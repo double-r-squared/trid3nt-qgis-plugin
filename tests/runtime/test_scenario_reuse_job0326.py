@@ -1,20 +1,9 @@
-"""job-0326: deterministic expensive-simulation reuse guard.
+"""The deterministic expensive-simulation reuse guard.
 
-PROBLEM (live, NATE 2026-06-16): the agent re-ran ~10-20-minute SFINCS / MODFLOW
-solves whose output layer was ALREADY on the map, and re-fetched / re-computed
-layers that already existed — the F54 soft prompt steer was being ignored. These
-tests cover the deterministic backstop:
-
-  1. ``scenario_signature`` distills an expensive-scenario call into a comparable
-     identity (scenario family + AOI + key physics params), and is conservative
-     (no AOI we can match without geocoding -> no signature -> RUN).
-  2. ``ScenarioResultIndex.find_reuse`` matches a repeat request to an existing
-     result on a CLEAR match (same family + same AOI + same key params), and
-     refuses on any change (AOI / return period / contaminant / etc.).
-  3. The enriched ``build_layers_present_note`` carries the richer identity
-     (RESULT vs INPUT, scenario family, handle, bbox) so the model can SEE that
-     an existing result already answers the request.
-"""
+``scenario_signature`` distils an expensive call into a comparable identity
+(family, AOI, key physics params) and is conservative - no matchable AOI means no
+signature and a RUN. ``ScenarioResultIndex.find_reuse`` matches only a clear
+repeat and refuses any change; the note carries RESULT vs INPUT and the handle."""
 
 from __future__ import annotations
 

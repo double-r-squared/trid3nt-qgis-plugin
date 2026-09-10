@@ -316,10 +316,8 @@ def test_upload_gs_no_bucket_with_fallback_returns_file_uri(tmp_path: Path) -> N
 
 
 def test_upload_non_s3_scheme_no_fallback_raises_typed(tmp_path: Path) -> None:
-    """GCP is decommissioned: a non-s3 scheme with no fallback is a typed
-    UPLOAD error naming the absent backend -- no gs client is ever
-    constructed (SWMM/GeoClaw/Landlab - no silent file:// on the cloud
-    path)."""
+    """A non-s3 scheme with no fallback is a typed UPLOAD error naming the absent
+    backend; no gs client is ever constructed and nothing silently writes ``file://``."""
     cog = tmp_path / "x.tif"
     cog.write_bytes(b"tiff")
     with patch("trid3nt_server.tools.cache.storage_scheme", return_value="gs"):

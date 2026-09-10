@@ -1,25 +1,9 @@
-"""F96 (NATE 2026-06-17): extend layer REUSE to fetch_* tools.
+"""Layer REUSE extended to the ``fetch_*`` tools.
 
-PROBLEM (live, "South Florida buildings" repeat): on a "resize the bbox to
-encompass all the buildings" follow-up the agent RE-FETCHED the footprints —
-already loaded — producing TWO identical layers. job-0333 added reuse only for
-run_model_* (expensive SIMULATION) results; it did NOT cover fetch_* layers, so a
-fit / resize / re-show follow-up re-fetched a layer already on the map.
-
-These tests cover the fetcher-reuse machinery (scenario_reuse.py) and the enriched
-``build_layers_present_note`` (adapter.py) that together let the agent SEE an
-already-loaded FETCHED layer as reusable so a follow-up reuses its handle (via
-compute_layer_bounds) instead of re-fetching:
-
-  1. ``fetched_layer_kind`` / ``fetched_kind_for_tool`` classify a fetched layer
-     and its producing tool into the same KIND token (and keep RESULTs out).
-  2. ``bbox_encloses`` recognizes a fit / resize to the SAME or a TIGHTER box.
-  3. ``find_reusable_fetched_layer`` returns an existing same-kind layer that
-     covers the request (so the caller does NOT re-fetch), and refuses on a
-     different kind / a genuinely larger area / a missing-AOI ambiguity.
-  4. The enriched ``build_layers_present_note`` tags an already-loaded buildings
-     layer INPUT[buildings] and carries the fetched-reuse / no-duplicate directive.
-"""
+``fetched_layer_kind`` and ``fetched_kind_for_tool`` classify a fetched layer and
+its tool into one KIND token, keeping RESULTs out; ``bbox_encloses`` recognizes a
+fit to the same or a tighter box; ``find_reusable_fetched_layer`` refuses another
+kind, a larger area or a missing-AOI ambiguity; the note tags the layer INPUT."""
 
 from __future__ import annotations
 

@@ -1,13 +1,9 @@
 """The USER-INPUT species: one normalizer per shape, and BOTH routes through it.
 
 A value the user hands us arrives DRAWN (the draw gate's reply) or TYPED (a wire
-coercion). These pin the shapes, the typed refusals, and the property that makes
-the seam worth having: the two routes produce the SAME value for the same
-geometry.
-
-Offline - the normalizers are pure and the draw route is exercised against a stub
-response object, never a live card.
-"""
+coercion). Pinned: the shapes, the typed refusals, and the property that makes
+the seam worth having - the two routes produce the SAME value for one geometry.
+Offline: the normalizers are pure and the draw route runs against a stub."""
 
 from __future__ import annotations
 

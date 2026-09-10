@@ -1,28 +1,9 @@
 """RERUN-WITH-OVERRIDES: the skeleton's recalibration interface. Offline.
 
-The setter family's capability, reproduced as skeleton machinery. What
-``set_telemac_parameters`` did for one run and one engine - copy the parent,
-change named values, leave the parent byte-identical, refuse the law-inversion
-that makes a coefficient mean something else - the primitive does for any
-declared workflow, through the plan rather than through a text editor.
-
-  1.  the REACH of an override is read off the plan: where reuse stops and which
-      declared Data survives it;
-  2.  the derivation refuses what it cannot honestly do - an unknown parent, an
-      undeclared name, an override that moves nothing, a template whose
-      declaration has changed;
-  3.  a derived run REUSES its parent's records for the untouched prefix and
-      re-executes from the cut, and the reused artifacts are the parent's OWN
-      (identical URIs, never re-fetched);
-  4.  the child records its parent and its overrides - in provenance, in the
-      narrated note and in the journal line, so a what-if fan and a calibration
-      loop are both readable as chains;
-  5.  COUPLED VALIDITY: a declared cross-param rule refuses the friction
-      law-inversion in BOTH lanes (a fresh invocation and a derivation), and an
-      atypical-but-right-quantity value still proceeds;
-  6.  a coupled rule that reads an undeclared param refuses at REGISTRATION - a
-      guard that can never fire is worse than none.
-"""
+The REACH of an override is read off the plan; the derivation refuses an unknown
+parent, an undeclared name, an inert override and a changed declaration; a child
+reuses the parent's OWN artifacts up to the cut and records parent and overrides;
+a coupled rule refuses in both lanes, and at REGISTRATION on an undeclared param."""
 
 from __future__ import annotations
 

@@ -54,10 +54,8 @@ _HERE = "tests.runtime.test_declarative_library"
 def _patched(target, name, value):
     """Patch and restore by hand.
 
-    NOT monkeypatch: the fixture and the test share one monkeypatch instance, so a
-    mid-test ``undo()`` would also revert the fixture's persistence-dir env and
-    send the rest of the test at the user's real store.
-    """
+    NOT monkeypatch: the fixture and the test share one instance, so a mid-test
+    ``undo()`` would revert the fixture's persistence-dir env as well."""
     original = target.__dict__[name]
     setattr(target, name, value)
     try:
@@ -297,11 +295,8 @@ async def test_bounds_clamp_leaves_a_provenance_note():
 async def test_clamping_compares_numbers_and_does_not_retype_the_param():
     """A row that declares int must not resolve to a float.
 
-    The clamp reads bounds as numbers, which is right; what it must not do is
-    hand back what it read. An engine keyword typed INTEGER refuses a float
-    several steps later and names the KEYWORD, so the declaration that was
-    actually violated never appears in the message.
-    """
+    The clamp reads bounds as numbers, which is right; handing back what it read
+    makes an engine keyword refuse later and name the KEYWORD, not the declaration."""
     declared = Param("levels", desc="d", door=doors.SCENARIO, default=13,
                      bounds=(5.0, 30.0), type=int)
     for supplied, expected in (({"levels": 13}, 13), ({}, 13),
@@ -885,10 +880,9 @@ async def _seed_ledger(name, wire, records, data_records=()):
 
 @pytest.mark.asyncio
 async def test_a_FAILED_attempt_is_tombstoned_so_the_rerun_RE_EXECUTES():
-    """The records a dead attempt left were produced by whatever the code was
-    then. Replaying them into a re-run of the corrected question reports a
-    superseded artifact as the new run's answer - the cache-provenance staleness
-    class, and the reason a canary could stay green through a real fix."""
+    """The records a dead attempt left were produced by whatever the code was then, so
+    replaying them into a re-run of the corrected question reports a superseded
+    artifact as the new run's answer."""
     plan = Plan("resume_w", None, (
         Step(runner=f"{_HERE}.stub_step").named("expensive"),
         Step(runner=f"{_HERE}.stub_second").named("cheap"),
@@ -973,12 +967,8 @@ async def test_replay_re_executes_when_the_cached_artifact_is_gone():
 async def test_a_replayed_artifact_comes_back_as_the_artifact_not_as_a_mapping():
     """The ledger must not flatten a step's artifact into the fields it printed.
 
-    A mesh step returns the MeshArtifact beside the values read off it. Serialized
-    as plain JSON the object becomes a dict, and the second attempt hands the step
-    a mapping: the granularity read crashes on the missing ``probes`` and the
-    containment read finds no ``provenance``, so a run that never declared a bbox
-    is refused for having been cut from one.
-    """
+    Serialized as plain JSON a ``MeshArtifact`` becomes a dict, and the second attempt
+    then crashes on the missing ``probes`` and finds no ``provenance``."""
     from trid3nt_server.workflows.mesh.artifact import MeshArtifact, measured_min_edge_m
     from trid3nt_server.workflows.telemac.helpers.release_point import domain_polygon_of
 
@@ -1833,11 +1823,8 @@ async def test_a_chart_that_failed_leaves_no_spec_to_persist(monkeypatch):
 def test_a_declaration_carries_no_presentation_vocabulary():
     """A ramp moves no water, so a workflow has no way to state one.
 
-    Presentation is DISPLAY STATE: changing it recomputes nothing, so it lives
-    at runtime on the restyle surface rather than in the plan. A dataset still
-    declares how it draws - that is a fact about the DATA, and it lives beside
-    the source, not here.
-    """
+    Presentation is DISPLAY STATE and lives on the restyle surface; how a dataset
+    draws is a fact about the DATA and lives beside the source."""
     runtime = importlib.import_module("trid3nt_server.workflows.runtime")
     assert [n for n in runtime.__all__
             if any(w in n.lower() for w in _PRESENTATION_WORDS)] == []

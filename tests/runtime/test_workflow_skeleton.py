@@ -1,22 +1,9 @@
 """The workflow SKELETON itself: the template method, the facade, the factory.
 
-Offline. Nothing here solves; these pin the contract in
-``docs/design/declarative-workflows.md`` "The Workflow Skeleton" (ADR 0312):
-
-  1. hooks have SILENT defaults, and a FILLED hook reaches the result;
-  2. the registration factory synthesizes the wire signature from the declared
-     params (``wire=False`` and every CONSTANT-door param stay off it, aliases and
-     controls join it) and renders the docstring from that same narrowed set;
-  3. a chart builder is the FUNCTION - a dotted string is refused, no fallback;
-  4. the slot/signature check runs BOTH ways: a member the author does not
-     accept, and a required member no slot covers, are both refused while the
-     plan value is being BUILT;
-  5. the facade's four are MUST-FILL - a hole refuses at registration, so a
-     NotImplementedError never reaches a caller as an engine internal error;
-  6. a coercion's failure is triaged, not flattened: retryable propagates, typed
-     keeps its code, a bug in our own coercion reads as INTERNAL_ERROR;
-  7. a declaration whose wire type would be silently guessed wrong refuses.
-"""
+Offline, nothing here solves. Hooks default silently; the factory synthesizes the
+wire signature from the declared params and renders the docstring from that same
+narrowed set; slot and signature are checked both ways; the facade's four MUST be
+filled; a coercion failure is triaged; a guessable-wrong wire type refuses."""
 
 from __future__ import annotations
 
@@ -144,12 +131,8 @@ def test_a_declared_param_the_wire_does_not_expose_stays_off_the_real_tool():
 def test_constant_door_params_are_off_the_model_facing_wire_and_docstring():
     """The door is a BINDING AUTHORITY contract: a constant is nobody's question.
 
-    Both cohort templates carry real constants (bank source, channel width, the
-    solve sizing class, the simulated window), and none of them is an argument the
-    model may fill or a row the prose sheet advertises. They keep their whole life
-    on the ``ParamSheet`` - the form card's advanced fold is where a user changes
-    one - which is what makes this an authority contract rather than a deletion.
-    """
+    A constant is neither an argument the model may fill nor a row the prose sheet
+    advertises; it lives its whole life on the ``ParamSheet``."""
     from trid3nt_server.tools import TOOL_REGISTRY
 
     for name in ("telemac_do_sag", "telemac_river_dye"):
@@ -163,14 +146,10 @@ def test_constant_door_params_are_off_the_model_facing_wire_and_docstring():
 
 
 def test_a_constant_supplied_off_the_model_wire_still_reaches_the_sheet():
-    """The Tier-A / form-edit lane keeps its lever. The exclusion is the SCHEMA's.
+    """The exclusion is the SCHEMA's, so the form-edit lane keeps its lever.
 
-    ``!run`` with every param supplied is the mechanical contract check, and its
-    whole point is that nothing is left to ask - which includes pinning the
-    constants a canary run has to shrink (a 600 s window instead of three hours).
-    That lane hands the workflow a sheet, not a model tool call, so the value is
-    seated through the USER door and the row reads ``basis=user``.
-    """
+    That lane hands the workflow a sheet rather than a model tool call, so the value
+    is seated through the USER door and the row reads ``basis=user``."""
     import asyncio
 
     from trid3nt_server.tools import TOOL_REGISTRY
@@ -450,12 +429,8 @@ def test_the_reach_templates_carry_the_reach_shape_into_the_settle():
 def test_the_catchment_mesh_step_carries_the_whole_recipe():
     """Every op the template declared reaches the step that builds the mesh.
 
-    The RECIPE travels WHOLE, so the step carries the mesher, the three agnostic
-    params and every op in declared order rather than a restated subset - and the
-    ONE mesh step carries nothing else, because everything else about the build
-    is in the recipe. The extent is the CHAIN's product - the delineated basin -
-    so the mesher triangulates a domain another tool measured, and the channel
-    network it is refined TOWARD is named by a sizing op."""
+    The RECIPE travels WHOLE - the mesher, the three agnostic params, every op in
+    declared order - and the ONE mesh step carries nothing else."""
     module = _template("trid3nt_server.workflows.telemac.templates.rain_on_grid.rain_on_grid")
     workflow = module.telemac_rain_on_grid.workflow
     mesh_step = [n for n in workflow.plan_decl(workflow)

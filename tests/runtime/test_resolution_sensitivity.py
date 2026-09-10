@@ -1,14 +1,9 @@
 """The resolution-sensitivity label: which answers a coarse mesh reads wrong.
 
-The mechanism is skeleton-level, so these pin it at the library rather than
-through any one engine: a template declares which of its ANSWER fields sit in
-which measured class, and the run's own sheet decides which of the two sentences
-it gets.
-
-The two DIRECTION tests drive the real resolver rather than a hand-built row: the
-user/default distinction is a property of the sheet the resolver produces, and a
-row written by hand can assert a shape the resolver never emits.
-"""
+The mechanism is skeleton-level: a template declares which ANSWER fields sit in
+which measured class and the run's own sheet decides which sentence it gets. The
+DIRECTION tests drive the real resolver, because the user/default distinction is
+a property of the sheet it produces and a hand-built row can assert a fiction."""
 
 from __future__ import annotations
 

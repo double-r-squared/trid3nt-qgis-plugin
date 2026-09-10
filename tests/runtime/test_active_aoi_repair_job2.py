@@ -1,30 +1,9 @@
-"""JOB 2: active-AOI repair + per-turn [Case state] context note.
+"""Active-AOI repair and the per-turn [Case state] context note.
 
-These tests pin the three load-bearing behaviors of JOB 2:
-
-2a (active-AOI repair) — ``_turn_case_bbox`` reads the durable
-    ``SessionState.case_bbox`` cache instead of the non-existent
-    ``state.active_case`` attribute. Pre-fix it ALWAYS returned None (the read
-    targeted a missing attribute), so the agent had no active-AOI signal and the
-    reuse seams were AOI-starved. We drive the REAL case-select path
-    (``_emit_case_open``) so the cache is populated exactly as production does,
-    then assert ``_turn_case_bbox`` returns the Case AOI (and clears on
-    deselect / no-active-Case).
-
-2b (per-turn context note) — the layers-present + reuse-AOI note
-    (``build_layers_present_note``) is built from the LIVE emitter layers + the
-    cached Case AOI and carries the "REUSE this exact extent, do NOT re-geocode"
-    instruction. We assert the builder includes the loaded layers AND the AOI
-    bbox line, and that the dispatch-side injection shape (append as a synthetic
-    [Case state] user turn) is well-formed.
-
-2c (fetch reuse short-circuit, end-to-end via the real ``_turn_case_bbox``) — a
-    bare follow-up fetch (no bbox of its own) whose AOI resolves to the Case AOI
-    is answered by a loaded same-kind layer -> short-circuit, no re-fetch. This
-    mirrors ``test_fetch_reuse_dispatch_f96.py`` but does NOT monkeypatch
-    ``_turn_case_bbox`` — it proves the JOB-2 ``case_bbox`` field actually drives
-    the reuse guard once populated by the real case-select path.
-"""
+``_turn_case_bbox`` reads the durable ``SessionState.case_bbox`` cache, populated
+by the REAL case-select path and cleared on deselect. The layers-present note is
+built from the live emitter layers and that cached AOI and carries the reuse
+instruction; a bare follow-up fetch whose AOI resolves to it does not re-fetch."""
 
 from __future__ import annotations
 
@@ -62,23 +41,18 @@ _CASE_AOI = (-82.0, 26.5, -81.8, 26.7)
 
 @pytest.fixture(autouse=True)
 def _cap_gate_waits(monkeypatch):
-    """LANE C: cap every user-decision gate wait so a headless run never hangs
-    on the F6 24h local-lane lift (``_gate_wait_timeout``). Production leaves
-    ``TRID3NT_GATE_WAIT_CAP_S`` unset -> byte-identical; the 2c fetch calls are
-    driven through ``_invoke_with_gate_proceed`` (below) which answers the
-    fetch-confirm gate, so this cap is only a fail-closed backstop."""
+    """Cap every user-decision gate wait so a headless run never hangs.
+
+    Production leaves ``TRID3NT_GATE_WAIT_CAP_S`` unset, so this is a fail-closed
+    backstop rather than the path the fetch tests take."""
     monkeypatch.setenv("TRID3NT_GATE_WAIT_CAP_S", "5")
 
 
 async def _invoke_with_gate_proceed(ws, state, tool_name: str, params: dict):
     """Invoke a fetcher, answering its fetch-confirm gate with ``proceed``.
 
-    ``fetch_dem`` is in ``FETCH_CONFIRM_TOOLS``, so a first fetch with a bbox
-    parks on the fetch-resolution gate. The 2c reuse tests exercise the AOI
-    cache -> reuse-guard path, not the gate, so a background approver replies
-    ``proceed`` to the pending card while the invoke runs -- the layer
-    materializes exactly as it would after the user clicks through, and the
-    reuse guard then governs the follow-up fetch."""
+    ``fetch_dem`` is in ``FETCH_CONFIRM_TOOLS`` and parks on the gate, so a background
+    approver replies; the layer then materializes and the reuse guard governs after it."""
 
     async def _watch() -> None:
         while True:
@@ -138,11 +112,8 @@ def test_turn_case_bbox_returns_cached_bbox_after_case_select(
 ) -> None:
     """After the REAL case-open path, ``_turn_case_bbox`` returns the Case AOI.
 
-    This is the keystone repair: pre-fix ``_turn_case_bbox`` read
-    ``getattr(state, "active_case", None)`` — an attribute SessionState never
-    had — so it always returned None. Now it reads ``state.case_bbox``, which
-    ``_emit_case_open`` populates from the persisted ``CaseSummary.bbox``.
-    """
+    It reads ``state.case_bbox``, which ``_emit_case_open`` populates from the
+    persisted ``CaseSummary.bbox``."""
     case = _fresh_case_summary()
     asyncio.run(_persistence_bound.upsert_case(case))
 
@@ -234,10 +205,8 @@ def test_layers_present_note_none_when_empty() -> None:
 def test_per_turn_injection_shape_appends_case_state_user_turn() -> None:
     """The dispatch-side injection appends ONE synthetic [Case state] user turn.
 
-    Mirrors the ``_stream_model_reply`` wiring: build the note from the live
-    emitter dicts + the cached AOI, then append it as the last history turn
-    (before the user message) WITHOUT mutating the entry-captured history list.
-    """
+    The note is built from the live emitter dicts and the cached AOI and appended as
+    the last history turn WITHOUT mutating the entry-captured history list."""
     turn_history = [{"role": "user", "text": "model the flooding"}]
     loaded = [
         {
@@ -306,12 +275,8 @@ def test_bare_followup_refetch_short_circuits_via_real_case_bbox(
 ) -> None:
     """A bare re-fetch reuses the loaded same-kind layer using the REAL AOI cache.
 
-    The Case AOI comes through the genuine ``_emit_case_open`` -> ``case_bbox``
-    cache (no monkeypatched ``_turn_case_bbox``), so this is the end-to-end proof
-    that JOB 2's repair actually feeds the fetch reuse short-circuit: with the
-    pre-fix always-None ``_turn_case_bbox`` the bare follow-up (no bbox) could not
-    resolve its AOI and would re-fetch a duplicate.
-    """
+    The Case AOI arrives through the genuine ``_emit_case_open`` -> ``case_bbox``
+    cache, with no monkeypatched ``_turn_case_bbox`` anywhere on the path."""
     case = _fresh_case_summary()
     asyncio.run(_persistence_bound.upsert_case(case))
 
@@ -347,13 +312,10 @@ def test_bare_followup_refetch_short_circuits_via_real_case_bbox(
 def test_bare_followup_refetches_without_case_bbox(
     _persistence_bound: Persistence, _stub_fetch_dem
 ) -> None:
-    """Control: with NO cached AOI, a bare follow-up cannot resolve -> re-fetch.
+    """Control: with NO cached AOI a bare follow-up cannot resolve, so it re-fetches.
 
-    Proves the short-circuit in the prior test is driven specifically by the
-    JOB-2 ``case_bbox`` cache, not by some unrelated dedup. Here ``case_bbox``
-    is never populated (no case-select), so ``_turn_case_bbox`` is None and the
-    bare follow-up (no bbox) has no AOI to compare -> conservative re-fetch.
-    """
+    ``case_bbox`` is never populated, which is what makes the short-circuit in the
+    previous test attributable to that cache rather than to some other dedup."""
     ws = MockWebSocket()
     state = SessionState(session_id=new_ulid())
     assert _turn_case_bbox(state) is None

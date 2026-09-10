@@ -1,46 +1,9 @@
-"""bbox-durability (live-reported): a plain FETCH's bbox durably anchors the
-Case AOI, not just a domain-producing solve's.
+"""A plain FETCH's bbox durably anchors the Case AOI, not only a solve's.
 
-CONFIRMED ROOT CAUSE: ``_pin_case_aoi_from_solve`` (LANE-C #1, see
-``test_aoi_pin_lane_c.py``) only fires for a domain-producing SOLVER
-(SWMM/SFINCS/MODFLOW). A Case whose activity is plain fetches (``fetch_dem``,
-``fetch_landcover``, ...) never wrote ``CaseSummary.bbox`` at all — every such
-Case row sat at ``bbox: None`` forever. Without an anchor,
-``build_layers_present_note`` carried no AOI line, and a follow-up like "show
-me the hillshade in the bounding box" made the model reverse-engineer the
-extent from layer-id strings instead of reading it (live transcript: a small
-local model burned its whole thinking budget trying to recover a bbox from a
-TiTiler URI).
-
-These tests pin the fix, ``_pin_case_aoi_from_tool_bbox`` (server.py), wired
-into the real fetch-dispatch path:
-
-(a) a bbox-carrying fetch on a bbox-less Case durably pins ``CaseSummary.bbox``
-    AND the in-session ``state.case_bbox`` anchor.
-(b) a second call with the SAME bbox does not redundantly upsert (debounced on
-    a tight 6-decimal-place comparison).
-(c) a bbox CHANGE (an explicit widen / a genuinely different place) updates
-    the persisted anchor — latest-wins, matching the solve-pin's unconditional
-    overwrite semantics.
-(d) no active Case -> no write (and no crash).
-(e) the per-turn [Case state] note renders the literal machine-usable
-    ``[min_lon, min_lat, max_lon, max_lat]`` array with the REUSE instruction.
-
-Uses ``fetch_buildings`` as the stub fetcher (mirrors ``test_aoi_pin_lane_c.
-py``'s ``test_followup_fetch_defaults_to_pinned_aoi_end_to_end``) rather than
-``fetch_dem`` / ``fetch_landcover`` — those two ARE the tools named in the
-live bug report, but both sit in ``server.FETCH_CONFIRM_TOOLS`` (the
-resolution-confirm gate) and a bare test dispatch never answers that gate, so
-the call hangs to the 5-minute gate timeout (the KNOWN pre-existing
-``test_active_aoi_repair_job2.py`` flake this task's brief warned not to
-chase). ``fetch_buildings`` is a recognized bbox-taking fetcher
-(``fetched_kind_for_tool``) that is NOT gated, so it exercises the exact same
-``_pin_case_aoi_from_tool_bbox`` code path deterministically and fast.
-
-Mirrors the harness in ``test_aoi_pin_lane_c.py`` / ``test_active_aoi_repair_
-job2.py`` (real ``_emit_case_open`` / ``_invoke_tool_via_emitter`` paths,
-MockMCPClient persistence).
-"""
+``_pin_case_aoi_from_tool_bbox`` writes ``CaseSummary.bbox`` and the in-session
+anchor from a bbox-carrying fetch, debounces an identical box at six decimal
+places, overwrites a changed one, and writes nothing with no active Case. The
+stub fetcher is ``fetch_buildings`` because it is bbox-taking and NOT gated."""
 
 from __future__ import annotations
 
