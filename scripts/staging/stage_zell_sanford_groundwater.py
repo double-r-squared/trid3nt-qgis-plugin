@@ -800,10 +800,9 @@ def validate(out_path: Path, dataset: str, work: Path, grid: dict[str, Any]) -> 
             # CONUS-WIDE structural check, not a spot-check window: b + dtw
             # must reproduce the model's PRESCRIBED per-zone TOP-BOTM. Block-
             # iterated exactly like the min/max/mean pass above it, over BOTH
-            # staged rasters, so the claim in the module docstring and ADR 0298
-            # ("validate() re-runs the structural half CONUS-wide") is what the
-            # code actually runs, not a 2-degree Kansas window that happened to
-            # avoid the release's coastal 5 m zone (see the floor guard below).
+            # staged rasters, so "the structural half, CONUS-wide" is what runs
+            # and not a 2-degree window that happens to avoid the release's
+            # coastal 5 m zone (see the floor guard below).
             n_zone, n_near_round = 0, 0
             zone_cells: dict[int, int] = {}
             with rasterio.open(out_path.parent / DATASETS[
