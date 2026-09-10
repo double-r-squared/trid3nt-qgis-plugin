@@ -115,7 +115,7 @@ class Provenance(GraceModel):
 
     data_sources: list[DataSource] = Field(default_factory=list)
     article_ids: list[ULIDStr] = Field(default_factory=list)  # if news-derived
-    event_id: ULIDStr | None = None  # MongoDB event id, if news-derived
+    event_id: ULIDStr | None = None  # the event id, if news-derived
 
 
 class CatalogReference(GraceModel):

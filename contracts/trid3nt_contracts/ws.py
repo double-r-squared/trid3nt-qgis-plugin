@@ -699,7 +699,7 @@ CLIENT_TO_AGENT_PAYLOADS: dict[str, type[GraceModel]] = {
 
 # The per-module payload fragments are splatted into the routing dicts HERE:
 # each module owns its typed payloads, and this module owns the registry.
-from .secrets import (  # noqa: E402 — module-level imports below the dict literals
+from .secrets import (  # noqa: E402 - imported below the dict literals
     SECRET_AGENT_TO_CLIENT_PAYLOADS,
     SECRET_CLIENT_TO_AGENT_PAYLOADS,
 )

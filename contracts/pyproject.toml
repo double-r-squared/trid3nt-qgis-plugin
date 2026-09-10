@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "trid3nt-contracts"
 version = "0.1.0"
-description = "Shared contracts: WebSocket protocol, AssessmentEnvelope, EventMetadata/ClaimSet, MongoDB collection schemas, CatalogEntry, and solver-execution shapes (SRS v0.3 Appendices A-D)."
+description = "Shared contracts: the WebSocket protocol, the persisted document schemas, the data-source and tool-registration declarations, and the result shapes."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }

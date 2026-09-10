@@ -1,90 +1,84 @@
 # trid3nt-contracts
 
-Shared contracts for this system — the WebSocket protocol, the `AssessmentEnvelope`,
-the MongoDB collection schemas, `CatalogEntry`, and the solver-execution shapes
-(`ModelSetup`/`RunResult`/`ExecutionHandle`/`LayerURI`).
-
-Single source of truth for every type that crosses a specialist boundary:
-`web` ↔ `agent` ↔ `engine` ↔ `infra` ↔ `testing`. Pydantic v2; SRS v0.3
-Appendices A–D are the authoritative starting stubs (the SRS itself is the
-user's document; appendix amendments flow through the schema specialist's
-report rather than being edited in place).
+The types that cross a package boundary, defined once and imported everywhere:
+the WebSocket protocol, the persisted document schemas, the data-source and
+tool-registration declarations, and the result shapes an engine or a fetch
+produces. Pydantic v2 throughout; every model subclasses `GraceModel`
+(`extra="forbid"`, UTC-`Z` datetimes).
 
 ## Modules
 
-| Module | What | SRS reference |
-|---|---|---|
-| `common` | `GraceModel`, `ULIDStr`, `BBox`, `TimeRange`, datetime + UTC serialization | A.1, B.7, D.7 |
-| `ws` | WebSocket envelope + every A.3/A.4/A.4b message type + A.6 error codes | Appendix A, FR-AS-5 |
-| `envelope` | `AssessmentEnvelope`, supporting types, `FloodPayload` + `FloodMetrics` | Appendix B, FR-TA-1, FR-AS-7 |
-| `collections` | The MongoDB collection models + vector index configs + TTL config | Appendix D, FR-MP-5, Decision F/L |
-| `catalog` | `CatalogEntry` for `public_hazard_catalog.yaml` | FR-PHC-2 |
-| `execution` | `ModelSetup`, `RunResult`, `ExecutionHandle` (Cloud Workflows execution-id cancellation seam), `LayerURI` | FR-TA-2, FR-CE-2/3, FR-AS-6 |
-| `tool_metadata` | Tool-docstring conventions + `tool_category` vocabulary (convention only; `agent` owns the registry code) | FR-TA-3, FR-AS-3 |
-| `export_schemas` | CLI / `trid3nt-export-schemas` script that writes JSON Schemas for every top-level contract | — |
+| Module | What |
+|---|---|
+| `common` | `GraceModel`, `ULIDStr`, `BBox`, `TimeRange`, the UTC-`Z` datetime alias, the fallback and input-provenance records |
+| `errors` | `ToolInputError` and the closed error-code and actionability vocabularies |
+| `ws` | The WebSocket envelope, every message payload, the map-command args, and the type -> payload routing registry |
+| `auth` | The two connect-handshake envelopes and the server-advertised sibling endpoints |
+| `user` | The `User` account record |
+| `case` | The Case envelopes: summary, persisted chat message, tool-card record, rehydration state, lifecycle command |
+| `secrets` | Per-Case secret records and the just-in-time credential request/reply |
+| `region_choice` | The region-narrowing picker request and its reply |
+| `payload_warning` | The payload gate: the warning envelope, its confirmation, and the granularity, time-scale and param-sheet rows |
+| `chart_contracts` | The `chart-emission` envelope, its Vega-Lite structural check, and the persisted chart record |
+| `sandbox_contracts` | The code-exec confirm request and run result |
+| `envelope` | `AssessmentEnvelope` and its supporting types, including the flood subtype |
+| `collections` | The persisted collection documents, the vector-index and TTL configs, and the catalog substrate |
+| `catalog` | `CatalogEntry` - one vetted public data source in the curated catalog |
+| `source_spec` | `SourceSpec` - the declarative data-router source specification a `source.yaml` validates against |
+| `tool_registry` | `AtomicToolMetadata`, the TTL classes, the retrieval tiers, and the declared resolution ranges |
+| `gate_spec` | The declarative confirm gate a tool carries, and the levers its card offers |
+| `tool_metadata` | The required tool-docstring sections and the `tool_category` vocabulary |
+| `execution` | `ModelSetup`, `ExecutionHandle`, `RunResult`, `LayerURI`, `LegendKey`, and the `LayerURI` result-model subclasses |
+| `telemac_contracts` | The TELEMAC result layers and their declared style rows |
+| `publish_manifest` | The typed reader for a worker's `publish_manifest.json` |
+| `outputs_manifest` | The `outputs.json` emit-on-solve manifest: a pure-stdlib writer and a tolerant reader |
+| `export_schemas` | Renders `contracts/schemas/` from the live models |
 
-## Install (development)
+## Install
+
+The package is installed editable as part of the repo's dev environment:
 
 ```bash
-python3 -m venv .venv
-. .venv/bin/activate
 pip install -e contracts
-pip install pytest  # for tests
 ```
 
-The package targets Python `>= 3.11`. Pydantic `>= 2, < 3`; `python-ulid`
-`>= 2, < 4`.
+Python `>= 3.11`, pydantic `>= 2, < 3`, `python-ulid >= 2, < 4`.
 
-## Run the round-trip tests
+## Tests
 
 ```bash
-pytest contracts/tests -v
+make test-packages
 ```
 
-Every WebSocket message type (Appendix A.3, A.4, A.4b), the
-`AssessmentEnvelope`, every `MongoDB` collection, `CatalogEntry`, and every
-solver-execution shape is exercised through a real `JSON -> model -> JSON`
-round-trip with idempotence checks. Negative controls include:
-missing-bbox-and-place_name rejection, no-cost-field assertions on
-`RunDocument` / `FloodMetrics`, invalid ULID rejection, and inverted-bbox
-rejection.
+Every message payload, every document and every result shape is exercised
+through a real `JSON -> model -> JSON` round trip with idempotence checks,
+alongside negative controls and the schema drift gate.
 
-## Regenerate JSON Schemas
+## Regenerate the JSON Schemas
 
 ```bash
-# Default output: contracts/schemas/
-trid3nt-export-schemas
-
-# Or to a custom directory
-trid3nt-export-schemas contracts/schemas
+./venvs/agent/bin/python -m trid3nt_contracts.export_schemas
 ```
 
-Output is sorted and `\n`-terminated so re-runs against an unchanged contract
-set produce byte-identical files (`git diff` is the drift signal).
+Output is key-sorted and newline-terminated, so an unchanged contract set
+re-renders byte-identically and `git diff` is the drift signal. A docstring or
+`Field(description=...)` change therefore has to be committed together with the
+regenerated `contracts/schemas/`.
 
 ## Wire form
 
-`model.model_dump(mode="json")` is the canonical wire form. For documents that
-use the Mongo `_id` alias (every `DocModel` subclass), use
-`model.model_dump(**MONGO_DUMP_KWARGS)` which is `mode="json", by_alias=True`.
+`model.model_dump(mode="json")` is the canonical wire form. A document that
+aliases `_id` dumps with `model.model_dump(**MONGO_DUMP_KWARGS)`, which adds
+`by_alias=True`.
 
-Datetimes serialize to ISO-8601 with a `Z` suffix (UTC). ULIDs are 26-char
-strings. `bbox` is always `[minLon, minLat, maxLon, maxLat]` in EPSG:4326.
-`payload` is always an object (`{}` when empty).
+Datetimes serialize to ISO-8601 with a `Z` suffix. ULIDs are 26-character
+strings. A `bbox` is always `[minLon, minLat, maxLon, maxLat]` in EPSG:4326. A
+`payload` is always an object, `{}` when empty.
 
 ## Versioning
 
-Each top-level document carries a `schema_version: Literal["v1"]` first field.
-Additive growth (new optional fields, new `Literal` members for open enums) is
-preferred; a breaking change bumps the version. The enums most likely to grow
-(`hazard_type`, `event_type`, `tool_category`, forcing-source type) are open by
-design so new engines register members without a breaking change (SRS Decision
-G; AGENTS.md "Pre-MVP scope" — no backward-compatibility shims).
-
-## Amendments to SRS Appendices A–D
-
-The SRS appendices are stubs and are **expected to drift** as implementation
-surfaces gaps. The schema specialist never edits the SRS; instead, appendix
-amendments are surfaced in each `report.md` for the user to land. See the
-job-0013 report's *Amendment Log* for the full list, including the
-`research_mode` field on `user-message` (FR-WC-15) and minor structural notes.
+Each top-level document carries a `schema_version: Literal["v1"]` as its first
+field. Growth is ADDITIVE - a new optional field, a new member of an open enum -
+and a breaking change bumps the version. The enums most likely to grow
+(`hazard_type`, `tool_category`, the forcing types) are open by design, so a new
+engine registers a member without breaking a receiver.
