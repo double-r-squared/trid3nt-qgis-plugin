@@ -39,10 +39,9 @@ def test_registered_on_the_model_surface():
 
 
 def test_the_outlet_boundary_is_declared_as_an_op_on_the_mesh_recipe():
-    """The one liquid boundary a catchment has is DECLARED where every other
-    boundary role is - as a ``set_boundary_roles`` op on the recipe, at the
-    delineation's snapped outlet - rather than resolved by a server step between
-    the mesh and the authoring."""
+    """The one liquid boundary a catchment has is DECLARED where every other boundary
+    role is - as a ``set_boundary_roles`` op on the recipe, at the delineation's
+    snapped outlet - rather than resolved by a server step between mesh and authoring."""
     from trid3nt_server.workflows.telemac.templates.rain_on_grid.rain_on_grid import MESH
 
     op = [o for o in MESH.ops if o.fn == "set_boundary_roles"]
@@ -105,10 +104,8 @@ def test_the_declared_plan_is_the_rain_on_grid_sequence():
 
 
 def test_constant_door_params_off_wire_scenario_and_user_ones_present():
-    """CONSTANT-door params (landcover_dataset, mesh_grade,
-    bed_dem_resolution_m, river_source, time_step_s, compute_class) never reach
-    the model-facing schema; SCENARIO/USER ones (the storm, the granularity
-    lever, the mesh slot) do."""
+    """CONSTANT-door params never reach the model-facing schema; the scenario and user
+    ones - the storm, the granularity lever, the mesh slot - do."""
     import inspect
 
     from trid3nt_server.workflows.runtime import doors
@@ -330,12 +327,10 @@ def test_aoi_from_pour_point_buffers_the_outlet():
 
 @pytest.mark.asyncio
 async def test_a_supplied_pour_point_derives_the_aoi_from_it_not_a_geocoded_bbox():
-    """When a pour point is supplied the analysis AOI must come FROM the pour
-    point, NOT a geocoded place bbox (the ADR 0196 live bug: 'Otto, NC' geocodes
-    to a town box that does not contain the upstream Coweeta catchment).
-    ``acquire_catchment`` (the catchment shape's own acquire step) never even
-    reaches for a geocoder - the catchment shape's docstring names this: the
-    basin's shape is the terrain's answer, never the geocoder's bbox."""
+    """A supplied pour point derives the AOI, never a geocoded place bbox.
+
+    A town box need not contain the upstream catchment, so ``acquire_catchment`` never
+    reaches for a geocoder: the basin's shape is the terrain's answer."""
     from trid3nt_server.workflows.telemac.helpers.catchment import (
         acquire_catchment,
         catchment_aoi,
@@ -386,12 +381,10 @@ def _accepted_catchment_mesh():
 
 @pytest.fixture()
 def rog_run(monkeypatch, tmp_path):
-    """``settle_catchment`` with the accepted mesh's reads stood in for, and the
-    STEERING body filled from what it measured.
+    """``settle_catchment`` with the accepted mesh's reads stood in for.
 
-    The DECK is real: every keyword and every file the template states is
-    resolved here, without the container the serializer writes them through.
-    """
+    The DECK is real: every keyword and every file the template states is resolved
+    here, without the container the serializer writes them through."""
     import numpy as np
 
     from trid3nt_server.workflows.telemac.authoring import assembler as asm_mod

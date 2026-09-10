@@ -1,15 +1,9 @@
 """Offline guard: a TELEMAC coercion never falsifies a value's provenance.
 
-A coercion's return value merges into the DOOR-1 supplied sheet, so anything it
-emits for an argument nobody sent resolves through the USER door and the run's
-provenance stamps it ``basis=user`` / "supplied on this invocation". A coercion
-that unconditionally returns its own fall-through therefore reports the
-template's own labeled default as a user choice on every single run.
-
-The rule these tests pin: ABSENT in, nothing out. No solver, no network - the
-resolution spine (``_normalize`` -> ``resolve_params`` -> ``provenance_entries``)
-runs offline.
-"""
+A coercion's return merges into the supplied sheet, so anything it emits for an
+argument nobody sent resolves through the USER door and is stamped as a user
+choice. The rule pinned here is ABSENT in, nothing out. The resolution spine runs
+offline - no solver and no network."""
 
 from __future__ import annotations
 
@@ -81,10 +75,8 @@ def test_a_supplied_compute_class_still_reads_as_the_users() -> None:
 def test_an_unknown_rung_refuses_rather_than_substituting() -> None:
     """A rung the dispatcher cannot serve is a REFUSAL, not a quiet 'medium'.
 
-    It used to log a warning and seat 'medium', so a caller who asked for
-    'xlarge' got a medium solve with no provenance row saying so and nothing on
-    any surface a reader looks at.
-    """
+    Seating one gave a caller who asked for 'xlarge' a medium solve with no provenance
+    row saying so."""
     from trid3nt_server.workflows.telemac.helpers.errors import TelemacDyeScenarioError
     from trid3nt_server.workflows.telemac.solving.solve import compute_class
 

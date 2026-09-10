@@ -1,14 +1,9 @@
 """The reach's manifest is a CASE: an engine, a file, and what must come back.
 
-The worker used to be handed the reach's raw geometry and asked to mesh it. Now
-the server authors the steering file against the accepted mesh and stages both,
-so what the manifest carries is the ``case`` the worker dispatches on - which
-engine, which steering file, which results are the success convention - plus the
-``inputs`` the launcher walks into the run directory.
-
-What is pinned here is that contract: the section key the worker reads, the
-per-class results and outputs, and the staging refusals.
-"""
+The server authors the steering file against the accepted mesh and stages both, so
+the manifest carries the ``case`` the worker dispatches on - which engine, which
+steering file, which results are the success convention - plus the ``inputs`` the
+launcher walks into the run directory. Pinned: that contract and its refusals."""
 
 from __future__ import annotations
 
@@ -182,11 +177,8 @@ def test_the_continuation_starts_where_the_restart_file_says_it_does(monkeypatch
                                                                     tmp_path):
     """The instant is READ, never computed from the ask.
 
-    The engine writes its restart at its own last time step, which is neither
-    the graphic period the results file lands on nor the duration that was
-    asked for, so a server that derived the instant would author the extended
-    scenario over the wrong stretch of clock.
-    """
+    The engine writes its restart at its own last time step, which is neither the
+    graphic period nor the duration asked for, so a derived instant is the wrong clock."""
     import trid3nt_server.workflows.telemac.products.result_reader as reader
     from trid3nt_server.workflows.telemac.authoring.assembler import (
         _continuation_state,

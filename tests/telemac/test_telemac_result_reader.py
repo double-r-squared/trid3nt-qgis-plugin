@@ -135,9 +135,7 @@ def test_no_reader_on_this_side_parses_the_format(module):
     """The byte layout is the engine's to know.
 
     The reader this replaced refused a truncated result the engine reads without
-    complaint, and handed every consumer a variable name with the record's unit
-    still glued on - two ways of being wrong about a format nobody here owns.
-    """
+    complaint, and glued a record's unit onto every variable name it handed back."""
     tree = ast.parse((_REPO / module).read_text())
     imported = set()
     for node in ast.walk(tree):

@@ -1,16 +1,9 @@
 """The TELEMAC-3D vertical discretisation: the plan, the refusal, the keyword pair.
 
-Offline: plane arithmetic and a composite expansion, no engine and no network.
-
-A uniform sigma spreads the levels evenly, so the near-surface layer over the
-deepest column is depth/(NPLAN-1). A deep lake against a metres-thick thermocline
-therefore gets a ONE-NODE epilimnion, and the declared initial condition is
-unrepresentable however it is written. What is pinned here is that the planner
-reproduces the transform ``condim.f`` actually applies - a declared dz computed by
-any other formula is fiction - that it spends the least stretch that reaches the
-target, and that a column no admissible grid can hold REFUSES by name instead of
-solving on a distorted one.
-"""
+Offline: plane arithmetic and a composite expansion, no engine and no network. A
+uniform sigma gives a deep lake a ONE-NODE epilimnion, so the planner reproduces
+the transform the engine actually applies - any other formula is fiction - spends
+the least stretch that reaches the target, and REFUSES a column it cannot hold."""
 
 from __future__ import annotations
 

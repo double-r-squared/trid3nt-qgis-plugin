@@ -1,19 +1,9 @@
 """The reach's outflow stage: a normal depth over the measured channel.
 
-The downstream cap of a reach used to be held at the outflow bed plus a declared
-2 m. That number was not a property of the reach - it was the same on a mountain
-creek and a coastal plain river - and it was the one level the run's whole water
-surface is anchored to.
-
-What replaces it is a COMPUTATION over data the accepted mesh already carries:
-the fall between the two role faces over the length the mesh was built on is the
-friction slope, the outflow face's own transect is the channel, the run's own
-roughness and its own prescribed discharge close the uniform-flow equation. No
-gauge, no rating curve, no second datum. What cannot be measured refuses by name
-rather than falling back to a level nobody derived.
-
-Offline: arithmetic and text, no mesh build and no solve.
-"""
+A declared cap above the outflow bed was not a property of the reach, and it was
+the one level the whole water surface is anchored to. What replaces it is a
+COMPUTATION over data the accepted mesh already carries - the friction slope, the
+outflow transect, the run's own roughness and discharge. Offline: no solve."""
 
 from __future__ import annotations
 
@@ -90,10 +80,8 @@ def test_an_outflow_face_with_no_section_left_refuses_by_name():
 def test_the_stage_is_the_depth_at_which_the_section_conveys_the_discharge():
     """Manning's equation read back over the section the stage was solved on.
 
-    The assertion is the physics, not the number: whatever depth came out, the
-    channel at that depth must convey exactly the discharge the run prescribes
-    upstream at the roughness the run writes.
-    """
+    The assertion is the physics, not the number: whatever depth came out, the channel
+    at that depth conveys exactly the discharge the run prescribes upstream."""
     derived = _stage()
     area, perimeter = U._wetted([tuple(p) for p in _SECTION], derived["stage_m"])
     conveyed = (derived["coefficient"] * area * (area / perimeter) ** (2.0 / 3.0)
@@ -232,10 +220,9 @@ def test_a_section_of_one_point_is_no_channel_to_derive_a_curve_over():
 
 
 def test_the_curve_file_is_written_in_the_engines_own_block_format():
-    """``read_fic_curves.f`` reads a header naming the boundary, a units line it
-    skips, then two columns until a blank; under Q(n) the first column is the
-    discharge. The file is the RATING composite's, beside the two keywords that
-    name it."""
+    """The engine's reader takes a header naming the boundary, a units line it skips,
+    then two columns until a blank; under Q(n) the first column is the discharge. The
+    file is the RATING composite's, beside the two keywords that name it."""
     from trid3nt_server.workflows.telemac.modules import T2D
     from trid3nt_server.workflows.telemac.modules.telemac2d import Rating
 
@@ -286,10 +273,9 @@ def test_the_flow_range_is_the_gross_rain_rate_on_the_meshed_area():
 
 
 def test_the_curve_is_spaced_EVENLY_IN_DISCHARGE_so_the_low_end_is_not_a_cliff():
-    """The engine looks the curve up BY discharge and interpolates linearly, so a
-    first interval carrying almost no flow and centimetres of stage makes the
-    boundary swing metres on a trickle - and a boundary above a catchment that has
-    not started running off yet lifts water back into it."""
+    """The engine looks the curve up BY discharge and interpolates linearly, so a first
+    interval carrying almost no flow and centimetres of stage makes the boundary swing
+    metres on a trickle, lifting water back into a catchment not yet running off."""
     rows = _curve()["rows"]
     steps = [b[0] - a[0] for a, b in zip(rows, rows[1:])]
     assert max(steps) - min(steps) < 1e-5

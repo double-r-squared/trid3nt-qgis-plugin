@@ -1,20 +1,9 @@
 """The MESH recipe travels WHOLE from the template to the mesh it builds.
 
-Offline. A template's mesh step carries the RECIPE - its mesher, its kind, its
-extent, its one size word and every op in declared order - rather than restating
-parts of it, so a param or an op the template asked for cannot go missing between
-the declaration and the mesh. What is pinned here:
-
-  1. THE ASK IS ONE VALUE. Every template that declares a mesh step hands that
-     step the whole recipe, and the mapping round-trips back to a recipe equal to
-     the one the template froze.
-  2. AN OP IS PART OF THE ASK. Every op reaches the step's kwargs with its own
-     name and its own kwargs, in the order it was written.
-  3. THE ORDER IS THE PROGRAM. A round trip preserves it, duplicates included.
-
-That the declaration survives a reset while a gate-time edit does not is the mesh
-session's own law, pinned on the session and at the gate.
-"""
+Offline. A template's mesh step carries the recipe - mesher, kind, extent, its one
+size word and every op in declared order - rather than restating parts of it, so
+the mapping round-trips back to a recipe equal to the frozen one, each op keeps
+its own name and kwargs, and the ORDER is preserved, duplicates included."""
 
 from __future__ import annotations
 

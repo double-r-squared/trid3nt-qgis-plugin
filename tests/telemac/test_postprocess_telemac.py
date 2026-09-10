@@ -78,10 +78,9 @@ def _postprocessed(monkeypatch, tmp_path, telemac_result, *, product,
 
 def test_the_product_picks_the_tracer_and_the_units_it_is_carried_in(
         monkeypatch, tmp_path, telemac_result):
-    """A GAIA coupled run writes the suspended load as a SECOND tracer beside the
-    dye companion, in g/l where the dye and the whole surface speak mg/L. The
-    product says which variable its field lands in, so the reader picks that one
-    and scales it - a silent 1000x otherwise passes every structural check."""
+    """A coupled run writes the suspended load as a SECOND tracer, in g/l where the
+    surface speaks mg/L. The product says which variable its field lands in, so the
+    reader picks that one and scales it - a silent 1000x passes every other check."""
     from trid3nt_contracts.telemac_contracts import TELEMAC_SUBSTANCE_PRODUCTS as T
 
     fields = {"DYE": np.full(5, 4.0), "NCOH SEDIMENT1": np.full(5, 0.25)}

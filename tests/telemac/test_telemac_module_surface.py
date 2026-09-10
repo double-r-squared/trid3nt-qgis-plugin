@@ -1,11 +1,9 @@
 """The module surface: the catalog is the keyword table, and the wrapper opines.
 
-Every refusal here is a refusal BY NAME at declaration or at fill, which is the
-whole point of spelling keywords raw: a misspelling, a value of the wrong type or
-one outside the dictionary's own choices is answered while a person can still
-read what they asked for, instead of stopping inside DAMOCLES blaming a keyword
-nobody wrote.
-"""
+Every refusal is BY NAME at declaration or at fill, which is the whole point of
+spelling keywords raw: a misspelling, a wrong type or a value outside the
+dictionary's own choices is answered while a person can still read what they
+asked, instead of stopping inside the engine blaming a keyword nobody wrote."""
 
 from __future__ import annotations
 
@@ -47,10 +45,10 @@ def test_every_slot_carries_the_dictionary_s_own_name_and_help():
 
 
 def test_the_identifier_is_the_keyword_and_nothing_invented():
-    """A raw keyword and its identifier differ only where a character cannot be
-    one. Where the mechanical spelling IS an identifier it is the identifier;
-    where it is not - a keyword opening on a digit - the image's own map decides,
-    which is why the map is read out of the image rather than guessed at here."""
+    """A raw keyword and its identifier differ only where a character cannot be one.
+
+    Where the mechanical spelling IS an identifier it is the identifier; where it is
+    not, the image's own map decides, which is why the map is read out of the image."""
     for module in _EXPOSED:
         for slot in load_catalog(module).values():
             mechanical = "".join(c if c.isalnum() else "_"
@@ -147,10 +145,9 @@ def test_a_list_s_choices_are_left_to_the_engine_s_own_reader():
 
 
 def test_a_multi_select_keyword_is_one_value_the_engine_splits_itself():
-    """The value is a separator-joined selection, so no choice names the whole
-    of it - and the arity the dictionary declares is ONE, which is what the
-    engine reads. Written as a list, five of the six variables are lost in
-    silence: the engine takes the first and says nothing about the rest."""
+    """The value is a separator-joined selection, so no choice names the whole of it, and
+    the arity the dictionary declares is ONE. Written as a list, every variable but
+    the first is lost in silence."""
     variables = T2D.slot("VARIABLES_FOR_GRAPHIC_PRINTOUTS")
     assert variables.multi_select and not variables.is_list
     assert fill(T2D, VARIABLES_FOR_GRAPHIC_PRINTOUTS="U,V,H,S,B,T1").resolved()
@@ -255,10 +252,9 @@ def test_a_composed_slot_says_which_part_asserted_it():
 
 
 def test_a_value_the_run_measured_reads_as_derived_not_as_the_body_that_named_it():
-    """A body states WHICH measurement a slot takes; the number is the accepted
-    artifact's. Badging it template or part would say an author wrote a value
-    nobody wrote down - the boundary walk, the normal depth, the CFL time step
-    and the stage-discharge curve are all measured, and the card has to say so.
+    """A body states WHICH measurement a slot takes; the number is the artifact's.
+
+    Badging it template or part would say an author wrote a value nobody wrote down.
     A declared PARAM is not this: it is the invocation's own answer."""
     class RIVER(T2D):
         TIDAL_FLATS = Ref("settled.tidal_flats")
@@ -395,11 +391,10 @@ def test_a_composite_becomes_several_slots_and_the_file_they_name():
 
 
 def test_a_composite_sets_only_what_its_value_s_presence_defines():
-    """A composite expands a value into the keywords that value IS. A literal
-    the value does not carry is an opinion, and the two literals a presence does
-    define are the arming boolean its input implies and the name of the file the
-    composite itself writes. Anything else - a choice among the alternatives the
-    dictionary offers - is the template's to assert, where a person reads it."""
+    """A composite expands a value into the keywords that value IS.
+
+    A literal the value does not carry is an opinion; the two a presence does define
+    are the arming boolean its input implies and the file the composite writes."""
     modules = Path(
         "trid3nt_server/workflows/telemac/modules").resolve()
     found = []
@@ -767,12 +762,9 @@ _TRANSPORT_ARMING = ("BED_LOAD_FOR_ALL_SANDS", "SUSPENSION_FOR_ALL_SANDS")
 
 
 def test_a_coupled_body_states_only_what_its_caller_handed_it():
-    """A coupled body is on the WRAPPER, so a constant inside one is a wrapper
-    opinion that reaches every template naming the body - and ASSERTED, which is
-    a class body, never sees it. Called twice with no argument in common, the
-    only values allowed to repeat are the file the wrapper names, the transport
-    mode the body IS, a slot the dictionary states no default for, and the
-    dictionary's own default at this body's class count."""
+    """A coupled body is on the WRAPPER, so a constant inside one reaches every template
+    naming the body while an ASSERTED class body never sees it. Called twice with no
+    argument in common, only the wrapper's own unopinionated slots may repeat."""
     from trid3nt_server.workflows.telemac.modules import WRAPPERS
 
     opinions = []
@@ -898,10 +890,9 @@ def _bodies():
 
 
 def test_a_structural_fork_is_a_template_and_never_a_switch():
-    """Four questions release something into the same reach and each fills
-    DIFFERENT slots for it. The arity of the carrier's own tracer surface moves
-    with the fork, which is why each body states it rather than a composite
-    owning it out of sight."""
+    """Four questions release something into the same reach and each fills DIFFERENT
+    slots for it. The arity of the carrier's tracer surface moves with the fork,
+    which is why each body states it rather than a composite owning it out of sight."""
     from trid3nt_server.workflows.telemac.modules.telemac2d import Boundaries
 
     measured = {"inflow_q_m3s": 50.0, "outflow_stage_m": 97.8,
@@ -954,11 +945,9 @@ def test_the_reach_body_is_written_at_the_derivation_it_was_solved_for():
 
 
 def test_the_basin_states_how_its_tracer_is_carried_and_under_what_ceiling():
-    """The dictionary gives SCHEME FOR ADVECTION OF TRACERS no 3D default, so an
-    unstated deck advects the temperature by whatever the VELOCITIES are advected
-    by. The template states the scheme, the ceiling that scheme sub-iterates
-    under, and the step - each from a param, so each is overridable on the sheet
-    and each carries the basis a reader is owed."""
+    """The dictionary gives the tracer advection scheme no 3D default, so an unstated
+    deck advects temperature by whatever the VELOCITIES use. The template states the
+    scheme, its ceiling and the step, each from a param and so each overridable."""
     from trid3nt_server.workflows.runtime import param_rows
     from trid3nt_server.workflows.telemac.modules import load_catalog
     from trid3nt_server.workflows.telemac.templates.stratified_flow.declarations import (
@@ -990,11 +979,9 @@ def test_the_basin_states_how_its_tracer_is_carried_and_under_what_ceiling():
 
 
 def test_every_open_water_recipe_sizes_the_domain_rim_it_meshes():
-    """Nothing else sizes the rim: every sizing function measures the SHORELINE,
-    and an AOI's own box is not one, so an undeclared rim comes back an order of
-    magnitude past the size word and the band where it meets the shoreline
-    triangulates into slivers. The op runs after the sizing and before the
-    gradation that grades the step in."""
+    """Nothing else sizes the rim: every sizing function measures the SHORELINE and an
+    AOI's box is not one, so an undeclared rim comes back an order of magnitude past
+    the size word. The op runs after the sizing and before the gradation."""
     from trid3nt_server.workflows.mesh.tool import recipe_plan_value
     from trid3nt_server.workflows.telemac.templates.agitation.agitation import (
         MESH as HARBOUR,
@@ -1022,10 +1009,9 @@ def test_every_open_water_recipe_sizes_the_domain_rim_it_meshes():
 
 
 def test_every_open_water_recipe_carries_the_boundary_cleaning_chain():
-    """A domain cut from a shoreline can leave scraps that touch at points, and
-    the library's own clean passes are what remove them before the boundary is
-    walked. The reach recipe lists them; the two open-water recipes list the
-    same four, in the same order."""
+    """A domain cut from a shoreline can leave scraps that touch at points, and the
+    library's own clean passes remove them before the boundary is walked. All three
+    recipes list the same four, in the same order."""
     from trid3nt_server.workflows.mesh.tool import recipe_plan_value
     from trid3nt_server.workflows.telemac.templates.agitation.agitation import (
         MESH as HARBOUR,
@@ -1144,10 +1130,9 @@ def test_every_template_wire_carries_the_raw_keyword_floor():
 
 
 def test_every_template_names_the_reader_its_own_question_needs():
-    """The reader is an OUTPUTS binding a template names, never one publisher
-    branching on a class string. Two questions that publish different fields -
-    a dye, a slick, a scoured bed, a deposited plume - name different readers,
-    and the runner each names is the module's own bound output."""
+    """The reader is an OUTPUTS binding a template names, never one publisher branching
+    on a class string. Two questions that publish different fields name different
+    readers, and the runner each names is the module's own bound output."""
     from trid3nt_server.tools import TOOL_REGISTRY
 
     readers = {}
@@ -1186,10 +1171,10 @@ def test_the_fill_docstring_names_the_module_its_rubriques_and_its_open_slots():
 
 
 def test_every_required_file_is_the_template_s_own_statement():
-    """A slot the dictionary marks OBLIG is named in the BODY, never by a
-    composite. A composite's expansion is not readable until a fill runs it, so a
-    required file it filled would read as an open mandatory slot on every surface
-    that shows the declaration - the docstring and the card both."""
+    """A slot the dictionary marks OBLIG is named in the BODY, never by a composite.
+
+    A composite's expansion is not readable until a fill runs it, so a required file
+    it filled would read as an open mandatory slot on the docstring and on the card."""
     from trid3nt_server.tools import TOOL_REGISTRY
 
     for name in _TEMPLATES:
@@ -1273,10 +1258,8 @@ _STEERING_WRITERS = (
 def _keyword_writer_lines(path: Path, keywords: set[str]) -> list[tuple[int, str]]:
     """Every string CONSTANT in ``path`` that spells a raw keyword and assigns it.
 
-    A docstring is prose about a keyword and never a deck line, so the module,
-    class and function docstrings are read past; what remains is a literal the
-    module could write into a file.
-    """
+    A docstring is prose about a keyword and never a deck line, so docstrings are read
+    past; what remains is a literal the module could write into a file."""
     tree = ast.parse(path.read_text(encoding="utf-8"))
     prose = set()
     for node in ast.walk(tree):
@@ -1308,11 +1291,8 @@ _ASSIGNS_A_KEYWORD = re.compile(
 def test_the_serializer_is_the_only_module_that_writes_a_keyword_into_a_deck():
     """No module outside the two writers spells a keyword and assigns it.
 
-    telapy writes the steering format and the serializer is the only thing that
-    hands it a sheet. A keyword formatted into a string anywhere else is a second
-    author of the format - which is what the surface replaced - and it is caught
-    here by the dictionary's own names rather than by a list somebody maintains.
-    """
+    A keyword formatted into a string anywhere else is a second author of the format,
+    caught here by the dictionary's own names rather than by a maintained list."""
     keywords = {slot.keyword for module in _EXPOSED + ("tomawac",)
                 for slot in load_catalog(module).values()}
     offenders = {}

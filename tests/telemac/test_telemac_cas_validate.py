@@ -1,11 +1,9 @@
 """The authored-steering parse gate: what it hands the container, and how it refuses.
 
-The parse itself runs inside the TELEMAC image, against the engine's own
-dictionaries, and is proved there. What is proved here is everything on this side
-of the mount: which files the author submits and under which dictionary, that a
-file the authoring did not write is not submitted, and that a parse failure
-becomes a refusal naming the file and the keyword rather than a log line.
-"""
+The parse itself runs inside the image against the engine's own dictionaries and
+is proved there. Proved here is everything on this side of the mount: which files
+are submitted under which dictionary, that a file the authoring did not write is
+not submitted, and that a parse failure names the file and the keyword."""
 
 from __future__ import annotations
 

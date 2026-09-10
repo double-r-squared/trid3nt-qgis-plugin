@@ -1,24 +1,9 @@
 """The reach family authors its run on an ACCEPTED mesh, and says so.
 
-Offline. The mesh is no longer a side effect of solving: a mesh step opens a
-session over the template's declaration, the accepted topology is staged into the
-solve's run directory, and the sheet's timestep AND recorded edge follow the edge
-the mesh was BUILT at rather than the edge that was asked for.
-
-What is pinned here:
-
-  1. WHAT THE MESH MEASURED, field by field, against a dumper that restates it
-     from the inputs rather than reading it back off the settle. The refactor
-     moved the mesh OUT of the solve and changed nothing the run states; both
-     reach shapes (a mid-reach release and a top-of-reach outfall) are checked.
-  2. The dt SEAM HAS A READER - a mesh artifact measured finer than the ask
-     tightens the sheet's timestep, and one measured at the ask leaves it alone.
-  3. What the worker is handed - the facts only the server measured, the mesh
-     under the names the deck states, the outflow stage DERIVED as a normal depth
-     over the reach the accepted mesh measures at its declared roles, and the
-     refusals a mesh record missing its topology or its bed raises rather than
-     letting the worker mesh one of its own.
-"""
+Offline. A mesh step opens a session over the template's declaration, the accepted
+topology is staged into the run directory, and the sheet's timestep and recorded
+edge follow the edge the mesh was BUILT at rather than the one asked for. Pinned:
+what the mesh measured, the dt seam's reader, and what the worker is handed."""
 
 from __future__ import annotations
 
@@ -62,11 +47,8 @@ def _mesh_record(*, min_edge_m: float | None = None,
                  topology_uri: str | None = "s3://m/M01/mesh_topology.json") -> dict:
     """A mesh step's result, composed the way the mesh step composes a real one.
 
-    Every derived field is READ off the artifact through the product's own
-    readers, so this stand-in cannot report a measured edge its probes never
-    held, or a provenance its artifact does not carry. A fixture free to invent
-    a key is how an author went on reading a probe no build had written.
-    """
+    Every derived field is READ off the artifact through the product's own readers, so
+    this stand-in cannot report a measured edge its probes never held."""
     from trid3nt_server.workflows.mesh.artifact import measured_min_edge_m
 
     probes = ({"edge_length_m": {"min": float(min_edge_m), "max": 40.0,
@@ -97,9 +79,7 @@ def settle(monkeypatch, tmp_path):
     """``assemble_reach`` with its world-reads stood in for.
 
     The AUTHORING is real: the files are written into a temp run directory by the
-    author this step calls, which is what makes the parity checks below statements
-    about the run rather than about a stub.
-    """
+    author this step calls, so the parity checks are statements about the run."""
     import numpy as np
 
     from trid3nt_server.workflows.telemac.helpers import release_layer as rel_mod
@@ -156,10 +136,8 @@ def _expected_settled(*, mesh_size_m: float, time_step_s: float,
                       do_sag: bool) -> dict:
     """What this ask MEANS, restated from the ask.
 
-    Independent of the settle on purpose: a parity check that read its own
-    output back would pass for any refactor, including one that changed what the
-    run states.
-    """
+    Independent of the settle on purpose: a parity check that read its own output back
+    would pass for any refactor, including one that changed what the run states."""
     return {
         "name": "eel",
         "title": "eel REACH",
@@ -217,10 +195,8 @@ async def test_a_run_with_no_measured_mesh_measures_the_same_reach(settle):
 async def test_a_refined_mesh_tightens_the_run_timestep(settle):
     """Refine at the gate and the run's dt follows the mesh, not the ask.
 
-    The stability criterion is a statement about the mesh that exists. A mesh
-    measured at 7 m under a 14 m ask is twice as fine, and a run that kept
-    quoting the ask would run it at twice the stable step.
-    """
+    The stability criterion is a statement about the mesh that exists, so a run that
+    kept quoting a coarser ask would run at twice the stable step."""
     asked = await settle(reach=_REACH, seed=_SEED, mesh=_mesh_record(min_edge_m=14.0),
                          carrier_discharge=_CARRIER, **_SHEET)
     refined = await settle(reach=_REACH, seed=_SEED, mesh=_mesh_record(min_edge_m=7.0),
@@ -238,13 +214,9 @@ async def test_a_refined_mesh_tightens_the_run_timestep(settle):
 # --------------------------------------------------------------------------- #
 @pytest.mark.asyncio
 async def test_the_server_facts_carry_what_only_the_server_measured(settle):
-    """A fact re-derived in the container is a second answer that can disagree
-    with the first, so the worker copies these into its metrics verbatim.
-
-    ``result_slf`` is one of them: the deck states the RESULTS FILE, so the name
-    is the server's and the container measures the file it names rather than
-    deciding which file the run produced.
-    """
+    """A fact re-derived in the container is a second answer that can disagree with the
+    first, so the worker copies these into its metrics verbatim. ``result_slf`` is one
+    of them: the deck states the results file, so the container measures what it names."""
     out = await settle(reach=_REACH, seed=_SEED, mesh=_mesh_record(min_edge_m=8.0),
                        carrier_discharge=_CARRIER, **_SHEET)
     assert out["server_facts"] == {
@@ -290,16 +262,9 @@ async def test_a_mesh_record_with_no_topology_refuses_rather_than_remeshing(sett
 
 @pytest.mark.asyncio
 async def test_the_outflow_stage_is_a_normal_depth_over_the_MEASURED_reach(settle):
-    """The stage stands on the ground the geometry file carries, at the depth
-    that ground conveys this run's own flow at.
-
-    Everything in it is measured off the accepted mesh: the outflow cap's median
-    bed is 10.2 m, its face cuts 100 m of that bed, and the reach falls 1.8 m
-    over the 6 km the mesh was built along. A stage read from anything else - a
-    plane fitted beside the mesh, a declared depth restated from the ask - would
-    put the water somewhere the solve's own bathymetry does not agree with, so
-    the run states every input the number was derived from.
-    """
+    """The stage stands on the ground the geometry file carries, at the depth that ground
+    conveys this run's own flow at. Everything in it is measured off the accepted
+    mesh, and the run states every input the number was derived from."""
     out = await settle(reach=_REACH, seed=_SEED, mesh=_mesh_record(min_edge_m=8.0),
                        carrier_discharge=_CARRIER, **_SHEET)
     assert out["outflow_stage_m"] == 10.593
@@ -326,12 +291,8 @@ async def test_a_mesh_with_no_painted_bed_refuses_rather_than_inventing_a_stage(
 async def test_the_stood_in_mesh_record_is_shaped_like_a_real_builds(monkeypatch):
     """The fixture is measured against the ONE writer of a real mesh record.
 
-    A fixture free to invent a key is not a smaller version of the product - it
-    is a second product with its own shape, and the suite stays green while the
-    live template dies. That is how an author went on reading a probe no build
-    had written once its writer was deleted, so the stand-in's keys are read off
-    the mesh step's own return rather than typed out beside it.
-    """
+    A fixture free to invent a key is a second product with its own shape, and the
+    suite stays green while the live template dies; the keys are read off the return."""
     from trid3nt_server.workflows.mesh import gate as gate_mod
     from trid3nt_server.workflows.mesh import session as session_mod
     from trid3nt_server.workflows.mesh import step as mesh_step

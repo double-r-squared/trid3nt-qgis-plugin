@@ -1,16 +1,9 @@
 """Offline tests for the SERVER-SIDE release-point pre-flight.
 
-The question this settles is whether a release point can be a source at all, and
-it is settled here rather than in the worker: the domain polygon and the flowline
-are geometry the run already holds, so the answer is available before anything is
-staged and a point that cannot be honored is refused while the user can still
-move it.
-
-What the old plumbing did instead - and what these tests exist to keep out - was
-accept a point within a couple of channel widths of a mesh node, walk
-``spill_fraction`` when it missed, and let the server discover the relocation
-from the run's own metrics afterwards.
-"""
+Whether a release point can be a source at all is settled here rather than in the
+worker: the domain polygon and the flowline are geometry the run already holds, so
+a point that cannot be honored is refused while the user can still move it - never
+accepted near a node, walked when it misses, and discovered from metrics after."""
 
 from __future__ import annotations
 
@@ -127,10 +120,8 @@ def test_the_domain_read_is_the_mesh_own_record_of_what_it_was_cut_from():
 def test_a_mesh_with_no_domain_polygon_refuses_rather_than_waving_the_point_through(art):
     """There is ONE containment path and it always has a polygon.
 
-    Four numbers are not a shape a point can be inside of. Answering "no domain"
-    let a supplied point ride into the run untested with a note about it, which
-    is a release inside a shape nobody mapped - so the read refuses instead.
-    """
+    Four numbers are not a shape a point can be inside of, so answering "no domain"
+    would let a supplied point ride into the run untested."""
     with pytest.raises(TelemacDyeScenarioError) as excinfo:
         domain_polygon_of(art)
     assert "no mapped shape" in str(excinfo.value)

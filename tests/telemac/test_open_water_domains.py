@@ -28,11 +28,9 @@ def test_the_footprint_and_the_solid_faces_are_cut_at_the_same_width():
 
 
 def test_a_boundary_node_is_on_the_structure_when_it_stands_on_the_punched_outline():
-    """The water inside the footprint was removed, so a boundary node is on the
-    cut when it stands at the half-width - to the precision a relaxation places
-    a node on a locked outline, which is the mesh's own edge. Point Judith,
-    measured: 176 boundary nodes at 9-11 m off a 20 m structure and nothing at
-    all between 11 and 12 m, so an equality at 10.000 m halves one population."""
+    """The water inside the footprint was removed, so a boundary node is on the cut when
+    it stands at the half-width, to the precision a relaxation places a node on a
+    locked outline. An equality at exactly 10.000 m would halve one population."""
     from trid3nt_server.workflows.telemac.authoring.assembler import _nodes_near
 
     # one 200 m centreline segment, cut 20 m wide on a 5 m mesh: the outline runs

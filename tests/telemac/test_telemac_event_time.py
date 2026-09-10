@@ -1,12 +1,8 @@
-"""``event_time`` - the NWM discharge-cycle selector shared by telemac_do_sag and
-telemac_river_dye (ADR 0309).
+"""``event_time``: the discharge-cycle selector the river templates share.
 
-Offline coverage for the coercion (the outfall-coordinate precedent: garbage
-refuses typed, never falls back), the door threading onto both templates, and
-the discharge resolver's cycle-pinning (a "latest" request never rides
-unpinned into provenance). The live NWM fetch itself is exercised by the A/B
-driver; here the pure resolution logic and the wire-arg refusal are pinned.
-"""
+Offline coverage for the coercion, which refuses garbage typed rather than falling
+back, the door threading onto both templates, and the resolver's cycle-pinning, so
+a "latest" request never rides unpinned into provenance. The live fetch is a driver."""
 from __future__ import annotations
 
 import inspect

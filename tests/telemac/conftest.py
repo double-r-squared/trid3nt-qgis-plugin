@@ -15,13 +15,8 @@ import pytest
 def _offline_cas_parse(monkeypatch: pytest.MonkeyPatch) -> None:
     """Stand in for the in-container steering-file parse, which needs the image.
 
-    The parse is a docker round trip into the box where the engine's own
-    dictionaries live, so a suite that must run offline cannot pay for it - the
-    same treatment ``write_telemac_pair`` gets. What the suite proves instead is
-    the WIRING (the author hands the parser every file it wrote, under the module
-    whose dictionary reads it) and the REFUSAL shape; the parser itself is proved
-    against real steering files in the image it runs in.
-    """
+    What the suite proves instead is the WIRING - the author hands the parser every
+    file it wrote, under the module whose dictionary reads it - and the REFUSAL shape."""
     def _parsed(rundir, steering):
         from pathlib import Path
 
@@ -41,12 +36,8 @@ def _offline_cas_parse(monkeypatch: pytest.MonkeyPatch) -> None:
 def telemac_result(monkeypatch: pytest.MonkeyPatch):
     """Hand a postprocess the fields a result file would have carried.
 
-    The read is a docker round trip into the box where the engine's own
-    ``TelemacFile`` lives, the same treatment the steering-file parse gets. What
-    a postprocess test proves is the arithmetic over the fields and the shape of
-    its refusals, so the fields are stated here and no test writes result bytes -
-    a suite that spells out a file format is a second implementation of it.
-    """
+    The read is a docker round trip, so the fields are stated here and no test writes
+    result bytes: a suite that spells out a file format re-implements it."""
     import numpy as np
 
     def install(*, varnames, x, y, ikle, times, data,

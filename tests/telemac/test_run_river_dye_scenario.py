@@ -1,20 +1,9 @@
-"""P4 tests for the TELEMAC river-dye LLM surface: the ``telemac_river_dye``
-template - its declared PARAMS, its DATA chain and the fill/run door it hands
-them to - over the shared river part it lists.
+"""The ``telemac_river_dye`` template: its PARAMS, its DATA chain, its fill/run door.
 
-Exercised in ISOLATION with geocode / fetch_river_geometry / NWM / run_solver /
-boto3 / postprocess / publish all MOCKED (no network, no docker, no TELEMAC).
-These pin:
-
-  1. Tool registration + metadata (workflow_dispatch, uncacheable).
-  2. Wire-arg normalization: the AOI rules, the three release-point shapes, the
-     release-point / reach-seed decoupling, the contaminant promotion.
-  3. Declared bounds + the non-numeric refusal replacing the old inline clamps.
-  4. The sequence the door builds: its shape, where the run is HELD, and that
-     it validates.
-  5. The chain geocode -> seed -> carrier discharge -> run -> solve -> products,
-     with the manifest's case section carrying what the sheet resolved to.
-"""
+Exercised in ISOLATION with every fetch, the solver, the store, the postprocess
+and the publish mocked - no network, no docker, no engine. Pinned: registration
+and metadata, the wire-arg normalization and its refusals, the declared bounds,
+the sequence the door builds and where the run is HELD, and the chain end to end."""
 
 from __future__ import annotations
 
@@ -175,12 +164,10 @@ def test_a_malformed_release_point_refuses_it_never_falls_back():
 
 
 def test_the_reach_seed_is_the_call_release_and_only_the_call_release():
-    """A CALL-provided release also seeds the reach; a DRAWN click moves the
-    source only, so the meshed water body cannot change under the user.
+    """A CALL-provided release also seeds the reach; a DRAWN click moves the source only.
 
-    The split is structural: coercions run on the wire args, before any door and
-    so before any gate, which is why a drawn point can reach ``release_coords``
-    and reach ``reach_seed_coords`` by no path at all."""
+    The split is structural: coercions run on the wire args, before any door and so
+    before any gate, so a drawn point reaches the reach seed by no path at all."""
     call, _ = _norm(location="X", release_lon=-114.31, release_lat=42.58)
     assert call["reach_seed_coords"] == (-114.31, 42.58)
 
@@ -191,10 +178,8 @@ def test_the_reach_seed_is_the_call_release_and_only_the_call_release():
 def test_an_invented_compute_class_refuses_at_the_ladder():
     """A rung the dispatcher cannot serve is REFUSED, not quietly re-seated.
 
-    It used to become 'medium' with a log line and no provenance row, so a caller
-    who asked for a bigger box got a smaller solve and nothing on any surface a
-    reader looks at said so.
-    """
+    Re-seating it gave a caller who asked for a bigger box a smaller solve, with
+    nothing on any surface a reader looks at saying so."""
     supplied, err = _norm(location="X", compute_class="dye_spill")
     assert supplied == {}
     assert err["status"] == "error"
@@ -262,10 +247,8 @@ def test_an_absent_carrier_discharge_leaves_a_derived_provenance_row():
 def test_the_granularity_lever_reads_back_beside_the_edge_the_mesh_was_built_at():
     """An asked edge the mesher answers differently has to be readable on the answer.
 
-    ``mesh_size_m`` is the MEASURED minimum edge of the accepted mesh, so on its
-    own it cannot say what was asked for; the lever's own row is what makes the
-    two comparable.
-    """
+    ``mesh_size_m`` is the MEASURED minimum edge of the accepted mesh, so the lever's
+    own row is what makes the two comparable."""
     from trid3nt_server.workflows.runtime import merge_provenance, provenance_entries
 
     workflow = _workflow()
@@ -639,10 +622,10 @@ def _real_centerline_read() -> dict:
 
 
 def test_the_reach_is_navigated_EXACTLY_ONCE(tmp_path, monkeypatch):
-    """ONE centerline acquisition. A second navigate resolved beside the declared
-    row walked a different seed for a different distance, so the line the section
-    was cut between and the line the author read described different rivers - and a
-    release derived along the second one landed outside the meshed domain."""
+    """ONE centerline acquisition.
+
+    A second navigate walks a different seed for a different distance, so the line the
+    section was cut between and the line the author read describe different rivers."""
     captured: dict = {}
     _run_tool(tmp_path, monkeypatch, captured, location="Twin Falls, Idaho",
               reach_length_km=4.0)
@@ -767,10 +750,9 @@ def test_a_partly_mapped_reach_proceeds_and_says_how_much_was_mapped(
 def test_a_reach_whose_far_END_is_unmapped_refuses_at_the_cut(
         tmp_path, monkeypatch):
     """Coverage above zero is not the same fact as a domain with two transects.
-    Mapped water that stops halfway leaves the downstream end standing on the
-    polygon's own bank, and a boundary role cannot be prescribed across an edge
-    the cut never made - so the refusal names the geometry rather than arriving
-    at the mesher as an empty face."""
+
+    Mapped water that stops halfway leaves the downstream end on the polygon's own
+    bank, and a boundary role cannot be prescribed across an edge the cut never made."""
     from tests._fakes.reach_chain import WATER_HALF
 
     captured: dict = {}

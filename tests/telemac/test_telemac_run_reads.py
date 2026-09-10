@@ -1,11 +1,9 @@
-"""The run readers, on the artifacts a solved run uploads (offline; no solve).
+"""The run readers, on the artifacts a solved run uploads. Offline, no solve.
 
-These are the derivations the worker used to perform in-container and no longer
-does: GAIA's closure out of the solver listing, the injected mass and deposit
-fraction off the sheet's own pulse, and the floating slick out of the raw drogues
-track. What they pin is the FORMAT the engine writes, which a guess would read
-silently wrong.
-"""
+These are the derivations the worker used to perform in-container: the sediment
+closure out of the solver listing, the injected mass and deposit fraction off the
+sheet's own pulse, and the floating slick out of the raw drogues track. What they
+pin is the FORMAT the engine writes, which a guess would read silently wrong."""
 
 from __future__ import annotations
 
@@ -228,14 +226,8 @@ _DEPTH_VAR = "WATER DEPTH"
 def _mesh(depths):
     """Two disjoint triangles - a 50 m2 channel and a 150 m2 bar beside it.
 
-    The areas differ so the measurement can be told apart from a node count: half
-    the nodes wet is a QUARTER of the domain wet, and only one of those two
-    numbers is the conveyance a reader is looking for.
-
-    The depth key carries the SELAFIN 32-char name padding with its unit trailing,
-    exactly as a solved result does - a bare 'WATER DEPTH' key would let a lookup
-    that no real run can satisfy pass here.
-    """
+    The areas differ so the measurement can be told from a node count, and the depth
+    key carries the SELAFIN name padding with its unit trailing, as a real result does."""
     import numpy as np
 
     return {"x": np.array([0.0, 10.0, 0.0, 20.0, 50.0, 20.0]),
@@ -275,10 +267,8 @@ def test_a_result_with_no_depth_measures_nothing():
 def test_the_reach_run_says_out_loud_what_it_did_not_wet():
     """The heuristic lands on the run journal, and it GATES nothing.
 
-    A run that wet a quarter of its bankfull domain is a correct low-flow run
-    with an overstated conveyance width, and the only thing wrong with it is a
-    reader who cannot tell. So the number is said; nothing is refused over it.
-    """
+    A run that wet a quarter of its bankfull domain is a correct low-flow run with an
+    overstated conveyance width; the number is said and nothing is refused over it."""
     from trid3nt_server.workflows.runtime.journal import bind_notes, drain_notes
     from trid3nt_server.workflows.telemac.products import products as PR
 
@@ -296,10 +286,8 @@ def test_the_reach_run_says_out_loud_what_it_did_not_wet():
 def test_an_unmeasurable_result_costs_the_run_nothing():
     """A postprocess whose result carried no depth field narrates nothing.
 
-    The read itself belongs to the postprocess and fails there with its own typed
-    error; what reaches here is the metrics dict, and a dict with no wetted
-    fraction on it says nothing rather than half a sentence.
-    """
+    The read belongs to the postprocess and fails there with its own typed error; what
+    reaches here is the metrics dict, and one with no wetted fraction says nothing."""
     from trid3nt_server.workflows.runtime.journal import bind_notes, drain_notes
     from trid3nt_server.workflows.telemac.products import products as PR
 

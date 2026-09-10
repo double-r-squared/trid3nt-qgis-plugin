@@ -1,11 +1,8 @@
-"""WAQTEL O2 dissolved-oxygen sag (telemac_do_sag) - offline V&V + tool tests.
+"""WAQTEL O2 dissolved-oxygen sag: offline V and V plus the tool tests.
 
-No solve, no network. The live V&V (the 12 km straight-channel WAQTEL O2 solve
-through the LANDED worker authoring, trid3nt-local/telemac:latest, 2026-08-07)
-is captured as a committed profile fixture; this test re-checks it against the
-Streeter-Phelps 1925 closed form deterministically (the 0163/0167 committed-V&V
-pattern), so a regression in the O2 machinery is caught without re-solving.
-"""
+No solve, no network. A live solve's O2 profile is a committed fixture, re-checked
+here against the Streeter-Phelps closed form deterministically, so a regression in
+the O2 machinery is caught without re-solving."""
 import asyncio
 import json
 from pathlib import Path
@@ -274,11 +271,10 @@ def _stub_reach_pipeline(monkeypatch, order, seen, *, layer, review, tmp_path=No
 @pytest.mark.asyncio
 async def test_the_declared_plan_composes_the_shared_steps_in_order(monkeypatch,
                                                                     tmp_path):
-    """The migrated plan itself, not a stand-in: geocode -> flowline -> seed ->
-    discharge -> waqtel -> review -> corridor mesh -> run -> solve -> DO
-    products, with the
-    outfall riding as the reach SEED (it pins which water body is meshed), never
-    as a dye release point."""
+    """The migrated plan itself, not a stand-in.
+
+    Geocode, flowline, seed, discharge, waqtel, review, corridor mesh, run, solve, DO
+    products - with the outfall riding as the reach SEED, never as a dye release."""
     monkeypatch.setenv("TRID3NT_DEV_PERSISTENCE_DIR", str(tmp_path / "persistence"))
     from trid3nt_contracts.telemac_contracts import (
         TELEMAC_DO_STYLE,

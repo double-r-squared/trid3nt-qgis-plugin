@@ -1,23 +1,9 @@
-"""Which end of the reach ``spill_fraction`` counts from, proved three ways.
+"""Which end of the reach ``spill_fraction`` counts from, proved two ways.
 
-``spill_fraction`` walks the reach's own centerline, and every claim the run
-makes downstream of the release - the plume travel, the DO sag, the deposition
-pattern - reads the wrong way round if the walk starts at the wrong end. Nothing
-in a solved result says which end it started from: a plume that advected upstream
-looks exactly like a plume that advected downstream on a reversed picture.
-
-So the invariant is pinned from two independent directions:
-
-  * chainage 0 is UPSTREAM, at the seed the flowline was navigated downstream
-    from, whatever order the source document's vertices happened to arrive in;
-  * the walk DISCRIMINATES - 0.1 lands near the inflow and 0.9 near the outflow,
-    rather than both landing near the middle of a line nobody oriented.
-
-The third direction was the BED: a monotone plane fitted along the same line,
-which fell as chainage rose. That fit was scar tissue over a surface DEM standing
-in for topobathy and is chopped; a bed is now painted from the class it is
-defined over and the reading of the line is what both remaining pins rest on.
-"""
+Nothing in a solved result says which end the walk started from - a plume that
+advected upstream looks like one that advected downstream on a reversed picture.
+So: chainage 0 is UPSTREAM, at the seed the flowline was navigated down from,
+whatever order the source vertices arrived in; and the walk DISCRIMINATES."""
 
 from __future__ import annotations
 

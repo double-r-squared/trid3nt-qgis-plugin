@@ -1,15 +1,9 @@
 """The cross-file boundary contract: the ``.cli`` quad and the steering keyword.
 
-A TELEMAC boundary states itself twice, and the engine reads the steering value
-only where the code quad says to. These two files therefore have to come from ONE
-decision, in ONE numbering, or the disagreement is silent: the number is written,
-never read, and the face runs on what its code alone means.
-
-Both halves are pinned here. The NUMBERING is the engine's own rule ported off
-``bief/front2.f`` - it starts each contour at the south-westernmost boundary
-point, not at the first row of the file - and the KEYWORD is derived from the
-quad the boundary file carries rather than from the role's name.
-"""
+A boundary states itself twice and the engine reads the steering value only where
+the code quad says to, so the two files must come from ONE decision in ONE
+numbering or the disagreement is silent. The NUMBERING is the engine's own rule -
+each contour starts south-westernmost - and the KEYWORD follows the quad."""
 
 from __future__ import annotations
 
@@ -61,11 +55,9 @@ def _numbered(table=None):
 
 
 def test_the_engine_numbers_from_its_own_south_west_corner_not_from_row_order():
-    """Row order would number the outflow first: it is the first liquid run met
-    walking the file from its first solid row. The engine starts at the domain's
-    south-west corner, which sits on the inflow, so the inflow is boundary 1 -
-    and a file written to the row-order answer prescribes both values into codes
-    that never read them."""
+    """Row order would number the outflow first; the engine starts at the south-west
+    corner, which sits on the inflow. A file written to the row-order answer
+    prescribes both values into codes that never read them."""
     assert [role for role, _ in _numbered()] == ["inflow", "outflow"]
 
 
@@ -136,20 +128,19 @@ def test_flipping_the_strategy_moves_the_quad_and_the_keyword_together():
 
 
 def test_a_boundary_whose_quad_prescribes_nothing_refuses_rather_than_writing():
-    """An OUTFLOW is the role that means a prescribed level, so an all-KSORT quad
-    under that name is the two files describing different boundaries: a value
-    written at its number would be a number the engine never looks at, which is
-    exactly the silence this contract exists to end."""
+    """An OUTFLOW means a prescribed level, so an all-KSORT quad under that name is the
+    two files describing different boundaries: a value written at its number is one
+    the engine never looks at."""
     mislabelled = {**D._ROLE_CODES, "outflow": (D.KSORT,) * 4}
     with pytest.raises(ValueError, match="prescribes 'nothing'"):
         _lists(_numbered(mislabelled))
 
 
 def test_the_free_exit_role_prescribes_nothing_as_a_stated_choice():
-    """The same ``"nothing"``, under the role that DECLARES it. A free exit is a
-    boundary condition - the water leaves at the level and velocity the interior
-    brings to it - so the deck writes a placeholder the engine never reads,
-    instead of refusing."""
+    """The same "nothing", under the role that DECLARES it.
+
+    A free exit is a boundary condition - the water leaves at the level and velocity
+    the interior brings to it - so the deck writes a placeholder rather than refusing."""
     assert D._prescribes(D._ROLE_CODES[D.FREE_EXIT_ROLE]) == "nothing"
     assert D._ROLE_CODES[D.FREE_EXIT_ROLE] == (D.KSORT,) * 4
     assert D.FREE_EXIT_ROLE == T.FREE_EXIT_ROLE
