@@ -2,8 +2,8 @@
 and every relative link those docs carry, must resolve against the tracked tree.
 
 A reference that stopped resolving is a lie the reader cannot check. Prose scope
-is the product trees plus the manual; a dated record states what was true then
-and is read as evidence, so it is out.
+is the product trees, the manual and the two law documents; a dated record states
+what was true then and is read as evidence, so it is out.
 """
 
 from __future__ import annotations
@@ -26,6 +26,11 @@ PACKAGE_ROOTS = ("", "contracts/", "plugin/")
 #: under `docs/design/`, `docs/validation/`, `docs/reports/` or `docs/decisions/`
 #: names what it named when it was written and is not scanned.
 LIVE_DOC_ROOTS = ("docs/site/", "docs/authoring/", "docs/playbooks/", "docs/templates/")
+
+#: The two law documents are scanned with the maps: an agent is told to obey them,
+#: so a path either of them names must resolve or the instruction cannot be carried
+#: out. They are undated standing law, not a record of what was once true.
+LAW_DOCS = ("AGENTS.md", "docs/CONVENTIONS.md")
 
 #: Relative links are resolved in every tracked markdown outside frozen evidence:
 #: a link is a promise the reader can follow, whatever the page's vintage.
@@ -82,7 +87,7 @@ def _prose():
 
 def _live_docs() -> list[str]:
     """The markdown whose sentences are claims about the tree as it is now."""
-    live = ["Makefile"]
+    live = ["Makefile", *LAW_DOCS]
     for path in source.markdown_files():
         rel = str(path.relative_to(source.REPO_ROOT))
         if path.name == "README.md" or rel.startswith(LIVE_DOC_ROOTS):

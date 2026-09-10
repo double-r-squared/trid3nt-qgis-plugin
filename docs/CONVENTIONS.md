@@ -59,5 +59,6 @@ stopped resolving is a claim the reader cannot check.
 holds the limits, the routing budget, the exemption ledger and the disallowed
 classes; `test_history_markers.py` sweeps every comment and docstring in every
 product tree; `test_dead_references.py` resolves every named module, script and
-path. A guard is a grep after a file has been read end to end - it catches a
+path, in the product trees, the directory maps, the manual, `AGENTS.md` and this
+document - an agent told to obey a law cannot follow a path that is not there. A guard is a grep after a file has been read end to end - it catches a
 class coming back, it never stands in for reading.
