@@ -5470,3 +5470,25 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   the two law documents; the counts and the ledger lines refreshed;
   the two landed-plan docs DELETED per the outright ruling; the
   conformance table WRITTEN with every deviation on it.
+  HYGIENE AND DOCS WAVE CLOSED (2026-09-10, HEAD 7232a506): the
+  remedy leg wrote the conformance table (docs/validation/hygiene-
+  docs-conformance.md) with the four verify deviations and their
+  resolutions, extended the dead-reference guard to AGENTS.md and
+  CONVENTIONS.md, refreshed the slice counts and the readability
+  ledger's lines (257 rows: 244 product + 13 tests, none applied),
+  deleted the two landed-plan docs and corpus-additions.yaml under
+  the outright rule, and ran the critic to two dry rounds; the fresh
+  check found three residues the orchestrator fixed directly (three
+  ledger rows with unescaped pipes, one deletion justification naming
+  two present fetchers as gone, the conformance table's own manifest
+  row). STANDING TRUTH from here = the suite's five hygiene guards
+  (docstring standard by content lines, history markers, dead
+  references incl. the law documents, map READMEs, template-docs
+  freshness); the scratch critic's remaining counts are disclosed
+  artifacts (a per-file reading of the template-figure glob row;
+  README rows that resolve package-relative; one conditioned corpus
+  row). Numbers on the corrected instrument: docstrings 36,243 ->
+  11,802; product pure 102,887 -> 100,411; comments +18 ("goes" won
+  over "becomes a comment block"). The tests/ and scripts/ structures
+  and the generated template docs are the new baseline for every
+  wave.
