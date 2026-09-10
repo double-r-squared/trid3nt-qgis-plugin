@@ -165,6 +165,6 @@ def format_probe_result(result: Dict[str, Any]) -> List[str]:
 
 
 def probe_location_label(lon: float, lat: float) -> str:
-    """The dock's short point label for the note header, e.g.
-    ``"(-85.42000, 29.95000)"`` -- 5 decimal places (~1 m precision)."""
+    """The dock's short point label for a note header: five decimal places,
+    roughly one metre."""
     return f"({lon:.5f}, {lat:.5f})"
