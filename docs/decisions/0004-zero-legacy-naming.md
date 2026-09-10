@@ -17,3 +17,10 @@ already-built worker images), the dev-machine conda env name, the headless
 QGIS docker image tag, the cloud web SPA's storage keys/test-ids quoted by
 live-drive tests and docs, the cloud repo's own name in the sync-script
 reference, and frozen report artifacts' historical error text.
+
+AMENDED 2026-09-09 - Layer B is UNMET, stated here rather than left implied.
+`GraceModel` is still the base class every contract model derives from, and
+`persistence.py` still migrates `~/.grace2` to `~/.trid3nt` on first run. This
+record stays BINDING because the decision stands; the identifier rename is
+QUEUED in `docs/DELETION_LEDGER.md` with its condition, so an unmet clause has
+a work-queue entry instead of living here as a permanently false claim.

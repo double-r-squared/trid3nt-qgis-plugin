@@ -1,4 +1,4 @@
-# 0023 - US-only validation cases + paper-first replication standard
+# 0023 - fetchable-observation validation cases + paper-first replication standard
 
 Date: 2026-07-26. Status: accepted.
 
@@ -12,9 +12,13 @@ hand, which is unverifiable.
 ## Decision
 
 1. Malpasset completes (in flight) as the LAST non-US case.
-2. All future validation/calibration cases are US events whose observations
-   flow through our fetchers (USGS NWIS gauges - the from-the-start goal -
-   STN HWMs, NOAA products).
+2. All future validation/calibration cases are events whose observations FLOW
+   THROUGH OUR FETCHERS (USGS NWIS gauges - the from-the-start goal - STN HWMs,
+   NOAA products). AMENDED 2026-09-09: the clause was written US-only and is
+   refined to what it was always for - a case wherever the substrate can FETCH
+   gauges. US events dominate that set by infrastructure, not by rule, and a
+   hand-transcribed observation is what the clause refuses. Paper-first is
+   unchanged.
 3. Paper-first replication standard: a validation arc starts from a
    published, verified V&V study - full citations + data/model availability
    delivered to NATE for verification BEFORE any build; we then replicate

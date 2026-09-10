@@ -43,3 +43,14 @@ that mixes analysis with commitment reads as neither.
 
 `docs/specs/workflow-blueprint.html` - the mesh-tool spec (rev 4), the
 template for the next one.
+
+## Amended 2026-09-09 - what a spec may draw, now that the model exists
+
+This format governs a WAVE CONTRACT: a page pinned before a wave builds, saying
+where the architecture stands and what the wave adds. It does not govern a
+drawing of LIVE STRUCTURE. `docs/model/` is the suite-checked structure surface
+- `scripts/instruments/model_check.py` and `tests/model/` fail while a view is
+stale - so a diagram of what the tree IS belongs there, regenerated, and a
+second hand-drawn copy of the same system is drift with nothing to catch it.
+A spec's UML therefore depicts the mechanism the wave is committing to, and
+cites the model for the structure it is building on.

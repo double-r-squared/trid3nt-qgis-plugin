@@ -253,3 +253,13 @@ in `0f7a6351..02acbfed` touched `artemis_build.py` except the two coastal datum 
 origin fixes. The server-side stance was removed; the worker-side one was not, and
 the consequence as written promises an open-water solve that the deck writer alone
 cannot deliver.
+
+## Amended 2026-09-09 - the coastal half is gone; two of the four stand
+
+The coastal template left the tree, and the two items that were about it - the
+peak-raster discrimination against the initial water line, and the local-origin
+grid the worker computed and threw away - went with their subject. What this
+record still binds is the other half: the RESOLUTION LABEL
+(`workflows/runtime/resolution.py`, a declared class rather than a number the
+code chose) and the CONTEXT SLOT. A reader looking for the coastal fixes should
+read this as the record of a fix to a template that no longer exists.

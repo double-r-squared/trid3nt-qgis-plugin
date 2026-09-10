@@ -3573,3 +3573,39 @@ byte-identical to `test_mesh_meshers.py`'s), and the fuzz cross product in
 | Candidate | Scope | Condition to delete | Status | Source |
 |---|---|---|---|---|
 | the `hydromt-sfincs` and `pandas` pins | `pyproject.toml` | The eval's condition on `test_pandas_pin_regression.py`: the pins that test guarded have no subject - SFINCS is gone and the pandas cap exists only to work around `hydromt-sfincs 1.2.2`. NOT taken with the test: removing a dependency and lifting a version cap is a build-surface change, and the wave that took the test is documentation and structure only. Condition to delete: a wave that owns the dependency set, where a fresh install is re-resolved and proven. | QUEUED | `docs/validation/tests-eval.md` section 3.1 |
+
+## The Layer B identifier rename - queued out of ADR 0004 - 2026-09-09
+
+| Candidate | Scope | Condition to delete | Status | Source |
+|---|---|---|---|---|
+| `GraceModel`, the base class every `trid3nt_contracts` model derives from | `contracts/trid3nt_contracts/common.py` and every model that subclasses it | ADR 0004's Layer B: the product name is TRID3NT across all versions and Layer B renames the IDENTIFIERS. The class name is a pre-rebrand identifier on the most-imported symbol in the package, so the rename touches every contract module and every consumer that names the base. Condition: a wave that owns the contracts package as code, where the rename lands with the schema regeneration in one commit and the suite proves the wire shapes byte-identical | QUEUED | ADR 0004 amendment (2026-09-09), `docs/validation/docs-census.md` Q4d |
+| The `~/.grace2` -> `~/.trid3nt` first-run migration | `trid3nt_server/persistence.py` | Same clause. The migration is LIVE code, not residue: it exists so a pre-rename install keeps its cases. Condition: no reachable install still carries a `~/.grace2` directory, at which point the migration and its name go together. Deleting it earlier silently orphans a user's case history | QUEUED | ADR 0004 amendment (2026-09-09) |
+
+## The decision records: 220 deleted outright - 2026-09-09
+
+DOCS CENSUS RULED: a record is BINDING or it is DELETED; there is no superseded
+state that keeps a file. The chop set is the 220 rows the census classified
+SUPERSEDED (66) or DEAD (154) in
+`docs/validation/hygiene-manifest/docs-decisions.md`, where every row carries
+the verdict's own evidence - the superseding record by number, or the tree
+measurement that makes the subject absent. 31,850 lines; 106 BINDING records
+survive and `docs/decisions/README.md` is regenerated to them.
+
+Nothing was lifted after the fact: the two content migrations ran FIRST
+(commit before this one). Four revisit triggers went to
+`docs/REANALYZE_LEDGER.md` (0049 and 0050 as one entry, 0091, 0321) and eight
+surviving clauses went to the BINDING record that succeeds each (0005 -> 0327,
+0022 -> the calibration methodology, 0055 and 0075 -> 0036, 0263 -> 0278,
+0295 -> 0035, 0303 and 0314 -> 0322).
+
+CONDITION: none. git is the archive, which is the whole reason the folder's
+"never rewrite history - supersede with a new note that links back" convention
+was replaced: that sentence is why the folder reached 45,614 lines in 45 days.
+
+Trace: no Python comment, docstring or README names any deleted file, so the
+dead-reference guard is unaffected. Three prose references survive by design -
+`docs/validation/docs-census.md` (the record OF this chop names its own set) and
+`docs/validation/scripts-eval.md` (dated evidence rows citing 0237, 0305, 0307
+and 0314 at the lines they were read at; a dated record is not rewritten).
+`docs/specs/shared-workflows-cull-proposal.md` names 0042 and is itself a delete
+in the docs-layout stage.
