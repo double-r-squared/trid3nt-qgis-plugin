@@ -1,0 +1,214 @@
+<title>The Module Is the Unit</title>
+<style>
+  :root { --bg: #ffffff; --fg: #111111; --line: #999999; --code-bg: #f4f4f4;
+          --kw: #0000cc; --str: #a31515; --com: #008000; --num: #098658; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --bg: #1b1b1b; --fg: #e6e6e6; --line: #666666; --code-bg: #2a2a2a;
+          --kw: #569cd6; --str: #ce9178; --com: #6a9955; --num: #b5cea8; }
+  }
+  :root[data-theme="dark"] { --bg: #1b1b1b; --fg: #e6e6e6; --line: #666666; --code-bg: #2a2a2a;
+          --kw: #569cd6; --str: #ce9178; --com: #6a9955; --num: #b5cea8; }
+  body { background: var(--bg); color: var(--fg); font-family: serif; line-height: 1.4; margin: 0 auto; max-width: 60em; padding: 1.5em 1em 4em; }
+  h1 { font-size: 1.6em; border-bottom: 1px solid var(--line); padding-bottom: .2em; }
+  h2 { font-size: 1.25em; border-bottom: 1px solid var(--line); padding-bottom: .15em; margin-top: 1.8em; }
+  code, pre { font-family: monospace; font-size: .95em; }
+  code { background: var(--code-bg); padding: 0 .25em; }
+  pre:not(.mermaid) { background: var(--code-bg); border: 1px solid var(--line); border-left: 4px solid var(--line); padding: .6em .8em; overflow-x: auto; }
+  .k { color: var(--kw); font-weight: bold; } .s { color: var(--str); } .c { color: var(--com); font-style: italic; } .n { color: var(--num); }
+  table { border-collapse: collapse; margin: .8em 0; }
+  th, td { border: 1px solid var(--line); padding: .3em .6em; text-align: left; vertical-align: top; }
+  th { background: var(--code-bg); }
+  .scroll { overflow-x: auto; }
+  .rev { font-size: .85em; }
+  p { max-width: 72ch; }
+</style>
+
+<h1>The Module Is the Unit</h1>
+<p class="rev">rev 1 &middot; 2026-09-10 &middot; the engine's module is the unit the system is built around; a scenario is expressed over it, never built and then tied to it. The small refactor wave before calibration.</p>
+
+<h2>1. The principle</h2>
+<p>An engine exposes modules (TELEMAC: telemac2d, telemac3d, artemis, tomawac, with gaia and waqtel coupled). A module has a keyword dictionary, inputs, and outputs. Everything TRID3NT knows how to do with an engine is a capability of one of its modules: a composite that expands one value into keywords, a primitive that reads one thing off a result. A scenario such as a dye plume down a river is a set of values over the telemac2d module plus a list of which primitives to read. Nothing below the template layer may know the scenario exists.</p>
+<div class="scroll">
+<pre class="mermaid">
+flowchart TB
+    DICO["dictionary<br/>extracted from the engine's dico<br/>every keyword, type, default, help"] --> MOD["module wrapper<br/>composites: one value -> several keywords<br/>outputs: primitives in the engine's vocabulary<br/>NO opinion, NO question"]
+    MOD --> TPL["template = VALUES<br/>parts + a body of keywords + an outputs list + captions<br/>the only per-question code"]
+    TPL -- "fill (repeatable)" --> SHEET["sheet<br/>every slot: value + provenance<br/>open slots listed"]
+    SHEET -- "run (held until the user says so)" --> RUN["run record<br/>engine = telemac, module = case.module<br/>the manifest the worker reads"]
+    RUN --> OUT["outputs<br/>field(name, t), series(name, at), max_over_time(name), extent, mass_balance<br/>published generically: layer, chart, animation"]
+</pre>
+</div>
+<table>
+<tr><th>layer</th><th>may name</th><th>may never name</th></tr>
+<tr><td>dictionary, module, solving, authoring, publishing</td><td>the engine, its modules, its keywords and variables</td><td>a template, a question word (dye, oil, scour, agitation, sag, stratified, plume)</td></tr>
+<tr><td>template</td><td>everything above plus its own values and captions</td><td>a function body: a template that needs code needs a primitive the module lacks</td></tr>
+<tr><td>run record, cards, journal, provenance</td><td>engine and module</td><td>the template (it survives only as a slot's fill provenance)</td></tr>
+</table>
+
+<h2>2. Identity: the solver is the engine</h2>
+<p>One solver registration per engine. The run record carries <code>engine</code> and <code>module</code>; the module is the manifest's own <code>case.module</code>, which the worker already keys on and refuses by name when unknown. The dispatch card reads "TELEMAC / artemis". Code provenance resolves an engine from the record's engine field.</p>
+<table>
+<tr><th>goes</th><th>replaced by</th></tr>
+<tr><td>the three question-named solver ids and the per-leg spec factory in <code>solving/run_telemac.py</code></td><td>one <code>LocalSolverSpec</code> for <code>telemac</code>; the exit classifier labels by the module the worker's metrics state</td></tr>
+<tr><td>the completion-metrics allowlist (sixty keys grouped by question, most never written by the worker)</td><td>the completion folds what the worker wrote; the worker is ours and writes module-level metrics only</td></tr>
+<tr><td>the solver-to-engine override table in <code>solver/code_provenance.py</code></td><td>the engine field</td></tr>
+<tr><td>the plugin's engine-label split on the solver id</td><td>the engine field on the card payload (plugin version bump)</td></tr>
+<tr><td>the river-dye special case in <code>tools/tool_arg_normalizer.py</code></td><td>the Point primitive (section 5)</td></tr>
+</table>
+
+<h2>3. The module surface: dictionary, composites, primitives</h2>
+<p><code>telemac/catalog/</code> is renamed <code>telemac/dictionary/</code> and the Module attribute with it: the engine's own word for the thing. Composites stay as they are. Outputs become primitives named from the module's variable vocabulary; the question-named outputs (<code>dye</code>, <code>oil_slick</code>, <code>agitation</code>, <code>column_structure</code>) leave the wrappers.</p>
+<table>
+<tr><th>primitive</th><th>telemac2d</th><th>telemac3d</th><th>artemis</th><th>gaia / waqtel</th></tr>
+<tr><td><code>field(name, t)</code></td><td>H, U, V, S, B, T1..Tn at a time</td><td>the same plus a plane of a 3D variable</td><td>WAVE HEIGHT HS, KD, phase</td><td>bed evolution, DO, BOD</td></tr>
+<tr><td><code>series(name, at)</code></td><td>a variable at a Point over time</td><td>the same, at a plane</td><td>the same</td><td>the same</td></tr>
+<tr><td><code>max_over_time(name)</code></td><td>the envelope field and the time of the max</td><td>the same</td><td>the same</td><td>the same</td></tr>
+<tr><td><code>extent()</code>, <code>mesh()</code>, <code>mass_balance()</code></td><td colspan="4">the solved domain, the mesh handed to the layer seam, the listing's mass balance</td></tr>
+</table>
+<p>Publishing is generic and written once: a field becomes a layer with a style, a series becomes a chart, a field over time becomes an animation. The per-question postprocessors in <code>telemac/products/</code> dissolve: their private readers become the primitives, their layer and chart calls become the generic publishers, and what is left of each is the template's outputs list. The two postprocessors with no callers (coastal, tomawac) go outright. An analytic reference such as the Streeter-Phelps sag is not an engine output and moves beside the template that overlays it.</p>
+
+<h2>4. A template is values</h2>
+<pre><span class="k">class</span> STEERING(T2D):
+    parts = [RIVER]
+    NUMBER_OF_TRACERS = <span class="n">1</span>                       <span class="c"># the question, in three lines</span>
+    NAMES_OF_TRACERS = [<span class="s">"DYE             MG/L"</span>]
+    INITIAL_VALUES_OF_TRACERS = [<span class="n">0.0</span>]
+    VARIABLES_FOR_GRAPHIC_PRINTOUTS = <span class="s">"U,V,H,S,B,T1"</span>
+    boundaries = Boundaries(measured=Ref(<span class="s">"settled"</span>), tracers=[<span class="n">0.0</span>])
+    releases = [Release(at=P.release, q=R.source_q_m3s, tracers=[P.concentration_mgl],
+                        window_s=R.spill_duration_s)]
+
+OUTPUTS = [field(<span class="s">"T1"</span>, t=<span class="s">"every"</span>).animate(), max_over_time(<span class="s">"T1"</span>).layer(), series(<span class="s">"T1"</span>, at=P.release).chart()]
+CAPTIONS = {<span class="s">"T1"</span>: <span class="s">"reach maximum {substance} concentration"</span>}</pre>
+<table>
+<tr><th>rule</th><th>consequence</th></tr>
+<tr><td>a template is parts, a body of keywords, an outputs list, captions; nothing else</td><td>a template that defines a function is refused by the lint; the fix is a primitive on the module</td></tr>
+<tr><td>nothing is frozen</td><td>two tracers is an override of <code>NUMBER_OF_TRACERS</code> and the names; the tracer composites already take lists</td></tr>
+<tr><td>the question is stated in the template, numerics in the part, the ask in the params</td><td>describe and the card show set values and open slots; a part's numerics sit under advanced</td></tr>
+<tr><td>engine defaults are unwritten; an opinion states its reason at the line</td><td>two findings in the RIVER part, for NATE's ruling: <code>SCHEME_FOR_ADVECTION_OF_TRACERS = 1</code> against the engine default and the ruling of 13; <code>COEFFICIENT_FOR_DIFFUSION_OF_TRACERS = 0.1</code> and <code>VELOCITY_DIFFUSIVITY = 0.1</code> against the default 1e-6, the first a tracer keyword in the water part</td></tr>
+</table>
+<p>The per-template declarations shrink to the ask: the substance, its concentration, the spill window, the release. Per-template chart builders, coercion modules, and lat/lon spellings go. The measurement point is river_dye re-expressed this way before the other seven move.</p>
+
+<h2>5. Inputs are typed primitives</h2>
+<div class="scroll">
+<pre class="mermaid">
+flowchart LR
+    PICK["canvas pick<br/>spatial-input-request mode=point<br/>+ a NAME (typed or point-n)"] --> PT["Point<br/>lon, lat, name"]
+    CALL["a pair on the call"] --> PT
+    LAYER["a selected point layer"] --> PT
+    GEO["a place name, geocoded"] --> PT
+    PT --> SLOT["the slot that asked<br/>release | pour | gauge | probe"]
+    SLOT --> V["validated against the mesh<br/>inside the domain, on the river, in water; snapped to wet"]
+    SLOT --> L["published as a context layer"]
+</pre>
+</div>
+<table>
+<tr><th>type</th><th>fed by</th><th>methods</th></tr>
+<tr><td><code>Point</code></td><td>the pick, a pair, a point layer, a geocoded name</td><td>contain-in-domain, snap-to-wet, as-layer, as-utm</td></tr>
+<tr><td><code>Extent</code></td><td>the bbox pick, the canvas AOI, a place name, a layer's bounds</td><td>quantize, encloses, as-layer</td></tr>
+<tr><td><code>Shape</code></td><td>the draw (role-tagged features), a selected vector layer</td><td>polylines, polygons, as-layer</td></tr>
+</table>
+<p>A pick carries a name: the plugin offers a field, defaulted to <code>point-n</code>; the wire payload and the run record gain <code>name</code>. The name feeds the tracer name, the source label, and the chart title, so neither the user nor the model supplies it a second time. The slot's role stays in the gate title, because "place the release" is information; the action and the ingestion are not per-thing. What goes: <code>release_lat</code>/<code>release_lon</code> in four templates, <code>release_coords</code>, <code>spill_location_latlon</code>, <code>templates/river_dye/coercions.py</code>, the normalizer special case, and the point-specific halves of <code>helpers/release_point.py</code> and <code>helpers/release_layer.py</code>, which become Point methods.</p>
+
+<h2>6. Provenance: one field, a closed vocabulary, read by people</h2>
+<table>
+<tr><th>origin</th><th>detail</th><th>meaning</th></tr>
+<tr><td><code>template</code></td><td>template name</td><td>a starting value</td></tr>
+<tr><td><code>user</code></td><td></td><td>typed or confirmed by the user</td></tr>
+<tr><td><code>model</code></td><td></td><td>proposed by the LLM during the fill</td></tr>
+<tr><td><code>producer</code></td><td>producer name</td><td>computed at fill time from fetched data</td></tr>
+<tr><td><code>derived</code></td><td>source slot</td><td>expanded from another slot by a composite</td></tr>
+<tr><td><code>calibrated</code></td><td>calibration run id</td><td>from a proposal the user confirmed</td></tr>
+</table>
+<p>The field is the one that exists on every filled slot; its free text becomes this vocabulary. The card renders it as a chip so a reader can override with confidence. No consumer changes behavior on it: the user or the driver decides. This is the only place the word "template" appears at runtime.</p>
+
+<h2>7. Homes: every kind of code has one</h2>
+<table>
+<tr><th>a piece of code that</th><th>lives in</th></tr>
+<tr><td>writes an engine input file</td><td>authoring (NESTOR polygon and action files from <code>helpers/dredging.py</code>; user Fortran from <code>helpers/oil.py</code>)</td></tr>
+<tr><td>expands a value into keywords</td><td>a composite on the wrapper (substance classes, the WAQTEL O2 block, the infiltration producer)</td></tr>
+<tr><td>fetches or resamples</td><td>a DATA row in the template (most of <code>helpers/forcing.py</code>)</td></tr>
+<tr><td>validates or places a geometry</td><td>a method on Point, Extent, or Shape, or a mesh tool</td></tr>
+<tr><td>fails</td><td>a module-level error (input invalid, point outside domain, reach unmapped); never a question-named one</td></tr>
+<tr><td>is a pure physics or numerics function none of the above expresses</td><td>helpers (normal depth, rating curve, saturation, time-step suggestion, solve-time estimate)</td></tr>
+<tr><td>reads a geometry source or an AOI</td><td>inputs (from <code>workflows/shared/geometry.py</code>, <code>aoi.py</code>, <code>supplied_geometry.py</code>, <code>layer_fields.py</code>)</td></tr>
+<tr><td>writes a COG, styles a layer, writes an outputs manifest</td><td>publishing (from <code>workflows/shared/cog_io.py</code>, <code>publish_product_layer.py</code>, <code>outputs_manifest_io.py</code>)</td></tr>
+</table>
+<table>
+<tr><th>folder</th><th>raw lines</th><th>fate</th></tr>
+<tr><td>telemac/products</td><td>4,658</td><td>dissolves into primitives, publishing, template outputs lists</td></tr>
+<tr><td>telemac/templates</td><td>4,499</td><td>values; shrinks, measured on river_dye first</td></tr>
+<tr><td>telemac/helpers</td><td>2,603</td><td>a few hundred physics lines remain</td></tr>
+<tr><td>telemac/modules</td><td>1,893</td><td>stays; primitives in, question outputs out</td></tr>
+<tr><td>telemac/authoring</td><td>1,380</td><td>gains dredging and oil authoring; the assembler reviewed for the same leaks</td></tr>
+<tr><td>workflows/shared</td><td>1,291</td><td>dissolves into inputs, publishing, solver, runtime; the worker-era manifest registration verified and culled</td></tr>
+<tr><td>telemac/solving</td><td>489</td><td>one engine registration</td></tr>
+<tr><td>telemac/catalog</td><td>data</td><td>telemac/dictionary</td></tr>
+<tr><td>trid3nt_server/testing</td><td>1,534</td><td>the dev directory (section 10)</td></tr>
+<tr><td>mesh, runtime, solver</td><td>13,790</td><td>untouched but for identity</td></tr>
+</table>
+
+<h2>8. The adapters' message IR is ours</h2>
+<p>Four files (<code>adapters/adapter.py</code>, <code>openai_adapter.py</code>, <code>anthropic_adapter.py</code>, <code>gates/context_budget.py</code>) build turns from six <code>google.genai.types</code> classes: Content, Part, FunctionDeclaration, FunctionCall, FunctionResponse, UnionType. That is a whole provider SDK carried for its data classes. The IR becomes five models in contracts: <code>Message(role, parts)</code>, <code>Part(text | call | response)</code>, <code>ToolCall(name, args, id)</code>, <code>ToolResponse(name, result, id)</code>, <code>ToolDeclaration(name, description, schema)</code>. Each provider adapter converts from these at its own boundary, which is what each already does from the google classes. <code>google-genai</code> leaves <code>pyproject.toml</code>; a dormant Gemini branch in <code>adapter.py</code>, if the wave finds one, goes to the attic with a manifest.</p>
+
+<h2>9. Attic rows and manifest relics</h2>
+<table>
+<tr><th>item</th><th>finding</th><th>fate</th></tr>
+<tr><td><code>trid3nt_server/scenario_reuse.py</code> (615)</td><td>a dispatch-time short-circuit keyed on a quantized bbox and layer-id substrings; its solver table names three unregistered tools and its own comment says it is inert; the runtime's rerun ledger is the reuse mechanism</td><td>attic, after a verify that nothing live reads its <code>reused_existing</code> status (dispatch aoi, dispatch emitter, the adapter)</td></tr>
+<tr><td><code>public_data_source_catalog.yaml</code> + <code>search_data_catalog</code> + <code>fetch_from_catalog</code> + <code>catalog_common</code> + <code>contracts/catalog.py</code> + three tests</td><td>a discovery capability no template or fetcher uses</td><td>scope attic with a manifest; <code>ogc_adapter</code> stays (the raster executor reads it). The Living Atlas quartet is the same class: flagged, not ruled</td></tr>
+<tr><td><code>pyproject.toml</code></td><td>web-era description; hydromt-sfincs and the pandas ceiling that exists for it (the ceiling blocks pyEMU 1.7); flopy, pelicun, pyswmm, swmm-api, landlab, openquake.engine for engines not in the tree; pmtiles with no importer; grimp and vulture as dev tools; a package-data line naming a file that does not exist; lxml and zarr used by name (BeautifulSoup parser, xarray zarr stores) with comments that say so</td><td>corrected in place; the attic manifests re-declare an engine's deps on re-mount</td></tr>
+</table>
+
+<h2>10. The dev directory, lint, and what ships</h2>
+<table>
+<tr><th>rule</th><th>shape</th></tr>
+<tr><td>dev tools are not product and not on the remote</td><td>one gitignored <code>dev/</code> at the repo root: the packet renderer, doc renders, the template-docs generator, the canary harness, ws_smoke, drivers, instruments, and the lints; <code>scripts/</code> keeps entry points that ship; <code>scripts/local</code> retires</td></tr>
+<tr><td>a backup is the archive for what git does not hold</td><td>a timed tar of <code>dev/</code>, <code>docs/IDEAS.md</code>, and <code>.env.local</code> to the disk NATE names, newest few kept</td></tr>
+<tr><td>lint is not tests</td><td><code>tests/</code> keeps unit tests; the history-marker, dead-reference, directory-map, and template-freshness checks are lints in <code>dev/</code>; the docstring-length guard and its exemption ledger are dropped, the three-or-five-line shape is guidance in AGENTS.md and CONVENTIONS</td></tr>
+<tr><td>the model ships</td><td><code>docs/model</code> is a source of truth like the docs; the model checker and <code>tests/model</code> stay in the suite</td></tr>
+<tr><td>banner comments go</td><td>the 1,777 ruler lines across 201 files are stripped; none are written again; a lint in <code>dev/</code> holds it</td></tr>
+<tr><td>the product LOC row is shipped code</td><td>server, plugin, contracts, workers; the instrument counts tracked Python, so <code>dev/</code> never enters a row</td></tr>
+</table>
+
+<h2>11. Guards and the model</h2>
+<table>
+<tr><th>check</th><th>kind</th><th>what it holds</th></tr>
+<tr><td>no template name and no question word under modules, solving, authoring, publishing, inputs, helpers, or the adapters</td><td>lint (dev/)</td><td>section 1's table</td></tr>
+<tr><td>every wrapper output is named from the module's variable vocabulary or the primitive set</td><td>lint (dev/)</td><td>section 3</td></tr>
+<tr><td>a template file holds no function definition</td><td>lint (dev/)</td><td>section 4</td></tr>
+<tr><td>no banner comment, no history marker, no dead reference, every map current, every template page fresh</td><td>lint (dev/)</td><td>section 10</td></tr>
+<tr><td>a run record carries engine and module and no template</td><td>unit test</td><td>section 2</td></tr>
+<tr><td>a Point slot fills from each of its four sources and refuses a point outside the domain by name</td><td>unit test</td><td>section 5</td></tr>
+<tr><td>a fill with <code>NUMBER_OF_TRACERS = 2</code> produces a two-tracer deck</td><td>unit test</td><td>section 4</td></tr>
+<tr><td>provenance on every filled slot is one of the six origins</td><td>unit test</td><td>section 6</td></tr>
+<tr><td>the adapters build a turn from the contracts IR with no google import</td><td>unit test</td><td>section 8</td></tr>
+</table>
+<p>One SysML requirement, <code>ModuleIsTheUnit</code>, with those unit tests as its verify allocations, so the model checker carries the principle. A second, <code>InputsAreTypedPrimitives</code>, over section 5. The views regenerate with the wave.</p>
+
+<h2>12. Estimates</h2>
+<p>Raw lines, with the record stated first: the module surface promised 7,000 to 8,500 and landed 3,777; the fetcher fold projected 3,490 and landed 638. The low end is the planning number.</p>
+<table>
+<tr><th>piece</th><th>raw delta</th></tr>
+<tr><td>products fold</td><td>-3,000 to -3,400</td></tr>
+<tr><td>helpers dissolution</td><td>-1,200 to -1,500</td></tr>
+<tr><td>templates as values</td><td>-1,200 to -1,800</td></tr>
+<tr><td>shared dissolution</td><td>-300 to -500</td></tr>
+<tr><td>scenario reuse, catalog tools, testing out of the package</td><td>-3,200 (attic and dev, not deletion)</td></tr>
+<tr><td>identity, provenance table, normalizer, plugin label, adapters IR</td><td>-250 to -400</td></tr>
+<tr><td>banner comments</td><td>-1,777 (comment lines; zero pure)</td></tr>
+<tr><td>total pure, product row</td><td>about -4,000 from the refactor, about -2,100 more from the attic and dev moves</td></tr>
+</table>
+
+<h2>13. Legs, in order</h2>
+<table>
+<tr><th>leg</th><th>lands</th><th>gate</th></tr>
+<tr><td>0 mechanical</td><td><code>dev/</code> with the backup timer; testing moved; lint set moved and the docstring guard dropped; pyproject corrected; scenario reuse and the catalog to their attics; banner comments stripped</td><td>six slices green; a live river_dye packet renders from <code>dev/</code>; the backup's first tar present on the named disk</td></tr>
+<tr><td>1 identity</td><td>one engine registration; engine and module on the record; the dictionary rename; the closed provenance vocabulary on the card; the adapters IR in contracts and google-genai out</td><td>the record and provenance tests; the card shows "TELEMAC / artemis" on a live agitation run; no google import</td></tr>
+<tr><td>2 inputs</td><td>Point, Extent, Shape with one ingestion each; the named pick end to end (plugin version bump); the four templates' point spellings and coercions gone</td><td>the Point tests; a live pick with a typed name lands as the tracer name on a river_dye run</td></tr>
+<tr><td>3 the measurement</td><td>the primitive set and generic publishing; river_dye re-expressed as values over them; its declarations shrunk to the ask</td><td>the river_dye packet is byte-comparable to the current one on the same run inputs (same layers, same chart values, same animation frames); the raw and pure deltas reported</td></tr>
+<tr><td>4 the family</td><td>the other seven templates; the products, helpers, and shared dissolutions; the RIVER findings as ruled</td><td>eight canaries green with packets; the guards dry</td></tr>
+<tr><td>5 close</td><td>the model requirements and views; the template pages and module README regenerated; the module-surface spec's affected sections revised; the conformance table</td><td>fresh-eyes clause-by-clause conformance; NATE reads it</td></tr>
+</table>
+
+<h2>14. Acceptance</h2>
+<p>The wave is closed when: no file below the template layer contains a template name or a question word; every wrapper output is a primitive; every template is values; every point in the system is a Point; every filled slot carries one of six origins; the run record carries engine and module; the adapters import no provider SDK for their IR; the dev directory renders a packet and the backup exists; the eight canaries pass with packets rendered under <code>run/proof</code>; the product pure-LOC row is reported against 100,099 with the row's contents restated; the conformance table is read.</p>
