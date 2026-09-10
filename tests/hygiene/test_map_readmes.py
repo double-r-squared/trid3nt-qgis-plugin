@@ -109,3 +109,23 @@ def test_a_map_names_everything_that_exists(readme: Path) -> None:
     missing = sorted((modules | folders) - named)
     assert not missing, (f"{readme.relative_to(REPO)} does not name: "
                         + ", ".join(missing))
+
+
+#: The decisions index is a map of a folder rather than of a package, so the
+#: table walk above does not reach it: its rows are markdown links, not cells.
+DECISIONS = REPO / "docs" / "decisions"
+_INDEX_ENTRY = re.compile(r"^- \[(\d{4}) - .+?\]\((\d{4}-[\w.-]+\.md)\)$", re.MULTILINE)
+
+
+def test_the_decisions_index_is_the_folder() -> None:
+    """Every numbered record is listed once, under its own number."""
+    entries = _INDEX_ENTRY.findall((DECISIONS / "README.md").read_text(encoding="utf-8"))
+    listed = [target for _, target in entries]
+    records = sorted(path.name for path in DECISIONS.glob("[0-9][0-9][0-9][0-9]-*.md"))
+    assert listed == records, (
+        "the index and the folder disagree: "
+        f"unlisted={sorted(set(records) - set(listed))} "
+        f"absent={sorted(set(listed) - set(records))} "
+        f"ordered={listed == sorted(listed)}")
+    misnumbered = [target for number, target in entries if not target.startswith(number)]
+    assert not misnumbered, "index rows whose number is not the record's: " + ", ".join(misnumbered)

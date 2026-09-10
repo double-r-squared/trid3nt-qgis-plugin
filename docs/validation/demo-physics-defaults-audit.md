@@ -379,7 +379,6 @@ for `basis="default_demo"` (schema-level), so the omission cannot even construct
   defaults, SILENT -- a mesh-layer sibling of #23), row 19 (SFR streambed gradient
   = #5), row 27 (Muncie demo geometry = #14). Those rows are runtime fallbacks of
   the SAME invented values; the conversions should land together.
-</content>
 
 ## CLOSING STATUS -- the ladder is complete (2026-08-18, ADR 0285 P1-P8)
 

@@ -497,10 +497,12 @@ now read as `tests/<destination>/<file>`.
 
 ## Added by the guards leg: `tests/hygiene/`
 
-The three sweep guards THE GUARDS ruling names, written and read end to end by
-the agent that landed them. Same columns; `hist` is the standing regex count
-after the read, `fate` is `KEEP` for all five - this directory is the guard, so
-it is never a move candidate. It joins the `test-server` slice.
+The three sweep guards THE GUARDS ruling names, plus the regression test the
+same leg wrote when the LOC instrument's own defect surfaced - written and read
+end to end by the agent that landed them. Same columns; `hist` is the standing
+regex count after the read, `fate` is `KEEP` for all six - the guard directory is
+never a move candidate, and the instrument test sits in the mirror beside the
+other `scripts/` subjects. Both join the `test-server` slice.
 
 | path | pure | hist | fate | note |
 | --- | ---: | ---: | --- | --- |
@@ -509,9 +511,10 @@ it is never a move candidate. It joins the `test-server` slice.
 | `tests/hygiene/test_docstring_standard.py` | 47 | 0 | KEEP | content-line limits, the 1000-char routing budget, the idle-marker refusal, the ten-entry ceiling, the rendered ledger diff, the disallowed classes over docstrings and comment blocks |
 | `tests/hygiene/test_history_markers.py` | 11 | 0 | KEEP | the HISTORY IN CODE classes over every comment token and docstring in every product tree |
 | `tests/hygiene/test_dead_references.py` | 67 | 0 | KEEP | paths, bare script names and dotted module names resolved against the tracked tree, the package roots and a README's own directory |
+| `tests/scripts/test_loc_report_classify.py` | 31 | 0 | KEEP | ROWED BY THE ROUND-4 CRITIC, which found it carrying no row in any lens. The guards leg landed it with the instrument fix (a blank line inside a docstring was subtracted twice, understating pure code): two tests over one fixture source, one pinning the exact blank/comment/docstring split and one asserting the three counts never claim a line twice, so the remainder is pure code by construction. It imports `scripts/instruments/loc_report.py` by path because `scripts/` is not a package, which is why it belongs in the mirror's `scripts/` directory rather than beside the guards. |
 
-Scope delta: `git ls-files tests plugin/tests contracts/tests` gains five files,
-344 pure LOC.
+Scope delta: `git ls-files tests plugin/tests contracts/tests` gains six files,
+375 pure LOC.
 
 ## Added by the docs stage: the proof-coverage guard
 
@@ -533,7 +536,7 @@ guards leg; both are KEEP and both join the `test-server` slice.
 | path | pure | hist | fate | note |
 | --- | ---: | ---: | --- | --- |
 | `tests/hygiene/test_template_docs.py` | 92 | 0 | KEEP | every registered template has a page, a run record and figures; the pages are byte-current against the generator; a figure whose stamped commit does not contain its template's last change fails; the figures stay inside the doc-size ceilings |
-| `tests/hygiene/test_map_readmes.py` | 70 | 0 | KEEP | a package map names only what exists beside it, and names every tracked top-level module and immediate subfolder |
+| `tests/hygiene/test_map_readmes.py` | 70 | 0 | KEEP | a package map names only what exists beside it, and names every tracked top-level module and immediate subfolder; round 4 adds the decisions index (a map of a FOLDER, whose rows are links rather than table cells) |
 
 Scope delta: `git ls-files tests plugin/tests contracts/tests` gains two files,
 162 pure LOC. `tests/README.md`'s `hygiene/` row is restated from 3 files to 6.
@@ -552,3 +555,16 @@ dead reference through the whole wave:
 Both proven on a seeded break: a live doc naming an absent instrument, and a
 page linking an absent sibling. `tests/README.md`'s `hygiene/` row still reads 6
 files - the file count is unchanged.
+
+## Completeness critic, round 4: the decisions index gets the map guard
+
+No file enters scope. `tests/hygiene/test_map_readmes.py` gains one check, and
+`tests/scripts/test_loc_report_classify.py` gains the row it never had (in the
+guards-leg table above, where the leg that wrote it belongs).
+
+| what it now reads | why it was a hole |
+| --- | --- |
+| `docs/decisions/README.md`'s index against the numbered records beside it: every record listed once, in order, under its own number | the file states that the index IS the folder ("a record that is not listed here does not exist"), and nothing checked it. The table walk cannot reach it - its rows are markdown links, not first cells - and the dead-reference guard only asks whether a listed target exists, never whether an existing record is listed. Three rows rendered as `???? - 0158:` and sat that way |
+
+Proven on two seeded breaks: an index row whose number is unrendered, and a
+record deleted from the index while its file stays.
