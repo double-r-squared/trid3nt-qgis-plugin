@@ -1,14 +1,9 @@
-"""fetch_river_geometry via the router: the OSM waterway network in an AOI.
+"""``fetch_river_geometry``: the OSM waterway network in an AOI.
 
-Migrates the value-bearing coverage of the deleted twin's tests (the
-fetch_river_geometry block of test_data_fetch.py) onto the spec-driven surface:
-the PURE river_geometry hooks (class-vocabulary resolution, the tag the library is
-asked for, the AOI clip, honest-empty), the max_bbox_km2 guardrail, and the
-end-to-end LayerURI + cache-key stability. The vestigial NHDPlus HR HUC4 leg was
-DROPPED (NATE-decided), so its fallback-ordering tests are intentionally absent.
-Offline: frames shaped as the library returns them + an in-memory read_through
-injector; the live read is proven by this row's fold parity.
-"""
+The spec-driven surface: the PURE hooks - class-vocabulary resolution, the tag the
+library is asked for, the AOI clip and the honest empty - the area guardrail, and
+the end-to-end layer with a stable cache key. Offline, over frames shaped as the
+library returns them plus an in-memory cache injector."""
 
 from __future__ import annotations
 

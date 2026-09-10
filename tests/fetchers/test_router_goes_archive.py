@@ -1,21 +1,9 @@
-"""Router-level coverage for the folded GOES raw-MCMIPC archive sources (ADR 0088).
+"""The folded raw-archive satellite sources, on the frames-list shape.
 
-fetch_goes_archive_animation + fetch_goes_active_fire fold onto shape:
-animation_frames via the shared goes_archive.frames_plan / frame_bytes hooks over
-the imagery._goes_archive_core substrate (netcdf_cf_object per-frame mode). This
-covers:
-
-- registration + spec-served + signature/return parity (twin-identical surface),
-- per-frame cache_params BYTE-identity vs the twin (cache reuse), naming, layer_id,
-  per-band style_preset, and the scrubber NAME-TOKEN grouping over REAL produced
-  declared per-frame validity windows,
-- the honesty floor (all-frames-degrade + empty-window -> GOES_ARCHIVE_EMPTY),
-  satellite-spelling normalization, band aliasing, and typed input errors,
-- the pure band-math core (Fire-Temp / true-color composite, split-window fire
-  detection, hotspot ramp, bake, window subsample) now living in the core module.
-
-ASCII only.
-"""
+Covered: registration and the signature and return parity; the per-frame cache
+params, naming and style preset, with the scrubber grouping over the produced
+validity windows; the honesty floor and the typed inputs; and the pure band math
+- composites, split-window detection, ramp, bake, subsample. ASCII only."""
 
 from __future__ import annotations
 
@@ -38,11 +26,8 @@ from trid3nt_server.tools.fetchers.imagery._goes_common import (
 def _scrubs(layers) -> bool:
     """Do these frames declare a playable sequence?
 
-    Every frame states its own [valid_from, valid_to) window, the windows run
-    forward, and each one ends where the next begins - which is what the
-    temporal controller needs and all it needs. A lone frame is a static
-    overlay, not a sequence, and declares no window at all.
-    """
+    Every frame states its own half-open window, the windows run forward and each ends
+    where the next begins; a lone frame is a static overlay and declares none."""
     windows = [(l.valid_from, l.valid_to) for l in layers]
     if len(windows) < 2 or any(None in w for w in windows):
         return False

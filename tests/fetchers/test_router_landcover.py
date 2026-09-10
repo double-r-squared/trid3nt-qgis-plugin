@@ -1,14 +1,9 @@
-"""Router value coverage for the fetch_landcover fold (ADR 0082).
+"""``fetch_landcover``: the coverage-service fold with a post-emit envelope.
 
-The NLCD landcover twin folded to a source.yaml + the wcs_getcoverage access mode
-(WCS 1.0.0 GetCoverage -> NLCD background(0)->nodata remap -> palette COG), the
-pre_resolve auto-coarsen (dataset alias + vintage parse + effective-resolution +
-quantized bbox into the cache key), and the post-emit envelope (the SFINCS Manning's
-sidecar -> LandcoverResult). These tests carry the value-bearing surface the twin's
-tests carried: the dataset-alias + vintage resolution, the background-transparency
-remap, the paletted categorical COG, the auto-coarsen at state scale, and the sidecar
-that the SFINCS builder reads (.uri + .nlcd_vintage_year).
-"""
+A service read remaps the background to nodata into a paletted COG, the
+pre-resolve puts the dataset alias, the parsed vintage, the effective resolution
+and the quantized bbox into the cache key, and the envelope writes the roughness
+sidecar a solver builder later reads. Covered with those, the auto-coarsen."""
 
 from __future__ import annotations
 

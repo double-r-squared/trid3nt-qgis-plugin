@@ -1,12 +1,9 @@
-"""Migrated coverage for the keyed/misc-leftovers fold (ADR 0071).
+"""The keyed and miscellaneous sources, through the chained-resolution enrich phase.
 
-climate_normals and usgs_groundwater_levels fold onto the router through the
-chained_resolution enrich phase. This file carries the value-bearing offline
-coverage the deleted twin test files held: registration parity and the hook
-compute primitives (station inventory filter + drop-and-EMPTY, selector gate,
-NO_WELLS, best-effort well-name join). Live edge-matrix parity vs the twins was
-proven at fold time on a network gate, not here.
-"""
+The value-bearing offline coverage: registration parity and the hook compute
+primitives - the station inventory filter with its drop-and-empty, the selector
+gate, the no-wells refusal and the best-effort name join. The live edge-matrix
+parity ran at fold time on a network gate rather than here."""
 
 from __future__ import annotations
 

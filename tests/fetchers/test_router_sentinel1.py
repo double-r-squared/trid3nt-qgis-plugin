@@ -1,13 +1,9 @@
-"""Router value coverage for the fetch_sentinel1_sar fold (ADR 0079).
+"""``fetch_sentinel1_sar``: the catalog raster fold with two additions.
 
-The Sentinel-1 SAR twin folded to a source.yaml + the stac_raster ``float`` render
-with two additions: a ``coverage`` scene-select (coverage-fraction-then-recency with an
-asset-presence pre-filter) and a ``log10_db`` transform (10*log10(power)); the -9999 dB
-nodata is the existing ``serialize`` directive. These OFFLINE tests cover the spec
-identity, the param gates (bbox / polarization / collection), the collection-alias
-normalization, and the -9999 nodata serialize round-trip. The coverage-select + log10_db
-PIXEL parity is proven by the live drive (STAC-backed).
-"""
+A coverage-fraction-then-recency scene select behind an asset-presence pre-filter,
+and a decibel transform whose sentinel nodata is the existing serialize directive.
+OFFLINE these cover the spec identity, the area, polarization and collection
+gates, the collection-alias normalization and the nodata round trip."""
 
 from __future__ import annotations
 

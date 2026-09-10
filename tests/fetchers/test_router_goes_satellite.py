@@ -1,28 +1,9 @@
-"""Router-fold test parity for ``fetch_goes_satellite`` (ADR 0111).
+"""``fetch_goes_satellite`` as a library-delegate raster spec.
 
-Migrated from ``test_fetch_goes_satellite.py`` when the coded twin was folded
-onto the router (a ``library_delegate`` raster-cog spec + the ``goes_satellite.*``
-hooks + the fetch-time provenance channel). Follows the ``test_router_topobathy.py``
-/ ``test_router_dem.py`` migrated-test style: pure hook/helper tests offline, plus
-end-to-end drives through the promoted router closure (``TOOL_REGISTRY``) with the
-delegate's network seams (``goes_satellite._list_recent_keys`` /
-``_download_to_tempfile`` / ``_reproject_and_clip``) monkeypatched and the S3 cache
-faked (``fake_s3``) -- no real netCDF is read. Proves:
-
-- registry shape + typed-error envelope + payload estimator;
-- ``goes_satellite.validate``: BBOX_REQUIRED, band/satellite/target_res_deg input
-  gates, and the CONUS-sector fast-reject (honest GOES_EMPTY pre-network);
-- ``goes_satellite.resolve``: satellite canon + 15-min ``valid_time`` cache
-  rounding (``_round_valid_time``, ``_scan_time_iso``, ``_pick_most_recent_key``);
-- END-TO-END via the promoted router closure: GOESSatelliteLayerURI fields
-  populated, the twin's exact em-dash display name preserved byte-identical, a
-  real COG written through the shared writer;
-- typed-error passthrough for GOES_UPSTREAM_ERROR / GOES_EMPTY raised inside the
-  delegate socket;
-- THE CHANNEL: a cache-hit REPLAYS the satellite/band/scan_time provenance fields
-  identically (no re-fetch) -- ``scan_time`` is otherwise unrecoverable from the
-  COG on a cache hit.
-"""
+Pure hook tests offline, plus end-to-end drives through the promoted registry
+closure with the delegate's network seams monkeypatched and the cache faked. It
+proves the registry shape and typed envelope, the validate gates including the
+sector fast-reject, and a cache hit REPLAYING the provenance channel."""
 
 from __future__ import annotations
 
@@ -380,11 +361,10 @@ def test_end_to_end_unknown_satellite_raises_input_error(fake_s3) -> None:
 
 
 def test_end_to_end_degenerate_bbox_raises_input_error(fake_s3) -> None:
-    """A degenerate-but-present bbox is caught by the router's OWN generic bbox
-    gate (``RouterInputError``, source-stamped) before the delegate_validate hook
-    ever runs -- still the pinned GOES_INPUT_INVALID code, just a different class
-    than the hook's own ``GOESInputError`` (that class is proven directly by
-    ``test_validate_hook_bad_bbox_shape`` above)."""
+    """A degenerate-but-present bbox is caught by the router's OWN generic gate.
+
+    It fires before the delegate validate hook runs, so the pinned code is the same
+    while the exception class differs from the hook's own."""
     with pytest.raises(FetchError) as ei:
         _fetch_goes(bbox=(-82.0, 26.0, -82.0, 26.0))
     assert ei.value.error_code == "GOES_INPUT_INVALID"

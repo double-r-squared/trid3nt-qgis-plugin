@@ -1,12 +1,9 @@
-"""Offline tests for the tier-3 hook contract (ADR 0056), no live calls.
+"""Offline tests for the tier-3 hook contract, with no live calls.
 
-Covers the registry (resolve / duplicate / spec-load validation), each source's
-build_request URL construction + bespoke input validation, each parse_response
-field extraction + honest-empty / too-large typed errors, and the http_json
-executor end-to-end (multi-request join + paging) with the transport
-monkeypatched. Migrates the value-bearing coverage from the three deleted twins'
-test files (parse-field, window/year validation, honest-empty, join, paging).
-"""
+Covers the registry - resolve, duplicate and spec-load validation - each source's
+request build and its bespoke input validation, each parse's field extraction with
+its honest-empty and too-large typed errors, and the JSON executor end to end
+across a multi-request join and paging, with the transport monkeypatched."""
 
 from __future__ import annotations
 

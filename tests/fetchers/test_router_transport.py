@@ -1,16 +1,9 @@
-"""Offline unit tests for the router remote-FILE transport (ADR-0044).
+"""Offline unit tests for the router's remote-FILE transport.
 
-A stdlib threading HTTP server (no new deps) serves real HTTP Range requests over
-an in-memory COG and forces error statuses. Coverage:
-  - windowed read correctness through the transport opener (pixel-identical);
-  - preflight HEAD size + typed early 404/403;
-  - block coalescing (adjacent merge = one GET) + PARALLEL fetch of non-adjacent
-    runs (request-count + parallel-batch assertions);
-  - forced 404 -> TransportNotFound, 403 -> TransportAuthError, 429 -> retried
-    then TransportUpstreamError, Retry-After honored, and the un-retried get_once;
-  - mid-read disconnect -> typed error via the C-frame recorded-error bridge;
-  - block-completeness (truncation) assertion.
-"""
+A stdlib threading server with no new dependency serves real range requests over an
+in-memory COG and forces error statuses. Covered: a pixel-identical windowed read,
+the preflight size, block coalescing and parallel fetch of non-adjacent runs, each
+status mapping to its typed error, a mid-read disconnect, and truncation."""
 
 from __future__ import annotations
 

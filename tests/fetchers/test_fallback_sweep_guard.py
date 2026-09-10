@@ -1,14 +1,9 @@
 """The sweep guard: naked substitution may not come back.
 
-A naked substitution is a path that serves DIFFERENT data than the request named,
-without declaring a rung, firing the loudness gate or stamping an activation row.
-Wave F2's inventory found four shapes of it. Each shape gets a structural guard
-here, or -- where the fix is a separate wave -- a REGISTERED entry whose marker
-must still match, so a change to the site cannot land without changing this file.
-
-The guards are structural on purpose: a lint that greps for the word "fallback"
-finds comments, and a lint that trusts a reviewer finds nothing.
-"""
+A naked substitution serves DIFFERENT data than the request named without
+declaring a rung, firing the loudness gate or stamping an activation row. Each
+known shape gets a structural guard, or a REGISTERED entry whose marker must
+still match. Structural on purpose: a lint that greps for a word finds comments."""
 
 from __future__ import annotations
 
@@ -205,10 +200,8 @@ _PARKED_SILENT_SUBSTITUTIONS: dict[str, tuple[str, str, str]] = {
 def test_the_parked_silent_substitutions_are_still_exactly_these():
     """Each parked site must still be findable by its marker.
 
-    A failure here is GOOD NEWS or a REGRESSION, never noise: either the site was
-    fixed (delete its row, cite the ADR) or it moved (update the marker). What it
-    must never do is drift out of the register unnoticed.
-    """
+    A failure here is good news or a regression, never noise: the site was fixed or
+    it moved. What it must never do is drift out of the register unnoticed."""
     missing: list[str] = []
     for row, (rel, marker, _verdict) in _PARKED_SILENT_SUBSTITUTIONS.items():
         path = _REPO / rel
@@ -231,11 +224,10 @@ def test_the_register_carries_a_verdict_for_every_entry():
 
 
 def test_the_register_covers_every_parked_row_the_adr_names():
-    """ADR 0299 parked rows 11, 12, 14, 16, 17, 18, 19, 20 and 25. Every row but
-    11 left the tree with the code that carried it - the SWMM and SFINCS rows
-    (12b, 16, 17, 18), the river-dye ribbon row (25), and rows 11b/12a/14/19/20
-    with the non-telemac workers. The register is the mechanism that keeps the
-    REMAINING set from shrinking quietly, so it must actually hold them."""
+    """The register must actually hold every parked row that still exists.
+
+    Most left the tree with the code that carried them; the register is the mechanism
+    that keeps the REMAINING set from shrinking quietly."""
     parked_rows = {"11"}
     registered = {
         key.split()[1].rstrip("ab") for key in _PARKED_SILENT_SUBSTITUTIONS

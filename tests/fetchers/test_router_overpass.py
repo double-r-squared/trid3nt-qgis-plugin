@@ -1,12 +1,9 @@
-"""Router value coverage for the OSM family, read through OSMnx.
+"""The OSM family, read through the library that owns the query and the decode.
 
-The library owns the query, the socket and the element-to-geometry decode. What
-each row owns is its tag vocabulary and its projection - clip or keep whole, a
-point or a line, which columns - and that is what these OFFLINE tests exercise,
+What each row owns is its tag vocabulary and its projection - clip or keep whole,
+a point or a line, which columns - and that is what these OFFLINE tests exercise,
 against synthetic frames shaped exactly as the library returns them. The mirror
-chain and the silent-error hook are driven against a stand-in for the library's
-own request seam.
-"""
+chain and the silent-error hook run against a stand-in for its request seam."""
 
 from __future__ import annotations
 
@@ -465,10 +462,8 @@ def test_pois_no_features_propagates(monkeypatch):
 def test_every_pois_corpus_phrasing_surfaces_the_row_model_free():
     """The row's phrasings are the questions IT answers, not a neighbour's.
 
-    A curated US critical-infrastructure category is ``fetch_hifld_*``'s question
-    and retrieves there; what only this row answers is an arbitrary OSM tag, and
-    the same class of feature anywhere on earth.
-    """
+    A curated national infrastructure category is another row's question; what only
+    this one answers is an arbitrary tag, and that class of feature anywhere on earth."""
     import yaml
 
     import trid3nt_server.main as main

@@ -1,11 +1,9 @@
-"""Offline tests for the shared HyRiver call shim, no live calls.
+"""Offline tests for the shared call shim, with no live calls.
 
 The three behaviours the library does not have and the shim supplies: a JSON error
-document RETURNED as data becomes a typed upstream error carrying the upstream text
-verbatim; a retryable status backs off and recovers; the provider's own
-``Retry-After`` is obeyed when the body carries one. Plus the cache placement the
-provenance rules require.
-"""
+document RETURNED as data becomes a typed upstream error carrying the upstream
+text verbatim; a retryable status backs off and recovers; and the provider's own
+``Retry-After`` is obeyed. Plus the cache placement the provenance rules require."""
 
 from __future__ import annotations
 

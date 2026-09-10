@@ -1,13 +1,9 @@
-"""Router value coverage for the fetch_flood_extent_observation fold (ADR 0082).
+"""``fetch_flood_extent_observation``: the categorical tile-grid fold.
 
-The MCDWD observed-flood-extent twin folded to a source.yaml + the categorical_tile_grid
-access mode (per-10-deg-tile direct GET + first-valid uint8 mosaic + palette COG), the
-pre_resolve LANCE dir-walk (date/None -> year/doy into the cache key), and the post-emit
-envelope (class_breakdown/flood_area/legend -> FloodExtentObservationResult). These tests
-carry the value-bearing surface the deleted twin's tests carried: the classified-tile
-first-valid mosaic, the categorical palette COG (nodata transparent), the observation
-envelope, and the honest all-nodata / no-tile no-coverage degrade.
-"""
+Per-tile direct reads mosaic first-valid into a paletted COG, the pre-resolve walk
+puts the date into the cache key, and the post-emit envelope carries the class
+breakdown and legend. Covered with that, the honest degrade when every tile is
+nodata or none exists at all."""
 
 from __future__ import annotations
 

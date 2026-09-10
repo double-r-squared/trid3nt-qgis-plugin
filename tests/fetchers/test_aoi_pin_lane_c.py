@@ -1,28 +1,9 @@
-"""LANE-C (#159 follow-up): pin the solve domain as the Case AOI + default
-follow-up fetches to it.
+"""Pin the solve domain as the Case AOI, and default follow-up fetches to it.
 
-CONFIRMED ROOT CAUSE (case 01KVM4NH7M8BT5HV21JV72MD97): there was NO pinned AOI.
-``case.bbox`` stayed None (no ``upsert_case`` caller wrote it from a solve), so
-``_turn_case_bbox`` returned None and the LLM free-handed a DIFFERENT bbox for
-every follow-up tool call (5 boxes in one case). The SWMM solve ran on one
-extent; ``fetch_buildings`` got a narrower+shorter box (87% width / 63% height of
-the flood domain); rivers/dem/roads each got yet another smaller box.
-
-These tests pin the four load-bearing behaviors of the fix:
-
-(a) after a domain-producing solve the Case bbox is PINNED to the solve domain
-    (persisted to ``CaseSummary.bbox`` AND cached on ``state.case_bbox`` so
-    ``_turn_case_bbox`` returns it).
-(b) a follow-up fetch with NO explicit bbox (and a drifted same-area bbox) uses
-    the pinned AOI.
-(c) a follow-up that names a DIFFERENT location (disjoint bbox) is NOT forced to
-    the old AOI; an explicit WIDEN (encloses the pin) is also honored.
-(d) the post-solve zoom-to is a SINGLE domain rectangle (the geocode snap is
-    purged), not the #159 geocode-then-domain double.
-
-Mirrors the harness in ``test_active_aoi_repair_job2.py`` (real ``_emit_case_open``
-/ ``_invoke_tool_via_emitter`` paths, MockMCPClient persistence).
-"""
+With no pinned AOI the model free-hands a different bbox for every follow-up.
+Pinned: a domain-producing solve writes its domain to the Case and caches it; a
+follow-up with no bbox or a drifted one uses it, a disjoint location is not
+forced to it, and the post-solve zoom-to is a SINGLE domain rectangle."""
 
 from __future__ import annotations
 
@@ -77,14 +58,10 @@ def _persistence_bound():
 
 @pytest.fixture()
 def _stub_swmm_solver(monkeypatch):
-    """Register a stub ``swmm_urban_flood`` that returns a peak LayerURI whose
-    bbox IS the floored solve domain, and pass the solver-confirm gate through.
+    """Register a stub solver returning a peak layer whose bbox IS the solve domain.
 
-    The stub stands in for the real (pyswmm) workflow: the production workflow
-    stamps the floored domain onto the returned peak ``bbox`` (see
-    model_swmm_urban_flood.py ~815), so the stub returning ``_SOLVE_DOMAIN`` as the
-    LayerURI bbox faithfully exercises the dispatch-site pin path.
-    """
+    The production workflow stamps the floored domain onto that bbox, so the stub
+    faithfully exercises the dispatch-site pin path; the confirm gate is passed."""
     name = "swmm_urban_flood"
     original = agent_tools.TOOL_REGISTRY.get(name)
     reset_scenario_indexes_for_tests()

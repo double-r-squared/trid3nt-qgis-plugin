@@ -1,29 +1,9 @@
-"""Router-fold test parity for ``fetch_noaa_nwm_streamflow`` (ADR 0112).
+"""``fetch_noaa_nwm_streamflow`` as a library-delegate vector spec.
 
-Migrated from ``test_fetch_noaa_nwm_streamflow.py`` when the coded twin -- the LAST
-coded data-fetcher, a MULTI-SOURCE COMPOSITE (NWM S3 channel_rt netCDF -> a
-``{feature_id: streamflow}`` lookup + an NLDI 5x5 bbox sample -> COMIDs + per-reach
-geometry + a ``feature_id`` JOIN -> point FGB) -- was folded onto the router (a
-``library_delegate`` vector-fgb spec + the ``nwm_streamflow.*`` hooks + the fetch-time
-provenance channel). Follows the ``test_router_storm_tracks.py`` / ``test_router_topobathy.py``
-migrated-test style: pure hook/helper tests offline, plus end-to-end drives through the
-promoted router closure (``TOOL_REGISTRY``) with the delegate's network leaves
-(``nwm_streamflow._resolve_nwm_key`` / ``_http_get`` / ``_load_streamflow_by_feature`` /
-``_discover_comids_in_bbox`` / ``_nldi_get_reach_geometry``) monkeypatched and the S3 cache
-faked (``fake_s3``). Proves:
-
-- registry shape + typed-error envelope + payload estimator;
-- the CONUS-intersect + short_range-forecast_hour + valid_time-parse gates
-  (``nwm_streamflow.validate``);
-- the composite JOIN (streamflow lookup x NLDI geometry -> point features) inside the
-  delegate, including the flow-missing / geometry-missing skips + honest-empty raises;
-- the NWM key resolver (analysis_assim + short_range matchers over a mocked S3 listing);
-- END-TO-END via the promoted router closure: NWMStreamflowLayerURI fields populated,
-  FlatGeobuf round-trips via geopandas with the feature_id/streamflow_cms/valid_time/product
-  schema, honest-empty raises the typed EMPTY code;
-- THE CHANNEL: a cache-hit REPLAYS the reference_time/reach_count/nldi provenance fields
-  identically (no re-fetch).
-"""
+A MULTI-SOURCE COMPOSITE: a streamflow lookup is JOINed by feature id onto
+per-reach geometry sampled from the navigation service. Offline hook tests plus
+end-to-end drives through the promoted closure, every network leaf monkeypatched.
+Proves the gates, the join with its skips and honest empty, and the cache replay."""
 
 from __future__ import annotations
 
@@ -171,14 +151,10 @@ def test_resolve_nwm_key_not_available_raises(monkeypatch) -> None:
 
 
 def test_load_streamflow_reads_the_real_nc_time_coordinate(tmp_path) -> None:
-    """A real NWM channel_rt file's 'time' coord is datetime64[ns]; ``.item(0)``
-    on that dtype degrades to a plain int (no ``.astype``), which used to make
-    the old ``hasattr(t0, "astype")`` guard silently skip the whole block and
-    fall through to the ``datetime.now()`` fallback - so a HISTORICAL
-    ``event_time`` request always reported "now" as its resolved cycle. No
-    network: a real xarray Dataset round-tripped through netcdf4 reproduces the
-    exact dtype a downloaded NWM file carries.
-    """
+    """The time coordinate is read off the real file dtype.
+
+    ``.item(0)`` on that dtype degrades to a plain int, so a guard that tested for an
+    array method fell through to a now-based fallback for a HISTORICAL request."""
     import numpy as np
     import xarray as xr
 

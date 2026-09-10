@@ -1,14 +1,9 @@
-"""Migrated coverage for the arcgis-odd fold wave (ADR 0066).
+"""The awkward-ArcGIS sources, through the shared tier-3 hooks.
 
-The twins (fema_nfhl_zones, usace_dams, epa_frs_facilities) were
-DELETED and folded onto the EXISTING tier-3 hooks
-(build_request / next_page / parse_response). Live twin-vs-router feature-set
-value-identity was proven at fold time; this file migrates the value-bearing
-UNIT coverage of the pure hook logic (offline, synthetic bodies): OBJECTID-cursor
-paging + tolerate, server-side sfha/zone/IN() where, USPS/hazard
-normalization, keyless-mirror endpoint selection, program-expansion union +
-point-from-LAT/LON synthesis.
-"""
+Offline over synthetic bodies, covering the pure hook logic: OBJECTID-cursor
+paging and its tolerance, the server-side where clauses, the field
+normalizations, keyless-mirror endpoint selection, and the program-expansion
+union with points synthesized from latitude and longitude columns."""
 
 from __future__ import annotations
 

@@ -1,18 +1,9 @@
-"""Offline tests for the router executors + transforms (B1 -- router-core).
+"""Offline tests for the router executors and transforms.
 
-Each executor is exercised against LOCAL synthetic fixtures (tiny in-memory
-rasters / GeoJSON features / station records) with the network layer
-monkeypatched -- NO live calls. Coverage:
-
-- raster_cog: ``array_to_cog_bytes`` roundtrip (band/dtype/crs/nodata/bounds);
-  ``execute`` with a monkeypatched ``fetch_source_array``.
-- vector_fgb: ``features_to_fgb_bytes`` non-empty + honest-empty header-only FGB;
-  the ``max_features`` cap the driver read carries.
-- station_timeseries: ``stations_to_point_fgb`` scalars + inline time_series_csv;
-  typed ``*_EMPTY`` on all-empty; ``fetch_station_records`` via monkeypatch.
-- tiled_mosaic: ``plan_tile_grid`` math; ``mosaic_tile_files`` over 2 synthetic
-  tiles (bounds cover both); single-tile fast path; hard-ceiling redirect error.
-"""
+Each executor runs against LOCAL synthetic fixtures with the network
+monkeypatched: the raster round trip through band, dtype, CRS, nodata and bounds;
+the vector write with its honest header-only empty and its cap; the station series
+with its typed empty; and the tile-grid math, mosaic, fast path and ceiling."""
 
 from __future__ import annotations
 

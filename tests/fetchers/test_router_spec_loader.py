@@ -1,16 +1,9 @@
-"""Offline tests for the router source-spec loader (B1 -- router-core).
+"""Offline tests for the router's source-spec loader.
 
-Coverage:
-- ``load_spec`` accepts a well-formed spec for each pilot shape.
-- ``load_spec`` rejects malformed specs (missing required key, shape/output
-  mismatch, join over a non-vector shape) with ``SpecLoadError``.
-- ``load_spec_from_path`` lifts corpus phrasings from the sibling ``corpus.yaml``
-  when the spec omits them (co-located corpus pickup).
-- ``compose_specs_from_tree`` rglobs ``source.yaml`` and keys by name; a
-  malformed spec in the tree is skipped, not fatal.
-
-No network. Synthetic YAML written to a tmp dir.
-"""
+A well-formed spec loads for each pilot shape, and a malformed one - a missing
+required key, a shape and output mismatch, a join over a non-vector shape -
+raises the typed load error. A spec that omits its phrasings picks them up from
+the sibling corpus, and a tree compose keys by name and SKIPS a malformed member."""
 
 from __future__ import annotations
 

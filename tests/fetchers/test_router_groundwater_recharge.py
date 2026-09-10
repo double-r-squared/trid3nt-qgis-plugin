@@ -1,18 +1,9 @@
-"""Router coverage for fetch_groundwater_recharge (ADR 0297).
+"""``fetch_groundwater_recharge``: the first STAGED-DATASET fetcher.
 
-The first STAGED-DATASET fetcher: the served objects are COGs this repo built
-from two published USGS CONUS recharge releases (Reitz et al. 2017, Wolock 2003)
-via ``scripts/staging/stage_groundwater_recharge.py``, and the spec names them by bucket
-and key so the transport resolves the host from the active object-store endpoint.
-
-These OFFLINE tests cover the spec identity + metadata flags, the staged-uri
-resolution (including the no-real-AWS-fallback refusal and the staged-404
-config-error split from a genuine EMPTY), the ``source`` enum -> object
-mapping, the CONUS gate (the coverage limit an out-of-CONUS AOI is refused
-with, plus the spec's own widened envelope), the NaN-nodata honesty gate that
-an all-ocean window must trip, the per-source inland-water split (reitz_2017
-0.0 vs wolock_2003 NaN), the payload estimate, and the retrieval corpus.
-"""
+The served objects are COGs this repo built from two published releases, and the
+spec names them by bucket and key, so the transport resolves the host from the
+active endpoint. Offline: the spec identity, the staged-uri resolution and its two
+refusals, the region gate, the nodata honesty gate, and the per-source split."""
 
 from __future__ import annotations
 

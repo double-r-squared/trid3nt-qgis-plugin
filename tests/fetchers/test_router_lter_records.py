@@ -1,12 +1,9 @@
-"""fetch_lter_records record fold (ADR 0203): the LTER/EDI reader via the router.
+"""``fetch_lter_records``: the metadata-and-entity reader through the router.
 
-Offline: a synthetic EML metadata body + a small TSV data entity stand in for the
-DataONE resolve responses (the shared transport ``_get_raw`` is monkeypatched by
-URL), and the in-memory read_through injector caches the record dict. The real
-DataONE network path is unchanged (exercised live). Covers package-id parsing (both
-spellings), EML entity extraction + selection, the delimited parse + window filter +
-per-column summary, and the route() -> dict record shape.
-"""
+Offline: a synthetic metadata body and a small delimited entity stand in for the
+resolve responses, monkeypatched by url, and the in-memory cache holds the record.
+Covers package-id parsing in both spellings, entity extraction and selection, the
+delimited parse with its window filter and per-column summary, and the record shape."""
 
 from __future__ import annotations
 

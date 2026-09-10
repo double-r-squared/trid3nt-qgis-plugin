@@ -1,13 +1,9 @@
-"""Library-delegate raster fold parity (ADR 0074): fetch_statsgo_soils via the router.
+"""``fetch_statsgo_soils`` through the library-delegate raster mode.
 
-Migrates the value-bearing coverage of the deleted fetch_statsgo_soils twin (the
-statsgo block of test_pfdf_unlock_statsgo_nldi_3dep.py) onto the generic
-library-delegate mode: the pre-cache CONUS validate hook, the router field enum, the
-pfdf delegate hook's array -> COG serialization + all-NaN empty, the payload gate,
-and the units/style-by-field LayerURI stamps. The pfdf socket is the ONE sanctioned
-impurity (mocked here for a hermetic offline run); the real ScienceBase path is
-proven by the live proof recorded in ADR 0074.
-"""
+Covered: the pre-cache region validate hook, the field enum, the delegate's
+array-to-COG serialization with its all-NaN empty, the payload gate, and the
+per-field units and style stamps. The library socket is the one sanctioned
+impurity, mocked here for a hermetic run."""
 
 from __future__ import annotations
 

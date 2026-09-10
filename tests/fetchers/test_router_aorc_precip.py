@@ -1,11 +1,9 @@
-"""fetch_aorc_precip record fold (ADR 0203): the AORC v1.1 hyetograph via the router.
+"""``fetch_aorc_precip``: the hyetograph record through the router.
 
-Offline: a synthetic xarray Dataset stands in for the AORC Zarr year store (the
-``aorc_precip._open_year`` I/O seam is monkeypatched), and the in-memory read_through
-injector caches the record dict -- the real anonymous-s3fs Zarr path is unchanged
-(exercised live). Covers the spec shape, the pure-record path (route() -> dict), the
-AOI-mean hyetograph math, the coverage NOT_AVAILABLE gates, and the empty-window gate.
-"""
+Offline: a synthetic dataset stands in for the archive year store at its open
+seam, and the in-memory cache injector holds the record. Covered: the spec
+shape, the pure-record path, the AOI-mean hyetograph math, the coverage gates
+and the empty-window gate."""
 
 from __future__ import annotations
 

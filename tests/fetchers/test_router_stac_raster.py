@@ -1,12 +1,9 @@
-"""Router value coverage for the stac_raster executor (the STAC fold).
+"""The catalog raster executor.
 
-One access mode (``ingest.access: stac``) reads a catalog through
-``odc.stac.load`` and serves three renders. These OFFLINE tests drive the whole
-executor over LOCAL synthetic COGs wrapped in real STAC items -- the catalog
-search is the only thing patched -- so the destination grid, the first-valid
-fuse, the DN band math, the palette bake, the scene-select ladder and the typed
-empty / refusal paths are exercised as the live path runs them.
-"""
+One access mode reads a catalog through the library and serves three renders.
+These OFFLINE tests drive the whole executor over LOCAL synthetic COGs wrapped in
+real catalog items - the search is the only thing patched - so the grid, the fuse,
+the band math, the palette bake, the scene ladder and the refusals all run."""
 
 from __future__ import annotations
 

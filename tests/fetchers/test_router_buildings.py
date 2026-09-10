@@ -1,13 +1,9 @@
-"""OSM buildings sidecar-write fold parity (trigger wave, ADR 0084): fetch_buildings.
+"""``fetch_buildings``: the sidecar-writing Overpass fold.
 
-Migrates the OFFLINE-testable coverage of the deleted twin onto the overpass_sidecar
-executor + the ``buildings`` hooks. The LIVE twin-vs-router value parity (Overpass
-polygon fetch: slim FGB schema + per-fid tag bags value-identical, sidecar sibling key,
-geometry area) is proven by the ADR 0084 live drive. Here the offline surfaces are: spec
-identity, the QL build, the (features, tags) parse (ways->Polygon, relations->
-(Multi)Polygon, slim props, tag capture, intersects-not-clip, junk drop), the sidecar
-sibling-key derivation, empty -> BUILDINGS_EMPTY, and param validation.
-"""
+The offline surfaces: spec identity, the query build, the features-and-tags parse
+(ways to polygons, relations to multipolygons, slim properties, tag capture,
+intersects rather than clip, junk dropped), the sidecar sibling-key derivation,
+the typed empty answer and param validation. The live parity is a separate drive."""
 
 from __future__ import annotations
 

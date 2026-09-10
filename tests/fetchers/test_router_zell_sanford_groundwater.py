@@ -1,38 +1,9 @@
-"""Router coverage for fetch_water_table_depth + fetch_aquifer_thickness +
-fetch_aquifer_transmissivity (ADR 0298).
+"""The three staged-dataset groundwater fetchers.
 
-Three staged-dataset fetchers over the Zell & Sanford 2020 CONUS surficial
-groundwater release, built by ``scripts/staging/stage_zell_sanford_groundwater.py``.
-Depth to water and transmissivity are the published rasters; saturated
-thickness is DERIVED as ``b = T / K`` from the release's own transmissivity
-and hydraulic conductivity. Transmissivity was built and validated in the
-same landing but parked (ADR 0298 Decision 7: ``NormalizeSpec.quantity`` is a
-single static stamp, so it could not ride ``fetch_aquifer_thickness`` without
-mislabelling a m2/day layer as a saturated thickness); NATE ruled REGISTER,
-so it now has its own spec.
-
-These OFFLINE tests cover all three specs' identity and metadata, the
-staged-uri resolution (including the staged-404 / no-endpoint config-error
-split from a genuine EMPTY), the coverage envelope read off the real staged
-grid, the honest encodings the spec CLAIMS -- negative depths preserved rather
-than clamped, off domain reading EMPTY -- the payload estimate, and the
-retrieval corpora.
-
-The live values these pin came from the staged objects: Story County IA reads a
-median depth of 5.02 m and a median thickness of 93.09 m; Maricopa County AZ
-(bbox [-113.3350468, 32.5049739, -111.0399049, 34.0481432]) reads a median
-depth of 43.939 m and a median thickness of 71.523 m; Oahu, Anchorage and San
-Juan refuse; mid-Lake-Michigan and Key West are inside the envelope but off the
-model's active domain and read EMPTY. Transmissivity's own live-staging
-validation (``--step build --dataset transmissivity``) reproduced the paper's
-west/east contrast exactly: CONUS median west of 100W 14.05 m2/day vs east
-87.94 m2/day.
-
-(Corrected 2026-08-21: an earlier draft of this docstring claimed 9.34 m /
-135.97 m for Maricopa County with no recorded bbox -- unreproducible from any
-discoverable county bbox. Re-run live against the county bbox above; see the
-ADR 0298 correction note.)
-"""
+Depth to water and transmissivity are the published rasters; saturated thickness is
+DERIVED from the release's own transmissivity and conductivity. Offline: the specs'
+identity, the staged-uri resolution with its config-error-versus-EMPTY split, the
+envelope read off the real grid, and the honest encodings the spec CLAIMS."""
 
 from __future__ import annotations
 
@@ -190,10 +161,10 @@ def test_the_three_products_are_distinguishable(specs):
 
 
 def test_every_layer_name_says_modelled(spec):
-    """The tool name is a question class; the LAYER name is what a person reads
-    off the map, and all three products are MODFLOW-6 model output, not survey
-    or well data. Without this the router stamps ``"<source_class>
-    <source_class>"``, which claims nothing and reads as a machine id."""
+    """The tool name is a question class; the LAYER name is what a person reads.
+
+    All three products are model output rather than survey or well data, and without
+    this the router stamps the source class twice, which claims nothing."""
     assert spec.output.display_name is not None
     assert "modelled" in spec.output.display_name.lower()
 
@@ -334,10 +305,10 @@ def test_envelope_is_the_staged_grids_own_bounds(spec):
 
 
 def test_key_west_passes_the_gate_and_fails_honestly_on_the_read(spec, monkeypatch):
-    """Key West (24.53N) is inside the staged envelope, so the cheap pre-fetch
-    gate must NOT refuse it -- but the model's active domain stops short of the
-    Keys, so the READ is where it honestly reports no coverage. Live-proven:
-    the staged window there is entirely nodata."""
+    """A point inside the staged envelope but off the model's active domain.
+
+    The cheap pre-fetch gate must NOT refuse it; the READ is where it honestly
+    reports no coverage."""
     key_west = [-81.85, 24.53, -81.75, 24.60]
     router._apply_gates(spec, {"bbox": key_west})  # must not raise
     _patch_open(monkeypatch, np.full((4, 4), np.nan, dtype="float32"), bbox=key_west)
@@ -377,10 +348,9 @@ def test_values_pass_through_unscaled(spec, monkeypatch):
 
 
 def test_negative_depths_survive_the_read_unclamped(specs, monkeypatch):
-    """Where the simulated water table stands ABOVE land surface (wetlands,
-    stream corridors) the depth is negative -- down to -25.68 m CONUS-wide, and
-    -0.23 m in the Story County acceptance window. Clamping them to zero would
-    erase the model's groundwater DISCHARGE areas."""
+    """Where the simulated water table stands ABOVE land surface, depth is negative.
+
+    Clamping those to zero would erase the model's groundwater DISCHARGE areas."""
     spec = specs["fetch_water_table_depth"]
     arr = np.array([[-0.231, -2.264], [5.02, 37.153]], dtype="float32")
     _patch_open(monkeypatch, arr)
@@ -405,10 +375,10 @@ def test_depth_caveats_state_the_verified_limits(specs):
 
 
 def test_thickness_caveats_refuse_to_overclaim(specs):
-    """The derived thickness is the MODELLED surficial system's, over a
-    PRESCRIBED model bottom -- not a mapped or drilled aquifer thickness. The
-    caveats must say so, and must carry the independent cross-check that showed
-    it reading systematically high."""
+    """The derived thickness is the MODELLED system's, over a PRESCRIBED bottom.
+
+    It is not a mapped or drilled aquifer thickness, so the caveats say so and carry
+    the independent cross-check that showed it reading systematically high."""
     joined = " ".join(specs["fetch_aquifer_thickness"].caveats).lower()
     assert "not a mapped aquifer thickness" in joined
     assert "prescribed" in joined

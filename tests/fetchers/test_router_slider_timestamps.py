@@ -1,14 +1,9 @@
-"""SLIDER availability index record fold parity (ADR 0078): fetch_slider_timestamps.
+"""``fetch_slider_timestamps``: the FIRST live-no-cache record source.
 
-The fetch_slider_timestamps twin (a thin dict-enriching wrapper over the shared
-_satellite_slider latest_times.json reader) folds onto the record-return output shape
-(ADR 0076) as the FIRST live-no-cache record source: the router registers it
-uncacheable and read_through short-circuits it (the availability index turns over every
-few minutes). This migrates the twin's value-bearing coverage -- the enriched
-availability + cadence dict, the ascending sort, the honest typed upstream on a bad
-body -- onto the spec-driven surface. The shared _satellite_slider helper is UNCHANGED
-(still owned by the animation cluster, which imports the raw list[int] reader directly).
-"""
+The availability index turns over every few minutes, so the router registers it
+uncacheable and the read-through short-circuits it. Covered: the enriched
+availability and cadence dict, the ascending sort, and the honest typed upstream
+on a bad body. The shared reader the animation cluster uses is unchanged."""
 
 from __future__ import annotations
 

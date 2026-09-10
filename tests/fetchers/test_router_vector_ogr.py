@@ -1,12 +1,9 @@
-"""Router value coverage for the vector_ogr executor (the vector fold).
+"""The vector executor.
 
-One access mode (``ingest.access: ogr``) reads a published vector layer through a
-GDAL driver. These OFFLINE tests drive the whole executor over LOCAL files the
-same drivers open -- an esri-json document on disk for ``ESRIJSON``, a shapefile
-inside a real zip for ``vsizip`` -- so the query build, the frame normalizer, the
-declared schema, the max-features cap and the verbatim-upstream path are
-exercised as the live path runs them.
-"""
+One access mode reads a published vector layer through a driver. These OFFLINE
+tests drive the whole executor over LOCAL files the same drivers open - a json
+document on disk and a shapefile inside a real zip - so the query build, the frame
+normalizer, the schema, the feature cap and the upstream path all run."""
 
 from __future__ import annotations
 

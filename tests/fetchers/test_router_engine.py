@@ -1,19 +1,9 @@
-"""Offline tests for the router engine + surfacing toggle (B1 -- router-core).
+"""Offline tests for the router engine and its promotion path.
 
-Coverage:
-- ``validate_params``: required-missing / bad-enum / bad-bbox / conus gate /
-  date-range ceiling / bbox quantize -- all typed ``RouterInputError``, no network.
-- ``synthesize_metadata`` mirrors the twin's AtomicToolMetadata.
-- ``synthesize_payload_estimator`` per model (bbox_area / per_feature /
-  per_station / tiled).
-- ``route`` end-to-end with a monkeypatched executor + the in-memory S3 double:
-  correct cache path + LayerURI, second call is a cache HIT.
-- Promotion (fold phase-2 wave 1): register_spec promotes a spec to a
-  tier="general" tool UNDER the twin name (default pool), signature synthesized
-  from spec.params, docstring carried -- the env-gated experiment toggle retired.
-
-No network.
-"""
+``validate_params`` refuses a missing required param, a bad enum, a bad bbox, an
+out-of-gate region and an over-ceiling date range, all typed and without network.
+The synthesized metadata and payload estimators match their models, ``route``
+writes the right cache path and hits on the second call, and a spec promotes."""
 
 from __future__ import annotations
 

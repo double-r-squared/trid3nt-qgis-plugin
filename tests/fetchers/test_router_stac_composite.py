@@ -1,17 +1,9 @@
-"""Router value coverage for the STAC multi-asset RGB composite fold (ADR 0080).
+"""The multi-asset RGB composite render over the catalog raster mode.
 
-The imagery trio -- fetch_landsat_imagery (true/false-color + thermal LST),
-fetch_sentinel2_truecolor and fetch_naip -- folded to source.yaml + the stac_raster
-``rgb`` render (one composite path: N single-band reflectance assets
-+ a QA/SCL mask + a joint 2/98 stretch; a colormap single-band LST; or a raw uint8
-passthrough; plus a cloud-cover query + coverage/cloud scene rank).
-
-These OFFLINE tests cover the spec identity + metadata flags (twin-identical), the
-param gates (bbox area / band_combo enum + aliases), and the composite RENDER value
-behavior over LOCAL synthetic COGs wrapped in real STAC items (cloud/nodata pixels
-zeroed, joint stretch spans 0..255, thermal ramps, naip uint8 passthrough). The live
-PC-STAC pixel parity vs the twins is proven by the live drive.
-"""
+One composite path serves several bands under a joint stretch behind a quality
+mask, a colormapped single band, or a raw passthrough. Offline these cover the
+spec identity, the area and combination gates, and the render's value behaviour
+over LOCAL synthetic COGs wrapped in real catalog items."""
 
 from __future__ import annotations
 

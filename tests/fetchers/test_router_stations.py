@@ -1,14 +1,9 @@
-"""Migrated coverage for the station-siblings fold (ADR 0065).
+"""The station siblings, folded onto the existing router phases.
 
-The five deferred station-sibling twins (asos_metar / raws_weather / snotel_snow /
-airnow_air_quality / openaq_measurements) fold onto the EXISTING router phases with
-zero new machinery. This file carries the value-bearing offline coverage that the
-deleted twin test files held: registration parity, the composition primitives
-(multi-state discovery, station x day enrich expansion, batched null-tolerant merge,
-sensor->parameter join), and the keyed missing-key credential parity. Live
-edge-matrix parity vs the twins was proven at fold time (drivers, ADR 0065); those
-are network gates, not offline tests.
-"""
+They needed no new machinery, so what is carried here is the value-bearing offline
+coverage: registration parity and the composition primitives - multi-state
+discovery, the station-by-day enrich expansion, the batched null-tolerant merge
+and the sensor-to-parameter join - plus the keyed missing-key parity."""
 
 from __future__ import annotations
 

@@ -1,19 +1,9 @@
-"""ADR 0244 S2 equivalence: the seam surfaces the SAME context inputs the deleted
-per-family ``_surface_*`` helpers used to, for the three representative composers
-the work order names (landlab, telemac rain_on_grid, sfincs flood).
+"""The seam surfaces the SAME context inputs the deleted per-family helpers did.
 
-No network: this pins the two halves that TOGETHER reproduce the old coverage:
-
-  (A) each composer now declares ``purpose="<word>"`` on the router fetch that
-      feeds each formerly-hand-surfaced input (so the seam names it the same way
-      the helper did), verified by inspecting the composer source; and
-  (B) the seam's ``input_layer_name`` maps that purpose word to the SAME
-      ``role="context"`` "Input: <word> (...)" row the helper emitted.
-
-Generic proof that the seam FIRES on a nested composer fetch (given a renderable
-LayerURI) lives in ``test_emit_on_fetch_seam.py``; here we pin that the per-family
-coverage set is preserved, input by input -- no silently lost layer.
-"""
+No network. Two halves reproduce the old coverage between them: each composer
+declares a ``purpose`` word on the router fetch that feeds a formerly
+hand-surfaced input, verified by inspecting the source; and the seam maps that
+word to the SAME context row the helper emitted. Input by input, none lost."""
 
 from __future__ import annotations
 
@@ -95,11 +85,8 @@ def test_purpose_words_map_to_input_names_the_helpers_used():
 def test_deleted_surface_helpers_are_gone():
     """Every per-family input-surfacing helper is gone; the seam is the only path.
 
-    The bed-bathymetry one was the last holdout, and its exemption was real
-    while it rode a COG the worker sampled inside the container - route() never
-    saw that fetch, so no seam could surface it. The reach bed is a declared
-    router fetch now, so the exemption expired with the thing it excused.
-    """
+    The bed-bathymetry exemption was real while it rode a COG sampled inside the
+    container, which the router never saw; that fetch is declared now."""
     gone = [
         "_surface_landlab_dem_input",
         "_surface_watershed_mesh_inputs",

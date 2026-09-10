@@ -1,19 +1,9 @@
-"""Router value coverage for the ISRIC SoilGrids fold (ADR 0086).
+"""``fetch_soilgrids``: the projected-window access mode.
 
-fetch_soilgrids folded to source.yaml + the raster_cog ``projected_vrt_window``
-access mode: the Homolosine VRT is windowed in the SOURCE projection
-(transform_bounds 4326->Homolosine, densified + the twin's floor/ceil + 2 px pad),
-the intersecting members read through the coalescing transport, reprojected
-native->4326 (bilinear, ~250 m), and the fixed-point Int16 scaled to physical units
-per property. The twin was DELETED (byte-identical live ISRIC parity proven by the
-live drive over a Louisiana AOI: clay/phh2o/soc/bdod all mask + value + nodata + crs
-+ transform identical, maxdiff 0; the ocean honesty path agrees on SOILGRIDS_EMPTY).
-
-These OFFLINE tests cover the spec identity + metadata flags (twin-identical), the
-param gates (property/depth enum + alias tables, bbox area), the URL templating, the
-per-property scale + serialize (synthetic 4326 source), and the coverage / all-nodata
-honesty paths.
-"""
+The mosaic is windowed in ITS OWN projection - bounds transformed, densified and
+padded - then read through the coalescing transport, reprojected to degrees and
+scaled from fixed point to physical units. Offline: the spec identity, the enum
+and area gates, the url templating, the per-property scale, the honesty paths."""
 
 from __future__ import annotations
 
@@ -159,12 +149,10 @@ def test_antarctica_is_empty(spec):
 
 @contextlib.contextmanager
 def _synthetic(tmp_path, native_vals, nodata=-32768):
-    """Route the projected read through a synthetic 4326 'native' COG (offline).
+    """Route the projected read through a synthetic degrees 'native' COG.
 
-    Using a 4326 source makes transform_bounds an identity so the reproject is a
-    near-identity resample -- this exercises the scale/serialize/honesty surface;
-    the real Homolosine projected path is proven by the live drive.
-    """
+    That makes the bounds transform an identity and the reproject a near-identity
+    resample, which exercises the scale, serialize and honesty surface offline."""
     real = rasterio.open
     h, w = native_vals.shape
     tf = rasterio.transform.from_bounds(-91.35, 30.25, -90.95, 30.60, w, h)

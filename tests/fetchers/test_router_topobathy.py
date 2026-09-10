@@ -1,16 +1,9 @@
-"""Router-fold + provenance-channel tests for ``fetch_topobathy`` (ADR 0110).
+"""``fetch_topobathy``: the router fold and its provenance channel.
 
-Migrated from ``test_fetch_topobathy.py`` when the coded twin was folded onto the
-router (a ``library_delegate`` raster spec + the ``topobathy.*`` hooks + the
-fetch-time provenance channel). Proves, all offline against SYNTHETIC rasters:
-
-- registry shape + typed-error envelope + payload estimator (indistinguishability);
-- input validation stamps TOPOBATHY_INPUT_INVALID (router + delegate_validate);
-- merge precedence + datum gate + the ETOPO / land-only degrades (the merge helpers);
-- END-TO-END via the promoted router closure: TopobathyResult fields populated;
-- the CHANNEL: a cache-hit REPLAYS the four provenance fields identically (no
-  re-fetch), and the LABELED ``land_absent`` loud-degrade names the failed land leg.
-"""
+All offline against SYNTHETIC rasters. Proves the registry shape and typed
+envelope; the input validation at both the router and the delegate; the merge
+precedence, the datum gate and the land-only degrades; the populated result; and
+a cache hit REPLAYING the four provenance fields, which the coded twin lost."""
 
 from __future__ import annotations
 
@@ -318,10 +311,10 @@ def test_end_to_end_datum_mismatch_propagates(monkeypatch, tmp_path, fake_s3) ->
 
 
 def test_cache_hit_replays_provenance_identically(monkeypatch, tmp_path, fake_s3) -> None:
-    """The provenance channel's proof (live-proof #2 offline analog): a second call
-    over the same AOI is a CACHE HIT that never re-runs the merge, yet the four
-    provenance fields are REPLAYED IDENTICAL from the ``<key>.provenance.json``
-    sidecar -- the fact the twin lost (it reverted to defaults on a cache hit)."""
+    """A second call over the same AOI is a CACHE HIT that never re-runs the merge.
+
+    The four provenance fields are REPLAYED IDENTICAL from the sidecar - the fact the
+    twin lost, reverting to defaults on a hit."""
     land_path = str(tmp_path / "land.tif")
     _write_synth_raster(land_path, bbox=_SMOKE_BBOX, nx=25, ny=25, fill=12.0, nodata=-9999.0)
     # CUDEM absent -> land-only degrade (bathymetry_present=False, a warning).
@@ -437,10 +430,10 @@ def test_deep_rung_restores_deep_column_under_land_fill(monkeypatch, tmp_path: A
 def test_the_permitted_etopo_base_is_masked_from_the_land_fill_over_no_cudem(
     monkeypatch, tmp_path: Any
 ) -> None:
-    """The rung's ETOPO base gets the land-leg mask over a zero-CUDEM AOI too.
-    Without it the 3DEP 0 m ocean fill -- higher precedence -- clobbers the ETOPO
-    column back to land-only while the result still claims a below-waterline
-    bed."""
+    """The permitted base gets the land-leg mask over a zero-coverage AOI too.
+
+    Without it the higher-precedence land fill clobbers the base column back to
+    land-only while the result still claims a below-waterline bed."""
     etopo_path, land_path = _deep_rung_rasters(tmp_path)
     _patch_delegate_sources(monkeypatch, cudem_tiles=[], land_path=land_path,
                             etopo_tiles=[etopo_path])

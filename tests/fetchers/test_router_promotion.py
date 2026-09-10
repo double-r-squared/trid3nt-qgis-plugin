@@ -1,19 +1,9 @@
-"""Promotion parity tests (data-router fold, phase-2 wave-1 pilots + wave-2 ArcGIS family).
+"""Promotion parity: each folded name is still a registered tool.
 
-Migrated from the deleted twin test files (wave-1: test_fetch_gridmet /
-_hifld_critical_infrastructure / _noaa_coops_tides / _esri_landcover_10m /
-wave-2: test_fetch_nifc_fire_perimeters / _hifld_transmission_lines /
-_mtbs_burn_severity / _nhd_waterbodies / _us_drought_monitor). Those
-files unit-tested the twins' INTERNAL helpers (``_plan_tile_grid``, ``_VARIABLES``,
-``_build_where_clause``, ``_normalize_props``, ``_ddate_to_iso`` ...) which no
-longer exist -- deleted per the migration rule. The CONTRACT-level behavior that
-survives the fold (each twin name is a registered tool with the twin's signature /
-docstring / typed errors) is re-expressed HERE against the promoted router surface.
-Deeper behavior parity (values, layer output, caveats, every error path) is covered
-twin-vs-router by ``experiments/fetcher_fold_replication`` (wave-2 6/6 edge matrix)
-and the router unit suites (``test_router_engine`` / ``test_router_executors`` /
-``test_router_spec_loader``).
-"""
+The deleted twins' own tests unit-tested internal helpers that no longer exist; what
+survives the fold is the CONTRACT - the name, the signature, the docstring and the
+typed errors - and that is re-expressed here against the promoted router surface.
+Deeper value parity is covered by the replication harness and the router unit suites."""
 
 from __future__ import annotations
 
@@ -159,9 +149,8 @@ def test_pilot_docstring_is_twin_verbatim(name: str) -> None:
 def test_pilot_degenerate_bbox_raises_twin_typed_error(name: str) -> None:
     """A degenerate bbox raises the twin-identical typed input error, pre-network.
 
-    Validation runs before any endpoint call (offline), and the router stamps the
-    twin's exact A.6 error_code (prefix from spec.error_code_prefix, suffix from
-    the bbox param / spec-level input suffix)."""
+    Validation runs before any endpoint call, and the router stamps the exact code -
+    its prefix from the spec, its suffix from the bbox param."""
     entry = TOOL_REGISTRY[name]
     spec = _SPECS[name]
     # NLDI has no bbox param (seed_point/comid selector); its degenerate-bbox case

@@ -1,18 +1,9 @@
-"""Offline tests for the wave-6 router modes (fan-out + per-enum routing).
+"""Offline tests for the fan-out and per-enum routing modes.
 
-Exercises the phase-2 wave-6 (ADR 0052) additions against LOCAL synthetic
-fixtures, NO live calls:
-
-- ``float_list`` param validation (scalar / list / default / empty->default /
-  bad value / non-numeric) -- the fan-out driver's param type.
-- fan_out.execute: per-value merge + slr_ft/scenario_label/dissolve stamp +
-  honest-empty header-only FGB; per-value endpoint templating; forced upstream.
-- endpoint_by_param: enum -> sub-layer endpoint selection (usace_levees layer).
-- properties_by_param: per-enum column projection + json_coerce of list fields +
-  honest-empty header carrying the per-value column set.
-- edge matrix: a failed driver read, an ArcGIS error-envelope 200, and an
-  honest-empty answer -- each asserting the typed class + retryable flag.
-"""
+Against LOCAL synthetic fixtures: the list param's validation across every shape;
+the fan-out's per-value merge, stamps, templated endpoint and honest empty;
+endpoint and property selection by enum; and an edge matrix - a failed read, an
+error envelope returned as 200, an honest empty - each typed with its flag."""
 
 from __future__ import annotations
 

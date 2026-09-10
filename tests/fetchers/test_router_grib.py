@@ -1,14 +1,9 @@
-"""Offline coverage for the weather/GRIB fold (ADR 0069).
+"""Offline coverage for the weather GRIB fold.
 
-Migrates the value-bearing unit coverage of the deleted fetch_mrms_qpe twin onto
-the router surface: the S3-listed key resolve phase (latest / targeted walkback)
-and the grib_object whole-object decode (gunzip -> GRIB -> window -> sentinel-nodata
--> conditional reproject). The live network is stubbed by monkeypatching the shared
-transport ``get_bytes`` with synthetic bodies (an S3 ListBucket XML for the resolve
-probes; a gzipped GeoTIFF standing in for the .grib2.gz -- both formats decode via
-GDAL, exactly the twin's own test stand-in). Live value-identical parity is the
-separate LIVE gate (ADR 0069, harness PASS).
-"""
+The listed-key resolve phase, latest and targeted walkback, and the whole-object
+decode - gunzip, GRIB, window, sentinel nodata, conditional reproject. The network
+is stubbed with synthetic bodies: a listing document for the resolve probes and a
+gzipped GeoTIFF for the object, both decoding through the same reader."""
 
 from __future__ import annotations
 

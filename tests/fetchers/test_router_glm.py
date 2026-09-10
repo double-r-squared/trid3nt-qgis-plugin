@@ -1,23 +1,9 @@
-"""GLM animation-frames fold parity (ADR 0092): fetch_glm_lightning via the router.
+"""``fetch_glm_lightning`` through the animation-frames shape.
 
-Migrates the value-bearing coverage of the deleted fetch_glm_lightning twin
-(test_fetch_glm_lightning.py) onto shape: animation_frames. The CONTRACT CHANGE
-(approved, ADR 0092): the DEFAULT output is now a frames LIST -- the single
-accumulation case is a ONE-frame list; ``accumulation_window_s`` fans the window into
-scrubber-steppable ``step <N>`` frames. Covers:
-
-- registration + spec-served + signature/return parity (list return),
-- frames_plan bucket resolve (single -> 1 frame, accumulation -> N) + the twin's
-  byte-identical per-frame cache_params + the ``step <N>`` scrubber name-token,
-- frame_bytes GED binning to a REAL RGBA COG + FrameDegraded on an empty bucket,
-- route() list-return + the declared per-frame validity windows the map scrubs,
-- the honesty floor (all buckets degrade / empty window -> GLM_EMPTY),
-- typed input errors (unknown satellite / bad window / tiny accum / over-long single),
-- the pure GED point-gridding math (bin + purple ramp) relocated into the hook module.
-
-The S3 boundary is monkeypatched for a hermetic offline run; the real GLM archive path
-is proven by the live proof recorded in ADR 0092. ASCII only.
-"""
+The DEFAULT output is a frames LIST - a single accumulation is a one-frame list,
+and a window fans into scrubber-steppable frames. Covered: the bucket resolve and
+its per-frame cache params, the binning to a real COG with a degraded empty
+bucket, the declared validity windows, the honesty floor and the typed inputs."""
 
 from __future__ import annotations
 
@@ -41,11 +27,8 @@ from trid3nt_server.tools.fetchers.imagery._goes_archive_core import _grid_for_b
 def _scrubs(layers) -> bool:
     """Do these frames declare a playable sequence?
 
-    Every frame states its own [valid_from, valid_to) window, the windows run
-    forward, and each one ends where the next begins - which is what the
-    temporal controller needs and all it needs. A lone frame is a static
-    overlay, not a sequence, and declares no window at all.
-    """
+    Every frame states its own half-open window, the windows run forward and each ends
+    where the next begins; a lone frame is a static overlay and declares none."""
     windows = [(l.valid_from, l.valid_to) for l in layers]
     if len(windows) < 2 or any(None in w for w in windows):
         return False

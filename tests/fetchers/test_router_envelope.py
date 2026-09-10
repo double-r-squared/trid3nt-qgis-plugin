@@ -1,12 +1,9 @@
-"""Offline tests for the LayerURI-envelope seam (ADR 0073), no live calls.
+"""Offline tests for the LayerURI-envelope seam, with no live calls.
 
-Covers the post-emit envelope hook contract (registration validation of the
-``envelope`` hook + ``output.result_model`` pairing/resolution; the honesty-floor
-protected-key strip; strict no-op for the priors) and the fetch_high_water_marks
-fold (event resolve, the states-overlap query scope + US-outside gate, the
-bbox-clip / NO_MARKS delegate, and the quality/type/datum envelope read back from
-the produced FGB -> HighWaterMarksLayerURI).
-"""
+Covers the post-emit hook contract - the registration pairing of the hook with
+its result model, the honesty-floor protected-key strip and the strict no-op for
+a spec that declares neither - and one fold end to end: the event resolve, the
+query scope with its outside gate, the clip and empty delegate, and the read back."""
 
 from __future__ import annotations
 
@@ -105,16 +102,9 @@ def test_hwm_spec_declares_envelope_and_result_model():
 
 
 def test_envelope_is_strict_no_op_for_priors():
-    """Only the envelope folds declare an envelope hook + result_model (HWM, ADR
-    0073; fault_sources, ADR 0081; landcover + flood_extent, ADR 0082; dem, ADR
-    0097 -- the naming override via a no-field DemLayerURI; topobathy, ADR 0110 --
-    the twin layer_id/name + the four provenance fields via the channel;
-    storm_tracks + goes_satellite, ADR 0111 -- the twin layer_id/name + the mode /
-    scan provenance via the channel; nwm_streamflow, ADR 0112 -- the twin
-    layer_id/name + the reference-time / reach-count / NLDI-sample provenance via the
-    channel; bluetopo, the bathymetry seam -- the vertical datum, tile count,
-    resolution tiers and measured coverage via the channel); every other spec
-    leaves both unset (no-op)."""
+    """Only the folds that declare BOTH an envelope hook and a result model do anything.
+
+    Every other spec leaves both unset, and the seam is a no-op for it."""
     envelope_folds = {
         "fetch_high_water_marks", "fetch_fault_sources",
         "fetch_landcover", "fetch_flood_extent_observation",

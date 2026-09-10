@@ -1,11 +1,8 @@
-"""Offline tests for the router ``mapserver_export`` RGBA mode + the NOAA SLR
-siblings (fetch_noaa_slr_confidence + fetch_noaa_slr_marsh), migrated from the
-deleted twin test file when the twins folded to source.yaml (ADR 0068).
+"""The router's RGBA export mode, and the two sea-level siblings.
 
-Network is monkeypatched: a synthetic PNG32 is fed through the real
-georeference -> 4-band RGBA COG path; the service map + res_deg grid + typed
-errors are exercised without a live call. ASCII only.
-"""
+Network monkeypatched: a synthetic image is fed through the real georeference and
+four-band COG path, and the service map, the resolution grid and the typed errors
+are exercised without a live call. ASCII only."""
 
 from __future__ import annotations
 

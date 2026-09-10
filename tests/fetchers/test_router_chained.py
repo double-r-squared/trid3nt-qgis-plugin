@@ -1,11 +1,8 @@
-"""Offline tests for the chained-resolution mode (ADR 0063), no live calls.
+"""Offline tests for the chained-resolution mode, with no live calls.
 
-Covers the mode primitives (resolve pre-step, offset paging, deduped/bounded/best-effort
-detail enrichment) and each folded source's build/parse/resolve/enrich hooks with the
-transport monkeypatched. Migrates the value-bearing coverage from the four deleted twins'
-test files (parse-field, resolve gate, paging stop conditions, honest-empty / no-gauges /
-too-large errors, zone-union enrichment, threshold/series enrichment).
-"""
+Covers the mode primitives - the resolve pre-step, offset paging, and deduped,
+bounded, best-effort detail enrichment - and each folded source's build, parse,
+resolve and enrich hooks with the transport monkeypatched."""
 
 from __future__ import annotations
 

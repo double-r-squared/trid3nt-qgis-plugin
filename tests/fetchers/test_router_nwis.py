@@ -1,12 +1,9 @@
-"""Router NWIS fold (ADR 0085): the last flood-seam twin, spec-driven.
+"""The gauge fold: spec-driven, with the two blockers it resolved.
 
-Twin (fetch_usgs_nwis_gauges.py) DELETED. Covers the two blockers the fold resolved:
-the IV WaterML-JSON -> Site-RDB parse_fallback chain (honest NO_STATIONS on all-empty)
-and the window-mode output-schema switch (5-col instantaneous vs 12-col hydrograph),
-plus the spatial-selector + temporal-window resolution edge matrix -- all offline with
-synthetic payloads. (Live end-to-end site-set + schema parity vs the twin was verified
-against real USGS at fold time; this suite is the offline regression surface.)
-"""
+The instantaneous-values parse falls back to the site table and answers an honest
+no-stations on an all-empty result, and the window mode switches the output schema
+between the instantaneous and hydrograph shapes. Plus the spatial-selector and
+temporal-window edge matrix, all offline over synthetic payloads."""
 
 from __future__ import annotations
 

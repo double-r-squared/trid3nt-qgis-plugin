@@ -1,13 +1,8 @@
-"""FTW/fiboa GeoParquet-pushdown fold parity (ADR 0083): fetch_field_boundaries.
+"""``fetch_field_boundaries``: the GeoParquet-pushdown vector delegate.
 
-Migrates the OFFLINE-testable coverage of the deleted twin onto the VECTOR
-library_delegate mode. The live GeoParquet row-group pushdown read (geopandas over an
-fsspec HTTPS handle -- the library owns the range reads) is proven by the ADR 0083 live
-twin-vs-router parity harness (select + feature-count + geometry-area + crop_name +
-error-edge value-identical). Here the offline surfaces are: spec identity, the pure
-pre_resolve dataset-selection (auto + explicit + no-coverage + unknown-key), and the
-payload estimate.
-"""
+The live row-group pushdown read is proven by a separate parity harness. The
+offline surfaces here are spec identity, the pure dataset selection - automatic,
+explicit, no coverage and an unknown key - and the payload estimate."""
 
 from __future__ import annotations
 

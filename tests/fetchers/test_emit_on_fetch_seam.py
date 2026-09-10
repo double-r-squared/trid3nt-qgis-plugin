@@ -1,21 +1,9 @@
-"""ADR 0244 -- the emit-on-fetch router seam.
+"""The emit-on-fetch router seam.
 
-Pins the IN-COMPOSER input-surfacing hook (``maybe_emit_input_on_fetch``) that
-``route()`` fires after a successful LayerURI build:
-
-  * declaration-present (a renderable raster/vector) emits a role="context"
-    "Input: ..." row carrying the spec preset -- via BOTH the worker-thread
-    off-load path (``run_coroutine_threadsafe``) and the on-loop path;
-  * declaration-absent (a record source) never attempts;
-  * ``visualize=False`` (a probe fetch) suppresses;
-  * a repeat fetch of the same uri is de-duped (surfaced once per session);
-  * a surfacing failure is non-fatal (never raises);
-  * no emitter bound -> no-op;
-  * a DIRECT dispatch (dispatched tool == the fetcher) is skipped -- the
-    tool-wrapper already emits the returned LayerURI.
-
-publish_layer + the vector inline-read are mocked; no network / boto3.
-"""
+The in-composer hook fires after a successful layer build: a renderable
+declaration emits a context row carrying the spec preset, on both the
+worker-thread and the on-loop paths; a record source, a probe fetch and a repeat
+uri each suppress; a failure never raises; and a DIRECT dispatch is skipped."""
 
 from __future__ import annotations
 

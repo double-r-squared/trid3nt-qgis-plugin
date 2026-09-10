@@ -1,11 +1,9 @@
 """The hook loader's tree walk: every spec's hooks resolve, from the right module.
 
-A fetcher package is self-contained -- its source.yaml, corpus.yaml and hooks.py
-all found by a walk -- so adding, moving or removing one edits no shared file.
-This pins the property the walk replaced a 58-line import list to buy: a hook
-module lives beside the ONE spec that names it, and stays under ``_router/hooks/``
-only when SEVERAL specs name it.
-"""
+A fetcher package is self-contained - its spec, corpus and hooks all found by a
+walk - so adding, moving or removing one edits no shared file. A hook module
+lives beside the ONE spec that names it, and stays in the shared directory only
+when SEVERAL specs name it."""
 
 from __future__ import annotations
 

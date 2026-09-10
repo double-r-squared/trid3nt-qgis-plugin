@@ -1,20 +1,9 @@
-"""WorldPop library-delegate raster fold parity (ADR 0092): fetch_population via the router.
+"""``fetch_population`` through the library-delegate raster mode.
 
-Migrates the value-bearing WorldPop coverage of the deleted fetch_population twin (the
-worldpop block of test_data_fetch.py) onto the generic library-delegate raster mode:
-the pre-cache vintage validate hook, the URL composition, the whole-object-download-
-then-window delegate read (WorldPop serves HTTP 200 to range requests, so /vsicurl
-cannot window it -> the delegate downloads once + windows), the payload gate, and the
-units/style LayerURI stamps.
-
-APPROVED REMOVAL (ADR 0092): the twin's half-built ACS (Census B01003) leg is DROPPED.
-An ``acs_*`` dataset now fails the validate gate with the standard typed input error
--- covered explicitly below as the surface-change contract, NOT a parity break.
-
-The requests/rasterio socket is the ONE sanctioned delegate impurity (mocked here for a
-hermetic offline run over a synthetic country GeoTIFF); the real WorldPop path is
-proven by the live proof recorded in ADR 0092. ASCII only.
-"""
+The source returns 200 to a range request, so the delegate downloads the object
+once and windows it rather than reading it remotely. Covered with that: the
+validate hook, the url composition, the payload gate and the layer stamps. A
+survey-table dataset now fails the gate typed, which is the surface change."""
 
 from __future__ import annotations
 

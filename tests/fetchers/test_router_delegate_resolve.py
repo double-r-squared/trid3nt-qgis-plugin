@@ -1,18 +1,9 @@
-"""hooks.delegate_resolve mechanism (ADR 0076): the socketed pre-cache-key resolve.
+"""The socketed pre-cache-key resolve hook.
 
-The delegate sibling of the chained-resolution resolve phase, for a source whose
-cycle/key resolution walks a LIBRARY socket (HRRR-Zarr's s3fs backward cycle walk).
-It runs in route() AFTER type/gate + delegate_validate and BEFORE read_through, under
-the library_delegate constraints (declared timeout, telemetry, upstream backstop), and
-MERGES its dict return into params so the resolved cycle enters the cache key.
-
-The HRRR pair (its consuming fold) is a live-S3 zarr data path with no offline value
-fixture, so it is STOP-RULED (twins intact) with this mechanism BUILT + proven here:
-no-op for a spec that omits it, the pre-cache merge (distinct cache keys), the typed
-upstream backstop on an unmapped library error, and the registration pairing gate.
-Offline: a stub raster delegate + a stub resolve hook; read_through is monkeypatched to
-capture the params it keys on.
-"""
+It runs after the type gate and the delegate validate and BEFORE the cache read,
+and MERGES its dict return into the params so a resolved cycle enters the cache
+key. Pinned: the no-op for a spec that omits it, the merge giving distinct keys,
+the typed upstream backstop on an unmapped library error, and the pairing gate."""
 
 from __future__ import annotations
 

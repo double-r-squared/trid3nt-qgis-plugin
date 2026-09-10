@@ -1,16 +1,9 @@
-"""Library-delegate raster fold parity (ADR 0075): fetch_3dep_extra via the router.
+"""``fetch_3dep_extra`` through the router's library-delegate raster mode.
 
-Migrates the value-bearing coverage of the deleted fetch_3dep_extra twin (the 3DEP
-block of test_pfdf_unlock_statsgo_nldi_3dep.py) onto the generic library-delegate
-mode, plus the two ADR 0075 fast-follow extensions this fold introduced:
-    role=input intermediate opts out of the server auto-render);
-  * ``payload_estimate.mb_per_sq_deg_by_param`` -> the per-resolution coefficient
-    table (5 / 500 / 5000 / 1 / 200 MB/deg^2) the scalar mb_per_sq_deg cannot hold.
-The pre-cache US-envelope validate hook, the pfdf TNM delegate hook's array -> COG
-serialization + empty/tile-limit/upstream error mapping, and the units/style LayerURI
-stamps round out the parity. The pfdf socket is the ONE sanctioned impurity (mocked
-here for a hermetic offline run); the real TNM path is proven by the ADR 0075 live proof.
-"""
+Offline, with the library socket mocked. Covered: the per-resolution coefficient
+table a scalar payload estimate cannot hold, the pre-cache envelope validate
+hook, the delegate's array-to-COG serialization with its empty, tile-limit and
+upstream error mapping, and the units and style stamps on the returned layer."""
 
 from __future__ import annotations
 

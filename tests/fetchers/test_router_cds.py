@@ -1,12 +1,9 @@
-"""Router CDS library-delegate fold (ADR 0085): ERA5 + GTSM parity coverage.
+"""The two climate-store sources through the router's library delegate.
 
-The twins (fetch_era5_reanalysis.py / fetch_gtsm_tide_surge.py) are DELETED; both
-sources are spec-driven through the ``cds`` delegate hooks. cdsapi is not installed,
-so these tests fake it (the twins' established ``sys.modules`` injection) to drive the
-missing-key / auth / upstream classifier and the NetCDF decode -- the OFFLINE surface
-(input-validation + missing-key parity + happy-path array/feature shape). No CDS key is
-ever registered; live-positive requires a resolvable key from the environment.
-"""
+The client library is not installed, so it is faked by module injection to drive
+the missing-key, auth and upstream classifier and the NetCDF decode. That is the
+OFFLINE surface - input validation, missing-key parity and the happy-path shapes.
+No key is ever registered; a live-positive run needs one from the environment."""
 
 from __future__ import annotations
 

@@ -1,13 +1,9 @@
-"""Router tests for fetch_viirs_day_fire (ADR 0087).
+"""``fetch_viirs_day_fire``, on the frames-list output shape.
 
-The twin folded onto the frames-list output shape (shape: animation_frames):
-- registration + metadata TWIN-IDENTICAL, spec-served.
-- the frames-list shape returns ordered list[LayerURI] with the scrubber
-  NAME-TOKEN ("VIIRS Day Fire step <N> <ISO> (<SAT>)"), proven by the plugin's
-  declared per-frame validity windows the map scrubs.
-- the day/night pass filter + the multi-satellite merge/sort pass-list.
-- honesty floor + the typed-error surface.
-"""
+Covered: registration and metadata; the ordered layer list with its scrubber name
+token, proven by the declared per-frame validity windows; the day and night pass
+filter with the multi-satellite merge and sort; and the honesty floor with the
+typed-error surface."""
 
 from __future__ import annotations
 
@@ -36,11 +32,8 @@ _W = dict(start_utc="2026-05-15T20:47:00Z", end_utc="2026-05-19T22:01:00Z")
 def _scrubs(layers) -> bool:
     """Do these frames declare a playable sequence?
 
-    Every frame states its own [valid_from, valid_to) window, the windows run
-    forward, and each one ends where the next begins - which is what the
-    temporal controller needs and all it needs. A lone frame is a static
-    overlay, not a sequence, and declares no window at all.
-    """
+    Every frame states its own half-open window, the windows run forward and each ends
+    where the next begins; a lone frame is a static overlay and declares none."""
     windows = [(l.valid_from, l.valid_to) for l in layers]
     if len(windows) < 2 or any(None in w for w in windows):
         return False

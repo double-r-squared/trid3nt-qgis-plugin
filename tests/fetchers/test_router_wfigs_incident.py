@@ -1,13 +1,9 @@
-"""WFIGS incident record fold parity (ADR 0076): fetch_wfigs_incident via the router.
+"""``fetch_wfigs_incident``: a record-returning fold.
 
-Migrates the value-bearing coverage of the deleted twin's tests onto the spec-driven
-record surface (shape=record): the PURE wfigs_incident hooks (state/pad validation +
-token-OR LIKE build + 2-endpoint ordered plans + best-feature discovery record), the
-Current->YearToDate short-circuit, the typed not-found, and the end-to-end record dict.
-Offline: synthetic WFIGS ArcGIS JSON bodies + the in-memory read_through injector; the
-real ArcGIS network path is unchanged (the router transport). Proof-by-migration for
-the record-return output shape (route() -> dict, not a LayerURI).
-"""
+The PURE hooks - state and pad validation, the token-OR clause build, the ordered
+two-endpoint plans and the best-feature discovery record - plus the short-circuit
+between the two collections, the typed not-found, and the end-to-end record dict.
+Offline over synthetic bodies; the route returns a dict, not a layer."""
 
 from __future__ import annotations
 

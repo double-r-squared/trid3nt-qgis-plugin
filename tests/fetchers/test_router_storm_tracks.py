@@ -1,26 +1,9 @@
-"""Router-fold test parity for ``fetch_storm_tracks`` (ADR 0111).
+"""``fetch_storm_tracks`` as a library-delegate vector spec.
 
-Migrated from ``test_fetch_storm_tracks.py`` when the coded twin was folded onto
-the router (a ``library_delegate`` vector-fgb spec + the ``storm_tracks.*`` hooks +
-the fetch-time provenance channel). Follows the ``test_router_topobathy.py`` /
-``test_router_dem.py`` migrated-test style: pure hook/helper tests offline, plus
-end-to-end drives through the promoted router closure (``TOOL_REGISTRY``) with the
-delegate's network seam (``storm_tracks._http_get``) monkeypatched and the S3 cache
-faked (``fake_s3``). Proves:
-
-- registry shape + typed-error envelope + payload estimator;
-- the historical-mode bbox-required gate + geometry/storm_name shape checks
-  (``storm_tracks.validate``);
-- year resolution + IBTrACS per-basin file selection (recent -> last3years,
-  older -> per-basin, >2 basins rejected, polar bbox honest-empty);
-- the IBTrACS CSV parser + storm-wise bbox selection (full track kept) + the
-  Saffir-Simpson label map + the line/point feature builders;
-- the NHC CurrentStorms.json parser (numeric + hemisphere-string coords);
-- END-TO-END via the promoted router closure for both modes: StormTracksLayerURI
-  fields populated, FlatGeobuf round-trips via geopandas, honest-empty raises;
-- THE CHANNEL: a cache-hit REPLAYS the mode/storm_count/storm_names provenance
-  fields identically (no re-fetch).
-"""
+Offline hook tests plus end-to-end drives through the promoted registry closure
+with the network seam monkeypatched and the cache faked. Proves the mode gates and
+geometry checks, year resolution and per-basin file selection with its refusals,
+both parsers and the feature builders, and a cache hit replaying the provenance."""
 
 from __future__ import annotations
 

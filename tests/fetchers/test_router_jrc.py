@@ -1,17 +1,9 @@
-"""Router value coverage for the JRC Global Surface Water fold (ADR 0086).
+"""``fetch_jrc_global_surface_water``: the STAC mosaic fold.
 
-fetch_jrc_global_surface_water folded to source.yaml + the stac_raster ``mosaic``
-render (a continuous-value uint8 STAC mosaic: bilinear + per-band nodata 0/253,
-signed by the planetary-computer SDK) with the PURE per-band colormap hook
-(occurrence/recurrence/seasonality/change ramp) baked into the band-1 palette. The twin was DELETED (byte-identical live PC-STAC parity proven by the live
-drive over Lake Okeechobee, all 4 bands array + palette + nodata + crs + transform
-identical; the dry-AOI honesty path agrees on JRC_GSW_NO_COVERAGE).
-
-These OFFLINE tests cover the spec identity + metadata flags (twin-identical), the
-param gates (band enum + lowercase alias, bbox area), the palette bake + first-valid
-mosaic value behaviour over local synthetic COGs wrapped in real STAC items, and the
-all-nodata / no-item honesty paths.
-"""
+A continuous-value mosaic with per-band nodata and a PURE per-band colormap hook
+baked into the palette. Offline over local synthetic COGs wrapped in real catalog
+items: the spec identity and flags, the band and area gates, the palette bake and
+first-valid mosaic, and the all-nodata and no-item honesty paths."""
 
 from __future__ import annotations
 

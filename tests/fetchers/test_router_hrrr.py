@@ -1,14 +1,9 @@
-"""HRRR-Zarr library-delegate fold parity (ADR 0083): fetch_hrrr_forecast + fetch_hrrr_smoke.
+"""The two forecast sources through the router's library-delegate raster mode.
 
-Migrates the OFFLINE-testable coverage of the deleted twins (test_fetch_hrrr_forecast.py
-/ test_fetch_hrrr_smoke.py) onto the router's library-delegate raster mode. The live
-Zarr data path (s3fs cycle walk + xarray open + LCC->4326 reproject + clip + forecast
-hypot) is proven by the ADR 0083 live twin-vs-router parity harness (value-identical on
-all 5 variables); here the socket is mocked for a hermetic run, and the offline surfaces
-are: spec identity, the delegate_validate CONUS + forecast_hour-horizon gates, the
-delegate_resolve cycle walk + NOT_AVAILABLE backstop, the read hook's array/hypot shaping,
-the units/style/role LayerURI stamps, and the payload estimate.
-"""
+The live data path is proven by a separate parity harness; here the socket is
+mocked for a hermetic run. The offline surfaces: spec identity, the validate
+region and horizon gates, the resolve's cycle walk with its not-available
+backstop, the read hook's array shaping, the layer stamps and the payload estimate."""
 
 from __future__ import annotations
 

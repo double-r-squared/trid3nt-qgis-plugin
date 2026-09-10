@@ -1,26 +1,9 @@
-"""Unit tests for the 4 data-fetch atomic tools (job-0033, M4 Stage C).
+"""Unit tests for the four data-fetch atomic tools.
 
-Coverage:
-- Each tool's ``@register_tool`` lands a registered entry with the expected
-  TTL class + source class + cacheable flag.
-- ``round_bbox_to_resolution`` is deterministic and snaps to a stable grid.
-- Bbox quantization at a single resolution produces the same canonicalized
-  params dict for two callers within the same grid cell.
-- ``fetch_dem`` routes through ``read_through`` (mocked GCS + mocked
-  py3dep): cache miss invokes the fetcher and returns a ``LayerURI``.
-- ``fetch_buildings`` routes through ``read_through`` (mocked GCS + mocked
-  Planetary Computer STAC search): no-matching-items raises
-  ``UpstreamAPIError`` (no sentinel written).
-- ``fetch_population`` routes through ``read_through`` (mocked Census REST
-  + mocked GCS): a single-state CONUS bbox yields a FeatureCollection.
-- ``geocode_location`` routes through ``read_through`` (mocked Nominatim
-  REST + mocked GCS): returns ``{name, bbox, latitude, longitude, source}``
-  shape and emits a ``location-resolved``-eligible payload.
-- ``BboxInvalidError`` paths (degenerate bbox, out-of-range lat/lon, bbox
-  area over guardrail).
-- Mocked external-API failures re-raise as ``UpstreamAPIError`` from inside
-  ``read_through`` with no sentinel written to the cache.
-"""
+Each registers with its expected TTL class, source class and cacheable flag; the
+bbox quantizer is deterministic, so two callers in one grid cell canonicalize
+identically; each tool routes through the cache read-through against mocked
+upstreams; and a bad bbox or a failing upstream refuses with NO sentinel."""
 
 from __future__ import annotations
 
@@ -79,12 +62,10 @@ class _S3Body:
 
 
 class FakeStorageClient:
-    """In-memory S3 double (GCP decommissioned). ``store`` keyed by object KEY.
+    """In-memory S3 double; ``store`` is keyed by object KEY.
 
-    Returns the per-test active instance installed by the autouse
-    ``_route_cache_to_inmemory_s3`` fixture so the tool's real S3 read-through
-    (boto3) reads/writes the same store the test inspects.
-    """
+    Returns the per-test instance the autouse fixture installs, so the tool's real
+    boto3 read-through reads and writes the store the test inspects."""
 
     _active: "FakeStorageClient | None" = None
 
@@ -166,16 +147,10 @@ def test_geocode_location_is_registered_with_dynamic_1h():
 
 
 def test_registry_contains_job_0039_subset_after_eager_import():
-    """job-0039 acceptance: this job's 3 new fetchers are registered + M4 fetchers.
+    """The fetchers this file imports are registered after the eager import.
 
-    Inside the test process, the eager-import surface is whatever the test
-    module triggers — ``tools/__init__.py`` (FROZEN) + the explicit
-    fetcher-module imports at the top of this test file (which fires this
-    job's three new ``@register_tool`` decorators alongside the M4 four).
-    The startup-only imports (``solver`` from job-0041) are triggered by
-    ``main._import_tools_registry()`` — see the ``--startup-only`` evidence
-    below for the live ≥11-tool assertion the kickoff calls out.
-    """
+    In-process the registry holds only what the package's own imports plus this
+    file's explicit ones fire; the startup-only surface is asserted at startup."""
     names = set(TOOL_REGISTRY.keys())
     expected_subset = {
         "fetch_dem",
@@ -549,15 +524,10 @@ def test_geocode_south_florida_wrong_state_snaps_to_florida(monkeypatch):
 
 
 def test_geocode_capitalized_south_florida_snaps_to_florida_centroid(monkeypatch):
-    """F71 headline: 'South Florida' -> KANSAS hit -> snap; centroid inside FL.
+    """A comma-less regional phrase snaps to its state rather than a foreign hit.
 
-    NATE 2026-06-17 confirmed geocode_location('South Florida') resolved to
-    Kansas every time (no comma; the bare-word guard skipped comma-less tokens).
-    The fix extracts the full state NAME 'Florida' from the comma-less phrase,
-    the Kansas centroid fails the in-state sanity check, and the result snaps to
-    the Florida bbox via the state-bbox-fallback. We mock Nominatim to return a
-    Kansas hit and assert the snapped bbox's centroid lands inside Florida.
-    """
+    The state NAME is extracted from the phrase, the out-of-state centroid fails the
+    sanity check, and the result snaps to the state bbox; the upstream is mocked."""
     import json as _json
 
     kansas_hit = {
@@ -607,12 +577,10 @@ def test_geocode_capitalized_south_florida_snaps_to_florida_centroid(monkeypatch
 
 
 def test_geocode_bare_dangerous_word_does_not_snap_to_state(monkeypatch):
-    """F71 guard: a bare 'in'/'or' query never resolves to a state (no snap).
+    """A bare two-letter word never resolves to a state.
 
-    'in' must NOT leak to Indiana and 'or' must NOT leak to Oregon — so when the
-    primary geocode of such a token finds no match, the typed GeocodeNoMatchError
-    must propagate (no state detected -> no silent snap).
-    """
+    When the primary geocode of such a token finds no match, the typed no-match
+    error propagates: no state detected means no silent snap."""
 
     def _boom(query):
         raise GeocodeNoMatchError(f"Could not locate {query!r}.")
@@ -751,13 +719,10 @@ class _FakeGeocodeResp:
 
 
 def test_geocode_empty_body_raises_typed_no_match(monkeypatch):
-    """An empty Nominatim result body for an unknown non-US place raises
-    GeocodeNoMatchError with the non-retryable GEOCODE_NO_MATCH code.
+    """An empty geocoder body for an unknown place raises the typed no-match error.
 
-    Drives the real ``_fetch_nominatim_geocode_bytes`` empty-result branch
-    (no _fetch_nominatim_geocode_bytes monkeypatch) so the typed-error contract
-    is locked end-to-end through ``geocode_location``.
-    """
+    The real fetch branch runs unmocked, so the non-retryable contract is locked end
+    to end through the tool."""
     monkeypatch.setattr(
         requests,
         "get",

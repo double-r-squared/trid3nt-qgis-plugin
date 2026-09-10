@@ -1,12 +1,9 @@
-"""fetch_dem router-fold tests (ADR 0097) -- migrated from test_data_fetch.py.
+"""``fetch_dem`` as a spec-driven library-delegate router source.
 
-fetch_dem folded from a coded twin to a spec-driven ``library_delegate`` router
-source (py3dep hooks + the source="copernicus" cross-sibling dispatch). These
-carry the 0091 gated-fallback contract's test-pins intact, adapted to the router
-seams: the network step is the monkeypatchable ``dem_3dep._fetch_3dep_dem_array``
-(returns ``(array, transform, crs)``), and ``fetch_dem`` is the promoted registry
-closure (``TOOL_REGISTRY["fetch_dem"].fn``, keyword-only).
-"""
+The gated-fallback contract's pins carry over onto the router seams: the network
+step is the monkeypatchable array fetch returning array, transform and CRS, and
+the tool under test is the promoted registry closure rather than a module
+function."""
 
 from __future__ import annotations
 

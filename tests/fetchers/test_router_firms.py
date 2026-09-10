@@ -1,13 +1,9 @@
-"""Router value coverage for the fetch_firms_active_fire fold (ADR 0079).
+"""``fetch_firms_active_fire``: the keyed CSV fold.
 
-The NASA FIRMS active-fire twin folded to a source.yaml + firms_active_fire hooks
-(keyed CSV http_json with the MAP_KEY carried IN the URL path). These tests cover
-the value-bearing surface the deleted twin's tests carried: the credential-resolution
-missing-key parity, the AREA-endpoint URL build (rolling + historical-date), the
-200-with-error-body auth split (parse_response) + the non-2xx body split
-(classify_status), the CSV -> Point parse with the retained schema, the honest 0-feature
-FGB, and the spec-identity flags pinned against the twin's registration.
-"""
+The map key rides IN the url path. Covered: missing-key parity through credential
+resolution, the area-endpoint url build for both the rolling and dated forms, the
+auth split on a 200 carrying an error body as well as on a non-2xx, the CSV to
+point parse with its retained schema, the honest empty answer and the spec flags."""
 
 from __future__ import annotations
 

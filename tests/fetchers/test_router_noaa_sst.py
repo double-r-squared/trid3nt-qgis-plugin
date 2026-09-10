@@ -1,12 +1,9 @@
-"""Router value coverage for the fetch_noaa_sst fold (ADR 0079).
+"""``fetch_noaa_sst``: the gridded-subset access mode.
 
-The NOAA CRW SST twin folded to a source.yaml + the new raster_cog ``griddap``
-access mode (ERDDAP griddap bracket-selector .nc GET -> in-memory xarray subset ->
-north-up float32 array -> NaN-nodata COG). These tests cover the value-bearing
-surface: the bracket-selector URL build (lat high:low), the north-up orientation,
-the 404-body no-data disambiguation (NOAA_SST_NO_DATA), the all-NaN land window
-(NO_DATA), the bbox-area + variable param gates, and the spec-identity flags.
-"""
+A bracket-selector request subsets in memory into a north-up float32 array and a
+NaN-nodata COG. Covered: the url build with its descending latitude, the
+orientation, the 404-body disambiguation from a genuine no-data, the all-NaN land
+window, the area and variable param gates, and the spec-identity flags."""
 
 from __future__ import annotations
 

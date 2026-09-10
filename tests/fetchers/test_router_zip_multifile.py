@@ -1,13 +1,9 @@
-"""Offline coverage for the zip/multi-file fold (ADR 0067).
+"""Offline coverage for the zip and multi-file fold.
 
-Migrates the value-bearing unit coverage of the deleted fetch_ghsl_population and
-fetch_administrative_boundaries twins onto the router surface: the GHSL
-fixed_tile_grid grid math + whole-object per-tile extract/window/merge, and the
-admin build_request FIPS planner + the ZIP-member read the ogr-vector executor
-does. The raster half stubs the shared ``get_zip`` step; the vector half points
-the driver at real local ZIPs, so the machinery (not the live data -- that is the
-LIVE parity gate) is exercised deterministically.
-"""
+The fixed tile grid's math with its whole-object per-tile extract, window and
+merge, and the request planner with the zip-member read the vector executor does.
+The raster half stubs the shared archive step; the vector half points the driver
+at real local zips, so the machinery runs deterministically."""
 
 from __future__ import annotations
 

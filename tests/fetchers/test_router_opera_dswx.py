@@ -1,11 +1,9 @@
-"""Router coverage for fetch_opera_dswx -- OPERA surface water extent.
+"""``fetch_opera_dswx``: the surface-water-extent products.
 
-The V1 DSWx products are served from an Earthdata-Login-gated bucket, so the
-live read cannot run until ``~/.netrc`` carries a machine entry for
-``urs.earthdata.nasa.gov``. The offline tests below pin the spec identity, the
-param surface and the REFUSAL that names the file and the host; the live cell
-SKIPS with that same reason until the credential exists.
-"""
+The bucket is login-gated, so the live read cannot run until the machine carries a
+credential for the provider host. Offline these pin the spec identity, the param
+surface and the REFUSAL that names the file and the host; the live cell SKIPS with
+that same reason until the credential exists."""
 
 from __future__ import annotations
 

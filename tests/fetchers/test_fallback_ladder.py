@@ -517,10 +517,10 @@ def test_same_data_rung_walks_without_asking() -> None:
 def test_auto_mode_refuses_a_synthetic_rung_without_asking_a_live_session(
     monkeypatch,
 ) -> None:
-    """AUTO means nobody is being asked, emitter or no emitter. Keying the ask on
-    the presence of a channel stalled an auto run for the whole gate TTL; the
-    labeled default (refuse, law 9) applies immediately -- the input-review
-    gate's auto semantics."""
+    """AUTO means nobody is being asked, emitter or no emitter.
+
+    Keying the ask on the presence of a channel stalled an auto run for the whole
+    gate TTL; the labeled default applies immediately."""
     import asyncio as _asyncio
 
     from trid3nt_server.emission import pipeline_emitter as pe
@@ -647,10 +647,8 @@ def test_skip_land_gap_does_not_cite_the_land_fill_the_caller_disabled(
 def test_zero_cudem_tiles_is_the_same_gap_at_zero_percent(monkeypatch) -> None:
     """A coast the nearshore composite does not reach is a 0% gap, not a pass.
 
-    The coarser global bed that could stand in is a cross-dataset substitution, so
-    it descends the ladder past the loudness gate rather than being laid under the
-    primary where nothing would see it.
-    """
+    The coarser global bed that could stand in is a cross-dataset substitution, so it
+    descends past the loudness gate rather than being laid under the primary."""
     monkeypatch.setattr(tb, "_select_cudem_tiles", lambda *_a, **_k: [])
     with pytest.raises(tb.TopobathyCoverageGapError) as ei:
         tb.validate_topobathy(None, {"bbox": list(_EXHIBIT_BBOX)})
@@ -803,10 +801,10 @@ def test_the_declared_rung_fills_a_mid_merge_drop_too(
 def test_rows_report_measured_paint_not_the_footprint_promise(
     monkeypatch, tmp_path, fake_s3
 ) -> None:
-    """The footprint PROMISE is 89/11. On the rung's own attempt the biggest tile
-    drops, so CUDEM actually paints 44%. The stamped rows must be the measured
-    44/56 -- a rung-injected param never exempts the rung's attempt from paint
-    accounting."""
+    """The stamped rows are the paint the rung MEASURED, not its footprint promise.
+
+    The biggest tile drops on the attempt, so a rung-injected param never exempts
+    that attempt from paint accounting."""
     _patch_partial_cudem(monkeypatch, tmp_path)
     real = tb._composite_sources_to_array
     dropped = "ncei19_n30X00_w085X50_2019v1.tif"
@@ -1017,13 +1015,10 @@ def _patch_total_cudem_loss_with_half_an_etopo(monkeypatch, tmp_path) -> None:
 def test_a_half_reaching_etopo_base_refuses_rather_than_claiming_a_bed_everywhere(
     monkeypatch, tmp_path, fake_s3
 ) -> None:
-    """The ETOPO leg painted ~48% of the AOI. Stamping etopo/1.0 and a 'REAL
-    below-waterline bed everywhere' warning over a half-NaN raster is the exact
-    lie the coverage gate exists to prevent.
+    """A rung that paints half the AOI refuses rather than claiming a bed everywhere.
 
-    The primary refuses on its own 0% paint and the PERMITTED rung is then tried
-    and gaps in turn, so the record carries the short paint the rung measured
-    rather than a bed everywhere."""
+    Stamping a provenance and an everywhere warning over a half-empty raster is the
+    lie the coverage gate exists to prevent, so the record carries the short paint."""
     _patch_total_cudem_loss_with_half_an_etopo(monkeypatch, tmp_path)
     with pytest.raises(tb.TopobathyCoverageGapError) as ei:
         TOOL_REGISTRY["fetch_topobathy"].fn(
@@ -1196,10 +1191,10 @@ def test_shares_that_do_not_sum_to_one_are_said_out_loud(caplog) -> None:
 
 
 def test_a_later_gap_never_retro_justifies_an_earlier_decline() -> None:
-    """Two alternatives. alt1 is declined while the primary's failure is a plain
-    retryable upstream error (no gap outstanding); alt2 then reports a gap. The
-    refusal must still be the PRIMARY's typed error, retryability intact -- not a
-    coverage refusal blamed on the decline."""
+    """A later gap never retro-justifies an earlier decline.
+
+    An alternative declined while the primary's failure is a plain retryable upstream
+    error leaves that primary error as the refusal, retryability intact."""
     class _Upstream(Exception):
         error_code = "CAP_UPSTREAM"
         retryable = True
@@ -1239,11 +1234,10 @@ def test_a_decline_in_front_of_an_outstanding_gap_still_owns_the_refusal() -> No
 
 def test_a_transport_fault_after_a_decline_still_beats_the_decline_verdict(
 ) -> None:
-    """F1e/R1: primary gaps -> alt1 is DECLINED while that gap is outstanding ->
-    alt2 is PERMITTED but transport-faults. The decline fired first in plan
-    order, but it is NOT why the gap went unfilled -- alt2's fault is. The
-    refusal must wear FALLBACK_LADDER_ERROR with alt2's own retryability, never
-    the coverage code with the decline's non-retryable verdict."""
+    """A transport fault after a decline still beats the decline verdict.
+
+    The decline fired first in plan order but is not why the gap went unfilled, so
+    the refusal wears the faulting rung's error and its retryability."""
     class _Transient(Exception):
         retryable = True
 

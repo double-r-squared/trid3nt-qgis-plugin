@@ -1,14 +1,9 @@
-"""Router value coverage for the fetch_fault_sources fold (ADR 0081).
+"""``fetch_fault_sources``: the constant-cache fold with an emptiness variant.
 
-The GEM active-faults twin folded to a source.yaml + fault_sources hooks: the
-``constant_cache`` two-tier cache (whole-world 10.6 MB GeoJSON downloaded once,
-AOI-filtered in the parse hook), the ``variant_by_emptiness`` output switch
-(zero-fault AOI -> record dict, non-empty -> FaultSourcesResult), and the
-post-emit envelope hook. These tests carry the value-bearing surface the deleted
-twin's tests carried: the '(best,min,max)' triple parse, the >=2-distinct-vertex
-+ slip>0 gate, the bbox filter, the kinematic-record reconstruction, the honest
-empty degrade, and the two-tier cache (no per-AOI re-download).
-"""
+The whole-world document is downloaded once and AOI-filtered in the parse hook,
+so a zero-fault AOI returns a record and a non-empty one a typed result. The
+value-bearing surface: the triple parse, the two-distinct-vertex and positive-slip
+gate, the bbox filter, the record reconstruction, and no per-AOI re-download."""
 
 from __future__ import annotations
 
