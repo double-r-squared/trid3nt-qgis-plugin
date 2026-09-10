@@ -1,43 +1,9 @@
-"""Round-trip + leak-resistance tests for per-Case secrets envelopes.
+"""Round-trip and leak-resistance tests for the per-Case secrets envelopes.
 
-The §F.3 forward-looking shapes this module owns:
-
-- ``SecretRecord`` — the persisted record (vault-ref-only, never carries the
-  raw key value).
-- ``SecretsListEnvelopePayload`` — server -> client A.4 list.
-- ``SecretAddEnvelopePayload`` — client -> server A.3 add (transient
-  ``key_value`` field that must NOT appear in default repr).
-- ``SecretRevokeEnvelopePayload`` — client -> server A.3 soft-revoke.
-
-Test coverage (10 tests, ≥7 required by the kickoff Acceptance):
-
-1. ``test_secret_record_roundtrip_idempotent`` — JSON serialize -> deserialize
-   -> re-serialize is byte-identical.
-2. ``test_secrets_list_envelope_roundtrip_idempotent`` — same, for the list
-   envelope (also: empty-list default).
-3. ``test_secret_add_envelope_roundtrip_idempotent`` — same, for add.
-4. ``test_secret_revoke_envelope_roundtrip_idempotent`` — same, for revoke.
-5. ``test_secret_add_repr_redacts_key_value`` — invariant-load-bearing:
-   default ``repr()`` of an add envelope MUST NOT contain the literal
-   ``key_value`` and MUST contain the ``<redacted>`` sentinel.
-6. ``test_envelope_type_literal_validation`` — wrong ``envelope_type``
-   strings are rejected by the Literal discriminator.
-7. ``test_provider_id_literal_validation`` — unknown ``provider`` strings are
-   rejected.
-8. ``test_secrets_payloads_exposed_via_module_registries`` — the three message
-   types land in the per-module registries (``SECRET_CLIENT_TO_AGENT_PAYLOADS``
-   / ``SECRET_AGENT_TO_CLIENT_PAYLOADS`` / ``SECRET_PAYLOADS``). NOTE: the
-   kickoff did not authorise editing ``ws.py``'s ``ALL_PAYLOADS`` registry
-   (file ownership only covers ``__init__.py`` registration) — see
-   ``OQ-0100-WS-REGISTRY-WIRING`` in the report for the follow-up.
-9. ``test_secret_record_no_cost_field_invariant9`` — Invariant 9 negative
-   control: extra ``cost_usd`` / ``estimated_cost`` / ``quota_remaining``
-   fields are rejected by ``extra='forbid'``.
-10. ``test_secret_add_keeps_key_value_accessible_for_server_write`` — the
-    server MUST be able to read the key value programmatically (the repr
-    elision is the leak-minimisation back-stop, not a data hiding mechanism
-    that would break the vault-write path).
-"""
+The persisted record is vault-ref-only and never carries a raw key; the list, add
+and revoke envelopes round-trip byte-identically; a wrong ``envelope_type`` or an
+unknown provider is refused; no cost, spend or quota field can be added; the add
+envelope's ``repr()`` redacts ``key_value`` while attribute access keeps it."""
 
 from __future__ import annotations
 
@@ -136,11 +102,8 @@ def test_secrets_list_envelope_roundtrip_idempotent() -> None:
 def test_secret_add_envelope_roundtrip_idempotent() -> None:
     """The add envelope round-trips through JSON byte-identically.
 
-    Note: the round-trip here exercises the wire shape, NOT the server-side
-    redaction discipline. The agent service is responsible for clearing
-    ``key_value`` BEFORE persistence; this test exercises the wire form a
-    fresh client sends to the server (which DOES include the value).
-    """
+    This is the wire form a client sends, which DOES carry the value; clearing
+    ``key_value`` before persistence is the server's discipline, not this shape's."""
     add = SecretAddEnvelopePayload(
         provider="firms",
         case_id=new_ulid(),
@@ -193,11 +156,10 @@ def test_secret_revoke_envelope_roundtrip_idempotent() -> None:
 
 
 def test_secret_add_repr_redacts_key_value() -> None:
-    """Default ``repr()`` MUST NOT echo the raw key value — the load-bearing
-    leak-minimisation back-stop. A future refactor that accidentally exposes
-    ``key_value`` in the default repr (e.g. by dropping the ``__repr_args__``
-    override) is the regression this test catches.
-    """
+    """Default ``repr()`` MUST NOT echo the raw key value.
+
+    It is the leak-minimisation back-stop, so dropping the ``__repr_args__`` override
+    has to fail here."""
     sensitive = "REAL-LOOKING-KEY-DO-NOT-LEAK-12345"
     add = SecretAddEnvelopePayload(
         provider="firms",
@@ -293,13 +255,8 @@ def test_provider_id_literal_validation() -> None:
 def test_secrets_payloads_exposed_via_module_registries() -> None:
     """All three message types land in the secrets module-level registries.
 
-    The module exposes three dicts (``SECRET_CLIENT_TO_AGENT_PAYLOADS`` /
-    ``SECRET_AGENT_TO_CLIENT_PAYLOADS`` / ``SECRET_PAYLOADS``) so a future
-    follow-up job can ``**SECRET_CLIENT_TO_AGENT_PAYLOADS`` them into
-    ``ws.CLIENT_TO_AGENT_PAYLOADS`` (etc.) when ``ws.py`` is in that job's
-    file-ownership scope.'s kickoff explicitly scoped ``ws.py`` as
-    FROZEN; see ``OQ-0100-WS-REGISTRY-WIRING`` in the report.
-    """
+    ``SECRET_CLIENT_TO_AGENT_PAYLOADS`` / ``SECRET_AGENT_TO_CLIENT_PAYLOADS`` /
+    ``SECRET_PAYLOADS`` are what the ws routing dicts splat in."""
     # Client -> agent (add, revoke)
     assert "secret-add" in secrets.SECRET_CLIENT_TO_AGENT_PAYLOADS
     assert "secret-revoke" in secrets.SECRET_CLIENT_TO_AGENT_PAYLOADS
@@ -361,11 +318,8 @@ def test_secret_record_no_cost_field_invariant9() -> None:
 def test_secret_add_keeps_key_value_accessible_for_server_write() -> None:
     """The repr elision is a leak-minimisation back-stop, not data hiding.
 
-    The agent service NEEDS to read ``key_value`` programmatically to write
-    it to the vault. The repr override only affects ``__repr__`` (and by
-    extension f-string ``{x!r}`` formatting), NOT attribute access or
-    ``model_dump`` — both of which the server uses.
-    """
+    It affects ``__repr__`` and ``{x!r}`` only, never attribute access or
+    ``model_dump``, both of which the server needs to write the value."""
     sensitive = "SERVER-MUST-READ-THIS-KEY-123"
     add = SecretAddEnvelopePayload(
         provider="anthropic",

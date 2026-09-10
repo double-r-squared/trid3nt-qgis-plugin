@@ -1,19 +1,9 @@
 """Drift gate: the committed JSON Schemas must equal the live Python models.
 
-``contracts/schemas/*.json`` is a MIRROR of the pydantic contract models. A
-mirror is only safe while something proves it still matches, so this module
-renders every schema in memory via ``export_schemas.render_schemas`` and diffs
-the result against the committed bytes.
-
-Two invariants, both enforced by WALKING ``contracts/schemas`` rather than by a
-hand-listed set (a hand-listed set is the same mirror defect one level up):
-
-  * the committed file SET equals the exported file set (no orphan file left
-    behind by a deleted model, no model missing its committed schema);
-  * every committed file is byte-identical to what the model renders today.
-
-The gate is READ-ONLY: it renders in memory and never writes into the repo.
-"""
+Every schema is rendered in memory and diffed against the committed bytes, and
+both invariants are enforced by WALKING ``contracts/schemas`` rather than from a
+hand-listed set: the committed file SET equals the exported set, and every file
+is byte-identical. The gate is READ-ONLY - it never writes into the repo."""
 
 from __future__ import annotations
 

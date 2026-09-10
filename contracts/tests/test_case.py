@@ -1,14 +1,9 @@
-"""Round-trip + invariant tests for Case persistence envelopes.
+"""Round-trip and invariant tests for the Case persistence envelopes.
 
-Every Case persistence type defined in ``trid3nt_contracts.case`` is exercised:
-- A real instance is built, dumped via ``model_dump(mode="json")``, JSON-text
-  round-tripped, parsed back, and re-dumped. Both passes must be byte-identical.
-- ULID format validation refuses malformed ids.
-- ISO-8601 datetime validation produces ``...Z`` suffixes.
-- envelope_type Literal validation refuses wrong discriminator values.
-- Invariant 9: no cost field anywhere (self-checked).
-- Closed-enum boundaries (``CaseStatus`` / ``CaseCommand``) are enforced.
-"""
+Every type in ``trid3nt_contracts.case`` is built, dumped, JSON round-tripped and
+re-dumped byte-identically. A malformed ULID and a wrong discriminator are
+refused, datetimes serialize with a ``Z`` suffix, the closed enums hold their
+boundaries, and no cost field exists anywhere."""
 
 from __future__ import annotations
 
@@ -579,10 +574,9 @@ def test_persisted_substep_record_roundtrip() -> None:
 
 
 def test_persisted_substep_record_rejects_unknown_state() -> None:
-    """``state`` is the ``ToolCardState`` lifecycle enum (running/complete/
-    failed/cancelled). ``pending`` and arbitrary strings are still rejected;
-    children only ever carry the two terminal values at runtime, but the wider
-    type is a harmless superset (shared with the parent ToolCardRecord)."""
+    """``state`` is the ``ToolCardState`` lifecycle enum, so ``pending`` and arbitrary
+    strings are rejected; children only ever carry the two terminal values, and the
+    wider type is a harmless superset shared with the parent record."""
     for bad in ("pending", "ok", "succeeded"):
         with pytest.raises(ValidationError):
             PersistedSubStepRecord(

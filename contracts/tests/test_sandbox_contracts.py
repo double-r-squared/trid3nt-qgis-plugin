@@ -1,16 +1,9 @@
-"""Validation + round-trip tests for the python-sandbox code-exec contracts
-(sprint-13 Stage 2, conversational data-analysis layer).
+"""Validation and round-trip tests for the python-sandbox code-exec contracts.
 
-Covers:
-- ``CodeExecRequestPayload`` round-trip + bounds (python_code min/max length,
-  rationale cap, default empty layer_refs).
-- ``CodeExecResultPayload`` round-trip + the status enum + the field caps +
-  ``duration_s >= 0``.
-- both envelopes are wired into the ws.py agent->client routing registry, and
-  NO new client->agent shape is added (the confirm reply rides
-  tool-payload-confirmation).
-- no cost field anywhere (Invariant 9).
-"""
+``CodeExecRequestPayload`` and ``CodeExecResultPayload`` round-trip within their
+bounds - code length, rationale cap, default empty ``layer_refs``, the status
+enum, ``duration_s >= 0``. Both are agent->client only: the confirm reply rides
+the tool-payload-confirmation shape. No cost field anywhere."""
 
 from __future__ import annotations
 

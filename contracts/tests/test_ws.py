@@ -790,13 +790,10 @@ def test_user_message_tool_choice_mode(session_id: str) -> None:
 
 
 def test_secrets_payloads_registered_in_ws_dicts() -> None:
-    """OQ-0100-WS-REGISTRY-WIRING resolved by splatting the §F.3
-    per-Case secrets payloads into the ws.py routing dicts.
+    """The per-Case secrets payloads are splatted into the ws routing dicts.
 
-    Mirrors the per-module ``SECRET_*_PAYLOADS`` dicts the secrets module
-    already exposes; this test guards against a future refactor accidentally
-    dropping the wire-up.
-    """
+    They mirror the ``SECRET_*_PAYLOADS`` dicts the secrets module exposes, so a
+    refactor that drops the wire-up fails here."""
     assert "secret-add" in ws.CLIENT_TO_AGENT_PAYLOADS
     assert "secret-revoke" in ws.CLIENT_TO_AGENT_PAYLOADS
     assert "secrets-list" in ws.AGENT_TO_CLIENT_PAYLOADS

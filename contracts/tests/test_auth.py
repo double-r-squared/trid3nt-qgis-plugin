@@ -1,29 +1,9 @@
-"""Round-trip + invariant tests for the Auth handshake envelopes.
+"""Round-trip and invariant tests for the Auth handshake envelopes.
 
-Coverage:
-
-1. ``test_auth_token_envelope_roundtrip`` — JSON serialize -> deserialize ->
-   re-serialize is byte-identical.
-2. ``test_auth_token_envelope_defaults`` — empty-token (anonymous fallback)
-   construction.
-3. ``test_auth_token_message_type_pinned`` — kebab-case discriminator is
-   ``auth-token``.
-4. ``test_auth_token_rejects_extra_fields`` — ``extra="forbid"`` keeps drift
-   out.
-5. ``test_auth_token_oversized_token_rejected`` — 8KB upper bound.
-6. ``test_auth_ack_envelope_roundtrip`` — JSON round-trip stability.
-7. ``test_auth_ack_envelope_anonymous`` — anonymous fallback ack:
-   anonymous=True and no firebase identity (local single-user).
-8. ``test_auth_ack_message_type_pinned`` — kebab-case ``auth-ack``.
-9. ``test_auth_ack_invariant9_no_cost_fields`` — Invariant 9: no cost /
-   spend / quota / billing fields.
-10. ``test_auth_ack_tier_field_removed`` — the H.4 tier claim was cut;
-    ``extra="forbid"`` rejects a ``tier`` key.
-11. ``test_auth_ack_invalid_user_id_rejected`` — ULID discipline on
-    ``user_id``.
-12. ``test_auth_envelopes_exported_from_package`` — ``trid3nt_contracts.auth``
-    is importable from the top-level package.
-"""
+Both envelopes serialize -> deserialize -> re-serialize byte-identically, pin
+their kebab-case discriminators, refuse extra fields and a malformed ULID
+``user_id``, cap a token at 8 KB, and carry no cost, spend or quota field. The
+anonymous ack carries no identity claim."""
 
 from __future__ import annotations
 

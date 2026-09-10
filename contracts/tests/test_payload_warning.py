@@ -1,17 +1,9 @@
 """Tests for the tool payload-warning envelopes.
 
-Covers:
-- Round-trip serialization for both envelopes (JSON idempotence).
-- ``options`` invariants (uniqueness, non-empty subset).
-- ``decision``/``revised_args`` cross-field rule on the confirmation
-  envelope.
-- Hard-cap shape: a warning where ``proceed`` is omitted from ``options``.
-- Registry wiring: both envelopes are reachable via
-  ``CLIENT_TO_AGENT_PAYLOADS`` / ``AGENT_TO_CLIENT_PAYLOADS`` /
-  ``ALL_PAYLOADS``.
-- Invariant 9 (no cost theater): neither envelope carries cost / dollar
-  / latency / quota fields.
-"""
+Both envelopes round-trip idempotently; ``options`` is a unique non-empty subset;
+``decision`` and ``revised_args`` hold their cross-field rule; a hard cap is a
+warning with ``proceed`` omitted from ``options``; both are reachable from the
+routing registries; neither carries a cost, latency or quota field."""
 
 from __future__ import annotations
 

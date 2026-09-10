@@ -1,13 +1,9 @@
 """Tests for ``AtomicToolMetadata``.
 
--schema-20260606 (sprint-06 / M4 pre-flight). Verifies:
-- All four TTL classes are accepted on a cacheable tool with a source_class.
-- The ``live-no-cache`` class round-trips on an uncacheable tool.
-- The cross-field ``model_validator`` rejects the two inconsistent combos.
-- ``source_class`` is required when ``cacheable=True``.
-- JSON serialize → deserialize → re-serialize is idempotent.
-- ``extra="forbid"`` is inherited via ``GraceModel``.
-"""
+All four TTL classes are accepted on a cacheable tool with a ``source_class``;
+``live-no-cache`` round-trips on an uncacheable one; the cross-field validator
+refuses the two inconsistent combinations; ``source_class`` is required when
+``cacheable=True``; the JSON round trip is idempotent and extra fields refused."""
 
 from __future__ import annotations
 
@@ -186,12 +182,10 @@ def test_atomic_tool_metadata_rejects_unknown_ttl_class() -> None:
 
 
 def test_atomic_tool_metadata_supports_global_query_defaults_false() -> None:
-    """Default supports_global_query is False (safer — tools opt in).
+    """``supports_global_query`` defaults False, so a tool opts in.
 
-    Backward-compatibility check: existing call sites that never mention
-    the flag must keep their pre-Wave-1.5 behaviour, which is "bbox is
-    required by default."
-    """
+    A call site that never mentions the flag keeps the default meaning: a bbox is
+    required."""
     meta = AtomicToolMetadata(
         name="fetch_dem",
         ttl_class="static-30d",
@@ -276,13 +270,10 @@ def test_atomic_tool_metadata_wave15_fields_roundtrip_through_json() -> None:
 
 
 def test_atomic_tool_metadata_supports_global_query_rejects_non_bool() -> None:
-    """supports_global_query is typed bool — non-coercible values are rejected.
+    """``supports_global_query`` is typed bool - non-coercible values are rejected.
 
-    Pydantic v2 will coerce common bool-like strings ("true"/"false"/"yes"/
-    "no"/"1"/"0") and integers (0/1), which is fine for forward compat with
-    JSON wire forms. But truly non-bool values (lists, dicts, arbitrary
-    strings) must fail — we want misregistrations to fail fast.
-    """
+    Pydantic coerces the bool-like strings and 0/1 for the JSON wire form; a list, a
+    dict or an arbitrary string must fail, so a misregistration fails fast."""
     with pytest.raises(ValidationError):
         AtomicToolMetadata.model_validate(
             {

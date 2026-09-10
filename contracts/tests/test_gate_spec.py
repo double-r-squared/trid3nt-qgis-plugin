@@ -1,15 +1,9 @@
-"""Tests for the confirm-gate declaration contract (the gate-collapse).
+"""Tests for the confirm-gate declaration contract.
 
-Verifies the declarative carrier NATE's gate-collapse rides on:
-- :class:`GateSpec` / :class:`LeverSpec` construct and validate.
-- A gate declaring levers MUST name a pin provider (a lever with no pin is a
-  dead knob).
-- A lever declares a discrete ladder XOR a continuous window (not both), and a
-  window's min <= max.
-- ``AtomicToolMetadata`` carries an OPTIONAL ``gate_spec`` (default None -> every
-  un-gated tool is unaffected; additive, same shape as ``resolution_specs``).
-- JSON serialize -> deserialize round-trips; ``extra="forbid"`` is inherited.
-"""
+``GateSpec`` and ``LeverSpec`` validate; a gate declaring levers MUST name a pin
+provider, a lever with no pin being a dead knob; a lever declares a discrete
+ladder XOR a continuous window with min <= max; ``gate_spec`` is optional on
+``AtomicToolMetadata``, so an un-gated tool is unaffected."""
 from __future__ import annotations
 
 import json

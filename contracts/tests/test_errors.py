@@ -1,15 +1,9 @@
-"""Tests for ``trid3nt_contracts.errors.ToolInputError`` (schema).
+"""Tests for ``trid3nt_contracts.errors.ToolInputError``.
 
-Verifies:
-- All three closed-enum codes round-trip cleanly.
-- ``retryable`` is pinned to ``False`` (the type-system literal).
-- Empty / missing message is rejected at construction.
-- Unknown code is rejected.
-- Extra fields are rejected (``extra='forbid'`` inheritance from GraceModel).
-- JSON round-trip is idempotent.
-- The convenience re-export from ``trid3nt_contracts.tool_registry`` returns
-  the same class as the authoritative module.
-"""
+All three closed-enum codes round-trip, ``retryable`` is pinned ``False``, an
+empty message and an unknown code are refused, extra fields are refused, the JSON
+round trip is idempotent, and the ``tool_registry`` re-export is the same class
+object as the authoritative module's."""
 
 from __future__ import annotations
 
@@ -137,10 +131,8 @@ def test_tool_input_error_wire_form_contains_all_three_fields() -> None:
 def test_tool_input_error_reexport_from_tool_registry_is_same_class() -> None:
     """``trid3nt_contracts.tool_registry`` re-exports the same class object.
 
-    Tool authors who already import from ``tool_registry`` can pick up
-    ``ToolInputError`` without a second import line, but both paths must
-    point at the authoritative class.
-    """
+    Both import paths must point at the authoritative class, or which one an author
+    caught would depend on where the name was imported from."""
     from trid3nt_contracts.tool_registry import (
         TOOL_INPUT_ERROR_CODES as reexport_codes,
     )

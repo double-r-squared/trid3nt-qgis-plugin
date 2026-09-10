@@ -1,20 +1,9 @@
-"""Round-trip + negative tests for the Mode 1 CatalogEntry and the new
-collections (D.11 ``catalog_entries`` + D.12 ``catalog_audit_log``).
+"""Round-trip and negative tests for ``CatalogEntry`` and its two collections.
 
-1. ``test_catalog_entry_mode1_roundtrip_idempotent`` - Tier-1 + Tier-2 entries
-   round-trip through JSON serialize->deserialize->re-serialize, byte-identical.
-2. ``test_catalog_entry_credential_tier_validator`` - cross-field rule rejects
-   tier-1+secret-ref and tier-2/3-without-secret-ref combinations.
-3. ``test_catalog_entry_document_inherits_catalog_entry`` - D.11 collection
-   document is a CatalogEntry; round-trips through MongoDB dump kwargs.
-4. ``test_catalog_audit_log_document_roundtrip`` - D.12 audit-log document
-   round-trips with ULID ``_id`` aliasing + every event_type literal accepted.
-5. ``test_json_schema_export_includes_new_contracts_and_is_idempotent`` -
-   ``catalog_entry.json`` + audit-log + entry-doc schemas are exported, and a
-   second export is byte-identical.
-6. ``test_catalog_entry_no_cost_field_invariant9`` - Invariant 9 negative
-   control: ``cost_usd`` / ``estimated_cost`` extra fields are rejected.
-"""
+Tier-1 and Tier-2 entries round-trip byte-identically; the cross-field rule
+refuses tier-1-with-secret-ref and tier-2-or-3-without; the collection document
+is a ``CatalogEntry`` and the audit-log document round-trips with ULID ``_id``
+aliasing; a second schema export is byte-identical; a cost field is refused."""
 
 from __future__ import annotations
 

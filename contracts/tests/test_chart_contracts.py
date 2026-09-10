@@ -1,16 +1,9 @@
-"""Validation + round-trip tests for the chart-emission contract (sprint-13
-Stage 1, conversational data-analysis layer).
+"""Validation and round-trip tests for the chart-emission contract.
 
-Covers:
-- ``ChartEmissionPayload`` JSON round-trip (idempotent serialize/deserialize),
-  the stack-grouping ``created_turn_id`` field, optional ``caption`` /
-  ``source_layer_uri`` defaults, and ``extra='forbid'``.
-- the structural Vega-Lite validator: accepts a real ``$schema``-bearing
-  histogram spec AND a minimal ``mark``+``encoding`` spec; rejects junk
-  (empty dict, missing mark/encoding, non-dict).
-- ``SessionChartRecord`` round-trip + the append-only persistence shape.
-- ``chart-emission`` is wired into the ws.py agent->client routing registry.
-"""
+``ChartEmissionPayload`` round-trips idempotently with its stack-grouping and
+optional fields under ``extra='forbid'``; the structural Vega-Lite validator
+accepts a ``$schema``-bearing spec and a minimal mark+encoding one and rejects
+junk; ``SessionChartRecord`` is append-only; the type is in the routing registry."""
 
 from __future__ import annotations
 
