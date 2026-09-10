@@ -455,7 +455,7 @@ and maps this leg WROTE or CORRECTED after reading the package they describe.
 | `docs/templates/telemac_river_sediment_plume.md` | 157 | KEEP - generated | as above |
 | `docs/modules.md` | 22 | KEEP - generated | the five module wrappers: keyword count, composites, outputs, and the `describe_keywords` read over them |
 | `docs/templates/<template>/run.json` (8) | - | KEEP - evidence | the committed record of the proving run a page is generated from: the invocation, the sheet, its provenance, the answer, the published layers. Written by the doc renderer; the pages read it, and nothing reads the untracked run journal |
-| `docs/templates/<template>/*.png`, `*.gif` (33) | - | KEEP - evidence | the doc-sized figures, 9.0 MB total, each stamped with its run id and the commit that drew it. Frozen like `docs/proof/` in kind, but REPLACED rather than kept when the declaration moves - that is what the freshness guard forces |
+| `docs/templates/<template>/*.png`, `*.gif` (33 figures + 8 run.json stamps = 41 generated files, rowed by this one glob row; a per-file critic reads a glob row as no row - by convention it is one) | - | KEEP - evidence | the doc-sized figures, 9.0 MB total, each stamped with its run id and the commit that drew it. Frozen like `docs/proof/` in kind, but REPLACED rather than kept when the declaration moves - that is what the freshness guard forces |
 
 ### Package maps written by this leg
 
