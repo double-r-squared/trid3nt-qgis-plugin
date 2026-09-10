@@ -1,6 +1,6 @@
 {
   "additionalProperties": false,
-  "description": "``solve-progress`` (A.4 extension): LIVE big-sim telemetry tick.\n\nEmitted by the agent during a long solver run (SFINCS / MODFLOW) so the web\nclient renders grid resolution / active-cell count / vCPU / elapsed / ETA\ninline on the running tool/pipeline card \u2014 replacing a silent multi-minute\nspinner with honest live progress. The web track owns the card rendering;\nthis payload is the shared wire contract.\n\nInvariant 1 (Determinism boundary): every field is solver/perf-model\nsourced, never an LLM estimate \u2014 ``elapsed_seconds`` is wall-clock and\n``eta_seconds`` comes from the autoscale ``estimated_solve_seconds`` (the\nperf model) when available, else ``None`` (no fabricated ETA).",
+  "description": "``solve-progress``: one LIVE telemetry tick during a long solver run.\nEvery field is solver- or perf-model-sourced: ``elapsed_seconds`` is\nwall-clock, and ``eta_seconds`` is ``None`` when the perf model has no\nestimate rather than a fabricated one.",
   "properties": {
     "active_cell_count": {
       "anyOf": [

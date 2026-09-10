@@ -1,6 +1,6 @@
 {
   "additionalProperties": false,
-  "description": "``map-command`` (A.4): one umbrella type with a ``command`` discriminator.\n\n``args`` is the command-specific args object (one of the ``*Args`` models\nabove). It is kept as a ``dict`` at the envelope level; the consumer\nvalidates it against the matching ``*Args`` model by ``command``.",
+  "description": "``map-command``: one umbrella message with a ``command`` discriminator.\n``args`` stays a dict on the wire; a consumer validates it against the\nmatching args model selected by ``command``.",
   "properties": {
     "args": {
       "additionalProperties": true,

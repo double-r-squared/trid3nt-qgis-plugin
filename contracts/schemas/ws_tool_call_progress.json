@@ -1,6 +1,6 @@
 {
   "additionalProperties": false,
-  "description": "``tool-call-progress`` (A.4): optional progress for an in-flight tool.",
+  "description": "``tool-call-progress``: optional progress for an in-flight tool.",
   "properties": {
     "call_id": {
       "title": "Call Id",

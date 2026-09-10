@@ -1,6 +1,6 @@
 {
   "additionalProperties": false,
-  "description": "``agent-message-chunk`` (A.4): a streamed token group from the LLM.",
+  "description": "``agent-message-chunk``: one streamed token group of an answer.",
   "properties": {
     "delta": {
       "title": "Delta",

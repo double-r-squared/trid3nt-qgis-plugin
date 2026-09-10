@@ -1,6 +1,6 @@
 {
   "additionalProperties": false,
-  "description": "``tool-call-failed`` (A.4): a tool errored out.",
+  "description": "``tool-call-failed``: a tool errored out.",
   "properties": {
     "call_id": {
       "title": "Call Id",

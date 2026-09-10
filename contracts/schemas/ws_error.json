@@ -1,6 +1,6 @@
 {
   "additionalProperties": false,
-  "description": "``error`` (A.4): global error not tied to a specific tool call.",
+  "description": "``error``: a global error, not tied to any one tool call.",
   "properties": {
     "error_code": {
       "enum": [

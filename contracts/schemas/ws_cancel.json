@@ -1,6 +1,6 @@
 {
   "additionalProperties": false,
-  "description": "``cancel`` (A.3): cancel the in-flight pipeline.",
+  "description": "``cancel``: cancel the in-flight pipeline.",
   "properties": {
     "reason": {
       "anyOf": [

@@ -1,6 +1,6 @@
 {
   "additionalProperties": false,
-  "description": "``session-resume`` (A.3): resume an existing session (id in envelope).",
+  "description": "``session-resume``: resume the session the envelope names.",
   "properties": {
     "case_id": {
       "anyOf": [

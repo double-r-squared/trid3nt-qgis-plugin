@@ -1,32 +1,9 @@
 """Atomic-tool registration metadata.
 
-This module owns ``AtomicToolMetadata`` — the pydantic v2 model every
-external-API atomic tool declares at registration time so the cache shim
-(SRS §3.9..6) can route the call correctly. ``agent`` consumes
-this model in the ADK FunctionTool registry; ``schema`` owns the shape.
-
-Why a dedicated ``tool_registry`` module rather than extending ``agent.py``
-(which currently holds tool-docstring conventions and the
-``tool_category`` vocabulary)?
-
-- ``tool_metadata`` is convention-only (docstring sections, allowed
-  ``tool_category`` strings). It carries no pydantic model.
-- ``AtomicToolMetadata`` IS a pydantic v2 model with a cross-field
-  ``model_validator`` — a different shape of contract surface. Mixing
-  validators into a convention-only module would obscure both.
-- The agent service will likely accrete other tool-registration models
-  (tool-result schemas, retry-policy descriptors, etc.); giving the
-  registry its own module keeps the seam clean.
-
-The four TTL classes match SRS §3.9 verbatim. Misconfigured tools
-fail-fast at import time (: "cache class is a required property
-validated at tool-registration time").
-
-Invariants this module is responsible for:
-- **Invariant 1 (Determinism boundary).** ``ttl_class`` is workflow-declared,
-  never LLM-judged; the validator refuses inconsistent combinations.
-- **Invariant 9 (No cost theater).** No cost / dollar / latency-estimate
-  fields. The cache shim's job is correctness + freshness, not pricing.
+Every tool that may issue a network call declares one ``AtomicToolMetadata`` at
+registration, and a misconfigured one raises at construction - before the tool
+is reachable at all. ``ttl_class`` is declared by the tool, never judged by a
+model, and no cost or latency-estimate field lives here.
 """
 
 from __future__ import annotations
@@ -51,9 +28,8 @@ __all__ = [
 ]
 
 
-# Re-export ToolInputError + codes here as a convenience for tools that
-# already import from ``trid3nt_contracts.tool_registry``. Authoritative
-# home is ``trid3nt_contracts.errors``; consumers may use either path.
+# Re-exported for callers that import them from here. The authoritative home
+# is the errors module; either path resolves the same objects.
 from .errors import (  # noqa: E402  (intentional: keep __all__ above the re-export)
     TOOL_INPUT_ERROR_CODES,
     ToolInputError,
@@ -67,18 +43,10 @@ __all__ += [
 ]
 
 
-#: The four TTL classes registered per atomic tool (SRS).
-#:
-#: Names match the kickoff verbatim. NOTE: SRS prose at
-#: ``docs/srs/03-functional-requirements.md`` describes the live class as
-#: "encoded as ``ttl_class: 'none'``" — that prose-vs-kickoff naming gap is
-#: surfaced as an Open Question in this job's report. The pydantic value here
-#: is ``"live-no-cache"`` (kickoff-frozen); a follow-up SRS amendment may
-#: harmonize the prose to the same literal.
+#: The four TTL classes, one declared per atomic tool.
 TTLClass = Literal["static-30d", "semi-static-7d", "dynamic-1h", "live-no-cache"]
 
-#: Tuple form of the four TTL classes (useful for parametrized tests + the
-#: agent-side registry's known-class assertions).
+#: Tuple form of the same four classes.
 TTL_CLASSES: tuple[str, ...] = (
     "static-30d",
     "semi-static-7d",
@@ -87,84 +55,61 @@ TTL_CLASSES: tuple[str, ...] = (
 )
 
 
-#: Retrieval tier for the engine-door refactor (docs/specs/engine-door-refactor.md).
-#: ``general`` (default) is the ordinary per-turn retrieval pool; ``door`` is a
-#: read-only engine concierge that ALSO competes in the per-turn pool; ``template``
-#: is a registered engine template EXCLUDED from the default pool and surfaced only
-#: by its door's gate expansion (select-then-call). Registration is thereby
-#: decoupled from retrieval visibility.
-#: ``catalog`` (catalog-surfacing experiment) is a spec-served data source EXCLUDED
-#: from the default declarable pool (like ``template``) BUT KEPT in the search index
-#: so a discovery hit can rank + gate-expand it (Design 2) or a card projection can
-#: surface it (Design 1). It diverges from ``template`` precisely in staying indexed.
-#: ``internal`` is a registry-resolvable tool with NO model-facing surface at all:
-#: excluded from the default declarable pool AND from the search index (like
-#: ``template``, but with no door to gate-expand it), so it is reachable ONLY by an
-#: in-process ``TOOL_REGISTRY[name].fn`` call from another tool. Used for an absorbed
-#: seam that a public tool resolves internally (fetch_copernicus_dem <- fetch_dem).
+#: Retrieval tier - what DECOUPLES registration from model-facing visibility.
+#:
+#: - ``general`` - the ordinary per-turn retrieval pool.
+#: - ``door`` - a read-only engine concierge that ALSO competes in that pool.
+#: - ``template`` - excluded from the default pool and surfaced only by its
+#:   door's gate expansion.
+#: - ``catalog`` - excluded from the default pool like a template, but KEPT in
+#:   the search index, so a discovery hit can still rank and expand it.
+#: - ``internal`` - excluded from BOTH the pool and the index, with no door to
+#:   expand it: reachable only by an in-process call from another tool.
 EngineTier = Literal["general", "door", "template", "catalog", "internal"]
 
 
-#: WHO owns a resolution bound (the two-layer-truth architecture).
-#: ``"solver"`` - the bound is a MODEL constraint (a mesh-generator's edge-length
-#: window, a node-budget ceiling, an output-raster cap); it lives with the template.
-#: ``"data"`` - the bound is a DATA-native fact (a source's finest cell, a tier
-#: floor); it lives with the fetcher. The gate card COMPOSES both layers.
+#: WHO owns a resolution bound. ``"solver"`` - a MODEL constraint, living with
+#: the template. ``"data"`` - a DATA-native fact, living with the fetcher. A gate
+#: card COMPOSES both layers rather than picking one.
 ResolutionConstraintSource = Literal["solver", "data"]
 
 
 class ResolutionSpec(GraceModel):
-    """A DECLARED valid-resolution range for one granularity-bearing tool param.
-
-    NATE's clamp ruling: silent coercion to an undeclared resolution is
-    BANNED. A tool DECLARES the resolutions it can actually run (min/max or a discrete
-    option set) so the user picks from REALITY; an out-of-range ask gets the declared
-    range QUOTED BACK (typed / gated), never a silent snap. This is the machine-readable
-    carrier of that declaration - one per resolution-class parameter. It is read by
-    (a) the tool docstring (via :meth:`docstring_line`), (b) the payload / input-review
-    gate card (via :meth:`quote_back`), and (c) the self-enforcing registry sweep test.
-
-    Fields (the kickoff shape ``{min, max, native_hint, step/options, unit,
-    constraint_source, rationale}``):
-
-    - ``param`` - the tool argument this constrains (e.g. ``"resolution_m"``,
-      ``"min_edge_length_m"``). The registry sweep matches specs to params by this name.
-    - ``unit`` - the value unit (``"m"`` default; ``"px"`` for an output-pixel cap,
-      ``"arcsec"`` for a lat/long-native source tier).
-    - ``min_value`` / ``max_value`` - the FINEST (smallest) and COARSEST (largest)
-      declared values, INCLUSIVE. ``None`` on either side declares that side UNBOUNDED
-      (e.g. no coarse ceiling). At least one bound, or ``options``, must be present.
-    - ``native_hint`` - a human string for the DATA-native / default resolution the
-      card quotes alongside the range (e.g. ``"CUDEM 1/9\" ~3 m nearshore; ETOPO ~450 m
-      offshore"``, ``"3DEP 10 m"``). ``None`` when there is no meaningful native.
-    - ``options`` - a DISCRETE valid-value set (mutually exclusive with a continuous
-      min/max window); used when only specific cells are supported.
-    - ``step`` - a discretization step within a continuous window, when the tool snaps
-      to a grid of allowed values (informational; ``None`` = continuous).
-    - ``constraint_source`` - ``"solver"`` or ``"data"`` (the two-layer-truth owner).
-    - ``rationale`` - WHY these are the bounds, evidence-based (the node-budget solve
-      time, the mesh-generator's accepted window, the source's native cell). Required so
-      a future reader/auditor can check the bound is real, not a guess.
+    """A DECLARED valid-resolution range for one granularity-bearing param.
+    Silent coercion to an undeclared resolution is BANNED: a tool declares what
+    it can actually run, and an out-of-range ask gets the declared range quoted
+    back, typed or gated, never a silent snap.
     """
 
+    #: The tool argument this constrains. Specs are matched to params by name.
     param: str = Field(min_length=1)
+    #: The value unit - ``"m"``, ``"px"`` for a pixel cap, ``"arcsec"`` for a
+    #: lat/long-native tier.
     unit: str = "m"
+    #: The FINEST and COARSEST declared values, INCLUSIVE. ``None`` on a side
+    #: declares that side UNBOUNDED. At least one bound, or ``options``, must be
+    #: present.
     min_value: float | None = None
     max_value: float | None = None
+    #: A human string for the data-native or default resolution, quoted beside
+    #: the range. ``None`` when there is no meaningful native.
     native_hint: str | None = None
+    #: A DISCRETE valid-value set, mutually exclusive with the min/max window,
+    #: for a tool that supports only specific cells.
     options: tuple[float, ...] | None = None
+    #: A discretization step within a continuous window. Informational.
     step: float | None = None
     constraint_source: ResolutionConstraintSource
+    #: WHY these are the bounds, from evidence - a solve time, an accepted
+    #: window, a source's native cell. REQUIRED, so a later reader can check the
+    #: bound is real rather than a guess.
     rationale: str = Field(min_length=1)
 
     @model_validator(mode="after")
     def _validate_bounds(self) -> ResolutionSpec:
-        """A spec must declare a real constraint: continuous window OR discrete options.
-
-        Unbounded is a legitimate declaration (both bounds ``None`` + no options) ONLY
-        when the ``rationale`` explicitly says so, so an empty spec cannot masquerade as
-        a forgotten one. A discrete ``options`` set and a continuous ``min/max`` window
-        are mutually exclusive - pick one. When both bounds are set, ``min <= max``.
+        """A spec declares a continuous window XOR a discrete option set.
+        Unbounded is legitimate ONLY when the ``rationale`` says so, so an empty
+        spec cannot masquerade as a forgotten one. With both bounds, ``min <= max``.
         """
         has_window = self.min_value is not None or self.max_value is not None
         has_options = bool(self.options)
@@ -214,11 +159,8 @@ class ResolutionSpec(GraceModel):
         return f"unbounded ({self.unit})"
 
     def docstring_line(self) -> str:
-        """One-line declaration for the tool docstring (consistent across tools).
-
-        Front-loads the range so the LLM routes a request to a valid value; names the
-        constraint owner + native hint so an out-of-range ask is self-explanatory.
-        """
+        """One line for the tool docstring, front-loading the RANGE so a request
+        routes to a valid value, then the constraint owner and native hint."""
         owner = "mesh/solver" if self.constraint_source == "solver" else "data-native"
         native = f"; data native {self.native_hint}" if self.native_hint else ""
         return (
@@ -228,13 +170,9 @@ class ResolutionSpec(GraceModel):
         )
 
     def quote_back(self, requested: float, *, measured: str | None = None) -> str:
-        """The gate/typed-error card text for an out-of-range request.
-
-        Composes the two-layer truth in ONE card: the requested value, the supported
-        range + its owner, the data-native hint, and (optionally) the measured cost.
-        e.g. ``"30 m requested; this tool supports 20-200 m (mesh/solver); data native
-        10 m; pick a value in range."``
-        """
+        """The card text for an out-of-range request: the value asked for, the
+        supported range and its owner, the data-native hint, and the measured
+        cost when there is one - both layers of truth in ONE card."""
         owner = "mesh/solver" if self.constraint_source == "solver" else "data-native"
         parts = [
             f"{requested:g} {self.unit} requested; this tool supports "
@@ -249,54 +187,25 @@ class ResolutionSpec(GraceModel):
 
 
 class AtomicToolMetadata(GraceModel):
-    """Cache-shim metadata for an atomic tool's registration.
-
-    Every atomic tool that may issue a network call to an external public data
-    source declares one of these at registration time. The agent service's
-    tool-registry refuses to register a tool whose metadata is missing,
-    incomplete, or fails the cross-field validator below.
-
-    Fields:
-
-    - ``name`` — atomic-tool function name (Python identifier, e.g.
-      ``"fetch_dem"``). The agent registry uses this as the registry key.
-    - ``ttl_class`` — one of the four classes. Required for every
-      external-API tool. ``"live-no-cache"`` is reserved for the
-      uncacheable-by-construction enumeration (interactive solicitation
-      tools, envelope emitters, persistence writes, solver dispatchers).
-    - ``source_class`` — the ``<source-class>`` prefix in the cache layout
-      (e.g. ``"dem"``, ``"buildings"``, ``"geocode"``).
-      Required when ``cacheable=True``; MAY be omitted when ``cacheable=False``
-      (no cache prefix is needed if nothing is written).
-    - ``cacheable`` — explicit boolean for enumeration; defaults to
-      ``True`` because the cacheable case is the common case. ``False`` for
-      interactive solicitation tools, envelope emitters, persistence writes,
-      and solver dispatchers.
-
-    Cross-field rule (``_validate_cacheable_consistency``):
-
-    - ``cacheable=True`` ⇒ ``ttl_class != "live-no-cache"`` AND
-      ``source_class`` is non-empty. A cacheable tool with a live-no-cache
-      class would never hit; a cacheable tool with no source_class can't
-      construct a cache key path.
-    - ``cacheable=False`` ⇒ ``ttl_class == "live-no-cache"``. The other
-      classes would suggest the cache is in play.
-
-    The validator runs at construction time, so a misconfigured registration
-    raises ``ValidationError`` before the tool is reachable on the wire.
+    """Cache-shim metadata for one atomic tool's registration.
+    Registration is REFUSED when this is missing, incomplete, or fails the
+    cross-field validator - so a misconfigured tool never reaches the wire.
     """
 
+    #: The tool's function name, and the registry key.
     name: str = Field(min_length=1)
+    #: ``"live-no-cache"`` is reserved for the uncacheable-by-construction set:
+    #: interactive solicitation, envelope emission, persistence writes, solver
+    #: dispatch.
     ttl_class: TTLClass
+    #: The prefix in the cache layout. Required when cacheable, and omittable
+    #: when not, since nothing is written.
     source_class: str | None = None
+    #: Explicit rather than inferred, so the uncacheable set is enumerated.
     cacheable: bool = True
 
-    # --- Wave 1.5 additions (schema-20260608)
-    #
-    # Both fields default to safe / opt-out values so the ~30 existing
-    # ``AtomicToolMetadata(...)`` call sites in src/
-    # trid3nt_server/tools/*.py keep working untouched. New tools and
-    # follow-ups opt in by passing the keyword.
+    # Both default to the safe, opted-out value, so a tool opts in by passing
+    # the keyword rather than by remembering to.
 
     supports_global_query: bool = Field(
         default=False,
@@ -322,13 +231,9 @@ class AtomicToolMetadata(GraceModel):
         ),
     )
 
-    # --- Wave 4.10 MCP annotation hints (job-B12) --- #
-    #
-    # MCP-emerging-standard annotation fields for downstream consumers
-    # (MCP exposure, parallelization decisions, lethal-trifecta auditing).
-    # All four default to the safest / most-conservative value so existing
-    # call sites are backward-compatible; individual tools opt in by passing
-    # the keyword at registration or via model_copy(update=...).
+    # Annotation hints a consumer reads for exposure, parallelization and
+    # capability auditing. All four default to the most CONSERVATIVE value, so
+    # a tool that says nothing is treated as the least dangerous case.
 
     read_only_hint: bool = Field(
         default=True,
@@ -380,15 +285,10 @@ class AtomicToolMetadata(GraceModel):
     )
 
 
-    # --- Engine-door refactor additions (docs/specs/engine-door-refactor.md) --- #
-    #
-    # Two OPTIONAL fields for the engine-door family. Both default to the
-    # zero-impact value so all existing ``AtomicToolMetadata(...)`` call sites
-    # keep working untouched (additive, same pattern as the Wave 1.5 / 4.10
-    # additions above). They are ORTHOGONAL to the cacheable/ttl_class rule -
-    # no new cross-field validator. The soft convention "tier in {door,
-    # template} SHOULD carry a non-null engine" is enforced server/audit-side,
-    # NOT here, to keep the contract a pure shape.
+    # Two OPTIONAL fields for the engine-door family, ORTHOGONAL to the
+    # cacheable / ttl_class rule - no cross-field validator joins them. The soft
+    # convention that a door or template carries an engine slug is enforced
+    # outside this module, so the contract stays a pure shape.
 
     engine: str | None = Field(
         default=None,
@@ -413,16 +313,11 @@ class AtomicToolMetadata(GraceModel):
         ),
     )
 
-    # --- Declared resolutions (NATE's clamp ruling)
-    #
-    # A tool with a granularity-bearing param DECLARES the resolutions it can
-    # actually run so the user picks from reality; an out-of-range ask is quoted
-    # the range (typed/gated), never silently snapped. The declaration is the
-    # SINGLE source read by the docstring, the gate card, and the self-enforcing
-    # registry sweep test. Default () = no resolution-class param (zero impact on
-    # the ~200 non-granularity tools). The two-layer-truth architecture: a fetcher
-    # declares constraint_source='data' specs, a template declares 'solver' specs;
-    # the gate card composes both.
+    # A tool with a granularity-bearing param declares the resolutions it can
+    # ACTUALLY run, so the user picks from reality and an out-of-range ask is
+    # quoted the range rather than silently snapped. This declaration is the
+    # SINGLE source the docstring, the gate card and the registry sweep all read.
+    # Default () = no resolution-class param.
     resolution_specs: tuple[ResolutionSpec, ...] = Field(
         default=(),
         description=(
@@ -440,15 +335,9 @@ class AtomicToolMetadata(GraceModel):
                 return spec
         return None
 
-    # --- Declared confirm gate (the gate-collapse carrier)
-    #
-    # A consequential solver run or a heavy raster fetch DECLARES its confirm gate
-    # here so the server gate engine reads membership from METADATA, not a hand-wired
-    # SOLVER_CONFIRM_TOOLS / FETCH_CONFIRM_TOOLS name set. Presence of a GateSpec is the
-    # ONE membership signal; the spec names the pure card/pin providers (by dotted import
-    # path) exported from the tool's own module and declares the levers the card offers.
-    # Default None = un-gated (zero impact on every non-gated tool), mirroring the
-    # resolution_specs default-() additive shape.
+    # A consequential run or a heavy fetch DECLARES its confirm gate here, so
+    # membership is read from METADATA rather than from a hand-wired name set.
+    # Presence is the ONE membership signal. Default None = un-gated.
     gate_spec: GateSpec | None = Field(
         default=None,
         description=(
@@ -460,7 +349,10 @@ class AtomicToolMetadata(GraceModel):
 
     @model_validator(mode="after")
     def _validate_cacheable_consistency(self) -> AtomicToolMetadata:
-        """Enforce the cross-field consistency rule."""
+        """A cacheable tool must name a source class and must not be live-only:
+        the first cannot build a cache key, the second would never hit. An
+        uncacheable tool must be live-only, or the cache appears to be in play.
+        """
         if self.cacheable:
             if self.ttl_class == "live-no-cache":
                 raise ValueError(

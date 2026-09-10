@@ -1,6 +1,6 @@
 {
   "additionalProperties": false,
-  "description": "``tool-call-complete`` (A.4): a tool finished successfully.\n\n``metrics`` is tool-specific structured data (invariant 1: the numbers the\nnarrative cites live here, never free text). For the flood depth tool this\ncarries ``FloodMetrics``-shaped fields; the full result body lives in GCS /\nMongoDB and is referenced by ``result_uri``.",
+  "description": "``tool-call-complete``: a tool finished successfully.\n``metrics`` is tool-specific structured data - the numbers a narrative cites\nlive there, never in the summary prose. The full result body is referenced\nby ``result_uri``, not inlined.",
   "properties": {
     "call_id": {
       "title": "Call Id",

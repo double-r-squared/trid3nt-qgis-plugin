@@ -1,20 +1,8 @@
-"""WebSocket protocol: envelope + every message type (SRS).
+"""The WebSocket protocol: the envelope and every message payload.
 
-All messages share the A.1 envelope (``type``/``id``/``ts``/``session_id``/
-``payload``). ``type`` is kebab-case; ``id`` is a ULID; ``ts`` is ISO-8601 ``Z``;
-``payload`` is always an object (``{}`` when empty).
-
-This module defines:
-- ``Envelope[PayloadT]``: the generic wire wrapper.
-- One ``*Payload`` model per message type (A.3, A.4, A.4b).
-- The ``map-command`` internal ``command`` discriminator (A.4) with one args
-  model per command.
-- ``ErrorCode``: the A.6 SCREAMING_SNAKE_CASE error-code enum.
-
-Invariants this module is responsible for:
-- **9. No cost theater.** no payload in this module carries a cost field.
-- **8. Cancellation is first-class.** ``cancelled`` is a distinct ``state`` in
-  ``pipeline-state`` step states, separate from ``failed``.
+Every message shares one envelope - ``type`` kebab-case, ``id`` a ULID, ``ts``
+ISO-8601 ``Z``, ``payload`` always an object. No payload here carries a cost
+field, and ``cancelled`` is a distinct step state, never folded into failed.
 """
 
 from __future__ import annotations
@@ -36,14 +24,14 @@ from .common import (
 __all__ = [
     "Envelope",
     "ErrorCode",
-    # client -> agent (A.3)
+    # client -> agent
     "DrawnGeometry",
     "UserMessagePayload",
     "CancelPayload",
     "SessionResumePayload",
-    # client -> agent (A.4b)
+    # client -> agent, user-input replies
     "SpatialInputResponsePayload",
-    # agent -> client (A.4)
+    # agent -> client
     "AgentMessageChunkPayload",
     "AgentThinkingChunkPayload",
     "ToolCallStartPayload",
@@ -62,13 +50,13 @@ __all__ = [
     "ReferenceLayer",
     "SuggestedView",
     "SpatialInputRequestPayload",
-    # auto/ask modes -- tool-selection picker (Stage 3, 2026-07-22)
+    # the tool-selection picker
     "ToolChoiceMode",
     "ToolCandidatesReason",
     "ToolCandidate",
     "ToolCandidatesPayload",
     "ToolChoicePayload",
-    # map-command args (A.4)
+    # map-command args
     "LoadLayerArgs",
     "ZoomToArgs",
     "SetTemporalConfigArgs",
@@ -81,38 +69,32 @@ __all__ = [
 
 
 # --------------------------------------------------------------------------- #
-# Envelope (A.1)
+# Envelope
 # --------------------------------------------------------------------------- #
 
 PayloadT = TypeVar("PayloadT", bound=GraceModel)
 
 
 class Envelope(GraceModel, Generic[PayloadT]):
-    """The shared message envelope (A.1).
-
-    ``type`` is the kebab-case discriminator; it is set per message type by the
-    caller (the agent service / client serialize the right value). ``id`` and
-    ``ts`` default to a fresh ULID and current UTC. ``payload`` is always an
-    object.
-    """
+    """The shared message envelope.
+    ``type`` is the kebab-case discriminator, set by whichever side serializes;
+    ``id`` and ``ts`` default to a fresh ULID and now."""
 
     type: str  # kebab-case discriminator (see ``*_TYPE`` on payloads)
     id: ULIDStr = Field(default_factory=new_ulid)
     ts: UTCDatetime = Field(default_factory=now_utc)
     session_id: ULIDStr
-    # (proposed A.1 amendment): the Case that OWNS the turn this
-    # envelope belongs to, when one is bound. With per-Case chat streams and
-    # stream-scoped turn concurrency, the client must route live
-    # streaming envelopes to the OWNING Case's stream — "the stream the user
-    # last messaged" misattributes a still-running turn's cards/narration the
-    # moment the user switches Cases. None = no Case context (root turns,
-    # lifecycle envelopes) — clients fall back to submit-time routing.
+    # The Case that OWNS the turn this envelope belongs to, when one is bound.
+    # A client routes a live envelope to that Case's stream: "the stream the
+    # user last messaged" misattributes a still-running turn the moment the user
+    # switches Cases. ``None`` is no Case context - a root turn, a lifecycle
+    # envelope - and a client falls back to submit-time routing.
     case_id: ULIDStr | None = None
     payload: PayloadT
 
 
 # --------------------------------------------------------------------------- #
-# Error codes (A.6)
+# Error codes
 # --------------------------------------------------------------------------- #
 
 ErrorCode = Literal[
@@ -131,57 +113,35 @@ ErrorCode = Literal[
     "CLARIFICATION_TIMEOUT",
     "USER_INPUT_CANCELLED",
     "CANCELLED",
-    # OPEN-14 (context-budget, LOCAL/OpenAI model path only): a turn's prompt
-    # was clipped by the model's num_ctx even after one recompaction + retry
-    # (context_budget.ContextWindowExceededError). Distinct from
-    # LLM_UNAVAILABLE -- a genuinely oversized Case, not a transient model
-    # outage -- so the client can render the honest "start a new case or
-    # switch models" guidance instead of an offer to retry.
-    #
-    # BUG 1 (post-OPEN-14 acceptance rerun, 2026-07-12): this value was
-    # missing here while server.py's abort handler already sent it as the
-    # literal ``error_code`` on every ``ErrorPayload`` -- so every single
-    # CONTEXT_WINDOW_EXCEEDED abort raised a pydantic ValidationError inside
-    # ``_send_error`` (constructing the payload), unconditionally, dead
-    # socket or not. That raise, uncaught by the pre-fix except-block, is why
-    # the terminal-failure-card persist call right after it was never
-    # reached.
+    # A prompt that stayed over the model's context window even after one
+    # recompaction and retry. DISTINCT from LLM_UNAVAILABLE: a genuinely
+    # oversized Case, not a transient outage, so the honest guidance is to start
+    # a new case or switch models rather than to retry.
     "CONTEXT_WINDOW_EXCEEDED",
 ]
 
 
 # =========================================================================== #
-# Client -> Agent messages (A.3)
+# Client -> agent messages
 # =========================================================================== #
 
-# (auto/ask modes, Stage 3 2026-07-22): the ROUTING-VISIBILITY mode
-# for a turn. Governs ONLY whether tool selection is surfaced as a
-# ``tool-candidates`` picker card -- the consent surface (payload warnings,
-# granularity, solver confirm, code-exec approval, credential entry, region
-# choice, spatial input) is NEVER mode-dependent (gates answer "may I do
-# this"; modes answer "which tool"; the two layers never mix).
+# The ROUTING-VISIBILITY mode for a turn. It governs ONLY whether tool
+# selection is surfaced as a picker card. The CONSENT surface - payload
+# warnings, granularity, solver confirm, code-exec approval, credential entry,
+# region choice, spatial input - is NEVER mode-dependent: a gate answers "may I
+# do this", a mode answers "which tool", and the two layers never mix.
 #
-# - ``"auto"``: tool selection is autonomous; no pick cards -- EXCEPT on a
-#   MEASURED ambiguity signal (top-1 vs top-2 retrieval near-tie), where the
-#   server may still emit a ``tool-candidates`` card with
-#   ``reason="ambiguity"``.
-# - ``"ask"``: tool selection is surfaced as a ``tool-candidates`` card
-#   (``reason="ask_mode"``), staged in waves along the natural analysis flow
-#   (acquisition -> preprocessing -> analysis -> visualization).
+# - ``"auto"``: selection is autonomous, with no pick card EXCEPT on a MEASURED
+#   ambiguity signal, where a card may still surface.
+# - ``"ask"``: selection is surfaced as a card, staged along the analysis flow.
 ToolChoiceMode = Literal["auto", "ask"]
 
 
 class DrawnGeometry(GraceModel):
     """A user-drawn geometry attached to a ``user-message``.
-
-    ONE rectangle for now -- the QGIS dock 'Draw region' rubber-band tool. Rides
-    ``UserMessagePayload.drawn_geometry`` exactly as the canvas AOI rides
-    ``aoi_bbox``: a per-turn STRUCTURED spatial knob (distinct from the analysis
-    AOI) that composer input-review gates consume as ``basis="user"`` -- e.g. the
-    geoclaw ``amr_regions`` refinement window. The ``geometry_type`` discriminator
-    leaves room for a polygon-editor follow-on; only ``"rectangle"`` is wired
-    today. ``bbox`` is EPSG:4326 ``[min_lon, min_lat, max_lon, max_lat]`` -- the
-    same element order + ordering rules as every other bbox carrier.
+    A per-turn STRUCTURED spatial knob, distinct from the analysis AOI, which an
+    input-review gate consumes as user-supplied. The ``geometry_type``
+    discriminator leaves room for a polygon editor; only a rectangle is wired.
     """
 
     geometry_type: Literal["rectangle"] = "rectangle"
@@ -202,65 +162,36 @@ class DrawnGeometry(GraceModel):
 
 
 class UserMessagePayload(GraceModel):
-    """``user-message`` (A.3): user-submitted text input."""
+    """``user-message``: one user-submitted turn."""
 
     MESSAGE_TYPE: ClassVar[str] = "user-message"
 
     text: str
-    # In-chat model selector: optional model id chosen by the user before
-    # submitting. ``None`` means "use the server default" (whatever the active
-    # provider adapter resolves).
-    # The client sends this on every user-message so the agent can hot-swap the
-    # model between turns without a session restart.
+    # The model chosen for THIS turn. ``None`` uses the server default. Sent on
+    # every message, so the model can change between turns with no restart.
     model_id: str | None = None
-    # job-CASE-AUTHORITY (amendment): the Case the CLIENT is
-    # currently in, stamped on every user-message. The server treats it as the
-    # authority for turn-binding — a 'resize bbox' turn runs in the client's
-    # current Case, never a stale in-memory server pointer. ``None`` (older
-    # client that does not stamp) preserves the prior behavior: the server
-    # falls back to its own ``_SESSION_ACTIVE_CASE`` pointer. Same field name +
-    # shape as ``SessionResumePayload.case_id`` and the web ``contracts.ts``
-    # mirror so the client<->server contract is identical across both messages.
+    # The Case the CLIENT is currently in. It is the AUTHORITY for turn
+    # binding, so a turn runs in the Case the user is looking at rather than
+    # against a stale server-side pointer. ``None`` falls back to that pointer.
     case_id: str | None = None
-    # Local-build thinking visibility (NATE live-feedback 2026-07-08): when
-    # True the OpenAI-compatible local adapter enables the model's reasoning
-    # channel for this turn (omits the /no_think system suffix) and the server
-    # forwards reasoning deltas as ``agent-thinking-chunk`` envelopes. ``None``
-    # (older client / cloud client that does not stamp) preserves the prior
-    # behavior: thinking suppressed per TRID3NT_OPENAI_EXTRA_SYSTEM. Ignored by
-    # the Bedrock path.
+    # True enables the model's reasoning channel for this turn, and the server
+    # forwards its deltas as thinking chunks. ``None`` suppresses it. Only an
+    # adapter with a reasoning channel reads this; the rest ignore it.
     show_thinking: bool | None = None
-    # Structured per-message AOI (mechanism 2, 2026-07-22): the
-    # client's current AOI as ``[min_lon, min_lat, max_lon, max_lat]``
-    # (EPSG:4326) -- replacing the bracketed in-text prose line the QGIS dock
-    # used to append to ``text`` ("[QGIS map canvas AOI (EPSG:4326): bbox =
-    # ...]"). ``None`` / absent (older client, web client, or no AOI set)
-    # preserves the prior behavior exactly: the server infers location from
-    # the message text. Element order + EPSG:4326 ordering rules mirror every
-    # other bbox carrier (``common.BBox``, case-create/set-bbox ``args.bbox``);
-    # kept a plain 4-float list (not ``BBox``) so consumers read the
-    # wire-identical shape. This is the PER-TURN AOI; the persistent Case bbox
-    # still rides ``case-command`` unchanged.
+    # The client's current AOI, ``[min_lon, min_lat, max_lon, max_lat]`` in
+    # EPSG:4326 - a STRUCTURED knob rather than a prose line inside ``text``.
+    # ``None`` leaves the server to infer location from the text. A plain
+    # 4-float list, not a ``BBox``, so a consumer reads the wire shape directly.
+    # This is the PER-TURN AOI; the persistent Case bbox has its own message.
     aoi_bbox: list[float] | None = None
-    # (auto/ask modes, Stage 3 2026-07-22): the routing-visibility
-    # mode for THIS turn -- the per-message settings carrier the QGIS dock /
-    # web settings toggle stamps, following the ``show_thinking`` /
-    # ``model_id`` precedent exactly (no session-config envelope exists; this
-    # IS the config path the server consumes). ``None`` / absent (older
-    # client, or a client that leaves the default) preserves the prior
-    # behavior: the server treats the turn as ``"auto"``. ``"ask"`` asks the
-    # server to surface tool selection as ``tool-candidates`` picker cards
-    # (see ``ToolCandidatesPayload``); consent gates are unaffected either
-    # way (``ToolChoiceMode`` docstring).
+    # The routing-visibility mode for THIS turn. There is no session-config
+    # message: the per-message carrier IS the config path. ``None`` is treated
+    # as auto, and consent gates are unaffected either way.
     tool_choice_mode: ToolChoiceMode | None = None
-    # User-drawn geometry for THIS turn: the QGIS dock 'Draw region'
-    # rubber-band rectangle, attached to the next message exactly as ``aoi_bbox``
-    # carries the canvas AOI. Distinct from ``aoi_bbox`` (the analysis extent):
-    # this is a sub-region KNOB a composer input-review gate consumes as
-    # ``basis="user"`` (e.g. geoclaw ``amr_regions``). ``None`` / absent (web
-    # client, older QGIS client, or nothing drawn) preserves the prior behavior
-    # exactly -- the composer falls back to its model-derived proposal. Cleared
-    # client-side on send (one rectangle, one turn).
+    # A geometry drawn for THIS turn, distinct from ``aoi_bbox``: the AOI is
+    # the analysis extent, this is a sub-region KNOB an input-review gate takes
+    # as user-supplied. ``None`` leaves a composer on its own proposal. One
+    # rectangle, one turn - a client clears it on send.
     drawn_geometry: DrawnGeometry | None = None
 
     @field_validator("aoi_bbox")
@@ -280,7 +211,7 @@ class UserMessagePayload(GraceModel):
 
 
 class CancelPayload(GraceModel):
-    """``cancel`` (A.3): cancel the in-flight pipeline."""
+    """``cancel``: cancel the in-flight pipeline."""
 
     MESSAGE_TYPE: ClassVar[str] = "cancel"
 
@@ -288,51 +219,32 @@ class CancelPayload(GraceModel):
 
 
 class SessionResumePayload(GraceModel):
-    """``session-resume`` (A.3): resume an existing session (id in envelope)."""
+    """``session-resume``: resume the session the envelope names."""
 
     MESSAGE_TYPE: ClassVar[str] = "session-resume"
 
-    # job-CASE-AUTHORITY (amendment): the Case the CLIENT is
-    # currently in, stamped on reconnect. On resume the server RE-BINDS its
-    # active-Case pointer to this value before replaying the Case's layers — so
-    # a reconnect replays the Case the user is actually in, never a stale
-    # server-side pointer (the SNAP root cause: a select tapped mid-reconnect
-    # never reaches the server, and the bare ``session-resume {}`` replays the
-    # server's stale active Case). ``None`` (older client, or a fresh session
-    # with no Case yet) preserves the prior behavior: the server keeps its own
-    # pointer and replays whatever it last had. Same field name + shape as
-    # ``UserMessagePayload.case_id`` and the web ``contracts.ts`` mirror.
+    # The Case the CLIENT is currently in, stamped on reconnect. The server
+    # RE-BINDS its active-Case pointer to this before replaying layers, so a
+    # reconnect replays the Case the user is actually in: a selection tapped
+    # mid-reconnect never reaches the server, and a resume carrying nothing
+    # would replay a stale one. ``None`` keeps the server's own pointer.
     case_id: str | None = None
 
 
 # =========================================================================== #
-# Client -> Agent (user input responses) (A.4b)
+# Client -> agent: user-input replies
 # =========================================================================== #
 
 
 class SpatialInputResponsePayload(GraceModel):
-    """``spatial-input-response`` (A.4b): user picked a geometry, or cancelled.
-
-    Three shapes ride this one payload, keyed by ``geometry_type``:
-
-    - ``"point"`` / ``"bbox"`` — the original pick-mode reply:
-      ``coordinates`` is set (``[lon, lat]`` for point,
-      ``[minLon, minLat, maxLon, maxLat]`` for bbox); ``features`` stays None.
-    - ``"vector_draw"`` — the urban vector-draw reply: ``features`` is
-      a GeoJSON ``FeatureCollection`` of the drawn geometry; ``coordinates``
-      stays None. Each ``Feature.properties`` carries a ``role`` in
-      {``"aoi"``, ``"line"``, ``"point"``}.
-    - For a cancellation: ``cancelled=True`` and every geometry field stays
-      None.
-
-    Large-payload note (Invariant + large-payload norm): a drawn
-    ``FeatureCollection`` is small by construction (a handful of short
-    ``LineString`` / ``Polygon`` rings — kilobytes, not the megabytes a raster
-    fetch produces), so NO ``estimate_payload_mb`` / payload-warning gate
-    applies to it. The 25 MB warn / 250 MB hard-block discipline
-    (``payload_warning.py``) governs TOOL-OUTPUT payloads, not this small
-    user-drawn input; no cap is imposed here beyond the structural validator.
+    """``spatial-input-response``: the user picked a geometry, or cancelled.
+    Three shapes on one payload, keyed by ``geometry_type``: a point or bbox
+    sets ``coordinates``; a draw sets ``features``, a role-tagged
+    ``FeatureCollection``; a cancellation sets ``cancelled`` and nothing else.
     """
+
+    # No payload-size gate applies here: a drawn collection is kilobytes by
+    # construction, and the warn/block discipline governs TOOL OUTPUT.
 
     MESSAGE_TYPE: ClassVar[str] = "spatial-input-response"
 
@@ -347,13 +259,9 @@ class SpatialInputResponsePayload(GraceModel):
     def _validate_features(
         cls, value: dict[str, Any] | None
     ) -> dict[str, Any] | None:
-        """Structurally validate the drawn GeoJSON ``FeatureCollection``.
-
-        Validates STRUCTURE only (no geometry-library dependency in contracts):
-        a ``FeatureCollection`` whose every ``Feature`` carries a
-        ``properties.role`` in {"aoi", "point", "line"}, and whose ``"line"``
-        features are ``LineString``s with >= 2 positions.
-        """
+        """STRUCTURE only, so this package needs no geometry library: every
+        feature carries a known ``properties.role``, and a ``"line"`` is a
+        ``LineString`` with at least two positions."""
         if value is None:
             return None
         return _validate_spatial_input_feature_collection(value)
@@ -362,11 +270,8 @@ class SpatialInputResponsePayload(GraceModel):
 def _validate_spatial_input_feature_collection(
     fc: dict[str, Any],
 ) -> dict[str, Any]:
-    """Shared structural validator for a role-tagged drawn FeatureCollection.
-
-    Enforces the role vocabulary while staying a pure-structure check (no
-    shapely/geojson import in the contracts package).
-    """
+    """Enforce the role vocabulary on a drawn FeatureCollection.
+    A pure-structure check - nothing here parses geometry."""
     if fc.get("type") != "FeatureCollection":
         raise ValueError(
             f"features must be a GeoJSON FeatureCollection, "
@@ -375,8 +280,8 @@ def _validate_spatial_input_feature_collection(
     feats = fc.get("features")
     if not isinstance(feats, list):
         raise ValueError("features.features must be a list")
-    # "line" is a NEUTRAL elevation/section LineString (compute_terrain_profile /
-    # compute_cross_section).
+    # "line" is a NEUTRAL elevation or section LineString - it carries no
+    # barrier semantics.
     valid_roles = {"aoi", "point", "line"}
     for idx, feat in enumerate(feats):
         if not isinstance(feat, dict) or feat.get("type") != "Feature":
@@ -394,9 +299,8 @@ def _validate_spatial_input_feature_collection(
                 f"{sorted(valid_roles)}, got {role!r}"
             )
         if role == "line":
-            # A neutral elevation/section line: a plain LineString (>= 2
-            # positions), NO barrier_type required. Surfaced as the result's
-            # `line`/`linestring` geometry for compute_terrain_profile.
+            # A plain LineString with at least two positions. No barrier type
+            # is required or read.
             if geom.get("type") != "LineString":
                 raise ValueError(
                     f"features.features[{idx}] role='line' geometry must be a "
@@ -412,12 +316,12 @@ def _validate_spatial_input_feature_collection(
 
 
 # =========================================================================== #
-# Agent -> Client messages (A.4)
+# Agent -> client messages
 # =========================================================================== #
 
 
 class AgentMessageChunkPayload(GraceModel):
-    """``agent-message-chunk`` (A.4): a streamed token group from the LLM."""
+    """``agent-message-chunk``: one streamed token group of an answer."""
 
     MESSAGE_TYPE: ClassVar[str] = "agent-message-chunk"
 
@@ -427,16 +331,9 @@ class AgentMessageChunkPayload(GraceModel):
 
 
 class AgentThinkingChunkPayload(GraceModel):
-    """``agent-thinking-chunk``: a streamed reasoning-channel token group.
-
-    Local-build feature (NATE live-feedback 2026-07-08): the OpenAI-compatible
-    adapter surfaces the model's reasoning deltas (e.g. Ollama qwen3
-    ``delta.reasoning``) and the server forwards them live so the web can
-    render a greyed, collapsible "thinking" block inside the SAME bubble as
-    the eventual answer. ``message_id`` is shared with the segment's
-    ``agent-message-chunk`` frames; a ``delta="" done=True`` frame closes the
-    thinking stream for that bubble. Shape mirrors AgentMessageChunkPayload.
-    """
+    """``agent-thinking-chunk``: one streamed reasoning-channel token group.
+    ``message_id`` is SHARED with the answer chunks of the same bubble, and an
+    empty final frame closes the thinking stream for it."""
 
     MESSAGE_TYPE: ClassVar[str] = "agent-thinking-chunk"
 
@@ -446,21 +343,20 @@ class AgentThinkingChunkPayload(GraceModel):
 
 
 class ToolCallStartPayload(GraceModel):
-    """``tool-call-start`` (A.4): a tool invocation has begun."""
+    """``tool-call-start``: a tool invocation has begun."""
 
     MESSAGE_TYPE: ClassVar[str] = "tool-call-start"
 
     call_id: ULIDStr
     step_id: ULIDStr
     tool_name: str
-    # tool_category vocabulary (convention; open enum). Mirrors the tool
-    # categories in. See report OQ-S5 for the documented vocabulary.
+    # An OPEN enum: a receiver must tolerate a category it does not know.
     tool_category: str
-    params: dict = Field(default_factory=dict)  # sanitized parameters
+    params: dict = Field(default_factory=dict)  # sanitized
 
 
 class ToolCallProgressPayload(GraceModel):
-    """``tool-call-progress`` (A.4): optional progress for an in-flight tool."""
+    """``tool-call-progress``: optional progress for an in-flight tool."""
 
     MESSAGE_TYPE: ClassVar[str] = "tool-call-progress"
 
@@ -470,85 +366,41 @@ class ToolCallProgressPayload(GraceModel):
 
 
 class ToolCallCompletePayload(GraceModel):
-    """``tool-call-complete`` (A.4): a tool finished successfully.
-
-    ``metrics`` is tool-specific structured data (invariant 1: the numbers the
-    narrative cites live here, never free text). For the flood depth tool this
-    carries ``FloodMetrics``-shaped fields; the full result body lives in GCS /
-    MongoDB and is referenced by ``result_uri``.
+    """``tool-call-complete``: a tool finished successfully.
+    ``metrics`` is tool-specific structured data - the numbers a narrative cites
+    live there, never in the summary prose. The full result body is referenced
+    by ``result_uri``, not inlined.
     """
 
     MESSAGE_TYPE: ClassVar[str] = "tool-call-complete"
 
     call_id: ULIDStr
-    result_summary: str  # human-readable one-liner for chat display
-    result_uri: str | None = None  # present when the result is a stored artifact
-    metrics: dict = Field(default_factory=dict)  # tool-specific structured data
+    result_summary: str  # a human-readable one-liner
+    result_uri: str | None = None  # set when the result is a stored artifact
+    metrics: dict = Field(default_factory=dict)
 
 
 class ToolCallFailedPayload(GraceModel):
-    """``tool-call-failed`` (A.4): a tool errored out."""
+    """``tool-call-failed``: a tool errored out."""
 
     MESSAGE_TYPE: ClassVar[str] = "tool-call-failed"
 
     call_id: ULIDStr
-    error_code: str  # enum-like string (per tool category; open)
-    message: str  # human-readable, surfaced in chat
+    error_code: str  # an enum-like string; the set is open
+    message: str  # human-readable
     retryable: bool = False
 
 
-# pipeline-state (A.4) ------------------------------------------------------- #
+# pipeline-state ------------------------------------------------------------ #
 
-# cancelled is a distinct terminal state, separate from failed (invariant 8).
+# ``cancelled`` is a distinct terminal state, never folded into failed.
 PipelineStepState = Literal["pending", "running", "complete", "failed", "cancelled"]
 
 
 class PipelineStep(GraceModel):
     """One step in the pipeline snapshot.
-
-    ``duration_ms`` (ELEVATED tool-timer requirement) is the
-    authoritative wall-clock elapsed time the workflow stamps on the
-    **terminal** transition (complete / failed / cancelled). It is derived
-    deterministically from ``completed_at - started_at`` by the
-    ``PipelineEmitter`` — NOT an LLM estimate (Invariant 1). Optional and
-    ``None`` for pending/running steps: the client renders a cosmetic live
-    ticker until this lands, then locks the card to this number. Milliseconds
-    so a sub-second tool reads honestly (0 displays as "0:00"). ``ge=0``.
-
-    Two-card sim observability (task-149): ``role`` discriminates the card
-    KIND — the default ``"tool"`` is an on-box atomic-tool card (every existing
-    payload), while ``"compute"`` is the off-box solver card that binds to an
-    AWS Batch job. For a ``"compute"`` card, ``batch_job_id`` carries the Batch
-    ``jobId`` it tracks and ``batch_status`` the last ``DescribeJobs`` status
-    (SUBMITTED / RUNNABLE / STARTING / RUNNING / SUCCEEDED / FAILED). All three
-    are optional with defaults that keep every existing tool card byte-identical
-    on the wire (``role="tool"``, both ids ``None``). Never an LLM estimate
-    (Invariant 1): ``batch_status`` mirrors the Batch control-plane verbatim.
-
-    Nested sub-step timeline (task-168): a composer's INTERNAL atomic-tool calls
-    (``fetch_*`` / deck build / ``run_solver`` / ``postprocess_*`` /
-    ``publish_layer`` / ``compute_*``) are surfaced as CHILD steps nested under
-    the parent workflow card instead of separate top-level interleaved cards.
-    Four additive fields drive the "live breadcrumb + expand" UX:
-
-    - ``parent_step_id`` -- set on a CHILD step; the ``step_id`` of the parent
-      workflow step this child belongs to. When set, the client NESTS this step
-      under the parent and does NOT render it as a top-level card. ``None`` (the
-      default) means a normal top-level step -- every existing payload.
-    - ``substep_label`` -- set on the PARENT; the raw tool name of the
-      currently-running child (the web humanizes it into a breadcrumb label).
-      Cleared (``None``) when the parent reaches a terminal state.
-    - ``substep_index`` -- set on the PARENT; the 1-based index of the
-      currently-running child (the breadcrumb "k" in "fetching topobathy k/N").
-      Cleared when the parent completes.
-    - ``substep_total`` -- set on the PARENT; the planned child count (the
-      breadcrumb "N"). ``None`` when unknown -- the web then shows just the
-      humanized label + index with no "/N".
-
-    All four default ``None`` so every existing serialization stays
-    byte-compatible (a step with no children + no parent dumps identically to
-    the pre-task-168 wire shape). Deterministic / workflow-attributed, never an
-    LLM estimate (Invariant 1).
+    Every number here is deterministic - measured or mirrored from a control
+    plane - and never a model's estimate.
     """
 
     step_id: ULIDStr
@@ -558,14 +410,22 @@ class PipelineStep(GraceModel):
     started_at: UTCDatetime | None = None
     completed_at: UTCDatetime | None = None
     progress_percent: int | None = Field(default=None, ge=0, le=100)
+    # The AUTHORITATIVE wall-clock elapsed time, stamped on the terminal
+    # transition and derived from the two stamps above. ``None`` while pending
+    # or running, so a client may tick cosmetically until this lands and then
+    # locks to it. Milliseconds, so a sub-second tool reads honestly.
     duration_ms: int | None = Field(default=None, ge=0)
+    # The card KIND. ``"tool"`` is an on-box tool card; ``"compute"`` is the
+    # off-box solver card, bound to a batch job whose status is mirrored
+    # VERBATIM from the control plane rather than interpreted.
     role: Literal["tool", "compute"] = "tool"
     batch_job_id: str | None = None
     batch_status: str | None = None
-    # Nested sub-step timeline (task-168). ``parent_step_id`` is set on a CHILD;
-    # ``substep_label`` / ``substep_index`` / ``substep_total`` are set on the
-    # PARENT and describe the currently-running child for the live breadcrumb.
-    # All default None => byte-compatible with every existing payload.
+    # The nested sub-step timeline. ``parent_step_id`` is set on a CHILD, and a
+    # client NESTS such a step instead of rendering it top-level. The three
+    # substep fields are set on the PARENT and describe the currently-running
+    # child for a live breadcrumb; they are cleared when the parent terminates.
+    # ``substep_total`` is ``None`` when the child count is not yet known.
     parent_step_id: ULIDStr | None = None
     substep_label: str | None = None
     substep_index: int | None = Field(default=None, ge=1)
@@ -573,11 +433,9 @@ class PipelineStep(GraceModel):
 
 
 class PipelineStatePayload(GraceModel):
-    """``pipeline-state`` (A.4): full snapshot of the current pipeline.
-
-    The full snapshot replaces the client's pipeline view on each message;
-    deltas are not used.
-    """
+    """``pipeline-state``: the FULL snapshot of the current pipeline.
+    It REPLACES a client's pipeline view outright; there are no deltas to
+    reconcile."""
 
     MESSAGE_TYPE: ClassVar[str] = "pipeline-state"
 
@@ -585,22 +443,14 @@ class PipelineStatePayload(GraceModel):
     steps: list[PipelineStep] = Field(default_factory=list)
 
 
-# solve-progress (live big-sim telemetry — tool-accuracy panel, NATE 2026-06-17)
+# solve-progress ------------------------------------------------------------ #
 
 
 class SolveProgressPayload(GraceModel):
-    """``solve-progress`` (A.4 extension): LIVE big-sim telemetry tick.
-
-    Emitted by the agent during a long solver run (SFINCS / MODFLOW) so the web
-    client renders grid resolution / active-cell count / vCPU / elapsed / ETA
-    inline on the running tool/pipeline card — replacing a silent multi-minute
-    spinner with honest live progress. The web track owns the card rendering;
-    this payload is the shared wire contract.
-
-    Invariant 1 (Determinism boundary): every field is solver/perf-model
-    sourced, never an LLM estimate — ``elapsed_seconds`` is wall-clock and
-    ``eta_seconds`` comes from the autoscale ``estimated_solve_seconds`` (the
-    perf model) when available, else ``None`` (no fabricated ETA).
+    """``solve-progress``: one LIVE telemetry tick during a long solver run.
+    Every field is solver- or perf-model-sourced: ``elapsed_seconds`` is
+    wall-clock, and ``eta_seconds`` is ``None`` when the perf model has no
+    estimate rather than a fabricated one.
     """
 
     MESSAGE_TYPE: ClassVar[str] = "solve-progress"
@@ -612,43 +462,19 @@ class SolveProgressPayload(GraceModel):
     vcpus: int | None = None
     elapsed_seconds: float = Field(ge=0)
     eta_seconds: float | None = Field(default=None, ge=0)
-    # Two-card sim observability (task-149): the DescribeJobs status this
-    # progress tick reflects (SUBMITTED / RUNNABLE / STARTING / RUNNING /
-    # SUCCEEDED / FAILED). Optional/None for ticks not bound to a Batch job;
-    # mirrors the Batch control-plane verbatim (Invariant 1, never inferred).
+    # The batch status this tick reflects, mirrored VERBATIM from the control
+    # plane. ``None`` for a tick not bound to a batch job.
     phase: str | None = None
 
 
-# tool-io (tool-card-expand-output spec) ------------------------------------- #
+# tool-io ------------------------------------------------------------------- #
 
 
 class ToolIoPayload(GraceModel):
-    """``tool-io`` (A.4 extension): the RAW input args + function_response for one
-    tool dispatch, keyed by the pipeline step it belongs to.
-
-    The ``pipeline-state`` ``PipelineStep`` carries only the humanized label +
-    state + timing — it deliberately does NOT carry the raw I/O. This envelope
-    is the additive sidecar that lets the chat tool-card's expander reveal the
-    EXACT args the agent sent and the EXACT ``function_response`` the agent read
-    back (the dict ``summarize_tool_result`` produced). Surfacing it makes
-    server-side / upstream-API failures the narration hides directly visible
-    (per ``feedback_tool_card_expand_output``).
-
-    ``step_id`` matches the ``PipelineStep.step_id`` of the dispatch's card so
-    the web merges this into the right card by id (the emitter mints the step
-    inside ``emit_tool_call``; the server reads it back off
-    ``emitter.last_tool_step`` and stamps it here).
-
-    ``raw_args`` / ``function_response`` are pre-serialized JSON STRINGS (the
-    server json-dumps them so a non-JSON-serializable value degrades to a
-    string rather than breaking the envelope). Large payloads are TRUNCATED at
-    the server to ``MAX_FIELD_BYTES`` (large-payload norm — the chat must never
-    ship a multi-MB blob just for an expander); ``args_truncated`` /
-    ``response_truncated`` flag a truncation and the ``*_bytes`` fields carry the
-    ORIGINAL byte length so the UI can render an honest "truncated, N bytes"
-    note. ``is_error`` mirrors the honesty-floor signal (the function_response
-    carried ``status == "error"`` or the dispatch raised) so the expander styles
-    the response block red without re-parsing the JSON.
+    """``tool-io``: the RAW args and response for one dispatch, keyed by step.
+    The pipeline step deliberately carries only label, state and timing; this is
+    the additive sidecar that makes the EXACT args sent and response read back
+    visible, so an upstream failure a narration smooths over stays inspectable.
     """
 
     MESSAGE_TYPE: ClassVar[str] = "tool-io"
@@ -657,18 +483,26 @@ class ToolIoPayload(GraceModel):
     #: expander is a debugging affordance, not a data-transfer channel.
     MAX_FIELD_BYTES: ClassVar[int] = 32_768
 
+    #: Matches the step of the dispatch's own card, so a client merges this
+    #: onto the right card by id.
     step_id: ULIDStr
     tool_name: str
+    #: Pre-serialized JSON STRINGS: a non-serializable value degrades to a
+    #: string rather than breaking the envelope.
     raw_args: str = ""
     function_response: str = ""
+    #: Mirrors the honesty signal, so the response block can be styled without
+    #: re-parsing the JSON.
     is_error: bool = False
+    #: A truncation flag with the ORIGINAL byte length beside it, so a reader
+    #: can say honestly how much is missing.
     args_truncated: bool = False
     response_truncated: bool = False
     args_bytes: int = Field(default=0, ge=0)
     response_bytes: int = Field(default=0, ge=0)
 
 
-# map-command (A.4) ---------------------------------------------------------- #
+# map-command --------------------------------------------------------------- #
 
 
 class MapTemporal(GraceModel):
@@ -710,12 +544,9 @@ MapCommand = Literal[
 
 
 class MapCommandPayload(GraceModel):
-    """``map-command`` (A.4): one umbrella type with a ``command`` discriminator.
-
-    ``args`` is the command-specific args object (one of the ``*Args`` models
-    above). It is kept as a ``dict`` at the envelope level; the consumer
-    validates it against the matching ``*Args`` model by ``command``.
-    """
+    """``map-command``: one umbrella message with a ``command`` discriminator.
+    ``args`` stays a dict on the wire; a consumer validates it against the
+    matching args model selected by ``command``."""
 
     MESSAGE_TYPE: ClassVar[str] = "map-command"
 
@@ -724,28 +555,15 @@ class MapCommandPayload(GraceModel):
 
 
 SessionStateStatus = Literal["active", "max_turns_reached"]
-"""Status of the session at the moment a ``session-state`` envelope is sent.
-
-- ``active``: normal operation (default).
-- ``max_turns_reached``: the agent has hit ``MAX_TURNS_PER_SESSION``.
-  No further tool calls will be dispatched; the user must start a new session.
-
-Added by (sprint-08).
-"""
+"""Session status at the moment a ``session-state`` is sent. ``active`` is
+normal; ``max_turns_reached`` means no further tool call will be dispatched and
+a new session is required."""
 
 
 class SessionStatePayload(GraceModel):
-    """``session-state`` (A.4): lets the client reconstruct the session.
-
-    The nested shapes are the JSON serialization of the models
-    (``ChatMessage``, ``ProjectLayerSummary``, ``PipelineSnapshot``,
-    ``MapView``). They are carried as plain ``dict``/``list`` here to avoid a
-    circular contract dependency between ws.py and collections.py; the agent
-    serializes the real D.6 models into them. See report OQ-S4.
-
-    ``status`` is ``"active"`` in normal operation; ``"max_turns_reached"``
-    when the cap fires. Defaults to ``"active"`` so
-    existing consumers do not need to change.
+    """``session-state``: everything a client needs to reconstruct a session.
+    The nested fields are the JSON serialization of the collection models,
+    carried as plain dicts here to keep this module acyclic.
     """
 
     MESSAGE_TYPE: ClassVar[str] = "session-state"
@@ -759,7 +577,7 @@ class SessionStatePayload(GraceModel):
 
 
 class ErrorPayload(GraceModel):
-    """``error`` (A.4): global error not tied to a specific tool call."""
+    """``error``: a global error, not tied to any one tool call."""
 
     MESSAGE_TYPE: ClassVar[str] = "error"
 
@@ -769,7 +587,7 @@ class ErrorPayload(GraceModel):
     retry_after_seconds: int | None = None
 
 
-# spatial-input-request (A.4) ------------------------------------------------ #
+# spatial-input-request ----------------------------------------------------- #
 
 
 class ReferenceLayer(GraceModel):
@@ -787,17 +605,9 @@ class SuggestedView(GraceModel):
 
 
 class SpatialInputRequestPayload(GraceModel):
-    """``spatial-input-request`` (A.4): agent needs the user to pick a geometry.
-
-    ``mode`` selects the client pick affordance:
-
-    - ``"point"`` — single map click; the reply carries ``coordinates=[lon, lat]``.
-    - ``"bbox"`` — a drag-rectangle; the reply carries
-      ``coordinates=[minLon, minLat, maxLon, maxLat]``.
-    - ``"vector_draw"`` — the client opens a draw surface (rectangle / polygon /
-      polyline + select-edit) and the reply carries ``features`` (a GeoJSON
-      ``FeatureCollection`` of ``role``-tagged geometry). Use this when the agent
-      needs the user to outline a region or trace a section line.
+    """``spatial-input-request``: the user is asked to pick a geometry.
+    ``mode`` selects the affordance: a point returns one coordinate pair, a
+    bbox returns four, and a draw returns a role-tagged ``FeatureCollection``.
     """
 
     MESSAGE_TYPE: ClassVar[str] = "spatial-input-request"
@@ -806,17 +616,12 @@ class SpatialInputRequestPayload(GraceModel):
     mode: Literal["point", "bbox", "vector_draw"]
     title: str
     description: str
-    # ``purpose`` (vector_draw only) selects the draw affordance + semantics:
+    # Selects the draw affordance and its semantics, on a draw request only.
     #
-    # - ``"aoi"`` (DEFAULT) -- area-of-interest selection: only the rect/polygon
-    #   draw tools are shown and submit gates on having drawn at least one
-    #   polygon, carried back as ``role=="aoi"``. Use when the model needs the
-    #   user to outline a region for any tool that accepts an AOI or bbox.
-    # - ``"line"`` -- a NEUTRAL elevation/section line (e.g. for
-    #   ``compute_terrain_profile`` / ``compute_cross_section``): a drawn
-    #   LineString is submitted as a plain ``role=="line"`` LineString. The
-    #   reply's first line geometry is surfaced as the ``line`` /
-    #   ``linestring`` fields.
+    # - ``"aoi"`` - region selection: only the area tools are offered and submit
+    #   gates on at least one polygon, returned tagged as an aoi.
+    # - ``"line"`` - a NEUTRAL elevation or section line, returned tagged as a
+    #   line. It carries no barrier semantics.
     purpose: Literal["aoi", "line"] = "aoi"
     suggested_view: SuggestedView | None = None
     reference_layers: list[ReferenceLayer] = Field(default_factory=list)
@@ -824,104 +629,66 @@ class SpatialInputRequestPayload(GraceModel):
 
 
 # =========================================================================== #
-# tool-candidates + tool-choice (auto/ask modes -- Stage 3, 2026-07-22)
+# tool-candidates + tool-choice: the tool-selection picker
 # =========================================================================== #
-# The tool-selection picker seam. Retrieval/routing ties are a real error
-# species: the model picks a plausible-but-wrong tool and the turn goes down a
-# sad path the user could have prevented in one click. The server
-# (Lane S) emits ``tool-candidates`` when either (a) the turn runs in ASK mode
-# (``UserMessagePayload.tool_choice_mode == "ask"``) or (b) AUTO mode measured
-# a retrieval near-tie (top-1 vs top-2 score) -- ``reason`` says which. The
-# client renders the ranked candidates as an inline picker card (radio choices
-# + a free-text option + "let the agent decide") and answers with
-# ``tool-choice``, correlated by ``request_id``.
+# A routing tie is a real error species: a plausible-but-wrong tool sends the
+# turn down a path one click could have prevented. The request is emitted either
+# because the turn runs in ask mode or because auto mode MEASURED a retrieval
+# near-tie, and ``reason`` says which.
 #
-# Timeout discipline (fail-open, mirrors the region-choice / credential
-# pause): an unanswered request times out SERVER-side after ``timeout_s`` and
-# the turn proceeds with the agent's own top-ranked pick -- the workflow never
-# blocks on the interactive card. The client folds an unanswered card to an
-# "agent proceeded" chip when subsequent turn events arrive.
-#
-# Invariant 1 (determinism boundary): ``score`` is the retrieval ranker's own
-# number, never an LLM estimate. Invariant 9: no cost field anywhere.
-# Consent gates are NEVER mode-dependent (``ToolChoiceMode`` docstring).
+# FAIL-OPEN: an unanswered request times out server-side and the turn proceeds
+# with the top-ranked pick. The workflow never blocks on the card.
 
 
-#: Why the picker surfaced: a measured retrieval near-tie in AUTO mode, or
-#: the user's ASK mode surfacing every staged selection.
+#: Why the picker surfaced: a MEASURED retrieval near-tie, or ask mode
+#: surfacing every staged selection.
 ToolCandidatesReason = Literal["ambiguity", "ask_mode"]
 
 
 class ToolCandidate(GraceModel):
-    """One ranked tool candidate inside a ``tool-candidates`` request.
+    """One ranked tool candidate inside a ``tool-candidates`` request."""
 
-    - ``tool_name`` -- the registry tool name, echoed VERBATIM in the
-      ``tool-choice`` reply when picked (the server re-resolves the tool by
-      this name; the client never invents one).
-    - ``summary`` -- one-line human summary the card renders beside the name
-      (drawn from the tool's docstring/description server-side; may be empty
-      for a defensively-built candidate).
-    - ``score`` -- the retrieval ranker's score for this candidate, verbatim
-      (Invariant 1: never an LLM estimate). Unconstrained float: ranker
-      backends differ (cosine similarity may be negative). Candidates arrive
-      ranked best-first; ``score`` lets the client show/inspect the margin.
-    """
-
+    #: The registry tool name, echoed VERBATIM by the reply. The tool is
+    #: re-resolved from it, so a client never invents one.
     tool_name: str = Field(min_length=1, max_length=200)
+    #: A one-line summary rendered beside the name. May be empty.
     summary: str = Field(default="", max_length=500)
+    #: The retrieval ranker's own score, verbatim, never an estimate.
+    #: UNCONSTRAINED: backends differ and a similarity may be negative.
+    #: Candidates arrive best-first, so this only shows the margin.
     score: float = 0.0
 
 
 class ToolCandidatesPayload(GraceModel):
-    """``tool-candidates`` (A.4 extension): agent -> client tool picker.
+    """``tool-candidates``: agent -> client, the tool picker."""
 
-    Fields:
-
-    - ``request_id`` -- ULID correlating this request with the ``tool-choice``
-      reply (and the server's paused-selection record). Echoed verbatim.
-    - ``stage_label`` -- the analysis-flow stage this pick belongs to (e.g.
-      ``"Data step"``, ``"Analysis step"``) so staged ASK-mode waves read as
-      a narrative, not a flood. Plain prose, client-rendered as the card
-      title.
-    - ``candidates`` -- the ranked candidates, best-first. MAY be empty when
-      the retrieval side degraded (the client then offers only the free-text
-      + let-agent-decide affordances -- honest degrade, mirroring the
-      region-choice empty-candidates rule).
-    - ``reason`` -- ``"ambiguity"`` (AUTO-mode measured near-tie) or
-      ``"ask_mode"`` (the user asked to see every staged selection).
-    - ``timeout_s`` -- how long the SERVER waits before proceeding with its
-      own top-ranked pick (fail-open; the client card notes the state when
-      the turn moves on).
-    """
 
     MESSAGE_TYPE: ClassVar[str] = "tool-candidates"
 
+    #: Correlates the request, the reply and the paused selection. Echoed
+    #: verbatim.
     request_id: ULIDStr
+    #: The analysis-flow stage this pick belongs to, so staged waves read as a
+    #: narrative rather than a flood.
     stage_label: str = Field(min_length=1, max_length=120)
+    #: Ranked best-first. MAY be EMPTY when retrieval degraded: the card then
+    #: offers only free text and let-the-agent-decide - an honest degrade rather
+    #: than an invented list.
     candidates: list[ToolCandidate] = Field(default_factory=list)
     reason: ToolCandidatesReason
+    #: How long the SERVER waits before proceeding with its own top pick.
     timeout_s: float = Field(default=60.0, gt=0)
 
 
 class ToolChoicePayload(GraceModel):
-    """``tool-choice`` (A.4b extension): client -> agent picker reply.
-
-    Exactly one of three shapes, keyed by which fields are set:
-
-    - ``tool_name`` set -- the user picked a candidate; the value is a
-      ``ToolCandidate.tool_name`` echoed VERBATIM. ``free_text`` is None.
-    - ``free_text`` set -- the user typed guidance instead of picking (the
-      card's free-text option); the server feeds it to the selection step.
-      ``tool_name`` is None.
-    - both None -- "let the agent decide": the server proceeds immediately
-      with its own top-ranked pick (the same outcome as the timeout, but
-      user-initiated and instant).
-
-    Cross-shape discipline (lightweight -- full enforcement is the consumer's
-    responsibility, matching the A.4b response shapes): ``tool_name`` and
-    ``free_text`` SHOULD NOT both be set; the server prefers ``tool_name``
-    when both arrive (the explicit pick is the stronger signal).
+    """``tool-choice``: client -> agent, the picker reply.
+    Exactly one of three shapes: ``tool_name`` set is a pick, echoed verbatim;
+    ``free_text`` set is typed guidance instead of a pick; both ``None`` is
+    let-the-agent-decide, the same outcome as the timeout but immediate.
     """
+
+    # The two should not both arrive; ``tool_name`` wins if they do, being the
+    # stronger signal.
 
     MESSAGE_TYPE: ClassVar[str] = "tool-choice"
 
@@ -939,25 +706,17 @@ CLIENT_TO_AGENT_PAYLOADS: dict[str, type[GraceModel]] = {
     CancelPayload.MESSAGE_TYPE: CancelPayload,
     SessionResumePayload.MESSAGE_TYPE: SessionResumePayload,
     SpatialInputResponsePayload.MESSAGE_TYPE: SpatialInputResponsePayload,
-    # auto/ask modes -- the picker reply (Stage 3, 2026-07-22)
     ToolChoicePayload.MESSAGE_TYPE: ToolChoicePayload,
 }
 
-# sprint-12-mega Wave 1.5: resolve OQ-0100-WS-REGISTRY-WIRING by
-# splatting the per-Case secrets envelopes (§F.3) into the routing dicts. The
-# secrets module owns the typed payloads + provider vocabulary; ws.py owns the
-#/A.4 registry surface, so the wiring lives here. Cases envelope
-# wiring lands separately in Wave 2 with the Case UX agent job (do NOT add
-# case-* payloads here).
+# The per-module payload fragments are splatted into the routing dicts HERE:
+# each module owns its typed payloads, and this module owns the registry.
 from .secrets import (  # noqa: E402 — module-level imports below the dict literals
     SECRET_AGENT_TO_CLIENT_PAYLOADS,
     SECRET_CLIENT_TO_AGENT_PAYLOADS,
 )
 
-# sprint-12-mega Wave 2: tool payload-warning envelopes. The
-# warning is agent->client (gate emission); the confirmation is client->agent
-# (user decision). See payload_warning.py for the contract; see
-# trid3nt_server/server.py for the dispatcher gate.
+# The payload warning is agent -> client; its confirmation is client -> agent.
 from .payload_warning import (  # noqa: E402
     PayloadConfirmationEnvelopePayload,
     PayloadWarningEnvelopePayload,
@@ -982,7 +741,6 @@ AGENT_TO_CLIENT_PAYLOADS: dict[str, type[GraceModel]] = {
     SessionStatePayload.MESSAGE_TYPE: SessionStatePayload,
     ErrorPayload.MESSAGE_TYPE: ErrorPayload,
     SpatialInputRequestPayload.MESSAGE_TYPE: SpatialInputRequestPayload,
-    # auto/ask modes -- the picker request (Stage 3, 2026-07-22)
     ToolCandidatesPayload.MESSAGE_TYPE: ToolCandidatesPayload,
 }
 AGENT_TO_CLIENT_PAYLOADS.update(SECRET_AGENT_TO_CLIENT_PAYLOADS)
@@ -990,34 +748,23 @@ AGENT_TO_CLIENT_PAYLOADS[
     PayloadWarningEnvelopePayload.MESSAGE_TYPE
 ] = PayloadWarningEnvelopePayload
 
-# sprint-13: chart-emission envelope. Agent->client (A.4); the agent
-# emits a Vega-Lite chart spec for the conversational data-analysis layer. See
-# chart_contracts.py for the contract; the per-module fragment is splatted here
-# following the secrets / payload_warning precedent.
+# The chart emission is agent -> client.
 from .chart_contracts import (  # noqa: E402
     CHART_AGENT_TO_CLIENT_PAYLOADS,
 )
 
 AGENT_TO_CLIENT_PAYLOADS.update(CHART_AGENT_TO_CLIENT_PAYLOADS)
 
-# sprint-13: python-sandbox code-exec envelopes. Both agent->client
-# (A.4): ``code-exec-request`` (confirm card before the sandbox runs) +
-# ``code-exec-result`` (the run outcome). The confirmation REPLY rides the
-# existing ``tool-payload-confirmation`` message (no new client->agent shape).
-# See sandbox_contracts.py for the contracts; splatted here following the
-# secrets / payload_warning / chart-emission precedent.
+# Both code-exec envelopes are agent -> client; the approval REPLY rides the
+# existing payload-confirmation message rather than a new shape.
 from .sandbox_contracts import (  # noqa: E402
     SANDBOX_AGENT_TO_CLIENT_PAYLOADS,
 )
 
 AGENT_TO_CLIENT_PAYLOADS.update(SANDBOX_AGENT_TO_CLIENT_PAYLOADS)
 
-# region-disambiguation picker envelopes (state-bbox-fallback narrowing). The
-# request is agent->client (``region-choice-request``: snap to whole state +
-# offer narrower sub-regions); the reply is client->agent
-# (``region-choice-provided``: the user's pick). MIRRORS the credential-request
-# seam in secrets.py. See region_choice.py for the contracts; the agent
-# pause/resume seam lives in trid3nt_server/server.py.
+# The region-narrowing request is agent -> client and its reply is
+# client -> agent.
 from .region_choice import (  # noqa: E402
     REGION_CHOICE_AGENT_TO_CLIENT_PAYLOADS,
     REGION_CHOICE_CLIENT_TO_AGENT_PAYLOADS,

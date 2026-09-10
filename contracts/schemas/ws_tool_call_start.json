@@ -1,6 +1,6 @@
 {
   "additionalProperties": false,
-  "description": "``tool-call-start`` (A.4): a tool invocation has begun.",
+  "description": "``tool-call-start``: a tool invocation has begun.",
   "properties": {
     "call_id": {
       "title": "Call Id",

@@ -58,7 +58,7 @@
     }
   },
   "additionalProperties": false,
-  "description": "``spatial-input-request`` (A.4): agent needs the user to pick a geometry.\n\n``mode`` selects the client pick affordance:\n\n- ``\"point\"`` \u2014 single map click; the reply carries ``coordinates=[lon, lat]``.\n- ``\"bbox\"`` \u2014 a drag-rectangle; the reply carries\n  ``coordinates=[minLon, minLat, maxLon, maxLat]``.\n- ``\"vector_draw\"`` \u2014 the client opens a draw surface (rectangle / polygon /\n  polyline + select-edit) and the reply carries ``features`` (a GeoJSON\n  ``FeatureCollection`` of ``role``-tagged geometry). Use this when the agent\n  needs the user to outline a region or trace a section line.",
+  "description": "``spatial-input-request``: the user is asked to pick a geometry.\n``mode`` selects the affordance: a point returns one coordinate pair, a\nbbox returns four, and a draw returns a role-tagged ``FeatureCollection``.",
   "properties": {
     "default_timeout_seconds": {
       "default": 300,
