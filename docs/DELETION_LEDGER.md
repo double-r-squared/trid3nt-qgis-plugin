@@ -3621,3 +3621,9 @@ The folder README's status line went with them: it declared the whole folder
 "STATUS: THINKING - nothing here is implemented or approved", which was wrong
 for more than thirty of its files. It now says what the folder is - dated
 measurements - and where the design space went.
+
+## `docs/specs/system-uml.html` - the second, ungated drawing - 2026-09-09
+
+| Candidate | Scope | Condition to delete | Status | Source |
+|---|---|---|---|---|
+| `docs/specs/system-uml.html` (167) | `docs/specs/` | DELETED rather than demoted to a generated rendering, because the model views already cover it and a rendering with no generator is the same ungated copy under a new name. Section 1 (the declaration surface) is `steering-surface.sysml` plus `data-seam.sysml`; section 2 (the chain and mesh subsystem) is `mesh-seam.sysml`; section 3 (the solve seam) is `solve-seam.sysml`, whose reader end plus `emission-seam.sysml` also carry section 5's product states. Each of those regenerates its view in-commit and `tests/model/test_model_conformance.py` fails while one is stale, which this page had nothing equivalent to - it was rev 1 of 2026-08-30 and had not moved through the mesh or module-surface waves. Its section 4, the end-to-end sequence, is the one part no seam holds; it is also the part that had gone stale, naming `FormGate` and `DrawGate`, both of which grep to ZERO in `trid3nt_server`, `contracts` and `plugin`. ADR 0320 is amended in the same wave to say why: a spec's UML depicts the mechanism a wave commits to, and a drawing of live structure belongs to the suite-checked model | DELETED (2026-09-09) | `docs/validation/docs-census.md` Q4f; `docs/validation/hygiene-manifest/docs-and-readmes.md` finding 10 |
