@@ -1,28 +1,9 @@
-"""Parallel-call bundling regression guard (job-B10).
+"""Parallel-call bundling: all calls in one turn, one follow-up stream.
 
-The verification audit (Q4) found that the multi-turn loop in
-``server.py::_stream_model_reply`` already correctly accumulates ALL
-function_call Parts emitted in a single Gemini stream chunk and dispatches
-them all before re-streaming, bundling all of their function_response
-Parts into the single follow-up content turn. These tests are a
-REGRESSION GUARD against future refactors silently splitting parallel
-calls across multiple turns (which would defeat Gemini 3's parallel
-function-calling and bloat round-trip latency).
-
-Coverage:
-
-1. Three function_call Parts in one Gemini response → all 3 land in
-   ``turn_function_calls`` → all 3 dispatch → 6 contents entries appended
-   (3 function_call + 3 function_response) → ONE follow-up
-   generate_content_stream call (not three).
-2. IDs round-trip 1:1 between the harvested call ids and the
-   function_response.id sent back to Gemini.
-3. Mixed text + function_call Parts in the same chunk → text streamed as
-   ``agent-message-chunk`` AND function_call dispatched (no part lost).
-4. Parallel calls split across multiple chunks within the SAME stream
-   (Gemini's wire shape — a single turn may stream multiple chunks before
-   the producer terminates) are still bundled into one turn.
-"""
+Every ``function_call`` Part in a model turn - in one chunk or spread across
+several within the same stream - is accumulated, all are dispatched, and their
+responses ride ONE follow-up turn. Ids round-trip 1:1, and mixed text and call
+Parts in one chunk both survive. Splitting them across turns is the regression."""
 
 from __future__ import annotations
 

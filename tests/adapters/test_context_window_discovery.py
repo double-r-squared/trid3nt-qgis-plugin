@@ -1,26 +1,9 @@
-"""Per-model context-budget seam: runtime window discovery, the ONE shared
-trim strategy, cache-prefix survival, and overflow classification.
+"""The per-model context budget: discovery, one trim strategy, cache prefixes.
 
-The context window is a PER-MODEL FACT DISCOVERED AT RUNTIME -- never a
-hardcoded constant. These tests pin that property from both directions: a
-provider that states its window is believed, and a provider that says nothing
-degrades to a LOUD conservative fallback rather than a silent guess.
-
-Covers:
-  1. Discovery matrix -- OpenRouter ``context_length``, Anthropic
-     ``max_input_tokens``, Ollama's runtime ``num_ctx``, the ``-<N>k`` name
-     suffix, the env pin, and ABSENT metadata on every one of them.
-  2. ``plan_turn`` -- the single strategy seam: the system prompt and tool
-     contracts are never trim candidates, and the terminal user message plus
-     the case-state note (the pending-confirmation spine) always survive.
-  3. Cache-prefix preservation -- trimming rewrites only the conversation, so
-     the Anthropic ``cache_control`` breakpoints keep a byte-identical prefix
-     across a compacted turn.
-  4. Overflow classification -- which provider 400 means "too long".
-
-Run:
-    python3 -m pytest tests/adapters/test_context_window_discovery.py -q
-"""
+The window is a PER-MODEL FACT DISCOVERED AT RUNTIME, never a constant: a
+provider that states it is believed, one that says nothing degrades to a LOUD
+conservative fallback. ``plan_turn`` never trims the system prompt or the tool
+contracts, and trimming rewrites only the conversation so a cache prefix survives."""
 
 from __future__ import annotations
 
@@ -65,10 +48,10 @@ def model_content(text: str) -> genai_types.Content:
 
 
 def long_alternating_history(pairs: int = 8, filler: int = 3000) -> list[genai_types.Content]:
-    """A realistic history: ALTERNATING user/model rows ending on a terminal
-    user message. Alternation matters -- the Bedrock/Anthropic converters
-    coalesce same-role runs and drop leading assistant rows, so an all-model
-    history would collapse to one wire message and hide what trimming did."""
+    """A realistic ALTERNATING user / model history ending on a user message.
+
+    The converters coalesce same-role runs and drop leading assistant rows, so an
+    all-model history would collapse to one wire message and hide what trimming did."""
     rows: list[genai_types.Content] = []
     for i in range(pairs):
         rows.append(user_content(f"q{i} " + "x" * filler))
@@ -350,10 +333,10 @@ def test_plan_turn_reactive_phase_always_reports_compacted():
 
 
 def test_plan_turn_reactive_shrinks_even_when_the_window_says_we_fit():
-    """THE REJECTED PROMPT IS AN UPPER BOUND. A reactive pass runs because the
-    provider said the prompt did not fit -- so the window fact or the estimator
-    was wrong. Budgeting off that wrong window would let the ladder no-op and
-    resend a byte-identical prompt, burning the one retry."""
+    """THE REJECTED PROMPT IS AN UPPER BOUND.
+
+    A reactive pass runs because the provider said the prompt did not fit, so the
+    window fact or the estimator was wrong and budgeting off it re-sends the bytes."""
     contents = long_alternating_history()
     before = sum(len(p.text or "") for c in contents for p in (c.parts or []))
 

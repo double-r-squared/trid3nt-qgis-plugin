@@ -1,27 +1,9 @@
-"""OPEN-16 empty-completion retry tests (live 2026-07-19).
+"""The empty-completion retry on the local model path.
 
-The local qwen3 model (MODEL_PROVIDER=openai) occasionally returns a round with
-ZERO tool calls AND ZERO non-whitespace text -- the empty-completion shape (log:
-"gemini loop terminal ... text_chunks=0"). Before this fix the loop logged
-terminal and BROKE, so the user's request (e.g. compute_hillshade) silently died.
-
-The fix (server.py, ``_stream_model_reply`` loop): on the LOCAL path only, an
-empty round RETRIES with a corrective user-role nudge appended to ``contents``,
-BOUNDED by ``_EMPTY_COMPLETION_RETRY_CAP`` so an always-empty model can never
-loop forever. Bedrock / vertex (production narration) is byte-unchanged.
-
-These drive the real loop with a scripted ``stream_events_with_contents`` (no
-live model, mirroring test_multi_turn_loop.py's fake-chunk approach) so the
-per-round event stream -- including a genuinely empty round -- is fully
-controlled. Cases:
-
-  (a) empty round -> RETRIED with a nudge appended -> next round calls a tool
-      -> turn completes normally.
-  (b) CAP+1 consecutive empty rounds stop at the cap and end the turn (no
-      infinite loop; exactly CAP nudges appended).
-  (c) a normal text answer (non-empty, no tool) still terminates in ONE round.
-  (d) the non-openai (vertex/bedrock) provider path never retries.
-"""
+A round with zero tool calls AND zero non-whitespace text used to end the turn
+silently. On the LOCAL path only, an empty round now RETRIES with a corrective
+user-role nudge appended, bounded by a cap so an always-empty model cannot loop;
+the other providers are byte-unchanged. Driven by a scripted event stream."""
 
 from __future__ import annotations
 
@@ -65,15 +47,10 @@ def _empty_round():
 
 
 def _install_scripted_stream(agent_server, rounds):
-    """Patch server.stream_events_with_contents with a scripted per-round fake.
+    """Patch the stream with a scripted per-round fake.
 
-    ``rounds`` is a list of event-lists (one per model call). Each invocation
-    pops the next round and yields its events. Every call snapshots the text of
-    the ``user``-role Content parts in ``contents`` so a test can assert the
-    corrective nudge was (or was not) appended between rounds.
-
-    Returns ``(contents_user_texts_per_call, model_call_count)`` recorders.
-    """
+    ``rounds`` is a list of event-lists, one per model call; each call snapshots the
+    user-role text so a test can assert whether a nudge was appended between rounds."""
     round_iter = iter(rounds)
     user_texts_per_call: list[list[str]] = []
     model_calls: list[int] = []

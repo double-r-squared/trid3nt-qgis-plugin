@@ -1,26 +1,9 @@
 """A failed model call must TERMINATE the turn, never wedge the loop.
 
-THE BUG THIS PINS (live agent DOWN): a provider call HUNG. With no client-side
-timeout, the request never returned and never raised, so:
-
-  * the adapter's producer thread (run via ``run_in_executor``) was stuck
-    forever, so the consumer's ``await queue.get()`` never completed,
-  * the turn coroutine never finished, so its ``_SESSION_LIVE_TURNS`` entry's
-    task stayed not-done -> ``inflight_turn_count() > 0`` AND the loop was
-    wedged on that turn, so NO model could respond,
-  * switching models produced NOTHING on the wire -- a silent death.
-
-Every adapter now bounds its own provider call, so a hung call RAISES instead
-of hanging the executor thread. These tests pin the SERVER side of that
-contract, provider-neutral: whatever the adapter raises, the turn surfaces an
-honest ``LLM_UNAVAILABLE`` envelope AND terminates, so the live-turn registry
-drains. The bound is on the model call ONLY -- the minutes-long ``run_solver``
-/ ``wait_for_completion`` solve path is intentionally NOT bounded.
-
-Run:
-    venvs/agent/bin/python -m pytest \
-        tests/adapters/test_turn_timeout_hardening.py -q
-"""
+An unbounded provider call that hangs leaves the producer thread stuck, the turn
+coroutine unfinished and its live-turn entry pinned, so no model can respond.
+Each adapter bounds its own call; this pins the SERVER side provider-neutrally,
+an honest ``LLM_UNAVAILABLE`` and a drained registry. The solve path is unbounded."""
 
 from __future__ import annotations
 
@@ -81,16 +64,10 @@ def _make_raising_stream(exc: BaseException):
 
 @pytest.mark.asyncio
 async def test_failed_model_call_clears_busy_and_surfaces_error():
-    """A timed-out model turn TERMINATES + surfaces an error + clears the turn.
+    """A timed-out model turn terminates, surfaces the error and clears the turn.
 
-    Reproduces the live-down shape:
-      * the turn task is REGISTERED as a detached live turn (as the handler
-        does when a socket drops mid-turn), so ``inflight_turn_count()`` would
-        stay pinned if the turn never finished;
-      * the model stream RAISES a timeout (the bounded-client outcome);
-      * we assert (a) an LLM_UNAVAILABLE error envelope reached the wire, and
-        (b) AFTER the turn task completes, ``inflight_turn_count() == 0``
-        -- the failed call did NOT wedge the loop."""
+    The task is registered as a detached live turn, so a turn that never finished
+    would pin the in-flight count; after it completes that count must be zero."""
     from trid3nt_server import server as agent_server
     from trid3nt_server.server import SessionState
     from trid3nt_contracts import new_ulid
@@ -189,11 +166,9 @@ async def test_normal_turn_path_unaffected():
 
 @pytest.mark.asyncio
 async def test_solve_tool_path_unaffected_by_model_bound():
-    """A tool-bearing turn dispatches the tool + completes cleanly.
+    """A tool-bearing turn dispatches the tool and completes cleanly.
 
-    Confirms the LLM read_timeout bound does NOT reach into the tool
-    dispatch path: a turn that calls a tool then narrates runs to a clean
-    terminal with the live-turn registry cleared."""
+    The model read-timeout bound does not reach into the tool dispatch path."""
     from trid3nt_server import server as agent_server
     from trid3nt_server.server import SessionState
     from trid3nt_server.adapters.adapter import FunctionCallEvent

@@ -1,21 +1,9 @@
-"""Pytest tests for Gemini/Vertex OpenAPI schema compliance (B11 / Wave 4.10).
+"""Provider OpenAPI schema compliance for every registered tool.
 
-Invariants verified:
-  1. Every tool in TOOL_REGISTRY produces a valid FunctionDeclaration when
-     passed through ``_normalize_callable_for_gemini`` → ``from_callable_with_api_option``.
-     No tool activates the docstring-only fallback (except zero-parameter tools
-     which legitimately have no schema).
-  2. No generated declaration contains ``anyOf``, ``oneOf``, ``allOf``, or
-     ``$ref`` — these are forbidden by Vertex AI and cause a 400 response.
-  3. Every property in every generated schema has an explicit ``type`` field —
-     typeless properties cause a Vertex 400 that blocks the entire tool catalog.
-  4. No underscore-prefixed parameters survive to the final declaration
-     (regression gate for the job-0163 Vertex 400 fix).
-
-Tests use the same normalized path that ``build_tool_declarations`` uses at
-runtime, so any regression that re-introduces an incompatible annotation will
-be caught here before it reaches Vertex.
-"""
+Each tool produces a valid FunctionDeclaration through the same normalized path
+the runtime builder uses, with no docstring-only fallback except for a
+zero-parameter tool; no declaration carries ``anyOf`` / ``oneOf`` / ``allOf`` /
+``$ref``; every property has an explicit ``type``; no underscore param survives."""
 
 from __future__ import annotations
 
@@ -113,16 +101,10 @@ def _walk_schema_for_violations(
 
 @pytest.mark.parametrize("tool_name", sorted(TOOL_REGISTRY.keys()))
 def test_every_tool_builds_declaration(tool_name: str) -> None:
-    """Every tool in TOOL_REGISTRY must produce a FunctionDeclaration without error.
+    """Every tool in ``TOOL_REGISTRY`` produces a FunctionDeclaration without error.
 
-    The normalised callable (return annotation replaced with dict, tuple params
-    replaced with list[float]/list[int], complex Pydantic params replaced with
-    str | None) must pass ``from_callable_with_api_option`` cleanly.
-
-    Failure here means a new incompatible annotation was added to the tool's
-    signature; fix it either in the tool file OR by extending
-    ``_simplify_annotation`` in adapter.py.
-    """
+    The normalised callable must pass the builder cleanly; a failure means a new
+    incompatible annotation, fixed in the tool or in the annotation simplifier."""
     entry = TOOL_REGISTRY[tool_name]
     normalised = _normalize_callable_for_gemini(entry.fn)
 
@@ -185,12 +167,9 @@ def test_no_anyof_in_any_tool_schema(
 def test_every_property_has_type(
     all_declarations: dict[str, genai_types.FunctionDeclaration],
 ) -> None:
-    """Every parameter property must have an explicit 'type' field.
+    """Every parameter property must have an explicit ``type`` field.
 
-    A missing type causes Vertex AI to reject the declaration with
-    400 INVALID_ARGUMENT: schema didn't specify the schema type field.
-    This is the same class of bug that job-0163 fixed for underscore params.
-    """
+    A missing type is a 400 INVALID_ARGUMENT that rejects the whole declaration."""
     violations: list[str] = []
     for name, decl in sorted(all_declarations.items()):
         if decl.parameters is None or decl.parameters.properties is None:
@@ -215,15 +194,10 @@ def test_every_property_has_type(
 def test_no_private_params_in_declarations(
     all_declarations: dict[str, genai_types.FunctionDeclaration],
 ) -> None:
-    """No underscore-prefixed parameter must appear in any final declaration.
+    """No underscore-prefixed parameter appears in any final declaration.
 
-    Underscore-prefixed params (``_storage_client``, ``_bucket``, etc.) are
-    test-injection kwargs invisible to the LLM. ``_strip_private_params`` removes
-    them; this test is a regression gate that prevents them from reappearing.
-
-    This is the invariant first verified in ``test_adapter_strip_private_params.py``
-    (job-0163) and extended here to all 58+ registered tools.
-    """
+    They are test-injection kwargs invisible to the model; the strip removes them and
+    this is the gate over every registered tool."""
     leaked: list[str] = []
     for name, decl in sorted(all_declarations.items()):
         if decl.parameters is None or decl.parameters.properties is None:

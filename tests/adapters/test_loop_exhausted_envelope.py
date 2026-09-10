@@ -1,19 +1,9 @@
-"""Loop-exhausted envelope tests (job-B9, Wave 4.10 Stage 3).
+"""The ``loop_exhausted`` envelope.
 
-Covers:
-    1. ``_send_loop_exhausted`` emits a JSON envelope with type="loop_exhausted"
-       and the expected payload shape.
-    2. ``error_code="MAX_ITERATIONS_REACHED"`` is present in the payload.
-    3. ``retryable=False`` in the payload.
-    4. The message references the iteration limit.
-    5. End-to-end: a multi-turn loop that always emits tool calls (never
-       terminates naturally) hits MAX_TURN_ITERATIONS and emits the
-       loop_exhausted envelope — NOT a generic error envelope.
-    6. After loop_exhausted, the terminal agent-message-chunk (done=True) is
-       still sent so the client doesn't hang waiting for the stream to close.
-    7. ``_send_loop_exhausted`` is safe to call even if the socket send fails
-       (best-effort, never raises).
-"""
+``_send_loop_exhausted`` emits a typed envelope carrying
+``error_code="MAX_ITERATIONS_REACHED"``, ``retryable=False`` and a message naming
+the limit; a loop that always emits tool calls gets it rather than a generic
+error; the terminal ``done=True`` chunk still follows; the send never raises."""
 
 from __future__ import annotations
 
@@ -164,10 +154,8 @@ def _make_fake_chunk_with_function_call(name: str, args: dict, call_id: str):
 async def test_stream_model_reply_emits_loop_exhausted_on_cap(fake_llm):
     """A loop that always requests tool calls hits the cap and emits loop_exhausted.
 
-    Gemini is mocked to always emit one function_call per turn; the tool is
-    mocked to always return a result; eventually MAX_TURN_ITERATIONS is hit
-    and the distinct 'loop_exhausted' envelope must appear on the wire.
-    """
+    The model emits one function_call per turn and the tool always returns, so only
+    the iteration cap can end it, and the distinct envelope must reach the wire."""
     from trid3nt_server import server as agent_server
 
     # Always-looping source: each round -> another function_call turn.

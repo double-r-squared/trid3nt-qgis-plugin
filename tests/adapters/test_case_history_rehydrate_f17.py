@@ -1,22 +1,9 @@
-"""F17 (ux-batch-1 J8): Case-reopen rehydrates the LLM conversation.
+"""Case reopen rehydrates the LLM conversation from the PER-CASE store.
 
-A follow-up turn in an existing Case must see prior work so the model stops
-recomputing (e.g. asking for a hillshade in the Fort Myers flood Case should
-NOT re-run the whole flood). The job-0245 fix clears ``state.chat_history`` on
-Case open/sync to kill an in-memory CROSS-CASE leak; F17 refills it from the
-PERSISTED PER-CASE store (which is keyed by Case, so the leak cannot return).
-
-These tests pin:
-- Reopening a Case rehydrates ``state.chat_history`` from persisted messages
-  (non-empty, correct order, text turns).
-- The "layers already present" note is injected and lists the persisted layers.
-- History is bounded to the cap (head dropped, tail kept).
-- Cross-case isolation: opening Case B does NOT surface Case A's messages.
-- The job-0245 unbound-persistence clean-slate is preserved (no rehydration
-  when there is nothing persisted to rehydrate from).
-- The pure adapter helpers (``rehydrate_history_from_case`` /
-  ``build_layers_present_note``) convert shapes correctly in isolation.
-"""
+Chat history is cleared on open to kill the in-memory cross-Case leak and
+refilled from persisted messages, which are keyed by Case, so the leak cannot
+return. Pinned: order and content, the layers-present note, the history cap
+dropping the head, cross-case isolation, the clean slate with nothing stored."""
 
 from __future__ import annotations
 

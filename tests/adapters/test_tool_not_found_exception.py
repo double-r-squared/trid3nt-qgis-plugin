@@ -1,29 +1,9 @@
-"""ToolNotFoundError typed-exception refactor tests (B-rev job).
+"""Routing failures raise typed exceptions rather than returning ``None``.
 
-Wave 4.9 introduced a structured error envelope for tool results so Gemini
-can distinguish "tool ran and returned nothing" from "the dispatch failed."
-That envelope is only emitted when ``_invoke_tool_via_emitter`` raises an
-exception; when it previously returned ``None`` (TOOL_NOT_FOUND path,
-payload-warning cancel path), ``summarize_tool_result`` emitted the weak
-``{"status": "no_result"}`` shape.
-
-B-rev fixes this: both routing-failure paths now raise typed exceptions
-(``ToolNotFoundError`` and ``PayloadWarningCancelledError``) so the
-exception handler at the call site routes them through
-``summarize_tool_result(error=...)`` — the same Wave 4.9 structured envelope
-that all ``fetch_*`` / ``compute_*`` typed exceptions already use.
-
-Tests:
-
-1. ``ToolNotFoundError`` shape: class attributes, message format, valid-tools
-   hint, JSON-serializable.
-2. ``_invoke_tool_via_emitter`` raises ``ToolNotFoundError`` for an unknown
-   tool (not ``return None``).
-3. ``summarize_tool_result(error=ToolNotFoundError(...))`` emits the structured
-   envelope with ``error_code="TOOL_NOT_FOUND"`` and ``retryable=False``.
-4. Multi-turn loop: a function_call to an unknown tool → ToolNotFoundError
-   → function_response carries the structured envelope → Gemini narrates.
-"""
+``ToolNotFoundError`` and ``PayloadWarningCancelledError`` route through the same
+structured error envelope every typed tool exception uses, so the model can tell
+a failed dispatch from a tool that ran and returned nothing. Pinned: the error
+shape, the raise, the envelope, and the loop narrating rather than crashing."""
 
 from __future__ import annotations
 
@@ -135,12 +115,10 @@ async def test_invoke_tool_via_emitter_raises_for_unknown_tool():
 
 @pytest.mark.asyncio
 async def test_invoke_tool_via_emitter_no_longer_returns_none_for_unknown_tool():
-    """_invoke_tool_via_emitter must NOT return None for unknown tool.
+    """The dispatch must NOT return ``None`` for an unknown tool.
 
-    B-rev removes the ``return None`` path; returning None silently caused
-    ``summarize_tool_result`` to emit ``status: no_result`` which Gemini
-    couldn't distinguish from a successful-but-empty tool run.
-    """
+    A None becomes ``status: no_result``, which the model cannot tell apart from a
+    successful-but-empty run."""
     ws = _FakeSocket()
     state = _make_session()
     raised = False
@@ -188,12 +166,9 @@ def test_summarize_tool_result_tool_not_found_is_json_serializable():
 
 
 def test_summarize_tool_result_no_result_still_works_for_genuine_none():
-    """summarize_tool_result(None) still emits no_result for non-routing None.
+    """``None`` from a legitimately side-effect-only tool still maps to ``no_result``.
 
-    B-rev removes the return-None routing-failure paths but legitimate tool
-    callables that return None (side-effect-only tools) must still map to
-    ``status: no_result`` — that contract is unchanged.
-    """
+    Only the routing-failure paths stopped returning None; that contract is unchanged."""
     summary = summarize_tool_result("some_side_effect_tool", None)
     assert summary["status"] == "no_result"
     # Must NOT have error fields.
@@ -218,16 +193,10 @@ def _make_fake_chunk_with_text(text: str):
 
 @pytest.mark.asyncio
 async def test_multi_turn_loop_tool_not_found_feeds_error_to_gemini(fake_llm):
-    """Unknown-tool call → ToolNotFoundError → function_response carries error.
+    """An unknown-tool call becomes an error envelope on the function_response.
 
-    The multi-turn loop must NOT propagate ToolNotFoundError out of the loop
-    (that would crash the session). Instead the exception handler at
-    server.py:500-574 catches it, routes through summarize_tool_result(error=...),
-    and appends the error envelope as a function_response — exactly what Gemini
-    needs to decide "I called a tool that doesn't exist; I should narrate
-    that I cannot do this." After seeing the error Gemini emits a text turn,
-    and the loop terminates normally.
-    """
+    The loop must not propagate the exception out and crash the session; after
+    reading the error the model emits a text turn and the loop terminates normally."""
     from trid3nt_server import server as agent_server
 
     # Turn 1: Gemini calls a tool that doesn't exist.
@@ -318,18 +287,10 @@ async def test_multi_turn_loop_tool_not_found_feeds_error_to_gemini(fake_llm):
 
 @pytest.mark.asyncio
 async def test_dispatch_tool_and_persist_catches_tool_not_found():
-    """``/invoke <unknown> {}`` → structured ``error`` envelope on the wire.
+    """An unknown tool through the operator-debug surface is a structured ``error``.
 
-    ``_dispatch_tool_and_persist`` is the manual operator-debug surface
-    (dispatched via ``asyncio.create_task`` with no awaiter). If
-    ``_invoke_tool_via_emitter`` raises ``ToolNotFoundError`` and the
-    wrapper does not catch it, the exception surfaces only as an asyncio
-    "Task exception was never retrieved" warning at gc time — the operator
-    sees nothing on the WebSocket. B-rev FIX: the wrapper catches typed
-    routing exceptions and routes them through ``_send_error`` so the chat
-    surface receives a structured ``error`` envelope with the same
-    ``error_code`` / ``retryable`` shape as the Gemini-loop path.
-    """
+    That path has no awaiter, so an uncaught exception would surface only as a
+    gc-time asyncio warning and the operator would see nothing on the socket."""
     sock = _FakeSocket()
     state = _make_session()
 
@@ -359,12 +320,8 @@ async def test_dispatch_tool_and_persist_catches_tool_not_found():
 async def test_dispatch_tool_and_persist_does_not_raise_unhandled():
     """The wrapper must NOT re-raise ``ToolNotFoundError``.
 
-    If the typed exception escapes the wrapper, the ``asyncio.create_task``
-    at server.py:2035 surfaces it as an "exception was never retrieved"
-    warning at gc time — silent failure mode. The wrapper catching the
-    exception is the contract; this test guards against a regression that
-    forgets the catch and lets the exception propagate.
-    """
+    An escaping exception on a no-awaiter task is a gc-time warning and a silent
+    failure mode; catching it is the contract."""
     sock = _FakeSocket()
     state = _make_session()
 

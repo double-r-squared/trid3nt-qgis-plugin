@@ -1,23 +1,9 @@
-"""Unit tests for ``adapter._strip_private_params`` / ``build_tool_declarations``.
+"""``adapter._strip_private_params`` and ``build_tool_declarations``.
 
-job-0163 surfaced a Vertex Gemini 400 INVALID_ARGUMENT that blocked the entire
-tool catalog: a tool with an underscore-prefixed test-injection kwarg
-(``_storage_client: object | None = None``) generated a FunctionDeclaration
-property with no schema ``type`` field, which Vertex rejects. The fix strips
-every underscore-prefixed property (and matching ``required`` entries) from
-the generated schema before it reaches Gemini.
-
-These tests cover:
-1. The bug case — ``_storage_client: object | None`` produces a typeless schema
-   that without the fix would trip Vertex; after the fix the property is gone.
-2. The general filter — every underscore-prefixed property is removed even
-   when its type is well-formed (``_bucket: str | None``).
-3. The required list — underscore-prefixed entries are removed from
-   ``required`` (defensive; underscore params have defaults and never end up
-   required in practice).
-4. The registry path — ``build_tool_declarations`` produces a declaration
-   for ``compute_hillshade`` with NO underscore properties left.
-"""
+An underscore-prefixed test-injection kwarg generates a schema property with no
+``type`` field, which the provider rejects with a 400 that blocks the whole tool
+catalog. Every underscore-prefixed property - well-typed or not - and its
+``required`` entry are stripped before the declaration is built."""
 
 from __future__ import annotations
 
@@ -35,17 +21,9 @@ def _example_with_private_kwargs(
     _storage_client: object | None = None,
     _bucket: str | None = None,
 ) -> dict:
-    """Example tool.
+    """Example tool with two underscore-prefixed injection kwargs.
 
-    Params:
-        a: required int
-        b: required str
-        _storage_client: test injection (must not be in schema)
-        _bucket: test injection (must not be in schema)
-
-    Returns:
-        a dict
-    """
+    Neither ``_storage_client`` nor ``_bucket`` may reach the generated schema."""
     return {"a": a, "b": b}
 
 
@@ -89,12 +67,7 @@ def test_strip_noop_when_no_underscore_params() -> None:
     """A declaration with no underscore params survives unchanged."""
 
     def public_only(x: int, y: str) -> dict:
-        """Example.
-
-        Params:
-            x: int
-            y: str
-        """
+        """Example tool whose params are all public."""
         return {"x": x, "y": y}
 
     decl = genai_types.FunctionDeclaration.from_callable_with_api_option(
@@ -115,13 +88,10 @@ def test_strip_noop_when_no_parameters() -> None:
 
 
 def test_build_tool_declarations_drops_storage_client_for_zonal_statistics() -> None:
-    """The full builder path produces a clean schema for the registry tool
-    that triggered the original 400.
+    """The full builder path produces a clean schema for a registry tool.
 
-    This is the regression gate for the live-fire bug — if anyone re-adds an
-    underscore property to a registered tool without going through the
-    stripping path, this test fails before Gemini does.
-    """
+    An underscore property re-added to a registered tool without going through the
+    stripping path fails here rather than at the provider."""
     from trid3nt_server.tools import TOOL_REGISTRY
 
     decls = build_tool_declarations(TOOL_REGISTRY)

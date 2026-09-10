@@ -1,35 +1,9 @@
-"""job-0267 — FULL-STREAM persistence: narration + tool cards replay on reopen.
+"""FULL-STREAM persistence: narration and tool cards replay on reopen.
 
-User-verified bug: reopening a Case replayed ONLY the user's own messages.
-Two root causes:
-
-1. ``_dispatch_model_turn_and_persist`` persisted the agent turn with
-   ``content=""`` — the streamed deltas were never accumulated, so the web
-   replay (rightly) rendered nothing for agent turns.
-2. Tool dispatches persisted NO replayable record at all — the inline tool
-   cards (``feedback_chat_tool_interleave``) were wire-only ``pipeline-state``
-   envelopes, lost the moment the socket closed.
-
-This suite drives the REAL server seams (no Gemini, no Playwright) against
-both the file-backed dev substrate and the MockMCPClient:
-
-- agent narration accumulates across stream iterations and persists as a
-  ``role="agent"`` ``CaseChatMessage`` with the real text;
-- every terminal tool dispatch persists a ``role="tool"`` row carrying a
-  typed ``ToolCardRecord`` (state, started_at, duration_ms from the
-  authoritative job-0264 emitter stamp, label);
-- failed dispatches persist ``state="failed"``; cancelled dispatches persist
-  nothing (Invariant 8);
-- ``get_session_state`` returns the FULL stream ordered by ``created_at``
-  (user -> tool -> agent), ULID tiebreak, regardless of backend sort;
-- ``list_cases_for_user`` excludes ``deleted`` AND ``archived`` Cases
-  SERVER-side (the user saw a deleted ghost in the left rail);
-- the user-turn persist path is byte-shape unchanged;
-- Gemini-free E2E: one full simulated turn (user msg -> tool dispatch ->
-  narration) through ``_prepare_user_turn`` + ``_invoke_tool_via_emitter`` +
-  ``_dispatch_model_turn_and_persist`` against file persistence, then the
-  rehydration envelope replays the complete ordered stream.
-"""
+Agent narration accumulates across stream iterations and persists as an agent row
+with its real text; every terminal tool dispatch persists a tool row with a typed
+card record; a failed dispatch persists ``state="failed"`` and a cancelled one
+persists nothing. The session state returns the stream ordered by creation."""
 
 from __future__ import annotations
 
@@ -264,13 +238,10 @@ def _tool_io_frames(ws) -> list[dict]:
 async def test_early_input_only_tool_io_frame_at_dispatch_start(
     file_persistence, slow_arg_tool
 ) -> None:
-    """FIX B: ``_invoke_tool_via_emitter`` emits an EARLY input-only ``tool-io``
-    frame at dispatch START — SAME ToolIoPayload wire shape, raw_args populated,
-    function_response empty (the 'Running…' placeholder), is_error False —
-    keyed on THIS dispatch's running card. (The completion-time emit that fills
-    function_response lives in the outer _stream_model_reply loop and re-keys
-    the SAME step_id; it is not driven by this lower-level seam, so exactly the
-    early frame rides the wire here.)"""
+    """An EARLY input-only ``tool-io`` frame is emitted at dispatch START.
+
+    Same payload shape, ``raw_args`` populated and ``function_response`` empty - the
+    running placeholder - keyed on this dispatch's card."""
     ws = FakeWS()
     state = server.SessionState(session_id=new_ulid())
     await _create_case(ws, state)
@@ -568,11 +539,10 @@ async def test_user_turn_shape_unchanged(file_persistence) -> None:
 async def test_e2e_full_turn_replays_complete_stream(
     file_persistence, fake_tool
 ) -> None:
-    """One simulated turn through the REAL seams: ``_prepare_user_turn``
-    (user persist) -> fake Gemini stream that narrates, dispatches a real
-    registry tool via ``_invoke_tool_via_emitter``, narrates again ->
-    ``_dispatch_model_turn_and_persist`` terminal persist. The rehydration
-    envelope must replay user -> tool -> agent, in order, with content."""
+    """One simulated turn through the REAL seams, then the rehydration envelope.
+
+    User persist, a narrating stream that dispatches a real registry tool, terminal
+    persist; the replay must be user -> tool -> agent, in order, with content."""
     ws = FakeWS()
     state = server.SessionState(session_id=new_ulid())
     case_id = await _create_case(ws, state)
@@ -624,10 +594,10 @@ from trid3nt_server.adapters.adapter import (  # noqa: E402 — grouped with the
 
 
 async def _drive_real_stream(ws, state, turn_events):
-    """Drive the REAL _stream_model_reply (via _dispatch_model_turn_and_persist)
-    with a mocked ``stream_events_with_contents`` yielding ``turn_events`` —
-    a list of per-turn event lists. Uses the REAL ``_invoke_tool_via_emitter``
-    so tool-card rows persist mid-turn (the whole point of the interleave)."""
+    """Drive the REAL stream with a mocked event source over per-turn event lists.
+
+    The real dispatch seam is used, so tool-card rows persist mid-turn, which is the
+    whole point of the interleave."""
     from unittest.mock import patch
 
     from trid3nt_server import server as agent_server
@@ -760,11 +730,10 @@ async def test_text_only_turn_single_segment_row(file_persistence) -> None:
 
 
 def _extract_last_zoom_to(rows):
-    """Python mirror of web ``extractLastZoomTo`` (case_zoom.ts): walk rows
-    newest-first, each row's ``map_command_emissions`` last-entry-first, and
-    return the first ``zoom-to`` carrying a bbox. This is exactly what the
-    Case-reopen camera snap (job-0280) runs over the rehydrated chat history,
-    so a green here proves the snap survives a tool-terminal turn."""
+    """Python mirror of the web ``extractLastZoomTo``.
+
+    Walk rows newest-first, each row's map-command emissions last-entry-first, and
+    return the first ``zoom-to`` carrying a bbox."""
     for msg in reversed(rows):
         emissions = msg.map_command_emissions or []
         for cmd in reversed(emissions):
@@ -779,18 +748,9 @@ def _extract_last_zoom_to(rows):
 async def test_tool_terminal_turn_persists_zoom_to_accumulator(
     file_persistence,
 ) -> None:
-    """job-0315 CONTRACT REGRESSION (panel blocker): a turn whose FINAL
-    generation round ends in tool calls with NO trailing narration (the
-    COMMON flood/publish shape — e.g. ...-> publish_layer is the last call)
-    must STILL persist a chat row carrying the turn's zoom-to / layer
-    accumulator, so the web ``extractLastZoomTo(chat_history)`` snaps the
-    Case-reopen camera to the AOI (job-0259/0280/0281).
-
-    Pre-fix: the in-loop terminal finalize only fires when the turn ends in
-    narration (``current_message_id is not None``); a tool-terminal turn left
-    NO row carrying ``layer_emissions`` / ``map_command_emissions``, so the
-    snap found nothing and the camera never moved.
-    """
+    """A turn whose FINAL round ends in tool calls with NO trailing narration must
+    STILL persist a row carrying the turn's zoom-to and layer accumulator, or the
+    Case-reopen camera snap finds nothing to move to."""
 
     async def _publishish() -> dict:
         return {"status": "ok"}
@@ -868,10 +828,8 @@ async def test_tool_terminal_turn_persists_zoom_to_accumulator(
 async def test_tool_terminal_turn_without_accumulator_writes_no_phantom(
     file_persistence,
 ) -> None:
-    """job-0315 guard: a tool-terminal turn that emitted NO zoom-to AND NO
-    layer accumulator AND no trailing narration must write NOTHING extra —
-    the contract fix must not resurrect phantom empty bubbles for turns that
-    carry no accumulator and no text."""
+    """A tool-terminal turn with no zoom-to, no accumulator and no trailing narration
+    writes NOTHING extra - the contract must not resurrect a phantom empty bubble."""
 
     async def _noop() -> dict:
         return {"status": "ok"}

@@ -1,15 +1,9 @@
-"""PER-TURN telemetry (LANE CORE, 2026-07-22).
+"""PER-TURN telemetry: one record per user-message turn.
 
-One record per user-message turn -- {turn_id, session_id, case_id, model_id,
-provider, prompt_tokens, completion_tokens, reasoning_tokens, turn_wall_ms,
-tool_dispatch_count, error_class|null} -- persisted beside the tool telemetry
-on its own JSONL sink (follows record_solve_telemetry's own-sink pattern) via
-``telemetry.emit_turn_telemetry`` (fire-and-forget, off-loop write), plus the
-per-model aggregates section folded into /api/telemetry/summary
-(``telemetry.build_turn_summary`` -> ``turns_by_model``).
-
-Offline: scripted provider + tmp JSONL sinks; no network, no model.
-"""
+The record carries the turn, session, case, model and provider ids, the token
+counts, wall time, dispatch count and error class, and persists to its own JSONL
+sink fire-and-forget off the loop. The per-model aggregates fold into the
+telemetry summary. Offline: scripted provider and temp sinks."""
 
 from __future__ import annotations
 

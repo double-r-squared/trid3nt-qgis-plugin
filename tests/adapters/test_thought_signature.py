@@ -1,30 +1,9 @@
-"""Gemini 3 thought_signature plumbing tests (job-B10).
+"""``Part.thought_signature`` plumbing through the multi-turn loop.
 
-Pre-dispatch verification found that the multi-turn loop adapter was
-silently dropping ``Part.thought_signature`` on the producer side and
-never echoing it back on the replayed model turn. On Gemini 3 (Vertex)
-this would trigger a ``thought-signature mismatch`` 400 on the second
-turn of any tool-using conversation. Gemini 2.5 (the current
-``DEFAULT_VERTEX_MODEL``) does not surface signatures, so the wire is
-None today — the plumbing is forward-compat so the bug does not return
-the moment ``TRID3NT_GEMINI_MODEL=gemini-3-pro`` is flipped.
-
-Coverage:
-
-1. ``stream_events_with_contents`` producer harvests ``part.thought_signature``
-   off the SDK ``Part`` and surfaces it on ``FunctionCallEvent``.
-2. ``build_function_call_content`` attaches the signature to the wrapping
-   ``Part`` (NOT the ``FunctionCall``, which has no signature field in
-   google-genai types.py — see the field on line 2044 of types.py).
-3. ``build_function_call_content`` is a no-op when signature is None
-   (Gemini 2.5 path); the resulting Part carries no signature.
-4. ``build_contents_from_history`` preserves a persisted ``parts_blob``
-   across reconstruction — function_call / function_response Parts and
-   the thought_signature round-trip cleanly through encode/decode.
-5. The replayed Content carries the same byte-for-byte signature on the
-   reconstructed Part.
-6. Malformed ``parts_blob`` is tolerated — fall back to the text path.
-"""
+The producer harvests the signature off the SDK Part onto the call event and the
+builder attaches it to the wrapping Part, a None signature leaving the Part bare.
+A persisted ``parts_blob`` round-trips call and response Parts and the signature
+byte-for-byte; a malformed blob falls back to the text path."""
 
 from __future__ import annotations
 

@@ -1,19 +1,9 @@
-"""Thinking persistence + NEVER-REHYDRATE guard (LANE CORE, 2026-07-22).
+"""Thinking persists for display and is NEVER rehydrated into the model.
 
-Server side of the same-bubble thinking contract: when the per-turn
-``show_thinking`` toggle is ON, the accumulated reasoning text persists as the
-``thinking`` FIELD on the agent chat row that carries the answer (field name
-"thinking" is the fixed cross-lane interface -- the QGIS plugin reads it).
-
-NEVER-REHYDRATE (NATE requirement): persisted thinking is display replay
-material ONLY. ``adapter.build_contents_from_history`` and
-``adapter.rehydrate_history_from_case`` skip the field BY RULE
-(``adapter.NEVER_REHYDRATE_FIELDS``) -- these tests pin that thinking text
-NEVER appears in LLM-bound contents, including via the full-fidelity
-``parts_blob`` path.
-
-Offline: fake stream events; no network, no model.
-"""
+With the per-turn toggle on, the accumulated reasoning persists as the
+``thinking`` FIELD on the agent row that carries the answer - the fixed
+cross-lane field name. The contents builder and the rehydrator skip it by rule,
+so it never reaches LLM-bound contents, including through the parts blob."""
 
 from __future__ import annotations
 

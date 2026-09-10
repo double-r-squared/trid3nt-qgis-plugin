@@ -1,17 +1,9 @@
-"""Upstream-provider discipline (LANE CORE, 2026-07-22 -- NATE hard rule:
-never internalize an upstream failure).
+"""Upstream-provider discipline: never internalize an upstream failure.
 
-The adapters classify transient provider errors (429 / 5xx / timeouts /
-connection drops / provider overload) as upstream, log the VERBATIM provider
-error, retry with exponential backoff (env TRID3NT_PROVIDER_RETRIES /
-TRID3NT_PROVIDER_BACKOFF_S, Retry-After honored), and on exhaustion raise the
-typed ``adapter.UpstreamProviderError`` so the server ends the turn with an
-honest provider-unavailable narration -- never a silent empty turn, never
-recorded as an internal error. Non-transient provider errors (auth / bad
-request) fail fast unchanged with their own class (``provider_request``).
-
-Offline: mocked clients + a mock clock (captured sleep waits); no network.
-"""
+A transient provider error - 429, 5xx, timeout, connection drop, overload - is
+classified upstream, logged VERBATIM and retried with exponential backoff
+honouring ``Retry-After``; on exhaustion the typed ``UpstreamProviderError`` ends
+the turn honestly. Auth and bad-request errors fail fast. Offline."""
 
 from __future__ import annotations
 
@@ -243,10 +235,10 @@ def _settings() -> ModelSettings:
 
 @pytest.mark.asyncio
 async def test_exhaustion_ends_turn_with_honest_narration_and_error_class():
-    """UpstreamProviderError from the adapter -> the user gets a typed,
-    provider-NAMED narration + a retryable error envelope; the per-turn record
-    carries error_class="upstream_provider"; the turn is never silent and
-    never recorded as internal."""
+    """Exhaustion gives the user a typed, provider-NAMED narration.
+
+    The per-turn record carries ``error_class="upstream_provider"``, so the turn is
+    never silent and never recorded as internal."""
 
     async def _dead_provider(*_a, **_k):
         raise UpstreamProviderError(

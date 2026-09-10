@@ -1,17 +1,9 @@
-"""Stage 3 (ADR 0017 mechanism 4) -- TURN-LOOP INVARIANTS, scripted adapter.
+"""Turn-loop invariants over the scripted adapter.
 
-Two structural nudges, ONE shared per-turn budget, injected as a user-role
-content so the model gets exactly one more round:
-
-  (a) NO-SILENT-END -- a turn terminating with tool results but ZERO assistant
-      text since the last tool round gets one "summarize the results"
-      continuation nudge; never more than one per turn.
-  (b) BARE-GEOCODE BACKSTOP -- a turn whose ONLY tool was geocode_location
-      while the user message asked for data/analysis gets the same nudge.
-
-Kill-switch: ``TRID3NT_TURN_INVARIANTS=0``. Driven end-to-end through
-``_stream_model_reply`` on the scripted (replay) provider.
-"""
+Two structural nudges share ONE per-turn budget and are injected as user-role
+content, so the model gets exactly one more round: a turn ending on tool results
+with zero assistant text since the last tool round, and a turn whose only tool
+was a geocode while the user asked for data. The kill-switch is an env var."""
 
 from __future__ import annotations
 

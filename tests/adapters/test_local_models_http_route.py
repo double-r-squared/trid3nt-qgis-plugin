@@ -1,17 +1,9 @@
-"""HTTP-route tests for GET /api/local-models (F2, live-feedback 2026-07-08).
+"""HTTP-route tests for ``GET /api/local-models``.
 
-The TRID3NT local build's web model selector lists the REAL installed Ollama
-models. The browser cannot reach Ollama (:11434) directly, so the agent's
-:8766 catalog listener proxies ``GET /api/tags`` and returns::
-
-    {"models": [{"id": "...", "label": "..."}, ...], "default": "..."|null}
-
-Covered here:
-  - route ABSENT (404) unless the active provider is openai;
-  - 200 with the mapped model list, configured default moved first;
-  - upstream (Ollama) unreachable -> honest 502, never a fabricated success;
-  - ``_ollama_tags_url`` derivation from TRID3NT_OPENAI_BASE_URL.
-"""
+The browser cannot reach Ollama directly, so the catalog listener proxies its
+tags. The route is ABSENT unless the active provider is openai; a 200 carries the
+mapped list with the configured default first; an unreachable upstream is an
+honest 502 rather than a fabricated success."""
 
 from __future__ import annotations
 

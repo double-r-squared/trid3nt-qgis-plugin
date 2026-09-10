@@ -1,21 +1,9 @@
-"""Crisp turn-end after a terminal composer delivers (NATE 2026-06-29).
+"""A crisp turn end once a terminal composer delivers.
 
-Symptom this guards against: a reach tracer run publishes its plume layer
-(``telemac_river_dye`` -> ``layers=1``) and the model, having nothing
-left to do, keeps emitting unproductive function calls until it trips the
-``MAX_TURN_ITERATIONS`` cap and emits a (harmless but sloppy) ``loop_exhausted``
-frame. The fix:
-
-  1. A terminal run-a-model composer that PRODUCES its artifact latches a
-     ``deliverable done`` flag and stamps a one-time wrap-up directive on its
-     function_response (so a well-behaved model summarizes and stops).
-  2. A small SAFETY budget: if the model keeps spinning with NO new progress
-     after the deliverable, the turn concludes CLEANLY (a normal final turn)
-     within a sane iteration count -- NOT via ``loop_exhausted``.
-
-Crucially, the genuine runaway guard is UNTOUCHED: a turn that never produced a
-terminal deliverable still runs to the cap and emits ``loop_exhausted``.
-"""
+A composer that PRODUCES its artifact latches a done flag and stamps a one-time
+wrap-up directive on its function_response; a model that keeps spinning with no
+new progress afterwards concludes the turn CLEANLY within a small safety budget.
+The runaway guard is untouched: a turn with no deliverable still runs to the cap."""
 
 from __future__ import annotations
 
@@ -88,14 +76,10 @@ def test_unknown_tool_is_not_terminal_composer():
 
 @pytest.mark.asyncio
 async def test_delivered_composer_concludes_without_loop_exhausted(fake_llm):
-    """A composer that delivers + a model that then spins ends CLEANLY.
+    """A composer that delivers, then a model that spins, ends CLEANLY.
 
-    Round 1 the model calls ``telemac_river_dye`` and it returns a
-    layer-bearing deliverable. Rounds 2+ the model keeps calling an unproductive
-    tool (no new progress). The post-deliverable safety must conclude the turn
-    within a couple of idle rounds -- WITHOUT emitting ``loop_exhausted`` and
-    far under ``MAX_TURN_ITERATIONS``.
-    """
+    The post-deliverable safety concludes the turn within a couple of idle rounds,
+    without ``loop_exhausted`` and far under the iteration cap."""
     from trid3nt_server import server as agent_server
 
     def _next_turn(i, _c):
@@ -163,11 +147,8 @@ async def test_delivered_composer_concludes_without_loop_exhausted(fake_llm):
 async def test_composer_function_response_carries_completion_directive(fake_llm):
     """The delivered composer's function_response is stamped with the wrap-up note.
 
-    The directive is appended to ``contents`` as the composer's function_response
-    and fed back to the model on the NEXT round -- this is what nudges a
-    well-behaved model to summarize and stop on its own. We capture the contents
-    handed to the model on the follow-up round and assert the directive rode in.
-    """
+    The directive rides in the contents handed to the model on the NEXT round, which
+    is what nudges a well-behaved model to summarize and stop on its own."""
     from trid3nt_server import server as agent_server
 
     def _next_turn(i, _c):
@@ -214,11 +195,8 @@ async def test_composer_function_response_carries_completion_directive(fake_llm)
 async def test_non_composer_runaway_still_trips_loop_exhausted(fake_llm):
     """A turn that NEVER produces a terminal deliverable still hits the cap.
 
-    The model loops a non-composer tool that returns a layer-bearing dict every
-    round (so the repeat-watchdog never trips on no-progress). No terminal
-    composer is ever called, so the crisp-end path stays dormant and the
-    historical ``loop_exhausted`` runaway guard must still fire at the cap.
-    """
+    The looped tool returns a layer-bearing dict every round, so the no-progress
+    watchdog stays quiet and the crisp-end path stays dormant."""
     from trid3nt_server import server as agent_server
 
     # Vary args so the no-progress watchdog is not the thing that stops it;

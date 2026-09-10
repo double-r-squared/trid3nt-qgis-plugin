@@ -1,26 +1,9 @@
-"""Stage-3 turn-invariant LOGGING + the P10 bench pin (LANE CORE, 2026-07-22).
+"""Turn-invariant logging, and the geocode-only backstop over the bench prompt.
 
-(4a) The two Stage-3 turn invariants (no-silent-end, bare-geocode backstop)
-used to fire with one INFO line but SKIP silently -- every terminal round now
-logs one INFO line per invariant: FIRED, or SKIPPED with its reason (or a
-gate-inactive line when the budget is spent / the env kill-switch is set).
-
-(4b) P10 pin: the last bench's P10 prompt ("Run a small pluvial flood
-simulation for a 4km box in Peoria, Illinois with a 50-year storm") observed a
-turn that ended after geocode_location only. ROOT CAUSE (logs/agent.log
-2026-07-22 14:15-14:20, session 01KY5TY0XV67RGS6HR5JFSKT1Q): NOT a heuristic
-miss -- the live turn geocoded, then parked 180s on the code-exec approval
-gate (the headless bench never answers approval cards), then called
-swmm_urban_flood and parked again on the solver-confirm gate (24h in the
-local lane) after the bench client had already disconnected -- so the turn
-NEVER REACHED the terminal round where the backstop runs. These tests pin
-that for the true geocode-only shape the backstop DOES rescue the P10 prompt
-(the heuristic matches "flood"/"simulation"), so the invariant itself carries
-no honest gap; the observability gap (silent skips + no way to see WHY a
-bench turn was not rescued) is closed by the fired/skipped INFO lines.
-
-Offline: scripted provider; no network, no model.
-"""
+The two turn invariants used to skip silently; every terminal round now logs one
+INFO line per invariant - FIRED, or SKIPPED with its reason, or gate-inactive
+when the budget is spent or the kill-switch is set. For a true geocode-only turn
+the backstop rescues the prompt. Offline: scripted provider, no model."""
 
 from __future__ import annotations
 

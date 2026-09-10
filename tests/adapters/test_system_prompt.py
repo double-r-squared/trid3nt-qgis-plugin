@@ -1,22 +1,9 @@
-"""System-prompt snapshot tests (job B-sys, Wave 4.10 Stage-0 anchor A2/A5).
+"""System-prompt snapshot tests.
 
-Stage 0 baseline anchor A2 surfaced: when a user prompt names a verbatim tool
-(e.g. "show me flood zones in Cape Coral" → expects
-``fetch_fema_nfhl_zones``) and the agent successfully geocodes a
-precursor location, the agent CURRENTLY ENDS the turn without dispatching the
-named tool. job B-sys amends ``SYSTEM_PROMPT`` with an explicit "Named-tool
-follow-on dispatch" instruction so Gemini does not stop at the precursor step.
-
-Stage 0 anchor A5 surfaced the parallel geographic-clipping gap: when the user
-says "in [admin-region]", the agent should use ``fetch_administrative_boundaries``
-+ ``clip_raster_to_polygon`` / ``clip_vector_to_polygon`` rather than collapsing
-to a rectangular bbox approximation that bleeds into neighboring regions.
-
-These tests are text snapshots — they confirm the prompt carries the new
-sections verbatim. If the prompt is reworded substantively, update both the
-prompt and these assertions in the same commit so the routing intent stays
-visible to reviewers.
-"""
+The prompt carries its named-tool follow-on dispatch instruction, so a turn does
+not stop at a geocode precursor, and its geographic-clipping instruction, so an
+admin-region ask is clipped to the boundary rather than a bbox. These are text
+snapshots: a substantive rewording updates the prompt and the assertion together."""
 
 from __future__ import annotations
 
@@ -48,10 +35,10 @@ _RETIRED_ENGINE_NAMES = (
 
 
 def test_system_prompt_names_no_absent_tool() -> None:
-    """A prompt that names a tool the registry does not have routes the model at
-    nothing, and the model then invents a recovery. Two locks: no purged engine
-    family by name, and every token sharing a first segment with a registered
-    tool must itself be registered."""
+    """A prompt naming a tool the registry lacks routes the model at nothing.
+
+    Two locks: no purged engine family by name, and every token sharing a first
+    segment with a registered tool must itself be registered."""
     import trid3nt_server.tools as agent_tools
 
     flat = SYSTEM_PROMPT.lower()
@@ -256,10 +243,10 @@ def test_system_prompt_still_forbids_fabricated_numbers() -> None:
 
 
 def test_system_prompt_forbids_inventing_physical_inputs() -> None:
-    """Provenance-chain wave (ADR 0106): the general ask-dont-invent rule for
-    physical MODEL INPUTS (distinct from narrating result numbers) must be
-    present -- the model asks the user for a physical parameter it cannot fetch or
-    derive, and names demo-default vs site-derived provenance in its narration."""
+    """The ask-dont-invent rule for physical MODEL INPUTS must be present.
+
+    The model asks for a physical parameter it cannot fetch or derive, and names
+    demo-default versus site-derived provenance in its narration."""
     assert "Never invent PHYSICAL MODEL INPUTS" in SYSTEM_PROMPT
     assert "synthetic_inputs" in SYSTEM_PROMPT
     assert "demo defaults versus site-derived" in SYSTEM_PROMPT

@@ -1,11 +1,9 @@
-"""Anthropic Messages API adapter (MODEL_PROVIDER=anthropic).
+"""Anthropic Messages API adapter (``MODEL_PROVIDER=anthropic``).
 
 Offline: a mocked ``AsyncAnthropic`` client, no network and no API key. Covers
 the request shape (adaptive thinking, no sampling params, mandatory cache
-breakpoints), the genai<->Messages conversion, the StreamEvent mapping
-including the cache-hit proof, upstream-provider discipline, and the dispatch
-seam.
-"""
+breakpoints), the genai / Messages conversion, the StreamEvent mapping including
+the cache-hit proof, upstream-provider discipline, and the dispatch seam."""
 
 from __future__ import annotations
 

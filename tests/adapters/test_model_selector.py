@@ -227,10 +227,10 @@ def test_resolve_openai_provider_none_still_silent(monkeypatch):
 def test_resolve_openai_provider_foreign_id_passes_through_to_adapter_guard(
     monkeypatch,
 ):
-    """An id shaped for another provider passes through here;
-    openai_adapter.openai_model ignores it (falls back to
-    TRID3NT_OPENAI_MODEL), so the guard lives at the adapter boundary, not in
-    resolve."""
+    """An id shaped for another provider passes through ``resolve``.
+
+    ``openai_adapter.openai_model`` ignores it and falls back to the configured
+    model, so the guard lives at the adapter boundary."""
     monkeypatch.setenv("MODEL_PROVIDER", "openai")
     got, notice = ms.resolve_selected_model("us.anthropic.claude-sonnet-4-6")
     assert got == "us.anthropic.claude-sonnet-4-6"
