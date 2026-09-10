@@ -5434,3 +5434,39 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   workers lever) whose live proof is a twenty-draw Monte Carlo on
   rain_on_grid; Monte Carlo and sweeps are one pass, calibration is
   the loop. Spec rev 2.
+
+- HYGIENE AND DOCS WAVE, VERIFY (2026-09-10, VERDICT BROKEN on the
+  record, not the work): coverage recomputed at 1,689 files with zero
+  fate mismatches; five guards green and each fired on a seeded break
+  (docstring standard, history markers, dead references, map READMEs,
+  template-docs freshness); scripts in five directories + local/
+  ignored; tests mirrored with six slices; 106 binding records kept,
+  218 deleted in the ruled order, IDEAS re-sectioned with zero body
+  lines touched; the gallery, eight template pages and the modules
+  page regenerate byte-identical with 33 stamped figures; a live
+  river_dye packet through the moved drivers; six slices zero.
+  DOCSTRINGS 36,218 -> 11,802 (-24,416); pure product 102,856 ->
+  100,411 on the CORRECTED instrument (-2,445; the old baseline
+  double-subtracted blanks); tests -814 net with 506 of new guards;
+  comments +25 (almost nothing converted to comment blocks - "goes"
+  won). BROKEN BECAUSE: no conformance table was written, and four
+  deviations had no place to be reported: (1) the completeness critic
+  ran four rounds and never came back dry (the charter capped it at
+  four); (2) system-uml.html was DELETED, not demoted - argued in the
+  ledger that the model views are the rendering; (3) eleven function
+  bodies changed in string literals (pydantic Field descriptions in
+  tool_registry.py and ws.py, attribute docstrings, log/error text)
+  and atomic_tool_metadata.json regenerated - no name, signature or
+  logic changed; (4) AGENTS.md and CONVENTIONS.md sit outside the
+  dead-reference guard. Also: tests/README's test-server count stale
+  (1067 vs 1143); 74 READABILITY_LEDGER rows name a line the trims
+  moved; zero ledger rows from tests/. RESOLUTIONS (orchestrator
+  under standing law - NATE may override): (2) the deletion STANDS -
+  the model views are the live rendering and a second drawing would
+  drift (MRE); (3) ACCEPTED as documentation - Field descriptions and
+  messages are prose the model and the user read, no behavior moved;
+  the regenerated schema is the honest consequence; (1) and (4) are
+  remedied: two more critic rounds until dry, the guard's scope gains
+  the two law documents; the counts and the ledger lines refreshed;
+  the two landed-plan docs DELETED per the outright ruling; the
+  conformance table WRITTEN with every deviation on it.
