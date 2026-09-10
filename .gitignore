@@ -63,3 +63,6 @@ docs/IDEAS.md
 
 # the local model build recipe is machine setup, not product
 ollama/
+
+# dev tools: not product, not on the remote; the backup timer archives them
+dev/
