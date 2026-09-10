@@ -95,4 +95,4 @@ narrative, `ex` examples, `roll` per-field roll-call of a typed model.
    ruling sets across the whole repo, so the scope should probably surface at most
    the first two.
 
-files listed: 42 / files read: 42 / rows written: 42
+files listed: 43 / files read: 43 / rows written: 43 (41 Python rows plus the 2 non-code rows; the earlier 42 was written before the completeness critic's `workflows/__init__.py` row and never counted the two corpora)

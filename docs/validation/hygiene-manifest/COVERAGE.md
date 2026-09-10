@@ -25,11 +25,15 @@ three rows are in `workflows-mesh.md`. The import-mode checkpoint then deleted
 `contracts/tests/__init__.py` and added `tests/_fakes/__init__.py`; those four
 rows are in `tests-plugin-contracts.md`, struck where the file is gone.
 
-OPEN GAP, not closed here: `git ls-files docs | grep -v '^docs/proof/'` now
-counts 514, sixteen above the 498 this census enumerated. Those sixteen landed
-after the census and have NO row. Reading them is the docs stage's work; until
-it lands, the 100% below is a figure for the tree the census walked, not for
-the tree today.
+GAP OPENED HERE, CLOSED BY THE DOCS STAGE: `git ls-files docs | grep -v
+'^docs/proof/'` counted 514 when this audit ran, sixteen above the 498 the
+census enumerated - the sixteen `hygiene-manifest/` siblings that became
+tracked. Two more landed afterwards (`docs/READABILITY_LEDGER.md` and
+`docs/validation/docstring-exemptions.md`), making the count 516 and the gap
+EIGHTEEN. All eighteen were read end to end and rowed in
+`docs-and-readmes.md`, whose scope is now 209. The 100% below remains the
+figure for the tree this audit walked; the docs stage's own closing line is the
+figure for the tree with those eighteen in it.
 
 ## Result
 

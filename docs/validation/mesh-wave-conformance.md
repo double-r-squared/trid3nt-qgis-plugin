@@ -1,5 +1,11 @@
 # Mesh wave - spec-conformance gate
 
+2026-09-09 - one line falsified since this walk, and the walk stays verbatim: the
+SWAN row below places the ADCIRC `fort.14` writer at
+`scripts/sandbox/oceanmesh/mesh_formats.py`. It moved to
+`trid3nt_server/workflows/mesh/shared/formats/`; the correction is the ledger row
+"The mesh format modules leave scripts/ - 2026-09-09" in `docs/DELETION_LEDGER.md`.
+
 Fresh-eyes walk of `docs/specs/workflow-blueprint.html` (rev 8, 2026-08-27)
 clause by clause against the landed tree, plus the D2-D5 rulings recorded in
 `docs/IDEAS.md`. Deviations are REPORTED, never fixed - they are design

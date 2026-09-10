@@ -114,4 +114,4 @@ re-imports them. Nothing imports it and nothing can.
    `dispatch/emitter.py` (8), `turn/stream.py` (2), `main.py` (2), `turn/cases.py`
    (1), `dispatch/persist.py` (1), `persistence.py` (1).
 
-files listed: 33 / files read: 33 / rows written: 33
+files listed: 35 / files read: 35 / rows written: 35 (33 at the first pass; the completeness critic read and rowed `scenario_reuse.py` and `telemetry.py`, and the table header moved to 35 while this line did not)
