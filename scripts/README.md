@@ -23,7 +23,7 @@ that publish a dataset once.
 
 | subfolder | what lives there |
 | --- | --- |
-| `instruments/` | What measures and checks the tree: the model checker, the code graph, the LOC report, the tool sweep, the catalog extractor, the generated pages, the canary replay. |
+| `instruments/` | What measures and checks the tree: the model checker, the code graph, the LOC report, the tool sweep, the catalog extractor, the generated pages. |
 | `packet/` | The proof-packet renderers and the doc-sized figures a template page embeds. |
 | `drivers/` | The live drive lane: one declared question per script, run against the daemon the way the plugin drives it. |
 | `staging/` | One-shot stagers that publish a source dataset into object storage. |

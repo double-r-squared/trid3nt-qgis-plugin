@@ -17,7 +17,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "packet"))
 
 from render_all_layers_proof import add_render_proof_flag, render_proof  # noqa: E402
 from trid3nt_server.testing import GateAnswers, LiveRun, run_live  # noqa: E402
-from trid3nt_server.testing.proof_paths import proof_dir  # noqa: E402
+from trid3nt_server.testing.proof_paths import packet_dir  # noqa: E402
 
 #: A real NHDPlus reach WITH NHDArea polygon coverage - the domain is the cut.
 LOCATION = "Eel River near Scotia, California"
@@ -156,7 +156,7 @@ def _main_coarse(ns) -> int:
     }
     print(json.dumps(report, indent=2, default=str))
     out = ns.out or os.path.join(
-        proof_dir("telemac_river_dye", "coarse"),
+        packet_dir("telemac_river_dye"),
         "telemac_river_dye_coarse_evidence.json")
     with open(out, "w", encoding="utf-8") as fh:
         json.dump({"report": report, "evidence": _compact(ev.as_dict())}, fh,
@@ -178,10 +178,10 @@ def main() -> int:
     ns = ap.parse_args()
     if ns.coarse:
         ns.render_proof = False
-    # The release-point acceptance cases are ADDENDUM proofs: a named case, not
-    # a resolution variant of the canary.
+    # The release-point acceptance cases are a named case, not a resolution
+    # variant of the canary, and the filename is what says so.
     out_path = ns.out or os.path.join(
-        proof_dir("telemac_river_dye", "addendum"),
+        packet_dir("telemac_river_dye"),
         f"telemac_river_dye_release_{ns.case}_evidence.json")
 
     if ns.coarse:

@@ -3755,3 +3755,96 @@ and nowhere else, which is the exact defect
 | --- | --- | --- |
 | `tests/emission/test_layer_handles_adr0014.py` -> `tests/emission/test_layer_handles.py` | RENAMED (git mv, no content change beyond one fixture title) | the name cited a record the charter drops, and spec notation is disallowed prose by `docs/CONVENTIONS.md`. Six `ADR NNNN` citations in five other test files went the same way; `grep -riE '\bADR ?[0-9]{3,4}\b'` over every tracked `.py` outside `docs/proof/` is now ZERO |
 
+
+## PROOF IS TRANSIENT: `docs/proof/` and its instruments - 2026-09-10
+
+The 2026-09-10 ruling moves proof packets out of git entirely. The packet
+renderer now writes under `run/proof/<template>/<run-id>/`, ignored by git with
+the rest of `run/` and swept to a seven-day TTL on every write
+(`prune_packets`, `--keep-days`, proved by `tests/scripts/test_packet_prune.py`
+with faked mtimes). Every acceptance still renders a full packet and DELIVERS
+it; the only durable images are the doc-sized figures under
+`docs/templates/<template>/`, which are untouched here.
+
+The folder is keyed by RUN rather than by variant. A variant still names the
+declaration and the filename stem its deliverables carry, but it no longer names
+a directory: one run, one folder, so a re-render replaces its own packet and can
+never overwrite another run's, and the TTL sweep has a unit to delete.
+
+| what | where it lived | why | state |
+| --- | --- | --- | --- |
+| `docs/proof/` - 493 tracked files, 649 MB of frozen packets, plus the folder's `README.md` | `docs/proof/templates/` | The frozen-proof law is dropped by the charter: a packet is a delivery, and git plus the rulings record are the memory | DELETED (2026-09-10) |
+| 32 untracked leftovers at `docs/proof/` root (27 direct-call result JSONs, 4 dock screenshots, `artifacts.txt`) | `docs/proof/` | Never tracked - they sat under the folder's own `.gitignore` carve-out and die with it. Listed here because the folder is removed from disk, not just from the index | DELETED (2026-09-10) |
+| `scripts/instruments/replay_canary_evidence.py` (182) | `scripts/instruments/` | The drift instrument over COMMITTED evidence. There is no committed evidence to replay: it globbed `docs/proof/templates/**/*_canary_evidence.json` and diffed each recorded metric set against a fresh re-invocation. Its subject left the tree | RETIRED (2026-09-10) |
+| `tests/hygiene/test_proof_coverage.py` (49) | `tests/hygiene/` | Asserted that every registered template owns a frozen proof DIRECTORY, xfail while three templates awaited their first packet. Dies with the directory tree it asserted over | DELETED (2026-09-10) |
+| the `docs/proof/` skip in `test_dead_references.py::test_relative_links_resolve` | `tests/hygiene/` | An exemption for frozen evidence, with no frozen evidence left to exempt | DELETED (2026-09-10) |
+
+Five sandbox scripts lived inside the proof folder rather than in `scripts/`:
+`artemis_sandbox.py`, `artemis_real_breakwater_sandbox.py`,
+`telemac3d_sandbox.py`, `tomawac_sandbox.py` and
+`modflow_capture_zone_disv_quadrefined_prt_smoke.py`. A capability goes to the
+ATTIC rather than the bin, so they are at
+`~/Documents/trid3nt-attic/docs/proof/templates/` at the mirrored path. Two of
+the four engines they drive (TOMAWAC, MODFLOW) left with the non-TELEMAC
+workers; the other two landed as the `artemis_harbor_agitation` and
+`telemac3d_stratified_flow` templates, which is what supersedes them.
+
+Ten consumers were repointed rather than left dangling:
+
+| file | change |
+| --- | --- |
+| `trid3nt_server/testing/proof_paths.py` | `PROOF_ROOT` -> `PACKET_ROOT` (`run/proof`); `proof_dir(template, variant)` -> `packet_dir(template, run_id=None)`; `evidence_path(name)` -> `evidence_path(name, run_id=None)` |
+| `scripts/packet/assemble_proof_packet.py` | the out-dir default is the run's packet folder; the evidence JSON is located BEFORE the folder (it carries the run id); `prune_packets` + `KEEP_DAYS` + `--keep-days`; `--check` refuses a folder that does not exist rather than creating one |
+| `trid3nt_server/testing/canaries.py` | `evidence_path` and `assemble_packet` take the run id; `--packet-dir` help names `run/proof/` |
+| `scripts/packet/render_selafin_animation.py` | out-dir default is `packet_dir(template, --run-id)`; `--variant` DROPPED - it selected a folder that no longer exists |
+| `scripts/packet/render_run_chart_proof.py` | out-dir default was `docs/proof/templates`; now the run's packet folder, named off `--stem`'s template |
+| `scripts/drivers/drive_do_sag_cards.py`, `drive_river_dye_cards.py`, `drive_artemis_structure_slot.py` | drive-lane evidence lands in the template's transient folder (it is written before the run that would name a packet); the FILENAME already carried the case |
+| `scripts/drivers/proof_artemis_om2d_rematch.py` | the packet folder is named after the flagship leg returns its run id |
+| `scripts/instruments/code_graph.py` | drops `docs/proof/**/*.py` from the out-of-scope list |
+| `scripts/drivers/seed_showcase_cases.py` | two showcase descriptions cited proof PNG paths; the physics numbers stay, the citations go |
+| `docs/site/engines.md`, `scripts/README.md`, `docs/CONVENTIONS.md`, `.gitignore` | the site page says packets are rendered, delivered and swept; the scripts map drops the retired instrument; CONVENTIONS states the transient-proof law; `.gitignore` drops the `docs/proof/*` carve-out (`run/` already covers `run/proof/`) |
+
+Two things did NOT change, against the expectation that they would:
+
+- **The template-docs generator reads no packet.** `scripts/packet/doc_renders.py`
+  pins a template's proving run from the local run journal
+  (`data/persistence/run_journal.jsonl`) and renders its figures straight from
+  the object store into `docs/templates/<template>/`, writing `run.json` beside
+  them. It never read `docs/proof/`, so there is no path change - and the
+  freshness guard in `tests/hygiene/test_template_docs.py`, which compares a
+  figure's commit stamp against the template package's last change, holds
+  unaltered.
+- **The code-staleness pin compares a run against the GIT TREE, not against
+  committed evidence.** `trid3nt_server/workflows/solver/code_provenance.py`
+  reads the run's own `code_sha` against `ENGINE_PATHS`; the packet reports the
+  warning. Nothing in it read the proof folder, so the comparison is kept whole.
+
+One document names a destination that no longer exists and is left for the wave
+that owns it: `docs/design/calibration-methodology.md` asked for a
+`docs/proof/templates/coastal_tidal_surge/calibration/` directory holding PINNED
+observation artifacts. Pinned artifacts cannot live in a seven-day tree, so the
+deliverable now states the constraint and leaves the durable home to the
+calibration wave's first gate.
+
+Six more consumers built the path out of `os.path.join(..., "docs", "proof")`
+rather than as a literal, so they are named separately: the two Qt harnesses
+(`plugin/tests/qt_dock_ui_harness.py`, `qt_charts_harness.py`) and the three
+headless proofs (`headless_first_run.py`, `headless_oq_chart_proof.py`,
+`headless_case_switch_proof.py`) now grab their screenshots into
+`run/proof/plugin/`, and `scripts/packet/render_all_layers_proof.py`'s case-sheet
+default lands in `run/proof/cases/`. Both sit under the same root the renderer
+sweeps, so a screenshot is a delivery on the same terms as a packet.
+
+`plugin/tests/test_mesh_temporal.py` was the one TEST that read the deleted tree:
+its two fixtures were a rain-on-grid and a river-dye SELAFIN committed as
+`rog_run_products/coweeta_full_results.slf` and
+`01KZH561BN64PFA5HWZ8EYEJPM_r2d_river.slf`. A solved result is a run product, so
+the test now takes the newest `r2d_rog.slf` and `r2d_river.slf` under this
+machine's `TRID3NT_RUNS_DIR` and skips honestly when the machine has made no run
+- the same posture it already had for a missing `qgis.core`. It PASSES against
+live local runs, so the QGIS mesh-clock and declared-style binding proof survives
+the folder rather than turning into a permanent skip.
+
+| what | where it lived | why | state |
+| --- | --- | --- | --- |
+| `scripts/drivers/proof_artemis_real_breakwater_v2.py` (287) | `scripts/drivers/` | Its only input was the frozen `artemis_real_breakwater/solved_slf` tree, which dies with the folder: it re-rendered a stashed solve rather than driving one. The live questions are the `artemis_harbor_agitation` canary and the om2d rematch flagship | ATTIC (2026-09-10) - `~/Documents/trid3nt-attic/scripts/drivers/` |

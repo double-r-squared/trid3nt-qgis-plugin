@@ -18,7 +18,11 @@ from qgis.gui import QgsMapCanvas  # noqa: E402
 from qgis.PyQt.QtCore import QCoreApplication  # noqa: E402
 from qgis.PyQt.QtWidgets import QMainWindow, QPushButton  # noqa: E402
 
-PROOF = os.path.join(os.path.dirname(__file__), "..", "..", "docs", "proof")
+#: A headless UI proof is TRANSIENT, like every other packet: it lands under
+#: `run/proof/plugin/`, which git does not carry and the packet renderer sweeps
+#: to its TTL. The screenshot is looked at when it is taken, not archived.
+PROOF = os.path.join(os.path.dirname(__file__), "..", "..",
+                     "run", "proof", "plugin")
 PLUGIN_PATH = os.environ.get(
     "TRID3NT_PLUGIN_PATH",
     os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")),

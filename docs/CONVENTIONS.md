@@ -9,6 +9,14 @@ maintenance liability. The RULINGS record - what was decided and why - is kept
 outside the repo, so a constraint that only a ruling states has to be lifted into
 one of the places above before the ruling can be its only home.
 
+PROOF IS TRANSIENT, so a packet is never one of those places. A rendered packet
+lands under `run/proof/<template>/<run-id>/`, which git does not carry and the
+renderer sweeps to a seven-day TTL on every write; it exists to be DELIVERED,
+and the delivery is the record. Prose that cites a packet path is citing
+something that will be gone - state the fact where the fact lives, and let the
+acceptance render its own packet. The only durable images are the doc-sized
+figures a generated template page embeds, which are committed beside it.
+
 A drawing of LIVE STRUCTURE is the model's, regenerated: `docs/model/` is
 derived from its own `.sysml` sources and the suite fails while a view is stale,
 so a second hand-drawn copy of the same system is drift with nothing to catch

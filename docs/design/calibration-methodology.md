@@ -798,9 +798,10 @@ Proposed deliverables:
 5. **An ADR** recording the decision, the calibrated value, the objective
    it minimised, and everything in section 6.3 that we are declining to
    claim.
-6. **A `docs/proof/templates/coastal_tidal_surge/calibration/` directory**
-   holding the pinned observation artifacts and their hashes, so the
-   experiment is re-scoreable without a re-fetch.
+6. **Pinned observation artifacts and their hashes**, so the experiment
+   is re-scoreable without a re-fetch. Not in the packet tree: a rendered
+   packet is a delivery under `run/proof/` with a seven-day TTL, so a
+   durable home for these is the execution wave's to choose.
 
 ### 7.2 Gates for the execution wave
 

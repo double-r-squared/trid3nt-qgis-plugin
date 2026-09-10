@@ -112,7 +112,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--stem", required=True, help="output basename (the workflow file)")
     ap.add_argument("--bucket", default=os.environ.get("TRID3NT_RUNS_BUCKET",
                                                        "trid3nt-runs"))
-    ap.add_argument("--out-dir", default=str(REPO / "docs" / "proof" / "templates"))
+    ap.add_argument("--out-dir", default=None,
+                    help="default: the run's own packet folder under run/proof/, "
+                         "named for --stem's template")
     ap.add_argument("--chart", default=None,
                     help="render only this DECLARED chart name (default: all)")
     ap.add_argument("--caption", default="")
@@ -120,6 +122,10 @@ def main(argv: list[str] | None = None) -> int:
                     help="the DOC size a template page embeds")
     ns = ap.parse_args(argv)
 
+    if ns.out_dir is None:
+        from trid3nt_server.testing.proof_paths import packet_dir, split_variant
+
+        ns.out_dir = packet_dir(split_variant(ns.stem)[0], ns.run_id)
     written = render_charts(run_id=ns.run_id, stem=ns.stem, out_dir=ns.out_dir,
                             bucket=ns.bucket, chart=ns.chart, caption=ns.caption,
                             doc=ns.doc)

@@ -881,8 +881,12 @@ def main() -> int:
                                           title=ns.title, doc=ns.doc)
         else:
             layers, title = _layers_from_case(ns.case_id)
-            out = Path(ns.out or (REPO / "docs" / "proof" / "templates"
+            # A case sheet is not one run's packet, so it lands beside them
+            # under the transient tree rather than in a run's folder - swept on
+            # the same TTL, because a rendered sheet is a delivery either way.
+            out = Path(ns.out or (REPO / "run" / "proof" / "cases"
                                   / f"case_{ns.case_id}_canvas_layers.png"))
+            out.parent.mkdir(parents=True, exist_ok=True)
             result = render_sheet(_collapse_frames(layers), out,
                                   title=ns.title or title, max_tiles=ns.max_tiles,
                                   composite_only=ns.composite_only, doc=ns.doc)

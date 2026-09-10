@@ -7,6 +7,7 @@ for a real solved result, since those fixed-width names are why it is resolved."
 
 from __future__ import annotations
 
+import glob
 import os
 import shutil
 import subprocess
@@ -14,16 +15,23 @@ import unittest
 
 import pytest
 
-#: A solved rain-on-grid result kept as a rendering proof. Read-only here.
-_SELAFIN = os.path.join(
-    os.path.dirname(__file__), "..", "..", "docs", "proof", "templates",
-    "rog_run_products", "coweeta_full_results.slf")
+#: Where the solver leaves a run directory on THIS MACHINE. A solved result is a
+#: run product, and a run product is transient: git carries none, so the fixtures
+#: are found here and the proof skips honestly when the machine has made no run.
+_RUNS_DIR = os.environ.get("TRID3NT_RUNS_DIR") or os.path.join(
+    os.path.dirname(__file__), "..", "..", "data", "runs")
 
-#: A solved river-dye result: the same four hydrodynamic groups plus the tracer
-#: the binding proof declares.
-_TRACER_SELAFIN = os.path.join(
-    os.path.dirname(__file__), "..", "..", "docs", "proof", "templates",
-    "01KZH561BN64PFA5HWZ8EYEJPM_r2d_river.slf")
+#: The rain-on-grid result: the four hydrodynamic groups on a time axis.
+_ROG_RESULT = "r2d_rog.slf"
+#: The river result: those same groups plus the DYE tracer the binding proof
+#: declares. Every river run advects dye, so the basename is the whole selector.
+_TRACER_RESULT = "r2d_river.slf"
+
+
+def _newest(result: str) -> str | None:
+    """The newest local run's ``result`` file, or ``None`` when there is none."""
+    found = glob.glob(os.path.join(_RUNS_DIR, "*", result))
+    return max(found, key=os.path.getmtime) if found else None
 
 
 @pytest.mark.qt_harness_shim
@@ -51,14 +59,15 @@ class TestQtMeshTemporalAndDeclaredStyle(unittest.TestCase):
         py = self._qgis_python()
         if py is None:
             self.skipTest("no interpreter with qgis.core available")
-        for fixture in (_SELAFIN, _TRACER_SELAFIN):
-            if not os.path.exists(fixture):
-                self.skipTest(f"mesh fixture missing: {fixture}")
+        fixtures = [_newest(name) for name in (_ROG_RESULT, _TRACER_RESULT)]
+        if not all(fixtures):
+            self.skipTest(
+                f"no solved {_ROG_RESULT} and {_TRACER_RESULT} under {_RUNS_DIR}; "
+                "drive the rain-on-grid and river-dye canaries first")
         harness = os.path.join(
             os.path.dirname(__file__), "qt_mesh_temporal_harness.py")
         proc = subprocess.run(
-            [py, "-u", harness, os.path.abspath(_SELAFIN),
-             os.path.abspath(_TRACER_SELAFIN)],
+            [py, "-u", harness, *(os.path.abspath(f) for f in fixtures)],
             capture_output=True,
             timeout=300,
             text=True,

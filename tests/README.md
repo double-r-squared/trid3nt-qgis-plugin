@@ -15,14 +15,14 @@ join the run as the sixth slice.
 | `emission/` | the emitter, the uri registry, publication, charts | 39 | 503 |
 | `fetchers/` | the fetch router, its executors, hooks and fallbacks | 65 | 1563 |
 | `gates/` | the gates, the context budget, the circuit breaker | 21 | 312 |
-| `hygiene/` | the documentation guards: the docstring standard, history markers, dead references, proof coverage, the template pages, the package maps | 6 | 83 |
+| `hygiene/` | the documentation guards: the docstring standard, history markers, dead references, the template pages, the package maps | 5 | 80 |
 | `mesh/` | the meshers, the mesh gate, topology and bed | 7 | 226 |
 | `model/` | the SysML model conformance check | 1 | 19 |
 | `plugin/` | the plugin seams the server suite reads offline, by `ast` | 1 | 3 |
 | `processing/` | the processing tools | 33 | 460 |
 | `runtime/` | the declarative runtime, scenario reuse, the run journal | 12 | 354 |
 | `sandbox/` | the code-exec sandbox | 2 | 34 |
-| `scripts/` | the instruments, the drivers and the proof renderers | 5 | 41 |
+| `scripts/` | the instruments, the drivers and the proof renderers | 6 | 45 |
 | `search/` | dataset and tool retrieval, the catalog | 20 | 313 |
 | `server/` | the HTTP and WS routes, persistence, telemetry | 27 | 559 |
 | `solver/` | the solver seam, the run reads, the engine-room posture | 6 | 59 |

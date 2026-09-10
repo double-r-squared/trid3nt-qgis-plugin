@@ -18,7 +18,7 @@ REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO))
 
 from trid3nt_server.testing.live_run import GateAnswers, LiveRun, run_live  # noqa: E402
-from trid3nt_server.testing.proof_paths import evidence_path, proof_dir  # noqa: E402
+from trid3nt_server.testing.proof_paths import evidence_path, packet_dir  # noqa: E402
 
 __all__ = ["author_mesh", "barrier_footprint", "main", "render_mesh_figures",
            "run_leg"]
@@ -273,7 +273,6 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--timeout", type=float, default=2400.0)
     ns = ap.parse_args(argv)
 
-    directory = Path(proof_dir(PROOF_NAME, PROOF_VARIANT))
     work = Path(os.environ.get("TRID3NT_RUNS_DIR", "/tmp")) / "artemis-om2d-rematch"
     work.mkdir(parents=True, exist_ok=True)
 
@@ -296,7 +295,11 @@ def main(argv: list[str] | None = None) -> int:
                        title="flagship: artemis on an authored om2d mesh "
                              "(Point Judith Harbor of Refuge)",
                        timeout_s=ns.timeout)
-    out = Path(evidence_path(f"{PROOF_NAME}_{PROOF_VARIANT}"))
+    # The packet folder is the RUN's, so it cannot be named until the run has
+    # one - which is why the mesh figures and the comparison record are written
+    # after the flagship leg rather than beside its inputs.
+    directory = Path(packet_dir(PROOF_NAME, evidence.run_id))
+    out = Path(evidence_path(f"{PROOF_NAME}_{PROOF_VARIANT}", evidence.run_id))
     out.write_text(json.dumps(evidence.as_dict(), indent=2, default=str),
                    encoding="utf-8")
     print(json.dumps({"evidence": str(out), "run_id": evidence.run_id,
@@ -327,7 +330,7 @@ def main(argv: list[str] | None = None) -> int:
 
     from trid3nt_server.testing.canaries import assemble_packet
 
-    packet = assemble_packet(f"{PROOF_NAME}_{PROOF_VARIANT}")
+    packet = assemble_packet(f"{PROOF_NAME}_{PROOF_VARIANT}", evidence.run_id)
     figures = render_mesh_figures(artifact, footprint, directory,
                                   run_id=str(evidence.run_id))
     print(json.dumps({"packet": packet["verdict"], "missing": packet["missing"],

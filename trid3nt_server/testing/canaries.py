@@ -65,10 +65,11 @@ __all__ = ["CANARIES", "PROOF_ANIMATIONS", "assemble_packet", "evidence_path",
 #: WHICH field of the result the delivered animation paints and why. Both are
 #: declarations, neither is inferred, and the packet assembler reads both.
 
-#: Where a canary's evidence lands: ``docs/proof/templates/<template>/<variant>/``,
-#: beside the renders the diagnostic lane writes from it. The FOLDER is
-#: ``proof_paths``' to decide - one home, so a render script and the canary that
-#: fed it cannot end up in different directories.
+#: Where a canary's evidence lands: ``run/proof/<template>/<run-id>/``, beside
+#: the renders the diagnostic lane writes from it. The FOLDER is ``proof_paths``'
+#: to decide - one home, so a render script and the canary that fed it cannot end
+#: up in different directories. It is TRANSIENT: the packet is delivered, and the
+#: tree it was rendered in is swept to a TTL on the next write.
 
 
 # --------------------------------------------------------------------------- #
@@ -359,8 +360,8 @@ CANARIES.update({
 })
 
 
-def evidence_path(name: str) -> str:
-    return _proof_evidence_path(name)
+def evidence_path(name: str, run_id: str | None = None) -> str:
+    return _proof_evidence_path(name, run_id)
 
 
 def run(name: str, *, timeout_s: float | None = None) -> RunEvidence:
@@ -397,15 +398,15 @@ def _answer(ev: RunEvidence) -> dict[str, Any]:
     }
 
 
-def assemble_packet(name: str, out_dir: str | None = None,
+def assemble_packet(name: str, run_id: str, out_dir: str | None = None,
                     evidence: str | None = None) -> dict:
     """The canary's DELIVERY PACKET - the checklist, assembled and verified.
 
     ``out_dir`` is where the renders land and ``evidence`` the JSON they are
-    assembled FROM; unset, both are the template's own proof folder."""
-    # Naming them assembles the checklist somewhere the FROZEN proof tree is not
-    # written to, off the run just driven, which is how an acceptance drive owes
-    # a full packet without editing delivered evidence.
+    assembled FROM; unset, both are the run's own packet folder."""
+    # Naming them assembles the checklist somewhere else - a lane that renders
+    # into a scratch directory off the run it just drove owes the same
+    # checklist, and says where it put it.
     #
     # Imported BY PATH because proof RENDERING stays out of the product tree by
     # ruling: the declaration lives here, the renderers do not.
@@ -418,7 +419,8 @@ def assemble_packet(name: str, out_dir: str | None = None,
     module = importlib.util.module_from_spec(spec)
     sys.modules.setdefault("assemble_proof_packet", module)
     spec.loader.exec_module(module)
-    return module.assemble(template, variant, out_dir=out_dir, evidence=evidence)
+    return module.assemble(template, variant, run_id=run_id, out_dir=out_dir,
+                           evidence=evidence)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -439,13 +441,12 @@ def main(argv: list[str] | None = None) -> int:
                     help="assemble + verify the delivery packet (default on)")
     ap.add_argument("--no-packet", dest="packet", action="store_false")
     ap.add_argument("--packet-dir", default=None,
-                    help="assemble the packet HERE rather than in the template's "
-                         "proof folder - the lane that owes the whole checklist "
-                         "without writing into the frozen proof tree")
+                    help="assemble the packet HERE rather than in the run's own "
+                         "packet folder under run/proof/")
     ns = ap.parse_args(argv)
 
     ev = run(ns.name, timeout_s=ns.timeout)
-    out = ns.out or evidence_path(ns.name)
+    out = ns.out or evidence_path(ns.name, ev.run_id)
     os.makedirs(os.path.dirname(out), exist_ok=True)
     with open(out, "w", encoding="utf-8") as fh:
         json.dump(ev.as_dict(), fh, indent=2, default=str)
@@ -456,12 +457,12 @@ def main(argv: list[str] | None = None) -> int:
         print(f"CANARY FAILED: {exc}", file=sys.stderr)
         return 1
     if not ns.packet or (ns.out and not ns.packet_dir):
-        # An evidence file written somewhere other than the canonical proof path
-        # has no variant folder to assemble into, so the packet step is skipped
+        # An evidence file written somewhere other than the canonical packet
+        # path has no folder to assemble into, so the packet step is skipped
         # rather than pointed at a directory it does not own.
         return 0
     try:
-        packet = assemble_packet(ns.name, out_dir=ns.packet_dir,
+        packet = assemble_packet(ns.name, ev.run_id, out_dir=ns.packet_dir,
                                  evidence=ns.out if ns.packet_dir else None)
     except Exception as exc:  # noqa: BLE001 - the reason IS the report
         print(f"PACKET FAILED: {type(exc).__name__}: {exc}", file=sys.stderr)

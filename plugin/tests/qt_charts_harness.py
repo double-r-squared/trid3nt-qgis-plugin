@@ -26,8 +26,11 @@ from plugin.ui import charts  # noqa: E402
 from plugin.ui.charts_window import ChartsWindow  # noqa: E402
 from plugin.ui.dock import Trid3ntDock  # noqa: E402
 
+#: A headless UI proof is TRANSIENT, like every other packet: it lands under
+#: `run/proof/plugin/`, which git does not carry and the packet renderer sweeps
+#: to its TTL. The screenshot is looked at when it is taken, not archived.
 PROOF_DIR = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "..", "..", "docs", "proof")
+    os.path.join(os.path.dirname(__file__), "..", "..", "run", "proof", "plugin")
 )
 
 

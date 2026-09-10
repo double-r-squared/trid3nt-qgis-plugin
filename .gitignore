@@ -11,6 +11,9 @@ third_party/
 venvs/
 /data/
 logs/
+# run/ carries the daemon's local state AND run/proof - the transient packet
+# tree the renderer sweeps to a seven-day TTL. A packet is a delivery, not an
+# archive, so git never holds one.
 run/
 runs/
 cache/
@@ -19,8 +22,6 @@ server/build/
 # Secret-bearing local env (OpenRouter/API keys) - never commit
 .env.local
 .env.*.local
-docs/proof/*
-!docs/proof/templates/
 # Nutshell — local server state and API key
 .nutshell-api-key
 .nutshell-server.pid

@@ -17,7 +17,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from trid3nt_server.testing import GateAnswers, LiveRun, run_live  # noqa: E402
-from trid3nt_server.testing.proof_paths import proof_dir  # noqa: E402
+from trid3nt_server.testing.proof_paths import packet_dir  # noqa: E402
 
 #: Marquette Lower Harbor, MI - the canary AOI, and a real Great Lakes harbour
 #: with a surveyed OSM breakwater across its approach.
@@ -104,7 +104,7 @@ def main() -> int:
         results.append(_run("omitted", dict(_BASE),
                             "artemis structure slot: OMITTED (open water, labeled)"))
 
-    out = os.path.join(proof_dir("artemis_harbor_agitation", "addendum"),
+    out = os.path.join(packet_dir("artemis_harbor_agitation"),
                        "artemis_harbor_agitation_structure_slot_evidence.json")
     with open(out, "w", encoding="utf-8") as fh:
         json.dump({"bbox": BBOX, "modes": results}, fh, indent=2, default=str)

@@ -18,9 +18,8 @@ from tests.hygiene import _source as source
 
 REPO = source.REPO_ROOT
 
-#: Trees a contributor navigates as PACKAGES. `docs/` is prose and frozen
-#: evidence: a README there is a reader's map, not a package's, and
-#: `docs/proof/` holds the sandbox scripts a run was proved with.
+#: Trees a contributor navigates as PACKAGES. `docs/` is prose: a README there is
+#: a reader's map, not a package's.
 MAP_TREES = ("trid3nt_server", "plugin", "contracts", "scripts", "tests", "workers")
 #: Directory entries that are never a package's own content.
 IGNORED = frozenset({"__pycache__", ".pytest_cache"})

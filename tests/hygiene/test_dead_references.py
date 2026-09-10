@@ -63,8 +63,8 @@ LIVE_DOC_ROOTS = ("docs/site/", "docs/authoring/", "docs/playbooks/", "docs/temp
 #: out. They are undated standing law, not a record of what was once true.
 LAW_DOCS = ("AGENTS.md", "docs/CONVENTIONS.md")
 
-#: Relative links are resolved in every tracked markdown outside frozen evidence:
-#: a link is a promise the reader can follow, whatever the page's vintage.
+#: Relative links are resolved in every tracked markdown: a link is a promise the
+#: reader can follow, whatever the page's vintage.
 LINK = re.compile(r"\[[^\]]*\]\(([^)\s]+)\)")
 
 
@@ -160,8 +160,6 @@ def test_relative_links_resolve() -> None:
     broken = []
     for path in source.markdown_files():
         rel = str(path.relative_to(source.REPO_ROOT))
-        if rel.startswith("docs/proof/"):
-            continue
         text = path.read_text(encoding="utf-8")
         for number, line in enumerate(text.splitlines(), start=1):
             for match in LINK.finditer(line):

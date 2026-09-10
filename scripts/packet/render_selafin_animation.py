@@ -787,17 +787,14 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--title", default=None)
     ap.add_argument("--bucket", default=os.environ.get("TRID3NT_RUNS_BUCKET",
                                                        "trid3nt-runs"))
-    # The proof layout is docs/proof/templates/<template>/<variant>/ and the
-    # writer asks proof_paths for it rather than joining its own path, so a
-    # render and the canary evidence it was made from land together.
+    # The packet layout is run/proof/<template>/<run-id>/ and the writer asks
+    # proof_paths for it rather than joining its own path, so a render and the
+    # canary evidence it was made from land together.
     ap.add_argument("--template", default=None,
-                    help="proof folder template name; default is --stem's own "
-                         "template (a _refined stem files under refined/)")
-    ap.add_argument("--variant", default=None,
-                    choices=("coarse", "refined", "postmigration", "addendum"),
-                    help="proof folder variant; default is read off --stem")
+                    help="packet folder template name; default is --stem's own "
+                         "template")
     ap.add_argument("--out-dir", default=None,
-                    help="explicit output directory; overrides the proof layout")
+                    help="explicit output directory; overrides the packet layout")
     ap.add_argument("--origin-bbox", default=None,
                     help="4326 min_lon,min_lat,max_lon,max_lat the LOCAL mesh was "
                          "built from; default reads telemac_metrics.json's bbox")
@@ -820,10 +817,10 @@ def main(argv: list[str] | None = None) -> int:
     if ns.out_dir:
         out_dir = Path(ns.out_dir)
     else:
-        from trid3nt_server.testing.proof_paths import proof_dir, split_variant
+        from trid3nt_server.testing.proof_paths import packet_dir, split_variant
 
-        template, variant = split_variant(ns.stem)
-        out_dir = Path(proof_dir(ns.template or template, ns.variant or variant))
+        template, _ = split_variant(ns.stem)
+        out_dir = Path(packet_dir(ns.template or template, ns.run_id))
 
     result = render_run(
         run_id=ns.run_id, slf=ns.slf, var=ns.var, stem=ns.stem, out_dir=out_dir,

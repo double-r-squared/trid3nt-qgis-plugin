@@ -310,11 +310,12 @@ check(
 # not still be showing anywhere in the (now-cleared) message list.
 check("case label shows B's title", CASE_B_TITLE in dock.case_label.text())
 
-os.makedirs(os.path.join(PLUGIN_PATH, "docs", "proof"), exist_ok=True)
+# The screenshot is TRANSIENT proof: it lands under `run/proof/plugin/`, which
+# git does not carry and the packet renderer sweeps to its TTL.
+_shots = os.path.join(PLUGIN_PATH, "run", "proof", "plugin")
+os.makedirs(_shots, exist_ok=True)
 try:
-    dock.grab().save(
-        os.path.join(PLUGIN_PATH, "docs", "proof", "50-case-switch-proof.png")
-    )
+    dock.grab().save(os.path.join(_shots, "50-case-switch-proof.png"))
 except Exception:  # noqa: BLE001 -- screenshot is a nice-to-have, not the proof
     pass
 

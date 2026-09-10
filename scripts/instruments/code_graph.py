@@ -734,8 +734,7 @@ def write_outputs(u: Universe, buckets: dict[str, set[str]], dead: list[dict[str
         + (f" -- {', '.join(grimp_unknown[:8])}" if grimp_unknown else ""),
         f"- Call sites the import table could not attribute: {unresolved}"
         " (builtins, locals, methods on non-imported objects -- counted, not guessed).",
-        "- Out of scope, so its imports anchor nothing: `experiments/`, `third_party/`,"
-        " `docs/proof/**/*.py`.",
+        "- Out of scope, so its imports anchor nothing: `experiments/`, `third_party/`.",
         "", "## False-positive classes handled", "",
         _table([
             ("flat-namespace worker payload", "`entrypoint.py` does `import artemis_build` for a"

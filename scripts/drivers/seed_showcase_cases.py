@@ -122,16 +122,14 @@ SHOWCASE: list[Showcase] = [
              "runoff visibly different, plus the snow-removal (plowing) knob. "
              "PHYSICS: peak SWE 4.32 in > 0, total melt 1.21 in > 0, rain-on-snow "
              "peak amplification 1.19x > 1, plowing cuts peak SWE to 1.41 in, "
-             "runoff continuity 0.00%. Proof docs/proof/templates/"
-             "swmm_snowmelt_degree_day_{swe_series,runoff_snowmelt_vs_rainonly}.png", 180),
+             "runoff continuity 0.00%.", 180),
     Showcase("swmm_aquifer_baseflow_to_node", {},
              "SWMM two-zone [AQUIFERS]/[GROUNDWATER] baseflow-to-node: a "
              "shallow aquifer under a pervious subcatchment sustains baseflow to a "
              "drainage node between two storms; the day-12 storm re-recharges it. "
              "PHYSICS: between-storms baseflow 0.930 cfs > 0 with groundwater vs "
              "0.000 cfs surface-only, storm-2 recharge bump +1.60 cfs, recession "
-             "tau ~964 h, flow-routing continuity 0.00%. Proof docs/proof/templates/"
-             "swmm_aquifer_baseflow_to_node_{node_hydrograph,baseflow_recession}.png", 180),
+             "tau ~964 h, flow-routing continuity 0.00%.", 180),
     Showcase("swmm_subcatchment_runoff_comparison", {"compare": "infiltration_method"},
              "SWMM mechanism comparison (infiltration method A/B)", 240),
     Showcase("swmm_wetwell_pump_control_comparison", {},

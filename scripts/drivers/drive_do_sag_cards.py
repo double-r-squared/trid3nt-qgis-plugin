@@ -17,12 +17,14 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "packet"))
 
 from render_all_layers_proof import add_render_proof_flag, render_proof  # noqa: E402
 from trid3nt_server.testing import GateAnswers, LiveRun, run_live  # noqa: E402
-from trid3nt_server.testing.proof_paths import proof_dir  # noqa: E402
+from trid3nt_server.testing.proof_paths import packet_dir  # noqa: E402
 
-#: The gate-CARDS walkthrough is an ADDENDUM proof, not the canary's coarse
-#: baseline: it is a different case (a different reach, a drawn outfall) asked
-#: for a different reason. Its folder says so.
-EVIDENCE = os.path.join(proof_dir("telemac_do_sag", "addendum"),
+#: The gate-CARDS walkthrough is not the canary's coarse baseline: it is a
+#: different case (a different reach, a drawn outfall) asked for a different
+#: reason, and its FILENAME says so. It lands in the template's transient folder
+#: rather than a run's packet folder because it is written before the run that
+#: would name one.
+EVIDENCE = os.path.join(packet_dir("telemac_do_sag"),
                         "telemac_do_sag_cards_evidence.json")
 
 #: A real NHDPlus reach WITH NHDArea polygon coverage - the domain is the cut.

@@ -37,9 +37,12 @@ OQ_CHART_ID = os.environ.get(
 OTHER_CASE = os.environ.get("TRID3NT_OTHER_CASE", "01KX509BASVDVWJGMXC51P150J")
 OTHER_CASE_TITLE = "Landcover Over Washington State"
 
+#: A headless UI proof is TRANSIENT, like every other packet: it lands under
+#: `run/proof/plugin/`, which git does not carry and the packet renderer sweeps
+#: to its TTL. The screenshot is looked at when it is taken, not archived.
 PROOF_PNG = os.path.abspath(
     os.path.join(
-        os.path.dirname(__file__), "..", "..", "docs", "proof",
+        os.path.dirname(__file__), "..", "..", "run", "proof", "plugin",
         "98-qgis-oq-chart.png",
     )
 )

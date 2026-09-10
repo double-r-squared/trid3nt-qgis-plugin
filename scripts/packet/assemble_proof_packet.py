@@ -15,8 +15,10 @@ import io
 import json
 import os
 import re
+import shutil
 import struct
 import sys
+import time
 from pathlib import Path
 from typing import Any
 
@@ -30,11 +32,18 @@ from trid3nt_server.testing.proof_animations import (  # noqa: E402
     suffixed,
 )
 from trid3nt_server.testing.proof_paths import (  # noqa: E402
+    PACKET_ROOT,
     VARIANTS,
-    proof_dir,
+    packet_dir,
 )
 
-__all__ = ["assemble", "main", "selafin_frame_count"]
+__all__ = ["assemble", "main", "prune_packets", "selafin_frame_count"]
+
+#: How long a rendered packet survives, in days. PROOF IS TRANSIENT: a packet is
+#: assembled to be DELIVERED, and the delivery is the record - the tree it was
+#: rendered in is scratch space git does not carry, so it is swept on every write
+#: rather than grown. ``--keep-days`` is the lever for a lane that needs longer.
+KEEP_DAYS = 7
 
 #: Where the colorbar strip starts, as a fraction of image width. The animation
 #: renderer builds its figure at matplotlib's default subplot margins and steals
@@ -220,7 +229,7 @@ def _sibling(name: str):
 
 
 # --------------------------------------------------------------------------- #
-# Reading the variant directory
+# Reading the packet directory
 # --------------------------------------------------------------------------- #
 def stem_for(template: str, variant: str) -> str:
     """The filename stem every deliverable in this variant carries."""
@@ -583,38 +592,58 @@ def _code_staleness(completion: dict, tool: str) -> dict | None:
                      code_dirty=completion.get("code_dirty"))
 
 
+def prune_packets(*, keep_days: int = KEEP_DAYS,
+                  now: float | None = None) -> list[str]:
+    """Sweep every packet under ``run/proof`` last written more than ``keep_days``
+    ago. Returns what was removed, relative to the root."""
+    # A packet folder is flat, but a re-render REPLACES files rather than
+    # creating them, and replacing a file does not touch the folder's own mtime.
+    # So the age of a packet is the newest thing IN it, not the directory stat.
+    root = Path(PACKET_ROOT)
+    if not root.is_dir():
+        return []
+    cutoff = (time.time() if now is None else now) - keep_days * 86400.0
+    removed: list[str] = []
+    for template in sorted(p for p in root.iterdir() if p.is_dir()):
+        for entry in sorted(template.iterdir()):
+            if _newest_mtime(entry) >= cutoff:
+                continue
+            shutil.rmtree(entry) if entry.is_dir() else entry.unlink()
+            removed.append(str(entry.relative_to(root)))
+    return removed
+
+
+def _newest_mtime(path: Path) -> float:
+    stats = [path.stat().st_mtime]
+    if path.is_dir():
+        stats += [child.stat().st_mtime for child in path.rglob("*")]
+    return max(stats)
+
+
 def assemble(template: str, variant: str, *, run_id: str | None = None,
              check: bool = False, bucket: str | None = None,
              out_dir: str | Path | None = None,
-             evidence: str | Path | None = None) -> dict:
+             evidence: str | Path | None = None,
+             keep_days: int = KEEP_DAYS) -> dict:
     """Assemble and VERIFY one template+variant proof packet. Writes packet.json.
-    ``out_dir`` defaults to the template's proof folder and ``evidence`` to the
+    ``out_dir`` defaults to the RUN's own packet folder and ``evidence`` to the
     JSON in it; either may name somewhere else, and the checklist is unchanged."""
-    # A lane that must not write into the frozen proof tree - an acceptance
-    # drive, a verify pass - names a scratch directory and its own evidence,
-    # rather than landing a fresh run's file in the frozen tree to be allowed
-    # to render it.
     if variant not in VARIANTS:
         raise PacketError(f"{variant!r} is not a proof variant; the four are "
                           f"{list(VARIANTS)}")
-    directory = Path(proof_dir(template, variant, create=not check and not out_dir))
-    if out_dir:
-        out = Path(out_dir)
-        out.mkdir(parents=True, exist_ok=True)
-    else:
-        # The proof folder is the packet's home only when the packet LANDS
-        # there. A lane rendering into a scratch directory owes the same
-        # checklist and names its own evidence, so a template with no folder in
-        # the frozen tree is not a gap in the run being proved.
-        if not directory.is_dir():
-            raise PacketError(f"no proof directory at {directory}")
-        out = directory
     stem = stem_for(template, variant)
-    if evidence is None and not directory.is_dir():
+    # The packet folder is named for the RUN, and the evidence JSON is what
+    # carries the run id - so the evidence is located first and the folder
+    # follows from it, unless the caller already knows which run it wants.
+    if evidence is not None:
+        evidence_path = Path(evidence)
+    elif run_id:
+        evidence_path = find_evidence(
+            Path(packet_dir(template, run_id, create=False)), stem)
+    else:
         raise PacketError(
-            f"no evidence JSON named and no proof directory at {directory} to "
-            "find one in; pass --evidence.")
-    evidence_path = Path(evidence) if evidence else find_evidence(directory, stem)
+            "name an evidence JSON or a run id: the packet folder is named for "
+            "the run it proves, and only those two say which run that is")
     if not evidence_path.is_file():
         raise PacketError(f"no evidence JSON at {evidence_path}")
     evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
@@ -625,6 +654,18 @@ def assemble(template: str, variant: str, *, run_id: str | None = None,
     run_id = run_id or str(evidence.get("run_id") or "")
     if not run_id:
         raise PacketError(f"{evidence_path.name} records no run_id")
+    out = Path(out_dir) if out_dir else Path(
+        packet_dir(template, run_id, create=False))
+    if check:
+        # An audit reads what is already on disk; creating the folder it is
+        # meant to be auditing would turn a missing packet into an empty pass.
+        if not out.is_dir():
+            raise PacketError(f"no packet directory at {out} to audit")
+    else:
+        # EVERY WRITE SWEEPS. The TTL is enforced by the act of rendering, so
+        # there is no cleanup step anyone can forget to run.
+        prune_packets(keep_days=keep_days)
+        out.mkdir(parents=True, exist_ok=True)
     bucket = bucket or os.environ.get("TRID3NT_RUNS_BUCKET", "trid3nt-runs")
 
     missing: list[str] = []
@@ -936,21 +977,24 @@ def main(argv: list[str] | None = None) -> int:
                     help="render from THIS run prefix (default: the run id the "
                          "evidence JSON records)")
     ap.add_argument("--check", action="store_true", default=False,
-                    help="audit an existing variant directory against the "
+                    help="audit an existing packet directory against the "
                          "checklist WITHOUT rendering anything")
     ap.add_argument("--bucket", default=None)
     ap.add_argument("--out-dir", dest="out_dir", default=None,
                     help="write the renders and packet.json HERE instead of into "
-                         "the template's proof folder")
+                         "the run's own packet folder under run/proof/")
     ap.add_argument("--evidence", default=None,
                     help="assemble from THIS evidence JSON instead of the one in "
-                         "the template's proof folder")
+                         "the run's packet folder")
+    ap.add_argument("--keep-days", dest="keep_days", type=int, default=KEEP_DAYS,
+                    help=f"how long a packet survives the sweep every write runs "
+                         f"(default {KEEP_DAYS})")
     ns = ap.parse_args(argv)
 
     try:
         packet = assemble(ns.template, ns.variant, run_id=ns.run, check=ns.check,
                           bucket=ns.bucket, out_dir=ns.out_dir,
-                          evidence=ns.evidence)
+                          evidence=ns.evidence, keep_days=ns.keep_days)
     except PacketError as exc:
         print(f"NO PACKET: {exc}", file=sys.stderr)
         return 2
