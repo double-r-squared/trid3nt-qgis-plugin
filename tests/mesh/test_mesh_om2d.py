@@ -1,14 +1,9 @@
 """Offline tests for the library-wrapping mesher ``om2d``.
 
 It builds in a container, so what runs here is everything AROUND that boundary:
-the three registrations it makes, the typed refusals, the CONFIG the box is
-handed - which is the recipe's ops list travelling as data - the neutral mesh
-assembled from what comes back, the measured conformal offset, and the
-determinism a recipe records. The container call and the two world-reads (the bed
-fetch, the object store) are the only things stubbed; the composition itself is
-the real code. The POLYGON-domain half of the same mesher is covered in
-``test_mesh_polygon_domain.py``.
-"""
+the three registrations, the typed refusals, the CONFIG the box is handed, the
+neutral mesh assembled from what comes back, the measured conformal offset and
+the recorded determinism. Only the container call and the world-reads are stubbed."""
 
 from __future__ import annotations
 
@@ -96,11 +91,8 @@ def test_the_boxs_own_typed_refusal_reaches_the_caller_with_its_escalation(
         tmp_path, monkeypatch):
     """A domain refusal is only knowable where the library is.
 
-    The lake case: GSHHG L1 describes the boundary between land and OCEAN, so
-    over an inland water body the shoreline carries nothing and the whole extent
-    - streets included - would mesh as open water. The driver writes the code,
-    the reason and the call that DOES the ask; the host re-raises it typed.
-    """
+    GSHHG L1 describes the land / OCEAN boundary, so an inland water body has no
+    shoreline there; the driver writes the refusal and the host re-raises it typed."""
     import subprocess
 
     document = {"code": "MESH_SHORELINE_DOES_NOT_DESCRIBE_EXTENT",
@@ -131,11 +123,8 @@ def test_an_unknown_op_refuses_with_the_nearest_names():
 def test_the_default_recipe_is_hard_baked_and_visible():
     """An undeclared ask gets its rim sized, the clean chain, then the bed.
 
-    The rim is in the list because nothing else sizes it: every sizing function
-    the library has measures the shoreline, so an undeclared ask that named none
-    came back with the boundary a solver forces its open condition on running an
-    order of magnitude past the size word.
-    """
+    The rim is in the list because nothing else sizes it: every sizing function the
+    library has measures the shoreline."""
     assert [op.fn for op in get_mesher("om2d").default_ops] == [
         "set_rim_size", "delete_boundary_faces",
         "delete_faces_connected_to_one_face", "laplacian2",
@@ -199,10 +188,8 @@ def test_the_journal_states_no_caveat_a_measurement_does_not_stand_behind(tmp_pa
 def test_the_driver_binds_the_seed_onto_the_librarys_own_tie_break():
     """The one library draw the recipe's seed does not otherwise reach.
 
-    ``feature_sizing_function`` skeletonizes through skimage's ``medial_axis``,
-    whose tie-break generator is fresh per process unless it is handed one - the
-    measured cause of a coastal domain rebuilding as three distinct meshes.
-    """
+    ``feature_sizing_function`` skeletonizes through skimage's ``medial_axis``, whose
+    tie-break generator is fresh per process unless it is handed one."""
     from trid3nt_server.workflows.mesh.meshers.drivers import drivers_dir
 
     # Read rather than imported: the driver's own imports live only in the image.
@@ -362,9 +349,7 @@ def test_a_line_shorter_than_the_declared_edge_drops_with_a_measured_note(
     """A line shorter than one edge cannot be walked at that edge.
 
     The library dies inside the resample rather than refusing, so the length is
-    measured at the conversion - the one place that knows both the layer and the
-    declared edge - and what it drops it says, by count and by threshold.
-    """
+    measured at the conversion and what drops is stated by count and by threshold."""
     sent = _stub_om2d(monkeypatch, tmp_path)
     lines = tmp_path / "channels.geojson"
     # ~0.001 deg of longitude at 36 N is ~90 m: one line well over the 60 m edge,
@@ -576,9 +561,7 @@ def test_two_nodes_a_fraction_of_a_metre_apart_are_fused_into_one():
     """A pair the geometry file would write as one point IS one point.
 
     A SELAFIN stores single-precision coordinates and a UTM northing eats the
-    mantissa, so the element between such a pair reaches the solver with a zero
-    determinant and takes the whole run down.
-    """
+    mantissa, so the element between such a pair reaches the solver degenerate."""
     points = np.array([[-75.780000, 36.120000], [-75.740000, 36.120000],
                        [-75.780000, 36.160000], [-75.780001, 36.120001]])
     cells = np.array([[0, 1, 2], [0, 3, 1]], dtype=np.int64)
@@ -611,12 +594,8 @@ def test_a_mesh_carrying_a_collapsed_element_reports_the_repair(
 def test_a_node_on_the_rasters_rim_reads_a_whole_cell_not_its_edge(tmp_path):
     """A node ON the AOI corner reads the first WHOLE cell, never off the grid.
 
-    The corner coordinate indexes one row and one column past the grid fetched for
-    that AOI, and a sample past the grid comes back as the untagged zero: an
-    18 m deep boundary reading as sea level, which every consumer takes at face
-    value. A rim deeper than the one partial cell is the bed FETCH's margin to
-    cover, not this clamp's.
-    """
+    The corner indexes one row and one column past the grid fetched for that AOI and
+    a sample past it returns the untagged zero; a deeper rim is the bed FETCH's margin."""
     import rasterio
     from rasterio.transform import from_origin
 

@@ -3,11 +3,7 @@
 The PURE surfaces, with no container, no object store and no live session: the
 router's typed refusals, the explicit / discovered / declared resolution order,
 the laziness of a declared recipe, the journal's replay determinism, the reset
-back to the declaration, and the hand-edit record that honestly refuses to
-replay.
-
-ASCII only.
-"""
+back to the declaration, and the hand-edit record that refuses to replay."""
 
 from __future__ import annotations
 
@@ -309,13 +305,9 @@ def test_a_supplied_mesh_in_the_mesh_row_is_accepted():
 
 @pytest.mark.asyncio
 async def test_a_supplied_mesh_is_adopted_instead_of_built(monkeypatch):
-    """The step that builds a mesh is the step that ADOPTS one, so a run solves
-    on the mesh it was handed rather than on a second one the recipe would make.
-
-    The session and the gate are asserted UNREACHED: a supplied mesh was built
-    and accepted already, and re-gating one nobody changed asks the same question
-    twice.
-    """
+    """The step that builds a mesh is the step that ADOPTS one, so a run solves on the
+    mesh it was handed. The session and the gate are asserted UNREACHED: re-gating a
+    mesh nobody changed asks the same question twice."""
     from trid3nt_server.workflows.mesh import gate as gate_mod
     from trid3nt_server.workflows.mesh import session as session_mod
     from trid3nt_server.workflows.mesh import step as mesh_step
@@ -602,10 +594,8 @@ def test_an_unmeasured_mesh_reports_no_minimum_edge(art):
 def test_the_timestep_follows_the_measured_edge_not_the_requested_one():
     """Gate-time refinement tightens dt without anybody restating the number.
 
-    The ask stays at a coarse edge and the mesh that was BUILT is finer, so the
-    CFL-safe step has to come off the mesh; reading the ask would hand the solver
-    a step the mesh it runs on cannot carry.
-    """
+    The ask stays coarse and the mesh BUILT is finer, so the CFL-safe step comes off
+    the mesh; reading the ask hands the solver a step it cannot carry."""
     from trid3nt_server.workflows.telemac.helpers.reach import suggest_time_step_s
 
     requested = suggest_time_step_s(40.0)
@@ -696,10 +686,7 @@ async def test_the_escalated_bbox_is_the_box_the_rerun_actually_models(monkeypat
     """A named override reaches the domain verbatim, place name notwithstanding.
 
     A rerun seats overrides on the parent's own sheet, so the box arrives at the
-    acquisition step beside the place name the parent ran with - and an escalation
-    that named a value the step then dropped would be a dead end dressed as a
-    corrective.
-    """
+    acquisition step beside the place name the parent ran with."""
     from trid3nt_server.workflows.shared.aoi import acquire_aoi
 
     def _never(*_a, **_kw):  # a geocode here would mean the box was dropped

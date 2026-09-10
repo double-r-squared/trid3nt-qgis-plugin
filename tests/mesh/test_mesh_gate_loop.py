@@ -1,16 +1,9 @@
 """Offline tests for the mesh gate loop.
 
-No object store, no live session, no container: the reg_grid mesher builds in
-process, a fake emitter stands in for the map, and a background driver answers
-the gate card on the shared pending-confirmation spine.
-
-Pins what the gate promises: the three loop tools mounted only while a session is
-open, ONE generic card path for every mesher, AUTO building inline with no card
-at all, ``mesh_op`` as the whole runtime edit surface, and reset putting the
-recipe back to the declaration through the gate.
-
-ASCII only.
-"""
+No object store, no live session, no container: a fake emitter stands in for the
+map and a background driver answers the card. Pinned: the three loop tools
+mounted only while a session is open, ONE generic card path for every mesher,
+AUTO building inline, ``mesh_op`` as the whole edit surface, reset via the gate."""
 
 from __future__ import annotations
 
@@ -469,11 +462,8 @@ def test_every_mesher_gets_the_same_card(tmp_path):
 def test_no_mesher_has_card_code_of_its_own():
     """The sweep guard, as source rather than as intent.
 
-    Two files carry a mesh gate card: the one that ASSEMBLES it and the one the
-    dock RENDERS it with. Neither may name a mesher - a card that knows one
-    library's name is the first branch, and the second is the per-mesher card
-    path this loop exists to not have.
-    """
+    Two files carry a mesh gate card - the one that ASSEMBLES it and the one the dock
+    RENDERS it with - and neither may name a mesher."""
     import pathlib
 
     from trid3nt_server.workflows.mesh.meshers import registered_meshers
@@ -558,11 +548,8 @@ async def test_the_shipped_client_parses_the_card_and_its_reply_routes_home(
         tmp_path, monkeypatch):
     """The reachability check, end to end through the CLIENT's own parser.
 
-    The plugin's gate helpers are pure python, so the card the server emits is
-    parsed here by the exact code the dock runs, its editors are typed into, and
-    what it would send back is fed to the loop - which is the only proof that the
-    channel is reachable rather than merely present on the envelope.
-    """
+    The card is parsed by the exact code the dock runs and what it would send back is
+    fed to the loop, which is the only proof the channel is reachable."""
     import sys
     from pathlib import Path
 

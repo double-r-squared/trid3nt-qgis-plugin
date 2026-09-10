@@ -1,11 +1,9 @@
-"""Offline tests for the registered meshers + the mesh artifact and its gate.
+"""Offline tests for the registered meshers, the mesh artifact and its gate.
 
-Every build here is container-driven or network-driven and is proven live; what
-this file exercises are the PURE surfaces: which meshers the router registers and
-what each one declares, the display-face round trip, the mesh-artifact record and
-its engine-compat gatekeeper, the case-scoped stash and sidecar-key derivation,
-and the precondition gate's decision logic with no live session.
-"""
+Every build is container- or network-driven and is proven live; the PURE surfaces
+run here: which meshers the router registers and what each declares, the
+display-face round trip, the artifact record and its engine-compat gatekeeper,
+the case-scoped stash and sidecar-key derivation, and the precondition gate."""
 
 from __future__ import annotations
 
@@ -117,8 +115,7 @@ def test_2dm_round_trip():
 def test_an_adopted_layer_drops_the_meta_bound_to_the_topology_it_replaced(tmp_path):
     """A hand-edited layer is a different topology, so the per-solver geometry the
     mesher wrote and the probes measured on the old cells must not ride into the
-    accepted artifact - the solver would get the pre-edit mesh under the edited
-    mesh's name."""
+    accepted artifact under the edited mesh's name."""
     from trid3nt_server.workflows.mesh.meshers import Mesh
     from trid3nt_server.workflows.mesh.session import MeshSession
     from trid3nt_server.workflows.mesh.tool import tool

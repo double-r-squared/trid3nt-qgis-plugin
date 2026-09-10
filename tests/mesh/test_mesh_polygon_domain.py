@@ -1,16 +1,9 @@
 """Offline tests for the POLYGON-DOMAIN path: a domain another tool produced.
 
-A recipe's extent takes a bbox or a polygon. The bbox path cuts the water side of
-the GSHHG shoreline; the polygon path meshes the interior of what it is handed,
-with the signed distance measured against that polygon's own boundary. Both go to
-the same ``om.generate_mesh`` in the same box, so what is tested here is the seam:
-the config the box is handed, the refusals each path owns, and the provenance the
-mesh travels with.
-
-The container call and the TELEMAC writer are stubbed; the composition is the
-real code. The in-container geometry itself is exercised against a stub
-``oceanmesh`` module, because the real one is GPL and lives only in the image.
-"""
+A recipe's extent takes a bbox or a polygon; the bbox path cuts the water side of
+the GSHHG shoreline, the polygon path meshes the interior it is handed against
+that polygon's own boundary. Both reach the same ``om.generate_mesh``, so what is
+tested is the seam: the config, the refusals each owns, and the provenance."""
 
 from __future__ import annotations
 
@@ -130,9 +123,8 @@ def test_the_box_is_seeded_inside_the_polygons_own_bounds(monkeypatch, tmp_path)
 @pytest.mark.parametrize("resolution_m", [120.0, 400.0, 1000.0])
 def test_the_one_size_word_is_the_uniform_base_a_basin_is_meshed_at(
         monkeypatch, tmp_path, resolution_m):
-    """A polygon interior with no sizing op sizes toward nothing, so the one size
-    word IS the edge the whole domain gets: the number a template declares reaches
-    the sizing function as the base, and a coarser ask is a coarser mesh rather
+    """A polygon interior with no sizing op sizes toward nothing, so the one size word
+    IS the edge the whole domain gets, and a coarser ask is a coarser mesh rather
     than a refusal about a ceiling the caller never wrote."""
     sent = _stub_om2d(monkeypatch, tmp_path)
     OM2D.build(_recipe(resolution_m=resolution_m))

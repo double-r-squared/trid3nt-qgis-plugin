@@ -77,10 +77,8 @@ def test_an_empty_role_is_not_a_role(tmp_path):
 def _lattice_mesh():
     """A 3x3 lon/lat node lattice, two triangles per square, one boundary loop.
 
-    In lon/lat because a declared FACE is what the chain measured - a section's
-    end transect, in the coordinates every other tool speaks - and the op is what
-    projects both onto the metres a tolerance is a length in.
-    """
+    In lon/lat because a declared FACE is what the chain measured, and the op is what
+    projects both onto the metres a tolerance is a length in."""
     xy = np.array([[x, y] for y in (36.12, 36.13, 36.14)
                    for x in (-75.78, -75.77, -75.76)])
     cells = []
@@ -181,10 +179,8 @@ def _face_across(points: np.ndarray, first: int, last: int) -> dict:
 def _forced_contiguous(labels: str, role: str) -> list[int]:
     """The isolating probe's closure: the shortest wrapping window holding a role.
 
-    Reproduced verbatim from the probe that ISOLATED the scatter - it rewrote the
-    measured labels into runs by hand and got two clean liquid boundaries out of
-    the writer. What the matcher constructs now has to agree with it.
-    """
+    It rewrites the measured labels into runs by hand; what the matcher constructs
+    now has to agree with it."""
     size = len(labels)
     seats = [i for i, mark in enumerate(labels) if mark == role]
     start, span = min(((seat, max((i - seat) % size for i in seats))
@@ -212,10 +208,9 @@ def test_a_face_that_ends_nowhere_near_the_boundary_carries_no_role():
 
 
 def test_a_cut_corner_does_not_cost_the_face_its_role():
-    """A triangulator conforms along a polygon's sides and cuts its corners, so
-    the anchors are the NEAREST nodes rather than nodes inside a tolerance: the
-    end caps here are chamfered well past one mean boundary edge and the face
-    still lands whole."""
+    """A triangulator conforms along a polygon's sides and cuts its corners, so the
+    anchors are the NEAREST nodes rather than nodes inside a tolerance: the end caps
+    here are chamfered past one mean boundary edge and the face still lands whole."""
     chamfered = np.array(
         [[8.0, 0.0], [0.0, 12.0], [0.0, 28.0], [8.0, 40.0],   # 0..3 west cap
          [100.0, 40.0],                                       # 4    north side
@@ -458,11 +453,8 @@ def test_the_substitution_the_fetch_narrated_rides_under_one_name(tmp_path):
 def test_the_journal_names_the_rung_that_ACTUALLY_painted_the_bed(tmp_path):
     """One datum, one name, in BOTH records.
 
-    The accepted artifact's provenance names the rung that served. A reader with
-    only the journal beside the mesh files would otherwise see the row the recipe
-    ASKED for and no sign of the substitution that answered it, so the line for
-    the mesh standing now carries the same measured statement.
-    """
+    A reader with only the journal beside the mesh files would otherwise see the row
+    the recipe ASKED for and no sign of the substitution that answered it."""
     from trid3nt_server.workflows.mesh.recipe import build_recipe
     from trid3nt_server.workflows.mesh.session import MeshSession
 
