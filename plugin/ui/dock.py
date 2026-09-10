@@ -1261,11 +1261,9 @@ class Trid3ntDock(QDockWidget):
         # Re-arm the top-row Connect button (disabled while connected).
 
     def _set_case_label(self, title: str) -> None:
-        # The case name rides the dock TITLEBAR --
-        # the under-button "Case: <title>" line (self.case_label) is gone. One
-        # method both the case-open and no-case paths call: a title = that case
-        # in the titlebar; empty = the "TRID3NT" brand word (fresh/no-case/
-        # disconnect). The dot colour (not the titlebar) signifies connection.
+        # ONE method both the case-open and the no-case paths call: a title
+        # names that case in the titlebar, and empty is the brand word. The
+        # dot colour, never the titlebar, signifies connection.
         self._case_title = title
         self.setWindowTitle(title if title else "TRID3NT")
 
@@ -1384,9 +1382,8 @@ class Trid3ntDock(QDockWidget):
         # also nulls self._case_bbox.
         self._clear_aoi_overlay()
         self._clear_region_overlay  #: drop any pending drawn region
-        # A NEW case is BBOX-LESS -- the canvas-as-AOI
-        # seed is gone. A clean slate with no AOI until the user Sets one (the
-        # Set-AOI rectangle) or the LLM geocodes it.
+        # A NEW case is BBOX-LESS: a clean slate with no AOI until the user
+        # sets one, or the model geocodes it out of the message.
         self.bridge.case_command("create", args=None)
 
     def delete_case(self, case_id: str, title: str) -> None:
@@ -1788,36 +1785,27 @@ class Trid3ntDock(QDockWidget):
         elif kind == "payload-warning":
             self._show_gate_card(data)
         elif kind == "code-exec-request":
-            # The code-exec HARD confirm gate. The
-            # agent blocks until the reply lands, so this envelope must never
-            # be dropped again (it previously fell through as kind="raw").
+            # The code-exec HARD confirm gate: the agent BLOCKS until the
+            # reply lands, so this envelope must never be dropped.
             self._show_code_exec_card(data)
         elif kind == "credential-request":
-            # The JIT API-key prompt for a paused
-            # keyed tool (AirNow/FIRMS/...). Same gap the code-exec card
-            # closed: previously fell through as kind="raw" and was dropped,
-            # so the agent's pause waited out its TTL and failed.
+            # The key prompt for a PAUSED keyed tool. The pause has a
+            # server-side TTL, so an undelivered card fails the tool.
             self._show_credential_card(data)
         elif kind == "tool-candidates":
-            # The tool-selection picker
-            # ranked candidates + free-text + let-agent-decide, replying on
-            # ONE tool-choice envelope. Fail-open: unanswered, the server's
-            # timeout_s proceeds and the supersede hook above folds the card.
+            # The tool-selection picker: ranked candidates, free text and
+            # let-agent-decide, replying on ONE envelope. FAIL-OPEN --
+            # unanswered, the server proceeds and the hook above folds it.
             self._show_tool_candidates_card(data)
         elif kind == "region-choice-request":
-            # CRITICAL gate-WAIT -- the server snapped a
-            # vague geocode to the whole state and PAUSES the turn awaiting a
-            # region-choice-provided reply. Previously fell through as
-            # kind="raw" and was dropped, so the turn hung (the code-exec
-            # stall class). The dock renders the picker card; a whole_state
-            # answer keeps the honest default, so the gate always closes.
+            # A gate WAIT: the server snapped a vague geocode to the whole
+            # state and PAUSES the turn on the reply. A whole-state answer
+            # keeps the honest default, so the gate always closes.
             self._show_region_choice_card(data)
         elif kind == "spatial-input-request":
-            # CRITICAL gate-WAIT -- the agent needs a
-            # picked geometry and PAUSES the turn. Previously dropped, hanging
-            # the turn. The dock renders the pick card wired to the canvas
-            # point/AOI tools; Cancel (and the honest vector_draw degrade)
-            # closes the gate.
+            # A gate WAIT: the agent needs a picked geometry and PAUSES the
+            # turn. The card is wired to the canvas point and AOI tools, and
+            # Cancel closes the gate.
             self._show_spatial_input_card(data)
         elif kind == "code-exec-result":
             # The run outcome that follows an approved
@@ -1914,10 +1902,9 @@ class Trid3ntDock(QDockWidget):
         if info.layers:
             notes = self.materializer.materialize(info.layers)
             if notes:
-                # The case-open replay
-                # used to paint one chat line PER layer (21 on a real case),
-                # pushing the conversation far up -- fold the batch into the
-                # collapsed "Layers (N)" toggle (errors stay visible).
+                # Fold the batch rather than painting one chat line per
+                # layer, which pushes the conversation far up on a real case.
+                # Errors stay visible.
                 self._ensure_pending().add_layer_notes(notes)
         # Rebuild the charts window's list from the
         # case's persisted SessionChartRecords (per-case durability). A

@@ -677,8 +677,7 @@ class _ToolCard(QFrame):
             prefix.setTextFormat(Qt.TextFormat.PlainText)
             prefix.setStyleSheet(_TOOLCARD_PREFIX_STYLE)
             rl.addWidget(prefix)
-            # The label keeps the EXACT state-driven text colour + plain
-            # non-wrapping behaviour of the old chip (only the frame is gone).
+            # A plain, non-wrapping label in the state-driven text colour.
             name_lbl = QLabel(label)
             name_lbl.setTextFormat(Qt.TextFormat.PlainText)
             name_lbl.setStyleSheet(_tool_row_text_style(state))
@@ -954,14 +953,10 @@ class _AssistantEntry:
         first frame so the chevron, collapse and spinner state persist while
         the inner rows re-render."""
         if self._tool_card is None:
-            # NEVER
-            # mint the card shell for a frame with no tool content. A turn
-            # whose pipeline frames carry only LLM bookkeeping steps (all
-            # filtered by the dock's _LLM_STEP_NAMES / compute / compaction
-            # routing) used to lazily create an empty "Tools" card that then
-            # sat stale in the transcript. The shell is created only when an
-            # actual tool row (or at least a metadata line) exists to show;
-            # once minted, later frames -- empty or not -- update it as before.
+            # NEVER mint the card shell for a frame with no tool content: a
+            # turn whose pipeline frames carry only bookkeeping steps would
+            # leave an empty "Tools" card sitting stale in the transcript.
+            # Once minted, later frames update it whether empty or not.
             has_rows = any(str(r.get("label") or "") for r in inner_rows)
             if not has_rows and not any(m for m in meta_lines):
                 return
