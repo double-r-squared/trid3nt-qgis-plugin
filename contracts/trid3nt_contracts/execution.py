@@ -1,21 +1,9 @@
-"""Solver-execution shapes: ModelSetup, RunResult, ExecutionHandle,
-LayerURI.
+"""The solver-execution shapes: setup, handle, result, layer.
 
-These are the return types of the model-setup/execution tool chain:
-- ``build_sfincs_model(...)  -> ModelSetup``
-- ``run_solver(...)          -> ExecutionHandle``
-- ``wait_for_completion(...) -> RunResult``
-- ``postprocess_flood(...)   -> list[LayerURI]``
-
-Invariants this module is responsible for:
-- **8. Cancellation is first-class.** ``ExecutionHandle`` carries the Cloud
-  Workflows execution identifier as a first-class field
-  (``workflows_execution_id``) so ``agent`` calls Workflows ``terminate``
-  without string-parsing. There is one handle type; no per-backend variants.
-- **``LayerURI`` aligns field-for-field with ``map-command load-layer`` args**
-  (``layer_id``, ``style``, optional ``temporal``) and with
-  ``ResultLayer`` so postprocess output flows to the map without translation.
-  Output formats are fixed: rasters COG, vectors FlatGeobuf/GeoParquet.
+``LayerURI`` aligns field-for-field with the ``load-layer`` map command and
+with ``ResultLayer``, so a produced layer reaches the map without translation;
+rasters are COG, vectors FlatGeobuf or GeoParquet. There is ONE handle type -
+cancellation reads a first-class field on it rather than parsing a string.
 """
 
 from __future__ import annotations
@@ -49,115 +37,90 @@ __all__ = [
 ]
 
 
-# Open enum: compute classes a solver may request. Engine/infra extend as
-# backends are added; the handle shape does not change per backend.
+# Open enum: the compute classes a solver may request. The handle shape does
+# NOT change per backend, so a new backend adds a class and nothing else.
 ComputeClass = Literal["small", "standard", "large", "gpu"]
 
 
 # --------------------------------------------------------------------------- #
-# Data-driven render legend (the colormap KEY that comes from the data)
+# The render legend - the colormap key that comes from the data
 # --------------------------------------------------------------------------- #
 
 
 class LegendKey(GraceModel):
     """A layer's RESOLVED style: what the reader is looking at, and its scale.
-
-    A preset is four renderer shapes parameterised by what the data is; this is
-    one of them resolved against a particular layer. The colours and the range
-    are the SAME ones the render uses, because both come from this one
-    resolution - there is no second range to drift.
-
-    ``qml`` is the resolved preset as QGIS's own style document, which is what
-    the map loads - the ONE record of how the layer is painted, swatches and
-    class breaks included. ``None`` for a layer that is already painted (an
-    RGB(A) composite, a COG carrying its own colour table): nothing may
-    override the colours such a file already has.
-
-    The remaining fields are what a reader other than the map asks of a
-    published layer: the scale a packet holds a quantity to, and the words a
-    restyle starts from.
-
-    ``kind``
-        Which preset shape drew it: ``continuous`` (a ramp over a range),
-        ``classed`` (declared breaks or an embedded class table),
-        ``reference`` (drawn, not measured), ``mesh`` (an MDAL dataset group).
-    ``colormap``
-        The ramp name, or explicit stops as ``[[stop_0to1, "#rrggbb"], ...]``.
-    ``vmin`` / ``vmax``
-        The one range the layer is read on. ``None`` for a reference layer.
-    ``units`` / ``label``
-        What the quantity is measured in and what the legend calls it.
+    The colours and the range here are the SAME ones the render uses, because
+    both come from this one resolution - there is no second range to drift.
     """
 
+    #: Which preset shape drew it: ``continuous`` (a ramp over a range),
+    #: ``classed`` (declared breaks or an embedded class table), ``reference``
+    #: (drawn, not measured), ``mesh`` (a dataset group).
     kind: Literal["continuous", "classed", "reference", "mesh"]
 
+    #: The ramp name, or explicit stops as ``[[stop_0to1, "#rrggbb"], ...]``.
     colormap: str | list[tuple[float, str]] | None = None
+    #: The ONE range the layer is read on. ``None`` for a reference layer.
     vmin: float | None = None
     vmax: float | None = None
+    #: What the quantity is measured in, and what the legend calls it.
     units: str | None = None
     label: str | None = None
-    #: The resolved preset as a QGIS ``.qml`` document - what the map loads.
-    #: ``None`` for a layer whose file already carries its colours.
+    #: The resolved preset as a QGIS ``.qml`` document - the ONE record of how
+    #: the layer is painted, swatches and class breaks included, and what the
+    #: map loads. ``None`` for a layer whose file already carries its colours:
+    #: nothing may override the colours such a file already has.
     qml: str | None = None
 
 
 class ModelSetup(GraceModel):
-    """Returned by ``build_sfincs_model`` (HydroMT). A staged, ready-to-run model.
-
-    The built model artifacts live in GCS; ``setup_uri`` points at them.
-    ``parameters`` is solver-specific staging metadata (grid, forcing, options)
-    validated at the engine layer.
-    """
+    """A staged, ready-to-run model. ``setup_uri`` points at the built
+    artifacts, and ``parameters`` is solver-specific staging metadata validated
+    at the engine layer rather than here."""
 
     schema_version: Literal["v1"] = "v1"
 
     setup_id: ULIDStr
-    solver: str  # e.g., "sfincs"
-    setup_uri: str  # gs://... staged model inputs
+    solver: str
+    setup_uri: str  # the staged model inputs
     grid_resolution_m: float = Field(gt=0.0)
     bbox: tuple[float, float, float, float]
-    parameters: dict = Field(default_factory=dict)  # solver-specific staging
+    parameters: dict = Field(default_factory=dict)
     created_at: UTCDatetime
 
 
 class ExecutionHandle(GraceModel):
-    """Returned by ``run_solver``. The cancellation contract (invariant 8).
-
-    ``workflows_execution_id`` is the Cloud Workflows execution identifier —
-    the pinned cancellation seam. ``agent`` calls Workflows ``terminate`` with
-    it on cancel; ``infra`` provisions the workflow definitions it names. All
-    three cite this same handle (orchestrator "Solver cancellation chain").
-    """
+    """A submitted execution, and the CANCELLATION contract.
+    The execution identifier is a first-class field, so a cancel terminates by
+    it instead of parsing one out of a string. One handle, every backend."""
 
     schema_version: Literal["v1"] = "v1"
 
     handle_id: ULIDStr
-    run_id: ULIDStr  # the runs._id / solver_run_id this execution backs
+    run_id: ULIDStr  # the run this execution backs
     solver: str
     compute_class: ComputeClass
 
-    # --- Cancellation seam
-    workflows_execution_id: str  # Cloud Workflows execution identifier
-    workflow_name: str  # the Cloud Workflows definition name
-    workflow_location: str  # GCP region of the workflow execution
+    # --- Cancellation seam: the identifier a terminate is issued against, and
+    # --- the definition and region it names.
+    workflows_execution_id: str
+    workflow_name: str
+    workflow_location: str
 
     submitted_at: UTCDatetime
 
 
 class RunResult(GraceModel):
-    """Returned by ``wait_for_completion``. Terminal outcome of an execution.
-
-    ``status`` mirrors the ``runs`` lifecycle; ``cancelled`` is distinct from
-    ``failed`` (invariant 8). ``output_uri`` points at the raw solver output in
-    GCS, which ``postprocess_flood`` consumes to produce ``LayerURI`` objects.
-    """
+    """The TERMINAL outcome of an execution.
+    ``cancelled`` is a distinct status from ``failed``: a stopped run is a
+    finished run, not a broken one."""
 
     schema_version: Literal["v1"] = "v1"
 
     run_id: ULIDStr
     handle_id: ULIDStr
     status: Literal["complete", "failed", "cancelled"]
-    output_uri: str | None = None  # gs://... raw solver output (None if not complete)
+    output_uri: str | None = None  # the raw solver output; None until complete
     started_at: UTCDatetime | None = None
     completed_at: UTCDatetime | None = None
     duration_seconds: float | None = None
@@ -169,44 +132,30 @@ class RunResult(GraceModel):
     # Cancellation details (status == "cancelled")
     cancellation_reason: str | None = None
 
-    # AWS Batch compute metadata (task-153 — solve-time inference). Best-effort
-    # capture of the Spot instance + timing breakdown the run landed on, so the
-    # adaptive perf model can later infer completion time from real (instance,
-    # problem-size) measurements. Populated ONLY on the aws-batch terminal paths
-    # (SUCCEEDED / FAILED); ``None`` on the local/in-process paths and on any
-    # AWS-describe failure (the capture is wrapped + swallows all exceptions).
-    # Shape (all keys optional): ``{instance_type, instance_lifecycle, az,
-    # vcpus, memory_mib, created_at_ms, started_at_ms, stopped_at_ms,
-    # queue_provision_secs, compute_secs, total_secs}``.
+    # BEST-EFFORT capture of the instance and timing breakdown the run landed
+    # on, so a completion-time model can later be inferred from real
+    # measurements rather than guessed. ``None`` on an in-process run and on any
+    # describe failure - the capture swallows its own exceptions, because a
+    # missing measurement must never fail a finished run. Every key optional:
+    # ``{instance_type, instance_lifecycle, az, vcpus, memory_mib,
+    # created_at_ms, started_at_ms, stopped_at_ms, queue_provision_secs,
+    # compute_secs, total_secs}``.
     batch_compute_meta: dict | None = None
 
 
 class LayerURI(GraceModel):
-    """Returned by ``postprocess_flood`` (one per output layer).
-
-    Aligned field-for-field with ``map-command load-layer`` args and with
-    ``ResultLayer`` so postprocess output maps onto the visualization seam with
-    no translation. ``uri`` is a COG (raster) or FlatGeobuf/GeoParquet (vector).
-
-    ``bbox`` is optional: when present the pipeline emitter emits a
-    ``map-command(zoom-to)`` after ``add_loaded_layer`` so the client camera
-    flies to the layer's geographic extent. Format: ``(min_lon, min_lat,
-    max_lon, max_lat)`` in EPSG:4326.
-
-    ``style`` is the DECLARED style row (which of the four preset shapes draws
-    this layer and the parameters that shape needs); ``legend`` is that row
-    RESOLVED against the layer, carrying the concrete range and the .qml the
-    map loads. The producer declares, the publish path resolves.
+    """ONE produced output layer.
+    Aligned field-for-field with the ``load-layer`` map command and with
+    ``ResultLayer``, so it reaches the map without translation. The producer
+    DECLARES a style; the publish path RESOLVES it into ``legend``.
     """
 
-    layer_id: str  # stable id; flows into map-command load-layer args
+    layer_id: str  # stable id; flows into the load-layer args
     name: str
-    # ``mesh`` (SCHISM landing): an unstructured/UGRID solver mesh the
-    # plugin opens via MDAL (``QgsMeshLayer``) -- the ONE format the live
-    # materializer STAGES rather than streams. SCHISM's out2d UGRID +
-    # (retroactively) the SFINCS quadtree map are the mesh producers.
+    # ``mesh`` is an unstructured solver mesh, the ONE format a client STAGES
+    # rather than streams.
     layer_type: Literal["raster", "vector", "mesh"]
-    uri: str  # gs://... COG / FlatGeobuf / GeoParquet / UGRID netCDF (mesh)
+    uri: str  # COG / FlatGeobuf / GeoParquet / UGRID netCDF
     #: The DECLARED style row - ``{kind, ramp, units, label, scale, classes,
     #: geometry, color}``. ``None`` = the kind's bare default.
     style: dict[str, Any] | None = None
@@ -218,359 +167,249 @@ class LayerURI(GraceModel):
     temporal: TemporalConfig | None = None  # present iff time-varying
     role: Literal["primary", "context", "input"] = "primary"
     units: str | None = None
-    bbox: tuple[float, float, float, float] | None = None  # (min_lon, min_lat, max_lon, max_lat); triggers zoom-to
+    # ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326. When present, the
+    # camera flies to it once the layer is added.
+    bbox: tuple[float, float, float, float] | None = None
     legend: LegendKey | None = None  # the resolved style; None until published
-    # Cross-source fallback honesty marker (2026-07-13, DEM 3DEP->GLO-30
-    # ladder): set ONLY when a tool substituted a fallback data source for the
-    # requested/default primary (e.g. ``fetch_dem`` with USGS 3DEP down returns
-    # Copernicus GLO-30 instead). Carries a human-readable note naming BOTH
-    # sources so the LLM/user can never mistake fallback data for the primary
-    # (honesty floor). ``None`` => the layer is exactly the requested source.
-    # Additive + optional per the GraceModel forward-compat rule.
+    # Set ONLY when a fallback data source was substituted for the requested
+    # primary. It names BOTH sources, so fallback data can never be mistaken for
+    # the primary. ``None`` means the layer is exactly the requested source.
     fallback_note: str | None = None
-    # Structured half of the same honesty: which rungs of a DECLARED fallback
-    # ladder served this layer, with the coverage share each painted. A mosaic
-    # several rungs built together carries one row per rung; an undegraded layer
-    # carries at most the ``primary`` row. ADDITIVE + default-empty -- ``[]``
-    # means no ladder governs this fetch, never "nothing was substituted".
+    # The structured half of the same honesty: which rungs of a DECLARED ladder
+    # served this layer, and the share each painted. A mosaic several rungs built
+    # carries one row per rung. ``[]`` means no ladder governs this fetch, NEVER
+    # "nothing was substituted".
     fallbacks: list[FallbackActivation] = Field(default_factory=list)
-    # Structured input provenance (provenance-chain wave): the physical model
-    # inputs this layer was built from, each tagged with WHERE it came from
-    # (fetched / user / default_demo / derived / prompt_interpreted). ADDITIVE +
-    # default-empty -- a template populates it incrementally; ``[]`` means the
-    # template has not declared its input provenance yet, NOT "all real". The
-    # narration seam (``summarize_tool_result``) renders it into one compact
-    # assumptions line so the agent narrates which quantities are demo defaults
-    # vs site-derived, and never mistakes a baked constant for measured data.
+    # The physical model inputs this layer was built from, each tagged with
+    # WHERE it came from. ``[]`` means no provenance has been declared yet, NOT
+    # "all real" - which is why a narration renders these rather than assuming a
+    # baked constant was measured.
     synthetic_inputs: list[SyntheticInput] = Field(default_factory=list)
-    # Explicit CRS authority id for a ``layer_type="mesh"`` row.
-    # MDAL reports an EMPTY crs() for a SCHISM out2d UGRID / a SFINCS quadtree
-    # grid, so the plugin's ``_add_mesh`` applies this string via
-    # ``QgsMeshLayer.setCrs(QgsCoordinateReferenceSystem(crs_authid))`` (0116).
-    # ``None`` for a raster/vector row (their CRS rides in the object bytes).
-    # Additive + optional per the GraceModel forward-compat rule.
+    # The CRS authority id for a ``layer_type="mesh"`` row: a mesh reader
+    # reports an empty CRS for these formats, so the run has to state it.
+    # ``None`` for a raster or vector row, whose CRS rides in the bytes.
     crs_authid: str | None = None
-    # The temporal twin of ``crs_authid`` for a ``layer_type="mesh"`` row: the
-    # ISO-8601 UTC instant the mesh's dataset times are counted from. A SELAFIN
-    # records no origin, so the plugin stamps this through
-    # ``QgsMeshLayer.setReferenceTime`` and the temporal controller scrubs the
-    # run's own clock rather than 1900. ``None`` for a raster/vector row.
+    # The temporal twin of ``crs_authid``: the instant a mesh's dataset times
+    # are counted from. A SELAFIN records no origin, so without this a scrubber
+    # reads the run's first step as 1900. ``None`` for a raster or vector row.
     reference_time: str | None = None
-    # The window this layer is valid for, as ISO-8601 UTC instants: one frame of
-    # an ordered sequence states its own [valid_from, valid_to) and the map
-    # stamps it straight onto the layer's fixed temporal range. The producer
-    # holds the instant already; a time spelled into the display NAME and parsed
-    # back out of it is the same fact in the wrong data class. ``None`` for a
-    # layer that is not one frame of a sequence.
+    # The window this layer is valid for, as ISO-8601 UTC instants. One frame of
+    # an ordered sequence states its own ``[valid_from, valid_to)`` and the map
+    # stamps it straight on. The producer holds the instant already; a time
+    # spelled into a display NAME and parsed back out is the same fact in the
+    # wrong data class. ``None`` for a layer that is not one frame.
     valid_from: str | None = None
     valid_to: str | None = None
 
 
 # --------------------------------------------------------------------------- #
-# LayerURI SUBCLASS result models (the router's envelope-hook seam).
+# LayerURI SUBCLASS result models.
 #
-# A source whose result is a ``LayerURI`` SUBCLASS carrying business fields
-# computed POST-serialize from the produced bytes declares the subclass by name
-# (``output.result_model``) in its ``source.yaml``; the router constructs it from
-# the base ``LayerURI`` plus the pure ``hooks.envelope`` field dict. The subclass
-# lives HERE (not in a fetcher module) so the spec-driven surface has no coded
-# twin. ``LAYER_RESULT_MODELS`` is the name -> class table the router resolves.
+# A source whose result carries business fields computed POST-serialize from the
+# produced bytes names its subclass in its ``source.yaml``; the subclass is built
+# from the base layer plus a pure envelope hook's field dict. The subclasses live
+# HERE rather than in a fetcher module, so the declarative surface needs no code
+# of its own. ``LAYER_RESULT_MODELS`` is the name -> class table.
 # --------------------------------------------------------------------------- #
 
 
 class HighWaterMarksLayerURI(LayerURI):
-    """The USGS STN HWM point ``LayerURI`` plus the survey-quality envelope.
+    """A high-water-mark point layer plus its survey-quality envelope."""
 
-    Extra fields beyond ``LayerURI`` (the ``fetch_high_water_marks`` envelope,
-    computed post-serialize from the FGB by ``hooks.usgs_stn_hwm.envelope``):
-
-    - ``n_marks`` -- HWM count in the AOI.
-    - ``event`` -- resolved flood-event name (or None for a state-scoped fetch).
-    - ``quality_breakdown`` -- ``{quality_label: count}`` (surveyor accuracy).
-    - ``type_breakdown`` -- ``{hwm_type: count}`` (seed/debris/stain/mud line).
-    - ``datum_summary`` -- ``{vertical_datum: count}``.
-    - ``observed_quantity`` -- the physical quantity ``elev_ft`` carries:
-      ``"water_surface_elevation"`` (a WSE above the stated vertical datum, NOT a
-      depth-above-ground), so ``extract_model_at_observations`` never silently
-      pairs this WSE against a model DEPTH raster.
-    - ``caveats`` -- honest usage caveats (quality spread, datum, point-peak).
-    - ``notes`` -- provenance detail.
-    """
 
     n_marks: int = 0
+    #: The resolved flood-event name; ``None`` for a state-scoped fetch.
     event: str | None = None
+    #: ``{label: count}`` over surveyor accuracy, mark type and vertical datum.
     quality_breakdown: dict[str, int] = {}
     type_breakdown: dict[str, int] = {}
     datum_summary: dict[str, int] = {}
+    #: The PHYSICAL QUANTITY the elevation column carries: a water-surface
+    #: elevation above the stated datum, NOT a depth above ground. Stated so a
+    #: comparison never silently pairs this against a model depth raster.
     observed_quantity: str = "water_surface_elevation"
     caveats: list[str] = []
     notes: list[str] = []
 
 
 class FaultSourcesResult(LayerURI):
-    """The GEM active-fault trace ``LayerURI`` plus the kinematic source records.
+    """An active-fault trace layer plus the kinematic source records."""
 
-    Extra fields beyond ``LayerURI`` (the ``fetch_fault_sources`` envelope,
-    computed post-serialize from the produced FGB by ``hooks.fault_sources.envelope``):
-
-    - ``catalog`` -- the source catalog ("gem").
-    - ``fault_count`` -- number of fault-source records (== ``len(faults)``).
-    - ``faults`` -- the kinematic source records (geometry trace + slip rate +
-      dip / rake / seismogenic-depth band) the OpenQuake deck builder turns into
-      ``simpleFaultSource`` sources.
-    - ``source`` -- provenance string.
-    - ``note`` -- always ``None`` on this (non-empty, rendered) path; the empty
-      AOI degrade returns a plain dict with a populated ``note`` instead (the
-      ``output.variant_by_emptiness`` switch).
-    """
 
     catalog: str = "gem"
+    #: Always equals ``len(faults)``.
     fault_count: int = 0
+    #: Geometry trace, slip rate, dip, rake and seismogenic-depth band per
+    #: record - what a deck builder turns into fault sources.
     faults: list[dict] = []
     source: str = "GEM Global Active Faults (harmonized)"
+    #: Always ``None`` here: an empty AOI returns a bare record instead of a
+    #: layer, so a populated note never rides a rendered result.
     note: str | None = None
 
 
 class FloodExtentObservationResult(LayerURI):
-    """The observed (MODIS MCDWD) flood-extent ``LayerURI`` plus the observation envelope.
+    """An OBSERVED flood-extent layer plus its observation envelope."""
 
-    Extra fields beyond ``LayerURI`` (the ``fetch_flood_extent_observation``
-    envelope, computed post-serialize from the produced categorical COG by
-    ``hooks.flood_extent_observation.envelope``):
-
-    - ``product`` -- the LANCE product id (``MCDWD_L3_F3_NRT``).
-    - ``observation_date`` -- the resolved 3-day-composite date (ISO).
-    - ``class_breakdown`` -- ``{class_label: pixel_count}`` (nodata excluded).
-    - ``flood_pixel_count`` / ``flood_area_km2`` -- classes 2 + 3.
-    - ``caveats`` -- SAR/optical detection-limit + 250 m resolution + NRT-provisional.
-    - ``notes`` -- provenance detail.
-    """
 
     product: str = "MCDWD_L3_F3_NRT"
+    #: The resolved composite date, ISO.
     observation_date: str | None = None
+    #: ``{class_label: pixel_count}``, nodata excluded.
     class_breakdown: dict[str, int] = {}
+    #: The flood classes only, not every wet class.
     flood_pixel_count: int = 0
     flood_area_km2: float | None = None
+    #: The detection limits and the provisional status, stated on the result.
     caveats: list[str] = []
     notes: list[str] = []
 
 
 class LandcoverResult(LayerURI):
-    """The NLCD landcover ``LayerURI`` plus the Manning's-validation sidecar.
-
-    Extra fields beyond ``LayerURI`` (the ``fetch_landcover`` sidecar, computed by
-    ``hooks.landcover.envelope``). ``LayerURI`` is a FROZEN ``extra="forbid"``
-    contract, so the NLCD vintage year cannot live on it -- the twin returned a
-    ``{"layer": LayerURI, "nlcd_vintage_year": ...}`` dict for exactly this reason;
-    the subclass carries the sidecar directly instead, and the SFINCS builder reads
-    ``.uri`` + ``.nlcd_vintage_year`` off it (Invariant 7: no silent wrong answers).
-
-    - ``nlcd_vintage_year`` -- the vintage year the SFINCS setup validates the
-      Manning's-roughness mapping CSV against (None for ESA WorldCover).
-    - ``dataset`` -- echo of the resolved dataset string ("nlcd_2021").
-    - ``source`` -- provenance ("mrlc-wcs").
-    - ``effective_resolution_m`` -- the pixel spacing actually delivered.
-    - ``native_resolution_m`` -- NLCD native (30 m).
-    - ``downsampled`` -- True when coarsened above native for a large AOI.
-    - ``downsampling_note`` -- honest coarsening caveat (None at native res).
+    """A landcover layer plus the sidecar a roughness mapping is validated on.
+    The base layer is a frozen ``extra="forbid"`` contract, so the vintage
+    cannot live on it; carrying it here keeps it typed rather than wrapped in a
+    dict beside the layer.
     """
 
+
+    #: The vintage the roughness mapping is validated against. ``None`` for a
+    #: dataset that has no such mapping.
     nlcd_vintage_year: int | None = None
     dataset: str = "nlcd_2021"
     source: str = "mrlc-wcs"
+    #: The pixel spacing actually DELIVERED, against the dataset's native.
     effective_resolution_m: int = 30
     native_resolution_m: int = 30
+    #: True when coarsened above native for a large AOI, with the honest
+    #: caveat beside it. The note is ``None`` at native resolution.
     downsampled: bool = False
     downsampling_note: str | None = None
 
 
 class DemLayerURI(LayerURI):
-    """A NO-FIELD ``LayerURI`` subclass for the ``fetch_dem`` fold.
-
-    ``fetch_dem`` carries NO business fields beyond the base ``LayerURI`` -- the
-    twin returned a plain ``LayerURI``. But the router's ONLY seam to override the
-    emitted ``layer_id`` / ``name`` (the twin's ``dem-{lon}-{lat}-{Nm}`` id and
-    ``USGS 3DEP DEM (Nm)`` name with the pixel-budget auto-coarsen stamp) is the
-    ``hooks.envelope`` post-emit hook, which ``registration._validate_hooks``
-    REQUIRES be declared TOGETHER with ``output.result_model`` (a name in this
-    table). This zero-field subclass satisfies that pairing with the LEAST
-    invasive change (no relaxation of the shared envelope/result_model validator,
-    which every other envelope spec depends on): it serializes field-for-field
-    like the base ``LayerURI``, so a consumer that expects a ``LayerURI`` sees an
-    identical shape (``isinstance`` holds).
+    """A NO-FIELD subclass, carrying nothing beyond the base layer.
+    It exists because the only seam that can override the emitted layer id and
+    name is the envelope hook, and a hook must be declared together with a
+    result model. It serializes field-for-field like the base.
     """
 
 
 class TopobathyResult(LayerURI):
-    """A merged coastal topo-bathymetry ``LayerURI`` plus its fetch-time provenance.
-
-    The ``fetch_topobathy`` fold's result model. The four extra fields
-    are FETCH-TIME PROVENANCE -- which of the composite's heterogeneous legs (CUDEM
-    1/9" tiles, NCEI regional 1 m tiles, the ETOPO 2022 global fallback, 3DEP land)
-    actually painted the merge -- and are NOT recoverable from the final single-band
-    COG. They are carried from the delegate to here by the provenance channel
-    (``topobathy.read`` records them; ``topobathy.envelope`` reads them back), so
-    they survive a cache hit that never re-runs the fetch. A cache object written
-    before the channel (no sidecar) yields ``None`` provenance, and these declared
-    DEFAULTS then hold -- byte-identical to the twin's own cache-hit behaviour.
-
+    """A merged coastal topo-bathymetry layer plus its FETCH-TIME provenance.
     Every field below reports what actually PAINTED the merge, never what was
-    selected for it: a tile can drop between selection and merge (unreadable
-    header, empty read) and a claim keyed on selection would be false.
-
-    - ``bathymetry_present`` -- True when CUDEM, the regional fine DEM, OR the ETOPO
-      global fallback actually painted a real below-waterline bed; False on the
-      3DEP-land-only degrade.
-    - ``fallback_warning`` -- an honest human-readable warning when the surface
-      degraded (bathymetry absent; global ETOPO fallback bathy; the land leg was
-      absent). ``None`` on the clean CUDEM/regional path. NEVER a fabricated success.
-    - ``cudem_tile_count`` -- number of CUDEM 1/9" tiles that painted (0 off the
-      CUDEM path).
-    - ``regional_tile_count`` -- number of NCEI regional fine (~1 m) tiles that painted.
-    - ``rung_coverage`` -- the MEASURED share of the AOI each fallback-ladder rung's
-      source painted, keyed by rung name. The fallback walker reconciles its own
-      promise-derived shares against this, so an activation row reports measured
-      paint rather than a footprint promise. ``None`` when nothing measurable ran.
+    selected for it: a tile can drop between selection and merge, and a claim
+    keyed on selection would be false.
     """
 
+    # The provenance travels through the recorder channel, so it survives a
+    # cache hit that never re-runs the fetch. A cache object written before the
+    # channel yields no sidecar, and these declared DEFAULTS then hold.
+
+    #: True when a real below-waterline bed painted, from any bathymetric leg;
+    #: False on the land-only degrade.
     bathymetry_present: bool = True
+    #: An honest warning when the surface degraded - bathymetry absent, a global
+    #: fallback bed, a missing land leg. ``None`` on the clean path, and NEVER a
+    #: fabricated success.
     fallback_warning: str | None = None
+    #: How many tiles of each fine leg painted; 0 when that leg did not run.
     cudem_tile_count: int = 0
     regional_tile_count: int = 0
+    #: The MEASURED share each ladder rung's source painted, by rung name, so an
+    #: activation row reports measured paint rather than a footprint promise.
+    #: ``None`` when nothing measurable ran.
     rung_coverage: dict[str, float] | None = None
 
 
 class BlueTopoResult(LayerURI):
-    """A NOAA BlueTopo bathymetric surface ``LayerURI`` plus its fetch-time provenance.
-
-    The ``fetch_bluetopo`` result model. Every field reports what the tile scheme
-    said and what actually painted, never what was asked for.
-
-    - ``vertical_datum`` -- the datum read off the tiles that painted, verbatim.
-      BlueTopo publishes NAVD88 (an orthometric datum, NOT a navigational or tidal
-      one), so the surface merges with a NAVD88 land DEM without a VDatum step. It
-      is stated here rather than assumed by a reader because a bed whose datum
-      nobody carried is a bed nobody can merge.
-    - ``tile_count`` -- number of BlueTopo tiles that painted the merge.
-    - ``resolution_tiers`` -- the tile-scheme ``Resolution`` labels of those tiles
-      (BlueTopo is a multi-resolution scheme; a merge may span tiers).
-    - ``coverage_fraction`` -- the share of the requested AOI the selected tile
-      footprints cover, measured against the tile scheme's own geometry. BlueTopo
-      is bathymetry ONLY and concentrates on navigationally significant water, so
-      a shore-spanning AOI is partially covered BY CONSTRUCTION: this number is
-      the honest report of that, not a failure.
-    - ``rung_coverage`` -- the MEASURED share of the AOI each fallback-ladder rung's
-      source painted, keyed by rung name (the walker reconciles against it).
+    """A bathymetric surface layer plus its fetch-time provenance.
+    Every field reports what the tile scheme said and what actually painted,
+    never what was asked for.
     """
 
+
+    #: The datum read off the tiles that painted, VERBATIM. It is orthometric
+    #: rather than tidal, so the surface merges with a matching land DEM with no
+    #: conversion step. Stated rather than assumed: a bed whose datum nobody
+    #: carried is a bed nobody can merge.
     vertical_datum: str = "NAVD88"
     tile_count: int = 0
+    #: The tile scheme's own resolution labels; a merge may span tiers.
     resolution_tiers: list[str] = Field(default_factory=list)
+    #: The share of the requested AOI the selected footprints cover, measured
+    #: against the tile scheme's geometry. This source is bathymetry ONLY and
+    #: concentrates on navigable water, so a shore-spanning AOI is partially
+    #: covered BY CONSTRUCTION - this number reports that, it is not a failure.
     coverage_fraction: float = 0.0
+    #: The MEASURED share each ladder rung's source painted, by rung name.
     rung_coverage: dict[str, float] | None = None
 
 
 class StormTracksLayerURI(LayerURI):
-    """The hurricane / tropical-cyclone track ``LayerURI`` plus its fetch-time mode provenance.
-
-    The ``fetch_storm_tracks`` fold's result model. The twin returned a
-    plain ``LayerURI``; the router's only seam to override the emitted ``layer_id`` /
-    ``name`` (the twin's ``storm-tracks-{seed}`` id + ``Storm tracks - <mode> (<scope>)``
-    name) is the ``hooks.envelope`` post-emit hook, which pairs with a result model.
-    The extra fields are FETCH-TIME PROVENANCE (which mode served + which storms were
-    attributed) -- carried from the delegate to here by the provenance channel
-    (``storm_tracks.read`` records them; ``storm_tracks.envelope`` reads them back), so
-    they survive a cache hit that never re-runs the fetch. A pre-channel cache object
-    (no sidecar) yields ``None`` provenance and these declared DEFAULTS hold.
-
-    - ``mode`` -- ``"active"`` (NHC live) or ``"historical"`` (IBTrACS archive).
-    - ``storm_count`` -- number of distinct storms in the returned layer.
-    - ``storm_names`` -- the attributed storm names (or SIDs) in the layer.
+    """A storm-track layer plus the fetch-time provenance of which mode served.
+    The provenance travels through the recorder channel, so it survives a cache
+    hit that never re-runs the fetch; a pre-channel cache object has no sidecar
+    and these declared DEFAULTS hold.
     """
 
+
+    #: ``"active"`` (a live feed) or ``"historical"`` (an archive).
     mode: str = "historical"
+    #: Distinct storms in the layer, and the names or ids attributed to them.
     storm_count: int = 0
     storm_names: list[str] = []
 
 
 class GOESSatelliteLayerURI(LayerURI):
-    """The single-band GOES ABI imagery ``LayerURI`` plus its fetch-time scan provenance.
-
-    The ``fetch_goes_satellite`` fold's result model. The twin returned a
-    plain ``LayerURI`` with an em-dash in its ``name``; the router's only seam to
-    reproduce that exact ``name`` is the ``hooks.envelope`` post-emit hook, which pairs
-    with a result model. The extra fields are FETCH-TIME PROVENANCE (which bird + which
-    scan actually served) carried by the provenance channel (``goes_satellite.read``
-    records them; ``goes_satellite.envelope`` reads them back) -- the ``scan_time`` in
-    particular is UNRECOVERABLE from the produced COG on a cache hit (the twin's own
-    cache hit lost which scan served), so the channel is what makes it durable.
-
-    - ``satellite`` -- the canonical bird token that served (``"goes-19"``).
-    - ``band`` -- the ABI band emitted (``"visible"`` / ``"ir_window"`` / ``"water_vapor"``).
-    - ``scan_time`` -- the ISO start-time of the chosen MCMIPC scan (``None`` on a
-      pre-channel cache object).
+    """A single-band satellite imagery layer plus its scan provenance.
+    ``scan_time`` is UNRECOVERABLE from the produced file, so without the
+    recorder channel a cache hit would lose which scan served.
     """
 
+
+    #: The canonical bird token that served, and the band emitted.
     satellite: str = "goes-19"
     band: str = "visible"
+    #: The chosen scan's ISO start time. ``None`` on a pre-channel cache object.
     scan_time: str | None = None
 
 
 class NWMStreamflowLayerURI(LayerURI):
-    """The NOAA NWM point-streamflow ``LayerURI`` plus its fetch-time cycle provenance.
-
-    The ``fetch_noaa_nwm_streamflow`` fold's result model (the fetcher-finale
-    endgame -- the LAST coded data-fetcher). The twin returned a plain ``LayerURI``; the
-    router's only seam to reproduce its exact ``layer_id`` /
-    ``name`` (``nwm-streamflow-{product}-{seed}`` + ``NWM streamflow -- <product>
-    (<latest|valid_time>[ +fNNN])``) is the ``hooks.envelope`` post-emit hook, which pairs
-    with a result model. The extra fields are FETCH-TIME PROVENANCE for a MULTI-SOURCE
-    COMPOSITE (which NWM cycle served + how many reaches joined + how many NLDI COMIDs the
-    5x5 bbox sample discovered) -- carried from the delegate to here by the provenance
-    channel (``nwm_streamflow.read`` records them; ``nwm_streamflow.envelope`` reads them
-    back), so they survive a cache hit that never re-runs the composite fetch. The
-    ``reference_time`` in particular is UNRECOVERABLE from the produced FGB's per-feature
-    ``valid_time`` attribute on a pre-channel cache object, so the channel is what makes it
-    durable. A pre-channel cache object (no sidecar) yields ``None`` provenance and these
-    declared DEFAULTS hold.
-
-    - ``product`` -- the NWM configuration that served (``"analysis_assim"`` / ``"short_range"``).
-    - ``reference_time`` -- the ISO valid/reference time of the resolved NWM cycle
-      (``None`` on a pre-channel cache object).
-    - ``reach_count`` -- number of joined NHDPlus reach points in the emitted layer.
-    - ``nldi_comids_discovered`` -- COMIDs the NLDI 5x5 bbox sample snapped (>= reach_count).
+    """A point-streamflow layer plus the fetch-time provenance of a COMPOSITE.
+    ``reference_time`` is unrecoverable from the produced file's per-feature
+    attributes, so the recorder channel is what makes it durable across a cache
+    hit that never re-runs the composite fetch.
     """
 
+
+    #: The model configuration that served.
     product: str = "analysis_assim"
+    #: The resolved cycle's ISO valid time. ``None`` on a pre-channel object.
     reference_time: str | None = None
+    #: Joined reach points in the layer, against the reach ids the bbox sample
+    #: discovered. The second is always >= the first.
     reach_count: int = 0
     nldi_comids_discovered: int = 0
 
 
 class LivingAtlasLayerURI(LayerURI):
-    """A discovered ESRI Living Atlas layer ``LayerURI`` plus its curation envelope.
-
-    Built by ``fetch_living_atlas_layer`` (not a spec envelope hook -- the tool is
-    hand-written) around the router's produced ``LayerURI``. Carries NATE's
-    two-pool curation label so the agent/user can never mistake community-curated
-    content for authoritative ESRI content.
-
-    Extra fields beyond ``LayerURI``:
-    - ``curation`` -- "authoritative" (ESRI ``contentStatus`` badge) or "community".
-    - ``item_id`` -- the Living Atlas ArcGIS item id.
-    - ``service_type`` -- "Image Service" | "Feature Service" | "Map Service".
-    - ``provenance`` -- item id, curation, service type/url, owner, source string.
+    """A discovered third-party layer plus its CURATION label.
+    The label exists so community-curated content can never be mistaken for
+    authoritative content by a reader or a model.
     """
+
 
     curation: Literal["authoritative", "community"] = "community"
     item_id: str = ""
+    #: "Image Service" | "Feature Service" | "Map Service".
     service_type: str = ""
+    #: Item id, curation, service type and url, owner, source string.
     provenance: dict[str, Any] = Field(default_factory=dict)
 
 
-#: name -> LayerURI-subclass. A spec's ``output.result_model`` string resolves
-#: here; the router builds the named subclass from the base LayerURI + the
-#: envelope hook's field dict. Empty of a name -> the plain LayerURI (no-op).
+#: name -> subclass. A spec's ``output.result_model`` resolves here; a name
+#: absent from this table is a registration error, not a fallback.
 LAYER_RESULT_MODELS: dict[str, type[LayerURI]] = {
     "HighWaterMarksLayerURI": HighWaterMarksLayerURI,
     "FaultSourcesResult": FaultSourcesResult,
@@ -589,15 +428,11 @@ LAYER_RESULT_MODELS: dict[str, type[LayerURI]] = {
 # --------------------------------------------------------------------------- #
 # Resolve the envelope-side ``LegendKey`` forward reference.
 # --------------------------------------------------------------------------- #
-# ``ResultLayer`` (envelope.py) mirrors ``LayerURI.legend`` but cannot import
-# ``LegendKey`` at module scope: execution.py imports envelope.py (for
-# ``TemporalConfig``), so the reverse import would be circular. ``ResultLayer``
-# therefore carries a STRING forward-ref ``"LegendKey | None"``. envelope.py is
-# fully loaded by the time execution.py reaches this point, so we rebuild the
-# envelope models that reference ``LegendKey`` here, injecting it into the
-# types namespace. ``AssessmentEnvelope`` embeds ``ResultLayer`` and so must be
-# rebuilt too. Idempotent; ``raise_errors=False`` keeps any unrelated still-open
-# forward ref from breaking the package import.
+# ``ResultLayer`` mirrors ``LayerURI.legend`` but cannot import ``LegendKey`` at
+# module scope: this module imports the envelope one, so the reverse would be
+# circular. It therefore carries a STRING forward-ref, and the models that use
+# it are rebuilt here, where the envelope module is fully loaded. The envelope
+# embeds ``ResultLayer``, so it is rebuilt too. Idempotent.
 from . import envelope as _envelope  # noqa: E402  (deferred to break the import cycle)
 
 _envelope.ResultLayer.model_rebuild(

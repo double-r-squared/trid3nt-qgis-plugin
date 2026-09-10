@@ -1,6 +1,6 @@
 {
   "additionalProperties": false,
-  "description": "``articles`` (D.4): fetched news article corpus.",
+  "description": "``articles``: the fetched news-article corpus.",
   "properties": {
     "_id": {
       "title": "Id",

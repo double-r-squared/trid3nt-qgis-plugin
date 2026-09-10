@@ -2,7 +2,7 @@
   "$defs": {
     "ChatMessage": {
       "additionalProperties": false,
-      "description": "One chat turn. ``message_id`` matches the WS message id for agent msgs.",
+      "description": "One chat turn. ``message_id`` matches the wire id for an agent turn.",
       "properties": {
         "content": {
           "title": "Content",
@@ -44,7 +44,7 @@
     },
     "LegendKey": {
       "additionalProperties": false,
-      "description": "A layer's RESOLVED style: what the reader is looking at, and its scale.\n\nA preset is four renderer shapes parameterised by what the data is; this is\none of them resolved against a particular layer. The colours and the range\nare the SAME ones the render uses, because both come from this one\nresolution - there is no second range to drift.\n\n``qml`` is the resolved preset as QGIS's own style document, which is what\nthe map loads - the ONE record of how the layer is painted, swatches and\nclass breaks included. ``None`` for a layer that is already painted (an\nRGB(A) composite, a COG carrying its own colour table): nothing may\noverride the colours such a file already has.\n\nThe remaining fields are what a reader other than the map asks of a\npublished layer: the scale a packet holds a quantity to, and the words a\nrestyle starts from.\n\n``kind``\n    Which preset shape drew it: ``continuous`` (a ramp over a range),\n    ``classed`` (declared breaks or an embedded class table),\n    ``reference`` (drawn, not measured), ``mesh`` (an MDAL dataset group).\n``colormap``\n    The ramp name, or explicit stops as ``[[stop_0to1, \"#rrggbb\"], ...]``.\n``vmin`` / ``vmax``\n    The one range the layer is read on. ``None`` for a reference layer.\n``units`` / ``label``\n    What the quantity is measured in and what the legend calls it.",
+      "description": "A layer's RESOLVED style: what the reader is looking at, and its scale.\nThe colours and the range here are the SAME ones the render uses, because\nboth come from this one resolution - there is no second range to drift.",
       "properties": {
         "colormap": {
           "anyOf": [
@@ -262,7 +262,7 @@
     },
     "PipelineStepSummary": {
       "additionalProperties": false,
-      "description": "A step in a persisted pipeline snapshot. ``cancelled`` is distinct.\n\nOptional progress + error fields (sprint-06 M4 pre-flight,\nresolving OQ-W-26-PIPELINE-STEP-FIELDS):\n\n- ``progress_percent`` is an integer 0..100, populated by the workflow\n  when it can reasonably attribute progress (e.g. solver chunk N of M,\n  n-of-M rows processed). Optional everywhere \u2014 never an LLM estimate\n  (Invariant 1: determinism boundary).\n- ``error_code`` is a ``SCREAMING_SNAKE_CASE`` literal aligned with the\n  error-code convention; populated only when ``state ==\n  \"failed\"``. The set of valid codes is **open** per A.6 (every workflow\n  may register its own); validation is shape-only (regex).\n- ``error_message`` is a short human-readable accompanier, capped at\n  512 chars to discourage stack-trace leakage. Free text.\n- ``duration_ms`` (ELEVATED tool-timer requirement) is the\n  authoritative wall-clock elapsed time, derived deterministically from\n  ``completed_at - started_at`` and stamped on the **terminal** transition\n  (complete / failed / cancelled) by the ``PipelineEmitter``. Never an LLM\n  estimate (Invariant 1). Optional / ``None`` for pending/running. ``ge=0``.\n\nTightening these to required on ``state == \"running\"`` / ``state ==\n\"failed\"`` is a deliberate follow-up \u2014 see report Open Questions.\nNo cost field anywhere (Invariant 9).",
+      "description": "A step in a persisted pipeline snapshot, ``cancelled`` distinct from\n``failed``. Every number here is measured, never an estimate, and no cost\nfield appears.",
       "properties": {
         "batch_job_id": {
           "anyOf": [
@@ -460,7 +460,7 @@
     },
     "ProjectLayerSummary": {
       "additionalProperties": false,
-      "description": "Denormalized layer entry on a project (and on session map state).\n\nOne store, one scheme: ``uri`` is the layer's ONE reference\n(``s3://bucket/key``), which the client reads natively. ``opacity``\n(0.0-1.0) and ``z_index`` enable layer-stack arbitration; clients fall back\nto ``1.0`` / a default order if both are absent.\n\n``legend`` is the layer's RESOLVED style, mirrored from ``LayerURI.legend``\n(see ``execution.LegendKey``): the concrete range, the colours and the .qml\nthe map loads. The pipeline emitter copies it onto this summary.",
+      "description": "Denormalized layer entry on a project, and on session map state.\nOne store, one scheme: ``uri`` is the layer's ONE reference. The remaining\nfields mirror the produced layer, so a client re-registers without a join.",
       "properties": {
         "crs_authid": {
           "anyOf": [
@@ -695,7 +695,7 @@
     }
   },
   "additionalProperties": false,
-  "description": "``sessions`` (D.6): chat session state. TTL-cleaned via ``expires_at``.",
+  "description": "``sessions``: chat session state, TTL-cleaned on ``expires_at``.",
   "properties": {
     "_id": {
       "title": "Id",

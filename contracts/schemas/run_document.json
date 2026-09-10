@@ -45,7 +45,7 @@
     }
   },
   "additionalProperties": false,
-  "description": "``runs`` (D.3): every solver execution or discovery operation.\n\nEmbeds the full ``AssessmentEnvelope`` as ``assessment: dict`` (None until\ncomplete) \u2014 a dict, not a nested model, so envelope schema changes don't\nforce a collection migration (D.7). Validation happens at the API boundary\nin the agent before write. ``status`` carries ``cancelled`` as a distinct\nterminal state (invariant 8). No cost field (invariant 9 / D.7).",
+  "description": "``runs``: every solver execution and every discovery operation.\nThe envelope is embedded as a DICT, not a nested model, so an envelope\nchange does not force a collection migration; it is validated at the API\nboundary before write. ``cancelled`` is a distinct terminal state.",
   "properties": {
     "_id": {
       "title": "Id",

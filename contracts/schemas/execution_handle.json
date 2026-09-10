@@ -1,6 +1,6 @@
 {
   "additionalProperties": false,
-  "description": "Returned by ``run_solver``. The cancellation contract (invariant 8).\n\n``workflows_execution_id`` is the Cloud Workflows execution identifier \u2014\nthe pinned cancellation seam. ``agent`` calls Workflows ``terminate`` with\nit on cancel; ``infra`` provisions the workflow definitions it names. All\nthree cite this same handle (orchestrator \"Solver cancellation chain\").",
+  "description": "A submitted execution, and the CANCELLATION contract.\nThe execution identifier is a first-class field, so a cancel terminates by\nit instead of parsing one out of a string. One handle, every backend.",
   "properties": {
     "compute_class": {
       "enum": [

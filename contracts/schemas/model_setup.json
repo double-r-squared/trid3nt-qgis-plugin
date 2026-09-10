@@ -1,6 +1,6 @@
 {
   "additionalProperties": false,
-  "description": "Returned by ``build_sfincs_model`` (HydroMT). A staged, ready-to-run model.\n\nThe built model artifacts live in GCS; ``setup_uri`` points at them.\n``parameters`` is solver-specific staging metadata (grid, forcing, options)\nvalidated at the engine layer.",
+  "description": "A staged, ready-to-run model. ``setup_uri`` points at the built\nartifacts, and ``parameters`` is solver-specific staging metadata validated\nat the engine layer rather than here.",
   "properties": {
     "bbox": {
       "maxItems": 4,

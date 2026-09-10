@@ -1,6 +1,6 @@
 {
   "additionalProperties": false,
-  "description": "Returned by ``wait_for_completion``. Terminal outcome of an execution.\n\n``status`` mirrors the ``runs`` lifecycle; ``cancelled`` is distinct from\n``failed`` (invariant 8). ``output_uri`` points at the raw solver output in\nGCS, which ``postprocess_flood`` consumes to produce ``LayerURI`` objects.",
+  "description": "The TERMINAL outcome of an execution.\n``cancelled`` is a distinct status from ``failed``: a stopped run is a\nfinished run, not a broken one.",
   "properties": {
     "batch_compute_meta": {
       "anyOf": [

@@ -1,26 +1,9 @@
-"""Document-store collection schemas.
+"""Document-store collection schemas - the metadata side of a metadata/payload
+split, where the object store holds payloads keyed by URIs recorded here.
 
-Five collections, each a pydantic model mapping to a BSON document. The wire/
-storage form is ``model.model_dump(mode="json", by_alias=True)`` with the
-document id serialized as ``_id``.
-
-pydantic forbids a field literally named ``_id`` (leading underscore), so each
-document model exposes ``id`` with ``alias="_id"`` and ``populate_by_name=True``:
-construct with ``id=...`` (or ``_id=...``), dump with ``by_alias=True`` to get
-``{"_id": ...}`` for Mongo. ``MONGO_DUMP_KWARGS`` captures the canonical dump
-options.
-
-Invariants this module is responsible for:
-- **6. Metadata-payload pattern.** These schemas are the MongoDB side of the
-  metadata-payload split; GCS holds payloads keyed by URIs stored here.
-- **8. Cancellation is first-class.** ``RunDocument.status`` carries
-  ``cancelled`` as a distinct terminal state.
-- **9. No cost theater.** No cost field on ``runs`` or anywhere (D.7).
-
-OQ-7 (embedding dimension) is surfaced in the report. The vector index configs
-below use the SRS-stated default of 768 dims; ``infra`` provisions the indexes
-to whatever the user lands after the recall-vs-cost check. They are documented
-constants here, NOT a locked Atlas config.
+pydantic forbids a field literally named ``_id``, so each document model exposes
+``id`` aliased to it and dumps with ``by_alias=True``; ``MONGO_DUMP_KWARGS`` is
+that canonical dump. No cost field lives on any of these.
 """
 
 from __future__ import annotations
@@ -35,12 +18,12 @@ from .catalog import CatalogEntry
 from .common import GraceModel, ULIDStr, UTCDatetime
 from .execution import LegendKey
 
-#: SCREAMING_SNAKE_CASE error-code pattern.
-#: Open set per A.6: codes are validated by shape, not against a closed registry,
-#: so every workflow/tool may register new codes without a schema change.
+#: SCREAMING_SNAKE_CASE error-code pattern. The SET is open: a code is validated
+#: by SHAPE and never against a registry, so a workflow registers its own codes
+#: without a schema change.
 _ERROR_CODE_RE: re.Pattern[str] = re.compile(r"^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*$")
 
-#: Cap on ``error_message`` length to discourage stack-trace leakage (D.6).
+#: Cap on ``error_message`` length, to discourage stack-trace leakage.
 _ERROR_MESSAGE_MAX_LEN: int = 512
 
 __all__ = [
@@ -74,19 +57,17 @@ __all__ = [
 #: Canonical kwargs for producing the BSON/wire form of any document model.
 MONGO_DUMP_KWARGS: dict[str, Any] = {"mode": "json", "by_alias": True}
 
-#: Embedding model + default dimension shared across collections (D.7).
-#: OQ-7: 768 is the SRS default; 256/128 trade recall for index size/cost. The
-#: index configs below use this default and are NOT a locked Atlas config.
+#: Embedding model and default dimension, shared across collections. A smaller
+#: dimension trades recall for index size; the index configs below are DOCUMENTED
+#: CONSTANTS, not a locked provisioning config.
 EMBEDDING_MODEL_DEFAULT = "text-embedding-005"
 EMBEDDING_DIMENSIONS_DEFAULT = 768
 
 
 class DocModel(GraceModel):
-    """Base for collection documents that use ``_id`` aliasing.
-
-    Adds ``populate_by_name=True`` on top of ``GraceModel`` so the id field can
-    be set by either ``id`` or ``_id`` and dumped to ``_id`` with ``by_alias``.
-    """
+    """Base for collection documents that alias ``_id``.
+    ``populate_by_name`` lets the id be set as either ``id`` or ``_id``, and
+    dumped back to ``_id`` under ``by_alias``."""
 
     model_config = ConfigDict(
         extra="forbid",
@@ -96,75 +77,62 @@ class DocModel(GraceModel):
 
 
 # --------------------------------------------------------------------------- #
-# D.2 projects
+# projects
 # --------------------------------------------------------------------------- #
 
 
 class ProjectLayerSummary(GraceModel):
-    """Denormalized layer entry on a project (and on session map state).
-
-    One store, one scheme: ``uri`` is the layer's ONE reference
-    (``s3://bucket/key``), which the client reads natively. ``opacity``
-    (0.0-1.0) and ``z_index`` enable layer-stack arbitration; clients fall back
-    to ``1.0`` / a default order if both are absent.
-
-    ``legend`` is the layer's RESOLVED style, mirrored from ``LayerURI.legend``
-    (see ``execution.LegendKey``): the concrete range, the colours and the .qml
-    the map loads. The pipeline emitter copies it onto this summary.
+    """Denormalized layer entry on a project, and on session map state.
+    One store, one scheme: ``uri`` is the layer's ONE reference. The remaining
+    fields mirror the produced layer, so a client re-registers without a join.
     """
 
     layer_id: str
     name: str
-    # ``mesh``: a UGRID/unstructured solver mesh the plugin opens via
-    # MDAL (``QgsMeshLayer``); it STAGES rather than streams. Mirrors
-    # ``LayerURI.layer_type``.
+    # ``mesh`` is an unstructured solver mesh, STAGED rather than streamed.
     layer_type: Literal["raster", "vector", "mesh"]
     uri: str
     visible: bool
     role: Literal["primary", "context", "input"]
-    temporal: bool  # has WMS-T config
+    temporal: bool  # carries a temporal config
 
-    # --- Fields added by (D.2 amendment)
-    opacity: float | None = None     # 0.0–1.0; client falls back to 1.0 if absent
-    z_index: int | None = None       # MapLibre layer-order arbitration; lower draws first
+    # Layer-stack arbitration. A client absent both falls back to fully opaque
+    # and its own default order.
+    opacity: float | None = None     # 0.0-1.0
+    z_index: int | None = None       # lower draws first
 
-    # --- Mesh CRS; mirrored from LayerURI.crs_authid
-    # Explicit CRS for a ``layer_type="mesh"`` row -- MDAL reports an empty crs()
-    # for a SCHISM out2d UGRID / SFINCS quadtree grid, so the plugin's _add_mesh
-    # applies this string. Serializes into the WS layer row (event.raw) the
-    # plugin reads. ``None`` for raster/vector.
+    # The CRS for a ``layer_type="mesh"`` row: a mesh reader reports an empty
+    # CRS for these formats, so the run has to state it. ``None`` otherwise.
     crs_authid: str | None = None
 
-    # --- Mesh reference time; mirrored from LayerURI.reference_time
-    # The ISO-8601 UTC instant a mesh row's dataset times are counted from. A
-    # SELAFIN records no origin, so without it the temporal controller scrubs
-    # 1900. ``None`` for raster/vector.
+    # The instant a mesh row's dataset times are counted from. A SELAFIN records
+    # no origin, so without it a scrubber reads 1900. ``None`` otherwise.
     reference_time: str | None = None
 
-    # --- Frame validity window; mirrored from LayerURI.valid_from / valid_to
-    # ISO-8601 UTC. One frame of an ordered sequence states its own window and
+    # One frame of an ordered sequence states its own window, ISO-8601 UTC, and
     # the map stamps it as the layer's fixed temporal range. ``None`` for a
-    # layer that is not one frame of a sequence.
+    # layer that is not one frame.
     valid_from: str | None = None
     valid_to: str | None = None
 
-    legend: LegendKey | None = None  # mirrored from LayerURI.legend
+    #: The layer's RESOLVED style: the concrete range, the colours and the
+    #: document the map loads.
+    legend: LegendKey | None = None
 
-    # --- The physical quantity; mirrored from LayerURI.quantity
-    # A layer's identity, as its producer names it - what a still, a frame and
-    # an animation of ONE field are matched by when they are held to one scale.
-    # ``None`` for a layer whose producer declared no quantity.
+    # The physical quantity, as the producer names it - a layer's identity, and
+    # what a still, a frame and an animation of ONE field are matched by when
+    # they are held to a single scale. ``None`` when none was declared.
     quantity: str | None = None
 
 
 class ProjectDocument(DocModel):
-    """``projects`` (D.2): metadata index over .qgs files in GCS."""
+    """``projects``: the metadata index over published project files."""
 
     schema_version: Literal["v1"] = "v1"
 
-    id: ULIDStr = Field(alias="_id")  # the project_id used everywhere
+    id: ULIDStr = Field(alias="_id")  # the project id used everywhere
     session_id: ULIDStr  # owning session
-    qgs_uri: str  # gs://.../project_<id>.qgs (canonical)
+    qgs_uri: str  # the canonical published project file
     name: str  # human-readable
     description: str | None = None
     bbox: tuple[float, float, float, float] | None = None  # EPSG:4326
@@ -176,14 +144,14 @@ class ProjectDocument(DocModel):
 
 
 # --------------------------------------------------------------------------- #
-# D.3 runs
+# runs
 # --------------------------------------------------------------------------- #
 
 
 class UserSpatialInput(GraceModel):
     """A user-provided spatial input recorded on a run."""
 
-    request_id: ULIDStr  # the WebSocket request that solicited this input
+    request_id: ULIDStr  # the request that solicited this input
     geometry_type: Literal["point", "bbox"]
     coordinates: list[float]  # [lon, lat] for point; bbox 4-tuple for bbox
     prompt_title: str
@@ -191,18 +159,15 @@ class UserSpatialInput(GraceModel):
 
 
 class RunDocument(DocModel):
-    """``runs`` (D.3): every solver execution or discovery operation.
-
-    Embeds the full ``AssessmentEnvelope`` as ``assessment: dict`` (None until
-    complete) — a dict, not a nested model, so envelope schema changes don't
-    force a collection migration (D.7). Validation happens at the API boundary
-    in the agent before write. ``status`` carries ``cancelled`` as a distinct
-    terminal state (invariant 8). No cost field (invariant 9 / D.7).
+    """``runs``: every solver execution and every discovery operation.
+    The envelope is embedded as a DICT, not a nested model, so an envelope
+    change does not force a collection migration; it is validated at the API
+    boundary before write. ``cancelled`` is a distinct terminal state.
     """
 
     schema_version: Literal["v1"] = "v1"
 
-    id: ULIDStr = Field(alias="_id")  # this is the solver_run_id
+    id: ULIDStr = Field(alias="_id")  # the solver run id
     project_id: ULIDStr
     session_id: ULIDStr
 
@@ -211,15 +176,16 @@ class RunDocument(DocModel):
     completed_at: UTCDatetime | None = None
     duration_seconds: float | None = None
 
-    run_type: Literal["modeled", "discovered"]  # mirrors envelope_type
-    hazard_type: str  # denormalized from envelope
-    workflow_name: str  # denormalized from envelope
+    # Denormalized off the envelope, so a query needs no join.
+    run_type: Literal["modeled", "discovered"]
+    hazard_type: str
+    workflow_name: str
 
-    bbox: tuple[float, float, float, float]  # denormalized for queries
+    bbox: tuple[float, float, float, float]
     event_time_start: UTCDatetime | None = None
     event_time_end: UTCDatetime | None = None
 
-    # Full AssessmentEnvelope as dict; None until status == "complete".
+    # The full envelope as a dict. ``None`` until the run completes.
     assessment: dict | None = None
 
     embedding: list[float] | None = None
@@ -233,17 +199,18 @@ class RunDocument(DocModel):
 
     user_spatial_inputs: list[UserSpatialInput] = Field(default_factory=list)
 
-    event_id: ULIDStr | None = None  # if news-derived
-    article_ids: list[ULIDStr] = Field(default_factory=list)  # if news-derived
+    # Populated only for a news-derived run.
+    event_id: ULIDStr | None = None
+    article_ids: list[ULIDStr] = Field(default_factory=list)
 
 
 # --------------------------------------------------------------------------- #
-# D.4 articles
+# articles
 # --------------------------------------------------------------------------- #
 
 
 class ArticleDocument(DocModel):
-    """``articles`` (D.4): fetched news article corpus."""
+    """``articles``: the fetched news-article corpus."""
 
     schema_version: Literal["v1"] = "v1"
 
@@ -254,9 +221,9 @@ class ArticleDocument(DocModel):
     publisher: str | None = None
     author: str | None = None
 
-    text: str  # extracted article text (cleaned)
+    text: str  # the cleaned extracted text
     text_length: int = Field(ge=0)
-    html_uri: str | None = None  # GCS URI if full HTML retained
+    html_uri: str | None = None  # set when the full HTML was retained
 
     published_at: UTCDatetime | None = None
     fetched_at: UTCDatetime
@@ -270,7 +237,7 @@ class ArticleDocument(DocModel):
 
 
 # --------------------------------------------------------------------------- #
-# D.6 sessions
+# sessions
 # --------------------------------------------------------------------------- #
 
 
@@ -288,40 +255,19 @@ class ToolCallSummary(GraceModel):
 
 
 class ChatMessage(GraceModel):
-    """One chat turn. ``message_id`` matches the WS message id for agent msgs."""
+    """One chat turn. ``message_id`` matches the wire id for an agent turn."""
 
     message_id: ULIDStr
     role: Literal["user", "agent"]
-    content: str  # for agent messages, final accumulated text after streaming
+    content: str  # for an agent turn, the text accumulated after streaming
     tool_calls: list[ToolCallSummary] = Field(default_factory=list)
     created_at: UTCDatetime
 
 
 class PipelineStepSummary(GraceModel):
-    """A step in a persisted pipeline snapshot. ``cancelled`` is distinct.
-
-    Optional progress + error fields (sprint-06 M4 pre-flight,
-    resolving OQ-W-26-PIPELINE-STEP-FIELDS):
-
-    - ``progress_percent`` is an integer 0..100, populated by the workflow
-      when it can reasonably attribute progress (e.g. solver chunk N of M,
-      n-of-M rows processed). Optional everywhere — never an LLM estimate
-      (Invariant 1: determinism boundary).
-    - ``error_code`` is a ``SCREAMING_SNAKE_CASE`` literal aligned with the
-      error-code convention; populated only when ``state ==
-      "failed"``. The set of valid codes is **open** per A.6 (every workflow
-      may register its own); validation is shape-only (regex).
-    - ``error_message`` is a short human-readable accompanier, capped at
-      512 chars to discourage stack-trace leakage. Free text.
-    - ``duration_ms`` (ELEVATED tool-timer requirement) is the
-      authoritative wall-clock elapsed time, derived deterministically from
-      ``completed_at - started_at`` and stamped on the **terminal** transition
-      (complete / failed / cancelled) by the ``PipelineEmitter``. Never an LLM
-      estimate (Invariant 1). Optional / ``None`` for pending/running. ``ge=0``.
-
-    Tightening these to required on ``state == "running"`` / ``state ==
-    "failed"`` is a deliberate follow-up — see report Open Questions.
-    No cost field anywhere (Invariant 9).
+    """A step in a persisted pipeline snapshot, ``cancelled`` distinct from
+    ``failed``. Every number here is measured, never an estimate, and no cost
+    field appears.
     """
 
     step_id: ULIDStr
@@ -330,26 +276,27 @@ class PipelineStepSummary(GraceModel):
     state: Literal["pending", "running", "complete", "failed", "cancelled"]
     started_at: UTCDatetime | None = None
     completed_at: UTCDatetime | None = None
+    #: Populated only where a workflow can genuinely attribute progress -
+    #: chunk N of M, row n of M. Optional everywhere, and never estimated.
     progress_percent: int | None = Field(default=None, ge=0, le=100)
+    #: Populated only when the step FAILED. The code set is open and validated
+    #: by shape; the message is short and capped to discourage a stack trace.
     error_code: str | None = None
     error_message: str | None = Field(default=None, max_length=_ERROR_MESSAGE_MAX_LEN)
+    #: The AUTHORITATIVE wall-clock elapsed time, derived from the two stamps
+    #: above at the terminal transition. ``None`` while pending or running.
     duration_ms: int | None = Field(default=None, ge=0)
-    # Two-card sim observability (task-149): mirror the ws.PipelineStep card-kind
-    # discriminator + Batch binding so a persisted/replayed snapshot and a
-    # cold-case rehydration carry the off-box solver card across a reconnect.
-    # ``role`` defaults to ``"tool"`` and the ids to ``None`` so every existing
-    # persisted step is byte-identical (back-compat); ``"compute"`` is the
-    # Batch-bound solver card. ``batch_status`` mirrors DescribeJobs verbatim
-    # (Invariant 1, never an LLM estimate).
+    # The card-kind discriminator and the compute binding, mirrored from the
+    # live step, so a replayed snapshot carries the off-box solver card across a
+    # reconnect. ``"compute"`` is the solver card; ``batch_status`` mirrors the
+    # backend's own status VERBATIM rather than being interpreted.
     role: Literal["tool", "compute"] = "tool"
     batch_job_id: str | None = None
     batch_status: str | None = None
-    # Nested sub-step timeline (task-168): mirror the ws.PipelineStep parent/child
-    # fields so a persisted/replayed snapshot and a cold-case rehydration carry
-    # the nested timeline across a reconnect. ``parent_step_id`` marks a CHILD;
-    # ``substep_label`` / ``substep_index`` / ``substep_total`` are the PARENT's
-    # live-breadcrumb fields (cleared on the parent's terminal transition). All
-    # default None so every existing persisted step is byte-identical (back-compat).
+    # The nested sub-step timeline, mirrored from the live step so a replay
+    # carries it across a reconnect. ``parent_step_id`` marks a CHILD; the three
+    # substep fields are the PARENT's live breadcrumb, cleared when the parent
+    # reaches a terminal state.
     parent_step_id: ULIDStr | None = None
     substep_label: str | None = None
     substep_index: int | None = Field(default=None, ge=1)
@@ -358,7 +305,8 @@ class PipelineStepSummary(GraceModel):
     @field_validator("error_code")
     @classmethod
     def _validate_error_code_shape(cls, value: str | None) -> str | None:
-        """Enforce SCREAMING_SNAKE_CASE shape  convention."""
+        """Shape only - the code SET is open, so nothing is checked against a
+        registry."""
         if value is None:
             return value
         if not _ERROR_CODE_RE.match(value):
@@ -388,16 +336,16 @@ class MapView(GraceModel):
 
 
 class SessionDocument(DocModel):
-    """``sessions`` (D.6): chat session state. TTL-cleaned via ``expires_at``."""
+    """``sessions``: chat session state, TTL-cleaned on ``expires_at``."""
 
     schema_version: Literal["v1"] = "v1"
 
-    id: ULIDStr = Field(alias="_id")  # this is the session_id
-    client_fingerprint: str | None = None  # cookie-derived opaque identifier
+    id: ULIDStr = Field(alias="_id")  # the session id
+    client_fingerprint: str | None = None  # an opaque client identifier
 
     created_at: UTCDatetime
     last_active_at: UTCDatetime
-    expires_at: UTCDatetime  # TTL cleanup driver; updated on each interaction
+    expires_at: UTCDatetime  # drives TTL cleanup; bumped on each interaction
 
     chat_history: list[ChatMessage] = Field(default_factory=list)
     project_ids: list[ULIDStr] = Field(default_factory=list)
@@ -409,10 +357,10 @@ class SessionDocument(DocModel):
 
 
 # --------------------------------------------------------------------------- #
-# Atlas Vector Search index configs (documented constants — NOT locked) (D.3-5)
+# Vector-search index configs - DOCUMENTED CONSTANTS, not a locked config
 # --------------------------------------------------------------------------- #
-# OQ-7: numDimensions uses the SRS default (768). infra provisions to whatever
-# the user lands after the recall-vs-cost check on a small corpus.
+# The dimension is the shared default; provisioning may land elsewhere after a
+# recall-versus-cost check.
 
 
 def _vector_index(name: str, *filter_paths: str) -> dict[str, Any]:
@@ -432,7 +380,7 @@ def _vector_index(name: str, *filter_paths: str) -> dict[str, Any]:
 RUNS_VECTOR_INDEX = _vector_index("runs_embedding_vsi", "hazard_type", "run_type")
 ARTICLES_VECTOR_INDEX = _vector_index("articles_embedding_vsi", "extraction_status")
 
-#: The Atlas Vector Search indexes (the minimum useful set, D.8).
+#: The vector-search indexes - the minimum useful set.
 VECTOR_INDEXES: dict[str, dict[str, Any]] = {
     "runs": RUNS_VECTOR_INDEX,
     "articles": ARTICLES_VECTOR_INDEX,
@@ -440,84 +388,51 @@ VECTOR_INDEXES: dict[str, dict[str, Any]] = {
 
 
 # --------------------------------------------------------------------------- #
-# sessions TTL config (D.6)
+# sessions TTL config
 # --------------------------------------------------------------------------- #
-#: Mongo TTL index spec for sessions: delete documents 30 days after
-#: ``expires_at``. ``infra`` creates the actual index; this is the contract.
+#: TTL index spec for sessions: a document is deleted 30 days after
+#: ``expires_at``. This is the CONTRACT; provisioning creates the index.
 SESSIONS_TTL: dict[str, Any] = {
     "collection": "sessions",
     "field": "expires_at",
     "expire_after_seconds": 30 * 24 * 60 * 60,  # 30 days past expires_at
 }
 
-#: TTL window for ANONYMOUS (pre-Auth) Cases (#147 ephemeral-cases track).
-#:
-#: Authed Cases are durable forever and carry NO ``expires_at`` — only an
-#: anonymous Case opts in to expiry by being written ``ephemeral=True``
-#: (``persistence.upsert_case`` / ``touch_case``). DynamoDB-native TTL needs a
-#: NUMERIC epoch-seconds attribute (unlike the ISO ``expires_at`` strings the
-#: sessions collection uses for the Mongo TTL index), so the value stamped on
-#: the case doc is ``int(now + CASES_ANON_TTL_SECONDS)``.
-#:
-#: Env-overridable via ``CASES_ANON_TTL_SECONDS`` (mirrors the env-config
-#: pattern used elsewhere); defaults to 7 days.
+#: TTL window for an ANONYMOUS Case. An authenticated Case is durable forever
+#: and carries no expiry at all; only an anonymous one OPTS IN by being written
+#: ephemeral. The stamped value is NUMERIC epoch seconds, not the ISO string the
+#: sessions TTL uses, because the store's native TTL requires a number.
 CASES_ANON_TTL_SECONDS: int = int(
     os.environ.get("CASES_ANON_TTL_SECONDS", 7 * 24 * 60 * 60)  # 7 days
 )
 
 
 # --------------------------------------------------------------------------- #
-# Mode 1 catalog substrate (sprint-08): catalog_entries + catalog_audit_log
+# The catalog substrate: catalog_entries + catalog_audit_log
 # --------------------------------------------------------------------------- #
-# Forward-looking — + §F.1.2 Mode 1 binding for sprint-08.
-#
-# Numbering note: SRS already uses D.7..D.10 for cross-cutting
-# storage-sizing / design-rationale / known-open-choices meta sections. The
-# new collections therefore land at **D.11 catalog_entries** and **D.12
-# catalog_audit_log** rather than D.8/D.9 (the kickoff's numbering assumed
-# D.1-D.6 were the only existing sections). Surfaced in report Open Questions
-# so the user can override during audit if D.8/D.9 is preferred (would require
-# renumbering the existing meta sections).
-#
-# Neither collection is TTL-eligible:
-# - ``catalog_entries`` are durable until a curator deprecates / removes them
-#   (status lifecycle does the soft-delete work).
-# - ``catalog_audit_log`` is append-only retention; Mode 2 user-proposed +
-#   curator-review provenance must survive indefinitely.
+# Neither collection is TTL-eligible: an entry is durable until a curator
+# deprecates it, and the status lifecycle does the soft-delete work; the audit
+# log is append-only retention, because proposal and review provenance has to
+# survive indefinitely.
 
 
 class CatalogEntryDocument(CatalogEntry):
-    """``catalog_entries`` (D.11): one curated Mode 1 catalog entry.
-
-    The collection schema *is* the ``CatalogEntry`` schema (/
-    + §F.1.2 Mode 1); no wrapper fields are added. The Mongo ``_id``
-    is the entry ``id`` (a stable string identifier curated at entry-creation
-    time, e.g. ``"usgs-3dep-dem-1m"``, ``"worldpop-1km-aggregated"``); the
-    write path sets ``_id = id`` at insert time.
-
-    We do NOT alias here — keeping ``CatalogEntry`` a single shape across wire,
-    YAML, and Mongo is more useful than the ``_id`` alias would be, and the
-    ``id`` field is already a free-form stable string (not a ULID), so the
-    Mongo-side aliasing of the ULID-based ``DocModel`` doesn't apply.
-
-    Indexes (declared in ``CATALOG_ENTRIES_INDEXES`` below): one on
-    ``source_class`` for ``catalog_search`` by domain, and a compound on
-    ``(status, source_class)`` for the common "active-only by source"
-    query path (``status: "active"`` filter + ``source_class`` selector).
+    """``catalog_entries``: one curated catalog entry, unwrapped.
+    The collection schema IS the entry schema - no wrapper fields, and no
+    ``_id`` alias, because one shape across wire, YAML and store is worth more
+    than the alias: the entry id is already a stable free-form string.
     """
 
 
-#: Audit-log event vocabulary per §F.1.2 Mode 1 + Mode 2.
+#: Audit-log event vocabulary.
 #:
-#: - ``add`` — curator added a new entry directly (Mode 1 path).
-#: - ``update`` — curator edited an existing entry's metadata.
-#: - ``deprecate`` — curator flipped ``status`` to ``"deprecated"``.
-#: - ``user_proposed`` — Mode 2 user accepted an ``offer-catalog-addition``;
-#:   entry written with ``status: "user_proposed_pending_curator_review"``.
-#: - ``curator_approved`` — curator flipped a user-proposed entry to
-#:   ``status: "active"``.
-#: - ``curator_rejected`` — curator removed a user-proposed entry that did
-#:   not pass review.
+#: - ``add`` - a curator added an entry directly.
+#: - ``update`` - a curator edited an entry's metadata.
+#: - ``deprecate`` - a curator flipped an entry to deprecated.
+#: - ``user_proposed`` - a user accepted an offered addition; the entry is
+#:   written pending curator review.
+#: - ``curator_approved`` - a curator activated a user-proposed entry.
+#: - ``curator_rejected`` - a curator removed one that did not pass review.
 CatalogAuditEventType = Literal[
     "add",
     "update",
@@ -529,58 +444,36 @@ CatalogAuditEventType = Literal[
 
 
 class CatalogAuditLogDocument(DocModel):
-    """``catalog_audit_log`` (D.12): append-only audit trail for the catalog.
-
-    Every catalog mutation lands one document here. Mode 2 user-proposed entries
-    produce a ``user_proposed`` event at acceptance; curator-side approval /
-    rejection produce a ``curator_approved`` / ``curator_rejected`` event
-    against the same ``entry_id``. (claim provenance) requires this
-    trail to be inspectable: the catalog query path may surface user-proposed
-    entries as provisional, and downstream run-document `CatalogReference`
-    fields can be resolved back through this collection to recover the
-    proposal + review context.
-
-    Fields:
-
-    - ``id`` — ULID, the audit-event id (this is the document ``_id``).
-    - ``entry_id`` — the ``CatalogEntry.id`` this event applies to. Indexed
-      for the ``(entry_id, timestamp DESC)`` query path.
-    - ``session_id`` — optional ULID; populated when the event originated
-      inside an active session (Mode 2 user-proposed flow).
-    - ``user_id`` — optional opaque user identifier; populated when user
-      identity is available (post-M6+ user accounts). v0.1 leaves this None
-      since identity machinery is not yet wired; the field is here so the
-      audit trail is forward-compatible.
-    - ``event_type`` — ``CatalogAuditEventType`` literal.
-    - ``event_payload`` — open dict (shape varies by ``event_type``); for
-      ``user_proposed`` it carries the conformity-probe findings + the
-      ``offer-catalog-addition`` request id; for ``curator_approved`` /
-      ``curator_rejected`` it carries the curator note; for ``update`` it
-      carries the diff.
-    - ``timestamp`` — UTC datetime when the event was recorded.
-
-    No TTL — the audit trail is durable. No cost field anywhere (Invariant 9).
+    """``catalog_audit_log``: the APPEND-ONLY audit trail for the catalog.
+    Every catalog mutation lands one document. It is durable and never
+    TTL-cleaned, because a reference recorded on a run must stay resolvable
+    back through here to its proposal and review context.
     """
 
     schema_version: Literal["v1"] = "v1"
 
     id: ULIDStr = Field(alias="_id")
-    entry_id: str = Field(min_length=1)  # references CatalogEntry.id
+    entry_id: str = Field(min_length=1)  # the ``CatalogEntry.id`` this applies to
+    #: Populated when the event originated inside an active session.
     session_id: ULIDStr | None = None
+    #: An opaque user identifier, when identity is available.
     user_id: str | None = None
     event_type: CatalogAuditEventType
+    #: Open dict; its shape varies by ``event_type`` - probe findings and a
+    #: request id for a proposal, a curator note for a review, a diff for an
+    #: update.
     event_payload: dict = Field(default_factory=dict)
     timestamp: UTCDatetime
 
 
 # --------------------------------------------------------------------------- #
-# D.11 catalog_entries indexes (declared; infra provisions)
+# catalog_entries indexes - declared here, provisioned elsewhere
 # --------------------------------------------------------------------------- #
 
 CATALOG_ENTRIES_INDEXES: list[dict[str, Any]] = [
-    # source_class: catalog_search by domain (e.g. "dem", "landcover", "flood_zone").
+    # source_class: search by domain.
     {"key": [("source_class", 1)], "name": "catalog_entries_source_class_1"},
-    # (status, source_class): the common "active-only by source" query.
+    # (status, source_class): the common active-only-by-source query.
     {
         "key": [("status", 1), ("source_class", 1)],
         "name": "catalog_entries_status_1_source_class_1",
@@ -589,11 +482,11 @@ CATALOG_ENTRIES_INDEXES: list[dict[str, Any]] = [
 
 
 # --------------------------------------------------------------------------- #
-# D.12 catalog_audit_log indexes (declared; infra provisions)
+# catalog_audit_log indexes - declared here, provisioned elsewhere
 # --------------------------------------------------------------------------- #
 
 CATALOG_AUDIT_LOG_INDEXES: list[dict[str, Any]] = [
-    # entry_id + timestamp DESC: the audit-trail-for-an-entry query path.
+    # entry_id + timestamp descending: the trail-for-one-entry query.
     {
         "key": [("entry_id", 1), ("timestamp", -1)],
         "name": "catalog_audit_log_entry_id_1_timestamp_-1",
