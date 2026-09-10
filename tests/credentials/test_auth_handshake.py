@@ -1,28 +1,9 @@
-"""Unit + integration tests for ``trid3nt_server.credentials.auth_handshake`` (local build).
+"""``trid3nt_server.credentials.auth_handshake`` under the local build.
 
-The local build has NO token verification and no identity provider:
-``solver_backend()`` is hardwired to ``local-docker``, so EVERY connection --
-any token -- resolves to the ONE fixed local user
-(``LOCAL_SINGLE_USER_ID``). Coverage:
-
-1. ``test_authenticate_token_nonempty_token_resolves_local_user`` -- a
-   presented token is ignored -> the fixed local user.
-2. ``test_authenticate_token_empty_token_resolves_local_user`` -- empty token.
-3. ``test_authenticate_token_no_envelope_resolves_local_user`` -- None envelope.
-4. ``test_local_user_shape`` -- resolved user is anonymous, is_active=True.
-5. ``test_build_auth_ack_shape`` -- ack envelope mirrors AuthResult fields,
-   no raw token leaks.
-6. ``test_persistence_unbound_returns_in_memory_user`` -- Persistence=None
-   path returns an in-memory User without raising.
-7. Integration: ``test_server_connect_handshake_flow_with_mocks`` -- drives
-   the full ``_handle_auth_token`` path through the server using mock
-   Persistence; asserts SessionState binding and the auth-ack envelope.
-8. ``test_connection_context_retains_authenticated_user_id`` -- a second
-   handshake call never rebinds a completed session.
-9. ``test_auth_envelope_contracts_round_trip`` -- wire-contract guard.
-10. ``test_non_local_mode_raises`` -- outside local single-user mode the
-    handshake fails LOUD (typed rejection), never silently resolves.
-"""
+There is no token verification and no identity provider: ``solver_backend()`` is
+hardwired to ``local-docker``, so every connection - any token, an empty token or
+no envelope - resolves to the one fixed local user, the ack mirrors the result
+without leaking a raw token, and any other mode fails LOUD."""
 
 from __future__ import annotations
 
@@ -223,10 +204,8 @@ async def test_persistence_unbound_returns_in_memory_user() -> None:
 class _FakeWebSocket:
     """Minimal stand-in for ``websockets.asyncio.server.ServerConnection``.
 
-    Only ``send`` is exercised -- every envelope the handler tries to send
-    lands in ``self.sent`` as a JSON-decoded dict so tests can assert types
-    + payloads.
-    """
+    Only ``send`` is exercised; every envelope the handler sends lands in
+    ``self.sent`` as a JSON-decoded dict."""
 
     def __init__(self) -> None:
         self.sent: list[dict] = []
@@ -237,20 +216,10 @@ class _FakeWebSocket:
 
 @pytest.mark.asyncio
 async def test_server_connect_handshake_flow_with_mocks() -> None:
-    """Integration: full WS connect -> auth-token -> auth-ack with mocks.
+    """Full WS connect -> auth-token -> auth-ack against a mock Persistence.
 
-    Drives ``server._handle_auth_token`` end-to-end against a
-    MockMCPClient-backed Persistence (no live store needed).
-
-    Verifies:
-    - SessionState ``authenticated_user_id`` is populated.
-    - SessionState ``is_anonymous`` is True (local build: every connection
-      is anonymous).
-    - The wire emits exactly one envelope of type ``auth-ack`` carrying
-      the resolved user_id.
-    - A subsequent non-handshake envelope arriving without an auth-token
-      flips the implicit-anonymous fallback path on a fresh state.
-    """
+    ``SessionState`` binds the resolved user and reads anonymous, exactly one
+    ``auth-ack`` reaches the wire, and a completed session is never rebound."""
     from trid3nt_server.server import (
         SessionState,
         _ensure_auth_handshake,

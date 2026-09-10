@@ -1,14 +1,9 @@
-"""Tests for the runtime credential resolver (session cache -> env fallback).
+"""The runtime credential resolver: session cache first, env as the floor.
 
-Covers the module that replaced the file vault as the runtime credential
-source:
-
-1. Resolution order: session cache wins over env; env is the floor; a
-   non-keyed tool resolves to None.
-2. Session-cache lifecycle: set / read / clear; blank inputs ignored.
-3. The reshaped ``secret-add`` handler writes the pushed value into the
-   session cache (no Persistence, no file vault).
-"""
+Resolution order (the session cache over env, a non-keyed tool resolving to
+None), the session-cache lifecycle with blank inputs ignored, and the
+``secret-add`` handler writing the pushed value into that cache without
+Persistence and without a file vault."""
 
 from __future__ import annotations
 

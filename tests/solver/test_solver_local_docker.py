@@ -1,33 +1,9 @@
 """The local-docker solver backend: staging, launch, supervisor, completion.
 
-The envelope is engine-AGNOSTIC - what varies per engine is the ``LocalSolverSpec``
-its own workflow module registers. These tests drive it through the TELEMAC
-river-dye spec, the one registered local-docker solver whose behaviour the rest of
-the suite also depends on, so a spec-driven field (``telemac_args``,
-``telemac_stdout_uri``, the ``--network none`` engine-room posture) is exercised
-as a real registration rather than a fixture invention.
-
-Hard constraint honored here: **NO real docker invocation on this machine**
-(the daemon is blocked). Every ``docker`` call resolves to a PATH-shim bash
-script that records its argv, emulates the container behaviors (ok / fail /
-hang), and supports ``docker kill`` against the run-mode shim's pidfile.
-All S3 I/O goes through the ``tools.simulation.solver.set_s3_client`` seam with a
-dict-backed fake (boto3-shaped ``get_object``/``put_object``).
-
-Coverage maps to the kickoff §4 test list:
-
-1.  Default env → backend is gcp-workflows; the Cloud Workflows path stays
-    byte-identical (the full pre-existing ``test_solver.py`` suite is the
-    primary guard; the explicit default assertion lives here).
-2.  local-docker ``run_solver``: manifest staged from S3 (legacy ``gs_uri``
-    field name carrying ``s3://`` VALUES — resolved by scheme), docker
-    launched detached with ``--rm --name <run_id> -v <rundir>:/data -w
-    /data $TRID3NT_TELEMAC_IMAGE``, ExecutionHandle returned immediately.
-3.  Supervisor writes the EXACT entrypoint.py completion.json schema —
-    ok, error, and cancel paths — and uploads outputs + stdout/stderr.
-4.  ``wait_for_completion``: happy / timeout / error; cancel chain =
-    ``docker kill <run_id>`` + status="cancelled" completion (Invariant-8).
-"""
+The envelope is engine-AGNOSTIC; what varies is the ``LocalSolverSpec`` a
+workflow module registers, so the TELEMAC river-dye registration drives it here
+rather than a fixture invention. NO real docker: every ``docker`` call resolves
+to a PATH shim that records argv, and all S3 goes through a dict-backed fake."""
 
 from __future__ import annotations
 
@@ -302,10 +278,9 @@ def test_local_run_solver_rejects_plain_path(reset_seams, local_env, docker_shim
 def test_local_run_solver_stages_manifest_and_launches_docker(
     reset_seams, local_env: Path, docker_shim: Path
 ) -> None:
-    """The headline: manifest read from S3 (boto3 seam), every ``inputs[]``
-    object staged into ``$TRID3NT_RUNS_DIR/<run_id>/`` (legacy ``gs_uri``
-    field name, s3:// VALUES resolved by scheme), docker launched detached
-    with the kickoff argv shape, ExecutionHandle returned immediately."""
+    """Manifest read from S3 through the boto3 seam, every ``inputs[]`` object staged
+    into ``$TRID3NT_RUNS_DIR/<run_id>/`` (the ``gs_uri`` field name carries ``s3://``
+    values, resolved by scheme), docker launched detached, handle returned at once."""
     s3 = FakeS3Client()
     set_s3_client(s3)
     uri = _seed_manifest(s3)
@@ -618,10 +593,9 @@ def _write_completion(s3: FakeS3Client, run_id: str) -> dict:
 
 
 def test_completion_carries_publish_manifest_uri_when_worker_wrote_one() -> None:
-    """A self-S3 worker writes publish_manifest.json under the run prefix and its
-    own completion.json; the supervisor's write lands LAST and overwrites it. The
-    manifest POINTER must survive -- read_publish_manifest requires it and never
-    globs, so losing it strips every consumer's metrics carrier."""
+    """A self-S3 worker writes its own ``completion.json`` and the supervisor's write
+    lands LAST over it, so the ``publish_manifest`` POINTER must survive -
+    ``read_publish_manifest`` requires it and never globs."""
     s3 = FakeS3Client()
     run_id = "RID-WITH-MANIFEST"
     s3.objects[("test-runs-bucket", f"{run_id}/publish_manifest.json")] = (

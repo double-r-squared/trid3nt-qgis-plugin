@@ -1,23 +1,9 @@
-"""Tests for ``list_run_frames`` (sandbox-staging).
+"""``list_run_frames``: the ORDERED animation-frame COG URIs of a run's layer.
 
-``list_run_frames(run_id, layer)`` returns the ORDERED animation-frame COG URIs
-for a completed run's layer -- the list the agent hands to ``code_exec_request``
-as a multi-frame ``layer_refs`` entry. It reads the emit-on-solve
-``outputs.json`` FIRST (frames = raster entries carrying a physical ``t``) and
-falls back to a LEGACY run's ``publish_manifest.json`` frame layers (ordered by
-``frame_no``) only when no outputs manifest is readable.
-
-Coverage:
-  - outputs.json frames ordered by t, the non-temporal peak excluded.
-  - outputs.json wins over a legacy publish_manifest when both are present.
-  - legacy publish_manifest frames still served, ordered by frame_no.
-  - layer filtering matches on the web grouping name / quantity / layer_id_stem.
-  - honest empty result when neither manifest exists -- never a fabricated list.
-  - honest empty result when no matching frames (+ a typed reason).
-  - missing run_id raises the typed error.
-
-No network: the solver S3 helpers both readers share are monkeypatched.
-"""
+The emit-on-solve ``outputs.json`` is read FIRST - frames are the raster entries
+carrying a physical ``t`` - and a legacy run's ``publish_manifest.json`` frame
+layers, ordered by ``frame_no``, only when no outputs manifest is readable. No
+match is an honest empty result with a typed reason, never a fabricated list."""
 
 from __future__ import annotations
 

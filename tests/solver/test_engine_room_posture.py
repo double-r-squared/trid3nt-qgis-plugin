@@ -1,11 +1,9 @@
 """The ENGINE-ROOM posture: staged inputs in, no network, and a code stamp on the run.
 
-Three seams landed together because they are one idea (ADR 0317): a worker that is
-handed everything it needs can be handed nothing else, and a run that records which
-code produced it can be read honestly later. Each is tested where it can actually
-fail - the flag on the launch line, the refusal when a bed is missing, the warning
-when the tree has moved.
-"""
+One idea in three seams: a worker handed everything it needs can be handed
+nothing else, and a run that records which code produced it can be read honestly
+later. Each is tested where it can actually fail - the flag on the launch line,
+the refusal when a bed is missing, the warning when the tree has moved."""
 
 from __future__ import annotations
 
@@ -65,9 +63,7 @@ def test_a_spec_that_writes_its_own_network_and_declares_one_is_refused():
     """Two ``--network`` flags on one line is a launch failure, so it fails HERE.
 
     The self-S3 build+solve specs write ``--network host`` in their own closure;
-    declaring the field as well would produce a command docker rejects at run
-    time, when the run is already minted and the failure reads as the solver's.
-    """
+    declaring the field as well produces a command docker rejects at run time."""
     def build_argv(run_id: str, rundir: Path, args: list[str]) -> list[str]:
         return ["docker", "run", "--network", "host", "img:latest"]
 
@@ -79,14 +75,8 @@ def test_a_spec_that_writes_its_own_network_and_declares_one_is_refused():
 def test_every_telemac_spec_declares_no_network():
     """The FAMILY DoD, asserted: the whole image runs with the network denied.
 
-    The reach spec is the one that carried the exception, because the reach
-    pipeline navigated NLDI, re-seeded off two flowline queries, queried NHDArea
-    and walked its own DEM ladder from inside the container. All four are staged
-    now, so the posture is no longer per-leg - it is the image's.
-
-    Note the reach spec also serves the rain-on-grid catchment, so this one line
-    is what puts BOTH remaining legs behind the denied network.
-    """
+    The posture is the image's rather than per-leg: the reach spec, which also serves
+    the rain-on-grid catchment, stages what it used to fetch inside the container."""
     import trid3nt_server.workflows.telemac.solving.run_telemac  # noqa: F401
     from trid3nt_server.workflows.solver.solver import LOCAL_SOLVER_SPEC_REGISTRY
 
@@ -163,10 +153,8 @@ def test_a_moved_engine_names_the_commits_that_moved_it():
 def test_an_engine_that_never_moved_is_not_reported_as_drift_unknown():
     """An EMPTY log is the clean answer, not a git failure.
 
-    The two are opposite verdicts and the reader only ever sees one line, so a
-    run whose engine has not been touched since it ran must read as unchanged
-    however many unrelated commits have landed on top of it.
-    """
+    The two are opposite verdicts on one line, so a run whose engine has not moved
+    since it ran reads as unchanged however many unrelated commits landed on top."""
     import subprocess
 
     from trid3nt_server.workflows.solver.code_provenance import _REPO_ROOT, staleness

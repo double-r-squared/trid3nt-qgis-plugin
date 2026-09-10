@@ -1,13 +1,8 @@
-"""Lane A tests: ``read_run_diagnostics`` dispatcher + per-engine parsers.
+"""The ``read_run_diagnostics`` dispatcher and its per-engine parsers.
 
-Offline-first (ZERO network): every case reads committed fixtures under
-``fixtures/validation/<engine>/`` via the private ``_run_dir`` seam, plus a
-dict-backed FakeS3 for the ONE production-path (S3 resolution) case. Fixtures
-were captured once from MinIO / trimmed local listings (build-contract 5.1);
-the tests never reach out.
-
-ASCII only.
-"""
+Offline-first with ZERO network: every case reads committed fixtures under
+``fixtures/validation/<engine>/`` through the private ``_run_dir`` seam, plus a
+dict-backed FakeS3 for the one S3-resolution case. ASCII only."""
 
 from __future__ import annotations
 

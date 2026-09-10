@@ -1,21 +1,9 @@
-"""HTTP-route tests for GET /api/case-list (live-feedback 2026-07-09).
+"""HTTP-route tests for GET /api/case-list.
 
-The QGIS local dock's Cases dialog previously could not show ANY cases
-until the user pressed Connect, because the case-list envelope only ever
-arrives over the WS session (``_emit_case_list`` in ``server.py``). This
-route mirrors that envelope's data + user-scoping over plain HTTP so the
-dock can populate the dialog before a WS connection exists.
-
-Covered here:
-  - route served UNCONDITIONALLY: the local build hardwires
-    ``solver_backend()`` to ``local-docker``, so the local single-user seam
-    is always on and ``TRID3NT_SOLVER_BACKEND`` no longer gates the route
-    (unset or a stale cloud value both serve 200);
-  - happy path: a fake Persistence with 2 cases -> 200 + newest-first
-    ordering + the wire shape (case_id/title/updated_at/bbox);
-  - Persistence unbound -> honest 503 {"error": "persistence unavailable"};
-  - the existing /api/tool-catalog path stays unaffected.
-"""
+The route mirrors the WS case-list envelope's data and user scoping over plain
+HTTP, so a dock can populate its dialog before a WS connection exists. It is
+served UNCONDITIONALLY - ``TRID3NT_SOLVER_BACKEND`` does not gate it - newest
+first, and an unbound Persistence is an honest 503 rather than an empty list."""
 
 from __future__ import annotations
 

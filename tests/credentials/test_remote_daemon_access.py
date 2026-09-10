@@ -1,25 +1,9 @@
-"""Remote-daemon access: endpoint advertisement + optional shared-token gate.
+"""Remote-daemon access: endpoint advertisement and the optional shared-token gate.
 
-Lane S (server) coverage for the 2026-07 remote-daemon-access work. Two
-independent features ride the connect handshake:
-
-1. **Endpoint advertisement.** The server rides an optional ``endpoints`` object
-   on the ``auth-ack`` (the first envelope the client parses) so a client
-   configured with ONLY the WS URL learns the sibling ``data_base`` (MinIO) and
-   ``http_base`` (agent HTTP) surfaces. Values come from
-   ``TRID3NT_ADVERTISED_DATA_BASE`` / ``TRID3NT_ADVERTISED_HTTP_BASE`` when set,
-   else DERIVED from the connection's own local address + the known ports.
-
-2. **Optional shared token.** ``TRID3NT_ACCESS_TOKEN`` gates the handshake:
-   when set, the client token must match (constant-time) or the connection is
-   rejected with a typed ``AUTH_FAILED`` close (WS 1008). Unset (default) =
-   byte-identical anonymous behavior.
-
-The tests split into pure-unit (``auth_handshake`` derivation + token verify +
-contract round-trip) and server-integration (``_handle_auth_token`` /
-``_ensure_auth_handshake`` end-to-end against a fake socket). No live socket,
-MinIO, or model is required -- everything runs offline.
-"""
+The ``auth-ack`` carries an optional ``endpoints`` object, so a client holding
+only the WS URL learns ``data_base`` and ``http_base`` - from the advertised env
+values, else derived from the connection's own address. ``TRID3NT_ACCESS_TOKEN``,
+when set, must match constant-time or the socket closes AUTH_FAILED. Offline."""
 
 from __future__ import annotations
 
@@ -412,12 +396,10 @@ async def test_token_gate_on_missing_token_typed_close(
 async def test_implicit_handshake_rejected_when_token_required(
     _no_persistence, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A token-gated daemon rejects the implicit (no-auth-token) path too.
+    """A token-gated daemon rejects the implicit no-auth-token path too.
 
-    Otherwise a client could bypass the gate by simply never sending
-    auth-token. ``_ensure_auth_handshake`` returns False (do-not-dispatch) and
-    closes the socket with the same typed AUTH_FAILED close.
-    """
+    ``_ensure_auth_handshake`` returns False and closes with the same typed
+    AUTH_FAILED, so never sending auth-token is not a bypass."""
     monkeypatch.setenv("TRID3NT_ACCESS_TOKEN", "s3cr3t")
     from trid3nt_server.server import SessionState, _ensure_auth_handshake
 

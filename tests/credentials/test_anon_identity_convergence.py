@@ -1,18 +1,9 @@
 """Anon-identity convergence under the LOCAL single-user build.
 
-CURRENT TRUTH (F1, TRID3NT local build): ``solver_backend()`` is hardwired to
-``local-docker``, so ``authenticate_token`` resolves EVERY connection --
-token-bearing or token-less -- to the ONE fixed local user
-(``auth_handshake.LOCAL_SINGLE_USER_ID``). Convergence is therefore
-unconditional by construction; identity forks are unrepresentable via the
-handshake. The sticky ``anonymous_user_id`` hint and the session-scoped anon-id
-registry that once collapsed the dual-socket no-hint race are DELETED (wave 11
-feature cut): with resolution pinned to a fixed constant, there is no hint to
-honor and no race to collapse.
-
-These tests pin: resolution always lands on the local user, and the case-list
-stability that resolution guarantees across reconnects.
-"""
+``solver_backend()`` is hardwired to ``local-docker``, so ``authenticate_token``
+resolves EVERY connection - token-bearing or token-less - to the one fixed local
+user, and an identity fork is unrepresentable through the handshake. Pinned
+here: that resolution, and the case-list stability it guarantees on reconnect."""
 
 from __future__ import annotations
 
@@ -28,14 +19,10 @@ from trid3nt_contracts.common import new_ulid, now_utc
 
 
 class FakeMCPClient:
-    """In-memory MCP client round-tripping users + projects (cases) for tests.
+    """In-memory MCP client round-tripping users and projects (cases).
 
-    Supports the exact tool shapes the Persistence layer issues:
-    - users: find-one by ``_id``, update-one (upsert) by ``_id``.
-    - projects: find with the ``$or: [{user_id}, {owner_user_id}]`` +
-      ``status $nin`` filter ``list_cases_for_user`` uses, and update-one
-      (upsert) stamping ``user_id`` from ``$set`` for ownership.
-    """
+    Supports the exact tool shapes ``Persistence`` issues: ``find-one`` and upsert by
+    ``_id`` on users, and the ownership ``$or`` filter with upsert on projects."""
 
     def __init__(self) -> None:
         self.users: dict[str, dict] = {}
@@ -125,11 +112,8 @@ async def test_sibling_sockets_converge_on_local_user() -> None:
 async def test_no_hint_connections_cannot_fork_case_lists() -> None:
     """Two token-less connections resolve to ONE user; forking is impossible.
 
-    The handshake can no longer produce two distinct identities, so the
-    dual-socket fork that once motivated the sticky-hint machinery is
-    structurally unrepresentable. A Case created via connection A is listed
-    for connection B because they ARE the same fixed local user.
-    """
+    A Case created on connection A is listed for connection B because they ARE the
+    same fixed local user."""
     client = FakeMCPClient()
     p = Persistence(client)
 

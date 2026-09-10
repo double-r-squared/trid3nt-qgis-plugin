@@ -1,26 +1,9 @@
-"""Backend-agnostic unit tests for ``solver.py`` (job-0041, M5 Stage C).
+"""Backend-agnostic unit tests for ``solver.py``.
 
-GCP Cloud Workflows is decommissioned. The gcp-workflows happy-path / poll /
-cancel / completion-read tests that this file used to carry (driven by a fake
-``google.cloud.workflows.executions_v1.ExecutionsClient`` via
-``set_workflows_client`` + ``TRID3NT_SOLVER_BACKEND=gcp-workflows``) are gone
-with the backend. What remains here is the backend-AGNOSTIC coverage:
-
-1. ``test_registry_registers_solver_tools_uncacheable`` — both atomic tools
-   appear in ``TOOL_REGISTRY`` with ``cacheable=False`` +
-   ``ttl_class="live-no-cache"`` + ``source_class="solver_dispatch"``
-   (FR-DC-6 enumeration honored).
-2. ``test_run_solver_rejects_unregistered_solver`` — ``solver="telemac"``
-   raises ``SolverNotRegisteredError`` (lazy per-milestone deploy strategy).
-   (``modflow`` is now a registered solver — wired to the generic AWS Batch
-   seam alongside sfincs/swmm — so an as-yet-unbuilt engine name is used.)
-3. ``test_progress_estimator_is_wall_clock_linear_clamped`` — pure-function
-   guard on ``_progress_percent``.
-
-The active-backend coverage (local-docker / aws-batch / MODFLOW local-exec)
-lives in test_solver_local_docker.py / test_solver_aws_batch.py /
-test_modflow_local_backend.py — none of which need a workflows client.
-"""
+What holds whichever backend is selected: both atomic tools registered
+uncacheable (``ttl_class="live-no-cache"``, ``source_class="solver_dispatch"``),
+an unregistered solver name refused before dispatch, and the wall-clock-linear
+clamped progress estimator. Per-backend coverage lives with each backend."""
 
 from __future__ import annotations
 
@@ -92,9 +75,8 @@ def test_registry_registers_solver_tools_uncacheable() -> None:
 
 def test_run_solver_rejects_unregistered_solver(reset_solver_di_seams) -> None:
     """A solver nobody registered raises ``SolverNotRegisteredError`` before any
-    dispatch, and the refusal NAMES what is registered - borrowing another
-    engine's spec is worse than a loud failure. Backend-agnostic: the registry
-    check fires ahead of the backend branch."""
+    dispatch, and the refusal NAMES what is registered - borrowing another engine's
+    spec is worse than a loud failure."""
     with pytest.raises(SolverNotRegisteredError) as exc_info:
         run_solver(solver="not_an_engine", model_setup_uri="s3://x/y.json")
     message = str(exc_info.value)

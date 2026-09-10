@@ -1,21 +1,9 @@
-"""Tests for the agent-side credential pipeline.
+"""The agent-side credential pipeline, all four moving parts.
 
-Covers all four moving parts:
-
-1. FIRMS key resolution: the fetcher's own ``_resolve_map_key`` honors an
-   explicit key / a ``str`` secret_ref / the env var / the demo fallback (the
-   fetcher path is unchanged by the vault chop). The cache key never includes
-   the raw key.
-2. Provider registry: ``credential_registry`` maps FIRMS → provider metadata
-   (label / signup_url / secret_key_name) and classifies FIRMS auth errors.
-3. Auth-error → credential-request: ``_invoke_tool_via_emitter`` pauses on a
-   keyed-tool credential error, emits a ``credential-request`` envelope, and
-   blocks awaiting ``credential-provided``.
-4. credential-provided → retry: resolving the pending credential future with
-   ``provided=True`` retries the tool, which now re-resolves the key the plugin
-   pushed into the resolver session cache; one prompt per tool per turn is
-   enforced.
-"""
+FIRMS key resolution (explicit key / ``secret_ref`` / env / demo fallback, the
+raw key never in the cache key); the provider registry's metadata and error
+classification; a keyed-tool auth error pausing dispatch into a
+``credential-request``; and the retry that one ``credential-provided`` unblocks."""
 
 from __future__ import annotations
 
@@ -151,13 +139,10 @@ def test_registry_structure_extensible():
 
 
 def test_build_credential_request_payload_uses_real_provider_id():
-    """FIRMS provider_id IS now a ProviderID Literal member → the payload is
-    scoped to the REAL provider (no 'openweathermap' fallback).
+    """The payload is scoped to the REAL provider, FIRMS being a ``ProviderID`` member.
 
-    This is the round-trip fix: the credential-request, the web secret-add it
-    triggers, and ``_resolve_active_secret_ref`` on retry all agree on
-    provider_id='firms', so the saved key re-resolves.
-    """
+    The credential-request, the secret-add it triggers and the retry's resolution
+    must agree on ``provider_id``, or the saved key never re-resolves."""
     provider = cr.get_provider("firms")
     payload = _build_credential_request_payload(
         request_id=new_ulid(),
@@ -328,13 +313,10 @@ def test_generic_classifier_never_classifies_unknown_provider():
 
 
 def test_classifier_matches_cdsapirc_config_missing_message():
-    """The exact live ERA5 no-key message ('Missing/incomplete configuration
-    file: /root/.cdsapirc') now classifies as a credential error for the
-    registered ecmwf_cds tool — even when wrapped in an *_UPSTREAM_ERROR code.
+    """The ERA5 no-key message classifies as a credential error for ``ecmwf_cds``.
 
-    This is the root-cause regression guard: previously the message matched NO
-    credential phrase, is_credential_error returned False, and NO secret-entry
-    card fired during the Mexico Beach run."""
+    'Missing/incomplete configuration file: /root/.cdsapirc' must match even when
+    wrapped in an ``*_UPSTREAM_ERROR`` code, or no secret-entry card fires."""
     assert cr.is_credential_error(
         "fetch_era5_reanalysis",
         _ErrWithCode(
@@ -367,11 +349,10 @@ def test_classifier_config_missing_phrases_narrow_no_false_positive():
 
 
 def test_signup_url_none_provider_round_trips_end_to_end():
-    """A registered provider with signup_url=None still builds a valid payload
-    (the no-URL / out-of-band mode is fully supported end to end — NATE
-    principle 2). Every registered provider carries a signup URL, so construct
-    a None-URL provider over a real provider_id to prove the wire path accepts
-    signup_url=None."""
+    """A registered provider with ``signup_url=None`` still builds a valid payload.
+
+    Every registered provider carries a signup URL, so the out-of-band no-URL mode is
+    proved over a real ``provider_id`` rather than an invented one."""
     none_url_provider = cr.CredentialProvider(
         provider_id="ecmwf_cds",  # a real ProviderID Literal member
         label="Copernicus CDS (out-of-band)",
@@ -544,12 +525,10 @@ def test_auth_error_emits_credential_request_and_retries_on_provided():
 
 
 def test_reshaped_flow_pushes_to_session_cache_then_retry_resolves():
-    """The full reshaped mid-turn flow: a keyed-tool auth error emits a
-    credential-request; the (mocked) plugin push writes the value into the
-    resolver session cache; on ``credential-provided`` the retry re-resolves
-    the session-cache key as ``secret_ref`` and the tool succeeds. Proves the
-    file vault is off the path -- the value comes from the session cache.
-    """
+    """Auth error -> credential-request -> pushed value -> the retry resolves it.
+
+    The value comes from the resolver session cache, which puts the file vault off
+    the path."""
     PUSHED_KEY = "session-cache-firms-key"
     seen_secret_ref = {"value": None}
 
@@ -606,16 +585,10 @@ def test_reshaped_flow_pushes_to_session_cache_then_retry_resolves():
 
 
 def test_credential_request_envelope_never_carries_raw_key():
-    """SECURITY (auth boundary): the raw key value MUST NOT appear anywhere in
-    the LLM/user-facing ``credential-request`` envelope.
+    """The raw key value MUST NOT appear anywhere in the ``credential-request``.
 
-    The server folds the tool's typed-error string into the prompt message
-    (honest, specific copy). FIRMS' own auth-error string redacts the key, but
-    a regression that leaked a key into the exception text would surface here:
-    we drive the path with a body that raises an auth error and assert the raw
-    key value the dispatch resolved appears in NO field of the emitted
-    envelope (provider_label / signup_url / secret_key_name / message / etc.).
-    """
+    The server folds the tool's typed-error string into the prompt message, so a key
+    leaked into that exception text would surface in some field of the envelope."""
     RAW_KEY = "RAWKEY-THIS-MUST-NEVER-LEAK-1234567890"
 
     def _firms_body(**kwargs):
@@ -704,12 +677,10 @@ def test_declined_credential_surfaces_original_error():
 
 
 def test_one_prompt_per_tool_per_turn_no_infinite_loop():
-    """A retry that ALSO fails with auth error does NOT re-prompt (one per turn).
+    """A retry that ALSO fails with an auth error does NOT re-prompt.
 
-    The second auth-error propagates as the normal typed error instead of a
-    second credential-request — preventing an infinite prompt loop on a
-    still-bad key.
-    """
+    The second auth error propagates as the normal typed error, so a still-bad key
+    cannot drive an infinite prompt loop."""
 
     def _firms_body(**kwargs):
         raise FirmsAuthError("still rejected")
@@ -849,10 +820,10 @@ def test_generic_fallback_emits_name_only_card_for_unregistered_tool():
 
 
 def test_generic_fallback_surfaces_original_error_when_payload_unbuildable():
-    """If the generic card cannot be built/emitted (e.g. 'generic' is not yet a
-    wire ProviderID), _emit_... returns None → _maybe_handle returns None →
-    the caller re-raises the ORIGINAL typed error. The agent NEVER fabricates a
-    URL. This is the live behavior today (until the schema adds 'generic')."""
+    """An unbuildable generic card re-raises the ORIGINAL typed error.
+
+    The emit helper returns None, ``_maybe_handle`` returns None and the caller
+    raises what the tool raised - the agent never fabricates a signup URL."""
     async def _fake_emit_none(websocket, state, tool_name, provider, error):
         # Mirrors _build_credential_request_payload returning None on an
         # unknown provider_id → _emit_... returns None.

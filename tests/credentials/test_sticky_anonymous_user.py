@@ -1,15 +1,9 @@
 """Anonymous resolution under the LOCAL single-user build.
 
 ``solver_backend()`` is pinned to ``local-docker``, so ``authenticate_token``
-takes the F1 single-user branch UNCONDITIONALLY: EVERY connection resolves to
-the ONE fixed local user (``auth_handshake.LOCAL_SINGLE_USER_ID``). The sticky
-``anonymous_user_id`` client-hint that once rode the wire is DELETED (wave 11
-feature cut) -- with resolution pinned to a fixed constant there is no per-hint
-reuse/verbatim-provisioning branch to exercise.
-
-These tests pin that resolution truth in isolation (the web persistence is
-verified separately in the web test suite).
-"""
+takes the single-user branch UNCONDITIONALLY and every connection resolves to the
+one fixed local user. Resolution is pinned here in isolation; the web persistence
+is verified in the web suite."""
 
 from __future__ import annotations
 

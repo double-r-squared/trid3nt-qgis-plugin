@@ -1,15 +1,9 @@
-"""Tests for the local subprocess runner (TRID3NT offline build).
+"""The local subprocess runner, engine-AGNOSTIC half.
 
-Covers the ENGINE-AGNOSTIC half - what is left once the pip-only engines that
-registered exec-kind specs (Landlab, OpenQuake) left the tree:
-  1. Manifest written to rundir: launch_local_solver writes manifest.json
-     to the run directory before launching the subprocess.
-  2. Mocked subprocess end-to-end: the supervisor thread picks up exit 0 and
-     writes a correct completion.json (no real process spawned).
-  3. env_overrides reach the subprocess environment.
-
-No AWS calls, no real subprocess (mocked via monkeypatch), no docker.
-"""
+The manifest is written to the run directory before launch, a mocked exit 0 is
+picked up by the supervisor into a correct ``completion.json``, and
+``env_overrides`` reach the subprocess environment. No AWS, no real subprocess
+and no docker."""
 
 from __future__ import annotations
 
