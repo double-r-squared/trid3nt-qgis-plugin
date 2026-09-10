@@ -21,6 +21,9 @@ from matplotlib.figure import Figure  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO))
+sys.path.insert(0, str(REPO / "scripts" / "packet"))
+
+import doc_size as DOC  # noqa: E402
 
 
 def _dock_renderer():
@@ -61,7 +64,7 @@ def _each_chart(document: dict, wanted: str | None):
 
 def render_charts(*, run_id: str, stem: str, out_dir: str | os.PathLike[str],
                   bucket: str | None = None, chart: str | None = None,
-                  caption: str = "") -> list[dict]:
+                  caption: str = "", doc: bool = False) -> list[dict]:
     """Every chart the run persisted, drawn through the DOCK's renderer."""
     ns = argparse.Namespace(
         run_id=run_id, stem=stem, out_dir=str(out_dir),
@@ -92,7 +95,8 @@ def render_charts(*, run_id: str, stem: str, out_dir: str | os.PathLike[str],
         figure.text(0.01, 0.005, caption[:200], fontsize=6.0, color="#888888")
         out = out_dir / (f"{ns.stem}_chart.png" if name is None
                          else f"{ns.stem}_chart_{name}.png")
-        figure.savefig(out, dpi=200, bbox_inches="tight")
+        figure.savefig(out, dpi=DOC.CHART_DPI if doc else 200,
+                       bbox_inches="tight")
         written.append({"chart": str(out), "name": name,
                         "title": envelope.get("title") or charts.spec_title(spec),
                         "render_summary": summary, "bytes": out.stat().st_size})
@@ -112,10 +116,13 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--chart", default=None,
                     help="render only this DECLARED chart name (default: all)")
     ap.add_argument("--caption", default="")
+    ap.add_argument("--doc", action="store_true", default=False,
+                    help="the DOC size a template page embeds")
     ns = ap.parse_args(argv)
 
     written = render_charts(run_id=ns.run_id, stem=ns.stem, out_dir=ns.out_dir,
-                            bucket=ns.bucket, chart=ns.chart, caption=ns.caption)
+                            bucket=ns.bucket, chart=ns.chart, caption=ns.caption,
+                            doc=ns.doc)
     print(json.dumps({"run_id": ns.run_id, "charts": written}, indent=2, default=str))
     return 0
 

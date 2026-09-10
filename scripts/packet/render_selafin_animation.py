@@ -30,6 +30,7 @@ sys.path.insert(0, str(REPO))
 sys.path.insert(0, str(REPO / "contracts"))
 sys.path.insert(0, str(REPO / "scripts" / "packet"))
 
+import doc_size as DOC  # noqa: E402
 import merc_render as MR  # noqa: E402
 
 from trid3nt_server.workflows.telemac.products.result_reader import (  # noqa: E402
@@ -258,14 +259,14 @@ class StablePaletteWriter(PillowWriter):
                        duration=int(1000 / self.fps), loop=0)
 
 
-def plain_axes(bbox_ll, title: str):
+def plain_axes(bbox_ll, title: str, *, dpi: int = _DPI):
     """Axes with NO basemap - the offline seam for a caller with no tile access.
     Same figure geometry as the basemap axes, and the third member is the CREDIT
     the caption prints, which says "no basemap" out loud."""
     xw, yw = MR.ll_to_merc(np.array([bbox_ll[0], bbox_ll[2]]),
                            np.array([bbox_ll[1], bbox_ll[3]]))
     aspect = float(np.clip((yw[1] - yw[0]) / (xw[1] - xw[0]), 0.35, 1.8))
-    fig, ax = plt.subplots(figsize=(10.0, 10.0 * aspect * 0.92), dpi=_DPI)
+    fig, ax = plt.subplots(figsize=(10.0, 10.0 * aspect * 0.92), dpi=dpi)
     ax.set_facecolor("#20242c")
     ax.set_xticks([])
     ax.set_yticks([])
@@ -273,13 +274,13 @@ def plain_axes(bbox_ll, title: str):
     return fig, ax, "no basemap (offline render)"
 
 
-def _axes_with_basemap(bbox_ll, title: str):
+def _axes_with_basemap(bbox_ll, title: str, *, dpi: int = _DPI):
     zoom = MR.pick_zoom(bbox_ll, max_tiles=6)
     mosaic, extent = MR.fetch_basemap(bbox_ll, zoom)
     xw, yw = MR.ll_to_merc(np.array([bbox_ll[0], bbox_ll[2]]),
                            np.array([bbox_ll[1], bbox_ll[3]]))
     aspect = float(np.clip((yw[1] - yw[0]) / (xw[1] - xw[0]), 0.35, 1.8))
-    fig, ax = plt.subplots(figsize=(10.0, 10.0 * aspect * 0.92), dpi=_DPI)
+    fig, ax = plt.subplots(figsize=(10.0, 10.0 * aspect * 0.92), dpi=dpi)
     ax.imshow(np.asarray(mosaic), extent=extent, origin="upper", zorder=0)
     padx, pady = (xw[1] - xw[0]) * _PAD_FRAC, (yw[1] - yw[0]) * _PAD_FRAC
     ax.set_xlim(xw[0] - padx, xw[1] + padx)
@@ -410,9 +411,10 @@ def render_frames(tri: Triangulation, values: np.ndarray, times, *, bbox_ll,
                   vector_grid_n: int = 200, arrow_size: float = 0.7,
                   vector_lw: tuple[float, float] = (0.35, 1.1),
                   still_vectors: str | None = None,
-                  shared_range: tuple[float, float] | None = None) -> dict:
+                  shared_range: tuple[float, float] | None = None,
+                  dpi: int = _DPI) -> dict:
     """The plotting seam: a triangulation plus a ``(time, node)`` field -> GIF +
-    still. ``axes_factory`` is ``(bbox_ll, title) -> (fig, ax, basemap_credit)``;
+    still. ``axes_factory`` is ``(bbox_ll, title, dpi) -> (fig, ax, credit)``;
     ``vectors`` and ``still_vectors`` name a DECLARED primitive or nothing."""
     values = np.asarray(values, dtype="float64")
     # THE COLOUR SCALE IS RESOLVED ONCE, HERE, BEFORE THE FIRST FRAME IS DRAWN,
@@ -442,7 +444,8 @@ def render_frames(tri: Triangulation, values: np.ndarray, times, *, bbox_ll,
 
     # The CREDIT is what the caption prints, so a render always names the ground
     # it was drawn on rather than the one it asked for.
-    fig, ax, basemap_credit = (axes_factory or _axes_with_basemap)(bbox_ll, title)
+    fig, ax, basemap_credit = (axes_factory or _axes_with_basemap)(
+        bbox_ll, title, dpi=dpi)
     coll = ax.tripcolor(tri, values[0], shading="gouraud", cmap=scale.colormap,
                         alpha=0.85, zorder=2,
                         **({"norm": norm} if norm is not None
@@ -523,7 +526,7 @@ def render_frames(tri: Triangulation, values: np.ndarray, times, *, bbox_ll,
     animated = values.shape[0] > 1
     if animated:
         writer = StablePaletteWriter(fps=_FPS)
-        with writer.saving(fig, str(gif_path), dpi=_DPI):
+        with writer.saving(fig, str(gif_path), dpi=dpi):
             for i, moment in enumerate(times):
                 coll.set_array(values[i])
                 if anim_style:
@@ -585,7 +588,8 @@ def render(slf_path: str, *, utm_epsg: int, origin_bbox, variable: str,
            vector_grid_n: int = 200, arrow_size: float = 0.7,
            vector_lw: tuple[float, float] = (0.35, 1.1),
            still_vectors: str | None = None,
-           shared_range: tuple[float, float] | None = None) -> dict:
+           shared_range: tuple[float, float] | None = None,
+           dpi: int = _DPI, max_frames: int | None = None) -> dict:
     """The GIF over every frame, plus the PEAK frame as a still. One read, two products."""
     from pyproj import Transformer
 
@@ -663,7 +667,15 @@ def render(slf_path: str, *, utm_epsg: int, origin_bbox, variable: str,
     tri = Triangulation(mx, my, triangles)
     bbox_ll = (float(lon.min()), float(lat.min()), float(lon.max()), float(lat.max()))
 
-    result = render_frames(tri, values, mesh["times"], bbox_ll=bbox_ll, units=units,
+    times = mesh["times"]
+    if max_frames and len(times) > max_frames:
+        # A DOC animation is a page's picture of the same solve, not a second
+        # answer: the stride keeps the first and last instants and thins what is
+        # between them, so the field a reader watches is the field the run wrote.
+        stride = int(np.ceil(len(times) / max_frames))
+        values, times = values[::stride], np.asarray(times)[::stride]
+
+    result = render_frames(tri, values, times, bbox_ll=bbox_ll, units=units,
                            title=title, run_id=run_id,
                            source_name=source_name or Path(slf_path).name,
                            variable=name.strip(),
@@ -676,7 +688,7 @@ def render(slf_path: str, *, utm_epsg: int, origin_bbox, variable: str,
                            vectors=vectors, vector_density=vector_density,
                            vector_grid_n=vector_grid_n, arrow_size=arrow_size,
                            vector_lw=vector_lw, still_vectors=still_vectors,
-                           shared_range=shared_range)
+                           shared_range=shared_range, dpi=dpi)
     # WHERE the frames actually landed. A LOCAL mesh rendered with no origin lands
     # at the UTM false origin, thousands of km from the water, and every other
     # number in this report stays perfectly healthy while it does - so the extent
@@ -712,7 +724,8 @@ def render_run(*, run_id: str, slf: str, var: str, stem: str, out_dir,
                arrow_size: float = 0.7,
                vector_lw: tuple[float, float] = (0.35, 1.1),
                still_vectors: str | None = None,
-               shared_range: tuple[float, float] | None = None) -> dict:
+               shared_range: tuple[float, float] | None = None,
+               doc: bool = False) -> dict:
     """One run's SELAFIN -> its GIF + still, straight off the object store.
     ``animation`` comes back ``None`` for a single-frame result. ``shared_range``,
     when passed, IS the scale; unset, the range is read off these frames."""
@@ -746,9 +759,13 @@ def render_run(*, run_id: str, slf: str, var: str, stem: str, out_dir,
                         vector_density=vector_density,
                         vector_grid_n=vector_grid_n, arrow_size=arrow_size,
                         vector_lw=vector_lw, still_vectors=still_vectors,
-                        shared_range=shared_range)
+                        shared_range=shared_range,
+                        dpi=DOC.ANIMATION_DPI if doc else _DPI,
+                        max_frames=DOC.ANIMATION_FRAMES if doc else None)
     finally:
         Path(local).unlink(missing_ok=True)
+    if doc:
+        DOC.quantize_png(peak)
     return {**result, "run_id": run_id, "origin_bbox": origin,
             "animation": str(gif) if result["animated"] else None,
             "peak": str(peak),
@@ -796,6 +813,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--still", choices=("peak", "final"), default="peak",
                     help="which frame the still shows - peak for a field that "
                          "builds, final for one that decays toward its answer")
+    ap.add_argument("--doc", action="store_true", default=False,
+                    help="the DOC size a template page embeds")
     ns = ap.parse_args(argv)
 
     if ns.out_dir:
@@ -812,7 +831,8 @@ def main(argv: list[str] | None = None) -> int:
         origin_bbox=([float(v) for v in ns.origin_bbox.split(",")]
                      if ns.origin_bbox else None),
         utm_epsg=ns.utm_epsg, plane=ns.plane, nplan=ns.nplan,
-        mask_var=ns.mask_var, mask_min=ns.mask_min, still=ns.still)
+        mask_var=ns.mask_var, mask_min=ns.mask_min, still=ns.still,
+        doc=ns.doc)
     print(json.dumps({**result, "animation": result["animation"] or
                       "NONE - a single-frame (steady) result has nothing to animate"},
                      indent=2))

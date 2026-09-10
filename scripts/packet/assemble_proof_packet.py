@@ -387,8 +387,10 @@ def _field_label(animation: ProofAnimation) -> str:
 # --------------------------------------------------------------------------- #
 def _render(directory: Path, stem: str, evidence_path: Path, evidence: dict,
             *, template: str, variant: str, run_id: str, bucket: str,
-            declared: tuple, frames: int, s3) -> dict:
-    """Every deliverable, rendered fresh, in checklist order. Returns a report."""
+            declared: tuple, frames: int, s3, doc: bool = False) -> dict:
+    """Every deliverable, rendered fresh, in checklist order. Returns a report.
+    ``doc`` renders the DOC size a template page embeds - the composite alone,
+    no per-layer panels."""
     tool = str(evidence.get("tool") or template)
     title = f"{tool} - run {run_id}"
     report: dict[str, Any] = {}
@@ -396,7 +398,8 @@ def _render(directory: Path, stem: str, evidence_path: Path, evidence: dict,
     layers = _sibling("render_all_layers_proof")
     try:
         report["sheet"] = layers.render_from_evidence(
-            evidence_path, out_path=directory / f"{stem}.png", title=title)
+            evidence_path, out_path=directory / f"{stem}.png", title=title,
+            doc=doc)
     except layers.RenderProofError as exc:
         # A sheet that cannot be drawn is a REFUSED packet naming why, not a
         # traceback out of the assembler: the reason is the finding, and a
@@ -408,7 +411,8 @@ def _render(directory: Path, stem: str, evidence_path: Path, evidence: dict,
     try:
         report["charts"] = charts.render_charts(
             run_id=run_id, stem=stem, out_dir=directory, bucket=bucket,
-            caption=f"{stem} - run {run_id} - the chart the run persisted")
+            caption=f"{stem} - run {run_id} - the chart the run persisted",
+            doc=doc)
     except SystemExit as exc:  # noqa: PERF203 - the reason IS the report
         report["charts"] = []
         report["chart_error"] = str(exc)
@@ -473,7 +477,8 @@ def _render(directory: Path, stem: str, evidence_path: Path, evidence: dict,
                 shared_range=(tuple(scale["published_range"])
                               if scale["published_range"] else None),
                 name_infix=suffixed(animation, len(declared)),
-                title=f"{stem} - {_field_label(animation)} - run {run_id}")
+                title=f"{stem} - {_field_label(animation)} - run {run_id}",
+                doc=doc)
         except SystemExit as exc:  # the renderer's own refusal IS the finding
             report.setdefault("animation_errors", []).append(
                 f"{animation.name}: {exc}")

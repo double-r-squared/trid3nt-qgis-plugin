@@ -27,6 +27,7 @@ REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO))
 sys.path.insert(0, str(REPO / "scripts" / "packet"))
 
+import doc_size as DOC  # noqa: E402
 import merc_render as MR  # noqa: E402
 
 #: Panels per row on the sheet. Three keeps a 6-8 layer run to two or three rows
@@ -71,6 +72,9 @@ _CASING_ALPHA = 0.55
 #: stacked layers are still separable. A sheet-side choice, stated on the panel -
 #: the product declares no vector colour to read.
 _VECTOR_CYCLE = ("#ff2fa0", "#00e5ff", "#ffe600", "#7cff4f", "#ff8a3d", "#c08cff")
+#: Basemap tiles the DOC composite is drawn over. One more than the sheet's, so
+#: a frame zoomed onto a short reach still lands on readable ground.
+_DOC_MAX_TILES = 8
 #: A composite sheet's panels are too small to spot-check by eye - each one is
 #: also saved full-size on its own. Width/dpi chosen so a panel this size
 #: reads clearly at normal zoom, distinct from the grid's cramped ~800px cells.
@@ -592,10 +596,11 @@ def _single_panel_h(bbox_ll: tuple) -> float:
 
 
 def _save_full_panel(out_path: Path, *, mosaic, extent, bbox_ll, panel_h: float,
-                     title: str, caption: str, draw_fn, colorbar: bool) -> Path:
+                     title: str, caption: str, draw_fn, colorbar: bool,
+                     dpi: int = _SINGLE_DPI) -> Path:
     """One panel, full-size, its own file - same framing, basemap and caption as
     its grid cell, and legible instead of squeezed 3-up."""
-    fig, ax = plt.subplots(figsize=(_SINGLE_PANEL_W, panel_h), dpi=_SINGLE_DPI)
+    fig, ax = plt.subplots(figsize=(_SINGLE_PANEL_W, panel_h), dpi=dpi)
     _frame_axes(ax, mosaic, extent, bbox_ll)
     artist = draw_fn(ax)
     if artist is not None and colorbar:
@@ -685,8 +690,47 @@ def _refuse_ungeoreferenced(renderable: list[tuple[dict, dict]]) -> None:
             "is the georeferencing that is wrong, not the render.")
 
 
+def _render_doc_composite(renderable: list[tuple[dict, dict]], out_path: Path, *,
+                          mosaic, extent, bbox_ll, title: str,
+                          skipped: list[dict], strays: list) -> dict:
+    """The DOC composite: the stacked canvas view alone, at a page's weight."""
+    # A page embeds ONE picture of the run, not the audit grid: nine panels at a
+    # weight a page can carry are nine panels nobody can read, and the per-layer
+    # spot-check is what the proof packet is for.
+    def _draw_composite(ax):
+        for i, (layer, payload) in enumerate(renderable):
+            _draw(ax, layer, payload, color=_VECTOR_CYCLE[i % len(_VECTOR_CYCLE)],
+                  zorder=3 + i, alpha=0.75)
+        return None
+
+    # FRAMED ON THE ANSWER. A run's context layers reach as far as the data
+    # source does - a whole river network behind a 600 m modelled reach - and a
+    # union frame turns the thing the template answers into a speck. The primary
+    # layers ARE the answer, so they set the frame and the context is what
+    # happens to fall inside it.
+    answer = [payload["bbox_ll"] for layer, payload in renderable
+              if layer.get("role") == "primary"]
+    frame = _undegenerate(_union_bbox(answer)) if answer else bbox_ll
+    if frame != bbox_ll:
+        mosaic, extent = _basemap(frame, _DOC_MAX_TILES)
+    caption = _wrap([
+        f"All {len(renderable)} layers stacked in emission order, framed on the "
+        f"{len(answer) or len(renderable)} result layer(s)",
+        "(vector colours cycle per layer so the stack stays separable; rasters "
+        "keep their product styling)"])
+    _save_full_panel(out_path, mosaic=mosaic, extent=extent, bbox_ll=frame,
+                     panel_h=_single_panel_h(frame), title=title,
+                     caption=caption, draw_fn=_draw_composite, colorbar=False,
+                     dpi=DOC.SHEET_DPI)
+    DOC.quantize_png(out_path)
+    return {"sheet": str(out_path), "bytes": out_path.stat().st_size,
+            "panels": 1, "layers": [l.get("name") for l, _ in renderable],
+            "not_rendered": skipped, "off_canvas": strays, "panel_pngs": []}
+
+
 def render_sheet(layers: list[dict], out_path: Path, *, title: str,
-                 max_tiles: int, composite_only: bool = False) -> dict:
+                 max_tiles: int, composite_only: bool = False,
+                 doc: bool = False) -> dict:
     renderable, skipped = [], []
     for layer in layers:
         try:
@@ -701,6 +745,11 @@ def render_sheet(layers: list[dict], out_path: Path, *, title: str,
 
     bbox_ll, strays = _canvas_bbox(renderable)
     mosaic, extent = _basemap(bbox_ll, max_tiles)
+
+    if doc:
+        return _render_doc_composite(
+            renderable, out_path, mosaic=mosaic, extent=extent, bbox_ll=bbox_ll,
+            title=title, skipped=skipped, strays=strays)
 
     panels = len(renderable) + 1
     rows = (panels + _COLS - 1) // _COLS
@@ -776,7 +825,7 @@ def render_sheet(layers: list[dict], out_path: Path, *, title: str,
 def render_from_evidence(evidence_path: str | os.PathLike[str], *,
                          out_path: str | os.PathLike[str] | None = None,
                          max_tiles: int = 6, composite_only: bool = False,
-                         title: str | None = None) -> dict:
+                         title: str | None = None, doc: bool = False) -> dict:
     """Sheet from a drive script's evidence JSON. ``title`` overrides the caption
     every panel carries; the packet assembler passes the RUN ID through it, so a
     delivered picture is verifiable against the evidence beside it."""
@@ -786,7 +835,8 @@ def render_from_evidence(evidence_path: str | os.PathLike[str], *,
         re.sub(r"_evidence$", "", src.stem) + "_canvas_layers.png")
     return render_sheet(_collapse_frames(layers), out,
                         title=title or evidence_title,
-                        max_tiles=max_tiles, composite_only=composite_only)
+                        max_tiles=max_tiles, composite_only=composite_only,
+                        doc=doc)
 
 
 def render_proof(evidence_path: str | os.PathLike[str], *,
@@ -819,6 +869,8 @@ def main() -> int:
     ap.add_argument("--max-tiles", type=int, default=6)
     ap.add_argument("--composite-only", action="store_true", default=False,
                     help="skip the per-layer full-size PNGs, sheet only")
+    ap.add_argument("--doc", action="store_true", default=False,
+                    help="the DOC size a template page embeds, sheet only")
     ns = ap.parse_args()
 
     try:
@@ -826,14 +878,14 @@ def main() -> int:
             result = render_from_evidence(ns.evidence, out_path=ns.out,
                                           max_tiles=ns.max_tiles,
                                           composite_only=ns.composite_only,
-                                          title=ns.title)
+                                          title=ns.title, doc=ns.doc)
         else:
             layers, title = _layers_from_case(ns.case_id)
             out = Path(ns.out or (REPO / "docs" / "proof" / "templates"
                                   / f"case_{ns.case_id}_canvas_layers.png"))
             result = render_sheet(_collapse_frames(layers), out,
                                   title=ns.title or title, max_tiles=ns.max_tiles,
-                                  composite_only=ns.composite_only)
+                                  composite_only=ns.composite_only, doc=ns.doc)
     except RenderProofError as exc:
         print(f"no sheet: {exc}")
         return 1
