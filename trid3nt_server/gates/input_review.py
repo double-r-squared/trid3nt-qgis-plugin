@@ -1,8 +1,7 @@
 """Two-mode INPUT_REQUIRED review gate -- the shared helper templates call.
 
-``auto`` proceeds immediately with every non-user input loudly labeled;
-``user_gated`` presents the resolved inputs for approval after resolution and
-before dispatch, bounded to ``max_rounds`` rounds then an honest cancel.
+``auto`` proceeds with every non-user input labeled; ``user_gated`` presents them for
+approval, bounded to ``max_rounds`` rounds then an honest cancel.
 """
 from __future__ import annotations
 

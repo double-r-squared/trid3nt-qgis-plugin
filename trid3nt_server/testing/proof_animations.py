@@ -1,9 +1,7 @@
-"""WHICH field a template's delivered animation paints - declared, never inferred.
+"""WHICH field a template's animation paints - declared here, never inferred.
 
-A time-stepped solve writes half a dozen variables and only ONE of them is the
-answer. That choice lives here, beside the canary declarations, and never on a
-command line: a delivered proof that came off a remembered flag is not
-repeatable.
+A time-stepped solve writes half a dozen variables and only ONE is the answer; a proof
+that came off a remembered command-line flag is not repeatable.
 """
 from __future__ import annotations
 

@@ -1,8 +1,7 @@
 """Session-scoped pending-confirmation registry for the block-and-wait gates.
 
-Every confirmation gate registers its future into the SAME dict the inbound
-``tool-payload-confirmation`` handler resolves. Process-global, keyed by an
-unguessable ULID, and per-session-owned: a non-owning session is refused.
+Every gate registers into the SAME dict the inbound handler resolves: process-global,
+keyed by an unguessable ULID, and refused from a non-owning session.
 """
 from __future__ import annotations
 

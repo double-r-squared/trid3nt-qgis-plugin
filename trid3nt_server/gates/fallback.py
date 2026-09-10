@@ -1,8 +1,7 @@
 """The ONE fallback gate: the loudness floor over the pending-confirm spine.
 
-A ``synthetic`` rung ALWAYS pauses and its labeled default is REFUSE. Declining
-is not a run-cancel: the walker treats a declined rung as one it may not take
-and descends to the next, ending at the ladder's typed REFUSE.
+A ``synthetic`` rung ALWAYS pauses and its labeled default is REFUSE. Declining is not a
+run-cancel: the walker descends to the ladder's typed REFUSE.
 """
 from __future__ import annotations
 

@@ -1,8 +1,7 @@
 """Runaway-agent guard: per-turn step cap, wall-clock and loop watchdog.
 
-Three independent bounds, all env-overridable, OR'd into one per-turn abort. A
-cheap / loop-prone model tier gets HALF the step cap, floored, so a legitimate
-short chain still fits.
+Three env-overridable bounds OR'd into one abort. A cheap, loop-prone model tier gets
+HALF the step cap, floored so a legitimate short chain still fits.
 """
 from __future__ import annotations
 

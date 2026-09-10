@@ -1,8 +1,7 @@
 """The confirm engine and the user-decision gates that park a turn on a card.
 
-Payload, code-exec, solver-confirm, credential, region and spatial-input all
-block on a future the inbound confirmation handler resolves; a wait that runs
-out resolves the parked call with a typed error rather than hanging it.
+Each blocks on a future the inbound confirmation handler resolves; a wait that runs out
+resolves the parked call with a typed error rather than hanging it.
 """
 
 from __future__ import annotations

@@ -1,8 +1,7 @@
 """Where a template's proofs live: ``docs/proof/templates/<template>/<variant>/``.
 
-FILENAMES must not change: renders are cited by name from decision notes and
-evidence JSONs, and a rename silently breaks every citation. Every render
-script, canary and evidence writer asks HERE rather than joining its own path.
+FILENAMES must not change: renders are cited by name elsewhere. Every render script,
+canary and evidence writer asks HERE instead of joining its own path.
 """
 
 from __future__ import annotations

@@ -1,8 +1,7 @@
 """Per-turn top-k tool gating for the LOCAL (openai) provider path.
 
-The gate applies ONLY when ``MODEL_PROVIDER=openai``; every other provider path
-is byte-unchanged. ``TRID3NT_TOOL_GATING_TOPK`` sets k and ``0`` disables the
-gate. Pure functions, and any fault leaves that turn UNGATED.
+It applies ONLY under ``MODEL_PROVIDER=openai``, ``TRID3NT_TOOL_GATING_TOPK=0`` disables
+it, and any fault leaves that turn UNGATED.
 """
 from __future__ import annotations
 

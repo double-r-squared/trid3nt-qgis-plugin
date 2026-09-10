@@ -1,8 +1,7 @@
 """The runtime half of the confirm-card contract: estimates and provider lookup.
 
-A :class:`CardEstimate` carries a LIVE envelope, so it lives server-side rather
-than in the serializable contract layer. Providers are named by dotted path so
-the contract carries no server import and engine knowledge stays in its engine.
+A :class:`CardEstimate` carries a LIVE envelope, so it lives server-side; providers are
+named by dotted path, so the contract carries no server import.
 """
 from __future__ import annotations
 

@@ -1,8 +1,7 @@
 """Per-session tool circuit breaker over consecutive tool failures.
 
-Only UPSTREAM/transient faults count toward a trip. A deterministic client/arg
-fault fails identically every time and the model can self-correct it, so
-counting one would let the cooldown block the corrected retry.
+Only UPSTREAM/transient faults count toward a trip: a client/arg fault fails identically
+every time, so counting one would block the corrected retry.
 """
 from __future__ import annotations
 

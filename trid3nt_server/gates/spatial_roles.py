@@ -1,8 +1,7 @@
 """Shared drawn-geometry ROLE vocabulary and parser for the mesh authoring layer.
 
-A pure structural translator: no I/O, no asyncio, no geometry library. A
-malformed ``FeatureCollection`` NEVER degrades to a silent success -- every
-parser raises :class:`SpatialRoleError`.
+A pure structural translator: no I/O, no asyncio, no geometry library. A malformed
+``FeatureCollection`` raises rather than degrading to a silent success.
 """
 from __future__ import annotations
 

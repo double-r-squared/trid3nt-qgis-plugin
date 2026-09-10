@@ -1,8 +1,7 @@
 """The snippet's engine room: a staged payload in, one result envelope out.
 
-Runs INSIDE the box and imports nothing from the server package; the mount is
-all that connects them. There is no network here and nothing to fetch, so a ref
-that is still a URI is a staging miss and opens as one.
+Runs INSIDE the box and imports nothing from the server package. There is no network, so
+a ref that is still a URI is a staging miss and opens as one.
 """
 
 from __future__ import annotations

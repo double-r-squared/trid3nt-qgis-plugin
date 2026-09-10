@@ -1,8 +1,7 @@
 """The DECLARED canary runs: one named Tier-A invocation per template.
 
-A canary is a DECLARATION - the tool, its args, the answers its cards get -
-with every unfilled param supplied on the call, so the gates are SATISFIED
-rather than skipped. Every variant owes its packet, and demo values live HERE.
+A DECLARATION - the tool, its args, the answers its cards get - with every param
+supplied so the gates are SATISFIED. Every variant owes its packet.
 """
 
 # A canary is what a migration's REPEATABILITY rests on: the same declaration

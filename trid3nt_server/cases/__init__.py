@@ -1,8 +1,7 @@
 """Platform-side ``cases/`` package: case-layer serving to the QGIS plugin.
 
-Only the callables whose names do NOT collide with a submodule name are
-re-exported here. Re-exporting the module-named function would rebind the
-same-named submodule attribute and shadow ``import cases.<module>``.
+Only names that do NOT collide with a submodule are re-exported: re-exporting a module-
+named function would shadow ``import cases.<module>``.
 """
 from __future__ import annotations
 

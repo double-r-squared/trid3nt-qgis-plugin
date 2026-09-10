@@ -55,11 +55,10 @@ _FETCH_MAX_PX_BY_TOOL: dict[str, int] = {
 def _clamp_fetch_resolution(chosen_m: float, finest_allowed_m: float) -> float:
     """Floor a user-chosen fetch resolution UP to the finest allowed cell size.
 
-    Finer = SMALLER metres, so the px-grid bound is a LOWER bound on the rung: a
-    request finer than ``finest_allowed_m`` (e.g. 1 m on a continent-scale AOI)
-    is clamped UP to ``finest_allowed_m`` so the materialized grid stays under
-    ``MAX_FETCH_PX`` on the long axis. A coarser request is honoured exactly.
-    """
+    Finer = SMALLER metres, so the px-grid bound is a LOWER bound on the rung;
+    a coarser request than ``finest_allowed_m`` is honoured exactly."""
+    # A request finer than the bound would materialize a grid past MAX_FETCH_PX
+    # on the long axis, so it is clamped up to the bound instead.
     return max(float(chosen_m), float(finest_allowed_m))
 
 

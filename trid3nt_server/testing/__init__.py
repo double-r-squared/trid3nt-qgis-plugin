@@ -1,8 +1,7 @@
 """Drivers for the product's own WS protocol - a scripted client, not a mock.
 
-A live test declares what to invoke, how to answer the gates, and what must be
-true of the answer. Drivers are PRODUCT code, which is why they live beside the
-server rather than in the test tree.
+A live test declares what to invoke, how to answer the gates, and what must be true of
+the answer. Drivers are PRODUCT code, which is why they live here.
 """
 
 from __future__ import annotations

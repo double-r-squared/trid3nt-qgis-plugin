@@ -1,8 +1,7 @@
-"""The code-exec box: a staged workdir in, one constrained container run, results out.
+"""The code-exec box: a staged workdir in, one container run, results out.
 
-Every byte a snippet reads is staged into the run directory HERE, before the
-container starts, so a world-read stays on the gate-visible fetch path and the
-analysis runs on what it was handed. The run directory dies with the run.
+Every byte a snippet reads is staged HERE before the container starts, so a world-read
+stays on the gate-visible fetch path. The run directory dies with it.
 """
 
 from __future__ import annotations

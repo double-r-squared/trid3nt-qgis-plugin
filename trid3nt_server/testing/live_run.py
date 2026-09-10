@@ -1,8 +1,7 @@
 """A live run, declared: the tool, its args, the gate answers, the assertions.
 
-The harness drives the daemon exactly as the plugin does. Nothing is re-derived:
-the physical answer a test asserts on is read back out of the run's own outputs.
-Every driven run pre-flights the daemon for staleness FIRST.
+Nothing is re-derived: the answer a test asserts on is read back off the run's own
+outputs, and every driven run pre-flights the daemon for staleness first.
 """
 from __future__ import annotations
 

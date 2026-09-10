@@ -1,8 +1,6 @@
-"""Deterministic map-click point probe: sample every raster on a case at a point.
+"""Deterministic map-click point probe: every raster on a case, at one point.
 
-A DETERMINISTIC read with no LLM in the loop, driven directly by a map click
-over cold HTTP, so it is a plain function and not a registered tool. Honesty
-floor: a point outside an extent, on nodata, or on an unreadable layer is an
+Honesty floor: a point outside an extent, on nodata, or on an unreadable layer is an
 honest null entry, never dropped and never zero-filled.
 """
 from __future__ import annotations

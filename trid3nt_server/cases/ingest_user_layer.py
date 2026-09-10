@@ -1,8 +1,7 @@
 """Bring a plugin-pushed vector or raster INTO a case as a first-class layer.
 
-The reverse of every other layer seam, which flows agent -> QGIS. Both entry
-points assume the artifact bytes are ALREADY in object storage: this module
-never accepts raw bytes, and ``upload_layer_file`` is the staging-upload half.
+The reverse of every other layer seam. The bytes must ALREADY be in object storage: this
+module never takes raw bytes, and ``upload_layer_file`` is that half.
 """
 from __future__ import annotations
 

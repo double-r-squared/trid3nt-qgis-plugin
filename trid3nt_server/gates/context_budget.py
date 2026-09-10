@@ -1,8 +1,7 @@
-"""Context-budget: per-model window discovery + client-side history management.
+"""Context-budget: per-model window discovery and client-side history management.
 
-The context window is a PER-MODEL FACT DISCOVERED AT RUNTIME, never a hardcoded
-constant, and one that could not be discovered narrates as an assumption rather
-than passing for a fact. The trim STRATEGY lives here, once.
+The window is a PER-MODEL FACT DISCOVERED AT RUNTIME, and one that could not be
+discovered narrates as an assumption. The trim STRATEGY lives here, once.
 """
 from __future__ import annotations
 
@@ -930,9 +929,8 @@ def plan_turn(
 ) -> TurnPlan:
     """Decide whether this turn's history must be compacted, and do it.
 
-    THE single client-side history-management entry point, for every provider.
-    The system prompt and tool contracts are never candidates: ``contents``
-    does not hold them."""
+    THE single client-side history-management entry point, for every provider;
+    the system prompt and tool contracts are never candidates."""
     # ``phase`` is "proactive" (a pre-send estimate) or "reactive" (the provider
     # has already said we overflowed); reactive takes the tighter target ratio
     # so a retry actually gains headroom.
