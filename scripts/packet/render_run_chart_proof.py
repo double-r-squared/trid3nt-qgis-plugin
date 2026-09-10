@@ -1,18 +1,9 @@
 #!/usr/bin/env python
 """Diagnostic CHART proof: a run's own persisted spec, through the dock's renderer.
 
-The chart SPEC is the product (the plugin's chart dock is the one renderer, and
-server-side figure generation is retired), so a proof that redrew the numbers with
-matplotlib here would be showing a SECOND chart that merely resembles the one the
-user sees. This reads ``<run>/chart_spec.json`` off the run's own prefix and draws
-it through ``plugin/ui/charts.render_spec`` at the dock's own 6.0 x 2.2 in
-geometry - the same interpreter, the same size, the same result.
-
-Generic by construction: every template on the workflow skeleton persists its
-chart spec under its run prefix, so this needs no per-template knowledge at all.
-
-Env (MinIO): set -a; source .env.local; set +a
-Usage: render_run_chart_proof.py --run-id <ULID> --stem telemac_do_sag
+Reads the chart spec off the run's own prefix and draws it through the plugin
+dock's chart renderer at the dock's own geometry, so the proof is the dock's
+picture rather than a matplotlib lookalike of it.
 """
 from __future__ import annotations
 
@@ -33,14 +24,9 @@ sys.path.insert(0, str(REPO))
 
 
 def _dock_renderer():
-    """The PLUGIN's own chart module, imported as the package member it is.
-
-    By PATH would be simpler but wrong: ``charts.py`` does a relative import of
-    its sibling ``install_dependencies``, so loading the file in isolation fails.
-    Importing it as ``plugin.ui.charts`` with the repo root on the path is what
-    gives it the package it was written inside - and is what keeps this proof the
-    DOCK's renderer rather than a copy of it.
-    """
+    """The PLUGIN's own chart module, imported as the package member it is."""
+    # By PATH would be simpler but wrong: ``charts.py`` relatively imports its
+    # sibling ``install_dependencies``, so loading the file in isolation fails.
     import importlib
 
     module = importlib.import_module("plugin.ui.charts")
@@ -61,12 +47,8 @@ def _read_spec(bucket: str, run_id: str) -> dict:
 
 def _each_chart(document: dict, wanted: str | None):
     """The chart payloads in a persisted document, as ``(name, payload)`` pairs.
-
-    A run persists ``RunResult.charts``, which is a MAP of the DECLARED chart name
-    to its payload - a template may declare more than one. A payload that is
-    itself a chart (the single-chart shape a hand-written composer wrote) is
-    yielded unnamed, so both documents read here.
-    """
+    ``RunResult.charts`` is a MAP of DECLARED name to payload; a payload that is
+    itself a chart is yielded unnamed, so both document shapes read here."""
     if any(key in document for key in ("vega_lite_spec", "spec", "layer", "mark")):
         yield None, document
         return
@@ -80,12 +62,7 @@ def _each_chart(document: dict, wanted: str | None):
 def render_charts(*, run_id: str, stem: str, out_dir: str | os.PathLike[str],
                   bucket: str | None = None, chart: str | None = None,
                   caption: str = "") -> list[dict]:
-    """Every chart the run persisted, drawn through the DOCK's renderer.
-
-    The importable seam. ``main`` is the command line over it and the packet
-    assembler calls it directly, so a delivered chart and a hand-rendered one
-    come off exactly one code path rather than two that drifted.
-    """
+    """Every chart the run persisted, drawn through the DOCK's renderer."""
     ns = argparse.Namespace(
         run_id=run_id, stem=stem, out_dir=str(out_dir),
         bucket=bucket or os.environ.get("TRID3NT_RUNS_BUCKET", "trid3nt-runs"),

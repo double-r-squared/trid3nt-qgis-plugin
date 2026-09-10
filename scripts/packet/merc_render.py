@@ -1,21 +1,8 @@
-"""Shared ESRI-World-Imagery tile + Web-Mercator primitives for the proof
-renderers.
+"""Shared ESRI-World-Imagery tile and Web-Mercator primitives for the proof renderers.
 
-Single source of truth for the basemap math used by every mesh/watershed proof
-render. Each renderer keeps its own matplotlib composition but MUST get its tiles
-+ extent from ``fetch_basemap`` so the imagery placement is defined in exactly one
-place.
-
-CRS: ESRI World_Imagery tiles are spherical Web Mercator (EPSG:3857). Meshes are
-EPSG:4326 lon/lat and are projected to the SAME spherical mercator via
-``ll_to_merc`` before plotting, so imagery and mesh share one coordinate frame.
-
-Satellite imagery over open water is a near-black field, so a domain that sits
-offshore renders on nothing and the framing cannot be checked against anything.
-``fetch_basemap`` measures the mosaic it fetched and falls back to the ocean
-reference basemap - shoreline and bathymetric shading - when the imagery carries
-no legible signal. ``basemap_label`` says which one came back, so a caption never
-credits imagery that is not there.
+ESRI World_Imagery tiles are spherical Web Mercator (EPSG:3857); meshes are
+EPSG:4326 and are projected to the SAME spherical mercator via ``ll_to_merc``
+before plotting, so imagery and mesh share one coordinate frame.
 """
 
 from __future__ import annotations
@@ -60,10 +47,8 @@ def lonlat_to_tile(lon, lat, z):
 
 def tile_merc_bounds(x, y, z):
     """Mercator bounds of tile (x, y, z) as (west, east, north, south) metres.
-
-    Tile y grows southward, so ``north`` (3rd) is the y-tile's top edge and
-    ``south`` (4th) is its bottom edge.
-    """
+    Tile y grows southward, so ``north`` is the y-tile's top edge and ``south``
+    its bottom edge."""
     n = 2 ** z
     lon_w, lon_e = x / n * 360.0 - 180.0, (x + 1) / n * 360.0 - 180.0
     lat_n = math.degrees(math.atan(math.sinh(math.pi * (1 - 2 * y / n))))
@@ -86,12 +71,8 @@ def pick_zoom(bbox, max_tiles=8, zmax=17, zmin=6, fallback=11):
 
 def _mosaic(template, bbox, zoom, user_agent):
     """Fetch + paste one tile grid -> ``(PIL.Image, (left, right, bottom, top))``.
-
-    The extent is the OUTER mercator edge of the mosaic -- north tile's north
-    edge, south tile's south edge -- so ``imshow(extent=...)`` places every pixel
-    at its true mercator position. Selecting the inner tile edges here vertically
-    compresses the imagery and is the classic mesh-vs-basemap misalignment bug.
-    """
+    The extent is the OUTER mercator edge of the mosaic, so ``imshow(extent=...)``
+    places every pixel at its true mercator position."""
     xmin, ymin, xmax, ymax = bbox
     xt0 = int(math.floor(lonlat_to_tile(xmin, ymax, zoom)[0]))
     xt1 = int(math.floor(lonlat_to_tile(xmax, ymin, zoom)[0]))
@@ -107,6 +88,8 @@ def _mosaic(template, bbox, zoom, user_agent):
             with urllib.request.urlopen(req, timeout=30) as rsp:
                 tile = Image.open(io.BytesIO(rsp.read())).convert("RGB")
             mosaic.paste(tile, (i * 256, j * 256))
+    # OUTER edges. Taking the inner tile edges here vertically compresses the
+    # imagery, which is the classic mesh-vs-basemap misalignment.
     left, _, top, _ = tile_merc_bounds(xa, ya, zoom)   # north tile: west edge + NORTH edge
     _, right, _, bottom = tile_merc_bounds(xb, yb, zoom)  # south tile: east edge + SOUTH edge
     return mosaic, (left, right, bottom, top)
@@ -124,16 +107,13 @@ def basemap_label(mosaic):
 
 
 def fetch_basemap(bbox, zoom, user_agent="trid3nt-mesh"):
-    """Fetch + mosaic the basemap covering ``bbox`` at ``zoom``.
-
-    World Imagery first. Over open water it is a black field carrying no
-    shoreline, and a domain rendered on it floats over nothing, so a mosaic that
-    measures as unlit is refetched from the ocean reference basemap instead. The
-    returned image carries the source's own label in ``info``; read it with
-    :func:`basemap_label` rather than assuming imagery.
-    """
+    """Fetch + mosaic the basemap covering ``bbox`` at ``zoom``: World Imagery,
+    or the ocean reference basemap when the imagery measures as unlit. The
+    source's own label rides in ``info``; read it with :func:`basemap_label`."""
     mosaic, extent = _mosaic(_TILE, bbox, zoom, user_agent)
     label = IMAGERY_LABEL
+    # Over open water World Imagery is a black field carrying no shoreline, and
+    # a domain rendered on it floats over nothing a reader can frame against.
     if _is_unlit(mosaic):
         mosaic, extent = _mosaic(_OCEAN_TILE, bbox, zoom, user_agent)
         label = OCEAN_LABEL

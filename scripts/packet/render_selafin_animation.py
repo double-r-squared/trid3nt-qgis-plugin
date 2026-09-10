@@ -1,32 +1,9 @@
 #!/usr/bin/env python
 """Diagnostic ANIMATION for any TELEMAC-family run: the frames, as a GIF + the peak.
 
-The contact sheet (``render_all_layers_proof.py``) shows the canvas STORY, one
-still panel per layer. A time-stepped solve has a story the stills cannot tell -
-the tide rising, the column stratifying, the plume arriving - and this renders it
-straight off the run's OWN time-stepped SELAFIN. Never a re-solve, never a
-re-derivation.
-
-Generic on purpose: the run says what to read - which SELAFIN, which variable,
-which units - so one renderer covers the family and a new template gets its GIF
-by naming its file.
-
-ONE SCALE FOR THE WHOLE GIF. The colour range is resolved once, over every frame
-at once, through the style contract (``--quantity`` names the published quantity,
-so this animation and the published raster of that quantity get the same ramp,
-the same range and the same legend sentence). A scale that moved with the frame
-would make the same colour mean a different value each tick.
-
-LOCAL COORDINATES. The open-water builds lay their mesh with node 0 at the AOI's
-SW corner, so a SELAFIN's metres are usually LOCAL. ``--origin-bbox`` (or, by
-default, the ``bbox`` the worker recorded in ``telemac_metrics.json``) is what
-puts the frames back on the map; without it they land at the UTM false origin.
-
-Env (MinIO): set -a; source .env.local; set +a
-Usage:
-  render_selafin_animation.py --run-id <ULID> --slf res_agitation.slf \\
-      --var "WAVE HEIGHT" --units m --quantity wave_height \\
-      --stem artemis_harbor_agitation
+Rendered straight off the run's OWN time-stepped SELAFIN - never a re-solve,
+never a re-derivation - and generic across the family: the run says which file,
+which variable and which units, so a new template gets its GIF by naming them.
 """
 from __future__ import annotations
 
@@ -90,10 +67,8 @@ _QUIVER_GRID_DECIMATE = 3
 @dataclass(frozen=True)
 class AnimationScale:
     """ONE colour scale for a whole animation: the range, the ramp, the caption.
-
-    Carrying the caption alongside the numbers is what stops the picture and its
-    legend disagreeing: both are read off this single value, resolved once.
-    """
+    The picture and its legend are both read off this single value, resolved
+    once, so they cannot disagree."""
 
     vmin: float
     vmax: float
@@ -127,20 +102,14 @@ def _percentile_range(finite: np.ndarray, clip) -> tuple[float, float] | None:
 
 
 def log_norm(values, scale: "AnimationScale"):
-    """The LOG norm for a run, floored at a number a reader can read.
-
-    A log ramp needs a strictly positive floor and the range it ADOPTS does not
-    supply one: a field that starts dry reads a p2 of zero, and a published
-    max-over-time envelope's floor IS zero. So the floor is read at the clip the
-    row already declares, over the POSITIVE values - a number the solver wrote,
-    at a percentile nobody invented here. Reaching for the smallest positive
-    value instead spans every decade down to a float32 denormal and paints the
-    whole domain one colour, which is a picture of the norm rather than of the
-    water.
-
-    The TOP stays the range's own: that is the end a peak is read off, and it is
-    where a log animation and the still beside it are held to agreement.
-    """
+    """The LOG norm for a run, floored at the clip the row already declares, read
+    over the POSITIVE values. The TOP stays the range's own - the end a peak is
+    read off, and where a log animation and its still are held to agreement."""
+    # A log ramp needs a strictly positive floor and the ADOPTED range does not
+    # supply one: a field that starts dry reads a p2 of zero, and a published
+    # max-over-time envelope's floor IS zero. Reaching for the smallest positive
+    # value instead spans every decade down to a float32 denormal and paints the
+    # whole domain one colour - a picture of the norm, not of the water.
     from matplotlib.colors import LogNorm
 
     arr = np.asarray(values, dtype="float64")
@@ -162,12 +131,9 @@ def _widen(rng: tuple[float, float]) -> tuple[float, float]:
 
 
 def _matplotlib_colormap(name: str | None) -> str:
-    """The contract's colormap under matplotlib's spelling; ``viridis`` when unknown.
-
-    The contract names ramps the way the tile renderer spells them (lowercase,
-    ``ylgnbu``); matplotlib spells the same ramp ``YlGnBu``. Matching case-blind is
-    what keeps ONE declared colormap on both the published raster and this GIF.
-    """
+    """The contract's colormap under matplotlib's spelling; ``viridis`` when
+    unknown. The contract spells ramps lowercase and matplotlib CamelCase, so
+    matching case-blind keeps ONE colormap on the raster and on this GIF."""
     table = {key.lower(): key for key in matplotlib.colormaps}
     return table.get((name or "").strip().lower(), "viridis")
 
@@ -175,23 +141,15 @@ def _matplotlib_colormap(name: str | None) -> str:
 def resolve_animation_style(values, *, style: dict | None = None,
                             transform: str | None = None,
                             shared: tuple[float, float] | None = None) -> AnimationScale:
-    """THE scale for an animation, resolved over EVERY frame at once.
-
-    The scope of a data-policy rescale is the RUN, never the frame: resolving here,
-    off the whole ``(time, node)`` array, is what makes one colour mean one value
-    for the length of the GIF. Routing it through the preset family's resolver is
-    what makes this GIF and the published raster of the same quantity agree on the
-    ramp, the range and the sentence the legend says about them.
-
-    ``shared`` is that agreement made literal: the range the PUBLISHED raster of
-    this same quantity carries. A percentile read over the frames and a percentile
-    read over a peak envelope are two reads of two different distributions, so
-    without it the GIF and the panel beside it end up on two scales for one
-    quantity - which is a reader's problem, not a renderer's detail.
-
-    Falls back to a plain p2-p98 over the same whole array when the server package
-    is not importable, so the script still runs standalone.
-    """
+    """THE scale for an animation, resolved over EVERY frame at once. ``shared``
+    is the range the PUBLISHED raster of this quantity carries and, when passed,
+    IS the scale. Falls back to p2-p98 with no server package importable."""
+    # The scope of a data-policy rescale is the RUN, never the frame: resolving
+    # off the whole ``(time, node)`` array makes one colour mean one value for
+    # the length of the GIF, and routing it through the preset family's resolver
+    # is what makes this GIF and the published raster of the same quantity agree
+    # on ramp, range and legend sentence. A percentile over the frames and a
+    # percentile over a peak envelope are two different distributions.
     finite = _finite(values)
     if _PRESETS is None:
         found = shared or _percentile_range(finite, _DEFAULT_CLIP)
@@ -269,11 +227,9 @@ def local_origin(bbox, utm_epsg: int) -> tuple[float, float]:
 
 
 def _global_palette(frames):
-    """ONE 256-colour palette derived from EVERY frame at once.
-
-    Derived off downscaled copies: the palette a median cut picks is the same, and
-    a 40-frame full-resolution montage is hundreds of megabytes for no gain.
-    """
+    """ONE 256-colour palette derived from EVERY frame at once, off downscaled
+    copies: the palette a median cut picks is the same, and a full-resolution
+    montage is hundreds of megabytes for no gain."""
     from PIL import Image
 
     w, h = frames[0].size
@@ -286,15 +242,11 @@ def _global_palette(frames):
 
 
 class StablePaletteWriter(PillowWriter):
-    """A GIF whose PALETTE is fixed once, over all frames, before anything is encoded.
-
-    Pillow's default is an adaptive palette PER FRAME, so unchanged pixels - the
-    colorbar above all - come out as slightly different colours in every frame.
-    That is the same dishonesty a per-frame vmin/vmax would be, moved out of the
-    scale and into the encoder: the legend appears to shift while the numbers
-    behind it did not. One palette, chosen over every frame at once, removes it,
-    and identical pixels stay identical bytes.
-    """
+    """A GIF whose PALETTE is fixed once, over all frames, before anything is
+    encoded, so identical pixels stay identical bytes."""
+    # Pillow's default is an adaptive palette PER FRAME, so unchanged pixels -
+    # the colorbar above all - come out slightly different in every frame: the
+    # same dishonesty a per-frame vmin/vmax would be, moved into the encoder.
 
     def finish(self) -> None:
         from PIL import Image
@@ -307,13 +259,9 @@ class StablePaletteWriter(PillowWriter):
 
 
 def plain_axes(bbox_ll, title: str):
-    """Axes with NO basemap - the offline seam, for a caller with no tile access.
-
-    Same figure geometry as the basemap axes so the colorbar lands in the same
-    place; the limits are left to the field being drawn. The third member is the
-    basemap CREDIT the caption prints, and saying "no basemap" out loud is what
-    keeps an offline render from reading as a failed tile fetch.
-    """
+    """Axes with NO basemap - the offline seam for a caller with no tile access.
+    Same figure geometry as the basemap axes, and the third member is the CREDIT
+    the caption prints, which says "no basemap" out loud."""
     xw, yw = MR.ll_to_merc(np.array([bbox_ll[0], bbox_ll[2]]),
                            np.array([bbox_ll[1], bbox_ll[3]]))
     aspect = float(np.clip((yw[1] - yw[0]) / (xw[1] - xw[0]), 0.35, 1.8))
@@ -344,13 +292,11 @@ def _axes_with_basemap(bbox_ll, title: str):
 
 def slice_plane(mesh: dict, values: np.ndarray, *, nplan: int, plane: str):
     """One horizontal plane out of a 3D PRISM SELAFIN, as a 2D mesh + its values.
-
-    A TELEMAC-3D result is prisms (six nodes an element) stacked ``nplan`` deep,
-    and node ``k`` of plane ``p`` sits at index ``p * n2d + k``. Rendering it as if
-    it were 2D would draw the BOTTOM plane's triangles under whatever slice of the
-    value array happened to line up - a picture of the wrong water. So the plane is
-    named, sliced, and captioned.
-    """
+    The plane is named, sliced and captioned - never inferred."""
+    # A TELEMAC-3D result is prisms (six nodes an element) stacked ``nplan``
+    # deep, and node ``k`` of plane ``p`` sits at index ``p * n2d + k``.
+    # Rendering it as if it were 2D draws the BOTTOM plane's triangles under
+    # whatever slice of the value array lined up - a picture of the wrong water.
     ikle = np.asarray(mesh["ikle"])
     if ikle.shape[1] < 6 or nplan <= 1:
         return mesh["x"], mesh["y"], ikle[:, :3], values, ""
@@ -364,14 +310,9 @@ def slice_plane(mesh: dict, values: np.ndarray, *, nplan: int, plane: str):
 
 
 def _stream_field(tri: Triangulation, grid_n: int):
-    """The regular grid a streamline trace needs, off a triangular mesh's extent.
-
-    Streamlines cannot be traced on an unstructured mesh: matplotlib integrates
-    on a rectilinear field. This is the DECLARED decimation - the components are
-    interpolated onto ``grid_n`` points across the wider axis and traced there,
-    which resolves the drainage network without paying for a trace through every
-    element.
-    """
+    """The regular grid a streamline trace needs, off a triangular mesh's extent:
+    the components interpolated onto ``grid_n`` points across the wider axis.
+    Streamlines cannot be traced on an unstructured mesh."""
     span_x = float(tri.x.max() - tri.x.min())
     span_y = float(tri.y.max() - tri.y.min())
     wider = max(span_x, span_y) or 1.0
@@ -398,11 +339,9 @@ def _speed_and_norm(u, v, scale: "AnimationScale"):
 
 def _draw_streamlines(ax, gx, gy, u, v, *, density: float, arrow_size: float,
                       lw_bounds: tuple[float, float], scale: "AnimationScale"):
-    """A traced flow field: ONE arrowhead per line (matplotlib's own streamplot
-    default), the LINE WIDTH tapered by local magnitude between ``lw_bounds`` -
-    the taper carries speed, the arrowhead is secondary and sized off
-    ``arrow_size``, matplotlib's own ``arrowsize`` scale where 1.0 is that
-    primitive's default."""
+    """A traced flow field: ONE arrowhead per line, the LINE WIDTH tapered by
+    local magnitude between ``lw_bounds`` so the taper carries speed.
+    ``arrow_size`` is matplotlib's ``arrowsize`` scale, 1.0 its default."""
     speed, norm = _speed_and_norm(u, v, scale)
     if not np.any(speed > 0):
         return []  # a frame with no flow has no trace to draw
@@ -420,21 +359,15 @@ def _draw_streamlines(ax, gx, gy, u, v, *, density: float, arrow_size: float,
 
 
 def _draw_quiver(ax, gx, gy, u, v, *, arrow_size: float, scale: "AnimationScale"):
-    """One arrow per grid cell - the DISCRETE read a coarse or frozen grid
-    carries more calmly than a traced line. ``arrow_size`` scales quiver's own
-    head dimensions the same way it scales streamplot's ``arrowsize``: 1.0 is
-    matplotlib's own default head.
-
-    The arrow LENGTH is pinned explicitly rather than left to quiver's own
-    autoscale: autoscale divides a target length by the grid's AVERAGE
-    magnitude, and the interpolation grid pads past the mesh's own concave
-    boundary with exact zeros, so a field with only a sparse interior of real
-    flow collapses that average toward zero and streaks the few nonzero
-    arrows far past the plot. Pinning it off the SAME ``(vmin, vmax)`` the
-    colour ramp reads - the fastest value in the run spans one grid cell -
-    keeps length and colour agreeing about which point is fast, regardless of
-    how much of the grid outside the mesh is exact zero.
-    """
+    """One arrow per grid cell - the DISCRETE read a coarse or frozen grid carries
+    more calmly than a traced line. ``arrow_size`` scales quiver's own head
+    dimensions, 1.0 being matplotlib's default."""
+    # The arrow LENGTH is pinned rather than left to quiver's autoscale:
+    # autoscale divides a target length by the grid's AVERAGE magnitude, and the
+    # interpolation grid pads past the mesh's concave boundary with exact zeros,
+    # so a sparse interior of real flow collapses that average and streaks the
+    # few nonzero arrows far past the plot. Pinning off the SAME ``(vmin, vmax)``
+    # the colour ramp reads keeps length and colour agreeing about what is fast.
     if not np.any(np.hypot(u, v) > 0):
         return []
     dx = float(abs(gx[0, 1] - gx[0, 0])) if gx.shape[1] > 1 else 1.0
@@ -478,28 +411,15 @@ def render_frames(tri: Triangulation, values: np.ndarray, times, *, bbox_ll,
                   vector_lw: tuple[float, float] = (0.35, 1.1),
                   still_vectors: str | None = None,
                   shared_range: tuple[float, float] | None = None) -> dict:
-    """The plotting seam: a triangulation plus a ``(time, node)`` field -> GIF + still.
-
-    THE COLOUR SCALE IS RESOLVED ONCE, HERE, BEFORE THE FIRST FRAME IS DRAWN, and
-    the loop below only ever calls ``coll.set_array``. Nothing per-frame may touch
-    ``vmin``, ``vmax``, the norm or the colorbar: a scale that moves with the frame
-    makes one colour mean a different value each tick, so the reader watching the
-    ramp is watching the renderer, not the water.
-
-    ``axes_factory`` is ``(bbox_ll, title) -> (fig, ax, basemap_credit)``; it
-    defaults to the ESRI basemap axes and takes :func:`plain_axes` where there is
-    no tile access. The credit is what the caption prints, so a render always
-    names the ground it was drawn on rather than the one it asked for.
-
-    ``vectors`` is the DECLARED vocabulary the moving GIF draws in -
-    ``"streamlines"`` (traced, magnitude-tapered width, one arrowhead per
-    trace) or ``"quiver"`` (one arrow per grid cell) - and ``still_vectors``
-    overrides it for the peak/final STILL alone, defaulting to ``vectors``
-    when unset. ``arrow_size`` and ``vector_lw`` are declared, not derived:
-    the caller states the arrow's prominence and the width taper's bounds
-    rather than this function guessing them from the grid.
-    """
+    """The plotting seam: a triangulation plus a ``(time, node)`` field -> GIF +
+    still. ``axes_factory`` is ``(bbox_ll, title) -> (fig, ax, basemap_credit)``;
+    ``vectors`` and ``still_vectors`` name a DECLARED primitive or nothing."""
     values = np.asarray(values, dtype="float64")
+    # THE COLOUR SCALE IS RESOLVED ONCE, HERE, BEFORE THE FIRST FRAME IS DRAWN,
+    # and the loop below only ever calls ``coll.set_array``. Nothing per-frame
+    # may touch vmin, vmax, the norm or the colorbar: a scale that moves with
+    # the frame makes one colour mean a different value each tick, and the
+    # reader watching the ramp is then watching the renderer, not the water.
     scale = resolve_animation_style(values, style=style, transform=transform,
                                     shared=shared_range)
     # WHICH frame the still shows. "peak" is right for a field that BUILDS (a
@@ -520,6 +440,8 @@ def render_frames(tri: Triangulation, values: np.ndarray, times, *, bbox_ll,
 
     norm = log_norm(values, scale) if scale.transform == "log" else None
 
+    # The CREDIT is what the caption prints, so a render always names the ground
+    # it was drawn on rather than the one it asked for.
     fig, ax, basemap_credit = (axes_factory or _axes_with_basemap)(bbox_ll, title)
     coll = ax.tripcolor(tri, values[0], shading="gouraud", cmap=scale.colormap,
                         alpha=0.85, zorder=2,
@@ -724,8 +646,8 @@ def render(slf_path: str, *, utm_epsg: int, origin_bbox, variable: str,
     # UTM easting is never below 160 km, so a mesh whose minimum sits near zero was
     # written in LOCAL metres and needs its corner back; one that already carries
     # real eastings is ABSOLUTE and adding a corner would shift it off the map by
-    # exactly that corner. Both mistakes land the frames at the false origin, and
-    # both used to be silent.
+    # exactly that corner. Both mistakes land the frames at the false origin,
+    # and neither announces itself.
     is_local = float(np.nanmin(mesh_x)) < _LOCAL_EASTING_M
     if x_org and not is_local:
         x_org = y_org = 0.0
@@ -764,14 +686,12 @@ def render(slf_path: str, *, utm_epsg: int, origin_bbox, variable: str,
 
 
 def _epsg_from_outputs(bucket: str, run_id: str) -> int | None:
-    """The mesh CRS off the run's OWN outputs manifest; ``None`` when it has none.
-
-    A SELAFIN carries no CRS, and not every leg's worker echoes one: the
-    rain-on-grid mesh is projected AGENT-side, so its ``telemac_metrics.json``
-    records no zone at all. What every leg does write is ``outputs.json``, where
-    the mesh entry is stamped with the ``crs_authid`` it was published under -
-    the same fact, recorded by the party that knew it.
-    """
+    """The mesh CRS off the run's OWN outputs manifest; ``None`` when it has none."""
+    # A SELAFIN carries no CRS and not every leg's worker echoes one - a mesh
+    # projected AGENT-side records no zone at all. What every leg does write is
+    # the outputs manifest, where the mesh entry is stamped with the
+    # ``crs_authid`` it was published under: the same fact, from the party that
+    # knew it.
     for entry in (_read_json(bucket, f"{run_id}/outputs.json") or {}).get("entries", []):
         authid = str(entry.get("crs_authid") or "")
         if authid.upper().startswith("EPSG:"):
@@ -794,16 +714,8 @@ def render_run(*, run_id: str, slf: str, var: str, stem: str, out_dir,
                still_vectors: str | None = None,
                shared_range: tuple[float, float] | None = None) -> dict:
     """One run's SELAFIN -> its GIF + still, straight off the object store.
-
-    The importable seam under ``main``: the packet assembler renders through this
-    rather than shelling out, so the delivered animation and a hand-rendered one
-    are the same code. Returns the render report plus the two paths - ``animation``
-    is ``None`` for a single-frame (steady) result, which has nothing to animate.
-
-    ``shared_range`` is the range the PUBLISHED raster of this quantity carries.
-    Passed, it IS the scale, so one quantity has one legend across everything a
-    reader is handed; unset, the range is read off these frames alone.
-    """
+    ``animation`` comes back ``None`` for a single-frame result. ``shared_range``,
+    when passed, IS the scale; unset, the range is read off these frames."""
     bucket = bucket or os.environ.get("TRID3NT_RUNS_BUCKET", "trid3nt-runs")
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -819,7 +731,7 @@ def render_run(*, run_id: str, slf: str, var: str, stem: str, out_dir,
     local = _download(bucket, f"{run_id}/{slf}", ".slf")
     # ``name_infix`` separates a template's SEVERAL animations on disk. It is
     # empty for the templates that declare one, so their filenames - cited by
-    # name in ADRs and evidence JSONs - do not move.
+    # name in the evidence JSONs - do not move.
     gif = out_dir / f"{stem}_animation{name_infix}.gif"
     peak = out_dir / f"{stem}{name_infix}_{still}_frame.png"
     try:

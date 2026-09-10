@@ -1,66 +1,9 @@
 #!/usr/bin/env python
 """THE DELIVERY CHECKLIST, AS A SCRIPT THAT CANNOT FORGET.
 
-Handing NATE a template's proof used to be a remembered list - the panels, the
-canvas view, the charts, the animation, the evidence JSON - and a remembered list
-is one that ships without its GIF the week everybody is busy. This assembles the
-whole packet for one ``<template>/<variant>`` and then REFUSES it with a named
-missing-list on any gap, so the orchestrator's delivery step becomes "send exactly
-what packet.json lists" and carries no judgement at all.
-
-WHAT THE CHECKLIST IS
-
-  1. every published layer as a full-size panel, in EMISSION ORDER
-  2. the composite canvas view (the last panel) plus the contact sheet
-  3. every chart the run persisted, drawn through the plugin dock's own renderer
-  4. EVERY animation the template declares, each with its peak-or-final still,
-     when the run is time-stepped; an explicit EXEMPTION line naming the physics
-     when it is not. A template may declare more than one - a coastal solve
-     answers both "how did the water surface move" and "where did it go onto
-     land", which are two variables, two masks and two scales off one SELAFIN -
-     and the checklist requires ALL of them
-  5. the canary evidence JSON the whole packet was assembled from
-
-WHAT IT VERIFIES, MECHANICALLY
-
-  * TIME-STEPPED IS MEASURED, NEVER REMEMBERED. The frame count is read off the
-    run's own SELAFIN - its header, then arithmetic over the file's length - and
-    cross-checked against the worker's recorded ``ntimestep`` - a second reader
-    of the same file, and a time-stepped run that offers none is itself a gap. A
-    run with more than one frame OWES a GIF; one frame is exempt with the reason
-    written down.
-  * THE GIF ACTUALLY EVOLVES. Every frame is extracted through PIL (with
-    ``.copy()``, because Pillow reuses its decode buffer and a list of un-copied
-    frames is N references to the last one), hashed, and required to be distinct.
-  * THE GIF'S LEGEND DOES NOT. The colorbar strip must be BYTE-IDENTICAL across
-    frames: a legend that shifts while the numbers behind it did not is a
-    per-frame rescale, and the reader watching the ramp is watching the renderer.
-  * ONE SCALE PER QUANTITY. The animation and its still are painted on the range
-    the PUBLISHED raster of the same quantity carries, and the packet reports the
-    pair. A GIF on its own percentile stretch beside a panel on another is two
-    legends for one field, and the value the narrow one saturates is usually the
-    run's own headline number.
-  * THE PANELS ARE ALL THERE. Panel count == published (frame-collapsed) layer
-    count + 1 for the canvas view, every file nonzero, and each one carries the
-    RUN ID - burned into its caption and stamped into its PNG text chunk, so an
-    audit months later can still tie the picture to the run.
-  * NOTHING IS STALE. Any deliverable older than the evidence JSON it claims to
-    show is reported STALE with both mtimes, because a proof pile that keeps the
-    previous run's GIF beside this run's panels reads as complete and is not.
-  * THE ANIMATED FIELD IS DECLARED, NEVER DEFAULTED.
-    ``trid3nt_server.testing.proof_animations`` rules which variable each
-    template's animation paints, which mask gates it, which still to keep and
-    WHY; a time-stepped template with no declaration REFUSES rather than
-    animating whatever the renderer would have picked. That refusal exists
-    because the alternative already shipped once: a default painted coastal
-    WATER DEPTH - bathymetry-dominated, barely moving - where the ruled field
-    was FREE SURFACE masked to wet nodes, and every other check passed.
-
-Env (MinIO): set -a; source .env.local; set +a
-Usage:
-  assemble_proof_packet.py --template artemis_harbor_agitation --variant refined
-  assemble_proof_packet.py --template artemis_harbor_agitation --variant coarse --check
-  assemble_proof_packet.py --template telemac_river_dye --variant coarse --out-dir DIR
+Assembles the whole proof packet for one ``<template>/<variant>``, verifies
+every deliverable against the run's own evidence, and REFUSES with a named
+missing-list on any gap, so the delivery step carries no judgement at all.
 """
 from __future__ import annotations
 
@@ -145,15 +88,12 @@ def _record(fh) -> bytes:
 
 
 def selafin_frame_count(head: bytes, total_bytes: int) -> tuple[int, dict]:
-    """Frames in a SELAFIN, from its HEADER plus the file's length.
-
-    A SELAFIN is Fortran sequential-unformatted with a fixed-shape header and
-    then one identical block per time step, so the count is arithmetic over the
-    remaining bytes - no need to pull a 58 MB result across the wire to learn that
-    it has 41 frames. Returns ``(frames, how)``; ``frames`` is -1 when the
-    arithmetic does not divide evenly, which means the assumption failed and the
-    caller must fall back to a full read rather than trust a rounded answer.
-    """
+    """Frames in a SELAFIN, from its HEADER plus the file's length. Returns
+    ``(frames, how)``; ``frames`` is -1 when the block arithmetic does not
+    divide evenly and the caller must fall back to a full read."""
+    # Fortran sequential-unformatted: a fixed-shape header and then one
+    # identical block per time step, so the count is arithmetic over the
+    # remaining bytes rather than a 58 MB result pulled across the wire.
     fh = io.BytesIO(head)
     title = _record(fh)
     tag = title[72:80].decode("latin-1", "replace").upper()
@@ -198,24 +138,24 @@ def measure_frames(s3, bucket: str, run_id: str, slf: str) -> dict:
 # Verifying a GIF: it must EVOLVE, and its legend must not
 # --------------------------------------------------------------------------- #
 def verify_gif(path: Path) -> dict:
-    """Frame-distinctness and legend byte-identity, straight off the encoded GIF.
-
-    Pillow decodes a GIF frame into a buffer it REUSES on the next ``seek``, so a
-    list built without ``.copy()`` is N references to the final frame and every
-    distinctness check it feeds passes vacuously. The copy is the whole reason
-    this check means anything.
-    """
+    """Frame-distinctness and legend byte-identity, straight off the encoded GIF."""
     import numpy as np
     from PIL import Image
 
     image = Image.open(path)
     frames = []
+    # Pillow decodes a frame into a buffer it REUSES on the next ``seek``, so a
+    # list built without ``.copy()`` is N references to the final frame and
+    # every distinctness check it feeds passes vacuously.
     for index in range(image.n_frames):
         image.seek(index)
         frames.append(np.asarray(image.convert("RGB")).copy())
 
     digests = [hashlib.sha256(frame.tobytes()).hexdigest() for frame in frames]
     stack = np.stack(frames)
+    # A legend that shifts while the numbers behind it did not is a per-frame
+    # rescale, and a reader watching the ramp is then watching the renderer - so
+    # the colorbar strip must be BYTE-IDENTICAL across frames.
     cut = int(stack.shape[2] * _LEGEND_X_FRAC)
     legend, field = stack[:, :, cut:, :], stack[:, :, :cut, :]
     ramp = int(len(np.unique(legend[0].reshape(-1, 3), axis=0)))
@@ -317,21 +257,15 @@ def _chart_names(evidence: dict) -> list[str | None]:
 
 
 def aoi_bbox(evidence: dict, worker_metrics: dict) -> list[float] | None:
-    """The 4326 corner a LOCAL mesh was built from, worker FIRST then the args.
-
-    The open-water builds lay node 0 at the AOI's SW corner, so a result SELAFIN's
-    metres are local and the bbox is what puts them back on the map. The worker's
-    own ``telemac_metrics.json`` is the authority, but older parser versions never
-    recorded it - and the canary's DECLARED bbox is the same corner, sitting right
-    there in the evidence. Reaching for it is recovery, not invention: a run whose
-    frames land at the UTM false origin is a picture of nothing.
-
-    The run's OWN persisted answer sits between the two, for the legs whose mesh
-    is projected agent-side: their worker never sees a bbox to echo and their
-    question may name no bbox at all (a catchment is delineated from a pour
-    point), but the ``domain_bbox`` they publish records exactly where they
-    modelled. It is the run's product, which is what a packet check should cite.
-    """
+    """The 4326 corner a LOCAL mesh was built from, worker FIRST, then the run's
+    own published ``domain_bbox``, then the declared args. A run whose frames
+    land at the UTM false origin is a picture of nothing."""
+    # The open-water builds lay node 0 at the AOI's SW corner, so a result
+    # SELAFIN's metres are local and the bbox is what puts them back on the map.
+    # The worker's own metrics are the authority; the run's published
+    # ``domain_bbox`` is next, for the legs whose mesh is projected agent-side -
+    # their worker never sees a bbox to echo and their question may name none (a
+    # catchment is delineated from a pour point). The declared arg is last.
     for candidate in (worker_metrics.get("bbox"),
                       (evidence.get("metrics") or {}).get("domain_bbox"),
                       (evidence.get("args") or {}).get("bbox")):
@@ -374,21 +308,15 @@ def _declaration_row(animation: ProofAnimation, declared: int) -> dict:
 
 
 def published_scale(evidence: dict, animation: ProofAnimation) -> dict:
-    """ONE range per quantity: the PUBLISHED raster's, for this animation to adopt.
-
-    A percentile read over the frames and a percentile read over a peak envelope
-    are two reads of two different distributions, so a packet that lets each
-    renderer pick its own ships two scales for one quantity and the reader is left
-    to notice. The published layer is the product a reader also meets on the map,
-    so its range is the one the GIF and its still are held to. A quantity with no
-    published raster of its own has nothing to agree with, and the row says that
-    rather than inventing an agreement.
-
-    The match is on the layer's QUANTITY, never on the title it was painted
-    under: a title is prose a producer may rewrite, and matching on prose is how
-    one field's still and its animation drift onto two scales without any range
-    comparison catching it.
-    """
+    """ONE range per quantity: the PUBLISHED raster's, for this animation to
+    adopt. A quantity with no published raster of its own has nothing to agree
+    with, and the row says so rather than inventing an agreement."""
+    # The published layer is the product a reader also meets on the map, so its
+    # range is the one the GIF and its still are held to: a percentile over the
+    # frames and a percentile over a peak envelope are two distributions, and
+    # letting each renderer pick its own ships two scales for one quantity.
+    # The match is on the layer's QUANTITY, never on the title it was painted
+    # under - a title is prose a producer may rewrite.
     from trid3nt_server.emission import presets
     from trid3nt_server.emission.outputs_seam import quantity_label
 
@@ -486,9 +414,9 @@ def _render(directory: Path, stem: str, evidence_path: Path, evidence: dict,
         report["chart_error"] = str(exc)
 
     # NO DEFAULT VARIABLE, EVER. An undeclared template REFUSES rather than
-    # animating whatever the renderer would have picked: the one regression this
-    # script has shipped was a fallback painting WATER DEPTH (bathymetry-
-    # dominated, barely moves) where the ruled field was a masked FREE SURFACE.
+    # animating whatever the renderer would have picked: a default paints
+    # WATER DEPTH (bathymetry-dominated, barely moving) where the ruled field
+    # is a masked FREE SURFACE, and every other check still passes.
     if not declared or declared[0].variable is None:
         report["animation_error"] = (
             f"tool {tool!r} has no declared field in "
@@ -558,12 +486,9 @@ def _render(directory: Path, stem: str, evidence_path: Path, evidence: dict,
 
 
 def _scales_agree(scale: dict) -> bool | None:
-    """Did the animation land on the published range? ``None`` = nothing to compare.
-
-    A LOG ramp cannot start at the published floor - the norm needs a strictly
-    positive one - so agreement there is on the TOP of the range, which is the end
-    a reader reads a peak off.
-    """
+    """Did the animation land on the published range? ``None`` = nothing to
+    compare. A LOG ramp cannot start at the published floor, so agreement there
+    is on the TOP of the range - the end a reader reads a peak off."""
     published, rendered = scale.get("published_range"), scale.get("rendered_range")
     if not published or rendered is None or rendered[1] is None:
         return None
@@ -575,12 +500,10 @@ def _scales_agree(scale: dict) -> bool | None:
 
 
 def _rendered_paths(report: dict) -> set[Path]:
-    """Exactly the files THIS invocation wrote.
-
-    Only these get stamped. Stamping a file the assembler merely found would
-    launder a stale picture into a verified one - the stamp has to mean "rendered
-    from this run", not "seen next to this run's evidence".
-    """
+    """Exactly the files THIS invocation wrote - the only ones that get stamped."""
+    # Stamping a file the assembler merely found would launder a stale picture
+    # into a verified one: the stamp means "rendered from this run", not "seen
+    # next to this run's evidence".
     out: set[Path] = set()
     sheet = report.get("sheet") or {}
     if sheet.get("sheet"):
@@ -645,11 +568,8 @@ def _item(order: int, kind: str, caption: str, *, path: Path | None = None,
 
 def _code_staleness(completion: dict, tool: str) -> dict | None:
     """The run's code stamp, read against THIS tree. ``None`` = nothing to say.
-
-    The engine is resolved from the completion's own ``solver`` when it has one,
-    falling back to the tool name, which carries the engine as its prefix for
-    every template in the fleet.
-    """
+    The engine comes from the completion's own ``solver``, falling back to the
+    tool name, which carries the engine as its prefix."""
     sys.path.insert(0, str(REPO))
     from trid3nt_server.workflows.solver.code_provenance import staleness
 
@@ -663,15 +583,12 @@ def assemble(template: str, variant: str, *, run_id: str | None = None,
              out_dir: str | Path | None = None,
              evidence: str | Path | None = None) -> dict:
     """Assemble and VERIFY one template+variant proof packet. Writes packet.json.
-
-    ``out_dir`` names where the renders and ``packet.json`` land: unset it is the
-    template's own proof folder, and a lane that must not write into the frozen
-    proof tree - an acceptance drive, a verify pass - names a scratch directory
-    instead and still owes the whole checklist. ``evidence`` names the JSON the
-    packet is assembled FROM: unset it is the one in that proof folder, and a
-    drive holding a fresh run's evidence somewhere else points at it rather than
-    landing the file in the frozen tree first to be allowed to render it.
-    """
+    ``out_dir`` defaults to the template's proof folder and ``evidence`` to the
+    JSON in it; either may name somewhere else, and the checklist is unchanged."""
+    # A lane that must not write into the frozen proof tree - an acceptance
+    # drive, a verify pass - names a scratch directory and its own evidence,
+    # rather than landing a fresh run's file in the frozen tree to be allowed
+    # to render it.
     if variant not in VARIANTS:
         raise PacketError(f"{variant!r} is not a proof variant; the four are "
                           f"{list(VARIANTS)}")

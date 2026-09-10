@@ -1,31 +1,9 @@
 #!/usr/bin/env python
 """Diagnostic contact sheet: EVERY layer a run put on the canvas, in emission order.
 
-The plume/peak renderers show the ANSWER. This one shows the CANVAS STORY - what
-QGIS receives, panel by panel, in the order the emit-on-fetch and emit-on-solve
-seams delivered it: river geometry, terrain, mesh preview, the drawn marker, then
-the result rasters, and finally the whole stack composited as one view.
-
-The order is not reconstructed here. ``loaded_layers`` is an append-ordered list
-(the emitter appends before it emits, and a re-publish replaces in place), and
-each row carries its ``z_index``, so the evidence a drive script writes IS the
-emission record.
-
-Styling comes from the PRODUCT, never from a palette invented here: a raster with
-a data-driven ``legend`` renders through that key, otherwise through
-``publish_layer.resolve_layer_style`` for its declared style row. A raster that
-resolves to NO preset is one that paints itself, and the panel paints it the way
-QGIS does: through the band-1 colour table when the file carries one (land cover
-in its own class colours, read NEAREST so no class is averaged into one that does
-not exist), and on an auto-scaled grey ramp only when there is no table to read.
-Vector presets are QGIS-side symbology with no server-side colour to read, so
-vectors get honest neutral geometry (lines, points, outlines) with the declared
-preset named on the panel.
-
-Env (MinIO): set -a; source .env.local; set +a
-Usage:
-  render_all_layers_proof.py --evidence docs/proof/templates/<drive>_evidence.json
-  render_all_layers_proof.py --case-id <ULID> --out sheet.png
+Shows the CANVAS STORY - what QGIS receives, panel by panel, in the order the
+emit seams delivered it, and finally the whole stack composited as one view.
+Styling comes from the PRODUCT, never from a palette invented here.
 """
 from __future__ import annotations
 
@@ -93,8 +71,8 @@ _CASING_ALPHA = 0.55
 #: stacked layers are still separable. A sheet-side choice, stated on the panel -
 #: the product declares no vector colour to read.
 _VECTOR_CYCLE = ("#ff2fa0", "#00e5ff", "#ffe600", "#7cff4f", "#ff8a3d", "#c08cff")
-#: A composite sheet's panels are too small for NATE to spot-check by eye - each
-#: one is also saved full-size on its own. Width/dpi chosen so a panel this size
+#: A composite sheet's panels are too small to spot-check by eye - each one is
+#: also saved full-size on its own. Width/dpi chosen so a panel this size
 #: reads clearly at normal zoom, distinct from the grid's cramped ~800px cells.
 _SINGLE_PANEL_W = 10.5
 _SINGLE_DPI = 150
@@ -122,6 +100,9 @@ def _layers_from_evidence(path: Path) -> tuple[list[dict], str]:
 
 def _layers_from_case(case_id: str) -> tuple[list[dict], str]:
     """The persisted Case's own ordered ``loaded_layer_summaries``."""
+    # The order is not reconstructed: the list is append-ordered (the emitter
+    # appends before it emits, and a re-publish replaces in place) and each row
+    # carries its ``z_index``, so the persisted record IS the emission record.
     import asyncio
 
     from trid3nt_server.persistence import make_persistence_for_backend
@@ -170,6 +151,13 @@ def _download(uri: str) -> str:
 # --------------------------------------------------------------------------- #
 # Product styling
 # --------------------------------------------------------------------------- #
+# The styling ladder: a raster with a data-driven ``legend`` renders through
+# that key, otherwise through the declared style row's preset. A raster that
+# resolves to NO preset is one that paints itself, and the panel paints it the
+# way QGIS does - through the band-1 colour table when the file carries one, and
+# on an auto-scaled grey ramp only when there is none. Vector presets are
+# QGIS-side symbology with no server-side colour to read, so vectors get honest
+# neutral geometry with the declared preset named on the panel.
 def _raster_style(layer: dict) -> tuple[float | None, float | None, str | None, str]:
     """(vmin, vmax, colormap, basis) as the PRODUCT resolves them for this layer."""
     legend = layer.get("legend")
@@ -346,11 +334,8 @@ def _draw_raster(ax, payload: dict, *, alpha: float):
 
 def _paletted_rgba(band, colormap: dict):
     """A class-code band painted through the file's own ``{code: (r,g,b,a)}``.
-
-    Codes outside the table, and the masked cells, come out fully transparent -
-    a colour invented for a code the file does not define would be this side
-    making up a class.
-    """
+    Codes outside the table, and the masked cells, come out fully transparent: a
+    colour invented for a code the file does not define is a made-up class."""
     table = np.zeros((256, 4), dtype="float32")
     for code, rgba in colormap.items():
         if 0 <= int(code) < 256:
@@ -362,17 +347,13 @@ def _paletted_rgba(band, colormap: dict):
 
 
 def _mpl_cmap(name: str):
-    """The product's colormap, spelled the way matplotlib spells it.
-
-    The style contract's vocabulary is rio-tiler's, which is lowercase, and
-    matplotlib's is CamelCase for every ColorBrewer ramp - so a layer whose
-    legend names ``rdylbu`` (the dissolved-oxygen field does) raised a hard
-    ValueError here and took the whole delivery packet down with it, while
-    ``viridis`` and ``gray`` happened to spell the same in both and hid the
-    mismatch. Resolved case-insensitively against matplotlib's own registry
-    rather than against a second hand-written table that could drift from the
-    first; an unknown name keeps its spelling so the error still names it.
-    """
+    """The product's colormap, spelled the way matplotlib spells it. An unknown
+    name keeps its spelling, so the error still names it."""
+    # The style contract's vocabulary is rio-tiler's, which is lowercase, and
+    # matplotlib's is CamelCase for every ColorBrewer ramp: a legend naming
+    # ``rdylbu`` raises a hard ValueError here while ``viridis`` and ``gray``
+    # spell the same in both and hide the mismatch. Resolved case-insensitively
+    # against matplotlib's own registry, never a second hand-written table.
     import matplotlib as mpl
 
     if not isinstance(name, str) or name in mpl.colormaps:
@@ -388,13 +369,9 @@ def _adaptive(spec: tuple[float, float, float], n: int) -> float:
 
 
 def _draw_vector(ax, payload: dict, *, color: str, zorder: int):
-    """Vector geometry, weighted to its own density and cased for contrast.
-
-    The width follows the VERTEX count rather than the feature count, because
-    that is what decides whether the drawing reads: 1,900 river reaches at a flat
-    hairline is a smudge over imagery, and one 200,000-vertex mesh-preview
-    MultiLineString at a flat 1.4 pt is a solid block. Both used to happen.
-    """
+    """Vector geometry, weighted to its own density and cased for contrast. The
+    width follows the VERTEX count, not the feature count: that is what decides
+    whether the drawing reads at all."""
     gdf = payload["gdf"]
     width = _adaptive(_VECTOR_LW, payload["vertices"])
     casing = width * _CASING_MULT
@@ -424,12 +401,8 @@ def _draw_vector(ax, payload: dict, *, color: str, zorder: int):
 
 def _draw_mesh(ax, payload: dict, *, color: str, zorder: int):
     """A solver mesh as its TRIANGLES - the modeled domain, not a node cloud.
-
-    Weight and opacity both follow the element count, on the same rule the
-    animation renderer uses. A fixed hairline over a small catchment inside a
-    wide frame collapses into a scatter of dots, which is what NATE read as an
-    empty panel; there was a mesh there the whole time.
-    """
+    Weight and opacity follow the element count: a fixed hairline over a small
+    catchment in a wide frame collapses into a scatter of dots."""
     elements = int(payload["tri"].triangles.shape[0])
     ax.triplot(payload["tri"], color=color, zorder=zorder,
                linewidth=_adaptive(_MESH_LW, elements),
@@ -459,17 +432,13 @@ def _intersects(a: tuple, b: tuple) -> bool:
 
 def _canvas_bbox(renderable: list[tuple]) -> tuple[tuple, list[str]]:
     """The canvas extent, and the names of any layers that do NOT sit inside it.
-
-    A layer whose extent is DISJOINT from every other layer in the run is not a
-    layer of this scene - it is a georeferencing defect (a mesh published with a
-    CRS whose coordinates are local, a raster at a false origin). Letting it into
-    the union zooms the whole sheet out to the two of them, which is how a
-    misplaced layer hides ITSELF by making every panel unreadable.
-
-    So: the union is taken over the largest mutually-intersecting group, and the
-    strays are RETURNED rather than dropped silently - the caller captions them,
-    which is the diagnostic this sheet exists to deliver.
-    """
+    The union is over the largest mutually-intersecting group, and the strays are
+    RETURNED rather than dropped, for the caller to caption."""
+    # A layer whose extent is DISJOINT from every other layer in the run is not a
+    # layer of this scene - it is a georeferencing defect (a mesh published in
+    # local coordinates, a raster at a false origin). Letting it into the union
+    # zooms the sheet out to the two of them, which is how a misplaced layer
+    # hides ITSELF by making every panel unreadable.
     boxes = [payload["bbox_ll"] for _, payload in renderable]
     best: list[int] = []
     for seed in range(len(boxes)):
@@ -516,12 +485,8 @@ def _undegenerate(bbox: tuple) -> tuple:
 
 def _panel_frame(payload: dict, canvas_bbox: tuple) -> tuple[tuple, str]:
     """The frame ONE layer's own panel gets, and the note its caption carries.
-
-    A per-layer panel exists to be looked at, so it frames the LAYER. The canvas
-    union is the CANVAS VIEW's job - that panel is where the layers are compared
-    against each other in one extent, and keeping both is what lets a reader see
-    a small layer clearly AND see where it sits.
-    """
+    A per-layer panel frames the LAYER; the union belongs to the CANVAS VIEW
+    panel, where the layers are compared against each other in one extent."""
     own = _undegenerate(tuple(payload["bbox_ll"]))
     canvas_area = _bbox_area(canvas_bbox)
     if canvas_area <= 0 or _bbox_area(own) / canvas_area >= _ZOOM_AREA_FRAC:
@@ -628,8 +593,8 @@ def _single_panel_h(bbox_ll: tuple) -> float:
 
 def _save_full_panel(out_path: Path, *, mosaic, extent, bbox_ll, panel_h: float,
                      title: str, caption: str, draw_fn, colorbar: bool) -> Path:
-    """One panel, full-size, its own file - same framing/basemap/caption as its
-    grid cell, just legible at NATE's screen size instead of squeezed 3-up."""
+    """One panel, full-size, its own file - same framing, basemap and caption as
+    its grid cell, and legible instead of squeezed 3-up."""
     fig, ax = plt.subplots(figsize=(_SINGLE_PANEL_W, panel_h), dpi=_SINGLE_DPI)
     _frame_axes(ax, mosaic, extent, bbox_ll)
     artist = draw_fn(ax)
@@ -649,13 +614,8 @@ def _save_layer_panels(renderable: list[tuple[dict, dict]], out_path: Path, *,
                        mosaic, extent, bbox_ll, title: str,
                        max_tiles: int = 6) -> list[dict]:
     """Every renderable layer PLUS the stacked composite view, each its own
-    full-size PNG, in emission order: ``<base>_panel_01_<layer-slug>.png``.
-
-    Each LAYER panel frames its own extent; the CANVAS VIEW keeps the union. A
-    panel framed on the union is the right picture for comparing layers and the
-    wrong one for looking at any of them - a catchment mesh inside a county-wide
-    AOI is a speck there, and a speck reads as an empty panel.
-    """
+    full-size PNG, in emission order. Each LAYER panel frames its own extent;
+    the CANVAS VIEW keeps the union."""
     base = _panel_base(out_path)
     saved: list[dict] = []
     for i, (layer, payload) in enumerate(renderable):
@@ -704,15 +664,12 @@ _MERCATOR_LAT_LIMIT = 85.05112878
 
 
 def _refuse_ungeoreferenced(renderable: list[tuple[dict, dict]]) -> None:
-    """A layer whose lon/lat extent is not ON EARTH stops the sheet, by name.
-
-    Local metres written into a 4326 raster produce bounds like a latitude of
-    670, and the zoom picker has no zoom that covers them: it falls back to a
-    fixed one and the mosaic asks for a grid of tiles no machine can allocate.
-    The failure that reaches a reader is then a MemoryError, which says nothing
-    about the georeferencing defect that caused it - so the defect is named here
-    instead, with the numbers.
-    """
+    """A layer whose lon/lat extent is not ON EARTH stops the sheet, by name."""
+    # Local metres written into a 4326 raster produce bounds like a latitude of
+    # 670. The zoom picker has no zoom that covers them, falls back to a fixed
+    # one, and the mosaic then asks for a grid of tiles no machine can allocate;
+    # the MemoryError that reaches a reader says nothing about the defect, so
+    # the defect is named here instead, with the numbers.
     bad = []
     for layer, payload in renderable:
         lon0, lat0, lon1, lat1 = (float(v) for v in payload["bbox_ll"])
@@ -820,13 +777,9 @@ def render_from_evidence(evidence_path: str | os.PathLike[str], *,
                          out_path: str | os.PathLike[str] | None = None,
                          max_tiles: int = 6, composite_only: bool = False,
                          title: str | None = None) -> dict:
-    """Sheet from a drive script's evidence JSON. The drives' ``--render-proof``.
-
-    ``title`` overrides the caption every panel carries. The packet assembler
-    passes the RUN ID through it, so a panel handed to a reader names the run it
-    came from rather than only the tool - a delivered picture with no run id is
-    unverifiable against the evidence beside it.
-    """
+    """Sheet from a drive script's evidence JSON. ``title`` overrides the caption
+    every panel carries; the packet assembler passes the RUN ID through it, so a
+    delivered picture is verifiable against the evidence beside it."""
     src = Path(evidence_path).resolve()
     layers, evidence_title = _layers_from_evidence(src)
     out = Path(out_path) if out_path else src.with_name(
@@ -839,11 +792,8 @@ def render_from_evidence(evidence_path: str | os.PathLike[str], *,
 def render_proof(evidence_path: str | os.PathLike[str], *,
                  composite_only: bool = False) -> dict:
     """``--render-proof`` for a drive script: the sheet, or why there is none.
-
-    Never raises. A refused run publishes no layers and a drive that asserts on
-    the refusal still has to reach its assertions, so the absent sheet is
-    REPORTED rather than thrown.
-    """
+    Never raises: a refused run publishes no layers, and a drive that asserts on
+    the refusal still has to reach its assertions."""
     try:
         return render_from_evidence(evidence_path, composite_only=composite_only)
     except Exception as exc:  # noqa: BLE001 - the reason IS the report
@@ -868,8 +818,7 @@ def main() -> int:
     ap.add_argument("--title", default=None)
     ap.add_argument("--max-tiles", type=int, default=6)
     ap.add_argument("--composite-only", action="store_true", default=False,
-                    help="skip the per-layer full-size PNGs, sheet only "
-                         "(old behavior)")
+                    help="skip the per-layer full-size PNGs, sheet only")
     ns = ap.parse_args()
 
     try:
