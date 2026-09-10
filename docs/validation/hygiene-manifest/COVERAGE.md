@@ -120,3 +120,10 @@ its own scope root and the nearest preceding heading). Thirty-one table rows
 resolve to no file and are correctly not rows: verdict-rollup totals, guard
 rows keyed `file:line`, and the three `docs/proof` READMEs the
 `docs-and-readmes` lens rows outside this scope.
+
+## Guards leg delta
+
+`tests/hygiene/` adds five files (344 pure LOC) to the `tests` scope; their rows
+are at the foot of `tests-plugin-contracts.md`, written by the agent that wrote
+and read them. No other file enters scope in this leg - the sweep edited files
+that already carry rows.

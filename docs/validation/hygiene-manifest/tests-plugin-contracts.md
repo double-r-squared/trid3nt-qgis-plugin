@@ -494,3 +494,21 @@ now read as `tests/<destination>/<file>`.
 | `tests/adapters/test_gemini_schema_compliance.py` | MOVE only | MOVE + the startup registry import | the catalog tools register through the daemon startup import, not through `trid3nt_server.tools`; in the mirror this module collects before whatever used to trigger that, and its sweep silently lost two tools. It runs the import itself now, and its case count is back to 181 |
 | four package-relative walk-ups | (not stated) | depth unchanged | `Path(<package>.__file__).resolve().parents[1]` is relative to the package, not to the test file, so the move does not shift it: `test_tool_description_surface.py`, `test_mesh_gate_loop.py`, `test_build_mesh_tool.py`, `test_door_dissolution.py` |
 
+
+## Added by the guards leg: `tests/hygiene/`
+
+The three sweep guards THE GUARDS ruling names, written and read end to end by
+the agent that landed them. Same columns; `hist` is the standing regex count
+after the read, `fate` is `KEEP` for all five - this directory is the guard, so
+it is never a move candidate. It joins the `test-server` slice.
+
+| path | pure | hist | fate | note |
+| --- | ---: | ---: | --- | --- |
+| `tests/hygiene/__init__.py` | 0 | 0 | KEEP | empty; the package marker `tests._fakes` already establishes for this tree |
+| `tests/hygiene/_source.py` | 219 | 0 | KEEP | the shared scanner: tracked-file discovery, AST docstrings with the LLM-facing and exemption-marker seams, comment blocks and comment tokens, the disallowed-class table, the exemption-ledger renderer |
+| `tests/hygiene/test_docstring_standard.py` | 47 | 0 | KEEP | content-line limits, the 1000-char routing budget, the idle-marker refusal, the ten-entry ceiling, the rendered ledger diff, the disallowed classes over docstrings and comment blocks |
+| `tests/hygiene/test_history_markers.py` | 11 | 0 | KEEP | the HISTORY IN CODE classes over every comment token and docstring in every product tree |
+| `tests/hygiene/test_dead_references.py` | 67 | 0 | KEEP | paths, bare script names and dotted module names resolved against the tracked tree, the package roots and a README's own directory |
+
+Scope delta: `git ls-files tests plugin/tests contracts/tests` gains five files,
+344 pure LOC.
