@@ -1,8 +1,8 @@
 """TRID3NT chat-surface widgets: message bubbles, tool card, gate + sim cards.
 
-Split out of dock.py (2026-07-21 flat->package restructure). The QDockWidget shell
-stays in ``dock.py`` and imports these. Behavior identical -- this is a move.
-"""
+EVERY gate card follows ONE pattern: it locks after exactly one answer, folds to
+a one-line chip, and "show details" re-expands it read-only. Its buttons are
+plain QPushButtons, so a composer ENTER can never fire one as a dialog default."""
 from __future__ import annotations
 
 import re
@@ -41,15 +41,13 @@ _ASSISTANT_BUBBLE_STYLE = (
     "background-color: palette(midlight); border-radius: 8px; padding: 6px 9px;"
 )
 _ERROR_LINE_STYLE = "color: #f85149; font-size: 8pt; padding-left: 4px;"
-# Amber caution frame for the gate card (mirrors the web's warning palette).
-# Item N6 (live-feedback 2026-07-19): a SUBTLE amber fill (low-alpha accent,
-# so it tints faintly over EITHER a light or dark QGIS window background --
-# no hard color that assumes one theme) so the card reads as a distinct
-# panel, not an outline floating on the chat.
-# STYLE-1 (NATE 2026-07-20): scope the fill to the FRAME (#gatecard) so it does
-# NOT cascade onto the child text labels. A bare "QFrame { background-color }"
-# selector tints every descendant QLabel too -> the "highlighted text" NATE did
-# not want. The card FILL is kept (it is enough); only the text highlight is gone.
+# CARD CHROME, the discipline every card below follows. A card carries its own
+# accent colour, a 1px border and a LOW-ALPHA fill, so it tints faintly over a
+# light or a dark QGIS window alike and never assumes one theme. The fill is
+# scoped to the FRAME ID, never a bare ``QFrame`` selector: that selector
+# cascades onto every descendant QLabel and highlights the text too.
+#
+# Amber: the caution gate.
 _GATE_CARD_STYLE = (
     "QFrame#gatecard { border: 1px solid #d29922; border-radius: 8px; "
     "background-color: rgba(210, 153, 34, 7%); }"
@@ -57,17 +55,9 @@ _GATE_CARD_STYLE = (
 _GATE_TITLE_STYLE = "color: #d29922; font-weight: bold; border: none;"
 _GATE_BODY_STYLE = "border: none; font-size: 9pt;"
 _GATE_NOTE_STYLE = "border: none; color: palette(mid); font-size: 8pt;"
-# Item R2 (live-feedback 2026-07-18): tool-usage chip -- a compact bordered
-# monospace badge so tool calls read as a visually DISTINCT class from the
-# grey info notes (layer added / thinking / chart pointers). The muted
-# detail text (state + substep + short arg summary) rides beside it in the
-# same row.
-#
-# Item N3 (live-feedback 2026-07-19): the chip color now tracks STATE instead
-# of a fixed blue -- GREEN on success (complete), GREY while in progress
-# (pending / running / unknown), RED on failure (failed / cancelled). Kept
-# subtle: an OUTLINED chip (border + text in the state color), never a loud
-# fill. ``_tool_chip_style`` composes the stylesheet from the step state.
+# The tool chip is a compact monospace badge, so a tool call reads as a
+# visually DISTINCT class from the grey info notes. Its colour tracks the step
+# STATE, and it stays OUTLINED rather than filled.
 _CHIP_STATE_COLORS = {
     "complete": "#3fb950",   # green -- success
     "failed": "#f85149",     # red -- failure
@@ -77,9 +67,8 @@ _CHIP_PENDING_COLOR = "#8b949e"  # grey -- pending / running / unknown
 
 
 def _tool_chip_style(state: Optional[str]) -> str:
-    """Item N3 (live-feedback 2026-07-19): outlined tool-chip stylesheet whose
-    border+text color is driven off the step state (green complete / grey
-    in-progress / red failed). Same monospace badge chrome as before."""
+    """The outlined tool-chip stylesheet, its border and text colour driven
+    off the step state: green complete, grey in progress, red failed."""
     color = _CHIP_STATE_COLORS.get((state or "").lower(), _CHIP_PENDING_COLOR)
     return (
         f"font-family: monospace; font-size: 8pt; color: {color}; "
@@ -88,31 +77,20 @@ def _tool_chip_style(state: Optional[str]) -> str:
 
 
 _TOOL_CHIP_DETAIL_STYLE = "color: palette(mid); font-size: 8pt; border: none;"
-# Item N2 (live-feedback 2026-07-19): nested/sub-step tool rows render as a
-# directory tree -- an ASCII "|->" connector before the child chip, kept in
-# the blue accent, so a parent -> child hierarchy reads clearly instead of a
-# flat indented chip list.
+# A nested tool row renders as a directory tree: an ASCII connector before the
+# child, so a parent-to-child hierarchy reads as one rather than as a flat
+# indented list.
 _TREE_CONNECTOR_STYLE = (
     "font-family: monospace; font-size: 8pt; color: #58a6ff; border: none;"
 )
 
-# T1..T7 (NATE 2026-07-20): the tool-call surface is now ONE parent card (a
-# QFrame containing the inner tool rows) -- NOT the flat chip pills above. The
-# constants below drive ``_ToolCard`` (the single builder used by BOTH the live
-# pipeline path AND the case-open replay path, T9).
-#
-# T2: the card BORDER spans the full chat width and adapts on resize (the frame
-# is a plain QVBoxLayout child -- no fixed/min width -- so it fills whatever the
-# resizable dock gives it), and the font is a notch LARGER than the old 8pt
-# pills (9pt here). A subtle border, no loud fill (theme-neutral -- reads over a
-# light or dark QGIS window alike, matching the gate/sim card discipline).
+# The constants below drive the parent tool card. Its border spans the FULL
+# chat width and adapts on resize, because the frame carries no fixed or
+# minimum width and simply fills whatever the resizable dock gives it.
 def _toolcard_frame_style(border_color: Optional[str] = None) -> str:
-    """F4 (live-feedback 2026-07-21): the parent tool-card BORDER tracks the
-    aggregate tool state -- GREEN once every inner tool completed
-    successfully, RED when any failed/cancelled, the neutral palette(mid)
-    while anything still runs (or the card is empty). Same chrome otherwise
-    (radius + the subtle low-alpha fill); the colors are the exact
-    ``_CHIP_STATE_COLORS`` palette the rows already use."""
+    """The parent tool-card BORDER, coloured off the AGGREGATE tool state:
+    green once every inner tool succeeded, red when any failed, neutral while
+    anything still runs or the card is empty."""
     color = border_color or "palette(mid)"
     return (
         f"QFrame#toolcard {{ border: 1px solid {color}; border-radius: 8px; "
@@ -121,40 +99,34 @@ def _toolcard_frame_style(border_color: Optional[str] = None) -> str:
 
 
 _TOOLCARD_FRAME_STYLE = _toolcard_frame_style()
-# The chevron + "Tools (N)" header line at the top of the card (T3).
+# The chevron + "Tools (N)" header line at the top of the card.
 _TOOLCARD_HEADER_STYLE = (
     "color: palette(text); font-size: 9pt; border: none; text-align: left;"
 )
-# The muted metadata block pinned at the BOTTOM of the card body (T7).
+# The muted metadata block pinned at the BOTTOM of the card body.
 _TOOLCARD_META_STYLE = "color: palette(mid); font-size: 8pt; border: none;"
-# The small ">" nesting prefix on every inner row (T4).
+# The small ">" nesting prefix on every inner row.
 _TOOLCARD_PREFIX_STYLE = (
     "font-family: monospace; font-size: 9pt; color: palette(mid); border: none;"
 )
 
 
 def _tool_row_text_style(state: Optional[str]) -> str:
-    """T4 (NATE 2026-07-20): the inner tool-row LABEL keeps the exact
-    state-driven TEXT COLOR the old chip used (green complete / grey in-progress
-    / red failed via ``_CHIP_STATE_COLORS``) -- only the chip's border/padding/
-    radius (the "bubble frame") is dropped, and the font bumps 8pt -> 9pt (T2's
-    larger card). No border, no background -- just the coloured monospace label
-    nested under the parent card."""
+    """An inner tool-row LABEL: a coloured monospace label with no border and
+    no background, its colour driven off the step state."""
     color = _CHIP_STATE_COLORS.get((state or "").lower(), _CHIP_PENDING_COLOR)
     return f"font-family: monospace; font-size: 9pt; color: {color}; border: none;"
 
 
 def _tool_status_style(state: Optional[str]) -> str:
-    """T5: the right-edge status glyph (animated spinner while running, a check
-    on success, an x on failure) is coloured off the same state map."""
+    """The right-edge status glyph -- spinner, check or x -- coloured off the
+    same state map."""
     color = _CHIP_STATE_COLORS.get((state or "").lower(), _CHIP_PENDING_COLOR)
     return f"font-family: monospace; font-size: 9pt; color: {color}; border: none;"
 
 
-# T5: the classic ascii spinner cycled on a QTimer while a row is RUNNING; the
-# terminal glyphs replace the old "running..."/"completed" words (a check on
-# success, an x on failure). These check/x symbols are the status glyphs NATE
-# explicitly sanctioned (they are text symbols, not emoji).
+# The ascii spinner cycles on a QTimer while a row is RUNNING; a terminal row
+# shows a check or an x instead. These are text symbols, never emoji.
 _SPINNER_FRAMES = ("|", "/", "-", "\\")
 _STATUS_GLYPH_DONE = "✓"  # check mark
 _STATUS_GLYPH_FAIL = "✗"  # ballot x
@@ -167,12 +139,7 @@ def _is_running_state(state: Optional[str]) -> bool:
     cancelled show the terminal glyph."""
     return (state or "").lower() not in _TERMINAL_STATES
 
-# Code-exec approval card chrome (live-feedback 2026-07-21: the agent's
-# ``code-exec-request`` confirm gate had ZERO plugin handling -- the agent
-# blocked forever and the turn "just stopped"). Blue -- the accent the tool
-# tree already uses -- with the same N6/STYLE-1 discipline as the gate/sim
-# cards: a subtle low-alpha fill scoped to the FRAME id (never cascading onto
-# child labels), theme-neutral over light and dark QGIS windows alike.
+# Blue, the accent the tool tree already uses: the code-exec approval gate.
 _CODE_CARD_STYLE = (
     "QFrame#codeexeccard { border: 1px solid #58a6ff; border-radius: 8px; "
     "background-color: rgba(88, 166, 255, 7%); }"
@@ -197,24 +164,16 @@ def _html_escape(text: str) -> str:
     )
 
 
-# Credential-request key-entry card chrome (LANE K, NATE directive
-# 2026-07-22: API-key entry in chat like the cloud client had). Green -- a
-# "provide something and the run continues" affordance, distinct from the
-# amber caution gate and the blue code gate -- with the same N6/STYLE-1
-# discipline: a subtle low-alpha fill scoped to the FRAME id (never cascading
-# onto child labels), theme-neutral over light and dark QGIS windows alike.
+# Green: a "provide something and the run continues" affordance, distinct from
+# the amber caution gate and the blue code gate.
 _CRED_CARD_STYLE = (
     "QFrame#credentialcard { border: 1px solid #3fb950; border-radius: 8px; "
     "background-color: rgba(63, 185, 80, 7%); }"
 )
 _CRED_TITLE_STYLE = "color: #3fb950; font-weight: bold; border: none;"
 
-# Tool-selection picker card chrome (auto/ask modes -- Stage 3,
-# 2026-07-22). Teal -- a "steer the routing" affordance, distinct from the
-# amber caution gate, the blue code gate and the green credential card --
-# with the same N6/STYLE-1 discipline: a subtle low-alpha fill scoped to the
-# FRAME id (never cascading onto child labels), theme-neutral over light and
-# dark QGIS windows alike.
+# Teal: a "steer the routing" affordance, distinct from the caution, code and
+# credential cards.
 _PICKER_CARD_STYLE = (
     "QFrame#toolpickercard { border: 1px solid #39c5cf; border-radius: 8px; "
     "background-color: rgba(57, 197, 207, 7%); }"
@@ -228,31 +187,21 @@ _PICKER_SUMMARY_STYLE = (
     "color: palette(mid); font-size: 8pt; border: none; padding-left: 22px;"
 )
 
-# Item R4 (live-feedback 2026-07-18): simulation-card chrome -- purple, the
-# color the web reserves for sim progress affordances; the collapse pattern
-# itself is the exact GateCard summary + "show details" affordance.
-# Item N6 (live-feedback 2026-07-19): a SUBTLE purple fill (low-alpha accent,
-# tints faintly over either a light or dark QGIS window -- no hard theme
-# assumption) so the card reads as a distinct panel, not a bare outline.
+# Purple: simulation progress.
 _SIM_CARD_STYLE = (
     "QFrame#simcard { border: 1px solid #8957e5; border-radius: 8px; "
     "background-color: rgba(137, 87, 229, 7%); }"
 )
 _SIM_TITLE_STYLE = "color: #8957e5; font-weight: bold; border: none;"
 
-# Region-choice picker chrome (state-bbox-fallback narrowing -- GATE-WAIT).
-# Blue, a "pick a place" affordance, with the same N6/STYLE-1 discipline: a
-# subtle low-alpha fill scoped to the FRAME id (never cascading onto child
-# labels), theme-neutral over light and dark QGIS windows alike.
+# Blue: a "pick a place" affordance.
 _REGION_CARD_STYLE = (
     "QFrame#regionchoicecard { border: 1px solid #58a6ff; border-radius: 8px; "
     "background-color: rgba(88, 166, 255, 7%); }"
 )
 _REGION_TITLE_STYLE = "color: #58a6ff; font-weight: bold; border: none;"
 
-# Spatial-input picker chrome (agent needs a picked geometry -- GATE-WAIT).
-# Green-cyan, a "click the map" affordance, with the same N6/STYLE-1
-# discipline.
+# Green-cyan: a "click the map" affordance.
 _SPATIAL_CARD_STYLE = (
     "QFrame#spatialinputcard { border: 1px solid #2dd4bf; border-radius: 8px; "
     "background-color: rgba(45, 212, 191, 7%); }"
@@ -278,25 +227,8 @@ _FORM_BADGE_STYLE = "color: palette(mid); font-size: 8pt; border: none;"
 
 
 class _WrapLabel(QLabel):
-    """Word-wrapping QLabel whose WRAPPED height the layouts actually honor.
-
-    BUG 1 (live-feedback 2026-07-12): "show me the landcover over washington
-    state" painted as ONE clipped visual line in the user bubble. Classic Qt
-    wrapped-label clip: QBoxLayout gives an alignment-constrained item its
-    sizeHint height -- computed at the UNWRAPPED width -- so the label's real
-    wrapped height (heightForWidth of the width it actually got) is never
-    honored (measured pre-fix: 73px painted vs 133px needed at a 320px-wide
-    dock; the assistant bubble clipped the same way, 153px vs 193px). Fix:
-    re-assert minimumHeight from heightForWidth(actual width) on every
-    resize/setText -- minimum sizes propagate through every layout +
-    scroll-area combination even where height-for-width does not.
-
-    Feature 2026-07-13 (markdown answers): finalized assistant labels
-    switch to Qt.TextFormat.RichText HTML -- heightForWidth then routes through the
-    rich-text document layout instead of plain-text metrics, but the same
-    min-height re-assert covers it (verified by the markdown-height case
-    in tests/qt_dock_ui_harness.py at 320px and 640px dock widths).
-    """
+    """Word-wrapping QLabel whose WRAPPED height the layouts actually honor,
+    plain text and rich text alike."""
 
     def __init__(self, text: str = "", parent=None):
         super().__init__(text, parent)
@@ -328,15 +260,9 @@ class _WrapLabel(QLabel):
 
 
 class _RunPrefixHighlighter(QSyntaxHighlighter):
-    """Colours the leading anchored ``!run`` token blue.
-
-    The blue signal fires on EXACTLY the same predicate as the parse-first
-    routing (``is_run_prefix``), so the highlight can never disagree with where
-    the message goes. Only the FIRST block (line) is considered and only when
-    that block is anchored -- a mid-sentence ``!run`` stays uncoloured, matching
-    the routing immunity. Leading whitespace is honoured so the coloured token
-    tracks the literal ``!run`` characters.
-    """
+    """Colours the leading anchored ``!run`` token blue. Only the FIRST block
+    is considered, and leading whitespace is honoured so the colour tracks the
+    literal characters."""
 
     _BLUE = QColor("#2f81f7")  # the web/accent blue, legible on light+dark
 
@@ -344,6 +270,8 @@ class _RunPrefixHighlighter(QSyntaxHighlighter):
         # Only the composer's first block can carry the anchored token.
         if self.currentBlock().blockNumber() != 0:
             return
+        # ONE shared predicate with the parse-first routing, so the visual
+        # signal can never disagree with where the message actually goes.
         if not is_run_prefix(text):
             return
         start = len(text) - len(text.lstrip())
@@ -354,15 +282,9 @@ class _RunPrefixHighlighter(QSyntaxHighlighter):
 
 
 class _ChatInput(QPlainTextEdit):
-    """Item A (qgis-ux-batch 2026-07-19): the composer input -- a MULTI-LINE
-    auto-growing field (was a one-line QLineEdit that clipped long prompts, so
-    a long self-audit prompt scrolled off the right edge invisibly). ENTER
-    sends (calls ``send_callback``, the dock's ``_send``); SHIFT+ENTER (and any
-    Ctrl/Meta chord) inserts a newline instead. The field grows with its
-    content from one line up to ``_MAX_LINES`` then scrolls -- mirrors the web
-    composer's textarea. Word-wrap is on so a long single-line prompt wraps
-    into the growing box instead of scrolling horizontally.
-    """
+    """The composer input: a MULTI-LINE auto-growing field. ENTER sends;
+    SHIFT+ENTER and any Ctrl or Meta chord insert a newline. It grows to
+    ``_MAX_LINES`` and then scrolls."""
 
     _MIN_LINES = 1
     _MAX_LINES = 10
@@ -373,7 +295,7 @@ class _ChatInput(QPlainTextEdit):
         self.setLineWrapMode(QPlainTextEdit.LineWrapMode.WidgetWidth)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        # C2 (NATE 2026-07-20): grow RELIABLY one row per new line / wrap. Drive
+        # Grow RELIABLY one row per new line / wrap. Drive
         # off the document LAYOUT's documentSizeChanged -- it fires AFTER the
         # relayout resolves the new document height, so the box never lags a row
         # behind (the old textChanged hook fired BEFORE relayout, so the height
@@ -404,7 +326,7 @@ class _ChatInput(QPlainTextEdit):
         super().keyPressEvent(event)
 
     def _adjust_height(self, *args) -> None:  # documentSizeChanged passes a QSizeF
-        # C2 (NATE 2026-07-20): compute the field height FROM the document layout
+        # Compute the field height FROM the document layout
         # so it visibly grows one row per new line (or wrap) and shrinks back
         # when lines are removed. IMPORTANT quirk: for a QPlainTextEdit the
         # layout is QPlainTextDocumentLayout, whose ``documentSize().height()``
@@ -435,27 +357,15 @@ class _ChatInput(QPlainTextEdit):
 
 
 def _markdown_to_display_html(text: str, palette) -> str:
-    """Render assistant markdown to Qt rich-text HTML (feature 2026-07-13).
-
-    Why md->HTML (QTextDocument.setMarkdown + toHtml) instead of the
-    lighter QLabel.setTextFormat(Qt.TextFormat.MarkdownText): the label route parses
-    the same GitHub dialect but offers ZERO styling hooks -- measured on
-    this Qt build (5.15.15), fenced code blocks come out in the default
-    PROPORTIONAL font with no background (the importer stamps a
-    FontFamilies property that resolves empty instead of a real monospace
-    family), and tables get no cell padding. Going through the document
-    lets us style the model before serializing: code blocks get a
-    palette-derived background + a real monospace font, inline code spans
-    get the same treatment, tables get solid borders + cell padding. The
-    HTML then renders in a Qt.TextFormat.RichText label -- same QTextDocument engine,
-    so wrapping/heightForWidth behave like any rich-text label.
-
-    Colors come from ``palette`` (Base for the code background, Mid for
-    table borders) so light and dark QGIS themes both stay readable --
-    no hardcoded hex that assumes one theme.
-
-    Raises on truly broken input (caller catches and keeps plain text).
-    """
+    """Render assistant markdown to Qt rich-text HTML. Colours come from
+    ``palette``, never a hardcoded hex, so a light and a dark QGIS theme both
+    stay readable. RAISES on broken input; the caller keeps plain text."""
+    # The route is deliberately QTextDocument.setMarkdown then toHtml, rather
+    # than a label's own MarkdownText format: the label route parses the same
+    # dialect but offers ZERO styling hooks, so a fenced code block comes out
+    # in the default proportional font with no background and a table gets no
+    # cell padding. Going through the document allows styling the model before
+    # serializing, and the result renders through the same engine anyway.
     from qgis.PyQt.QtGui import (
         QBrush,
         QPalette,
@@ -538,9 +448,9 @@ def _markdown_to_display_html(text: str, palette) -> str:
 
 
 def _is_error_note(note: str) -> bool:
-    """BUG 3a (live-feedback 2026-07-12): materializer notes are plain
-    strings, so classify by the honest failure vocabulary layers.py uses --
-    error-ish notes must stay VISIBLE outside the collapsed Layers toggle."""
+    """Whether a materializer note reports a FAILURE. The notes are plain
+    strings, so this classifies by the honest failure vocabulary they use; an
+    error-ish note has to stay visible."""
     lowered = note.lower()
     return any(
         token in lowered
@@ -548,7 +458,7 @@ def _is_error_note(note: str) -> bool:
     )
 
 
-# F7 (live-feedback 2026-07-22): chat NOTE text (status + error lines) rides
+# Chat NOTE text (status + error lines) rides
 # plain-text QLabels, and plain-text word-wrap breaks at whitespace ONLY -- so
 # one long unbroken token (a store URL inside a rehydrate failure note)
 # reported an unbreakable preferred/minimum width (measured: label
@@ -559,8 +469,8 @@ def _is_error_note(note: str) -> bool:
 # breaker can wrap ANYWHERE inside such tokens (measured post-fix: sizeHint
 # 175px, host 193px, the URL wraps over 7 lines at 320px). Display-only
 # munging of note text; the full text stays readable (no elide -- an error URL
-# must stay diagnosable), matching the E1 wrap-never-force-width discipline
-# the other chat text already follows.
+# must stay diagnosable), matching the wrap-never-force-width discipline the
+# other chat text already follows.
 _ZWSP = "\u200b"  # zero-width space: an invisible line-break opportunity
 _BREAK_CHUNK = 24
 _UNBROKEN_RUN = re.compile(r"\S{%d,}" % (_BREAK_CHUNK + 1))
@@ -580,7 +490,7 @@ def _breakable_display_text(text: str) -> str:
     return _UNBROKEN_RUN.sub(_chunk, text)
 
 
-# F7: the folded-errors toggle keeps the exact charts/thinking collapse
+# The folded-errors toggle keeps the exact charts/thinking collapse
 # affordance chrome (_THINKING_TOGGLE_STYLE) but in the error red, so the
 # collapsed row still reads as errors at a glance.
 _ERROR_FOLD_TOGGLE_STYLE = (
@@ -589,21 +499,9 @@ _ERROR_FOLD_TOGGLE_STYLE = (
 
 
 class _ErrorFold(QWidget):
-    """F7 (live-feedback 2026-07-22): ONE run of consecutive error notes.
-
-    Consecutive red error lines (e.g. the per-layer "MinIO fetch failed ...
-    -- skipped" notes a case-open rehydrate emits) collapse into a single
-    inline "ERRORS (N)" toggle row, collapsed by default, expanding IN PLACE
-    to the wrapped lines -- a flat checkable QPushButton header toggling a body
-    widget, kept in the error red. The fold lives INLINE in the notes area, in chat scroll
-    order -- never moved to a panel.
-
-    N == 1 renders as the plain wrapped red line with NO toggle chrome
-    (today's look -- one error does not need a fold); the toggle appears,
-    collapsed, from the second consecutive error onward. Once the user
-    expands the fold, later errors in the same run keep it expanded (the
-    count in the header updates either way).
-    """
+    """ONE run of consecutive error notes, folded inline in chat scroll order
+    and never moved to a panel. A single error renders plainly with NO toggle;
+    the fold appears from the second consecutive error onward."""
 
     def __init__(self, parent: Optional[QWidget] = None):
         super().__init__(parent)
@@ -632,13 +530,13 @@ class _ErrorFold(QWidget):
         self._body.setVisible(self.toggle.isChecked())
 
     def add_error(self, text: str) -> None:
-        """Append one error line to the run: a wrapped red label (the F7
-        break-anywhere text + the E1 min-width cap, so a long URL reflows
-        with the dock instead of forcing its width)."""
+        """Append one error line to the run as a wrapped red label, with the
+        break-anywhere text and the min-width cap, so a long URL reflows with
+        the dock instead of forcing its width."""
         lbl = _WrapLabel(_breakable_display_text(text))
         lbl.setTextFormat(Qt.TextFormat.PlainText)
         lbl.setStyleSheet(_ERROR_LINE_STYLE)
-        lbl.setMinimumWidth(1)  # E1: wrap, never a horizontal scrollbar
+        lbl.setMinimumWidth(1)  # wrap, never a horizontal scrollbar
         self._body_lay.addWidget(lbl)
         self.count += 1
         if self.count == 1:
@@ -652,47 +550,27 @@ class _ErrorFold(QWidget):
 
 
 class _ToolCard(QFrame):
-    """T1..T7/T9 (NATE 2026-07-20): ONE parent tool card -- a full-width QFrame
-    that CONTAINS the inner tool calls, replacing the old flat chip pills.
-
-    There is exactly ONE representation: this parent card IS the container; the
-    inner tool calls live inside it (never a small pill AND a large card). The
-    SAME widget is built by both the live pipeline path (``_AssistantEntry.
-    render_tool_card``) and the case-open replay path (``_replay_tool_group``),
-    so a reopened case shows the identical parent format (T9).
-
-    Layout:
-
-      [chevron]  Tools (N)                      <- header (T3)
-        > tool_a                            [glyph]
-        > tool_b                            [glyph]   <- inner rows (T4/T5/T6)
-        (optional collapsible result body under a row, replay only -- T9)
-        <one muted metadata block>                    <- bottom of body (T7)
-
-    T3 collapse rules: the inner body is EXPANDED while ANY inner tool runs (so
-    the user can watch live) and COLLAPSES once every inner tool is terminal --
-    and it re-expands if a new running row appears after an intermediate
-    all-terminal frame. The FIRST chevron click latches ``_user_toggled`` and
-    auto-collapse never fights the user's manual choice thereafter.
-
-    T5 spinner: a shared ``QTimer`` cycles the ascii spinner frames across every
-    RUNNING row's status glyph; terminal rows show a check (success) or x
-    (failure) instead. The timer only runs while at least one row is running.
-    """
+    """ONE parent card containing this turn's tool calls. There is exactly one
+    representation, and the SAME widget serves both the live pipeline and the
+    case-open replay, so a reopened case reads identically."""
+    # Collapse: the body is EXPANDED while any inner tool runs and collapses
+    # once every row is terminal, re-expanding if a new running row appears
+    # afterwards. The FIRST chevron click latches ``_user_toggled``, and
+    # auto-collapse never fights the user's own choice from then on.
 
     def __init__(self, parent: Optional[QWidget] = None):
         super().__init__(parent)
         self.setObjectName("toolcard")
         self.setStyleSheet(_TOOLCARD_FRAME_STYLE)
         self.setFrameShape(QFrame.Shape.NoFrame)
-        # T2: fill the chat width, adapt on resize -- no fixed/min width.
+        # Fill the chat width, adapt on resize -- no fixed/min width.
         self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(8, 4, 8, 4)
         outer.setSpacing(2)
 
-        # Header: chevron (T3) + "Tools (N)" title. The chevron is a native
+        # Header: chevron + "Tools (N)" title. The chevron is a native
         # QToolButton arrow (style-drawn triangle -- not an emoji/text glyph).
         header = QWidget()
         hl = QHBoxLayout(header)
@@ -718,8 +596,8 @@ class _ToolCard(QFrame):
         self._body_lay.setSpacing(1)
         outer.addWidget(self._body)
 
-        self._expanded = True             # default EXPANDED while running (T3)
-        # T3 (fixed 2026-07-21): the collapse is AUTO (expand while any inner
+        self._expanded = True             # default EXPANDED while running
+        # The collapse is AUTO (expand while any inner
         # tool runs, collapse once ALL are terminal) UNTIL the user clicks the
         # chevron -- then ``_user_toggled`` latches and auto never fights their
         # choice again. The old one-shot ``_auto_collapsed`` latched on the
@@ -745,7 +623,7 @@ class _ToolCard(QFrame):
         self._expanded = not self._expanded
         self._apply_expanded()
 
-    # -- spinner (T5) ------------------------------------------------------ #
+    # -- spinner ------------------------------------------------------------ #
 
     def _tick_spinner(self) -> None:
         self._spinner_frame = (self._spinner_frame + 1) % len(_SPINNER_FRAMES)
@@ -761,14 +639,12 @@ class _ToolCard(QFrame):
             if w is not None:
                 w.deleteLater()
 
-    # -- the ONE builder used by live + replay (T9) ------------------------ #
+    # -- the ONE builder used by live + replay ------------------------------ #
 
     def set_content(self, inner_rows: List[dict], meta_lines: List[str]) -> None:
-        """Rebuild the inner rows + bottom metadata from ``inner_rows`` (each a
-        ``{"label", "state", "nested", "result", "is_error"}`` dict) and
-        ``meta_lines`` (muted strings). Called every live pipeline frame (cheap
-        rebuild -- the frame/chevron/collapse state persist on ``self``) and
-        once on replay (all-terminal rows -> immediate auto-collapse)."""
+        """Rebuild the inner rows and bottom metadata. Called on EVERY live
+        pipeline frame: the rebuild is cheap, and the frame, chevron and
+        collapse state persist on ``self`` across it."""
         self._clear_body()
         any_running = False
         any_failed = False
@@ -783,7 +659,7 @@ class _ToolCard(QFrame):
             running = _is_running_state(state)
             if running:
                 any_running = True
-            # F4: a failed/cancelled row (or a replayed error row) taints the
+            # A failed/cancelled row (or a replayed error row) taints the
             # whole card's aggregate state -> red border below.
             if (state or "").lower() in ("failed", "cancelled") or bool(
                 row.get("is_error")
@@ -792,7 +668,7 @@ class _ToolCard(QFrame):
 
             row_w = QWidget()
             rl = QHBoxLayout(row_w)
-            # T4: a small ">" prefix for visual nesting (drops the old bubble
+            # A small ">" prefix for visual nesting (drops the old bubble
             # frame + tree-connector arrow that cut into the text); a deeper
             # inset for a sub-step child so hierarchy still reads.
             rl.setContentsMargins(4 + (12 if nested else 0), 0, 0, 0)
@@ -801,17 +677,16 @@ class _ToolCard(QFrame):
             prefix.setTextFormat(Qt.TextFormat.PlainText)
             prefix.setStyleSheet(_TOOLCARD_PREFIX_STYLE)
             rl.addWidget(prefix)
-            # T4: the label keeps the EXACT state-driven text colour + plain
+            # The label keeps the EXACT state-driven text colour + plain
             # non-wrapping behaviour of the old chip (only the frame is gone).
             name_lbl = QLabel(label)
             name_lbl.setTextFormat(Qt.TextFormat.PlainText)
             name_lbl.setStyleSheet(_tool_row_text_style(state))
             rl.addWidget(name_lbl)
             rl.addStretch(1)
-            # T5/T6: the ONLY right-edge element is the status glyph now (the
-            # per-row arg/metadata summary is dropped -- it moves to the bottom
-            # block, T7). Running -> animated spinner; complete -> check;
-            # failed/cancelled -> x.
+            # The ONLY right-edge element is the status glyph; the arg and
+            # metadata summary rides the bottom block instead. Running is an
+            # animated spinner, complete a check, terminal-failed an x.
             status = QLabel()
             status.setTextFormat(Qt.TextFormat.PlainText)
             status.setStyleSheet(_tool_status_style(state))
@@ -827,7 +702,7 @@ class _ToolCard(QFrame):
             rl.addWidget(status)
             self._body_lay.addWidget(row_w)
 
-            # T9 (replay): the tool RESULT shows UNDER its row, inside the card,
+            # The tool RESULT shows UNDER its row, inside the card,
             # as a collapsed read-only body (error responses get the red block).
             result = row.get("result")
             if isinstance(result, str) and result:
@@ -843,7 +718,7 @@ class _ToolCard(QFrame):
                 body.setStyleSheet(
                     _PROBE_ERROR_BLOCK_STYLE if is_error else _THINKING_BLOCK_STYLE
                 )
-                body.setMinimumWidth(1)  # E1: never force a horizontal scrollbar
+                body.setMinimumWidth(1)  # never force a horizontal scrollbar
                 body.setVisible(False)
                 toggle.clicked.connect(
                     lambda _c=False, b=body, t=toggle: b.setVisible(t.isChecked())
@@ -851,19 +726,19 @@ class _ToolCard(QFrame):
                 self._body_lay.addWidget(toggle)
                 self._body_lay.addWidget(body)
 
-        # T7: one muted metadata block pinned at the BOTTOM of the body, under
+        # One muted metadata block pinned at the BOTTOM of the body, under
         # all the inner rows, so every bit of text lives inside the card border.
         clean_meta = [m for m in meta_lines if m]
         if clean_meta:
             meta = _WrapLabel("\n".join(clean_meta))
             meta.setTextFormat(Qt.TextFormat.PlainText)
             meta.setStyleSheet(_TOOLCARD_META_STYLE)
-            meta.setMinimumWidth(1)  # E1: wrap, never a horizontal scrollbar
+            meta.setMinimumWidth(1)  # wrap, never a horizontal scrollbar
             self._body_lay.addWidget(meta)
 
         self._title.setText(f"Tools ({n_tools})" if n_tools else "Tools")
 
-        # F4 (live-feedback 2026-07-21): the card BORDER carries the aggregate
+        # The card BORDER carries the aggregate
         # outcome -- red the moment any tool failed/cancelled, green once
         # every tool is terminal-and-successful, neutral while running.
         if any_failed:
@@ -874,16 +749,16 @@ class _ToolCard(QFrame):
             border = None
         self.setStyleSheet(_toolcard_frame_style(border))
 
-        # T5: run the spinner only while a row is live.
+        # Run the spinner only while a row is live.
         if any_running and not self._spinner_timer.isActive():
             self._spinner_timer.start()
         elif not any_running and self._spinner_timer.isActive():
             self._spinner_timer.stop()
 
-        # T3: auto behavior (until the user takes manual control) -- EXPANDED
-        # while any inner tool runs (so NATE can monitor), COLLAPSED once every
-        # inner tool is terminal. Re-expands if a new running row appears after
-        # an intermediate all-terminal frame; a manual chevron click disables it.
+        # Auto behavior, until the user takes manual control: EXPANDED while
+        # any inner tool runs, so it can be watched live, and COLLAPSED once
+        # every row is terminal. It re-expands if a new running row appears
+        # after an all-terminal frame; a manual chevron click disables it.
         if n_tools and not self._user_toggled:
             self._expanded = any_running
         self._apply_expanded()
@@ -898,7 +773,7 @@ class _AssistantEntry:
         lay.setContentsMargins(0, 2, 40, 2)
         lay.setSpacing(2)
 
-        # F9 thinking block: toggle button + collapsible text label.
+        # The thinking block: a toggle button plus a collapsible text label.
         # Hidden until the first thinking-chunk arrives.
         self._thinking_container = QWidget()
         thinking_lay = QVBoxLayout(self._thinking_container)
@@ -917,7 +792,7 @@ class _AssistantEntry:
         self._thinking_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         self._thinking_label.setStyleSheet(_THINKING_BLOCK_STYLE)
         thinking_lay.addWidget(self._thinking_label)
-        # LANE PLUGIN (2026-07-22): wire the fold WIDGET-to-WIDGET (toggled ->
+        # Wire the fold WIDGET-to-WIDGET (toggled ->
         # setVisible) instead of through a bound method of this plain-python
         # wrapper. Replayed entries (case reopen) are not retained by the dock,
         # so a connection to ``self`` died with the wrapper's GC and the
@@ -932,15 +807,13 @@ class _AssistantEntry:
         self.label = _WrapLabel("")
         self.label.setTextFormat(Qt.TextFormat.PlainText)
         self.label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-        # Feature 2026-07-13 (markdown answers) link policy: markdown links
-        # render styled but are NOT clickable -- interaction flags stay
-        # TextSelectableByMouse only (no LinksAccessibleByMouse), and
-        # openExternalLinks is explicitly off. No silent click-to-open-
-        # arbitrary-URL surface.
+        # Link policy: a markdown link renders STYLED but is not clickable.
+        # The interaction flags stay selectable-only and openExternalLinks is
+        # explicitly off, so there is no silent click-to-open-any-URL surface.
         self.label.setOpenExternalLinks(False)
         self.label.setStyleSheet(_ASSISTANT_BUBBLE_STYLE)
         self.label.setVisible(False)  # only once NON-whitespace text arrives
-        # Item R1 (live-feedback 2026-07-18): while STREAMING, the bubble used
+        # While STREAMING, the bubble used
         # to sit in an AlignLeft cell, so every chunk re-measured the label's
         # preferred width and the bubble snapped to a different width per
         # chunk -- hard to read mid-stream. The label now takes the layout's
@@ -953,7 +826,7 @@ class _AssistantEntry:
         self.label.setMinimumWidth(1)
         lay.addWidget(self.label)
 
-        # T1/T9 (NATE 2026-07-20): the tool calls of this turn live in ONE
+        # The tool calls of this turn live in ONE
         # parent ``_ToolCard`` hosted here (lazily created on the first pipeline
         # frame). ``pipeline_area`` is the slot it sits in; the card itself
         # persists across frames (chevron state, auto-collapse memory, spinner)
@@ -963,7 +836,7 @@ class _AssistantEntry:
         lay.addLayout(self.pipeline_area)
         self._tool_card: Optional[_ToolCard] = None
 
-        # T8 (NATE 2026-07-20): the "Layers (N)" toggle is GONE -- the user sees
+        # The "Layers (N)" toggle is GONE -- the user sees
         # rendered layers in the QGIS map / layer tree already, so the in-chat
         # listing was clutter. The materialization path (``materializer.
         # materialize`` -> actual QGIS layers) is untouched; only layer FAILURE
@@ -973,7 +846,7 @@ class _AssistantEntry:
         self.notes_area = QVBoxLayout()
         self.notes_area.setSpacing(0)
         lay.addLayout(self.notes_area)
-        # F7: the OPEN run of consecutive error notes (one _ErrorFold widget);
+        # The OPEN run of consecutive error notes (one _ErrorFold widget);
         # a non-error note (or an explicit break_error_run) ends the run so
         # the next error starts a fresh fold.
         self._error_fold: Optional[_ErrorFold] = None
@@ -981,10 +854,10 @@ class _AssistantEntry:
         # Insert above the terminal stretch.
         parent_layout.insertWidget(parent_layout.count() - 1, self.container)
         self.text = ""
-        # BUG 2 (live-feedback 2026-07-12): True once the FIRST non-whitespace
+        # True once the FIRST non-whitespace
         # answer token arrived (reveals the bubble + collapses thinking).
         self._answer_started = False
-        # Feature 2026-07-13: True once the final markdown render happened
+        # True once the final markdown render happened
         # (turn-complete / gate closeout / replay) -- runs at most once.
         self._finalized = False
 
@@ -1008,7 +881,7 @@ class _AssistantEntry:
     # -- answer text ------------------------------------------------------- #
 
     def append_delta(self, delta: str) -> None:
-        # BUG 2 (live-feedback 2026-07-12): qwen3 emits whitespace-only text
+        # Qwen3 emits whitespace-only text
         # deltas after </think>, and revealing the bubble on ANY delta
         # painted an empty grey box on thinking+tool-only turns. Reveal the
         # label (and collapse the thinking block) only on the first
@@ -1018,10 +891,9 @@ class _AssistantEntry:
         if not self.text.strip():
             return
         if self._finalized:
-            # Defensive (feature 2026-07-13): a delta after the final
-            # markdown render (should not happen -- finalize runs at the
-            # terminal seams) drops back to plain-text streaming so raw
-            # text is never fed through a RichText label.
+            # A delta arriving AFTER the final markdown render drops back to
+            # plain-text streaming, so raw text is never fed through a
+            # RichText label.
             self._finalized = False
             self.label.setTextFormat(Qt.TextFormat.PlainText)
         if not self._answer_started:
@@ -1036,18 +908,9 @@ class _AssistantEntry:
         self.label.setVisible(True)
 
     def finalize_markdown(self) -> None:
-        """Feature 2026-07-13 (markdown answers): the turn is FINAL --
-        re-render the accumulated answer text as markdown.
-
-        While STREAMING the label stays Qt.TextFormat.PlainText (``append_delta``
-        re-sets it token by token) so a half-open ``` fence never flickers
-        through a markdown parser mid-stream; this converts exactly once,
-        at the terminal seams (turn-complete, gate-card closeout, chat
-        replay -- replay text is always final). Never raises: a conversion
-        failure keeps the already-painted plain text -- an honest
-        degradation, never a crashed dock. The thinking block, notes and
-        pipeline lines stay plain text by design (raw model musing / status
-        vocabulary must never be interpreted as markup)."""
+        """The turn is FINAL: re-render the accumulated answer as markdown,
+        exactly ONCE, because a half-open fence must never flicker through a
+        parser mid-stream. Never raises; the plain text stands on failure."""
         if self._finalized:
             return
         self._finalized = True
@@ -1073,12 +936,11 @@ class _AssistantEntry:
         # wrapped sizeHint heuristic picks ~217px (the AlignLeft cell would
         # pin the bubble that narrow even in a wide dock). Cap the explicit
         # minimum width to defeat the first, and drop the AlignLeft
-        # constraint so the finalized bubble takes the layout's full width
-        # -- wraps at narrow docks, uses the room at wide ones; the F36
-        # _WrapLabel min-HEIGHT re-assert keeps the wrapped height honored.
-        # (Item R1, 2026-07-18: the streaming label is now ALSO full-width
-        # with the same min-width cap, so both lines below are defensive
-        # no-ops kept for the rich-text swap's independence.)
+        # constraint so the finalized bubble takes the layout's full width:
+        # it wraps at narrow docks and uses the room at wide ones, while
+        # ``_WrapLabel``'s min-height re-assert keeps the wrapped height
+        # honored. The streaming label already carries the same cap, so both
+        # lines below are defensive no-ops.
         self.label.setMinimumWidth(1)
         layout = self.container.layout()
         if layout is not None:
@@ -1088,15 +950,11 @@ class _AssistantEntry:
     def render_tool_card(
         self, inner_rows: List[dict], meta_lines: List[str]
     ) -> None:
-        """T1/T9 (NATE 2026-07-20): update this turn's parent ``_ToolCard`` (the
-        ONE tool-call representation). Lazily creates the card on the first
-        frame, then feeds every subsequent pipeline frame through the same
-        builder (``_ToolCard.set_content``) -- so the chevron/collapse/spinner
-        state persists while the inner rows re-render. ``inner_rows`` are the
-        ``{"label","state","nested","result","is_error"}`` dicts the pipeline
-        handler assembles; ``meta_lines`` is the bottom metadata block (T7)."""
+        """Update this turn's parent tool card, creating it lazily on the
+        first frame so the chevron, collapse and spinner state persist while
+        the inner rows re-render."""
         if self._tool_card is None:
-            # F3 (live-feedback 2026-07-21, "empty stale tool card"): NEVER
+            # NEVER
             # mint the card shell for a frame with no tool content. A turn
             # whose pipeline frames carry only LLM bookkeeping steps (all
             # filtered by the dock's _LLM_STEP_NAMES / compute / compaction
@@ -1120,7 +978,7 @@ class _AssistantEntry:
             self._tool_card = None
 
     def add_note(self, text: str, error: bool = False) -> None:
-        # F7 (live-feedback 2026-07-22): consecutive ERROR notes fold into one
+        # Consecutive ERROR notes fold into one
         # collapsed "ERRORS (N)" toggle row (single errors stay a plain
         # wrapped line -- _ErrorFold docstring). The fold sits inline in the
         # notes area, in chat scroll order; a non-error note breaks the run.
@@ -1131,12 +989,11 @@ class _AssistantEntry:
             self._error_fold.add_error(text)
             return
         self._error_fold = None  # a status line ends the consecutive-error run
-        # E1 (NATE 2026-07-20): an error/status line WRAPS with the resizable
-        # chat panel and never pins the scroll host wide -- cap the minimum
-        # width so even a long unbroken token reflows instead of forcing a
-        # horizontal scrollbar. F7 adds break-anywhere opportunities inside
-        # long unbroken tokens so the label's own sizeHint stays narrow too
-        # (the wide PREFERRED width was what dragged the dock wider).
+        # An error or status line WRAPS with the resizable chat panel and
+        # never pins the scroll host wide: the minimum width is capped so even
+        # a long unbroken token reflows instead of forcing a horizontal
+        # scrollbar, and break-anywhere opportunities inside such tokens keep
+        # the label's own sizeHint narrow too.
         lbl = _WrapLabel(_breakable_display_text(text))
         lbl.setTextFormat(Qt.TextFormat.PlainText)
         lbl.setStyleSheet(_STATUS_LINE_STYLE)
@@ -1144,43 +1001,30 @@ class _AssistantEntry:
         self.notes_area.addWidget(lbl)
 
     def break_error_run(self) -> None:
-        """F7: end the current consecutive-error run WITHOUT adding a note --
-        the replay path calls this when a conversational row (user/agent
-        bubble) lands between persisted error rows, so errors separated by
-        chat never fold into one ERRORS (N) row."""
+        """End the current consecutive-error run WITHOUT adding a note, so
+        errors separated by conversation never fold into one row."""
         self._error_fold = None
 
     def add_layer_notes(self, notes: List[str]) -> None:
-        """T8 (NATE 2026-07-20): the collapsed "Layers (N)" toggle is gone -- a
-        SUCCESSFUL layer note is dropped from chat (the user sees the layer in
-        the map / layer tree). Only FAILURE notes (``_is_error_note``) still
-        surface, as visible error lines, so a materialization failure is never
-        silently swallowed. The actual layer materialization happens in the
-        caller (``materializer.materialize``) and is untouched."""
+        """A SUCCESSFUL layer note is dropped from chat -- the layer itself is
+        the feedback. Only a FAILURE note surfaces, so a materialization
+        failure is never silently swallowed."""
         for note in notes:
             if _is_error_note(note):
                 self.add_note(note, error=True)
 
 
 class GateCard(QFrame):
-    """Inline confirmation card for one ``tool-payload-warning``.
-
-    Renders the honest envelope numbers (tool, estimated vs threshold MB,
-    recommendation), the #154 granularity ladder when present (rung combo +
-    live cells/ETA recompute via the mirrored web math), editable cadence /
-    window when a ``time_scale`` rides along, and Proceed / Cancel. Decision
-    mapping (proceed / narrow_scope+revised_args / cancel) is delegated to
-    ``gate.resolve_gate_decision`` -- the exact web ResolutionPickerCard
-    rules. Once answered the card locks (no re-answer) and folds to a
-    one-line summary.
-    """
+    """Inline confirmation card for one ``tool-payload-warning``: the honest
+    envelope numbers, the granularity ladder and time scale when they ride
+    along, and Proceed or Cancel."""
 
     def __init__(self, warning: gate.PayloadWarning, on_decide, parent=None):
         super().__init__(parent)
         self._warning = warning
         self._on_decide = on_decide
         self._decided: Optional[str] = None
-        self.setObjectName("gatecard")  # STYLE-1: scope the fill, no text highlight
+        self.setObjectName("gatecard")  # scope the fill; no text highlight
         self.setStyleSheet(_GATE_CARD_STYLE)
         self.setFrameShape(QFrame.Shape.StyledPanel)
 
@@ -1188,7 +1032,7 @@ class GateCard(QFrame):
         outer.setContentsMargins(8, 6, 8, 6)
         outer.setSpacing(3)
 
-        # Item 5 (live-feedback 2026-07-09): the collapsed one-line summary,
+        # The collapsed one-line summary,
         # shown only once the card is answered (``_collapse``). "show
         # details" re-expands ``self._body`` read-only (its buttons stay
         # disabled -- see ``_commit``).
@@ -1374,7 +1218,7 @@ class GateCard(QFrame):
         self.result_lbl.setVisible(True)
         self._collapse()
 
-    # -- collapse (item 5, live-feedback 2026-07-09) ---------------------------- #
+    # -- collapse --------------------------------------------------------------- #
 
     def _collapse(self) -> None:
         """Fold to a single amber summary line once answered. The body stays
@@ -1403,34 +1247,16 @@ class GateCard(QFrame):
 
 
 class CodeExecCard(QFrame):
-    """Inline approval card for one ``code-exec-request`` (live-feedback
-    2026-07-21: previously the envelope was silently dropped, the agent's
-    confirm gate blocked forever and the turn "just stopped").
-
-    Running arbitrary Python is a consequential action, so this is a HARD
-    confirm gate (contracts ``sandbox_contracts.py``): the card shows the
-    agent's ``rationale``, the layers the sandbox will receive, and a
-    COLLAPSED read-only monospace preview of the EXACT ``python_code``
-    (verbatim -- the user confirms what they are approving, never a
-    paraphrase), with Run / Deny buttons. The decision maps through the pure
-    ``gate.resolve_code_exec_decision`` (Run -> "proceed", Deny -> "cancel",
-    ``revised_args`` always None) and rides back on the EXISTING
-    ``tool-payload-confirmation`` envelope with ``warning_id ==
-    code_exec_id`` -- ``on_decide(code_exec_id, decision)`` is the dock's
-    send hook. Once answered the card locks (answered exactly once) and
-    folds to a one-line state chip -- the exact GateCard collapse pattern.
-
-    Keyboard-safe: the preview is read-only + click-to-focus (it never
-    steals tab/enter from the composer), and the buttons are plain
-    QPushButtons in a dock (no dialog auto-default that ENTER could fire).
-    """
+    """Inline approval card for one ``code-exec-request``: a HARD confirm
+    gate. The code preview is the EXACT code, VERBATIM and never a paraphrase,
+    because the user is confirming precisely what will run."""
 
     def __init__(self, request: gate.CodeExecRequest, on_decide, parent=None):
         super().__init__(parent)
         self._request = request
         self._on_decide = on_decide
         self._decided: Optional[str] = None
-        self.setObjectName("codeexeccard")  # STYLE-1: scope the fill to the frame
+        self.setObjectName("codeexeccard")  # scope the fill to the frame
         self.setStyleSheet(_CODE_CARD_STYLE)
         self.setFrameShape(QFrame.Shape.StyledPanel)
 
@@ -1497,7 +1323,7 @@ class CodeExecCard(QFrame):
         self.code_view.setPlainText(request.python_code)
         self.code_view.setReadOnly(True)
         self.code_view.setStyleSheet(_CODE_PREVIEW_STYLE)
-        # E1 discipline: the preview scrolls INSIDE its own box -- it never
+        # The preview scrolls INSIDE its own box -- it never
         # pins the chat host wide or tall (long snippets get scrollbars).
         self.code_view.setLineWrapMode(QPlainTextEdit.LineWrapMode.NoWrap)
         self.code_view.setMinimumWidth(1)
@@ -1574,13 +1400,9 @@ class CodeExecCard(QFrame):
     # -- run outcome (code-exec-result)
 
     def update_from_result(self, result: gate.CodeExecResult) -> None:
-        """Fold the run OUTCOME into this card once the ``code-exec-result``
-        arrives (only meaningful on an APPROVED run -- a denied card never
-        ran). Updates the folded chip with the HONEST terminal status
-        (``gate.code_exec_result_chip`` -- a blocked/timeout run is never
-        dressed up as ok) and appends the stdout/stderr tails + result
-        descriptor into the (re-expandable) body. No-op on a card that was
-        denied -- the deny chip stands."""
+        """Fold the run OUTCOME into this card. The chip carries the HONEST
+        terminal status -- a blocked or timed-out run is never dressed up as
+        ok. A NO-OP on a denied card: the deny chip stands."""
         if self._decided != "proceed":
             return
         self.summary_lbl.setText(gate.code_exec_result_chip(result))
@@ -1596,40 +1418,16 @@ class CodeExecCard(QFrame):
 
 
 class CredentialCard(QFrame):
-    """Inline key-entry card for one ``credential-request`` (LANE K, NATE
-    directive 2026-07-22: API-key entry in chat like the cloud client had).
-    Previously the envelope was silently dropped -- the same gap the code-exec
-    card closed -- so the agent's paused keyed tool waited out its server-side
-    TTL and the turn failed with the original auth error.
-
-    The card shows the server's ``message`` verbatim, the provider label, the
-    canonical key name + waiting tool (``gate.credential_note_lines``), the
-    provider's real ``signup_url`` when one exists (never a fabricated URL --
-    the server is the only source of URLs), and a MASKED QLineEdit (password
-    echo) for the key. Submit hands the key to ``on_decide(request_id,
-    provider_id, key)`` (the dock's send hook -> secret-add THEN
-    credential-provided, ordering); Skip hands ``None``
-    (credential-provided ``provided=False`` -- the server's real decline
-    path). Locks after one answer and folds to a one-line chip -- the exact
-    GateCard collapse pattern.
-
-    KEY HYGIENE (hard requirement): the raw key value is never logged,
-    printed, repr'd, or stored on ``self`` -- it lives only in the QLineEdit
-    (masked) and the local variable handed to ``on_decide``; the field is
-    cleared + disabled the moment a decision commits, and the folded chip
-    names only the PROVIDER, never any part of the key.
-
-    Keyboard-safe: Return inside the (focused) key field submits, but the
-    buttons are plain QPushButtons in a dock -- no dialog auto-default that a
-    composer ENTER could fire.
-    """
+    """Inline key-entry card for one ``credential-request``. KEY HYGIENE: the
+    raw key is never logged, stored on ``self`` or named in the chip. A signup
+    URL is shown only when the server sent one, never invented."""
 
     def __init__(self, request: gate.CredentialRequest, on_decide, parent=None):
         super().__init__(parent)
         self._request = request
         self._on_decide = on_decide
         self._decided: Optional[str] = None
-        self.setObjectName("credentialcard")  # STYLE-1: scope the fill to the frame
+        self.setObjectName("credentialcard")  # scope the fill to the frame
         self.setStyleSheet(_CRED_CARD_STYLE)
         self.setFrameShape(QFrame.Shape.StyledPanel)
 
@@ -1792,35 +1590,9 @@ class CredentialCard(QFrame):
 
 
 class ToolCandidatesCard(QFrame):
-    """Inline tool-selection picker for one ``tool-candidates`` request (ADR
-    0018 auto/ask modes -- Stage 3, 2026-07-22).
-
-    The agent's retrieval ranked several plausible tools for a step and is
-    asking WHICH one should run -- either because ASK mode surfaces every
-    staged selection or because AUTO mode measured a near-tie (the card's
-    reason note says which, off the closed contract enum). The card shows the
-    stage label as its title, the ranked candidates as radio choices (tool
-    name + one-line summary), a free-text line edit as the last option, and
-    Confirm / "Let agent decide" buttons. The decision maps through the pure
-    ``gate.resolve_tool_choice`` (pick wins outright; else stripped guidance;
-    else both-None = let the agent decide) and rides back on ONE
-    ``tool-choice`` envelope via ``on_decide(request_id, tool_name,
-    free_text)`` -- the dock's send hook. Locks after one answer and folds to
-    a chip ("picked spatial_query" / "agent decided" / the guidance variant)
-    -- the exact GateCard collapse pattern.
-
-    FAIL-OPEN twin (contract ``timeout_s``): unanswered, the SERVER times out
-    and proceeds with its own top pick -- the card never blocks the turn. When
-    a subsequent turn event reaches the dock while this card is still open,
-    the dock calls ``mark_superseded()`` and the card folds to an "agent
-    proceeded" chip (locked -- answering a request the server already
-    resolved would be a lie on the wire).
-
-    Keyboard-safe: Return inside the (focused) free-text field confirms, but
-    the buttons are plain QPushButtons in a dock -- no dialog auto-default
-    that a composer ENTER could fire. Typing in the free-text field selects
-    its radio so a typed answer is never silently attributed to a candidate.
-    """
+    """Inline tool-selection picker for one ``tool-candidates`` request.
+    Typing in the free-text field selects ITS radio, so a typed answer is never
+    attributed to a candidate; unanswered, the card never blocks the turn."""
 
     def __init__(
         self,
@@ -1833,14 +1605,14 @@ class ToolCandidatesCard(QFrame):
         self._request = request
         self._on_decide = on_decide
         self._decided: Optional[str] = None
-        # Wave-picker UX (LANE P, 2026-07-22): when multiple picker cards
+        # When multiple picker cards
         # land in one turn, ``step_index`` (1-based, dock-assigned off
         # arrival order -- "trivially derivable from card order", never a
         # server field) prefixes the title so a staged wave reads as a
         # stepped wizard ("Step 1", "Step 2", ...) instead of stacked
         # walls. None (a single/unstepped picker) omits the prefix.
         self._step_index = step_index
-        self.setObjectName("toolpickercard")  # STYLE-1: scope the fill to the frame
+        self.setObjectName("toolpickercard")  # scope the fill to the frame
         self.setStyleSheet(_PICKER_CARD_STYLE)
         self.setFrameShape(QFrame.Shape.StyledPanel)
 
@@ -2014,12 +1786,9 @@ class ToolCandidatesCard(QFrame):
         self._on_decide(self._request.request_id, tool_name, free_text)
 
     def mark_superseded(self) -> None:
-        """The turn moved on (a subsequent event arrived) while this card was
-        still open -- the SERVER's ``timeout_s`` fail-open already resolved
-        the selection with the agent's own pick. Lock + fold to the honest
-        "agent proceeded" chip; NO reply is sent (answering a request the
-        server already resolved would be a lie on the wire). No-op once any
-        terminal state landed."""
+        """The turn moved on while this card was open, so the server's own
+        fail-open already resolved the selection. NO reply is sent: answering
+        a request the server already resolved would be a lie on the wire."""
         if self._decided is not None:
             return
         self._decided = "superseded"
@@ -2042,10 +1811,9 @@ class ToolCandidatesCard(QFrame):
     # -- collapse (the GateCard affordance) --------------------------------- #
 
     def _collapse(self, chip: str) -> None:
-        """Fold to the one-line chip; the body stays intact underneath
-        (controls already disabled) so "show details" can re-expand a
-        read-only view." The "Step N" prefix rides along so a folded wave
-        still reads as a stepped wizard, not an anonymous stack of chips."""
+        """Fold to the one-line chip, the body intact underneath so "show
+        details" re-expands a read-only view. The step prefix rides along so a
+        folded wave still reads as a sequence, not an anonymous stack."""
         prefix = f"Step {self._step_index}: " if self._step_index else ""
         self.summary_lbl.setText(f"{prefix}{chip}")
         self._summary_container.setVisible(True)
@@ -2055,34 +1823,9 @@ class ToolCandidatesCard(QFrame):
 
 
 class SimCard(QFrame):
-    """Item R4 (live-feedback 2026-07-18): ONE collapsible card per off-box
-    solver run -- parity with the cloud web's sim card -- replacing the grey
-    pipeline rows for ``role="compute"`` steps.
-
-    Wire sources (read from the live agent contracts, never guessed):
-
-      * ``pipeline-state`` compute steps (contract ws.PipelineStep, the
-        task-149 two-card sim observability): minted running by
-        ``pipeline_emitter.mint_dispatch_and_sim_cards`` with
-        ``tool_name="<solver>:solve"`` + ``batch_job_id``
-        ("local-docker:<run_id>" on the local seam) + ``batch_status``;
-        driven terminal (complete / failed / cancelled, ``duration_ms``,
-        ``error_message``) by ``route_sim_terminal``.
-      * ``solve-progress`` ticks (contract ws.SolveProgressPayload, emitted
-        every ~10 s by ``workflows.solve_progress.drive_live_solve_progress``
-        -- the exact path the TELEMAC dye composer
-        ``model_river_dye_release_scenario`` / ``run_telemac`` arms): run_id /
-        solver / grid_resolution_m / active_cell_count / vcpus /
-        elapsed_seconds / eta_seconds / phase.
-
-    The small metadata table updates IN PLACE as events arrive; unknown
-    fields honestly read "-" (e.g. TELEMAC arms its progress driver with no
-    cell count, and dt is on NEITHER wire shape -- nothing is fabricated,
-    Invariant 1). The collapse affordance (one-line summary + "show details"
-    re-expand) is the exact ``GateCard`` pattern reused verbatim: expanded
-    while RUNNING, folding to "Simulation complete - TELEMAC" (or failed /
-    cancelled) on the terminal transition, details re-expandable read-only.
-    """
+    """ONE collapsible card per off-box solver run, EXPANDED while running.
+    A field neither wire shape carries honestly reads "-": nothing on this
+    card is ever fabricated."""
 
     _FIELDS: Tuple[Tuple[str, str], ...] = (
         ("engine", "Engine"),
@@ -2101,13 +1844,13 @@ class SimCard(QFrame):
         super().__init__(parent)
         self._engine = engine_label
         self._terminal = False
-        # Item N4 (live-feedback 2026-07-19): the latest live-progress bits so
+        # The latest live-progress bits so
         # the collapsed summary's right-side readout can recompose from
         # whichever wire (step pct or progress-tick elapsed/phase) last spoke.
         self._pct: Optional[int] = None
         self._elapsed_str: str = ""
         self._phase: str = ""
-        self.setObjectName("simcard")  # STYLE-1: scope the fill, no text highlight
+        self.setObjectName("simcard")  # scope the fill; no text highlight
         self.setStyleSheet(_SIM_CARD_STYLE)
         self.setFrameShape(QFrame.Shape.StyledPanel)
 
@@ -2115,12 +1858,12 @@ class SimCard(QFrame):
         outer.setContentsMargins(8, 6, 8, 6)
         outer.setSpacing(3)
 
-        # Item N1 (live-feedback 2026-07-19): the summary row + "show/hide
+        # The summary row + "show/hide
         # details" toggle is ALWAYS visible now (was: revealed only on the
         # terminal collapse, so a RUNNING card could not be folded). The
         # toggle is live from the first frame -- expanded while running,
         # foldable anytime; the terminal transition auto-collapses (kept).
-        # Item N4: the live progress readout (pct / elapsed / phase) rides on
+        # The live progress readout (pct / elapsed / phase) rides on
         # the RIGHT of this row, next to the toggle, so a COLLAPSED card still
         # shows progress at a glance without expanding.
         summary_row = QHBoxLayout()
@@ -2224,7 +1967,7 @@ class SimCard(QFrame):
                 "failed": f"Simulation failed - {self._engine}",
                 "cancelled": f"Simulation cancelled - {self._engine}",
             }[step.state]
-            # Item N4: on the terminal transition the right-side readout shows
+            # On the terminal transition the right-side readout shows
             # the final duration (the live pct/elapsed/phase is done).
             if step.duration_ms is not None:
                 self.progress_lbl.setText(
@@ -2262,15 +2005,13 @@ class SimCard(QFrame):
             if isinstance(phase, str) and phase:
                 self._phase = phase
                 self._set("status", f"running / {phase}")
-            # Item N4: refresh the collapsed summary's right-side readout live.
+            # Refresh the collapsed summary's right-side readout live.
             self._refresh_progress_readout()
 
     def _refresh_progress_readout(self) -> None:
-        """Item N4 (live-feedback 2026-07-19): recompose the summary row's
-        right-side progress readout (pct - elapsed - phase) from the latest
-        live bits, so a COLLAPSED card shows progress at a glance. Live only:
-        a terminal card shows the final duration there instead (set in
-        ``update_from_step``), so this no-ops once terminal."""
+        """Recompose the summary row's progress readout, so a COLLAPSED card
+        still shows progress at a glance. LIVE only: a terminal card shows its
+        final duration there instead, so this no-ops once terminal."""
         if self._terminal:
             return
         parts: List[str] = []
@@ -2285,39 +2026,24 @@ class SimCard(QFrame):
     # -- collapse (the GateCard affordance) ------------------------------------ #
 
     def _collapse(self, line: str) -> None:
-        """Item N1 (live-feedback 2026-07-19): auto-fold on the terminal
-        transition (kept). The summary row + toggle stay visible (they always
-        are now); only the body hides, and the user can re-expand it."""
+        """Auto-fold on the terminal transition. The summary row and toggle
+        stay visible; only the body hides, and it re-expands."""
         self.summary_lbl.setText(line)
         self._body.setVisible(False)
         self.details_toggle.setChecked(False)
         self.details_toggle.setText("show details")
 
     def _toggle_details(self, checked: bool) -> None:
-        # Item N1: live at ANY time -- the user can fold/unfold a RUNNING card,
+        # Live at ANY time -- the user can fold/unfold a RUNNING card,
         # not just a terminal one.
         self._body.setVisible(checked)
         self.details_toggle.setText("hide details" if checked else "show details")
 
 
 class RegionChoiceCard(QFrame):
-    """Inline picker for one ``region-choice-request`` gate (state-bbox-fallback
-    narrowing) -- CRITICAL gate-WAIT.
-
-    The server snapped a vague/regional geocode ("south Florida") to the WHOLE
-    state bbox (the honest already-resolved default) and PAUSES the turn
-    offering a narrower pick. The card shows the agent's ``message`` verbatim,
-    a radio list of the candidate sub-regions (default: counties) PLUS a
-    "keep the whole state" option that is CHECKED by default (the honest
-    already-resolved answer), and Confirm / "Use whole state" buttons. The
-    decision maps through the pure ``gate.resolve_region_choice`` (a candidate
-    pick -> ``choice="region"`` + id + echoed bbox; else -> ``choice=
-    "whole_state"``) and rides back on ONE ``region-choice-provided`` envelope
-    via ``on_decide(request_id, choice, selected_region_id, selected_bbox)``.
-    A "whole_state" answer keeps the honest default, so the gate ALWAYS closes
-    (never a hung turn). Locks after one answer and folds to a one-line chip --
-    the exact GateCard collapse pattern.
-    """
+    """Inline picker for one ``region-choice-request``. Keep-the-whole-state
+    is CHECKED by default, being the honest already-resolved answer, so the
+    card always has a move that closes the paused gate."""
 
     #: The sentinel radio value for the whole-state option (never a region_id).
     _WHOLE_STATE = ""
@@ -2328,7 +2054,7 @@ class RegionChoiceCard(QFrame):
         self._on_decide = on_decide
         self._decided = False
         self._selected_region_id: Optional[str] = None
-        self.setObjectName("regionchoicecard")  # STYLE-1: scope the fill
+        self.setObjectName("regionchoicecard")  # scope the fill
         self.setStyleSheet(_REGION_CARD_STYLE)
         self.setFrameShape(QFrame.Shape.StyledPanel)
 
@@ -2457,32 +2183,9 @@ class RegionChoiceCard(QFrame):
 
 
 class SpatialInputCard(QFrame):
-    """Inline pick card for one ``spatial-input-request`` gate -- CRITICAL
-    gate-WAIT.
-
-    The agent needs the user to pick a geometry on the map (``mode`` ==
-    ``point`` / ``bbox`` / ``vector_draw``) and PAUSES the turn. The card
-    shows the agent's title + description verbatim and a "click the map"
-    affordance wired to the SAME canvas machinery the probe/AOI tools use:
-
-    - ``point``: a ``QgsMapToolEmitPoint`` -- one click, transformed to
-      EPSG:4326 via the injected ``to_lonlat`` callable, replies
-      ``coordinates=[lon, lat]``.
-    - ``bbox``: a ``QgsMapToolExtent`` -- a drag rectangle, transformed via the
-      injected ``to_bbox`` callable, replies ``coordinates=[minLon, minLat,
-      maxLon, maxLat]``.
-    - ``vector_draw`` with purpose ``aoi`` / ``line``: a ``VertexCaptureTool``
-      -- click per vertex, right-click to finish -- replying ``features`` with a
-      single ``role``-tagged Polygon / LineString.
-
-    Submit is disabled until a geometry is captured; Cancel is always
-    available (the decline path). The decision maps through the pure
-    ``gate.resolve_spatial_input_*`` helpers and rides back on ONE
-    ``spatial-input-response`` via ``on_decide(wire)``. Mirrors the GateCard
-    release-point map-tool discipline (ON saves + installs a tool, OFF/commit
-    restores the previous tool -- the canvas is never left on a tool the user
-    did not ask for) and the GateCard collapse pattern.
-    """
+    """Inline pick card for one ``spatial-input-request``. Submit is disabled
+    until a geometry is captured; installing a map tool SAVES the previous one,
+    so the canvas is never left on a tool the user did not ask for."""
 
     def __init__(
         self, request: gate.SpatialInputRequest, on_decide, parent=None,
@@ -2499,7 +2202,7 @@ class SpatialInputCard(QFrame):
         self._tool = None
         self._prev_tool = None
         self._marker = None
-        self.setObjectName("spatialinputcard")  # STYLE-1: scope the fill
+        self.setObjectName("spatialinputcard")  # scope the fill
         self.setStyleSheet(_SPATIAL_CARD_STYLE)
         self.setFrameShape(QFrame.Shape.StyledPanel)
 
@@ -2648,12 +2351,9 @@ class SpatialInputCard(QFrame):
             self.pick_btn.setChecked(False)   # restores the previous map tool
 
     def _to_lonlats(self, points: list) -> list:
-        """Canvas-CRS vertices -> ``[[lon, lat], ...]``, dropping what cannot map.
-
-        A vertex that will not transform is DROPPED rather than guessed at; the
-        vertex-count gate above then refuses a shape that lost too many, so a
-        partial transform can never become a smaller shape the user did not draw.
-        """
+        """Canvas-CRS vertices -> ``[[lon, lat], ...]``. A vertex that will not
+        transform is DROPPED, never guessed at, and the vertex-count gate then
+        refuses a shape that lost too many to still be the one drawn."""
         try:
             authid = self._iface.mapCanvas().mapSettings().destinationCrs().authid()
         except Exception:  # noqa: BLE001 -- headless / no iface
@@ -2784,24 +2484,9 @@ class SpatialInputCard(QFrame):
 
 
 class FormCard(QFrame):
-    """The declarative FORM gate: the resolved param sheet, editable in place.
-
-    A ``tool-payload-warning`` carrying a ``param_sheet`` is a run asking to be
-    REVIEWED before it starts. The card renders one row per declared param -
-    label, units, the value in an editor, and the SOURCE BADGE saying where the
-    value came from - with the solver's own constants folded under "advanced".
-
-    Every row is editable. Editing a derived value does not unlock anything; the
-    badge is the warning, and the server re-stamps the row as user-supplied and
-    re-derives whatever read it. Declared bounds ride along as the editor's
-    placeholder and the server re-clamps on submit, so the form is an edit
-    surface and never a bypass of the declaration.
-
-    Submit IS the approval: the whole sheet was on screen, so the edits ride back
-    as ``narrow_scope`` + ``revised_args`` and the run proceeds. Cancel declines
-    (``cancel``) and the run does not start. Same lock-once + fold-to-a-chip
-    behaviour as every other gate card.
-    """
+    """The declarative FORM gate: the resolved param sheet, editable in place,
+    each row badged with where its value came from. SUBMIT IS THE APPROVAL, so
+    an empty edit set approves rather than revises."""
 
     def __init__(self, warning: gate.PayloadWarning, sheet: gate.ParamSheetRequest,
                  on_decide, parent=None):
@@ -2811,7 +2496,7 @@ class FormCard(QFrame):
         self._on_decide = on_decide
         self._decided: Optional[str] = None
         self._editors: Dict[str, QLineEdit] = {}
-        self.setObjectName("formcard")  # STYLE-1: scope the fill to the frame
+        self.setObjectName("formcard")  # scope the fill to the frame
         self.setStyleSheet(_FORM_CARD_STYLE)
         self.setFrameShape(QFrame.Shape.StyledPanel)
 
@@ -2885,12 +2570,9 @@ class FormCard(QFrame):
     # -- rows ---------------------------------------------------------------- #
 
     def _grid(self, rows: List[gate.ParamRow]) -> QWidget:
-        """One property-grid block: label | editor | source badge, per row.
-
-        A row that names a GROUP - an engine dictionary's own rubrique - opens
-        one under its heading, so the fold that carries a whole module's keyword
-        surface is read down the sections the dictionary itself is written in.
-        """
+        """One property-grid block: label, editor and source badge per row. A
+        row naming a GROUP opens one under its heading, so a whole module's
+        keyword surface reads down the sections it was written in."""
         holder = QWidget()
         grid = QGridLayout(holder)
         grid.setContentsMargins(0, 0, 0, 0)
