@@ -1,26 +1,9 @@
-"""Unit + live tests for ``clip_raster_to_polygon`` atomic tool (job-0106, FR-CE-8, FR-DC).
+"""Unit and live tests for the ``clip_raster_to_polygon`` atomic tool.
 
-Coverage:
-1. ``test_clip_raster_to_polygon_registered`` — tool appears in TOOL_REGISTRY with
-   correct metadata.
-2. ``test_clip_with_square_polygon_yields_correct_extent`` — synthetic raster +
-   square polygon → output extent matches polygon (geographic-correctness gate).
-3. ``test_polygon_crs_mismatch_is_reprojected`` — polygon in EPSG:3857, raster in
-   EPSG:4326 → reprojection applied; mask still works and the correct quadrant
-   is selected.
-4. ``test_feature_filter_selects_one_polygon`` — multi-feature input + filter
-   picks one polygon by attribute; other polygon is excluded from mask.
-5. ``test_nodata_outside_override`` — nodata_outside=-999 → output's nodata value
-   is -999 and outside pixels are -999.
-6. ``test_cache_miss_then_hit_skips_mask`` — first call masks; second call hits cache.
-7. ``test_empty_filter_raises_typed_error`` — feature_filter matching zero
-   features raises POLYGON_FILTER_EMPTY.
-8. ``test_unknown_raster_uri_raises_typed_error``
-9. ``test_unknown_polygon_uri_raises_typed_error``
-10. Live (env TRID3NT_TEST_LIVE_CLIP=1): clip a synthetic Fort-Myers-sized DEM to
-    a Lee-County-shaped polygon → verify the masked pixels fall inside the polygon
-    bounds and at least one pixel was masked.
-"""
+Registration and metadata; a square polygon giving an output extent that matches
+it, which is the geographic-correctness gate; a polygon in another CRS
+reprojected; a feature filter selecting one polygon and refusing when it matches
+none; a nodata override; cache miss then hit; typed errors for unknown uris."""
 
 from __future__ import annotations
 
@@ -123,12 +106,10 @@ class _S3Body:
 
 
 class FakeStorageClient:
-    """In-memory S3 double (GCP decommissioned). ``store`` keyed by object KEY.
+    """In-memory S3 double; ``store`` is keyed by object KEY.
 
-    Returns the per-test active instance installed by the autouse
-    ``_route_cache_to_inmemory_s3`` fixture so the tool's real S3 read-through
-    (boto3) reads/writes the same store the test inspects.
-    """
+    Returns the per-test instance the autouse fixture installs, so the tool's real
+    boto3 read-through reads and writes the store the test inspects."""
 
     _active: "FakeStorageClient | None" = None
 
@@ -203,12 +184,9 @@ def test_clip_raster_to_polygon_registered():
 
 
 def test_clip_with_square_polygon_yields_correct_extent(tmp_path):
-    """256x256 raster (-82,26,-80,28) + center-quadrant polygon → output extent
-    matches polygon bbox; pixels inside polygon retain source values; outside is nodata.
-
-    This is the geographic-correctness gate: we don't just check bytes round-trip,
-    we verify the masked output covers the polygon's bbox in EPSG:4326 coords.
-    """
+    """Output extent matches the polygon bbox; inside keeps source values, outside is
+    nodata. The gate is not that bytes round-trip but that the masked output covers
+    the polygon's bbox in its own coordinates."""
     src_path = tmp_path / "src.tif"
     poly_path = tmp_path / "poly.fgb"
 
@@ -271,12 +249,10 @@ def test_clip_with_square_polygon_yields_correct_extent(tmp_path):
 
 
 def test_polygon_crs_mismatch_is_reprojected(tmp_path):
-    """Polygon in EPSG:3857 (web mercator), raster in EPSG:4326 → reprojection
-    applied transparently; output is masked correctly.
+    """A polygon in another CRS is reprojected transparently and masks correctly.
 
-    We pick a polygon whose 3857 bounds reproject to the center quadrant of the
-    raster's WGS84 extent and verify the output bounds match.
-    """
+    Its bounds reproject onto the centre quadrant of the raster's extent, so the
+    output bounds are what the assertion reads."""
     src_path = tmp_path / "src4326.tif"
     poly_path = tmp_path / "poly3857.fgb"
 
@@ -556,21 +532,10 @@ _LIVE = os.environ.get("TRID3NT_TEST_LIVE_CLIP") == "1"
 
 @pytest.mark.skipif(not _LIVE, reason="set TRID3NT_TEST_LIVE_CLIP=1 to enable")
 def test_live_clip_fortmyers_dem_to_lee_county_shape(tmp_path):
-    """Live geographic-correctness gate.
+    """Live geographic-correctness gate over a realistic geography.
 
-    Simulates the real flow: a Fort Myers/Lee County-sized DEM (synthetic but
-    geographically positioned at the Fort Myers AOI) clipped to a Lee County
-    approximate-shape polygon. Verifies:
-
-    1. The output's geographic bounds are inside Lee County's bbox.
-    2. The masked output has at least one valid pixel.
-    3. The output's pixel center coordinates fall inside the polygon (sampled).
-
-    No external network — we hand-craft a Lee County approximation polygon so the
-    test is deterministic but exercises the real rasterio.mask + reprojection
-    path on a realistic geography (the "wettest pixels at the river mouth" gate
-    from the codified-lesson #1 reminder).
-    """
+    The output's bounds sit inside the county bbox, at least one pixel is valid, and
+    sampled pixel centres fall inside the polygon. No network: the shape is hand-made."""
     src_path = tmp_path / "fortmyers_dem.tif"
     poly_path = tmp_path / "lee_county.fgb"
 

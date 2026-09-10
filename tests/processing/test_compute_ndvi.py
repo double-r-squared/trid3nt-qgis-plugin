@@ -1,19 +1,9 @@
-"""Unit tests for the ``compute_ndvi`` atomic tool (conservation reference scenario).
+"""Unit tests for the ``compute_ndvi`` atomic tool.
 
-Coverage:
-- Registration in TOOL_REGISTRY with expected metadata (+ payload estimator).
-- bbox validation: degenerate / out-of-range / non-finite / too-large -> typed.
-- Mocked PC STAC + band reads: a synthetic Red/NIR pair round-trips to a cached
-  single-band float32 NDVI COG with the right values (-1..1) and style preset.
-- No-imagery path: an empty STAC search raises NDVINoImageryError (honest, not
-  fabricated) and is NOT retryable.
-- Cache-key determinism: different bbox / window -> different cache keys; a
-  cache hit on the second identical call does not re-invoke the fetcher.
-- Style preset registry: the ``ndvi`` preset resolves to a real rescale+colormap.
-
-Network is fully mocked: ``_pc_search`` (the catalog client signs) + the per-band window reader
-are patched so no real Sentinel-2 scene is fetched.
-"""
+The catalog search and the per-band window reader are patched, so no real scene
+is fetched. Covered: registration, the typed bbox refusals, a synthetic Red/NIR
+pair round-tripping to a single-band float32 COG in range with its style preset,
+an empty search refusing rather than fabricating, and cache-key determinism."""
 
 from __future__ import annotations
 
@@ -152,10 +142,10 @@ def test_too_large_bbox_raises() -> None:
 
 
 def test_county_ish_bbox_does_not_raise_validation() -> None:
-    """NATE 2026-06-26: a ~0.77 deg^2 county-ish AOI must NOT be rejected by the
-    bbox guardrail -- the 4096px grid clamp auto-coarsens it (effective cell
-    ~= bbox_m/4096) so the COG stays bounded. The old 0.5 deg^2 cap wrongly
-    rejected it with no recourse. _validate_bbox proceeds (does not raise)."""
+    """A county-sized AOI must NOT be rejected by the bbox guardrail.
+
+    The 4096 px grid clamp auto-coarsens the effective cell, so the COG stays
+    bounded and validation proceeds instead of refusing with no recourse."""
     # (-80.44, 32.56, -79.56, 33.44): area = 0.88 * 0.88 = ~0.774 deg^2.
     bbox = (-80.44, 32.56, -79.56, 33.44)
     area = (bbox[2] - bbox[0]) * (bbox[3] - bbox[1])

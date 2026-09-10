@@ -1,23 +1,9 @@
-"""Unit tests for the ``show_nexrad_radar`` display tool (job-0102).
+"""Unit tests for the ``show_nexrad_radar`` display tool.
 
-Coverage (≥4 unit + 1 live, env-guarded):
-
-- Tool registered in TOOL_REGISTRY with the expected uncacheable metadata.
-- Default product n0r returns a LayerURI pointing at the Iowa Mesonet WMS.
-- product='n0q' and product='vil' produce distinct LayerURIs (different URIs +
-  different layer_ids + different units).
-- bbox=None yields a CONUS-scoped LayerURI (no BBOX hint, layer_id ends -conus).
-- bbox=(-82,26,-81,27) yields a bbox-scoped LayerURI (BBOX present in URL).
-- Unknown product raises ``NexradProductError`` (typed FR-AS-11 error).
-- Malformed bbox shapes raise ``NexradBboxError``.
-- Geographic-correctness gate (codified job-0086 lesson): when bbox is supplied,
-  the LayerURI carries the EXACT bbox tuple AND the URL query string encodes
-  the same four numbers in the documented (min_lon,min_lat,max_lon,max_lat)
-  order — so a sign-flip / axis-swap bug surfaces immediately, not on-screen.
-- Live (env TRID3NT_TEST_LIVE_NEXRAD=1): HEAD the n0r endpoint; expect 200 OK
-  or a benign HTTP response (some WMS endpoints prefer GetCapabilities over
-  HEAD; we accept <500 + body containing a WMS marker as proof-of-reach).
-"""
+Registration with uncacheable metadata; the default product and two others each
+giving distinct uris, layer ids and units; no bbox giving a CONUS-scoped layer
+and a bbox giving a scoped one; typed refusals on an unknown product and a
+malformed bbox; and an env-guarded live reachability check."""
 
 from __future__ import annotations
 
@@ -120,12 +106,10 @@ def test_bbox_none_returns_conus_layeruri() -> None:
 
 
 def test_bbox_supplied_returns_scoped_layeruri() -> None:
-    """bbox supplied: LayerURI carries the bbox AND URL encodes BBOX in order.
+    """A supplied bbox rides the LayerURI AND the URL, in order.
 
-    Geographic-correctness gate (codified job-0086 lesson): the URL query
-    string MUST encode (min_lon, min_lat, max_lon, max_lat) verbatim — a
-    sign-flip / axis-swap would scope the radar overlay to the wrong place.
-    """
+    The query string must encode the four numbers verbatim in
+    ``(min_lon, min_lat, max_lon, max_lat)``, or a sign flip scopes the overlay wrong."""
     bbox = _FORT_MYERS_BBOX
     layer = show_nexrad_radar(bbox=bbox, product="n0r")
     assert layer.bbox == bbox
@@ -216,12 +200,10 @@ def test_build_wms_url_unknown_product_raises() -> None:
 
 @pytest.mark.skipif(not _LIVE_NEXRAD, reason="TRID3NT_TEST_LIVE_NEXRAD!=1")
 def test_live_nexrad_endpoint_reachable() -> None:
-    """HEAD/GET the n0r WMS endpoint and confirm it responds with a WMS body.
+    """The endpoint responds with a WMS body.
 
-    We accept any non-5xx response with a WMS-like body marker (a GetCapabilities
-    request returns XML; a bare hit of the .cgi may also return capabilities).
-    The point is that the URL we'd hand the client is actually live.
-    """
+    Any non-5xx response carrying a WMS marker counts: the point is that the url the
+    client would be handed is live."""
     import urllib.request
 
     layer = show_nexrad_radar(product="n0r")

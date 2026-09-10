@@ -1,30 +1,9 @@
-"""Unit + live tests for ``extract_landcover_class`` atomic tool (job-0094, FR-CE-8, FR-DC).
+"""Unit and live tests for the ``extract_landcover_class`` atomic tool.
 
-Coverage:
-1. ``test_extract_landcover_class_registered`` — tool appears in TOOL_REGISTRY
-   with correct metadata (cacheable=True, ttl_class="static-30d",
-   source_class="landcover_class").
-2. ``test_extract_single_class_water_only`` — synthetic 32x32 NLCD raster with
-   mixed classes (11, 21, 41, 81), extract class=[11] → only water pixels are
-   1, every other pixel is 0.
-3. ``test_extract_multiple_classes_forest`` — synthetic raster, extract
-   [41, 42, 43] (all forest) → forest pixels are 1, others 0.
-4. ``test_bbox_window_read_top_right`` — 64x64 raster + bbox covering the
-   top-right quadrant → output 32x32 covering just that quadrant.
-5. ``test_nodata_preserved`` — input has nodata pixels (255 sentinel); output
-   preserves them as 255 (not 0 or 1).
-6. ``test_cache_miss_hit_skips_recompute`` — first call (miss) reads source +
-   computes; second call (hit) does NOT read source again.
-7. ``test_empty_classes_raises_typed_error`` — classes=[] → LandcoverClassError
-   with error_code="CLASSES_EMPTY".
-8. ``test_invalid_class_code_raises_typed_error`` — classes=[255] (reserved) →
-   LandcoverClassError with error_code="CLASSES_INVALID".
-9. ``test_returns_layer_uri_fields`` — LayerURI fields are well-formed.
-10. (Live, env-guarded) ``test_live_fortmyers_water_mask`` — extract class=[11]
-    from a known-good Fort Myers NLCD COG; assert the water pixel count matches
-    the source's class-11 pixel count exactly (geography-correctness check per
-    job-0086 codified lesson).
-"""
+Registration; a synthetic mixed-class raster where one class and then a group
+extract to 1 and everything else to 0; a bbox window reading one quadrant; nodata
+preserved as its sentinel; cache miss then hit; the two class-code refusals; and
+an env-guarded live extract whose pixel count must match the source exactly."""
 
 from __future__ import annotations
 
@@ -65,12 +44,10 @@ class _S3Body:
 
 
 class FakeStorageClient:
-    """In-memory S3 double (GCP decommissioned). ``store`` keyed by object KEY.
+    """In-memory S3 double; ``store`` is keyed by object KEY.
 
-    Returns the per-test active instance installed by the autouse
-    ``_route_cache_to_inmemory_s3`` fixture so the tool's real S3 read-through
-    (boto3) reads/writes the same store the test inspects.
-    """
+    Returns the per-test instance the autouse fixture installs, so the tool's real
+    boto3 read-through reads and writes the store the test inspects."""
 
     _active: "FakeStorageClient | None" = None
 
@@ -143,12 +120,10 @@ def _write_synthetic_nlcd(
     nodata: int = 255,
     crs: str = "EPSG:4326",
 ) -> np.ndarray:
-    """Write a synthetic NLCD-coded GeoTIFF; return the in-memory array.
+    """Write a synthetic class-coded GeoTIFF; return the in-memory array.
 
-    If ``arr`` is None, fills with a deterministic four-quadrant pattern using
-    canonical NLCD codes: top-left=11 (water), top-right=21 (developed-open),
-    bottom-left=41 (forest), bottom-right=81 (pasture).
-    """
+    With no array given it fills a deterministic four-quadrant pattern, one
+    canonical class per quadrant."""
     if arr is None:
         arr = np.full((height, width), fill_value=11, dtype=np.uint8)
         h2 = height // 2
@@ -553,14 +528,10 @@ _LIVE_LANDCOVER = bool(os.environ.get("TRID3NT_TEST_LIVE_LANDCOVER"))
     reason="set TRID3NT_TEST_LIVE_LANDCOVER=1 to run live Fort Myers NLCD test",
 )
 def test_live_fortmyers_water_mask(tmp_path):
-    """Live extract of class=[11] from the Fort Myers cached NLCD COG.
+    """Live extract of one class from a cached land-cover COG.
 
-    Geography-correctness check per the job-0086 codified lesson: the count of
-    1-pixels in the output must equal the count of class-11 pixels in the
-    source raster — exactly, because both are computed over the same window.
-    This catches in-COG axis mirrors, transform drift, or window misalignment
-    that would mirror or rotate the mask relative to its source.
-    """
+    The count of 1-pixels in the output must EQUAL the count of that class in the
+    source, which catches an axis mirror, transform drift or a window misalignment."""
     # Inject a fake GCS so the cache shim's write is in-memory; the read path is
     # fully real (stages the live cached NLCD via the tool's own s3 reader).
     nlcd_uri = (

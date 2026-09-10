@@ -1,39 +1,9 @@
-"""Unit tests for ``enhance_satellite_image`` atomic tool (NATE 2026-06-23).
+"""Unit tests for the ``enhance_satellite_image`` atomic tool.
 
-The tool is the OPTIONAL polish/enhance pass that pushes a true-color satellite
-RGB COG closer to NOAA/CIRA's de-hazed "GeoColor" look. Coverage:
-
-Pure passes (synthetic numpy arrays, no I/O):
- 1. ``test_estimate_haze_floor`` - per-channel dark-object floor is the low
-    percentile and tracks an injected blue-heavy haze offset.
- 2. ``test_apply_rayleigh_correction_dehazes`` - a hazy (blue-cast, low-contrast)
-    image gets its blue floor pulled down hardest and its contrast re-stretched.
- 3. ``test_apply_white_balance_grayworld`` - a green-cast image's channel means
-    move toward equal; gains are clamped; green trim pulls green down.
- 4. ``test_apply_unsharp_mask_sharpens`` - sharpening increases edge local
-    contrast (gradient magnitude) vs the original; amount=0 is a no-op.
- 5. ``test_box_blur_smooths`` - the pure-numpy box blur reduces variance and
-    preserves the mean (no border darkening), radius 0 is a copy.
- 6. ``test_apply_upscale_lanczos`` - output grid grows by factor^2; factor 1 is a
-    no-op passthrough.
-
-Registry + COG round-trip (rasterio temp files):
- 7. ``test_enhance_satellite_image_registered`` - tool in TOOL_REGISTRY with
-    correct metadata (cacheable, static-30d, source_class="enhanced").
- 8. ``test_enhance_resolvable_param_in_allowlist`` - source_layer_uri resolves.
- 9. ``test_enhance_cog_round_trip`` - a synthetic RGB COG in -> a valid RGB COG
-    out, same dims, 3 bands, uint8, georeferencing preserved.
-10. ``test_enhance_upscale_round_trip`` - upscale_factor=2 doubles the grid and
-    scales the affine pixel size by 1/2 (stays correctly georeferenced).
-11. ``test_enhance_returns_layer_uri_fields`` - LayerURI fields (raster, rgb
-    units, rgb_composite preset, "Enhanced" name).
-12. ``test_enhance_non_rgb_raises`` - a single-band DEM-like input raises the
-    typed NOT_AN_RGB_IMAGE error (honest failure, not garbage output).
-13. ``test_enhance_invalid_upscale_raises`` - upscale_factor < 1 -> INVALID_PARAM.
-14. ``test_enhance_cache_hit_skips_fetch`` - a second identical call hits the
-    cache (the enhance compute is not re-run).
-15. ``test_enhance_alpha_preserved`` - a 4-band RGBA input keeps its alpha band.
-"""
+The optional polish pass over a true-color RGB COG. The pure passes run on
+synthetic arrays with no I/O - the haze floor, the de-haze, the grey-world
+balance, the unsharp mask, the blur and the upscale, each with its no-op case.
+The round trips keep dims, bands, georeferencing and alpha, and refuse typed."""
 
 from __future__ import annotations
 
@@ -64,13 +34,10 @@ from trid3nt_server.tools.processing.enhance_satellite_image.enhance_satellite_i
 
 
 def _hazy_rgb(size: int = 64) -> np.ndarray:
-    """A low-contrast, blue-cast 'hazy' RGB image (3, H, W) float32 in [0,255].
+    """A low-contrast, blue-cast 'hazy' RGB image, float32 in [0, 255].
 
-    A mid-grey base with a structured gradient (so contrast + edges exist),
-    compressed into a narrow band and lifted by a per-channel haze floor that
-    is heaviest in blue - i.e. exactly the additive atmospheric path radiance
-    the de-haze pass should remove.
-    """
+    A mid-grey base with a structured gradient so contrast and edges exist,
+    compressed into a narrow band and lifted by a blue-heaviest haze floor."""
     yy, xx = np.mgrid[0:size, 0:size].astype(np.float32)
     grad = (xx / size) * 60.0 + (yy / size) * 30.0  # 0..90 structured detail
     base = 90.0 + grad  # land radiance ~90..180, with structure
@@ -373,11 +340,8 @@ def test_enhance_alpha_preserved(tmp_path, monkeypatch_local_cache):
 def monkeypatch_local_cache(monkeypatch, tmp_path):
     """Patch ``read_through`` so the enhanced COG bytes land in a temp file.
 
-    Returns a resolver ``uri -> local_path`` the test uses to re-open the
-    output COG. This keeps the round-trip tests self-contained (no boto3 / no
-    network) while still exercising the real _run_enhance compute path through
-    the tool's public entrypoint.
-    """
+    Returns a ``uri -> local_path`` resolver, which keeps the round trips
+    self-contained while still running the real compute through the entrypoint."""
     import trid3nt_server.tools.processing.enhance_satellite_image.enhance_satellite_image as mod
     from trid3nt_contracts.tool_registry import AtomicToolMetadata
 

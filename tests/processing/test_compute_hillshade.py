@@ -1,33 +1,9 @@
-"""Unit tests for ``compute_hillshade`` atomic tool (job-0079, FR-CE-8, FR-DC).
+"""Unit tests for the ``compute_hillshade`` atomic tool.
 
-Coverage:
- 1. ``test_compute_hillshade_registered`` — tool appears in TOOL_REGISTRY with
-    correct metadata (cacheable=True, ttl_class="static-30d",
-    source_class="hillshade").
- 2. ``test_compute_hillshade_standard_preset`` — synthetic DEM → standard style
-    runs cleanly, returns a GeoTIFF with non-zero mean value.
- 3. ``test_compute_hillshade_swiss_double_preset`` — swiss_double runs both
-    gdaldem passes and produces a blended GeoTIFF.
- 4. ``test_compute_hillshade_multidirectional_preset`` — multidirectional style
-    runs without error.
- 5. ``test_compute_hillshade_combined_preset`` — combined style runs without error.
- 6. ``test_compute_hillshade_smooth_preset`` — smooth style (ZevenbergenThorne)
-    runs without error.
- 7. ``test_compute_hillshade_cache_hit_skips_fetch`` — second call with identical
-    args hits the cache (fetch_fn not invoked).
- 8. ``test_compute_hillshade_cache_miss_writes`` — first call (empty cache)
-    invokes gdaldem and writes to the cache bucket.
- 9. ``test_compute_hillshade_returns_layer_uri_fields`` — LayerURI fields
-    correct (layer_type, role, units, layer_id contains style).
-10. ``test_compute_hillshade_gdaldem_failure_raises_error`` — non-zero gdaldem
-    exit raises HillshadeComputeError(error_code="GDALDEM_FAILED").
-11. ``test_compute_hillshade_dem_download_failure_raises_error`` — GCS download
-    failure raises HillshadeComputeError(error_code="DEM_DOWNLOAD_FAILED").
-12. ``test_cache_keys_vary_across_styles`` — 5 style presets produce 5 distinct
-    cache keys.
-13. ``test_cache_keys_vary_across_azimuths`` — standard style at different
-    azimuths produces different cache keys.
-"""
+Registration and metadata; each style preset running over a synthetic DEM, the
+two-pass one producing a blended result; cache miss writing and hit skipping;
+the returned LayerURI's fields; the typed failures on a non-zero gdaldem exit
+and a failed DEM read; distinct cache keys per style and per azimuth."""
 
 from __future__ import annotations
 
@@ -65,12 +41,10 @@ def _write_synthetic_dem(
     size: int = 32,
     dx_m: float = 10.0,
 ) -> None:
-    """Write a 32×32 GeoTIFF DEM with a known N-S linear slope.
+    """Write a 32x32 GeoTIFF DEM with a known north-south linear slope.
 
-    Row 0 (north) has the highest elevation; elevation decreases southward.
-    Uses EPSG:5070 (Albers Equal Area, metres) so GDAL interprets pixel
-    spacing as metres — required for hillshade to produce valid luminance.
-    """
+    Row 0 is the north edge and the highest; the CRS is metric so GDAL reads the
+    pixel spacing as metres, which hillshade needs for a valid luminance."""
     import math
 
     dz = dx_m * math.tan(math.radians(slope_deg))
@@ -162,12 +136,10 @@ class _S3Body:
 
 
 class FakeStorageClient:
-    """In-memory S3 double (GCP decommissioned). ``store`` keyed by object KEY.
+    """In-memory S3 double; ``store`` is keyed by object KEY.
 
-    Returns the per-test active instance installed by the autouse
-    ``_route_cache_to_inmemory_s3`` fixture so the tool's real S3 read-through
-    (boto3) reads/writes the same store the test inspects.
-    """
+    Returns the per-test instance the autouse fixture installs, so the tool's real
+    boto3 read-through reads and writes the store the test inspects."""
 
     _active: "FakeStorageClient | None" = None
 
@@ -686,12 +658,10 @@ def test_ensure_output_crs_noop_when_already_correct():
 
 @_SKIP_GDALDEM
 def test_fetch_fn_output_preserves_dem_crs_without_proj_env():
-    """End-to-end _make_fetch_fn: output bytes carry the DEM's EPSG:5070 even
-    when the process env lacks PROJ_LIB/PROJ_DATA (the agent's situation).
+    """The output bytes carry the DEM's own CRS even with no PROJ env set.
 
-    This is the live failure mode: the demo-session cache artifacts read back
-    as LOCAL_CS["NAD83 / Conus Albers"] with epsg=None.
-    """
+    That is the agent's situation, and without it the artifact reads back as a local
+    CS with no EPSG code."""
     from trid3nt_server.tools.processing.compute_hillshade.compute_hillshade import _make_fetch_fn
 
     # Strip PROJ vars so the subprocess depends entirely on the job-0257

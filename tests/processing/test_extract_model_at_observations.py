@@ -1,13 +1,8 @@
-"""Offline unit tests for ``extract_model_at_observations`` (no network).
+"""Offline unit tests for ``extract_model_at_observations``, with no network.
 
-Mode A (static raster vs observation points) inputs are SYNTHESIZED locally: a
-UTM linear-ramp raster (so bilinear sampling reduces to an exact value) + a
-small EPSG:4326 point GeoJSON of surveyed observations with HWM-shaped
-attributes (``elev_ft`` / ``vertical_datum`` / ``hwm_id`` / ``survey_date``).
-Mode B (time-series) inputs are two synthesized point FlatGeobufs each carrying
-an inline ``time_series_csv``. Mirrors the ``test_compute_model_residuals.py``
-helper pattern.
-"""
+The static-raster mode takes a UTM linear-ramp raster, so bilinear sampling is
+exact, and a small point layer of surveyed observations. The time-series mode
+takes two point FlatGeobufs each carrying an inline series."""
 
 from __future__ import annotations
 

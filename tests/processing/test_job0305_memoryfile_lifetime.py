@@ -1,12 +1,9 @@
-"""job-0305: the s3 in-memory raster read must keep its MemoryFile ALIVE.
+"""The in-memory raster read must keep its ``MemoryFile`` ALIVE.
 
-Live 2026-06-16 the NLCD validation gate read a categorical landcover raster as
-real classes (11-95) PLUS a continuous garbage spread (96-254) and failed the
-flood NON-deterministically. Root cause: ``MemoryFile(read_object_bytes_s3(uri))
-.open()`` orphaned the MemoryFile, so GC could free its /vsimem/ buffer mid-read.
-These tests build a known categorical raster, force GC around the read, and
-assert the class set is EXACTLY the categorical legend — never garbage.
-"""
+Opening a ``MemoryFile`` built inline orphans it, so the buffer can be freed
+mid-read and a categorical raster comes back with a continuous garbage spread
+beside its real classes. These build a known categorical raster, force GC around
+the read, and assert the class set is EXACTLY the legend."""
 from __future__ import annotations
 
 import gc

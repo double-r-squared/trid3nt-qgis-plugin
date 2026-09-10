@@ -1,11 +1,9 @@
 """The two generic geometry composition links: ``combine`` and ``endpoints``.
 
 Offline: every source is a file this module writes. What is checked is what a
-CHAIN depends on - that one document comes back holding exactly what went in,
-that the two ends are vertices of the supplied line, that the mesher reads the
-layer either tool returns without being handed its uri, and that every refusal is
-typed and names what to supply instead.
-"""
+CHAIN depends on - one document coming back holding exactly what went in, the two
+ends being vertices of the supplied line, the mesher reading either tool's layer
+without being handed its uri, and every refusal typed and naming what to supply."""
 
 from __future__ import annotations
 

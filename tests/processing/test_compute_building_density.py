@@ -1,18 +1,9 @@
-"""Unit tests for the ``compute_building_density`` atomic tool (job-0096).
+"""Unit tests for the ``compute_building_density`` atomic tool.
 
-Coverage:
-- Tool is registered in TOOL_REGISTRY with expected metadata.
-- Invalid bbox / cell_size_m / source raise typed input errors.
-- Quadkey math: Fort Myers bbox maps to expected zoom-9 quadkey(s).
-- Mocked tile feed of 100 polygons in a 1km² bbox → density grid with sum=100.
-- Different ``cell_size_m`` values produce correctly-scaled grid dimensions.
-- Empty (no-features) bbox → zero raster, no error.
-- Cache miss invokes fetch_fn once and writes the store.
-- Cache hit on second call with same params skips fetch_fn.
-- Live (env ``TRID3NT_TEST_LIVE_BUILDINGS=1``): Fort Myers bbox → density raster
-  whose high-count pixels coincide with the known dense neighbourhood and
-  whose ocean/river pixels read zero (codified job-0086 geography test).
-"""
+Registration and metadata; typed input errors on a bad bbox, cell size or source;
+the quadkey math; a mocked feed of 100 polygons in a small bbox summing to 100;
+cell size scaling the grid; an empty bbox giving a zero raster rather than an
+error; cache miss then hit; a live geography gate behind an env var."""
 
 from __future__ import annotations
 
@@ -94,12 +85,10 @@ class FakeStorageClient:
 
 
 def _make_read_through_injector(fake_gcs):
-    """S3-only in-memory read-through injector (GCP decommissioned).
+    """An in-memory S3 read-through injector.
 
-    Replaces the retired ``google.cloud.storage`` double: drives the tool's
-    ``read_through`` off an in-memory S3 store (``fake_gcs.store``, keyed by
-    object KEY), minting ``s3://`` URIs and honoring cache hit/miss/write.
-    """
+    Drives the tool's ``read_through`` off an in-memory store keyed by object KEY,
+    minting ``s3://`` uris and honouring hit, miss and write."""
     from trid3nt_server.tools.cache import (
         CACHE_BUCKET,
         cache_path,
@@ -247,14 +236,10 @@ def test_quadkey_zoom9_length():
 
 
 def test_quadkeys_for_fort_myers_bbox_includes_known_tile():
-    """The Fort Myers bbox intersects ≥1 zoom-9 quadkey; computed quadkey is
-    deterministic and starts with the SE-hemisphere prefix for North America.
+    """A small bbox intersects a handful of zoom-9 quadkeys, deterministically.
 
-    Fort Myers (~26.6°N, -81.9°W) at zoom-9 falls under quadkey 032213000-ish
-    range (the global ``0`` for western hemisphere northern half). We assert
-    the count is reasonable (1-4 tiles for a 0.2°×0.2° bbox at zoom-9) and
-    each quadkey is well-formed.
-    """
+    The count is asserted as a range rather than a literal, and every quadkey is
+    checked well-formed."""
     qks = _quadkeys_for_bbox(_FORT_MYERS_BBOX, zoom=9)
     assert 1 <= len(qks) <= 4, f"Expected 1-4 quadkeys; got {len(qks)}: {qks}"
     for qk in qks:
@@ -448,14 +433,10 @@ def test_cache_key_differentiates_cell_size():
 
 
 def test_end_to_end_with_100_polygons_density_sum_is_100():
-    """100 polygons inside the bbox → COG whose cell-sum is exactly 100.
+    """100 polygons inside the bbox give a COG whose cell-sum is exactly 100.
 
-    This tests the full pipeline including _fetch_building_density_bytes —
-    only the upstream HTTP calls are stubbed:
-      - _fetch_index returns a single fake quadkey.
-      - _download_tile_features returns 100 generated polygons in-bbox.
-    The COG bytes are then re-opened with rasterio and the array summed.
-    """
+    The whole pipeline runs; only the upstream index and tile reads are stubbed, and
+    the COG bytes are re-opened and summed."""
     import rasterio
 
     # 100 polygons on a 10×10 grid inside _FORT_MYERS_BBOX.
@@ -570,31 +551,10 @@ def test_index_failure_is_typed_upstream_error():
     reason="Set TRID3NT_TEST_LIVE_BUILDINGS=1 to run live MS Building Footprints tests",
 )
 def test_live_fort_myers_density_geographic_correctness():
-    """LIVE: real MS data over Fort Myers bbox.
+    """LIVE: the OUTPUT GEOGRAPHY, not a byte round-trip.
 
-    Codified job-0086 lesson: the test verifies the OUTPUT GEOGRAPHY, not
-    just byte round-trip. The signal we cross-check:
-
-    1. **Total building count is large.** The Fort Myers / Cape Coral / Sanibel
-       area covered by the bbox has hundreds of thousands of structures; the
-       full sum must be ≥ 10,000 to confirm we are not silently dropping tiles.
-    2. **The four bbox-corner cells are zero.** The bbox corners sit in marsh,
-       water, and undeveloped land at the bbox edges. If our COG were
-       Y-flipped (job-0086), N-S mirrored, or off by ½-grid, at least one
-       corner would carry a non-zero building count from the urban interior.
-    3. **The densest cell is geographically INSIDE the urban core**, not at
-       the edge. We assert the argmax cell lies within an inner box that
-       excludes the outermost 5 % of the grid on each side.
-    4. **Downtown Fort Myers (-81.872, 26.640) lies in a 5×5 neighbourhood
-       whose mean count is at least 1**, confirming that the downtown LOCATION
-       (computed via rasterio's CRS-aware coordinate→pixel index) is dense in
-       the COG. A Y-flip would put the downtown pixel into the Estero Bay
-       water and the assertion would fail.
-
-    These four assertions together would catch the job-0086 class of bug
-    (in-COG mirror, axis flip, off-by-one) AND a wrong-CRS bug (which
-    would mis-locate downtown).
-    """
+    The total count is large, the corner cells are zero, the densest cell lies inside
+    the grid and a known dense location reads dense - catching a mirror or a flip."""
     import numpy as np
     import rasterio
     from pyproj import Transformer

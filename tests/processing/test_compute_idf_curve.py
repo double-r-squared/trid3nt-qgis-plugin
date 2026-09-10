@@ -1,25 +1,9 @@
-"""Unit tests for ``compute_idf_curve`` (no network).
+"""Unit tests for ``compute_idf_curve``, with no network.
 
-The PFDS fetch is monkeypatched with the verbatim Fort Myers Atlas 14 CSV
-capture (the same fixture ``test_data_fetch`` uses for
-``lookup_precip_return_period``), and ``read_through`` is replaced with a
-pass-through stub, so the full pipeline (quantize -> fetch -> parse ->
-190-row Vega-Lite chart payload) runs offline.
-
-Coverage:
-1.  ``test_registered`` -- tool in TOOL_REGISTRY, cacheable static-30d.
-2.  ``test_intensity_chart_payload`` -- chart-emission payload shape, log x,
-    one series per ARI, and the hand-checked 100-yr 24-hr intensity cell.
-3.  ``test_depth_mode`` -- depth y axis carries the raw Atlas 14 inches.
-4.  ``test_bbox_center_accepted`` -- a 4-element bbox resolves to its center.
-5.  ``test_out_of_area_raises_no_coverage`` -- the PFDS "not within a project
-    area" answer surfaces as the typed ``IdfCurveNoCoverageError``.
-6.  ``test_network_failure_raises_upstream`` -- a non-coverage upstream die
-    stays retryable ``IdfCurveUpstreamError``.
-7.  ``test_bad_location_raises`` / ``test_bad_y_axis_raises`` -- typed input
-    validation.
-8.  ``test_category_and_corpus`` -- primary category + routing-corpus presence.
-"""
+The upstream fetch is monkeypatched with a verbatim CSV capture and the cache is
+a pass-through, so the whole pipeline runs offline. Covered: the chart payload's
+shape with one series per recurrence interval and a hand-checked cell, the depth
+axis, a bbox resolving to its centre, and the four typed refusals."""
 
 from __future__ import annotations
 

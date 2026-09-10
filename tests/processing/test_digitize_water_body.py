@@ -1,25 +1,9 @@
-"""Unit tests for the ``digitize_water_body`` atomic tool (NDWI water polygons).
+"""Unit tests for the ``digitize_water_body`` atomic tool.
 
-Coverage:
-- Registration in TOOL_REGISTRY with expected metadata (+ payload estimator).
-- Input validation: degenerate / out-of-range / non-finite / too-large bbox,
-  bad ndwi_threshold, bad min_area_m2 -> typed ``WaterBodyBboxError`` (not
-  retryable).
-- Mocked PC STAC + band reads: a synthetic Green/NIR pair where one half of the
-  scene is water (NDWI > 0) and the other half is land (NDWI < 0) round-trips
-  through read_through to a FlatGeobuf with the right polygon count, the water
-  geometry on the correct side, and the expected layer attributes.
-- Honest no-imagery: an empty STAC search raises ``WaterBodyNoImageryError``
-  (not retryable).
-- Honest no-water: a scene that is all land (NDWI < 0 everywhere) raises
-  ``WaterBodyNoWaterError`` (not retryable)  --  never an empty success layer.
-- min_area_m2 speck filter: water below the area floor raises no-water.
-
-Network is fully mocked: ``_pc_search`` (the catalog client signs) + the per-band window reader
-are patched so no real Sentinel-2 scene is fetched. The vectorization
-(rasterio.features.shapes), area filter (geopandas), and FlatGeobuf write run
-for real on the synthetic mask  --  that is the compute-correctness surface.
-"""
+The catalog search and the band reader are patched, so no real scene is fetched;
+the vectorization, the area filter and the FlatGeobuf write run for real over the
+synthetic mask. A half-water scene round-trips to the right polygon count on the
+right side; an empty search, an all-land scene and a speck each refuse typed."""
 
 from __future__ import annotations
 

@@ -1,12 +1,9 @@
 """Offline tests for ``section``: the generic polygon cut.
 
-Everything here is shapely and pyproj on geometry authored in the test, so there
-is no world read to stub: the tool is handed inline GeoJSON and writes into a
-tmp dir. What is checked is the CUT - that the two end faces are square to the
-line joining the points, that a disconnected piece the line misses is dropped
-and SAID to be dropped, and that every way the ask can be wrong refuses by code
-rather than returning a shape nobody asked for.
-"""
+Everything is geometry authored in the test, so there is no world read to stub.
+What is checked is the CUT - that the two end faces are square to the line
+joining the points, that a disconnected piece the line misses is dropped and SAID
+to be dropped, and that every wrong ask refuses by code."""
 
 from __future__ import annotations
 
@@ -59,10 +56,10 @@ def test_the_two_end_faces_stand_where_the_points_were_put(tmp_path):
 
 
 def test_each_end_face_spans_the_polygon_across_the_reach(tmp_path):
-    """The face is the whole transect the cut left, not the part of it a probe
-    line happened to catch: the cut edge is exactly collinear with such a line,
-    and over a domain-sized probe the collinear intersection comes back whole at
-    one end and EMPTY at the other, which is what left a reach with no outflow."""
+    """The face is the whole transect the cut left, not the part a probe line caught.
+
+    The cut edge is exactly collinear with such a line, so over a domain-sized probe
+    the intersection comes back whole at one end and EMPTY at the other."""
     cut = section(_BANK, between=[_UPSTREAM, _DOWNSTREAM],
                   _output_dir=str(tmp_path))
     for face, lon in ((cut.face_start, _UPSTREAM[0]),

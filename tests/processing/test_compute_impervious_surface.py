@@ -1,36 +1,9 @@
-"""Unit tests for ``compute_impervious_surface`` atomic tool (job-0095, FR-CE-8, FR-DC).
+"""Unit tests for the ``compute_impervious_surface`` atomic tool.
 
-Coverage:
-1. ``test_compute_impervious_surface_registered`` — tool appears in
-   TOOL_REGISTRY with correct metadata (cacheable=True, ttl_class="static-30d",
-   source_class="impervious").
-2. ``test_compute_impervious_from_landcover_classes_22_23_24`` — synthetic
-   landcover raster with developed classes 22, 23, 24 → output pixels equal
-   0.3, 0.6, 0.9 respectively.
-3. ``test_compute_impervious_from_impervious_product_scale_0_100`` — synthetic
-   impervious product (values 0, 30, 60, 90, 100) → output is 0.0, 0.3, 0.6,
-   0.9, 1.0 after 1/100 scaling.
-4. ``test_compute_impervious_nodata_preserved_as_nan`` — input nodata pixels
-   become NaN in the output.
-5. ``test_compute_impervious_bbox_window`` — bbox window read returns a smaller
-   raster covering only the requested AOI.
-6. ``test_compute_impervious_cache_miss_writes`` + ``test_compute_impervious_cache_hit_skips_compute``
-   — cache miss/hit behaviour (separate tests).
-7. ``test_compute_impervious_returns_layer_uri`` — LayerURI shape correctness.
-8. ``test_compute_impervious_raster_download_failure_raises`` — typed error.
-9. ``test_compute_impervious_non_developed_classes_map_to_zero`` — water,
-   forest, agriculture, wetlands → 0.0 (no spurious impervious values).
-10. ``test_compute_impervious_unit_only_developed`` — only the four
-    developed classes (21, 22, 23, 24) map to non-trivial fractions; verifies
-    the canonical NLCD mapping.
-
-The codified job-0086 lesson is honored:
-- The tool propagates the input CRS / transform verbatim (no in-COG mirror).
-- The unit tests place known classes at known PIXEL POSITIONS and assert the
-  output value at THAT position, not just round-trip.
-- The synthetic landcover test uses a non-square grid where each row holds a
-  different class, so a Y-axis flip bug would be immediately visible.
-"""
+Registration; the developed landcover classes mapping to their declared fractions
+and every other class to zero; the percent product scaling; nodata preserved as
+NaN; a bbox window; cache miss and hit. Known classes sit at known PIXEL
+POSITIONS, one per row, so a flipped output fails on position."""
 
 from __future__ import annotations
 
@@ -135,16 +108,10 @@ class _S3Body:
 
 
 class FakeStorageClient:
-    """In-memory S3 double (GCP decommissioned). ``store`` keyed by object KEY.
+    """In-memory S3 double; ``store`` is keyed by object KEY.
 
-    GCP is decommissioned: both the SOURCE raster read and the CACHE write now
-    flow through boto3 S3 (the cache shim's only object store). ``source_blobs``
-    is seeded into the same in-memory ``store`` so the tool's
-    ``_download_raster_bytes`` can read an ``s3://`` landcover URI. Returns the
-    per-test active instance installed by the autouse
-    ``_route_cache_to_inmemory_s3`` fixture so the tool's read-through reads /
-    writes the store the test inspects.
-    """
+    Both the SOURCE raster read and the CACHE write flow through it, so the seeded
+    source blobs live in the same store the tool reads its ``s3://`` uri from."""
 
     _active: "FakeStorageClient | None" = None
 
@@ -637,15 +604,10 @@ def test_scale_helper_impervious_product_clipping():
     reason="live NLCD impervious-surface test requires TRID3NT_RUN_LIVE_NLCD=1 + GCP ADC",
 )
 def test_live_compute_impervious_against_fort_myers_landcover():
-    """Live: derive impervious from a real NLCD landcover layer (Fort Myers AOI).
+    """Live: derive impervious from a real landcover layer.
 
-    Uses the existing job-0042 / job-0044 NLCD cache (Annual_NLCD_LndCov_2021).
-    Asserts:
-      - output has values in [0.0, 1.0] (excluding NaN);
-      - some non-zero impervious fraction is present (urban Fort Myers has
-        developed classes);
-      - mean impervious fraction is < 1.0 (sanity: not all-developed).
-    """
+    Every value lies in [0, 1] excluding NaN, some fraction is non-zero, and the mean
+    is below 1 - a sanity floor and ceiling rather than a pinned number."""
     # fetch_landcover is spec-driven (ADR 0082): resolve off the registry seam; it
     # returns a LandcoverResult (a LayerURI subclass -- the layer IS the result).
     from trid3nt_server.tools import TOOL_REGISTRY

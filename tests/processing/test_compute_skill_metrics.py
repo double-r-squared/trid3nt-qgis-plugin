@@ -1,37 +1,9 @@
-"""Unit tests for ``compute_skill_metrics`` (no network).
+"""Unit tests for ``compute_skill_metrics``, with no network.
 
-All fixtures are hand-built numeric series (a few also stage a synthesized
-FlatGeobuf paired table, mirroring the lane-C ``extract_model_at_observations``
-storage format) so every expected metric is independently hand-computed.
-
-Coverage:
-1.  ``test_registered`` -- TOOL_REGISTRY entry, cacheable=False /
-    live-no-cache, open_world_hint=False (pure compute, no external API).
-2.  ``test_identical_series_perfect_scores`` -- identical non-constant
-    series -> NSE=1.0, KGE=1.0, PBIAS=0.0, R2=1.0, RSR=0.0, RMSE=0.0.
-3.  ``test_constant_offset_hand_computed`` -- observed=[10..50],
-    simulated=observed+5 -> hand-computed NSE/KGE/PBIAS/RSR/RMSE/R2 +
-    suggested_verdict="satisfactory" + peak_error=10.0.
-4.  ``test_peak_timing_error`` -- distinct peak indices + explicit ISO8601
-    times -> exact peak_error / peak_timing_error (seconds, signed).
-5.  ``test_variable_head_adds_srms`` -- SRMS populated (hand-computed) only
-    for variable="head"; null for variable="generic" on the same data.
-6.  ``test_constant_observed_metrics_null`` -- zero-variance observed series
-    -> NSE/RSR/KGE/R2 all null (never -inf/inf/nan), each with a caveat.
-7.  ``test_small_n_indeterminate`` -- n=3 -> suggested_verdict="indeterminate"
-    with a caveat, metric values still populated.
-8.  ``test_paired_table_uri_single_station`` -- FlatGeobuf paired table,
-    single obs_id -> no pooling caveat; metrics match the direct-array path.
-9.  ``test_paired_table_uri_multi_station_pools_with_caveat`` -- 2 distinct
-    obs_id groups -> pooling caveat present.
-10. ``test_no_selector_raises`` -- neither paired_table_uri nor arrays.
-11. ``test_mismatched_length_raises``.
-12. ``test_all_nonfinite_raises`` -- SkillMetricsNoDataError.
-13. ``test_units_passthrough``.
-14. ``test_kge_band_always_null_with_caveat``.
-15. ``test_dependency_missing_raises`` -- spotpy import failure -> typed
-    SkillMetricsDependencyMissingError (sys.modules poisoning trick).
-"""
+Every fixture is a hand-built numeric series, some staged as a paired table in
+the format the extraction tool writes, so each expected metric is independently
+hand-computed. Covered: perfect scores, a constant offset with its verdict, peak
+magnitude and signed timing, the null-with-caveat cases, pooling, the refusals."""
 
 from __future__ import annotations
 

@@ -1,31 +1,9 @@
-"""Unit tests for ``compute_flood_extent_skill`` (no network).
+"""Unit tests for ``compute_flood_extent_skill``, with no network.
 
-Hand-built 10x10 (or smaller) rasters on a projected UTM-like grid (10 m
-pixels -> exact 100 m2 = 0.0001 km2 pixel area) so the 2x2 confusion counts,
-Hit Rate, False Alarm Ratio, and CSI are exact hand-computed values, not
-approximations.
-
-Coverage:
-1.  ``test_registered`` -- TOOL_REGISTRY entry, cacheable=False /
-    live-no-cache, open_world_hint=False (pure compute, no external API).
-2.  ``test_confusion_matrix_hand_computed`` -- 4 quadrants (hit/false_alarm/
-    miss/correct_dry, 25 cells each) -> exact areas + H=0.5, F=0.5,
-    CSI=1/3.
-3.  ``test_model_wet_threshold`` -- a continuous depth raster thresholded at
-    a non-default value.
-4.  ``test_benchmark_vector_polygon`` -- a polygon benchmark rasterized onto
-    the model grid reproduces the SAME confusion as the raster-benchmark
-    case covering the identical footprint.
-5.  ``test_nodata_excluded_reported`` -- model nodata cells are excluded
-    from every count/area and reported (count + area).
-6.  ``test_no_overlap_raises`` -- benchmark raster with zero spatial overlap
-    with the model grid -> typed FloodExtentSkillNoOverlapError.
-7.  ``test_all_dry_csi_null`` -- neither model nor benchmark shows any wet
-    pixel -> CSI/hit_rate/false_alarm_ratio all null with caveats.
-8.  ``test_unreadable_benchmark_raises`` -- garbage bytes, neither raster
-    nor vector -> typed FloodExtentSkillInputError.
-9.  ``test_published_context_always_present``.
-"""
+Hand-built rasters on a projected grid with an exact pixel area make the 2x2
+confusion counts and the derived rates exact. Covered: a four-quadrant matrix,
+the wet threshold, a polygon benchmark on the same footprint, nodata excluded and
+reported, an all-dry case whose rates are null, and the two typed refusals."""
 
 from __future__ import annotations
 

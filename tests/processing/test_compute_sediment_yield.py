@@ -1,32 +1,9 @@
-"""Unit tests for the ``compute_sediment_yield`` RUSLE composer (no network).
+"""Unit tests for the ``compute_sediment_yield`` RUSLE composer, with no network.
 
-All inputs are SYNTHESIZED locally and passed via the override URIs
-(``dem_uri`` / ``k_uri`` / ``landcover_uri``), so the full RUSLE pipeline
-(DEM gradient -> LS -> K -> C -> A = R*K*LS*C*P COG) runs for real without
-touching Copernicus / STATSGO / Planetary Computer.
-
-Coverage:
-1.  ``test_registered`` -- tool in TOOL_REGISTRY with cacheable=False /
-    ttl_class="live-no-cache".
-2.  ``test_rusle_matches_hand_computed_cell`` -- a uniform inclined-plane DEM
-    (exactly-known slope) + constant K + all-crops land cover: an interior
-    output cell equals the HAND-COMPUTED A = R*K*(lambda/22.13)^m*(65.41
-    sin^2(theta)+4.56 sin(theta)+0.065)*C*1.
-3.  ``test_default_r_is_honest`` -- omitting rainfall_erosivity uses the
-    documented constant 300 with an honest note (values scale accordingly).
-4.  ``test_k_fallback_constant_with_note`` -- STATSGO unavailable -> constant
-    0.2 K with a note; output matches the re-hand-computed cell.
-5.  ``test_water_class_yields_zero`` -- water land cover (C=0) -> A=0.
-6.  ``test_unknown_class_is_nodata`` -- cloud class (10) carries no C -> NaN
-    (masked) in the output, never a fabricated value.
-7.  ``test_aoi_clamp_raises`` -- AOI over 0.2 deg per side raises the typed
-    ``SedimentYieldAoiTooLargeError``.
-8.  ``test_bad_bbox_raises`` / ``test_bad_erosivity_raises`` -- typed input
-    validation.
-9.  ``test_the_declared_breaks_are_the_paint`` -- the publish seam resolves
-    ``sediment_yield_t_ha_yr`` to a TiTiler interval ``&colormap=`` built from
-    the log-spaced class table (the log-scaled colormap requirement).
-"""
+All inputs are SYNTHESIZED locally and passed through the override uris, so the
+full pipeline runs for real. An inclined-plane DEM with constant K and one cover
+class gives a HAND-COMPUTED interior cell; each fallback carries an honest note;
+water yields zero and an unknown class is masked rather than invented."""
 
 from __future__ import annotations
 

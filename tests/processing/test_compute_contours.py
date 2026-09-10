@@ -1,23 +1,9 @@
-"""Unit tests for ``compute_contours`` atomic tool (F35, FR-CE-8, FR-DC).
+"""Unit tests for the ``compute_contours`` atomic tool.
 
-Mirrors ``test_compute_hillshade.py``: mocks the GDAL subprocess + DEM read so
-no live ``gdal_contour`` binary is required in CI.
-
-Coverage:
- 1. ``test_compute_contours_registered`` — tool in TOOL_REGISTRY with the
-    expected metadata (cacheable, static-30d, source_class="contours").
- 2. ``test_derive_interval_*`` — default-interval derivation from DEM relief
-    (relief/15 snapped to a nice number; never 0/negative; flat → smallest).
- 3. ``test_run_gdal_contour_invocation_args`` — ``-a elev -i <interval>`` and
-    the FlatGeobuf driver appear in the subprocess argv.
- 5. ``test_compute_contours_layer_uri_shape`` — vector LayerURI (layer_type
-    vector, bbox set, drawn as a line reference, units m).
- 6. ``test_compute_contours_binary_missing_raises`` — binary-missing typed
-    error (ContourComputeError / GDAL_CONTOUR_UNAVAILABLE).
- 7. ``test_compute_contours_no_dem_input_raises`` — neither dem_uri nor bbox.
- 8. ``test_compute_contours_cache_hit_skips_fetch`` — second identical call
-    hits the cache (gdal_contour not invoked).
-"""
+The GDAL subprocess and the DEM read are mocked, so no contour binary is needed.
+Registration and metadata; the default interval derived from relief, never zero
+or negative; the interval and the FlatGeobuf driver reaching the argv; the vector
+LayerURI's shape; the binary-missing and no-input typed errors; a cache hit."""
 
 from __future__ import annotations
 
@@ -127,12 +113,10 @@ class _S3Body:
 
 
 class FakeStorageClient:
-    """In-memory S3 double (GCP decommissioned). ``store`` keyed by object KEY.
+    """In-memory S3 double; ``store`` is keyed by object KEY.
 
-    Returns the per-test active instance installed by the autouse
-    ``_route_cache_to_inmemory_s3`` fixture so the tool's real S3 read-through
-    (boto3) reads/writes the same store the test inspects.
-    """
+    Returns the per-test instance the autouse fixture installs, so the tool's real
+    boto3 read-through reads and writes the store the test inspects."""
 
     _active: "FakeStorageClient | None" = None
 

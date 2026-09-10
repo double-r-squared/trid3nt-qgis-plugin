@@ -1,24 +1,9 @@
-"""Tests for ``compute_cross_section`` (the cross-section / profile tool).
+"""Tests for ``compute_cross_section``, over synthetic rasters and no network.
 
-All tests use synthetic in-memory/temp-file rasters -- no network, no LLM calls.
-
-Coverage:
-- Synthetic ramp DEM -> a known, monotonic linear profile sampled along a line.
-- The result is a structurally-valid ChartEmissionPayload (the contract's own
-  validator runs on construction, so a broken spec would raise) and rides the
-  chart-emission chat-card path (``is_chart_emission_result`` True).
-- Line input parsing: GeoJSON LineString, a Feature, a FeatureCollection (the
-  drawn ``barriers`` FC round-trip), and a bare ``[lon,lat]`` list (agent-
-  derived inline) all resolve; degenerate / malformed lines -> LINE_INVALID.
-- Multi-layer overlay (DESIGN CALL B = YES): two synthetic rasters on one line ->
-  a two-line chart (``color`` encoding); matching units -> single shared y-axis,
-  differing units -> dual independent y scales.
-- Honesty floor: nodata stations surface as null (not dropped); a line entirely
-  off every raster -> typed LINE_OUTSIDE_RASTER (never a fabricated profile).
-- CRS mismatch: a UTM raster is sampled correctly from an EPSG:4326 line.
-- Geodesic distance: the x-axis is metres on the ground, not degrees.
-- Registration in TOOL_REGISTRY + category membership.
-"""
+A ramp DEM gives a known monotonic profile along a line, returned as a
+structurally valid chart payload on the chart-emission path. Every line shape
+resolves and a degenerate one is typed. Two rasters overlay on one line, sharing
+a y-axis when units match. Nodata surfaces as null; a line off every raster refuses."""
 
 from __future__ import annotations
 
@@ -445,18 +430,10 @@ class TestInputValidation:
 
 
 def test_registered_via_package_import_path():
-    """FIX 1 (fused-import regression guard): importing the tools PACKAGE alone
-    (NOT the compute_cross_section module directly) must register the tool.
+    """Importing the tools PACKAGE alone must register the tool.
 
-    The other tests in this file import ``compute_cross_section`` directly (which
-    self-registers as a side effect), so they pass even when ``tools/__init__.py``
-    fails to import the module. This test instead asserts registration in a FRESH
-    interpreter that imports ONLY the package -- the path the live agent / catalog
-    / LLM-declaration build actually take. A fused ``from . import ...`` line in
-    ``tools/__init__.py`` that swallows the ``compute_cross_section`` import would
-    FAIL here (a subprocess so it can't be masked by another test's direct
-    import already populating the in-process registry).
-    """
+    The other tests import the module directly, which self-registers, so a fused
+    import line that swallowed this one would still pass them; a subprocess runs it."""
     import subprocess
     import sys
 

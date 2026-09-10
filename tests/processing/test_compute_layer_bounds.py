@@ -1,30 +1,9 @@
-"""Unit tests for ``compute_layer_bounds`` (NATE 2026-06-17).
+"""Unit tests for ``compute_layer_bounds``.
 
-The live bug this tool fixes: the agent reached for the Python sandbox to
-compute ``gdf.total_bounds`` for "resize the box to encompass all the
-<features>" — slow, gated, orphaned, and never applied to the map. This tool
-computes the EPSG:4326 extent deterministically AND emits a ``zoom-to``
-map-command so the viewport actually fits all features.
-
-Tests:
-
-1. ``test_returns_correct_bbox_for_known_vector`` — a known GeoJSON
-   FeatureCollection yields the expected min/max lon/lat.
-2. ``test_emits_zoom_to_map_command_with_those_bounds`` — driven inside an
-   ``emit_tool_call`` bracket, the tool fires ``map-command(zoom-to)`` carrying
-   exactly the computed bbox.
-3. ``test_reprojects_non_4326_vector_to_wgs84`` — a Web-Mercator vector is
-   reprojected so the returned bbox is in lon/lat degrees, not meters.
-4. ``test_returns_correct_bbox_for_known_raster`` — a small synthetic GeoTIFF
-   yields its corner extent.
-5. ``test_pad_fraction_expands_bbox`` — padding widens the box symmetrically.
-5b. ``test_pad_m_*`` / ``test_a_chained_layer_handle_*`` — the METRE pad a fetch
-   query window is reasoned in, and the layer handle a chained row hands over.
-6. ``test_unknown_uri_raises_typed_error`` — FR-AS-11 typed error on a bad URI.
-7. ``test_no_emitter_does_not_crash`` — direct call (no emitter) skips the emit.
-8. ``test_registered_and_in_hot_set`` — registry + category + hot-set wiring.
-9. ``test_adapter_steer_present`` — the SYSTEM_PROMPT carries the fit/zoom steer.
-"""
+The tool computes an EPSG:4326 extent deterministically AND emits a ``zoom-to``
+map command, so the viewport actually fits the features. Covered: the bbox of a
+known vector and of a raster, a non-4326 vector reprojected, the two pads, a
+chained handle, the typed error on a bad uri, and a direct call with no emitter."""
 
 from __future__ import annotations
 

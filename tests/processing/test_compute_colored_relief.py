@@ -1,25 +1,9 @@
-"""Unit tests for the ``compute_colored_relief`` atomic tool (job-0080).
+"""Unit tests for the ``compute_colored_relief`` atomic tool.
 
-Coverage:
-- ``@register_tool`` lands a registry entry with the expected metadata
-  (name="compute_colored_relief", ttl_class="static-30d",
-   source_class="colored_relief", cacheable=True).
-- ``_write_ramp_file`` produces a valid ``gdaldem color-relief`` CSV for
-  each of the four ramp presets.
-- Each ramp preset produces a 3- or 4-band RGB(A) GeoTIFF output from a
-  synthetic 32×32 DEM with a known elevation gradient.
-- Cache hit: a second call with the same ``(dem_uri, ramp)`` returns the
-  cached artefact without invoking ``gdaldem`` again.
-- Cache miss followed by hit: first call writes through, second call returns
-  from the fake GCS store.
-- ``ColoredReliefError`` on unknown ramp name.
-- The returned ``LayerURI`` carries the expected shape (layer_type="raster",
-  role="context", units="rgb").
-
-Tests that exercise ``gdaldem`` (the synthetic-DEM tests) are skipped when
-the ``gdaldem`` binary is not on PATH, so they do not break CI environments
-that lack GDAL. The cache-layer tests are pure Python and run unconditionally.
-"""
+Registration and metadata; a valid ramp file for each of the four presets; an
+RGB or RGBA GeoTIFF from a synthetic DEM per preset; cache miss writing through
+and a second call hitting; a typed error on an unknown ramp; the LayerURI shape.
+The gdaldem-dependent tests skip when the binary is absent."""
 
 from __future__ import annotations
 
@@ -53,16 +37,10 @@ _GDALDEM_AVAILABLE = shutil.which("gdaldem") is not None
 
 
 def _make_synthetic_dem_tif() -> str:
-    """Create a 32×32 single-band GeoTIFF with a known elevation gradient.
+    """Create a 32x32 single-band GeoTIFF with a known elevation gradient.
 
-    Elevation values go linearly from 0 m (top-left) to 900 m (bottom-right).
-    The file is written to a temp path and returned; caller is responsible for
-    cleanup.
-
-    Uses ``gdal_array`` if available; falls back to a minimal hand-crafted
-    GeoTIFF byte sequence (enough for gdaldem to parse) if GDAL Python
-    bindings are not installed.
-    """
+    Elevation runs linearly from 0 m to 900 m corner to corner; the caller owns the
+    temp path. Falls back to a hand-crafted GeoTIFF when GDAL's bindings are absent."""
     try:
         from osgeo import gdal, gdal_array  # type: ignore[import-not-found]
         import numpy as np  # type: ignore[import-not-found]
@@ -149,12 +127,10 @@ class _S3Body:
 
 
 class FakeStorageClient:
-    """In-memory S3 double (GCP decommissioned). ``store`` keyed by object KEY.
+    """In-memory S3 double; ``store`` is keyed by object KEY.
 
-    Returns the per-test active instance installed by the autouse
-    ``_route_cache_to_inmemory_s3`` fixture so the tool's real S3 read-through
-    (boto3) reads/writes the same store the test inspects.
-    """
+    Returns the per-test instance the autouse fixture installs, so the tool's real
+    boto3 read-through reads and writes the store the test inspects."""
 
     _active: "FakeStorageClient | None" = None
 
@@ -314,13 +290,10 @@ def _make_fake_cog_bytes() -> bytes:
 
 
 def test_cache_hit_skips_fetch_fn():
-    """When the cache is pre-seeded, the fetch function is NOT invoked.
+    """A pre-seeded cache means the fetch function is NOT invoked.
 
-    This test calls ``read_through`` directly (same approach as
-    ``test_cache_miss_writes_through``) with a pre-seeded FakeStorageClient.
-    The key derivation uses the same params dict as ``compute_colored_relief``
-    would use internally, so a pre-seeded entry at that path produces a HIT.
-    """
+    The key derivation uses the same params the tool would, so a pre-seeded entry at
+    that path produces a HIT."""
     fake_gcs = FakeStorageClient()
     dem_uri = "gs://legacy-cloud-cache/cache/static-30d/dem/abc123.tif"
     ramp = "terrain"

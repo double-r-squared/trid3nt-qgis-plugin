@@ -1,31 +1,9 @@
-"""Unit tests for ``compute_aspect`` atomic tool (job-0082, FR-CE-8, FR-DC).
+"""Unit tests for the ``compute_aspect`` atomic tool.
 
-Coverage:
-1. ``test_compute_aspect_registered`` — tool appears in TOOL_REGISTRY with
-   correct metadata (cacheable=True, ttl_class="static-30d",
-   source_class="aspect").
-2. ``test_compute_aspect_south_facing_slope`` — 32×32 synthetic DEM with a
-   known south-facing slope (elevation increases northward → faces south)
-   → aspect ≈ 180° (within ±10° tolerance, interior pixels).
-3. ``test_compute_aspect_horn_vs_zeventhorne_both_succeed`` — both algorithm
-   choices run without error on the synthetic DEM and return near-180°.
-4. ``test_compute_aspect_zero_for_flat_true`` — flat DEM with zero_for_flat=True
-   → output pixels are 0 (not -9999).
-5. ``test_compute_aspect_zero_for_flat_false`` — flat DEM with zero_for_flat=False
-   → output pixels are -9999 (or no-data) not 0.
-6. ``test_compute_aspect_cache_hit_skips_fetch`` — second call with identical
-   args hits the cache (fetch_fn not invoked).
-7. ``test_compute_aspect_cache_miss_writes`` — first call (empty cache) invokes
-   gdaldem and writes to cache bucket.
-8. ``test_compute_aspect_returns_layer_uri`` — LayerURI fields correct (layer_type,
-   role, units match).
-9. ``test_compute_aspect_gdaldem_failure_raises_aspect_compute_error`` — non-zero
-   gdaldem exit raises AspectComputeError(error_code="GDALDEM_FAILED").
-10. ``test_compute_aspect_dem_download_failure_raises_aspect_compute_error`` — GCS
-    download failure raises AspectComputeError(error_code="DEM_DOWNLOAD_FAILED").
-11. ``test_cache_keys_vary_across_combos`` — 4 (algorithm × zero_for_flat) combos
-    produce 4 distinct cache keys.
-"""
+Registration and metadata; a synthetic DEM with a known south-facing slope giving
+an aspect near 180 degrees under either algorithm; ``zero_for_flat`` choosing
+between 0 and nodata on a flat DEM; cache miss writing and hit skipping; the
+returned LayerURI's fields; the typed failures; four combos, four cache keys."""
 
 from __future__ import annotations
 
@@ -64,36 +42,10 @@ def _write_synthetic_dem_south_facing(
     size: int = 32,
     dx_m: float = 10.0,
 ) -> None:
-    """Write a 32×32 GeoTIFF DEM with a known south-facing slope.
+    """Write a 32x32 GeoTIFF DEM whose terrain descends toward the south.
 
-    A south-facing slope has elevation increasing from south to north (row index
-    increases → elevation increases). GDAL's raster convention: row 0 is the
-    northernmost row, row (size-1) is the southernmost row.
-
-    So elevation increases as row index increases (going south → lower elevation
-    in south, higher in north means row 0 = highest, row n-1 = lowest —
-    that's a NORTH-facing slope).
-
-    For a SOUTH-facing slope: row 0 (north) = lowest elevation, row n-1
-    (south) = highest elevation. The gradient descends northward → aspect ≈ 180°
-    (facing south, downslope toward north).
-
-    Wait — aspect is the direction the slope *faces* (i.e., the direction of the
-    downslope direction). A slope that descends toward the north faces NORTH
-    (aspect ≈ 0°/360°). A slope that descends toward the south faces SOUTH
-    (aspect ≈ 180°).
-
-    For aspect ≈ 180° (south-facing):
-    - The terrain descends toward the south.
-    - Row 0 (north edge) has HIGH elevation; row n-1 (south edge) has LOW elevation.
-    - This matches the same layout as a "downslope toward south" gradient.
-
-    GDAL's raster row ordering: row 0 = top (north in a north-up raster).
-    Transform: north edge = max_y, south edge = min_y.
-    For descent southward: elevation[row] decreases as row increases.
-    → row 0 = highest (north), row n-1 = lowest (south).
-    → downslope direction = south → aspect = 180°.
-    """
+    Aspect is the direction the slope FACES, so a southward descent reads near 180
+    degrees; row 0 is the north edge and carries the highest elevation."""
     dz = dx_m * math.tan(math.radians(slope_deg))
     # Row 0 = highest (north); elevation decreases southward → south-facing slope.
     elevations = np.zeros((size, size), dtype=np.float32)
@@ -165,12 +117,10 @@ class _S3Body:
 
 
 class FakeStorageClient:
-    """In-memory S3 double (GCP decommissioned). ``store`` keyed by object KEY.
+    """In-memory S3 double; ``store`` is keyed by object KEY.
 
-    Returns the per-test active instance installed by the autouse
-    ``_route_cache_to_inmemory_s3`` fixture so the tool's real S3 read-through
-    (boto3) reads/writes the same store the test inspects.
-    """
+    Returns the per-test instance the autouse fixture installs, so the tool's real
+    boto3 read-through reads and writes the store the test inspects."""
 
     _active: "FakeStorageClient | None" = None
 

@@ -1,21 +1,9 @@
-"""Unit tests for ``compute_blended_composite`` atomic tool (job-0319).
+"""Unit tests for the ``compute_blended_composite`` atomic tool.
 
-Coverage:
- 1. ``test_compute_blended_composite_registered`` — tool in TOOL_REGISTRY with
-    correct metadata (cacheable=True, ttl_class="static-30d",
-    source_class="blended").
- 2. ``test_blend_resolvable_params_in_allowlist`` — base/overlay layer URIs are
-    in RESOLVABLE_URI_PARAMS so the server resolves handles → COG URIs.
- 3. ``test_compute_blended_composite_multiply_math`` — blends a 3-band RGB base
-    with a 1-band grayscale overlay; asserts output COG has overviews, dims
-    match the base, and the multiply math is correct on a sample pixel.
- 4. ``test_compute_blended_composite_invalid_mode_raises`` — bad blend_mode →
-    typed BlendedCompositeError(error_code="INVALID_BLEND_MODE").
- 5. ``test_compute_blended_composite_returns_layer_uri_fields`` — LayerURI
-    fields correct (raster, role, rgb units, "Shaded" name for multiply).
- 6. ``test_compute_blended_composite_cache_hit_skips_fetch`` — second identical
-    call hits the cache (blend not re-run).
-"""
+Registration and metadata; both layer uris in the resolvable-param allowlist so
+the server resolves handles; the multiply math over a 3-band base and a grayscale
+overlay, with overviews and matching dims; a typed error on a bad blend mode; the
+LayerURI fields; a second identical call hitting the cache."""
 
 from __future__ import annotations
 
@@ -96,11 +84,8 @@ def _write_palette_base(
 ) -> tuple[np.ndarray, dict[int, tuple[int, int, int]]]:
     """Write a single-band palette-INDEX COG with an EMBEDDED color table.
 
-    Mirrors the NLCD land-cover base the agent commonly blends: a uint8 raster
-    of class *indices* whose RGB colors live ONLY in an embedded GDAL color
-    table (``dst.write_colormap``) — there is no explicit per-pixel RGB. Returns
-    ``(index_array (H, W), palette {index: (r, g, b)})``.
-    """
+    The class indices carry no per-pixel RGB - the colours live only in the GDAL
+    color table. Returns the index array and the palette."""
     rng = np.random.default_rng(101)
     classes = np.array(sorted(_NLCD_PALETTE.keys()), dtype=np.uint8)
     idx = rng.choice(classes, size=(size, size)).astype(np.uint8)
@@ -159,12 +144,10 @@ class _S3Body:
 
 
 class FakeStorageClient:
-    """In-memory S3 double (GCP decommissioned). ``store`` keyed by object KEY.
+    """In-memory S3 double; ``store`` is keyed by object KEY.
 
-    Returns the per-test active instance installed by the autouse
-    ``_route_cache_to_inmemory_s3`` fixture so the tool's real S3 read-through
-    (boto3) reads/writes the same store the test inspects.
-    """
+    Returns the per-test instance the autouse fixture installs, so the tool's real
+    boto3 read-through reads and writes the store the test inspects."""
 
     _active: "FakeStorageClient | None" = None
 
@@ -261,10 +244,8 @@ def test_blend_resolvable_params_in_allowlist():
 def test_compute_blended_composite_multiply_math(fake_storage):
     """Blend a 3-band RGB base with a 1-band grayscale overlay.
 
-    Asserts: (a) output COG has overviews, (b) output dims == base dims,
-    (c) multiply math correct on a sample pixel:
-        result_rgb = round(base_rgb * (overlay_gray / 255)).
-    """
+    Overviews are present, the dims match the base, and a sampled pixel equals
+    ``round(base_rgb * overlay_gray / 255)``."""
     with tempfile.TemporaryDirectory() as tmpdir:
         base_path = os.path.join(tmpdir, "base_rgb.tif")
         overlay_path = os.path.join(tmpdir, "overlay_gray.tif")
@@ -318,17 +299,10 @@ def test_compute_blended_composite_multiply_math(fake_storage):
 
 
 def test_compute_blended_composite_palette_base_keeps_palette_colors(fake_storage):
-    """job-0323: a single-band base with an EMBEDDED color table colorizes.
+    """A single-band base with an EMBEDDED color table colorizes.
 
-    The NLCD land-cover base is a single-band palette-INDEX raster whose colors
-    live ONLY in an embedded GDAL color table. The composite MUST carry the real
-    palette color (modulated by the overlay), NOT a flat gray broadcast.
-
-    Asserts, per sampled pixel: the output RGB equals
-        palette_rgb[index] * (overlay_gray / 255)
-    AND that the three channels are NOT all-equal (i.e. it is a real color, not
-    gray) wherever the palette entry is itself non-gray.
-    """
+    The output carries the real palette colour modulated by the overlay, so a sampled
+    pixel is not three equal channels wherever the palette entry is not gray."""
     with tempfile.TemporaryDirectory() as tmpdir:
         base_path = os.path.join(tmpdir, "nlcd_landcover.tif")
         overlay_path = os.path.join(tmpdir, "hillshade.tif")
@@ -387,13 +361,10 @@ def test_compute_blended_composite_palette_base_keeps_palette_colors(fake_storag
 
 
 def test_compute_blended_composite_grayscale_base_no_colormap_stays_gray(fake_storage):
-    """A single-band base with NO embedded color table keeps R=G=B grayscale.
+    """A single-band base with NO embedded color table keeps R=G=B.
 
-    This is the true-grayscale base path (e.g. a hillshade used AS the base):
-    no colormap → the historical grayscale-broadcast behavior must be preserved.
-    Asserts the three output channels are equal per pixel and equal the
-    grayscale base value times the overlay multiply factor.
-    """
+    The true-grayscale path broadcasts, so the three channels are equal and equal the
+    base value times the multiply factor."""
     with tempfile.TemporaryDirectory() as tmpdir:
         base_path = os.path.join(tmpdir, "gray_base.tif")
         overlay_path = os.path.join(tmpdir, "overlay.tif")

@@ -1,27 +1,9 @@
-"""Unit tests for ``compute_change_detection`` (no network).
+"""Unit tests for ``compute_change_detection``, with no network.
 
-All inputs are SYNTHESIZED locally and passed via the precomputed-index
-override URIs (``imagery_a_uri`` / ``imagery_b_uri``), so the full pipeline
-(stage -> resample-onto-A -> delta -> threshold -> vectorize -> FGB) runs for
-real without touching the Planetary Computer.
-
-Coverage:
-1.  ``test_registered`` -- tool in TOOL_REGISTRY, cacheable=False /
-    ttl_class="live-no-cache".
-2.  ``test_gain_loss_polygons_hand_checked`` -- a synthetic pair with a known
-    gain block and a known loss block yields exactly those polygons with
-    hand-computed areas + the categorical gain/loss legend.
-3.  ``test_no_change_raises`` -- identical rasters raise the honest typed
-    ``ChangeDetectionNoChangeError`` (never an empty layer).
-4.  ``test_threshold_respected`` -- a delta below the threshold is no-change;
-    lowering the threshold surfaces it.
-5.  ``test_mismatched_grid_resampled`` -- raster B on a coarser grid is
-    resampled onto A's grid and still detects the change.
-6.  ``test_requires_both_override_uris`` / ``test_requires_dates_when_no_overrides``
-    / ``test_bad_bbox_raises`` / ``test_aoi_clamp_raises`` /
-    ``test_bad_index_raises`` -- typed input validation.
-7.  ``test_category_and_corpus`` -- primary category + routing-corpus presence.
-"""
+Every input is SYNTHESIZED locally and passed through the precomputed-index
+override uris, so the whole pipeline runs for real. A known gain block and loss
+block yield exactly those polygons with hand-computed areas; identical rasters
+raise the typed no-change error rather than an empty layer; a coarse grid resamples."""
 
 from __future__ import annotations
 

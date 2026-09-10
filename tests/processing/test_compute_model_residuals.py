@@ -1,41 +1,9 @@
-"""Unit tests for ``compute_model_residuals`` (no network).
+"""Unit tests for ``compute_model_residuals``, with no network.
 
-Inputs are SYNTHESIZED locally: a UTM "simulated head" raster with a linear
-ramp (so bilinear sampling reduces to an exact value at any point, in-bounds
-or off-center) + a small EPSG:4326 point GeoJSON of "observed" values with
-USGS-groundwater-shaped attributes (``water_level`` / ``parameter_code`` /
-``vertical_datum`` / ``unit``), passed via ``observations_layer_uri`` --
-mirrors the ``compute_flood_depth_damage`` test pattern.
-
-Coverage:
-1.  ``test_registered`` -- TOOL_REGISTRY entry, cacheable=False /
-    live-no-cache, open_world_hint=True.
-2.  ``test_residuals_matches_hand_computed`` -- exact-offset observed values
-    at points colinear with the ramp -> exact mean_error/rmse/mae/bias.
-3.  ``test_footprint_filtering`` -- a point outside the raster extent is
-    dropped + noted; not counted in n_points.
-4.  ``test_no_points_in_footprint_raises`` -- every point outside -> typed
-    honest error.
-5.  ``test_all_nodata_raises`` -- every in-footprint point lands on nodata.
-6.  ``test_small_n_caveat`` -- n=2 points still returns full stats + a
-    small-n caveat note and flag.
-7.  ``test_units_warning_elevation_pcode`` / ``_depth_pcode`` / ``_mixed`` --
-    the honest units/semantics warning for each USGS pcode family, including
-    the mixed-fetch filter-and-note behaviour.
-8.  ``test_generic_field_auto_detect`` -- a non-USGS layer with a plain
-    ``value`` column is auto-detected + gets the generic disclaimer.
-9.  ``test_observed_value_field_verbatim`` -- explicit override bypasses
-    auto-detection.
-10. ``test_missing_field_raises`` -- unresolvable field -> typed input error
-    listing available columns.
-11. ``test_bbox_fetch_path`` -- no observations_layer_uri; bbox drives the
-    shared-core USGS fetch (mocked), correct bbox passed through.
-12. ``test_no_selector_raises`` -- neither observations_layer_uri nor bbox.
-13. ``test_category_and_corpus`` -- primary/secondary category + routing
-    corpus presence.
-14. ``test_uri_registry_resolvable_params`` -- model_layer_uri /
-    observations_layer_uri are handle-resolvable (registry-handle path).
-"""
+Inputs are SYNTHESIZED locally - a UTM ramp raster, so bilinear sampling is exact
+at any point, and a small point layer of observed values - giving exact error
+statistics. Covered: footprint filtering and its refusals, the small-n caveat,
+the units warning, field auto-detection and its override, the bbox fetch path."""
 
 from __future__ import annotations
 

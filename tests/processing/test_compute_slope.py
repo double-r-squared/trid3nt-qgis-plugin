@@ -1,26 +1,9 @@
-"""Unit tests for ``compute_slope`` atomic tool (job-0081, FR-CE-8, FR-DC).
+"""Unit tests for the ``compute_slope`` atomic tool.
 
-Coverage:
-1. ``test_compute_slope_registered`` — tool appears in TOOL_REGISTRY with
-   correct metadata (cacheable=True, ttl_class="static-30d",
-   source_class="slope").
-2. ``test_compute_slope_degrees_known_gradient`` — 32×32 synthetic DEM with a
-   known 1° linear N-S slope → computed degrees ≈ 1° (within ±0.1° tolerance).
-3. ``test_compute_slope_percent_conversion`` — same DEM → percent output
-   verifies tan(1°) × 100 ≈ 1.745% (within ±0.1% tolerance).
-4. ``test_compute_slope_horn_vs_zeventhorne_both_succeed`` — both algorithm
-   choices run without error on the synthetic DEM.
-5. ``test_compute_slope_cache_hit_skips_fetch`` — second call with identical
-   args hits the cache (fetch_fn not invoked).
-6. ``test_compute_slope_cache_miss_writes`` — first call (empty cache) invokes
-   gdaldem and writes to cache bucket.
-7. ``test_compute_slope_returns_layer_uri`` — LayerURI fields correct (layer_type,
-   role, units match).
-8. ``test_compute_slope_gdaldem_failure_raises_slope_compute_error`` — non-zero
-   gdaldem exit raises SlopeComputeError(error_code="GDALDEM_FAILED").
-9. ``test_compute_slope_dem_download_failure_raises_slope_compute_error`` — GCS
-   download failure raises SlopeComputeError(error_code="DEM_DOWNLOAD_FAILED").
-"""
+Registration and metadata; a synthetic DEM with a known one-degree gradient
+reading back in degrees and, as percent, its tangent; both algorithm choices
+running; cache miss writing and hit skipping; the returned LayerURI's fields;
+and the typed failures on a non-zero gdaldem exit and on a failed DEM read."""
 
 from __future__ import annotations
 
@@ -61,19 +44,10 @@ def _write_synthetic_dem(
     size: int = 32,
     dx_m: float = 10.0,
 ) -> None:
-    """Write a 32×32 GeoTIFF DEM with a known N-S linear slope.
+    """Write a 32x32 GeoTIFF DEM with a known north-south linear slope.
 
-    The DEM has elevation values chosen so that the rise/run over each cell in
-    the N-S direction equals ``tan(slope_deg)`` when grid spacing is ``dx_m``
-    meters. We use a simple Albers-like projected CRS (EPSG:5070) so that GDAL
-    interprets pixel spacing correctly (not geographic degrees).
-
-    The N-S gradient per pixel (rise per row) is:
-        dz = dx_m * tan(slope_deg * π / 180)
-
-    Row 0 has the highest elevation; elevation decreases southward (row index
-    increases → elevation decreases), giving a uniform downslope toward south.
-    """
+    The per-row rise is ``dx_m * tan(slope_deg)`` and the CRS is metric, so GDAL
+    reads the pixel spacing as metres; row 0 is the north edge and the highest."""
     dz = dx_m * math.tan(math.radians(slope_deg))
     # Build elevation grid: row 0 = max elevation, row n-1 = min.
     elevations = np.zeros((size, size), dtype=np.float32)

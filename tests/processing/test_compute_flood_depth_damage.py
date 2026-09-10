@@ -1,28 +1,9 @@
-"""Unit tests for ``compute_flood_depth_damage`` (no network).
+"""Unit tests for ``compute_flood_depth_damage``, with no network.
 
-Inputs are SYNTHESIZED locally: a UTM depth raster with hand-placed depths +
-a small EPSG:4326 point GeoJSON with NSI-shaped attributes (``val_struct`` /
-``found_ht`` / ``occtype``), passed via ``assets_uri``, so the full pipeline
-(stage -> bounds -> sample-in-raster-CRS -> curve -> USD -> FGB) runs offline.
-
-Coverage:
-1.  ``test_registered`` -- tool in TOOL_REGISTRY, cacheable=False /
-    live-no-cache.
-2.  ``test_curve_interpolation`` -- hand-checked curve cells (table rows,
-    midpoints, below-0 floor, 16-ft cap).
-3.  ``test_damage_matches_hand_computed`` -- a 4-ft-deep structure carries the
-    EGM/HAZUS 0.471 fraction and fraction x val_struct dollars; totals agree.
-4.  ``test_found_ht_reduces_damage`` -- foundation height shifts the curve.
-5.  ``test_dry_and_nodata_points_zero`` -- dry cells + nodata cells = 0 damage
-    with the honest nodata note.
-6.  ``test_no_value_attribute`` -- fractions still computed; USD totals cover
-    0 structures with a note.
-7.  ``test_no_structures_raises`` -- empty asset layer raises the typed error.
-8.  ``test_nsi_fetch_used_when_no_assets`` -- fetch_usace_nsi is called with
-    the raster's EPSG:4326 bounds when assets_uri is omitted.
-9.  ``test_bad_units_raises`` -- typed input validation.
-10. ``test_category_and_corpus`` -- primary category + routing-corpus presence.
-"""
+Inputs are SYNTHESIZED locally - a UTM depth raster with hand-placed depths and a
+small point layer with the expected attributes - so the whole pipeline runs
+offline. Hand-checked curve cells including the floor and the cap, foundation
+height shifting the curve, dry and nodata points at zero, and typed refusals."""
 
 from __future__ import annotations
 
@@ -108,13 +89,10 @@ def _point_feature(
 
 @pytest.fixture()
 def depth_and_assets(tmp_path):
-    """Depth raster with hand-placed depths + 4 NSI-shaped structure points.
+    """Depth raster with hand-placed depths and four structure points.
 
-    - cell (5, 5): 4 ft of water   -> structure A (val 200k, found_ht 0)
-    - cell (10, 10): 6 ft of water -> structure B (val 100k, found_ht 2 ft)
-    - cell (20, 20): dry (0)       -> structure C (val 300k)
-    - cell (30, 30): NODATA        -> structure D (val 150k)
-    """
+    One structure stands in water, one behind a foundation height, one dry and one on
+    a nodata cell, each with its own declared value."""
     depth = np.zeros((N, N), dtype="float64")
     depth[5, 5] = 4.0 * FT_TO_M
     depth[10, 10] = 6.0 * FT_TO_M

@@ -1,29 +1,9 @@
-"""Unit tests for the watershed primitives (no network).
+"""Unit tests for the watershed primitives, with no network.
 
-The DEM is a SYNTHETIC south-draining V-valley in EPSG:4326 passed via the
-``dem_uri`` override, so the full pysheds D8 chain (fill_pits ->
-fill_depressions -> resolve_flats -> flowdir -> accumulation -> catchment /
-extract_river_network) runs for real without touching Copernicus.
-
-Coverage:
-1.  ``test_registered`` -- both tools in TOOL_REGISTRY with cacheable=False /
-    ttl_class="live-no-cache".
-2.  ``test_watershed_contains_pour_point`` -- the delineated polygon contains
-    the (snapped) pour point AND the upstream valley axis; area/cell_count
-    are consistent; the notes document the pysheds engine path.
-3.  ``test_watershed_excludes_downstream_cells`` -- a valley-axis point
-    DOWNSTREAM (south) of a mid-valley pour point is NOT inside the upstream
-    catchment.
-4.  ``test_streams_follow_valley`` -- at the default 500-cell threshold the
-    network is the main stem: every extracted stream vertex lies on the
-    valley center line (+- 1 cell).
-5.  ``test_no_streams_raises`` -- an impossible threshold raises the typed
-    ``NoStreamsError``.
-6.  ``test_auto_bbox_is_0p1_deg`` -- the default bbox is the 0.1-degree box
-    centered on the pour point.
-7.  ``test_aoi_clamp_raises`` / ``test_bad_inputs_raise`` -- typed input
-    validation for both tools.
-"""
+The DEM is a SYNTHETIC south-draining V-valley passed through the override uri,
+so the full D8 chain runs for real. The delineated polygon holds the snapped pour
+point and the upstream axis and excludes a downstream one; the network follows
+the valley centre line; the threshold, the AOI clamp and bad inputs refuse typed."""
 
 from __future__ import annotations
 
@@ -301,11 +281,10 @@ def _bowl_dem(path: str, origin_lon: float, top_lat: float, dx: float, n: int) -
 
 
 def test_index_space_beats_coordinate_path_on_convergent_dem(tmp_path) -> None:
-    """The bug the shared tool carried: ``grid.catchment(xytype="coordinate")``
-    round-trips the outlet coordinate to a NEIGHBOUR cell on some alignments and
-    collapses the basin to a sliver. On a convergent bowl the OLD coordinate path
-    returns a handful of cells while the FIXED index-space delineation (what
-    ``delineate_watershed`` now uses) captures the whole convergent interior."""
+    """Index-space delineation, not the coordinate path.
+
+    Rounding an outlet coordinate to a neighbour cell collapses a convergent basin to
+    a sliver, where the index-space delineation captures the whole interior."""
     from trid3nt_server.tools.processing._hydrology_common import _condition_dem
 
     dem = str(tmp_path / "bowl.tif")

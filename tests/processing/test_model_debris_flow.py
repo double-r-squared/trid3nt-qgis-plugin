@@ -1,27 +1,9 @@
-"""Unit tests for the ``model_debris_flow`` composer tool (no network).
+"""Unit tests for the ``model_debris_flow`` composer tool, with no network.
 
-All inputs are SYNTHESIZED locally and passed via the override URIs
-(``dem_uri`` / ``severity_uri`` / ``kf_uri``), so the full pfdf pipeline
-(watershed -> Segments -> Staley 2017 M1 -> Gartner 2014 -> Cannon 2010)
-runs for real without touching Copernicus / MTBS / STATSGO.
-
-Coverage:
-1.  ``test_registered`` -- tool in TOOL_REGISTRY with cacheable=False /
-    ttl_class="live-no-cache".
-2.  ``test_full_pipeline_synthetic`` -- 60x60 UTM valley DEM + BARC4
-    moderate/high burn patch + constant KF -> segments GeoJSON with the three
-    required properties (likelihood, volume_m3, hazard_class), consistent
-    counts, and a typed ``DebrisFlowLayerURI`` return (a ``LayerURI``
-    subclass, so the emit_tool_call wrap-site persists the hazard layer to
-    the case record -- renders + exports + cold view).
-3.  ``test_dnbr_severity_input`` -- a CONTINUOUS dNBR severity_uri raster is
-    auto-detected and classified via pfdf.severity.estimate.
-4.  ``test_aoi_clamp_raises`` -- AOI over 0.15 deg per side ->
-    AoiTooLargeError.
-5.  ``test_no_burn_raises`` -- all-unburned severity raster -> NoBurnDataError.
-6.  ``test_bad_bbox_raises`` / ``test_bad_intensity_raises`` -- input
-    validation is typed.
-"""
+All inputs are SYNTHESIZED locally and passed through the override uris, so the
+full pipeline runs for real. A valley DEM with a burn patch gives segments
+carrying likelihood, volume and hazard class and a typed layer return; a
+continuous severity raster is auto-detected; the AOI and inputs refuse typed."""
 
 from __future__ import annotations
 
