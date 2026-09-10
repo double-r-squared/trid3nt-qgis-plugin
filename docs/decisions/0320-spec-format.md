@@ -20,7 +20,7 @@ under `docs/specs/` and published as an artifact for review. The format:
 - **UML** for structure: class diagrams (mermaid) for the static shape,
   simple flow/state diagrams (also mermaid) for loops and
   pipelines. Diagrams depict the mechanism, with labeled arrows.
-- **Plain presentation.** Reference-style HTML: default typography, thin-bordered tables, bordered code blocks with PYTHON SYNTAX COLORING (the self-contained inline highlighter from workflow-blueprint.html - artifacts load no external libs), mermaid for ALL diagrams - no decorative styling, fonts, or hand-drawn SVG.
+- **Plain presentation.** Reference-style HTML: default typography, thin-bordered tables, bordered code blocks with PYTHON SYNTAX COLORING (a self-contained inline highlighter - artifacts load no external libs), mermaid for ALL diagrams - no decorative styling, fonts, or hand-drawn SVG.
 - **Plain language.** No design-pattern names, no jargon - describe what the
   code does ("a fixed spine of steps; engine-touching steps delegate to the
   official library"), not which pattern it resembles. Pattern vocabulary is
@@ -41,8 +41,11 @@ that mixes analysis with commitment reads as neither.
 
 ## First instance
 
-`docs/specs/workflow-blueprint.html` - the mesh-tool spec (rev 4), the
-template for the next one.
+The blueprint this format was ruled during was a plan the mesh wave landed, and
+it was deleted with the rest of the superseded material. The format survives it:
+`docs/specs/mesh-recipe.html` and `docs/specs/module-surface.html` are the pages
+to copy, and a new spec that wants python coloring writes its own inline
+highlighter rather than loading one.
 
 ## Amended 2026-09-09 - what a spec may draw, now that the model exists
 

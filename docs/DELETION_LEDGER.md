@@ -3692,3 +3692,26 @@ lands. Two companion assertions keep the exemption honest - the set may name
 only templates that actually register, and a name whose directory appears must
 leave the set, which the strict xfail also catches by turning into an
 unexpected pass.
+
+## The two landed plans, and one staging file - 2026-09-10
+
+The completeness critic named these and left the call to the orchestrator:
+"superseded material is DELETED outright because git is the archive" is the
+census ruling, and a landed plan is superseded by the thing it planned. Both
+had a REWRITE verdict from their lens; a rewrite of a plan whose work is done
+produces a description of the tree, which `docs/model/` already is.
+
+| what | where it lived | why | state | source |
+| --- | --- | --- | --- | --- |
+| `docs/design/offline-architecture.md` (123) | `docs/design/` | The 2026-07-04 design of the GCP-to-local port. The port landed two months before this wave; its four GAPs are all closed or purged, its migration table names Bedrock and AWS as the from-side, it names `scripts/sync_from_grace2.sh` and a titiler `compose.yml` that the tree does not carry, and it vendors from a GRACE-2 upstream that no longer feeds this repo | DELETED (2026-09-10) | `hygiene-manifest/docs-and-readmes.md` critic round 1 |
+| `docs/specs/workflow-blueprint.html` (293) | `docs/specs/` | The mesh-tool spec. It opens "what is being added: the mesh tool" - work the mesh wave landed. Its plan-language half died at module-surface stage 3 and its skeleton half is the live `Workflow` base and door, so what a reader would learn from it is either done or wrong | DELETED (2026-09-10) | `hygiene-manifest/docs-and-readmes.md` critic round 1 |
+| `docs/validation/corpus-additions.yaml` (118) | `docs/validation/` | Nine tools' retrieval phrasings staged for a hand-merge, under a header citing ADR 0021 (deleted with the 218). Five of the nine are gone from the tree (`fetch_high_water_marks`, `fetch_flood_extent_observation`, and the three `set_*_parameters` that died with the input-review gate); the other four are registered and already carry their queries in their own co-located `corpus.yaml`, which `test_every_registered_tool_has_corpus_queries` enforces. Nothing was owed | DELETED (2026-09-10) | this wave's remedy leg |
+
+Three references were repointed rather than left dangling: `docs/specs/square-
+two.html` listed the blueprint as a child spec, `docs/decisions/0320-spec-
+format.md` named it as the format's first instance and as the source of the
+inline python highlighter, and `docs/validation/README.md` indexed the staging
+file. 0320 is a BINDING record, so it is amended in place per the census
+ruling rather than left contradicting the tree. Dated records that name the
+three are left verbatim: `docs/validation/docs-census.md`, `mesh-wave-
+conformance.md` and the manifest's own rows say what was true when written.

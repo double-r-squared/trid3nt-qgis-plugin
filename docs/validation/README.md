@@ -51,5 +51,4 @@ order and the open-questions list were superseded by the rulings in
 | `external-fetch-audit.md`, `fallback-audit.md`, `demo-physics-defaults-audit.md` | three dated audits, moved here from `docs/design/` because a dated measurement is not a standing design |
 | `afk-ledger-2026-08-24.md` | one closed AFK design-decision ledger, moved out of `docs/decisions/` because it is not a decision record |
 | `docstring-exemptions.md` | the regenerated `# docstring-exempt:` ledger, written by the guard test |
-| `corpus-additions.yaml` | retrieval phrasings staged for addition to a registered tool's own corpus |
 | `code-graph/` | the code atlas the instrument writes: its summary, orphan and dead-symbol reports. `graph.json` is machine-only and untracked |
