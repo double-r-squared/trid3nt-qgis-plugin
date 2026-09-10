@@ -1,60 +1,8 @@
-"""The Charts window -- a TUFLOW-Viewer-style bottom dock for the session's
-charts (NATE charts-window directive 2026-08-04).
+"""The Charts window -- a bottom-docked window for the session's charts.
 
-The charts used to render in a small collapsible "Charts (N)" panel pinned
-under the chat message list (``charts.ChartsPanel``, now deleted). NATE's
-directive: charts get their OWN window that "looks and operates similar to
-tuflow viewer, where it has interactive maps and displays at the bottom of
-the app window horizontally". This module is that window:
-
-* ``ChartsWindow`` -- a ``QDockWidget`` the dock docks to
-  ``Qt.BottomDockWidgetArea`` of the QGIS main window (the TUFLOW Viewer
-  position). Horizontal layout: a thin chart-list strip (left) for switching
-  among the session's charts, the chart canvas centre-stage, a matplotlib
-  navigation toolbar (pan / x-zoom / home) above it, and a status row below
-  (hover readout + click-inspect readout + a "Locate on map" affordance).
-  Floating / re-docking is native ``QDockWidget``.
-
-* The pure Vega-Lite -> matplotlib renderer stays in ``charts.render_spec``
-  (byte-identical -- it only changed homes); this module imports it. The
-  window adds the INTERACTIVITY the inline panel never had:
-
-  (a) HOVER readout -- ``motion_notify_event`` reports the cursor's data
-      coords in a status row.
-  (b) CLICK-TO-INSPECT -- ``button_press_event`` finds the nearest plotted
-      vertex (line series + scatter collections), highlights it, and shows
-      its value + series label.
-  (c) X-ZOOM / PAN -- the matplotlib ``NavigationToolbar`` (pan, rubber-band
-      zoom, home) is embedded; a plain scroll-wheel also zooms the x-axis
-      about the cursor.
-  (d) MAP LINKAGE -- a chart that carries a ``source_layer_uri`` gets a
-      "Locate on map" button; clicking it calls back into the dock to pan +
-      flash the QGIS canvas to that layer's extent (the honest reachable
-      half of TUFLOW's map<->plot linking; per-feature click->plot linking
-      needs per-feature series data the ``chart-emission`` payload does not
-      carry today -- ).
-
-Durability: the window's chart list rebuilds from the persisted
-``SessionChartRecord`` replay on every case open (``set_charts``); a case
-switch clears it (``clear``) -- charts are per-Case state (the per-case
-durability norm).
-
-matplotlib import is GUARDED in ``charts``: when absent the chart canvas
-degrades to ``MissingMatplotlibPanel`` -- what's missing, why, and ONE
-copy-able fix for the platform actually running (NATE ground truth,
-live-verified, supersedes every earlier console/PYTHONPATH attempt in this
-module's history): Linux and Windows QGIS pythons have pip, so the panel
-shows a plain ``pip install matplotlib`` one-liner for them
-(``charts.linux_install_command`` / ``charts.windows_install_command``).
-QGIS 4's bundled python on macOS has NO pip module at all ("No module
-named pip") -- there is no interpreter here to install into, pip-based or
-otherwise, so the panel instead shows ``charts.mac_wheel_recipe``: a
-two-line recipe that downloads prebuilt wheels with the SYSTEM python3 (a
-pure downloader) and unzips them straight into the QGIS profile's own
-``python/`` dir, already on QGIS's ``sys.path``. The panel never runs
-anything itself -- every command is for the user to paste into a real
-terminal, then restart QGIS.
-"""
+The RENDERER stays in ``charts.render_spec``; this module carries none of its
+own. Charts are per-Case state, so a case switch clears the list, and a chart
+with no ``source_layer_uri`` or no callback disables Locate-on-map."""
 
 from __future__ import annotations
 
@@ -92,16 +40,12 @@ if charts.matplotlib_available():
         except Exception:  # noqa: BLE001 -- no toolbar, canvas still renders
             _NAV_TOOLBAR = None
 
-# Compact nav toolbar (NATE chart-chrome feedback, first live look, QGIS 4
-# mac: "there is a large header ... maybe we can shrink it"). The stock
-# ``NavigationToolbar2QT`` draws its full Home/Back/Forward/Pan/Zoom/
-# Subplots/Customize/Save set with text-under-icon buttons at retina icon
-# sizes -- a tall row for a dock that is supposed to be short-and-wide. This
-# keeps only the subset a chart dock actually needs (Home/Pan/Zoom/Save),
-# icon-only, at a small fixed icon size, with the coordinate readout off
-# (the dock's own ``hover_label`` already shows x/y -- ADR: interactivity
-# (a) above). Guarded exactly like ``_NAV_TOOLBAR``: None when matplotlib/the
-# toolbar backend is absent.
+# A compact nav toolbar. The stock ``NavigationToolbar2QT`` draws its full
+# button set with text-under-icon labels at retina icon sizes -- a tall row for
+# a dock that is meant to be short and wide. This keeps only the subset a chart
+# dock needs, icon-only, at a small fixed icon size, with the coordinate
+# readout OFF because the window's own hover label already shows x and y.
+# Guarded like ``_NAV_TOOLBAR``: None when the toolbar backend is absent.
 _COMPACT_TOOLITEMS = {"Home", "Pan", "Zoom", "Save"}
 _TOOLBAR_ICON_SIZE = QSize(16, 16)
 _CompactNavToolbar = None
@@ -129,11 +73,9 @@ if _NAV_TOOLBAR is not None:
 
 
 class _CompactTitleBar(QWidget):
-    """A slim ``QDockWidget.setTitleBarWidget`` replacement (NATE: "there is
-    a large header ... I think it is the default. Maybe we can shrink it?").
-    A fixed-height single row: small-font title, stretch, float + close --
-    the same two affordances the native title bar gave, just without its
-    generous default padding/icon sizing."""
+    """A slim ``setTitleBarWidget`` replacement: one fixed-height row with a
+    small-font title, float and close -- the same two affordances the native
+    title bar gives, without its generous padding and icon sizing."""
 
     _HEIGHT = 20  # px -- vs the platform-default title bar (30-40+ px)
 
@@ -169,7 +111,7 @@ class _CompactTitleBar(QWidget):
         self.setFixedHeight(self._HEIGHT)
 
 
-_CANVAS_MIN_HEIGHT = 220  # px -- the bottom dock is short + wide (TUFLOW-esque)
+_CANVAS_MIN_HEIGHT = 220  # px -- the bottom dock is short and wide
 _LIST_WIDTH = 180  # px -- the thin chart-switcher strip
 
 
@@ -191,24 +133,13 @@ def _platform_command(platform_id: str) -> str:
 
 class MissingMatplotlibPanel(QWidget):
     """The guided fix shown in place of the chart canvas when matplotlib is
-    unavailable in this QGIS python (QGIS 4's macOS/Windows bundles dropped
-    it; QGIS 3 shipped it). Explains what's missing and why, and shows ONE
-    copy-able command for the platform actually running (never hardcoded --
-    derived from ``charts`` at render time).
-
-    Nothing here runs in-dock, by design, not laziness: an in-dock "Attempt
-    install" that launched a QGIS-derived interpreter via ``QProcess``
-    failed to even start inside the QGIS app-bundle process on NATE's
-    macOS QGIS (``ProcessError.FailedToStart``); worse, QGIS 4's bundled
-    python on macOS has NO pip module at all ("No module named pip",
-    live-verified) -- there is no interpreter here an in-dock installer
-    could target even if the launch worked. On Linux/Windows the command is
-    a plain ``pip install`` one-liner for the user's own terminal; on
-    macOS it is NATE's verified wheel-download recipe, run with the
-    SYSTEM python3, never QGIS's own. matplotlib is picked up on the next
-    QGIS restart (Python's module cache is fresh then), so there is no
-    in-app reload/recheck action either.
-    """
+    unavailable, with ONE copy-able command derived at render time for the
+    platform actually running. This panel NEVER runs anything itself."""
+    # There is nothing for it to run: QGIS 4's bundled python on macOS has no
+    # pip at all, and a QProcess launch of a QGIS-derived interpreter does not
+    # even start inside the app bundle. matplotlib installed from a real
+    # terminal is picked up on the next QGIS restart, when Python's module
+    # cache is fresh, so there is no in-app recheck action either.
 
     def __init__(self, parent: Optional[QWidget] = None):
         super().__init__(parent)
@@ -266,18 +197,9 @@ class MissingMatplotlibPanel(QWidget):
 
 
 class ChartsWindow(QDockWidget):
-    """The session's charts, in a bottom-docked TUFLOW-Viewer-style window.
-
-    Public API mirrors the deleted ``ChartsPanel`` so the dock wiring is a
-    drop-in swap: ``set_charts`` (case-open replay), ``add_chart`` (live
-    ``chart-emission`` frame, de-duped on ``chart_id``), ``clear`` (case
-    switch), ``count`` / ``current_chart_id``. ``last_render_summary`` carries
-    the current chart's ``render_spec`` output for the headless harness.
-
-    ``locate_callback`` is the dock's ``_locate_layer_on_map`` -- invoked with
-    a chart's ``source_layer_uri`` when the user clicks "Locate on map". None
-    (headless / no callback) simply disables the button.
-    """
+    """The session's charts, in a bottom-docked window. ``locate_callback``
+    is invoked with a chart's ``source_layer_uri`` on Locate-on-map; None
+    simply disables that button."""
 
     def __init__(
         self,
@@ -402,12 +324,11 @@ class ChartsWindow(QDockWidget):
             return self._charts[self._index].get("chart_id")
         return None
 
-    # -- dock-facing API (drop-in for the old ChartsPanel) -------------------- #
+    # -- dock-facing API ------------------------------------------------------ #
 
     def set_charts(self, payloads: list) -> int:
-        """Replace-all for the case-open replay (``session_state.charts``,
-        persisted oldest-first). Shows the NEWEST chart. Returns the count of
-        usable charts (the per-case durability rebuild)."""
+        """Replace-all for the case-open replay, which arrives oldest-first.
+        Shows the NEWEST chart; returns the count of usable ones."""
         self._charts = []
         seen = set()
         for raw in payloads or []:
@@ -421,9 +342,8 @@ class ChartsWindow(QDockWidget):
         return len(self._charts)
 
     def add_chart(self, payload: Any) -> bool:
-        """One live ``chart-emission`` frame. De-dupes on chart_id (a re-emit
-        re-shows the existing entry). Returns True when a NEW chart was
-        added."""
+        """One live chart frame. De-dupes on chart_id, so a re-emit re-shows
+        the existing entry; True only when a NEW chart was added."""
         chart = charts.parse_chart_payload(payload)
         if chart is None:
             return False
@@ -438,7 +358,7 @@ class ChartsWindow(QDockWidget):
         return True
 
     def clear(self) -> None:
-        """Case switch: charts are per-Case state (per-case durability norm)."""
+        """Case switch: charts are per-Case state and do not survive one."""
         self._charts = []
         self._index = 0
         self._refresh()
@@ -500,8 +420,8 @@ class ChartsWindow(QDockWidget):
         )
 
     def _teardown_canvas(self) -> None:
-        """Drop the current canvas + toolbar and disconnect its mpl event
-        callbacks (a fresh chart gets a fresh canvas bound to its own axes)."""
+        """Drop the current canvas and toolbar and disconnect its event
+        callbacks: a fresh chart gets a fresh canvas bound to its own axes."""
         for cid_attr in ("_motion_cid", "_press_cid", "_scroll_cid"):
             cid = getattr(self, cid_attr)
             if cid is not None and self._canvas is not None:
@@ -562,7 +482,7 @@ class ChartsWindow(QDockWidget):
             "scroll_event", self._on_scroll
         )
 
-    # -- interactivity: hover (a) -------------------------------------------- #
+    # -- interactivity: hover ------------------------------------------------ #
 
     def _on_motion(self, event) -> None:
         if event.inaxes is None or event.xdata is None or event.ydata is None:
@@ -572,14 +492,12 @@ class ChartsWindow(QDockWidget):
             f"x = {event.xdata:.4g}    y = {event.ydata:.4g}"
         )
 
-    # -- interactivity: click-to-inspect (b) --------------------------------- #
+    # -- interactivity: click-to-inspect ------------------------------------- #
 
     def nearest_vertex(self, x_pixel: float, y_pixel: float):
         """Nearest plotted vertex to a DISPLAY-space point, across every line
-        series and scatter collection on the current axes. Returns
-        ``(x_data, y_data, label)`` or None. Pure geometry (display-space
-        distance so log axes + differing x/y scales compare fairly) so the
-        harness can assert it without synthesizing a mouse event."""
+        series and scatter on the current axes -> ``(x_data, y_data, label)``
+        or None. Display space, so log and mismatched scales compare fairly."""
         if self._ax is None:
             return None
         best = None
@@ -639,7 +557,7 @@ class ChartsWindow(QDockWidget):
         except Exception:  # noqa: BLE001 -- highlight is best-effort chrome
             pass
 
-    # -- interactivity: wheel x-zoom (c) ------------------------------------- #
+    # -- interactivity: wheel x-zoom ----------------------------------------- #
 
     def _on_scroll(self, event) -> None:
         if event.inaxes is None or self._ax is None or event.xdata is None:
@@ -655,7 +573,7 @@ class ChartsWindow(QDockWidget):
         except Exception:  # noqa: BLE001
             pass
 
-    # -- interactivity: map linkage (d) -------------------------------------- #
+    # -- interactivity: map linkage ------------------------------------------ #
 
     def _on_locate(self) -> None:
         chart = (

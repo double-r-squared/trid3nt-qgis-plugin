@@ -1,48 +1,8 @@
-"""The pure Vega-Lite -> matplotlib chart renderer for the TRID3NT plugin
-(live-feedback 2026-07-13, OpenQuake result parity; charts-window 2026-08-04).
+"""The pure Vega-Lite -> matplotlib chart renderer for the TRID3NT plugin.
 
-The web UI renders the agent's ``chart-emission`` payloads (Vega-Lite v5
-specs -- contracts ``chart_contracts.ChartEmissionPayload``) as inline chart
-cards; the QGIS plugin renders the same payloads with the small interpreter
-below:
-
-* ``parse_chart_payload`` / spec helpers -- defensive, pure-python handling
-  of the wire payload (chart_id + title + caption + vega_lite_spec).
-* ``render_spec`` -- a deliberately SMALL Vega-Lite interpreter that draws
-  the subset our agent actually emits (see ``chart_tools.py``: line+point,
-  dashed rule reference lines, bar, rect/heatmap) onto a matplotlib Figure.
-  It is NOT a general Vega renderer; unknown marks are skipped and counted,
-  never crashed on -- a malformed persisted spec must not break a case open.
-
-The interactive surface that HOSTS ``render_spec`` is ``charts_window
-.ChartsWindow`` -- the bottom-docked TUFLOW-Viewer-style window (NATE
-charts-window directive 2026-08-04). This module is the renderer only; it
-carries no Qt widgets of its own.
-
-Rendering choice (researched 2026-07-13): matplotlib ``FigureCanvasQTAgg``
-embedded in the dock. Debian QGIS 3.40 ships matplotlib (3.10) in the same
-system python as PyQt5, the QtAgg backend binds to the already-imported
-qgis.PyQt binding, and it gives log-log axes / legends / dashed rules for
-free -- the hazard curve is log-log, which pure-QPainter code would have to
-hand-roll. GEM's IRMT plugin was rejected (not installed, its viewer is
-coupled to OQ-engine NRML outputs, not our Vega payloads); a server-side PNG
-render was rejected (server change + restart + flood smoke for zero offline
-benefit). matplotlib import is GUARDED: when absent the window degrades to a
-guided fix panel -- see ``charts_window.MissingMatplotlibPanel`` -- never a
-crash. QGIS 4's macOS/Windows bundles dropped matplotlib (QGIS 3 shipped
-it); the guard + panel below are what makes that survivable offline.
-
-The fix is PER-OS (NATE ground truth, live-verified, supersedes every
-earlier console/PYTHONPATH attempt): Linux and Windows QGIS pythons have
-pip, so ``linux_install_command`` / ``windows_install_command`` below are
-plain ``pip install`` one-liners. macOS QGIS 4's bundled python has NO pip
-module at all ("No module named pip") -- nothing installs into it, so
-``mac_wheel_recipe`` instead downloads prebuilt wheels with the system
-python3 (a pure downloader) and unzips them straight into the QGIS
-profile's own ``python/`` dir, which is already on QGIS's ``sys.path``.
-Nothing here is ever run in-process by the plugin -- every command is for
-the user to paste into a real terminal; see ``install_dependencies.py``.
-"""
+A deliberately SMALL interpreter over the subset the agent emits: NOT a general
+Vega renderer, and an unknown mark is skipped and counted rather than crashed
+on, so a malformed persisted spec cannot break a case open."""
 
 from __future__ import annotations
 
@@ -51,16 +11,15 @@ from typing import Any, Dict, List, Optional, Sequence
 
 from .. import install_dependencies
 
-# -- guarded matplotlib import (see module docstring) ------------------------ #
-# ``Figure`` + a Qt canvas class, no pyplot (pyplot owns global backend state
-# we must not fight QGIS for). backend_qtagg resolves its binding via the
-# already-imported qgis.PyQt (PyQt5); backend_qt5agg is the pre-3.5 fallback.
-# The check itself is cheap (one import attempt) and CACHED via
-# ``_MATPLOTLIB_CHECKED`` -- every chart-emission frame and every dock open
-# calls ``matplotlib_available()``, so a repeated failing import must not
-# re-walk sys.path on each one. matplotlib picked up post-install shows up on
-# the next QGIS restart (fresh module cache) -- no in-process cache-bust is
-# needed.
+# -- guarded matplotlib import ---------------------------------------------- #
+# ``Figure`` plus a Qt canvas class and NO pyplot: pyplot owns global backend
+# state this must not fight QGIS for. backend_qtagg resolves its binding via
+# the already-imported qgis.PyQt; backend_qt5agg is the pre-3.5 fallback.
+#
+# The check is CACHED, because every chart frame and every dock open calls
+# ``matplotlib_available()`` and a repeated failing import must not re-walk
+# sys.path each time. A matplotlib installed afterwards appears on the next
+# QGIS restart, so no in-process cache-bust is needed.
 Figure = None  # type: ignore[assignment]
 FigureCanvasQTAgg = None  # type: ignore[assignment]
 _MATPLOTLIB_ERROR: Optional[str] = None
@@ -97,26 +56,23 @@ def matplotlib_available() -> bool:
 
 
 def matplotlib_error() -> Optional[str]:
-    """The cached import failure string, or None once available. Always
-    forces the (cached) check first so a caller that never called
-    ``matplotlib_available()`` still gets an answer."""
+    """The cached import failure string, or None once available. Forces the
+    cached check first, so a caller that never asked still gets an answer."""
     matplotlib_available()
     return _MATPLOTLIB_ERROR
 
 
 # --------------------------------------------------------------------------- #
-# Per-OS "how do I get matplotlib" command builders. Pure (no Qt, no
-# subprocess) -- the panel's Copy action and the tests both call through
-# these. Every value is re-exported from ``install_dependencies`` (one
-# source of truth shared with the standalone script); this module only
-# wraps them under the panel's established names.
+# Per-OS "how do I get matplotlib" command builders. Pure: no Qt and no
+# subprocess -- every command is for the USER to paste into a real terminal,
+# and nothing here is ever run in-process. The values come from
+# ``install_dependencies``, which is the one source of truth for them.
 # --------------------------------------------------------------------------- #
 
 
 def linux_install_command(pip_names: Sequence[str] = ("matplotlib",)) -> str:
-    """Linux one-liner -- QGIS runs under the SYSTEM python3 there, which
-    already has pip, so this is the plain literal command: no interpreter
-    to derive or probe."""
+    """The Linux one-liner. QGIS runs under the SYSTEM python3 there, which
+    already has pip, so there is no interpreter to derive or probe."""
     return f"python3 -m pip install {' '.join(pip_names)}"
 
 
@@ -125,10 +81,9 @@ def windows_install_command(
     exec_prefix: Optional[str] = None,
     executable: Optional[str] = None,
 ) -> str:
-    """Windows one-liner -- the OSGeo4W python.exe pip ships with
-    (exec_prefix-derived, verified real on disk before being shown; an
-    honest 'could not locate' sentence, never a fabricated path, when it
-    can't be verified)."""
+    """The Windows one-liner over the OSGeo4W python.exe, verified real on
+    disk. An unverifiable path yields an honest 'could not locate' sentence,
+    never a fabricated one."""
     python_exe = install_dependencies.windows_python_executable(
         exec_prefix, executable
     )
@@ -144,17 +99,9 @@ def mac_wheel_recipe(
     platform_tag: Optional[str] = None,
     profile_python: Optional[str] = None,
 ) -> str:
-    """NATE's verified macOS recipe (RULING -- QGIS 4's bundled python has
-    NO pip module at all, live-verified: 'No module named pip'; there is
-    no interpreter here to install into). The SYSTEM python3 downloads
-    prebuilt wheels (``pip download --only-binary``, never touching QGIS's
-    own interpreter) and they are unzipped straight into ``<profile>/
-    python`` -- already on QGIS's ``sys.path``. Every value is
-    runtime-derived: python-version from this process's own
-    ``sys.version_info``, the platform tag from ``platform.machine()``,
-    the profile path from ``install_dependencies``'s own file location.
-    Delegates entirely to ``install_dependencies.mac_wheel_recipe`` (one
-    source of truth)."""
+    """The macOS recipe: QGIS 4's bundled python has NO pip at all, so the
+    SYSTEM python3 downloads wheels and they are unzipped into the profile's
+    own python dir. Every value is runtime-derived, never hardcoded."""
     return install_dependencies.mac_wheel_recipe(
         pip_names,
         python_version,
@@ -177,10 +124,9 @@ _SERIES_COLORS = [
 
 
 def parse_chart_payload(payload: Any) -> Optional[dict]:
-    """A wire/persisted ``ChartEmissionPayload`` dict -> the same dict, or
-    None when it is unusable (no chart_id / no dict spec). Defensive: the
-    replayed ``session_state.charts`` rows are persisted data -- a bad row
-    is skipped, never raised on."""
+    """A wire or persisted chart payload -> the same dict, or None when it
+    carries no chart_id or no dict spec. A bad row is SKIPPED, never raised
+    on: these rows are persisted data."""
     if not isinstance(payload, dict):
         return None
     chart_id = payload.get("chart_id")
@@ -246,11 +192,9 @@ def _is_log(channel: dict) -> bool:
 
 
 def _as_float(value: Any) -> Optional[float]:
-    """A plottable float, or None. Rejects bools AND non-finite (NaN/inf) --
-    a persisted spec carrying NaN/inf must not reach the matplotlib axis: it
-    poisons the auto-range into a degenerate (non-finite) extent, and the same
-    degenerate extent is what feeds a native precision computation elsewhere.
-    Non-finite points are dropped, exactly like non-numeric ones."""
+    """A plottable float, or None. REJECTS bools and non-finite values, which
+    would poison a matplotlib auto-range into a degenerate extent; a
+    non-finite point is dropped exactly like a non-numeric one."""
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         return None
     v = float(value)
@@ -263,14 +207,9 @@ def _as_float(value: Any) -> Optional[float]:
 
 
 def render_spec(figure, spec: dict) -> Dict[str, Any]:
-    """Draw ``spec`` (the emitted subset -- module docstring) onto ``figure``.
-
-    Returns a summary dict the harness asserts on: ``views`` / ``lines`` /
-    ``series`` / ``rules`` / ``bars`` / ``points`` (line vertices drawn) /
-    ``skipped`` counts plus ``x_log`` / ``y_log`` flags and the collected
-    ``legend_labels``. Never raises on spec content -- an unusable view is
-    counted in ``skipped``.
-    """
+    """Draw ``spec`` onto ``figure`` -> a summary of what was drawn, with the
+    log-axis flags and the collected legend labels. NEVER raises on spec
+    content: an unusable view is counted in ``skipped`` instead."""
     summary: Dict[str, Any] = {
         "views": 0, "lines": 0, "series": 0, "rules": 0, "bars": 0,
         "points": 0, "skipped": 0, "x_log": False, "y_log": False,
@@ -326,9 +265,8 @@ def render_spec(figure, spec: dict) -> Dict[str, Any]:
         summary["legend_labels"] = list(labels)
         ax.legend(fontsize=7, framealpha=0.6)
     try:
-        # pad=0.3 (default 1.08) -- the axes title is already small; the
-        # plot area, not whitespace above it, should dominate the dock
-        # (NATE chart-chrome feedback).
+        # pad=0.3 against a 1.08 default: the axes title is already small,
+        # so the plot area, not whitespace above it, dominates the dock.
         figure.tight_layout(pad=0.3)
     except Exception:  # noqa: BLE001 -- tight_layout can fail on odd extents
         pass
@@ -336,13 +274,9 @@ def render_spec(figure, spec: dict) -> Dict[str, Any]:
 
 
 def _draw_line(ax, rows, xf, yf, view, props, summary) -> int:
-    """Line mark, one plotted series per ``encoding.color.field`` group
-    (or one unlabeled series without a color field). Returns series count.
-
-    A non-numeric x (the time-series chart uses ordinal timestamp strings)
-    falls back to category positions 0..n-1 with thinned tick labels --
-    the same left-to-right reading, no date parsing to get wrong.
-    """
+    """Line mark, one plotted series per colour-field group, or one unlabeled
+    series without one. A non-numeric x falls back to category positions with
+    thinned tick labels, so no date parsing can go wrong."""
     color_field = _channel(view, "color").get("field")
     numeric_x = all(
         _as_float(row.get(xf)) is not None for row in rows if xf in row
@@ -390,10 +324,9 @@ def _draw_line(ax, rows, xf, yf, view, props, summary) -> int:
 
 
 def _draw_rules(ax, rows, xf, yf, props, summary) -> None:
-    """Rule mark: a constant reference line per row -- horizontal when the
-    y channel carries the field (the hazard curve's dashed 10%-in-50yr
-    design level), vertical for an x-channel rule (the intrusion-toe
-    marker). ``strokeDash`` -> dashed; row ``label`` -> legend entry."""
+    """Rule mark: one constant reference line per row, HORIZONTAL when the y
+    channel carries the field and vertical for an x-channel rule.
+    ``strokeDash`` draws it dashed; a row ``label`` becomes a legend entry."""
     linestyle = "--" if props.get("strokeDash") else "-"
     color = props.get("color") or "#c1121f"
     for row in rows:

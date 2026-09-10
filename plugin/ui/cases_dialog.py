@@ -1,7 +1,4 @@
-"""TRID3NT cases dialog.
-
-Split out of dock.py (2026-07-21 flat->package restructure). Behavior identical.
-"""
+"""TRID3NT cases dialog."""
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, List
@@ -29,27 +26,9 @@ if TYPE_CHECKING:  # runtime-false: avoids a ui.dock <-> ui.cases_dialog import 
 
 
 class CasesDialog(QDialog):
-    """The user's cases (latest ``case-list`` envelope, or -- before a WS
-    connection exists -- the cold ``GET /api/case-list`` route; item b/c,
-    live-feedback 2026-07-09):
-
-      Refresh   debounced session-resume round trip.
-      New case  case-command create -> dock rebind (fresh case-open).
-      Click a case row (single click, or double-click) opens it and closes
-                the dialog: ``Trid3ntDock.open_case`` -- case-command select
-                -> dock rebind when already connected, or (item d) connects
-                first and queues the select for the instant the handshake
-                completes when the row came from the cold list. Opening a
-                case now restores its persisted LAYERS as well as its chat,
-                in the SAME gesture (decision A, NATE 2026-07-31,
-                ``Trid3ntDock._on_case_open_event``) -- there is no separate
-                layer-load action anymore.
-      Right-click a case row -> context menu: Rename / Delete (the old
-                "Export GeoTIFFs" action is gone -- opening the case does
-                this now; moved off the button row -- a left click now
-                opens, so these secondary actions need a gesture that does
-                not).
-    """
+    """The user's cases, from the latest ``case-list`` envelope or the cold
+    HTTP route when no connection exists yet. A LEFT CLICK opens a case, so
+    rename and delete had to move to the context menu."""
 
     def __init__(self, dock: "Trid3ntDock", cases: List[CaseInfo]):
         super().__init__(dock)
@@ -59,13 +38,10 @@ class CasesDialog(QDialog):
         lay = QVBoxLayout(self)
 
         self.listw = QListWidget()
-        # R1 (NATE 2026-07-20): single-click still OPENS a case (unchanged). The
-        # rows are now inline-EDITABLE for rename (F2 via keyboard selection, or
-        # the context-menu "Rename" which starts the same inline edit). Mouse
-        # double-click keeps opening -- single-click-open fires first, so it is
-        # the rename gesture that yields to open, by design ("do not let edit
-        # mode hijack opening"). ``_populating`` guards the ``itemChanged`` slot
-        # so programmatic repopulation (``set_cases``) never mis-fires a rename.
+        # Rows are inline-EDITABLE for rename, but single-click-open fires
+        # first, so it is the rename gesture that yields to open, by design.
+        # ``_populating`` guards the ``itemChanged`` slot, so a programmatic
+        # repopulation never mis-fires as a user rename.
         self._populating = False
         self.listw.itemClicked.connect(self._open_item)
         self.listw.itemDoubleClicked.connect(self._open_item)
@@ -92,15 +68,14 @@ class CasesDialog(QDialog):
         self.set_cases(cases)
 
     def set_cases(self, cases: List[CaseInfo]) -> None:
-        """(Re)populate the list -- called live when a fresh ``case-list``
-        lands while the dialog is open (the Refresh round trip, a New/
-        Delete case-command reply, or the cold HTTP fetch landing)."""
+        """(Re)populate the list; safe to call live while the dialog is
+        open."""
         selected = None
         current = self.listw.currentItem()
         if current is not None:
             selected = current.data(Qt.ItemDataRole.UserRole)
-        # R1: guard the itemChanged rename slot while we rebuild the list, so a
-        # programmatic clear/add never looks like a user rename commit.
+        # Guard the itemChanged rename slot while the list rebuilds, so a
+        # programmatic clear and add never looks like a user rename commit.
         self._populating = True
         self.listw.clear()
         for case in cases:
@@ -112,7 +87,7 @@ class CasesDialog(QDialog):
             item = QListWidgetItem(label)
             item.setData(Qt.ItemDataRole.UserRole, case.case_id)
             item.setData(Qt.ItemDataRole.UserRole + 1, case.title)
-            # R1: inline-editable for rename (double-click / F2 / context menu).
+            # Inline-editable for rename (F2 or the context menu).
             item.setFlags(item.flags() | Qt.ItemFlag.ItemIsEditable)
             self.listw.addItem(item)
             if case.case_id == selected:
@@ -138,10 +113,9 @@ class CasesDialog(QDialog):
         case_id = item.data(Qt.ItemDataRole.UserRole)
         title = item.data(Qt.ItemDataRole.UserRole + 1) or item.text()
         if isinstance(case_id, str) and case_id:
-            # Item d (live-feedback 2026-07-09): the cold-list open path
-            # rides the SAME single-click action -- ``open_case`` itself
-            # decides whether a direct select suffices or a connect-then-
-            # queue is needed.
+            # The cold-list open path rides the SAME action: ``open_case``
+            # itself decides whether a direct select suffices or a
+            # connect-then-queue is needed.
             self._dock.open_case(case_id, str(title))
             self.accept()
 
@@ -164,10 +138,8 @@ class CasesDialog(QDialog):
             self._delete_case(case_id, str(title))
 
     def _begin_rename(self, item: QListWidgetItem) -> None:
-        """R1: start the inline rename edit on ``item``. The row text carries
-        the decorated label (title + optional ``[status]`` + ``(date)``); swap
-        it to the PLAIN title first so the user edits just the name, then open
-        the editor. ``_populating`` guards this programmatic setText."""
+        """Start the inline rename edit on ``item``, swapping the decorated
+        row label for the PLAIN title first so the user edits just the name."""
         plain = item.data(Qt.ItemDataRole.UserRole + 1) or item.text()
         self._populating = True
         item.setText(str(plain))
@@ -176,11 +148,8 @@ class CasesDialog(QDialog):
         self.listw.editItem(item)
 
     def _commit_rename(self, item: QListWidgetItem) -> None:
-        """R1: an inline edit committed. Send the rename case-command (mirrors
-        how delete/select flow through the dock bridge) with the case_id + new
-        title, then refresh the list. A blank or unchanged title is a no-op that
-        restores the row label. ``_populating`` short-circuits programmatic
-        text changes (``set_cases`` / ``_begin_rename``)."""
+        """An inline edit committed: send the rename, then refresh the list. A
+        blank or unchanged title is a NO-OP that restores the row label."""
         if self._populating:
             return
         case_id = item.data(Qt.ItemDataRole.UserRole)

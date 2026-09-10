@@ -1,15 +1,8 @@
 """Multi-vertex canvas capture: the polygon / polyline half of the draw gate.
 
-The stock tools cover a single click (``QgsMapToolEmitPoint``) and a single drag
-(``QgsMapToolExtent``); a shape needs vertices. This is the smallest tool that
-adds them, in the same discipline the point and extent picks already follow -
-the caller saves and restores the previous canvas tool, and nothing here touches
-the project or any layer.
-
-Left click adds a vertex, right click (or double click) finishes, Backspace
-removes the last one, Escape abandons. Coordinates leave in the CANVAS CRS; the
-card transforms them to EPSG:4326 through the same seam the point pick uses.
-"""
+Left click adds a vertex, right or double click finishes, Backspace removes one,
+Escape abandons. The CALLER saves and restores the previous canvas tool; nothing
+here touches the project, and coordinates leave in the CANVAS CRS."""
 
 from __future__ import annotations
 
@@ -25,12 +18,9 @@ _RUBBER_FILL = QColor(220, 120, 30, 45)
 
 
 class VertexCaptureTool(QgsMapTool):
-    """Capture a polygon ring or a polyline, one click per vertex.
-
-    ``captured`` carries the vertices in canvas-CRS order when the user finishes;
-    ``cancelled`` fires on Escape. ``changed`` reports the running count so the
-    card can enable Submit only once the shape has enough vertices to BE one.
-    """
+    """Capture a polygon ring or a polyline, one click per vertex. ``changed``
+    reports the running COUNT, so a card can enable Submit only once the shape
+    has enough vertices to be one."""
 
     captured = pyqtSignal(list)
     cancelled = pyqtSignal()
