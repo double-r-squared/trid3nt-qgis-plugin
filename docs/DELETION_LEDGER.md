@@ -3848,3 +3848,49 @@ the folder rather than turning into a permanent skip.
 | what | where it lived | why | state |
 | --- | --- | --- | --- |
 | `scripts/drivers/proof_artemis_real_breakwater_v2.py` (287) | `scripts/drivers/` | Its only input was the frozen `artemis_real_breakwater/solved_slf` tree, which dies with the folder: it re-rendered a stashed solve rather than driving one. The live questions are the `artemis_harbor_agitation` canary and the om2d rematch flagship | ATTIC (2026-09-10) - `~/Documents/trid3nt-attic/scripts/drivers/` |
+
+## docs/validation - 45 dated measurements, 2026-09-10
+
+Every file here declared itself a MEASUREMENT taken against the tree as it stood
+(the folder README's own first paragraph). A measurement binds nothing by
+construction: it is evidence, not law, and evidence about a tree that has moved
+under it is not something a clone needs. Each was read one at a time against the
+tree before it went; the one constraint that had no other home - the NLCD curve
+number and roughness pair being one published study's, so a swap is an author
+decision and never a shim - is now a comment block at `NLCD_CN_MANNING` in
+`trid3nt_server/workflows/telemac/templates/rain_on_grid/cn_infiltration.py`.
+
+KEPT, because neither is a measurement of a past tree but instrument output over
+the present one, regenerated on demand: `docstring-exemptions.md` (written by
+`tests/hygiene/test_docstring_standard.py`) and `code-graph/` (written by
+`scripts/instruments/code_graph.py`). `README.md` is rewritten to what the
+folder holds now.
+
+Deleted, 28 records:
+
+`afk-ledger-2026-08-24.md`, `demo-physics-defaults-audit.md`, `docs-census.md`,
+`emission-fold-presets-conformance.md`, `emission-fold-store-conformance.md`,
+`external-fetch-audit.md`, `fallback-audit.md`, `fetcher-fold-census.md`,
+`fetcher-fold-conformance.md`, `fetcher-fold-hydro-stage.md`,
+`fetcher-fold-raster-half.md`, `fetcher-fold-stage0.md`,
+`hygiene-docs-conformance.md`, `lean-sweep-inventory.md`,
+`mesh-recipe-conformance.md`, `mesh-wave-conformance.md`,
+`module-coverage-board.md`, `module-surface-conformance.md`,
+`module-surface-loc.md`, `nlcd-manning-tables.md`, `scope-census.md`,
+`scripts-eval.md`, `section-vs-hyriver.md`, `skeleton-loc-ledger.md`,
+`tests-eval.md`, `worker-loc-ledger.md`, `worker-unification-conformance.md`,
+`worker-unification-proof-interrogation.md`.
+
+Deleted, the 17 `hygiene-manifest/` lenses - a read log of one wave, one row per
+file READ, every row's action landed and the standing check now the six guards in
+`tests/hygiene/`:
+
+`COVERAGE.md`, `contracts.md`, `docs-and-readmes.md`, `docs-decisions.md`,
+`emission.md`, `plugin.md`, `scripts-workers.md`, `tests-plugin-contracts.md`,
+`tools-processing.md`,
+`trid3nt_server-adapters-credentials-fallbacks.md`,
+`trid3nt_server-gates-cases-sandbox-testing.md`,
+`trid3nt_server-server-main-persistence-plugin_repo.md`,
+`trid3nt_server-tools-fetchers.md`,
+`trid3nt_server-tools-root-search-meta-display.md`, `workflows-mesh.md`,
+`workflows-runtime-solver-shared.md`, `workflows-telemac.md`.
