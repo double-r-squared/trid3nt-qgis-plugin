@@ -454,8 +454,7 @@ package SteeringSurface {
 
     requirement def TheOpenSetIsCompleteAndRequiredIsTheObligFiles {
         doc /*
-        RULING 2026-09-06 (docs/IDEAS.md, "STAGE 3 RULINGS, ACCEPTANCE FINDINGS",
-        (c)): the sheet states two different things and never conflates them.
+        The sheet states two different things and never conflates them.
 
         OPEN is every keyword the dictionary gives no default for and nothing has
         set - LISTS INCLUDED. A list the dictionary writes no DEFAUT for is empty
@@ -474,12 +473,11 @@ package SteeringSurface {
 
     requirement def ANoDefaultKeywordIsTheTemplatesToState {
         doc /*
-        RULING 2026-09-06 (docs/IDEAS.md, "STAGE 3 RULINGS, LIVE FINDINGS", (a)):
-        a keyword the dictionary gives NO default for is a choice somebody makes.
-        Left unstated it is not silence - the engine substitutes something of its
-        own (SCHEME FOR ADVECTION OF TRACERS falls back to whatever the
-        VELOCITIES are advected by) and the deck records no choice at all, so
-        nobody can read what the run was solved under.
+        A keyword the dictionary gives NO default for is a choice somebody
+        makes. Left unstated it is not silence - the engine substitutes
+        something of its own (SCHEME FOR ADVECTION OF TRACERS falls back to
+        whatever the VELOCITIES are advected by) and the deck records no choice
+        at all, so nobody can read what the run was solved under.
 
         Such a keyword is the TEMPLATE's to state, never the wrapper's, and it
         states three things with it: the value, the BASIS for the value where the
@@ -491,11 +489,10 @@ package SteeringSurface {
 
     requirement def ATemplateNumberIsMetToTheMeshsPrecision {
         doc /*
-        RATIFIED 2026-09-06 (docs/IDEAS.md, "REMEDY RULINGS" (a)): a template
-        declares ONE number for a physical thing - the obstacle half-width says
-        where the cut is - and the deck's own statement about that thing is read
-        off the same number. Two numbers would let the cut and the deck disagree
-        about where a structure is.
+        A template declares ONE number for a physical thing - the obstacle
+        half-width says where the cut is - and the deck's own statement about
+        that thing is read off the same number. Two numbers would let the cut
+        and the deck disagree about where a structure is.
 
         What a node is MEASURED AGAINST is that number's outline plus the
         ACCEPTED MESH'S OWN EDGE. The edge is a property of the mesh - what a
@@ -571,15 +568,14 @@ package SteeringSurface {
 
     requirement def CompositesSetOnlyPresence {
         doc /*
-        RULING 2026-09-06 (docs/IDEAS.md, "CONFORMANCE RULINGS", (b)): a
-        composite expands a value into the keywords that value IS. Two literals
-        a presence defines: the ARMING keyword the input implies (WIND = YES
-        when a wind is given) and the NAME of the file the composite itself
-        writes. A CHOICE among the alternatives the dictionary offers - the
-        restart format, the runoff model, the wind option - is not one of them:
-        a composite picking it puts an opinion in the one place a reader of the
-        template would not look, and inherits it into every template that ever
-        passes the composite a value.
+        A composite expands a value into the keywords that value IS. Two
+        literals a presence defines: the ARMING keyword the input implies (WIND
+        = YES when a wind is given) and the NAME of the file the composite
+        itself writes. A CHOICE among the alternatives the dictionary offers -
+        the restart format, the runoff model, the wind option - is not one of
+        them: a composite picking it puts an opinion in the one place a reader
+        of the template would not look, and inherits it into every template
+        that ever passes the composite a value.
 
         Such a choice is the TEMPLATE's assertion where the template needs a
         non-default, and the engine's own default by omission where it does not.
@@ -606,13 +602,12 @@ package SteeringSurface {
 
     requirement def ProvenanceNamesTheLayerThatAnswered {
         doc /*
-        RULING 2026-09-06 (docs/IDEAS.md, "CONFORMANCE RULINGS": D2, a derived
-        provenance badge): a filled slot says which of the six layers answered
-        it. Engine default is ABSENCE - the slot is not on the sheet at all and
-        the card badges it under the advanced fold. The other five are on the
-        row: a shared body names itself, a template names itself, a fill names
-        the user, a composite names the producer that expanded it, and a value
-        the RUN MEASURED reads DERIVED.
+        A filled slot says which of the six layers answered it. Engine default
+        is ABSENCE - the slot is not on the sheet at all and the card badges it
+        under the advanced fold. The other five are on the row: a shared body
+        names itself, a template names itself, a fill names the user, a
+        composite names the producer that expanded it, and a value the RUN
+        MEASURED reads DERIVED.
 
         Derived is not the same statement as template. A body states WHICH
         measurement a slot takes - the boundary walk the accepted mesh reported,
@@ -643,11 +638,10 @@ package SteeringSurface {
         composite own a carrier slot out of sight. What varies WITHIN one
         question is a composite that states nothing when it is given nothing.
 
-        The rule holds on the READING side too (RULING 2026-09-06, "CONFORMANCE
-        RULINGS": D4). Each template NAMES the reader its question needs, out of
-        the module's own OUTPUTS bindings; a single publisher branching on a
-        substance-class string put the fork back in the products, one level down
-        from where a person reads it.
+        The rule holds on the READING side too. Each template NAMES the reader
+        its question needs, out of the module's own OUTPUTS bindings; a single
+        publisher branching on a substance-class string put the fork back in
+        the products, one level down from where a person reads it.
         */
     }
 
@@ -659,13 +653,13 @@ package SteeringSurface {
         fill. No gate concept survives in the plan: a card in front of the door
         would revise a sheet the door never reads.
 
-        RULED (docs/IDEAS.md, "DESIGN STOPS RESOLVED" 2026-09-04): what is SET
-        and what is OPEN AND MANDATORY are the review; the whole rest of the
-        module folds under advanced, grouped by the dictionary's own rubrique
-        and carrying the engine default it would otherwise run on. The same
-        declaration is what the tool's own docstring names - the module, the
-        rubriques the body touches, the mandatory slots it leaves open - so the
-        prose and the card cannot claim a surface the body does not state.
+        What is SET and what is OPEN AND MANDATORY are the review; the whole
+        rest of the module folds under advanced, grouped by the dictionary's
+        own rubrique and carrying the engine default it would otherwise run on.
+        The same declaration is what the tool's own docstring names - the
+        module, the rubriques the body touches, the mandatory slots it leaves
+        open - so the prose and the card cannot claim a surface the body does
+        not state.
         */
     }
 

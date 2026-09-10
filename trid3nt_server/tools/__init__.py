@@ -47,6 +47,16 @@ class RegisteredTool:
 TOOL_REGISTRY: dict[str, RegisteredTool] = {}
 
 
+# WHAT MAY BE A TOOL. An atomic tool is a fetcher or an irreducible primitive -
+# a thing that reads the world, or an operation the caller cannot assemble out
+# of the ones already here. An ANALYSIS is neither: several tools composed, a
+# threshold applied, a number derived from two layers. It is written as code and
+# run in the box, where the caller can vary it, and it is not registered.
+#
+# A registered analysis is one question's answer frozen into the surface. It
+# takes the arguments its author thought of, it answers the neighbouring
+# question wrong or not at all, and every tool beside it is a name retrieval has
+# to rank. The surface stays small so the model can see it whole.
 def register_tool(
     metadata: AtomicToolMetadata,
     *,

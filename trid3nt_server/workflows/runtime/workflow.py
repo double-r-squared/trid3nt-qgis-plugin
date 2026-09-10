@@ -354,6 +354,18 @@ _CONTROLS: tuple[tuple[str, Any, Any], ...] = (
 )
 
 
+# A TEMPLATE IS THE SIMULATION SURFACE. One registered template answers one
+# question on one engine, out of its own declarations. A question that spans
+# several templates, or a template plus fetchers - an alert polygon routed into
+# a flood run, a described spill turned into a plume, damage summed across
+# hazards - is COMPOSED by the model from what is already registered, and does
+# not become a tool of its own.
+#
+# A wrapper tool is an archetype somebody guessed. It fixes the chain, the AOI
+# rule and the degrade path at authoring time, so the question that differs by
+# one step has nothing to call, and the judgment it encoded is invisible to the
+# model that needed it. That judgment belongs where the model reads it: the
+# system prompt, or the docstring of the tool it routes to.
 def register_workflow(
     facade: type[Workflow],
     metadata: Any,

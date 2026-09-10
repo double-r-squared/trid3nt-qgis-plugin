@@ -650,13 +650,13 @@ package MeshSeam {
         carries one boundary condition and picking silently would put a flowrate
         on a stretch meant to hold at a level.
 
-        RATIFIED 2026-09-06 (docs/IDEAS.md, "REMEDY RULINGS" (a)): the law is the
-        MESH's, so it holds wherever roles settle - a recipe prescribing them
-        across a declared face, and equally a steering author settling them on a
-        mesh it was handed. The harbour settle was deciding node by node and
-        produced exactly what front2.f refuses by name, "a solid point between
-        two liquid points"; a lone node whose two walk neighbours agree with each
-        other takes their role, and the two roles come out as runs.
+        The law is the MESH's, so it holds wherever roles settle - a recipe
+        prescribing them across a declared face, and equally a steering author
+        settling them on a mesh it was handed. The harbour settle was deciding
+        node by node and produced exactly what front2.f refuses by name, "a
+        solid point between two liquid points"; a lone node whose two walk
+        neighbours agree with each other takes their role, and the two roles
+        come out as runs.
 
         And a node is measured against a locked outline TO THE MESH'S OWN EDGE.
         The edge length is a property of the accepted mesh - what a relaxation

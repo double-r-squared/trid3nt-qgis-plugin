@@ -671,13 +671,11 @@ package SolveSeam {
 
     requirement def OutflowStageIsNormalDepth {
         doc /*
-        SIGNED DECISION - the reach run's outflow stage is the NORMAL DEPTH for
-        the discharge the same run prescribes (bathymetry methodology M4,
-        signed 2026-09-02), replacing the outflow bed plus a declared 2 m. Under
-        the HAPPY PATH FIRST, SYNTHETIC DEFERRED amendment this is the whole of
-        the Producer stage: it produces no bathymetry, it computes a level over
-        bathymetry already measured, which is why it stands while the synthetic
-        producer does not.
+        The reach run's outflow stage is the NORMAL DEPTH for the discharge the
+        same run prescribes (bathymetry methodology M4). Under the deferral of
+        synthetic bathymetry this is the whole of the Producer stage: it
+        produces no bathymetry, it computes a level over bathymetry already
+        measured, which is why it stands while the synthetic producer does not.
 
         The four inputs are the run's own. The friction slope is the fall the
         accepted mesh carries between its two role faces, over the length of the
@@ -759,9 +757,8 @@ package SolveSeam {
 
     requirement def OneNumberDefinesTheStructure {
         doc /*
-        RULING 2026-09-06 (docs/IDEAS.md, "CONFORMANCE RULINGS": D8a): the
-        declared structure's HALF-WIDTH is what the mesher removes water inside
-        and what the deck calls solid. A survey maps a breakwater as a
+        The declared structure's HALF-WIDTH is what the mesher removes water
+        inside and what the deck calls solid. A survey maps a breakwater as a
         centreline, the recipe punches the centreline buffered by half the
         declared width, and the water inside that footprint is gone - so a
         boundary node stands on the punched outline exactly when it lies within
@@ -791,12 +788,12 @@ package SolveSeam {
 
     requirement def AWaterDomainIsClippedToItsMeasuredBed {
         doc /*
-        RULING 2026-09-06 (docs/IDEAS.md, "CONFORMANCE RULINGS": D8b): a water
-        domain is the mapped water polygon INTERSECT the bed raster's valid-data
-        footprint. A mapped polygon says where the water is; a survey says where
-        its floor was sounded, and the two disagree over an arm or a slip - so
-        meshing the difference builds elements the bed painter has nothing to
-        give. A water domain has no bed where nobody measured.
+        A water domain is the mapped water polygon INTERSECT the bed raster's
+        valid-data footprint. A mapped polygon says where the water is; a
+        survey says where its floor was sounded, and the two disagree over an
+        arm or a slip - so meshing the difference builds elements the bed
+        painter has nothing to give. A water domain has no bed where nobody
+        measured.
 
         The footprint is measured from the raster's own MASK, never from a
         threshold on its values: a nodata cell and a cell sounded at zero depth

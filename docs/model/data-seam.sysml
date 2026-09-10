@@ -9,10 +9,10 @@
 // forwards a contract verbatim.
 //
 // This seam exists because a bed is the one input a model cannot be honest
-// without and cannot check for itself. Every requirement below is a SIGNED
-// decision from the bathymetry methodology (docs/research/bathymetry-sources.md,
-// signed 2026-09-02), named in its doc, allocated to the code that embodies it
-// and verified by a test that exists.
+// without and cannot check for itself. Every requirement below is a decision
+// from the bathymetry methodology (docs/research/bathymetry-sources.md), named
+// in its doc, allocated to the code that embodies it and verified by a test
+// that exists.
 
 package DataSeam {
 
@@ -464,13 +464,12 @@ package DataSeam {
 
     requirement def ACatalogReaderCarriesNoProvenance {
         doc /*
-        RULING 2026-09-09 (docs/IDEAS.md, "FOLD STAGE 0 RULINGS"): the STAC rows
-        read through a maintained catalog library rather than hand-written
-        search-and-warp code. The library owns the socket, the grid and the
-        pixel fuse; it owns nothing else. Provenance facts - the vertical datum,
-        the resolution and the style row - stay on the source row whatever
-        library performs the fetch, so a bed published through a catalog is as
-        mergeable after the fold as before it.
+        The STAC rows read through a maintained catalog library rather than
+        hand-written search-and-warp code. The library owns the socket, the
+        grid and the pixel fuse; it owns nothing else. Provenance facts - the
+        vertical datum, the resolution and the style row - stay on the source
+        row whatever library performs the fetch, so a bed published through a
+        catalog is as mergeable after the fold as before it.
         */
     }
 
@@ -519,15 +518,12 @@ package DataSeam {
 
     requirement def OneSourceReadsOnOneStatedDatum {
         doc /*
-        RULING 2026-09-06 (docs/IDEAS.md, "STAGE 3 RULINGS, ACCEPTANCE FINDINGS",
-        (b); recorded in docs/REANALYZE_LEDGER.md, "2026-09-06 - bed datum: one
-        stated datum per source, refuse otherwise"): every bed source states its
-        VERTICAL DATUM on its own source row, taken from the dataset's own
-        documentation and never inferred from the bytes - a raster carries
-        numbers, and what they are counted from is not among them. A row that
-        cannot state one carries none, and a row carrying none is refused as a
-        bed rather than painted and read later as if it were on whatever the run
-        assumed.
+        Every bed source states its VERTICAL DATUM on its own source row, taken
+        from the dataset's own documentation and never inferred from the bytes
+        - a raster carries numbers, and what they are counted from is not among
+        them. A row that cannot state one carries none, and a row carrying none
+        is refused as a bed rather than painted and read later as if it were on
+        whatever the run assumed.
 
         A mosaic that mixes datums is therefore not a bed source. The NCEI
         DEM_all endpoint serves the lake-datum bathymetry, the NAVD88 coastal
@@ -549,11 +545,10 @@ package DataSeam {
 
     requirement def AFreeSurfaceAndABedShareOneStatedDatum {
         doc /*
-        RULING 2026-09-06 (docs/IDEAS.md, "REMEDY RULINGS" (b)): a water body's
-        LEVEL is an observation, fetched the way a river's discharge is - the
-        nearest gauge to the AOI, at the day the run is about - and the run's
-        free surface opens at it. Data is assumed true; nothing thresholds the
-        reading.
+        A water body's LEVEL is an observation, fetched the way a river's
+        discharge is - the nearest gauge to the AOI, at the day the run is
+        about - and the run's free surface opens at it. Data is assumed true;
+        nothing thresholds the reading.
 
         WHAT MAKES THE ARITHMETIC LEGAL is that both documents state their zero.
         The gauge row and the bed row each state a vertical datum, and the
@@ -594,27 +589,24 @@ package DataSeam {
         So the small-stream class likewise has no rung and REFUSES, naming both
         gaps and the synthetic slot below them.
 
-        That slot is DEFERRED BY RULING, not merely unbuilt (HAPPY PATH FIRST,
-        SYNTHETIC DEFERRED, 2026-09-02, amending the signed methodology): no
-        synthetic bathymetry is produced now, the Bieger regression the
-        methodology named as the candidate does not build, and whether a
-        fabricated bed may ever stand in for a survey is a USER decision rather
-        than a gap for an implementation to close. Best-case behaviour is
-        established first and never intertwined with sad-path interpolation.
-        The slot is therefore STATED and EMPTY - an absence somebody decided, so
-        that a later reader finds a ruling where they would otherwise find an
-        oversight. Empty, it is a refusal, and the refusal is the honest floor
-        working.
+        That slot is DEFERRED, not merely unbuilt: no synthetic bathymetry is
+        produced, the Bieger regression the methodology named as the candidate
+        does not build, and whether a fabricated bed may ever stand in for a
+        survey is a USER decision rather than a gap for an implementation to
+        close. Best-case behaviour is established first and never intertwined
+        with sad-path interpolation. The slot is therefore STATED and EMPTY -
+        an absence somebody decided, so that a later reader finds a decision
+        where they would otherwise find an oversight. Empty, it is a refusal,
+        and the refusal is the honest floor working.
         */
     }
 
     requirement def TheShorelineIsALadderWithStatedFidelity {
         doc /*
-        RULING 2026-09-06 (docs/IDEAS.md, "STAGE 3 RULINGS, LIVE FINDINGS", (c)):
-        a declarative OSM coastline fetcher is the HARBOUR-SCALE rung of the
+        A declarative OSM coastline fetcher is the HARBOUR-SCALE rung of the
         shoreline a domain is cut from, and GSHHG at full resolution is the
-        COARSE rung; the ladder resolves the file, the rung is journaled, and an
-        ask below every rung's coverage refuses BY NAME.
+        COARSE rung; the ladder resolves the file, the rung is journaled, and
+        an ask below every rung's coverage refuses BY NAME.
 
         A shoreline is the same kind of input as a bed and carries the same
         obligation: a substrate coarser than the triangles asked for does not
