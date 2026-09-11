@@ -82,23 +82,23 @@ It publishes these layers onto the canvas:
 
 ## The proving run
 
-Run `01M27VBH8TS4CENKQCVCEVWSMD`, 2026-09-11T09:04:23.153389+00:00, 25.017 s, at commit `43f05e3aa417e8d2864ddcf97b7f7ea7fa3eb789`.
+Run `01M282ZMATVSRPJM9VXD41GD77`, 2026-09-11T11:17:42.316353+00:00, 25.701 s, at commit `2a9a2831441681ae72164a84234729e8b621566e-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M27VBH8TS4CENKQCVCEVWSMD)](telemac_river_dye/telemac_river_dye.png)
+![Every layer the run published, stacked and framed on the result (run 01M282ZMATVSRPJM9VXD41GD77)](telemac_river_dye/telemac_river_dye.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M27VBH8TS4CENKQCVCEVWSMD)*
+*Every layer the run published, stacked and framed on the result (run 01M282ZMATVSRPJM9VXD41GD77)*
 
-![The solve, frame by frame (run 01M27VBH8TS4CENKQCVCEVWSMD)](telemac_river_dye/telemac_river_dye_animation.gif)
+![The solve, frame by frame (run 01M282ZMATVSRPJM9VXD41GD77)](telemac_river_dye/telemac_river_dye_animation.gif)
 
-*The solve, frame by frame (run 01M27VBH8TS4CENKQCVCEVWSMD)*
+*The solve, frame by frame (run 01M282ZMATVSRPJM9VXD41GD77)*
 
-![peak frame (run 01M27VBH8TS4CENKQCVCEVWSMD)](telemac_river_dye/telemac_river_dye_peak_frame.png)
+![peak frame (run 01M282ZMATVSRPJM9VXD41GD77)](telemac_river_dye/telemac_river_dye_peak_frame.png)
 
-*peak frame (run 01M27VBH8TS4CENKQCVCEVWSMD)*
+*peak frame (run 01M282ZMATVSRPJM9VXD41GD77)*
 
-![dye concentration - the chart the run persisted (run 01M27VBH8TS4CENKQCVCEVWSMD)](telemac_river_dye/telemac_river_dye_chart_dye_concentration.png)
+![dye concentration - the chart the run persisted (run 01M282ZMATVSRPJM9VXD41GD77)](telemac_river_dye/telemac_river_dye_chart_dye_concentration.png)
 
-*dye concentration - the chart the run persisted (run 01M27VBH8TS4CENKQCVCEVWSMD)*
+*dye concentration - the chart the run persisted (run 01M282ZMATVSRPJM9VXD41GD77)*
 
 ### The sheet it filled
 
@@ -124,13 +124,12 @@ Every slot the run resolved, with where the value came from. The engine's own de
 | `friction_law` | - | - | user | not supplied (declared optional) |
 | `bbox` | - | - | user | not supplied (declared optional) |
 | `event_time` | - | - | prompt_interpreted | not supplied (declared optional) |
-| `release_coords` | - | - | user | not supplied (declared optional) |
 | `rainfall_mm_per_day` | - | mm/day | user | not supplied (declared optional) |
 | `evaporation_mm_per_day` | - | mm/day | user | not supplied (declared optional) |
 | `rainfall_gridmet_window` | - | - | user | not supplied (declared optional) |
 | `velocity_diffusivity` | - | m^2/s | user | not supplied (declared optional) |
 | `tracer_diffusivity` | - | m^2/s | user | not supplied (declared optional) |
-| `reach_seed_coords` | - | - | user | not supplied (declared optional) |
+| `release` | - | - | user | not supplied (declared optional) |
 | `decaying_substance` | - | - | prompt_interpreted | not supplied (declared optional) |
 | `decay_half_life_hours` | - | h | user | not supplied (declared optional) |
 | `decay_rate_per_day` | - | 1/day | user | not supplied (declared optional) |
@@ -155,5 +154,5 @@ await TOOL_REGISTRY['telemac_river_dye'].fn(
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M27VBH8TS4CENKQCVCEVWSMD` and commit `43f05e3aa417e8d2864ddcf97b7f7ea7fa3eb789`. The full argument record is [`telemac_river_dye/run.json`](telemac_river_dye/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M282ZMATVSRPJM9VXD41GD77` and commit `2a9a2831441681ae72164a84234729e8b621566e-dirty`. The full argument record is [`telemac_river_dye/run.json`](telemac_river_dye/run.json).
 

@@ -1,10 +1,10 @@
 {
   "tool": "telemac_river_dye",
-  "run_id": "01M27VBH8TS4CENKQCVCEVWSMD",
-  "commit": "43f05e3aa417e8d2864ddcf97b7f7ea7fa3eb789",
-  "recorded_at": "2026-09-11T09:04:23.153389+00:00",
+  "run_id": "01M282ZMATVSRPJM9VXD41GD77",
+  "commit": "2a9a2831441681ae72164a84234729e8b621566e-dirty",
+  "recorded_at": "2026-09-11T11:17:42.316353+00:00",
   "engine": "telemac",
-  "wall_seconds": 25.017,
+  "wall_seconds": 25.701,
   "args": {
     "location": "Eel River near Scotia, California",
     "discharge_m3s": 2.2,
@@ -217,17 +217,6 @@
       "real_source": null
     },
     {
-      "name": "release_coords",
-      "value": null,
-      "door": "user",
-      "basis": "user",
-      "units": null,
-      "consequence": "scenario",
-      "note": "not supplied (declared optional)",
-      "clamped_from": null,
-      "real_source": null
-    },
-    {
       "name": "rainfall_mm_per_day",
       "value": null,
       "door": "user",
@@ -283,12 +272,12 @@
       "real_source": null
     },
     {
-      "name": "reach_seed_coords",
+      "name": "release",
       "value": null,
       "door": "user",
       "basis": "user",
       "units": null,
-      "consequence": "aoi",
+      "consequence": "scenario",
       "note": "not supplied (declared optional)",
       "clamped_from": null,
       "real_source": null
@@ -348,7 +337,7 @@
     },
     {
       "param": "mesh_bed",
-      "value": "bed raster supplied directly: /home/nate/Documents/trid3nt-local/data/runs/raster-01M27VBABKEEJWPEVQHKVR3STR.tif",
+      "value": "bed raster supplied directly: /home/nate/Documents/trid3nt-local/data/runs/raster-01M282ZDA5NVZ9442FE4MRKS00.tif",
       "basis": "fetched",
       "note": "the elevation every node of the reach carries; the solver reads it as the channel's bathymetry",
       "real_source": null
@@ -480,17 +469,10 @@
       "real_source": null
     },
     {
-      "param": "release_coords",
+      "param": "release",
       "value": "derived",
       "basis": "derived",
-      "note": "not supplied; the release sits at spill_fraction along the meshed reach; the downstream plume distance is measured from there",
-      "real_source": null
-    },
-    {
-      "param": "reach_seed_coords",
-      "value": "derived",
-      "basis": "derived",
-      "note": "not supplied; the reach centerline is resolved from the mid-reach point on the largest fetched flowline, else the geocoded centroid",
+      "note": "not supplied; the release sits at spill_fraction along the meshed reach; the downstream distance is measured from there",
       "real_source": null
     },
     {
@@ -514,7 +496,7 @@
     "plume_reach_m": 56.7,
     "active_frames": 30,
     "mesh_size_m": 7.763,
-    "layer_uri": "s3://trid3nt-runs/01M27VBH8TS4CENKQCVCEVWSMD/overviews/01M27VBY1PD40WF879B2ATX13M.tif",
+    "layer_uri": "s3://trid3nt-runs/01M282ZMATVSRPJM9VXD41GD77/overviews/01M28301TWP8NKNRFNTQATGNRY.tif",
     "discharge_m3s": 2.2,
     "discharge_note": "carrier discharge 2.2 m3/s (user-supplied)",
     "mesh_resolution_m": 10.0,
@@ -626,7 +608,7 @@
     },
     {
       "crs_authid": null,
-      "layer_id": "telemac-release-01M27VBBTQ9R4W3ET9J5XYE5DY",
+      "layer_id": "point-01M282ZEPGJ0VH5S1D66WKF4MY",
       "layer_type": "vector",
       "legend": {
         "colormap": null,
@@ -643,7 +625,7 @@
       "reference_time": null,
       "role": "context",
       "temporal": false,
-      "uri": "s3://trid3nt-runs/inputs/01M27VBBTE9YE8DA64E4FGSB5R/release_point.geojson",
+      "uri": "s3://trid3nt-runs/inputs/01M282ZEP6JQ0FEG4TENAQ05VH/point.geojson",
       "valid_from": null,
       "valid_to": null,
       "visible": true,
@@ -651,7 +633,7 @@
     },
     {
       "crs_authid": "EPSG:32610",
-      "layer_id": "model-results-mesh-01M27VBH8TS4CENKQCVCEVWSMD",
+      "layer_id": "model-results-mesh-01M282ZMATVSRPJM9VXD41GD77",
       "layer_type": "mesh",
       "legend": {
         "colormap": "viridis",
@@ -665,10 +647,10 @@
       "name": "Model results (time series): scotia_humboldt_county_california_95562_united_s",
       "opacity": null,
       "quantity": "model_results",
-      "reference_time": "2026-09-11T09:04:09+00:00",
+      "reference_time": "2026-09-11T11:17:28+00:00",
       "role": "context",
       "temporal": false,
-      "uri": "s3://trid3nt-runs/01M27VBH8TS4CENKQCVCEVWSMD/r2d_river.slf",
+      "uri": "s3://trid3nt-runs/01M282ZMATVSRPJM9VXD41GD77/r2d_river.slf",
       "valid_from": null,
       "valid_to": null,
       "visible": true,
@@ -676,7 +658,7 @@
     },
     {
       "crs_authid": null,
-      "layer_id": "01M27VC0NAGT3RNF0BGZHTHP1J",
+      "layer_id": "01M28304F8TQEK73D4B8NEDC8Q",
       "layer_type": "raster",
       "legend": {
         "colormap": "reds",
@@ -693,7 +675,7 @@
       "reference_time": null,
       "role": "primary",
       "temporal": false,
-      "uri": "s3://trid3nt-runs/01M27VBH8TS4CENKQCVCEVWSMD/overviews/01M27VBY1PD40WF879B2ATX13M.tif",
+      "uri": "s3://trid3nt-runs/01M282ZMATVSRPJM9VXD41GD77/overviews/01M28301TWP8NKNRFNTQATGNRY.tif",
       "valid_from": null,
       "valid_to": null,
       "visible": true,
