@@ -3,8 +3,7 @@
 The wrapper asserts NO value of its own. ARTEMIS reads its forcing out of the
 BOUNDARY CONDITIONS FILE rather than out of the steering file, so the incident
 wave is a FILE this composite writes and the steering file names, and the
-agitation coefficient KD is the wave height over the incident height that file
-stamps."""
+coefficient KD is the wave height over the incident height that file stamps."""
 
 from __future__ import annotations
 
@@ -124,7 +123,7 @@ def incident_height(cli_text: str) -> float:
     """The incident height the boundary file stamps on its KINC rows, in metres.
 
     One height: the file forces one monochromatic wave, and a file stamping
-    several or none carries no incident wave to measure agitation against."""
+    several or none carries no incident wave to measure KD against."""
     heights = set()
     for line in cli_text.splitlines():
         parts = line.split()
@@ -133,11 +132,11 @@ def incident_height(cli_text: str) -> float:
     if len(heights) != 1:
         raise ValueError(
             f"the boundary file stamps {sorted(heights)} as incident heights; the "
-            "agitation coefficient is measured against exactly one.")
+            "coefficient KD is measured against exactly one.")
     return heights.pop()
 
 
-def _agitation(solved: Any) -> tuple[str, str, Any]:
+def _kd(solved: Any) -> tuple[str, str, Any]:
     """``KD``: the wave height over the incident height the run was forced with."""
     from ..solving.solve import download_result
 
@@ -152,6 +151,6 @@ def _agitation(solved: Any) -> tuple[str, str, Any]:
 
 ART = Module("artemis")
 ART.VARIABLES = VARIABLES
-ART.DERIVED = MappingProxyType({"KD": _agitation})
+ART.DERIVED = MappingProxyType({"KD": _kd})
 ART.composites(incident_wave=_incident_wave)
 ART.outputs(**PRIMITIVES)

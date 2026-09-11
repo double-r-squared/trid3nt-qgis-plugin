@@ -70,7 +70,7 @@ reader that knows a question.
 | `describe.py` | `describe_keywords` - the read over a module's dictionary, which is how the whole keyword surface is reached rather than carried in a docstring. |
 | `corpus.yaml` | The routing phrasings that reach `describe_keywords`. |
 | `telemac2d.py` | The TELEMAC-2D wrapper: the releases, wind, rain, oil, friction, runoff, infiltration (the curve-number and roughness surface read off the land cover at the fill), rating, hyetograph, time-origin and coupling groups, the module's variable vocabulary with the flux it prints rather than writes, and the drogues track it writes. |
-| `telemac3d.py` | The TELEMAC-3D wrapper: the vertical grid keyword pair and its refusal, the water column a stratified run is initialized from, and the wind. |
+| `telemac3d.py` | The TELEMAC-3D wrapper: the vertical grid keyword pair and its refusal, the water column a run is initialized from, and the wind. |
 | `artemis.py` | The ARTEMIS wrapper: the incident wave, which the module reads out of the boundary file rather than the deck, so the composite restamps the pair the mesh recipe wrote; and the wave vocabulary. |
 | `waqtel.py` | The WAQTEL wrapper: the O2 process and the degradation a carrier names as coupled bodies, whose slots serialize into WAQTEL's own steering file while the coupling keywords land on the carrier's sheet; a degradation given nothing couples nothing. |
 | `gaia.py` | The GAIA wrapper: the bed and the suspension a carrier names as coupled bodies, expanded from a gradation or a class and its concentration, the NESTOR dredging composite, and its primitives over the module's own result file. |
