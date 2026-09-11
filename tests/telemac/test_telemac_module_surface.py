@@ -1094,6 +1094,35 @@ def test_two_releases_on_the_floor_are_two_sources_in_the_deck():
     assert "Q(1) Q(2)" in series
 
 
+def test_a_fill_with_two_tracers_is_a_two_tracer_deck():
+    """Nothing is frozen: a body that states one tracer is overridden to two on
+    the fill, and every tracer-arity keyword and the sources series follow the
+    fill rather than the body."""
+    from trid3nt_server.workflows.telemac.modules.telemac2d import Release, TracerNames
+
+    class ONE(T2D):
+        NUMBER_OF_TRACERS = 1
+        tracer_names = TracerNames(names=["DYE             MG/L"])
+        INITIAL_VALUES_OF_TRACERS = [0.0]
+        releases = [Release(at=[500.0, 1000.0], q=8.0, tracers=[100.0],
+                            window_s=120.0, until_s=600.0)]
+
+    sheet = fill(ONE, NUMBER_OF_TRACERS=2,
+                 tracer_names={"names": ["DYE             MG/L",
+                                         "SALT            MG/L"]},
+                 INITIAL_VALUES_OF_TRACERS=[0.0, 0.0],
+                 releases=[{"at": [500.0, 1000.0], "q": 8.0,
+                            "tracers": [100.0, 50.0],
+                            "window_s": 120.0, "until_s": 600.0}])
+    deck = dict(sheet.resolved())
+    assert deck["NUMBER OF TRACERS"] == 2
+    assert len(deck["NAMES OF TRACERS"]) == 2
+    assert deck["INITIAL VALUES OF TRACERS"] == [0.0, 0.0]
+    assert deck["VALUES OF THE TRACERS AT THE SOURCES"] == [100.0, 50.0]
+    assert "TR(1,1)" in sheet.files["river_sources.txt"] \
+        and "TR(1,2)" in sheet.files["river_sources.txt"]
+
+
 def test_a_floor_that_is_not_a_mapping_refuses_by_name():
     """The floor is a mapping of keyword to value. Anything else is named as the
     argument it is, rather than raising out of the fill and blaming a step."""

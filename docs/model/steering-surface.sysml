@@ -32,6 +32,14 @@ package SteeringSurface {
     Run is explicit, on a complete sheet, and it is where execution stops being
     held: the sheet is serialized by telapy - the one writer of the format -
     read straight back by the engine's own parser, staged, and handed to the box.
+
+    The module is the unit the whole surface is built around. A question is a
+    template: values over one module - a body of keywords, DATA rows, an outputs
+    list, captions - and nothing below it knows the question exists. A wrapper's
+    outputs are primitives named from the module's variable vocabulary, the
+    run record carries the engine and the module, every filled slot carries one
+    of six origins, and the adapters build their turns from an IR of this
+    repo's own. A point anywhere in the system is one typed Point.
     */
 
     // ----------------------------------------------------------------- //
@@ -129,6 +137,30 @@ package SteeringSurface {
         doc /*
         An authored run directory becomes a staged run: everything uploaded
         beside the mesh, the manifest naming the case written last.
+        */
+    }
+
+    part def RunRecord {
+        doc /*
+        One line per completed run: the engine and the module it ran under, the
+        sheet with its provenance, the answer. The template is not a field of
+        the line; it survives as the provenance of the slots it filled.
+        */
+    }
+
+    part def TypedInput {
+        doc /*
+        A Point: lon, lat and a name, ingested once from every form a user hands
+        it in - the pick, a pair, a point layer, a geocoded place - and validated
+        against the mesh by the slot that asked for it.
+        */
+    }
+
+    part def MessageIR {
+        doc /*
+        The five models a turn is built from - a message, its parts, a tool
+        call, a tool response, a tool declaration - owned by the contracts
+        package, so no provider SDK is carried for its data classes.
         */
     }
 
@@ -359,6 +391,24 @@ package SteeringSurface {
     part door : Door {
         doc /*
         code: trid3nt_server/workflows/telemac/workflow.py
+        */
+    }
+
+    part runRecord : RunRecord {
+        doc /*
+        code: trid3nt_server/workflows/runtime/journal.py
+        */
+    }
+
+    part point : TypedInput {
+        doc /*
+        code: trid3nt_server/workflows/inputs/point.py
+        */
+    }
+
+    part messageIR : MessageIR {
+        doc /*
+        code: contracts/trid3nt_contracts/message.py
         */
     }
 
@@ -653,6 +703,28 @@ package SteeringSurface {
         */
     }
 
+    requirement def ModuleIsTheUnit {
+        doc /*
+        The engine's module is the unit. A template is values over one module
+        and composes nothing, so nothing is frozen: a body that states one
+        tracer is two on the fill. A wrapper's outputs are primitives named from
+        the module's own variables and never from a question. A run is recorded
+        under its engine and its module, with no template field; every filled
+        slot carries one of the six origins the card renders. The adapters
+        build a turn from the contracts IR and import no provider SDK for it.
+        */
+    }
+
+    requirement def InputsAreTypedPrimitives {
+        doc /*
+        Every point in the system is a Point. A slot that asks for one fills
+        from each of its sources - the pick, a pair, a point layer, a geocoded
+        name - under the same ingestion, keeps the name the source carried,
+        refuses by name a point outside the domain, and moves a dry landing to
+        the nearest wet node. Neither the user nor the model names it twice.
+        */
+    }
+
     requirement def TheSteeringFormatHasOneWriter {
         doc /*
         telapy writes the steering file and the serializer is the only thing
@@ -854,4 +926,45 @@ package SteeringSurface {
     satisfy requirement TheSteeringFormatHasOneWriter by steeringDriver;
     verify requirement TheSteeringFormatHasOneWriter by
         "tests/telemac/test_telemac_module_surface.py::test_the_serializer_is_the_only_module_that_writes_a_keyword_into_a_deck";
+
+    satisfy requirement ModuleIsTheUnit by wrapper;
+    satisfy requirement ModuleIsTheUnit by output;
+    satisfy requirement ModuleIsTheUnit by sheet;
+    satisfy requirement ModuleIsTheUnit by door;
+    satisfy requirement ModuleIsTheUnit by runRecord;
+    satisfy requirement ModuleIsTheUnit by messageIR;
+    verify requirement ModuleIsTheUnit by
+        "tests/telemac/test_telemac_run_identity.py::test_every_template_is_values_over_a_module_of_the_one_engine";
+    verify requirement ModuleIsTheUnit by
+        "tests/telemac/test_telemac_run_identity.py::test_the_run_record_carries_the_engine_and_the_module_and_no_template";
+    verify requirement ModuleIsTheUnit by
+        "tests/telemac/test_telemac_run_identity.py::test_the_vocabulary_is_the_six_the_card_renders";
+    verify requirement ModuleIsTheUnit by
+        "tests/telemac/test_telemac_run_identity.py::test_every_slot_of_a_template_s_default_fill_carries_one_of_the_six";
+    verify requirement ModuleIsTheUnit by
+        "tests/telemac/test_telemac_module_surface.py::test_a_fill_with_two_tracers_is_a_two_tracer_deck";
+    verify requirement ModuleIsTheUnit by
+        "tests/telemac/test_telemac_module_surface.py::test_every_wrapper_binds_the_primitive_set_and_nothing_question_named";
+    verify requirement ModuleIsTheUnit by
+        "tests/adapters/test_message_ir.py::test_the_conversation_is_built_from_the_ir_alone";
+    verify requirement ModuleIsTheUnit by
+        "tests/adapters/test_message_ir.py::test_no_provider_sdk_is_imported_for_the_ir";
+
+    satisfy requirement InputsAreTypedPrimitives by point;
+    satisfy requirement InputsAreTypedPrimitives by canvasGate;
+    satisfy requirement InputsAreTypedPrimitives by sheet;
+    verify requirement InputsAreTypedPrimitives by
+        "tests/inputs/test_point.py::test_a_pick_carries_its_coordinates_and_its_name";
+    verify requirement InputsAreTypedPrimitives by
+        "tests/inputs/test_point.py::test_a_pair_is_lon_lat_with_no_name";
+    verify requirement InputsAreTypedPrimitives by
+        "tests/inputs/test_point.py::test_a_selected_point_layer_gives_its_first_point_and_its_name";
+    verify requirement InputsAreTypedPrimitives by
+        "tests/inputs/test_point.py::test_a_place_name_is_geocoded_and_keeps_the_name";
+    verify requirement InputsAreTypedPrimitives by
+        "tests/inputs/test_point.py::test_a_point_outside_the_domain_is_refused_by_name_and_names_the_fix";
+    verify requirement InputsAreTypedPrimitives by
+        "tests/inputs/test_point.py::test_a_point_landing_on_a_dry_node_moves_to_the_nearest_wet_one";
+    verify requirement InputsAreTypedPrimitives by
+        "tests/telemac/test_telemac_module_surface.py::test_a_drawn_point_is_a_fill";
 }
