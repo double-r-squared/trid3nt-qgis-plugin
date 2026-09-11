@@ -155,13 +155,6 @@ package SolveSeam {
         */
     }
 
-    part def PacketAssembler {
-        doc /*
-        Cross-checks the recorded frame count against the file itself, so one
-        reader is never the only reader.
-        */
-    }
-
     part def MeshAcceptance {
         doc /*
         The accepted mesh's record - the frozen recipe's artifact plus the
@@ -477,13 +470,6 @@ package SolveSeam {
         port listingIn : ListingIn;
     }
 
-    part packetAssembler : PacketAssembler {
-        doc /*
-        code: dev/packet/assemble_proof_packet.py
-        */
-        port completionIn : CompletionIn;
-    }
-
     part meshAcceptance : MeshAcceptance {
         doc /*
         code: trid3nt_server/workflows/mesh/step.py
@@ -550,13 +536,6 @@ package SolveSeam {
 
     interface completionDiagnosed : FoldedRunPhysics
         connect supervisor.completionOut to diagnosticsReader.completionIn {
-        doc /*
-        pass-through: supervisor
-        */
-    }
-
-    interface completionCrossChecked : FrameCountCrossCheck
-        connect supervisor.completionOut to packetAssembler.completionIn {
         doc /*
         pass-through: supervisor
         */
