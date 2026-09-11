@@ -2248,12 +2248,19 @@ class Trid3ntDock(QDockWidget):
                 error=True,
             )
             return
+        default_name = ""
+        if request.mode == "point":
+            # point-1, point-2, ... for the session: a name the user never edits
+            # still tells one picked point from the next.
+            self._point_picks = getattr(self, "_point_picks", 0) + 1
+            default_name = f"point-{self._point_picks}"
         card = SpatialInputCard(
             request,
             self._on_spatial_input_decision,
             iface=self.iface,
             to_lonlat=self._point_to_lonlat4326,
             to_bbox=self._rect_to_bbox4326,
+            default_name=default_name,
         )
         self.messages_layout.insertWidget(self.messages_layout.count() - 1, card)
         self._close_pending_for_card()
@@ -2268,6 +2275,7 @@ class Trid3ntDock(QDockWidget):
                 geometry_type=wire.get("geometry_type"),
                 coordinates=wire.get("coordinates"),
                 features=wire.get("features"),
+                name=wire.get("name"),
                 cancelled=bool(wire.get("cancelled")),
             )
         except Exception as exc:  # noqa: BLE001

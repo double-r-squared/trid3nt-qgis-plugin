@@ -309,6 +309,7 @@ class AgentWorker(QObject):
         geometry_type: Optional[str] = None,
         coordinates: Optional[list] = None,
         features: Optional[dict] = None,
+        name: Optional[str] = None,
         cancelled: bool = False,
     ) -> None:
         if self.client is not None:
@@ -317,6 +318,7 @@ class AgentWorker(QObject):
                 geometry_type=geometry_type,
                 coordinates=coordinates,
                 features=features,
+                name=name,
                 cancelled=cancelled,
             )
 
@@ -495,6 +497,7 @@ class AgentBridge(QObject):
         geometry_type: Optional[str] = None,
         coordinates: Optional[list] = None,
         features: Optional[dict] = None,
+        name: Optional[str] = None,
         cancelled: bool = False,
     ) -> None:
         if self._worker is not None:
@@ -503,5 +506,6 @@ class AgentBridge(QObject):
                 geometry_type=geometry_type,
                 coordinates=coordinates,
                 features=features,
+                name=name,
                 cancelled=cancelled,
             )

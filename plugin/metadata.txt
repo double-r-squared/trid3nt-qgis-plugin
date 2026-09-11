@@ -5,9 +5,13 @@ qgisMaximumVersion=4.99
 supportsQt6=True
 description=TRID3NT agent chat dock -- ask for geospatial data or a hazard simulation in plain language and the answer arrives as styled layers on the canvas.
 about=Dockable chat panel that drives a TRID3NT agent over ws:// (this box or a tailnet peer). Every layer the agent publishes is STREAMED in place as a native QGIS layer -- COG rasters and FlatGeobuf vectors read ranged from the object store via GDAL /vsis3/ (no project download); the one format with no /vsi layer (MDAL meshes) stages to a session-scoped temp dir cleaned up when the dock closes. Simulation gate card, drawn-rectangle AOI on every message, capped-jitter auto-reconnect with queued sends, and case switching (open any existing case's chat) that restores its layers in one gesture. The TRID3NT stack (agent, MinIO, Ollama) must be installed and running separately -- the plugin never starts or stops it.
-version=0.3.23
+version=0.3.24
 author=Nate Almanza
-changelog=0.3.23 - A run is identified by its ENGINE and the MODULE of it that
+changelog=0.3.24 - A picked POINT carries a NAME. The point pick card offers a
+    name field, defaulted to point-<n> for the session, and the reply carries it
+    as ``name`` on the spatial-input-response; the slot that asked for the point
+    calls what it places by that name (a river dye run's tracer, say).
+    0.3.23 - A run is identified by its ENGINE and the MODULE of it that
     ran, not by the question that asked for it. The sim card's title now reads
     "TELEMAC / telemac2d" off two new pipeline-step fields (engine, module)
     instead of splitting the solver id on its first underscore, so an artemis

@@ -1420,11 +1420,13 @@ class AgentClient:
         geometry_type: Optional[str] = None,
         coordinates: Optional[list] = None,
         features: Optional[dict] = None,
+        name: Optional[str] = None,
         cancelled: bool = False,
     ) -> None:
         """Answer a ``spatial-input-request`` gate. ``geometry_type`` is
-        ``"point"`` (``[lon, lat]``), ``"bbox"`` (four coordinates) or
-        ``"vector_draw"`` (``features``); ``cancelled`` is the decline path."""
+        ``"point"`` (``[lon, lat]``, plus the ``name`` the user gave it),
+        ``"bbox"`` (four coordinates) or ``"vector_draw"`` (``features``);
+        ``cancelled`` is the decline path."""
         self._send(
             "spatial-input-response",
             {
@@ -1432,6 +1434,7 @@ class AgentClient:
                 "geometry_type": geometry_type,
                 "coordinates": coordinates,
                 "features": features,
+                "name": name,
                 "cancelled": cancelled,
             },
             case_id=self.case_id,

@@ -907,14 +907,18 @@ def parse_spatial_input_request(payload: dict) -> Optional[SpatialInputRequest]:
     )
 
 
-def resolve_spatial_input_point(request_id: str, lon: float, lat: float) -> dict:
+def resolve_spatial_input_point(request_id: str, lon: float, lat: float,
+                                name: Optional[str] = None) -> dict:
     """Build the ``spatial-input-response`` wire dict for a POINT pick
-    (contract SpatialInputResponsePayload): ``coordinates=[lon, lat]``,
-    ``features`` None. All keys present (the explicit-None convention)."""
+    (contract SpatialInputResponsePayload): ``coordinates=[lon, lat]``, the
+    ``name`` the user gave the point (blank sends None), ``features`` None.
+    All keys present (the explicit-None convention)."""
+    text = (name or "").strip()
     return {
         "request_id": request_id,
         "geometry_type": "point",
         "coordinates": [round(float(lon), 6), round(float(lat), 6)],
+        "name": text or None,
         "features": None,
         "cancelled": False,
     }
@@ -985,7 +989,8 @@ def spatial_input_summary(request: SpatialInputRequest, wire: dict) -> str:
         return "spatial input cancelled"
     coords = wire.get("coordinates") or []
     if request.mode == "point" and len(coords) == 2:
-        return f"picked point ({coords[1]:.5f}, {coords[0]:.5f})"
+        named = f" '{wire['name']}'" if wire.get("name") else ""
+        return f"picked point{named} ({coords[1]:.5f}, {coords[0]:.5f})"
     if request.mode == "bbox" and len(coords) == 4:
         return (
             f"picked bbox [{coords[0]:.4f}, {coords[1]:.4f}, "

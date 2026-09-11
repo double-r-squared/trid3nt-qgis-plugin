@@ -2189,7 +2189,7 @@ class SpatialInputCard(QFrame):
 
     def __init__(
         self, request: gate.SpatialInputRequest, on_decide, parent=None,
-        iface=None, to_lonlat=None, to_bbox=None,
+        iface=None, to_lonlat=None, to_bbox=None, default_name: str = "",
     ):
         super().__init__(parent)
         self._request = request
@@ -2197,6 +2197,7 @@ class SpatialInputCard(QFrame):
         self._iface = iface
         self._to_lonlat = to_lonlat
         self._to_bbox = to_bbox
+        self._default_name = default_name
         self._decided = False
         self._captured: Optional[dict] = None  # the wire reply once captured
         self._tool = None
@@ -2261,6 +2262,19 @@ class SpatialInputCard(QFrame):
         self.status_lbl.setText("nothing picked yet")
         pick_row.addWidget(self.status_lbl, 1)
         lay.addLayout(pick_row)
+
+        # A picked POINT carries a name: the slot that asked for it calls the
+        # thing it places by that name, so the user types it once, here.
+        self.name_edit: Optional[QLineEdit] = None
+        if request.mode == "point":
+            name_row = QHBoxLayout()
+            name_lbl = QLabel("name")
+            name_lbl.setStyleSheet(_GATE_NOTE_STYLE)
+            name_row.addWidget(name_lbl)
+            self.name_edit = QLineEdit(default_name)
+            self.name_edit.setPlaceholderText("what to call this point")
+            name_row.addWidget(self.name_edit, 1)
+            lay.addLayout(name_row)
 
         btn_row = QHBoxLayout()
         btn_row.addStretch(1)
@@ -2386,7 +2400,7 @@ class SpatialInputCard(QFrame):
             return
         lon, lat = lonlat
         self._captured = gate.resolve_spatial_input_point(
-            self._request.request_id, lon, lat
+            self._request.request_id, lon, lat, self._point_name()
         )
         try:
             from qgis.gui import QgsVertexMarker
@@ -2440,10 +2454,19 @@ class SpatialInputCard(QFrame):
 
     # -- actions ----------------------------------------------------------- #
 
+    def _point_name(self) -> str:
+        return self.name_edit.text() if self.name_edit is not None else ""
+
     def _submit(self) -> None:
         if self._captured is None:
             self.status_lbl.setText("pick a location first, or press Cancel")
             return
+        if self._request.mode == "point":
+            # The name is read at SUBMIT, so a name typed after the click rides.
+            coords = self._captured["coordinates"]
+            self._captured = gate.resolve_spatial_input_point(
+                self._request.request_id, coords[0], coords[1], self._point_name()
+            )
         self._commit(self._captured, drop_marker=False)
 
     def _cancel(self) -> None:
@@ -2457,7 +2480,8 @@ class SpatialInputCard(QFrame):
             return  # locked -- a gate is answered exactly once
         self._decided = True
         self._pick_teardown(drop_marker=drop_marker)
-        for widget in (self.submit_btn, self.cancel_btn, self.pick_btn):
+        for widget in (self.submit_btn, self.cancel_btn, self.pick_btn,
+                       self.name_edit):
             if widget is not None:
                 widget.setEnabled(False)
         self._on_decide(wire)

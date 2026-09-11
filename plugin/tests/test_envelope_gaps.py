@@ -106,7 +106,16 @@ class TestSpatialInputParsing(unittest.TestCase):
         self.assertEqual(wire["geometry_type"], "point")
         self.assertEqual(wire["coordinates"], [-82.55, 27.9])
         self.assertIsNone(wire["features"])
+        self.assertIsNone(wire["name"])
         self.assertFalse(wire["cancelled"])
+
+    def test_resolve_point_carries_the_name_the_user_typed(self):
+        wire = gate.resolve_spatial_input_point("r1", -82.55, 27.9, " outfall-a ")
+        self.assertEqual(wire["name"], "outfall-a")
+        self.assertIsNone(gate.resolve_spatial_input_point("r1", 0.0, 0.0, "  ")["name"])
+        request = gate.parse_spatial_input_request(
+            {"request_id": "r1", "mode": "point", "title": "Draw release"})
+        self.assertIn("'outfall-a'", gate.spatial_input_summary(request, wire))
 
     def test_resolve_bbox(self):
         wire = gate.resolve_spatial_input_bbox("r1", [-82.6, 27.8, -82.5, 27.95])
@@ -267,10 +276,12 @@ class TestSpatialInputRoundTrip(_RoundTripBase):
         ev = self._await_kind("spatial-input-request")
         req = gate.parse_spatial_input_request(ev.data)
         self.assertEqual(req.request_id, STUB_SPATIAL_POINT_REQUEST_ID)
-        wire = gate.resolve_spatial_input_point(req.request_id, -82.55, 27.9)
+        wire = gate.resolve_spatial_input_point(req.request_id, -82.55, 27.9,
+                                                "point-1")
         self.client.send_spatial_input(
             wire["request_id"], geometry_type=wire["geometry_type"],
-            coordinates=wire["coordinates"], cancelled=wire["cancelled"],
+            coordinates=wire["coordinates"], name=wire["name"],
+            cancelled=wire["cancelled"],
         )
         chunk = self._await_kind("chunk")
         self.assertIn("point", chunk.data["delta"])
@@ -278,6 +289,7 @@ class TestSpatialInputRoundTrip(_RoundTripBase):
         got = self.server.spatial_inputs[-1]
         self.assertEqual(got["geometry_type"], "point")
         self.assertEqual(got["coordinates"], [-82.55, 27.9])
+        self.assertEqual(got["name"], "point-1")
 
     def test_bbox_pick_resumes_turn(self):
         self.client.send_chat("pick-bbox the study area")
