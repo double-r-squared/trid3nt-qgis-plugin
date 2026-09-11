@@ -117,30 +117,3 @@ def test_a_unit_target_the_steering_cannot_carry_refuses():
     with pytest.raises(F.TelemacDyeScenarioInputError):
         F._rain_forcing(150.0, None, None,
                         TemporalSpec(units=UnitsSpec("in/day")))
-
-
-def test_the_transform_stamp_reaches_the_layers_provenance_row():
-    from trid3nt_server.workflows.telemac.products import products as P
-
-    out = F._rain_forcing(150.0, None, None,
-                          _rain_decl().producer.temporal)
-    row, = P._rain_provenance({"rain_mm_per_day": out["mm_per_day"],
-                               "rain_rung": out["rung"],
-                               "rain_note": out["note"]})
-    assert row.param == "rain_or_evap_mm_per_day" and row.units == "mm/day"
-    assert row.basis == "user" and "no resample" in row.note
-
-
-def test_a_gridmet_rung_row_names_the_real_source():
-    from trid3nt_server.workflows.telemac.products import products as P
-
-    row, = P._rain_provenance({"rain_mm_per_day": 12.0,
-                               "rain_rung": "gridmet_domain_mean",
-                               "rain_note": "gridMET pr domain-mean"})
-    assert row.basis == "fetched" and "gridMET" in row.real_source_if_any
-
-
-def test_a_run_with_no_rain_carries_no_rain_row():
-    from trid3nt_server.workflows.telemac.products import products as P
-
-    assert P._rain_provenance({"rain_mm_per_day": None}) == []

@@ -277,7 +277,7 @@ def test_the_sequence_validates_and_holds_the_run_after_the_fill():
     steps = list(pl.declared())
     assert [s.label for s in steps] == [
         "reach", "seed", "carrier_discharge", "mesh", "measure_mesh_coverage",
-        "decay", "settled", "sheet", "solve", "outputs"]
+        "settled", "sheet", "solve", "outputs"]
     # The review is the door's VIEW of the sheet it just filled, so the run is
     # held on the fill itself rather than in front of a step that has not run.
     assert [s.label for s in steps if s.self_gating] == ["sheet"]
@@ -299,7 +299,6 @@ def test_the_declared_data_is_the_chain_in_declaration_order():
     """The reach chain, restated as this template's own rows, then the rain."""
     from trid3nt_server.workflows.runtime import DataRef, data_rows
     from trid3nt_server.workflows.telemac.templates.river_dye.river_dye import DATA
-    from trid3nt_server.workflows.telemac.templates.shared import river
 
     rows = data_rows(DATA)
     # CLASS-BODY ORDER is the declaration's own, and the chain reads down it.
@@ -312,7 +311,7 @@ def test_the_declared_data_is_the_chain_in_declaration_order():
     assert by_name["ends"].producer.kwargs["line"] == DataRef("centerline")
     assert by_name["reach_polygon"].producer.kwargs["polygon"] == DataRef(
         "mapped_water")
-    assert river.DATA.rivers == DataRef("rivers")
+    assert DATA.rivers == DataRef("rivers")
     # None of these is superseded by a supplied artifact.
     assert all(d.producer.supplied_uri is None for d in rows)
     # No producer here declares a ladder: gridMET-vs-user-rate is a branch on the
@@ -322,10 +321,10 @@ def test_the_declared_data_is_the_chain_in_declaration_order():
 
 
 def test_an_unknown_data_row_is_an_attribute_error_at_the_line_that_wrote_it():
-    from trid3nt_server.workflows.telemac.templates.shared import river
+    from trid3nt_server.workflows.telemac.templates.river_dye.river_dye import DATA
 
     with pytest.raises(AttributeError):
-        river.DATA.centreline
+        DATA.centreline
 
 
 def _install_step_mocks(captured: dict):

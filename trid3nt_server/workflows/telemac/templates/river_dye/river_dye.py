@@ -20,9 +20,9 @@ from trid3nt_server.workflows.inputs import point_arg
 from trid3nt_server.workflows.inputs.aoi import location_or_bbox
 from trid3nt_server.workflows.telemac.helpers.forcing import event_time
 from trid3nt_server.workflows.telemac.helpers.reach import MeshCoverage
-from trid3nt_server.workflows.telemac.helpers.substance import Decay
 from trid3nt_server.workflows.telemac.modules import (
     T2D,
+    WAQTEL,
     field,
     max_over_time,
     mesh,
@@ -38,7 +38,7 @@ from trid3nt_server.workflows.telemac.modules.telemac2d import (
 )
 from trid3nt_server.workflows.telemac.solving.solve import compute_class
 from trid3nt_server.workflows.telemac.templates.river_dye.declarations import (
-    ACCEPTS, DOC, PARAMS, PARAMS as P,
+    ACCEPTS, DECAY_PRESETS, DOC, PARAMS, PARAMS as P,
 )
 from trid3nt_server.workflows.telemac.templates.shared import river
 from trid3nt_server.workflows.telemac.templates.shared.river import (
@@ -172,10 +172,9 @@ class STEERING(T2D):
     # one and written at another is a level the run never sits at.
     LAW_OF_BOTTOM_FRICTION = Ref("settled.friction_law")
     FRICTION_COEFFICIENT = Ref("settled.friction_coefficient")
-    VELOCITY_DIFFUSIVITY = 0.1
 
     # The advection of momentum and depth, and the SUPG the reach is stable
-    # under. The tracer's own scheme is stated separately below.
+    # under. The tracer advects under the engine's own scheme and diffusivity.
     TYPE_OF_ADVECTION = [1, 5]
     SUPG_OPTION = [0, 0]
     MASS_LUMPING_ON_H = 1.0
@@ -192,11 +191,6 @@ class STEERING(T2D):
     # fields reads near zero at a prescribed-depth face, where the boundary values
     # are clamped after the flux was computed.
     MASS_BALANCE = True
-
-    # The tracer is advected by the scheme the reach is stable under, with a
-    # diffusivity that sets lateral plume spread.
-    SCHEME_FOR_ADVECTION_OF_TRACERS = 1
-    COEFFICIENT_FOR_DIFFUSION_OF_TRACERS = 0.1
 
     #: The engine's own last instant, in the double precision a continuation
     #: reads. An uncoupled run is the only one that can be continued, so it is
@@ -238,8 +232,11 @@ class STEERING(T2D):
     rain = Rain(mm_per_day=Ref("settled.rain_mm_per_day"), tracers=1)
     continue_from = Continuation(previous=Ref("settled.continue_from"))
     #: First-order degradation on the same tracer - no new tracer - when a
-    #: decaying substance was named or a half-life stated.
-    coupling = Ref("decay.coupling")
+    #: decaying substance was named or a half-life stated; nothing otherwise.
+    coupling = [WAQTEL.degradation(substance=P.decaying_substance,
+                                   half_life_hours=P.decay_half_life_hours,
+                                   rate_per_day=P.decay_rate_per_day,
+                                   presets=DECAY_PRESETS)]
 
 
 #: What the solved run is read for: the tracer over time as the animation, its
@@ -301,21 +298,13 @@ telemac_river_dye = register_workflow(
         steering=STEERING,
         # A release named up front also names which stretch to model: the one
         # centerline is navigated from it.
-        domain=river.acquire(seed=P.release),
+        domain=river.acquire(rivers=DATA.rivers, seed=P.release),
         mesh=MESH, mesh_on="reach",
-        produce=(
-            MeshCoverage(mesh=Ref("mesh"), centerline=DATA.centerline),
-            Decay(substance=P.decaying_substance,
-                  half_life_hours=P.decay_half_life_hours,
-                  rate_per_day=P.decay_rate_per_day).named("decay"),
-        ),
-        settle=river.settle(release=P.release,
-                            spill_fraction=R.spill_fraction,
+        produce=(MeshCoverage(mesh=Ref("mesh"), centerline=DATA.centerline),),
+        settle=river.settle(centerline=DATA.centerline,
+                            reach_polygon=DATA.reach_polygon,
+                            release=P.release, spill_fraction=R.spill_fraction,
                             rain=DATA.rain, continue_from=P.continue_from),
-        # The two constitutive knobs a caller may override. An unset one is not
-        # a statement, so the body's own value stands.
-        slots={"VELOCITY_DIFFUSIVITY": R.velocity_diffusivity,
-               "COEFFICIENT_FOR_DIFFUSION_OF_TRACERS": R.tracer_diffusivity},
         results=(_RESULT, _RESTART),
         steering_file=_STEERING_FILE, prefix="telemac",
         dispatch=f"{_SOLVING}.solve_reach", compute_class=S.compute_class,

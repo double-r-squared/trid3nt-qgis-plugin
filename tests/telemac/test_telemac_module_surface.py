@@ -700,25 +700,68 @@ def test_a_value_of_none_states_nothing_and_the_engine_default_stands():
 def test_a_coupling_states_only_what_the_carrier_names_it_by():
     from trid3nt_server.workflows.telemac.modules import WAQTEL
 
-    slots, files = T2D.COMPOSITES["coupling"].expand(
-        [WAQTEL.decay(law=1, coefficient=2.0)])
+    body = WAQTEL.degradation(substance="sewage", half_life_hours=None,
+                              rate_per_day=None, presets={"sewage": {"law": 1,
+                                                                     "coef": 2.0}})
+    slots, files = T2D.COMPOSITES["coupling"].expand([body])
     assert slots == {"COUPLING_WITH": "WAQTEL",
                      "WAQTEL_STEERING_FILE": "t2d_river.waqtel",
                      "WATER_QUALITY_PROCESS": 17}
     # The body's own slots are WAQTEL's, not the carrier's: they go to WAQTEL's
-    # own deck, checked against WAQTEL's own dictionary.
+    # own deck, expanded and checked against WAQTEL's own dictionary.
     assert files["t2d_river.waqtel"]["module"] == "waqtel"
-    assert dict(files["t2d_river.waqtel"]["slots"]) == {
-        "LAW_OF_TRACERS_DEGRADATION": [1],
-        "COEFFICIENT_1_FOR_LAW_OF_TRACERS_DEGRADATION": [2.0]}
+    written = dict(fill(WAQTEL, **dict(files["t2d_river.waqtel"]["slots"])).resolved())
+    assert written == {"LAW OF TRACERS DEGRADATION": [1],
+                       "COEFFICIENT 1 FOR LAW OF TRACERS DEGRADATION": [2.0]}
+
+
+def test_a_degradation_given_nothing_couples_nothing():
+    """The body is listed on every dye deck; asked for no decay, the carrier
+    states no coupling at all rather than a process with nothing to run."""
+    from trid3nt_server.workflows.telemac.modules import WAQTEL
+
+    body = WAQTEL.degradation(substance=None, half_life_hours=None,
+                              rate_per_day=None, presets={})
+    assert T2D.COMPOSITES["coupling"].expand([body]) == ({}, {})
+
+
+@pytest.mark.parametrize("given,expected", [
+    (dict(substance=None, half_life_hours=4.0, rate_per_day=None),
+     {"LAW OF TRACERS DEGRADATION": [2],
+      "COEFFICIENT 1 FOR LAW OF TRACERS DEGRADATION": [pytest.approx(0.173287)]}),
+    (dict(substance=None, half_life_hours=None, rate_per_day=0.5),
+     {"LAW OF TRACERS DEGRADATION": [3],
+      "COEFFICIENT 1 FOR LAW OF TRACERS DEGRADATION": [0.5]}),
+    (dict(substance="E. coli effluent", half_life_hours=None, rate_per_day=None),
+     {"LAW OF TRACERS DEGRADATION": [1],
+      "COEFFICIENT 1 FOR LAW OF TRACERS DEGRADATION": [2.0]}),
+])
+def test_a_half_life_a_rate_or_a_named_substance_reach_the_law(given, expected):
+    from trid3nt_server.workflows.telemac.modules import WAQTEL
+
+    body = WAQTEL.degradation(**given, presets={"coli": {"law": 1, "coef": 2.0}})
+    assert dict(fill(WAQTEL, **dict(body["slots"])).resolved()) == expected
+
+
+def test_a_substance_no_preset_names_refuses_rather_than_running_conservative():
+    from trid3nt_server.workflows.telemac.modules import WAQTEL
+
+    body = WAQTEL.degradation(substance="arsenic", half_life_hours=None,
+                              rate_per_day=None, presets={"coli": {"law": 1,
+                                                                   "coef": 2.0}})
+    with pytest.raises(ValueError, match="arsenic"):
+        fill(WAQTEL, **dict(body["slots"]))
 
 
 #: Two calls of every coupled body, with no argument value shared between them.
 #: A slot that comes back the SAME from both is a value the caller did not hand
 #: in, which is the wrapper speaking for itself.
 _COUPLED_CALLS = {
-    ("waqtel", "decay"): ({"law": 1, "coefficient": 0.2},
-                          {"law": 2, "coefficient": 0.7}),
+    ("waqtel", "degradation"): (
+        {"substance": "x", "half_life_hours": 4.0, "rate_per_day": 0.2,
+         "presets": {}},
+        {"substance": "y", "half_life_hours": 0.0, "rate_per_day": 0.7,
+         "presets": {"y": {"law": 1, "coef": 2.0}}}),
     ("waqtel", "o2"): (
         {"water_temp_c": 20.0, "salinity_ppt": 0.0, "k1_per_day": 0.3,
          "k4_per_day": 0.0, "k2_per_day": 0.9, "k2_formula": 0,
@@ -728,32 +771,23 @@ _COUPLED_CALLS = {
          "k4_per_day": 0.35, "k2_per_day": 1.7, "k2_formula": 2,
          "saturation_mgl": 11.2, "benthic_demand": 0.1,
          "photosynthesis_p": 1.0, "respiration_r": 0.06}),
-    ("gaia", "graded"): (
+    ("gaia", "bed"): (
         {"geometry": "a.slf", "boundary": "a.cli",
-         "classes": [(63.0, 0.4), (200.0, 0.6)], "density": 2650.0,
+         "gradation": [(63.0, 0.4), (200.0, 0.6)], "presets": {}, "d50_um": 120.0,
          "thickness_m": 5.0, "formula": 1, "hiding_factor_formula": 1,
-         "morphological_factor": 10.0, "printouts": "B,E,D50",
-         "mass_balance": True},
-        {"geometry": "b.slf", "boundary": "b.cli",
-         "classes": [(90.0, 0.5), (400.0, 0.3), (900.0, 0.2)],
-         "density": 2400.0, "thickness_m": 1.5, "formula": 3,
-         "hiding_factor_formula": 0, "morphological_factor": 4.0,
-         "printouts": "B,E", "mass_balance": False}),
-    ("gaia", "erodible"): (
-        {"geometry": "a.slf", "boundary": "a.cli", "d50_um": 200.0,
-         "density": 2650.0, "thickness_m": 5.0, "formula": 1,
          "morphological_factor": 10.0, "printouts": "B,E",
-         "mass_balance": True},
-        {"geometry": "b.slf", "boundary": "b.cli", "d50_um": 90.0,
-         "density": 2400.0, "thickness_m": 1.5, "formula": 3,
-         "morphological_factor": 4.0, "printouts": "B,E,D50",
-         "mass_balance": False}),
+         "mixture_printouts": "B,E,D50", "mass_balance": True},
+        {"geometry": "b.slf", "boundary": "b.cli",
+         "gradation": None, "presets": {"x": [[1.0, 1.0]]}, "d50_um": 90.0,
+         "thickness_m": 1.5, "formula": 3,
+         "hiding_factor_formula": 0, "morphological_factor": 4.0,
+         "printouts": "E", "mixture_printouts": "E,D50", "mass_balance": False}),
     ("gaia", "suspended"): (
         {"geometry": "a.slf", "boundary": "a.cli", "d50_um": 30.0,
-         "density": 2650.0, "concentration_kgm3": 0.25, "transport_formula": 3,
+         "concentration_mgl": 250.0, "transport_formula": 3,
          "advection_scheme": [1], "printouts": "B,E", "mass_balance": True},
         {"geometry": "b.slf", "boundary": "b.cli", "d50_um": 12.0,
-         "density": 2400.0, "concentration_kgm3": 0.75, "transport_formula": 2,
+         "concentration_mgl": 750.0, "transport_formula": 2,
          "advection_scheme": [5], "printouts": "B,E,D50",
          "mass_balance": False}),
 }
@@ -773,8 +807,10 @@ def test_a_coupled_body_states_only_what_its_caller_handed_it():
     for (module, body), (first, second) in _COUPLED_CALLS.items():
         wrapper = WRAPPERS[module]
         dictionary = load_dictionary(module)
-        one = dict(getattr(wrapper, body)(**first)["slots"])
-        two = dict(getattr(wrapper, body)(**second)["slots"])
+        one = {name: row.value for name, row in fill(
+            wrapper, **dict(getattr(wrapper, body)(**first)["slots"])).filled.items()}
+        two = {name: row.value for name, row in fill(
+            wrapper, **dict(getattr(wrapper, body)(**second)["slots"])).filled.items()}
         shared = ({_hashable(v) for v in first.values()}
                   & {_hashable(v) for v in second.values()})
         assert not shared, f"{module}.{body} calls share {shared}"
@@ -798,6 +834,8 @@ def test_a_coupled_body_states_only_what_its_caller_handed_it():
 def _hashable(value):
     if isinstance(value, (list, tuple)):
         return tuple(_hashable(item) for item in value)
+    if isinstance(value, dict):
+        return tuple(sorted((k, _hashable(v)) for k, v in value.items()))
     return value
 
 
@@ -814,46 +852,60 @@ def test_a_coupled_body_is_checked_against_its_own_module_s_dictionary():
         fill(WAQTEL, WATER_TEMPERATURE="warm")
 
 
-def test_the_gaia_classes_lists_are_four_of_one_length():
-    """The four parallel CLASSES lists are written from ONE gradation, so they
-    cannot disagree about how many classes there are."""
+def _bed(**over):
     from trid3nt_server.workflows.telemac.modules import GAIA
 
-    body = GAIA.graded(geometry="river.slf", boundary="river.cli",
-                       classes=[(63.0, 0.4), (200.0, 0.35), (600.0, 0.25)],
-                       density=2650.0, thickness_m=5.0, formula=1,
-                       hiding_factor_formula=1, morphological_factor=10.0,
-                       printouts="B,E,D50", mass_balance=True)
-    slots = dict(body["slots"])
-    assert {len(slots[k]) for k in (
-        "CLASSES_TYPE_OF_SEDIMENT", "CLASSES_SEDIMENT_DIAMETERS",
-        "CLASSES_SEDIMENT_DENSITY", "CLASSES_INITIAL_FRACTION")} == {3}
-    assert slots["CLASSES_SEDIMENT_DIAMETERS"] == pytest.approx(
+    asked = dict(geometry="river.slf", boundary="river.cli", gradation=None,
+                 presets={"graded_sand": [[100.0, 0.34], [400.0, 0.33],
+                                          [1000.0, 0.33]]},
+                 d50_um=200.0, thickness_m=5.0, formula=1, hiding_factor_formula=1,
+                 morphological_factor=10.0, printouts="B,E",
+                 mixture_printouts="B,E,D50", mass_balance=True)
+    return fill(GAIA, **dict(GAIA.bed(**{**asked, **over})["slots"]))
+
+
+def test_the_gaia_classes_lists_are_three_of_one_length():
+    """The parallel CLASSES lists are written from ONE gradation, so they cannot
+    disagree about how many classes there are; the density is the dictionary's
+    own quartz and is unwritten."""
+    written = dict(_bed(gradation=[(63.0, 0.4), (200.0, 0.35), (600.0, 0.25)]).resolved())
+    assert {len(written[k]) for k in (
+        "CLASSES TYPE OF SEDIMENT", "CLASSES SEDIMENT DIAMETERS",
+        "CLASSES INITIAL FRACTION")} == {3}
+    assert written["CLASSES SEDIMENT DIAMETERS"] == pytest.approx(
         [63.0e-6, 200.0e-6, 600.0e-6])
-    assert slots["HIDING_FACTOR_FORMULA"] == 1
+    assert written["HIDING FACTOR FORMULA"] == 1
+    assert written["VARIABLES FOR GRAPHIC PRINTOUTS"] == "B,E,D50"
+    assert "CLASSES SEDIMENT DENSITY" not in written
+
+
+def test_a_gradation_by_preset_name_or_too_few_classes_resolves_the_bed_shape():
+    """A preset name is the mixture it names, renormalized; one pair cannot sort
+    and the bed is the single class at d50, printing no grading."""
+    by_name = dict(_bed(gradation="graded_sand").resolved())
+    assert len(by_name["CLASSES INITIAL FRACTION"]) == 3
+    assert sum(by_name["CLASSES INITIAL FRACTION"]) == pytest.approx(1.0)
+    single = dict(_bed(gradation=[[300.0, 1.0]]).resolved())
+    assert single["CLASSES SEDIMENT DIAMETERS"] == pytest.approx([200.0e-6])
+    assert single["VARIABLES FOR GRAPHIC PRINTOUTS"] == "B,E"
+    assert "HIDING FACTOR FORMULA" not in single
+
+
+def test_a_class_outside_the_formulae_s_window_refuses_by_size():
+    with pytest.raises(ValueError, match="3000 um"):
+        _bed(gradation=[[100.0, 0.5], [3000.0, 0.5]])
 
 
 def test_dredging_names_every_nestor_file_or_none_of_them():
     """NESTOR reads all three on every action, so a run naming two of them is a
     run it cannot read."""
-    from trid3nt_server.workflows.telemac.modules import GAIA
     from trid3nt_server.workflows.telemac.modules.gaia import Dredging
 
-    body = GAIA.erodible(geometry="river.slf", boundary="river.cli",
-                         d50_um=200.0, density=2650.0, thickness_m=5.0,
-                         formula=1, morphological_factor=10.0,
-                         printouts="B,E", mass_balance=True,
-                         dredging=Dredging(action="A", polygon="P",
-                                           surface_ref="R"))
-    sheet = fill(GAIA, **dict(body["slots"]))
+    sheet = _bed(dredging=Dredging(action="A", polygon="P", surface_ref="R"))
     written = dict(sheet.resolved())
     assert written["NESTOR"] is True
     assert sorted(sheet.files) == ["nestor.act", "nestor.pol", "nestor.ref"]
-    plain = fill(GAIA, **dict(GAIA.erodible(
-        geometry="river.slf", boundary="river.cli", d50_um=200.0,
-        density=2650.0, thickness_m=5.0, formula=1,
-        morphological_factor=10.0, printouts="B,E",
-        mass_balance=True)["slots"]))
+    plain = _bed()
     assert "NESTOR" not in dict(plain.resolved())
     assert not plain.files
 
@@ -867,9 +919,14 @@ def test_every_wrapper_binds_the_primitive_set_and_nothing_question_named():
     from trid3nt_server.workflows.telemac.modules.outputs import PRIMITIVES
 
     for wrapper in (T2D, T3D, ART, GAIA):
-        assert sorted(wrapper.OUTPUTS) == sorted(PRIMITIVES), wrapper.MODULE
+        assert set(PRIMITIVES) <= set(wrapper.OUTPUTS), wrapper.MODULE
         assert wrapper.VARIABLES, wrapper.MODULE
         assert all(callable(output.read) for output in wrapper.OUTPUTS.values())
+    # The drogues are the one output past the set: the particle track TELEMAC-2D
+    # itself writes, named by the module's own word for it.
+    assert set(T2D.OUTPUTS) - set(PRIMITIVES) == {"drogues"}
+    for wrapper in (T3D, ART, GAIA):
+        assert sorted(wrapper.OUTPUTS) == sorted(PRIMITIVES), wrapper.MODULE
     assert not WAQTEL.OUTPUTS
     # GAIA writes its own result beside the carrier's, so its primitives read it.
     assert GAIA.RESULT_FILE == "gaia_river.slf"
@@ -939,13 +996,12 @@ def test_the_reach_body_is_written_at_the_derivation_it_was_solved_for():
     """ONE normal depth: the level the outflow is held to and the depth the run
     opens at are the same number, read off the same producer, so the initial free
     surface and the prescribed boundary agree by construction."""
-    from trid3nt_server.workflows.telemac.templates.shared.river import RIVER
-
-    assert RIVER.ASSERTED["INITIAL_DEPTH"] == Ref("settled.depth_m")
-    assert RIVER.ASSERTED["FRICTION_COEFFICIENT"] == Ref("settled.friction_coefficient")
     for _name, body in _bodies():
         stated = body.ASSERTED.get("boundaries")
         if stated is not None:
+            assert body.ASSERTED["INITIAL_DEPTH"] == Ref("settled.depth_m")
+            assert body.ASSERTED["FRICTION_COEFFICIENT"] == Ref(
+                "settled.friction_coefficient")
             assert stated["measured"] == Ref("settled")
 
 
@@ -1021,7 +1077,9 @@ def test_every_open_water_recipe_carries_the_boundary_cleaning_chain():
     from trid3nt_server.workflows.telemac.templates.agitation.agitation import (
         MESH as HARBOUR,
     )
-    from trid3nt_server.workflows.telemac.templates.shared.river import MESH as REACH
+    from trid3nt_server.workflows.telemac.templates.river_dye.river_dye import (
+        MESH as REACH,
+    )
     from trid3nt_server.workflows.telemac.templates.stratified_flow.stratified_flow import (
         MESH as BASIN,
     )
@@ -1141,6 +1199,7 @@ def test_a_template_reads_its_answer_through_the_primitives_its_module_binds():
     wrapper under the primitive's name; a template that still names a reader of
     its own names one no other template names."""
     from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt_server.workflows.telemac.modules import WRAPPERS
 
     readers = {}
     for name in _TEMPLATES:
@@ -1148,11 +1207,15 @@ def test_a_template_reads_its_answer_through_the_primitives_its_module_binds():
         if door.outputs:
             body = door.steering
             for primitive in door.outputs:
-                assert primitive.kind in body.OUTPUTS, (name, primitive)
+                reader = WRAPPERS[primitive.module] if primitive.module else body
+                assert primitive.kind in reader.OUTPUTS, (name, primitive)
                 assert primitive.publish in ("layer", "chart", "animate")
-                assert primitive.variable in door.captions, (name, primitive)
+                assert (primitive.variable or primitive.kind) in door.captions, (
+                    name, primitive)
             for measure in door.answer.values():
-                assert measure.primitive.kind in body.OUTPUTS, (name, measure)
+                reader = (WRAPPERS[measure.primitive.module]
+                          if measure.primitive.module else body)
+                assert measure.primitive.kind in reader.OUTPUTS, (name, measure)
             continue
         readers[name] = door.read(None).runner
     assert "telemac_river_dye" not in readers
@@ -1317,3 +1380,32 @@ def test_the_serializer_is_the_only_module_that_writes_a_keyword_into_a_deck():
     assert not offenders, (
         "a keyword is spelled and assigned outside the serializer and its "
         f"driver, which is a second writer of the steering format: {offenders}")
+
+
+def test_the_oil_module_is_one_value_the_deck_s_own_preset_and_point_expand():
+    """The preset named is one row of the table the deck carries; the settled
+    point and the release step are compiled into the routine; the write cadence
+    asked in seconds becomes steps at the run's own step."""
+    from trid3nt_server.workflows.telemac.modules.telemac2d import Oil
+
+    presets = {"diesel": dict(compo=[(0.6, 560.0), (0.4, 700.0)],
+                              hap=[(0.15, 610.0, 0.005, 1.0e-5, 8.0e-5)],
+                              rho=840.0, eta=4.0e-6, voldev=10.0, tamb=288.0,
+                              etal=1)}
+    slots, files = T2D.COMPOSITES["oil"].expand(Oil(
+        presets=presets, named="diesel", at=[512345.6, 4401234.4],
+        release_step=90, drogues=50, drogues_period_s=60.0, time_step_s=0.5))
+    assert slots == {"FORTRAN_FILE": "user_fortran",
+                     "OIL_SPILL_STEERING_FILE": "oil_spill.txt",
+                     "MAXIMUM_NUMBER_OF_DROGUES": 50,
+                     "PRINTOUT_PERIOD_FOR_DROGUES": 120,
+                     "ASCII_DROGUES_FILE": "drogues.txt"}
+    assert files["oil_spill.txt"].splitlines()[:4] == [
+        "DIESEL - trid3nt oil preset", "2", "FM_COMPO TB_COMPO", "0.6 560.0"]
+    routine = files["user_fortran/oil_flot.f"]
+    assert "IF(LT.EQ.90)" in routine
+    assert "COORD_X=512346.D0" in routine and "COORD_Y=4401234.D0" in routine
+    with pytest.raises(ValueError, match="crude"):
+        T2D.COMPOSITES["oil"].expand(Oil(
+            presets=presets, named="crude", at=[0.0, 0.0], release_step=1,
+            drogues=1, drogues_period_s=1.0, time_step_s=1.0))

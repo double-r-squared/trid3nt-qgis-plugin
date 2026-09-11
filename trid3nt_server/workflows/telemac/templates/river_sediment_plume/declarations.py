@@ -4,10 +4,7 @@ from __future__ import annotations
 
 from trid3nt_server.workflows.inputs import Point
 from trid3nt_server.workflows.runtime import Accepts, Param, doors
-from trid3nt_server.workflows.telemac.helpers.substance import (
-    GRAIN_UM_MAX,
-    GRAIN_UM_MIN,
-)
+from trid3nt_server.workflows.telemac.modules.gaia import GRAIN_UM_MAX, GRAIN_UM_MIN
 
 __all__ = ["ACCEPTS", "DOC", "PARAMS"]
 
@@ -89,9 +86,10 @@ DOC = dict(
          "every step from the top."),
     ),
     returns=(
-        "On success a `TelemacSedimentLayerURI` - the peak suspended-concentration "
-        "map plus the SELAFIN sibling the client animates. It carries "
-        "`max_deposition_mm` / `deposited_mass_kg` / `deposit_fraction`; narrate "
+        "On success the peak suspended-concentration layer (a `LayerURI`) - the "
+        "emitter loads the map, animates the result mesh and loads the bed "
+        "evolution beside it - whose `answer` carries `suspended_cmax` / "
+        "`plume_reach_m` / `bed_evolution_max_m` / `net_bed_mass_kg`; narrate "
         "those typed numbers. On failure a dict with `status=\"error\"` + "
         "`error_code`."
     ),

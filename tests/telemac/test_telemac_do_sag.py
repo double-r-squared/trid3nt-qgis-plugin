@@ -13,7 +13,9 @@ import pytest
 
 from tests._fakes.reach_chain import install_reach_chain
 
-from trid3nt_server.workflows.telemac.products.streeter_phelps import (
+from trid3nt_server.workflows.publishing import Line, Profile
+from trid3nt_server.workflows.telemac.templates.do_sag.streeter_phelps import (
+    overlay,
     sp_critical_point,
     sp_do_profile,
 )
@@ -103,9 +105,9 @@ def test_the_plan_reads_as_the_universal_stage_sequence():
     wf = _workflow()
     plan = wf.plan
     stages = [s.stage for s in plan.declared() if s.stage]
-    assert stages == ["acquire", "acquire", "acquire", "mesh", "mesh", "prep",
+    assert stages == ["acquire", "acquire", "acquire", "mesh", "mesh",
                       "author", "author", "solve", "publish"]
-    assert [s.name for s in plan.declared()][-1] == "do_field"
+    assert [s.name for s in plan.declared()][-1] == "outputs"
 
 
 def test_declared_bounds_clamp_the_wq_knobs():
@@ -181,36 +183,29 @@ def test_the_door_declares_the_run_mode_read_for_the_sheet_review():
     assert review.self_gating is True    # so no gate may be declared in front
 
 
-# --- the sag chart ----------------------------------------------------------- #
-def test_the_chart_title_is_not_doubled_on_a_bbox_only_invocation():
-    from trid3nt_server.workflows.runtime import ParamValues
-    from trid3nt_server.workflows.telemac.templates.do_sag.do_sag import build_sag_chart
-
-    result = SimpleNamespace(
-        name="Dissolved oxygen sag (Eel_River_near_Scotia)",
-        sag_curve_distance_m=[0.0, 1000.0], sag_curve_do_mgl=[9.0, 8.0],
-        sag_curve_bod_mgl=[20.0, 18.0], do_standard_mgl=5.0, do_min_mgl=8.0,
-        do_min_distance_m=1000.0, do_violates_standard=False,
+# --- the outputs list: the oxygen field, its animation, its profile ---------- #
+def test_the_outputs_list_reads_the_oxygen_and_charts_it_down_the_reach():
+    """The oxygen is the SECOND tracer the O2 process appends, read at the last
+    instant as the map and down the centerline as the chart; the load is read
+    for the answer, and the closed form rides the chart as a reference."""
+    from trid3nt_server.workflows.telemac.templates.do_sag.do_sag import (
+        ANSWER,
+        CAPTIONS,
+        OUTPUTS,
     )
-    payload = build_sag_chart(result=result, params=ParamValues({}))
-    assert payload["title"] == "Dissolved oxygen sag (Eel_River_near_Scotia)"
-    assert payload["title"].count("sag") == 1
 
-
-def test_do_layer_contract_fields():
-    from trid3nt_contracts.telemac_contracts import (
-        TELEMAC_DO_STYLE,
-        TelemacDoLayerURI,
-    )
-    lay = TelemacDoLayerURI(
-        layer_id="t", name="n", layer_type="raster", uri="s3://b/k.tif",
-        style=TELEMAC_DO_STYLE, role="primary",
-        do_min_mgl=4.0, do_min_distance_m=6500.0, do_standard_mgl=5.0,
-        do_violates_standard=True, sag_curve_distance_m=[0.0, 100.0],
-        sag_curve_do_mgl=[9.0, 8.0], sag_curve_bod_mgl=[20.0, 18.0],
-    )
-    assert lay.do_violates_standard is True
-    assert lay.style == TELEMAC_DO_STYLE
+    assert [(p.kind, p.variable, p.t, p.publish) for p in OUTPUTS] == [
+        ("field", "T2", -1, "layer"), ("field", "T2", "every", "animate"),
+        ("profile", "T2", -1, "chart")]
+    assert OUTPUTS[2].reference is overlay
+    assert CAPTIONS == {"T2": "dissolved oxygen", "T3": "organic load"}
+    assert {name: (m.primitive.kind, m.primitive.variable, m.stat)
+            for name, m in ANSWER.items()} == {
+        "do_min_mgl": ("profile", "T2", "min"),
+        "do_min_distance_m": ("profile", "T2", "x_min_m"),
+        "bod_mixed_mgl": ("profile", "T3", "max"),
+        "mean_velocity_mps": ("profile", "T2", "velocity_mps"),
+        "mesh_size_m": ("mesh", None, "size_m")}
 
 
 # --- the REAL composition, driven through the declared plan ------------------ #
@@ -222,7 +217,6 @@ def _stub_reach_pipeline(monkeypatch, order, seen, *, layer, review, tmp_path=No
         forcing as forcing_mod,
         reach as reach_mod,
     )
-    from trid3nt_server.workflows.telemac.products import products as products_mod
     from trid3nt_server.workflows.telemac.solving import solve as solve_mod
     from trid3nt_server.workflows.telemac.authoring import assembler as asm_mod
     from trid3nt_server.workflows.telemac import workflow as door_mod
@@ -268,31 +262,30 @@ def _stub_reach_pipeline(monkeypatch, order, seen, *, layer, review, tmp_path=No
                             "liquid_boundary_prescribes": ["flowrate"]}))
     monkeypatch.setattr(door_mod, "run_sheet", _step("run", {"run_id": "R"}))
     monkeypatch.setattr(solve_mod, "solve_reach", _step("solve", {"run_id": "R"}))
-    monkeypatch.setattr(products_mod, "publish_do_products", _step("products", layer))
+    monkeypatch.setattr(door_mod, "publish_outputs", _step("outputs", layer))
     monkeypatch.setattr(gate_mod, "gate_input_review", review)
 
 
 @pytest.mark.asyncio
 async def test_the_declared_plan_composes_the_shared_steps_in_order(monkeypatch,
                                                                     tmp_path):
-    """The migrated plan itself, not a stand-in.
+    """The declared plan itself, not a stand-in.
 
-    Geocode, flowline, seed, discharge, waqtel, review, corridor mesh, run, solve, DO
-    products - with the outfall riding as the reach SEED, never as a dye release."""
+    Geocode, flowline, seed, discharge, corridor mesh, settle, review, run, solve,
+    outputs - with the outfall riding as the reach SEED, never as a dye release."""
     monkeypatch.setenv("TRID3NT_DEV_PERSISTENCE_DIR", str(tmp_path / "persistence"))
-    from trid3nt_contracts.telemac_contracts import (
-        TELEMAC_DO_STYLE,
-        TelemacDoLayerURI,
-    )
+    from trid3nt_contracts.execution import AnswerLayerURI
     from trid3nt_server.workflows.telemac.templates.do_sag.do_sag import telemac_do_sag
 
     order: list[str] = []
     seen: dict = {}
-    layer = TelemacDoLayerURI(
-        layer_id="t", name="Dissolved oxygen sag (eel)", layer_type="raster",
-        uri="s3://b/k.tif", role="primary",
-        do_min_mgl=8.0, do_min_distance_m=100.0, do_standard_mgl=5.0,
-        do_violates_standard=False)
+    layer = AnswerLayerURI(
+        layer_id="t", name="Dissolved oxygen (mg/L) at t = 600 s (eel)",
+        layer_type="raster", uri="s3://b/k.tif", role="primary",
+        quantity="dissolved_oxygen",
+        answer={"do_min_mgl": 8.0, "do_min_distance_m": 100.0,
+                "bod_mixed_mgl": 20.0, "mean_velocity_mps": 0.4,
+                "mesh_size_m": 9.0})
 
     async def _review(**kwargs):
         order.append("review")
@@ -306,25 +299,32 @@ async def test_the_declared_plan_composes_the_shared_steps_in_order(monkeypatch,
                          tmp_path=tmp_path)
 
     out = await telemac_do_sag(
-        location="Eel River near Scotia, California", upstream_do_mgl=99.0,
+        location="Eel River near Scotia, California", upstream_do_mgl=7.5,
         outfall_coords=[-124.11, 40.51], input_mode="user_gated")
 
     assert not isinstance(out, dict), out
     assert order == ["geocode", "rivers", "seed", "discharge", "mesh", "settled",
-                     "review", "run", "products"]
+                     "review", "run", "outputs"]
     # the outfall pins the MESHED water body, so it rides as the reach seed the
     # ONE centerline is navigated from - never as a dye release point
     from trid3nt_server.workflows.inputs import Point
 
     assert seen["seed"]["supplied"] == Point(-124.11, 40.51)
     assert seen["settled"]["release"] == Point(-124.11, 40.51)
-    # DO cannot ride in above its own saturation - the one coupled clamp - and
-    # the body reads the clamped value where it states its boundary and source.
+    # The body reads the declared upstream oxygen where it states its boundary
+    # and its initial state, and the user's own value reaches the deck.
     body = seen["run"]["sheet"].body
-    assert body.ASSERTED["boundaries"]["tracers"][1].path == \
-        "waqtel.upstream_do_mgl"
+    assert body.ASSERTED["boundaries"]["tracers"][1].name == "upstream_do_mgl"
     filled = dict(seen["run"]["sheet"].resolved())
-    assert filled["PRESCRIBED TRACERS VALUES"][1] == pytest.approx(9.022)
+    assert filled["PRESCRIBED TRACERS VALUES"][1] == pytest.approx(7.5)
+    assert filled["INITIAL VALUES OF TRACERS"] == [0.0, 7.5, 0.0, 0.0]
+    # The O2 process is the coupled body's own sheet: the rates and the
+    # saturation the template declared, and a constant reaeration formula.
+    o2 = dict(seen["run"]["sheet"].files["t2d_river.waqtel"]["slots"])
+    assert (o2["CONSTANT_OF_DEGRADATION_OF_ORGANIC_LOAD_K1"],
+            o2["K2_REAERATION_COEFFICIENT"], o2["FORMULA_FOR_COMPUTING_K2"],
+            o2["O2_SATURATION_DENSITY_OF_WATER__CS_"]) == (0.3, 0.9, 0,
+                                                         pytest.approx(9.022))
     assert seen["review"]["mode"] == "user_gated"
     # the door renders the SHEET it just filled, and holds there
     assert seen["review"]["param_sheet"].workflow == "telemac_do_sag"
@@ -378,40 +378,52 @@ class _Measured:
         self.probes = doc["probes"]
 
 
-# --- the analytical overlay: wired in, anchored, and honest about absence ---- #
-def _overlay(**kw):
-    from trid3nt_server.workflows.telemac.products.postprocess_telemac import (
-        _streeter_phelps_overlay,
-    )
-    return _streeter_phelps_overlay(**kw)
+# --- the analytical overlay: anchored, and honest about absence ------------- #
+def _profile(x, values, *, velocity=0.5, units="mg/L") -> Profile:
+    import numpy as np
+
+    return Profile(name="DISSOLVED O2", units=units, distance_m=np.asarray(x),
+                   values=np.asarray(values), along="downstream distance",
+                   measures={"min": min(values), "velocity_mps": velocity})
+
+
+def _load(x, values) -> tuple:
+    from trid3nt_server.workflows.telemac.modules import field
+    from trid3nt_server.workflows.telemac.modules.outputs import profile
+
+    return {profile("T3", along="line"): _profile(x, values),
+            field("T2"): None}
+
+
+_PARAMS = {"do_standard_mgl": 5.0, "do_saturation_mgl": 9.0,
+           "k1_per_day": 2.0, "k2_per_day": 6.0}
 
 
 def test_the_overlay_is_anchored_at_the_modeled_mix_point():
     """The closed form starts where the solve says the load entered - the CBOD
-    peak - not at the top of whatever stretch happened to be wet."""
+    peak - not at the top of whatever stretch happened to be wet; the standard
+    and the load ride beside it under their own labels."""
     xs = [0.0, 100.0, 200.0, 300.0, 400.0, 500.0]
     bod = [0.0, 0.0, 20.0, 18.0, 16.0, 14.0]
     do = [9.0, 9.0, 8.5, 8.2, 8.0, 7.9]
-    anchor, sp, note = _overlay(curve_x=xs, curve_do=do, curve_bod=bod,
-                                velocity_mps=0.5, saturation_mgl=9.0,
-                                k1_per_day=2.0, k2_per_day=6.0)
-    assert anchor == 2 and len(sp) == 4
-    assert sp[0] == pytest.approx(do[2])          # anchored ON the modeled state
-    assert "200 m downstream" in note and "0.500 m/s" in note
+    lines = overlay(_profile(xs, do), _load(xs, bod), _PARAMS)
+    assert [line.label for line in lines] == [
+        "5 mg/L standard", "organic load", "Streeter-Phelps closed form"]
+    closed = lines[2]
+    assert list(closed.x) == xs[2:] and len(closed.values) == 4
+    assert closed.values[0] == pytest.approx(do[2])   # anchored ON the modeled state
+    assert lines[0].values == [5.0, 5.0] and list(lines[1].values) == bod
 
 
-@pytest.mark.parametrize("kw,reason", [
-    (dict(velocity_mps=0.0), "velocity"),
-    (dict(curve_bod=[0.0] * 6), "organic load"),
-    (dict(k1_per_day=None), "rates"),
+@pytest.mark.parametrize("velocity,bod", [
+    (0.0, [0.0, 0.0, 20.0, 18.0, 16.0, 14.0]),
+    (0.5, [0.0] * 6),
 ])
-def test_the_overlay_says_why_there_is_none(kw, reason):
-    base = dict(curve_x=[0.0, 1.0, 2.0, 3.0, 4.0, 5.0],
-                curve_do=[9.0] * 6, curve_bod=[0.0, 0.0, 20.0, 18.0, 16.0, 14.0],
-                velocity_mps=0.5, saturation_mgl=9.0, k1_per_day=2.0,
-                k2_per_day=6.0)
-    anchor, sp, note = _overlay(**{**base, **kw})
-    assert sp == [] and anchor == 0 and reason in note
+def test_the_overlay_draws_no_closed_form_it_cannot_anchor(velocity, bod):
+    xs = [0.0, 1.0, 2.0, 3.0, 4.0, 5.0]
+    lines = overlay(_profile(xs, [9.0] * 6, velocity=velocity), _load(xs, bod),
+                    _PARAMS)
+    assert "Streeter-Phelps closed form" not in [line.label for line in lines]
 
 
 def test_the_overlay_reproduces_the_closed_form_it_is_graded_against():
@@ -421,25 +433,5 @@ def test_the_overlay_reproduces_the_closed_form_it_is_graded_against():
     xs = [0.0, 500.0, 1000.0, 1500.0, 2000.0, 2500.0]
     do_exact, _ = sp_do_profile(xs, 0.4, 9.0, 20.0, 0.5, 2.0, 6.0)
     bod = [20.0] + [0.0] * 5          # the mix point is bin 0
-    _anchor, sp, _note = _overlay(curve_x=xs, curve_do=do_exact, curve_bod=bod,
-                                  velocity_mps=0.4, saturation_mgl=9.0,
-                                  k1_per_day=2.0, k2_per_day=6.0)
-    assert sp == pytest.approx(do_exact, abs=1e-9)
-
-
-# --- the downstream axis is pointed by the SOLVED flow ----------------------- #
-def test_the_principal_axis_is_oriented_by_the_solved_velocity():
-    from trid3nt_server.workflows.telemac.products.postprocess_telemac import (
-        _downstream_coordinate,
-    )
-
-    x = np.linspace(0.0, 1000.0, 21)
-    y = np.zeros_like(x)
-    east, label_e = _downstream_coordinate(x, y, None, flow_uv=(1.0, 0.0))
-    west, label_w = _downstream_coordinate(x, y, None, flow_uv=(-1.0, 0.0))
-    # the same node cloud, opposite flows: chainage zero moves to the other end
-    assert east[0] == pytest.approx(0.0) and east[-1] == pytest.approx(1000.0)
-    assert west[0] == pytest.approx(1000.0) and west[-1] == pytest.approx(0.0)
-    assert label_e == label_w
-    assert "oriented by the solved mean velocity" in label_e
-    assert "direction unverified" in _downstream_coordinate(x, y, None)[1]
+    lines = overlay(_profile(xs, do_exact, velocity=0.4), _load(xs, bod), _PARAMS)
+    assert lines[-1].values == pytest.approx(do_exact, abs=1e-9)

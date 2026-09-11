@@ -638,10 +638,11 @@ package SteeringSurface {
         composite own a carrier slot out of sight. What varies WITHIN one
         question is a composite that states nothing when it is given nothing.
 
-        The rule holds on the READING side too. Each template NAMES the reader
-        its question needs, out of the module's own OUTPUTS bindings; a single
-        publisher branching on a substance-class string put the fork back in
-        the products, one level down from where a person reads it.
+        The rule holds on the READING side too. Each template LISTS the
+        primitives its question reads, off the module's own OUTPUTS bindings
+        and, for a coupled module's own result, through that module's wrapper;
+        a single publisher branching on a substance-class string put the fork
+        back in the products, one level down from where a person reads it.
         */
     }
 
@@ -814,7 +815,7 @@ package SteeringSurface {
     verify requirement OneTemplatePerQuestion by
         "tests/telemac/test_telemac_module_surface.py::test_a_template_reads_its_answer_through_the_primitives_its_module_binds";
     verify requirement OneTemplatePerQuestion by
-        "tests/telemac/test_postprocess_telemac.py::test_the_peak_layer_handle_carries_the_product_that_wrote_it";
+        "tests/telemac/test_telemac_outputs.py::test_a_primitive_names_the_coupled_module_whose_result_it_reads";
 
     satisfy requirement ReviewIsTheDoorsView by door;
     verify requirement ReviewIsTheDoorsView by

@@ -4,12 +4,19 @@ from __future__ import annotations
 
 from trid3nt_server.workflows.inputs import Point
 from trid3nt_server.workflows.runtime import Accepts, Param, doors
-from trid3nt_server.workflows.telemac.helpers.substance import (
-    GRAIN_UM_MAX,
-    GRAIN_UM_MIN,
-)
+from trid3nt_server.workflows.telemac.modules.gaia import GRAIN_UM_MAX, GRAIN_UM_MIN
 
-__all__ = ["ACCEPTS", "DOC", "PARAMS"]
+__all__ = ["ACCEPTS", "DOC", "GRADATION_PRESETS", "PARAMS"]
+
+#: Named gradations (d50 in microns, initial fraction) a mixture can be asked for
+#: by name - honest demo mixes, never a measured site sieve curve. The fractions
+#: are renormalized on use.
+GRADATION_PRESETS: dict[str, list[list[float]]] = {
+    "graded_sand": [[100.0, 0.34], [400.0, 0.33], [1000.0, 0.33]],
+    "poorly_sorted": [[80.0, 0.4], [300.0, 0.3], [1200.0, 0.3]],
+    "sand_gravel_bimodal": [[200.0, 0.5], [1800.0, 0.5]],
+    "fine_coarse_sand": [[120.0, 0.5], [800.0, 0.5]],
+}
 
 #: What a mobile-bed run can be HANDED. The bed evolves on the same triangulation
 #: the hydrodynamics runs on, so a lattice is refused at the door.
@@ -143,10 +150,11 @@ DOC = dict(
          "every step from the top."),
     ),
     returns=(
-        "On success a `TelemacSedimentLayerURI` - the bed-evolution map plus the "
-        "SELAFIN sibling the client animates. It carries `max_scour_mm` / "
-        "`max_deposition_mm` / `deposited_mass_kg` / `deposit_fraction` and, on a "
-        "graded bed, `sediment_surface_d50_range_um`; narrate those typed "
-        "numbers. On failure a dict with `status=\"error\"` + `error_code`."
+        "On success the bed-evolution layer (a `LayerURI`, metres, deposition "
+        "positive and scour negative) - the emitter loads the map and animates "
+        "the bed beside it - whose `answer` carries `bed_evolution_max_m` / "
+        "`bed_evolution_min_m` / `net_bed_mass_kg` / `marker_cmax_mgl`; narrate "
+        "those typed numbers. On failure a dict with `status=\"error\"` + "
+        "`error_code`."
     ),
 )

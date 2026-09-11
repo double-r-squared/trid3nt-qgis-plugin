@@ -54,76 +54,6 @@ def test_a_residual_that_rounds_to_negative_zero_reads_as_zero():
     listing = _LISTING.replace("60.00000", "-0.1E-12")
     net = R.gaia_mass_balance(listing)["sediment_net_bed_mass_kg"]
     assert net == 0.0 and math.copysign(1.0, net) == 1.0
-    stats = R.sediment_scalars(listing_text=listing, injected_kg=_INJECTED)
-    fraction = stats["sediment_deposit_fraction"]
-    assert fraction == 0.0 and math.copysign(1.0, fraction) == 1.0
-
-
-def test_the_deposit_fraction_compares_the_net_bed_against_the_sheet_pulse():
-    stats = R.sediment_scalars(listing_text=_LISTING, injected_kg=_INJECTED)
-    assert stats["sediment_injected_kg"] == 240.0
-    assert stats["sediment_deposit_fraction"] == 0.25
-
-
-def test_a_net_gain_past_the_injection_clamps_rather_than_reading_over_one():
-    listing = _LISTING.replace("60.00000", "600.0000")
-    assert R.sediment_scalars(
-        listing_text=listing,
-        injected_kg=_INJECTED)["sediment_deposit_fraction"] == 1.0
-
-
-def test_a_single_class_bed_reports_no_sorting_at_all():
-    """Sorting is structurally impossible on one class, so no spread is claimed."""
-    stats = R.sediment_scalars(listing_text=_LISTING, injected_kg=_INJECTED)
-    assert "sediment_n_classes" not in stats
-    graded = R.sediment_scalars(listing_text=_LISTING, injected_kg=_INJECTED,
-                                n_classes=2)
-    assert graded["sediment_n_classes"] == 2
-
-
-_DROGUES = """TITLE = "drogues"
-VARIABLES = "id","X","Y"
-ZONE T="floats" SOLUTIONTIME= 0.0
-1, 500.0, 0.0
-2, 501.0, 1.0
-3, 502.0, 2.0
-ZONE T="floats" SOLUTIONTIME= 300.0
-1, 700.0, 0.0
-2, 701.0, 1.0
-ZONE T="floats" SOLUTIONTIME= 600.0
-1, 900.0, 0.0
-"""
-
-
-def test_the_track_is_one_zone_per_written_instant(tmp_path):
-    path = tmp_path / "drogues.txt"
-    path.write_text(_DROGUES)
-    zones = R.parse_drogues(path)
-    assert [t for t, _pts in zones] == [0.0, 300.0, 600.0]
-    assert [len(pts) for _t, pts in zones] == [3, 2, 1]
-
-
-def test_a_lost_float_reads_as_having_left_through_the_outlet(tmp_path):
-    """TELEMAC deletes a float that crosses a liquid boundary; that is an exit."""
-    path = tmp_path / "drogues.txt"
-    path.write_text(_DROGUES)
-    particles, slick, stats = R.oil_slick_features(path, utm_epsg=32610)
-    assert stats["oil_particles_released"] == 3
-    assert stats["oil_particles"] == 1
-    assert stats["oil_particles_exited_domain"] == 2
-    assert stats["oil_drift_m"] > 300.0
-    assert len(particles["snapshots"]) == 3
-    # the release, the middle and the end - never one layer per written frame
-    assert len(slick["features"]) == 3
-    lon, lat = slick["features"][0]["geometry"]["coordinates"][0]
-    assert -180.0 <= lon <= 180.0 and -90.0 <= lat <= 90.0
-
-
-def test_a_track_with_no_floats_at_any_instant_draws_no_slick(tmp_path):
-    path = tmp_path / "drogues.txt"
-    path.write_text('ZONE T="floats" SOLUTIONTIME= 0.0\n')
-    _particles, slick, stats = R.oil_slick_features(path, utm_epsg=32610)
-    assert slick["features"] == [] and stats == {}
 
 
 def _balance(t_s: float, *fluxes: float, error: str = "0.1E-14") -> str:
@@ -256,40 +186,6 @@ def test_a_result_with_no_depth_measures_nothing():
         "x": np.zeros(3), "y": np.zeros(3), "ikle": np.array([[0, 1, 2]]),
         "varnames": ["DYE"],
         "data": {"DYE": np.zeros((1, 3))}}) == {}
-
-
-def test_the_reach_run_says_out_loud_what_it_did_not_wet():
-    """The heuristic lands on the run journal, and it GATES nothing.
-
-    A run that wet a quarter of its bankfull domain is a correct low-flow run with an
-    overstated conveyance width; the number is said and nothing is refused over it."""
-    from trid3nt_server.workflows.runtime.journal import bind_notes, drain_notes
-    from trid3nt_server.workflows.telemac.products import products as PR
-
-    measured = R.wetted_fraction(_mesh([1.0, 1.0, 1.0, 0.0, 0.0, 0.0]))
-    token = bind_notes()
-    try:
-        PR._journal_wetted_fraction(dict(measured))
-    finally:
-        notes = drain_notes(token)
-    assert len(notes) == 1
-    assert "wetted fraction: 25%" in notes[0]
-    assert "0.02 m" in notes[0] and "active channel" in notes[0]
-
-
-def test_an_unmeasurable_result_costs_the_run_nothing():
-    """A postprocess whose result carried no depth field narrates nothing.
-
-    The read belongs to the postprocess and fails there with its own typed error; what
-    reaches here is the metrics dict, and one with no wetted fraction says nothing."""
-    from trid3nt_server.workflows.runtime.journal import bind_notes, drain_notes
-    from trid3nt_server.workflows.telemac.products import products as PR
-
-    token = bind_notes()
-    try:
-        PR._journal_wetted_fraction({"dye_cmax_mgl": 1.0})
-    finally:
-        assert drain_notes(token) == []
 
 
 #: How LECDON asks, verbatim from the image's own lecdon_telemac3d.F: the phrase

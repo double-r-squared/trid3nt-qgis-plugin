@@ -1,20 +1,13 @@
-# `templates/shared/` - the bodies a template LISTS
+# `templates/shared/` - the rows and steps every river template declares
 
-A shared body is a PART, never a parent: a template writes `parts = [RIVER]` and
-the part's assertions merge under the PART's own name, so per-slot provenance
-says where every value came from and a keyword that means something else in a new
-setting is seen rather than inherited into silence. A keyword two parts both set
-REFUSES by name unless the template settles it itself.
-
-A body is created only when a good portion of a template is shared, and it must
-have at least two users - one user folds back into its own template, and the
-suite checks. A part carries the DATA rows and the MESH recipe it shares
-alongside its slot assertions: a chain that produces the same artifacts for the
-same reason is as much the shared thing as a keyword is.
+Shared things are engine-agnostic by construction only: the rows a reach run
+and a point release declare, and the two steps that establish the modelled
+world and measure it. A template restates its own keywords, chain and recipe;
+nothing here is a body a template lists or a parent it extends.
 
 ## Files
 
 | file | what it is |
 | --- | --- |
-| `river.py` | `RIVER` - what every river deck states about the WATER, whatever is carried in it - plus the chain that cuts the reach out of real geometry, the mesh recipe that triangulates it, the steps that establish the modelled world, the settle that measures it, and the rows every river run and every point release declare. |
-| `__init__.py` | The package door. It re-exports nothing: a consumer imports the body it means. |
+| `river.py` | `PARAMS` and `RELEASE` - the rows every river run and every point release declare - and `acquire` and `settle`, the steps that geocode the reach, seed and navigate its one centerline, resolve the carrier discharge, and measure the accepted mesh into what the sheet is filled from. |
+| `__init__.py` | The package door. It re-exports nothing: a consumer imports what it means. |

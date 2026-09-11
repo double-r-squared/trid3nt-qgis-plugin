@@ -41,18 +41,19 @@ def _tmp_persistence(tmp_path, monkeypatch):
 
 # --- (1) the reach of an override, read off the plan ------------------------ #
 def test_the_cut_is_the_first_node_the_override_reaches():
-    """A rate the physics step reads leaves the whole acquire prefix inheritable."""
+    """A rate the sheet reads leaves everything before the fill inheritable."""
     from trid3nt_server.tools import TOOL_REGISTRY
 
     wf = TOOL_REGISTRY["telemac_do_sag"].fn.workflow
     labels = [n.label for n in _nodes(wf)]
 
     cut, keep = reuse_plan(wf.plan, wf.data, ("k1_per_day",))
-    assert labels[cut] == "waqtel"
-    # the mid-reach seed, the National Water Model discharge and the MESH itself
-    # are all upstream of the process block, so a rate override inherits them
+    assert labels[cut] == "sheet"
+    # the mid-reach seed, the National Water Model discharge, the MESH itself
+    # and the settled reach are all upstream of the fill, so a rate override
+    # inherits them
     assert labels[:cut] == ["reach", "seed", "carrier_discharge", "mesh",
-                            "measure_mesh_coverage"]
+                            "measure_mesh_coverage", "settled"]
     # the whole domain CHAIN is upstream of the physics too - the navigated
     # mainstem, its ends, the mapped water, the reach cut between them and the
     # terrain the mesh's bed is painted from

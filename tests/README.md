@@ -20,14 +20,14 @@ join the run as the sixth slice.
 | `mesh/` | the meshers, the mesh gate, topology and bed | 7 | 226 |
 | `model/` | the SysML model conformance check | 1 | 19 |
 | `plugin/` | the plugin seams the server suite reads offline, by `ast` | 1 | 3 |
-| `publishing/` | the one publisher: a field to a layer, a series to a chart, a field over time to an animation; the rasterizers and the COG seam | 3 | 31 |
-| `runtime/` | the declarative runtime, the run journal | 9 | 306 |
+| `publishing/` | the one publisher: a field to a layer, a series or a profile to a chart, a field over time to an animation, a track to a vector layer; the rasterizers and the COG seam | 3 | 36 |
+| `runtime/` | the declarative runtime, the run journal | 9 | 309 |
 | `sandbox/` | the code-exec sandbox | 2 | 34 |
 | `scripts/` | the dev instruments, the live-run harness and the proof renderers, skipped when `dev/` is absent | 6 | 45 |
 | `search/` | dataset and tool retrieval, the OGC adapter | 18 | 280 |
 | `server/` | the HTTP and WS routes, dispatch reuse, persistence, telemetry | 27 | 559 |
 | `solver/` | the solver seam, the run reads, the engine-room posture | 6 | 59 |
-| `telemac/` | the TELEMAC templates, the module surface and its primitives, authoring and postprocesses | 26 | 463 |
+| `telemac/` | the TELEMAC templates, the module surface and its primitives, authoring and the open-water postprocesses | 25 | 473 |
 | `tools/` | the registry, the arg normalizer, the tool cache | 14 | 402 |
 
 | file | what it is |
@@ -44,11 +44,11 @@ else has one.
 Six slices by subsystem, each its own foreground invocation, from the repo root:
 
     make test-fetchers        # tests/fetchers                                 1561
-    make test-spatial         # tests/derive tests/emission tests/mesh tests/publishing   1210
-    make test-engines         # tests/telemac tests/runtime tests/inputs tests/solver tests/search   1144
-    make test-server          # tests/server tests/gates tests/credentials tests/sandbox tests/model tests/scripts   1142
-    make test-model-surface   # tests/adapters tests/tools                      693
-    make test-packages        # contracts/tests plugin/tests tests/plugin       816
+    make test-spatial         # tests/derive tests/emission tests/mesh tests/publishing   1214
+    make test-engines         # tests/telemac tests/runtime tests/inputs tests/solver tests/search   1157
+    make test-server          # tests/server tests/gates tests/credentials tests/sandbox tests/model tests/scripts   1078
+    make test-model-surface   # tests/adapters tests/tools                      667
+    make test-packages        # contracts/tests plugin/tests tests/plugin       821
 
 The prose guards - history markers, dead references, the package maps, the
 template pages, banner comments - are LINTS rather than tests: they read the

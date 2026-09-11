@@ -27,6 +27,7 @@ def read_result(slf: str, out: str) -> dict:
         # shape its own postprocess is handed. Names arrive as the engine states
         # them, WITHOUT the unit the record stores alongside.
         varnames = [str(name) for name in res.varnames]
+        varunits = [str(unit).strip() for unit in res.varunits]
         arrays = {"x": np.asarray(res.meshx, dtype="float64"),
                   "y": np.asarray(res.meshy, dtype="float64"),
                   "ikle": np.asarray(res.ikle3, dtype="int64"),
@@ -39,7 +40,7 @@ def read_result(slf: str, out: str) -> dict:
             arrays[f"v{index}"] = (np.vstack(frames) if frames
                                    else np.empty((0, res.npoin3)))
         np.savez(out + "/" + FIELDS_NAME, **arrays)
-        return {"varnames": varnames, "npoin": int(res.npoin3),
+        return {"varnames": varnames, "varunits": varunits, "npoin": int(res.npoin3),
                 "nelem": int(res.nelem3), "x_origin": int(res.x_orig),
                 "y_origin": int(res.y_orig), "ntimestep": int(res.ntimestep),
                 # The VERTICAL shape, which only the engine's own reader knows: a

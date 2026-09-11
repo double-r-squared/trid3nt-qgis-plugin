@@ -6,8 +6,8 @@ Bed SCOUR and DEPOSITION in a river reach: a mobile bed under a flow.
 
 |  |  |
 |---|---|
-| module | `telemac2d` - 376 keywords in its dictionary, of which this template states 35 |
-| parts | `RIVER` |
+| module | `telemac2d` - 376 keywords in its dictionary, of which this template states 32 |
+| parts | - |
 | solves | `trid3nt_server.workflows.telemac.solving.solve.solve_reach` |
 | engine defaults | every keyword this template does not state keeps the engine's own default; `describe_keywords` names it with that default, and `keywords={...}` sets it |
 
@@ -48,8 +48,6 @@ The values the template declares. `desc` is what the model reads when it fills o
 | `rainfall_mm_per_day` | user | mm/day | optional | Distributed ON-MESH rainfall applied at every wet node, independent of the inflow hydrograph |
 | `evaporation_mm_per_day` | user | mm/day | optional | Distributed evaporation, subtracted from the net rain flux |
 | `rainfall_gridmet_window` | user | - | optional | Real-storm source: an ISO window 'YYYY-MM-DD:YYYY-MM-DD' whose gridMET domain-mean daily precipitation supersedes rainfall_mm_per_day |
-| `velocity_diffusivity` | user | m^2/s | optional | Turbulent momentum diffusivity |
-| `tracer_diffusivity` | user | m^2/s | optional | Tracer diffusivity, which sets lateral plume spread |
 | `release` | user | - | optional | Where the substance enters the water, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer, or a place name |
 | `grain_size_um` | scenario | um | 200.0 | Median grain diameter d50 of the bed - ~200 um fine sand, ~20 um silt, ~8 um mud (all modeled non-cohesive); read only when no gradation is given |
 | `bed_thickness_m` | scenario | m | 5.0 | Depth of the erodible sediment stock the bed can scour into |
@@ -72,12 +70,11 @@ The values the template declares. `desc` is what the model reads when it fills o
 
 | field | the proving run's value |
 |---|---|
-| `max_deposition_mm` | 1.6364 |
-| `max_scour_mm` | 5.2132 |
-| `deposited_mass_kg` | 0.0 |
-| `deposit_fraction` | 0.0 |
-| `sediment_surface_d50_range_um` | - |
-| `active_frames` | 5 |
+| `bed_evolution_max_m` | 0.0016452783020213246 |
+| `bed_evolution_min_m` | -0.005266561172902584 |
+| `net_bed_mass_kg` | -746.0278 |
+| `marker_cmax_mgl` | 94.071044921875 |
+| `active_frames` | 30 |
 | `mesh_size_m` | 10.415 |
 
 It publishes these layers onto the canvas:
@@ -87,29 +84,29 @@ It publishes these layers onto the canvas:
 - Input: nhd area water (nhd_area_water)
 - Input: river bed elevation (copernicus_dem, datum EGM2008 geoid (metres, positive up))
 - Release point (derived) - scotia_humboldt_county_california_95562_united_s
+- Peak marker concentration (scotia_humboldt_county_california_95562_united_s)
 - Model results (time series): scotia_humboldt_county_california_95562_united_s
-- Bed evolution / scour (scotia_humboldt_county_california_95562_united_s)
-- Peak suspended sediment concentration (scotia_humboldt_county_california_95562_united_s)
+- Bed evolution (m) at t = 593.94 s (scotia_humboldt_county_california_95562_united_s)
 
 ## The proving run
 
-Run `01M1X9FD86HCED18XCSEGQHFXR`, 2026-09-07T06:39:32.912925+00:00, 27.003 s, at commit `1f0ccc3188561e84f5f977f0d0d6c54e08c9adb1`.
+Run `01M28B2RRZEGKXCHMJB37R9FTY`, 2026-09-11T13:39:15.857224+00:00, 28.83 s, at commit `750ff38e2d831d1c51358b20ceeac29fe274b4e6-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M1X9FD86HCED18XCSEGQHFXR)](telemac_river_scour/telemac_river_scour.png)
+![Every layer the run published, stacked and framed on the result (run 01M28B2RRZEGKXCHMJB37R9FTY)](telemac_river_scour/telemac_river_scour.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M1X9FD86HCED18XCSEGQHFXR)*
+*Every layer the run published, stacked and framed on the result (run 01M28B2RRZEGKXCHMJB37R9FTY)*
 
-![The solve, frame by frame (run 01M1X9FD86HCED18XCSEGQHFXR)](telemac_river_scour/telemac_river_scour_animation.gif)
+![The solve, frame by frame (run 01M28B2RRZEGKXCHMJB37R9FTY)](telemac_river_scour/telemac_river_scour_animation.gif)
 
-*The solve, frame by frame (run 01M1X9FD86HCED18XCSEGQHFXR)*
+*The solve, frame by frame (run 01M28B2RRZEGKXCHMJB37R9FTY)*
 
-![final frame (run 01M1X9FD86HCED18XCSEGQHFXR)](telemac_river_scour/telemac_river_scour_final_frame.png)
+![final frame (run 01M28B2RRZEGKXCHMJB37R9FTY)](telemac_river_scour/telemac_river_scour_final_frame.png)
 
-*final frame (run 01M1X9FD86HCED18XCSEGQHFXR)*
+*final frame (run 01M28B2RRZEGKXCHMJB37R9FTY)*
 
-![bed evolution - the chart the run persisted (run 01M1X9FD86HCED18XCSEGQHFXR)](telemac_river_scour/telemac_river_scour_chart_bed_evolution.png)
+![marker concentration - the chart the run persisted (run 01M28B2RRZEGKXCHMJB37R9FTY)](telemac_river_scour/telemac_river_scour_chart_marker_concentration.png)
 
-*bed evolution - the chart the run persisted (run 01M1X9FD86HCED18XCSEGQHFXR)*
+*marker concentration - the chart the run persisted (run 01M28B2RRZEGKXCHMJB37R9FTY)*
 
 ### The sheet it filled
 
@@ -119,6 +116,7 @@ Every slot the run resolved, with where the value came from. The engine's own de
 |---|---|---|---|---|
 | `location` | Eel River near Scotia, California | - | user | supplied on this invocation |
 | `discharge_m3s` | 2.2 | m^3/s | user | supplied on this invocation |
+| `output_interval_min` | 0.333 | min | user | supplied on this invocation |
 | `spill_duration_s` | 120.0 | s | user | supplied on this invocation |
 | `source_q_m3s` | 8.0 | m^3/s | user | supplied on this invocation |
 | `grain_size_um` | 200.0 | um | user | supplied on this invocation |
@@ -145,14 +143,10 @@ Every slot the run resolved, with where the value came from. The engine's own de
 | `friction_law` | - | - | user | not supplied (declared optional) |
 | `bbox` | - | - | user | not supplied (declared optional) |
 | `event_time` | - | - | prompt_interpreted | not supplied (declared optional) |
-| `output_interval_min` | - | min | user | not supplied (declared optional) |
-| `release_coords` | - | - | user | not supplied (declared optional) |
 | `rainfall_mm_per_day` | - | mm/day | user | not supplied (declared optional) |
 | `evaporation_mm_per_day` | - | mm/day | user | not supplied (declared optional) |
 | `rainfall_gridmet_window` | - | - | user | not supplied (declared optional) |
-| `velocity_diffusivity` | - | m^2/s | user | not supplied (declared optional) |
-| `tracer_diffusivity` | - | m^2/s | user | not supplied (declared optional) |
-| `reach_seed_coords` | - | - | user | not supplied (declared optional) |
+| `release` | - | - | user | not supplied (declared optional) |
 | `sediment_gradation` | - | - | user | not supplied (declared optional) |
 
 ### Reproduce
@@ -165,6 +159,7 @@ await TOOL_REGISTRY['telemac_river_scour'].fn(
     grain_size_um=200.0,
     location='Eel River near Scotia, California',
     mesh_resolution_m=12.0,
+    output_interval_min=0.333,
     reach_length_km=1.0,
     sim_duration_s=600.0,
     source_q_m3s=8.0,
@@ -173,5 +168,5 @@ await TOOL_REGISTRY['telemac_river_scour'].fn(
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M1X9FD86HCED18XCSEGQHFXR` and commit `1f0ccc3188561e84f5f977f0d0d6c54e08c9adb1`. The full argument record is [`telemac_river_scour/run.json`](telemac_river_scour/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M28B2RRZEGKXCHMJB37R9FTY` and commit `750ff38e2d831d1c51358b20ceeac29fe274b4e6-dirty`. The full argument record is [`telemac_river_scour/run.json`](telemac_river_scour/run.json).
 

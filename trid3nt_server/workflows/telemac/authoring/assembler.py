@@ -85,11 +85,6 @@ _REACH_STRICKLER = 33.0
 #: How many solver steps between written frames when the sheet states no cadence.
 _DEFAULT_GRAPHIC_PERIOD = 200
 
-#: How far down its own reach a DO-sag outfall sits. The reach was navigated
-#: downstream FROM the outfall, so the discharge belongs at the top; the fraction
-#: is what holds the source node off the inflow face rather than on it.
-DO_SAG_OUTFALL_FRAC = 0.02
-
 
 def case_section(*, module: str, steering: str, results: list[str],
                  server_facts: Mapping[str, Any], user_fortran: str | None = None,
@@ -583,7 +578,6 @@ async def settle_reach(
     friction_coefficient: float | None = None,
     continue_from: str | None = None,
     marker_label: str = "Release point",
-    oil: Mapping[str, Any] | None = None,
     dredge: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Everything the reach MEASURES, before a single keyword is set.
@@ -711,7 +705,6 @@ async def settle_reach(
         "restart": _RESTART,
         # Present as NOTHING unless this question asks for one: a composite that
         # reads a field the run holds as nothing expands to no keyword at all.
-        "oil": None,
         "dredging": None,
         "mesh_inputs": [
             {"gs_uri": _mesh_field(mesh, "slf_uri", missing=_reach_mesh_missing),
@@ -736,19 +729,6 @@ async def settle_reach(
             "result_slf": "r2d_river.slf",
             "bed_source": bed_source},
     }
-    if oil is not None:
-        from ..helpers.oil import oil_inputs
-        from ..helpers.substance import oil_preset
-
-        preset = oil_preset(oil["preset"])
-        settled["oil"] = {
-            "preset": preset,
-            **oil_inputs(preset=preset, release_step=int(oil["release_step"]),
-                         x=source_utm[0], y=source_utm[1]),
-            # The write cadence is asked for in SECONDS; the only thing that
-            # turns seconds into steps is the step this run is solved at.
-            "period_steps": max(int(float(oil["drogues_period_s"])
-                                    / max(time_step_s, 1e-6)), 1)}
     if dredge is not None and dredge.get("on"):
         from ..helpers.dredging import NESTOR_TIME_ORIGIN, dredge_field
 

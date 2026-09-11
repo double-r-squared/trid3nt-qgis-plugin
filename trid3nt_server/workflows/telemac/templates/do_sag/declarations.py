@@ -107,8 +107,8 @@ DOC = dict(
         "at the outfall: clean river in at the top, the DISCHARGE ITSELF a continuous "
         "point source of organic load and low oxygen, CBOD decaying downstream (k1) "
         "and reaeration (k2) recovering it. Produces a DISSOLVED-O2 field map + the "
-        "along-reach sag curve against the Streeter-Phelps closed form + the "
-        "sag-minimum location/value. Supply a place `location` OR a `bbox`."
+        "along-reach oxygen profile against the Streeter-Phelps closed form and "
+        "the standard + the minimum's location/value. Supply `location` OR `bbox`."
     ),
     not_for=(
         "a conservative dye/tracer/contaminant plume that only dilutes "
@@ -130,12 +130,11 @@ DOC = dict(
          "died without unwinding left on disk."),
     ),
     returns=(
-        "On success a `TelemacDoLayerURI` (a `LayerURI` subtype) - the emitter loads "
-        "the DISSOLVED-O2 field map and animates the SELAFIN sibling. It carries "
-        "`do_min_mgl` / `do_min_distance_m` / `do_violates_standard` + `sag_curve_*`, "
-        "and the analytical check `sp_curve_*` / `sp_rms_mgl` / "
-        "`sp_sag_deviation_mgl`; "
-        "narrate those typed numbers. On failure a dict with `status=\"error\"` + "
-        "`error_code`."
+        "On success the dissolved-oxygen layer (a `LayerURI`) - the emitter loads "
+        "the field map and animates the result mesh beside it - whose `answer` "
+        "carries `do_min_mgl` / `do_min_distance_m` / `bod_mixed_mgl` / "
+        "`mean_velocity_mps`; judge the minimum against `do_standard_mgl` on the "
+        "sheet and narrate those typed numbers. On failure a dict with "
+        "`status=\"error\"` + `error_code`."
     ),
 )

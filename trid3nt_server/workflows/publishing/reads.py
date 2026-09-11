@@ -9,7 +9,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Mapping
 
-__all__ = ["Deliverable", "Field", "Frames", "Read", "Series"]
+__all__ = ["Deliverable", "Field", "Frames", "Line", "Profile", "Read", "Series",
+           "Track"]
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -36,6 +37,16 @@ class Field(Read):
 
 
 @dataclass(frozen=True, kw_only=True)
+class Line:
+    """One more line on a chart, over the chart's own x axis: a reference the
+    caller computed beside the read, drawn under its own label."""
+
+    label: str
+    x: Any
+    values: Any
+
+
+@dataclass(frozen=True, kw_only=True)
 class Series(Read):
     """One variable over time: the domain maximum at each instant, or a point's."""
 
@@ -45,6 +56,27 @@ class Series(Read):
     values: Any
     #: Where the series was read - ``"the domain maximum"`` or a point's name.
     at: str
+    lines: tuple[Line, ...] = ()
+
+
+@dataclass(frozen=True, kw_only=True)
+class Profile(Read):
+    """One variable along a line at one instant: a value per station."""
+
+    name: str
+    units: str
+    distance_m: Any
+    values: Any
+    #: What the x axis IS - ``"downstream distance"``.
+    along: str
+    lines: tuple[Line, ...] = ()
+
+
+@dataclass(frozen=True, kw_only=True)
+class Track(Read):
+    """Positions at written instants, as a GeoJSON FeatureCollection in lon/lat."""
+
+    features: Mapping[str, Any]
 
 
 @dataclass(frozen=True, kw_only=True)

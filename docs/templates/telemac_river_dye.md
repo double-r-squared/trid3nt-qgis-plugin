@@ -6,7 +6,7 @@ A DYE / TRACER / CONTAMINANT plume that TRAVELS DOWNSTREAM in a RIVER (surface w
 
 |  |  |
 |---|---|
-| module | `telemac2d` - 376 keywords in its dictionary, of which this template states 37 |
+| module | `telemac2d` - 376 keywords in its dictionary, of which this template states 34 |
 | parts | - |
 | solves | `trid3nt_server.workflows.telemac.solving.solve.solve_reach` |
 | engine defaults | every keyword this template does not state keeps the engine's own default; `describe_keywords` names it with that default, and `keywords={...}` sets it |
@@ -48,8 +48,6 @@ The values the template declares. `desc` is what the model reads when it fills o
 | `rainfall_mm_per_day` | user | mm/day | optional | Distributed ON-MESH rainfall applied at every wet node, independent of the inflow hydrograph |
 | `evaporation_mm_per_day` | user | mm/day | optional | Distributed evaporation, subtracted from the net rain flux |
 | `rainfall_gridmet_window` | user | - | optional | Real-storm source: an ISO window 'YYYY-MM-DD:YYYY-MM-DD' whose gridMET domain-mean daily precipitation supersedes rainfall_mm_per_day |
-| `velocity_diffusivity` | user | m^2/s | optional | Turbulent momentum diffusivity |
-| `tracer_diffusivity` | user | m^2/s | optional | Tracer diffusivity, which sets lateral plume spread |
 | `release` | user | - | optional | Where the substance enters the water, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer, or a place name; its name becomes the tracer's name |
 | `dye_concentration_mgl` | scenario | mg/L | 100.0 | Source concentration of the released substance |
 | `reach_length_km` | scenario | km | 6.0 | Modeled reach length downstream of the release; a longer reach is coarsened under the mesh node budget |
@@ -64,7 +62,7 @@ The values the template declares. `desc` is what the model reads when it fills o
 
 | field | the proving run's value |
 |---|---|
-| `dye_cmax_mgl` | 97.43170928955078 |
+| `dye_cmax_mgl` | 98.6875228881836 |
 | `dye_peak_time_s` | 118.72799682617188 |
 | `plume_reach_m` | 56.7 |
 | `active_frames` | 30 |
@@ -82,23 +80,23 @@ It publishes these layers onto the canvas:
 
 ## The proving run
 
-Run `01M286WWNHXZJW8W5J1SDGG264`, 2026-09-11T12:26:06.455361+00:00, 28.194 s, at commit `c8290e8447b6eeb70580bb6f9766f111e56942e9`.
+Run `01M28ADCMXM0EMW4FXG2FW79NW`, 2026-09-11T13:27:33.303238+00:00, 25.974 s, at commit `750ff38e2d831d1c51358b20ceeac29fe274b4e6-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M286WWNHXZJW8W5J1SDGG264)](telemac_river_dye/telemac_river_dye.png)
+![Every layer the run published, stacked and framed on the result (run 01M28ADCMXM0EMW4FXG2FW79NW)](telemac_river_dye/telemac_river_dye.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M286WWNHXZJW8W5J1SDGG264)*
+*Every layer the run published, stacked and framed on the result (run 01M28ADCMXM0EMW4FXG2FW79NW)*
 
-![The solve, frame by frame (run 01M286WWNHXZJW8W5J1SDGG264)](telemac_river_dye/telemac_river_dye_animation.gif)
+![The solve, frame by frame (run 01M28ADCMXM0EMW4FXG2FW79NW)](telemac_river_dye/telemac_river_dye_animation.gif)
 
-*The solve, frame by frame (run 01M286WWNHXZJW8W5J1SDGG264)*
+*The solve, frame by frame (run 01M28ADCMXM0EMW4FXG2FW79NW)*
 
-![peak frame (run 01M286WWNHXZJW8W5J1SDGG264)](telemac_river_dye/telemac_river_dye_peak_frame.png)
+![peak frame (run 01M28ADCMXM0EMW4FXG2FW79NW)](telemac_river_dye/telemac_river_dye_peak_frame.png)
 
-*peak frame (run 01M286WWNHXZJW8W5J1SDGG264)*
+*peak frame (run 01M28ADCMXM0EMW4FXG2FW79NW)*
 
-![dye concentration - the chart the run persisted (run 01M286WWNHXZJW8W5J1SDGG264)](telemac_river_dye/telemac_river_dye_chart_dye_concentration.png)
+![dye concentration - the chart the run persisted (run 01M28ADCMXM0EMW4FXG2FW79NW)](telemac_river_dye/telemac_river_dye_chart_dye_concentration.png)
 
-*dye concentration - the chart the run persisted (run 01M286WWNHXZJW8W5J1SDGG264)*
+*dye concentration - the chart the run persisted (run 01M28ADCMXM0EMW4FXG2FW79NW)*
 
 ### The sheet it filled
 
@@ -127,8 +125,6 @@ Every slot the run resolved, with where the value came from. The engine's own de
 | `rainfall_mm_per_day` | - | mm/day | user | not supplied (declared optional) |
 | `evaporation_mm_per_day` | - | mm/day | user | not supplied (declared optional) |
 | `rainfall_gridmet_window` | - | - | user | not supplied (declared optional) |
-| `velocity_diffusivity` | - | m^2/s | user | not supplied (declared optional) |
-| `tracer_diffusivity` | - | m^2/s | user | not supplied (declared optional) |
 | `release` | - | - | user | not supplied (declared optional) |
 | `decaying_substance` | - | - | prompt_interpreted | not supplied (declared optional) |
 | `decay_half_life_hours` | - | h | user | not supplied (declared optional) |
@@ -154,5 +150,5 @@ await TOOL_REGISTRY['telemac_river_dye'].fn(
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M286WWNHXZJW8W5J1SDGG264` and commit `c8290e8447b6eeb70580bb6f9766f111e56942e9`. The full argument record is [`telemac_river_dye/run.json`](telemac_river_dye/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M28ADCMXM0EMW4FXG2FW79NW` and commit `750ff38e2d831d1c51358b20ceeac29fe274b4e6-dirty`. The full argument record is [`telemac_river_dye/run.json`](telemac_river_dye/run.json).
 

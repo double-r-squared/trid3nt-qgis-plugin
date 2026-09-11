@@ -6,8 +6,8 @@ A SUSPENDED SEDIMENT plume in a RIVER: it settles and deposits on the bed.
 
 |  |  |
 |---|---|
-| module | `telemac2d` - 376 keywords in its dictionary, of which this template states 34 |
-| parts | `RIVER` |
+| module | `telemac2d` - 376 keywords in its dictionary, of which this template states 31 |
+| parts | - |
 | solves | `trid3nt_server.workflows.telemac.solving.solve.solve_reach` |
 | engine defaults | every keyword this template does not state keeps the engine's own default; `describe_keywords` names it with that default, and `keywords={...}` sets it |
 
@@ -48,8 +48,6 @@ The values the template declares. `desc` is what the model reads when it fills o
 | `rainfall_mm_per_day` | user | mm/day | optional | Distributed ON-MESH rainfall applied at every wet node, independent of the inflow hydrograph |
 | `evaporation_mm_per_day` | user | mm/day | optional | Distributed evaporation, subtracted from the net rain flux |
 | `rainfall_gridmet_window` | user | - | optional | Real-storm source: an ISO window 'YYYY-MM-DD:YYYY-MM-DD' whose gridMET domain-mean daily precipitation supersedes rainfall_mm_per_day |
-| `velocity_diffusivity` | user | m^2/s | optional | Turbulent momentum diffusivity |
-| `tracer_diffusivity` | user | m^2/s | optional | Tracer diffusivity, which sets lateral plume spread |
 | `release` | user | - | optional | Where the substance enters the water, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer, or a place name |
 | `grain_size_um` | scenario | um | 200.0 | Median grain diameter d50 of the RELEASED class - ~200 um fine sand settles within a few km, ~20 um silt mostly stays suspended (all modeled non-cohesive) |
 | `sediment_concentration_mgl` | scenario | mg/L | 100.0 | Concentration of the released suspended sediment; what deposits is measured against what this put in |
@@ -61,13 +59,12 @@ The values the template declares. `desc` is what the model reads when it fills o
 
 | field | the proving run's value |
 |---|---|
-| `dye_cmax_mgl` | 44.44381222128868 |
-| `dye_peak_time_s` | 104.19999694824219 |
-| `plume_reach_m` | - |
-| `active_frames` | 1 |
-| `max_deposition_mm` | 0.1248 |
-| `deposited_mass_kg` | 66.92078 |
-| `deposit_fraction` | 0.6971 |
+| `suspended_cmax` | 0.04468173533678055 |
+| `suspended_peak_time_s` | 118.78800201416016 |
+| `plume_reach_m` | 13.8 |
+| `active_frames` | 8 |
+| `bed_evolution_max_m` | 0.00012464386236388236 |
+| `net_bed_mass_kg` | 66.90308 |
 | `mesh_size_m` | 10.415 |
 
 It publishes these layers onto the canvas:
@@ -77,29 +74,29 @@ It publishes these layers onto the canvas:
 - Input: nhd area water (nhd_area_water)
 - Input: river bed elevation (copernicus_dem, datum EGM2008 geoid (metres, positive up))
 - Release point (derived) - scotia_humboldt_county_california_95562_united_s
+- Bed evolution (m) at t = 593.94 s (scotia_humboldt_county_california_95562_united_s)
 - Model results (time series): scotia_humboldt_county_california_95562_united_s
-- Sediment deposition (scotia_humboldt_county_california_95562_united_s)
 - Peak suspended sediment concentration (scotia_humboldt_county_california_95562_united_s)
 
 ## The proving run
 
-Run `01M1X9GD51SANK57VM3WB76BNM`, 2026-09-07T06:40:05.873531+00:00, 27.953 s, at commit `1f0ccc3188561e84f5f977f0d0d6c54e08c9adb1`.
+Run `01M28B6RP5NJSFDV097X22PDRH`, 2026-09-11T13:41:38.038709+00:00, 41.388 s, at commit `750ff38e2d831d1c51358b20ceeac29fe274b4e6-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M1X9GD51SANK57VM3WB76BNM)](telemac_river_sediment_plume/telemac_river_sediment_plume.png)
+![Every layer the run published, stacked and framed on the result (run 01M28B6RP5NJSFDV097X22PDRH)](telemac_river_sediment_plume/telemac_river_sediment_plume.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M1X9GD51SANK57VM3WB76BNM)*
+*Every layer the run published, stacked and framed on the result (run 01M28B6RP5NJSFDV097X22PDRH)*
 
-![The solve, frame by frame (run 01M1X9GD51SANK57VM3WB76BNM)](telemac_river_sediment_plume/telemac_river_sediment_plume_animation.gif)
+![The solve, frame by frame (run 01M28B6RP5NJSFDV097X22PDRH)](telemac_river_sediment_plume/telemac_river_sediment_plume_animation.gif)
 
-*The solve, frame by frame (run 01M1X9GD51SANK57VM3WB76BNM)*
+*The solve, frame by frame (run 01M28B6RP5NJSFDV097X22PDRH)*
 
-![peak frame (run 01M1X9GD51SANK57VM3WB76BNM)](telemac_river_sediment_plume/telemac_river_sediment_plume_peak_frame.png)
+![peak frame (run 01M28B6RP5NJSFDV097X22PDRH)](telemac_river_sediment_plume/telemac_river_sediment_plume_peak_frame.png)
 
-*peak frame (run 01M1X9GD51SANK57VM3WB76BNM)*
+*peak frame (run 01M28B6RP5NJSFDV097X22PDRH)*
 
-![suspended sediment concentration - the chart the run persisted (run 01M1X9GD51SANK57VM3WB76BNM)](telemac_river_sediment_plume/telemac_river_sediment_plume_chart_suspended_sediment_concentration.png)
+![suspended sediment concentration - the chart the run persisted (run 01M28B6RP5NJSFDV097X22PDRH)](telemac_river_sediment_plume/telemac_river_sediment_plume_chart_suspended_sediment_concentration.png)
 
-*suspended sediment concentration - the chart the run persisted (run 01M1X9GD51SANK57VM3WB76BNM)*
+*suspended sediment concentration - the chart the run persisted (run 01M28B6RP5NJSFDV097X22PDRH)*
 
 ### The sheet it filled
 
@@ -109,6 +106,7 @@ Every slot the run resolved, with where the value came from. The engine's own de
 |---|---|---|---|---|
 | `location` | Eel River near Scotia, California | - | user | supplied on this invocation |
 | `discharge_m3s` | 2.2 | m^3/s | user | supplied on this invocation |
+| `output_interval_min` | 0.333 | min | user | supplied on this invocation |
 | `spill_duration_s` | 120.0 | s | user | supplied on this invocation |
 | `source_q_m3s` | 8.0 | m^3/s | user | supplied on this invocation |
 | `grain_size_um` | 200.0 | um | user | supplied on this invocation |
@@ -125,14 +123,10 @@ Every slot the run resolved, with where the value came from. The engine's own de
 | `friction_law` | - | - | user | not supplied (declared optional) |
 | `bbox` | - | - | user | not supplied (declared optional) |
 | `event_time` | - | - | prompt_interpreted | not supplied (declared optional) |
-| `output_interval_min` | - | min | user | not supplied (declared optional) |
-| `release_coords` | - | - | user | not supplied (declared optional) |
 | `rainfall_mm_per_day` | - | mm/day | user | not supplied (declared optional) |
 | `evaporation_mm_per_day` | - | mm/day | user | not supplied (declared optional) |
 | `rainfall_gridmet_window` | - | - | user | not supplied (declared optional) |
-| `velocity_diffusivity` | - | m^2/s | user | not supplied (declared optional) |
-| `tracer_diffusivity` | - | m^2/s | user | not supplied (declared optional) |
-| `reach_seed_coords` | - | - | user | not supplied (declared optional) |
+| `release` | - | - | user | not supplied (declared optional) |
 
 ### Reproduce
 
@@ -144,6 +138,7 @@ await TOOL_REGISTRY['telemac_river_sediment_plume'].fn(
     grain_size_um=200.0,
     location='Eel River near Scotia, California',
     mesh_resolution_m=12.0,
+    output_interval_min=0.333,
     reach_length_km=1.0,
     sediment_concentration_mgl=100.0,
     sim_duration_s=600.0,
@@ -152,5 +147,5 @@ await TOOL_REGISTRY['telemac_river_sediment_plume'].fn(
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M1X9GD51SANK57VM3WB76BNM` and commit `1f0ccc3188561e84f5f977f0d0d6c54e08c9adb1`. The full argument record is [`telemac_river_sediment_plume/run.json`](telemac_river_sediment_plume/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M28B6RP5NJSFDV097X22PDRH` and commit `750ff38e2d831d1c51358b20ceeac29fe274b4e6-dirty`. The full argument record is [`telemac_river_sediment_plume/run.json`](telemac_river_sediment_plume/run.json).
 

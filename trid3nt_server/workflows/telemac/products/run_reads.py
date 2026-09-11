@@ -17,11 +17,7 @@ __all__ = [
     "continuity_rel_error",
     "engine_demand",
     "gaia_mass_balance",
-    "oil_slick_features",
     "outlet_hydrograph",
-    "parse_drogues",
-    "sediment_scalars",
-    "surface_d50_spread",
     "wetted_fraction",
 ]
 
@@ -101,129 +97,6 @@ def gaia_mass_balance(listing_text: str) -> dict[str, Any]:
         except ValueError:
             continue
     return out
-
-
-def surface_d50_spread(gaia_slf: str | Path) -> dict[str, Any]:
-    """The SORTING signature: the spread of the bed's surface mean diameter, in um.
-
-    A single-class bed cannot sort, so its range is structurally zero."""
-    import numpy as np
-
-    from trid3nt_server.workflows.telemac.modules.outputs import read_selafin
-
-    slf = read_selafin(str(gaia_slf))
-    picked = next((v for v in slf["varnames"]
-                   if "DIAMETER" in v.upper() or v.strip().upper().startswith("D50")),
-                  None)
-    frames = slf["data"].get(picked) if picked is not None else None
-    if frames is None or not len(frames):
-        return {}
-    values = np.asarray(frames[-1], dtype=float)
-    values = values[np.isfinite(values) & (values > 0.0)]
-    if not values.size:
-        return {}
-    microns = values * 1.0e6
-    return {"sediment_surface_d50_min_um": round(float(microns.min()), 1),
-            "sediment_surface_d50_max_um": round(float(microns.max()), 1),
-            "sediment_surface_d50_range_um":
-                round(float(microns.max() - microns.min()), 1)}
-
-
-def sediment_scalars(*, listing_text: str, injected_kg: float,
-                     n_classes: int = 1,
-                     gaia_slf: str | Path | None = None) -> dict[str, Any]:
-    """Every sediment number a GAIA run reports, off its own listing and result.
-
-    The deposit fraction is clamped into [0, 1]; sorting needs two classes."""
-    stats = gaia_mass_balance(listing_text)
-    stats["sediment_injected_kg"] = round(float(injected_kg), 3)
-    net = stats.get("sediment_net_bed_mass_kg")
-    if net is not None and injected_kg > 0.0:
-        stats["sediment_deposit_fraction"] = round(
-            min(max(float(net) / float(injected_kg), 0.0), 1.0), 4)
-    if n_classes >= 2:
-        stats["sediment_n_classes"] = n_classes
-        if gaia_slf is not None:
-            try:
-                stats.update(surface_d50_spread(gaia_slf))
-            except Exception as exc:  # noqa: BLE001 -- a bonus scalar never voids a run
-                logger.warning("gaia surface d50 read failed (%s)", exc)
-    return stats
-
-
-def parse_drogues(path: str | Path) -> list[tuple[float, list[tuple[float, float]]]]:
-    """The TecPlot ASCII drogues track -> ``[(t_s, [(x, y), ...]), ...]``.
-
-    One ZONE per written instant; an unparsable row is skipped, not fatal."""
-    zones: list[tuple[float, list[tuple[float, float]]]] = []
-    time_s: float | None = None
-    points: list[tuple[float, float]] = []
-    for line in Path(path).read_text(errors="replace").splitlines():
-        if line.startswith("ZONE"):
-            if time_s is not None:
-                zones.append((time_s, points))
-            stamp = re.search(r"SOLUTIONTIME=\s*([\d.]+)", line)
-            time_s, points = (float(stamp.group(1)) if stamp else 0.0), []
-            continue
-        parts = [p.strip() for p in line.split(",")]
-        if len(parts) >= 3:
-            try:
-                points.append((float(parts[1]), float(parts[2])))
-            except ValueError:
-                continue
-    if time_s is not None:
-        zones.append((time_s, points))
-    return zones
-
-
-#: How many snapshots the renderable slick keeps: the release, the middle of the
-#: run and the end. Every instant would be one layer per written frame.
-_SLICK_SNAPSHOTS = 3
-
-
-def oil_slick_features(drogues_path: str | Path, *, utm_epsg: int
-                       ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
-    """The oil track -> ``(particles, slick, stats)`` in lon/lat.
-
-    ``oil_particles_exited_domain`` is released minus remaining at the outlet."""
-    import numpy as np
-    from pyproj import Transformer
-
-    zones = parse_drogues(drogues_path)
-    to_lonlat = Transformer.from_crs(int(utm_epsg), 4326, always_xy=True).transform
-    snapshots: list[dict[str, Any]] = []
-    for time_s, points in zones:
-        if not points:
-            snapshots.append({"t_s": time_s, "lonlat": []})
-            continue
-        xs, ys = zip(*points)
-        lons, lats = to_lonlat(xs, ys)
-        snapshots.append({"t_s": time_s,
-                          "lonlat": [[round(a, 6), round(b, 6)]
-                                     for a, b in zip(lons, lats)]})
-
-    keep = ([snapshots[0], snapshots[len(snapshots) // 2], snapshots[-1]]
-            if len(snapshots) >= _SLICK_SNAPSHOTS else snapshots)
-    slick = {"type": "FeatureCollection", "features": [
-        {"type": "Feature",
-         "geometry": {"type": "MultiPoint", "coordinates": snap["lonlat"]},
-         "properties": {"kind": "oil-slick", "t_s": snap["t_s"],
-                        "n": len(snap["lonlat"])}}
-        for snap in keep if snap["lonlat"]]}
-
-    stats: dict[str, Any] = {}
-    if zones and zones[0][1] and zones[-1][1]:
-        first = np.mean(zones[0][1], axis=0)
-        last = np.mean(zones[-1][1], axis=0)
-        released, remaining = len(zones[0][1]), len(zones[-1][1])
-        stats = {
-            "oil_particles": remaining,
-            "oil_particles_released": released,
-            "oil_particles_exited_domain": max(0, released - remaining),
-            "oil_snapshots": len(zones),
-            "oil_drift_m": round(float(np.hypot(*(last - first))), 1),
-        }
-    return {"snapshots": snapshots}, slick, stats
 
 
 #: TELEMAC-2D closes its water-volume balance once per listing period. The block

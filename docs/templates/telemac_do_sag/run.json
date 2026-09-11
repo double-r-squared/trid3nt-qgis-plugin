@@ -1,17 +1,15 @@
 {
   "tool": "telemac_do_sag",
-  "run_id": "01M23T00DZP407C6FV1EQWSKT3",
-  "commit": "1f0ccc3188561e84f5f977f0d0d6c54e08c9adb1",
-  "recorded_at": "2026-09-09T19:23:38.965417+00:00",
-  "engine": "telemac2d",
-  "wall_seconds": 26.293,
+  "run_id": "01M28BB68MFADZ1FRKWZYRN0XA",
+  "commit": "750ff38e2d831d1c51358b20ceeac29fe274b4e6-dirty",
+  "recorded_at": "2026-09-11T13:43:49.042885+00:00",
+  "engine": "telemac",
+  "wall_seconds": 24.425,
   "args": {
     "location": "Eel River near Scotia, California",
     "discharge_m3s": 60.0,
-    "outfall_coords": [
-      -124.0983,
-      40.4921
-    ],
+    "output_interval_min": 0.333,
+    "outfall_coords": "Point(lon=-124.0983, lat=40.4921, name=None)",
     "effluent_bod_mgl": 250.0,
     "effluent_q_m3s": 1.0,
     "water_temp_c": 20.0,
@@ -46,11 +44,19 @@
       "real_source": null
     },
     {
+      "name": "output_interval_min",
+      "value": 0.333,
+      "door": "user",
+      "basis": "user",
+      "units": "min",
+      "consequence": "numerical",
+      "note": "supplied on this invocation",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
       "name": "outfall_coords",
-      "value": [
-        -124.0983,
-        40.4921
-      ],
+      "value": "Point(lon=-124.0983, lat=40.4921, name=None)",
       "door": "user",
       "basis": "user",
       "units": null,
@@ -256,27 +262,9 @@
       "note": "not supplied (declared optional)",
       "clamped_from": null,
       "real_source": null
-    },
-    {
-      "name": "output_interval_min",
-      "value": null,
-      "door": "user",
-      "basis": "user",
-      "units": "min",
-      "consequence": "numerical",
-      "note": "not supplied (declared optional)",
-      "clamped_from": null,
-      "real_source": null
     }
   ],
   "provenance": [
-    {
-      "param": "discharge_m3s",
-      "value": 60.0,
-      "basis": "user",
-      "note": "carrier discharge 60.0 m3/s (user-supplied)",
-      "real_source": null
-    },
     {
       "param": "location",
       "value": "Eel River near Scotia, California",
@@ -285,10 +273,24 @@
       "real_source": null
     },
     {
-      "param": "outfall_coords",
-      "value": "[-124.098, 40.4921]",
+      "param": "discharge_m3s",
+      "value": 60.0,
       "basis": "user",
-      "note": "Where the discharge enters the water, (lon, lat); unset seeds the reach at the derived reach point [supplied on this invocation]",
+      "note": "Steady upstream CARRIER discharge - the river flow that dilutes and transports the release [supplied on this invocation]",
+      "real_source": null
+    },
+    {
+      "param": "output_interval_min",
+      "value": 0.333,
+      "basis": "user",
+      "note": "Result-writing cadence; unset keeps the steering file's own period [supplied on this invocation]",
+      "real_source": null
+    },
+    {
+      "param": "outfall_coords",
+      "value": "lon=-124.098, lat=40.4921",
+      "basis": "user",
+      "note": "Where the discharge enters the water, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer, or a place name; unset seeds the reach at the derived reach point [supplied on this invocation]",
       "real_source": null
     },
     {
@@ -412,96 +414,19 @@
     }
   ],
   "answer": {
-    "do_min_mgl": 8.9209,
-    "do_min_distance_m": 131.5,
-    "do_standard_mgl": 5.0,
-    "do_violates_standard": false,
-    "do_upstream_mgl": 9.022,
-    "do_saturation_mgl": 9.022,
-    "bod_mixed_mgl": 3.565,
-    "mean_velocity_mps": 0.60974,
-    "sag_curve_distance_m": {
-      "length": 60,
-      "head": [
-        7.7,
-        23.2,
-        38.7,
-        54.2,
-        69.6,
-        85.1,
-        100.6,
-        116.1
-      ],
-      "truncated": true
-    },
-    "sag_curve_do_mgl": {
-      "length": 60,
-      "head": [
-        9.022,
-        9.022,
-        9.022,
-        9.022,
-        9.0218,
-        9.0009,
-        8.9433,
-        8.9452
-      ],
-      "truncated": true
-    },
-    "sag_curve_bod_mgl": {
-      "length": 60,
-      "head": [
-        0.0,
-        0.0,
-        0.0,
-        0.0001,
-        0.0082,
-        0.7486,
-        2.7902,
-        2.7162
-      ],
-      "truncated": true
-    },
-    "sp_curve_distance_m": {
-      "length": 52,
-      "head": [
-        131.5,
-        147.0,
-        162.5,
-        178.0,
-        193.4,
-        208.9,
-        224.4,
-        239.9
-      ],
-      "truncated": true
-    },
-    "sp_curve_do_mgl": {
-      "length": 52,
-      "head": [
-        8.9209,
-        8.9206,
-        8.9203,
-        8.92,
-        8.9197,
-        8.9194,
-        8.9191,
-        8.9188
-      ],
-      "truncated": true
-    },
-    "sp_rms_mgl": 0.0822,
-    "sp_sag_deviation_mgl": 0.0145,
-    "sp_note": "Streeter-Phelps closed form from the modeled mix point (132 m downstream, CBOD 3.56 mg/L, DO 8.92 mg/L) at the solved mean along-reach velocity 0.610 m/s",
+    "do_min_mgl": 8.921165352434825,
+    "do_min_distance_m": 297.73186921575723,
+    "bod_mixed_mgl": 3.469098542982656,
+    "mean_velocity_mps": 0.6124773205557589,
     "mesh_size_m": 9.323,
-    "layer_uri": "s3://trid3nt-runs/01M23T00DZP407C6FV1EQWSKT3/overviews/01M23T0D6T65TWA21YAJRQCX3W.tif",
+    "layer_uri": "s3://trid3nt-runs/01M28BB68MFADZ1FRKWZYRN0XA/overviews/01M28BBK4TWJWTJB8GBPXG4EYE.tif",
     "discharge_m3s": 60.0,
-    "discharge_note": "carrier discharge 60.0 m3/s (user-supplied)",
+    "discharge_note": "Steady upstream CARRIER discharge - the river flow that dilutes and transports the release [supplied on this invocation]",
     "mesh_resolution_m": 12.0,
     "mesh_resolution_note": "Target element edge length the reach is triangulated at; where the sag bottoms out is a local feature and moves with the element that resolves it [supplied on this invocation]"
   },
   "mesh": {
-    "mesh_size_m": 9.323
+    "mesh_size_m": null
   },
   "layers": [
     {
@@ -606,7 +531,7 @@
     },
     {
       "crs_authid": null,
-      "layer_id": "telemac-release-01M23SZT9HJHN3JW8HWNWZ1V05",
+      "layer_id": "point-01M28BB0KZA1FE2H5KRQYTAGVG",
       "layer_type": "vector",
       "legend": {
         "colormap": null,
@@ -623,36 +548,61 @@
       "reference_time": null,
       "role": "context",
       "temporal": false,
-      "uri": "s3://trid3nt-runs/inputs/01M23SZT99TCDZ7HV65727EC29/release_point.geojson",
+      "uri": "s3://trid3nt-runs/inputs/01M28BB0KK8E4AB3C790384H1C/point.geojson",
       "valid_from": null,
       "valid_to": null,
       "visible": true,
       "z_index": 4
     },
     {
+      "crs_authid": "EPSG:32610",
+      "layer_id": "model-results-mesh-01M28BB68MFADZ1FRKWZYRN0XA",
+      "layer_type": "mesh",
+      "legend": {
+        "colormap": "viridis",
+        "kind": "mesh",
+        "label": "Model results",
+        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <mesh-renderer-settings>\n    <active-dataset-group scalar=\"0\" vector=\"-1\"/>\n    <scalar-settings group=\"0\" min-val=\"0\" max-val=\"9.022001\" opacity=\"1\" interpolation-method=\"no-resampling\">\n      <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"0\" maximumValue=\"9.022001\" labelPrecision=\"4\">\n        <item value=\"0\" color=\"#440154\" alpha=\"255\" label=\"0 mgO2/L\"/>\n        <item value=\"2.25550025\" color=\"#3b528b\" alpha=\"255\" label=\"2.2555 mgO2/L\"/>\n        <item value=\"4.5110005\" color=\"#21918c\" alpha=\"255\" label=\"4.511 mgO2/L\"/>\n        <item value=\"6.76650075\" color=\"#5ec962\" alpha=\"255\" label=\"6.7665 mgO2/L\"/>\n        <item value=\"9.022001\" color=\"#fde725\" alpha=\"255\" label=\"9.022 mgO2/L\"/>\n      </colorrampshader>\n    </scalar-settings>\n  </mesh-renderer-settings>\n  <name-to-global-index global-index=\"0\" name=\"DISSOLVED O2\"/>\n</qgis>\n",
+        "units": "mgO2/L",
+        "vmax": 9.022001,
+        "vmin": 0.0
+      },
+      "name": "Model results (time series): scotia_humboldt_county_california_95562_united_s",
+      "opacity": null,
+      "quantity": "model_results",
+      "reference_time": "2026-09-11T13:43:35+00:00",
+      "role": "context",
+      "temporal": false,
+      "uri": "s3://trid3nt-runs/01M28BB68MFADZ1FRKWZYRN0XA/r2d_river.slf",
+      "valid_from": null,
+      "valid_to": null,
+      "visible": true,
+      "z_index": 5
+    },
+    {
       "crs_authid": null,
-      "layer_id": "01M23T0FN40FR7GWBP58NX5JJB",
+      "layer_id": "01M28BBNP88B8YR952NFWTH526",
       "layer_type": "raster",
       "legend": {
         "colormap": "rdylbu",
         "kind": "continuous",
-        "label": "Dissolved oxygen (mg/L)",
-        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <pipe>\n    <rasterrenderer type=\"singlebandpseudocolor\" band=\"1\" opacity=\"1\" alphaBand=\"-1\" classificationMin=\"5\" classificationMax=\"9.022\" nodataColor=\"\">\n      <rastershader>\n        <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"5\" maximumValue=\"9.022\" labelPrecision=\"4\">\n          <item value=\"5\" color=\"#a50026\" alpha=\"255\" label=\"5 mg/L\"/>\n          <item value=\"6.0055\" color=\"#f98e52\" alpha=\"255\" label=\"6.0055 mg/L\"/>\n          <item value=\"7.011\" color=\"#feffc0\" alpha=\"255\" label=\"7.011 mg/L\"/>\n          <item value=\"8.0165\" color=\"#8ec2dc\" alpha=\"255\" label=\"8.0165 mg/L\"/>\n          <item value=\"9.022\" color=\"#313695\" alpha=\"255\" label=\"9.022 mg/L\"/>\n        </colorrampshader>\n      </rastershader>\n    </rasterrenderer>\n  </pipe>\n</qgis>\n",
-        "units": "mg/L",
-        "vmax": 9.022,
-        "vmin": 5.0
+        "label": "Dissolved oxygen (mgO2/L)",
+        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <pipe>\n    <rasterrenderer type=\"singlebandpseudocolor\" band=\"1\" opacity=\"1\" alphaBand=\"-1\" classificationMin=\"0\" classificationMax=\"9.022001\" nodataColor=\"\">\n      <rastershader>\n        <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"0\" maximumValue=\"9.022001\" labelPrecision=\"4\">\n          <item value=\"0\" color=\"#a50026\" alpha=\"255\" label=\"0 mgO2/L\"/>\n          <item value=\"2.25550025\" color=\"#f98e52\" alpha=\"255\" label=\"2.2555 mgO2/L\"/>\n          <item value=\"4.5110005\" color=\"#feffc0\" alpha=\"255\" label=\"4.511 mgO2/L\"/>\n          <item value=\"6.76650075\" color=\"#8ec2dc\" alpha=\"255\" label=\"6.7665 mgO2/L\"/>\n          <item value=\"9.022001\" color=\"#313695\" alpha=\"255\" label=\"9.022 mgO2/L\"/>\n        </colorrampshader>\n      </rastershader>\n    </rasterrenderer>\n  </pipe>\n</qgis>\n",
+        "units": "mgO2/L",
+        "vmax": 9.022001,
+        "vmin": 0.0
       },
-      "name": "Dissolved oxygen sag (scotia_humboldt_county_california_95562_united_s)",
+      "name": "Dissolved oxygen (mgO2/L) at t = 581.102 s (scotia_humboldt_county_california_95562_united_s)",
       "opacity": null,
       "quantity": "dissolved_oxygen",
       "reference_time": null,
       "role": "primary",
       "temporal": false,
-      "uri": "s3://trid3nt-runs/01M23T00DZP407C6FV1EQWSKT3/overviews/01M23T0D6T65TWA21YAJRQCX3W.tif",
+      "uri": "s3://trid3nt-runs/01M28BB68MFADZ1FRKWZYRN0XA/overviews/01M28BBK4TWJWTJB8GBPXG4EYE.tif",
       "valid_from": null,
       "valid_to": null,
       "visible": true,
-      "z_index": 5
+      "z_index": 6
     }
   ]
 }

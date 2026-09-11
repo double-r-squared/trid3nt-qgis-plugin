@@ -1,56 +1,173 @@
 """Engine template ``telemac_do_sag`` - the dissolved-oxygen sag below an outfall.
 
-TELEMAC-2D coupled with WAQTEL O2 - the Streeter-Phelps oxygen sag - over a real
-NHDPlus reach: where DO bottoms out downstream, and whether it violates the
-water-quality standard."""
+TELEMAC-2D coupled with WAQTEL O2 over a real NHDPlus reach: where DO bottoms
+out downstream of a continuous discharge, against the standard the reach is held
+to and the closed form the process reduces to."""
 
 from __future__ import annotations
-
-from typing import Any
 
 from trid3nt_contracts.telemac_contracts import TELEMAC_DO_STYLE
 from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
 
 from trid3nt_server.workflows.runtime import (
+    ParamRef,
     Ref,
     param_rows,
     register_workflow,
 )
+from trid3nt_server.workflows.mesh.tool import mesh_op, tool
 from trid3nt_server.workflows.inputs import point_arg
 from trid3nt_server.workflows.inputs.aoi import location_or_bbox
-from trid3nt_server.workflows.telemac.authoring.assembler import DO_SAG_OUTFALL_FRAC
 from trid3nt_server.workflows.telemac.helpers.forcing import event_time
 from trid3nt_server.workflows.telemac.helpers.reach import MeshCoverage
-from trid3nt_server.workflows.telemac.helpers.water_quality import WaqtelO2
-from trid3nt_server.workflows.telemac.modules import T2D, WAQTEL
+from trid3nt_server.workflows.telemac.modules import T2D, WAQTEL, field, mesh
+from trid3nt_server.workflows.telemac.modules.outputs import profile
 from trid3nt_server.workflows.telemac.modules.telemac2d import Boundaries, Release
-from trid3nt_server.workflows.telemac.products.products import Products
+from trid3nt_server.workflows.telemac.templates.do_sag import streeter_phelps
 from trid3nt_server.workflows.telemac.templates.do_sag.declarations import (
     ACCEPTS, DOC, PARAMS, PARAMS as P,
 )
 from trid3nt_server.workflows.telemac.templates.shared import river
-from trid3nt_server.workflows.telemac.templates.shared.river import (
-    PARAMS as S,
-    RIVER,
-)
+from trid3nt_server.workflows.telemac.templates.shared.river import PARAMS as S
 from trid3nt_server.workflows.telemac.workflow import Door, TelemacWorkflow
 
-__all__ = ["ANSWER", "DATA", "PARAMS", "STEERING", "build_sag_chart",
+__all__ = ["ANSWER", "CAPTIONS", "DATA", "MESH", "OUTPUTS", "PARAMS", "STEERING",
            "telemac_do_sag"]
 
+_HELPERS = "trid3nt_server.workflows.telemac.helpers"
 _SOLVING = "trid3nt_server.workflows.telemac.solving.solve"
 
-#: What the run directory calls this deck.
+#: The names the run directory holds this run's files under. They are the deck's
+#: own STEERING / GEOMETRY / BOUNDARY CONDITIONS / RESULTS statements, so the
+#: directory reads as the record of the run it is.
 _STEERING_FILE = "t2d_river.cas"
+_GEOMETRY = "river.slf"
+_BOUNDARY = "river.cli"
+_RESULT = "r2d_river.slf"
 
-#: The reach chain, unchanged: a sag reads exactly what a plume reads.
-DATA = river.DATA_ROWS
+#: How far down its own reach the outfall sits. The reach was navigated
+#: downstream FROM the outfall, so the discharge belongs at the top; the fraction
+#: is what holds the source node off the inflow face rather than on it, where it
+#: would compete with the boundary condition for the same node.
+_OUTFALL_FRAC = 0.02
+
+#: How far past the centerline the mapped banks are ASKED for. The water that
+#: belongs to this reach reaches past the line - a far channel behind a mid-river
+#: island is three km off it and is still the same river - and the pad widens the
+#: QUESTION, never the meshed domain: the section cut below keeps only the
+#: stretch between the reach's two ends.
+_BANK_QUERY_PAD_M = 3000.0
+
+
+class DATA:
+    """The reach chain, one row per artifact, in the order it is read. The
+    carrier discharge is a STEP, because it reads the resolved seed."""
+
+    rivers = tool(f"{_HELPERS}.reach.fetch_reach_flowline",
+                  prefetched=ParamRef("river_geometry_uri"))
+    # THE REACH, narrowed by CHAINING tools rather than by a mesher that grew a
+    # corridor of its own. The navigated mainstem names the stretch, its two ends
+    # name where the stretch stops, and the cut through the MAPPED banks is the
+    # domain - so the two end faces are the transects the inflow and the outflow
+    # are prescribed on, measured off real geometry rather than a ribbon.
+    centerline = tool("fetch_nhdplus_nldi_navigate",
+                      seed_point=[Ref("seed.lon"), Ref("seed.lat")],
+                      direction="DM",
+                      distance_km=ParamRef("reach_length_km"))
+    ends = tool("endpoints", line=centerline)
+    window = tool("compute_layer_bounds", layer_uri=centerline,
+                  pad_m=_BANK_QUERY_PAD_M, fit_map=False)
+    water = tool("fetch_nhd_area_water", bbox=Ref("window.bbox"))
+    # HOW MUCH of the reach the returned polygons actually map, measured before
+    # the cut so an unmapped reach refuses on its own cause instead of arriving
+    # at the section as an empty geometry.
+    mapped_water = tool(f"{_HELPERS}.reach.measure_water_coverage",
+                        water=water, centerline=centerline)
+    reach_polygon = tool("section", polygon=mapped_water,
+                         between=Ref("ends.between"))
+    # THE SUBSTITUTION, declared where a reader can see it. A bed is TOPOBATHY -
+    # the channel bottom - and no topobathy survey covers an inland reach, so
+    # this row is a surface DEM and the recipe below says so by painting the bed
+    # from it BY NAME. The consequence travels with it: a surface measures the
+    # water top, so the modelled channel is shallower than the real one and the
+    # journal names this row as what the bed came from. GLO-30 is asked for on
+    # its OWN 1-arcsecond lattice, so the raster the nodes are sampled from
+    # carries the source pixels rather than a resample of them.
+    dem = tool("fetch_copernicus_dem", bbox=Ref("window.bbox"), px_per_deg=3600.0,
+               purpose="river bed elevation")
+
+
+#: The MESH RECIPE, frozen at declaration and building nothing at import. The
+#: extent is the CHAIN's product - the stretch of mapped water the section cut
+#: between the centerline's two ends - so the mesher triangulates a domain other
+#: tools measured rather than growing a corridor of its own. The ops are
+#: oceanmesh's own clean passes under its own names, then the two things we
+#: impose: the bed, painted from the substitution declared above and named in the
+#: journal, and the roles, prescribed across the two end transects the section cut.
+MESH = tool.build_mesh(
+    mesher="om2d",
+    kind="unstructured_tri",
+    extent=Ref("reach_polygon"),
+    resolution_m=ParamRef("mesh_resolution_m"),
+    ops=[
+        mesh_op("delete_boundary_faces"),
+        mesh_op("delete_faces_connected_to_one_face"),
+        mesh_op("laplacian2"),
+        mesh_op("make_mesh_boundaries_traversable"),
+        mesh_op("fix_mesh", delete_unused=True),
+        mesh_op("set_bed", source=DATA.dem, interp="nearest"),
+        mesh_op("set_boundary_roles",
+                inflow=Ref("reach_polygon.face_start"),
+                outflow=Ref("reach_polygon.face_end")),
+    ],
+)
 
 
 class STEERING(T2D):
     """The deck: a river, an OUTFALL, and the four tracers the O2 process runs."""
 
-    parts = [RIVER]
+    GEOMETRY_FILE = _GEOMETRY
+    BOUNDARY_CONDITIONS_FILE = _BOUNDARY
+    RESULTS_FILE = _RESULT
+    TITLE = Ref("settled.title")
+
+    # The step the reach is solved at follows the edge the accepted mesh was
+    # BUILT at rather than the edge that was asked for.
+    TIME_STEP = Ref("settled.time_step_s")
+    LISTING_PRINTOUT_PERIOD = 500
+
+    # The run OPENS at the derived normal depth, laid bed-parallel. Not a
+    # constant elevation at the outflow stage: the stage is derived only where
+    # the reach FALLS, so a horizontal surface at the outlet's level leaves every
+    # node upstream of it dry - the flowrate face among them - and the engine
+    # refuses a discharge it has no water to impose.
+    INITIAL_CONDITIONS = "CONSTANT DEPTH"
+    INITIAL_DEPTH = Ref("settled.depth_m")
+
+    # The roughness the outflow stage was DERIVED at, written back out as the
+    # roughness the run is solved at. One number, stated once: a stage derived at
+    # one and written at another is a level the run never sits at.
+    LAW_OF_BOTTOM_FRICTION = Ref("settled.friction_law")
+    FRICTION_COEFFICIENT = Ref("settled.friction_coefficient")
+
+    # The advection of momentum and depth, and the SUPG the reach is stable
+    # under. The tracer advects under the engine's own scheme and diffusivity.
+    TYPE_OF_ADVECTION = [1, 5]
+    SUPG_OPTION = [0, 0]
+    MASS_LUMPING_ON_H = 1.0
+    CONTINUITY_CORRECTION = True
+    SOLVER = 1
+    SOLVER_ACCURACY = 1.0e-6
+    MAXIMUM_NUMBER_OF_ITERATIONS_FOR_SOLVER = 500
+    IMPLICITATION_FOR_DEPTH = 0.6
+    IMPLICITATION_FOR_VELOCITY = 0.6
+
+    # The engine accounts for its own water volume and prints one flux per liquid
+    # boundary. That is the only honest check that the level prescribed at a
+    # boundary reached it: a server-side integration of the depth and velocity
+    # fields reads near zero at a prescribed-depth face, where the boundary values
+    # are clamped after the flux was computed.
+    MASS_BALANCE = True
 
     # A coupled run drives the module's own launcher whole rather than the
     # stepped arm, so it writes no restart record and cannot be continued.
@@ -63,125 +180,61 @@ class STEERING(T2D):
     # tracer count below carries four values.
     NUMBER_OF_TRACERS = 1
     NAMES_OF_TRACERS = ["DYE             MG/L"]
-    INITIAL_VALUES_OF_TRACERS = [0.0, Ref("waqtel.upstream_do_mgl"), 0.0, 0.0]
+    INITIAL_VALUES_OF_TRACERS = [0.0, P.upstream_do_mgl, 0.0, 0.0]
 
     #: CLEAN RIVER at every liquid boundary: no organic load, its own oxygen. The
     #: load enters at the source, so which boundary the engine numbers first
     #: cannot decide the answer.
-    boundaries = Boundaries(
-        measured=Ref("settled"),
-        tracers=[0.0, Ref("waqtel.upstream_do_mgl"), 0.0, 0.0])
+    boundaries = Boundaries(measured=Ref("settled"),
+                            tracers=[0.0, P.upstream_do_mgl, 0.0, 0.0])
 
     #: The OUTFALL: a permitted discharge does not pulse, so the flow and its
     #: concentrations hold flat across the whole run and the reach reaches the
     #: steady-state sag the question is asked about.
-    releases = [Release(at=Ref("settled.release_at"),
-                        q=Ref("waqtel.effluent_q_m3s"),
-                        tracers=[0.0, Ref("waqtel.effluent_do_mgl"),
-                                 Ref("waqtel.effluent_bod_mgl"), 0.0],
+    releases = [Release(at=Ref("settled.release_at"), q=P.effluent_q_m3s,
+                        tracers=[0.0, P.effluent_do_mgl, P.effluent_bod_mgl, 0.0],
                         window_s=None, until_s=Ref("settled.until_s"))]
 
     #: Deoxygenation balanced by surface reaeration, and nothing else: the
     #: modelled curve is the closed form the question is asked against, so this
-    #: run states FRESH water and zeroes the three sources the closed form has
+    #: run states FRESH water, a CONSTANT reaeration rate (formula 0, the one the
+    #: closed form holds under) and zeroes the three sources the closed form has
     #: no term for - nitrification, benthic demand, and photosynthesis less
     #: respiration.
-    coupling = [WAQTEL.o2(water_temp_c=Ref("waqtel.water_temp_c"),
-                          salinity_ppt=0.0,
-                          k1_per_day=Ref("waqtel.k1_per_day"),
-                          k4_per_day=0.0,
-                          k2_per_day=Ref("waqtel.k2_per_day"),
-                          k2_formula=Ref("waqtel.k2_formula"),
-                          saturation_mgl=Ref("waqtel.saturation_mgl"),
+    coupling = [WAQTEL.o2(water_temp_c=P.water_temp_c, salinity_ppt=0.0,
+                          k1_per_day=P.k1_per_day, k4_per_day=0.0,
+                          k2_per_day=P.k2_per_day, k2_formula=0,
+                          saturation_mgl=P.do_saturation_mgl,
                           benthic_demand=0.0, photosynthesis_p=0.0,
                           respiration_r=0.0)]
 
 
-#: The run's ANSWER, as the numbers a reader has to be able to check. Persisted
-#: beside the chart spec so verification cites the run's own figures rather than
-#: recomputing them from the raster.
-ANSWER = ("do_min_mgl", "do_min_distance_m", "do_standard_mgl",
-          "do_violates_standard", "do_upstream_mgl", "do_saturation_mgl",
-          "bod_mixed_mgl", "mean_velocity_mps", "sag_curve_distance_m",
-          "sag_curve_do_mgl", "sag_curve_bod_mgl", "sp_curve_distance_m",
-          "sp_curve_do_mgl", "sp_rms_mgl", "sp_sag_deviation_mgl", "sp_note",
-          "mesh_size_m")
+#: What the solved run is read for: the oxygen at the last instant as the map,
+#: the oxygen over time as the animation, and the oxygen down the reach as the
+#: chart, with the organic load, the closed form and the standard drawn beside it.
+OUTPUTS = [
+    field("T2", t=-1).layer(style=TELEMAC_DO_STYLE),
+    field("T2", t="every").animate(),
+    profile("T2", along=DATA.centerline).chart(reference=streeter_phelps.overlay),
+]
+CAPTIONS = {"T2": "dissolved oxygen", "T3": "organic load"}
+
+#: The run's ANSWER, as the numbers a reader has to be able to check, each a
+#: measure of one of the reads above: how low the oxygen bottoms out and where,
+#: the mixed load that drove it, and the speed it travelled at.
+ANSWER = {
+    "do_min_mgl": profile("T2", along=DATA.centerline).measure("min"),
+    "do_min_distance_m": profile("T2", along=DATA.centerline).measure("x_min_m"),
+    "bod_mixed_mgl": profile("T3", along=DATA.centerline).measure("max"),
+    "mean_velocity_mps": profile("T2", along=DATA.centerline).measure("velocity_mps"),
+    "mesh_size_m": mesh().measure("size_m"),
+}
 
 
-def build_sag_chart(*, result: Any, params: Any) -> dict[str, Any] | None:
-    """The DO-sag chart SPEC: DO + CBOD vs distance, against the closed form.
-
-    Scalars come off the published layer; ``None`` when the curve is absent."""
-    xs = getattr(result, "sag_curve_distance_m", None)
-    do = getattr(result, "sag_curve_do_mgl", None)
-    bod = getattr(result, "sag_curve_bod_mgl", None)
-    if not xs or not do or len(xs) != len(do):
-        return None
-    std = float(getattr(result, "do_standard_mgl", None) or 5.0)
-
-    from trid3nt_server.emission.charts import build_chart_payload
-
-    # The layer's own declared units, so the chart's axis and the legend cannot
-    # disagree about what this field is measured in.
-    units = TELEMAC_DO_STYLE["units"]
-
-    do_vals = [{"x_km": round(xs[i] / 1000.0, 4), "v": do[i], "series": "Dissolved O2"}
-               for i in range(len(xs))]
-    bod_vals = ([{"x_km": round(xs[i] / 1000.0, 4), "v": bod[i], "series": "CBOD"}
-                 for i in range(len(xs))] if bod and len(bod) == len(xs) else [])
-    sp_x = getattr(result, "sp_curve_distance_m", None)
-    sp_do = getattr(result, "sp_curve_do_mgl", None)
-    # The closed form rides as its OWN NAMED SERIES rather than as a second
-    # layer: the dock draws one colour and one legend entry per series, so a
-    # reader can tell the solved profile from the analytical one - which is the
-    # whole point of drawing them together.
-    sp_vals = ([{"x_km": round(sp_x[i] / 1000.0, 4), "v": sp_do[i],
-                 "series": "Streeter-Phelps closed form"}
-                for i in range(len(sp_x))]
-               if sp_x and sp_do and len(sp_x) == len(sp_do) else [])
-    vega_lite_spec = {
-        "layer": [
-            {"mark": {"type": "line", "point": False},
-             "data": {"values": do_vals + sp_vals + bod_vals},
-             "encoding": {
-                 "x": {"field": "x_km", "type": "quantitative",
-                       "title": "Downstream distance (km)"},
-                 "y": {"field": "v", "type": "quantitative",
-                       "title": f"Concentration ({units})"},
-                 "color": {"field": "series", "type": "nominal", "title": None}}},
-            {"mark": {"type": "rule", "strokeDash": [6, 4], "color": "#c0392b"},
-             "data": {"values": [{"y": std}]},
-             "encoding": {"y": {"field": "y", "type": "quantitative"}}},
-        ]
-    }
-    dmin = getattr(result, "do_min_mgl", None)
-    dloc = getattr(result, "do_min_distance_m", None)
-    verdict = "violates" if getattr(result, "do_violates_standard", False) else "meets"
-    # With no location words the LAYER's own name is the title: it already reads
-    # "Dissolved oxygen sag (<reach>)", so prefixing it would say it twice.
-    where = params.get("location")
-    title = (f"Dissolved-oxygen sag - {where}" if where
-             else (getattr(result, "name", None) or "Dissolved-oxygen sag"))
-    rms = getattr(result, "sp_rms_mgl", None)
-    dev = getattr(result, "sp_sag_deviation_mgl", None)
-    overlay = (
-        f" The Streeter-Phelps closed form is drawn beside it on this run's own mix "
-        f"point, load and velocity - whole-profile RMS {rms:g} {units}, sag minimum "
-        f"{abs(dev):g} {units} {'below' if dev < 0 else 'above'} it."
-        if sp_vals and rms is not None and dev is not None else
-        f" No analytical overlay ({getattr(result, 'sp_note', None) or 'not computed'})."
-    )
-    return build_chart_payload(
-        vega_lite_spec=vega_lite_spec,
-        title=title,
-        caption=(
-            f"DO sag: minimum {dmin} {units} at {dloc} m downstream "
-            f"({verdict} the {std:g} {units} standard, red dashed). CBOD decay drives "
-            f"the sag; reaeration recovers it." + overlay + " Screening/permit grade."
-        ),
-    )
-
-
+#: DECLARED mesh_resolution_m range. The solver floor is the finest edge the mesh
+#: builder authors regardless of ask; below it a screening run gains nothing.
+#: There is no fixed coarse ceiling - the node budget coarsens a long reach WITHIN
+#: this declaration, and the effective edge stays >= 2 cells across the channel.
 _RES_SPEC = ResolutionSpec(
     param="mesh_resolution_m",
     unit="m",
@@ -189,8 +242,8 @@ _RES_SPEC = ResolutionSpec(
     native_hint="NHD channel geometry + 3DEP terrain; edge sized from reach width",
     constraint_source="solver",
     rationale=(
-        "explicit target edge length; 3 m is the absolute finest the TELEMAC mesh "
-        "builder authors, a long reach is coarsened under the node budget "
+        "explicit target edge length; 3 m is the absolute finest the builder "
+        "authors, a long reach is further coarsened under the mesh node budget "
         "(self-labeled); no fixed coarse ceiling"
     ),
 )
@@ -211,39 +264,21 @@ telemac_do_sag = register_workflow(
     (*river.PARAM_ROWS, *param_rows(PARAMS)),
     Door(
         steering=STEERING,
-        domain=river.acquire(seed=P.outfall_coords),
-        mesh=river.MESH, mesh_on="reach",
-        produce=(
-            MeshCoverage(mesh=Ref("mesh"), centerline=river.DATA.centerline),
-            WaqtelO2(effluent_bod_mgl=P.effluent_bod_mgl,
-                     effluent_q_m3s=P.effluent_q_m3s,
-                     effluent_do_mgl=P.effluent_do_mgl,
-                     upstream_do_mgl=P.upstream_do_mgl,
-                     do_saturation_mgl=P.do_saturation_mgl,
-                     water_temp_c=P.water_temp_c, k1_per_day=P.k1_per_day,
-                     k2_per_day=P.k2_per_day,
-                     do_standard_mgl=P.do_standard_mgl).named("waqtel"),
-        ),
-        # The reach was NAVIGATED downstream from its outfall, so the outfall is
-        # this reach's chainage zero and the whole modelled stretch is below it.
-        # The source sits just inside that top rather than on it: a source node
-        # on the prescribed-flowrate face would compete with the boundary
-        # condition for the same node.
-        settle=river.settle(release=P.outfall_coords,
-                            spill_fraction=DO_SAG_OUTFALL_FRAC,
+        domain=river.acquire(rivers=DATA.rivers, seed=P.outfall_coords),
+        mesh=MESH, mesh_on="reach",
+        produce=(MeshCoverage(mesh=Ref("mesh"), centerline=DATA.centerline),),
+        settle=river.settle(centerline=DATA.centerline,
+                            reach_polygon=DATA.reach_polygon,
+                            release=P.outfall_coords, spill_fraction=_OUTFALL_FRAC,
                             marker_label="Outfall"),
-        results=(river.RESULT,),
+        results=(_RESULT,),
         steering_file=_STEERING_FILE, prefix="telemac",
         dispatch=f"{_SOLVING}.solve_reach", compute_class=S.compute_class,
-        meta={"substance": "effluent"},
-        read=lambda run: Products.dissolved_oxygen(
-            run=run, solve=run, process=Ref("waqtel"),
-            carrier_discharge=Ref("carrier_discharge")).named("do_field"),
-        chart=("do_sag_curve", build_sag_chart),
+        outputs=OUTPUTS, captions=CAPTIONS, answer=ANSWER,
         review_title="Review the outfall and the reach it discharges to"),
     data=DATA,
     accepts=ACCEPTS,
-    answer=ANSWER,
+    answer=tuple(ANSWER),
     provenance=(("discharge_m3s", "discharge_note"),
                 ("mesh_resolution_m", "mesh_resolution_note")),
     # WHERE the sag sits is a local-feature LOCATION and moves with the element

@@ -203,7 +203,8 @@ def test_the_case_names_the_module_the_DECK_says_it_couples_with():
     WITH rather than a second table beside it."""
     from trid3nt_server.workflows.telemac.modules import T2D, WAQTEL, fill
 
-    coupled = fill(T2D, coupling=[WAQTEL.decay(law=1, coefficient=2.0)])
+    coupled = fill(T2D, coupling=[WAQTEL.degradation(
+        substance=None, half_life_hours=4.0, rate_per_day=None, presets={})])
     assert dict(coupled.resolved())["COUPLING WITH"] == "WAQTEL"
     assert "COUPLING WITH" not in dict(fill(T2D, DURATION=600.0).resolved())
 

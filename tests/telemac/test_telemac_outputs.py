@@ -276,3 +276,191 @@ def _run_of(workflow: Any) -> Any:
     params = asyncio.run(resolve_params(workflow.params,
                                         {"location": "X", "mesh_resolution_m": 9.0}))
     return SimpleNamespace(params=params, results={}, notes=[], entries=[])
+
+
+# -- the primitives past the dye: appended tracers, instants, profiles, tracks - #
+
+def _coupled_reach(telemac_result) -> dict[str, Any]:
+    """Five nodes down a straight channel, two frames: the carrier's own tracer,
+    then two the coupled process appended behind it, each with the unit the
+    record stores; the flow runs +x at the last instant."""
+    x = [500000.0, 500100.0, 500200.0, 500300.0, 500400.0]
+    y = [4400000.0, 4400010.0, 4400000.0, 4400010.0, 4400000.0]
+    ikle = [[0, 1, 2], [1, 2, 3], [2, 3, 4]]
+    return telemac_result(
+        varnames=["VELOCITY U", "VELOCITY V", "WATER DEPTH", "DYE", "DISSOLVED O2",
+                  "ORGANIC LOAD"],
+        varunits=["M/S", "M/S", "M", "MG/L", "MGO2/L", "MG/L"],
+        x=x, y=y, ikle=ikle, times=[0.0, 600.0],
+        data={"VELOCITY U": [[0.5] * 5] * 2, "VELOCITY V": [[0.0] * 5] * 2,
+              "WATER DEPTH": [[2.0] * 5, [2.0, 2.0, 2.0, 2.0, 0.0]],
+              "DYE": [[0.0] * 5, [1.0, 2.0, 3.0, 4.0, 5.0]],
+              "DISSOLVED O2": [[9.0] * 5, [9.0, 8.0, 6.0, 7.0, 8.5]],
+              "ORGANIC LOAD": [[0.0] * 5, [0.0, 20.0, 15.0, 10.0, 5.0]]})
+
+
+@pytest.fixture()
+def coupled(monkeypatch, telemac_result):
+    _coupled_reach(telemac_result)
+    monkeypatch.setattr(
+        "trid3nt_server.workflows.telemac.solving.solve.download_result",
+        lambda run_id, basename, error_code=None: "/tmp/does-not-matter.slf")
+    return _solved()
+
+
+def test_a_tracer_a_coupled_process_appended_is_read_by_position_with_its_unit(
+        coupled):
+    """The deck declares one tracer; the process appends its own behind it, in
+    order, and the record's own unit is what the read carries."""
+    assert coupled.variable("T1") == ("DYE", "mg/L")
+    assert coupled.variable("T2") == ("DISSOLVED O2", "mgO2/L")
+    assert coupled.variable("T3") == ("ORGANIC LOAD", "mg/L")
+    with pytest.raises(OutputEmpty, match="declares 1 and the result carries"):
+        coupled.variable("T4")
+
+
+def test_a_field_at_an_instant_measures_that_frame_s_own_extremes(coupled):
+    last = T2D.OUTPUTS["field"].read(field("T2", t=-1), coupled)
+    assert (last.measures["max"], last.measures["min"], last.measures["t"]) == (
+        9.0, 6.0, 600.0)
+    # a tracer's floor still comes off the envelope, so the edge is the run's
+    assert last.floor == pytest.approx(0.45)
+
+
+def _line(coupled, *, reverse: bool = False):
+    """The channel's own centerline in lon/lat, as a geometry document."""
+    import json
+    import tempfile
+    from pathlib import Path
+
+    lon, lat = coupled.lonlat
+    coords = [[float(lon[0]), float(lat[0])], [float(lon[-1]), float(lat[-1])]]
+    if reverse:
+        coords.reverse()
+    path = Path(tempfile.mkdtemp()) / "centerline.geojson"
+    path.write_text(json.dumps({"type": "Feature", "properties": {},
+                                "geometry": {"type": "LineString",
+                                             "coordinates": coords}}))
+    return str(path)
+
+
+def test_a_profile_is_the_variable_per_station_down_the_line_at_the_instant(
+        coupled):
+    """Depth-weighted per station, the dry node dropped, the minimum found and
+    placed, and the along-line speed the flow travelled at."""
+    from trid3nt_server.workflows.publishing import Profile
+    from trid3nt_server.workflows.telemac.modules.outputs import profile
+
+    read = T2D.OUTPUTS["profile"].read(profile("T2", along=_line(coupled)), coupled)
+    assert isinstance(read, Profile)
+    assert read.along == "downstream distance" and read.units == "mgO2/L"
+    # four wet nodes, four stations; the last node was dry at the instant
+    assert read.measures["stations"] == 4
+    assert list(read.values) == [9.0, 8.0, 6.0, 7.0]
+    assert read.measures["min"] == 6.0
+    assert read.measures["x_min_m"] == pytest.approx(200.0, abs=10.0)
+    assert read.measures["velocity_mps"] == pytest.approx(0.5)
+
+
+def test_a_profile_runs_the_way_the_solved_flow_goes(coupled):
+    """A line drawn against the flow is read downstream regardless: the flow
+    orients the chainage, so the mix point stays where the water carries it."""
+    from trid3nt_server.workflows.telemac.modules.outputs import profile
+
+    forward = T2D.OUTPUTS["profile"].read(profile("T3", along=_line(coupled)),
+                                          coupled)
+    against = T2D.OUTPUTS["profile"].read(
+        profile("T3", along=_line(coupled, reverse=True)), coupled)
+    assert list(forward.values) == list(against.values) == [0.0, 20.0, 15.0, 10.0]
+    assert forward.measures["x_max_m"] == pytest.approx(against.measures["x_max_m"])
+
+
+def test_the_drogues_are_the_track_at_three_written_instants(monkeypatch, coupled):
+    """The release, the middle and the end of the track the module wrote, in
+    lon/lat, with how many floats were released, remain, and how far they went."""
+    import tempfile
+    from pathlib import Path
+
+    from trid3nt_server.workflows.publishing import Track
+
+    track = Path(tempfile.mkdtemp()) / "drogues.txt"
+    track.write_text(
+        "TITLE = drogues\nVARIABLES = ID, X, Y\n"
+        "ZONE T=\"t\", SOLUTIONTIME= 0.0\n1, 500000.0, 4400000.0\n2, 500000.0, 4400010.0\n"
+        "ZONE T=\"t\", SOLUTIONTIME= 60.0\n1, 500100.0, 4400000.0\n2, 500100.0, 4400010.0\n"
+        "ZONE T=\"t\", SOLUTIONTIME= 120.0\n1, 500200.0, 4400000.0\n"
+        "ZONE T=\"t\", SOLUTIONTIME= 180.0\n1, 500300.0, 4400000.0\n")
+    monkeypatch.setattr(
+        "trid3nt_server.workflows.telemac.solving.solve.download_result",
+        lambda run_id, basename, error_code=None: str(track))
+    from trid3nt_server.workflows.telemac.modules.outputs import drogues
+
+    read = T2D.OUTPUTS["drogues"].read(drogues(), coupled)
+    assert isinstance(read, Track)
+    assert [f["properties"]["t_s"] for f in read.features["features"]] == [
+        0.0, 120.0, 180.0]
+    assert read.measures == {"released": 2, "remaining": 1, "exited": 1,
+                             "instants": 4, "drift_m": 300.0}
+
+
+def test_a_primitive_names_the_coupled_module_whose_result_it_reads():
+    """A module's own file is read through its own wrapper, keyed by the module."""
+    from trid3nt_server.workflows.telemac.modules import GAIA
+
+    bed = field("E", t=-1, module="gaia")
+    assert bed.module == "gaia" and bed.key.module == "gaia"
+    assert field("E", t=-1).key != bed.key and hash(bed.key) != hash(field("E").key)
+    assert GAIA.OUTPUTS["field"].read is T2D.OUTPUTS["field"].read
+
+
+def test_the_door_carries_a_primitive_s_point_and_line_beside_the_list(monkeypatch):
+    """A read's point or line is a declared read the plan binds; it rides beside
+    the list as anchors and the publish step rejoins it to its primitive."""
+    from trid3nt_server.workflows.runtime import DataRef
+    from trid3nt_server.workflows.telemac.templates.do_sag.do_sag import (
+        telemac_do_sag,
+    )
+
+    step = next(s for s in telemac_do_sag.workflow.plan.declared()
+                if s.label == "outputs")
+    listed = step.kwargs["outputs"]
+    assert all(p.along is None and p.at is None for p in listed)
+    anchors = step.kwargs["anchors"]
+    assert len(anchors) == len(listed) + len(step.kwargs["answer"])
+    assert anchors[2]["along"] == DataRef("centerline")
+
+
+def test_publish_outputs_rejoins_the_anchors_and_draws_the_reference_lines(
+        monkeypatch, coupled):
+    from trid3nt_contracts.execution import LayerURI
+
+    from trid3nt_server.workflows.publishing import Line
+    from trid3nt_server.workflows.telemac import workflow as door
+    from trid3nt_server.workflows.telemac.modules.outputs import profile
+
+    seen: dict[str, Any] = {}
+
+    async def _publish(**kwargs):
+        seen.update(kwargs)
+        return Published(primary=LayerURI(
+            layer_id="L", name="Dissolved oxygen (reach)", layer_type="raster",
+            uri="s3://runs/RID/dissolved_oxygen.tif", quantity="dissolved_oxygen"))
+
+    def _reference(read, reads, params):
+        assert params["do_standard_mgl"] == 5.0
+        return [Line(label="standard", x=[0.0, 1.0], values=[5.0, 5.0])]
+
+    monkeypatch.setattr(door, "publish", _publish)
+    run = {**coupled.run, "module": "telemac2d"}
+    result = asyncio.run(door.publish_outputs(
+        run=run,
+        outputs=[field("T2", t=-1).layer(style={"kind": "continuous"}),
+                 profile("T2", along=None).chart(reference=_reference)],
+        captions={"T2": "dissolved oxygen"},
+        answer={"low": profile("T2", along=None).measure("min")},
+        anchors=[{"at": None, "along": None}, {"at": None, "along": _line(coupled)},
+                 {"at": None, "along": _line(coupled)}],
+        params={"location": "the Eel", "do_standard_mgl": 5.0}))
+    chart = seen["items"][1].read
+    assert [line.label for line in chart.lines] == ["standard"]
+    assert result.answer == {"low": 6.0}

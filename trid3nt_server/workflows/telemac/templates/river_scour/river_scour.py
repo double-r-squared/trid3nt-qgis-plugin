@@ -6,53 +6,66 @@ rule layers a channel-maintenance dredge on top of the same bed."""
 
 from __future__ import annotations
 
-from typing import Any
-
+from trid3nt_contracts.telemac_contracts import (
+    TELEMAC_BED_EVOLUTION_STYLE,
+    TELEMAC_DYE_STYLE,
+)
 from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
 
 from trid3nt_server.workflows.runtime import (
+    ParamRef,
     Ref,
-    data_rows,
     param_rows,
     register_workflow,
     user_input,
 )
-from trid3nt_server.workflows.mesh.tool import tool
+from trid3nt_server.workflows.mesh.tool import mesh_op, tool
 from trid3nt_server.workflows.inputs import point_arg
 from trid3nt_server.workflows.inputs.aoi import location_or_bbox
 from trid3nt_server.workflows.telemac.helpers.forcing import event_time
 from trid3nt_server.workflows.telemac.helpers.reach import MeshCoverage
-from trid3nt_server.workflows.telemac.helpers.substance import SedimentBed
-from trid3nt_server.workflows.telemac.modules import T2D
+from trid3nt_server.workflows.telemac.modules import (
+    GAIA,
+    T2D,
+    field,
+    mass_balance,
+    max_over_time,
+    mesh,
+    series,
+)
 from trid3nt_server.workflows.telemac.modules.gaia import RESULT_FILENAME
 from trid3nt_server.workflows.telemac.modules.telemac2d import (
     Boundaries,
     Rain,
     Release,
     TimeOrigin,
+    TracerNames,
     Wind,
 )
-from trid3nt_server.workflows.telemac.products.products import Products
 from trid3nt_server.workflows.telemac.solving.solve import compute_class
 from trid3nt_server.workflows.telemac.templates.river_scour.declarations import (
-    ACCEPTS, DOC, PARAMS, PARAMS as P,
+    ACCEPTS, DOC, GRADATION_PRESETS, PARAMS, PARAMS as P,
 )
 from trid3nt_server.workflows.telemac.templates.shared import river
 from trid3nt_server.workflows.telemac.templates.shared.river import (
     PARAMS as S,
     RELEASE as R,
-    RIVER,
 )
 from trid3nt_server.workflows.telemac.workflow import Door, TelemacWorkflow
 
-__all__ = ["ANSWER", "DATA", "PARAMS", "STEERING", "build_bed_chart",
+__all__ = ["ANSWER", "CAPTIONS", "DATA", "MESH", "OUTPUTS", "PARAMS", "STEERING",
            "telemac_river_scour"]
 
 _HELPERS = "trid3nt_server.workflows.telemac.helpers"
 _SOLVING = "trid3nt_server.workflows.telemac.solving.solve"
 
-#: What the run directory calls this deck.
+#: The names the run directory holds this run's files under. They are the deck's
+#: own STEERING / GEOMETRY / BOUNDARY CONDITIONS / RESULTS statements, so the
+#: directory reads as the record of the run it is.
 _STEERING_FILE = "t2d_river.cas"
+_GEOMETRY = "river.slf"
+_BOUNDARY = "river.cli"
+_RESULT = "r2d_river.slf"
 
 #: WHERE along the reach a maintenance dredge acts, and OVER WHAT stretch of the
 #: run. A dig at mid-reach with the spoil placed well downstream of it is the
@@ -67,15 +80,55 @@ _DREDGE_START_FRAC = 0.15
 _DREDGE_END_FRAC = 0.95
 _DREDGE_RATE_M_PER_S = 5.0e-4
 
+#: How far past the centerline the mapped banks are ASKED for. The water that
+#: belongs to this reach reaches past the line - a far channel behind a mid-river
+#: island is three km off it and is still the same river - and the pad widens the
+#: QUESTION, never the meshed domain: the section cut below keeps only the
+#: stretch between the reach's two ends.
+_BANK_QUERY_PAD_M = 3000.0
 
-#: The variables GAIA prints, as the two shapes of this question read them.
-_PRINTOUTS = "B,E"
-_MIXTURE_PRINTOUTS = "B,E,D50"
 
+class DATA:
+    """The reach chain, one row per artifact, in the order it is read, and the
+    rain this question adds to it. The carrier discharge is a STEP, because it
+    reads the resolved seed."""
 
-class _OWN:
-    """What this question reads past the reach chain every river run reads."""
-
+    rivers = tool(f"{_HELPERS}.reach.fetch_reach_flowline",
+                  prefetched=ParamRef("river_geometry_uri"))
+    # THE REACH, narrowed by CHAINING tools rather than by a mesher that grew a
+    # corridor of its own. The navigated mainstem names the stretch, its two ends
+    # name where the stretch stops, and the cut through the MAPPED banks is the
+    # domain - so the two end faces are the transects the inflow and the outflow
+    # are prescribed on, measured off real geometry rather than a ribbon.
+    centerline = tool("fetch_nhdplus_nldi_navigate",
+                      seed_point=[Ref("seed.lon"), Ref("seed.lat")],
+                      direction="DM",
+                      distance_km=ParamRef("reach_length_km"))
+    ends = tool("endpoints", line=centerline)
+    window = tool("compute_layer_bounds", layer_uri=centerline,
+                  pad_m=_BANK_QUERY_PAD_M, fit_map=False)
+    water = tool("fetch_nhd_area_water", bbox=Ref("window.bbox"))
+    # HOW MUCH of the reach the returned polygons actually map, measured before
+    # the cut so an unmapped reach refuses on its own cause instead of arriving
+    # at the section as an empty geometry.
+    mapped_water = tool(f"{_HELPERS}.reach.measure_water_coverage",
+                        water=water, centerline=centerline)
+    reach_polygon = tool("section", polygon=mapped_water,
+                         between=Ref("ends.between"))
+    # THE SUBSTITUTION, declared where a reader can see it. A bed is TOPOBATHY -
+    # the channel bottom - and no topobathy survey covers an inland reach, so
+    # this row is a surface DEM and the recipe below says so by painting the bed
+    # from it BY NAME. The consequence travels with it: a surface measures the
+    # water top, so the modelled channel is shallower than the real one and the
+    # journal names this row as what the bed came from. GLO-30 is asked for on
+    # its OWN 1-arcsecond lattice, so the raster the nodes are sampled from
+    # carries the source pixels rather than a resample of them.
+    dem = tool("fetch_copernicus_dem", bbox=Ref("window.bbox"), px_per_deg=3600.0,
+               purpose="river bed elevation")
+    # The cadence and units the run receives, stated rather than assumed: the
+    # producer answers in daily rates, so this asks for no interpolation - and a
+    # sub-daily target would refuse here instead of manufacturing a storm shape
+    # gridMET never reported.
     rain = tool(f"{_HELPERS}.forcing.resolve_rain_forcing",
                 rainfall_mm_per_day=R.rainfall_mm_per_day,
                 evaporation_mm_per_day=R.evaporation_mm_per_day,
@@ -83,13 +136,77 @@ class _OWN:
                 ).resample(to="1D", max_gap="native*3").normalize(units="mm/day")
 
 
-DATA = (*river.DATA_ROWS, *data_rows(_OWN))
+#: The MESH RECIPE, frozen at declaration and building nothing at import. The
+#: extent is the CHAIN's product - the stretch of mapped water the section cut
+#: between the centerline's two ends - so the mesher triangulates a domain other
+#: tools measured rather than growing a corridor of its own. The ops are
+#: oceanmesh's own clean passes under its own names, then the two things we
+#: impose: the bed, painted from the substitution declared above and named in the
+#: journal, and the roles, prescribed across the two end transects the section cut.
+MESH = tool.build_mesh(
+    mesher="om2d",
+    kind="unstructured_tri",
+    extent=Ref("reach_polygon"),
+    resolution_m=ParamRef("mesh_resolution_m"),
+    ops=[
+        mesh_op("delete_boundary_faces"),
+        mesh_op("delete_faces_connected_to_one_face"),
+        mesh_op("laplacian2"),
+        mesh_op("make_mesh_boundaries_traversable"),
+        mesh_op("fix_mesh", delete_unused=True),
+        mesh_op("set_bed", source=DATA.dem, interp="nearest"),
+        mesh_op("set_boundary_roles",
+                inflow=Ref("reach_polygon.face_start"),
+                outflow=Ref("reach_polygon.face_end")),
+    ],
+)
 
 
 class STEERING(T2D):
     """The deck: a river, a marker tracer in it, and a BED that moves under it."""
 
-    parts = [RIVER]
+    GEOMETRY_FILE = _GEOMETRY
+    BOUNDARY_CONDITIONS_FILE = _BOUNDARY
+    RESULTS_FILE = _RESULT
+    TITLE = Ref("settled.title")
+
+    # The step the reach is solved at follows the edge the accepted mesh was
+    # BUILT at rather than the edge that was asked for.
+    TIME_STEP = Ref("settled.time_step_s")
+    LISTING_PRINTOUT_PERIOD = 500
+
+    # The run OPENS at the derived normal depth, laid bed-parallel. Not a
+    # constant elevation at the outflow stage: the stage is derived only where
+    # the reach FALLS, so a horizontal surface at the outlet's level leaves every
+    # node upstream of it dry - the flowrate face among them - and the engine
+    # refuses a discharge it has no water to impose.
+    INITIAL_CONDITIONS = "CONSTANT DEPTH"
+    INITIAL_DEPTH = Ref("settled.depth_m")
+
+    # The roughness the outflow stage was DERIVED at, written back out as the
+    # roughness the run is solved at. One number, stated once: a stage derived at
+    # one and written at another is a level the run never sits at.
+    LAW_OF_BOTTOM_FRICTION = Ref("settled.friction_law")
+    FRICTION_COEFFICIENT = Ref("settled.friction_coefficient")
+
+    # The advection of momentum and depth, and the SUPG the reach is stable
+    # under. The tracer advects under the engine's own scheme and diffusivity.
+    TYPE_OF_ADVECTION = [1, 5]
+    SUPG_OPTION = [0, 0]
+    MASS_LUMPING_ON_H = 1.0
+    CONTINUITY_CORRECTION = True
+    SOLVER = 1
+    SOLVER_ACCURACY = 1.0e-6
+    MAXIMUM_NUMBER_OF_ITERATIONS_FOR_SOLVER = 500
+    IMPLICITATION_FOR_DEPTH = 0.6
+    IMPLICITATION_FOR_VELOCITY = 0.6
+
+    # The engine accounts for its own water volume and prints one flux per liquid
+    # boundary. That is the only honest check that the level prescribed at a
+    # boundary reached it: a server-side integration of the depth and velocity
+    # fields reads near zero at a prescribed-depth face, where the boundary values
+    # are clamped after the flux was computed.
+    MASS_BALANCE = True
 
     # A coupled run drives the module's own launcher whole rather than the
     # stepped arm, so it writes no restart record and cannot be continued.
@@ -98,23 +215,37 @@ class STEERING(T2D):
     DURATION = P.sim_duration_s
 
     NUMBER_OF_TRACERS = 1
-    NAMES_OF_TRACERS = ["DYE             MG/L"]
+    #: The marker is called what the user called the release point, when a
+    #: picked or named point came; the template's own name stands otherwise.
+    tracer_names = TracerNames(names=["MARKER          MG/L"],
+                               named_by=Ref("settled.release_name"))
     INITIAL_VALUES_OF_TRACERS = [0.0]
 
     #: The bed is GAIA's; the carrier still runs ONE tracer, so every liquid
     #: boundary carries one clean-river value.
     boundaries = Boundaries(measured=Ref("settled"), tracers=[0.0])
 
-    #: The marker the deposited fraction is measured against, released as a
-    #: finite pulse at a mid-reach point source.
+    #: The marker the bed change is watched against, released as a finite pulse
+    #: at a mid-reach point source.
     releases = [Release(at=Ref("settled.release_at"), q=R.source_q_m3s,
                         tracers=[P.tracer_concentration_mgl],
                         window_s=R.spill_duration_s,
                         until_s=Ref("settled.until_s"))]
 
     #: The bed itself: one class or a mixture, bedload on, a real stock to scour
-    #: into, and the NESTOR files when a dredge rule was armed.
-    coupling = Ref("sediment.coupling")
+    #: into, and the NESTOR files when a dredge rule was armed. The classes of a
+    #: MIXTURE shelter each other, and formula 1 is the engine's own Egiazaroff
+    #: hiding factor; a single class hides behind nothing and never reads it. A
+    #: sorted mixture additionally prints the SURFACE D50 its grading is read
+    #: from, which a single class has none of; the listing's own sediment
+    #: balance is what the net bed mass is read off.
+    coupling = [GAIA.bed(geometry=_GEOMETRY, boundary=_BOUNDARY,
+                         gradation=P.sediment_gradation, presets=GRADATION_PRESETS,
+                         d50_um=P.grain_size_um, thickness_m=P.bed_thickness_m,
+                         formula=P.bedload_formula, hiding_factor_formula=1,
+                         morphological_factor=P.morphological_factor,
+                         printouts="B,E", mixture_printouts="B,E,D50",
+                         mass_balance=True, dredging=Ref("settled.dredging"))]
     #: NESTOR reads absolute DATES; a run without it leaves the dictionary's own
     #: origin, which is what states nothing here.
     time_origin = TimeOrigin(at=Ref("settled.dredging.time_origin"))
@@ -123,46 +254,34 @@ class STEERING(T2D):
     rain = Rain(mm_per_day=Ref("settled.rain_mm_per_day"), tracers=1)
 
 
-#: The run's ANSWER, as the numbers a reader has to be able to check.
-ANSWER = ("max_deposition_mm", "max_scour_mm", "deposited_mass_kg",
-          "deposit_fraction", "sediment_surface_d50_range_um", "active_frames",
-          "mesh_size_m")
+#: What the solved run is read for: the bed's cumulative evolution off GAIA's own
+#: result as the map, the bed itself over time as the animation, the marker's
+#: envelope beside it and its reach-wide history as the chart.
+OUTPUTS = [
+    field("E", t=-1, module="gaia").layer(style=TELEMAC_BED_EVOLUTION_STYLE),
+    field("B", t="every").animate(),
+    max_over_time("T1").layer(style=TELEMAC_DYE_STYLE),
+    series("T1").chart(),
+]
+CAPTIONS = {"E": "bed evolution", "B": "bed elevation", "T1": "marker concentration"}
+
+#: The run's ANSWER, as the numbers a reader has to be able to check, each a
+#: measure of one of the reads above. The evolution is signed: deposition
+#: positive, scour negative.
+ANSWER = {
+    "bed_evolution_max_m": field("E", t=-1, module="gaia").measure("max"),
+    "bed_evolution_min_m": field("E", t=-1, module="gaia").measure("min"),
+    "net_bed_mass_kg": mass_balance(module="gaia").measure("sediment_net_bed_mass_kg"),
+    "marker_cmax_mgl": max_over_time("T1").measure("max"),
+    "active_frames": series("T1").measure("active_frames"),
+    "mesh_size_m": mesh().measure("size_m"),
+}
 
 
-def build_bed_chart(*, result: Any, params: Any) -> dict[str, Any] | None:
-    """The marker tracer's HISTORY beside the bed change the run reports.
-
-    The bed evolution is a map, not a curve; ``None`` when none persisted."""
-    times = getattr(result, "dye_curve_time_s", None)
-    values = getattr(result, "dye_curve_cmax_mgl", None)
-    if not times or not values:
-        return None
-    from trid3nt_server.emission.charts import build_chart_payload
-
-    where = params.get("location") or getattr(result, "name", None) or "the reach"
-    scour = getattr(result, "max_scour_mm", None)
-    deposition = getattr(result, "max_deposition_mm", None)
-    return build_chart_payload(
-        vega_lite_spec={
-            "mark": {"type": "line", "point": True},
-            "data": {"values": [{"t_s": float(t), "mgl": float(c)}
-                                for t, c in zip(times, values)]},
-            "encoding": {
-                "x": {"field": "t_s", "type": "quantitative", "title": "Time (s)"},
-                "y": {"field": "mgl", "type": "quantitative",
-                      "title": "Marker concentration (mg/L)"},
-            },
-        },
-        title=f"Marker passage over the moving bed - {where}",
-        caption=(f"The marker's reach maximum at each of {len(times)} output "
-                 f"times, beside a bed that scoured "
-                 f"{'-' if scour is None else f'{float(scour):.3g}'} mm at most "
-                 f"and gained "
-                 f"{'-' if deposition is None else f'{float(deposition):.3g}'} mm "
-                 "at most. The bed evolution itself is the map, not this curve."),
-    )
-
-
+#: DECLARED mesh_resolution_m range. The solver floor is the finest edge the mesh
+#: builder authors regardless of ask; below it a screening run gains nothing.
+#: There is no fixed coarse ceiling - the node budget coarsens a long reach WITHIN
+#: this declaration, and the effective edge stays >= 2 cells across the channel.
 _RES_SPEC = ResolutionSpec(
     param="mesh_resolution_m",
     unit="m",
@@ -187,7 +306,6 @@ _METADATA = AtomicToolMetadata(
 )
 
 
-
 telemac_river_scour = register_workflow(
     TelemacWorkflow, _METADATA,
     (*river.PARAM_ROWS, *river.RELEASE_ROWS, *param_rows(PARAMS)),
@@ -195,13 +313,12 @@ telemac_river_scour = register_workflow(
         steering=STEERING,
         # A release named up front also names which stretch to model: the one
         # centerline is navigated from it.
-        domain=river.acquire(seed=P.release),
-        mesh=river.MESH, mesh_on="reach",
-        produce=(MeshCoverage(mesh=Ref("mesh"),
-                              centerline=river.DATA.centerline),),
+        domain=river.acquire(rivers=DATA.rivers, seed=P.release),
+        mesh=MESH, mesh_on="reach",
+        produce=(MeshCoverage(mesh=Ref("mesh"), centerline=DATA.centerline),),
         settle=river.settle(
-            release=P.release, spill_fraction=R.spill_fraction,
-            rain=_OWN.rain,
+            centerline=DATA.centerline, reach_polygon=DATA.reach_polygon,
+            release=P.release, spill_fraction=R.spill_fraction, rain=DATA.rain,
             dredge={"on": P.dredging,
                     "field": {"bank_offset_m": P.dredge_bank_offset_m,
                               "zone_len_m": _DREDGE_ZONE_LEN_M,
@@ -215,52 +332,20 @@ telemac_river_scour = register_workflow(
                              "volume_m3": P.dredge_volume_m3,
                              "crit_depth_m": P.dredge_crit_depth_m,
                              "dig_depth_m": P.dredge_dig_depth_m}}),
-        derive=(SedimentBed(
-            gradation=P.sediment_gradation, grain_size_um=P.grain_size_um,
-            bed_thickness_m=P.bed_thickness_m,
-            bedload_formula=P.bedload_formula,
-            # The classes of a MIXTURE shelter each other, and formula 1 is the
-            # engine's own Egiazaroff hiding factor; a single class hides behind
-            # nothing and never reads it.
-            hiding_factor_formula=1,
-            morphological_factor=P.morphological_factor,
-            # What this question reads off GAIA's own result: the bed evolution
-            # and the erosion/deposition split. A sorted mixture additionally
-            # prints the SURFACE D50 the grading answer is measured from, which a
-            # single class has none of.
-            printouts=_PRINTOUTS, mixture_printouts=_MIXTURE_PRINTOUTS,
-            # The listing's own sediment balance, which the deposited-mass answer
-            # is read from.
-            mass_balance=True,
-            settled=Ref("settled"),
-            injected={"q_m3s": R.source_q_m3s,
-                      "concentration_mgl": P.tracer_concentration_mgl,
-                      "window_s": R.spill_duration_s}).named("sediment"),),
-        slots={"VELOCITY_DIFFUSIVITY": R.velocity_diffusivity,
-               "COEFFICIENT_FOR_DIFFUSION_OF_TRACERS": R.tracer_diffusivity},
-        results=(river.RESULT, RESULT_FILENAME),
+        results=(_RESULT, RESULT_FILENAME),
         steering_file=_STEERING_FILE, prefix="telemac",
         dispatch=f"{_SOLVING}.solve_reach", compute_class=S.compute_class,
-        # A MOBILE bed is what this question is: the reader publishes the bed
-        # evolution both ways round it and reports the scour half, which a
-        # supply-limited plume has none of.
-        meta={"substance": "sediment",
-              "sediment_injected_kg": Ref("sediment.injected_kg"),
-              "sediment_n_classes": Ref("sediment.n_classes")},
-        read=lambda run: Products.scour(
-            run=run, solve=run,
-            carrier_discharge=Ref("carrier_discharge")).named("bed"),
-        chart=("bed_evolution", build_bed_chart),
+        outputs=OUTPUTS, captions=CAPTIONS, answer=ANSWER,
         review_title="Review the mobile-bed scenario"),
     data=DATA,
     accepts=ACCEPTS,
-    answer=ANSWER,
+    answer=tuple(ANSWER),
     provenance=(("discharge_m3s", "discharge_note"),
                 ("mesh_resolution_m", "mesh_resolution_note")),
     # Scour and deposition maxima live inside single elements, so a coarse mesh
     # reads both low.
-    sensitivity=(("max_deposition_mm", "peak"),
-                 ("max_scour_mm", "peak")),
+    sensitivity=(("bed_evolution_max_m", "peak"),
+                 ("bed_evolution_min_m", "peak")),
     coerce=(
         location_or_bbox("telemac_river_scour", code_prefix="TELEMAC",
                          hint="For a natural prompt like 'bed scour below the dam "

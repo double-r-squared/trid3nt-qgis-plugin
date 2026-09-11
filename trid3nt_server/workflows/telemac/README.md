@@ -40,5 +40,5 @@ absent here and rides with the rung-4 wave-field rebuild.
 | `templates/` | One package per question, over the module wrappers, plus the shared bodies several of them list. See its own map. |
 | `authoring/` | Everything the box receives: the ONE assembler, the serializer that writes the steering format, the DAMOCLES parse that gates it. See its own map. |
 | `solving/` | The run, dispatched: stage the manifest, hand it to the solve seam, wait, surface the gates. See its own map. |
-| `products/` | What a solved run is answered with: the postprocessors, the deliverables, and the readers that open the run's own files on the server. See its own map. |
-| `helpers/` | What a declaration summons: the reach front, the catchment, the infiltration surface, the declared forcing, the substance class, the WAQTEL relations, where a derived release settles, and the typed failures. See its own map. |
+| `products/` | What an open-water run is answered with: the free-surface, wave, agitation, 3D and coastal postprocessors, the catchment products, and the listing readers the primitives share. See its own map. |
+| `helpers/` | What a declaration summons: the reach front, the catchment, the infiltration surface, the declared forcing, the dredge fields, the saturation relations, where a derived release settles, and the typed failures. See its own map. |

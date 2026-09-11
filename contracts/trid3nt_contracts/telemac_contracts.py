@@ -1,14 +1,11 @@
-"""The TELEMAC result layers - one ``LayerURI`` subclass per product.
+"""The TELEMAC style rows, and the open-water result layers - one ``LayerURI``
+subclass per postprocessed product.
 
-Each adds the scalars a narration CITES rather than invents, so a number that
-reaches a reader came off the field. Every one is a raster anchor: the animation
-rides the engine's NATIVE time-stepped mesh beside it, which a mesh reader opens
-directly, so no per-frame raster set is published.
-"""
+Each subclass adds the scalars a narration CITES rather than invents, so a number
+that reaches a reader came off the field. Every one is a raster anchor: the
+animation rides the engine's NATIVE time-stepped mesh beside it."""
 
 from __future__ import annotations
-
-from typing import NamedTuple
 
 from pydantic import Field
 
@@ -17,8 +14,6 @@ from .execution import LayerURI
 __all__ = [
     "TELEMAC_DYE_STYLE",
     "TELEMAC_SEDIMENT_CONCENTRATION_STYLE",
-    "TELEMAC_SUBSTANCE_PRODUCTS",
-    "SubstanceProduct",
     "TELEMAC_BED_EVOLUTION_STYLE",
     "TELEMAC_WSE_STYLE",
     "TELEMAC_DO_STYLE",
@@ -29,10 +24,7 @@ __all__ = [
     "TELEMAC_MAX_DEPTH_STYLE",
     "TELEMAC_RAIN_ON_GRID_MESH_GROUP",
     "TELEMAC3D_SIGNED_STYLE",
-    "TelemacDyeLayerURI",
-    "TelemacSedimentLayerURI",
     "TelemacWseLayerURI",
-    "TelemacDoLayerURI",
     "TelemacWaveLayerURI",
     "ArtemisAgitationLayerURI",
     "Telemac3dLayerURI",
@@ -87,10 +79,12 @@ TELEMAC_SEDIMENT_CONCENTRATION_STYLE: dict = {
     "kind": "continuous", "ramp": "oranges", "units": "mg/L",
     "label": "Suspended sediment concentration"}
 
-#: The GAIA bed-evolution raster: deposition positive, erosion negative, so the
-#: ramp diverges about zero.
+#: The GAIA bed-evolution raster, in the metres the module writes: deposition
+#: positive, erosion negative, so the ramp diverges about zero and the legend is
+#: ranged symmetrically about that centre.
 TELEMAC_BED_EVOLUTION_STYLE: dict = {
-    "kind": "continuous", "ramp": "rdbu", "units": "mm", "label": "Bed evolution"}
+    "kind": "continuous", "ramp": "rdbu", "units": "m", "label": "Bed evolution",
+    "center": 0.0}
 
 #: The MAX FREE-SURFACE ELEVATION raster. A water SURFACE is not a depth: it is
 #: referenced to a vertical datum and it is signed, so it is titled and ramped
@@ -113,37 +107,6 @@ TELEMAC_DO_STYLE: dict = {
     "kind": "continuous", "ramp": "rdylbu", "units": "mg/L",
     "label": "Dissolved oxygen"}
 
-
-class SubstanceProduct(NamedTuple):
-    """What ONE substance class publishes as its transported-field raster.
-    A product NAME must not assert more than the field carries, so each class
-    names its own file and declares its own quantity, style row and noun.
-    """
-
-    #: The basename the raster is uploaded under, per run.
-    cog: str
-    #: The physical field the raster carries.
-    quantity: str
-    #: The declared style row that draws it.
-    style: dict
-    #: What the layer name and the legend call the field.
-    noun: str
-    #: The mesh variable this class's tracer lands in - the group the results
-    #: mesh's preset paints.
-    mesh_group: str
-
-
-#: substance class -> its transported-field product, for the classes whose
-#: field rides beside a product of its own: the slick, the bed.
-TELEMAC_SUBSTANCE_PRODUCTS: dict[str, SubstanceProduct] = {
-    "oil": SubstanceProduct("telemac_oil_tracer_peak.tif",
-                            "oil_tracer_concentration",
-                            TELEMAC_DYE_STYLE, "oil tracer", "DYE"),
-    "sediment": SubstanceProduct("telemac_sediment_peak.tif",
-                                 "suspended_sediment_concentration",
-                                 TELEMAC_SEDIMENT_CONCENTRATION_STYLE,
-                                 "suspended sediment", "NCOH SEDIMENT1"),
-}
 
 #: The SELAFIN group a rain-on-grid results mesh paints. A mesh preset binds ONE
 #: group and the reader binds it BY NAME, so the answer field is named here in
@@ -174,125 +137,6 @@ class TelemacWseLayerURI(LayerURI):
     #: observations share one CRS and pairing is an exact identity with no
     #: reprojection; the caveat is recorded in ``fallback_note``.
     mesh_epsg: int | None = Field(default=None, gt=0)
-
-
-class TelemacDyeLayerURI(LayerURI):
-    """The peak dye-concentration raster of a tracer run, plus its scalars.
-    The animation plays from the mesh sibling, not from per-frame rasters.
-    """
-
-    #: Peak concentration anywhere, any time - the strength of the signal.
-    dye_cmax_mgl: float = Field(ge=0.0)
-    dye_peak_time_s: float | None = Field(default=None, ge=0.0)
-    #: How far the plume centroid travelled downstream from the release point.
-    plume_reach_m: float | None = Field(default=None, ge=0.0)
-    #: In how many output frames the plume was present in-reach - how long the
-    #: tracer lingered before it passed.
-    active_frames: int | None = Field(default=None, ge=0)
-    #: EQUAL-LENGTH arrays: at each output time, the highest concentration
-    #: anywhere in the reach. The two scalars above are this curve's maximum and
-    #: the time it occurs at, so the chart and the narration are one measurement.
-    dye_curve_time_s: list[float] | None = Field(default=None)
-    dye_curve_cmax_mgl: list[float] | None = Field(default=None)
-    #: The GRANULARITY the solve actually used, its size estimate, and how the
-    #: resolution was chosen. Published so mesh resolution stays a visible,
-    #: narratable lever rather than a hidden one.
-    mesh_size_m: float | None = Field(default=None, gt=0.0)
-    mesh_node_estimate: int | None = Field(default=None, ge=0)
-    mesh_resolution_label: str | None = Field(default=None)
-    # Deposition scalars, populated only for a sediment run, so the returned
-    # concentration layer ALSO carries the numbers that run is narrated on.
-    # ``None`` for every other substance class.
-    deposited_mass_kg: float | None = Field(default=None, ge=0.0)
-    deposit_fraction: float | None = Field(default=None, ge=0.0)
-    max_deposition_mm: float | None = Field(default=None, ge=0.0)
-    # The deepest bed SCOUR magnitude. ``None`` on a supply-limited run, where
-    # nothing erodes, and on every non-sediment run.
-    max_scour_mm: float | None = Field(default=None, ge=0.0)
-    # The spread of SURFACE mean grain size once the bed sorts: it armors in
-    # scour zones and fines in deposits. Populated only for a multi-class run -
-    # a single class is uniform by construction, so a nonzero range IS the
-    # sorting signature, read off the field rather than asserted.
-    sediment_n_classes: int | None = Field(default=None, ge=2)
-    sediment_surface_d50_min_um: float | None = Field(default=None, ge=0.0)
-    sediment_surface_d50_max_um: float | None = Field(default=None, ge=0.0)
-    sediment_surface_d50_range_um: float | None = Field(default=None, ge=0.0)
-
-
-class TelemacDoLayerURI(LayerURI):
-    """The steady-state DISSOLVED-OXYGEN raster of a sag run, plus its scalars.
-    Below a discharge, decay consumes oxygen and reaeration recovers it; the
-    along-reach curve rides here so a chart plots the run's own numbers.
-    """
-
-    #: The SAG minimum - how low oxygen bottoms out - and how far downstream of
-    #: the discharge that critical point sits.
-    do_min_mgl: float = Field(ge=0.0)
-    do_min_distance_m: float | None = Field(default=None, ge=0.0)
-    #: The pre-sag reference: oxygen carried in at the top of the reach.
-    do_upstream_mgl: float | None = Field(default=None, ge=0.0)
-    #: The temperature-dependent saturation the deficit is measured against -
-    #: the ceiling recovery approaches.
-    do_saturation_mgl: float | None = Field(default=None, ge=0.0)
-    #: The standard the sag is JUDGED against, and whether it is breached. The
-    #: second is the permit answer; the first is a chart reference only.
-    do_standard_mgl: float | None = Field(default=None, ge=0.0)
-    do_violates_standard: bool | None = Field(default=None)
-    #: The MODELED peak ultimate load along the reach, once mixed into the
-    #: carrier flow - the driver of the sag.
-    bod_mixed_mgl: float | None = Field(default=None, ge=0.0)
-    #: The solved mean along-reach velocity: what converts downstream distance
-    #: into the travel time the sag develops over.
-    mean_velocity_mps: float | None = Field(default=None)
-    #: EQUAL-LENGTH arrays of the solved centerline curve, plotted against the
-    #: standard line.
-    sag_curve_distance_m: list[float] | None = Field(default=None)
-    sag_curve_do_mgl: list[float] | None = Field(default=None)
-    sag_curve_bod_mgl: list[float] | None = Field(default=None)
-    #: The analytical CLOSED FORM over the same bins - the deterministic overlay
-    #: drawn beside the solved profile.
-    sp_curve_distance_m: list[float] | None = Field(default=None)
-    sp_curve_do_mgl: list[float] | None = Field(default=None)
-    #: How far the solve sits from that closed form: whole-profile RMS, and the
-    #: solved sag minimum minus the analytical one. Negative means the solve
-    #: sags deeper.
-    sp_rms_mgl: float | None = Field(default=None, ge=0.0)
-    sp_sag_deviation_mgl: float | None = Field(default=None)
-    #: Why the overlay reads as it does, or why there is none.
-    sp_note: str | None = Field(default=None)
-    #: The granularity the solve used - the visible resolution lever.
-    mesh_size_m: float | None = Field(default=None, gt=0.0)
-    mesh_node_estimate: int | None = Field(default=None, ge=0)
-    mesh_resolution_label: str | None = Field(default=None)
-    #: The solver run this layer came out of - i.e. its object-store prefix. The
-    #: run's own chart spec + metrics are written there, so a reader can pull the
-    #: product's chart instead of rebuilding one from the scalars above.
-    run_id: str | None = Field(default=None)
-
-
-class TelemacSedimentLayerURI(LayerURI):
-    """The BED-EVOLUTION raster: deposition positive, erosion negative.
-    The SECOND raster a sediment run emits, beside its suspended-concentration
-    ribbon, drawn on a ramp that diverges about zero.
-    """
-
-    #: NET mass left on the bed over the run, from the solver's own mass balance
-    #: and clamped at zero. The SAME net quantity the final-frame map and the
-    #: fraction below integrate - NEVER the gross deposition, which cancels
-    #: against re-suspension and would contradict an empty map.
-    deposited_mass_kg: float | None = Field(default=None, ge=0.0)
-    #: The fraction of injected mass that settled: net bed mass over injected
-    #: mass. ``None`` when the injected mass is unknown.
-    deposit_fraction: float | None = Field(default=None, ge=0.0)
-    #: The thickest point of the deposition tongue.
-    max_deposition_mm: float | None = Field(default=None, ge=0.0)
-    # The DEEPEST scour magnitude - the most-negative node of the same field.
-    # Reported beside the deposition maximum so BOTH limbs of the signed field
-    # the diverging ramp paints are narratable. ``None`` on a supply-limited
-    # run, where nothing erodes.
-    max_scour_mm: float | None = Field(default=None, ge=0.0)
-    grain_size_um: float | None = Field(default=None, gt=0.0)
-    sediment_type: str | None = Field(default=None)
 
 
 class TelemacWaveLayerURI(LayerURI):

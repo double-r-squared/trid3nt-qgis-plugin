@@ -18,11 +18,14 @@ from trid3nt_server.workflows.mesh.tool import (
 )
 
 
-#: Every declared recipe in the tree, at the body that declares it. The five
-#: river templates LIST the shared river part rather than each freezing a
-#: triangulation of their own, so the reach recipe is pinned once, where it is.
+#: Every declared recipe in the tree, at the template that declares it; the
+#: river templates each restate the reach recipe as their own value.
 _TEMPLATES = (
-    "trid3nt_server.workflows.telemac.templates.shared.river",
+    "trid3nt_server.workflows.telemac.templates.river_dye.river_dye",
+    "trid3nt_server.workflows.telemac.templates.river_oil_spill.river_oil_spill",
+    "trid3nt_server.workflows.telemac.templates.river_scour.river_scour",
+    "trid3nt_server.workflows.telemac.templates.river_sediment_plume.river_sediment_plume",
+    "trid3nt_server.workflows.telemac.templates.do_sag.do_sag",
     "trid3nt_server.workflows.telemac.templates.rain_on_grid.rain_on_grid",
     "trid3nt_server.workflows.telemac.templates.agitation.agitation",
     "trid3nt_server.workflows.telemac.templates.stratified_flow.stratified_flow",

@@ -12,7 +12,7 @@ from types import MappingProxyType
 from typing import Any, Mapping, Sequence
 
 from .module import Module
-from .outputs import PRIMITIVES
+from .outputs import PRIMITIVES, read_drogues
 
 __all__ = ["T2D", "Boundaries", "Continuation", "Friction", "Hyetograph", "Oil",
            "Rain", "Rating", "Release", "Runoff", "TimeOrigin", "TracerNames",
@@ -101,14 +101,16 @@ def Continuation(*, previous: Any) -> Mapping[str, Any]:  # noqa: N802
     return MappingProxyType({"previous": previous})
 
 
-def Oil(*, steering: Any, fortran: Any, release_step: Any,  # noqa: N802
-        drogues: Any, drogues_period_steps: Any) -> Mapping[str, Any]:
-    """The oil module riding on top of the tracer solve.
+def Oil(*, presets: Any, named: Any, at: Any, release_step: Any,  # noqa: N802
+        drogues: Any, drogues_period_s: Any, time_step_s: Any) -> Mapping[str, Any]:
+    """The oil module riding on top of the tracer solve: which preset, released
+    where and at which step, and how many floats are written how often.
 
-    ``steering`` and ``fortran`` are CONTENT, written beside the deck naming them."""
-    return MappingProxyType({"steering": steering, "fortran": fortran,
+    ``presets`` is the table the deck carries; ``named`` picks one row of it."""
+    return MappingProxyType({"presets": presets, "named": named, "at": at,
                              "release_step": release_step, "drogues": drogues,
-                             "drogues_period_steps": drogues_period_steps})
+                             "drogues_period_s": drogues_period_s,
+                             "time_step_s": time_step_s})
 
 
 def _releases(value: Any) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
@@ -203,14 +205,27 @@ def _continue_from(value: Mapping[str, Any]
 
 
 def _oil(value: Mapping[str, Any]) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
-    """The oil module: its steering file, its per-run Fortran, and the drogues."""
+    """The oil module: its steering file, its per-run Fortran, and the drogues.
+
+    The write cadence is asked in seconds; the run's own step turns it into steps."""
+    from ..authoring.oil import release_routine, steering_text
+
+    presets = value["presets"]
+    name = str(value["named"]).strip().lower().replace(" ", "_")
+    if name not in presets:
+        raise ValueError(f"{value['named']!r} is not an oil preset this deck "
+                         f"carries; the presets are {sorted(presets)}.")
+    x, y = value["at"]
+    period = max(int(float(value["drogues_period_s"])
+                     / max(float(value["time_step_s"]), 1e-6)), 1)
     return ({"FORTRAN_FILE": USER_FORTRAN_DIR,
              "OIL_SPILL_STEERING_FILE": OIL_STEERING_FILENAME,
              "MAXIMUM_NUMBER_OF_DROGUES": int(value["drogues"]),
-             "PRINTOUT_PERIOD_FOR_DROGUES": int(value["drogues_period_steps"]),
+             "PRINTOUT_PERIOD_FOR_DROGUES": period,
              "ASCII_DROGUES_FILE": DROGUES_FILENAME},
-            {OIL_STEERING_FILENAME: value["steering"],
-             f"{USER_FORTRAN_DIR}/oil_flot.f": value["fortran"]})
+            {OIL_STEERING_FILENAME: steering_text(name, presets[name]),
+             f"{USER_FORTRAN_DIR}/oil_flot.f": release_routine(
+                 int(value["release_step"]), float(x), float(y))})
 
 
 def _rain(value: Mapping[str, Any]) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
@@ -260,8 +275,13 @@ def Rain(*, mm_per_day: Any, tracers: Any, hours: Any = None  # noqa: N802
 def _coupling(value: Any) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
     """The coupled bodies a template named -> what the CARRIER states about them.
 
-    A coupled body's own slots go to that module's steering file, never here."""
-    bodies = list(value)
+    A coupled body's own slots go to that module's steering file, never here. A
+    body whose ``given`` values all resolved to nothing was asked for nothing,
+    and states nothing."""
+    bodies = [body for body in value
+              if any(v is not None for v in body.get("given", (True,)))]
+    if not bodies:
+        return ({}, {})
     slots: dict[str, Any] = {
         "COUPLING_WITH": ";".join(body["module"].upper() for body in bodies)}
     files: dict[str, Any] = {}
@@ -456,4 +476,4 @@ T2D.composites(releases=_releases, wind=_wind, continue_from=_continue_from,
                boundaries=_boundaries, runoff=_runoff, friction=_friction,
                rating=_rating, hyetograph=_hyetograph,
                time_origin=_time_origin, tracer_names=_tracer_names)
-T2D.outputs(**PRIMITIVES)
+T2D.outputs(**PRIMITIVES, drogues=read_drogues)

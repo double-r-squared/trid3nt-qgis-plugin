@@ -1,10 +1,10 @@
 """A module's outputs: the primitive set, and the read of each off a solved run.
 
 A primitive is named from the module's variable vocabulary - ``field("T1", t)``,
-``series("H")``, ``max_over_time("T1")``, ``extent()``, ``mesh()``,
-``mass_balance()`` - and a template lists them with how each is published. The
-result file is read INSIDE the TELEMAC image, where ``TelemacFile`` lives: one
-container round trip per file, no network, and no parser of the format here."""
+``series("H")``, ``max_over_time("T1")``, ``profile("T1", along)``, ``extent()``,
+``mesh()``, ``mass_balance()``, ``drogues()`` - and a template lists them with
+how each is published. The result file is read INSIDE the TELEMAC image, where
+``TelemacFile`` lives: one container round trip per file, and no parser here."""
 
 from __future__ import annotations
 
@@ -20,7 +20,14 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from trid3nt_server.workflows.mesh.meshers.drivers import drivers_dir
-from trid3nt_server.workflows.publishing import Field, Frames, Read, Series
+from trid3nt_server.workflows.publishing import (
+    Field,
+    Frames,
+    Profile,
+    Read,
+    Series,
+    Track,
+)
 from trid3nt_server.workflows.runtime import DeclarativeError
 
 logger = logging.getLogger("trid3nt_server.workflows.telemac.modules.outputs")
@@ -32,11 +39,13 @@ __all__ = [
     "Primitive",
     "SelafinReadError",
     "Solved",
+    "drogues",
     "extent",
     "field",
     "mass_balance",
     "max_over_time",
     "mesh",
+    "profile",
     "read_selafin",
     "series",
 ]
@@ -54,7 +63,7 @@ TRACER_EDGE_FRACTION = 0.05
 TRACER_FLOOR = 1e-3
 #: The engine spells a variable's unit in capitals after the name; these are
 #: the SI spellings a reader expects for the ones that are not plain lower-case.
-_UNITS = {"MG/L": "mg/L", "G/L": "g/L"}
+_UNITS = {"MG/L": "mg/L", "G/L": "g/L", "MGO2/L": "mgO2/L"}
 
 
 class SelafinReadError(RuntimeError):
@@ -73,8 +82,9 @@ class OutputEmpty(DeclarativeError):
 def read_selafin(path: str | Path) -> dict[str, Any]:
     """A result file -> its mesh and per-variable time series.
 
-    ``varnames`` carry no unit, ``ikle`` is 0-based, origins are not applied."""
-    # {"varnames": [str], "npoin": int, "nelem": int,
+    ``varnames`` carry no unit (``varunits`` does), ``ikle`` is 0-based, origins
+    are not applied."""
+    # {"varnames": [str], "varunits": [str], "npoin": int, "nelem": int,
     #  "x": ndarray(npoin2), "y": ndarray(npoin2), "ikle": ndarray(nelem, ndp),
     #  "nplan": int, "npoin2": int, "nelem2": int, "ikle2": ndarray(nelem2, 3),
     #  "x_origin": int, "y_origin": int, "times": ndarray(nframes),
@@ -92,6 +102,7 @@ def read_selafin(path: str | Path) -> dict[str, Any]:
         varnames = [str(name) for name in meta["varnames"]]
         return {
             "varnames": varnames,
+            "varunits": [str(unit) for unit in meta.get("varunits") or ()],
             "npoin": int(meta["npoin"]),
             "nelem": int(meta["nelem"]),
             # The vertical shape a 3D result carries. A 3D field is flat over
@@ -136,11 +147,12 @@ def _run_driver(slf: Path, scratch: Path) -> dict[str, Any]:
 
 # -- the primitive set ------------------------------------------------------ #
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=True)
 class Primitive:
     """One read a template asks for, and how it is published.
 
-    A value: the template lists primitives, the door reads and publishes them."""
+    A value: the template lists primitives, the door reads and publishes them.
+    Hashed by what it reads, so a resolved point or line of any shape keys it."""
 
     kind: str
     variable: str | None = None
@@ -149,18 +161,28 @@ class Primitive:
     t: Any = None
     #: The Point a series is read at; ``None`` reads the domain maximum.
     at: Any = None
+    #: The line a profile is read along, as a geometry source.
+    along: Any = None
     #: The plane of a 3D variable, bottom first; ``None`` on a 2D module.
     plane: int | None = None
+    #: The coupled module whose result this reads; ``None`` reads the run's own.
+    module: str | None = None
     publish: str | None = None
     style: Any = None
+    #: ``(read, reads, params) -> lines`` drawn on the chart beside the read.
+    reference: Any = None
+
+    def __hash__(self) -> int:
+        return hash((self.kind, self.variable, repr(self.t), repr(self.at),
+                     repr(self.along), self.plane, self.module))
 
     def layer(self, *, style: Mapping[str, Any] | None = None) -> "Primitive":
         """Publish this field as a layer on the map, styled by ``style``."""
         return replace(self, publish="layer", style=style)
 
-    def chart(self) -> "Primitive":
-        """Publish this series as a chart."""
-        return replace(self, publish="chart")
+    def chart(self, *, reference: Any = None) -> "Primitive":
+        """Publish this series or profile as a chart, ``reference`` lines beside it."""
+        return replace(self, publish="chart", reference=reference)
 
     def animate(self) -> "Primitive":
         """Publish this field over time as an animation of the result file."""
@@ -173,7 +195,7 @@ class Primitive:
     @property
     def key(self) -> "Primitive":
         """What one read answers: the primitive without its publishing."""
-        return replace(self, publish=None, style=None)
+        return replace(self, publish=None, style=None, reference=None)
 
 
 @dataclass(frozen=True)
@@ -184,34 +206,49 @@ class Measure:
     stat: str
 
 
-def field(name: str, t: Any = -1, *, plane: int | None = None) -> Primitive:
+def field(name: str, t: Any = -1, *, plane: int | None = None,
+          module: str | None = None) -> Primitive:
     """A variable over the domain at an instant, or over every instant."""
-    return Primitive("field", variable=name, t=t, plane=plane)
+    return Primitive("field", variable=name, t=t, plane=plane, module=module)
 
 
-def series(name: str, at: Any = None, *, plane: int | None = None) -> Primitive:
+def series(name: str, at: Any = None, *, plane: int | None = None,
+           module: str | None = None) -> Primitive:
     """A variable over time: at a Point, or the domain maximum at each instant."""
-    return Primitive("series", variable=name, at=at, plane=plane)
+    return Primitive("series", variable=name, at=at, plane=plane, module=module)
 
 
-def max_over_time(name: str, *, plane: int | None = None) -> Primitive:
+def max_over_time(name: str, *, plane: int | None = None,
+                  module: str | None = None) -> Primitive:
     """A variable's envelope: the maximum every node reached, and when."""
-    return Primitive("max_over_time", variable=name, plane=plane)
+    return Primitive("max_over_time", variable=name, plane=plane, module=module)
 
 
-def extent() -> Primitive:
+def profile(name: str, along: Any, t: Any = -1, *, plane: int | None = None,
+            module: str | None = None) -> Primitive:
+    """A variable along a line at an instant: the cross-section mean per station."""
+    return Primitive("profile", variable=name, along=along, t=t, plane=plane,
+                     module=module)
+
+
+def extent(*, module: str | None = None) -> Primitive:
     """The solved domain, and how much of it held water at the end."""
-    return Primitive("extent")
+    return Primitive("extent", module=module)
 
 
-def mesh() -> Primitive:
+def mesh(*, module: str | None = None) -> Primitive:
     """The mesh the run solved on: its counts and its measured edge."""
-    return Primitive("mesh")
+    return Primitive("mesh", module=module)
 
 
-def mass_balance() -> Primitive:
+def mass_balance(*, module: str | None = None) -> Primitive:
     """The engine's own closure, off the listing it printed."""
-    return Primitive("mass_balance")
+    return Primitive("mass_balance", module=module)
+
+
+def drogues() -> Primitive:
+    """The particle track the module wrote, as the positions at written instants."""
+    return Primitive("drogues")
 
 
 # -- the read of each, off a solved run ------------------------------------- #
@@ -267,9 +304,7 @@ class Solved:
             names = list(self.run.get("tracer_names") or ())
             index = int(upper[1:]) - 1
             if index >= len(names):
-                raise OutputEmpty(
-                    f"{token} names tracer {index + 1}, and this run declares "
-                    f"{len(names)}.")
+                return self._appended_tracer(token, names, index)
             padded = str(names[index]).ljust(32)
             wanted, unit = padded[:16].strip(), padded[16:].strip()
         else:
@@ -285,6 +320,25 @@ class Solved:
         raise OutputEmpty(
             f"{token} ({wanted}) is not among the variables the result carries "
             f"({self.result['varnames']}).")
+
+    def _appended_tracer(self, token: str, names: list[Any], index: int
+                         ) -> tuple[str, str]:
+        """A tracer a coupled module appended behind the carrier's declared ones.
+
+        The result lists tracers in declared order, so the n-th sits n-1 past the
+        first declared name; its unit is the one the record stores."""
+        varnames = list(self.result["varnames"])
+        units = list(self.result.get("varunits") or [""] * len(varnames))
+        first = str(names[0]).ljust(32)[:16].strip().upper() if names else None
+        start = next((i for i, name in enumerate(varnames)
+                      if name.strip().upper() == first), None)
+        position = None if start is None else start + index
+        if position is None or position >= len(varnames):
+            raise OutputEmpty(
+                f"{token} names tracer {index + 1}; this run declares {len(names)} "
+                f"and the result carries {varnames}.")
+        unit = units[position] if position < len(units) else ""
+        return varnames[position], _UNITS.get(unit.upper(), unit.lower())
 
     def frames(self, token: str, plane: int | None) -> tuple[str, str, Any]:
         """``(variable, units, values(nframes, npoin2))`` for a token, one plane."""
@@ -367,15 +421,18 @@ def read_field(primitive: Primitive, solved: Solved) -> Read:
                       reference_time=solved.run.get("started_at"),
                       frames=int(times.size), measures=measures)
     # An int is a frame index, counted from the file's own first frame; a float
-    # is an instant in seconds, read at the nearest frame the engine wrote.
+    # is an instant in seconds, read at the nearest frame the engine wrote. The
+    # measures are the frame's own; the envelope only sets the visible edge.
     index = (int(primitive.t) if isinstance(primitive.t, int)
              else int(np.argmin(np.abs(times - float(primitive.t)))))
     lon, lat = solved.lonlat
+    frame = values[index]
     return Field(name=name, units=units, lon=lon, lat=lat,
-                 ikle=solved.result["ikle2"], values=values[index],
+                 ikle=solved.result["ikle2"], values=frame,
                  t=float(times[index]), floor=_floor(primitive.variable,
                                                      measures["max"]),
-                 measures=measures)
+                 measures={"max": float(frame.max()), "min": float(frame.min()),
+                           "t": float(times[index]), "frames": int(times.size)})
 
 
 def read_series(primitive: Primitive, solved: Solved) -> Series:
@@ -443,8 +500,156 @@ def read_mass_balance(primitive: Primitive, solved: Solved) -> Read:
     return Read(measures={"continuity_rel_error": continuity_rel_error(solved.listing)})
 
 
+#: How many stations a profile is binned into along its line.
+_PROFILE_STATIONS = 60
+#: A node shallower than this at the instant is dry and off the profile.
+_PROFILE_WET_M = 0.01
+
+
+def _chainage(x: Any, y: Any, line: Any) -> tuple[Any, Any]:
+    """Each node's arc length along ``line`` at its nearest segment, and that
+    segment's unit direction: the along-line coordinate and its local axis."""
+    import numpy as np
+
+    line = np.asarray(line, dtype="float64")
+    ax, ay, bx, by = line[:-1, 0], line[:-1, 1], line[1:, 0], line[1:, 1]
+    dx, dy = bx - ax, by - ay
+    length = np.hypot(dx, dy)
+    cum = np.concatenate([[0.0], np.cumsum(length)])
+    t = np.clip(((x[:, None] - ax) * dx + (y[:, None] - ay) * dy)
+                / np.maximum(length * length, 1e-9), 0.0, 1.0)
+    d2 = (ax + t * dx - x[:, None]) ** 2 + (ay + t * dy - y[:, None]) ** 2
+    k = np.argmin(d2, axis=1)
+    s = cum[k] + t[np.arange(x.size), k] * length[k]
+    unit = np.stack([dx[k], dy[k]], axis=1) / np.maximum(length[k], 1e-9)[:, None]
+    return s, unit
+
+
+def read_profile(primitive: Primitive, solved: Solved) -> Profile:
+    """``profile(name, along, t)``: the depth-weighted cross-section mean of a
+    variable per station down a line, at one instant. The line runs the way the
+    solved flow goes when the module carries velocities; the reach's own order
+    otherwise. The measures carry the minimum and maximum with their stations,
+    and the depth-weighted mean along-line speed when velocities are carried."""
+    import numpy as np
+
+    from trid3nt_server.workflows.mesh.shared.nodes import read_centerline_utm
+
+    name, units, values = solved.frames(primitive.variable, primitive.plane)
+    times = np.asarray(solved.result["times"], dtype="float64")
+    index = (int(primitive.t) if isinstance(primitive.t, int)
+             else int(np.argmin(np.abs(times - float(primitive.t)))))
+    x = np.asarray(solved.result["x"], dtype="float64")
+    y = np.asarray(solved.result["y"], dtype="float64")
+    line = read_centerline_utm(primitive.along, solved.utm_epsg)
+    s, axis = _chainage(x, y, line)
+    weight, along = np.ones(x.size), None
+    if all(token in solved.body.VARIABLES for token in ("H", "U", "V")):
+        depth = solved.frames("H", primitive.plane)[2][index]
+        weight = np.where(depth > _PROFILE_WET_M, depth, 0.0)
+        u = solved.frames("U", primitive.plane)[2][index]
+        v = solved.frames("V", primitive.plane)[2][index]
+        along = u * axis[:, 0] + v * axis[:, 1]
+        if float((along * weight).sum()) < 0.0:
+            s, along = s.max() - s, -along
+    if not (weight > 0.0).any():
+        raise OutputEmpty(f"no wet node at t = {times[index]:g} s to read "
+                          f"{primitive.variable} along the line.")
+    edges = np.linspace(0.0, float(s.max()) or 1.0, _PROFILE_STATIONS + 1)
+    station = np.clip(np.digitize(s, edges) - 1, 0, _PROFILE_STATIONS - 1)
+    frame = values[index]
+    distance, means = [], []
+    for b in range(_PROFILE_STATIONS):
+        w = weight[station == b]
+        if w.sum() <= 0.0:
+            continue
+        distance.append(float(0.5 * (edges[b] + edges[b + 1])))
+        means.append(float((frame[station == b] * w).sum() / w.sum()))
+    if len(distance) < 3:
+        raise OutputEmpty(f"{primitive.variable} reaches {len(distance)} wet "
+                          "stations along the line; a profile needs three.")
+    means_arr = np.asarray(means)
+    lo, hi = int(means_arr.argmin()), int(means_arr.argmax())
+    measures: dict[str, Any] = {
+        "min": float(means_arr[lo]), "x_min_m": distance[lo],
+        "max": float(means_arr[hi]), "x_max_m": distance[hi],
+        "t": float(times[index]), "stations": len(distance),
+        "velocity_mps": (None if along is None else
+                         float((along * weight).sum() / weight.sum()))}
+    return Profile(name=name, units=units, distance_m=np.asarray(distance),
+                   values=means_arr, along="downstream distance", measures=measures)
+
+
+def parse_drogues(path: str | Path) -> list[tuple[float, list[tuple[float, float]]]]:
+    """The TecPlot ASCII drogues track -> ``[(t_s, [(x, y), ...]), ...]``.
+
+    One ZONE per written instant; an unparsable row is skipped, not fatal."""
+    import re
+
+    zones: list[tuple[float, list[tuple[float, float]]]] = []
+    time_s: float | None = None
+    points: list[tuple[float, float]] = []
+    for line in Path(path).read_text(errors="replace").splitlines():
+        if line.startswith("ZONE"):
+            if time_s is not None:
+                zones.append((time_s, points))
+            stamp = re.search(r"SOLUTIONTIME=\s*([\d.]+)", line)
+            time_s, points = (float(stamp.group(1)) if stamp else 0.0), []
+            continue
+        parts = [p.strip() for p in line.split(",")]
+        if len(parts) >= 3:
+            try:
+                points.append((float(parts[1]), float(parts[2])))
+            except ValueError:
+                continue
+    if time_s is not None:
+        zones.append((time_s, points))
+    return zones
+
+
+#: How many written instants the track keeps: the release, mid-run and the end.
+_TRACK_SNAPSHOTS = 3
+
+
+def read_drogues(primitive: Primitive, solved: Solved) -> Track:
+    """``drogues()``: the particle positions the module wrote, at three instants."""
+    import numpy as np
+    from pyproj import Transformer
+
+    from ..solving.solve import download_result
+    from .telemac2d import DROGUES_FILENAME
+
+    local = download_result(solved.run_id, DROGUES_FILENAME)
+    try:
+        zones = parse_drogues(local)
+    finally:
+        Path(local).unlink(missing_ok=True)
+    written = [(t, pts) for t, pts in zones if pts]
+    if not written:
+        raise OutputEmpty("the drogues track holds no float at any written instant.")
+    to_lonlat = Transformer.from_crs(solved.utm_epsg, 4326, always_xy=True).transform
+    keep = ([written[0], written[len(written) // 2], written[-1]]
+            if len(written) >= _TRACK_SNAPSHOTS else written)
+    features = []
+    for t, pts in keep:
+        lon, lat = to_lonlat(*zip(*pts))
+        features.append({"type": "Feature",
+                         "geometry": {"type": "MultiPoint",
+                                      "coordinates": [[round(a, 6), round(b, 6)]
+                                                      for a, b in zip(lon, lat)]},
+                         "properties": {"t_s": t, "n": len(pts)}})
+    first, last = np.mean(written[0][1], axis=0), np.mean(written[-1][1], axis=0)
+    released, remaining = len(written[0][1]), len(written[-1][1])
+    return Track(features={"type": "FeatureCollection", "features": features},
+                 measures={"released": released, "remaining": remaining,
+                           "exited": max(0, released - remaining),
+                           "instants": len(written),
+                           "drift_m": round(float(np.hypot(*(last - first))), 1)})
+
+
 #: The primitive set, as every wrapper binds it: the reader of each, by kind.
 PRIMITIVES: Mapping[str, Any] = {
     "field": read_field, "series": read_series, "max_over_time": read_max_over_time,
-    "extent": read_extent, "mesh": read_mesh, "mass_balance": read_mass_balance,
+    "profile": read_profile, "extent": read_extent, "mesh": read_mesh,
+    "mass_balance": read_mass_balance,
 }

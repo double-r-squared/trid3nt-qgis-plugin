@@ -1,13 +1,14 @@
 {
   "tool": "telemac_river_sediment_plume",
-  "run_id": "01M1X9GD51SANK57VM3WB76BNM",
-  "commit": "1f0ccc3188561e84f5f977f0d0d6c54e08c9adb1",
-  "recorded_at": "2026-09-07T06:40:05.873531+00:00",
-  "engine": "telemac2d",
-  "wall_seconds": 27.953,
+  "run_id": "01M28B6RP5NJSFDV097X22PDRH",
+  "commit": "750ff38e2d831d1c51358b20ceeac29fe274b4e6-dirty",
+  "recorded_at": "2026-09-11T13:41:38.038709+00:00",
+  "engine": "telemac",
+  "wall_seconds": 41.388,
   "args": {
     "location": "Eel River near Scotia, California",
     "discharge_m3s": 2.2,
+    "output_interval_min": 0.333,
     "spill_duration_s": 120.0,
     "source_q_m3s": 8.0,
     "grain_size_um": 200.0,
@@ -35,6 +36,17 @@
       "basis": "user",
       "units": "m^3/s",
       "consequence": "physics",
+      "note": "supplied on this invocation",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "output_interval_min",
+      "value": 0.333,
+      "door": "user",
+      "basis": "user",
+      "units": "min",
+      "consequence": "numerical",
       "note": "supplied on this invocation",
       "clamped_from": null,
       "real_source": null
@@ -216,28 +228,6 @@
       "real_source": null
     },
     {
-      "name": "output_interval_min",
-      "value": null,
-      "door": "user",
-      "basis": "user",
-      "units": "min",
-      "consequence": "numerical",
-      "note": "not supplied (declared optional)",
-      "clamped_from": null,
-      "real_source": null
-    },
-    {
-      "name": "release_coords",
-      "value": null,
-      "door": "user",
-      "basis": "user",
-      "units": null,
-      "consequence": "scenario",
-      "note": "not supplied (declared optional)",
-      "clamped_from": null,
-      "real_source": null
-    },
-    {
       "name": "rainfall_mm_per_day",
       "value": null,
       "door": "user",
@@ -271,34 +261,12 @@
       "real_source": null
     },
     {
-      "name": "velocity_diffusivity",
-      "value": null,
-      "door": "user",
-      "basis": "user",
-      "units": "m^2/s",
-      "consequence": "numerical",
-      "note": "not supplied (declared optional)",
-      "clamped_from": null,
-      "real_source": null
-    },
-    {
-      "name": "tracer_diffusivity",
-      "value": null,
-      "door": "user",
-      "basis": "user",
-      "units": "m^2/s",
-      "consequence": "numerical",
-      "note": "not supplied (declared optional)",
-      "clamped_from": null,
-      "real_source": null
-    },
-    {
-      "name": "reach_seed_coords",
+      "name": "release",
       "value": null,
       "door": "user",
       "basis": "user",
       "units": null,
-      "consequence": "aoi",
+      "consequence": "scenario",
       "note": "not supplied (declared optional)",
       "clamped_from": null,
       "real_source": null
@@ -306,38 +274,24 @@
   ],
   "provenance": [
     {
-      "param": "release_point",
-      "value": "spill_fraction 0.25",
-      "basis": "derived",
-      "note": "no release point was supplied; the source sits at spill_fraction along the modeled reach",
-      "real_source": null
-    },
-    {
-      "param": "mesh_bed",
-      "value": "bed raster supplied directly: /home/nate/Documents/trid3nt-local/data/runs/raster-01M1X9G3YD61RYXMEQHVS0BCMT.tif",
-      "basis": "fetched",
-      "note": "the elevation every node of the reach carries; the solver reads it as the channel's bathymetry",
+      "param": "location",
+      "value": "Eel River near Scotia, California",
+      "basis": "user",
+      "note": "Place name on the river, geocoded to the reach [supplied on this invocation]",
       "real_source": null
     },
     {
       "param": "discharge_m3s",
       "value": 2.2,
       "basis": "user",
-      "note": "carrier discharge 2.2 m3/s (user-supplied)",
+      "note": "Steady upstream CARRIER discharge - the river flow that dilutes and transports the release [supplied on this invocation]",
       "real_source": null
     },
     {
-      "param": "bank_geometry",
-      "value": "nhd_area",
-      "basis": "fetched",
-      "note": null,
-      "real_source": null
-    },
-    {
-      "param": "location",
-      "value": "Eel River near Scotia, California",
+      "param": "output_interval_min",
+      "value": 0.333,
       "basis": "user",
-      "note": "Place name on the river, geocoded to the reach [supplied on this invocation]",
+      "note": "Result-writing cadence; unset keeps the steering file's own period [supplied on this invocation]",
       "real_source": null
     },
     {
@@ -446,35 +400,29 @@
       "real_source": null
     },
     {
-      "param": "release_coords",
+      "param": "release",
       "value": "derived",
       "basis": "derived",
-      "note": "not supplied; the release sits at spill_fraction along the meshed reach; the downstream plume distance is measured from there",
-      "real_source": null
-    },
-    {
-      "param": "reach_seed_coords",
-      "value": "derived",
-      "basis": "derived",
-      "note": "not supplied; the reach centerline is resolved from the mid-reach point on the largest fetched flowline, else the geocoded centroid",
+      "note": "not supplied; the release sits at spill_fraction along the meshed reach; the downstream distance is measured from there",
       "real_source": null
     }
   ],
   "answer": {
-    "dye_cmax_mgl": 44.44381222128868,
-    "dye_peak_time_s": 104.19999694824219,
-    "plume_reach_m": null,
-    "active_frames": 1,
-    "max_deposition_mm": 0.1248,
-    "deposited_mass_kg": 66.92078,
-    "deposit_fraction": 0.6971,
+    "suspended_cmax": 0.04468173533678055,
+    "suspended_peak_time_s": 118.78800201416016,
+    "plume_reach_m": 13.8,
+    "active_frames": 8,
+    "bed_evolution_max_m": 0.00012464386236388236,
+    "net_bed_mass_kg": 66.90308,
     "mesh_size_m": 10.415,
-    "layer_uri": "s3://trid3nt-runs/01M1X9GD51SANK57VM3WB76BNM/overviews/01M1X9GTACWQX783GQS6A82YFW.tif",
+    "layer_uri": "s3://trid3nt-runs/01M28B6RP5NJSFDV097X22PDRH/overviews/01M28B7JYMJHGCS4ZZEBNV7SES.tif",
     "discharge_m3s": 2.2,
-    "discharge_note": "carrier discharge 2.2 m3/s (user-supplied)"
+    "discharge_note": "Steady upstream CARRIER discharge - the river flow that dilutes and transports the release [supplied on this invocation]",
+    "mesh_resolution_m": 12.0,
+    "mesh_resolution_note": "Target element edge length the reach is triangulated at; peak concentration is a resolution-bound class and a coarse mesh reads it low [supplied on this invocation]"
   },
   "mesh": {
-    "mesh_size_m": 10.415
+    "mesh_size_m": null
   },
   "layers": [
     {
@@ -529,7 +477,7 @@
     },
     {
       "crs_authid": null,
-      "layer_id": "input-nhd_area_water-2bfd2c196c2e",
+      "layer_id": "input-nhd_area_water-bf200d54dada",
       "layer_type": "vector",
       "legend": {
         "colormap": null,
@@ -546,7 +494,7 @@
       "reference_time": null,
       "role": "context",
       "temporal": false,
-      "uri": "s3://trid3nt-cache/cache/static-30d/nhd_area_water/1bb3eeb4c755fb0d51ada6652f0523b3.fgb",
+      "uri": "s3://trid3nt-cache/cache/static-30d/nhd_area_water/d16260183c08f87793aa0f87c33d1958.fgb",
       "valid_from": null,
       "valid_to": null,
       "visible": true,
@@ -554,7 +502,7 @@
     },
     {
       "crs_authid": null,
-      "layer_id": "input-copernicus_dem-a6b704bccfed",
+      "layer_id": "input-copernicus_dem-10fdc3134f39",
       "layer_type": "raster",
       "legend": {
         "colormap": "gray",
@@ -571,7 +519,7 @@
       "reference_time": null,
       "role": "context",
       "temporal": false,
-      "uri": "s3://trid3nt-cache/cache/static-30d/copernicus_dem/66dd2e314b106bb28353326453826e2a.tif",
+      "uri": "s3://trid3nt-cache/cache/static-30d/copernicus_dem/a7f87e92c511538651360b3a7cf4f00a.tif",
       "valid_from": null,
       "valid_to": null,
       "visible": true,
@@ -579,7 +527,7 @@
     },
     {
       "crs_authid": null,
-      "layer_id": "telemac-release-01M1X9G5C8N746H2SDD0X9QEC1",
+      "layer_id": "point-01M28B6FPW3B6VHR5C5QYBTVQP",
       "layer_type": "vector",
       "legend": {
         "colormap": null,
@@ -596,57 +544,57 @@
       "reference_time": null,
       "role": "context",
       "temporal": false,
-      "uri": "s3://trid3nt-runs/inputs/01M1X9G5BJTQZRSV75776DWEQZ/release_point.geojson",
+      "uri": "s3://trid3nt-runs/inputs/01M28B6FPJ97BH799BEX6TJR7C/point.geojson",
       "valid_from": null,
       "valid_to": null,
       "visible": true,
       "z_index": 4
     },
     {
-      "crs_authid": "EPSG:32610",
-      "layer_id": "model-results-mesh-01M1X9GD51SANK57VM3WB76BNM",
-      "layer_type": "mesh",
+      "crs_authid": null,
+      "layer_id": "telemac-bed_evolution-t593-01M28B6RP5NJSFDV097X22PDRH",
+      "layer_type": "raster",
       "legend": {
-        "colormap": "viridis",
-        "kind": "mesh",
-        "label": "Model results",
-        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <mesh-renderer-settings>\n    <active-dataset-group scalar=\"0\" vector=\"-1\"/>\n    <scalar-settings group=\"0\" min-val=\"0\" max-val=\"44.443812\" opacity=\"1\" interpolation-method=\"no-resampling\">\n      <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"0\" maximumValue=\"44.443812\" labelPrecision=\"4\">\n        <item value=\"0\" color=\"#440154\" alpha=\"255\" label=\"0 mg/L\"/>\n        <item value=\"11.110953\" color=\"#3b528b\" alpha=\"255\" label=\"11.111 mg/L\"/>\n        <item value=\"22.221906\" color=\"#21918c\" alpha=\"255\" label=\"22.2219 mg/L\"/>\n        <item value=\"33.332859\" color=\"#5ec962\" alpha=\"255\" label=\"33.3329 mg/L\"/>\n        <item value=\"44.443812\" color=\"#fde725\" alpha=\"255\" label=\"44.4438 mg/L\"/>\n      </colorrampshader>\n    </scalar-settings>\n  </mesh-renderer-settings>\n  <name-to-global-index global-index=\"0\" name=\"NCOH SEDIMENT1\"/>\n</qgis>\n",
-        "units": "mg/L",
-        "vmax": 44.443812,
-        "vmin": 0.0
+        "colormap": "rdbu",
+        "kind": "continuous",
+        "label": "Bed evolution (m)",
+        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <pipe>\n    <rasterrenderer type=\"singlebandpseudocolor\" band=\"1\" opacity=\"1\" alphaBand=\"-1\" classificationMin=\"-0.000125\" classificationMax=\"0.000125\" nodataColor=\"\">\n      <rastershader>\n        <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"-0.000125\" maximumValue=\"0.000125\" labelPrecision=\"4\">\n          <item value=\"-0.000125\" color=\"#67001f\" alpha=\"255\" label=\"-0.000125 m\"/>\n          <item value=\"-6.25e-05\" color=\"#e58368\" alpha=\"255\" label=\"-6.25e-05 m\"/>\n          <item value=\"0\" color=\"#f6f7f7\" alpha=\"255\" label=\"0 m\"/>\n          <item value=\"6.25e-05\" color=\"#68abd0\" alpha=\"255\" label=\"6.25e-05 m\"/>\n          <item value=\"0.000125\" color=\"#053061\" alpha=\"255\" label=\"0.000125 m\"/>\n        </colorrampshader>\n      </rastershader>\n    </rasterrenderer>\n  </pipe>\n</qgis>\n",
+        "units": "m",
+        "vmax": 0.000125,
+        "vmin": -0.000125
       },
-      "name": "Model results (time series): scotia_humboldt_county_california_95562_united_s",
+      "name": "Bed evolution (m) at t = 593.94 s (scotia_humboldt_county_california_95562_united_s)",
       "opacity": null,
-      "quantity": "model_results",
-      "reference_time": "2026-09-07T06:39:50+00:00",
-      "role": "context",
+      "quantity": "bed_evolution",
+      "reference_time": null,
+      "role": "primary",
       "temporal": false,
-      "uri": "s3://trid3nt-runs/01M1X9GD51SANK57VM3WB76BNM/r2d_river.slf",
+      "uri": "s3://trid3nt-runs/01M28B6RP5NJSFDV097X22PDRH/overviews/01M28B7K5986W5KF63R0W2WGGK.tif",
       "valid_from": null,
       "valid_to": null,
       "visible": true,
       "z_index": 5
     },
     {
-      "crs_authid": null,
-      "layer_id": "telemac-sediment-deposition-01M1X9GD51SANK57VM3WB76BNM",
-      "layer_type": "raster",
+      "crs_authid": "EPSG:32610",
+      "layer_id": "model-results-mesh-01M28B6RP5NJSFDV097X22PDRH",
+      "layer_type": "mesh",
       "legend": {
-        "colormap": "rdbu",
-        "kind": "continuous",
-        "label": "Bed evolution / deposition (mm)",
-        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <pipe>\n    <rasterrenderer type=\"singlebandpseudocolor\" band=\"1\" opacity=\"1\" alphaBand=\"-1\" classificationMin=\"-0.1248\" classificationMax=\"0.1248\" nodataColor=\"\">\n      <rastershader>\n        <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"-0.1248\" maximumValue=\"0.1248\" labelPrecision=\"4\">\n          <item value=\"-0.1248\" color=\"#67001f\" alpha=\"255\" label=\"-0.1248 mm\"/>\n          <item value=\"-0.0624\" color=\"#e58368\" alpha=\"255\" label=\"-0.0624 mm\"/>\n          <item value=\"0\" color=\"#f6f7f7\" alpha=\"255\" label=\"0 mm\"/>\n          <item value=\"0.0624\" color=\"#68abd0\" alpha=\"255\" label=\"0.0624 mm\"/>\n          <item value=\"0.1248\" color=\"#053061\" alpha=\"255\" label=\"0.1248 mm\"/>\n        </colorrampshader>\n      </rastershader>\n    </rasterrenderer>\n  </pipe>\n</qgis>\n",
-        "units": "mm",
-        "vmax": 0.1248,
-        "vmin": -0.1248
+        "colormap": "viridis",
+        "kind": "mesh",
+        "label": "Model results",
+        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <mesh-renderer-settings>\n    <active-dataset-group scalar=\"0\" vector=\"-1\"/>\n    <scalar-settings group=\"0\" min-val=\"0\" max-val=\"0.044682\" opacity=\"1\" interpolation-method=\"no-resampling\">\n      <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"0\" maximumValue=\"0.044682\" labelPrecision=\"4\">\n        <item value=\"0\" color=\"#440154\" alpha=\"255\" label=\"0 g/L\"/>\n        <item value=\"0.0111705\" color=\"#3b528b\" alpha=\"255\" label=\"0.0111705 g/L\"/>\n        <item value=\"0.022341\" color=\"#21918c\" alpha=\"255\" label=\"0.022341 g/L\"/>\n        <item value=\"0.0335115\" color=\"#5ec962\" alpha=\"255\" label=\"0.0335115 g/L\"/>\n        <item value=\"0.044682\" color=\"#fde725\" alpha=\"255\" label=\"0.044682 g/L\"/>\n      </colorrampshader>\n    </scalar-settings>\n  </mesh-renderer-settings>\n  <name-to-global-index global-index=\"0\" name=\"NCOH SEDIMENT1\"/>\n</qgis>\n",
+        "units": "g/L",
+        "vmax": 0.044682,
+        "vmin": 0.0
       },
-      "name": "Sediment deposition (scotia_humboldt_county_california_95562_united_s)",
+      "name": "Model results (time series): scotia_humboldt_county_california_95562_united_s",
       "opacity": null,
-      "quantity": "bed_evolution",
-      "reference_time": null,
-      "role": "primary",
+      "quantity": "model_results",
+      "reference_time": "2026-09-11T13:41:10+00:00",
+      "role": "context",
       "temporal": false,
-      "uri": "s3://trid3nt-runs/01M1X9GD51SANK57VM3WB76BNM/overviews/01M1X9GVTAA9ETR7DTSNBA8SSC.tif",
+      "uri": "s3://trid3nt-runs/01M28B6RP5NJSFDV097X22PDRH/r2d_river.slf",
       "valid_from": null,
       "valid_to": null,
       "visible": true,
@@ -654,15 +602,15 @@
     },
     {
       "crs_authid": null,
-      "layer_id": "01M1X9GY1JMCQXNMXJDJ56TKRD",
+      "layer_id": "01M28B7NRRAHSP37NGNF6DE7R7",
       "layer_type": "raster",
       "legend": {
         "colormap": "oranges",
         "kind": "continuous",
-        "label": "Suspended sediment concentration (mg/L)",
-        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <pipe>\n    <rasterrenderer type=\"singlebandpseudocolor\" band=\"1\" opacity=\"1\" alphaBand=\"-1\" classificationMin=\"0\" classificationMax=\"44.443812\" nodataColor=\"\">\n      <rastershader>\n        <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"0\" maximumValue=\"44.443812\" labelPrecision=\"4\">\n          <item value=\"0\" color=\"#fff5eb\" alpha=\"255\" label=\"0 mg/L\"/>\n          <item value=\"11.110953\" color=\"#fdd0a2\" alpha=\"255\" label=\"11.111 mg/L\"/>\n          <item value=\"22.221906\" color=\"#fd8c3b\" alpha=\"255\" label=\"22.2219 mg/L\"/>\n          <item value=\"33.332859\" color=\"#d84801\" alpha=\"255\" label=\"33.3329 mg/L\"/>\n          <item value=\"44.443812\" color=\"#7f2704\" alpha=\"255\" label=\"44.4438 mg/L\"/>\n        </colorrampshader>\n      </rastershader>\n    </rasterrenderer>\n  </pipe>\n</qgis>\n",
-        "units": "mg/L",
-        "vmax": 44.443812,
+        "label": "Suspended sediment concentration (g/L)",
+        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <pipe>\n    <rasterrenderer type=\"singlebandpseudocolor\" band=\"1\" opacity=\"1\" alphaBand=\"-1\" classificationMin=\"0\" classificationMax=\"0.044682\" nodataColor=\"\">\n      <rastershader>\n        <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"0\" maximumValue=\"0.044682\" labelPrecision=\"4\">\n          <item value=\"0\" color=\"#fff5eb\" alpha=\"255\" label=\"0 g/L\"/>\n          <item value=\"0.0111705\" color=\"#fdd0a2\" alpha=\"255\" label=\"0.0111705 g/L\"/>\n          <item value=\"0.022341\" color=\"#fd8c3b\" alpha=\"255\" label=\"0.022341 g/L\"/>\n          <item value=\"0.0335115\" color=\"#d84801\" alpha=\"255\" label=\"0.0335115 g/L\"/>\n          <item value=\"0.044682\" color=\"#7f2704\" alpha=\"255\" label=\"0.044682 g/L\"/>\n        </colorrampshader>\n      </rastershader>\n    </rasterrenderer>\n  </pipe>\n</qgis>\n",
+        "units": "g/L",
+        "vmax": 0.044682,
         "vmin": 0.0
       },
       "name": "Peak suspended sediment concentration (scotia_humboldt_county_california_95562_united_s)",
@@ -671,7 +619,7 @@
       "reference_time": null,
       "role": "primary",
       "temporal": false,
-      "uri": "s3://trid3nt-runs/01M1X9GD51SANK57VM3WB76BNM/overviews/01M1X9GTACWQX783GQS6A82YFW.tif",
+      "uri": "s3://trid3nt-runs/01M28B6RP5NJSFDV097X22PDRH/overviews/01M28B7JYMJHGCS4ZZEBNV7SES.tif",
       "valid_from": null,
       "valid_to": null,
       "visible": true,

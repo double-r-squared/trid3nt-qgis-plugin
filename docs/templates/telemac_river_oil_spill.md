@@ -6,8 +6,8 @@ An OIL SLICK released into a RIVER: floating particles plus the dissolved fracti
 
 |  |  |
 |---|---|
-| module | `telemac2d` - 376 keywords in its dictionary, of which this template states 35 |
-| parts | `RIVER` |
+| module | `telemac2d` - 376 keywords in its dictionary, of which this template states 33 |
+| parts | - |
 | solves | `trid3nt_server.workflows.telemac.solving.solve.solve_reach` |
 | engine defaults | every keyword this template does not state keeps the engine's own default; `describe_keywords` names it with that default, and `keywords={...}` sets it |
 
@@ -48,10 +48,8 @@ The values the template declares. `desc` is what the model reads when it fills o
 | `rainfall_mm_per_day` | user | mm/day | optional | Distributed ON-MESH rainfall applied at every wet node, independent of the inflow hydrograph |
 | `evaporation_mm_per_day` | user | mm/day | optional | Distributed evaporation, subtracted from the net rain flux |
 | `rainfall_gridmet_window` | user | - | optional | Real-storm source: an ISO window 'YYYY-MM-DD:YYYY-MM-DD' whose gridMET domain-mean daily precipitation supersedes rainfall_mm_per_day |
-| `velocity_diffusivity` | user | m^2/s | optional | Turbulent momentum diffusivity |
-| `tracer_diffusivity` | user | m^2/s | optional | Tracer diffusivity, which sets lateral plume spread |
 | `release` | user | - | optional | Where the substance enters the water, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer, or a place name |
-| `oil_type` | question | - | crude | What was spilled - crude \| diesel \| gasoline \| heavy fuel \| bunker - which picks the module's own composition, density and viscosity preset |
+| `oil_type` | question | - | light_crude | Which preset was spilled: light_crude \| diesel \| heavy_fuel - the module's own composition, density and viscosity. Crude runs as light_crude, gasoline and petrol as diesel, bunker as heavy_fuel |
 | `oil_concentration_mgl` | scenario | mg/L | 100.0 | Concentration of the DISSOLVED fraction released with the slick, carried as the reach's tracer |
 | `reach_length_km` | scenario | km | 6.0 | Modeled reach length downstream of the release; a longer reach is coarsened under the mesh node budget |
 | `sim_duration_s` | scenario | s | 3600.0 | Simulated physical time |
@@ -64,10 +62,13 @@ The values the template declares. `desc` is what the model reads when it fills o
 
 | field | the proving run's value |
 |---|---|
-| `dye_cmax_mgl` | 90.79682159423828 |
-| `dye_peak_time_s` | 104.19999694824219 |
-| `plume_reach_m` | 40.2 |
-| `active_frames` | 5 |
+| `oil_cmax_mgl` | 94.023193359375 |
+| `oil_peak_time_s` | 118.78800201416016 |
+| `plume_reach_m` | 54.0 |
+| `active_frames` | 30 |
+| `slick_drift_m` | 85.5 |
+| `floats_released` | 100 |
+| `floats_remaining` | 100 |
 | `mesh_size_m` | 10.415 |
 
 It publishes these layers onto the canvas:
@@ -77,29 +78,29 @@ It publishes these layers onto the canvas:
 - Input: nhd area water (nhd_area_water)
 - Input: river bed elevation (copernicus_dem, datum EGM2008 geoid (metres, positive up))
 - Release point (derived) - scotia_humboldt_county_california_95562_united_s
+- Oil slick track (scotia_humboldt_county_california_95562_united_s)
 - Model results (time series): scotia_humboldt_county_california_95562_united_s
-- Oil slick track (light_crude, scotia_humboldt_county_california_95562_united_s)
-- Peak oil tracer concentration (scotia_humboldt_county_california_95562_united_s)
+- Peak dissolved oil concentration (scotia_humboldt_county_california_95562_united_s)
 
 ## The proving run
 
-Run `01M1X9EER6X9PV8D1M9HT511F3`, 2026-09-07T06:39:00.532728+00:00, 25.848 s, at commit `1f0ccc3188561e84f5f977f0d0d6c54e08c9adb1`.
+Run `01M28AH124EF7VPH73QFDWC02R`, 2026-09-11T13:29:31.713571+00:00, 23.397 s, at commit `750ff38e2d831d1c51358b20ceeac29fe274b4e6-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M1X9EER6X9PV8D1M9HT511F3)](telemac_river_oil_spill/telemac_river_oil_spill.png)
+![Every layer the run published, stacked and framed on the result (run 01M28AH124EF7VPH73QFDWC02R)](telemac_river_oil_spill/telemac_river_oil_spill.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M1X9EER6X9PV8D1M9HT511F3)*
+*Every layer the run published, stacked and framed on the result (run 01M28AH124EF7VPH73QFDWC02R)*
 
-![The solve, frame by frame (run 01M1X9EER6X9PV8D1M9HT511F3)](telemac_river_oil_spill/telemac_river_oil_spill_animation.gif)
+![The solve, frame by frame (run 01M28AH124EF7VPH73QFDWC02R)](telemac_river_oil_spill/telemac_river_oil_spill_animation.gif)
 
-*The solve, frame by frame (run 01M1X9EER6X9PV8D1M9HT511F3)*
+*The solve, frame by frame (run 01M28AH124EF7VPH73QFDWC02R)*
 
-![peak frame (run 01M1X9EER6X9PV8D1M9HT511F3)](telemac_river_oil_spill/telemac_river_oil_spill_peak_frame.png)
+![peak frame (run 01M28AH124EF7VPH73QFDWC02R)](telemac_river_oil_spill/telemac_river_oil_spill_peak_frame.png)
 
-*peak frame (run 01M1X9EER6X9PV8D1M9HT511F3)*
+*peak frame (run 01M28AH124EF7VPH73QFDWC02R)*
 
-![dissolved oil concentration - the chart the run persisted (run 01M1X9EER6X9PV8D1M9HT511F3)](telemac_river_oil_spill/telemac_river_oil_spill_chart_dissolved_oil_concentration.png)
+![dissolved oil concentration - the chart the run persisted (run 01M28AH124EF7VPH73QFDWC02R)](telemac_river_oil_spill/telemac_river_oil_spill_chart_dissolved_oil_concentration.png)
 
-*dissolved oil concentration - the chart the run persisted (run 01M1X9EER6X9PV8D1M9HT511F3)*
+*dissolved oil concentration - the chart the run persisted (run 01M28AH124EF7VPH73QFDWC02R)*
 
 ### The sheet it filled
 
@@ -109,9 +110,10 @@ Every slot the run resolved, with where the value came from. The engine's own de
 |---|---|---|---|---|
 | `location` | Eel River near Scotia, California | - | user | supplied on this invocation |
 | `discharge_m3s` | 2.2 | m^3/s | user | supplied on this invocation |
+| `output_interval_min` | 0.333 | min | user | supplied on this invocation |
 | `spill_duration_s` | 120.0 | s | user | supplied on this invocation |
 | `source_q_m3s` | 8.0 | m^3/s | user | supplied on this invocation |
-| `oil_type` | crude | - | user | supplied on this invocation |
+| `oil_type` | light_crude | - | user | supplied on this invocation |
 | `oil_concentration_mgl` | 100.0 | mg/L | user | supplied on this invocation |
 | `reach_length_km` | 1.0 | km | user | supplied on this invocation |
 | `sim_duration_s` | 600.0 | s | user | supplied on this invocation |
@@ -128,14 +130,10 @@ Every slot the run resolved, with where the value came from. The engine's own de
 | `friction_law` | - | - | user | not supplied (declared optional) |
 | `bbox` | - | - | user | not supplied (declared optional) |
 | `event_time` | - | - | prompt_interpreted | not supplied (declared optional) |
-| `output_interval_min` | - | min | user | not supplied (declared optional) |
-| `release_coords` | - | - | user | not supplied (declared optional) |
 | `rainfall_mm_per_day` | - | mm/day | user | not supplied (declared optional) |
 | `evaporation_mm_per_day` | - | mm/day | user | not supplied (declared optional) |
 | `rainfall_gridmet_window` | - | - | user | not supplied (declared optional) |
-| `velocity_diffusivity` | - | m^2/s | user | not supplied (declared optional) |
-| `tracer_diffusivity` | - | m^2/s | user | not supplied (declared optional) |
-| `reach_seed_coords` | - | - | user | not supplied (declared optional) |
+| `release` | - | - | user | not supplied (declared optional) |
 
 ### Reproduce
 
@@ -149,7 +147,8 @@ await TOOL_REGISTRY['telemac_river_oil_spill'].fn(
     n_drogues=100,
     oil_concentration_mgl=100.0,
     oil_release_step=60,
-    oil_type='crude',
+    oil_type='light_crude',
+    output_interval_min=0.333,
     reach_length_km=1.0,
     sim_duration_s=600.0,
     source_q_m3s=8.0,
@@ -157,5 +156,5 @@ await TOOL_REGISTRY['telemac_river_oil_spill'].fn(
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M1X9EER6X9PV8D1M9HT511F3` and commit `1f0ccc3188561e84f5f977f0d0d6c54e08c9adb1`. The full argument record is [`telemac_river_oil_spill/run.json`](telemac_river_oil_spill/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M28AH124EF7VPH73QFDWC02R` and commit `750ff38e2d831d1c51358b20ceeac29fe274b4e6-dirty`. The full argument record is [`telemac_river_oil_spill/run.json`](telemac_river_oil_spill/run.json).
 

@@ -1,16 +1,17 @@
 {
   "tool": "telemac_river_oil_spill",
-  "run_id": "01M1X9EER6X9PV8D1M9HT511F3",
-  "commit": "1f0ccc3188561e84f5f977f0d0d6c54e08c9adb1",
-  "recorded_at": "2026-09-07T06:39:00.532728+00:00",
-  "engine": "telemac2d",
-  "wall_seconds": 25.848,
+  "run_id": "01M28AH124EF7VPH73QFDWC02R",
+  "commit": "750ff38e2d831d1c51358b20ceeac29fe274b4e6-dirty",
+  "recorded_at": "2026-09-11T13:29:31.713571+00:00",
+  "engine": "telemac",
+  "wall_seconds": 23.397,
   "args": {
     "location": "Eel River near Scotia, California",
     "discharge_m3s": 2.2,
+    "output_interval_min": 0.333,
     "spill_duration_s": 120.0,
     "source_q_m3s": 8.0,
-    "oil_type": "crude",
+    "oil_type": "light_crude",
     "oil_concentration_mgl": 100.0,
     "reach_length_km": 1.0,
     "sim_duration_s": 600.0,
@@ -42,6 +43,17 @@
       "real_source": null
     },
     {
+      "name": "output_interval_min",
+      "value": 0.333,
+      "door": "user",
+      "basis": "user",
+      "units": "min",
+      "consequence": "numerical",
+      "note": "supplied on this invocation",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
       "name": "spill_duration_s",
       "value": 120.0,
       "door": "user",
@@ -65,7 +77,7 @@
     },
     {
       "name": "oil_type",
-      "value": "crude",
+      "value": "light_crude",
       "door": "user",
       "basis": "user",
       "units": null,
@@ -251,28 +263,6 @@
       "real_source": null
     },
     {
-      "name": "output_interval_min",
-      "value": null,
-      "door": "user",
-      "basis": "user",
-      "units": "min",
-      "consequence": "numerical",
-      "note": "not supplied (declared optional)",
-      "clamped_from": null,
-      "real_source": null
-    },
-    {
-      "name": "release_coords",
-      "value": null,
-      "door": "user",
-      "basis": "user",
-      "units": null,
-      "consequence": "scenario",
-      "note": "not supplied (declared optional)",
-      "clamped_from": null,
-      "real_source": null
-    },
-    {
       "name": "rainfall_mm_per_day",
       "value": null,
       "door": "user",
@@ -306,34 +296,12 @@
       "real_source": null
     },
     {
-      "name": "velocity_diffusivity",
-      "value": null,
-      "door": "user",
-      "basis": "user",
-      "units": "m^2/s",
-      "consequence": "numerical",
-      "note": "not supplied (declared optional)",
-      "clamped_from": null,
-      "real_source": null
-    },
-    {
-      "name": "tracer_diffusivity",
-      "value": null,
-      "door": "user",
-      "basis": "user",
-      "units": "m^2/s",
-      "consequence": "numerical",
-      "note": "not supplied (declared optional)",
-      "clamped_from": null,
-      "real_source": null
-    },
-    {
-      "name": "reach_seed_coords",
+      "name": "release",
       "value": null,
       "door": "user",
       "basis": "user",
       "units": null,
-      "consequence": "aoi",
+      "consequence": "scenario",
       "note": "not supplied (declared optional)",
       "clamped_from": null,
       "real_source": null
@@ -341,38 +309,24 @@
   ],
   "provenance": [
     {
-      "param": "release_point",
-      "value": "spill_fraction 0.25",
-      "basis": "derived",
-      "note": "no release point was supplied; the source sits at spill_fraction along the modeled reach",
-      "real_source": null
-    },
-    {
-      "param": "mesh_bed",
-      "value": "bed raster supplied directly: /home/nate/Documents/trid3nt-local/data/runs/raster-01M1X9E6JQAYGGYHZ6458S4SEG.tif",
-      "basis": "fetched",
-      "note": "the elevation every node of the reach carries; the solver reads it as the channel's bathymetry",
+      "param": "location",
+      "value": "Eel River near Scotia, California",
+      "basis": "user",
+      "note": "Place name on the river, geocoded to the reach [supplied on this invocation]",
       "real_source": null
     },
     {
       "param": "discharge_m3s",
       "value": 2.2,
       "basis": "user",
-      "note": "carrier discharge 2.2 m3/s (user-supplied)",
+      "note": "Steady upstream CARRIER discharge - the river flow that dilutes and transports the release [supplied on this invocation]",
       "real_source": null
     },
     {
-      "param": "bank_geometry",
-      "value": "nhd_area",
-      "basis": "fetched",
-      "note": null,
-      "real_source": null
-    },
-    {
-      "param": "location",
-      "value": "Eel River near Scotia, California",
+      "param": "output_interval_min",
+      "value": 0.333,
       "basis": "user",
-      "note": "Place name on the river, geocoded to the reach [supplied on this invocation]",
+      "note": "Result-writing cadence; unset keeps the steering file's own period [supplied on this invocation]",
       "real_source": null
     },
     {
@@ -391,9 +345,9 @@
     },
     {
       "param": "oil_type",
-      "value": "crude",
+      "value": "light_crude",
       "basis": "user",
-      "note": "What was spilled - crude | diesel | gasoline | heavy fuel | bunker - which picks the module's own composition, density and viscosity preset [supplied on this invocation]",
+      "note": "Which preset was spilled: light_crude | diesel | heavy_fuel - the module's own composition, density and viscosity. Crude runs as light_crude, gasoline and petrol as diesel, bunker as heavy_fuel [supplied on this invocation]",
       "real_source": null
     },
     {
@@ -502,32 +456,30 @@
       "real_source": null
     },
     {
-      "param": "release_coords",
+      "param": "release",
       "value": "derived",
       "basis": "derived",
-      "note": "not supplied; the release sits at spill_fraction along the meshed reach; the downstream plume distance is measured from there",
-      "real_source": null
-    },
-    {
-      "param": "reach_seed_coords",
-      "value": "derived",
-      "basis": "derived",
-      "note": "not supplied; the reach centerline is resolved from the mid-reach point on the largest fetched flowline, else the geocoded centroid",
+      "note": "not supplied; the release sits at spill_fraction along the meshed reach; the downstream distance is measured from there",
       "real_source": null
     }
   ],
   "answer": {
-    "dye_cmax_mgl": 90.79682159423828,
-    "dye_peak_time_s": 104.19999694824219,
-    "plume_reach_m": 40.2,
-    "active_frames": 5,
+    "oil_cmax_mgl": 94.023193359375,
+    "oil_peak_time_s": 118.78800201416016,
+    "plume_reach_m": 54.0,
+    "active_frames": 30,
+    "slick_drift_m": 85.5,
+    "floats_released": 100,
+    "floats_remaining": 100,
     "mesh_size_m": 10.415,
-    "layer_uri": "s3://trid3nt-runs/01M1X9EER6X9PV8D1M9HT511F3/overviews/01M1X9EVPY4X7D47NAYNY77NWK.tif",
+    "layer_uri": "s3://trid3nt-runs/01M28AH124EF7VPH73QFDWC02R/overviews/01M28AHDWTYTZXQ6PXB341X6EF.tif",
     "discharge_m3s": 2.2,
-    "discharge_note": "carrier discharge 2.2 m3/s (user-supplied)"
+    "discharge_note": "Steady upstream CARRIER discharge - the river flow that dilutes and transports the release [supplied on this invocation]",
+    "mesh_resolution_m": 12.0,
+    "mesh_resolution_note": "Target element edge length the reach is triangulated at; where the slick reaches is a front location and moves with the elements that carry it [supplied on this invocation]"
   },
   "mesh": {
-    "mesh_size_m": 10.415
+    "mesh_size_m": null
   },
   "layers": [
     {
@@ -582,7 +534,7 @@
     },
     {
       "crs_authid": null,
-      "layer_id": "input-nhd_area_water-2bfd2c196c2e",
+      "layer_id": "input-nhd_area_water-bf200d54dada",
       "layer_type": "vector",
       "legend": {
         "colormap": null,
@@ -599,7 +551,7 @@
       "reference_time": null,
       "role": "context",
       "temporal": false,
-      "uri": "s3://trid3nt-cache/cache/static-30d/nhd_area_water/1bb3eeb4c755fb0d51ada6652f0523b3.fgb",
+      "uri": "s3://trid3nt-cache/cache/static-30d/nhd_area_water/d16260183c08f87793aa0f87c33d1958.fgb",
       "valid_from": null,
       "valid_to": null,
       "visible": true,
@@ -607,7 +559,7 @@
     },
     {
       "crs_authid": null,
-      "layer_id": "input-copernicus_dem-a6b704bccfed",
+      "layer_id": "input-copernicus_dem-10fdc3134f39",
       "layer_type": "raster",
       "legend": {
         "colormap": "gray",
@@ -624,7 +576,7 @@
       "reference_time": null,
       "role": "context",
       "temporal": false,
-      "uri": "s3://trid3nt-cache/cache/static-30d/copernicus_dem/66dd2e314b106bb28353326453826e2a.tif",
+      "uri": "s3://trid3nt-cache/cache/static-30d/copernicus_dem/a7f87e92c511538651360b3a7cf4f00a.tif",
       "valid_from": null,
       "valid_to": null,
       "visible": true,
@@ -632,7 +584,7 @@
     },
     {
       "crs_authid": null,
-      "layer_id": "telemac-release-01M1X9E810V801CJ6CPAYR1BR5",
+      "layer_id": "point-01M28AGVK05X17TRKKFS54FZ3A",
       "layer_type": "vector",
       "legend": {
         "colormap": null,
@@ -649,40 +601,15 @@
       "reference_time": null,
       "role": "context",
       "temporal": false,
-      "uri": "s3://trid3nt-runs/inputs/01M1X9E809FHKNVH042T3S88SM/release_point.geojson",
+      "uri": "s3://trid3nt-runs/inputs/01M28AGVJQN8300XJFZR70JKDT/point.geojson",
       "valid_from": null,
       "valid_to": null,
       "visible": true,
       "z_index": 4
     },
     {
-      "crs_authid": "EPSG:32610",
-      "layer_id": "model-results-mesh-01M1X9EER6X9PV8D1M9HT511F3",
-      "layer_type": "mesh",
-      "legend": {
-        "colormap": "viridis",
-        "kind": "mesh",
-        "label": "Model results",
-        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <mesh-renderer-settings>\n    <active-dataset-group scalar=\"0\" vector=\"-1\"/>\n    <scalar-settings group=\"0\" min-val=\"0\" max-val=\"90.796822\" opacity=\"1\" interpolation-method=\"no-resampling\">\n      <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"0\" maximumValue=\"90.796822\" labelPrecision=\"4\">\n        <item value=\"0\" color=\"#440154\" alpha=\"255\" label=\"0 mg/L\"/>\n        <item value=\"22.6992055\" color=\"#3b528b\" alpha=\"255\" label=\"22.6992 mg/L\"/>\n        <item value=\"45.398411\" color=\"#21918c\" alpha=\"255\" label=\"45.3984 mg/L\"/>\n        <item value=\"68.0976165\" color=\"#5ec962\" alpha=\"255\" label=\"68.0976 mg/L\"/>\n        <item value=\"90.796822\" color=\"#fde725\" alpha=\"255\" label=\"90.7968 mg/L\"/>\n      </colorrampshader>\n    </scalar-settings>\n  </mesh-renderer-settings>\n  <name-to-global-index global-index=\"0\" name=\"DYE\"/>\n</qgis>\n",
-        "units": "mg/L",
-        "vmax": 90.796822,
-        "vmin": 0.0
-      },
-      "name": "Model results (time series): scotia_humboldt_county_california_95562_united_s",
-      "opacity": null,
-      "quantity": "model_results",
-      "reference_time": "2026-09-07T06:38:46+00:00",
-      "role": "context",
-      "temporal": false,
-      "uri": "s3://trid3nt-runs/01M1X9EER6X9PV8D1M9HT511F3/r2d_river.slf",
-      "valid_from": null,
-      "valid_to": null,
-      "visible": true,
-      "z_index": 5
-    },
-    {
       "crs_authid": null,
-      "layer_id": "telemac-oil-slick-01M1X9EER6X9PV8D1M9HT511F3",
+      "layer_id": "telemac-oil_slick_track-01M28AH124EF7VPH73QFDWC02R",
       "layer_type": "vector",
       "legend": {
         "colormap": null,
@@ -693,13 +620,38 @@
         "vmax": null,
         "vmin": null
       },
-      "name": "Oil slick track (light_crude, scotia_humboldt_county_california_95562_united_s)",
+      "name": "Oil slick track (scotia_humboldt_county_california_95562_united_s)",
       "opacity": null,
-      "quantity": null,
+      "quantity": "oil_slick_track",
       "reference_time": null,
       "role": "primary",
       "temporal": false,
-      "uri": "s3://trid3nt-runs/01M1X9EER6X9PV8D1M9HT511F3/slick.geojson",
+      "uri": "s3://trid3nt-runs/01M28AH124EF7VPH73QFDWC02R/oil_slick_track.geojson",
+      "valid_from": null,
+      "valid_to": null,
+      "visible": true,
+      "z_index": 5
+    },
+    {
+      "crs_authid": "EPSG:32610",
+      "layer_id": "model-results-mesh-01M28AH124EF7VPH73QFDWC02R",
+      "layer_type": "mesh",
+      "legend": {
+        "colormap": "viridis",
+        "kind": "mesh",
+        "label": "Model results",
+        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <mesh-renderer-settings>\n    <active-dataset-group scalar=\"0\" vector=\"-1\"/>\n    <scalar-settings group=\"0\" min-val=\"0\" max-val=\"94.023193\" opacity=\"1\" interpolation-method=\"no-resampling\">\n      <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"0\" maximumValue=\"94.023193\" labelPrecision=\"4\">\n        <item value=\"0\" color=\"#440154\" alpha=\"255\" label=\"0 mg/L\"/>\n        <item value=\"23.50579825\" color=\"#3b528b\" alpha=\"255\" label=\"23.5058 mg/L\"/>\n        <item value=\"47.0115965\" color=\"#21918c\" alpha=\"255\" label=\"47.0116 mg/L\"/>\n        <item value=\"70.51739475\" color=\"#5ec962\" alpha=\"255\" label=\"70.5174 mg/L\"/>\n        <item value=\"94.023193\" color=\"#fde725\" alpha=\"255\" label=\"94.0232 mg/L\"/>\n      </colorrampshader>\n    </scalar-settings>\n  </mesh-renderer-settings>\n  <name-to-global-index global-index=\"0\" name=\"OIL\"/>\n</qgis>\n",
+        "units": "mg/L",
+        "vmax": 94.023193,
+        "vmin": 0.0
+      },
+      "name": "Model results (time series): scotia_humboldt_county_california_95562_united_s",
+      "opacity": null,
+      "quantity": "model_results",
+      "reference_time": "2026-09-11T13:29:18+00:00",
+      "role": "context",
+      "temporal": false,
+      "uri": "s3://trid3nt-runs/01M28AH124EF7VPH73QFDWC02R/r2d_river.slf",
       "valid_from": null,
       "valid_to": null,
       "visible": true,
@@ -707,24 +659,24 @@
     },
     {
       "crs_authid": null,
-      "layer_id": "01M1X9EY7PSG61RTCB37464RSK",
+      "layer_id": "01M28AHGGX0SB52QVH125N21NM",
       "layer_type": "raster",
       "legend": {
         "colormap": "reds",
         "kind": "continuous",
-        "label": "Oil tracer concentration (mg/L)",
-        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <pipe>\n    <rasterrenderer type=\"singlebandpseudocolor\" band=\"1\" opacity=\"1\" alphaBand=\"-1\" classificationMin=\"0\" classificationMax=\"90.796822\" nodataColor=\"\">\n      <rastershader>\n        <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"0\" maximumValue=\"90.796822\" labelPrecision=\"4\">\n          <item value=\"0\" color=\"#fff5f0\" alpha=\"255\" label=\"0 mg/L\"/>\n          <item value=\"22.6992055\" color=\"#fcbba1\" alpha=\"255\" label=\"22.6992 mg/L\"/>\n          <item value=\"45.398411\" color=\"#fb694a\" alpha=\"255\" label=\"45.3984 mg/L\"/>\n          <item value=\"68.0976165\" color=\"#ca181d\" alpha=\"255\" label=\"68.0976 mg/L\"/>\n          <item value=\"90.796822\" color=\"#67000d\" alpha=\"255\" label=\"90.7968 mg/L\"/>\n        </colorrampshader>\n      </rastershader>\n    </rasterrenderer>\n  </pipe>\n</qgis>\n",
+        "label": "Dissolved oil concentration (mg/L)",
+        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <pipe>\n    <rasterrenderer type=\"singlebandpseudocolor\" band=\"1\" opacity=\"1\" alphaBand=\"-1\" classificationMin=\"0\" classificationMax=\"94.023193\" nodataColor=\"\">\n      <rastershader>\n        <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"0\" maximumValue=\"94.023193\" labelPrecision=\"4\">\n          <item value=\"0\" color=\"#fff5f0\" alpha=\"255\" label=\"0 mg/L\"/>\n          <item value=\"23.50579825\" color=\"#fcbba1\" alpha=\"255\" label=\"23.5058 mg/L\"/>\n          <item value=\"47.0115965\" color=\"#fb694a\" alpha=\"255\" label=\"47.0116 mg/L\"/>\n          <item value=\"70.51739475\" color=\"#ca181d\" alpha=\"255\" label=\"70.5174 mg/L\"/>\n          <item value=\"94.023193\" color=\"#67000d\" alpha=\"255\" label=\"94.0232 mg/L\"/>\n        </colorrampshader>\n      </rastershader>\n    </rasterrenderer>\n  </pipe>\n</qgis>\n",
         "units": "mg/L",
-        "vmax": 90.796822,
+        "vmax": 94.023193,
         "vmin": 0.0
       },
-      "name": "Peak oil tracer concentration (scotia_humboldt_county_california_95562_united_s)",
+      "name": "Peak dissolved oil concentration (scotia_humboldt_county_california_95562_united_s)",
       "opacity": null,
-      "quantity": "oil_tracer_concentration",
+      "quantity": "dissolved_oil_concentration",
       "reference_time": null,
       "role": "primary",
       "temporal": false,
-      "uri": "s3://trid3nt-runs/01M1X9EER6X9PV8D1M9HT511F3/overviews/01M1X9EVPY4X7D47NAYNY77NWK.tif",
+      "uri": "s3://trid3nt-runs/01M28AH124EF7VPH73QFDWC02R/overviews/01M28AHDWTYTZXQ6PXB341X6EF.tif",
       "valid_from": null,
       "valid_to": null,
       "visible": true,

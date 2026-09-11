@@ -15,7 +15,10 @@ from trid3nt_server.workflows.publishing import (
     Deliverable,
     Field,
     Frames,
+    Line,
+    Profile,
     Series,
+    Track,
     quantity_of,
 )
 from trid3nt_server.workflows.publishing import publish as publish_mod
@@ -189,3 +192,106 @@ def test_an_animation_with_no_layer_of_its_quantity_still_plays(monkeypatch):
         run_id="RID", engine="telemac", name="reach", where="x", reference_time=None,
         items=[Deliverable(read=frames, mode="animate", caption="water depth")]))
     assert published.primary is None and seen["peak_layer"] is None
+
+
+def _profile(**over) -> Profile:
+    return Profile(**{"name": "DISSOLVED O2", "units": "mg/L",
+                      "distance_m": np.array([50.0, 150.0, 250.0]),
+                      "values": np.array([9.0, 6.0, 7.5]),
+                      "along": "downstream distance",
+                      "measures": {"min": 6.0, "x_min_m": 150.0}, **over})
+
+
+def test_a_profile_becomes_a_chart_down_the_line_with_its_lines_beside_it():
+    """The x axis is distance, the read is one named series, every reference line
+    another, and the caption names the lowest station."""
+    payload = publish_mod._chart(
+        _profile(lines=(Line(label="5 mg/L standard", x=[50.0, 250.0],
+                             values=[5.0, 5.0]),)),
+        caption="dissolved oxygen", where="the Eel")
+    spec = payload["vega_lite_spec"]
+    assert spec["encoding"]["x"]["title"] == "Downstream distance (m)"
+    assert spec["encoding"]["color"]["field"] == "series"
+    rows = spec["data"]["values"]
+    assert [r["series"] for r in rows] == ["Dissolved oxygen"] * 3 + ["5 mg/L standard"] * 2
+    assert rows[0] == {"x_m": 50.0, "value": 9.0, "series": "Dissolved oxygen"}
+    assert payload["title"] == "Dissolved oxygen, downstream distance - the Eel"
+    assert "lowest 6 mg/L at 150 m" in payload["caption"]
+    assert "5 mg/L standard is drawn beside it" in payload["caption"]
+
+
+def test_a_series_chart_keeps_its_time_axis_and_its_points():
+    payload = publish_mod._chart(_series(), caption="dye concentration", where="X")
+    spec = payload["vega_lite_spec"]
+    assert spec["encoding"]["x"]["field"] == "t_s" and spec["mark"]["point"] is True
+    assert "color" not in spec["encoding"]
+
+
+def test_a_track_becomes_a_vector_layer_in_the_run_s_own_store(monkeypatch):
+    from trid3nt_server.workflows.solver import solver as solver_mod
+
+    put = {}
+
+    class _S3:
+        def put_object(self, **kw):
+            put.update(kw)
+
+    monkeypatch.setattr(solver_mod, "_get_runs_bucket", lambda: "runs")
+    monkeypatch.setattr(solver_mod, "_get_s3_client", lambda: _S3())
+    track = Track(features={"type": "FeatureCollection", "features": [
+        {"type": "Feature", "geometry": {"type": "MultiPoint",
+                                         "coordinates": [[-124.1, 40.5], [-124.0, 40.6]]},
+         "properties": {"t_s": 0.0, "n": 2}}]}, measures={"released": 2})
+    layer = publish_mod._vector_layer(track, run_id="RID", engine="telemac",
+                                      name="reach", caption="oil slick track")
+    assert put["Key"] == "RID/oil_slick_track.geojson"
+    assert layer.layer_type == "vector" and layer.uri == "s3://runs/RID/oil_slick_track.geojson"
+    assert layer.name == "Oil slick track (reach)" and layer.quantity == "oil_slick_track"
+    assert layer.bbox == (-124.1, 40.5, -124.0, 40.6)
+
+
+def test_every_layer_past_the_first_is_surfaced_beside_it(monkeypatch):
+    """The first layer is the step's own return; the rest reach the canvas
+    through the extra-layer seam, as results of the solve."""
+    from trid3nt_contracts.execution import LayerURI
+
+    from trid3nt_server.emission import layer_uri_emit
+    from trid3nt_server.emission import pipeline_emitter
+
+    surfaced = []
+    layers = iter([LayerURI(layer_id="A", name="a", layer_type="raster", uri="s3://a"),
+                   LayerURI(layer_id="B", name="b", layer_type="vector", uri="s3://b")])
+    monkeypatch.setattr(publish_mod, "_layer", lambda *a, **k: next(layers))
+    monkeypatch.setattr(publish_mod, "_vector_layer", lambda *a, **k: next(layers))
+    monkeypatch.setattr(pipeline_emitter, "current_emitter", lambda: object())
+
+    async def _surface(emitter, layer, *, role):
+        surfaced.append((layer.layer_id, role))
+        return True
+
+    monkeypatch.setattr(layer_uri_emit, "publish_input_layer", _surface)
+    published = asyncio.run(publish(
+        run_id="RID", engine="telemac", name="reach", where="X", reference_time=None,
+        items=[Deliverable(read=_field(), mode="layer", caption="dye concentration"),
+               Deliverable(read=Track(features={"type": "FeatureCollection",
+                                                "features": []}),
+                           mode="layer", caption="oil slick track")]))
+    assert published.primary.layer_id == "A"
+    assert surfaced == [("B", "primary")]
+
+
+def test_a_row_with_a_centre_ranges_the_legend_symmetrically_about_it(monkeypatch):
+    """A diverging ramp's middle colour has to mean the centre value, so a signed
+    field is ranged by its larger limb on both sides of the declared centre."""
+    from trid3nt_server.emission import publish as emission_publish
+    from trid3nt_server.workflows.publishing import cog
+
+    monkeypatch.setattr(cog, "upload_cog", lambda *a, **k: "s3://runs/RID/x.tif")
+    monkeypatch.setattr(emission_publish, "publish_layer", lambda **k: "https://t")
+    signed = _field(values=np.array([-0.005, 0.0, 0.0016, 0.0, -0.001]), floor=None,
+                    measures={"max": 0.0016, "min": -0.005})
+    layer = publish_mod._layer(signed, run_id="RID", engine="telemac", name="reach",
+                               caption="bed evolution",
+                               style={"kind": "continuous", "ramp": "rdbu",
+                                      "center": 0.0})
+    assert (layer.legend.vmin, layer.legend.vmax) == (-0.005, 0.005)

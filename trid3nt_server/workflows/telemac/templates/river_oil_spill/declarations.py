@@ -2,10 +2,32 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from trid3nt_server.workflows.inputs import Point
 from trid3nt_server.workflows.runtime import Accepts, Param, doors
 
-__all__ = ["ACCEPTS", "DOC", "PARAMS"]
+__all__ = ["ACCEPTS", "DOC", "OIL_PRESETS", "PARAMS"]
+
+#: The oil presets the deck carries, in the module reader's own terms: the
+#: (mass fraction, boiling point) components, the aromatic rows with their
+#: solubility and dissolution and volatilisation rates, then the density,
+#: viscosity, spreading volume, ambient temperature and spreading law. The
+#: fractions sum to one per preset.
+OIL_PRESETS: dict[str, dict[str, Any]] = {
+    "light_crude": dict(
+        compo=[(0.5, 645.0), (0.3, 830.0)],
+        hap=[(0.2, 673.0, 0.018, 1.0e-5, 5.0e-5)],
+        rho=850.0, eta=1.0e-5, voldev=20.0, tamb=288.0, etal=1),
+    "diesel": dict(
+        compo=[(0.6, 560.0), (0.25, 700.0)],
+        hap=[(0.15, 610.0, 0.005, 1.0e-5, 8.0e-5)],
+        rho=840.0, eta=4.0e-6, voldev=10.0, tamb=288.0, etal=1),
+    "heavy_fuel": dict(
+        compo=[(0.75, 900.0), (0.2, 1050.0)],
+        hap=[(0.05, 800.0, 0.001, 5.0e-6, 1.0e-5)],
+        rho=960.0, eta=5.0e-4, voldev=30.0, tamb=288.0, etal=1),
+}
 
 #: What an oil run can be HANDED. TELEMAC-2D solves on triangles, so a
 #: triangulation is the whole of what a reach corridor can be handed as a mesh.
@@ -29,10 +51,10 @@ class PARAMS:
 
     # -- the scenario ------------------------------------------------------- #
     oil_type = Param(
-        door=doors.QUESTION, default="crude", consequence="scenario",
-        desc="What was spilled - crude | diesel | gasoline | heavy fuel | bunker "
-             "- which picks the module's own composition, density and viscosity "
-             "preset")
+        door=doors.QUESTION, default="light_crude", consequence="scenario",
+        desc="Which preset was spilled: light_crude | diesel | heavy_fuel - the "
+             "module's own composition, density and viscosity. Crude runs as "
+             "light_crude, gasoline and petrol as diesel, bunker as heavy_fuel")
     oil_concentration_mgl = Param(
         door=doors.SCENARIO, default=100.0,
         bounds=(0.0, 1.0e6), units="mg/L", consequence="scenario",
@@ -106,9 +128,11 @@ DOC = dict(
          "every step from the top."),
     ),
     returns=(
-        "On success a `TelemacDyeLayerURI` - the emitter loads the peak "
-        "dissolved-fraction map, animates the SELAFIN sibling and draws the slick "
-        "from the particle track. Narrate the typed numbers it carries. On failure "
-        "a dict with `status=\"error\"` + `error_code`."
+        "On success the peak dissolved-oil layer (a `LayerURI`) - the emitter "
+        "loads the map, animates the result mesh beside it and draws the slick "
+        "track from the floats - whose `answer` carries `oil_cmax_mgl` / "
+        "`oil_peak_time_s` / `plume_reach_m` / `slick_drift_m` / "
+        "`floats_released` / `floats_remaining`; narrate those typed numbers. "
+        "On failure a dict with `status=\"error\"` + `error_code`."
     ),
 )

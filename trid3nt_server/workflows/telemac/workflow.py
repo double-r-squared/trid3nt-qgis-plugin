@@ -18,6 +18,8 @@ from trid3nt_contracts.common import SyntheticInput
 from trid3nt_contracts.execution import AnswerLayerURI
 from trid3nt_contracts.payload_warning import ParamSheet, ParamSheetRow
 
+from dataclasses import replace
+
 from trid3nt_server.workflows.publishing import Deliverable
 from trid3nt_server.workflows.publishing.publish import publish
 from trid3nt_server.workflows.runtime import (
@@ -170,36 +172,71 @@ class Door:
                     f"OUTPUTS lists {primitive.kind}({primitive.variable!r}) with "
                     "no .layer(), .chart() or .animate(); a listed primitive is "
                     "published, and an answer is named under ANSWER.")
-            if primitive.variable and primitive.variable not in self.captions:
+            named = primitive.variable or primitive.kind
+            if named not in self.captions:
                 raise PlanValidationError(
-                    f"OUTPUTS publishes {primitive.variable!r} and CAPTIONS names "
-                    "no caption for it.")
+                    f"OUTPUTS publishes {named!r} and CAPTIONS names no caption "
+                    "for it.")
+        # A primitive's point and line are reads the run resolves; they ride
+        # beside the list, where the plan's binder walks, and rejoin it at publish.
+        listed = [*self.outputs, *(m.primitive for m in self.answer.values())]
+        anchors = [{"at": p.at, "along": p.along} for p in listed]
         return Step(runner=f"{_TELEMAC}.workflow.publish_outputs", stage="publish",
-                    kwargs={"run": Ref("solve"), "outputs": list(self.outputs),
+                    kwargs={"run": Ref("solve"),
+                            "outputs": [_unanchored(p) for p in self.outputs],
                             "captions": dict(self.captions),
-                            "answer": dict(self.answer),
+                            "answer": {name: Measure(_unanchored(m.primitive), m.stat)
+                                       for name, m in self.answer.items()},
+                            "anchors": anchors,
                             "params": dict(params)}).named("outputs")
+
+
+def _unanchored(primitive: Primitive) -> Primitive:
+    return replace(primitive, at=None, along=None)
+
+
+def _anchored(primitive: Primitive, anchor: Mapping[str, Any]) -> Primitive:
+    return replace(primitive, at=anchor["at"], along=anchor["along"])
 
 
 async def publish_outputs(*, run: Mapping[str, Any], outputs: Sequence[Primitive],
                           captions: Mapping[str, str],
                           answer: Mapping[str, Measure],
-                          params: Mapping[str, Any]) -> AnswerLayerURI:
+                          params: Mapping[str, Any],
+                          anchors: Sequence[Mapping[str, Any]] = ()
+                          ) -> AnswerLayerURI:
     """Read the listed primitives off the solved run, publish each, answer.
 
-    The result is read ONCE; every primitive and every answer reads from it."""
-    body = wrapper_for(str(run["module"]))
-    solved = Solved(run, body)
+    Each module's result is read ONCE; every primitive and every answer reads
+    from it, a coupled module's own file through its own wrapper."""
+    listed = [*outputs, *(m.primitive for m in answer.values())]
+    if anchors:
+        listed = [_anchored(p, a) for p, a in zip(listed, anchors)]
+    outputs = listed[:len(outputs)]
+    answer = {name: Measure(p, m.stat)
+              for (name, m), p in zip(answer.items(), listed[len(outputs):])}
+    solved: dict[str, Solved] = {}
+
+    def _read(key: Primitive) -> Any:
+        module = key.module or str(run["module"])
+        if module not in solved:
+            solved[module] = Solved(run, wrapper_for(module))
+        return solved[module].body.OUTPUTS[key.kind].read(key, solved[module])
+
     wanted = {primitive.key for primitive in outputs}
     wanted |= {measure.primitive for measure in answer.values()}
-    reads = await asyncio.to_thread(
-        lambda: {key: body.OUTPUTS[key.kind].read(key, solved) for key in wanted})
+    reads = await asyncio.to_thread(lambda: {key: _read(key) for key in wanted})
+    for primitive in outputs:
+        if primitive.reference is not None:
+            read = reads[primitive.key]
+            reads[primitive.key] = replace(
+                read, lines=tuple(primitive.reference(read, reads, params)))
     published = await publish(
         run_id=str(run["run_id"]), engine="telemac", name=str(run["name"]),
         where=str(params.get("location") or run["name"]),
         reference_time=run.get("started_at"),
         items=[Deliverable(read=reads[primitive.key], mode=primitive.publish,
-                           caption=captions.get(primitive.variable or "",
+                           caption=captions.get(primitive.variable or primitive.kind,
                                                 primitive.kind),
                            style=primitive.style)
                for primitive in outputs])

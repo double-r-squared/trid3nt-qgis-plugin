@@ -37,9 +37,13 @@ explicit, on a complete sheet, and it is where execution stops being held.
 
 A wrapper's OUTPUTS are the PRIMITIVE SET, named from the module's own variable
 vocabulary: `field(name, t)`, `series(name, at)`, `max_over_time(name)`,
-`extent()`, `mesh()`, `mass_balance()`. A template lists primitives with how
-each is published - `.layer()`, `.chart()`, `.animate()` - and names its answer
-as measures of them; the wrapper binds no reader that knows a question.
+`profile(name, along, t)`, `extent()`, `mesh()`, `mass_balance()`, plus the
+one output past the set a module writes for itself - TELEMAC-2D's `drogues()`.
+A primitive names the coupled module whose own result it reads (`module=`), and
+a tracer a coupled process appended behind the carrier's declared ones is the
+carrier's `T<n>` by position. A template lists primitives with how each is
+published - `.layer()`, `.chart(reference=)`, `.animate()` - and names its
+answer as measures of them; the wrapper binds no reader that knows a question.
 
 ## Files
 
@@ -48,11 +52,11 @@ as measures of them; the wrapper binds no reader that knows a question.
 | `__init__.py` | The door: the wrappers, the two acts, and the primitive set. |
 | `module.py` | What a slot, a wrapper, a composite and an output ARE, and the dictionary loader that makes a wrapper out of `dictionary/<module>.json`. |
 | `sheet.py` | The sheet - filled slots with their provenance, the files a composite named, the slots still open - and `fill` / `run`. |
-| `outputs.py` | The primitive set - `field`, `series`, `max_over_time`, `extent`, `mesh`, `mass_balance` - and the read of each off a solved run, through `read_selafin`, the engine's own reader inside the image. |
+| `outputs.py` | The primitive set - `field`, `series`, `max_over_time`, `profile`, `extent`, `mesh`, `mass_balance` - and `drogues`, with the read of each off a solved run through `read_selafin`, the engine's own reader inside the image. |
 | `describe.py` | `describe_keywords` - the read over a module's dictionary, which is how the whole keyword surface is reached rather than carried in a docstring. |
 | `corpus.yaml` | The routing phrasings that reach `describe_keywords`. |
-| `telemac2d.py` | The TELEMAC-2D wrapper: the releases, wind, rain, friction, rating, hyetograph, time-origin and coupling groups, and the module's variable vocabulary. |
+| `telemac2d.py` | The TELEMAC-2D wrapper: the releases, wind, rain, oil, friction, rating, hyetograph, time-origin and coupling groups, the module's variable vocabulary, and the drogues track it writes. |
 | `telemac3d.py` | The TELEMAC-3D wrapper: the vertical grid keyword pair and its refusal, the water column a stratified run is initialized from, and the wind. |
 | `artemis.py` | The ARTEMIS wrapper: the incident wave, which the module reads out of the boundary file rather than the deck, so the composite restamps the pair the mesh recipe wrote; and the wave vocabulary. |
-| `waqtel.py` | The WAQTEL wrapper: the coupled bodies a carrier names, whose slots serialize into WAQTEL's own steering file while the coupling keywords land on the carrier's sheet. |
-| `gaia.py` | The GAIA wrapper: the sediment bodies a carrier names and the NESTOR dredging composite, coupled the same way; its primitives read the module's own result file. |
+| `waqtel.py` | The WAQTEL wrapper: the O2 process and the degradation a carrier names as coupled bodies, whose slots serialize into WAQTEL's own steering file while the coupling keywords land on the carrier's sheet; a degradation given nothing couples nothing. |
+| `gaia.py` | The GAIA wrapper: the bed and the suspension a carrier names as coupled bodies, expanded from a gradation or a class and its concentration, the NESTOR dredging composite, and its primitives over the module's own result file. |

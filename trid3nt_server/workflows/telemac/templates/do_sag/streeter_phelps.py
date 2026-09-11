@@ -1,7 +1,8 @@
-"""Streeter-Phelps (1925) closed-form dissolved-oxygen sag - the WAQTEL O2 V&V.
+"""Streeter-Phelps (1925) closed-form dissolved-oxygen sag: the analytic
+reference the template draws beside its solved profile.
 
-The deterministic analytical reference the DO-sag template overlays against its
-computed profile. Pure arithmetic - no solver, no I/O."""
+Pure arithmetic; ``overlay`` is the chart reference the outputs list names,
+anchored at the solved mix point so it tests the kinetics rather than the mixing."""
 
 # The WAQTEL O2 module (WATER QUALITY PROCESS = 2) reduces EXACTLY to this ODE
 # when the eutrophication and benthic sources are zeroed (photosynthesis P,
@@ -13,7 +14,11 @@ from __future__ import annotations
 
 import math
 
-__all__ = ["sp_do_profile", "sp_critical_point"]
+from typing import Any, Mapping
+
+from trid3nt_server.workflows.publishing import Line, Profile
+
+__all__ = ["overlay", "sp_do_profile", "sp_critical_point"]
 
 
 def sp_do_profile(
@@ -82,3 +87,33 @@ def sp_critical_point(
         min_do_mgl=Cs - Dc,
         max_deficit_mgl=Dc,
     )
+
+
+def overlay(read: Profile, reads: Mapping[Any, Any], params: Mapping[str, Any]
+            ) -> list[Line]:
+    """The lines drawn beside the solved oxygen profile: the organic load the
+    run carried, the closed form from the modelled mix point at the solved
+    along-reach speed, and the standard the sag is judged against."""
+    x = [float(v) for v in read.distance_m]
+    do = [float(v) for v in read.values]
+    standard = float(params["do_standard_mgl"])
+    lines = [Line(label=f"{standard:g} {read.units} standard",
+                  x=[x[0], x[-1]], values=[standard, standard])]
+    load = next((r for key, r in reads.items()
+                 if key.kind == "profile" and key.variable == "T3"), None)
+    if load is None or not len(load.values) or max(load.values) <= 0.0:
+        return lines
+    bod = [float(v) for v in load.values]
+    lines.append(Line(label="organic load", x=x[:len(bod)], values=bod))
+    velocity = read.measures.get("velocity_mps")
+    anchor = max(range(len(bod)), key=bod.__getitem__)
+    if not velocity or velocity <= 0.0 or anchor >= len(x) - 2:
+        return lines
+    saturation = float(params["do_saturation_mgl"])
+    closed, _ = sp_do_profile(
+        [x[i] - x[anchor] for i in range(anchor, len(x))], velocity, saturation,
+        bod[anchor], saturation - do[anchor],
+        float(params["k1_per_day"]), float(params["k2_per_day"]))
+    lines.append(Line(label="Streeter-Phelps closed form", x=x[anchor:],
+                      values=[float(v) for v in closed]))
+    return lines

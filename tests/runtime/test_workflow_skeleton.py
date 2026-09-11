@@ -387,13 +387,16 @@ _TEMPLATES = (
      "trid3nt_server.workflows.telemac.templates.rain_on_grid.rain_on_grid", "om2d"),
 )
 
-#: Where a recipe is DECLARED. Four river templates list the shared river part
-#: rather than each freezing a triangulation of their own; the dye template
-#: declares the reach recipe as its own value.
+#: Where a recipe is DECLARED: every template declares its own as a value, the
+#: river templates each restating the reach recipe.
 _RECIPES = (
     *((path, mesher) for _n, path, mesher in _TEMPLATES),
-    ("trid3nt_server.workflows.telemac.templates.shared.river", "om2d"),
     ("trid3nt_server.workflows.telemac.templates.river_dye.river_dye", "om2d"),
+    ("trid3nt_server.workflows.telemac.templates.river_oil_spill.river_oil_spill", "om2d"),
+    ("trid3nt_server.workflows.telemac.templates.river_scour.river_scour", "om2d"),
+    ("trid3nt_server.workflows.telemac.templates.river_sediment_plume"
+     ".river_sediment_plume", "om2d"),
+    ("trid3nt_server.workflows.telemac.templates.do_sag.do_sag", "om2d"),
 )
 
 

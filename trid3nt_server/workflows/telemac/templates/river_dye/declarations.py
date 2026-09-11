@@ -5,7 +5,29 @@ from __future__ import annotations
 from trid3nt_server.workflows.inputs import Point
 from trid3nt_server.workflows.runtime import Accepts, Param, doors
 
-__all__ = ["ACCEPTS", "DOC", "PARAMS"]
+__all__ = ["ACCEPTS", "DECAY_PRESETS", "DOC", "PARAMS"]
+
+#: The first-order die-off a named substance runs under, as the degradation law
+#: and its coefficient: 1 is a T90 in hours, 2 a rate per hour. Bacterial words
+#: carry T90 ~ 2 h, the daylight freshwater fecal-coliform die-off - a narrated
+#: literature default, never a measured observation. A key matches as a
+#: substring of the named word.
+DECAY_PRESETS: dict[str, dict[str, float]] = {
+    "sewage": {"law": 1, "coef": 2.0},
+    "e. coli": {"law": 1, "coef": 2.0},
+    "e.coli": {"law": 1, "coef": 2.0},
+    "e coli": {"law": 1, "coef": 2.0},
+    "ecoli": {"law": 1, "coef": 2.0},
+    "coliform": {"law": 1, "coef": 2.0},
+    "coli": {"law": 1, "coef": 2.0},
+    "bacteria": {"law": 1, "coef": 2.0},
+    "bacterial": {"law": 1, "coef": 2.0},
+    "effluent": {"law": 1, "coef": 2.0},
+    "wastewater": {"law": 1, "coef": 2.0},
+    "die-off": {"law": 1, "coef": 2.0},
+    "decaying": {"law": 2, "coef": 0.35},
+    "half-life": {"law": 2, "coef": 0.35},
+}
 
 #: What a reach run can be HANDED. TELEMAC-2D solves on triangles, so a
 #: triangulation is the whole of what a reach corridor can be handed as a mesh; a
