@@ -35,9 +35,6 @@ def _case(tmp_path: Path, **over) -> dict:
     return {"case": case, "run_id": "RUN123"}
 
 
-# --------------------------------------------------------------------------- #
-# The contract stamps
-# --------------------------------------------------------------------------- #
 
 
 def test_the_parser_stamp_is_the_unified_one():
@@ -59,9 +56,6 @@ def test_the_dispatch_is_the_one_section_a_manifest_may_name():
     assert set(E._DISPATCH) == {"case"}
 
 
-# --------------------------------------------------------------------------- #
-# Which runner a case gets - the telapy arm, or the module's own launcher
-# --------------------------------------------------------------------------- #
 
 
 def test_an_uncoupled_case_runs_on_the_telapy_arm():
@@ -102,9 +96,6 @@ def test_a_waqtel_case_is_dispatched_through_the_launcher(tmp_path, monkeypatch)
     assert seen["argv"] == ["telemac2d.py", "t2d.cas"]
 
 
-# --------------------------------------------------------------------------- #
-# The stepped loop, and the one point between steps
-# --------------------------------------------------------------------------- #
 
 
 class _WholeRunStudy:
@@ -195,9 +186,6 @@ def test_the_hook_ships_doing_nothing(monkeypatch):
     assert E._on_step(_Study("c"), 1, 1) is None
 
 
-# --------------------------------------------------------------------------- #
-# Continuation: the steering file restarts, the worker only stages
-# --------------------------------------------------------------------------- #
 
 
 def test_a_continued_case_runs_once_its_previous_file_is_staged(tmp_path,
@@ -245,9 +233,6 @@ def test_the_legacy_builders_have_no_continuation_to_ask_for(section):
     assert "continue_from" in str(exc.value)
 
 
-# --------------------------------------------------------------------------- #
-# The one strict gate
-# --------------------------------------------------------------------------- #
 
 
 def test_the_gate_keeps_known_keys_and_drops_the_pinned_ones():
@@ -267,9 +252,6 @@ def test_the_gate_refuses_an_unknown_key_and_names_the_parser():
     assert E._PARSER_VERSION in str(err.value)
 
 
-# --------------------------------------------------------------------------- #
-# Manifest refusals
-# --------------------------------------------------------------------------- #
 
 
 def test_a_manifest_that_is_not_an_object_is_a_typed_error(tmp_path):
@@ -315,9 +297,6 @@ def test_a_case_declaring_no_results_refuses(tmp_path):
     assert _metrics(tmp_path)["error_code"] == "TELEMAC_CASE_NO_RESULTS"
 
 
-# --------------------------------------------------------------------------- #
-# The solve time bound
-# --------------------------------------------------------------------------- #
 
 
 def test_the_solve_bound_defaults_to_a_day_and_the_knob_states_it(monkeypatch):
@@ -345,9 +324,6 @@ def test_a_child_that_outruns_the_bound_is_killed_and_still_reports(tmp_path,
     assert metrics["correct_end"] is False
 
 
-# --------------------------------------------------------------------------- #
-# The metrics envelope
-# --------------------------------------------------------------------------- #
 
 
 def test_a_clean_child_that_wrote_its_results_is_the_run_succeeding(tmp_path,
@@ -441,9 +417,6 @@ def test_a_user_fortran_case_hands_the_child_its_fortran(tmp_path, monkeypatch):
     assert seen["argv"][-2:] == ["--user-fortran", "user_fortran"]
 
 
-# --------------------------------------------------------------------------- #
-# Crash isolation, through a real child
-# --------------------------------------------------------------------------- #
 
 
 def test_a_child_that_dies_still_leaves_the_metrics_written(tmp_path):
