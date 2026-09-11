@@ -16,9 +16,6 @@ from trid3nt_contracts.auth import AuthAckEnvelope, AuthTokenEnvelope
 from trid3nt_contracts.common import new_ulid
 
 
-# --------------------------------------------------------------------------- #
-# Helpers
-# --------------------------------------------------------------------------- #
 
 
 def _ack(**overrides) -> AuthAckEnvelope:
@@ -30,9 +27,6 @@ def _ack(**overrides) -> AuthAckEnvelope:
     return AuthAckEnvelope(**base)
 
 
-# --------------------------------------------------------------------------- #
-# 1. auth-token round-trip
-# --------------------------------------------------------------------------- #
 
 
 def test_auth_token_envelope_roundtrip() -> None:
@@ -50,9 +44,6 @@ def test_auth_token_envelope_roundtrip() -> None:
     assert a["token"].startswith("eyJ")
 
 
-# --------------------------------------------------------------------------- #
-# 2. auth-token defaults: anonymous fallback
-# --------------------------------------------------------------------------- #
 
 
 def test_auth_token_envelope_defaults() -> None:
@@ -62,9 +53,6 @@ def test_auth_token_envelope_defaults() -> None:
     assert tok.anonymous is False  # client may still NOT mark anonymous
 
 
-# --------------------------------------------------------------------------- #
-# 3. auth-token discriminator
-# --------------------------------------------------------------------------- #
 
 
 def test_auth_token_message_type_pinned() -> None:
@@ -72,9 +60,6 @@ def test_auth_token_message_type_pinned() -> None:
     assert AuthTokenEnvelope.MESSAGE_TYPE == "auth-token"
 
 
-# --------------------------------------------------------------------------- #
-# 4. auth-token extra="forbid"
-# --------------------------------------------------------------------------- #
 
 
 def test_auth_token_rejects_extra_fields() -> None:
@@ -88,9 +73,6 @@ def test_auth_token_rejects_extra_fields() -> None:
             AuthTokenEnvelope.model_validate(bad)
 
 
-# --------------------------------------------------------------------------- #
-# 5. auth-token oversize guard
-# --------------------------------------------------------------------------- #
 
 
 def test_auth_token_oversized_token_rejected() -> None:
@@ -100,9 +82,6 @@ def test_auth_token_oversized_token_rejected() -> None:
         AuthTokenEnvelope(token=huge)
 
 
-# --------------------------------------------------------------------------- #
-# 6. auth-ack round-trip
-# --------------------------------------------------------------------------- #
 
 
 def test_auth_ack_envelope_roundtrip() -> None:
@@ -115,9 +94,6 @@ def test_auth_ack_envelope_roundtrip() -> None:
     assert text_a == text_b
 
 
-# --------------------------------------------------------------------------- #
-# 7. auth-ack anonymous fallback defaults
-# --------------------------------------------------------------------------- #
 
 
 def test_auth_ack_envelope_anonymous() -> None:
@@ -131,9 +107,6 @@ def test_auth_ack_envelope_anonymous() -> None:
     assert ack.is_anonymous is True
 
 
-# --------------------------------------------------------------------------- #
-# 8. auth-ack discriminator
-# --------------------------------------------------------------------------- #
 
 
 def test_auth_ack_message_type_pinned() -> None:
@@ -141,9 +114,6 @@ def test_auth_ack_message_type_pinned() -> None:
     assert AuthAckEnvelope.MESSAGE_TYPE == "auth-ack"
 
 
-# --------------------------------------------------------------------------- #
-# 9. auth-ack Invariant 9: no cost theater
-# --------------------------------------------------------------------------- #
 
 
 def test_auth_ack_invariant9_no_cost_fields() -> None:
@@ -162,9 +132,6 @@ def test_auth_ack_invariant9_no_cost_fields() -> None:
             AuthAckEnvelope.model_validate(bad)
 
 
-# --------------------------------------------------------------------------- #
-# 10. auth-ack tier claim removed
-# --------------------------------------------------------------------------- #
 
 
 def test_auth_ack_tier_field_removed() -> None:
@@ -176,9 +143,6 @@ def test_auth_ack_tier_field_removed() -> None:
         )
 
 
-# --------------------------------------------------------------------------- #
-# 11. auth-ack user_id ULID discipline
-# --------------------------------------------------------------------------- #
 
 
 def test_auth_ack_invalid_user_id_rejected() -> None:
@@ -189,9 +153,6 @@ def test_auth_ack_invalid_user_id_rejected() -> None:
         AuthAckEnvelope(user_id="")
 
 
-# --------------------------------------------------------------------------- #
-# 12. package-level export
-# --------------------------------------------------------------------------- #
 
 
 def test_auth_envelopes_exported_from_package() -> None:

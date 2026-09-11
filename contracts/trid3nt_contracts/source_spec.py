@@ -63,9 +63,6 @@ def _validate_style_row(name: str, row: Any, *, where: str = "output.style") -> 
         _validate_style_row(name, mapped, where=f"{where}.by_param.map[{value!r}]")
 
 
-# --------------------------------------------------------------------------- #
-# Enums
-# --------------------------------------------------------------------------- #
 
 #: The ingestion shape that selects the base executor. A HYBRID spec declares a
 #: base shape PLUS a transform block that wraps that executor - a raster source
@@ -107,9 +104,6 @@ ParamType = Literal[
 PayloadModel = Literal["bbox_area", "per_station", "per_feature", "tiled"]
 
 
-# --------------------------------------------------------------------------- #
-# Typed sub-blocks
-# --------------------------------------------------------------------------- #
 
 
 class EndpointSpec(GraceModel):
@@ -492,9 +486,6 @@ class DispatchSpec(GraceModel):
     pass_args: dict[str, str] = Field(default_factory=dict)
 
 
-# --------------------------------------------------------------------------- #
-# Top-level SourceSpec
-# --------------------------------------------------------------------------- #
 
 
 class SourceSpec(GraceModel):

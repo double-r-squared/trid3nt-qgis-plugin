@@ -40,7 +40,6 @@ __all__ = [
     "TelemacRainOnGridLayerURI",
 ]
 
-# --------------------------------------------------------------------------- #
 # The product contract's own style rows.
 #
 # Each row says which of the four preset shapes draws the product and what the
@@ -48,7 +47,6 @@ __all__ = [
 # here is a preset NAME, so nothing here can drift from one: the dye and the
 # suspended-sediment fields differ because their PARAMETERS differ, which is
 # what a reader sees on the canvas.
-# --------------------------------------------------------------------------- #
 
 #: The coastal tidal/surge PEAK-INUNDATION-DEPTH raster. The rising-tide
 #: animation rides the result SELAFIN as a ``layer_type="mesh"`` layer.

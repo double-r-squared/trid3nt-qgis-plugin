@@ -175,10 +175,8 @@ def test_atomic_tool_metadata_rejects_unknown_ttl_class() -> None:
         )
 
 
-# ============================================================================ #
 # Registry-schema additions:
 #   supports_global_query + payload_mb_estimator_name
-# ============================================================================ #
 
 
 def test_atomic_tool_metadata_supports_global_query_defaults_false() -> None:
@@ -325,7 +323,6 @@ def test_atomic_tool_metadata_wave15_does_not_break_cacheable_validator() -> Non
         )
 
 
-# ============================================================================ #
 # Geographic-correctness / semantic policy check
 #
 # This isn't a tool emitting geometry, but the kickoff codified lesson 1
@@ -334,7 +331,6 @@ def test_atomic_tool_metadata_wave15_does_not_break_cacheable_validator() -> Non
 # The schema's job is to make that contract well-typed and discoverable.
 # Verify the field is reachable on a snapshot of the catalog surface (the
 # model_dump JSON that the agent serializes for the LLM).
-# ============================================================================ #
 
 
 def test_atomic_tool_metadata_advertises_global_policy_to_llm_catalog() -> None:
@@ -361,10 +357,8 @@ def test_atomic_tool_metadata_advertises_global_policy_to_llm_catalog() -> None:
     assert dumped_global_ok["supports_global_query"] is True
 
 
-# ============================================================================ #
 # The tier vocabulary and the optional engine field:
 #   engine: str | None = None + tier: Literal["general","door","template"]
-# ============================================================================ #
 
 
 def test_engine_tier_default_none_general() -> None:

@@ -26,9 +26,6 @@ from trid3nt_contracts.common import new_ulid
 from trid3nt_contracts.export_schemas import export
 
 
-# --------------------------------------------------------------------------- #
-# Fixtures
-# --------------------------------------------------------------------------- #
 
 
 def _tier1_entry() -> CatalogEntry:
@@ -83,9 +80,6 @@ def _tier2_entry() -> CatalogEntry:
     )
 
 
-# --------------------------------------------------------------------------- #
-# 1. CatalogEntry round-trip
-# --------------------------------------------------------------------------- #
 
 
 def test_catalog_entry_mode1_roundtrip_idempotent() -> None:
@@ -103,9 +97,6 @@ def test_catalog_entry_mode1_roundtrip_idempotent() -> None:
         assert a["last_verified"].endswith("Z"), "datetime must serialize with Z suffix"
 
 
-# --------------------------------------------------------------------------- #
-# 2. CatalogEntry credential-tier cross-field validator
-# --------------------------------------------------------------------------- #
 
 
 def test_catalog_entry_credential_tier_validator() -> None:
@@ -138,9 +129,6 @@ def test_catalog_entry_credential_tier_validator() -> None:
     assert "credential_tier=3" in str(exc.value)
 
 
-# --------------------------------------------------------------------------- #
-# 3. D.11 CatalogEntryDocument
-# --------------------------------------------------------------------------- #
 
 
 def test_catalog_entry_document_inherits_catalog_entry() -> None:
@@ -166,9 +154,6 @@ def test_catalog_entry_document_inherits_catalog_entry() -> None:
     assert "catalog_entries_status_1_source_class_1" in index_names
 
 
-# --------------------------------------------------------------------------- #
-# 4. D.12 CatalogAuditLogDocument
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.parametrize(
@@ -213,9 +198,6 @@ def test_catalog_audit_log_document_roundtrip(event_type: str) -> None:
     )
 
 
-# --------------------------------------------------------------------------- #
-# 5. JSON Schema export includes new contracts + is idempotent
-# --------------------------------------------------------------------------- #
 
 
 def test_json_schema_export_includes_new_contracts_and_is_idempotent(tmp_path: Path) -> None:
@@ -235,9 +217,6 @@ def test_json_schema_export_includes_new_contracts_and_is_idempotent(tmp_path: P
     assert snapshot_a == snapshot_b, "second export differs — not idempotent"
 
 
-# --------------------------------------------------------------------------- #
-# 6. Invariant 9 (no cost theater) negative control
-# --------------------------------------------------------------------------- #
 
 
 def test_catalog_entry_no_cost_field_invariant9() -> None:

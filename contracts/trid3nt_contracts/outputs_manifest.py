@@ -41,9 +41,6 @@ OUTPUT_KINDS: frozenset[str] = frozenset({"raster", "mesh", "vector", "scalar"})
 OUTPUTS_MANIFEST_BASENAME: str = "outputs.json"
 
 
-# --------------------------------------------------------------------------- #
-# WRITER: pure stdlib, mirrorable verbatim. NO pydantic on this path.
-# --------------------------------------------------------------------------- #
 def build_entry(
     *,
     kind: str,
@@ -154,9 +151,6 @@ def serialize(manifest: dict[str, Any]) -> str:
     return json.dumps(manifest, separators=(",", ":"), sort_keys=False)
 
 
-# --------------------------------------------------------------------------- #
-# READER: tolerant pydantic, the consuming side only.
-# --------------------------------------------------------------------------- #
 class _ReaderModel(BaseModel):
     model_config = ConfigDict(extra="ignore")
 

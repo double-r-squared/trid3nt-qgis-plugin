@@ -22,9 +22,6 @@ __all__ = [
 ]
 
 
-# --------------------------------------------------------------------------- #
-# Vega-Lite structural sanity check - NOT full Vega validation
-# --------------------------------------------------------------------------- #
 
 
 def is_structurally_valid_vega_lite_spec(spec: dict[str, Any]) -> bool:
@@ -39,9 +36,6 @@ def is_structurally_valid_vega_lite_spec(spec: dict[str, Any]) -> bool:
     return "mark" in spec and "encoding" in spec
 
 
-# --------------------------------------------------------------------------- #
-# chart-emission envelope payload (agent -> client)
-# --------------------------------------------------------------------------- #
 
 
 class ChartEmissionPayload(GraceModel):
@@ -81,9 +75,6 @@ class ChartEmissionPayload(GraceModel):
         return value
 
 
-# --------------------------------------------------------------------------- #
-# Persistence record, appended to a session document's ``charts`` array
-# --------------------------------------------------------------------------- #
 
 
 class SessionChartRecord(GraceModel):
@@ -103,9 +94,6 @@ class SessionChartRecord(GraceModel):
     emitted_at: UTCDatetime = Field(...)
 
 
-# --------------------------------------------------------------------------- #
-# Routing registry fragment
-# --------------------------------------------------------------------------- #
 
 CHART_AGENT_TO_CLIENT_PAYLOADS: dict[str, type[GraceModel]] = {
     ChartEmissionPayload.MESSAGE_TYPE: ChartEmissionPayload,

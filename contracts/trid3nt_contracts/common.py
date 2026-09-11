@@ -44,9 +44,6 @@ __all__ = [
 ]
 
 
-# --------------------------------------------------------------------------- #
-# ULID
-# --------------------------------------------------------------------------- #
 
 
 def new_ulid() -> str:
@@ -66,9 +63,6 @@ def _validate_ulid(value: str) -> str:
 ULIDStr = Annotated[str, AfterValidator(_validate_ulid)]
 
 
-# --------------------------------------------------------------------------- #
-# Datetime
-# --------------------------------------------------------------------------- #
 
 
 def now_utc() -> datetime:
@@ -93,9 +87,6 @@ def _serialize_dt_z(value: datetime) -> str:
 UTCDatetime = Annotated[datetime, PlainSerializer(_serialize_dt_z, return_type=str)]
 
 
-# --------------------------------------------------------------------------- #
-# Geometry
-# --------------------------------------------------------------------------- #
 
 Lon = Annotated[float, Field(ge=-180.0, le=180.0)]
 Lat = Annotated[float, Field(ge=-90.0, le=90.0)]
@@ -119,9 +110,6 @@ def _validate_bbox(value: tuple[float, float, float, float]) -> tuple[float, flo
 BBox = Annotated[tuple[float, float, float, float], AfterValidator(_validate_bbox)]
 
 
-# --------------------------------------------------------------------------- #
-# Base model
-# --------------------------------------------------------------------------- #
 
 
 class GraceModel(BaseModel):
@@ -137,9 +125,6 @@ class GraceModel(BaseModel):
     )
 
 
-# --------------------------------------------------------------------------- #
-# Shared types
-# --------------------------------------------------------------------------- #
 
 
 class TimeRange(GraceModel):
@@ -149,9 +134,6 @@ class TimeRange(GraceModel):
     end: UTCDatetime
 
 
-# --------------------------------------------------------------------------- #
-# Engine run-args mixin
-# --------------------------------------------------------------------------- #
 
 #: The run's temporal solve mode. ``"steady"`` is a single stationary solve;
 #: ``"transient"`` a time-stepping solve that emits an animation. Growth is by
@@ -211,9 +193,6 @@ class EngineRunArgsMixin(GraceModel):
         return _TEMPORAL_MODE_ALIASES.get(key, key)
 
 
-# --------------------------------------------------------------------------- #
-# Structured input provenance
-# --------------------------------------------------------------------------- #
 
 #: Where a single physical model input came from. A demo default is NOT the same
 #: thing as a value fetched from real data, supplied by the user, interpreted

@@ -23,9 +23,6 @@ __all__ = [
 ]
 
 
-# --------------------------------------------------------------------------- #
-# Server-advertised sibling endpoints
-# --------------------------------------------------------------------------- #
 
 
 class AdvertisedEndpoints(GraceModel):
@@ -42,9 +39,6 @@ class AdvertisedEndpoints(GraceModel):
     http_base: str | None = Field(default=None, max_length=2048)
 
 
-# --------------------------------------------------------------------------- #
-# Client -> agent: auth-token
-# --------------------------------------------------------------------------- #
 
 
 class AuthTokenEnvelope(GraceModel):
@@ -64,9 +58,6 @@ class AuthTokenEnvelope(GraceModel):
     anonymous: bool = False
 
 
-# --------------------------------------------------------------------------- #
-# Agent -> client: auth-ack
-# --------------------------------------------------------------------------- #
 
 
 class AuthAckEnvelope(GraceModel):

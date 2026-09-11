@@ -17,9 +17,6 @@ from trid3nt_contracts.common import new_ulid
 from trid3nt_contracts.user import User
 
 
-# --------------------------------------------------------------------------- #
-# Helpers
-# --------------------------------------------------------------------------- #
 
 
 def _fresh_user(
@@ -37,9 +34,6 @@ def _fresh_user(
     )
 
 
-# --------------------------------------------------------------------------- #
-# 1. JSON round-trip
-# --------------------------------------------------------------------------- #
 
 
 def test_user_roundtrip_idempotent() -> None:
@@ -58,9 +52,6 @@ def test_user_roundtrip_idempotent() -> None:
     assert a["prefs"] == {"theme": "dark", "map_basemap": "esri"}
 
 
-# --------------------------------------------------------------------------- #
-# 2. Minimal construction
-# --------------------------------------------------------------------------- #
 
 
 def test_user_defaults_minimal_construction() -> None:
@@ -78,9 +69,6 @@ def test_user_defaults_minimal_construction() -> None:
     assert u.prefs == {}
 
 
-# --------------------------------------------------------------------------- #
-# 3. extra="forbid" — silent drift caught
-# --------------------------------------------------------------------------- #
 
 
 def test_user_rejects_extra_fields() -> None:
@@ -94,9 +82,6 @@ def test_user_rejects_extra_fields() -> None:
             User.model_validate(bad)
 
 
-# --------------------------------------------------------------------------- #
-# 4. ULID validation
-# --------------------------------------------------------------------------- #
 
 
 def test_user_invalid_ulid_rejected() -> None:
@@ -113,9 +98,6 @@ def test_user_invalid_ulid_rejected() -> None:
         )
 
 
-# --------------------------------------------------------------------------- #
-# 5. Invariant 9: no cost / quota / spend fields
-# --------------------------------------------------------------------------- #
 
 
 def test_user_no_cost_or_quota_fields_invariant9() -> None:
@@ -133,9 +115,6 @@ def test_user_no_cost_or_quota_fields_invariant9() -> None:
             User.model_validate(bad)
 
 
-# --------------------------------------------------------------------------- #
-# 6. UTC ``Z`` suffix discipline
-# --------------------------------------------------------------------------- #
 
 
 def test_user_datetime_serializes_with_z_suffix() -> None:

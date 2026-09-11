@@ -69,9 +69,6 @@ def _roundtrip_idempotent(envelope: ws.Envelope) -> dict[str, Any]:
     return dumped_a
 
 
-# --------------------------------------------------------------------------- #
-# Client -> Agent (A.3)
-# --------------------------------------------------------------------------- #
 
 
 def test_user_message_roundtrip(session_id: str) -> None:
@@ -194,9 +191,6 @@ def test_case_id_field_identical_shape_on_both_payloads() -> None:
     assert not sr_field.is_required() and not um_field.is_required()
 
 
-# --------------------------------------------------------------------------- #
-# Client -> Agent user-input responses (A.4b)
-# --------------------------------------------------------------------------- #
 
 
 def test_spatial_input_response_point(session_id: str) -> None:
@@ -334,9 +328,6 @@ def test_spatial_input_response_one_position_line_rejected() -> None:
         )
 
 
-# --------------------------------------------------------------------------- #
-# Agent -> Client (A.4)
-# --------------------------------------------------------------------------- #
 
 
 def test_agent_message_chunk(session_id: str) -> None:
@@ -696,9 +687,6 @@ def test_spatial_input_request_unknown_mode_rejected() -> None:
         )
 
 
-# --------------------------------------------------------------------------- #
-# tool-candidates / tool-choice (auto/ask modes -- Stage 3)
-# --------------------------------------------------------------------------- #
 
 
 def test_tool_candidates_round_trip(session_id: str) -> None:
@@ -784,9 +772,6 @@ def test_user_message_tool_choice_mode(session_id: str) -> None:
         ws.UserMessagePayload(text="hi", tool_choice_mode="always")  # type: ignore[arg-type]
 
 
-# --------------------------------------------------------------------------- #
-# Envelope-level + registry coverage
-# --------------------------------------------------------------------------- #
 
 
 def test_secrets_payloads_registered_in_ws_dicts() -> None:

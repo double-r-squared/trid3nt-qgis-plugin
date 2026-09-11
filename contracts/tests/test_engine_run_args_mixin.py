@@ -13,9 +13,6 @@ from trid3nt_contracts import EngineRunArgsMixin, TemporalMode  # __init__ expor
 from trid3nt_contracts.common import EngineRunArgsMixin as Mixin
 
 
-# --------------------------------------------------------------------------- #
-# EngineRunArgsMixin defaults (DEFAULT-OFF == today's behavior)
-# --------------------------------------------------------------------------- #
 def test_mixin_defaults_are_no_op() -> None:
     m = Mixin()
     assert m.temporal_mode == "steady"
@@ -39,9 +36,6 @@ def test_temporal_mode_is_the_exported_alias() -> None:
     assert Mixin(temporal_mode="transient").temporal_mode == "transient"
 
 
-# --------------------------------------------------------------------------- #
-# temporal_mode alias normalizer
-# --------------------------------------------------------------------------- #
 @pytest.mark.parametrize(
     "raw,expected",
     [

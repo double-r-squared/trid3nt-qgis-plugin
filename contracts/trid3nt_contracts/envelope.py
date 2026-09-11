@@ -52,9 +52,6 @@ HazardType = Literal["flood", "groundwater", "wildfire", "seismic", "spill"]
 EnvelopeType = Literal["modeled", "discovered"]
 
 
-# --------------------------------------------------------------------------- #
-# Supporting types
-# --------------------------------------------------------------------------- #
 
 
 class ForcingSummary(GraceModel):
@@ -134,9 +131,6 @@ class BaseMetrics(GraceModel):
     the envelope itself hazard-agnostic."""
 
 
-# --------------------------------------------------------------------------- #
-# Flood subtype - the only fully typed one
-# --------------------------------------------------------------------------- #
 
 
 class CriticalFacility(GraceModel):
@@ -181,9 +175,6 @@ class FloodPayload(GraceModel):
     metrics: FloodMetrics
 
 
-# --------------------------------------------------------------------------- #
-# Top-level envelope
-# --------------------------------------------------------------------------- #
 
 
 class AssessmentEnvelope(GraceModel):

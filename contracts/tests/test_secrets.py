@@ -23,9 +23,6 @@ from trid3nt_contracts.secrets import (
 )
 
 
-# --------------------------------------------------------------------------- #
-# Fixtures
-# --------------------------------------------------------------------------- #
 
 
 def _record(provider: str = "firms", case_id: str | None = None) -> SecretRecord:
@@ -45,9 +42,6 @@ def _record(provider: str = "firms", case_id: str | None = None) -> SecretRecord
     )
 
 
-# --------------------------------------------------------------------------- #
-# 1. SecretRecord round-trip
-# --------------------------------------------------------------------------- #
 
 
 def test_secret_record_roundtrip_idempotent() -> None:
@@ -68,9 +62,6 @@ def test_secret_record_roundtrip_idempotent() -> None:
     assert a["vault_ref"].startswith("gcp-sm://")
 
 
-# --------------------------------------------------------------------------- #
-# 2. SecretsListEnvelopePayload round-trip
-# --------------------------------------------------------------------------- #
 
 
 def test_secrets_list_envelope_roundtrip_idempotent() -> None:
@@ -94,9 +85,6 @@ def test_secrets_list_envelope_roundtrip_idempotent() -> None:
     assert {s["provider"] for s in a["secrets"]} == {"firms", "ecmwf_cds"}
 
 
-# --------------------------------------------------------------------------- #
-# 3. SecretAddEnvelopePayload round-trip
-# --------------------------------------------------------------------------- #
 
 
 def test_secret_add_envelope_roundtrip_idempotent() -> None:
@@ -127,9 +115,6 @@ def test_secret_add_envelope_roundtrip_idempotent() -> None:
     assert blank.label is None
 
 
-# --------------------------------------------------------------------------- #
-# 4. SecretRevokeEnvelopePayload round-trip
-# --------------------------------------------------------------------------- #
 
 
 def test_secret_revoke_envelope_roundtrip_idempotent() -> None:
@@ -150,9 +135,6 @@ def test_secret_revoke_envelope_roundtrip_idempotent() -> None:
         SecretRevokeEnvelopePayload(secret_id="")
 
 
-# --------------------------------------------------------------------------- #
-# 5. SecretAddEnvelopePayload — key_value MUST be elided from default repr
-# --------------------------------------------------------------------------- #
 
 
 def test_secret_add_repr_redacts_key_value() -> None:
@@ -179,9 +161,6 @@ def test_secret_add_repr_redacts_key_value() -> None:
     assert "key_value=" in r
 
 
-# --------------------------------------------------------------------------- #
-# 6. envelope_type literal discriminator
-# --------------------------------------------------------------------------- #
 
 
 def test_envelope_type_literal_validation() -> None:
@@ -207,9 +186,6 @@ def test_envelope_type_literal_validation() -> None:
         SecretRevokeEnvelopePayload.model_validate(bad)
 
 
-# --------------------------------------------------------------------------- #
-# 7. ProviderID literal
-# --------------------------------------------------------------------------- #
 
 
 def test_provider_id_literal_validation() -> None:
@@ -247,9 +223,6 @@ def test_provider_id_literal_validation() -> None:
         assert rec.provider == provider
 
 
-# --------------------------------------------------------------------------- #
-# 8. Registry integration with ws.py
-# --------------------------------------------------------------------------- #
 
 
 def test_secrets_payloads_exposed_via_module_registries() -> None:
@@ -281,9 +254,6 @@ def test_secrets_payloads_exposed_via_module_registries() -> None:
         assert t in secrets.SECRET_PAYLOADS, f"{t} missing from SECRET_PAYLOADS"
 
 
-# --------------------------------------------------------------------------- #
-# 9. Invariant 9 — no cost theater
-# --------------------------------------------------------------------------- #
 
 
 def test_secret_record_no_cost_field_invariant9() -> None:
@@ -310,9 +280,6 @@ def test_secret_record_no_cost_field_invariant9() -> None:
             SecretAddEnvelopePayload.model_validate(bad)
 
 
-# --------------------------------------------------------------------------- #
-# 10. Server MUST be able to read key_value programmatically (not data-hidden)
-# --------------------------------------------------------------------------- #
 
 
 def test_secret_add_keeps_key_value_accessible_for_server_write() -> None:

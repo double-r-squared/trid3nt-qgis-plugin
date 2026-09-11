@@ -21,9 +21,6 @@ from trid3nt_contracts.common import new_ulid
 from trid3nt_contracts import ws
 
 
-# --------------------------------------------------------------------------- #
-# Fixtures: realistic Vega-Lite specs
-# --------------------------------------------------------------------------- #
 
 
 def _histogram_spec_with_schema() -> dict:
@@ -77,9 +74,6 @@ def _payload(**overrides: object) -> ChartEmissionPayload:
     return ChartEmissionPayload(**base)  # type: ignore[arg-type]
 
 
-# --------------------------------------------------------------------------- #
-# Structural Vega-Lite validator
-# --------------------------------------------------------------------------- #
 
 
 def test_validator_accepts_schema_bearing_histogram() -> None:
@@ -132,9 +126,6 @@ def test_schema_alone_is_sufficient_even_without_mark_encoding() -> None:
     assert "layer" in p.vega_lite_spec
 
 
-# --------------------------------------------------------------------------- #
-# ChartEmissionPayload — fields, defaults, round-trip
-# --------------------------------------------------------------------------- #
 
 
 def test_envelope_type_discriminator_is_fixed() -> None:
@@ -225,9 +216,6 @@ def test_payload_roundtrip_through_envelope_wrapper() -> None:
     assert back.payload.created_turn_id == p.created_turn_id
 
 
-# --------------------------------------------------------------------------- #
-# SessionChartRecord — persistence wrapper
-# --------------------------------------------------------------------------- #
 
 
 def test_session_chart_record_wraps_payload() -> None:
@@ -304,9 +292,6 @@ def test_session_chart_record_forbids_extra_fields() -> None:
         )
 
 
-# --------------------------------------------------------------------------- #
-# Registration — chart-emission wired into ws.py routing
-# --------------------------------------------------------------------------- #
 
 
 def test_chart_emission_registered_agent_to_client() -> None:

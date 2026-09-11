@@ -76,9 +76,6 @@ class DocModel(GraceModel):
     )
 
 
-# --------------------------------------------------------------------------- #
-# projects
-# --------------------------------------------------------------------------- #
 
 
 class ProjectLayerSummary(GraceModel):
@@ -143,9 +140,6 @@ class ProjectDocument(DocModel):
     deleted_at: UTCDatetime | None = None  # soft delete
 
 
-# --------------------------------------------------------------------------- #
-# runs
-# --------------------------------------------------------------------------- #
 
 
 class UserSpatialInput(GraceModel):
@@ -202,9 +196,6 @@ class RunDocument(DocModel):
     article_ids: list[ULIDStr] = Field(default_factory=list)
 
 
-# --------------------------------------------------------------------------- #
-# articles
-# --------------------------------------------------------------------------- #
 
 
 class ArticleDocument(DocModel):
@@ -234,9 +225,6 @@ class ArticleDocument(DocModel):
     last_processed_at: UTCDatetime | None = None
 
 
-# --------------------------------------------------------------------------- #
-# sessions
-# --------------------------------------------------------------------------- #
 
 
 class ToolCallSummary(GraceModel):
@@ -354,9 +342,7 @@ class SessionDocument(DocModel):
     map_view: MapView | None = None
 
 
-# --------------------------------------------------------------------------- #
 # Vector-search index configs - DOCUMENTED CONSTANTS, not a locked config
-# --------------------------------------------------------------------------- #
 # The dimension is the shared default; provisioning may land elsewhere after a
 # recall-versus-cost check.
 
@@ -385,9 +371,6 @@ VECTOR_INDEXES: dict[str, dict[str, Any]] = {
 }
 
 
-# --------------------------------------------------------------------------- #
-# sessions TTL config
-# --------------------------------------------------------------------------- #
 #: TTL index spec for sessions: a document is deleted 30 days after
 #: ``expires_at``. This is the CONTRACT; provisioning creates the index.
 SESSIONS_TTL: dict[str, Any] = {
@@ -405,9 +388,6 @@ CASES_ANON_TTL_SECONDS: int = int(
 )
 
 
-# --------------------------------------------------------------------------- #
-# The catalog substrate: catalog_entries + catalog_audit_log
-# --------------------------------------------------------------------------- #
 # Neither collection is TTL-eligible: an entry is durable until a curator
 # deprecates it, and the status lifecycle does the soft-delete work; the audit
 # log is append-only retention, because proposal and review provenance has to
@@ -460,9 +440,7 @@ class CatalogAuditLogDocument(DocModel):
     timestamp: UTCDatetime
 
 
-# --------------------------------------------------------------------------- #
 # catalog_entries indexes - declared here, provisioned elsewhere
-# --------------------------------------------------------------------------- #
 
 CATALOG_ENTRIES_INDEXES: list[dict[str, Any]] = [
     # source_class: search by domain.
@@ -475,9 +453,7 @@ CATALOG_ENTRIES_INDEXES: list[dict[str, Any]] = [
 ]
 
 
-# --------------------------------------------------------------------------- #
 # catalog_audit_log indexes - declared here, provisioned elsewhere
-# --------------------------------------------------------------------------- #
 
 CATALOG_AUDIT_LOG_INDEXES: list[dict[str, Any]] = [
     # entry_id + timestamp descending: the trail-for-one-entry query.

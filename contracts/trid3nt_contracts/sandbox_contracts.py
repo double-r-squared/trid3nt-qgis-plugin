@@ -79,9 +79,6 @@ class CodeExecResultPayload(GraceModel):
     duration_s: float = Field(default=0.0, ge=0.0)
 
 
-# --------------------------------------------------------------------------- #
-# Routing registry fragment
-# --------------------------------------------------------------------------- #
 
 SANDBOX_AGENT_TO_CLIENT_PAYLOADS: dict[str, type[GraceModel]] = {
     CodeExecRequestPayload.MESSAGE_TYPE: CodeExecRequestPayload,

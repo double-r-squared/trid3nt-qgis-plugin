@@ -42,9 +42,6 @@ __all__ = [
 ComputeClass = Literal["small", "standard", "large", "gpu"]
 
 
-# --------------------------------------------------------------------------- #
-# The render legend - the colormap key that comes from the data
-# --------------------------------------------------------------------------- #
 
 
 class LegendKey(GraceModel):
@@ -200,7 +197,6 @@ class LayerURI(GraceModel):
     valid_to: str | None = None
 
 
-# --------------------------------------------------------------------------- #
 # LayerURI SUBCLASS result models.
 #
 # A source whose result carries business fields computed POST-serialize from the
@@ -208,7 +204,6 @@ class LayerURI(GraceModel):
 # from the base layer plus a pure envelope hook's field dict. The subclasses live
 # HERE rather than in a fetcher module, so the declarative surface needs no code
 # of its own. ``LAYER_RESULT_MODELS`` is the name -> class table.
-# --------------------------------------------------------------------------- #
 
 
 class HighWaterMarksLayerURI(LayerURI):
@@ -413,9 +408,6 @@ LAYER_RESULT_MODELS: dict[str, type[LayerURI]] = {
 }
 
 
-# --------------------------------------------------------------------------- #
-# Resolve the envelope-side ``LegendKey`` forward reference.
-# --------------------------------------------------------------------------- #
 # ``ResultLayer`` mirrors ``LayerURI.legend`` but cannot import ``LegendKey`` at
 # module scope: this module imports the envelope one, so the reverse would be
 # circular. It therefore carries a STRING forward-ref, and the models that use

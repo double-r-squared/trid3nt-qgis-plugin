@@ -26,9 +26,6 @@ from trid3nt_contracts.case import (
 from trid3nt_contracts.common import new_ulid
 
 
-# --------------------------------------------------------------------------- #
-# Helpers
-# --------------------------------------------------------------------------- #
 
 
 def _roundtrip(model: Any) -> dict[str, Any]:
@@ -56,9 +53,6 @@ def _fresh_case_summary() -> CaseSummary:
     )
 
 
-# --------------------------------------------------------------------------- #
-# CaseSummary
-# --------------------------------------------------------------------------- #
 
 
 def test_case_summary_roundtrip() -> None:
@@ -141,9 +135,6 @@ def test_case_summary_extra_forbid() -> None:
         })
 
 
-# --------------------------------------------------------------------------- #
-# CaseChatMessage
-# --------------------------------------------------------------------------- #
 
 
 def test_case_chat_message_roundtrip() -> None:
@@ -199,9 +190,6 @@ def test_case_chat_message_rejects_invalid_role() -> None:
         )
 
 
-# --------------------------------------------------------------------------- #
-# CaseSessionState
-# --------------------------------------------------------------------------- #
 
 
 def test_case_session_state_roundtrip() -> None:
@@ -250,9 +238,6 @@ def test_case_session_state_requires_case() -> None:
         CaseSessionState.model_validate({"chat_history": []})
 
 
-# --------------------------------------------------------------------------- #
-# CaseListEnvelopePayload
-# --------------------------------------------------------------------------- #
 
 
 def test_case_list_envelope_roundtrip_with_cases() -> None:
@@ -285,9 +270,6 @@ def test_case_list_envelope_message_type_classvar() -> None:
     assert CaseListEnvelopePayload.MESSAGE_TYPE == "case-list"
 
 
-# --------------------------------------------------------------------------- #
-# CaseOpenEnvelopePayload
-# --------------------------------------------------------------------------- #
 
 
 def test_case_open_envelope_roundtrip_with_state() -> None:
@@ -320,9 +302,6 @@ def test_case_open_envelope_message_type_classvar() -> None:
     assert CaseOpenEnvelopePayload.MESSAGE_TYPE == "case-open"
 
 
-# --------------------------------------------------------------------------- #
-# CaseCommandEnvelopePayload
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.parametrize(
@@ -388,9 +367,6 @@ def test_case_command_envelope_message_type_classvar() -> None:
     assert CaseCommandEnvelopePayload.MESSAGE_TYPE == "case-command"
 
 
-# --------------------------------------------------------------------------- #
-# Exports
-# --------------------------------------------------------------------------- #
 
 
 def test_module_exports_via_package_namespace() -> None:
@@ -406,9 +382,6 @@ def test_module_exports_via_package_namespace() -> None:
     assert trid3nt_contracts.case.CaseCommandEnvelopePayload is CaseCommandEnvelopePayload
 
 
-# --------------------------------------------------------------------------- #
-# ToolCardRecord + role="tool" (full-stream persistence)
-# --------------------------------------------------------------------------- #
 
 
 def _fresh_tool_card() -> ToolCardRecord:
@@ -510,10 +483,8 @@ def test_tool_card_record_field_set_matches_ts_contract() -> None:
     assert set(ToolCardRecord.model_fields) == expected
 
 
-# --------------------------------------------------------------------------- #
 # PersistedSubStepRecord + ToolCardRecord.children - read-only nested
 # sub-step persistence
-# --------------------------------------------------------------------------- #
 
 
 def test_persisted_substep_record_field_set_matches_ts_contract() -> None:

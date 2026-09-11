@@ -29,9 +29,6 @@ __all__ = [
 ]
 
 
-# --------------------------------------------------------------------------- #
-# Admin-level vocabulary - a closed Literal
-# --------------------------------------------------------------------------- #
 
 # The granularity a region candidate is drawn at. The Literal is CLOSED because
 # each level has its own fetch plumbing: admitting an unknown level here would
@@ -42,9 +39,6 @@ RegionAdminLevel = Literal[
 ]
 
 
-# --------------------------------------------------------------------------- #
-# RegionCandidate - one selectable sub-region
-# --------------------------------------------------------------------------- #
 
 
 class RegionCandidate(GraceModel):
@@ -62,9 +56,6 @@ class RegionCandidate(GraceModel):
     admin_level: RegionAdminLevel = "county"
 
 
-# --------------------------------------------------------------------------- #
-# RegionChoiceRequest - server -> client
-# --------------------------------------------------------------------------- #
 
 
 class RegionChoiceRequestEnvelopePayload(GraceModel):
@@ -94,9 +85,6 @@ class RegionChoiceRequestEnvelopePayload(GraceModel):
     message: str = Field(min_length=1, max_length=1024)
 
 
-# --------------------------------------------------------------------------- #
-# RegionChoiceProvided - client -> server
-# --------------------------------------------------------------------------- #
 
 
 class RegionChoiceProvidedEnvelopePayload(GraceModel):
@@ -118,9 +106,6 @@ class RegionChoiceProvidedEnvelopePayload(GraceModel):
     selected_bbox: BBox | None = None
 
 
-# --------------------------------------------------------------------------- #
-# Routing registry fragments
-# --------------------------------------------------------------------------- #
 
 # Client -> server envelopes this module contributes.
 REGION_CHOICE_CLIENT_TO_AGENT_PAYLOADS: dict[str, type[GraceModel]] = {

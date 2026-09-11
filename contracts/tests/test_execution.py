@@ -100,9 +100,6 @@ def test_layer_uri_maps_field_for_field_onto_load_layer_args() -> None:
     assert args.temporal.step_seconds == layer.temporal.step_seconds
 
 
-# --------------------------------------------------------------------------- #
-# LegendKey -- the data-driven render key (the colormap that comes from the data)
-# --------------------------------------------------------------------------- #
 
 
 def test_legend_key_constructs_continuous_from_real_data_range() -> None:

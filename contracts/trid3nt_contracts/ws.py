@@ -68,9 +68,6 @@ __all__ = [
 ]
 
 
-# --------------------------------------------------------------------------- #
-# Envelope
-# --------------------------------------------------------------------------- #
 
 PayloadT = TypeVar("PayloadT", bound=GraceModel)
 
@@ -93,9 +90,6 @@ class Envelope(GraceModel, Generic[PayloadT]):
     payload: PayloadT
 
 
-# --------------------------------------------------------------------------- #
-# Error codes
-# --------------------------------------------------------------------------- #
 
 ErrorCode = Literal[
     "AUTH_FAILED",
@@ -121,9 +115,6 @@ ErrorCode = Literal[
 ]
 
 
-# =========================================================================== #
-# Client -> agent messages
-# =========================================================================== #
 
 # The ROUTING-VISIBILITY mode for a turn. It governs ONLY whether tool
 # selection is surfaced as a picker card. The CONSENT surface - payload
@@ -229,9 +220,6 @@ class SessionResumePayload(GraceModel):
     case_id: str | None = None
 
 
-# =========================================================================== #
-# Client -> agent: user-input replies
-# =========================================================================== #
 
 
 class SpatialInputResponsePayload(GraceModel):
@@ -311,9 +299,6 @@ def _validate_spatial_input_feature_collection(
     return fc
 
 
-# =========================================================================== #
-# Agent -> client messages
-# =========================================================================== #
 
 
 class AgentMessageChunkPayload(GraceModel):
@@ -618,9 +603,6 @@ class SpatialInputRequestPayload(GraceModel):
     default_timeout_seconds: int = 300
 
 
-# =========================================================================== #
-# tool-candidates + tool-choice: the tool-selection picker
-# =========================================================================== #
 # A routing tie is a real error species: a plausible-but-wrong tool sends the
 # turn down a path one click could have prevented. The request is emitted either
 # because the turn runs in ask mode or because auto mode MEASURED a retrieval
@@ -685,9 +667,6 @@ class ToolChoicePayload(GraceModel):
     free_text: str | None = Field(default=None, max_length=4096)
 
 
-# =========================================================================== #
-# Registries: kebab-case type -> payload model
-# =========================================================================== #
 
 CLIENT_TO_AGENT_PAYLOADS: dict[str, type[GraceModel]] = {
     UserMessagePayload.MESSAGE_TYPE: UserMessagePayload,

@@ -32,9 +32,6 @@ __all__ = [
 ]
 
 
-# --------------------------------------------------------------------------- #
-# Provider vocabulary - a closed Literal
-# --------------------------------------------------------------------------- #
 
 # Closed Literal of providers a Case secret can be bound to. CLOSED because
 # each provider has its own injection plumbing - a query param here, a header
@@ -67,9 +64,6 @@ ProviderID = Literal[
 ]
 
 
-# --------------------------------------------------------------------------- #
-# SecretRecord - the persisted, vault-reference-only record
-# --------------------------------------------------------------------------- #
 
 
 class SecretRecord(GraceModel):
@@ -98,9 +92,6 @@ class SecretRecord(GraceModel):
     is_active: bool = True
 
 
-# --------------------------------------------------------------------------- #
-# WebSocket envelopes
-# --------------------------------------------------------------------------- #
 
 
 class SecretsListEnvelopePayload(GraceModel):
@@ -155,9 +146,6 @@ class SecretRevokeEnvelopePayload(GraceModel):
     secret_id: ULIDStr
 
 
-# --------------------------------------------------------------------------- #
-# Credential-request flow - the just-in-time key prompt
-# --------------------------------------------------------------------------- #
 
 
 class CredentialRequestEnvelopePayload(GraceModel):
@@ -203,9 +191,6 @@ class CredentialProvidedEnvelopePayload(GraceModel):
     provided: bool = True
 
 
-# --------------------------------------------------------------------------- #
-# Routing registry fragments
-# --------------------------------------------------------------------------- #
 
 # Client -> server envelopes this module contributes.
 SECRET_CLIENT_TO_AGENT_PAYLOADS: dict[str, type[GraceModel]] = {

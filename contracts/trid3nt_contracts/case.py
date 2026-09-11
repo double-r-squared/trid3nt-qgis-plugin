@@ -36,9 +36,6 @@ __all__ = [
 ]
 
 
-# --------------------------------------------------------------------------- #
-# Case persistence envelopes
-# --------------------------------------------------------------------------- #
 
 # Closed enum: Case lifecycle status. ``deleted`` is a soft-delete tombstone,
 # not a removal. The list is CLOSED - a new status is an explicit amendment
@@ -219,9 +216,6 @@ class CaseSessionState(GraceModel):
     charts: list[dict] = Field(default_factory=list)
 
 
-# --------------------------------------------------------------------------- #
-# WebSocket envelopes for the Case lifecycle
-# --------------------------------------------------------------------------- #
 
 
 class CaseListEnvelopePayload(GraceModel):
