@@ -7,7 +7,7 @@ A DYE / TRACER / CONTAMINANT plume that TRAVELS DOWNSTREAM in a RIVER (surface w
 |  |  |
 |---|---|
 | module | `telemac2d` - 376 keywords in its dictionary, of which this template states 37 |
-| parts | `RIVER` |
+| parts | - |
 | solves | `trid3nt_server.workflows.telemac.solving.solve.solve_reach` |
 | engine defaults | every keyword this template does not state keeps the engine's own default; `describe_keywords` names it with that default, and `keywords={...}` sets it |
 
@@ -82,23 +82,23 @@ It publishes these layers onto the canvas:
 
 ## The proving run
 
-Run `01M282ZMATVSRPJM9VXD41GD77`, 2026-09-11T11:17:42.316353+00:00, 25.701 s, at commit `6b3937d0fc8e9774f4aba54676658e51641dd512`.
+Run `01M286WWNHXZJW8W5J1SDGG264`, 2026-09-11T12:26:06.455361+00:00, 28.194 s, at commit `63788fb6a673f06cb981fcb0f01ae8e2afd25ab3-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M282ZMATVSRPJM9VXD41GD77)](telemac_river_dye/telemac_river_dye.png)
+![Every layer the run published, stacked and framed on the result (run 01M286WWNHXZJW8W5J1SDGG264)](telemac_river_dye/telemac_river_dye.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M282ZMATVSRPJM9VXD41GD77)*
+*Every layer the run published, stacked and framed on the result (run 01M286WWNHXZJW8W5J1SDGG264)*
 
-![The solve, frame by frame (run 01M282ZMATVSRPJM9VXD41GD77)](telemac_river_dye/telemac_river_dye_animation.gif)
+![The solve, frame by frame (run 01M286WWNHXZJW8W5J1SDGG264)](telemac_river_dye/telemac_river_dye_animation.gif)
 
-*The solve, frame by frame (run 01M282ZMATVSRPJM9VXD41GD77)*
+*The solve, frame by frame (run 01M286WWNHXZJW8W5J1SDGG264)*
 
-![peak frame (run 01M282ZMATVSRPJM9VXD41GD77)](telemac_river_dye/telemac_river_dye_peak_frame.png)
+![peak frame (run 01M286WWNHXZJW8W5J1SDGG264)](telemac_river_dye/telemac_river_dye_peak_frame.png)
 
-*peak frame (run 01M282ZMATVSRPJM9VXD41GD77)*
+*peak frame (run 01M286WWNHXZJW8W5J1SDGG264)*
 
-![dye concentration - the chart the run persisted (run 01M282ZMATVSRPJM9VXD41GD77)](telemac_river_dye/telemac_river_dye_chart_dye_concentration.png)
+![dye concentration - the chart the run persisted (run 01M286WWNHXZJW8W5J1SDGG264)](telemac_river_dye/telemac_river_dye_chart_dye_concentration.png)
 
-*dye concentration - the chart the run persisted (run 01M282ZMATVSRPJM9VXD41GD77)*
+*dye concentration - the chart the run persisted (run 01M286WWNHXZJW8W5J1SDGG264)*
 
 ### The sheet it filled
 
@@ -154,5 +154,5 @@ await TOOL_REGISTRY['telemac_river_dye'].fn(
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M282ZMATVSRPJM9VXD41GD77` and commit `6b3937d0fc8e9774f4aba54676658e51641dd512`. The full argument record is [`telemac_river_dye/run.json`](telemac_river_dye/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M286WWNHXZJW8W5J1SDGG264` and commit `63788fb6a673f06cb981fcb0f01ae8e2afd25ab3-dirty`. The full argument record is [`telemac_river_dye/run.json`](telemac_river_dye/run.json).
 
