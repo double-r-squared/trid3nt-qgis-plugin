@@ -38,7 +38,7 @@ package SteeringSurface {
     // Blocks
     // ----------------------------------------------------------------- //
 
-    part def Catalog {
+    part def Dictionary {
         doc /*
         The in-image extractor: the module dictionaries read through the
         engine's own DAMOCLES reader, trimmed to what a slot is filled and
@@ -56,7 +56,7 @@ package SteeringSurface {
 
     part def Module {
         doc /*
-        The wrapper class the catalog makes. It holds the catalog, the
+        The wrapper class the dictionary makes. It holds the dictionary, the
         composites and the outputs, and it asserts no value: there is
         deliberately no hook here for a default.
         */
@@ -143,8 +143,8 @@ package SteeringSurface {
     // Ports
     // ----------------------------------------------------------------- //
 
-    port def CatalogOut;
-    port def CatalogIn;
+    port def DictionaryOut;
+    port def DictionaryIn;
     port def SurfaceOut;
     port def SurfaceIn;
     port def DeckOut;
@@ -162,9 +162,9 @@ package SteeringSurface {
     // Interfaces - the seam contracts, by their real key names
     // ----------------------------------------------------------------- //
 
-    interface def KeywordCatalog {
+    interface def KeywordDictionary {
         doc /*
-        One dictionary entry as the catalog carries it. ``keyword`` is the
+        One dictionary entry as the dictionary carries it. ``keyword`` is the
         engine's own name and is never rewritten; ``identifier`` is the spelling
         a class body writes it under, taken from the map eficas ships in the
         image rather than from a rule guessed at outside it. ``help`` is the
@@ -196,7 +196,7 @@ package SteeringSurface {
         asserts - empty on the wrapper itself, by law.
         */
         item MODULE : String;
-        item CATALOG : Map;
+        item DICTIONARY : Map;
         item COMPOSITES : Map;
         item ASSERTED : Map;
     }
@@ -276,25 +276,25 @@ package SteeringSurface {
     // Parts - bound to the modules they ARE
     // ----------------------------------------------------------------- //
 
-    part catalogExtractor : Catalog {
+    part dictionaryExtractor : Dictionary {
         doc /*
         code: trid3nt_server/workflows/mesh/meshers/drivers/telemac_dico_driver.py
         */
-        port catalogOut : CatalogOut;
+        port dictionaryOut : DictionaryOut;
     }
 
     part slot : Slot {
         doc /*
         code: trid3nt_server/workflows/telemac/modules/module.py
         */
-        port catalogIn : CatalogIn;
+        port dictionaryIn : DictionaryIn;
     }
 
     part wrapper : Module {
         doc /*
         code: trid3nt_server/workflows/telemac/modules/module.py
         */
-        port catalogIn : CatalogIn;
+        port dictionaryIn : DictionaryIn;
         port surfaceOut : SurfaceOut;
     }
 
@@ -379,11 +379,11 @@ package SteeringSurface {
     // Hops
     // ----------------------------------------------------------------- //
 
-    interface catalogExtracted : KeywordCatalog
-        connect catalogExtractor.catalogOut to slot.catalogIn;
+    interface dictionaryExtracted : KeywordDictionary
+        connect dictionaryExtractor.dictionaryOut to slot.dictionaryIn;
 
-    interface catalogLoaded : KeywordCatalog
-        connect catalogExtractor.catalogOut to wrapper.catalogIn;
+    interface dictionaryLoaded : KeywordDictionary
+        connect dictionaryExtractor.dictionaryOut to wrapper.dictionaryIn;
 
     interface surfaceOffered : WrapperSurface
         connect wrapper.surfaceOut to sheet.surfaceIn;
@@ -420,7 +420,7 @@ package SteeringSurface {
 
     requirement def KeywordNamesAreRaw {
         doc /*
-        A slot is spelled the engine's way. The catalog carries the dictionary's
+        A slot is spelled the engine's way. The dictionary carries the dictionary's
         own keyword verbatim, and the identifier a class body writes it under is
         the image's own map - which matters because a keyword can open on a
         digit or carry a hyphen or a parenthesis, and a spelling rule invented
@@ -438,7 +438,7 @@ package SteeringSurface {
         The description is not decoration: it is what the model and the reader
         are given in place of a docstring, and 1,311 keywords cannot be
         described any other way. Markup surviving into it is markup in the
-        surface, so no backslash may remain in any catalog.
+        surface, so no backslash may remain in any dictionary.
         */
     }
 
@@ -549,9 +549,9 @@ package SteeringSurface {
         */
     }
 
-    requirement def CatalogMatchesImage {
+    requirement def DictionaryMatchesImage {
         doc /*
-        The committed catalog is the image's dictionaries, not a copy that once
+        The committed dictionary is the image's dictionaries, not a copy that once
         was. The suite re-extracts from the image and compares, and skips saying
         so when the image is absent - it never passes on absence.
         */
@@ -691,7 +691,7 @@ package SteeringSurface {
     // Allocations
     // ----------------------------------------------------------------- //
 
-    satisfy requirement KeywordNamesAreRaw by catalogExtractor;
+    satisfy requirement KeywordNamesAreRaw by dictionaryExtractor;
     satisfy requirement KeywordNamesAreRaw by slot;
     verify requirement KeywordNamesAreRaw by
         "tests/telemac/test_telemac_module_surface.py::test_every_slot_carries_the_dictionary_s_own_name_and_help";
@@ -700,12 +700,12 @@ package SteeringSurface {
     verify requirement KeywordNamesAreRaw by
         "tests/telemac/test_telemac_module_surface.py::test_a_keyword_the_module_does_not_have_refuses_naming_the_nearest";
 
-    satisfy requirement EverySlotDescribed by catalogExtractor;
+    satisfy requirement EverySlotDescribed by dictionaryExtractor;
     satisfy requirement EverySlotDescribed by slot;
     verify requirement EverySlotDescribed by
         "tests/telemac/test_telemac_module_surface.py::test_every_slot_carries_the_dictionary_s_own_name_and_help";
     verify requirement EverySlotDescribed by
-        "tests/scripts/test_telemac_catalog_drift.py::test_the_help_carries_no_markup_into_the_surface";
+        "tests/scripts/test_telemac_dictionary_drift.py::test_the_help_carries_no_markup_into_the_surface";
 
     satisfy requirement EngineDefaultSurfaced by slot;
     satisfy requirement EngineDefaultSurfaced by sheet;
@@ -783,11 +783,11 @@ package SteeringSurface {
     verify requirement EverythingOverridable by
         "tests/telemac/test_telemac_module_surface.py::test_a_canvas_that_answers_nothing_refuses_and_invents_nothing";
 
-    satisfy requirement CatalogMatchesImage by catalogExtractor;
-    verify requirement CatalogMatchesImage by
-        "tests/scripts/test_telemac_catalog_drift.py::test_the_committed_catalog_is_what_the_image_says_today";
-    verify requirement CatalogMatchesImage by
-        "tests/scripts/test_telemac_catalog_drift.py::test_every_exposed_module_has_a_committed_catalog";
+    satisfy requirement DictionaryMatchesImage by dictionaryExtractor;
+    verify requirement DictionaryMatchesImage by
+        "tests/scripts/test_telemac_dictionary_drift.py::test_the_committed_dictionary_is_what_the_image_says_today";
+    verify requirement DictionaryMatchesImage by
+        "tests/scripts/test_telemac_dictionary_drift.py::test_every_exposed_module_has_a_committed_dictionary";
 
     satisfy requirement CompositesLiveInWrappers by composite;
     satisfy requirement CompositesLiveInWrappers by wrapper;

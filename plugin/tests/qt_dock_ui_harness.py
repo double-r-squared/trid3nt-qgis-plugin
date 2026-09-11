@@ -550,7 +550,7 @@ assert card._body.isVisible(), "chevron re-expand failed"
 print("[T1..T5] parent tool card: >-prefixed rows, state colors, glyphs, auto-collapse")
 
 # N1: a RUNNING SimCard folds + unfolds at ANY time (not just terminal).
-sim = SimCard("TELEMAC")
+sim = SimCard("TELEMAC / telemac2d")
 dock.messages_layout.insertWidget(dock.messages_layout.count() - 1, sim)
 pump()
 assert not sim.terminal, "fresh sim card should be non-terminal"
@@ -582,7 +582,8 @@ print(f"[N4] live progress readout on the right: {sim.progress_lbl.text()!r}")
 sim.update_from_step(
     PipelineStep(
         step_id="s-sim", name="telemac:solve",
-        tool_name="telemac_river_dye:solve", state="complete", role="compute",
+        tool_name="telemac:solve", state="complete", role="compute",
+        engine="telemac", module="telemac2d",
         batch_job_id="local-docker:r1", duration_ms=165000,
     )
 )
@@ -603,7 +604,8 @@ sim_pre.append_delta("Dispatching the solver now.")
 dock._route_compute_step(
     PipelineStep(
         step_id="s-order", name="telemac:solve",
-        tool_name="telemac_river_dye:solve", state="running", role="compute",
+        tool_name="telemac:solve", state="running", role="compute",
+        engine="telemac", module="telemac2d",
         batch_job_id="local-docker:r2",
     )
 )
@@ -622,6 +624,12 @@ assert 0 <= i_pre < i_card < i_post, (
     f"sim card out of order: pre={i_pre} card={i_card} post={i_post}"
 )
 print("[N5] sim card lands inline: pre-entry -> card -> post-entry")
+
+# N6: the card is titled by the run's ENGINE and the MODULE of it that ran.
+assert "TELEMAC / telemac2d" in inserted.summary_lbl.text(), (
+    f"sim card not titled by engine and module: {inserted.summary_lbl.text()!r}"
+)
+print("[N6] sim card title reads TELEMAC / telemac2d")
 
 # ---- 8. Code-exec approval card ------------------ #
 # The agent's code-exec-request envelope previously had ZERO handling (the

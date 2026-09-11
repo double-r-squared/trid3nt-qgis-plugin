@@ -245,6 +245,11 @@ class ParamSheetRow(GraceModel):
     desc: str = Field(default="", max_length=512)
     door: ParamDoor
     basis: InputBasis
+    #: WHERE the value came from, as one word of a closed set. A card renders it
+    #: as a chip so a reader can override with confidence; nothing branches on
+    #: it. Empty on a row that is not a filled slot.
+    origin: Literal["template", "user", "model", "producer", "derived",
+                    "calibrated"] | None = None
     #: The short phrase shown beside the value. RENDERED, never re-derived by a
     #: client from the basis and door.
     source_badge: str = Field(default="", max_length=200)

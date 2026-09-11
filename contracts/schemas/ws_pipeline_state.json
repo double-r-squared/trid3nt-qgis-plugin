@@ -54,6 +54,30 @@
           "default": null,
           "title": "Duration Ms"
         },
+        "engine": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Engine"
+        },
+        "module": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Module"
+        },
         "name": {
           "title": "Name",
           "type": "string"

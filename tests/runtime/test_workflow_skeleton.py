@@ -220,7 +220,7 @@ def test_the_skeleton_names_and_engines_the_plan_the_template_does_not():
     ops.plan_decl = lambda o: (Step(runner="pkg.mod.fn"),)
     plan = ops.build_plan()
     assert plan.name == "telemac_probe"      # from the metadata
-    assert plan.engine == "telemac2d"        # from the facade
+    assert plan.engine == "telemac"          # from the facade
 
 
 def test_an_undeclared_data_name_refuses_at_registration_saying_it_is_a_data_name():

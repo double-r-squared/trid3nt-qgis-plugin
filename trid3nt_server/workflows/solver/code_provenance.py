@@ -27,12 +27,6 @@ ENGINE_PATHS: dict[str, tuple[str, ...]] = {
     "telemac": ("workers/telemac/", "trid3nt_server/workflows/telemac/"),
 }
 
-#: Solver identifiers that are not their engine's name. Every other solver name
-#: either IS the engine or starts with it.
-_SOLVER_ENGINE_OVERRIDES: dict[str, str] = {
-    "artemis_agitation": "telemac",
-}
-
 #: A commit list is a warning, not a changelog. Past this many, the warning says
 #: how many and shows the newest.
 _MAX_LISTED_COMMITS = 12
@@ -54,28 +48,18 @@ def _git(*args: str, empty_ok: bool = False) -> str | None:
     return out.stdout.strip() or ("" if empty_ok else None)
 
 
-def resolve_engine(engine_or_solver: str) -> str | None:
-    """The ENGINE a solver identifier belongs to, or ``None`` when none is declared."""
-    key = str(engine_or_solver or "").strip().lower()
-    if not key:
-        return None
-    if key in ENGINE_PATHS:
-        return key
-    override = _SOLVER_ENGINE_OVERRIDES.get(key)
-    if override:
-        return override
-    for engine in ENGINE_PATHS:
-        if key.startswith(engine):
-            return engine
-    return None
+def resolve_engine(engine: str) -> str | None:
+    """An engine name - a run record's ``engine`` field - or ``None`` when undeclared.
+    One solver registration per engine, so the name a run was dispatched under IS
+    the engine and there is nothing to map."""
+    key = str(engine or "").strip().lower()
+    return key if key in ENGINE_PATHS else None
 
 
-def engine_paths(engine_or_solver: str) -> tuple[str, ...]:
-    """The repo paths whose commits can change ``engine_or_solver``'s answers.
-    Accepts a solver identifier as well as an engine name, because a run record
-    carries the solver."""
-    engine = resolve_engine(engine_or_solver)
-    return ENGINE_PATHS[engine] if engine else ()
+def engine_paths(engine: str) -> tuple[str, ...]:
+    """The repo paths whose commits can change ``engine``'s answers."""
+    resolved = resolve_engine(engine)
+    return ENGINE_PATHS[resolved] if resolved else ()
 
 
 def code_identity() -> dict[str, Any]:

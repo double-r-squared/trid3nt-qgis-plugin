@@ -27,15 +27,15 @@ flowchart LR
     assembler -- "ManifestCaseSection" --> manifestStager
     manifestStager -- "ManifestCaseSection" --> workerEntrypoint
     supervisor -- "FoldedRunPhysics (supervisor pass through)" --> diagnosticsReader
-    launcherArm -- "FoldedRunPhysics (supervisor pass through)" --> supervisor
+    launcherArm -- "FoldedRunPhysics (launcherArm, supervisor pass through)" --> supervisor
     supervisor -- "RunTerminalSignal" --> solveStep
     resultReader -- "SolvedResultFields" --> resultPostprocess
-    launcherArm -- "FrameCountCrossCheck (supervisor pass through)" --> supervisor
+    launcherArm -- "FrameCountCrossCheck (launcherArm, supervisor pass through)" --> supervisor
     workerEntrypoint -- "SolverListing" --> diagnosticsReader
     telapyChild -- "SolverListing" --> workerEntrypoint
     meshAcceptance -- "AcceptedMeshRecord" --> assembler
-    workerEntrypoint -- "WorkerRunReport" --> launcherArm
-    workerEntrypoint -- "ServerFacts (workerEntrypoint pass through)" --> launcherArm
+    workerEntrypoint -- "WorkerRunReport (launcherArm pass through)" --> launcherArm
+    workerEntrypoint -- "ServerFacts (launcherArm, workerEntrypoint pass through)" --> launcherArm
     assembler -- "ServerFacts (workerEntrypoint pass through)" --> workerEntrypoint
     topologyWriter -- "TopologyBundle" --> assembler
 ```

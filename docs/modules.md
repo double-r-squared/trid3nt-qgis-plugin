@@ -4,7 +4,7 @@
 
 One wrapper per TELEMAC module. A wrapper is the module's own dictionary, read at import: every keyword, its type, its choices and its engine default. A template states a few of them and leaves the rest to the engine.
 
-`describe_keywords(module=..., query=...)` is the read over any of these catalogs - it answers with the keyword, the engine's own help text, its choices and its default.
+`describe_keywords(module=..., query=...)` is the read over any of these dictionaries - it answers with the keyword, the engine's own help text, its choices and its default.
 
 | module | keywords | composites | outputs |
 |---|---|---|---|

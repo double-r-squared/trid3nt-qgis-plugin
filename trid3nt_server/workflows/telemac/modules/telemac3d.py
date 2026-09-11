@@ -1,4 +1,4 @@
-"""The TELEMAC-3D wrapper: its catalog, its composites, and its output.
+"""The TELEMAC-3D wrapper: its dictionary, its composites, and its output.
 
 The wrapper asserts NO value of its own. The VERTICAL GRID and the COLUMN read
 the SAME three numbers through the SAME planner, so the thermocline thickness the

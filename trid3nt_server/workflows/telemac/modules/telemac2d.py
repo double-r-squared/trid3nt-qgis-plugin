@@ -1,4 +1,4 @@
-"""The TELEMAC-2D wrapper: its catalog, its composites, and its outputs.
+"""The TELEMAC-2D wrapper: its dictionary, its composites, and its outputs.
 
 The wrapper asserts NO value of its own. Each composite is ONE value standing for
 a keyword group, so the group cannot half-arrive; the OUTPUTS bind the module's

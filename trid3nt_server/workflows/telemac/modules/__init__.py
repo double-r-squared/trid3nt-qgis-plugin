@@ -1,4 +1,4 @@
-"""One wrapper per TELEMAC module: the catalog, the composites, the outputs.
+"""One wrapper per TELEMAC module: the dictionary, the composites, the outputs.
 
 The machinery is in ``module.py`` (what a slot and a wrapper are) and
 ``sheet.py`` (fill, then run). Every other file here is one module's wrapper.
@@ -9,7 +9,7 @@ from __future__ import annotations
 from types import MappingProxyType
 from typing import Mapping
 
-from .module import Composite, Module, Output, Slot, SlotRefused, load_catalog
+from .module import Composite, Module, Output, Slot, SlotRefused, load_dictionary
 from .sheet import Filled, Sheet, SheetIncomplete, draw, fill, run
 from .artemis import ART
 from .gaia import GAIA
@@ -20,12 +20,12 @@ from .waqtel import WAQTEL
 __all__ = [
     "ART", "Composite", "Filled", "GAIA", "Module", "Output", "Sheet",
     "SheetIncomplete", "Slot", "SlotRefused", "T2D", "T3D", "WAQTEL",
-    "WRAPPERS", "draw", "fill", "load_catalog", "run", "wrapper_for",
+    "WRAPPERS", "draw", "fill", "load_dictionary", "run", "wrapper_for",
 ]
 
 #: The exposed wrappers, by the module name the engine knows each by. A coupled
 #: body names its module rather than carrying its wrapper, so this is where the
-#: serializer turns that name back into the catalog its slots are checked
+#: serializer turns that name back into the dictionary its slots are checked
 #: against.
 WRAPPERS: Mapping[str, type] = MappingProxyType({
     "artemis": ART, "telemac2d": T2D, "telemac3d": T3D, "waqtel": WAQTEL,

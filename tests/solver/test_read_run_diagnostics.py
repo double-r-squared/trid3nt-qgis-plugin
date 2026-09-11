@@ -125,7 +125,7 @@ def test_telemac_failed_run_is_unhealthy_and_mass_balance_null():
 
 def test_telemac_healthy_run_reports_listing_mass_balance():
     env = _run("telemac_ok", _TELEMAC_OK_RID)
-    assert env["engine"] == "telemac"  # solver "telemac_river_dye" normalized
+    assert env["engine"] == "telemac"
     assert env["status"] == "ok"
     assert env["engine_specific"]["correct_end"] is True
     assert env["mass_balance_source"] == "reported"
@@ -143,7 +143,7 @@ def test_run_not_found_when_no_completion(tmp_path):
 def test_engine_unknown_for_unsupported_solver(tmp_path):
     (tmp_path / "completion.json").write_text(
         json.dumps(
-            {"run_id": _TELEMAC_FAIL_RID, "status": "ok", "solver": "landlab",
+            {"run_id": _TELEMAC_FAIL_RID, "status": "ok", "engine": "landlab",
              "landlab_stdout_uri": "s3://b/x/landlab.stdout", "output_uris": []}
         )
     )
@@ -218,7 +218,7 @@ def test_production_s3_resolution_reads_via_solver_seam(_reset_solver_seams):
 
 
 
-def test_write_local_completion_records_solver_field(_reset_solver_seams):
+def test_write_local_completion_records_the_engine_field(_reset_solver_seams):
     fake = _FakeS3()
     solver.set_s3_client(fake)
     solver._write_local_completion(
@@ -232,11 +232,12 @@ def test_write_local_completion_records_solver_field(_reset_solver_seams):
         stderr_uri=None,
         started_at="2026-07-24T00:00:00Z",
         error=None,
-        extra={"scenario": "tsunami"},
-        solver="sfincs",
+        extra={"scenario": "tsunami", "status": "ok-from-the-worker"},
+        engine="sfincs",
     )
     key = ("trid3nt-runs", "01TESTTESTTESTTESTTESTTEST/completion.json")
     payload = json.loads(fake.objects[key])
-    assert payload["solver"] == "sfincs"
-    # extra still folded, and does not clobber solver.
+    assert payload["engine"] == "sfincs"
+    # extra is folded whole, and the envelope's own fields still win.
     assert payload["scenario"] == "tsunami"
+    assert payload["status"] == "ok"

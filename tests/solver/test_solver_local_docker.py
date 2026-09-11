@@ -32,9 +32,9 @@ from trid3nt_server.workflows.solver.solver import (
 )
 from trid3nt_contracts.execution import ExecutionHandle, RunResult
 
-#: The one registered local-docker solver; the envelope under test is its spec's
-#: host, not its engine.
-_SOLVER = "telemac_river_dye"
+#: The one registered local-docker solver, which is its engine's own name; the
+#: envelope under test is its spec's host.
+_SOLVER = "telemac"
 
 
 
@@ -360,7 +360,7 @@ _ENTRYPOINT_COMPLETION_KEYS = {
     "run_id",
     "status",
     "exit_code",
-    "solver",
+    "engine",
     "code_sha",
     "code_dirty",
     "telemac_stdout_uri",
@@ -572,7 +572,7 @@ def _write_completion(s3: FakeS3Client, run_id: str) -> dict:
         stderr_uri=None,
         started_at="2026-08-20T00:00:00Z",
         error=None,
-        solver="telemac_river_dye",
+        engine="telemac",
     )
     return json.loads(s3.objects[("test-runs-bucket", f"{run_id}/completion.json")])
 
@@ -621,7 +621,7 @@ def test_spec_supplied_publish_manifest_uri_is_not_clobbered() -> None:
         started_at="2026-08-20T00:00:00Z",
         error=None,
         extra={"publish_manifest_uri": "s3://elsewhere/manifest.json"},
-        solver="telemac_river_dye",
+        engine="telemac",
     )
     completion = json.loads(
         s3.objects[("test-runs-bucket", f"{run_id}/completion.json")]

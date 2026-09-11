@@ -146,6 +146,9 @@ class ParamRow:
     desc: str = ""
     door: str = "scenario"
     basis: str = "default_demo"
+    # WHERE the value came from, as one word of the server's closed set. Empty
+    # on a row that is not a filled slot, which is the row that gets no chip.
+    origin: str = ""
     source_badge: str = ""
     bounds: Optional[tuple] = None
     user_lever: bool = False
@@ -236,6 +239,7 @@ def _parse_param_row(raw: dict) -> Optional[ParamRow]:
         desc=str(raw.get("desc") or ""),
         door=str(raw.get("door") or "scenario"),
         basis=str(raw.get("basis") or "default_demo"),
+        origin=str(raw.get("origin") or ""),
         source_badge=str(raw.get("source_badge") or ""),
         bounds=pair,
         user_lever=bool(raw.get("user_lever")),

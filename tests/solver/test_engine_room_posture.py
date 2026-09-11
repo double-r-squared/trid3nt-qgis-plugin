@@ -69,16 +69,15 @@ def test_a_spec_that_writes_its_own_network_and_declares_one_is_refused():
         _with_declared_network(spec, spec.build_argv("RID", Path("/tmp/r"), []))
 
 
-def test_every_telemac_spec_declares_no_network():
-    """The FAMILY DoD, asserted: the whole image runs with the network denied.
+def test_the_telemac_spec_declares_no_network():
+    """The ENGINE DoD, asserted: the whole image runs with the network denied.
 
-    The posture is the image's rather than per-leg: the reach spec, which also serves
-    the rain-on-grid catchment, stages what it used to fetch inside the container."""
+    The posture is the image's rather than per-module: one spec serves every
+    module, and it stages what it used to fetch inside the container."""
     import trid3nt_server.workflows.telemac.solving.run_telemac  # noqa: F401
     from trid3nt_server.workflows.solver.solver import LOCAL_SOLVER_SPEC_REGISTRY
 
-    for name in ("artemis_agitation", "telemac3d_strat", "telemac_river_dye"):
-        assert LOCAL_SOLVER_SPEC_REGISTRY[name]().network == "none", name
+    assert LOCAL_SOLVER_SPEC_REGISTRY["telemac"]().network == "none"
 
 
 
@@ -100,16 +99,16 @@ def test_an_engine_with_no_declared_paths_says_so():
     assert warning["kind"] == "engine_paths_unknown"
 
 
-def test_a_solver_identifier_resolves_to_its_engine():
-    """A run record carries the SOLVER name, which is not always the engine's."""
+def test_the_engine_field_is_the_only_thing_an_engine_resolves_from():
+    """A run record carries its ENGINE, so there is no solver name to map."""
     from trid3nt_server.workflows.solver.code_provenance import (
         engine_paths,
         resolve_engine,
     )
 
-    assert resolve_engine("artemis_agitation") == "telemac"
-    assert resolve_engine("telemac3d_strat") == "telemac"
-    assert engine_paths("artemis_agitation") == engine_paths("telemac")
+    assert resolve_engine("TELEMAC") == "telemac"
+    assert resolve_engine("telemac_river_dye") is None
+    assert engine_paths("telemac_river_dye") == ()
 
 
 def test_code_identity_stamps_a_sha_and_a_dirty_flag():
@@ -136,7 +135,7 @@ def test_a_moved_engine_names_the_commits_that_moved_it():
     shas = [s for s in out.stdout.split() if s]
     if len(shas) < 3:
         pytest.skip("not enough telemac history in this checkout")
-    warning = staleness(code_sha=shas[2], engine="artemis_agitation")
+    warning = staleness(code_sha=shas[2], engine="telemac")
     assert warning is not None
     assert warning["kind"] == "engine_code_moved"
     assert warning["engine"] == "telemac"

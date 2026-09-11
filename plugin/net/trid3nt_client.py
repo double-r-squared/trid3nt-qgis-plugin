@@ -211,6 +211,10 @@ class PipelineStep:
     batch_status: Optional[str] = None
     progress_percent: Optional[int] = None
     duration_ms: Optional[int] = None
+    # WHICH engine and which of its modules the compute card is a run of; both
+    # empty on a plain tool card, which is a run of nothing.
+    engine: str = ""
+    module: str = ""
 
 
 def parse_pipeline_steps(pipeline_state_payload: dict) -> list[PipelineStep]:
@@ -255,6 +259,8 @@ def parse_pipeline_steps(pipeline_state_payload: dict) -> list[PipelineStep]:
                 duration_ms=row.get("duration_ms")
                 if isinstance(row.get("duration_ms"), int)
                 else None,
+                engine=str(row.get("engine") or ""),
+                module=str(row.get("module") or ""),
             )
         )
     return steps

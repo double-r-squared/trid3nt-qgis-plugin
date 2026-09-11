@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
+from enum import Enum
 from types import MappingProxyType
 from typing import Any, Callable, Mapping, Sequence
 
@@ -16,7 +17,37 @@ from trid3nt_server.workflows.runtime.plan import declared_reads
 
 from .module import Slot, SlotRefused
 
-__all__ = ["Filled", "Sheet", "SheetIncomplete", "draw", "fill", "run"]
+__all__ = ["Filled", "Origin", "Provenance", "Sheet", "SheetIncomplete", "draw",
+           "fill", "run"]
+
+
+class Origin(str, Enum):
+    """WHERE a filled slot's value came from. A closed set, read by people.
+
+    Nothing downstream branches on it: the reader overrides with confidence, or
+    does not."""
+
+    TEMPLATE = "template"
+    USER = "user"
+    MODEL = "model"
+    PRODUCER = "producer"
+    DERIVED = "derived"
+    CALIBRATED = "calibrated"
+
+
+@dataclass(frozen=True, slots=True)
+class Provenance:
+    """One slot's origin, and the name that makes it checkable.
+
+    ``detail`` is the template, the producer, the source slot or the calibration
+    run the origin points at; empty where the origin names everything there is."""
+
+    origin: Origin
+    detail: str = ""
+
+    def __str__(self) -> str:
+        return f"{self.origin.value}: {self.detail}" if self.detail \
+            else self.origin.value
 
 
 class SheetIncomplete(SlotRefused):
@@ -31,7 +62,7 @@ class Filled:
 
     slot: Slot
     value: Any
-    provenance: str
+    provenance: Provenance
 
 
 @dataclass(frozen=True, slots=True)
@@ -53,7 +84,7 @@ class Sheet:
         """Every keyword the dictionary gives no default for and nothing has set.
 
         Informational and COMPLETE: what this run leaves to the engine, whole."""
-        return tuple(slot for name, slot in self.body.CATALOG.items()
+        return tuple(slot for name, slot in self.body.DICTIONARY.items()
                      if slot.is_open and name not in self.filled)
 
     def required(self) -> tuple[Slot, ...]:
@@ -61,11 +92,11 @@ class Sheet:
         return tuple(slot for slot in self.open() if slot.is_required)
 
     def resolved(self) -> tuple[tuple[str, Any], ...]:
-        """``(keyword, value)`` for everything the deck states, in catalog order.
+        """``(keyword, value)`` for everything the deck states, in dictionary order.
 
         An engine default is never among them; the dictionary supplies it."""
         return tuple((row.slot.keyword, row.value)
-                     for name, row in _in_catalog_order(self.body, self.filled))
+                     for name, row in _in_dictionary_order(self.body, self.filled))
 
     def state(self) -> dict[str, Any]:
         """What fill hands back: the sheet, said plainly."""
@@ -73,8 +104,8 @@ class Sheet:
             "module": self.module,
             "body": self.body.__name__,
             "filled": {name: {"keyword": row.slot.keyword, "value": row.value,
-                              "provenance": row.provenance}
-                       for name, row in _in_catalog_order(self.body, self.filled)},
+                              "provenance": str(row.provenance)}
+                       for name, row in _in_dictionary_order(self.body, self.filled)},
             "files": sorted(self.files),
             "open": [{"keyword": slot.keyword, "identifier": slot.identifier,
                       "desc": slot.desc, "type": slot.type,
@@ -83,10 +114,10 @@ class Sheet:
         }
 
 
-def _in_catalog_order(body: type,
+def _in_dictionary_order(body: type,
                       filled: Mapping[str, Filled]) -> list[tuple[str, Filled]]:
     """The dictionary's own order - the order a sheet is read down."""
-    return [(name, filled[name]) for name in body.CATALOG if name in filled]
+    return [(name, filled[name]) for name in body.DICTIONARY if name in filled]
 
 
 def fill(source: type | Sheet, *, produced: Mapping[str, Any] | None = None,
@@ -95,22 +126,24 @@ def fill(source: type | Sheet, *, produced: Mapping[str, Any] | None = None,
 
     Repeatable; an unknown keyword refuses BY NAME and None states nothing."""
     body, standing, pending = _standing(source)
-    catalog = body.CATALOG
+    dictionary = body.DICTIONARY
     composites = body.COMPOSITES
     for name, value in slots.items():
         if name not in composites:
             body.slot(name)      # refuses by name, and names the nearest keyword
-        pending[name] = (value, "fill")
+        pending[name] = (value, Provenance(Origin.USER))
 
     filled = dict(standing)
     files: dict[str, Any] = dict(source.files) if isinstance(source, Sheet) else {}
     for name, (value, provenance) in _in_ref_order(pending):
-        if _measured(value) and provenance != "fill":
-            # A template states WHICH measurement this slot takes; the number
-            # itself is the accepted artifact's - the boundary walk, the normal
-            # depth, the time step the mesh's own CFL allows. Badging it
-            # "template" would hide that nobody wrote it down.
-            provenance = "derived"
+        if provenance.origin is not Origin.USER:
+            read = _measured(value)
+            if read is not None:
+                # A template states WHICH measurement this slot takes; the number
+                # itself is the accepted artifact's - the boundary walk, the
+                # normal depth, the time step the mesh's own CFL allows. Badging
+                # it "template" would hide that nobody wrote it down.
+                provenance = Provenance(Origin.DERIVED, read)
         value = _bind(value, produced or {}, params or {}, filled)
         if value is None:
             # NOTHING is what None states. No keyword's value is None, so the
@@ -123,11 +156,12 @@ def fill(source: type | Sheet, *, produced: Mapping[str, Any] | None = None,
             expanded, named = composites[name].expand(value)
             for key, item in expanded.items():
                 slot = body.slot(key)
-                filled[key] = Filled(slot=slot, value=slot.check(item),
-                                     provenance=f"producer {name}")
+                filled[key] = Filled(
+                    slot=slot, value=slot.check(item),
+                    provenance=Provenance(Origin.PRODUCER, name))
             files.update(named)
             continue
-        slot = catalog[name]
+        slot = dictionary[name]
         filled[name] = Filled(slot=slot, value=slot.check(value),
                               provenance=provenance)
     return Sheet(body=body, filled=MappingProxyType(filled),
@@ -162,9 +196,9 @@ def _standing(source: type | Sheet) -> tuple[type, dict[str, Filled],
     standing: dict[str, Filled] = {}
     pending: dict[str, tuple[Any, str]] = {}
     for body in (*source.PARTS, source):
-        provenance = ("template" if body is source else f"part {body.__name__}")
+        provenance = Provenance(Origin.TEMPLATE, body.__name__)
         for name, value in body.ASSERTED.items():
-            slot = source.CATALOG.get(name)
+            slot = source.DICTIONARY.get(name)
             if slot is None or value is None or _late(value):
                 pending[name] = (value, provenance)
                 standing.pop(name, None)
@@ -175,13 +209,14 @@ def _standing(source: type | Sheet) -> tuple[type, dict[str, Filled],
     return source, standing, pending
 
 
-def _measured(value: Any) -> bool:
-    """Is this assertion a read of something the run MEASURED?
+def _measured(value: Any) -> str | None:
+    """The SLOT this assertion reads, or ``None`` when it reads nothing measured.
 
-    A ``Ref`` is; a ``ParamRef`` is the invocation's own answer and is not."""
-    for _found in declared_reads(value, Ref):
-        return True
-    return False
+    A ``Ref`` is a read of what the run measured; a ``ParamRef`` is the
+    invocation's own answer and is not."""
+    for found in declared_reads(value, Ref):
+        return str(found.path)
+    return None
 
 
 def _late(value: Any) -> bool:

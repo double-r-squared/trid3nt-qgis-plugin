@@ -3,7 +3,7 @@
 A workflow is a WRAPPER around a TELEMAC module, exposing the module's full
 keyword surface. The engine already publishes that surface: every module's
 dictionary names each keyword, its type, its allowed values, its default and its
-help. The wrapper is that catalog, and nothing else that opines - it is the
+help. The wrapper is that dictionary, and nothing else that opines - it is the
 analog of the engine's own defaults. Variance lives in templates, which stay
 Python because people read them.
 
@@ -11,10 +11,11 @@ A class body extending a wrapper asserts raw keywords under the identifiers the
 image itself spells them by. A keyword the module does not have, and a value the
 dictionary does not take, refuse BY NAME at import; the sheet the body fills
 records per slot WHERE its value came from, so nothing composed or derived hides
-behind a number. Six layers can answer, and the badge names which: the engine
-default by ABSENCE, then a part, the template, a producer a composite expanded,
-the user's own fill - and `derived`, for a value the run MEASURED off the
-accepted artifact where the body only named which measurement to take.
+behind a number. That record is a closed vocabulary - `template`, `user`,
+`model`, `producer`, `derived`, `calibrated` - with a detail beside it naming
+the body, the producer or the slot it points at; the engine default answers by
+ABSENCE and carries no row at all. Nothing branches on it: it is what a reader
+overrides with confidence, or does not.
 
 A COMPOSITE expands one value into the keywords that value IS: the arming
 keyword its input implies, the slots its value literally fills, the file it
@@ -39,9 +40,9 @@ explicit, on a complete sheet, and it is where execution stops being held.
 | file | what it is |
 | --- | --- |
 | `__init__.py` | The door: the wrappers, and the two acts. |
-| `module.py` | What a slot, a wrapper, a composite and an output ARE, and the catalog loader that makes a wrapper out of `catalog/<module>.json`. |
+| `module.py` | What a slot, a wrapper, a composite and an output ARE, and the dictionary loader that makes a wrapper out of `dictionary/<module>.json`. |
 | `sheet.py` | The sheet - filled slots with their provenance, the files a composite named, the slots still open - and `fill` / `run`. |
-| `describe.py` | `describe_keywords` - the read over a module's catalog, which is how the whole keyword surface is reached rather than carried in a docstring. |
+| `describe.py` | `describe_keywords` - the read over a module's dictionary, which is how the whole keyword surface is reached rather than carried in a docstring. |
 | `corpus.yaml` | The routing phrasings that reach `describe_keywords`. |
 | `telemac2d.py` | The TELEMAC-2D wrapper: the releases, wind, rain, friction, rating, hyetograph, time-origin and coupling groups, and the fields and mass-balance outputs. |
 | `telemac3d.py` | The TELEMAC-3D wrapper: the vertical grid keyword pair and its refusal, the water column a stratified run is initialized from, and the wind. |

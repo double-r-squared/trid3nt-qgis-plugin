@@ -400,6 +400,11 @@ class PipelineStep(GraceModel):
     role: Literal["tool", "compute"] = "tool"
     batch_job_id: str | None = None
     batch_status: str | None = None
+    # WHICH engine, and which of its modules, the compute card is a run of. A
+    # run is identified by these two and never by the question it answered; both
+    # are ``None`` on a plain tool card, which is a run of nothing.
+    engine: str | None = None
+    module: str | None = None
     # The nested sub-step timeline. ``parent_step_id`` is set on a CHILD, and a
     # client NESTS such a step instead of rendering it top-level. The three
     # substep fields are set on the PARENT and describe the currently-running

@@ -1,4 +1,4 @@
-"""The WAQTEL wrapper: its catalog, and the two coupled bodies a carrier names.
+"""The WAQTEL wrapper: its dictionary, and the two coupled bodies a carrier names.
 
 WAQTEL runs UNDER a hydrodynamic module and states only what its caller handed
 it. It binds no OUTPUTS: it writes no result file of its own, and the oxygen and
@@ -19,7 +19,7 @@ STEERING_FILENAME = "t2d_river.waqtel"
 
 
 class _Waqtel(Module("waqtel")):  # type: ignore[misc]
-    """The catalog, plus the coupled bodies the carrier's ``coupling`` expands."""
+    """The dictionary, plus the coupled bodies the carrier's ``coupling`` expands."""
 
     @classmethod
     def decay(cls, *, law: Any, coefficient: Any) -> Mapping[str, Any]:

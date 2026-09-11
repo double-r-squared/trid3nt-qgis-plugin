@@ -106,6 +106,7 @@ def read_records(path: Path | None = None) -> list[dict[str, Any]]:
 
 
 def build_record(*, run_id: str | None, template: str, engine: str | None,
+                 module: str | None,
                  sheet: Sequence[Any], answer: Mapping[str, Any],
                  provenance: Sequence[Any], result: Any,
                  wall_seconds: float | None, origin: str,
@@ -120,6 +121,7 @@ def build_record(*, run_id: str | None, template: str, engine: str | None,
         "recorded_at": datetime.now(timezone.utc).isoformat(),
         "template": template,
         "engine": engine,
+        "module": module,
         "origin": origin,
         "parent_run_id": parent_run_id,
         "overrides": list(overrides),

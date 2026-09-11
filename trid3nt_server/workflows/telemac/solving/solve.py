@@ -17,6 +17,7 @@ from trid3nt_server.workflows.runtime import Step
 
 from ..helpers.errors import OpenWaterError, TelemacDyeScenarioError
 from ..helpers.reach import MESH_NODE_CAP, estimate_telemac_solve_seconds
+from .run_telemac import TELEMAC_SOLVER_NAME
 
 logger = logging.getLogger("trid3nt_server.workflows.telemac.solving.solve")
 
@@ -46,8 +47,8 @@ _WAIT_HEADROOM = 1.5
 _CASE_TIMEOUT_S = 86400.0
 
 
-async def dispatch_and_wait(*, solver: str, manifest_uri: str, compute_class: str,
-                           label: str, timeout_s: float,
+async def dispatch_and_wait(*, manifest_uri: str, compute_class: str,
+                           module: str, label: str, timeout_s: float,
                            grid_resolution_m: float | None = None,
                            active_cell_count: int | None = None) -> tuple[Any, str]:
     """Dispatch a staged manifest, drive the cards, wait, and hand back the result.
@@ -67,15 +68,16 @@ async def dispatch_and_wait(*, solver: str, manifest_uri: str, compute_class: st
     )
 
     emitter = current_emitter()
-    handle = run_solver(solver=solver, model_setup_uri=manifest_uri,
+    handle = run_solver(solver=TELEMAC_SOLVER_NAME, model_setup_uri=manifest_uri,
                         compute_class=compute_class)
     run_id = handle.run_id
     sim_step_id = await mint_dispatch_and_sim_cards(
-        emitter=emitter, solver=solver, handle=handle, compute_class=compute_class)
+        emitter=emitter, solver=TELEMAC_SOLVER_NAME, module=module, handle=handle,
+        compute_class=compute_class)
     if emitter is not None and sim_step_id is not None:
         set_emitter_binding(EmitterBinding(emitter=emitter, step_id=sim_step_id))
     progress = asyncio.ensure_future(drive_live_solve_progress(
-        emitter=emitter, run_id=run_id, solver=solver,
+        emitter=emitter, run_id=run_id, solver=TELEMAC_SOLVER_NAME,
         grid_resolution_m=grid_resolution_m, active_cell_count=active_cell_count,
         vcpus=None, eta_seconds=None))
 
@@ -158,8 +160,6 @@ async def solve_reach(*, run: dict[str, Any],
         route_sim_terminal,
     )
     from trid3nt_server.workflows.shared.solve_progress import drive_live_solve_progress
-    from trid3nt_server.workflows.telemac.solving.run_telemac import TELEMAC_SOLVER_NAME
-
     # What the server already knows and the worker cannot learn from the files
     # it is handed. The wait is bounded off the deck's own horizon and step.
     facts = run["case"]["server_facts"]
@@ -173,7 +173,8 @@ async def solve_reach(*, run: dict[str, Any],
     run_id = handle.run_id
 
     sim_step_id = await mint_dispatch_and_sim_cards(
-        emitter=emitter, solver=TELEMAC_SOLVER_NAME, handle=handle,
+        emitter=emitter, solver=TELEMAC_SOLVER_NAME,
+        module=str(run["case"]["module"]), handle=handle,
         compute_class=compute_class)
     if emitter is not None and sim_step_id is not None:
         set_emitter_binding(EmitterBinding(emitter=emitter, step_id=sim_step_id))
@@ -284,8 +285,8 @@ async def solve_case(*, run: dict[str, Any],
     logger.info("telemac case dispatching run_tag=%s name=%s -> %s",
                 run["run_tag"], facts["name"], run["manifest_uri"])
     run_result, batch_run_id = await dispatch_and_wait(
-        solver=_telemac_solver_name(), manifest_uri=run["manifest_uri"],
-        compute_class=compute_class, label=label,
+        manifest_uri=run["manifest_uri"], compute_class=compute_class,
+        module=str(run["case"]["module"]), label=label,
         timeout_s=_CASE_TIMEOUT_S, grid_resolution_m=facts.get("mesh_size_m"),
         active_cell_count=facts.get("nelem"))
     if run_result is None or run_result.status != "complete":
@@ -304,11 +305,6 @@ async def solve_case(*, run: dict[str, Any],
         "started_at": _run_start_iso(run_result),
     }
 
-
-def _telemac_solver_name() -> str:
-    from trid3nt_server.workflows.telemac.solving.run_telemac import TELEMAC_SOLVER_NAME
-
-    return TELEMAC_SOLVER_NAME
 
 
 class Solve:

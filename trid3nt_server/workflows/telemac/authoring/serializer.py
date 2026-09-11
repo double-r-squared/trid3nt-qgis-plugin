@@ -44,7 +44,7 @@ def _spread(sheet: Any, rundir: Path, steering: str,
             decks: dict[str, dict[str, Any]]) -> None:
     """``sheet`` and everything it names, onto the disk and into ``decks``.
 
-    A coupled body is not content: it is filled against its own module's catalog."""
+    A coupled body is not content: it is filled against its own module's dictionary."""
     from ..modules import fill, wrapper_for
 
     decks[steering] = {"module": sheet.module, "values": dict(sheet.resolved())}

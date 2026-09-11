@@ -221,6 +221,26 @@
           "default": null,
           "title": "Note"
         },
+        "origin": {
+          "anyOf": [
+            {
+              "enum": [
+                "template",
+                "user",
+                "model",
+                "producer",
+                "derived",
+                "calibrated"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Origin"
+        },
         "source_badge": {
           "default": "",
           "maxLength": 200,

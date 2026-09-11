@@ -1,4 +1,4 @@
-"""``describe_keywords``: the READ over a module's keyword catalog.
+"""``describe_keywords``: the READ over a module's keyword dictionary.
 
 Nothing here decides anything and nothing here runs. What a caller does with a
 keyword it learns is state it on a fill, through the ``keywords={NAME: value}``
@@ -13,7 +13,7 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.tools import register_tool
 
-from .module import catalog_dir, load_catalog
+from .module import dictionary_dir, load_dictionary
 
 __all__ = ["DescribeKeywordsError", "describe_keywords"]
 
@@ -32,7 +32,7 @@ _WEIGHTS: Mapping[str, int] = {"keyword": 6, "mnemo": 4, "rubrique": 3, "help": 
 
 
 class DescribeKeywordsError(RuntimeError):
-    """The catalog cannot answer: ``UNKNOWN_MODULE`` is the only code."""
+    """The dictionary cannot answer: ``UNKNOWN_MODULE`` is the only code."""
 
     error_code: str
     retryable: bool = False
@@ -43,7 +43,7 @@ class DescribeKeywordsError(RuntimeError):
 
 
 def _exposed() -> list[str]:
-    return sorted(path.stem for path in catalog_dir().glob("*.json"))
+    return sorted(path.stem for path in dictionary_dir().glob("*.json"))
 
 
 def _words(text: str) -> list[str]:
@@ -125,15 +125,15 @@ def describe_keywords(module: str = "telemac2d", query: str = "",
     if name not in _exposed():
         raise DescribeKeywordsError(
             "UNKNOWN_MODULE",
-            f"there is no keyword catalog for {module!r}; the exposed modules are "
+            f"there is no keyword dictionary for {module!r}; the exposed modules are "
             f"{', '.join(_exposed())}.")
-    catalog = load_catalog(name)
+    dictionary = load_dictionary(name)
     if not str(query or "").strip():
         sections: dict[str, int] = {}
-        for slot in catalog.values():
+        for slot in dictionary.values():
             head = slot.rubrique[0] if slot.rubrique else ""
             sections[head] = sections.get(head, 0) + 1
-        return {"module": name, "keyword_count": len(catalog),
+        return {"module": name, "keyword_count": len(dictionary),
                 "sections": [{"rubrique": head, "keywords": count}
                              for head, count in sorted(sections.items())],
                 "modules": _exposed()}
@@ -141,7 +141,7 @@ def describe_keywords(module: str = "telemac2d", query: str = "",
     phrase = " ".join(_words(query))
     wanted = {w for w in _words(query) if w not in _GLUE}
     scored = [(_score(slot, wanted, phrase), index, slot)
-              for index, slot in enumerate(catalog.values())]
+              for index, slot in enumerate(dictionary.values())]
     # The dictionary's own order breaks a tie, so the same question asked twice
     # is answered the same way.
     best = sorted((row for row in scored if row[0] > 0),
@@ -151,7 +151,7 @@ def describe_keywords(module: str = "telemac2d", query: str = "",
     for _score_value, _index, slot in kept:
         head = slot.rubrique[0] if slot.rubrique else ""
         grouped.setdefault(head, []).append(_row(slot))
-    return {"module": name, "query": str(query), "keyword_count": len(catalog),
+    return {"module": name, "query": str(query), "keyword_count": len(dictionary),
             "match_count": len(best),
             "matches": [{"rubrique": head, "keywords": rows}
                         for head, rows in grouped.items()]}

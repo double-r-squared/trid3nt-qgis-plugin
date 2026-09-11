@@ -1,4 +1,4 @@
-"""The TELEMAC local-docker solve seam - three solver names, one image, one spec.
+"""The TELEMAC local-docker solve seam - one engine, one image, one spec.
 
 Status is the worker's exit code AND the CORRECT-END flag in
 ``telemac_metrics.json`` together: a clean process that never reached the end of
@@ -10,15 +10,15 @@ import json
 import logging
 import os
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 logger = logging.getLogger("trid3nt.workflows.run_telemac")
 
-#: Solver identifiers. Each is keyed in both ``SOLVER_WORKFLOW_REGISTRY`` (the
-#: presence gate ``run_solver`` reads) and ``LOCAL_SOLVER_SPEC_REGISTRY``.
-TELEMAC_SOLVER_NAME: str = "telemac_river_dye"
-ARTEMIS_SOLVER_NAME: str = "artemis_agitation"
-TELEMAC3D_SOLVER_NAME: str = "telemac3d_strat"
+#: The solver identifier IS the engine name: one registration per engine, keyed
+#: in both ``SOLVER_WORKFLOW_REGISTRY`` (the presence gate ``run_solver`` reads)
+#: and ``LOCAL_SOLVER_SPEC_REGISTRY``. Which MODULE ran is the manifest's
+#: ``case.module``, which the worker states back in its metrics.
+TELEMAC_SOLVER_NAME: str = "telemac"
 
 #: Default worker image (override via env TRID3NT_TELEMAC_IMAGE).
 DEFAULT_TELEMAC_IMAGE: str = "trid3nt-local/telemac:latest"
@@ -26,44 +26,9 @@ DEFAULT_TELEMAC_IMAGE: str = "trid3nt-local/telemac:latest"
 #: The metrics filename the worker writes into the mounted rundir.
 _METRICS_FILENAME: str = "telemac_metrics.json"
 
-#: Metrics keys folded into completion.json. ONE list across the family: a key a
-#: leg never writes is simply absent from its metrics and never lands, so a
-#: per-leg list only duplicated that filtering in a second place.
-_COMPLETION_METRIC_KEYS: frozenset[str] = frozenset((
-    # every leg. ``bbox`` is the ONE spelling of the solved domain's lon/lat
-    # extent: the server measures it and states it, and a second name for it was
-    # a second answer a reader had to pick between.
-    "correct_end", "error_code", "module", "result_slf",
-    "npoin", "nelem", "ntimestep",
-    # the failure path's evidence. The worker writes it only when the run did
-    # not reach a correct end, and it is the only listing a reader has when the
-    # solve died before the listing file was uploaded.
-    "listing_tail",
-    "nptfr", "utm_epsg", "dx_m", "coarsened", "n_wet_nodes", "depth_max_m",
-    "depth_mean_m", "bathy_source", "bed_source", "bbox", "wall_s",
-    # reach / river dye
-    "n_frames", "dye_peak_time_s", "reach_name", "mesh_size_m",
-    "time_step_s", "edge_min_m", "edge_mean_m", "edge_max_m",
-    "preview_geojson",
-    # wind stress, on whichever leg was asked for it
-    "wind_speed_mps", "wind_dir_from_deg",
-    # artemis
-    "wave_mode", "hs_max_m",
-    "agitation_field_slf", "kd_max", "kd_sheltered", "kd_exposed",
-    "sheltering_ratio", "resonant_period_s", "response_at_resonance",
-    "response_off_resonance", "kd_focus_peak", "wave_period_s", "wave_dir_deg",
-    "wave_height_m", "reflection_coef",
-    # telemac3d
-    "flow_mode", "surface_field_slf", "bottom_field_slf", "nplan",
-    "stratification_metric", "variable_label", "variable_units",
-    "stratification_dt", "stratification_dt_init", "u_surface", "u_bottom",
-    "depth_avg_u", "front_speed_mps", "benjamin_speed_mps", "front_ratio",
-    "non_hydrostatic", "surface_value_mean", "bottom_value_mean",
-))
-
 
 def _telemac_image() -> str:
-    """The TELEMAC worker image every leg of the family runs in."""
+    """The TELEMAC worker image every module of the engine runs in."""
     return os.environ.get("TRID3NT_TELEMAC_IMAGE") or DEFAULT_TELEMAC_IMAGE
 
 
@@ -86,70 +51,62 @@ def _why(metrics: dict[str, Any], fallback: str) -> str:
     return f"{said} - the engine asked for: {demand}" if demand else said
 
 
-def _classify(label: str) -> Callable[[Path, int], tuple[str, int, str | None,
-                                                         dict[str, Any]]]:
-    """The exit classifier for one leg -> ``(status, exit_code, error, extra)``.
-
-    ``label`` names the leg in the error sentence; nothing else differs."""
-    def classify_exit(rundir: Path, exit_code: int
-                      ) -> tuple[str, int, str | None, dict[str, Any]]:
-        metrics: dict[str, Any] = {}
-        path = rundir / _METRICS_FILENAME
-        try:
-            if path.exists():
-                loaded = json.loads(path.read_text(encoding="utf-8"))
-                if isinstance(loaded, dict):
-                    metrics = loaded
-        except Exception as exc:  # noqa: BLE001 -- a bad metrics file must not kill the write
-            logger.warning("%s classify_exit: metrics read failed %s: %s",
-                           label, path, exc)
-        extra = {k: v for k, v in metrics.items() if k in _COMPLETION_METRIC_KEYS}
-        if exit_code != 0:
-            return ("error", exit_code, _why(
-                metrics, f"{label} exited with non-zero code {exit_code}"), extra)
-        if metrics and not bool(metrics.get("correct_end")):
-            return ("error", 2, _why(
-                metrics, f"{label} did not reach CORRECT END OF RUN"), extra)
-        return "ok", 0, None, extra
-    return classify_exit
+def _metrics(rundir: Path) -> dict[str, Any]:
+    """What the worker wrote, or ``{}``: a bad metrics file must not kill the write."""
+    path = rundir / _METRICS_FILENAME
+    try:
+        if path.exists():
+            loaded = json.loads(path.read_text(encoding="utf-8"))
+            if isinstance(loaded, dict):
+                return loaded
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("telemac classify_exit: metrics read failed %s: %s",
+                       path, exc)
+    return {}
 
 
-def make_spec(solver: str, stream_prefix: str) -> Callable[[], Any]:
-    """The ``LocalSolverSpec`` factory for one solver name.
+def classify_exit(rundir: Path, exit_code: int
+                  ) -> tuple[str, int, str | None, dict[str, Any]]:
+    """The post-exit verdict -> ``(status, exit_code, error, extra)``.
 
-    ``stream_prefix`` names the leg's stdout and stderr objects."""
-    def spec() -> Any:
-        from trid3nt_server.workflows.solver.solver import (
-            LOCAL_DOCKER_WORKFLOW_NAME,
-            LocalSolverSpec,
-        )
-
-        return LocalSolverSpec(
-            solver=solver,
-            workflow_name=LOCAL_DOCKER_WORKFLOW_NAME,
-            args_key="telemac_args",
-            build_argv=_build_argv,
-            network="none",
-            stdout_name=f"{stream_prefix}.stdout",
-            stderr_name=f"{stream_prefix}.stderr",
-            stdout_uri_field=f"{stream_prefix}_stdout_uri",
-            stderr_uri_field=f"{stream_prefix}_stderr_uri",
-            exec_kind="docker",
-            classify_exit=_classify(solver),
-        )
-    return spec
+    The error sentence names the MODULE the worker says it ran; the whole metrics
+    file is the completion's extra, because the worker is ours and writes
+    module-level metrics only."""
+    metrics = _metrics(rundir)
+    label = str(metrics.get("module") or TELEMAC_SOLVER_NAME)
+    if exit_code != 0:
+        return ("error", exit_code, _why(
+            metrics, f"{label} exited with non-zero code {exit_code}"), metrics)
+    if metrics and not bool(metrics.get("correct_end")):
+        return ("error", 2, _why(
+            metrics, f"{label} did not reach CORRECT END OF RUN"), metrics)
+    return "ok", 0, None, metrics
 
 
-#: solver name -> the stdout/stderr prefix its run directory is read by.
-_SOLVERS: dict[str, str] = {
-    TELEMAC_SOLVER_NAME: "telemac",
-    ARTEMIS_SOLVER_NAME: "artemis",
-    TELEMAC3D_SOLVER_NAME: "telemac3d",
-}
+def _spec() -> Any:
+    """The engine's one ``LocalSolverSpec``."""
+    from trid3nt_server.workflows.solver.solver import (
+        LOCAL_DOCKER_WORKFLOW_NAME,
+        LocalSolverSpec,
+    )
+
+    return LocalSolverSpec(
+        solver=TELEMAC_SOLVER_NAME,
+        workflow_name=LOCAL_DOCKER_WORKFLOW_NAME,
+        args_key="telemac_args",
+        build_argv=_build_argv,
+        network="none",
+        stdout_name=f"{TELEMAC_SOLVER_NAME}.stdout",
+        stderr_name=f"{TELEMAC_SOLVER_NAME}.stderr",
+        stdout_uri_field=f"{TELEMAC_SOLVER_NAME}_stdout_uri",
+        stderr_uri_field=f"{TELEMAC_SOLVER_NAME}_stderr_uri",
+        exec_kind="docker",
+        classify_exit=classify_exit,
+    )
 
 
-def register_telemac_solvers() -> None:
-    """Register every leg in the solver + local-spec registries. Idempotent.
+def register_telemac_solver() -> None:
+    """Register the engine in the solver + local-spec registries. Idempotent.
 
     TELEMAC is local-docker only: the engine lives in the worker image."""
     from trid3nt_server.workflows.solver.solver import (
@@ -158,9 +115,9 @@ def register_telemac_solvers() -> None:
         register_local_solver_spec,
     )
 
-    for solver, prefix in _SOLVERS.items():
-        SOLVER_WORKFLOW_REGISTRY.setdefault(solver, LOCAL_DOCKER_WORKFLOW_NAME)
-        register_local_solver_spec(solver, make_spec(solver, prefix))
+    SOLVER_WORKFLOW_REGISTRY.setdefault(TELEMAC_SOLVER_NAME,
+                                        LOCAL_DOCKER_WORKFLOW_NAME)
+    register_local_solver_spec(TELEMAC_SOLVER_NAME, _spec)
 
 
-register_telemac_solvers()
+register_telemac_solver()

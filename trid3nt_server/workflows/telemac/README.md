@@ -1,7 +1,7 @@
 # `workflows/telemac/` - the TELEMAC engine
 
 One door and seven trees. Nothing lives at this root but the door itself: the
-trees are named for what they hold - `catalog/` the engine's own dictionaries,
+trees are named for what they hold - `dictionary/` the engine's own dictionaries,
 `modules/` the wrappers over them, `templates/` one package per question,
 `authoring/` the run directory the box receives, `solving/` the dispatched run,
 `products/` the answer that run is read into, `helpers/` what a declaration
@@ -18,7 +18,7 @@ binding. Every question this engine answers is one of those, so the plan languag
 is gone from the tree and the worker authors nothing.
 
 TOMAWAC has NO wrapper, and the reason is measurable rather than an oversight:
-`catalog/tomawac.json` holds its 223 keywords and `entrypoint._MODULES` can solve
+`dictionary/tomawac.json` holds its 223 keywords and `entrypoint._MODULES` can solve
 it, but the spectral tier has no publisher of the shape an `outputs(...)` binding
 takes - `products/postprocess_telemac.postprocess_tomawac` is a raw postprocess
 returning `(layers, metrics)`, and its tool is tombstoned. The wrapper was to be
@@ -36,8 +36,8 @@ absent here and rides with the rung-4 wave-field rebuild.
 
 | folder | what it is |
 | --- | --- |
-| `catalog/` | The engine's own keyword dictionaries, one JSON per exposed module. See its own map. |
-| `modules/` | One wrapper per exposed module - its catalog, its composites, its outputs, and nothing that opines - plus the sheet a body fills and the two acts on it, fill and run. See its own map. |
+| `dictionary/` | The engine's own keyword dictionaries, one JSON per exposed module. See its own map. |
+| `modules/` | One wrapper per exposed module - its dictionary, its composites, its outputs, and nothing that opines - plus the sheet a body fills and the two acts on it, fill and run. See its own map. |
 | `templates/` | One package per question, over the module wrappers, plus the shared bodies several of them list. See its own map. |
 | `authoring/` | Everything the box receives: the ONE assembler, the serializer that writes the steering format, the DAMOCLES parse that gates it. See its own map. |
 | `solving/` | The run, dispatched: stage the manifest, hand it to the solve seam, wait, surface the gates. See its own map. |

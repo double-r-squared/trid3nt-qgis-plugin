@@ -650,6 +650,10 @@ class _StepState:
     role: str = "tool"
     batch_job_id: str | None = None
     batch_status: str | None = None
+    #: WHICH engine and which of its modules this compute card is a run of. Both
+    #: ``None`` on a plain tool card, which is a run of nothing.
+    engine: str | None = None
+    module: str | None = None
     #: Durable-card lifecycle: the STABLE persisted
     #: ``message_id`` (a ULID) of this step's tool-card row. Set on a compute
     #: SOLVE step at mint so the card persisted ``running`` and the
@@ -1174,6 +1178,8 @@ class PipelineEmitter:
         tool_name: str,
         batch_job_id: str,
         batch_status: str | None = None,
+        engine: str | None = None,
+        module: str | None = None,
     ) -> str:
         """Append a ``role="compute"`` step bound to a dispatched solver run; emit.
         Lands RUNNING immediately, so the card shows motion while the solver runs
@@ -1184,6 +1190,8 @@ class PipelineEmitter:
         step.role = "compute"
         step.batch_job_id = batch_job_id
         step.batch_status = batch_status
+        step.engine = engine
+        step.module = module
         # Pin a STABLE persisted row id NOW, so the row written at mint and the
         # later terminal write upsert the SAME row - running to terminal in place,
         # never as two cards.
@@ -1790,6 +1798,8 @@ class PipelineEmitter:
             role=s.role,  # type: ignore[arg-type]
             batch_job_id=s.batch_job_id,
             batch_status=s.batch_status,
+            engine=s.engine,
+            module=s.module,
             # ``parent_step_id`` rides a CHILD; the live-breadcrumb trio rides
             # the PARENT, and is None while it is idle.
             parent_step_id=s.parent_step_id,
@@ -1956,6 +1966,7 @@ async def mint_dispatch_and_sim_cards(
     solver: str,
     handle: Any,
     compute_class: str | None = None,
+    module: str | None = None,
 ) -> str | None:
     """Mint the Dispatch (tool) + Sim (compute) cards for a dispatched solve.
     Returns the SIM step's id, or ``None`` on any failure: the cards are an
@@ -1989,6 +2000,8 @@ async def mint_dispatch_and_sim_cards(
             tool_name=f"{case}:solve",
             batch_job_id=job_id,
             batch_status="SUBMITTED",
+            engine=solver,
+            module=module,
         )
         # Persist the SIM card NOW, still running, so a reconnect mid-solve
         # replays the live card instead of dropping it. The same row is upserted

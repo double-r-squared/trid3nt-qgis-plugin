@@ -73,6 +73,17 @@ class ParamSheetParseTests(unittest.TestCase):
         self.assertTrue(row.editable)
         self.assertTrue(row.is_numeric)
 
+    def test_a_filled_slot_carries_the_origin_the_card_chips(self) -> None:
+        """A SET row names one word of the server's closed set; a row that is
+        not a filled slot names none, and the card leaves it as plain prose."""
+        rows = [*_DEFAULT_ROWS,
+                {"name": "TIME_STEP", "value": 2.5, "desc": "Time step",
+                 "door": "derived", "basis": "derived", "origin": "derived",
+                 "source_badge": "derived: settled.time_step_s"}]
+        sheet = gate.parse_param_sheet(_sheet_payload(rows=rows))
+        self.assertEqual(sheet.rows[-1].origin, "derived")
+        self.assertEqual(sheet.rows[0].origin, "")
+
     def test_a_list_value_displays_without_none(self) -> None:
         sheet = gate.parse_param_sheet(_sheet_payload())
         self.assertEqual(sheet.rows[0].display(), "-124.1, 40.5")

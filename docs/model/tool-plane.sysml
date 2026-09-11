@@ -1,7 +1,7 @@
 // plane: tool | system: code-exec
 //
 // The tool plane's modeled seams: the box a user-confirmed snippet runs in, and
-// the read over the engine keyword catalogs a caller reaches a surface too large
+// the read over the engine keyword dictionaries a caller reaches a surface too large
 // to carry through.
 //
 // SysML v2 TEXTUAL notation, restricted to the subset the project checker
@@ -66,7 +66,7 @@ package ToolPlane {
 
     part def KeywordLookup {
         doc /*
-        The read over the engine's own keyword catalogs. It answers a question in
+        The read over the engine's own keyword dictionaries. It answers a question in
         words with the dictionary's entries and runs nothing.
         */
     }
@@ -308,7 +308,7 @@ package ToolPlane {
         The read decides nothing and runs nothing. Its ranking is model-free and
         deterministic, so the same question is answered the same way twice and
         an index nobody can rebuild is never between the caller and the
-        dictionary. A module with no catalog refuses naming the ones there are.
+        dictionary. A module with no dictionary refuses naming the ones there are.
         */
     }
 

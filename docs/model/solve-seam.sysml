@@ -511,15 +511,21 @@ package SolveSeam {
         connect workerEntrypoint.serverFactsOut to launcherArm.metricsIn {
         doc /*
         pass-through: workerEntrypoint
+        pass-through: launcherArm
         */
     }
 
     interface metricsWritten : WorkerRunReport
-        connect workerEntrypoint.metricsOut to launcherArm.metricsIn;
+        connect workerEntrypoint.metricsOut to launcherArm.metricsIn {
+        doc /*
+        pass-through: launcherArm
+        */
+    }
 
     interface completionFolded : FoldedRunPhysics
         connect launcherArm.completionOut to supervisor.completionIn {
         doc /*
+        pass-through: launcherArm
         pass-through: supervisor
         */
     }
@@ -527,6 +533,7 @@ package SolveSeam {
     interface frameCountFolded : FrameCountCrossCheck
         connect launcherArm.completionOut to supervisor.completionIn {
         doc /*
+        pass-through: launcherArm
         pass-through: supervisor
         */
     }

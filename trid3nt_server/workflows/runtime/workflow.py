@@ -313,6 +313,14 @@ class Workflow:
             return direct
         return (run.results.get(self.solve_step) or {}).get("run_id")
 
+    def _module(self, run: RunResult) -> str | None:
+        """WHICH module of the engine ran, as the solve step itself states it.
+        The engine is the workflow's; the module is the run's, so a family that
+        shares one engine does not record every run under one sibling's name."""
+        if not self.solve_step:
+            return None
+        return (run.results.get(self.solve_step) or {}).get("module")
+
     def _journal(self, run_id: str | None, run: RunResult, result: Any,
                  metrics: Mapping[str, Any], wall_seconds: float,
                  notes: Sequence[str] = (),
@@ -325,7 +333,7 @@ class Workflow:
         sheet = run.params.rows() if run.params is not None else ()
         journal.append_record(journal.build_record(
             run_id=run_id, template=self.name, engine=self.engine or None,
-            sheet=sheet, answer=metrics,
+            module=self._module(run), sheet=sheet, answer=metrics,
             provenance=getattr(result, "synthetic_inputs", None) or [],
             result=result, wall_seconds=round(wall_seconds, 3),
             origin=journal.run_origin(live_session=current_emitter() is not None),

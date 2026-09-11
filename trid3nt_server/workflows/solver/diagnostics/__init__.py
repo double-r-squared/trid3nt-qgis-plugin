@@ -113,7 +113,7 @@ def _code_staleness_warnings(completion: dict[str, Any]) -> list[str]:
 
         warning = staleness(
             code_sha=completion.get("code_sha"),
-            engine=str(completion.get("solver") or ""),
+            engine=str(completion.get("engine") or ""),
             code_dirty=completion.get("code_dirty"),
         )
     except Exception:  # noqa: BLE001 -- provenance never fails a health read
@@ -124,8 +124,8 @@ def _code_staleness_warnings(completion: dict[str, Any]) -> list[str]:
 
 
 def _recover_engine(completion: dict[str, Any]) -> str:
-    """Engine identity: the ``solver`` field (fix), else the stdout-field stem."""
-    raw = completion.get("solver")
+    """Engine identity: the ``engine`` field (fix), else the stdout-field stem."""
+    raw = completion.get("engine")
     if raw is None:
         for key in completion:
             if key.endswith("_stdout_uri"):
@@ -135,7 +135,7 @@ def _recover_engine(completion: dict[str, Any]) -> str:
     if engine is None:
         raise DiagnosticsEngineUnknown(
             "could not recover the engine identity from completion.json "
-            f"(solver={completion.get('solver')!r}, stdout fields="
+            f"(engine={completion.get('engine')!r}, stdout fields="
             f"{[k for k in completion if k.endswith('_stdout_uri')]}); no "
             "diagnostics parser applies."
         )

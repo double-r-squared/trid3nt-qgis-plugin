@@ -1,6 +1,6 @@
-"""The committed TELEMAC catalogs are the image's dictionaries, not a copy of them.
+"""The committed TELEMAC dictionaries are the image's dictionaries, not a copy of them.
 
-The catalog under ``workflows/telemac/catalog/`` is generated data, valid only
+The dictionary under ``workflows/telemac/dictionary/`` is generated data, valid only
 while it agrees with the engine's own keyword dictionaries, so this re-extracts
 in-image and compares. Without the image the check SKIPS - it never passes on
 absence."""
@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 
 DEV = Path(__file__).resolve().parents[2] / "dev"
-_SCRIPT = DEV / "instruments" / "extract_telemac_catalog.py"
+_SCRIPT = DEV / "instruments" / "extract_telemac_dictionary.py"
 
 if not DEV.is_dir():
     pytest.skip("dev/ is absent: the dev tools are not on the remote",
@@ -26,21 +26,21 @@ _TOTAL_KEYWORDS = 1311
 
 def _extractor():
     """The script, imported by path - ``dev/instruments/`` is not a package."""
-    spec = importlib.util.spec_from_file_location("extract_telemac_catalog", _SCRIPT)
+    spec = importlib.util.spec_from_file_location("extract_telemac_dictionary", _SCRIPT)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
 
 
-def test_every_exposed_module_has_a_committed_catalog():
+def test_every_exposed_module_has_a_committed_dictionary():
     extractor = _extractor()
     committed = {path.stem: json.loads(path.read_text())
-                 for path in extractor.catalog_dir().glob("*.json")}
+                 for path in extractor.dictionary_dir().glob("*.json")}
     assert set(committed) == set(extractor.MODULES)
     assert sum(len(c["keywords"]) for c in committed.values()) == _TOTAL_KEYWORDS
-    for module, catalog in committed.items():
-        assert catalog["module"] == module
-        for slot in catalog["keywords"]:
+    for module, dictionary in committed.items():
+        assert dictionary["module"] == module
+        for slot in dictionary["keywords"]:
             assert slot["type"] in ("INTEGER", "REAL", "LOGICAL", "STRING")
             assert slot["help"] and slot["keyword"]
             assert slot["identifier"].isidentifier()
@@ -51,19 +51,19 @@ def test_every_exposed_module_has_a_committed_catalog():
 def test_the_help_carries_no_markup_into_the_surface():
     """A slot's desc is what a reader is given, so no LaTeX may survive in it."""
     extractor = _extractor()
-    for path in extractor.catalog_dir().glob("*.json"):
+    for path in extractor.dictionary_dir().glob("*.json"):
         assert "\\" not in path.read_text(), (
             f"{path.name} still carries LaTeX; widen de_latex in the extractor")
 
 
-def test_the_committed_catalog_is_what_the_image_says_today(tmp_path):
+def test_the_committed_dictionary_is_what_the_image_says_today(tmp_path):
     extractor = _extractor()
     if not extractor.image_present():
         pytest.skip(f"{extractor.IMAGE} is not on this machine: the dictionaries "
-                    "the catalog is extracted from are only in that image")
-    extractor.extract_catalogs(tmp_path)
+                    "the dictionary is extracted from are only in that image")
+    extractor.extract_dictionaries(tmp_path)
     for module in extractor.MODULES:
-        committed = (extractor.catalog_dir() / f"{module}.json").read_text()
+        committed = (extractor.dictionary_dir() / f"{module}.json").read_text()
         assert (tmp_path / f"{module}.json").read_text() == committed, (
             f"{module}.json has drifted from the image's dictionary; re-run "
-            "dev/instruments/extract_telemac_catalog.py and read the diff")
+            "dev/instruments/extract_telemac_dictionary.py and read the diff")

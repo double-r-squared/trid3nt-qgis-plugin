@@ -1,4 +1,4 @@
-"""The GAIA wrapper: its catalog, the sediment bodies, and the NESTOR composite.
+"""The GAIA wrapper: its dictionary, the sediment bodies, and the NESTOR composite.
 
 GAIA runs UNDER a hydrodynamic module and states no value of its own. Cohesive
 sediment is approximated as very fine non-cohesive; the Krone/Partheniades path
@@ -24,7 +24,7 @@ SURFACE_REF_FILENAME = "nestor.ref"
 
 
 class _Gaia(Module("gaia")):  # type: ignore[misc]
-    """The catalog, the three sediment bodies, and NESTOR as one value."""
+    """The dictionary, the three sediment bodies, and NESTOR as one value."""
 
     @classmethod
     def graded(cls, *, geometry: Any, boundary: Any, classes: Any,

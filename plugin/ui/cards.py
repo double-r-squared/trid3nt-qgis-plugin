@@ -224,6 +224,12 @@ _FORM_CARD_STYLE = (
 )
 _FORM_TITLE_STYLE = "color: #a78bfa; font-weight: bold; border: none;"
 _FORM_BADGE_STYLE = "color: palette(mid); font-size: 8pt; border: none;"
+#: A row whose value has a declared ORIGIN wears it as a chip, so where the
+#: value came from is legible at a glance rather than read out of a sentence.
+_FORM_ORIGIN_CHIP_STYLE = (
+    "font-family: monospace; font-size: 8pt; color: palette(mid); "
+    "border: 1px solid palette(mid); border-radius: 7px; padding: 0px 6px;"
+)
 
 
 class _WrapLabel(QLabel):
@@ -2596,10 +2602,11 @@ class FormCard(QFrame):
             grid.addWidget(editor, i, 1)
             self._editors[row.name] = editor
 
-            badge = QLabel(row.source_badge)
-            badge.setWordWrap(True)
-            badge.setStyleSheet(_FORM_BADGE_STYLE)
-            badge.setToolTip(row.note or "")
+            badge = QLabel(row.origin or row.source_badge)
+            badge.setWordWrap(not row.origin)
+            badge.setStyleSheet(
+                _FORM_ORIGIN_CHIP_STYLE if row.origin else _FORM_BADGE_STYLE)
+            badge.setToolTip(row.source_badge if row.origin else (row.note or ""))
             grid.addWidget(badge, i, 2)
         grid.setColumnStretch(1, 1)
         grid.setColumnStretch(2, 1)

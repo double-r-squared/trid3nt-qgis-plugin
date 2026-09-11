@@ -311,8 +311,10 @@ _SHADOW_RECORD_TYPE = "tool_retrieval_shadow"
 
 #: Terminal solver tools -> the flow they identify. A turn is attributed to a
 #: flow when it dispatched one of these, which drives the recall@k per-flow
-#: breakdown. Keys must be registered engine templates; a key that no longer
-#: registers reports a permanently empty flow.
+#: breakdown. This is RETRIEVAL BENCH DATA, not a run surface: the names are
+#: template names because what is being measured is whether a phrasing reaches
+#: the right template. Keys must be registered engine templates; a key that no
+#: longer registers reports a permanently empty flow.
 _FLOW_BY_SOLVER_TOOL: dict[str, str] = {
     "telemac_river_dye": "river-plume",
     "telemac_river_oil_spill": "river-oil-slick",

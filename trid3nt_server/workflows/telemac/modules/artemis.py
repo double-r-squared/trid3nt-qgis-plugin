@@ -1,4 +1,4 @@
-"""The ARTEMIS wrapper: its catalog, its composite, and its output.
+"""The ARTEMIS wrapper: its dictionary, its composite, and its output.
 
 The wrapper asserts NO value of its own. ARTEMIS reads its forcing out of the
 BOUNDARY CONDITIONS FILE rather than out of the steering file, so the incident

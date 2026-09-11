@@ -25,7 +25,7 @@ from trid3nt_server.workflows.runtime import (
 from trid3nt_server.workflows.mesh.step import MeshStep
 from trid3nt_server.workflows.telemac.helpers.errors import TelemacDyeScenarioError
 from trid3nt_server.workflows.telemac.modules.module import SlotRefused
-from trid3nt_server.workflows.telemac.modules.sheet import Sheet
+from trid3nt_server.workflows.telemac.modules.sheet import Origin, Sheet
 from trid3nt_server.workflows.telemac.modules.sheet import fill as fill_slots
 from trid3nt_server.workflows.telemac.modules.sheet import run as run_sheet_
 
@@ -91,12 +91,12 @@ class Door:
         body = self.steering
         stated = {name for part in (*body.PARTS, body) for name in part.ASSERTED}
         stated |= set(self.slots)
-        touched = sorted({body.CATALOG[name].rubrique[0] for name in stated
-                          if name in body.CATALOG and body.CATALOG[name].rubrique})
-        open_required = sorted(slot.keyword for name, slot in body.CATALOG.items()
+        touched = sorted({body.DICTIONARY[name].rubrique[0] for name in stated
+                          if name in body.DICTIONARY and body.DICTIONARY[name].rubrique})
+        open_required = sorted(slot.keyword for name, slot in body.DICTIONARY.items()
                                if slot.is_required and name not in stated)
         return (
-            f"Sheet: {body.MODULE}, whose dictionary has {len(body.CATALOG)} "
+            f"Sheet: {body.MODULE}, whose dictionary has {len(body.DICTIONARY)} "
             f"keywords. This template states {len(stated)} of them, under "
             f"{', '.join(touched)}. Open mandatory slots: "
             f"{', '.join(open_required) if open_required else 'none'}. Every "
@@ -196,15 +196,19 @@ async def run_sheet(*, sheet: Sheet, settled: Mapping[str, Any],
         compute_class=compute_class,
         coupling=None if not coupled else str(coupled).split(";")[0].lower(),
         continue_from=settled.get("continue_from"))
-    return {**settled, **dict(meta), **handle}
+    return {**settled, **dict(meta), **handle, "module": sheet.module}
 
 
-#: How a slot's PROVENANCE reads on the card: which door served the value, and
-#: what the badge says beside it. The card is a view of the sheet, so the row's
-#: name is the keyword's own identifier and an edit of it is another fill.
-_PROVENANCE_DOORS: Mapping[str, tuple[str, str]] = {
-    "template": ("scenario", "derived"),
-    "fill": ("user", "user"),
+#: How a slot's ORIGIN reads on the card: which door served the value, and what
+#: the basis beside it says. The card is a view of the sheet, so the row's name
+#: is the keyword's own identifier and an edit of it is another fill.
+_ORIGIN_DOORS: Mapping[Origin, tuple[str, str]] = {
+    Origin.TEMPLATE: ("scenario", "derived"),
+    Origin.USER: ("user", "user"),
+    Origin.MODEL: ("user", "user"),
+    Origin.PRODUCER: ("derived", "derived"),
+    Origin.DERIVED: ("derived", "derived"),
+    Origin.CALIBRATED: ("derived", "derived"),
 }
 
 
@@ -217,7 +221,7 @@ def card_rows(sheet: Sheet) -> list[ParamSheetRow]:
     # The advanced fold reads down the dictionary's own RUBRIQUES, and inside one
     # down the dictionary's own order - the sections the engine's documentation
     # is written in, rather than a flat thousand-row list.
-    rest = [slot for name, slot in sheet.body.CATALOG.items()
+    rest = [slot for name, slot in sheet.body.DICTIONARY.items()
             if name not in sheet.filled and not slot.is_required]
     return rows + [_default_row(slot) for slot in
                    sorted(rest, key=lambda slot: _group(slot))]
@@ -250,17 +254,18 @@ async def _review(sheet: Sheet, *, workflow: str, title: str,
             "USER_INPUT_CANCELLED",
             outcome.cancel_reason or f"{workflow} was cancelled at the review.")
     return {name: value for name, value in outcome.params.items()
-            if name in sheet.body.CATALOG or name in sheet.body.COMPOSITES}
+            if name in sheet.body.DICTIONARY or name in sheet.body.COMPOSITES}
 
 
 def _slot_row(name: str, row: Any) -> ParamSheetRow:
     """One SET slot, as the card renders it: the value and where it came from."""
-    door, basis = _PROVENANCE_DOORS.get(row.provenance, ("derived", "derived"))
+    door, basis = _ORIGIN_DOORS[row.provenance.origin]
     value = row.value if isinstance(row.value, (int, float, str, bool, list)) \
         else str(row.value)
     return ParamSheetRow(
         name=name, value=value, desc=row.slot.desc[:512], door=door, basis=basis,
-        source_badge=row.provenance, group=_group(row.slot))
+        origin=row.provenance.origin.value, source_badge=str(row.provenance),
+        group=_group(row.slot))
 
 
 def _open_row(slot: Any) -> ParamSheetRow:
@@ -296,5 +301,5 @@ def _group(slot: Any) -> str:
 class TelemacWorkflow(Workflow):
     """TELEMAC: the two facts the skeleton records a run of this engine under."""
 
-    engine = "telemac2d"
+    engine = "telemac"
     solve_step = "solve"

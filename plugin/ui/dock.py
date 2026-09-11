@@ -120,13 +120,13 @@ _USER_BUBBLE_STYLE = (
 )
 
 
-def _solver_engine_label(solver: str) -> str:
-    """A solver id -> the ENGINE it names, for a sim card title; the full run
-    identity stays in the metadata table. Pure string math on the convention
-    that a solver id leads with its engine."""
-    base = (solver or "").split(":", 1)[0]
-    head = base.split("_", 1)[0]
-    return head.upper() if head else "SOLVER"
+def _run_identity(engine: str, module: str) -> str:
+    """A run's identity for a sim card title: the ENGINE and the MODULE of it
+    that ran. A run that states no engine is titled by neither - the full run
+    identity stays in the card's metadata table either way."""
+    if not engine:
+        return "SOLVER"
+    return f"{engine.upper()} / {module}" if module else engine.upper()
 
 
 def _short_args_summary(raw_args: str, max_len: int = 64) -> str:
@@ -1507,7 +1507,7 @@ class Trid3ntDock(QDockWidget):
             # it (chronological turn flow; the card never strands at the
             # bottom while text piles above it).
             self._close_pending_for_card()
-            card = SimCard(_solver_engine_label(step.tool_name))
+            card = SimCard(_run_identity(step.engine, step.module))
             self._sim_cards[step.step_id] = card
             self.messages_layout.insertWidget(
                 self.messages_layout.count() - 1, card

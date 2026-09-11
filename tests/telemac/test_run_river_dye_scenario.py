@@ -539,7 +539,7 @@ def test_the_chain_geocodes_dispatches_and_stages_the_resolved_sheet(
 
     # The place was GEOCODED, never hand-typed.
     assert captured["geocode_query"] == "Twin Falls, Idaho"
-    assert captured["solver"] == "telemac_river_dye"
+    assert captured["solver"] == "telemac"
     assert captured["model_setup_uri"].endswith("manifest.json")
     # Download + postprocess ran under the SOLVER's run_id, so outputs land under
     # the real run prefix rather than the manifest tag.

@@ -1,4 +1,4 @@
-"""The module surface: the catalog is the keyword table, and the wrapper opines.
+"""The module surface: the dictionary is the keyword table, and the wrapper opines.
 
 Every refusal is BY NAME at declaration or at fill, which is the whole point of
 spelling keywords raw: a misspelling, a wrong type or a value outside the
@@ -23,7 +23,7 @@ from trid3nt_server.workflows.telemac.modules import (
     T2D,
     draw,
     fill,
-    load_catalog,
+    load_dictionary,
     run,
 )
 from trid3nt_server.workflows.telemac.modules.module import UNSET, Module
@@ -31,13 +31,13 @@ from trid3nt_server.workflows.telemac.modules.module import UNSET, Module
 _EXPOSED = ("telemac2d", "telemac3d", "artemis", "waqtel", "gaia")
 
 
-# -- the catalog IS the keyword table ---------------------------------------- #
+# -- the dictionary IS the keyword table ---------------------------------------- #
 
 def test_every_slot_carries_the_dictionary_s_own_name_and_help():
     for module in _EXPOSED:
-        catalog = load_catalog(module)
-        assert catalog, module
-        for identifier, slot in catalog.items():
+        dictionary = load_dictionary(module)
+        assert dictionary, module
+        for identifier, slot in dictionary.items():
             assert slot.identifier == identifier
             assert slot.keyword.strip() == slot.keyword.strip().upper()
             assert slot.desc, f"{module}/{identifier} describes nothing"
@@ -50,7 +50,7 @@ def test_the_identifier_is_the_keyword_and_nothing_invented():
     Where the mechanical spelling IS an identifier it is the identifier; where it is
     not, the image's own map decides, which is why the map is read out of the image."""
     for module in _EXPOSED:
-        for slot in load_catalog(module).values():
+        for slot in load_dictionary(module).values():
             mechanical = "".join(c if c.isalnum() else "_"
                                  for c in slot.keyword.strip())
             assert slot.identifier.isidentifier()
@@ -102,7 +102,7 @@ def test_a_wrapper_is_a_declaration_and_refuses_to_be_a_value():
 
 
 def test_an_unexposed_module_refuses_naming_the_ones_there_are():
-    with pytest.raises(SlotRefused, match="no catalog"):
+    with pytest.raises(SlotRefused, match="no dictionary"):
         Module("nosuchmodule")
 
 
@@ -233,9 +233,10 @@ def test_resolution_order_is_engine_then_the_parts_then_template_then_fill():
 
     rows = fill(DYE, TIDAL_FLATS=False).state()["filled"]
     assert rows["LAW_OF_BOTTOM_FRICTION"] == {
-        "keyword": "LAW OF BOTTOM FRICTION", "value": 4, "provenance": "template"}
+        "keyword": "LAW OF BOTTOM FRICTION", "value": 4,
+        "provenance": "template: DYE"}
     assert rows["TIDAL_FLATS"] == {
-        "keyword": "TIDAL FLATS", "value": False, "provenance": "fill"}
+        "keyword": "TIDAL FLATS", "value": False, "provenance": "user"}
 
 
 def test_a_composed_slot_says_which_part_asserted_it():
@@ -247,8 +248,8 @@ def test_a_composed_slot_says_which_part_asserted_it():
         DURATION = 600.0
 
     rows = fill(DYE).state()["filled"]
-    assert rows["TIDAL_FLATS"]["provenance"] == "part RIVER"
-    assert rows["DURATION"]["provenance"] == "template"
+    assert rows["TIDAL_FLATS"]["provenance"] == "template: RIVER"
+    assert rows["DURATION"]["provenance"] == "template: DYE"
 
 
 def test_a_value_the_run_measured_reads_as_derived_not_as_the_body_that_named_it():
@@ -268,10 +269,10 @@ def test_a_value_the_run_measured_reads_as_derived_not_as_the_body_that_named_it
     rows = fill(DYE, produced={"settled": {"tidal_flats": True,
                                            "time_step_s": 2.5}},
                 params={"sim_duration_s": 600.0}).state()["filled"]
-    assert rows["TIDAL_FLATS"]["provenance"] == "derived"
-    assert rows["TIME_STEP"]["provenance"] == "derived"
-    assert rows["DURATION"]["provenance"] == "template"
-    assert rows["SOLVER"]["provenance"] == "template"
+    assert rows["TIDAL_FLATS"]["provenance"] == "derived: settled.tidal_flats"
+    assert rows["TIME_STEP"]["provenance"] == "derived: settled.time_step_s"
+    assert rows["DURATION"]["provenance"] == "template: DYE"
+    assert rows["SOLVER"]["provenance"] == "template: DYE"
 
 
 def test_a_measured_value_a_fill_overrides_still_reads_as_the_users():
@@ -280,9 +281,10 @@ def test_a_measured_value_a_fill_overrides_still_reads_as_the_users():
         TIME_STEP = Ref("settled.time_step_s")
 
     sheet = fill(DYE, produced={"settled": {"time_step_s": 2.5}})
-    assert sheet.state()["filled"]["TIME_STEP"]["provenance"] == "derived"
+    assert (sheet.state()["filled"]["TIME_STEP"]["provenance"]
+            == "derived: settled.time_step_s")
     edited = fill(sheet, TIME_STEP=1.0).state()["filled"]["TIME_STEP"]
-    assert edited["value"] == 1.0 and edited["provenance"] == "fill"
+    assert edited["value"] == 1.0 and edited["provenance"] == "user"
 
 
 def test_the_parts_merge_in_the_listed_order():
@@ -297,8 +299,8 @@ def test_the_parts_merge_in_the_listed_order():
 
     assert [p.__name__ for p in DYE.PARTS] == ["RIVER", "TRACER"]
     rows = fill(DYE).state()["filled"]
-    assert rows["SOLVER"]["provenance"] == "part RIVER"
-    assert rows["NUMBER_OF_TRACERS"]["provenance"] == "part TRACER"
+    assert rows["SOLVER"]["provenance"] == "template: RIVER"
+    assert rows["NUMBER_OF_TRACERS"]["provenance"] == "template: TRACER"
 
 
 def test_a_keyword_two_parts_both_set_refuses_unless_the_template_settles_it():
@@ -386,7 +388,7 @@ def test_a_composite_becomes_several_slots_and_the_file_they_name():
     state = fill(DYE).state()
     assert state["filled"]["ABSCISSAE_OF_SOURCES"] == {
         "keyword": "ABSCISSAE OF SOURCES", "value": [1.0, 3.0],
-        "provenance": "producer releases"}
+        "provenance": "producer: releases"}
     assert state["files"] == ["river_sources.txt"]
 
 
@@ -401,7 +403,7 @@ def test_a_composite_sets_only_what_its_value_s_presence_defines():
     for module in _EXPOSED:
         source = (modules / f"{module}.py").read_text(encoding="utf-8")
         tree = ast.parse(source)
-        catalog = load_catalog(module)
+        dictionary = load_dictionary(module)
         constants = {
             node.targets[0].id: node.value.value
             for node in tree.body
@@ -426,7 +428,7 @@ def test_a_composite_sets_only_what_its_value_s_presence_defines():
                     if not (isinstance(key, ast.Constant)
                             and isinstance(key.value, str)):
                         continue
-                    slot = catalog.get(key.value)
+                    slot = dictionary.get(key.value)
                     if slot is None:
                         continue
                     if isinstance(value, ast.Constant):
@@ -770,14 +772,14 @@ def test_a_coupled_body_states_only_what_its_caller_handed_it():
     opinions = []
     for (module, body), (first, second) in _COUPLED_CALLS.items():
         wrapper = WRAPPERS[module]
-        catalog = load_catalog(module)
+        dictionary = load_dictionary(module)
         one = dict(getattr(wrapper, body)(**first)["slots"])
         two = dict(getattr(wrapper, body)(**second)["slots"])
         shared = ({_hashable(v) for v in first.values()}
                   & {_hashable(v) for v in second.values()})
         assert not shared, f"{module}.{body} calls share {shared}"
         for identifier, value in one.items():
-            slot = catalog.get(identifier)
+            slot = dictionary.get(identifier)
             if slot is None or _hashable(value) != _hashable(two.get(identifier)):
                 continue
             if slot.is_file or identifier in _TRANSPORT_ARMING:
@@ -949,7 +951,7 @@ def test_the_basin_states_how_its_tracer_is_carried_and_under_what_ceiling():
     deck advects temperature by whatever the VELOCITIES use. The template states the
     scheme, its ceiling and the step, each from a param and so each overridable."""
     from trid3nt_server.workflows.runtime import param_rows
-    from trid3nt_server.workflows.telemac.modules import load_catalog
+    from trid3nt_server.workflows.telemac.modules import load_dictionary
     from trid3nt_server.workflows.telemac.templates.stratified_flow.declarations import (
         PARAMS,
     )
@@ -958,7 +960,7 @@ def test_the_basin_states_how_its_tracer_is_carried_and_under_what_ceiling():
     )
 
     rows = {row.name: row for row in param_rows(PARAMS)}
-    slot = load_catalog("telemac3d")["SCHEME_FOR_ADVECTION_OF_TRACERS"]
+    slot = load_dictionary("telemac3d")["SCHEME_FOR_ADVECTION_OF_TRACERS"]
     assert slot.engine_default is UNSET
     scheme = rows["tracer_advection_scheme"].default
     # The NERD family, by the engine's own naming: telemac2d's TREATMENT OF
@@ -1052,13 +1054,15 @@ def _filled(**keywords):
 
 
 def test_a_raw_keyword_on_the_wire_fills_the_slot_it_names():
-    """The dictionary's own spelling reaches the sheet, and the row says the fill
+    """The dictionary's own spelling reaches the sheet, and the row says the user
     put it there - not the template, which said something else about it."""
+    from trid3nt_server.workflows.telemac.modules.sheet import Origin
+
     sheet = _filled(**{"LAW OF BOTTOM FRICTION": 4})
     row = sheet.filled["LAW_OF_BOTTOM_FRICTION"]
     assert _STEERING.ASSERTED["LAW_OF_BOTTOM_FRICTION"] == 3
     assert row.value == 4
-    assert row.provenance == "fill"
+    assert row.provenance.origin is Origin.USER
     assert ("LAW OF BOTTOM FRICTION", 4) in sheet.resolved()
 
 
@@ -1159,13 +1163,13 @@ def test_the_fill_docstring_names_the_module_its_rubriques_and_its_open_slots():
         body = entry.fn.workflow.plan_decl.steering
         doc = entry.fn.__doc__
         assert f"Sheet: {body.MODULE}" in doc, name
-        assert f"dictionary has {len(body.CATALOG)} keywords" in doc, name
+        assert f"dictionary has {len(body.DICTIONARY)} keywords" in doc, name
         assert "Open mandatory slots:" in doc, name
         assert "describe_keywords" in doc and "keywords=" in doc, name
         stated = {n for part in (*body.PARTS, body) for n in part.ASSERTED}
         stated |= set(entry.fn.workflow.plan_decl.slots)
         for identifier in stated:
-            slot = body.CATALOG.get(identifier)
+            slot = body.DICTIONARY.get(identifier)
             if slot is not None and slot.rubrique:
                 assert slot.rubrique[0] in doc, f"{name}: {slot.keyword}"
 
@@ -1182,7 +1186,7 @@ def test_every_required_file_is_the_template_s_own_statement():
         body = door.steering
         stated = {n for part in (*body.PARTS, body) for n in part.ASSERTED}
         stated |= set(door.slots)
-        unstated = sorted(slot.keyword for n, slot in body.CATALOG.items()
+        unstated = sorted(slot.keyword for n, slot in body.DICTIONARY.items()
                           if slot.is_required and n not in stated)
         assert not unstated, f"{name} leaves {unstated} to something else"
 
@@ -1214,9 +1218,10 @@ def test_the_card_shows_what_is_set_and_open_and_folds_the_rest_by_rubrique():
 
     sheet = _filled(**{"LAW OF BOTTOM FRICTION": 4})
     rows = {row.name: row for row in card_rows(sheet)}
-    assert len(rows) == len(T2D.CATALOG)
+    assert len(rows) == len(T2D.DICTIONARY)
     assert not rows["LAW_OF_BOTTOM_FRICTION"].advanced
-    assert rows["LAW_OF_BOTTOM_FRICTION"].source_badge == "fill"
+    assert rows["LAW_OF_BOTTOM_FRICTION"].origin == "user"
+    assert rows["LAW_OF_BOTTOM_FRICTION"].source_badge == "user"
     # The two OBLIG files this bare fill leaves open are shown, not folded.
     for identifier in ("GEOMETRY_FILE", "BOUNDARY_CONDITIONS_FILE"):
         assert not rows[identifier].advanced
@@ -1294,7 +1299,7 @@ def test_the_serializer_is_the_only_module_that_writes_a_keyword_into_a_deck():
     A keyword formatted into a string anywhere else is a second author of the format,
     caught here by the dictionary's own names rather than by a maintained list."""
     keywords = {slot.keyword for module in _EXPOSED + ("tomawac",)
-                for slot in load_catalog(module).values()}
+                for slot in load_dictionary(module).values()}
     offenders = {}
     for tree_root in (Path("trid3nt_server"), Path("workers")):
         for path in sorted(tree_root.rglob("*.py")):

@@ -411,22 +411,24 @@ def _write_local_completion(
     stdout_uri_field: str = "sfincs_stdout_uri",
     stderr_uri_field: str = "sfincs_stderr_uri",
     extra: dict[str, Any] | None = None,
-    solver: str | None = None,
+    engine: str | None = None,
     code: dict[str, Any] | None = None,
 ) -> None:
     """Write ``s3://<runs_bucket>/<run_id>/completion.json``, the terminal signal
     ``wait_for_completion`` polls for. The stdout/stderr field names and the
     ``extra`` fold are spec-driven, so each solver writes its own key set."""
-    # ``solver`` is recorded so a reader resolves the engine directly instead of
-    # inferring it from a stdout field name. It lands before the spec's ``extra``
-    # fold; no spec carries a ``solver`` key, so it is never clobbered.
+    # The envelope's own fields land AFTER the classifier's fold: the fold is
+    # whatever the worker measured, and where the two share a name the
+    # supervisor's answer is the one a reader of the terminal signal needs.
+    # ``engine`` is recorded so a reader resolves the engine directly instead of
+    # inferring it from a stdout field name.
     payload = {
+        **(code or {}),
+        **(extra or {}),
         "run_id": run_id,
         "status": status,
         "exit_code": exit_code,
-        "solver": solver,
-        **(code or {}),
-        **(extra or {}),
+        "engine": engine,
         stdout_uri_field: stdout_uri,
         stderr_uri_field: stderr_uri,
         "output_uris": output_uris,
@@ -558,7 +560,7 @@ def _supervise_local_run(run: _LocalRun) -> None:
             stdout_uri_field=run.spec.stdout_uri_field,
             stderr_uri_field=run.spec.stderr_uri_field,
             extra=completion_extra,
-            solver=run.spec.solver,
+            engine=run.spec.solver,
             code=run.code,
         )
     except Exception:  # noqa: BLE001 -- terminal-signal write failed; log loudly

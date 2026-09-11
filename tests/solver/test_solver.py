@@ -74,8 +74,8 @@ def test_run_solver_rejects_unregistered_solver(reset_solver_di_seams) -> None:
     message = str(exc_info.value)
     assert "not_an_engine" in message
     # The refusal quotes the roster, so a caller can see what it could have asked.
-    assert "telemac_river_dye" in message
-    assert set(SOLVER_WORKFLOW_REGISTRY) >= {"telemac_river_dye"}
+    assert "telemac" in message
+    assert set(SOLVER_WORKFLOW_REGISTRY) >= {"telemac"}
 
 
 
