@@ -14,7 +14,7 @@ flowchart LR
     door["Door<br/>trid3nt_server/workflows/telemac/workflow.py"]
     messageIR["MessageIR<br/>contracts/trid3nt_contracts/message.py"]
     output["Output<br/>trid3nt_server/workflows/telemac/modules/telemac2d.py"]
-    point["TypedInput<br/>trid3nt_server/workflows/inputs/point.py"]
+    point["TypedInput<br/>trid3nt_server/inputs/point.py"]
     runRecord["RunRecord<br/>trid3nt_server/workflows/runtime/journal.py"]
     serializer["Serializer<br/>trid3nt_server/workflows/telemac/authoring/serializer.py"]
     sheet["Sheet<br/>trid3nt_server/workflows/telemac/modules/sheet.py"]

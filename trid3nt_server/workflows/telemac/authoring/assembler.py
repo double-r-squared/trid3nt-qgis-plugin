@@ -24,8 +24,8 @@ from trid3nt_server.workflows.mesh.shared.nodes import (
 )
 from trid3nt_server.workflows.mesh.topology import RATING_CURVE_ROLE, read_topology
 
-from trid3nt_server.workflows.inputs.layer_fields import layer_field
-from trid3nt_server.workflows.inputs.point import (
+from trid3nt_server.inputs.layer_fields import layer_field
+from trid3nt_server.inputs.point import (
     Point,
     as_utm,
     contain,
@@ -360,7 +360,7 @@ def to_utm(source: Any, utm_epsg: int) -> Any:
     from shapely.geometry import shape as _shape
     from shapely.ops import transform as _transform, unary_union
 
-    from trid3nt_server.workflows.inputs.geometry import (
+    from trid3nt_server.inputs.geometry import (
         flatten_geometries, read_geometry_doc,
     )
 
@@ -1080,7 +1080,7 @@ async def settle_harbour(
     """What the accepted harbour mesh measures -> what the harbour sheet reads.
 
     A mesh naming no liquid boundary refuses: a wave has no edge to enter by."""
-    from trid3nt_server.workflows.inputs.shape import polylines as _lines, shape
+    from trid3nt_server.inputs.shape import polylines as _lines, shape
 
     facts = _mesh_facts(mesh, missing=_harbour_mesh_missing)
     utm_epsg = int(facts["utm_epsg"])

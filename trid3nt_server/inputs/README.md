@@ -1,13 +1,14 @@
-# `workflows/inputs/` - the typed inputs
+# `inputs/` - the typed inputs
 
-What a user hands a template arrives in many forms - a canvas pick, a typed
+What a user hands the system arrives in many forms - a canvas pick, a typed
 value, a selected layer, a place name - and is read in one. Each kind here has
 ONE ingestion function that takes every form and returns the typed value, and
 one home for what is done with that value afterwards: where a point is allowed
 to be, what a shape's lines are, how an AOI becomes the bound domain.
 
-Nothing here knows a template or a question. A slot names the kind it takes
-and the role it plays; the ingestion is the same for every slot of that kind.
+Nothing here knows a template, a question or an engine. A slot names the kind it
+takes and the role it plays; the ingestion is the same for every slot of that
+kind, whichever workflow or route asked.
 
 ## Files
 

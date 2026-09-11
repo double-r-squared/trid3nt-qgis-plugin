@@ -31,7 +31,7 @@ def _footprint(structure: Any, width_m: float) -> dict[str, Any]:
     import geopandas as gpd
     from shapely.geometry import LineString
 
-    from trid3nt_server.workflows.inputs.shape import polylines, shape
+    from trid3nt_server.inputs.shape import polylines, shape
 
     drawn = shape(structure, label="structure", code="ARTEMIS_STRUCTURE_INVALID")
     if drawn is None:

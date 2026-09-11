@@ -16,8 +16,8 @@ import re
 import tempfile
 from typing import Any
 
-from trid3nt_server.workflows.inputs.aoi import aoi_slug
-from trid3nt_server.workflows.inputs.layer_fields import layer_field
+from trid3nt_server.inputs.aoi import aoi_slug
+from trid3nt_server.inputs.layer_fields import layer_field
 from trid3nt_server.workflows.runtime import (
     RATE,
     Step,
@@ -297,7 +297,7 @@ def _covered_fraction(water: Any, centerline: Any) -> float:
     from shapely.geometry import shape
     from shapely.ops import transform as _transform, unary_union
 
-    from trid3nt_server.workflows.inputs.geometry import (
+    from trid3nt_server.inputs.geometry import (
         source_uri, utm_epsg_for,
     )
 

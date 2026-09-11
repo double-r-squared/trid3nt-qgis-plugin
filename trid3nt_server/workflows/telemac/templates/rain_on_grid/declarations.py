@@ -4,7 +4,7 @@ Every number the run uses is on this page or is a labeled constant below it."""
 
 from __future__ import annotations
 
-from trid3nt_server.workflows.inputs import Point
+from trid3nt_server.inputs import Point
 from trid3nt_server.workflows.runtime import Param, doors
 
 __all__ = [

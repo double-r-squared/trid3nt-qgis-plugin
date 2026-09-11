@@ -106,7 +106,7 @@ def test_the_series_is_the_domain_maximum_at_each_instant(solved):
 
 
 def test_a_series_at_a_point_reads_the_nearest_node(solved):
-    from trid3nt_server.workflows.inputs import Point
+    from trid3nt_server.inputs import Point
 
     lon, lat = solved.lonlat
     at = Point(float(lon[1]), float(lat[1]), "outfall-a")
@@ -572,7 +572,7 @@ def test_a_series_of_the_printed_flux_reads_the_boundary_nearest_the_point(catch
     """FLUX is the token the module prints rather than writes: the series is the
     listing's own discharge across the liquid boundary the Point lies on,
     outflow-positive, and the station sits at that boundary."""
-    from trid3nt_server.workflows.inputs import Point
+    from trid3nt_server.inputs import Point
 
     lon, lat = catchment.lonlat
     outlet = Point(float(lon[1]), float(lat[1]), "outlet")
@@ -632,7 +632,7 @@ def test_the_envelope_carries_its_p99_beside_its_maximum_and_the_extent_its_area
 
 
 def test_a_series_at_a_point_carries_the_station_it_was_read_at(solved):
-    from trid3nt_server.workflows.inputs import Point
+    from trid3nt_server.inputs import Point
 
     lon, lat = solved.lonlat
     read = T2D.OUTPUTS["series"].read(

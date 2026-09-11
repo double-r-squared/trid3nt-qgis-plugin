@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from trid3nt_server.workflows.inputs import Point
+from trid3nt_server.inputs import Point
 from trid3nt_server.workflows.runtime import Accepts, Param, doors
 
 __all__ = ["ACCEPTS", "DOC", "OIL_PRESETS", "PARAMS"]

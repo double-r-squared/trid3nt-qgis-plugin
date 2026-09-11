@@ -16,8 +16,8 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.tools import register_tool
 from trid3nt_server.tools.derive._hydrology_common import _write_geojson
-from trid3nt_server.workflows.inputs.geometry import flatten_geometries, utm_epsg_for
-from trid3nt_server.workflows.inputs.shape import shape as _ingest
+from trid3nt_server.inputs.geometry import flatten_geometries, utm_epsg_for
+from trid3nt_server.inputs.shape import shape as _ingest
 from trid3nt_server.workflows.runtime.user_input import UserInputError
 
 __all__ = ["TransectError", "TransectLayerURI", "derive_transect"]

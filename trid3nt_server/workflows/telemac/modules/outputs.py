@@ -413,7 +413,7 @@ class Solved:
         """The 2D node nearest ``at``, a Point in any of the shapes it arrives in."""
         import numpy as np
 
-        from trid3nt_server.workflows.inputs.point import as_utm
+        from trid3nt_server.inputs.point import as_utm
 
         px, py = as_utm(_point(at), self.utm_epsg)
         return int(np.argmin(np.hypot(np.asarray(self.result["x"]) - px,
@@ -513,7 +513,7 @@ def read_field(primitive: Primitive, solved: Solved) -> Read:
 
 def _point(at: Any) -> Any:
     """The Point a primitive was anchored at, whatever shape the anchor took."""
-    from trid3nt_server.workflows.inputs import Point
+    from trid3nt_server.inputs import Point
 
     if isinstance(at, Point):
         return at
@@ -553,7 +553,7 @@ def _boundary_series(primitive: Primitive, solved: Solved) -> Series:
     from pyproj import Transformer
 
     from .listing import boundary_flux
-    from trid3nt_server.workflows.inputs.point import as_utm
+    from trid3nt_server.inputs.point import as_utm
 
     if primitive.at is None:
         raise OutputEmpty(f"{primitive.variable} is read at a liquid boundary; "

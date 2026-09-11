@@ -27,6 +27,7 @@ on one machine against one user; the only wire shapes it speaks are
 | `emission/` | Everything a computed layer passes through on its way to the map. |
 | `fallbacks/` | Declared degradation: ladders as data, and the one walker. |
 | `gates/` | The agent-loop gates - confirm, review, draw, budget, runaway. |
+| `inputs/` | Every input into the system as a typed value: a Point, an Extent and a Shape, each with one ingestion from every form a user hands it in. |
 | `sandbox/` | The code-exec box: the container a user-confirmed snippet runs in. |
 | `server/` | The daemon core: connection loop, turn engine, dispatch, session state. |
 | `tools/` | The registered tool surface: fetchers, derive, search, display. |

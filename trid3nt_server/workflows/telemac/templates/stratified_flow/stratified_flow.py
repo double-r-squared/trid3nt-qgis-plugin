@@ -11,7 +11,7 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
 
 from trid3nt_server.workflows.runtime import ParamRef, Ref, Step, register_workflow
 from trid3nt_server.workflows.mesh.tool import mesh_op, tool
-from trid3nt_server.workflows.inputs.aoi import AcquireAoi, location_or_bbox
+from trid3nt_server.inputs.aoi import AcquireAoi, location_or_bbox
 from trid3nt_server.workflows.telemac.authoring.assembler import (
     BASIN_BOUNDARY,
     BASIN_GEOMETRY,

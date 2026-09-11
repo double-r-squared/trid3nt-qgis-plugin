@@ -19,7 +19,7 @@ from .geometry import flatten_geometries, read_geometry_doc
 
 __all__ = ["Shape", "polygons", "polylines", "shape"]
 
-logger = logging.getLogger("trid3nt_server.workflows.inputs.shape")
+logger = logging.getLogger("trid3nt_server.inputs.shape")
 
 _CODE = "SHAPE_INVALID"
 _LAYER_SCHEMES = ("s3://", "gs://", "file://", "/", "./")

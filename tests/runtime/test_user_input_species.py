@@ -162,7 +162,7 @@ def _drawn(geometry: str, response) -> object:
 
 
 def test_a_drawn_point_equals_the_typed_point_and_keeps_its_name():
-    from trid3nt_server.workflows.inputs import Point
+    from trid3nt_server.inputs import Point
 
     reply = SimpleNamespace(coordinates=[-124.1, 40.5], features=None,
                             cancelled=False, name="point-1")

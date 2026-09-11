@@ -15,9 +15,9 @@ from trid3nt_server.workflows.runtime import Step, WireArgsError
 __all__ = ["AcquireAoi", "acquire_aoi", "aoi_slug", "geocode_place",
            "location_or_bbox"]
 
-logger = logging.getLogger("trid3nt_server.workflows.inputs.aoi")
+logger = logging.getLogger("trid3nt_server.inputs.aoi")
 
-_HERE = "trid3nt_server.workflows.inputs.aoi"
+_HERE = "trid3nt_server.inputs.aoi"
 
 
 def location_or_bbox(tool: str, *, code_prefix: str, hint: str = "",

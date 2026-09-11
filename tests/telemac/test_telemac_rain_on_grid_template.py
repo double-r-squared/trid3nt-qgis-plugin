@@ -234,8 +234,8 @@ async def test_the_aoi_is_the_box_around_the_outlet_not_the_geocoded_place():
     """A supplied pour point derives the AOI, never a geocoded place bbox: a town
     box need not contain the upstream catchment, so the acquisition never reaches
     for a geocoder and the basin's shape is the terrain's answer."""
-    from trid3nt_server.workflows.inputs import Point
-    from trid3nt_server.workflows.inputs.aoi import acquire_aoi
+    from trid3nt_server.inputs import Point
+    from trid3nt_server.inputs.aoi import acquire_aoi
     from trid3nt_server.workflows.telemac.templates.rain_on_grid.declarations import (
         POUR_POINT_BUFFER_DEG,
     )

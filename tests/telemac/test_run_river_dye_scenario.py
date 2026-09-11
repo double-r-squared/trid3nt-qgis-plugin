@@ -141,7 +141,7 @@ def test_location_wins_when_both_an_aoi_and_a_place_are_supplied():
     {"coordinates": [-114.31, 42.58], "name": "outfall-a"},
 ])
 def test_every_release_point_form_reaches_the_one_point_slot(value):
-    from trid3nt_server.workflows.inputs import Point
+    from trid3nt_server.inputs import Point
 
     supplied, err = _norm(location="X", release=value)
     assert err is None

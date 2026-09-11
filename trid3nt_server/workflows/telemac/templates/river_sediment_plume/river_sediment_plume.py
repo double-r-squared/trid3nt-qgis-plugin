@@ -19,8 +19,8 @@ from trid3nt_server.workflows.runtime import (
     user_input,
 )
 from trid3nt_server.workflows.mesh.tool import mesh_op, tool
-from trid3nt_server.workflows.inputs import point_arg
-from trid3nt_server.workflows.inputs.aoi import location_or_bbox
+from trid3nt_server.inputs import point_arg
+from trid3nt_server.inputs.aoi import location_or_bbox
 from trid3nt_server.workflows.telemac.modules import (
     GAIA,
     T2D,

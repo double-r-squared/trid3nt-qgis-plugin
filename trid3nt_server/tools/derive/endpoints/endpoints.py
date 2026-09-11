@@ -13,7 +13,7 @@ from trid3nt_contracts.execution import LayerURI
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.tools import register_tool
-from trid3nt_server.workflows.inputs.geometry import (
+from trid3nt_server.inputs.geometry import (
     GeometryReadError,
     flatten_geometries,
     read_geometry_doc,
@@ -111,7 +111,7 @@ def _length_m(line: Any) -> tuple[float, int]:
     from pyproj import Transformer
     from shapely.ops import transform as _transform
 
-    from trid3nt_server.workflows.inputs.geometry import utm_epsg_for
+    from trid3nt_server.inputs.geometry import utm_epsg_for
 
     epsg = utm_epsg_for(float(line.centroid.x), float(line.centroid.y))
     forward = Transformer.from_crs(4326, epsg, always_xy=True)

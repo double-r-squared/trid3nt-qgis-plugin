@@ -8,7 +8,7 @@ import json
 
 import pytest
 
-from trid3nt_server.workflows.inputs.extent import Extent, extent
+from trid3nt_server.inputs.extent import Extent, extent
 from trid3nt_server.workflows.runtime.user_input import UserInputError
 
 
@@ -40,7 +40,7 @@ def test_a_layer_gives_the_bounds_of_everything_it_holds(tmp_path):
 
 
 def test_a_place_becomes_the_box_around_its_geocoded_centre(monkeypatch):
-    from trid3nt_server.workflows.inputs import aoi
+    from trid3nt_server.inputs import aoi
 
     async def _geo(name):
         return (-114.46, 42.56)

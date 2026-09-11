@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from trid3nt_server.workflows.inputs import Point
+from trid3nt_server.inputs import Point
 from trid3nt_server.workflows.runtime import Accepts, Param, doors
 from trid3nt_server.workflows.telemac.modules.gaia import GRAIN_UM_MAX, GRAIN_UM_MIN
 

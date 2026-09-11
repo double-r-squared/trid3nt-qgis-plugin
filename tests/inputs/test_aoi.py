@@ -5,14 +5,14 @@ from __future__ import annotations
 
 import pytest
 
-from trid3nt_server.workflows.inputs import Point
-from trid3nt_server.workflows.inputs.aoi import acquire_aoi
+from trid3nt_server.inputs import Point
+from trid3nt_server.inputs.aoi import acquire_aoi
 
 
 @pytest.mark.asyncio
 async def test_a_point_is_boxed_half_deg_either_side_and_the_place_only_names_it(
         monkeypatch):
-    from trid3nt_server.workflows.inputs import aoi as aoi_mod
+    from trid3nt_server.inputs import aoi as aoi_mod
 
     async def _never(_name):
         raise AssertionError("a Point decides the box; the place is not geocoded")

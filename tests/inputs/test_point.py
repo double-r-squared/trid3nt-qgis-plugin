@@ -11,8 +11,8 @@ import json
 
 import pytest
 
-from trid3nt_server.workflows.inputs import point as point_mod
-from trid3nt_server.workflows.inputs.point import (
+from trid3nt_server.inputs import point as point_mod
+from trid3nt_server.inputs.point import (
     Point,
     PointOutsideDomainError,
     contain,
@@ -70,7 +70,7 @@ def test_a_layer_with_no_point_feature_refuses_by_name(tmp_path):
 
 
 def test_a_place_name_is_geocoded_and_keeps_the_name(monkeypatch):
-    from trid3nt_server.workflows.inputs import aoi
+    from trid3nt_server.inputs import aoi
 
     async def _geo(name):
         assert name == "Twin Falls, Idaho"
@@ -81,7 +81,7 @@ def test_a_place_name_is_geocoded_and_keeps_the_name(monkeypatch):
 
 
 def test_a_place_the_geocoder_does_not_know_refuses(monkeypatch):
-    from trid3nt_server.workflows.inputs import aoi
+    from trid3nt_server.inputs import aoi
 
     async def _geo(_name):
         return None

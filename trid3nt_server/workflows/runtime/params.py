@@ -154,7 +154,7 @@ class Param(Row):
         A Point slot is typed by the value it holds; what the WIRE takes for it is
         every form the ingestion reads - a pick's mapping, a pair, a string."""
         if self.type is not None:
-            from trid3nt_server.workflows.inputs.point import Point
+            from trid3nt_server.inputs.point import Point
 
             return dict | list[float] | str if self.type is Point else self.type
         if isinstance(self.default, bool):

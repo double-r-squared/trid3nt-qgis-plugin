@@ -160,7 +160,7 @@ def test_a_supplied_outfall_is_carried_as_a_user_row():
     from trid3nt_server.workflows.runtime import provenance_entries, resolve_params
 
     wf = _workflow()
-    from trid3nt_server.workflows.inputs import Point
+    from trid3nt_server.inputs import Point
 
     supplied, err = asyncio.run(wf._normalize({"location": "x",
                                                "outfall_coords": ["-124.1", "40.5"]}))
@@ -309,7 +309,7 @@ async def test_the_declared_plan_composes_the_shared_steps_in_order(monkeypatch,
                      "settled", "review", "run", "outputs"]
     # the outfall pins the MESHED water body, so it rides as the reach seed the
     # ONE centerline is navigated from - never as a dye release point
-    from trid3nt_server.workflows.inputs import Point
+    from trid3nt_server.inputs import Point
 
     assert seen["seed"]["supplied"] == Point(-124.11, 40.51)
     assert seen["outfall"]["point"] == Point(-124.11, 40.51)

@@ -22,7 +22,7 @@ from .geometry import flatten_geometries, read_geometry_doc, utm_epsg_for
 __all__ = ["Point", "PointOutsideDomainError", "as_utm", "contain", "point",
            "point_arg", "publish_point", "snap_to_wet"]
 
-logger = logging.getLogger("trid3nt_server.workflows.inputs.point")
+logger = logging.getLogger("trid3nt_server.inputs.point")
 
 _CODE = "POINT_INVALID"
 

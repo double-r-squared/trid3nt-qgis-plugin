@@ -358,7 +358,7 @@ waits per the hybrid rule).
   plugin's pick card offers a field, defaulted to `point-<n>`, the reply
   carries it as `name`, and the Point slot that asked carries it on - a
   river dye run calls its tracer by it. A Point slot is a `Param` typed
-  `Point` (`workflows/inputs/point.py`); its coercion `point_arg` reads
+  `Point` (`inputs/point.py`); its coercion `point_arg` reads
   the wire value in any of the ingestion's forms, and in a live
   `user_gated` session with nothing on the wire asks the canvas. Draw-time constraints (within(reach),
   on-mesh) are still OUT - the geometry to constrain against is produced

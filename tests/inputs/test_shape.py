@@ -7,7 +7,7 @@ import json
 
 import pytest
 
-from trid3nt_server.workflows.inputs.shape import Shape, polygons, polylines, shape
+from trid3nt_server.inputs.shape import Shape, polygons, polylines, shape
 from trid3nt_server.workflows.runtime.user_input import UserInputError
 
 _DRAWN = {"type": "FeatureCollection", "features": [

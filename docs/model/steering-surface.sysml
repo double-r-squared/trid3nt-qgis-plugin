@@ -402,7 +402,7 @@ package SteeringSurface {
 
     part point : TypedInput {
         doc /*
-        code: trid3nt_server/workflows/inputs/point.py
+        code: trid3nt_server/inputs/point.py
         */
     }
 
