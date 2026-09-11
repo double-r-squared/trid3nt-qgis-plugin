@@ -42,14 +42,15 @@ def telemac_result(monkeypatch: pytest.MonkeyPatch):
 
     def install(*, varnames, x, y, ikle, times, data,
                 x_origin: int = 0, y_origin: int = 0,
-                varunits=None) -> dict[str, Any]:
+                varunits=None, nplan: int = 1) -> dict[str, Any]:
         mesh = {
             "varnames": list(varnames),
             "varunits": list(varunits or [""] * len(varnames)),
-            "npoin": len(x),
-            "nelem": len(ikle),
-            # A 2D result reports one plane and the same mesh twice.
-            "nplan": 1,
+            "npoin": len(x) * nplan,
+            "nelem": len(ikle) * max(nplan - 1, 1),
+            # A 2D result reports one plane and the same mesh twice; a 3D one
+            # stacks ``nplan`` planes of the 2D mesh, bottom first.
+            "nplan": nplan,
             "npoin2": len(x),
             "nelem2": len(ikle),
             "x": np.asarray(x, dtype="float64"),

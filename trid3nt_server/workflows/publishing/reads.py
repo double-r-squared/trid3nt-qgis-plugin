@@ -24,7 +24,8 @@ class Read:
 class Field(Read):
     """One variable over the domain at one instant, or its envelope over time.
 
-    ``t`` is the instant, ``None`` the envelope; a cell below ``floor`` is nodata."""
+    ``t`` is the instant, ``None`` the envelope; ``plane`` names which plane of a
+    3D result this is, ``None`` on a 2D one; a cell below ``floor`` is nodata."""
 
     name: str
     units: str
@@ -33,6 +34,7 @@ class Field(Read):
     ikle: Any
     values: Any
     t: float | None = None
+    plane: str | None = None
     floor: float | None = None
 
 

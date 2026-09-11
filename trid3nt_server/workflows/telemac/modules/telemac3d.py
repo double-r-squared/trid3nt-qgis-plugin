@@ -12,7 +12,7 @@ from typing import Any, Mapping
 from trid3nt_server.workflows.runtime import DeclarativeError
 
 from .module import Module
-from .outputs import PRIMITIVES
+from .outputs import PRIMITIVES, read_column
 
 __all__ = ["T3D", "Column", "USER_FORTRAN_DIR", "VARIABLES",
            "VerticalGridUnresolved", "VerticalGrid", "plan_vertical_grid"]
@@ -275,4 +275,4 @@ def _wind(value: Mapping[str, Any]) -> tuple[Mapping[str, Any], Mapping[str, Any
 T3D = Module("telemac3d")
 T3D.VARIABLES = VARIABLES
 T3D.composites(vertical_grid=_vertical_grid, column=_column, wind=_wind)
-T3D.outputs(**PRIMITIVES)
+T3D.outputs(**PRIMITIVES, column=read_column)

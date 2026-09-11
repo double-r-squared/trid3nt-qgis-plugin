@@ -165,15 +165,17 @@ DOC = dict(
          "died without unwinding left on disk."),
     ),
     returns=(
-        "On success a `Telemac3dLayerURI` (a `LayerURI` subtype) - the "
-        "SURFACE-layer temperature COG, with the BOTTOM companion emitted beside "
-        "it. It carries `lake_level_m` - the OBSERVED level the basin opened at, "
-        "on the same datum its bed is charted on, with the gauge named in "
-        "`lake_level_note` - `stratification_metric` / `stratification_dt`, the "
-        "`u_surface` / `u_bottom` / `depth_avg_u` triple the same run drove, and "
-        "the vertical `profile_*` arrays; narrate those typed numbers. The run "
-        "exchanges NO heat with the atmosphere, so a falling surface temperature "
-        "is downward MIXING and never the lake cooling - narrate it that way. On "
-        "failure a dict with `status=\"error\"` + `error_code`."
+        "On success an `AnswerLayerURI` - the SURFACE-plane water temperature "
+        "COG the run leads with, the BOTTOM-plane companion beside it on the same "
+        "scale, and the column at the deepest node charted against the "
+        "prescribed initial column. Its `answer` carries `stratification_dt` "
+        "(the surviving top-to-bottom difference) against `stratification_dt_init`, "
+        "the depth-weighted `column_mean_final_c` / `column_mean_init_c` whose "
+        "drift is the numerical error bar on the mixing, `column_depth_m`, and the "
+        "`u_surface` / `u_bottom` / `depth_avg_u` triple the same wind drove; "
+        "narrate those typed numbers. The run exchanges NO heat with the "
+        "atmosphere, so a falling surface temperature is downward MIXING and never "
+        "the lake cooling - narrate it that way. On failure a dict with "
+        "`status=\"error\"` + `error_code`."
     ),
 )

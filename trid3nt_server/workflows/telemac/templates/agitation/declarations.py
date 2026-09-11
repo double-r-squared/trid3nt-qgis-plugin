@@ -149,10 +149,11 @@ DOC = dict(
          "died without unwinding left on disk."),
     ),
     returns=(
-        "On success an `ArtemisAgitationLayerURI` (a `LayerURI` subtype) - the "
-        "emitter loads the Kd COG and animates the ARTEMIS SELAFIN sibling. It "
-        "carries `kd_max` / `kd_sheltered` / `kd_exposed` and the transect through "
-        "the structure's own shadow strip; narrate those typed numbers. On failure "
-        "a dict with `status=\"error\"` + `error_code`."
+        "On success an `AnswerLayerURI` - the agitation coefficient Kd = Hs/H0 "
+        "COG the run leads with, its `answer` carrying `kd_max`, `hs_max_m` and "
+        "`mesh_size_m`; narrate those typed numbers. kd_max is often a standing "
+        "wave against the domain's own open boundary rather than a harbour "
+        "answer, so read the field behind the structure. On failure a dict with "
+        "`status=\"error\"` + `error_code`."
     ),
 )

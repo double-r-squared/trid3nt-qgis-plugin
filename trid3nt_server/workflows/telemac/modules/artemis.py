@@ -2,10 +2,13 @@
 
 The wrapper asserts NO value of its own. ARTEMIS reads its forcing out of the
 BOUNDARY CONDITIONS FILE rather than out of the steering file, so the incident
-wave is a FILE this composite writes and the steering file names."""
+wave is a FILE this composite writes and the steering file names, and the
+agitation coefficient KD is the wave height over the incident height that file
+stamps."""
 
 from __future__ import annotations
 
+from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Mapping, Sequence
 
@@ -13,7 +16,7 @@ from .module import Module
 from .outputs import PRIMITIVES
 
 __all__ = ["ART", "BOUNDARY_FILENAME", "IncidentWave", "VARIABLES",
-           "stamp_boundary_rows"]
+           "incident_height", "stamp_boundary_rows"]
 
 #: The module's variable vocabulary, by the mnemonic VARIABLES FOR GRAPHIC
 #: PRINTOUTS spells: the result-file name and the unit. A mild-slope solve is
@@ -117,7 +120,38 @@ def stamp_boundary_rows(cli_text: str, *, open_nodes: Sequence[int],
     return "\n".join(lines) + "\n"
 
 
+def incident_height(cli_text: str) -> float:
+    """The incident height the boundary file stamps on its KINC rows, in metres.
+
+    One height: the file forces one monochromatic wave, and a file stamping
+    several or none carries no incident wave to measure agitation against."""
+    heights = set()
+    for line in cli_text.splitlines():
+        parts = line.split()
+        if len(parts) >= 4 and int(parts[0]) == KINC:
+            heights.add(float(parts[3]))
+    if len(heights) != 1:
+        raise ValueError(
+            f"the boundary file stamps {sorted(heights)} as incident heights; the "
+            "agitation coefficient is measured against exactly one.")
+    return heights.pop()
+
+
+def _agitation(solved: Any) -> tuple[str, str, Any]:
+    """``KD``: the wave height over the incident height the run was forced with."""
+    from ..solving.solve import download_result
+
+    local = download_result(solved.run_id, BOUNDARY_FILENAME)
+    try:
+        h0 = incident_height(Path(local).read_text(errors="replace"))
+    finally:
+        Path(local).unlink(missing_ok=True)
+    _name, _units, hs = solved.frames("HS", None)
+    return "KD", "Hs/H0", hs / h0
+
+
 ART = Module("artemis")
 ART.VARIABLES = VARIABLES
+ART.DERIVED = MappingProxyType({"KD": _agitation})
 ART.composites(incident_wave=_incident_wave)
 ART.outputs(**PRIMITIVES)

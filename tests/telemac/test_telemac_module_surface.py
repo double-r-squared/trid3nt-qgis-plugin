@@ -922,10 +922,12 @@ def test_every_wrapper_binds_the_primitive_set_and_nothing_question_named():
         assert set(PRIMITIVES) <= set(wrapper.OUTPUTS), wrapper.MODULE
         assert wrapper.VARIABLES, wrapper.MODULE
         assert all(callable(output.read) for output in wrapper.OUTPUTS.values())
-    # The drogues are the one output past the set: the particle track TELEMAC-2D
-    # itself writes, named by the module's own word for it.
+    # The outputs past the set are what a module carries that the others do
+    # not: the particle track TELEMAC-2D itself writes, and the planes a
+    # TELEMAC-3D result stacks, read down as a column.
     assert set(T2D.OUTPUTS) - set(PRIMITIVES) == {"drogues"}
-    for wrapper in (T3D, ART, GAIA):
+    assert set(T3D.OUTPUTS) - set(PRIMITIVES) == {"column"}
+    for wrapper in (ART, GAIA):
         assert sorted(wrapper.OUTPUTS) == sorted(PRIMITIVES), wrapper.MODULE
     assert not WAQTEL.OUTPUTS
     # GAIA writes its own result beside the carrier's, so its primitives read it.

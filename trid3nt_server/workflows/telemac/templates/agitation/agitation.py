@@ -6,8 +6,7 @@ standing waves are visible rather than averaged away."""
 
 from __future__ import annotations
 
-from typing import Any
-
+from trid3nt_contracts.telemac_contracts import TELEMAC_AGITATION_STYLE
 from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
 
 from trid3nt_server.workflows.runtime import (
@@ -20,12 +19,12 @@ from trid3nt_server.workflows.runtime import (
 from trid3nt_server.workflows.mesh.tool import mesh_op, tool
 from trid3nt_server.workflows.inputs.aoi import AcquireAoi, location_or_bbox
 from trid3nt_server.workflows.telemac.authoring.assembler import HARBOUR_GEOMETRY
+from trid3nt_server.workflows.telemac.modules import field, mesh
 from trid3nt_server.workflows.telemac.modules.artemis import (
     ART,
     BOUNDARY_FILENAME,
     IncidentWave,
 )
-from trid3nt_server.workflows.telemac.products.agitation import AgitationProducts
 from trid3nt_server.workflows.telemac.solving.solve import compute_class
 from trid3nt_server.workflows.telemac.templates.agitation.declarations import (
     ACCEPTS,
@@ -36,8 +35,8 @@ from trid3nt_server.workflows.telemac.templates.agitation.declarations import (
 )
 from trid3nt_server.workflows.telemac.workflow import Door, TelemacWorkflow
 
-__all__ = ["ANSWER", "DATA", "MESH", "PARAMS", "STEERING",
-           "artemis_harbor_agitation", "build_agitation_chart"]
+__all__ = ["ANSWER", "CAPTIONS", "DATA", "MESH", "OUTPUTS", "PARAMS", "STEERING",
+           "artemis_harbor_agitation"]
 
 _AUTHORING = "trid3nt_server.workflows.telemac.authoring"
 _SOLVING = "trid3nt_server.workflows.telemac.solving.solve"
@@ -130,56 +129,20 @@ class STEERING(ART):
                                  reflection_coef=P.reflection_coef)
 
 
-#: The run's ANSWER, as the numbers a reader has to be able to check.
-ANSWER = ("kd_max", "hs_max_m", "kd_sheltered", "kd_exposed", "wave_period_s",
-          "mesh_size_m", "agitation_curve_m", "agitation_curve_kd",
-          "agitation_curve_kind", "boundary_states")
+#: What the solved run is read for: the agitation coefficient over the harbour,
+#: at the one instant an elliptic solve writes.
+OUTPUTS = [
+    field("KD", t=-1).layer(style=TELEMAC_AGITATION_STYLE),
+]
+CAPTIONS = {"KD": "agitation coefficient"}
 
-
-def build_agitation_chart(*, result: Any, params: Any) -> dict[str, Any] | None:
-    """The agitation chart SPEC: Kd along the structure's own shadow strip.
-
-    The curve is the RUN's own; ``None`` when the run measured no curve."""
-    xs = getattr(result, "agitation_curve_m", None)
-    kd = getattr(result, "agitation_curve_kd", None)
-    if not xs or not kd or len(xs) != len(kd):
-        return None
-    from trid3nt_server.emission.charts import build_chart_payload
-
-    sheltered = getattr(result, "kd_sheltered", None)
-    exposed = getattr(result, "kd_exposed", None)
-    period = getattr(result, "wave_period_s", None)
-    where = params.get("location")
-    title = (f"Harbour agitation Kd - {where}" if where
-             else (getattr(result, "name", None) or "Harbour agitation Kd"))
-    return build_chart_payload(
-        vega_lite_spec={
-            "mark": {"type": "line", "point": False},
-            "data": {"values": [{"x": float(xs[i]), "kd": float(kd[i])}
-                                for i in range(len(xs))]},
-            "encoding": {
-                "x": {"field": "x", "type": "quantitative",
-                      "title": "Along the incident direction, 0 = the structure (m)"},
-                "y": {"field": "kd", "type": "quantitative",
-                      "title": "Agitation coefficient Kd = Hs/H0"},
-            },
-        },
-        title=title,
-        caption=(
-            (f"Forced by a prescribed {float(period):.3g} s incident wave: "
-             if period is not None else "")
-            + (f"Kd {float(exposed):.3g} on the exposed approach against "
-               f"{float(sheltered):.3g} in the lee - the structure cut agitation "
-               f"in the strip it shadows by a factor of "
-               f"{float(exposed) / float(sheltered):.3g}. "
-               if sheltered and exposed else "")
-            # WHAT WAS AND WAS NOT MEASURED. Both numbers are means over the
-            # structure's own shadow strip inside the MESHED domain; water the
-            # shoreline left out of that domain is not in either of them.
-            + "Both are means over the meshed domain only. Phase-resolving "
-              "screening, not a calibrated hindcast."
-        ),
-    )
+#: The run's ANSWER, as the numbers a reader has to be able to check, each a
+#: measure of one of the reads above or of the wave height it is a ratio of.
+ANSWER = {
+    "kd_max": field("KD", t=-1).measure("max"),
+    "hs_max_m": field("HS", t=-1).measure("max"),
+    "mesh_size_m": mesh().measure("size_m"),
+}
 
 
 _ARTEMIS_RES_SPEC = ResolutionSpec(
@@ -236,23 +199,17 @@ artemis_harbor_agitation = register_workflow(
         results=(_RESULT,),
         steering_file=_STEERING_FILE, prefix="artemis",
         dispatch=f"{_SOLVING}.solve_case", compute_class=P.compute_class,
-        read=lambda run: AgitationProducts.agitation(
-            run=run, solve=run).named("agitation"),
-        chart=("harbor_agitation", build_agitation_chart),
+        outputs=OUTPUTS, captions=CAPTIONS, answer=ANSWER,
         review_title="Review the incident wave, the structure and the mesh"),
     data=DATA,
     accepts=ACCEPTS,
-    answer=ANSWER,
+    answer=tuple(ANSWER),
     provenance=(("wave_period_s", "wave_period_note"),
                 ("structure", "structure_note"),
                 ("mesh_min_edge_m", "mesh_edge_note")),
     # A phase-RESOLVING solve is the most mesh-dependent of the family: Kd peaks
-    # inside a diffraction fringe, and the sheltered/exposed pair is read inside
-    # the shadow gradient. The sheltering RATIO between them converges and is not
-    # labeled.
-    sensitivity=(("kd_max", "peak"),
-                 ("kd_sheltered", "gradient"),
-                 ("kd_exposed", "gradient")),
+    # inside a diffraction fringe the coarse mesh averages away.
+    sensitivity=(("kd_max", "peak"),),
     coerce=(
         location_or_bbox("artemis_harbor_agitation", code_prefix="ARTEMIS",
                          hint="For a natural prompt like 'is the marina at <place> "

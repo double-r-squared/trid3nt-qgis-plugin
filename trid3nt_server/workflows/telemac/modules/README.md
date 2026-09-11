@@ -38,23 +38,30 @@ explicit, on a complete sheet, and it is where execution stops being held.
 A wrapper's OUTPUTS are the PRIMITIVE SET, named from the module's own variable
 vocabulary: `field(name, t)`, `series(name, at)`, `max_over_time(name)`,
 `profile(name, along, t)`, `extent()`, `mesh()`, `mass_balance()`, plus the
-one output past the set a module writes for itself - TELEMAC-2D's `drogues()`.
-A primitive names the coupled module whose own result it reads (`module=`), and
-a tracer a coupled process appended behind the carrier's declared ones is the
-carrier's `T<n>` by position. A series of a token the module PRINTS rather than writes - TELEMAC-2D's `FLUX`,
+outputs past the set a module carries for itself - TELEMAC-2D's `drogues()`,
+the particle track it writes, and TELEMAC-3D's `column(name, at, t)`, a
+variable down the planes its result stacks. A field of a 3D result reads one
+plane (`plane=`, bottom first; unstated, the surface) and is named by it. A
+module may DEFINE a token over the variables its result carries - ARTEMIS's
+`KD`, the wave height over the incident height its boundary file stamps - and
+the primitives read it as any other. A primitive names the coupled module whose
+own result it reads (`module=`), and a tracer a coupled process appended behind
+the carrier's declared ones is the carrier's `T<n>` by position. A series of a token the module PRINTS rather than writes - TELEMAC-2D's `FLUX`,
 the discharge across a liquid boundary - is read off the listing at the boundary
 the Point lies on. A template lists primitives with how each is published -
 `.layer()`, `.chart(reference=)`, `.animate()`, `.station()` - and names its
-answer as measures of them; the wrapper binds no reader that knows a question.
+answer as measures of them; a chart's reference is a callable computing lines
+beside the read or another primitive drawn as one. The wrapper binds no reader
+that knows a question.
 
 ## Files
 
 | file | what it is |
 | --- | --- |
 | `__init__.py` | The door: the wrappers, the two acts, and the primitive set. |
-| `module.py` | What a slot, a wrapper, a composite and an output ARE, and the dictionary loader that makes a wrapper out of `dictionary/<module>.json`. |
+| `module.py` | What a slot, a wrapper, a composite, an output and a defined token ARE, and the dictionary loader that makes a wrapper out of `dictionary/<module>.json`. |
 | `sheet.py` | The sheet - filled slots with their provenance, the files a composite named, the slots still open - and `fill` / `run`. |
-| `outputs.py` | The primitive set - `field`, `series`, `max_over_time`, `profile`, `extent`, `mesh`, `mass_balance` - and `drogues`, with the read of each off a solved run through `read_selafin`, the engine's own reader inside the image. |
+| `outputs.py` | The primitive set - `field`, `series`, `max_over_time`, `profile`, `extent`, `mesh`, `mass_balance` - and `drogues` and `column`, with the read of each off a solved run through `read_selafin`, the engine's own reader inside the image. |
 | `describe.py` | `describe_keywords` - the read over a module's dictionary, which is how the whole keyword surface is reached rather than carried in a docstring. |
 | `corpus.yaml` | The routing phrasings that reach `describe_keywords`. |
 | `telemac2d.py` | The TELEMAC-2D wrapper: the releases, wind, rain, oil, friction, runoff, infiltration (the curve-number and roughness surface read off the land cover at the fill), rating, hyetograph, time-origin and coupling groups, the module's variable vocabulary with the flux it prints rather than writes, and the drogues track it writes. |

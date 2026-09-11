@@ -10,17 +10,15 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from importlib import import_module
-from typing import Any, Callable, Mapping, Sequence
+from typing import Any, Mapping, Sequence
 
 from trid3nt_contracts.common import SyntheticInput
 from trid3nt_contracts.execution import AnswerLayerURI
 from trid3nt_contracts.payload_warning import ParamSheet, ParamSheetRow
 
-from dataclasses import replace
-
-from trid3nt_server.workflows.publishing import Deliverable
+from trid3nt_server.workflows.publishing import Deliverable, Line, Profile
 from trid3nt_server.workflows.publishing.publish import publish
 from trid3nt_server.workflows.runtime import (
     ParamRef,
@@ -82,9 +80,6 @@ class Door:
     outputs: Sequence[Primitive] = ()
     captions: Mapping[str, str] = field(default_factory=dict)
     answer: Mapping[str, Measure] = field(default_factory=dict)
-    #: A per-question reader publishing the solved file, ``(run) -> Step``, for
-    #: a template that lists no outputs.
-    read: Callable[[Any], Step] | None = None
     #: This question's own producers: what the WORLD gives, before the run is
     #: settled, and what the SETTLED run gives, after it.
     produce: tuple[Step, ...] = ()
@@ -92,10 +87,6 @@ class Door:
     #: Slot values the fill sets that the body cannot state - a value the canvas
     #: or another producer answers, under the identifier it fills.
     slots: Mapping[str, Any] = field(default_factory=dict)
-    #: Constants the reader needs that no keyword carries: what was released, and
-    #: which product family publishes it.
-    meta: Mapping[str, Any] = field(default_factory=dict)
-    chart: tuple[str, Callable[..., Any]] | None = None
     compute_class: Any = None
     #: The title the card carries when the run is held for review.
     review_title: str = ""
@@ -127,12 +118,6 @@ class Door:
     def __call__(self, ops: Workflow) -> list[Any]:
         """The step sequence: the world, then fill, then run, then the outputs."""
         params = {prm.name: ParamRef(prm.name) for prm in ops.params}
-        if self.outputs:
-            read = self._outputs_step(params)
-        else:
-            read = self.read(Ref("solve"))
-            if self.chart is not None:
-                read = read.chart(self.chart[0], builder=self.chart[1])
         # Every producer the body may READ, under the name it names it by. A
         # body states what it will hold; this is where the fill finds it. The
         # accepted mesh is among them: a composite that samples at its nodes
@@ -161,13 +146,17 @@ class Door:
                  kwargs={"sheet": Ref("sheet"), "settled": Ref("settled"),
                          "results": list(self.results),
                          "steering": self.steering_file, "prefix": self.prefix,
-                         "dispatch": self.dispatch, "meta": dict(self.meta),
+                         "dispatch": self.dispatch,
                          "compute_class": self.compute_class}).named("solve"),
-            read,
+            self._outputs_step(params),
         ]
 
     def _outputs_step(self, params: Mapping[str, Any]) -> Step:
         """The publish step, checked: every published variable has its caption."""
+        if not self.outputs:
+            raise PlanValidationError(
+                "OUTPUTS lists nothing; a template reads its answer off the solved "
+                "run through the primitives it lists.")
         for primitive in self.outputs:
             if primitive.publish is None:
                 raise PlanValidationError(
@@ -210,7 +199,9 @@ async def publish_outputs(*, run: Mapping[str, Any], outputs: Sequence[Primitive
     """Read the listed primitives off the solved run, publish each, answer.
 
     Each module's result is read ONCE; every primitive and every answer reads
-    from it, a coupled module's own file through its own wrapper."""
+    from it, a coupled module's own file through its own wrapper. A chart's
+    reference is a callable computing lines beside the read, or another
+    primitive read where the chart's own is anchored and drawn as a line."""
     listed = [*outputs, *(m.primitive for m in answer.values())]
     if anchors:
         listed = [_anchored(p, a) for p, a in zip(listed, anchors)]
@@ -225,14 +216,31 @@ async def publish_outputs(*, run: Mapping[str, Any], outputs: Sequence[Primitive
             solved[module] = Solved(run, wrapper_for(module))
         return solved[module].body.OUTPUTS[key.kind].read(key, solved[module])
 
+    def _beside(primitive: Primitive) -> Primitive | None:
+        reference = primitive.reference
+        if not isinstance(reference, Primitive):
+            return None
+        return replace(reference, at=primitive.at, along=primitive.along).key
+
     wanted = {primitive.key for primitive in outputs}
     wanted |= {measure.primitive for measure in answer.values()}
+    wanted |= {_beside(p) for p in outputs if _beside(p) is not None}
     reads = await asyncio.to_thread(lambda: {key: _read(key) for key in wanted})
     for primitive in outputs:
-        if primitive.reference is not None:
-            read = reads[primitive.key]
-            reads[primitive.key] = replace(
-                read, lines=tuple(primitive.reference(read, reads, params)))
+        if primitive.reference is None:
+            continue
+        read = reads[primitive.key]
+        beside = _beside(primitive)
+        if beside is None:
+            lines = tuple(primitive.reference(read, reads, params))
+        else:
+            other = reads[beside]
+            caption = captions.get(primitive.variable or primitive.kind, primitive.kind)
+            lines = (Line(label=f"{caption} at t = {other.measures['t']:g} s",
+                          x=(other.distance_m if isinstance(other, Profile)
+                             else other.times),
+                          values=other.values),)
+        reads[primitive.key] = replace(read, lines=lines)
     published = await publish(
         run_id=str(run["run_id"]), engine="telemac", name=str(run["name"]),
         where=str(params.get("location") or run["name"]),
@@ -294,8 +302,7 @@ async def fill_sheet(*, steering: type, produced: Mapping[str, Any],
 
 async def run_sheet(*, sheet: Sheet, settled: Mapping[str, Any],
                     results: Sequence[str], steering: str, prefix: str,
-                    dispatch: str, meta: Mapping[str, Any],
-                    compute_class: Any) -> dict[str, Any]:
+                    dispatch: str, compute_class: Any) -> dict[str, Any]:
     """A complete sheet: serialize, stage, hand it to the box -> the run handle.
 
     Nothing is listed as readable that the run does not carry."""
@@ -311,7 +318,7 @@ async def run_sheet(*, sheet: Sheet, settled: Mapping[str, Any],
         compute_class=compute_class,
         coupling=None if not coupled else str(coupled).split(";")[0].lower(),
         continue_from=settled.get("continue_from"))
-    return {**settled, **dict(meta), **handle, "module": sheet.module,
+    return {**settled, **handle, "module": sheet.module,
             "tracer_names": dict(sheet.resolved()).get("NAMES OF TRACERS")}
 
 

@@ -323,8 +323,9 @@ def test_a_field_at_an_instant_measures_that_frame_s_own_extremes(coupled):
     last = T2D.OUTPUTS["field"].read(field("T2", t=-1), coupled)
     assert (last.measures["max"], last.measures["min"], last.measures["t"]) == (
         9.0, 6.0, 600.0)
-    # a tracer's floor still comes off the envelope, so the edge is the run's
-    assert last.floor == pytest.approx(0.45)
+    # oxygen is everywhere above a tracer's edge - a river carries it before
+    # any load arrives - so the field has no absent region and is drawn whole
+    assert last.floor is None
 
 
 def _line(coupled, *, reverse: bool = False):
@@ -570,3 +571,179 @@ def test_a_series_at_a_point_carries_the_station_it_was_read_at(solved):
     assert (read.lon, read.lat) == (pytest.approx(float(lon[1])),
                                     pytest.approx(float(lat[1])))
     assert T2D.OUTPUTS["series"].read(series("T1"), solved).lon is None
+
+
+# -- a variable the module defines, and the planes a 3D result stacks --------- #
+
+def _harbour(telemac_result) -> dict[str, Any]:
+    """Three nodes of a steady mild-slope solve: one record, the wave height."""
+    return telemac_result(
+        varnames=["WAVE HEIGHT", "BOTTOM"], varunits=["M", "M"],
+        x=[500000.0, 500100.0, 500000.0], y=[4400000.0, 4400000.0, 4400100.0],
+        ikle=[[0, 1, 2]], times=[0.0],
+        data={"WAVE HEIGHT": [[1.0, 0.5, 3.0]], "BOTTOM": [[-8.0, -9.0, -7.0]]})
+
+
+def test_the_agitation_coefficient_is_the_wave_height_over_the_stamped_incident(
+        monkeypatch, telemac_result, tmp_path):
+    """KD is a token ARTEMIS defines over its own result: the wave height over
+    the incident height its boundary file stamps on the KINC rows."""
+    from trid3nt_server.workflows.telemac.modules import ART
+    from trid3nt_server.workflows.telemac.modules.artemis import stamp_boundary_rows
+
+    _harbour(telemac_result)
+    cli = tmp_path / "artemis.cli"
+    cli.write_text(stamp_boundary_rows(
+        "2 2 2 0.0 0.0 0.0 0.0 2 0.0 0.0 0.0 1 1\n2 2 2 0.0 0.0 0.0 0.0 2 0.0 0.0 0.0 2 2\n"
+        "2 2 2 0.0 0.0 0.0 0.0 2 0.0 0.0 0.0 3 3\n",
+        open_nodes=[0, 1], structure_nodes=[2], height_m=2.0, reflection_coef=0.5))
+    monkeypatch.setattr(
+        "trid3nt_server.workflows.telemac.solving.solve.download_result",
+        lambda run_id, basename, error_code=None: str(cli))
+    solved = _solved({"result_basename": "res_agitation.slf"}, body=ART)
+    kd = ART.OUTPUTS["field"].read(field("KD", t=-1), solved)
+    assert kd.name == "KD" and kd.units == "Hs/H0"
+    assert kd.values.tolist() == [0.5, 0.25, 1.5]
+    assert (kd.measures["max"], kd.floor, kd.plane) == (1.5, None, None)
+    # the token the module does not define reads the result's own array
+    assert ART.OUTPUTS["field"].read(field("HS", t=-1), solved).measures["max"] == 3.0
+
+
+def test_a_boundary_file_stamping_no_single_incident_height_refuses():
+    from trid3nt_server.workflows.telemac.modules.artemis import incident_height
+
+    with pytest.raises(ValueError, match="exactly one"):
+        incident_height("2 5 5  0.0000 0.000 0.000 0.000  2  0.000 0.000 0.000  1 1\n")
+    with pytest.raises(ValueError, match="exactly one"):
+        incident_height("1 5 5  1.0000 0.000 0.000 0.000  2  0.000 0.000 0.000  1 1\n"
+                        "1 5 5  2.0000 0.000 0.000 0.000  2  0.000 0.000 0.000  2 2\n")
+
+
+def _basin(telemac_result) -> dict[str, Any]:
+    """Three nodes under three planes, two frames: the column at node 1 is the
+    deepest, warm over cold at the start and mixed at the end; a wind drives
+    the surface east and the bed west."""
+    z = [[-10.0, -20.0, -5.0], [-5.0, -10.0, -2.5], [0.0, 0.0, 0.0]]
+    temp0 = [[15.0, 15.0, 15.0], [20.0, 20.0, 20.0], [25.0, 25.0, 25.0]]
+    temp1 = [[17.0, 16.0, 19.0], [20.0, 20.0, 20.0], [23.0, 24.0, 21.0]]
+    u = [[-0.01, -0.02, -0.005], [0.0, 0.0, 0.0], [0.01, 0.02, 0.005]]
+    flat = lambda planes: [v for plane in planes for v in plane]  # noqa: E731
+    return telemac_result(
+        varnames=["ELEVATION Z", "VELOCITY U", "TEMPERATURE"],
+        varunits=["M", "M/S", "DEGC"], nplan=3,
+        x=[500000.0, 500100.0, 500000.0], y=[4400000.0, 4400000.0, 4400100.0],
+        ikle=[[0, 1, 2]], times=[0.0, 3600.0],
+        data={"ELEVATION Z": [flat(z), flat(z)], "VELOCITY U": [flat(u), flat(u)],
+              "TEMPERATURE": [flat(temp0), flat(temp1)]})
+
+
+@pytest.fixture()
+def basin(monkeypatch, telemac_result):
+    from trid3nt_server.workflows.telemac.modules import T3D
+
+    _basin(telemac_result)
+    monkeypatch.setattr(
+        "trid3nt_server.workflows.telemac.solving.solve.download_result",
+        lambda run_id, basename, error_code=None: "/tmp/does-not-matter.slf")
+    return _solved({"result_basename": "res3d_basin.slf",
+                    "tracer_names": ["TEMPERATURE     DEGC"]}, body=T3D)
+
+
+def test_a_column_reads_the_planes_at_the_deepest_node_as_depth_below_the_surface(
+        basin):
+    from trid3nt_server.workflows.telemac.modules import T3D, column
+
+    read = T3D.OUTPUTS["column"].read(column("T1"), basin)
+    assert (read.name, read.units, read.along) == (
+        "TEMPERATURE", "degC", "depth below the surface")
+    assert read.distance_m.tolist() == [0.0, 10.0, 20.0]
+    assert read.values.tolist() == [24.0, 20.0, 16.0]
+    assert read.measures["top"] == 24.0 and read.measures["bottom"] == 16.0
+    assert read.measures["top_minus_bottom"] == 8.0
+    assert read.measures["mean"] == pytest.approx(20.0)
+    assert (read.measures["depth_m"], read.measures["t"], read.measures["planes"]) == (
+        20.0, 3600.0, 3)
+    initial = T3D.OUTPUTS["column"].read(column("T1", t=0), basin)
+    assert initial.measures["top_minus_bottom"] == 10.0
+    wind = T3D.OUTPUTS["column"].read(column("U"), basin)
+    assert (wind.measures["top"], wind.measures["bottom"]) == (0.02, -0.02)
+    assert wind.measures["mean"] == pytest.approx(0.0)
+
+
+def test_a_column_at_a_point_reads_the_nearest_node(basin):
+    from trid3nt_server.workflows.telemac.modules import T3D, column
+
+    lon, lat = basin.lonlat
+    read = T3D.OUTPUTS["column"].read(
+        column("T1", at={"lon": float(lon[2]), "lat": float(lat[2]), "name": "berth"}),
+        basin)
+    assert read.values.tolist() == [21.0, 20.0, 19.0]
+    assert read.measures["depth_m"] == 5.0
+
+
+def test_a_column_needs_the_planes_of_a_3d_result(solved):
+    from trid3nt_server.workflows.telemac.modules import column
+    from trid3nt_server.workflows.telemac.modules.outputs import read_column
+
+    with pytest.raises(OutputEmpty, match="one plane"):
+        read_column(column("T1"), solved)
+
+
+def test_a_plane_of_a_3d_field_is_named_bottom_first(basin):
+    from trid3nt_server.workflows.telemac.modules import T3D
+
+    surface = T3D.OUTPUTS["field"].read(field("T1", t=-1), basin)
+    bottom = T3D.OUTPUTS["field"].read(field("T1", t=-1, plane=0), basin)
+    middle = T3D.OUTPUTS["field"].read(field("T1", t=-1, plane=1), basin)
+    assert (surface.plane, bottom.plane, middle.plane) == (
+        "surface plane", "bottom plane", "plane 2 of 3")
+    assert surface.values.tolist() == [23.0, 24.0, 21.0]
+    assert bottom.values.tolist() == [17.0, 16.0, 19.0]
+
+
+def test_a_tracer_everywhere_above_its_edge_is_drawn_and_ranged_whole(basin):
+    """A temperature is a tracer with no absent region: nothing is cut at a
+    visible edge, so the layer ranges over the field rather than from zero."""
+    from trid3nt_server.workflows.telemac.modules import T3D
+
+    surface = T3D.OUTPUTS["field"].read(field("T1", t=-1), basin)
+    assert surface.floor is None
+    assert T3D.OUTPUTS["max_over_time"].read(max_over_time("T1"), basin).floor is None
+
+
+def test_a_2d_field_names_no_plane(solved):
+    assert T2D.OUTPUTS["field"].read(field("T1", t=-1), solved).plane is None
+
+
+def test_a_chart_s_reference_may_be_another_primitive_drawn_as_a_line(
+        monkeypatch, basin):
+    """The reference is read where the chart's own is anchored, once, and rides
+    as a line labeled by the caption and its instant."""
+    from trid3nt_contracts.execution import LayerURI
+
+    from trid3nt_server.workflows.telemac import workflow as door
+    from trid3nt_server.workflows.telemac.modules import column
+
+    seen: dict[str, Any] = {}
+
+    async def _publish(**kwargs):
+        seen.update(kwargs)
+        return Published(primary=LayerURI(
+            layer_id="L", name="Water temperature (basin)", layer_type="raster",
+            uri="s3://runs/RID/water_temperature.tif", quantity="water_temperature"))
+
+    monkeypatch.setattr(door, "publish", _publish)
+    run = {**basin.run, "module": "telemac3d"}
+    result = asyncio.run(door.publish_outputs(
+        run=run,
+        outputs=[field("T1", t=-1).layer(style={"kind": "continuous"}),
+                 column("T1").chart(reference=column("T1", t=0))],
+        captions={"T1": "water temperature"},
+        answer={"dt": column("T1").measure("top_minus_bottom"),
+                "dt0": column("T1", t=0).measure("top_minus_bottom")},
+        params={"location": "the lake"}))
+    chart = seen["items"][1].read
+    assert [line.label for line in chart.lines] == ["water temperature at t = 0 s"]
+    assert chart.lines[0].values.tolist() == [25.0, 20.0, 15.0]
+    assert chart.lines[0].x.tolist() == [0.0, 10.0, 20.0]
+    assert result.answer == {"dt": 8.0, "dt0": 10.0}

@@ -2,9 +2,10 @@
 
 A primitive is named from the module's variable vocabulary - ``field("T1", t)``,
 ``series("H")``, ``max_over_time("T1")``, ``profile("T1", along)``, ``extent()``,
-``mesh()``, ``mass_balance()``, ``drogues()`` - and a template lists them with
-how each is published. The result file is read INSIDE the TELEMAC image, where
-``TelemacFile`` lives: one container round trip per file, and no parser here."""
+``mesh()``, ``mass_balance()``, ``drogues()``, ``column("T1", at)`` - and a
+template lists them with how each is published. The result file is read INSIDE
+the TELEMAC image, where ``TelemacFile`` lives: one container round trip per
+file, and no parser here."""
 
 from __future__ import annotations
 
@@ -39,6 +40,7 @@ __all__ = [
     "Primitive",
     "SelafinReadError",
     "Solved",
+    "column",
     "drogues",
     "extent",
     "field",
@@ -63,7 +65,7 @@ TRACER_EDGE_FRACTION = 0.05
 TRACER_FLOOR = 1e-3
 #: The engine spells a variable's unit in capitals after the name; these are
 #: the SI spellings a reader expects for the ones that are not plain lower-case.
-_UNITS = {"MG/L": "mg/L", "G/L": "g/L", "MGO2/L": "mgO2/L"}
+_UNITS = {"MG/L": "mg/L", "G/L": "g/L", "MGO2/L": "mgO2/L", "DEGC": "degC"}
 
 
 class SelafinReadError(RuntimeError):
@@ -255,6 +257,11 @@ def drogues() -> Primitive:
     return Primitive("drogues")
 
 
+def column(name: str, at: Any = None, t: Any = -1) -> Primitive:
+    """A 3D variable down the planes at a Point, or at the deepest node, at an instant."""
+    return Primitive("column", variable=name, at=at, t=t)
+
+
 # -- the read of each, off a solved run ------------------------------------- #
 
 class Solved:
@@ -345,9 +352,15 @@ class Solved:
         return varnames[position], _UNITS.get(unit.upper(), unit.lower())
 
     def frames(self, token: str, plane: int | None) -> tuple[str, str, Any]:
-        """``(variable, units, values(nframes, npoin2))`` for a token, one plane."""
+        """``(variable, units, values(nframes, npoin2))`` for a token, one plane.
+
+        A token the module DEFINES over the result's variables is read through
+        its own definition; the rest are the result's own arrays."""
         import numpy as np
 
+        derived = self.body.DERIVED.get(str(token).strip().upper())
+        if derived is not None:
+            return derived(self)
         name, units = self.variable(token)
         values = np.asarray(self.result["data"][name], dtype="float64")
         nplan = int(self.result.get("nplan", 1))
@@ -359,16 +372,43 @@ class Solved:
             raise OutputEmpty(f"{token} carries no time steps in {self.result_file}.")
         return name, units, values
 
+    def plane_label(self, plane: int | None) -> str | None:
+        """What a plane of this result is called, bottom first; ``None`` on 2D."""
+        nplan = int(self.result.get("nplan", 1))
+        if nplan < 2:
+            return None
+        index = nplan - 1 if plane is None else int(plane)
+        return ("bottom plane" if index == 0 else "surface plane"
+                if index == nplan - 1 else f"plane {index + 1} of {nplan}")
+
+    def node_at(self, at: Any) -> int:
+        """The 2D node nearest ``at``, a Point in any of the shapes it arrives in."""
+        import numpy as np
+
+        from trid3nt_server.workflows.inputs.point import as_utm
+
+        px, py = as_utm(_point(at), self.utm_epsg)
+        return int(np.argmin(np.hypot(np.asarray(self.result["x"]) - px,
+                                      np.asarray(self.result["y"]) - py)))
+
 
 def _is_tracer(token: str) -> bool:
     upper = str(token).strip().upper()
     return upper.startswith("T") and upper[1:].isdigit()
 
 
-def _floor(token: str, peak: float) -> float | None:
-    """Where a variable stops being drawn: a tracer's visible edge, else nowhere."""
+def _edge(token: str, peak: float) -> float | None:
+    """A tracer's visible edge, a fraction of its own peak; nothing for the rest."""
     return (max(TRACER_FLOOR, TRACER_EDGE_FRACTION * peak) if _is_tracer(token)
             else None)
+
+
+def _floor(token: str, values: Any) -> float | None:
+    """Where a variable stops being drawn: a tracer's edge, where the tracer HAS
+    one. A tracer that is everywhere above its edge - a temperature, a salinity -
+    is a field with no absent region, and is drawn and ranged whole."""
+    edge = _edge(token, float(values.max()))
+    return edge if edge is not None and float(values.min()) < edge else None
 
 
 def _envelope(token: str, times: Any, values: Any) -> dict[str, Any]:
@@ -384,12 +424,12 @@ def _envelope(token: str, times: Any, values: Any) -> dict[str, Any]:
                                 "frames": int(values.shape[0]),
                                 "truncated": bool(times.size > 1
                                                   and peak_i == times.size - 1)}
-    floor = _floor(token, peak)
-    if floor is not None and peak < floor:
+    edge = _edge(token, peak)
+    if edge is not None and peak < edge:
         raise OutputEmpty(
-            f"{token} never exceeded its floor {floor:.4g} anywhere (peak {peak:.4g}).")
-    if floor is not None:
-        measures["active_frames"] = int((per_frame > floor).sum())
+            f"{token} never exceeded its floor {edge:.4g} anywhere (peak {peak:.4g}).")
+    if edge is not None:
+        measures["active_frames"] = int((per_frame > edge).sum())
     return measures
 
 
@@ -420,10 +460,9 @@ def read_field(primitive: Primitive, solved: Solved) -> Read:
     times = np.asarray(solved.result["times"], dtype="float64")
     measures = _envelope(primitive.variable, times, values)
     if primitive.t == "every":
-        floor = _floor(primitive.variable, measures["max"])
         measures["travel_m"] = _travel_m(np.asarray(solved.result["x"]),
                                          np.asarray(solved.result["y"]),
-                                         values, floor)
+                                         values, _floor(primitive.variable, values))
         return Frames(name=name, units=units, file=solved.result_file,
                       group=name.strip(), epsg=solved.utm_epsg,
                       reference_time=solved.run.get("started_at"),
@@ -437,8 +476,8 @@ def read_field(primitive: Primitive, solved: Solved) -> Read:
     frame = values[index]
     return Field(name=name, units=units, lon=lon, lat=lat,
                  ikle=solved.result["ikle2"], values=frame,
-                 t=float(times[index]), floor=_floor(primitive.variable,
-                                                     measures["max"]),
+                 t=float(times[index]), plane=solved.plane_label(primitive.plane),
+                 floor=_floor(primitive.variable, values),
                  measures={"max": float(frame.max()), "min": float(frame.min()),
                            "t": float(times[index]), "frames": int(times.size)})
 
@@ -469,12 +508,8 @@ def read_series(primitive: Primitive, solved: Solved) -> Series:
     if primitive.at is None:
         return Series(name=name, units=units, times=times, values=values.max(axis=1),
                       at="the domain maximum", measures=measures)
-    from trid3nt_server.workflows.inputs.point import as_utm
-
     point = _point(primitive.at)
-    px, py = as_utm(point, solved.utm_epsg)
-    node = int(np.argmin(np.hypot(np.asarray(solved.result["x"]) - px,
-                                  np.asarray(solved.result["y"]) - py)))
+    node = solved.node_at(point)
     lon, lat = solved.lonlat
     return Series(name=name, units=units, times=times, values=values[:, node],
                   at=f"at {point.name or 'the point'}",
@@ -535,7 +570,8 @@ def read_max_over_time(primitive: Primitive, solved: Solved) -> Field:
     measures["p99"] = float(np.percentile(envelope, 99))
     return Field(name=name, units=units, lon=lon, lat=lat,
                  ikle=solved.result["ikle2"], values=envelope,
-                 floor=_floor(primitive.variable, measures["max"]),
+                 plane=solved.plane_label(primitive.plane),
+                 floor=_floor(primitive.variable, values),
                  measures=measures)
 
 
@@ -669,6 +705,44 @@ def read_profile(primitive: Primitive, solved: Solved) -> Profile:
                          float((along * weight).sum() / weight.sum()))}
     return Profile(name=name, units=units, distance_m=np.asarray(distance),
                    values=means_arr, along="downstream distance", measures=measures)
+
+
+def read_column(primitive: Primitive, solved: Solved) -> Profile:
+    """``column(name, at, t)``: a 3D variable down the planes at one node, at one
+    instant, as a profile of depth below the free surface. ``at=None`` reads the
+    deepest column the mesh carries, where vertical structure can exist at all.
+    The measures carry the top and bottom values, their difference, the
+    depth-weighted mean and the column's depth."""
+    import numpy as np
+
+    times = np.asarray(solved.result["times"], dtype="float64")
+    index = (int(primitive.t) if isinstance(primitive.t, int)
+             else int(np.argmin(np.abs(times - float(primitive.t)))))
+    nplan, npoin2 = int(solved.result.get("nplan", 1)), int(solved.result["npoin2"])
+    if nplan < 2:
+        raise OutputEmpty(f"{solved.result_file} carries one plane; a column reads "
+                          "the planes of a 3D result.")
+
+    def _planes(token: str) -> Any:
+        name = solved.variable(token)[0]
+        frame = np.asarray(solved.result["data"][name], dtype="float64")[index]
+        return frame.reshape(nplan, npoin2)
+
+    z = _planes("Z")
+    node = (int(np.argmin(z[0])) if primitive.at is None
+            else solved.node_at(primitive.at))
+    name, units = solved.variable(primitive.variable)
+    values = _planes(primitive.variable)[:, node]
+    depth = z[-1, node] - z[:, node]
+    span = float(depth[0])
+    mean = (float(np.trapezoid(values, z[:, node]) / span) if span > 1e-9
+            else float(values.mean()))
+    return Profile(name=name, units=units, distance_m=depth[::-1],
+                   values=values[::-1], along="depth below the surface",
+                   measures={"top": float(values[-1]), "bottom": float(values[0]),
+                             "top_minus_bottom": float(values[-1] - values[0]),
+                             "mean": mean, "depth_m": span,
+                             "t": float(times[index]), "planes": nplan})
 
 
 def parse_drogues(path: str | Path) -> list[tuple[float, list[tuple[float, float]]]]:

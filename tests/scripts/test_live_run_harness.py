@@ -337,7 +337,7 @@ def test_the_assertions_refuse_a_run_that_did_not_deliver():
     with pytest.raises(LiveRunError, match="no run prefix"):
         _env().require_run_products()
     with pytest.raises(LiveRunError, match="absent from the run prefix"):
-        _env(run_id="RID", metrics={"a": 1}).require_run_products()
+        _env(run_id="RID", chart_spec={"c": 1}).require_run_products()
     with pytest.raises(LiveRunError, match="no metrics.json"):
         _env().metric("dye_cmax_mgl")
     with pytest.raises(LiveRunError, match="has no"):

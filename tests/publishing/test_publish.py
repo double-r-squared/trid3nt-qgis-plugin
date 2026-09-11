@@ -337,3 +337,67 @@ def test_a_series_read_nowhere_is_no_station():
         publish_mod._station_layer(
             _series(), run_id="RID", engine="telemac", name="reach",
             caption="dye concentration", reference_time=None)
+
+
+def test_two_planes_of_one_quantity_share_a_scale_and_are_named_apart(monkeypatch):
+    """One quantity, one scale: the surface and the bottom of a 3D field are
+    ranged over both, and each layer carries its plane in its id, its file and
+    its name."""
+    from trid3nt_server.emission import publish as emission_publish
+    from trid3nt_server.workflows.publishing import cog
+    from trid3nt_server.workflows.shared import run_products
+
+    uploaded = []
+    monkeypatch.setattr(cog, "upload_cog",
+                        lambda local, run_id, bucket, *, dest_filename, **_kw:
+                        uploaded.append(dest_filename) or f"s3://runs/{run_id}/{dest_filename}")
+    monkeypatch.setattr(emission_publish, "publish_layer",
+                        lambda *, layer_uri, **_kw: layer_uri)
+
+    async def _surface(_emitter, layer, **_kw):
+        return True
+
+    async def _persist(run_id, *, charts, metrics):
+        return []
+
+    monkeypatch.setattr(publish_mod, "publish_input_layer", _surface, raising=False)
+    monkeypatch.setattr("trid3nt_server.emission.layer_uri_emit.publish_input_layer",
+                        _surface)
+    monkeypatch.setattr(run_products, "persist_run_products", _persist)
+    surface = _field(name="TEMPERATURE", units="degC", floor=None, t=3600.0,
+                     plane="surface plane",
+                     values=np.array([23.0, 24.0, 21.0, 22.0, 23.5]))
+    bottom = _field(name="TEMPERATURE", units="degC", floor=None, t=3600.0,
+                    plane="bottom plane",
+                    values=np.array([17.0, 16.0, 19.0, 18.0, 17.5]))
+    published = asyncio.run(publish(
+        run_id="RID", engine="telemac", name="basin", where="the lake",
+        reference_time=None,
+        items=[Deliverable(read=surface, mode="layer", caption="water temperature",
+                           style={"kind": "continuous", "ramp": "viridis"}),
+               Deliverable(read=bottom, mode="layer", caption="water temperature",
+                           style={"kind": "continuous", "ramp": "viridis"})]))
+    top, bed = published.layers
+    assert (top.layer_id, bed.layer_id) == (
+        "telemac-water_temperature_surface_plane-t3600-RID",
+        "telemac-water_temperature_bottom_plane-t3600-RID")
+    assert top.name == "Water temperature (degC) at t = 3600 s, surface plane (basin)"
+    assert bed.name == "Water temperature (degC) at t = 3600 s, bottom plane (basin)"
+    assert uploaded == ["water_temperature_surface_plane.tif",
+                        "water_temperature_bottom_plane.tif"]
+    assert top.quantity == bed.quantity == "water_temperature"
+    assert (top.legend.vmin, top.legend.vmax) == (16.0, 24.0)
+    assert (bed.legend.vmin, bed.legend.vmax) == (16.0, 24.0)
+
+
+def test_a_profile_chart_titles_its_axis_by_what_the_profile_runs_along():
+    payload = publish_mod._chart(
+        Profile(name="TEMPERATURE", units="degC",
+                distance_m=np.array([0.0, 10.0, 20.0]),
+                values=np.array([24.0, 20.0, 16.0]), along="depth below the surface",
+                measures={}),
+        caption="water temperature", where="the lake")
+    spec = payload["vega_lite_spec"]
+    assert spec["encoding"]["x"]["title"] == "Depth below the surface (m)"
+    assert payload["title"] == "Water temperature, depth below the surface - the lake"
+    assert "lowest 16 degC at 20 m" in payload["caption"]

@@ -1084,9 +1084,8 @@ async def settle_harbour(
         f"{topology['states']}.")
     return {
         **facts,
+        "name": _slug(facts["mesh_name"]),
         "title": f"ARTEMIS AGITATION {facts['mesh_name']}",
-        "domain_name": facts["mesh_name"],
-        "domain_slug": _slug(facts["mesh_name"]),
         "cli_text": cli_text,
         "open_nodes": open_nodes,
         "structure_nodes": structure_nodes,
@@ -1171,9 +1170,8 @@ async def settle_basin(
         + (f" {level_note}" if level_note else ""))
     return {
         **facts,
+        "name": _slug(facts["mesh_name"]),
         "title": f"TELEMAC3D STRATIFIED {facts['mesh_name']}",
-        "domain_name": facts["mesh_name"],
-        "domain_slug": _slug(facts["mesh_name"]),
         "boundary_states": topology["states"],
         "max_depth_m": round(max_depth, 2),
         "surface_m": round(float(surface_m), 3),

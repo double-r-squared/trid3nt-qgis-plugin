@@ -13,6 +13,7 @@ from .module import Composite, Module, Output, Slot, SlotRefused, load_dictionar
 from .outputs import (
     Measure,
     Primitive,
+    column,
     extent,
     field,
     mass_balance,
@@ -30,8 +31,9 @@ from .waqtel import WAQTEL
 __all__ = [
     "ART", "Composite", "Filled", "GAIA", "Measure", "Module", "Output",
     "Primitive", "Sheet", "SheetIncomplete", "Slot", "SlotRefused", "T2D", "T3D",
-    "WAQTEL", "WRAPPERS", "draw", "extent", "field", "fill", "load_dictionary",
-    "mass_balance", "max_over_time", "mesh", "run", "series", "wrapper_for",
+    "WAQTEL", "WRAPPERS", "column", "draw", "extent", "field", "fill",
+    "load_dictionary", "mass_balance", "max_over_time", "mesh", "run", "series",
+    "wrapper_for",
 ]
 
 #: The exposed wrappers, by the module name the engine knows each by. A coupled

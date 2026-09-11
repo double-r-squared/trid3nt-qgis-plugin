@@ -6,8 +6,7 @@ MIXING DOWNWARD. The basin is CLOSED: it names no liquid boundary."""
 
 from __future__ import annotations
 
-from typing import Any
-
+from trid3nt_contracts.telemac_contracts import TELEMAC3D_STRATIFICATION_STYLE
 from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
 
 from trid3nt_server.workflows.runtime import ParamRef, Ref, Step, register_workflow
@@ -17,13 +16,13 @@ from trid3nt_server.workflows.telemac.authoring.assembler import (
     BASIN_BOUNDARY,
     BASIN_GEOMETRY,
 )
+from trid3nt_server.workflows.telemac.modules import column, field, mesh
 from trid3nt_server.workflows.telemac.modules.telemac3d import (
     T3D,
     Column,
     VerticalGrid,
     Wind,
 )
-from trid3nt_server.workflows.telemac.products.stratified import StratifiedProducts
 from trid3nt_server.workflows.telemac.solving.solve import compute_class
 from trid3nt_server.workflows.telemac.templates.stratified_flow.declarations import (
     BASIN_HALF_DEG,
@@ -33,8 +32,8 @@ from trid3nt_server.workflows.telemac.templates.stratified_flow.declarations imp
 )
 from trid3nt_server.workflows.telemac.workflow import Door, TelemacWorkflow
 
-__all__ = ["ANSWER", "DATA", "MESH", "PARAMS", "STEERING",
-           "build_profile_chart", "telemac3d_stratified_flow"]
+__all__ = ["ANSWER", "CAPTIONS", "DATA", "MESH", "OUTPUTS", "PARAMS", "STEERING",
+           "telemac3d_stratified_flow"]
 
 _AUTHORING = "trid3nt_server.workflows.telemac.authoring"
 _TEMPLATE = "trid3nt_server.workflows.telemac.templates.stratified_flow"
@@ -151,10 +150,13 @@ class STEERING(T3D):
     COEFFICIENT_FOR_VERTICAL_DIFFUSION_OF_TRACERS = [1.0e-4]
 
     # THE TRACER IS THE PHYSICS: temperature drives the density and the density
-    # drives the flow. The initial values keyword is mandatory even where the
-    # Fortran hook overrides it - the solver stops asking for it by name.
+    # drives the flow. The engine finds the temperature by the first sixteen
+    # characters of its name; the unit rides in the next sixteen, as the
+    # dictionary spells a tracer name, and is what the result file carries. The
+    # initial values keyword is mandatory even where the Fortran hook overrides
+    # it - the solver stops asking for it by name.
     NUMBER_OF_TRACERS = 1
-    NAMES_OF_TRACERS = ["TEMPERATURE     "]
+    NAMES_OF_TRACERS = ["TEMPERATURE     DEGC"]
     INITIAL_VALUES_OF_TRACERS = [0.0]
     DENSITY_LAW = 1
     AVERAGE_WATER_DENSITY = 1000.0
@@ -191,71 +193,37 @@ class STEERING(T3D):
     wind = Wind(speed_mps=P.wind_speed_mps, from_deg=P.wind_direction_deg)
 
 
-#: The run's ANSWER, as the numbers a reader has to be able to check.
-ANSWER = ("stratification_metric", "stratification_dt", "variable_label",
-          "variable_units", "nplan", "wind_speed_mps", "u_surface", "u_bottom",
-          "depth_avg_u", "mesh_size_m", "profile_sigma", "profile_values",
-          "profile_values_initial", "column_heat_drift_frac",
-          "stratification_dt_init", "column_heat_mean_init_c",
-          "column_heat_mean_final_c", "column_depth_m")
+#: What the solved run is read for: the temperature on the surface plane and on
+#: the bed plane as the pair of maps whose contrast a depth average cannot show,
+#: and the column at the deepest node as the chart, the prescribed initial column
+#: drawn beside what survived. The run exchanges no heat with the atmosphere, so
+#: the two curves enclose the same heat and a surface that fell is the warm
+#: layer mixed downward.
+OUTPUTS = [
+    field("T1", t=-1).layer(style=TELEMAC3D_STRATIFICATION_STYLE),
+    field("T1", t=-1, plane=0).layer(style=TELEMAC3D_STRATIFICATION_STYLE),
+    column("T1").chart(reference=column("T1", t=0)),
+]
+CAPTIONS = {"T1": "water temperature"}
 
-
-def build_profile_chart(*, result: Any, params: Any) -> dict[str, Any] | None:
-    """The VERTICAL profile SPEC: what the column started as, and what survived.
-
-    Two lines against sigma (0 = bed, 1 = surface); ``None`` when unmeasured."""
-    # The run exchanges NO heat with the atmosphere, so the two lines enclose the
-    # same heat and the caption reads the change as redistribution (mixing),
-    # never as the lake losing heat.
-    sigma = getattr(result, "profile_sigma", None)
-    final = getattr(result, "profile_values", None)
-    if not sigma or not final or len(sigma) != len(final):
-        return None
-    from trid3nt_server.emission.charts import build_chart_payload
-
-    units = getattr(result, "variable_units", None) or ""
-    label = getattr(result, "variable_label", None) or "Field"
-    initial = getattr(result, "profile_values_initial", None)
-    values = [{"sigma": float(sigma[i]), "v": float(final[i]), "state": "final"}
-              for i in range(len(sigma))]
-    if initial and len(initial) == len(sigma):
-        values += [{"sigma": float(sigma[i]), "v": float(initial[i]),
-                    "state": "initial"} for i in range(len(sigma))]
-
-    metric = getattr(result, "stratification_metric", None)
-    surface = getattr(result, "u_surface", None)
-    bottom = getattr(result, "u_bottom", None)
-    where = params.get("location")
-    title = (f"Vertical profile - {where}" if where
-             else (getattr(result, "name", None) or "Vertical profile"))
-    return build_chart_payload(
-        vega_lite_spec={
-            "mark": {"type": "line", "point": True},
-            "data": {"values": values},
-            "encoding": {
-                "x": {"field": "v", "type": "quantitative",
-                      "title": f"{label} ({units})" if units else label},
-                "y": {"field": "sigma", "type": "quantitative",
-                      "title": "Sigma (0 = bed, 1 = surface)"},
-                "color": {"field": "state", "type": "nominal", "title": None},
-            },
-        },
-        title=title,
-        caption=(
-            (f"Top-to-bottom difference surviving the run: {float(metric):.4g} "
-             f"{units}. " if metric is not None else "")
-            + "The two lines are the PRESCRIBED initial column and the solved "
-              "final one; their separation is what a depth-averaged model cannot "
-              "show. "
-            + (f"The same wind drove {float(surface):.3g} m/s at the surface "
-               f"against {float(bottom):.3g} m/s at the bed. "
-               if surface is not None and bottom is not None else "")
-            + "There is no heat exchange in this run - heat is CONSERVED, so the "
-              "surface falling and the depths rising is the warm layer MIXING "
-              "DOWNWARD, not the lake cooling. 3D screening, not a calibrated "
-              "study."
-        ),
-    )
+#: The run's ANSWER, as the numbers a reader has to be able to check, each a
+#: measure of one of the reads above or of the velocity column beside them: the
+#: top-to-bottom difference that survived against the one prescribed, the
+#: depth-weighted column means whose drift is the numerical error bar on the
+#: mixing, and the surface-downwind / return-flow-at-depth pair the same wind
+#: drove, whose depth average a 2D model reports as nothing.
+ANSWER = {
+    "stratification_dt": column("T1").measure("top_minus_bottom"),
+    "stratification_dt_init": column("T1", t=0).measure("top_minus_bottom"),
+    "column_mean_final_c": column("T1").measure("mean"),
+    "column_mean_init_c": column("T1", t=0).measure("mean"),
+    "column_depth_m": column("T1").measure("depth_m"),
+    "u_surface": column("U").measure("top"),
+    "u_bottom": column("U").measure("bottom"),
+    "depth_avg_u": column("U").measure("mean"),
+    "planes": mesh().measure("planes"),
+    "mesh_size_m": mesh().measure("size_m"),
+}
 
 
 _TELEMAC3D_RES_SPEC = ResolutionSpec(
@@ -326,14 +294,11 @@ telemac3d_stratified_flow = register_workflow(
         results=(_RESULT_3D, _RESULT_2D),
         steering_file=_STEERING_FILE, prefix="telemac3d",
         dispatch=f"{_SOLVING}.solve_case", compute_class=P.compute_class,
-        read=lambda run: StratifiedProducts.column(
-            run=run, solve=run).named("column"),
-        chart=("vertical_profile", build_profile_chart),
+        outputs=OUTPUTS, captions=CAPTIONS, answer=ANSWER,
         review_title="Review the prescribed column, the wind and the mesh"),
     data=DATA,
-    answer=ANSWER,
-    provenance=(("lake_level_m", "lake_level_note"),
-                ("wind_speed_mps", "wind_note"),
+    answer=tuple(ANSWER),
+    provenance=(("wind_speed_mps", "wind_note"),
                 ("thermocline_depth_m", "thermocline_note"),
                 ("levels", "levels_note"),
                 ("time_step_s", "time_step_note"),

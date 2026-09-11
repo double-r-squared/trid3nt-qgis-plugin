@@ -18,7 +18,7 @@ from trid3nt_contracts.execution import LayerURI
 
 from . import cog, raster
 from .animation import publish_results_mesh_via_seam
-from .reads import Deliverable, Field, Frames, Profile, Series, Track
+from .reads import Deliverable, Field, Profile, Series, Track
 
 logger = logging.getLogger("trid3nt_server.workflows.publishing.publish")
 
@@ -64,6 +64,12 @@ async def publish(*, run_id: str, engine: str, name: str, where: str,
     layers: list[LayerURI] = []
     charts: dict[str, Any] = {}
     animations = 0
+    # ONE QUANTITY, ONE SCALE: every field layer of a quantity is ranged over
+    # all of them, so two planes of one variable read on one ramp.
+    fields: dict[str, list[Field]] = {}
+    for item in items:
+        if item.mode == "layer" and isinstance(item.read, Field):
+            fields.setdefault(quantity_of(item.caption), []).append(item.read)
     for item in items:
         if item.mode == "layer" and isinstance(item.read, Track):
             layers.append(await asyncio.to_thread(
@@ -72,7 +78,9 @@ async def publish(*, run_id: str, engine: str, name: str, where: str,
         elif item.mode == "layer":
             layers.append(await asyncio.to_thread(
                 _layer, item.read, run_id=run_id, engine=engine, name=name,
-                caption=item.caption, style=item.style))
+                caption=item.caption, style=item.style,
+                value_range=_value_range(fields[quantity_of(item.caption)],
+                                         item.style)))
         elif item.mode == "station":
             layers.append(await asyncio.to_thread(
                 _station_layer, item.read, run_id=run_id, engine=engine, name=name,
@@ -106,11 +114,38 @@ async def publish(*, run_id: str, engine: str, name: str, where: str,
                      animations=animations)
 
 
+def _value_range(reads: Sequence[Field], style: Mapping[str, Any] | None
+                 ) -> tuple[float, float]:
+    """The legend range the fields of one quantity share, measured in hand.
+
+    A floored field is read from zero: the floor is where the field STOPS being
+    drawn, so the ramp's bottom is nothing rather than the faintest cell. A row
+    that declares a centre is a diverging ramp, ranged symmetrically about it so
+    the centre colour means the centre value on every run."""
+    import numpy as np
+
+    values = np.concatenate([np.asarray(read.values, dtype="float64").ravel()
+                             for read in reads])
+    finite = values[np.isfinite(values)]
+    hi = float(finite.max()) if finite.size else 0.0
+    lo = float(finite.min()) if finite.size else 0.0
+    center = (style or {}).get("center")
+    floors = [read.floor for read in reads if read.floor is not None]
+    if center is not None:
+        reach = max(abs(hi - float(center)), abs(lo - float(center)))
+        return (round(float(center) - reach, 6), round(float(center) + reach, 6))
+    if floors:
+        return (0.0, round(max(hi, *floors), 6))
+    return (round(lo, 6), round(hi, 6))
+
+
 def _layer(read: Field, *, run_id: str, engine: str, name: str, caption: str,
-           style: Mapping[str, Any] | None) -> LayerURI:
+           style: Mapping[str, Any] | None,
+           value_range: tuple[float, float] | None = None) -> LayerURI:
     """A field -> ONE COG on the map, styled by the row the caller declared.
 
-    The legend range is the field's own, measured while it is in hand."""
+    The legend range is the field's own unless the caller ranged it over the
+    quantity's other fields; a plane of a 3D result is named in the layer."""
     import numpy as np
     from rasterio.transform import from_bounds
 
@@ -118,6 +153,7 @@ def _layer(read: Field, *, run_id: str, engine: str, name: str, caption: str,
     from trid3nt_server.emission.publish import PublishLayerError, publish_layer
 
     quantity = quantity_of(caption)
+    which = quantity + ("" if read.plane is None else f"_{quantity_of(read.plane)}")
     lon, lat = np.asarray(read.lon, dtype="float64"), np.asarray(read.lat, dtype="float64")
     bbox = (float(lon.min() - _PAD_DEG), float(lat.min() - _PAD_DEG),
             float(lon.max() + _PAD_DEG), float(lat.max() + _PAD_DEG))
@@ -128,37 +164,23 @@ def _layer(read: Field, *, run_id: str, engine: str, name: str, caption: str,
     transform = from_bounds(bbox[0], bbox[1], bbox[2], bbox[3], shape[1], shape[0])
     path = cog.write_cog_4326_from_grid(
         grid, src_crs="EPSG:4326", src_transform=transform, reproject=False,
-        crs_roundtrip_guard=True, dst_suffix=f"_{quantity}.tif")
+        crs_roundtrip_guard=True, dst_suffix=f"_{which}.tif")
     try:
-        uri = cog.upload_cog(path, run_id, None, dest_filename=f"{quantity}.tif",
-                             log_label=f"{quantity} COG")
+        uri = cog.upload_cog(path, run_id, None, dest_filename=f"{which}.tif",
+                             log_label=f"{which} COG")
     finally:
         cog.safe_unlink(path)
 
-    values = np.asarray(read.values, dtype="float64")
-    finite = values[np.isfinite(values)]
-    hi = float(finite.max()) if finite.size else 0.0
-    lo = float(finite.min()) if finite.size else 0.0
-    # A floored field is read from zero: the floor is where the field STOPS
-    # being drawn, so the ramp's bottom is nothing rather than the faintest cell.
-    # A row that declares a centre is a diverging ramp, ranged symmetrically
-    # about it so the centre colour means the centre value on every run.
-    center = (style or {}).get("center")
-    if center is not None:
-        reach = max(abs(hi - float(center)), abs(lo - float(center)))
-        value_range = (round(float(center) - reach, 6), round(float(center) + reach, 6))
-    elif read.floor is not None:
-        value_range = (0.0, round(max(hi, read.floor), 6))
-    else:
-        value_range = (round(lo, 6), round(hi, 6))
     label = f"{caption[:1].upper()}{caption[1:]} ({read.units})"
-    legend = presets.legend_key(style, value_range=value_range, units=read.units,
-                                label=label)
+    legend = presets.legend_key(
+        style, value_range=value_range or _value_range((read,), style),
+        units=read.units, label=label)
     instant = "" if read.t is None else f"-t{int(read.t)}"
+    plane = "" if read.plane is None else f", {read.plane}"
     layer = LayerURI(
-        layer_id=f"{engine}-{quantity}{instant}-{run_id}",
-        name=(f"Peak {caption} ({name})" if read.t is None
-              else f"{label} at t = {read.t:g} s ({name})"),
+        layer_id=f"{engine}-{which}{instant}-{run_id}",
+        name=(f"Peak {caption}{plane} ({name})" if read.t is None
+              else f"{label} at t = {read.t:g} s{plane} ({name})"),
         layer_type="raster", uri=uri, style=dict(style) if style else None,
         quantity=quantity, role="primary", units=read.units, bbox=bbox,
         legend=legend)
@@ -261,7 +283,7 @@ def _chart(read: Series | Profile, *, caption: str, where: str) -> dict[str, Any
     title = f"{caption[:1].upper()}{caption[1:]}"
     if isinstance(read, Profile):
         x, at = [float(d) for d in read.distance_m], read.along
-        xfield, axis = "x_m", "Downstream distance (m)"
+        xfield, axis = "x_m", f"{at[:1].upper()}{at[1:]} (m)"
     else:
         x, at = [float(t) for t in read.times], read.at
         xfield, axis = "t_s", "Time (s)"

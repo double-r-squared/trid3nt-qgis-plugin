@@ -45,7 +45,8 @@ UNSET = _Unset()
 #: Class attributes a wrapper carries that are never keyword assertions.
 _RESERVED = frozenset((
     "MODULE", "DICTIONARY", "COMPOSITES", "OUTPUTS", "ASSERTED", "PARTS", "parts",
-    "VARIABLES", "LISTING", "RESULT_FILE", "composites", "outputs", "slot",
+    "VARIABLES", "LISTING", "DERIVED", "RESULT_FILE", "composites", "outputs",
+    "slot",
 ))
 
 
@@ -319,6 +320,9 @@ class Module(metaclass=_Body):
     #: The tokens of that vocabulary the module PRINTS in its listing rather
     #: than writes to its result file; a series of one is read off the listing.
     LISTING: frozenset[str] = frozenset()
+    #: The tokens of that vocabulary the module defines OVER the variables its
+    #: result carries, each ``(solved) -> (name, units, values(nframes, npoin2))``.
+    DERIVED: Mapping[str, Callable[..., Any]] = MappingProxyType({})
     #: The result file the primitives read; empty reads the run's own.
     RESULT_FILE: str = ""
     #: The shared bodies this one is made of, in the order they merge.

@@ -22,11 +22,8 @@ __all__ = [
     "TELEMAC3D_STRATIFICATION_STYLE",
     "TELEMAC_COASTAL_DEPTH_STYLE",
     "TELEMAC_MAX_DEPTH_STYLE",
-    "TELEMAC3D_SIGNED_STYLE",
     "TelemacWseLayerURI",
     "TelemacWaveLayerURI",
-    "ArtemisAgitationLayerURI",
-    "Telemac3dLayerURI",
     "TelemacCoastalLayerURI",
 ]
 
@@ -44,21 +41,13 @@ TELEMAC_COASTAL_DEPTH_STYLE: dict = {
     "kind": "continuous", "ramp": "ylgnbu", "units": "m",
     "label": "Peak inundation depth"}
 
-#: The TELEMAC-3D surface (or bottom) field, where the field is strictly
-#: positive - temperature C, salinity psu - and reads on a sequential ramp. The
-#: COG variable differs by mode, so the caller titles this row with the variable
-#: it actually rasterized rather than minting a row per mode.
+#: A TELEMAC-3D plane of a strictly positive field - temperature C, salinity
+#: psu - on a sequential ramp; the caption names the variable.
 TELEMAC3D_STRATIFICATION_STYLE: dict = {"kind": "continuous", "ramp": "viridis"}
-
-#: The same TELEMAC-3D field when it is SIGNED - a velocity component, where the
-#: sign IS the direction - so the ramp diverges about zero and a reader tells
-#: upstream from downstream by colour rather than by magnitude.
-TELEMAC3D_SIGNED_STYLE: dict = {"kind": "continuous", "ramp": "rdbu"}
 
 #: The ARTEMIS agitation coefficient Kd = Hs/H0 - a dimensionless amplification
 #: ratio, not a wave height.
-TELEMAC_AGITATION_STYLE: dict = {
-    "kind": "continuous", "units": "Kd", "label": "Agitation coefficient (Kd)"}
+TELEMAC_AGITATION_STYLE: dict = {"kind": "continuous"}
 
 #: The TOMAWAC significant wave height Hs.
 TELEMAC_WAVE_STYLE: dict = {
@@ -159,98 +148,6 @@ class TelemacWaveLayerURI(LayerURI):
     #: the chart and the narrated numbers are the same measurement.
     fetch_curve_km: list[float] | None = Field(default=None)
     fetch_curve_hs_m: list[float] | None = Field(default=None)
-
-
-class ArtemisAgitationLayerURI(LayerURI):
-    """The harbour-agitation field: a dimensionless amplification ratio.
-    The phase-RESOLVING complement to the spectral wave layer - it carries
-    diffraction, refraction and partial reflection, not a wave height.
-    """
-
-    #: The strongest amplification anywhere - a resonant antinode or a focus.
-    kd_max: float = Field(ge=0.0)
-    hs_max_m: float | None = Field(default=None, ge=0.0)
-    #: Mean amplification in the lee of a structure against the exposed
-    #: approach - the DISCRIMINATING pair: sheltered must fall well below
-    #: exposed, or the structure shelters nothing.
-    kd_sheltered: float | None = Field(default=None, ge=0.0)
-    kd_exposed: float | None = Field(default=None, ge=0.0)
-    #: The harbour's resonant period, and the in-harbour response AT and OFF
-    #: it - the resonance pair.
-    resonant_period_s: float | None = Field(default=None, ge=0.0)
-    response_at_resonance: float | None = Field(default=None, ge=0.0)
-    response_off_resonance: float | None = Field(default=None, ge=0.0)
-    #: The question class, and the incident period the field was forced with.
-    wave_mode: str | None = Field(default=None)
-    wave_period_s: float | None = Field(default=None, ge=0.0)
-    mesh_size_m: float | None = Field(default=None, gt=0.0)
-    mesh_resolution_label: str | None = Field(default=None)
-    #: The curve the run MEASURED across the field, paired index-for-index,
-    #: with the kind naming what the axis IS - a transect in metres, or a period
-    #: sweep. A chart plots this rather than resampling the raster, so the chart
-    #: and the sheltered/exposed pair above are one measurement.
-    agitation_curve_m: list[float] | None = Field(default=None)
-    agitation_curve_kd: list[float] | None = Field(default=None)
-    agitation_curve_kind: str | None = Field(default=None)
-    #: The mesh topology's own liquid-boundary sentence: how many liquid
-    #: boundaries this domain names and how they are numbered, or that the whole
-    #: boundary is solid wall.
-    boundary_states: str | None = Field(default=None)
-
-
-class Telemac3dLayerURI(LayerURI):
-    """A surface- or bottom-layer field from a 3D baroclinic run.
-    The vertical structure a 2D depth-average cannot resolve, so what makes the
-    layer worth having is the scalars below, not the map.
-    """
-
-    #: The headline DISCRIMINATING magnitude, whichever quantity the mode makes
-    #: it: a top-to-bottom difference, a surface-minus-bottom velocity, a front
-    #: speed. Nonzero IS the 3D structure a 2D model misses.
-    stratification_metric: float = Field(ge=0.0)
-    #: The VERTICAL profile the run measured - sigma (0 at the bed, 1 at the
-    #: surface) against the field value, final and initial, paired
-    #: index-for-index. This is the 3D answer in the only form that shows it:
-    #: what the column looked like at the start and what survived. A surface map
-    #: carries no depth at all, so a chart plots these rather than resampling it.
-    profile_sigma: list[float] | None = Field(default=None)
-    profile_values: list[float] | None = Field(default=None)
-    profile_values_initial: list[float] | None = Field(default=None)
-    #: The question class, and what the rasterized variable IS.
-    flow_mode: str | None = Field(default=None)
-    variable_label: str | None = Field(default=None)
-    variable_units: str | None = Field(default=None)
-    #: The persisting top-to-bottom temperature difference: thermocline strength.
-    stratification_dt: float | None = Field(default=None)
-    #: The vertical velocity structure - surface downwind, bottom upwind, and a
-    #: depth-average near zero, which is the whole two-layer gyre a 2D model
-    #: returns as nothing everywhere.
-    u_surface: float | None = Field(default=None)
-    u_bottom: float | None = Field(default=None)
-    depth_avg_u: float | None = Field(default=None)
-    #: Measured against analytic gravity-current front speed.
-    front_speed_mps: float | None = Field(default=None, ge=0.0)
-    benjamin_speed_mps: float | None = Field(default=None, ge=0.0)
-    surface_value_mean: float | None = Field(default=None)
-    bottom_value_mean: float | None = Field(default=None)
-    #: The number of sigma planes - the 3D degree of freedom - and whether the
-    #: non-hydrostatic solver ran.
-    nplan: int | None = Field(default=None, ge=0)
-    non_hydrostatic: bool | None = Field(default=None)
-    wind_speed_mps: float | None = Field(default=None, ge=0.0)
-    mesh_size_m: float | None = Field(default=None, gt=0.0)
-    mesh_resolution_label: str | None = Field(default=None)
-    #: The depth-weighted column mean's own fractional move over the run: the
-    #: numerical ERROR BAR on the mixing, since a run that exchanges no heat
-    #: should conserve that mean exactly.
-    column_heat_drift_frac: float | None = Field(default=None)
-    #: The column's difference and depth-weighted mean at the start and at the
-    #: end - what the two numbers above are measured against - and the depth the
-    #: profile was taken from.
-    stratification_dt_init: float | None = Field(default=None)
-    column_heat_mean_init_c: float | None = Field(default=None)
-    column_heat_mean_final_c: float | None = Field(default=None)
-    column_depth_m: float | None = Field(default=None)
 
 
 class TelemacCoastalLayerURI(LayerURI):
