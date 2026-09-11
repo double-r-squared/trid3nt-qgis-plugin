@@ -1,7 +1,7 @@
 {
   "tool": "telemac_river_dye",
   "run_id": "01M286WWNHXZJW8W5J1SDGG264",
-  "commit": "63788fb6a673f06cb981fcb0f01ae8e2afd25ab3-dirty",
+  "commit": "c8290e8447b6eeb70580bb6f9766f111e56942e9",
   "recorded_at": "2026-09-11T12:26:06.455361+00:00",
   "engine": "telemac",
   "wall_seconds": 28.194,
