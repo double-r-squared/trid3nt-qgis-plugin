@@ -40,7 +40,6 @@ The values the template declares. `desc` is what the model reads when it fills o
 | `event_time` | question | - | optional | The storm/event moment to read the carrier discharge cycle at - from phrasing like 'during last Tuesday's storm'; an ISO date or datetime (e.g. '2026-08-20' or '2026-08-20T06:00:00Z'). Unset reads the most recent published NWM cycle. The NWM PDS bucket retains only the last ~30 days of history; a deeper request refuses typed rather than silently reading a different cycle. |
 | `output_interval_min` | user | min | optional | Result-writing cadence; unset keeps the steering file's own period |
 | `compute_class` | constant | - | medium | Solve sizing class |
-| `release_coords` | user | - | optional | Where the substance enters the water, (lon, lat) EPSG:4326 |
 | `spill_fraction` | scenario | - | 0.25 | Along-reach release position, 0=upstream..1=downstream; the source must sit strictly INSIDE the reach, never on a boundary |
 | `spill_duration_s` | scenario | s | 300.0 | Finite pulse injection window |
 | `source_q_m3s` | scenario | m^3/s | 8.0 | Point-source discharge of the release itself, small against the river's carrier flow |
@@ -51,7 +50,7 @@ The values the template declares. `desc` is what the model reads when it fills o
 | `rainfall_gridmet_window` | user | - | optional | Real-storm source: an ISO window 'YYYY-MM-DD:YYYY-MM-DD' whose gridMET domain-mean daily precipitation supersedes rainfall_mm_per_day |
 | `velocity_diffusivity` | user | m^2/s | optional | Turbulent momentum diffusivity |
 | `tracer_diffusivity` | user | m^2/s | optional | Tracer diffusivity, which sets lateral plume spread |
-| `reach_seed_coords` | user | - | optional | The point the reach centerline is navigated from, (lon, lat); set when the release must pin which water body is meshed |
+| `release` | user | - | optional | Where the substance enters the water, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer, or a place name |
 | `grain_size_um` | scenario | um | 200.0 | Median grain diameter d50 of the RELEASED class - ~200 um fine sand settles within a few km, ~20 um silt mostly stays suspended (all modeled non-cohesive) |
 | `sediment_concentration_mgl` | scenario | mg/L | 100.0 | Concentration of the released suspended sediment; what deposits is measured against what this put in |
 | `reach_length_km` | scenario | km | 6.0 | Modeled reach length downstream of the release; a longer reach is coarsened under the mesh node budget |

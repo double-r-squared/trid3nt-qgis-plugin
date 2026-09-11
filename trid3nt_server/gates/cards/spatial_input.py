@@ -114,6 +114,8 @@ def _spatial_response_to_result(
             "status": "ok",
             "geometry_type": gtype,
             "coordinates": list(response.coordinates),
+            **({"name": response.name} if gtype == "point" and response.name
+               else {}),
         }
     if gtype == "vector_draw":
         if not isinstance(response.features, dict):

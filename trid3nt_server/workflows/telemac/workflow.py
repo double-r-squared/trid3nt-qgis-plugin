@@ -196,7 +196,8 @@ async def run_sheet(*, sheet: Sheet, settled: Mapping[str, Any],
         compute_class=compute_class,
         coupling=None if not coupled else str(coupled).split(";")[0].lower(),
         continue_from=settled.get("continue_from"))
-    return {**settled, **dict(meta), **handle, "module": sheet.module}
+    return {**settled, **dict(meta), **handle, "module": sheet.module,
+            "tracer_names": dict(sheet.resolved()).get("NAMES OF TRACERS")}
 
 
 #: How a slot's ORIGIN reads on the card: which door served the value, and what

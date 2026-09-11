@@ -18,7 +18,7 @@ dredging rule, a wind, a hyetograph against a constant rate.
 | --- | --- |
 | `__init__.py` | The package door. A template is imported for its registration, so nothing is re-exported here. |
 | `shared/` | The bodies, chains and rows a good portion of several templates share. A body here is a PART a template LISTS, never a parent it extends. |
-| `river_dye/` | `telemac_river_dye` - a conservative plume down a reach, decaying when a decaying substance is named; `coercions.py` is the river family's wire policy for which point seeds the reach. |
+| `river_dye/` | `telemac_river_dye` - a conservative plume down a reach, decaying when a decaying substance is named; its release is a Point slot whose name the tracer takes. |
 | `river_oil_spill/` | `telemac_river_oil_spill` - an oil slick on a reach: floating particles plus the dissolved fraction. |
 | `river_scour/` | `telemac_river_scour` - a mobile bed under a reach: scour, deposition, grain sorting, and the NESTOR dredge rule. |
 | `river_sediment_plume/` | `telemac_river_sediment_plume` - one settling class over a bed with no stock, so only what was injected deposits. |

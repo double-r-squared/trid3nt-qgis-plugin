@@ -4,6 +4,7 @@ Every number the run uses is on this page or is a labeled constant below it."""
 
 from __future__ import annotations
 
+from trid3nt_server.workflows.inputs import Point
 from trid3nt_server.workflows.runtime import Param, doors
 
 __all__ = [
@@ -48,11 +49,12 @@ NLCD_NATIVE_RESOLUTION_M: int = 30
 class PARAMS:
     # -- the question ------------------------------------------------------- #
     pour_point = Param(
-        door=doors.USER, consequence="aoi",
-        type=tuple[float, float] | list[float] | str,
-        desc="The catchment OUTLET as (lon, lat) EPSG:4326 - the point the runoff "
-             "drains to. It decides which basin is modelled at all, so it is asked "
-             "for (drawn on the canvas or passed explicitly) and NEVER invented")
+        door=doors.USER, consequence="aoi", type=Point,
+        desc="The catchment OUTLET, as a Point: the pick's {coordinates, name} "
+             "verbatim, a (lon, lat) pair, 'lat,lon', a point layer, or a place "
+             "name - the point the runoff drains to. It decides which basin is "
+             "modelled at all, so it is asked for (picked on the canvas or passed "
+             "explicitly) and NEVER invented")
     location = Param(
         door=doors.QUESTION, optional=True, consequence="aoi",
         derived_when_absent=(

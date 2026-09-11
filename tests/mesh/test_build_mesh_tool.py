@@ -661,7 +661,7 @@ async def test_the_escalated_bbox_is_the_box_the_rerun_actually_models(monkeypat
 
     A rerun seats overrides on the parent's own sheet, so the box arrives at the
     acquisition step beside the place name the parent ran with."""
-    from trid3nt_server.workflows.shared.aoi import acquire_aoi
+    from trid3nt_server.workflows.inputs.aoi import acquire_aoi
 
     def _never(*_a, **_kw):  # a geocode here would mean the box was dropped
         raise AssertionError("the supplied extent is the domain; nothing to geocode")

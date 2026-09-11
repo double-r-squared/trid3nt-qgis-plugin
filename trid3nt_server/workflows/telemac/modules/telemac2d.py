@@ -21,8 +21,8 @@ from ..products.rain_on_grid import publish_rain_on_grid_products
 from .module import Module
 
 __all__ = ["T2D", "Boundaries", "Continuation", "Friction", "Hyetograph", "Oil",
-           "Rain", "Rating", "Release", "Runoff", "TimeOrigin", "Wind",
-           "SOURCES_FILENAME"]
+           "Rain", "Rating", "Release", "Runoff", "TimeOrigin", "TracerNames",
+           "Wind", "SOURCES_FILENAME"]
 
 #: The point-source time series the SOURCES FILE names.
 SOURCES_FILENAME = "river_sources.txt"
@@ -62,6 +62,27 @@ def Release(*, at: Any, q: Any, tracers: Any,  # noqa: N802 - a value constructo
     # held flat for the whole run; ``until_s`` is the horizon it is written over.
     return MappingProxyType({"at": at, "q": q, "tracers": tracers,
                              "window_s": window_s, "until_s": until_s})
+
+
+def TracerNames(*, names: Any, named_by: Any = None  # noqa: N802
+                ) -> Mapping[str, Any]:
+    """The tracer names, the first of them called what ``named_by`` is called.
+
+    A name the user gave a point replaces the template's word; none keeps it."""
+    return MappingProxyType({"names": names, "named_by": named_by})
+
+
+def _tracer_names(value: Mapping[str, Any]
+                  ) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
+    """The NAMES OF TRACERS list, its first entry renamed when a name came.
+
+    A tracer name is 32 characters: the name in the first 16, the unit after."""
+    names = [str(name) for name in value["names"]]
+    given = value.get("named_by")
+    if given and names:
+        first = names[0].ljust(32)
+        names[0] = f"{str(given).strip()[:16]:<16}{first[16:]}".rstrip()
+    return ({"NAMES_OF_TRACERS": names}, {})
 
 
 def Wind(*, speed_mps: Any, from_deg: Any,  # noqa: N802 - a value constructor
@@ -429,7 +450,7 @@ T2D.composites(releases=_releases, wind=_wind, continue_from=_continue_from,
                oil=_oil, rain=_rain, coupling=_coupling,
                boundaries=_boundaries, runoff=_runoff, friction=_friction,
                rating=_rating, hyetograph=_hyetograph,
-               time_origin=_time_origin)
+               time_origin=_time_origin, tracer_names=_tracer_names)
 T2D.outputs(dye=publish_dye_products, oil_slick=publish_oil_products,
             scour=publish_scour_products,
             sediment_plume=publish_sediment_plume_products,

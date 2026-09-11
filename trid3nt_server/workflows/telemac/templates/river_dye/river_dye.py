@@ -18,7 +18,8 @@ from trid3nt_server.workflows.runtime import (
     user_input,
 )
 from trid3nt_server.workflows.mesh.tool import tool
-from trid3nt_server.workflows.shared.aoi import location_or_bbox
+from trid3nt_server.workflows.inputs import point_arg
+from trid3nt_server.workflows.inputs.aoi import location_or_bbox
 from trid3nt_server.workflows.telemac.authoring.assembler import settle_reach
 from trid3nt_server.workflows.telemac.helpers.forcing import event_time
 from trid3nt_server.workflows.telemac.helpers.reach import MeshCoverage
@@ -29,13 +30,11 @@ from trid3nt_server.workflows.telemac.modules.telemac2d import (
     Continuation,
     Rain,
     Release,
+    TracerNames,
     Wind,
 )
 from trid3nt_server.workflows.telemac.products.products import Products
 from trid3nt_server.workflows.telemac.solving.solve import compute_class
-from trid3nt_server.workflows.telemac.templates.river_dye.coercions import (
-    release_points,
-)
 from trid3nt_server.workflows.telemac.templates.river_dye.declarations import (
     ACCEPTS, DOC, PARAMS, PARAMS as P,
 )
@@ -91,7 +90,10 @@ class STEERING(T2D):
     DURATION = P.sim_duration_s
 
     NUMBER_OF_TRACERS = 1
-    NAMES_OF_TRACERS = ["DYE             MG/L"]
+    #: The tracer is called what the user called the release point, when a
+    #: picked or named point came; the template's own name stands otherwise.
+    tracer_names = TracerNames(names=["DYE             MG/L"],
+                               named_by=Ref("settled.release_name"))
     INITIAL_VALUES_OF_TRACERS = [0.0]
 
     #: The carrier's own boundary values. ONE tracer, so every liquid boundary
@@ -205,14 +207,6 @@ _METADATA = AtomicToolMetadata(
 )
 
 
-#: Wire ALIASES the model uses for values PARAMS already declares.
-#: ``release_points`` folds them into the declared params before any door.
-_EXTRA_ARGS: tuple[tuple[str, Any], ...] = (
-    ("contaminant", str | None),
-    ("release_lon", float | None),
-    ("release_lat", float | None),
-    ("spill_location_latlon", str | None),
-)
 
 
 telemac_river_dye = register_workflow(
@@ -220,7 +214,9 @@ telemac_river_dye = register_workflow(
     (*river.PARAM_ROWS, *river.RELEASE_ROWS, *param_rows(PARAMS)),
     Door(
         steering=STEERING,
-        domain=river.acquire(seed_coords=R.reach_seed_coords),
+        # A release named up front also names which stretch to model: the one
+        # centerline is navigated from it.
+        domain=river.acquire(seed=P.release),
         mesh=river.MESH, mesh_on="reach",
         produce=(
             MeshCoverage(mesh=Ref("mesh"), centerline=river.DATA.centerline),
@@ -228,7 +224,7 @@ telemac_river_dye = register_workflow(
                   half_life_hours=P.decay_half_life_hours,
                   rate_per_day=P.decay_rate_per_day).named("decay"),
         ),
-        settle=river.settle(release_coords=R.release_coords,
+        settle=river.settle(release=P.release,
                             spill_fraction=R.spill_fraction,
                             rain=_OWN.rain, continue_from=P.continue_from),
         # The two constitutive knobs a caller may override. An unset one is not
@@ -258,12 +254,13 @@ telemac_river_dye = register_workflow(
         location_or_bbox("telemac_river_dye", code_prefix="TELEMAC",
                          hint="For a natural prompt like 'dye spill in the river "
                               "near <place>', pass location='<place>'."),
-        release_points,
+        point_arg("release", tool="telemac_river_dye",
+                  prompt="Click on the river where the substance enters the water",
+                  code="TELEMAC_PARAMS_INVALID"),
         event_time(),
         compute_class(),
         user_input.bearing("wind_direction_deg", label="wind_direction_deg",
                            code="TELEMAC_PARAMS_INVALID"),
     ),
     doc=DOC,
-    extra_args=_EXTRA_ARGS,
 )

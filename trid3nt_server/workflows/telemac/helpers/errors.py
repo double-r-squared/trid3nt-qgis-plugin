@@ -15,7 +15,6 @@ __all__ = [
     "TelemacDyeScenarioInputError",
     "ReachWaterUnmapped",
     "ReachMeshUncovered",
-    "TelemacReleaseOutsideDomainError",
 ]
 
 
@@ -65,38 +64,6 @@ class ReachMeshUncovered(TelemacDyeScenarioError):
             "at a finer mesh_resolution_m, declare a sizing function that resolves "
             "the channel, or supply your own mesh of the reach.",
         )
-
-
-class TelemacReleaseOutsideDomainError(TelemacDyeScenarioError):
-    """The supplied release point lies outside the domain polygon the run solves.
-
-    Retryable: the corrective args ride the tool-retry loop."""
-
-    retryable = True
-
-    def __init__(self, lon: float, lat: float,
-                 distance_m: float | None = None) -> None:
-        self.lon = float(lon)
-        self.lat = float(lat)
-        self.distance_m = float(distance_m) if distance_m is not None else None
-        dist_txt = (f", {self.distance_m:.0f} m outside its nearest edge"
-                    if self.distance_m is not None else "")
-        super().__init__(
-            "TELEMAC_RELEASE_POINT_OUTSIDE_DOMAIN",
-            f"The release point ({self.lon:.5f}, {self.lat:.5f}) is not inside "
-            f"the domain polygon this run solves over{dist_txt}. Nothing was "
-            "relocated for you: releasing the substance somewhere else would "
-            "answer a different question. Retry with a point INSIDE the modeled "
-            "water body, widen the domain so the point falls in it, or omit "
-            "release_coords to release at spill_fraction along the reach.",
-        )
-        self.suggestions = [  # type: ignore[attr-defined]
-            "Retry with release_coords INSIDE the modeled water polygon (not on "
-            "the bank, and not at a nearby gage).",
-            "Or widen the domain - a longer reach, or a section cut that covers "
-            "the point - so the release falls inside it.",
-            "Or omit release_coords to release at spill_fraction along the reach.",
-        ]
 
 
 class RainOnGridError(DeclarativeError):

@@ -225,7 +225,8 @@ class SessionResumePayload(GraceModel):
 class SpatialInputResponsePayload(GraceModel):
     """``spatial-input-response``: the user picked a geometry, or cancelled.
     Three shapes on one payload: a point or bbox sets ``coordinates``, a draw
-    sets a role-tagged ``features``, a cancellation sets neither."""
+    sets a role-tagged ``features``, a cancellation sets neither. A point pick
+    also carries the ``name`` the user gave it."""
 
     # No payload-size gate applies here: a drawn collection is kilobytes by
     # construction, and the warn/block discipline governs TOOL OUTPUT.
@@ -236,6 +237,8 @@ class SpatialInputResponsePayload(GraceModel):
     geometry_type: Literal["point", "bbox", "vector_draw"] | None = None
     coordinates: list[float] | None = None
     features: dict[str, Any] | None = None
+    #: What the user called the picked point; the slot that asked carries it on.
+    name: str | None = None
     cancelled: bool = False
 
     @field_validator("features")

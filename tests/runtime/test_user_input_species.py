@@ -154,15 +154,21 @@ def test_a_coercion_labels_its_refusal_with_the_param_it_reads():
 
 # --- ONE SEAM: the drawn route and the typed route agree ---------------------- #
 def _drawn(geometry: str, response) -> object:
+    import asyncio
+
     from trid3nt_server.gates.draw_input import _value_from
 
-    return _value_from(response, geometry)
+    return asyncio.run(_value_from(response, geometry))
 
 
-def test_a_drawn_point_equals_the_typed_point():
+def test_a_drawn_point_equals_the_typed_point_and_keeps_its_name():
+    from trid3nt_server.workflows.inputs import Point
+
     reply = SimpleNamespace(coordinates=[-124.1, 40.5], features=None,
-                            cancelled=False)
-    assert _drawn("point", reply) == lonlat_point([-124.1, 40.5])
+                            cancelled=False, name="point-1")
+    got = _drawn("point", reply)
+    assert (got.lon, got.lat) == lonlat_point([-124.1, 40.5])
+    assert got == Point(-124.1, 40.5, "point-1")
 
 
 def test_a_drawn_rectangle_equals_the_typed_bbox_reversed_corners_included():
@@ -192,6 +198,6 @@ def test_a_drawn_polygon_equals_the_typed_polygon():
 
 def test_a_drawn_point_off_the_earth_refuses_through_the_same_normalizer():
     reply = SimpleNamespace(coordinates=[40.5, -124.1], features=None,
-                            cancelled=False)
+                            cancelled=False, name=None)
     with pytest.raises(UserInputError, match="longitude first"):
         _drawn("point", reply)

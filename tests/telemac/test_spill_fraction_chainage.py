@@ -47,7 +47,7 @@ def _walk(fraction: float, centerline_utm, monkeypatch):
                         lambda _uri, utm_epsg=None: _HOLDS_EVERYTHING)
     mesh = {"display_uri": "s3://m/M/mesh.2dm",
             "artifact": type("A", (), {"utm_epsg": _UTM_EPSG})()}
-    (lon, lat), note = asyncio.run(_settle_release(
+    placed, note = asyncio.run(_settle_release(
         None, mesh=mesh, centerline=None, centerline_utm=centerline_utm,
         utm_epsg=_UTM_EPSG, spill_fraction=fraction,
         node_xy=_HOLDS_EVERYTHING[0],
@@ -55,7 +55,7 @@ def _walk(fraction: float, centerline_utm, monkeypatch):
     # a derived release inside the mesh, landing on a node that holds water,
     # relocates nothing
     assert "nothing was moved" in note
-    return lon, lat
+    return placed.lon, placed.lat
 
 
 @pytest.mark.parametrize("coords", [_COORDS, list(reversed(_COORDS))])

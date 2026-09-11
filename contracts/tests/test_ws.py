@@ -202,6 +202,17 @@ def test_spatial_input_response_point(session_id: str) -> None:
     _roundtrip_idempotent(_wrap(payload, session_id))
 
 
+def test_a_named_point_pick_round_trips_the_wire(session_id: str) -> None:
+    payload = ws.SpatialInputResponsePayload(
+        request_id=new_ulid(), geometry_type="point",
+        coordinates=[-82.0, 26.5], name="outfall-a")
+    dumped = _roundtrip_idempotent(_wrap(payload, session_id))
+    assert dumped["payload"]["name"] == "outfall-a"
+    unnamed = ws.SpatialInputResponsePayload(
+        request_id=new_ulid(), geometry_type="point", coordinates=[-82.0, 26.5])
+    assert unnamed.name is None
+
+
 def test_spatial_input_response_cancelled(session_id: str) -> None:
     payload = ws.SpatialInputResponsePayload(
         request_id=new_ulid(),

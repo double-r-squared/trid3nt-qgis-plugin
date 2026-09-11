@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from trid3nt_server.workflows.inputs import Point
 from trid3nt_server.workflows.runtime import Accepts, Param, doors
 
 __all__ = ["ACCEPTS", "DOC", "PARAMS"]
@@ -18,13 +19,15 @@ _HELPERS = "trid3nt_server.workflows.telemac.helpers"
 class PARAMS:
     outfall_coords = Param(
         door=doors.USER, optional=True, consequence="scenario",
-        user_lever=True, type=tuple[float, float] | list[float],
+        user_lever=True, type=Point,
         derived_when_absent=(
             "the release is seeded at the reach point the pipeline derives "
             "(mid-reach on the fetched flowline, else the geocoded centroid); the "
             "sag distance is measured downstream from there"),
-        desc="Where the discharge enters the water, (lon, lat); unset seeds the "
-             "reach at the derived reach point")
+        desc="Where the discharge enters the water, as a Point: the pick's "
+             "{coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a "
+             "point layer, or a place name; unset seeds the reach at the derived "
+             "reach point")
 
     effluent_bod_mgl = Param(
         door=doors.SCENARIO, default=250.0,

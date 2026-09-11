@@ -148,6 +148,7 @@ class UserSpatialInput(GraceModel):
     request_id: ULIDStr  # the request that solicited this input
     geometry_type: Literal["point", "bbox"]
     coordinates: list[float]  # [lon, lat] for point; bbox 4-tuple for bbox
+    name: str | None = None  # what the user called a picked point
     prompt_title: str
     submitted_at: UTCDatetime
 

@@ -53,8 +53,8 @@ class PARAMS:
     spill_fraction = Param(
         door=doors.SCENARIO, default=0.25, bounds=(0.05, 0.9),
         desc="Initial plume span as a fraction of reach width.")
-    release_coords = Param(
-        door=doors.USER, desc="Where the substance enters the water.")
+    release = Param(
+        door=doors.USER, type=Point, desc="Where the substance enters the water.")
     mesh_size_m = Param(
         door=doors.DERIVED, resolve="telemac.suggest_mesh_size",
         user_lever=True, desc="Target element edge length.")
@@ -70,7 +70,7 @@ class DATA:
 
 
 # -- the binding blocks --------------------------------------------------- #
-PHYSICS = Physics("tracer", substance=P.substance, release=P.release_coords)
+PHYSICS = Physics("tracer", substance=P.substance, release=P.release)
 FORCING = Forcing(carrier=Ref("carrier_discharge"), rain=DATA.rain)
 MESH    = tool.build_mesh(mesher="om2d", kind="unstructured_tri",
                           extent=Ref("reach_polygon"),
@@ -82,7 +82,7 @@ MESH    = tool.build_mesh(mesher="om2d", kind="unstructured_tri",
 def plan(ops):
     return [
         FormGate(),
-        DrawGate(param="release_coords", geometry="point",
+        DrawGate(param="release", geometry="point",
                  prompt="Click where the substance enters the river"),
         Geocode.river(P.location).named("reach"),
         When(P.delineate,
@@ -354,7 +354,13 @@ waits per the hybrid rule).
   existing AOI-rectangle machinery. Wire: the existing
   `spatial-input-request` pair - `point`/`bbox` ride the stock pick
   tools, `polygon`/`polyline` ride purposes `aoi`/`line` and the
-  plugin's vertex-capture tool. Draw-time constraints (within(reach),
+  plugin's vertex-capture tool. A picked POINT carries a NAME: the
+  plugin's pick card offers a field, defaulted to `point-<n>`, the reply
+  carries it as `name`, and the Point slot that asked carries it on - a
+  river dye run calls its tracer by it. A Point slot is a `Param` typed
+  `Point` (`workflows/inputs/point.py`); its coercion `point_arg` reads
+  the wire value in any of the ingestion's forms, and in a live
+  `user_gated` session with nothing on the wire asks the canvas. Draw-time constraints (within(reach),
   on-mesh) are still OUT - the geometry to constrain against is produced
   after the gates, so there is nothing to check at gate time and a
   declared-but-unread constraint is a dead promise.

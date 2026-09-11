@@ -1,6 +1,6 @@
 {
   "additionalProperties": false,
-  "description": "``spatial-input-response``: the user picked a geometry, or cancelled.\nThree shapes on one payload: a point or bbox sets ``coordinates``, a draw\nsets a role-tagged ``features``, a cancellation sets neither.",
+  "description": "``spatial-input-response``: the user picked a geometry, or cancelled.\nThree shapes on one payload: a point or bbox sets ``coordinates``, a draw\nsets a role-tagged ``features``, a cancellation sets neither. A point pick\nalso carries the ``name`` the user gave it.",
   "properties": {
     "cancelled": {
       "default": false,
@@ -51,6 +51,18 @@
       ],
       "default": null,
       "title": "Geometry Type"
+    },
+    "name": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Name"
     },
     "request_id": {
       "title": "Request Id",

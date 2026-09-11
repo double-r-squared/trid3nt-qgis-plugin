@@ -19,6 +19,18 @@
           "title": "Geometry Type",
           "type": "string"
         },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Name"
+        },
         "prompt_title": {
           "title": "Prompt Title",
           "type": "string"

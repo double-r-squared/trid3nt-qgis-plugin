@@ -323,6 +323,15 @@ def _journal_wetted_fraction(metrics: dict[str, Any]) -> None:
         "reach at this discharge - a measured heuristic, not a verdict.")
 
 
+def _tracer_group(run: dict[str, Any], product: SubstanceProduct) -> str:
+    """The SELAFIN group the product's tracer landed in: the first declared tracer
+    name when the run states its names, else the product's own group."""
+    names = run.get("tracer_names") or ()
+    if product.mesh_group == "DYE" and names:
+        return str(names[0])[:16].strip() or product.mesh_group
+    return product.mesh_group
+
+
 async def _publish_transported_field(*, run: dict[str, Any], solve: dict[str, Any],
                                      carrier_discharge: dict[str, Any],
                                      product: SubstanceProduct
@@ -348,7 +357,8 @@ async def _publish_transported_field(*, run: dict[str, Any], solve: dict[str, An
     try:
         layers, metrics = await asyncio.to_thread(
             postprocess_telemac, slf_path, run_id=run_id, utm_epsg=utm_epsg,
-            reach_name=reach_name, product=product)
+            reach_name=reach_name, product=product,
+            mesh_group=_tracer_group(run, product))
         _journal_wetted_fraction(metrics)
     finally:
         Path(slf_path).unlink(missing_ok=True)
@@ -373,7 +383,7 @@ async def _publish_transported_field(*, run: dict[str, Any], solve: dict[str, An
     # artifact. The typed peak above stays this step's own.
     await publish_results_mesh_via_seam(
         emitter, run_id=run_id, engine="telemac", peak_layer=raw_peak,
-        peak_quantity=product.quantity, mesh_group=product.mesh_group,
+        peak_quantity=product.quantity, mesh_group=_tracer_group(run, product),
         mesh_basename="r2d_river.slf",
         mesh_epsg=utm_epsg, reach_name=reach_name,
         reference_time=solve.get("started_at"))

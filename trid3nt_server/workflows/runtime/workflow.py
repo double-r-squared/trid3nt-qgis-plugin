@@ -130,7 +130,7 @@ class Workflow:
 
     async def run(self, wire: Mapping[str, Any]) -> Any:
         """The absorbed tool body: normalize, resolve, then the shared spine."""
-        supplied, err = self._normalize(dict(wire))
+        supplied, err = await self._normalize(dict(wire))
         if err is not None:
             return err
         return await self.execute(
@@ -206,15 +206,21 @@ class Workflow:
 
     # -- normalize --------------------------------------------------------- #
 
-    def _normalize(self, args: dict[str, Any]) -> tuple[dict[str, Any], dict | None]:
+    async def _normalize(self, args: dict[str, Any]
+                         ) -> tuple[dict[str, Any], dict | None]:
         """Coerce the wire args into the door-1 sheet through the declared coercions.
         Three-way: a retryable typed error PROPAGATES, a typed refusal reports under
-        its own code, and anything else reports as an internal error."""
+        its own code, and anything else reports as an internal error. A coercion
+        that ingests from the world - a layer read, a geocode, a canvas pick - is
+        awaited where it stands."""
         # A retryable error must not be flattened into an envelope: that destroys
         # the ``.suggestions`` channel the adapter harvests off the raised exception.
         try:
             for coercion in self.coercions:
-                args.update(coercion(args) or {})
+                coerced = coercion(args)
+                if inspect.isawaitable(coerced):
+                    coerced = await coerced
+                args.update(coerced or {})
         except asyncio.CancelledError:
             raise
         except Exception as exc:  # noqa: BLE001

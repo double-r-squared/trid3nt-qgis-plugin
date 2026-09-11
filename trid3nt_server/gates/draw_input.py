@@ -106,7 +106,7 @@ async def gate_draw_input(
 
     if response.cancelled:
         return DrawOutcome(reason="the drawing was cancelled")
-    value = _value_from(response, geometry)
+    value = await _value_from(response, geometry)
     if value is None:
         return DrawOutcome(
             reason=f"the reply carried no {geometry} geometry to read {param} from")
@@ -115,23 +115,27 @@ async def gate_draw_input(
     return DrawOutcome(value=value)
 
 
-def _value_from(response: Any, geometry: str) -> Any:
+async def _value_from(response: Any, geometry: str) -> Any:
     """The PARAM value inside the reply - a handful of vertices, never a dataset.
 
-    Read through the SAME normalizers a typed wire value passes, so the drawn
-    vocabulary cannot drift from the typed one."""
-    # The import is function-local: the declarative library's interpreter
+    Read through the SAME ingestions a typed wire value passes, so the drawn
+    vocabulary cannot drift from the typed one; a point keeps the name it was
+    picked under."""
+    # The imports are function-local: the declarative library's interpreter
     # imports this module, and the package edge is the cycle.
+    from trid3nt_server.workflows.inputs.point import point
     from trid3nt_server.workflows.runtime.user_input import (
         lonlat_bbox,
-        lonlat_point,
         polygon_ring,
         polyline_coords,
     )
 
     if geometry == "point":
         coords = response.coordinates or []
-        return lonlat_point(coords[:2] if len(coords) >= 2 else None, label="the point")
+        if len(coords) < 2:
+            return None
+        return await point({"coordinates": coords[:2], "name": response.name},
+                           label="the point")
     if geometry == "rectangle":
         coords = response.coordinates or []
         return lonlat_bbox(coords[:4] if len(coords) >= 4 else None,

@@ -486,7 +486,7 @@ EXTRACT the location, the substance, the released amount (gallons / liters /
 barrels / tons / kg) and the duration, DERIVE the forcing (convert the amount to
 mass via the substance density, then a release rate = mass / duration, and the
 source concentration that implies against the carrier discharge), and call
-telemac_river_dye with those plus release_coords. NEVER INVENT a contamination
+telemac_river_dye with those plus release. NEVER INVENT a contamination
 parameter you cannot ground in the article or the user (Invariant 9): if the
 amount, duration, substance, or location is not stated, ASK the user for it
 (or state the single documented assumption you are making) BEFORE running -- a

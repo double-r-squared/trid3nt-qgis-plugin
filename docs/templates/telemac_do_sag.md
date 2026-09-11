@@ -39,7 +39,7 @@ The values the template declares. `desc` is what the model reads when it fills o
 | `event_time` | question | - | optional | The storm/event moment to read the carrier discharge cycle at - from phrasing like 'during last Tuesday's storm'; an ISO date or datetime (e.g. '2026-08-20' or '2026-08-20T06:00:00Z'). Unset reads the most recent published NWM cycle. The NWM PDS bucket retains only the last ~30 days of history; a deeper request refuses typed rather than silently reading a different cycle. |
 | `output_interval_min` | user | min | optional | Result-writing cadence; unset keeps the steering file's own period |
 | `compute_class` | constant | - | medium | Solve sizing class |
-| `outfall_coords` | user | - | optional | Where the discharge enters the water, (lon, lat); unset seeds the reach at the derived reach point |
+| `outfall_coords` | user | - | optional | Where the discharge enters the water, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer, or a place name; unset seeds the reach at the derived reach point |
 | `effluent_bod_mgl` | scenario | mg/L | 250.0 | Ultimate carbonaceous BOD IN THE DISCHARGE ITSELF - what leaves the outfall pipe, before any dilution; the reach's mixed load is what the solve computes from this and the carrier flow |
 | `effluent_q_m3s` | scenario | m^3/s | 1.0 | Discharge rate at the outfall - with the carrier flow this sets the dilution, and so how much of the effluent load the river carries |
 | `effluent_do_mgl` | scenario | mg/L | 2.0 | Dissolved oxygen in the discharge itself; a treated effluent arrives oxygen-poor, which is the initial deficit the sag starts from |

@@ -123,19 +123,25 @@ class PostprocessTelemacError(RuntimeError):
         self.details: dict[str, Any] = dict(details or {})
 
 
-def _pick_dye_var(varnames: list[str], *, mesh_group: str = "DYE") -> str | None:
+def _pick_dye_var(varnames: list[str], *, mesh_group: str = "DYE",
+                  product_group: str = "DYE") -> str | None:
     """The tracer variable name to rasterize, or None.
 
-    ``mesh_group`` is the variable the PRODUCT declares its field lands in."""
+    ``mesh_group`` is the group the RUN declared its field under - a named point
+    renames the tracer - and ``product_group`` is what the product class expects."""
     # A GAIA sediment coupled run declares ``NCOH SEDIMENT1``: the suspended
     # concentration rides as a SECOND telemac2d tracer alongside the required DYE
     # companion, so the sediment-named var is picked and the concentration COG is
     # the SEDIMENT ribbon rather than the conservative dye reference.
-    if mesh_group != "DYE":
+    if product_group != "DYE":
         for v in varnames:
             u = v.strip().upper()
             if "SEDIMENT" in u or u.startswith(("NCOH", "COH", "CS")):
                 return v
+    wanted = mesh_group.strip().upper()
+    for v in varnames:
+        if wanted and v.strip().upper().startswith(wanted):
+            return v
     for v in varnames:
         if "DYE" in v.upper():
             return v
@@ -342,13 +348,15 @@ def postprocess_telemac(
     utm_epsg: int,
     reach_name: str = "river_dye",
     product: SubstanceProduct,
+    mesh_group: str | None = None,
     dye_units: str = "mg/L",
     runs_bucket: str | None = None,
     target_ground_res_m: float = TELEMAC_TARGET_GROUND_RES_M,
 ) -> tuple[list[TelemacDyeLayerURI], dict[str, Any]]:
     """Rasterize a solved TELEMAC-2D tracer run into ONE peak-concentration COG.
 
-    ``utm_epsg`` is the mesh CRS the SELAFIN itself does not carry."""
+    ``utm_epsg`` is the mesh CRS the SELAFIN itself does not carry; ``mesh_group``
+    is the name the run gave its tracer when it differs from the product's."""
     try:
         import numpy as np
         from pyproj import Transformer  # noqa: F401
@@ -368,7 +376,9 @@ def postprocess_telemac(
             details={"slf": str(slf)},
         ) from exc
 
-    dye_var = _pick_dye_var(mesh["varnames"], mesh_group=product.mesh_group)
+    dye_var = _pick_dye_var(mesh["varnames"],
+                            mesh_group=mesh_group or product.mesh_group,
+                            product_group=product.mesh_group)
     if dye_var is None or mesh["data"].get(dye_var) is None or mesh["data"][dye_var].size == 0:
         raise PostprocessTelemacError(
             "TELEMAC_OUTPUT_EMPTY",

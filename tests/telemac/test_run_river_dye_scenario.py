@@ -90,14 +90,11 @@ def _workflow():
 def _norm(**kw):
 
     base: dict[str, Any] = {
-        "location": None, "bbox": None, "substance": "dye", "contaminant": None,
-        "release_coords": None, "release_lon": None, "release_lat": None,
-        "spill_location_latlon": None, "compute_class": None,
-        "wind_direction_deg": None, "_release_seeds_reach": None,
-        "_seed_release_lon": None, "_seed_release_lat": None,
+        "location": None, "bbox": None, "release": None, "compute_class": None,
+        "wind_direction_deg": None, "input_mode": "auto",
     }
     base.update(kw)
-    return _workflow()._normalize(base)
+    return asyncio.run(_workflow()._normalize(base))
 
 
 def test_tool_rejects_neither_location_nor_bbox():
@@ -137,36 +134,44 @@ def test_location_wins_when_both_an_aoi_and_a_place_are_supplied():
     assert "bbox" not in supplied
 
 
-@pytest.mark.parametrize("kwargs", [
-    {"release_coords": [-114.31, 42.58]},
-    {"release_lon": -114.31, "release_lat": 42.58},
-    {"spill_location_latlon": "42.58,-114.31"},
+@pytest.mark.parametrize("value", [
+    [-114.31, 42.58],
+    "42.58,-114.31",
+    {"coordinates": [-114.31, 42.58], "name": "outfall-a"},
 ])
-def test_every_release_point_shape_reaches_the_same_param(kwargs):
-    supplied, err = _norm(location="X", **kwargs)
+def test_every_release_point_form_reaches_the_one_point_slot(value):
+    from trid3nt_server.workflows.inputs import Point
+
+    supplied, err = _norm(location="X", release=value)
     assert err is None
-    assert supplied["release_coords"] == (-114.31, 42.58)
+    got = supplied["release"]
+    assert isinstance(got, Point) and (got.lon, got.lat) == (-114.31, 42.58)
 
 
 def test_a_malformed_release_point_refuses_it_never_falls_back():
     from trid3nt_server.workflows.telemac.templates.river_dye.river_dye import telemac_river_dye
 
-    out = asyncio.run(telemac_river_dye(location="X", release_coords="somewhere"))
+    out = asyncio.run(telemac_river_dye(location="X", release=[200.0, 10.0]))
     assert out["error_code"] == "TELEMAC_PARAMS_INVALID"
-    out = asyncio.run(telemac_river_dye(location="X", release_coords=[200.0, 10.0]))
+    out = asyncio.run(telemac_river_dye(location="X", release={"name": "x"}))
     assert out["error_code"] == "TELEMAC_PARAMS_INVALID"
 
 
-def test_the_reach_seed_is_the_call_release_and_only_the_call_release():
-    """A CALL-provided release also seeds the reach; a DRAWN click moves the source only.
+def test_the_release_is_the_one_point_slot_and_it_seeds_the_reach():
+    """The release names which stretch to model: the one centerline is navigated
+    from it, and the wire carries no second spelling of the same point."""
+    import inspect
 
-    The split is structural: coercions run on the wire args, before any door and so
-    before any gate, so a drawn point reaches the reach seed by no path at all."""
-    call, _ = _norm(location="X", release_lon=-114.31, release_lat=42.58)
-    assert call["reach_seed_coords"] == (-114.31, 42.58)
+    from trid3nt_server.tools import TOOL_REGISTRY
 
-    drawn, _ = _norm(location="X")
-    assert "release_coords" not in drawn and "reach_seed_coords" not in drawn
+    wf = _workflow()
+    steps = {s.label: s for s in wf.plan.declared()}
+    assert steps["seed"].kwargs["supplied"].name == "release"
+    assert steps["settled"].kwargs["release"].name == "release"
+    wire = set(inspect.signature(TOOL_REGISTRY["telemac_river_dye"].fn).parameters)
+    assert "release" in wire
+    assert not {"release_coords", "release_lat", "release_lon",
+                "spill_location_latlon", "reach_seed_coords"} & wire
 
 
 def test_an_invented_compute_class_refuses_at_the_ladder():
@@ -349,7 +354,6 @@ def test_an_unknown_data_row_is_an_attribute_error_at_the_line_that_wrote_it():
 def _install_step_mocks(captured: dict):
     from trid3nt_server.workflows.solver import solver as solver_mod
     from trid3nt_server.workflows.telemac.products import postprocess_telemac as pp_mod
-    from trid3nt_server.workflows.telemac.helpers import release_layer as rel_mod
     from trid3nt_server.workflows.telemac.products import results_mesh_seam as seam_mod
     from trid3nt_server.workflows.shared import run_products as products_mod
     from trid3nt_server.workflows.telemac.products import products as prod_mod
@@ -439,9 +443,9 @@ def _install_step_mocks(captured: dict):
         captured["deck_files"] = dict(sheet.files)
         return {"steering": steering or "t2d_river.cas"}
 
-    async def _capture_marker(_emitter, *, lon, lat, user_supplied, **_kw):
-        captured["release_marker"] = {"lon": lon, "lat": lat,
-                                      "user_supplied": user_supplied}
+    async def _capture_marker(_emitter, pt, *, basis, **_kw):
+        captured["release_marker"] = {"lon": pt.lon, "lat": pt.lat, "name": pt.name,
+                                      "user_supplied": basis == "user"}
         return False
 
     def _fake_run_solver(*, solver, model_setup_uri, compute_class):
@@ -500,7 +504,7 @@ def _install_step_mocks(captured: dict):
         patch.object(prod_mod, "_publish_peak_layer", _fake_publish),
         patch.object(pp_mod, "postprocess_telemac", _fake_postprocess),
         patch.object(seam_mod, "publish_results_mesh_via_seam", _amock(0)),
-        patch.object(rel_mod, "publish_release_point", _capture_marker),
+        patch.object(asm_mod, "publish_point", _capture_marker),
         patch.object(products_mod, "persist_run_products", _amock([])),
         patch.object(solver_mod, "run_solver", _fake_run_solver),
         patch.object(solver_mod, "wait_for_completion", _amock(_FakeRunResult())),
@@ -624,13 +628,26 @@ def test_a_supplied_seed_point_is_the_one_the_centerline_is_navigated_from(
     so the ONE navigate starts there rather than at the flowline midpoint."""
     captured: dict = {}
     _run_tool(tmp_path, monkeypatch, captured, location="Twin Falls, Idaho",
-              release_coords=[-124.10, 40.50], **_real_centerline_read())
+              release={"coordinates": [-124.10, 40.50], "name": "outfall-a"},
+              **_real_centerline_read())
     assert captured["navigates"][0]["seed_point"] == [-124.10, 40.50]
     assert captured["settled"]["seed_lon"] == pytest.approx(-124.10)
     # the supplied point was settled against THAT centerline, and the run says so
     assert captured["settled"]["release_lon"] == pytest.approx(-124.10)
     assert captured["settled"]["release_user_supplied"] is True
+    assert captured["settled"]["release_name"] == "outfall-a"
     assert captured["release_marker"]["user_supplied"] is True
+    # the picked name is what the deck calls the tracer; its unit stays
+    assert captured["deck"]["NAMES OF TRACERS"] == ["outfall-a       MG/L"]
+
+
+def test_an_unnamed_release_keeps_the_template_s_own_tracer_name(
+        tmp_path, monkeypatch):
+    captured: dict = {}
+    _run_tool(tmp_path, monkeypatch, captured, location="Twin Falls, Idaho",
+              release=[-124.10, 40.50], **_real_centerline_read())
+    assert captured["settled"]["release_name"] is None
+    assert captured["deck"]["NAMES OF TRACERS"] == ["DYE             MG/L"]
 
 
 def test_a_derived_release_sits_on_the_DECLARED_centerline(tmp_path, monkeypatch):

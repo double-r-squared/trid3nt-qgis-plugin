@@ -28,7 +28,7 @@ def _resolve_bare(tool_name: str, location: str):
     from trid3nt_server.workflows.runtime.resolver import resolve_params
 
     workflow = TOOL_REGISTRY[tool_name].fn.workflow
-    supplied, err = workflow._normalize({"location": location})
+    supplied, err = asyncio.run(workflow._normalize({"location": location}))
     assert err is None, f"{tool_name} refused a bare location: {err}"
     return workflow, asyncio.run(resolve_params(workflow.params, supplied))
 
@@ -65,8 +65,8 @@ def test_a_supplied_compute_class_still_reads_as_the_users() -> None:
     from trid3nt_server.workflows.runtime.resolver import resolve_params
 
     workflow = TOOL_REGISTRY["telemac_river_dye"].fn.workflow
-    supplied, err = workflow._normalize(
-        {"location": "the Wabash River", "compute_class": "LARGE"})
+    supplied, err = asyncio.run(workflow._normalize(
+        {"location": "the Wabash River", "compute_class": "LARGE"}))
     assert err is None, err
     row = asyncio.run(resolve_params(workflow.params, supplied)).row("compute_class")
     assert (row.value, row.door, row.basis) == ("large", "user", "user")

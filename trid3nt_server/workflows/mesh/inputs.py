@@ -38,7 +38,7 @@ def op_input(value: Any) -> Any:
 def op_raster(source: Any) -> Path:
     """A raster source -> a LOCAL readable path, whatever it arrived as."""
     from trid3nt_server.tools.cache import read_object_bytes_s3
-    from trid3nt_server.workflows.shared.geometry import source_uri
+    from trid3nt_server.workflows.inputs.geometry import source_uri
 
     uri = str(source_uri(source) or "").strip()
     if not uri:
@@ -65,7 +65,7 @@ def op_geometry(source: Any) -> dict[str, Any]:
 
     A source is inline GeoJSON, an object-store uri, a path, or a layer handle."""
     from trid3nt_server.tools.cache import read_object_bytes_s3
-    from trid3nt_server.workflows.shared.geometry import source_uri
+    from trid3nt_server.workflows.inputs.geometry import source_uri
 
     resolved = source_uri(source)
     if isinstance(resolved, Mapping):

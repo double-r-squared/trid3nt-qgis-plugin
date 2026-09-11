@@ -12,7 +12,8 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
 
 from trid3nt_server.workflows.runtime import ParamRef, Ref, register_workflow, user_input
 from trid3nt_server.workflows.mesh.tool import mesh_op, tool
-from trid3nt_server.workflows.shared.aoi import AcquireAoi
+from trid3nt_server.workflows.inputs import point_arg
+from trid3nt_server.workflows.inputs.aoi import AcquireAoi
 from trid3nt_server.workflows.telemac.authoring.assembler import settle_catchment
 from trid3nt_server.workflows.telemac.helpers.catchment import AcquireCatchment
 from trid3nt_server.workflows.telemac.helpers.infiltration import Infiltration
@@ -92,7 +93,7 @@ class DATA:
     # The snap window is the delineation tool's own declared default: how far a
     # clicked outlet may move to reach the channel is a fact about the D8 grid,
     # which is where it is declared.
-    basin = tool("delineate_watershed", pour_point=P.pour_point,
+    basin = tool("delineate_watershed", pour_point=Ref("aoi.pour_point"),
                  bbox=Ref("aoi.bbox"), dem_uri=Ref("dem.uri"))
 
 
@@ -354,7 +355,9 @@ telemac_rain_on_grid = register_workflow(
         # Both routes to a drawn value go through one normalizer: the draw gate
         # seats what the canvas returns and this seats what the model typed, and
         # a point that arrived either way means the same outlet.
-        user_input.point("pour_point", label="pour_point", code=_CODE),
+        point_arg("pour_point", tool="telemac_rain_on_grid",
+                  prompt="Click the catchment outlet the runoff drains to",
+                  code=_CODE),
         user_input.bbox("bbox", label="analysis AOI", code=_CODE),
         compute_class(),
     ),

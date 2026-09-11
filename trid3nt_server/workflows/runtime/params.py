@@ -6,6 +6,7 @@ access and a typo is an ``AttributeError`` at import.
 
 from __future__ import annotations
 
+import dataclasses
 from dataclasses import dataclass, replace
 from typing import Any, Literal, Sequence
 
@@ -149,9 +150,13 @@ class Param(Row):
 
     @property
     def wire_type(self) -> Any:
-        """The declared type, or the one the declaration implies."""
+        """The declared type, or the one the declaration implies.
+        A Point slot is typed by the value it holds; what the WIRE takes for it is
+        every form the ingestion reads - a pick's mapping, a pair, a string."""
         if self.type is not None:
-            return self.type
+            from trid3nt_server.workflows.inputs.point import Point
+
+            return dict | list[float] | str if self.type is Point else self.type
         if isinstance(self.default, bool):
             return bool
         if self.bounds is not None:
@@ -286,6 +291,8 @@ def wire_value(value: Any) -> Any:
     never re-seated from what the card showed."""
     if value is None or isinstance(value, (bool, int, str)):
         return value
+    if dataclasses.is_dataclass(value) and not isinstance(value, type):
+        return {k: wire_value(v) for k, v in dataclasses.asdict(value).items()}
     if isinstance(value, float):
         # Six SIGNIFICANT figures, not decimal places: 9.3e-07 to four decimals is
         # 0.0, and a row reporting a physics value as zero is worse than no row.

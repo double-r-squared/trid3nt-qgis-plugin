@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from trid3nt_server.workflows.inputs import Point
 from trid3nt_server.workflows.runtime import Accepts, Param, doors
 
 __all__ = ["ACCEPTS", "DOC", "PARAMS"]
@@ -18,6 +19,15 @@ class PARAMS:
     """What only a conservative-plume question asks. The rows every river run
     reads, and the rows every point RELEASE reads, are the shared river part's.
     """
+    release = Param(
+        door=doors.USER, optional=True, user_lever=True,
+        consequence="scenario", type=Point,
+        derived_when_absent=(
+            "the release sits at spill_fraction along the meshed reach; the "
+            "downstream distance is measured from there"),
+        desc="Where the substance enters the water, as a Point: the pick's "
+             "{coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a "
+             "point layer, or a place name; its name becomes the tracer's name")
 
     # -- the scenario ------------------------------------------------------- #
     dye_concentration_mgl = Param(

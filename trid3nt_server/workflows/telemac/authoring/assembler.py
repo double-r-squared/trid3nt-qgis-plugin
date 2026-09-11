@@ -29,7 +29,15 @@ from ..helpers.errors import (
     TelemacDyeScenarioError,
     TelemacDyeScenarioInputError,
 )
-from ..helpers.reach import MESH_H_FLOOR_M, coerce_lonlat_point, suggest_time_step_s
+from trid3nt_server.workflows.inputs.point import (
+    Point,
+    as_utm,
+    contain,
+    publish_point,
+    snap_to_wet,
+)
+
+from ..helpers.reach import MESH_H_FLOOR_M, suggest_time_step_s
 from ..helpers.uniform_flow import normal_depth_stage
 
 logger = logging.getLogger("trid3nt_server.workflows.telemac.authoring.assembler")
@@ -358,7 +366,7 @@ def _to_utm(source: Any, utm_epsg: int) -> Any:
     from shapely.geometry import shape as _shape
     from shapely.ops import transform as _transform, unary_union
 
-    from trid3nt_server.workflows.shared.geometry import (
+    from trid3nt_server.workflows.inputs.geometry import (
         flatten_geometries, read_geometry_doc,
     )
 
@@ -366,16 +374,6 @@ def _to_utm(source: Any, utm_epsg: int) -> Any:
                             for g in flatten_geometries(read_geometry_doc(source))])
     tr = Transformer.from_crs(4326, int(utm_epsg), always_xy=True)
     return _transform(tr.transform, geometry)
-
-
-def _to_utm_point(lonlat: tuple[float, float],
-                  utm_epsg: int) -> tuple[float, float]:
-    """One lon/lat point in the mesh's own metres."""
-    from pyproj import Transformer
-
-    x, y = Transformer.from_crs(4326, int(utm_epsg), always_xy=True).transform(
-        float(lonlat[0]), float(lonlat[1]))
-    return (float(x), float(y))
 
 
 def _to_lonlat_point(xy: tuple[float, float],
@@ -404,16 +402,15 @@ def _mesh_nodes(mesh: Mapping[str, Any]) -> tuple[Any, Any]:
     return points, z
 
 async def _settle_release(
-    release_pair: tuple[float, float] | None, *, mesh: dict[str, Any],
+    release: Point | None, *, mesh: dict[str, Any],
     centerline: Any, centerline_utm: Any, utm_epsg: int, spill_fraction: float,
     node_xy: Any, initial_state: Mapping[str, Any],
-) -> tuple[tuple[float, float], str]:
-    """WHERE the source enters the water -> ``(lon, lat)`` and how it was decided.
+) -> tuple[Point, str]:
+    """WHERE the source enters the water -> the settled Point and how it was decided.
 
     A supplied point the domain polygon does not hold raises rather than moves."""
     from trid3nt_server.workflows.telemac.helpers.release_point import (
-        contain_release_point, derive_release_on_mesh, domain_polygon_of,
-        snap_release_to_wetted,
+        derive_release_on_mesh, domain_polygon_of,
     )
 
     # With no point placed the source sits at ``spill_fraction`` along the declared
@@ -421,24 +418,28 @@ async def _settle_release(
     # the centerline is the whole navigated stretch and the mesh is only the part
     # of it the mapped banks left, so "on the line" and "in the domain" are two
     # different claims and only the second one solves.
-    if release_pair is None:
-        lonlat, note = await asyncio.to_thread(
+    if release is None:
+        (lon, lat), note = await asyncio.to_thread(
             derive_release_on_mesh, centerline_utm=centerline_utm, mesh=mesh,
             fraction=spill_fraction)
+        placed = Point(lon, lat)
     else:
-        contained = await asyncio.to_thread(
-            contain_release_point, point=release_pair,
-            domain=domain_polygon_of(mesh.get("artifact")),
-            flowline=centerline)
-        lonlat, note = (contained.lon, contained.lat), contained.note
+        placed, moved_m = await asyncio.to_thread(
+            contain, release, domain=domain_polygon_of(mesh.get("artifact")),
+            flowline=centerline, label="release")
+        note = ("supplied point, inside the modeled domain and on the flowline"
+                if moved_m <= 0.0 else
+                f"supplied point, inside the modeled domain; moved {moved_m:.0f} m "
+                "onto the flowline")
 
     # The settled point lands LAST on the nearest node holding water at t0. Both
     # steps above ask about geometry only; a bankfull domain at low flow has mapped
     # river that is dry ground when the run opens, and a source released onto it
     # discharges into the bed.
     wet_utm, moved_m, node = await asyncio.to_thread(
-        snap_release_to_wetted, _to_utm_point(lonlat, utm_epsg),
-        node_xy=node_xy, wet=initial_state["wet"], state=initial_state["note"])
+        snap_to_wet, as_utm(placed, utm_epsg),
+        node_xy=node_xy, wet=initial_state["wet"], state=initial_state["note"],
+        label="release")
     settled = (f"solved at mesh node {node}, which holds water at t0 "
                f"({initial_state['note']}), so nothing was moved")
     if moved_m > 0.0:
@@ -448,7 +449,8 @@ async def _settle_release(
     logger.info("release settled: %s", settled)
     journal_note(f"release point: {settled}."
                  + (f" Before that: {note}." if note else ""))
-    return _to_lonlat_point(wet_utm, utm_epsg), "; ".join(
+    lon, lat = _to_lonlat_point(wet_utm, utm_epsg)
+    return Point(lon, lat, placed.name), "; ".join(
         part for part in (note, settled) if part)
 
 
@@ -572,7 +574,7 @@ async def settle_reach(
     carrier_discharge: dict[str, Any],
     sim_duration_s: float,
     reach_polygon: Any = None,
-    release_coords: Any = None,
+    release: Point | None = None,
     spill_fraction: float = 0.25,
     rain: Mapping[str, Any] | None = None,
     mesh_resolution_m: float | None = None,
@@ -587,10 +589,8 @@ async def settle_reach(
     """Everything the reach MEASURES, before a single keyword is set.
 
     The mesh is the ACCEPTED one, never an equivalent rebuild."""
-    from trid3nt_server.workflows.telemac.helpers.release_layer import publish_release_point
     from trid3nt_server.emission.pipeline_emitter import current_emitter
 
-    release_pair = coerce_lonlat_point(release_coords)
     seed_lon, seed_lat = float(seed["lon"]), float(seed["lat"])
 
     # The granularity the run records is the one the ACCEPTED mesh was built at,
@@ -627,17 +627,16 @@ async def settle_reach(
         {"start_s": None, "wet": [True] * len(node_xy),
          "note": "the deck's own constant initial depth, the derived normal "
                  "depth laid bed-parallel over every node of the accepted mesh"})
-    release_lonlat, release_note = await _settle_release(
-        release_pair, mesh=mesh, centerline=centerline,
+    settled_release, release_note = await _settle_release(
+        release, mesh=mesh, centerline=centerline,
         centerline_utm=centerline_utm, utm_epsg=utm_epsg,
         spill_fraction=spill_fraction, node_xy=node_xy,
         initial_state=initial_state)
     # The marker rides BEFORE the solve, so the user sees the input against the
     # mesh rather than only in the results, and it carries the SETTLED point.
-    await publish_release_point(
-        current_emitter(), lon=release_lonlat[0], lat=release_lonlat[1],
-        user_supplied=release_pair is not None, reach_name=reach["slug"],
-        label=marker_label)
+    await publish_point(current_emitter(), settled_release, label=marker_label,
+                        basis="user" if release is not None else "derived",
+                        context=reach["slug"])
 
     topology = await asyncio.to_thread(
         read_topology, _mesh_field(mesh, "topology_uri",
@@ -660,7 +659,7 @@ async def settle_reach(
 
     start_time_s = float(initial_state["start_s"] or 0.0)
     duration_s = float(sim_duration_s)
-    source_utm = _to_utm_point(release_lonlat, utm_epsg)
+    source_utm = as_utm(settled_release, utm_epsg)
     # WHICH dataset painted the mesh's nodes. The worker opens a file and cannot
     # know, so the label travels with the file - otherwise the run's own metrics
     # could not tell a GLO-30 bed from the 3DEP one a ladder fell to.
@@ -694,9 +693,10 @@ async def settle_reach(
         "liquid_boundary_order": list(topology["liquid_boundary_order"]),
         "liquid_boundary_prescribes": list(topology["liquid_boundary_prescribes"]),
         "release_at": [round(source_utm[0], 3), round(source_utm[1], 3)],
-        "release_lon": round(release_lonlat[0], 6),
-        "release_lat": round(release_lonlat[1], 6),
-        "release_user_supplied": release_pair is not None,
+        "release_lon": round(settled_release.lon, 6),
+        "release_lat": round(settled_release.lat, 6),
+        "release_name": settled_release.name,
+        "release_user_supplied": release is not None,
         "release_note": release_note,
         "spill_fraction": float(min(max(spill_fraction, 0.0), 1.0)),
         "discharge_note": carrier_discharge.get("note"),
@@ -1030,7 +1030,7 @@ async def settle_harbour(
     """What the accepted harbour mesh measures -> what the agitation sheet reads.
 
     A mesh naming no liquid boundary refuses: a wave has no edge to enter by."""
-    from trid3nt_server.workflows.shared.supplied_geometry import supplied_polylines
+    from trid3nt_server.workflows.inputs.shape import polylines as _lines, shape
 
     facts = _mesh_facts(mesh, missing=_harbour_mesh_missing)
     utm_epsg = int(facts["utm_epsg"])
@@ -1049,9 +1049,10 @@ async def settle_harbour(
         read_accepted_mesh_nodes,
         _mesh_field(mesh, "display_uri", missing=_harbour_mesh_missing))
 
-    polylines = await asyncio.to_thread(
-        supplied_polylines, structure, label="structure",
-        code="ARTEMIS_STRUCTURE_INVALID") or []
+    drawn = await asyncio.to_thread(
+        shape, structure, label="structure", code="ARTEMIS_STRUCTURE_INVALID")
+    polylines = (_lines(drawn, label="structure", code="ARTEMIS_STRUCTURE_INVALID")
+                 if drawn is not None else [])
     segments = await asyncio.to_thread(
         _segments_utm, polylines, utm_epsg) if polylines else []
     # ONE NUMBER decides where the structure is, and it is the one the mesher

@@ -358,4 +358,6 @@ def _provenance_value(value: Any) -> Any:
     # Rendered by the one shared rule, then flattened: a provenance row's value is
     # a scalar or a string, so a coordinate pair travels as its text.
     rendered = wire_value(value)
+    if isinstance(rendered, dict):
+        return ", ".join(f"{k}={v}" for k, v in rendered.items() if v is not None)
     return str(rendered) if isinstance(rendered, (list, bool)) else rendered

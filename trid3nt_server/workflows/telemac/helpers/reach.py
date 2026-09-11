@@ -12,8 +12,8 @@ import re
 import tempfile
 from typing import Any
 
-from trid3nt_server.workflows.runtime import Step, journal_note, user_input
-from trid3nt_server.workflows.shared.layer_fields import layer_field
+from trid3nt_server.workflows.runtime import Step, journal_note
+from trid3nt_server.workflows.inputs.layer_fields import layer_field
 
 from .errors import (
     ReachWaterUnmapped,
@@ -30,7 +30,6 @@ __all__ = [
     "MESH_H_FLOOR_M",
     "MESH_NODE_CAP",
     "ReachSeed",
-    "coerce_lonlat_point",
     "estimate_telemac_solve_seconds",
     "fetch_reach_flowline",
     "geocode_reach",
@@ -104,18 +103,6 @@ def slug(name: str) -> str:
     while "__" in out:
         out = out.replace("__", "_")
     return (out or "river_dye")[:48]
-
-
-def coerce_lonlat_point(value: Any, *,
-                        label: str = "release point") -> tuple[float, float] | None:
-    """``(lon, lat)`` from a wire value, in TELEMAC's own error family.
-
-    Adds the engine's error TYPE so a fail-open caller can catch at the call site."""
-    try:
-        return user_input.lonlat_point(value, label=label,
-                                       code="TELEMAC_PARAMS_INVALID")
-    except user_input.UserInputError as exc:
-        raise TelemacDyeScenarioError("TELEMAC_PARAMS_INVALID", str(exc)) from None
 
 
 def bbox_center(bbox: Any) -> tuple[float, float]:
@@ -364,7 +351,7 @@ def _covered_fraction(water: Any, centerline: Any) -> float:
     from shapely.geometry import shape
     from shapely.ops import transform as _transform, unary_union
 
-    from trid3nt_server.workflows.shared.geometry import (
+    from trid3nt_server.workflows.inputs.geometry import (
         source_uri, utm_epsg_for,
     )
 
@@ -457,9 +444,8 @@ async def reach_seed(*, reach: dict[str, Any], rivers: str | None,
     # stretch to model, and the navigate has to start there or the reach the user
     # pinned is not the reach that gets meshed. The geocoded centroid is the last
     # rung and is honest: the navigate snaps it to the nearest flowline anyway.
-    point = coerce_lonlat_point(supplied, label="reach seed point")
-    if point is not None:
-        return {"lon": point[0], "lat": point[1],
+    if supplied is not None:
+        return {"lon": float(supplied.lon), "lat": float(supplied.lat),
                 "source": "the supplied point the reach is seeded from"}
     seed = None
     if rivers:

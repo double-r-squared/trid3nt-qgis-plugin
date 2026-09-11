@@ -319,9 +319,11 @@ async def test_a_supplied_pour_point_derives_the_aoi_from_it_not_a_geocoded_bbox
         catchment_aoi,
     )
 
+    from trid3nt_server.workflows.inputs import Point
+
     pp = (-83.40402, 35.05746)
     out = await acquire_catchment(location="Otto, North Carolina", bbox=None,
-                                  pour_point=pp, half_deg=0.14)
+                                  pour_point=Point(*pp, "outlet"), half_deg=0.14)
     assert out["bbox"] == catchment_aoi(pp, 0.14)
     assert out["pour_point"] == [pp[0], pp[1]]
 

@@ -15,9 +15,9 @@ from trid3nt_server.workflows.runtime import (
     Ref,
     param_rows,
     register_workflow,
-    user_input,
 )
-from trid3nt_server.workflows.shared.aoi import location_or_bbox
+from trid3nt_server.workflows.inputs import point_arg
+from trid3nt_server.workflows.inputs.aoi import location_or_bbox
 from trid3nt_server.workflows.telemac.authoring.assembler import DO_SAG_OUTFALL_FRAC
 from trid3nt_server.workflows.telemac.helpers.forcing import event_time
 from trid3nt_server.workflows.telemac.helpers.reach import MeshCoverage
@@ -211,7 +211,7 @@ telemac_do_sag = register_workflow(
     (*river.PARAM_ROWS, *param_rows(PARAMS)),
     Door(
         steering=STEERING,
-        domain=river.acquire(seed_coords=P.outfall_coords),
+        domain=river.acquire(seed=P.outfall_coords),
         mesh=river.MESH, mesh_on="reach",
         produce=(
             MeshCoverage(mesh=Ref("mesh"), centerline=river.DATA.centerline),
@@ -229,7 +229,7 @@ telemac_do_sag = register_workflow(
         # The source sits just inside that top rather than on it: a source node
         # on the prescribed-flowrate face would compete with the boundary
         # condition for the same node.
-        settle=river.settle(release_coords=P.outfall_coords,
+        settle=river.settle(release=P.outfall_coords,
                             spill_fraction=DO_SAG_OUTFALL_FRAC,
                             marker_label="Outfall"),
         results=(river.RESULT,),
@@ -252,8 +252,9 @@ telemac_do_sag = register_workflow(
     sensitivity=(("do_min_distance_m", "location"),),
     coerce=(
         location_or_bbox("telemac_do_sag", code_prefix="TELEMAC"),
-        user_input.point("outfall_coords", label="outfall_coords",
-                         code="TELEMAC_PARAMS_INVALID"),
+        point_arg("outfall_coords", tool="telemac_do_sag",
+                  prompt="Click on the river where the outfall discharges",
+                  code="TELEMAC_PARAMS_INVALID"),
         event_time(),
     ),
     doc=DOC,

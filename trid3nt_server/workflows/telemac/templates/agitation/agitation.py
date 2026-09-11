@@ -18,7 +18,7 @@ from trid3nt_server.workflows.runtime import (
     register_workflow,
 )
 from trid3nt_server.workflows.mesh.tool import mesh_op, tool
-from trid3nt_server.workflows.shared.aoi import AcquireAoi, location_or_bbox
+from trid3nt_server.workflows.inputs.aoi import AcquireAoi, location_or_bbox
 from trid3nt_server.workflows.telemac.authoring.assembler import HARBOUR_GEOMETRY
 from trid3nt_server.workflows.telemac.modules.artemis import (
     ART,

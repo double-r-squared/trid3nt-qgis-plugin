@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import Any, Mapping
 
 from trid3nt_server.workflows.runtime import Step
-from trid3nt_server.workflows.shared.aoi import aoi_slug
+from trid3nt_server.workflows.inputs.aoi import aoi_slug
 
 from .errors import RainOnGridError
 
@@ -37,12 +37,8 @@ async def acquire_catchment(*, location: str | None, bbox: Any,
                             code_prefix: str = "TELEMAC_ROG") -> dict[str, Any]:
     """Resolve the outlet and the AOI the catchment is delineated INSIDE.
 
-    The pour point comes first and the AOI derives from it; a ``bbox`` still wins."""
-    from trid3nt_server.workflows.runtime import user_input
-
-    point = user_input.lonlat_point(pour_point, label="pour_point",
-                                    code=f"{code_prefix}_PARAMS_INVALID")
-    if point is None:
+    The pour point is a Point and the AOI derives from it; a ``bbox`` still wins."""
+    if pour_point is None:
         # Unreachable through the plan (the draw gate refuses first), and stated
         # anyway: an outlet decides the entire catchment, so a missing one is a
         # refusal rather than a centroid nobody chose.
@@ -52,12 +48,12 @@ async def acquire_catchment(*, location: str | None, bbox: Any,
             error_code=f"{code_prefix}_PARAMS_INCOMPLETE")
 
     extent = (tuple(float(v) for v in bbox) if bbox is not None
-              else catchment_aoi(point, half_deg))
+              else catchment_aoi((pour_point.lon, pour_point.lat), half_deg))
     name = str(location).strip() if (location and str(location).strip()) \
         else default_name
     return {"bbox": extent, "name": name,
             "slug": aoi_slug(name, default=default_name),
-            "pour_point": [point[0], point[1]],
+            "pour_point": [pour_point.lon, pour_point.lat],
             "aoi_basis": "user bbox" if bbox is not None else
                          f"a +-{float(half_deg):g} deg buffer around the outlet"}
 

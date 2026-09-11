@@ -31,16 +31,16 @@ def _footprint(structure: Any, width_m: float) -> dict[str, Any]:
     import geopandas as gpd
     from shapely.geometry import LineString
 
-    from trid3nt_server.workflows.shared.supplied_geometry import supplied_polylines
+    from trid3nt_server.workflows.inputs.shape import polylines, shape
 
-    lines = supplied_polylines(structure, label="structure",
-                               code="ARTEMIS_STRUCTURE_INVALID")
-    if not lines:
+    drawn = shape(structure, label="structure", code="ARTEMIS_STRUCTURE_INVALID")
+    if drawn is None:
         raise ValueError(
             "artemis_harbor_agitation is asked WHETHER A STRUCTURE SHELTERS the "
             "water behind it, so the structure is the question and cannot be "
             "left out. Hand the slot a breakwater layer "
             "(fetch_osm_breakwaters) or a drawn line.")
+    lines = polylines(drawn, label="structure", code="ARTEMIS_STRUCTURE_INVALID")
     series = gpd.GeoSeries([LineString(line) for line in lines], crs=4326)
     metric = series.estimate_utm_crs()
     footprint = series.to_crs(metric).buffer(width_m / 2.0).union_all()

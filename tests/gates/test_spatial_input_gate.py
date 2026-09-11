@@ -183,6 +183,11 @@ def test_response_point_and_bbox():
     r = _spatial_response_to_result(pt)
     assert r["status"] == "ok" and r["geometry_type"] == "point"
     assert r["coordinates"] == [-85.3, 35.05]
+    assert "name" not in r
+    named = SpatialInputResponsePayload(
+        request_id=new_ulid(), geometry_type="point", coordinates=[-85.3, 35.05],
+        name="outfall-a")
+    assert _spatial_response_to_result(named)["name"] == "outfall-a"
 
     bb = SpatialInputResponsePayload(
         request_id=new_ulid(),

@@ -6,9 +6,8 @@ trees are named for what they hold - `dictionary/` the engine's own dictionaries
 `authoring/` the run directory the box receives, `solving/` the dispatched run,
 `products/` the answer that run is read into, `helpers/` what a declaration
 summons on the way. A template package is the recipe (`<name>.py`), its
-declarations (`declarations.py`), its routing phrasings (`corpus.yaml`) and
-whatever one bespoke coercion its wire needs; everything else it uses is the
-door's or the trees'.
+declarations (`declarations.py`) and its routing phrasings (`corpus.yaml`);
+everything else it uses is the door's or the trees'.
 
 A template writes no plan. It declares a STEERING body of the module's own raw
 keywords, the parts it is made of, the data chain it consumes and the mesh recipe
@@ -42,4 +41,4 @@ absent here and rides with the rung-4 wave-field rebuild.
 | `authoring/` | Everything the box receives: the ONE assembler, the serializer that writes the steering format, the DAMOCLES parse that gates it. See its own map. |
 | `solving/` | The run, dispatched: stage the manifest, hand it to the solve seam, wait, surface the gates. See its own map. |
 | `products/` | What a solved run is answered with: the postprocessors, the deliverables, and the readers that open the run's own files on the server. See its own map. |
-| `helpers/` | What a declaration summons: the reach front, the catchment, the infiltration surface, the declared forcing, the substance class, the WAQTEL relations, where a release is allowed to be, and the typed failures. See its own map. |
+| `helpers/` | What a declaration summons: the reach front, the catchment, the infiltration surface, the declared forcing, the substance class, the WAQTEL relations, where a derived release settles, and the typed failures. See its own map. |

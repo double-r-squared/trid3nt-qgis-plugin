@@ -82,13 +82,12 @@ def settle(monkeypatch, tmp_path):
     author this step calls, so the parity checks are statements about the run."""
     import numpy as np
 
-    from trid3nt_server.workflows.telemac.helpers import release_layer as rel_mod
 
     async def _publish(*_a, **_kw):
         return False
 
     monkeypatch.setenv("TRID3NT_RUNS_DIR", str(tmp_path))
-    monkeypatch.setattr(rel_mod, "publish_release_point", _publish)
+    monkeypatch.setattr(asm_mod, "publish_point", _publish)
     monkeypatch.setattr(asm_mod, "read_topology",
                         lambda _uri: {
                             "roles": dict(_ROLES),

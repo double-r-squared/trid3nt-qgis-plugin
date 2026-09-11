@@ -16,6 +16,7 @@ join the run as the sixth slice.
 | `emission/` | the emitter, the uri registry, publication, charts | 39 | 503 |
 | `fetchers/` | the fetch router, its executors, hooks and fallbacks | 65 | 1561 |
 | `gates/` | the gates, the context budget, the circuit breaker | 21 | 311 |
+| `inputs/` | the typed inputs: a Point, an Extent, a Shape, each from every form it arrives in | 3 | 40 |
 | `mesh/` | the meshers, the mesh gate, topology and bed | 7 | 226 |
 | `model/` | the SysML model conformance check | 1 | 19 |
 | `plugin/` | the plugin seams the server suite reads offline, by `ast` | 1 | 3 |
@@ -43,7 +44,7 @@ Six slices by subsystem, each its own foreground invocation, from the repo root:
 
     make test-fetchers        # tests/fetchers                                 1561
     make test-spatial         # tests/derive tests/emission tests/mesh         1189
-    make test-engines         # tests/telemac tests/runtime tests/solver tests/search   1155
+    make test-engines         # tests/telemac tests/runtime tests/inputs tests/solver tests/search   1195
     make test-server          # tests/server tests/gates tests/credentials tests/sandbox tests/model tests/scripts   1142
     make test-model-surface   # tests/adapters tests/tools                      693
     make test-packages        # contracts/tests plugin/tests tests/plugin       816

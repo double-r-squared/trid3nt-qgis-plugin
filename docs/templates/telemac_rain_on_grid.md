@@ -27,7 +27,7 @@ The values the template declares. `desc` is what the model reads when it fills o
 
 | param | door | units | default | desc |
 |---|---|---|---|---|
-| `pour_point` | user | - | - | The catchment OUTLET as (lon, lat) EPSG:4326 - the point the runoff drains to. It decides which basin is modelled at all, so it is asked for (drawn on the canvas or passed explicitly) and NEVER invented |
+| `pour_point` | user | - | - | The catchment OUTLET, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer, or a place name - the point the runoff drains to. It decides which basin is modelled at all, so it is asked for (picked on the canvas or passed explicitly) and NEVER invented |
 | `location` | question | - | optional | Place naming the catchment. It names the run and the published layers; the basin's SHAPE is the terrain's answer at the pour point, never the geocoder's bbox |
 | `bbox` | user | - | optional | Explicit analysis AOI (min_lon,min_lat,max_lon,max_lat) EPSG:4326 the catchment is delineated INSIDE; it must contain the whole upstream basin, because delineation truncates at its edge |
 | `rain_window` | question | - | optional | A REAL storm window as 'YYYY-MM-DD/YYYY-MM-DD'. Drives the run with the hourly AORC hyetograph over the catchment - the true intensity structure, which is what resolves the hydrograph SHAPE. AORC rather than MRMS because MRMS only covers ~2020-10 onward |

@@ -66,9 +66,12 @@ async def request_spatial_input(
     `default_timeout_seconds` the wait window (300).
 
     Returns once the user finishes: vector_draw gives {status, geometry_type,
-    aoi_bbox?, points, n_aoi, n_lines, line?, linestring?}; point and bbox give
-    {status, geometry_type, coordinates}. A cancel gives status="cancelled", a
-    timeout or malformed answer status="error". NEVER invent an AOI on error.
+    aoi_bbox?, points, n_aoi, n_lines, line?, linestring?}; bbox gives {status,
+    geometry_type, coordinates}; point gives {status, geometry_type, coordinates,
+    name} - pass {"coordinates": ..., "name": ...} VERBATIM as the Point argument
+    of the template (its release, outfall, pour point), so the name the user typed
+    travels with the point. A cancel gives status="cancelled", a timeout or
+    malformed answer status="error". NEVER invent an AOI on error.
     """
     norm_mode = (mode or "vector_draw").strip()
     if norm_mode not in _VALID_MODES:

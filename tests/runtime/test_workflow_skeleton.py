@@ -124,8 +124,7 @@ def test_a_declared_param_the_wire_does_not_expose_stays_off_the_real_tool():
     declared = {p.name for p in wf.params}
     constants = {p.name for p in wf.params if p.door == doors.CONSTANT}
     wire = set(inspect.signature(TOOL_REGISTRY["telemac_river_dye"].fn).parameters)
-    assert "reach_seed_coords" in declared and "reach_seed_coords" not in wire
-    assert declared - {"reach_seed_coords"} - constants <= wire
+    assert declared - constants <= wire
 
 
 def test_constant_door_params_are_off_the_model_facing_wire_and_docstring():
@@ -156,8 +155,8 @@ def test_a_constant_supplied_off_the_model_wire_still_reaches_the_sheet():
     from trid3nt_server.workflows.runtime.resolver import resolve_params
 
     wf = TOOL_REGISTRY["telemac_do_sag"].fn.workflow
-    supplied, err = wf._normalize({"location": "x", "sim_duration_s": 600.0,
-                                   "mesh_resolution_m": 30.0})
+    supplied, err = asyncio.run(wf._normalize(
+        {"location": "x", "sim_duration_s": 600.0, "mesh_resolution_m": 30.0}))
     assert err is None
     assert supplied["sim_duration_s"] == 600.0
     assert supplied["mesh_resolution_m"] == 30.0

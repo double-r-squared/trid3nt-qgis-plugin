@@ -1,42 +1,20 @@
-"""Where a release is allowed to be: inside the domain, on the river, in water.
+"""Where a DERIVED release is settled: a station along the reach, inside the mesh.
 
-All three claims are answered before anything is staged, against geometry the run
-already holds. Nothing here invents a tolerance: a band around the flowline would
-be a softer second domain standing in for the one the run actually has."""
+A run with no release point placed puts the source a declared fraction along the
+centerline and walks it downstream to the first station the accepted mesh holds;
+the domain a supplied point is tested against is the mesh's own record of what
+it was cut from."""
 
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
 from typing import Any
 
-from trid3nt_server.workflows.telemac.helpers.errors import (
-    TelemacDyeScenarioError,
-    TelemacReleaseOutsideDomainError,
-)
+from trid3nt_server.workflows.telemac.helpers.errors import TelemacDyeScenarioError
 
 logger = logging.getLogger("trid3nt_server.workflows.telemac.helpers.release_point")
 
-__all__ = ["ContainedRelease", "contain_release_point", "derive_release_on_mesh",
-           "domain_polygon_of", "snap_release_to_wetted"]
-
-
-@dataclass(frozen=True)
-class ContainedRelease:
-    """A release point the domain accepts, moved onto the flowline.
-
-    ``snap_distance_m`` is 0 when the supplied point was already on the river."""
-
-    lon: float
-    lat: float
-    snap_distance_m: float
-
-    @property
-    def note(self) -> str:
-        if self.snap_distance_m <= 0.0:
-            return "supplied point, inside the modeled domain and on the flowline"
-        return (f"supplied point, inside the modeled domain; moved "
-                f"{self.snap_distance_m:.0f} m onto the flowline")
+__all__ = ["derive_release_on_mesh", "domain_polygon_of"]
 
 
 def domain_polygon_of(artifact: Any) -> Any:
@@ -111,123 +89,3 @@ def derive_release_on_mesh(*, centerline_utm: Any, mesh: Any,
         "inside the accepted mesh, so there is nowhere in the solved domain to "
         "put the release. Mesh more of the reach (a finer mesh_resolution_m or a "
         "supplied mesh) or place the release explicitly.")
-
-
-def snap_release_to_wetted(point_utm: tuple[float, float], *, node_xy: Any,
-                           wet: Any, state: str) -> tuple[tuple[float, float],
-                                                          float, int]:
-    """Put a release where the run holds WATER at t0 -> where it went, how far.
-
-    The engine solves a source at a mesh NODE (``proxim.f`` picks the nearest
-    vertex of the element the coordinates fall in), so the node nearest the
-    settled point is where the substance enters and whether THAT node is wet is a
-    question the domain tests upstream never ask. A dry landing moves to the
-    nearest node the initial state holds water at; a wet one is left where it is.
-
-    ``wet`` is the initial state's own mask over the same node numbering and
-    ``state`` is what the deck says that state IS; a state with no wet node
-    anywhere refuses. Returns ``((x, y), moved_m, node)`` in the mesh's metres.
-    """
-    import numpy as np
-
-    xy = np.asarray(node_xy, dtype=float)
-    mask = np.asarray(wet, dtype=bool)
-    here = np.asarray(point_utm, dtype=float)
-    reach = np.hypot(xy[:, 0] - here[0], xy[:, 1] - here[1])
-    nearest = int(np.argmin(reach))
-    if mask[nearest]:
-        return (float(here[0]), float(here[1])), 0.0, nearest
-    if not mask.any():
-        raise TelemacDyeScenarioError(
-            "TELEMAC_RELEASE_NOWHERE_WET",
-            f"the release lands at mesh node {nearest}, {reach[nearest]:.0f} m "
-            f"away and DRY, and there is no wet water to move it to: {state}. A "
-            "release needs water at t0 - continue from a state that holds some, "
-            "or run the scenario that fills the domain first.")
-    wet_nodes = np.flatnonzero(mask)
-    node = int(wet_nodes[np.argmin(reach[wet_nodes])])
-    moved = float(np.hypot(xy[node, 0] - here[0], xy[node, 1] - here[1]))
-    logger.info("release node %d is dry at t0; moved %.1f m to wet node %d",
-                nearest, moved, node)
-    return (float(xy[node, 0]), float(xy[node, 1])), moved, node
-
-
-def contain_release_point(*, point: tuple[float, float], domain: Any,
-                          flowline: Any) -> ContainedRelease:
-    """Refuse a release outside ``domain``; snap one inside it onto ``flowline``.
-
-    Both are geometry sources in EPSG:4326; distances are the domain's own UTM."""
-    from shapely.geometry import Point, shape
-    from shapely.ops import nearest_points, transform as _transform, unary_union
-    from pyproj import Transformer
-
-    from trid3nt_server.workflows.mesh.inputs import op_geometry
-    from trid3nt_server.workflows.shared.geometry import utm_epsg_for
-
-    lon, lat = float(point[0]), float(point[1])
-    polygons = _geometries(op_geometry(domain), ("Polygon", "MultiPolygon"))
-    if not polygons:
-        raise TelemacDyeScenarioError(
-            "TELEMAC_DYE_SCENARIO_ERROR",
-            f"the domain {domain!r} carries no polygon, so there is no shape a "
-            "release point could be inside of.")
-    lines = _geometries(op_geometry(flowline), ("LineString", "MultiLineString"))
-    if not lines:
-        raise TelemacDyeScenarioError(
-            "TELEMAC_DYE_SCENARIO_ERROR",
-            f"the flowline {flowline!r} carries no line, so there is no river to "
-            "put the release on.")
-
-    domain_ll = unary_union([shape(g) for g in polygons]).buffer(0)
-    river_ll = unary_union([shape(g) for g in lines])
-    epsg = utm_epsg_for(float(domain_ll.centroid.x), float(domain_ll.centroid.y))
-    forward = Transformer.from_crs(4326, epsg, always_xy=True)
-    back = Transformer.from_crs(epsg, 4326, always_xy=True)
-    domain_m = _transform(forward.transform, domain_ll)
-    here = Point(*forward.transform(lon, lat))
-
-    if not domain_m.covers(here):
-        raise TelemacReleaseOutsideDomainError(
-            lon, lat, float(here.distance(domain_m)))
-
-    # The flowline is clipped to the domain FIRST: a river that runs on past the
-    # modeled stretch would otherwise offer its own out-of-domain length as the
-    # nearest point, and the run would solve a source it just refused to accept.
-    reach_m = _transform(forward.transform, river_ll).intersection(domain_m)
-    if reach_m.is_empty:
-        raise TelemacDyeScenarioError(
-            "TELEMAC_DYE_SCENARIO_ERROR",
-            f"the flowline {flowline!r} does not run through the domain "
-            f"{domain!r}, so the two describe different reaches and there is no "
-            "river inside the domain to place the release on.")
-
-    snapped_m, _ = nearest_points(reach_m, here)
-    distance = float(here.distance(snapped_m))
-    snapped_lon, snapped_lat = back.transform(snapped_m.x, snapped_m.y)
-    logger.info("release point (%.5f, %.5f) contained; snapped %.1f m to "
-                "(%.5f, %.5f)", lon, lat, distance, snapped_lon, snapped_lat)
-    return ContainedRelease(lon=float(snapped_lon), lat=float(snapped_lat),
-                            snap_distance_m=distance)
-
-
-def _geometries(doc: Any, kinds: tuple[str, ...]) -> list[dict[str, Any]]:
-    """Every geometry of one of ``kinds`` in a GeoJSON document, at any depth."""
-    out: list[dict[str, Any]] = []
-
-    def walk(node: Any) -> None:
-        if not isinstance(node, dict):
-            return
-        kind = str(node.get("type") or "")
-        if kind == "FeatureCollection":
-            for feature in node.get("features") or ():
-                walk(feature)
-        elif kind == "Feature":
-            walk(node.get("geometry"))
-        elif kind == "GeometryCollection":
-            for part in node.get("geometries") or ():
-                walk(part)
-        elif kind in kinds:
-            out.append(dict(node))
-
-    walk(doc)
-    return out

@@ -128,11 +128,13 @@ async def test_do_sag_requires_location_or_bbox():
 
 
 # --- the outfall: absent DERIVES, malformed REFUSES -------------------------- #
-@pytest.mark.parametrize("bad", ["somewhere", [1.0], [1.0, 2.0, 3.0], {"lon": 1},
+@pytest.mark.parametrize("bad", [[1.0], [1.0, 2.0, 3.0], {"lon": 1},
                                  [200.0, 10.0], ["a", "b"]])
 @pytest.mark.asyncio
 async def test_malformed_outfall_coords_refuse_they_never_fall_back(bad):
-    """A garbage discharge location must not silently become the reach seed."""
+    """A garbage discharge location must not silently become the reach seed.
+
+    A bare word is not garbage: it is a place name the geocoder is asked about."""
     from trid3nt_server.workflows.telemac.templates.do_sag.do_sag import telemac_do_sag
     out = await telemac_do_sag(location="Eel River near Scotia, California",
                                outfall_coords=bad)
@@ -156,9 +158,11 @@ def test_a_supplied_outfall_is_carried_as_a_user_row():
     from trid3nt_server.workflows.runtime import provenance_entries, resolve_params
 
     wf = _workflow()
-    supplied, err = wf._normalize({"location": "x",
-                                   "outfall_coords": ["-124.1", "40.5"]})
-    assert err is None and supplied["outfall_coords"] == (-124.1, 40.5)
+    from trid3nt_server.workflows.inputs import Point
+
+    supplied, err = asyncio.run(wf._normalize({"location": "x",
+                                               "outfall_coords": ["-124.1", "40.5"]}))
+    assert err is None and supplied["outfall_coords"] == Point(-124.1, 40.5)
     p = asyncio.run(resolve_params(wf.params, supplied))
     row = next(r for r in provenance_entries(p, wf.params)
                if r.param == "outfall_coords")
@@ -310,8 +314,10 @@ async def test_the_declared_plan_composes_the_shared_steps_in_order(monkeypatch,
                      "review", "run", "products"]
     # the outfall pins the MESHED water body, so it rides as the reach seed the
     # ONE centerline is navigated from - never as a dye release point
-    assert seen["seed"]["supplied"] == (-124.11, 40.51)
-    assert seen["settled"]["release_coords"] == (-124.11, 40.51)
+    from trid3nt_server.workflows.inputs import Point
+
+    assert seen["seed"]["supplied"] == Point(-124.11, 40.51)
+    assert seen["settled"]["release"] == Point(-124.11, 40.51)
     # DO cannot ride in above its own saturation - the one coupled clamp - and
     # the body reads the clamped value where it states its boundary and source.
     body = seen["run"]["sheet"].body

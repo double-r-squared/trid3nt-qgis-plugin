@@ -20,19 +20,11 @@ logger = logging.getLogger("trid3nt_server.tools.tool_arg_normalizer")
 __all__ = [
     "autofill_missing_bbox",
     "coerce_bbox_value",
-    "coerce_latlon",
     "fuzzy_correct_enum_args",
     "normalize_args",
     "parse_forcing_string",
     "snake_case",
 ]
-
-
-class LatLonCoercionError(ValueError):
-    """Raised by :func:`coerce_latlon` when a value is genuinely not two numbers.
-    A distinct subtype so a caller catches only this, not an unrelated
-    ``ValueError``."""
-
 
 
 #: Bidirectional alias pairs. If a tool accepts the canonical (left) form and
@@ -500,53 +492,6 @@ def coerce_bbox_value(value: Any) -> list[float] | None:
         return None
 
 
-def coerce_latlon(value: Any) -> list[float]:
-    """A lat/lon point as ``[lat, lon]``, from a 2-element sequence or a
-    ``"lat,lon"`` string. Order is preserved verbatim and NOTHING is range-checked;
-    a value that is not two numbers raises ``LatLonCoercionError``."""
-    if value is None:
-        raise LatLonCoercionError("lat/lon is required (got None)")
-    # Real list/tuple path -- pass through with float coercion.
-    if isinstance(value, (list, tuple)):
-        if len(value) != 2:
-            raise LatLonCoercionError(
-                f"lat/lon must have exactly 2 elements, got {len(value)}: {value!r}"
-            )
-        try:
-            return [float(v) for v in value]
-        except (TypeError, ValueError) as exc:
-            raise LatLonCoercionError(
-                f"lat/lon elements must be numbers: {value!r}"
-            ) from exc
-    # Reject other non-string scalars (int/float alone isn't a pair; dict; etc.)
-    if not isinstance(value, str):
-        raise LatLonCoercionError(
-            f"lat/lon must be a 2-list or 'lat,lon' string, got {type(value).__name__}"
-        )
-    # A coordinate parameter arrives as a STRING often enough to matter: the naive
-    # ``tuple(float(v) for v in value)`` would iterate the string's CHARACTERS and
-    # die on the decimal point, turning a routable call into a hard param error.
-    s = value.strip()
-    if not s:
-        raise LatLonCoercionError("lat/lon string is empty")
-    # Strip one layer of surrounding brackets/parens.
-    if s[:1] in "[(" and s[-1:] in "])":
-        s = s[1:-1].strip()
-    # Split on commas and/or whitespace uniformly (handles "a,b", "a, b",
-    # "a b"). Drop empties so trailing separators don't create blank parts.
-    parts = [p for p in re.split(r"[,\s]+", s) if p]
-    if len(parts) != 2:
-        raise LatLonCoercionError(
-            f"lat/lon must parse to exactly 2 numbers, got {len(parts)}: {value!r}"
-        )
-    try:
-        return [float(p) for p in parts]
-    except ValueError as exc:
-        raise LatLonCoercionError(
-            f"lat/lon parts must be numbers: {value!r}"
-        ) from exc
-
-
 def parse_forcing_string(s: str) -> dict[str, int]:
     """Parse a free-text design storm into ``{return_period_years,
     duration_hours}``; either key may be absent. An unrecognizable string yields an
@@ -793,32 +738,6 @@ def normalize_args(
     ``**kwargs`` keeps every unknown kwarg, otherwise unknowns are dropped."""
     if not raw_args:
         return {}
-    # A model may pack the release point into ONE 'spill_location_latlon' string
-    # instead of release_lat/release_lon. This MUST normalize HERE: the gate preview
-    # reads normalized args before the tool function runs, and the approve-click
-    # injects release_* only afterwards, so a tool-level parse guarded on "coords
-    # absent" would never fire and the preview would mesh the wrong river.
-    if (tool_name == "telemac_river_dye"
-            and isinstance(raw_args.get("spill_location_latlon"), str)
-            and raw_args.get("release_lat") is None
-            and raw_args.get("release_lon") is None):
-        try:
-            _lat_s, _lon_s = raw_args["spill_location_latlon"].split(",", 1)
-            raw_args = dict(raw_args)
-            raw_args["release_lat"] = float(_lat_s)
-            raw_args["release_lon"] = float(_lon_s)
-            raw_args.pop("spill_location_latlon")
-            logger.info(
-                "normalize_args(telemac_river_dye): spill_location_latlon -> "
-                "release_lat=%s release_lon=%s",
-                raw_args["release_lat"], raw_args["release_lon"],
-            )
-        except (ValueError, TypeError):
-            logger.warning(
-                "normalize_args(telemac_river_dye): unparseable "
-                "spill_location_latlon %r - left for the tool to drop",
-                raw_args.get("spill_location_latlon"),
-            )
     accepted, accepts_var_keyword = _accepted_params(fn)
     tool_aliases = _TOOL_SPECIFIC_ALIASES.get(tool_name, {})
     out: dict[str, Any] = {}

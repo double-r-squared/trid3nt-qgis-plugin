@@ -12,11 +12,12 @@ from typing import Any, Mapping
 from trid3nt_server.tools.tool_arg_normalizer import coerce_bbox_value
 from trid3nt_server.workflows.runtime import Step, WireArgsError
 
-__all__ = ["AcquireAoi", "acquire_aoi", "aoi_slug", "location_or_bbox"]
+__all__ = ["AcquireAoi", "acquire_aoi", "aoi_slug", "geocode_place",
+           "location_or_bbox"]
 
-logger = logging.getLogger("trid3nt_server.workflows.shared.aoi")
+logger = logging.getLogger("trid3nt_server.workflows.inputs.aoi")
 
-_SHARED = "trid3nt_server.workflows.shared.aoi"
+_HERE = "trid3nt_server.workflows.inputs.aoi"
 
 
 def location_or_bbox(tool: str, *, code_prefix: str, hint: str = "",
@@ -98,6 +99,30 @@ def _geo_field(geo: Any, keys: tuple[str, ...]) -> float | None:
     return None
 
 
+async def geocode_place(name: str) -> tuple[float, float] | None:
+    """A place name -> ``(lon, lat)`` through the registered geocoder; ``None``
+    when it answers nothing. A SYNC geocode is a network call, and running one
+    on the loop stalls the socket keepalive, so it runs in a thread."""
+    from trid3nt_server.tools import TOOL_REGISTRY
+
+    entry = TOOL_REGISTRY.get("geocode_location")
+    if entry is None:
+        raise WireArgsError("geocode_location is not registered.",
+                            error_code="AOI_INTERNAL_ERROR")
+    import asyncio
+    import inspect
+
+    if inspect.iscoroutinefunction(entry.fn):
+        geo = await entry.fn(name)
+    else:
+        geo = await asyncio.to_thread(entry.fn, name)
+        if inspect.isawaitable(geo):
+            geo = await geo
+    lon = _geo_field(geo, ("lon", "longitude", "x"))
+    lat = _geo_field(geo, ("lat", "latitude", "y"))
+    return None if lon is None or lat is None else (lon, lat)
+
+
 async def acquire_aoi(*, location: str | None,
                       bbox: Any = None,
                       half_deg: float | tuple[float, float] = 0.06,
@@ -113,25 +138,8 @@ async def acquire_aoi(*, location: str | None,
             else default_name
         lon, lat = (0.5 * (extent[0] + extent[2]), 0.5 * (extent[1] + extent[3]))
     elif location and str(location).strip():
-        from trid3nt_server.tools import TOOL_REGISTRY
-
-        entry = TOOL_REGISTRY.get("geocode_location")
-        if entry is None:
-            raise WireArgsError("geocode_location is not registered.",
-                                error_code=f"{code_prefix}_INTERNAL_ERROR")
-        import asyncio
-        import inspect
-
-        # A SYNC geocode is a network call, and running one on the loop stalls
-        # the socket keepalive; an async one is awaited where it stands.
-        if inspect.iscoroutinefunction(entry.fn):
-            geo = await entry.fn(location)
-        else:
-            geo = await asyncio.to_thread(entry.fn, location)
-            if inspect.isawaitable(geo):
-                geo = await geo
-        lon = _geo_field(geo, ("lon", "longitude", "x"))
-        lat = _geo_field(geo, ("lat", "latitude", "y"))
+        found = await geocode_place(str(location).strip())
+        lon, lat = found if found is not None else (None, None)
         if lon is None or lat is None:
             raise WireArgsError(
                 f"could not geocode {location!r} to an AOI.",
@@ -154,7 +162,7 @@ def AcquireAoi(*, location: Any, bbox: Any,  # noqa: N802
                half_deg: float | tuple[float, float] = 0.06,
                default_name: str = "aoi", code_prefix: str = "AOI") -> Step:
     """Place/extent -> the modeled AOI. Refines the domain for everything after it."""
-    return Step(runner=f"{_SHARED}.acquire_aoi", stage="acquire",
+    return Step(runner=f"{_HERE}.acquire_aoi", stage="acquire",
                 kwargs={"location": location, "bbox": bbox, "half_deg": half_deg,
                         "default_name": default_name,
                         "code_prefix": code_prefix}).overrides_domain()

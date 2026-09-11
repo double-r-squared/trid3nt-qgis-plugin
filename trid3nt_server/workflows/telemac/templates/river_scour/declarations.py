@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from trid3nt_server.workflows.inputs import Point
 from trid3nt_server.workflows.runtime import Accepts, Param, doors
 from trid3nt_server.workflows.telemac.helpers.substance import (
     GRAIN_UM_MAX,
@@ -17,6 +18,15 @@ ACCEPTS = Accepts(mesh=("unstructured_tri",), release=("point",))
 
 class PARAMS:
     """What only a scouring-bed question asks."""
+    release = Param(
+        door=doors.USER, optional=True, user_lever=True,
+        consequence="scenario", type=Point,
+        derived_when_absent=(
+            "the release sits at spill_fraction along the meshed reach; the "
+            "downstream distance is measured from there"),
+        desc="Where the substance enters the water, as a Point: the pick's "
+             "{coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a "
+             "point layer, or a place name")
 
     # -- the bed ------------------------------------------------------------ #
     grain_size_um = Param(

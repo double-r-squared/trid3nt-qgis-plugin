@@ -156,7 +156,7 @@ def _bed_raster(source: Any, bbox: tuple[float, float, float, float]
 
     EPSG:4326: the nodes are sampled in lon/lat, and a projected bed reads fill."""
     from trid3nt_server.tools import TOOL_REGISTRY
-    from trid3nt_server.workflows.shared.geometry import source_uri
+    from trid3nt_server.workflows.inputs.geometry import source_uri
 
     name = str(source_uri(source) or "").strip()
     if not name:

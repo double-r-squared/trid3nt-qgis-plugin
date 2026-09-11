@@ -15,7 +15,7 @@ from typing import Any
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.tools import register_tool
-from trid3nt_server.workflows.shared.geometry import source_uri
+from trid3nt_server.workflows.inputs.geometry import source_uri
 
 __all__ = [
     "compute_layer_bounds",

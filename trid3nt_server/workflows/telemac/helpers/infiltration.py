@@ -16,7 +16,7 @@ from trid3nt_server.workflows.mesh.shared.nodes import (
     node_slopes_from_mesh,
     sample_raster_at_nodes,
 )
-from trid3nt_server.workflows.shared.layer_fields import layer_field
+from trid3nt_server.workflows.inputs.layer_fields import layer_field
 
 from .catchment import mesh_nodes
 

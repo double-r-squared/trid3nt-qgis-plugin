@@ -124,16 +124,8 @@ class PARAMS:
 class RELEASE:
     """The rows a run that RELEASES something at a point in the reach declares.
 
-    Identical whatever is released; the substance's own rows are its template's."""
-
-
-    release_coords = Param(
-        door=doors.USER, optional=True, user_lever=True,
-        consequence="scenario", type=tuple[float, float] | list[float],
-        derived_when_absent=(
-            "the release sits at spill_fraction along the meshed reach; the "
-            "downstream plume distance is measured from there"),
-        desc="Where the substance enters the water, (lon, lat) EPSG:4326")
+    Identical whatever is released; the substance's own rows are its template's.
+    The release POINT is the template's own row: a Point slot under its role name."""
 
     spill_fraction = Param(
         door=doors.SCENARIO, default=0.25, bounds=(0.05, 0.9),
@@ -189,15 +181,6 @@ class RELEASE:
         door=doors.USER, optional=True, bounds=(1e-3, 10.0),
         units="m^2/s", consequence="numerical",
         desc="Tracer diffusivity, which sets lateral plume spread")
-
-    reach_seed_coords = Param(
-        door=doors.USER, optional=True, consequence="aoi",
-        type=tuple[float, float] | list[float], wire=False,
-        derived_when_absent=(
-            "the reach centerline is resolved from the mid-reach point on the "
-            "largest fetched flowline, else the geocoded centroid"),
-        desc="The point the reach centerline is navigated from, (lon, lat); "
-             "set when the release must pin which water body is meshed")
 
 
 #: The shared rows, as a template composes them with its own.
@@ -275,21 +258,21 @@ MESH = tool.build_mesh(
 )
 
 
-def acquire(*, seed_coords: Any) -> tuple[Step, ...]:
+def acquire(*, seed: Any) -> tuple[Step, ...]:
     """The steps that establish the modelled world and the flow that carries it.
 
-    ``seed_coords`` pins the seed the one centerline is navigated from."""
+    ``seed`` is the Point the one centerline is navigated from when it is set."""
     return (
         Geocode.reach(ParamRef("location"), ParamRef("bbox")).named("reach"),
         ReachSeed(reach=Ref("reach"), rivers=DATA.rivers,
-                  supplied=seed_coords).named("seed"),
+                  supplied=seed).named("seed"),
         CarrierDischarge(seed=Ref("seed"), explicit=ParamRef("discharge_m3s"),
                          event_time=ParamRef("event_time")
                          ).named("carrier_discharge"),
     )
 
 
-def settle(*, release_coords: Any, spill_fraction: Any,
+def settle(*, release: Any, spill_fraction: Any,
            marker_label: str = "Release point", rain: Any = None,
            continue_from: Any = None, oil: Any = None,
            dredge: Any = None) -> Step:
@@ -307,7 +290,7 @@ def settle(*, release_coords: Any, spill_fraction: Any,
                     "output_interval_min": ParamRef("output_interval_min"),
                     "friction_law": ParamRef("friction_law"),
                     "friction_coefficient": ParamRef("friction_coefficient"),
-                    "release_coords": release_coords,
+                    "release": release,
                     "spill_fraction": spill_fraction,
                     "marker_label": marker_label, "rain": rain,
                     "continue_from": continue_from, "oil": oil, "dredge": dredge})
