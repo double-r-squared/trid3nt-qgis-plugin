@@ -20,9 +20,6 @@ from stub_server import (  # noqa: E402
     StubAgentServer,
 )
 
-# --------------------------------------------------------------------------- #
-# Generic case-command (create/delete) -- item 2/3
-# --------------------------------------------------------------------------- #
 
 
 class TestCaseCommandCreateDelete(unittest.TestCase):

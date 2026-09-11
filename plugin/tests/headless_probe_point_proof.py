@@ -89,9 +89,6 @@ def _run_flow(
     return True
 
 
-# --------------------------------------------------------------------------- #
-# HALF 1: STUB route (always runs -- no live agent required)
-# --------------------------------------------------------------------------- #
 
 
 class _ProbeStub(http.server.BaseHTTPRequestHandler):
@@ -159,11 +156,9 @@ try:
 finally:
     httpd.shutdown()
 
-# --------------------------------------------------------------------------- #
 # HALF 2: the CURRENTLY RUNNING local agent, IF it already serves the new
 # route (skipped -- not failed -- if unreachable or still pre-restart
 # 404/405, per the kickoff's "do NOT restart the running agent" constraint).
-# --------------------------------------------------------------------------- #
 
 print(f"\n[proof] HALF 2: attempting the real flow against the live agent at {AGENT_HTTP} ...", flush=True)
 live_route_present = False

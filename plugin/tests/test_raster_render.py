@@ -21,10 +21,8 @@ sys.path.insert(0, os.path.dirname(__file__))
 from stub_server import RASTER_LAYER_ROW  # noqa: E402
 
 
-# --------------------------------------------------------------------------- #
 # stubbed-qgis harness (mirrors test_milestone2's _import_layers pattern,
 # extended with the raster-renderer API surface)
-# --------------------------------------------------------------------------- #
 
 
 def _import_layers():
@@ -401,9 +399,6 @@ def _event(layers, row_or_fields):
     )
 
 
-# --------------------------------------------------------------------------- #
-# uri resolution
-# --------------------------------------------------------------------------- #
 
 
 class TestStoreUriResolution(unittest.TestCase):
@@ -447,9 +442,6 @@ class TestStoreUriResolution(unittest.TestCase):
         self.assertEqual(fakes.RasterLayer.instances, [])
         self.assertTrue(any("skipped" in n for n in notes), notes)
 
-# --------------------------------------------------------------------------- #
-# the un-emit
-# --------------------------------------------------------------------------- #
 
 
 class TestTheUnEmitReachesTheLayerTree(unittest.TestCase):
@@ -474,9 +466,6 @@ class TestTheUnEmitReachesTheLayerTree(unittest.TestCase):
         self.assertTrue(node.isVisible())
 
 
-# --------------------------------------------------------------------------- #
-# the declared preset, loaded as QGIS's own style document
-# --------------------------------------------------------------------------- #
 
 
 _QML = (
@@ -537,9 +526,6 @@ class TestDeclaredStyleIsLoadedNotRebuilt(unittest.TestCase):
         self.assertTrue(any("renderer is unchanged" in n for n in notes), notes)
 
 
-# --------------------------------------------------------------------------- #
-# the declared validity window, stamped as the layer's temporal range
-# --------------------------------------------------------------------------- #
 
 
 class TestDeclaredTemporalWindow(unittest.TestCase):
@@ -590,9 +576,6 @@ class TestDeclaredTemporalWindow(unittest.TestCase):
         self.assertFalse(fakes.RasterLayer.instances[0].temporal.active)
 
 
-# --------------------------------------------------------------------------- #
-# degenerate-numeric crash defenses (the 0.3.14 sweep)
-# --------------------------------------------------------------------------- #
 
 
 class _FakeDatasetIndex:
@@ -837,9 +820,6 @@ class TestMeshStagingExtension(unittest.TestCase):
         self.assertTrue(fname.endswith(".nc"), fname)
 
 
-# --------------------------------------------------------------------------- #
-# the preset is a BIRTH default
-# --------------------------------------------------------------------------- #
 
 
 class TestThePresetAppliesAtBirthOnly(unittest.TestCase):

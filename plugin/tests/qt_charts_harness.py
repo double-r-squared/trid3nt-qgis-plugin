@@ -45,9 +45,6 @@ assert charts.matplotlib_available(), (
     f"the real renderer): {charts.matplotlib_error()}"
 )
 
-# --------------------------------------------------------------------------- #
-# Fixtures -- the exact spec shapes a chart builder emits
-# --------------------------------------------------------------------------- #
 
 # Hazard-curve shape: 19 positive IML points, layered line+rule, log-log,
 # dashed design-level rule.
@@ -149,9 +146,6 @@ UHS_CHART = {
     },
 }
 
-# --------------------------------------------------------------------------- #
-# 1. Hazard curve renders with the full log-log + rule chrome
-# --------------------------------------------------------------------------- #
 
 _located = []
 window = ChartsWindow(locate_callback=lambda uri: _located.append(uri))
@@ -183,9 +177,6 @@ fig_axes = window._figure.axes  # noqa: SLF001 -- harness introspection
 assert fig_axes[0].get_xlabel() == "PGA (g)", fig_axes[0].get_xlabel()
 assert fig_axes[0].get_ylabel() == "Mean PoE in 50yr", fig_axes[0].get_ylabel()
 
-# --------------------------------------------------------------------------- #
-# 6a. Click-to-inspect (b): nearest_vertex snaps to the exact plotted vertex.
-# --------------------------------------------------------------------------- #
 
 ax = window._ax  # noqa: SLF001
 target = (_IMLS[9], _POES[9])  # a real vertex (iml=0.103, poe=0.994751)
@@ -195,26 +186,18 @@ print("nearest_vertex:", hit)
 assert hit is not None, "nearest_vertex found nothing"
 assert abs(hit[0] - target[0]) < 1e-6 and abs(hit[1] - target[1]) < 1e-6, hit
 
-# --------------------------------------------------------------------------- #
 # 6b. Locate-on-map (d): enabled for a source-bearing chart; click fires the
 #     callback with that uri.
-# --------------------------------------------------------------------------- #
 
 assert window.locate_btn.isEnabled(), "Locate-on-map disabled for a source chart"
 window.locate_btn.click()
 pump()
 assert _located == [HAZARD_CHART["source_layer_uri"]], _located
 
-# --------------------------------------------------------------------------- #
-# 2. De-dupe on chart_id
-# --------------------------------------------------------------------------- #
 
 assert window.add_chart(dict(HAZARD_CHART)) is False, "re-emit must not duplicate"
 assert window.count == 1, window.count
 
-# --------------------------------------------------------------------------- #
-# 3. Paging + list strip: a second chart (bar + color field), prev/next
-# --------------------------------------------------------------------------- #
 
 assert window.add_chart(DAMAGE_CHART) is True
 pump()
@@ -245,18 +228,12 @@ window.chart_list.setCurrentRow(1)
 pump()
 assert window.current_chart_id() == DAMAGE_CHART["chart_id"], window.current_chart_id()
 
-# --------------------------------------------------------------------------- #
-# 4. Clear empties (case-switch discipline)
-# --------------------------------------------------------------------------- #
 
 window.clear()
 pump()
 assert window.count == 0
 assert window.chart_list.count() == 0
 
-# --------------------------------------------------------------------------- #
-# 5. Defensive parsing
-# --------------------------------------------------------------------------- #
 
 n = window.set_charts([
     "junk", {"chart_id": "", "vega_lite_spec": {"mark": "line"}},
@@ -270,9 +247,6 @@ assert s["lines"] == 1 and s["points"] == 4 and not s["x_log"], s
 assert window.add_chart({"nope": True}) is False
 window.clear()
 
-# --------------------------------------------------------------------------- #
-# 7. Dock wiring: _on_event("chart") -> lazy window + button + ONE pointer note
-# --------------------------------------------------------------------------- #
 
 
 class FakeIface:

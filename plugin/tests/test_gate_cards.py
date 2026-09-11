@@ -22,9 +22,6 @@ from stub_server import (  # noqa: E402
     StubAgentServer,
 )
 
-# --------------------------------------------------------------------------- #
-# Gate logic (pure)
-# --------------------------------------------------------------------------- #
 
 
 class TestGateParsing(unittest.TestCase):

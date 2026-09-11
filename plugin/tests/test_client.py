@@ -25,9 +25,6 @@ from stub_server import (  # noqa: E402
 )
 
 
-# --------------------------------------------------------------------------- #
-# Pure helpers (no server)
-# --------------------------------------------------------------------------- #
 
 
 class TestPureHelpers(unittest.TestCase):
@@ -205,9 +202,6 @@ class TestPureHelpers(unittest.TestCase):
         self.assertEqual(steps[1].parent_step_id, "s1")
 
 
-# --------------------------------------------------------------------------- #
-# Live protocol tests against the stub server
-# --------------------------------------------------------------------------- #
 
 
 class StubServerTestCase(unittest.TestCase):

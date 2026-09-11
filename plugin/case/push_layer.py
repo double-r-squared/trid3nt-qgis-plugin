@@ -224,10 +224,8 @@ def push_active_layer(
     )
 
 
-# --------------------------------------------------------------------------- #
 # QGIS-only: export the active layer to a temp file. NOT unit-testable
 # headless -- everything above this line is.
-# --------------------------------------------------------------------------- #
 
 
 def export_active_layer_to_tempfile(layer: Any) -> Tuple[str, str]:

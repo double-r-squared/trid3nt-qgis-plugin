@@ -15,9 +15,6 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 from plugin.case import aoi  # noqa: E402
 
-# --------------------------------------------------------------------------- #
-# Selection AOI (pure math)
-# --------------------------------------------------------------------------- #
 
 
 class TestSelectionAoi(unittest.TestCase):

@@ -19,9 +19,6 @@ from stub_server import (  # noqa: E402
     StubAgentServer,
 )
 
-# --------------------------------------------------------------------------- #
-# Token-expiry classification
-# --------------------------------------------------------------------------- #
 
 
 class TestAuthFailureClassification(unittest.TestCase):

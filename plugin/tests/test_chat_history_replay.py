@@ -15,11 +15,9 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 from plugin.net import trid3nt_client as tc  # noqa: E402
 
-# --------------------------------------------------------------------------- #
 # ITEM B: chat-history replay extraction --
 # ``session_state.chat_history`` (contracts ``case.py`` CaseChatMessage) ->
 # plain role/content rows for the dock's case-open chat replay.
-# --------------------------------------------------------------------------- #
 
 
 class TestParseChatHistory(unittest.TestCase):

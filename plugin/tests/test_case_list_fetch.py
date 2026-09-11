@@ -25,9 +25,6 @@ from stub_server import (  # noqa: E402
     StubAgentServer,
 )
 
-# --------------------------------------------------------------------------- #
-# Remote export API stub -- the REAL route's semantics, in miniature
-# --------------------------------------------------------------------------- #
 
 
 class _CaseListStub(http.server.BaseHTTPRequestHandler):

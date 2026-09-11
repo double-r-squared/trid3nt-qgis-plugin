@@ -15,9 +15,6 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 from plugin.net import trid3nt_client as tc  # noqa: E402
 
-# --------------------------------------------------------------------------- #
-# Case export (open case in QGIS)
-# --------------------------------------------------------------------------- #
 
 
 def _make_gpkg(path: str, tables: list) -> None:

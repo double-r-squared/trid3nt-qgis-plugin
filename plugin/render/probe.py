@@ -90,9 +90,6 @@ def post_probe_point(
     return _parse_probe_response(raw)
 
 
-# --------------------------------------------------------------------------- #
-# Response -> dock note-block formatting.
-# --------------------------------------------------------------------------- #
 
 
 def _format_number(value: float) -> str:

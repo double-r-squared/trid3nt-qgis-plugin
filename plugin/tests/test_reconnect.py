@@ -17,9 +17,6 @@ sys.path.insert(0, os.path.dirname(__file__))
 from plugin.net import trid3nt_client as tc  # noqa: E402
 from stub_server import StubAgentServer  # noqa: E402
 
-# --------------------------------------------------------------------------- #
-# Reconnect + outbound queue
-# --------------------------------------------------------------------------- #
 
 
 class TestBackoff(unittest.TestCase):

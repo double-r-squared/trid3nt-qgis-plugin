@@ -129,9 +129,6 @@ def parse_payload_warning(payload: dict) -> Optional[PayloadWarning]:
     )
 
 
-# --------------------------------------------------------------------------- #
-# The param SHEET -- the card an input review is rendered as.
-# --------------------------------------------------------------------------- #
 #
 # The sheet rides an OPTIONAL field of the payload warning, and its presence is
 # what turns the gate card into an editable property grid. Edits ride back on
@@ -279,9 +276,6 @@ def param_sheet_summary(sheet: ParamSheetRequest, revised: dict) -> str:
     return "Inputs approved with edits: " + ", ".join(sorted(revised))
 
 
-# --------------------------------------------------------------------------- #
-# Client-side live estimates.
-# --------------------------------------------------------------------------- #
 
 
 def estimate_cells(granularity: dict, chosen_resolution_m: float) -> int:
@@ -323,9 +317,6 @@ def estimate_frames(time_scale: dict, interval_min: float, duration_hr: float) -
     return max(1, raw)
 
 
-# --------------------------------------------------------------------------- #
-# Decision resolution (the Proceed / Cancel wiring)
-# --------------------------------------------------------------------------- #
 
 
 @dataclass
@@ -407,9 +398,6 @@ def resolve_gate_decision(
     return GateDecision("proceed", None)
 
 
-# --------------------------------------------------------------------------- #
-# Code-exec approval gate -- the agent BLOCKS on its confirm future.
-# --------------------------------------------------------------------------- #
 #
 # The decision rides back on the ORDINARY payload-confirmation envelope, with
 # its ``warning_id`` set to the request's ``code_exec_id``. The server
@@ -472,9 +460,6 @@ def code_exec_layer_lines(request: CodeExecRequest) -> list:
     return lines
 
 
-# --------------------------------------------------------------------------- #
-# Credential-request key-entry card.
-# --------------------------------------------------------------------------- #
 #
 # The reply is TWO envelopes in order, and the split is the point: the raw key
 # rides ``secret-add`` ALONE, and the ``credential-provided`` retry signal that
@@ -547,9 +532,6 @@ def credential_note_lines(request: CredentialRequest) -> list:
     return lines
 
 
-# --------------------------------------------------------------------------- #
-# Tool-selection picker card.
-# --------------------------------------------------------------------------- #
 #
 # Candidates arrive ranked best-first and MAY be empty on a retrieval degrade,
 # in which case the card offers only free text and let-agent-decide. The reply
@@ -663,9 +645,6 @@ def tool_choice_summary(tool_name: Optional[str], free_text: Optional[str]) -> s
     return "agent decided"
 
 
-# --------------------------------------------------------------------------- #
-# Honest card text
-# --------------------------------------------------------------------------- #
 
 
 def summary_lines(warning: PayloadWarning) -> list:
@@ -733,9 +712,6 @@ def summary_lines(warning: PayloadWarning) -> list:
     return lines
 
 
-# --------------------------------------------------------------------------- #
-# Region-choice picker -- a GATE-WAIT: the server pauses the turn on it.
-# --------------------------------------------------------------------------- #
 #
 # The server snapped a vague geocode to the WHOLE state bbox, which is the
 # honest already-resolved default, and offers a narrower pick. Candidates MAY
@@ -875,9 +851,6 @@ def region_choice_summary(
     return f"kept the whole state ({request.state_label})"
 
 
-# --------------------------------------------------------------------------- #
-# Spatial-input picker -- a GATE-WAIT: the server pauses the turn on it.
-# --------------------------------------------------------------------------- #
 #
 # The agent asks the user to pick a geometry: a point, a dragged bbox, or a
 # drawn shape whose purpose is either an area or a line. This plugin answers
@@ -1023,9 +996,6 @@ def spatial_input_summary(request: SpatialInputRequest, wire: dict) -> str:
     return "spatial input sent"
 
 
-# --------------------------------------------------------------------------- #
-# code-exec-result -- the run outcome that follows an APPROVED code-exec-request.
-# --------------------------------------------------------------------------- #
 #
 # ``code_exec_id`` joins the result back to the card that approved it. The
 # status is the HONEST terminal outcome and is never dressed up. Fire-and-
@@ -1112,9 +1082,6 @@ def code_exec_result_lines(result: CodeExecResult) -> list:
     return lines
 
 
-# --------------------------------------------------------------------------- #
-# secrets-list -- the server's per-user/per-Case secret roster (settings state).
-# --------------------------------------------------------------------------- #
 #
 # Emitted when the secrets surface opens, and as the confirmation after an
 # add or a revoke. The raw key value NEVER appears here -- only the

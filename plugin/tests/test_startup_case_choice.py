@@ -20,10 +20,8 @@ from stub_server import (  # noqa: E402
     StubAgentServer,
 )
 
-# --------------------------------------------------------------------------- #
 # Startup case reuse: never mint a fresh
 # "QGIS session ..." case while the user already has one
-# --------------------------------------------------------------------------- #
 
 
 class TestChooseStartupCase(unittest.TestCase):

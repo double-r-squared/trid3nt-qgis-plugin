@@ -16,9 +16,6 @@ from plugin.case import aoi  # noqa: E402
 from plugin.net import trid3nt_client as tc  # noqa: E402
 from stub_server import StubAgentServer  # noqa: E402
 
-# --------------------------------------------------------------------------- #
-# Canvas AOI (pure)
-# --------------------------------------------------------------------------- #
 
 
 class TestAoi(unittest.TestCase):

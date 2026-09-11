@@ -19,9 +19,6 @@ from stub_server import (  # noqa: E402
     StubAgentServer,
 )
 
-# --------------------------------------------------------------------------- #
-# Case list
-# --------------------------------------------------------------------------- #
 
 
 class TestCaseList(unittest.TestCase):

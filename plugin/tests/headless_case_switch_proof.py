@@ -187,9 +187,6 @@ def message_text_blob():
     return "\n".join(lbl.text() for lbl in dock.messages_host.findChildren(QLabel))
 
 
-# --------------------------------------------------------------------------- #
-# Open case A (has layers + a 7-frame sequence + chat history)
-# --------------------------------------------------------------------------- #
 
 dock.select_case(CASE_A, CASE_A_TITLE)
 pump(20, lambda: dock._case_id == CASE_A)
@@ -246,9 +243,6 @@ check(
 # There is no "Zoomed to case area" chat note; the zoom BEHAVIOR (canvas
 # auto-focus, checked above) happens silently.
 
-# --------------------------------------------------------------------------- #
-# Open case B (a DIFFERENT case) -- A's group/layers/chat must vanish
-# --------------------------------------------------------------------------- #
 
 dock.select_case(CASE_B, CASE_B_TITLE)
 pump(20, lambda: dock._case_id == CASE_B)

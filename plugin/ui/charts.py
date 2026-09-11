@@ -62,12 +62,10 @@ def matplotlib_error() -> Optional[str]:
     return _MATPLOTLIB_ERROR
 
 
-# --------------------------------------------------------------------------- #
 # Per-OS "how do I get matplotlib" command builders. Pure: no Qt and no
 # subprocess -- every command is for the USER to paste into a real terminal,
 # and nothing here is ever run in-process. The values come from
 # ``install_dependencies``, which is the one source of truth for them.
-# --------------------------------------------------------------------------- #
 
 
 def linux_install_command(pip_names: Sequence[str] = ("matplotlib",)) -> str:
@@ -118,9 +116,6 @@ _SERIES_COLORS = [
 ]
 
 
-# --------------------------------------------------------------------------- #
-# Pure payload/spec helpers (no matplotlib needed)
-# --------------------------------------------------------------------------- #
 
 
 def parse_chart_payload(payload: Any) -> Optional[dict]:
@@ -201,9 +196,6 @@ def _as_float(value: Any) -> Optional[float]:
     return v if math.isfinite(v) else None
 
 
-# --------------------------------------------------------------------------- #
-# The mini Vega-Lite -> matplotlib renderer
-# --------------------------------------------------------------------------- #
 
 
 def render_spec(figure, spec: dict) -> Dict[str, Any]:

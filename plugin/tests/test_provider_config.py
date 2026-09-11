@@ -24,10 +24,8 @@ sys.path.insert(0, os.path.dirname(__file__))
 from plugin.net import trid3nt_client as tc  # noqa: E402
 
 
-# --------------------------------------------------------------------------- #
 # Recording stub: POST /api/provider-config + GET /api/local-models, in
 # miniature (mirrors the server's catalog_http.py).
-# --------------------------------------------------------------------------- #
 
 
 class _ProviderStub(http.server.BaseHTTPRequestHandler):
@@ -81,9 +79,6 @@ class _ProviderStubBase(unittest.TestCase):
         return f"http://127.0.0.1:{httpd.server_address[1]}"
 
 
-# --------------------------------------------------------------------------- #
-# post_provider_config
-# --------------------------------------------------------------------------- #
 
 
 class TestPostProviderConfig(_ProviderStubBase):
@@ -125,9 +120,6 @@ class TestPostProviderConfig(_ProviderStubBase):
         self.assertIn("unreachable", str(ctx.exception))
 
 
-# --------------------------------------------------------------------------- #
-# fetch_model_list
-# --------------------------------------------------------------------------- #
 
 
 class TestFetchModelList(_ProviderStubBase):
@@ -172,10 +164,8 @@ class TestFetchModelList(_ProviderStubBase):
             tc.fetch_model_list("http://127.0.0.1:1", timeout=2)
 
 
-# --------------------------------------------------------------------------- #
 # Qt dock wiring (subprocess under the qgis.PyQt interpreter) -- Save POST
 # payload shape + OpenRouter provider live model-list repopulate.
-# --------------------------------------------------------------------------- #
 
 
 def _qt_python() -> str | None:

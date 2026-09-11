@@ -15,9 +15,6 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 from stub_server import StubAgentServer  # noqa: E402
 
-# --------------------------------------------------------------------------- #
-# REAL Qt bridge wiring (subprocess -- the layer the stdlib tests bypass)
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.qt_harness_shim

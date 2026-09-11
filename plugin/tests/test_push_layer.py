@@ -22,9 +22,6 @@ sys.path.insert(0, os.path.dirname(__file__))
 from plugin.case import push_layer  # noqa: E402
 
 
-# ---------------------------------------------------------------------------
-# Ingest-route stub -- the REAL routes' semantics, in miniature
-# ---------------------------------------------------------------------------
 
 
 class _IngestStub(http.server.BaseHTTPRequestHandler):
@@ -105,9 +102,6 @@ class _IngestStubBase(unittest.TestCase):
         self.base = f"http://127.0.0.1:{self.httpd.server_address[1]}"
 
 
-# ---------------------------------------------------------------------------
-# upload_layer_bytes
-# ---------------------------------------------------------------------------
 
 
 class TestUploadLayerBytes(_IngestStubBase):
@@ -134,9 +128,6 @@ class TestUploadLayerBytes(_IngestStubBase):
         self.assertIn("unreachable", str(ctx.exception))
 
 
-# ---------------------------------------------------------------------------
-# post_ingest_layer
-# ---------------------------------------------------------------------------
 
 
 class TestPostIngestLayer(_IngestStubBase):
@@ -177,10 +168,8 @@ class TestPostIngestLayer(_IngestStubBase):
         self.assertIn("not found", str(ctx.exception))
 
 
-# ---------------------------------------------------------------------------
 # push_exported_file -- the full pure (no-PyQGIS) orchestration: an
 # already-on-disk file -> upload -> ingest -> the temp file is removed.
-# ---------------------------------------------------------------------------
 
 
 class TestPushExportedFile(_IngestStubBase):
@@ -221,9 +210,6 @@ class TestPushExportedFile(_IngestStubBase):
         self.assertFalse(os.path.exists(self.tmp_path))
 
 
-# ---------------------------------------------------------------------------
-# format_push_note
-# ---------------------------------------------------------------------------
 
 
 class TestFormatPushNote(unittest.TestCase):

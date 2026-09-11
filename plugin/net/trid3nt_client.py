@@ -76,9 +76,6 @@ __all__ = [
 
 _WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 
-# --------------------------------------------------------------------------- #
-# ULID + envelope helpers
-# --------------------------------------------------------------------------- #
 
 _CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
 
@@ -120,9 +117,6 @@ def build_ws_url(base_url: str, token: Optional[str] = None) -> str:
     return f"{base_url}{sep}st={urllib.parse.quote(token, safe='')}"
 
 
-# --------------------------------------------------------------------------- #
-# Layer + pipeline event parsing (pure)
-# --------------------------------------------------------------------------- #
 
 
 @dataclass
@@ -266,9 +260,6 @@ def parse_pipeline_steps(pipeline_state_payload: dict) -> list[PipelineStep]:
     return steps
 
 
-# --------------------------------------------------------------------------- #
-# Case-list parsing (pure)
-# --------------------------------------------------------------------------- #
 
 
 @dataclass
@@ -385,10 +376,8 @@ def fetch_case_list(base_url: str, timeout: float = 5.0) -> list:
     return parse_case_list(payload)
 
 
-# --------------------------------------------------------------------------- #
 # Provider-config POST + live model-list GET, both against the local agent's
 # HTTP listener.
-# --------------------------------------------------------------------------- #
 
 
 class ProviderConfigRequestError(Exception):
@@ -493,9 +482,6 @@ def fetch_model_list(
     return ids, default
 
 
-# --------------------------------------------------------------------------- #
-# Case-open parsing (pure) -- the select/rebind rehydration
-# --------------------------------------------------------------------------- #
 
 
 #: Cap on chat-history replay rows: a Case that has chatted for hours must not
@@ -646,9 +632,6 @@ def parse_case_open(payload: dict) -> Optional[CaseOpenInfo]:
     )
 
 
-# --------------------------------------------------------------------------- #
-# Auth-failure classification (pure)
-# --------------------------------------------------------------------------- #
 
 
 def is_auth_failure(text: str) -> bool:
@@ -671,9 +654,6 @@ def is_auth_failure(text: str) -> bool:
     return any(marker in low for marker in markers)
 
 
-# --------------------------------------------------------------------------- #
-# Refresh debounce (pure)
-# --------------------------------------------------------------------------- #
 
 #: Minimum seconds between case-list refresh round trips: session-resume is
 #: cheap, but a click-happy user must not be able to queue a resume storm.
@@ -702,9 +682,6 @@ class Debouncer:
         return True
 
 
-# --------------------------------------------------------------------------- #
-# Reconnect backoff (pure)
-# --------------------------------------------------------------------------- #
 
 #: Backoff FLOOR (ms): the first reconnect after a drop waits at least this
 #: long, which is what keeps a drop from becoming a reconnect storm.
@@ -730,9 +707,6 @@ def next_backoff(
     return delay, min(base * 2, RECONNECT_MAX_MS)
 
 
-# --------------------------------------------------------------------------- #
-# URI helpers (pure)
-# --------------------------------------------------------------------------- #
 
 
 def s3_to_vsis3(uri: str) -> Optional[str]:
@@ -797,9 +771,6 @@ def qgis_xyz_uri(template: str, zmin: int = 0, zmax: int = 24) -> str:
     )
 
 
-# --------------------------------------------------------------------------- #
-# Minimal RFC 6455 client (stdlib sockets)
-# --------------------------------------------------------------------------- #
 
 
 class WebSocketError(Exception):
@@ -1057,9 +1028,6 @@ class WebSocketConnection:
         return out
 
 
-# --------------------------------------------------------------------------- #
-# Agent protocol client
-# --------------------------------------------------------------------------- #
 
 
 @dataclass

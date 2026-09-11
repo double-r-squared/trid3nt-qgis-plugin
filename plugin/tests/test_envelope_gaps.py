@@ -30,9 +30,6 @@ from stub_server import (  # noqa: E402
 )
 
 
-# =========================================================================== #
-# Region-choice (CRITICAL gate-WAIT) -- pure logic
-# =========================================================================== #
 
 
 class TestRegionChoiceParsing(unittest.TestCase):
@@ -84,9 +81,6 @@ class TestRegionChoiceParsing(unittest.TestCase):
             self.assertIsNone(wire["selected_bbox"])
 
 
-# =========================================================================== #
-# Spatial-input (CRITICAL gate-WAIT) -- pure logic
-# =========================================================================== #
 
 
 class TestSpatialInputParsing(unittest.TestCase):
@@ -126,9 +120,6 @@ class TestSpatialInputParsing(unittest.TestCase):
         self.assertIsNone(wire["coordinates"])
 
 
-# =========================================================================== #
-# code-exec-result -- pure logic
-# =========================================================================== #
 
 
 class TestCodeExecResultParsing(unittest.TestCase):
@@ -168,9 +159,6 @@ class TestCodeExecResultParsing(unittest.TestCase):
         self.assertIn("succeeded", gate.code_exec_result_chip(ok))
 
 
-# =========================================================================== #
-# secrets-list -- pure logic
-# =========================================================================== #
 
 
 class TestSecretsListParsing(unittest.TestCase):
@@ -211,9 +199,6 @@ class TestSecretsListParsing(unittest.TestCase):
         self.assertIn("firms", lines[0])
 
 
-# =========================================================================== #
-# Wire round trips against the stub
-# =========================================================================== #
 
 
 class _RoundTripBase(unittest.TestCase):

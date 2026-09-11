@@ -15,11 +15,9 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 from plugin.net import trid3nt_client as tc  # noqa: E402
 
-# --------------------------------------------------------------------------- #
 # ITEM D: auto-focus fallback bbox scan --
 # ``find_fallback_bbox`` covers a case-open payload OUTSIDE the primary
 # session_state.case.bbox carrier ``parse_case_open`` already extracts.
-# --------------------------------------------------------------------------- #
 
 
 class TestFindFallbackBbox(unittest.TestCase):

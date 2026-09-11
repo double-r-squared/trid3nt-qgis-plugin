@@ -162,9 +162,6 @@ if dock._case_id is None:
 pump(15)
 print(f"[proof] settled after connect: case={dock._case_id}", flush=True)
 
-# --------------------------------------------------------------------------- #
-# Open the kept PSHA case (READ-ONLY select) -- the chart must surface
-# --------------------------------------------------------------------------- #
 
 dock.select_case(OQ_CASE, OQ_CASE_TITLE)
 pump(25, lambda: dock._case_id == OQ_CASE
@@ -231,9 +228,6 @@ window.grab().save(PROOF_PNG)
 print(f"[proof] screenshot: {PROOF_PNG}", flush=True)
 check("screenshot written", os.path.exists(PROOF_PNG))
 
-# --------------------------------------------------------------------------- #
-# Switch away to a chart-less case -- the window's list must clear
-# --------------------------------------------------------------------------- #
 
 dock.select_case(OTHER_CASE, OTHER_CASE_TITLE)
 pump(20, lambda: dock._case_id == OTHER_CASE)
@@ -245,7 +239,6 @@ check(
     f"count={dock._charts_window.count} button={dock.charts_btn.text()}",
 )
 
-# --------------------------------------------------------------------------- #
 
 plugin.unload()
 _restore()

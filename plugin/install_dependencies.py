@@ -33,9 +33,6 @@ _PLATFORM_MODULES = frozenset({
 })
 
 
-# --------------------------------------------------------------------------- #
-# Dependency presence check
-# --------------------------------------------------------------------------- #
 
 
 @dataclass
@@ -84,11 +81,9 @@ def format_table(statuses: Sequence[DependencyStatus]) -> str:
     return "\n".join(rows)
 
 
-# --------------------------------------------------------------------------- #
 # Windows: OSGeo4W python.exe resolution. Linux needs none (the system python3
 # QGIS runs under already has pip); macOS never resolves a QGIS-side interpreter
 # at all, because there is no pip inside one to reach.
-# --------------------------------------------------------------------------- #
 
 
 def _first_real_executable(candidates: Sequence[str]) -> Optional[str]:
@@ -168,12 +163,10 @@ def install_missing(
     return _run_pip(python_exe, pip_names, extra_args=["--user"])
 
 
-# --------------------------------------------------------------------------- #
 # macOS: pip-download-as-wheel-fetcher recipe. QGIS 4's bundled Python has no
 # pip at all, so there is no interpreter to install INTO; the fix downloads
 # prebuilt wheels with the system python3 and unzips them into the QGIS
 # profile's own python/ dir, which is already on QGIS's sys.path.
-# --------------------------------------------------------------------------- #
 
 
 def python_version_tag(version_info=None) -> str:
@@ -242,9 +235,6 @@ def mac_wheel_recipe(
     return f"{download}\n{drop_numpy}\n{install}"
 
 
-# --------------------------------------------------------------------------- #
-# Self-enforcing source sweep -- what DEPENDENCIES must equal
-# --------------------------------------------------------------------------- #
 
 
 def _stdlib_module_names() -> frozenset:
@@ -286,9 +276,6 @@ def scan_third_party_imports(root: Path) -> frozenset:
     return frozenset(n for n in found if n not in stdlib and n not in _PLATFORM_MODULES)
 
 
-# --------------------------------------------------------------------------- #
-# CLI
-# --------------------------------------------------------------------------- #
 
 
 def main(argv: Optional[Iterable[str]] = None) -> int:

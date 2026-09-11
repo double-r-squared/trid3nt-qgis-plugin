@@ -19,9 +19,6 @@ sys.path.insert(0, os.path.dirname(__file__))
 from plugin.render import probe  # noqa: E402
 
 
-# ---------------------------------------------------------------------------
-# Probe-route stub -- the REAL route's semantics, in miniature
-# ---------------------------------------------------------------------------
 
 
 class _ProbeStub(http.server.BaseHTTPRequestHandler):
@@ -78,9 +75,6 @@ class _ProbeStubBase(unittest.TestCase):
         self.base = f"http://127.0.0.1:{self.httpd.server_address[1]}"
 
 
-# ---------------------------------------------------------------------------
-# post_probe_point
-# ---------------------------------------------------------------------------
 
 
 class TestPostProbePoint(_ProbeStubBase):
@@ -112,9 +106,6 @@ class TestPostProbePoint(_ProbeStubBase):
         self.assertIn("unreachable", str(ctx.exception))
 
 
-# ---------------------------------------------------------------------------
-# format_probe_result
-# ---------------------------------------------------------------------------
 
 
 class TestFormatProbeResult(unittest.TestCase):
