@@ -1,7 +1,7 @@
 {
   "tool": "telemac_rain_on_grid",
   "run_id": "01M23FFN1021M24HT7Q54YST8X",
-  "commit": "f77dcc08a4ac6c060d2695179d6c6f84143fddc7",
+  "commit": "cb9f397638b615d0f9b0dd4b4ea4fb440d610d0e",
   "recorded_at": "2026-09-09T16:22:48.060827+00:00",
   "engine": "telemac2d",
   "wall_seconds": 255.247,
