@@ -24,7 +24,7 @@
 </style>
 
 <h1>The Module Is the Unit</h1>
-<p class="rev">rev 1 &middot; 2026-09-10 &middot; the engine's module is the unit the system is built around; a scenario is expressed over it, never built and then tied to it. The small refactor wave before calibration.</p>
+<p class="rev">rev 2 &middot; 2026-09-10 &middot; parts leave the surface: vertical generalization only, the reach chain as one primitive. The engine's module is the unit the system is built around; a scenario is expressed over it, never built and then tied to it. The small refactor wave before calibration.</p>
 
 <h2>1. The principle</h2>
 <p>An engine exposes modules (TELEMAC: telemac2d, telemac3d, artemis, tomawac, with gaia and waqtel coupled). A module has a keyword dictionary, inputs, and outputs. Everything TRID3NT knows how to do with an engine is a capability of one of its modules: a composite that expands one value into keywords, a primitive that reads one thing off a result. A scenario such as a dye plume down a river is a set of values over the telemac2d module plus a list of which primitives to read. Nothing below the template layer may know the scenario exists.</p>
@@ -32,7 +32,7 @@
 <pre class="mermaid">
 flowchart TB
     DICO["dictionary<br/>extracted from the engine's dico<br/>every keyword, type, default, help"] --> MOD["module wrapper<br/>composites: one value -> several keywords<br/>outputs: primitives in the engine's vocabulary<br/>NO opinion, NO question"]
-    MOD --> TPL["template = VALUES<br/>parts + a body of keywords + an outputs list + captions<br/>the only per-question code"]
+    MOD --> TPL["template = VALUES<br/>a body of keywords + DATA rows + an outputs list + captions<br/>the only per-question code; composes nothing"]
     TPL -- "fill (repeatable)" --> SHEET["sheet<br/>every slot: value + provenance<br/>open slots listed"]
     SHEET -- "run (held until the user says so)" --> RUN["run record<br/>engine = telemac, module = case.module<br/>the manifest the worker reads"]
     RUN --> OUT["outputs<br/>field(name, t), series(name, at), max_over_time(name), extent, mass_balance<br/>published generically: layer, chart, animation"]
@@ -41,7 +41,7 @@ flowchart TB
 <table>
 <tr><th>layer</th><th>may name</th><th>may never name</th></tr>
 <tr><td>dictionary, module, solving, authoring, publishing</td><td>the engine, its modules, its keywords and variables</td><td>a template, a question word (dye, oil, scour, agitation, sag, stratified, plume)</td></tr>
-<tr><td>template</td><td>everything above plus its own values and captions</td><td>a function body: a template that needs code needs a primitive the module lacks</td></tr>
+<tr><td>template</td><td>everything above plus its own values and captions</td><td>a function body, or another template's body: a template that needs code needs a primitive the module lacks; a template that needs another template's values restates them</td></tr>
 <tr><td>run record, cards, journal, provenance</td><td>engine and module</td><td>the template (it survives only as a slot's fill provenance)</td></tr>
 </table>
 
@@ -69,7 +69,9 @@ flowchart TB
 
 <h2>4. A template is values</h2>
 <pre><span class="k">class</span> STEERING(T2D):
-    parts = [RIVER]
+    GEOMETRY_FILE = <span class="s">"river.slf"</span>; BOUNDARY_CONDITIONS_FILE = <span class="s">"river.cli"</span>; RESULTS_FILE = <span class="s">"r2d_river.slf"</span>
+    TIME_STEP = Ref(<span class="s">"reach.time_step_s"</span>); INITIAL_CONDITIONS = <span class="s">"CONSTANT DEPTH"</span>; INITIAL_DEPTH = Ref(<span class="s">"reach.depth_m"</span>)
+    LAW_OF_BOTTOM_FRICTION = <span class="n">3</span>; FRICTION_COEFFICIENT = P.friction_coefficient   <span class="c"># ten lines every river deck states, restated here</span>
     NUMBER_OF_TRACERS = <span class="n">1</span>                       <span class="c"># the question, in three lines</span>
     NAMES_OF_TRACERS = [<span class="s">"DYE             MG/L"</span>]
     INITIAL_VALUES_OF_TRACERS = [<span class="n">0.0</span>]
@@ -82,10 +84,11 @@ OUTPUTS = [field(<span class="s">"T1"</span>, t=<span class="s">"every"</span>).
 CAPTIONS = {<span class="s">"T1"</span>: <span class="s">"reach maximum {substance} concentration"</span>}</pre>
 <table>
 <tr><th>rule</th><th>consequence</th></tr>
-<tr><td>a template is parts, a body of keywords, an outputs list, captions; nothing else</td><td>a template that defines a function is refused by the lint; the fix is a primitive on the module</td></tr>
+<tr><td>a template is a body of keywords, DATA rows, an outputs list, captions; nothing else</td><td>a template that defines a function, or composes another body, is refused by the lint; the fix is a primitive on the module or ten restated lines</td></tr>
+<tr><td>no parts: generalization is vertical only</td><td>the parts mechanism leaves the module surface and <code>templates/shared</code> goes. The RIVER part's reach chain (geocode, seed, flowline, bed, mesh, settled boundary and initial state) becomes ONE primitive in the mesh and authoring layer, <code>reach = tool("river_reach", seed=P.release, aoi=...)</code>, one DATA row any template on any engine may call; its RELEASE params move to the templates that release; its ten keyword lines are restated per template. Shared things are engine-agnostic by construction only: typed inputs, the AOI, the reach primitive, publishing</td></tr>
 <tr><td>nothing is frozen</td><td>two tracers is an override of <code>NUMBER_OF_TRACERS</code> and the names; the tracer composites already take lists</td></tr>
-<tr><td>the question is stated in the template, numerics in the part, the ask in the params</td><td>describe and the card show set values and open slots; a part's numerics sit under advanced</td></tr>
-<tr><td>engine defaults are unwritten; an opinion states its reason at the line</td><td>two findings in the RIVER part, for NATE's ruling: <code>SCHEME_FOR_ADVECTION_OF_TRACERS = 1</code> against the engine default and the ruling of 13; <code>COEFFICIENT_FOR_DIFFUSION_OF_TRACERS = 0.1</code> and <code>VELOCITY_DIFFUSIVITY = 0.1</code> against the default 1e-6, the first a tracer keyword in the water part</td></tr>
+<tr><td>the question and the ask are stated in the template; numerics are engine defaults unless the template states a value with its reason</td><td>describe and the card show set values and open slots; every keyword stays overridable through the sheet</td></tr>
+<tr><td>engine defaults are unwritten; an opinion states its reason at the line</td><td>ruled: the <code>SCHEME_FOR_ADVECTION_OF_TRACERS = 1</code> line is deleted and the engine default 13 applies; <code>COEFFICIENT_FOR_DIFFUSION_OF_TRACERS</code> and <code>VELOCITY_DIFFUSIVITY</code> are engine defaults below the template, and a template that wants 0.1 states it with its reason</td></tr>
 </table>
 <p>The per-template declarations shrink to the ask: the substance, its concentration, the spill window, the release. Per-template chart builders, coercion modules, and lat/lon spellings go. The measurement point is river_dye re-expressed this way before the other seven move.</p>
 
@@ -137,9 +140,9 @@ flowchart LR
 <table>
 <tr><th>folder</th><th>raw lines</th><th>fate</th></tr>
 <tr><td>telemac/products</td><td>4,658</td><td>dissolves into primitives, publishing, template outputs lists</td></tr>
-<tr><td>telemac/templates</td><td>4,499</td><td>values; shrinks, measured on river_dye first</td></tr>
+<tr><td>telemac/templates</td><td>4,499</td><td>values; <code>templates/shared</code> (the RIVER part, 367) goes and its reach chain becomes a primitive; shrinks, measured on river_dye first</td></tr>
 <tr><td>telemac/helpers</td><td>2,603</td><td>a few hundred physics lines remain</td></tr>
-<tr><td>telemac/modules</td><td>1,893</td><td>stays; primitives in, question outputs out</td></tr>
+<tr><td>telemac/modules</td><td>1,893</td><td>stays; primitives in, question outputs and the parts mechanism out</td></tr>
 <tr><td>telemac/authoring</td><td>1,380</td><td>gains dredging and oil authoring; the assembler reviewed for the same leaks</td></tr>
 <tr><td>workflows/shared</td><td>1,291</td><td>dissolves into inputs, publishing, solver, runtime; the worker-era manifest registration verified and culled</td></tr>
 <tr><td>telemac/solving</td><td>489</td><td>one engine registration</td></tr>
@@ -191,7 +194,7 @@ flowchart LR
 <tr><th>piece</th><th>raw delta</th></tr>
 <tr><td>products fold</td><td>-3,000 to -3,400</td></tr>
 <tr><td>helpers dissolution</td><td>-1,200 to -1,500</td></tr>
-<tr><td>templates as values</td><td>-1,200 to -1,800</td></tr>
+<tr><td>templates as values (ten restated lines per river template come back; the part and the parts mechanism go)</td><td>-1,100 to -1,700</td></tr>
 <tr><td>shared dissolution</td><td>-300 to -500</td></tr>
 <tr><td>scenario reuse, catalog tools, testing out of the package</td><td>-3,200 (attic and dev, not deletion)</td></tr>
 <tr><td>identity, provenance table, normalizer, plugin label, adapters IR</td><td>-250 to -400</td></tr>
@@ -206,7 +209,7 @@ flowchart LR
 <tr><td>1 identity</td><td>one engine registration; engine and module on the record; the dictionary rename; the closed provenance vocabulary on the card; the adapters IR in contracts and google-genai out</td><td>the record and provenance tests; the card shows "TELEMAC / artemis" on a live agitation run; no google import</td></tr>
 <tr><td>2 inputs</td><td>Point, Extent, Shape with one ingestion each; the named pick end to end (plugin version bump); the four templates' point spellings and coercions gone</td><td>the Point tests; a live pick with a typed name lands as the tracer name on a river_dye run</td></tr>
 <tr><td>3 the measurement</td><td>the primitive set and generic publishing; river_dye re-expressed as values over them; its declarations shrunk to the ask</td><td>the river_dye packet is byte-comparable to the current one on the same run inputs (same layers, same chart values, same animation frames); the raw and pure deltas reported</td></tr>
-<tr><td>4 the family</td><td>the other seven templates; the products, helpers, and shared dissolutions; the RIVER findings as ruled</td><td>eight canaries green with packets; the guards dry</td></tr>
+<tr><td>4 the family</td><td>the other seven templates; the products, helpers, and shared dissolutions; the reach primitive and the end of parts</td><td>eight canaries green with packets; the guards dry</td></tr>
 <tr><td>5 close</td><td>the model requirements and views; the template pages and module README regenerated; the module-surface spec's affected sections revised; the conformance table</td><td>fresh-eyes clause-by-clause conformance; NATE reads it</td></tr>
 </table>
 
