@@ -17,5 +17,5 @@ def do_saturation_mgl(params: Any) -> float:
 
 
 def upstream_do_mgl(params: Any) -> float:
-    """Inflow DO when none is supplied: a stream at saturation upstream of the sag."""
+    """Inflow DO when none is supplied: a stream at saturation upstream of the discharge."""
     return float(params.do_saturation_mgl)

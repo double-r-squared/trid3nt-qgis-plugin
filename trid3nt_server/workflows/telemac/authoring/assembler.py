@@ -1077,7 +1077,7 @@ async def settle_harbour(
     reflection_coef: float,
     result_basename: str,
 ) -> dict[str, Any]:
-    """What the accepted harbour mesh measures -> what the agitation sheet reads.
+    """What the accepted harbour mesh measures -> what the harbour sheet reads.
 
     A mesh naming no liquid boundary refuses: a wave has no edge to enter by."""
     from trid3nt_server.workflows.inputs.shape import polylines as _lines, shape
@@ -1134,7 +1134,7 @@ async def settle_harbour(
     return {
         **facts,
         "name": _slug(facts["mesh_name"]),
-        "title": f"ARTEMIS AGITATION {facts['mesh_name']}",
+        "title": f"ARTEMIS {facts['mesh_name']}",
         "cli_text": cli_text,
         "open_nodes": open_nodes,
         "structure_nodes": structure_nodes,
@@ -1220,7 +1220,7 @@ async def settle_basin(
     return {
         **facts,
         "name": _slug(facts["mesh_name"]),
-        "title": f"TELEMAC3D STRATIFIED {facts['mesh_name']}",
+        "title": f"TELEMAC3D {facts['mesh_name']}",
         "boundary_states": topology["states"],
         "max_depth_m": round(max_depth, 2),
         "surface_m": round(float(surface_m), 3),
