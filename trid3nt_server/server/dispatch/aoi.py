@@ -53,9 +53,8 @@ async def _pin_case_aoi_from_tool_bbox(
     coerced = _coerce_bbox4(params.get("bbox"))
     if coerced is None:
         return
-    # Latest-wins: always refresh the in-session anchor first, mirroring
-    # _pin_case_aoi_from_solve -- the durable write below is best-effort and
-    # may legitimately no-op (debounce) or fail without undoing this.
+    # Latest-wins: the in-session anchor is refreshed before the durable write,
+    # which is best-effort and may no-op (debounce) or fail without undoing it.
     state.case_bbox = list(coerced)
     p = get_persistence()
     if p is None:
