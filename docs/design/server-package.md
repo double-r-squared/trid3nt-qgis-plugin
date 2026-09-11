@@ -24,8 +24,8 @@ deterministic tests. Provider selection itself lives in
 `adapters/model_selection.py` and is read at call time, so no adapter import
 decides it.
 
-`google.genai.types` is the internal history and tool-declaration shape, and a
-provider adapter is the only place a provider's own nouns appear. Every adapter
+`trid3nt_contracts.message` is the internal history and tool-declaration
+shape, and a provider adapter is the only place a provider's own nouns appear. Every adapter
 yields the same streamed events, so the turn loop, the validator, the emitter
 and the plugin are untouched by the provider choice. See
 [Configuration](../site/configuration.md#llm-provider) for the env vars.

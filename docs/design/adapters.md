@@ -8,15 +8,12 @@ surface the turn engine drives regardless of backend.
 
 - `adapter.py` -- the shared surface: `SYSTEM_PROMPT`,
   `build_contents_from_history`, `build_tool_declarations`,
-  `MAX_TURN_ITERATIONS`, `UsageMetadataEvent`, error classification. Reuses
-  `google.genai.types` as the Content/Part containment layer.
+  `MAX_TURN_ITERATIONS`, `UsageMetadataEvent`, error classification. Builds
+  turns from the `trid3nt_contracts.message` IR.
 - `model_selection.py` -- provider + per-turn model resolution, owned by no
   one provider: `model_provider()` reads `MODEL_PROVIDER` at call time, and
   `resolve_selected_model()` validates a client-supplied model id before it
   can reach a provider API.
-- `tool_schema.py` -- `genai_schema_to_json_schema`, the one conversion from
-  the genai `Schema` IR to the plain JSON Schema every provider wire format
-  wants.
 - `anthropic_adapter.py` -- the first-party Anthropic Messages API path
   (`stream_anthropic`, `anthropic_model`, `anthropic_api_key`), selected by
   `MODEL_PROVIDER=anthropic`. Claude Sonnet 5 by default
@@ -37,6 +34,12 @@ surface the turn engine drives regardless of backend.
 - `scripted_adapter.py` -- deterministic test double.
 
 ## Composition
+
+The message IR is ours: `Message`, `Part`, `ToolCall`, `ToolResponse` and
+`ToolDeclaration` in `trid3nt_contracts.message` carry a turn, and each adapter
+converts them to its own wire shape at its own boundary, so no provider SDK
+type crosses the seam. A declaration carries JSON Schema, which is the argument
+shape both provider APIs take.
 
 `server/turn/stream.py` drives these via the shared `adapter.py` surface. The
 pluggable-LLM story (cloud API or local model) is a provider swap behind this
