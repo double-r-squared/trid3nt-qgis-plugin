@@ -164,8 +164,8 @@ async def fill_sheet(*, steering: type, produced: Mapping[str, Any],
             f"{type(keywords).__name__}.")
     stated.update({steering.identify(name): value
                    for name, value in (keywords or {}).items()})
-    sheet = fill_slots(steering, produced=dict(produced), params=dict(params),
-                       **stated)
+    sheet = fill_slots(steering, template=workflow, produced=dict(produced),
+                       params=dict(params), **stated)
     revised = await _review(sheet, workflow=workflow, title=title,
                             input_mode=input_mode)
     if revised:

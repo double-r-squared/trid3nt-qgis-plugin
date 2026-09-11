@@ -36,8 +36,9 @@ def _row(name, value, **kw):
 
 def _record(**overrides):
     base = dict(
-        run_id="RUN9", template="telemac_do_sag", engine="telemac",
-        module="telemac2d",
+        run_id="RUN9", engine="telemac", module="telemac2d",
+        fill={"DURATION": "template: telemac_do_sag",
+              "FRICTION_COEFFICIENT": "producer: friction"},
         sheet=[_row("reach_length_km", 15.0, door="user", basis="user", units="km",
                     consequence="physics", real_source="nhd"),
                _row("compute_class", "standard", door="constant",
@@ -55,13 +56,13 @@ def _record(**overrides):
 
 
 # --- the record SHAPE --------------------------------------------------------- #
-def test_a_run_record_carries_the_run_its_template_and_where_it_came_from():
+def test_a_run_record_carries_the_run_its_engine_and_where_it_came_from():
     rec = _record()
     assert rec["run_id"] == "RUN9"
-    assert rec["template"] == "telemac_do_sag"
-    # The engine and the MODULE of it that ran; the template survives only as a
-    # label on the line, never as the run's identity.
+    # The engine and the MODULE of it that ran are the run's identity; the
+    # template it started in is not on the line at all.
     assert rec["engine"] == "telemac" and rec["module"] == "telemac2d"
+    assert "template" not in rec
     assert rec["origin"] == "session"
     assert rec["recorded_at"].endswith("+00:00")
     assert rec["executed"] == ["aoi", "run", "solve"] and rec["replayed"] == []

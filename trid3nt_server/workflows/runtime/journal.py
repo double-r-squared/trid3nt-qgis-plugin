@@ -105,13 +105,14 @@ def read_records(path: Path | None = None) -> list[dict[str, Any]]:
     return out
 
 
-def build_record(*, run_id: str | None, template: str, engine: str | None,
+def build_record(*, run_id: str | None, engine: str | None,
                  module: str | None,
                  sheet: Sequence[Any], answer: Mapping[str, Any],
                  provenance: Sequence[Any], result: Any,
                  wall_seconds: float | None, origin: str,
                  executed: Sequence[str], replayed: Sequence[str],
-                 notes: Sequence[str], parent_run_id: str | None = None,
+                 notes: Sequence[str], fill: Mapping[str, str] | None = None,
+                 parent_run_id: str | None = None,
                  overrides: Sequence[str] = ()) -> dict[str, Any]:
     """One run record, from what the publish stage already holds.
     ``parent_run_id`` + ``overrides`` make the journal a CHAIN rather than a pile:
@@ -119,7 +120,6 @@ def build_record(*, run_id: str | None, template: str, engine: str | None,
     return {
         "run_id": run_id,
         "recorded_at": datetime.now(timezone.utc).isoformat(),
-        "template": template,
         "engine": engine,
         "module": module,
         "origin": origin,
@@ -128,6 +128,10 @@ def build_record(*, run_id: str | None, template: str, engine: str | None,
         "sheet": [_row(row) for row in sheet],
         "answer": {k: _small(v) for k, v in answer.items()},
         "provenance": [_provenance(row) for row in provenance],
+        # WHERE each slot of the solved deck came from, in the closed vocabulary
+        # the card renders. A run is recorded under its engine and its module;
+        # the template it started in survives here and nowhere else on the line.
+        "fill": dict(fill or {}),
         "mesh": {"mesh_size_m": getattr(result, "mesh_size_m", None)},
         "compute_class": next((r.value for r in sheet
                                if getattr(r, "name", "") == "compute_class"), None),

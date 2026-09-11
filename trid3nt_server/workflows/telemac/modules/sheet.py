@@ -120,12 +120,13 @@ def _in_dictionary_order(body: type,
     return [(name, filled[name]) for name in body.DICTIONARY if name in filled]
 
 
-def fill(source: type | Sheet, *, produced: Mapping[str, Any] | None = None,
+def fill(source: type | Sheet, *, template: str = "",
+         produced: Mapping[str, Any] | None = None,
          params: Mapping[str, Any] | None = None, **slots: Any) -> Sheet:
     """Set slots on a body or on a sheet already filled -> the sheet that results.
 
     Repeatable; an unknown keyword refuses BY NAME and None states nothing."""
-    body, standing, pending = _standing(source)
+    body, standing, pending = _standing(source, template)
     dictionary = body.DICTIONARY
     composites = body.COMPOSITES
     for name, value in slots.items():
@@ -186,8 +187,8 @@ async def draw(source: type | Sheet, name: str, *, geometry: str = "point",
     return fill(source, **{name: outcome.value})
 
 
-def _standing(source: type | Sheet) -> tuple[type, dict[str, Filled],
-                                             dict[str, tuple[Any, str]]]:
+def _standing(source: type | Sheet, template: str = "",
+              ) -> tuple[type, dict[str, Filled], dict[str, tuple[Any, str]]]:
     """What is on the sheet before this fill: the body's parts, or a sheet.
 
     A body's assertions beat its parts; a composite or a read is PENDING."""
@@ -196,7 +197,10 @@ def _standing(source: type | Sheet) -> tuple[type, dict[str, Filled],
     standing: dict[str, Filled] = {}
     pending: dict[str, tuple[Any, str]] = {}
     for body in (*source.PARTS, source):
-        provenance = Provenance(Origin.TEMPLATE, body.__name__)
+        # The TEMPLATE the value started in, which is the only place a template
+        # name survives a run. A fill with no template names the body instead,
+        # because a bare wrapper has no template to name.
+        provenance = Provenance(Origin.TEMPLATE, template or body.__name__)
         for name, value in body.ASSERTED.items():
             slot = source.DICTIONARY.get(name)
             if slot is None or value is None or _late(value):

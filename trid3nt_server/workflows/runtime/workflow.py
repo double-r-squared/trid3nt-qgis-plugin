@@ -321,6 +321,16 @@ class Workflow:
             return None
         return (run.results.get(self.solve_step) or {}).get("module")
 
+    def _fill(self, run: RunResult) -> dict[str, str]:
+        """Every slot of the solved deck, and where the fill took it from.
+        Read off the solve step's own sheet, so a workflow that fills no sheet
+        records no fill rather than an invented one."""
+        if not self.solve_step:
+            return {}
+        sheet = (run.results.get(self.solve_step) or {}).get("sheet") or {}
+        return {name: str(row.get("provenance") or "")
+                for name, row in (sheet.get("filled") or {}).items()}
+
     def _journal(self, run_id: str | None, run: RunResult, result: Any,
                  metrics: Mapping[str, Any], wall_seconds: float,
                  notes: Sequence[str] = (),
@@ -332,8 +342,9 @@ class Workflow:
 
         sheet = run.params.rows() if run.params is not None else ()
         journal.append_record(journal.build_record(
-            run_id=run_id, template=self.name, engine=self.engine or None,
-            module=self._module(run), sheet=sheet, answer=metrics,
+            run_id=run_id, engine=self.engine or None,
+            module=self._module(run), fill=self._fill(run),
+            sheet=sheet, answer=metrics,
             provenance=getattr(result, "synthetic_inputs", None) or [],
             result=result, wall_seconds=round(wall_seconds, 3),
             origin=journal.run_origin(live_session=current_emitter() is not None),

@@ -76,20 +76,47 @@ def test_a_card_names_the_origin_of_every_set_row_and_of_no_other(
             row.name
 
 
-def test_the_run_record_carries_the_engine_and_the_module_it_ran():
+def test_the_run_record_carries_the_engine_and_the_module_and_no_template():
+    """A run is recorded under the engine and the module that ran it. The template
+    is not a field of the line; it survives as the provenance of the slots it
+    filled, which is how a reader - and the template pages - find its runs."""
     from trid3nt_server.workflows.runtime import journal
 
     record = journal.build_record(
-        run_id="RUN1", template="telemac_river_dye", engine="telemac",
-        module="telemac2d", sheet=(), answer={}, provenance=(), result=None,
+        run_id="RUN1", engine="telemac", module="telemac2d",
+        fill={"DURATION": "template: telemac_river_dye",
+              "GEOMETRY FILE": "producer: mesh"},
+        sheet=(), answer={}, provenance=(), result=None,
         wall_seconds=1.0, origin="session", executed=(), replayed=(), notes=())
     assert record["engine"] == "telemac" and record["module"] == "telemac2d"
+    assert "template" not in record
+    assert "template: telemac_river_dye" in record["fill"].values()
 
 
-def test_the_module_is_read_off_the_solve_step_the_workflow_declares():
+def test_the_module_and_the_fill_are_read_off_the_solve_step_the_workflow_declares():
     from types import SimpleNamespace
 
     from trid3nt_server.workflows.telemac.workflow import TelemacWorkflow
 
-    run = SimpleNamespace(results={"solve": {"module": "artemis"}})
+    run = SimpleNamespace(results={"solve": {
+        "module": "artemis",
+        "sheet": {"filled": {"DURATION": {"keyword": "DURATION", "value": 600.0,
+                                          "provenance": "template: t"}}}}})
     assert TelemacWorkflow._module(TelemacWorkflow, run) == "artemis"
+    assert TelemacWorkflow._fill(TelemacWorkflow, run) == {"DURATION": "template: t"}
+
+
+@pytest.mark.parametrize("tool_name,_module", TEMPLATE_MODULES)
+def test_a_template_s_own_name_is_what_its_slots_are_stamped_with(
+        tool_name, _module):
+    """The detail beside the ``template`` origin is the template, not the body
+    class: eight templates share the class names, and a page that selects its own
+    runs by the provenance needs the name that tells them apart."""
+    from trid3nt_server.workflows.telemac.modules.sheet import Origin, _standing
+
+    _body, standing, pending = _standing(_steering(tool_name), tool_name)
+    stamped = [row.provenance for row in standing.values()]
+    stamped += [provenance for _value, provenance in pending.values()]
+    for provenance in stamped:
+        if provenance.origin is Origin.TEMPLATE:
+            assert str(provenance) == f"template: {tool_name}"

@@ -584,7 +584,7 @@ the peak is ~0.037 m and the best HWM class is +/- 0.05 ft.
 
 `data/persistence/run_journal.jsonl` already carries every field a
 calibration experiment needs: `run_id`, `parent_run_id`, `overrides`,
-`replayed`, `wall_seconds`, `template`, `engine`, `mesh`, the full
+`replayed`, `wall_seconds`, `engine`, `module`, `mesh`, the full
 resolved `sheet` and the `answer`. **Proposed: the loop adds exactly one
 field, `objective`,** carrying the metric name, its value, the paired
 count and the observation artifact's content hash. Nothing else. The
