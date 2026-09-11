@@ -1,40 +1,127 @@
-"""The styling seam a solved raster product goes through before it is returned.
+"""THE styling seam: the row a producer declared, and the ask a reader lays over it.
 
-Nothing here is field-specific: the caller supplies the style row and the update
-mapping, and gets the same typed layer back, published."""
+Both ends of one decision live here, so two products of the same quantity cannot
+be painted by two different rules. All of it is DISPLAY STATE: re-painting,
+retitling or un-emitting a layer recomputes nothing and moves no number. Every
+restyle is journaled with the sentence the legend ends up saying, because the
+colours cannot state which policy produced them.
+"""
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from typing import Any
 
+from trid3nt_server.emission import presets
+from trid3nt_server.emission.presets import Resolved, Scale
+from trid3nt_server.workflows.runtime.journal import journal_note
+
 logger = logging.getLogger("trid3nt_server.workflows.publishing.style")
 
-__all__ = ["publish_product_layer"]
+__all__ = ["RestyleError", "apply_style", "restyled_row", "scale_override",
+           "set_hidden"]
 
 
-async def publish_product_layer(raw: Any, *, style: dict,
-                                update: dict[str, Any]) -> Any:
-    """Style ``raw``'s COG through ``publish_layer`` and fold ``update`` onto it.
-    A layer whose ``uri`` is not an object-store URI is only enriched, and the
-    layer's OWN ``style`` row wins over the caller's default."""
-    from trid3nt_server.emission.publish import (
-        PublishLayerError,
-        publish_layer,
+class RestyleError(RuntimeError):
+    """The layer cannot be re-painted, and saying why beats painting nothing."""
+
+    error_code = "RESTYLE_FAILED"
+
+    def __init__(self, message: str, *, error_code: str = "RESTYLE_FAILED") -> None:
+        super().__init__(message)
+        self.error_code = error_code
+
+
+def scale_override(*, policy: str | None = None,
+                   value_range: tuple[float, float] | None = None,
+                   transform: str | None = None,
+                   clip: tuple[float, float] | None = None) -> Scale | None:
+    """The caller's scale ASK in the preset vocabulary, or ``None``."""
+    # ``None`` rather than an empty spec: the resolver then falls straight through
+    # to the declared row instead of merging defaults back over it.
+    if policy is None and value_range is None and transform is None and clip is None:
+        return None
+    return Scale(
+        policy=policy or "data",
+        range=tuple(value_range) if value_range else None,   # type: ignore[arg-type]
+        transform=transform or "linear",
+        clip=tuple(clip) if clip else None,                  # type: ignore[arg-type]
     )
 
-    if not str(getattr(raw, "uri", "")).startswith(("s3://", "gs://")):
-        return raw.model_copy(update=update)
-    try:
-        published_uri = await asyncio.to_thread(
-            publish_layer, layer_uri=raw.uri, layer_id=raw.layer_id,
-            style=raw.style or style)
-    except PublishLayerError as exc:
-        # FAILURE NEVER RETRACTS: the raw layer comes back enriched but unpublished.
-        # Its object-store COG still lets the case find the solver's own output, and
-        # dropping a solved result over a styling miss would retract the run.
-        logger.warning("publish_layer failed (%s) - the unpublished COG is returned",
-                       exc)
-        return raw.model_copy(update=update)
-    return raw.model_copy(update={"uri": published_uri, **update})
+
+def restyled_row(declared: dict[str, Any] | None, *,
+                 kind: str | None = None,
+                 ramp: str | None = None,
+                 label: str | None = None,
+                 units: str | None = None) -> dict[str, Any]:
+    """The declared row with the caller's presentation asks laid over it.
+
+    A kind override re-shapes the layer; the rest parameterise the shape it has.
+    """
+    row = dict(declared or {})
+    if kind is not None:
+        if kind not in presets.KINDS:
+            raise RestyleError(
+                f"{kind!r} is not one of the four preset kinds "
+                f"{list(presets.KINDS)}.", error_code="STYLE_KIND_UNKNOWN")
+        row["kind"] = kind
+    if ramp is not None:
+        row["ramp"] = ramp
+    if label is not None:
+        row["label"] = label
+    if units is not None:
+        row["units"] = units
+    return row
+
+
+async def set_hidden(layer_id: str, hidden: bool) -> bool:
+    """Take a layer off the canvas, or put it back. The un-emit.
+
+    False when no emitter is bound or the session never loaded that layer.
+    """
+    from trid3nt_server.emission.pipeline_emitter import current_emitter
+
+    emitter = current_emitter()
+    if emitter is None:
+        return False
+    return await emitter.set_layer_visible(layer_id, not hidden)
+
+
+def apply_style(*, layer_uri: str, layer_id: str,
+                declared: dict[str, Any] | None = None,
+                kind: str | None = None,
+                ramp: str | None = None,
+                label: str | None = None,
+                units: str | None = None,
+                policy: str | None = None,
+                value_range: tuple[float, float] | None = None,
+                transform: str | None = None,
+                clip: tuple[float, float] | None = None,
+                shared: tuple[float, float] | None = None) -> Resolved:
+    """Re-emit one published layer's display face under the caller's asks.
+
+    Returns the RESOLVED preset - what the resolver decided, not what was asked.
+    """
+    if not layer_uri or not layer_id:
+        raise RestyleError("a restyle needs both the layer's uri and its layer id.")
+
+    from trid3nt_server.emission.publish import publish_layer
+
+    row = restyled_row(declared, kind=kind, ramp=ramp, label=label, units=units)
+    override = scale_override(policy=policy, value_range=value_range,
+                              transform=transform, clip=clip)
+    publish_layer(layer_uri=layer_uri, layer_id=layer_id, style=row,
+                  scale=override, shared_range=shared)
+    resolved = presets.resolve(presets.from_row(row), override=override,
+                               shared=shared, read_range=_range_reader(layer_uri))
+    journal_note(f"restyle {layer_id}: {resolved.legend_note()}")
+    return resolved
+
+
+def _range_reader(layer_uri: str) -> Any:
+    from trid3nt_server.emission.publish import _read_raster_bytes
+
+    def _read(scale: Scale) -> tuple[float, float] | None:
+        return presets.band_range_reader(_read_raster_bytes(layer_uri))(scale)
+
+    return _read

@@ -96,7 +96,6 @@ def test_system_prompt_lists_named_data_source_triggers() -> None:
     # just guards against accidental deletion of the trigger vocabulary.
     for keyword in (
         "FEMA NFHL",
-        "NEXRAD",
         "NWS alerts",
         "NLCD",
         "MRMS",
@@ -117,8 +116,6 @@ def test_system_prompt_forbids_ending_at_precursor() -> None:
 
 def test_system_prompt_carries_named_tool_example() -> None:
     """A2 prompt must include at least one geocode → fetch_* → narrate example."""
-    # NEXRAD + Florida is the canonical worked example.
-    assert "show_nexrad_radar" in SYSTEM_PROMPT
     assert "geocode_location" in SYSTEM_PROMPT
     # And the flood-zone pair that carries the precursor-then-tool shape.
     assert "fetch_fema_nfhl_zones" in SYSTEM_PROMPT

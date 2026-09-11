@@ -120,7 +120,6 @@ _MINIMAL_VALID_PARAMS: dict[str, dict[str, Any]] = {
     "fetch_landfire_fuels": {"bbox": _SAMPLE_BBOX},
     "fetch_mrms_qpe": {},
     "fetch_mtbs_burn_severity": {"bbox": _SAMPLE_BBOX},
-    "show_nexrad_radar": {},
     "fetch_nifc_fire_perimeters": {},
     "fetch_nws_alerts_conus": {},
     "fetch_nws_event": {"area": "FLZ055"},

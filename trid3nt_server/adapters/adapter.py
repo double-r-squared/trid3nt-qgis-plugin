@@ -340,17 +340,12 @@ result = fig                  # assign a matplotlib Figure (or scalar/dict) to r
 
 Named-tool follow-on dispatch (CRITICAL — Stage 0 anchor A2):
 When a user prompt explicitly names a specific data source, dataset, or tool
-(e.g. "NEXRAD", "NWS alerts", "NLCD", "MRMS", "HRRR", "NHD", "3DEP",
+(e.g. "NWS alerts", "NLCD", "MRMS", "HRRR", "NHD", "3DEP",
 "MTBS", "LANDFIRE", "USACE NSI", "FEMA NFHL", "NWI",
 "flood zones", "burn severity", "radar reflectivity"), you MUST dispatch
 that tool after completing any precursor steps (geocoding, admin-boundary
 lookup, etc.). DO NOT end the turn at the precursor step — the precursor only
 exists to feed the named tool.
-
-Example: user asks "show me NEXRAD radar in Florida"
-  1. Call geocode_location for "Florida" (precursor) →
-  2. THEN call show_nexrad_radar with the geocoded bbox →
-  3. THEN narrate the result.
 
 Example: user asks "show me flood zones in Cape Coral"
   1. Call geocode_location for "Cape Coral" (precursor) →

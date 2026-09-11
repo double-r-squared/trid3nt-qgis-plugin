@@ -3,8 +3,8 @@
 Publication is automatic: a raster is published as it is produced, and every
 `LayerURI` bound for the client crosses one seam before it is tracked. That is
 what makes the layers a run put on the canvas an auditable list rather than a
-side effect. Styling has exactly one home here, so two products of the same
-quantity cannot be painted by two different rules.
+side effect. The preset family that writes a style document lives here; the
+seam that decides WHICH row a layer is painted by is `workflows/publishing`.
 
 ## Files
 
@@ -19,5 +19,4 @@ quantity cannot be painted by two different rules.
 | `pipeline_emitter.py` | One session's pipeline snapshot and its accumulating `loaded_layers`. |
 | `presets.py` | The preset family: four data kinds, one `.qml` writer. |
 | `publish.py` | The raster publish mechanism - write the COG, register it, notify. |
-| `restyle.py` | The presentation surface: re-paint, retitle, un-emit. Display state only; nothing recomputes. |
 | `uri_registry.py` | The session-scoped layer-handle registry - one uri per layer. |

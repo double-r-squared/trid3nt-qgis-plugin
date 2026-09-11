@@ -29,6 +29,6 @@ unstyled with its COG still in the store.
 | `publish.py` | The one publisher: `publish` takes the deliverables in order and returns what the run leads with; a field is rasterized, written, uploaded and styled here, a track is written as GeoJSON, a series at a station becomes the point layer carrying it inline as `time_series_csv`, a series or a profile becomes the chart spec. |
 | `raster.py` | A nodal field on an unstructured mesh onto a regular EPSG:4326 grid: the element fill (the solver's own P1 representation) and the node halo. |
 | `cog.py` | Cloud-Optimized-GeoTIFF write, reproject, CRS-guard and upload; every failure a staged `CogIoError`. |
-| `style.py` | `publish_product_layer` - the styling seam a typed product layer goes through before it is returned. |
+| `style.py` | THE styling seam: the row a producer declared and the ask a reader lays over it, the resolved preset it publishes under, and the un-emit. |
 | `manifest.py` | The `outputs.json` writer: one PUT under the run prefix, the exact key the outputs seam reads back. |
 | `animation.py` | A field over time as an animation: the results-mesh entry beside the layer of the same quantity, written to the manifest and published through the seam. |

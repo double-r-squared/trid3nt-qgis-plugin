@@ -90,7 +90,7 @@ docstring: |-
   - Current-conditions weather context for a hurricane or severe-weather
     narration -- visible band shows cloud structure; IR window shows storm
     tops; water vapor shows upper-level moisture.
-  - Near-real-time storm monitoring alongside NEXRAD radar overlays.
+  - Near-real-time storm monitoring over a convective event.
   - Any map view that benefits from a live geostationary background to
     orient the user relative to current cloud/storm structure.
 
@@ -104,8 +104,6 @@ docstring: |-
   - DO NOT use for historical replay at a specific valid time -- this tool
     always fetches the most-recent observation; a future ``valid_time``
     param is in scope for v0.2.
-  - DO NOT use for precipitation-radar products -- use
-    ``show_nexrad_radar`` for that.
 
   **Parameters:**
   - ``bbox`` (tuple[float, float, float, float]): ``(min_lon, min_lat,

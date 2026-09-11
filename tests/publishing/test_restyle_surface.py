@@ -15,10 +15,10 @@ from trid3nt_contracts import new_ulid
 
 from trid3nt_server.emission import pipeline_emitter as emitter_module
 from trid3nt_server.emission import publish as publish_module
-from trid3nt_server.emission import restyle as restyle_module
+from trid3nt_server.workflows.publishing import style as restyle_module
 from trid3nt_server.emission.pipeline_emitter import PipelineEmitter
-from trid3nt_server.emission.restyle import RestyleError, apply_style
-from trid3nt_server.tools.display.restyle_layer.restyle_layer import restyle_layer
+from trid3nt_server.workflows.publishing.style import RestyleError, apply_style
+from trid3nt_server.tools.derive.restyle_layer.restyle_layer import restyle_layer
 
 #: A declared row with something to say in every field, so an override that
 #: leaked into a neighbour is visible rather than masked by a default.

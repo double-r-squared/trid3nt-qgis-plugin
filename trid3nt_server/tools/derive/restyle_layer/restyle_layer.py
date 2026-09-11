@@ -12,13 +12,17 @@ from typing import Any, Literal
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.emission import presets
-from trid3nt_server.emission.restyle import RestyleError, apply_style, set_hidden
 from trid3nt_server.tools import register_tool
+from trid3nt_server.workflows.publishing.style import (
+    RestyleError,
+    apply_style,
+    set_hidden,
+)
 
 __all__ = ["restyle_layer"]
 
 logger = logging.getLogger(
-    "trid3nt_server.tools.display.restyle_layer.restyle_layer")
+    "trid3nt_server.tools.derive.restyle_layer.restyle_layer")
 
 
 class RestyleArgsError(RuntimeError):

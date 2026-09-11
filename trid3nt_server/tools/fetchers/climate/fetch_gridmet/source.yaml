@@ -123,7 +123,7 @@ docstring: |-
 
   Do NOT use this for:
     - Non-CONUS bboxes -- use ``fetch_era5_reanalysis`` (global 0.25 deg).
-    - Sub-daily timesteps -- gridMET is daily; use ERA5, HRRR, NEXRAD,
+    - Sub-daily timesteps -- gridMET is daily; use ERA5 or HRRR,
       or GOES for hourly / sub-hourly.
     - Real-time / live forecast -- gridMET lags ~3 days; use NWS Alerts
       + HRRR for live CONUS forecast.

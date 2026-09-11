@@ -29,5 +29,5 @@ on one machine against one user; the only wire shapes it speaks are
 | `inputs/` | Every input into the system as a typed value: a Point, an Extent and a Shape, each with one ingestion from every form a user hands it in, and the user's own file adopted as a layer. |
 | `sandbox/` | The code-exec box: the container a user-confirmed snippet runs in. |
 | `server/` | The daemon core: connection loop, turn engine, dispatch, session state. |
-| `tools/` | The registered tool surface: fetchers, derive, search, display. |
+| `tools/` | The registered tool surface: fetchers and derive tools, with search and meta beside them. |
 | `workflows/` | The declarative engine layer: the runtime, the mesh front, TELEMAC. |

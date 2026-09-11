@@ -168,7 +168,6 @@ docstring: |-
   - Observed precipitation accumulation -- use ``fetch_mrms_qpe``
     (1 km gauge-corrected). HRRR's APCP is model-predicted; MRMS is the
     observation.
-  - Observed radar reflectivity -- use ``show_nexrad_radar``.
   - Watches / warnings -- use ``fetch_nws_alerts_conus`` or
     ``fetch_nws_event`` instead. Those carry the official advisory text;
     HRRR carries raw model output.

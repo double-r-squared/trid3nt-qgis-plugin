@@ -420,7 +420,7 @@ package EmissionSeam {
 
     part restyleSurface : RestyleSurface {
         doc /*
-        code: trid3nt_server/emission/restyle.py
+        code: trid3nt_server/workflows/publishing/style.py
         */
         port askIn : AskIn;
         port rowOut : RowOut;
@@ -428,7 +428,7 @@ package EmissionSeam {
 
     part restyleTool : RestyleTool {
         doc /*
-        code: trid3nt_server/tools/display/restyle_layer/restyle_layer.py
+        code: trid3nt_server/tools/derive/restyle_layer/restyle_layer.py
         */
         port askOut : AskOut;
     }
@@ -689,11 +689,11 @@ package EmissionSeam {
     verify requirement UserChoiceBeatsPreset by
         "tests/emission/test_presets.py::test_the_override_wins_field_by_field_over_the_declaration";
     verify requirement UserChoiceBeatsPreset by
-        "tests/emission/test_restyle_surface.py::test_the_ask_beats_the_declared_row_field_by_field";
+        "tests/publishing/test_restyle_surface.py::test_the_ask_beats_the_declared_row_field_by_field";
     verify requirement UserChoiceBeatsPreset by
-        "tests/emission/test_restyle_surface.py::test_an_ask_nobody_made_leaves_the_declaration_alone";
+        "tests/publishing/test_restyle_surface.py::test_an_ask_nobody_made_leaves_the_declaration_alone";
     verify requirement UserChoiceBeatsPreset by
-        "tests/emission/test_restyle_surface.py::test_a_comparison_paints_every_layer_on_the_one_range";
+        "tests/publishing/test_restyle_surface.py::test_a_comparison_paints_every_layer_on_the_one_range";
     verify requirement UserChoiceBeatsPreset by
         "plugin/tests/test_raster_render.py::test_a_case_reopen_adopts_its_own_layers_and_loads_no_style_over_them";
     verify requirement UserChoiceBeatsPreset by
@@ -708,9 +708,9 @@ package EmissionSeam {
     verify requirement EmissionIsAutomatic by
         "tests/emission/test_auto_publish_droppable_raster.py::test_publish_for_emission_is_the_only_seam";
     verify requirement EmissionIsAutomatic by
-        "tests/emission/test_restyle_surface.py::test_hiding_a_layer_is_the_un_emit_and_unhiding_puts_it_back";
+        "tests/publishing/test_restyle_surface.py::test_hiding_a_layer_is_the_un_emit_and_unhiding_puts_it_back";
     verify requirement EmissionIsAutomatic by
-        "tests/emission/test_restyle_surface.py::test_hiding_a_layer_nobody_published_refuses_rather_than_creating_one";
+        "tests/publishing/test_restyle_surface.py::test_hiding_a_layer_nobody_published_refuses_rather_than_creating_one";
     verify requirement EmissionIsAutomatic by
         "plugin/tests/test_raster_render.py::test_a_visibility_flip_on_a_row_already_seen_reaches_the_layer_tree";
 

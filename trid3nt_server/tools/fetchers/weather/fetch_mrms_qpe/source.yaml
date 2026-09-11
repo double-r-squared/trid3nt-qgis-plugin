@@ -79,7 +79,7 @@ caveats:
 - NOAA MRMS MultiSensor QPE Pass2 (gauge-corrected, ~2 h delayed) whole-object .grib2.gz at CONUS 0.01
   deg (~1 km); the S3 key is resolved by an S3 list-objects walk (latest file / nearest-earlier hour within
   a 24 h walkback); MRMS sentinels (-3 no-precip, -1 missing) collapse to nodata -9999.
-- CONUS-only; a bbox outside (-130,20,-60,55) -> MRMS_QPE_EMPTY. Live radar reflectivity -> show_nexrad_radar;
+- CONUS-only; a bbox outside (-130,20,-60,55) -> MRMS_QPE_EMPTY.
   global precip -> fetch_era5_reanalysis; design-storm return periods -> lookup_precip_return_period.
 docstring: |-
   Fetch NOAA MRMS accumulated QPE (gauge-corrected precipitation) as a COG.
@@ -109,8 +109,6 @@ docstring: |-
 
   **When NOT to use:**
 
-  - Live radar reflectivity -- use ``show_nexrad_radar`` (Iowa Mesonet
-    WMS; dBZ products n0r/n0q/vil).
   - Historical return-period precipitation (design storms) -- use
     ``lookup_precip_return_period`` (NOAA Atlas 14 PFDS).
   - Global precipitation outside CONUS -- MRMS is CONUS-only; for global

@@ -165,6 +165,8 @@ _RECALL_FIXTURE = [
     ("draw the topographic contour lines from the elevation", "compute_contours"),
     ("what telemac keyword controls the bottom friction law", "describe_keywords"),
     ("read every raster on this case at this spot", "probe_point"),
+    ("put these two runs on the same colour scale so I can compare them",
+     "restyle_layer"),
 ]
 
 

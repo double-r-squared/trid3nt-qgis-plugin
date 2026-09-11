@@ -39,7 +39,6 @@ def _import_tools_registry() -> int:
     from .tools.derive.compute_impervious_surface import compute_impervious_surface  # noqa: F401
     from .tools.derive.extract_landcover_class import extract_landcover_class  # noqa: F401
     from .tools.derive.compute_building_density import compute_building_density  # noqa: F401
-    from .tools.display.show_nexrad_radar.show_nexrad_radar import show_nexrad_radar  # noqa: F401
 
     return len(tools.TOOL_REGISTRY)
 

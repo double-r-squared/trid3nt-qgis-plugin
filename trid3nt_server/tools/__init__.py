@@ -187,11 +187,6 @@ from .fetchers._router.registration import register_specs_from_tree as _register
 
 _register_router_specs()
 
-# -- display (live map overlays composing a service URL; they transfer no data
-# bytes, so they are NOT fetchers) --
-from .display.restyle_layer.restyle_layer import restyle_layer  # noqa: E402,F401 - DISPLAY-state re-emission of an already-published layer
-from .display.show_nexrad_radar.show_nexrad_radar import show_nexrad_radar  # noqa: E402,F401
-
 # -- derive (compute / clip / extract / vector-edit / charts) --
 from .derive.clip_raster_to_polygon import clip_raster_to_polygon  # noqa: E402,F401
 # The two generic geometry composition links: one document out of several layers
@@ -233,6 +228,7 @@ from .derive.extract_timeseries_at_point import extract_timeseries_at_point  # n
 from .derive.charts.generate_chart import generate_chart  # noqa: E402,F401
 from .derive.probe_point import probe_point  # noqa: E402,F401
 from .derive.query_point_hazard import query_point_hazard  # noqa: E402,F401
+from .derive.restyle_layer import restyle_layer  # noqa: E402,F401 - DISPLAY-state re-emission of an already-published layer
 from .derive.section import section  # noqa: E402,F401
 # The one read-only SQL surface over published layers.
 from .derive.spatial_query import spatial_query  # noqa: E402,F401

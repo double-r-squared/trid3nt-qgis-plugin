@@ -15,6 +15,10 @@ into the layer + pipeline frames the QGIS plugin renders over the WebSocket.
   no band to read resolves here through the SAME `legend_for_published_layer`.
   A row that names no kind takes the one its layer TYPE implies.
 - `uri_registry.py` -- the published-URI registry.
+- `workflows/publishing/style.py` -- THE styling seam, outside this package:
+  the row a producer declared, and over it a reader's ask for ramp, title,
+  units, scale, kind, or `hide` (the un-emit, and its undo). Journaled with the
+  sentence the legend ends up saying.
 - `presets.py` -- THE preset family: four data KINDS (continuous raster,
   classed vector-or-raster, reference outline, mesh dataset group), each
   parameterised by what the data is (its ramp, units, legend title, and the one
@@ -22,9 +26,6 @@ into the layer + pipeline frames the QGIS plugin renders over the WebSocket.
   QGIS's own `.qml`. There are no preset NAMES: a producer declares a `style:`
   row and a solved output derives one from its manifest entry's kind and
   quantity, so no quantity can be "unregistered".
-- `restyle.py` -- THE presentation surface: ramp, title, units, scale, kind,
-  and `hide` (the un-emit, and its undo). Journaled with the sentence the
-  legend ends up saying.
 - `outputs_seam.py` -- the emit-on-SOLVE CONSUMER.
   `read_outputs_manifest(run_result)` reads `outputs.json` from the run prefix
   (missing/unknown-schema -> `None`, the byte-identical no-op);

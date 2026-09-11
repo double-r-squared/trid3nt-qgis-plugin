@@ -142,7 +142,6 @@ def test_global_query_scope_audit():
         "fetch_nws_alerts_conus",       # /alerts/active CONUS sweep (this job)
         "fetch_era5_reanalysis",        # ERA5 is a global reanalysis grid
         "fetch_mrms_qpe",               # CONUS radar QPE mosaic
-        "show_nexrad_radar",    # WMS service URL; bbox=None => CONUS
         "fetch_nifc_fire_perimeters",   # active national fire perimeters
         "fetch_usace_dams",             # NID CONUS sweep (ArcGIS query)
         "fetch_usace_levees",           # NLD CONUS sweep (ArcGIS query)
