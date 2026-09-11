@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "trid3nt-server"
 version = "0.1.0"
-description = "Agent service: the pluggable-LLM agent loop, Appendix-A WebSocket server, file-backed persistence, local solver dispatch."
+description = "The TRID3NT daemon: the agent loop, the WebSocket protocol, file-backed persistence, local solver dispatch."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
@@ -31,51 +31,30 @@ dependencies = [
     # through it: WorldPop serves a direct REST API and has no collection on
     # Planetary Computer to open.
     "pystac-client>=0.8,<1",
-    # The < 2.0 cap holds until SfincsModel v2.0 leaves release-candidate
-    # status; v2.0 breaks the component-based API. hydromt-sfincs 1.1.2 does
-    # not exist on PyPI (the line jumps 1.1.0 -> 1.2.0), and the stable 1.2.x
-    # line transitively constrains hydromt < 1 - so hydromt carries no pin of
-    # its own here and resolves transitively.
-    "hydromt-sfincs>=1.1.0,<2.0",
-    # The pandas ceiling is upstream's, not ours: hydromt-sfincs 1.2.2 calls
-    # pd.Index.is_integer() (removed in pandas 2.0) and pd.date_range(
-    # freq="10T") (the "T" alias, removed in pandas 3.0). Both still work under
-    # 2.2.x with FutureWarnings. 2.2 is also the earliest series with cp313
-    # wheels - 2.1.x and older fail to compile against the CPython 3.13
-    # _PyLong_AsByteArray change. The cap lifts when upstream fixes both calls.
-    "pandas>=2.2,<2.3",
+    # 2.2 is the earliest series with cp313 wheels: 2.1.x and older fail to
+    # compile against the CPython 3.13 _PyLong_AsByteArray change.
+    "pandas>=2.2",
     # fsspec core only: the live object store is S3 through s3fs below, and the
     # ``fsspec.filesystem("gcs")`` calls in the staging branches are dead.
     "fsspec>=2024.6",
-    # flopy is the MODFLOW 6 deck builder and UCN reader. 3.9 is the first
-    # series carrying the MF6-GWT API used here; < 4 guards the next major.
-    # Declared explicitly rather than left transitive: an undeclared dependency
-    # is how a stale-venv resolution silently changes what runs.
-    "flopy>=3.9,<4",
     # s3fs is the fsspec S3 backend for the NOAA Big Data Program anonymous
     # mirrors (HRRR-Zarr at s3://hrrrzarr/). It wraps boto3 + aiobotocore, but
     # is used only in sync calls via fsspec.filesystem('s3', anon=True).
     "s3fs>=2024.6",
-    # zarr is the chunked-array backend for HRRR-Zarr and is pulled in by
-    # xarray.open_zarr elsewhere. v3 reads v2 stores, which is what hrrrzarr
-    # publishes.
+    # No import statement names zarr: xarray.open_zarr and the s3fs.S3Map
+    # stores the HRRR and AORC readers open resolve it at call time, so a
+    # resolver that drops it fails only at the fetch. v3 reads the v2 stores
+    # those buckets publish.
     "zarr>=2.18,<4",
-    # BeautifulSoup4 + lxml drive web_fetch's main_text/metadata extraction
-    # (boilerplate strip, Open Graph tag parse). lxml is already present
-    # transitively through the rasterio chain; it is pinned explicitly so a
-    # dependency churn cannot silently drop the parser.
+    # BeautifulSoup4 drives web_fetch's main_text and Open Graph extraction. No
+    # import statement names lxml: it is reached through the parser STRING
+    # BeautifulSoup(html, "lxml"), so a resolver that drops it fails only at the
+    # parse call.
     "beautifulsoup4>=4.12,<5",
     "lxml>=5.0,<7",
     "websockets>=13,<16",
     "pydantic>=2,<3",
     "python-ulid>=2,<4",
-    # Pelicun (NHERI SimCenter) is the fragility-curve runtime. Only the
-    # bundled HAZUS v6.1 flood loss-function library is wired
-    # (resources/DamageAndLossModelLibrary/flood/...); the seismic library
-    # ships with it but has no engine integration here. It pulls in
-    # scikit-learn / scipy / pandas / colorama transitively, and its
-    # pandas >= 2.2, < 3 range contains the 2.2.x pin above.
-    "pelicun>=3.9,<4",
     # cdsapi wraps the queue/poll/stream lifecycle of a Copernicus CDS
     # retrieval; the returned NetCDF is converted to a CRS-tagged COG at the
     # call site. CDS is a key-required (Tier-2) source.
@@ -105,22 +84,6 @@ dependencies = [
     # pyarrow backend. The country files run 4-5 GB, so pruning rather than
     # whole-file download is the only viable read.
     "pyarrow>=16",
-    # pyswmm is the headless SWMM5 runner and swmm-api the .inp deck author.
-    # BOTH are lazy-imported inside the mesh builder - a top-level import would
-    # force every agent process to load SWMM5 - so the service still starts
-    # when they are absent. Two shape constraints the deck author encodes: a
-    # flap gate is an Orifice(has_flap_gate=True) (a Conduit has no flap kwarg
-    # in 0.4.73), and an Outfall takes exactly ONE inlet link.
-    "pyswmm>=2.1,<3",
-    "swmm-api>=0.4.73,<0.5",
-    # pmtiles is the PMTiles v3 archive writer/reader behind
-    # vector_tiles.build_pmtiles. The import surface it relies on
-    # (pmtiles.tile.zxy_to_tileid + Compression + TileType, pmtiles.writer.
-    # Writer, pmtiles.reader.Reader/MmapSource) is 3.x. The build path is
-    # env-gated OFF unless TRID3NT_VECTOR_TILES_BASE_URL is set, so the
-    # dependency only binds once an HTTP tile-serving face exists.
-    # mapbox-vector-tile + mercantile arrive transitively.
-    "pmtiles>=3,<4",
     # openai is the client for ANY OpenAI-compatible chat.completions endpoint
     # (Ollama, vLLM, llama.cpp, LM Studio, OpenAI, Groq, DeepSeek, OpenRouter)
     # and is the live default provider. AsyncOpenAI with streaming tool calls
@@ -204,17 +167,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=7", "grimp>=3", "vulture>=2.14"]
-# local-engines: the pip-only solver runtimes, installed with
-# `pip install -e ".[local-engines]"`. pyswmm + swmm-api are ALSO core deps
-# (always on the box); the pins here are for the offline venv where the full
-# agent is not installed.
-local-engines = [
-    "pyswmm>=2.1,<3",
-    "swmm-api>=0.4,<1",
-    "landlab>=2.6,<3",
-    "openquake.engine>=3.19",
-]
+# The suite runs against the installed package; the dev TOOLING that is not
+# product carries its own dev/requirements.txt.
+dev = ["pytest>=7"]
 
 [project.scripts]
 trid3nt-server = "trid3nt_server.main:run"
@@ -236,7 +191,6 @@ include = ["trid3nt_server*"]
 # image. Any new file loaded via Path(__file__).parent belongs in this list.
 [tool.setuptools.package-data]
 trid3nt_server = [
-    "workflows/sfincs/manning_mapping.csv",
     "tools/tool_query_corpus.yaml",
     "tools/duckdb_spatial_functions.json",
     "tools/README.md",

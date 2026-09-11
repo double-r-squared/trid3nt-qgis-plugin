@@ -38,16 +38,10 @@ logger = logging.getLogger("trid3nt_server.gates.tool_gating")
 #: Default top-k for the openai-provider tool gate.
 TOOL_GATING_TOPK_DEFAULT = 24
 
-#: The always-include META floor: the core floor plus the catalog discovery
-#: pair and web_fetch. These are the "find anything else" escape hatches a
-#: gated model must always hold, and they register outside the tools package.
-META_TOOL_FLOOR: frozenset[str] = frozenset(CORE_FLOOR) | frozenset(
-    {
-        "search_data_catalog",
-        "fetch_from_catalog",
-        "web_fetch",
-    }
-)
+#: The always-include META floor: the core floor plus web_fetch, the open-web
+#: escape hatch a gated model must always hold. It registers at daemon startup,
+#: outside the tools package.
+META_TOOL_FLOOR: frozenset[str] = frozenset(CORE_FLOOR) | frozenset({"web_fetch"})
 
 
 def gating_topk() -> int:

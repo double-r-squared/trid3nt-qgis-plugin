@@ -158,12 +158,6 @@ QGIS profile when the daemon's MinIO uses different ones.
 | `TRID3NT_SYNC_TOOL_OFFLOAD` | `global` | Off-loads synchronous tool bodies from the asyncio loop to a thread: `off` (default; only a hand-audited always-offload set of proven-pathological heavy fetchers is off-loaded), `subset` (also the pure `compute_*`/`clip_*` families), `global` (every sync tool body). Armed locally on 2026-07-06 after an abandoned sweep prompt's heavy fetch chain (USACE NSI + river geometry) ran ON the loop and starved new WS handshakes; global mode was proven safe on cloud first. |
 | `TRID3NT_TELEMETRY_PATH` | `<repo>/data/telemetry/tool_calls.jsonl` | Output path for per-tool-call telemetry JSONL (the local fallback writer; default is under `/tmp`, which does not survive reboots). Feeds the local stats work (roadmap track 3). |
 
-## Data catalog
-
-| Variable | Shipped value | What it does |
-|----------|---------------|--------------|
-| `TRID3NT_CATALOG_YAML` | `<repo>/public_data_source_catalog.yaml` | Path to the vetted public data-source catalog used by `catalog_search` / `catalog_fetch`. Lives at the repo root; the tool also walks up from its own file to find it, so the env var is belt-and-suspenders. Without any of that the catalog tools raise a typed not-found error. |
-
 ## Not in the file, but related
 
 - **Per-tool API keys** for the `KEY`-earmarked fetchers (`TRID3NT_AIRNOW_API_KEY`,

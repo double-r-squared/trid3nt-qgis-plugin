@@ -105,14 +105,6 @@ def test_k_clamps_low_and_bad(warm_index):
 # ---------------------------------------------------------------------------
 # FAIL-OPEN: error / cold index / empty ranking -> FULL registry.
 # ---------------------------------------------------------------------------
-# the tools that register ONLY via the full startup path -- the fail-open
-# full-registry snapshot must include them even in a cold process.
-_STARTUP_ONLY = {
-    "search_data_catalog",
-    "fetch_from_catalog",
-}
-
-
 def _pool_hidden_names() -> set[str]:
     """Registered pool-HIDDEN names: ``tier=internal`` only.
 
@@ -135,7 +127,6 @@ def _assert_full_failopen(res):
     # Expect the full registry MINUS the internal seam.
     full = _full_registry_names() - _pool_hidden_names()
     assert full <= res, f"fail-open dropped: {sorted(full - res)}"
-    assert _STARTUP_ONLY <= res, "fail-open omitted the startup-only tools"
     assert not (_pool_hidden_names() & res), (
         f"fail-open leaked pool-hidden internal tools: {sorted(_pool_hidden_names() & res)}"
     )
@@ -217,8 +208,8 @@ def _load_corpus():
 
 
 def _full_registry_names() -> set[str]:
-    """The FULL registry, including the tools that register only through the startup
-    import path, so the coverage check is deterministic regardless of test order."""
+    """The FULL registry after the startup import path has run, so the coverage
+    check is deterministic regardless of test order."""
     import trid3nt_server.main as _m
 
     _m._import_tools_registry()

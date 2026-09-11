@@ -214,8 +214,8 @@ def retrieve_ranked_tools(
 
 def _full_registry_floor(floor: set[str]) -> set[str]:
     """The FAIL-OPEN result: every model-facing registered tool UNION the core
-    floor. The FULL registry is populated first, because the catalog tools register
-    only through the startup import path. Idempotent; only this rare path pays."""
+    floor. The FULL registry is populated first, because a coded tool registers
+    only when its module is imported. Idempotent; only this rare path pays."""
     try:
         import trid3nt_server.main as _main
 

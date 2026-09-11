@@ -63,10 +63,9 @@ def search_living_atlas(
     """Search the ESRI Living Atlas of the World for fetchable map/data layers.
 
     ROUTING: the user wants an ESRI/ArcGIS Living Atlas layer, or no dedicated
-    fetcher exists and ESRI's curated catalog is worth trying first. NOT for the
-    internal public-source catalog (`search_data_catalog`), NOT for a dataset that
-    already has its own fetcher, NOT to pull bytes - this only RANKS; the returned
-    `id` goes to `fetch_living_atlas_layer`.
+    fetcher exists and ESRI's curated catalog is worth trying first. NOT for a
+    dataset that already has its own fetcher, NOT to pull bytes - this only RANKS;
+    the returned `id` goes to `fetch_living_atlas_layer`.
 
     Two-pool curation: by default ONLY authoritative entries come back. Community
     entries never take priority in an authoritative ask - they appear on

@@ -15,8 +15,6 @@ import pytest
 # Trigger full tool surface registration so the index includes a realistic
 # universe of candidates (mirrors test_search_tools.py setup).
 from trid3nt_server.tools import TOOL_REGISTRY  # noqa: F401
-from trid3nt_server.tools.search.fetch_from_catalog import fetch_from_catalog  # noqa: F401 — registration side-effect
-from trid3nt_server.tools.search.search_data_catalog import search_data_catalog  # noqa: F401 — registration side-effect
 from trid3nt_server.tools.search.search_tools import search_tools as discover_module
 from trid3nt_server.workflows.solver import solver  # noqa: F401 — registration side-effect
 

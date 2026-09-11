@@ -42,9 +42,8 @@ _SPEC_REGISTRY: dict[str, SourceSpec] = {}
 #: UNSET (default) -> the spec-served sources register tier="general" (ambient).
 #: "1" (card-carried), "2" (discovery-expands-declaration) or "3" -> they register
 #: tier="catalog": EXCLUDED from the default declarable pool but KEPT in the search
-#: index, reachable by name through ``fetch_from_catalog(source=...)``. The flag is
-#: read at import so each arm runs in its OWN process with a clean pool; DEFAULT
-#: behaviour is unchanged when it is unset.
+#: index. The flag is read at import so each arm runs in its OWN process with a
+#: clean pool; DEFAULT behaviour is unchanged when it is unset.
 CATALOG_ARM_ENV = "TRID3NT_CATALOG_ARM"
 
 

@@ -58,11 +58,6 @@ class LivingAtlasEntry(BaseModel):
     tags: list[str] = Field(default_factory=list)
 
 
-# --------------------------------------------------------------------------- #
-# Path resolution (env-overridable; mirrors catalog_common).
-# --------------------------------------------------------------------------- #
-
-
 def _repo_data_dir() -> Path:
     """Walk up from this module to the repo root's ``data/living_atlas`` dir."""
     here = Path(__file__).resolve()
