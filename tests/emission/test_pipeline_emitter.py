@@ -1430,7 +1430,7 @@ async def test_mint_cards_name_the_case_not_the_shared_solver_id(
     token = pe._DISPATCHED_TOOL.set("telemac_do_sag")
     try:
         await pe.mint_dispatch_and_sim_cards(
-            emitter=emitter, solver="telemac_river_dye", handle=handle
+            emitter=emitter, solver="telemac", handle=handle
         )
     finally:
         pe._DISPATCHED_TOOL.reset(token)
@@ -1439,6 +1439,26 @@ async def test_mint_cards_name_the_case_not_the_shared_solver_id(
     assert [s["tool_name"] for s in steps] == [
         "telemac_do_sag:dispatch", "telemac_do_sag:solve"
     ]
+
+
+@pytest.mark.asyncio
+async def test_a_compute_card_carries_the_engine_and_the_module_that_ran(
+    emitter: PipelineEmitter, sink: _CapturingSink
+) -> None:
+    """The card is titled by the run's identity, which is the engine and the
+    module of it that ran; the plain tool card beside it is a run of nothing."""
+    from trid3nt_server.emission.pipeline_emitter import mint_dispatch_and_sim_cards
+
+    handle = type("H", (), {"workflows_execution_id": "j",
+                            "workflow_name": "local-docker"})()
+    await mint_dispatch_and_sim_cards(
+        emitter=emitter, solver="telemac", module="artemis", handle=handle)
+
+    steps = _pipeline_frames(sink)[-1]["payload"]["steps"]
+    compute = next(s for s in steps if s["role"] == "compute")
+    tool = next(s for s in steps if s["role"] == "tool")
+    assert (compute["engine"], compute["module"]) == ("telemac", "artemis")
+    assert (tool["engine"], tool["module"]) == (None, None)
 
 
 @pytest.mark.asyncio
