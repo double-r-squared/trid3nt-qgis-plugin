@@ -254,7 +254,7 @@ class STEERING(T2D):
 #: envelope beside it and its reach-wide history as the chart.
 OUTPUTS = [
     field("E", t=-1, module="gaia").layer(style=TELEMAC_BED_EVOLUTION_STYLE),
-    field("B", t="every").animate(),
+    field("E", t="every", module="gaia").animate(),
     max_over_time("T1").layer(style=TELEMAC_DYE_STYLE),
     series("T1").chart(),
 ]
