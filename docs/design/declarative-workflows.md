@@ -5,7 +5,7 @@ do_sag MIGRATED. WAVE 2 LANDED - the FORM and DRAW cards, on
 the existing spines, plugin 0.3.17. WAVE 3 LANDED -
 telemac_river_dye MIGRATED (3,469 -> 671 lines over a shared
 `workflows/telemac/` family), the form card's first live proof,
-and the live-run harness (`trid3nt_server/testing/`). WAVE 4 LANDED
+and the live-run harness (`dev/testing/`). WAVE 4 LANDED
 - the GENERALIZATION CHECKPOINT PASSED:
 `modflow_regional_water_budget` and `swmm_aquifer_baseflow_to_node`
 migrated onto shared `workflows/<engine>/steps/` families, both
@@ -426,7 +426,7 @@ THREE PATHS, and the split is itself diagnostic (NATE, 2026-08-24):
   VALUES live in the declaration - a demo script IS a saved,
   banner-labeled path-A invocation, never a constant in workflow code.
 - **B - the gate-by-gate walkthrough**, over the real socket
-  (`trid3nt_server/testing`, wave 3): the tool, its args, the answers
+  (`dev/testing`, wave 3): the tool, its args, the answers
   its gates get, and the assertions - `LiveRun(tool, args, answers=
   GateAnswers(draw=..., form_edits=..., require_draw=True))`. The full
   product-path audit, run at wave acceptance. Three rules make it

@@ -106,8 +106,6 @@ def _min_planes_for(depth_m: float, thermocline_depth_m: float,
     return cap
 
 
-# docstring-exempt: the refusal, the transform reproduced and the sizing of the
-# returned thickness are three contracts no argument or return type carries.
 def plan_vertical_grid(nplan: int, max_depth_m: float,
                        thermocline_depth_m: float) -> dict[str, Any]:
     """The vertical discretisation that can HOLD the declared column, or refuse.

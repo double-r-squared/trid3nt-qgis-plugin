@@ -20,8 +20,12 @@ import numpy as np  # noqa: E402
 
 from trid3nt_server.emission import presets  # noqa: E402
 
-REPO = Path(__file__).resolve().parents[2]
-SCRIPT = REPO / "scripts" / "packet" / "render_selafin_animation.py"
+DEV = Path(__file__).resolve().parents[2] / "dev"
+SCRIPT = DEV / "packet" / "render_selafin_animation.py"
+
+if not DEV.is_dir():
+    pytest.skip("dev/ is absent: the dev tools are not on the remote",
+                allow_module_level=True)
 
 #: The style row the synthetic field is drawn by - the same row the published
 #: raster of that quantity carries.
@@ -37,7 +41,7 @@ _LEGEND_X_FRAC = 0.86
 
 @functools.lru_cache(maxsize=1)
 def _animation_module():
-    """The script, imported by path - ``scripts/`` is not a package."""
+    """The script, imported by path - ``dev/packet/`` is not a package."""
     spec = importlib.util.spec_from_file_location("render_selafin_animation", SCRIPT)
     module = importlib.util.module_from_spec(spec)
     sys.modules.setdefault("render_selafin_animation", module)
@@ -177,7 +181,7 @@ def test_an_empty_field_still_yields_a_usable_scale():
 
 def _packet_module():
     spec = importlib.util.spec_from_file_location(
-        "assemble_proof_packet", REPO / "scripts" / "packet" / "assemble_proof_packet.py")
+        "assemble_proof_packet", DEV / "packet" / "assemble_proof_packet.py")
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
@@ -189,7 +193,7 @@ def test_the_published_range_is_found_by_quantity_not_by_the_title_it_was_painte
     identity. Matching on prose is how a still and its animation drift onto two
     scales for one field with no range comparison able to catch it.
     """
-    from trid3nt_server.testing.proof_animations import ProofAnimation
+    from dev.testing.proof_animations import ProofAnimation
 
     packet = _packet_module()
     evidence = {"layers": [
@@ -213,7 +217,7 @@ def test_the_published_range_is_found_by_quantity_not_by_the_title_it_was_painte
 def test_a_quantity_the_run_never_published_has_nothing_to_agree_with():
     """Honest silence, not an invented agreement: a field with no published
     raster of its own is rendered on its own range and the row says so."""
-    from trid3nt_server.testing.proof_animations import ProofAnimation
+    from dev.testing.proof_animations import ProofAnimation
 
     packet = _packet_module()
     evidence = {"layers": [

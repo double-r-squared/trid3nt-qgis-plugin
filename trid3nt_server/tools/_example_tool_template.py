@@ -1,4 +1,3 @@
-# docstring-exempt: copy-me authoring template; the docstring IS the demonstrated artifact
 """``example_bbox_area`` -- COPY-ME template for a new atomic tool.
 
 This is a COMPLETE, WORKING, minimal registered tool you copy to start your own.
@@ -78,7 +77,6 @@ _METADATA = AtomicToolMetadata(
 # TODO: in a REAL tool, drop the ``if _ENABLED`` gate below and decorate the
 # function directly:  @register_tool(_METADATA, open_world_hint=True)
 # ---------------------------------------------------------------------------
-# docstring-exempt: copy-me authoring template; the docstring IS the demonstrated artifact
 def example_bbox_area(
     bbox: tuple[float, float, float, float],
     label: str = "area of interest",

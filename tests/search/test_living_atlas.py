@@ -312,7 +312,9 @@ def test_probe_raises_subscription_on_token_required(la_catalogs, monkeypatch):
 def test_harvest_normalizes_and_splits(tmp_path):
     import importlib.util
 
-    script = Path(__file__).resolve().parents[2] / "scripts" / "instruments" / "harvest_living_atlas.py"
+    script = Path(__file__).resolve().parents[2] / "dev" / "instruments" / "harvest_living_atlas.py"
+    if not script.is_file():
+        pytest.skip("dev/ is absent: the dev tools are not on the remote")
     spec = importlib.util.spec_from_file_location("harvest_la", script)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)

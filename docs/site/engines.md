@@ -14,7 +14,7 @@ the artifacts the run itself wrote rather than on the turn finishing. That is wh
 CANARY is - a declared question, the same one every time - and each one closes by
 assembling a delivery packet (the canvas panels, the composite, the charts, an animation
 where the solve is time-stepped) and refusing when a piece is missing. The declarations
-live in `trid3nt_server/testing/canaries.py`; the packets they produce are rendered under
+live in `dev/testing/canaries.py`; the packets they produce are rendered under
 `run/proof/<template>/<run-id>/`, delivered from there, and swept after seven days - a
 packet is a delivery, not an archive.
 

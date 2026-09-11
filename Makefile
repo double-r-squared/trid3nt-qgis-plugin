@@ -1,11 +1,12 @@
 # Makefile -- TRID3NT Local runtime targets
 REPO_ROOT := $(shell pwd)
 SCRIPTS   := $(REPO_ROOT)/scripts
+DEV       := $(REPO_ROOT)/dev
 RUN_DIR   := $(REPO_ROOT)/run
 LOG_DIR   := $(REPO_ROOT)/logs
 
 .PHONY: binaries minio agent venv status stop setup up down plugin env help plugin-zip plugin-repo
-.PHONY: test test-fetchers test-spatial test-engines test-server test-model-surface test-packages
+.PHONY: test test-fetchers test-spatial test-engines test-server test-model-surface test-packages lint
 
 # ---- orchestration (the clone -> run flow) ----------------------------------
 help:
@@ -18,6 +19,7 @@ help:
 	@echo "  make status    health-check the running services"
 	@echo "  make down      stop everything"
 	@echo "  make test      the six suite slices, zero failures"
+	@echo "  make lint      the prose guards in dev/ (skipped when dev/ is absent)"
 
 # ---- suite -------------------------------------------------------------
 # Six slices by subsystem, run from the repo root. Globs are unquoted so the
@@ -29,11 +31,25 @@ PYTEST = env -u TRID3NT_CACHE_BUCKET venvs/agent/bin/python -m pytest \
 test-fetchers:      ; $(PYTEST) tests/fetchers
 test-spatial:       ; $(PYTEST) tests/derive tests/emission tests/mesh
 test-engines:       ; $(PYTEST) tests/telemac tests/runtime tests/solver tests/search
-test-server:        ; $(PYTEST) tests/server tests/gates tests/credentials tests/sandbox tests/model tests/scripts tests/hygiene
+test-server:        ; $(PYTEST) tests/server tests/gates tests/credentials tests/sandbox tests/model tests/scripts
 test-model-surface: ; $(PYTEST) tests/adapters tests/tools
 test-packages:      ; $(PYTEST) contracts/tests plugin/tests tests/plugin
 
 test: test-fetchers test-spatial test-engines test-server test-model-surface test-packages
+
+# Lint is not tests: the prose guards read the tree rather than the product's
+# behaviour, so they live with the other dev tools and skip on a clone that has
+# none. An underscore-led module there is a helper, not a lint.
+lint:
+	@if [ ! -d $(DEV)/lint ]; then \
+	  echo "lint skipped: dev/ is absent - the dev tools are not on the remote"; \
+	else \
+	  status=0; \
+	  for l in $(DEV)/lint/[!_]*.py; do \
+	    venvs/agent/bin/python $$l || status=1; \
+	  done; \
+	  exit $$status; \
+	fi
 
 # One-time bootstrap: env template + binaries (minio/mf6/...) + the agent venv.
 setup: env binaries venv

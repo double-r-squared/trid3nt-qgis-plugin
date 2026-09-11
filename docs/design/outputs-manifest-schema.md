@@ -394,7 +394,7 @@ seam-styling path must be byte-identical to what today's
 `publish_manifest.json` + `register_manifest_layers` path renders for the
 SAME run. The MANIFEST shape differs (flatter entries, Section 1); the
 RENDERED OUTPUT must not. This makes the migration provable with the
-existing canary set (`trid3nt_server/testing/canaries.py`, status=ok) plus a
+existing canary set (`dev/testing/canaries.py`, status=ok) plus a
 byte-diff of the COG set between the old and new code paths on the same
 solved `sfincs_map.nc` -- no new solver run needed to validate the seam
 change itself.

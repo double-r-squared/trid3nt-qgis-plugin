@@ -1,8 +1,8 @@
 # tests/
 
 The tree mirrors the product by subsystem: a test file lives in the directory
-named for the package it asserts against, and a file whose subject is an
-instrument lives in `tests/scripts/` rather than beside the product it drives.
+named for the package it asserts against, and a file whose subject is a dev
+tool lives in `tests/scripts/` rather than beside the product it drives.
 `plugin/tests/` and `contracts/tests/` stay inside their own distributions and
 join the run as the sixth slice.
 
@@ -16,14 +16,13 @@ join the run as the sixth slice.
 | `emission/` | the emitter, the uri registry, publication, charts | 39 | 503 |
 | `fetchers/` | the fetch router, its executors, hooks and fallbacks | 65 | 1563 |
 | `gates/` | the gates, the context budget, the circuit breaker | 21 | 312 |
-| `hygiene/` | the documentation guards: the docstring standard, history markers, dead references, the template pages, the package maps | 5 | 80 |
 | `mesh/` | the meshers, the mesh gate, topology and bed | 7 | 226 |
 | `model/` | the SysML model conformance check | 1 | 19 |
 | `plugin/` | the plugin seams the server suite reads offline, by `ast` | 1 | 3 |
 | `runtime/` | the declarative runtime, scenario reuse, the run journal | 12 | 354 |
 | `sandbox/` | the code-exec sandbox | 2 | 34 |
-| `scripts/` | the instruments, the drivers and the proof renderers | 6 | 45 |
-| `search/` | dataset and tool retrieval, the catalog | 20 | 313 |
+| `scripts/` | the dev instruments, the live-run harness and the proof renderers, skipped when `dev/` is absent | 6 | 45 |
+| `search/` | dataset and tool retrieval, the OGC adapter | 18 | 280 |
 | `server/` | the HTTP and WS routes, persistence, telemetry | 27 | 559 |
 | `solver/` | the solver seam, the run reads, the engine-room posture | 6 | 59 |
 | `telemac/` | the TELEMAC templates, authoring and postprocesses | 24 | 429 |
@@ -45,9 +44,14 @@ Six slices by subsystem, each its own foreground invocation, from the repo root:
     make test-fetchers        # tests/fetchers                                 1563
     make test-spatial         # tests/derive tests/emission tests/mesh         1189
     make test-engines         # tests/telemac tests/runtime tests/solver tests/search   1155
-    make test-server          # tests/server tests/gates tests/credentials tests/sandbox tests/model tests/scripts tests/hygiene   1143
+    make test-server          # tests/server tests/gates tests/credentials tests/sandbox tests/model tests/scripts   1143
     make test-model-surface   # tests/adapters tests/tools                      870
     make test-packages        # contracts/tests plugin/tests tests/plugin       816
+
+The prose guards - history markers, dead references, the package maps, the
+template pages, banner comments - are LINTS rather than tests: they read the
+tree rather than the product's behaviour, so they live in `dev/lint/` and run
+with `make lint`, which skips itself on a clone that carries no `dev/`.
 
 `make test` runs all six in order. Each target expands to
 

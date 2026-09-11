@@ -14,15 +14,21 @@ import sys
 import time
 from pathlib import Path
 
-REPO = Path(__file__).resolve().parents[2]
-SCRIPT = REPO / "scripts" / "packet" / "assemble_proof_packet.py"
+import pytest
+
+DEV = Path(__file__).resolve().parents[2] / "dev"
+SCRIPT = DEV / "packet" / "assemble_proof_packet.py"
+
+if not DEV.is_dir():
+    pytest.skip("dev/ is absent: the dev tools are not on the remote",
+                allow_module_level=True)
 
 DAY = 86400.0
 
 
 @functools.lru_cache(maxsize=1)
 def _packet_module():
-    """The renderer, imported by path - ``scripts/`` is not a package."""
+    """The renderer, imported by path - ``dev/packet/`` is not a package."""
     spec = importlib.util.spec_from_file_location("assemble_proof_packet", SCRIPT)
     module = importlib.util.module_from_spec(spec)
     sys.modules.setdefault("assemble_proof_packet", module)

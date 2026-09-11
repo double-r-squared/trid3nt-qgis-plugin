@@ -9,7 +9,14 @@ from __future__ import annotations
 import importlib.util
 from pathlib import Path
 
-_SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "instruments" / "loc_report.py"
+import pytest
+
+DEV = Path(__file__).resolve().parents[2] / "dev"
+_SCRIPT = DEV / "instruments" / "loc_report.py"
+
+if not DEV.is_dir():
+    pytest.skip("dev/ is absent: the dev tools are not on the remote",
+                allow_module_level=True)
 
 _SOURCE = '''"""Summary line.
 
@@ -30,7 +37,7 @@ def f():
 
 
 def _loc_report():
-    """The instrument, imported by path - ``scripts/`` is not a package."""
+    """The instrument, imported by path - ``dev/instruments/`` is not a package."""
     spec = importlib.util.spec_from_file_location("loc_report", _SCRIPT)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)

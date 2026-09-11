@@ -15,7 +15,7 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = Path(__file__).resolve().parents[1]
 
 DEFAULT_MODEL = REPO_ROOT / "docs" / "model" / "solve-seam.sysml"
 
@@ -638,7 +638,7 @@ def render_view(model: Model, source: Path) -> str:
         f"# {model.package} - derived view",
         "",
         f"GENERATED from `{source.relative_to(REPO_ROOT).as_posix()}` by "
-        "`scripts/instruments/model_check.py --view`. Never hand-edited: regenerate it, and "
+        "`scripts/model_check.py --view`. Never hand-edited: regenerate it, and "
         "`tests/model/test_model_conformance.py` fails while it is stale.",
         "",
         # A view drawn without its place reads as the whole system. It is one

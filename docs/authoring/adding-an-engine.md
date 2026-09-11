@@ -61,7 +61,7 @@ seam list, from the TELEMAC templates:
    - add the routing phrasings to the template package's `corpus.yaml` and run
      the retrieval-visibility check;
    - add a declaration test beside the other template tests, and a canary in
-     `trid3nt_server/testing/canaries.py`.
+     `dev/testing/canaries.py`.
 
 ---
 

@@ -17,8 +17,12 @@ pytest.importorskip("PIL")
 import numpy as np  # noqa: E402
 from PIL import Image  # noqa: E402
 
-REPO = Path(__file__).resolve().parents[2]
-MODULE = REPO / "scripts" / "packet" / "merc_render.py"
+DEV = Path(__file__).resolve().parents[2] / "dev"
+MODULE = DEV / "packet" / "merc_render.py"
+
+if not DEV.is_dir():
+    pytest.skip("dev/ is absent: the dev tools are not on the remote",
+                allow_module_level=True)
 
 
 def _merc_render():

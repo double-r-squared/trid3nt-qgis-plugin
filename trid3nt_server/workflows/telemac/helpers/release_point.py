@@ -113,8 +113,6 @@ def derive_release_on_mesh(*, centerline_utm: Any, mesh: Any,
         "supplied mesh) or place the release explicitly.")
 
 
-# docstring-exempt: the engine solves a source at a mesh NODE, so which node and
-# whether it is wet are contracts no argument or return type carries.
 def snap_release_to_wetted(point_utm: tuple[float, float], *, node_xy: Any,
                            wet: Any, state: str) -> tuple[tuple[float, float],
                                                           float, int]:

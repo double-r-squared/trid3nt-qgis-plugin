@@ -31,9 +31,12 @@ touch, BEFORE writing code. Inherit the structure; do not improvise.
 - `plugin/` - the QGIS dock (installs as `trid3nt`). `tests/` - the
   offline suite, mirroring the product tree; the six slices are its
   directories, named by the `make test-*` targets law 1 lists.
-  `scripts/` - the entry points you type, plus `instruments/` (measure
-  + check), `packet/` (the delivery renderers), `drivers/` (the live
-  drive lane) and `staging/`. `docs/` - the manual, the directory
+  `scripts/` - the entry points you type, plus the model checker.
+  `dev/` - the dev tools, which git does not carry and the remote never
+  sees: `lint/` (the prose guards), `instruments/` (measure + render
+  the generated pages), `packet/` (the delivery renderers), `drivers/`
+  (the live drive lane), `testing/` (the live-run harness and the
+  canaries), `staging/` and `local/`. `docs/` - the manual, the directory
   maps, the specs, the model, the generated template pages and the
   ledgers. The repo carries the SYSTEM; the rulings record - what was
   decided and why - is kept outside it.
@@ -60,9 +63,9 @@ touch, BEFORE writing code. Inherit the structure; do not improvise.
 3. The live stack runs on THIS box: MinIO :9000, the daemon via
    `make agent`, local docker solvers. `set -a; source .env.local;
    set +a` for env. Server changes end with daemon restart +
-   `scripts/instruments/ws_smoke.py` (all_passed) + one declared canary
+   `dev/instruments/ws_smoke.py` (all_passed) + one declared canary
    through the product path,
-   `python -m trid3nt_server.testing.canaries <name>`, which exits
+   `python -m dev.testing.canaries <name>`, which exits
    non-zero unless the run's own products were read AND its delivery
    packet assembled. You run these yourself.
 4. Behavior-preserving refactors move code verbatim; every reference
@@ -115,9 +118,10 @@ touch, BEFORE writing code. Inherit the structure; do not improvise.
   Never: history, ADR/spec citations, attributions, milestones, dead
   systems, or claims about other code you have not verified. If a
   comment smells, suspect the code under it.
-- Docstring budget (docs/CONVENTIONS.md): LLM-facing tool docstrings
-  are product material - rich, front-loaded, citation-free. Public
-  seams get 1-3 lines of promise. Private helpers get NOTHING unless a
+- Docstring shape (docs/CONVENTIONS.md), guidance and not a gate:
+  three content lines for a function, a method or a class, five for a
+  module. LLM-facing tool docstrings are product material - rich,
+  front-loaded, citation-free. Private helpers get NOTHING unless a
   non-obvious constraint exists - if one needs a paragraph, it needs a
   better name or a split.
 - Names and structure carry meaning; documents carry knowledge

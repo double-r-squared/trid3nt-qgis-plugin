@@ -105,7 +105,8 @@ Each has its own map README.
 | `trid3nt_server/` | The daemon: turn loop, tool dispatch, gates, emission, workflows. |
 | `contracts/` | The shared pydantic contracts both sides import. |
 | `workers/` | The solver worker images - the engine room. |
-| `scripts/` | The entry points you type, and the instruments that measure the tree. |
+| `scripts/` | The entry points you type, and the model checker. |
+| `dev/` | The dev tools - lints, instruments, packet renderers, drivers, the live harness. Not product, not on the remote. |
 | `tests/` | The suite, one directory per subsystem. |
 | `docs/` | Method, rulings and maps. |
 

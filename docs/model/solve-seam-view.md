@@ -1,6 +1,6 @@
 # SolveSeam - derived view
 
-GENERATED from `docs/model/solve-seam.sysml` by `scripts/instruments/model_check.py --view`. Never hand-edited: regenerate it, and `tests/model/test_model_conformance.py` fails while it is stale.
+GENERATED from `docs/model/solve-seam.sysml` by `scripts/model_check.py --view`. Never hand-edited: regenerate it, and `tests/model/test_model_conformance.py` fails while it is stale.
 
 Plane: **workflow**. System: **assembler -> solver -> products**. One seam of the system of systems indexed by [`README.md`](README.md) - never the whole picture.
 
@@ -14,7 +14,7 @@ flowchart LR
     launcherArm["LauncherArm<br/>trid3nt_server/workflows/telemac/solving/run_telemac.py"]
     manifestStager["ManifestStager<br/>trid3nt_server/workflows/telemac/authoring/assembler.py"]
     meshAcceptance["MeshAcceptance<br/>trid3nt_server/workflows/mesh/step.py"]
-    packetAssembler["PacketAssembler<br/>scripts/packet/assemble_proof_packet.py"]
+    packetAssembler["PacketAssembler<br/>dev/packet/assemble_proof_packet.py"]
     resultPostprocess["ResultPostprocess<br/>trid3nt_server/workflows/telemac/products/postprocess_telemac.py"]
     resultReader["ResultReader<br/>trid3nt_server/workflows/telemac/products/result_reader.py"]
     runReader["RunReader<br/>trid3nt_server/workflows/telemac/products/run_reads.py"]

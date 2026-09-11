@@ -13,14 +13,19 @@ from pathlib import Path
 
 import pytest
 
-_SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "instruments" / "extract_telemac_catalog.py"
+DEV = Path(__file__).resolve().parents[2] / "dev"
+_SCRIPT = DEV / "instruments" / "extract_telemac_catalog.py"
+
+if not DEV.is_dir():
+    pytest.skip("dev/ is absent: the dev tools are not on the remote",
+                allow_module_level=True)
 
 #: What the six exposed dictionaries hold together.
 _TOTAL_KEYWORDS = 1311
 
 
 def _extractor():
-    """The script, imported by path - ``scripts/`` is not a package."""
+    """The script, imported by path - ``dev/instruments/`` is not a package."""
     spec = importlib.util.spec_from_file_location("extract_telemac_catalog", _SCRIPT)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -61,4 +66,4 @@ def test_the_committed_catalog_is_what_the_image_says_today(tmp_path):
         committed = (extractor.catalog_dir() / f"{module}.json").read_text()
         assert (tmp_path / f"{module}.json").read_text() == committed, (
             f"{module}.json has drifted from the image's dictionary; re-run "
-            "scripts/instruments/extract_telemac_catalog.py and read the diff")
+            "dev/instruments/extract_telemac_catalog.py and read the diff")

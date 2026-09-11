@@ -136,8 +136,6 @@ def _seat_derived(param: Param, produced: Any, default_note: str) -> ResolvedPar
     return _finish(param, produced, doors.DERIVED, default_note)
 
 
-# docstring-exempt: the two user-authority doors seat identically (both stamp
-# basis=user) and differ only in what they record, which no signature can say.
 def reseat_revised(declared: Sequence[Param], resolved: ResolvedParams,
                    revised: Mapping[str, Any],
                    *, note: str = "revised at input review",
@@ -167,8 +165,6 @@ def reseat_revised(declared: Sequence[Param], resolved: ResolvedParams,
     return (resolved.replacing(rows) if rows else resolved), changed
 
 
-# docstring-exempt: the three-element return is under-specified by its type, and
-# the pin on a user-basis row is a rule no signature carries.
 async def rederive_revised(
     declared: Sequence[Param], resolved: ResolvedParams, changed: Sequence[str],
     *, occasion: str = "input review",

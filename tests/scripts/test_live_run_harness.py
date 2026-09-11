@@ -1,8 +1,8 @@
 """The live-run driver harness, offline: gate answering, evidence, assertions.
 
-The harness is product code (drivers are), so its wire shapes and its refusals
-are pinned here without a daemon. A fake socket replays a recorded turn; the
-assertions the harness offers are exercised on the evidence it builds.
+The harness drives the product's own protocol, so its wire shapes and its
+refusals are pinned here without a daemon. A fake socket replays a recorded
+turn; the assertions the harness offers are exercised on the evidence it builds.
 """
 
 from __future__ import annotations
@@ -10,10 +10,21 @@ from __future__ import annotations
 import asyncio
 import io
 import json
+import sys
+from pathlib import Path
 
 import pytest
 
-from trid3nt_server.testing.live_run import (
+REPO = Path(__file__).resolve().parents[2]
+DEV = REPO / "dev"
+
+if not DEV.is_dir():
+    pytest.skip("dev/ is absent: the dev tools are not on the remote",
+                allow_module_level=True)
+
+sys.path.insert(0, str(REPO))
+
+from dev.testing.live_run import (  # noqa: E402
     GateAnswers,
     LiveRun,
     LiveRunError,
@@ -163,7 +174,7 @@ def _drive(run: LiveRun) -> RunEvidence:
     """``drive`` over a socket that answers nothing - the invoke frame is the point."""
     import contextlib
 
-    from trid3nt_server.testing import live_run as L
+    from dev.testing import live_run as L
 
     ws = _FakeWS([])
 
@@ -194,7 +205,7 @@ async def _case(*_a, **_kw) -> str:
 def test_a_daemon_older_than_HEAD_is_restarted_before_anything_is_driven():
     """Stale evidence does not look like a failure - it looks like a PASS of the
     wrong build, which is the one outcome an acceptance run must never produce."""
-    from trid3nt_server.testing import live_run as L
+    from dev.testing import live_run as L
 
     restarted: list = []
     with pytest.MonkeyPatch.context() as mp:
@@ -207,7 +218,7 @@ def test_a_daemon_older_than_HEAD_is_restarted_before_anything_is_driven():
 
 
 def test_no_daemon_at_all_is_started_and_said_so():
-    from trid3nt_server.testing import live_run as L
+    from dev.testing import live_run as L
 
     restarted: list = []
     with pytest.MonkeyPatch.context() as mp:
@@ -219,7 +230,7 @@ def test_no_daemon_at_all_is_started_and_said_so():
 
 
 def test_a_daemon_newer_than_HEAD_is_left_alone_and_the_run_says_nothing():
-    from trid3nt_server.testing import live_run as L
+    from dev.testing import live_run as L
 
     def _never(*_a, **_kw):
         raise AssertionError("a fresh daemon must not be restarted")
@@ -236,7 +247,7 @@ def test_the_daemon_age_is_the_PROCESS_start_not_the_pid_file_mtime(tmp_path):
     the age of the last ``make agent`` call rather than of the process serving."""
     import os
 
-    from trid3nt_server.testing import live_run as L
+    from dev.testing import live_run as L
 
     pid_file = tmp_path / "agent.pid"
     pid_file.write_text(f"{os.getpid()}\n")

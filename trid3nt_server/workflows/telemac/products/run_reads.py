@@ -250,8 +250,6 @@ def continuity_rel_error(listing_text: str) -> float | None:
         return None
 
 
-# docstring-exempt: the 1-based boundary numbering and the outflow-positive sign
-# convention are stated here and nowhere else, and neither is in the signature.
 def outlet_hydrograph(listing_text: str, *, boundary: int) -> dict[str, Any]:
     """Discharge through one LIQUID BOUNDARY, as the engine itself measured it.
 

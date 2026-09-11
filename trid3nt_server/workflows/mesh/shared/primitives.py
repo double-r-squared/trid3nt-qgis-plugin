@@ -69,8 +69,6 @@ def set_bed(mesh: Mesh, source: Any, interp: str = "nearest",
                      "domain's bathymetry"}])
 
 
-# docstring-exempt: **roles accepts four face shapes and a run-not-node-set
-# contract the signature cannot carry
 def set_boundary_roles(mesh: Mesh, **roles: Any) -> Mesh:
     """Which CONTIGUOUS runs of the boundary carry which role -> the mesh, roled.
 
