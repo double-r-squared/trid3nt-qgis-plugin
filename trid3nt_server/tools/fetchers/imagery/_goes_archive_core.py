@@ -62,9 +62,6 @@ __all__ = [
 logger = logging.getLogger("trid3nt_server.tools.fetchers.imagery._goes_archive_core")
 
 
-# ---------------------------------------------------------------------------
-# Error types (typed-error surface).
-# ---------------------------------------------------------------------------
 
 
 class GOESArchiveError(RuntimeError):
@@ -102,9 +99,6 @@ class GOESArchiveEmptyError(GOESArchiveError):
     retryable = False
 
 
-# ---------------------------------------------------------------------------
-# Constants.
-# ---------------------------------------------------------------------------
 
 #: Satellites with a full raw MCMIPC archive in the public S3 buckets. GOES-18 is
 #: GOES-West (Utah / Nevada fire AOIs); GOES-19 is the GOES-East replacement;
@@ -150,9 +144,6 @@ TRUE_COLOR_GAMMA = 1.0 / 2.2
 #: reproduces a natural-color scene from the ABI's red/blue/NIR bands.
 TRUE_COLOR_GREEN_COEFFS = (0.45, 0.10, 0.45)
 
-# ---------------------------------------------------------------------------
-# Active-fire DETECTION bands + thresholds (the fire-only isolation product).
-# ---------------------------------------------------------------------------
 #
 # The Fire Temperature RGB above renders ALL warm pixels red -- in a midday scene
 # most of that red is just sun-heated desert, NOT fire. To isolate GENUINE active
@@ -294,16 +285,10 @@ def _resolve_res_deg(band: str, true_color_res_deg: float | None) -> float:
     return _OUT_RES_DEG
 
 
-# ---------------------------------------------------------------------------
-# AtomicToolMetadata.
-# ---------------------------------------------------------------------------
 
 
 
 
-# ---------------------------------------------------------------------------
-# Time helpers.
-# ---------------------------------------------------------------------------
 
 
 def _parse_utc(value: Any) -> datetime:
@@ -363,9 +348,6 @@ def _iso_z(dt: datetime) -> str:
     return dt.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-# ---------------------------------------------------------------------------
-# Frame-list assembly (pure).
-# ---------------------------------------------------------------------------
 
 
 def _select_window_keys(keys: list[str], cap: int = MAX_ARCHIVE_FRAMES) -> list[str]:
@@ -478,9 +460,6 @@ def _list_archive_keys_in_window(
     return deduped
 
 
-# ---------------------------------------------------------------------------
-# Fire Temperature band math (pure -- the testable core).
-# ---------------------------------------------------------------------------
 
 
 def _stretch_brightness_temp_red(bt_kelvin: Any) -> Any:
@@ -572,9 +551,6 @@ def _true_color_rgb(
     return np.clip(np.rint(rgb01 * 255.0), 0, 255).astype(np.uint8)
 
 
-# ---------------------------------------------------------------------------
-# Active-fire detection + isolation band math (pure -- the testable core).
-# ---------------------------------------------------------------------------
 
 
 def _detect_active_fire_mask(
@@ -703,9 +679,6 @@ def _bake_fire_over_base(base_rgb: Any, fire_rgba: Any) -> Any:
     return np.clip(np.rint(out), 0, 255).astype(np.uint8)
 
 
-# ---------------------------------------------------------------------------
-# netCDF band read + CF scaling + reproject (the I/O core).
-# ---------------------------------------------------------------------------
 
 
 #: Fallback DN valid range if a CMI variable carries no usable ``valid_range``.
@@ -1020,9 +993,6 @@ def _reproject_fire_baked(
     return baked, out_transform, width, height
 
 
-# ---------------------------------------------------------------------------
-# Per-frame fetch (the read_through fetch_fn).
-# ---------------------------------------------------------------------------
 
 
 def _rgba_array_to_cog_bytes(
@@ -1130,9 +1100,6 @@ def _fetch_archive_frame_cog_bytes(
             pass
 
 
-# ---------------------------------------------------------------------------
-# bbox helpers.
-# ---------------------------------------------------------------------------
 
 
 def _validate_bbox(bbox: Any) -> tuple[float, float, float, float]:

@@ -107,9 +107,6 @@ def _zarr_paths(cycle_date: _dt.date, cycle_hour: int, level: str, s3_var: str) 
     return f"s3://{base}", f"s3://{base}/{level}"
 
 
-# --------------------------------------------------------------------------- #
-# delegate_validate: CONUS gate + forecast_hour horizon (pre-cache, offline)
-# --------------------------------------------------------------------------- #
 
 
 @register_hook("hrrr.validate")
@@ -144,9 +141,6 @@ def validate_inputs(spec: SourceSpec, params: dict[str, Any]) -> None:
         )
 
 
-# --------------------------------------------------------------------------- #
-# delegate_resolve: s3fs backward cycle walk (socketed, pre-cache-key)
-# --------------------------------------------------------------------------- #
 
 
 @register_hook("hrrr.resolve_cycle")
@@ -196,9 +190,6 @@ def resolve_cycle(spec: SourceSpec, params: dict[str, Any], *, timeout_s: float)
     raise err
 
 
-# --------------------------------------------------------------------------- #
-# delegate: open the Zarr slice(s) -> EPSG:4326 array (the hook owns the socket)
-# --------------------------------------------------------------------------- #
 
 
 def _open_component_4326(

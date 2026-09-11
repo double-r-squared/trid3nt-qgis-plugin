@@ -32,9 +32,6 @@ __all__ = [
 logger = logging.getLogger("trid3nt_server.tools.derive.compute_skill_metrics.compute_skill_metrics")
 
 
-# ---------------------------------------------------------------------------
-# Error types (typed-error surface).
-# ---------------------------------------------------------------------------
 
 
 class SkillMetricsError(RuntimeError):
@@ -72,9 +69,6 @@ class SkillMetricsDependencyMissingError(SkillMetricsError):
     retryable = True
 
 
-# ---------------------------------------------------------------------------
-# Constants.
-# ---------------------------------------------------------------------------
 
 #: Below this many paired samples, NSE/KGE/RSR estimates are unstable enough
 #: that a graded verdict would overstate confidence -- values are still
@@ -120,9 +114,6 @@ _METADATA = AtomicToolMetadata(
 )
 
 
-# ---------------------------------------------------------------------------
-# Dependency seam.
-# ---------------------------------------------------------------------------
 
 
 def _import_spotpy_objectivefunctions() -> Any:
@@ -138,13 +129,11 @@ def _import_spotpy_objectivefunctions() -> Any:
     return sof
 
 
-# ---------------------------------------------------------------------------
 # Paper-exact hydrograph-validation primitives: NSE and the Pearson coefficient
 # of determination R2, the two a computed-vs-observed discharge hydrograph is
 # reported against (Godara, Bruland and Alfredsen 2024, Front. Water 6:1384205,
 # eq 14 and eq 13). Both delegate to spotpy, which implements exactly those
 # equations; nothing here reimplements metric math.
-# ---------------------------------------------------------------------------
 
 
 def _finite_pairs(
@@ -188,9 +177,6 @@ def pearson_r2(observed: Any, simulated: Any) -> float | None:
         return _clean(sof.rsquared(obs, sim))
 
 
-# ---------------------------------------------------------------------------
-# Staging and loading.
-# ---------------------------------------------------------------------------
 
 
 def _stage_uri_local(uri: str, tmpdir: str, label: str) -> str:
@@ -310,9 +296,6 @@ def _load_paired_table(
     return observed, simulated, times, n_id_groups
 
 
-# ---------------------------------------------------------------------------
-# Metric computation.
-# ---------------------------------------------------------------------------
 
 
 def _clean(value: Any) -> float | None:
@@ -443,9 +426,6 @@ def _suggested_verdict(
     return "unsatisfactory"
 
 
-# ---------------------------------------------------------------------------
-# Registered tool.
-# ---------------------------------------------------------------------------
 
 
 @register_tool(_METADATA)

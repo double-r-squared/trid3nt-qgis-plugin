@@ -26,10 +26,8 @@ from websockets.asyncio.server import ServerConnection
 
 logger = logging.getLogger("trid3nt_server.server")
 
-# ---------------------------------------------------------------------------
 # Turn config seams. Every mechanism here carries an env kill-switch, so a live
 # regression can be flipped off without a code change.
-# ---------------------------------------------------------------------------
 
 
 def _session_routing_mode(state: "SessionState") -> str:

@@ -33,9 +33,6 @@ _USER_AGENT = (
 )
 
 
-# --------------------------------------------------------------------------- #
-# Typed errors (error_code + retryable, the fetcher honesty-floor surface).
-# --------------------------------------------------------------------------- #
 
 
 class LivingAtlasInputError(ValueError):
@@ -54,14 +51,12 @@ class LivingAtlasSubscriptionError(RuntimeError):
     retryable = False
 
 
-# --------------------------------------------------------------------------- #
 # URL shaping + service probe.
 #
 # Service type -> router mode:
 #   Image Service   -> raster-cog / imageserver_export (exportImage GeoTIFF)
 #   Map Service     -> raster-cog / mapserver_export   (server-symbolized RGBA COG)
 #   Feature Service -> vector-fgb / esri_json          (FeatureServer /query -> FGB)
-# --------------------------------------------------------------------------- #
 
 
 def _split_service(url: str, suffix: str) -> tuple[str, str]:
@@ -128,9 +123,6 @@ def _feature_query_url(service_url: str) -> str:
     return f"{base}/{layer_id}/query"
 
 
-# --------------------------------------------------------------------------- #
-# Dynamic SourceSpec builders (one per service type).
-# --------------------------------------------------------------------------- #
 
 
 def _base_spec(entry_id: str, source_class: str) -> dict[str, Any]:
@@ -254,9 +246,7 @@ def _adhoc_entry(service_url: str) -> LivingAtlasEntry:
     )
 
 
-# --------------------------------------------------------------------------- #
 # Payload estimator (the tool-payload-warning seam resolves this by name).
-# --------------------------------------------------------------------------- #
 
 
 def estimate_payload_mb(bbox: Any = None, **_kw: Any) -> float:
@@ -271,9 +261,6 @@ def estimate_payload_mb(bbox: Any = None, **_kw: Any) -> float:
     return max(0.05, 1.0 * area)
 
 
-# --------------------------------------------------------------------------- #
-# The registered tool.
-# --------------------------------------------------------------------------- #
 
 
 # The OUTER tool does not cache itself -- route() caches under the per-item dynamic

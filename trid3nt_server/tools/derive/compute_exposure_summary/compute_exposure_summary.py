@@ -30,9 +30,6 @@ __all__ = [
 logger = logging.getLogger("trid3nt_server.tools.derive.compute_exposure_summary.compute_exposure_summary")
 
 
-# ---------------------------------------------------------------------------
-# Typed errors.
-# ---------------------------------------------------------------------------
 
 
 class ExposureSummaryError(RuntimeError):
@@ -65,9 +62,6 @@ class ExposureUpstreamError(ExposureSummaryError):
     retryable = True
 
 
-# ---------------------------------------------------------------------------
-# Session store.
-# ---------------------------------------------------------------------------
 
 _GLOBAL_KEY = "__global__"
 _MAX_SESSION_ENTRIES = 32
@@ -99,9 +93,6 @@ def get_session_exposure(case_id: str | None) -> dict[str, Any] | None:
     return _SESSION_EXPOSURE.get(_GLOBAL_KEY)
 
 
-# ---------------------------------------------------------------------------
-# Metadata.
-# ---------------------------------------------------------------------------
 
 _METADATA = AtomicToolMetadata(
     name="compute_exposure_summary",
@@ -111,9 +102,6 @@ _METADATA = AtomicToolMetadata(
 )
 
 
-# ---------------------------------------------------------------------------
-# Fetcher indirections.
-# ---------------------------------------------------------------------------
 
 
 def _fetch_population_layer(
@@ -136,9 +124,6 @@ def _fetch_buildings_layer(bbox: tuple[float, float, float, float]) -> Any:
     return fetch_buildings(bbox=bbox)
 
 
-# ---------------------------------------------------------------------------
-# Staging + footprint helpers.
-# ---------------------------------------------------------------------------
 
 
 def _stage_uri_local(uri: str, tmpdir: str, label: str) -> str:
@@ -286,9 +271,6 @@ def _buildings_in_footprint(
     return exposed
 
 
-# ---------------------------------------------------------------------------
-# Registered tool.
-# ---------------------------------------------------------------------------
 
 
 @register_tool(

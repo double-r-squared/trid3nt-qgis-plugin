@@ -29,9 +29,6 @@ __all__ = [
 
 logger = logging.getLogger("trid3nt_server.tools.derive.compute_hillshade.compute_hillshade")
 
-# ---------------------------------------------------------------------------
-# Error class
-# ---------------------------------------------------------------------------
 
 
 class HillshadeComputeError(RuntimeError):
@@ -44,9 +41,6 @@ class HillshadeComputeError(RuntimeError):
         self.error_code = error_code
 
 
-# ---------------------------------------------------------------------------
-# Tool metadata
-# ---------------------------------------------------------------------------
 
 _COMPUTE_HILLSHADE_METADATA = AtomicToolMetadata(
     name="compute_hillshade",
@@ -55,9 +49,6 @@ _COMPUTE_HILLSHADE_METADATA = AtomicToolMetadata(
     cacheable=True,
 )
 
-# ---------------------------------------------------------------------------
-# gdaldem binary resolution + COG encode (shared runner)
-# ---------------------------------------------------------------------------
 
 
 def _get_gdaldem_bin() -> str:
@@ -110,9 +101,6 @@ def _ensure_output_crs_matches_dem(dem_path: str, output_path: str) -> None:
         )
 
 
-# ---------------------------------------------------------------------------
-# DEM read helper
-# ---------------------------------------------------------------------------
 
 
 def _download_dem_bytes(dem_uri: str, storage_client: object | None = None) -> bytes:
@@ -126,9 +114,6 @@ def _download_dem_bytes(dem_uri: str, storage_client: object | None = None) -> b
     )
 
 
-# ---------------------------------------------------------------------------
-# gdaldem hillshade subprocess wrapper
-# ---------------------------------------------------------------------------
 
 
 def _run_gdaldem_hillshade(
@@ -235,9 +220,6 @@ def _multiply_blend_hillshades(
         ) from exc
 
 
-# ---------------------------------------------------------------------------
-# Per-style fetch function builders
-# ---------------------------------------------------------------------------
 
 
 def _make_fetch_fn(
@@ -331,9 +313,6 @@ def _make_fetch_fn(
                     pass
 
 
-# ---------------------------------------------------------------------------
-# Tool registration
-# ---------------------------------------------------------------------------
 
 
 @register_tool(

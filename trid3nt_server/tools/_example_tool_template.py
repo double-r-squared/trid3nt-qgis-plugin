@@ -29,7 +29,6 @@ from . import register_tool
 
 __all__ = ["example_bbox_area"]
 
-# ---------------------------------------------------------------------------
 # 1. The metadata (trid3nt_contracts.tool_registry.AtomicToolMetadata).
 #
 # Every atomic tool declares one at module load. The cross-field validator runs
@@ -42,7 +41,6 @@ __all__ = ["example_bbox_area"]
 #   - source_class=None (no cache-bucket prefix is needed when nothing is cached).
 # A network FETCHER instead sets cacheable=True + ttl_class="static-30d" (or
 # semi-static-7d / dynamic-1h) + a source_class prefix like "dem".
-# ---------------------------------------------------------------------------
 _METADATA = AtomicToolMetadata(
     name="example_bbox_area",  # TODO: rename to your tool's function name (== registry key)
     ttl_class="live-no-cache",  # TODO: a fetcher uses "static-30d" / "semi-static-7d" / "dynamic-1h"
@@ -57,7 +55,6 @@ _METADATA = AtomicToolMetadata(
 )
 
 
-# ---------------------------------------------------------------------------
 # 2. The tool function.
 #
 # Signature conventions:
@@ -76,7 +73,6 @@ _METADATA = AtomicToolMetadata(
 #
 # TODO: in a REAL tool, drop the ``if _ENABLED`` gate below and decorate the
 # function directly:  @register_tool(_METADATA, open_world_hint=True)
-# ---------------------------------------------------------------------------
 def example_bbox_area(
     bbox: tuple[float, float, float, float],
     label: str = "area of interest",
@@ -151,7 +147,6 @@ def example_bbox_area(
     }
 
 
-# ---------------------------------------------------------------------------
 # 3. Registration.
 #
 # In a REAL tool this is a single line directly above the function:
@@ -167,7 +162,6 @@ def example_bbox_area(
 #
 # TODO: in your real tool DELETE this block and use the plain @register_tool
 # decorator shown above.
-# ---------------------------------------------------------------------------
 _ENABLED = os.environ.get("TRID3NT_ENABLE_EXAMPLE_TOOL", "").strip().lower() in (
     "1",
     "true",

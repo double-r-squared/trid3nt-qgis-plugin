@@ -51,9 +51,6 @@ __all__ = [
 ]
 
 
-# ---------------------------------------------------------------------------
-# Typed errors, whose codes the router preserves through the delegate wrapper.
-# ---------------------------------------------------------------------------
 
 
 class BlueTopoError(FetchError):
@@ -95,9 +92,6 @@ class BlueTopoCoverageGapError(BlueTopoError):
     retryable = False
 
 
-# ---------------------------------------------------------------------------
-# Constants -- each one a MEASURED fact about the live bucket, not a guess.
-# ---------------------------------------------------------------------------
 
 #: The AWS Open Data bucket, anonymous read, us-east-1.
 BLUETOPO_BUCKET = "noaa-ocs-nationalbathymetry-pds"
@@ -133,9 +127,6 @@ _MAX_TILES = 64
 _scheme_memo: tuple[float, str] | None = None
 
 
-# ---------------------------------------------------------------------------
-# Discovery: the tile scheme is the coverage truth.
-# ---------------------------------------------------------------------------
 
 
 def latest_tile_scheme_key(*, timeout_s: float = 60.0) -> str:
@@ -241,9 +232,6 @@ def _tier_metres(label: str) -> float:
         return 0.0
 
 
-# ---------------------------------------------------------------------------
-# The datum gate. BlueTopo states NAVD88 machine-readably; this reads it.
-# ---------------------------------------------------------------------------
 
 
 def assert_navd88_tile(vsicurl_path: str) -> str:
@@ -278,9 +266,6 @@ def assert_navd88_tile(vsicurl_path: str) -> str:
     )
 
 
-# ---------------------------------------------------------------------------
-# HOOK: delegate_validate -- pre-cache, pre-network input gate.
-# ---------------------------------------------------------------------------
 
 
 @register_hook("bluetopo.validate")
@@ -312,9 +297,6 @@ def validate_bluetopo(spec: Any, params: dict[str, Any]) -> None:
         raise BlueTopoInputError(f"min_pixel_m must be > 0 and finite; got {mpx!r}")
 
 
-# ---------------------------------------------------------------------------
-# HOOK: delegate -- select, gate, merge, record provenance.
-# ---------------------------------------------------------------------------
 
 
 @register_hook("bluetopo.read")
@@ -389,9 +371,6 @@ def read_bluetopo(
     return array, transform, crs
 
 
-# ---------------------------------------------------------------------------
-# HOOK: envelope -- the layer identity + the provenance replayed from the channel.
-# ---------------------------------------------------------------------------
 
 
 @register_hook("bluetopo.envelope")

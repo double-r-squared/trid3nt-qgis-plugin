@@ -27,9 +27,6 @@ __all__ = [
 logger = logging.getLogger("trid3nt_server.emission.charts")
 
 
-# ---------------------------------------------------------------------------
-# Constants
-# ---------------------------------------------------------------------------
 
 #: Maximum number of inline rows in a Vega-Lite spec's ``data.values``, so the
 #: wire envelope (and the function_response that summarizes it) stays small.
@@ -53,9 +50,6 @@ _RASTER_EXTS = {".tif", ".tiff", ".img", ".vrt", ".nc"}
 
 _VECTOR_EXTS = {".fgb", ".geojson", ".gpkg", ".shp", ".json", ".gml", ".kml"}
 
-# ---------------------------------------------------------------------------
-# Error type (typed-error surface)
-# ---------------------------------------------------------------------------
 
 
 class ChartToolError(RuntimeError):
@@ -69,9 +63,6 @@ class ChartToolError(RuntimeError):
         self.error_code = error_code
         self.retryable = retryable
 
-# ---------------------------------------------------------------------------
-# URI / layer-type helpers
-# ---------------------------------------------------------------------------
 
 
 def _download_uri_bytes(uri: str, storage_client: object | None = None) -> bytes:
@@ -238,9 +229,6 @@ def _validate_uri(uri: object, field: str) -> str:
     return uri.strip()
 
 
-# ---------------------------------------------------------------------------
-# Shared payload builder - single place every tool constructs the contract.
-# ---------------------------------------------------------------------------
 
 
 def build_chart_payload(
@@ -293,13 +281,11 @@ def is_chart_emission_result(result: Any) -> bool:
         and isinstance(result.get("chart_id"), str)
     )
 
-# ---------------------------------------------------------------------------
 # Engine-output chart builders (wire non-raster engine values).
 #
 # Every number is a real parsed engine output, never synthesized. When the
 # required series is absent or empty each builder returns ``None``: the honesty
 # floor is to emit NO chart rather than invent one.
-# ---------------------------------------------------------------------------
 
 
 def build_budget_partition_chart(
@@ -465,9 +451,6 @@ def build_hydrograph_overlay_chart(
         created_turn_id=created_turn_id,
     )
 
-# ---------------------------------------------------------------------------
-# Raster / vector data-extraction helpers
-# ---------------------------------------------------------------------------
 
 
 def _sample_raster_values(local_path: str) -> np.ndarray:

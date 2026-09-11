@@ -40,9 +40,6 @@ _VALID_STATE_CODES: frozenset[str] = frozenset(
 )
 
 
-# --------------------------------------------------------------------------- #
-# pre_resolve: spatial-selector + temporal-window resolution -> _mode.
-# --------------------------------------------------------------------------- #
 
 
 def _resolve_window(sc: str, sfx: str, start_date: Any, end_date: Any, period: Any):
@@ -129,9 +126,6 @@ def resolve(spec: SourceSpec, params: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-# --------------------------------------------------------------------------- #
-# build_request: ordered plan(s) for the parse_fallback executor.
-# --------------------------------------------------------------------------- #
 
 
 def _selector_params(state_code: str | None, bbox: list[float] | None) -> dict[str, str]:
@@ -168,9 +162,6 @@ def build_request(spec: SourceSpec, params: dict[str, Any]) -> list[RequestPlan]
     return [iv_plan, site_plan]
 
 
-# --------------------------------------------------------------------------- #
-# parse_response: self-detecting IV-JSON / IV-window-JSON / Site-RDB decode.
-# --------------------------------------------------------------------------- #
 
 
 def _feature(lon: float, lat: float, props: dict[str, Any]) -> dict[str, Any]:

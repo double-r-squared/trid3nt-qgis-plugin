@@ -28,9 +28,6 @@ __all__ = [
 logger = logging.getLogger("trid3nt_server.tools.derive.query_point_hazard.query_point_hazard")
 
 
-# ---------------------------------------------------------------------------
-# Typed errors.
-# ---------------------------------------------------------------------------
 
 
 class PointHazardError(RuntimeError):
@@ -68,9 +65,6 @@ class PointHazardUpstreamError(PointHazardError):
     retryable = True
 
 
-# ---------------------------------------------------------------------------
-# Metadata.
-# ---------------------------------------------------------------------------
 
 _METADATA = AtomicToolMetadata(
     name="query_point_hazard",
@@ -80,9 +74,6 @@ _METADATA = AtomicToolMetadata(
 )
 
 
-# ---------------------------------------------------------------------------
-# Location resolution.
-# ---------------------------------------------------------------------------
 
 
 def _geocode_place(place: str) -> dict[str, Any]:
@@ -136,9 +127,6 @@ def resolve_point(
     )
 
 
-# ---------------------------------------------------------------------------
-# Case-layer enumeration.
-# ---------------------------------------------------------------------------
 
 
 def resolve_case_id(case_id: Any, error_cls: type[Exception] = NoCaseBoundError) -> str:
@@ -185,9 +173,6 @@ async def layers_from_case(
     return layers, bbox, getattr(case, "title", None) or case_id, case
 
 
-# ---------------------------------------------------------------------------
-# Raster staging + point sampling.
-# ---------------------------------------------------------------------------
 
 
 def stage_layer_local(uri: str, tmpdir: str, label: str) -> str:
@@ -250,9 +235,6 @@ def sample_raster_at_point(
     return value, None, units
 
 
-# ---------------------------------------------------------------------------
-# Registered tool.
-# ---------------------------------------------------------------------------
 
 
 @register_tool(

@@ -52,9 +52,6 @@ _TOOL_DISCIPLINE_SYSTEM = (
 # Logged once per process if the session model id looks like a Bedrock id.
 _BEDROCK_ID_WARN_DONE = False
 
-# ---------------------------------------------------------------------------
-# Config helpers
-# ---------------------------------------------------------------------------
 
 _BEDROCK_ID_PATTERNS = (
     "anthropic.",
@@ -142,9 +139,6 @@ def openai_model(session_model: str | None = None) -> str:
     )
 
 
-# ---------------------------------------------------------------------------
-# Schema conversion: genai FunctionDeclaration -> OpenAI tools[]
-# ---------------------------------------------------------------------------
 
 _TYPE_MAP = {
     "STRING": "string",
@@ -156,9 +150,6 @@ _TYPE_MAP = {
     "TYPE_UNSPECIFIED": "string",
 }
 
-# ---------------------------------------------------------------------------
-# Tool-schema slimming (LOCAL path only)
-# ---------------------------------------------------------------------------
 #
 # The registry's tool and param descriptions are written for large cloud
 # models; on a small local context window the schemas alone can crowd the
@@ -326,9 +317,6 @@ def tool_declarations_to_openai_tools(
     return tools
 
 
-# ---------------------------------------------------------------------------
-# History conversion: genai Content[] -> OpenAI messages[]
-# ---------------------------------------------------------------------------
 
 
 def _coalesce_messages(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -471,9 +459,6 @@ def contents_to_openai_messages(
     return _coalesce_messages(messages)
 
 
-# ---------------------------------------------------------------------------
-# Streaming
-# ---------------------------------------------------------------------------
 
 
 #: 429 retry policy: a free-tier model pool is transiently rate-limited, and a

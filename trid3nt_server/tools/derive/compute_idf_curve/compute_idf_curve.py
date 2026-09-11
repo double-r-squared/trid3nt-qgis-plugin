@@ -27,9 +27,6 @@ __all__ = [
 logger = logging.getLogger("trid3nt_server.tools.derive.compute_idf_curve.compute_idf_curve")
 
 
-# ---------------------------------------------------------------------------
-# Error types (typed-error surface).
-# ---------------------------------------------------------------------------
 
 
 class IdfCurveError(RuntimeError):
@@ -60,9 +57,6 @@ class IdfCurveUpstreamError(IdfCurveError):
     retryable = True
 
 
-# ---------------------------------------------------------------------------
-# Metadata + fetch seam.
-# ---------------------------------------------------------------------------
 
 _METADATA = AtomicToolMetadata(
     name="compute_idf_curve",
@@ -77,9 +71,6 @@ def _fetch_pfds_matrix_bytes(lat: float, lon: float) -> bytes:
     return _df._fetch_atlas14_pfds_bytes(lat, lon)
 
 
-# ---------------------------------------------------------------------------
-# Location normalization.
-# ---------------------------------------------------------------------------
 
 
 def _resolve_latlon(location: Any) -> tuple[float, float]:
@@ -114,9 +105,6 @@ def _resolve_latlon(location: Any) -> tuple[float, float]:
     return lat, lon
 
 
-# ---------------------------------------------------------------------------
-# Registered tool.
-# ---------------------------------------------------------------------------
 
 
 @register_tool(

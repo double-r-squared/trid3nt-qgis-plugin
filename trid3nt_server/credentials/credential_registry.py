@@ -45,14 +45,12 @@ class CredentialProvider:
     default_message: str
 
 
-# --------------------------------------------------------------------------- #
 # Provider registry -- ALL keyed atomic-tool data sources. Every provider_id is
 # a member of the closed ``ProviderID`` Literal in ``trid3nt_contracts.secrets``
 # so the saved key lands under the same scope the resolver's session cache
 # re-reads on retry. Each ``secret_key_name`` is the SAME env-var name the
 # tool's ``_resolve_*_key`` reads as its env fallback, so the user-facing name
 # and the code path agree.
-# --------------------------------------------------------------------------- #
 
 CREDENTIAL_PROVIDERS: dict[str, CredentialProvider] = {
     "firms": CredentialProvider(
@@ -82,10 +80,8 @@ CREDENTIAL_PROVIDERS: dict[str, CredentialProvider] = {
 }
 
 
-# --------------------------------------------------------------------------- #
 # Tool → provider mapping. A tool name resolves to the provider whose key it
 # needs. ERA5 and GTSM both route to the shared ``ecmwf_cds`` CDS provider.
-# --------------------------------------------------------------------------- #
 
 TOOL_PROVIDER: dict[str, str] = {
     "fetch_firms_active_fire": "firms",
@@ -94,7 +90,6 @@ TOOL_PROVIDER: dict[str, str] = {
 }
 
 
-# --------------------------------------------------------------------------- #
 # Per-tool auth/credential error-code set. The server treats a dispatch
 # failure whose ``error_code`` is in this tool's set (OR whose exception is the
 # tool's credential-error class, OR whose error matches the generic credential
@@ -103,7 +98,6 @@ TOOL_PROVIDER: dict[str, str] = {
 # explicit ``*_AUTH_ERROR`` / ``*_MISSING_KEY`` typed-error codes; the generic
 # pattern matcher in ``is_credential_error`` is the catch-all for codes/bodies
 # that don't appear here (e.g. a 401 surfaced under an UPSTREAM code).
-# --------------------------------------------------------------------------- #
 
 TOOL_AUTH_ERROR_CODES: dict[str, frozenset[str]] = {
     "fetch_firms_active_fire": frozenset(
@@ -118,11 +112,9 @@ TOOL_AUTH_ERROR_CODES: dict[str, frozenset[str]] = {
 }
 
 
-# --------------------------------------------------------------------------- #
 # Generic "needs an API key" detection helpers (provider-agnostic). These back
 # ``is_credential_error`` so a credential failure is caught regardless of which
 # tool raised it or whether the tool authored an explicit ``*_AUTH_ERROR`` code.
-# --------------------------------------------------------------------------- #
 
 # Substrings that, when present in an ``error_code``, mark it credential-shaped.
 _CREDENTIAL_CODE_SUBSTRINGS: tuple[str, ...] = (

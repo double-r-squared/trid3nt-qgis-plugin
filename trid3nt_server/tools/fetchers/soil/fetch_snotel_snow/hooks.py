@@ -39,9 +39,6 @@ def _headers(spec: SourceSpec) -> dict[str, str]:
     return {"User-Agent": spec.auth.user_agent}
 
 
-# --------------------------------------------------------------------------- #
-# MAIN FETCH -- stations catalog (the spatial primary) -> bbox-filtered features.
-# --------------------------------------------------------------------------- #
 
 
 @_hooks.register_hook("snotel_snow.build_request")
@@ -111,9 +108,6 @@ def parse_response(spec: SourceSpec, params: dict[str, Any], bodies: list[bytes]
     return feats
 
 
-# --------------------------------------------------------------------------- #
-# PHASE E -- one batched data GET for all triplets; null-tolerant merge.
-# --------------------------------------------------------------------------- #
 
 
 @_hooks.register_hook("snotel_snow.enrich_plan")

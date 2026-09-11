@@ -90,9 +90,6 @@ def catalog_path(curation: CurationClass) -> Path:
     return living_atlas_dir() / f"living_atlas_{curation}.yaml"
 
 
-# --------------------------------------------------------------------------- #
-# Load + cache.
-# --------------------------------------------------------------------------- #
 
 #: Per-stratum in-memory cache (lazy; refreshed at process restart or reset).
 _CACHE: dict[CurationClass, list[LivingAtlasEntry]] = {}

@@ -28,9 +28,6 @@ __all__ = [
 logger = logging.getLogger("trid3nt_server.tools.derive.spatial_query.spatial_query")
 
 
-# ---------------------------------------------------------------------------
-# Constants
-# ---------------------------------------------------------------------------
 
 #: Hard cap on returned rows (wire-size + function_response safety rail).
 _ROW_CAP = 5000
@@ -91,9 +88,6 @@ _FORBIDDEN_KEYWORDS = frozenset(
 _WORD_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 
 
-# ---------------------------------------------------------------------------
-# Typed error (resilience surface)
-# ---------------------------------------------------------------------------
 
 
 # ``error_code`` is one of SQL_NOT_ALLOWED (the guard rejected the statement),
@@ -109,9 +103,6 @@ class SpatialQueryError(RuntimeError):
         self.retryable = retryable
 
 
-# ---------------------------------------------------------------------------
-# Read-only guard
-# ---------------------------------------------------------------------------
 
 
 def _strip_literals_and_comments(sql: str) -> str:
@@ -183,9 +174,6 @@ def _validate_read_only(sql: str) -> None:
         )
 
 
-# ---------------------------------------------------------------------------
-# DuckDB session + layer views
-# ---------------------------------------------------------------------------
 
 
 def _open_connection() -> Any:
@@ -346,9 +334,6 @@ def _create_view_or_raise(con: Any, alias: str, target: str, display_uri: str) -
         ) from exc
 
 
-# ---------------------------------------------------------------------------
-# Result shaping
-# ---------------------------------------------------------------------------
 
 
 def _json_safe(value: Any) -> Any:
@@ -392,9 +377,6 @@ def _summarize(columns: list[str], rows: list[list[Any]], truncated: bool) -> st
     return head
 
 
-# ---------------------------------------------------------------------------
-# Result materialization (geometry results paint, not just tabulate)
-# ---------------------------------------------------------------------------
 
 
 class SpatialQueryLayerURI(LayerURI):
@@ -600,9 +582,6 @@ def _materialize_result(
     )
 
 
-# ---------------------------------------------------------------------------
-# Tool metadata + registration
-# ---------------------------------------------------------------------------
 
 _METADATA = AtomicToolMetadata(
     name="spatial_query",

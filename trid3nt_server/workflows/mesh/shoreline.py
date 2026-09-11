@@ -84,9 +84,6 @@ def _why(rung: "_Rung", asked: float, tried: Sequence[str]) -> str:
     return f"{rung.name} was not reached"
 
 
-# --------------------------------------------------------------------------- #
-# The rungs.
-# --------------------------------------------------------------------------- #
 @dataclass(frozen=True, slots=True)
 class _Rung:
     """One substrate: what it is called, what it resolves, and how it serves."""
@@ -174,9 +171,6 @@ def _coastline_walks(layer: Any) -> list[list[tuple[float, float]]]:
     return [w for w in walks if len(w) >= 2]
 
 
-# --------------------------------------------------------------------------- #
-# Open coastline -> the land it bounds.
-# --------------------------------------------------------------------------- #
 def land_polygons(walks: Sequence[Sequence[tuple[float, float]]],
                   bbox: tuple[float, float, float, float]) -> list[dict[str, Any]]:
     """Coastline walks + the extent's box -> the LAND polygons, as GeoJSON.

@@ -20,9 +20,6 @@ __all__ = [
 
 logger = logging.getLogger("trid3nt_server.tools.derive.compute_cross_section.compute_cross_section")
 
-# ---------------------------------------------------------------------------
-# Constants
-# ---------------------------------------------------------------------------
 
 #: Default number of stations sampled along the line. ~200 is dense enough for a
 #: smooth profile while keeping the inline chart data well under chart_tools'
@@ -42,9 +39,6 @@ _MAX_LAYERS = 4
 _VEGA_LITE_V5_SCHEMA = "https://vega.github.io/schema/vega-lite/v5.json"
 
 
-# ---------------------------------------------------------------------------
-# Error type (typed-error surface)
-# ---------------------------------------------------------------------------
 
 
 # ``error_code`` is one of LINE_INVALID, NO_LAYERS, TOO_MANY_LAYERS,
@@ -58,9 +52,6 @@ class CrossSectionError(RuntimeError):
         self.retryable = retryable
 
 
-# ---------------------------------------------------------------------------
-# Tool metadata
-# ---------------------------------------------------------------------------
 
 # Never cached: every call mints a fresh chart_id, and a cached envelope would
 # hand the panel a stale one. The raster read is already cached upstream.
@@ -73,9 +64,6 @@ _METADATA = AtomicToolMetadata(
 )
 
 
-# ---------------------------------------------------------------------------
-# Line resolution
-# ---------------------------------------------------------------------------
 
 
 def _coords_from_geojson_geometry(geom: dict[str, Any]) -> list[list[float]]:
@@ -175,9 +163,6 @@ def _resolve_line_coords(line: Any) -> list[list[float]]:
     return deduped
 
 
-# ---------------------------------------------------------------------------
-# Raster open helper
-# ---------------------------------------------------------------------------
 
 
 def _open_raster_source(layer_uri: str) -> tuple[Any, bool]:
@@ -208,9 +193,6 @@ def _open_raster_source(layer_uri: str) -> tuple[Any, bool]:
     )
 
 
-# ---------------------------------------------------------------------------
-# Station interpolation + geodesic distance
-# ---------------------------------------------------------------------------
 
 
 def _interpolate_stations(
@@ -241,9 +223,6 @@ def _interpolate_stations(
     return stations, distances
 
 
-# ---------------------------------------------------------------------------
-# Per-layer sampling
-# ---------------------------------------------------------------------------
 
 
 def _sample_layer(
@@ -315,9 +294,6 @@ def _sample_layer(
         ) from exc
 
 
-# ---------------------------------------------------------------------------
-# Layer label helper
-# ---------------------------------------------------------------------------
 
 
 def _layer_label(layer_uri: str) -> str:
@@ -328,9 +304,6 @@ def _layer_label(layer_uri: str) -> str:
     return base or layer_uri
 
 
-# ---------------------------------------------------------------------------
-# Tool
-# ---------------------------------------------------------------------------
 
 
 @register_tool(
@@ -484,9 +457,6 @@ def compute_cross_section(
     )
 
 
-# ---------------------------------------------------------------------------
-# Vega-Lite spec + caption builders
-# ---------------------------------------------------------------------------
 
 
 def _build_profile_spec(

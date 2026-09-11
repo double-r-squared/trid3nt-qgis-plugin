@@ -28,9 +28,6 @@ __all__ = [
     "read_population",
 ]
 
-# --------------------------------------------------------------------------- #
-# Vintage window and country-envelope table.
-# --------------------------------------------------------------------------- #
 
 #: The WorldPop Global_2000_2020 tree publishes only the vintages 2000..2020
 #: inclusive; a year outside this window composes a well-formed URL into a
@@ -113,9 +110,6 @@ def _worldpop_url_for(iso3: str, year: int, resolution_m: int = 1000) -> str:
     )
 
 
-# --------------------------------------------------------------------------- #
-# validate: the pre-cache input gate.
-# --------------------------------------------------------------------------- #
 
 
 @register_hook("worldpop.validate")
@@ -127,9 +121,6 @@ def validate_population(spec: SourceSpec, params: dict[str, Any]) -> None:
     _worldpop_year_from_dataset(spec, dataset)
 
 
-# --------------------------------------------------------------------------- #
-# read: whole-object download-then-window (the sanctioned delegate socket).
-# --------------------------------------------------------------------------- #
 
 
 @register_hook("worldpop.read")

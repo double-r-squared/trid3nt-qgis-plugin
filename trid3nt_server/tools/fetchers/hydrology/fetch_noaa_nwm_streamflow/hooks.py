@@ -55,10 +55,8 @@ __all__ = [
 ]
 
 
-# ---------------------------------------------------------------------------
 # Error types (typed-error surface). Base = FetchError so the pinned
 # error_code survives library_delegate.invoke's passthrough.
-# ---------------------------------------------------------------------------
 
 
 class NWMStreamflowError(FetchError):
@@ -98,9 +96,6 @@ class NWMStreamflowEmptyError(NWMStreamflowError):
     retryable = False
 
 
-# ---------------------------------------------------------------------------
-# Constants.
-# ---------------------------------------------------------------------------
 
 #: NOAA NWM public S3 bucket (open access, no auth).
 _S3_BASE = "https://noaa-nwm-pds.s3.amazonaws.com"
@@ -132,10 +127,8 @@ _NLDI_SAMPLE_GRID = 5
 _MAX_REACHES = 500
 
 
-# ---------------------------------------------------------------------------
 # Payload estimator (kept importable for tests; the router synthesizes its own
 # from source.yaml's payload_estimate block for the promoted tool).
-# ---------------------------------------------------------------------------
 
 
 def estimate_payload_mb(
@@ -157,9 +150,6 @@ def estimate_payload_mb(
     return max(0.01, reaches * 100 / 1_000_000.0)
 
 
-# ---------------------------------------------------------------------------
-# bbox and date helpers, all raising NWMStreamflowInputError.
-# ---------------------------------------------------------------------------
 
 
 def _validate_conus_bbox(bbox: tuple[float, float, float, float]) -> None:
@@ -199,9 +189,6 @@ def _parse_valid_time(valid_time: str | None) -> _dt.datetime | None:
     return dt.astimezone(_dt.timezone.utc)
 
 
-# ---------------------------------------------------------------------------
-# HTTP helpers (the delegate owns its own socket, the sanctioned impurity).
-# ---------------------------------------------------------------------------
 
 
 def _http_get(url: str, timeout: float) -> bytes:
@@ -230,9 +217,6 @@ def _list_s3_keys(prefix: str, max_keys: int = 1000) -> list[str]:
     return re.findall(r"<Key>([^<]+)</Key>", body)
 
 
-# ---------------------------------------------------------------------------
-# NWM file resolution.
-# ---------------------------------------------------------------------------
 
 
 def _latest_nwm_date() -> str:
@@ -316,9 +300,6 @@ def _resolve_nwm_key(
     return key, valid_time
 
 
-# ---------------------------------------------------------------------------
-# NLDI bbox-sampling -> list of COMIDs + per-reach geometry.
-# ---------------------------------------------------------------------------
 
 
 def _nldi_snap_point(lon: float, lat: float) -> int | None:
@@ -386,9 +367,6 @@ def _discover_comids_in_bbox(bbox: tuple[float, float, float, float]) -> list[in
     return list(found)
 
 
-# ---------------------------------------------------------------------------
-# netCDF -> streamflow lookup.
-# ---------------------------------------------------------------------------
 
 
 def _load_streamflow_by_feature(nc_path: str) -> tuple[dict[int, float], _dt.datetime]:
@@ -451,9 +429,6 @@ def _load_streamflow_by_feature(nc_path: str) -> tuple[dict[int, float], _dt.dat
             pass
 
 
-# ---------------------------------------------------------------------------
-# The composite fetch (delegate body): S3 netCDF + NLDI sample -> point features.
-# ---------------------------------------------------------------------------
 
 
 def _fetch_nwm_features(
@@ -555,9 +530,6 @@ def _fetch_nwm_features(
     return feats, derived_valid_time, len(bbox_comids)
 
 
-# ---------------------------------------------------------------------------
-# HOOK: delegate_validate -- CONUS + short_range + valid_time gate (pre-cache).
-# ---------------------------------------------------------------------------
 
 
 @register_hook("nwm_streamflow.validate")
@@ -580,9 +552,6 @@ def validate_nwm_streamflow(spec: Any, params: dict[str, Any]) -> None:
     _parse_valid_time(params.get("valid_time"))
 
 
-# ---------------------------------------------------------------------------
-# HOOK: delegate -- own the composite fetch; record provenance; return features.
-# ---------------------------------------------------------------------------
 
 
 @register_hook("nwm_streamflow.read")
@@ -610,9 +579,6 @@ def read_nwm_streamflow(
     return feats
 
 
-# ---------------------------------------------------------------------------
-# HOOK: envelope -- layer_id and name, plus the reference-time and reach provenance.
-# ---------------------------------------------------------------------------
 
 
 @register_hook("nwm_streamflow.envelope")

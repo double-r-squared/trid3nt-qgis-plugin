@@ -32,9 +32,6 @@ __all__ = [
 logger = logging.getLogger("trid3nt_server.tools.derive.enhance_satellite_image.enhance_satellite_image")
 
 
-# ---------------------------------------------------------------------------
-# Error class
-# ---------------------------------------------------------------------------
 
 
 class EnhanceSatelliteImageError(RuntimeError):
@@ -49,9 +46,6 @@ class EnhanceSatelliteImageError(RuntimeError):
         self.error_code = error_code
 
 
-# ---------------------------------------------------------------------------
-# Tool metadata
-# ---------------------------------------------------------------------------
 
 _ENHANCE_SATELLITE_IMAGE_METADATA = AtomicToolMetadata(
     name="enhance_satellite_image",
@@ -61,12 +55,10 @@ _ENHANCE_SATELLITE_IMAGE_METADATA = AtomicToolMetadata(
 )
 
 
-# ---------------------------------------------------------------------------
 # Pure enhancement passes, numpy and PIL only.
 #
 # Each takes and returns a float32 RGB array of shape (3, H, W) in [0, 255],
 # except apply_upscale, which changes H and W.
-# ---------------------------------------------------------------------------
 
 
 def estimate_haze_floor(rgb, low_percentile: float = 1.0):
@@ -210,9 +202,6 @@ def apply_upscale(rgb, upscale_factor: int):
     return out
 
 
-# ---------------------------------------------------------------------------
-# URI staging
-# ---------------------------------------------------------------------------
 
 
 def _stage_uri_to_local(uri: str) -> tuple[str, bool]:
@@ -240,9 +229,6 @@ def _stage_uri_to_local(uri: str) -> tuple[str, bool]:
     return uri, False
 
 
-# ---------------------------------------------------------------------------
-# Raster read (RGB(A)) + write
-# ---------------------------------------------------------------------------
 
 
 def _read_rgb(path: str):
@@ -384,9 +370,6 @@ def _run_enhance(
                     pass
 
 
-# ---------------------------------------------------------------------------
-# Registered atomic tool
-# ---------------------------------------------------------------------------
 
 
 @register_tool(

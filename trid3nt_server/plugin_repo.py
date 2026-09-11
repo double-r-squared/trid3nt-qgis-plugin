@@ -81,9 +81,6 @@ class PluginRepoBuildError(Exception):
     request before the repo was ever packaged)."""
 
 
-# ---------------------------------------------------------------------------
-# Path resolution
-# ---------------------------------------------------------------------------
 
 
 def _repo_root() -> Path:
@@ -112,9 +109,6 @@ def _served_dir(served_dir: Path | str | None = None) -> Path:
     return _repo_root() / "run" / "plugin-repo"
 
 
-# ---------------------------------------------------------------------------
-# metadata.txt + tree hash
-# ---------------------------------------------------------------------------
 
 
 def _parse_metadata_txt(path: Path) -> dict[str, str]:
@@ -187,10 +181,8 @@ def _source_signature(plugin_src: Path) -> tuple[tuple[str, int, int], ...]:
     return tuple(entries)
 
 
-# ---------------------------------------------------------------------------
 # Zip build (mirrors the repo-root ``make plugin-zip`` shape: a top-level
 # ``trid3nt/`` dir, LICENSE copied inside it, caches/hidden files excluded).
-# ---------------------------------------------------------------------------
 
 
 def _build_zip(plugin_src: Path, dest_zip: Path) -> None:
@@ -268,9 +260,6 @@ def build_fresh_zip(repo_root: Path | None = None) -> tuple[bytes, str, str]:
         return data, version, zip_filename
 
 
-# ---------------------------------------------------------------------------
-# plugins.xml
-# ---------------------------------------------------------------------------
 
 
 def _cdata(text: str) -> str:
@@ -346,9 +335,6 @@ def build_plugins_repo_xml(
     return xml.encode("utf-8")
 
 
-# ---------------------------------------------------------------------------
-# manifest
-# ---------------------------------------------------------------------------
 
 
 def read_manifest(served_dir: Path | str | None = None) -> dict[str, Any] | None:
@@ -364,9 +350,6 @@ def read_manifest(served_dir: Path | str | None = None) -> dict[str, Any] | None
     return data if isinstance(data, dict) else None
 
 
-# ---------------------------------------------------------------------------
-# PACKAGE (deploy time)
-# ---------------------------------------------------------------------------
 
 
 def package_plugin_repo(served_dir: Path | str | None = None) -> dict[str, Any]:
@@ -426,9 +409,6 @@ def package_plugin_repo(served_dir: Path | str | None = None) -> dict[str, Any]:
     }
 
 
-# ---------------------------------------------------------------------------
-# SERVE (per request)
-# ---------------------------------------------------------------------------
 
 
 def render_plugins_xml(host: str, served_dir: Path | str | None = None) -> bytes:
@@ -458,9 +438,6 @@ def served_zip_path(zip_filename: str, served_dir: Path | str | None = None) -> 
     return path
 
 
-# ---------------------------------------------------------------------------
-# /api/version (unrelated to the repo -- the daemon git-sha + provider probe)
-# ---------------------------------------------------------------------------
 
 
 def _run_git(repo_root: Path, *args: str) -> str | None:

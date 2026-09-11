@@ -21,9 +21,6 @@ __all__ = ["show_nexrad_radar"]
 logger = logging.getLogger("trid3nt_server.tools.display.show_nexrad_radar.show_nexrad_radar")
 
 
-# ---------------------------------------------------------------------------
-# Error types (typed-error surface).
-# ---------------------------------------------------------------------------
 
 
 class NexradError(RuntimeError):
@@ -47,9 +44,6 @@ class NexradBboxError(NexradError):
     retryable = False
 
 
-# ---------------------------------------------------------------------------
-# Constants.
-# ---------------------------------------------------------------------------
 
 # Iowa State University Mesonet NEXRAD WMS service base; per-product endpoints
 # hang off it at .../wms/nexrad/{product}.cgi.
@@ -78,10 +72,8 @@ _PRODUCT_WMS_LAYER: dict[str, str] = {
 }
 
 
-# ---------------------------------------------------------------------------
 # AtomicToolMetadata -- registered once at import time. Only a service URL is
 # composed, so cacheable=False and ttl_class="live-no-cache".
-# ---------------------------------------------------------------------------
 
 _METADATA = AtomicToolMetadata(
     name="show_nexrad_radar",
@@ -94,9 +86,6 @@ _METADATA = AtomicToolMetadata(
 )
 
 
-# ---------------------------------------------------------------------------
-# bbox helpers.
-# ---------------------------------------------------------------------------
 
 
 def _validate_bbox(bbox: tuple[float, float, float, float]) -> None:
@@ -118,9 +107,6 @@ def _validate_bbox(bbox: tuple[float, float, float, float]) -> None:
         )
 
 
-# ---------------------------------------------------------------------------
-# WMS URL builder.
-# ---------------------------------------------------------------------------
 
 
 def _build_wms_url(
@@ -148,9 +134,6 @@ def _build_wms_url(
     return f"{base}?{qs}"
 
 
-# ---------------------------------------------------------------------------
-# Registered atomic tool.
-# ---------------------------------------------------------------------------
 
 
 @register_tool(

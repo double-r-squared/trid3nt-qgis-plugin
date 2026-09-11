@@ -36,9 +36,6 @@ logger = logging.getLogger("trid3nt_server.cases.probe_point")
 MAX_PROBE_LAYERS = 40
 
 
-# ---------------------------------------------------------------------------
-# Typed errors.
-# ---------------------------------------------------------------------------
 
 
 class ProbePointError(RuntimeError):
@@ -62,9 +59,7 @@ class ProbePointCaseNotFoundError(ProbePointError):
     retryable = False
 
 
-# ---------------------------------------------------------------------------
 # Sync per-layer/per-frame sampling (wrapped in asyncio.to_thread by callers).
-# ---------------------------------------------------------------------------
 
 
 def _sample_single_layer(
@@ -127,9 +122,6 @@ def _sample_series_member(
     return entry, units
 
 
-# ---------------------------------------------------------------------------
-# Core.
-# ---------------------------------------------------------------------------
 
 
 async def probe_point_at(case_id: str, lon: float, lat: float) -> dict[str, Any]:

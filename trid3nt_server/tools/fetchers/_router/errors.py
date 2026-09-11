@@ -63,9 +63,6 @@ class RouterNotAvailableError(RouterError):
     retryable = False
 
 
-# --------------------------------------------------------------------------- #
-# Factories that stamp the per-source ``error_code``.
-# --------------------------------------------------------------------------- #
 
 
 def _stamp(cls: type[RouterError], code_prefix: str, suffix: str, message: str) -> RouterError:

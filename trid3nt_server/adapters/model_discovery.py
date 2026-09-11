@@ -191,13 +191,11 @@ def _fetch_local_models() -> bytes:
     ).encode("utf-8")
 
 
-# ---------------------------------------------------------------------------
 # Per-provider CONTEXT-WINDOW resolvers
 #
 # Each returns the model's INPUT-token capacity, or None when the provider
 # exposes no such fact. None means "undiscoverable", NEVER "assume a default"
 # -- the caller owns the fallback and the warning that goes with it.
-# ---------------------------------------------------------------------------
 
 
 def is_openrouter_base_url(base_url: str | None) -> bool:

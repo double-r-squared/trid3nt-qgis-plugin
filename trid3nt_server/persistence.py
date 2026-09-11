@@ -35,9 +35,7 @@ SESSIONS_COLLECTION = "sessions"  # agent's own session records
 USERS_COLLECTION = "users"  # Auth/Users track stub
 
 
-# --------------------------------------------------------------------------- #
 # Store client protocol -- duck-typed so tests can pass a mock
-# --------------------------------------------------------------------------- #
 
 
 class MCPClientProtocol(Protocol):
@@ -49,9 +47,6 @@ class MCPClientProtocol(Protocol):
         ...
 
 
-# --------------------------------------------------------------------------- #
-# Persistence wrapper
-# --------------------------------------------------------------------------- #
 
 
 def _unwrap_result(raw: dict[str, Any]) -> Any:
@@ -146,9 +141,6 @@ class Persistence:
         )
         return case
 
-    # ------------------------------------------------------------------ #
-    # Per-Case short layer-handle map (storage-only field)
-    # ------------------------------------------------------------------ #
 
     async def set_case_layer_handles(
         self, case_id: str, handles: dict[str, str]
@@ -600,9 +592,6 @@ class Persistence:
             return None
 
 
-# --------------------------------------------------------------------------- #
-# The file-backed store
-# --------------------------------------------------------------------------- #
 # Storage is ``~/.trid3nt/dev_persistence/<database>/<collection>.json``, one
 # JSON file per collection mapping ``_id`` to document. A per-collection
 # ``asyncio.Lock`` serializes concurrent calls and writes land through a sibling
@@ -700,9 +689,6 @@ class FileMCPClient:
                 _new_db_dir,
             )
 
-    # ------------------------------------------------------------------ #
-    # Storage helpers
-    # ------------------------------------------------------------------ #
 
     def _collection_path(self, database: str, collection: str) -> _Path:
         db_dir = self._base_dir / database
@@ -761,9 +747,7 @@ class FileMCPClient:
                 pass
         _os_for_file.replace(tmp, path)
 
-    # ------------------------------------------------------------------ #
     # Query matcher -- the same subset the test mock supports
-    # ------------------------------------------------------------------ #
 
     @staticmethod
     def _matches(doc: dict, filt: dict) -> bool:
@@ -791,9 +775,6 @@ class FileMCPClient:
                 return False
         return True
 
-    # ------------------------------------------------------------------ #
-    # Update-operator application
-    # ------------------------------------------------------------------ #
 
     @staticmethod
     def _apply_update(doc: dict, update: dict, *, inserting: bool) -> None:
@@ -828,9 +809,6 @@ class FileMCPClient:
                     f"(supports $set / $setOnInsert / $push / $addToSet)"
                 )
 
-    # ------------------------------------------------------------------ #
-    # The call surface
-    # ------------------------------------------------------------------ #
 
     async def call_tool(
         self, name: str, arguments: dict[str, Any] | None = None
@@ -951,9 +929,6 @@ def make_file_persistence(base_dir: _Path | None = None) -> Persistence:
     return Persistence(FileMCPClient(base_dir=base_dir))
 
 
-# --------------------------------------------------------------------------- #
-# Backend selection (local-only)
-# --------------------------------------------------------------------------- #
 #
 # ``file`` is the ONLY persistence backend. ``TRID3NT_PERSISTENCE_BACKEND``
 # unset (or ``file``) binds the file backend; any other value is an explicit

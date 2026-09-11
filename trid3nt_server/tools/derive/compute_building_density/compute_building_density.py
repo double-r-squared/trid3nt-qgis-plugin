@@ -28,9 +28,6 @@ __all__ = ["compute_building_density"]
 logger = logging.getLogger("trid3nt_server.tools.derive.compute_building_density.compute_building_density")
 
 
-# ---------------------------------------------------------------------------
-# Error types (typed-error surface).
-# ---------------------------------------------------------------------------
 
 
 class BuildingDensityError(RuntimeError):
@@ -54,9 +51,6 @@ class BuildingDensityUpstreamError(BuildingDensityError):
     retryable = True
 
 
-# ---------------------------------------------------------------------------
-# Constants.
-# ---------------------------------------------------------------------------
 
 #: The Microsoft Global ML Building Footprints CSV index URL.
 _MS_INDEX_URL = (
@@ -81,9 +75,6 @@ _INDEX_CACHE: dict[str, list[str]] | None = None
 _INDEX_CACHE_DOWNLOAD_BYTES: int = 0
 
 
-# ---------------------------------------------------------------------------
-# AtomicToolMetadata -- registered once at import time.
-# ---------------------------------------------------------------------------
 
 _METADATA = AtomicToolMetadata(
     name="compute_building_density",
@@ -93,9 +84,6 @@ _METADATA = AtomicToolMetadata(
 )
 
 
-# ---------------------------------------------------------------------------
-# bbox validation.
-# ---------------------------------------------------------------------------
 
 
 def _validate_bbox(bbox: tuple[float, float, float, float]) -> None:
@@ -127,13 +115,11 @@ def _round_bbox_to_6dp(
     return tuple(round(v, 6) for v in bbox)  # type: ignore[return-value]
 
 
-# ---------------------------------------------------------------------------
 # Quadkey math (Bing tile system).
 #
 # The canonical Bing Maps Tile System spec:
 # https://learn.microsoft.com/en-us/bingmaps/articles/bing-maps-tile-system
 # Four short functions rather than a dependency for a one-off operation.
-# ---------------------------------------------------------------------------
 
 
 def _lonlat_to_tile_xy(lon: float, lat: float, zoom: int) -> tuple[int, int]:
@@ -186,9 +172,6 @@ def _quadkeys_for_bbox(
     return quadkeys
 
 
-# ---------------------------------------------------------------------------
-# CSV index -- fetch + parse + per-quadkey lookup.
-# ---------------------------------------------------------------------------
 
 
 def _fetch_index() -> dict[str, list[str]]:
@@ -251,9 +234,6 @@ def _index_for_quadkeys(quadkeys: Iterable[str]) -> dict[str, list[str]]:
     return {qk: full[qk] for qk in quadkeys if qk in full}
 
 
-# ---------------------------------------------------------------------------
-# Tile download + GeoJSONL streaming.
-# ---------------------------------------------------------------------------
 
 
 def _download_tile_features(url: str) -> list[dict]:
@@ -304,9 +284,6 @@ def _download_tile_features(url: str) -> list[dict]:
     return features
 
 
-# ---------------------------------------------------------------------------
-# Geometry helpers -- ring centroid in lon/lat.
-# ---------------------------------------------------------------------------
 
 
 def _ring_centroid(ring: list[list[float]]) -> tuple[float, float] | None:
@@ -391,9 +368,6 @@ def _feature_centroid(feat: dict) -> tuple[float, float] | None:
     return None
 
 
-# ---------------------------------------------------------------------------
-# Density grid construction.
-# ---------------------------------------------------------------------------
 
 
 def _build_density_grid(
@@ -445,9 +419,6 @@ def _build_density_grid(
     return arr, transform, "EPSG:3857", height, width
 
 
-# ---------------------------------------------------------------------------
-# Core fetch + rasterize.
-# ---------------------------------------------------------------------------
 
 
 def _fetch_building_density_bytes(
@@ -559,9 +530,6 @@ def _fetch_building_density_bytes(
                 pass
 
 
-# ---------------------------------------------------------------------------
-# Registered atomic tool.
-# ---------------------------------------------------------------------------
 
 
 @register_tool(

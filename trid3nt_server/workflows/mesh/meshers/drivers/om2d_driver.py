@@ -190,9 +190,6 @@ class _PolygonDomain(om.Domain):
         return np.where(inside, -d, d)
 
 
-# --------------------------------------------------------------------------- #
-# The build state the pre ops shape.
-# --------------------------------------------------------------------------- #
 class _Build:
     """What the pre ops act on: the domain, the sizing stack, the obstacles.
 
@@ -322,9 +319,6 @@ class _Build:
         return stacked
 
 
-# --------------------------------------------------------------------------- #
-# om2d's OWN pre primitives.
-# --------------------------------------------------------------------------- #
 def set_obstacle(build: _Build, geometry: str, constrain: bool = True) -> None:
     """Punch a geometry out of the domain and lock its outline into the mesh.
 
@@ -450,9 +444,6 @@ _PRIMITIVES = {"set_obstacle": set_obstacle,
                "set_rim_size": set_rim_size}
 
 
-# --------------------------------------------------------------------------- #
-# Calling one op verbatim.
-# --------------------------------------------------------------------------- #
 def _resolve(name: str):
     """The callable behind an op name: our primitive, else the library's own."""
     if name in _PRIMITIVES:
@@ -522,9 +513,6 @@ def _is_mesh(result) -> bool:
             and result[1].shape[1] in (3, 4))
 
 
-# --------------------------------------------------------------------------- #
-# build.
-# --------------------------------------------------------------------------- #
 def op_build(cfg: dict, out: str) -> int:
     _seed_library_randomness(int(cfg.get("seed", 0)))
     build = _Build(cfg)
@@ -858,9 +846,6 @@ def _sections(ends, points, cells, bed, node_ids, first: int) -> list[dict]:
     return out
 
 
-# --------------------------------------------------------------------------- #
-# post.
-# --------------------------------------------------------------------------- #
 def op_post(cfg: dict, out: str) -> int:
     """Run ops over a mesh the host already holds -> the mesh and the results."""
     npz = np.load(cfg["mesh_npz"])

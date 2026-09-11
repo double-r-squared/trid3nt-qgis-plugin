@@ -28,9 +28,6 @@ __all__ = [
 logger = logging.getLogger("trid3nt_server.tools.derive.compute_flood_extent_skill.compute_flood_extent_skill")
 
 
-# ---------------------------------------------------------------------------
-# Error types (typed-error surface).
-# ---------------------------------------------------------------------------
 
 
 class FloodExtentSkillError(RuntimeError):
@@ -61,9 +58,6 @@ class FloodExtentSkillUpstreamError(FloodExtentSkillError):
     retryable = True
 
 
-# ---------------------------------------------------------------------------
-# Constants.
-# ---------------------------------------------------------------------------
 
 _PUBLISHED_CONTEXT = (
     "CSI ~0.5-0.7 is a general 'good agreement' convention, not "
@@ -83,9 +77,6 @@ _METADATA = AtomicToolMetadata(
 )
 
 
-# ---------------------------------------------------------------------------
-# Staging.
-# ---------------------------------------------------------------------------
 
 
 def _stage_uri_local(uri: str, tmpdir: str, label: str) -> str:
@@ -127,9 +118,6 @@ def _validate_threshold(value: Any, label: str) -> float:
     return v
 
 
-# ---------------------------------------------------------------------------
-# Model raster loading.
-# ---------------------------------------------------------------------------
 
 
 def _load_model_raster(
@@ -277,9 +265,6 @@ def _load_benchmark_as_mask(
     return wet, valid, "vector_polygon", "rasterize"
 
 
-# ---------------------------------------------------------------------------
-# Pixel-area helper.
-# ---------------------------------------------------------------------------
 
 
 def _pixel_area_km2_grid(transform: Any, crs: Any, shape: tuple[int, int]) -> np.ndarray:
@@ -305,9 +290,6 @@ def _pixel_area_km2_grid(transform: Any, crs: Any, shape: tuple[int, int]) -> np
     return np.full(shape, area_km2, dtype=np.float64)
 
 
-# ---------------------------------------------------------------------------
-# Registered tool.
-# ---------------------------------------------------------------------------
 
 
 @register_tool(_METADATA)

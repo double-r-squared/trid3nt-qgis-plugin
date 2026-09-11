@@ -46,9 +46,6 @@ _PROPS = (
 )
 
 
-# --------------------------------------------------------------------------- #
-# GEM-property parsing helpers.
-# --------------------------------------------------------------------------- #
 
 
 def first_num(v: Any, default: float | None = None) -> float | None:
@@ -137,9 +134,6 @@ def _parse_fault_feature(feature: dict[str, Any]) -> dict[str, Any] | None:
     }
 
 
-# --------------------------------------------------------------------------- #
-# Hooks.
-# --------------------------------------------------------------------------- #
 
 
 @_hooks.register_hook("fault_sources.build_request")

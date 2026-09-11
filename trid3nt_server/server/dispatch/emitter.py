@@ -115,9 +115,6 @@ def _running_emitter_step_id(emitter: Any, tool_name: str) -> str | None:
         return None
     return None
 
-# ---------------------------------------------------------------------------
-# SYNC-TOOL DISPATCH OFF-LOAD
-# ---------------------------------------------------------------------------
 # A synchronous atomic tool runs its whole body on the agent's asyncio loop
 # inside the ``entry.fn(**params)`` branch below, so a slow one (boto3,
 # requests, heavy GDAL or numpy compute) stalls the WS keepalive past the pong

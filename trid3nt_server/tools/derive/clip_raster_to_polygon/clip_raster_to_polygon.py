@@ -23,9 +23,6 @@ __all__ = [
 
 logger = logging.getLogger("trid3nt_server.tools.derive.clip_raster_to_polygon.clip_raster_to_polygon")
 
-# ---------------------------------------------------------------------------
-# Error class
-# ---------------------------------------------------------------------------
 
 
 # ``error_code`` is the caller's typed switch and is one of:
@@ -45,9 +42,6 @@ class ClipRasterPolygonError(RuntimeError):
         self.retryable = retryable
 
 
-# ---------------------------------------------------------------------------
-# Tool metadata
-# ---------------------------------------------------------------------------
 
 _METADATA = AtomicToolMetadata(
     name="clip_raster_to_polygon",
@@ -57,9 +51,6 @@ _METADATA = AtomicToolMetadata(
 )
 
 
-# ---------------------------------------------------------------------------
-# Raster I/O helpers
-# ---------------------------------------------------------------------------
 
 
 def _get_source_crs(raster_uri: str) -> Any:
@@ -161,9 +152,6 @@ def _download_polygon_bytes(polygon_uri: str, storage_client: Any | None = None)
     return data, suffix
 
 
-# ---------------------------------------------------------------------------
-# Polygon load + filter + reproject helpers
-# ---------------------------------------------------------------------------
 
 
 def _load_polygon_geom(
@@ -268,9 +256,6 @@ def _load_polygon_geom(
                 pass
 
 
-# ---------------------------------------------------------------------------
-# BBox -> rectangular polygon geometry
-# ---------------------------------------------------------------------------
 
 
 def _bbox_to_geoms(
@@ -316,9 +301,6 @@ def _bbox_to_geoms(
     return [rect]
 
 
-# ---------------------------------------------------------------------------
-# Mask + write GeoTIFF
-# ---------------------------------------------------------------------------
 
 
 def _mask_and_write(
@@ -464,9 +446,6 @@ def _reproject_masked(
         ) from exc
 
 
-# ---------------------------------------------------------------------------
-# Tool registration
-# ---------------------------------------------------------------------------
 
 
 @register_tool(

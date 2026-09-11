@@ -87,9 +87,6 @@ def _locations_plan(spec: SourceSpec, params: dict[str, Any], api_key: str, page
     return _hooks.RequestPlan(url=_LOCATIONS_URL, params=q, headers=_key_headers(spec, api_key))
 
 
-# --------------------------------------------------------------------------- #
-# MAIN FETCH -- paginated /v3/locations sweep.
-# --------------------------------------------------------------------------- #
 
 
 @_hooks.register_hook("openaq_measurements.build_request")
@@ -140,9 +137,6 @@ def parse_response(spec: SourceSpec, params: dict[str, Any], bodies: list[bytes]
     return [{"type": "Feature", "geometry": None, "properties": {"_station": st}} for st in stations]
 
 
-# --------------------------------------------------------------------------- #
-# PHASE E -- per-location latest fan-out + sensor->parameter join (expanding).
-# --------------------------------------------------------------------------- #
 
 
 @_hooks.register_hook("openaq_measurements.enrich_plan")

@@ -70,9 +70,6 @@ def pre_validate(spec: SourceSpec, params: dict[str, Any]) -> None:
             raise router_input_error(prefix, f"comid must be a positive integer; got {comid!r}", sfx)
 
 
-# --------------------------------------------------------------------------- #
-# dataretrieval error -> router error mapping (upstream-provider-errors rule).
-# --------------------------------------------------------------------------- #
 
 
 def _map_http_error(spec: SourceSpec, exc: Exception, *, input_on_400: bool = True) -> None:
@@ -94,13 +91,11 @@ def _point_feature(lon: float, lat: float, props: dict[str, Any]) -> dict[str, A
     }
 
 
-# --------------------------------------------------------------------------- #
 # Service: wqp_water_quality  (USGS/EPA Water Quality Portal)
 #
 # Station locations (`wqp.what_sites`) LEFT-joined with the latest numeric Result
 # per site (`wqp.get_results`, resultPhysChem profile, latest-by-ActivityStartDate).
 # Zero stations raises the typed WQP_NO_SITES error, never an empty layer.
-# --------------------------------------------------------------------------- #
 
 
 def _bbox_str(bbox: list[float]) -> str:
@@ -255,13 +250,11 @@ def wqp_features(spec: SourceSpec, params: dict[str, Any]) -> list[dict[str, Any
     return feats
 
 
-# --------------------------------------------------------------------------- #
 # Service: nldi_navigate  (USGS NLDI NHDPlus network traversal)
 #
 # Snap a seed_point to a COMID (or take an explicit comid), then navigate the
 # connected flowlines UM/UT/DM/DD to the distance: `nldi.get_features(lat,long)`
 # snaps, `get_flowlines` navigates. Zero flowlines raises NHDPLUS_NLDI_EMPTY.
-# --------------------------------------------------------------------------- #
 
 
 def _nldi_snap(spec: SourceSpec, lon: float, lat: float) -> int:
@@ -378,9 +371,6 @@ def nldi_features(spec: SourceSpec, params: dict[str, Any]) -> list[dict[str, An
     return feats
 
 
-# --------------------------------------------------------------------------- #
-# Dispatch.
-# --------------------------------------------------------------------------- #
 
 _SERVICES = {
     "wqp_water_quality": wqp_features,

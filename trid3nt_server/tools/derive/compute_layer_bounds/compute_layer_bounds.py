@@ -25,9 +25,6 @@ __all__ = [
 logger = logging.getLogger("trid3nt_server.tools.derive.compute_layer_bounds.compute_layer_bounds")
 
 
-# ---------------------------------------------------------------------------
-# Error class (typed errors)
-# ---------------------------------------------------------------------------
 
 
 # ``error_code`` is one of UNKNOWN_LAYER_URI, DOWNLOAD_FAILED,
@@ -41,9 +38,7 @@ class ComputeLayerBoundsError(RuntimeError):
         self.error_code = error_code
 
 
-# ---------------------------------------------------------------------------
 # Metadata. Never cached: the tool drives the map view and is sub-second.
-# ---------------------------------------------------------------------------
 
 _COMPUTE_LAYER_BOUNDS_METADATA = AtomicToolMetadata(
     name="compute_layer_bounds",
@@ -56,9 +51,6 @@ _RASTER_EXTENSIONS = {".tif", ".tiff", ".img", ".vrt", ".nc"}
 _VECTOR_EXTENSIONS = {".fgb", ".geojson", ".json", ".gpkg", ".shp", ".gml", ".kml", ".parquet"}
 
 
-# ---------------------------------------------------------------------------
-# URI to local path materialization
-# ---------------------------------------------------------------------------
 
 
 def _infer_suffix(uri: str) -> str:
@@ -111,9 +103,6 @@ def _resolve_layer_to_local_path(
     )
 
 
-# ---------------------------------------------------------------------------
-# Layer-type detection and per-type bbox extraction
-# ---------------------------------------------------------------------------
 
 
 def _detect_layer_type(uri: str) -> str | None:
@@ -283,9 +272,6 @@ def _apply_pad_m(
             min(180.0, maxx + dx), min(90.0, maxy + dy))
 
 
-# ---------------------------------------------------------------------------
-# Tool registration
-# ---------------------------------------------------------------------------
 
 
 @register_tool(

@@ -56,10 +56,8 @@ __all__ = [
 ]
 
 
-# ---------------------------------------------------------------------------
 # Error types (typed-error surface). Base = FetchError so the pinned
 # error_code survives library_delegate.invoke's passthrough.
-# ---------------------------------------------------------------------------
 
 
 class StormTracksError(FetchError):
@@ -97,9 +95,6 @@ class StormTracksNoActiveStormsError(StormTracksError):
     retryable = False
 
 
-# ---------------------------------------------------------------------------
-# Constants.
-# ---------------------------------------------------------------------------
 
 #: IBTrACS v04r01 points-CSV base URL (NOAA NCEI).
 IBTRACS_CSV_BASE = (
@@ -148,10 +143,8 @@ _HTTP_TIMEOUT = 300.0
 _MAX_POINT_FEATURES = 50000
 
 
-# ---------------------------------------------------------------------------
 # Payload estimator (kept importable for tests; the router synthesizes its own
 # from source.yaml's payload_estimate block for the promoted tool).
-# ---------------------------------------------------------------------------
 
 
 def estimate_payload_mb(
@@ -183,9 +176,6 @@ def estimate_payload_mb(
     return max(0.001, n_storms * 2000 / 1_000_000.0)
 
 
-# ---------------------------------------------------------------------------
-# Input validation + year resolution.
-# ---------------------------------------------------------------------------
 
 
 def _validate_bbox(bbox: tuple[float, float, float, float]) -> None:
@@ -248,9 +238,6 @@ def _resolve_years(
     return (y0, y1)
 
 
-# ---------------------------------------------------------------------------
-# IBTrACS file selection.
-# ---------------------------------------------------------------------------
 
 
 def _envelopes_intersect(
@@ -289,9 +276,6 @@ def _select_ibtracs_files(
     return [f"ibtracs.{b}.list.v04r01.csv" for b in sorted(basins)]
 
 
-# ---------------------------------------------------------------------------
-# HTTP helper (the delegate owns its own socket, the sanctioned impurity).
-# ---------------------------------------------------------------------------
 
 
 def _http_get(url: str, timeout: float = _HTTP_TIMEOUT) -> bytes:
@@ -314,9 +298,6 @@ def _http_get(url: str, timeout: float = _HTTP_TIMEOUT) -> bytes:
         ) from exc
 
 
-# ---------------------------------------------------------------------------
-# IBTrACS CSV parsing.
-# ---------------------------------------------------------------------------
 
 
 def _blank_to_none_float(v: Any) -> float | None:
@@ -478,9 +459,6 @@ def _select_storms_in_bbox(
     return out
 
 
-# ---------------------------------------------------------------------------
-# NHC active-storms parsing.
-# ---------------------------------------------------------------------------
 
 
 def _parse_signed_coord(v: Any) -> float | None:
@@ -649,9 +627,6 @@ def _fetch_forecast_track_points(
         return []
 
 
-# ---------------------------------------------------------------------------
-# GeoJSON feature builders (delegate returns features; vector_fgb serializes).
-# ---------------------------------------------------------------------------
 
 
 def _line_features(
@@ -722,9 +697,6 @@ def _point_features(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return feats
 
 
-# ---------------------------------------------------------------------------
-# The two fetch modes (delegate body).
-# ---------------------------------------------------------------------------
 
 
 def _fetch_historical(
@@ -825,9 +797,6 @@ def _fetch_active(
     return _point_features(records), names
 
 
-# ---------------------------------------------------------------------------
-# HOOK: delegate_validate -- historical bbox-required + shape gate (pre-cache).
-# ---------------------------------------------------------------------------
 
 
 @register_hook("storm_tracks.validate")
@@ -854,9 +823,6 @@ def validate_storm_tracks(spec: Any, params: dict[str, Any]) -> None:
         )
 
 
-# ---------------------------------------------------------------------------
-# HOOK: pre_resolve -- storm_name canon + historical year resolution (pre-key).
-# ---------------------------------------------------------------------------
 
 
 @register_hook("storm_tracks.resolve")
@@ -873,9 +839,6 @@ def resolve_storm_tracks(spec: Any, params: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
-# ---------------------------------------------------------------------------
-# HOOK: delegate -- branch on active_only; fetch; record provenance; features.
-# ---------------------------------------------------------------------------
 
 
 @register_hook("storm_tracks.read")
@@ -911,9 +874,6 @@ def read_storm_tracks(
     return feats
 
 
-# ---------------------------------------------------------------------------
-# HOOK: envelope -- layer_id, name and the mode provenance replayed from the channel.
-# ---------------------------------------------------------------------------
 
 
 @register_hook("storm_tracks.envelope")

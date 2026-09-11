@@ -43,9 +43,6 @@ def _bbox_intersects(a: Any, b: Any) -> bool:
     return box(*a).intersects(box(*b))
 
 
-# --------------------------------------------------------------------------- #
-# pre_resolve: pure dataset selection (bbox -> key), pre-cache.
-# --------------------------------------------------------------------------- #
 
 
 @register_hook("field_boundaries.select")
@@ -91,9 +88,6 @@ def select_dataset(spec: SourceSpec, params: dict[str, Any]) -> dict[str, Any]:
     return {"dataset": matches[0]["key"]}
 
 
-# --------------------------------------------------------------------------- #
-# delegate: geopandas GeoParquet pushdown read -> GeoJSON polygon features.
-# --------------------------------------------------------------------------- #
 
 
 def _file_crs(parquet_file: Any) -> Any:

@@ -34,9 +34,6 @@ __all__ = [
 logger = logging.getLogger("trid3nt_server.tools.derive.compute_flood_depth_damage.compute_flood_depth_damage")
 
 
-# ---------------------------------------------------------------------------
-# Error types (typed-error surface).
-# ---------------------------------------------------------------------------
 
 
 class FloodDamageError(RuntimeError):
@@ -67,9 +64,6 @@ class FloodDamageUpstreamError(FloodDamageError):
     retryable = True
 
 
-# ---------------------------------------------------------------------------
-# Result type.
-# ---------------------------------------------------------------------------
 
 
 class FloodDepthDamageLayerURI(LayerURI):
@@ -86,9 +80,6 @@ class FloodDepthDamageLayerURI(LayerURI):
     notes: list[str] = []
 
 
-# ---------------------------------------------------------------------------
-# Constants.
-# ---------------------------------------------------------------------------
 
 #: Generic one-story no-basement residential STRUCTURE depth-damage curve:
 #: (depth above first floor, ft) -> damage fraction of structure replacement
@@ -154,9 +145,6 @@ _METADATA = AtomicToolMetadata(
 )
 
 
-# ---------------------------------------------------------------------------
-# Curve evaluation.
-# ---------------------------------------------------------------------------
 
 
 def damage_fraction_at_depth(depth_ft: float) -> float:
@@ -178,9 +166,6 @@ def damage_fraction_at_depth(depth_ft: float) -> float:
     return 0.0
 
 
-# ---------------------------------------------------------------------------
-# Staging helpers.
-# ---------------------------------------------------------------------------
 
 
 def _stage_uri_local(uri: str, tmpdir: str, label: str) -> str:
@@ -280,9 +265,6 @@ def _load_assets(
     return gdf
 
 
-# ---------------------------------------------------------------------------
-# Output helpers.
-# ---------------------------------------------------------------------------
 
 
 def _write_output(payload: bytes, seed: str, output_dir: str | None) -> str:
@@ -313,9 +295,6 @@ def _write_output(payload: bytes, seed: str, output_dir: str | None) -> str:
         ) from exc
 
 
-# ---------------------------------------------------------------------------
-# Registered tool.
-# ---------------------------------------------------------------------------
 
 
 @register_tool(

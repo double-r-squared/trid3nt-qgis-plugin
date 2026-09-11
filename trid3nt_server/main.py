@@ -13,12 +13,10 @@ import sys
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
-# ---------------------------------------------------------------------------
 # The maximum number of user-message / tool-call turns allowed before the agent
 # refuses further dispatch and emits a ``session-state`` envelope with
 # ``status="max_turns_reached"``. ``TRID3NT_MAX_TURNS_PER_SESSION`` overrides
 # the default 25; 0 is the sentinel that disables the cap.
-# ---------------------------------------------------------------------------
 MAX_TURNS_PER_SESSION: int = int(os.environ.get("TRID3NT_MAX_TURNS_PER_SESSION", "25"))
 
 

@@ -83,9 +83,6 @@ def _states_overlapping_bbox(bbox: tuple[float, float, float, float]) -> list[st
     )
 
 
-# --------------------------------------------------------------------------- #
-# PHASE R -- resolve a named event -> event_id (skip when no event named).
-# --------------------------------------------------------------------------- #
 
 
 @_hooks.register_hook("usgs_stn_hwm.resolve_build")
@@ -136,9 +133,6 @@ def resolve_parse(
     )
 
 
-# --------------------------------------------------------------------------- #
-# MAIN FETCH -- the library read, scoped by event or by overlapping state.
-# --------------------------------------------------------------------------- #
 
 
 def _query_params(spec: SourceSpec, params: dict[str, Any]) -> dict[str, Any]:
@@ -230,9 +224,6 @@ def delegate(
     return features
 
 
-# --------------------------------------------------------------------------- #
-# POST-EMIT ENVELOPE -- quality/type/datum breakdown + caveats/notes.
-# --------------------------------------------------------------------------- #
 
 
 def _records_from_fgb(data: bytes) -> list[dict[str, Any]]:

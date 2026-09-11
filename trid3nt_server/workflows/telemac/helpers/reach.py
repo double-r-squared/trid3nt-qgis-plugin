@@ -48,11 +48,9 @@ _HELPERS = "trid3nt_server.workflows.telemac.helpers"
 #: even when the geocoded city centroid sits a few km off the channel.
 DEFAULT_RIVER_AOI_HALF_DEG: float = 0.06
 
-# --------------------------------------------------------------------------- #
 # Mesh granularity BOUNDS. The edge length ``h`` is an explicit sheet value; what
 # a run is judged on is the edge the ACCEPTED mesh was measured at, so nothing
 # here derives one from a channel width nobody surveyed.
-# --------------------------------------------------------------------------- #
 #: Absolute gmsh edge-length floor (below it quality + solve cost degrade).
 MESH_H_FLOOR_M: float = 3.0
 #: Node ceiling for a single local-docker TELEMAC reach. It bounds how long the
@@ -99,9 +97,6 @@ def estimate_telemac_solve_seconds(
     return round(est + _TELEMAC_SOLVE_OVERHEAD_S, 1)
 
 
-# --------------------------------------------------------------------------- #
-# Geometry + registry helpers
-# --------------------------------------------------------------------------- #
 def slug(name: str) -> str:
     """A safe reach slug for the sheet's ``name`` (ASCII, underscores)."""
     keep = [c.lower() if c.isalnum() else "_" for c in str(name)]
@@ -259,9 +254,6 @@ def river_seed_from_geometry(river_uri: str) -> tuple[float, float] | None:
         return None
 
 
-# --------------------------------------------------------------------------- #
-# The declared runners
-# --------------------------------------------------------------------------- #
 async def geocode_reach(*, location: str | None,
                         bbox: tuple[float, float, float, float] | None) -> dict[str, Any]:
     """Resolve the reach AOI: a geocoded place, or the centre of an explicit bbox.

@@ -161,7 +161,6 @@ def clear_registry_for_tests() -> None:
     MOUNTED_TOOLS.clear()
 
 
-# ---------------------------------------------------------------------------
 # Eager submodule import (fail-fast).
 #
 # Importing ``trid3nt_server.tools`` populates ``TOOL_REGISTRY`` with EVERY
@@ -175,7 +174,6 @@ def clear_registry_for_tests() -> None:
 # registered by the tree walk below - so adding a source is adding a YAML, not an
 # import line here. Only a fetcher with a hand-written module appears in this
 # block.
-# ---------------------------------------------------------------------------
 
 # -- fetchers/climate --
 from .fetchers.climate.lookup_precip_return_period import lookup_precip_return_period  # noqa: E402,F401
@@ -267,9 +265,7 @@ from trid3nt_server.workflows.telemac.modules.describe import describe_keywords 
 from .meta.spatial_input_tool import spatial_input_tool  # noqa: E402,F401
 from .search.web_fetch import web_fetch  # noqa: E402,F401
 
-# ---------------------------------------------------------------------------
 # Workflow-composer registrations; each module carries its OWN @register_tool.
-# ---------------------------------------------------------------------------
 # The five REACH templates (engine="telemac", tier="template"). ONE TEMPLATE PER
 # QUESTION: a tracer, an oil slick, a moving bed, a settling class and an oxygen
 # sag fill DIFFERENT slots of the same deck, so routing picks a template rather

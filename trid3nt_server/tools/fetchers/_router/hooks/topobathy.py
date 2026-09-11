@@ -58,10 +58,8 @@ __all__ = [
 ]
 
 
-# ---------------------------------------------------------------------------
 # Error types (typed-error surface). Base = FetchError so the pinned
 # error_code survives library_delegate.invoke's passthrough.
-# ---------------------------------------------------------------------------
 
 
 class TopobathyError(FetchError):
@@ -119,9 +117,6 @@ class TopobathyCoverageGapError(TopobathyError, LadderGap):
         )
 
 
-# ---------------------------------------------------------------------------
-# Constants.
-# ---------------------------------------------------------------------------
 
 #: NOAA NCEI CUDEM 1/9 arc-second "Topobathy 2014" collection root (public
 #: S3, anonymous read).
@@ -205,10 +200,8 @@ _VSICURL_ENV_KW = dict(
 )
 
 
-# ---------------------------------------------------------------------------
 # Payload estimator (kept importable for tests; the router synthesizes its own
 # from source.yaml's payload_estimate block for the promoted tool).
-# ---------------------------------------------------------------------------
 
 
 def _analytic_payload_mb(bbox: tuple[float, float, float, float] | None) -> float:
@@ -347,9 +340,6 @@ def estimate_payload_mb_detail(
     return f"topo-bathy {grid} grid ~{est.mb:.1f} MB ({est.kind})"
 
 
-# ---------------------------------------------------------------------------
-# bbox helpers.
-# ---------------------------------------------------------------------------
 
 
 def _validate_bbox(bbox: tuple[float, float, float, float]) -> None:
@@ -382,9 +372,6 @@ def _round_bbox_to_6dp(
     return tuple(round(v, _BBOX_DECIMALS) for v in bbox)  # type: ignore[return-value]
 
 
-# ---------------------------------------------------------------------------
-# CUDEM tile-index intersect.
-# ---------------------------------------------------------------------------
 
 
 def _parse_tile_nw_corner(url_or_name: str) -> tuple[float, float] | None:
@@ -512,9 +499,6 @@ def _select_cudem_tiles(
     return selected
 
 
-# ---------------------------------------------------------------------------
-# GLOBAL topo-bathy fallback tile-index intersect (NOAA ETOPO 2022 15").
-# ---------------------------------------------------------------------------
 
 
 def _etopo_url_for_corner(nw_lat: float, nw_lon: float) -> str:
@@ -558,9 +542,6 @@ def _select_etopo_tiles(bbox: tuple[float, float, float, float]) -> list[str]:
     return urls
 
 
-# ---------------------------------------------------------------------------
-# NCEI REGIONAL high-resolution coastal-DEM tile selection (the FINE shore layer).
-# ---------------------------------------------------------------------------
 
 
 def _select_regional_coastal_dem_tiles(
@@ -609,9 +590,6 @@ def _select_regional_coastal_dem_tiles(
     return tiles, collections_hit
 
 
-# ---------------------------------------------------------------------------
-# Vertical-datum gate.
-# ---------------------------------------------------------------------------
 
 
 def _assert_navd88(
@@ -681,9 +659,6 @@ def _classify_vertical_datum(
     return 0.0
 
 
-# ---------------------------------------------------------------------------
-# 3DEP land DEM, read by reusing fetch_dem through the registry closure.
-# ---------------------------------------------------------------------------
 
 
 def _fetch_3dep_land_to_file(
@@ -736,9 +711,6 @@ def _stage_uri_to_local(uri: str) -> str | None:
         return f.name
 
 
-# ---------------------------------------------------------------------------
-# Merge + reproject + COG.
-# ---------------------------------------------------------------------------
 
 
 def _array_to_topobathy_cog_bytes(array: Any, transform: Any, crs: Any) -> bytes:
@@ -1059,9 +1031,6 @@ def painted_fraction(array: Any) -> float:
     return float(np.count_nonzero(np.isfinite(grid)) / grid.size)
 
 
-# ---------------------------------------------------------------------------
-# Orchestration -- the 4-leg select + merge, returning the array + provenance.
-# ---------------------------------------------------------------------------
 
 
 def _compose_fallback_warnings(
@@ -1504,9 +1473,6 @@ def _select_and_merge(
     return array, transform, crs, provenance
 
 
-# ---------------------------------------------------------------------------
-# HOOK: delegate_validate -- US-coastal + finiteness gate (pre-cache/pre-network).
-# ---------------------------------------------------------------------------
 
 
 @register_hook("topobathy.validate")
@@ -1653,9 +1619,6 @@ def _assert_nearshore_coverage(
     )
 
 
-# ---------------------------------------------------------------------------
-# HOOK: delegate -- the 4-leg merge + provenance record; returns (array, tf, crs).
-# ---------------------------------------------------------------------------
 
 
 @register_hook("topobathy.read")
@@ -1689,9 +1652,6 @@ def read_topobathy(
     return array, transform, crs
 
 
-# ---------------------------------------------------------------------------
-# HOOK: envelope -- layer_id, name and the four provenance fields replayed.
-# ---------------------------------------------------------------------------
 
 
 @register_hook("topobathy.envelope")
@@ -1728,9 +1688,6 @@ def envelope_topobathy(
     }
 
 
-# ---------------------------------------------------------------------------
-# The bathymetry fallback ladder (rung definitions live with the capability).
-# ---------------------------------------------------------------------------
 
 
 def serve_user_supplied_bed(

@@ -47,9 +47,6 @@ __all__ = [
 ]
 
 
-# --------------------------------------------------------------------------- #
-# Constants.
-# --------------------------------------------------------------------------- #
 
 #: band/product name -> SLIDER product slug, read from the viewer's own product list.
 _BAND_TO_SLIDER_PRODUCT: dict[str, str] = {
@@ -85,9 +82,6 @@ MAX_ANIM_FRAMES: int = int(os.environ.get("TRID3NT_MAX_ANIM_FRAMES", "144"))
 _BBOX_QUANTIZE_DP = 6
 
 
-# --------------------------------------------------------------------------- #
-# Pure helpers (also importable for tests).
-# --------------------------------------------------------------------------- #
 
 
 def _parse_utc(spec: SourceSpec, value: Any) -> datetime:
@@ -207,9 +201,6 @@ def _resolve_window(
     return start_dt, end_dt
 
 
-# --------------------------------------------------------------------------- #
-# frames_plan: the pre-loop resolve.
-# --------------------------------------------------------------------------- #
 
 
 @register_hook("goes_animation.frames_plan")
@@ -287,9 +278,6 @@ def frames_plan(spec: SourceSpec, params: dict[str, Any]) -> list[FramePlan]:
     return plans
 
 
-# --------------------------------------------------------------------------- #
-# frame_bytes: the per-frame COG builder.
-# --------------------------------------------------------------------------- #
 
 
 def _stitch_single(

@@ -31,7 +31,6 @@ __all__ = [
 ]
 
 
-# --------------------------------------------------------------------------- #
 # Declarative WHERE-clause builder for the ArcGIS family.
 #
 # `ingest.where_clauses` is an ordered list of {template, require:[params]}
@@ -40,7 +39,6 @@ __all__ = [
 # clauses are AND-joined. Absent/none-declared -> falls back to a literal
 # `where` param else "1=1". A voltage floor, a year range and a period filter are
 # all spec data this way, with no source hardcode.
-# --------------------------------------------------------------------------- #
 
 
 def build_where(spec: SourceSpec, params: dict[str, Any]) -> str:
@@ -63,7 +61,6 @@ def build_where(spec: SourceSpec, params: dict[str, Any]) -> str:
     return " AND ".join(parts) if parts else "1=1"
 
 
-# --------------------------------------------------------------------------- #
 # Declarative column normalizer for the ArcGIS family.
 #
 # `ingest.column_map` is an ORDERED map out_col -> rule, a raw-property to
@@ -79,7 +76,6 @@ def build_where(spec: SourceSpec, params: dict[str, Any]) -> str:
 #   default_template  lookup miss: str formatted with {key} (drought "D{key}")
 # When column_map is present the executor emits EXACTLY the mapped columns (a
 # projection), then derived_columns / json_coerce / geometry_filter layer on top.
-# --------------------------------------------------------------------------- #
 
 
 class _SkipFeature(Exception):
@@ -235,11 +231,9 @@ def apply_column_map(
     return out
 
 
-# --------------------------------------------------------------------------- #
 # Declarative ingest transforms: derived and constant columns, nested-property to
 # JSON coercion, and the Point/finite-geometry filter. All three are opt-in
 # ``ingest.*`` directives; a spec declaring none of them is untouched.
-# --------------------------------------------------------------------------- #
 
 
 def _derived_column_names(spec: SourceSpec) -> list[str]:

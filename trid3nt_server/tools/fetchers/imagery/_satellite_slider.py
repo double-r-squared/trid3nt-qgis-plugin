@@ -75,9 +75,6 @@ class SliderEmptyError(SliderError):
     retryable = False
 
 
-# ---------------------------------------------------------------------------
-# Constants from the SLIDER-cli source.
-# ---------------------------------------------------------------------------
 
 #: SLIDER host. The rammb host 302-redirects to slider.cira.colostate.edu; we
 #: follow redirects so either resolves.
@@ -151,9 +148,6 @@ _TILE_TIMEOUT_S = 30.0
 _JSON_TIMEOUT_S = 30.0
 
 
-# ---------------------------------------------------------------------------
-# Timestamp helpers.
-# ---------------------------------------------------------------------------
 
 
 def ts_int_to_datetime(ts_int: int) -> Any:
@@ -177,9 +171,6 @@ def ts_int_to_iso(ts_int: int) -> str:
     return ts_int_to_datetime(ts_int).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-# ---------------------------------------------------------------------------
-# URL builders.
-# ---------------------------------------------------------------------------
 
 
 def build_times_url(sat: str, sector: str, product: str) -> str:
@@ -212,9 +203,6 @@ def build_tile_url(
     )
 
 
-# ---------------------------------------------------------------------------
-# Time-index fetch.
-# ---------------------------------------------------------------------------
 
 
 def fetch_slider_timestamps(
@@ -264,9 +252,6 @@ def fetch_slider_timestamps(
     return out
 
 
-# ---------------------------------------------------------------------------
-# Zoom selection.
-# ---------------------------------------------------------------------------
 
 
 def pick_zoom_for_aoi(
@@ -308,9 +293,6 @@ def pick_zoom_for_aoi(
     return min(max(best, 0), max_zoom)
 
 
-# ---------------------------------------------------------------------------
-# Tile-grid stitch.
-# ---------------------------------------------------------------------------
 
 
 def _aoi_to_pixel_window(
@@ -445,9 +427,6 @@ def stitch_slider_mosaic(
     return canvas, (blk_west, blk_south, blk_east, blk_north)
 
 
-# ---------------------------------------------------------------------------
-# Mosaic -> EPSG:4326 COG (lifts the rasterio warp/COG CORE).
-# ---------------------------------------------------------------------------
 
 
 def mosaic_to_cog_bytes(
@@ -516,9 +495,6 @@ def mosaic_to_cog_bytes(
     return rgb_array_to_cog_bytes(out_rgb, out_transform, out_w, out_h)
 
 
-# ---------------------------------------------------------------------------
-# RGB COG read / write helpers (shared by the GeoColor + Fire Temperature blend).
-# ---------------------------------------------------------------------------
 
 
 def rgb_array_to_cog_bytes(
@@ -622,9 +598,6 @@ def reproject_rgb_to_grid(
     return out
 
 
-# ---------------------------------------------------------------------------
-# GeoColor + Fire Temperature per-timestep blend (the CIRA composite look).
-# ---------------------------------------------------------------------------
 #
 # CIRA publishes a combined "GeoColor and Fire Temperature" product: GeoColor is
 # the true-color base (shows the scene + smoke + clouds), and the Fire

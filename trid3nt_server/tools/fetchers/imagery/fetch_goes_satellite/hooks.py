@@ -50,9 +50,6 @@ __all__ = [
 ]
 
 
-# ---------------------------------------------------------------------------
-# Constants.
-# ---------------------------------------------------------------------------
 
 # Band-name -> CMI variable mapping in the MCMIPC netCDF (one variable per ABI
 # channel). Kept ASCII: a micron or degree symbol here would be commentary.
@@ -86,10 +83,8 @@ _CONUS_SECTOR_BBOX = (-153.0, 14.0, -52.0, 57.0)
 _VALID_TIME_ROUND_MINUTES = 15
 
 
-# ---------------------------------------------------------------------------
 # Payload estimator (kept importable for tests; the router synthesizes its own
 # from source.yaml's payload_estimate block for the promoted tool).
-# ---------------------------------------------------------------------------
 
 
 def estimate_payload_mb(
@@ -106,9 +101,6 @@ def estimate_payload_mb(
     return max(0.05, sq * 8.0)
 
 
-# ---------------------------------------------------------------------------
-# Pure helpers.
-# ---------------------------------------------------------------------------
 
 
 def _band_to_variable(band: str) -> str:
@@ -312,9 +304,6 @@ def _reproject_and_clip(
         src.close()
 
 
-# ---------------------------------------------------------------------------
-# HOOK: delegate_validate -- bbox-required + band/satellite + CONUS pre-gate.
-# ---------------------------------------------------------------------------
 
 
 @register_hook("goes_satellite.validate")
@@ -345,9 +334,6 @@ def validate_goes_satellite(spec: Any, params: dict[str, Any]) -> None:
         )
 
 
-# ---------------------------------------------------------------------------
-# HOOK: pre_resolve -- 15-min valid_time rounding + satellite canon (pre-key).
-# ---------------------------------------------------------------------------
 
 
 @register_hook("goes_satellite.resolve")
@@ -360,9 +346,6 @@ def resolve_goes_satellite(spec: Any, params: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
-# ---------------------------------------------------------------------------
-# HOOK: delegate -- most-recent MCMIPC read + CF-scale reproject; record scan.
-# ---------------------------------------------------------------------------
 
 
 @register_hook("goes_satellite.read")
@@ -410,9 +393,6 @@ def read_goes_satellite(
     return array, transform, crs
 
 
-# ---------------------------------------------------------------------------
-# HOOK: envelope -- layer_id, display name and the scan provenance.
-# ---------------------------------------------------------------------------
 
 
 @register_hook("goes_satellite.envelope")

@@ -109,9 +109,6 @@ def _validate(spec: SourceSpec, params: dict[str, Any]) -> None:
         raise router_input_error(sc, f"begin_date {begin_date!r} is after end_date {end_date!r}", "ARG_INVALID")
 
 
-# --------------------------------------------------------------------------- #
-# PHASE R -- directory-index resolve (index -> newest bulk-CSV URL per year).
-# --------------------------------------------------------------------------- #
 
 
 @_hooks.register_hook("storm_events_db.resolve_build")
@@ -144,9 +141,6 @@ def resolve_parse(spec: SourceSpec, params: dict[str, Any], bodies: list[bytes])
     return {"_csv_urls": urls}
 
 
-# --------------------------------------------------------------------------- #
-# MAIN FETCH -- GET each resolved bulk gzip CSV.
-# --------------------------------------------------------------------------- #
 
 
 @_hooks.register_hook("storm_events_db.build_request")
@@ -156,9 +150,6 @@ def build_request(spec: SourceSpec, params: dict[str, Any]) -> list["_hooks.Requ
     return [_hooks.RequestPlan(url=u, headers=_headers(spec)) for u in urls]
 
 
-# --------------------------------------------------------------------------- #
-# PARSE -- decompress + filter + synthesize points.
-# --------------------------------------------------------------------------- #
 
 
 def _derive_begin_datetime(df: Any, pd: Any) -> Any:

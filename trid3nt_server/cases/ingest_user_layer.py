@@ -47,9 +47,6 @@ _RASTER_KIND = "raster"
 _KINDS = (_VECTOR_KIND, _RASTER_KIND)
 
 
-# --------------------------------------------------------------------------- #
-# Typed errors (SCREAMING_SNAKE_CASE error_code)
-# --------------------------------------------------------------------------- #
 
 
 class ImportLayerError(RuntimeError):
@@ -95,9 +92,7 @@ class UnreadableLayerError(ImportLayerError):
     error_code = "UNREADABLE_LAYER"
 
 
-# --------------------------------------------------------------------------- #
 # S3 helpers. boto3 honors AWS_ENDPOINT_URL, so MinIO works unchanged.
-# --------------------------------------------------------------------------- #
 
 
 def _split_s3_uri(uri: str) -> tuple[str, str]:
@@ -194,9 +189,6 @@ def _default_cache_bucket() -> str:
     return CACHE_BUCKET
 
 
-# --------------------------------------------------------------------------- #
-# Vector ingestion
-# --------------------------------------------------------------------------- #
 
 _VECTOR_READ_EXTS = (".geojson", ".json", ".fgb", ".gpkg", ".shp")
 
@@ -327,9 +319,6 @@ async def _ingest_vector(
     }
 
 
-# --------------------------------------------------------------------------- #
-# Raster ingestion
-# --------------------------------------------------------------------------- #
 
 
 def _validate_raster_and_bounds(
@@ -427,12 +416,10 @@ async def _ingest_raster(
     }
 
 
-# --------------------------------------------------------------------------- #
 # Persistence merge. Durable persistence is the CONTRACT of an ingest: the layer
 # is merged into the Case's own summaries, so a Case reopen -- cold OR live --
 # always shows the pushed layer. This entry point is COLD by design, and needs
 # no live session or emitter.
-# --------------------------------------------------------------------------- #
 
 
 async def _merge_layer_into_case(
@@ -530,9 +517,6 @@ async def _notify_live_sessions(case_id: str) -> None:
         logger.debug("register_case_layer: live-session nudge skipped", exc_info=True)
 
 
-# --------------------------------------------------------------------------- #
-# Shared core
-# --------------------------------------------------------------------------- #
 
 
 async def ingest_user_layer(
@@ -615,10 +599,8 @@ async def ingest_user_layer(
     }
 
 
-# --------------------------------------------------------------------------- #
 # A thin wrapper over the shared core, so "use the file I uploaded as the AOI"
 # works conversationally once the file already lives in object storage.
-# --------------------------------------------------------------------------- #
 
 _REGISTER_CASE_LAYER_METADATA = AtomicToolMetadata(
     name="register_case_layer",

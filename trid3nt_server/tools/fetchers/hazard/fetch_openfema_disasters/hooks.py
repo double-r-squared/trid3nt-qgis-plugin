@@ -100,9 +100,6 @@ def _headers(spec: SourceSpec) -> dict[str, str]:
     return {"User-Agent": spec.auth.user_agent}
 
 
-# --------------------------------------------------------------------------- #
-# Selector resolution + input validation (pure; recomputed by each phase).
-# --------------------------------------------------------------------------- #
 
 
 def _validate_state_code(sc: str, state_code: Any) -> str:
@@ -198,9 +195,6 @@ def _resolve(spec: SourceSpec, params: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-# --------------------------------------------------------------------------- #
-# MAIN FETCH -- one combined OData query, offset-paged.
-# --------------------------------------------------------------------------- #
 
 
 def _odata_filter(states: list[str], incident: str | None, start_fy: int | None) -> str:
@@ -328,9 +322,6 @@ def parse_response(spec: SourceSpec, params: dict[str, Any], bodies: list[bytes]
     return out
 
 
-# --------------------------------------------------------------------------- #
-# PHASE E -- boundary-service FIPS join (TIGERweb county polygons).
-# --------------------------------------------------------------------------- #
 
 
 def _tiger_plan(spec: SourceSpec, state_fips: str) -> "_hooks.RequestPlan":

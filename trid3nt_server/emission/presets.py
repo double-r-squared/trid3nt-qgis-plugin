@@ -196,9 +196,6 @@ def from_row(row: Any) -> Preset:
     )
 
 
-# --------------------------------------------------------------------------- #
-# resolution: a preset plus a layer's own values -> one concrete scale
-# --------------------------------------------------------------------------- #
 
 #: Where the concrete range came from. The legend says which, because the
 #: colours cannot.
@@ -359,9 +356,6 @@ def fixed_range_reader(
     return _read
 
 
-# --------------------------------------------------------------------------- #
-# the writer: THEIR format, OUR subset
-# --------------------------------------------------------------------------- #
 
 _HEADER = ("<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n"
            '<qgis version="3.40.6" styleCategories="Symbology">\n')

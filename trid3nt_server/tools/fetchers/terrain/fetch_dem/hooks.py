@@ -56,9 +56,6 @@ __all__ = [
 ]
 
 
-# --------------------------------------------------------------------------- #
-# Typed DEM errors.
-# --------------------------------------------------------------------------- #
 
 
 class DemPartialCoverageError(UpstreamAPIError):
@@ -107,9 +104,6 @@ class DemOutOfCoverageError(UpstreamAPIError):
     retryable = True
 
 
-# --------------------------------------------------------------------------- #
-# Constants.
-# --------------------------------------------------------------------------- #
 
 #: Coverage shortfall (deg) tolerated before a DEM is flagged partial (~90 m).
 _DEM_COVERAGE_TOL_DEG = 0.0008
@@ -157,9 +151,6 @@ _US_3DEP_COVERAGE_ENVELOPES: tuple[tuple[float, float, float, float], ...] = (
 )
 
 
-# --------------------------------------------------------------------------- #
-# Pure geometry helpers.
-# --------------------------------------------------------------------------- #
 
 
 def _src(params: dict[str, Any]) -> str:
@@ -238,9 +229,6 @@ def _bbox_covers(
     )
 
 
-# --------------------------------------------------------------------------- #
-# The 3DEP array fetch (the monkeypatchable network seam) + bounded watchdog.
-# --------------------------------------------------------------------------- #
 
 
 def _fetch_3dep_dem_array(
@@ -347,9 +335,6 @@ def _fetch_3dep_dem_array_bounded(
     return box["data"]
 
 
-# --------------------------------------------------------------------------- #
-# HOOK: delegate_validate -- continent ceiling + auto-path out-of-coverage.
-# --------------------------------------------------------------------------- #
 
 
 @register_hook("dem_3dep.validate")
@@ -384,9 +369,6 @@ def validate_dem(spec: SourceSpec, params: dict[str, Any]) -> None:
         raise oob_err
 
 
-# --------------------------------------------------------------------------- #
-# HOOK: pre_resolve -- pixel-budget auto-coarsen (pre-cache-key).
-# --------------------------------------------------------------------------- #
 
 
 @register_hook("dem_3dep.coarsen")
@@ -417,9 +399,6 @@ def coarsen_dem(spec: SourceSpec, params: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
-# --------------------------------------------------------------------------- #
-# HOOK: delegate -- py3dep read + bounded watchdog + source-conditional gating.
-# --------------------------------------------------------------------------- #
 
 
 @register_hook("dem_3dep.read")
@@ -482,9 +461,6 @@ def read_dem(spec: SourceSpec, params: dict[str, Any], *, timeout_s: float) -> t
         raise gate_err from primary_exc
 
 
-# --------------------------------------------------------------------------- #
-# HOOK: envelope -- the layer_id / name naming override (+ coarsen stamp).
-# --------------------------------------------------------------------------- #
 
 
 @register_hook("dem_3dep.envelope")

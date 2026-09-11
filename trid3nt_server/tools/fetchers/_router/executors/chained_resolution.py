@@ -46,13 +46,11 @@ def _chained_block(spec: SourceSpec) -> dict[str, Any]:
     return (spec.ingest or {}).get("chained") or {}
 
 
-# --------------------------------------------------------------------------- #
 # PHASE R -- resolve (name -> id), pre-cache-key, runs in route().
 #
 # The ``resolve_build`` hook builds the resolution requests (or [] to skip), the
 # router GETs them, and ``resolve_parse`` returns a params-merge dict the router
 # folds into params, so a name query and its id query collapse to one cache entry.
-# --------------------------------------------------------------------------- #
 
 
 def pre_resolve(spec: SourceSpec, params: dict[str, Any]) -> dict[str, Any]:
@@ -73,11 +71,9 @@ def pre_resolve(spec: SourceSpec, params: dict[str, Any]) -> dict[str, Any]:
     return {**params, **update}
 
 
-# --------------------------------------------------------------------------- #
 # MAIN FETCH -- ``build_request`` builds page 1; the optional ``next_page`` hook
 # drives offset paging (the next page's plan given the pages so far, or None to
 # stop); ``parse_response`` decodes the bodies into features.
-# --------------------------------------------------------------------------- #
 
 
 def _fetch_main(spec: SourceSpec, params: dict[str, Any]) -> list[bytes]:
@@ -103,13 +99,11 @@ def _fetch_main(spec: SourceSpec, params: dict[str, Any]) -> list[bytes]:
     return bodies
 
 
-# --------------------------------------------------------------------------- #
 # PHASE E -- enrich (list -> per-item detail). The ``enrich_plan`` hook emits the
 # ordered (ref_key, RequestPlan) detail set already sliced to the source's per-pass
 # cap; the router dedupes by ref_key, bounds by ingest.chained.max_detail_fetches,
 # and fetches each best-effort; ``enrich_merge`` folds the {ref_key: DetailResult}
 # map back into the features, and every feature survives.
-# --------------------------------------------------------------------------- #
 
 
 def fetch_detail_set(
@@ -154,9 +148,6 @@ def _enrich(spec: SourceSpec, params: dict[str, Any], features: list[dict[str, A
     return merge_hook(spec, params, features, results)
 
 
-# --------------------------------------------------------------------------- #
-# Executor entry point (the read_through fetch_fn body).
-# --------------------------------------------------------------------------- #
 
 
 def execute(spec: SourceSpec, params: dict[str, Any]) -> bytes:

@@ -82,9 +82,6 @@ class _ReadPolicy:
         _config_lock.release()
 
 
-# --------------------------------------------------------------------------- #
-# The read path: one URL per source shape, one driver read.
-# --------------------------------------------------------------------------- #
 
 
 def build_query(

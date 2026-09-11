@@ -99,9 +99,6 @@ def _gate_for(mesh_id: str) -> MeshGate:
     return gate
 
 
-# --------------------------------------------------------------------------- #
-# Mount / unmount.
-# --------------------------------------------------------------------------- #
 def open_mesh_gate(session: MeshSession) -> MeshGate:
     """Open a gate over ``session`` -> the :class:`MeshGate`, tools mounted.
 
@@ -139,9 +136,6 @@ def close_mesh_gate(gate: "MeshGate | str") -> None:
     logger.info("mesh gate CLOSED session=%s", mesh_id)
 
 
-# --------------------------------------------------------------------------- #
-# The loop tools.
-# --------------------------------------------------------------------------- #
 def _metadata(name: str) -> AtomicToolMetadata:
     return AtomicToolMetadata(
         name=name, ttl_class="live-no-cache", cacheable=False, tier="general")
@@ -204,9 +198,6 @@ def _adopt_tool(mesh_id: str) -> tuple[AtomicToolMetadata, Any]:
     return _metadata(ADOPT_TOOL), mesh_adopt_layer
 
 
-# --------------------------------------------------------------------------- #
-# Presentation.
-# --------------------------------------------------------------------------- #
 async def present_mesh(gate: MeshGate) -> dict[str, Any]:
     """Put the mesh on the map and read it -> the layer, the probes, the recipe.
 
@@ -273,9 +264,6 @@ def render_probe_lines(probes: Mapping[str, Any]) -> list[str]:
     return lines
 
 
-# --------------------------------------------------------------------------- #
-# The gate loop for a DEMANDED build.
-# --------------------------------------------------------------------------- #
 async def gate_mesh_build(session: MeshSession, *, tool_name: str,
                           input_mode: str | None = None,
                           max_rounds: int = _MAX_ROUNDS) -> MeshArtifact:

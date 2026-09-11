@@ -120,9 +120,6 @@ def _overlaps(bbox: tuple[float, ...], sb: tuple[float, float, float, float]) ->
     return not (e1 < w2 or w1 > e2 or n1 < s2 or s1 > n2)
 
 
-# --------------------------------------------------------------------------- #
-# PHASE R -- multi-state station discovery (per-state GeoJSON -> station ids).
-# --------------------------------------------------------------------------- #
 
 
 @_hooks.register_hook("asos_metar.resolve_build")
@@ -192,9 +189,6 @@ def resolve_parse(spec: SourceSpec, params: dict[str, Any], bodies: list[bytes])
     }
 
 
-# --------------------------------------------------------------------------- #
-# MAIN FETCH -- one bulk IEM CGI CSV request for all stations over the window.
-# --------------------------------------------------------------------------- #
 
 
 @_hooks.register_hook("asos_metar.build_request")
@@ -217,9 +211,6 @@ def build_request(spec: SourceSpec, params: dict[str, Any]) -> list["_hooks.Requ
     return [_hooks.RequestPlan(url=_IEM_ASOS_CGI, params=q, headers=_headers(spec))]
 
 
-# --------------------------------------------------------------------------- #
-# PARSE -- comma-CSV -> one Point feature per observation row.
-# --------------------------------------------------------------------------- #
 
 
 @_hooks.register_hook("asos_metar.parse_response")

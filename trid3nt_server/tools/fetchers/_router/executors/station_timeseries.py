@@ -151,9 +151,7 @@ def stations_to_point_fgb(
                 pass
 
 
-# --------------------------------------------------------------------------- #
 # Catalog discover + per-station loop (network). Tests monkeypatch this.
-# --------------------------------------------------------------------------- #
 
 
 def _guard_not_staged(spec: SourceSpec, url: str) -> None:
@@ -263,12 +261,10 @@ def fetch_station_records(spec: SourceSpec, params: dict[str, Any]) -> list[dict
     return records
 
 
-# --------------------------------------------------------------------------- #
 # SNAPSHOT mode (``ingest.per_station.emit == "snapshot"``). One representative row
 # per station -- the latest observed or the nearest-now prediction -- instead of the
 # full time series. The flood/ebb/slack direction lives in the named
 # ``coops_currents`` selector, dispatched by ``snapshot.transform``.
-# --------------------------------------------------------------------------- #
 
 
 def _snapshot_window(

@@ -29,9 +29,6 @@ __all__ = [
 
 logger = logging.getLogger("trid3nt_server.tools.derive.compute_slope.compute_slope")
 
-# ---------------------------------------------------------------------------
-# Error class
-# ---------------------------------------------------------------------------
 
 
 class SlopeComputeError(RuntimeError):
@@ -44,9 +41,6 @@ class SlopeComputeError(RuntimeError):
         self.error_code = error_code
 
 
-# ---------------------------------------------------------------------------
-# Tool metadata
-# ---------------------------------------------------------------------------
 
 _COMPUTE_SLOPE_METADATA = AtomicToolMetadata(
     name="compute_slope",
@@ -55,9 +49,6 @@ _COMPUTE_SLOPE_METADATA = AtomicToolMetadata(
     cacheable=True,
 )
 
-# ---------------------------------------------------------------------------
-# gdaldem binary resolution + DEM read (shared runner)
-# ---------------------------------------------------------------------------
 
 
 def _get_gdaldem_bin() -> str:
@@ -83,9 +74,6 @@ def _download_dem_bytes(dem_uri: str, storage_client: object | None = None) -> b
     )
 
 
-# ---------------------------------------------------------------------------
-# gdaldem slope subprocess wrapper
-# ---------------------------------------------------------------------------
 
 
 def _run_gdaldem_slope(
@@ -124,9 +112,6 @@ def _run_gdaldem_slope(
     )
 
 
-# ---------------------------------------------------------------------------
-# Tool registration
-# ---------------------------------------------------------------------------
 
 
 @register_tool(

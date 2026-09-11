@@ -52,9 +52,6 @@ __all__ = [
 logger = logging.getLogger("trid3nt_server.workflows.solver.solver")
 
 
-# --------------------------------------------------------------------------- #
-# Constants / configuration
-# --------------------------------------------------------------------------- #
 
 
 #: Target run-time budget the progress ramp is linear in: progress is
@@ -142,9 +139,6 @@ COMPUTE_CLASS_ALIAS: dict[str, str] = {
 }
 
 
-# --------------------------------------------------------------------------- #
-# Errors
-# --------------------------------------------------------------------------- #
 
 
 class SolverNotRegisteredError(ValueError):
@@ -161,9 +155,6 @@ class SolverDispatchError(RuntimeError):
     error_code: str = "SOLVER_DISPATCH_FAILED"
 
 
-# --------------------------------------------------------------------------- #
-# DI seams
-# --------------------------------------------------------------------------- #
 
 
 @dataclass(frozen=True)
@@ -240,13 +231,11 @@ def _get_local_runs_bucket() -> str:
     return bucket
 
 
-# --------------------------------------------------------------------------- #
 # The local backend envelope, one shape for every solver: stage the manifest's
 # inputs from the object store, launch the solver DETACHED, hand a supervisor
 # thread the process, upload the outputs and ALWAYS write completion.json, poll
 # that object from the caller, and cancel by killing the container or the process
 # group. Only the knobs in ``LocalSolverSpec`` differ between solvers.
-# --------------------------------------------------------------------------- #
 
 
 def _utc_now_iso() -> str:
@@ -785,7 +774,6 @@ def _run_solver_local_docker(
     )
 
 
-# --------------------------------------------------------------------------- #
 # Per-solver local-spec registry -- EVERY solver, no exceptions.
 #
 # Maps solver name -> callable returning a LocalSolverSpec. The callable form
@@ -794,7 +782,6 @@ def _run_solver_local_docker(
 # factory is only CALLED inside _run_solver_local_docker, by which time the
 # module is fully loaded. Engines with a public image use exec_kind="docker";
 # pip-only engines with none use exec_kind="exec".
-# --------------------------------------------------------------------------- #
 
 #: solver name -> zero-arg callable returning a LocalSolverSpec.
 LOCAL_SOLVER_SPEC_REGISTRY: dict[str, Any] = {}
@@ -1032,9 +1019,6 @@ async def _wait_for_completion_local(
         raise
 
 
-# --------------------------------------------------------------------------- #
-# run_solver
-# --------------------------------------------------------------------------- #
 
 
 _RUN_SOLVER_METADATA = AtomicToolMetadata(
@@ -1111,9 +1095,6 @@ def run_solver(
     )
 
 
-# --------------------------------------------------------------------------- #
-# wait_for_completion
-# --------------------------------------------------------------------------- #
 
 
 _WAIT_FOR_COMPLETION_METADATA = AtomicToolMetadata(
@@ -1205,9 +1186,6 @@ async def wait_for_completion(
     )
 
 
-# --------------------------------------------------------------------------- #
-# Result-building helpers
-# --------------------------------------------------------------------------- #
 
 
 def _to_utc(value: Any) -> datetime | None:

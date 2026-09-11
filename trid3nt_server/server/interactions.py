@@ -20,11 +20,9 @@ if TYPE_CHECKING:
 logger = logging.getLogger("trid3nt_server.server")
 
 
-# --------------------------------------------------------------------------- #
 # Pending tool-choice registry: keyed by the unguessable ULID request_id plus
 # the owning session_id, so a reply arriving on a sibling WebSocket connection
 # of the same session still resolves the paused turn.
-# --------------------------------------------------------------------------- #
 
 _PENDING_TOOL_CHOICES: dict[str, tuple[str, "asyncio.Future"]] = {}
 
@@ -67,9 +65,6 @@ def _resolve_pending_tool_choice(session_id: str, payload: Any) -> bool:
     return True
 
 
-# --------------------------------------------------------------------------- #
-# Session-scoped pending-CREDENTIAL registry
-# --------------------------------------------------------------------------- #
 #
 # A keyed tool dispatch that hits a missing or invalid credential pauses on a
 # future keyed by the credential ``request_id`` after emitting the request

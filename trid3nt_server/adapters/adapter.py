@@ -24,9 +24,6 @@ logger = logging.getLogger("trid3nt_server.adapters.adapter")
 DEFAULT_VERTEX_MODEL = "gemini-2.5-pro"
 
 
-# ---------------------------------------------------------------------------
-# Typed stream events
-# ---------------------------------------------------------------------------
 
 @dataclass(frozen=True)
 class TextDeltaEvent:
@@ -104,7 +101,6 @@ StreamEvent = (
 )
 
 
-# ---------------------------------------------------------------------------
 # Upstream-provider discipline: an upstream failure is NEVER internalized.
 #
 # The provider adapters classify TRANSIENT provider errors (HTTP 429, 5xx,
@@ -124,7 +120,6 @@ StreamEvent = (
 #                                  ``base * 2**N`` (default 5.0). A provider
 #                                  Retry-After, when present, OVERRIDES the
 #                                  schedule for that attempt.
-# ---------------------------------------------------------------------------
 
 
 class UpstreamProviderError(RuntimeError):
@@ -250,9 +245,6 @@ def classify_provider_error_class(exc: BaseException) -> str:
     return "internal"
 
 
-# ---------------------------------------------------------------------------
-# System prompt builder
-# ---------------------------------------------------------------------------
 
 SYSTEM_PROMPT = """\
 You are TRID3NT - a general geospatial intelligence assistant. You fetch,
@@ -767,9 +759,6 @@ chain-of-thought internal; emit only the final, user-facing narration.
 """
 
 
-# ---------------------------------------------------------------------------
-# Tool declaration builder
-# ---------------------------------------------------------------------------
 
 def _is_union_type(annotation: Any) -> bool:
     """True for any union form: ``typing.Union[X, Y]`` or ``X | Y``.
@@ -1005,9 +994,6 @@ def build_tool_declarations(
     return declarations
 
 
-# ---------------------------------------------------------------------------
-# ModelSettings
-# ---------------------------------------------------------------------------
 
 @dataclass(frozen=True)
 class ModelSettings:
@@ -1030,9 +1016,6 @@ def load_settings() -> ModelSettings:
     )
 
 
-# ---------------------------------------------------------------------------
-# Content / function_response builders
-# ---------------------------------------------------------------------------
 
 # Hard upper bound on chars we send back to Gemini per function_response.
 # Anything bigger gets clipped -- Gemini doesn't need megabytes of GeoJSON to
@@ -1049,7 +1032,6 @@ _FUNCTION_RESPONSE_CHAR_BUDGET = 4_000
 MAX_TURN_ITERATIONS = 12
 
 
-# ---------------------------------------------------------------------------
 # NEVER-REHYDRATE guard.
 #
 # The persisted agent chat row carries a ``thinking`` field (the
@@ -1065,7 +1047,6 @@ MAX_TURN_ITERATIONS = 12
 #     cannot re-inject it);
 #   * ``rehydrate_history_from_case`` reads only role/content/tool_card and is
 #     covered by the same regression test.
-# ---------------------------------------------------------------------------
 
 #: Persisted-row field names that must NEVER reach LLM-bound contents.
 NEVER_REHYDRATE_FIELDS: frozenset[str] = frozenset({"thinking"})
@@ -1961,9 +1942,6 @@ def summarize_tool_result(
     return payload
 
 
-# --------------------------------------------------------------------------- #
-# result_usability classifier (tool-accuracy panel)
-# --------------------------------------------------------------------------- #
 #
 # ``success`` (did the tool return without raising / without a failure-tagged
 # envelope) is NOT the same question as ``was the result USABLE`` -- the headline
@@ -2140,9 +2118,6 @@ def build_user_text_content(text: str) -> genai_types.Content:
     )
 
 
-# ---------------------------------------------------------------------------
-# stream_events -- tool-aware streaming
-# ---------------------------------------------------------------------------
 
 async def stream_events(
     client: Any,
@@ -2168,9 +2143,6 @@ async def stream_events(
         yield event
 
 
-# ---------------------------------------------------------------------------
-# stream_events_with_contents -- single-turn primitive for the multi-turn loop
-# ---------------------------------------------------------------------------
 
 
 async def stream_events_with_contents(

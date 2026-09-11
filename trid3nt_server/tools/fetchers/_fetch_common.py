@@ -17,9 +17,6 @@ __all__ = [
 ]
 
 
-# ---------------------------------------------------------------------------
-# Error codes registered by this module (typed-error surface).
-# ---------------------------------------------------------------------------
 #
 # These RuntimeError subclasses carry a stable ``error_code`` for the error frame
 # the agent surface emits when a fetch fails. Nothing in this module catches them:
@@ -55,9 +52,6 @@ _DEFAULT_USER_AGENT = (
     "https://github.com/double-r-squared/trid3nt-qgis-plugin; agent@trid3nt.dev)"
 )
 
-# ---------------------------------------------------------------------------
-# bbox helpers (engine-side quantize).
-# ---------------------------------------------------------------------------
 
 
 def _validate_bbox(bbox: tuple[float, float, float, float]) -> None:

@@ -53,9 +53,6 @@ class WaterBodyClassUnknown(ValueError):
         self.missing = tuple(missing)
 
 
-# ---------------------------------------------------------------------------
-# The classifier. Its ONLY inputs are rows the reach chain already holds.
-# ---------------------------------------------------------------------------
 
 #: NHD FType codes for TIDAL / MARINE water surfaces. Their presence in the
 #: mapped water of a reach is what makes it coastal or estuarine; it is a fact
@@ -131,9 +128,6 @@ def classify_water_body(
     )
 
 
-# ---------------------------------------------------------------------------
-# The rung adapter: BlueTopo served under the topobathy row's ladder.
-# ---------------------------------------------------------------------------
 
 #: Coverage at or above this counts as complete (a sliver of a tile edge is not
 #: a gap a second source could meaningfully fill).
@@ -182,9 +176,6 @@ def serve_bluetopo_bed(
     return result
 
 
-# ---------------------------------------------------------------------------
-# The ladders, one per class.
-# ---------------------------------------------------------------------------
 
 _USER_RUNG = Rung(
     name="user_supplied",

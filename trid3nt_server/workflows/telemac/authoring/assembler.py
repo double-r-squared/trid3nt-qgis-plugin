@@ -83,9 +83,6 @@ _DEFAULT_GRAPHIC_PERIOD = 200
 DO_SAG_OUTFALL_FRAC = 0.02
 
 
-# --------------------------------------------------------------------------- #
-# The staging flow.
-# --------------------------------------------------------------------------- #
 def case_section(*, module: str, steering: str, results: list[str],
                  server_facts: Mapping[str, Any], user_fortran: str | None = None,
                  coupling: str | None = None,
@@ -240,9 +237,6 @@ def _catchment_mesh_missing(message: str) -> Exception:
 
 
 
-# --------------------------------------------------------------------------- #
-# The reach: what the accepted mesh measures before a keyword is set.
-# --------------------------------------------------------------------------- #
 def _face_section(nodes: Sequence[int], node_xy: Any, bed: Any, *,
                   missing: Callable[[str], Exception]) -> list[list[float]]:
     """The channel a role's face cuts, as ``(offset, bed)`` pairs.
@@ -458,9 +452,6 @@ async def _settle_release(
         part for part in (note, settled) if part)
 
 
-# --------------------------------------------------------------------------- #
-# The catchment: what the accepted mesh measures at the face it drains through.
-# --------------------------------------------------------------------------- #
 def _outlet_boundary(mesh: Mapping[str, Any]) -> tuple[dict[str, Any], int, str, int]:
     """The declared OUTLET: ``(topology, number, what its quad prescribes, count)``.
 
@@ -923,9 +914,6 @@ async def settle_catchment(
     }
 
 
-# --------------------------------------------------------------------------- #
-# Open water: what an accepted AOI mesh measures before a keyword is set.
-# --------------------------------------------------------------------------- #
 def _mesh_facts(mesh: Mapping[str, Any], *,
                 missing: Callable[[str], Exception]) -> dict[str, Any]:
     """The accepted mesh's own record, as every open-water sheet reads it.

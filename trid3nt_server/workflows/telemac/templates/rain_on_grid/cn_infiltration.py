@@ -52,7 +52,6 @@ class CNInfiltrationError(ValueError):
     """Invalid CN-infiltration input (out-of-range CN, unknown AMC, etc.)."""
 
 
-# ---------------------------------------------------------------------------
 # Land-cover -> (CN2, Manning n) table -- paper Table 1 analog.
 #
 # Godara et al. Table 1 lists CN + Manning per land-cover class for the T2D
@@ -61,7 +60,6 @@ class CNInfiltrationError(ValueError):
 # the field directly. CN values are the paper's T2D column for the mid hydrologic
 # soil group (HSG B); the true CN depends on soil group and is a calibration
 # lever rather than a fixed constant. Manning n is the paper T2D column verbatim.
-# ---------------------------------------------------------------------------
 
 # ONE STUDY, BOTH COLUMNS. The curve number and the roughness are read off the
 # same paper's same table for the same class, so a run's infiltration and its
@@ -107,9 +105,6 @@ def landcover_cn_manning(nlcd_code: int) -> tuple[float, float, str]:
     return NLCD_CN_MANNING.get(int(nlcd_code), _DEFAULT_CN_MANNING)
 
 
-# ---------------------------------------------------------------------------
-# SCS-CN rainfall-excess (paper eq 7-8).
-# ---------------------------------------------------------------------------
 
 
 def scs_potential_retention_mm(cn: float) -> float:
@@ -156,9 +151,6 @@ def rainfall_excess_hyetograph(
     return out
 
 
-# ---------------------------------------------------------------------------
-# Steep-slope CN correction (paper eq 9).
-# ---------------------------------------------------------------------------
 
 
 def huang_steep_slope_cn(cn2: float, slope_m_per_m: float) -> float:
@@ -188,9 +180,7 @@ def paper_exponential_steep_slope_cn(cn2: float, slope_m_per_m: float) -> float:
     return min(100.0, float(cn2) * math.exp(0.0065 * float(slope_m_per_m)))
 
 
-# ---------------------------------------------------------------------------
 # Antecedent-moisture conversion (matches TELEMAC's runoff_scs_cn.f exactly).
-# ---------------------------------------------------------------------------
 
 
 #: The SCS antecedent-moisture words, and the condition each one names. Both the
@@ -236,10 +226,8 @@ def amc_convert_cn(cn2: float, amc: int) -> float:
     raise CNInfiltrationError(f"AMC must be 1 (dry), 2 (normal) or 3 (wet); got {amc}")
 
 
-# ---------------------------------------------------------------------------
 # Per-node CN field builder (feeds TELEMAC FORMATTED DATA FILE 2 on the native
 # path).
-# ---------------------------------------------------------------------------
 
 
 def node_curve_numbers(
@@ -266,7 +254,6 @@ def node_curve_numbers(
     return [huang_steep_slope_cn(cn, s) for cn, s in zip(base, slopes_m_per_m)]
 
 
-# ---------------------------------------------------------------------------
 # Automatic CN-path selection (native constant vs native time-varying hyetograph).
 #
 # TELEMAC v9.0.0's native SCS-CN runoff model ships with RAINDEF hardcoded to 1
@@ -287,7 +274,6 @@ def node_curve_numbers(
 #     could not; the residual peak-timing lag is bounded by the forcing product
 #     and mesh routing, not the rain representation.
 # The chosen path is recorded in the run envelope (runoff_path + reason).
-# ---------------------------------------------------------------------------
 
 
 @dataclass(frozen=True)

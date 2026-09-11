@@ -21,9 +21,6 @@ if TYPE_CHECKING:
 logger = logging.getLogger("trid3nt_server.server")
 
 
-# --------------------------------------------------------------------------- #
-# Turn zoom-to accumulator helpers
-# --------------------------------------------------------------------------- #
 def _is_finite_bbox4(bbox: Any) -> bool:
     """True iff ``bbox`` is a 4-tuple or list of finite real numbers, so a
     None, wrong-length or non-finite bbox never lands a bad zoom-to."""
@@ -84,9 +81,6 @@ def _last_zoom_to_bbox(commands: list[dict]) -> list | None:
     return None
 
 
-# --------------------------------------------------------------------------- #
-# Session-scoped pending-REGION-CHOICE registry
-# --------------------------------------------------------------------------- #
 #
 # A geocode that lands on a state-bbox fallback emits a region-choice request
 # and pauses on a future keyed by the choice ``request_id``; the reply, which
@@ -134,9 +128,6 @@ def _resolve_pending_region_choice(
     return True
 
 
-# --------------------------------------------------------------------------- #
-# Session-scoped pending-SPATIAL-INPUT registry
-# --------------------------------------------------------------------------- #
 #
 # A ``request_spatial_input`` call emits its envelope and pauses on a future
 # keyed by the request ``request_id``; the inbound response, which may arrive on

@@ -30,9 +30,6 @@ class MissingCredentialError(RuntimeError):
     ``None``, leaving the fetcher's own env path as the floor."""
 
 
-# --------------------------------------------------------------------------- #
-# Session cache: session_id -> {provider_id: raw_value}
-# --------------------------------------------------------------------------- #
 
 # Guarded by a lock: ``secret-add`` handling and tool-dispatch resolution run on
 # the same asyncio loop today, but the lock keeps the module honest if a value
@@ -41,12 +38,10 @@ _LOCK: Final[threading.Lock] = threading.Lock()
 _SESSION_CREDENTIALS: dict[str, dict[str, str]] = {}
 
 
-# --------------------------------------------------------------------------- #
 # Env fallback: provider_id -> the env var the tool's own resolver reads.
 # Single-key providers only. Movebank is deliberately absent: its credential is
 # a composite user + password pair its own fetcher resolves, so the resolver
 # never has to reassemble one.
-# --------------------------------------------------------------------------- #
 _PROVIDER_ENV_VARS: Final[dict[str, tuple[str, ...]]] = {
     "firms": ("TRID3NT_FIRMS_MAP_KEY",),
     "ebird": ("TRID3NT_EBIRD_API_KEY",),

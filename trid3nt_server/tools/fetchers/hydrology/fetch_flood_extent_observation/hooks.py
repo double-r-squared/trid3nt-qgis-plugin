@@ -54,9 +54,6 @@ _CAVEATS = [
 ]
 
 
-# --------------------------------------------------------------------------- #
-# pre_resolve: the LANCE dir-walk (date -> year/doy), over the shared transport.
-# --------------------------------------------------------------------------- #
 
 
 def _list_dir_names(spec: SourceSpec, url: str) -> list[str]:
@@ -123,9 +120,6 @@ def pre_resolve(spec: SourceSpec, params: dict[str, Any]) -> dict[str, Any]:
     return {"year": d.year, "doy": d.timetuple().tm_yday}
 
 
-# --------------------------------------------------------------------------- #
-# envelope: class-breakdown / flood-area / legend / caveats from the produced COG.
-# --------------------------------------------------------------------------- #
 
 
 def _summarize_cog(data: bytes, bbox: tuple[float, float, float, float]) -> dict[str, Any]:

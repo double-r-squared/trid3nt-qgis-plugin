@@ -75,9 +75,6 @@ def _configure_read_path() -> None:
     _read_path_configured = True
 
 
-# --------------------------------------------------------------------------- #
-# Catalog: signing, collection/asset resolution, search, scene select.
-# --------------------------------------------------------------------------- #
 
 
 def _signing_modifier(spec: SourceSpec) -> Any:
@@ -301,9 +298,6 @@ def _select_items(spec: SourceSpec, params: dict[str, Any], items: list[Any],
     return [_rank_item(sel, items, bbox)]
 
 
-# --------------------------------------------------------------------------- #
-# The destination grid.
-# --------------------------------------------------------------------------- #
 
 
 def _source_cell(items: list[Any]) -> tuple[float, float, float] | None:
@@ -393,9 +387,6 @@ def _geobox(spec: SourceSpec, params: dict[str, Any], items: list[Any],
                    "EPSG:4326"), "nearest")
 
 
-# --------------------------------------------------------------------------- #
-# The load.
-# --------------------------------------------------------------------------- #
 
 
 def _one_group(item: Any, parsed: Any, idx: int) -> int:
@@ -464,9 +455,6 @@ def _load(spec: SourceSpec, items: list[Any], bands: list[str], geobox: Any,
     return {b: ds[b].isel(time=0).values for b in bands}
 
 
-# --------------------------------------------------------------------------- #
-# Renders.
-# --------------------------------------------------------------------------- #
 
 
 def _render_float(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any, Any, Any]:
@@ -577,10 +565,8 @@ def fetch_source_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any, A
     return _render_float(spec, params)
 
 
-# --------------------------------------------------------------------------- #
 # RGB composites: N single-band assets (or N bands of one asset) scaled, masked
 # and rendered into a 3-band photometric-RGB uint8 COG.
-# --------------------------------------------------------------------------- #
 
 
 def _declare_asset_bands(items: list[Any], asset: str) -> int:
@@ -782,9 +768,6 @@ def _render_rgb(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any, Any, str
     return rgb, geobox.transform, "EPSG:4326"
 
 
-# --------------------------------------------------------------------------- #
-# Entry point.
-# --------------------------------------------------------------------------- #
 
 
 def execute(spec: SourceSpec, params: dict[str, Any]) -> bytes:

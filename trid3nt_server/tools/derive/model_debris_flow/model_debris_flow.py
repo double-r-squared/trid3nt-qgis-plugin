@@ -34,9 +34,6 @@ __all__ = [
 logger = logging.getLogger("trid3nt_server.tools.derive.model_debris_flow.model_debris_flow")
 
 
-# ---------------------------------------------------------------------------
-# Error types (typed-error surface).
-# ---------------------------------------------------------------------------
 
 
 class DebrisFlowError(RuntimeError):
@@ -85,9 +82,6 @@ class DebrisFlowUpstreamError(DebrisFlowError):
     retryable = True
 
 
-# ---------------------------------------------------------------------------
-# Result type.
-# ---------------------------------------------------------------------------
 
 
 class DebrisFlowLayerURI(LayerURI):
@@ -106,9 +100,6 @@ class DebrisFlowLayerURI(LayerURI):
     notes: list[str] = []
 
 
-# ---------------------------------------------------------------------------
-# Constants.
-# ---------------------------------------------------------------------------
 
 #: CPU-bound AOI clamp (degrees per side). At 30 m cells, 0.15 deg is roughly
 #: a 550 x 550 grid -- comfortably CPU-bounded for the pysheds-backed
@@ -154,9 +145,6 @@ _METADATA = AtomicToolMetadata(
 )
 
 
-# ---------------------------------------------------------------------------
-# Validation helpers.
-# ---------------------------------------------------------------------------
 
 
 def _validate_bbox(bbox: Any) -> tuple[float, float, float, float]:
@@ -207,9 +195,6 @@ def _validate_intensity(value: Any) -> float:
     return intensity
 
 
-# ---------------------------------------------------------------------------
-# Input staging.
-# ---------------------------------------------------------------------------
 
 
 def _stage_uri_local(uri: str, tmpdir: str, label: str) -> str:
@@ -482,9 +467,6 @@ def _load_kf(
         return kf
 
 
-# ---------------------------------------------------------------------------
-# Output writing.
-# ---------------------------------------------------------------------------
 
 
 def _write_segments_geojson(
@@ -518,9 +500,6 @@ def _write_segments_geojson(
         ) from exc
 
 
-# ---------------------------------------------------------------------------
-# Registered tool.
-# ---------------------------------------------------------------------------
 
 
 @register_tool(

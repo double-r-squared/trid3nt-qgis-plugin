@@ -56,9 +56,6 @@ class CodeExecConfirmationRequired(RuntimeError):
         self.code_exec_id = code_exec_id
 
 
-# --------------------------------------------------------------------------- #
-# Result shaping
-# --------------------------------------------------------------------------- #
 
 
 def build_code_exec_result_payload(
@@ -150,9 +147,6 @@ def is_code_exec_result(result: Any) -> bool:
     )
 
 
-# --------------------------------------------------------------------------- #
-# The atomic tool
-# --------------------------------------------------------------------------- #
 
 
 @register_tool(

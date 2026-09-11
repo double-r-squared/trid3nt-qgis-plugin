@@ -24,9 +24,6 @@ __all__ = [
 
 logger = logging.getLogger("trid3nt_server.tools.derive.compute_impervious_surface.compute_impervious_surface")
 
-# ---------------------------------------------------------------------------
-# Error class
-# ---------------------------------------------------------------------------
 
 
 # ``error_code`` is one of RASTER_OPEN_FAILED, RASTER_DOWNLOAD_FAILED,
@@ -39,9 +36,6 @@ class ImperviousSurfaceError(RuntimeError):
         self.error_code = error_code
 
 
-# ---------------------------------------------------------------------------
-# Tool metadata
-# ---------------------------------------------------------------------------
 
 _IMPERVIOUS_METADATA = AtomicToolMetadata(
     name="compute_impervious_surface",
@@ -51,9 +45,6 @@ _IMPERVIOUS_METADATA = AtomicToolMetadata(
 )
 
 
-# ---------------------------------------------------------------------------
-# Developed-class to impervious-fraction mapping
-# ---------------------------------------------------------------------------
 
 #: USGS NLCD developed-density classes -> representative impervious fraction:
 #: 21 Open Space (under 20% impervious), 22 Low (20-49%), 23 Medium (50-79%),
@@ -67,9 +58,6 @@ DEVELOPED_CLASS_TO_IMPERVIOUS: dict[int, float] = {
 }
 
 
-# ---------------------------------------------------------------------------
-# Object-store read helper
-# ---------------------------------------------------------------------------
 
 
 def _download_raster_bytes(uri: str, storage_client: object | None = None) -> bytes:
@@ -96,9 +84,6 @@ def _download_raster_bytes(uri: str, storage_client: object | None = None) -> by
         ) from exc
 
 
-# ---------------------------------------------------------------------------
-# Product-type detection
-# ---------------------------------------------------------------------------
 
 
 def _is_impervious_product(uri: str, tags: dict[str, object] | None) -> bool:
@@ -119,9 +104,6 @@ def _is_impervious_product(uri: str, tags: dict[str, object] | None) -> bool:
     return False
 
 
-# ---------------------------------------------------------------------------
-# Core computation
-# ---------------------------------------------------------------------------
 
 
 def _derive_impervious_from_landcover(
@@ -327,9 +309,6 @@ def _compute_impervious_bytes(
             pass
 
 
-# ---------------------------------------------------------------------------
-# Tool registration
-# ---------------------------------------------------------------------------
 
 
 @register_tool(

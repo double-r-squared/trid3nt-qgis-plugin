@@ -174,9 +174,6 @@ def build_recipe(*, mesher: str, kind: Any = None, extent: Any = None,
         ops=declared)
 
 
-# --------------------------------------------------------------------------- #
-# The plan-value round trip.
-# --------------------------------------------------------------------------- #
 def recipe_plan_value(recipe: MeshRecipe) -> dict[str, Any]:
     """A recipe as the plain mapping a plan step carries in its kwargs.
 

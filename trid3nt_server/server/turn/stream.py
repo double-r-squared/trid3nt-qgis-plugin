@@ -1835,9 +1835,6 @@ async def _stream_model_reply(
                 exc_info=True,
             )
 
-# --------------------------------------------------------------------------- #
-# Dispatch wrappers with chat persistence
-# --------------------------------------------------------------------------- #
 
 
 async def _dispatch_model_turn_and_persist(

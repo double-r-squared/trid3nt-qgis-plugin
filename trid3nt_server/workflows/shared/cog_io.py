@@ -152,9 +152,6 @@ def cog_bbox_4326(cog_path: Path) -> tuple[float, float, float, float] | None:
         return None
 
 
-# --------------------------------------------------------------------------- #
-# CRS round-trip guard (the TiTiler-wedge / mistagged-raster guard).
-# --------------------------------------------------------------------------- #
 def _run_crs_roundtrip_guard(
     cog_path: Path,
     *,
@@ -189,9 +186,6 @@ def _run_crs_roundtrip_guard(
         return (float(b.left), float(b.bottom), float(b.right), float(b.top))
 
 
-# --------------------------------------------------------------------------- #
-# Grid -> EPSG:4326 COG (covers SWMM / MODFLOW / GeoClaw / OpenQuake).
-# --------------------------------------------------------------------------- #
 DST_CRS = "EPSG:4326"
 
 
@@ -310,9 +304,6 @@ def write_cog_4326_from_grid(
     return dst_cog
 
 
-# --------------------------------------------------------------------------- #
-# Existing-COG-file -> EPSG:4326 COG (Landlab worker field).
-# --------------------------------------------------------------------------- #
 def reproject_cog_file_to_4326(
     src_cog: Path,
     *,
@@ -377,9 +368,6 @@ def reproject_cog_file_to_4326(
     return dst_cog, bbox
 
 
-# --------------------------------------------------------------------------- #
-# Scheme-aware upload (covers SWMM / MODFLOW / GeoClaw / Landlab / OpenQuake).
-# --------------------------------------------------------------------------- #
 def upload_cog(
     local_cog: Path,
     run_id: str,

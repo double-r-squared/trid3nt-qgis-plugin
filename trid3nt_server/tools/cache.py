@@ -104,7 +104,6 @@ def is_cacheable(metadata: AtomicToolMetadata) -> bool:
     return metadata.cacheable and metadata.ttl_class != "live-no-cache"
 
 
-# ---------------------------------------------------------------------------
 # Fetch-time provenance channel: a cache-replayable sidecar from fetch to envelope.
 #
 # Some fetch-time facts are UNRECOVERABLE from the cached bytes - which of a
@@ -121,7 +120,6 @@ def is_cacheable(metadata: AtomicToolMetadata) -> bool:
 # predates it is a MISS: an artifact's honesty lives in its provenance, so a stale
 # sidecar would keep serving a stale account of the bytes for the rest of the TTL
 # bucket - the exact way a landed fix fails to reach an already-cached AOI.
-# ---------------------------------------------------------------------------
 
 
 class ProvenanceRecorder:
@@ -188,9 +186,6 @@ def _sidecar_key(obj_key: str) -> str:
     return f"{stem}.provenance.json"
 
 
-# ---------------------------------------------------------------------------
-# read_through - the read-through / write-on-miss entry point.
-# ---------------------------------------------------------------------------
 
 
 class ReadThroughResult:

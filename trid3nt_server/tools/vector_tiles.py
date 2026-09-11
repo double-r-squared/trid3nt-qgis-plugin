@@ -21,9 +21,7 @@ __all__ = [
 ]
 
 
-# --------------------------------------------------------------------------- #
 # Tunables (env-overridable so ops can move the line without a redeploy)
-# --------------------------------------------------------------------------- #
 
 def _env_int(name: str, default: int) -> int:
     raw = os.environ.get(name)
@@ -53,9 +51,6 @@ MAX_INLINE_FEATURES: int = max(
 )
 
 
-# --------------------------------------------------------------------------- #
-# Result metadata
-# --------------------------------------------------------------------------- #
 
 @dataclass(frozen=True)
 class DensifyMeta:
@@ -84,9 +79,6 @@ class DensifyMeta:
         }
 
 
-# --------------------------------------------------------------------------- #
-# Geometry helpers (shapely - already a hard dep via geopandas)
-# --------------------------------------------------------------------------- #
 
 def _feature_count(fc: dict[str, Any]) -> int:
     feats = fc.get("features")
@@ -264,9 +256,6 @@ def _simplify_and_cap(fc: dict[str, Any]) -> tuple[dict[str, Any], bool, bool, i
     return fc_out, any_simplified, capped, len(out_features)
 
 
-# --------------------------------------------------------------------------- #
-# The single decision + transform seam
-# --------------------------------------------------------------------------- #
 
 def densify_if_needed(
     fc: dict[str, Any] | None,

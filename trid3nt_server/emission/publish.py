@@ -31,9 +31,6 @@ __all__ = [
 logger = logging.getLogger("trid3nt_server.emission.publish")
 
 
-# --------------------------------------------------------------------------- #
-# Error class
-# --------------------------------------------------------------------------- #
 
 
 class PublishLayerError(RuntimeError):
@@ -48,7 +45,6 @@ class PublishLayerError(RuntimeError):
         self.retryable = retryable
 
 
-# --------------------------------------------------------------------------- #
 # The render chokepoint
 #
 # Two guards run FIRST because they are facts about the FILE rather than about
@@ -56,7 +52,6 @@ class PublishLayerError(RuntimeError):
 # image: a COG carrying its own band-1 colour table is coloured by that table,
 # and an RGB(A) / multiband COG is coloured already. Neither takes a preset -
 # they are handed back as "already painted".
-# --------------------------------------------------------------------------- #
 
 def _is_rgba_or_multiband(raster_bytes: bytes | None) -> bool:
     """True if the COG is RGB(A)/multiband - QGIS renders it DIRECTLY.
@@ -139,7 +134,6 @@ def resolve_layer_style(
     return resolved
 
 
-# --------------------------------------------------------------------------- #
 # The resolved style, as the layer carries it
 #
 # The legend is built from the SAME resolution the .qml is written from, so the
@@ -149,7 +143,6 @@ def resolve_layer_style(
 # no meaningful key at all.
 #
 # Fail-open: ANY failure here returns ``None`` so a publish is never blocked.
-# --------------------------------------------------------------------------- #
 
 #: The most-recent published-raster ``LegendKey`` keyed by the layer's ``s3://``
 #: COG uri. The legend travels by URI rather than on the layer row, and the
@@ -230,9 +223,6 @@ def pop_legend_for_uri(layer_uri: str) -> "LegendKey | None":
 # XYZ tile-template mint here.
 
 
-# --------------------------------------------------------------------------- #
-# Benign vector handling
-# --------------------------------------------------------------------------- #
 
 #: Vector artifact extensions. ``publish_layer`` is RASTER-ONLY: a vector
 #: reaching it is already a store object the plugin opens natively, and GDAL
@@ -272,9 +262,7 @@ def _benign_vector_noop(layer_uri: str, layer_id: str) -> str:
     )
 
 
-# --------------------------------------------------------------------------- #
 # Overview enforcement (no-overview COGs render spotty / never paint)
-# --------------------------------------------------------------------------- #
 
 
 def _raster_has_overviews(raster_bytes: bytes) -> bool | None:
@@ -666,9 +654,6 @@ def derive_readable_layer_name(
     return f"{label} {_short_disambiguator(layer_id)}"
 
 
-# --------------------------------------------------------------------------- #
-# The mechanism
-# --------------------------------------------------------------------------- #
 
 def publish_layer(
     layer_uri: str,

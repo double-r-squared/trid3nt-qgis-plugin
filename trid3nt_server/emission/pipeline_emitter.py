@@ -62,9 +62,6 @@ __all__ = [
 ]
 
 
-# --------------------------------------------------------------------------- #
-# Per-turn Case binding for envelope tagging
-# --------------------------------------------------------------------------- #
 #
 # The turn's pinned Case is bound here at task entry, and EVERY envelope
 # constructed inside the turn stamps ``Envelope.case_id`` from it, so the client
@@ -86,9 +83,6 @@ def current_turn_case() -> str | None:
     return _TURN_CASE.get()
 
 
-# --------------------------------------------------------------------------- #
-# Per-turn drawn-geometry binding
-# --------------------------------------------------------------------------- #
 #
 # The user's rubber-band rectangle rides ``user-message`` as ``drawn_geometry``
 # and is bound here per task, so a gate reads it without a new kwarg threaded
@@ -112,9 +106,6 @@ def current_turn_drawn_geometry() -> dict | None:
     return _TURN_DRAWN_GEOMETRY.get()
 
 
-# --------------------------------------------------------------------------- #
-# Active-emitter ContextVar
-# --------------------------------------------------------------------------- #
 #
 # ``emit_tool_call`` binds the active ``PipelineEmitter`` here for the lifetime of
 # one tool or workflow invocation, so a workflow body can fire a transient map
@@ -199,9 +190,6 @@ async def emit_chart_payloads(payloads: Any) -> None:
 logger = logging.getLogger("trid3nt_server.emission.pipeline_emitter")
 
 
-# --------------------------------------------------------------------------- #
-# Dead-socket terminal-send resilience
-# --------------------------------------------------------------------------- #
 #
 # The TERMINAL pipeline-state send can raise ConnectionClosed* on a dead or
 # mid-cycling socket, which would abort the transition and LOSE the red/green
@@ -222,9 +210,6 @@ except Exception:  # pragma: no cover -- websockets absent in a minimal env
     _CONNECTION_CLOSED_EXC = ()
 
 
-# --------------------------------------------------------------------------- #
-# Terminal-on-RETURN detector
-# --------------------------------------------------------------------------- #
 #
 # A tool or workflow can FAIL or be CANCELLED and still RETURN a value rather
 # than raise - a killed solver run comes back as a terminal RunResult, and a
@@ -302,9 +287,6 @@ def _classify_tool_return(result: Any) -> tuple[str, str, str] | None:
     return None
 
 
-# --------------------------------------------------------------------------- #
-# Error-code registry (open set, SCREAMING_SNAKE_CASE)
-# --------------------------------------------------------------------------- #
 
 
 class ErrorCodeRegistry:
@@ -354,9 +336,6 @@ class StepNotFoundError(EmitterError):
     """``mark_*`` called with a step_id the emitter does not own."""
 
 
-# --------------------------------------------------------------------------- #
-# Emission sink -- the function the emitter calls to push a frame on the wire
-# --------------------------------------------------------------------------- #
 
 
 #: Type of the per-session sink the emitter pushes frames to. The sink is
@@ -378,9 +357,6 @@ ChartPersistHook = Callable[[dict], Awaitable[None]]
 ToolCardPersistHook = Callable[..., Awaitable[None]]
 
 
-# --------------------------------------------------------------------------- #
-# PipelineEmitter
-# --------------------------------------------------------------------------- #
 
 
 def _now() -> datetime:
@@ -401,9 +377,6 @@ def _elapsed_ms(started_at: datetime | None, completed_at: datetime | None) -> i
     return int(round(delta))
 
 
-# --------------------------------------------------------------------------- #
-# tool-io serialization
-# --------------------------------------------------------------------------- #
 
 
 def _json_for_tool_io(value: Any) -> tuple[str, bool, int]:
@@ -428,9 +401,6 @@ def _json_for_tool_io(value: Any) -> tuple[str, bool, int]:
     return truncated, True, orig_bytes
 
 
-# --------------------------------------------------------------------------- #
-# Vector layer inline-GeoJSON helper
-# --------------------------------------------------------------------------- #
 
 
 def _fgb_bytes_to_geojson(fgb_bytes: bytes) -> dict[str, Any] | None:
@@ -809,9 +779,6 @@ class PipelineEmitter:
         #: until the first terminal transition.
         self._last_terminal_pipeline_payload: PipelineStatePayload | None = None
 
-    # ------------------------------------------------------------------ #
-    # Session-state seeding (reconnect-resync)
-    # ------------------------------------------------------------------ #
 
     def seed_chat_history(self, history: list[dict]) -> None:
         """Replace the chat-history mirror this emitter ships in session-state.
@@ -820,9 +787,6 @@ class PipelineEmitter:
         """
         self._chat_history = list(history or [])
 
-    # ------------------------------------------------------------------ #
-    # Sink rebinding (WS-disconnect survival)
-    # ------------------------------------------------------------------ #
 
     def rebind_sink(self, sink: EmissionSink) -> None:
         """Swap the wire sink this emitter pushes frames to, and replay onto it.
@@ -903,9 +867,7 @@ class PipelineEmitter:
                 self._pipeline_id,
             )
 
-    # ------------------------------------------------------------------ #
     # Snapshot accessors (read-only views; tests + integrations introspect)
-    # ------------------------------------------------------------------ #
 
     @property
     def pipeline_id(self) -> str | None:
@@ -1065,9 +1027,6 @@ class PipelineEmitter:
             steps=[self._to_summary(sid) for sid in self._step_order],
         )
 
-    # ------------------------------------------------------------------ #
-    # Transition methods (the public emitter surface)
-    # ------------------------------------------------------------------ #
 
     def start_pipeline(self) -> str:
         """Open a fresh pipeline. Returns the new ``pipeline_id``.
@@ -1144,10 +1103,8 @@ class PipelineEmitter:
         step.progress_percent = self._coerce_progress(progress_percent)
         await self._emit_pipeline_state()
 
-    # ------------------------------------------------------------------ #
     # Nested sub-step timeline -- composer-internal atomic-tool
     # calls surfaced as CHILD rows nested under the parent workflow card.
-    # ------------------------------------------------------------------ #
 
     def begin_substeps(self, total: int | None) -> None:
         """Declare the planned child count for the live breadcrumb.
@@ -1209,9 +1166,6 @@ class PipelineEmitter:
         else:
             await self.mark_complete(child_id)
 
-    # ------------------------------------------------------------------ #
-    # Two-card sim observability -- the dispatched-solve compute card
-    # ------------------------------------------------------------------ #
 
     async def add_compute_step(
         self,
@@ -1394,9 +1348,6 @@ class PipelineEmitter:
         """
         await self._persist_step_card(step_id, states=("complete", "failed"))
 
-    # ------------------------------------------------------------------ #
-    # session-state -- current_pipeline + loaded_layers
-    # ------------------------------------------------------------------ #
 
     def _alloc_z(self) -> int:
         """Return the next monotonic ``z_index`` and advance the counter.
@@ -1635,9 +1586,6 @@ class PipelineEmitter:
             return
         await self._send("tool-io", payload)
 
-    # ------------------------------------------------------------------ #
-    # Tool-call wrapper -- the integration seam for the server
-    # ------------------------------------------------------------------ #
 
     @contextmanager
     def tool_call(self, *, name: str, tool_name: str):
@@ -1780,9 +1728,6 @@ class PipelineEmitter:
             # single-top-level-step path this returns it to None.
             self._current_parent_step_id = _prev_parent
 
-    # ------------------------------------------------------------------ #
-    # Internal helpers
-    # ------------------------------------------------------------------ #
 
     def _classify_exception(self, exc: Exception) -> tuple[str, str]:
         """Map a tool exception to an ``(error_code, error_message)`` pair.
@@ -1997,9 +1942,6 @@ class PipelineEmitter:
         )
 
 
-# --------------------------------------------------------------------------- #
-# Two-card sim observability composer helpers
-# --------------------------------------------------------------------------- #
 #
 # Every solver-dispatch composer mints the same two cards: a Dispatch tool card
 # recording the submit, which lands complete immediately, and a Sim compute card
@@ -2110,9 +2052,6 @@ async def route_sim_terminal(
         logger.warning("route_sim_terminal failed (non-fatal): %s", exc)
 
 
-# --------------------------------------------------------------------------- #
-# Compaction card
-# --------------------------------------------------------------------------- #
 #
 # The running-then-upsert-terminal shape above, collapsed to a SINGLE card:
 # compaction is one atomic local pass, not a dispatch and a solve, so it takes a

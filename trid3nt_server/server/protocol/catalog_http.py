@@ -294,9 +294,6 @@ def render_catalog_page(payload: dict[str, Any] | None = None) -> bytes:
     return _CATALOG_PAGE_TEMPLATE.replace("__DATA__", safe).encode("utf-8")
 
 
-# ---------------------------------------------------------------------------
-# Telemetry summary: the routing-quality dashboard backend.
-# ---------------------------------------------------------------------------
 
 
 def _get_telemetry_path() -> Path:
@@ -680,13 +677,11 @@ def _aggregate_records(records: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-# ---------------------------------------------------------------------------
 # The solve-telemetry section of the summary.
 #
 # The per-solve metrics - grid resolution, active cells, vCPU, wall clock,
 # backend, AOI - are read from the JSONL the solve writer already maintains and
 # folded into the summary.
-# ---------------------------------------------------------------------------
 
 _DEFAULT_SOLVE_TELEMETRY_PATH = "/tmp/trid3nt_solve_telemetry.jsonl"
 
@@ -1089,7 +1084,6 @@ async def build_telemetry_summary(
     return summary
 
 
-# ---------------------------------------------------------------------------
 # Building click-to-enrich detail endpoint.
 #
 # The building footprint inline GeoJSON now carries ID-only props (osm_id /
@@ -1099,7 +1093,6 @@ async def build_telemetry_summary(
 # that sidecar for a clicked (osm_type, osm_id); if no sidecar carries the fid it
 # falls back to a LIVE Overpass-by-id query. Non-blocking: S3 + Overpass run via
 # asyncio.to_thread so the agent's WS heartbeat is never starved.
-# ---------------------------------------------------------------------------
 
 
 class _BuildingDetailNotFound(Exception):
@@ -1244,7 +1237,6 @@ async def _handle_building_detail(query_string: str) -> bytes:
 
 
 
-# ---------------------------------------------------------------------------
 class _ProviderConfigBadRequest(Exception):
     """POST /api/provider-config body was malformed. SECURITY: the message
     NEVER echoes the request body or the api_key -- only field-shape complaints
@@ -1416,14 +1408,12 @@ def _apply_provider_config(raw_body: bytes) -> bytes:
 
 
 
-# ---------------------------------------------------------------------------
 # The cold case list: the same rows the WS session emits, over plain HTTP, so a
 # client can populate its dialog BEFORE a WebSocket connection exists.
 #
 # The WS path scopes rows to the handshake's user. A cold caller has no
 # handshake, and this build collapses every connection onto one fixed local
 # user id, so it resolves the identical id anyway.
-# ---------------------------------------------------------------------------
 
 
 class _CaseListPersistenceUnavailable(Exception):
@@ -1465,7 +1455,6 @@ async def build_case_list_payload() -> dict[str, Any]:
     return {"cases": rows}
 
 
-# ---------------------------------------------------------------------------
 # /api/ingest-layer(-file) -- bidirectional layer push (QGIS plugin -> case).
 #
 # The reverse seam of layer materialization: the plugin's "Push layer" button
@@ -1567,7 +1556,6 @@ def _parse_ingest_layer_filename(query_string: str) -> str:
     return filename
 
 
-# ---------------------------------------------------------------------------
 # The deterministic map-click point probe: samples every raster layer, and any
 # detected frame sequence, on the case at one point. Served whenever the agent
 # runs the local single-user seam.
@@ -1616,9 +1604,6 @@ async def _handle_probe_point_post(raw_body: bytes) -> bytes:
 
 
 
-# ---------------------------------------------------------------------------
-# HTTP server (asyncio, stdlib only)
-# ---------------------------------------------------------------------------
 
 
 _HTTP_VERSION = b"HTTP/1.1"

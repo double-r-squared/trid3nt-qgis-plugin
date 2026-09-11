@@ -35,9 +35,6 @@ __all__ = [
 logger = logging.getLogger("trid3nt_server.tools.derive.compute_model_residuals.compute_model_residuals")
 
 
-# ---------------------------------------------------------------------------
-# Error types (typed-error surface).
-# ---------------------------------------------------------------------------
 
 
 class ResidualsError(RuntimeError):
@@ -75,9 +72,6 @@ class ResidualsUpstreamError(ResidualsError):
     retryable = True
 
 
-# ---------------------------------------------------------------------------
-# Result type.
-# ---------------------------------------------------------------------------
 
 
 class ModelResidualsLayerURI(LayerURI):
@@ -98,9 +92,6 @@ class ModelResidualsLayerURI(LayerURI):
     notes: list[str] = []
 
 
-# ---------------------------------------------------------------------------
-# Constants.
-# ---------------------------------------------------------------------------
 
 #: USGS groundwater parameter codes referenced to a fixed ELEVATION datum
 #: (NAVD88/NGVD29) -- directly analogous to a simulated head.
@@ -150,9 +141,6 @@ _GENERIC_UNITS_WARNING = (
 )
 
 
-# ---------------------------------------------------------------------------
-# Staging helpers (mirror compute_flood_depth_damage / compute_sediment_yield).
-# ---------------------------------------------------------------------------
 
 
 def _stage_uri_local(uri: str, tmpdir: str, label: str) -> str:
@@ -194,9 +182,6 @@ def _to_float_array(values: Any) -> np.ndarray:
     return out
 
 
-# ---------------------------------------------------------------------------
-# Observation loading.
-# ---------------------------------------------------------------------------
 
 
 def _load_observations_from_uri(observations_layer_uri: str, tmpdir: str) -> Any:
@@ -259,9 +244,6 @@ def _fetch_observations_from_bbox(
     return gdf
 
 
-# ---------------------------------------------------------------------------
-# Observed-field resolution + honest units/semantics detection.
-# ---------------------------------------------------------------------------
 
 
 def _resolve_observed_field(gdf: Any, observed_value_field: str | None) -> str:
@@ -355,9 +337,6 @@ def _apply_usgs_semantics(
     return gdf, _GENERIC_UNITS_WARNING
 
 
-# ---------------------------------------------------------------------------
-# Bilinear raster sampling.
-# ---------------------------------------------------------------------------
 
 
 def _bilinear_sample(
@@ -388,9 +367,6 @@ def _bilinear_sample(
     return in_bounds, samples
 
 
-# ---------------------------------------------------------------------------
-# Output helpers.
-# ---------------------------------------------------------------------------
 
 
 def _write_output(payload: bytes, seed: str, output_dir: str | None) -> str:
@@ -434,9 +410,6 @@ def _build_legend(max_abs_residual: float, units: str | None) -> LegendKey:
     )
 
 
-# ---------------------------------------------------------------------------
-# Registered tool.
-# ---------------------------------------------------------------------------
 
 
 @register_tool(

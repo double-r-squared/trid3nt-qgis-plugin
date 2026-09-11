@@ -40,9 +40,6 @@ __all__ = [
 ]
 
 
-# ---------------------------------------------------------------------------
-# Typed errors (typed-error surface). Shared across the GOES family.
-# ---------------------------------------------------------------------------
 
 
 class GOESError(FetchError):
@@ -84,7 +81,6 @@ class GOESEmptyError(GOESError):
     retryable = False
 
 
-# ---------------------------------------------------------------------------
 # Satellite identifier normalization + maps.
 #
 # NOTE: the AWS Open Data bucket token GLUES the digits to "goes" with NO
@@ -99,7 +95,6 @@ class GOESEmptyError(GOESError):
 # (Gulf/Atlantic), GOES-18 is operational GOES-West (Pacific). GOES-16 was the
 # prior East and GOES-17 the prior West; both are historical/standby now and
 # their buckets stop gaining fresh frames -- kept here ONLY for archival lookups.
-# ---------------------------------------------------------------------------
 
 _SATELLITE_BUCKETS: dict[str, str] = {
     "goes-16": "noaa-goes16",  # GOES-East (historical, pre-2025-04-07)

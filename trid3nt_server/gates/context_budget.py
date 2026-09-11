@@ -19,9 +19,7 @@ from trid3nt_server.adapters.model_discovery import _ollama_root
 
 logger = logging.getLogger("trid3nt_server.gates.context_budget")
 
-# ---------------------------------------------------------------------------
 # Config (env-overridable, read at call time)
-# ---------------------------------------------------------------------------
 
 #: Final fallback when neither /api/show discovery nor a ``-<N>k`` name
 #: suffix resolves a model's context window (``TRID3NT_OPENAI_NUM_CTX``).
@@ -159,9 +157,6 @@ def compute_budget_tokens(num_ctx: int) -> int:
     return max(budget, 256)
 
 
-# ---------------------------------------------------------------------------
-# Token estimator: ceil(chars / 4) over the serialized payload.
-# ---------------------------------------------------------------------------
 
 
 def estimate_tokens(text: str | None) -> int:
@@ -197,9 +192,6 @@ def estimate_tokens_for_tools(tools: list[dict[str, Any]] | None) -> int:
     return estimate_tokens(json.dumps(tools, default=str))
 
 
-# ---------------------------------------------------------------------------
-# 1. NUM_CTX DISCOVERY
-# ---------------------------------------------------------------------------
 
 _SUFFIX_RE = re.compile(r"-(\d+)k$", re.IGNORECASE)
 
@@ -269,14 +261,12 @@ def _reset_num_ctx_cache_for_tests() -> None:
     reset_num_ctx_cache()
 
 
-# ---------------------------------------------------------------------------
 # 1b. PROVIDER-AGNOSTIC CONTEXT-WINDOW DISCOVERY
 #
 # The context window is a PER-MODEL FACT DISCOVERED AT RUNTIME. It is never
 # hardcoded, and a value we could not discover is never passed off as one we
 # did -- ``ContextWindow.source`` records where every number came from, and an
 # undiscovered window logs a WARNING and carries narration for the user.
-# ---------------------------------------------------------------------------
 
 #: Where a resolved window came from. Carried on every ``ContextWindow`` so a
 #: log line (or a test) can tell a provider-stated fact from a fallback.
@@ -467,9 +457,6 @@ async def discover_context_window(
     return window
 
 
-# ---------------------------------------------------------------------------
-# 2. PROACTIVE BUDGET + COMPACTION LADDER
-# ---------------------------------------------------------------------------
 
 
 @dataclass
@@ -753,9 +740,6 @@ def compact_contents(
     )
 
 
-# ---------------------------------------------------------------------------
-# Compaction UX -- durable pipeline-card labels.
-# ---------------------------------------------------------------------------
 #
 # The adapter yields typed compaction start / complete events, and the dispatch
 # loop mints and completes a durable pipeline card from them using the two
@@ -803,9 +787,6 @@ def build_context_window_abort_note(*, fabricated_claim: bool) -> str:
     return CONTEXT_WINDOW_ABORT_NOTE
 
 
-# ---------------------------------------------------------------------------
-# 3. REACTIVE CLIP GUARD
-# ---------------------------------------------------------------------------
 
 
 class ContextWindowExceededError(RuntimeError):
@@ -831,9 +812,6 @@ def is_prompt_clipped(prompt_tokens: int | None, num_ctx: int) -> bool:
     return prompt_tokens >= num_ctx
 
 
-# ---------------------------------------------------------------------------
-# 4. FABRICATION BACKSTOP
-# ---------------------------------------------------------------------------
 
 # Completed-action verbs (past tense only -- "I can compute a hillshade" /
 # "fetching the DEM now" are capability/in-progress statements, not claims of
@@ -882,7 +860,6 @@ def looks_like_fabricated_action_claim(text: str | None) -> bool:
     return bool(_FABRICATION_RE.search(text))
 
 
-# ---------------------------------------------------------------------------
 # THE SHARED BUDGET SEAM (one strategy, every provider)
 #
 # TWO FAILURE MODES, one seam. Ollama silently CLIPS an over-long prompt rather
@@ -901,7 +878,6 @@ def looks_like_fabricated_action_claim(text: str | None) -> bool:
 # -> messages), so trimming the conversation cannot move or invalidate them.
 # Adapters therefore MUST run the plan BEFORE building request kwargs, so the
 # cached prefix is rebuilt byte-identically each turn.
-# ---------------------------------------------------------------------------
 
 
 @dataclass

@@ -29,9 +29,6 @@ __all__ = [
 
 logger = logging.getLogger("trid3nt_server.tools.derive.compute_aspect.compute_aspect")
 
-# ---------------------------------------------------------------------------
-# Error class
-# ---------------------------------------------------------------------------
 
 
 class AspectComputeError(RuntimeError):
@@ -44,9 +41,6 @@ class AspectComputeError(RuntimeError):
         self.error_code = error_code
 
 
-# ---------------------------------------------------------------------------
-# Tool metadata
-# ---------------------------------------------------------------------------
 
 _COMPUTE_ASPECT_METADATA = AtomicToolMetadata(
     name="compute_aspect",
@@ -55,9 +49,6 @@ _COMPUTE_ASPECT_METADATA = AtomicToolMetadata(
     cacheable=True,
 )
 
-# ---------------------------------------------------------------------------
-# gdaldem binary resolution + DEM read (shared runner)
-# ---------------------------------------------------------------------------
 
 
 def _get_gdaldem_bin() -> str:
@@ -83,9 +74,6 @@ def _download_dem_bytes(dem_uri: str, storage_client: object | None = None) -> b
     )
 
 
-# ---------------------------------------------------------------------------
-# gdaldem aspect subprocess wrapper
-# ---------------------------------------------------------------------------
 
 
 def _run_gdaldem_aspect(
@@ -124,9 +112,6 @@ def _run_gdaldem_aspect(
     )
 
 
-# ---------------------------------------------------------------------------
-# Tool registration
-# ---------------------------------------------------------------------------
 
 
 @register_tool(

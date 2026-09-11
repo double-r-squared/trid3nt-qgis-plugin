@@ -30,9 +30,6 @@ __all__ = [
 logger = logging.getLogger("trid3nt_server.tools.derive.extract_landcover_class.extract_landcover_class")
 
 
-# ---------------------------------------------------------------------------
-# Error class
-# ---------------------------------------------------------------------------
 
 
 # ``error_code`` is one of CLASSES_EMPTY, CLASSES_INVALID, BBOX_INVALID,
@@ -45,9 +42,6 @@ class LandcoverClassError(RuntimeError):
         self.error_code = error_code
 
 
-# ---------------------------------------------------------------------------
-# Tool metadata
-# ---------------------------------------------------------------------------
 
 _METADATA = AtomicToolMetadata(
     name="extract_landcover_class",
@@ -67,9 +61,6 @@ _NODATA_OUT = 255
 _NLCD_MAX_CLASS = 254
 
 
-# ---------------------------------------------------------------------------
-# Validation helpers
-# ---------------------------------------------------------------------------
 
 
 def _validate_classes(classes: list[int]) -> list[int]:
@@ -120,9 +111,6 @@ def _round_bbox(
     return tuple(round(v, 6) for v in bbox)  # type: ignore[return-value]
 
 
-# ---------------------------------------------------------------------------
-# Source-raster opener
-# ---------------------------------------------------------------------------
 
 
 @contextlib.contextmanager
@@ -165,9 +153,6 @@ def _open_source(landcover_uri: str) -> Any:
         yield src
 
 
-# ---------------------------------------------------------------------------
-# Core extraction
-# ---------------------------------------------------------------------------
 
 
 def _extract_mask_bytes(
@@ -325,9 +310,6 @@ def _extract_mask_bytes(
                 pass
 
 
-# ---------------------------------------------------------------------------
-# Registered atomic tool
-# ---------------------------------------------------------------------------
 
 
 @register_tool(

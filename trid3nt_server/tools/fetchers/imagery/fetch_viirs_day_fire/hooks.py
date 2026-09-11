@@ -41,9 +41,6 @@ __all__ = [
 ]
 
 
-# --------------------------------------------------------------------------- #
-# Constants.
-# --------------------------------------------------------------------------- #
 
 #: Conceptual JPSS satellite subsets. 'all' = the merged SLIDER jpss pass list.
 VIIRS_SATELLITES = ("suomi-npp", "noaa-20", "noaa-21", "all")
@@ -65,9 +62,6 @@ MAX_VIIRS_FRAMES: int = int(os.environ.get("TRID3NT_MAX_VIIRS_FRAMES", "144"))
 _BBOX_QUANTIZE_DP = 6
 
 
-# --------------------------------------------------------------------------- #
-# Pure helpers (also importable for tests).
-# --------------------------------------------------------------------------- #
 
 
 def _parse_utc(spec: SourceSpec, value: Any) -> datetime:
@@ -153,9 +147,6 @@ def _round_bbox(bbox: Any) -> tuple[float, float, float, float]:
     return tuple(round(float(v), _BBOX_QUANTIZE_DP) for v in bbox)  # type: ignore[return-value]
 
 
-# --------------------------------------------------------------------------- #
-# frames_plan: the pre-loop resolve.
-# --------------------------------------------------------------------------- #
 
 
 @register_hook("viirs_day_fire.frames_plan")
@@ -237,9 +228,6 @@ def frames_plan(spec: SourceSpec, params: dict[str, Any]) -> list[FramePlan]:
     return plans
 
 
-# --------------------------------------------------------------------------- #
-# frame_bytes: the per-frame COG builder.
-# --------------------------------------------------------------------------- #
 
 
 @register_hook("viirs_day_fire.frame_bytes")

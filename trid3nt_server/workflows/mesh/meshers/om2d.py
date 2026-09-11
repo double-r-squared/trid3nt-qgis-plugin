@@ -122,9 +122,6 @@ _DEFAULT_OPS = (
 )
 
 
-# --------------------------------------------------------------------------- #
-# The role adapter.
-# --------------------------------------------------------------------------- #
 def build(recipe: Any) -> Mesh:
     """Mesh the water side of the shoreline, or the interior of a supplied polygon."""
     ops = bind_ops(OM2D, recipe.ops)
@@ -395,9 +392,6 @@ def _walk_length_m(geod: Any, walk: list[list[float]]) -> float:
                                   [point[1] for point in walk]))
 
 
-# --------------------------------------------------------------------------- #
-# The domain the extent resolves to.
-# --------------------------------------------------------------------------- #
 @dataclass(frozen=True)
 class _Domain:
     """What the mesh is cut from: the shoreline, or a supplied polygon.
@@ -494,9 +488,6 @@ def _geometry_bounds(geometries: list[dict[str, Any]]
     return (float(minx), float(miny), float(maxx), float(maxy))
 
 
-# --------------------------------------------------------------------------- #
-# The box.
-# --------------------------------------------------------------------------- #
 def _rundir() -> Path:
     rundir = (Path(os.environ.get("TRID3NT_RUNS_DIR", "/tmp"))
               / f"mesh-{new_ulid()}")
@@ -553,9 +544,6 @@ def _sizing_source(stats: Mapping[str, Any], domain: _Domain) -> str:
     return f"{domain.source}; " + "; ".join(active)
 
 
-# --------------------------------------------------------------------------- #
-# The one topology pass, before any writer sees the mesh.
-# --------------------------------------------------------------------------- #
 def _clean_once(lonlat: Any, cells: Any) -> tuple[Any, Any, int]:
     """Orphan re-indexing, CCW normalization and the fusions a FILE forces.
 
@@ -635,9 +623,6 @@ def _conformal_probe(points_m: Any, pfix: Any, utm_epsg: int) -> dict[str, Any]:
                             "nearest mesh node"}}
 
 
-# --------------------------------------------------------------------------- #
-# Emit: the per-solver geometry, written from what the ops left on the mesh.
-# --------------------------------------------------------------------------- #
 def _emitted(mesh: Mesh, rundir: Path, domain: _Domain,
              stats: Mapping[str, Any], notes: list[str]) -> Mesh:
     """Write the per-solver geometry from ONE boundary segmentation -> the mesh.
@@ -722,7 +707,6 @@ def _open_sections(mesh: Mesh) -> list[dict[str, Any]]:
     return [dict(section) for section in (found or [])]
 
 
-# --------------------------------------------------------------------------- #
 OM2D = register_mesher(
     "om2d",
     build,

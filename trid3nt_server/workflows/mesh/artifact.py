@@ -106,9 +106,6 @@ def measured_min_edge_m(art: MeshArtifact | None) -> float | None:
     return value if value > 0.0 else None
 
 
-# --------------------------------------------------------------------------- #
-# Same-process stash, keyed by case.
-# --------------------------------------------------------------------------- #
 _MAX_CASES: int = 64
 _MAX_PER_CASE: int = 16
 _CASE_MESH_ARTIFACTS: dict[str, list[MeshArtifact]] = {}
@@ -135,9 +132,6 @@ def stashed_mesh_artifacts(case_id: str | None) -> list[MeshArtifact]:
     return list(_CASE_MESH_ARTIFACTS.get(case_id, []))
 
 
-# --------------------------------------------------------------------------- #
-# Durable sidecar, co-located with the mesh objects.
-# --------------------------------------------------------------------------- #
 def sidecar_key_for_mesh_uri(mesh_uri: str) -> tuple[str, str] | None:
     """``s3://bucket/prefix/mesh.2dm`` -> ``(bucket, prefix/mesh_artifact.json)``.
 

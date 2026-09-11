@@ -319,9 +319,6 @@ def _s3_client() -> Any:
     return _get_s3_client()
 
 
-# --------------------------------------------------------------------------- #
-# Building and replaying.
-# --------------------------------------------------------------------------- #
 def _build(mesher: Mesher, recipe: MeshRecipe) -> Mesh:
     """The whole mesh, from the whole recipe. There is no incremental path."""
     unbound = recipe.unbound
@@ -361,9 +358,6 @@ def replay_recipe(source: str | os.PathLike[str] | Sequence[Mapping[str, Any]]
     return _build(get_mesher(recipe.mesher), recipe)
 
 
-# --------------------------------------------------------------------------- #
-# Display face + probes.
-# --------------------------------------------------------------------------- #
 def mesh_digest(mesh: Mesh) -> str:
     """``sha256:<hex>`` over the mesh's display text - one number per geometry."""
     import hashlib

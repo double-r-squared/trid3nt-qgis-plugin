@@ -188,9 +188,7 @@ class SessionState:
     # (the active adapter's own model resolver).
     selected_model: str | None = None
 
-    # ------------------------------------------------------------------ #
     # Active-Case context -- session-scoped, NOT per-connection.
-    # ------------------------------------------------------------------ #
 
     @property
     def active_case_id(self) -> str | None:

@@ -40,9 +40,6 @@ logger = logging.getLogger(
 )
 
 
-# ---------------------------------------------------------------------------
-# Error types (typed-error surface).
-# ---------------------------------------------------------------------------
 
 
 class PairingError(RuntimeError):
@@ -91,9 +88,6 @@ class PairingUpstreamError(PairingError):
     retryable = True
 
 
-# ---------------------------------------------------------------------------
-# Result type.
-# ---------------------------------------------------------------------------
 
 
 class PairedObsLayerURI(LayerURI):
@@ -112,9 +106,6 @@ class PairedObsLayerURI(LayerURI):
     notes: list[str] = []
 
 
-# ---------------------------------------------------------------------------
-# Constants.
-# ---------------------------------------------------------------------------
 
 #: Per-item drop reasons (build-contract section 3.3).
 DROP_REASONS: tuple[str, ...] = (
@@ -200,9 +191,6 @@ _METADATA = AtomicToolMetadata(
 )
 
 
-# ---------------------------------------------------------------------------
-# Staging + coercion helpers.
-# ---------------------------------------------------------------------------
 
 
 def _stage_local(uri: str, tmpdir: str, label: str) -> str:
@@ -245,9 +233,6 @@ def _to_float_array(values: Any) -> np.ndarray:
     return out
 
 
-# ---------------------------------------------------------------------------
-# Field resolution.
-# ---------------------------------------------------------------------------
 
 
 def _resolve_field(
@@ -310,9 +295,6 @@ def _resolve_observed_units(
     )
 
 
-# ---------------------------------------------------------------------------
-# Quantity semantics: the WSE-vs-depth core.
-# ---------------------------------------------------------------------------
 #
 # A model flood-DEPTH raster measures height above GROUND and an observed
 # water-surface ELEVATION measures height above a vertical DATUM. Their
@@ -454,9 +436,6 @@ def _sample_ground_elev(dem_local: str, gdf: Any) -> np.ndarray:
     return samples
 
 
-# ---------------------------------------------------------------------------
-# Vertical-datum reconciliation (the honesty core).
-# ---------------------------------------------------------------------------
 
 
 def _reconcile_datum(
@@ -528,9 +507,6 @@ def _reconcile_datum(
     )
 
 
-# ---------------------------------------------------------------------------
-# Raster sampling (mode A): bilinear + nearest-wet-cell fallback.
-# ---------------------------------------------------------------------------
 
 
 def _m_per_deg_lat(lat_deg: float) -> float:
@@ -596,9 +572,6 @@ def _nearest_wet_sample(
     )
 
 
-# ---------------------------------------------------------------------------
-# Output write (runs bucket, or _output_dir for offline tests).
-# ---------------------------------------------------------------------------
 
 
 def _write_paired_fgb(gdf: Any, seed: str, output_dir: str | None) -> str:
@@ -659,9 +632,6 @@ def _records_bbox(
     return (west, south, east, north)
 
 
-# ---------------------------------------------------------------------------
-# Observation loading (shared).
-# ---------------------------------------------------------------------------
 
 
 def _load_points(uri: str, tmpdir: str, label: str) -> Any:
@@ -685,9 +655,6 @@ def _load_points(uri: str, tmpdir: str, label: str) -> Any:
     return gdf
 
 
-# ---------------------------------------------------------------------------
-# Mode A -- static raster model vs observation points.
-# ---------------------------------------------------------------------------
 
 
 def _pair_raster_static(
@@ -997,9 +964,6 @@ def _pair_raster_static(
     return out, dropped, alignment, units_warning, flags
 
 
-# ---------------------------------------------------------------------------
-# Mode B -- time-series model vs time-series observations.
-# ---------------------------------------------------------------------------
 
 
 def _parse_time_series_csv(raw: Any) -> list[tuple[str, float]]:
@@ -1164,9 +1128,6 @@ def _pair_timeseries(
     return out, dropped, alignment, units_warning, []
 
 
-# ---------------------------------------------------------------------------
-# Small shared helpers.
-# ---------------------------------------------------------------------------
 
 
 def _obs_id_for(gdf: Any, col: str | None, i: int) -> str:
@@ -1216,9 +1177,6 @@ def _looks_like_raster(path: str) -> bool:
         return False
 
 
-# ---------------------------------------------------------------------------
-# Registered tool.
-# ---------------------------------------------------------------------------
 
 
 @register_tool(_METADATA)

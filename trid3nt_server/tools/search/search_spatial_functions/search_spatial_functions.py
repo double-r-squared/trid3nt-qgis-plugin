@@ -35,9 +35,7 @@ class SearchSpatialFunctionsError(RuntimeError):
     retryable: bool = False
 
 
-# ---------------------------------------------------------------------------
 # Index state (module-level, lazy-built on first call).
-# ---------------------------------------------------------------------------
 
 _INDEX_LOCK = threading.Lock()
 _INDEX: "_SpatialFunctionIndex | None" = None

@@ -28,9 +28,6 @@ logger = logging.getLogger(
 __all__ = ["frames_plan", "frame_bytes"]
 
 
-# --------------------------------------------------------------------------- #
-# Pure helpers.
-# --------------------------------------------------------------------------- #
 
 
 def _round_bbox(bbox: Any) -> tuple[float, float, float, float]:
@@ -97,9 +94,6 @@ def _thresh(value: Any, fallback: float) -> float:
     return float(value)
 
 
-# --------------------------------------------------------------------------- #
-# frames_plan: the pre-loop resolve.
-# --------------------------------------------------------------------------- #
 
 
 @register_hook("goes_archive.frames_plan")
@@ -226,9 +220,6 @@ def frames_plan(spec: SourceSpec, params: dict[str, Any]) -> list[FramePlan]:
     return plans
 
 
-# --------------------------------------------------------------------------- #
-# frame_bytes: the per-frame COG builder.
-# --------------------------------------------------------------------------- #
 
 
 @register_hook("goes_archive.frame_bytes")

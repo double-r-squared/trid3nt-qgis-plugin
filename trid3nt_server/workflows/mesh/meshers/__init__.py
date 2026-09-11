@@ -144,9 +144,6 @@ def fetch_fallback_note(layer: Any) -> str | None:
     return str(note) if note else None
 
 
-# --------------------------------------------------------------------------- #
-# The op vocabulary: two origins, both verbatim.
-# --------------------------------------------------------------------------- #
 @dataclass(frozen=True)
 class MeshOp:
     """One entry of a recipe's ops list: a function NAME and its kwargs.
@@ -313,9 +310,6 @@ def _bind_signature(mesher: "Mesher", op: MeshOp,
             f"function's own parameters are {declared}.") from None
 
 
-# --------------------------------------------------------------------------- #
-# The neutral mesh, and the registry.
-# --------------------------------------------------------------------------- #
 @dataclass(frozen=True)
 class Mesh:
     """A built mesh in the ONE shape every mesher returns and every writer reads."""

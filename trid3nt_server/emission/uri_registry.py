@@ -35,9 +35,6 @@ __all__ = [
 ]
 
 
-# --------------------------------------------------------------------------- #
-# Tunables
-# --------------------------------------------------------------------------- #
 
 #: Param names that consume layer/raster/vector URIs and therefore resolve
 #: through the registry at dispatch. Names, not tools -- the same param name
@@ -127,9 +124,6 @@ _DEM_CONSUMING_TOOLS: frozenset[str] = frozenset(
 )
 
 
-# --------------------------------------------------------------------------- #
-# Typed error (branch 4)
-# --------------------------------------------------------------------------- #
 
 
 class UriResolutionError(RuntimeError):
@@ -152,9 +146,6 @@ class UriResolutionError(RuntimeError):
         )
 
 
-# --------------------------------------------------------------------------- #
-# Record + registry
-# --------------------------------------------------------------------------- #
 
 
 @dataclass
@@ -238,9 +229,6 @@ class SessionUriRegistry:
     _short_seq: int = 0
     _shorts_dirty: bool = False
 
-    # ------------------------------------------------------------------ #
-    # Registration
-    # ------------------------------------------------------------------ #
 
     def record(
         self,
@@ -287,9 +275,6 @@ class SessionUriRegistry:
             # an already-announced L<n> must keep resolving for the life of
             # the Case (the map is tiny: two strings per layer).
 
-    # ------------------------------------------------------------------ #
-    # Short per-case layer handles (L<n>)
-    # ------------------------------------------------------------------ #
 
     def _mint_short(self, uri: str) -> str | None:
         """Mint the next ``L<n>`` for a DATA uri (idempotent per uri)."""
@@ -501,9 +486,6 @@ class SessionUriRegistry:
         except Exception:  # noqa: BLE001 -- best-effort seam
             logger.exception("uri_registry[%s]: seed failed", self.session_id)
 
-    # ------------------------------------------------------------------ #
-    # Announcements (function_response surfacing)
-    # ------------------------------------------------------------------ #
 
     def drain_announcements(self) -> dict[str, str]:
         """Pop the handles registered since the last drain ({handle: uri})."""
@@ -511,9 +493,6 @@ class SessionUriRegistry:
         self._pending_announcements.clear()
         return out
 
-    # ------------------------------------------------------------------ #
-    # Resolution
-    # ------------------------------------------------------------------ #
 
     def resolve_params(self, tool_name: str, params: dict) -> dict:
         """Resolve every ``RESOLVABLE_URI_PARAMS`` member of ``params``.
@@ -748,9 +727,6 @@ class SessionUriRegistry:
             return same_dir[0]
         return None
 
-    # ------------------------------------------------------------------ #
-    # Introspection
-    # ------------------------------------------------------------------ #
 
     def _inventory_text(self, tool_name: str | None = None) -> str:
         """Compact handle inventory for the branch-4 error message.
@@ -790,10 +766,8 @@ class SessionUriRegistry:
         return [h for h in self._records if not h.startswith("uri:")]
 
 
-# --------------------------------------------------------------------------- #
 # Module-level session store: survives reconnects, and is shared across a
 # session's sibling WebSocket connections
-# --------------------------------------------------------------------------- #
 
 _SESSION_URI_REGISTRIES: OrderedDict[str, SessionUriRegistry] = OrderedDict()
 
@@ -814,9 +788,6 @@ def reset_uri_registries_for_tests() -> None:
     _SESSION_URI_REGISTRIES.clear()
 
 
-# --------------------------------------------------------------------------- #
-# ContextVar observation hook -- composer-internal publishes
-# --------------------------------------------------------------------------- #
 
 _ACTIVE_REGISTRY: ContextVar[SessionUriRegistry | None] = ContextVar(
     "trid3nt_active_uri_registry", default=None

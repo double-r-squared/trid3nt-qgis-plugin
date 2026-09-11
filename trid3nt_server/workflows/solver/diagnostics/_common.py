@@ -22,9 +22,7 @@ __all__ = [
 ]
 
 
-# --------------------------------------------------------------------------- #
 # Typed errors (convention: class attrs ``error_code`` + ``retryable``)
-# --------------------------------------------------------------------------- #
 
 
 class DiagnosticsError(RuntimeError):
@@ -92,9 +90,6 @@ class DiagnosticsParseError(DiagnosticsError):
         )
 
 
-# --------------------------------------------------------------------------- #
-# Normalized per-engine parser return.
-# --------------------------------------------------------------------------- #
 
 
 @dataclass
@@ -115,9 +110,6 @@ class EngineDiagnostics:
     diagnostics_files: list[str] = field(default_factory=list)
 
 
-# --------------------------------------------------------------------------- #
-# Artifact access seam.
-# --------------------------------------------------------------------------- #
 
 
 def basename_of(uri: str) -> str:

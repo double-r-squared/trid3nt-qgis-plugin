@@ -22,7 +22,6 @@ logger = logging.getLogger("trid3nt_server.telemetry")
 
 _DEFAULT_TELEMETRY_PATH = "/tmp/trid3nt_tool_call_telemetry.jsonl"
 
-# --------------------------------------------------------------------------- #
 # Telemetry retention. Ephemerality is POLICY, enforced at daemon boot by
 # ``cleanup_telemetry_segments``.
 #
@@ -31,7 +30,6 @@ _DEFAULT_TELEMETRY_PATH = "/tmp/trid3nt_tool_call_telemetry.jsonl"
 # DIRECTORY-mode - one segment per daemon boot named
 # ``tool_calls.<boot_id>.jsonl`` - so a long-lived or crash-looped daemon never
 # re-grows one unbounded file.
-# --------------------------------------------------------------------------- #
 
 _DEFAULT_TELEMETRY_DIR = "/tmp/trid3nt_telemetry"
 _TELEMETRY_BASENAME = "tool_calls"
@@ -296,7 +294,6 @@ def load_tool_call_records(
     return out
 
 
-# --------------------------------------------------------------------------- #
 # Tool-retrieval SHADOW telemetry.
 #
 # Shadow mode computes the WOULD-BE-visible tool set per turn without changing
@@ -306,7 +303,6 @@ def load_tool_call_records(
 # The rows share the tool-call JSONL sink and carry a
 # ``record_type="tool_retrieval_shadow"`` discriminator so a reader can split
 # them out. Fire-and-forget; never raises.
-# --------------------------------------------------------------------------- #
 
 #: The discriminator stamped on every shadow-selection record so a reader can
 #: separate them from per-tool ``tool_call`` rows that share the sink.
@@ -391,14 +387,12 @@ def now_iso_utc() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
 
 
-# --------------------------------------------------------------------------- #
 # Solve-time telemetry: per-job autoscale measurements.
 #
 # At solve completion the real (active_cells, vCPU, wall_clock) triple is
 # accumulated so the adaptive-grid cell cap can be re-tuned from measurements
 # rather than guesses. A structured logger line fires ALWAYS, so the row lands
 # in the agent log even when the JSONL sink is unwritable.
-# --------------------------------------------------------------------------- #
 
 _DEFAULT_SOLVE_TELEMETRY_PATH = "/tmp/trid3nt_solve_telemetry.jsonl"
 
@@ -503,7 +497,6 @@ def emit_solve_telemetry(
     return record
 
 
-# --------------------------------------------------------------------------- #
 # SOLVE completion telemetry: compute meta, problem size and timing.
 #
 # A richer sibling to ``emit_solve_telemetry``: where that record carries the
@@ -512,7 +505,6 @@ def emit_solve_telemetry(
 # from real measurements. A structured INFO line always fires alongside the
 # JSONL append, and a ``record_type="solve"`` discriminator separates these rows
 # from the per-tool rows that share the sink.
-# --------------------------------------------------------------------------- #
 
 #: Dedicated structured logger so a log scrape can grep these rows out of the
 #: agent log even when the JSONL file path is unwritable (mirrors solve_logger).
@@ -567,7 +559,6 @@ def record_solve_telemetry(record: dict) -> dict:
     return rec
 
 
-# --------------------------------------------------------------------------- #
 # PER-TURN telemetry.
 #
 # One record per user-message turn on its own JSONL sink plus an always-on
@@ -579,7 +570,6 @@ def record_solve_telemetry(record: dict) -> dict:
 # never internalized as ours), ``"provider_request"`` for a non-transient
 # rejection, ``"internal"`` for our own bugs, and ``"cancelled"`` /
 # ``"context_window"`` / ``"client_disconnect"`` for those turn endings.
-# --------------------------------------------------------------------------- #
 
 _DEFAULT_TURN_TELEMETRY_PATH = "/tmp/trid3nt_turn_telemetry.jsonl"
 

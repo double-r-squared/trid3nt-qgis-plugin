@@ -32,9 +32,6 @@ __all__ = [
 logger = logging.getLogger("trid3nt_server.tools.derive.digitize_water_body.digitize_water_body")
 
 
-# ---------------------------------------------------------------------------
-# Error types (typed-error surface).
-# ---------------------------------------------------------------------------
 
 
 class WaterBodyError(RuntimeError):
@@ -76,9 +73,6 @@ class WaterBodyUpstreamError(WaterBodyError):
     retryable = True
 
 
-# ---------------------------------------------------------------------------
-# Constants.
-# ---------------------------------------------------------------------------
 
 _COLLECTION = "sentinel-2-l2a"
 _GREEN_BAND = "B03"
@@ -113,9 +107,6 @@ _BBOX_DECIMALS = 6
 _STYLE = {"kind": "reference", "geometry": "polygon"}
 
 
-# ---------------------------------------------------------------------------
-# AtomicToolMetadata.
-# ---------------------------------------------------------------------------
 
 _METADATA = AtomicToolMetadata(
     name="digitize_water_body",
@@ -127,9 +118,6 @@ _METADATA = AtomicToolMetadata(
 )
 
 
-# ---------------------------------------------------------------------------
-# Payload estimator (chat-warning gate).
-# ---------------------------------------------------------------------------
 
 
 def estimate_payload_mb(
@@ -149,9 +137,6 @@ def estimate_payload_mb(
     return max(0.05, min(20.0, sq_deg * 8.0))
 
 
-# ---------------------------------------------------------------------------
-# bbox / threshold helpers.
-# ---------------------------------------------------------------------------
 
 
 def _validate_bbox(bbox: tuple[float, float, float, float]) -> None:
@@ -223,9 +208,6 @@ def _default_window() -> tuple[str, str]:
     return start.isoformat(), end.isoformat()
 
 
-# ---------------------------------------------------------------------------
-# Core: search -> per-band windowed read -> NDWI -> mask -> polygons -> FGB.
-# ---------------------------------------------------------------------------
 
 
 def _read_band_window(
@@ -440,9 +422,6 @@ def _digitize_water_fgb_bytes(
     return fgb_bytes
 
 
-# ---------------------------------------------------------------------------
-# Registered atomic tool.
-# ---------------------------------------------------------------------------
 
 
 @register_tool(

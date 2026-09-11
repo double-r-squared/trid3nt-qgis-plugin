@@ -49,9 +49,6 @@ logger = logging.getLogger(__name__)
 __all__ = ["frames_plan", "frame_bytes"]
 
 
-# --------------------------------------------------------------------------- #
-# Constants.
-# --------------------------------------------------------------------------- #
 #: GLM Level-2 Lightning Cluster-Filter Algorithm product (events/groups/flashes).
 _GLM_PRODUCT = "GLM-L2-LCFA"
 
@@ -89,9 +86,6 @@ GED_FJ_FLOOR = 1.0      # fJ -> bottom of the visible ramp (faint violet)
 _GLM_KEY_START_RE = re.compile(r"_s(\d{14})")
 
 
-# --------------------------------------------------------------------------- #
-# Local typed signals (bucket-level; frame_bytes maps them to FrameDegraded).
-# --------------------------------------------------------------------------- #
 class _GLMEmpty(RuntimeError):
     """A bucket window had no granules OR no lightning groups inside the AOI."""
 
@@ -100,9 +94,6 @@ class _GLMUpstream(RuntimeError):
     """An S3 listing / granule download / read failure for a bucket."""
 
 
-# --------------------------------------------------------------------------- #
-# GLM S3 access (anonymous / public NOAA archive).
-# --------------------------------------------------------------------------- #
 def _glm_s3_client() -> Any:
     """Anonymous (UNSIGNED) boto3 S3 client for the public ``noaa-goesNN`` buckets."""
     from ..._public_s3 import public_s3_client
@@ -316,9 +307,6 @@ def _fetch_glm_ged_cog_bytes(
     return _rgba_array_to_cog_bytes(rgba, transform, width, height)
 
 
-# --------------------------------------------------------------------------- #
-# frames-plan helpers.
-# --------------------------------------------------------------------------- #
 def _resolve_satellite(spec: SourceSpec, satellite: Any) -> str:
     """Normalize the spelling zoo to a canonical bird, then gate to the GLM set,
     re-wrapping the shared normalizer's error as this source's own so the base GOES
@@ -355,9 +343,6 @@ def _resolve_window(spec: SourceSpec, params: dict[str, Any]) -> tuple[datetime,
     return start_dt, end_dt
 
 
-# --------------------------------------------------------------------------- #
-# frames_plan: the pre-loop resolve (single mode -> ONE frame).
-# --------------------------------------------------------------------------- #
 @register_hook("glm.frames_plan")
 def frames_plan(spec: SourceSpec, params: dict[str, Any]) -> list[FramePlan]:
     """Split the window into accumulation buckets and build the ordered per-frame plans.
@@ -433,9 +418,6 @@ def frames_plan(spec: SourceSpec, params: dict[str, Any]) -> list[FramePlan]:
     return plans
 
 
-# --------------------------------------------------------------------------- #
-# frame_bytes: the per-bucket COG builder.
-# --------------------------------------------------------------------------- #
 @register_hook("glm.frame_bytes")
 def frame_bytes(spec: SourceSpec, params: dict[str, Any], frame: FramePlan) -> bytes:
     """Build ONE bucket's COG bytes; a bucket with no lightning, or one that failed,

@@ -150,9 +150,6 @@ def set_boundary_roles(mesh: Mesh, **roles: Any) -> Mesh:
                             **{role: len(runs) for role, runs in matched.items()}})
 
 
-# --------------------------------------------------------------------------- #
-# The bed's source.
-# --------------------------------------------------------------------------- #
 def _bed_raster(source: Any, bbox: tuple[float, float, float, float]
                 ) -> tuple[Path, str, str | None]:
     """Stage the bed as a local EPSG:4326 raster -> ``(path, provenance, note)``.
@@ -257,9 +254,6 @@ def _conditioned(raster: Path, provenance: str, condition: str) -> tuple[Path, s
     return filled, f"{provenance} (pit-filled: the delineator's own chain)"
 
 
-# --------------------------------------------------------------------------- #
-# Reading the mesh a primitive was handed.
-# --------------------------------------------------------------------------- #
 def _lonlat_nodes(mesh: Mesh) -> Any:
     """This mesh's nodes in lon/lat, whichever CRS its own points are in."""
     import numpy as np
@@ -315,9 +309,6 @@ def _with_meta(mesh: Mesh, **meta: Any) -> Mesh:
     return dataclasses.replace(mesh, meta=carried)
 
 
-# --------------------------------------------------------------------------- #
-# The contiguous-run matcher.
-# --------------------------------------------------------------------------- #
 def _faces(role: str, value: Any) -> list[dict[str, Any]]:
     """One declared role's faces as GeoJSON, whichever way they were declared.
 

@@ -58,9 +58,6 @@ _METADATA = AtomicToolMetadata(
 )
 
 
-# --------------------------------------------------------------------------- #
-# Handle resolution + engine identity.
-# --------------------------------------------------------------------------- #
 
 
 def _resolve_run_handle(run_handle: str) -> tuple[str | None, str]:
@@ -145,9 +142,6 @@ def _recover_engine(completion: dict[str, Any]) -> str:
     return engine
 
 
-# --------------------------------------------------------------------------- #
-# Completion loading (offline fixture dir OR production S3 seam).
-# --------------------------------------------------------------------------- #
 
 
 def _load_completion(
@@ -194,9 +188,6 @@ def _load_completion(
     return completion, resolved_id, source, bucket
 
 
-# --------------------------------------------------------------------------- #
-# The registered tool.
-# --------------------------------------------------------------------------- #
 
 
 @register_tool(_METADATA)

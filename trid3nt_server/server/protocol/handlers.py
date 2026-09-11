@@ -139,9 +139,6 @@ async def _handle_dev_tool_invoke(
     state.inflight_tasks[turn_key] = task
     _register_live_turn(state.session_id, turn_key, task, state.emitter)
 
-# --------------------------------------------------------------------------- #
-# Secrets envelope handler (credential push over the WS seam)
-# --------------------------------------------------------------------------- #
 
 
 async def _handle_secret_add(

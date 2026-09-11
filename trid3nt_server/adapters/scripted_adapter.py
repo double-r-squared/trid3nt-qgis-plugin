@@ -103,7 +103,6 @@ def _turn_index(contents: Any) -> int:
     return sum(1 for c in contents if _role_of(c) == "model")
 
 
-# ---------------------------------------------------------------------------
 # Test-harness (fake-provider) seam.
 #
 # The agent-loop test suite drives the REAL server dispatch under
@@ -130,7 +129,6 @@ def _turn_index(contents: Any) -> int:
 # which -- unlike the production transcript path's contents-model-role counting
 # -- correctly handles a round that emits MULTIPLE tool calls (the loop appends
 # more than one model Content for such a round).
-# ---------------------------------------------------------------------------
 
 #: Installed fake-turn source (list of turn dicts OR a (index, contents)->turn
 #: callable). ``None`` => harness inactive (production transcript path runs).

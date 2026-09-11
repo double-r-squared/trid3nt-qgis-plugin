@@ -12,9 +12,6 @@ from dataclasses import dataclass, field
 
 logger = logging.getLogger("trid3nt_server.gates.circuit_breaker")
 
-# ---------------------------------------------------------------------------
-# Environment-overridable defaults
-# ---------------------------------------------------------------------------
 
 _DEFAULT_THRESHOLD = 3
 _DEFAULT_COOLDOWN_S = 60.0
@@ -64,9 +61,6 @@ def _get_cooldown_s() -> float:
         return _DEFAULT_COOLDOWN_S
 
 
-# ---------------------------------------------------------------------------
-# Typed exception
-# ---------------------------------------------------------------------------
 
 
 class CircuitBreakerError(RuntimeError):
@@ -89,9 +83,6 @@ class CircuitBreakerError(RuntimeError):
         )
 
 
-# ---------------------------------------------------------------------------
-# Failure classification — only upstream/transient faults count toward a trip.
-# ---------------------------------------------------------------------------
 
 
 def is_client_arg_error(error: BaseException | None) -> bool:
@@ -125,9 +116,6 @@ def _is_operator_class_error(tool_name: str, error: BaseException) -> bool:
     return classify_actionability(tool_name, error) == "operator"
 
 
-# ---------------------------------------------------------------------------
-# Per-session breaker state
-# ---------------------------------------------------------------------------
 
 
 @dataclass

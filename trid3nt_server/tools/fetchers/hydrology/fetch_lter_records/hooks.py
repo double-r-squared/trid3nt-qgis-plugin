@@ -191,9 +191,6 @@ def _pick_value_cols(
     return [c for c in columns if _is_value(c)][:8]
 
 
-# --------------------------------------------------------------------------- #
-# Resolve phase (PRE-cache-key): package_id -> data-entity URL + parse hints.
-# --------------------------------------------------------------------------- #
 
 
 @register_hook("lter_records.resolve_build")
@@ -232,9 +229,6 @@ def resolve_parse(
     }
 
 
-# --------------------------------------------------------------------------- #
-# Record phase: fetch the data entity, parse into the time-series dict.
-# --------------------------------------------------------------------------- #
 
 
 @register_hook("lter_records.build_request")

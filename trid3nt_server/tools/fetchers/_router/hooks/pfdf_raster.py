@@ -47,9 +47,6 @@ def _raster_to_array(spec: SourceSpec, raster: Any) -> tuple[Any, Any, Any]:
     return arr, raster.affine, raster.crs
 
 
-# --------------------------------------------------------------------------- #
-# fetch_statsgo_soils  (pfdf.data.usgs.statsgo.read)
-# --------------------------------------------------------------------------- #
 
 
 @register_hook("pfdf_statsgo.validate")
@@ -101,9 +98,6 @@ def read_statsgo(spec: SourceSpec, params: dict[str, Any], *, timeout_s: float) 
     return arr, affine, crs
 
 
-# --------------------------------------------------------------------------- #
-# fetch_3dep_extra  (pfdf.data.usgs.tnm.dem.read)
-# --------------------------------------------------------------------------- #
 
 
 @register_hook("pfdf_3dep.validate")

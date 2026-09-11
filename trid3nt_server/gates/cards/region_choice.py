@@ -13,9 +13,6 @@ from trid3nt_contracts.region_choice import (
 logger = logging.getLogger("trid3nt_server.gates.cards.region_choice")
 
 
-# --------------------------------------------------------------------------- #
-# Region-disambiguation picker (state-bbox-fallback narrowing).
-# --------------------------------------------------------------------------- #
 #
 # A vague or regional query snaps to the WHOLE state bbox, stamped
 # ``source="state-bbox-fallback"`` with an honest ``fallback_reason``, and that

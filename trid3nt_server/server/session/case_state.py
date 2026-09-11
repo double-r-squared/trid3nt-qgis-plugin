@@ -147,9 +147,6 @@ async def _reload_session_active_case(state: SessionState) -> None:
             persisted,
         )
 
-# --------------------------------------------------------------------------- #
-# Case lifecycle handlers
-# --------------------------------------------------------------------------- #
 
 #: The last-emitted case-list digest PER SESSION, not per connection, since a
 #: session can carry more than one live socket: without it a keepalive ping

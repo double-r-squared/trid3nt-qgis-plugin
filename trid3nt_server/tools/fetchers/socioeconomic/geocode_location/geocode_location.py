@@ -43,7 +43,6 @@ class GeocodeNoMatchError(UpstreamAPIError):
     error_code = "GEOCODE_NO_MATCH"
     retryable = False
 
-# ---------------------------------------------------------------------------
 # THE STATE-SNAP FALLBACK. A vague or regional query like "south Florida" geocodes
 # with no country or region constraint and no sanity check, so an arbitrary
 # first-ranked feature comes back -- observed resolving to a random house, and to
@@ -51,7 +50,6 @@ class GeocodeNoMatchError(UpstreamAPIError):
 # So a US state named in the query is detected, and a wrong-state or failed primary
 # result snaps the bbox to the full state: closer to right than wrong on the second
 # attempt. Sub-region math within a state is deliberately not attempted.
-# ---------------------------------------------------------------------------
 
 # Directional / qualifier words stripped from the FRONT of a query before the
 # state match. "south Florida" -> "florida"; "greater metro Los Angeles, CA"
@@ -355,7 +353,6 @@ _GEOCODE_LOCATION_METADATA = AtomicToolMetadata(
     cacheable=True,
 )
 
-# ---------------------------------------------------------------------------
 # Sub-locality phrasings can resolve to a single building/POI footprint when
 # OSM has no competing neighbourhood entity for that name, producing a bbox
 # too small to be a usable case AOI. Two-part mitigation:
@@ -375,7 +372,6 @@ _GEOCODE_LOCATION_METADATA = AtomicToolMetadata(
 #       a 2 km square centered on the point and attach an honest
 #       ``expansion_note`` so the model narrates the widening instead of
 #       silently handing back an invisible-layers AOI.
-# ---------------------------------------------------------------------------
 
 #: Nominatim ``category`` values that represent an area/place (as opposed to
 #: a point-scale POI). Matches the taxonomy observed live in jsonv2 responses

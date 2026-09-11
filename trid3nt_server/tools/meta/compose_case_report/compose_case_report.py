@@ -30,9 +30,6 @@ __all__ = [
 logger = logging.getLogger("trid3nt_server.tools.meta.compose_case_report.compose_case_report")
 
 
-# ---------------------------------------------------------------------------
-# Typed errors.
-# ---------------------------------------------------------------------------
 
 
 class CaseReportError(RuntimeError):
@@ -56,9 +53,6 @@ class CaseReportNotFoundError(CaseReportError):
     retryable = True
 
 
-# ---------------------------------------------------------------------------
-# Metadata.
-# ---------------------------------------------------------------------------
 
 _METADATA = AtomicToolMetadata(
     name="compose_case_report",
@@ -75,9 +69,6 @@ _MAX_STAT_LAYERS = 24
 _MAX_VECTOR_ATTRS = 4
 
 
-# ---------------------------------------------------------------------------
-# Helpers.
-# ---------------------------------------------------------------------------
 
 
 def _sanitize_name(name: str) -> str:
@@ -177,9 +168,6 @@ def _resolve_output_dir(case_id: str, title: str, output_dir: str | None) -> Pat
     return out
 
 
-# ---------------------------------------------------------------------------
-# Registered tool.
-# ---------------------------------------------------------------------------
 
 
 @register_tool(

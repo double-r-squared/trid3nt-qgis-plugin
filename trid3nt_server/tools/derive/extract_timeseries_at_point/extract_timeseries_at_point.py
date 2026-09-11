@@ -36,9 +36,6 @@ __all__ = [
 logger = logging.getLogger("trid3nt_server.tools.derive.extract_timeseries_at_point.extract_timeseries_at_point")
 
 
-# ---------------------------------------------------------------------------
-# Typed errors.
-# ---------------------------------------------------------------------------
 
 
 class TimeseriesError(RuntimeError):
@@ -69,9 +66,6 @@ class TimeseriesUpstreamError(TimeseriesError):
     retryable = True
 
 
-# ---------------------------------------------------------------------------
-# Metadata.
-# ---------------------------------------------------------------------------
 
 _METADATA = AtomicToolMetadata(
     name="extract_timeseries_at_point",
@@ -81,14 +75,12 @@ _METADATA = AtomicToolMetadata(
 )
 
 
-# ---------------------------------------------------------------------------
 # Frame-token parsing.
 #
 # The token read here is an ANALYSIS over the layers a case already holds, not
 # the map's clock: presentation reads the valid_from / valid_to window a frame
 # declares. A case persisted before that window existed carries only the name,
 # which is why the token read stays.
-# ---------------------------------------------------------------------------
 
 _FRAME_PATTERNS: tuple[tuple[re.Pattern[str], Any], ...] = (
     # Forecast lead hour: "F+01h", "f+12h", "F+1 h", "+06h"
@@ -176,9 +168,6 @@ def detect_frame_sequences(
     return sequences
 
 
-# ---------------------------------------------------------------------------
-# Registered tool.
-# ---------------------------------------------------------------------------
 
 
 @register_tool(

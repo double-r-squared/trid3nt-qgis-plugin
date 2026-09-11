@@ -35,9 +35,6 @@ __all__ = [
 logger = logging.getLogger("trid3nt_server.tools.derive.compute_change_detection.compute_change_detection")
 
 
-# ---------------------------------------------------------------------------
-# Error types (typed-error surface).
-# ---------------------------------------------------------------------------
 
 
 class ChangeDetectionError(RuntimeError):
@@ -84,9 +81,6 @@ class ChangeDetectionUpstreamError(ChangeDetectionError):
     retryable = True
 
 
-# ---------------------------------------------------------------------------
-# Result type.
-# ---------------------------------------------------------------------------
 
 
 class ChangeDetectionLayerURI(LayerURI):
@@ -105,9 +99,6 @@ class ChangeDetectionLayerURI(LayerURI):
     notes: list[str] = []
 
 
-# ---------------------------------------------------------------------------
-# Constants.
-# ---------------------------------------------------------------------------
 
 _COLLECTION = "sentinel-2-l2a"
 _NATIVE_CELL_M = 10.0
@@ -143,9 +134,6 @@ _METADATA = AtomicToolMetadata(
 )
 
 
-# ---------------------------------------------------------------------------
-# Validation helpers.
-# ---------------------------------------------------------------------------
 
 
 def _validate_bbox(bbox: Any) -> tuple[float, float, float, float]:
@@ -203,9 +191,6 @@ def _validate_threshold(threshold: Any) -> float:
     return thr
 
 
-# ---------------------------------------------------------------------------
-# Input staging.
-# ---------------------------------------------------------------------------
 
 
 def _stage_uri_local(uri: str, tmpdir: str, label: str) -> str:
@@ -235,9 +220,6 @@ def _stage_uri_local(uri: str, tmpdir: str, label: str) -> str:
     return uri
 
 
-# ---------------------------------------------------------------------------
-# Index computation.
-# ---------------------------------------------------------------------------
 
 
 def _read_band_window(
@@ -399,9 +381,6 @@ def _resample_onto(
         src.close()
 
 
-# ---------------------------------------------------------------------------
-# Vectorize + write.
-# ---------------------------------------------------------------------------
 
 
 def _vectorize_change(
@@ -510,9 +489,6 @@ def _build_legend(index: str) -> LegendKey:
     return LegendKey(kind="classed", label=f"{index.upper()} change")
 
 
-# ---------------------------------------------------------------------------
-# Registered tool.
-# ---------------------------------------------------------------------------
 
 
 @register_tool(

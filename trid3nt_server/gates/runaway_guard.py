@@ -8,7 +8,6 @@ from __future__ import annotations
 import math
 import os
 
-# --------------------------------------------------------------------------- #
 # The three guards these defaults arm:
 #   1. STEP CAP -- a hard cap on model<->tool ROUNDS within one user turn; the
 #      primary bound.
@@ -21,7 +20,6 @@ import os
 # own iteration bound and this step cap, and that bound is the binding one for
 # full-tier models, so the default step cap only bites a genuinely runaway turn
 # -- while the cheap-model halving does tighten the loop-prone tier.
-# --------------------------------------------------------------------------- #
 
 #: Hard cap on model<->tool ROUNDS within a single user turn (full-tier models).
 MAX_AGENT_STEPS_DEFAULT: int = 30

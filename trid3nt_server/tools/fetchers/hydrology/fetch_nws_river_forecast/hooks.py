@@ -71,9 +71,6 @@ def _stageflow_url(lid: str) -> str:
     return _detail_url(lid) + "/stageflow"
 
 
-# --------------------------------------------------------------------------- #
-# build_request: bbox list OR single-gauge detail, with the bespoke gates.
-# --------------------------------------------------------------------------- #
 
 
 @_hooks.register_hook("nws_river_forecast.build_request")
@@ -115,9 +112,6 @@ def build_request(spec: SourceSpec, params: dict[str, Any]) -> list["_hooks.Requ
     return [_hooks.RequestPlan(url=GAUGES_URL, params=q, headers=_headers(spec))]
 
 
-# --------------------------------------------------------------------------- #
-# parse_response: gauges-list OR single-detail -> gauge records -> point features.
-# --------------------------------------------------------------------------- #
 
 
 def _parse_gauge_records(obj: dict[str, Any]) -> list[dict[str, Any]]:
@@ -239,9 +233,6 @@ def _no_gauges_bbox(sc: str, bbox: Any):
     )
 
 
-# --------------------------------------------------------------------------- #
-# Enrichment: bounded per-gauge threshold (bbox mode) + stageflow series.
-# --------------------------------------------------------------------------- #
 
 
 @_hooks.register_hook("nws_river_forecast.enrich_plan")

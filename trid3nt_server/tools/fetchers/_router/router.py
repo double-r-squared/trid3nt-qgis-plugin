@@ -72,9 +72,6 @@ _NO_DISPATCH = object()
 _CONUS_BBOX: tuple[float, float, float, float] = (-124.77, 25.05, -67.06, 49.40)
 
 
-# --------------------------------------------------------------------------- #
-# Metadata and payload-estimator synthesis.
-# --------------------------------------------------------------------------- #
 
 
 def synthesize_metadata(spec: SourceSpec) -> AtomicToolMetadata:
@@ -165,9 +162,6 @@ def synthesize_payload_estimator(spec: SourceSpec) -> Callable[..., float]:
     return estimate_payload_mb
 
 
-# --------------------------------------------------------------------------- #
-# Param validation + gates (BEFORE any network call).
-# --------------------------------------------------------------------------- #
 
 
 def _quantize_bbox(bbox: tuple[float, ...], directive: str | None) -> tuple[float, ...]:
@@ -506,9 +500,6 @@ def _apply_gates(spec: SourceSpec, params: dict[str, Any]) -> None:
             )
 
 
-# --------------------------------------------------------------------------- #
-# Executor selection + LayerURI emission.
-# --------------------------------------------------------------------------- #
 
 
 def select_executor(spec: SourceSpec) -> Callable[[SourceSpec, dict[str, Any]], bytes]:

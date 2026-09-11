@@ -36,9 +36,6 @@ logger = logging.getLogger(
     "trid3nt_server.tools.fetchers._router.hooks.cds"
 )
 
-# --------------------------------------------------------------------------- #
-# Shared CDS constants.
-# --------------------------------------------------------------------------- #
 
 _DEFAULT_CDS_URL = "https://cds.climate.copernicus.eu/api"
 _KEY_ENV = "TRID3NT_COPERNICUS_CDS_API_KEY"
@@ -58,9 +55,6 @@ _MISSING_KEY_CDS_PHRASES: tuple[str, ...] = (
     "no credentials found",
 )
 
-# --------------------------------------------------------------------------- #
-# ERA5 variable tables (single-level hourly reanalysis).
-# --------------------------------------------------------------------------- #
 
 _ERA5_DATASET = "reanalysis-era5-single-levels"
 _ERA5_CDS_VARIABLES: frozenset[str] = frozenset(
@@ -78,9 +72,6 @@ _ERA5_WIND_SPEED_COMPONENTS = ("10m_u_component_of_wind", "10m_v_component_of_wi
 _ERA5_ALLOWED_VARIABLES: frozenset[str] = _ERA5_CDS_VARIABLES | {_ERA5_DERIVED_WIND_SPEED}
 _ERA5_MAX_DATE_RANGE_DAYS = 366
 
-# --------------------------------------------------------------------------- #
-# GTSM output tables (Global Tide and Surge Model v3.0).
-# --------------------------------------------------------------------------- #
 
 _GTSM_DATASET = "sis-water-level-change-timeseries-cmip6"
 _GTSM_ALLOWED_OUTPUTS: frozenset[str] = frozenset({"water_level", "surge_only"})
@@ -91,9 +82,6 @@ _GTSM_OUTPUT_TO_CDS_VARIABLE: dict[str, str] = {
 _GTSM_MAX_DATE_RANGE_DAYS = 366
 
 
-# --------------------------------------------------------------------------- #
-# Shared helpers: key resolution + the timeout-guarded retrieve + classify.
-# --------------------------------------------------------------------------- #
 
 
 def _resolve_key(params: dict[str, Any]) -> str | None:
@@ -198,9 +186,6 @@ def _parse_iso(sc: str, s: Any, field: str, suffix: str) -> _dt.date:
         raise router_input_error(sc, f"{field}={s!r} is not a valid ISO date (YYYY-MM-DD): {exc}", suffix)
 
 
-# --------------------------------------------------------------------------- #
-# ERA5.
-# --------------------------------------------------------------------------- #
 
 
 @register_hook("era5.validate")
@@ -390,9 +375,6 @@ def era5_read(spec: SourceSpec, params: dict[str, Any], *, timeout_s: float) -> 
                 pass
 
 
-# --------------------------------------------------------------------------- #
-# GTSM.
-# --------------------------------------------------------------------------- #
 
 
 @register_hook("gtsm.validate")

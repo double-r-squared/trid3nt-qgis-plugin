@@ -178,9 +178,6 @@ def _pick_named_var(varnames: list[str], keys: tuple[str, ...], letter: str) -> 
     return None
 
 
-# --------------------------------------------------------------------------- #
-# Rasterization: scatter mesh nodes -> regular 4326 grid, clipped to the channel.
-# --------------------------------------------------------------------------- #
 def _grid_shape(bbox, res_m: float) -> tuple[int, int]:
     import math
 
@@ -338,9 +335,6 @@ def peak_layer_id(run_id: str, product: SubstanceProduct) -> str:
     return f"telemac-{product.noun.replace(' ', '-')}-peak-{run_id}"
 
 
-# --------------------------------------------------------------------------- #
-# Top-level postprocess.
-# --------------------------------------------------------------------------- #
 def postprocess_telemac(
     slf_path: str | Path,
     *,
@@ -561,9 +555,6 @@ def postprocess_telemac(
     return [layer], metrics
 
 
-# --------------------------------------------------------------------------- #
-# GAIA sediment: the SECOND COG - final CUMUL BED EVOL (deposition, mm).
-# --------------------------------------------------------------------------- #
 def postprocess_telemac_deposition(
     gaia_slf_path: str | Path,
     *,
@@ -803,9 +794,6 @@ def postprocess_telemac_deposition(
     return [layer], metrics
 
 
-# --------------------------------------------------------------------------- #
-# MAX FREE-SURFACE ELEVATION (WSE) - the dam-break / river validation COG.
-# --------------------------------------------------------------------------- #
 def _nn_spacing_m(x, y) -> float:
     """Median nearest-neighbour node spacing (mesh characteristic length).
 
@@ -1173,9 +1161,6 @@ def postprocess_telemac_wse(
     return [layer], metrics
 
 
-# --------------------------------------------------------------------------- #
-# WAQTEL O2: the dissolved-oxygen SAG - steady-state DO COG + the sag curve.
-# --------------------------------------------------------------------------- #
 #: DISSOLVED O2 / ORGANIC LOAD variable names WAQTEL's O2 module writes (nametrac
 #: strings).
 _DO_VAR_KEYS: tuple[str, ...] = ("DISSOLVED O2", "O2 DISSOUS", "DISSOLVED OXYGEN")
@@ -1551,9 +1536,6 @@ def postprocess_telemac_do(
     return [layer], metrics
 
 
-# --------------------------------------------------------------------------- #
-# TOMAWAC significant-wave-height (Hs) - the spectral-wave COG.
-# --------------------------------------------------------------------------- #
 #: Hs (m) below which a wet node is treated as "flat water" for the extent
 #: metrics / detection floor. Tiny absolute floor separates a real wave field
 #: from a genuinely empty solve.
@@ -1769,9 +1751,6 @@ def postprocess_tomawac(
     return [layer], metrics
 
 
-# --------------------------------------------------------------------------- #
-# ARTEMIS harbour agitation (Kd = Hs/H0) - the phase-resolving COG.
-# --------------------------------------------------------------------------- #
 #: Kd (agitation coefficient) below which a wet node is treated as "flat water"
 #: for the detection floor. Tiny absolute floor separates a real agitation field
 #: from a genuinely empty solve.
@@ -1906,9 +1885,6 @@ def postprocess_artemis(
     return [layer], metrics
 
 
-# --------------------------------------------------------------------------- #
-# TELEMAC-3D stratified / 3D-hydrodynamics (surface + bottom layer COGs, 0241).
-# --------------------------------------------------------------------------- #
 def _rasterize_t3d_plane(
     x, y, ikle, node_vals, *, run_id, utm_epsg, dest_filename, dst_suffix,
     log_label, runs_bucket, target_ground_res_m,
@@ -2102,9 +2078,6 @@ def postprocess_telemac3d(
     return [surface_layer, bottom_layer], metrics
 
 
-# --------------------------------------------------------------------------- #
-# Coastal tidal/surge: the PEAK-INUNDATION-DEPTH COG + flooded area.
-# --------------------------------------------------------------------------- #
 def _initially_dry_mask(mesh: Any, depth: Any, init_wl_m: Any) -> tuple[Any, str]:
     """The t=0 wet/dry mask: True where a node was DRY before the tide arrived.
 

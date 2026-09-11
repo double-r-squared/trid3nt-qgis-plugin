@@ -40,9 +40,6 @@ _TELEMAC = "trid3nt_server.workflows.telemac"
 _ALWAYS_READABLE = ("full_listing.log", "telemac_metrics.json")
 
 
-# --------------------------------------------------------------------------- #
-# The door.
-# --------------------------------------------------------------------------- #
 @dataclass(frozen=True, slots=True)
 class Door:
     """What a template hands over: the world, the sheet, and how it is read.

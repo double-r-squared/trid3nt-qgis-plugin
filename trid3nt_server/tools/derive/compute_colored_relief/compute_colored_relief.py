@@ -27,9 +27,6 @@ __all__ = ["compute_colored_relief"]
 logger = logging.getLogger("trid3nt_server.tools.derive.compute_colored_relief.compute_colored_relief")
 
 
-# ---------------------------------------------------------------------------
-# Error type.
-# ---------------------------------------------------------------------------
 
 
 class ColoredReliefError(RuntimeError):
@@ -41,9 +38,6 @@ class ColoredReliefError(RuntimeError):
     retryable: bool = False
 
 
-# --------------------------------------------------------------------------- #
-# gdaldem binary resolution + DEM staging (shared runner)
-# --------------------------------------------------------------------------- #
 
 
 def _get_gdaldem_bin() -> str:
@@ -73,7 +67,6 @@ def _download_dem_to_local(dem_uri: str) -> str:
     return dem_uri
 
 
-# ---------------------------------------------------------------------------
 # Ramp definitions.
 #
 # ``gdaldem color-relief`` ramp file format:
@@ -86,7 +79,6 @@ def _download_dem_to_local(dem_uri: str) -> str:
 #
 # Elevations are in metres; a cell below the ramp takes the lowest colour and a
 # cell above it the highest.
-# ---------------------------------------------------------------------------
 
 _RampEntry = tuple[int | str, int, int, int]  # (elevation | "nv", R, G, B)
 
@@ -228,9 +220,6 @@ def _dem_min_max(local_path: str) -> tuple[float, float] | None:
         return None
 
 
-# ---------------------------------------------------------------------------
-# AtomicToolMetadata -- registered once at import time.
-# ---------------------------------------------------------------------------
 
 _COMPUTE_COLORED_RELIEF_METADATA = AtomicToolMetadata(
     name="compute_colored_relief",
@@ -240,9 +229,6 @@ _COMPUTE_COLORED_RELIEF_METADATA = AtomicToolMetadata(
 )
 
 
-# ---------------------------------------------------------------------------
-# Fetch function (cache-miss path).
-# ---------------------------------------------------------------------------
 
 
 def _run_colored_relief(dem_uri: str, ramp: str) -> bytes:
@@ -315,9 +301,6 @@ def _run_colored_relief(dem_uri: str, ramp: str) -> bytes:
                 pass
 
 
-# ---------------------------------------------------------------------------
-# Registered atomic tool.
-# ---------------------------------------------------------------------------
 
 
 @register_tool(

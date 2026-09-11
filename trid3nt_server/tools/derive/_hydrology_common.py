@@ -33,9 +33,6 @@ __all__ = [
 logger = logging.getLogger("trid3nt_server.tools.derive._hydrology_common")
 
 
-# ---------------------------------------------------------------------------
-# Error types (typed-error surface).
-# ---------------------------------------------------------------------------
 
 
 class HydrologyPrimitivesError(RuntimeError):
@@ -70,9 +67,6 @@ class HydrologyUpstreamError(HydrologyPrimitivesError):
     error_code = "HYDROLOGY_UPSTREAM_ERROR"
     retryable = True
 
-# ---------------------------------------------------------------------------
-# Constants.
-# ---------------------------------------------------------------------------
 
 #: CPU-bound AOI clamp (degrees per side): ~1100x1100 cells at 30 m.
 _MAX_AOI_DEG: float = 0.3
@@ -94,9 +88,6 @@ _D8_DIRMAP: tuple[int, ...] = (64, 128, 1, 2, 4, 8, 16, 32)
 #: basin.
 _OUTLET_SNAP_SEARCH_CELLS: int = 8
 
-# ---------------------------------------------------------------------------
-# Shared helpers.
-# ---------------------------------------------------------------------------
 
 
 def _import_pysheds() -> Any:

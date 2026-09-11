@@ -48,9 +48,6 @@ __all__ = [
 logger = logging.getLogger("trid3nt_server.tools.search.search_tools.search_tools")
 
 
-# ---------------------------------------------------------------------------
-# Error types (typed-error surface).
-# ---------------------------------------------------------------------------
 
 
 class SearchToolsError(RuntimeError):
@@ -79,23 +76,19 @@ class CorpusFormatError(SearchToolsError):
         self.entry = entry
 
 
-# ---------------------------------------------------------------------------
 # Index state (module-level, lazy-built on first call).
-# ---------------------------------------------------------------------------
 
 
 _INDEX_LOCK = threading.Lock()
 _INDEX: "_DiscoverIndex | None" = None
 
 
-# ---------------------------------------------------------------------------
 # Co-occurrence index state.
 #
 # Rebuilt from the tool-call telemetry JSONL sink on a ~5-minute cadence, so the
 # RRF boost tracks recent behaviour without re-reading the file on every call.
 # Telemetry is JSONL-ONLY. When the sink is empty or unreadable the index is EMPTY
 # and this fourth channel silently drops out; the three-channel ranking still works.
-# ---------------------------------------------------------------------------
 
 
 _COOCCURRENCE_LOCK = threading.Lock()
@@ -155,9 +148,6 @@ class _DiscoverIndex:
         self.tiers = tiers if tiers is not None else ["general"] * len(tool_names)
 
 
-# ---------------------------------------------------------------------------
-# Tokenizer + corpus assembly.
-# ---------------------------------------------------------------------------
 
 
 _TOKEN_RE = re.compile(r"[A-Za-z0-9_]+")
@@ -172,7 +162,6 @@ def _tokenize(text: str) -> list[str]:
     return [tok.lower() for tok in _TOKEN_RE.findall(text)]
 
 
-# ---------------------------------------------------------------------------
 # Typo query expansion: model-free, stdlib difflib, deterministic.
 #
 # The BM25 channel is exact-token and the hashed dense fallback hashes the same
@@ -183,7 +172,6 @@ def _tokenize(text: str) -> list[str]:
 #
 # The wrappers below are installed on the built index's slots, so every consumer
 # of the cached index inherits the expansion without its own code.
-# ---------------------------------------------------------------------------
 
 #: Minimum token length eligible for fuzzy correction; a short token is too
 #: ambiguous to correct toward anything in particular.
@@ -346,9 +334,6 @@ def _load_corpus(path: Path | None = None) -> dict[str, list[str]]:
     return _compose_corpus_from_tree()
 
 
-# ---------------------------------------------------------------------------
-# Dense-embedding backends (graceful degradation).
-# ---------------------------------------------------------------------------
 
 
 #: Default sentence-transformers model id; env-overridable for an experiment
@@ -424,9 +409,6 @@ def _select_dense_backend() -> tuple[Any, Any, str] | None:
     return None
 
 
-# ---------------------------------------------------------------------------
-# Index build.
-# ---------------------------------------------------------------------------
 
 
 def _build_index(
@@ -561,9 +543,6 @@ def _reset_index_for_tests() -> None:
     _close_vocab_matches.cache_clear()
 
 
-# ---------------------------------------------------------------------------
-# Co-occurrence.
-# ---------------------------------------------------------------------------
 
 
 # Sampling caps: the last 30 sessions OR the last 1000 calls, whichever is
@@ -738,9 +717,6 @@ def _build_cooccurrence_ranking(
     return [i for i, _, _ in scores]
 
 
-# ---------------------------------------------------------------------------
-# Reciprocal Rank Fusion.
-# ---------------------------------------------------------------------------
 
 
 def _reciprocal_rank_fusion(
@@ -760,7 +736,6 @@ def _reciprocal_rank_fusion(
     return out
 
 
-# ---------------------------------------------------------------------------
 # Lexical-champion reinforcement.
 #
 # For a short or domain-worded query the dense channel often ranks a tool's BEST
@@ -770,7 +745,6 @@ def _reciprocal_rank_fusion(
 # scale as a real channel: bounded, deterministic, never a hard slot, and no corpus
 # edit. The gate is tier-aware, wider for a tier structurally disadvantaged in the
 # dense and name channels.
-# ---------------------------------------------------------------------------
 _LEX_REINFORCE_GATE_GENERAL = 1  # reinforce only the BM25 champion
 _LEX_REINFORCE_GATE_DOOR = 3     # the wider gate: the top-3 BM25 lexical matches
 
@@ -802,9 +776,6 @@ def _lexical_reinforcement(
     return rescored
 
 
-# ---------------------------------------------------------------------------
-# Query-time matched-queries selection.
-# ---------------------------------------------------------------------------
 
 
 def _match_synthetic_queries(
@@ -904,9 +875,6 @@ _STOPWORDS: set[str] = {
 }
 
 
-# ---------------------------------------------------------------------------
-# Tool registration.
-# ---------------------------------------------------------------------------
 
 
 _SEARCH_TOOLS_METADATA = AtomicToolMetadata(

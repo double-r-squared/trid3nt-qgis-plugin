@@ -44,9 +44,6 @@ class PrecipForcingUnavailableError(FetchError):
     error_code = "PRECIP_FORCING_UNAVAILABLE"
     retryable = False
 
-# ---------------------------------------------------------------------------
-# NOAA Atlas 14 PFDS.
-# ---------------------------------------------------------------------------
 #
 # PFDS is a point-query CSV endpoint with no native bbox lookup: header rows
 # naming the atlas volume and project area, then a matrix of depths in inches
@@ -187,9 +184,6 @@ def _fetch_atlas14_pfds_bytes(lat: float, lon: float) -> bytes:
         )
     return body.encode("utf-8")
 
-# --------------------------------------------------------------------------- #
-# NOAA Atlas 2 (Western US) design-storm fallback
-# --------------------------------------------------------------------------- #
 #
 # The Pacific Northwest and most of the Intermountain West are NOT in Atlas 14 --
 # they remain covered only by the legacy NOAA Atlas 2, "Precipitation-Frequency

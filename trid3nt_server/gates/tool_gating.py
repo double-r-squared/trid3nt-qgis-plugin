@@ -121,7 +121,6 @@ def gate_tool_registry(
         return None
 
 
-# ===========================================================================
 # POOR-FIT WIDENING: when a turn's TOP retrieval score is under a calibrated
 # threshold, the ranking is uncertain -- widen that turn's gate k once
 # (24 -> 40) so recall does not silently drop on an ambiguous / vague ask.
@@ -181,7 +180,6 @@ def should_widen_for_poor_fit(
         return False
 
 
-# ===========================================================================
 # BENCH PRE-DISPATCH BLOCK HOOK: a session-scoped, bench-only gate that decides
 # -- BEFORE the tool fn is invoked -- whether a model-picked tool should be
 # EXECUTED, BLOCKED as a wrong pick, or BLOCKED as a deliberately-not-executed

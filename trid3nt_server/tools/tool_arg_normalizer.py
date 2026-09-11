@@ -34,9 +34,6 @@ class LatLonCoercionError(ValueError):
     ``ValueError``."""
 
 
-# --------------------------------------------------------------------------- #
-# Alias maps
-# --------------------------------------------------------------------------- #
 
 #: Bidirectional alias pairs. If a tool accepts the canonical (left) form and
 #: the LLM provided the alias (right), we rename; and vice-versa. The pairs are
@@ -77,12 +74,10 @@ _TOOL_SPECIFIC_ALIASES: dict[str, dict[str, str]] = {
         "location_name": "location_query",
         "location": "location_query",
     },
-    # -----------------------------------------------------------------------
     # NWS alert tools: the LLM names the state freely ("state",
     # "state_code", "location", "region") -- all land on the canonical "area"
     # param so the precise server-side ?area= filter engages instead of the
     # unscoped CONUS sweep.
-    # -----------------------------------------------------------------------
     "fetch_nws_alerts_conus": {
         "state": "area",
         "state_code": "area",
@@ -99,12 +94,10 @@ _TOOL_SPECIFIC_ALIASES: dict[str, dict[str, str]] = {
         "fips": "area",
         "county_fips": "area",
     },
-    # -----------------------------------------------------------------------
     # endpoint aliases.
     # For each new tool: param-name variants the model is likely to invent based
     # on (a) common GIS/API terminology, (b) naming patterns in adjacent tools,
     # (c) docstring prose that names related concepts.
-    # -----------------------------------------------------------------------
     "fetch_fema_nfhl_zones": {
         # bbox aliases (common across all spatial tools)
         "bounding_box": "bbox",
@@ -459,9 +452,6 @@ _SILENT_DROP: frozenset[str] = frozenset(
 )
 
 
-# --------------------------------------------------------------------------- #
-# Helpers
-# --------------------------------------------------------------------------- #
 
 _CAMEL_RE = re.compile(r"(?<!^)(?=[A-Z])")
 
@@ -602,9 +592,6 @@ def _accepted_params(fn: Callable[..., Any]) -> tuple[set[str], bool]:
     return accepted, accepts_var_keyword
 
 
-# --------------------------------------------------------------------------- #
-# Structured AOI slice -- dispatch-time bbox auto-fill
-# --------------------------------------------------------------------------- #
 
 #: Param names treated as "bbox-like" for the auto-fill. Only
 #: REQUIRED (no-default) signature params auto-fill -- an optional bbox means
@@ -681,9 +668,6 @@ def autofill_missing_bbox(
     return out if out is not None else params
 
 
-# --------------------------------------------------------------------------- #
-# Fuzzy enum-arg correction
-# --------------------------------------------------------------------------- #
 # A string arg that fails a ``Literal[...]`` schema ("truecolour" for
 # Literal["truecolor", "ndvi"], "Flood-Depth" for "flood_depth") would
 # otherwise fall straight through to the tool's typed error and burn a full
@@ -797,9 +781,6 @@ def fuzzy_correct_enum_args(
     return out if out is not None else params
 
 
-# --------------------------------------------------------------------------- #
-# Public entry point
-# --------------------------------------------------------------------------- #
 
 
 def normalize_args(

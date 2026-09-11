@@ -311,9 +311,6 @@ async def _gate_with_turn_memory(
         }
     return True, approved
 
-# --------------------------------------------------------------------------- #
-# Payload-warning gate.
-# --------------------------------------------------------------------------- #
 
 
 async def _maybe_gate_on_payload_warning(
@@ -588,10 +585,8 @@ async def _gate_on_code_exec(
     approved["code_exec_id"] = code_exec_id
     return True, approved
 
-# --------------------------------------------------------------------------- #
 # Credential pipeline: secret_ref injection, then auth-error ->
 # credential-request -> retry.
-# --------------------------------------------------------------------------- #
 
 
 async def _inject_secret_ref(
@@ -906,9 +901,6 @@ async def _maybe_handle_region_choice(
             exc_info=True,
         )
 
-# --------------------------------------------------------------------------- #
-# request_spatial_input -- pause the turn, await the drawn geometry.
-# --------------------------------------------------------------------------- #
 #
 # The LLM-facing tool returns a sentinel result that the turn loop replaces with
 # the parsed, role-split drawn geometry: the tool surface stays catalog-clean

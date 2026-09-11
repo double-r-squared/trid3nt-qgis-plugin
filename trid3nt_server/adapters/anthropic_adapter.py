@@ -105,9 +105,6 @@ def anthropic_model(session_model: str | None = None) -> str:
     return configured or ANTHROPIC_DEFAULT_MODEL
 
 
-# --------------------------------------------------------------------------- #
-# Tool-spec conversion: genai FunctionDeclaration -> Messages API tools[]
-# --------------------------------------------------------------------------- #
 
 
 def tool_declarations_to_anthropic_tools(
@@ -137,9 +134,6 @@ def tool_declarations_to_anthropic_tools(
     return tools
 
 
-# --------------------------------------------------------------------------- #
-# History conversion: genai Content[] -> Messages API messages[]
-# --------------------------------------------------------------------------- #
 
 
 def _coalesce(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -228,9 +222,6 @@ def contents_to_anthropic_messages(
     return _ensure_messages_start_with_user(_coalesce(messages))
 
 
-# --------------------------------------------------------------------------- #
-# Request construction
-# --------------------------------------------------------------------------- #
 
 
 def _build_message_kwargs(
@@ -274,9 +265,6 @@ def _build_message_kwargs(
     return kwargs
 
 
-# --------------------------------------------------------------------------- #
-# Upstream-provider discipline
-# --------------------------------------------------------------------------- #
 
 
 def _is_transient_anthropic_error(exc: BaseException) -> bool:
@@ -394,9 +382,6 @@ def _refusal_notice(message: Any) -> str | None:
     return f"The model declined to answer this request{suffix}."
 
 
-# --------------------------------------------------------------------------- #
-# Streaming
-# --------------------------------------------------------------------------- #
 
 
 async def stream_anthropic(

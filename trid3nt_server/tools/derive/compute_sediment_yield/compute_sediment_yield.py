@@ -35,9 +35,6 @@ __all__ = [
 logger = logging.getLogger("trid3nt_server.tools.derive.compute_sediment_yield.compute_sediment_yield")
 
 
-# ---------------------------------------------------------------------------
-# Error types (typed-error surface).
-# ---------------------------------------------------------------------------
 
 
 class SedimentYieldError(RuntimeError):
@@ -75,9 +72,6 @@ class SedimentYieldUpstreamError(SedimentYieldError):
     retryable = True
 
 
-# ---------------------------------------------------------------------------
-# Result type.
-# ---------------------------------------------------------------------------
 
 
 class SedimentYieldLayerURI(LayerURI):
@@ -92,9 +86,6 @@ class SedimentYieldLayerURI(LayerURI):
     notes: list[str] = []
 
 
-# ---------------------------------------------------------------------------
-# Constants.
-# ---------------------------------------------------------------------------
 
 #: CPU/memory-bound AOI clamp (degrees per side).
 _MAX_AOI_DEG: float = 0.2
@@ -176,9 +167,6 @@ _METADATA = AtomicToolMetadata(
 )
 
 
-# ---------------------------------------------------------------------------
-# Validation helpers.
-# ---------------------------------------------------------------------------
 
 
 def _validate_bbox(bbox: Any) -> tuple[float, float, float, float]:
@@ -239,9 +227,6 @@ def _validate_erosivity(value: Any, notes: list[str]) -> float:
     return r
 
 
-# ---------------------------------------------------------------------------
-# Input staging.
-# ---------------------------------------------------------------------------
 
 
 def _stage_uri_local(uri: str, tmpdir: str, label: str) -> str:
@@ -333,9 +318,6 @@ def _resample_to_grid(
         src.close()
 
 
-# ---------------------------------------------------------------------------
-# RUSLE factor computation.
-# ---------------------------------------------------------------------------
 
 
 def _cell_size_m(dem_src: Any) -> tuple[float, float]:
@@ -478,9 +460,6 @@ def _load_c(
     return c
 
 
-# ---------------------------------------------------------------------------
-# Output writing.
-# ---------------------------------------------------------------------------
 
 
 def _write_cog_bytes(
@@ -560,9 +539,6 @@ def _build_legend() -> LegendKey:
     return presets.legend_key(_STYLE)
 
 
-# ---------------------------------------------------------------------------
-# Registered tool.
-# ---------------------------------------------------------------------------
 
 
 @register_tool(

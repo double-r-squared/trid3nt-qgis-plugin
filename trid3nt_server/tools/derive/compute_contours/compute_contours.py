@@ -37,9 +37,6 @@ def fetch_dem(**kwargs):
     return TOOL_REGISTRY["fetch_dem"].fn(**kwargs)
 
 
-# ---------------------------------------------------------------------------
-# Error class
-# ---------------------------------------------------------------------------
 
 
 # ``error_code`` is one of GDAL_CONTOUR_UNAVAILABLE, GDAL_CONTOUR_FAILED,
@@ -52,9 +49,6 @@ class ContourComputeError(RuntimeError):
         self.error_code = error_code
 
 
-# ---------------------------------------------------------------------------
-# Tool metadata
-# ---------------------------------------------------------------------------
 
 _COMPUTE_CONTOURS_METADATA = AtomicToolMetadata(
     name="compute_contours",
@@ -63,9 +57,6 @@ _COMPUTE_CONTOURS_METADATA = AtomicToolMetadata(
     cacheable=True,
 )
 
-# ---------------------------------------------------------------------------
-# gdal_contour binary resolution + DEM read (shared runner)
-# ---------------------------------------------------------------------------
 
 
 def _get_gdal_contour_bin() -> str:
@@ -94,9 +85,6 @@ def _download_dem_bytes(dem_uri: str, storage_client: object | None = None) -> b
     )
 
 
-# ---------------------------------------------------------------------------
-# Contour-interval derivation
-# ---------------------------------------------------------------------------
 
 #: "Nice" contour intervals (metres). Derived intervals snap to the closest of
 #: these so the contour layer reads cleanly on a map.
@@ -157,9 +145,6 @@ def _derive_interval_m(dem_path: str) -> float:
     return _snap_to_nice_interval(raw)
 
 
-# ---------------------------------------------------------------------------
-# DEM bbox extent, in EPSG:4326
-# ---------------------------------------------------------------------------
 
 
 def _dem_bbox_4326(dem_path: str) -> tuple[float, float, float, float] | None:
@@ -187,9 +172,6 @@ def _dem_bbox_4326(dem_path: str) -> tuple[float, float, float, float] | None:
         return None
 
 
-# ---------------------------------------------------------------------------
-# gdal_contour subprocess wrapper
-# ---------------------------------------------------------------------------
 
 
 def _run_gdal_contour(
@@ -254,9 +236,6 @@ def _reproject_fgb_to_4326(input_path: str, output_path: str) -> None:
         ) from exc
 
 
-# ---------------------------------------------------------------------------
-# DEM resolution
-# ---------------------------------------------------------------------------
 
 
 def _resolve_dem_uri(
@@ -278,9 +257,6 @@ def _resolve_dem_uri(
     return dem_layer.uri
 
 
-# ---------------------------------------------------------------------------
-# Fetch function (cache miss)
-# ---------------------------------------------------------------------------
 
 
 def _make_fetch_fn(
@@ -333,9 +309,6 @@ def _make_fetch_fn(
                     pass
 
 
-# ---------------------------------------------------------------------------
-# Tool registration
-# ---------------------------------------------------------------------------
 
 
 @register_tool(

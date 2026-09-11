@@ -31,9 +31,6 @@ __all__ = [
 logger = logging.getLogger("trid3nt_server.tools.derive.compute_ndvi.compute_ndvi")
 
 
-# ---------------------------------------------------------------------------
-# Error types (typed-error surface).
-# ---------------------------------------------------------------------------
 
 
 class NDVIError(RuntimeError):
@@ -66,9 +63,6 @@ class NDVIUpstreamError(NDVIError):
     retryable = True
 
 
-# ---------------------------------------------------------------------------
-# Constants.
-# ---------------------------------------------------------------------------
 
 _COLLECTION = "sentinel-2-l2a"
 _RED_BAND = "B04"
@@ -100,9 +94,6 @@ _STYLE = {"kind": "continuous", "ramp": "rdylgn", "units": "index",
          "range": [-1, 1], "transform": "linear"}}
 
 
-# ---------------------------------------------------------------------------
-# AtomicToolMetadata.
-# ---------------------------------------------------------------------------
 
 _METADATA = AtomicToolMetadata(
     name="compute_ndvi",
@@ -114,9 +105,6 @@ _METADATA = AtomicToolMetadata(
 )
 
 
-# ---------------------------------------------------------------------------
-# Payload estimator (chat-warning gate).
-# ---------------------------------------------------------------------------
 
 
 def estimate_payload_mb(
@@ -134,9 +122,6 @@ def estimate_payload_mb(
     return max(0.5, sq_deg * 60.0)
 
 
-# ---------------------------------------------------------------------------
-# bbox helpers.
-# ---------------------------------------------------------------------------
 
 
 def _validate_bbox(bbox: tuple[float, float, float, float]) -> None:
@@ -194,9 +179,6 @@ def _default_window() -> tuple[str, str]:
     return start.isoformat(), end.isoformat()
 
 
-# ---------------------------------------------------------------------------
-# Core: search -> per-band windowed read -> NDVI -> COG bytes.
-# ---------------------------------------------------------------------------
 
 
 def _read_band_window(
@@ -351,9 +333,6 @@ def _compute_ndvi_cog_bytes(
     return cog_bytes
 
 
-# ---------------------------------------------------------------------------
-# Registered atomic tool.
-# ---------------------------------------------------------------------------
 
 
 @register_tool(

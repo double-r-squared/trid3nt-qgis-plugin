@@ -64,9 +64,6 @@ class SeamPublishResult:
     scalar_count: int = 0
 
 
-# --------------------------------------------------------------------------- #
-# Manifest read (the byte-identical no-op on a missing/unknown manifest).
-# --------------------------------------------------------------------------- #
 def read_outputs_manifest(run_result: Any) -> OutputsManifest | None:
     """Read + schema-gate ``outputs.json`` from a completed run's prefix.
 
@@ -113,9 +110,6 @@ def read_outputs_manifest(run_result: Any) -> OutputsManifest | None:
     return manifest
 
 
-# --------------------------------------------------------------------------- #
-# Layer id / grouping.
-# --------------------------------------------------------------------------- #
 def _quantity_base(quantity: str) -> str:
     """``flood_depth`` -> ``flood-depth``: the stem the register path uses too.
 
@@ -253,9 +247,6 @@ def _build_raster_layer(
     return layer
 
 
-# --------------------------------------------------------------------------- #
-# The consumer.
-# --------------------------------------------------------------------------- #
 def build_layers_from_outputs(
     manifest: OutputsManifest,
     *,

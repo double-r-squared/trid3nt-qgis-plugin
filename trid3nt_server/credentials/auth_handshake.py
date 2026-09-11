@@ -29,9 +29,6 @@ DEFAULT_AUTH_TOKEN_TIMEOUT_S: float = float(
     os.environ.get("TRID3NT_AUTH_TOKEN_TIMEOUT_S", "5.0")
 )
 
-# --------------------------------------------------------------------------- #
-# Remote-daemon access: endpoint advertisement + optional token
-# --------------------------------------------------------------------------- #
 
 #: Object-store (MinIO) port the daemon co-hosts. Fixed on the local stack;
 #: a non-standard MinIO port is handled by the ``TRID3NT_ADVERTISED_DATA_BASE``
@@ -109,9 +106,6 @@ def verify_access_token(presented: str | None) -> bool:
     # timing.
     return hmac.compare_digest(str(presented or ""), required)
 
-# --------------------------------------------------------------------------- #
-# TRID3NT local build: ONE fixed local user
-# --------------------------------------------------------------------------- #
 
 #: The single fixed user every connection resolves to. A constant, ULID-shaped
 #: id ("L0CA1 VSER" in Crockford base32 -- L/O/U are not in the alphabet, hence
@@ -119,9 +113,6 @@ def verify_access_token(presented: str | None) -> bool:
 LOCAL_SINGLE_USER_ID = "0110CA1VSERAAAAAAAAAAAAAAA"
 
 
-# --------------------------------------------------------------------------- #
-# Public surface
-# --------------------------------------------------------------------------- #
 
 
 @dataclass
@@ -191,9 +182,7 @@ def build_auth_ack(
     )
 
 
-# --------------------------------------------------------------------------- #
 # Timeout helper -- public so the connect handler shares the default constant.
-# --------------------------------------------------------------------------- #
 
 
 def get_auth_token_timeout_s(default: float | None = None) -> float:

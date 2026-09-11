@@ -18,9 +18,6 @@ from websockets.asyncio.server import ServerConnection
 
 logger = logging.getLogger("trid3nt_server.server")
 
-# --------------------------------------------------------------------------- #
-# Connect-handshake
-# --------------------------------------------------------------------------- #
 
 
 def _connection_local_host(websocket: "ServerConnection | Any") -> str | None:

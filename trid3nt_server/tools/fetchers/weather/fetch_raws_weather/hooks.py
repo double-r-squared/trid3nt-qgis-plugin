@@ -110,9 +110,6 @@ def _overlaps(bbox: tuple[float, ...], sb: tuple[float, float, float, float]) ->
     return not (e1 < w2 or w1 > e2 or n1 < s2 or s1 > n2)
 
 
-# --------------------------------------------------------------------------- #
-# PHASE R -- multi-state RAWS discovery + date-window resolution.
-# --------------------------------------------------------------------------- #
 
 
 @_hooks.register_hook("raws_weather.resolve_build")
@@ -187,9 +184,6 @@ def resolve_parse(spec: SourceSpec, params: dict[str, Any], bodies: list[bytes])
     return {"_stations": stations, "start_date": start_d.isoformat(), "end_date": end_d.isoformat()}
 
 
-# --------------------------------------------------------------------------- #
-# MAIN FETCH -- no round trip; synthesize one feature per resolved station.
-# --------------------------------------------------------------------------- #
 
 
 @_hooks.register_hook("raws_weather.build_request")
@@ -212,9 +206,6 @@ def parse_response(spec: SourceSpec, params: dict[str, Any], bodies: list[bytes]
     return feats
 
 
-# --------------------------------------------------------------------------- #
-# PHASE E -- per-station-per-day obhistory (best-effort) -> obs rows.
-# --------------------------------------------------------------------------- #
 
 
 def _all_dates(start_iso: str, end_iso: str) -> list[str]:

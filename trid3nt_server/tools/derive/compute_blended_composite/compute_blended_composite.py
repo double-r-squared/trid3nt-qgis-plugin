@@ -25,9 +25,6 @@ __all__ = [
 logger = logging.getLogger("trid3nt_server.tools.derive.compute_blended_composite.compute_blended_composite")
 
 
-# ---------------------------------------------------------------------------
-# Error class
-# ---------------------------------------------------------------------------
 
 
 class BlendedCompositeError(RuntimeError):
@@ -45,9 +42,6 @@ class BlendedCompositeError(RuntimeError):
 _VALID_BLEND_MODES = frozenset({"multiply", "overlay", "screen", "normal"})
 
 
-# ---------------------------------------------------------------------------
-# Tool metadata
-# ---------------------------------------------------------------------------
 
 _COMPUTE_BLENDED_COMPOSITE_METADATA = AtomicToolMetadata(
     name="compute_blended_composite",
@@ -57,9 +51,6 @@ _COMPUTE_BLENDED_COMPOSITE_METADATA = AtomicToolMetadata(
 )
 
 
-# ---------------------------------------------------------------------------
-# URI staging
-# ---------------------------------------------------------------------------
 
 
 def _stage_uri_to_local(
@@ -90,9 +81,6 @@ def _stage_uri_to_local(
     return uri, False
 
 
-# ---------------------------------------------------------------------------
-# Raster read + align helpers
-# ---------------------------------------------------------------------------
 
 
 def _colormap_to_lut(colormap: dict):
@@ -324,9 +312,6 @@ def _run_blend(
                     pass
 
 
-# ---------------------------------------------------------------------------
-# Registered atomic tool
-# ---------------------------------------------------------------------------
 
 
 @register_tool(

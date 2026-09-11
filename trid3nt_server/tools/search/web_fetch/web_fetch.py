@@ -28,9 +28,6 @@ __all__ = [
 logger = logging.getLogger("trid3nt_server.tools.search.web_fetch.web_fetch")
 
 
-# ---------------------------------------------------------------------------
-# Typed errors.
-# ---------------------------------------------------------------------------
 
 
 class WebFetchError(RuntimeError):
@@ -54,9 +51,6 @@ class WebFetchUpstreamError(WebFetchError):
     retryable = True
 
 
-# ---------------------------------------------------------------------------
-# Constants.
-# ---------------------------------------------------------------------------
 
 _DEFAULT_USER_AGENT = "trid3nt-server/0.1 (research; contact: trid3nt-ops@local)"
 _ALLOWED_EXTRACT_MODES = ("full_html", "main_text", "json", "metadata")
@@ -66,9 +60,6 @@ _ALLOWED_EXTRACT_MODES = ("full_html", "main_text", "json", "metadata")
 _BOILERPLATE_TAGS = ("script", "style", "nav", "header", "footer", "aside", "noscript")
 
 
-# ---------------------------------------------------------------------------
-# URL canonicalization for the cache key.
-# ---------------------------------------------------------------------------
 
 
 def _canonicalize_url(url: str) -> str:
@@ -99,9 +90,6 @@ def _canonicalize_url(url: str) -> str:
     return urlunparse((scheme, netloc, path, parsed.params, parsed.query, ""))
 
 
-# ---------------------------------------------------------------------------
-# HTML extraction helpers.
-# ---------------------------------------------------------------------------
 
 
 def _extract_main_text(html: str) -> tuple[str, str | None, str | None]:
@@ -168,9 +156,6 @@ def _extract_metadata(html: str) -> tuple[dict[str, Any], str | None, str | None
     return (metadata, title, lang)
 
 
-# ---------------------------------------------------------------------------
-# Fetch + extract -- the body the cache shim calls on miss.
-# ---------------------------------------------------------------------------
 
 
 def _fetch_and_extract_bytes(
@@ -263,9 +248,6 @@ def _fetch_and_extract_bytes(
     return json.dumps(result).encode("utf-8")
 
 
-# ---------------------------------------------------------------------------
-# Registration + public entry point.
-# ---------------------------------------------------------------------------
 
 
 _WEB_FETCH_METADATA = AtomicToolMetadata(

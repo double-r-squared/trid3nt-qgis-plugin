@@ -50,9 +50,6 @@ class EmptyWatershedError(HydrologyPrimitivesError):
     error_code = "HYDROLOGY_EMPTY_WATERSHED"
     retryable = False
 
-# ---------------------------------------------------------------------------
-# Result types.
-# ---------------------------------------------------------------------------
 
 
 class WatershedLayerURI(LayerURI):
@@ -163,9 +160,6 @@ def _cell_area_km2(grid: Any) -> float:
     dy_m = geod.inv(lon_c, lat_c - 0.5 * res_y, lon_c, lat_c + 0.5 * res_y)[2]
     return (dx_m * dy_m) / 1.0e6
 
-# ---------------------------------------------------------------------------
-# delineate_watershed
-# ---------------------------------------------------------------------------
 
 
 @register_tool(

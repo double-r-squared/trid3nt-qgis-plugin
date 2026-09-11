@@ -115,9 +115,7 @@ def array_to_cog_bytes(
             pass
 
 
-# --------------------------------------------------------------------------- #
 # Source-array fetch (network). Tests monkeypatch this dispatcher.
-# --------------------------------------------------------------------------- #
 
 
 def fetch_source_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any, Any, Any]:
@@ -339,14 +337,12 @@ def _direct_window_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[A
     return np.asarray(arr, dtype="float32"), transform, crs
 
 
-# --------------------------------------------------------------------------- #
 # multi_url (VRT fan-out): a mosaic source declared over MANY member URLs. The
 # single-URL opener serves ONE object, so a multi-tile .vrt read through it returns
 # all-NaN -- it re-serves the VRT bytes for every sub-tile open. This mode resolves
 # the member tiles, windows the intersecting ones through the SAME transport opener,
 # and mosaics them into the requested window. Member discovery is pluggable, so
 # another discovery mode reuses the identical windowed-mosaic read path.
-# --------------------------------------------------------------------------- #
 
 
 class _VrtSource:
@@ -519,7 +515,6 @@ def _multi_url_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any, 
     return np.asarray(out, dtype="float32"), out_transform, crs
 
 
-# --------------------------------------------------------------------------- #
 # projected_vrt_window: a VRT mosaic in a NON-4326 projected CRS. Where multi_url
 # windows a 4326 VRT directly and returns the native array, this transform_bounds the
 # 4326 bbox INTO the source CRS (densified), windows the native grid with a floor/ceil
@@ -527,7 +522,6 @@ def _multi_url_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any, 
 # opener, reprojects the native window to EPSG:4326 bilinear, and applies a
 # per-property fixed-point to physical scale divisor. NaN fill; the serialize
 # directive writes the float32 COG.
-# --------------------------------------------------------------------------- #
 
 
 def _projected_vrt_window_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any, Any, Any]:
@@ -653,12 +647,10 @@ def _projected_vrt_window_to_array(spec: SourceSpec, params: dict[str, Any]) -> 
     return out, dst_transform, "EPSG:4326"
 
 
-# --------------------------------------------------------------------------- #
 # gzip_object: a whole-object GET of a date-templated ``.tif.gz``, gunzip, in-
 # memory open + window. A gzip stream is NOT a byte-servable COG (it has no
 # windowable layout), so the whole-object cost is accepted and gated honestly by the
 # payload estimator; ``bbox=None`` reads the full grid.
-# --------------------------------------------------------------------------- #
 
 
 def _resolve_gzip_url(spec: SourceSpec, params: dict[str, Any], go: dict[str, Any]) -> str:
@@ -775,7 +767,6 @@ def _gzip_object_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any
     return arr, out_transform, src_crs
 
 
-# --------------------------------------------------------------------------- #
 # grib_object: a whole-object GET of a resolved ``.grib2(.gz)`` key, gunzip, GRIB
 # decode, a source-grid bbox window, a sentinel-to-nodata collapse, and a conditional
 # reproject to EPSG:4326. The GRIB driver needs a REAL PATH -- a MemoryFile cannot
@@ -783,7 +774,6 @@ def _gzip_object_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any
 # nature (no byte-range windowing), so that cost is accepted and payload-gated. The
 # listed key is resolved pre-cache-key by the resolve phase and merged into params,
 # so this mode only reads params[key_param] and never lists.
-# --------------------------------------------------------------------------- #
 
 
 def _grib_object_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any, Any, Any]:
@@ -914,7 +904,6 @@ def _grib_object_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any
     return np.asarray(arr, dtype="float32"), out_transform, dst_crs
 
 
-# --------------------------------------------------------------------------- #
 # griddap: an ERDDAP griddap bracket-selector REST endpoint that returns a
 # PRE-SUBSET NetCDF (``.nc?<var>[(<time>)][(<lat_hi>):(<lat_lo>)][(<lon_lo>):
 # (<lon_hi>)]``) -- the server does the bbox and day subset, so the whole small
@@ -922,7 +911,6 @@ def _grib_object_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any
 # transport, an in-memory xarray open and squeeze, and a north-up (array, transform,
 # crs). A 404 whose body carries the ERDDAP no-matching or axis-range markers is
 # honest no-data (typed EMPTY); an all-NaN window over a fully-land AOI is also EMPTY.
-# --------------------------------------------------------------------------- #
 
 
 def _griddap_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any, Any, Any]:
@@ -1067,14 +1055,12 @@ def _griddap_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any, An
                 pass
 
 
-# --------------------------------------------------------------------------- #
 # fixed_tile_grid: a global raster cut into a REGULAR degree grid of per-tile
 # ZIP objects, each wrapping ONE DEFLATE-compressed .tif member (GHS-POP tiles).
 # A DEFLATE member is not windowable by a byte range (decoding forces a near-whole
 # member transfer), so the honest shape is a WHOLE-OBJECT GET of each intersecting
 # tile's ZIP through the shared ``get_zip`` step, an in-memory member read, a per-tile
 # window, and a NaN-nodata merge.
-# --------------------------------------------------------------------------- #
 
 
 def _tile_grid_tiles(
@@ -1215,7 +1201,6 @@ def _fixed_tile_grid_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple
                 pass
 
 
-# --------------------------------------------------------------------------- #
 # wcs_getcoverage: a WCS 1.0.0 GetCoverage templated GET of a CATEGORICAL coverage
 # (NLCD via the MRLC GeoServer) returning the canonical class integers in the band
 # (NOT palette indices), then a background(0)-to-nodata pixel remap, then a palette
@@ -1224,7 +1209,6 @@ def _fixed_tile_grid_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple
 # bbox come from the pre_resolve auto-coarsen, merged into params before the cache
 # key. The GET runs through the shared ogc adapter, the ONE sanctioned socket for this
 # mode, and ``execute`` bakes the source's embedded palette into the serialized COG.
-# --------------------------------------------------------------------------- #
 
 
 def _wcs_getcoverage_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any, Any, Any, dict | None, float | None]:
@@ -1309,7 +1293,6 @@ def _wcs_getcoverage_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple
     return np.asarray(arr, dtype="uint8"), transform, crs, colormap, target_nodata
 
 
-# --------------------------------------------------------------------------- #
 # categorical_tile_grid: a global CATEGORICAL raster cut into a fixed h/v degree
 # grid of per-tile direct-GET GeoTIFFs (NASA LANCE MCDWD flood tiles), each a
 # uint8 class raster, neither zip-wrapped nor continuous. It is the first-valid-wins
@@ -1319,7 +1302,6 @@ def _wcs_getcoverage_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple
 # params. ``execute`` serializes the uint8 array with the declarative palette, nodata
 # transparent. A missing tile (404) is a coverage gap and is skipped; an all-nodata
 # mosaic is a typed EMPTY.
-# --------------------------------------------------------------------------- #
 
 
 def _ctg_tile_bounds(h: int, v: int, tile_deg: float) -> tuple[float, float, float, float]:
@@ -1563,7 +1545,6 @@ def _imageserver_export_bytes(spec: SourceSpec, params: dict[str, Any]) -> bytes
     return body
 
 
-# --------------------------------------------------------------------------- #
 # mapserver_export: an ArcGIS MapServer ``/export`` returning a SERVER-SYMBOLIZED
 # PNG32 (a baked color scheme, not raw values), georeferenced client-side into a
 # 4-band RGBA COG so publish_layer renders the baked symbology directly (no
@@ -1571,7 +1552,6 @@ def _imageserver_export_bytes(spec: SourceSpec, params: dict[str, Any]) -> bytes
 # decode the returned image. A fully-transparent export -- a bbox with no coverage at
 # that level -- is a VALID transparent overlay, never a fabricated layer and never a
 # typed EMPTY: the layer appears and renders nothing.
-# --------------------------------------------------------------------------- #
 
 
 def _mapserver_export_grid(
