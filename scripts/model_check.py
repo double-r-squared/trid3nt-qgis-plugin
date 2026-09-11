@@ -24,9 +24,6 @@ DEFAULT_MODEL = REPO_ROOT / "docs" / "model" / "solve-seam.sysml"
 _BESIDE_THE_MODEL = Path("-")
 
 
-# --------------------------------------------------------------------------- #
-# The notation subset
-# --------------------------------------------------------------------------- #
 
 #: One ``doc /* ... */`` block. Captured whole: the conformance doc-lines are
 #: read out of the body, and the rest is prose the view carries.
@@ -277,9 +274,6 @@ def _prose(doc: str) -> str:
     return " ".join(body.split())
 
 
-# --------------------------------------------------------------------------- #
-# Findings
-# --------------------------------------------------------------------------- #
 
 
 @dataclass(frozen=True, order=True)
@@ -626,9 +620,6 @@ def check(model: Model, root: Path) -> list[Finding]:
                   + _dependency_findings(scoped_import_edges(model, root), model))
 
 
-# --------------------------------------------------------------------------- #
-# The derived view
-# --------------------------------------------------------------------------- #
 
 def render_view(model: Model, source: Path) -> str:
     """The model as a page: the flow graph, the item tables, the allocations.
@@ -685,9 +676,6 @@ def render_view(model: Model, source: Path) -> str:
     return "\n".join(lines)
 
 
-# --------------------------------------------------------------------------- #
-# Entry point
-# --------------------------------------------------------------------------- #
 
 
 def main(argv: list[str] | None = None) -> int:
