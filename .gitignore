@@ -41,13 +41,7 @@ scripts/sandbox/pysheds_watershed/_work/
 # hecras rain-on-grid reference decks (re-downloadable USACE example projects)
 scripts/sandbox/hecras/_ref/
 
-# Machine-shaped harnesses: local-model benches, one-shot store migrations and
-# direct-call bench conveniences. Git does not protect these - they live only on
-# the machine that runs them, and a fresh clone has neither the ollama, the
-# object store nor the runs they read.
-scripts/local/
-
-# Staged-dataset working directories (scripts/staging/*.py --work-dir default).
+# Staged-dataset working directories (dev/staging/*.py --work-dir default).
 # Multi-GB downloads, extracted source rasters and intermediate mosaics; the
 # staging scripts rebuild them and the product lives in the object store.
 # Narrow on purpose -- scratchpad/ itself carries tracked proof artifacts.
@@ -55,7 +49,7 @@ scratchpad/staging/
 scratchpad/
 experiments/
 
-# machine-only: regenerated wholesale by scripts/instruments/code_graph.py on every run
+# machine-only: regenerated wholesale by dev/instruments/code_graph.py on every run
 docs/validation/code-graph/graph.json
 
 # the rulings record stays local; git holds the code, not the decisions

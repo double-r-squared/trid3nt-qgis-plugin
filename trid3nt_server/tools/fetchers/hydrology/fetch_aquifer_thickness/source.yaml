@@ -1,6 +1,6 @@
 # A staged-dataset direct_window over a raster DERIVED from the Zell & Sanford 2020
 # release as b = T / K: the published CONUS transmissivity divided by a CONUS mosaic of
-# the models' own hydraulic conductivity. See scripts/staging/stage_zell_sanford_groundwater.py.
+# the models' own hydraulic conductivity. See dev/staging/stage_zell_sanford_groundwater.py.
 schema_version: v1
 
 name: fetch_aquifer_thickness

@@ -14,6 +14,7 @@ separately below. An unused parameter is reclassified from `variable` to
 | `unquote` | import | trid3nt_server/emission/uri_registry.py:18 | 90 | 1 |
 | `default_seconds` | parameter | trid3nt_server/gates/confirm.py:90 | 100 | 1 |
 | `raw_user_text` | parameter | trid3nt_server/server/dispatch/emitter.py:950 | 100 | 1 |
+| `entry_id` | parameter | trid3nt_server/tools/search/fetch_living_atlas_layer/fetch_living_atlas_layer.py:136 | 100 | 1 |
 | `gs_backend` | parameter | trid3nt_server/workflows/shared/cog_io.py:390 | 100 | 1 |
 | `runs_bucket_default` | parameter | trid3nt_server/workflows/shared/cog_io.py:392 | 100 | 1 |
 
@@ -33,7 +34,6 @@ one reached dynamically. Treat as candidates, not verdicts.
 | `_selection_bbox4326` | method | plugin/ui/dock.py:718 | 17 |
 | `pin_fetch_resolution` | function | trid3nt_server/gates/cards/solver_confirm.py:251 | 17 |
 | `upsert_session_record` | method | trid3nt_server/persistence.py:396 | 16 |
-| `require_layer` | method | trid3nt_server/testing/live_run.py:145 | 15 |
 | `update_compute_status` | method | trid3nt_server/emission/pipeline_emitter.py:1263 | 14 |
 | `update_current_progress` | method | trid3nt_server/emission/pipeline_emitter.py:1133 | 13 |
 | `run_forever` | method | plugin/net/trid3nt_client.py:1601 | 12 |
@@ -42,12 +42,10 @@ one reached dynamically. Treat as candidates, not verdicts.
 | `decimals_for_range` | function | plugin/render/formatting.py:70 | 11 |
 | `count_outputs` | method | trid3nt_server/workflows/solver/diagnostics/_common.py:203 | 11 |
 | `read_output_required` | method | trid3nt_server/workflows/solver/diagnostics/_common.py:215 | 11 |
-| `require_chart` | method | trid3nt_server/testing/live_run.py:161 | 10 |
 | `_default_corpus_path` | function | trid3nt_server/tools/search/search_tools/search_tools.py:282 | 10 |
 | `_canvas_bbox4326` | method | plugin/ui/dock.py:708 | 9 |
 | `_tool_chip_style` | function | plugin/ui/cards.py:69 | 8 |
 | `_default_corpus_path` | function | trid3nt_server/server/protocol/catalog_http.py:42 | 7 |
-| `require_metric_close` | method | trid3nt_server/testing/live_run.py:192 | 7 |
 | `uri_for_short` | method | trid3nt_server/emission/uri_registry.py:314 | 6 |
 | `coverage_summary` | method | trid3nt_server/fallbacks/walker.py:141 | 6 |
 | `read_stdout_optional` | method | trid3nt_server/workflows/solver/diagnostics/_common.py:236 | 6 |
@@ -72,4 +70,4 @@ one reached dynamically. Treat as candidates, not verdicts.
 | descriptor/typing decorator | 6 |
 | protocol/framework-called name | 13 |
 | registry decorator: no static caller by construction | 4 |
-| test-support hook (tests are excluded from the scavenge) | 2 |
+| test-support hook (tests are excluded from the scavenge) | 1 |

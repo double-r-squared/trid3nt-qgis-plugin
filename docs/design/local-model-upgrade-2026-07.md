@@ -3,7 +3,7 @@
 > Frozen record. Its procedure (steps 5-7) drives three routing harnesses that no
 > longer face a clone: `tool_routing_sweep.py` was deleted outright, and
 > `routing_failure_split.py` and `tool_routing_bench.py` moved to the untracked
-> `scripts/local/`. The findings below are left verbatim; what a shipped page may
+> `dev/local/`. The findings below are left verbatim; what a shipped page may
 > say about routing is the MEASUREMENT, as `docs/site/models.md` now states it,
 > and the moves are recorded in `docs/DELETION_LEDGER.md`.
 

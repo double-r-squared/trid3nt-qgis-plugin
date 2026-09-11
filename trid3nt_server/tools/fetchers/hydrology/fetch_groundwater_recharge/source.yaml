@@ -1,5 +1,5 @@
 # A staged-dataset direct_window over TWO published CONUS recharge grids converted to
-# COGs by scripts/staging/stage_groundwater_recharge.py. The s3:// endpoints name bucket
+# COGs by dev/staging/stage_groundwater_recharge.py. The s3:// endpoints name bucket
 # and key only: the transport resolves the host from the active object-store endpoint at
 # read time.
 schema_version: v1

@@ -1,5 +1,5 @@
 # A staged-dataset direct_window over the Zell & Sanford 2020 CONUS depth-to-water
-# raster, converted to a COG by scripts/staging/stage_zell_sanford_groundwater.py. The
+# raster, converted to a COG by dev/staging/stage_zell_sanford_groundwater.py. The
 # s3:// endpoint names bucket and key only: the transport resolves the host from the
 # active object-store endpoint at read time.
 schema_version: v1
