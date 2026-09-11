@@ -608,7 +608,7 @@ located. [UNVERIFIED / not found]
 ### 2g. How a synthetic method is expressed honestly in our architecture
 
 Stated so M3 has something concrete to rule on. A synthetic bed is a PRODUCER
-under its real method name, registered like any processing tool, appearing on
+under its real method name, registered like any derive tool, appearing on
 the ladder as a rung with `consequence="synthetic"`, which already sits inside
 `DEGRADATION_CLASSES` and therefore already trips the loudness floor and the
 gate card. Sketch, in the declaration vocabulary:

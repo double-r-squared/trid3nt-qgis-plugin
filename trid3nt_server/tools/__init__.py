@@ -194,52 +194,52 @@ _register_router_specs()
 from .display.restyle_layer.restyle_layer import restyle_layer  # noqa: E402,F401 - DISPLAY-state re-emission of an already-published layer
 from .display.show_nexrad_radar.show_nexrad_radar import show_nexrad_radar  # noqa: E402,F401
 
-# -- processing (compute / clip / extract / vector-edit / charts) --
-from .processing.clip_raster_to_polygon import clip_raster_to_polygon  # noqa: E402,F401
+# -- derive (compute / clip / extract / vector-edit / charts) --
+from .derive.clip_raster_to_polygon import clip_raster_to_polygon  # noqa: E402,F401
 # The two generic geometry composition links: one document out of several layers
 # (``combine``), and the two ends of a line (``endpoints``).
-from .processing.combine import combine  # noqa: E402,F401
-from .processing.compute_aspect import compute_aspect  # noqa: E402,F401
-from .processing.compute_blended_composite import compute_blended_composite  # noqa: E402,F401
-from .processing.compute_building_density import compute_building_density  # noqa: E402,F401
-from .processing.compute_change_detection import compute_change_detection  # noqa: E402,F401
-from .processing.compute_colored_relief import compute_colored_relief  # noqa: E402,F401
-from .processing.compute_contours import compute_contours  # noqa: E402,F401
-from .processing.compute_cross_section import compute_cross_section  # noqa: E402,F401
-from .processing.compute_exposure_summary import compute_exposure_summary  # noqa: E402,F401
-from .processing.compute_flood_depth_damage import compute_flood_depth_damage  # noqa: E402,F401
+from .derive.combine import combine  # noqa: E402,F401
+from .derive.compute_aspect import compute_aspect  # noqa: E402,F401
+from .derive.compute_blended_composite import compute_blended_composite  # noqa: E402,F401
+from .derive.compute_building_density import compute_building_density  # noqa: E402,F401
+from .derive.compute_change_detection import compute_change_detection  # noqa: E402,F401
+from .derive.compute_colored_relief import compute_colored_relief  # noqa: E402,F401
+from .derive.compute_contours import compute_contours  # noqa: E402,F401
+from .derive.compute_cross_section import compute_cross_section  # noqa: E402,F401
+from .derive.compute_exposure_summary import compute_exposure_summary  # noqa: E402,F401
+from .derive.compute_flood_depth_damage import compute_flood_depth_damage  # noqa: E402,F401
 # flood-extent skill (raster/vector confusion).
-from .processing.compute_flood_extent_skill import compute_flood_extent_skill  # noqa: E402,F401
-from .processing.compute_hillshade import compute_hillshade  # noqa: E402,F401
-from .processing.compute_idf_curve import compute_idf_curve  # noqa: E402,F401
-from .processing.compute_impervious_surface import compute_impervious_surface  # noqa: E402,F401
-from .processing.compute_layer_bounds import compute_layer_bounds  # noqa: E402,F401
-from .processing.compute_model_residuals import compute_model_residuals  # noqa: E402,F401
-from .processing.compute_ndvi import compute_ndvi  # noqa: E402,F401
-from .processing.compute_sediment_yield import compute_sediment_yield  # noqa: E402,F401
+from .derive.compute_flood_extent_skill import compute_flood_extent_skill  # noqa: E402,F401
+from .derive.compute_hillshade import compute_hillshade  # noqa: E402,F401
+from .derive.compute_idf_curve import compute_idf_curve  # noqa: E402,F401
+from .derive.compute_impervious_surface import compute_impervious_surface  # noqa: E402,F401
+from .derive.compute_layer_bounds import compute_layer_bounds  # noqa: E402,F401
+from .derive.compute_model_residuals import compute_model_residuals  # noqa: E402,F401
+from .derive.compute_ndvi import compute_ndvi  # noqa: E402,F401
+from .derive.compute_sediment_yield import compute_sediment_yield  # noqa: E402,F401
 # model-fit skill metrics (spotpy).
-from .processing.compute_skill_metrics import compute_skill_metrics  # noqa: E402,F401
-from .processing.compute_slope import compute_slope  # noqa: E402,F401
-from .processing.delineate_watershed import delineate_watershed  # noqa: E402,F401
-from .processing.digitize_water_body import digitize_water_body  # noqa: E402,F401
-from .processing.enhance_satellite_image import enhance_satellite_image  # noqa: E402,F401
-from .processing.endpoints import endpoints  # noqa: E402,F401
-from .processing.extract_landcover_class import extract_landcover_class  # noqa: E402,F401
+from .derive.compute_skill_metrics import compute_skill_metrics  # noqa: E402,F401
+from .derive.compute_slope import compute_slope  # noqa: E402,F401
+from .derive.delineate_watershed import delineate_watershed  # noqa: E402,F401
+from .derive.digitize_water_body import digitize_water_body  # noqa: E402,F401
+from .derive.enhance_satellite_image import enhance_satellite_image  # noqa: E402,F401
+from .derive.endpoints import endpoints  # noqa: E402,F401
+from .derive.extract_landcover_class import extract_landcover_class  # noqa: E402,F401
 # model-vs-observation pairing primitive.
-from .processing.extract_model_at_observations import extract_model_at_observations  # noqa: E402,F401
-from .processing.extract_stream_network import extract_stream_network  # noqa: E402,F401
-from .processing.extract_timeseries_at_point import extract_timeseries_at_point  # noqa: E402,F401
-from .processing.charts.generate_chart import generate_chart  # noqa: E402,F401
-from .processing.query_point_hazard import query_point_hazard  # noqa: E402,F401
-from .processing.section import section  # noqa: E402,F401
+from .derive.extract_model_at_observations import extract_model_at_observations  # noqa: E402,F401
+from .derive.extract_stream_network import extract_stream_network  # noqa: E402,F401
+from .derive.extract_timeseries_at_point import extract_timeseries_at_point  # noqa: E402,F401
+from .derive.charts.generate_chart import generate_chart  # noqa: E402,F401
+from .derive.query_point_hazard import query_point_hazard  # noqa: E402,F401
+from .derive.section import section  # noqa: E402,F401
 # The one read-only SQL surface over published layers.
-from .processing.spatial_query import spatial_query  # noqa: E402,F401
+from .derive.spatial_query import spatial_query  # noqa: E402,F401
 
 # -- simulation (engine bridges, model_* engines, solver seam) --
 # Run-diagnostics dispatcher: one registered tool over the per-engine parser
 # modules under workflows/solver/diagnostics/, which are NOT themselves registered.
 from trid3nt_server.workflows.solver.diagnostics import read_run_diagnostics  # noqa: E402,F401
-from trid3nt_server.tools.processing.model_debris_flow import model_debris_flow  # noqa: E402,F401
+from trid3nt_server.tools.derive.model_debris_flow import model_debris_flow  # noqa: E402,F401
 # Derive a run from a run, with named values moved: the recalibration interface.
 from trid3nt_server.workflows.runtime.rerun import rerun_workflow  # noqa: E402,F401
 from trid3nt_server.workflows.solver import solver  # noqa: E402,F401
@@ -249,9 +249,6 @@ from trid3nt_server.workflows.solver import solver  # noqa: E402,F401
 # no tool of its own.
 
 # -- discovery (dataset/tool retrieval) --
-# search_data_catalog / fetch_from_catalog register at daemon startup via main.py's
-# eager-import block, NOT here: importing this package alone deliberately leaves
-# them out of TOOL_REGISTRY.
 from .search.search_tools import search_tools  # noqa: E402,F401
 from .search.search_spatial_functions import search_spatial_functions  # noqa: E402,F401
 # ESRI Living Atlas: a scoped search over the harvested catalog plus a generic

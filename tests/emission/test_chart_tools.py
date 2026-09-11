@@ -19,7 +19,7 @@ from trid3nt_server.emission.charts import (
     build_chart_payload,
     is_chart_emission_result,
 )
-from trid3nt_server.tools.processing.charts.generate_chart.generate_chart import (
+from trid3nt_server.tools.derive.charts.generate_chart.generate_chart import (
     generate_chart,
 )
 from trid3nt_contracts.chart_contracts import (
@@ -414,7 +414,7 @@ class TestEmitChart:
 
 
 def test_dispatch_detection_signal(tmp_path):
-    from trid3nt_server.tools.processing.spatial_query.spatial_query import spatial_query
+    from trid3nt_server.tools.derive.spatial_query.spatial_query import spatial_query
 
     records = [{"x": 0.1 * i, "y": 0.1 * i, "v": float(i)} for i in range(4)]
     vec_path = _make_geojson_points(tmp_path, records)

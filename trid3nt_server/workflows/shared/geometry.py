@@ -46,7 +46,7 @@ def source_uri(source: Any) -> Any:
 
 def read_geometry_doc(source: Any) -> dict[str, Any]:
     """A geometry source -> GeoJSON, whatever vector format it arrived in."""
-    from trid3nt_server.tools.processing._hydrology_common import _stage_uri_local
+    from trid3nt_server.tools.derive._hydrology_common import _stage_uri_local
 
     resolved = source_uri(source)
     if isinstance(resolved, Mapping):

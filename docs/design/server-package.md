@@ -1,7 +1,7 @@
 # `trid3nt_server` -- the agent service (WebSocket + tool dispatch)
 
 The Python application that serves the plugin's WebSocket protocol, hosts the
-tool registry (fetchers, search, processing, display, meta, and the engine
+tool registry (fetchers, search, derive, display, meta, and the engine
 workflows), runs the multi-turn generation loop against a **pluggable LLM
 provider**, streams replies, propagates cancellation, and enforces the
 determinism boundary and the confirmation-before-consequence gates.

@@ -10,7 +10,7 @@
 // function that builds a contract, and ``pass-through:`` marks an end that
 // forwards a contract verbatim.
 //
-// The plane holds more than this - the registry, retrieval, the processing
+// The plane holds more than this - the registry, retrieval, the derive
 // tools - and none of it is modeled here. What is modeled is what was touched;
 // the rest of the plane is stated as unmodeled in the index rather than
 // sketched.

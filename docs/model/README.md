@@ -11,7 +11,7 @@ their seams are touched, never speculatively and never to fill in the table.
 | plane | what it holds | state |
 | --- | --- | --- |
 | **workflow** | the six systems a run passes through - fetcher, mesher, assembler, solver, products, runtime | MODELED in part: four seams, listed below |
-| **tool** | the processing tools, the registry, how a tool is surfaced, retrieved and picked | MODELED in part: one seam, `tool-plane.sysml` |
+| **tool** | the derive tools, the registry, how a tool is surfaced, retrieved and picked | MODELED in part: one seam, `tool-plane.sysml` |
 | **intelligence** | LLM provider selection, the adapter, the routing between them | NOT YET MODELED |
 | **user** | the chat dock, the canvas, what the model says back | MODELED at ONE EDGE: the canvas end of `emission-seam.sysml` - the layer row a produced layer arrives on and the style document it is drawn from. The dock, the chat and the cards are unmodeled |
 | **record** | the run journal, provenance, and this model with its checker | NOT YET MODELED |

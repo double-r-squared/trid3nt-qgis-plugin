@@ -27,7 +27,7 @@ PYTEST = env -u TRID3NT_CACHE_BUCKET venvs/agent/bin/python -m pytest \
          -p no:cacheprovider --timeout=300 -q
 
 test-fetchers:      ; $(PYTEST) tests/fetchers
-test-spatial:       ; $(PYTEST) tests/processing tests/emission tests/mesh
+test-spatial:       ; $(PYTEST) tests/derive tests/emission tests/mesh
 test-engines:       ; $(PYTEST) tests/telemac tests/runtime tests/solver tests/search
 test-server:        ; $(PYTEST) tests/server tests/gates tests/credentials tests/sandbox tests/model tests/scripts tests/hygiene
 test-model-surface: ; $(PYTEST) tests/adapters tests/tools
@@ -54,7 +54,6 @@ env:
 	  'AWS_DEFAULT_REGION=us-east-1' \
 	  'TRID3NT_CACHE_BUCKET=trid3nt-cache' \
 	  'TRID3NT_DEV_PERSISTENCE_DIR=$(REPO_ROOT)/data/persistence' \
-	  'TRID3NT_CATALOG_YAML=$(REPO_ROOT)/public_data_source_catalog.yaml' \
 	  > $(REPO_ROOT)/.env.local; \
 	echo "wrote .env.local - edit it and set your API key"; fi
 

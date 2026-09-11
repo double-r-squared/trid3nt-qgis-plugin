@@ -16,12 +16,12 @@ A DATA FETCHER is not written in Python at all: it is DECLARED as a
 `source.yaml` beside a `corpus.yaml` under `trid3nt_server/tools/fetchers/`, and
 the router promotes the declaration into a registered tool. Read
 `trid3nt_server/tools/README.md` for that path. Everything below is the CODED
-path - the processing, display, search and meta primitives.
+path - the derive, display, search and meta primitives.
 
 Two files are your templates. Read them next to this guide:
 
 - Canonical real example (a cached raster compute returning a map layer):
-  `trid3nt_server/tools/processing/compute_slope/compute_slope.py`
+  `trid3nt_server/tools/derive/compute_slope/compute_slope.py`
 - Copy-me starter (a trivial, dependency-free compute):
   `trid3nt_server/tools/_example_tool_template.py`
 
@@ -34,7 +34,7 @@ Everything below cites real code. Line numbers drift; grep the symbol.
 1. The tool **function** + its **metadata** (`AtomicToolMetadata`) in its own
    DIRECTORY under `trid3nt_server/tools/<subpackage>/<tool_name>/`, holding
    `<tool_name>.py`, `corpus.yaml` and an `__init__.py`. Pick the subpackage by
-   what the tool IS: `processing/` (compute_* / clip_* / extract_* / charts),
+   what the tool IS: `derive/` (compute_* / clip_* / extract_* / charts),
    `display/` (live map overlays that transfer no data), `search/` (catalog and
    tool retrieval), or `meta/` (utilities: the code_exec box, case report,
    spatial input). `cache.py`, `vector_tiles.py` and `tool_arg_normalizer.py`
@@ -214,7 +214,7 @@ import block near the bottom of
 `trid3nt_server/tools/__init__.py`:
 
 ```python
-from .processing.compute_slope import compute_slope  # noqa: E402,F401
+from .derive.compute_slope import compute_slope  # noqa: E402,F401
 ```
 
 The block is grouped by subpackage and sorted; add your line to the group
@@ -253,7 +253,7 @@ though it is registered.
 
 Add 5-10 realistic, natural user-prompt queries keyed by your function name, in
 the `corpus.yaml` beside your module. Cover synonyms, regional variants, and
-adjacent intent. Real entry (`processing/compute_slope/corpus.yaml`):
+adjacent intent. Real entry (`derive/compute_slope/corpus.yaml`):
 
 ```yaml
 compute_slope:
@@ -298,9 +298,9 @@ case so it proves the CORPUS actually routes.
 
 ## Step 5 - the test
 
-The test tree MIRRORS the product tree, so a processing tool's test is
-`tests/processing/test_<your_tool>.py`. Model it on
-`tests/processing/test_compute_slope.py`. A minimal test asserts three things:
+The test tree MIRRORS the product tree, so a derive tool's test is
+`tests/derive/test_<your_tool>.py`. Model it on
+`tests/derive/test_compute_slope.py`. A minimal test asserts three things:
 registration + metadata, the corpus coverage, and the tool's own behavior
 (called directly via `TOOL_REGISTRY[name].fn`, since the decorator returns the
 undecorated function):
@@ -316,7 +316,7 @@ def test_registered():
 
 def test_corpus():
     import pathlib, yaml
-    from trid3nt_server.tools.processing.compute_slope import compute_slope as mod
+    from trid3nt_server.tools.derive.compute_slope import compute_slope as mod
     p = pathlib.Path(mod.__file__).resolve().parent / "corpus.yaml"
     corpus = yaml.safe_load(p.read_text())
     assert len(corpus["compute_slope"]) >= 3
@@ -327,7 +327,7 @@ the test is offline and deterministic. Run it from the repo root with the agent
 venv, through the slice that owns your subsystem:
 
 ```bash
-venvs/agent/bin/python -m pytest tests/processing/test_<your_tool>.py -q
+venvs/agent/bin/python -m pytest tests/derive/test_<your_tool>.py -q
 ```
 
 ---

@@ -408,7 +408,7 @@ def test_a_declared_pit_fill_runs_the_delineators_own_chain_and_says_so(
         return dst
 
     monkeypatch.setattr(
-        "trid3nt_server.tools.processing._hydrology_common.write_conditioned_dem",
+        "trid3nt_server.tools.derive._hydrology_common.write_conditioned_dem",
         _fake_condition)
     bedded = P.set_bed(_lonlat_mesh(), source=str(raster), condition="pit_fill")
     assert seen["src"] == str(raster)

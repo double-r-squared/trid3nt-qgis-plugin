@@ -14,12 +14,12 @@ from pathlib import Path
 
 import pytest
 
-from trid3nt_server.tools.processing.spatial_query.spatial_query import (
+from trid3nt_server.tools.derive.spatial_query.spatial_query import (
     SpatialQueryError,
     SpatialQueryLayerURI,
     spatial_query,
 )
-from trid3nt_server.tools.processing.spatial_query import spatial_query as sq_module
+from trid3nt_server.tools.derive.spatial_query import spatial_query as sq_module
 
 
 # ---------------------------------------------------------------------------

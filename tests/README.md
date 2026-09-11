@@ -12,6 +12,7 @@ join the run as the sixth slice.
 | `fixtures/` | data the tests read; no code | - | - |
 | `adapters/` | provider adapters, the turn loop, the stream persistence | 23 | 468 |
 | `credentials/` | credential resolution, the auth handshake, identity | 7 | 95 |
+| `derive/` | the derive tools | 33 | 460 |
 | `emission/` | the emitter, the uri registry, publication, charts | 39 | 503 |
 | `fetchers/` | the fetch router, its executors, hooks and fallbacks | 65 | 1563 |
 | `gates/` | the gates, the context budget, the circuit breaker | 21 | 312 |
@@ -19,7 +20,6 @@ join the run as the sixth slice.
 | `mesh/` | the meshers, the mesh gate, topology and bed | 7 | 226 |
 | `model/` | the SysML model conformance check | 1 | 19 |
 | `plugin/` | the plugin seams the server suite reads offline, by `ast` | 1 | 3 |
-| `processing/` | the processing tools | 33 | 460 |
 | `runtime/` | the declarative runtime, scenario reuse, the run journal | 12 | 354 |
 | `sandbox/` | the code-exec sandbox | 2 | 34 |
 | `scripts/` | the instruments, the drivers and the proof renderers | 6 | 45 |
@@ -43,7 +43,7 @@ else has one.
 Six slices by subsystem, each its own foreground invocation, from the repo root:
 
     make test-fetchers        # tests/fetchers                                 1563
-    make test-spatial         # tests/processing tests/emission tests/mesh     1189
+    make test-spatial         # tests/derive tests/emission tests/mesh         1189
     make test-engines         # tests/telemac tests/runtime tests/solver tests/search   1155
     make test-server          # tests/server tests/gates tests/credentials tests/sandbox tests/model tests/scripts tests/hygiene   1143
     make test-model-surface   # tests/adapters tests/tools                      870

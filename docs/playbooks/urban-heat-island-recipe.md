@@ -15,7 +15,7 @@ tool was `fetch_modis_lst` + `fetch_esri_landcover_10m` + a zonal mean, which
 is doctrine's "fetch X + fetch Y + zonal + summarize" shape with land-cover
 classes as the zones.
 
-The EMIT gate that protects most of `processing/` does not hold here, and that
+The EMIT gate that protects most of `derive/` does not hold here, and that
 is the whole reason this one demotes while its five siblings do not. The tool's
 map product was the MODIS LST resampled onto the 10 m land-cover grid, painted
 with `style_preset="land_surface_temp_c"` - which the tool's own source called

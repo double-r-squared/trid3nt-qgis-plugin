@@ -32,17 +32,15 @@ def _import_tools_registry() -> int:
     from .tools.fetchers.climate.lookup_precip_return_period import lookup_precip_return_period  # noqa: F401
     from .tools.fetchers.socioeconomic.geocode_location import geocode_location  # noqa: F401
     from .workflows.solver import solver  # noqa: F401
-    from .tools.search.fetch_from_catalog import fetch_from_catalog  # noqa: F401
-    from .tools.search.search_data_catalog import search_data_catalog  # noqa: F401
-    from .tools.processing.compute_colored_relief import compute_colored_relief  # noqa: F401
-    from .tools.processing.compute_slope import compute_slope  # noqa: F401
-    from .tools.processing.compute_aspect import compute_aspect  # noqa: F401
-    from .tools.processing.clip_raster_to_polygon import clip_raster_to_polygon  # noqa: F401
-    from .tools.processing.compute_hillshade import compute_hillshade  # noqa: F401
+    from .tools.derive.compute_colored_relief import compute_colored_relief  # noqa: F401
+    from .tools.derive.compute_slope import compute_slope  # noqa: F401
+    from .tools.derive.compute_aspect import compute_aspect  # noqa: F401
+    from .tools.derive.clip_raster_to_polygon import clip_raster_to_polygon  # noqa: F401
+    from .tools.derive.compute_hillshade import compute_hillshade  # noqa: F401
     from .tools.search.web_fetch import web_fetch  # noqa: F401
-    from .tools.processing.compute_impervious_surface import compute_impervious_surface  # noqa: F401
-    from .tools.processing.extract_landcover_class import extract_landcover_class  # noqa: F401
-    from .tools.processing.compute_building_density import compute_building_density  # noqa: F401
+    from .tools.derive.compute_impervious_surface import compute_impervious_surface  # noqa: F401
+    from .tools.derive.extract_landcover_class import extract_landcover_class  # noqa: F401
+    from .tools.derive.compute_building_density import compute_building_density  # noqa: F401
     from .tools.display.show_nexrad_radar.show_nexrad_radar import show_nexrad_radar  # noqa: F401
 
     return len(tools.TOOL_REGISTRY)

@@ -105,7 +105,7 @@ def install_reach_chain(monkeypatch, tmp_path, captured: dict | None = None,
 
     for module in ("endpoints.endpoints", "section.section"):
         monkeypatch.setattr(
-            f"trid3nt_server.tools.processing.{module}._write_geojson",
+            f"trid3nt_server.tools.derive.{module}._write_geojson",
             _local_write)
 
     # The ACCEPTED MESH a derived release is settled inside. The mesh session is

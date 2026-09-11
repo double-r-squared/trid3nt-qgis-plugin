@@ -31,5 +31,5 @@ on one machine against one user; the only wire shapes it speaks are
 | `sandbox/` | The code-exec box: the container a user-confirmed snippet runs in. |
 | `server/` | The daemon core: connection loop, turn engine, dispatch, session state. |
 | `testing/` | Drivers for the product's own WS protocol, and the declared canaries. |
-| `tools/` | The registered tool surface: fetchers, processing, search, display. |
+| `tools/` | The registered tool surface: fetchers, derive, search, display. |
 | `workflows/` | The declarative engine layer: the runtime, the mesh front, TELEMAC. |

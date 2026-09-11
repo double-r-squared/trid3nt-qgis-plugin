@@ -157,7 +157,7 @@ def test_response_aoi_flow_has_no_line_keys():
 
 
 def test_surfaced_line_feeds_compute_cross_section():
-    from trid3nt_server.tools.processing.compute_cross_section.compute_cross_section import _resolve_line_coords
+    from trid3nt_server.tools.derive.compute_cross_section.compute_cross_section import _resolve_line_coords
 
     resp = SpatialInputResponsePayload(
         request_id=new_ulid(),

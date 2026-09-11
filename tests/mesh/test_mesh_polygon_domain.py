@@ -273,7 +273,7 @@ def test_a_lattice_still_builds_from_a_box():
 # The chain: one tool's polygon is the next tool's domain.
 # --------------------------------------------------------------------------- #
 def test_a_section_the_tool_produced_meshes_as_the_domain(monkeypatch, tmp_path):
-    from trid3nt_server.tools.processing.section.section import section
+    from trid3nt_server.tools.derive.section.section import section
 
     sent = _stub_om2d(monkeypatch, tmp_path)
     water = json.dumps({"type": "Polygon", "coordinates": [[

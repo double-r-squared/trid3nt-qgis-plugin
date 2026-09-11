@@ -250,7 +250,7 @@ def _conditioned(raster: Path, provenance: str, condition: str) -> tuple[Path, s
         raise MeshToolError(
             "MESH_OP_BAD_VALUE",
             f"set_bed knows one conditioning, {_PIT_FILL!r}, not {condition!r}.")
-    from trid3nt_server.tools.processing._hydrology_common import (
+    from trid3nt_server.tools.derive._hydrology_common import (
         write_conditioned_dem,
     )
 

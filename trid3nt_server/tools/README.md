@@ -1,7 +1,7 @@
 # `tools/` - the atomic-tool surface
 
 Every tool the model can call is registered here at import time. A fetcher is a
-declared source spec the router executes; a processing tool is a function; the
+declared source spec the router executes; a derive tool is a function; the
 registry and the cache shim are the two seams they all pass through.
 
 ## Files
@@ -22,11 +22,11 @@ registry and the cache shim are the two seams they all pass through.
 
 | folder | what it is |
 | --- | --- |
+| `derive/` | Compute / clip / extract / vector-edit / chart tools, one folder per tool, flat, plus the shared GDAL, geometry, hydrology and chart cores. |
 | `display/` | Tools that change what the canvas SHOWS rather than what it holds: `restyle_layer`, `show_nexrad_radar`. |
 | `fetchers/` | Data fetchers, one folder per phenomenon measured (`climate`, `hazard`, `hydrology`, `imagery`, `ocean`, `socioeconomic`, `soil`, `terrain`, `weather`), plus the shared helpers at its root and `_router/`. See below. |
 | `meta/` | Utility tools: `code_exec_tool`, `compose_case_report`, `list_run_frames`, `spatial_input_tool`. |
-| `processing/` | Compute / clip / extract / vector-edit / chart tools, one folder per tool, flat, plus the shared GDAL, geometry, hydrology and chart cores. |
-| `search/` | Dataset and tool discovery: `search_data_catalog` and `fetch_from_catalog` over the YAML catalog, `search_living_atlas` and `fetch_living_atlas_layer` over the harvested Living Atlas, `search_spatial_functions`, `search_tools` retrieval, the OGC adapter and `web_fetch`. |
+| `search/` | Dataset and tool discovery: `search_living_atlas` and `fetch_living_atlas_layer` over the harvested Living Atlas, `search_spatial_functions`, `search_tools` retrieval, the OGC adapter and `web_fetch`. |
 
 ## `fetchers/` - the router and its shared root
 

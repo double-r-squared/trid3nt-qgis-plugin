@@ -635,9 +635,9 @@ package DataSeam {
         imported them would be conditioning terrain and calling the result a
         survey.
 
-        forbid: trid3nt_server.tools.fetchers.ocean.fetch_bluetopo.hooks -> trid3nt_server.tools.processing
-        forbid: trid3nt_server.tools.fetchers._router.hooks.topobathy_class -> trid3nt_server.tools.processing
-        forbid: trid3nt_server.tools.fetchers._router.hooks.topobathy -> trid3nt_server.tools.processing
+        forbid: trid3nt_server.tools.fetchers.ocean.fetch_bluetopo.hooks -> trid3nt_server.tools.derive
+        forbid: trid3nt_server.tools.fetchers._router.hooks.topobathy_class -> trid3nt_server.tools.derive
+        forbid: trid3nt_server.tools.fetchers._router.hooks.topobathy -> trid3nt_server.tools.derive
         */
     }
 

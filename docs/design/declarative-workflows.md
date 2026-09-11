@@ -792,14 +792,14 @@ picture cannot show is the dishonest case this pins.
 
 Emission becomes automatic on ALL three paths: fetchers (already),
 declarative workflows (the skeleton's publish stage), and
-processing-primitive rasters (NEW - hillshade/NDVI/slope and playground
+derive-primitive rasters (NEW - hillshade/NDVI/slope and playground
 outputs auto-emit, intermediates included: they are useful input
 checks, and the user hides what they don't want). The mechanism -
 the style resolution (`resolve_layer_style`), overview enforcement,
 layer registration - moves OUT of the publish_layer tool file into
 `emission/` as its single home. The registered `publish_layer` tool is
 then DELETED (DELETION_LEDGER entry QUEUED 2026-08-24; condition: a
-live case shows a processing raster on the map with zero publish call,
+live case shows a derive raster on the map with zero publish call,
 plus flood canary green).
 
 ### Mesh
@@ -830,7 +830,7 @@ conflict, this table governs):
 | today | destiny |
 |---|---|
 | `data/fetchers/` | `tools/fetchers/` (pure rename - the substrate) |
-| `data/processing/` | `tools/processing/` + misdirection audit (workflow verbs -> `workflows/shared/`; dead web-era code -> delete) |
+| `data/processing/` | `tools/derive/` + misdirection audit (workflow verbs -> `workflows/shared/`; dead web-era code -> delete) |
 | `data/search/` | `tools/search/` |
 | `data/publish_layer/` | `tools/publish_layer/` interim; dissolved by emission unification |
 | `data/simulation/` engine shims | STAY PUT; die engine-by-engine as the factory absorbs them (moving a thing scheduled to die is double work) |

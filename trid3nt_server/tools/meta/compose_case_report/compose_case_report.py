@@ -18,7 +18,7 @@ from typing import Any
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.tools import register_tool
-from trid3nt_server.tools.processing.query_point_hazard.query_point_hazard import layers_from_case, resolve_case_id
+from trid3nt_server.tools.derive.query_point_hazard.query_point_hazard import layers_from_case, resolve_case_id
 
 __all__ = [
     "compose_case_report",
@@ -289,7 +289,7 @@ async def compose_case_report(
 
     # ---- Exposure summary (session store; never recomputed here) ------------
     lines += ["", "## Exposure summary", ""]
-    from trid3nt_server.tools.processing.compute_exposure_summary.compute_exposure_summary import get_session_exposure
+    from trid3nt_server.tools.derive.compute_exposure_summary.compute_exposure_summary import get_session_exposure
 
     exposure = get_session_exposure(resolved_case)
     has_exposure = exposure is not None
