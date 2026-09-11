@@ -1,14 +1,12 @@
 """A solved open-water result SELAFIN -> the peak raster COGs and their scalars.
 
-The free-surface, wave, agitation, 3D and coastal readers. Each emits ONE peak
+The wave, agitation, 3D and coastal readers. Each emits ONE peak
 COG as the map anchor and narration carrier; the time animation rides the result
 SELAFIN itself, published as a mesh layer, so NO per-frame COGs are written."""
 
 from __future__ import annotations
 
 import logging
-import math
-import os
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
@@ -18,14 +16,11 @@ from trid3nt_contracts.telemac_contracts import (
     TELEMAC3D_STRATIFICATION_STYLE,
     TELEMAC_AGITATION_STYLE,
     TELEMAC_COASTAL_DEPTH_STYLE,
-    TELEMAC_MAX_DEPTH_STYLE,
     TELEMAC_WAVE_STYLE,
-    TELEMAC_WSE_STYLE,
     ArtemisAgitationLayerURI,
     Telemac3dLayerURI,
     TelemacCoastalLayerURI,
     TelemacWaveLayerURI,
-    TelemacWseLayerURI,
 )
 from trid3nt_server.emission import presets
 from trid3nt_server.workflows.publishing import cog as cog_io
@@ -33,18 +28,15 @@ from trid3nt_server.workflows.publishing import raster
 from trid3nt_server.workflows.publishing.cog import RUNS_BUCKET_DEFAULT, CogIoError
 from trid3nt_server.workflows.telemac.modules.outputs import read_selafin
 
-from .run_reads import wetted_fraction
 
 __all__ = [
     "PostprocessTelemacError",
-    "postprocess_telemac_wse",
     "postprocess_tomawac",
     "postprocess_artemis",
     "postprocess_telemac3d",
     "postprocess_coastal",
     "TELEMAC_WAVE_STYLE",
     "TELEMAC_AGITATION_STYLE",
-    "TELEMAC_WSE_STYLE",
     "TELEMAC_TARGET_GROUND_RES_M",
     "TELEMAC_WSE_WET_DEPTH_M",
 ]
@@ -89,21 +81,11 @@ class PostprocessTelemacError(RuntimeError):
         self.details: dict[str, Any] = dict(details or {})
 
 
-#: TELEMAC-2D free-surface variable names (English + French steering). The
-#: Malpasset reference case emits ``FREE SURFACE    M``; a French one emits
-#: ``SURFACE LIBRE``/``COTE DE LA SURFACE LIBRE``. Never guessed -- verified by
-#: parsing the bundled ``f2d_malpasset-small.slf`` header.
-_WSE_VAR_KEYS: tuple[str, ...] = ("FREE SURFACE", "SURFACE LIBRE", "WATER SURFACE",
-                                  "COTE DE LA SURFACE", "COTE DE L'EAU")
 #: Water-depth variable names (English + French) the wet mask is built from.
 _DEPTH_VAR_KEYS: tuple[str, ...] = ("WATER DEPTH", "HAUTEUR D'EAU", "HAUTEUR D EAU")
 #: Static bed-elevation variable names (English + French). Read to reproduce the
 #: worker's own ``bed > initial water line`` discrimination on the raster.
 _BED_VAR_KEYS: tuple[str, ...] = ("BOTTOM", "FOND")
-#: Depth-averaged velocity component names (English + French). The reach runs
-#: emit ``VELOCITY U``/``VELOCITY V``; a French one emits ``VITESSE U``/``V``.
-_U_VAR_KEYS: tuple[str, ...] = ("VELOCITY U", "VITESSE U")
-_V_VAR_KEYS: tuple[str, ...] = ("VELOCITY V", "VITESSE V")
 
 
 def _pick_named_var(varnames: list[str], keys: tuple[str, ...], letter: str) -> str | None:
@@ -136,375 +118,6 @@ def _reraise_cogio(exc: CogIoError) -> "PostprocessTelemacError":
     )
 
 
-def _nn_spacing_m(x, y) -> float:
-    """Median nearest-neighbour node spacing (mesh characteristic length).
-
-    Sizes the raster clip distance where a cell-based clip would punch holes."""
-    # A fine channel mesh clips at ~1.5 output cells, but a coarse mesh with
-    # tens-of-metres node spacing needs ~2x the node spacing to keep the interior
-    # filled while still trimming cells outside the mesh footprint.
-    import numpy as np
-    from scipy.spatial import cKDTree
-
-    pts = np.column_stack([np.asarray(x, "float64"), np.asarray(y, "float64")])
-    if pts.shape[0] < 2:
-        return 1.0
-    tree = cKDTree(pts)
-    d, _ = tree.query(pts, k=2)  # col 0 = self (0), col 1 = nearest other node
-    nn = d[:, 1]
-    nn = nn[np.isfinite(nn) & (nn > 0)]
-    return float(np.median(nn)) if nn.size else 1.0
-
-
-def postprocess_telemac_wse(
-    slf_path: str | Path,
-    *,
-    run_id: str,
-    mesh_epsg: int,
-    reach_name: str = "river",
-    quantity: str = "wse",
-    vertical_datum: str | None = None,
-    mesh_frame_note: str | None = None,
-    runs_bucket: str | None = None,
-    target_ground_res_m: float = TELEMAC_TARGET_GROUND_RES_M,
-    _output_dir: str | None = None,
-) -> tuple[list[TelemacWseLayerURI], dict[str, Any]]:
-    """Rasterize a solved TELEMAC-2D result into ONE peak FREE-SURFACE (WSE) COG.
-
-    Written in the MESH's OWN CRS with NO reprojection, and tagged by quantity."""
-    # The max is taken only over frames where the node's WATER DEPTH exceeded the
-    # wet floor: TELEMAC's free surface equals the bed at a dry node, so an
-    # unmasked max would paint dry terrain as a water surface.
-    #
-    # ``quantity="depth"`` is the deliberate exception: a DEPTH of zero is a
-    # result, so a never-wetted node inside the domain keeps its own zero and the
-    # map renders it DRY, with only cells outside the meshed domain nodata. A
-    # field punched full of holes wherever the storm produced no runoff reads as a
-    # broken raster rather than as an answer, and a field that is zero everywhere
-    # is that same result at full extent. TELEMAC_OUTPUT_EMPTY is for output that
-    # is truly empty: no depth variable, no time steps.
-    #
-    # Observations for a validation case live in the mesh's own frame, so keeping
-    # both sides in one identical CRS makes the downstream pairing an exact
-    # identity, and the quantity tag lets that pairing resolve the model quantity
-    # without a DEM or depth conversion. For a bundled local-frame mesh
-    # ``mesh_epsg`` is a PLACEHOLDER the coordinates are stamped with, and
-    # ``mesh_frame_note`` records the caveat.
-    try:
-        import numpy as np
-    except Exception as exc:  # noqa: BLE001
-        raise PostprocessTelemacError(
-            "TELEMAC_DEPENDENCY_MISSING",
-            message=f"numpy unavailable for TELEMAC WSE postprocess: {exc}",
-        ) from exc
-
-    is_depth = str(quantity).strip().lower() in ("depth", "h", "water_depth", "hmax")
-    quantity_tag = "water_depth" if is_depth else "water_surface_elevation"
-
-    slf = Path(slf_path)
-    try:
-        mesh = read_selafin(slf)
-    except Exception as exc:  # noqa: BLE001
-        raise PostprocessTelemacError(
-            "TELEMAC_OUTPUT_READ_FAILED",
-            message=f"could not parse SELAFIN {slf.name}: {exc}",
-            details={"slf": str(slf)},
-        ) from exc
-
-    if is_depth:
-        surf_var = _pick_named_var(mesh["varnames"], _DEPTH_VAR_KEYS, "H")
-    else:
-        surf_var = _pick_named_var(mesh["varnames"], _WSE_VAR_KEYS, "S")
-    if surf_var is None or mesh["data"].get(surf_var) is None or mesh["data"][surf_var].size == 0:
-        raise PostprocessTelemacError(
-            "TELEMAC_OUTPUT_EMPTY",
-            message=f"no {'WATER DEPTH' if is_depth else 'FREE SURFACE'} variable / "
-            f"no time steps in {slf.name} (vars={mesh['varnames']})",
-            details={"slf": str(slf), "varnames": mesh["varnames"]},
-        )
-
-    surf = np.asarray(mesh["data"][surf_var])  # (nframes, npoin), metres
-    times = np.asarray(mesh["times"])
-    x = np.asarray(mesh["x"])  # metres, MESH CRS (no reprojection)
-    y = np.asarray(mesh["y"])
-
-    # Wet mask from WATER DEPTH (so dry terrain is never read as a water surface).
-    depth_var = _pick_named_var(mesh["varnames"], _DEPTH_VAR_KEYS, "H")
-    wet_note = ""
-    if is_depth:
-        # depth IS the field; wet where depth > floor.
-        field = surf
-        wet = field > TELEMAC_WSE_WET_DEPTH_M
-        wet_note = (
-            f"dry renders DRY: a node inside the domain that never exceeded "
-            f"{TELEMAC_WSE_WET_DEPTH_M} m keeps its own zero depth, so only cells "
-            "outside the meshed domain are nodata")
-    elif depth_var is not None and mesh["data"].get(depth_var) is not None \
-            and mesh["data"][depth_var].size == surf.size:
-        depth = np.asarray(mesh["data"][depth_var])
-        field = surf
-        wet = depth > TELEMAC_WSE_WET_DEPTH_M
-        wet_note = (
-            f"masked to WATER DEPTH > {TELEMAC_WSE_WET_DEPTH_M} m (dry nodes NaN)"
-        )
-    else:
-        # No depth variable to mask with -- honest fallback: take the raw max
-        # free surface and WARN (dry-terrain contamination possible).
-        field = surf
-        wet = np.ones_like(surf, dtype=bool)
-        wet_note = (
-            "NO water-depth variable found to build a wet mask; raw max free "
-            "surface used (dry-terrain elevation may leak into the raster)"
-        )
-
-    # per-node peak over ONLY the wet frames; never-wet nodes -> NaN (the
-    # all-NaN-slice RuntimeWarning for a never-wet node is expected, not an error).
-    import warnings
-
-    masked = np.where(wet, field, np.nan)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", category=RuntimeWarning)
-        node_peak = np.nanmax(masked, axis=0) if masked.shape[0] else np.full(x.size, np.nan)
-    ever_wet = np.isfinite(node_peak)
-    if is_depth:
-        # DRY IS A RESULT, and a WHOLLY dry field is the same result at full
-        # extent. A DEPTH is zero where the storm generated no runoff, and that
-        # is an answer: rendered as NODATA it punches holes through the map and
-        # reads as a broken raster, and refused outright it reads as a failed
-        # run. So a node inside the domain that never went wet keeps its own
-        # zero depth - all of them, if that is what the solve measured - and only
-        # the cells OUTSIDE the meshed domain, the ones the rasterizer's clip
-        # distance never reaches, stay nodata. An ELEVATION has no such floor (a
-        # dry node would report its bed as a water surface), so the never-wet
-        # refusal below is the free-surface path's alone. Truly empty output - no
-        # variable, no frames - is refused above, on both paths.
-        node_peak = np.where(ever_wet, node_peak, 0.0)
-    elif not ever_wet.any():
-        raise PostprocessTelemacError(
-            "TELEMAC_OUTPUT_EMPTY",
-            message=f"no wet node in {slf.name}: WATER DEPTH never exceeded "
-            f"{TELEMAC_WSE_WET_DEPTH_M} m anywhere (dry solve?)",
-            details={"slf": str(slf), "wet_depth_m": TELEMAC_WSE_WET_DEPTH_M},
-        )
-    finite = np.isfinite(node_peak)
-
-    # honest scalar metrics over the wet field.
-    wet_field = np.where(wet, field, np.nan)
-    with np.errstate(all="ignore"):
-        per_frame_max = np.array(
-            [np.nanmax(wet_field[i]) if np.isfinite(wet_field[i]).any() else np.nan
-             for i in range(wet_field.shape[0])]
-        ) if wet_field.shape[0] else np.array([np.nan])
-    finite_frames = np.isfinite(per_frame_max)
-    if finite_frames.any():
-        peak_i = int(np.nanargmax(per_frame_max))
-        wse_max = float(per_frame_max[peak_i])
-        wse_peak_time_s = float(times[peak_i]) if times.size > peak_i else None
-    else:
-        wse_max = float(np.nanmax(node_peak))
-        wse_peak_time_s = None
-    wse_min = float(np.nanmin(node_peak))
-    # The FIELD beside the extreme: one pit ponding to its rim sets the maximum
-    # while the sheet the run actually produced is orders of magnitude shallower,
-    # so the 99th percentile over the nodes that went wet is published too. Read
-    # over the WET nodes only - padding it with the dry zeros would measure how
-    # much of the catchment stayed dry rather than how deep the water got.
-    wse_p99 = float(np.percentile(node_peak[ever_wet], 99)) if ever_wet.any() \
-        else wse_max
-
-    xw = x[finite]
-    yw = y[finite]
-    vw = node_peak[finite]
-
-    # metric grid in the mesh frame (metres) -- NO degree conversion.
-    nn_m = _nn_spacing_m(x, y)
-    res_m = max(float(target_ground_res_m), nn_m * 0.5)
-    pad = max(50.0, nn_m)
-    bbox = (float(xw.min() - pad), float(yw.min() - pad),
-            float(xw.max() + pad), float(yw.max() + pad))
-    w_m = bbox[2] - bbox[0]
-    h_m = bbox[3] - bbox[1]
-    import math
-
-    ncols = min(max(int(round(w_m / res_m)), raster.MIN_PX_PER_SIDE), raster.MAX_PX_PER_SIDE)
-    nrows = min(max(int(round(h_m / res_m)), raster.MIN_PX_PER_SIDE), raster.MAX_PX_PER_SIDE)
-    if nrows * ncols > raster.MAX_TOTAL_CELLS:
-        s = math.sqrt(raster.MAX_TOTAL_CELLS / float(nrows * ncols))
-        nrows = max(raster.MIN_PX_PER_SIDE, int(nrows * s))
-        ncols = max(raster.MIN_PX_PER_SIDE, int(ncols * s))
-    shape = (nrows, ncols)
-    # clip at ~2x mesh node spacing so interior cells between nodes are kept.
-    clip_dist = 2.0 * nn_m
-    try:
-        # wet_floor very negative: WSE values (down-valley ~14 m) must NOT be
-        # value-masked; the wet/dry decision was already made per node above.
-        grid = raster.rasterize_nodes(
-            xw, yw, vw, bbox, shape, clip_dist, wet_floor=-1e30
-        )
-    except Exception as exc:  # noqa: BLE001
-        raise PostprocessTelemacError(
-            "TELEMAC_OUTPUT_READ_FAILED",
-            message=f"WSE rasterization failed: {exc}",
-        ) from exc
-
-    # --- write the COG in the MESH CRS (no reprojection), stamped quantity tag - #
-    try:
-        import rasterio
-        from rasterio.transform import from_bounds
-    except Exception as exc:  # noqa: BLE001
-        raise PostprocessTelemacError(
-            "TELEMAC_DEPENDENCY_MISSING",
-            message=f"rasterio unavailable for WSE COG: {exc}",
-        ) from exc
-
-    transform = from_bounds(bbox[0], bbox[1], bbox[2], bbox[3], shape[1], shape[0])
-    dst_crs = f"EPSG:{int(mesh_epsg)}"
-    cog = Path(cog_io._named_tmp("_telemac_wse.tif"))
-    try:
-        profile = {
-            "driver": "COG",
-            "crs": dst_crs,
-            "transform": transform,
-            "width": shape[1],
-            "height": shape[0],
-            "count": 1,
-            "dtype": "float32",
-            "nodata": float("nan"),
-            "compress": "LZW",
-        }
-        with rasterio.open(cog, "w", **profile) as dst:
-            dst.write(np.asarray(grid, dtype="float32"), 1)
-            tagset = {
-                "quantity": quantity_tag,
-                "measured_quantity": quantity_tag,
-            }
-            if vertical_datum:
-                tagset["vertical_datum"] = str(vertical_datum)
-            dst.update_tags(**tagset)
-            dst.update_tags(1, **tagset)
-    except Exception as exc:  # noqa: BLE001
-        cog_io.safe_unlink(cog)
-        raise PostprocessTelemacError(
-            "TELEMAC_COG_WRITE_FAILED",
-            message=f"WSE COG write failed: {exc}",
-            details={"crs": dst_crs},
-        ) from exc
-
-    dest_filename = "telemac_wse_max.tif" if not is_depth else "telemac_depth_max.tif"
-    try:
-        if _output_dir is not None:
-            import shutil
-
-            local = os.path.join(_output_dir, f"{dest_filename[:-4]}_{run_id}.tif")
-            shutil.copyfile(cog, local)
-            uri = local
-        else:
-            uri = cog_io.upload_cog(
-                cog,
-                run_id,
-                runs_bucket,
-                dest_filename=dest_filename,
-                content_type="image/tiff",
-                gs_backend="fsspec",
-                gs_fallback_to_file=False,
-                runs_bucket_default=RUNS_BUCKET_DEFAULT,
-                log_label="TELEMAC WSE COG",
-            )
-    except CogIoError as exc:
-        raise _reraise_cogio(exc) from exc
-    finally:
-        cog_io.safe_unlink(cog)
-
-    style = TELEMAC_MAX_DEPTH_STYLE if is_depth else TELEMAC_WSE_STYLE
-    label_txt = str(style["label"])
-    # A FLAT field has no range of its own, and a degenerate vmin==vmax ramp
-    # paints every cell the MIDDLE colour - a catchment that measured zero water
-    # everywhere renders as a full basin of it, which is the opposite of the
-    # answer. The ramp is therefore floored at one wet threshold above its
-    # minimum, so a measured zero sits at the BOTTOM of the scale and reads dry.
-    legend_min = round(min(wse_min, wse_max), 4)
-    legend_max = round(wse_max, 4)
-    flat = legend_max <= legend_min
-    if flat:
-        legend_max = round(legend_min + TELEMAC_WSE_WET_DEPTH_M, 4)
-    legend = presets.legend_key(style, value_range=(legend_min, legend_max))
-    honesty_bits = [
-        f"Peak {'depth' if is_depth else 'free-surface elevation'} over the run "
-        f"({int(times.size)} output frame(s))",
-    ]
-    if vertical_datum:
-        honesty_bits.append(f"elevations are metres in {vertical_datum}")
-    if wet_note:
-        honesty_bits.append(wet_note)
-    if is_depth and not ever_wet.any():
-        honesty_bits.append(
-            f"MEASURED DRY: no node exceeded {TELEMAC_WSE_WET_DEPTH_M} m at any "
-            f"of the {int(times.size)} output frames, so the peak-depth field is "
-            "zero across the whole domain - what the solve measured, not a "
-            "missing result"
-        )
-    if flat:
-        honesty_bits.append(
-            f"the colour ramp spans {legend_min:g} to {legend_max:g} m because the "
-            "field is FLAT and a ramp with no range paints every cell its middle "
-            "colour; every cell here sits at the bottom of the scale"
-        )
-    if mesh_frame_note:
-        honesty_bits.append(mesh_frame_note)
-    if times.size <= 3 and not is_depth:
-        honesty_bits.append(
-            "COARSE cadence: a low-frame result can UNDER-estimate the transient "
-            "crest (the wave peak may fall between output frames)"
-        )
-    honesty = "; ".join(honesty_bits) + "."
-
-    layer = TelemacWseLayerURI(
-        layer_id=f"telemac-wse-max-{run_id}",
-        name=f"{label_txt} ({reach_name})",
-        layer_type="raster",
-        uri=uri,
-        style=style,
-        role="primary",
-        units="m",
-        bbox=None,  # mesh-CRS metres, not EPSG:4326 lon/lat -> no zoom-to bbox
-        legend=legend,
-        fallback_note=honesty,
-        wse_max_m=round(wse_max, 4),
-        wse_peak_time_s=wse_peak_time_s,
-        n_frames=int(times.size),
-        quantity=quantity_tag,
-        vertical_datum=vertical_datum,
-        mesh_epsg=int(mesh_epsg),
-    )
-    metrics: dict[str, Any] = {
-        "surf_var": surf_var.strip(),
-        "quantity": quantity_tag,
-        "wse_max_m": round(wse_max, 4),
-        "wse_min_m": round(wse_min, 4),
-        "wse_p99_m": round(wse_p99, 4),
-        "wse_peak_time_s": wse_peak_time_s,
-        "n_frames": int(times.size),
-        "n_wet_nodes": int(ever_wet.sum()),
-        "npoin": int(mesh["npoin"]),
-        "nelem": int(mesh["nelem"]),
-        "mesh_epsg": int(mesh_epsg),
-        "vertical_datum": vertical_datum,
-        "mesh_nn_spacing_m": round(nn_m, 3),
-        "grid_shape": [int(shape[0]), int(shape[1])],
-        "bbox_mesh_m": [round(v, 3) for v in bbox],
-        "honesty_label": honesty,
-    }
-    logger.info(
-        "postprocess_telemac_wse run_id=%s var=%s wse_max=%.4g m p99=%.4g m "
-        "peak_t=%ss n_wet=%d/%d n_frames=%d mesh_epsg=%s -> %s",
-        run_id, surf_var.strip(), wse_max, wse_p99, wse_peak_time_s,
-        int(ever_wet.sum()), int(x.size), int(times.size), mesh_epsg, uri,
-    )
-    return [layer], metrics
-
-
-#: DISSOLVED O2 / ORGANIC LOAD variable names WAQTEL's O2 module writes (nametrac
-#: strings).
 #: Hs (m) below which a wet node is treated as "flat water" for the extent
 #: metrics / detection floor. Tiny absolute floor separates a real wave field
 #: from a genuinely empty solve.

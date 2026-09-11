@@ -188,6 +188,10 @@ class Primitive:
         """Publish this field over time as an animation of the result file."""
         return replace(self, publish="animate")
 
+    def station(self) -> "Primitive":
+        """Publish this series at its Point as a station layer carrying it."""
+        return replace(self, publish="station")
+
     def measure(self, stat: str) -> "Measure":
         """One of this primitive's measures, as an answer a template names."""
         return Measure(self.key, stat)
@@ -374,8 +378,12 @@ def _envelope(token: str, times: Any, values: Any) -> dict[str, Any]:
     per_frame = values.max(axis=1)
     peak_i = int(np.argmax(per_frame))
     peak = float(per_frame[peak_i])
+    # A peak on the last instant is where the window closed, not where the
+    # variable crested: the run was still rising, so the peak is a floor.
     measures: dict[str, Any] = {"max": peak, "t_max": float(times[peak_i]),
-                                "frames": int(values.shape[0])}
+                                "frames": int(values.shape[0]),
+                                "truncated": bool(times.size > 1
+                                                  and peak_i == times.size - 1)}
     floor = _floor(token, peak)
     if floor is not None and peak < floor:
         raise OutputEmpty(
@@ -435,25 +443,81 @@ def read_field(primitive: Primitive, solved: Solved) -> Read:
                            "t": float(times[index]), "frames": int(times.size)})
 
 
+def _point(at: Any) -> Any:
+    """The Point a primitive was anchored at, whatever shape the anchor took."""
+    from trid3nt_server.workflows.inputs import Point
+
+    if isinstance(at, Point):
+        return at
+    if isinstance(at, Mapping):
+        return Point(float(at["lon"]), float(at["lat"]), at.get("name"))
+    return Point(*at)
+
+
 def read_series(primitive: Primitive, solved: Solved) -> Series:
-    """``series(name, at)``: the domain maximum per instant, or a Point's value."""
+    """``series(name, at)``: the domain maximum per instant, or a Point's value.
+
+    A token the module prints rather than writes is read off the listing, at
+    the liquid boundary the Point lies on."""
     import numpy as np
 
+    if primitive.variable in solved.body.LISTING:
+        return _boundary_series(primitive, solved)
     name, units, values = solved.frames(primitive.variable, primitive.plane)
     times = np.asarray(solved.result["times"], dtype="float64")
     measures = _envelope(primitive.variable, times, values)
     if primitive.at is None:
         return Series(name=name, units=units, times=times, values=values.max(axis=1),
                       at="the domain maximum", measures=measures)
-    from trid3nt_server.workflows.inputs import Point
     from trid3nt_server.workflows.inputs.point import as_utm
 
-    point = primitive.at if isinstance(primitive.at, Point) else Point(*primitive.at)
+    point = _point(primitive.at)
     px, py = as_utm(point, solved.utm_epsg)
     node = int(np.argmin(np.hypot(np.asarray(solved.result["x"]) - px,
                                   np.asarray(solved.result["y"]) - py)))
+    lon, lat = solved.lonlat
     return Series(name=name, units=units, times=times, values=values[:, node],
-                  at=f"at {point.name or 'the point'}", measures=measures)
+                  at=f"at {point.name or 'the point'}",
+                  lon=float(lon[node]), lat=float(lat[node]), measures=measures)
+
+
+def _boundary_series(primitive: Primitive, solved: Solved) -> Series:
+    """A printed token at a Point: the series the listing carries for the liquid
+    boundary nearest it, as the engine measured the flux across that boundary.
+    The measures carry the volume that crossed it over the sampled instants."""
+    import numpy as np
+    from pyproj import Transformer
+
+    from ..products.run_reads import boundary_flux
+    from trid3nt_server.workflows.inputs.point import as_utm
+
+    if primitive.at is None:
+        raise OutputEmpty(f"{primitive.variable} is read at a liquid boundary; "
+                          "series() needs the Point it is read at.")
+    boundaries = list(solved.run.get("liquid_boundaries") or ())
+    if not boundaries:
+        raise OutputEmpty("the run records no liquid boundary, so there is none "
+                          f"to read {primitive.variable} across.")
+    point = _point(primitive.at)
+    px, py = as_utm(point, solved.utm_epsg)
+    nearest = min(boundaries,
+                  key=lambda b: float(np.hypot(float(b["x"]) - px,
+                                               float(b["y"]) - py)))
+    times, flows = boundary_flux(solved.listing, boundary=int(nearest["number"]))
+    if not times:
+        raise OutputEmpty(f"the listing prints no flux for liquid boundary "
+                          f"{nearest['number']}.")
+    times_arr = np.asarray(times, dtype="float64")
+    flows_arr = np.asarray(flows, dtype="float64")
+    measures = _envelope(primitive.variable, times_arr, flows_arr[:, None])
+    measures["integral"] = round(float(np.trapezoid(flows_arr, times_arr)), 3)
+    name, unit = solved.body.VARIABLES[primitive.variable]
+    lon, lat = Transformer.from_crs(solved.utm_epsg, 4326, always_xy=True).transform(
+        float(nearest["x"]), float(nearest["y"]))
+    return Series(name=name, units=_UNITS.get(unit.upper(), unit.lower()),
+                  times=times_arr, values=flows_arr,
+                  at=f"at {point.name or 'liquid boundary ' + str(nearest['number'])}",
+                  lon=float(lon), lat=float(lat), measures=measures)
 
 
 def read_max_over_time(primitive: Primitive, solved: Solved) -> Field:
@@ -464,19 +528,25 @@ def read_max_over_time(primitive: Primitive, solved: Solved) -> Field:
     times = np.asarray(solved.result["times"], dtype="float64")
     measures = _envelope(primitive.variable, times, values)
     lon, lat = solved.lonlat
+    envelope = values.max(axis=0)
+    # The extreme and the field: one pit can set the maximum while the field the
+    # run produced sits orders of magnitude below it, so the 99th percentile of
+    # the envelope rides beside the maximum.
+    measures["p99"] = float(np.percentile(envelope, 99))
     return Field(name=name, units=units, lon=lon, lat=lat,
-                 ikle=solved.result["ikle2"], values=values.max(axis=0),
+                 ikle=solved.result["ikle2"], values=envelope,
                  floor=_floor(primitive.variable, measures["max"]),
                  measures=measures)
 
 
 def read_extent(primitive: Primitive, solved: Solved) -> Read:
-    """``extent()``: the domain's lon/lat bounds, and its wetted fraction."""
-    from ..products.run_reads import wetted_fraction
+    """``extent()``: the domain's lon/lat bounds, its area, its wetted fraction."""
+    from ..products.run_reads import mesh_area_m2, wetted_fraction
 
     lon, lat = solved.lonlat
     return Read(measures={
         "bbox": [float(lon.min()), float(lat.min()), float(lon.max()), float(lat.max())],
+        "area_km2": round(mesh_area_m2(solved.result) / 1.0e6, 4),
         **wetted_fraction(solved.result)})
 
 
@@ -492,12 +562,33 @@ def read_mesh(primitive: Primitive, solved: Solved) -> Read:
 
 
 def read_mass_balance(primitive: Primitive, solved: Solved) -> Read:
-    """``mass_balance()``: the closure the engine printed in its own listing."""
-    from ..products.run_reads import continuity_rel_error, gaia_mass_balance
+    """``mass_balance()``: the closure the engine printed in its own listing.
+
+    The water balance carries the final block's volumes, outflow-positive
+    across the liquid boundaries like the flux series, and where the runoff
+    routine printed the rainfall it accumulated, the volume that fell on the
+    meshed domain and the fraction of it that left."""
+    from ..products.run_reads import (
+        continuity_rel_error,
+        final_balance,
+        gaia_mass_balance,
+        mesh_area_m2,
+    )
 
     if solved.body.MODULE == "gaia":
         return Read(measures=gaia_mass_balance(solved.listing))
-    return Read(measures={"continuity_rel_error": continuity_rel_error(solved.listing)})
+    measures: dict[str, Any] = {
+        "continuity_rel_error": continuity_rel_error(solved.listing)}
+    final = final_balance(solved.listing)
+    if "boundary_volume_m3" in final:
+        final["outflow_volume_m3"] = -final.pop("boundary_volume_m3") + 0.0
+    if "rain_depth_m" in final:
+        final["rain_volume_m3"] = round(
+            final["rain_depth_m"] * mesh_area_m2(solved.result), 3)
+        if final.get("outflow_volume_m3") is not None and final["rain_volume_m3"] > 0.0:
+            final["runoff_coefficient"] = round(
+                final["outflow_volume_m3"] / final["rain_volume_m3"], 6)
+    return Read(measures={**measures, **final})
 
 
 #: How many stations a profile is binned into along its line.

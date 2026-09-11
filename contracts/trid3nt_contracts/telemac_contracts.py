@@ -22,14 +22,12 @@ __all__ = [
     "TELEMAC3D_STRATIFICATION_STYLE",
     "TELEMAC_COASTAL_DEPTH_STYLE",
     "TELEMAC_MAX_DEPTH_STYLE",
-    "TELEMAC_RAIN_ON_GRID_MESH_GROUP",
     "TELEMAC3D_SIGNED_STYLE",
     "TelemacWseLayerURI",
     "TelemacWaveLayerURI",
     "ArtemisAgitationLayerURI",
     "Telemac3dLayerURI",
     "TelemacCoastalLayerURI",
-    "TelemacRainOnGridLayerURI",
 ]
 
 # The product contract's own style rows.
@@ -107,11 +105,6 @@ TELEMAC_DO_STYLE: dict = {
     "kind": "continuous", "ramp": "rdylbu", "units": "mg/L",
     "label": "Dissolved oxygen"}
 
-
-#: The SELAFIN group a rain-on-grid results mesh paints. A mesh preset binds ONE
-#: group and the reader binds it BY NAME, so the answer field is named here in
-#: the solver's own spelling rather than derived from a quantity token.
-TELEMAC_RAIN_ON_GRID_MESH_GROUP: str = "WATER DEPTH"
 
 class TelemacWseLayerURI(LayerURI):
     """The peak (max-over-time) FREE-SURFACE elevation raster.
@@ -299,60 +292,3 @@ class TelemacCoastalLayerURI(LayerURI):
     ocean_edge: str | None = Field(default=None)
     mesh_size_m: float | None = Field(default=None, gt=0.0)
     mesh_resolution_label: str | None = Field(default=None)
-
-
-class TelemacRainOnGridLayerURI(TelemacWseLayerURI):
-    """The peak flood-depth raster of a RAIN-ON-GRID run, plus its hydrograph.
-    Two questions at once: WHERE the water stood, which the raster paints, and
-    HOW MUCH left the basin, which the outlet series below carries."""
-
-    #: The delineated basin area upstream of the outlet. Every volume below is
-    #: only readable against it.
-    catchment_area_km2: float | None = Field(default=None, ge=0.0)
-    #: The hydrograph crest and when it arrived.
-    peak_discharge_m3s: float | None = Field(default=None)
-    peak_discharge_time_s: float | None = Field(default=None, ge=0.0)
-    #: True when that crest is the LAST sample - the outflow was still rising
-    #: when the window closed. The peak, the runoff volume and the coefficient
-    #: are then FLOORS on the storm's answer, not measurements of it.
-    peak_is_window_truncated: bool | None = Field(default=None)
-    #: What fell on the catchment and what left through the outlet, over the
-    #: simulated window, and their ratio. The ratio is ``None`` when no rain fell.
-    rainfall_volume_m3: float | None = Field(default=None, ge=0.0)
-    runoff_volume_m3: float | None = Field(default=None)
-    runoff_coefficient: float | None = Field(default=None)
-    #: The deepest and fastest the overland sheet got anywhere, at any time.
-    max_depth_peak_m: float | None = Field(default=None, ge=0.0)
-    #: The 99th-percentile peak depth, published BESIDE the maximum: a single
-    #: terrain pit ponding to its rim sets the maximum while the sheet the storm
-    #: produced is orders of magnitude shallower. One is the extreme, the other
-    #: is the field, and a reader needs both.
-    max_depth_p99_m: float | None = Field(default=None, ge=0.0)
-    max_velocity_peak_ms: float | None = Field(default=None, ge=0.0)
-    #: The solver's own mass-balance residual. A run whose volumes do not close
-    #: is not a run whose hydrograph means anything, so it is PUBLISHED rather
-    #: than checked in private.
-    continuity_rel_error: float | None = Field(default=None)
-    #: Which infiltration path ran, under which antecedent-moisture condition,
-    #: and the constant design rate when one drove the run.
-    runoff_path: str | None = Field(default=None)
-    amc_condition: int | None = Field(default=None, ge=1, le=3)
-    rain_intensity_mm_per_hr: float | None = Field(default=None, ge=0.0)
-    #: The outlet discharge series the chart is built from.
-    outlet_hydrograph_t_s: list[float] | None = Field(default=None)
-    outlet_hydrograph_q_m3s: list[float] | None = Field(default=None)
-    #: What the catchment was discretized as, so resolution stays a visible,
-    #: narratable lever.
-    mesh_node_count: int | None = Field(default=None, ge=0)
-    mesh_element_count: int | None = Field(default=None, ge=0)
-    mesh_size_m: float | None = Field(default=None, gt=0.0)
-    mesh_resolution_label: str | None = Field(default=None)
-    #: Whether the mesh was GENERATED for this run or SUPPLIED on invocation.
-    catchment_provenance: str | None = Field(default=None)
-    #: What the modelled basin is CALLED, so a chart titles itself with the
-    #: catchment rather than with whichever raster is the map anchor.
-    catchment_name: str | None = Field(default=None)
-    #: The extent actually MODELLED - the mesh's own node bounds, not the
-    #: analysis window it was delineated inside. A basin is a fraction of its
-    #: search buffer, so the two are different answers to "where is this".
-    domain_bbox: list[float] | None = Field(default=None)

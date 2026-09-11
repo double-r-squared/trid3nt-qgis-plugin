@@ -67,59 +67,33 @@ def _balance(t_s: float, *fluxes: float, error: str = "0.1E-14") -> str:
     return "\n".join(lines) + "\n"
 
 
-def test_the_hydrograph_is_the_listings_own_flux_series():
+def test_the_boundary_flux_is_the_listings_own_series():
     """The engine integrates the boundary flux itself and prints it; a server-side
     re-derivation from the depth and velocity fields is a second computation of
     the same quantity, and it read 0.0 while the solver reported tens of m3/s."""
     listing = _balance(900.0, -20.25) + _balance(1800.0, -8.5)
-    out = R.outlet_hydrograph(listing, boundary=1)
-    assert out["t_s"] == [900.0, 1800.0]
+    times, flows = R.boundary_flux(listing, boundary=1)
+    assert times == [900.0, 1800.0]
     # ONE convention: outflow positive, so the listing's own sign is negated once.
-    assert out["q_m3s"] == [20.25, 8.5]
-    assert out["peak_discharge_m3s"] == 20.25
-    assert out["peak_discharge_time_s"] == 900.0
-    assert out["outlet_boundary"] == 1
-    # The limb fell after its crest, so the window closed on a measured peak.
-    assert out["peak_is_window_truncated"] is False
-
-
-def test_a_crest_on_the_last_sample_is_labelled_the_window_closing():
-    """A hydrograph still rising when the run ends has no peak inside it: the
-    reported peak, volume and coefficient are floors, and the read says so."""
-    listing = _balance(900.0, -8.5) + _balance(1800.0, -20.25)
-    assert R.outlet_hydrograph(listing, boundary=1)["peak_is_window_truncated"] is True
-
-
-def test_a_single_sample_is_not_a_truncation_claim():
-    """One balance block is a cadence fact, not evidence about a rising limb."""
-    listing = _balance(900.0, -8.5)
-    assert R.outlet_hydrograph(listing, boundary=1)["peak_is_window_truncated"] is False
-
-
-def test_the_reported_volume_is_the_integral_of_that_same_series():
-    listing = _balance(0.0, -0.0) + _balance(3600.0, -10.0)
-    out = R.outlet_hydrograph(listing, boundary=1)
-    # trapezoid over one hour of a 0 -> 10 m3/s limb.
-    assert out["runoff_volume_m3"] == pytest.approx(18000.0)
+    assert flows == [20.25, 8.5]
 
 
 def test_the_declared_boundary_is_the_one_that_is_read():
     """A reach prints an inflow and an outflow; reading the wrong number would
     report the carrier discharge as the basin's runoff."""
     listing = _balance(900.0, 250.0, -18.0)
-    assert R.outlet_hydrograph(listing, boundary=2)["q_m3s"] == [18.0]
-    assert R.outlet_hydrograph(listing, boundary=1)["q_m3s"] == [-250.0]
+    assert R.boundary_flux(listing, boundary=2)[1] == [18.0]
+    assert R.boundary_flux(listing, boundary=1)[1] == [-250.0]
 
 
-def test_water_running_back_in_reads_negative_and_yields_no_runoff():
+def test_water_running_back_in_reads_negative_and_a_printed_zero_is_not_minus_zero():
     listing = _balance(0.0, 0.0) + _balance(60.0, 20.0)
-    out = R.outlet_hydrograph(listing, boundary=1)
-    assert out["q_m3s"] == [0.0, -20.0]
-    # A basin that only took water in produced no runoff volume to report.
-    assert out["runoff_volume_m3"] == 0.0
+    times, flows = R.boundary_flux(listing, boundary=1)
+    assert flows == [0.0, -20.0]
+    assert math.copysign(1.0, flows[0]) == 1.0
 
 
-def test_a_TRACER_balances_flux_lines_never_leak_into_the_water_hydrograph():
+def test_a_TRACER_balances_flux_lines_never_leak_into_the_water_flux():
     """A coupled run prints a second balance under its own heading; reading it as
     discharge would report kilograms per second as cubic metres per second."""
     listing = (_balance(900.0, -20.25)
@@ -127,12 +101,44 @@ def test_a_TRACER_balances_flux_lines_never_leak_into_the_water_hydrograph():
                  "     FLUX BOUNDARY    1:   -0.5000000E+03 KG/S\n"
                  "     RELATIVE ERROR IN QUANTITY OF TRACER  1 : 0.1E-13\n"
                + _balance(1800.0, -8.5))
-    assert R.outlet_hydrograph(listing, boundary=1)["q_m3s"] == [20.25, 8.5]
+    assert R.boundary_flux(listing, boundary=1)[1] == [20.25, 8.5]
 
 
 def test_a_listing_that_printed_no_balance_measures_nothing():
-    assert R.outlet_hydrograph("ITERATION 1\n", boundary=1) == {}
-    assert R.outlet_hydrograph(_balance(900.0, -1.0), boundary=3) == {}
+    assert R.boundary_flux("ITERATION 1\n", boundary=1) == ([], [])
+    assert R.boundary_flux(_balance(900.0, -1.0), boundary=3) == ([], [])
+
+
+#: The block the engine prints once, as its run closes, plus the runoff
+#: routine's own accumulated rainfall lines.
+_FINAL = """
+      RUNOFF_SCS_CN : ACCUMULATED RAINFALL :    0.3265000E-02 M
+      RUNOFF_SCS_CN : ACCUMULATED RAINFALL :    0.1567200     M
+                   FINAL BALANCE OF WATER VOLUME
+
+     RELATIVE ERROR CUMULATED ON VOLUME:   -0.1086687E-13
+
+     INITIAL VOLUME              :     0.000000     M3
+     FINAL VOLUME                :     1226447.     M3
+     VOLUME THAT ENTERED THE DOMAIN:    -1564079.     M3  ( IF <0 EXIT )
+     VOLUME ADDED BY SOURCE TERM   :     2790526.     M3
+     TOTAL VOLUME LOST             :   -0.1699664E-07 M3
+"""
+
+
+def test_the_final_balance_is_the_engines_own_closure_of_the_whole_run():
+    out = R.final_balance(_FINAL)
+    assert out == {"initial_volume_m3": 0.0, "final_volume_m3": 1226447.0,
+                   "boundary_volume_m3": -1564079.0, "source_volume_m3": 2790526.0,
+                   "lost_volume_m3": pytest.approx(-1.699664e-08),
+                   "rain_depth_m": pytest.approx(0.15672)}
+
+
+def test_a_listing_without_the_final_block_states_no_volume():
+    assert R.final_balance(_balance(900.0, -1.0)) == {}
+    # the rain depth rides on its own: a run cut short still accumulated it
+    assert R.final_balance("  RUNOFF_SCS_CN : ACCUMULATED RAINFALL :    0.25 M\n") == {
+        "rain_depth_m": 0.25}
 
 
 def test_the_engines_own_volume_closure_is_the_last_one_it_printed():

@@ -464,3 +464,109 @@ def test_publish_outputs_rejoins_the_anchors_and_draws_the_reference_lines(
     chart = seen["items"][1].read
     assert [line.label for line in chart.lines] == ["standard"]
     assert result.answer == {"low": 6.0}
+
+
+def _catchment_listing(monkeypatch) -> str:
+    import tempfile
+    from pathlib import Path
+
+    path = Path(tempfile.mkdtemp()) / "full_listing.log"
+    path.write_text(
+        "      RUNOFF_SCS_CN : ACCUMULATED RAINFALL :    0.1000000     M\n"
+        "BALANCE OF WATER VOLUME\n FLUX BOUNDARY 1 : -2.0\n FLUX BOUNDARY 2 : 8.0\n"
+        " RELATIVE ERROR IN VOLUME AT T = 600.0 S : -1.0E-07\n"
+        "BALANCE OF WATER VOLUME\n FLUX BOUNDARY 1 : -6.0\n FLUX BOUNDARY 2 : 1.0\n"
+        " RELATIVE ERROR IN VOLUME AT T = 1200.0 S : -1.2E-07\n"
+        "                   FINAL BALANCE OF WATER VOLUME  \n"
+        "     INITIAL VOLUME              :     0.000000     M3\n"
+        "     FINAL VOLUME                :     100.     M3\n"
+        "     VOLUME THAT ENTERED THE DOMAIN:    -1200.     M3  ( IF <0 EXIT )\n"
+        "     VOLUME ADDED BY SOURCE TERM   :     1300.     M3\n"
+        "     TOTAL VOLUME LOST             :   -0.1E-07 M3\n")
+    return str(path)
+
+
+@pytest.fixture()
+def catchment(monkeypatch, solved):
+    """The reach's result read as a catchment's: two liquid boundaries the settle
+    placed, the outlet at the east face, and the listing the engine printed."""
+    monkeypatch.setattr(
+        "trid3nt_server.workflows.telemac.solving.solve.download_result",
+        lambda run_id, basename, error_code=None: _catchment_listing(monkeypatch))
+    return _solved({"liquid_boundaries": [
+        {"number": 1, "role": "rating_curve", "x": 500120.0, "y": 4400055.0},
+        {"number": 2, "role": "inflow", "x": 500000.0, "y": 4400055.0}]})
+
+
+def test_a_series_of_the_printed_flux_reads_the_boundary_nearest_the_point(catchment):
+    """FLUX is the token the module prints rather than writes: the series is the
+    listing's own discharge across the liquid boundary the Point lies on,
+    outflow-positive, and the station sits at that boundary."""
+    from trid3nt_server.workflows.inputs import Point
+
+    lon, lat = catchment.lonlat
+    outlet = Point(float(lon[1]), float(lat[1]), "outlet")
+    read = T2D.OUTPUTS["series"].read(series("FLUX", at=outlet), catchment)
+    assert isinstance(read, Series)
+    assert list(read.times) == [600.0, 1200.0] and list(read.values) == [2.0, 6.0]
+    assert (read.name, read.units, read.at) == ("FLUX BOUNDARY", "m3/s", "at outlet")
+    assert read.lon == pytest.approx(float(lon[1]), abs=1e-6)
+    assert read.measures["max"] == 6.0 and read.measures["t_max"] == 1200.0
+    assert read.measures["truncated"] is True
+    assert read.measures["integral"] == pytest.approx(2400.0)
+    # the other face, by a pair rather than a Point, named by its number
+    other = T2D.OUTPUTS["series"].read(
+        series("FLUX", at=(float(lon[0]), float(lat[0]))), catchment)
+    assert list(other.values) == [-8.0, -1.0]
+    assert other.at == "at liquid boundary 2"
+
+
+def test_a_printed_token_needs_a_point_and_a_run_that_placed_its_boundaries(
+        catchment, solved):
+    with pytest.raises(OutputEmpty, match="needs the Point"):
+        T2D.OUTPUTS["series"].read(series("FLUX"), catchment)
+    with pytest.raises(OutputEmpty, match="records no liquid boundary"):
+        T2D.OUTPUTS["series"].read(series("FLUX", at=(0.0, 0.0)), solved)
+
+
+def test_the_water_balance_carries_the_final_block_and_the_rain_that_fell(catchment):
+    """The volumes are the engine's own, outflow-positive across the boundaries
+    like the flux series; the rain volume is the accumulated depth the runoff
+    routine printed over the meshed area, and the coefficient their ratio."""
+    from trid3nt_server.workflows.telemac.products.run_reads import mesh_area_m2
+
+    read = T2D.OUTPUTS["mass_balance"].read(mass_balance(), catchment)
+    area = mesh_area_m2(catchment.result)
+    assert read.measures["continuity_rel_error"] == pytest.approx(-1.2e-7)
+    assert read.measures["outflow_volume_m3"] == 1200.0
+    assert read.measures["source_volume_m3"] == 1300.0
+    assert read.measures["rain_depth_m"] == pytest.approx(0.1)
+    assert read.measures["rain_volume_m3"] == pytest.approx(0.1 * area, abs=1e-3)
+    assert read.measures["runoff_coefficient"] == pytest.approx(1200.0 / (0.1 * area),
+                                                                 abs=1e-6)
+    assert "boundary_volume_m3" not in read.measures
+
+
+def test_the_envelope_carries_its_p99_beside_its_maximum_and_the_extent_its_area(
+        solved):
+    """One pit can set the maximum while the field sits far below it, so the
+    99th percentile of the envelope rides beside it."""
+    from trid3nt_server.workflows.telemac.products.run_reads import mesh_area_m2
+
+    read = T2D.OUTPUTS["max_over_time"].read(max_over_time("T1"), solved)
+    assert read.measures["max"] == 80.0
+    assert read.measures["p99"] == pytest.approx(np.percentile([10, 80, 5, 50, 60], 99))
+    assert read.measures["truncated"] is False
+    box = T2D.OUTPUTS["extent"].read(extent(), solved).measures
+    assert box["area_km2"] == pytest.approx(mesh_area_m2(solved.result) / 1.0e6)
+
+
+def test_a_series_at_a_point_carries_the_station_it_was_read_at(solved):
+    from trid3nt_server.workflows.inputs import Point
+
+    lon, lat = solved.lonlat
+    read = T2D.OUTPUTS["series"].read(
+        series("T1", at=Point(float(lon[1]), float(lat[1]))), solved)
+    assert (read.lon, read.lat) == (pytest.approx(float(lon[1])),
+                                    pytest.approx(float(lat[1])))
+    assert T2D.OUTPUTS["series"].read(series("T1"), solved).lon is None

@@ -295,3 +295,45 @@ def test_a_row_with_a_centre_ranges_the_legend_symmetrically_about_it(monkeypatc
                                style={"kind": "continuous", "ramp": "rdbu",
                                       "center": 0.0})
     assert (layer.legend.vmin, layer.legend.vmax) == (-0.005, 0.005)
+
+
+def test_a_series_at_a_station_becomes_the_point_layer_that_carries_it(monkeypatch):
+    """The station sits where the series was read; the rows are ISO instants
+    counted from the run's own reference time, so the pairing that reads a
+    gauge's ``time_series_csv`` reads this one the same way."""
+    import json
+
+    from trid3nt_server.workflows.solver import solver as solver_mod
+
+    put = {}
+
+    class _S3:
+        def put_object(self, **kw):
+            put.update(kw)
+
+    monkeypatch.setattr(solver_mod, "_get_runs_bucket", lambda: "runs")
+    monkeypatch.setattr(solver_mod, "_get_s3_client", lambda: _S3())
+    read = Series(name="FLUX BOUNDARY", units="m3/s",
+                  times=np.array([0.0, 1800.0]), values=np.array([0.0, 4.5]),
+                  at="at the outlet", lon=-83.4, lat=35.05,
+                  measures={"max": 4.5, "t_max": 1800.0})
+    layer = publish_mod._station_layer(
+        read, run_id="RID", engine="telemac", name="watershed",
+        caption="outlet hydrograph", reference_time="2026-01-01T00:00:00+00:00")
+    assert put["Key"] == "RID/outlet_hydrograph.geojson"
+    feature = json.loads(put["Body"])["features"][0]
+    assert feature["geometry"] == {"type": "Point", "coordinates": [-83.4, 35.05]}
+    assert feature["properties"]["time_series_csv"] == (
+        "2026-01-01T00:00:00+00:00,0.000000\n2026-01-01T00:30:00+00:00,4.500000\n")
+    assert feature["properties"]["quantity"] == "outlet_hydrograph"
+    assert feature["properties"]["n_timesteps"] == 2
+    assert layer.layer_type == "vector" and layer.quantity == "outlet_hydrograph"
+    assert layer.name == "Outlet hydrograph (watershed)" and layer.units == "m3/s"
+    assert layer.bbox == pytest.approx((-83.402, 35.048, -83.398, 35.052))
+
+
+def test_a_series_read_nowhere_is_no_station():
+    with pytest.raises(ValueError, match="no station"):
+        publish_mod._station_layer(
+            _series(), run_id="RID", engine="telemac", name="reach",
+            caption="dye concentration", reference_time=None)

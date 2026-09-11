@@ -127,29 +127,36 @@ async def acquire_aoi(*, location: str | None,
                       bbox: Any = None,
                       half_deg: float | tuple[float, float] = 0.06,
                       default_name: str = "aoi",
-                      code_prefix: str = "AOI") -> dict[str, Any]:
-    """Resolve the modeled AOI: an explicit extent used VERBATIM, or a geocoded place
-    around one. Rebinds the DOMAIN; ``half_deg`` takes a ``(dlon, dlat)`` pair where
-    the question is not square; ``default_name`` becomes the AOI slug."""
+                      code_prefix: str = "AOI",
+                      around: Any = None) -> dict[str, Any]:
+    """Resolve the modeled AOI: an explicit extent used VERBATIM, the box around a
+    Point, or a geocoded place around one. Rebinds the DOMAIN; ``half_deg`` takes
+    a ``(dlon, dlat)`` pair where the question is not square; ``default_name``
+    becomes the AOI slug; ``around`` wins over a place, because the place only
+    NAMES the run while the Point decides what is modelled."""
     coerced = coerce_bbox_value(bbox) if bbox is not None else None
+    named = str(location).strip() if (location and str(location).strip()) else ""
     if coerced is not None:
         extent = tuple(float(v) for v in coerced)
-        name = str(location).strip() if (location and str(location).strip()) \
-            else default_name
+        name = named or default_name
         lon, lat = (0.5 * (extent[0] + extent[2]), 0.5 * (extent[1] + extent[3]))
-    elif location and str(location).strip():
+    elif around is not None:
+        lon, lat = float(around.lon), float(around.lat)
+        dlon, dlat = _half(half_deg)
+        extent = (max(lon - dlon, -180.0), max(lat - dlat, -90.0),
+                  min(lon + dlon, 180.0), min(lat + dlat, 90.0))
+        name = named or default_name
+    elif named:
         found = await geocode_place(str(location).strip())
         lon, lat = found if found is not None else (None, None)
         if lon is None or lat is None:
             raise WireArgsError(
                 f"could not geocode {location!r} to an AOI.",
                 error_code=f"{code_prefix}_GEOCODE_FAILED")
-        dlon, dlat = ((float(half_deg[0]), float(half_deg[1]))
-                      if isinstance(half_deg, (list, tuple))
-                      else (float(half_deg), float(half_deg)))
+        dlon, dlat = _half(half_deg)
         extent = (round(lon - dlon, 4), round(lat - dlat, 4),
                   round(lon + dlon, 4), round(lat + dlat, 4))
-        name = str(location).strip()
+        name = named
     else:
         raise WireArgsError(
             "the domain needs a place `location` (geocoded) or an explicit `bbox`.",
@@ -158,11 +165,18 @@ async def acquire_aoi(*, location: str | None,
             "slug": aoi_slug(name, default=default_name), "bbox": extent}
 
 
+def _half(half_deg: float | tuple[float, float]) -> tuple[float, float]:
+    return ((float(half_deg[0]), float(half_deg[1]))
+            if isinstance(half_deg, (list, tuple))
+            else (float(half_deg), float(half_deg)))
+
+
 def AcquireAoi(*, location: Any, bbox: Any,  # noqa: N802
                half_deg: float | tuple[float, float] = 0.06,
-               default_name: str = "aoi", code_prefix: str = "AOI") -> Step:
-    """Place/extent -> the modeled AOI. Refines the domain for everything after it."""
+               default_name: str = "aoi", code_prefix: str = "AOI",
+               around: Any = None) -> Step:
+    """Place, extent or Point -> the modeled AOI. Refines the domain for everything after it."""
     return Step(runner=f"{_HERE}.acquire_aoi", stage="acquire",
                 kwargs={"location": location, "bbox": bbox, "half_deg": half_deg,
-                        "default_name": default_name,
-                        "code_prefix": code_prefix}).overrides_domain()
+                        "default_name": default_name, "code_prefix": code_prefix,
+                        "around": around}).overrides_domain()

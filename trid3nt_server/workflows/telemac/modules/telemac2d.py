@@ -14,19 +14,23 @@ from typing import Any, Mapping, Sequence
 from .module import Module
 from .outputs import PRIMITIVES, read_drogues
 
-__all__ = ["T2D", "Boundaries", "Continuation", "Friction", "Hyetograph", "Oil",
-           "Rain", "Rating", "Release", "Runoff", "TimeOrigin", "TracerNames",
-           "Wind", "SOURCES_FILENAME", "VARIABLES"]
+__all__ = ["T2D", "Boundaries", "Continuation", "Friction", "Hyetograph",
+           "Infiltration", "Oil", "Rain", "Rating", "Release", "Runoff",
+           "TimeOrigin", "TracerNames", "Wind", "SOURCES_FILENAME", "VARIABLES"]
 
 #: The module's variable vocabulary, by the mnemonic VARIABLES FOR GRAPHIC
 #: PRINTOUTS spells: the name the result file carries it under, and its unit.
 #: ``T<n>`` is the n-th NAMES OF TRACERS entry and is resolved off the run.
+#: ``FLUX`` is the one the module PRINTS rather than writes: the discharge
+#: across each liquid boundary, in its own water-volume balance.
 VARIABLES: Mapping[str, tuple[str, str]] = MappingProxyType({
     "U": ("VELOCITY U", "M/S"), "V": ("VELOCITY V", "M/S"),
     "H": ("WATER DEPTH", "M"), "S": ("FREE SURFACE", "M"),
     "B": ("BOTTOM", "M"), "F": ("FROUDE NUMBER", ""),
     "Q": ("SCALAR FLOWRATE", "M2/S"), "M": ("SCALAR VELOCITY", "M/S"),
+    "FLUX": ("FLUX BOUNDARY", "M3/S"),
 })
+LISTING: frozenset[str] = frozenset({"FLUX"})
 
 #: The point-source time series the SOURCES FILE names.
 SOURCES_FILENAME = "river_sources.txt"
@@ -368,6 +372,82 @@ def _runoff(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
             {CN_MAP_FILENAME: "\n".join(rows) + "\n"})
 
 
+#: The SCS antecedent-moisture words, and the condition each one names: the
+#: wet/dry vocabulary a question is asked in and the I/II/III the literature
+#: uses both resolve to the integer the ANTECEDENT MOISTURE CONDITIONS keyword
+#: takes. ONE table, so a value typed and a value chosen mean the same condition.
+_AMC_CONDITIONS: Mapping[str, int] = MappingProxyType({
+    "dry": 1, "i": 1, "1": 1,
+    "normal": 2, "ii": 2, "2": 2,
+    "wet": 3, "iii": 3, "3": 3,
+})
+#: The friction law the infiltration surface is written under: its roughness
+#: column is Manning n, so the law is the Manning one and not a choice.
+_MANNING_LAW = 4
+
+
+def Infiltration(*, mesh: Any, landcover: Any, table: Any, unmapped: Any,  # noqa: N802
+                 uniform_cn: Any, steep_slope_correction: Any,
+                 antecedent_moisture: Any, initial_abstraction: Any
+                 ) -> Mapping[str, Any]:
+    """The infiltration surface: a curve number and a roughness at every node,
+    read off the land cover at the accepted mesh's own nodes at fill time.
+
+    ``table`` maps a land-cover class to ``(CN2, Manning n, label)``, ``unmapped``
+    is the row a class outside it takes; ``uniform_cn`` overrides the curve
+    numbers alone, never the roughness."""
+    return MappingProxyType({
+        "mesh": mesh, "landcover": landcover, "table": table, "unmapped": unmapped,
+        "uniform_cn": uniform_cn, "steep_slope_correction": steep_slope_correction,
+        "antecedent_moisture": antecedent_moisture,
+        "initial_abstraction": initial_abstraction})
+
+
+def _huang(cn2: float, slope: float) -> float:
+    """The steep-slope curve number the engine's own runoff routine would apply,
+    were its branch compiled in: ``CN2 * (322.79 + 15.63 a) / (a + 323.52)`` for
+    a slope ``a`` in [0.14, 1.4] m/m, held at the ends, capped at 100."""
+    alpha = min(max(float(slope), 0.14), 1.4)
+    factor = 1.0 if float(slope) < 0.14 else (322.79 + 15.63 * alpha) / (alpha + 323.52)
+    return min(100.0, float(cn2) * factor)
+
+
+def _infiltration(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
+                                                     Mapping[str, Any]]:
+    """The surface -> the runoff keywords and the friction zones, with their files.
+
+    The steep-slope correction is applied here because the installed engine has
+    its own branch compiled off; the slopes are the mesh's own bed gradients."""
+    from trid3nt_server.workflows.mesh.shared.nodes import (
+        accepted_mesh_nodes,
+        node_slopes_from_mesh,
+        sample_layer_at_nodes,
+    )
+
+    points_utm, cells, bed, lonlat = accepted_mesh_nodes(value["mesh"])
+    table = {int(code): tuple(row) for code, row in dict(value["table"]).items()}
+    rows = [table.get(int(round(float(code))), tuple(value["unmapped"]))
+            for code in sample_layer_at_nodes(value["landcover"], lonlat)]
+    uniform = value.get("uniform_cn")
+    cn2 = [float(uniform) if uniform is not None else float(row[0]) for row in rows]
+    if value.get("steep_slope_correction"):
+        slopes = node_slopes_from_mesh(points_utm, cells, bed)
+        cn2 = [_huang(cn, slope) for cn, slope in zip(cn2, slopes)]
+    word = str(value["antecedent_moisture"]).strip().lower()
+    if word not in _AMC_CONDITIONS:
+        raise ValueError(
+            f"antecedent_moisture {value['antecedent_moisture']!r} is not an SCS "
+            "condition; the three are 'dry' (AMC I), 'normal' (AMC II) and 'wet' "
+            "(AMC III).")
+    runoff, runoff_files = _runoff({
+        "node_xy": points_utm[:, :2], "cn2": cn2,
+        "antecedent_moisture": _AMC_CONDITIONS[word],
+        "initial_abstraction": value["initial_abstraction"]})
+    friction, friction_files = _friction({
+        "law": _MANNING_LAW, "manning_per_node": [float(row[1]) for row in rows]})
+    return ({**runoff, **friction}, {**runoff_files, **friction_files})
+
+
 def Friction(*, law: Any, manning_per_node: Any) -> Mapping[str, Any]:  # noqa: N802
     """Distributed bottom friction: a law per zone, and each node's zone."""
     return MappingProxyType({"law": law, "manning_per_node": manning_per_node})
@@ -471,9 +551,10 @@ def _hyetograph(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
 
 T2D = Module("telemac2d")
 T2D.VARIABLES = VARIABLES
+T2D.LISTING = LISTING
 T2D.composites(releases=_releases, wind=_wind, continue_from=_continue_from,
                oil=_oil, rain=_rain, coupling=_coupling,
                boundaries=_boundaries, runoff=_runoff, friction=_friction,
-               rating=_rating, hyetograph=_hyetograph,
+               infiltration=_infiltration, rating=_rating, hyetograph=_hyetograph,
                time_origin=_time_origin, tracer_names=_tracer_names)
 T2D.outputs(**PRIMITIVES, drogues=read_drogues)

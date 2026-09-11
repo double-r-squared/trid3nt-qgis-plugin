@@ -1209,7 +1209,7 @@ def test_a_template_reads_its_answer_through_the_primitives_its_module_binds():
             for primitive in door.outputs:
                 reader = WRAPPERS[primitive.module] if primitive.module else body
                 assert primitive.kind in reader.OUTPUTS, (name, primitive)
-                assert primitive.publish in ("layer", "chart", "animate")
+                assert primitive.publish in ("layer", "chart", "animate", "station")
                 assert (primitive.variable or primitive.kind) in door.captions, (
                     name, primitive)
             for measure in door.answer.values():

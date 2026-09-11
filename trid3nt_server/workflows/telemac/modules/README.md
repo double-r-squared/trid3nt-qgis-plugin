@@ -41,8 +41,10 @@ vocabulary: `field(name, t)`, `series(name, at)`, `max_over_time(name)`,
 one output past the set a module writes for itself - TELEMAC-2D's `drogues()`.
 A primitive names the coupled module whose own result it reads (`module=`), and
 a tracer a coupled process appended behind the carrier's declared ones is the
-carrier's `T<n>` by position. A template lists primitives with how each is
-published - `.layer()`, `.chart(reference=)`, `.animate()` - and names its
+carrier's `T<n>` by position. A series of a token the module PRINTS rather than writes - TELEMAC-2D's `FLUX`,
+the discharge across a liquid boundary - is read off the listing at the boundary
+the Point lies on. A template lists primitives with how each is published -
+`.layer()`, `.chart(reference=)`, `.animate()`, `.station()` - and names its
 answer as measures of them; the wrapper binds no reader that knows a question.
 
 ## Files
@@ -55,7 +57,7 @@ answer as measures of them; the wrapper binds no reader that knows a question.
 | `outputs.py` | The primitive set - `field`, `series`, `max_over_time`, `profile`, `extent`, `mesh`, `mass_balance` - and `drogues`, with the read of each off a solved run through `read_selafin`, the engine's own reader inside the image. |
 | `describe.py` | `describe_keywords` - the read over a module's dictionary, which is how the whole keyword surface is reached rather than carried in a docstring. |
 | `corpus.yaml` | The routing phrasings that reach `describe_keywords`. |
-| `telemac2d.py` | The TELEMAC-2D wrapper: the releases, wind, rain, oil, friction, rating, hyetograph, time-origin and coupling groups, the module's variable vocabulary, and the drogues track it writes. |
+| `telemac2d.py` | The TELEMAC-2D wrapper: the releases, wind, rain, oil, friction, runoff, infiltration (the curve-number and roughness surface read off the land cover at the fill), rating, hyetograph, time-origin and coupling groups, the module's variable vocabulary with the flux it prints rather than writes, and the drogues track it writes. |
 | `telemac3d.py` | The TELEMAC-3D wrapper: the vertical grid keyword pair and its refusal, the water column a stratified run is initialized from, and the wind. |
 | `artemis.py` | The ARTEMIS wrapper: the incident wave, which the module reads out of the boundary file rather than the deck, so the composite restamps the pair the mesh recipe wrote; and the wave vocabulary. |
 | `waqtel.py` | The WAQTEL wrapper: the O2 process and the degradation a carrier names as coupled bodies, whose slots serialize into WAQTEL's own steering file while the coupling keywords land on the carrier's sheet; a degradation given nothing couples nothing. |

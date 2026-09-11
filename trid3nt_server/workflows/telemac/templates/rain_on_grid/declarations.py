@@ -11,6 +11,8 @@ __all__ = [
     "DEFAULT_MAX_EDGE_M",
     "DEFAULT_MIN_EDGE_M",
     "DOC",
+    "LANDCOVER_CN_MANNING",
+    "LANDCOVER_UNMAPPED",
     "NLCD_NATIVE_RESOLUTION_M",
     "PARAMS",
     "POUR_POINT_BUFFER_DEG",
@@ -44,6 +46,45 @@ DEFAULT_RIVER_SOURCE: str = "nhdplus_hr"
 #: spatial doctrine refuses outright. Declared as a constant rather than a knob
 #: because there is no honest value other than the product's native one.
 NLCD_NATIVE_RESOLUTION_M: int = 30
+
+#: The infiltration surface, per NLCD class: the curve number (AMC II, the mid
+#: hydrologic soil group) and the Manning n the rain-on-grid study of Godara,
+#: Bruland and Alfredsen (2024, Front. Water 6:1384205) tabulates per land-cover
+#: class, mapped onto the NLCD legend. ONE STUDY, BOTH COLUMNS: the curve number
+#: and the roughness are read off the same table for the same class, so a run's
+#: infiltration and its friction are parameterised together. Substituting
+#: another published roughness table - one that agrees with this on none of the
+#: shared codes - would mix two calibrations in one field and move every number
+#: this template has produced. That is an author's declared choice, never a shim:
+#: swap the pair, or carry both as a declared lever, but never half of one. The
+#: true curve number depends on the soil group and is a calibration lever.
+#:
+#: nlcd_code -> (curve_number_amc2, manning_n, class_label)
+LANDCOVER_CN_MANNING: dict[int, tuple[float, float, str]] = {
+    11: (100.0, 0.040, "river/open-water"),
+    12: (100.0, 0.040, "river/open-water"),
+    21: (75.0, 0.050, "open-land"),
+    22: (89.0, 0.100, "urban"),
+    23: (89.0, 0.100, "urban"),
+    24: (89.0, 0.100, "urban"),
+    31: (85.0, 0.020, "bare-rock/scarce-veg"),
+    41: (80.0, 0.200, "forest"),
+    42: (80.0, 0.200, "forest"),
+    43: (80.0, 0.200, "forest"),
+    51: (75.0, 0.050, "open-land"),
+    52: (75.0, 0.050, "open-land"),
+    71: (75.0, 0.050, "open-land"),
+    72: (75.0, 0.050, "open-land"),
+    81: (80.0, 0.050, "open-land"),
+    82: (80.0, 0.050, "open-land"),
+    90: (90.0, 0.200, "marsh"),
+    95: (90.0, 0.200, "marsh"),
+}
+
+#: The row a class outside the table takes: the open-land one. Never silently a
+#: low curve number, which over-produces runoff, nor 100, which zeroes
+#: infiltration.
+LANDCOVER_UNMAPPED: tuple[float, float, str] = (75.0, 0.050, "open-land")
 
 
 class PARAMS:
@@ -217,10 +258,11 @@ DOC = dict(
          "died without unwinding left on disk."),
     ),
     returns=(
-        "On success a `TelemacRainOnGridLayerURI` (a `LayerURI` subtype) - the "
-        "emitter loads the peak flood-depth COG and animates the rain-on-grid "
-        "SELAFIN sibling. It carries `peak_discharge_m3s` / `peak_discharge_time_s` "
-        "/ `runoff_volume_m3` / `runoff_coefficient` / `catchment_area_km2` / "
+        "On success the peak water-depth layer (a `LayerURI`) - the emitter loads "
+        "the map, animates the depth over the run and places the outlet "
+        "hydrograph as a station layer beside it - whose `answer` carries "
+        "`peak_discharge_m3s` / `peak_discharge_time_s` / `runoff_volume_m3` / "
+        "`rainfall_volume_m3` / `runoff_coefficient` / `catchment_area_km2` / "
         "`continuity_rel_error`, plus `max_depth_peak_m` beside `max_depth_p99_m` "
         "(the extreme and the field - one terrain pit can set the maximum) and "
         "`peak_is_window_truncated` (True means the discharge was still rising "

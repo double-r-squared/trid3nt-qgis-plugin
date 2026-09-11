@@ -14,10 +14,12 @@ from typing import Any, Mapping
 logger = logging.getLogger("trid3nt_server.workflows.telemac.products.run_reads")
 
 __all__ = [
+    "boundary_flux",
     "continuity_rel_error",
     "engine_demand",
+    "final_balance",
     "gaia_mass_balance",
-    "outlet_hydrograph",
+    "mesh_area_m2",
     "wetted_fraction",
 ]
 
@@ -123,24 +125,15 @@ def continuity_rel_error(listing_text: str) -> float | None:
         return None
 
 
-def outlet_hydrograph(listing_text: str, *, boundary: int) -> dict[str, Any]:
-    """Discharge through one LIQUID BOUNDARY, as the engine itself measured it.
+def boundary_flux(listing_text: str, *, boundary: int
+                  ) -> tuple[list[float], list[float]]:
+    """The discharge through one LIQUID BOUNDARY over time, as the engine measured it.
 
-    TELEMAC integrates the flux across every liquid boundary as part of its own
-    water-volume balance and prints the result each listing period; that number
-    is the hydrograph, never a server-side re-derivation.
-
-    ``boundary`` is the 1-based liquid-boundary number - the position the role
-    takes in the accepted topology's ``liquid_boundary_order``, which is the
-    order the solver numbers its boundaries in.
-
-    ONE SIGN CONVENTION, stated here and nowhere else: **outflow is positive**.
-    The listing's own convention is the opposite, so it is negated once, at the
-    read, and every consumer downstream reads a rising outflow as a rising number.
-    """
-    import numpy as np
-
-    series: list[tuple[float, float]] = []
+    ``boundary`` is the 1-based number the solver walks its liquid boundaries in.
+    ONE SIGN CONVENTION, stated here and nowhere else: outflow is positive; the
+    listing's own is the opposite and is negated once, at the read."""
+    times: list[float] = []
+    flows: list[float] = []
     pending: dict[int, float] | None = None
     for line in (listing_text or "").splitlines():
         if re.search(_BALANCE_HEAD, line):
@@ -160,30 +153,69 @@ def outlet_hydrograph(listing_text: str, *, boundary: int) -> dict[str, Any]:
             continue
         if int(boundary) in pending:
             try:
-                series.append((float(stamp.group(1)), -pending[int(boundary)]))
+                times.append(round(float(stamp.group(1)), 3))
+                # Negated once, then plus zero so a printed 0 is not a -0.
+                flows.append(round(-pending[int(boundary)], 6) + 0.0)
             except ValueError:
                 pass
         pending = None
-    if not series:
-        return {}
+    return times, flows
 
-    times = np.asarray([t for t, _q in series], dtype=float)
-    flows = np.asarray([q for _t, q in series], dtype=float)
-    volume = float(np.trapezoid(flows, times)) if times.size > 1 else 0.0
-    peak = int(np.argmax(flows))
-    return {
-        "t_s": [round(float(t), 3) for t in times],
-        "q_m3s": [round(float(q), 6) for q in flows],
-        "peak_discharge_m3s": round(float(flows[peak]), 6),
-        "peak_discharge_time_s": round(float(times[peak]), 3),
-        # A maximum that lands on the LAST sample is not a peak, it is where the
-        # window closed: the series was still rising when the run ended, so the
-        # real peak, the runoff volume and every ratio built on them are floors,
-        # not measurements. The read says so; nothing downstream has to infer it.
-        "peak_is_window_truncated": bool(times.size > 1 and peak == times.size - 1),
-        "runoff_volume_m3": round(max(volume, 0.0), 3),
-        "outlet_boundary": int(boundary),
-    }
+
+#: The engine closes its whole run once, under this heading, in m3: what it
+#: began and ended with, what crossed the liquid boundaries (entering positive),
+#: what the source terms added, and what it lost. The SCS-CN runoff routine
+#: prints the gross rainfall it accumulated in metres, so the depth that fell is
+#: the engine's own figure rather than a re-derivation from the deck.
+_FINAL_HEAD = r"FINAL BALANCE OF WATER VOLUME"
+_FINAL_FIELDS: tuple[tuple[str, str], ...] = (
+    (r"INITIAL VOLUME\s*:\s*([-+\d.Ee]+)", "initial_volume_m3"),
+    (r"FINAL VOLUME\s*:\s*([-+\d.Ee]+)", "final_volume_m3"),
+    (r"VOLUME THAT ENTERED THE DOMAIN\s*:\s*([-+\d.Ee]+)", "boundary_volume_m3"),
+    (r"VOLUME ADDED BY SOURCE TERM\s*:\s*([-+\d.Ee]+)", "source_volume_m3"),
+    (r"TOTAL VOLUME LOST\s*:\s*([-+\d.Ee]+)", "lost_volume_m3"),
+)
+_ACCUMULATED_RAIN = r"ACCUMULATED RAINFALL\s*:\s*([-+\d.Ee]+)\s*M\b"
+
+
+def final_balance(listing_text: str) -> dict[str, Any]:
+    """The engine's whole-run water balance, off the final block it printed.
+
+    A figure the listing did not print is absent; the accumulated rainfall depth
+    rides beside them when the runoff routine printed one."""
+    text = listing_text or ""
+    out: dict[str, Any] = {}
+    start = re.search(_FINAL_HEAD, text)
+    if start is not None:
+        block = text[start.end():]
+        for pattern, name in _FINAL_FIELDS:
+            found = re.search(pattern, block)
+            if found is None:
+                continue
+            try:
+                out[name] = float(found.group(1))
+            except ValueError:
+                continue
+    rain = re.findall(_ACCUMULATED_RAIN, text)
+    if rain:
+        try:
+            out["rain_depth_m"] = float(rain[-1])
+        except ValueError:
+            pass
+    return out
+
+
+def mesh_area_m2(mesh: Mapping[str, Any]) -> float:
+    """The area the elements of a read result cover, in the mesh's own metres."""
+    import numpy as np
+
+    ikle = np.asarray(mesh["ikle"], dtype=int)
+    x, y = np.asarray(mesh["x"]), np.asarray(mesh["y"])
+    if ikle.size == 0:
+        return 0.0
+    a, b, c = ikle[:, 0], ikle[:, 1], ikle[:, 2]
+    return float((0.5 * np.abs((x[b] - x[a]) * (y[c] - y[a])
+                               - (x[c] - x[a]) * (y[b] - y[a]))).sum())
 
 
 def wetted_fraction(mesh: Mapping[str, Any], *, wet_tol_m: float = _WET_TOL_M
@@ -212,7 +244,7 @@ def wetted_fraction(mesh: Mapping[str, Any], *, wet_tol_m: float = _WET_TOL_M
                         - (x[c] - x[a]) * (y[b] - y[a]))
     final = np.asarray(depth)[-1]
     wet = area[final[ikle].mean(axis=1) > float(wet_tol_m)]
-    total = float(area.sum())
+    total = mesh_area_m2(mesh)
     if total <= 0.0:
         return {}
     return {"mesh_area_m2": total, "wet_area_m2": float(wet.sum()),

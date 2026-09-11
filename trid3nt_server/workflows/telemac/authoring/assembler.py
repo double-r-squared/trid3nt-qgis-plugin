@@ -17,18 +17,20 @@ from trid3nt_contracts import new_ulid
 
 from trid3nt_server.workflows.runtime import journal_note
 from trid3nt_server.workflows.mesh.shared.nodes import (
+    accepted_mesh_nodes,
     read_accepted_mesh_nodes,
     read_centerline_utm,
+    sample_layer_at_nodes,
 )
 from trid3nt_server.workflows.mesh.topology import RATING_CURVE_ROLE, read_topology
 
-from ..helpers.catchment import mesh_nodes
 from ..helpers.errors import (
     OpenWaterError,
     RainOnGridError,
     TelemacDyeScenarioError,
     TelemacDyeScenarioInputError,
 )
+from trid3nt_server.workflows.inputs.layer_fields import layer_field
 from trid3nt_server.workflows.inputs.point import (
     Point,
     as_utm,
@@ -505,17 +507,48 @@ def _bed_slope(nodes: Sequence[int], node_xy: Any, node_bed: Any,
     return slope
 
 
+def _outlet_nodes(topology: Mapping[str, Any]) -> list[int]:
+    return [int(n) for n in (topology["roles"].get(_OUTLET_ROLE) or ())]
+
+
+def _outlet_manning(landcover: Any, lonlat: Any, roughness: Mapping[Any, Any],
+                    unmapped: Any) -> list[float]:
+    """The Manning n at the outlet nodes, read off the land cover the way the
+    infiltration surface reads it, so the curve is derived under the roughness
+    the deck writes at those nodes."""
+    table = {int(code): tuple(row) for code, row in dict(roughness).items()}
+    return [float(table.get(int(round(float(code))), tuple(unmapped))[1])
+            for code in sample_layer_at_nodes(landcover, lonlat)]
+
+
+def _liquid_boundaries(topology: Mapping[str, Any], node_xy: Any
+                       ) -> list[dict[str, Any]]:
+    """Each numbered liquid boundary, where it sits: the centroid of its role's
+    nodes in the mesh's own metres. A role landing as several sections shares
+    one centroid, because the topology records nodes per role."""
+    import numpy as np
+
+    xy = np.asarray(node_xy, dtype=float)
+    out = []
+    for number, role in enumerate(topology["liquid_boundary_order"], start=1):
+        nodes = [int(n) for n in (topology["roles"].get(role) or ())]
+        out.append({"number": number, "role": str(role),
+                    "x": round(float(xy[nodes, 0].mean()), 3),
+                    "y": round(float(xy[nodes, 1].mean()), 3)})
+    return out
+
+
 def _measured_outlet(topology: Mapping[str, Any], node_xy: Any, node_bed: Any,
-                     cells: Any, node_manning: Any, *,
+                     cells: Any, manning: Any, *,
                      q_ceiling_m3s: float, q_ceiling_basis: str) -> dict[str, Any]:
     """What the accepted mesh says about the face the basin drains through.
 
-    Section, slope and roughness, every one measured off the artifact itself."""
+    Section, slope and roughness, every one measured off the artifact itself;
+    ``manning`` is the roughness at the outlet's own nodes."""
     import numpy as np
 
-    nodes = [int(n) for n in (topology["roles"].get(_OUTLET_ROLE) or ())]
-    manning = np.asarray(node_manning, dtype=float)[nodes]
-    coefficient = float(np.nanmedian(manning))
+    nodes = _outlet_nodes(topology)
+    coefficient = float(np.nanmedian(np.asarray(manning, dtype=float)))
     if not np.isfinite(coefficient) or coefficient <= 0.0:
         raise RainOnGridError(
             f"the friction field carries {coefficient!r} at the outlet nodes, so "
@@ -758,24 +791,19 @@ def _graphic_period(output_interval_min: float | None, time_step_s: float) -> in
 async def settle_catchment(
     *,
     catchment: dict[str, Any],
-    infiltration: dict[str, Any],
     rain: dict[str, Any],
+    landcover: Any,
+    roughness: Mapping[Any, Any],
+    unmapped: Any,
     time_step_s: float,
     mesh_resolution_m: float | None = None,
     output_interval_min: float | None = None,
 ) -> dict[str, Any]:
     """Everything the catchment MEASURES at the face the basin drains through.
 
-    ``catchment`` is the ACCEPTED mesh, never an equivalent rebuild."""
-    from trid3nt_server.workflows.telemac.templates.rain_on_grid.cn_infiltration import (
-        select_runoff_path,
-    )
-
-    decision = (select_runoff_path(hyetograph_mm=rain["series"])
-                if rain["kind"] == "hyetograph"
-                else select_runoff_path(
-                    constant_intensity_mm_per_hr=rain["intensity_mm_per_hr"]))
-
+    ``catchment`` is the ACCEPTED mesh, never an equivalent rebuild; the outlet's
+    roughness is read off ``landcover`` through ``roughness``, the class table
+    the deck's own friction zones are written from."""
     artifact = catchment.get("artifact")
     utm_epsg = int(getattr(artifact, "utm_epsg", 0) or 0)
     probes = dict(getattr(artifact, "probes", None) or {})
@@ -794,11 +822,14 @@ async def settle_catchment(
     bed_source = str(provenance.get("bed_source") or "staged")
     duration_s = float(rain["duration_s"])
 
-    points_utm, cells, node_bed, _lonlat = await asyncio.to_thread(
-        mesh_nodes, catchment)
+    points_utm, cells, node_bed, lonlat = await asyncio.to_thread(
+        accepted_mesh_nodes, catchment)
     q_ceiling, q_ceiling_basis = _rain_ceiling(rain, cells, points_utm)
+    manning = await asyncio.to_thread(
+        _outlet_manning, landcover, lonlat[_outlet_nodes(topology)], roughness,
+        unmapped)
     outlet = _measured_outlet(
-        topology, points_utm, node_bed, cells, infiltration["node_manning"],
+        topology, points_utm, node_bed, cells, manning,
         q_ceiling_m3s=q_ceiling, q_ceiling_basis=q_ceiling_basis)
     from ..helpers.uniform_flow import derive_rating_curve
 
@@ -814,6 +845,7 @@ async def settle_catchment(
         f"measured outlet section at {rating['law']} {rating['coefficient']:g} on "
         f"the measured bed slope {rating['slope']:.6f}. The range is "
         f"{outlet['q_ceiling_basis']}.")
+    time_varying = bool(rain.get("time_varying"))
     return {
         "name": name,
         "title": f"{name} RAIN-ON-GRID",
@@ -831,19 +863,15 @@ async def settle_catchment(
                        if rain.get("rain_duration_s") is not None
                        and 0.0 < float(rain["rain_duration_s"]) < duration_s
                        else None),
-        "antecedent_moisture": int(infiltration["amc_condition"]),
-        "initial_abstraction": 1,
-        "friction_law": _ROG_FRICTION_LAW,
-        # The mesh's own coordinates, which nothing else on the run carries.
-        # The per-node curve numbers and roughnesses are the INFILTRATION step's
-        # and are read where they were produced - carrying them again here would
-        # be the same field on the run twice.
-        "node_xy": [[round(float(x), 3), round(float(y), 3)]
-                    for x, y in points_utm[:, :2]],
+        # The land cover the deck's own surface is sampled from at the fill,
+        # named by its raster, so the roughness the curve above was derived
+        # under and the zones the deck writes come off one layer.
+        "landcover": {"uri": str(layer_field(landcover, "uri") or "")},
         "hyetograph_blocks": ([[float(t), float(mm)] for t, mm in rain["blocks"]]
-                              if decision.time_varying else None),
+                              if time_varying else None),
         "outlet_boundary": outlet_boundary,
         "n_liquid_boundaries": n_liquid,
+        "liquid_boundaries": _liquid_boundaries(topology, points_utm),
         "rating": {
             "at_boundary": outlet_boundary, "of_boundaries": n_liquid,
             "rows": [[q, z] for q, z in rating["rows"]],
@@ -851,16 +879,9 @@ async def settle_catchment(
                      f"depth over the measured outlet section at {rating['law']} "
                      f"{rating['coefficient']:g}, bed slope "
                      f"{rating['slope']:.6f}, {outlet['q_ceiling_basis']}")},
-        "runoff_path": decision.path,
-        "runoff_reason": decision.reason,
         "rain": dict(rain),
-        # The infiltration surface's own record, WITHOUT the per-node fields:
-        # those are that step's and are read where they were produced, so the
-        # run does not carry the same field twice.
-        "infiltration": {key: value for key, value in infiltration.items()
-                         if not key.startswith("node_")},
         "hyetograph_total_mm": (round(sum(float(mm) for _t, mm in rain["blocks"]), 4)
-                                if decision.time_varying else None),
+                                if time_varying else None),
         "mesh_node_count": int(catchment.get("node_count") or 0),
         "mesh_element_count": int(catchment.get("element_count") or 0),
         "mesh_size_m": mesh_size_m,

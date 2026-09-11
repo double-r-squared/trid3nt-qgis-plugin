@@ -112,7 +112,7 @@ record and against MRMS availability before any run.
 ## 4. Calibration protocol (CN + Manning per land cover, per engine)
 
 Paper Table 1 gives SEPARATE CN and Manning columns for T2D and HR2D per
-land-cover class. Our analog is `cn_infiltration.NLCD_CN_MANNING` (NLCD class ->
+land-cover class. Our analog is the template's `LANDCOVER_CN_MANNING` (NLCD class ->
 CN2 + Manning n, paper T2D column, HSG-B mid values). Protocol:
 
 1. Land cover: `fetch_landcover` (NLCD 2021) over the catchment -> per-node class

@@ -56,6 +56,9 @@ class Series(Read):
     values: Any
     #: Where the series was read - ``"the domain maximum"`` or a point's name.
     at: str
+    #: The station the series was read at, in lon/lat; ``None`` for a maximum.
+    lon: float | None = None
+    lat: float | None = None
     lines: tuple[Line, ...] = ()
 
 
@@ -96,7 +99,7 @@ class Frames(Read):
 
 @dataclass(frozen=True, kw_only=True)
 class Deliverable:
-    """One read and how it is published: as a layer, a chart or an animation.
+    """One read and how it is published: a layer, a chart, an animation, a station.
 
     ``caption`` names the quantity in the reader's words; ``style`` is a
     declared style row, read only for a layer."""

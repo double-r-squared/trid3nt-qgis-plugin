@@ -1,5 +1,6 @@
 """The one publisher: a field becomes a layer, a series or a profile a chart, a
-field over time an animation, a track a vector layer.
+field over time an animation, a track a vector layer, a series at a station the
+station layer that carries it.
 
 Written once for every engine. What arrives is a read - coordinates, values, an
 axis, a result file - with a caption in the reader's own words; what leaves is
@@ -72,6 +73,10 @@ async def publish(*, run_id: str, engine: str, name: str, where: str,
             layers.append(await asyncio.to_thread(
                 _layer, item.read, run_id=run_id, engine=engine, name=name,
                 caption=item.caption, style=item.style))
+        elif item.mode == "station":
+            layers.append(await asyncio.to_thread(
+                _station_layer, item.read, run_id=run_id, engine=engine, name=name,
+                caption=item.caption, reference_time=reference_time))
     emitter = current_emitter()
     for layer in layers[1:]:
         await publish_input_layer(emitter, layer, role="primary")
@@ -189,6 +194,63 @@ def _vector_layer(read: Track, *, run_id: str, engine: str, name: str,
                     name=f"{caption[:1].upper()}{caption[1:]} ({name})",
                     layer_type="vector", uri=f"s3://{bucket}/{key}",
                     quantity=quantity, role="primary", bbox=bbox)
+
+
+#: A station's declared bbox half-width, in degrees: a zero-extent bbox reads as
+#: no extent to the camera, so the point gets a small honest box.
+_STATION_PAD_DEG = 0.002
+
+
+def _station_layer(read: Series, *, run_id: str, engine: str, name: str,
+                   caption: str, reference_time: str | None) -> LayerURI:
+    """A series at a station -> ONE point feature carrying the series inline.
+
+    ``time_series_csv`` rows are ``iso,value`` counted from ``reference_time``,
+    the same instant the run's frames are counted from; with no instant to
+    count from the rows carry the run's own seconds."""
+    import json
+    from datetime import datetime, timedelta
+
+    from trid3nt_server.workflows.solver.solver import _get_runs_bucket, _get_s3_client
+
+    if read.lon is None or read.lat is None:
+        raise ValueError(f"the series {read.name!r} was read {read.at}, which is "
+                         "no station to publish it at.")
+    quantity = quantity_of(caption)
+    origin = (datetime.fromisoformat(reference_time.replace("Z", "+00:00"))
+              if reference_time else None)
+    rows = []
+    for t, v in zip(read.times, read.values):
+        stamp = ((origin + timedelta(seconds=float(t))).isoformat()
+                 if origin is not None else f"{float(t):.3f}")
+        rows.append(f"{stamp},{float(v):.6f}")
+    label = f"{caption[:1].upper()}{caption[1:]}"
+    feature = {
+        "type": "Feature",
+        "geometry": {"type": "Point",
+                     "coordinates": [round(float(read.lon), 6),
+                                     round(float(read.lat), 6)]},
+        "properties": {"name": f"{label} {read.at}", "quantity": quantity,
+                       "units": read.units, "variable": read.name,
+                       "reference_time": reference_time,
+                       "n_timesteps": len(rows),
+                       "time_series_csv": "\n".join(rows) + "\n"},
+    }
+    bucket, key = _get_runs_bucket(), f"{run_id}/{quantity}.geojson"
+    _get_s3_client().put_object(
+        Bucket=bucket, Key=key,
+        Body=json.dumps({"type": "FeatureCollection",
+                         "features": [feature]}).encode("utf-8"),
+        ContentType="application/geo+json")
+    return LayerURI(layer_id=f"{engine}-{quantity}-{run_id}",
+                    name=f"{label} ({name})", layer_type="vector",
+                    uri=f"s3://{bucket}/{key}", quantity=quantity, role="primary",
+                    units=read.units,
+                    style={"kind": "reference", "geometry": "point"},
+                    bbox=(float(read.lon) - _STATION_PAD_DEG,
+                          float(read.lat) - _STATION_PAD_DEG,
+                          float(read.lon) + _STATION_PAD_DEG,
+                          float(read.lat) + _STATION_PAD_DEG))
 
 
 def _chart(read: Series | Profile, *, caption: str, where: str) -> dict[str, Any]:

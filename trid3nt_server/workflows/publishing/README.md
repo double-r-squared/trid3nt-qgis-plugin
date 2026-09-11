@@ -1,4 +1,4 @@
-# `workflows/publishing/` - a field becomes a layer, a series or a profile a chart, a field over time an animation, a track a vector layer
+# `workflows/publishing/` - a field becomes a layer, a series or a profile a chart, a field over time an animation, a track a vector layer, a series at a station the station layer that carries it
 
 Publishing is written ONCE, for every engine. What arrives is a READ the engine
 already made - node coordinates in lon/lat, values, a time or distance axis, the
@@ -23,8 +23,8 @@ unstyled with its COG still in the store.
 | file | what it is |
 | --- | --- |
 | `__init__.py` | The door: the read value types, `Published`, and `quantity_of`. |
-| `reads.py` | What a read IS - a `Field`, a `Series`, a `Profile`, a `Frames`, a `Track`, a bare `Read` of measures, the `Line` a chart draws beside one - and the `Deliverable` that pairs a read with how it is published. |
-| `publish.py` | The one publisher: `publish` takes the deliverables in order and returns what the run leads with; a field is rasterized, written, uploaded and styled here, a track is written as GeoJSON, a series or a profile becomes the chart spec. |
+| `reads.py` | What a read IS - a `Field`, a `Series` (with the station it was read at), a `Profile`, a `Frames`, a `Track`, a bare `Read` of measures, the `Line` a chart draws beside one - and the `Deliverable` that pairs a read with how it is published. |
+| `publish.py` | The one publisher: `publish` takes the deliverables in order and returns what the run leads with; a field is rasterized, written, uploaded and styled here, a track is written as GeoJSON, a series at a station becomes the point layer carrying it inline as `time_series_csv`, a series or a profile becomes the chart spec. |
 | `raster.py` | A nodal field on an unstructured mesh onto a regular EPSG:4326 grid: the element fill (the solver's own P1 representation) and the node halo. |
 | `cog.py` | Cloud-Optimized-GeoTIFF write, reproject, CRS-guard and upload; every failure a staged `CogIoError`. |
 | `style.py` | `publish_product_layer` - the styling seam a typed product layer goes through before it is returned. |

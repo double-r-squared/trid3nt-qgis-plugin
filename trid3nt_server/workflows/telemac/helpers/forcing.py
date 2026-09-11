@@ -490,6 +490,7 @@ def resolve_rain_event(*, window: str | None, intensity_mm_per_hr: float,
     if not window:
         return {
             "kind": "design_storm", "blocks": None, "series": None,
+            "time_varying": False,
             "intensity_mm_per_hr": float(intensity_mm_per_hr),
             "duration_s": float(sim_duration_hr if sim_duration_hr
                                 else storm_duration_hr) * _HOUR_S,
@@ -520,8 +521,12 @@ def resolve_rain_event(*, window: str | None, intensity_mm_per_hr: float,
     blocks = [[float((i + 1) * _HOUR_S), round(mm[i], 5)] for i in range(len(mm))]
     asked_s = float(sim_duration_hr or 0.0) * _HOUR_S
     span_s = float(len(mm) * _HOUR_S)
+    # A record whose wet hours all carry one rate is a constant storm with a
+    # date on it, and the engine's own constant branch drives it; two distinct
+    # rates are a shape only the block file can state.
     return {
         "kind": "hyetograph", "blocks": blocks, "series": mm,
+        "time_varying": len({round(v, 6) for v in mm if v > 0.0}) >= 2,
         "intensity_mm_per_hr": float(intensity_mm_per_hr),
         "duration_s": max(asked_s, span_s),
         "duration_basis": "user" if asked_s > span_s else "hyetograph",

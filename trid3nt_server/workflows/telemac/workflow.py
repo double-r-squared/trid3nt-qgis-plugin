@@ -134,10 +134,12 @@ class Door:
             if self.chart is not None:
                 read = read.chart(self.chart[0], builder=self.chart[1])
         # Every producer the body may READ, under the name it names it by. A
-        # body states what it will hold; this is where the fill finds it.
+        # body states what it will hold; this is where the fill finds it. The
+        # accepted mesh is among them: a composite that samples at its nodes
+        # reads the record the mesh step returned.
         produced = {step.name: Ref(step.name)
                     for step in (*self.produce, *self.derive)
-                    if step.name} | {"settled": Ref("settled")}
+                    if step.name} | {"settled": Ref("settled"), "mesh": Ref("mesh")}
         return [
             *self.domain,
             MeshStep.build(mesh=self.mesh, name=Ref(self.mesh_on),
@@ -273,13 +275,17 @@ async def fill_sheet(*, steering: type, produced: Mapping[str, Any],
             f"{type(keywords).__name__}.")
     stated.update({steering.identify(name): value
                    for name, value in (keywords or {}).items()})
-    sheet = fill_slots(steering, template=workflow, produced=dict(produced),
-                       params=dict(params), **stated)
+    # A composite may read fetched data at the fill - a raster sampled at the
+    # mesh's nodes - so the fill runs off the loop.
+    sheet = await asyncio.to_thread(
+        fill_slots, steering, template=workflow, produced=dict(produced),
+        params=dict(params), **stated)
     revised = await _review(sheet, workflow=workflow, title=title,
                             input_mode=input_mode)
     if revised:
-        sheet = fill_slots(sheet, produced=dict(produced), params=dict(params),
-                           **revised)
+        sheet = await asyncio.to_thread(
+            fill_slots, sheet, produced=dict(produced), params=dict(params),
+            **revised)
     logger.info("telemac sheet filled: %s states %d keywords, %d open "
                 "(%d required)", sheet.body.__name__, len(sheet.filled),
                 len(sheet.open()), len(sheet.required()))

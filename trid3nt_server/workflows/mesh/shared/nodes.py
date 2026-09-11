@@ -13,12 +13,14 @@ from trid3nt_server.workflows.inputs.geometry import utm_epsg_for
 
 __all__ = [
     "MeshNodeError",
+    "accepted_mesh_nodes",
     "boundary_contours",
     "node_slopes_from_mesh",
     "read_2dm_mesh",
     "read_accepted_mesh_nodes",
     "read_centerline_utm",
     "reproject_nodes_to_utm",
+    "sample_layer_at_nodes",
     "sample_raster_at_nodes",
     "tin_formats",
 ]
@@ -107,6 +109,30 @@ def sample_raster_at_nodes(raster_path: Any, points_lonlat: Any,
     return vals
 
 
+def sample_layer_at_nodes(layer: Any, points_lonlat: Any,
+                          interp: str = "nearest") -> Any:
+    """A fetched raster layer sampled at (N,2) lon/lat nodes -> (N,) values.
+
+    The layer's ``uri`` names the raster, in the store or on disk."""
+    import tempfile
+
+    from trid3nt_server.tools.cache import read_object_bytes_s3
+    from trid3nt_server.workflows.inputs.layer_fields import layer_field
+
+    uri = str(layer_field(layer, "uri") or "")
+    if not uri:
+        raise MeshNodeError(
+            "MESH_LAYER_NO_RASTER",
+            f"the layer {layer!r} names no raster uri to sample at the nodes.")
+    local = Path(tempfile.mkdtemp(prefix="mesh-sample-")) / "layer.tif"
+    local.write_bytes(read_object_bytes_s3(uri) if uri.startswith("s3://")
+                      else Path(uri).read_bytes())
+    try:
+        return sample_raster_at_nodes(local, points_lonlat, interp=interp)
+    finally:
+        local.unlink(missing_ok=True)
+
+
 def _bilinear(src: Any, xs: Any, ys: Any, nodata: Any) -> Any:
     """The band read between its four surrounding cell centres, nodata held out.
 
@@ -152,6 +178,21 @@ def read_accepted_mesh_nodes(display_uri: str, *, utm_epsg: int | None = None
     lon, lat = Transformer.from_crs(int(utm_epsg), 4326, always_xy=True).transform(
         points_utm[:, 0], points_utm[:, 1])
     return points_utm, cells, bed, np.column_stack([lon, lat])
+
+
+def accepted_mesh_nodes(mesh: Any) -> tuple[Any, Any, Any, Any]:
+    """The mesh step's record -> ``(points_utm, cells, bed, points_lonlat)``.
+
+    Read off the display face, the one readable record of the file's numbering;
+    a record with no display face or no projected zone refuses by name."""
+    utm_epsg = int(getattr(mesh.get("artifact"), "utm_epsg", 0) or 0)
+    uri = str(mesh.get("display_uri") or "")
+    if not uri or not utm_epsg:
+        raise MeshNodeError(
+            "MESH_NOT_ACCEPTED",
+            "the accepted mesh carries no display face or no projected zone, so "
+            "its nodes cannot be read; a mesh ask builds both.")
+    return read_accepted_mesh_nodes(uri, utm_epsg=utm_epsg)
 
 
 def read_centerline_utm(source: Any, utm_epsg: int, *,

@@ -6,38 +6,47 @@ permanently lost, so there is no subsurface return flow and no baseflow."""
 
 from __future__ import annotations
 
-from typing import Any
-
+from trid3nt_contracts.telemac_contracts import TELEMAC_MAX_DEPTH_STYLE
 from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
 
-from trid3nt_server.workflows.runtime import ParamRef, Ref, register_workflow, user_input
+from trid3nt_server.workflows.runtime import (
+    ParamRef,
+    Ref,
+    Step,
+    register_workflow,
+    user_input,
+)
 from trid3nt_server.workflows.mesh.tool import mesh_op, tool
 from trid3nt_server.workflows.inputs import point_arg
 from trid3nt_server.workflows.inputs.aoi import AcquireAoi
-from trid3nt_server.workflows.telemac.authoring.assembler import settle_catchment
-from trid3nt_server.workflows.telemac.helpers.catchment import AcquireCatchment
-from trid3nt_server.workflows.telemac.helpers.infiltration import Infiltration
-from trid3nt_server.workflows.telemac.modules import T2D
+from trid3nt_server.workflows.telemac.modules import (
+    T2D,
+    extent,
+    field,
+    mass_balance,
+    max_over_time,
+    mesh,
+    series,
+)
 from trid3nt_server.workflows.telemac.modules.telemac2d import (
-    Friction,
     Hyetograph,
+    Infiltration,
     Rain,
     Rating,
-    Runoff,
 )
-from trid3nt_server.workflows.telemac.products.rain_on_grid import RainOnGridProducts
 from trid3nt_server.workflows.telemac.solving.solve import compute_class
 from trid3nt_server.workflows.telemac.templates.rain_on_grid.declarations import (
     DOC,
+    LANDCOVER_CN_MANNING,
+    LANDCOVER_UNMAPPED,
     NLCD_NATIVE_RESOLUTION_M,
     PARAMS,
     PARAMS as P,
     POUR_POINT_BUFFER_DEG,
 )
-from trid3nt_server.workflows.runtime import Step
 from trid3nt_server.workflows.telemac.workflow import Door, TelemacWorkflow
 
-__all__ = ["ANSWER", "DATA", "PARAMS", "STEERING", "build_hydrograph_chart",
+__all__ = ["ANSWER", "CAPTIONS", "DATA", "MESH", "OUTPUTS", "PARAMS", "STEERING",
            "telemac_rain_on_grid"]
 
 _HELPERS = "trid3nt_server.workflows.telemac.helpers"
@@ -93,7 +102,7 @@ class DATA:
     # The snap window is the delineation tool's own declared default: how far a
     # clicked outlet may move to reach the channel is a fact about the D8 grid,
     # which is where it is declared.
-    basin = tool("delineate_watershed", pour_point=Ref("aoi.pour_point"),
+    basin = tool("delineate_watershed", pour_point=[Ref("aoi.lon"), Ref("aoi.lat")],
                  bbox=Ref("aoi.bbox"), dem_uri=Ref("dem.uri"))
 
 
@@ -176,11 +185,6 @@ class STEERING(T2D):
     FREE_SURFACE_GRADIENT_COMPATIBILITY = 0.9
     MASS_BALANCE = True
 
-    #: Manning per land cover, as zones and the laws they index. The law is the
-    #: one the outlet's rating curve was derived under, stated once.
-    friction = Friction(law=Ref("settled.friction_law"),
-                        manning_per_node=Ref("infiltration.node_manning"))
-
     #: The SCS Curve Number method, out of the four rainfall-runoff models the
     #: engine offers, is what the curve-number field below is a field FOR.
     RAINFALL_RUNOFF_MODEL = 1
@@ -191,10 +195,18 @@ class STEERING(T2D):
     #: its own dry tail and states no window.
     rain = Rain(mm_per_day=Ref("settled.rain_mm_per_day"), tracers=0,
                 hours=Ref("settled.rain_hours"))
-    runoff = Runoff(node_xy=Ref("settled.node_xy"),
-                    cn2=Ref("infiltration.node_cn2"),
-                    antecedent_moisture=Ref("settled.antecedent_moisture"),
-                    initial_abstraction=Ref("settled.initial_abstraction"))
+    #: The infiltration surface, read off the land cover at the accepted mesh's
+    #: own nodes when the sheet is filled: the curve number the engine
+    #: interpolates and the Manning zones it runs over, one table for both.
+    infiltration = Infiltration(
+        mesh=Ref("mesh"), landcover=Ref("settled.landcover"),
+        table=LANDCOVER_CN_MANNING, unmapped=LANDCOVER_UNMAPPED,
+        uniform_cn=P.curve_number,
+        steep_slope_correction=P.steep_slope_correction,
+        antecedent_moisture=P.antecedent_moisture,
+        # The standard initial abstraction, Ia/S = 0.2, the ratio the curve
+        # numbers in the table were published against.
+        initial_abstraction=1)
     hyetograph = Hyetograph(blocks=Ref("settled.hyetograph_blocks"),
                             until_s=Ref("settled.duration_s"),
                             fortran=RAINDEF3_USER_FORTRAN)
@@ -210,70 +222,38 @@ class STEERING(T2D):
                     note=Ref("settled.rating.note"))
 
 
-#: The run's ANSWER, as the numbers a reader has to be able to check. Persisted
-#: beside the chart spec so verification cites the run's own figures rather than
-#: recomputing them from the raster.
-ANSWER = ("catchment_area_km2", "peak_discharge_m3s", "peak_discharge_time_s",
-          "peak_is_window_truncated",
-          "rainfall_volume_m3", "runoff_volume_m3", "runoff_coefficient",
-          "max_depth_peak_m", "max_depth_p99_m", "continuity_rel_error",
-          "amc_condition", "rain_intensity_mm_per_hr", "n_frames",
-          "mesh_size_m", "mesh_node_count", "mesh_element_count",
-          "catchment_provenance", "domain_bbox")
+#: What the solved run is read for: the depth over time as the animation, its
+#: envelope as the map, and the flux the engine printed across the outlet as the
+#: hydrograph - charted, and placed on the map as the station that carries it.
+OUTPUTS = [
+    field("H", t="every").animate(),
+    max_over_time("H").layer(style=TELEMAC_MAX_DEPTH_STYLE),
+    series("FLUX", at=P.pour_point).chart(),
+    series("FLUX", at=P.pour_point).station(),
+]
+CAPTIONS = {"H": "water depth", "FLUX": "outlet hydrograph"}
 
-
-def build_hydrograph_chart(*, result: Any, params: Any) -> dict[str, Any] | None:
-    """The OUTLET HYDROGRAPH spec: discharge against time, off the run's own series.
-
-    The solver's own outflow, outflow-positive; ``None`` when there is none."""
-    # A series of ZEROS is not that case: the solver measured the outlet and the
-    # answer was nothing left through it, so the chart is drawn and the caption
-    # says the flat line is a measurement.
-    times = getattr(result, "outlet_hydrograph_t_s", None)
-    flows = getattr(result, "outlet_hydrograph_q_m3s", None)
-    if not times or not flows or len(times) != len(flows):
-        return None
-    from trid3nt_server.emission.charts import build_chart_payload
-
-    values = [{"t_h": float(t) / 3600.0, "q_m3s": float(q)}
-              for t, q in zip(times, flows)]
-    where = (params.get("location") or getattr(result, "catchment_name", None)
-             or "the catchment")
-    peak = getattr(result, "peak_discharge_m3s", None)
-    area = getattr(result, "catchment_area_km2", None)
-    coefficient = getattr(result, "runoff_coefficient", None)
-    intensity = getattr(result, "rain_intensity_mm_per_hr", None)
-    lead = ("No outflow series was measured over this window" if peak is None
-            else f"Peak outflow {float(peak):.3g} m3/s" if float(peak) > 0.0
-            else "MEASURED ZERO outflow: every sample the solver printed at the "
-                 "outlet was 0 m3/s, so the storm infiltrated")
-    return build_chart_payload(
-        vega_lite_spec={
-            "mark": {"type": "line", "point": True},
-            "data": {"values": values},
-            "encoding": {
-                "x": {"field": "t_h", "type": "quantitative",
-                      "title": "Time since storm start (h)"},
-                "y": {"field": "q_m3s", "type": "quantitative",
-                      "title": "Outlet discharge (m3/s)"},
-            },
-        },
-        title=f"Outlet hydrograph - {where}",
-        caption=(
-            lead
-            + (f" from a {float(area):.3g} km2 catchment" if area is not None else "")
-            + (f", {float(intensity):g} mm/h storm" if intensity else "")
-            + (f", runoff coefficient {float(coefficient):.3g}"
-               if coefficient is not None else "")
-            + ". Planning-grade single-storm screening: infiltrated water is "
-              "permanently lost, so there is no baseflow limb."
-            # The crest on the last sample is the window closing, not the storm
-            # answering: the chart says so where the number is read.
-            + (" WINDOW-TRUNCATED: the limb is still rising at the last sample, "
-               "so this peak is a LOWER BOUND."
-               if getattr(result, "peak_is_window_truncated", None) else "")
-        ),
-    )
+#: The run's ANSWER, as the numbers a reader has to be able to check, each a
+#: measure of one of the reads above. The volumes are the engine's own final
+#: balance: what fell on the meshed catchment, what left through its boundary,
+#: and the ratio.
+ANSWER = {
+    "catchment_area_km2": extent().measure("area_km2"),
+    "peak_discharge_m3s": series("FLUX", at=P.pour_point).measure("max"),
+    "peak_discharge_time_s": series("FLUX", at=P.pour_point).measure("t_max"),
+    "peak_is_window_truncated": series("FLUX", at=P.pour_point).measure("truncated"),
+    "rainfall_volume_m3": mass_balance().measure("rain_volume_m3"),
+    "runoff_volume_m3": mass_balance().measure("outflow_volume_m3"),
+    "runoff_coefficient": mass_balance().measure("runoff_coefficient"),
+    "max_depth_peak_m": max_over_time("H").measure("max"),
+    "max_depth_p99_m": max_over_time("H").measure("p99"),
+    "continuity_rel_error": mass_balance().measure("continuity_rel_error"),
+    "n_frames": field("H", t="every").measure("frames"),
+    "mesh_size_m": mesh().measure("size_m"),
+    "mesh_node_count": mesh().measure("nodes"),
+    "mesh_element_count": mesh().measure("elements"),
+    "domain_bbox": extent().measure("bbox"),
+}
 
 
 #: DECLARED mesh_min_edge_m range. 5 m is the finest the catchment triangulator
@@ -311,39 +291,28 @@ telemac_rain_on_grid = register_workflow(
         # The OUTLET first, then the analysis window around it: the basin's shape
         # is the terrain's answer rather than the geocoder's, so a place bbox
         # cannot bound it.
-        domain=(AcquireCatchment(location=P.location, bbox=P.bbox,
-                                 pour_point=P.pour_point,
-                                 half_deg=POUR_POINT_BUFFER_DEG,
-                                 default_name="watershed",
-                                 code_prefix="TELEMAC_ROG").named("aoi"),),
+        domain=(AcquireAoi(location=P.location, bbox=P.bbox, around=P.pour_point,
+                           half_deg=POUR_POINT_BUFFER_DEG,
+                           default_name="watershed",
+                           code_prefix="TELEMAC_ROG").named("aoi"),),
         mesh=MESH, mesh_on="aoi",
-        produce=(Infiltration.fields(
-            mesh=Ref("mesh"), landcover=DATA.landcover,
-            curve_number=P.curve_number,
-            steep_slope_correction=P.steep_slope_correction,
-            antecedent_moisture=P.antecedent_moisture).named("infiltration"),),
         settle=Step(runner=f"{_AUTHORING}.assembler.settle_catchment",
                     stage="author",
                     kwargs={"catchment": Ref("mesh"),
-                            "infiltration": Ref("infiltration"),
                             "rain": DATA.rain,
+                            "landcover": DATA.landcover,
+                            "roughness": LANDCOVER_CN_MANNING,
+                            "unmapped": LANDCOVER_UNMAPPED,
                             "time_step_s": ParamRef("time_step_s"),
                             "mesh_resolution_m": ParamRef("mesh_min_edge_m"),
                             "output_interval_min": ParamRef("output_interval_min")}),
         results=(_RESULT,),
         steering_file=_STEERING_FILE, prefix="telemac_rog",
         dispatch=f"{_SOLVING}.solve_case", compute_class=P.compute_class,
-        read=lambda run: RainOnGridProducts.flood_depth(
-            run=run, solve=run).named("flood_depth"),
-        chart=("rain_on_grid_outlet_hydrograph", build_hydrograph_chart),
+        outputs=OUTPUTS, captions=CAPTIONS, answer=ANSWER,
         review_title="Review the storm, the catchment and the mesh band"),
     data=DATA,
-    answer=ANSWER,
-    provenance=(("rain_event", "rain_event_note"),
-                ("sim_duration_hr", "sim_duration_note"),
-                ("runoff_path", "runoff_path_note"),
-                ("mesh_domain", "mesh_domain_note"),
-                ("mesh_bed", "mesh_bed_note")),
+    answer=tuple(ANSWER),
     # The overland sheet's deepest point and the hydrograph crest are magnitude
     # maxima that live inside single elements, and a coarse element averages both
     # away. WHEN the crest arrives moves with the elements that route the water

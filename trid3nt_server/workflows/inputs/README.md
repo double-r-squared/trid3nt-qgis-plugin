@@ -17,6 +17,6 @@ and the role it plays; the ingestion is the same for every slot of that kind.
 | `point.py` | `Point` - one location with an optional name - and `point`, its ingestion from a pick, a pair, a `"lat,lon"` string, a point layer or a geocoded place; the pick-or-wire coercion; containment in a domain, the move onto a wet node, the UTM projection and the context layer. |
 | `extent.py` | `Extent` - one lon/lat box with an optional name - and `extent`, its ingestion from a bbox pick, the canvas AOI, a place or a layer's bounds. |
 | `shape.py` | `Shape` - one feature collection with an optional name - and `shape`, its ingestion from the draw, a stored layer, a geometry or typed vertices; its `polylines` and `polygons`. |
-| `aoi.py` | AOI coercion and ACQUISITION: `location`/`bbox` resolved to exactly one area, geocoded through `geocode_place`, and the step that rebinds the domain to it. |
+| `aoi.py` | AOI coercion and ACQUISITION: `location`/`bbox` resolved to exactly one area - an extent verbatim, the box around a Point, or a place geocoded through `geocode_place` - and the step that rebinds the domain to it. |
 | `geometry.py` | Reading a GEOMETRY SOURCE - a layer object, its uri, a path or inline GeoJSON - flattened to its geometries, and the one UTM-zone rule. |
 | `layer_fields.py` | Reading one field off whatever shape a fetched layer arrived in. |
