@@ -219,9 +219,12 @@ CAPTIONS = {"T2": "dissolved oxygen", "T3": "organic load"}
 
 #: The run's ANSWER, as the numbers a reader has to be able to check, each a
 #: measure of one of the reads above: how low the oxygen bottoms out and where,
-#: the mixed load that drove it, and the speed it travelled at.
+#: whether that is below the standard the reach is held to, the mixed load that
+#: drove it, and the speed it travelled at.
 ANSWER = {
     "do_min_mgl": profile("T2", along=DATA.centerline).measure("min"),
+    "do_below_standard": profile("T2", along=DATA.centerline).measure("min")
+                         .below(P.do_standard_mgl),
     "do_min_distance_m": profile("T2", along=DATA.centerline).measure("x_min_m"),
     "bod_mixed_mgl": profile("T3", along=DATA.centerline).measure("max"),
     "mean_velocity_mps": profile("T2", along=DATA.centerline).measure("velocity_mps"),

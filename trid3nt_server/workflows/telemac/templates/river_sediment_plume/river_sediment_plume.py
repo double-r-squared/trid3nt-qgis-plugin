@@ -244,7 +244,8 @@ OUTPUTS = [
 CAPTIONS = {"T2": "suspended sediment concentration", "E": "bed evolution"}
 
 #: The run's ANSWER, as the numbers a reader has to be able to check, each a
-#: measure of one of the reads above.
+#: measure of one of the reads above; the deposited fraction is the listing's
+#: deposited mass over the mass the sheet says the pulse put in.
 ANSWER = {
     "suspended_cmax": max_over_time("T2").measure("max"),
     "suspended_peak_time_s": max_over_time("T2").measure("t_max"),
@@ -252,6 +253,8 @@ ANSWER = {
     "active_frames": field("T2", t="every").measure("active_frames"),
     "bed_evolution_max_m": field("E", t=-1, module="gaia").measure("max"),
     "net_bed_mass_kg": mass_balance(module="gaia").measure("sediment_net_bed_mass_kg"),
+    "deposit_fraction": mass_balance(module="gaia").measure(
+        "sediment_deposited_mass_kg").over(P.injected_mass_kg),
     "mesh_size_m": mesh().measure("size_m"),
 }
 

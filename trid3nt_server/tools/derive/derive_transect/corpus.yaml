@@ -1,0 +1,8 @@
+derive_transect:
+- lay a transect through the middle of this breakwater along the wave direction
+- a straight line through the centroid of this shape on a bearing
+- cut a profile line across the structure from the open water into the lee
+- draw a 1500 m line through the centre of this feature heading north-east
+- the transect I want to read the agitation along, through the breakwater
+- a line across the bar along the flow direction to read a profile on
+- give me a transect through this polygon at a bearing of 45 degrees

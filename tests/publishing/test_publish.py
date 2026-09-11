@@ -297,6 +297,30 @@ def test_a_row_with_a_centre_ranges_the_legend_symmetrically_about_it(monkeypatc
     assert (layer.legend.vmin, layer.legend.vmax) == (-0.005, 0.005)
 
 
+def test_a_row_with_a_floor_and_a_percentile_cap_ranges_the_legend_by_them(
+        monkeypatch):
+    """A declared ``floor`` pins the legend's bottom where a standard has to stay
+    on the ramp; a declared ``range`` of ``p<q>`` caps its top at that percentile
+    so one pit cannot paint the rest of the field one colour."""
+    from trid3nt_server.emission import publish as emission_publish
+    from trid3nt_server.workflows.publishing import cog
+
+    monkeypatch.setattr(cog, "upload_cog", lambda *a, **k: "s3://runs/RID/x.tif")
+    monkeypatch.setattr(emission_publish, "publish_layer", lambda **k: "https://t")
+    oxygen = _field(values=np.array([6.0, 7.0, 8.0, 9.0, 8.5]), floor=None,
+                    measures={"max": 9.0, "min": 6.0})
+    floored = publish_mod._layer(oxygen, run_id="RID", engine="telemac", name="reach",
+                                 caption="dissolved oxygen",
+                                 style={"kind": "continuous", "floor": 0})
+    assert (floored.legend.vmin, floored.legend.vmax) == (0.0, 9.0)
+    spiked = _field(values=np.array([0.5, 0.6, 0.7, 0.8, 40.0]), floor=None,
+                    measures={"max": 40.0, "min": 0.5})
+    capped = publish_mod._layer(spiked, run_id="RID", engine="harbour", name="basin",
+                                caption="agitation coefficient",
+                                style={"kind": "continuous", "range": "p50"})
+    assert capped.legend.vmin == 0.5 and capped.legend.vmax == pytest.approx(0.7)
+
+
 def test_a_series_at_a_station_becomes_the_point_layer_that_carries_it(monkeypatch):
     """The station sits where the series was read; the rows are ISO instants
     counted from the run's own reference time, so the pairing that reads a

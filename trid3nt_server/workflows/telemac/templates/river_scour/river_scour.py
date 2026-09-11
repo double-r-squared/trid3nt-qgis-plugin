@@ -262,11 +262,14 @@ CAPTIONS = {"E": "bed evolution", "B": "bed elevation", "T1": "marker concentrat
 
 #: The run's ANSWER, as the numbers a reader has to be able to check, each a
 #: measure of one of the reads above. The evolution is signed: deposition
-#: positive, scour negative.
+#: positive, scour negative. The surface D50 is written for a MIXTURE only, so
+#: its spread - the sorting signature, in the metres the module writes - is
+#: nothing on a single-class bed, which cannot sort.
 ANSWER = {
     "bed_evolution_max_m": field("E", t=-1, module="gaia").measure("max"),
     "bed_evolution_min_m": field("E", t=-1, module="gaia").measure("min"),
     "net_bed_mass_kg": mass_balance(module="gaia").measure("sediment_net_bed_mass_kg"),
+    "surface_d50_spread_m": field("D50", t=-1, module="gaia").measure("spread"),
     "marker_cmax_mgl": max_over_time("T1").measure("max"),
     "active_frames": series("T1").measure("active_frames"),
     "mesh_size_m": mesh().measure("size_m"),

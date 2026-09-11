@@ -21,7 +21,7 @@ __all__ = [
 ]
 
 #: Target GROUND resolution (m/px). A river channel is tens of metres wide, so
-#: ~10 m/px keeps a plume a smooth ribbon rather than chunky specks.
+#: ~10 m/px keeps a field a smooth ribbon rather than chunky specks.
 TARGET_GROUND_RES_M: float = 10.0
 MIN_PX_PER_SIDE: int = 128
 MAX_PX_PER_SIDE: int = 2500

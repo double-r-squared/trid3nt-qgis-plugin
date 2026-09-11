@@ -202,10 +202,14 @@ def test_the_outputs_list_reads_the_oxygen_and_charts_it_down_the_reach():
     assert {name: (m.primitive.kind, m.primitive.variable, m.stat)
             for name, m in ANSWER.items()} == {
         "do_min_mgl": ("profile", "T2", "min"),
+        "do_below_standard": ("profile", "T2", "min"),
         "do_min_distance_m": ("profile", "T2", "x_min_m"),
         "bod_mixed_mgl": ("profile", "T3", "max"),
         "mean_velocity_mps": ("profile", "T2", "velocity_mps"),
         "mesh_size_m": ("mesh", None, "size_m")}
+    # the verdict is the minimum held below the standard the sheet declares
+    assert ANSWER["do_below_standard"].op == "below"
+    assert ANSWER["do_below_standard"].against.name == "do_standard_mgl"
 
 
 # --- the REAL composition, driven through the declared plan ------------------ #

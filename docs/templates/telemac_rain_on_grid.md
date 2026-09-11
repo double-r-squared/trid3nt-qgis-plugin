@@ -7,7 +7,6 @@ How much RUNOFF a storm produces from this WATERSHED, as an outlet hydrograph an
 |  |  |
 |---|---|
 | module | `telemac2d` - 376 keywords in its dictionary, of which this template states 25 |
-| parts | - |
 | solves | `trid3nt_server.workflows.telemac.solving.solve.solve_case` |
 | engine defaults | every keyword this template does not state keeps the engine's own default; `describe_keywords` names it with that default, and `keywords={...}` sets it |
 
@@ -18,7 +17,7 @@ How much RUNOFF a storm produces from this WATERSHED, as an outlet hydrograph an
 | `dem` | `fetch_dem` | Fetch a digital elevation model (DEM) / terrain elevation for a bounding box (USGS 3DEP US lidar; on a 3DEP outage the default path STOPS and asks before any Copernicus GLO-30 swap; either source pinnable). | NAVD88 (metres, positive up) |
 | `rivers` | `fetch_river_geometry` | Fetch river and stream flowline geometry for a bbox (OSM Overpass waterways). | - |
 | `landcover` | `fetch_landcover` | Fetch landcover classification raster (NLCD or ESA WorldCover) for a bbox. | - |
-| `rain` | `trid3nt_server.workflows.telemac.helpers.forcing.resolve_rain_event` | The storm, as either a real hourly hyetograph or a constant design rate. | - |
+| `rain` | `trid3nt_server.workflows.telemac.templates.rain_on_grid.storm.resolve_rain_event` | The storm, as either a real hourly hyetograph or a constant design rate. | - |
 | `basin` | `delineate_watershed` | Delineate the watershed (drainage basin) upstream of a pour point (D8 flow analysis via pysheds). | - |
 
 ## The sheet

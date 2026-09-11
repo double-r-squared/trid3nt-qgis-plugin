@@ -61,7 +61,7 @@ _FIELDS_NAME = "telemac_result_fields.npz"
 _META_NAME = "telemac_result_meta.json"
 
 #: A tracer's visible edge is a fraction of its own peak, above a small absolute
-#: floor: a dilute plume still draws whole, a run that injected nothing refuses,
+#: floor: a dilute tracer still draws whole, a run that injected nothing refuses,
 #: and the frames counted as active are the ones the ribbon is visible in.
 TRACER_EDGE_FRACTION = 0.05
 TRACER_FLOOR = 1e-3

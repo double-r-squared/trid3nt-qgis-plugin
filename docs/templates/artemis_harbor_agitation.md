@@ -7,7 +7,6 @@ The WAVE AGITATION (Kd = Hs/H0) a declared structure leaves inside a harbour.
 |  |  |
 |---|---|
 | module | `artemis` - 118 keywords in its dictionary, of which this template states 9 |
-| parts | - |
 | solves | `trid3nt_server.workflows.telemac.solving.solve.solve_case` |
 | engine defaults | every keyword this template does not state keeps the engine's own default; `describe_keywords` names it with that default, and `keywords={...}` sets it |
 
@@ -16,6 +15,7 @@ The WAVE AGITATION (Kd = Hs/H0) a declared structure leaves inside a harbour.
 | row | produced by | what it is | datum |
 |---|---|---|---|
 | `structure` | supplied by the caller | a polyline layer you supply, as a uri or a layer name; required - the template names no source for it. | - |
+| `transect` | `derive_transect` | Lay ONE straight line through the centroid of a shape, along a bearing -> a line layer. | - |
 | `mesh` | supplied by the caller | a mesh layer you supply, as a uri or a layer name; absent is legal and the run reports it. | - |
 
 ## The sheet
@@ -33,6 +33,7 @@ The values the template declares. `desc` is what the model reads when it fills o
 | `mesh_min_edge_m` | scenario | m | 8.0 | Finest triangle edge, used at the shoreline and around the structure. THE granularity lever: a phase-resolving solve needs several nodes per WAVELENGTH and Kd peaks inside a diffraction fringe, so a coarse mesh reads the peaks low |
 | `mesh_grade` | constant | - | 0.2 | Mesh gradation: how fast the edge may grow from the structure band out to the open approach |
 | `barrier_width_m` | scenario | m | 20.0 | The width the mapped structure centreline is cut at; a survey maps a mound as a line and a line removes no water from the domain |
+| `transect_length_m` | scenario | m | 1500.0 | The whole length of the transect the agitation is read along: a straight line through the structure's centroid along the incident wave direction, half of it on the exposed side and half in the lee |
 | `open_depth_threshold_m` | scenario | m | -12.0 | How deep a boundary stretch must reach for it to be designated the OPEN edge the incident wave enters through; every stretch that reaches it opens |
 | `compute_class` | constant | - | medium | Solve sizing class |
 
@@ -41,6 +42,8 @@ The values the template declares. `desc` is what the model reads when it fills o
 | field | the proving run's value |
 |---|---|
 | `kd_max` | 3.5609095096588135 |
+| `kd_transect_min` | - |
+| `kd_transect_max` | - |
 | `hs_max_m` | 3.5609095096588135 |
 | `mesh_size_m` | 5.113546548265623 |
 

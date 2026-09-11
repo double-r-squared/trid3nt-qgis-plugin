@@ -7,7 +7,6 @@ A SUSPENDED SEDIMENT plume in a RIVER: it settles and deposits on the bed.
 |  |  |
 |---|---|
 | module | `telemac2d` - 376 keywords in its dictionary, of which this template states 31 |
-| parts | - |
 | solves | `trid3nt_server.workflows.telemac.solving.solve.solve_reach` |
 | engine defaults | every keyword this template does not state keeps the engine's own default; `describe_keywords` names it with that default, and `keywords={...}` sets it |
 
@@ -15,15 +14,15 @@ A SUSPENDED SEDIMENT plume in a RIVER: it settles and deposits on the bed.
 
 | row | produced by | what it is | datum |
 |---|---|---|---|
-| `rivers` | `trid3nt_server.workflows.telemac.helpers.reach.fetch_reach_flowline` | The reach flowline FlatGeobuf over the CURRENT DOMAIN. Reference data. | - |
+| `rivers` | `trid3nt_server.workflows.telemac.templates.reach.fetch_reach_flowline` | The reach flowline FlatGeobuf over the CURRENT DOMAIN. Reference data. | - |
 | `centerline` | `fetch_nhdplus_nldi_navigate` | Walk the NHDPlus stream network from a seed in the requested direction. | - |
 | `ends` | `endpoints` | Take the TWO END POINTS of a line layer -> a point layer plus the pair itself. | - |
 | `window` | `compute_layer_bounds` | Get a layer's geographic extent AND fit/zoom/resize the map to it. | - |
 | `water` | `fetch_nhd_area_water` | Fetch NHD water-surface polygons (the two BANKS of a wide river, an estuary, a canal) inside a bounding box. | - |
-| `mapped_water` | `trid3nt_server.workflows.telemac.helpers.reach.measure_water_coverage` | MEASURE how much of the reach the fetched water polygons map -> the water. | - |
+| `mapped_water` | `trid3nt_server.workflows.telemac.templates.reach.measure_water_coverage` | MEASURE how much of the reach the fetched water polygons map -> the water. | - |
 | `reach_polygon` | `section` | Cut a POLYGON LAYER down to the part between two points, or inside an extent -> a polygon layer. | - |
 | `dem` | `fetch_copernicus_dem` | Internal seam -- NOT a model-facing tool (tier="internal"). | EGM2008 geoid (metres, positive up) |
-| `rain` | `trid3nt_server.workflows.telemac.helpers.forcing.resolve_rain_forcing` | The SIGNED net rain-or-evaporation rate (mm/day) the sheet carries. | - |
+| `rain` | `trid3nt_server.workflows.telemac.templates.reach.resolve_rain_forcing` | The SIGNED net rain-or-evaporation rate (mm/day) the sheet carries. | - |
 
 ## The sheet
 
@@ -31,13 +30,13 @@ The values the template declares. `desc` is what the model reads when it fills o
 
 | param | door | units | default | desc |
 |---|---|---|---|---|
-| `river_geometry_uri` | user | - | optional | Reuse an already-fetched river flowline for this reach instead of re-fetching it |
-| `friction_coefficient` | user | - | optional | Bed roughness under friction_law |
-| `friction_law` | user | - | optional | Law interpreting friction_coefficient: 2=Chezy, 3=Strickler, 4=Manning |
 | `location` | question | - | optional | Place name on the river, geocoded to the reach |
 | `bbox` | user | - | optional | Explicit AOI (min_lon,min_lat,max_lon,max_lat) EPSG:4326, instead of a place |
+| `river_geometry_uri` | user | - | optional | Reuse an already-fetched river flowline for this reach instead of re-fetching it |
 | `discharge_m3s` | user | m^3/s | optional | Steady upstream CARRIER discharge - the river flow that dilutes and transports the release |
 | `event_time` | question | - | optional | The storm/event moment to read the carrier discharge cycle at - from phrasing like 'during last Tuesday's storm'; an ISO date or datetime (e.g. '2026-08-20' or '2026-08-20T06:00:00Z'). Unset reads the most recent published NWM cycle. The NWM PDS bucket retains only the last ~30 days of history; a deeper request refuses typed rather than silently reading a different cycle. |
+| `friction_coefficient` | user | - | optional | Bed roughness under friction_law |
+| `friction_law` | user | - | optional | Law interpreting friction_coefficient: 2=Chezy, 3=Strickler, 4=Manning |
 | `output_interval_min` | user | min | optional | Result-writing cadence; unset keeps the steering file's own period |
 | `compute_class` | constant | - | medium | Solve sizing class |
 | `spill_fraction` | scenario | - | 0.25 | Along-reach release position, 0=upstream..1=downstream; the source must sit strictly INSIDE the reach, never on a boundary |
@@ -51,6 +50,7 @@ The values the template declares. `desc` is what the model reads when it fills o
 | `release` | user | - | optional | Where the substance enters the water, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer, or a place name |
 | `grain_size_um` | scenario | um | 200.0 | Median grain diameter d50 of the RELEASED class - ~200 um fine sand settles within a few km, ~20 um silt mostly stays suspended (all modeled non-cohesive) |
 | `sediment_concentration_mgl` | scenario | mg/L | 100.0 | Concentration of the released suspended sediment; what deposits is measured against what this put in |
+| `injected_mass_kg` | derived | kg | - | The mass the pulse released - source_q_m3s x sediment_concentration_mgl x spill_duration_s - which the deposited fraction is measured against |
 | `reach_length_km` | scenario | km | 6.0 | Modeled reach length downstream of the release; a longer reach is coarsened under the mesh node budget |
 | `sim_duration_s` | scenario | s | 3600.0 | Simulated physical time |
 | `mesh_resolution_m` | scenario | m | 14.0 | Target element edge length the reach is triangulated at; peak concentration is a resolution-bound class and a coarse mesh reads it low |
@@ -65,6 +65,7 @@ The values the template declares. `desc` is what the model reads when it fills o
 | `active_frames` | 8 |
 | `bed_evolution_max_m` | 0.00012464386236388236 |
 | `net_bed_mass_kg` | 66.90308 |
+| `deposit_fraction` | - |
 | `mesh_size_m` | 10.415 |
 
 It publishes these layers onto the canvas:

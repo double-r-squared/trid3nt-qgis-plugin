@@ -8,6 +8,8 @@ from trid3nt_server.workflows.telemac.modules.gaia import GRAIN_UM_MAX, GRAIN_UM
 
 __all__ = ["ACCEPTS", "DOC", "PARAMS"]
 
+_TEMPLATE = "trid3nt_server.workflows.telemac.templates.river_sediment_plume"
+
 #: What a suspended-plume run can be HANDED. The settling class rides the same
 #: triangulation the hydrodynamics runs on, so a lattice is refused at the door.
 ACCEPTS = Accepts(mesh=("unstructured_tri",), release=("point",))
@@ -136,6 +138,13 @@ class PARAMS:
         bounds=(0.0, 1.0e6), units="mg/L", consequence="scenario",
         desc="Concentration of the released suspended sediment; what deposits is "
              "measured against what this put in")
+    injected_mass_kg = Param(
+        door=doors.DERIVED,
+        resolve=f"{_TEMPLATE}.injected_mass.injected_mass_kg",
+        bounds=(0.0, 1.0e9), units="kg", consequence="scenario",
+        desc="The mass the pulse released - source_q_m3s x "
+             "sediment_concentration_mgl x spill_duration_s - which the deposited "
+             "fraction is measured against")
     reach_length_km = Param(
         door=doors.SCENARIO, default=6.0, bounds=(0.5, 15.0),
         units="km", consequence="aoi",
@@ -187,7 +196,8 @@ DOC = dict(
         "On success the peak suspended-concentration layer (a `LayerURI`) - the "
         "emitter loads the map, animates the result mesh and loads the bed "
         "evolution beside it - whose `answer` carries `suspended_cmax` / "
-        "`plume_reach_m` / `bed_evolution_max_m` / `net_bed_mass_kg`; narrate "
+        "`plume_reach_m` / `bed_evolution_max_m` / `net_bed_mass_kg` / "
+        "`deposit_fraction` (the deposited mass over the injected mass); narrate "
         "those typed numbers. On failure a dict with `status=\"error\"` + "
         "`error_code`."
     ),

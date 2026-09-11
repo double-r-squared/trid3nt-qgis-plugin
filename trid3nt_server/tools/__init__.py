@@ -219,6 +219,9 @@ from .derive.compute_sediment_yield import compute_sediment_yield  # noqa: E402,
 from .derive.compute_skill_metrics import compute_skill_metrics  # noqa: E402,F401
 from .derive.compute_slope import compute_slope  # noqa: E402,F401
 from .derive.delineate_watershed import delineate_watershed  # noqa: E402,F401
+# A line through a shape's centroid along a bearing: what a profile is read along
+# when the read runs ACROSS a feature rather than down the domain's own axis.
+from .derive.derive_transect import derive_transect  # noqa: E402,F401
 from .derive.digitize_water_body import digitize_water_body  # noqa: E402,F401
 from .derive.enhance_satellite_image import enhance_satellite_image  # noqa: E402,F401
 from .derive.endpoints import endpoints  # noqa: E402,F401

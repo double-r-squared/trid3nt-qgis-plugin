@@ -191,9 +191,9 @@ DOC = dict(
     returns=(
         "On success the dissolved-oxygen layer (a `LayerURI`) - the emitter loads "
         "the field map and animates the result mesh beside it - whose `answer` "
-        "carries `do_min_mgl` / `do_min_distance_m` / `bod_mixed_mgl` / "
-        "`mean_velocity_mps`; judge the minimum against `do_standard_mgl` on the "
-        "sheet and narrate those typed numbers. On failure a dict with "
+        "carries `do_min_mgl` / `do_below_standard` (the minimum judged against "
+        "`do_standard_mgl`) / `do_min_distance_m` / `bod_mixed_mgl` / "
+        "`mean_velocity_mps`; narrate those typed numbers. On failure a dict with "
         "`status=\"error\"` + `error_code`."
     ),
 )

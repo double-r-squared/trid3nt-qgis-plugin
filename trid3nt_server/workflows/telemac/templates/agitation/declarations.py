@@ -96,6 +96,12 @@ class PARAMS:
         bounds=(1.0, 200.0), units="m", consequence="numerical",
         desc="The width the mapped structure centreline is cut at; a survey maps "
              "a mound as a line and a line removes no water from the domain")
+    transect_length_m = Param(
+        door=doors.SCENARIO, default=1500.0, bounds=(100.0, 20000.0),
+        units="m", consequence="scenario",
+        desc="The whole length of the transect the agitation is read along: a "
+             "straight line through the structure's centroid along the incident "
+             "wave direction, half of it on the exposed side and half in the lee")
     open_depth_threshold_m = Param(
         door=doors.SCENARIO, default=DEFAULT_OPEN_DEPTH_M,
         bounds=(-200.0, -1.0), units="m", consequence="physics",
@@ -150,10 +156,13 @@ DOC = dict(
     ),
     returns=(
         "On success an `AnswerLayerURI` - the agitation coefficient Kd = Hs/H0 "
-        "COG the run leads with, its `answer` carrying `kd_max`, `hs_max_m` and "
-        "`mesh_size_m`; narrate those typed numbers. kd_max is often a standing "
-        "wave against the domain's own open boundary rather than a harbour "
-        "answer, so read the field behind the structure. On failure a dict with "
-        "`status=\"error\"` + `error_code`."
+        "COG the run leads with and the Kd transect through the structure along "
+        "the incident wave charted beside it, its `answer` carrying `kd_max`, "
+        "`kd_transect_min` and `kd_transect_max` (Kd along that transect - the "
+        "lee against the exposed approach), `hs_max_m` and `mesh_size_m`; "
+        "narrate those typed numbers. kd_max is often a standing wave against "
+        "the domain's own open boundary rather than a harbour answer, so read "
+        "the transect and the field behind the structure. On failure a dict "
+        "with `status=\"error\"` + `error_code`."
     ),
 )

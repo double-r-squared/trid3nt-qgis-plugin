@@ -183,6 +183,27 @@ def test_a_primitive_is_a_value_and_its_measure_names_the_read_it_comes_from():
     assert max_over_time("T1").layer().measure("max") == measure
 
 
+def test_a_measure_held_against_a_sheet_value_answers_a_ratio_or_a_verdict():
+    """``over`` is the measure divided by the value, ``below`` whether it lies
+    under it; a read that came back as nothing, or a zero to divide by, answers
+    nothing rather than a number nobody measured."""
+    deposited = mass_balance(module="gaia").measure("sediment_deposited_mass_kg")
+    fraction = deposited.over(12.0)
+    assert (fraction.op, fraction.against) == ("over", 12.0)
+    assert fraction.primitive == deposited.primitive and fraction.stat == deposited.stat
+    assert fraction.answer(3.0, 12.0) == 0.25
+    assert fraction.answer(3.0, 0.0) is None and fraction.answer(None, 12.0) is None
+    verdict = series("T2").measure("min").below(5.0)
+    assert verdict.answer(4.2, 5.0) is True and verdict.answer(6.0, 5.0) is False
+    assert verdict.answer(4.2, None) is None
+    assert deposited.answer(3.0, None) == 3.0
+
+
+def test_a_field_at_an_instant_carries_its_spread(solved):
+    frame = T2D.OUTPUTS["field"].read(field("T1", t=1), solved)
+    assert frame.measures["spread"] == 75.0
+
+
 # -- the door: the outputs list, read and published -------------------------- #
 
 def test_the_door_refuses_a_published_variable_with_no_caption():
@@ -361,6 +382,54 @@ def test_a_profile_is_the_variable_per_station_down_the_line_at_the_instant(
     assert read.measures["min"] == 6.0
     assert read.measures["x_min_m"] == pytest.approx(200.0, abs=10.0)
     assert read.measures["velocity_mps"] == pytest.approx(0.5)
+
+
+def test_a_profile_keeps_only_the_nodes_within_the_stated_band(coupled):
+    """A transect through a domain reads the nodes beside the line, not a mean
+    over the whole width; without a band the whole domain is the profile."""
+    from trid3nt_server.workflows.telemac.modules.outputs import profile
+
+    whole = T2D.OUTPUTS["profile"].read(profile("T2", along=_line(coupled)), coupled)
+    assert whole.measures["stations"] == 4
+    # a one-metre band keeps the three nodes ON the line, and the last of those
+    # is dry at the instant: two wet stations is no profile, which is the band
+    # being applied
+    with pytest.raises(OutputEmpty, match="needs three"):
+        T2D.OUTPUTS["profile"].read(
+            profile("T2", along=_line(coupled), within_m=1.0), coupled)
+    wide = T2D.OUTPUTS["profile"].read(
+        profile("T2", along=_line(coupled), within_m=20.0), coupled)
+    assert list(wide.values) == list(whole.values)
+    assert profile("T2", along="l", within_m=1.0) != profile("T2", along="l")
+
+
+def test_an_answer_over_a_variable_the_run_never_wrote_is_nothing(monkeypatch,
+                                                                    solved):
+    """A listed output the result lacks refuses; a measure alone over one is
+    an answer of nothing - a single-class bed writes no surface D50 to spread."""
+    from trid3nt_contracts.execution import LayerURI
+
+    from trid3nt_server.workflows.telemac import workflow as door
+
+    async def _publish(**kwargs):
+        return Published(primary=LayerURI(
+            layer_id="L", name="Peak dye concentration (reach)",
+            layer_type="raster", uri="s3://runs/RID/dye_concentration.tif",
+            quantity="dye_concentration"))
+
+    monkeypatch.setattr(door, "publish", _publish)
+    run = {**solved.run, "module": "telemac2d"}
+    result = asyncio.run(door.publish_outputs(
+        run=run, outputs=[max_over_time("T1").layer(style={"kind": "continuous"})],
+        captions={"T1": "dye concentration"},
+        answer={"spread": field("Q", t=-1).measure("spread"),
+                "cmax": max_over_time("T1").measure("max")},
+        params={}))
+    assert result.answer == {"spread": None, "cmax": 80.0}
+    with pytest.raises(OutputEmpty):
+        asyncio.run(door.publish_outputs(
+            run=run, outputs=[field("Q", t=-1).layer(style={"kind": "continuous"})],
+            captions={"Q": "flowrate"}, answer={}, params={}))
 
 
 def test_a_profile_runs_the_way_the_solved_flow_goes(coupled):

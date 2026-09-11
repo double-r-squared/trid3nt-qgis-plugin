@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from dataclasses import dataclass, field
 from typing import Any, Mapping, Sequence
 
@@ -40,9 +41,9 @@ class Published:
 
 
 def quantity_of(caption: str) -> str:
-    """The quantity token a caption's own words spell: ``dye concentration`` ->
-    ``dye_concentration``. The still, the frames and the chart of one quantity
-    are held to one scale by it."""
+    """The quantity token a caption's own words spell: ``water depth`` ->
+    ``water_depth``. The still, the frames and the chart of one quantity are
+    held to one scale by it."""
     return "_".join(str(caption).strip().lower().split())
 
 
@@ -114,6 +115,10 @@ async def publish(*, run_id: str, engine: str, name: str, where: str,
                      animations=animations)
 
 
+#: A style row's ``range`` names the percentile the legend's top is capped at.
+_PERCENTILE_CAP = re.compile(r"p(\d+(?:\.\d+)?)")
+
+
 def _value_range(reads: Sequence[Field], style: Mapping[str, Any] | None
                  ) -> tuple[float, float]:
     """The legend range the fields of one quantity share, measured in hand.
@@ -121,7 +126,9 @@ def _value_range(reads: Sequence[Field], style: Mapping[str, Any] | None
     A floored field is read from zero: the floor is where the field STOPS being
     drawn, so the ramp's bottom is nothing rather than the faintest cell. A row
     that declares a centre is a diverging ramp, ranged symmetrically about it so
-    the centre colour means the centre value on every run."""
+    the centre colour means the centre value on every run; one that declares a
+    ``floor`` pins the bottom there, and one that declares a ``range`` of
+    ``p<q>`` caps the top at that percentile of the field."""
     import numpy as np
 
     values = np.concatenate([np.asarray(read.values, dtype="float64").ravel()
@@ -129,13 +136,19 @@ def _value_range(reads: Sequence[Field], style: Mapping[str, Any] | None
     finite = values[np.isfinite(values)]
     hi = float(finite.max()) if finite.size else 0.0
     lo = float(finite.min()) if finite.size else 0.0
-    center = (style or {}).get("center")
+    row = style or {}
+    center = row.get("center")
     floors = [read.floor for read in reads if read.floor is not None]
     if center is not None:
         reach = max(abs(hi - float(center)), abs(lo - float(center)))
         return (round(float(center) - reach, 6), round(float(center) + reach, 6))
-    if floors:
-        return (0.0, round(max(hi, *floors), 6))
+    cap = _PERCENTILE_CAP.fullmatch(str(row.get("range") or ""))
+    if cap is not None and finite.size:
+        hi = float(np.percentile(finite, float(cap.group(1))))
+    if row.get("floor") is not None:
+        lo = float(row["floor"])
+    elif floors:
+        lo, hi = 0.0, max(hi, *floors)
     return (round(lo, 6), round(hi, 6))
 
 

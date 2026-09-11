@@ -20,6 +20,7 @@ from trid3nt_server.workflows.mesh.tool import mesh_op, tool
 from trid3nt_server.workflows.inputs.aoi import AcquireAoi, location_or_bbox
 from trid3nt_server.workflows.telemac.authoring.assembler import HARBOUR_GEOMETRY
 from trid3nt_server.workflows.telemac.modules import field, mesh
+from trid3nt_server.workflows.telemac.modules.outputs import profile
 from trid3nt_server.workflows.telemac.modules.artemis import (
     ART,
     BOUNDARY_FILENAME,
@@ -52,9 +53,16 @@ _STEERING_FILE = "art_agitation.cas"
 class DATA:
     """What the run consumes from the world.
 
-    ONE row, and a SLOT: this template names no default source for a structure."""
+    A SLOT and a row over it: this template names no default source for a
+    structure, and the transect is laid through whatever structure it is handed."""
 
     structure = Data.supplied(geometry="polyline")
+    #: The line the agitation is read along: through the structure's centroid,
+    #: along the incident wave (a propagation direction, so the trig convention
+    #: the wave param is stated in), from the exposed side into the lee.
+    transect = tool("derive_transect", shape=structure,
+                    bearing_deg=P.wave_direction_deg, convention="trig",
+                    length_m=P.transect_length_m)
     #: The domain itself, when the caller has one. Unfilled, MESH below cuts it
     #: from the shoreline; filled, that mesh is what the wave is solved on and
     #: the recipe is not run.
@@ -130,9 +138,13 @@ class STEERING(ART):
 
 
 #: What the solved run is read for: the agitation coefficient over the harbour,
-#: at the one instant an elliptic solve writes.
+#: at the one instant an elliptic solve writes, and along the transect through
+#: the structure. The profile keeps the nodes within one finest mesh edge of the
+#: line: the band the structure's own nodes were laid at, so the read is the
+#: line's and not a mean over the whole harbour's width.
 OUTPUTS = [
     field("KD", t=-1).layer(style=TELEMAC_AGITATION_STYLE),
+    profile("KD", along=DATA.transect, within_m=P.mesh_min_edge_m).chart(),
 ]
 CAPTIONS = {"KD": "agitation coefficient"}
 
@@ -140,6 +152,10 @@ CAPTIONS = {"KD": "agitation coefficient"}
 #: measure of one of the reads above or of the wave height it is a ratio of.
 ANSWER = {
     "kd_max": field("KD", t=-1).measure("max"),
+    "kd_transect_min": profile("KD", along=DATA.transect,
+                               within_m=P.mesh_min_edge_m).measure("min"),
+    "kd_transect_max": profile("KD", along=DATA.transect,
+                               within_m=P.mesh_min_edge_m).measure("max"),
     "hs_max_m": field("HS", t=-1).measure("max"),
     "mesh_size_m": mesh().measure("size_m"),
 }
