@@ -10,28 +10,28 @@ venvs/agent/bin/python dev/instruments/code_graph.py
 
 | metric | value |
 |---|---|
-| modules scanned | 984 |
-| total loc | 251743 |
-| reachable from roots | 431 (115021 loc) |
+| modules scanned | 977 |
+| total loc | 242529 |
+| reachable from roots | 420 (109909 loc) |
 | test-only-reachable | 83 |
 | script-only-reachable | 0 |
 | orphans (product) | 18 |
 | package markers excluded from orphans | 104 |
 | orphans (scripts/ entry modules) | 0 |
-| test modules | 385 |
-| import edges | 3150 |
-| dynamic (string-resolved) edges | 177 |
-| reference call-site edges | 12276 |
-| unattributed call sites | 59341 |
+| test modules | 389 |
+| import edges | 3144 |
+| dynamic (string-resolved) edges | 184 |
+| reference call-site edges | 12632 |
+| unattributed call sites | 58541 |
 | dead symbols (conf >= 80) | 8 |
 | unused callables (conf 60 tier) | 36 |
-| vulture findings muted by whitelist | 30 |
+| vulture findings muted by whitelist | 39 |
 
 ## Honesty checks
 
 - Known-culled modules from this arc still present: **0** (all confirmed gone)
 - grimp modules with no file in the scanned universe: 0
-- Call sites the import table could not attribute: 59341 (builtins, locals, methods on non-imported objects -- counted, not guessed).
+- Call sites the import table could not attribute: 58541 (builtins, locals, methods on non-imported objects -- counted, not guessed).
 - Out of scope, so its imports anchor nothing: `experiments/`, `third_party/`.
 
 ## False-positive classes handled
@@ -48,19 +48,19 @@ venvs/agent/bin/python dev/instruments/code_graph.py
 
 | module | loc | path |
 |---|---|---|
-| `trid3nt_server.tools.fetchers._router.hooks.cds` | 652 | trid3nt_server/tools/fetchers/_router/hooks/cds.py |
-| `trid3nt_server.tools.fetchers.hydrology.fetch_usgs_nwis_gauges.hooks` | 361 | trid3nt_server/tools/fetchers/hydrology/fetch_usgs_nwis_gauges/hooks.py |
-| `trid3nt_server.tools.fetchers.hydrology.fetch_nws_river_forecast.hooks` | 334 | trid3nt_server/tools/fetchers/hydrology/fetch_nws_river_forecast/hooks.py |
-| `trid3nt_server.tools.fetchers.weather.fetch_raws_weather.hooks` | 288 | trid3nt_server/tools/fetchers/weather/fetch_raws_weather/hooks.py |
-| `trid3nt_server.tools.fetchers.weather.fetch_asos_metar.hooks` | 280 | trid3nt_server/tools/fetchers/weather/fetch_asos_metar/hooks.py |
+| `trid3nt_server.tools.fetchers._router.hooks.cds` | 634 | trid3nt_server/tools/fetchers/_router/hooks/cds.py |
+| `trid3nt_server.tools.fetchers.hydrology.fetch_usgs_nwis_gauges.hooks` | 352 | trid3nt_server/tools/fetchers/hydrology/fetch_usgs_nwis_gauges/hooks.py |
+| `trid3nt_server.tools.fetchers.hydrology.fetch_nws_river_forecast.hooks` | 325 | trid3nt_server/tools/fetchers/hydrology/fetch_nws_river_forecast/hooks.py |
+| `trid3nt_server.tools.fetchers.weather.fetch_raws_weather.hooks` | 279 | trid3nt_server/tools/fetchers/weather/fetch_raws_weather/hooks.py |
+| `trid3nt_server.tools.fetchers.weather.fetch_asos_metar.hooks` | 271 | trid3nt_server/tools/fetchers/weather/fetch_asos_metar/hooks.py |
 | `trid3nt_server.tools.fetchers.hazard.fetch_usgs_earthquakes.hooks` | 247 | trid3nt_server/tools/fetchers/hazard/fetch_usgs_earthquakes/hooks.py |
 | `trid3nt_server.tools.fetchers.hydrology.fetch_usgs_groundwater_levels.hooks` | 237 | trid3nt_server/tools/fetchers/hydrology/fetch_usgs_groundwater_levels/hooks.py |
-| `trid3nt_server.tools.fetchers.weather.fetch_openaq_measurements.hooks` | 236 | trid3nt_server/tools/fetchers/weather/fetch_openaq_measurements/hooks.py |
+| `trid3nt_server.tools.fetchers.weather.fetch_openaq_measurements.hooks` | 230 | trid3nt_server/tools/fetchers/weather/fetch_openaq_measurements/hooks.py |
 | `trid3nt_server.tools.fetchers.weather.fetch_nws_alerts_conus.hooks` | 227 | trid3nt_server/tools/fetchers/weather/fetch_nws_alerts_conus/hooks.py |
 | `trid3nt_server.tools.fetchers.hazard.fetch_tsunami_events.hooks` | 218 | trid3nt_server/tools/fetchers/hazard/fetch_tsunami_events/hooks.py |
 | `trid3nt_server.tools.fetchers.hazard.fetch_usgs_volcano_alerts.hooks` | 202 | trid3nt_server/tools/fetchers/hazard/fetch_usgs_volcano_alerts/hooks.py |
-| `trid3nt_server.tools.fetchers.soil.fetch_snotel_snow.hooks` | 201 | trid3nt_server/tools/fetchers/soil/fetch_snotel_snow/hooks.py |
-| `trid3nt_server.tools.fetchers._router.hooks.pfdf_raster` | 176 | trid3nt_server/tools/fetchers/_router/hooks/pfdf_raster.py |
+| `trid3nt_server.tools.fetchers.soil.fetch_snotel_snow.hooks` | 195 | trid3nt_server/tools/fetchers/soil/fetch_snotel_snow/hooks.py |
+| `trid3nt_server.tools.fetchers._router.hooks.pfdf_raster` | 170 | trid3nt_server/tools/fetchers/_router/hooks/pfdf_raster.py |
 | `trid3nt_server.tools.fetchers.weather.fetch_airnow_air_quality.hooks` | 165 | trid3nt_server/tools/fetchers/weather/fetch_airnow_air_quality/hooks.py |
 | `trid3nt_server.tools.fetchers.socioeconomic.fetch_usace_nsi.hooks` | 142 | trid3nt_server/tools/fetchers/socioeconomic/fetch_usace_nsi/hooks.py |
 | `trid3nt_server.tools.fetchers.weather.fetch_nws_event.hooks` | 125 | trid3nt_server/tools/fetchers/weather/fetch_nws_event/hooks.py |
@@ -71,63 +71,63 @@ venvs/agent/bin/python dev/instruments/code_graph.py
 
 | module | loc | path |
 |---|---|---|
-| `trid3nt_server.tools.fetchers._router.hooks.topobathy` | 1830 | trid3nt_server/tools/fetchers/_router/hooks/topobathy.py |
-| `trid3nt_server.tools.fetchers.imagery._goes_archive_core` | 1167 | trid3nt_server/tools/fetchers/imagery/_goes_archive_core.py |
-| `trid3nt_server.tools.fetchers.weather.fetch_storm_tracks.hooks` | 971 | trid3nt_server/tools/fetchers/weather/fetch_storm_tracks/hooks.py |
-| `trid3nt_server.tools.fetchers.imagery._satellite_slider` | 736 | trid3nt_server/tools/fetchers/imagery/_satellite_slider.py |
-| `scripts.model_check` | 732 | scripts/model_check.py |
-| `trid3nt_server.tools.fetchers.hydrology.fetch_noaa_nwm_streamflow.hooks` | 652 | trid3nt_server/tools/fetchers/hydrology/fetch_noaa_nwm_streamflow/hooks.py |
-| `trid3nt_server.tools.fetchers.terrain.fetch_dem.hooks` | 508 | trid3nt_server/tools/fetchers/terrain/fetch_dem/hooks.py |
-| `trid3nt_server.tools.fetchers.weather.fetch_glm_lightning.hooks` | 451 | trid3nt_server/tools/fetchers/weather/fetch_glm_lightning/hooks.py |
-| `trid3nt_server.tools.fetchers.hazard.fetch_openfema_disasters.hooks` | 444 | trid3nt_server/tools/fetchers/hazard/fetch_openfema_disasters/hooks.py |
-| `trid3nt_server.tools.fetchers.imagery.fetch_goes_satellite.hooks` | 441 | trid3nt_server/tools/fetchers/imagery/fetch_goes_satellite/hooks.py |
-| `trid3nt_server.tools.fetchers.ocean.fetch_bluetopo.hooks` | 425 | trid3nt_server/tools/fetchers/ocean/fetch_bluetopo/hooks.py |
-| `trid3nt_server.tools.fetchers._router.hooks.goes_animation` | 350 | trid3nt_server/tools/fetchers/_router/hooks/goes_animation.py |
-| `trid3nt_server.tools.fetchers.hydrology.fetch_lter_records.hooks` | 345 | trid3nt_server/tools/fetchers/hydrology/fetch_lter_records/hooks.py |
-| `trid3nt_server.tools.fetchers._router.hooks.topobathy_class` | 327 | trid3nt_server/tools/fetchers/_router/hooks/topobathy_class.py |
-| `trid3nt_server.tools.fetchers._router.hooks.hrrr` | 320 | trid3nt_server/tools/fetchers/_router/hooks/hrrr.py |
-| `trid3nt_server.tools.fetchers.hydrology.fetch_high_water_marks.hooks` | 319 | trid3nt_server/tools/fetchers/hydrology/fetch_high_water_marks/hooks.py |
+| `trid3nt_server.tools.fetchers._router.hooks.topobathy` | 1787 | trid3nt_server/tools/fetchers/_router/hooks/topobathy.py |
+| `trid3nt_server.tools.fetchers.imagery._goes_archive_core` | 1134 | trid3nt_server/tools/fetchers/imagery/_goes_archive_core.py |
+| `trid3nt_server.tools.fetchers.weather.fetch_storm_tracks.hooks` | 931 | trid3nt_server/tools/fetchers/weather/fetch_storm_tracks/hooks.py |
+| `scripts.model_check` | 720 | scripts/model_check.py |
+| `trid3nt_server.tools.fetchers.imagery._satellite_slider` | 709 | trid3nt_server/tools/fetchers/imagery/_satellite_slider.py |
+| `trid3nt_server.tools.fetchers.hydrology.fetch_noaa_nwm_streamflow.hooks` | 618 | trid3nt_server/tools/fetchers/hydrology/fetch_noaa_nwm_streamflow/hooks.py |
+| `trid3nt_server.tools.fetchers.terrain.fetch_dem.hooks` | 484 | trid3nt_server/tools/fetchers/terrain/fetch_dem/hooks.py |
+| `trid3nt_server.tools.fetchers.hazard.fetch_openfema_disasters.hooks` | 435 | trid3nt_server/tools/fetchers/hazard/fetch_openfema_disasters/hooks.py |
+| `trid3nt_server.tools.fetchers.weather.fetch_glm_lightning.hooks` | 433 | trid3nt_server/tools/fetchers/weather/fetch_glm_lightning/hooks.py |
+| `trid3nt_server.tools.fetchers.imagery.fetch_goes_satellite.hooks` | 421 | trid3nt_server/tools/fetchers/imagery/fetch_goes_satellite/hooks.py |
+| `trid3nt_server.tools.fetchers.ocean.fetch_bluetopo.hooks` | 404 | trid3nt_server/tools/fetchers/ocean/fetch_bluetopo/hooks.py |
+| `trid3nt_server.tools.fetchers.hydrology.fetch_lter_records.hooks` | 339 | trid3nt_server/tools/fetchers/hydrology/fetch_lter_records/hooks.py |
+| `trid3nt_server.tools.fetchers._router.hooks.goes_animation` | 338 | trid3nt_server/tools/fetchers/_router/hooks/goes_animation.py |
+| `trid3nt_server.tools.fetchers._router.hooks.topobathy_class` | 318 | trid3nt_server/tools/fetchers/_router/hooks/topobathy_class.py |
+| `trid3nt_server.tools.fetchers._router.hooks.hrrr` | 311 | trid3nt_server/tools/fetchers/_router/hooks/hrrr.py |
+| `trid3nt_server.tools.fetchers.hydrology.fetch_high_water_marks.hooks` | 310 | trid3nt_server/tools/fetchers/hydrology/fetch_high_water_marks/hooks.py |
 | `trid3nt_server.tools.fetchers.hazard.fetch_fema_nfhl_zones.hooks` | 276 | trid3nt_server/tools/fetchers/hazard/fetch_fema_nfhl_zones/hooks.py |
-| `trid3nt_server.tools.fetchers.hazard.fetch_fault_sources.hooks` | 271 | trid3nt_server/tools/fetchers/hazard/fetch_fault_sources/hooks.py |
-| `trid3nt_server.tools.fetchers.imagery.fetch_viirs_day_fire.hooks` | 256 | trid3nt_server/tools/fetchers/imagery/fetch_viirs_day_fire/hooks.py |
-| `trid3nt_server.tools.fetchers.weather.fetch_storm_events_db.hooks` | 256 | trid3nt_server/tools/fetchers/weather/fetch_storm_events_db/hooks.py |
+| `trid3nt_server.tools.fetchers.hazard.fetch_fault_sources.hooks` | 265 | trid3nt_server/tools/fetchers/hazard/fetch_fault_sources/hooks.py |
+| `trid3nt_server.tools.fetchers.imagery._goes_common` | 249 | trid3nt_server/tools/fetchers/imagery/_goes_common.py |
+| `trid3nt_server.tools.fetchers.weather.fetch_storm_events_db.hooks` | 247 | trid3nt_server/tools/fetchers/weather/fetch_storm_events_db/hooks.py |
 
 ## Top 20 dead symbols by loc
 
 | symbol | kind | file:line | loc |
 |---|---|---|---|
 | `return` | unreachable_code | trid3nt_server/server/protocol/connections.py:63 | 30 |
-| `token_envelope` | parameter | trid3nt_server/credentials/auth_handshake.py:136 | 1 |
+| `token_envelope` | parameter | trid3nt_server/credentials/auth_handshake.py:127 | 1 |
 | `unquote` | import | trid3nt_server/emission/uri_registry.py:18 | 1 |
 | `default_seconds` | parameter | trid3nt_server/gates/confirm.py:90 | 1 |
-| `raw_user_text` | parameter | trid3nt_server/server/dispatch/emitter.py:825 | 1 |
-| `entry_id` | parameter | trid3nt_server/tools/search/fetch_living_atlas_layer/fetch_living_atlas_layer.py:136 | 1 |
-| `gs_backend` | parameter | trid3nt_server/workflows/shared/cog_io.py:390 | 1 |
-| `runs_bucket_default` | parameter | trid3nt_server/workflows/shared/cog_io.py:392 | 1 |
+| `raw_user_text` | parameter | trid3nt_server/server/dispatch/emitter.py:822 | 1 |
+| `entry_id` | parameter | trid3nt_server/tools/search/fetch_living_atlas_layer/fetch_living_atlas_layer.py:128 | 1 |
+| `gs_backend` | parameter | trid3nt_server/workflows/publishing/cog.py:373 | 1 |
+| `runs_bucket_default` | parameter | trid3nt_server/workflows/publishing/cog.py:375 | 1 |
 
 ## Package-level edge matrix (cross-package import edges)
 
-| from \ to | contracts | plugin | scripts | tests | trid3nt_contracts | trid3nt_server | trid3nt_server.__main__ | trid3nt_server.adapters | trid3nt_server.cases | trid3nt_server.credentials | trid3nt_server.emission | trid3nt_server.fallbacks | trid3nt_server.gates | trid3nt_server.main | trid3nt_server.persistence | trid3nt_server.plugin_repo | trid3nt_server.sandbox | trid3nt_server.server | trid3nt_server.telemetry | trid3nt_server.tools | trid3nt_server.workflows | workers |
+| from \ to | contracts | plugin | scripts | tests | trid3nt_contracts | trid3nt_server | trid3nt_server.__main__ | trid3nt_server.adapters | trid3nt_server.credentials | trid3nt_server.emission | trid3nt_server.fallbacks | trid3nt_server.gates | trid3nt_server.inputs | trid3nt_server.main | trid3nt_server.persistence | trid3nt_server.plugin_repo | trid3nt_server.sandbox | trid3nt_server.server | trid3nt_server.telemetry | trid3nt_server.tools | trid3nt_server.workflows | workers |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | contracts | . | . | . | . | 52 | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . |
 | plugin | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . |
 | scripts | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . |
-| tests | . | 3 | 1 | . | 258 | 1 | . | 69 | 4 | 9 | 76 | 4 | 36 | 16 | 31 | 1 | 3 | 99 | 10 | 546 | 236 | 1 |
+| tests | . | 3 | 1 | . | 264 | 1 | . | 70 | 9 | 76 | 4 | 37 | 16 | 16 | 32 | 1 | 3 | 99 | 10 | 551 | 260 | . |
 | trid3nt_contracts | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . |
 | trid3nt_server | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . |
 | trid3nt_server.__main__ | . | . | . | . | . | . | . | . | . | . | . | . | . | 1 | . | . | . | . | . | . | . | . |
-| trid3nt_server.adapters | . | . | . | . | 1 | . | . | . | . | 1 | . | . | 3 | . | . | . | . | 1 | . | . | . | . |
-| trid3nt_server.cases | . | . | . | . | 3 | . | . | . | . | 1 | 1 | . | . | . | . | . | . | 1 | . | 3 | 1 | . |
+| trid3nt_server.adapters | . | . | . | . | 4 | . | . | . | 1 | . | . | 3 | . | . | . | . | . | 1 | . | . | . | . |
 | trid3nt_server.credentials | . | . | . | . | 3 | . | . | . | . | . | . | . | . | . | 1 | . | . | . | . | . | . | . |
-| trid3nt_server.emission | . | . | . | . | 14 | . | . | . | . | . | . | . | 1 | . | . | . | . | . | . | 3 | 5 | . |
-| trid3nt_server.fallbacks | . | . | . | . | 1 | . | . | . | . | . | . | . | 1 | . | . | . | . | . | . | 1 | 1 | . |
-| trid3nt_server.gates | . | . | . | . | 21 | . | . | 1 | . | 4 | 3 | . | . | . | . | . | . | 8 | . | 9 | 1 | . |
-| trid3nt_server.main | . | . | . | . | . | . | . | . | . | . | . | . | . | . | 1 | . | . | 1 | 1 | 13 | 1 | . |
+| trid3nt_server.emission | . | . | . | . | 14 | . | . | . | . | . | . | 1 | . | . | . | . | . | . | . | 3 | 4 | . |
+| trid3nt_server.fallbacks | . | . | . | . | 1 | . | . | . | . | . | . | 1 | . | . | . | . | . | . | . | 1 | 1 | . |
+| trid3nt_server.gates | . | . | . | . | 22 | . | . | 1 | 4 | 3 | . | . | 1 | . | . | . | . | 8 | . | 9 | 1 | . |
+| trid3nt_server.inputs | . | . | . | . | 5 | . | . | . | 1 | 5 | . | 2 | . | . | . | . | . | 1 | . | 4 | 6 | . |
+| trid3nt_server.main | . | . | . | . | . | . | . | . | . | . | . | . | . | . | 1 | . | . | 1 | 1 | 12 | 1 | . |
 | trid3nt_server.persistence | . | . | . | . | 4 | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . |
 | trid3nt_server.plugin_repo | . | . | . | . | . | . | . | 1 | . | . | . | . | . | . | . | . | . | . | . | . | . | . |
 | trid3nt_server.sandbox | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | 1 | . | . |
-| trid3nt_server.server | . | . | . | . | 29 | 1 | . | 9 | 2 | 4 | 11 | . | 14 | 2 | 2 | 1 | . | . | 2 | 16 | 1 | . |
+| trid3nt_server.server | . | . | . | . | 29 | 1 | . | 9 | 4 | 11 | . | 14 | 1 | 2 | 2 | 1 | . | . | 2 | 17 | 2 | . |
 | trid3nt_server.telemetry | . | . | . | . | . | 1 | . | . | . | . | . | . | . | . | 1 | . | . | 1 | . | . | . | . |
-| trid3nt_server.tools | . | . | . | . | 166 | . | . | . | . | . | 22 | 3 | 2 | 1 | . | . | 1 | . | 2 | . | 30 | . |
-| trid3nt_server.workflows | . | . | . | . | 54 | . | . | . | . | . | 33 | . | 8 | . | 3 | . | . | . | 1 | 29 | . | . |
+| trid3nt_server.tools | . | . | . | . | 167 | . | . | . | . | 21 | 3 | 2 | 7 | 1 | . | . | 1 | . | 2 | . | 27 | . |
+| trid3nt_server.workflows | . | . | . | . | 44 | . | . | . | . | 22 | . | 7 | 38 | . | 3 | . | . | . | 1 | 25 | . | . |
 | workers | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | 1 | . |
