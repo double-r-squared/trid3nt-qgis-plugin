@@ -15,7 +15,6 @@ on one machine against one user; the only wire shapes it speaks are
 | `main.py` | The `trid3nt-server` console script: importing `trid3nt_server.tools` is what populates the registry. |
 | `persistence.py` | The typed wrapper over the document store: cases, layers, chat, run snapshots. |
 | `plugin_repo.py` | The QGIS custom plugin repository the daemon serves: the versioned zip, `plugins.xml` and its manifest. |
-| `scenario_reuse.py` | The reuse guard in front of an expensive solve: a signature match short-circuits, anything ambiguous runs. |
 | `telemetry.py` | The JSONL sink: one line per tool call, turn, shadow selection and solve completion. |
 
 ## Subfolders

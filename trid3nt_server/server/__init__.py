@@ -22,7 +22,7 @@ from .dispatch import emitter as _dispatch_emitter
 from .dispatch import helpers as _dispatch_helpers
 from .dispatch import persist as _dispatch_persist
 from .dispatch import results as _dispatch_results
-from .dispatch import reuse as _dispatch_reuse
+from .dispatch import layer_reuse as _dispatch_layer_reuse
 from .protocol import auth as _protocol_auth
 from .protocol import connections as _protocol_connections
 from .protocol import handlers as _protocol_handlers
@@ -47,7 +47,7 @@ _LEAF_MODULES = (
     _turn_engine,
     _turn_stream,
     _dispatch_helpers,
-    _dispatch_reuse,
+    _dispatch_layer_reuse,
     _dispatch_persist,
     _dispatch_aoi,
     _dispatch_emitter,

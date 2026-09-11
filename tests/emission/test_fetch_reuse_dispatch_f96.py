@@ -15,7 +15,6 @@ import pytest_asyncio
 
 from trid3nt_server import server
 from trid3nt_server import tools as agent_tools
-from trid3nt_server.scenario_reuse import reset_scenario_indexes_for_tests
 from trid3nt_server.tools import RegisteredTool
 from trid3nt_server.emission.uri_registry import reset_uri_registries_for_tests
 from trid3nt_contracts.common import new_ulid
@@ -78,7 +77,6 @@ def _stub_fetch_dem(monkeypatch):
     name = "fetch_dem"
     original = agent_tools.TOOL_REGISTRY.get(name)
     _FETCHES.clear()
-    reset_scenario_indexes_for_tests()
     reset_uri_registries_for_tests()
     # Supply a Case AOI hermetically (avoids persistence/active_case plumbing).
     monkeypatch.setattr(server, "_turn_case_bbox", lambda state: _CASE_AOI)
@@ -105,7 +103,6 @@ def _stub_fetch_dem(monkeypatch):
             agent_tools.TOOL_REGISTRY[name] = original
         else:
             agent_tools.TOOL_REGISTRY.pop(name, None)
-        reset_scenario_indexes_for_tests()
         reset_uri_registries_for_tests()
 
 

@@ -3,7 +3,7 @@
 A string arg failing a ``Literal`` schema is fuzzy-corrected above a cutoff and
 left to the typed-error path below it. After a geocode, a call whose bbox
 intersects neither the geocoded bbox nor the active AOI gets an advisory warning
-that never blocks. The two reuse short-circuits each have a kill-switch."""
+that never blocks. The fetch reuse short-circuit has a kill-switch."""
 
 from __future__ import annotations
 
@@ -17,7 +17,6 @@ import pytest
 from trid3nt_server import server as agent_server
 from trid3nt_server import tools as agent_tools
 from trid3nt_server.adapters.adapter import ModelSettings
-from trid3nt_server.scenario_reuse import reset_scenario_indexes_for_tests
 from trid3nt_server.tools.tool_arg_normalizer import (
     fuzzy_correct_enum_args,
     normalize_args,
@@ -223,90 +222,7 @@ async def test_drift_warning_kill_switch(monkeypatch, fake_llm):
 
 
 # ---------------------------------------------------------------------------
-# (b) expensive-sim reuse kill-switch
-# ---------------------------------------------------------------------------
-
-_SIM_LAUNCHES: list[dict] = []
-
-
-@pytest.fixture()
-def _stub_expensive_tool():
-    """Shadow modflow_contaminant_plume with a launch-counting stub."""
-    name = "modflow_contaminant_plume"
-    original = agent_tools.TOOL_REGISTRY.get(name)
-    _SIM_LAUNCHES.clear()
-    reset_scenario_indexes_for_tests()
-    reset_uri_registries_for_tests()
-
-    def _fn(spill_location_latlon=None, contaminant=None, **_kw) -> LayerURI:
-        _SIM_LAUNCHES.append({"loc": spill_location_latlon})
-        lat, lon = spill_location_latlon
-        return LayerURI(
-            layer_id=f"plume-run-{len(_SIM_LAUNCHES)}",
-            name="Contaminant Plume",
-            layer_type="raster",
-            uri=f"https://example.test/wms?LAYERS=plume-{len(_SIM_LAUNCHES)}",
-            bbox=(lon - 0.1, lat - 0.1, lon + 0.1, lat + 0.1),
-        )
-
-    meta = AtomicToolMetadata(name=name, ttl_class="live-no-cache", cacheable=False)
-    agent_tools.TOOL_REGISTRY[name] = RegisteredTool(
-        metadata=meta, fn=_fn, module=__name__
-    )
-    try:
-        yield
-    finally:
-        if original is not None:
-            agent_tools.TOOL_REGISTRY[name] = original
-        else:
-            agent_tools.TOOL_REGISTRY.pop(name, None)
-        reset_scenario_indexes_for_tests()
-        reset_uri_registries_for_tests()
-
-
-_SIM_PARAMS = {
-    "spill_location_latlon": [40.81, -96.71],
-    "contaminant": "benzene",
-}
-
-
-@pytest.mark.asyncio
-async def test_scenario_reuse_kill_switch_disables_short_circuit(
-    _stub_expensive_tool, monkeypatch
-):
-    monkeypatch.setenv("TRID3NT_SCENARIO_REUSE", "0")
-    ws = _FakeSocket()
-    state = agent_server.SessionState(session_id=new_ulid())
-    await agent_server._invoke_tool_via_emitter(
-        ws, state, "modflow_contaminant_plume", dict(_SIM_PARAMS)
-    )
-    await agent_server._invoke_tool_via_emitter(
-        ws, state, "modflow_contaminant_plume", dict(_SIM_PARAMS)
-    )
-    assert len(_SIM_LAUNCHES) == 2, (
-        "TRID3NT_SCENARIO_REUSE=0 must disable the reuse short-circuit"
-    )
-
-
-@pytest.mark.asyncio
-async def test_scenario_reuse_default_still_fires(
-    _stub_expensive_tool, monkeypatch
-):
-    """Sanity: with the switch unset the reuse short-circuit still works."""
-    monkeypatch.delenv("TRID3NT_SCENARIO_REUSE", raising=False)
-    ws = _FakeSocket()
-    state = agent_server.SessionState(session_id=new_ulid())
-    await agent_server._invoke_tool_via_emitter(
-        ws, state, "modflow_contaminant_plume", dict(_SIM_PARAMS)
-    )
-    await agent_server._invoke_tool_via_emitter(
-        ws, state, "modflow_contaminant_plume", dict(_SIM_PARAMS)
-    )
-    assert len(_SIM_LAUNCHES) == 1
-
-
-# ---------------------------------------------------------------------------
-# (a) refetch-dedupe kill-switch (guard itself: F96 tests)
+# (a) refetch-dedupe kill-switch
 # ---------------------------------------------------------------------------
 
 _FETCHES: list[dict] = []
@@ -319,7 +235,6 @@ def _stub_fetch_tool():
     name = "fetch_buildings"
     original = agent_tools.TOOL_REGISTRY.get(name)
     _FETCHES.clear()
-    reset_scenario_indexes_for_tests()
     reset_uri_registries_for_tests()
 
     def _fn(bbox=None, **_kw) -> LayerURI:
@@ -345,7 +260,6 @@ def _stub_fetch_tool():
             agent_tools.TOOL_REGISTRY[name] = original
         else:
             agent_tools.TOOL_REGISTRY.pop(name, None)
-        reset_scenario_indexes_for_tests()
         reset_uri_registries_for_tests()
 
 

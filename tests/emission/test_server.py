@@ -11,7 +11,6 @@ import pytest
 
 from trid3nt_server import server
 from trid3nt_server import tools as agent_tools
-from trid3nt_server.scenario_reuse import reset_scenario_indexes_for_tests
 from trid3nt_server.tools import RegisteredTool
 from trid3nt_server.emission.uri_registry import reset_uri_registries_for_tests
 from trid3nt_contracts.common import new_ulid
@@ -40,7 +39,6 @@ def _stub_list_tool():
     The name is neither a scenario nor a solver tool, so neither the reuse
     short-circuit nor the confirm gate fires and the bare mint path runs."""
     original = agent_tools.TOOL_REGISTRY.get(_LIST_TOOL)
-    reset_scenario_indexes_for_tests()
     reset_uri_registries_for_tests()
 
     def _fn(**_kw) -> list[LayerURI]:
@@ -69,7 +67,6 @@ def _stub_list_tool():
             agent_tools.TOOL_REGISTRY[_LIST_TOOL] = original
         else:
             agent_tools.TOOL_REGISTRY.pop(_LIST_TOOL, None)
-        reset_scenario_indexes_for_tests()
         reset_uri_registries_for_tests()
 
 

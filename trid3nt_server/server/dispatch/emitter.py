@@ -14,12 +14,11 @@ from trid3nt_server.emission.uri_registry import activate_registry, deactivate_r
 # The gate engine (trid3nt_server.gates.confirm) is imported function-locally in
 # _invoke_tool_via_emitter -- deferred to break the server<->gates load cycle.
 from trid3nt_server.gates.tool_gating import BenchBlockedError
-from trid3nt_server.scenario_reuse import fetched_kind_for_tool, find_reusable_fetched_layer, get_scenario_index, scenario_signature, scenario_type_for_tool
 from trid3nt_server.server.config import _env_flag
-from trid3nt_server.server.dispatch.aoi import _maybe_default_fetch_bbox_to_pinned_aoi, _maybe_default_solver_bbox_to_pinned_aoi, _pin_case_aoi_from_solve, _pin_case_aoi_from_tool_bbox, _scenario_produces_domain
+from trid3nt_server.server.dispatch.aoi import _maybe_default_fetch_bbox_to_pinned_aoi, _pin_case_aoi_from_tool_bbox
 from trid3nt_server.server.dispatch.persist import _VALID_ERROR_CODES, _persist_chart_record, _persist_chat_turn, _persist_tool_card
 from trid3nt_server.server.dispatch.results import _run_to_completion_shielded
-from trid3nt_server.server.dispatch.reuse import _ReuseEntry
+from trid3nt_server.server.dispatch.layer_reuse import _ReuseEntry, fetched_kind_for_tool, find_reusable_fetched_layer
 from trid3nt_server.server.errors import CodeExecConfirmationCancelledError, PayloadWarningCancelledError, SolverConfirmationCancelledError, ToolNotFoundError
 from trid3nt_server.server.session.case_state import _persist_case_layer_handles, _persist_case_loaded_layers, _turn_case_bbox, _turn_case_id
 from trid3nt_server.server.session.state import SessionState
@@ -478,82 +477,14 @@ async def _invoke_tool_via_emitter(
         case_bbox=_turn_case_bbox(state),
     )
 
-    # Default a bbox-taking FETCH to the pinned Case AOI: after a solve pins
-    # the domain, force a same-area follow-up fetch onto the pinned extent so
-    # all layers cover the SAME AOI by construction; a genuinely DIFFERENT
-    # place (disjoint) or an explicit WIDEN (encloses the pin) is honored.
-    # Runs BEFORE the fetcher reuse guard so the reuse comparison sees the
-    # snapped bbox. No-op when no AOI is pinned.
+    # Default a bbox-taking FETCH to the pinned Case AOI: a same-area follow-up
+    # is forced onto the pinned extent so all layers cover the SAME AOI by
+    # construction; a genuinely DIFFERENT place (disjoint) or an explicit WIDEN
+    # (encloses the pin) is honored. Runs BEFORE the reuse guard so the reuse
+    # comparison sees the snapped bbox. No-op when no AOI is pinned.
     params = _maybe_default_fetch_bbox_to_pinned_aoi(
         tool_name, params, _turn_case_bbox(state)
     )
-
-    # Pin an expensive SOLVER's bbox to the active Case AOI as well: the solve
-    # grid is built directly from this bbox with no padding, so a drifted or
-    # wider same-area box would compute OUTSIDE the displayed AOI. Runs before
-    # the scenario reuse guard so the reuse comparison sees the snap.
-    params = _maybe_default_solver_bbox_to_pinned_aoi(
-        tool_name, params, _turn_case_bbox(state)
-    )
-
-    # DETERMINISTIC expensive-simulation reuse guard: a hard backstop before
-    # launching a solver composer. A CLEAR match against the session's
-    # already-produced results returns the EXISTING layer and tags a reuse note
-    # for the model; any ambiguity falls through and RUNS. A truthy
-    # force_rerun/rerun/force kwarg is the explicit re-run escape hatch,
-    # stripped before the real dispatch.
-    _reuse_note: str | None = None
-    if scenario_type_for_tool(tool_name) is not None:
-        _force_rerun = any(
-            bool(params.get(k))
-            for k in ("force_rerun", "rerun", "re_run", "force")
-        )
-        # These are guard-control kwargs, never real tool params -- strip them so
-        # the downstream tool body never sees an unexpected kwarg.
-        for _k in ("force_rerun", "rerun", "re_run", "force"):
-            params.pop(_k, None)
-        # ``TRID3NT_SCENARIO_REUSE=0`` disables the short-circuit; the
-        # guard-control strip above stays unconditional either way.
-        if not _force_rerun and _env_flag("TRID3NT_SCENARIO_REUSE", True):
-            scenario_index = get_scenario_index(state.session_id)
-            # Seed the index from this Case's durable loaded_layers so reuse
-            # survives a reconnect / sibling connection (the in-memory index may
-            # be cold while the layer persists on the Case).
-            try:
-                if state.emitter is not None:
-                    scenario_index.seed_from_loaded_layers(
-                        state.emitter.loaded_layers
-                    )
-            except Exception:  # noqa: BLE001 -- seeding is best-effort
-                logger.debug("scenario_reuse seed failed", exc_info=True)
-            request_sig = scenario_signature(tool_name, params)
-            case_bbox = _turn_case_bbox(state)
-            reuse = scenario_index.find_reuse(request_sig, case_bbox=case_bbox)
-            if reuse is not None:
-                logger.info(
-                    "scenario_reuse[%s]: SHORT-CIRCUIT %s -> reusing layer_id=%s "
-                    "(not re-running solver)",
-                    state.session_id, tool_name, reuse.layer_id,
-                )
-                _reuse_note = (
-                    f"Reusing the existing {reuse.scenario_type} result already "
-                    f"on the map (layer '{reuse.name}', handle={reuse.layer_id}) "
-                    "for this AOI and parameters — the simulation was NOT re-run. "
-                    "Narrate from this existing layer; do not launch the solver "
-                    "again unless the user changes the area or parameters or "
-                    "explicitly asks to re-run."
-                )
-                _reused_layer = LayerURI(
-                    layer_id=reuse.layer_id,
-                    name=reuse.name,
-                    layer_type=reuse.layer_type,  # type: ignore[arg-type]
-                    uri=reuse.uri,
-                    bbox=reuse.bbox,
-                )
-                # Replace the dispatch with a synchronous return of the existing
-                # layer so the SAME emission / card / persistence machinery
-                # (emit_tool_call's LayerURI gate) fires with the reused layer.
-                entry = _ReuseEntry(entry.metadata, _reused_layer)
 
     # Deterministic reuse backstop for FETCHERS: a fit, resize or re-show
     # follow-up would otherwise re-fetch and mint a SECOND identical layer, so a
@@ -561,11 +492,8 @@ async def _invoke_tool_via_emitter(
     # short-circuits to that handle. Any ambiguity falls through to a fetch, and
     # a truthy force_refetch/refetch/force kwarg is the explicit escape hatch,
     # stripped before the real dispatch.
-    if (
-        _reuse_note is None
-        and not isinstance(entry, _ReuseEntry)
-        and fetched_kind_for_tool(tool_name) is not None
-    ):
+    _reuse_note: str | None = None
+    if fetched_kind_for_tool(tool_name) is not None:
         _force_refetch = any(
             bool(params.get(k)) for k in ("force_refetch", "refetch", "force")
         )
@@ -587,7 +515,7 @@ async def _invoke_tool_via_emitter(
             )
             if fmatch is not None:
                 logger.info(
-                    "scenario_reuse[%s]: FETCH SHORT-CIRCUIT %s -> reusing "
+                    "layer_reuse[%s]: FETCH SHORT-CIRCUIT %s -> reusing "
                     "layer_id=%s (not re-fetching)",
                     state.session_id, tool_name, fmatch.layer_id,
                 )
@@ -609,7 +537,7 @@ async def _invoke_tool_via_emitter(
                 entry = _ReuseEntry(entry.metadata, _reused_fetch_layer)
 
     # Anchor the Case AOI from THIS bbox-carrying fetch's final params, after
-    # both reuse guards, so it never perturbs their read of the prior pin.
+    # the reuse guard, so it never perturbs its read of the prior pin.
     await _pin_case_aoi_from_tool_bbox(
         state, case_id=turn_case_id, tool_name=tool_name, params=params
     )
@@ -859,65 +787,12 @@ async def _invoke_tool_via_emitter(
     # zoom-to, so a re-entry that replays the newest one snaps to the floored
     # AOI. Guarded on a finite extent and deduped against the last accumulated
     # zoom-to, so a repeat dispatch does not double-append.
-    #
-    # For a DOMAIN-producing solver, emit ONLY the pinned domain bbox and purge
-    # earlier zoom-to entries, or the camera flashes the geocode box before the
-    # domain box. Plain fetches keep the append-only behaviour.
     if isinstance(result, LayerURI) and _is_finite_bbox4(result.bbox):
         _floored_bbox = list(result.bbox)
-        if not isinstance(entry, _ReuseEntry) and _scenario_produces_domain(
-            tool_name
-        ):
-            state.current_turn_map_commands = [
-                cmd
-                for cmd in state.current_turn_map_commands
-                if not (isinstance(cmd, dict) and cmd.get("command") == "zoom-to")
-            ]
+        if _last_zoom_to_bbox(state.current_turn_map_commands) != _floored_bbox:
             state.current_turn_map_commands.append(
                 {"command": "zoom-to", "args": {"bbox": _floored_bbox}}
             )
-        elif _last_zoom_to_bbox(state.current_turn_map_commands) != _floored_bbox:
-            state.current_turn_map_commands.append(
-                {"command": "zoom-to", "args": {"bbox": _floored_bbox}}
-            )
-
-    # Record a FRESHLY produced scenario result in the session reuse index so a
-    # later identical request short-circuits. Skipped when this dispatch WAS the
-    # short-circuit, and only a real success is indexed, never a failure dict.
-    if (
-        not isinstance(entry, _ReuseEntry)
-        and scenario_type_for_tool(tool_name) is not None
-        and isinstance(result, LayerURI)
-    ):
-        try:
-            get_scenario_index(state.session_id).record_result(
-                scenario_signature(tool_name, params),
-                layer_id=result.layer_id,
-                name=result.name,
-                layer_type=result.layer_type,
-                uri=result.uri,
-                bbox=result.bbox,
-            )
-        except Exception:  # noqa: BLE001 -- indexing must never break dispatch
-            logger.debug("scenario_reuse record failed", exc_info=True)
-
-    # PIN the solve domain as the Case AOI: a freshly completed solver mints a
-    # layer whose bbox IS the authoritative floored domain, so persisting and
-    # caching it makes every later fetch default to that extent and a reopen
-    # rehydrate the same AOI. A reuse short-circuit was pinned when first
-    # produced. Best-effort.
-    if (
-        not isinstance(entry, _ReuseEntry)
-        and _scenario_produces_domain(tool_name)
-        and isinstance(result, LayerURI)
-        and _is_finite_bbox4(result.bbox)
-    ):
-        try:
-            await _pin_case_aoi_from_solve(
-                state, case_id=turn_case_id, bbox=result.bbox
-            )
-        except Exception:  # noqa: BLE001 -- pin is a side-effect, never break
-            logger.debug("aoi-pin failed", exc_info=True)
 
     # On a reuse short-circuit the emitter has ALREADY re-loaded the existing
     # layer onto the map, so what remains is an unambiguous function response
@@ -925,7 +800,7 @@ async def _invoke_tool_via_emitter(
     # instead of retrying. The compact dict replaces the bare layer return;
     # nothing renderable is lost, because the map update already happened.
     if _reuse_note is not None and isinstance(result, LayerURI):
-        logger.info("scenario_reuse note=%s", _reuse_note)
+        logger.info("layer_reuse note=%s", _reuse_note)
         return {
             "status": "reused_existing",
             "reused": True,

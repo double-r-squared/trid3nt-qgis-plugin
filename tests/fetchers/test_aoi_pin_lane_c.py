@@ -1,9 +1,9 @@
-"""Pin the solve domain as the Case AOI, and default follow-up fetches to it.
+"""Pin the Case AOI from a fetch bbox, and default follow-up fetches to it.
 
-With no pinned AOI the model free-hands a different bbox for every follow-up.
-Pinned: a domain-producing solve writes its domain to the Case and caches it; a
-follow-up with no bbox or a drifted one uses it, a disjoint location is not
-forced to it, and the post-solve zoom-to is a SINGLE domain rectangle."""
+With no pinned AOI the model free-hands a different bbox for every follow-up, so
+the layers stop covering the same ground. Pinned: the first bbox-carrying fetch
+writes its extent to the Case and caches it; a follow-up with no bbox or a
+drifted one runs at that extent, and a disjoint location is not forced to it."""
 
 from __future__ import annotations
 
@@ -15,7 +15,6 @@ import pytest
 from trid3nt_server import server
 from trid3nt_server import tools as agent_tools
 from trid3nt_server.persistence import Persistence
-from trid3nt_server.scenario_reuse import reset_scenario_indexes_for_tests
 from trid3nt_server.server import (
     SessionState,
     _emit_case_open,
@@ -25,15 +24,13 @@ from trid3nt_server.server import (
     set_persistence,
 )
 from trid3nt_server.tools import RegisteredTool
-from trid3nt_server.emission.uri_registry import reset_uri_registries_for_tests
 from trid3nt_contracts.common import new_ulid
 from trid3nt_contracts.execution import LayerURI
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from tests._fakes import MockMCPClient, _fresh_case_summary
 
-# The solve domain (the live Austin AOI from the root-cause case).
-_SOLVE_DOMAIN = (-97.755, 30.26, -97.725, 30.285)
+_AOI = (-97.755, 30.26, -97.725, 30.285)
 
 
 class MockWebSocket:
@@ -56,112 +53,24 @@ def _persistence_bound():
         set_persistence(saved)
 
 
-@pytest.fixture()
-def _stub_swmm_solver(monkeypatch):
-    """Register a stub solver returning a peak layer whose bbox IS the solve domain.
-
-    The production workflow stamps the floored domain onto that bbox, so the stub
-    faithfully exercises the dispatch-site pin path; the confirm gate is passed."""
-    name = "swmm_urban_flood"
-    original = agent_tools.TOOL_REGISTRY.get(name)
-    reset_scenario_indexes_for_tests()
-    reset_uri_registries_for_tests()
-
-    async def _fn(bbox=None, **_kw) -> LayerURI:
-        return LayerURI(
-            layer_id=f"swmm-peak-{new_ulid()}",
-            name="Peak flood depth",
-            layer_type="raster",
-            uri="s3://x/peak.tif",
-            bbox=tuple(_SOLVE_DOMAIN),  # type: ignore[arg-type]
-        )
-
-    meta = AtomicToolMetadata(
-        name=name, ttl_class="live-no-cache", cacheable=False
-    )
-    agent_tools.TOOL_REGISTRY[name] = RegisteredTool(
-        metadata=meta, fn=_fn, module=__name__
-    )
-    # The server-owned solver-confirm gate would PAUSE awaiting a user "proceed";
-    # pass it through so the test exercises the post-solve pin path deterministically.
-    monkeypatch.setattr(
-        server,
-        "_gate_on_solver_confirm",
-        lambda ws, st, tn, params, _warning_id_out=None: _passthrough(params),
-    )
-    try:
-        yield
-    finally:
-        if original is not None:
-            agent_tools.TOOL_REGISTRY[name] = original
-        else:
-            agent_tools.TOOL_REGISTRY.pop(name, None)
-        reset_scenario_indexes_for_tests()
-        reset_uri_registries_for_tests()
-
-
-async def _passthrough(params):
-    return True, params
-
-
 # --------------------------------------------------------------------------- #
-# (a) after a SWMM solve the Case bbox is pinned to the solve domain
-# --------------------------------------------------------------------------- #
-
-
-def test_solve_pins_case_aoi_to_solve_domain(
-    _persistence_bound: Persistence, _stub_swmm_solver
-) -> None:
-    """After a domain-producing solve, ``CaseSummary.bbox`` + ``state.case_bbox``
-    are pinned to the EXACT solve-domain extent (the peak LayerURI bbox)."""
-    case = _fresh_case_summary()
-    # Start with NO pinned AOI (the live pre-fix state).
-    case = case.model_copy(update={"bbox": None})
-    asyncio.run(_persistence_bound.upsert_case(case))
-
-    ws = MockWebSocket()
-    state = SessionState(session_id=new_ulid())
-    asyncio.run(_emit_case_open(ws, state, case.case_id))
-    assert _turn_case_bbox(state) is None  # precondition: no AOI yet
-
-    peak = asyncio.run(
-        server._invoke_tool_via_emitter(
-            ws, state, "swmm_urban_flood", {"bbox": list(_SOLVE_DOMAIN)}
-        )
-    )
-    assert isinstance(peak, LayerURI)
-
-    # The in-session anchor is pinned to the solve domain.
-    assert _turn_case_bbox(state) == list(_SOLVE_DOMAIN)
-    assert state.case_bbox == list(_SOLVE_DOMAIN)
-    # And it is PERSISTED on the Case (a reopen rehydrates the same AOI).
-    persisted = asyncio.run(_persistence_bound.get_case(case.case_id))
-    assert persisted is not None
-    assert list(persisted.bbox) == list(_SOLVE_DOMAIN)
-
-
-# --------------------------------------------------------------------------- #
-# (b) a follow-up fetch with no explicit / a drifted bbox uses the pinned AOI
+# (a) the first bbox-carrying fetch pins the Case AOI, and every follow-up with
+#     no bbox or a drifted one runs at it
 # --------------------------------------------------------------------------- #
 
 
 def test_followup_fetch_defaults_to_pinned_aoi_end_to_end(
-    _persistence_bound: Persistence, _stub_swmm_solver, monkeypatch
+    _persistence_bound: Persistence, monkeypatch
 ) -> None:
-    """A bare follow-up fetch (no bbox) and a drifted narrower fetch BOTH run at
-    the pinned solve domain, via the real dispatch path."""
+    """Through the real dispatch path: the first fetch pins the AOI durably, then
+    a bare follow-up and a drifted narrower one BOTH run at the pin."""
     case = _fresh_case_summary().model_copy(update={"bbox": None})
     asyncio.run(_persistence_bound.upsert_case(case))
 
     ws = MockWebSocket()
     state = SessionState(session_id=new_ulid())
     asyncio.run(_emit_case_open(ws, state, case.case_id))
-    asyncio.run(
-        server._invoke_tool_via_emitter(
-            ws, state, "swmm_urban_flood", {"bbox": list(_SOLVE_DOMAIN)}
-        )
-    )
-    assert _turn_case_bbox(state) == list(_SOLVE_DOMAIN)
+    assert _turn_case_bbox(state) is None  # precondition: no AOI yet
 
     # Capture the bbox the fetch tool actually ran with.
     seen: list = []
@@ -185,23 +94,37 @@ def test_followup_fetch_defaults_to_pinned_aoi_end_to_end(
         RegisteredTool(metadata=meta, fn=_fn, module=__name__),
     )
 
+    asyncio.run(
+        server._invoke_tool_via_emitter(
+            ws, state, "fetch_buildings", {"bbox": list(_AOI)}
+        )
+    )
+    # The in-session anchor is pinned, and PERSISTED so a reopen rehydrates it.
+    assert _turn_case_bbox(state) == list(_AOI)
+    assert state.case_bbox == list(_AOI)
+    persisted = asyncio.run(_persistence_bound.get_case(case.case_id))
+    assert persisted is not None
+    assert list(persisted.bbox) == list(_AOI)
+
     # Bare follow-up: NO bbox -> runs at the pinned AOI.
     asyncio.run(
-        server._invoke_tool_via_emitter(ws, state, "fetch_buildings", {})
+        server._invoke_tool_via_emitter(
+            ws, state, "fetch_buildings", {"force_refetch": True}
+        )
     )
-    assert seen[-1] == list(_SOLVE_DOMAIN), (
-        "bare follow-up fetch did not default to the pinned solve domain"
+    assert seen[-1] == list(_AOI), (
+        "bare follow-up fetch did not default to the pinned AOI"
     )
 
-    # Drifted narrower box (the live bug: 87% width / 63% height) -> snaps to pin.
+    # Drifted narrower box (87% width / 63% height) -> snaps to the pin.
     drifted = [-97.755, 30.26, -97.73, 30.275]
     asyncio.run(
         server._invoke_tool_via_emitter(
             ws, state, "fetch_buildings", {"bbox": drifted, "force_refetch": True}
         )
     )
-    assert seen[-1] == list(_SOLVE_DOMAIN), (
-        "drifted same-area fetch was not snapped to the pinned solve domain"
+    assert seen[-1] == list(_AOI), (
+        "drifted same-area fetch was not snapped to the pinned AOI"
     )
 
 
@@ -212,7 +135,7 @@ def test_followup_fetch_defaults_to_pinned_aoi_end_to_end(
 
 def test_followup_different_location_not_forced_to_pin() -> None:
     """A disjoint bbox (a different place) is honored; an explicit widen too."""
-    pin = list(_SOLVE_DOMAIN)
+    pin = list(_AOI)
     # Disjoint -> honored verbatim.
     elsewhere = {"bbox": [-100.0, 40.0, -99.9, 40.1]}
     assert (
@@ -231,7 +154,7 @@ def test_fetch_default_snaps_drifted_but_honors_other(
     _persistence_bound: Persistence,
 ) -> None:
     """Pure-rule coverage of every branch of the fetch-default decision."""
-    pin = list(_SOLVE_DOMAIN)
+    pin = list(_AOI)
     f = _maybe_default_fetch_bbox_to_pinned_aoi
     # bare -> inject the pin
     assert f("fetch_buildings", {}, pin)["bbox"] == pin
@@ -246,51 +169,10 @@ def test_fetch_default_snaps_drifted_but_honors_other(
     far = {"bbox": [-100.0, 40.0, -99.9, 40.1]}
     assert f("fetch_buildings", far, pin) == far
     # non-fetch tool -> no-op (even with a pin)
-    assert f("swmm_urban_flood", {}, pin) == {}
+    assert f("compute_layer_bounds", {}, pin) == {}
     # no pin -> no-op
     narrow = {"bbox": [-97.755, 30.26, -97.73, 30.275]}
     assert f("fetch_buildings", narrow, None) == narrow
-
-
-# --------------------------------------------------------------------------- #
-# (d) the post-solve zoom-to is a single domain rectangle (no #159 double)
-# --------------------------------------------------------------------------- #
-
-
-def test_solve_emits_single_domain_zoom_to(
-    _persistence_bound: Persistence, _stub_swmm_solver
-) -> None:
-    """A pre-solve geocode snap (small collapsed bbox) is PURGED so the closing
-    turn accumulator carries ONLY the domain zoom-to (the #159 double-rectangle
-    fix)."""
-    case = _fresh_case_summary().model_copy(update={"bbox": None})
-    asyncio.run(_persistence_bound.upsert_case(case))
-
-    ws = MockWebSocket()
-    state = SessionState(session_id=new_ulid())
-    asyncio.run(_emit_case_open(ws, state, case.case_id))
-
-    # Simulate the earlier geocode snap to the SMALL collapsed bbox this turn.
-    small_geocode = [-97.7405, 30.2718, -97.7395, 30.2728]
-    state.current_turn_map_commands.append(
-        {"command": "zoom-to", "args": {"bbox": small_geocode}}
-    )
-
-    asyncio.run(
-        server._invoke_tool_via_emitter(
-            ws, state, "swmm_urban_flood", {"bbox": list(_SOLVE_DOMAIN)}
-        )
-    )
-
-    zoom_tos = [
-        c["args"]["bbox"]
-        for c in state.current_turn_map_commands
-        if isinstance(c, dict) and c.get("command") == "zoom-to"
-    ]
-    assert zoom_tos == [list(_SOLVE_DOMAIN)], (
-        f"expected a single domain zoom-to, got {zoom_tos!r} (the geocode snap "
-        "was not purged -> the #159 double rectangle persists)"
-    )
 
 
 # --------------------------------------------------------------------------- #

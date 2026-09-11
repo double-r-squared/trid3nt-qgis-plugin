@@ -13,7 +13,7 @@ separately below. An unused parameter is reclassified from `variable` to
 | `token_envelope` | parameter | trid3nt_server/credentials/auth_handshake.py:136 | 100 | 1 |
 | `unquote` | import | trid3nt_server/emission/uri_registry.py:18 | 90 | 1 |
 | `default_seconds` | parameter | trid3nt_server/gates/confirm.py:90 | 100 | 1 |
-| `raw_user_text` | parameter | trid3nt_server/server/dispatch/emitter.py:950 | 100 | 1 |
+| `raw_user_text` | parameter | trid3nt_server/server/dispatch/emitter.py:825 | 100 | 1 |
 | `entry_id` | parameter | trid3nt_server/tools/search/fetch_living_atlas_layer/fetch_living_atlas_layer.py:136 | 100 | 1 |
 | `gs_backend` | parameter | trid3nt_server/workflows/shared/cog_io.py:390 | 100 | 1 |
 | `runs_bucket_default` | parameter | trid3nt_server/workflows/shared/cog_io.py:392 | 100 | 1 |

@@ -11,7 +11,6 @@ import pytest
 
 from trid3nt_server import server
 from trid3nt_server import tools as agent_tools
-from trid3nt_server.scenario_reuse import reset_scenario_indexes_for_tests
 from trid3nt_server.tools import RegisteredTool
 from trid3nt_server.emission.uri_registry import reset_uri_registries_for_tests
 from trid3nt_contracts.common import new_ulid
@@ -45,7 +44,6 @@ def _stub_collision_tool():
     short-circuit nor the confirm gate fires and the bare mint path runs."""
     original = agent_tools.TOOL_REGISTRY.get(_STUB_TOOL)
     _FETCH_N.clear()
-    reset_scenario_indexes_for_tests()
     reset_uri_registries_for_tests()
 
     def _fn(**_kw) -> LayerURI:
@@ -73,7 +71,6 @@ def _stub_collision_tool():
             agent_tools.TOOL_REGISTRY[_STUB_TOOL] = original
         else:
             agent_tools.TOOL_REGISTRY.pop(_STUB_TOOL, None)
-        reset_scenario_indexes_for_tests()
         reset_uri_registries_for_tests()
 
 

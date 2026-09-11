@@ -187,20 +187,17 @@ def test_layers_present_note_lists_layers() -> None:
     ])
     assert note is not None
     assert "ALREADY produced" in note
-    # The note now forbids re-RUN as well as re-fetch/recompute and
-    # tags each layer RESULT[...] / INPUT so the model recognizes an existing
-    # simulation output and never re-launches the solver that made it.
+    # The note forbids re-RUN as well as re-fetch/recompute and tags each layer
+    # RESULT / INPUT so the model recognizes an existing output and never
+    # re-launches the work that made it.
     assert "do NOT re-run, re-fetch, or recompute" in note
-    # The per-layer line surfaces the reusable handle
-    # (== layer_id), the underlying uri, AND the role label. A flood-depth layer
-    # classifies as a RESULT of the flood-depth family; landcover is an INPUT.
+    # The per-layer line surfaces the reusable handle (== layer_id), the
+    # underlying uri, AND the role label. The fixture marks every layer
+    # role="primary", which IS the RESULT label.
     assert (
-        "Flood depth (Ian) (id=flood-depth-01HX, RESULT[flood-depth], raster, "
+        "Flood depth (Ian) (id=flood-depth-01HX, RESULT, raster, "
         "handle=flood-depth-01HX, uri=gs://bucket/flood-depth-01HX.tif)"
     ) in note
-    # The fixture marks every layer role="primary", so a non-scenario layer
-    # still reads as a RESULT (role-based fallback); a scenario-family layer_id
-    # would read RESULT[<family>] (covered by the flood-depth line above).
     assert (
         "Protected areas (id=wdpa-fm, RESULT, vector, handle=wdpa-fm, "
         "uri=gs://bucket/wdpa-fm.tif)"

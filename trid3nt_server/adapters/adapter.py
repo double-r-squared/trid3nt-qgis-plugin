@@ -1279,16 +1279,14 @@ def build_layers_present_note(
     """Build the compact "Case state" model turn: layers plus the AOI bbox.
     ``None`` only when there is neither a layer nor a usable bbox."""
     # Each line carries enough IDENTITY for the model to recognize an existing
-    # RESULT and not re-run the solver that made it:
+    # RESULT and not re-run the work that made it:
     #   - role: RESULT (a primary simulation / analysis output) vs INPUT
-    #     (a fetched / context layer used as a solver input);
-    #   - the producing scenario family when recognizable from the layer_id
-    #     (flood-depth, plume, ...) so "a flood-depth RESULT for this AOI is
-    #     already here" and "the landcover/water-mask for this AOI is already
-    #     here" read unambiguously;
+    #     (a fetched / context layer used as an input), and for a fetched layer
+    #     the KIND it carries, so "the landcover for this AOI is already here"
+    #     reads unambiguously;
     #   - name, layer_type, the reusable handle (== layer_id), and the uri.
     # local import: avoid cycle
-    from trid3nt_server.scenario_reuse import fetched_layer_kind, layer_id_scenario_type
+    from trid3nt_server.server.dispatch.layer_reuse import fetched_layer_kind
 
     lines: list[str] = []
     for layer in loaded_layers or []:
@@ -1302,17 +1300,12 @@ def build_layers_present_note(
         # existing artifact straight to a tool instead of recomputing it.
         uri = layer.get("uri")
         role_raw = layer.get("role")
-        scenario_type = layer_id_scenario_type(layer_id, name)
-        # An expensive-simulation output (recognized scenario family) OR a
-        # ``role="primary"`` layer is a RESULT; everything else is an INPUT /
-        # context layer. RESULT labelling is what stops the re-run. A
-        # recognized FETCHED layer (buildings / landcover / dem / roads / ...) is an
-        # INPUT tagged with its KIND so a fit / resize / re-show follow-up
-        # reuses it (compute_layer_bounds on its handle) instead of re-fetching
-        # a duplicate.
-        if scenario_type is not None:
-            role_label = f"RESULT[{scenario_type}]"
-        elif role_raw == "primary":
+        # A ``role="primary"`` layer is a RESULT, which is what stops the re-run;
+        # everything else is an INPUT / context layer. A recognized FETCHED layer
+        # (buildings / landcover / dem / roads / ...) is an INPUT tagged with its
+        # KIND so a fit / resize / re-show follow-up reuses it
+        # (compute_layer_bounds on its handle) instead of re-fetching a duplicate.
+        if role_raw == "primary":
             role_label = "RESULT"
         else:
             fetched_kind = fetched_layer_kind(layer_id, name)
@@ -1332,9 +1325,9 @@ def build_layers_present_note(
     if lines:
         segments.append(
             "These layers are ALREADY produced and on the map for this Case. "
-            "Lines tagged RESULT[...] are finished simulation / analysis OUTPUTS "
-            "(e.g. a flood-depth or plume RESULT for this AOI) — the work that "
-            "made them is DONE. Lines tagged INPUT (or INPUT[<kind>], e.g. "
+            "Lines tagged RESULT are finished simulation / analysis OUTPUTS for "
+            "this AOI - the work that made them is DONE. "
+            "Lines tagged INPUT (or INPUT[<kind>], e.g. "
             "INPUT[buildings], INPUT[landcover], INPUT[dem]) are fetched / context "
             "layers ALREADY on the map. "
             "REUSE these (pass their handle/uri DIRECTLY to the next tool) — do "
@@ -1347,7 +1340,7 @@ def build_layers_present_note(
             "existing RESULT is FORBIDDEN unless the user changes the area / "
             "parameters or explicitly asks to re-run. Do NOT re-fetch or "
             "recompute a layer already listed here unless it is genuinely absent."
-            "\nFETCHED LAYER REUSE (F96 — HARD RULE): a fetched layer "
+            "\nFETCHED LAYER REUSE (HARD RULE): a fetched layer "
             "(INPUT[<kind>]) for this AOI is ALREADY on the map. A follow-up to "
             "FIT, ZOOM, RESIZE the box, or 'encompass all the <features>' for "
             "that SAME data (e.g. 'resize the bbox to encompass all the "
@@ -1680,35 +1673,6 @@ def _extract_flood_metrics_phrase(result: dict[str, Any]) -> str:
     return ", ".join(parts)
 
 
-#: Scenario/simulation composer tool names whose successful return is an
-#: ALREADY-PUBLISHED, styled layer on the user's map (job duplicate-flood-layer).
-#: Their thin wrapper publishes the postprocess result internally and returns the
-#: published LayerURI. The LLM must NOT be told to display it again. Kept
-#: aligned with ``scenario_reuse.EXPENSIVE_SCENARIO_TOOLS`` (the reuse index keys
-#: off the same set); a lazy import keeps the two in lockstep without a hard
-#: module coupling at import time.
-def _published_scenario_tool_names() -> frozenset[str]:
-    try:
-        from trid3nt_server.scenario_reuse import EXPENSIVE_SCENARIO_TOOLS
-
-        names = set(EXPENSIVE_SCENARIO_TOOLS.keys())
-    except Exception:  # noqa: BLE001 -- never let an import hiccup break summary
-        names = set()
-    return frozenset(names)
-
-
-def _layer_uri_is_published(result: Any) -> bool:
-    """True when ``result`` duck-types as a LayerURI carrying a store uri.
-    One store, one scheme: an ``s3://`` uri IS the published face, while an
-    external http(s) address is somebody else's service, not a layer here."""
-    if isinstance(result, (dict, str, bytes)) or result is None:
-        return False
-    uri = getattr(result, "uri", None)
-    if not (hasattr(result, "layer_id") and isinstance(uri, str)):
-        return False
-    return uri.startswith("s3://")
-
-
 def _extract_synthetic_inputs(result: Any) -> list[dict[str, Any]]:
     """Pull the structured ``synthetic_inputs`` provenance list off a tool result.
     Returns plain dicts, or ``[]`` when none is declared; NEVER raises, so a
@@ -1783,45 +1747,6 @@ def _hoist_synthetic_inputs(payload: dict[str, Any], result: Any) -> None:
     payload["synthetic_inputs"] = entries[:12]
 
 
-def _summarize_published_scenario_layer(
-    tool_name: str, result: Any
-) -> dict[str, Any]:
-    """Compact function_response for an ALREADY-PUBLISHED, styled LayerURI.
-    Explicit ``published`` / ``on_map`` / ``publish_status`` flags, so the model
-    does not issue a redundant display request for a layer already on the map."""
-    layer_id = getattr(result, "layer_id", None)
-    uri = getattr(result, "uri", None)
-    bbox = getattr(result, "bbox", None)
-    summary: dict[str, Any] = {
-        "tool": tool_name,
-        "status": "ok",
-        "published": True,
-        "on_map": True,
-        "publish_status": "published",
-        "layer_id": layer_id,
-        # ``handle`` mirrors the layer_id so the model passes the canonical
-        # handle (never a raw object path) into any downstream *_uri param.
-        "handle": layer_id,
-        "name": getattr(result, "name", None),
-        "layer_type": getattr(result, "layer_type", None),
-        "uri": uri,
-        "already_published_note": (
-            "This scenario layer is ALREADY published, styled, and on the user's "
-            "map. Narrate the result from this layer; there is nothing further to "
-            "do to display it."
-        ),
-    }
-    if isinstance(bbox, (list, tuple)) and len(bbox) == 4:
-        summary["bbox"] = list(bbox)
-    # provenance-chain wave: the bare-published-LayerURI path used to drop every
-    # field but the render metadata, losing any input-provenance the layer
-    # carried on the peak layer. Thread the structured
-    # ``synthetic_inputs`` + its rendered assumptions line through so the demo-vs-
-    # site-derived provenance reaches the narration on this path too.
-    _hoist_synthetic_inputs(summary, result)
-    return summary
-
-
 def summarize_tool_result(
     tool_name: str,
     result: Any,
@@ -1882,19 +1807,6 @@ def summarize_tool_result(
 
     if result is None:
         return {"tool": tool_name, "status": "no_result"}
-
-    # A scenario/simulation composer returns its result layer ALREADY published,
-    # styled, and on the map (its thin wrapper publishes the postprocess result
-    # internally). Without an explicit signal this LayerURI falls through to the
-    # repr-coerce branch below and the model, seeing only a raw COG-ish repr,
-    # narrates it as unfinished work. Stamp ``published``/``on_map`` so the model
-    # narrates from the layer. Scoped to the scenario tool set AND a LayerURI
-    # carrying a store uri, so a FAILED scenario (no layer / honesty-floor empty
-    # envelope, handled above) and every non-scenario tool are untouched.
-    if tool_name in _published_scenario_tool_names() and _layer_uri_is_published(
-        result
-    ):
-        return _summarize_published_scenario_layer(tool_name, result)
 
     # chart-emission results carry a full
     # Vega-Lite spec with INLINE data rows (up to ~2000). The model must

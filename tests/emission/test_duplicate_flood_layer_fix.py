@@ -1,9 +1,9 @@
-"""One flood layer, never two, and it is styled by DECLARATION.
+"""One layer, never two, and it is styled by DECLARATION.
 
-Three independent things can break that, one class each: a wrapper's published
-layer is summarized with explicit on-map signals, so the model does not publish
-the same COG twice; a layer is drawn by the style row its PRODUCER declared; and
-two publishes of one COG collapse to one row while two distinct COGs coexist."""
+Two independent things can break that, one class each: a layer is drawn by the
+style row its PRODUCER declared, never by a name that reads like a measurement;
+and two publishes of one COG collapse to one row while two distinct COGs
+coexist, each independently deletable."""
 
 from __future__ import annotations
 
@@ -14,11 +14,6 @@ import pytest
 from trid3nt_contracts import new_ulid
 from trid3nt_contracts.execution import LayerURI
 
-from trid3nt_server.adapters.adapter import (
-    _layer_uri_is_published,
-    _published_scenario_tool_names,
-    summarize_tool_result,
-)
 from trid3nt_server.emission.pipeline_emitter import PipelineEmitter
 from trid3nt_server.emission import presets
 
@@ -33,92 +28,9 @@ class _Sink:
         return None
 
 
-def _published_flood_layer_uri(run_id: str) -> LayerURI:
-    """The single styled, ALREADY-PUBLISHED peak-depth LayerURI a flood scenario
-    wrapper returns on success. One store, one scheme: its uri IS the COG."""
-    return LayerURI(
-        layer_id=f"flood-depth-peak-{run_id}",
-        name="Peak flood depth",
-        layer_type="raster",
-        uri=f"s3://trid3nt-runs/{run_id}/flood_depth_peak.tif",
-        role="primary",
-        units="meters",
-        bbox=(-85.4, 35.0, -85.2, 35.2),
-    )
-
-
 # --------------------------------------------------------------------------- #
-# (c) PRIMARY - the scenario function_response carries the already-published
-#     signal so the LLM does not re-publish.
-# --------------------------------------------------------------------------- #
-
-
-class TestScenarioPublishedSignal:
-    def test_flood_scenario_summary_signals_already_published(self) -> None:
-        result = _published_flood_layer_uri("RUN123")
-        summary = summarize_tool_result("sfincs_flood", result)
-
-        assert summary["status"] == "ok"
-        # The explicit already-published signals the LLM keys on.
-        assert summary["published"] is True
-        assert summary["on_map"] is True
-        assert summary["publish_status"] == "published"
-        # The canonical handle + metadata the loop needs to narrate.
-        assert summary["layer_id"] == result.layer_id
-        assert summary["handle"] == result.layer_id
-        assert summary["bbox"] == [-85.4, 35.0, -85.2, 35.2]
-        # A human-readable already-on-the-map note for the model.
-        assert "ALREADY published" in summary["already_published_note"]
-
-    def test_every_scenario_wrapper_is_recognized(self) -> None:
-        # All flood + plume scenario wrappers carry the published signal.
-        for tool in (
-            "sfincs_flood",
-            "modflow_contaminant_plume",
-        ):
-            assert tool in _published_scenario_tool_names(), tool
-            summary = summarize_tool_result(tool, _published_flood_layer_uri("R"))
-            assert summary.get("published") is True, tool
-            assert summary.get("on_map") is True, tool
-
-    def test_non_scenario_layer_uri_is_not_flagged_published(self) -> None:
-        """A LayerURI from a NON-scenario tool (e.g. a fetcher) must NOT get the
-        published signal - it falls through to the normal summary path."""
-        layer = _published_flood_layer_uri("R")
-        summary = summarize_tool_result("fetch_fema_nfhl_zones", layer)
-        assert "published" not in summary
-        assert "on_map" not in summary
-
-    def test_foreign_http_uri_not_flagged_published(self) -> None:
-        """A scenario result whose uri points at somebody else's http service is
-        NOT a layer this stack published - only a store uri is."""
-        foreign = LayerURI(
-            layer_id="flood-depth-peak-R",
-            name="Peak flood depth",
-            layer_type="raster",
-            uri="https://example.net/tiles/R/flood_depth_peak.tif",
-            role="primary",
-        )
-        assert _layer_uri_is_published(foreign) is False
-        summary = summarize_tool_result("sfincs_flood", foreign)
-        assert "published" not in summary
-
-    def test_failed_scenario_envelope_unaffected(self) -> None:
-        """A FAILED modeled envelope (empty layers, honesty floor) must still
-        surface status=error - the published-signal branch must not swallow it."""
-        failed = {
-            "envelope_type": "modeled",
-            "layers": [],
-            "workflow_name": "model_flood_scenario:FAILED:SOLVER_TIMEOUT",
-        }
-        summary = summarize_tool_result("sfincs_flood", failed)
-        assert summary["status"] == "error"
-        assert "published" not in summary
-
-
-# --------------------------------------------------------------------------- #
-# (a) THE STYLE BOUNDARY - the shape and its parameters come from what the
-#     producer DECLARED, and a filename is not a declaration.
+# THE STYLE BOUNDARY - the shape and its parameters come from what the producer
+# DECLARED, and a filename is not a declaration.
 # --------------------------------------------------------------------------- #
 
 
@@ -157,8 +69,8 @@ class TestPublishBoundaryStyle:
 
 
 # --------------------------------------------------------------------------- #
-# (b) SAFETY NET - two publishes of the SAME underlying COG (different display
-#     URLs) dedup to ONE loaded_layer.
+# SAFETY NET - two publishes of the SAME underlying COG (different display URLs)
+# dedup to ONE loaded_layer.
 # --------------------------------------------------------------------------- #
 
 
@@ -220,8 +132,8 @@ class TestDedupByIdentity:
 
 
 # --------------------------------------------------------------------------- #
-# z-index-fix - every appended layer carries a STABLE, MONOTONIC z_index, and
-# an in-place re-publish REUSES the superseded layer's slot (no renumbering).
+# every appended layer carries a STABLE, MONOTONIC z_index, and an in-place
+# re-publish REUSES the superseded layer's slot (no renumbering).
 # --------------------------------------------------------------------------- #
 
 

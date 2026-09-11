@@ -1,4 +1,4 @@
-"""Layer REUSE extended to the ``fetch_*`` tools.
+"""Reuse of a loaded layer in place of a repeat ``fetch_*`` call.
 
 ``fetched_layer_kind`` and ``fetched_kind_for_tool`` classify a fetched layer and
 its tool into one KIND token, keeping RESULTs out; ``bbox_encloses`` recognizes a
@@ -8,7 +8,7 @@ kind, a larger area or a missing-AOI ambiguity; the note tags the layer INPUT.""
 from __future__ import annotations
 
 from trid3nt_server.adapters.adapter import build_layers_present_note
-from trid3nt_server.scenario_reuse import (
+from trid3nt_server.server.dispatch.layer_reuse import (
     FetchedLayerMatch,
     bbox_encloses,
     bbox_equivalent,
@@ -46,7 +46,6 @@ def test_fetched_kind_for_tool_maps_fetchers() -> None:
     assert fetched_kind_for_tool("fetch_landcover") == "landcover"
     assert fetched_kind_for_tool("fetch_dem") == "dem"
     # Non-fetcher / unknown tools have no fetched kind.
-    assert fetched_kind_for_tool("sfincs_flood") is None
     assert fetched_kind_for_tool("compute_layer_bounds") is None
 
 
@@ -58,11 +57,35 @@ def test_fetched_layer_kind_classifies_fetched_layers() -> None:
 
 
 def test_fetched_layer_kind_excludes_simulation_results() -> None:
-    # A simulation RESULT is NOT a fetched kind — the two taxonomies stay disjoint.
+    # A simulation RESULT is NOT a fetched kind - the two taxonomies stay
+    # disjoint however the result's reach or place name reads.
     assert fetched_layer_kind("flood-depth-peak-abc", "Flood Depth (peak)") is None
     assert fetched_layer_kind("plume-r9", "Contaminant Plume") is None
+    assert (
+        fetched_layer_kind("t2d-dye-peak-r7", "Peak dye concentration (Green River)")
+        is None
+    )
     # An unrecognized layer is conservatively None (falls back to plain INPUT).
     assert fetched_layer_kind("mystery-layer-1", "Mystery") is None
+
+
+def test_a_result_layer_never_answers_a_fetch() -> None:
+    # The reach name would otherwise read as a river layer and answer a river
+    # fetch with a solved dye field.
+    dye = {
+        "layer_id": "t2d-dye-peak-r7",
+        "name": "Peak dye concentration (Green River)",
+        "layer_type": "raster",
+        "uri": "s3://trid3nt-runs/r7/dye_peak.tif",
+        "role": "primary",
+        "bbox": SOUTH_FL_BBOX,
+    }
+    assert (
+        find_reusable_fetched_layer(
+            "fetch_river_geometry", {"bbox": TIGHTER_BBOX}, [dye]
+        )
+        is None
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -80,7 +103,7 @@ def test_bbox_encloses_refuses_larger() -> None:
 
 
 # --------------------------------------------------------------------------- #
-# find_reusable_fetched_layer — the core F96 reuse check
+# find_reusable_fetched_layer
 # --------------------------------------------------------------------------- #
 
 
@@ -155,11 +178,10 @@ def test_no_aoi_resolvable_does_not_reuse() -> None:
 
 
 def test_non_fetcher_tool_does_not_reuse() -> None:
-    # An expensive-simulation tool routes through the scenario-reuse path, not
-    # the fetched-layer path.
+    # A tool with no fetched kind never reaches the reuse check.
     assert (
         find_reusable_fetched_layer(
-            "sfincs_flood",
+            "compute_layer_bounds",
             {"bbox": SOUTH_FL_BBOX},
             [_buildings_layer()],
         )
@@ -198,7 +220,7 @@ def test_bbox_equivalent_still_works_for_fetch_paths() -> None:
 
 
 # --------------------------------------------------------------------------- #
-# enriched layers-present note (F96)
+# the layers-present note
 # --------------------------------------------------------------------------- #
 
 

@@ -19,11 +19,11 @@ join the run as the sixth slice.
 | `mesh/` | the meshers, the mesh gate, topology and bed | 7 | 226 |
 | `model/` | the SysML model conformance check | 1 | 19 |
 | `plugin/` | the plugin seams the server suite reads offline, by `ast` | 1 | 3 |
-| `runtime/` | the declarative runtime, scenario reuse, the run journal | 12 | 354 |
+| `runtime/` | the declarative runtime, the run journal | 12 | 354 |
 | `sandbox/` | the code-exec sandbox | 2 | 34 |
 | `scripts/` | the dev instruments, the live-run harness and the proof renderers, skipped when `dev/` is absent | 6 | 45 |
 | `search/` | dataset and tool retrieval, the OGC adapter | 18 | 280 |
-| `server/` | the HTTP and WS routes, persistence, telemetry | 27 | 559 |
+| `server/` | the HTTP and WS routes, dispatch reuse, persistence, telemetry | 27 | 559 |
 | `solver/` | the solver seam, the run reads, the engine-room posture | 6 | 59 |
 | `telemac/` | the TELEMAC templates, authoring and postprocesses | 24 | 429 |
 | `tools/` | the registry, the arg normalizer, the tool cache | 14 | 402 |

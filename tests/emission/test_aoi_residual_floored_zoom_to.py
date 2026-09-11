@@ -14,7 +14,6 @@ import pytest
 
 from trid3nt_server import server
 from trid3nt_server import tools as agent_tools
-from trid3nt_server.scenario_reuse import reset_scenario_indexes_for_tests
 from trid3nt_server.server import (
     SessionState,
     _is_finite_bbox4,
@@ -61,7 +60,6 @@ def _stub_composer():
     """
     name = "model_flood_scenario"
     original = agent_tools.TOOL_REGISTRY.get(name)
-    reset_scenario_indexes_for_tests()
     reset_uri_registries_for_tests()
 
     def _fn(bbox=None, **_kw) -> LayerURI:
@@ -86,7 +84,6 @@ def _stub_composer():
             agent_tools.TOOL_REGISTRY[name] = original
         else:
             agent_tools.TOOL_REGISTRY.pop(name, None)
-        reset_scenario_indexes_for_tests()
         reset_uri_registries_for_tests()
 
 
