@@ -1,10 +1,10 @@
 {
   "tool": "telemac_do_sag",
-  "run_id": "01M28BB68MFADZ1FRKWZYRN0XA",
-  "commit": "750ff38e2d831d1c51358b20ceeac29fe274b4e6-dirty",
-  "recorded_at": "2026-09-11T13:43:49.042885+00:00",
+  "run_id": "01M28NHS5MXT77XXGBY44N8271",
+  "commit": "2fba21a6f70cf14ec7820930e71f1314673f20e8-dirty",
+  "recorded_at": "2026-09-11T16:42:11.215442+00:00",
   "engine": "telemac",
-  "wall_seconds": 24.425,
+  "wall_seconds": 26.29,
   "args": {
     "location": "Eel River near Scotia, California",
     "discharge_m3s": 60.0,
@@ -209,12 +209,34 @@
       "real_source": null
     },
     {
+      "name": "bbox",
+      "value": null,
+      "door": "user",
+      "basis": "user",
+      "units": null,
+      "consequence": "aoi",
+      "note": "not supplied (declared optional)",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
       "name": "river_geometry_uri",
       "value": null,
       "door": "user",
       "basis": "user",
       "units": null,
       "consequence": "aoi",
+      "note": "not supplied (declared optional)",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "event_time",
+      "value": null,
+      "door": "question",
+      "basis": "prompt_interpreted",
+      "units": null,
+      "consequence": "scenario",
       "note": "not supplied (declared optional)",
       "clamped_from": null,
       "real_source": null
@@ -237,28 +259,6 @@
       "basis": "user",
       "units": null,
       "consequence": "numerical",
-      "note": "not supplied (declared optional)",
-      "clamped_from": null,
-      "real_source": null
-    },
-    {
-      "name": "bbox",
-      "value": null,
-      "door": "user",
-      "basis": "user",
-      "units": null,
-      "consequence": "aoi",
-      "note": "not supplied (declared optional)",
-      "clamped_from": null,
-      "real_source": null
-    },
-    {
-      "name": "event_time",
-      "value": null,
-      "door": "question",
-      "basis": "prompt_interpreted",
-      "units": null,
-      "consequence": "scenario",
       "note": "not supplied (declared optional)",
       "clamped_from": null,
       "real_source": null
@@ -392,6 +392,13 @@
       "real_source": null
     },
     {
+      "param": "event_time",
+      "value": "derived",
+      "basis": "derived",
+      "note": "not supplied; the carrier discharge is read at the MOST RECENT published NWM cycle",
+      "real_source": null
+    },
+    {
       "param": "friction_coefficient",
       "value": "derived",
       "basis": "derived",
@@ -404,22 +411,16 @@
       "basis": "derived",
       "note": "not supplied; the coefficient is read as a Strickler one",
       "real_source": null
-    },
-    {
-      "param": "event_time",
-      "value": "derived",
-      "basis": "derived",
-      "note": "not supplied; the carrier discharge is read at the MOST RECENT published NWM cycle",
-      "real_source": null
     }
   ],
   "answer": {
     "do_min_mgl": 8.921165352434825,
+    "do_below_standard": false,
     "do_min_distance_m": 297.73186921575723,
     "bod_mixed_mgl": 3.469098542982656,
     "mean_velocity_mps": 0.6124773205557589,
     "mesh_size_m": 9.323,
-    "layer_uri": "s3://trid3nt-runs/01M28BB68MFADZ1FRKWZYRN0XA/overviews/01M28BBK4TWJWTJB8GBPXG4EYE.tif",
+    "layer_uri": "s3://trid3nt-runs/01M28NHS5MXT77XXGBY44N8271/overviews/01M28NJ6D241KP008PMJN9H263.tif",
     "discharge_m3s": 60.0,
     "discharge_note": "Steady upstream CARRIER discharge - the river flow that dilutes and transports the release [supplied on this invocation]",
     "mesh_resolution_m": 12.0,
@@ -531,7 +532,7 @@
     },
     {
       "crs_authid": null,
-      "layer_id": "point-01M28BB0KZA1FE2H5KRQYTAGVG",
+      "layer_id": "point-01M28NHJVDMBEAE7EY8KMNMAGY",
       "layer_type": "vector",
       "legend": {
         "colormap": null,
@@ -548,7 +549,7 @@
       "reference_time": null,
       "role": "context",
       "temporal": false,
-      "uri": "s3://trid3nt-runs/inputs/01M28BB0KK8E4AB3C790384H1C/point.geojson",
+      "uri": "s3://trid3nt-runs/inputs/01M28NHJTA0QTZY1VCRZ47JCTV/point.geojson",
       "valid_from": null,
       "valid_to": null,
       "visible": true,
@@ -556,7 +557,7 @@
     },
     {
       "crs_authid": "EPSG:32610",
-      "layer_id": "model-results-mesh-01M28BB68MFADZ1FRKWZYRN0XA",
+      "layer_id": "model-results-mesh-01M28NHS5MXT77XXGBY44N8271",
       "layer_type": "mesh",
       "legend": {
         "colormap": "viridis",
@@ -570,10 +571,10 @@
       "name": "Model results (time series): scotia_humboldt_county_california_95562_united_s",
       "opacity": null,
       "quantity": "model_results",
-      "reference_time": "2026-09-11T13:43:35+00:00",
+      "reference_time": "2026-09-11T16:41:57+00:00",
       "role": "context",
       "temporal": false,
-      "uri": "s3://trid3nt-runs/01M28BB68MFADZ1FRKWZYRN0XA/r2d_river.slf",
+      "uri": "s3://trid3nt-runs/01M28NHS5MXT77XXGBY44N8271/r2d_river.slf",
       "valid_from": null,
       "valid_to": null,
       "visible": true,
@@ -581,7 +582,7 @@
     },
     {
       "crs_authid": null,
-      "layer_id": "01M28BBNP88B8YR952NFWTH526",
+      "layer_id": "01M28NJ926G7JADCP26S26CRCE",
       "layer_type": "raster",
       "legend": {
         "colormap": "rdylbu",
@@ -598,7 +599,7 @@
       "reference_time": null,
       "role": "primary",
       "temporal": false,
-      "uri": "s3://trid3nt-runs/01M28BB68MFADZ1FRKWZYRN0XA/overviews/01M28BBK4TWJWTJB8GBPXG4EYE.tif",
+      "uri": "s3://trid3nt-runs/01M28NHS5MXT77XXGBY44N8271/overviews/01M28NJ6D241KP008PMJN9H263.tif",
       "valid_from": null,
       "valid_to": null,
       "visible": true,

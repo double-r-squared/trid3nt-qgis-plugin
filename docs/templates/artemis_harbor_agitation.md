@@ -41,11 +41,11 @@ The values the template declares. `desc` is what the model reads when it fills o
 
 | field | the proving run's value |
 |---|---|
-| `kd_max` | 3.5609095096588135 |
-| `kd_transect_min` | - |
-| `kd_transect_max` | - |
-| `hs_max_m` | 3.5609095096588135 |
-| `mesh_size_m` | 5.113546548265623 |
+| `kd_max` | 4.02045202255249 |
+| `kd_transect_min` | 1.9933346639966487e-11 |
+| `kd_transect_max` | 4.987552074453561e-06 |
+| `hs_max_m` | 4.02045202255249 |
+| `mesh_size_m` | 5.113541873062308 |
 
 It publishes these layers onto the canvas:
 
@@ -55,15 +55,19 @@ It publishes these layers onto the canvas:
 
 ## The proving run
 
-Run `01M28GGE2Z8EFJ0J9Z9G1XACHP`, 2026-09-11T15:14:04.845636+00:00, 34.528 s, at commit `18b105f8ea887cfc1dda8acd493eae55648efb73-dirty`.
+Run `01M28PWTMRFPZ2QETTCVQG79CH`, 2026-09-11T17:05:41.792756+00:00, 25.117 s, at commit `2fba21a6f70cf14ec7820930e71f1314673f20e8-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M28GGE2Z8EFJ0J9Z9G1XACHP)](artemis_harbor_agitation/artemis_harbor_agitation.png)
+![Every layer the run published, stacked and framed on the result (run 01M28PWTMRFPZ2QETTCVQG79CH)](artemis_harbor_agitation/artemis_harbor_agitation.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M28GGE2Z8EFJ0J9Z9G1XACHP)*
+*Every layer the run published, stacked and framed on the result (run 01M28PWTMRFPZ2QETTCVQG79CH)*
 
-![peak frame (run 01M28GGE2Z8EFJ0J9Z9G1XACHP)](artemis_harbor_agitation/artemis_harbor_agitation_peak_frame.png)
+![peak frame (run 01M28PWTMRFPZ2QETTCVQG79CH)](artemis_harbor_agitation/artemis_harbor_agitation_peak_frame.png)
 
-*peak frame (run 01M28GGE2Z8EFJ0J9Z9G1XACHP)*
+*peak frame (run 01M28PWTMRFPZ2QETTCVQG79CH)*
+
+![agitation coefficient - the chart the run persisted (run 01M28PWTMRFPZ2QETTCVQG79CH)](artemis_harbor_agitation/artemis_harbor_agitation_chart_agitation_coefficient.png)
+
+*agitation coefficient - the chart the run persisted (run 01M28PWTMRFPZ2QETTCVQG79CH)*
 
 ### The sheet it filled
 
@@ -80,6 +84,7 @@ Every slot the run resolved, with where the value came from. The engine's own de
 | `compute_class` | medium | - | user | supplied on this invocation |
 | `mesh_grade` | 0.2 | - | default_demo | declared constant default |
 | `barrier_width_m` | 20.0 | m | default_demo | declared scenario default |
+| `transect_length_m` | 1500.0 | m | default_demo | declared scenario default |
 | `open_depth_threshold_m` | -12.0 | m | default_demo | declared scenario default |
 | `location` | - | - | prompt_interpreted | not supplied (declared optional) |
 
@@ -99,5 +104,5 @@ await TOOL_REGISTRY['artemis_harbor_agitation'].fn(
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M28GGE2Z8EFJ0J9Z9G1XACHP` and commit `18b105f8ea887cfc1dda8acd493eae55648efb73-dirty`. The full argument record is [`artemis_harbor_agitation/run.json`](artemis_harbor_agitation/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M28PWTMRFPZ2QETTCVQG79CH` and commit `2fba21a6f70cf14ec7820930e71f1314673f20e8-dirty`. The full argument record is [`artemis_harbor_agitation/run.json`](artemis_harbor_agitation/run.json).
 

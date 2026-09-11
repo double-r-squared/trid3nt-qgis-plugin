@@ -82,7 +82,10 @@ lint resolves every named module, script and path, in the product trees, the
 directory maps, the manual, `AGENTS.md` and this document - an agent told to
 obey a law cannot follow a path that is not there; the map lint holds a package
 README to its package; the template-page lint holds a generated page to its
-declaration; the banner lint holds the ruler comments out. A path is read whole:
+declaration; the template-grammar lint holds a recipe to values, defining no
+function; the module-vocabulary lint holds every tree below the template layer
+to the engine's own words, naming no template and no question; the banner lint
+holds the ruler comments out. A path is read whole:
 one starting at a tree resolves as written, and one written package-relative
 (`workflows/...`, `tools/...`, `net/...`) resolves under the package roots, but
 only when it ends in a file suffix - without that the pattern reads ordinary

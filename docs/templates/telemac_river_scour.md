@@ -90,23 +90,23 @@ It publishes these layers onto the canvas:
 
 ## The proving run
 
-Run `01M28B2RRZEGKXCHMJB37R9FTY`, 2026-09-11T13:39:15.857224+00:00, 28.83 s, at commit `750ff38e2d831d1c51358b20ceeac29fe274b4e6-dirty`.
+Run `01M28N9SJQYMZDWEN49WMQWFX0`, 2026-09-11T16:37:50.757710+00:00, 26.657 s, at commit `2fba21a6f70cf14ec7820930e71f1314673f20e8-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M28B2RRZEGKXCHMJB37R9FTY)](telemac_river_scour/telemac_river_scour.png)
+![Every layer the run published, stacked and framed on the result (run 01M28N9SJQYMZDWEN49WMQWFX0)](telemac_river_scour/telemac_river_scour.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M28B2RRZEGKXCHMJB37R9FTY)*
+*Every layer the run published, stacked and framed on the result (run 01M28N9SJQYMZDWEN49WMQWFX0)*
 
-![The solve, frame by frame (run 01M28B2RRZEGKXCHMJB37R9FTY)](telemac_river_scour/telemac_river_scour_animation.gif)
+![The solve, frame by frame (run 01M28N9SJQYMZDWEN49WMQWFX0)](telemac_river_scour/telemac_river_scour_animation.gif)
 
-*The solve, frame by frame (run 01M28B2RRZEGKXCHMJB37R9FTY)*
+*The solve, frame by frame (run 01M28N9SJQYMZDWEN49WMQWFX0)*
 
-![final frame (run 01M28B2RRZEGKXCHMJB37R9FTY)](telemac_river_scour/telemac_river_scour_final_frame.png)
+![final frame (run 01M28N9SJQYMZDWEN49WMQWFX0)](telemac_river_scour/telemac_river_scour_final_frame.png)
 
-*final frame (run 01M28B2RRZEGKXCHMJB37R9FTY)*
+*final frame (run 01M28N9SJQYMZDWEN49WMQWFX0)*
 
-![marker concentration - the chart the run persisted (run 01M28B2RRZEGKXCHMJB37R9FTY)](telemac_river_scour/telemac_river_scour_chart_marker_concentration.png)
+![marker concentration - the chart the run persisted (run 01M28N9SJQYMZDWEN49WMQWFX0)](telemac_river_scour/telemac_river_scour_chart_marker_concentration.png)
 
-*marker concentration - the chart the run persisted (run 01M28B2RRZEGKXCHMJB37R9FTY)*
+*marker concentration - the chart the run persisted (run 01M28N9SJQYMZDWEN49WMQWFX0)*
 
 ### The sheet it filled
 
@@ -138,11 +138,11 @@ Every slot the run resolved, with where the value came from. The engine's own de
 | `dredge_dig_depth_m` | 1.5 | m | default_demo | declared scenario default |
 | `dredge_disposal` | False | - | default_demo | declared scenario default |
 | `dredge_bank_offset_m` | 5.0 | m | default_demo | declared scenario default |
+| `bbox` | - | - | user | not supplied (declared optional) |
 | `river_geometry_uri` | - | - | user | not supplied (declared optional) |
+| `event_time` | - | - | prompt_interpreted | not supplied (declared optional) |
 | `friction_coefficient` | - | - | user | not supplied (declared optional) |
 | `friction_law` | - | - | user | not supplied (declared optional) |
-| `bbox` | - | - | user | not supplied (declared optional) |
-| `event_time` | - | - | prompt_interpreted | not supplied (declared optional) |
 | `rainfall_mm_per_day` | - | mm/day | user | not supplied (declared optional) |
 | `evaporation_mm_per_day` | - | mm/day | user | not supplied (declared optional) |
 | `rainfall_gridmet_window` | - | - | user | not supplied (declared optional) |
@@ -168,5 +168,5 @@ await TOOL_REGISTRY['telemac_river_scour'].fn(
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M28B2RRZEGKXCHMJB37R9FTY` and commit `750ff38e2d831d1c51358b20ceeac29fe274b4e6-dirty`. The full argument record is [`telemac_river_scour/run.json`](telemac_river_scour/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M28N9SJQYMZDWEN49WMQWFX0` and commit `2fba21a6f70cf14ec7820930e71f1314673f20e8-dirty`. The full argument record is [`telemac_river_scour/run.json`](telemac_river_scour/run.json).
 

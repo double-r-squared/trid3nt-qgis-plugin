@@ -1,10 +1,10 @@
 {
   "tool": "artemis_harbor_agitation",
-  "run_id": "01M28GGE2Z8EFJ0J9Z9G1XACHP",
-  "commit": "18b105f8ea887cfc1dda8acd493eae55648efb73-dirty",
-  "recorded_at": "2026-09-11T15:14:04.845636+00:00",
+  "run_id": "01M28PWTMRFPZ2QETTCVQG79CH",
+  "commit": "2fba21a6f70cf14ec7820930e71f1314673f20e8-dirty",
+  "recorded_at": "2026-09-11T17:05:41.792756+00:00",
   "engine": "telemac",
-  "wall_seconds": 34.528,
+  "wall_seconds": 25.117,
   "args": {
     "bbox": [
       -71.525,
@@ -125,6 +125,17 @@
       "real_source": null
     },
     {
+      "name": "transect_length_m",
+      "value": 1500.0,
+      "door": "scenario",
+      "basis": "default_demo",
+      "units": "m",
+      "consequence": "scenario",
+      "note": "declared scenario default",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
       "name": "open_depth_threshold_m",
       "value": -12.0,
       "door": "scenario",
@@ -212,6 +223,13 @@
       "real_source": null
     },
     {
+      "param": "transect_length_m",
+      "value": 1500.0,
+      "basis": "default_demo",
+      "note": "The whole length of the transect the agitation is read along: a straight line through the structure's centroid along the incident wave direction, half of it on the exposed side and half in the lee [declared scenario default]",
+      "real_source": null
+    },
+    {
       "param": "open_depth_threshold_m",
       "value": -12.0,
       "basis": "default_demo",
@@ -220,10 +238,12 @@
     }
   ],
   "answer": {
-    "kd_max": 3.5609095096588135,
-    "hs_max_m": 3.5609095096588135,
-    "mesh_size_m": 5.113546548265623,
-    "layer_uri": "s3://trid3nt-runs/01M28GGE2Z8EFJ0J9Z9G1XACHP/overviews/01M28GGW9MW8F9W5ZQD3THNTA8.tif",
+    "kd_max": 4.02045202255249,
+    "kd_transect_min": 1.9933346639966487e-11,
+    "kd_transect_max": 4.987552074453561e-06,
+    "hs_max_m": 4.02045202255249,
+    "mesh_size_m": 5.113541873062308,
+    "layer_uri": "s3://trid3nt-runs/01M28PWTMRFPZ2QETTCVQG79CH/overviews/01M28PX808RF4GB8SW8KFXAFS9.tif",
     "wave_period_s": 8.0,
     "wave_period_note": "Incident monochromatic wave period - a PRESCRIBED demo forcing, since no wave-forcing fetcher exists yet [supplied on this invocation]",
     "structure": null,
@@ -287,15 +307,15 @@
     },
     {
       "crs_authid": null,
-      "layer_id": "01M28GGYM6ST98QS8HB6471BAY",
+      "layer_id": "01M28PXAQ1ZPZNTJSSP14VDS5N",
       "layer_type": "raster",
       "legend": {
         "colormap": "viridis",
         "kind": "continuous",
         "label": "Agitation coefficient (Hs/H0)",
-        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <pipe>\n    <rasterrenderer type=\"singlebandpseudocolor\" band=\"1\" opacity=\"1\" alphaBand=\"-1\" classificationMin=\"0\" classificationMax=\"3.56091\" nodataColor=\"\">\n      <rastershader>\n        <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"0\" maximumValue=\"3.56091\" labelPrecision=\"4\">\n          <item value=\"0\" color=\"#440154\" alpha=\"255\" label=\"0 Hs/H0\"/>\n          <item value=\"0.8902275\" color=\"#3b528b\" alpha=\"255\" label=\"0.890227 Hs/H0\"/>\n          <item value=\"1.780455\" color=\"#21918c\" alpha=\"255\" label=\"1.78045 Hs/H0\"/>\n          <item value=\"2.6706825\" color=\"#5ec962\" alpha=\"255\" label=\"2.67068 Hs/H0\"/>\n          <item value=\"3.56091\" color=\"#fde725\" alpha=\"255\" label=\"3.56091 Hs/H0\"/>\n        </colorrampshader>\n      </rastershader>\n    </rasterrenderer>\n  </pipe>\n</qgis>\n",
+        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <pipe>\n    <rasterrenderer type=\"singlebandpseudocolor\" band=\"1\" opacity=\"1\" alphaBand=\"-1\" classificationMin=\"0\" classificationMax=\"2.179907\" nodataColor=\"\">\n      <rastershader>\n        <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"0\" maximumValue=\"2.179907\" labelPrecision=\"4\">\n          <item value=\"0\" color=\"#440154\" alpha=\"255\" label=\"0 Hs/H0\"/>\n          <item value=\"0.54497675\" color=\"#3b528b\" alpha=\"255\" label=\"0.544977 Hs/H0\"/>\n          <item value=\"1.0899535\" color=\"#21918c\" alpha=\"255\" label=\"1.08995 Hs/H0\"/>\n          <item value=\"1.63493025\" color=\"#5ec962\" alpha=\"255\" label=\"1.63493 Hs/H0\"/>\n          <item value=\"2.179907\" color=\"#fde725\" alpha=\"255\" label=\"2.17991 Hs/H0\"/>\n        </colorrampshader>\n      </rastershader>\n    </rasterrenderer>\n  </pipe>\n</qgis>\n",
         "units": "Hs/H0",
-        "vmax": 3.56091,
+        "vmax": 2.179907,
         "vmin": 0.0
       },
       "name": "Agitation coefficient (Hs/H0) at t = 8 s (harbour_mesh)",
@@ -304,7 +324,7 @@
       "reference_time": null,
       "role": "primary",
       "temporal": false,
-      "uri": "s3://trid3nt-runs/01M28GGE2Z8EFJ0J9Z9G1XACHP/overviews/01M28GGW9MW8F9W5ZQD3THNTA8.tif",
+      "uri": "s3://trid3nt-runs/01M28PWTMRFPZ2QETTCVQG79CH/overviews/01M28PX808RF4GB8SW8KFXAFS9.tif",
       "valid_from": null,
       "valid_to": null,
       "visible": true,

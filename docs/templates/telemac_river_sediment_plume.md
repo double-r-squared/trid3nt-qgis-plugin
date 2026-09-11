@@ -65,7 +65,7 @@ The values the template declares. `desc` is what the model reads when it fills o
 | `active_frames` | 8 |
 | `bed_evolution_max_m` | 0.00012464386236388236 |
 | `net_bed_mass_kg` | 66.90308 |
-| `deposit_fraction` | - |
+| `deposit_fraction` | 5.615383333333334 |
 | `mesh_size_m` | 10.415 |
 
 It publishes these layers onto the canvas:
@@ -81,23 +81,23 @@ It publishes these layers onto the canvas:
 
 ## The proving run
 
-Run `01M28B6RP5NJSFDV097X22PDRH`, 2026-09-11T13:41:38.038709+00:00, 41.388 s, at commit `750ff38e2d831d1c51358b20ceeac29fe274b4e6-dirty`.
+Run `01M28NDT0XJWV564A8ZVEB7TXR`, 2026-09-11T16:40:03.057516+00:00, 26.735 s, at commit `2fba21a6f70cf14ec7820930e71f1314673f20e8-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M28B6RP5NJSFDV097X22PDRH)](telemac_river_sediment_plume/telemac_river_sediment_plume.png)
+![Every layer the run published, stacked and framed on the result (run 01M28NDT0XJWV564A8ZVEB7TXR)](telemac_river_sediment_plume/telemac_river_sediment_plume.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M28B6RP5NJSFDV097X22PDRH)*
+*Every layer the run published, stacked and framed on the result (run 01M28NDT0XJWV564A8ZVEB7TXR)*
 
-![The solve, frame by frame (run 01M28B6RP5NJSFDV097X22PDRH)](telemac_river_sediment_plume/telemac_river_sediment_plume_animation.gif)
+![The solve, frame by frame (run 01M28NDT0XJWV564A8ZVEB7TXR)](telemac_river_sediment_plume/telemac_river_sediment_plume_animation.gif)
 
-*The solve, frame by frame (run 01M28B6RP5NJSFDV097X22PDRH)*
+*The solve, frame by frame (run 01M28NDT0XJWV564A8ZVEB7TXR)*
 
-![peak frame (run 01M28B6RP5NJSFDV097X22PDRH)](telemac_river_sediment_plume/telemac_river_sediment_plume_peak_frame.png)
+![peak frame (run 01M28NDT0XJWV564A8ZVEB7TXR)](telemac_river_sediment_plume/telemac_river_sediment_plume_peak_frame.png)
 
-*peak frame (run 01M28B6RP5NJSFDV097X22PDRH)*
+*peak frame (run 01M28NDT0XJWV564A8ZVEB7TXR)*
 
-![suspended sediment concentration - the chart the run persisted (run 01M28B6RP5NJSFDV097X22PDRH)](telemac_river_sediment_plume/telemac_river_sediment_plume_chart_suspended_sediment_concentration.png)
+![suspended sediment concentration - the chart the run persisted (run 01M28NDT0XJWV564A8ZVEB7TXR)](telemac_river_sediment_plume/telemac_river_sediment_plume_chart_suspended_sediment_concentration.png)
 
-*suspended sediment concentration - the chart the run persisted (run 01M28B6RP5NJSFDV097X22PDRH)*
+*suspended sediment concentration - the chart the run persisted (run 01M28NDT0XJWV564A8ZVEB7TXR)*
 
 ### The sheet it filled
 
@@ -119,11 +119,12 @@ Every slot the run resolved, with where the value came from. The engine's own de
 | `spill_fraction` | 0.25 | - | default_demo | declared scenario default |
 | `wind_speed_mps` | 0.0 | m/s | default_demo | declared scenario default |
 | `wind_direction_deg` | 0.0 | deg | default_demo | declared scenario default |
+| `injected_mass_kg` | 96.0 | kg | derived | derived by trid3nt_server.workflows.telemac.templates.river_sediment_plume.injected_mass.injected_mass_kg |
+| `bbox` | - | - | user | not supplied (declared optional) |
 | `river_geometry_uri` | - | - | user | not supplied (declared optional) |
+| `event_time` | - | - | prompt_interpreted | not supplied (declared optional) |
 | `friction_coefficient` | - | - | user | not supplied (declared optional) |
 | `friction_law` | - | - | user | not supplied (declared optional) |
-| `bbox` | - | - | user | not supplied (declared optional) |
-| `event_time` | - | - | prompt_interpreted | not supplied (declared optional) |
 | `rainfall_mm_per_day` | - | mm/day | user | not supplied (declared optional) |
 | `evaporation_mm_per_day` | - | mm/day | user | not supplied (declared optional) |
 | `rainfall_gridmet_window` | - | - | user | not supplied (declared optional) |
@@ -148,5 +149,5 @@ await TOOL_REGISTRY['telemac_river_sediment_plume'].fn(
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M28B6RP5NJSFDV097X22PDRH` and commit `750ff38e2d831d1c51358b20ceeac29fe274b4e6-dirty`. The full argument record is [`telemac_river_sediment_plume/run.json`](telemac_river_sediment_plume/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M28NDT0XJWV564A8ZVEB7TXR` and commit `2fba21a6f70cf14ec7820930e71f1314673f20e8-dirty`. The full argument record is [`telemac_river_sediment_plume/run.json`](telemac_river_sediment_plume/run.json).
 

@@ -1,15 +1,12 @@
 {
   "tool": "telemac_rain_on_grid",
-  "run_id": "01M23FFN1021M24HT7Q54YST8X",
-  "commit": "cb9f397638b615d0f9b0dd4b4ea4fb440d610d0e",
-  "recorded_at": "2026-09-09T16:22:48.060827+00:00",
-  "engine": "telemac2d",
-  "wall_seconds": 255.247,
+  "run_id": "01M28NZW9B3XPV4F0BY8BE942E",
+  "commit": "2fba21a6f70cf14ec7820930e71f1314673f20e8-dirty",
+  "recorded_at": "2026-09-11T16:52:33.472339+00:00",
+  "engine": "telemac",
+  "wall_seconds": 244.25,
   "args": {
-    "pour_point": [
-      -83.40402,
-      35.05746
-    ],
+    "pour_point": "Point(lon=-83.40402, lat=35.05746, name=None)",
     "design_storm_mm_per_hr": 6.53,
     "storm_duration_hr": 24.0,
     "sim_duration_hr": 30.0,
@@ -20,10 +17,7 @@
   "sheet": [
     {
       "name": "pour_point",
-      "value": [
-        -83.40402,
-        35.05746
-      ],
+      "value": "Point(lon=-83.40402, lat=35.05746, name=None)",
       "door": "user",
       "basis": "user",
       "units": null,
@@ -233,59 +227,10 @@
   ],
   "provenance": [
     {
-      "param": "rain_event",
-      "value": "design_storm",
-      "basis": "default_demo",
-      "note": "a CONSTANT design storm of 6.53 mm/h over 24 h - a hypothetical event, not a record.",
-      "real_source": null
-    },
-    {
-      "param": "sim_duration_hr",
-      "value": 30.0,
-      "basis": "user",
-      "note": "the window you asked for",
-      "real_source": null
-    },
-    {
-      "param": "antecedent_moisture",
-      "value": 2,
-      "basis": "user",
-      "note": "the SCS antecedent-moisture condition the curve numbers are converted under - the dominant infiltration lever",
-      "real_source": null
-    },
-    {
-      "param": "runoff_path",
-      "value": "native",
-      "basis": "derived",
-      "note": "constant design-storm intensity 6.53 mm/h -> native SCS-CN runoff model (RAINFALL-RUNOFF MODEL=1 + FORMATTED DATA FILE 2 CN2).",
-      "real_source": null
-    },
-    {
-      "param": "mesh_domain",
-      "value": "12974 elements over 28.1 km2",
-      "basis": "derived",
-      "note": "the catchment was delineated at the pour point and meshed for this run",
-      "real_source": null
-    },
-    {
-      "param": "mesh_bed",
-      "value": "bed raster supplied directly: /home/nate/Documents/trid3nt-local/data/runs/raster-01M23FEK389MFTZHD2FPKB6X65.tif (pit-filled: the delineator's own chain)",
-      "basis": "fetched",
-      "note": "the bare-earth bed the mesher painted every node from",
-      "real_source": null
-    },
-    {
-      "param": "mesh_sizing_source",
-      "value": "supplied polygon domain (1 part(s)); polygon_sdf(interior); distance_sizing_from_line_function; enforce_mesh_gradation",
-      "basis": "fetched",
-      "note": "the channel network the mesh refinement was sized by distance to",
-      "real_source": null
-    },
-    {
       "param": "pour_point",
-      "value": "[-83.404, 35.0575]",
+      "value": "lon=-83.404, lat=35.0575",
       "basis": "user",
-      "note": "The catchment OUTLET as (lon, lat) EPSG:4326 - the point the runoff drains to. It decides which basin is modelled at all, so it is asked for (drawn on the canvas or passed explicitly) and NEVER invented [supplied on this invocation]",
+      "note": "The catchment OUTLET, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer, or a place name - the point the runoff drains to. It decides which basin is modelled at all, so it is asked for (picked on the canvas or passed explicitly) and NEVER invented [supplied on this invocation]",
       "real_source": null
     },
     {
@@ -300,6 +245,20 @@
       "value": 24.0,
       "basis": "user",
       "note": "How long the design storm rains for [supplied on this invocation]",
+      "real_source": null
+    },
+    {
+      "param": "sim_duration_hr",
+      "value": 30.0,
+      "basis": "user",
+      "note": "Total simulated window; longer than the rain to watch the recession [supplied on this invocation]",
+      "real_source": null
+    },
+    {
+      "param": "antecedent_moisture",
+      "value": "normal",
+      "basis": "user",
+      "note": "How wet the catchment already is: dry (SCS AMC I) | normal (AMC II) | wet (AMC III). The dominant infiltration lever - a wet basin absorbs far less and the hydrograph peaks higher and sooner [supplied on this invocation]",
       "real_source": null
     },
     {
@@ -402,43 +361,30 @@
     }
   ],
   "answer": {
-    "catchment_area_km2": 28.1359,
+    "catchment_area_km2": 28.1361,
     "peak_discharge_m3s": 41.40334,
     "peak_discharge_time_s": 86400.0,
     "peak_is_window_truncated": false,
-    "rainfall_volume_m3": 4409464.103,
-    "runoff_volume_m3": 1526212.993,
-    "runoff_coefficient": 0.346122,
-    "max_depth_peak_m": 9.9493,
-    "max_depth_p99_m": 1.2596,
+    "rainfall_volume_m3": 4409487.258,
+    "runoff_volume_m3": 1564079.0,
+    "runoff_coefficient": 0.354708,
+    "max_depth_peak_m": 9.949299812316895,
+    "max_depth_p99_m": 1.2588693523406922,
     "continuity_rel_error": -2.405208e-15,
-    "amc_condition": 2,
-    "rain_intensity_mm_per_hr": 6.53,
     "n_frames": 61,
     "mesh_size_m": 26.76898646896342,
     "mesh_node_count": 6615,
     "mesh_element_count": 12974,
-    "catchment_provenance": "supplied polygon domain (1 part(s))",
     "domain_bbox": [
-      -83.47785743749148,
-      35.020842655690025,
-      -83.39843388520751,
-      35.07357312220887
+      -83.47785741613603,
+      35.02084328984999,
+      -83.39843378895853,
+      35.073572656237715
     ],
-    "layer_uri": "s3://trid3nt-runs/01M23FFN1021M24HT7Q54YST8X/overviews/01M23FN88W5AAYYF08F7JHHQF1.tif",
-    "rain_event": "design_storm",
-    "rain_event_note": "a CONSTANT design storm of 6.53 mm/h over 24 h - a hypothetical event, not a record.",
-    "sim_duration_hr": 30.0,
-    "sim_duration_note": "the window you asked for",
-    "runoff_path": "native",
-    "runoff_path_note": "constant design-storm intensity 6.53 mm/h -> native SCS-CN runoff model (RAINFALL-RUNOFF MODEL=1 + FORMATTED DATA FILE 2 CN2).",
-    "mesh_domain": "12974 elements over 28.1 km2",
-    "mesh_domain_note": "the catchment was delineated at the pour point and meshed for this run",
-    "mesh_bed": "bed raster supplied directly: /home/nate/Documents/trid3nt-local/data/runs/raster-01M23FEK389MFTZHD2FPKB6X65.tif (pit-filled: the delineator's own chain)",
-    "mesh_bed_note": "the bare-earth bed the mesher painted every node from"
+    "layer_uri": "s3://trid3nt-runs/01M28NZW9B3XPV4F0BY8BE942E/water_depth.tif"
   },
   "mesh": {
-    "mesh_size_m": 26.76898646896342
+    "mesh_size_m": null
   },
   "layers": [
     {
@@ -509,8 +455,33 @@
       "z_index": 2
     },
     {
+      "crs_authid": null,
+      "layer_id": "telemac-outlet_hydrograph-01M28NZW9B3XPV4F0BY8BE942E",
+      "layer_type": "vector",
+      "legend": {
+        "colormap": null,
+        "kind": "reference",
+        "label": null,
+        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <renderer-v2 type=\"singleSymbol\" symbollevels=\"0\" forceraster=\"0\" enableorderby=\"0\" referencescale=\"-1\">\n    <symbols>\n      <symbol name=\"0\" type=\"marker\" alpha=\"1\" force_rhr=\"0\" clip_to_extent=\"1\" frame_rate=\"10\" is_animated=\"0\">\n        <layer class=\"SimpleMarker\" enabled=\"1\" locked=\"0\" pass=\"0\">\n          <Option type=\"Map\">\n            <Option name=\"color\" type=\"QString\" value=\"59,125,216,255\"/>\n        <Option name=\"outline_color\" type=\"QString\" value=\"35,35,35,255\"/>\n        <Option name=\"outline_width\" type=\"QString\" value=\"0.26\"/>\n        <Option name=\"size\" type=\"QString\" value=\"2.4\"/>\n        <Option name=\"size_unit\" type=\"QString\" value=\"MM\"/>\n        <Option name=\"name\" type=\"QString\" value=\"circle\"/>\n            <Option name=\"style\" type=\"QString\" value=\"solid\"/>\n          </Option>\n        </layer>\n      </symbol>\n    </symbols>\n  </renderer-v2>\n</qgis>\n",
+        "units": "m3/s",
+        "vmax": null,
+        "vmin": null
+      },
+      "name": "Outlet hydrograph (watershed mesh)",
+      "opacity": null,
+      "quantity": "outlet_hydrograph",
+      "reference_time": null,
+      "role": "primary",
+      "temporal": false,
+      "uri": "s3://trid3nt-runs/01M28NZW9B3XPV4F0BY8BE942E/outlet_hydrograph.geojson",
+      "valid_from": null,
+      "valid_to": null,
+      "visible": true,
+      "z_index": 3
+    },
+    {
       "crs_authid": "EPSG:32617",
-      "layer_id": "model-results-mesh-01M23FFN1021M24HT7Q54YST8X",
+      "layer_id": "model-results-mesh-01M28NZW9B3XPV4F0BY8BE942E",
       "layer_type": "mesh",
       "legend": {
         "colormap": "viridis",
@@ -524,39 +495,39 @@
       "name": "Model results (time series): watershed mesh",
       "opacity": null,
       "quantity": "model_results",
-      "reference_time": "2026-09-09T16:19:43+00:00",
+      "reference_time": "2026-09-11T16:49:39+00:00",
       "role": "context",
       "temporal": false,
-      "uri": "s3://trid3nt-runs/01M23FFN1021M24HT7Q54YST8X/r2d_rog.slf",
+      "uri": "s3://trid3nt-runs/01M28NZW9B3XPV4F0BY8BE942E/r2d_rog.slf",
       "valid_from": null,
       "valid_to": null,
       "visible": true,
-      "z_index": 3
+      "z_index": 4
     },
     {
       "crs_authid": null,
-      "layer_id": "01M23FNB523PG73EZRA3C6EJ2A",
+      "layer_id": "01M28P58TZFR1X7PXBBCKWBSC7",
       "layer_type": "raster",
       "legend": {
         "colormap": "ylgnbu",
         "kind": "continuous",
-        "label": "Max water depth",
+        "label": "Water depth (m)",
         "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <pipe>\n    <rasterrenderer type=\"singlebandpseudocolor\" band=\"1\" opacity=\"1\" alphaBand=\"-1\" classificationMin=\"0\" classificationMax=\"9.9493\" nodataColor=\"\">\n      <rastershader>\n        <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"0\" maximumValue=\"9.9493\" labelPrecision=\"4\">\n          <item value=\"0\" color=\"#ffffd9\" alpha=\"255\" label=\"0 m\"/>\n          <item value=\"2.487325\" color=\"#c6e9b4\" alpha=\"255\" label=\"2.48732 m\"/>\n          <item value=\"4.97465\" color=\"#40b5c4\" alpha=\"255\" label=\"4.97465 m\"/>\n          <item value=\"7.461975\" color=\"#225da8\" alpha=\"255\" label=\"7.46197 m\"/>\n          <item value=\"9.9493\" color=\"#081d58\" alpha=\"255\" label=\"9.9493 m\"/>\n        </colorrampshader>\n      </rastershader>\n    </rasterrenderer>\n  </pipe>\n</qgis>\n",
         "units": "m",
         "vmax": 9.9493,
         "vmin": 0.0
       },
-      "name": "Max water depth (watershed mesh)",
+      "name": "Peak water depth (watershed mesh)",
       "opacity": null,
       "quantity": "water_depth",
       "reference_time": null,
       "role": "primary",
       "temporal": false,
-      "uri": "s3://trid3nt-runs/01M23FFN1021M24HT7Q54YST8X/overviews/01M23FN88W5AAYYF08F7JHHQF1.tif",
+      "uri": "s3://trid3nt-runs/01M28NZW9B3XPV4F0BY8BE942E/water_depth.tif",
       "valid_from": null,
       "valid_to": null,
       "visible": true,
-      "z_index": 4
+      "z_index": 5
     }
   ]
 }

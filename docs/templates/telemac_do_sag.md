@@ -57,7 +57,7 @@ The values the template declares. `desc` is what the model reads when it fills o
 | field | the proving run's value |
 |---|---|
 | `do_min_mgl` | 8.921165352434825 |
-| `do_below_standard` | - |
+| `do_below_standard` | False |
 | `do_min_distance_m` | 297.73186921575723 |
 | `bod_mixed_mgl` | 3.469098542982656 |
 | `mean_velocity_mps` | 0.6124773205557589 |
@@ -75,23 +75,23 @@ It publishes these layers onto the canvas:
 
 ## The proving run
 
-Run `01M28BB68MFADZ1FRKWZYRN0XA`, 2026-09-11T13:43:49.042885+00:00, 24.425 s, at commit `750ff38e2d831d1c51358b20ceeac29fe274b4e6-dirty`.
+Run `01M28NHS5MXT77XXGBY44N8271`, 2026-09-11T16:42:11.215442+00:00, 26.29 s, at commit `2fba21a6f70cf14ec7820930e71f1314673f20e8-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M28BB68MFADZ1FRKWZYRN0XA)](telemac_do_sag/telemac_do_sag.png)
+![Every layer the run published, stacked and framed on the result (run 01M28NHS5MXT77XXGBY44N8271)](telemac_do_sag/telemac_do_sag.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M28BB68MFADZ1FRKWZYRN0XA)*
+*Every layer the run published, stacked and framed on the result (run 01M28NHS5MXT77XXGBY44N8271)*
 
-![The solve, frame by frame (run 01M28BB68MFADZ1FRKWZYRN0XA)](telemac_do_sag/telemac_do_sag_animation.gif)
+![The solve, frame by frame (run 01M28NHS5MXT77XXGBY44N8271)](telemac_do_sag/telemac_do_sag_animation.gif)
 
-*The solve, frame by frame (run 01M28BB68MFADZ1FRKWZYRN0XA)*
+*The solve, frame by frame (run 01M28NHS5MXT77XXGBY44N8271)*
 
-![final frame (run 01M28BB68MFADZ1FRKWZYRN0XA)](telemac_do_sag/telemac_do_sag_final_frame.png)
+![final frame (run 01M28NHS5MXT77XXGBY44N8271)](telemac_do_sag/telemac_do_sag_final_frame.png)
 
-*final frame (run 01M28BB68MFADZ1FRKWZYRN0XA)*
+*final frame (run 01M28NHS5MXT77XXGBY44N8271)*
 
-![dissolved oxygen - the chart the run persisted (run 01M28BB68MFADZ1FRKWZYRN0XA)](telemac_do_sag/telemac_do_sag_chart_dissolved_oxygen.png)
+![dissolved oxygen - the chart the run persisted (run 01M28NHS5MXT77XXGBY44N8271)](telemac_do_sag/telemac_do_sag_chart_dissolved_oxygen.png)
 
-*dissolved oxygen - the chart the run persisted (run 01M28BB68MFADZ1FRKWZYRN0XA)*
+*dissolved oxygen - the chart the run persisted (run 01M28NHS5MXT77XXGBY44N8271)*
 
 ### The sheet it filled
 
@@ -116,11 +116,11 @@ Every slot the run resolved, with where the value came from. The engine's own de
 | `effluent_do_mgl` | 2.0 | mg/L | default_demo | declared scenario default |
 | `do_saturation_mgl` | 9.022 | mg/L | derived | derived by trid3nt_server.workflows.telemac.helpers.water_quality.do_saturation_mgl |
 | `upstream_do_mgl` | 9.022 | mg/L | derived | derived by trid3nt_server.workflows.telemac.helpers.water_quality.upstream_do_mgl |
+| `bbox` | - | - | user | not supplied (declared optional) |
 | `river_geometry_uri` | - | - | user | not supplied (declared optional) |
+| `event_time` | - | - | prompt_interpreted | not supplied (declared optional) |
 | `friction_coefficient` | - | - | user | not supplied (declared optional) |
 | `friction_law` | - | - | user | not supplied (declared optional) |
-| `bbox` | - | - | user | not supplied (declared optional) |
-| `event_time` | - | - | prompt_interpreted | not supplied (declared optional) |
 
 ### Reproduce
 
@@ -144,5 +144,5 @@ await TOOL_REGISTRY['telemac_do_sag'].fn(
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M28BB68MFADZ1FRKWZYRN0XA` and commit `750ff38e2d831d1c51358b20ceeac29fe274b4e6-dirty`. The full argument record is [`telemac_do_sag/run.json`](telemac_do_sag/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M28NHS5MXT77XXGBY44N8271` and commit `2fba21a6f70cf14ec7820930e71f1314673f20e8-dirty`. The full argument record is [`telemac_do_sag/run.json`](telemac_do_sag/run.json).
 

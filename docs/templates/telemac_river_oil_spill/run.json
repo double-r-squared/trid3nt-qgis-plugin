@@ -1,10 +1,10 @@
 {
   "tool": "telemac_river_oil_spill",
-  "run_id": "01M28AH124EF7VPH73QFDWC02R",
-  "commit": "750ff38e2d831d1c51358b20ceeac29fe274b4e6-dirty",
-  "recorded_at": "2026-09-11T13:29:31.713571+00:00",
+  "run_id": "01M28N5R2PA3NG6CBKX4H0AC4R",
+  "commit": "2fba21a6f70cf14ec7820930e71f1314673f20e8-dirty",
+  "recorded_at": "2026-09-11T16:35:36.704231+00:00",
   "engine": "telemac",
-  "wall_seconds": 23.397,
+  "wall_seconds": 26.424,
   "args": {
     "location": "Eel River near Scotia, California",
     "discharge_m3s": 2.2,
@@ -208,12 +208,34 @@
       "real_source": null
     },
     {
+      "name": "bbox",
+      "value": null,
+      "door": "user",
+      "basis": "user",
+      "units": null,
+      "consequence": "aoi",
+      "note": "not supplied (declared optional)",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
       "name": "river_geometry_uri",
       "value": null,
       "door": "user",
       "basis": "user",
       "units": null,
       "consequence": "aoi",
+      "note": "not supplied (declared optional)",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "event_time",
+      "value": null,
+      "door": "question",
+      "basis": "prompt_interpreted",
+      "units": null,
+      "consequence": "scenario",
       "note": "not supplied (declared optional)",
       "clamped_from": null,
       "real_source": null
@@ -236,28 +258,6 @@
       "basis": "user",
       "units": null,
       "consequence": "numerical",
-      "note": "not supplied (declared optional)",
-      "clamped_from": null,
-      "real_source": null
-    },
-    {
-      "name": "bbox",
-      "value": null,
-      "door": "user",
-      "basis": "user",
-      "units": null,
-      "consequence": "aoi",
-      "note": "not supplied (declared optional)",
-      "clamped_from": null,
-      "real_source": null
-    },
-    {
-      "name": "event_time",
-      "value": null,
-      "door": "question",
-      "basis": "prompt_interpreted",
-      "units": null,
-      "consequence": "scenario",
       "note": "not supplied (declared optional)",
       "clamped_from": null,
       "real_source": null
@@ -435,6 +435,13 @@
       "real_source": null
     },
     {
+      "param": "event_time",
+      "value": "derived",
+      "basis": "derived",
+      "note": "not supplied; the carrier discharge is read at the MOST RECENT published NWM cycle",
+      "real_source": null
+    },
+    {
       "param": "friction_coefficient",
       "value": "derived",
       "basis": "derived",
@@ -446,13 +453,6 @@
       "value": "derived",
       "basis": "derived",
       "note": "not supplied; the coefficient is read as a Strickler one",
-      "real_source": null
-    },
-    {
-      "param": "event_time",
-      "value": "derived",
-      "basis": "derived",
-      "note": "not supplied; the carrier discharge is read at the MOST RECENT published NWM cycle",
       "real_source": null
     },
     {
@@ -472,7 +472,7 @@
     "floats_released": 100,
     "floats_remaining": 100,
     "mesh_size_m": 10.415,
-    "layer_uri": "s3://trid3nt-runs/01M28AH124EF7VPH73QFDWC02R/overviews/01M28AHDWTYTZXQ6PXB341X6EF.tif",
+    "layer_uri": "s3://trid3nt-runs/01M28N5R2PA3NG6CBKX4H0AC4R/overviews/01M28N655R7BT7VZ12RZHNQKT0.tif",
     "discharge_m3s": 2.2,
     "discharge_note": "Steady upstream CARRIER discharge - the river flow that dilutes and transports the release [supplied on this invocation]",
     "mesh_resolution_m": 12.0,
@@ -584,7 +584,7 @@
     },
     {
       "crs_authid": null,
-      "layer_id": "point-01M28AGVK05X17TRKKFS54FZ3A",
+      "layer_id": "point-01M28N5JF7BQM6F0S1A00Q923X",
       "layer_type": "vector",
       "legend": {
         "colormap": null,
@@ -601,7 +601,7 @@
       "reference_time": null,
       "role": "context",
       "temporal": false,
-      "uri": "s3://trid3nt-runs/inputs/01M28AGVJQN8300XJFZR70JKDT/point.geojson",
+      "uri": "s3://trid3nt-runs/inputs/01M28N5JEXD8JG5Y6GN6CC9HZ8/point.geojson",
       "valid_from": null,
       "valid_to": null,
       "visible": true,
@@ -609,7 +609,7 @@
     },
     {
       "crs_authid": null,
-      "layer_id": "telemac-oil_slick_track-01M28AH124EF7VPH73QFDWC02R",
+      "layer_id": "telemac-oil_slick_track-01M28N5R2PA3NG6CBKX4H0AC4R",
       "layer_type": "vector",
       "legend": {
         "colormap": null,
@@ -626,7 +626,7 @@
       "reference_time": null,
       "role": "primary",
       "temporal": false,
-      "uri": "s3://trid3nt-runs/01M28AH124EF7VPH73QFDWC02R/oil_slick_track.geojson",
+      "uri": "s3://trid3nt-runs/01M28N5R2PA3NG6CBKX4H0AC4R/oil_slick_track.geojson",
       "valid_from": null,
       "valid_to": null,
       "visible": true,
@@ -634,7 +634,7 @@
     },
     {
       "crs_authid": "EPSG:32610",
-      "layer_id": "model-results-mesh-01M28AH124EF7VPH73QFDWC02R",
+      "layer_id": "model-results-mesh-01M28N5R2PA3NG6CBKX4H0AC4R",
       "layer_type": "mesh",
       "legend": {
         "colormap": "viridis",
@@ -648,10 +648,10 @@
       "name": "Model results (time series): scotia_humboldt_county_california_95562_united_s",
       "opacity": null,
       "quantity": "model_results",
-      "reference_time": "2026-09-11T13:29:18+00:00",
+      "reference_time": "2026-09-11T16:35:22+00:00",
       "role": "context",
       "temporal": false,
-      "uri": "s3://trid3nt-runs/01M28AH124EF7VPH73QFDWC02R/r2d_river.slf",
+      "uri": "s3://trid3nt-runs/01M28N5R2PA3NG6CBKX4H0AC4R/r2d_river.slf",
       "valid_from": null,
       "valid_to": null,
       "visible": true,
@@ -659,7 +659,7 @@
     },
     {
       "crs_authid": null,
-      "layer_id": "01M28AHGGX0SB52QVH125N21NM",
+      "layer_id": "01M28N68V0S2WTE0Z6RCE0VPSY",
       "layer_type": "raster",
       "legend": {
         "colormap": "reds",
@@ -676,7 +676,7 @@
       "reference_time": null,
       "role": "primary",
       "temporal": false,
-      "uri": "s3://trid3nt-runs/01M28AH124EF7VPH73QFDWC02R/overviews/01M28AHDWTYTZXQ6PXB341X6EF.tif",
+      "uri": "s3://trid3nt-runs/01M28N5R2PA3NG6CBKX4H0AC4R/overviews/01M28N655R7BT7VZ12RZHNQKT0.tif",
       "valid_from": null,
       "valid_to": null,
       "visible": true,

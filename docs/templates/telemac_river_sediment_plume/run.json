@@ -1,10 +1,10 @@
 {
   "tool": "telemac_river_sediment_plume",
-  "run_id": "01M28B6RP5NJSFDV097X22PDRH",
-  "commit": "750ff38e2d831d1c51358b20ceeac29fe274b4e6-dirty",
-  "recorded_at": "2026-09-11T13:41:38.038709+00:00",
+  "run_id": "01M28NDT0XJWV564A8ZVEB7TXR",
+  "commit": "2fba21a6f70cf14ec7820930e71f1314673f20e8-dirty",
+  "recorded_at": "2026-09-11T16:40:03.057516+00:00",
   "engine": "telemac",
-  "wall_seconds": 41.388,
+  "wall_seconds": 26.735,
   "args": {
     "location": "Eel River near Scotia, California",
     "discharge_m3s": 2.2,
@@ -173,12 +173,45 @@
       "real_source": null
     },
     {
+      "name": "injected_mass_kg",
+      "value": 96.0,
+      "door": "derived",
+      "basis": "derived",
+      "units": "kg",
+      "consequence": "scenario",
+      "note": "derived by trid3nt_server.workflows.telemac.templates.river_sediment_plume.injected_mass.injected_mass_kg",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "bbox",
+      "value": null,
+      "door": "user",
+      "basis": "user",
+      "units": null,
+      "consequence": "aoi",
+      "note": "not supplied (declared optional)",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
       "name": "river_geometry_uri",
       "value": null,
       "door": "user",
       "basis": "user",
       "units": null,
       "consequence": "aoi",
+      "note": "not supplied (declared optional)",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "event_time",
+      "value": null,
+      "door": "question",
+      "basis": "prompt_interpreted",
+      "units": null,
+      "consequence": "scenario",
       "note": "not supplied (declared optional)",
       "clamped_from": null,
       "real_source": null
@@ -201,28 +234,6 @@
       "basis": "user",
       "units": null,
       "consequence": "numerical",
-      "note": "not supplied (declared optional)",
-      "clamped_from": null,
-      "real_source": null
-    },
-    {
-      "name": "bbox",
-      "value": null,
-      "door": "user",
-      "basis": "user",
-      "units": null,
-      "consequence": "aoi",
-      "note": "not supplied (declared optional)",
-      "clamped_from": null,
-      "real_source": null
-    },
-    {
-      "name": "event_time",
-      "value": null,
-      "door": "question",
-      "basis": "prompt_interpreted",
-      "units": null,
-      "consequence": "scenario",
       "note": "not supplied (declared optional)",
       "clamped_from": null,
       "real_source": null
@@ -372,10 +383,24 @@
       "real_source": null
     },
     {
+      "param": "injected_mass_kg",
+      "value": 96.0,
+      "basis": "derived",
+      "note": "The mass the pulse released - source_q_m3s x sediment_concentration_mgl x spill_duration_s - which the deposited fraction is measured against [derived by trid3nt_server.workflows.telemac.templates.river_sediment_plume.injected_mass.injected_mass_kg]",
+      "real_source": null
+    },
+    {
       "param": "river_geometry_uri",
       "value": "derived",
       "basis": "derived",
       "note": "not supplied; the reach flowline is fetched fresh for the AOI",
+      "real_source": null
+    },
+    {
+      "param": "event_time",
+      "value": "derived",
+      "basis": "derived",
+      "note": "not supplied; the carrier discharge is read at the MOST RECENT published NWM cycle",
       "real_source": null
     },
     {
@@ -393,13 +418,6 @@
       "real_source": null
     },
     {
-      "param": "event_time",
-      "value": "derived",
-      "basis": "derived",
-      "note": "not supplied; the carrier discharge is read at the MOST RECENT published NWM cycle",
-      "real_source": null
-    },
-    {
       "param": "release",
       "value": "derived",
       "basis": "derived",
@@ -414,8 +432,9 @@
     "active_frames": 8,
     "bed_evolution_max_m": 0.00012464386236388236,
     "net_bed_mass_kg": 66.90308,
+    "deposit_fraction": 5.615383333333334,
     "mesh_size_m": 10.415,
-    "layer_uri": "s3://trid3nt-runs/01M28B6RP5NJSFDV097X22PDRH/overviews/01M28B7JYMJHGCS4ZZEBNV7SES.tif",
+    "layer_uri": "s3://trid3nt-runs/01M28NDT0XJWV564A8ZVEB7TXR/overviews/01M28NE93NVF7A1EWNHT03CCAE.tif",
     "discharge_m3s": 2.2,
     "discharge_note": "Steady upstream CARRIER discharge - the river flow that dilutes and transports the release [supplied on this invocation]",
     "mesh_resolution_m": 12.0,
@@ -527,7 +546,7 @@
     },
     {
       "crs_authid": null,
-      "layer_id": "point-01M28B6FPW3B6VHR5C5QYBTVQP",
+      "layer_id": "point-01M28NDM11H3K346W1D68KRSY2",
       "layer_type": "vector",
       "legend": {
         "colormap": null,
@@ -544,7 +563,7 @@
       "reference_time": null,
       "role": "context",
       "temporal": false,
-      "uri": "s3://trid3nt-runs/inputs/01M28B6FPJ97BH799BEX6TJR7C/point.geojson",
+      "uri": "s3://trid3nt-runs/inputs/01M28NDM0QZN8T6BWFY1ZD1A0D/point.geojson",
       "valid_from": null,
       "valid_to": null,
       "visible": true,
@@ -552,7 +571,7 @@
     },
     {
       "crs_authid": null,
-      "layer_id": "telemac-bed_evolution-t593-01M28B6RP5NJSFDV097X22PDRH",
+      "layer_id": "telemac-bed_evolution-t593-01M28NDT0XJWV564A8ZVEB7TXR",
       "layer_type": "raster",
       "legend": {
         "colormap": "rdbu",
@@ -569,7 +588,7 @@
       "reference_time": null,
       "role": "primary",
       "temporal": false,
-      "uri": "s3://trid3nt-runs/01M28B6RP5NJSFDV097X22PDRH/overviews/01M28B7K5986W5KF63R0W2WGGK.tif",
+      "uri": "s3://trid3nt-runs/01M28NDT0XJWV564A8ZVEB7TXR/overviews/01M28NE9AESVWHS0NFYYTWCSKB.tif",
       "valid_from": null,
       "valid_to": null,
       "visible": true,
@@ -577,7 +596,7 @@
     },
     {
       "crs_authid": "EPSG:32610",
-      "layer_id": "model-results-mesh-01M28B6RP5NJSFDV097X22PDRH",
+      "layer_id": "model-results-mesh-01M28NDT0XJWV564A8ZVEB7TXR",
       "layer_type": "mesh",
       "legend": {
         "colormap": "viridis",
@@ -591,10 +610,10 @@
       "name": "Model results (time series): scotia_humboldt_county_california_95562_united_s",
       "opacity": null,
       "quantity": "model_results",
-      "reference_time": "2026-09-11T13:41:10+00:00",
+      "reference_time": "2026-09-11T16:39:47+00:00",
       "role": "context",
       "temporal": false,
-      "uri": "s3://trid3nt-runs/01M28B6RP5NJSFDV097X22PDRH/r2d_river.slf",
+      "uri": "s3://trid3nt-runs/01M28NDT0XJWV564A8ZVEB7TXR/r2d_river.slf",
       "valid_from": null,
       "valid_to": null,
       "visible": true,
@@ -602,7 +621,7 @@
     },
     {
       "crs_authid": null,
-      "layer_id": "01M28B7NRRAHSP37NGNF6DE7R7",
+      "layer_id": "01M28NEBZJATFZQ13121A8SGWR",
       "layer_type": "raster",
       "legend": {
         "colormap": "oranges",
@@ -619,7 +638,7 @@
       "reference_time": null,
       "role": "primary",
       "temporal": false,
-      "uri": "s3://trid3nt-runs/01M28B6RP5NJSFDV097X22PDRH/overviews/01M28B7JYMJHGCS4ZZEBNV7SES.tif",
+      "uri": "s3://trid3nt-runs/01M28NDT0XJWV564A8ZVEB7TXR/overviews/01M28NE93NVF7A1EWNHT03CCAE.tif",
       "valid_from": null,
       "valid_to": null,
       "visible": true,

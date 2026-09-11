@@ -9,17 +9,18 @@ touch, BEFORE writing code. Inherit the structure; do not improvise.
 ## The map
 
 - `trid3nt_server/` - the framework package, by feature:
-  `tools/` (the atomic-tool registry: fetcher specs + router +
-  emit-on-fetch, derive, search), `emission/` (the one
-  emission seam plus the raster publish mechanism), `data/`
-  (category-era fossil - only the per-engine simulation shims remain),
-  `mesh/` (shared mesh layer), `workflows/` (engine composers, plus
-  `lib/` the declarative library and `solver/` the solve seam),
-  `gates/` (GateSpec
-  engine + cards + pending registries), `adapters/` (LLM providers -
-  the ONLY place provider nouns appear), `server/` (session/ turn/
-  dispatch/ protocol/), `emission/` (layer publication + the
-  emit-on-solve seam), `persistence.py`.
+  `tools/` (the atomic-tool registry; a tool is one of two kinds -
+  `fetch` produces data from outside through a declared source spec
+  the router executes, `derive` ingests data and outputs data - with
+  `search`, `display` and `meta` beside them as infrastructure),
+  `emission/` (the one emission seam, layer publication, the raster
+  publish mechanism and the emit-on-solve seam), `workflows/` (the
+  declarative `runtime/`, the `mesh/` front, the typed `inputs/`, the
+  generic `publishing/`, the `solver/` seam, and the engine package
+  `telemac/`), `gates/` (GateSpec engine + cards + pending
+  registries), `adapters/` (LLM providers - the ONLY place provider
+  nouns appear), `server/` (session/ turn/ dispatch/ protocol/),
+  `persistence.py`.
 - `workers/` - the telemac solver worker plus the mesh and qgis
   legs. Worker code is INERT until its image is
   rebuilt: absolute -f/context paths, provenance-check the new code is
@@ -107,6 +108,18 @@ touch, BEFORE writing code. Inherit the structure; do not improvise.
 
 ## How to write code here
 
+- EVERY KIND OF CODE HAS ONE HOME. The engine's module is the unit: a
+  template is values over one module - keywords, DATA rows, an outputs
+  list, captions - and nothing below the template layer names a
+  template or a question. A piece that writes an engine input file is
+  authoring; one that expands a value into keywords is a composite on
+  the wrapper; one that reads a variable off a result is a primitive;
+  one that fetches or resamples is a DATA row; one that validates or
+  places a geometry is a method on Point, Extent or Shape; one that
+  fails is a module-level error. `helpers/` holds ONLY a pure physics or
+  numerics function none of those express - no fetch, no geometry, no
+  file, no failure of its own. A tool is `fetch` or `derive`; a third
+  kind invents a schism to justify.
 - SIMPLICITY: prefer the boring solution. Reuse an existing seam,
   convention, or pattern before inventing anything. Before adding a
   flag, mode, field, or knob: name who reads it - no reader, no

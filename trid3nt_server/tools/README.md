@@ -1,7 +1,9 @@
 # `tools/` - the atomic-tool surface
 
-Every tool the model can call is registered here at import time. A fetcher is a
-declared source spec the router executes; a derive tool is a function; the
+Every tool the model can call is registered here at import time. A tool is one
+of two kinds: a fetcher produces data from outside - a declared source spec the
+router executes - and a derive tool ingests data and outputs data - a function.
+Search, display and the meta tools stand beside them as infrastructure. The
 registry and the cache shim are the two seams they all pass through.
 
 ## Files

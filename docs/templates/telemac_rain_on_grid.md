@@ -50,57 +50,58 @@ The values the template declares. `desc` is what the model reads when it fills o
 
 | field | the proving run's value |
 |---|---|
-| `catchment_area_km2` | 28.1359 |
+| `catchment_area_km2` | 28.1361 |
 | `peak_discharge_m3s` | 41.40334 |
 | `peak_discharge_time_s` | 86400.0 |
 | `peak_is_window_truncated` | False |
-| `rainfall_volume_m3` | 4409464.103 |
-| `runoff_volume_m3` | 1526212.993 |
-| `runoff_coefficient` | 0.346122 |
-| `max_depth_peak_m` | 9.9493 |
-| `max_depth_p99_m` | 1.2596 |
+| `rainfall_volume_m3` | 4409487.258 |
+| `runoff_volume_m3` | 1564079.0 |
+| `runoff_coefficient` | 0.354708 |
+| `max_depth_peak_m` | 9.949299812316895 |
+| `max_depth_p99_m` | 1.2588693523406922 |
 | `continuity_rel_error` | -2.405208e-15 |
 | `n_frames` | 61 |
 | `mesh_size_m` | 26.76898646896342 |
 | `mesh_node_count` | 6615 |
 | `mesh_element_count` | 12974 |
-| `domain_bbox` | [-83.47785743749148, 35.020842655690025, -83.39843388520751, 35.07357312220887] |
+| `domain_bbox` | [-83.47785741613603, 35.02084328984999, -83.39843378895853, 35.073572656237715] |
 
 It publishes these layers onto the canvas:
 
 - Input: mesh bed (dem, 3DEP 1-10 m US lidar (default 10 m); Copernicus GLO-30 30 m global via source=copernicus, datum NAVD88 (metres, positive up))
 - Input: river geometry (river_geometry)
 - Input: land cover (landcover)
+- Outlet hydrograph (watershed mesh)
 - Model results (time series): watershed mesh
-- Max water depth (watershed mesh)
+- Peak water depth (watershed mesh)
 
 ## The proving run
 
-Run `01M23FFN1021M24HT7Q54YST8X`, 2026-09-09T16:22:48.060827+00:00, 255.247 s, at commit `cb9f397638b615d0f9b0dd4b4ea4fb440d610d0e`.
+Run `01M28NZW9B3XPV4F0BY8BE942E`, 2026-09-11T16:52:33.472339+00:00, 244.25 s, at commit `2fba21a6f70cf14ec7820930e71f1314673f20e8-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M23FFN1021M24HT7Q54YST8X)](telemac_rain_on_grid/telemac_rain_on_grid.png)
+![Every layer the run published, stacked and framed on the result (run 01M28NZW9B3XPV4F0BY8BE942E)](telemac_rain_on_grid/telemac_rain_on_grid.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M23FFN1021M24HT7Q54YST8X)*
+*Every layer the run published, stacked and framed on the result (run 01M28NZW9B3XPV4F0BY8BE942E)*
 
-![The solve, frame by frame - flow_dynamics (run 01M23FFN1021M24HT7Q54YST8X)](telemac_rain_on_grid/telemac_rain_on_grid_animation_flow_dynamics.gif)
+![The solve, frame by frame - flow_dynamics (run 01M28NZW9B3XPV4F0BY8BE942E)](telemac_rain_on_grid/telemac_rain_on_grid_animation_flow_dynamics.gif)
 
-*The solve, frame by frame - flow_dynamics (run 01M23FFN1021M24HT7Q54YST8X)*
+*The solve, frame by frame - flow_dynamics (run 01M28NZW9B3XPV4F0BY8BE942E)*
 
-![The solve, frame by frame - inundation_depth (run 01M23FFN1021M24HT7Q54YST8X)](telemac_rain_on_grid/telemac_rain_on_grid_animation_inundation_depth.gif)
+![The solve, frame by frame - inundation_depth (run 01M28NZW9B3XPV4F0BY8BE942E)](telemac_rain_on_grid/telemac_rain_on_grid_animation_inundation_depth.gif)
 
-*The solve, frame by frame - inundation_depth (run 01M23FFN1021M24HT7Q54YST8X)*
+*The solve, frame by frame - inundation_depth (run 01M28NZW9B3XPV4F0BY8BE942E)*
 
-![flow dynamics peak frame (run 01M23FFN1021M24HT7Q54YST8X)](telemac_rain_on_grid/telemac_rain_on_grid_flow_dynamics_peak_frame.png)
+![flow dynamics peak frame (run 01M28NZW9B3XPV4F0BY8BE942E)](telemac_rain_on_grid/telemac_rain_on_grid_flow_dynamics_peak_frame.png)
 
-*flow dynamics peak frame (run 01M23FFN1021M24HT7Q54YST8X)*
+*flow dynamics peak frame (run 01M28NZW9B3XPV4F0BY8BE942E)*
 
-![inundation depth peak frame (run 01M23FFN1021M24HT7Q54YST8X)](telemac_rain_on_grid/telemac_rain_on_grid_inundation_depth_peak_frame.png)
+![inundation depth peak frame (run 01M28NZW9B3XPV4F0BY8BE942E)](telemac_rain_on_grid/telemac_rain_on_grid_inundation_depth_peak_frame.png)
 
-*inundation depth peak frame (run 01M23FFN1021M24HT7Q54YST8X)*
+*inundation depth peak frame (run 01M28NZW9B3XPV4F0BY8BE942E)*
 
-![rain on grid outlet hydrograph - the chart the run persisted (run 01M23FFN1021M24HT7Q54YST8X)](telemac_rain_on_grid/telemac_rain_on_grid_chart_rain_on_grid_outlet_hydrograph.png)
+![outlet hydrograph - the chart the run persisted (run 01M28NZW9B3XPV4F0BY8BE942E)](telemac_rain_on_grid/telemac_rain_on_grid_chart_outlet_hydrograph.png)
 
-*rain on grid outlet hydrograph - the chart the run persisted (run 01M23FFN1021M24HT7Q54YST8X)*
+*outlet hydrograph - the chart the run persisted (run 01M28NZW9B3XPV4F0BY8BE942E)*
 
 ### The sheet it filled
 
@@ -108,7 +109,7 @@ Every slot the run resolved, with where the value came from. The engine's own de
 
 | param | value | units | basis | provenance |
 |---|---|---|---|---|
-| `pour_point` | [-83.40402, 35.05746] | - | user | supplied on this invocation |
+| `pour_point` | Point(lon=-83.40402, lat=35.05746, name=None) | - | user | supplied on this invocation |
 | `design_storm_mm_per_hr` | 6.53 | mm/h | user | supplied on this invocation |
 | `storm_duration_hr` | 24.0 | h | user | supplied on this invocation |
 | `sim_duration_hr` | 30.0 | h | user | supplied on this invocation |
@@ -138,11 +139,11 @@ await TOOL_REGISTRY['telemac_rain_on_grid'].fn(
     compute_class='medium',
     design_storm_mm_per_hr=6.53,
     output_interval_min=30.0,
-    pour_point=[-83.40402, 35.05746],
+    pour_point='Point(lon=-83.40402, lat=35.05746, name=None)',
     sim_duration_hr=30.0,
     storm_duration_hr=24.0,
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M23FFN1021M24HT7Q54YST8X` and commit `cb9f397638b615d0f9b0dd4b4ea4fb440d610d0e`. The full argument record is [`telemac_rain_on_grid/run.json`](telemac_rain_on_grid/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M28NZW9B3XPV4F0BY8BE942E` and commit `2fba21a6f70cf14ec7820930e71f1314673f20e8-dirty`. The full argument record is [`telemac_rain_on_grid/run.json`](telemac_rain_on_grid/run.json).
 

@@ -83,23 +83,23 @@ It publishes these layers onto the canvas:
 
 ## The proving run
 
-Run `01M28AH124EF7VPH73QFDWC02R`, 2026-09-11T13:29:31.713571+00:00, 23.397 s, at commit `750ff38e2d831d1c51358b20ceeac29fe274b4e6-dirty`.
+Run `01M28N5R2PA3NG6CBKX4H0AC4R`, 2026-09-11T16:35:36.704231+00:00, 26.424 s, at commit `2fba21a6f70cf14ec7820930e71f1314673f20e8-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M28AH124EF7VPH73QFDWC02R)](telemac_river_oil_spill/telemac_river_oil_spill.png)
+![Every layer the run published, stacked and framed on the result (run 01M28N5R2PA3NG6CBKX4H0AC4R)](telemac_river_oil_spill/telemac_river_oil_spill.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M28AH124EF7VPH73QFDWC02R)*
+*Every layer the run published, stacked and framed on the result (run 01M28N5R2PA3NG6CBKX4H0AC4R)*
 
-![The solve, frame by frame (run 01M28AH124EF7VPH73QFDWC02R)](telemac_river_oil_spill/telemac_river_oil_spill_animation.gif)
+![The solve, frame by frame (run 01M28N5R2PA3NG6CBKX4H0AC4R)](telemac_river_oil_spill/telemac_river_oil_spill_animation.gif)
 
-*The solve, frame by frame (run 01M28AH124EF7VPH73QFDWC02R)*
+*The solve, frame by frame (run 01M28N5R2PA3NG6CBKX4H0AC4R)*
 
-![peak frame (run 01M28AH124EF7VPH73QFDWC02R)](telemac_river_oil_spill/telemac_river_oil_spill_peak_frame.png)
+![peak frame (run 01M28N5R2PA3NG6CBKX4H0AC4R)](telemac_river_oil_spill/telemac_river_oil_spill_peak_frame.png)
 
-*peak frame (run 01M28AH124EF7VPH73QFDWC02R)*
+*peak frame (run 01M28N5R2PA3NG6CBKX4H0AC4R)*
 
-![dissolved oil concentration - the chart the run persisted (run 01M28AH124EF7VPH73QFDWC02R)](telemac_river_oil_spill/telemac_river_oil_spill_chart_dissolved_oil_concentration.png)
+![dissolved oil concentration - the chart the run persisted (run 01M28N5R2PA3NG6CBKX4H0AC4R)](telemac_river_oil_spill/telemac_river_oil_spill_chart_dissolved_oil_concentration.png)
 
-*dissolved oil concentration - the chart the run persisted (run 01M28AH124EF7VPH73QFDWC02R)*
+*dissolved oil concentration - the chart the run persisted (run 01M28N5R2PA3NG6CBKX4H0AC4R)*
 
 ### The sheet it filled
 
@@ -124,11 +124,11 @@ Every slot the run resolved, with where the value came from. The engine's own de
 | `wind_speed_mps` | 0.0 | m/s | default_demo | declared scenario default |
 | `wind_direction_deg` | 0.0 | deg | default_demo | declared scenario default |
 | `drogues_period_s` | 60.0 | s | default_demo | declared scenario default |
+| `bbox` | - | - | user | not supplied (declared optional) |
 | `river_geometry_uri` | - | - | user | not supplied (declared optional) |
+| `event_time` | - | - | prompt_interpreted | not supplied (declared optional) |
 | `friction_coefficient` | - | - | user | not supplied (declared optional) |
 | `friction_law` | - | - | user | not supplied (declared optional) |
-| `bbox` | - | - | user | not supplied (declared optional) |
-| `event_time` | - | - | prompt_interpreted | not supplied (declared optional) |
 | `rainfall_mm_per_day` | - | mm/day | user | not supplied (declared optional) |
 | `evaporation_mm_per_day` | - | mm/day | user | not supplied (declared optional) |
 | `rainfall_gridmet_window` | - | - | user | not supplied (declared optional) |
@@ -155,5 +155,5 @@ await TOOL_REGISTRY['telemac_river_oil_spill'].fn(
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M28AH124EF7VPH73QFDWC02R` and commit `750ff38e2d831d1c51358b20ceeac29fe274b4e6-dirty`. The full argument record is [`telemac_river_oil_spill/run.json`](telemac_river_oil_spill/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M28N5R2PA3NG6CBKX4H0AC4R` and commit `2fba21a6f70cf14ec7820930e71f1314673f20e8-dirty`. The full argument record is [`telemac_river_oil_spill/run.json`](telemac_river_oil_spill/run.json).
 

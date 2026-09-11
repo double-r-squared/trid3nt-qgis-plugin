@@ -24,31 +24,32 @@
 </style>
 
 <h1>The Module Surface</h1>
-<p class="rev">rev 1d &middot; 2026-09-07 &middot; closed with the measured LOC &middot; amended in place after Stage 0 (the apostrophe caveat, the de-LaTeX set), Stage 2 (composition over inheritance; one template per question) and the conformance read (the third serializer caveat, the composite rule, the measured LOC) &middot; the module-surface wave's spec, per the rulings of docs/IDEAS.md "MODULE SURFACE RULED" - written fresh for NATE's read; the wave runs only after. Format per <code>docs/CONVENTIONS.md</code>, "The spec". Frozen: the mesh recipe (docs/specs/mesh-recipe.html), the emission fold, the worker's engine-room contract, the data seam.</p>
+<p class="rev">rev 1e &middot; 2026-09-11 &middot; the module is the unit: the catalog reads dictionary, outputs are the primitive set, parts and shared bodies are gone (docs/specs/module-is-the-unit.html) &middot; rev 1d closed the module-surface wave with its measured LOC &middot; format per <code>docs/CONVENTIONS.md</code>, "The spec". Frozen: the mesh recipe (docs/specs/mesh-recipe.html), the emission fold, the worker's engine-room contract, the data seam.</p>
 
 <h2>1. The principle</h2>
-<p>A workflow is a wrapper around a TELEMAC module, exposing the module's FULL keyword surface. The engine already publishes that surface: every module's dico names each keyword, its type, its allowed values, its default and its help text. We stop transcribing it by hand into f-strings and comments. The wrapper is the engine's catalog and NOTHING ELSE that opines; variance lives in templates, which stay Python because they are read by people. Every knob is reachable at invocation. Simple system, complex work.</p>
+<p>A workflow is a wrapper around a TELEMAC module, exposing the module's FULL keyword surface. The engine already publishes that surface: every module's dico names each keyword, its type, its allowed values, its default and its help text. We stop transcribing it by hand into f-strings and comments. The wrapper is the engine's dictionary and NOTHING ELSE that opines; variance lives in templates, which stay Python because they are read by people. Every knob is reachable at invocation. Simple system, complex work.</p>
 
 <h2>2. The sheet: a module's keywords are slots</h2>
-<p>Every keyword in a module is a SLOT. The dico's SUBMIT field marks FILE slots (GEOMETRY FILE, BOUNDARY CONDITIONS FILE, SOURCES FILE, FORTRAN FILE). A slot's value comes from exactly one of the sources below, and the sheet records which - PROVENANCE is shown per slot, so nothing inherited or derived is hidden.</p>
+<p>Every keyword in a module is a SLOT. The dico's SUBMIT field marks FILE slots (GEOMETRY FILE, BOUNDARY CONDITIONS FILE, SOURCES FILE, FORTRAN FILE). A slot's value comes from exactly one of the origins below, and the sheet records which - PROVENANCE is one field on every filled slot, a closed vocabulary the card renders as a chip, so nothing inherited or derived is hidden. The engine default answers by absence and carries no row.</p>
 <table>
-<tr><th>source</th><th>meaning</th><th>shown as</th></tr>
-<tr><td>engine default</td><td>unset; the dico's DEFAUT value stands</td><td>greyed, with the value</td></tr>
-<tr><td>shared body</td><td>a part this template lists asserts it</td><td><code>river.py</code></td></tr>
-<tr><td>template</td><td>this template asserts it (a literal or a param)</td><td><code>river_dye</code></td></tr>
-<tr><td>fill</td><td>set at invocation: a param value, a canvas click, or a raw keyword</td><td><code>edited</code></td></tr>
-<tr><td>producer</td><td>a file slot filled by the mesh recipe, a data row, a helper, or a composite</td><td><code>mesh recipe</code>, <code>releases</code></td></tr>
-<tr><td>derived</td><td>measured by the assembler off the accepted artifact (boundary order, normal-depth stage, Z(Q))</td><td><code>derived</code></td></tr>
+<tr><th>origin</th><th>detail</th><th>meaning</th></tr>
+<tr><td>template</td><td>the template's name</td><td>a starting value</td></tr>
+<tr><td>user</td><td></td><td>typed or confirmed by the user, a canvas pick among them</td></tr>
+<tr><td>model</td><td></td><td>proposed by the LLM during the fill</td></tr>
+<tr><td>producer</td><td>the producer's name</td><td>computed at fill time from fetched data - the mesh recipe, a DATA row, a composite's file</td></tr>
+<tr><td>derived</td><td>the source slot</td><td>expanded from another slot by a composite, or measured by the assembler off the accepted artifact (boundary order, normal-depth stage, Z(Q))</td></tr>
+<tr><td>calibrated</td><td>the calibration run id</td><td>from a proposal the user confirmed</td></tr>
 </table>
-<p>Resolution order, lowest to highest: engine default, the listed parts in order, template, fill. At most two opinion layers exist and both are templates. A slot not in the module's catalog refuses by name at import time (template) or at fill time (invocation); a value outside the dico's choices refuses naming the choices.</p>
+<p>Resolution order, lowest to highest: engine default, template, fill. One opinion layer exists and it is the template. A slot not in the module's dictionary refuses by name at import time (template) or at fill time (invocation); a value outside the dico's choices refuses naming the choices.</p>
 <div class="scroll">
 <pre class="mermaid">
 classDiagram
     class Module {
       name : "telemac2d"
-      catalog : Slot[*]
+      dictionary : Slot[*]
       composites : Composite[*]
-      outputs : Output[*]
+      outputs : Primitive[*]
+      VARIABLES : the module's own vocabulary
     }
     class Slot {
       keyword : raw dico name
@@ -64,74 +65,63 @@ classDiagram
       name : releases | wind | continue_from
       expand(value) : slots + files
     }
-    class Output {
-      name : fields | mass_balance | drogues
-      read(rundir)
+    class Primitive {
+      name : field | series | max_over_time | profile | extent | mesh | mass_balance
+      read(solved, variable)
     }
     class Template {
       STEERING : slot assertions
-      PARAMS, DATA, MESH
-      parts : SharedBody[*]
+      PARAMS, DATA, MESH, OUTPUTS, CAPTIONS, ANSWER
       extends : Module
     }
     class Sheet {
       slots : keyword to (value, provenance)
       open : mandatory slots still empty
     }
-    Module "1" --> "*" Slot : catalog/&lt;module&gt;.json
+    Module "1" --> "*" Slot : dictionary/&lt;module&gt;.json
     Module --> Composite : one value fills several slots
-    Module --> Output : how each output is read
+    Module --> Primitive : how a variable is read
     Template --> Module : extends (no opinion below)
-    Template --> Template : parts (composed in order)
     Sheet --> Template : filled from
     Sheet --> Module : or bare, engine defaults
 </pre>
 </div>
 
-<h2>3. The wrapper: catalog, composites, outputs - no opinion</h2>
+<h2>3. The wrapper: dictionary, composites, primitives - no opinion</h2>
 <p>One wrapper per module under <code>telemac/modules/</code>: telemac2d, telemac3d, artemis, waqtel, gaia (tomawac: see &sect;13). The wrapper holds three things and asserts no value of its own.</p>
 <pre><span class="c"># modules/telemac2d.py</span>
-T2D = Module(<span class="s">"telemac2d"</span>)                       <span class="c"># catalog/telemac2d.json -> one Slot per keyword</span>
-T2D.composites(releases=Releases, wind=Wind,    <span class="c"># one value stands for several slots (+ the file they name)</span>
-               continue_from=Continuation)
-T2D.outputs(fields=read_selafin,                <span class="c"># the module's outputs and how each is read</span>
-            mass_balance=read_listing_balance)</pre>
+T2D = Module(<span class="s">"telemac2d"</span>)                       <span class="c"># dictionary/telemac2d.json -> one Slot per keyword</span>
+T2D.composites(releases=_releases, wind=_wind,  <span class="c"># one value stands for several slots (+ the file they name)</span>
+               continue_from=_continuation)
+T2D.outputs(**PRIMITIVES, drogues=_drogues)      <span class="c"># the primitive set, plus what this module alone writes</span>
+T2D.VARIABLES = {<span class="s">"U"</span>: ..., <span class="s">"H"</span>: ..., <span class="s">"T"</span>: ...}    <span class="c"># the module's own variable vocabulary</span></pre>
 <table>
 <tr><th>part</th><th>is</th><th>is not</th></tr>
-<tr><td>catalog</td><td>the dico, extracted once in-image into <code>telemac/catalog/&lt;module&gt;.json</code> (committed; a suite test re-extracts from the image when present and fails on drift)</td><td>edited by hand; opined on</td></tr>
-<tr><td>composites</td><td>expanders for repetitive, failure-prone keyword groups - a composite may set ONLY what its value's presence defines (the arming keyword its input implies, the slots its value literally fills); a choice among alternatives is a template assertion or the engine default (rev 1c): a Release becomes ABSCISSAE/ORDINATES/DISCHARGE/VALUES OF THE TRACERS AT THE SOURCES plus the sources series; wind becomes the five wind keywords with the from-direction transform; continuation becomes PREVIOUS COMPUTATION FILE + the staged input, the FORMAT it is read at being one of the three the dictionary offers and so the template's; decay law, gradation (four parallel CLASSES lists), dredging (NESTOR keywords + three files), oil (preset + patched Fortran)</td><td>a place for defaults; a template's private code</td></tr>
-<tr><td>outputs</td><td>bindings from the module to the existing readers in <code>products/</code></td><td>new readers</td></tr>
+<tr><td>dictionary</td><td>the dico, extracted once in-image into <code>telemac/dictionary/&lt;module&gt;.json</code> (committed; a suite test re-extracts from the image when present and fails on drift) - the engine's own word for the thing</td><td>edited by hand; opined on</td></tr>
+<tr><td>composites</td><td>expanders for repetitive, failure-prone keyword groups - a composite may set ONLY what its value's presence defines (the arming keyword its input implies, the slots its value literally fills); a choice among alternatives is a template assertion or the engine default: a Release becomes ABSCISSAE/ORDINATES/DISCHARGE/VALUES OF THE TRACERS AT THE SOURCES plus the sources series; wind becomes the five wind keywords with the from-direction transform; continuation becomes PREVIOUS COMPUTATION FILE + the staged input, the FORMAT it is read at being one of the three the dictionary offers and so the template's; degradation, gradation (four parallel CLASSES lists), dredging (NESTOR keywords + three files), oil (preset + patched Fortran)</td><td>a place for defaults; a template's private code</td></tr>
+<tr><td>primitives</td><td>the outputs, named from the module's variable vocabulary and nothing else: <code>field(name, t)</code>, <code>series(name, at)</code>, <code>max_over_time(name)</code>, <code>profile(name, along)</code>, <code>extent()</code>, <code>mesh()</code>, <code>mass_balance()</code>, plus what one module alone writes (TELEMAC-2D's <code>drogues()</code>, TELEMAC-3D's <code>column()</code>); a token a module DEFINES over its own result (ARTEMIS's <code>KD</code>) reads as any variable. Publishing is generic and written once under <code>workflows/publishing/</code>: a field becomes a layer, a series a chart, a field over time an animation</td><td>a reader that knows a question; a question-named output</td></tr>
 </table>
-<p>Coupled modules (WAQTEL, GAIA) are wrappers too; a template names a coupling body (<code>WAQTEL.decay(...)</code>, <code>GAIA.erodible(...)</code>) whose slots serialize into the coupled steering file and whose COUPLING WITH / steering-file keywords land on the carrier's sheet.</p>
+<p>Coupled modules (WAQTEL, GAIA) are wrappers too; a template names a coupling body (<code>WAQTEL.degradation(...)</code>, <code>GAIA.bed(...)</code>) whose slots serialize into the coupled steering file and whose COUPLING WITH / steering-file keywords land on the carrier's sheet, and GAIA's primitives read its own result file.</p>
 
-<h2>4. Templates and shared bodies</h2>
-<p>A template package stays what it is: the recipe file, <code>declarations.py</code>, <code>corpus.yaml</code>. Its recipe file now carries a STEERING body of raw keywords, spelled as identifiers by the mechanical spaces-to-underscores map the image itself ships (eficas <code>&lt;module&gt;_dicoCasEnToCata.py</code>). Every hardcoded author literal becomes a visible assertion here, or an engine default by omission.</p>
-<pre><span class="c"># templates/shared/river.py - a shared body: a PART the river templates list</span>
-<span class="k">class</span> RIVER(T2D):
-    SOLVER_ACCURACY = <span class="n">1e-6</span>                                <span class="c"># an engine default (tidal flats, negative depths) stays UNWRITTEN</span>
-    INITIAL_CONDITIONS = <span class="s">"CONSTANT DEPTH"</span>
-    GEOMETRY_FILE = MESH                                  <span class="c"># a file slot, filled by the recipe</span>
-    BOUNDARY_CONDITIONS_FILE = MESH.boundaries
-    PRESCRIBED_FLOWRATES = derived.inflow(P.discharge_m3s)
-    PRESCRIBED_ELEVATIONS = derived.normal_depth_stage()
-    INITIAL_DEPTH = derived.normal_depth()
-
-<span class="c"># templates/river_dye/river_dye.py</span>
+<h2>4. Templates are values</h2>
+<p>A template package is the recipe file, <code>declarations.py</code>, <code>corpus.yaml</code>. The recipe is VALUES over one module: a STEERING body of raw keywords spelled as identifiers by the mechanical spaces-to-underscores map the image itself ships (eficas <code>&lt;module&gt;_dicoCasEnToCata.py</code>), the DATA rows it consumes, the MESH recipe, an OUTPUTS list of primitives with how each is published, CAPTIONS and an ANSWER of measures. Every author literal is a visible assertion here, or an engine default by omission. A template defines no function and composes no other body; the lint under <code>dev/lint/</code> refuses one that does.</p>
+<pre><span class="c"># templates/river_dye/river_dye.py</span>
 <span class="k">class</span> STEERING(T2D):
-    parts = [RIVER, TRACER]                               <span class="c"># composed in this order; a keyword two parts set refuses unless settled here</span>
-    DURATION = P.sim_duration_s
-    GRAPHIC_PRINTOUT_PERIOD = derived.steps(P.output_interval_min)
-    LAW_OF_BOTTOM_FRICTION = P.friction_law
-    FRICTION_COEFFICIENT = P.friction_coefficient
-    NUMBER_OF_TRACERS = <span class="n">1</span>
-    NAMES_OF_TRACERS = [<span class="s">"DYE MG/L"</span>]
-    releases = [Release(at=P.release_coords, q=P.source_q_m3s,
-                        conc=P.dye_concentration_mgl, window_s=P.spill_duration_s)]
-    wind = Wind(speed_mps=P.wind_speed_mps, from_deg=P.wind_direction_deg)
-    coupling = [WAQTEL.decay(half_life_h=P.decay_half_life_hours)]</pre>
-<p>THE COMPOSITION LAW (amended 2026-09-04, rev 1b): a shared body is a PART a template lists, never a parent it extends. It lives in <code>templates/shared/</code>, is named for what it is (<code>river</code>, <code>catchment</code>, <code>basin</code> - never <code>reach</code>), is created only when a good portion of a template is shared, and must have at least two users (one user folds back into its template; the suite checks). Parts merge in the listed order; a keyword set by two parts REFUSES by name unless the template settles it itself; a template's own assertion beats any part. Per-slot provenance names the part, so composed context is visible at the use site: a keyword that means something else in a new setting is seen, not assumed. The same mechanism serves a fill-time bundle.</p>
-<p>ONE TEMPLATE PER QUESTION (rev 1b): a structural fork of the deck - tracer, oil and sediment fill DIFFERENT slots, not different values - is a different template, never a switch on a param. <code>river_dye</code> = RIVER + TRACER; <code>river_oil_spill</code> = RIVER + OIL; <code>river_scour</code> = RIVER + SEDIMENT bed (bedload, morphology, gradation as a shape, the dredging composite); <code>river_sediment_plume</code> = RIVER + a suspended class from a source; <code>do_sag</code> = RIVER + O2. The rule holds at every level: a fork that fills different slots is a template, never a composite that owns a carrier slot. Bodies are static and read no resolved value. Optional features within one question are composites that state nothing when given nothing (a decay rate, dredging, a hyetograph versus a constant rate). The tool surface is eight templates; routing picks the template.</p>
-<p>PARAMS are unchanged in shape (<code>Param(desc=..., default=..., bounds=..., units=...)</code>); a slot's <code>desc</code> is the dico's help, so a raw keyword reads to the LLM and the human exactly the way a Param does. <code>Physics(...)</code> and <code>Forcing(...)</code> no longer exist; a forcing series is a file-slot producer.</p>
+    GEOMETRY_FILE = <span class="s">"river.slf"</span>; BOUNDARY_CONDITIONS_FILE = <span class="s">"river.cli"</span>; RESULTS_FILE = <span class="s">"r2d_river.slf"</span>
+    TIME_STEP = Ref(<span class="s">"settled.time_step_s"</span>); INITIAL_CONDITIONS = <span class="s">"CONSTANT DEPTH"</span>; INITIAL_DEPTH = Ref(<span class="s">"settled.depth_m"</span>)
+    LAW_OF_BOTTOM_FRICTION = Ref(<span class="s">"settled.friction_law"</span>)   <span class="c"># the river lines every river deck states, restated here</span>
+    NUMBER_OF_TRACERS = <span class="n">1</span>                                     <span class="c"># the question, in three lines</span>
+    tracer_names = TracerNames(names=[<span class="s">"DYE             MG/L"</span>], named_by=Ref(<span class="s">"release.name"</span>))
+    INITIAL_VALUES_OF_TRACERS = [<span class="n">0.0</span>]
+    boundaries = Boundaries(measured=Ref(<span class="s">"settled"</span>), tracers=[<span class="n">0.0</span>])
+    releases = [Release(at=Ref(<span class="s">"release.at"</span>), q=P.source_q_m3s, tracers=[P.dye_concentration_mgl],
+                        window_s=P.spill_duration_s, until_s=Ref(<span class="s">"settled.until_s"</span>))]
+
+OUTPUTS = [field(<span class="s">"T1"</span>, t=<span class="s">"every"</span>).animate(), max_over_time(<span class="s">"T1"</span>).layer(), series(<span class="s">"T1"</span>, at=DATA.release).chart()]
+CAPTIONS = {<span class="s">"T1"</span>: <span class="s">"{substance} concentration"</span>}</pre>
+<p>NO PARTS: generalization is vertical only. A value two templates share is restated in each, under the template that states it, so a keyword that means something else in a new setting is seen at the use site; per-slot provenance names the template. The one exception is a DATA row two or more templates read: the reach rows the river templates share live in <code>templates/reach.py</code>, and a template names them. Nothing is frozen - two tracers is an override of NUMBER OF TRACERS and the names on the fill, and the tracer composites take lists.</p>
+<p>ONE TEMPLATE PER QUESTION: a structural fork of the deck - tracer, oil and sediment fill DIFFERENT slots, not different values - is a different template, never a switch on a param. The rule holds at every level: a fork that fills different slots is a template, never a composite that owns a carrier slot. Bodies are static and read no resolved value. Optional features within one question are composites that state nothing when given nothing (a degradation rate, dredging, a hyetograph versus a constant rate). The tool surface is eight templates; routing picks the template.</p>
+<p>The question and the ask are stated in the template; numerics are engine defaults unless the template states a value with its reason at the line. PARAMS are unchanged in shape (<code>Param(desc=..., default=..., bounds=..., units=...)</code>); a slot's <code>desc</code> is the dico's help, so a raw keyword reads to the LLM and the human exactly the way a Param does. A point a template asks for is a <code>Point</code> slot under its role name (<code>release</code>, <code>outfall</code>, <code>pour</code>), fed by the pick, a pair, a point layer or a geocoded name, and the name it carries is the tracer's.</p>
 
 <h2>5. Fill, then run</h2>
 <p>The plan language dissolves into two acts on one sheet. Execution is HELD until the user runs.</p>
@@ -150,7 +140,7 @@ flowchart LR
 <tr><th>call</th><th>contract</th></tr>
 <tr><td><code>fill</code></td><td>Repeatable. Accepts template params, canvas points, and a validated <code>keywords={RAW: value}</code> floor. Producers run during fill so the canvas shows the mesh and the release before any solve. Returns the sheet: every filled slot with provenance; every open mandatory slot with its desc, choices and engine default.</td></tr>
 <tr><td><code>run</code></td><td>Explicit, on a complete sheet only. Serializes, stages the rundir, hands it to the box. Step-through and reentry are the landed rerun machinery, unchanged.</td></tr>
-<tr><td><code>describe_keywords</code></td><td>Read-only: "what governs friction" answered from the catalog - help, labeled choices, engine default, level, file-ness. The way the LLM reaches the 1,311-keyword surface the docstring budget cannot carry.</td></tr>
+<tr><td><code>describe_keywords</code></td><td>Read-only: "what governs friction" answered from the dictionary - help, labeled choices, engine default, level, file-ness. The way the LLM reaches the 1,311-keyword surface the docstring budget cannot carry.</td></tr>
 </table>
 <p>A bare module run is the same sheet with nothing pre-filled: engine defaults plus the mandatory slots. "Filled by a template and edited, or filled by hand" is one mechanism.</p>
 
@@ -170,27 +160,29 @@ flowchart LR
 <tr><td><code>authoring/assembler.py</code></td><td>1,284</td><td>keeps manifest + aux staging + release settle + mesh binding (~600); the sheet renames die</td></tr>
 <tr><td><code>authoring/{agitation,stratified,open_water}.py</code> JSON-config hop</td><td>1,363</td><td>dead; artemis/telemac3d become templates over their wrappers</td></tr>
 <tr><td><code>workers/telemac/{artemis,telemac3d}_build.py</code></td><td>2,178</td><td>dead; the worker authors nothing (engine room)</td></tr>
-<tr><td><code>shared/physics_registry.py</code></td><td>753</td><td>dead; the catalog is the keyword table</td></tr>
+<tr><td><code>shared/physics_registry.py</code></td><td>753</td><td>dead; the dictionary is the keyword table</td></tr>
 <tr><td><code>runtime/</code> plan language: <code>interpreter.py</code>, the plan-step half of <code>plan.py</code>, <code>_setter_envelope</code>, <code>slots</code>, <code>user_input</code>, <code>form</code> as sequence machinery, FormGate/DrawGate as steps</td><td>~2,600 of 6,755</td><td>fill/run + the sheet (~300); the Stage 1 inventory names what the rerun machinery still needs before anything deletes</td></tr>
 <tr><td><code>telemac/workflow.py</code>: <code>ops.*</code> realizations, <code>_PROCESSES</code>, <code>_refuse_uncovered_fields</code>, <code>_MESH_SHEET_PARAMS</code></td><td>382</td><td>the thin fill/run door (~120)</td></tr>
 <tr><td>templates</td><td>~3,040</td><td>STEERING bodies replace PHYSICS/FORCING/plan; literals move out; shared bodies (~2,400)</td></tr>
 </table>
-<p>Expected net of order -7,000 to -8,500 Python across server + worker; the catalog JSON is generated data. MEASURED AT THE CONFORMANCE READ (rev 1c, 2026-09-06): -4,267 over the seven areas named; AT CLOSE (rev 1d, 2026-09-07, after the remedy +235 and the lake-level leg +255): <b>-3,777</b> - the promise was MISSED at about 54% of its low end, and every later leg added reader-facing surface rather than removing more. Where the rest went: the interpreter's rerun half survives by ruling (-1,084 in runtime/, not -2,300); the composites are real code MOVED into modules/ (+2,172), not deleted; eight templates where the spec counted five (+1,413).</p>
+<p>Expected net of order -7,000 to -8,500 Python across server + worker; the dictionary JSON is generated data. MEASURED AT THE CONFORMANCE READ (rev 1c, 2026-09-06): -4,267 over the seven areas named; AT CLOSE (rev 1d, 2026-09-07, after the remedy +235 and the lake-level leg +255): <b>-3,777</b> - the promise was MISSED at about 54% of its low end, and every later leg added reader-facing surface rather than removing more. Where the rest went: the interpreter's rerun half survives by ruling (-1,084 in runtime/, not -2,300); the composites are real code MOVED into modules/ (+2,172), not deleted; eight templates where the spec counted five (+1,413).</p>
 
 <h2>8. Layout</h2>
 <pre>telemac/
   README.md
   workflow.py            the fill/run door (the facade, thin)
-  catalog/               telemac2d.json telemac3d.json artemis.json waqtel.json gaia.json  (generated, committed, drift-audited)
-  modules/               telemac2d.py telemac3d.py artemis.py waqtel.py gaia.py            (catalog + composites + outputs)
+  errors.py              the engine's typed failures, none named for a question
+  dictionary/            telemac2d.json telemac3d.json artemis.json waqtel.json gaia.json tomawac.json  (generated, committed, drift-audited)
+  modules/               module.py sheet.py outputs.py listing.py describe.py telemac2d.py telemac3d.py artemis.py waqtel.py gaia.py  (dictionary + composites + primitives)
   templates/
-    shared/              river.py  catchment.py (only if a good portion is shared)
+    reach.py             the one shared DATA row module the river templates read
     river_dye/  river_oil_spill/  river_scour/  river_sediment_plume/  do_sag/  rain_on_grid/  agitation/  stratified_flow/
-  authoring/             assembler.py serializer.py cas_validate.py                        (everything the box receives)
-  solving/               solve.py run_telemac.py
-  products/              postprocess_telemac.py products.py run_reads.py rain_on_grid.py result_reader.py results_mesh_seam.py streeter_phelps.py
-  helpers/               reach.py forcing.py substance.py catchment.py infiltration.py water_quality.py errors.py release_point.py release_layer.py</pre>
-<p>Strays homed as shown; <code>release_point</code>/<code>release_layer</code> move into the releases composite where they expand keywords. Every directory-map README rewrites in the same commit (the stale "seven templates" and "five solver names" lines go). <code>tools/__init__.py</code> imports repoint.</p>
+  authoring/             assembler.py serializer.py cas_validate.py dredging.py oil.py      (everything the box receives)
+  solving/               solve.py run_telemac.py                                            (one engine registration)
+  helpers/               time_step.py uniform_flow.py water_quality.py                     (pure physics and numerics, nothing else)
+workflows/inputs/        point.py extent.py shape.py aoi.py geometry.py layer_fields.py     (the typed inputs, one ingestion each)
+workflows/publishing/    publish.py reads.py raster.py animation.py cog.py style.py manifest.py  (a field to a layer, a series to a chart, written once)</pre>
+<p>Every directory-map README describes its directory as it stands and the map lint holds it to the tree.</p>
 
 <h2>9. The model extension (the standing reminder)</h2>
 <p><code>docs/model/solve-seam.sysml</code> bindings move with the files (assembler, steeringStatements becomes the serializer, manifestStager, launcherArm, resultReader). A new <code>steering-surface</code> block set models Catalog, Slot, Module, Composite, Output, Sheet, Serializer, with requirements and verify allocations: KeywordNamesAreRaw, EverySlotDescribed, EngineDefaultSurfaced, WrapperHasNoOpinion, EverythingOverridable, CatalogMatchesImage, CompositesLiveInWrappers, SharedBodyHasTwoUsers, BodiesAreStatic, RunIsHeld. This is the runtime plane's first modeled seam; the planes index updates; views regenerate; seeded breaks prove each rule fires.</p>
