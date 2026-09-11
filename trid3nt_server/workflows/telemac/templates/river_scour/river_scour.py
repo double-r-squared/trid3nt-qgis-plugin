@@ -249,7 +249,8 @@ class STEERING(T2D):
 
 
 #: What the solved run is read for: the bed's cumulative evolution off GAIA's own
-#: result as the map, the bed itself over time as the animation, the marker's
+#: result as the map and, over time, as the animation - the CHANGE is the answer,
+#: where the bed's absolute relief is terrain the run did not make - the marker's
 #: envelope beside it and its reach-wide history as the chart.
 OUTPUTS = [
     field("E", t=-1, module="gaia").layer(style=TELEMAC_BED_EVOLUTION_STYLE),

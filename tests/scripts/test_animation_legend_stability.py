@@ -250,3 +250,41 @@ def test_a_log_ramp_takes_the_published_top_and_its_own_declared_floor():
     assert norm.vmin == pytest.approx(expected)
     assert norm.vmax == pytest.approx(9.9493)
     assert norm.vmin > 1e-12, "a denormal floor is not a scale a reader can read"
+
+
+def test_a_coupled_module_animates_off_its_own_result_file():
+    """A coupled module writes its own SELAFIN and the carrier's carries none of
+    its variables, so a declared module resolves the frames onto that file."""
+    from dev.testing.proof_animations import ProofAnimation
+    from trid3nt_server.workflows.telemac.modules.gaia import RESULT_FILENAME
+
+    packet = _packet_module()
+    completion = {"result_slf": "r2d_river.slf"}
+    coupled = ProofAnimation(variable="CUMUL BED EVOL", units="m",
+                             quantity="bed_evolution", module="gaia")
+    own = ProofAnimation(variable="WATER DEPTH", units="m", quantity="water_depth")
+
+    assert packet._frames_file(coupled, completion) == RESULT_FILENAME
+    assert packet._frames_file(own, completion) == "r2d_river.slf"
+
+
+def test_the_gif_resolves_the_ramp_its_panel_was_painted_through():
+    """The panel and the GIF of one quantity are painted through ONE resolved key:
+    a field diverging about zero on a sequential ramp is a different picture of
+    the same numbers."""
+    from dev.testing.proof_animations import ProofAnimation
+
+    packet = _packet_module()
+    evidence = {"layers": [
+        {"name": "Bed evolution (m) at t = 3600 s (snake)", "layer_type": "raster",
+         "quantity": "bed_evolution",
+         "legend": {"kind": "continuous", "colormap": "rdbu", "units": "m",
+                    "label": "Bed evolution (m)",
+                    "vmin": -0.005267, "vmax": 0.005267}},
+    ]}
+    scale = packet.published_scale(
+        evidence, ProofAnimation(variable="CUMUL BED EVOL", units="m",
+                                 quantity="bed_evolution", module="gaia"))
+    assert scale["published_range"] == [-0.005267, 0.005267]
+    assert scale["published_style"] == {"kind": "continuous", "ramp": "rdbu",
+                                        "units": "m", "label": "Bed evolution (m)"}
