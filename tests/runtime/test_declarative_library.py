@@ -554,13 +554,16 @@ def test_the_class_body_names_its_rows_and_keeps_their_order():
         dem = tool("fetch_dem", source="3dep")
         basin = tool("delineate_watershed", dem_uri=dem)
         walls = Data.supplied(geometry="polyline").optional()
+        transect = tool("derive_transect", shape=walls)
 
     rows = data_rows(DATA)
-    assert [r.name for r in rows] == ["dem", "basin", "walls"]
+    assert [r.name for r in rows] == ["dem", "basin", "walls", "transect"]
     assert rows[1].producer.kwargs["dem_uri"] == DataRef("dem")
     assert DATA.dem == DataRef("dem")
     assert rows[2].producer is None and rows[2].geometry == "polyline"
     assert rows[2].is_optional is True
+    # A context slot read in-body is a row reference too, never the slot object.
+    assert rows[3].producer.kwargs["shape"] == DataRef("walls")
 
 
 def test_an_unknown_row_on_the_body_is_an_attribute_error():

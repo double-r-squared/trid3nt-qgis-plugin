@@ -317,6 +317,12 @@ def _row_refs(value: Any) -> Any:
                 f"a producer for {value.runner!r} is read by another row but is not "
                 "declared as one: give it a name in the DATA body.")
         return DataRef(value.row)
+    if isinstance(value, DataDecl):
+        if not value.name:
+            raise PlanValidationError(
+                "a context slot is read by another row but is not declared as one: "
+                "give it a name in the DATA body.")
+        return DataRef(value.name)
     if isinstance(value, Mapping):
         return {k: _row_refs(v) for k, v in value.items()}
     if isinstance(value, (list, tuple, set, frozenset)):
