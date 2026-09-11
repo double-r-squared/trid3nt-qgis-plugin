@@ -59,6 +59,7 @@ __all__ = [
     "route_sim_terminal",
     "mint_compaction_card",
     "complete_compaction_card",
+    "summary_of",
 ]
 
 
@@ -603,6 +604,41 @@ def _store_densified_fc(key: str, fc: dict[str, Any]) -> None:
     _DENSIFIED_FC_CACHE_BY_URI[key] = fc
     while len(_DENSIFIED_FC_CACHE_BY_URI) > _MAX_DENSIFIED_FC_CACHE_ENTRIES:
         _DENSIFIED_FC_CACHE_BY_URI.pop(next(iter(_DENSIFIED_FC_CACHE_BY_URI)))
+
+
+def summary_of(layer: LayerURI) -> ProjectLayerSummary:
+    """THE mint: one client-bound ``LayerURI`` as the row a case and a session
+    both carry. A layer reaches a case through this function whether a turn
+    emitted it or a cold route registered it, so the two views cannot diverge."""
+    return ProjectLayerSummary(
+        layer_id=layer.layer_id,
+        name=layer.name,
+        layer_type=layer.layer_type,
+        uri=layer.uri,
+        visible=True,
+        role=layer.role,
+        origin=getattr(layer, "origin", None),
+        temporal=layer.valid_from is not None,
+        # RESOLVED STYLE carry-over, so the range, the ramp and the .qml reach
+        # the client: a layer may carry its legend directly, and where a publish
+        # returned a bare uri the legend is lifted out of the stash by that uri.
+        # ``None`` means the layer reaches the map unstyled.
+        legend=getattr(layer, "legend", None) or _legend_for_layer_uri(layer.uri),
+        # The quantity travels with the layer: a title is prose a producer may
+        # rewrite, and matching one field's still to its animation by prose is
+        # how two scales for one quantity get shipped.
+        quantity=getattr(layer, "quantity", None),
+        # Mesh CRS: an MDAL mesh reports an empty native crs(), so the plugin's
+        # _add_mesh needs the run to state it. None for raster/vector.
+        crs_authid=getattr(layer, "crs_authid", None),
+        # The instant the mesh's seconds are counted from, so the plugin's
+        # temporal stamp reads the run's own clock.
+        reference_time=getattr(layer, "reference_time", None),
+        # One frame of a sequence states its own validity window, so the map
+        # stamps a fixed temporal range without reading it back out of a name.
+        valid_from=getattr(layer, "valid_from", None),
+        valid_to=getattr(layer, "valid_to", None),
+    )
 
 
 def _legend_for_layer_uri(uri: str | None) -> Any:
@@ -1370,37 +1406,7 @@ class PipelineEmitter:
         DEDUP BY URI: one store and one scheme mean two publishes of the same COG
         name the same uri, so the fresher row REPLACES the older in place.
         """
-        # RESOLVED STYLE carry-over, so the range, the ramp and the .qml reach the
-        # client: a layer may carry its legend directly, and where a publish
-        # returned a bare uri the legend is lifted out of the stash by that uri.
-        # ``None`` means the layer reaches the map unstyled.
-        _legend = getattr(layer, "legend", None) or _legend_for_layer_uri(layer.uri)
-        summary = ProjectLayerSummary(
-            layer_id=layer.layer_id,
-            name=layer.name,
-            layer_type=layer.layer_type,
-            uri=layer.uri,
-            visible=True,
-            role=layer.role,
-            temporal=layer.valid_from is not None,
-            legend=_legend,
-            # The quantity travels with the layer: a title is prose a producer
-            # may rewrite, and matching one field's still to its animation by
-            # prose is how two scales for one quantity get shipped.
-            quantity=getattr(layer, "quantity", None),
-            # Mesh CRS: carry the LayerURI's crs_authid onto the WS
-            # row so the plugin's _add_mesh can setCrs() an MDAL mesh whose
-            # native crs() is empty. None for raster/vector (byte-for-byte
-            # unchanged).
-            crs_authid=getattr(layer, "crs_authid", None),
-            # Mesh reference time: the instant the mesh's seconds are counted
-            # from, so the plugin's temporal stamp reads the run's own clock.
-            reference_time=getattr(layer, "reference_time", None),
-            # One frame of a sequence states its own validity window, so the map
-            # stamps a fixed temporal range without reading it back out of a name.
-            valid_from=getattr(layer, "valid_from", None),
-            valid_to=getattr(layer, "valid_to", None),
-        )
+        summary = summary_of(layer)
         # Dedup by uri -- in-place replace if present, else append.
         for i, existing in enumerate(self._loaded_layers):
             if existing.uri == summary.uri:

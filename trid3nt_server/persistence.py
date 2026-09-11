@@ -142,6 +142,56 @@ class Persistence:
         return case
 
 
+    async def merge_case_layers(
+        self,
+        case_id: str,
+        summaries: list[dict[str, Any]],
+        *,
+        bbox: list[float] | None = None,
+    ) -> bool:
+        """Append each summary to the Case's layers, or replace it by
+        ``layer_id``, keeping the lightweight projection in lockstep. ``False``
+        means no such Case; ``bbox`` also pins the Case's AOI when given."""
+        # MERGE rather than replace: a caller holding only its own partial view
+        # of the Case (a fresh connection, a cold route) must never clobber
+        # summaries it never saw. Its entry wins on a layer_id collision.
+        case = await self.get_case(case_id)
+        if case is None:
+            return False
+        merged: list[dict[str, Any]] = [
+            dict(d) for d in case.loaded_layer_summaries if isinstance(d, dict)
+        ]
+        position = {
+            d.get("layer_id"): i for i, d in enumerate(merged) if d.get("layer_id")
+        }
+        for d in summaries:
+            layer_id = d.get("layer_id")
+            at = position.get(layer_id)
+            if at is None:
+                position[layer_id] = len(merged)
+                merged.append(d)
+            else:
+                merged[at] = d
+        layer_ids = [
+            d.get("layer_id") for d in merged if isinstance(d.get("layer_id"), str)
+        ]
+        pin = bbox is not None and len(bbox) == 4
+        if (
+            case.loaded_layer_summaries == merged
+            and case.layer_summary == layer_ids
+            and not pin
+        ):
+            return True
+        update: dict[str, Any] = {
+            "loaded_layer_summaries": merged,
+            "layer_summary": layer_ids,
+            "updated_at": now_utc(),
+        }
+        if pin:
+            update["bbox"] = list(bbox)
+        await self.upsert_case(case.model_copy(update=update))
+        return True
+
     async def set_case_layer_handles(
         self, case_id: str, handles: dict[str, str]
     ) -> None:

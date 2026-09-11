@@ -22,12 +22,11 @@ on one machine against one user; the only wire shapes it speaks are
 | subfolder | what lives there |
 | --- | --- |
 | `adapters/` | The LLM provider adapters, behind one shared IR. |
-| `cases/` | Case-side layer serving: ingesting a pushed layer, probing a point. |
 | `credentials/` | The connect handshake and the per-provider credential registry. |
 | `emission/` | Everything a computed layer passes through on its way to the map. |
 | `fallbacks/` | Declared degradation: ladders as data, and the one walker. |
 | `gates/` | The agent-loop gates - confirm, review, draw, budget, runaway. |
-| `inputs/` | Every input into the system as a typed value: a Point, an Extent and a Shape, each with one ingestion from every form a user hands it in. |
+| `inputs/` | Every input into the system as a typed value: a Point, an Extent and a Shape, each with one ingestion from every form a user hands it in, and the user's own file adopted as a layer. |
 | `sandbox/` | The code-exec box: the container a user-confirmed snippet runs in. |
 | `server/` | The daemon core: connection loop, turn engine, dispatch, session state. |
 | `tools/` | The registered tool surface: fetchers, derive, search, display. |

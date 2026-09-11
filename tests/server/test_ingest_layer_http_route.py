@@ -13,7 +13,7 @@ import json
 import pytest
 
 from trid3nt_server.server.protocol import catalog_http as tool_catalog_http
-from trid3nt_server.cases.ingest_user_layer import (
+from trid3nt_server.inputs.user_layer import (
     CaseNotFoundError,
     ImportLayerInputError,
     ObjectNotFoundError,
@@ -325,7 +325,7 @@ def test_ingest_layer_file_oversized_413_before_read(monkeypatch):
         raise AssertionError("upload fn must not run on an oversized body")
 
     monkeypatch.setattr(tool_catalog_http, "_upload_layer_file_fn", lambda: _never)
-    from trid3nt_server.cases.ingest_user_layer import MAX_INGEST_BYTES
+    from trid3nt_server.inputs.user_layer import MAX_INGEST_BYTES
 
     out = _drive(
         _post_no_length(

@@ -8,7 +8,8 @@ to be, what a shape's lines are, how an AOI becomes the bound domain.
 
 Nothing here knows a template, a question or an engine. A slot names the kind it
 takes and the role it plays; the ingestion is the same for every slot of that
-kind, whichever workflow or route asked.
+kind, whichever workflow or route asked. A user's own FILE is an input of the
+same standing, and it enters here too.
 
 ## Files
 
@@ -21,3 +22,4 @@ kind, whichever workflow or route asked.
 | `aoi.py` | AOI coercion and ACQUISITION: `location`/`bbox` resolved to exactly one area - an extent verbatim, the box around a Point, or a place geocoded through `geocode_place` - and the step that rebinds the domain to it. |
 | `geometry.py` | Reading a GEOMETRY SOURCE - a layer object, its uri, a path or inline GeoJSON - flattened to its geometries, and the one UTM-zone rule. |
 | `layer_fields.py` | Reading one field off whatever shape a fetched layer arrived in. |
+| `user_layer.py` | A file the USER pushed in: staged to object storage, validated and converted, then minted as a layer on their case with origin `user`. |

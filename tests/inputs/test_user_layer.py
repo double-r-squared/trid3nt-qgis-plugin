@@ -1,9 +1,10 @@
-"""``register_case_layer``: the bidirectional layer push core.
+"""``ingest_user_layer``: a user's own file entering the system as a layer.
 
 Real geopandas and rasterio round trips, since the artifact parsing IS the thing
 under test, with every object-store call and the persistence seam monkeypatched.
-A vector gains a data face, a durable display face and an input summary on the
-case; the three input failures refuse typed; the AOI is pinned only when asked."""
+A vector gains a data face, a durable display face and a row on the case carrying
+origin ``user``; the three input failures refuse typed; the AOI pins only when
+asked."""
 
 from __future__ import annotations
 
@@ -12,7 +13,8 @@ import json
 import pytest
 
 from trid3nt_server import server
-import trid3nt_server.cases.ingest_user_layer as iul
+from trid3nt_server.persistence import Persistence
+import trid3nt_server.inputs.user_layer as iul
 from trid3nt_contracts.case import CaseSummary
 from trid3nt_contracts.common import new_ulid
 
@@ -89,6 +91,10 @@ def _tiny_geotiff_bytes_3857() -> bytes:
 
 
 class _FakePersistence:
+    #: The REAL merge over a fake store: re-implementing it here would be the
+    #: duplication this module exists to have removed.
+    merge_case_layers = Persistence.merge_case_layers
+
     def __init__(self, cases: dict[str, CaseSummary]):
         self._cases = cases
         self.upserted: list[CaseSummary] = []
@@ -170,6 +176,7 @@ async def test_ingest_vector_happy_path(monkeypatch, fake_persistence):
     assert summary["layer_id"] == result["layer_id"]
     assert summary["layer_type"] == "vector"
     assert summary["role"] == "input"
+    assert summary["origin"] == "user"
     assert summary["uri"].startswith("s3://") and summary["uri"].endswith(".fgb")
     assert updated.bbox is None  # make_aoi defaulted False
 
@@ -217,8 +224,9 @@ async def test_ingest_raster_happy_path(monkeypatch, fake_persistence):
     summary = updated.loaded_layer_summaries[0]
     assert summary["layer_type"] == "raster"
     assert summary["role"] == "input"
-    # NEW CONTRACT (TiTiler exit): the persisted uri is the raw s3:// COG the
-    # publish returned (plugin /vsicurl/), not an http tile template.
+    assert summary["origin"] == "user"
+    # The persisted uri is the raw s3:// COG the publish returned (the plugin
+    # reads it via /vsicurl/), not an http tile template.
     assert summary["uri"] == "s3://cache/user-uploads/x/dem.tif"
     assert list(updated.bbox) == pytest.approx([-122.5, 45.5, -122.4, 45.6])
 
@@ -366,21 +374,21 @@ async def test_ingest_merges_alongside_existing_layers(monkeypatch, fake_persist
 
 
 @pytest.mark.asyncio
-async def test_tool_wrapper_requires_case_id(fake_persistence):
-    with pytest.raises(iul.CaseNotFoundError):
-        await iul.register_case_layer(
-            s3_uri="s3://b/k.geojson", name="x", kind="vector", case_id=None
+async def test_a_case_less_ingest_refuses(fake_persistence):
+    with pytest.raises(iul.ImportLayerInputError):
+        await iul.ingest_user_layer(
+            case_id="", name="x", kind="vector", s3_uri="s3://b/k.geojson"
         )
 
 
 @pytest.mark.asyncio
-async def test_tool_wrapper_happy_path(monkeypatch, fake_persistence):
+async def test_the_aoi_pins_to_the_pushed_layer(monkeypatch, fake_persistence):
     case_id = new_ulid()
     fake_persistence._cases[case_id] = _case(case_id)
     data = _geojson_bytes()
     _mock_s3_object(monkeypatch, data)
 
-    result = await iul.register_case_layer(
+    result = await iul.ingest_user_layer(
         s3_uri="s3://b/aoi.geojson",
         name="AOI from chat",
         kind="vector",

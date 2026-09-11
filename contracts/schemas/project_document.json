@@ -165,6 +165,19 @@
           "default": null,
           "title": "Opacity"
         },
+        "origin": {
+          "anyOf": [
+            {
+              "const": "user",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Origin"
+        },
         "quantity": {
           "anyOf": [
             {

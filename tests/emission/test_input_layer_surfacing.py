@@ -296,19 +296,19 @@ async def test_publish_raster_input_cog_none_emitter_or_uri_noop():
 import pathlib  # noqa: E402
 import re  # noqa: E402
 
-_WORKFLOWS_DIR = (
-    pathlib.Path(__file__).resolve().parents[2]
-    / "trid3nt_server" / "workflows"
-)
+_SERVER_DIR = pathlib.Path(__file__).resolve().parents[2] / "trid3nt_server"
+# The trees a COMPOSER lives in. `emission/` is the seam's own home and defines
+# what this sweep counts, so sweeping it would count the definition site.
+_SWEPT = ("workflows", "inputs")
 
-# relpath (from workflows/) -> (n_input_emission_calls, reason). Sum is the only
-# input-emission the tree is allowed to keep post-collapse.
+# relpath (from trid3nt_server/) -> (n_input_emission_calls, reason). Sum is the
+# only input-emission the tree is allowed to keep post-collapse.
 _ALLOWLISTED_INPUT_EMISSION: dict[str, tuple[int, str]] = {
-    "mesh/gate.py": (1, "the mesh under construction, presented at the gate as an editable MDAL layer - an AUTHORED domain, not a router fetch, so no emit-on-fetch seam can cover it; one home for every mesher's presentation"),
-    "telemac/templates/reach.py": (1, "NWM discharge station point, its name pinned to the RESOLVED cycle for its caption, which the fetch (visualize=False) never exposes to the generic seam"),
-    "publishing/publish.py": (1, "every layer an outputs list publishes past the one the run leads with - a result of the solve, surfaced beside the step's return"),
+    "workflows/mesh/gate.py": (1, "the mesh under construction, presented at the gate as an editable MDAL layer - an AUTHORED domain, not a router fetch, so no emit-on-fetch seam can cover it; one home for every mesher's presentation"),
+    "workflows/telemac/templates/reach.py": (1, "NWM discharge station point, its name pinned to the RESOLVED cycle for its caption, which the fetch (visualize=False) never exposes to the generic seam"),
+    "workflows/publishing/publish.py": (1, "every layer an outputs list publishes past the one the run leads with - a result of the solve, surfaced beside the step's return"),
     "inputs/point.py": (1, "the Point context-layer publisher - a resolved PARAM (picked, typed or derived), not a router fetch, so no emit-on-fetch seam can cover it; one home for every Point slot"),
-    "publishing/animation.py": (1, "a field over time as an animation: the results-mesh publisher, framework emission, one home for every engine"),
+    "workflows/publishing/animation.py": (1, "a field over time as an animation: the results-mesh publisher, framework emission, one home for every engine"),
 }
 
 # NONE survive. The last bespoke input-surfacing helper rode an in-worker bed COG
@@ -323,7 +323,8 @@ _SURFACE_DEF = re.compile(r"^\s*(?:async\s+)?def\s+(_surface_\w*input\w*)\s*\(",
 
 
 def _iter_workflow_py() -> list[pathlib.Path]:
-    return [p for p in _WORKFLOWS_DIR.rglob("*.py") if "__pycache__" not in p.parts]
+    return [p for tree in _SWEPT for p in (_SERVER_DIR / tree).rglob("*.py")
+            if "__pycache__" not in p.parts]
 
 
 def test_sweep_no_surface_input_helpers_except_worker_cog():
@@ -333,7 +334,7 @@ def test_sweep_no_surface_input_helpers_except_worker_cog():
     for path in _iter_workflow_py():
         for name in _SURFACE_DEF.findall(path.read_text(encoding="utf-8")):
             if name not in _ALLOWLISTED_SURFACE_HELPERS:
-                offenders.append(f"{path.relative_to(_WORKFLOWS_DIR)}::{name}")
+                offenders.append(f"{path.relative_to(_SERVER_DIR)}::{name}")
     assert not offenders, (
         "router-fetched inputs surface via the emit-on-fetch seam; "
         "delete these hand-written _surface_*input* helpers:\n  "
@@ -355,7 +356,7 @@ def test_sweep_input_emission_calls_match_allowlist():
                 continue
             n += len(_EMISSION_CALL.findall(line))
         if n:
-            found[str(path.relative_to(_WORKFLOWS_DIR))] = n
+            found[str(path.relative_to(_SERVER_DIR))] = n
 
     expected = {rel: cnt for rel, (cnt, _reason) in _ALLOWLISTED_INPUT_EMISSION.items()}
     unexpected = {

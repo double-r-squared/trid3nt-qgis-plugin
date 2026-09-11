@@ -162,6 +162,10 @@ class LayerURI(GraceModel):
     quantity: str | None = None
     temporal: TemporalConfig | None = None  # present iff time-varying
     role: Literal["primary", "context", "input"] = "primary"
+    #: WHERE the layer came from, read by a person. ``user`` is a file the user
+    #: pushed in themselves; ``None`` is the system saying nothing. Nothing
+    #: branches on it - a reader overrides with confidence, or does not.
+    origin: Literal["user"] | None = None
     units: str | None = None
     # ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326. When present, the
     # camera flies to it once the layer is added.

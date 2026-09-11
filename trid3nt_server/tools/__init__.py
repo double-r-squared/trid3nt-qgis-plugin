@@ -231,6 +231,7 @@ from .derive.extract_model_at_observations import extract_model_at_observations 
 from .derive.extract_stream_network import extract_stream_network  # noqa: E402,F401
 from .derive.extract_timeseries_at_point import extract_timeseries_at_point  # noqa: E402,F401
 from .derive.charts.generate_chart import generate_chart  # noqa: E402,F401
+from .derive.probe_point import probe_point  # noqa: E402,F401
 from .derive.query_point_hazard import query_point_hazard  # noqa: E402,F401
 from .derive.section import section  # noqa: E402,F401
 # The one read-only SQL surface over published layers.

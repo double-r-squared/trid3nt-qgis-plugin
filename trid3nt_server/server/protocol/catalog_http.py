@@ -1474,7 +1474,7 @@ async def build_case_list_payload() -> dict[str, Any]:
 #   POST /api/ingest-layer {"case_id", "name", "kind", "s3_uri",
 #     "crs_authid"?, "make_aoi"?}  -- registers an ALREADY-uploaded object
 #     (normally the s3_uri from the call above) onto the case. Runs the
-#     ingest_user_layer core (cases/ingest_user_layer.py): validates the object
+#     ingest_user_layer core (inputs/user_layer.py): validates the object
 #     exists + is within the size cap, converts/validates the artifact,
 #     merges it into the case's durable loaded_layer_summaries, and
 #     best-effort-pins the AOI when make_aoi is true.
@@ -1494,14 +1494,14 @@ def _ingest_layer_route_enabled() -> bool:
 def _ingest_layer_fn():
     """Lazy-import seam for the ingest core (heavy geo deps load on first
     call, not at listener start; monkeypatchable in tests)."""
-    from trid3nt_server.cases.ingest_user_layer import ingest_user_layer
+    from trid3nt_server.inputs.user_layer import ingest_user_layer
 
     return ingest_user_layer
 
 
 def _upload_layer_file_fn():
     """Lazy-import seam for the staging-upload helper (monkeypatchable)."""
-    from trid3nt_server.cases.ingest_user_layer import upload_layer_file
+    from trid3nt_server.inputs.user_layer import upload_layer_file
 
     return upload_layer_file
 
@@ -1573,11 +1573,11 @@ def _probe_point_route_enabled() -> bool:
 
 
 def _probe_point_fn():
-    """Lazy-import seam for the probe core (heavy geo deps load on first
+    """Lazy-import seam for the probe tool (heavy geo deps load on first
     call, not at listener start; monkeypatchable in tests)."""
-    from trid3nt_server.cases.probe_point import probe_point_at
+    from trid3nt_server.tools.derive.probe_point.probe_point import probe_point
 
-    return probe_point_at
+    return probe_point
 
 
 async def _handle_probe_point_post(raw_body: bytes) -> bytes:
@@ -1601,7 +1601,7 @@ async def _handle_probe_point_post(raw_body: bytes) -> bytes:
     if lon is None or lat is None:
         raise _ProbePointBadRequest("`lon` and `lat` are both required")
 
-    result = await _probe_point_fn()(case_id=case_id.strip(), lon=lon, lat=lat)
+    result = await _probe_point_fn()(point=(lon, lat), case_id=case_id.strip())
     return json.dumps(result, separators=(",", ":")).encode("utf-8")
 
 
@@ -1724,7 +1724,7 @@ async def _handle_http(
             await writer.drain()
             writer.close()
             return
-        from trid3nt_server.cases.ingest_user_layer import MAX_INGEST_BYTES
+        from trid3nt_server.inputs.user_layer import MAX_INGEST_BYTES
 
         if content_length <= 0:
             writer.write(
@@ -1750,7 +1750,7 @@ async def _handle_http(
             await writer.drain()
             writer.close()
             return
-        from trid3nt_server.cases.ingest_user_layer import ImportLayerError, ObjectTooLargeError
+        from trid3nt_server.inputs.user_layer import ImportLayerError, ObjectTooLargeError
 
         try:
             filename = _parse_ingest_layer_filename(proxy_qs)
@@ -1823,7 +1823,7 @@ async def _handle_http(
                 )
             except (asyncio.TimeoutError, asyncio.IncompleteReadError):
                 raw_body = b""
-        from trid3nt_server.cases.ingest_user_layer import CaseNotFoundError, ImportLayerError, ObjectNotFoundError
+        from trid3nt_server.inputs.user_layer import CaseNotFoundError, ImportLayerError, ObjectNotFoundError
 
         try:
             body = await _handle_ingest_layer_post(raw_body)
@@ -1880,7 +1880,11 @@ async def _handle_http(
                 )
             except (asyncio.TimeoutError, asyncio.IncompleteReadError):
                 raw_body = b""
-        from trid3nt_server.cases.probe_point import ProbePointCaseNotFoundError, ProbePointInputError
+        from trid3nt_server.tools.derive.probe_point.probe_point import (
+            ProbePointCaseNotFoundError,
+            ProbePointInputError,
+        )
+        from trid3nt_server.workflows.runtime.user_input import UserInputError
 
         try:
             body = await _handle_probe_point_post(raw_body)
@@ -1903,7 +1907,7 @@ async def _handle_http(
                     ),
                 )
             )
-        except ProbePointInputError as exc:
+        except (ProbePointInputError, UserInputError) as exc:
             writer.write(
                 _format_response(
                     400,

@@ -332,8 +332,7 @@ def _set_drawn_geometry_from_payload(state: SessionState, raw: Any) -> None:
 async def _persist_case_loaded_layers(
     state: SessionState, *, case_id: str | None = None
 ) -> None:
-    """Sync the emitter's layer accumulator onto the turn's Case, keeping the
-    full summaries and their lightweight projection in lockstep. Best-effort,
+    """Sync the emitter's layer accumulator onto the turn's Case. Best-effort,
     and an archived or deleted Case is skipped rather than resurrected."""
     # ``case_id`` pins the target Case explicitly - a caller inside a dispatch
     # passes its entry-time capture - so a mid-turn switch never re-aims the
@@ -342,74 +341,18 @@ async def _persist_case_loaded_layers(
     p = get_persistence()
     if p is None or state.emitter is None or not target_case:
         return
+    summaries = [layer.model_dump(mode="json") for layer in state.emitter.loaded_layers]
     try:
-        case = await p.get_case(target_case)
+        found = await p.merge_case_layers(target_case, summaries)
     except Exception:  # noqa: BLE001
-        logger.exception(
-            "case-layer-persist: get_case failed case=%s",
-            target_case,
-        )
+        logger.exception("case-layer-persist: failed case=%s", target_case)
         return
-    if case is None:
-        logger.debug(
-            "case-layer-persist: case=%s missing; skipping",
-            target_case,
-        )
+    if not found:
+        logger.debug("case-layer-persist: case=%s missing; skipping", target_case)
         return
-
-    loaded = state.emitter.loaded_layers  # defensive copy from the emitter
-    emitter_dicts: list[dict] = [layer.model_dump(mode="json") for layer in loaded]
-
-    # MERGE (append + replace-by-layer_id) instead of wholesale replace: an
-    # emitter never seeded with the Case's persisted layers (fresh
-    # connection, sync failure, sibling-socket dispatch) must never CLOBBER
-    # previously persisted summaries down to its own partial view -- union
-    # them, with the emitter's fresher entry winning on a layer_id collision.
-    merged: list[dict] = [
-        dict(d) for d in case.loaded_layer_summaries if isinstance(d, dict)
-    ]
-
-    index_by_layer_id = {
-        d.get("layer_id"): i for i, d in enumerate(merged) if d.get("layer_id")
-    }
-    for d in emitter_dicts:
-        lid = d.get("layer_id")
-        pos = index_by_layer_id.get(lid)
-        if pos is None:
-            index_by_layer_id[lid] = len(merged)
-            merged.append(d)
-        else:
-            merged[pos] = d
-    layer_ids: list[str] = [
-        d.get("layer_id") for d in merged if isinstance(d.get("layer_id"), str)
-    ]
-
-    # If nothing has changed, skip the round-trip.
-    if (
-        case.loaded_layer_summaries == merged
-        and case.layer_summary == layer_ids
-    ):
-        return
-
-    updated = case.model_copy(
-        update={
-            "loaded_layer_summaries": merged,
-            "layer_summary": layer_ids,
-            "updated_at": now_utc(),
-        }
+    logger.debug(
+        "case-layer-persist case=%s layers=%d", target_case, len(summaries)
     )
-    try:
-        await p.upsert_case(updated)
-        logger.debug(
-            "case-layer-persist case=%s layers=%d",
-            target_case,
-            len(layer_ids),
-        )
-    except Exception:  # noqa: BLE001
-        logger.exception(
-            "case-layer-persist: upsert failed case=%s",
-            target_case,
-        )
 
 async def _delete_case_loaded_layer(
     state: SessionState, layer_id: str, *, case_id: str | None = None

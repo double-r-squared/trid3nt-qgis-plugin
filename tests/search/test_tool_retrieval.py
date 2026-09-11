@@ -157,7 +157,6 @@ _RECALL_FIXTURE = [
     ("detect the active fire hot pixels from GOES", "fetch_goes_active_fire"),
     ("get the elevation DEM for this area", "fetch_dem"),
     ("geocode this city to a bounding box", "geocode_location"),
-    ("show NEXRAD radar reflectivity on the map", "show_nexrad_radar"),
     ("fetch high resolution aerial imagery for this area", "fetch_naip"),
     ("how much does incoming swell amplify inside this harbour basin",
      "artemis_harbor_agitation"),
@@ -165,6 +164,7 @@ _RECALL_FIXTURE = [
      "telemac_river_dye"),
     ("draw the topographic contour lines from the elevation", "compute_contours"),
     ("what telemac keyword controls the bottom friction law", "describe_keywords"),
+    ("read every raster on this case at this spot", "probe_point"),
 ]
 
 

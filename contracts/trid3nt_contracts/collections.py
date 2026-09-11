@@ -91,6 +91,9 @@ class ProjectLayerSummary(GraceModel):
     uri: str
     visible: bool
     role: Literal["primary", "context", "input"]
+    #: WHERE the layer came from, read by a person. ``user`` is a file the user
+    #: pushed in themselves; ``None`` is the system saying nothing.
+    origin: Literal["user"] | None = None
     temporal: bool  # carries a temporal config
 
     # Layer-stack arbitration. A client absent both falls back to fully opaque

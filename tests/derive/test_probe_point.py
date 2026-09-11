@@ -1,4 +1,4 @@
-"""``probe_point.probe_point_at``, the deterministic map-click probe core.
+"""``probe_point``, the point read over every raster on a case.
 
 No network and no store: persistence is a fake monkeypatched onto the telemetry
 seam the layer read goes through. Layers are tiny local GeoTIFFs referenced from
@@ -13,12 +13,13 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from trid3nt_server.cases.probe_point import (
+from trid3nt_server.tools.derive.probe_point.probe_point import (
     MAX_PROBE_LAYERS,
     ProbePointCaseNotFoundError,
     ProbePointInputError,
-    probe_point_at,
+    probe_point,
 )
+from trid3nt_server.workflows.runtime.user_input import UserInputError
 
 _BBOX = (-85.5, 29.9, -85.4, 30.0)
 # A point in the left half of the grid (column 1 of 10).
@@ -93,7 +94,7 @@ async def test_two_rasters_happy_path(monkeypatch, tmp_path: Path) -> None:
         _flat_layer(tmp_path / "b.tif", 42.0, layer_id="b-1", name="Layer B"),
     ]
     _install_case(monkeypatch, layers)
-    result = await probe_point_at("case-1", _PT_LON, _PT_LAT)
+    result = await probe_point(point=(_PT_LON, _PT_LAT), case_id="case-1")
     assert result["status"] == "ok"
     assert result["point"] == {"lon": _PT_LON, "lat": _PT_LAT}
     assert result["case_id"] == "case-1"
@@ -114,7 +115,7 @@ async def test_no_raster_layers_is_ok_empty_results(monkeypatch) -> None:
         monkeypatch,
         [{"layer_id": "v", "name": "Vec", "layer_type": "vector", "uri": "x.fgb"}],
     )
-    result = await probe_point_at("case-1", _PT_LON, _PT_LAT)
+    result = await probe_point(point=(_PT_LON, _PT_LAT), case_id="case-1")
     assert result["status"] == "ok"
     assert result["results"] == []
 
@@ -122,7 +123,7 @@ async def test_no_raster_layers_is_ok_empty_results(monkeypatch) -> None:
 @pytest.mark.asyncio
 async def test_empty_case_is_ok_empty_results(monkeypatch) -> None:
     _install_case(monkeypatch, [])
-    result = await probe_point_at("case-1", _PT_LON, _PT_LAT)
+    result = await probe_point(point=(_PT_LON, _PT_LAT), case_id="case-1")
     assert result["status"] == "ok"
     assert result["results"] == []
 
@@ -133,7 +134,7 @@ async def test_empty_case_is_ok_empty_results(monkeypatch) -> None:
 async def test_outside_bounds_is_honest_null(monkeypatch, tmp_path: Path) -> None:
     layers = [_flat_layer(tmp_path / "a.tif", 1.5, layer_id="a-1", name="Layer A")]
     _install_case(monkeypatch, layers)
-    result = await probe_point_at("case-1", -80.0, 25.0)
+    result = await probe_point(point=(-80.0, 25.0), case_id="case-1")
     (entry,) = result["results"]
     assert entry["value"] is None
     assert entry["note"] == "point outside the layer extent"
@@ -147,7 +148,7 @@ async def test_nodata_is_honest_null(monkeypatch, tmp_path: Path) -> None:
         monkeypatch,
         [{"layer_id": "nd-1", "name": "Nodata layer", "layer_type": "raster", "uri": str(path)}],
     )
-    result = await probe_point_at("case-1", _PT_LON, _PT_LAT)
+    result = await probe_point(point=(_PT_LON, _PT_LAT), case_id="case-1")
     (entry,) = result["results"]
     assert entry["value"] is None
     assert entry["note"] == "nodata at this point"
@@ -161,7 +162,7 @@ async def test_unreadable_layer_is_per_layer_error(monkeypatch, tmp_path: Path) 
         good,
     ]
     _install_case(monkeypatch, layers)
-    result = await probe_point_at("case-1", _PT_LON, _PT_LAT)
+    result = await probe_point(point=(_PT_LON, _PT_LAT), case_id="case-1")
     assert "error" in result["results"][0]
     assert result["results"][0]["value"] is None
     assert result["results"][1]["value"] == pytest.approx(7.0)
@@ -179,7 +180,7 @@ async def test_frame_sequence_groups_into_one_series_entry(
         _flat_layer(tmp_path / "f3.tif", 0.31, layer_id="f-3", name="Flood depth step 3"),
     ]
     _install_case(monkeypatch, layers)
-    result = await probe_point_at("case-1", _PT_LON, _PT_LAT)
+    result = await probe_point(point=(_PT_LON, _PT_LAT), case_id="case-1")
     assert len(result["results"]) == 1
     (entry,) = result["results"]
     assert entry["name"] == "flood depth"
@@ -199,7 +200,7 @@ async def test_series_and_single_layer_both_present(monkeypatch, tmp_path: Path)
         _flat_layer(tmp_path / "dem.tif", 12.0, layer_id="dem-1", name="Elevation"),
     ]
     _install_case(monkeypatch, layers)
-    result = await probe_point_at("case-1", _PT_LON, _PT_LAT)
+    result = await probe_point(point=(_PT_LON, _PT_LAT), case_id="case-1")
     assert len(result["results"]) == 2
     names = {r.get("name") for r in result["results"]}
     assert "flood depth" in names
@@ -220,7 +221,7 @@ async def test_layer_cap_truncates_and_flags(monkeypatch, tmp_path: Path) -> Non
         for i in range(MAX_PROBE_LAYERS + 5)
     ]
     _install_case(monkeypatch, layers)
-    result = await probe_point_at("case-1", _PT_LON, _PT_LAT)
+    result = await probe_point(point=(_PT_LON, _PT_LAT), case_id="case-1")
     assert result["truncated"] is True
     assert len(result["results"]) == MAX_PROBE_LAYERS
 
@@ -228,19 +229,21 @@ async def test_layer_cap_truncates_and_flags(monkeypatch, tmp_path: Path) -> Non
 
 
 @pytest.mark.asyncio
-async def test_missing_case_id_typed_error(monkeypatch, tmp_path: Path) -> None:
+async def test_no_case_anywhere_is_a_typed_refusal(monkeypatch, tmp_path: Path) -> None:
     layers = [_flat_layer(tmp_path / "a.tif", 1.0, layer_id="a-1", name="A")]
     _install_case(monkeypatch, layers)
-    with pytest.raises(ProbePointInputError):
-        await probe_point_at("", _PT_LON, _PT_LAT)
+    with pytest.raises(ProbePointCaseNotFoundError):
+        await probe_point(point=(_PT_LON, _PT_LAT), case_id="")
 
 
 @pytest.mark.asyncio
-async def test_invalid_lon_lat_typed_error(monkeypatch, tmp_path: Path) -> None:
+async def test_a_point_off_the_earth_refuses_at_the_ingestion(
+    monkeypatch, tmp_path: Path
+) -> None:
     layers = [_flat_layer(tmp_path / "a.tif", 1.0, layer_id="a-1", name="A")]
     _install_case(monkeypatch, layers)
-    with pytest.raises(ProbePointInputError):
-        await probe_point_at("case-1", 999.0, _PT_LAT)
+    with pytest.raises(UserInputError):
+        await probe_point(point=(999.0, _PT_LAT), case_id="case-1")
 
 
 @pytest.mark.asyncio
@@ -248,7 +251,7 @@ async def test_case_not_found_typed_error(monkeypatch, tmp_path: Path) -> None:
     layers = [_flat_layer(tmp_path / "a.tif", 1.0, layer_id="a-1", name="A")]
     _install_case(monkeypatch, layers)
     with pytest.raises(ProbePointCaseNotFoundError):
-        await probe_point_at("case-GONE", _PT_LON, _PT_LAT)
+        await probe_point(point=(_PT_LON, _PT_LAT), case_id="case-GONE")
 
 
 @pytest.mark.asyncio
@@ -257,4 +260,12 @@ async def test_persistence_unavailable_typed_error(monkeypatch) -> None:
 
     monkeypatch.setattr(telemetry, "get_persistence", lambda: None)
     with pytest.raises(ProbePointCaseNotFoundError):
-        await probe_point_at("case-1", _PT_LON, _PT_LAT)
+        await probe_point(point=(_PT_LON, _PT_LAT), case_id="case-1")
+
+
+@pytest.mark.asyncio
+async def test_no_point_at_all_is_a_typed_refusal(monkeypatch, tmp_path: Path) -> None:
+    layers = [_flat_layer(tmp_path / "a.tif", 1.0, layer_id="a-1", name="A")]
+    _install_case(monkeypatch, layers)
+    with pytest.raises(ProbePointInputError):
+        await probe_point(case_id="case-1")

@@ -1,7 +1,9 @@
-"""Bring a plugin-pushed vector or raster INTO a case as a first-class layer.
+"""A user's OWN file as a layer: the one ingestion for bytes the user pushed in.
 
-The reverse of every other layer seam. The bytes must ALREADY be in object storage: this
-module never takes raw bytes, and ``upload_layer_file`` is that half.
+The bytes must ALREADY be in object storage when the layer is registered, and
+``upload_layer_file`` is the half that puts them there. What lands is minted the
+way a fetch result is - a ``LayerURI`` through the emission seam, registered on
+the case as the same row a turn would have written - carrying origin ``user``.
 """
 from __future__ import annotations
 
@@ -12,10 +14,10 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from trid3nt_contracts import new_ulid, now_utc
-from trid3nt_contracts.tool_registry import AtomicToolMetadata
+from trid3nt_contracts import new_ulid
+from trid3nt_contracts.execution import LayerURI
 
-logger = logging.getLogger("trid3nt_server.cases.ingest_user_layer")
+logger = logging.getLogger("trid3nt_server.inputs.user_layer")
 
 __all__ = [
     "ImportLayerError",
@@ -28,7 +30,6 @@ __all__ = [
     "USER_UPLOAD_PREFIX",
     "ingest_user_layer",
     "upload_layer_file",
-    "register_case_layer",
 ]
 
 #: Size cap for a pushed layer (raw upload OR the object being ingested). 200 MB
@@ -175,7 +176,7 @@ def upload_layer_file(filename: str, data: bytes) -> str:
     s3_uri = f"s3://{bucket}/{key}"
     _put_object_bytes(s3_uri, data)
     logger.info(
-        "register_case_layer: staged upload filename=%s bytes=%d -> %s",
+        "user_layer: staged upload filename=%s bytes=%d -> %s",
         filename,
         len(data),
         s3_uri,
@@ -302,21 +303,9 @@ async def _ingest_vector(
         _put_object_bytes, fgb_uri, fgb_bytes, content_type="application/octet-stream"
     )
 
-    summary = {
-        "layer_id": layer_id,
-        "name": name,
-        "layer_type": "vector",
-        "uri": fgb_uri,
-        "visible": True,
-        "role": "input",
-        "temporal": False,
-    }
-    return {
-        "summary": summary,
-        "bbox": bounds,
-        "feature_count": feature_count,
-        "display_uri": fgb_uri,
-    }
+    layer = LayerURI(layer_id=layer_id, name=name, layer_type="vector",
+                     uri=fgb_uri, role="input", origin="user")
+    return {"layer": layer, "bbox": bounds, "feature_count": feature_count}
 
 
 
@@ -399,36 +388,25 @@ async def _ingest_raster(
     # ramp - never on a physical band inferred from what the file is called.
     layer_name = derive_readable_layer_name(name, layer_id, None, published_uri)
 
-    summary = {
-        "layer_id": layer_id,
-        "name": layer_name,
-        "layer_type": "raster",
-        "uri": published_uri,
-        "visible": True,
-        "role": "input",
-        "temporal": False,
-    }
-    return {
-        "summary": summary,
-        "bbox": list(bounds),
-        "feature_count": None,
-        "display_uri": published_uri,
-    }
+    layer = LayerURI(layer_id=layer_id, name=layer_name, layer_type="raster",
+                     uri=published_uri, role="input", origin="user")
+    return {"layer": layer, "bbox": list(bounds), "feature_count": None}
 
 
-# Persistence merge. Durable persistence is the CONTRACT of an ingest: the layer
-# is merged into the Case's own summaries, so a Case reopen -- cold OR live --
-# always shows the pushed layer. This entry point is COLD by design, and needs
-# no live session or emitter.
+# Durable persistence is the CONTRACT of an ingest: the layer is registered on
+# the Case itself, so a reopen - cold OR live - always shows the pushed file.
+# This entry point is COLD by design and has no session or emitter of its own,
+# which is why it registers through persistence rather than through a turn.
 
 
-async def _merge_layer_into_case(
-    case_id: str, summary: dict[str, Any], *, bbox: list[float] | None, make_aoi: bool
-) -> bool:
-    """Append ``summary`` to the Case's layers, or replace it by ``layer_id``.
+async def _register_on_case(
+    case_id: str, layer: LayerURI, *, bbox: list[float] | None, make_aoi: bool
+) -> None:
+    """Mint ``layer`` as the Case's own row, pinning the AOI when asked.
 
-    ``make_aoi`` also pins ``Case.bbox``; a missing case or unbound persistence
-    raises ``CaseNotFoundError``."""
+    A missing case or unbound persistence raises ``CaseNotFoundError``."""
+    from trid3nt_server.emission.layer_uri_emit import emit_layer_uri
+    from trid3nt_server.emission.pipeline_emitter import summary_of
     from trid3nt_server.server import get_persistence
 
     p = get_persistence()
@@ -436,32 +414,18 @@ async def _merge_layer_into_case(
         raise CaseNotFoundError(
             "persistence unavailable -- cannot register the layer on a case"
         )
-    case = await p.get_case(case_id)
-    if case is None:
+    safe = emit_layer_uri(layer)
+    if safe is None:
+        raise UnreadableLayerError(
+            f"{layer.uri} is not a uri the map can open; nothing was registered"
+        )
+    found = await p.merge_case_layers(
+        case_id,
+        [summary_of(safe).model_dump(mode="json")],
+        bbox=bbox if (make_aoi and bbox) else None,
+    )
+    if not found:
         raise CaseNotFoundError(f"case {case_id!r} not found")
-
-    merged = [dict(d) for d in case.loaded_layer_summaries if isinstance(d, dict)]
-    index_by_layer_id = {
-        d.get("layer_id"): i for i, d in enumerate(merged) if d.get("layer_id")
-    }
-    pos = index_by_layer_id.get(summary["layer_id"])
-    if pos is None:
-        merged.append(summary)
-    else:
-        merged[pos] = summary
-    layer_ids = [d.get("layer_id") for d in merged if isinstance(d.get("layer_id"), str)]
-
-    update: dict[str, Any] = {
-        "loaded_layer_summaries": merged,
-        "layer_summary": layer_ids,
-        "updated_at": now_utc(),
-    }
-    if make_aoi and bbox is not None and len(bbox) == 4:
-        update["bbox"] = list(bbox)
-
-    updated = case.model_copy(update=update)
-    await p.upsert_case(updated)
-    return True
 
 
 async def _require_case_exists(case_id: str) -> None:
@@ -514,7 +478,7 @@ async def _notify_live_sessions(case_id: str) -> None:
                 except Exception:  # noqa: BLE001 -- one dead socket must not
                     continue  # block notifying the rest
     except Exception:  # noqa: BLE001 -- best-effort, never break the ingest
-        logger.debug("register_case_layer: live-session nudge skipped", exc_info=True)
+        logger.debug("user_layer: live-session nudge skipped", exc_info=True)
 
 
 
@@ -575,13 +539,14 @@ async def ingest_user_layer(
             crs_authid=crs_authid,
         )
 
-    await _merge_layer_into_case(
-        case_id, ingested["summary"], bbox=ingested["bbox"], make_aoi=make_aoi
+    layer: LayerURI = ingested["layer"]
+    await _register_on_case(
+        case_id, layer, bbox=ingested["bbox"], make_aoi=make_aoi
     )
     await _notify_live_sessions(case_id)
 
     logger.info(
-        "register_case_layer: ingested case=%s layer_id=%s kind=%s make_aoi=%s",
+        "user_layer: ingested case=%s layer_id=%s kind=%s make_aoi=%s",
         case_id,
         layer_id,
         kind,
@@ -590,56 +555,10 @@ async def ingest_user_layer(
     return {
         "status": "ok",
         "layer_id": layer_id,
-        "name": ingested["summary"]["name"],
+        "name": layer.name,
         "layer_type": kind,
-        "uri": ingested["display_uri"],
+        "uri": layer.uri,
         "bbox": ingested["bbox"],
         "aoi_pinned": bool(make_aoi and ingested["bbox"] is not None),
         "feature_count": ingested["feature_count"],
     }
-
-
-# A thin wrapper over the shared core, so "use the file I uploaded as the AOI"
-# works conversationally once the file already lives in object storage.
-
-_REGISTER_CASE_LAYER_METADATA = AtomicToolMetadata(
-    name="register_case_layer",
-    ttl_class="live-no-cache",
-    source_class=None,
-    cacheable=False,
-)
-
-
-# DEREGISTERED (not LLM-visible): this function is NOT a registered tool. It
-# serves the ``/api/ingest-layer`` HTTP route directly, lazy-imported there, and
-# tests call it as a plain coroutine. ``_REGISTER_CASE_LAYER_METADATA`` above is
-# the route's source of truth for the tool's ttl and cacheable semantics.
-async def register_case_layer(
-    s3_uri: str,
-    name: str,
-    kind: str,
-    case_id: str | None = None,
-    make_aoi: bool = False,
-    crs_authid: str | None = None,
-    **_extra_ignored: Any,
-) -> dict[str, Any]:
-    """Register an already-uploaded artifact as a Case input layer.
-
-    ``make_aoi`` also pins the Case's AOI to the pushed layer's extent, and
-    ``crs_authid`` is read ONLY when the artifact carries no embedded CRS."""
-    # ``case_id`` is required in practice: the dispatch wrapper substitutes the
-    # turn's active case when it is omitted, so only a genuinely case-less call
-    # reaches this refusal.
-    if not case_id:
-        raise CaseNotFoundError(
-            "no active case -- register_case_layer requires a case_id "
-            "(open or create a case first)"
-        )
-    return await ingest_user_layer(
-        case_id=case_id,
-        name=name,
-        kind=kind,
-        s3_uri=s3_uri,
-        crs_authid=crs_authid,
-        make_aoi=bool(make_aoi),
-    )

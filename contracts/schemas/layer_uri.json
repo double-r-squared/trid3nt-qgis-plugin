@@ -381,6 +381,19 @@
       "title": "Name",
       "type": "string"
     },
+    "origin": {
+      "anyOf": [
+        {
+          "const": "user",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Origin"
+    },
     "quantity": {
       "anyOf": [
         {

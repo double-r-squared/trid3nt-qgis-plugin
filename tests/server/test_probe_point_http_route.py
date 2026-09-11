@@ -12,7 +12,7 @@ import json
 import pytest
 
 from trid3nt_server.server.protocol import catalog_http as tool_catalog_http
-from trid3nt_server.cases.probe_point import (
+from trid3nt_server.tools.derive.probe_point.probe_point import (
     ProbePointCaseNotFoundError,
     ProbePointInputError,
 )
@@ -147,7 +147,7 @@ def test_probe_point_post_happy_path(monkeypatch):
     out = _drive(_post("/api/probe-point", body))
     assert _status(out) == 200
     assert _body_json(out) == result
-    assert calls == [{"case_id": "01CASE", "lon": -85.42, "lat": 29.95}]
+    assert calls == [{"point": (-85.42, 29.95), "case_id": "01CASE"}]
 
 
 def test_probe_point_post_missing_case_id_400(monkeypatch):

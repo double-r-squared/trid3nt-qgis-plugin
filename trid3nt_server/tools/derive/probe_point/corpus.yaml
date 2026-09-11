@@ -1,0 +1,9 @@
+probe_point:
+- what do all the layers say at the point I clicked
+- read every raster on this case at this spot
+- probe this point and give me every value including the animation frames
+- inspect the map here and list what each layer holds
+- read the whole layer stack at these coordinates over time
+- identify the values under this click
+- what does each loaded layer show at that marker
+- point-read every raster on the case, frames collapsed into one series

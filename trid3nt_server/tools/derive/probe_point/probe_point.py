@@ -1,7 +1,9 @@
-"""Deterministic map-click point probe: every raster on a case, at one point.
+"""``probe_point`` - every raster layer on a case read at ONE Point.
 
-Honesty floor: a point outside an extent, on nodata, or on an unreadable layer is an
-honest null entry, never dropped and never zero-filled.
+A stack of animation frames collapses into one series rather than N rows, and a
+case with no rasters is an empty read rather than a refusal. Honesty floor: a
+point outside an extent, on nodata, or on an unreadable layer is a null entry
+carrying its reason, never dropped and never zero-filled.
 """
 from __future__ import annotations
 
@@ -11,23 +13,27 @@ import tempfile
 from datetime import datetime, timezone
 from typing import Any
 
+from trid3nt_contracts.tool_registry import AtomicToolMetadata
+
+from trid3nt_server.inputs.point import point as ingest_point
+from trid3nt_server.tools import register_tool
 from trid3nt_server.tools.derive.extract_timeseries_at_point.extract_timeseries_at_point import detect_frame_sequences
 from trid3nt_server.tools.derive.query_point_hazard.query_point_hazard import (
     layers_from_case,
-    resolve_point,
+    resolve_case_id,
     sample_raster_at_point,
     stage_layer_local,
 )
 
 __all__ = [
-    "probe_point_at",
+    "probe_point",
     "ProbePointError",
     "ProbePointInputError",
     "ProbePointCaseNotFoundError",
     "MAX_PROBE_LAYERS",
 ]
 
-logger = logging.getLogger("trid3nt_server.cases.probe_point")
+logger = logging.getLogger("trid3nt_server.tools.derive.probe_point.probe_point")
 
 #: Max raster layers opened per probe click. A case accumulates loaded layers
 #: over a long session and a probe is a synchronous point-and-wait UI action,
@@ -90,8 +96,7 @@ def _sample_single_layer(
     except Exception as exc:  # noqa: BLE001 -- honest per-layer entry
         entry["error"] = f"{type(exc).__name__}: {exc}"
         logger.warning(
-            "probe_point: layer %r unreadable at point: %s", name, exc
-        )
+            "probe_point: layer %r unreadable at point: %s", name, exc)
     return entry
 
 
@@ -124,19 +129,52 @@ def _sample_series_member(
 
 
 
-async def probe_point_at(case_id: str, lon: float, lat: float) -> dict[str, Any]:
-    """Sample every raster layer and frame sequence on a case at one point.
+_METADATA = AtomicToolMetadata(
+    name="probe_point",
+    ttl_class="live-no-cache",
+    source_class=None,
+    cacheable=False,
+)
 
-    A case with zero raster layers is NOT an error: the click succeeded and
-    there was nothing to sample."""
-    # A detected animation-frame stack collapses into ONE result entry carrying
-    # a series, rather than N single-value rows. Vector layers are not sampled
-    # at all -- a point probe of a vector needs a different query shape -- and
-    # are simply absent from the results.
-    q_lon, q_lat, _label = resolve_point(lon, lat, None, ProbePointInputError)
-    if not case_id or not str(case_id).strip():
-        raise ProbePointInputError("missing or empty `case_id`")
-    resolved_case = str(case_id).strip()
+
+@register_tool(
+    _METADATA,
+    read_only_hint=True,
+    open_world_hint=False,
+    destructive_hint=False,
+    idempotent_hint=True,
+)
+async def probe_point(
+    point: Any = None,
+    case_id: str | None = None,
+    # absorb LLM-invented kwargs.
+    **_extra_ignored: Any,
+) -> dict[str, Any]:
+    """READ every raster layer on the case at ONE point, frames included.
+
+    ROUTING: "what do the layers say here", "read everything at the point I
+    clicked", "probe this spot", "what is the value at this point over the
+    animation". `point` takes any form a point arrives in - a canvas pick, a
+    (lon, lat) pair, a "lat,lon" string, a selected point layer or a place name.
+    A stack of animation frames comes back as ONE series, not N rows.
+
+    Do NOT use for: area statistics (`spatial_query`); one layer's time series
+    (`extract_timeseries_at_point`); vector layers, which a point read skips.
+
+    Returns the point, the case, and one result per raster: its value, units and
+    any note. A layer outside its extent, on nodata or unreadable is a null with
+    its reason, never a fabricated number; a case with no rasters reads empty.
+    """
+    # Vector layers are not sampled at all -- a point probe of a vector needs a
+    # different query shape -- and are simply absent from the results.
+    picked = await ingest_point(point, label="probe point",
+                                code=ProbePointInputError.error_code)
+    if picked is None:
+        raise ProbePointInputError(
+            "probe_point needs a point - a pick, a (lon, lat) pair, a point "
+            "layer or a place name")
+    q_lon, q_lat = picked.lon, picked.lat
+    resolved_case = resolve_case_id(case_id, ProbePointCaseNotFoundError)
 
     layers, _bbox, _title, _case = await layers_from_case(
         resolved_case, ProbePointCaseNotFoundError
