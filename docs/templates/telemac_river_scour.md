@@ -90,23 +90,23 @@ It publishes these layers onto the canvas:
 
 ## The proving run
 
-Run `01M28N9SJQYMZDWEN49WMQWFX0`, 2026-09-11T16:37:50.757710+00:00, 26.657 s, at commit `2fba21a6f70cf14ec7820930e71f1314673f20e8-dirty`.
+Run `01M29CGPTX3T5QVG55G9X2J69P`, 2026-09-11T23:23:34.500077+00:00, 29.3 s, at commit `212b02a5a902fd904fca41bc5939d0dd0abec820`.
 
-![Every layer the run published, stacked and framed on the result (run 01M28N9SJQYMZDWEN49WMQWFX0)](telemac_river_scour/telemac_river_scour.png)
+![Every layer the run published, stacked and framed on the result (run 01M29CGPTX3T5QVG55G9X2J69P)](telemac_river_scour/telemac_river_scour.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M28N9SJQYMZDWEN49WMQWFX0)*
+*Every layer the run published, stacked and framed on the result (run 01M29CGPTX3T5QVG55G9X2J69P)*
 
-![The solve, frame by frame (run 01M28N9SJQYMZDWEN49WMQWFX0)](telemac_river_scour/telemac_river_scour_animation.gif)
+![The solve, frame by frame (run 01M29CGPTX3T5QVG55G9X2J69P)](telemac_river_scour/telemac_river_scour_animation.gif)
 
-*The solve, frame by frame (run 01M28N9SJQYMZDWEN49WMQWFX0)*
+*The solve, frame by frame (run 01M29CGPTX3T5QVG55G9X2J69P)*
 
-![final frame (run 01M28N9SJQYMZDWEN49WMQWFX0)](telemac_river_scour/telemac_river_scour_final_frame.png)
+![final frame (run 01M29CGPTX3T5QVG55G9X2J69P)](telemac_river_scour/telemac_river_scour_final_frame.png)
 
-*final frame (run 01M28N9SJQYMZDWEN49WMQWFX0)*
+*final frame (run 01M29CGPTX3T5QVG55G9X2J69P)*
 
-![marker concentration - the chart the run persisted (run 01M28N9SJQYMZDWEN49WMQWFX0)](telemac_river_scour/telemac_river_scour_chart_marker_concentration.png)
+![marker concentration - the chart the run persisted (run 01M29CGPTX3T5QVG55G9X2J69P)](telemac_river_scour/telemac_river_scour_chart_marker_concentration.png)
 
-*marker concentration - the chart the run persisted (run 01M28N9SJQYMZDWEN49WMQWFX0)*
+*marker concentration - the chart the run persisted (run 01M29CGPTX3T5QVG55G9X2J69P)*
 
 ### The sheet it filled
 
@@ -168,5 +168,5 @@ await TOOL_REGISTRY['telemac_river_scour'].fn(
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M28N9SJQYMZDWEN49WMQWFX0` and commit `2fba21a6f70cf14ec7820930e71f1314673f20e8-dirty`. The full argument record is [`telemac_river_scour/run.json`](telemac_river_scour/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M29CGPTX3T5QVG55G9X2J69P` and commit `212b02a5a902fd904fca41bc5939d0dd0abec820`. The full argument record is [`telemac_river_scour/run.json`](telemac_river_scour/run.json).
 

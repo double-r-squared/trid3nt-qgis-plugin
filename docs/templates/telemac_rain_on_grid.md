@@ -77,7 +77,7 @@ It publishes these layers onto the canvas:
 
 ## The proving run
 
-Run `01M28S5FHQS78XNTR8JHBM9F0P`, 2026-09-11T17:48:03.860203+00:00, 250.184 s, at commit `e5e0a4bf6ebb05cc1a870257ce21ca118bb4ede4-dirty`.
+Run `01M28S5FHQS78XNTR8JHBM9F0P`, 2026-09-11T17:48:03.860203+00:00, 250.184 s, at commit `212b02a5a902fd904fca41bc5939d0dd0abec820-dirty`.
 
 ![Every layer the run published, stacked and framed on the result (run 01M28S5FHQS78XNTR8JHBM9F0P)](telemac_rain_on_grid/telemac_rain_on_grid.png)
 
@@ -145,5 +145,5 @@ await TOOL_REGISTRY['telemac_rain_on_grid'].fn(
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M28S5FHQS78XNTR8JHBM9F0P` and commit `e5e0a4bf6ebb05cc1a870257ce21ca118bb4ede4-dirty`. The full argument record is [`telemac_rain_on_grid/run.json`](telemac_rain_on_grid/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M28S5FHQS78XNTR8JHBM9F0P` and commit `212b02a5a902fd904fca41bc5939d0dd0abec820-dirty`. The full argument record is [`telemac_rain_on_grid/run.json`](telemac_rain_on_grid/run.json).
 

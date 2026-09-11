@@ -79,7 +79,7 @@ It publishes these layers onto the canvas:
 
 ## The proving run
 
-Run `01M28RFK72DXH8Y8FMGSE3KY77`, 2026-09-11T17:33:25.448214+00:00, 24.194 s, at commit `e5e0a4bf6ebb05cc1a870257ce21ca118bb4ede4-dirty`.
+Run `01M28RFK72DXH8Y8FMGSE3KY77`, 2026-09-11T17:33:25.448214+00:00, 24.194 s, at commit `212b02a5a902fd904fca41bc5939d0dd0abec820-dirty`.
 
 ![Every layer the run published, stacked and framed on the result (run 01M28RFK72DXH8Y8FMGSE3KY77)](telemac_river_dye/telemac_river_dye.png)
 
@@ -149,5 +149,5 @@ await TOOL_REGISTRY['telemac_river_dye'].fn(
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M28RFK72DXH8Y8FMGSE3KY77` and commit `e5e0a4bf6ebb05cc1a870257ce21ca118bb4ede4-dirty`. The full argument record is [`telemac_river_dye/run.json`](telemac_river_dye/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M28RFK72DXH8Y8FMGSE3KY77` and commit `212b02a5a902fd904fca41bc5939d0dd0abec820-dirty`. The full argument record is [`telemac_river_dye/run.json`](telemac_river_dye/run.json).
 
