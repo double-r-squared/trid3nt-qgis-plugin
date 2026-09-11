@@ -13,7 +13,7 @@ import json
 from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
 
-from trid3nt_server.workflows.runtime.user_input import UserInputError, lonlat_bbox
+from .user_input import UserInputError, lonlat_bbox
 
 from .geometry import flatten_geometries, read_geometry_doc
 

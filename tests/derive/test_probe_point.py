@@ -19,7 +19,7 @@ from trid3nt_server.tools.derive.probe_point.probe_point import (
     ProbePointInputError,
     probe_point,
 )
-from trid3nt_server.workflows.runtime.user_input import UserInputError
+from trid3nt_server.inputs.user_input import UserInputError
 
 _BBOX = (-85.5, 29.9, -85.4, 30.0)
 # A point in the left half of the grid (column 1 of 10).

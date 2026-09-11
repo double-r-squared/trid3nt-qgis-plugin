@@ -1884,7 +1884,7 @@ async def _handle_http(
             ProbePointCaseNotFoundError,
             ProbePointInputError,
         )
-        from trid3nt_server.workflows.runtime.user_input import UserInputError
+        from trid3nt_server.inputs.user_input import UserInputError
 
         try:
             body = await _handle_probe_point_post(raw_body)

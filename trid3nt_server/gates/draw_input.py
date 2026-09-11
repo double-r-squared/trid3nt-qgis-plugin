@@ -124,7 +124,7 @@ async def _value_from(response: Any, geometry: str) -> Any:
     # The imports are function-local: the declarative library's interpreter
     # imports this module, and the package edge is the cycle.
     from trid3nt_server.inputs.point import point
-    from trid3nt_server.workflows.runtime.user_input import (
+    from trid3nt_server.inputs.user_input import (
         lonlat_bbox,
         polygon_ring,
         polyline_coords,

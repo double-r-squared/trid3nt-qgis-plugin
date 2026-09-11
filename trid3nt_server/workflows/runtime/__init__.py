@@ -83,7 +83,6 @@ from .resolver import (
     resolve_params,
 )
 from .snapshot import Derivation, RunSnapshot, read_snapshot
-from . import user_input
 from .validate import validate_plan
 from .validity import CoupledValidityError, Validity, check_validity
 
@@ -122,5 +121,5 @@ __all__ = [
     "rederive_revised",
     "register_workflow",
     "render_docstring", "reseat_revised", "resolve_params", "transform_series",
-    "tool", "transform_value", "user_input", "validate_plan",
+    "tool", "transform_value", "validate_plan",
 ]

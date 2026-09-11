@@ -21,5 +21,6 @@ same standing, and it enters here too.
 | `shape.py` | `Shape` - one feature collection with an optional name - and `shape`, its ingestion from the draw, a stored layer, a geometry or typed vertices; its `polylines` and `polygons`. |
 | `aoi.py` | AOI coercion and ACQUISITION: `location`/`bbox` resolved to exactly one area - an extent verbatim, the box around a Point, or a place geocoded through `geocode_place` - and the step that rebinds the domain to it. |
 | `geometry.py` | Reading a GEOMETRY SOURCE - a layer object, its uri, a path or inline GeoJSON - flattened to its geometries, and the one UTM-zone rule. |
+| `user_input.py` | The user-input species: clicks, sketches and typed values, normalized once per SHAPE, with the coercions that carry the wire route through the same normalizers. |
 | `layer_fields.py` | Reading one field off whatever shape a fetched layer arrived in. |
 | `user_layer.py` | A file the USER pushed in: staged to object storage, validated and converted, then minted as a layer on their case with origin `user`. |

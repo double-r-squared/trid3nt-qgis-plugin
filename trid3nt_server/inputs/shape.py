@@ -13,7 +13,7 @@ import logging
 from dataclasses import dataclass
 from typing import Any, Mapping
 
-from trid3nt_server.workflows.runtime.user_input import UserInputError, polyline_set
+from .user_input import UserInputError, polyline_set
 
 from .geometry import flatten_geometries, read_geometry_doc
 

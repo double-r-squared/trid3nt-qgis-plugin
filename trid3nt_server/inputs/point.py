@@ -15,7 +15,7 @@ import re
 from dataclasses import dataclass
 from typing import Any, Awaitable, Callable, Mapping
 
-from trid3nt_server.workflows.runtime.user_input import UserInputError, lonlat_point
+from .user_input import UserInputError, lonlat_point
 
 from .geometry import flatten_geometries, read_geometry_doc, utm_epsg_for
 

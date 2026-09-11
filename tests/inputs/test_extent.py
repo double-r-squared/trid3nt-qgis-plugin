@@ -9,7 +9,7 @@ import json
 import pytest
 
 from trid3nt_server.inputs.extent import Extent, extent
-from trid3nt_server.workflows.runtime.user_input import UserInputError
+from trid3nt_server.inputs.user_input import UserInputError
 
 
 def _ingest(value, **kw):

@@ -8,8 +8,10 @@ acquisition, the geometry-source reader and the layer-field reader live beside
 them because a template reads the world through the same door.
 """
 
+from . import user_input
 from .extent import Extent
 from .point import Point, PointOutsideDomainError, point_arg
 from .shape import Shape
 
-__all__ = ["Extent", "Point", "PointOutsideDomainError", "Shape", "point_arg"]
+__all__ = ["Extent", "Point", "PointOutsideDomainError", "Shape", "point_arg",
+           "user_input"]

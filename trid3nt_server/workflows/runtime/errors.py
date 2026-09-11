@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+from trid3nt_server.errors import DeclarativeError
+
 __all__ = [
     "DeclarativeError",
     "GateRefusedError",
@@ -16,17 +18,6 @@ __all__ = [
     "SuppliedGeometryError",
     "WorkflowParkedError",
 ]
-
-
-class DeclarativeError(RuntimeError):
-    """Base for every declarative-library failure; carries a typed ``error_code``."""
-
-    error_code = "DECLARATIVE_ERROR"
-
-    def __init__(self, message: str, *, error_code: str | None = None) -> None:
-        super().__init__(message)
-        if error_code:
-            self.error_code = error_code
 
 
 class PlanValidationError(DeclarativeError):

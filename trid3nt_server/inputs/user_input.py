@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Any, Callable, Iterable, Mapping, Sequence
 
-from .errors import DeclarativeError
+from trid3nt_server.errors import DeclarativeError
 
 __all__ = [
     "UserInputError",

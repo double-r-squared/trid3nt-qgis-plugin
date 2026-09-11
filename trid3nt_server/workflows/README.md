@@ -43,7 +43,6 @@ dispatches the box, and each engine package holds the templates that speak it.
 | `runtime/run_products.py` | The run's persisted chart spec and metrics, written under its own prefix so the products outlive the turn that emitted them. |
 | `runtime/snapshot.py` | The run snapshot: what a finished run leaves behind so a child run can derive from it. |
 | `runtime/temporal.py` | The declared temporal transforms - `.resample(...)` and `.normalize(units=...)` - and the conversions behind them. |
-| `runtime/user_input.py` | The user-input species: clicks, sketches and typed values, normalized once. |
 | `runtime/validate.py` | The plan validator - ref integrity, modifier legality and gate placement, all before any execution. |
 | `runtime/validity.py` | Coupled validity: the cross-param rules a single `Param` declaration cannot express. |
 | `runtime/workflow.py` | The workflow SKELETON and the registration factory: normalize, resolve, interpret, post, publish, and the synthesized tool signature. |
