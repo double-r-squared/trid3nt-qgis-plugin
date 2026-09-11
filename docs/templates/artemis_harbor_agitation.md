@@ -40,36 +40,27 @@ The values the template declares. `desc` is what the model reads when it fills o
 
 | field | the proving run's value |
 |---|---|
-| `kd_max` | 4.184 |
-| `hs_max_m` | 4.1838 |
-| `kd_sheltered` | 0.076 |
-| `kd_exposed` | 0.853 |
-| `wave_period_s` | 8.0 |
-| `mesh_size_m` | 5.11341997989883 |
-| `agitation_curve_m` | {'length': 60, 'head': [-1022.8, -913.2, -844.4, -787.7, -734.7, -678.4, -636.9, -595.1], 'truncated': True} |
-| `agitation_curve_kd` | {'length': 60, 'head': [1.88, 0.466, 2.023, 2.794, 1.106, 1.808, 0.217, 2.955], 'truncated': True} |
-| `agitation_curve_kind` | diffraction_transect |
-| `boundary_states` | - |
+| `kd_max` | 3.5609095096588135 |
+| `hs_max_m` | 3.5609095096588135 |
+| `mesh_size_m` | 5.113546548265623 |
 
 It publishes these layers onto the canvas:
 
-- Wave agitation Kd (point_judith_supplied_mesh)
+- Input: the shoreline this domain is cut from (osm_coastline)
+- Input: topobathy (topobathy, CUDEM 1/9" ~3 m nearshore; ETOPO 2022 15" ~450 m offshore fallback; 3DEP 10 m land, datum NAVD88 (metres, positive up))
+- Agitation coefficient (Hs/H0) at t = 8 s (harbour_mesh)
 
 ## The proving run
 
-Run `01M1X9QWW1HF0TMEFVXX3GRH1X`, 2026-09-07T06:44:09.703578+00:00, 16.915 s, at commit `1f0ccc3188561e84f5f977f0d0d6c54e08c9adb1`.
+Run `01M28GGE2Z8EFJ0J9Z9G1XACHP`, 2026-09-11T15:14:04.845636+00:00, 34.528 s, at commit `18b105f8ea887cfc1dda8acd493eae55648efb73-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M1X9QWW1HF0TMEFVXX3GRH1X)](artemis_harbor_agitation/artemis_harbor_agitation.png)
+![Every layer the run published, stacked and framed on the result (run 01M28GGE2Z8EFJ0J9Z9G1XACHP)](artemis_harbor_agitation/artemis_harbor_agitation.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M1X9QWW1HF0TMEFVXX3GRH1X)*
+*Every layer the run published, stacked and framed on the result (run 01M28GGE2Z8EFJ0J9Z9G1XACHP)*
 
-![peak frame (run 01M1X9QWW1HF0TMEFVXX3GRH1X)](artemis_harbor_agitation/artemis_harbor_agitation_peak_frame.png)
+![peak frame (run 01M28GGE2Z8EFJ0J9Z9G1XACHP)](artemis_harbor_agitation/artemis_harbor_agitation_peak_frame.png)
 
-*peak frame (run 01M1X9QWW1HF0TMEFVXX3GRH1X)*
-
-![harbor agitation - the chart the run persisted (run 01M1X9QWW1HF0TMEFVXX3GRH1X)](artemis_harbor_agitation/artemis_harbor_agitation_chart_harbor_agitation.png)
-
-*harbor agitation - the chart the run persisted (run 01M1X9QWW1HF0TMEFVXX3GRH1X)*
+*peak frame (run 01M28GGE2Z8EFJ0J9Z9G1XACHP)*
 
 ### The sheet it filled
 
@@ -83,10 +74,10 @@ Every slot the run resolved, with where the value came from. The engine's own de
 | `wave_direction_deg` | 160.0 | deg | user | supplied on this invocation |
 | `reflection_coef` | 0.3 | - | user | supplied on this invocation |
 | `mesh_min_edge_m` | 25.0 | m | user | supplied on this invocation |
-| `open_depth_threshold_m` | -1.0 | m | user | supplied on this invocation; CLAMPED from 8 to the declared maximum -1 m |
+| `compute_class` | medium | - | user | supplied on this invocation |
 | `mesh_grade` | 0.2 | - | default_demo | declared constant default |
 | `barrier_width_m` | 20.0 | m | default_demo | declared scenario default |
-| `compute_class` | medium | - | default_demo | declared constant default |
+| `open_depth_threshold_m` | -12.0 | m | default_demo | declared scenario default |
 | `location` | - | - | prompt_interpreted | not supplied (declared optional) |
 
 ### Reproduce
@@ -96,8 +87,8 @@ from trid3nt_server.tools import TOOL_REGISTRY
 
 await TOOL_REGISTRY['artemis_harbor_agitation'].fn(
     bbox=[-71.525, 41.338, -71.492, 41.368],
+    compute_class='medium',
     mesh_min_edge_m=25.0,
-    open_depth_threshold_m=-1.0,
     reflection_coef=0.3,
     wave_direction_deg=160.0,
     wave_height_m=1.0,
@@ -105,5 +96,5 @@ await TOOL_REGISTRY['artemis_harbor_agitation'].fn(
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M1X9QWW1HF0TMEFVXX3GRH1X` and commit `1f0ccc3188561e84f5f977f0d0d6c54e08c9adb1`. The full argument record is [`artemis_harbor_agitation/run.json`](artemis_harbor_agitation/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M28GGE2Z8EFJ0J9Z9G1XACHP` and commit `18b105f8ea887cfc1dda8acd493eae55648efb73-dirty`. The full argument record is [`artemis_harbor_agitation/run.json`](artemis_harbor_agitation/run.json).
 

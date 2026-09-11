@@ -1,10 +1,10 @@
 {
   "tool": "artemis_harbor_agitation",
-  "run_id": "01M1X9QWW1HF0TMEFVXX3GRH1X",
-  "commit": "1f0ccc3188561e84f5f977f0d0d6c54e08c9adb1",
-  "recorded_at": "2026-09-07T06:44:09.703578+00:00",
-  "engine": "telemac2d",
-  "wall_seconds": 16.915,
+  "run_id": "01M28GGE2Z8EFJ0J9Z9G1XACHP",
+  "commit": "18b105f8ea887cfc1dda8acd493eae55648efb73-dirty",
+  "recorded_at": "2026-09-11T15:14:04.845636+00:00",
+  "engine": "telemac",
+  "wall_seconds": 34.528,
   "args": {
     "bbox": [
       -71.525,
@@ -17,7 +17,7 @@
     "wave_direction_deg": 160.0,
     "reflection_coef": 0.3,
     "mesh_min_edge_m": 25.0,
-    "open_depth_threshold_m": -1.0
+    "compute_class": "medium"
   },
   "sheet": [
     {
@@ -92,14 +92,14 @@
       "real_source": null
     },
     {
-      "name": "open_depth_threshold_m",
-      "value": -1.0,
+      "name": "compute_class",
+      "value": "medium",
       "door": "user",
       "basis": "user",
-      "units": "m",
-      "consequence": "physics",
-      "note": "supplied on this invocation; CLAMPED from 8 to the declared maximum -1 m",
-      "clamped_from": 8.0,
+      "units": null,
+      "consequence": "numerical",
+      "note": "supplied on this invocation",
+      "clamped_from": null,
       "real_source": null
     },
     {
@@ -125,13 +125,13 @@
       "real_source": null
     },
     {
-      "name": "compute_class",
-      "value": "medium",
-      "door": "constant",
+      "name": "open_depth_threshold_m",
+      "value": -12.0,
+      "door": "scenario",
       "basis": "default_demo",
-      "units": null,
-      "consequence": "numerical",
-      "note": "declared constant default",
+      "units": "m",
+      "consequence": "physics",
+      "note": "declared scenario default",
       "clamped_from": null,
       "real_source": null
     },
@@ -149,45 +149,24 @@
   ],
   "provenance": [
     {
+      "param": "bbox",
+      "value": "[-71.525, 41.338, -71.492, 41.368]",
+      "basis": "user",
+      "note": "Explicit AOI (min_lon,min_lat,max_lon,max_lat) EPSG:4326 - the harbour approach the domain is cut from the shoreline inside [supplied on this invocation]",
+      "real_source": null
+    },
+    {
       "param": "wave_period_s",
       "value": 8.0,
-      "basis": "default_demo",
-      "note": "prescribed monochromatic incident wave period",
+      "basis": "user",
+      "note": "Incident monochromatic wave period - a PRESCRIBED demo forcing, since no wave-forcing fetcher exists yet [supplied on this invocation]",
       "real_source": null
     },
     {
       "param": "wave_height_m",
       "value": 1.0,
-      "basis": "default_demo",
-      "note": "prescribed incident wave height H0 on the designated liquid boundary; Kd is measured against it",
-      "real_source": null
-    },
-    {
-      "param": "mesh_bed",
-      "value": "fetch_topobathy: cudem_nearshore 100% [datum NAVD88 (metres, positive up); native CUDEM 1/9\" ~3 m nearshore; ETOPO 2022 15\" ~450 m offshore fallback; 3DEP 10 m land]",
-      "basis": "fetched",
-      "note": "the elevation every node of the harbour carries; the solve reads it as the bathymetry the wave refracts over",
-      "real_source": null
-    },
-    {
-      "param": "structure",
-      "value": "supplied_73_segments",
       "basis": "user",
-      "note": "the structure supplied for this run, 73 segments of it, meshed as a conformal cut and forced as a solid face reflecting 0.3 of the incident energy; 178 boundary nodes took that face",
-      "real_source": null
-    },
-    {
-      "param": "mesh_domain",
-      "value": "Point Judith supplied mesh (3087 nodes / 5434 elements)",
-      "basis": "user",
-      "note": "solved on the accepted mesh: edges 5.11342-333.917 m (median 5.11342 m), 558 of 736 boundary nodes designated liquid - the edge the 72.8 m incident wave enters through",
-      "real_source": null
-    },
-    {
-      "param": "bbox",
-      "value": "[-71.525, 41.338, -71.492, 41.368]",
-      "basis": "user",
-      "note": "Explicit AOI (min_lon,min_lat,max_lon,max_lat) EPSG:4326 - the harbour approach the domain is cut from the shoreline inside [supplied on this invocation]",
+      "note": "Incident wave height H0 on the designated liquid boundary; Kd is measured against it, so it sets the scale of every narrated height [supplied on this invocation]",
       "real_source": null
     },
     {
@@ -212,10 +191,10 @@
       "real_source": null
     },
     {
-      "param": "open_depth_threshold_m",
-      "value": -1.0,
+      "param": "compute_class",
+      "value": "medium",
       "basis": "user",
-      "note": "How deep a boundary stretch must reach for it to be designated the OPEN edge the incident wave enters through; every stretch that reaches it opens [supplied on this invocation; CLAMPED from 8 to the declared maximum -1 m]",
+      "note": "Solve sizing class [supplied on this invocation]",
       "real_source": null
     },
     {
@@ -233,84 +212,103 @@
       "real_source": null
     },
     {
-      "param": "compute_class",
-      "value": "medium",
+      "param": "open_depth_threshold_m",
+      "value": -12.0,
       "basis": "default_demo",
-      "note": "Solve sizing class [declared constant default]",
+      "note": "How deep a boundary stretch must reach for it to be designated the OPEN edge the incident wave enters through; every stretch that reaches it opens [declared scenario default]",
       "real_source": null
     }
   ],
   "answer": {
-    "kd_max": 4.184,
-    "hs_max_m": 4.1838,
-    "kd_sheltered": 0.076,
-    "kd_exposed": 0.853,
+    "kd_max": 3.5609095096588135,
+    "hs_max_m": 3.5609095096588135,
+    "mesh_size_m": 5.113546548265623,
+    "layer_uri": "s3://trid3nt-runs/01M28GGE2Z8EFJ0J9Z9G1XACHP/overviews/01M28GGW9MW8F9W5ZQD3THNTA8.tif",
     "wave_period_s": 8.0,
-    "mesh_size_m": 5.11341997989883,
-    "agitation_curve_m": {
-      "length": 60,
-      "head": [
-        -1022.8,
-        -913.2,
-        -844.4,
-        -787.7,
-        -734.7,
-        -678.4,
-        -636.9,
-        -595.1
-      ],
-      "truncated": true
-    },
-    "agitation_curve_kd": {
-      "length": 60,
-      "head": [
-        1.88,
-        0.466,
-        2.023,
-        2.794,
-        1.106,
-        1.808,
-        0.217,
-        2.955
-      ],
-      "truncated": true
-    },
-    "agitation_curve_kind": "diffraction_transect",
-    "layer_uri": "s3://trid3nt-runs/01M1X9QWW1HF0TMEFVXX3GRH1X/overviews/01M1X9R9XJPV86WWYYGK56T1XN.tif",
-    "wave_period_note": "prescribed monochromatic incident wave period",
-    "structure": "supplied_73_segments",
-    "structure_note": "the structure supplied for this run, 73 segments of it, meshed as a conformal cut and forced as a solid face reflecting 0.3 of the incident energy; 178 boundary nodes took that face",
+    "wave_period_note": "Incident monochromatic wave period - a PRESCRIBED demo forcing, since no wave-forcing fetcher exists yet [supplied on this invocation]",
+    "structure": null,
+    "structure_note": null,
     "mesh_min_edge_m": 25.0,
     "mesh_edge_note": "Finest triangle edge, used at the shoreline and around the structure. THE granularity lever: a phase-resolving solve needs several nodes per WAVELENGTH and Kd peaks inside a diffraction fringe, so a coarse mesh reads the peaks low [supplied on this invocation]"
   },
   "mesh": {
-    "mesh_size_m": 5.11341997989883
+    "mesh_size_m": null
   },
   "layers": [
     {
       "crs_authid": null,
-      "layer_id": "01M1X9RC8VHJ4N8BC5W9ZASD3M",
+      "layer_id": "input-osm_coastline-2087b73a76bf",
+      "layer_type": "vector",
+      "legend": {
+        "colormap": null,
+        "kind": "reference",
+        "label": null,
+        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <renderer-v2 type=\"singleSymbol\" symbollevels=\"0\" forceraster=\"0\" enableorderby=\"0\" referencescale=\"-1\">\n    <symbols>\n      <symbol name=\"0\" type=\"line\" alpha=\"1\" force_rhr=\"0\" clip_to_extent=\"1\" frame_rate=\"10\" is_animated=\"0\">\n        <layer class=\"SimpleLine\" enabled=\"1\" locked=\"0\" pass=\"0\">\n          <Option type=\"Map\">\n            <Option name=\"line_color\" type=\"QString\" value=\"59,125,216,255\"/>\n        <Option name=\"line_width\" type=\"QString\" value=\"0.66\"/>\n        <Option name=\"line_width_unit\" type=\"QString\" value=\"MM\"/>\n            <Option name=\"style\" type=\"QString\" value=\"solid\"/>\n          </Option>\n        </layer>\n      </symbol>\n    </symbols>\n  </renderer-v2>\n</qgis>\n",
+        "units": null,
+        "vmax": null,
+        "vmin": null
+      },
+      "name": "Input: the shoreline this domain is cut from (osm_coastline)",
+      "opacity": null,
+      "quantity": null,
+      "reference_time": null,
+      "role": "context",
+      "temporal": false,
+      "uri": "s3://trid3nt-cache/cache/static-30d/osm_coastline/32b4f4d80ba17cb0b0fd7da20f519516.fgb",
+      "valid_from": null,
+      "valid_to": null,
+      "visible": true,
+      "z_index": 0
+    },
+    {
+      "crs_authid": null,
+      "layer_id": "input-topobathy-ab0c88198ba8",
+      "layer_type": "raster",
+      "legend": {
+        "colormap": "gray",
+        "kind": "continuous",
+        "label": "Elevation",
+        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <pipe>\n    <rasterrenderer type=\"singlebandpseudocolor\" band=\"1\" opacity=\"1\" alphaBand=\"-1\" classificationMin=\"-17.11725845\" classificationMax=\"-1.519824672\" nodataColor=\"\">\n      <rastershader>\n        <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"-17.11725845\" maximumValue=\"-1.519824672\" labelPrecision=\"4\">\n          <item value=\"-17.11725845\" color=\"#000000\" alpha=\"255\" label=\"-17.1173 m\"/>\n          <item value=\"-13.21790001\" color=\"#404040\" alpha=\"255\" label=\"-13.2179 m\"/>\n          <item value=\"-9.318541563\" color=\"#808080\" alpha=\"255\" label=\"-9.31854 m\"/>\n          <item value=\"-5.419183117\" color=\"#c0c0c0\" alpha=\"255\" label=\"-5.41918 m\"/>\n          <item value=\"-1.519824672\" color=\"#ffffff\" alpha=\"255\" label=\"-1.51982 m\"/>\n        </colorrampshader>\n      </rastershader>\n    </rasterrenderer>\n  </pipe>\n</qgis>\n",
+        "units": "m",
+        "vmax": -1.519824671745305,
+        "vmin": -17.11725845336914
+      },
+      "name": "Input: topobathy (topobathy, CUDEM 1/9\" ~3 m nearshore; ETOPO 2022 15\" ~450 m offshore fallback; 3DEP 10 m land, datum NAVD88 (metres, positive up))",
+      "opacity": null,
+      "quantity": null,
+      "reference_time": null,
+      "role": "context",
+      "temporal": false,
+      "uri": "s3://trid3nt-cache/cache/static-30d/topobathy/b4d7d82d20ac924ef9bb3b162737cfbd.tif",
+      "valid_from": null,
+      "valid_to": null,
+      "visible": true,
+      "z_index": 1
+    },
+    {
+      "crs_authid": null,
+      "layer_id": "01M28GGYM6ST98QS8HB6471BAY",
       "layer_type": "raster",
       "legend": {
         "colormap": "viridis",
         "kind": "continuous",
-        "label": "Agitation coefficient Kd = Hs / H0",
-        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <pipe>\n    <rasterrenderer type=\"singlebandpseudocolor\" band=\"1\" opacity=\"1\" alphaBand=\"-1\" classificationMin=\"0\" classificationMax=\"3.456\" nodataColor=\"\">\n      <rastershader>\n        <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"0\" maximumValue=\"3.456\" labelPrecision=\"4\">\n          <item value=\"0\" color=\"#440154\" alpha=\"255\" label=\"0 Kd\"/>\n          <item value=\"0.864\" color=\"#3b528b\" alpha=\"255\" label=\"0.864 Kd\"/>\n          <item value=\"1.728\" color=\"#21918c\" alpha=\"255\" label=\"1.728 Kd\"/>\n          <item value=\"2.592\" color=\"#5ec962\" alpha=\"255\" label=\"2.592 Kd\"/>\n          <item value=\"3.456\" color=\"#fde725\" alpha=\"255\" label=\"3.456 Kd\"/>\n        </colorrampshader>\n      </rastershader>\n    </rasterrenderer>\n  </pipe>\n</qgis>\n",
-        "units": "Kd",
-        "vmax": 3.456,
+        "label": "Agitation coefficient (Hs/H0)",
+        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <pipe>\n    <rasterrenderer type=\"singlebandpseudocolor\" band=\"1\" opacity=\"1\" alphaBand=\"-1\" classificationMin=\"0\" classificationMax=\"3.56091\" nodataColor=\"\">\n      <rastershader>\n        <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"0\" maximumValue=\"3.56091\" labelPrecision=\"4\">\n          <item value=\"0\" color=\"#440154\" alpha=\"255\" label=\"0 Hs/H0\"/>\n          <item value=\"0.8902275\" color=\"#3b528b\" alpha=\"255\" label=\"0.890227 Hs/H0\"/>\n          <item value=\"1.780455\" color=\"#21918c\" alpha=\"255\" label=\"1.78045 Hs/H0\"/>\n          <item value=\"2.6706825\" color=\"#5ec962\" alpha=\"255\" label=\"2.67068 Hs/H0\"/>\n          <item value=\"3.56091\" color=\"#fde725\" alpha=\"255\" label=\"3.56091 Hs/H0\"/>\n        </colorrampshader>\n      </rastershader>\n    </rasterrenderer>\n  </pipe>\n</qgis>\n",
+        "units": "Hs/H0",
+        "vmax": 3.56091,
         "vmin": 0.0
       },
-      "name": "Wave agitation Kd (point_judith_supplied_mesh)",
+      "name": "Agitation coefficient (Hs/H0) at t = 8 s (harbour_mesh)",
       "opacity": null,
       "quantity": "agitation_coefficient",
       "reference_time": null,
       "role": "primary",
       "temporal": false,
-      "uri": "s3://trid3nt-runs/01M1X9QWW1HF0TMEFVXX3GRH1X/overviews/01M1X9R9XJPV86WWYYGK56T1XN.tif",
+      "uri": "s3://trid3nt-runs/01M28GGE2Z8EFJ0J9Z9G1XACHP/overviews/01M28GGW9MW8F9W5ZQD3THNTA8.tif",
       "valid_from": null,
       "valid_to": null,
       "visible": true,
-      "z_index": 0
+      "z_index": 2
     }
   ]
 }

@@ -6,7 +6,7 @@ How much RUNOFF a storm produces from this WATERSHED, as an outlet hydrograph an
 
 |  |  |
 |---|---|
-| module | `telemac2d` - 376 keywords in its dictionary, of which this template states 26 |
+| module | `telemac2d` - 376 keywords in its dictionary, of which this template states 25 |
 | parts | - |
 | solves | `trid3nt_server.workflows.telemac.solving.solve.solve_case` |
 | engine defaults | every keyword this template does not state keeps the engine's own default; `describe_keywords` names it with that default, and `keywords={...}` sets it |
@@ -61,13 +61,10 @@ The values the template declares. `desc` is what the model reads when it fills o
 | `max_depth_peak_m` | 9.9493 |
 | `max_depth_p99_m` | 1.2596 |
 | `continuity_rel_error` | -2.405208e-15 |
-| `amc_condition` | 2 |
-| `rain_intensity_mm_per_hr` | 6.53 |
 | `n_frames` | 61 |
 | `mesh_size_m` | 26.76898646896342 |
 | `mesh_node_count` | 6615 |
 | `mesh_element_count` | 12974 |
-| `catchment_provenance` | supplied polygon domain (1 part(s)) |
 | `domain_bbox` | [-83.47785743749148, 35.020842655690025, -83.39843388520751, 35.07357312220887] |
 
 It publishes these layers onto the canvas:

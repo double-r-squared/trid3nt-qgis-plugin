@@ -48,52 +48,44 @@ The values the template declares. `desc` is what the model reads when it fills o
 
 | field | the proving run's value |
 |---|---|
-| `stratification_metric` | 0.1516 |
-| `stratification_dt` | 0.1516 |
-| `variable_label` | Surface temperature |
-| `variable_units` | degC |
-| `nplan` | 13 |
-| `wind_speed_mps` | 6.0 |
-| `u_surface` | 0.01067 |
-| `u_bottom` | -0.007 |
-| `depth_avg_u` | -1e-05 |
+| `stratification_dt` | 2.6936378479003906 |
+| `stratification_dt_init` | 7.582208633422852 |
+| `column_mean_final_c` | 23.963044319011594 |
+| `column_mean_init_c` | 23.804604505637272 |
+| `column_depth_m` | 8.841507196426392 |
+| `u_surface` | -0.008717009797692299 |
+| `u_bottom` | -0.023563141003251076 |
+| `depth_avg_u` | -3.2348501036132663e-05 |
+| `planes` | 13 |
 | `mesh_size_m` | 32.9447594688078 |
-| `profile_sigma` | [0.0, 0.0833, 0.1667, 0.25, 0.3333, 0.4167, 0.5, 0.5833, 0.6667, 0.75, 0.8333, 0.9167, 1.0] |
-| `profile_values` | [16.975, 17.005, 17.026, 17.044, 17.073, 17.085, 17.095, 17.109, 17.117, 17.121, 17.123, 17.125, 17.126] |
-| `profile_values_initial` | [8.801, 11.435, 14.308, 16.314, 17.319, 17.74, 17.903, 17.964, 17.987, 17.995, 17.998, 17.999, 18.0] |
-| `column_heat_drift_frac` | - |
-| `stratification_dt_init` | - |
-| `column_heat_mean_init_c` | - |
-| `column_heat_mean_final_c` | - |
-| `column_depth_m` | - |
 
 It publishes these layers onto the canvas:
 
 - Input: nhd waterbodies (nhd_waterbodies)
 - Input: greatlakes bathymetry (greatlakes_bathymetry, NCEI Great Lakes bathymetry is gridded at 3 arc-seconds (~90 m); 1800 px/deg is ~62 m, datum each Great Lake's own Low Water Datum (metres, positive up))
 - Input: greatlakes water level (greatlakes_water_level, datum each Great Lake's own Low Water Datum (metres, positive up))
-- Bottom temperature (basin_mesh)
-- Surface temperature (basin_mesh)
+- Water temperature (degC) at t = 3600 s, bottom plane (basin_mesh)
+- Water temperature (degC) at t = 3600 s, surface plane (basin_mesh)
 
 ## The proving run
 
-Run `01M1X9RXW4TE1CPBWWN28SAHW8`, 2026-09-07T06:50:45.273951+00:00, 390.271 s, at commit `1f0ccc3188561e84f5f977f0d0d6c54e08c9adb1`.
+Run `01M28GT1KRQXWG264ZVKNZ2QZJ`, 2026-09-11T15:20:19.961110+00:00, 89.325 s, at commit `18b105f8ea887cfc1dda8acd493eae55648efb73-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M1X9RXW4TE1CPBWWN28SAHW8)](telemac3d_stratified_flow/telemac3d_stratified_flow.png)
+![Every layer the run published, stacked and framed on the result (run 01M28GT1KRQXWG264ZVKNZ2QZJ)](telemac3d_stratified_flow/telemac3d_stratified_flow.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M1X9RXW4TE1CPBWWN28SAHW8)*
+*Every layer the run published, stacked and framed on the result (run 01M28GT1KRQXWG264ZVKNZ2QZJ)*
 
-![The solve, frame by frame (run 01M1X9RXW4TE1CPBWWN28SAHW8)](telemac3d_stratified_flow/telemac3d_stratified_flow_animation.gif)
+![The solve, frame by frame (run 01M28GT1KRQXWG264ZVKNZ2QZJ)](telemac3d_stratified_flow/telemac3d_stratified_flow_animation.gif)
 
-*The solve, frame by frame (run 01M1X9RXW4TE1CPBWWN28SAHW8)*
+*The solve, frame by frame (run 01M28GT1KRQXWG264ZVKNZ2QZJ)*
 
-![final frame (run 01M1X9RXW4TE1CPBWWN28SAHW8)](telemac3d_stratified_flow/telemac3d_stratified_flow_final_frame.png)
+![final frame (run 01M28GT1KRQXWG264ZVKNZ2QZJ)](telemac3d_stratified_flow/telemac3d_stratified_flow_final_frame.png)
 
-*final frame (run 01M1X9RXW4TE1CPBWWN28SAHW8)*
+*final frame (run 01M28GT1KRQXWG264ZVKNZ2QZJ)*
 
-![vertical profile - the chart the run persisted (run 01M1X9RXW4TE1CPBWWN28SAHW8)](telemac3d_stratified_flow/telemac3d_stratified_flow_chart_vertical_profile.png)
+![water temperature - the chart the run persisted (run 01M28GT1KRQXWG264ZVKNZ2QZJ)](telemac3d_stratified_flow/telemac3d_stratified_flow_chart_water_temperature.png)
 
-*vertical profile - the chart the run persisted (run 01M1X9RXW4TE1CPBWWN28SAHW8)*
+*water temperature - the chart the run persisted (run 01M28GT1KRQXWG264ZVKNZ2QZJ)*
 
 ### The sheet it filled
 
@@ -102,21 +94,21 @@ Every slot the run resolved, with where the value came from. The engine's own de
 | param | value | units | basis | provenance |
 |---|---|---|---|---|
 | `bbox` | [-87.39234, 46.52812, -87.36788, 46.55021] | - | user | supplied on this invocation |
-| `warm_temp_c` | 18.0 | C | user | supplied on this invocation |
-| `cold_temp_c` | 6.0 | C | user | supplied on this invocation |
+| `warm_temp_c` | 25.0 | C | user | supplied on this invocation |
+| `cold_temp_c` | 15.0 | C | user | supplied on this invocation |
 | `thermocline_depth_m` | 8.0 | m | user | supplied on this invocation |
-| `wind_speed_mps` | 6.0 | m/s | user | supplied on this invocation |
+| `wind_speed_mps` | 0.0 | m/s | user | supplied on this invocation |
 | `wind_direction_deg` | 270.0 | deg | user | supplied on this invocation |
 | `levels` | 13 | - | user | supplied on this invocation |
 | `mesh_min_edge_m` | 60.0 | m | user | supplied on this invocation |
-| `output_interval_min` | 10.0 | min | user | supplied on this invocation |
-| `sim_duration_hours` | 5.0 | h | default_demo | declared constant default |
+| `sim_duration_hours` | 1.0 | h | user | supplied on this invocation |
+| `compute_class` | medium | - | user | supplied on this invocation |
 | `tracer_advection_scheme` | 13 | - | default_demo | declared constant default |
 | `max_advection_iterations` | 50 | - | default_demo | declared constant default |
-| `compute_class` | medium | - | default_demo | declared constant default |
 | `location` | - | - | prompt_interpreted | not supplied (declared optional) |
 | `event_time` | - | - | prompt_interpreted | not supplied (declared optional) |
 | `time_step_s` | - | s | user | not supplied (declared optional) |
+| `output_interval_min` | - | min | user | not supplied (declared optional) |
 
 ### Reproduce
 
@@ -125,16 +117,17 @@ from trid3nt_server.tools import TOOL_REGISTRY
 
 await TOOL_REGISTRY['telemac3d_stratified_flow'].fn(
     bbox=[-87.39234, 46.52812, -87.36788, 46.55021],
-    cold_temp_c=6.0,
+    cold_temp_c=15.0,
+    compute_class='medium',
     levels=13,
     mesh_min_edge_m=60.0,
-    output_interval_min=10.0,
+    sim_duration_hours=1.0,
     thermocline_depth_m=8.0,
-    warm_temp_c=18.0,
+    warm_temp_c=25.0,
     wind_direction_deg=270.0,
-    wind_speed_mps=6.0,
+    wind_speed_mps=0.0,
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M1X9RXW4TE1CPBWWN28SAHW8` and commit `1f0ccc3188561e84f5f977f0d0d6c54e08c9adb1`. The full argument record is [`telemac3d_stratified_flow/run.json`](telemac3d_stratified_flow/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M28GT1KRQXWG264ZVKNZ2QZJ` and commit `18b105f8ea887cfc1dda8acd493eae55648efb73-dirty`. The full argument record is [`telemac3d_stratified_flow/run.json`](telemac3d_stratified_flow/run.json).
 

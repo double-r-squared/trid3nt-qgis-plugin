@@ -10,8 +10,8 @@ One wrapper per TELEMAC module. A wrapper is the module's own dictionary, read a
 |---|---|---|---|
 | `artemis` | 118 | `incident_wave` | `extent`, `field`, `mass_balance`, `max_over_time`, `mesh`, `profile`, `series` |
 | `gaia` | 148 | `bed`, `dredging`, `suspension` | `extent`, `field`, `mass_balance`, `max_over_time`, `mesh`, `profile`, `series` |
-| `telemac2d` | 376 | `boundaries`, `continue_from`, `coupling`, `friction`, `hyetograph`, `oil`, `rain`, `rating`, `releases`, `runoff`, `time_origin`, `tracer_names`, `wind` | `drogues`, `extent`, `field`, `mass_balance`, `max_over_time`, `mesh`, `profile`, `series` |
-| `telemac3d` | 355 | `column`, `vertical_grid`, `wind` | `extent`, `field`, `mass_balance`, `max_over_time`, `mesh`, `profile`, `series` |
+| `telemac2d` | 376 | `boundaries`, `continue_from`, `coupling`, `friction`, `hyetograph`, `infiltration`, `oil`, `rain`, `rating`, `releases`, `runoff`, `time_origin`, `tracer_names`, `wind` | `drogues`, `extent`, `field`, `mass_balance`, `max_over_time`, `mesh`, `profile`, `series` |
+| `telemac3d` | 355 | `column`, `vertical_grid`, `wind` | `column`, `extent`, `field`, `mass_balance`, `max_over_time`, `mesh`, `profile`, `series` |
 | `waqtel` | 91 | `degradation` | - |
 
 A COMPOSITE is one value standing for a keyword group, so the group cannot half-arrive. An OUTPUT binds a result file to the reader that publishes it.
