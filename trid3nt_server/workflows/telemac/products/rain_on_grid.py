@@ -19,7 +19,7 @@ from trid3nt_contracts.telemac_contracts import (
 )
 
 from trid3nt_server.workflows.runtime import Step
-from trid3nt_server.workflows.shared.publish_product_layer import publish_product_layer
+from trid3nt_server.workflows.publishing.style import publish_product_layer
 
 logger = logging.getLogger("trid3nt_server.workflows.telemac.products.rain_on_grid")
 
@@ -197,7 +197,7 @@ async def publish_rain_on_grid_products(*, run: dict[str, Any],
         continuity_rel_error,
         outlet_hydrograph,
     )
-    from trid3nt_server.workflows.telemac.products.results_mesh_seam import (
+    from trid3nt_server.workflows.publishing.animation import (
         publish_results_mesh_via_seam,
     )
 

@@ -309,7 +309,7 @@ _ALLOWLISTED_INPUT_EMISSION: dict[str, tuple[int, str]] = {
     "telemac/helpers/forcing.py": (1, "NWM discharge station point, its name pinned to the RESOLVED cycle for its caption, which the fetch (visualize=False) never exposes to the generic seam"),
     "telemac/products/products.py": (3, "deposition + oil-slick + DO-field results"),
     "inputs/point.py": (1, "the Point context-layer publisher - a resolved PARAM (picked, typed or derived), not a router fetch, so no emit-on-fetch seam can cover it; one home for every Point slot"),
-    "telemac/products/results_mesh_seam.py": (1, "the seam-side SELAFIN mesh publisher - framework emission, one home for all telemac legs"),
+    "publishing/animation.py": (1, "a field over time as an animation: the results-mesh publisher, framework emission, one home for every engine"),
 }
 
 # NONE survive. The last bespoke input-surfacing helper rode an in-worker bed COG

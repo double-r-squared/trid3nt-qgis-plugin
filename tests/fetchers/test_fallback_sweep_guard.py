@@ -179,7 +179,7 @@ def test_every_topobathy_call_site_declares_a_rung():
 # defect, so a failure here means LOOK, not "broken".
 _PARKED_SILENT_SUBSTITUTIONS: dict[str, tuple[str, str, str]] = {
     "row 11 -- COG CRS guess": (
-        "trid3nt_server/workflows/shared/cog_io.py",
+        "trid3nt_server/workflows/publishing/cog.py",
         'ds.attrs.get("crs", "EPSG:3857")',
         "audit row 11: a COG whose dataset carries no CRS is TAGGED EPSG:3857 and "
         "written, so pixel coordinates that were never Web Mercator get a Web "

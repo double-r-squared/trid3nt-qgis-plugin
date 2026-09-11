@@ -1,4 +1,4 @@
-"""The TELEMAC-3D wrapper: its dictionary, its composites, and its output.
+"""The TELEMAC-3D wrapper: its dictionary, its composites, and its outputs.
 
 The wrapper asserts NO value of its own. The VERTICAL GRID and the COLUMN read
 the SAME three numbers through the SAME planner, so the thermocline thickness the
@@ -11,11 +11,19 @@ from typing import Any, Mapping
 
 from trid3nt_server.workflows.runtime import DeclarativeError
 
-from ..products.stratified import publish_stratified_products
 from .module import Module
+from .outputs import PRIMITIVES
 
-__all__ = ["T3D", "Column", "USER_FORTRAN_DIR", "VerticalGridUnresolved",
-           "VerticalGrid", "plan_vertical_grid"]
+__all__ = ["T3D", "Column", "USER_FORTRAN_DIR", "VARIABLES",
+           "VerticalGridUnresolved", "VerticalGrid", "plan_vertical_grid"]
+
+#: The module's variable vocabulary, by the mnemonic VARIABLES FOR 3D GRAPHIC
+#: PRINTOUTS spells: the result-file name and the unit. A 3D variable is read on
+#: one plane, bottom first; ``T<n>`` is the n-th NAMES OF TRACERS entry.
+VARIABLES: Mapping[str, tuple[str, str]] = MappingProxyType({
+    "Z": ("ELEVATION Z", "M"), "U": ("VELOCITY U", "M/S"),
+    "V": ("VELOCITY V", "M/S"), "W": ("VELOCITY W", "M/S"),
+})
 
 
 class VerticalGridUnresolved(DeclarativeError):
@@ -265,5 +273,6 @@ def _wind(value: Mapping[str, Any]) -> tuple[Mapping[str, Any], Mapping[str, Any
 
 
 T3D = Module("telemac3d")
+T3D.VARIABLES = VARIABLES
 T3D.composites(vertical_grid=_vertical_grid, column=_column, wind=_wind)
-T3D.outputs(column_structure=publish_stratified_products)
+T3D.outputs(**PRIMITIVES)

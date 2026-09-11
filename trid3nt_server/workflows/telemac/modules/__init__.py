@@ -1,8 +1,8 @@
 """One wrapper per TELEMAC module: the dictionary, the composites, the outputs.
 
-The machinery is in ``module.py`` (what a slot and a wrapper are) and
-``sheet.py`` (fill, then run). Every other file here is one module's wrapper.
-"""
+The machinery is in ``module.py`` (what a slot and a wrapper are), ``sheet.py``
+(fill, then run) and ``outputs.py`` (the primitive set and the read of each).
+Every other file here is one module's wrapper."""
 
 from __future__ import annotations
 
@@ -10,6 +10,16 @@ from types import MappingProxyType
 from typing import Mapping
 
 from .module import Composite, Module, Output, Slot, SlotRefused, load_dictionary
+from .outputs import (
+    Measure,
+    Primitive,
+    extent,
+    field,
+    mass_balance,
+    max_over_time,
+    mesh,
+    series,
+)
 from .sheet import Filled, Sheet, SheetIncomplete, draw, fill, run
 from .artemis import ART
 from .gaia import GAIA
@@ -18,9 +28,10 @@ from .telemac3d import T3D
 from .waqtel import WAQTEL
 
 __all__ = [
-    "ART", "Composite", "Filled", "GAIA", "Module", "Output", "Sheet",
-    "SheetIncomplete", "Slot", "SlotRefused", "T2D", "T3D", "WAQTEL",
-    "WRAPPERS", "draw", "fill", "load_dictionary", "run", "wrapper_for",
+    "ART", "Composite", "Filled", "GAIA", "Measure", "Module", "Output",
+    "Primitive", "Sheet", "SheetIncomplete", "Slot", "SlotRefused", "T2D", "T3D",
+    "WAQTEL", "WRAPPERS", "draw", "extent", "field", "fill", "load_dictionary",
+    "mass_balance", "max_over_time", "mesh", "run", "series", "wrapper_for",
 ]
 
 #: The exposed wrappers, by the module name the engine knows each by. A coupled

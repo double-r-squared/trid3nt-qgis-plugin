@@ -1,0 +1,191 @@
+"""The one publisher: a field becomes a layer, a series a chart, a field over
+time an animation.
+
+Offline: the store and the render chokepoint are stood in for; what is proved
+is what each deliverable becomes and in which order they are handed on."""
+
+from __future__ import annotations
+
+import asyncio
+
+import numpy as np
+import pytest
+
+from trid3nt_server.workflows.publishing import (
+    Deliverable,
+    Field,
+    Frames,
+    Series,
+    quantity_of,
+)
+from trid3nt_server.workflows.publishing import publish as publish_mod
+from trid3nt_server.workflows.publishing.publish import publish
+
+
+def test_the_quantity_token_is_the_caption_s_own_words():
+    assert quantity_of("dye concentration") == "dye_concentration"
+    assert quantity_of("  Suspended   sediment  ") == "suspended_sediment"
+
+
+def _field(**over) -> Field:
+    lon = np.array([-124.10, -124.099, -124.10, -124.099, -124.0995])
+    lat = np.array([40.50, 40.50, 40.501, 40.501, 40.5005])
+    ikle = np.array([[0, 1, 4], [1, 3, 4], [2, 3, 4], [0, 2, 4]])
+    return Field(**{"name": "DYE", "units": "mg/L", "lon": lon, "lat": lat,
+                    "ikle": ikle, "values": np.array([10.0, 80.0, 5.0, 50.0, 60.0]),
+                    "floor": 4.0, "measures": {"max": 80.0}, **over})
+
+
+def _series() -> Series:
+    return Series(name="DYE", units="mg/L", times=np.array([0.0, 60.0, 120.0]),
+                  values=np.array([0.0, 80.0, 50.0]), at="the domain maximum",
+                  measures={"max": 80.0, "t_max": 60.0})
+
+
+def test_a_field_becomes_one_styled_layer_named_by_its_caption(monkeypatch):
+    """The COG is written, uploaded, published through the chokepoint; the
+    legend spans the field's own range from its floor's zero; the name, the
+    quantity and the units come off the caption and the read."""
+    from trid3nt_server.emission import publish as emission_publish
+    from trid3nt_server.workflows.publishing import cog
+
+    seen = {}
+
+    def _upload(local, run_id, bucket, *, dest_filename, **_kw):
+        import rasterio
+
+        with rasterio.open(local) as src:
+            seen["shape"] = (src.height, src.width)
+            seen["crs"] = str(src.crs)
+        return f"s3://runs/{run_id}/{dest_filename}"
+
+    monkeypatch.setattr(cog, "upload_cog", _upload)
+    monkeypatch.setattr(emission_publish, "publish_layer",
+                        lambda *, layer_uri, layer_id, style=None, **_kw:
+                        seen.setdefault("published", (layer_uri, layer_id, style))
+                        and layer_uri + "#published")
+    layer = publish_mod._layer(_field(), run_id="RID", engine="telemac",
+                               name="reach", caption="dye concentration",
+                               style={"kind": "continuous", "ramp": "reds",
+                                      "units": "mg/L", "label": "Dye concentration"})
+    assert seen["crs"] == "EPSG:4326" and min(seen["shape"]) >= 128
+    assert seen["published"] == ("s3://runs/RID/dye_concentration.tif",
+                                 "telemac-dye_concentration-RID",
+                                 {"kind": "continuous", "ramp": "reds",
+                                  "units": "mg/L", "label": "Dye concentration"})
+    assert layer.uri == "s3://runs/RID/dye_concentration.tif#published"
+    assert layer.name == "Peak dye concentration (reach)"
+    assert layer.quantity == "dye_concentration" and layer.units == "mg/L"
+    assert layer.role == "primary" and layer.layer_type == "raster"
+    assert (layer.legend.vmin, layer.legend.vmax) == (0.0, 80.0)
+    assert layer.legend.label == "Dye concentration (mg/L)"
+    # the bbox is the nodes' own, padded so a ribbon at the bank is not clipped
+    assert layer.bbox[0] == pytest.approx(-124.10 - 0.0009)
+    assert layer.bbox[3] == pytest.approx(40.501 + 0.0009)
+
+
+def test_a_field_at_an_instant_is_named_for_it_and_ranged_on_itself(monkeypatch):
+    from trid3nt_server.emission import publish as emission_publish
+    from trid3nt_server.workflows.publishing import cog
+
+    monkeypatch.setattr(cog, "upload_cog",
+                        lambda local, run_id, bucket, *, dest_filename, **_kw:
+                        f"s3://runs/{run_id}/{dest_filename}")
+    monkeypatch.setattr(emission_publish, "publish_layer",
+                        lambda *, layer_uri, **_kw: layer_uri)
+    layer = publish_mod._layer(
+        _field(name="WATER DEPTH", units="m", floor=None, t=120.0,
+               values=np.array([1.5, 2.0, 0.5, 1.0, 1.25])),
+        run_id="RID", engine="telemac", name="reach", caption="water depth",
+        style=None)
+    assert layer.layer_id == "telemac-water_depth-t120-RID"
+    assert layer.name == "Water depth (m) at t = 120 s (reach)"
+    assert (layer.legend.vmin, layer.legend.vmax) == (0.5, 2.0)
+
+
+def test_a_publish_failure_never_retracts_the_layer(monkeypatch):
+    from trid3nt_server.emission import publish as emission_publish
+    from trid3nt_server.workflows.publishing import cog
+
+    monkeypatch.setattr(cog, "upload_cog",
+                        lambda local, run_id, bucket, *, dest_filename, **_kw:
+                        f"s3://runs/{run_id}/{dest_filename}")
+
+    def _refuse(**_kw):
+        raise emission_publish.PublishLayerError("LAYER_URI_NOT_FOUND", "no")
+
+    monkeypatch.setattr(emission_publish, "publish_layer", _refuse)
+    layer = publish_mod._layer(_field(), run_id="RID", engine="telemac",
+                               name="reach", caption="dye concentration", style=None)
+    assert layer.uri == "s3://runs/RID/dye_concentration.tif"
+
+
+def test_a_series_becomes_a_chart_with_one_point_per_instant():
+    payload = publish_mod._chart(_series(), caption="dye concentration",
+                                 where="the Wabash")
+    values = payload["vega_lite_spec"]["data"]["values"]
+    assert [v["t_s"] for v in values] == [0.0, 60.0, 120.0]
+    assert [v["value"] for v in values] == [0.0, 80.0, 50.0]
+    assert payload["title"] == "Dye concentration, the domain maximum - the Wabash"
+    assert "peaks at 80 mg/L at t = 60 s" in payload["caption"]
+    assert payload["vega_lite_spec"]["encoding"]["y"]["title"] == "Dye concentration (mg/L)"
+    assert payload["envelope_type"] == "chart-emission"
+
+
+def test_layers_lead_and_an_animation_adopts_its_sibling_s_scale(monkeypatch):
+    """The first layer is the primary; the animation of the same quantity is
+    handed that layer so the frames and the still share one range; the charts
+    are persisted under the run."""
+    from trid3nt_contracts.execution import LayerURI
+
+    from trid3nt_server.workflows.shared import run_products
+
+    seen: dict = {}
+    primary = LayerURI(layer_id="L", name="Peak dye concentration (reach)",
+                       layer_type="raster", uri="s3://runs/RID/dye_concentration.tif",
+                       quantity="dye_concentration")
+    monkeypatch.setattr(publish_mod, "_layer", lambda *a, **k: primary)
+
+    async def _seam(_emitter, **kwargs):
+        seen["seam"] = kwargs
+        return 1
+
+    async def _persist(run_id, *, charts, metrics):
+        seen["persisted"] = (run_id, dict(charts), metrics)
+        return []
+
+    monkeypatch.setattr(publish_mod, "publish_results_mesh_via_seam", _seam)
+    monkeypatch.setattr(run_products, "persist_run_products", _persist)
+    frames = Frames(name="DYE", units="mg/L", file="r2d.slf", group="DYE",
+                    epsg=32610, reference_time="2026-01-01T00:00:00+00:00", frames=3)
+    published = asyncio.run(publish(
+        run_id="RID", engine="telemac", name="reach", where="the Wabash",
+        reference_time="2026-01-01T00:00:00+00:00",
+        items=[Deliverable(read=frames, mode="animate", caption="dye concentration"),
+               Deliverable(read=_field(), mode="layer", caption="dye concentration"),
+               Deliverable(read=_series(), mode="chart", caption="dye concentration")]))
+    assert published.primary is primary and published.animations == 1
+    assert seen["seam"]["peak_layer"] is primary
+    assert (seen["seam"]["peak_quantity"], seen["seam"]["mesh_group"],
+            seen["seam"]["mesh_basename"], seen["seam"]["mesh_epsg"],
+            seen["seam"]["reach_name"]) == (
+        "dye_concentration", "DYE", "r2d.slf", 32610, "reach")
+    assert list(published.charts) == ["dye_concentration"]
+    assert seen["persisted"][0] == "RID" and list(seen["persisted"][1]) == [
+        "dye_concentration"]
+
+
+def test_an_animation_with_no_layer_of_its_quantity_still_plays(monkeypatch):
+    seen: dict = {}
+
+    async def _seam(_emitter, **kwargs):
+        seen.update(kwargs)
+        return 1
+
+    monkeypatch.setattr(publish_mod, "publish_results_mesh_via_seam", _seam)
+    frames = Frames(name="WATER DEPTH", units="m", file="r2d.slf",
+                    group="WATER DEPTH", epsg=32610, reference_time=None, frames=3)
+    published = asyncio.run(publish(
+        run_id="RID", engine="telemac", name="reach", where="x", reference_time=None,
+        items=[Deliverable(read=frames, mode="animate", caption="water depth")]))
+    assert published.primary is None and seen["peak_layer"] is None

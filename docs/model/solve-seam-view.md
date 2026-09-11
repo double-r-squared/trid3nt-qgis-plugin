@@ -15,7 +15,7 @@ flowchart LR
     manifestStager["ManifestStager<br/>trid3nt_server/workflows/telemac/authoring/assembler.py"]
     meshAcceptance["MeshAcceptance<br/>trid3nt_server/workflows/mesh/step.py"]
     resultPostprocess["ResultPostprocess<br/>trid3nt_server/workflows/telemac/products/postprocess_telemac.py"]
-    resultReader["ResultReader<br/>trid3nt_server/workflows/telemac/products/result_reader.py"]
+    resultReader["ResultReader<br/>trid3nt_server/workflows/telemac/modules/outputs.py"]
     runReader["RunReader<br/>trid3nt_server/workflows/telemac/products/run_reads.py"]
     solveStep["SolveStep<br/>trid3nt_server/workflows/telemac/solving/solve.py"]
     steeringStatements["Serializer<br/>trid3nt_server/workflows/telemac/authoring/serializer.py"]

@@ -16,9 +16,9 @@ ACCEPTS = Accepts(mesh=("unstructured_tri",), release=("point",))
 
 
 class PARAMS:
-    """What only a conservative-plume question asks. The rows every river run
-    reads, and the rows every point RELEASE reads, are the shared river part's.
-    """
+    """What only a conservative-plume question asks: the release, what is
+    released and how much of it, whether it decays, and how much of the river
+    is modelled for how long and at what edge."""
     release = Param(
         door=doors.USER, optional=True, user_lever=True,
         consequence="scenario", type=Point,
@@ -122,8 +122,8 @@ DOC = dict(
          "died without unwinding left on disk."),
     ),
     returns=(
-        "On success a `TelemacDyeLayerURI` (a `LayerURI` subtype) - the emitter loads "
-        "the peak-concentration map and animates the SELAFIN sibling. It carries "
+        "On success the peak-concentration layer (a `LayerURI`) - the emitter loads "
+        "the map and animates the result mesh beside it - whose `answer` carries "
         "`dye_cmax_mgl` / `dye_peak_time_s` / `plume_reach_m` / `active_frames`; "
         "narrate those typed numbers. On failure a dict with `status=\"error\"` + "
         "`error_code`."

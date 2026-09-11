@@ -1,8 +1,7 @@
-"""Shared Cloud-Optimized-GeoTIFF write / reproject / CRS-guard / upload helpers.
+"""Cloud-Optimized-GeoTIFF write, reproject, CRS-guard and upload.
 
 Every per-caller nuance is a DECLARED PARAMETER, never flattened; a failure raises
-a staged :class:`CogIoError` for the caller to map onto its own error codes.
-"""
+a staged :class:`CogIoError` for the caller to map onto its own error codes."""
 
 from __future__ import annotations
 
@@ -11,7 +10,7 @@ import os
 from pathlib import Path
 from typing import Any, Callable
 
-logger = logging.getLogger("trid3nt_server.workflows.shared.cog_io")
+logger = logging.getLogger("trid3nt_server.workflows.publishing.cog")
 
 __all__ = [
     "CogIoError",
@@ -31,15 +30,12 @@ __all__ = [
 CogStage = str  # one of: "DEPENDENCY", "WRITE", "REPROJECT", "CRS_MISMATCH", "UPLOAD"
 
 
-#: Default runs bucket -- the local MinIO runs bucket (env override:
-#: TRID3NT_RUNS_BUCKET). Cross-engine seam: every on-box postprocess uploads its
-#: display COGs under ``s3://<RUNS_BUCKET_DEFAULT>/<run_id>/``.
+#: The runs bucket when TRID3NT_RUNS_BUCKET names none: every on-box publish
+#: uploads its display COGs under ``s3://<RUNS_BUCKET_DEFAULT>/<run_id>/``.
 RUNS_BUCKET_DEFAULT: str = "trid3nt-runs"
 
-#: Minimum depth threshold below which cells are masked to NaN (treated as dry).
-#: 5 cm is the physically meaningful wet-cell threshold -- matches the
-#: ``flooded_cell_count`` reporting convention. Shared by every depth COG writer
-#: (SFINCS / GeoClaw / SWMM).
+#: Depth below which a cell is masked to NaN (dry): 5 cm is the wet-cell
+#: threshold the flooded-cell counts report on.
 NODATA_DEPTH_M: float = 0.05
 
 
@@ -105,8 +101,8 @@ def _read_crs_from_dataset(ds: Any) -> str:
     fallback = ds.attrs.get("crs", "EPSG:3857")
     if fallback == "EPSG:3857":
         logger.warning(
-            "cog_io: no 'crs' variable found in the netCDF dataset; falling back "
-            "to EPSG:3857 — COG CRS tag may not match pixel coords."
+            "no 'crs' variable in the netCDF dataset; falling back to EPSG:3857 - "
+            "the COG CRS tag may not match the pixel coordinates."
         )
     return fallback
 
@@ -130,8 +126,7 @@ class CogIoError(RuntimeError):
 
 
 def safe_unlink(p: Path) -> None:
-    """Best-effort ``unlink(missing_ok=True)`` (never raises). The shared
-    ``_safe_unlink`` every engine duplicated."""
+    """Best-effort ``unlink(missing_ok=True)``; never raises."""
     try:
         p.unlink(missing_ok=True)
     except Exception:  # noqa: BLE001
@@ -190,7 +185,7 @@ DST_CRS = "EPSG:4326"
 
 
 def _named_tmp(suffix: str) -> str:
-    """A non-deleting NamedTemporaryFile name (the engines all used this idiom)."""
+    """A non-deleting NamedTemporaryFile name."""
     import tempfile
 
     return tempfile.NamedTemporaryFile(suffix=suffix, delete=False).name

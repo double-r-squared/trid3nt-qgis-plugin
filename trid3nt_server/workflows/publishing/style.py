@@ -1,8 +1,7 @@
-"""The ONE styling seam a solved raster product goes through before it is returned.
+"""The styling seam a solved raster product goes through before it is returned.
 
-Nothing here is field-specific: the caller supplies the style preset and the update
-mapping, and gets the same typed layer back, published.
-"""
+Nothing here is field-specific: the caller supplies the style row and the update
+mapping, and gets the same typed layer back, published."""
 
 from __future__ import annotations
 
@@ -10,7 +9,7 @@ import asyncio
 import logging
 from typing import Any
 
-logger = logging.getLogger("trid3nt_server.workflows.shared.publish_product_layer")
+logger = logging.getLogger("trid3nt_server.workflows.publishing.style")
 
 __all__ = ["publish_product_layer"]
 

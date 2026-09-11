@@ -134,9 +134,11 @@ package SolveSeam {
     part def ResultReader {
         doc /*
         A solved result's fields, read by the engine's own library inside the
-        image that wrote them. It parses nothing: the byte layout is the
-        engine's to know, and a second implementation of it on this side is a
-        second thing to be wrong about it.
+        image that wrote them, and the primitive set a module's outputs are
+        named from - a field, a series, an envelope, the extent, the mesh, the
+        mass balance - each a read of those fields. It parses nothing: the byte
+        layout is the engine's to know, and a second implementation of it on
+        this side is a second thing to be wrong about it.
         */
     }
 
@@ -450,7 +452,7 @@ package SolveSeam {
 
     part resultReader : ResultReader {
         doc /*
-        code: trid3nt_server/workflows/telemac/products/result_reader.py
+        code: trid3nt_server/workflows/telemac/modules/outputs.py
         */
         port fieldsOut : FieldsOut;
     }
@@ -648,7 +650,7 @@ package SolveSeam {
         worker's number, and converting it would make the cross-check agree
         with itself.
 
-        forbid: trid3nt_server.workflows.telemac.products.result_reader -> struct
+        forbid: trid3nt_server.workflows.telemac.modules.outputs -> struct
         forbid: trid3nt_server.workflows.telemac.products.postprocess_telemac -> struct
         forbid: trid3nt_server.workflows.telemac.products.run_reads -> struct
         forbid: trid3nt_server.workflows.telemac.authoring.assembler -> struct

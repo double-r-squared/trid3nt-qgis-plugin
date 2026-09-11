@@ -10,17 +10,17 @@ declarations (`declarations.py`) and its routing phrasings (`corpus.yaml`);
 everything else it uses is the door's or the trees'.
 
 A template writes no plan. It declares a STEERING body of the module's own raw
-keywords, the parts it is made of, the data chain it consumes and the mesh recipe
-it triangulates on, and hands them to the door - which fills the sheet, holds it
-for review, runs it, and reads the solved file through the wrapper's own output
-binding. Every question this engine answers is one of those, so the plan language
-is gone from the tree and the worker authors nothing.
+keywords, the data chain it consumes, the mesh recipe it triangulates on and the
+outputs it reads off the solved run, and hands them to the door - which fills
+the sheet, holds it for review, runs it, and publishes what the outputs list
+names through the wrapper's own primitives. Every question this engine answers
+is one of those, so the plan language is gone from the tree and the worker
+authors nothing.
 
 TOMAWAC has NO wrapper, and the reason is measurable rather than an oversight:
 `dictionary/tomawac.json` holds its 223 keywords and `entrypoint._MODULES` can solve
-it, but the spectral tier has no publisher of the shape an `outputs(...)` binding
-takes - `products/postprocess_telemac.postprocess_tomawac` is a raw postprocess
-returning `(layers, metrics)`, and its tool is tombstoned. The wrapper was to be
+it, but the spectral tier has no template over it - `products/postprocess_telemac.postprocess_tomawac`
+is a raw postprocess returning `(layers, metrics)`, and its tool is tombstoned. The wrapper was to be
 built only if it fell out of this stage for free; it does not, so it is stated
 absent here and rides with the rung-4 wave-field rebuild.
 

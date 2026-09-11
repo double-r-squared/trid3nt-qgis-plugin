@@ -29,7 +29,7 @@ from ..solving.solve import download_result
 
 logger = logging.getLogger("trid3nt_server.workflows.telemac.products.products")
 
-__all__ = ["Products", "publish_do_products", "publish_dye_products"]
+__all__ = ["Products", "publish_do_products"]
 
 _PRODUCTS = "trid3nt_server.workflows.telemac.products"
 
@@ -343,7 +343,7 @@ async def _publish_transported_field(*, run: dict[str, Any], solve: dict[str, An
     from trid3nt_server.workflows.telemac.products.postprocess_telemac import (
         postprocess_telemac,
     )
-    from trid3nt_server.workflows.telemac.products.results_mesh_seam import (
+    from trid3nt_server.workflows.publishing.animation import (
         publish_results_mesh_via_seam,
     )
 
@@ -398,14 +398,6 @@ async def _publish_transported_field(*, run: dict[str, Any], solve: dict[str, An
         except Exception as exc:  # noqa: BLE001
             logger.warning("telemac zoom-to failed: %s", exc)
     return peak
-
-
-async def publish_dye_products(*, run: dict[str, Any], solve: dict[str, Any],
-                               carrier_discharge: dict[str, Any]) -> TelemacDyeLayerURI:
-    """The CONSERVATIVE tracer's peak field. Nothing rides behind it."""
-    return await _publish_transported_field(
-        run=run, solve=solve, carrier_discharge=carrier_discharge,
-        product=TELEMAC_SUBSTANCE_PRODUCTS["tracer"])
 
 
 async def publish_oil_products(*, run: dict[str, Any], solve: dict[str, Any],
@@ -550,13 +542,6 @@ async def publish_do_products(*, run: dict[str, Any], solve: dict[str, Any],
 
 class Products:
     """Postprocess + publish steps, one constructor per deliverable family."""
-
-    @staticmethod
-    def dye(*, run: Any, solve: Any, carrier_discharge: Any) -> Step:
-        """The conservative tracer: peak COG + results mesh."""
-        return Step(runner=f"{_PRODUCTS}.products.publish_dye_products", stage="publish",
-                    kwargs={"run": run, "solve": solve,
-                            "carrier_discharge": carrier_discharge})
 
     @staticmethod
     def oil_slick(*, run: Any, solve: Any, carrier_discharge: Any) -> Step:

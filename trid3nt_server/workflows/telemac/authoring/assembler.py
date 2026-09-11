@@ -323,7 +323,7 @@ def _continuation_state(uri: str) -> dict[str, Any]:
     import numpy as np
 
     from trid3nt_server.workflows.solver.solver import _download_object
-    from trid3nt_server.workflows.telemac.products.result_reader import read_selafin
+    from trid3nt_server.workflows.telemac.modules.outputs import read_selafin
     from trid3nt_server.workflows.telemac.products.postprocess_telemac import (
         _DEPTH_VAR_KEYS, TELEMAC_WSE_WET_DEPTH_M,
     )

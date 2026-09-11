@@ -18,7 +18,7 @@ from trid3nt_contracts.telemac_contracts import (
 )
 
 from trid3nt_server.workflows.runtime import Step
-from trid3nt_server.workflows.shared.publish_product_layer import publish_product_layer
+from trid3nt_server.workflows.publishing.style import publish_product_layer
 
 from ..helpers.errors import OpenWaterError
 from ..solving.solve import download_result
@@ -230,7 +230,7 @@ async def publish_stratified_products(*, run: dict[str, Any],
     The BOTTOM is published and emitted; the SURFACE is returned for the seam."""
     from trid3nt_server.emission.pipeline_emitter import current_emitter
 
-    from .result_reader import read_selafin
+    from ..modules.outputs import read_selafin
     from .postprocess_telemac import postprocess_telemac3d
 
     emitter = current_emitter()

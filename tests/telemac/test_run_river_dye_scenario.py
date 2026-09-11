@@ -14,10 +14,7 @@ from unittest.mock import patch
 import pytest
 
 from tests._fakes.reach_chain import MESH_ROLES, install_reach_chain
-from trid3nt_contracts.telemac_contracts import (
-    TELEMAC_DYE_STYLE,
-    TelemacDyeLayerURI,
-)
+from trid3nt_contracts.execution import AnswerLayerURI
 
 _AOI = (-114.50, 42.52, -114.38, 42.62)  # Twin Falls, Idaho-ish
 
@@ -42,20 +39,24 @@ class _FakeRunResult:
     cancellation_reason = None
 
 
-def _fake_peak(run_id: str, reach_name: str) -> TelemacDyeLayerURI:
-    return TelemacDyeLayerURI(
-        layer_id=f"telemac-dye-peak-{run_id}",
-        name=f"Peak dye concentration ({reach_name})",
-        layer_type="raster",
-        uri=f"s3://runs/{run_id}/telemac_dye_peak.tif",
-        role="primary",
-        units="mg/L",
-        bbox=list(_AOI),
-        dye_cmax_mgl=97.3,
-        dye_peak_time_s=420.0,
-        plume_reach_m=1830.0,
-        active_frames=7,
-    )
+def _fake_result() -> dict[str, Any]:
+    """A solved reach the reads open: five nodes in UTM zone 11, four frames of
+    ONE tracer that arrives, peaks at 97.3 mg/L in the second frame, and drains."""
+    import numpy as np
+
+    x = np.array([720000.0, 720120.0, 720000.0, 720120.0, 720060.0])
+    y = np.array([4718000.0, 4718000.0, 4718110.0, 4718110.0, 4718055.0])
+    dye = np.array([[0.0, 0.0, 0.0, 0.0, 0.0],
+                    [10.0, 97.3, 5.0, 40.0, 60.0],
+                    [2.0, 30.0, 1.0, 50.0, 20.0],
+                    [0.0, 0.0, 0.0, 0.0, 0.0]])
+    depth = np.full((4, 5), 2.0)
+    ikle = np.array([[0, 1, 4], [1, 3, 4], [2, 3, 4], [0, 2, 4]])
+    return {"varnames": ["WATER DEPTH", "DYE"], "npoin": 5, "nelem": 4,
+            "nplan": 1, "npoin2": 5, "nelem2": 4, "x": x, "y": y,
+            "ikle": ikle, "ikle2": ikle, "x_origin": 0, "y_origin": 0,
+            "times": np.array([0.0, 420.0, 840.0, 1260.0]),
+            "data": {"WATER DEPTH": depth, "DYE": dye}}
 
 
 def test_telemac_river_dye_registered_as_engine_template():
@@ -252,51 +253,18 @@ def test_the_granularity_lever_reads_back_beside_the_edge_the_mesh_was_built_at(
     metrics = workflow.answer(_peak_layer(mesh_size_m=7.763).model_copy(
         update={"synthetic_inputs": merge_provenance(
             [], provenance_entries(sheet, workflow.params))}))
+    assert metrics["dye_cmax_mgl"] == 4.9
     assert metrics["mesh_size_m"] == 7.763
     assert metrics["mesh_resolution_m"] == 10.0
     assert "supplied on this invocation" in metrics["mesh_resolution_note"]
 
 
-def _peak_layer(**overrides: Any) -> TelemacDyeLayerURI:
-    from trid3nt_contracts.common import SyntheticInput
-
-    return TelemacDyeLayerURI(
+def _peak_layer(**answer: Any) -> AnswerLayerURI:
+    """The layer a published outputs list leads with, carrying the answer."""
+    return AnswerLayerURI(
         layer_id="L", name="Peak dye concentration (reach)", layer_type="raster",
-        uri="s3://runs/x.tif", dye_cmax_mgl=4.9, dye_peak_time_s=200.0,
-        dye_curve_time_s=[0.0, 100.0, 200.0, 300.0],
-        dye_curve_cmax_mgl=[0.0, 1.2, 4.9, 2.1],
-        synthetic_inputs=[SyntheticInput(
-            param="mesh_bed", value="Copernicus GLO-30", basis="fetched",
-            consequence="physics")],
-        **overrides)
-
-
-def test_the_dye_chart_is_the_run_s_own_history_not_two_points():
-    """Every frame the solver wrote is a point; the peak is one of them."""
-    from trid3nt_server.workflows.telemac.templates.river_dye.river_dye import build_dye_chart
-
-    payload = build_dye_chart(result=_peak_layer(), params={"location": "the reach"})
-    values = payload["vega_lite_spec"]["data"]["values"]
-    assert [v["t_s"] for v in values] == [0.0, 100.0, 200.0, 300.0]
-    assert max(v["dye_mgl"] for v in values) == 4.9
-
-
-def test_the_dye_chart_caption_names_the_bed_the_run_actually_read():
-    from trid3nt_server.workflows.telemac.templates.river_dye.river_dye import build_dye_chart
-
-    payload = build_dye_chart(result=_peak_layer(), params={"location": "the reach"})
-    assert "Copernicus GLO-30" in payload["caption"]
-    assert "idealized" not in payload["caption"].lower()
-
-
-def test_a_run_with_no_persisted_history_draws_no_chart():
-    """No curve is the honest answer; two invented points are not."""
-    from trid3nt_server.workflows.telemac.templates.river_dye.river_dye import build_dye_chart
-
-    bare = _peak_layer()
-    bare.dye_curve_time_s = None
-    bare.dye_curve_cmax_mgl = None
-    assert build_dye_chart(result=bare, params={"location": "the reach"}) is None
+        uri="s3://runs/x.tif", quantity="dye_concentration",
+        answer={"dye_cmax_mgl": 4.9, "dye_peak_time_s": 200.0, **answer})
 
 
 def test_the_sequence_validates_and_holds_the_run_after_the_fill():
@@ -309,17 +277,26 @@ def test_the_sequence_validates_and_holds_the_run_after_the_fill():
     steps = list(pl.declared())
     assert [s.label for s in steps] == [
         "reach", "seed", "carrier_discharge", "mesh", "measure_mesh_coverage",
-        "decay", "settled", "sheet", "solve", "plume"]
+        "decay", "settled", "sheet", "solve", "outputs"]
     # The review is the door's VIEW of the sheet it just filled, so the run is
     # held on the fill itself rather than in front of a step that has not run.
     assert [s.label for s in steps if s.self_gating] == ["sheet"]
     assert steps[0].rebinds_domain          # the geocode binds the reach AOI
     assert steps[-2].consequential          # the run is the consequential node
-    assert steps[-1].charts[0].name == "dye_concentration"
+    # The outputs step carries the template's list as values: what is read off
+    # the solved run, how each is published, and what the run answers with.
+    listed = steps[-1].kwargs["outputs"]
+    assert [(p.kind, p.variable, p.publish) for p in listed] == [
+        ("field", "T1", "animate"), ("max_over_time", "T1", "layer"),
+        ("series", "T1", "chart")]
+    assert steps[-1].kwargs["captions"] == {"T1": "dye concentration"}
+    assert set(steps[-1].kwargs["answer"]) == {
+        "dye_cmax_mgl", "dye_peak_time_s", "plume_reach_m", "active_frames",
+        "mesh_size_m"}
 
 
 def test_the_declared_data_is_the_chain_in_declaration_order():
-    """The shared part's chain, then the row this question adds to it."""
+    """The reach chain, restated as this template's own rows, then the rain."""
     from trid3nt_server.workflows.runtime import DataRef, data_rows
     from trid3nt_server.workflows.telemac.templates.river_dye.river_dye import DATA
     from trid3nt_server.workflows.telemac.templates.shared import river
@@ -352,11 +329,12 @@ def test_an_unknown_data_row_is_an_attribute_error_at_the_line_that_wrote_it():
 
 
 def _install_step_mocks(captured: dict):
+    from trid3nt_server.emission import publish as emission_publish
     from trid3nt_server.workflows.solver import solver as solver_mod
-    from trid3nt_server.workflows.telemac.products import postprocess_telemac as pp_mod
-    from trid3nt_server.workflows.telemac.products import results_mesh_seam as seam_mod
+    from trid3nt_server.workflows.publishing import cog as cog_mod
+    from trid3nt_server.workflows.publishing import publish as publish_mod
     from trid3nt_server.workflows.shared import run_products as products_mod
-    from trid3nt_server.workflows.telemac.products import products as prod_mod
+    from trid3nt_server.workflows.telemac.modules import outputs as outputs_mod
     from trid3nt_server.workflows.mesh import step as mesh_step
     from trid3nt_server.workflows.telemac.helpers import reach as reach_mod
     from trid3nt_server.workflows.telemac.helpers import forcing as forcing_mod
@@ -454,20 +432,20 @@ def _install_step_mocks(captured: dict):
         captured["compute_class"] = compute_class
         return _FakeHandle()
 
-    def _fake_postprocess(slf_path, *, run_id, utm_epsg, reach_name, **_kw):
+    def _fake_download(run_id, basename, error_code=None):
+        """The solved result's download: what run it was asked under is kept."""
         captured["pp_run_id"] = run_id
-        captured["pp_utm_epsg"] = utm_epsg
-        return [_fake_peak(run_id, reach_name)], {"dye_cmax_mgl": 97.3}
+        captured["pp_basename"] = basename
+        return "/tmp/telemac/does-not-matter.slf"
 
-    def _fake_publish(raw_peak, run_id, location_name, mesh_meta, substance,
-                      product, synthetic_inputs):
-        captured["published"] = True
-        captured["publish_substance"] = substance
-        captured["publish_product"] = product.quantity
-        captured["synthetic_inputs"] = synthetic_inputs
-        return raw_peak.model_copy(update={"uri": "https://tiles/dye_peak.png",
-                                           "synthetic_inputs": synthetic_inputs,
-                                           **mesh_meta})
+    def _fake_upload(local, run_id, bucket, *, dest_filename, **_kw):
+        captured["uploaded"] = dest_filename
+        return f"s3://runs/{run_id}/{dest_filename}"
+
+    def _fake_publish_layer(*, layer_uri, layer_id, style=None, **_kw):
+        captured["published"] = layer_id
+        captured["publish_style"] = style
+        return "https://tiles/dye_peak.png"
 
     return [
         patch.object(reach_mod, "registry_fn", _fake_registry_fn),
@@ -498,12 +476,11 @@ def _install_step_mocks(captured: dict):
                          "product": "analysis_assim", "layer": None}),
         patch.object(solve_mod, "read_run_metrics",
                      lambda rid: {"utm_epsg": 32611}),
-        patch.object(prod_mod, "download_result",
-                     lambda rid, basename, error_code=None:
-                     "/tmp/telemac/does-not-matter.slf"),
-        patch.object(prod_mod, "_publish_peak_layer", _fake_publish),
-        patch.object(pp_mod, "postprocess_telemac", _fake_postprocess),
-        patch.object(seam_mod, "publish_results_mesh_via_seam", _amock(0)),
+        patch.object(solve_mod, "download_result", _fake_download),
+        patch.object(outputs_mod, "read_selafin", lambda _path: _fake_result()),
+        patch.object(cog_mod, "upload_cog", _fake_upload),
+        patch.object(emission_publish, "publish_layer", _fake_publish_layer),
+        patch.object(publish_mod, "publish_results_mesh_via_seam", _amock(0)),
         patch.object(asm_mod, "publish_point", _capture_marker),
         patch.object(products_mod, "persist_run_products", _amock([])),
         patch.object(solver_mod, "run_solver", _fake_run_solver),
@@ -536,19 +513,28 @@ def test_the_chain_geocodes_dispatches_and_stages_the_resolved_sheet(
                      spill_duration_s=600.0, dye_concentration_mgl=250.0,
                      reach_length_km=4.0, sim_duration_s=1800.0)
 
-    assert isinstance(peak, TelemacDyeLayerURI)
+    assert isinstance(peak, AnswerLayerURI)
     assert peak.uri == "https://tiles/dye_peak.png"
-    assert peak.dye_cmax_mgl == pytest.approx(97.3)
-    assert peak.mesh_size_m is not None
+    # The answer is read off the solved result the outputs list named: the
+    # tracer's envelope peak, when it peaked, and the accepted mesh's edge.
+    assert peak.answer["dye_cmax_mgl"] == pytest.approx(97.3)
+    assert peak.answer["dye_peak_time_s"] == pytest.approx(420.0)
+    assert peak.answer["active_frames"] == 2
+    assert peak.answer["mesh_size_m"] is not None
+    assert peak.quantity == "dye_concentration"
+    assert peak.name.startswith("Peak dye concentration (")
+    assert peak.legend is not None and peak.legend.vmax == pytest.approx(97.3)
+    assert captured["published"] == "telemac-dye_concentration-TELERID"
+    assert captured["uploaded"] == "dye_concentration.tif"
 
     # The place was GEOCODED, never hand-typed.
     assert captured["geocode_query"] == "Twin Falls, Idaho"
     assert captured["solver"] == "telemac"
     assert captured["model_setup_uri"].endswith("manifest.json")
-    # Download + postprocess ran under the SOLVER's run_id, so outputs land under
-    # the real run prefix rather than the manifest tag.
+    # The result was read under the SOLVER's run_id, so outputs land under the
+    # real run prefix rather than the manifest tag.
     assert captured["pp_run_id"] == "TELERID"
-    assert captured["pp_utm_epsg"] == 32611
+    assert captured["pp_basename"] == "r2d_river.slf"
 
     settled, deck = captured["settled"], captured["deck"]
     assert settled["spill_fraction"] == pytest.approx(0.4)
@@ -564,11 +550,11 @@ def test_the_chain_geocodes_dispatches_and_stages_the_resolved_sheet(
     assert [row.split()[0] for row in series[3:]] == [
         "0.000", "600.000", "600.100", "1900.000"]
     # The carrier discharge the NWM lookup resolved reached the boundary
-    # condition, and the layer says where it came from.
+    # condition, and the sheet's own row says it was derived from the model.
     assert settled["inflow_q_m3s"] == pytest.approx(312.0)
     assert deck["PRESCRIBED FLOWRATES"] == [0.0, pytest.approx(312.0)]
     q_row = next(r for r in peak.synthetic_inputs if r.param == "discharge_m3s")
-    assert q_row.basis == "fetched" and "Water Model" in (q_row.real_source_if_any or "")
+    assert q_row.basis == "derived" and "Water Model" in (q_row.note or "")
 
 
 def test_a_prefetched_flowline_is_reused_instead_of_refetched(tmp_path, monkeypatch):
@@ -576,7 +562,7 @@ def test_a_prefetched_flowline_is_reused_instead_of_refetched(tmp_path, monkeypa
     provided = "s3://trid3nt-cache/cache/static-30d/river_geometry/prefetched.fgb"
     peak = _run_tool(tmp_path, monkeypatch, captured,
                      location="Twin Falls, Idaho", river_geometry_uri=provided)
-    assert isinstance(peak, TelemacDyeLayerURI)
+    assert isinstance(peak, AnswerLayerURI)
     assert captured["seed_uri"] == provided
     assert "river_bbox" not in captured  # fetch_river_geometry never ran
 
@@ -591,7 +577,7 @@ def test_the_seed_falls_back_to_the_centroid_when_extraction_misses(
         tmp_path, monkeypatch, captured, location="Twin Falls, Idaho",
         overrides=[patch.object(reach_mod, "river_seed_from_geometry",
                                 lambda uri: None)])
-    assert isinstance(peak, TelemacDyeLayerURI)
+    assert isinstance(peak, AnswerLayerURI)
     settled = captured["settled"]
     assert settled["seed_lon"] == pytest.approx(-114.4609, abs=1e-3)
     assert settled["seed_lat"] == pytest.approx(42.5629, abs=1e-3)
@@ -743,7 +729,7 @@ def test_a_partly_mapped_reach_proceeds_and_says_how_much_was_mapped(
     captured: dict = {}
     peak = _run_tool(tmp_path, monkeypatch, captured, location="Twin Falls, Idaho",
                      water=WATER_GAPPED)
-    assert isinstance(peak, TelemacDyeLayerURI)
+    assert isinstance(peak, AnswerLayerURI)
     note = peak.fallback_note or ""
     assert "50.0%" in note
     assert "flowline" in note

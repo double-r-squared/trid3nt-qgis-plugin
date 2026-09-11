@@ -133,13 +133,9 @@ class SubstanceProduct(NamedTuple):
     mesh_group: str
 
 
-#: substance class -> its transported-field product. A class absent here takes
-#: the dye row: a tracer whose class declared no chemistry of its own IS dye.
+#: substance class -> its transported-field product, for the classes whose
+#: field rides beside a product of its own: the slick, the bed.
 TELEMAC_SUBSTANCE_PRODUCTS: dict[str, SubstanceProduct] = {
-    "tracer": SubstanceProduct("telemac_dye_peak.tif", "dye_concentration",
-                               TELEMAC_DYE_STYLE, "dye", "DYE"),
-    "decay": SubstanceProduct("telemac_dye_peak.tif", "dye_concentration",
-                              TELEMAC_DYE_STYLE, "dye", "DYE"),
     "oil": SubstanceProduct("telemac_oil_tracer_peak.tif",
                             "oil_tracer_concentration",
                             TELEMAC_DYE_STYLE, "oil tracer", "DYE"),

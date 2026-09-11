@@ -1,21 +1,28 @@
-"""The TELEMAC door: fill, then run.
+"""The TELEMAC door: fill, run, then read.
 
 ``fill`` sets slots, expands composites and binds producers; it is repeatable and
 decides nothing. ``run`` serializes the complete sheet, stages the run directory
-and hands it to the box; it is explicit and consequential."""
+and hands it to the box; it is explicit and consequential. ``publish_outputs``
+reads the primitives a template listed off the solved run and publishes each
+the way it asked."""
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from dataclasses import dataclass, field
 from importlib import import_module
 from typing import Any, Callable, Mapping, Sequence
 
 from trid3nt_contracts.common import SyntheticInput
+from trid3nt_contracts.execution import AnswerLayerURI
 from trid3nt_contracts.payload_warning import ParamSheet, ParamSheetRow
 
+from trid3nt_server.workflows.publishing import Deliverable
+from trid3nt_server.workflows.publishing.publish import publish
 from trid3nt_server.workflows.runtime import (
     ParamRef,
+    PlanValidationError,
     RawKeywords,
     Ref,
     RunMode,
@@ -24,14 +31,17 @@ from trid3nt_server.workflows.runtime import (
 )
 from trid3nt_server.workflows.mesh.step import MeshStep
 from trid3nt_server.workflows.telemac.helpers.errors import TelemacDyeScenarioError
+from trid3nt_server.workflows.telemac.modules import wrapper_for
 from trid3nt_server.workflows.telemac.modules.module import SlotRefused
+from trid3nt_server.workflows.telemac.modules.outputs import Measure, Primitive, Solved
 from trid3nt_server.workflows.telemac.modules.sheet import Origin, Sheet
 from trid3nt_server.workflows.telemac.modules.sheet import fill as fill_slots
 from trid3nt_server.workflows.telemac.modules.sheet import run as run_sheet_
 
 logger = logging.getLogger("trid3nt_server.workflows.telemac.workflow")
 
-__all__ = ["Door", "TelemacWorkflow", "card_rows", "fill_sheet", "run_sheet"]
+__all__ = ["Door", "TelemacWorkflow", "card_rows", "fill_sheet", "publish_outputs",
+           "run_sheet"]
 
 _TELEMAC = "trid3nt_server.workflows.telemac"
 
@@ -64,8 +74,15 @@ class Door:
     #: The dispatch the staged run goes to, by the path it is resolved at CALL
     #: time. WHICH box entry is the template's, not the sheet's.
     dispatch: str
-    #: The reader that publishes the solved file: ``(run) -> Step``.
-    read: Callable[[Any], Step]
+    #: The primitives the template reads off the solved run, each with how it
+    #: is published; ``captions`` names each variable's quantity in the
+    #: template's words; ``answer`` names the measures the run answers with.
+    outputs: Sequence[Primitive] = ()
+    captions: Mapping[str, str] = field(default_factory=dict)
+    answer: Mapping[str, Measure] = field(default_factory=dict)
+    #: A per-question reader publishing the solved file, ``(run) -> Step``, for
+    #: a template that lists no outputs.
+    read: Callable[[Any], Step] | None = None
     #: This question's own producers: what the WORLD gives, before the run is
     #: settled, and what the SETTLED run gives, after it.
     produce: tuple[Step, ...] = ()
@@ -106,15 +123,19 @@ class Door:
             f"with its help, its choices and that default.")
 
     def __call__(self, ops: Workflow) -> list[Any]:
-        """The step sequence: the world, then fill, then run, then the reader."""
-        read = self.read(Ref("solve"))
+        """The step sequence: the world, then fill, then run, then the outputs."""
+        params = {prm.name: ParamRef(prm.name) for prm in ops.params}
+        if self.outputs:
+            read = self._outputs_step(params)
+        else:
+            read = self.read(Ref("solve"))
+            if self.chart is not None:
+                read = read.chart(self.chart[0], builder=self.chart[1])
         # Every producer the body may READ, under the name it names it by. A
         # body states what it will hold; this is where the fill finds it.
         produced = {step.name: Ref(step.name)
                     for step in (*self.produce, *self.derive)
                     if step.name} | {"settled": Ref("settled")}
-        if self.chart is not None:
-            read = read.chart(self.chart[0], builder=self.chart[1])
         return [
             *self.domain,
             MeshStep.build(mesh=self.mesh, name=Ref(self.mesh_on),
@@ -126,8 +147,7 @@ class Door:
             Step(runner=f"{_TELEMAC}.workflow.fill_sheet", stage="author",
                  self_gating=True,
                  kwargs={"steering": self.steering, "produced": produced,
-                         "params": {prm.name: ParamRef(prm.name)
-                                    for prm in ops.params},
+                         "params": params,
                          "slots": dict(self.slots), "workflow": ops.name,
                          "title": self.review_title,
                          "keywords": RawKeywords,
@@ -141,6 +161,58 @@ class Door:
                          "compute_class": self.compute_class}).named("solve"),
             read,
         ]
+
+    def _outputs_step(self, params: Mapping[str, Any]) -> Step:
+        """The publish step, checked: every published variable has its caption."""
+        for primitive in self.outputs:
+            if primitive.publish is None:
+                raise PlanValidationError(
+                    f"OUTPUTS lists {primitive.kind}({primitive.variable!r}) with "
+                    "no .layer(), .chart() or .animate(); a listed primitive is "
+                    "published, and an answer is named under ANSWER.")
+            if primitive.variable and primitive.variable not in self.captions:
+                raise PlanValidationError(
+                    f"OUTPUTS publishes {primitive.variable!r} and CAPTIONS names "
+                    "no caption for it.")
+        return Step(runner=f"{_TELEMAC}.workflow.publish_outputs", stage="publish",
+                    kwargs={"run": Ref("solve"), "outputs": list(self.outputs),
+                            "captions": dict(self.captions),
+                            "answer": dict(self.answer),
+                            "params": dict(params)}).named("outputs")
+
+
+async def publish_outputs(*, run: Mapping[str, Any], outputs: Sequence[Primitive],
+                          captions: Mapping[str, str],
+                          answer: Mapping[str, Measure],
+                          params: Mapping[str, Any]) -> AnswerLayerURI:
+    """Read the listed primitives off the solved run, publish each, answer.
+
+    The result is read ONCE; every primitive and every answer reads from it."""
+    body = wrapper_for(str(run["module"]))
+    solved = Solved(run, body)
+    wanted = {primitive.key for primitive in outputs}
+    wanted |= {measure.primitive for measure in answer.values()}
+    reads = await asyncio.to_thread(
+        lambda: {key: body.OUTPUTS[key.kind].read(key, solved) for key in wanted})
+    published = await publish(
+        run_id=str(run["run_id"]), engine="telemac", name=str(run["name"]),
+        where=str(params.get("location") or run["name"]),
+        reference_time=run.get("started_at"),
+        items=[Deliverable(read=reads[primitive.key], mode=primitive.publish,
+                           caption=captions.get(primitive.variable or "",
+                                                primitive.kind),
+                           style=primitive.style)
+               for primitive in outputs])
+    answered = {name: reads[measure.primitive].measures.get(measure.stat)
+                for name, measure in answer.items()}
+    if published.primary is None:
+        raise SlotRefused(
+            "the outputs list publishes no layer, so the run has nothing to lead "
+            "with; list at least one .layer().")
+    logger.info("telemac outputs published run_id=%s layers=%d charts=%d "
+                "animations=%d answer=%s", run["run_id"], len(published.layers),
+                len(published.charts), published.animations, answered)
+    return AnswerLayerURI(**published.primary.model_dump(), answer=answered)
 
 
 async def fill_sheet(*, steering: type, produced: Mapping[str, Any],

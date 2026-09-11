@@ -34,7 +34,7 @@ def _offline_cas_parse(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.fixture()
 def telemac_result(monkeypatch: pytest.MonkeyPatch):
-    """Hand a postprocess the fields a result file would have carried.
+    """Hand a read the fields a result file would have carried.
 
     The read is a docker round trip, so the fields are stated here and no test writes
     result bytes: a suite that spells out a file format re-implements it."""
@@ -46,10 +46,15 @@ def telemac_result(monkeypatch: pytest.MonkeyPatch):
             "varnames": list(varnames),
             "npoin": len(x),
             "nelem": len(ikle),
+            # A 2D result reports one plane and the same mesh twice.
+            "nplan": 1,
+            "npoin2": len(x),
+            "nelem2": len(ikle),
             "x": np.asarray(x, dtype="float64"),
             "y": np.asarray(y, dtype="float64"),
             # 0-based, as the reader returns it.
             "ikle": np.asarray(ikle, dtype="int64"),
+            "ikle2": np.asarray(ikle, dtype="int64"),
             "x_origin": int(x_origin),
             "y_origin": int(y_origin),
             "times": np.asarray(times, dtype="float64"),
@@ -57,9 +62,9 @@ def telemac_result(monkeypatch: pytest.MonkeyPatch):
                                       for frame in data[name]])
                      for name in varnames},
         }
-        monkeypatch.setattr(
-            "trid3nt_server.workflows.telemac.products.postprocess_telemac.read_selafin",
-            lambda _path: mesh)
+        for reader in ("trid3nt_server.workflows.telemac.modules.outputs",
+                       "trid3nt_server.workflows.telemac.products.postprocess_telemac"):
+            monkeypatch.setattr(f"{reader}.read_selafin", lambda _path: mesh)
         return mesh
 
     return install

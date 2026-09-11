@@ -16,6 +16,7 @@ from .common import FallbackActivation, GraceModel, SyntheticInput, ULIDStr, UTC
 from .envelope import TemporalConfig
 
 __all__ = [
+    "AnswerLayerURI",
     "ComputeClass",
     "ModelSetup",
     "ExecutionHandle",
@@ -195,6 +196,14 @@ class LayerURI(GraceModel):
     # wrong data class. ``None`` for a layer that is not one frame.
     valid_from: str | None = None
     valid_to: str | None = None
+
+
+class AnswerLayerURI(LayerURI):
+    """The layer a published outputs list leads with, carrying the run's answer.
+    ``answer`` holds the scalars the template named, each read off the same
+    outputs the layers, charts and animations were published from."""
+
+    answer: dict[str, Any] = Field(default_factory=dict)
 
 
 # LayerURI SUBCLASS result models.

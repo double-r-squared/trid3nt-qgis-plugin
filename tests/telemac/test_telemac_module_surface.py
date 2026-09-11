@@ -858,19 +858,22 @@ def test_dredging_names_every_nestor_file_or_none_of_them():
     assert not plain.files
 
 
-def test_every_wrapper_binds_its_own_outputs_and_claims_no_other_s():
-    """WAQTEL writes no result file of its own - the oxygen field is a carrier
-    tracer - so it binds nothing, which is the honest reading of a module that
-    publishes nothing."""
-    from trid3nt_server.workflows.telemac.modules import GAIA, WAQTEL
+def test_every_wrapper_binds_the_primitive_set_and_nothing_question_named():
+    """An output is a primitive named from the module's own variables: a field,
+    a series, an envelope, the extent, the mesh, the mass balance. WAQTEL writes
+    no result file of its own - the oxygen field is a carrier tracer - so it binds
+    nothing, which is the honest reading of a module that publishes nothing."""
+    from trid3nt_server.workflows.telemac.modules import ART, GAIA, T3D, WAQTEL
+    from trid3nt_server.workflows.telemac.modules.outputs import PRIMITIVES
 
-    assert sorted(T2D.OUTPUTS) == [
-        "dissolved_oxygen", "dye", "flood_depth", "oil_slick", "scour",
-        "sediment_plume"]
-    assert sorted(GAIA.OUTPUTS) == ["deposition", "mass_balance", "surface_d50"]
-    assert not WAQTEL.OUTPUTS
-    for wrapper in (T2D, GAIA, WAQTEL):
+    for wrapper in (T2D, T3D, ART, GAIA):
+        assert sorted(wrapper.OUTPUTS) == sorted(PRIMITIVES), wrapper.MODULE
+        assert wrapper.VARIABLES, wrapper.MODULE
         assert all(callable(output.read) for output in wrapper.OUTPUTS.values())
+    assert not WAQTEL.OUTPUTS
+    # GAIA writes its own result beside the carrier's, so its primitives read it.
+    assert GAIA.RESULT_FILE == "gaia_river.slf"
+    assert T2D.RESULT_FILE == ""
 
 
 # -- the flip: one template per question, and the door's own review ----------- #
@@ -1133,24 +1136,27 @@ def test_every_template_wire_carries_the_raw_keyword_floor():
         assert fill_step.kwargs["keywords"] is RawKeywords, name
 
 
-def test_every_template_names_the_reader_its_own_question_needs():
-    """The reader is an OUTPUTS binding a template names, never one publisher branching
-    on a class string. Two questions that publish different fields name different
-    readers, and the runner each names is the module's own bound output."""
+def test_a_template_reads_its_answer_through_the_primitives_its_module_binds():
+    """A template lists primitives, and every one is bound on its own module's
+    wrapper under the primitive's name; a template that still names a reader of
+    its own names one no other template names."""
     from trid3nt_server.tools import TOOL_REGISTRY
 
     readers = {}
     for name in _TEMPLATES:
         door = TOOL_REGISTRY[name].fn.workflow.plan_decl
+        if door.outputs:
+            body = door.steering
+            for primitive in door.outputs:
+                assert primitive.kind in body.OUTPUTS, (name, primitive)
+                assert primitive.publish in ("layer", "chart", "animate")
+                assert primitive.variable in door.captions, (name, primitive)
+            for measure in door.answer.values():
+                assert measure.primitive.kind in body.OUTPUTS, (name, measure)
+            continue
         readers[name] = door.read(None).runner
+    assert "telemac_river_dye" not in readers
     assert len(set(readers.values())) == len(readers), readers
-    bound = {f"{fn.__module__}.{fn.__name__}"
-             for wrapper in (T2D,) for fn in
-             (output.read for output in wrapper.OUTPUTS.values())}
-    for name in ("telemac_river_dye", "telemac_river_oil_spill",
-                 "telemac_river_scour", "telemac_river_sediment_plume",
-                 "telemac_do_sag", "telemac_rain_on_grid"):
-        assert readers[name] in bound, f"{name} reads {readers[name]}"
 
 
 def test_the_fill_docstring_names_the_module_its_rubriques_and_its_open_slots():

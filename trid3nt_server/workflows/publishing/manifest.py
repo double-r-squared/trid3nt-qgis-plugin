@@ -1,8 +1,7 @@
-"""Host-exec ``outputs.json`` writer - the agent-side producer half.
+"""The ``outputs.json`` writer.
 
 PUTs the serialized entries to ``<scheme>://<runs_bucket>/<run_id>/outputs.json``,
-the exact prefix the outputs seam reads back, resolving the bucket the same way.
-"""
+the exact prefix the outputs seam reads back, resolving the bucket the same way."""
 
 from __future__ import annotations
 
@@ -10,7 +9,7 @@ import logging
 import os
 from typing import Any
 
-logger = logging.getLogger("trid3nt_server.workflows.shared.outputs_manifest_io")
+logger = logging.getLogger("trid3nt_server.workflows.publishing.manifest")
 
 __all__ = ["write_outputs_manifest"]
 

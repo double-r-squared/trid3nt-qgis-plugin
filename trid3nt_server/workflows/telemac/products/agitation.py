@@ -18,7 +18,7 @@ from trid3nt_contracts.telemac_contracts import (
 )
 
 from trid3nt_server.workflows.runtime import Step
-from trid3nt_server.workflows.shared.publish_product_layer import publish_product_layer
+from trid3nt_server.workflows.publishing.style import publish_product_layer
 
 from ..helpers.errors import OpenWaterError
 from ..solving.solve import download_result
@@ -226,7 +226,7 @@ async def publish_agitation_products(*, run: dict[str, Any],
     """The solved harbour -> its published Kd layer, its scalars and its curve."""
     import numpy as np
 
-    from .result_reader import read_selafin
+    from ..modules.outputs import read_selafin
     from .postprocess_telemac import postprocess_artemis
 
     run_id = solve["run_id"]

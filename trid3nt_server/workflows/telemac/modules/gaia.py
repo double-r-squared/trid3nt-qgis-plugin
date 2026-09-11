@@ -6,14 +6,23 @@ is not exposed."""
 
 from __future__ import annotations
 
+from types import MappingProxyType
 from typing import Any, Mapping, Sequence
 
-from ..products.postprocess_telemac import postprocess_telemac_deposition
-from ..products.run_reads import gaia_mass_balance, surface_d50_spread
 from .module import Module
+from .outputs import PRIMITIVES
 
-__all__ = ["GAIA", "STEERING_FILENAME", "RESULT_FILENAME",
+__all__ = ["GAIA", "STEERING_FILENAME", "RESULT_FILENAME", "VARIABLES",
            "ACTION_FILENAME", "POLYGON_FILENAME", "SURFACE_REF_FILENAME"]
+
+#: The module's variable vocabulary, by the mnemonic VARIABLES FOR GRAPHIC
+#: PRINTOUTS spells: the result-file name and the unit. The evolution is
+#: cumulative, so its last frame is the whole event's bed change.
+VARIABLES: Mapping[str, tuple[str, str]] = MappingProxyType({
+    "B": ("BOTTOM", "M"), "E": ("CUMUL BED EVOL", "M"),
+    "QS": ("SOLID DISCH", "M2/S"), "D50": ("MEAN DIAMETER", "M"),
+    "TOB": ("BED SHEAR STRESS", "N/M2"),
+})
 
 STEERING_FILENAME = "gaia_river.cas"
 #: GAIA's own result SELAFIN, carrying CUMUL BED EVOL.
@@ -134,6 +143,8 @@ def _body(slots: Mapping[str, Any]) -> Mapping[str, Any]:
 
 
 GAIA = _Gaia
+GAIA.VARIABLES = VARIABLES
+#: The result the primitives read: GAIA writes its own file beside the carrier's.
+GAIA.RESULT_FILE = RESULT_FILENAME
 GAIA.composites(dredging=_dredging)
-GAIA.outputs(deposition=postprocess_telemac_deposition,
-             surface_d50=surface_d50_spread, mass_balance=gaia_mass_balance)
+GAIA.outputs(**PRIMITIVES)

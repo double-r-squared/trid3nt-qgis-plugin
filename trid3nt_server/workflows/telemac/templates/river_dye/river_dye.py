@@ -5,26 +5,29 @@ spill travels downstream and what its peak concentration is."""
 
 from __future__ import annotations
 
-from typing import Any
-
 from trid3nt_contracts.telemac_contracts import TELEMAC_DYE_STYLE
 from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
 
 from trid3nt_server.workflows.runtime import (
+    ParamRef,
     Ref,
-    data_rows,
     param_rows,
     register_workflow,
     user_input,
 )
-from trid3nt_server.workflows.mesh.tool import tool
+from trid3nt_server.workflows.mesh.tool import mesh_op, tool
 from trid3nt_server.workflows.inputs import point_arg
 from trid3nt_server.workflows.inputs.aoi import location_or_bbox
-from trid3nt_server.workflows.telemac.authoring.assembler import settle_reach
 from trid3nt_server.workflows.telemac.helpers.forcing import event_time
 from trid3nt_server.workflows.telemac.helpers.reach import MeshCoverage
 from trid3nt_server.workflows.telemac.helpers.substance import Decay
-from trid3nt_server.workflows.telemac.modules import T2D
+from trid3nt_server.workflows.telemac.modules import (
+    T2D,
+    field,
+    max_over_time,
+    mesh,
+    series,
+)
 from trid3nt_server.workflows.telemac.modules.telemac2d import (
     Boundaries,
     Continuation,
@@ -33,7 +36,6 @@ from trid3nt_server.workflows.telemac.modules.telemac2d import (
     TracerNames,
     Wind,
 )
-from trid3nt_server.workflows.telemac.products.products import Products
 from trid3nt_server.workflows.telemac.solving.solve import compute_class
 from trid3nt_server.workflows.telemac.templates.river_dye.declarations import (
     ACCEPTS, DOC, PARAMS, PARAMS as P,
@@ -42,24 +44,71 @@ from trid3nt_server.workflows.telemac.templates.shared import river
 from trid3nt_server.workflows.telemac.templates.shared.river import (
     PARAMS as S,
     RELEASE as R,
-    RIVER,
 )
 from trid3nt_server.workflows.telemac.workflow import Door, TelemacWorkflow
 
-__all__ = ["ANSWER", "DATA", "PARAMS", "STEERING", "build_dye_chart",
+__all__ = ["ANSWER", "CAPTIONS", "DATA", "MESH", "OUTPUTS", "PARAMS", "STEERING",
            "telemac_river_dye"]
 
 _HELPERS = "trid3nt_server.workflows.telemac.helpers"
 _SOLVING = "trid3nt_server.workflows.telemac.solving.solve"
 
-#: What the run directory calls this deck. It is the steering file's own name,
-#: so the directory reads as the record of the run it is.
+#: The names the run directory holds this run's files under. They are the deck's
+#: own STEERING / GEOMETRY / BOUNDARY CONDITIONS / RESULTS / RESTART statements,
+#: so the directory reads as the record of the run it is. The restart is the
+#: engine's full state at its last instant in double precision, which is what a
+#: continuation reads; the results file is a picture of the run.
 _STEERING_FILE = "t2d_river.cas"
+_GEOMETRY = "river.slf"
+_BOUNDARY = "river.cli"
+_RESULT = "r2d_river.slf"
+_RESTART = "restart_river.slf"
+
+#: How far past the centerline the mapped banks are ASKED for. The water that
+#: belongs to this reach reaches past the line - a far channel behind a mid-river
+#: island is three km off it and is still the same river - and the pad widens the
+#: QUESTION, never the meshed domain: the section cut below keeps only the
+#: stretch between the reach's two ends.
+_BANK_QUERY_PAD_M = 3000.0
 
 
-class _OWN:
-    """What this question reads past the reach chain every river run reads."""
+class DATA:
+    """The reach chain, one row per artifact, in the order it is read, and the
+    rain this question adds to it. The carrier discharge is a STEP, because it
+    reads the resolved seed."""
 
+    rivers = tool(f"{_HELPERS}.reach.fetch_reach_flowline",
+                  prefetched=ParamRef("river_geometry_uri"))
+    # THE REACH, narrowed by CHAINING tools rather than by a mesher that grew a
+    # corridor of its own. The navigated mainstem names the stretch, its two ends
+    # name where the stretch stops, and the cut through the MAPPED banks is the
+    # domain - so the two end faces are the transects the inflow and the outflow
+    # are prescribed on, measured off real geometry rather than a ribbon.
+    centerline = tool("fetch_nhdplus_nldi_navigate",
+                      seed_point=[Ref("seed.lon"), Ref("seed.lat")],
+                      direction="DM",
+                      distance_km=ParamRef("reach_length_km"))
+    ends = tool("endpoints", line=centerline)
+    window = tool("compute_layer_bounds", layer_uri=centerline,
+                  pad_m=_BANK_QUERY_PAD_M, fit_map=False)
+    water = tool("fetch_nhd_area_water", bbox=Ref("window.bbox"))
+    # HOW MUCH of the reach the returned polygons actually map, measured before
+    # the cut so an unmapped reach refuses on its own cause instead of arriving
+    # at the section as an empty geometry.
+    mapped_water = tool(f"{_HELPERS}.reach.measure_water_coverage",
+                        water=water, centerline=centerline)
+    reach_polygon = tool("section", polygon=mapped_water,
+                         between=Ref("ends.between"))
+    # THE SUBSTITUTION, declared where a reader can see it. A bed is TOPOBATHY -
+    # the channel bottom - and no topobathy survey covers an inland reach, so
+    # this row is a surface DEM and the recipe below says so by painting the bed
+    # from it BY NAME. The consequence travels with it: a surface measures the
+    # water top, so the modelled channel is shallower than the real one and the
+    # journal names this row as what the bed came from. GLO-30 is asked for on
+    # its OWN 1-arcsecond lattice, so the raster the nodes are sampled from
+    # carries the source pixels rather than a resample of them.
+    dem = tool("fetch_copernicus_dem", bbox=Ref("window.bbox"), px_per_deg=3600.0,
+               purpose="river bed elevation")
     # The cadence and units the run receives, stated rather than assumed: the
     # producer answers in daily rates, so this asks for no interpolation - and a
     # sub-daily target would refuse here instead of manufacturing a storm shape
@@ -71,19 +120,88 @@ class _OWN:
                 ).resample(to="1D", max_gap="native*3").normalize(units="mm/day")
 
 
-#: The reach chain, plus the one row this question adds to it.
-DATA = (*river.DATA_ROWS, *data_rows(_OWN))
+#: The MESH RECIPE, frozen at declaration and building nothing at import. The
+#: extent is the CHAIN's product - the stretch of mapped water the section cut
+#: between the centerline's two ends - so the mesher triangulates a domain other
+#: tools measured rather than growing a corridor of its own. The ops are
+#: oceanmesh's own clean passes under its own names, then the two things we
+#: impose: the bed, painted from the substitution declared above and named in the
+#: journal, and the roles, prescribed across the two end transects the section cut.
+MESH = tool.build_mesh(
+    mesher="om2d",
+    kind="unstructured_tri",
+    extent=Ref("reach_polygon"),
+    resolution_m=ParamRef("mesh_resolution_m"),
+    ops=[
+        mesh_op("delete_boundary_faces"),
+        mesh_op("delete_faces_connected_to_one_face"),
+        mesh_op("laplacian2"),
+        mesh_op("make_mesh_boundaries_traversable"),
+        mesh_op("fix_mesh", delete_unused=True),
+        mesh_op("set_bed", source=DATA.dem, interp="nearest"),
+        mesh_op("set_boundary_roles",
+                inflow=Ref("reach_polygon.face_start"),
+                outflow=Ref("reach_polygon.face_end")),
+    ],
+)
 
 
 class STEERING(T2D):
     """The deck: a river, and ONE conservative tracer released into it."""
 
-    parts = [RIVER]
+    GEOMETRY_FILE = _GEOMETRY
+    BOUNDARY_CONDITIONS_FILE = _BOUNDARY
+    RESULTS_FILE = _RESULT
+    TITLE = Ref("settled.title")
+
+    # The step the reach is solved at follows the edge the accepted mesh was
+    # BUILT at rather than the edge that was asked for.
+    TIME_STEP = Ref("settled.time_step_s")
+    LISTING_PRINTOUT_PERIOD = 500
+
+    # The run OPENS at the derived normal depth, laid bed-parallel. Not a
+    # constant elevation at the outflow stage: the stage is derived only where
+    # the reach FALLS, so a horizontal surface at the outlet's level leaves every
+    # node upstream of it dry - the flowrate face among them - and the engine
+    # refuses a discharge it has no water to impose.
+    INITIAL_CONDITIONS = "CONSTANT DEPTH"
+    INITIAL_DEPTH = Ref("settled.depth_m")
+
+    # The roughness the outflow stage was DERIVED at, written back out as the
+    # roughness the run is solved at. One number, stated once: a stage derived at
+    # one and written at another is a level the run never sits at.
+    LAW_OF_BOTTOM_FRICTION = Ref("settled.friction_law")
+    FRICTION_COEFFICIENT = Ref("settled.friction_coefficient")
+    VELOCITY_DIFFUSIVITY = 0.1
+
+    # The advection of momentum and depth, and the SUPG the reach is stable
+    # under. The tracer's own scheme is stated separately below.
+    TYPE_OF_ADVECTION = [1, 5]
+    SUPG_OPTION = [0, 0]
+    MASS_LUMPING_ON_H = 1.0
+    CONTINUITY_CORRECTION = True
+    SOLVER = 1
+    SOLVER_ACCURACY = 1.0e-6
+    MAXIMUM_NUMBER_OF_ITERATIONS_FOR_SOLVER = 500
+    IMPLICITATION_FOR_DEPTH = 0.6
+    IMPLICITATION_FOR_VELOCITY = 0.6
+
+    # The engine accounts for its own water volume and prints one flux per liquid
+    # boundary. That is the only honest check that the level prescribed at a
+    # boundary reached it: a server-side integration of the depth and velocity
+    # fields reads near zero at a prescribed-depth face, where the boundary values
+    # are clamped after the flux was computed.
+    MASS_BALANCE = True
+
+    # The tracer is advected by the scheme the reach is stable under, with a
+    # diffusivity that sets lateral plume spread.
+    SCHEME_FOR_ADVECTION_OF_TRACERS = 1
+    COEFFICIENT_FOR_DIFFUSION_OF_TRACERS = 0.1
 
     #: The engine's own last instant, in the double precision a continuation
     #: reads. An uncoupled run is the only one that can be continued, so it is
     #: the only one asked to write this.
-    RESTART_FILE = river.RESTART
+    RESTART_FILE = _RESTART
 
     VARIABLES_FOR_GRAPHIC_PRINTOUTS = "U,V,H,S,B,T1"
     GRAPHIC_PRINTOUT_PERIOD = Ref("settled.graphic_period")
@@ -124,55 +242,24 @@ class STEERING(T2D):
     coupling = Ref("decay.coupling")
 
 
-#: The run's ANSWER, as the numbers a reader has to be able to check. Persisted
-#: beside the chart spec so verification cites the run's own figures rather than
-#: recomputing them from the raster.
-ANSWER = ("dye_cmax_mgl", "dye_peak_time_s", "plume_reach_m", "active_frames",
-          "mesh_size_m")
+#: What the solved run is read for: the tracer over time as the animation, its
+#: envelope as the map, its reach-wide history as the chart.
+OUTPUTS = [
+    field("T1", t="every").animate(),
+    max_over_time("T1").layer(style=TELEMAC_DYE_STYLE),
+    series("T1").chart(),
+]
+CAPTIONS = {"T1": "dye concentration"}
 
-
-def _bed_of(result: Any) -> str:
-    """The bed the run's mesh was painted from, off the layer's own provenance."""
-    for row in getattr(result, "synthetic_inputs", None) or ():
-        if getattr(row, "param", None) == "mesh_bed" and row.value:
-            return str(row.value)
-    return "unrecorded bed"
-
-
-def build_dye_chart(*, result: Any, params: Any) -> dict[str, Any] | None:
-    """The plume's concentration HISTORY: one point per frame the solver wrote.
-
-    Every point is the reach maximum at that time; ``None`` when none persisted."""
-    times = getattr(result, "dye_curve_time_s", None)
-    values = getattr(result, "dye_curve_cmax_mgl", None)
-    cmax = getattr(result, "dye_cmax_mgl", None)
-    peak_t = getattr(result, "dye_peak_time_s", None)
-    if not times or not values or cmax is None or peak_t is None:
-        return None
-    from trid3nt_server.emission.charts import build_chart_payload
-
-    where = params.get("location") or getattr(result, "name", None) or "the reach"
-    substance = params.get("decaying_substance") or "dye"
-    # The layer's own declared units, so the chart's axis and the legend cannot
-    # disagree about what this field is measured in.
-    units = TELEMAC_DYE_STYLE["units"]
-    return build_chart_payload(
-        vega_lite_spec={
-            "mark": {"type": "line", "point": True},
-            "data": {"values": [{"t_s": float(t), "dye_mgl": float(c)}
-                                for t, c in zip(times, values)]},
-            "encoding": {
-                "x": {"field": "t_s", "type": "quantitative", "title": "Time (s)"},
-                "y": {"field": "dye_mgl", "type": "quantitative",
-                      "title": f"{str(substance).capitalize()} concentration ({units})"},
-            },
-        },
-        title=f"Reach maximum {substance} concentration - {where}",
-        caption=(f"The highest {substance} concentration anywhere in the reach at "
-                 f"each of {len(times)} output times; peaks at {float(cmax):.3g} "
-                 f"{units}, {float(peak_t):.0f} s after release. Bed: "
-                 f"{_bed_of(result)}."),
-    )
+#: The run's ANSWER, as the numbers a reader has to be able to check, each a
+#: measure of one of the reads above.
+ANSWER = {
+    "dye_cmax_mgl": max_over_time("T1").measure("max"),
+    "dye_peak_time_s": max_over_time("T1").measure("t_max"),
+    "plume_reach_m": field("T1", t="every").measure("travel_m"),
+    "active_frames": field("T1", t="every").measure("active_frames"),
+    "mesh_size_m": mesh().measure("size_m"),
+}
 
 
 #: DECLARED mesh_resolution_m range. The solver floor is the finest edge the mesh
@@ -207,8 +294,6 @@ _METADATA = AtomicToolMetadata(
 )
 
 
-
-
 telemac_river_dye = register_workflow(
     TelemacWorkflow, _METADATA,
     (*river.PARAM_ROWS, *river.RELEASE_ROWS, *param_rows(PARAMS)),
@@ -217,32 +302,28 @@ telemac_river_dye = register_workflow(
         # A release named up front also names which stretch to model: the one
         # centerline is navigated from it.
         domain=river.acquire(seed=P.release),
-        mesh=river.MESH, mesh_on="reach",
+        mesh=MESH, mesh_on="reach",
         produce=(
-            MeshCoverage(mesh=Ref("mesh"), centerline=river.DATA.centerline),
+            MeshCoverage(mesh=Ref("mesh"), centerline=DATA.centerline),
             Decay(substance=P.decaying_substance,
                   half_life_hours=P.decay_half_life_hours,
                   rate_per_day=P.decay_rate_per_day).named("decay"),
         ),
         settle=river.settle(release=P.release,
                             spill_fraction=R.spill_fraction,
-                            rain=_OWN.rain, continue_from=P.continue_from),
+                            rain=DATA.rain, continue_from=P.continue_from),
         # The two constitutive knobs a caller may override. An unset one is not
-        # a statement, so the shared part's own value stands.
+        # a statement, so the body's own value stands.
         slots={"VELOCITY_DIFFUSIVITY": R.velocity_diffusivity,
                "COEFFICIENT_FOR_DIFFUSION_OF_TRACERS": R.tracer_diffusivity},
-        results=(river.RESULT, river.RESTART),
+        results=(_RESULT, _RESTART),
         steering_file=_STEERING_FILE, prefix="telemac",
         dispatch=f"{_SOLVING}.solve_reach", compute_class=S.compute_class,
-        meta={"substance": "dye"},
-        read=lambda run: Products.dye(
-            run=run, solve=run,
-            carrier_discharge=Ref("carrier_discharge")).named("plume"),
-        chart=("dye_concentration", build_dye_chart),
+        outputs=OUTPUTS, captions=CAPTIONS, answer=ANSWER,
         review_title="Review the river-tracer scenario"),
     data=DATA,
     accepts=ACCEPTS,
-    answer=ANSWER,
+    answer=tuple(ANSWER),
     provenance=(("discharge_m3s", "discharge_note"),
                 ("mesh_resolution_m", "mesh_resolution_note")),
     # The dye maximum is the canonical peak class: measured 6x LOW on the coarse

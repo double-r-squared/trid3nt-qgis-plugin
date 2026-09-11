@@ -812,7 +812,7 @@ package SteeringSurface {
     verify requirement OneTemplatePerQuestion by
         "tests/search/test_door_dissolution.py::test_all_templates_registered_and_callable";
     verify requirement OneTemplatePerQuestion by
-        "tests/telemac/test_telemac_module_surface.py::test_every_template_names_the_reader_its_own_question_needs";
+        "tests/telemac/test_telemac_module_surface.py::test_a_template_reads_its_answer_through_the_primitives_its_module_binds";
     verify requirement OneTemplatePerQuestion by
         "tests/telemac/test_postprocess_telemac.py::test_the_peak_layer_handle_carries_the_product_that_wrote_it";
 

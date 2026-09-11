@@ -20,7 +20,7 @@ from .data import DataDecl, data_rows
 from .errors import DeclarativeError, PlanValidationError, WorkflowParkedError
 from .params import Param, ResolvedParams, doors, param_rows
 from .plan import Plan, Ref, Step
-from .resolution import SensitivityDecl, sensitivity_notes
+from .resolution import SensitivityDecl, answered, sensitivity_notes
 from .resolver import merge_provenance, resolve_params
 from .snapshot import Derivation
 from .validate import validate_plan
@@ -301,7 +301,7 @@ class Workflow:
         """The run's ANSWER: the numbers a reader has to be able to check.
         A declared provenance name rides its resolved value AND its note, so what a
         row was pinned to is on the artifact rather than recomputed."""
-        out: dict[str, Any] = {f: getattr(result, f, None) for f in self.answer_fields}
+        out: dict[str, Any] = {f: answered(result, f) for f in self.answer_fields}
         out["layer_uri"] = getattr(result, "uri", None)
         rows = getattr(result, "synthetic_inputs", None) or []
         for name, note_key in self.answer_provenance:

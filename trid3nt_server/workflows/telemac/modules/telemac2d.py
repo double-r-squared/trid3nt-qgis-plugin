@@ -1,8 +1,9 @@
 """The TELEMAC-2D wrapper: its dictionary, its composites, and its outputs.
 
 The wrapper asserts NO value of its own. Each composite is ONE value standing for
-a keyword group, so the group cannot half-arrive; the OUTPUTS bind the module's
-results to their readers, because what a result file holds is the module's fact."""
+a keyword group, so the group cannot half-arrive; the outputs are the primitive
+set over the module's own variables, because what a result file holds is the
+module's fact."""
 
 from __future__ import annotations
 
@@ -10,19 +11,22 @@ import math
 from types import MappingProxyType
 from typing import Any, Mapping, Sequence
 
-from ..products.products import (
-    publish_do_products,
-    publish_dye_products,
-    publish_oil_products,
-    publish_scour_products,
-    publish_sediment_plume_products,
-)
-from ..products.rain_on_grid import publish_rain_on_grid_products
 from .module import Module
+from .outputs import PRIMITIVES
 
 __all__ = ["T2D", "Boundaries", "Continuation", "Friction", "Hyetograph", "Oil",
            "Rain", "Rating", "Release", "Runoff", "TimeOrigin", "TracerNames",
-           "Wind", "SOURCES_FILENAME"]
+           "Wind", "SOURCES_FILENAME", "VARIABLES"]
+
+#: The module's variable vocabulary, by the mnemonic VARIABLES FOR GRAPHIC
+#: PRINTOUTS spells: the name the result file carries it under, and its unit.
+#: ``T<n>`` is the n-th NAMES OF TRACERS entry and is resolved off the run.
+VARIABLES: Mapping[str, tuple[str, str]] = MappingProxyType({
+    "U": ("VELOCITY U", "M/S"), "V": ("VELOCITY V", "M/S"),
+    "H": ("WATER DEPTH", "M"), "S": ("FREE SURFACE", "M"),
+    "B": ("BOTTOM", "M"), "F": ("FROUDE NUMBER", ""),
+    "Q": ("SCALAR FLOWRATE", "M2/S"), "M": ("SCALAR VELOCITY", "M/S"),
+})
 
 #: The point-source time series the SOURCES FILE names.
 SOURCES_FILENAME = "river_sources.txt"
@@ -446,13 +450,10 @@ def _hyetograph(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
 
 
 T2D = Module("telemac2d")
+T2D.VARIABLES = VARIABLES
 T2D.composites(releases=_releases, wind=_wind, continue_from=_continue_from,
                oil=_oil, rain=_rain, coupling=_coupling,
                boundaries=_boundaries, runoff=_runoff, friction=_friction,
                rating=_rating, hyetograph=_hyetograph,
                time_origin=_time_origin, tracer_names=_tracer_names)
-T2D.outputs(dye=publish_dye_products, oil_slick=publish_oil_products,
-            scour=publish_scour_products,
-            sediment_plume=publish_sediment_plume_products,
-            dissolved_oxygen=publish_do_products,
-            flood_depth=publish_rain_on_grid_products)
+T2D.outputs(**PRIMITIVES)

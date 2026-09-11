@@ -45,7 +45,7 @@ UNSET = _Unset()
 #: Class attributes a wrapper carries that are never keyword assertions.
 _RESERVED = frozenset((
     "MODULE", "DICTIONARY", "COMPOSITES", "OUTPUTS", "ASSERTED", "PARTS", "parts",
-    "composites", "outputs", "slot",
+    "VARIABLES", "RESULT_FILE", "composites", "outputs", "slot",
 ))
 
 
@@ -167,7 +167,7 @@ class Composite:
 
 @dataclass(frozen=True, slots=True)
 class Output:
-    """One of the module's outputs, bound to the reader that publishes it."""
+    """One of the module's outputs: a primitive, bound to the read of it."""
 
     name: str
     read: Callable[..., Any]
@@ -314,6 +314,10 @@ class Module(metaclass=_Body):
     DICTIONARY: Mapping[str, Slot] = MappingProxyType({})
     COMPOSITES: Mapping[str, Composite] = MappingProxyType({})
     OUTPUTS: Mapping[str, Output] = MappingProxyType({})
+    #: The module's variable vocabulary: mnemonic -> (result name, unit).
+    VARIABLES: Mapping[str, tuple[str, str]] = MappingProxyType({})
+    #: The result file the primitives read; empty reads the run's own.
+    RESULT_FILE: str = ""
     #: The shared bodies this one is made of, in the order they merge.
     PARTS: tuple[type, ...] = ()
     #: What THIS body asserts - empty on a wrapper, by law.
@@ -329,7 +333,7 @@ class Module(metaclass=_Body):
 
     @classmethod
     def outputs(cls, **readers: Callable[..., Any]) -> None:
-        """Register the module's outputs: name -> the reader that publishes it."""
+        """Register the module's outputs: primitive -> the read of it."""
         cls.OUTPUTS = MappingProxyType({
             **cls.OUTPUTS,
             **{name: Output(name=name, read=fn)

@@ -1,4 +1,4 @@
-"""The ARTEMIS wrapper: its dictionary, its composite, and its output.
+"""The ARTEMIS wrapper: its dictionary, its composite, and its outputs.
 
 The wrapper asserts NO value of its own. ARTEMIS reads its forcing out of the
 BOUNDARY CONDITIONS FILE rather than out of the steering file, so the incident
@@ -9,10 +9,20 @@ from __future__ import annotations
 from types import MappingProxyType
 from typing import Any, Mapping, Sequence
 
-from ..products.agitation import publish_agitation_products
 from .module import Module
+from .outputs import PRIMITIVES
 
-__all__ = ["ART", "BOUNDARY_FILENAME", "IncidentWave", "stamp_boundary_rows"]
+__all__ = ["ART", "BOUNDARY_FILENAME", "IncidentWave", "VARIABLES",
+           "stamp_boundary_rows"]
+
+#: The module's variable vocabulary, by the mnemonic VARIABLES FOR GRAPHIC
+#: PRINTOUTS spells: the result-file name and the unit. A mild-slope solve is
+#: steady, so every field is read at its one frame.
+VARIABLES: Mapping[str, tuple[str, str]] = MappingProxyType({
+    "HS": ("WAVE HEIGHT", "M"), "PHAS": ("WAVE PHASE", "RAD"),
+    "U0": ("U0", "M/S"), "V0": ("V0", "M/S"), "S": ("FREE SURFACE", "M"),
+    "ZF": ("BOTTOM", "M"), "H": ("WATER DEPTH", "M"), "INC": ("WAVE INCIDENCE", "DEG"),
+})
 
 #: What the restamped boundary file is called in the run directory. The deck's own
 #: BOUNDARY CONDITIONS FILE statement, so the steering file reads as the record of
@@ -108,5 +118,6 @@ def stamp_boundary_rows(cli_text: str, *, open_nodes: Sequence[int],
 
 
 ART = Module("artemis")
+ART.VARIABLES = VARIABLES
 ART.composites(incident_wave=_incident_wave)
-ART.outputs(agitation=publish_agitation_products)
+ART.outputs(**PRIMITIVES)

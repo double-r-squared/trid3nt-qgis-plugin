@@ -63,6 +63,17 @@ def _lever(metadata: Any) -> str | None:
     return None
 
 
+def answered(result: Any, name: str) -> Any:
+    """One answer field off a result: its ``answer`` map, else its attribute.
+
+    A published outputs list carries its scalars in the map; a product layer
+    carries them as fields of its own."""
+    carried = getattr(result, "answer", None)
+    if isinstance(carried, Mapping) and name in carried:
+        return carried[name]
+    return getattr(result, name, None)
+
+
 def sensitivity_notes(decl: SensitivityDecl, metadata: Any, result: Any,
                       sheet: Sequence[Any]) -> tuple[str, ...]:
     """The honesty note(s) this run's answer carries, or ``()``.
@@ -71,7 +82,7 @@ def sensitivity_notes(decl: SensitivityDecl, metadata: Any, result: Any,
     if not decl:
         return ()
     present = [(field, cls) for field, cls in decl.rows
-               if getattr(result, field, None) is not None]
+               if answered(result, field) is not None]
     if not present:
         return ()
 
@@ -83,7 +94,7 @@ def sensitivity_notes(decl: SensitivityDecl, metadata: Any, result: Any,
     # basis alone labels a default-spacing run as refined and swallows the bound.
     refined = (getattr(row, "basis", None) == "user"
                and getattr(row, "value", None) is not None)
-    mesh_m = getattr(result, "mesh_size_m", None)
+    mesh_m = answered(result, "mesh_size_m")
     at = f" at {float(mesh_m):g} m" if mesh_m is not None else ""
 
     classes = sorted({cls for _, cls in present})

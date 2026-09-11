@@ -1,9 +1,8 @@
-"""Unit tests for the shared cog_io COG write / reproject / upload helpers (STEP 1).
+"""The COG write / reproject / upload seam.
 
-Pins the PARAMETER PRESERVATION that makes the five-engine dedupe byte-identical:
-the mask predicate, the reproject on/off path, the CRS round-trip guard, the
-scheme-aware upload (s3 ContentType / gs fsspec-vs-gcs_client / file:// fallback),
-and the generic CogIoError stage tokens the engine shims map onto their codes.
+Pins the mask predicate, the reproject on/off path, the CRS round-trip guard, the
+scheme-aware upload (s3 ContentType / file:// fallback), and the CogIoError stage
+tokens a caller maps onto its own codes.
 """
 
 from __future__ import annotations
@@ -21,8 +20,8 @@ import rasterio  # noqa: E402
 from rasterio.transform import from_bounds  # noqa: E402
 from rasterio.warp import Resampling  # noqa: E402
 
-from trid3nt_server.workflows.shared import cog_io  # noqa: E402
-from trid3nt_server.workflows.shared.cog_io import CogIoError  # noqa: E402
+from trid3nt_server.workflows.publishing import cog as cog_io  # noqa: E402
+from trid3nt_server.workflows.publishing.cog import CogIoError  # noqa: E402
 
 
 def _bbox_transform(bbox, w, h):

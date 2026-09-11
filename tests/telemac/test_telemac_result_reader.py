@@ -16,12 +16,12 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from trid3nt_server.workflows.telemac.products import result_reader as R
+from trid3nt_server.workflows.telemac.modules import outputs as R
 
 #: Every module on this side that reads a solved result. None may parse the
 #: format: a second implementation of it is a second thing to be wrong about it.
 _READERS = (
-    "trid3nt_server/workflows/telemac/products/result_reader.py",
+    "trid3nt_server/workflows/telemac/modules/outputs.py",
     "trid3nt_server/workflows/telemac/products/postprocess_telemac.py",
     "trid3nt_server/workflows/telemac/products/run_reads.py",
     "trid3nt_server/workflows/telemac/authoring/assembler.py",

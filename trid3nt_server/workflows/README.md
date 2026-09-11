@@ -19,7 +19,8 @@ speak it.
 | `runtime/` | The declarative library - the value types, the six doors, the validator, the interpreter, the skeleton and the run's records. See below. |
 | `mesh/` | The one mesh front: router, meshers, session, gate, artifact. Has its own map. |
 | `inputs/` | The typed inputs: a Point, an Extent and a Shape, each with one ingestion from every form a user hands it in; the AOI acquisition, the geometry-source reader and the layer-field reader beside them. Has its own map. |
-| `shared/` | Engine-agnostic seams the live engines need: COG io, the layer-uri record, the publish/manifest seams, solve progress, run products. |
+| `publishing/` | A field becomes a layer, a series a chart, a field over time an animation - written once for every engine, with the COG writer, the styling seam and the outputs manifest beside it. Has its own map. |
+| `shared/` | What the engines still share past publishing: the worker-era manifest registration, solve progress, the run's persisted chart and metrics. |
 | `solver/` | Solve dispatch and what came back: `solver.py` (the box), `code_provenance.py` (which code produced a run), `diagnostics/` (the one `read_run_diagnostics` dispatcher plus its per-engine parsers), `corpus.yaml` (routing phrasings). |
 | `telemac/` | The TELEMAC engine: the module wrappers, eight templates over them, and the fill/run door. Has its own map. |
 

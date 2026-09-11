@@ -173,7 +173,7 @@ def test_the_continuation_starts_where_the_restart_file_says_it_does(monkeypatch
 
     The engine writes its restart at its own last time step, which is neither the
     graphic period nor the duration asked for, so a derived instant is the wrong clock."""
-    import trid3nt_server.workflows.telemac.products.result_reader as reader
+    import trid3nt_server.workflows.telemac.modules.outputs as reader
     from trid3nt_server.workflows.telemac.authoring.assembler import (
         _continuation_state,
     )
