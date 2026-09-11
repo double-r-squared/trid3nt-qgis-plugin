@@ -1,7 +1,7 @@
 """The sheet: a module's slots, what filled each one, and the two acts on it.
 
 Resolution order, lowest to highest: the engine default (never written - the
-dictionary supplies it), the listed parts in order, the template, the fill. OPEN
+dictionary supplies it), the template, the fill. OPEN
 is informational; REQUIRED, the dictionary's OBLIG files, is what a run refuses on."""
 
 from __future__ import annotations
@@ -189,27 +189,23 @@ async def draw(source: type | Sheet, name: str, *, geometry: str = "point",
 
 def _standing(source: type | Sheet, template: str = "",
               ) -> tuple[type, dict[str, Filled], dict[str, tuple[Any, str]]]:
-    """What is on the sheet before this fill: the body's parts, or a sheet.
+    """What is on the sheet before this fill: the body's assertions, or a sheet.
 
-    A body's assertions beat its parts; a composite or a read is PENDING."""
+    A composite or a read is PENDING until the fill binds it."""
     if isinstance(source, Sheet):
         return source.body, dict(source.filled), {}
     standing: dict[str, Filled] = {}
     pending: dict[str, tuple[Any, str]] = {}
-    for body in (*source.PARTS, source):
-        # The TEMPLATE the value started in, which is the only place a template
-        # name survives a run. A fill with no template names the body instead,
-        # because a bare wrapper has no template to name.
-        provenance = Provenance(Origin.TEMPLATE, template or body.__name__)
-        for name, value in body.ASSERTED.items():
-            slot = source.DICTIONARY.get(name)
-            if slot is None or value is None or _late(value):
-                pending[name] = (value, provenance)
-                standing.pop(name, None)
-            else:
-                standing[name] = Filled(slot=slot, value=value,
-                                        provenance=provenance)
-                pending.pop(name, None)
+    # The TEMPLATE the value started in, which is the only place a template
+    # name survives a run. A fill with no template names the body instead,
+    # because a bare wrapper has no template to name.
+    provenance = Provenance(Origin.TEMPLATE, template or source.__name__)
+    for name, value in source.ASSERTED.items():
+        slot = source.DICTIONARY.get(name)
+        if slot is None or value is None or _late(value):
+            pending[name] = (value, provenance)
+        else:
+            standing[name] = Filled(slot=slot, value=value, provenance=provenance)
     return source, standing, pending
 
 

@@ -12,7 +12,8 @@ import inspect
 import pytest
 
 from trid3nt_server.workflows.telemac.templates.river_dye import river_dye as M
-from trid3nt_server.workflows.telemac.helpers import forcing as F
+from trid3nt_server.workflows.telemac.errors import TelemacInputInvalid
+from trid3nt_server.workflows.telemac.templates import reach as F
 
 
 def _net(rain=None, evap=None, window=None):
@@ -62,9 +63,9 @@ def test_window_parser_roundtrip():
 
 
 def test_window_parser_rejects_malformed():
-    with pytest.raises(F.TelemacDyeScenarioInputError):
+    with pytest.raises(TelemacInputInvalid):
         F._parse_gridmet_window("2017-08-25")
-    with pytest.raises(F.TelemacDyeScenarioInputError):
+    with pytest.raises(TelemacInputInvalid):
         F._parse_gridmet_window("not-a-date:also-bad")
 
 
@@ -114,6 +115,6 @@ def test_a_sub_daily_target_refuses_rather_than_manufacturing_a_storm_shape():
 def test_a_unit_target_the_steering_cannot_carry_refuses():
     from trid3nt_server.workflows.runtime import TemporalSpec, UnitsSpec
 
-    with pytest.raises(F.TelemacDyeScenarioInputError):
+    with pytest.raises(TelemacInputInvalid):
         F._rain_forcing(150.0, None, None,
                         TemporalSpec(units=UnitsSpec("in/day")))

@@ -12,7 +12,6 @@ flowchart LR
     fetcherRouter["FetcherRouter<br/>trid3nt_server/tools/fetchers/_router/router.py"]
     layerMaterializer["LayerMaterializer<br/>plugin/render/layers.py"]
     layerRecord["LayerRecord<br/>trid3nt_server/emission/uri_registry.py"]
-    manifestRegistrar["ManifestRegistrar<br/>trid3nt_server/workflows/shared/register_published_manifest.py"]
     outputsSeamPoint["OutputsSeamPoint<br/>trid3nt_server/emission/outputs_seam.py"]
     pipelineEmitter["PipelineEmitter<br/>trid3nt_server/emission/pipeline_emitter.py"]
     presetFamily["PresetFamily<br/>trid3nt_server/emission/presets.py"]
@@ -29,7 +28,6 @@ flowchart LR
     publishPath -- "LegendStash" --> pipelineEmitter
     publishPath -- "LayerRecordEntry" --> layerRecord
     outputsSeamPoint -- "LayerRecordEntry" --> layerRecord
-    manifestRegistrar -- "LayerRecordEntry" --> layerRecord
     restyleTool -- "RestyleAsk" --> restyleSurface
     restyleSurface -- "DeclaredStyleRow" --> publishPath
     publishPath -- "DeclaredStyleRow" --> presetFamily

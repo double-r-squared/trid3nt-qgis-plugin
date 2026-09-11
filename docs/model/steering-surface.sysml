@@ -125,13 +125,6 @@ package SteeringSurface {
         */
     }
 
-    part def SharedBody {
-        doc /*
-        A body several templates LIST as a part, carrying the slot assertions,
-        the data chain and the mesh recipe they share.
-        */
-    }
-
     part def Stager {
         doc /*
         An authored run directory becomes a staged run: everything uploaded
@@ -369,12 +362,6 @@ package SteeringSurface {
         */
     }
 
-    part sharedBody : SharedBody {
-        doc /*
-        code: trid3nt_server/workflows/telemac/templates/shared/river.py
-        */
-    }
-
     // ----------------------------------------------------------------- //
     // Hops
     // ----------------------------------------------------------------- //
@@ -582,21 +569,12 @@ package SteeringSurface {
         */
     }
 
-    requirement def SharedBodyHasTwoUsers {
+    requirement def NoBodyExtendsABody {
         doc /*
-        A shared body exists because a good portion is shared, which means at
-        least two templates LIST it as a part. One user folds back into its
-        template; a body with one is an indirection, not a sharing.
-        */
-    }
-
-    requirement def CompositionNotInheritance {
-        doc /*
-        A body reuses another body by listing it, never by extending it. Parts
-        merge in the listed order and per-slot provenance names the part, so a
-        keyword that means something else in a new setting is seen rather than
-        inherited into silence; a keyword two parts both set refuses by name
-        unless the template settles it itself.
+        A body extends its module's wrapper and nothing else. A value two
+        templates share is restated in each, under the template that states
+        it, so a keyword that means something else in a new setting is seen
+        rather than inherited into silence.
         */
     }
 
@@ -604,8 +582,8 @@ package SteeringSurface {
         doc /*
         A filled slot says which of the six layers answered it. Engine default
         is ABSENCE - the slot is not on the sheet at all and the card badges it
-        under the advanced fold. The other five are on the row: a shared body
-        names itself, a template names itself, a fill names the user, a
+        under the advanced fold. The other five are on the row: a template
+        names itself, a fill names the user, a
         composite names the producer that expanded it, and a value the RUN
         MEASURED reads DERIVED.
 
@@ -774,9 +752,7 @@ package SteeringSurface {
     verify requirement EverythingOverridable by
         "tests/telemac/test_telemac_module_surface.py::test_a_floor_that_is_not_a_mapping_refuses_by_name";
     verify requirement EverythingOverridable by
-        "tests/telemac/test_telemac_module_surface.py::test_resolution_order_is_engine_then_the_parts_then_template_then_fill";
-    verify requirement EverythingOverridable by
-        "tests/telemac/test_telemac_module_surface.py::test_a_composed_slot_says_which_part_asserted_it";
+        "tests/telemac/test_telemac_module_surface.py::test_resolution_order_is_engine_then_template_then_fill";
     verify requirement EverythingOverridable by
         "tests/telemac/test_telemac_module_surface.py::test_a_fill_is_repeatable_and_the_later_one_stands";
     verify requirement EverythingOverridable by
@@ -838,20 +814,9 @@ package SteeringSurface {
     verify requirement CompositesSetOnlyPresence by
         "tests/telemac/test_telemac_module_surface.py::test_a_curve_number_field_names_no_model_and_the_template_does";
 
-    satisfy requirement SharedBodyHasTwoUsers by sharedBody;
-    satisfy requirement SharedBodyHasTwoUsers by sheet;
-    verify requirement SharedBodyHasTwoUsers by
-        "tests/telemac/test_telemac_module_surface.py::test_every_shared_body_has_at_least_two_users";
-
-    satisfy requirement CompositionNotInheritance by sheet;
-    verify requirement CompositionNotInheritance by
-        "tests/telemac/test_telemac_module_surface.py::test_a_body_is_reused_by_composition_and_never_by_extension";
-    verify requirement CompositionNotInheritance by
-        "tests/telemac/test_telemac_module_surface.py::test_the_parts_merge_in_the_listed_order";
-    verify requirement CompositionNotInheritance by
-        "tests/telemac/test_telemac_module_surface.py::test_a_keyword_two_parts_both_set_refuses_unless_the_template_settles_it";
-    verify requirement CompositionNotInheritance by
-        "tests/telemac/test_telemac_module_surface.py::test_a_composed_slot_says_which_part_asserted_it";
+    satisfy requirement NoBodyExtendsABody by wrapper;
+    verify requirement NoBodyExtendsABody by
+        "tests/telemac/test_telemac_module_surface.py::test_a_body_extends_the_wrapper_and_never_a_body";
 
     satisfy requirement ATemplateNumberIsMetToTheMeshsPrecision by door;
     satisfy requirement ATemplateNumberIsMetToTheMeshsPrecision by sheet;
@@ -868,8 +833,6 @@ package SteeringSurface {
         "tests/telemac/test_telemac_module_surface.py::test_a_value_the_run_measured_reads_as_derived_not_as_the_body_that_named_it";
     verify requirement ProvenanceNamesTheLayerThatAnswered by
         "tests/telemac/test_telemac_module_surface.py::test_a_measured_value_a_fill_overrides_still_reads_as_the_users";
-    verify requirement ProvenanceNamesTheLayerThatAnswered by
-        "tests/telemac/test_telemac_module_surface.py::test_a_composed_slot_says_which_part_asserted_it";
 
     satisfy requirement BodiesAreStatic by sheet;
     verify requirement BodiesAreStatic by

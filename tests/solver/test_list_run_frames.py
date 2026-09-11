@@ -1,9 +1,8 @@
 """``list_run_frames``: the ORDERED animation-frame COG URIs of a run's layer.
 
-The emit-on-solve ``outputs.json`` is read FIRST - frames are the raster entries
-carrying a physical ``t`` - and a legacy run's ``publish_manifest.json`` frame
-layers, ordered by ``frame_no``, only when no outputs manifest is readable. No
-match is an honest empty result with a typed reason, never a fabricated list."""
+The emit-on-solve ``outputs.json`` is the one frame source - frames are the
+raster entries carrying a physical ``t``. No match is an honest empty result
+with a typed reason, never a fabricated list."""
 
 from __future__ import annotations
 
@@ -16,31 +15,7 @@ from trid3nt_server.tools.meta.list_run_frames.list_run_frames import (
     list_run_frames,
 )
 
-_PM_URI = "s3://runs-bucket/run-xyz/publish_manifest.json"
 _OUT_URI = "s3://runs-bucket/run-xyz/outputs.json"
-
-
-def _manifest_json(layers: list[dict]) -> str:
-    return json.dumps(
-        {
-            "schema_version": 1,
-            "engine": "sfincs",
-            "run_id": "run-xyz",
-            "status": "ok",
-            "frame_count": len([l for l in layers if l.get("frame_no") is not None]),
-            "metrics": {},
-            "layers": layers,
-        }
-    )
-
-
-def _frame_layer(stem: str, name: str, frame_no, cog_uri: str) -> dict:
-    return {
-        "layer_id_stem": stem,
-        "name": name,
-        "cog_uri": cog_uri,
-        "frame_no": frame_no,
-    }
 
 
 def _outputs_json(entries: list[dict]) -> str:
@@ -63,24 +38,17 @@ def _entry(quantity: str, name: str, uri: str, t: float | None) -> dict:
 
 @pytest.fixture
 def _patch_run(monkeypatch):
-    """Patch the solver S3 helpers so both manifest readers resolve from
-    in-memory bodies (no network). A ``None`` body = that object is absent."""
+    """Patch the solver S3 helpers so the manifest reader resolves from an
+    in-memory body (no network). A ``None`` body = that object is absent."""
 
-    def _install(*, outputs_text: str | None = None, publish_text: str | None = None):
+    def _install(*, outputs_text: str | None = None):
         from trid3nt_server.workflows.solver import solver
 
         monkeypatch.setattr(solver, "_get_runs_bucket", lambda: "runs-bucket")
-        monkeypatch.setattr(
-            solver,
-            "_try_get_completion_s3",
-            lambda b, r: ({"publish_manifest_uri": _PM_URI} if publish_text else None),
-        )
 
         def _read(uri: str) -> bytes:
             if uri == _OUT_URI and outputs_text is not None:
                 return outputs_text.encode()
-            if uri == _PM_URI and publish_text is not None:
-                return publish_text.encode()
             raise FileNotFoundError(uri)
 
         monkeypatch.setattr(solver, "_read_object_bytes", _read)
@@ -124,52 +92,6 @@ def test_outputs_matches_on_physical_quantity(_patch_run) -> None:
     ]
 
 
-def test_outputs_wins_over_legacy_publish_manifest(_patch_run) -> None:
-    """A run carrying BOTH manifests is served from outputs.json -- the seam's own
-    contract is the single frame source of truth."""
-    _patch_run(
-        outputs_text=_outputs_json(
-            [_entry("flood_depth", "Flood depth step 1", "s3://b/new1.tif", 60.0)]
-        ),
-        publish_text=_manifest_json(
-            [_frame_layer("flood-step", "Flood depth step 1", 1, "s3://b/old1.tif")]
-        ),
-    )
-    out = list_run_frames("run-xyz", layer="flood_depth")
-    assert out["frame_uris"] == ["s3://b/new1.tif"]
-
-
-def test_legacy_publish_manifest_frames_still_served(_patch_run) -> None:
-    """A LEGACY run (publish_manifest frame layers, no outputs.json) is still
-    served, ordered by frame_no, with the aggregate peak excluded."""
-    layers = [
-        _frame_layer("flood-peak", "Peak flood depth", None, "s3://b/peak.tif"),
-        _frame_layer("flood-step", "Flood depth step 2", 2, "s3://b/f2.tif"),
-        _frame_layer("flood-step", "Flood depth step 0", 0, "s3://b/f0.tif"),
-        _frame_layer("flood-step", "Flood depth step 1", 1, "s3://b/f1.tif"),
-    ]
-    _patch_run(publish_text=_manifest_json(layers))
-
-    out = list_run_frames("run-xyz", layer="flood depth")
-    assert out["frame_count"] == 3
-    assert out["frame_uris"] == ["s3://b/f0.tif", "s3://b/f1.tif", "s3://b/f2.tif"]
-    assert [f["frame_no"] for f in out["frames"]] == [0, 1, 2]
-    assert all(f["t"] is None for f in out["frames"])
-    assert "reason" not in out
-
-
-def test_legacy_layer_filter_excludes_non_matching(_patch_run) -> None:
-    """Only layers matching the requested layer name are returned."""
-    layers = [
-        _frame_layer("flood-step", "Flood depth step 0", 0, "s3://b/flood0.tif"),
-        _frame_layer("wave-step", "Wave height step 0", 0, "s3://b/wave0.tif"),
-    ]
-    _patch_run(publish_text=_manifest_json(layers))
-
-    out = list_run_frames("run-xyz", layer="flood_depth")
-    assert out["frame_uris"] == ["s3://b/flood0.tif"]
-
-
 def test_blank_layer_lists_all_frames(_patch_run) -> None:
     """An empty ``layer`` lists ALL frames regardless of name."""
     entries = [
@@ -184,13 +106,13 @@ def test_blank_layer_lists_all_frames(_patch_run) -> None:
 
 
 def test_no_manifest_returns_honest_empty(_patch_run) -> None:
-    """Neither manifest -> honest empty result (frame_count 0 + a reason), NOT a
+    """No manifest -> honest empty result (frame_count 0 + a reason), NOT a
     crash and NOT a fabricated list."""
     _patch_run()
     out = list_run_frames("run-xyz", layer="flood_depth")
     assert out["frame_count"] == 0
     assert out["frame_uris"] == []
-    assert "reason" in out and "no outputs.json or publish_manifest.json" in out["reason"]
+    assert "reason" in out and "no outputs.json" in out["reason"]
 
 
 def test_no_matching_frames_returns_honest_empty(_patch_run) -> None:
@@ -207,14 +129,10 @@ def test_no_matching_frames_returns_honest_empty(_patch_run) -> None:
 
 
 def test_peak_only_outputs_manifest_returns_honest_empty(_patch_run) -> None:
-    """A peak-only run (no temporal entries) is an honest empty listing -- the
-    current publish_manifest carries no frame entries to fall back on."""
+    """A peak-only run (no temporal entries) is an honest empty listing."""
     _patch_run(
         outputs_text=_outputs_json(
             [_entry("flood_depth", "Peak flood depth", "s3://b/peak.tif", None)]
-        ),
-        publish_text=_manifest_json(
-            [_frame_layer("flood-peak", "Peak flood depth", None, "s3://b/peak.tif")]
         ),
     )
     out = list_run_frames("run-xyz", layer="flood_depth")

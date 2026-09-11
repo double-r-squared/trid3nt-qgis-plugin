@@ -176,13 +176,6 @@ def test_legend_fail_open_returns_none_on_unreadable_bytes() -> None:
 
 
 
-# NOTE (TiTiler exit): ``build_titiler_tile_url`` - the legacy register-only
-# tile-template mint + its template-keyed legend stash - was DELETED once
-# ``register_published_manifest`` swapped to stashing by the raw ``cog_uri``.
-# That seam's legend coverage lives in
-# ``test_publish_manifest_register_only_phase4.py``.
-
-
 def _s3_titiler(monkeypatch: pytest.MonkeyPatch) -> None:
     """Force the AWS s3 publish branch (storage_scheme == 's3').
 

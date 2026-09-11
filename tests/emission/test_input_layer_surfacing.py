@@ -305,7 +305,7 @@ _WORKFLOWS_DIR = (
 # input-emission the tree is allowed to keep post-collapse.
 _ALLOWLISTED_INPUT_EMISSION: dict[str, tuple[int, str]] = {
     "mesh/gate.py": (1, "the mesh under construction, presented at the gate as an editable MDAL layer - an AUTHORED domain, not a router fetch, so no emit-on-fetch seam can cover it; one home for every mesher's presentation"),
-    "telemac/helpers/forcing.py": (1, "NWM discharge station point, its name pinned to the RESOLVED cycle for its caption, which the fetch (visualize=False) never exposes to the generic seam"),
+    "telemac/templates/reach.py": (1, "NWM discharge station point, its name pinned to the RESOLVED cycle for its caption, which the fetch (visualize=False) never exposes to the generic seam"),
     "publishing/publish.py": (1, "every layer an outputs list publishes past the one the run leads with - a result of the solve, surfaced beside the step's return"),
     "inputs/point.py": (1, "the Point context-layer publisher - a resolved PARAM (picked, typed or derived), not a router fetch, so no emit-on-fetch seam can cover it; one home for every Point slot"),
     "publishing/animation.py": (1, "a field over time as an animation: the results-mesh publisher, framework emission, one home for every engine"),

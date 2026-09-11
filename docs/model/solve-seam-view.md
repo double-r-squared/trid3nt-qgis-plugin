@@ -14,9 +14,8 @@ flowchart LR
     launcherArm["LauncherArm<br/>trid3nt_server/workflows/telemac/solving/run_telemac.py"]
     manifestStager["ManifestStager<br/>trid3nt_server/workflows/telemac/authoring/assembler.py"]
     meshAcceptance["MeshAcceptance<br/>trid3nt_server/workflows/mesh/step.py"]
-    resultPostprocess["ResultPostprocess<br/>trid3nt_server/workflows/telemac/products/postprocess_telemac.py"]
     resultReader["ResultReader<br/>trid3nt_server/workflows/telemac/modules/outputs.py"]
-    runReader["RunReader<br/>trid3nt_server/workflows/telemac/products/run_reads.py"]
+    runReader["RunReader<br/>trid3nt_server/workflows/telemac/modules/listing.py"]
     solveStep["SolveStep<br/>trid3nt_server/workflows/telemac/solving/solve.py"]
     steeringStatements["Serializer<br/>trid3nt_server/workflows/telemac/authoring/serializer.py"]
     supervisor["Supervisor<br/>trid3nt_server/workflows/solver/solver.py"]
@@ -29,7 +28,6 @@ flowchart LR
     supervisor -- "FoldedRunPhysics (supervisor pass through)" --> diagnosticsReader
     launcherArm -- "FoldedRunPhysics (launcherArm, supervisor pass through)" --> supervisor
     supervisor -- "RunTerminalSignal" --> solveStep
-    resultReader -- "SolvedResultFields" --> resultPostprocess
     launcherArm -- "FrameCountCrossCheck (launcherArm, supervisor pass through)" --> supervisor
     workerEntrypoint -- "SolverListing" --> diagnosticsReader
     telapyChild -- "SolverListing" --> workerEntrypoint
@@ -115,23 +113,6 @@ What the SERVER already knows and the container cannot learn from the files it i
 | `bed_source` | String | required |
 | `result_slf` | FileName | required |
 
-### `SolvedResultFields`
-
-What the engine's reader says a solved result holds: the mesh it was computed on, the instants it was written at, and one field per variable shaped (frames, nodes). The variable names are the engine's OWN names, with no unit glued to them - the record stores the two together and splitting them is the format knowledge that stays on the engine's side. The origins are REPORTED and not applied, and this hop does not require them: the coordinates stay as the file stores them, and every postprocess adds the origin it recovered from the domain bbox, so applying the header's would double the offset on all of them.
-
-| item | type | required |
-| --- | --- | --- |
-| `varnames` | StringList | required |
-| `npoin` | Integer | required |
-| `nelem` | Integer | required |
-| `x` | RealArray | required |
-| `y` | RealArray | required |
-| `ikle` | IntTable | required |
-| `x_origin` | Integer | optional |
-| `y_origin` | Integer | optional |
-| `times` | RealArray | required |
-| `data` | FieldMap | required |
-
 ### `SolverListing`
 
 The solver's own listing, teed off the child's stdout. It is the run's evidence: every closure a run narrates is parsed out of it rather than recomputed from the fields.
@@ -173,7 +154,7 @@ The run's only report, written whatever the child did. Success is not the worker
 | **CorrectEndIsTheSuccessConvention** | `workerEntrypoint`, `launcherArm` | `workers/telemac/test_entrypoint.py::test_a_clean_exit_that_wrote_no_result_is_not_a_solve`<br/>`tests/telemac/test_run_telemac_chain.py::test_classify_exit_clean_exit_but_no_correct_end_is_error` |
 | **EmptyResultsRefuses** | `workerEntrypoint` | `workers/telemac/test_entrypoint.py::test_a_case_declaring_no_results_refuses` |
 | **MetricsAlways** | `workerEntrypoint` | `workers/telemac/test_entrypoint.py::test_a_child_that_dies_still_leaves_the_metrics_written` |
-| **NoSecondParserOfTheFormat** | `resultReader`, `resultPostprocess`, `runReader`, `assembler` | `tests/telemac/test_telemac_result_reader.py::test_no_reader_on_this_side_parses_the_format`<br/>`tests/model/test_model_conformance.py::test_the_model_conforms_to_the_tree` |
+| **NoSecondParserOfTheFormat** | `resultReader`, `runReader`, `assembler` | `tests/telemac/test_telemac_result_reader.py::test_no_reader_on_this_side_parses_the_format`<br/>`tests/model/test_model_conformance.py::test_the_model_conforms_to_the_tree` |
 | **OneNumberDefinesTheStructure** | `assembler` | `tests/telemac/test_open_water_domains.py::test_the_footprint_and_the_solid_faces_are_cut_at_the_same_width`<br/>`tests/telemac/test_open_water_domains.py::test_a_boundary_node_is_on_the_structure_when_it_stands_on_the_punched_outline`<br/>`tests/telemac/test_open_water_domains.py::test_a_lone_node_between_two_of_another_kind_is_not_a_face` |
 | **OutflowStageIsNormalDepth** | `uniformFlow`, `assembler` | `tests/telemac/test_telemac_outflow_stage.py::test_the_stage_is_the_depth_at_which_the_section_conveys_the_discharge`<br/>`tests/telemac/test_telemac_outflow_stage.py::test_the_friction_slope_is_the_measured_fall_over_the_measured_length`<br/>`tests/telemac/test_telemac_outflow_stage.py::test_the_outflow_face_is_measured_as_a_transect_of_the_painted_bed`<br/>`tests/telemac/test_telemac_outflow_stage.py::test_the_reach_length_is_walked_along_the_line_the_mesh_was_built_over`<br/>`tests/telemac/test_telemac_outflow_stage.py::test_a_bigger_discharge_stands_higher_in_the_same_channel`<br/>`tests/telemac/test_telemac_outflow_stage.py::test_strickler_and_its_reciprocal_manning_derive_the_same_stage`<br/>`tests/telemac/test_telemac_outflow_stage.py::test_an_input_the_stage_cannot_be_derived_from_refuses_by_name`<br/>`tests/telemac/test_telemac_module_surface.py::test_the_reach_body_is_written_at_the_derivation_it_was_solved_for`<br/>`tests/telemac/test_telemac_outflow_stage.py::test_a_flatter_reach_stands_higher_for_the_same_flow` |
 | **ReadersNeverImportTheWorker** | `runReader`, `diagnosticsReader` | `tests/model/test_model_conformance.py::test_the_model_conforms_to_the_tree` |

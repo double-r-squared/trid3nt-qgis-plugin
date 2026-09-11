@@ -59,7 +59,7 @@ async def publish(*, run_id: str, engine: str, name: str, where: str,
         current_emitter,
         emit_chart_payloads,
     )
-    from trid3nt_server.workflows.shared.run_products import persist_run_products
+    from trid3nt_server.workflows.runtime.run_products import persist_run_products
 
     layers: list[LayerURI] = []
     charts: dict[str, Any] = {}

@@ -2,14 +2,15 @@
 
 The module reads THREE files on every action - polygons, actions and the surface
 reference - so a run naming two of them is a run NESTOR cannot read. What is
-built here is their content; the keywords naming them are GAIA's composite."""
+authored here is their content; the keywords naming them are GAIA's composite."""
 
 from __future__ import annotations
 
+import asyncio
 import datetime
 from typing import Any, Mapping
 
-__all__ = ["DredgeFieldError", "NESTOR_TIME_ORIGIN", "dredge_field"]
+__all__ = ["DredgeFieldError", "NESTOR_TIME_ORIGIN", "dredge", "dredge_field"]
 
 #: The time origin the deck stamps so NESTOR's action dates map to sim seconds
 #: through DateStringToSeconds (seconds since MARDAT/MARTIM).
@@ -328,3 +329,32 @@ def dredge_field(*, field: Mapping[str, Any], rule: Mapping[str, Any],
                                              half_width_m=half_width),
             "has_dump": dump is not None, "design_grade_m": float(grade),
             **measured}
+
+
+async def dredge(*, on: Any, mesh: Mapping[str, Any], centerline: Any,
+                 seed: Mapping[str, Any], reach_polygon: Any, duration_s: float,
+                 field: Mapping[str, Any], rule: Mapping[str, Any],
+                 design_grade_m: float | None = None) -> dict[str, Any]:
+    """The NESTOR files a run that dredges is authored with, cut on the ACCEPTED
+    mesh; a run that does not dredge states no file and no time origin, so the
+    composites reading it expand to nothing."""
+    from trid3nt_server.workflows.mesh.shared.nodes import read_centerline_utm
+
+    from .assembler import mesh_nodes, to_utm
+
+    if not on:
+        return {"action": None, "polygon": None, "surface_ref": None,
+                "time_origin": None}
+    utm_epsg = int(getattr(mesh.get("artifact"), "utm_epsg", 0) or 0)
+    centerline_utm = await asyncio.to_thread(
+        read_centerline_utm, centerline, utm_epsg,
+        start_lonlat=(float(seed["lon"]), float(seed["lat"])))
+    node_xy, node_bed = await asyncio.to_thread(mesh_nodes, mesh)
+    files = await asyncio.to_thread(
+        dredge_field, field=field, rule=rule, centerline_utm=centerline_utm,
+        reach_polygon_utm=await asyncio.to_thread(to_utm, reach_polygon, utm_epsg),
+        node_xy=node_xy, node_bed=node_bed, duration_s=float(duration_s),
+        design_grade_m=design_grade_m)
+    # NESTOR reads absolute DATES, which map to sim seconds through the origin
+    # the carrier's deck stamps.
+    return {**files, "time_origin": list(NESTOR_TIME_ORIGIN)}

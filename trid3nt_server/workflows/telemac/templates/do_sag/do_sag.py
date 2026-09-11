@@ -12,14 +12,12 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
 from trid3nt_server.workflows.runtime import (
     ParamRef,
     Ref,
-    param_rows,
+    Step,
     register_workflow,
 )
 from trid3nt_server.workflows.mesh.tool import mesh_op, tool
 from trid3nt_server.workflows.inputs import point_arg
 from trid3nt_server.workflows.inputs.aoi import location_or_bbox
-from trid3nt_server.workflows.telemac.helpers.forcing import event_time
-from trid3nt_server.workflows.telemac.helpers.reach import MeshCoverage
 from trid3nt_server.workflows.telemac.modules import T2D, WAQTEL, field, mesh
 from trid3nt_server.workflows.telemac.modules.outputs import profile
 from trid3nt_server.workflows.telemac.modules.telemac2d import Boundaries, Release
@@ -27,14 +25,14 @@ from trid3nt_server.workflows.telemac.templates.do_sag import streeter_phelps
 from trid3nt_server.workflows.telemac.templates.do_sag.declarations import (
     ACCEPTS, DOC, PARAMS, PARAMS as P,
 )
-from trid3nt_server.workflows.telemac.templates.shared import river
-from trid3nt_server.workflows.telemac.templates.shared.river import PARAMS as S
+from trid3nt_server.workflows.telemac.templates import reach
 from trid3nt_server.workflows.telemac.workflow import Door, TelemacWorkflow
 
 __all__ = ["ANSWER", "CAPTIONS", "DATA", "MESH", "OUTPUTS", "PARAMS", "STEERING",
            "telemac_do_sag"]
 
-_HELPERS = "trid3nt_server.workflows.telemac.helpers"
+_AUTHORING = "trid3nt_server.workflows.telemac.authoring"
+_REACH = "trid3nt_server.workflows.telemac.templates.reach"
 _SOLVING = "trid3nt_server.workflows.telemac.solving.solve"
 
 #: The names the run directory holds this run's files under. They are the deck's
@@ -63,7 +61,7 @@ class DATA:
     """The reach chain, one row per artifact, in the order it is read. The
     carrier discharge is a STEP, because it reads the resolved seed."""
 
-    rivers = tool(f"{_HELPERS}.reach.fetch_reach_flowline",
+    rivers = tool(f"{_REACH}.fetch_reach_flowline",
                   prefetched=ParamRef("river_geometry_uri"))
     # THE REACH, narrowed by CHAINING tools rather than by a mesher that grew a
     # corridor of its own. The navigated mainstem names the stretch, its two ends
@@ -81,7 +79,7 @@ class DATA:
     # HOW MUCH of the reach the returned polygons actually map, measured before
     # the cut so an unmapped reach refuses on its own cause instead of arriving
     # at the section as an empty geometry.
-    mapped_water = tool(f"{_HELPERS}.reach.measure_water_coverage",
+    mapped_water = tool(f"{_REACH}.measure_water_coverage",
                         water=water, centerline=centerline)
     reach_polygon = tool("section", polygon=mapped_water,
                          between=Ref("ends.between"))
@@ -191,7 +189,7 @@ class STEERING(T2D):
     #: The OUTFALL: a permitted discharge does not pulse, so the flow and its
     #: concentrations hold flat across the whole run and the reach reaches the
     #: steady-state sag the question is asked about.
-    releases = [Release(at=Ref("settled.release_at"), q=P.effluent_q_m3s,
+    releases = [Release(at=Ref("outfall.at"), q=P.effluent_q_m3s,
                         tracers=[0.0, P.effluent_do_mgl, P.effluent_bod_mgl, 0.0],
                         window_s=None, until_s=Ref("settled.until_s"))]
 
@@ -261,19 +259,37 @@ _METADATA = AtomicToolMetadata(
 
 telemac_do_sag = register_workflow(
     TelemacWorkflow, _METADATA,
-    (*river.PARAM_ROWS, *param_rows(PARAMS)),
+    PARAMS,
     Door(
         steering=STEERING,
-        domain=river.acquire(rivers=DATA.rivers, seed=P.outfall_coords),
+        # The outfall pins the reach: the one centerline is navigated from it.
+        domain=(reach.Geocode(location=P.location, bbox=P.bbox),
+                reach.ReachSeed(reach=Ref("reach"), rivers=DATA.rivers,
+                                supplied=P.outfall_coords),
+                reach.CarrierDischarge(seed=Ref("seed"), explicit=P.discharge_m3s,
+                                       event_time=P.event_time)),
         mesh=MESH, mesh_on="reach",
-        produce=(MeshCoverage(mesh=Ref("mesh"), centerline=DATA.centerline),),
-        settle=river.settle(centerline=DATA.centerline,
-                            reach_polygon=DATA.reach_polygon,
-                            release=P.outfall_coords, spill_fraction=_OUTFALL_FRAC,
-                            marker_label="Outfall"),
+        produce=(reach.MeshCoverage(mesh=Ref("mesh"), centerline=DATA.centerline),
+                 # The outfall, settled against the accepted mesh before the
+                 # sheet reads it.
+                 Step(runner=f"{_AUTHORING}.assembler.settle_release",
+                      stage="author",
+                      kwargs={"point": P.outfall_coords, "mesh": Ref("mesh"),
+                              "centerline": DATA.centerline, "seed": Ref("seed"),
+                              "reach": Ref("reach"), "fraction": _OUTFALL_FRAC,
+                              "label": "Outfall"}).named("outfall")),
+        settle=Step(runner=f"{_AUTHORING}.assembler.settle_reach", stage="author",
+                    kwargs={"reach": Ref("reach"), "seed": Ref("seed"),
+                            "mesh": Ref("mesh"), "centerline": DATA.centerline,
+                            "carrier_discharge": Ref("carrier_discharge"),
+                            "sim_duration_s": P.sim_duration_s,
+                            "mesh_resolution_m": P.mesh_resolution_m,
+                            "output_interval_min": P.output_interval_min,
+                            "friction_law": P.friction_law,
+                            "friction_coefficient": P.friction_coefficient}),
         results=(_RESULT,),
         steering_file=_STEERING_FILE, prefix="telemac",
-        dispatch=f"{_SOLVING}.solve_reach", compute_class=S.compute_class,
+        dispatch=f"{_SOLVING}.solve_reach", compute_class=P.compute_class,
         outputs=OUTPUTS, captions=CAPTIONS, answer=ANSWER,
         review_title="Review the outfall and the reach it discharges to"),
     data=DATA,
@@ -290,7 +306,7 @@ telemac_do_sag = register_workflow(
         point_arg("outfall_coords", tool="telemac_do_sag",
                   prompt="Click on the river where the outfall discharges",
                   code="TELEMAC_PARAMS_INVALID"),
-        event_time(),
+        reach.event_time(),
     ),
     doc=DOC,
 )

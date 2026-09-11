@@ -1,4 +1,4 @@
-"""Offline tests for the DERIVED release: a station along the reach, inside the
+"""Offline tests for the DERIVED source: a station along the reach, inside the
 accepted mesh, and the mesh's own record of the domain a supplied point is
 tested against."""
 
@@ -6,11 +6,11 @@ from __future__ import annotations
 
 import pytest
 
-from trid3nt_server.workflows.telemac.helpers.release_point import (
-    derive_release_on_mesh,
-    domain_polygon_of,
+from trid3nt_server.workflows.telemac.authoring.assembler import (
+    _domain_polygon,
+    _station_on_mesh,
 )
-from trid3nt_server.workflows.telemac.helpers.errors import TelemacDyeScenarioError
+from trid3nt_server.workflows.telemac.errors import TelemacError
 
 
 class _Artifact:
@@ -21,7 +21,7 @@ class _Artifact:
 
 
 def test_the_domain_read_is_the_mesh_own_record_of_what_it_was_cut_from():
-    assert domain_polygon_of(_Artifact("s3://cache/section/reach.geojson")) == (
+    assert _domain_polygon(_Artifact("s3://cache/section/reach.geojson")) == (
         "s3://cache/section/reach.geojson")
 
 
@@ -35,8 +35,8 @@ def test_a_mesh_with_no_domain_polygon_refuses_rather_than_waving_the_point_thro
 
     Four numbers are not a shape a point can be inside of, so answering "no domain"
     would let a supplied point ride into the run untested."""
-    with pytest.raises(TelemacDyeScenarioError) as excinfo:
-        domain_polygon_of(art)
+    with pytest.raises(TelemacError) as excinfo:
+        _domain_polygon(art)
     assert "no mapped shape" in str(excinfo.value)
 
 
@@ -57,7 +57,7 @@ def _mesh_holding(x_from: float, x_to: float, monkeypatch):
 
 def test_a_derived_release_inside_the_mesh_is_left_where_it_was(monkeypatch):
     mesh = _mesh_holding(0.0, 1000.0, monkeypatch)
-    (_lon, _lat), note = derive_release_on_mesh(
+    (_lon, _lat), note = _station_on_mesh(
         centerline_utm=[[0.0, 0.0], [1000.0, 0.0]], mesh=mesh, fraction=0.25)
     assert note is None
 
@@ -67,7 +67,7 @@ def test_a_derived_release_above_the_meshed_stretch_walks_downstream(monkeypatch
     be inside the triangulation or the solver stops with the source outside the
     domain."""
     mesh = _mesh_holding(400.0, 1000.0, monkeypatch)
-    _lonlat, note = derive_release_on_mesh(
+    _lonlat, note = _station_on_mesh(
         centerline_utm=[[0.0, 0.0], [1000.0, 0.0]], mesh=mesh, fraction=0.02)
     assert note is not None and "downstream" in note
     walked = float(note.split("moved ")[1].split(" m")[0])
@@ -76,6 +76,6 @@ def test_a_derived_release_above_the_meshed_stretch_walks_downstream(monkeypatch
 
 def test_a_centerline_the_mesh_never_holds_refuses(monkeypatch):
     mesh = _mesh_holding(5000.0, 6000.0, monkeypatch)
-    with pytest.raises(TelemacDyeScenarioError):
-        derive_release_on_mesh(centerline_utm=[[0.0, 0.0], [1000.0, 0.0]],
+    with pytest.raises(TelemacError):
+        _station_on_mesh(centerline_utm=[[0.0, 0.0], [1000.0, 0.0]],
                                mesh=mesh, fraction=0.0)

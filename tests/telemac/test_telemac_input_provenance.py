@@ -77,11 +77,11 @@ def test_an_unknown_rung_refuses_rather_than_substituting() -> None:
 
     Seating one gave a caller who asked for 'xlarge' a medium solve with no provenance
     row saying so."""
-    from trid3nt_server.workflows.telemac.helpers.errors import TelemacDyeScenarioError
+    from trid3nt_server.workflows.telemac.errors import TelemacError
     from trid3nt_server.workflows.telemac.solving.solve import compute_class
 
     coerce = compute_class()
-    with pytest.raises(TelemacDyeScenarioError) as excinfo:
+    with pytest.raises(TelemacError) as excinfo:
         coerce({"compute_class": "enormous"})
     assert excinfo.value.error_code == "TELEMAC_COMPUTE_CLASS_UNKNOWN"
     assert "enormous" in str(excinfo.value)

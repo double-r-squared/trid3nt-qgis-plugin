@@ -15,8 +15,8 @@ from typing import Any
 
 from trid3nt_server.workflows.runtime import Step
 
-from ..helpers.errors import OpenWaterError, TelemacDyeScenarioError
-from ..helpers.reach import MESH_NODE_CAP, estimate_telemac_solve_seconds
+from ..errors import TelemacError
+from ..helpers.time_step import MESH_NODE_CAP, estimate_telemac_solve_seconds
 from .run_telemac import TELEMAC_SOLVER_NAME
 
 logger = logging.getLogger("trid3nt_server.workflows.telemac.solving.solve")
@@ -59,7 +59,7 @@ async def dispatch_and_wait(*, manifest_uri: str, compute_class: str,
         mint_dispatch_and_sim_cards,
         route_sim_terminal,
     )
-    from trid3nt_server.workflows.shared.solve_progress import drive_live_solve_progress
+    from trid3nt_server.workflows.solver.solve_progress import drive_live_solve_progress
     from trid3nt_server.workflows.solver.solver import (
         EmitterBinding,
         run_solver,
@@ -136,7 +136,7 @@ def download_result(run_id: str, basename: str, *,
         with open(local, "wb") as fh:
             fh.write(body)
     except Exception as exc:  # noqa: BLE001
-        raise OpenWaterError(
+        raise TelemacError(
             f"TELEMAC run {run_id} completed but s3://{runs_bucket}/{run_id}/"
             f"{basename} was not downloadable: {exc}",
             error_code=error_code) from exc
@@ -159,7 +159,7 @@ async def solve_reach(*, run: dict[str, Any],
         mint_dispatch_and_sim_cards,
         route_sim_terminal,
     )
-    from trid3nt_server.workflows.shared.solve_progress import drive_live_solve_progress
+    from trid3nt_server.workflows.solver.solve_progress import drive_live_solve_progress
     # What the server already knows and the worker cannot learn from the files
     # it is handed. The wait is bounded off the deck's own horizon and step.
     facts = run["case"]["server_facts"]
@@ -205,19 +205,19 @@ async def solve_reach(*, run: dict[str, Any],
 
     batch_run_id = getattr(run_result, "run_id", None) or run_id
     if run_result is None or run_result.status != "complete":
-        raise TelemacDyeScenarioError(
-            "TELEMAC_DYE_RUN_FAILED",
-            "TELEMAC dye solve did not complete "
+        raise TelemacError(
+            "the reach solve did not complete "
             f"(status={getattr(run_result, 'status', None)}, "
             f"error_code={getattr(run_result, 'error_code', None)}): "
-            f"{getattr(run_result, 'error_message', '') or getattr(run_result, 'cancellation_reason', '') or ''}")
+            f"{getattr(run_result, 'error_message', '') or getattr(run_result, 'cancellation_reason', '') or ''}",
+            error_code="TELEMAC_RUN_FAILED")
 
     metrics = await asyncio.to_thread(read_run_metrics, batch_run_id)
     if metrics.get("utm_epsg") is None:
-        raise TelemacDyeScenarioError(
-            "TELEMAC_DYE_OUTPUT_MISSING",
+        raise TelemacError(
             f"TELEMAC run {batch_run_id} produced no utm_epsg in "
-            "telemac_metrics.json; cannot georeference the SELAFIN mesh.")
+            "telemac_metrics.json; cannot georeference the SELAFIN mesh.",
+            error_code="TELEMAC_OUTPUT_MISSING")
     from trid3nt_server.workflows.solver.solver import _get_runs_bucket
 
     # No local path travels out of this step: it is the ledger's record of the
@@ -262,11 +262,11 @@ def compute_class() -> Any:
             # REFUSED, not substituted. Silently seating 'medium' gave a caller
             # who asked for 'xlarge' a medium solve, no provenance row saying so,
             # and a warning only the log ever saw.
-            raise TelemacDyeScenarioError(
-                "TELEMAC_COMPUTE_CLASS_UNKNOWN",
+            raise TelemacError(
                 f"compute_class {raw!r} is not a rung this dispatcher serves; the "
                 f"ladder is {sorted(_ALLOWED_COMPUTE)}. Omit it to take the "
-                "template's declared default.")
+                "template's declared default.",
+                error_code="TELEMAC_COMPUTE_CLASS_UNKNOWN")
         return {"compute_class": value}
 
     _coerce.__name__ = "compute_class"
@@ -290,7 +290,7 @@ async def solve_case(*, run: dict[str, Any],
         timeout_s=_CASE_TIMEOUT_S, grid_resolution_m=facts.get("mesh_size_m"),
         active_cell_count=facts.get("nelem"))
     if run_result is None or run_result.status != "complete":
-        raise OpenWaterError(
+        raise TelemacError(
             f"the {label} solve did not complete "
             f"(status={getattr(run_result, 'status', None)}, "
             f"error_code={getattr(run_result, 'error_code', None)}): "

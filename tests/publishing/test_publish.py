@@ -141,7 +141,7 @@ def test_layers_lead_and_an_animation_adopts_its_sibling_s_scale(monkeypatch):
     are persisted under the run."""
     from trid3nt_contracts.execution import LayerURI
 
-    from trid3nt_server.workflows.shared import run_products
+    from trid3nt_server.workflows.runtime import run_products
 
     seen: dict = {}
     primary = LayerURI(layer_id="L", name="Peak dye concentration (reach)",
@@ -345,7 +345,7 @@ def test_two_planes_of_one_quantity_share_a_scale_and_are_named_apart(monkeypatc
     its name."""
     from trid3nt_server.emission import publish as emission_publish
     from trid3nt_server.workflows.publishing import cog
-    from trid3nt_server.workflows.shared import run_products
+    from trid3nt_server.workflows.runtime import run_products
 
     uploaded = []
     monkeypatch.setattr(cog, "upload_cog",

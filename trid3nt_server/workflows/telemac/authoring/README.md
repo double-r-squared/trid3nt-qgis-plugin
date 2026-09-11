@@ -19,7 +19,8 @@ anything is staged.
 | file | what it is |
 | --- | --- |
 | `__init__.py` | The door. Consumers import the module they mean. |
-| `assembler.py` | What the accepted mesh MEASURES before a keyword is set - the bed at its roles, the section its outflow face cuts, the depth that section conveys the flow at, where the release lands, which stretch of a harbour boundary is the liquid edge, how deep a basin's deepest column is - the case section every run dispatches under, and the staging that turns a filled sheet into the run directory the box receives. |
+| `assembler.py` | What the accepted mesh MEASURES before a keyword is set - the bed at its roles, the section its outflow face cuts, the depth that section conveys the flow at, where a source point lands, which stretch of a harbour boundary is the liquid edge, how deep a basin's deepest column is - the case section every run dispatches under, and the staging that turns a filled sheet into the run directory the box receives. |
+| `dredging.py` | NESTOR's three files as CONTENT - the fields a maintenance dredge acts on, the actions it takes and the grade it digs to - cut on the accepted mesh by the producer a template names. |
 | `cas_validate.py` | The ONE door to the image for the steering format, in both directions: telapy writes, the engine's own reader reads back, and every authored file is parsed against its own dictionary before anything is staged. |
 | `serializer.py` | A sheet of raw keywords, written by telapy as the engine's own steering file and read straight back by the engine's own parser. The ONE writer of the steering format. |
 | `oil.py` | The oil module's two input files as content: the preset in the module reader's own format, and the release routine this run's step and point are compiled into. |

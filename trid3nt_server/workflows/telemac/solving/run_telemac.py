@@ -44,7 +44,7 @@ def _why(metrics: dict[str, Any], fallback: str) -> str:
     """Why the run stopped, with the engine's own demand named where it made one.
 
     The listing's own sentence, so this side invents no required set."""
-    from ..products.run_reads import engine_demand
+    from ..modules.listing import engine_demand
 
     said = str(metrics.get("error") or fallback)
     demand = engine_demand(str(metrics.get("listing_tail") or ""))

@@ -382,20 +382,6 @@ def _expand_local_outputs(patterns: list[str], rundir: Path) -> list[Path]:
     return sorted(seen)
 
 
-def _discover_publish_manifest_uri(
-    s3: Any, runs_bucket: str, run_id: str
-) -> str | None:
-    """The ``publish_manifest.json`` a self-S3 worker wrote under the run prefix.
-    Probed because the supervisor's completion write lands LAST and overwrites the
-    worker's own; ``None`` when the worker wrote no manifest."""
-    key = f"{run_id}/publish_manifest.json"
-    try:
-        s3.head_object(Bucket=runs_bucket, Key=key)
-    except Exception:  # noqa: BLE001 -- absent or unreadable: no pointer to add
-        return None
-    return f"s3://{runs_bucket}/{key}"
-
-
 def _write_local_completion(
     s3: Any,
     *,
@@ -436,10 +422,6 @@ def _write_local_completion(
         "finished_at": _utc_now_iso(),
         "error": error,
     }
-    if not payload.get("publish_manifest_uri"):
-        manifest_uri = _discover_publish_manifest_uri(s3, runs_bucket, run_id)
-        if manifest_uri is not None:
-            payload["publish_manifest_uri"] = manifest_uri
     s3.put_object(
         Bucket=runs_bucket,
         Key=f"{run_id}/completion.json",

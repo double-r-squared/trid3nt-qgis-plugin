@@ -11,7 +11,7 @@ import pytest
 
 from trid3nt_server.workflows.mesh.artifact import MeshArtifact
 from trid3nt_server.workflows.telemac.authoring import assembler as asm_mod
-from trid3nt_server.workflows.telemac.helpers.errors import TelemacDyeScenarioError
+from trid3nt_server.workflows.telemac.errors import TelemacError
 
 _REACH = {"name": "Eel River", "slug": "eel", "lon": -124.1, "lat": 40.5,
           "bbox": (-124.2, 40.4, -124.0, 40.6)}
@@ -122,14 +122,12 @@ def settle(monkeypatch, tmp_path):
         lambda case, run_tag, **_kw: f"s3://cache/telemac/{run_tag}/manifest.json")
 
     async def _settle(**kwargs):
-        return await asm_mod.settle_reach(centerline=_CENTERLINE,
-                                          reach_polygon=None, **kwargs)
+        return await asm_mod.settle_reach(centerline=_CENTERLINE, **kwargs)
 
     return _settle
 
 
-def _expected_settled(*, mesh_size_m: float, time_step_s: float,
-                      do_sag: bool) -> dict:
+def _expected_settled(*, mesh_size_m: float, time_step_s: float) -> dict:
     """What this ask MEANS, restated from the ask.
 
     Independent of the settle on purpose: a parity check that read its own output back
@@ -142,9 +140,6 @@ def _expected_settled(*, mesh_size_m: float, time_step_s: float,
         "bed_source": "cop-dem-glo-30",
         "mesh_size_m": mesh_size_m,
         "time_step_s": time_step_s,
-        # The outfall sits at the TOP of the reach it seeded; a mid-reach release
-        # walks to whatever fraction the ask stated.
-        "spill_fraction": 0.02 if do_sag else 0.25,
         "inflow_q_m3s": _CARRIER["m3s"],
         "duration_s": _SHEET["sim_duration_s"],
         "friction_law": 3,
@@ -157,22 +152,17 @@ def _expected_settled(*, mesh_size_m: float, time_step_s: float,
 
 def _measured(settled: dict) -> dict:
     return {key: settled[key] for key in _expected_settled(
-        mesh_size_m=0.0, time_step_s=0.0, do_sag=False)}
+        mesh_size_m=0.0, time_step_s=0.0)}
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("spill_fraction,do_sag", [(0.25, False), (0.02, True)])
-async def test_what_the_run_measures_is_unchanged_on_an_accepted_mesh(
-        settle, spill_fraction, do_sag):
+async def test_what_the_run_measures_is_unchanged_on_an_accepted_mesh(settle):
     """Routing the mesh through a session changed what the run measures in NO
     field. The artifact reports the edge the ask named, so the mesh contributes
     nothing to the timestep here."""
     out = await settle(reach=_REACH, seed=_SEED, mesh=_mesh_record(min_edge_m=14.0),
-                       carrier_discharge=_CARRIER, spill_fraction=spill_fraction,
-                       marker_label="Outfall" if do_sag else "Release point",
-                       **_SHEET)
-    assert _measured(out) == _expected_settled(mesh_size_m=14.0, time_step_s=0.7,
-                                               do_sag=do_sag)
+                       carrier_discharge=_CARRIER, **_SHEET)
+    assert _measured(out) == _expected_settled(mesh_size_m=14.0, time_step_s=0.7)
 
 
 @pytest.mark.asyncio
@@ -180,8 +170,7 @@ async def test_a_run_with_no_measured_mesh_measures_the_same_reach(settle):
     """No probes to read -> the requested edge decides dt, exactly as before."""
     out = await settle(reach=_REACH, seed=_SEED, mesh=_mesh_record(),
                        carrier_discharge=_CARRIER, **_SHEET)
-    assert _measured(out) == _expected_settled(mesh_size_m=14.0, time_step_s=0.7,
-                                               do_sag=False)
+    assert _measured(out) == _expected_settled(mesh_size_m=14.0, time_step_s=0.7)
 
 
 @pytest.mark.asyncio
@@ -243,7 +232,7 @@ async def test_the_run_prescribes_in_the_order_the_mesh_MEASURED(settle):
 
 @pytest.mark.asyncio
 async def test_a_mesh_record_with_no_topology_refuses_rather_than_remeshing(settle):
-    with pytest.raises(TelemacDyeScenarioError) as excinfo:
+    with pytest.raises(TelemacError) as excinfo:
         await settle(reach=_REACH, seed=_SEED,
                      mesh=_mesh_record(min_edge_m=8.0, topology_uri=None),
                      carrier_discharge=_CARRIER, **_SHEET)
@@ -271,7 +260,7 @@ async def test_a_mesh_with_no_painted_bed_refuses_rather_than_inventing_a_stage(
     """A bedless mesh has no ground for a stage to be measured from."""
     monkeypatch.setattr(asm_mod, "read_accepted_mesh_nodes",
                         lambda _uri, utm_epsg=None: (None, None, None, None))
-    with pytest.raises(TelemacDyeScenarioError) as excinfo:
+    with pytest.raises(TelemacError) as excinfo:
         await settle(reach=_REACH, seed=_SEED, mesh=_mesh_record(min_edge_m=8.0),
                      carrier_discharge=_CARRIER, **_SHEET)
     assert excinfo.value.error_code == "TELEMAC_MESH_BED_UNMEASURED"

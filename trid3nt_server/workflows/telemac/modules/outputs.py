@@ -40,6 +40,8 @@ __all__ = [
     "Primitive",
     "SelafinReadError",
     "Solved",
+    "mesh_area_m2",
+    "wetted_fraction",
     "column",
     "drogues",
     "extent",
@@ -163,8 +165,10 @@ class Primitive:
     t: Any = None
     #: The Point a series is read at; ``None`` reads the domain maximum.
     at: Any = None
-    #: The line a profile is read along, as a geometry source.
+    #: The line a profile is read along, as a geometry source, and how far off
+    #: it a node still belongs to the profile; ``None`` reads the whole domain.
     along: Any = None
+    within: Any = None
     #: The plane of a 3D variable, bottom first; ``None`` on a 2D module.
     plane: int | None = None
     #: The coupled module whose result this reads; ``None`` reads the run's own.
@@ -176,7 +180,7 @@ class Primitive:
 
     def __hash__(self) -> int:
         return hash((self.kind, self.variable, repr(self.t), repr(self.at),
-                     repr(self.along), self.plane, self.module))
+                     repr(self.along), repr(self.within), self.plane, self.module))
 
     def layer(self, *, style: Mapping[str, Any] | None = None) -> "Primitive":
         """Publish this field as a layer on the map, styled by ``style``."""
@@ -206,10 +210,33 @@ class Primitive:
 
 @dataclass(frozen=True)
 class Measure:
-    """A measure of a primitive's read, named by a template as an answer."""
+    """A measure of a primitive's read, named by a template as an answer.
+
+    ``over`` answers with the measure's ratio to a sheet value, ``below`` with
+    whether the measure lies under one: the two arithmetics a verdict needs."""
 
     primitive: Primitive
     stat: str
+    op: str | None = None
+    against: Any = None
+
+    def over(self, value: Any) -> "Measure":
+        """This measure divided by ``value``, a number or a declared param."""
+        return replace(self, op="over", against=value)
+
+    def below(self, value: Any) -> "Measure":
+        """Whether this measure lies below ``value``, a number or a declared param."""
+        return replace(self, op="below", against=value)
+
+    def answer(self, measured: Any, against: Any) -> Any:
+        """The answer this measure names, off what was read and what it is held to."""
+        if measured is None or self.op is None:
+            return measured
+        if against is None:
+            return None
+        if self.op == "over":
+            return None if not float(against) else float(measured) / float(against)
+        return bool(float(measured) < float(against))
 
 
 def field(name: str, t: Any = -1, *, plane: int | None = None,
@@ -230,11 +257,12 @@ def max_over_time(name: str, *, plane: int | None = None,
     return Primitive("max_over_time", variable=name, plane=plane, module=module)
 
 
-def profile(name: str, along: Any, t: Any = -1, *, plane: int | None = None,
-            module: str | None = None) -> Primitive:
-    """A variable along a line at an instant: the cross-section mean per station."""
-    return Primitive("profile", variable=name, along=along, t=t, plane=plane,
-                     module=module)
+def profile(name: str, along: Any, t: Any = -1, *, within_m: Any = None,
+            plane: int | None = None, module: str | None = None) -> Primitive:
+    """A variable along a line at an instant: the mean per station of the nodes
+    within ``within_m`` of the line, or of the whole domain when none is stated."""
+    return Primitive("profile", variable=name, along=along, within=within_m, t=t,
+                     plane=plane, module=module)
 
 
 def extent(*, module: str | None = None) -> Primitive:
@@ -479,6 +507,7 @@ def read_field(primitive: Primitive, solved: Solved) -> Read:
                  t=float(times[index]), plane=solved.plane_label(primitive.plane),
                  floor=_floor(primitive.variable, values),
                  measures={"max": float(frame.max()), "min": float(frame.min()),
+                           "spread": float(frame.max() - frame.min()),
                            "t": float(times[index]), "frames": int(times.size)})
 
 
@@ -523,7 +552,7 @@ def _boundary_series(primitive: Primitive, solved: Solved) -> Series:
     import numpy as np
     from pyproj import Transformer
 
-    from ..products.run_reads import boundary_flux
+    from .listing import boundary_flux
     from trid3nt_server.workflows.inputs.point import as_utm
 
     if primitive.at is None:
@@ -575,10 +604,62 @@ def read_max_over_time(primitive: Primitive, solved: Solved) -> Field:
                  measures=measures)
 
 
+#: The depth an element has to hold to count as wet. TELEMAC's own tidal-flat
+#: treatment leaves films thinner than this on a drying bar, and counting them as
+#: conveyance is what would make the heuristic agree with the domain by
+#: construction.
+_WET_TOL_M = 0.02
+
+
+def mesh_area_m2(mesh: Mapping[str, Any]) -> float:
+    """The area the elements of a read result cover, in the mesh's own metres."""
+    import numpy as np
+
+    ikle = np.asarray(mesh["ikle"], dtype=int)
+    x, y = np.asarray(mesh["x"]), np.asarray(mesh["y"])
+    if ikle.size == 0:
+        return 0.0
+    a, b, c = ikle[:, 0], ikle[:, 1], ikle[:, 2]
+    return float((0.5 * np.abs((x[b] - x[a]) * (y[c] - y[a])
+                               - (x[c] - x[a]) * (y[b] - y[a]))).sum())
+
+
+def wetted_fraction(mesh: Mapping[str, Any], *, wet_tol_m: float = _WET_TOL_M
+                    ) -> dict[str, Any]:
+    """How much of the solved domain still held water at the final frame.
+
+    By element, a HEURISTIC; ``mesh`` is the record the postprocess ALREADY read."""
+    # The reach domain is the mapped ACTIVE CHANNEL, which at bankfull includes
+    # the gravel bars a low flow leaves dry: TELEMAC wets and dries them natively,
+    # so a low-flow run is correct and its conveyance width is still narrower than
+    # the domain it solved on. Nothing about the result says so, and a reader
+    # looking at a ribbon inside a wider mesh has no number to read it against.
+    import numpy as np
+
+    # SELAFIN pads a variable name to 32 chars with its unit trailing ('WATER
+    # DEPTH     M'), so an exact-key lookup never matches a real result.
+    picked = next((v for v in mesh["varnames"]
+                   if v.strip().upper().startswith("WATER DEPTH")), None)
+    depth = mesh["data"].get(picked) if picked is not None else None
+    ikle = np.asarray(mesh["ikle"], dtype=int)
+    if depth is None or np.asarray(depth).size == 0 or ikle.size == 0:
+        return {}
+    x, y = np.asarray(mesh["x"]), np.asarray(mesh["y"])
+    a, b, c = ikle[:, 0], ikle[:, 1], ikle[:, 2]
+    area = 0.5 * np.abs((x[b] - x[a]) * (y[c] - y[a])
+                        - (x[c] - x[a]) * (y[b] - y[a]))
+    final = np.asarray(depth)[-1]
+    wet = area[final[ikle].mean(axis=1) > float(wet_tol_m)]
+    total = mesh_area_m2(mesh)
+    if total <= 0.0:
+        return {}
+    return {"mesh_area_m2": total, "wet_area_m2": float(wet.sum()),
+            "wetted_fraction": round(float(wet.sum()) / total, 4),
+            "wet_tol_m": float(wet_tol_m)}
+
+
 def read_extent(primitive: Primitive, solved: Solved) -> Read:
     """``extent()``: the domain's lon/lat bounds, its area, its wetted fraction."""
-    from ..products.run_reads import mesh_area_m2, wetted_fraction
-
     lon, lat = solved.lonlat
     return Read(measures={
         "bbox": [float(lon.min()), float(lat.min()), float(lon.max()), float(lat.max())],
@@ -604,12 +685,7 @@ def read_mass_balance(primitive: Primitive, solved: Solved) -> Read:
     across the liquid boundaries like the flux series, and where the runoff
     routine printed the rainfall it accumulated, the volume that fell on the
     meshed domain and the fraction of it that left."""
-    from ..products.run_reads import (
-        continuity_rel_error,
-        final_balance,
-        gaia_mass_balance,
-        mesh_area_m2,
-    )
+    from .listing import continuity_rel_error, final_balance, gaia_mass_balance
 
     if solved.body.MODULE == "gaia":
         return Read(measures=gaia_mass_balance(solved.listing))
@@ -633,9 +709,10 @@ _PROFILE_STATIONS = 60
 _PROFILE_WET_M = 0.01
 
 
-def _chainage(x: Any, y: Any, line: Any) -> tuple[Any, Any]:
-    """Each node's arc length along ``line`` at its nearest segment, and that
-    segment's unit direction: the along-line coordinate and its local axis."""
+def _chainage(x: Any, y: Any, line: Any) -> tuple[Any, Any, Any]:
+    """Each node's arc length along ``line`` at its nearest segment, that
+    segment's unit direction, and the node's distance off the line: the
+    along-line coordinate, its local axis, and how far the node is from it."""
     import numpy as np
 
     line = np.asarray(line, dtype="float64")
@@ -649,15 +726,16 @@ def _chainage(x: Any, y: Any, line: Any) -> tuple[Any, Any]:
     k = np.argmin(d2, axis=1)
     s = cum[k] + t[np.arange(x.size), k] * length[k]
     unit = np.stack([dx[k], dy[k]], axis=1) / np.maximum(length[k], 1e-9)[:, None]
-    return s, unit
+    return s, unit, np.sqrt(d2[np.arange(x.size), k])
 
 
 def read_profile(primitive: Primitive, solved: Solved) -> Profile:
-    """``profile(name, along, t)``: the depth-weighted cross-section mean of a
-    variable per station down a line, at one instant. The line runs the way the
-    solved flow goes when the module carries velocities; the reach's own order
-    otherwise. The measures carry the minimum and maximum with their stations,
-    and the depth-weighted mean along-line speed when velocities are carried."""
+    """``profile(name, along, t, within_m)``: the depth-weighted mean of a
+    variable per station down a line, at one instant, over the nodes within the
+    stated distance of it or the whole domain. The line runs the way the solved
+    flow goes when the module carries velocities; its own order otherwise. The
+    measures carry the minimum and maximum with their stations, and the
+    depth-weighted mean along-line speed when velocities are carried."""
     import numpy as np
 
     from trid3nt_server.workflows.mesh.shared.nodes import read_centerline_utm
@@ -669,11 +747,13 @@ def read_profile(primitive: Primitive, solved: Solved) -> Profile:
     x = np.asarray(solved.result["x"], dtype="float64")
     y = np.asarray(solved.result["y"], dtype="float64")
     line = read_centerline_utm(primitive.along, solved.utm_epsg)
-    s, axis = _chainage(x, y, line)
+    s, axis, off = _chainage(x, y, line)
     weight, along = np.ones(x.size), None
+    if primitive.within is not None:
+        weight = np.where(off <= float(primitive.within), weight, 0.0)
     if all(token in solved.body.VARIABLES for token in ("H", "U", "V")):
         depth = solved.frames("H", primitive.plane)[2][index]
-        weight = np.where(depth > _PROFILE_WET_M, depth, 0.0)
+        weight = weight * np.where(depth > _PROFILE_WET_M, depth, 0.0)
         u = solved.frames("U", primitive.plane)[2][index]
         v = solved.frames("V", primitive.plane)[2][index]
         along = u * axis[:, 0] + v * axis[:, 1]
@@ -704,7 +784,10 @@ def read_profile(primitive: Primitive, solved: Solved) -> Profile:
         "velocity_mps": (None if along is None else
                          float((along * weight).sum() / weight.sum()))}
     return Profile(name=name, units=units, distance_m=np.asarray(distance),
-                   values=means_arr, along="downstream distance", measures=measures)
+                   values=means_arr,
+                   along="downstream distance" if along is not None
+                   else "distance along the line",
+                   measures=measures)
 
 
 def read_column(primitive: Primitive, solved: Solved) -> Profile:

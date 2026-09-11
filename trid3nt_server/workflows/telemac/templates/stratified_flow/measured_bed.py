@@ -36,7 +36,7 @@ def _clip(polygon: Any, bed: Any) -> dict[str, Any]:
     )
     from trid3nt_server.workflows.mesh.inputs import op_raster
     from trid3nt_server.workflows.runtime import journal_note
-    from trid3nt_server.workflows.telemac.helpers.errors import OpenWaterError
+    from trid3nt_server.workflows.telemac.errors import TelemacError
 
     water = unary_union([shape(g) for g in
                          flatten_geometries(read_geometry_doc(polygon))])
@@ -50,7 +50,7 @@ def _clip(polygon: Any, bed: Any) -> dict[str, Any]:
     measured = gpd.GeoSeries([measured], crs=crs).to_crs(4326).union_all()
     domain = water.intersection(measured)
     if domain.is_empty:
-        raise OpenWaterError(
+        raise TelemacError(
             "the bed source measures nothing under this water body, so the "
             "domain would be water with no floor. Name a bed whose survey "
             "reaches this basin.",

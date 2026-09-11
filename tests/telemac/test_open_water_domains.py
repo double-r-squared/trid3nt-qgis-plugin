@@ -105,12 +105,12 @@ def test_the_basin_is_the_water_the_survey_actually_sounded(tmp_path):
 
 
 def test_water_the_survey_never_reached_refuses_rather_than_meshing(tmp_path):
-    from trid3nt_server.workflows.telemac.helpers.errors import OpenWaterError
+    from trid3nt_server.workflows.telemac.errors import TelemacError
     from trid3nt_server.workflows.telemac.templates.stratified_flow.measured_bed import (
         _clip,
     )
 
-    with pytest.raises(OpenWaterError) as excinfo:
+    with pytest.raises(TelemacError) as excinfo:
         _clip(_water(2.0, 3.0), _bed_raster(tmp_path, west_only=False))
     assert excinfo.value.error_code == "TELEMAC3D_BED_DOES_NOT_REACH"
 
@@ -171,12 +171,12 @@ def test_the_level_is_the_nearest_gauges_last_reading(tmp_path):
 def test_a_level_and_a_bed_on_two_datums_refuse_by_name(tmp_path):
     """The stated datum is the whole arithmetic: a gauge on one zero and a bed on
     another are not two numbers on one axis, and adding them is the refusal."""
-    from trid3nt_server.workflows.telemac.helpers.errors import OpenWaterError
+    from trid3nt_server.workflows.telemac.errors import TelemacError
     from trid3nt_server.workflows.telemac.templates.stratified_flow.lake_level import (
         _observed,
     )
 
-    with pytest.raises(OpenWaterError) as excinfo:
+    with pytest.raises(TelemacError) as excinfo:
         _observed(_gauges(tmp_path, [("9099018", "Marquette C.G.", -87.378,
                                       46.545, _SERIES)]),
                   "fetch_greatlakes_water_level", "fetch_topobathy",
@@ -188,12 +188,12 @@ def test_a_level_and_a_bed_on_two_datums_refuse_by_name(tmp_path):
 def test_water_no_gauge_watches_refuses_rather_than_opening_at_the_datum(tmp_path):
     """A lake nobody measures the level of does not get zero: zero IS the chart
     datum, which is the dry rim this row exists to give water."""
-    from trid3nt_server.workflows.telemac.helpers.errors import OpenWaterError
+    from trid3nt_server.workflows.telemac.errors import TelemacError
     from trid3nt_server.workflows.telemac.templates.stratified_flow.lake_level import (
         _observed,
     )
 
-    with pytest.raises(OpenWaterError) as excinfo:
+    with pytest.raises(TelemacError) as excinfo:
         _observed(_gauges(tmp_path, []), "fetch_greatlakes_water_level",
                   "fetch_greatlakes_bathymetry", {"lon": -87.38, "lat": 46.54})
     assert excinfo.value.error_code == "TELEMAC3D_LAKE_IS_UNGAUGED"

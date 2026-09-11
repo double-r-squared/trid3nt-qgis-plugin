@@ -24,13 +24,12 @@ offers - which wind option, which restart format, which runoff model - is the
 TEMPLATE's assertion where the template needs a non-default, and the engine's own
 default by omission where it does not.
 
-A body reuses another body by COMPOSITION - `parts = [RIVER, TRACER]` - never by
-extending it. Parts merge in the listed order, the body's own assertion beats
-every part, and a keyword two parts both set refuses by name unless the body
-settles it. Provenance names the part, so a keyword that means something else in
-a new setting is seen at the use site. Bodies are STATIC: every assertion is data
-fixed at import - a literal, or a description of a read the fill substitutes -
-so a body never branches on a value a run resolved.
+A body extends its module's wrapper and nothing else: a value two templates
+share is restated in each, under the template that states it, so a keyword that
+means something else in a new setting is seen at the use site. Bodies are
+STATIC: every assertion is data fixed at import - a literal, or a description of
+a read the fill substitutes - so a body never branches on a value a run
+resolved.
 
 Two acts, and only two. `fill` is repeatable and decides nothing. `run` is
 explicit, on a complete sheet, and it is where execution stops being held.
@@ -48,11 +47,16 @@ the primitives read it as any other. A primitive names the coupled module whose
 own result it reads (`module=`), and a tracer a coupled process appended behind
 the carrier's declared ones is the carrier's `T<n>` by position. A series of a token the module PRINTS rather than writes - TELEMAC-2D's `FLUX`,
 the discharge across a liquid boundary - is read off the listing at the boundary
-the Point lies on. A template lists primitives with how each is published -
+the Point lies on. A profile names the line it runs along and, where the line is
+a transect rather than the domain's own axis, how far off it a node still counts
+(`within_m=`). A template lists primitives with how each is published -
 `.layer()`, `.chart(reference=)`, `.animate()`, `.station()` - and names its
-answer as measures of them; a chart's reference is a callable computing lines
-beside the read or another primitive drawn as one. The wrapper binds no reader
-that knows a question.
+answer as measures of them, each held against a sheet value where a verdict
+needs one (`.over(P.x)` the ratio, `.below(P.x)` the comparison); a chart's
+reference is a callable computing lines beside the read or another primitive
+drawn as one. An answer over a variable the run did not write is nothing rather
+than a refusal; a listed output that is missing refuses. The wrapper binds no
+reader that knows a question.
 
 ## Files
 
@@ -61,7 +65,8 @@ that knows a question.
 | `__init__.py` | The door: the wrappers, the two acts, and the primitive set. |
 | `module.py` | What a slot, a wrapper, a composite, an output and a defined token ARE, and the dictionary loader that makes a wrapper out of `dictionary/<module>.json`. |
 | `sheet.py` | The sheet - filled slots with their provenance, the files a composite named, the slots still open - and `fill` / `run`. |
-| `outputs.py` | The primitive set - `field`, `series`, `max_over_time`, `profile`, `extent`, `mesh`, `mass_balance` - and `drogues` and `column`, with the read of each off a solved run through `read_selafin`, the engine's own reader inside the image. |
+| `outputs.py` | The primitive set - `field`, `series`, `max_over_time`, `profile`, `extent`, `mesh`, `mass_balance` - and `drogues` and `column`, with the read of each off a solved run through `read_selafin`, the engine's own reader inside the image, and the `Measure` a template names an answer by. |
+| `listing.py` | What a solved run's own listing says, read on the server: the engine's demand, GAIA's closure, the water-volume closure per period and whole, and the flux across a liquid boundary. |
 | `describe.py` | `describe_keywords` - the read over a module's dictionary, which is how the whole keyword surface is reached rather than carried in a docstring. |
 | `corpus.yaml` | The routing phrasings that reach `describe_keywords`. |
 | `telemac2d.py` | The TELEMAC-2D wrapper: the releases, wind, rain, oil, friction, runoff, infiltration (the curve-number and roughness surface read off the land cover at the fill), rating, hyetograph, time-origin and coupling groups, the module's variable vocabulary with the flux it prints rather than writes, and the drogues track it writes. |

@@ -14,7 +14,7 @@ import pytest
 
 from trid3nt_server.workflows.telemac.authoring import assembler as D
 from trid3nt_server.workflows.telemac.helpers import uniform_flow as U
-from trid3nt_server.workflows.telemac.helpers.errors import TelemacDyeScenarioError
+from trid3nt_server.workflows.telemac.errors import TelemacError
 
 #: A trapezoid: 40 m bed at 97 m, banks rising 3 m over 10 m either side.
 _SECTION = [[0.0, 100.0], [10.0, 97.0], [50.0, 97.0], [60.0, 100.0]]
@@ -65,7 +65,7 @@ def test_a_node_the_bed_left_unpainted_drops_out_without_moving_the_others():
 
 def test_an_outflow_face_with_no_section_left_refuses_by_name():
     xy = np.array([[0.0, 0.0], [0.0, 10.0]])
-    with pytest.raises(TelemacDyeScenarioError) as exc:
+    with pytest.raises(TelemacError) as exc:
         D._measured_reach({"inflow": [0, 1], "outflow": [0, 1]}, xy,
                           np.array([97.0, np.nan]), [(0.0, 0.0), (10.0, 0.0)])
     assert exc.value.error_code == "TELEMAC_MESH_SECTION_UNMEASURED"
@@ -238,11 +238,9 @@ def test_the_catchments_outlet_slope_is_the_bed_over_the_elements_it_touches():
 def test_a_flat_outlet_refuses_rather_than_holding_a_level_nobody_measured():
     xy = np.array([[0.0, 0.0], [10.0, 0.0], [0.0, 10.0], [10.0, 10.0]])
     cells = np.array([[0, 1, 2], [1, 3, 2]])
-    from trid3nt_server.workflows.telemac.helpers.errors import RainOnGridError
-
-    with pytest.raises(RainOnGridError) as excinfo:
+    with pytest.raises(TelemacError) as excinfo:
         D._bed_slope([1, 3], xy, np.zeros(4), cells)
-    assert excinfo.value.error_code == "TELEMAC_ROG_OUTLET_SLOPE_UNMEASURED"
+    assert excinfo.value.error_code == "TELEMAC_OUTLET_SLOPE_UNMEASURED"
 
 
 def test_the_flow_range_is_the_gross_rain_rate_on_the_meshed_area():

@@ -11,7 +11,7 @@ import json
 import logging
 from typing import Any, Mapping
 
-logger = logging.getLogger("trid3nt_server.workflows.shared.run_products")
+logger = logging.getLogger("trid3nt_server.workflows.runtime.run_products")
 
 __all__ = ["CHART_SPEC_KEY", "METRICS_KEY", "persist_run_products"]
 

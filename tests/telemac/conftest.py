@@ -65,9 +65,9 @@ def telemac_result(monkeypatch: pytest.MonkeyPatch):
                                       for frame in data[name]])
                      for name in varnames},
         }
-        for reader in ("trid3nt_server.workflows.telemac.modules.outputs",
-                       "trid3nt_server.workflows.telemac.products.postprocess_telemac"):
-            monkeypatch.setattr(f"{reader}.read_selafin", lambda _path: mesh)
+        monkeypatch.setattr(
+            "trid3nt_server.workflows.telemac.modules.outputs.read_selafin",
+            lambda _path: mesh)
         return mesh
 
     return install

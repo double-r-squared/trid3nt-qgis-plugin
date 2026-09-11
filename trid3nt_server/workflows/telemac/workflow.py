@@ -30,10 +30,15 @@ from trid3nt_server.workflows.runtime import (
     Workflow,
 )
 from trid3nt_server.workflows.mesh.step import MeshStep
-from trid3nt_server.workflows.telemac.helpers.errors import TelemacDyeScenarioError
+from trid3nt_server.workflows.telemac.errors import TelemacError
 from trid3nt_server.workflows.telemac.modules import wrapper_for
 from trid3nt_server.workflows.telemac.modules.module import SlotRefused
-from trid3nt_server.workflows.telemac.modules.outputs import Measure, Primitive, Solved
+from trid3nt_server.workflows.telemac.modules.outputs import (
+    Measure,
+    OutputEmpty,
+    Primitive,
+    Solved,
+)
 from trid3nt_server.workflows.telemac.modules.sheet import Origin, Sheet
 from trid3nt_server.workflows.telemac.modules.sheet import fill as fill_slots
 from trid3nt_server.workflows.telemac.modules.sheet import run as run_sheet_
@@ -56,8 +61,7 @@ class Door:
 
     Decides nothing: every value it carries is the template's own declaration."""
 
-    #: The STEERING body: the module wrapper plus the parts and slots this
-    #: question asserts.
+    #: The STEERING body: the module wrapper plus the slots this question asserts.
     steering: type
     #: The step that MEASURES what the sheet is filled from, named ``settled``.
     settle: Step
@@ -99,8 +103,7 @@ class Door:
 
         Read off the declaration itself, never claimed by prose."""
         body = self.steering
-        stated = {name for part in (*body.PARTS, body) for name in part.ASSERTED}
-        stated |= set(self.slots)
+        stated = set(body.ASSERTED) | set(self.slots)
         touched = sorted({body.DICTIONARY[name].rubrique[0] for name in stated
                           if name in body.DICTIONARY and body.DICTIONARY[name].rubrique})
         open_required = sorted(slot.keyword for name, slot in body.DICTIONARY.items()
@@ -118,13 +121,14 @@ class Door:
     def __call__(self, ops: Workflow) -> list[Any]:
         """The step sequence: the world, then fill, then run, then the outputs."""
         params = {prm.name: ParamRef(prm.name) for prm in ops.params}
-        # Every producer the body may READ, under the name it names it by. A
-        # body states what it will hold; this is where the fill finds it. The
-        # accepted mesh is among them: a composite that samples at its nodes
-        # reads the record the mesh step returned.
-        produced = {step.name: Ref(step.name)
-                    for step in (*self.produce, *self.derive)
-                    if step.name} | {"settled": Ref("settled"), "mesh": Ref("mesh")}
+        # Every DATA row and every producer the body may READ, under the name
+        # it names it by. A body states what it will hold; this is where the
+        # fill finds it. The accepted mesh is among them: a composite that
+        # samples at its nodes reads the record the mesh step returned.
+        produced = {row.name: Ref(row.name) for row in ops.data}
+        produced |= {step.name: Ref(step.name)
+                     for step in (*self.produce, *self.derive)
+                     if step.name} | {"settled": Ref("settled"), "mesh": Ref("mesh")}
         return [
             *self.domain,
             MeshStep.build(mesh=self.mesh, name=Ref(self.mesh_on),
@@ -168,53 +172,69 @@ class Door:
                 raise PlanValidationError(
                     f"OUTPUTS publishes {named!r} and CAPTIONS names no caption "
                     "for it.")
-        # A primitive's point and line are reads the run resolves; they ride
-        # beside the list, where the plan's binder walks, and rejoin it at publish.
+        # A primitive's point, line and band, and the sheet value a measure is
+        # held against, are reads the run resolves; they ride beside the list,
+        # where the plan's binder walks, and rejoin it at publish.
         listed = [*self.outputs, *(m.primitive for m in self.answer.values())]
-        anchors = [{"at": p.at, "along": p.along} for p in listed]
+        anchors = [{"at": p.at, "along": p.along, "within": p.within}
+                   for p in listed]
         return Step(runner=f"{_TELEMAC}.workflow.publish_outputs", stage="publish",
                     kwargs={"run": Ref("solve"),
                             "outputs": [_unanchored(p) for p in self.outputs],
                             "captions": dict(self.captions),
-                            "answer": {name: Measure(_unanchored(m.primitive), m.stat)
+                            "answer": {name: replace(m, primitive=_unanchored(m.primitive),
+                                                     against=None)
                                        for name, m in self.answer.items()},
+                            "against": {name: m.against
+                                        for name, m in self.answer.items()},
                             "anchors": anchors,
                             "params": dict(params)}).named("outputs")
 
 
 def _unanchored(primitive: Primitive) -> Primitive:
-    return replace(primitive, at=None, along=None)
+    return replace(primitive, at=None, along=None, within=None)
 
 
 def _anchored(primitive: Primitive, anchor: Mapping[str, Any]) -> Primitive:
-    return replace(primitive, at=anchor["at"], along=anchor["along"])
+    return replace(primitive, at=anchor["at"], along=anchor["along"],
+                   within=anchor.get("within"))
 
 
 async def publish_outputs(*, run: Mapping[str, Any], outputs: Sequence[Primitive],
                           captions: Mapping[str, str],
                           answer: Mapping[str, Measure],
                           params: Mapping[str, Any],
-                          anchors: Sequence[Mapping[str, Any]] = ()
+                          anchors: Sequence[Mapping[str, Any]] = (),
+                          against: Mapping[str, Any] | None = None
                           ) -> AnswerLayerURI:
     """Read the listed primitives off the solved run, publish each, answer.
 
     Each module's result is read ONCE; every primitive and every answer reads
     from it, a coupled module's own file through its own wrapper. A chart's
     reference is a callable computing lines beside the read, or another
-    primitive read where the chart's own is anchored and drawn as a line."""
+    primitive read where the chart's own is anchored and drawn as a line. A
+    listed output the result lacks refuses; an answer over one is ``None``."""
     listed = [*outputs, *(m.primitive for m in answer.values())]
     if anchors:
         listed = [_anchored(p, a) for p, a in zip(listed, anchors)]
     outputs = listed[:len(outputs)]
-    answer = {name: Measure(p, m.stat)
+    answer = {name: replace(m, primitive=p, against=(against or {}).get(name))
               for (name, m), p in zip(answer.items(), listed[len(outputs):])}
     solved: dict[str, Solved] = {}
+    published_keys = {primitive.key for primitive in outputs}
 
     def _read(key: Primitive) -> Any:
         module = key.module or str(run["module"])
         if module not in solved:
             solved[module] = Solved(run, wrapper_for(module))
-        return solved[module].body.OUTPUTS[key.kind].read(key, solved[module])
+        try:
+            return solved[module].body.OUTPUTS[key.kind].read(key, solved[module])
+        except OutputEmpty:
+            # A run that carried nothing a measure could read answers with
+            # nothing; a published output that is missing is a refusal.
+            if key in published_keys:
+                raise
+            return None
 
     def _beside(primitive: Primitive) -> Primitive | None:
         reference = primitive.reference
@@ -250,7 +270,10 @@ async def publish_outputs(*, run: Mapping[str, Any], outputs: Sequence[Primitive
                                                 primitive.kind),
                            style=primitive.style)
                for primitive in outputs])
-    answered = {name: reads[measure.primitive].measures.get(measure.stat)
+    answered = {name: measure.answer(
+                    None if reads[measure.primitive] is None
+                    else reads[measure.primitive].measures.get(measure.stat),
+                    measure.against)
                 for name, measure in answer.items()}
     if published.primary is None:
         raise SlotRefused(
@@ -373,9 +396,9 @@ async def _review(sheet: Sheet, *, workflow: str, title: str,
     if not outcome.proceed:
         # A DECLINED review is the user's answer, not a defect in the sheet, so
         # it carries the cancel code every gate in the tree refuses under.
-        raise TelemacDyeScenarioError(
-            "USER_INPUT_CANCELLED",
-            outcome.cancel_reason or f"{workflow} was cancelled at the review.")
+        raise TelemacError(
+            outcome.cancel_reason or f"{workflow} was cancelled at the review.",
+            error_code="USER_INPUT_CANCELLED")
     return {name: value for name, value in outcome.params.items()
             if name in sheet.body.DICTIONARY or name in sheet.body.COMPOSITES}
 

@@ -49,8 +49,8 @@ from trid3nt_server.workflows.telemac.workflow import Door, TelemacWorkflow
 __all__ = ["ANSWER", "CAPTIONS", "DATA", "MESH", "OUTPUTS", "PARAMS", "STEERING",
            "telemac_rain_on_grid"]
 
-_HELPERS = "trid3nt_server.workflows.telemac.helpers"
 _AUTHORING = "trid3nt_server.workflows.telemac.authoring"
+_TEMPLATE = "trid3nt_server.workflows.telemac.templates.rain_on_grid"
 _SOLVING = "trid3nt_server.workflows.telemac.solving.solve"
 
 _CODE = "TELEMAC_ROG_PARAMS_INVALID"
@@ -90,7 +90,7 @@ class DATA:
                      dataset=P.landcover_dataset,
                      resolution_m=NLCD_NATIVE_RESOLUTION_M,
                      purpose="land cover")
-    rain = tool(f"{_HELPERS}.forcing.resolve_rain_event",
+    rain = tool(f"{_TEMPLATE}.storm.resolve_rain_event",
                 window=P.rain_window,
                 intensity_mm_per_hr=P.design_storm_mm_per_hr,
                 storm_duration_hr=P.storm_duration_hr,

@@ -147,7 +147,9 @@ def test_constant_door_params_off_wire_scenario_and_user_ones_present():
 
 
 def test_resolve_rain_event_design_storm_rung_no_window():
-    from trid3nt_server.workflows.telemac.helpers.forcing import resolve_rain_event
+    from trid3nt_server.workflows.telemac.templates.rain_on_grid.storm import (
+        resolve_rain_event,
+    )
 
     # no sim_duration_hr asked -> the storm's OWN duration stands.
     out = resolve_rain_event(window=None, intensity_mm_per_hr=25.0,
@@ -171,15 +173,17 @@ def test_resolve_rain_event_malformed_window_refuses():
         bind_domain,
         reset_domain,
     )
-    from trid3nt_server.workflows.telemac.helpers.errors import RainOnGridError
-    from trid3nt_server.workflows.telemac.helpers.forcing import resolve_rain_event
+    from trid3nt_server.workflows.telemac.errors import TelemacError
+    from trid3nt_server.workflows.telemac.templates.rain_on_grid.storm import (
+        resolve_rain_event,
+    )
 
     token = bind_domain(Domain(bbox=(-83.47, 35.02, -83.36, 35.10)))
     try:
-        with pytest.raises(RainOnGridError) as ei:
+        with pytest.raises(TelemacError) as ei:
             resolve_rain_event(window="no-separator", intensity_mm_per_hr=25.0,
                                storm_duration_hr=6.0, sim_duration_hr=None)
-        assert ei.value.error_code == "TELEMAC_ROG_BAD_WINDOW"
+        assert ei.value.error_code == "TELEMAC_RAIN_WINDOW_INVALID"
     finally:
         reset_domain(token)
 
@@ -191,7 +195,9 @@ def _hyetograph(monkeypatch, precip_mm: list[float]) -> dict:
         bind_domain,
         reset_domain,
     )
-    from trid3nt_server.workflows.telemac.helpers.forcing import resolve_rain_event
+    from trid3nt_server.workflows.telemac.templates.rain_on_grid.storm import (
+        resolve_rain_event,
+    )
 
     monkeypatch.setitem(
         TOOL_REGISTRY, "fetch_aorc_precip",
@@ -446,11 +452,11 @@ def test_the_settle_records_where_each_liquid_boundary_sits(rog_run):
 
 def test_a_mesh_whose_boundary_took_no_outlet_role_refuses(rog_run, monkeypatch):
     from trid3nt_server.workflows.telemac.authoring import assembler as asm_mod
-    from trid3nt_server.workflows.telemac.helpers.errors import RainOnGridError
+    from trid3nt_server.workflows.telemac.errors import TelemacError
 
     monkeypatch.setattr(asm_mod, "read_topology", lambda _uri: {
         "roles": {"inflow": [0]}, "liquid_boundary_order": ["inflow"],
         "liquid_boundary_prescribes": ["flowrate"]})
-    with pytest.raises(RainOnGridError) as ei:
+    with pytest.raises(TelemacError) as ei:
         asyncio.run(rog_run(_DESIGN_STORM))
-    assert ei.value.error_code == "TELEMAC_ROG_NO_OUTLET_NODES"
+    assert ei.value.error_code == "TELEMAC_OUTLET_UNSET"

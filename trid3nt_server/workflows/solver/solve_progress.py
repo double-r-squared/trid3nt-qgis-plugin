@@ -10,7 +10,7 @@ import asyncio
 import logging
 from typing import Any
 
-logger = logging.getLogger("trid3nt_server.workflows.shared.solve_progress")
+logger = logging.getLogger("trid3nt_server.workflows.solver.solve_progress")
 
 
 #: Cadence (seconds) for the LIVE solve-progress envelope during the long solve.

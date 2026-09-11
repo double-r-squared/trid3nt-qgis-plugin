@@ -22,7 +22,7 @@ async def reading_day(*, event_time: str | None = None) -> dict[str, Any]:
     Unset is TODAY; a value that is not a date REFUSES, never falls back."""
     import datetime as dt
 
-    from trid3nt_server.workflows.telemac.helpers.errors import OpenWaterError
+    from trid3nt_server.workflows.telemac.errors import TelemacError
 
     stated = str(event_time or "").strip()
     if not stated:
@@ -31,7 +31,7 @@ async def reading_day(*, event_time: str | None = None) -> dict[str, Any]:
     try:
         day = dt.date.fromisoformat(stated[:10])
     except ValueError:
-        raise OpenWaterError(
+        raise TelemacError(
             f"event_time={event_time!r} is not an ISO date (e.g. '2026-09-05'), "
             "so the day the lake level is read at is unknown. Omit it to read "
             "today.",
@@ -54,12 +54,12 @@ def _observed(level: Any, gauge_source: str, bed_source: str,
     import geopandas as gpd
 
     from trid3nt_server.workflows.runtime import journal_note
-    from trid3nt_server.workflows.telemac.helpers.errors import OpenWaterError
+    from trid3nt_server.workflows.telemac.errors import TelemacError
 
     datum = _one_datum(gauge_source, bed_source)
     frame = _stations(level)
     if frame.empty:
-        raise OpenWaterError(
+        raise TelemacError(
             f"{gauge_source} reports no water-level gauge over this AOI, so the "
             "level the basin opens at is not observed anywhere. Widen the bbox "
             "to reach a gauge on this lake, or state the level on the call "
@@ -98,19 +98,19 @@ def _one_datum(gauge_source: str, bed_source: str) -> str:
 
     What a document counts from is on its source row, never in its values."""
     from trid3nt_server.tools.fetchers._router.registration import get_spec
-    from trid3nt_server.workflows.telemac.helpers.errors import OpenWaterError
+    from trid3nt_server.workflows.telemac.errors import TelemacError
 
     stated = {name: (get_spec(name).vertical_datum or "").strip()
               for name in (gauge_source, bed_source)}
     missing = sorted(name for name, datum in stated.items() if not datum)
     if missing:
-        raise OpenWaterError(
+        raise TelemacError(
             f"{', '.join(missing)} states no vertical datum, so a water level "
             "and a bed elevation cannot be placed on one axis. State the datum "
             "on the source row from the dataset's own documentation.",
             error_code="TELEMAC3D_DATUM_UNSTATED")
     if stated[gauge_source] != stated[bed_source]:
-        raise OpenWaterError(
+        raise TelemacError(
             f"{gauge_source} reads on {stated[gauge_source]!r} and {bed_source} "
             f"is on {stated[bed_source]!r}, and no offset between the two is "
             "stated anywhere, so the free surface cannot be placed over this "
@@ -129,11 +129,11 @@ def _stations(level: Any) -> Any:
 
     from trid3nt_server.tools.cache import read_object_bytes_s3
     from trid3nt_server.workflows.inputs.geometry import source_uri
-    from trid3nt_server.workflows.telemac.helpers.errors import OpenWaterError
+    from trid3nt_server.workflows.telemac.errors import TelemacError
 
     uri = str(source_uri(level) or "").strip()
     if not uri:
-        raise OpenWaterError(
+        raise TelemacError(
             "the lake-level fetch returned no layer to read the gauge from.",
             error_code="TELEMAC3D_LAKE_LEVEL_UNREADABLE")
     if not uri.startswith("s3://"):
@@ -155,7 +155,7 @@ def _last_reading(row: Any, gauge_source: str) -> tuple[str, float]:
     """The LAST sample the gauge published in the window -> ``(stamp, metres)``.
 
     The window is one day, so its last sample is the level as that day closed."""
-    from trid3nt_server.workflows.telemac.helpers.errors import OpenWaterError
+    from trid3nt_server.workflows.telemac.errors import TelemacError
 
     for line in reversed(str(row.get("time_series_csv") or "").splitlines()):
         stamp, _sep, value = line.strip().partition(",")
@@ -163,7 +163,7 @@ def _last_reading(row: Any, gauge_source: str) -> tuple[str, float]:
             return stamp, float(value)
         except ValueError:
             continue
-    raise OpenWaterError(
+    raise TelemacError(
         f"{gauge_source} returned station {row.get('station_id')} with no "
         "readable water level in the window asked for. Ask for a day the gauge "
         "published, or state the level on the call.",

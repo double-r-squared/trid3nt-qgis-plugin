@@ -534,7 +534,7 @@ def test_the_water_balance_carries_the_final_block_and_the_rain_that_fell(catchm
     """The volumes are the engine's own, outflow-positive across the boundaries
     like the flux series; the rain volume is the accumulated depth the runoff
     routine printed over the meshed area, and the coefficient their ratio."""
-    from trid3nt_server.workflows.telemac.products.run_reads import mesh_area_m2
+    from trid3nt_server.workflows.telemac.modules.outputs import mesh_area_m2
 
     read = T2D.OUTPUTS["mass_balance"].read(mass_balance(), catchment)
     area = mesh_area_m2(catchment.result)
@@ -552,7 +552,7 @@ def test_the_envelope_carries_its_p99_beside_its_maximum_and_the_extent_its_area
         solved):
     """One pit can set the maximum while the field sits far below it, so the
     99th percentile of the envelope rides beside it."""
-    from trid3nt_server.workflows.telemac.products.run_reads import mesh_area_m2
+    from trid3nt_server.workflows.telemac.modules.outputs import mesh_area_m2
 
     read = T2D.OUTPUTS["max_over_time"].read(max_over_time("T1"), solved)
     assert read.measures["max"] == 80.0

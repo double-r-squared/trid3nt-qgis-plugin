@@ -19,7 +19,6 @@ from . import (
     gate_spec,
     message,
     payload_warning,
-    publish_manifest,
     region_choice,
     sandbox_contracts,
     secrets,
@@ -57,13 +56,6 @@ from .message import (
     ToolDeclaration,
     ToolResponse,
 )
-from .publish_manifest import (
-    MANIFEST_SCHEMA_VERSION,
-    PublishManifest,
-    PublishManifestBandStats,
-    PublishManifestLayer,
-    parse_publish_manifest,
-)
 from .outputs_manifest import (
     OUTPUTS_MANIFEST_SCHEMA_VERSION,
     OUTPUT_KINDS,
@@ -96,7 +88,6 @@ __all__ = [
     "gate_spec",
     "message",
     "payload_warning",
-    "publish_manifest",
     "outputs_manifest",
     "region_choice",
     "sandbox_contracts",
@@ -110,12 +101,6 @@ __all__ = [
     "ToolCall",
     "ToolDeclaration",
     "ToolResponse",
-    # publish manifest: worker -> agent
-    "MANIFEST_SCHEMA_VERSION",
-    "PublishManifest",
-    "PublishManifestBandStats",
-    "PublishManifestLayer",
-    "parse_publish_manifest",
     # outputs.json manifest: writer + tolerant reader
     "OUTPUTS_MANIFEST_SCHEMA_VERSION",
     "OUTPUT_KINDS",

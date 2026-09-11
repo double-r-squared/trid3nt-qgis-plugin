@@ -1,8 +1,8 @@
 """A TELEMAC module's keyword surface, as the engine publishes it.
 
 Every assertion is DATA, fixed when the module is imported: a body reads no value
-any fill produced, and every refusal - an unknown keyword, a wrong type, a
-keyword two parts both set - is raised at IMPORT time."""
+any fill produced, and every refusal - an unknown keyword, a wrong type, a body
+extending anything but its wrapper - is raised at IMPORT time."""
 
 from __future__ import annotations
 
@@ -44,7 +44,7 @@ UNSET = _Unset()
 
 #: Class attributes a wrapper carries that are never keyword assertions.
 _RESERVED = frozenset((
-    "MODULE", "DICTIONARY", "COMPOSITES", "OUTPUTS", "ASSERTED", "PARTS", "parts",
+    "MODULE", "DICTIONARY", "COMPOSITES", "OUTPUTS", "ASSERTED",
     "VARIABLES", "LISTING", "DERIVED", "RESULT_FILE", "composites", "outputs",
     "slot",
 ))
@@ -200,7 +200,7 @@ def load_dictionary(module: str) -> Mapping[str, Slot]:
 class _Body(type):
     """The metaclass every wrapper and every body extending one is made by.
 
-    A body's namespace and parts are checked against the dictionary at import."""
+    A body's namespace is checked against the dictionary at import."""
 
     def __call__(cls, *args: str) -> type:
         if cls is not Module:
@@ -222,50 +222,18 @@ class _Body(type):
         if dictionary is None or "DICTIONARY" in namespace:
             return cls
         _refuse_extended_body(cls, bases)
-        cls.PARTS = _parts(cls, namespace.get("parts", ()))
         cls.ASSERTED = MappingProxyType(_asserted(cls, namespace, dictionary))
-        _refuse_unsettled(cls)
         return cls
 
 
 def _refuse_extended_body(cls: type, bases: tuple) -> None:
-    """A body extends the WRAPPER. Reuse between bodies is composition.
-
-    A part keeps its own name on every row it fills; an heir could not."""
+    """A body extends the WRAPPER and nothing else: a value two bodies share is
+    restated in each, under the template that states it."""
     for base in bases:
         if getattr(base, "ASSERTED", None):
             raise SlotRefused(
                 f"{cls.__name__} extends {base.__name__}, which is a body. A body "
-                f"extends its module's wrapper; to reuse {base.__name__}, list it: "
-                f"parts = [{base.__name__}].")
-
-
-def _parts(cls: type, declared: Any) -> tuple[type, ...]:
-    """The shared bodies this one is made of, flattened in the listed order."""
-    flat: list[type] = []
-    for part in declared:
-        if not (isinstance(part, type) and getattr(part, "MODULE", "") == cls.MODULE):
-            raise SlotRefused(
-                f"{cls.__name__} lists {part!r} as a part; a part is a body of "
-                f"the same module ({cls.MODULE}).")
-        for member in (*part.PARTS, part):
-            if member not in flat:
-                flat.append(member)
-    return tuple(flat)
-
-
-def _refuse_unsettled(cls: type) -> None:
-    """A keyword two parts both set is settled by this body, or it refuses.
-
-    Merging in the listed order would let the second part win silently."""
-    seen: dict[str, str] = {}
-    for part in cls.PARTS:
-        for key in part.ASSERTED:
-            if key in seen and key not in cls.ASSERTED:
-                raise SlotRefused(
-                    f"{cls.__name__} lists {seen[key]} and {part.__name__}, which "
-                    f"both set {key}; settle it on {cls.__name__} or drop one part.")
-            seen[key] = part.__name__
+                f"extends its module's wrapper; restate the values it needs.")
 
 
 def _asserted(cls: type, namespace: Mapping[str, Any],
@@ -325,8 +293,6 @@ class Module(metaclass=_Body):
     DERIVED: Mapping[str, Callable[..., Any]] = MappingProxyType({})
     #: The result file the primitives read; empty reads the run's own.
     RESULT_FILE: str = ""
-    #: The shared bodies this one is made of, in the order they merge.
-    PARTS: tuple[type, ...] = ()
     #: What THIS body asserts - empty on a wrapper, by law.
     ASSERTED: Mapping[str, Any] = MappingProxyType({})
 

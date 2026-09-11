@@ -24,7 +24,6 @@ consumer branches on its discriminator rather than on a string it recognised.
 | `message.py` | The adapters' message IR: `Message`, `Part`, `ToolCall`, `ToolResponse`, `ToolDeclaration`. |
 | `outputs_manifest.py` | The `outputs.json` emit-on-solve manifest, writer and typed reader. |
 | `payload_warning.py` | The payload-warning envelope and its confirmation. |
-| `publish_manifest.py` | The typed reader for the worker's `publish_manifest.json`. |
 | `py.typed` | The marker that says these annotations are shipped. |
 | `region_choice.py` | The region-narrowing picker: the request that pauses a turn, and its reply. |
 | `sandbox_contracts.py` | The two code-exec envelopes: confirm request and run result. |

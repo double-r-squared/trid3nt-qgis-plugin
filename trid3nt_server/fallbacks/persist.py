@@ -50,10 +50,8 @@ def persist_run_activations(
         }
         from trid3nt_server.workflows.solver.solver import _get_s3_client
 
-        # A sidecar rather than a field inside ``publish_manifest.json``: that
-        # file is worker-written and inert until an image rebuild, while the
-        # activations are a server-side fact about the inputs the composer
-        # fetched.
+        # A sidecar of its own: the activations are a server-side fact about
+        # the inputs the composer fetched, not something the worker wrote.
         _get_s3_client().put_object(
             Bucket=bucket,
             Key=key,

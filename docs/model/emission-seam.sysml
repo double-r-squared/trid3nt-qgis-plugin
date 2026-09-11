@@ -143,14 +143,6 @@ package EmissionSeam {
         */
     }
 
-    part def ManifestRegistrar {
-        doc /*
-        The register-only arm: a worker already wrote display-ready objects and
-        the statistics to scale them by, so the agent binds the handles and
-        resolves the legend without reading a single COG back.
-        */
-    }
-
     part def LayerMaterializer {
         doc /*
         The canvas end, in the other process. It opens the store uri natively,
@@ -466,13 +458,6 @@ package EmissionSeam {
         port recordOut : RecordOut;
     }
 
-    part manifestRegistrar : ManifestRegistrar {
-        doc /*
-        code: trid3nt_server/workflows/shared/register_published_manifest.py
-        */
-        port recordOut : RecordOut;
-    }
-
     part layerMaterializer : LayerMaterializer {
         doc /*
         code: plugin/render/layers.py
@@ -538,9 +523,6 @@ package EmissionSeam {
 
     interface recordFromSolve : LayerRecordEntry
         connect outputsSeamPoint.recordOut to layerRecord.recordIn;
-
-    interface recordFromWorkerManifest : LayerRecordEntry
-        connect manifestRegistrar.recordOut to layerRecord.recordIn;
 
     interface restyleAsked : RestyleAsk
         connect restyleTool.askOut to restyleSurface.askIn;

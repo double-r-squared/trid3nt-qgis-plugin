@@ -106,7 +106,7 @@ def test_the_plan_reads_as_the_universal_stage_sequence():
     plan = wf.plan
     stages = [s.stage for s in plan.declared() if s.stage]
     assert stages == ["acquire", "acquire", "acquire", "mesh", "mesh",
-                      "author", "author", "solve", "publish"]
+                      "author", "author", "author", "solve", "publish"]
     assert [s.name for s in plan.declared()][-1] == "outputs"
 
 
@@ -213,10 +213,7 @@ def _stub_reach_pipeline(monkeypatch, order, seen, *, layer, review, tmp_path=No
     """Patch the shared trees at the modules the plan's runners resolve to."""
     from trid3nt_server.gates import input_review as gate_mod
     from trid3nt_server.workflows.mesh import step as mesh_step_mod
-    from trid3nt_server.workflows.telemac.helpers import (
-        forcing as forcing_mod,
-        reach as reach_mod,
-    )
+    from trid3nt_server.workflows.telemac.templates import reach as reach_mod
     from trid3nt_server.workflows.telemac.solving import solve as solve_mod
     from trid3nt_server.workflows.telemac.authoring import assembler as asm_mod
     from trid3nt_server.workflows.telemac import workflow as door_mod
@@ -235,7 +232,7 @@ def _stub_reach_pipeline(monkeypatch, order, seen, *, layer, review, tmp_path=No
     monkeypatch.setattr(reach_mod, "reach_seed",
                         _step("seed", {"lon": -124.1, "lat": 40.5,
                                        "source": "flowline"}))
-    monkeypatch.setattr(forcing_mod, "resolve_carrier_discharge",
+    monkeypatch.setattr(reach_mod, "resolve_carrier_discharge",
                         _step("discharge", {"m3s": 2.0, "basis": "fetched",
                                             "note": "NWM 2.0 m3/s"}))
     monkeypatch.setattr(mesh_step_mod, "build_declared_mesh",
@@ -248,13 +245,14 @@ def _stub_reach_pipeline(monkeypatch, order, seen, *, layer, review, tmp_path=No
                         lambda mesh, centerline: 1.0)
     if tmp_path is not None:
         install_reach_chain(monkeypatch, tmp_path, seen)
+    monkeypatch.setattr(asm_mod, "settle_release",
+                        _step("outfall", {"at": [0.0, 0.0], "name": None}))
     monkeypatch.setattr(asm_mod, "settle_reach",
                         _step("settled", {
                             "name": "eel", "title": "eel REACH",
                             "graphic_period": 200, "until_s": 3700.0,
                             "time_step_s": 1.0, "depth_m": 1.2,
                             "friction_law": 3, "friction_coefficient": 33.0,
-                            "release_at": [0.0, 0.0],
                             "mesh_inputs": [], "server_facts": {},
                             "continue_from": None, "inflow_q_m3s": 2.0,
                             "outflow_stage_m": 1.0,
@@ -303,14 +301,15 @@ async def test_the_declared_plan_composes_the_shared_steps_in_order(monkeypatch,
         outfall_coords=[-124.11, 40.51], input_mode="user_gated")
 
     assert not isinstance(out, dict), out
-    assert order == ["geocode", "rivers", "seed", "discharge", "mesh", "settled",
-                     "review", "run", "outputs"]
+    assert order == ["geocode", "rivers", "seed", "discharge", "mesh", "outfall",
+                     "settled", "review", "run", "outputs"]
     # the outfall pins the MESHED water body, so it rides as the reach seed the
     # ONE centerline is navigated from - never as a dye release point
     from trid3nt_server.workflows.inputs import Point
 
     assert seen["seed"]["supplied"] == Point(-124.11, 40.51)
-    assert seen["settled"]["release"] == Point(-124.11, 40.51)
+    assert seen["outfall"]["point"] == Point(-124.11, 40.51)
+    assert seen["outfall"]["label"] == "Outfall"
     # The body reads the declared upstream oxygen where it states its boundary
     # and its initial state, and the user's own value reaches the deck.
     body = seen["run"]["sheet"].body
@@ -364,7 +363,7 @@ def test_the_run_records_the_edge_the_accepted_mesh_was_measured_at():
     """DS-3: the granularity a run is judged on is the built mesh's own minimum
     edge, not the number that was asked for and not one re-derived from a channel
     width nobody surveyed."""
-    from trid3nt_server.workflows.telemac.helpers.reach import suggest_time_step_s
+    from trid3nt_server.workflows.telemac.helpers.time_step import suggest_time_step_s
 
     # The measured edge drives the CFL step; the asked edge only stands in until
     # a mesh exists to measure.

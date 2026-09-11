@@ -168,7 +168,7 @@ def test_the_release_is_the_one_point_slot_and_it_seeds_the_reach():
     wf = _workflow()
     steps = {s.label: s for s in wf.plan.declared()}
     assert steps["seed"].kwargs["supplied"].name == "release"
-    assert steps["settled"].kwargs["release"].name == "release"
+    assert steps["release"].kwargs["point"].name == "release"
     wire = set(inspect.signature(TOOL_REGISTRY["telemac_river_dye"].fn).parameters)
     assert "release" in wire
     assert not {"release_coords", "release_lat", "release_lon",
@@ -277,7 +277,7 @@ def test_the_sequence_validates_and_holds_the_run_after_the_fill():
     steps = list(pl.declared())
     assert [s.label for s in steps] == [
         "reach", "seed", "carrier_discharge", "mesh", "measure_mesh_coverage",
-        "settled", "sheet", "solve", "outputs"]
+        "release", "settled", "sheet", "solve", "outputs"]
     # The review is the door's VIEW of the sheet it just filled, so the run is
     # held on the fill itself rather than in front of a step that has not run.
     assert [s.label for s in steps if s.self_gating] == ["sheet"]
@@ -332,11 +332,10 @@ def _install_step_mocks(captured: dict):
     from trid3nt_server.workflows.solver import solver as solver_mod
     from trid3nt_server.workflows.publishing import cog as cog_mod
     from trid3nt_server.workflows.publishing import publish as publish_mod
-    from trid3nt_server.workflows.shared import run_products as products_mod
+    from trid3nt_server.workflows.runtime import run_products as products_mod
     from trid3nt_server.workflows.telemac.modules import outputs as outputs_mod
     from trid3nt_server.workflows.mesh import step as mesh_step
-    from trid3nt_server.workflows.telemac.helpers import reach as reach_mod
-    from trid3nt_server.workflows.telemac.helpers import forcing as forcing_mod
+    from trid3nt_server.workflows.telemac.templates import reach as reach_mod
     from trid3nt_server.workflows.telemac.solving import solve as solve_mod
     from trid3nt_server.workflows.telemac.authoring import assembler as asm_mod
     from trid3nt_server.workflows.telemac.authoring import serializer as ser_mod
@@ -403,11 +402,18 @@ def _install_step_mocks(captured: dict):
         return f"s3://cache/telemac/{run_tag}/manifest.json"
 
     _settle_reach = asm_mod.settle_reach
+    _settle_release = asm_mod.settle_release
 
     async def _capture_settle(**kw):
         """The real settle, with what it MEASURED kept for inspection."""
         out = await _settle_reach(**kw)
         captured["settled"] = out
+        return out
+
+    async def _capture_release(**kw):
+        """The real source placement, with what it SETTLED kept for inspection."""
+        out = await _settle_release(**kw)
+        captured["release"] = out
         return out
 
     def _capture_deck(sheet, rundir, *, steering=None):
@@ -453,6 +459,7 @@ def _install_step_mocks(captured: dict):
         # what the mesh holds of the reach is measured in its own test module.
         patch.object(reach_mod, "_meshed_fraction", lambda mesh, centerline: 1.0),
         patch.object(asm_mod, "settle_reach", _capture_settle),
+        patch.object(asm_mod, "settle_release", _capture_release),
         patch.object(ser_mod, "serialize", _capture_deck),
         patch.object(asm_mod, "read_topology",
                      lambda _uri: {
@@ -469,7 +476,7 @@ def _install_step_mocks(captured: dict):
                          for n in names]),
         patch.object(asm_mod, "_write_manifest", _fake_stage),
         patch.object(mesh_step, "build_declared_mesh", _fake_mesh),
-        patch.object(forcing_mod, "_nwm_nearest_streamflow",
+        patch.object(reach_mod, "_nwm_nearest_streamflow",
                      lambda lon, lat, valid_time=None: {
                          "m3s": 312.0, "reference_time": "2026-01-01T12:00:00+00:00",
                          "product": "analysis_assim", "layer": None}),
@@ -536,7 +543,7 @@ def test_the_chain_geocodes_dispatches_and_stages_the_resolved_sheet(
     assert captured["pp_basename"] == "r2d_river.slf"
 
     settled, deck = captured["settled"], captured["deck"]
-    assert settled["spill_fraction"] == pytest.approx(0.4)
+    assert captured["release"]["fraction"] == pytest.approx(0.4)
     assert settled["seed_lon"] == pytest.approx(-114.31, abs=1e-4)
     assert settled["seed_lat"] == pytest.approx(42.58, abs=1e-4)
     assert captured["navigates"][0]["direction"] == "DM"
@@ -569,7 +576,7 @@ def test_a_prefetched_flowline_is_reused_instead_of_refetched(tmp_path, monkeypa
 def test_the_seed_falls_back_to_the_centroid_when_extraction_misses(
         tmp_path, monkeypatch):
     """The worker NLDI-snaps the centroid, so the degrade is honest, not a dead end."""
-    from trid3nt_server.workflows.telemac.helpers import reach as reach_mod
+    from trid3nt_server.workflows.telemac.templates import reach as reach_mod
 
     captured: dict = {}
     peak = _run_tool(
@@ -618,9 +625,9 @@ def test_a_supplied_seed_point_is_the_one_the_centerline_is_navigated_from(
     assert captured["navigates"][0]["seed_point"] == [-124.10, 40.50]
     assert captured["settled"]["seed_lon"] == pytest.approx(-124.10)
     # the supplied point was settled against THAT centerline, and the run says so
-    assert captured["settled"]["release_lon"] == pytest.approx(-124.10)
-    assert captured["settled"]["release_user_supplied"] is True
-    assert captured["settled"]["release_name"] == "outfall-a"
+    assert captured["release"]["lon"] == pytest.approx(-124.10)
+    assert captured["release"]["user_supplied"] is True
+    assert captured["release"]["name"] == "outfall-a"
     assert captured["release_marker"]["user_supplied"] is True
     # the picked name is what the deck calls the tracer; its unit stays
     assert captured["deck"]["NAMES OF TRACERS"] == ["outfall-a       MG/L"]
@@ -631,7 +638,7 @@ def test_an_unnamed_release_keeps_the_template_s_own_tracer_name(
     captured: dict = {}
     _run_tool(tmp_path, monkeypatch, captured, location="Twin Falls, Idaho",
               release=[-124.10, 40.50], **_real_centerline_read())
-    assert captured["settled"]["release_name"] is None
+    assert captured["release"]["name"] is None
     assert captured["deck"]["NAMES OF TRACERS"] == ["DYE             MG/L"]
 
 
@@ -652,23 +659,22 @@ def test_a_derived_release_sits_on_the_DECLARED_centerline(tmp_path, monkeypatch
     assert line.distance(Point(marker["lon"], marker["lat"])) < 1e-4
     # ... and the run states the FRACTION rather than a user coordinate, because
     # a release row that reads "user" over a derived point is the dishonest one.
-    assert captured["settled"]["spill_fraction"] == 0.5
-    assert captured["settled"]["release_user_supplied"] is False
+    assert captured["release"]["fraction"] == 0.5
+    assert captured["release"]["user_supplied"] is False
 
 
 def test_a_step_failure_maps_to_the_typed_error_envelope(tmp_path, monkeypatch):
     from trid3nt_server.workflows.telemac.solving import solve as solve_mod
-    from trid3nt_server.workflows.telemac.helpers.errors import TelemacDyeScenarioError
+    from trid3nt_server.workflows.telemac.errors import TelemacError
 
     async def _boom(**_kw):
-        raise TelemacDyeScenarioError("TELEMAC_DYE_RUN_FAILED",
-                                      "solve did not complete")
+        raise TelemacError("solve did not complete", error_code="TELEMAC_RUN_FAILED")
 
     captured: dict = {}
     out = _run_tool(tmp_path, monkeypatch, captured, location="Twin Falls, Idaho",
                     overrides=[patch.object(solve_mod, "solve_reach", _boom)])
     assert out["status"] == "error"
-    assert out["error_code"] == "TELEMAC_DYE_RUN_FAILED"
+    assert out["error_code"] == "TELEMAC_RUN_FAILED"
 
 
 # --- the water WINDOW, and the coverage it is judged by --------------------- #
@@ -753,9 +759,9 @@ def test_a_reach_whose_far_END_is_unmapped_refuses_at_the_cut(
 def test_an_unmapped_reach_refuses_terminally_naming_the_three_supply_paths():
     """A reach nothing maps has no domain, and no rung to retry with: the refusal
     names the three ways a domain is SUPPLIED and offers no retry args."""
-    from trid3nt_server.workflows.telemac.helpers.errors import ReachWaterUnmapped
+    from trid3nt_server.workflows.telemac.errors import ReachUnmapped
 
-    exc = ReachWaterUnmapped()
+    exc = ReachUnmapped()
     assert exc.error_code == "REACH_WATER_UNMAPPED"
     assert getattr(exc, "retryable", False) is False
     assert not hasattr(exc, "suggestions")

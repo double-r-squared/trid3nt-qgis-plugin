@@ -12,7 +12,8 @@ import pytest
 from trid3nt_server.workflows.runtime import param_rows
 from trid3nt_server.workflows.telemac.templates.do_sag import do_sag as do_sag_mod
 from trid3nt_server.workflows.telemac.templates.river_dye import river_dye as dye_mod
-from trid3nt_server.workflows.telemac.helpers import forcing as F
+from trid3nt_server.workflows.telemac.errors import TelemacError, TelemacInputInvalid
+from trid3nt_server.workflows.telemac.templates import reach as F
 
 
 # --- coerce_event_time: the outfall-coercion precedent ----------------------- #
@@ -32,9 +33,9 @@ def test_coerce_event_time_accepts_a_zulu_datetime():
 
 
 def test_coerce_event_time_rejects_garbage_it_never_falls_back_to_latest():
-    with pytest.raises(F.TelemacDyeScenarioError) as ei:
+    with pytest.raises(TelemacInputInvalid) as ei:
         F.coerce_event_time("last tuesday")
-    assert ei.value.error_code == "TELEMAC_PARAMS_INVALID"
+    assert ei.value.error_code == "TELEMAC_INPUT_INVALID"
     assert "event_time" in str(ei.value)
 
 
@@ -65,7 +66,7 @@ async def test_malformed_event_time_refuses_it_never_falls_back_to_latest(
     out = await fn(location="Eel River near Scotia, California",
                    event_time="not-a-date", **extra)
     assert isinstance(out, dict) and out["status"] == "error"
-    assert out["error_code"] == "TELEMAC_PARAMS_INVALID"
+    assert out["error_code"] == "TELEMAC_INPUT_INVALID"
     assert "event_time" in out["error_message"]
 
 
@@ -124,7 +125,7 @@ async def test_out_of_retention_event_time_refuses_typed(monkeypatch):
     fabricated discharge - the refusal names the retention bound."""
     monkeypatch.setattr(F, "_nwm_nearest_streamflow",
                         lambda lon, lat, valid_time=None: None)
-    with pytest.raises(F.TelemacDyeScenarioError) as ei:
+    with pytest.raises(TelemacError) as ei:
         await F.resolve_carrier_discharge(
             seed={"lon": -124.1, "lat": 40.5}, explicit=None,
             event_time="2020-01-01T00:00:00Z")

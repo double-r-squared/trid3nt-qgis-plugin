@@ -20,8 +20,7 @@ speak it.
 | `mesh/` | The one mesh front: router, meshers, session, gate, artifact. Has its own map. |
 | `inputs/` | The typed inputs: a Point, an Extent and a Shape, each with one ingestion from every form a user hands it in; the AOI acquisition, the geometry-source reader and the layer-field reader beside them. Has its own map. |
 | `publishing/` | A field becomes a layer, a series a chart, a field over time an animation - written once for every engine, with the COG writer, the styling seam and the outputs manifest beside it. Has its own map. |
-| `shared/` | What the engines still share past publishing: the worker-era manifest registration, solve progress, the run's persisted chart and metrics. |
-| `solver/` | Solve dispatch and what came back: `solver.py` (the box), `code_provenance.py` (which code produced a run), `diagnostics/` (the one `read_run_diagnostics` dispatcher plus its per-engine parsers), `corpus.yaml` (routing phrasings). |
+| `solver/` | Solve dispatch and what came back: `solver.py` (the box), `solve_progress.py` (the live progress heartbeat a long solve emits while it runs), `code_provenance.py` (which code produced a run), `diagnostics/` (the one `read_run_diagnostics` dispatcher plus its per-engine parsers), `corpus.yaml` (routing phrasings). |
 | `telemac/` | The TELEMAC engine: the module wrappers, eight templates over them, and the fill/run door. Has its own map. |
 
 ## `runtime/` - the declarative library
@@ -42,6 +41,7 @@ speak it.
 | `runtime/rerun/` | The rerun-with-overrides primitive: derive a run from a run (`derive.py`), what it inherits (`reuse.py`), and the tool door onto it (`rerun_workflow.py`). |
 | `runtime/resolution.py` | Resolution sensitivity: which answers a coarse mesh reads wrong, and which way. |
 | `runtime/resolver.py` | The param resolver: the six doors in order, with bounds clamping and a provenance row per resolution. |
+| `runtime/run_products.py` | The run's persisted chart spec and metrics, written under its own prefix so the products outlive the turn that emitted them. |
 | `runtime/snapshot.py` | The run snapshot: what a finished run leaves behind so a child run can derive from it. |
 | `runtime/temporal.py` | The declared temporal transforms - `.resample(...)` and `.normalize(units=...)` - and the conversions behind them. |
 | `runtime/user_input.py` | The user-input species: clicks, sketches and typed values, normalized once. |

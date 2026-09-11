@@ -63,11 +63,11 @@ def test_an_unstaged_manifest_carries_an_empty_inputs_list(monkeypatch):
 def test_writing_the_manifest_requires_a_cache_bucket(monkeypatch):
     import trid3nt_server.workflows.solver.solver as solver_mod
 
-    from trid3nt_server.workflows.telemac.helpers.errors import TelemacDyeScenarioError
+    from trid3nt_server.workflows.telemac.errors import TelemacError
 
     monkeypatch.setattr(solver_mod, "_get_s3_client", lambda: _FakeS3())
     monkeypatch.delenv("TRID3NT_CACHE_BUCKET", raising=False)
-    with pytest.raises(TelemacDyeScenarioError):
+    with pytest.raises(TelemacError):
         _write_manifest(_CASE, "RUNTAG", outputs=["r2d_river.slf"], inputs=[],
                         prefix="telemac")
 
@@ -177,7 +177,7 @@ def test_the_continuation_starts_where_the_restart_file_says_it_does(monkeypatch
     from trid3nt_server.workflows.telemac.authoring.assembler import (
         _continuation_state,
     )
-    from trid3nt_server.workflows.telemac.helpers.errors import TelemacDyeScenarioError
+    from trid3nt_server.workflows.telemac.errors import TelemacError
 
     previous = tmp_path / "restart_river.slf"
     previous.write_bytes(b"selafin")
@@ -193,7 +193,7 @@ def test_the_continuation_starts_where_the_restart_file_says_it_does(monkeypatch
     assert list(state["wet"]) == [True, False, False]
 
     monkeypatch.setattr(reader, "read_selafin", lambda path: {"times": []})
-    with pytest.raises(TelemacDyeScenarioError) as exc:
+    with pytest.raises(TelemacError) as exc:
         _continuation_state(str(previous))
     assert exc.value.error_code == "TELEMAC_CONTINUATION_UNREADABLE"
 

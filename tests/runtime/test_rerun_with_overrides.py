@@ -53,7 +53,7 @@ def test_the_cut_is_the_first_node_the_override_reaches():
     # and the settled reach are all upstream of the fill, so a rate override
     # inherits them
     assert labels[:cut] == ["reach", "seed", "carrier_discharge", "mesh",
-                            "measure_mesh_coverage", "settled"]
+                            "measure_mesh_coverage", "outfall", "settled"]
     # the whole domain CHAIN is upstream of the physics too - the navigated
     # mainstem, its ends, the mapped water, the reach cut between them and the
     # terrain the mesh's bed is painted from
@@ -520,7 +520,7 @@ def _pin_run_id(monkeypatch, wf, run_id, captured):
 
 
 def _no_persist(monkeypatch):
-    from trid3nt_server.workflows.shared import run_products
+    from trid3nt_server.workflows.runtime import run_products
 
     async def _skip(run_id, *, charts, metrics):
         return []

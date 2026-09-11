@@ -11,15 +11,13 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
 from trid3nt_server.workflows.runtime import (
     ParamRef,
     Ref,
-    param_rows,
+    Step,
     register_workflow,
     user_input,
 )
 from trid3nt_server.workflows.mesh.tool import mesh_op, tool
 from trid3nt_server.workflows.inputs import point_arg
 from trid3nt_server.workflows.inputs.aoi import location_or_bbox
-from trid3nt_server.workflows.telemac.helpers.forcing import event_time
-from trid3nt_server.workflows.telemac.helpers.reach import MeshCoverage
 from trid3nt_server.workflows.telemac.modules import (
     T2D,
     WAQTEL,
@@ -40,17 +38,14 @@ from trid3nt_server.workflows.telemac.solving.solve import compute_class
 from trid3nt_server.workflows.telemac.templates.river_dye.declarations import (
     ACCEPTS, DECAY_PRESETS, DOC, PARAMS, PARAMS as P,
 )
-from trid3nt_server.workflows.telemac.templates.shared import river
-from trid3nt_server.workflows.telemac.templates.shared.river import (
-    PARAMS as S,
-    RELEASE as R,
-)
+from trid3nt_server.workflows.telemac.templates import reach
 from trid3nt_server.workflows.telemac.workflow import Door, TelemacWorkflow
 
 __all__ = ["ANSWER", "CAPTIONS", "DATA", "MESH", "OUTPUTS", "PARAMS", "STEERING",
            "telemac_river_dye"]
 
-_HELPERS = "trid3nt_server.workflows.telemac.helpers"
+_AUTHORING = "trid3nt_server.workflows.telemac.authoring"
+_REACH = "trid3nt_server.workflows.telemac.templates.reach"
 _SOLVING = "trid3nt_server.workflows.telemac.solving.solve"
 
 #: The names the run directory holds this run's files under. They are the deck's
@@ -77,7 +72,7 @@ class DATA:
     rain this question adds to it. The carrier discharge is a STEP, because it
     reads the resolved seed."""
 
-    rivers = tool(f"{_HELPERS}.reach.fetch_reach_flowline",
+    rivers = tool(f"{_REACH}.fetch_reach_flowline",
                   prefetched=ParamRef("river_geometry_uri"))
     # THE REACH, narrowed by CHAINING tools rather than by a mesher that grew a
     # corridor of its own. The navigated mainstem names the stretch, its two ends
@@ -95,7 +90,7 @@ class DATA:
     # HOW MUCH of the reach the returned polygons actually map, measured before
     # the cut so an unmapped reach refuses on its own cause instead of arriving
     # at the section as an empty geometry.
-    mapped_water = tool(f"{_HELPERS}.reach.measure_water_coverage",
+    mapped_water = tool(f"{_REACH}.measure_water_coverage",
                         water=water, centerline=centerline)
     reach_polygon = tool("section", polygon=mapped_water,
                          between=Ref("ends.between"))
@@ -113,10 +108,10 @@ class DATA:
     # producer answers in daily rates, so this asks for no interpolation - and a
     # sub-daily target would refuse here instead of manufacturing a storm shape
     # gridMET never reported.
-    rain = tool(f"{_HELPERS}.forcing.resolve_rain_forcing",
-                rainfall_mm_per_day=R.rainfall_mm_per_day,
-                evaporation_mm_per_day=R.evaporation_mm_per_day,
-                gridmet_window=R.rainfall_gridmet_window
+    rain = tool(f"{_REACH}.resolve_rain_forcing",
+                rainfall_mm_per_day=P.rainfall_mm_per_day,
+                evaporation_mm_per_day=P.evaporation_mm_per_day,
+                gridmet_window=P.rainfall_gridmet_window
                 ).resample(to="1D", max_gap="native*3").normalize(units="mm/day")
 
 
@@ -205,7 +200,7 @@ class STEERING(T2D):
     #: The tracer is called what the user called the release point, when a
     #: picked or named point came; the template's own name stands otherwise.
     tracer_names = TracerNames(names=["DYE             MG/L"],
-                               named_by=Ref("settled.release_name"))
+                               named_by=Ref("release.name"))
     INITIAL_VALUES_OF_TRACERS = [0.0]
 
     #: The carrier's own boundary values. ONE tracer, so every liquid boundary
@@ -215,9 +210,9 @@ class STEERING(T2D):
 
     #: A FINITE pulse at a mid-reach point source, so the slug advects downstream
     #: and dilutes instead of saturating the domain.
-    releases = [Release(at=Ref("settled.release_at"), q=R.source_q_m3s,
+    releases = [Release(at=Ref("release.at"), q=P.source_q_m3s,
                         tracers=[P.dye_concentration_mgl],
-                        window_s=R.spill_duration_s,
+                        window_s=P.spill_duration_s,
                         until_s=Ref("settled.until_s"))]
 
     #: The restart this deck is read at. A continuation reads the last record of
@@ -228,8 +223,8 @@ class STEERING(T2D):
     #: The three optional forcings. Each states NOTHING when it was given
     #: nothing: no wind speed is no wind, no resolved rate is no rain, and a run
     #: that continues nothing states its own initial conditions.
-    wind = Wind(speed_mps=R.wind_speed_mps, from_deg=R.wind_direction_deg)
-    rain = Rain(mm_per_day=Ref("settled.rain_mm_per_day"), tracers=1)
+    wind = Wind(speed_mps=P.wind_speed_mps, from_deg=P.wind_direction_deg)
+    rain = Rain(mm_per_day=Ref("rain.mm_per_day"), tracers=1)
     continue_from = Continuation(previous=Ref("settled.continue_from"))
     #: First-order degradation on the same tracer - no new tracer - when a
     #: decaying substance was named or a half-life stated; nothing otherwise.
@@ -293,21 +288,41 @@ _METADATA = AtomicToolMetadata(
 
 telemac_river_dye = register_workflow(
     TelemacWorkflow, _METADATA,
-    (*river.PARAM_ROWS, *river.RELEASE_ROWS, *param_rows(PARAMS)),
+    PARAMS,
     Door(
         steering=STEERING,
         # A release named up front also names which stretch to model: the one
         # centerline is navigated from it.
-        domain=river.acquire(rivers=DATA.rivers, seed=P.release),
+        domain=(reach.Geocode(location=P.location, bbox=P.bbox),
+                reach.ReachSeed(reach=Ref("reach"), rivers=DATA.rivers,
+                                supplied=P.release),
+                reach.CarrierDischarge(seed=Ref("seed"), explicit=P.discharge_m3s,
+                                       event_time=P.event_time)),
         mesh=MESH, mesh_on="reach",
-        produce=(MeshCoverage(mesh=Ref("mesh"), centerline=DATA.centerline),),
-        settle=river.settle(centerline=DATA.centerline,
-                            reach_polygon=DATA.reach_polygon,
-                            release=P.release, spill_fraction=R.spill_fraction,
-                            rain=DATA.rain, continue_from=P.continue_from),
+        produce=(reach.MeshCoverage(mesh=Ref("mesh"), centerline=DATA.centerline),
+                 # WHERE the source enters the water, settled against the
+                 # accepted mesh before the sheet reads it.
+                 Step(runner=f"{_AUTHORING}.assembler.settle_release",
+                      stage="author",
+                      kwargs={"point": P.release, "mesh": Ref("mesh"),
+                              "centerline": DATA.centerline, "seed": Ref("seed"),
+                              "reach": Ref("reach"), "fraction": P.spill_fraction,
+                              "label": "Release point",
+                              "continue_from": P.continue_from}
+                      ).named("release")),
+        settle=Step(runner=f"{_AUTHORING}.assembler.settle_reach", stage="author",
+                    kwargs={"reach": Ref("reach"), "seed": Ref("seed"),
+                            "mesh": Ref("mesh"), "centerline": DATA.centerline,
+                            "carrier_discharge": Ref("carrier_discharge"),
+                            "sim_duration_s": P.sim_duration_s,
+                            "mesh_resolution_m": P.mesh_resolution_m,
+                            "output_interval_min": P.output_interval_min,
+                            "friction_law": P.friction_law,
+                            "friction_coefficient": P.friction_coefficient,
+                            "continue_from": P.continue_from}),
         results=(_RESULT, _RESTART),
         steering_file=_STEERING_FILE, prefix="telemac",
-        dispatch=f"{_SOLVING}.solve_reach", compute_class=S.compute_class,
+        dispatch=f"{_SOLVING}.solve_reach", compute_class=P.compute_class,
         outputs=OUTPUTS, captions=CAPTIONS, answer=ANSWER,
         review_title="Review the river-tracer scenario"),
     data=DATA,
@@ -327,7 +342,7 @@ telemac_river_dye = register_workflow(
         point_arg("release", tool="telemac_river_dye",
                   prompt="Click on the river where the substance enters the water",
                   code="TELEMAC_PARAMS_INVALID"),
-        event_time(),
+        reach.event_time(),
         compute_class(),
         user_input.bearing("wind_direction_deg", label="wind_direction_deg",
                            code="TELEMAC_PARAMS_INVALID"),

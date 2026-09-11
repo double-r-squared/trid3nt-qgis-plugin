@@ -11,7 +11,8 @@ import math
 
 import pytest
 
-from trid3nt_server.workflows.telemac.products import run_reads as R
+from trid3nt_server.workflows.telemac.modules import listing as R
+from trid3nt_server.workflows.telemac.modules.outputs import wetted_fraction
 
 #: The in-image listing shape - the block GAIA prints once its run closes.
 _LISTING = """
@@ -173,7 +174,7 @@ def test_the_wetted_fraction_is_area_weighted_off_the_final_frame():
     And the LAST frame decides it: frame zero is bone dry above, so a reader
     taking the first record would call this run empty.
     """
-    got = R.wetted_fraction(_mesh([1.0, 1.0, 1.0, 0.0, 0.0, 0.0]))
+    got = wetted_fraction(_mesh([1.0, 1.0, 1.0, 0.0, 0.0, 0.0]))
     assert got["mesh_area_m2"] == pytest.approx(200.0)
     assert got["wet_area_m2"] == pytest.approx(50.0)
     assert got["wetted_fraction"] == pytest.approx(0.25)
@@ -181,14 +182,14 @@ def test_the_wetted_fraction_is_area_weighted_off_the_final_frame():
 
 def test_a_film_thinner_than_the_tolerance_is_not_conveyance():
     """A drying bar keeps a film; counting it wet makes the number say nothing."""
-    assert R.wetted_fraction(_mesh([0.001] * 6))["wetted_fraction"] == 0.0
-    assert R.wetted_fraction(_mesh([1.0] * 6))["wetted_fraction"] == 1.0
+    assert wetted_fraction(_mesh([0.001] * 6))["wetted_fraction"] == 0.0
+    assert wetted_fraction(_mesh([1.0] * 6))["wetted_fraction"] == 1.0
 
 
 def test_a_result_with_no_depth_measures_nothing():
     import numpy as np
 
-    assert R.wetted_fraction({
+    assert wetted_fraction({
         "x": np.zeros(3), "y": np.zeros(3), "ikle": np.array([[0, 1, 2]]),
         "varnames": ["DYE"],
         "data": {"DYE": np.zeros((1, 3))}}) == {}

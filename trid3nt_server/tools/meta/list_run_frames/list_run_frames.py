@@ -96,11 +96,8 @@ def list_run_frames(run_id: str, layer: str = "flood_depth") -> dict[str, Any]:
     if not run_id or not str(run_id).strip():
         raise ListRunFramesError("MISSING_RUN_ID", "list_run_frames requires a run_id")
 
-    # Both readers NEVER raise: a None return is the honest "no manifest" path.
+    # The reader NEVER raises: a None return is the honest "no manifest" path.
     from trid3nt_server.emission.outputs_seam import read_outputs_manifest
-    from trid3nt_server.workflows.shared.register_published_manifest import (
-        read_publish_manifest,
-    )
 
     shim = _RunIdShim(str(run_id))
     frames: list[dict[str, Any]] = []
@@ -130,38 +127,6 @@ def list_run_frames(run_id: str, layer: str = "flood_depth") -> dict[str, Any]:
             if e.uri
         ]
 
-    if not frames:
-        # A run predating outputs.json has only the worker's publish_manifest, whose
-        # layers[] carried a per-frame frame_no; those are ordered by frame_no and
-        # carry no t. A current worker writes NO frame entries there at all - it is
-        # the metrics carrier, not a second frame stream - so this branch fires only
-        # for old runs.
-        manifest = read_publish_manifest(shim)
-        if manifest is not None:
-            legacy = [
-                e
-                for e in manifest.layers
-                if getattr(e, "frame_no", None) is not None
-                and _matches_layer(e, layer)
-            ]
-            legacy.sort(key=lambda e: int(getattr(e, "frame_no")))
-            if legacy:
-                source = "publish_manifest.json (legacy)"
-                layer_total = len(manifest.layers)
-                frames = [
-                    {
-                        "frame_no": int(getattr(e, "frame_no")),
-                        "cog_uri": e.cog_uri,
-                        "name": e.name,
-                        "t": None,
-                    }
-                    for e in legacy
-                    if e.cog_uri
-                ]
-            elif not source:
-                source = "publish_manifest.json (legacy)"
-                layer_total = len(manifest.layers)
-
     frame_uris = [f["cog_uri"] for f in frames]
     logger.info(
         "list_run_frames: run_id=%s layer=%r frames=%d source=%s",
@@ -177,7 +142,7 @@ def list_run_frames(run_id: str, layer: str = "flood_depth") -> dict[str, Any]:
     }
     if not frame_uris:
         result["reason"] = (
-            "no outputs.json or publish_manifest.json found for this run (the run "
+            "no outputs.json found for this run (the run "
             "may still be in flight, or have failed); no frames to list"
             if not source
             else (

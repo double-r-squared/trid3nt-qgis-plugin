@@ -362,7 +362,7 @@ class Workflow:
     @staticmethod
     async def _persist(run_id: str | None, charts: Mapping[str, Any],
                        metrics: Mapping[str, Any]) -> None:
-        from trid3nt_server.workflows.shared.run_products import persist_run_products
+        from trid3nt_server.workflows.runtime.run_products import persist_run_products
 
         await persist_run_products(run_id, charts=charts, metrics=metrics)
 

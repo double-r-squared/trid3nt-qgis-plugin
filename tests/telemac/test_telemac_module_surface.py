@@ -222,14 +222,10 @@ def test_an_engine_default_is_never_written_into_the_deck():
     assert sheet.resolved() == (("DURATION", 600.0),)
 
 
-def test_resolution_order_is_engine_then_the_parts_then_template_then_fill():
-    class RIVER(T2D):
-        LAW_OF_BOTTOM_FRICTION = 3
-        TIDAL_FLATS = True
-
+def test_resolution_order_is_engine_then_template_then_fill():
     class DYE(T2D):
-        parts = [RIVER]
         LAW_OF_BOTTOM_FRICTION = 4
+        TIDAL_FLATS = True
 
     rows = fill(DYE, TIDAL_FLATS=False).state()["filled"]
     assert rows["LAW_OF_BOTTOM_FRICTION"] == {
@@ -239,29 +235,13 @@ def test_resolution_order_is_engine_then_the_parts_then_template_then_fill():
         "keyword": "TIDAL FLATS", "value": False, "provenance": "user"}
 
 
-def test_a_composed_slot_says_which_part_asserted_it():
-    class RIVER(T2D):
-        TIDAL_FLATS = True
-
-    class DYE(T2D):
-        parts = [RIVER]
-        DURATION = 600.0
-
-    rows = fill(DYE).state()["filled"]
-    assert rows["TIDAL_FLATS"]["provenance"] == "template: RIVER"
-    assert rows["DURATION"]["provenance"] == "template: DYE"
-
-
 def test_a_value_the_run_measured_reads_as_derived_not_as_the_body_that_named_it():
     """A body states WHICH measurement a slot takes; the number is the artifact's.
 
     Badging it template or part would say an author wrote a value nobody wrote down.
     A declared PARAM is not this: it is the invocation's own answer."""
-    class RIVER(T2D):
-        TIDAL_FLATS = Ref("settled.tidal_flats")
-
     class DYE(T2D):
-        parts = [RIVER]
+        TIDAL_FLATS = Ref("settled.tidal_flats")
         TIME_STEP = Ref("settled.time_step_s")
         DURATION = ParamRef("sim_duration_s")
         SOLVER = 1
@@ -287,49 +267,14 @@ def test_a_measured_value_a_fill_overrides_still_reads_as_the_users():
     assert edited["value"] == 1.0 and edited["provenance"] == "user"
 
 
-def test_the_parts_merge_in_the_listed_order():
-    class RIVER(T2D):
-        SOLVER = 1
-
-    class TRACER(T2D):
-        NUMBER_OF_TRACERS = 1
-
-    class DYE(T2D):
-        parts = [RIVER, TRACER]
-
-    assert [p.__name__ for p in DYE.PARTS] == ["RIVER", "TRACER"]
-    rows = fill(DYE).state()["filled"]
-    assert rows["SOLVER"]["provenance"] == "template: RIVER"
-    assert rows["NUMBER_OF_TRACERS"]["provenance"] == "template: TRACER"
-
-
-def test_a_keyword_two_parts_both_set_refuses_unless_the_template_settles_it():
-    class RIVER(T2D):
-        SOLVER = 1
-
-    class SURGE(T2D):
-        SOLVER = 3
-
-    with pytest.raises(SlotRefused) as caught:
-        class BOTH(T2D):
-            parts = [RIVER, SURGE]
-    assert "SOLVER" in str(caught.value)
-
-    class SETTLED(T2D):
-        parts = [RIVER, SURGE]
-        SOLVER = 2
-
-    assert fill(SETTLED).state()["filled"]["SOLVER"]["value"] == 2
-
-
-def test_a_body_is_reused_by_composition_and_never_by_extension():
+def test_a_body_extends_the_wrapper_and_never_a_body():
     class RIVER(T2D):
         SOLVER = 1
 
     with pytest.raises(SlotRefused) as caught:
         class DYE(RIVER):
             DURATION = 600.0
-    assert "parts = [RIVER]" in str(caught.value)
+    assert "restate" in str(caught.value)
 
 
 def test_a_body_is_static_and_no_fill_changes_what_it_asserts():
@@ -543,24 +488,6 @@ def test_run_serializes_then_stages_then_dispatches(monkeypatch, tmp_path):
                           steering="t2d_river.cas"))
     assert order == ["serialize", "stage", "dispatch"]
     assert out["run_id"] == "R"
-
-
-# -- the shared-body law ------------------------------------------------------ #
-
-def test_every_shared_body_has_at_least_two_users():
-    """One user folds back into its template; a body is created when a good
-    portion is shared. The guard fires the moment a body gains its first file."""
-    shared = (Path(__file__).resolve().parents[2] / "trid3nt_server" / "workflows"
-              / "telemac" / "templates" / "shared")
-    if not shared.is_dir():
-        return
-    for body in sorted(shared.glob("*.py")):
-        if body.name == "__init__.py":
-            continue
-        name = body.stem
-        users = [p for p in shared.parent.rglob("*.py")
-                 if p != body and f"shared.{name} import" in p.read_text()]
-        assert len(users) >= 2, f"{name} has {len(users)} users"
 
 
 # -- the wrappers' own composites --------------------------------------------- #
@@ -1237,8 +1164,7 @@ def test_the_fill_docstring_names_the_module_its_rubriques_and_its_open_slots():
         assert f"dictionary has {len(body.DICTIONARY)} keywords" in doc, name
         assert "Open mandatory slots:" in doc, name
         assert "describe_keywords" in doc and "keywords=" in doc, name
-        stated = {n for part in (*body.PARTS, body) for n in part.ASSERTED}
-        stated |= set(entry.fn.workflow.plan_decl.slots)
+        stated = set(body.ASSERTED) | set(entry.fn.workflow.plan_decl.slots)
         for identifier in stated:
             slot = body.DICTIONARY.get(identifier)
             if slot is not None and slot.rubrique:
@@ -1255,8 +1181,7 @@ def test_every_required_file_is_the_template_s_own_statement():
     for name in _TEMPLATES:
         door = TOOL_REGISTRY[name].fn.workflow.plan_decl
         body = door.steering
-        stated = {n for part in (*body.PARTS, body) for n in part.ASSERTED}
-        stated |= set(door.slots)
+        stated = set(body.ASSERTED) | set(door.slots)
         unstated = sorted(slot.keyword for n, slot in body.DICTIONARY.items()
                           if slot.is_required and n not in stated)
         assert not unstated, f"{name} leaves {unstated} to something else"

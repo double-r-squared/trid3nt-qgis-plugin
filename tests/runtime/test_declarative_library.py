@@ -967,7 +967,7 @@ async def test_a_replayed_artifact_comes_back_as_the_artifact_not_as_a_mapping()
     Serialized as plain JSON a ``MeshArtifact`` becomes a dict, and the second attempt
     then crashes on the missing ``probes`` and finds no ``provenance``."""
     from trid3nt_server.workflows.mesh.artifact import MeshArtifact, measured_min_edge_m
-    from trid3nt_server.workflows.telemac.helpers.release_point import domain_polygon_of
+    from trid3nt_server.workflows.telemac.authoring.assembler import _domain_polygon
 
     plan = Plan("mesh_replay_w", None, (
         Step(runner=f"{_HERE}.stub_mesh_step").named("mesh"),
@@ -984,7 +984,7 @@ async def test_a_replayed_artifact_comes_back_as_the_artifact_not_as_a_mapping()
     replayed = out.results["mesh"]["artifact"]
     assert isinstance(replayed, MeshArtifact)
     assert measured_min_edge_m(replayed) == 40.5
-    assert domain_polygon_of(replayed)["type"] == "Polygon"
+    assert _domain_polygon(replayed)["type"] == "Polygon"
 
 
 @pytest.mark.asyncio

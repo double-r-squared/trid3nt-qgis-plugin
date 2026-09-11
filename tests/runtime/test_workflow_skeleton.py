@@ -72,7 +72,7 @@ def test_the_skeleton_emits_no_input_layer_of_its_own():
 @pytest.mark.asyncio
 async def test_a_filled_check_hook_reaches_the_result_as_a_note(monkeypatch):
     from trid3nt_server.workflows.runtime import RunResult
-    from trid3nt_server.workflows.shared import run_products
+    from trid3nt_server.workflows.runtime import run_products
 
     class Checked(Workflow):
         def checks(self, result, run):

@@ -1,17 +1,16 @@
-"""What a solved run's OWN files say, read on the server.
+"""What a solved run's OWN listing says, read on the server.
 
 The worker is the engine room: it runs a steering file and writes what the engine
-wrote, and everything derived from those files is read HERE. Every function is
+printed, and everything derived from the listing is read HERE. Every function is
 BEST-EFFORT: a parse that fails returns nothing and the primary layer stands."""
 
 from __future__ import annotations
 
 import logging
 import re
-from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
 
-logger = logging.getLogger("trid3nt_server.workflows.telemac.products.run_reads")
+logger = logging.getLogger("trid3nt_server.workflows.telemac.modules.listing")
 
 __all__ = [
     "boundary_flux",
@@ -19,15 +18,7 @@ __all__ = [
     "engine_demand",
     "final_balance",
     "gaia_mass_balance",
-    "mesh_area_m2",
-    "wetted_fraction",
 ]
-
-#: The depth an element has to hold to count as wet. TELEMAC's own tidal-flat
-#: treatment leaves films thinner than this on a drying bar, and counting them as
-#: conveyance is what would make the heuristic agree with the domain by
-#: construction.
-_WET_TOL_M = 0.02
 
 #: GAIA prints its closure once per class under this heading, in kg. The block is
 #: cut at the end-of-run marker so a run that printed intermediate balances is
@@ -203,50 +194,3 @@ def final_balance(listing_text: str) -> dict[str, Any]:
         except ValueError:
             pass
     return out
-
-
-def mesh_area_m2(mesh: Mapping[str, Any]) -> float:
-    """The area the elements of a read result cover, in the mesh's own metres."""
-    import numpy as np
-
-    ikle = np.asarray(mesh["ikle"], dtype=int)
-    x, y = np.asarray(mesh["x"]), np.asarray(mesh["y"])
-    if ikle.size == 0:
-        return 0.0
-    a, b, c = ikle[:, 0], ikle[:, 1], ikle[:, 2]
-    return float((0.5 * np.abs((x[b] - x[a]) * (y[c] - y[a])
-                               - (x[c] - x[a]) * (y[b] - y[a]))).sum())
-
-
-def wetted_fraction(mesh: Mapping[str, Any], *, wet_tol_m: float = _WET_TOL_M
-                    ) -> dict[str, Any]:
-    """How much of the solved domain still held water at the final frame.
-
-    By element, a HEURISTIC; ``mesh`` is the record the postprocess ALREADY read."""
-    # The reach domain is the mapped ACTIVE CHANNEL, which at bankfull includes
-    # the gravel bars a low flow leaves dry: TELEMAC wets and dries them natively,
-    # so a low-flow run is correct and its conveyance width is still narrower than
-    # the domain it solved on. Nothing about the result says so, and a reader
-    # looking at a ribbon inside a wider mesh has no number to read it against.
-    import numpy as np
-
-    # SELAFIN pads a variable name to 32 chars with its unit trailing ('WATER
-    # DEPTH     M'), so an exact-key lookup never matches a real result.
-    picked = next((v for v in mesh["varnames"]
-                   if v.strip().upper().startswith("WATER DEPTH")), None)
-    depth = mesh["data"].get(picked) if picked is not None else None
-    ikle = np.asarray(mesh["ikle"], dtype=int)
-    if depth is None or np.asarray(depth).size == 0 or ikle.size == 0:
-        return {}
-    x, y = np.asarray(mesh["x"]), np.asarray(mesh["y"])
-    a, b, c = ikle[:, 0], ikle[:, 1], ikle[:, 2]
-    area = 0.5 * np.abs((x[b] - x[a]) * (y[c] - y[a])
-                        - (x[c] - x[a]) * (y[b] - y[a]))
-    final = np.asarray(depth)[-1]
-    wet = area[final[ikle].mean(axis=1) > float(wet_tol_m)]
-    total = mesh_area_m2(mesh)
-    if total <= 0.0:
-        return {}
-    return {"mesh_area_m2": total, "wet_area_m2": float(wet.sum()),
-            "wetted_fraction": round(float(wet.sum()) / total, 4),
-            "wet_tol_m": float(wet_tol_m)}

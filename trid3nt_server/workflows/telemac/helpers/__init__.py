@@ -1,1 +1,1 @@
-"""Per-question measurement and resolution the TELEMAC templates share."""
+"""The pure physics and numerics the templates and the assembler read."""

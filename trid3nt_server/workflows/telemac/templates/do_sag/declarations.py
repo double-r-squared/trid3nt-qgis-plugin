@@ -17,6 +17,65 @@ _HELPERS = "trid3nt_server.workflows.telemac.helpers"
 
 
 class PARAMS:
+    # -- the reach ---------------------------------------------------------- #
+    location = Param(
+        door=doors.QUESTION, optional=True, consequence="aoi",
+        desc="Place name on the river, geocoded to the reach")
+    bbox = Param(
+        door=doors.USER, optional=True, consequence="aoi",
+        type=tuple[float, float, float, float] | list[float] | str,
+        desc="Explicit AOI (min_lon,min_lat,max_lon,max_lat) EPSG:4326, instead of a place")
+    river_geometry_uri = Param(
+        door=doors.USER, optional=True, consequence="aoi",
+        derived_when_absent="the reach flowline is fetched fresh for the AOI",
+        desc="Reuse an already-fetched river flowline for this reach instead of "
+             "re-fetching it")
+    discharge_m3s = Param(
+        door=doors.USER, optional=True, units="m^3/s",
+        bounds=(0.01, 1.0e5), consequence="physics", user_lever=True,
+        derived_when_absent=(
+            "the steady carrier discharge is resolved from the NOAA National "
+            "Water Model at the reach; no NWM coverage refuses typed rather "
+            "than falling back to a constant"),
+        desc="Steady upstream CARRIER discharge - the river flow that dilutes "
+             "and transports the release")
+    event_time = Param(
+        door=doors.QUESTION, optional=True, consequence="scenario",
+        derived_when_absent=(
+            "the carrier discharge is read at the MOST RECENT published NWM "
+            "cycle"),
+        desc="The storm/event moment to read the carrier discharge cycle at - "
+             "from phrasing like 'during last Tuesday's storm'; an ISO date "
+             "or datetime (e.g. '2026-08-20' or '2026-08-20T06:00:00Z'). "
+             "Unset reads the most recent published NWM cycle. The NWM PDS "
+             "bucket retains only the last ~30 days of history; a deeper "
+             "request refuses typed rather than silently reading a "
+             "different cycle.")
+    # The friction the reach is solved at when the ask states none is named on
+    # the row because the outflow stage is a normal depth AT this roughness: a
+    # stage derived at one number under a deck written at another is a level
+    # the run never sits at. The assembler reads the same number.
+    friction_coefficient = Param(
+        door=doors.USER, optional=True, bounds=(10.0, 90.0),
+        user_lever=True, consequence="numerical",
+        derived_when_absent=(
+            "the reach is solved at Strickler 33.0, which is also the "
+            "roughness its outflow stage is derived as a normal depth at"),
+        desc="Bed roughness under friction_law")
+    friction_law = Param(
+        door=doors.USER, optional=True, consequence="numerical",
+        type=int,
+        derived_when_absent="the coefficient is read as a Strickler one",
+        desc="Law interpreting friction_coefficient: 2=Chezy, 3=Strickler, "
+             "4=Manning")
+    output_interval_min = Param(
+        door=doors.USER, optional=True, bounds=(0.1, 1440.0),
+        units="min", consequence="numerical",
+        desc="Result-writing cadence; unset keeps the steering file's own period")
+    compute_class = Param(
+        door=doors.CONSTANT, default="medium",
+        consequence="numerical", desc="Solve sizing class")
+
     outfall_coords = Param(
         door=doors.USER, optional=True, consequence="scenario",
         user_lever=True, type=Point,
