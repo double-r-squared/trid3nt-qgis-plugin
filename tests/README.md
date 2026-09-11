@@ -10,12 +10,12 @@ join the run as the sixth slice.
 |---|---|---:|---:|
 | `_fakes/` | shared doubles: the MCP client, the websocket, the case summary, the reach chain, the read-through injector | - | - |
 | `fixtures/` | data the tests read; no code | - | - |
-| `adapters/` | provider adapters, the turn loop, the stream persistence | 23 | 468 |
+| `adapters/` | provider adapters, the message IR, the turn loop, the stream persistence | 22 | 291 |
 | `credentials/` | credential resolution, the auth handshake, identity | 7 | 95 |
 | `derive/` | the derive tools | 33 | 460 |
 | `emission/` | the emitter, the uri registry, publication, charts | 39 | 503 |
-| `fetchers/` | the fetch router, its executors, hooks and fallbacks | 65 | 1563 |
-| `gates/` | the gates, the context budget, the circuit breaker | 21 | 312 |
+| `fetchers/` | the fetch router, its executors, hooks and fallbacks | 65 | 1561 |
+| `gates/` | the gates, the context budget, the circuit breaker | 21 | 311 |
 | `mesh/` | the meshers, the mesh gate, topology and bed | 7 | 226 |
 | `model/` | the SysML model conformance check | 1 | 19 |
 | `plugin/` | the plugin seams the server suite reads offline, by `ast` | 1 | 3 |
@@ -41,11 +41,11 @@ else has one.
 
 Six slices by subsystem, each its own foreground invocation, from the repo root:
 
-    make test-fetchers        # tests/fetchers                                 1563
+    make test-fetchers        # tests/fetchers                                 1561
     make test-spatial         # tests/derive tests/emission tests/mesh         1189
     make test-engines         # tests/telemac tests/runtime tests/solver tests/search   1155
-    make test-server          # tests/server tests/gates tests/credentials tests/sandbox tests/model tests/scripts   1143
-    make test-model-surface   # tests/adapters tests/tools                      870
+    make test-server          # tests/server tests/gates tests/credentials tests/sandbox tests/model tests/scripts   1142
+    make test-model-surface   # tests/adapters tests/tools                      693
     make test-packages        # contracts/tests plugin/tests tests/plugin       816
 
 The prose guards - history markers, dead references, the package maps, the

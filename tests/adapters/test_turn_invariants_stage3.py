@@ -37,7 +37,7 @@ def _settings() -> ModelSettings:
 
 
 def _content_texts(contents) -> list[str]:
-    """Flatten the plain-text parts of a genai contents list."""
+    """Flatten the plain-text parts of an IR contents list."""
     texts: list[str] = []
     for content in contents or []:
         for part in getattr(content, "parts", None) or []:

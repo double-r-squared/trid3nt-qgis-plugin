@@ -53,9 +53,9 @@ def _function_response_payloads(contents_per_turn: list[list[Any]]) -> list[tupl
     for contents in contents_per_turn:
         for content in contents:
             for part in content.parts:
-                fr = getattr(part, "function_response", None)
+                fr = part.response
                 if fr is not None and not isinstance(fr, MagicMock):
-                    out.append((fr.name, dict(fr.response)))
+                    out.append((fr.name, dict(fr.result)))
     return out
 
 

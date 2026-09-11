@@ -1,6 +1,6 @@
 """Anthropic Messages API adapter (official ``anthropic`` SDK).
 
-Converts the genai-typed history and tool specs at the boundary and yields the
+Converts the IR history and tool declarations at the boundary and yields the
 shared ``StreamEvent`` union; every env read happens at call time.
 """
 
@@ -14,7 +14,7 @@ from collections import deque
 from collections.abc import AsyncIterator
 from typing import Any
 
-from google.genai import types as genai_types
+from trid3nt_contracts.message import Message, ToolDeclaration
 
 from .adapter import (
     CompactionCompleteEvent,
@@ -27,7 +27,6 @@ from .adapter import (
     provider_backoff_wait,
     provider_retries,
 )
-from .tool_schema import genai_schema_to_json_schema
 from trid3nt_server.gates.context_budget import (
     ContextWindowExceededError,
     discover_context_window,
@@ -108,26 +107,20 @@ def anthropic_model(session_model: str | None = None) -> str:
 
 
 def tool_declarations_to_anthropic_tools(
-    tool_declarations: list[genai_types.FunctionDeclaration] | None,
+    tool_declarations: list[ToolDeclaration] | None,
 ) -> list[dict[str, Any]]:
-    """Convert genai FunctionDeclarations to Messages API ``tools[]``.
+    """Convert the IR declarations to Messages API ``tools[]``.
     Descriptions pass through in FULL: this API imposes no per-description
     length cap."""
     tools: list[dict[str, Any]] = []
     for decl in tool_declarations or []:
-        dumped = decl.model_dump(mode="json", exclude_none=True)
-        params = dumped.get("parameters")
-        schema = (
-            genai_schema_to_json_schema(params)
-            if params
-            else {"type": "object", "properties": {}}
-        )
+        schema = dict(decl.schema)
         if schema.get("type") != "object":
             schema = {"type": "object", "properties": {}}
         tools.append(
             {
-                "name": dumped["name"],
-                "description": dumped.get("description") or dumped["name"],
+                "name": decl.name,
+                "description": decl.description or decl.name,
                 "input_schema": schema,
             }
         )
@@ -167,9 +160,9 @@ def _ensure_messages_start_with_user(
 
 
 def contents_to_anthropic_messages(
-    contents: list[genai_types.Content],
+    contents: list[Message],
 ) -> list[dict[str, Any]]:
-    """Convert genai ``contents`` to Messages API ``messages[]``.
+    """Convert the IR ``contents`` to Messages API ``messages[]``.
     ``tool_use`` and ``tool_result`` ids must match, so a history with no call
     ids gets synthesized ids paired by arrival order; empty text is a 400."""
     messages: list[dict[str, Any]] = []
@@ -182,29 +175,28 @@ def contents_to_anthropic_messages(
         return f"toolu_{counter}"
 
     for content in contents:
-        role = getattr(content, "role", "user") or "user"
-        api_role = "assistant" if role == "model" else "user"
+        api_role = "assistant" if content.role == "model" else "user"
         blocks: list[dict[str, Any]] = []
-        for part in getattr(content, "parts", None) or []:
-            fc = getattr(part, "function_call", None)
-            fr = getattr(part, "function_response", None)
-            text = getattr(part, "text", None)
-            if fc is not None and getattr(fc, "name", None):
-                tid = getattr(fc, "id", None) or _next_id()
+        for part in content.parts:
+            fc = part.call
+            fr = part.response
+            text = part.text
+            if fc is not None and fc.name:
+                tid = fc.id or _next_id()
                 pending_ids.append(tid)
                 blocks.append(
                     {
                         "type": "tool_use",
                         "id": tid,
                         "name": fc.name,
-                        "input": dict(getattr(fc, "args", None) or {}),
+                        "input": dict(fc.args or {}),
                     }
                 )
-            elif fr is not None and getattr(fr, "name", None):
-                tid = getattr(fr, "id", None) or (
+            elif fr is not None and fr.name:
+                tid = fr.id or (
                     pending_ids.popleft() if pending_ids else _next_id()
                 )
-                resp = getattr(fr, "response", None)
+                resp = fr.result
                 if not isinstance(resp, dict):
                     resp = {"result": resp}
                 blocks.append(
@@ -385,8 +377,8 @@ def _refusal_notice(message: Any) -> str | None:
 
 
 async def stream_anthropic(
-    contents: list[genai_types.Content],
-    tool_declarations: list[genai_types.FunctionDeclaration] | None = None,
+    contents: list[Message],
+    tool_declarations: list[ToolDeclaration] | None = None,
     system_prompt: str | None = None,
     model: str | None = None,
 ) -> AsyncIterator[StreamEvent]:

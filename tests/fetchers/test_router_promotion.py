@@ -119,15 +119,14 @@ def test_pilot_registered_as_general_tool(name: str) -> None:
 
 @pytest.mark.parametrize("name", sorted(PROMOTED))
 def test_pilot_declaration_schema_matches_twin(name: str) -> None:
-    """FunctionDeclaration inputSchema (properties + required) == the twin's."""
+    """The declaration's schema (properties + required) == the twin's."""
     entry = TOOL_REGISTRY[name]
     decls = build_tool_declarations({name: entry})
     assert len(decls) == 1
     d = decls[0]
     assert d.name == name
-    assert d.parameters is not None
-    props = sorted((d.parameters.properties or {}).keys())
-    required = sorted(d.parameters.required or [])
+    props = sorted(d.schema.get("properties", {}).keys())
+    required = sorted(d.schema.get("required", []))
     assert props == PROMOTED[name]["properties"], f"{name} properties drifted"
     assert required == PROMOTED[name]["required"], f"{name} required set drifted"
     # A non-trivial description is carried (the twin docstring, indistinguishable).
@@ -141,7 +140,7 @@ def test_pilot_docstring_is_twin_verbatim(name: str) -> None:
     spec = _SPECS[name]
     assert spec.docstring, f"{name} source.yaml lost its docstring"
     # The promoted callable's __doc__ IS the spec docstring verbatim (the sole
-    # source of the FunctionDeclaration description + the retrieval-index document).
+    # source of the declaration description + the retrieval-index document).
     assert entry.fn.__doc__ == spec.docstring
 
 

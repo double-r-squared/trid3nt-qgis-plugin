@@ -62,13 +62,13 @@ def _contents_snapshot(fake_llm):
             for p in c.parts:
                 if p.text:
                     parts_repr.append(("text", p.text))
-                elif getattr(p, "function_call", None):
-                    parts_repr.append(("function_call", p.function_call.name))
-                elif getattr(p, "function_response", None):
+                elif p.call:
+                    parts_repr.append(("function_call", p.call.name))
+                elif p.response:
                     parts_repr.append((
                         "function_response",
-                        p.function_response.name,
-                        p.function_response.response,
+                        p.response.name,
+                        p.response.result,
                     ))
                 else:
                     parts_repr.append(("unknown", None))

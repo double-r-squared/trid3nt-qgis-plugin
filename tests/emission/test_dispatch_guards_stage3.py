@@ -180,10 +180,10 @@ def _fetch_response_payload(captured_contents) -> dict:
     """The fetch_dem function_response dict from the final round's contents."""
     final = captured_contents[-1]
     for content in final:
-        for part in getattr(content, "parts", None) or []:
-            fr = getattr(part, "function_response", None)
-            if fr is not None and getattr(fr, "name", None) == "fetch_dem":
-                return dict(fr.response)
+        for part in content.parts:
+            fr = part.response
+            if fr is not None and fr.name == "fetch_dem":
+                return dict(fr.result)
     raise AssertionError("fetch_dem function_response not found in contents")
 
 

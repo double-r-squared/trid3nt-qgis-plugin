@@ -1,7 +1,8 @@
-"""google-genai IR containment + provider-dispatch seam.
+"""The turn builders and the provider-dispatch seam.
 
-``google.genai.types`` is the shared IR each provider adapter converts at its
-own boundary; an unsupported ``MODEL_PROVIDER`` raises, never an empty turn.
+``trid3nt_contracts.message`` is the shared IR each provider adapter converts
+at its own boundary; an unsupported ``MODEL_PROVIDER`` raises, never an empty
+turn.
 """
 
 from __future__ import annotations
@@ -13,9 +14,9 @@ import os
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 import types as _builtin_types
-from typing import Any, get_args, get_origin, Union
+from typing import Any, Literal, get_args, get_origin, get_type_hints, Union
 
-from google.genai import types as genai_types
+from trid3nt_contracts.message import Message, Part, ToolCall, ToolDeclaration, ToolResponse
 
 logger = logging.getLogger("trid3nt_server.adapters.adapter")
 
@@ -47,13 +48,6 @@ class FunctionCallEvent:
     name: str
     call_id: str | None
     args: dict[str, Any] = field(default_factory=dict)
-    #: Opaque per-thought signature carried on the ``Part`` that WRAPS the
-    #: function_call. A provider that emits one requires the same byte-blob
-    #: echoed back on that same Part when the turn is replayed, or the next
-    #: request fails on a signature mismatch. The harvest is therefore at the
-    #: Part level -- ``FunctionCall`` itself has no such field. ``None`` where
-    #: no signature is emitted, and a no-op when fed back.
-    thought_signature: bytes | None = None
 
 
 @dataclass(frozen=True)
@@ -776,222 +770,130 @@ def _union_args(annotation: Any) -> tuple[Any, ...]:
     return get_args(annotation)
 
 
-# ``from_callable_with_api_option`` silently DROPS a parameter whose type is a
-# fixed-length tuple and RAISES for the optional form, so both are replaced
-# before a callable ever reaches it.
-def _is_tuple_annotation(annotation: Any) -> bool:
-    """True when ``annotation`` is a ``tuple[...]`` type, not a bare ``tuple``.
-    Sees through both ``Optional[tuple[...]]`` and ``tuple[...] | None``."""
+#: JSON Schema type for each primitive an annotation resolves to.
+_JSON_TYPES: dict[Any, str] = {
+    str: "string",
+    bool: "boolean",
+    int: "integer",
+    float: "number",
+    bytes: "string",
+}
+
+
+def _is_custom_class(annotation: Any) -> bool:
+    """True for a class the model boundary cannot carry as itself.
+    A pydantic model, a dataclass, a client object: each reaches a tool only as
+    its serialized form, so the schema offers text."""
+    return (
+        isinstance(annotation, type)
+        and get_origin(annotation) is None
+        and annotation not in (str, int, float, bool, bytes, dict, list, set, tuple, type(None))
+    )
+
+
+def _json_schema_for_annotation(annotation: Any) -> dict[str, Any]:
+    """Convert one annotation to a JSON Schema node.
+    Every node carries an explicit ``type`` and neither ``anyOf`` nor ``$ref``:
+    a provider rejects a whole tool catalog over a union or a reference."""
+    if annotation is inspect.Parameter.empty or annotation is Any or _is_custom_class(annotation):
+        return {"type": "string"}
     if _is_union_type(annotation):
-        args = _union_args(annotation)
-        return any(_is_tuple_annotation(a) for a in args if a is not type(None))
-    # Plain tuple[...] -- origin is ``tuple``
-    return get_origin(annotation) is tuple
-
-
-def _simplify_annotation(annotation: Any) -> Any:
-    """Map a complex annotation to a schema-compatible equivalent.
-    An annotation already schematizable (``str``, ``int``, ``list[str]``,
-    ``Literal[...]``, ``str | None``) passes through unchanged."""
-    # The OpenAPI schema subset rejects: ``tuple[float, ...]``, silently
-    # dropped -- use ``list[float]``; ``tuple[float, ...] | None``, which raises
-    # -- use ``list[float] | None``; ``str | tuple[float, ...]``, a union of
-    # incompatible types -- use ``str``; and any Pydantic model or dataclass
-    # annotation, which raises -- use ``str | None``, the serialized form that
-    # actually crosses the LLM boundary. Both union spellings are handled.
-    if annotation is inspect.Parameter.empty:
-        return annotation
-
-    # --- Union forms (typing.Union and Python 3.10+ X|Y) ---
-    if _is_union_type(annotation):
-        args = _union_args(annotation)
-        non_none = [a for a in args if a is not type(None)]
-        has_none = type(None) in args
-
-        # ``tuple[...] | None`` → ``list[elem] | None``
-        if len(non_none) == 1 and _is_tuple_annotation(non_none[0]):
-            inner = non_none[0]
-            inner_args = get_args(inner)
-            elem_type = inner_args[0] if inner_args else float
-            list_type: Any = list[elem_type]  # type: ignore[valid-type]
-            return list_type | None  # type: ignore[return-value]
-
-        # ``str | tuple[...]`` or any union containing a tuple → keep only str
-        if any(_is_tuple_annotation(a) for a in non_none):
-            str_args = [a for a in non_none if a is str]
-            return str if str_args else str
-
-        # ``SomePydanticModel | None`` → ``str | None``
-        simplified_non_none = []
-        for a in non_none:
-            s = _simplify_annotation(a)
-            simplified_non_none.append(s)
-
-        if len(simplified_non_none) == 1:
-            result = simplified_non_none[0]
-            return (result | None) if has_none else result  # type: ignore[return-value]
-
-        # Multi-type union (e.g. ``float | list[float] | None``):
-        # Prefer the list form if one is present (a list[float] covers a single
-        # float too from the LLM's perspective), otherwise prefer str as a
-        # universal fallback so Gemini at least sees a typed parameter.
-        list_args = [a for a in simplified_non_none if get_origin(a) is list]
-        if list_args:
-            result = list_args[0]
-            return (result | None) if has_none else result  # type: ignore[return-value]
-        str_args = [a for a in simplified_non_none if a is str]
-        if str_args:
-            result = str
-            return (result | None) if has_none else result  # type: ignore[return-value]
-
-        # ``float | int`` (either order) -- both are the JSON Schema "number"
-        # type; collapsing keeps a single primitive (float accepts int values
-        # from the LLM boundary too) instead of falling through to "keep
-        # as-is", which leaves an unresolved multi-primitive union that
-        # ``from_callable_with_api_option`` schematizes WITHOUT a 'type' field
-        # -- a Vertex 400 INVALID_ARGUMENT trigger.
-        numeric_args = {a for a in simplified_non_none if a in (int, float)}
-        if numeric_args and len(numeric_args) == len(simplified_non_none):
-            result = float
-            return (result | None) if has_none else result  # type: ignore[return-value]
-
-        # Last resort -- keep as-is; the ``from_callable`` call may still succeed
-        # for simple multi-type unions like ``int | str``.
-        return annotation
-
+        members = [a for a in _union_args(annotation) if a is not type(None)]
+        if not members:
+            return {"type": "string"}
+        # A typed list member covers a single value too, and text carries
+        # anything else across the boundary, so a multi-type union collapses to
+        # ONE member rather than losing its ``type``.
+        if len(members) > 1:
+            for member in members:
+                if get_origin(member) is list:
+                    return _json_schema_for_annotation(member)
+            if any(member is str for member in members):
+                return {"type": "string"}
+        return _json_schema_for_annotation(members[0])
     origin = get_origin(annotation)
-    args = get_args(annotation)
-
-    # --- bare ``tuple[float, ...]`` → ``list[float]`` ---
-    if origin is tuple and args:
-        elem_type = args[0]
-        return list[elem_type]  # type: ignore[valid-type]
-
-    # --- complex Pydantic model / dataclass annotation → ``str | None`` ---
-    # A class that is not a built-in and not a simple generic is a custom model.
-    # We detect this by checking whether the origin is None (not a generic) and
-    # whether the annotation is a class (not a primitive like ``str``).
-    if (
-        origin is None
-        and isinstance(annotation, type)
-        and annotation not in (str, int, float, bool, bytes, dict, list, type(None))
-    ):
-        # Custom class (Pydantic, dataclass, …) -- replace with ``str | None``
-        # so the LLM at least sees the parameter name and can supply a value.
-        return str | None  # type: ignore[return-value]
-
-    return annotation
-
-
-def _normalize_callable_for_gemini(fn: Any) -> Any:
-    """A ``functools.wraps`` wrapper of ``fn`` with annotations simplified for
-    ``from_callable``: the return becomes ``dict``, and each public parameter
-    passes through :func:`_simplify_annotation`. Calls delegate unchanged."""
-    import typing as _typing
-
-    @functools.wraps(fn)
-    def _wrapper(*args: Any, **kwargs: Any) -> Any:
-        return fn(*args, **kwargs)
-
-    # Resolve forward-reference strings to real types via get_type_hints().
-    # This is essential because all tool modules use ``from __future__ import
-    # annotations``, which defers evaluation and stores strings in __annotations__.
+    if origin is Literal:
+        values = list(get_args(annotation))
+        base = _json_schema_for_annotation(type(values[0])) if values else {"type": "string"}
+        return {**base, "enum": values}
+    if origin in (list, set, frozenset, tuple) or annotation in (list, set, tuple):
+        args = [a for a in get_args(annotation) if a is not Ellipsis]
+        return {
+            "type": "array",
+            "items": _json_schema_for_annotation(args[0] if args else str),
+        }
+    if origin is dict or annotation is dict:
+        return {"type": "object", "properties": {}}
     try:
-        resolved: dict[str, Any] = _typing.get_type_hints(fn)
+        return {"type": _JSON_TYPES.get(annotation, "string")}
+    except TypeError:  # an unhashable annotation object
+        return {"type": "string"}
+
+
+def _parameter_schema(annotation: Any, default: Any) -> tuple[dict[str, Any], bool]:
+    """The JSON Schema node for one parameter, and whether the model must fill it.
+    Required means the annotation admits no ``None`` and the signature offers no
+    value; a ``None`` default is a sentinel, not a value the model may assume."""
+    unfilled = default is inspect.Parameter.empty or default is None
+    if annotation is inspect.Parameter.empty or annotation is Any or _is_custom_class(annotation):
+        return {"type": "string"}, False
+    if _is_union_type(annotation):
+        members = [a for a in _union_args(annotation) if a is not type(None)]
+        # A union spanning a coordinate tuple and another spelling is offered as
+        # that other spelling: a place the user named, never coordinates the
+        # model invents.
+        if len(members) > 1 and any(get_origin(a) is tuple for a in members):
+            return {"type": "string"}, unfilled
+        nullable = len(members) != len(_union_args(annotation))
+        return _json_schema_for_annotation(annotation), unfilled and not nullable
+    return _json_schema_for_annotation(annotation), unfilled
+
+
+def _tool_schema(fn: Any) -> dict[str, Any]:
+    """Build the JSON Schema of a tool callable's public parameters.
+    Underscore-prefixed injection kwargs are private by convention and NEVER
+    reach the model; an unresolvable forward reference types as text."""
+    try:
+        sig = inspect.signature(fn)
+    except (TypeError, ValueError):
+        return {"type": "object", "properties": {}}
+    # Tool modules use ``from __future__ import annotations``, so the signature
+    # carries annotation STRINGS; the resolved hints are the real types.
+    try:
+        resolved: dict[str, Any] = get_type_hints(fn)
     except Exception:  # noqa: BLE001 -- name resolution can fail in unusual envs
-        # Fall back to the raw (possibly string) annotations.
-        try:
-            resolved = fn.__annotations__.copy()
-        except AttributeError:
-            resolved = {}
-
-    new_annotations: dict[str, Any] = {}
-    for param_name, annotation in resolved.items():
-        if param_name == "return":
-            # Always replace complex return types with ``dict``.  The actual
-            # return value crosses the LLM boundary via ``summarize_tool_result``
-            # (adapter.py), which serialises it to a JSON-safe dict anyway.
-            new_annotations["return"] = dict
-        elif param_name.startswith("_"):
-            # Private/test-injection params: keep as-is (they'll be stripped
-            # downstream by ``_strip_private_params``).
-            new_annotations[param_name] = annotation
-        else:
-            new_annotations[param_name] = _simplify_annotation(annotation)
-
-    _wrapper.__annotations__ = new_annotations
-    # A SYNTHESIZED signature (spec-promoted fetchers, skeleton-registered
-    # workflows) lives in ``fn.__dict__`` and ``functools.wraps`` copies it here,
-    # where ``inspect.signature`` prefers it over ``__annotations__`` - so the
-    # simplification above would be read for the type hints and ignored for the
-    # parameters. Re-stamp it with the simplified annotations so both surfaces
-    # agree. Nothing to do when the callable declares no explicit signature.
-    sig = getattr(fn, "__signature__", None)
-    if sig is not None:
-        _wrapper.__signature__ = sig.replace(  # type: ignore[attr-defined]
-            parameters=[p.replace(annotation=new_annotations.get(p.name, p.annotation))
-                        for p in sig.parameters.values()],
-            return_annotation=dict)
-    return _wrapper
+        resolved = {}
+    properties: dict[str, Any] = {}
+    required: list[str] = []
+    for name, param in sig.parameters.items():
+        if name.startswith("_") or name in ("self", "cls"):
+            continue
+        if param.kind in (param.VAR_POSITIONAL, param.VAR_KEYWORD):
+            continue
+        annotation = resolved.get(name, param.annotation)
+        if isinstance(annotation, str):
+            annotation = inspect.Parameter.empty
+        properties[name], is_required = _parameter_schema(annotation, param.default)
+        if is_required:
+            required.append(name)
+    schema: dict[str, Any] = {"type": "object", "properties": properties}
+    if required:
+        schema["required"] = required
+    return schema
 
 
-def _strip_private_params(decl: genai_types.FunctionDeclaration) -> genai_types.FunctionDeclaration:
-    """Remove underscore-prefixed parameters from a generated FunctionDeclaration.
-    Test-injection kwargs are private by convention and must NEVER be visible to
-    the model; the filter keys on the prefix, so it needs no list of names."""
-    if decl.parameters is None or decl.parameters.properties is None:
-        return decl
-    # ``from_callable_with_api_option`` includes these in the generated schema,
-    # where a ``_storage_client: object | None`` becomes a Schema carrying only
-    # ``nullable=True`` and no ``type`` field. Vertex rejects that with a 400
-    # INVALID_ARGUMENT that blocks the ENTIRE tool catalog, so the property and
-    # its ``required`` entry are removed here.
-    cleaned_props = {
-        n: s for n, s in decl.parameters.properties.items() if not n.startswith("_")
-    }
-    cleaned_required = (
-        [r for r in (decl.parameters.required or []) if not r.startswith("_")]
-        if decl.parameters.required is not None
-        else decl.parameters.required
-    )
-    new_parameters = decl.parameters.model_copy(
-        update={"properties": cleaned_props, "required": cleaned_required}
-    )
-    return decl.model_copy(update={"parameters": new_parameters})
-
-
-def build_tool_declarations(
-    tool_registry: dict[str, Any],
-) -> list[genai_types.FunctionDeclaration]:
-    """Build ``FunctionDeclaration`` objects from the tool registry.
+def build_tool_declarations(tool_registry: dict[str, Any]) -> list[ToolDeclaration]:
+    """Build one ``ToolDeclaration`` per registered tool.
     A tool's registered docstring is the SOLE tool-selection signal the model
-    reasons over; a callable that still fails to schematize falls back to it."""
-    declarations: list[genai_types.FunctionDeclaration] = []
-    for name, entry in sorted(tool_registry.items()):
-        normalised = _normalize_callable_for_gemini(entry.fn)
-        try:
-            decl = genai_types.FunctionDeclaration.from_callable_with_api_option(
-                callable=normalised,
-                api_option="VERTEX_AI",
-            )
-            declarations.append(_strip_private_params(decl))
-        except Exception as exc:  # noqa: BLE001 -- fallback gracefully
-            logger.warning(
-                "tool declaration fallback for %r (normalisation did not resolve "
-                "a complex signature): %s",
-                name,
-                exc,
-            )
-            doc = inspect.getdoc(entry.fn) or f"Tool: {name}"
-            declarations.append(
-                genai_types.FunctionDeclaration(
-                    name=name,
-                    # 1,000 chars captures the routing block, the refusals and
-                    # the param section of a well-documented tool.
-                    description=doc[:1000],
-                )
-            )
-    return declarations
+    reasons over, and it crosses in FULL; each adapter caps it to its own wire."""
+    return [
+        ToolDeclaration(
+            name=name,
+            description=inspect.getdoc(entry.fn) or f"Tool: {name}",
+            schema=_tool_schema(entry.fn),
+        )
+        for name, entry in sorted(tool_registry.items())
+    ]
 
 
 
@@ -1017,9 +919,9 @@ def load_settings() -> ModelSettings:
 
 
 
-# Hard upper bound on chars we send back to Gemini per function_response.
-# Anything bigger gets clipped -- Gemini doesn't need megabytes of GeoJSON to
-# decide the next tool call; it needs the LayerURI, key metrics, error code,
+# Hard upper bound on chars a tool response carries back to the model.
+# Anything bigger gets clipped -- the model does not need megabytes of GeoJSON
+# to decide the next tool call; it needs the LayerURI, key metrics, error code,
 # and a couple of identifying fields.
 _FUNCTION_RESPONSE_CHAR_BUDGET = 4_000
 
@@ -1060,11 +962,10 @@ def _strip_never_rehydrate(entry: dict) -> dict:
     return {k: v for k, v in entry.items() if k not in NEVER_REHYDRATE_FIELDS}
 
 
-def _decode_parts_blob(blob: Any) -> list[genai_types.Part] | None:
+def _decode_parts_blob(blob: Any) -> list[Part] | None:
     """Decode a persisted ``parts_blob`` into a list of ``Part``.
     ``None`` when the blob is missing, empty or malformed: a single bad history
     row must never raise and break the whole conversation."""
-    import base64 as _b64
     import json as _json
 
     if blob is None:
@@ -1092,14 +993,11 @@ def _decode_parts_blob(blob: Any) -> list[genai_types.Part] | None:
 
     # Wire shape, one entry per part:
     #   {"text": "..."}                                  text-only part
-    #   {"function_call": {"name", "id", "args"},
-    #    "thought_signature_b64": "..."}                 model turn
+    #   {"function_call": {"name", "id", "args"}}         model turn
     #   {"function_response": {"name", "id", "response"}}
-    # ``thought_signature`` is persisted base64-encoded (JSON cannot carry raw
-    # bytes) and decoded back to bytes here. The blob carries enough fidelity
-    # to rebuild the exact Parts, so a replayed turn survives a provider's
-    # signature-mismatch check.
-    parts: list[genai_types.Part] = []
+    # The blob carries enough fidelity to rebuild the exact Parts, so a
+    # replayed turn reaches the provider as the turn it originally sent.
+    parts: list[Part] = []
     for entry in raw:
         if not isinstance(entry, dict):
             continue
@@ -1113,28 +1011,22 @@ def _decode_parts_blob(blob: Any) -> list[genai_types.Part] | None:
             kwargs["text"] = entry["text"]
         if "function_call" in entry and isinstance(entry["function_call"], dict):
             fc = entry["function_call"]
-            kwargs["function_call"] = genai_types.FunctionCall(
-                name=fc.get("name"),
+            kwargs["call"] = ToolCall(
+                name=fc.get("name") or "",
                 args=fc.get("args") or {},
                 id=fc.get("id"),
             )
         if "function_response" in entry and isinstance(entry["function_response"], dict):
             fr = entry["function_response"]
-            kwargs["function_response"] = genai_types.FunctionResponse(
-                name=fr.get("name"),
-                response=fr.get("response") or {},
+            kwargs["response"] = ToolResponse(
+                name=fr.get("name") or "",
+                result=fr.get("response") or {},
                 id=fr.get("id"),
             )
-        sig_b64 = entry.get("thought_signature_b64")
-        if isinstance(sig_b64, str) and sig_b64:
-            try:
-                kwargs["thought_signature"] = _b64.b64decode(sig_b64)
-            except Exception:  # noqa: BLE001
-                pass
         if not kwargs:
             continue
         try:
-            parts.append(genai_types.Part(**kwargs))
+            parts.append(Part(**kwargs))
         except Exception:  # noqa: BLE001 -- drop the bad part, keep going
             continue
     return parts or None
@@ -1143,11 +1035,11 @@ def _decode_parts_blob(blob: Any) -> list[genai_types.Part] | None:
 def build_contents_from_history(
     user_text: str,
     chat_history: list[dict] | None = None,
-) -> list[genai_types.Content]:
-    """Convert ``chat_history`` plus a new ``user_text`` into ``Content``s.
+) -> list[Message]:
+    """Convert ``chat_history`` plus a new ``user_text`` into ``Message``s.
     A decodable ``parts_blob`` wins over the text shape; an empty-text row is
     dropped, and ``user_text`` is always the terminal ``user`` turn."""
-    contents: list[genai_types.Content] = []
+    contents: list[Message] = []
     if chat_history:
         for entry in chat_history:
             # NEVER-REHYDRATE guard: strip the ``thinking`` field BY RULE
@@ -1155,30 +1047,19 @@ def build_contents_from_history(
             # replay material only and must never reach the model.
             entry = _strip_never_rehydrate(entry)
             role = entry.get("role", "user")
-            gem_role = "model" if role in ("agent", "assistant", "model") else "user"
-            # Prefer parts_blob when present -- it carries function_call and
-            # function_response Parts plus any thought_signature, so the
-            # replayed turn survives a provider's signature-mismatch check.
+            ir_role = "model" if role in ("agent", "assistant", "model") else "user"
+            # Prefer parts_blob when present -- it carries the call and
+            # response Parts, so the replayed turn reaches the provider whole.
             blob = entry.get("parts_blob")
             decoded = _decode_parts_blob(blob) if blob is not None else None
             if decoded:
-                contents.append(genai_types.Content(role=gem_role, parts=decoded))
+                contents.append(Message(role=ir_role, parts=decoded))
                 continue
             text = entry.get("text", "")
             if not text:
                 continue
-            contents.append(
-                genai_types.Content(
-                    role=gem_role,
-                    parts=[genai_types.Part(text=text)],
-                )
-            )
-    contents.append(
-        genai_types.Content(
-            role="user",
-            parts=[genai_types.Part(text=user_text)],
-        )
-    )
+            contents.append(Message(role=ir_role, parts=[Part(text=text)]))
+    contents.append(Message(role="user", parts=[Part(text=user_text)]))
     return contents
 
 
@@ -1394,36 +1275,28 @@ def rehydrate_history_from_case(
     return history, dropped
 
 
-def encode_parts_blob(parts: list[genai_types.Part]) -> bytes:
+def encode_parts_blob(parts: list[Part]) -> bytes:
     """Encode a list of ``Part`` to the ``parts_blob`` wire shape.
-    A JSON byte string, so it round-trips through JSON persistence;
-    ``thought_signature`` is base64-encoded, since JSON cannot carry bytes."""
-    import base64 as _b64
+    A JSON byte string, so it round-trips through JSON persistence."""
     import json as _json
 
     out: list[dict[str, Any]] = []
     for part in parts:
         entry: dict[str, Any] = {}
-        text = getattr(part, "text", None)
-        if text:
-            entry["text"] = text
-        fc = getattr(part, "function_call", None)
-        if fc is not None and getattr(fc, "name", None):
+        if part.text:
+            entry["text"] = part.text
+        if part.call is not None and part.call.name:
             entry["function_call"] = {
-                "name": fc.name,
-                "id": getattr(fc, "id", None),
-                "args": dict(getattr(fc, "args", None) or {}),
+                "name": part.call.name,
+                "id": part.call.id,
+                "args": dict(part.call.args or {}),
             }
-        fr = getattr(part, "function_response", None)
-        if fr is not None and getattr(fr, "name", None):
+        if part.response is not None and part.response.name:
             entry["function_response"] = {
-                "name": fr.name,
-                "id": getattr(fr, "id", None),
-                "response": dict(getattr(fr, "response", None) or {}),
+                "name": part.response.name,
+                "id": part.response.id,
+                "response": dict(part.response.result or {}),
             }
-        sig = getattr(part, "thought_signature", None)
-        if isinstance(sig, (bytes, bytearray)) and sig:
-            entry["thought_signature_b64"] = _b64.b64encode(bytes(sig)).decode("ascii")
         if entry:
             out.append(entry)
     return _json.dumps(out).encode("utf-8")
@@ -2074,22 +1947,13 @@ def build_function_call_content(
     name: str,
     args: dict[str, Any],
     call_id: str | None = None,
-    thought_signature: bytes | None = None,
-) -> genai_types.Content:
-    """Build the ``model``-role Content wrapping the function_call.
+) -> Message:
+    """Build the ``model``-role Message wrapping the tool call.
     Appended to ``contents`` after a dispatch so the next model round sees its
     own prior tool-call decision."""
-    fn_call = genai_types.FunctionCall(name=name, args=args or {}, id=call_id)
-    part_kwargs: dict[str, Any] = {"function_call": fn_call}
-    # The signature rides the wrapping ``Part``, never the ``FunctionCall``:
-    # google-genai gives only ``Part`` such a field. A provider that emits one
-    # requires the same byte-blob echoed back on the replayed model turn, or
-    # the next request fails on a signature mismatch. ``None`` is a no-op.
-    if thought_signature is not None:
-        part_kwargs["thought_signature"] = thought_signature
-    return genai_types.Content(
+    return Message(
         role="model",
-        parts=[genai_types.Part(**part_kwargs)],
+        parts=[Part(call=ToolCall(name=name, args=args or {}, id=call_id))],
     )
 
 
@@ -2097,25 +1961,21 @@ def build_function_response_content(
     name: str,
     response: dict[str, Any],
     call_id: str | None = None,
-) -> genai_types.Content:
-    """Build the ``function``-role Content wrapping the function_response.
-    Appended right after the matching function_call content, so the model has
-    the (call, response) pair before deciding its next turn."""
-    fn_resp = genai_types.FunctionResponse(name=name, response=response, id=call_id)
-    return genai_types.Content(
+) -> Message:
+    """Build the ``user``-role Message wrapping the tool response.
+    Appended right after the matching call message, so the model has the
+    (call, response) pair before deciding its next turn."""
+    return Message(
         role="user",
-        parts=[genai_types.Part(function_response=fn_resp)],
+        parts=[Part(response=ToolResponse(name=name, result=response, id=call_id))],
     )
 
 
-def build_user_text_content(text: str) -> genai_types.Content:
-    """Build a plain ``user``-role text Content.
+def build_user_text_content(text: str) -> Message:
+    """Build a plain ``user``-role text Message.
     The one-Part shape the contents builder uses for a live user message, so a
-    loop driver can append a corrective turn without hand-rolling genai types."""
-    return genai_types.Content(
-        role="user",
-        parts=[genai_types.Part(text=text)],
-    )
+    loop driver can append a corrective turn without hand-rolling the IR."""
+    return Message(role="user", parts=[Part(text=text)])
 
 
 
@@ -2123,7 +1983,7 @@ async def stream_events(
     client: Any,
     model: str,
     user_text: str,
-    tool_declarations: list[genai_types.FunctionDeclaration] | None = None,
+    tool_declarations: list[ToolDeclaration] | None = None,
     system_prompt: str | None = None,
     chat_history: list[dict] | None = None,
     model_cache_ref: str | None = None,
@@ -2148,8 +2008,8 @@ async def stream_events(
 async def stream_events_with_contents(
     client: Any,
     model: str,
-    contents: list[genai_types.Content],
-    tool_declarations: list[genai_types.FunctionDeclaration] | None = None,
+    contents: list[Message],
+    tool_declarations: list[ToolDeclaration] | None = None,
     system_prompt: str | None = None,
     model_cache_ref: str | None = None,
     model_id: str | None = None,
@@ -2164,7 +2024,7 @@ async def stream_events_with_contents(
     # reference is a 400. ``system_prompt`` and ``tool_declarations`` are
     # ignored on that path.
     #
-    # Every adapter converts the genai contents and tool declarations at its own
+    # Every adapter converts the IR contents and tool declarations at its own
     # boundary and yields the SAME StreamEvent union, so the dispatch loop, the
     # validator, the emitter and the UI are untouched.
     from .model_selection import model_provider
@@ -2215,8 +2075,7 @@ async def stream_events_with_contents(
 
     # Provider dispatch is EXPLICIT -- scripted/replay/fake, anthropic and
     # openai each returned above. Anything else is unsupported: a TYPED error,
-    # never a silent empty turn. ``google.genai.types`` stays imported as the
-    # load-bearing IR, but there is no client path here to fall through to.
+    # never a silent empty turn: there is no client path to fall through to.
     raise UnsupportedModelProviderError(
         f"MODEL_PROVIDER={model_provider()!r} is not supported. Valid providers: "
         "scripted/replay/fake, anthropic, openai."
@@ -2254,8 +2113,4 @@ __all__ = [
     "stream_events_with_contents",
     "summarize_tool_result",
     "classify_result_usable",
-    # B11 schema-normalisation helpers (exported for audit / test use)
-    "_is_tuple_annotation",
-    "_normalize_callable_for_gemini",
-    "_simplify_annotation",
 ]

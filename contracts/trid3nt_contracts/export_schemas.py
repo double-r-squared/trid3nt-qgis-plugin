@@ -12,7 +12,7 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
-from . import catalog, collections, envelope, execution, tool_registry, ws
+from . import catalog, collections, envelope, execution, message, tool_registry, ws
 
 # (filename stem, model) for every top-level contract we export.
 _EXPORTS: list[tuple[str, type[BaseModel]]] = [
@@ -36,6 +36,9 @@ _EXPORTS: list[tuple[str, type[BaseModel]]] = [
     ("layer_uri", execution.LayerURI),
     # atomic-tool registration metadata
     ("atomic_tool_metadata", tool_registry.AtomicToolMetadata),
+    # the adapters' message IR; Part, ToolCall and ToolResponse ride Message
+    ("message", message.Message),
+    ("tool_declaration", message.ToolDeclaration),
 ]
 
 

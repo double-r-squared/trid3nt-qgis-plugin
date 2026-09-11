@@ -21,6 +21,7 @@ consumer branches on its discriminator rather than on a string it recognised.
 | `execution.py` | The solver-execution shapes: setup, handle, result, and `LayerURI`. |
 | `export_schemas.py` | Render every contract's JSON Schema into `contracts/schemas`, idempotently. |
 | `gate_spec.py` | The declarative confirm-gate metadata a gated tool carries. |
+| `message.py` | The adapters' message IR: `Message`, `Part`, `ToolCall`, `ToolResponse`, `ToolDeclaration`. |
 | `outputs_manifest.py` | The `outputs.json` emit-on-solve manifest, writer and typed reader. |
 | `payload_warning.py` | The payload-warning envelope and its confirmation. |
 | `publish_manifest.py` | The typed reader for the worker's `publish_manifest.json`. |

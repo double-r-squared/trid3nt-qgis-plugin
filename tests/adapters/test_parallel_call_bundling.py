@@ -48,10 +48,10 @@ async def test_producer_yields_three_function_calls_in_one_chunk(fake_llm):
         }
     ])
 
-    from google.genai import types as genai_types
+    from trid3nt_contracts.message import Message, Part, ToolCall, ToolDeclaration, ToolResponse
 
     contents = [
-        genai_types.Content(role="user", parts=[genai_types.Part(text="test")])
+        Message(role="user", parts=[Part(text="test")])
     ]
     events: list = []
     async for evt in stream_events_with_contents(None, "gemini-3-pro", contents):
@@ -81,10 +81,10 @@ async def test_producer_yields_parallel_calls_across_chunks(fake_llm):
         }
     ])
 
-    from google.genai import types as genai_types
+    from trid3nt_contracts.message import Message, Part, ToolCall, ToolDeclaration, ToolResponse
 
     contents = [
-        genai_types.Content(role="user", parts=[genai_types.Part(text="t")])
+        Message(role="user", parts=[Part(text="t")])
     ]
     events: list = []
     async for evt in stream_events_with_contents(None, "gemini-3-pro", contents):
@@ -108,10 +108,10 @@ async def test_producer_yields_mixed_text_and_function_calls(fake_llm):
         }
     ])
 
-    from google.genai import types as genai_types
+    from trid3nt_contracts.message import Message, Part, ToolCall, ToolDeclaration, ToolResponse
 
     contents = [
-        genai_types.Content(role="user", parts=[genai_types.Part(text="t")])
+        Message(role="user", parts=[Part(text="t")])
     ]
     events: list = []
     async for evt in stream_events_with_contents(None, "gemini-3-pro", contents):
@@ -181,17 +181,13 @@ async def test_loop_dispatches_three_parallel_calls_in_one_turn(fake_llm):
         for c in call["contents"]:
             parts_view = []
             for p in c.parts:
-                if getattr(p, "function_call", None) is not None and getattr(
-                    p.function_call, "name", None
-                ):
-                    parts_view.append(("function_call", p.function_call.name, p.function_call.id))
-                elif getattr(p, "function_response", None) is not None and getattr(
-                    p.function_response, "name", None
-                ):
+                if p.call is not None and p.call.name:
+                    parts_view.append(("function_call", p.call.name, p.call.id))
+                elif p.response is not None and p.response.name:
                     parts_view.append(
-                        ("function_response", p.function_response.name, p.function_response.id)
+                        ("function_response", p.response.name, p.response.id)
                     )
-                elif getattr(p, "text", None):
+                elif p.text:
                     parts_view.append(("text", p.text, None))
             snapshot.append((c.role, parts_view))
         captured_contents.append(snapshot)

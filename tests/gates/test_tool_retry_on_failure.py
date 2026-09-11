@@ -221,9 +221,9 @@ async def test_stream_model_reply_retry_after_recoverable_failure(fake_llm):
                 c.role,
                 [
                     ("text", p.text) if p.text
-                    else ("function_call", p.function_call.name) if getattr(p, "function_call", None)
-                    else ("function_response", p.function_response.name, p.function_response.response)
-                    if getattr(p, "function_response", None)
+                    else ("function_call", p.call.name) if p.call
+                    else ("function_response", p.response.name, p.response.result)
+                    if p.response
                     else ("unknown", None)
                     for p in c.parts
                 ],

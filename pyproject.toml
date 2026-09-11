@@ -17,10 +17,6 @@ dependencies = [
     # S3-compatible object I/O: the cached-fetch store, user-layer ingest and
     # the public-bucket fetchers all speak S3 (MinIO locally).
     "boto3>=1.40,<2",
-    # Kept for its ``types`` package alone: the Content/FunctionDeclaration IR
-    # every provider adapter converts from at its own boundary. Removing it
-    # breaks every live provider path, whichever provider is selected.
-    "google-genai>=2.8,<3",
     # py3dep wraps the USGS 3DEP DEM service (CONUS DEM at 10/30 m) and pulls
     # in rioxarray + rasterio for COG serialization. requests is the HTTP
     # client for Nominatim, Census ACS and Planetary Computer STAC search.

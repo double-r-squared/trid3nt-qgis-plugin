@@ -715,10 +715,10 @@ async def _stream_model_reply(
                         iterations,
                     )
                     # Corrective user-role nudge, built with the same plain-text
-                    # Content idiom the initial user message uses (adapter.
-                    # build_user_text_content) -- no hand-rolled google.genai
-                    # types here. Appended so the retried round sees "your last
-                    # turn was empty, act or answer".
+                    # Message idiom the initial user message uses (adapter.
+                    # build_user_text_content) -- no hand-rolled IR here.
+                    # Appended so the retried round sees "your last turn was
+                    # empty, act or answer".
                     contents.append(build_user_text_content(_EMPTY_COMPLETION_NUDGE))
                     # Observability is log-only (above): a retry must not inject
                     # a transient note into the persisted narration segment, and
@@ -1290,18 +1290,8 @@ async def _stream_model_reply(
                 # PER-TURN TELEMETRY: one dispatched tool call counted at the
                 # same chokepoint the per-tool record is emitted from.
                 _turn_tool_dispatch_count += 1
-                # Pass the thought_signature harvested off the function_call Part
-                # through to the replayed model turn. A provider that emits an opaque
-                # reasoning signature requires the same byte-blob on the replayed
-                # function_call Part; a provider that emits None is a no-op -- the
-                # helper forwards whatever was harvested with no behavior change.
                 contents.append(
-                    build_function_call_content(
-                        call.name,
-                        call.args,
-                        call.call_id,
-                        thought_signature=call.thought_signature,
-                    )
+                    build_function_call_content(call.name, call.args, call.call_id)
                 )
                 contents.append(
                     build_function_response_content(call.name, summary, call.call_id)

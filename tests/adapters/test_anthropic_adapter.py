@@ -2,7 +2,7 @@
 
 Offline: a mocked ``AsyncAnthropic`` client, no network and no API key. Covers
 the request shape (adaptive thinking, no sampling params, mandatory cache
-breakpoints), the genai / Messages conversion, the StreamEvent mapping including
+breakpoints), the IR / Messages conversion, the StreamEvent mapping including
 the cache-hit proof, upstream-provider discipline, and the dispatch seam."""
 
 from __future__ import annotations
@@ -13,7 +13,7 @@ from typing import Any
 
 import httpx2
 import pytest
-from google.genai import types as genai_types
+from trid3nt_contracts.message import Message, Part, ToolCall, ToolDeclaration, ToolResponse
 
 import anthropic
 
@@ -29,23 +29,23 @@ from trid3nt_server.adapters.adapter import (
 
 
 
-def _decl(name: str, description: str) -> genai_types.FunctionDeclaration:
-    return genai_types.FunctionDeclaration(
+def _decl(name: str, description: str) -> ToolDeclaration:
+    return ToolDeclaration(
         name=name,
         description=description,
-        parameters=genai_types.Schema(
-            type="OBJECT",
-            properties={
-                "bbox": genai_types.Schema(type="STRING", description="AOI bbox"),
-                "count": genai_types.Schema(type="INTEGER"),
+        schema={
+            "type": "object",
+            "properties": {
+                "bbox": {"type": "string", "description": "AOI bbox"},
+                "count": {"type": "integer"},
             },
-            required=["bbox"],
-        ),
+            "required": ["bbox"],
+        },
     )
 
 
-def _user(text: str) -> genai_types.Content:
-    return genai_types.Content(role="user", parts=[genai_types.Part(text=text)])
+def _user(text: str) -> Message:
+    return Message(role="user", parts=[Part(text=text)])
 
 
 class _FakeStream:
@@ -202,29 +202,29 @@ def test_tool_descriptions_are_not_truncated():
 def test_tool_use_and_result_ids_pair_and_coalesce():
     contents = [
         _user("model a flood"),
-        genai_types.Content(
+        Message(
             role="model",
             parts=[
-                genai_types.Part(
-                    function_call=genai_types.FunctionCall(
+                Part(
+                    call=ToolCall(
                         name="fetch_dem", args={"bbox": "1,2,3,4"}
                     )
                 )
             ],
         ),
-        genai_types.Content(
+        Message(
             role="user",
             parts=[
-                genai_types.Part(
-                    function_response=genai_types.FunctionResponse(
-                        name="fetch_dem", response={"status": "ok"}
+                Part(
+                    response=ToolResponse(
+                        name="fetch_dem", result={"status": "ok"}
                     )
                 )
             ],
         ),
-        genai_types.Content(
+        Message(
             role="user",
-            parts=[genai_types.Part(text="thanks")],
+            parts=[Part(text="thanks")],
         ),
     ]
     messages = aa.contents_to_anthropic_messages(contents)
@@ -241,7 +241,7 @@ def test_tool_use_and_result_ids_pair_and_coalesce():
 
 def test_messages_start_with_user_and_drop_empty_text():
     contents = [
-        genai_types.Content(role="model", parts=[genai_types.Part(text="orphan")]),
+        Message(role="model", parts=[Part(text="orphan")]),
         _user("   "),
         _user("real"),
     ]

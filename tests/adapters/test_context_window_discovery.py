@@ -11,7 +11,7 @@ import logging
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from google.genai import types as genai_types
+from trid3nt_contracts.message import Message, Part, ToolCall, ToolDeclaration, ToolResponse
 
 from trid3nt_server.adapters import model_discovery
 from trid3nt_server.gates.context_budget import (
@@ -39,20 +39,20 @@ def _clear_window_cache():
     reset_num_ctx_cache()
 
 
-def user_content(text: str) -> genai_types.Content:
-    return genai_types.Content(role="user", parts=[genai_types.Part(text=text)])
+def user_content(text: str) -> Message:
+    return Message(role="user", parts=[Part(text=text)])
 
 
-def model_content(text: str) -> genai_types.Content:
-    return genai_types.Content(role="model", parts=[genai_types.Part(text=text)])
+def model_content(text: str) -> Message:
+    return Message(role="model", parts=[Part(text=text)])
 
 
-def long_alternating_history(pairs: int = 8, filler: int = 3000) -> list[genai_types.Content]:
+def long_alternating_history(pairs: int = 8, filler: int = 3000) -> list[Message]:
     """A realistic ALTERNATING user / model history ending on a user message.
 
     The converters coalesce same-role runs and drop leading assistant rows, so an
     all-model history would collapse to one wire message and hide what trimming did."""
-    rows: list[genai_types.Content] = []
+    rows: list[Message] = []
     for i in range(pairs):
         rows.append(user_content(f"q{i} " + "x" * filler))
         rows.append(model_content(f"a{i} " + "y" * filler))
@@ -442,15 +442,12 @@ async def test_anthropic_exact_counter_returns_the_provider_number():
 
 
 
-def _decls() -> list[genai_types.FunctionDeclaration]:
+def _decls() -> list[ToolDeclaration]:
     return [
-        genai_types.FunctionDeclaration(
+        ToolDeclaration(
             name=f"tool_{i}",
             description=f"does thing {i}",
-            parameters=genai_types.Schema(
-                type=genai_types.Type.OBJECT,
-                properties={"a": genai_types.Schema(type=genai_types.Type.STRING)},
-            ),
+            schema={"type": "object", "properties": {"a": {"type": "string"}}},
         )
         for i in range(3)
     ]

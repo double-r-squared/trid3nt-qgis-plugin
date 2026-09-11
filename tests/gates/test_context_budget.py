@@ -11,7 +11,7 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from google.genai import types as genai_types
+from trid3nt_contracts.message import Message, Part, ToolCall, ToolDeclaration, ToolResponse
 
 from trid3nt_server.gates.context_budget import (
     CompactionResult,
@@ -45,39 +45,39 @@ from trid3nt_server.gates.context_budget import (
 
 
 
-def user_content(text: str) -> genai_types.Content:
-    return genai_types.Content(role="user", parts=[genai_types.Part(text=text)])
+def user_content(text: str) -> Message:
+    return Message(role="user", parts=[Part(text=text)])
 
 
-def model_content(text: str) -> genai_types.Content:
-    return genai_types.Content(role="model", parts=[genai_types.Part(text=text)])
+def model_content(text: str) -> Message:
+    return Message(role="model", parts=[Part(text=text)])
 
 
-def fc_content(name: str, args: dict[str, Any], call_id: str = "c1") -> genai_types.Content:
-    fc = genai_types.FunctionCall(name=name, args=args, id=call_id)
-    return genai_types.Content(role="model", parts=[genai_types.Part(function_call=fc)])
+def fc_content(name: str, args: dict[str, Any], call_id: str = "c1") -> Message:
+    fc = ToolCall(name=name, args=args, id=call_id)
+    return Message(role="model", parts=[Part(call=fc)])
 
 
-def fr_content(name: str, response: dict[str, Any], call_id: str = "c1") -> genai_types.Content:
-    fr = genai_types.FunctionResponse(name=name, response=response, id=call_id)
-    return genai_types.Content(role="user", parts=[genai_types.Part(function_response=fr)])
+def fr_content(name: str, response: dict[str, Any], call_id: str = "c1") -> Message:
+    fr = ToolResponse(name=name, result=response, id=call_id)
+    return Message(role="user", parts=[Part(response=fr)])
 
 
-def case_state_note_content(text: str = "These layers are ALREADY produced...") -> genai_types.Content:
+def case_state_note_content(text: str = "These layers are ALREADY produced...") -> Message:
     """A stand-in for the row the server appends as the case-state note --
     just an ordinary role=user text Content structurally."""
-    return genai_types.Content(role="user", parts=[genai_types.Part(text=text)])
+    return Message(role="user", parts=[Part(text=text)])
 
 
 def mixed_narration_and_call_content(
     text: str, name: str, args: dict[str, Any], call_id: str = "c1"
-) -> genai_types.Content:
+) -> Message:
     """A model turn that narrates BEFORE calling a tool: ONE Content row carrying a
     ``text`` Part and a ``function_call`` Part together. ``_is_droppable_row``
     refuses it, so the narration text has to be reached by a later ladder step."""
-    fc = genai_types.FunctionCall(name=name, args=args, id=call_id)
-    return genai_types.Content(
-        role="model", parts=[genai_types.Part(text=text), genai_types.Part(function_call=fc)]
+    fc = ToolCall(name=name, args=args, id=call_id)
+    return Message(
+        role="model", parts=[Part(text=text), Part(call=fc)]
     )
 
 
@@ -206,9 +206,9 @@ class TestCompactionLadder:
         hardened_row = next(
             c
             for c in result.contents
-            if getattr(c.parts[0], "function_response", None) is not None
+            if c.parts[0].response is not None
         )
-        resp = hardened_row.parts[0].function_response.response
+        resp = hardened_row.parts[0].response.result
         assert resp.get("truncated") is True
         assert len(resp["summary"]) <= 200
         # Tail untouched.
@@ -220,7 +220,7 @@ class TestCompactionLadder:
         # ``_is_droppable_row``), so many of them survive drop AND, even
         # hardened, still overflow a tiny budget -- the only remaining lever
         # is fold.
-        rows: list[genai_types.Content] = []
+        rows: list[Message] = []
         for i in range(8):
             rows.append(fc_content(f"fetch_layer_{i}", {"i": i}, call_id=f"c{i}"))
             rows.append(fr_content(f"fetch_layer_{i}", {"data": "y" * 300}, call_id=f"c{i}"))

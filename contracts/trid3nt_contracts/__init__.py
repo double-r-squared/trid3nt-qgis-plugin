@@ -17,6 +17,7 @@ from . import (
     errors,
     execution,
     gate_spec,
+    message,
     payload_warning,
     publish_manifest,
     region_choice,
@@ -48,6 +49,13 @@ from .common import (
     now_utc,
     render_assumptions_line,
     render_fallback_line,
+)
+from .message import (
+    Message,
+    Part,
+    ToolCall,
+    ToolDeclaration,
+    ToolResponse,
 )
 from .publish_manifest import (
     MANIFEST_SCHEMA_VERSION,
@@ -86,6 +94,7 @@ __all__ = [
     "chart_contracts",
     "execution",
     "gate_spec",
+    "message",
     "payload_warning",
     "publish_manifest",
     "outputs_manifest",
@@ -95,6 +104,12 @@ __all__ = [
     "tool_metadata",
     "tool_registry",
     "user",
+    # the adapters' message IR
+    "Message",
+    "Part",
+    "ToolCall",
+    "ToolDeclaration",
+    "ToolResponse",
     # publish manifest: worker -> agent
     "MANIFEST_SCHEMA_VERSION",
     "PublishManifest",

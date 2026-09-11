@@ -1,6 +1,6 @@
 """Unit tests for ``openai_adapter.py``, no network required.
 
-The genai-to-OpenAI message translation including a tool-history round trip; the
+The IR-to-OpenAI message translation including a tool-history round trip; the
 declaration sanitisation; the streaming accumulator over synthetic chunks; the
 context-budget wiring - proactive compaction before the request and the reactive
 clip guard's retry-then-typed-error; and a start/complete event pair per pass."""
@@ -11,7 +11,7 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from google.genai import types as genai_types
+from trid3nt_contracts.message import Message, Part, ToolCall, ToolDeclaration, ToolResponse
 
 from trid3nt_server.gates.context_budget import ContextWindow, WINDOW_SOURCE_ENV
 from trid3nt_server.adapters.openai_adapter import (
@@ -35,30 +35,30 @@ from trid3nt_server.gates.context_budget import (
 
 
 
-def user_content(text: str) -> genai_types.Content:
-    return genai_types.Content(
+def user_content(text: str) -> Message:
+    return Message(
         role="user",
-        parts=[genai_types.Part(text=text)],
+        parts=[Part(text=text)],
     )
 
 
-def model_content(text: str) -> genai_types.Content:
-    return genai_types.Content(
+def model_content(text: str) -> Message:
+    return Message(
         role="model",
-        parts=[genai_types.Part(text=text)],
+        parts=[Part(text=text)],
     )
 
 
-def model_fc_content(name: str, args: dict[str, Any], call_id: str | None = None) -> genai_types.Content:
+def model_fc_content(name: str, args: dict[str, Any], call_id: str | None = None) -> Message:
     """Build a model-role Content carrying a function_call Part."""
-    fc = genai_types.FunctionCall(name=name, args=args, id=call_id)
-    return genai_types.Content(role="model", parts=[genai_types.Part(function_call=fc)])
+    fc = ToolCall(name=name, args=args, id=call_id)
+    return Message(role="model", parts=[Part(call=fc)])
 
 
-def user_fr_content(name: str, response: dict[str, Any], call_id: str | None = None) -> genai_types.Content:
+def user_fr_content(name: str, response: dict[str, Any], call_id: str | None = None) -> Message:
     """Build a user-role Content carrying a function_response Part."""
-    fr = genai_types.FunctionResponse(name=name, response=response, id=call_id)
-    return genai_types.Content(role="user", parts=[genai_types.Part(function_response=fr)])
+    fr = ToolResponse(name=name, result=response, id=call_id)
+    return Message(role="user", parts=[Part(response=fr)])
 
 
 
@@ -172,21 +172,19 @@ class TestContentsToOpenaiMessages:
 
 class TestToolDeclarationsToOpenaiTools:
 
-    def _make_decl(self, name: str, description: str, props: dict | None = None) -> genai_types.FunctionDeclaration:
+    def _make_decl(self, name: str, description: str, props: dict | None = None) -> ToolDeclaration:
         if props is None:
-            return genai_types.FunctionDeclaration(name=name, description=description)
-        schema_props = {
-            k: genai_types.Schema(type=genai_types.Type.STRING, description=v)
-            for k, v in props.items()
-        }
-        return genai_types.FunctionDeclaration(
+            return ToolDeclaration(name=name, description=description)
+        return ToolDeclaration(
             name=name,
             description=description,
-            parameters=genai_types.Schema(
-                type=genai_types.Type.OBJECT,
-                properties=schema_props,
-                required=list(props.keys()),
-            ),
+            schema={
+                "type": "object",
+                "properties": {
+                    k: {"type": "string", "description": v} for k, v in props.items()
+                },
+                "required": list(props.keys()),
+            },
         )
 
     def test_basic_structure(self):
@@ -199,7 +197,7 @@ class TestToolDeclarationsToOpenaiTools:
         assert "city" in t["function"]["parameters"]["properties"]
 
     def test_no_parameters_gives_empty_object(self):
-        decl = genai_types.FunctionDeclaration(name="list_tools", description="Lists tools")
+        decl = ToolDeclaration(name="list_tools", description="Lists tools")
         tools = tool_declarations_to_openai_tools([decl])
         params = tools[0]["function"]["parameters"]
         assert params["type"] == "object"
@@ -210,7 +208,7 @@ class TestToolDeclarationsToOpenaiTools:
         # still applies.
         monkeypatch.setenv("TRID3NT_OPENAI_TOOL_DESC_CAP", "0")
         long_desc = "x" * 2000
-        decl = genai_types.FunctionDeclaration(name="tool", description=long_desc)
+        decl = ToolDeclaration(name="tool", description=long_desc)
         tools = tool_declarations_to_openai_tools([decl])
         assert len(tools[0]["function"]["description"]) == 1000
 
@@ -218,7 +216,7 @@ class TestToolDeclarationsToOpenaiTools:
 
     def test_tool_description_capped_at_default_600(self):
         long_desc = "word " * 300  # 1500 chars, plenty of word boundaries
-        decl = genai_types.FunctionDeclaration(name="tool", description=long_desc)
+        decl = ToolDeclaration(name="tool", description=long_desc)
         tools = tool_declarations_to_openai_tools([decl])
         desc = tools[0]["function"]["description"]
         assert len(desc) <= 600
@@ -226,7 +224,7 @@ class TestToolDeclarationsToOpenaiTools:
 
     def test_truncation_at_word_boundary(self):
         long_desc = "alpha bravo charlie delta " * 40  # >600 chars
-        decl = genai_types.FunctionDeclaration(name="tool", description=long_desc)
+        decl = ToolDeclaration(name="tool", description=long_desc)
         tools = tool_declarations_to_openai_tools([decl])
         desc = tools[0]["function"]["description"]
         assert desc.endswith("...")
@@ -237,7 +235,7 @@ class TestToolDeclarationsToOpenaiTools:
         assert long_desc[len(body)] == " "
 
     def test_short_description_untouched_no_marker(self):
-        decl = genai_types.FunctionDeclaration(name="tool", description="Short and sweet.")
+        decl = ToolDeclaration(name="tool", description="Short and sweet.")
         tools = tool_declarations_to_openai_tools([decl])
         assert tools[0]["function"]["description"] == "Short and sweet."
 
@@ -250,22 +248,22 @@ class TestToolDeclarationsToOpenaiTools:
         assert pdesc.endswith("...")
 
     def test_nested_items_description_capped(self):
-        decl = genai_types.FunctionDeclaration(
+        decl = ToolDeclaration(
             name="batch",
             description="Batch operation",
-            parameters=genai_types.Schema(
-                type=genai_types.Type.OBJECT,
-                properties={
-                    "ids": genai_types.Schema(
-                        type=genai_types.Type.ARRAY,
-                        items=genai_types.Schema(
-                            type=genai_types.Type.STRING,
-                            description="id detail " * 40,  # 400 chars
-                        ),
-                        description="List of IDs",
-                    )
+            schema={
+                "type": "object",
+                "properties": {
+                    "ids": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "description": "id detail " * 40,  # 400 chars
+                        },
+                        "description": "List of IDs",
+                    }
                 },
-            ),
+            },
         )
         tools = tool_declarations_to_openai_tools([decl])
         items = tools[0]["function"]["parameters"]["properties"]["ids"]["items"]
@@ -287,28 +285,28 @@ class TestToolDeclarationsToOpenaiTools:
     def test_env_override_cap_value(self, monkeypatch):
         monkeypatch.setenv("TRID3NT_OPENAI_TOOL_DESC_CAP", "100")
         long_desc = "word " * 100
-        decl = genai_types.FunctionDeclaration(name="tool", description=long_desc)
+        decl = ToolDeclaration(name="tool", description=long_desc)
         tools = tool_declarations_to_openai_tools([decl])
         desc = tools[0]["function"]["description"]
         assert len(desc) <= 100
         assert desc.endswith("...")
 
     def test_non_description_fields_untouched_by_cap(self):
-        decl = genai_types.FunctionDeclaration(
+        decl = ToolDeclaration(
             name="pick",
             description="d " * 400,  # forces tool-desc truncation
-            parameters=genai_types.Schema(
-                type=genai_types.Type.OBJECT,
-                properties={
-                    "mode": genai_types.Schema(
-                        type=genai_types.Type.STRING,
-                        enum=["auto", "medium", "strict"],
-                        description="m " * 200,  # forces param-desc truncation
-                    ),
-                    "count": genai_types.Schema(type=genai_types.Type.INTEGER),
+            schema={
+                "type": "object",
+                "properties": {
+                    "mode": {
+                        "type": "string",
+                        "enum": ["auto", "medium", "strict"],
+                        "description": "m " * 200,  # forces param-desc truncation
+                    },
+                    "count": {"type": "integer"},
                 },
-                required=["mode"],
-            ),
+                "required": ["mode"],
+            },
         )
         tools = tool_declarations_to_openai_tools([decl])
         params = tools[0]["function"]["parameters"]
@@ -323,40 +321,20 @@ class TestToolDeclarationsToOpenaiTools:
         # And the serialized tool is still valid JSON end-to-end.
         json.loads(json.dumps(tools[0]))
 
-    def test_type_map_uppercase_to_lowercase(self):
-        """Genai uppercase TYPE -> lowercase JSON Schema type."""
-        decl = genai_types.FunctionDeclaration(
-            name="compute",
-            description="Compute something",
-            parameters=genai_types.Schema(
-                type=genai_types.Type.OBJECT,
-                properties={
-                    "count": genai_types.Schema(type=genai_types.Type.INTEGER),
-                    "value": genai_types.Schema(type=genai_types.Type.NUMBER),
-                    "flag": genai_types.Schema(type=genai_types.Type.BOOLEAN),
-                },
-            ),
-        )
-        tools = tool_declarations_to_openai_tools([decl])
-        props = tools[0]["function"]["parameters"]["properties"]
-        assert props["count"]["type"] == "integer"
-        assert props["value"]["type"] == "number"
-        assert props["flag"]["type"] == "boolean"
-
     def test_array_type_with_items(self):
-        decl = genai_types.FunctionDeclaration(
+        decl = ToolDeclaration(
             name="batch",
             description="Batch operation",
-            parameters=genai_types.Schema(
-                type=genai_types.Type.OBJECT,
-                properties={
-                    "ids": genai_types.Schema(
-                        type=genai_types.Type.ARRAY,
-                        items=genai_types.Schema(type=genai_types.Type.STRING),
-                        description="List of IDs",
-                    )
+            schema={
+                "type": "object",
+                "properties": {
+                    "ids": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "List of IDs",
+                    }
                 },
-            ),
+            },
         )
         tools = tool_declarations_to_openai_tools([decl])
         ids_schema = tools[0]["function"]["parameters"]["properties"]["ids"]
@@ -653,13 +631,13 @@ class TestContextBudgetWiring:
         monkeypatch.setenv("TRID3NT_OPENAI_MODEL", "test-model")
         monkeypatch.setenv("TRID3NT_OPENAI_API_KEY", "not-needed")
 
-    def _long_history(self, n: int = 60) -> list[genai_types.Content]:
+    def _long_history(self, n: int = 60) -> list[Message]:
         contents = []
         for i in range(n):
             contents.append(
-                genai_types.Content(
+                Message(
                     role="user" if i % 2 == 0 else "model",
-                    parts=[genai_types.Part(text=f"turn {i}: " + "x" * 200)],
+                    parts=[Part(text=f"turn {i}: " + "x" * 200)],
                 )
             )
         contents.append(user_content("what is the status now?"))

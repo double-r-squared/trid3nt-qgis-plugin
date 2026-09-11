@@ -1,0 +1,25 @@
+{
+  "additionalProperties": false,
+  "description": "One tool as the model sees it.\n``schema`` is JSON Schema for the call arguments - an object schema with\na ``properties`` map - which is the shape both provider APIs take.",
+  "properties": {
+    "description": {
+      "default": "",
+      "title": "Description",
+      "type": "string"
+    },
+    "name": {
+      "title": "Name",
+      "type": "string"
+    },
+    "schema": {
+      "additionalProperties": true,
+      "title": "Schema",
+      "type": "object"
+    }
+  },
+  "required": [
+    "name"
+  ],
+  "title": "ToolDeclaration",
+  "type": "object"
+}

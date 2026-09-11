@@ -249,10 +249,10 @@ def test_parts_blob_thinking_never_reaches_contents():
     assert _SECRET not in joined
     # The function_call part survived the strip (only thinking was removed).
     fc_names = [
-        part.function_call.name
+        part.call.name
         for content in contents
         for part in (content.parts or [])
-        if getattr(part, "function_call", None) is not None
+        if part.call is not None
     ]
     assert "fetch_dem" in fc_names
 

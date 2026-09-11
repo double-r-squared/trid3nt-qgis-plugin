@@ -1,6 +1,6 @@
 """OpenAI-compatible LLM provider adapter, for any OpenAI-compatible endpoint.
 
-Converts the genai-typed history and tool specs at the boundary and yields the
+Converts the IR history and tool declarations at the boundary and yields the
 shared ``StreamEvent`` union; every env read happens at call time.
 """
 
@@ -14,7 +14,7 @@ from collections import deque
 from collections.abc import AsyncIterator
 from typing import Any
 
-from google.genai import types as genai_types
+from trid3nt_contracts.message import Message, ToolDeclaration
 
 from .adapter import (
     CompactionCompleteEvent,
@@ -140,16 +140,6 @@ def openai_model(session_model: str | None = None) -> str:
 
 
 
-_TYPE_MAP = {
-    "STRING": "string",
-    "NUMBER": "number",
-    "INTEGER": "integer",
-    "BOOLEAN": "boolean",
-    "ARRAY": "array",
-    "OBJECT": "object",
-    "TYPE_UNSPECIFIED": "string",
-}
-
 #
 # The registry's tool and param descriptions are written for large cloud
 # models; on a small local context window the schemas alone can crowd the
@@ -230,60 +220,24 @@ def _cap_schema_descriptions(schema: Any, cap: int) -> None:
     _cap_schema_descriptions(schema.get("items"), cap)
 
 
-def _genai_schema_to_json_schema(node: Any) -> dict[str, Any]:
-    """Recursively convert a genai-dumped Schema dict to JSON Schema."""
-    if not isinstance(node, dict):
-        return {"type": "string"}
-    out: dict[str, Any] = {}
-    raw_type = node.get("type")
-    if raw_type is not None:
-        t = raw_type.value if hasattr(raw_type, "value") else str(raw_type)
-        out["type"] = _TYPE_MAP.get(t.upper(), t.lower())
-    if node.get("description"):
-        out["description"] = node["description"]
-    if node.get("enum"):
-        out["enum"] = list(node["enum"])
-    if node.get("format"):
-        out["format"] = node["format"]
-    props = node.get("properties")
-    if isinstance(props, dict):
-        out["properties"] = {
-            k: _genai_schema_to_json_schema(v) for k, v in props.items()
-        }
-    items = node.get("items")
-    if items is not None:
-        out["items"] = _genai_schema_to_json_schema(items)
-    if node.get("required"):
-        out["required"] = list(node["required"])
-    # Ensure object schemas declare type.
-    if out.get("type") == "object" and "properties" not in out:
-        out["properties"] = {}
-    return out
-
-
 def tool_declarations_to_openai_tools(
-    tool_declarations: list[genai_types.FunctionDeclaration] | None,
+    tool_declarations: list[ToolDeclaration] | None,
 ) -> list[dict[str, Any]]:
-    """Convert genai FunctionDeclarations to OpenAI ``tools[]`` (function type).
+    """Convert the IR declarations to OpenAI ``tools[]`` (function type).
     Applies the local-wire description caps at build time and logs one INFO
     line per process with the serialized size before and after capping."""
     global _SCHEMA_STATS_LOGGED
     tools: list[dict[str, Any]] = []
     for decl in tool_declarations or []:
-        dumped = decl.model_dump(mode="json", exclude_none=True)
-        params = dumped.get("parameters")
-        if params:
-            schema = _genai_schema_to_json_schema(params)
-        else:
-            schema = {"type": "object", "properties": {}}
+        schema = dict(decl.schema)
         if schema.get("type") != "object":
             schema = {"type": "object", "properties": {}}
         tools.append(
             {
                 "type": "function",
                 "function": {
-                    "name": dumped["name"],
-                    "description": (dumped.get("description") or dumped["name"])[:1000],
+                    "name": decl.name,
+                    "description": (decl.description or decl.name)[:1000],
                     "parameters": schema,
                 },
             }
@@ -355,11 +309,11 @@ def _coalesce_messages(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def contents_to_openai_messages(
-    contents: list[genai_types.Content],
+    contents: list[Message],
     system_prompt: str | None = None,
     show_thinking: bool = False,
 ) -> list[dict[str, Any]]:
-    """Convert genai ``contents`` to OpenAI ``messages[]``.
+    """Convert the IR ``contents`` to OpenAI ``messages[]``.
     An absent ``tool_call_id`` is minted as ``call_{counter}``, and responses
     pair with the calls that produced them by arrival order."""
     messages: list[dict[str, Any]] = []
@@ -396,24 +350,22 @@ def contents_to_openai_messages(
         return f"call_{counter}"
 
     for content in contents:
-        role = getattr(content, "role", "user") or "user"
-        oai_role = "assistant" if role == "model" else "user"
-        parts = getattr(content, "parts", None) or []
+        oai_role = "assistant" if content.role == "model" else "user"
 
         # Collect tool calls and text for assistant turns.
         tool_calls: list[dict[str, Any]] = []
         text_parts: list[str] = []
         tool_results: list[dict[str, Any]] = []
 
-        for part in parts:
-            fc = getattr(part, "function_call", None)
-            fr = getattr(part, "function_response", None)
-            text = getattr(part, "text", None)
+        for part in content.parts:
+            fc = part.call
+            fr = part.response
+            text = part.text
 
-            if fc is not None and getattr(fc, "name", None):
-                tid = getattr(fc, "id", None) or _next_id()
+            if fc is not None and fc.name:
+                tid = fc.id or _next_id()
                 pending_ids.append(tid)
-                args = dict(getattr(fc, "args", None) or {})
+                args = dict(fc.args or {})
                 tool_calls.append(
                     {
                         "id": tid,
@@ -424,11 +376,11 @@ def contents_to_openai_messages(
                         },
                     }
                 )
-            elif fr is not None and getattr(fr, "name", None):
-                tid = getattr(fr, "id", None) or (
+            elif fr is not None and fr.name:
+                tid = fr.id or (
                     pending_ids.popleft() if pending_ids else _next_id()
                 )
-                resp = getattr(fr, "response", None)
+                resp = fr.result
                 if not isinstance(resp, dict):
                     resp = {"result": resp}
                 tool_results.append(
@@ -773,8 +725,8 @@ async def _stream_one_round(
 
 
 async def stream_openai(
-    contents: list[genai_types.Content],
-    tool_declarations: list[genai_types.FunctionDeclaration] | None = None,
+    contents: list[Message],
+    tool_declarations: list[ToolDeclaration] | None = None,
     system_prompt: str | None = None,
     model: str | None = None,
     show_thinking: bool = False,

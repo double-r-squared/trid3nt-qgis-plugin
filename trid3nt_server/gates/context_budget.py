@@ -13,7 +13,7 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
-from google.genai import types as genai_types
+from trid3nt_contracts.message import Message, Part, ToolResponse
 
 from trid3nt_server.adapters.model_discovery import _ollama_root
 
@@ -165,7 +165,7 @@ def estimate_tokens(text: str | None) -> int:
     return math.ceil(len(text) / CHARS_PER_TOKEN)
 
 
-def _content_text_repr(content: genai_types.Content) -> str:
+def _content_text_repr(content: Message) -> str:
     """Serialize one history row for token estimation."""
     try:
         dumped = content.model_dump(mode="json", exclude_none=True)
@@ -174,7 +174,7 @@ def _content_text_repr(content: genai_types.Content) -> str:
         return str(content)
 
 
-def estimate_tokens_for_contents(contents: list[genai_types.Content]) -> int:
+def estimate_tokens_for_contents(contents: list[Message]) -> int:
     return sum(estimate_tokens(_content_text_repr(c)) for c in contents)
 
 
@@ -461,7 +461,7 @@ async def discover_context_window(
 
 @dataclass
 class CompactionResult:
-    contents: list[genai_types.Content]
+    contents: list[Message]
     changed: bool
     dropped: int
     hardened: int
@@ -470,7 +470,7 @@ class CompactionResult:
     after_tokens: int
 
 
-def _protected_tail_len(contents: list[genai_types.Content]) -> int:
+def _protected_tail_len(contents: list[Message]) -> int:
     """The rows that must NEVER be dropped, hardened or folded.
 
     Always the LAST <= 2: the case-state note and the terminal user message."""
@@ -480,7 +480,7 @@ def _protected_tail_len(contents: list[genai_types.Content]) -> int:
     return min(2, len(contents))
 
 
-def _is_droppable_row(content: genai_types.Content) -> bool:
+def _is_droppable_row(content: Message) -> bool:
     """True for a plain narration row: text only, no call or response Part.
 
     Step (a) drops only these; a tool row is hardened by (b), never deleted."""
@@ -488,81 +488,75 @@ def _is_droppable_row(content: genai_types.Content) -> bool:
     # one side without the other leaves an orphaned tool_call/tool_result
     # pairing once the rows are converted to the OpenAI wire format -- an
     # API-breaking shape.
-    for part in getattr(content, "parts", None) or []:
-        if getattr(part, "function_call", None) is not None:
-            return False
-        if getattr(part, "function_response", None) is not None:
+    for part in content.parts:
+        if part.call is not None or part.response is not None:
             return False
     return True
 
 
 def _harden_function_response_part(
-    part: genai_types.Part, max_chars: int
-) -> tuple[genai_types.Part, bool]:
-    fr = getattr(part, "function_response", None)
+    part: Part, max_chars: int
+) -> tuple[Part, bool]:
+    fr = part.response
     if fr is None:
         return part, False
-    resp = getattr(fr, "response", None)
-    serialized = json.dumps(resp, default=str) if resp is not None else ""
+    serialized = json.dumps(fr.result, default=str) if fr.result is not None else ""
     if len(serialized) <= max_chars:
         return part, False
-    hardened_resp = {"summary": serialized[:max_chars], "truncated": True}
-    new_fr = genai_types.FunctionResponse(
-        name=getattr(fr, "name", None),
-        id=getattr(fr, "id", None),
-        response=hardened_resp,
+    hardened = ToolResponse(
+        name=fr.name,
+        id=fr.id,
+        result={"summary": serialized[:max_chars], "truncated": True},
     )
-    return genai_types.Part(function_response=new_fr), True
+    return Part(response=hardened), True
 
 
 def _harden_content(
-    content: genai_types.Content, max_chars: int
-) -> tuple[genai_types.Content, bool]:
+    content: Message, max_chars: int
+) -> tuple[Message, bool]:
     """Re-summarize any long ``function_response`` Part down to ``max_chars``.
 
     Only tool RESULTS are hardened; text and call Parts are left untouched."""
-    parts = list(getattr(content, "parts", None) or [])
     changed = False
-    new_parts: list[genai_types.Part] = []
-    for part in parts:
+    new_parts: list[Part] = []
+    for part in content.parts:
         new_part, part_changed = _harden_function_response_part(part, max_chars)
         new_parts.append(new_part)
         changed = changed or part_changed
     if not changed:
         return content, False
-    return genai_types.Content(role=content.role, parts=new_parts), True
+    return Message(role=content.role, parts=new_parts), True
 
 
 def _cap_text_parts(
-    content: genai_types.Content, max_chars: int
-) -> tuple[genai_types.Content, bool]:
+    content: Message, max_chars: int
+) -> tuple[Message, bool]:
     """Truncate any oversized ``text`` Part to ``max_chars``, ellipsis-marked.
 
     What shrinks a giant AGENT NARRATION row, alone or beside a call Part."""
-    parts = list(getattr(content, "parts", None) or [])
     changed = False
-    new_parts: list[genai_types.Part] = []
-    for part in parts:
-        text = getattr(part, "text", None)
+    new_parts: list[Part] = []
+    for part in content.parts:
+        text = part.text
         if text is not None and len(text) > max_chars:
-            new_parts.append(genai_types.Part(text=text[:max_chars] + " ...[truncated]"))
+            new_parts.append(Part(text=text[:max_chars] + " ...[truncated]"))
             changed = True
         else:
             new_parts.append(part)
     if not changed:
         return content, False
-    return genai_types.Content(role=content.role, parts=new_parts), True
+    return Message(role=content.role, parts=new_parts), True
 
 
 def normalize_contents_row_sizes(
-    contents: list[genai_types.Content], max_chars: int | None = None
-) -> list[genai_types.Content]:
+    contents: list[Message], max_chars: int | None = None
+) -> list[Message]:
     """Defensive per-row TEXT cap, run whether or not the turn is over budget.
 
     A row needing no change keeps its object identity, untouched verbatim."""
     if max_chars is None:
         max_chars = contents_normalize_char_cap()
-    out: list[genai_types.Content] = []
+    out: list[Message] = []
     for c in contents:
         capped, changed = _cap_text_parts(c, max_chars)
         out.append(capped if changed else c)
@@ -580,35 +574,31 @@ def _protected_row_labels(n: int) -> list[str]:
     return [f"protected row {i}" for i in range(n)]
 
 
-def _digest_line_for_content(content: genai_types.Content) -> str | None:
-    role = getattr(content, "role", "user") or "user"
-    for part in getattr(content, "parts", None) or []:
-        fc = getattr(part, "function_call", None)
-        fr = getattr(part, "function_response", None)
-        text = getattr(part, "text", None)
-        if fc is not None and getattr(fc, "name", None):
-            return f"called {fc.name}"
-        if fr is not None and getattr(fr, "name", None):
-            return f"{fr.name} completed"
-        if text:
-            snippet = " ".join(text.strip().split())[:80]
+def _digest_line_for_content(content: Message) -> str | None:
+    for part in content.parts:
+        if part.call is not None and part.call.name:
+            return f"called {part.call.name}"
+        if part.response is not None and part.response.name:
+            return f"{part.response.name} completed"
+        if part.text:
+            snippet = " ".join(part.text.strip().split())[:80]
             if snippet:
-                return f"{'asked' if role == 'user' else 'answered'}: {snippet}"
+                return f"{'asked' if content.role == 'user' else 'answered'}: {snippet}"
     return None
 
 
-def _build_digest_row(contents: list[genai_types.Content]) -> genai_types.Content:
+def _build_digest_row(contents: list[Message]) -> Message:
     """One extractive line per surviving row, folded into a single row.
 
     The ``user`` role is what makes it read as durable context, not a live turn."""
     lines = [ln for ln in (_digest_line_for_content(c) for c in contents) if ln]
     body = "\n".join(f"- {ln}" for ln in lines) if lines else "(no further detail)"
     text = "Earlier in this case: " + body
-    return genai_types.Content(role="user", parts=[genai_types.Part(text=text)])
+    return Message(role="user", parts=[Part(text=text)])
 
 
 def compact_contents(
-    contents: list[genai_types.Content],
+    contents: list[Message],
     *,
     budget_tokens: int,
     target_ratio: float,
@@ -884,7 +874,7 @@ def looks_like_fabricated_action_claim(text: str | None) -> bool:
 class TurnPlan:
     """The decision for one model round: what to send, and what it cost."""
 
-    contents: list[genai_types.Content]
+    contents: list[Message]
     compacted: bool
     before_tokens: int
     after_tokens: int
@@ -893,7 +883,7 @@ class TurnPlan:
 
 
 def plan_turn(
-    contents: list[genai_types.Content],
+    contents: list[Message],
     *,
     window: ContextWindow,
     tool_tokens: int = 0,

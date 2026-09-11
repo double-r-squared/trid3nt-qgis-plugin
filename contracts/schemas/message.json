@@ -1,0 +1,132 @@
+{
+  "$defs": {
+    "Part": {
+      "additionalProperties": false,
+      "description": "One element of a turn: text, a tool call, or a tool response.\nAt most one of the three is set; a Part carrying none is dropped by the\nbuilders rather than sent to a provider.",
+      "properties": {
+        "call": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ToolCall"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "response": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ToolResponse"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "text": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Text"
+        }
+      },
+      "title": "Part",
+      "type": "object"
+    },
+    "ToolCall": {
+      "additionalProperties": false,
+      "description": "The model's decision to call one tool.\n``id`` is the provider's per-call identifier; it is echoed back on the\nmatching response, and is absent where a provider mints none.",
+      "properties": {
+        "args": {
+          "additionalProperties": true,
+          "title": "Args",
+          "type": "object"
+        },
+        "id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Id"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "ToolCall",
+      "type": "object"
+    },
+    "ToolResponse": {
+      "additionalProperties": false,
+      "description": "The result of one dispatched tool call, paired to it by ``id``.",
+      "properties": {
+        "id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Id"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "result": {
+          "additionalProperties": true,
+          "title": "Result",
+          "type": "object"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "ToolResponse",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "One turn of the conversation.\n``model`` is the assistant side; every other speaker, the dispatched tool\nresults included, rides the ``user`` side, which is what both live provider\nwire formats accept.",
+  "properties": {
+    "parts": {
+      "items": {
+        "$ref": "#/$defs/Part"
+      },
+      "title": "Parts",
+      "type": "array"
+    },
+    "role": {
+      "default": "user",
+      "enum": [
+        "user",
+        "model"
+      ],
+      "title": "Role",
+      "type": "string"
+    }
+  },
+  "title": "Message",
+  "type": "object"
+}

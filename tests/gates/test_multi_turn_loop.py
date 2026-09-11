@@ -125,20 +125,18 @@ def test_build_function_call_and_response_content_pair():
         "geocode_location", {"query": "Fort Myers, FL"}, call_id="call-1"
     )
     assert call_content.role == "model"
-    assert call_content.parts[0].function_call.name == "geocode_location"
-    assert call_content.parts[0].function_call.args == {"query": "Fort Myers, FL"}
+    assert call_content.parts[0].call.name == "geocode_location"
+    assert call_content.parts[0].call.args == {"query": "Fort Myers, FL"}
 
     resp_content = build_function_response_content(
         "geocode_location",
         {"tool": "geocode_location", "status": "ok", "result": {"bbox": [1, 2, 3, 4]}},
         call_id="call-1",
     )
-    # google-genai accepts function responses under the "user" or "function"
-    # role; we use "user" as it is the documented multi-turn shape.
-    assert resp_content.role in ("user", "function")
-    fr = resp_content.parts[0].function_response
+    assert resp_content.role == "user"
+    fr = resp_content.parts[0].response
     assert fr.name == "geocode_location"
-    assert fr.response["status"] == "ok"
+    assert fr.result["status"] == "ok"
 
 
 
@@ -265,11 +263,11 @@ async def test_stream_model_reply_multi_turn_loop(fake_llm):
         [
             (c.role, [
                 ("text", p.text) if p.text else (
-                    "function_call", p.function_call.name
-                ) if getattr(p, "function_call", None) else (
+                    "function_call", p.call.name
+                ) if p.call else (
                     "function_response",
-                    p.function_response.name,
-                ) if getattr(p, "function_response", None) else ("unknown", None)
+                    p.response.name,
+                ) if p.response else ("unknown", None)
                 for p in c.parts
             ])
             for c in call["contents"]

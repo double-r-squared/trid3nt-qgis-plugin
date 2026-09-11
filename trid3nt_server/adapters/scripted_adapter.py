@@ -88,7 +88,7 @@ def load_script() -> list[dict[str, Any]]:
 
 
 def _role_of(content: Any) -> str | None:
-    """Best-effort role extraction from a genai Content object OR a plain dict."""
+    """Best-effort role extraction from a ``Message`` OR a plain dict."""
     if isinstance(content, dict):
         return content.get("role")
     return getattr(content, "role", None)
@@ -112,7 +112,7 @@ def _turn_index(contents: Any) -> int:
 #
 # A fake turn is a plain dict (the JSON-transcript shape, extended):
 #   {"text": "..."}                         -- one narration delta
-#   {"tool_call": {"name","args","call_id"?,"thought_signature"?}}
+#   {"tool_call": {"name","args","call_id"?}}
 #   {"tool_calls": [ {..}, {..} ]}           -- parallel calls in ONE round
 #   {"raise": <BaseException>}               -- inject a model-stream error
 #   {"usage": {"total_token_count": ...}}    -- emit a UsageMetadataEvent
@@ -175,20 +175,17 @@ def call_turn(
     name: str,
     args: dict[str, Any] | None = None,
     call_id: str | None = None,
-    thought_signature: bytes | None = None,
 ) -> dict[str, Any]:
     """A fake turn that emits ONE tool call (optionally text via merge)."""
     tc: dict[str, Any] = {"name": name, "args": args or {}}
     if call_id is not None:
         tc["call_id"] = call_id
-    if thought_signature is not None:
-        tc["thought_signature"] = thought_signature
     return {"tool_call": tc}
 
 
 def calls_turn(*calls: dict[str, Any]) -> dict[str, Any]:
     """A fake turn that emits N tool calls in ONE round (parallel bundling).
-    Each argument is a ``{"name","args","call_id"?,"thought_signature"?}`` dict."""
+    Each argument is a ``{"name","args","call_id"?}`` dict."""
     return {"tool_calls": list(calls)}
 
 
@@ -237,16 +234,12 @@ def _events_from_turn(turn: Any, index: int) -> list[StreamEvent]:
     for i, tc in enumerate(calls):
         if not tc.get("name"):
             continue
-        sig = tc.get("thought_signature")
         args = tc.get("args")
         events.append(
             FunctionCallEvent(
                 name=str(tc["name"]),
                 call_id=str(tc.get("call_id") or f"scripted-{index}-{i}"),
                 args=args if isinstance(args, dict) else {},
-                # A non-bytes signature (e.g. a MagicMock leak) is coerced to
-                # None so garbage is never fed back to the model.
-                thought_signature=sig if isinstance(sig, (bytes, bytearray)) else None,
             )
         )
     usage = turn.get("usage")
