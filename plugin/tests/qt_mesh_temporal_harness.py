@@ -62,8 +62,10 @@ _MESH_QML = (
     "</qgis>\n"
 )
 
-#: The quantity the tracer leg declares, and one no SELAFIN group answers to.
-_DECLARED_TRACER = "dye"
+#: The groups a river result carries besides its tracer, and a quantity no
+#: SELAFIN group answers to. A run names its tracer for what it releases, so the
+#: group that is none of these is the one the binding proof declares.
+_HYDRODYNAMIC = ("VELOCITY", "WATER DEPTH", "FREE SURFACE", "BOTTOM")
 _DECLARED_ABSENT = "model_results"
 
 
@@ -86,15 +88,16 @@ def _mesh_binding(layers, slf_path: str, tmp: str) -> None:
     names = _group_names(mesh)
     print(f"mesh dataset groups: {names}", flush=True)
     matched = [i for i, n in enumerate(names)
-               if n.strip().upper().startswith(_DECLARED_TRACER.upper())]
-    assert matched, f"the tracer fixture carries no dye group: {names}"
+               if not n.strip().upper().startswith(_HYDRODYNAMIC)]
+    assert matched, f"the tracer fixture carries no tracer group: {names}"
     index = matched[0]
+    declared = names[index].split()[0]
 
     # A document QGIS accepts and then renders nothing from: the declared
     # quantity is not how MDAL spells the group, so no group binds.
     unbound = QgsMeshLayer(slf_path, "unbound", "mdal")
     _msg, ok = unbound.loadNamedStyle(
-        _write(tmp, "unbound", _MESH_QML.format(declared=_DECLARED_TRACER)))
+        _write(tmp, "unbound", _MESH_QML.format(declared=declared)))
     assert ok, "QGIS rejected the mesh document outright"
     dropped = unbound.rendererSettings().activeScalarDatasetGroup()
     assert dropped == -1, (
@@ -105,7 +108,7 @@ def _mesh_binding(layers, slf_path: str, tmp: str) -> None:
     # wins on the one group it binds.
     layers._clamp_mesh_scalar_classification(mesh)
     note = layers.bind_declared_mesh_style(
-        mesh, {"qml": _MESH_QML.format(declared=_DECLARED_TRACER)}, tmp)
+        mesh, {"qml": _MESH_QML.format(declared=declared)}, tmp)
     print(f"bind note:{note}", flush=True)
     assert "styled from the declared preset" in note, note
     assert names[index].strip() in note, note

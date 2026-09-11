@@ -23,8 +23,8 @@ _RUNS_DIR = os.environ.get("TRID3NT_RUNS_DIR") or os.path.join(
 
 #: The rain-on-grid result: the four hydrodynamic groups on a time axis.
 _ROG_RESULT = "r2d_rog.slf"
-#: The river result: those same groups plus the DYE tracer the binding proof
-#: declares. Every river run advects dye, so the basename is the whole selector.
+#: The river result: those same groups plus the tracer the binding proof
+#: declares. Every river run carries one, so the basename is the whole selector.
 _TRACER_RESULT = "r2d_river.slf"
 
 
