@@ -69,10 +69,8 @@ async def _drive_decision(server, decision: str, revised_args=None) -> None:
     )
 
 
-# --------------------------------------------------------------------------- #
 # 1) Registration: the fetchers are in FETCH_CONFIRM_TOOLS, SEPARATE from the
 #    solver set; the no-finer-knob fetchers are NOT in either.
-# --------------------------------------------------------------------------- #
 def test_fetch_tools_in_fetch_confirm_set() -> None:
     from trid3nt_server import server
 
@@ -88,9 +86,6 @@ def test_fetch_tools_in_fetch_confirm_set() -> None:
     assert "compute_ndvi" not in server.SOLVER_CONFIRM_TOOLS
 
 
-# --------------------------------------------------------------------------- #
-# 2) The gate emits a granularity block for each fetcher.
-# --------------------------------------------------------------------------- #
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     "tool_name,engine",
@@ -132,9 +127,6 @@ async def test_gate_emits_fetch_granularity_block(tool_name: str, engine: str) -
     assert "narrow_scope" in card["payload"]["options"]
 
 
-# --------------------------------------------------------------------------- #
-# 3) proceed pins resolution_m=10 (the coarse default) + injects NO confirmed.
-# --------------------------------------------------------------------------- #
 @pytest.mark.asyncio
 @pytest.mark.parametrize("tool_name", ["fetch_dem", "fetch_topobathy"])
 async def test_proceed_pins_default_resolution(tool_name: str) -> None:
@@ -154,9 +146,6 @@ async def test_proceed_pins_default_resolution(tool_name: str) -> None:
     assert "enable_autoscale" not in effective
 
 
-# --------------------------------------------------------------------------- #
-# 4) narrow_scope to a finer rung on a SMALL AOI is applied as-is.
-# --------------------------------------------------------------------------- #
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     "tool_name,finer",
@@ -182,9 +171,6 @@ async def test_narrow_scope_finer_applied_small_aoi(
     assert "confirmed" not in effective
 
 
-# --------------------------------------------------------------------------- #
-# 5) narrow_scope finer-than-finest_allowed on a LARGE AOI is CLAMPED UP.
-# --------------------------------------------------------------------------- #
 @pytest.mark.asyncio
 async def test_narrow_scope_finer_clamped_large_aoi() -> None:
     from trid3nt_server import server
@@ -214,9 +200,6 @@ async def test_narrow_scope_finer_clamped_large_aoi() -> None:
     assert "confirmed" not in effective
 
 
-# --------------------------------------------------------------------------- #
-# 6) cancel / timeout fail-CLOSED (the fetch does not run).
-# --------------------------------------------------------------------------- #
 @pytest.mark.asyncio
 async def test_cancel_fails_closed() -> None:
     from trid3nt_server import server
@@ -252,9 +235,6 @@ async def test_timeout_fails_closed(monkeypatch) -> None:
     assert not server._PENDING_CONFIRMATIONS
 
 
-# --------------------------------------------------------------------------- #
-# 7) A build exception fails OPEN (proceed with original params, unmodified).
-# --------------------------------------------------------------------------- #
 @pytest.mark.asyncio
 async def test_build_exception_fails_open() -> None:
     from trid3nt_server import server
@@ -275,9 +255,6 @@ async def test_build_exception_fails_open() -> None:
     assert not server._PENDING_CONFIRMATIONS
 
 
-# --------------------------------------------------------------------------- #
-# 8) A fetch is NOT marked as a solver dispatch.
-# --------------------------------------------------------------------------- #
 def test_fetch_is_not_a_solver_dispatch_marker() -> None:
     """The autostop solver-marker keys off SOLVER_CONFIRM_TOOLS only; a fetcher
     being absent there is what keeps a fetch from skewing the in-flight solve
@@ -288,9 +265,6 @@ def test_fetch_is_not_a_solver_dispatch_marker() -> None:
         assert fetcher not in server.SOLVER_CONFIRM_TOOLS
 
 
-# --------------------------------------------------------------------------- #
-# 9) _clamp_fetch_resolution unit: finer floored up, coarser honoured.
-# --------------------------------------------------------------------------- #
 def test_clamp_fetch_resolution_helper() -> None:
     from trid3nt_server import server
 
@@ -302,19 +276,16 @@ def test_clamp_fetch_resolution_helper() -> None:
     assert server._clamp_fetch_resolution(5.0, 5.0) == 5.0
 
 
-# --------------------------------------------------------------------------- #
 # 10) Local-cloud fingerprint seam: the LOCAL build
 #     (TRID3NT_SOLVER_BACKEND=local-docker) must not surface the cloud
 #     "fetch (1 vCPU)" compute label on the confirm card -- it renders the
 #     "local" compute lane instead. The cloud lane (aws-batch / unset) keeps
 #     the exact prior values byte-for-byte.
-# --------------------------------------------------------------------------- #
 # 11) fetch_dem F16-for-DEM extension: a state-scale bbox (the
 #     WA-state live failure this fixes) gets an HONEST coarsened suggestion --
 #     bounded by fetch_dem's own 4000 px/axis budget (matching
 #     the fetcher's own _DEM_PIXEL_BUDGET_PX), not the generic 8192 px
 #     MAX_FETCH_PX and not a stale 30 m default.
-# --------------------------------------------------------------------------- #
 # The exact bbox from the live failure report.
 _WA_STATE_BBOX_DEM = [-124.837922, 45.543029, -116.914037, 49.003324]
 
@@ -345,9 +316,6 @@ async def test_dem_state_scale_gate_suggests_honest_coarsened_rung() -> None:
 
 
 
-# --------------------------------------------------------------------------- #
-# 10) fetch_landcover is in FETCH_CONFIRM_TOOLS (large-bbox auto-coarsen gate).
-# --------------------------------------------------------------------------- #
 def test_fetch_landcover_in_fetch_confirm_set() -> None:
     """fetch_landcover must be in FETCH_CONFIRM_TOOLS so state-scale bboxes
     trigger the resolution gate instead of hard-failing."""
@@ -358,9 +326,6 @@ def test_fetch_landcover_in_fetch_confirm_set() -> None:
     assert "fetch_landcover" not in server.SOLVER_CONFIRM_TOOLS
 
 
-# --------------------------------------------------------------------------- #
-# 11) fetch_landcover gate emits a granularity block with engine="landcover".
-# --------------------------------------------------------------------------- #
 @pytest.mark.asyncio
 async def test_landcover_gate_emits_granularity_block() -> None:
     from trid3nt_server import server
@@ -387,10 +352,8 @@ async def test_landcover_gate_emits_granularity_block() -> None:
     assert "narrow_scope" in card["payload"]["options"]
 
 
-# --------------------------------------------------------------------------- #
 # 12) State-scale bbox (Washington state ~ 230 000 km^2): the gate fires and
 #     the effective resolution is coarsened (> 30 m native).
-# --------------------------------------------------------------------------- #
 # Washington state approx bbox
 _WA_STATE_BBOX = [-124.7, 45.5, -116.9, 49.0]
 
@@ -418,10 +381,8 @@ async def test_landcover_state_scale_gate_coarsens() -> None:
     assert effective["resolution_m"] > 30  # coarsened from native
 
 
-# --------------------------------------------------------------------------- #
 # 13) fetch_landcover: small bbox (< 10 000 km^2) stays at 30 m native and
 #     the gate is SKIPPED (no card, no confirm) -- no coarsening to surface.
-# --------------------------------------------------------------------------- #
 @pytest.mark.asyncio
 async def test_landcover_small_bbox_native_resolution_no_gate() -> None:
     """A small bbox needs no coarsening -> the gate is skipped entirely and the
@@ -441,7 +402,6 @@ async def test_landcover_small_bbox_native_resolution_no_gate() -> None:
     assert effective == params
 
 
-# --------------------------------------------------------------------------- #
 # 14-17) fetch_landcover auto-coarsen (state-scale no-hard-fail / native-metadata /
 # continent-scale ceiling / pixel-budget) FOLDED to the spec-driven surface.
 # The tool's auto-coarsen moved to the router pre_resolve hook + the gates.max_bbox_km2

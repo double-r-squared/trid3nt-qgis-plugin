@@ -39,9 +39,6 @@ from trid3nt_contracts.ws import (
 )
 
 
-# --------------------------------------------------------------------------- #
-# MockWebSocket — collects wire envelopes for assertion (mirrors credential tests).
-# --------------------------------------------------------------------------- #
 
 
 @pytest.fixture(autouse=True)
@@ -149,9 +146,6 @@ async def _drive_region_choice(
     return ws
 
 
-# =========================================================================== #
-# 1. State-snap result TRIGGERS a region-choice-request with counties + default
-# =========================================================================== #
 
 
 def test_state_snap_triggers_region_choice_request_with_counties():
@@ -184,9 +178,6 @@ def test_state_snap_triggers_region_choice_request_with_counties():
     assert "whole state" in msg and "florida" in msg
 
 
-# =========================================================================== #
-# 2. A PRECISE geocode does NOT trigger the picker
-# =========================================================================== #
 
 
 def test_precise_geocode_does_not_trigger_region_choice():
@@ -224,9 +215,6 @@ def test_precise_geocode_does_not_trigger_region_choice():
     assert not server._PENDING_REGION_CHOICES
 
 
-# =========================================================================== #
-# 3. region-choice-provided(region) narrows the geocode bbox
-# =========================================================================== #
 
 
 def test_region_choice_provided_region_narrows_bbox():
@@ -278,9 +266,6 @@ def test_region_choice_provided_region_falls_back_to_bbox_when_id_unknown():
     assert result["source"] == "region-choice-narrowed"
 
 
-# =========================================================================== #
-# 4. region-choice-provided(whole_state) keeps the state bbox
-# =========================================================================== #
 
 
 def test_region_choice_provided_whole_state_keeps_state_bbox():
@@ -328,9 +313,6 @@ def test_region_choice_timeout_keeps_state_bbox(monkeypatch):
     assert not server._PENDING_REGION_CHOICES
 
 
-# =========================================================================== #
-# 5. Envelope (de)serialization + ws.py registry wiring
-# =========================================================================== #
 
 
 def test_envelopes_roundtrip_and_are_registered():
@@ -424,9 +406,6 @@ def test_request_payload_built_from_state_snap_result():
     )
 
 
-# =========================================================================== #
-# 6. Region-set builder: TIGER FlatGeobuf features -> per-county candidates
-# =========================================================================== #
 
 
 def _make_tiger_county_fgb_bytes() -> bytes:

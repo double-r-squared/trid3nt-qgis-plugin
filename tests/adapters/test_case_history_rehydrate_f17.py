@@ -35,9 +35,6 @@ from tests._fakes import MockMCPClient
 from tests._fakes import MockWebSocket
 
 
-# --------------------------------------------------------------------------- #
-# Fixtures / helpers
-# --------------------------------------------------------------------------- #
 
 
 @pytest.fixture()
@@ -97,9 +94,6 @@ def _seed_case(p: Persistence, case: CaseSummary,
         asyncio.run(p.append_chat_message(m))
 
 
-# --------------------------------------------------------------------------- #
-# Pure adapter helper unit tests
-# --------------------------------------------------------------------------- #
 
 
 def test_rehydrate_converts_text_turns_in_order() -> None:
@@ -270,9 +264,6 @@ def test_rehydrate_appends_layers_note_last() -> None:
     assert "flood-depth-01HX" in history[-1]["text"]
 
 
-# --------------------------------------------------------------------------- #
-# Server wiring: _emit_case_open rehydrates state.chat_history
-# --------------------------------------------------------------------------- #
 
 
 def test_case_open_rehydrates_chat_history(_persistence_bound: Persistence) -> None:

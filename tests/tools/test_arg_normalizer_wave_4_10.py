@@ -14,9 +14,6 @@ import pytest
 from trid3nt_server.tools.tool_arg_normalizer import normalize_args
 
 
-# --------------------------------------------------------------------------- #
-# Helpers: tiny fake callables whose signatures are the canonical contracts
-# --------------------------------------------------------------------------- #
 
 
 def _fn_fema_nfhl_zones(
@@ -158,9 +155,6 @@ def _fn_usfs_canopy_fuels(
     return None
 
 
-# =========================================================================== #
-# fetch_fema_nfhl_zones
-# =========================================================================== #
 
 _NFHL = "fetch_fema_nfhl_zones"
 
@@ -188,9 +182,6 @@ def test_fema_nfhl_zone_filter_alias(alias: str) -> None:
     assert alias not in out
 
 
-# =========================================================================== #
-# fetch_hrrr_forecast
-# =========================================================================== #
 
 _HRRR = "fetch_hrrr_forecast"
 
@@ -224,9 +215,6 @@ def test_hrrr_forecast_cycle_alias(alias: str) -> None:
     assert alias not in out
 
 
-# =========================================================================== #
-# fetch_noaa_nwm_streamflow
-# =========================================================================== #
 
 _NWM = "fetch_noaa_nwm_streamflow"
 
@@ -260,9 +248,6 @@ def test_nwm_streamflow_forecast_hour_alias(alias: str) -> None:
     assert alias not in out
 
 
-# =========================================================================== #
-# fetch_usace_levees
-# =========================================================================== #
 
 _LEVEES = "fetch_usace_levees"
 
@@ -281,9 +266,6 @@ def test_usace_levees_layer_alias(alias: str) -> None:
     assert alias not in out
 
 
-# =========================================================================== #
-# fetch_usace_dams
-# =========================================================================== #
 
 _DAMS = "fetch_usace_dams"
 
@@ -295,9 +277,6 @@ def test_usace_dams_bbox_alias(alias: str) -> None:
     assert out.get("bbox") == val
 
 
-# =========================================================================== #
-# fetch_usace_nsi
-# =========================================================================== #
 
 _NSI = "fetch_usace_nsi"
 
@@ -309,9 +288,6 @@ def test_usace_nsi_bbox_alias(alias: str) -> None:
     assert out.get("bbox") == val
 
 
-# =========================================================================== #
-# fetch_asos_metar
-# =========================================================================== #
 
 _ASOS = "fetch_asos_metar"
 
@@ -339,9 +315,6 @@ def test_asos_metar_end_time_alias(alias: str) -> None:
     assert alias not in out
 
 
-# =========================================================================== #
-# fetch_gridmet
-# =========================================================================== #
 
 _GRIDMET = "fetch_gridmet"
 
@@ -376,9 +349,6 @@ def test_gridmet_end_date_alias(alias: str) -> None:
     assert alias not in out
 
 
-# =========================================================================== #
-# fetch_noaa_coops_tides
-# =========================================================================== #
 
 _COOPS = "fetch_noaa_coops_tides"
 
@@ -413,9 +383,6 @@ def test_noaa_coops_product_alias(alias: str) -> None:
     assert alias not in out
 
 
-# =========================================================================== #
-# fetch_noaa_slr_scenarios
-# =========================================================================== #
 
 _SLR = "fetch_noaa_slr_scenarios"
 
@@ -435,9 +402,6 @@ def test_noaa_slr_scenario_ft_alias(alias: str) -> None:
     assert alias not in out
 
 
-# =========================================================================== #
-# fetch_gtsm_tide_surge
-# =========================================================================== #
 
 _GTSM = "fetch_gtsm_tide_surge"
 
@@ -472,9 +436,6 @@ def test_gtsm_output_alias(alias: str) -> None:
     assert alias not in out
 
 
-# =========================================================================== #
-# fetch_raws_weather
-# =========================================================================== #
 
 _RAWS = "fetch_raws_weather"
 
@@ -502,9 +463,6 @@ def test_raws_weather_end_time_alias(alias: str) -> None:
     assert alias not in out
 
 
-# =========================================================================== #
-# fetch_nhdplus_nldi_navigate
-# =========================================================================== #
 
 _NLDI = "fetch_nhdplus_nldi_navigate"
 
@@ -538,9 +496,6 @@ def test_nhdplus_nldi_distance_km_alias(alias: str) -> None:
     assert alias not in out
 
 
-# =========================================================================== #
-# fetch_statsgo_soils
-# =========================================================================== #
 
 _STATSGO = "fetch_statsgo_soils"
 
@@ -566,9 +521,6 @@ def test_statsgo_soils_timeout_alias(alias: str) -> None:
     assert alias not in out
 
 
-# =========================================================================== #
-# fetch_hrrr_smoke
-# =========================================================================== #
 
 _HRRR_SMOKE = "fetch_hrrr_smoke"
 
@@ -602,9 +554,6 @@ def test_hrrr_smoke_cycle_alias(alias: str) -> None:
     assert alias not in out
 
 
-# =========================================================================== #
-# fetch_3dep_extra
-# =========================================================================== #
 
 _3DEP = "fetch_3dep_extra"
 
@@ -637,9 +586,6 @@ def test_3dep_extra_timeout_alias(alias: str) -> None:
     assert alias not in out
 
 
-# =========================================================================== #
-# fetch_usfs_canopy_fuels
-# =========================================================================== #
 
 _CANOPY = "fetch_usfs_canopy_fuels"
 

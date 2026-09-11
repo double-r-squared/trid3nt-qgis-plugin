@@ -21,9 +21,6 @@ from trid3nt_server.emission import pipeline_emitter as pe
 _SERVER_ROOT = pathlib.Path(__file__).resolve().parents[2] / "trid3nt_server"
 
 
-# --------------------------------------------------------------------------- #
-# (a) SCHEMA
-# --------------------------------------------------------------------------- #
 def test_schema_demo_without_consequence_cannot_construct() -> None:
     with pytest.raises(ValueError, match="consequence"):
         SyntheticInput(param="aquifer_k_ms", value=1e-4, basis="default_demo")
@@ -57,9 +54,6 @@ def test_schema_tolerant_history_read_backfills_scenario() -> None:
     assert lyr.synthetic_inputs[0].consequence == "scenario"
 
 
-# --------------------------------------------------------------------------- #
-# (b) STATIC LINT
-# --------------------------------------------------------------------------- #
 def _synthetic_input_blocks(src: str):
     """Yield (line, block) for every balanced ``SyntheticInput(...)`` call."""
     i = 0
@@ -95,9 +89,6 @@ def test_lint_every_default_demo_site_carries_consequence() -> None:
     )
 
 
-# --------------------------------------------------------------------------- #
-# (c) BEHAVIORAL
-# --------------------------------------------------------------------------- #
 def _demo_entry(consequence: str) -> SyntheticInput:
     return SyntheticInput(param="p", value=None, basis="default_demo",
                           consequence=consequence, note="no real source")

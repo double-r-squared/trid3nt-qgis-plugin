@@ -71,9 +71,6 @@ def _spec(resolve_hook: str | None) -> SourceSpec:
     )
 
 
-# --------------------------------------------------------------------------- #
-# library_delegate.resolve() unit.
-# --------------------------------------------------------------------------- #
 
 
 def test_resolve_noop_when_unset():
@@ -96,9 +93,6 @@ def test_resolve_rejects_non_dict_return():
         library_delegate.resolve(_spec("t_delres.badtype"), {"cycle": None})
 
 
-# --------------------------------------------------------------------------- #
-# route(): the resolved value merges into params BEFORE the cache key.
-# --------------------------------------------------------------------------- #
 
 
 def _capture_read_through(monkeypatch) -> dict:
@@ -128,9 +122,6 @@ def test_route_noop_without_resolve_leaves_params(monkeypatch):
     assert seen["params"].get("cycle") in (None,)
 
 
-# --------------------------------------------------------------------------- #
-# Registration pairing gate: delegate_resolve requires delegate.
-# --------------------------------------------------------------------------- #
 
 
 def test_registration_rejects_resolve_without_delegate():

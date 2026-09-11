@@ -45,9 +45,6 @@ def _run(coro):
     return asyncio.run(coro)
 
 
-# --------------------------------------------------------------------------- #
-# Provider selection.
-# --------------------------------------------------------------------------- #
 @pytest.mark.parametrize("val,expected", [
     ("scripted", True), ("replay", True), ("fake", True), ("SCRIPTED", True),
     ("bedrock", False), ("vertex", False), ("", False),
@@ -62,9 +59,6 @@ def test_model_provider_unset_is_not_scripted(monkeypatch):
     assert sa.model_provider_is_scripted() is False
 
 
-# --------------------------------------------------------------------------- #
-# Transcript resolution precedence.
-# --------------------------------------------------------------------------- #
 def test_load_script_override_wins(monkeypatch):
     monkeypatch.setenv("TRID3NT_SCRIPTED_TRANSCRIPT_JSON", json.dumps([{"text": "env"}]))
     sa.set_script([{"text": "override"}])
@@ -95,9 +89,6 @@ def test_load_script_bad_json_is_safe(monkeypatch):
     assert sa.load_script() == []
 
 
-# --------------------------------------------------------------------------- #
-# Turn indexing = count of prior model (assistant) turns.
-# --------------------------------------------------------------------------- #
 def test_turn_index_counts_model_roles():
     assert sa._turn_index([{"role": "user"}]) == 0
     assert sa._turn_index([{"role": "user"}, {"role": "model"}, {"role": "user"}]) == 1
@@ -106,9 +97,6 @@ def test_turn_index_counts_model_roles():
     assert sa._turn_index("not a list") == 0
 
 
-# --------------------------------------------------------------------------- #
-# stream_scripted: emits the right StreamEvents and advances per turn.
-# --------------------------------------------------------------------------- #
 def test_stream_scripted_emits_text_then_tool_call_at_turn0():
     sa.set_script([
         {"text": "Geocoding.", "tool_call": {"name": "geocode_place", "args": {"q": "Mexico Beach"}}},
@@ -146,9 +134,6 @@ def test_stream_scripted_exhausted_emits_terminal_text_no_loop():
     assert not any(isinstance(e, FunctionCallEvent) for e in evs)
 
 
-# --------------------------------------------------------------------------- #
-# Integration: the OUTER dispatch routes to scripted with NO model client.
-# --------------------------------------------------------------------------- #
 def test_dispatch_routes_to_scripted_with_no_client(monkeypatch):
     """stream_events_with_contents(client=None, ...) must yield the scripted
     tool call when MODEL_PROVIDER=scripted -- proving the adapter.py seam routes
@@ -166,12 +151,10 @@ def test_dispatch_routes_to_scripted_with_no_client(monkeypatch):
     assert fc.args["bbox"] == [-85.55, 29.85, -85.3, 30.05]
 
 
-# --------------------------------------------------------------------------- #
 # The decommissioned vertex/gemini google-genai generate path is REMOVED:
 # those providers (and any unknown value) now raise the typed error instead of
 # falling through to a genai client. ``bedrock`` (the unset default) is the
 # supported production path and is NOT raised here.
-# --------------------------------------------------------------------------- #
 @pytest.mark.parametrize("prov", ["vertex", "gemini", "GEMINI", "googlegenai", "gpt"])
 def test_removed_and_unknown_providers_raise_unsupported(monkeypatch, prov):
     from trid3nt_server.adapters.adapter import UnsupportedModelProviderError

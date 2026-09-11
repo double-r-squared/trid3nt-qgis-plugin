@@ -15,18 +15,13 @@ import pytest
 
 from trid3nt_server.tools import TOOL_REGISTRY
 
-# ---------------------------------------------------------------------------
 # Eager-import all workflow modules that add to TOOL_REGISTRY at import time.
 # Mirrors the startup-time import order; any module that calls @register_tool
 # at module level must appear here so the registry is fully populated.
-# ---------------------------------------------------------------------------
 
 logger = logging.getLogger(__name__)
 
 
-# ---------------------------------------------------------------------------
-# Normalizer adapter
-# ---------------------------------------------------------------------------
 
 def _get_normalizer():
     """Return a ``(tool_name, raw_args, fn) -> dict`` callable and whether it is the
@@ -69,9 +64,6 @@ def _inspect_strip_unknown(
     return stripped
 
 
-# ---------------------------------------------------------------------------
-# Minimal valid params for each tool (required positional arguments only)
-# ---------------------------------------------------------------------------
 
 # A sample EPSG:4326 bbox used as a stand-in for required bbox params.
 _SAMPLE_BBOX = (-81.95, 26.55, -81.75, 26.75)  # Fort Myers, FL
@@ -157,9 +149,6 @@ _MINIMAL_VALID_PARAMS: dict[str, dict[str, Any]] = {
 }
 
 
-# ---------------------------------------------------------------------------
-# The 20 invented kwarg patterns Gemini routinely generates
-# ---------------------------------------------------------------------------
 
 # These are drawn from a real failure log. Each dict
 # contains one or more invented kwargs; they are layered ON TOP of the valid
@@ -204,9 +193,6 @@ assert len(_INVENTED_KWARG_PATTERNS) == 20, (
 )
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
 
 def _build_fuzz_kwargs(tool_name: str, extra: dict[str, Any]) -> dict[str, Any]:
     """Merge valid minimal params with invented extras."""
@@ -231,9 +217,6 @@ def _call_fn(entry_fn, kwargs: dict[str, Any]) -> None:
         # not the bug class we are guarding — pass silently.
 
 
-# ---------------------------------------------------------------------------
-# Parametrised fuzz test
-# ---------------------------------------------------------------------------
 
 # One case per invented pattern, sweeping the whole registry inside it. The
 # cross product of every tool with every pattern proved the same single
@@ -275,9 +258,6 @@ def test_tool_survives_invented_kwargs(pattern_idx: int) -> None:
         )
 
 
-# ---------------------------------------------------------------------------
-# Sentinel test: all tools must have native **_extra_ignored
-# ---------------------------------------------------------------------------
 
 @pytest.mark.xfail(
     reason=(
@@ -309,9 +289,6 @@ def test_all_tools_have_native_extra_ignored() -> None:
         )
 
 
-# ---------------------------------------------------------------------------
-# Coverage audit test: tool registry count must be ≥ 50
-# ---------------------------------------------------------------------------
 
 def test_tool_registry_count_ge_50() -> None:
     """The registry must hold at least 50 tools for the fuzz to be meaningful.
@@ -326,9 +303,6 @@ def test_tool_registry_count_ge_50() -> None:
     )
 
 
-# ---------------------------------------------------------------------------
-# Normalizer presence test
-# ---------------------------------------------------------------------------
 
 def test_normalizer_presence_logged() -> None:
     """Log whether the production normalizer or the fallback is in use.

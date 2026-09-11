@@ -47,9 +47,6 @@ class _Res:
         self.body = body
 
 
-# --------------------------------------------------------------------------- #
-# Registration parity: all five spec-served under the twin name.
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.parametrize("name", list(_SPECS))
@@ -59,9 +56,6 @@ def test_spec_served_under_twin_name(name):
     assert "_router._promoted" in TOOL_REGISTRY[name].fn.__module__
 
 
-# --------------------------------------------------------------------------- #
-# climate_normals: inventory filter + drop-and-EMPTY enrich.
-# --------------------------------------------------------------------------- #
 
 
 def test_climate_normals_inventory_filter_and_empty():
@@ -89,9 +83,6 @@ def test_climate_normals_enrich_merge_and_drop():
     assert drop.error_code == "CLIMATE_NORMALS_EMPTY"
 
 
-# --------------------------------------------------------------------------- #
-# usgs_groundwater_levels: selector gate, NO_WELLS, best-effort location join.
-# --------------------------------------------------------------------------- #
 
 
 def test_groundwater_selector_and_no_wells_and_join():

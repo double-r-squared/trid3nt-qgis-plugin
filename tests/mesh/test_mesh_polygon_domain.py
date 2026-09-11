@@ -83,9 +83,6 @@ def _stub_om2d(monkeypatch, tmp_path, *, stats=None):
     return sent
 
 
-# --------------------------------------------------------------------------- #
-# One extent param, two kinds of value.
-# --------------------------------------------------------------------------- #
 def test_the_extent_param_takes_a_box_or_a_polygon():
     assert _recipe(extent=_AOI).extent == _AOI
     for supplied in (json.dumps(_BASIN), _BASIN):
@@ -98,9 +95,6 @@ def test_the_polygon_domain_is_the_om2d_mesher_not_a_second_one():
     assert registered_meshers() == ("om2d", "reg_grid")
 
 
-# --------------------------------------------------------------------------- #
-# The config the box is handed on each path.
-# --------------------------------------------------------------------------- #
 def test_a_supplied_polygon_is_staged_for_the_box_with_no_shoreline(
         monkeypatch, tmp_path):
     sent = _stub_om2d(monkeypatch, tmp_path)
@@ -194,9 +188,6 @@ def test_a_polygon_domain_can_come_from_a_file_a_tool_wrote(monkeypatch, tmp_pat
     assert sent["config"]["domain_geojson"] == "/data/domain.geojson"
 
 
-# --------------------------------------------------------------------------- #
-# The provenance a polygon-domain mesh travels with.
-# --------------------------------------------------------------------------- #
 def test_the_mesh_states_that_its_domain_was_supplied_not_cut_from_a_shoreline(
         monkeypatch, tmp_path):
     _stub_om2d(monkeypatch, tmp_path)
@@ -225,9 +216,6 @@ def test_the_boundary_record_carries_the_domain_it_was_walked_on(
     assert info["source"] == "supplied polygon domain (1 part(s))"
 
 
-# --------------------------------------------------------------------------- #
-# The refusals each path owns.
-# --------------------------------------------------------------------------- #
 def test_an_extent_carrying_no_polygon_refuses_rather_than_widen_a_line(
         monkeypatch, tmp_path):
     # THE ruling: a flowline is not a domain. Nothing buffers it into one.
@@ -269,9 +257,6 @@ def test_a_lattice_still_builds_from_a_box():
     assert REG_GRID.build(recipe).node_count > 0
 
 
-# --------------------------------------------------------------------------- #
-# The chain: one tool's polygon is the next tool's domain.
-# --------------------------------------------------------------------------- #
 def test_a_section_the_tool_produced_meshes_as_the_domain(monkeypatch, tmp_path):
     from trid3nt_server.tools.derive.section.section import section
 
@@ -287,9 +272,6 @@ def test_a_section_the_tool_produced_meshes_as_the_domain(monkeypatch, tmp_path)
     assert staged["geometries"][0]["type"] == "Polygon"
 
 
-# --------------------------------------------------------------------------- #
-# The in-container geometry, against a stub oceanmesh.
-# --------------------------------------------------------------------------- #
 @pytest.fixture()
 def driver(monkeypatch):
     """The om2d driver with a stub ``oceanmesh`` - the real one is GPL, in the image."""

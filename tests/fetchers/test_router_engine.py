@@ -49,9 +49,6 @@ def _raster_spec(**over) -> SourceSpec:
     return SourceSpec.model_validate(base)
 
 
-# --------------------------------------------------------------------------- #
-# param validation + gates
-# --------------------------------------------------------------------------- #
 
 
 def test_validate_required_missing_raises_typed():
@@ -110,9 +107,6 @@ def test_validate_quantizes_and_defaults():
     assert out["bbox"] == [round(v, 6) for v in out["bbox"]]
 
 
-# --------------------------------------------------------------------------- #
-# metadata + payload estimator synthesis
-# --------------------------------------------------------------------------- #
 
 
 def test_synthesize_metadata_mirrors_twin():
@@ -168,9 +162,6 @@ def test_payload_estimator_tiled_counts_tiles():
     assert big > small
 
 
-# --------------------------------------------------------------------------- #
-# route end-to-end (cache + LayerURI)
-# --------------------------------------------------------------------------- #
 
 
 def test_route_end_to_end_writes_cache_and_emits_layeruri(fake_s3, monkeypatch):
@@ -229,9 +220,6 @@ def test_route_vector_source_class_in_uri(fake_s3, monkeypatch):
     assert layer.uri.endswith(".fgb")
 
 
-# --------------------------------------------------------------------------- #
-# Fold-arm surfacing toggle (contract sec 3): default pool unchanged when OFF
-# --------------------------------------------------------------------------- #
 
 
 @pytest.fixture()

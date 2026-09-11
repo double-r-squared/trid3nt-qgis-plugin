@@ -112,9 +112,6 @@ def clean_exposure_store():
     exposure_mod._SESSION_EXPOSURE.clear()
 
 
-# --------------------------------------------------------------------------- #
-# Happy path
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio
@@ -260,9 +257,6 @@ async def test_default_output_dir_uses_export_env(
     assert Path(result["report_path"]).is_file()
 
 
-# --------------------------------------------------------------------------- #
-# Typed errors
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio
@@ -280,9 +274,6 @@ async def test_no_case_typed_error(monkeypatch, case_layers) -> None:
         await compose_case_report()
 
 
-# --------------------------------------------------------------------------- #
-# Registration
-# --------------------------------------------------------------------------- #
 
 
 def test_registered_in_tool_registry() -> None:

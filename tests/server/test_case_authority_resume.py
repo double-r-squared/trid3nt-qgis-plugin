@@ -63,9 +63,6 @@ def _stub_resume(monkeypatch):
     monkeypatch.setattr(server, "_emit_turn_complete", _noop)
 
 
-# --------------------------------------------------------------------------- #
-# Persistence round-trip of the active-case pointer (Requirement 4)
-# --------------------------------------------------------------------------- #
 
 
 def test_persistence_active_case_pointer_round_trip(tmp_path):
@@ -104,9 +101,6 @@ def test_persistence_pointer_survives_a_fresh_get_session_record(tmp_path):
     asyncio.run(run())
 
 
-# --------------------------------------------------------------------------- #
-# _handle_session_resume re-binds to the client's Case (Requirement 2)
-# --------------------------------------------------------------------------- #
 
 
 def test_resume_rebinds_active_case_to_client_then_replays(monkeypatch, tmp_path):
@@ -188,9 +182,6 @@ def test_resume_same_case_is_noop_rebind(monkeypatch, tmp_path):
     assert replayed_for == [CASE_A]
 
 
-# --------------------------------------------------------------------------- #
-# Cold-start reload from the persisted pointer (Requirement 4)
-# --------------------------------------------------------------------------- #
 
 
 def test_reload_warms_pointer_after_restart(monkeypatch, tmp_path):
@@ -236,9 +227,6 @@ def test_reload_never_overwrites_a_live_pointer(tmp_path):
     assert st.active_case_id == CASE_B  # live value wins
 
 
-# --------------------------------------------------------------------------- #
-# _prepare_user_turn binds the turn to the message's Case (Requirement 3)
-# --------------------------------------------------------------------------- #
 
 
 def test_user_turn_rebinds_to_message_case(monkeypatch, tmp_path):

@@ -25,11 +25,9 @@ from trid3nt_server.emission.uri_registry import (
 )
 from trid3nt_contracts.execution import LayerURI
 
-# --------------------------------------------------------------------------- #
 # Real logged values from the evidence files. Bucket names carry the live
 # store's; the MANGLE SHAPES - the doubled prefix, the layer-id basename, the
 # hash tail, the invented name - are what these pin, and they are verbatim.
-# --------------------------------------------------------------------------- #
 
 # A real Fort Myers flood -> Pelicun cache key.
 REAL_FLOOD_COG_0253 = (
@@ -77,9 +75,6 @@ def make_registry(session_id: str = "sess-test") -> SessionUriRegistry:
     return get_uri_registry(session_id)
 
 
-# --------------------------------------------------------------------------- #
-# 1. Registration
-# --------------------------------------------------------------------------- #
 
 
 class TestRegistration:
@@ -159,9 +154,6 @@ class TestRegistration:
         reg.register_tool_result("t", 42)
 
 
-# --------------------------------------------------------------------------- #
-# 2. The four resolution branches
-# --------------------------------------------------------------------------- #
 
 
 class TestResolutionBranches:
@@ -247,9 +239,6 @@ class TestResolutionBranches:
         msg = str(exc_info.value)
         assert "hillshade-a" in msg and "hillshade-b" in msg
 
-# --------------------------------------------------------------------------- #
-# 3. Cross-session isolation
-# --------------------------------------------------------------------------- #
 
 
 class TestSessionIsolation:
@@ -279,9 +268,6 @@ class TestSessionIsolation:
         assert out["assets_uri"] == "some-handle-from-elsewhere"
 
 
-# --------------------------------------------------------------------------- #
-# 4. The five historical incidents — real logged values
-# --------------------------------------------------------------------------- #
 
 
 class TestHistoricalIncidents:
@@ -404,9 +390,6 @@ class TestHistoricalIncidents:
         assert NSI_LAYER_ID in msg and "usace-nsi-tampa" in msg
 
 
-# --------------------------------------------------------------------------- #
-# 5. Server-seam wiring (_invoke_tool_via_emitter)
-# --------------------------------------------------------------------------- #
 
 
 class MockWebSocket:
@@ -532,14 +515,12 @@ def test_resolvable_param_allowlist_excludes_server_owned_params() -> None:
         assert name in RESOLVABLE_URI_PARAMS
 
 
-# --------------------------------------------------------------------------- #
 # 6. Small-model PLACEHOLDER resolution
 #
 # Local 8B models emit fetch_dem + publish_layer in the SAME iteration, passing
 # stand-in strings as the consumer's layer_uri. Dispatch is sequential, so the
 # producer's real URI is already registered when the consumer resolves.
 # Observed live placeholder values are replayed verbatim below.
-# --------------------------------------------------------------------------- #
 
 DEM_LAYER_ID = "dem-3dep-10m--122.51-47.49--122.30-47.62"
 DEM_COG = (
@@ -676,7 +657,6 @@ class TestPlaceholderResolution:
         assert out["layer_uri"] == DEM_COG
 
 
-# --------------------------------------------------------------------------- #
 # 7. F32 (live-reported): reconnect-empty registry + honest error text
 #
 # The layer-handle registry is session-scoped in-memory state (module-level
@@ -688,7 +668,6 @@ class TestPlaceholderResolution:
 # those advertised handles then failed with "does not match any layer this
 # session produced" — factually wrong (the Case HAS the layer; only this
 # connection's registry didn't know about it yet).
-# --------------------------------------------------------------------------- #
 
 
 class TestReplaceFromLayers:

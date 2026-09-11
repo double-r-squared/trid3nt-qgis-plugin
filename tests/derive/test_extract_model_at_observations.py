@@ -138,9 +138,6 @@ def _write_obs(path: str, records) -> str:
     return path
 
 
-# ---------------------------------------------------------------------------
-# Registration.
-# ---------------------------------------------------------------------------
 
 
 def test_registered() -> None:
@@ -151,9 +148,6 @@ def test_registered() -> None:
     assert entry.metadata.open_world_hint is False
 
 
-# ---------------------------------------------------------------------------
-# Mode A -- static raster vs observation points.
-# ---------------------------------------------------------------------------
 
 
 def test_static_pairing_and_interop(tmp_path) -> None:
@@ -408,9 +402,6 @@ def test_bad_uri_raises(tmp_path) -> None:
         )
 
 
-# ---------------------------------------------------------------------------
-# Mode B -- time-series model vs time-series observations.
-# ---------------------------------------------------------------------------
 
 
 def _write_ts_layer(path: str, lon: float, lat: float, series, obs_id: str) -> str:
@@ -472,9 +463,6 @@ def test_station_tolerance_excludes_far_station(tmp_path) -> None:
         )
 
 
-# ---------------------------------------------------------------------------
-# Quantity semantics -- WSE (elevation) vs model DEPTH (the Harvey L2 bug).
-# ---------------------------------------------------------------------------
 
 
 def test_stn_hwm_wse_to_depth_via_dem(tmp_path) -> None:

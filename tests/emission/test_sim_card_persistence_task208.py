@@ -83,9 +83,6 @@ async def _mint_sim_card(state) -> str:
     return sim_id
 
 
-# --------------------------------------------------------------------------- #
-# (a) a COMPLETE solve persists a replayable role="tool" SIM card row
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio
@@ -119,9 +116,6 @@ async def test_complete_sim_card_persists_and_replays(file_persistence) -> None:
     assert twin["tool_name"] == "sfincs:solve"
 
 
-# --------------------------------------------------------------------------- #
-# (b) a FAILED solve persists state="failed" (honesty floor)
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio
@@ -151,10 +145,8 @@ async def test_failed_sim_card_persists_failed(file_persistence) -> None:
     )
 
 
-# --------------------------------------------------------------------------- #
 # (c) a CANCELLED solve walks its persisted running row to a traceable
 #     ``cancelled`` terminal (durability supersedes Invariant 8's "no row")
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio
@@ -180,9 +172,6 @@ async def test_cancelled_sim_card_persists_cancelled(file_persistence) -> None:
     assert tool_rows[0].tool_card.state == "cancelled"
 
 
-# --------------------------------------------------------------------------- #
-# (d) the Dispatch card is NOT double-persisted by THIS path
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio
@@ -208,10 +197,8 @@ async def test_only_compute_card_persisted_not_dispatch(file_persistence) -> Non
     assert tool_rows[0].tool_card.tool_name == "sfincs:solve"
 
 
-# --------------------------------------------------------------------------- #
 # (e) no persist hook (verify/CI/direct call) -> live card still terminal,
 #     no crash, no row written
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio
@@ -236,10 +223,8 @@ async def test_no_persist_hook_still_marks_terminal(file_persistence) -> None:
     assert last["payload"]["steps"][-1]["state"] == "complete"
 
 
-# --------------------------------------------------------------------------- #
 # (f) PART 1 END-TO-END: a bare WS reconnect replays the persisted SIM card in
 #     the resume session-state payload's chat_history.
-# --------------------------------------------------------------------------- #
 
 
 def _session_states(ws: FakeWS) -> list[dict]:
@@ -293,11 +278,9 @@ async def test_reconnect_replays_persisted_sim_card(file_persistence) -> None:
     assert tool_msgs[0]["tool_card"]["tool_name"] == "sfincs:solve"
 
 
-# --------------------------------------------------------------------------- #
 # RUNNING DURABILITY (the mid-run reconnect bug) — the SIM card is
 # persisted the MOMENT it is minted (running), so a reconnect/reopen WHILE the
 # solve runs replays the spinning card instead of dropping it.
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio
@@ -397,10 +380,8 @@ async def test_case_open_reopen_replays_sim_card(file_persistence) -> None:
     assert tool_rows[0].tool_card.tool_name == "sfincs:solve"
 
 
-# --------------------------------------------------------------------------- #
 # FULL TWO-CARD MINT: mint_dispatch_and_sim_cards persists BOTH the (terminal)
 # Dispatch card AND the (running) SIM card, so the pair replays on reopen.
-# --------------------------------------------------------------------------- #
 
 
 class _FakeHandle:

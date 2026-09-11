@@ -99,9 +99,6 @@ async def _create_case(ws, state, title="Full Stream Case") -> str:
     return case_id
 
 
-# --------------------------------------------------------------------------- #
-# 1. Agent narration persists with the REAL accumulated text
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio
@@ -192,14 +189,8 @@ async def test_no_agent_row_when_stream_dies_with_nothing_said(
     assert session_state.chat_history == []
 
 
-# --------------------------------------------------------------------------- #
-# 2. Tool-card rows persist with duration + label
-# --------------------------------------------------------------------------- #
 
 
-# --------------------------------------------------------------------------- #
-# FIX B — early input-only tool-io frame at dispatch START (#7 input + Running…)
-# --------------------------------------------------------------------------- #
 
 
 @pytest.fixture()
@@ -373,9 +364,6 @@ async def test_no_tool_card_write_without_active_case(
     assert (not chat_file.exists()) or chat_file.read_text().strip() in ("{}", "")
 
 
-# --------------------------------------------------------------------------- #
-# 3. Ordering: the rehydrated stream interleaves by created_at
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio
@@ -413,9 +401,6 @@ async def test_rehydrated_stream_orders_by_created_at(file_persistence) -> None:
     assert [m.role for m in session_state.chat_history] == ["user", "tool", "agent"]
 
 
-# --------------------------------------------------------------------------- #
-# 4. Server-side case-list hardening (deleted ghost)
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio
@@ -507,9 +492,6 @@ async def test_pre_status_case_docs_stay_listed(file_persistence) -> None:
     assert [c.title for c in listed] == ["legacy"]
 
 
-# --------------------------------------------------------------------------- #
-# 5. User-turn path unchanged
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio
@@ -530,9 +512,6 @@ async def test_user_turn_shape_unchanged(file_persistence) -> None:
     assert row.pipeline_id is None
 
 
-# --------------------------------------------------------------------------- #
-# 6. Gemini-free E2E: full turn -> complete ordered stream on reopen
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio
@@ -581,9 +560,6 @@ async def test_e2e_full_turn_replays_complete_stream(
     assert stamps == sorted(stamps)
 
 
-# --------------------------------------------------------------------------- #
-# 7. Narration SEGMENTS interleave with tool rows in creation order
-# --------------------------------------------------------------------------- #
 
 
 from trid3nt_server.adapters.adapter import (  # noqa: E402

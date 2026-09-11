@@ -40,9 +40,6 @@ def _recipe(**over):
     return tool.build_mesh(**ask)
 
 
-# --------------------------------------------------------------------------- #
-# What a mesher IS: namespaces, a role adapter, a default recipe.
-# --------------------------------------------------------------------------- #
 def test_the_wrapper_registers_the_librarys_own_names_tagged_by_phase():
     """The op vocabulary is VERBATIM and its phase is DERIVED from where it sits."""
     for sizing in ("feature_sizing_function", "wavelength_sizing_function",
@@ -156,9 +153,6 @@ def test_engine_vocabulary_is_not_in_the_op_namespace_either():
     assert "fit_downstream_bed" not in names
 
 
-# --------------------------------------------------------------------------- #
-# Determinism: a measured claim, journaled where a replay reads it.
-# --------------------------------------------------------------------------- #
 #: The mesher that shells the OceanMesh2D image, with the flag it registers and
 #: the rebuild-and-diff that flag was MEASURED by. A flag no measurement stands
 #: behind is a replayability promise nobody checked, so the evidence is named
@@ -198,9 +192,6 @@ def test_the_driver_binds_the_seed_onto_the_librarys_own_tie_break():
     assert "_seed_library_randomness(int(cfg.get(\"seed\", 0)))" in source
 
 
-# --------------------------------------------------------------------------- #
-# The config the box is handed IS the recipe's ops, travelling as data.
-# --------------------------------------------------------------------------- #
 def _stub_om2d(monkeypatch, tmp_path, *, pfix=None, stats=None,
                points=None, cells=None, results=None):
     """Answer the container calls with a known mesh, and record what was sent."""
@@ -383,9 +374,6 @@ def test_a_line_layer_entirely_below_the_edge_refuses_by_naming_the_resolution(
     assert "2 lines" in str(excinfo.value)
 
 
-# --------------------------------------------------------------------------- #
-# The ops after the first primitive run over the mesh the host already holds.
-# --------------------------------------------------------------------------- #
 def _no_fetch_bed(monkeypatch, value=-4.0):
     """set_bed, with the world-read answered and the node assignment real."""
     import dataclasses
@@ -458,9 +446,6 @@ def test_an_op_that_renumbers_after_a_primitive_refuses_by_name(
     assert sent["configs"][0][0] == "build"
 
 
-# --------------------------------------------------------------------------- #
-# What the mesher measured about its own build.
-# --------------------------------------------------------------------------- #
 def test_the_conformal_offset_is_measured_from_the_points_the_box_locked(
         monkeypatch, tmp_path):
     """The claim a constrained outline makes is a NUMBER, computed from the mesh
@@ -510,9 +495,6 @@ def test_a_library_op_records_the_note_that_its_kwargs_bound_elsewhere(
     assert any("laplacian2" in note and "cannot import" in note for note in notes)
 
 
-# --------------------------------------------------------------------------- #
-# The box: a driver in the product tree, shelled with an op.
-# --------------------------------------------------------------------------- #
 def test_the_drivers_live_in_the_product_tree_beside_their_callers():
     from trid3nt_server.workflows.mesh.meshers.drivers import drivers_dir
 
@@ -554,9 +536,6 @@ def test_the_om2d_box_is_shelled_with_a_named_op(monkeypatch, tmp_path):
     assert "--network" in argv and argv[argv.index("--network") + 1] == "none"
 
 
-# --------------------------------------------------------------------------- #
-# What a mesh must survive to be SOLVABLE.
-# --------------------------------------------------------------------------- #
 def test_two_nodes_a_fraction_of_a_metre_apart_are_fused_into_one():
     """A pair the geometry file would write as one point IS one point.
 
@@ -619,9 +598,6 @@ def test_a_node_on_the_rasters_rim_reads_a_whole_cell_not_its_edge(tmp_path):
         str(path), corners, interp="bilinear") == pytest.approx([-18.0] * 4)
 
 
-# --------------------------------------------------------------------------- #
-# The boundary blocks the shared TIN writer builds from the runs it is handed.
-# --------------------------------------------------------------------------- #
 def _square_mesh():
     """A 3x3 lattice, two triangles per square - one loop of 8 boundary nodes."""
     xy = np.array([[x, y] for y in (0.0, 1.0, 2.0) for x in (0.0, 1.0, 2.0)])
@@ -664,9 +640,6 @@ def test_no_fort14_is_written_because_no_engine_reads_one(monkeypatch, tmp_path)
     assert callable(tin_formats().write_fort14)
 
 
-# --------------------------------------------------------------------------- #
-# Inside the driver: the verbatim call, exercised with oceanmesh stubbed out.
-# --------------------------------------------------------------------------- #
 def _driver():
     """The in-container driver, imported here with its library stubbed.
 

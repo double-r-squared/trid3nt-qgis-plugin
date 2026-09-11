@@ -24,9 +24,6 @@ from trid3nt_contracts.common import new_ulid, now_utc
 from trid3nt_contracts.user import User
 
 
-# --------------------------------------------------------------------------- #
-# Mock MCP client (subset of trid3nt_server.tests.test_persistence.MockMCPClient)
-# --------------------------------------------------------------------------- #
 
 
 class MockMCPClient:
@@ -82,9 +79,6 @@ def persistence() -> Persistence:
     return Persistence(MockMCPClient())
 
 
-# --------------------------------------------------------------------------- #
-# 1. Non-empty token -> anonymous fallback (no verifier in the local build)
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio
@@ -101,9 +95,6 @@ async def test_authenticate_token_nonempty_token_resolves_local_user(
     assert result.user.is_active is True
 
 
-# --------------------------------------------------------------------------- #
-# 2. Empty token -> local user
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio
@@ -116,9 +107,6 @@ async def test_authenticate_token_empty_token_resolves_local_user(
     assert result.user.user_id == LOCAL_SINGLE_USER_ID
 
 
-# --------------------------------------------------------------------------- #
-# 3. None envelope -> local user
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio
@@ -131,9 +119,6 @@ async def test_authenticate_token_no_envelope_resolves_local_user(
     assert result.user.user_id == LOCAL_SINGLE_USER_ID
 
 
-# --------------------------------------------------------------------------- #
-# 4. Local user shape
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio
@@ -149,9 +134,6 @@ async def test_local_user_shape(
     assert u.user_id == LOCAL_SINGLE_USER_ID
 
 
-# --------------------------------------------------------------------------- #
-# 5. build_auth_ack shape + no token leak
-# --------------------------------------------------------------------------- #
 
 
 def test_build_auth_ack_shape() -> None:
@@ -178,9 +160,6 @@ def test_build_auth_ack_shape() -> None:
     assert "password" not in a
 
 
-# --------------------------------------------------------------------------- #
-# 6. Persistence unbound returns in-memory user
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio
@@ -196,9 +175,6 @@ async def test_persistence_unbound_returns_in_memory_user() -> None:
     assert result2.user.user_id == LOCAL_SINGLE_USER_ID
 
 
-# --------------------------------------------------------------------------- #
-# 7. Integration: full WS connect -> auth-token -> auth-ack flow
-# --------------------------------------------------------------------------- #
 
 
 class _FakeWebSocket:
@@ -275,9 +251,6 @@ async def test_server_connect_handshake_flow_with_mocks() -> None:
     set_persistence(None)
 
 
-# --------------------------------------------------------------------------- #
-# 8. Connection-context retains authenticated_user_id across subsequent envelopes
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio
@@ -316,9 +289,6 @@ async def test_connection_context_retains_authenticated_user_id() -> None:
     assert state.is_anonymous is True
 
 
-# --------------------------------------------------------------------------- #
-# 9. AuthTokenEnvelope round-trip across the wire (contract handshake)
-# --------------------------------------------------------------------------- #
 
 
 def test_auth_envelope_contracts_round_trip() -> None:
@@ -341,8 +311,5 @@ def test_auth_envelope_contracts_round_trip() -> None:
     assert c == d
 
 
-# --------------------------------------------------------------------------- #
-# 10. Non-local mode fails LOUD (typed rejection)
-# --------------------------------------------------------------------------- #
 
 

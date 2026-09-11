@@ -21,9 +21,6 @@ from trid3nt_contracts import new_ulid
 from trid3nt_contracts.collections import SessionDocument
 
 
-# --------------------------------------------------------------------------- #
-# Helpers
-# --------------------------------------------------------------------------- #
 
 
 class RecordingMCPClient:
@@ -47,9 +44,6 @@ def file_persistence(tmp_path):
     return Persistence(FileMCPClient(base_dir=tmp_path))
 
 
-# --------------------------------------------------------------------------- #
-# touch_session — protocol shape (mock client)
-# --------------------------------------------------------------------------- #
 
 
 def _healthy_doc(sid: str) -> dict[str, Any]:
@@ -113,9 +107,6 @@ def test_touch_session_repairs_headerless_doc():
     assert "created_at" in repair
 
 
-# --------------------------------------------------------------------------- #
-# Session record lifecycle — live FileMCPClient substrate
-# --------------------------------------------------------------------------- #
 
 
 def test_first_touch_creates_valid_session_document(file_persistence):
@@ -190,10 +181,8 @@ def test_get_session_record_missing_returns_none(file_persistence):
     assert asyncio.run(file_persistence.get_session_record(new_ulid())) is None
 
 
-# --------------------------------------------------------------------------- #
 # Regression: chart $push lands on the dev substrate and the
 # session record stays readable (extras dropped on typed read)
-# --------------------------------------------------------------------------- #
 
 
 def test_chart_push_lands_and_typed_read_tolerates_extras(file_persistence, tmp_path):
@@ -263,9 +252,6 @@ def test_chart_push_on_headerless_doc_then_touch_backfills_header(file_persisten
     assert typed is not None and typed.schema_version == "v1"
 
 
-# --------------------------------------------------------------------------- #
-# FileMCPClient._apply_update operator semantics
-# --------------------------------------------------------------------------- #
 
 
 def test_apply_update_setoninsert_only_on_insert():

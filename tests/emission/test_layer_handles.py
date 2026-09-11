@@ -51,9 +51,6 @@ def _layer(layer_id: str, uri: str, layer_type: str = "raster") -> LayerURI:
     )
 
 
-# --------------------------------------------------------------------------- #
-# 1. HANDLE MINT
-# --------------------------------------------------------------------------- #
 
 
 class TestHandleMint:
@@ -130,9 +127,6 @@ class TestHandleMint:
         assert reg.short_for_uri(COG_B) == "L8"  # counter resumed past 7
 
 
-# --------------------------------------------------------------------------- #
-# 2. EMIT REWRITE (LLM face only; plugin envelope untouched)
-# --------------------------------------------------------------------------- #
 
 
 class TestEmitRewrite:
@@ -189,9 +183,6 @@ class TestEmitRewrite:
         assert isinstance(out, dict)
 
 
-# --------------------------------------------------------------------------- #
-# 3. DISPATCH RESOLVE (dual-accept + typed rejects + layer_refs)
-# --------------------------------------------------------------------------- #
 
 
 class TestDispatchResolve:
@@ -275,9 +266,6 @@ class TestDispatchResolve:
         assert "layer_refs[peak]" in str(exc_info.value)
 
 
-# --------------------------------------------------------------------------- #
-# 4. PERSISTENCE — storage-only field on the cases doc
-# --------------------------------------------------------------------------- #
 
 
 def _mk_case(case_id: str):
@@ -361,10 +349,8 @@ async def test_server_persist_and_seed_helpers_round_trip(tmp_path) -> None:
         )
 
 
-# --------------------------------------------------------------------------- #
 # 5. End-to-end: the function_response the model reads shows L<n>, never the
 #    raw uri (fake Gemini, REAL emit seam in _stream_model_reply).
-# --------------------------------------------------------------------------- #
 
 
 def _make_fake_chunk_with_function_call(name: str, args: dict, call_id: str = "c1"):

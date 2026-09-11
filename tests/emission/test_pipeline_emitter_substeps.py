@@ -20,9 +20,6 @@ from trid3nt_server.emission.pipeline_emitter import (
 )
 
 
-# --------------------------------------------------------------------------- #
-# Fixtures
-# --------------------------------------------------------------------------- #
 
 
 class _CapturingSink:
@@ -51,9 +48,6 @@ def _last_steps(sink: _CapturingSink) -> list[dict[str, Any]]:
     return _pipeline_frames(sink)[-1]["payload"]["steps"]
 
 
-# --------------------------------------------------------------------------- #
-# 1. One parent + three children, unique ids, parent_step_id linkage
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio
@@ -106,9 +100,6 @@ async def test_parent_with_three_substeps_emits_one_parent_three_children(
     assert parent["substep_total"] is None
 
 
-# --------------------------------------------------------------------------- #
-# 2. Parent breadcrumb transitions (label / index / total) + terminal clear
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio
@@ -183,9 +174,6 @@ async def test_begin_substeps_none_total_degrades_to_label_only(
     assert seen == [("fetch_topobathy", 1, None)]
 
 
-# --------------------------------------------------------------------------- #
-# 3. Failing substep -> child red, parent NOT turned green-by-mistake / red
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio
@@ -251,9 +239,6 @@ async def test_failing_substep_reraises_to_caller(
         )
 
 
-# --------------------------------------------------------------------------- #
-# 4. No-op when no emitter bound (verify/CI direct-call path)
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio

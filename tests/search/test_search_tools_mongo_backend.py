@@ -26,9 +26,6 @@ from trid3nt_server.tools.search.search_tools.search_tools import (
 )
 
 
-# ---------------------------------------------------------------------------
-# Fixtures
-# ---------------------------------------------------------------------------
 
 
 @pytest.fixture(autouse=True)
@@ -92,9 +89,6 @@ def _write_telemetry_jsonl(path, pairs: list[tuple[str, str]]) -> None:
             )
 
 
-# ---------------------------------------------------------------------------
-# 1. test_co_occurrence_boost_when_jsonl_populated
-# ---------------------------------------------------------------------------
 
 
 def test_co_occurrence_boost_when_jsonl_populated(tmp_path, monkeypatch) -> None:
@@ -149,9 +143,6 @@ def test_co_occurrence_boost_when_jsonl_populated(tmp_path, monkeypatch) -> None
         )
 
 
-# ---------------------------------------------------------------------------
-# 2. test_falls_back_to_3_channel_when_no_telemetry
-# ---------------------------------------------------------------------------
 
 
 def test_falls_back_to_3_channel_when_no_telemetry(tmp_path, monkeypatch) -> None:
@@ -178,9 +169,6 @@ def test_malformed_jsonl_does_not_crash(tmp_path, monkeypatch) -> None:
     assert "fetch_fema_nfhl_zones" in names
 
 
-# ---------------------------------------------------------------------------
-# 3. test_cooccurrence_index_cached_within_5min_window
-# ---------------------------------------------------------------------------
 
 
 def test_cooccurrence_index_cached_within_5min_window(tmp_path, monkeypatch) -> None:
@@ -232,9 +220,6 @@ def test_cooccurrence_index_cached_within_5min_window(tmp_path, monkeypatch) -> 
     )
 
 
-# ---------------------------------------------------------------------------
-# 4. test_existing_unit_tests_still_pass — smoke
-# ---------------------------------------------------------------------------
 
 
 def test_existing_unit_tests_still_pass_smoke(tmp_path, monkeypatch) -> None:
@@ -262,9 +247,6 @@ def test_existing_unit_tests_still_pass_smoke(tmp_path, monkeypatch) -> None:
         assert "matched_queries" in r
 
 
-# ---------------------------------------------------------------------------
-# 5. Build-cooccurrence-from-docs algorithmic correctness
-# ---------------------------------------------------------------------------
 
 
 def test_build_cooccurrence_from_docs_pair_count_per_session() -> None:

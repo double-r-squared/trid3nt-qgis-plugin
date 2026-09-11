@@ -24,9 +24,6 @@ from trid3nt_contracts.chart_contracts import (
 )
 
 
-# ---------------------------------------------------------------------------
-# Synthetic-fixture helpers
-# ---------------------------------------------------------------------------
 
 
 def _make_raster(
@@ -110,9 +107,6 @@ def _all_rows(spec: dict) -> list[dict]:
     return rows
 
 
-# ---------------------------------------------------------------------------
-# Line resolution
-# ---------------------------------------------------------------------------
 
 
 class TestResolveLine:
@@ -179,9 +173,6 @@ class TestResolveLine:
         assert ei.value.error_code == "LINE_INVALID"
 
 
-# ---------------------------------------------------------------------------
-# Single-layer happy path: a known linear ramp profile
-# ---------------------------------------------------------------------------
 
 
 class TestSingleLayerProfile:
@@ -240,9 +231,6 @@ class TestSingleLayerProfile:
         assert len(_all_rows(spec)) == 2
 
 
-# ---------------------------------------------------------------------------
-# Multi-layer overlay (DESIGN CALL B = YES)
-# ---------------------------------------------------------------------------
 
 
 class TestMultiLayerOverlay:
@@ -323,9 +311,6 @@ class TestMultiLayerOverlay:
         assert len(labels) == 2
 
 
-# ---------------------------------------------------------------------------
-# Honesty floor: nodata -> null, line outside -> typed error
-# ---------------------------------------------------------------------------
 
 
 class TestHonestyFloor:
@@ -357,9 +342,6 @@ class TestHonestyFloor:
         assert ei.value.retryable is False
 
 
-# ---------------------------------------------------------------------------
-# CRS handling: a UTM raster sampled from an EPSG:4326 line
-# ---------------------------------------------------------------------------
 
 
 class TestCrsMismatch:
@@ -395,9 +377,6 @@ class TestCrsMismatch:
         assert 0.0 <= min(vals) <= 10.0 and 0.0 <= max(vals) <= 10.0
 
 
-# ---------------------------------------------------------------------------
-# Input validation
-# ---------------------------------------------------------------------------
 
 
 class TestInputValidation:
@@ -424,9 +403,6 @@ class TestInputValidation:
         _assert_valid_chart_payload(payload)
 
 
-# ---------------------------------------------------------------------------
-# Registration + discoverability
-# ---------------------------------------------------------------------------
 
 
 def test_registered_via_package_import_path():

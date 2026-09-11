@@ -34,9 +34,6 @@ def _fetch_nwm(**kw: Any) -> Any:
     return TOOL_REGISTRY["fetch_noaa_nwm_streamflow"].fn(**kw)
 
 
-# --------------------------------------------------------------------------- #
-# Registry shape.
-# --------------------------------------------------------------------------- #
 
 
 def test_nwm_registered_with_expected_metadata() -> None:
@@ -49,9 +46,7 @@ def test_nwm_registered_with_expected_metadata() -> None:
     assert getattr(md, "payload_mb_estimator_name", None) == "estimate_payload_mb"
 
 
-# --------------------------------------------------------------------------- #
 # Typed-error envelope (base = FetchError so library_delegate passes it through).
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.parametrize(
@@ -82,9 +77,6 @@ def test_estimate_payload_mb_shape() -> None:
     assert estimate_payload_mb(bbox=None) >= 0.0
 
 
-# --------------------------------------------------------------------------- #
-# Input validation (``nwm_streamflow.validate``, pre-cache).
-# --------------------------------------------------------------------------- #
 
 
 def test_validate_hook_out_of_conus_raises() -> None:
@@ -117,9 +109,6 @@ def test_parse_valid_time_zulu_to_utc() -> None:
     assert ns._parse_valid_time(None) is None
 
 
-# --------------------------------------------------------------------------- #
-# NWM key resolution (S3 listing mocked).
-# --------------------------------------------------------------------------- #
 
 
 def test_resolve_nwm_key_analysis_assim_latest(monkeypatch) -> None:
@@ -145,9 +134,6 @@ def test_resolve_nwm_key_not_available_raises(monkeypatch) -> None:
         ns._resolve_nwm_key("analysis_assim", None, 0)
 
 
-# --------------------------------------------------------------------------- #
-# netCDF -> streamflow lookup: the real datetime64[ns] round-trip.
-# --------------------------------------------------------------------------- #
 
 
 def test_load_streamflow_reads_the_real_nc_time_coordinate(tmp_path) -> None:
@@ -172,9 +158,6 @@ def test_load_streamflow_reads_the_real_nc_time_coordinate(tmp_path) -> None:
     assert valid_time == _dt.datetime(2026, 8, 19, 0, 0, 0, tzinfo=_dt.timezone.utc)
 
 
-# --------------------------------------------------------------------------- #
-# The composite fetch + join (network leaves mocked).
-# --------------------------------------------------------------------------- #
 
 
 def _install_composite_mocks(monkeypatch, *, comids, flows, geom_none=()) -> None:
@@ -234,9 +217,6 @@ def test_fetch_features_no_matched_tuples_raises_empty(monkeypatch) -> None:
         ns._fetch_nwm_features(_FORT_MYERS_BBOX, "analysis_assim", None, 0)
 
 
-# --------------------------------------------------------------------------- #
-# Pure envelope hook (layer_id / name / provenance replay).
-# --------------------------------------------------------------------------- #
 
 
 def test_envelope_hook_layer_id_and_name_analysis() -> None:
@@ -278,9 +258,6 @@ def test_envelope_hook_short_range_name_carries_fhour() -> None:
     assert out["nldi_comids_discovered"] == 0
 
 
-# --------------------------------------------------------------------------- #
-# END-TO-END via the promoted router closure (network leaves mocked + fake_s3).
-# --------------------------------------------------------------------------- #
 
 
 def test_end_to_end_happy_path_roundtrip(monkeypatch, fake_s3) -> None:
@@ -352,9 +329,6 @@ def test_end_to_end_not_available_propagates(monkeypatch, fake_s3) -> None:
     assert ei.value.error_code == "NWM_STREAMFLOW_NOT_AVAILABLE"
 
 
-# --------------------------------------------------------------------------- #
-# THE CHANNEL: cache-hit replay of reference_time / reach_count / nldi count.
-# --------------------------------------------------------------------------- #
 
 
 def test_cache_hit_replays_provenance_identically(monkeypatch, fake_s3) -> None:

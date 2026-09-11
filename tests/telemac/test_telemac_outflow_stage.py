@@ -27,9 +27,6 @@ def _stage(**over):
                                            "discharge_q": 50.0, **over})
 
 
-# --------------------------------------------------------------------------- #
-# The measurement: what the accepted mesh says the reach is.
-# --------------------------------------------------------------------------- #
 def test_the_outflow_face_is_measured_as_a_transect_of_the_painted_bed():
     """A role is a run of the boundary walk, so the nodes ARE in section order.
 
@@ -74,9 +71,6 @@ def test_an_outflow_face_with_no_section_left_refuses_by_name():
     assert exc.value.error_code == "TELEMAC_MESH_SECTION_UNMEASURED"
 
 
-# --------------------------------------------------------------------------- #
-# The derivation: uniform flow over that channel.
-# --------------------------------------------------------------------------- #
 def test_the_stage_is_the_depth_at_which_the_section_conveys_the_discharge():
     """Manning's equation read back over the section the stage was solved on.
 
@@ -138,9 +132,6 @@ def test_the_section_closes_vertically_at_its_own_end_points():
     assert perimeter == pytest.approx(60.0 + 2.0 * depth)
 
 
-# --------------------------------------------------------------------------- #
-# What it refuses rather than defaulting past.
-# --------------------------------------------------------------------------- #
 @pytest.mark.parametrize(
     ("reach", "sheet", "code"),
     [
@@ -162,9 +153,6 @@ def test_an_input_the_stage_cannot_be_derived_from_refuses_by_name(reach, sheet,
     assert exc.value.error_code == code
 
 
-# --------------------------------------------------------------------------- #
-# The catchment outlet: the SAME derivation, swept over a flow range.
-# --------------------------------------------------------------------------- #
 #: The outlet face of a catchment: a 10 m trapezoid at 10 m, banks rising 2 m.
 _OUTLET_SECTION = [[0.0, 12.0], [5.0, 10.0], [15.0, 10.0], [20.0, 12.0]]
 

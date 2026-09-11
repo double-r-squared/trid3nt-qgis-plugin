@@ -25,9 +25,6 @@ from trid3nt_server.workflows.solver.solver import (
 )
 
 
-# --------------------------------------------------------------------------- #
-# Fixtures
-# --------------------------------------------------------------------------- #
 
 
 @pytest.fixture()
@@ -45,9 +42,6 @@ def reset_solver_di_seams():
         set_s3_client(None)
 
 
-# --------------------------------------------------------------------------- #
-# 1. Registry: both tools register with FR-DC-6 metadata
-# --------------------------------------------------------------------------- #
 
 
 def test_registry_registers_solver_tools_uncacheable() -> None:
@@ -67,10 +61,8 @@ def test_registry_registers_solver_tools_uncacheable() -> None:
         )
 
 
-# --------------------------------------------------------------------------- #
 # 2. run_solver rejects unregistered solver (backend-agnostic — fails before
 #    any dispatch)
-# --------------------------------------------------------------------------- #
 
 
 def test_run_solver_rejects_unregistered_solver(reset_solver_di_seams) -> None:
@@ -86,9 +78,6 @@ def test_run_solver_rejects_unregistered_solver(reset_solver_di_seams) -> None:
     assert set(SOLVER_WORKFLOW_REGISTRY) >= {"telemac_river_dye"}
 
 
-# --------------------------------------------------------------------------- #
-# 3. _progress_percent — pure-function guard
-# --------------------------------------------------------------------------- #
 
 
 def test_progress_estimator_is_wall_clock_linear_clamped() -> None:

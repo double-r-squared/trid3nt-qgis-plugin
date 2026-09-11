@@ -24,15 +24,9 @@ from trid3nt_server.tools.derive.compute_hillshade.compute_hillshade import (
     compute_hillshade,
 )
 
-# ---------------------------------------------------------------------------
-# Pinned timestamp for deterministic cache keys
-# ---------------------------------------------------------------------------
 
 PINNED_NOW = datetime(2026, 6, 8, 12, 0, 0, tzinfo=timezone.utc)
 
-# ---------------------------------------------------------------------------
-# Helpers: synthetic DEM creation
-# ---------------------------------------------------------------------------
 
 
 def _write_synthetic_dem(
@@ -122,9 +116,6 @@ def _fake_dem_bytes() -> bytes:
             pass
 
 
-# ---------------------------------------------------------------------------
-# FakeBlob / FakeStorageClient for cache shim tests
-# ---------------------------------------------------------------------------
 
 
 class _S3Body:
@@ -194,9 +185,6 @@ def _route_cache_to_inmemory_s3(monkeypatch):
         FakeStorageClient._active = None
 
 
-# ---------------------------------------------------------------------------
-# gdaldem availability check
-# ---------------------------------------------------------------------------
 
 _GDALDEM_AVAILABLE = (
     os.path.isfile(os.path.expanduser("~/miniforge3/envs/grace2/bin/gdaldem"))
@@ -211,9 +199,6 @@ _SKIP_GDALDEM = pytest.mark.skipif(
     reason="gdaldem binary not available in this environment",
 )
 
-# ---------------------------------------------------------------------------
-# Test 1 — registration check
-# ---------------------------------------------------------------------------
 
 
 def test_compute_hillshade_registered():
@@ -225,9 +210,6 @@ def test_compute_hillshade_registered():
     assert entry.metadata.source_class == "hillshade"
 
 
-# ---------------------------------------------------------------------------
-# Tests 2–6 — gdaldem subprocess correctness on synthetic DEM (all 5 presets)
-# ---------------------------------------------------------------------------
 
 
 @_SKIP_GDALDEM
@@ -335,9 +317,6 @@ def test_compute_hillshade_smooth_preset():
         assert os.path.isfile(out_path), "Smooth hillshade output not created"
 
 
-# ---------------------------------------------------------------------------
-# Tests 7–9 — cache shim integration (mocked GCS + mocked gdaldem)
-# ---------------------------------------------------------------------------
 
 
 @pytest.fixture()
@@ -453,9 +432,6 @@ def test_compute_hillshade_returns_layer_uri_fields():
     assert "Swiss Double" in result.name
 
 
-# ---------------------------------------------------------------------------
-# Tests 10–11 — error path coverage
-# ---------------------------------------------------------------------------
 
 
 def test_compute_hillshade_gdaldem_failure_raises_error():
@@ -495,9 +471,6 @@ def test_compute_hillshade_dem_download_failure_raises_error():
     assert exc_info.value.error_code == "DEM_DOWNLOAD_FAILED"
 
 
-# ---------------------------------------------------------------------------
-# Test 12 — cache key varies across all 5 style presets
-# ---------------------------------------------------------------------------
 
 
 def test_cache_keys_vary_across_styles():
@@ -524,9 +497,6 @@ def test_cache_keys_vary_across_styles():
     )
 
 
-# ---------------------------------------------------------------------------
-# Test 13 — cache key varies with azimuth changes (standard style)
-# ---------------------------------------------------------------------------
 
 
 def test_cache_keys_vary_across_azimuths():
@@ -554,9 +524,6 @@ def test_cache_keys_vary_across_azimuths():
     )
 
 
-# ---------------------------------------------------------------------------
-# Test 14 — swiss_double calls gdaldem exactly twice
-# ---------------------------------------------------------------------------
 
 
 def test_compute_hillshade_swiss_double_calls_gdaldem_twice(fake_storage):
@@ -595,7 +562,6 @@ def test_compute_hillshade_swiss_double_calls_gdaldem_twice(fake_storage):
     assert "swiss_double" in result.layer_id
 
 
-# ---------------------------------------------------------------------------
 # CRS preservation (hillshade no-render root-cause #3)
 #
 # Live evidence: the conda-env gdaldem invoked via bare
@@ -604,7 +570,6 @@ def test_compute_hillshade_swiss_double_calls_gdaldem_twice(fake_storage):
 # DEM's EPSG:5070. QGIS Server then cannot reproject the layer for WMS.
 # Fixes under test: (a) _gdaldem_subprocess_env wires <prefix>/share/proj,
 # (b) _ensure_output_crs_matches_dem re-stamps the DEM CRS when degraded.
-# ---------------------------------------------------------------------------
 
 
 def test_ensure_output_crs_stamps_degraded_output():
@@ -697,14 +662,12 @@ def test_fetch_fn_output_preserves_dem_crs_without_proj_env():
             )
 
 
-# ---------------------------------------------------------------------------
 # DEM fallback ladder (FIX 3): the Copernicus GLO-30 fallback DEM
 # handle must flow through compute_hillshade UNCHANGED. The fallback layer's
 # uri points at a COG the router serialize path emits (COG driver, EPSG:4326
 # degrees, float32, nodata=-9999) -- a DIFFERENT byte shape than the 3DEP
 # EPSG:5070 path -- so
 # this proves the uniform dem_uri contract with the real writer + real gdaldem.
-# ---------------------------------------------------------------------------
 
 
 @_SKIP_GDALDEM

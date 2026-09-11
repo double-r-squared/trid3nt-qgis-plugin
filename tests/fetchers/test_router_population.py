@@ -88,9 +88,6 @@ def _patch_worldpop_download(monkeypatch, status: int = 200, data: bytes | None 
     monkeypatch.setattr(worldpop.requests, "get", fake_get)
 
 
-# --------------------------------------------------------------------------- #
-# Registration + spec shape.
-# --------------------------------------------------------------------------- #
 
 
 def test_population_promoted_as_library_delegate_spec():
@@ -128,9 +125,6 @@ def test_population_docstring_is_worldpop_only():
     assert "Census" not in doc
 
 
-# --------------------------------------------------------------------------- #
-# APPROVED REMOVAL: the ACS leg is gone from the surface.
-# --------------------------------------------------------------------------- #
 
 
 def test_acs_dataset_rejected_as_input_error():
@@ -152,9 +146,6 @@ def test_acs_request_never_reaches_network(monkeypatch):
         TOOL_REGISTRY["fetch_population"].fn(bbox=list(FORT_MYERS_BBOX), dataset="acs_2022")
 
 
-# --------------------------------------------------------------------------- #
-# Vintage validate hook (normalize-then-validate; pre-cache, offline).
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.parametrize("year", [2000, 2005, 2010, 2015, 2020])
@@ -178,9 +169,6 @@ def test_validate_rejects_non_numeric_suffix():
     assert "worldpop_YYYY" in str(ei.value)
 
 
-# --------------------------------------------------------------------------- #
-# URL composition (100m native opt-in vs 1km default).
-# --------------------------------------------------------------------------- #
 
 
 def test_worldpop_url_for_100m_returns_unadj_native_url():
@@ -197,9 +185,6 @@ def test_worldpop_url_for_default_returns_1km_url():
     )
 
 
-# --------------------------------------------------------------------------- #
-# Payload estimator + bbox cache-key (target_resolution_m distinct keys).
-# --------------------------------------------------------------------------- #
 
 
 def test_population_payload_scales_with_bbox():
@@ -219,9 +204,6 @@ def test_target_resolution_m_enters_cache_params():
     assert p1000 != p100
 
 
-# --------------------------------------------------------------------------- #
-# Delegate download-then-window -> array -> COG + honest empty + upstream.
-# --------------------------------------------------------------------------- #
 
 
 def test_delegate_downloads_windows_and_serializes_to_cog(monkeypatch):
@@ -262,9 +244,6 @@ def test_delegate_download_failure_maps_to_upstream(monkeypatch):
     assert "WorldPop 503" in str(ei.value)
 
 
-# --------------------------------------------------------------------------- #
-# LayerURI stamps.
-# --------------------------------------------------------------------------- #
 
 
 def test_population_units_and_style_stamps():

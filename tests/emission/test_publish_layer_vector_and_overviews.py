@@ -23,9 +23,6 @@ from trid3nt_server.emission.publish import (
 )
 
 
-# --------------------------------------------------------------------------- #
-# GeoTIFF byte builders (real rasterio rasters so overview inspection is real)
-# --------------------------------------------------------------------------- #
 
 
 def _flat_geotiff_bytes(size: int = 1024) -> bytes:
@@ -54,9 +51,6 @@ def _cog_with_overviews_bytes(size: int = 1024) -> bytes:
     return out
 
 
-# --------------------------------------------------------------------------- #
-# The benign vector no-op (helpers)
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.parametrize(
@@ -100,9 +94,6 @@ def test_benign_vector_noop_is_non_error_string() -> None:
     assert "roads-layer" in msg
 
 
-# --------------------------------------------------------------------------- #
-# The benign vector no-op (end to end)
-# --------------------------------------------------------------------------- #
 
 
 def test_publish_layer_vector_returns_benign_and_registers_nothing(
@@ -137,9 +128,6 @@ def test_publish_layer_raster_still_raises_for_non_s3() -> None:
     assert exc.value.error_code == "LAYER_URI_NOT_FOUND"
 
 
-# --------------------------------------------------------------------------- #
-# Overview detection
-# --------------------------------------------------------------------------- #
 
 
 def test_raster_has_overviews_false_for_flat_geotiff() -> None:
@@ -164,9 +152,6 @@ def test_build_cog_with_overviews_adds_overviews() -> None:
     assert _raster_has_overviews(cog) is True
 
 
-# --------------------------------------------------------------------------- #
-# _ensure_raster_has_overviews (local-path round trip)
-# --------------------------------------------------------------------------- #
 
 
 def test_ensure_overviews_auto_translates_when_missing(tmp_path) -> None:
@@ -210,9 +195,6 @@ def test_ensure_overviews_fail_open_on_missing_path() -> None:
     assert out_uri == "/nonexistent/path/raster.tif"
 
 
-# --------------------------------------------------------------------------- #
-# End to end: auto-translate, then the store uri as the envelope
-# --------------------------------------------------------------------------- #
 
 
 def test_publish_layer_auto_translates_no_overview_cog(
@@ -282,7 +264,6 @@ def test_publish_layer_overview_cog_published_unchanged(
     assert out == "s3://bucket/runs/good.tif"
 
 
-# --------------------------------------------------------------------------- #
 # Colormap preservation in the overview-enforcement re-write.
 #
 # NLCD land cover is a single-band palette-index COG with an EMBEDDED GDAL
@@ -290,7 +271,6 @@ def test_publish_layer_overview_cog_published_unchanged(
 # re-translate MUST carry that table forward or the layer renders solid GREY.
 # Non-paletted rasters (DEM/hillshade/flood depth) must pass through with NO
 # fabricated colormap, and overviews must still build in both cases.
-# --------------------------------------------------------------------------- #
 
 
 _NLCD_COLORMAP = {

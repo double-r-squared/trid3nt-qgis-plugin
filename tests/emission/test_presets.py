@@ -19,9 +19,6 @@ def _doc(resolved):
     return ET.fromstring(presets.qml(resolved))
 
 
-# --------------------------------------------------------------------------- #
-# the family
-# --------------------------------------------------------------------------- #
 
 def test_the_family_is_four_kinds_and_every_one_of_them_writes_a_document():
     assert presets.KINDS == ("continuous", "classed", "reference", "mesh")
@@ -72,9 +69,6 @@ def test_titling_a_preset_for_a_quantity_leaves_the_shape_alone():
     assert (titled.kind, titled.label, titled.units) == ("continuous", "Head", "m")
 
 
-# --------------------------------------------------------------------------- #
-# the one scale
-# --------------------------------------------------------------------------- #
 
 def test_a_fixed_scale_never_asks_for_the_layers_own_range():
     asked: list[Scale] = []
@@ -145,9 +139,6 @@ def test_declared_classes_are_the_scale_and_the_legend_says_how_many():
     assert resolved.legend_note() == "2 declared classes"
 
 
-# --------------------------------------------------------------------------- #
-# ramps
-# --------------------------------------------------------------------------- #
 
 def test_a_reversed_ramp_is_the_base_reversed():
     assert presets.ramp_stops("ylorrd_r") == tuple(reversed(presets.ramp_stops("ylorrd")))
@@ -163,9 +154,6 @@ def test_the_compass_ramp_is_closed_because_a_bearing_wraps():
     assert stops[0] == stops[-1]
 
 
-# --------------------------------------------------------------------------- #
-# the writer
-# --------------------------------------------------------------------------- #
 
 def test_the_continuous_document_carries_the_resolved_range_and_the_ramp():
     resolved = presets.resolve(Preset(ramp="blues", units="m/s"),

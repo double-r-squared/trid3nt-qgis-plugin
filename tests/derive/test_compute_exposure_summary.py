@@ -91,9 +91,6 @@ def patched_fetchers(monkeypatch, population_layer, buildings_layer):
     monkeypatch.setattr(mod, "_fetch_buildings_layer", lambda bbox: buildings_layer)
 
 
-# --------------------------------------------------------------------------- #
-# Happy path
-# --------------------------------------------------------------------------- #
 
 
 def test_exposure_happy_path(hazard_path: Path, patched_fetchers) -> None:
@@ -144,9 +141,6 @@ def test_session_store_records_result(hazard_path: Path, patched_fetchers) -> No
     assert stored["area_km2"] == result["area_km2"]
 
 
-# --------------------------------------------------------------------------- #
-# Per-component honest degrade
-# --------------------------------------------------------------------------- #
 
 
 def test_population_failure_degrades_per_component(
@@ -184,9 +178,6 @@ def test_buildings_failure_degrades_per_component(
     assert result["population"] == 500
 
 
-# --------------------------------------------------------------------------- #
-# Typed errors
-# --------------------------------------------------------------------------- #
 
 
 def test_empty_footprint_raises_typed_error(tmp_path: Path, patched_fetchers) -> None:
@@ -232,9 +223,6 @@ def test_nodata_cells_excluded_from_footprint(
     assert result["footprint_cell_count"] == 50
 
 
-# --------------------------------------------------------------------------- #
-# Registration
-# --------------------------------------------------------------------------- #
 
 
 def test_registered_in_tool_registry() -> None:

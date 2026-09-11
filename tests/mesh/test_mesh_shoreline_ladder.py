@@ -48,9 +48,6 @@ def _stub_fetch(monkeypatch, walks):
 _NORTHWARD = [(-71.505, 41.33), (-71.505, 41.38)]
 
 
-# --------------------------------------------------------------------------- #
-# Which rung serves.
-# --------------------------------------------------------------------------- #
 def test_a_coarse_ask_is_served_by_the_local_file_without_a_fetch(
         monkeypatch, tmp_path):
     """The COARSEST rung that resolves the ask serves it: a shoreline far finer
@@ -116,9 +113,6 @@ def test_an_inland_extent_the_fetcher_maps_no_coastline_in_hands_over(
     assert "TRID3NT_GSHHG_SHP is unset" in message
 
 
-# --------------------------------------------------------------------------- #
-# Open coastline -> the land it bounds.
-# --------------------------------------------------------------------------- #
 def test_the_land_is_on_the_left_of_the_way_the_way_was_drawn():
     """OSM's own convention IS the classification, and reversing a way would put
     the sea where the town is."""
@@ -151,9 +145,6 @@ def test_an_island_inside_the_extent_is_land_and_the_rest_is_water():
     assert shape(land[0]).area == pytest.approx(0.0001, rel=1e-6)
 
 
-# --------------------------------------------------------------------------- #
-# The new tool reaches the model.
-# --------------------------------------------------------------------------- #
 def test_the_coastline_fetcher_surfaces_in_top8():
     """Corpus first: the harbour-scale rung is reachable from its own phrasings
     before anything is accepted on it."""

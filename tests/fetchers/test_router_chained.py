@@ -64,9 +64,6 @@ def _err(name: str, raw: dict, url_map):
     return ei.value
 
 
-# --------------------------------------------------------------------------- #
-# Every spec loads + registers its hooks.
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.parametrize("name", [
@@ -82,9 +79,6 @@ def test_spec_loads_and_hooks_resolve(name):
             assert has_hook(hn), (name, pt, hn)
 
 
-# --------------------------------------------------------------------------- #
-# Mode primitive: deduped / bounded / best-effort detail fetch.
-# --------------------------------------------------------------------------- #
 
 
 def test_fetch_detail_set_dedup_cap_besteffort():
@@ -117,9 +111,6 @@ def test_fetch_detail_set_dedup_cap_besteffort():
     assert set(res) == {"a", "boom", "b", "c"}
 
 
-# --------------------------------------------------------------------------- #
-# NWS alerts: event filter + preserved props + zone enrichment + keep-null.
-# --------------------------------------------------------------------------- #
 
 def _alert(event, geom=None, zones=None, ugc=None):
     props = {"event": event, "headline": "H", "severity": "Severe", "id": event}
@@ -167,9 +158,6 @@ def test_alerts_bad_area_input_invalid():
     assert isinstance(e, RouterInputError) and e.error_code == "NWS_CONUS_INPUT_INVALID"
 
 
-# --------------------------------------------------------------------------- #
-# NWS river: gates + no-gauges + threshold enrichment.
-# --------------------------------------------------------------------------- #
 
 def _gauge(lid, lon=-91.0, lat=30.5):
     return {"lid": lid, "name": lid, "latitude": lat, "longitude": lon,
@@ -214,9 +202,6 @@ def test_river_gauge_id_detail_mode():
     assert gdf.iloc[0]["lid"] == "CIDI4" and gdf.iloc[0]["action_stage_ft"] == 2.5
 
 
-# --------------------------------------------------------------------------- #
-# openfema_disasters: offset paging + attribute<-boundary FIPS enrich.
-# --------------------------------------------------------------------------- #
 
 from trid3nt_server.tools.fetchers._router.executors import http_json as _HJ
 from trid3nt_server.tools.fetchers.hazard.fetch_openfema_disasters import hooks as _OF
@@ -309,9 +294,6 @@ def test_openfema_input_errors():
         assert ei.value.error_code == "OPENFEMA_INPUT_ERROR"
 
 
-# --------------------------------------------------------------------------- #
-# storm_events_db: directory-index resolve -> bulk gzip-CSV decode.
-# --------------------------------------------------------------------------- #
 
 import gzip as _gzip
 

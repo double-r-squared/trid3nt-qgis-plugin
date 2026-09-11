@@ -34,9 +34,6 @@ from trid3nt_server.tools.derive.compute_building_density.compute_building_densi
 )
 
 
-# ---------------------------------------------------------------------------
-# Constants / helpers
-# ---------------------------------------------------------------------------
 
 _PINNED_NOW = datetime(2026, 6, 8, 12, 0, 0, tzinfo=timezone.utc)
 
@@ -46,9 +43,6 @@ _FORT_MYERS_BBOX = (-82.0, 26.5, -81.8, 26.7)
 _LIVE_BUILDINGS = os.environ.get("TRID3NT_TEST_LIVE_BUILDINGS") == "1"
 
 
-# ---------------------------------------------------------------------------
-# Fake GCS plumbing (mirrors the administrative-boundaries fetcher tests).
-# ---------------------------------------------------------------------------
 
 
 class FakeBlob:
@@ -117,9 +111,6 @@ def _make_read_through_injector(fake_gcs):
     return patched
 
 
-# ---------------------------------------------------------------------------
-# Synthetic-tile builders for the rasterization tests.
-# ---------------------------------------------------------------------------
 
 
 def _square_polygon_feature(cx: float, cy: float, half_size_deg: float = 1e-4) -> dict:
@@ -144,9 +135,6 @@ def _square_polygon_feature(cx: float, cy: float, half_size_deg: float = 1e-4) -
     }
 
 
-# ---------------------------------------------------------------------------
-# Registration tests.
-# ---------------------------------------------------------------------------
 
 
 def test_tool_is_registered_in_registry():
@@ -159,9 +147,6 @@ def test_tool_is_registered_in_registry():
     assert entry.metadata.cacheable is True
 
 
-# ---------------------------------------------------------------------------
-# Input-validation tests (no network).
-# ---------------------------------------------------------------------------
 
 
 def test_degenerate_bbox_raises_typed_input_error():
@@ -208,9 +193,6 @@ def test_round_bbox_to_6dp():
     assert rounded == (-82.123457, 26.123457, -81.987654, 26.987654)
 
 
-# ---------------------------------------------------------------------------
-# Quadkey tests.
-# ---------------------------------------------------------------------------
 
 
 def test_quadkey_zero_at_zoom_one():
@@ -247,9 +229,6 @@ def test_quadkeys_for_fort_myers_bbox_includes_known_tile():
         assert all(c in "0123" for c in qk), f"Bad quadkey chars: {qk!r}"
 
 
-# ---------------------------------------------------------------------------
-# Centroid math tests.
-# ---------------------------------------------------------------------------
 
 
 def test_ring_centroid_of_unit_square():
@@ -282,9 +261,6 @@ def test_feature_centroid_for_missing_geometry():
     assert _feature_centroid({"type": "Feature", "geometry": None}) is None
 
 
-# ---------------------------------------------------------------------------
-# Grid construction tests.
-# ---------------------------------------------------------------------------
 
 
 def test_grid_sum_equals_centroid_count_in_bbox():
@@ -344,9 +320,6 @@ def test_empty_bbox_yields_zero_raster_no_error():
     assert crs == "EPSG:3857"
 
 
-# ---------------------------------------------------------------------------
-# Cache-layer tests (mocked index + tiles + GCS).
-# ---------------------------------------------------------------------------
 
 
 def _patched_fetch_index(quadkeys: list[str], urls_per_key: list[str]):
@@ -427,9 +400,6 @@ def test_cache_key_differentiates_cell_size():
     assert len(fake_gcs.store) == 2
 
 
-# ---------------------------------------------------------------------------
-# End-to-end with synthetic tiles: 100 polygons → density sum = 100.
-# ---------------------------------------------------------------------------
 
 
 def test_end_to_end_with_100_polygons_density_sum_is_100():
@@ -541,9 +511,6 @@ def test_index_failure_is_typed_upstream_error():
             cbd._fetch_index()
 
 
-# ---------------------------------------------------------------------------
-# Live integration test (TRID3NT_TEST_LIVE_BUILDINGS=1 to run).
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.skipif(

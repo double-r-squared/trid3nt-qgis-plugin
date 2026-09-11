@@ -21,9 +21,6 @@ from trid3nt_server.tools.fetchers._router.spec import (
 )
 
 
-# --------------------------------------------------------------------------- #
-# Minimal well-formed spec dicts (one per shape + the two transforms).
-# --------------------------------------------------------------------------- #
 
 
 def raster_spec() -> dict:
@@ -86,9 +83,6 @@ def join_spec() -> dict:
     }
 
 
-# --------------------------------------------------------------------------- #
-# load_spec: good specs
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.parametrize("factory", [raster_spec, vector_spec, join_spec])
@@ -106,9 +100,6 @@ def test_load_spec_defaults_applied():
     assert spec.supports_global_query is False
 
 
-# --------------------------------------------------------------------------- #
-# load_spec: bad specs
-# --------------------------------------------------------------------------- #
 
 
 def test_load_spec_rejects_missing_required_key():
@@ -144,13 +135,11 @@ def test_load_spec_rejects_non_mapping():
         load_spec(["not", "a", "mapping"])  # type: ignore[arg-type]
 
 
-# --------------------------------------------------------------------------- #
 # the declared style row: the preset family is closed at registration
 #
 # A row naming a shape nothing can draw must fail HERE, where a spec is loaded,
 # and not at paint time - a layer that reaches the canvas with no renderer is a
 # blank the reader has to diagnose.
-# --------------------------------------------------------------------------- #
 
 
 def test_a_style_row_naming_a_kind_outside_the_family_is_refused_at_registration():
@@ -187,9 +176,6 @@ def test_a_declared_row_survives_the_load_as_the_spec_wrote_it():
     assert load_spec(bare).output.style is None
 
 
-# --------------------------------------------------------------------------- #
-# co-located corpus pickup + tree walk
-# --------------------------------------------------------------------------- #
 
 
 def _write_source_yaml(dir_path: Path, spec_dict: dict) -> Path:

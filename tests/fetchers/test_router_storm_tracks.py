@@ -38,9 +38,6 @@ def _fetch_storm_tracks(**kw: Any) -> Any:
     return TOOL_REGISTRY["fetch_storm_tracks"].fn(**kw)
 
 
-# --------------------------------------------------------------------------- #
-# Synthetic IBTrACS CSV body (ported verbatim from the deleted twin test).
-# --------------------------------------------------------------------------- #
 
 _CSV_HEADER = (
     "SID,SEASON,NUMBER,BASIN,SUBBASIN,NAME,ISO_TIME,NATURE,LAT,LON,"
@@ -169,9 +166,6 @@ def _historical_selection() -> dict[str, list[dict[str, Any]]]:
     return st._select_storms_in_bbox(storms, _FL_BBOX)
 
 
-# --------------------------------------------------------------------------- #
-# Registry shape.
-# --------------------------------------------------------------------------- #
 
 
 def test_storm_tracks_registered_with_expected_metadata() -> None:
@@ -184,9 +178,6 @@ def test_storm_tracks_registered_with_expected_metadata() -> None:
     assert getattr(md, "payload_mb_estimator_name", None) == "estimate_payload_mb"
 
 
-# --------------------------------------------------------------------------- #
-# Typed-error envelope.
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.parametrize(
@@ -217,9 +208,6 @@ def test_estimate_payload_mb_positive_and_scales() -> None:
     ) >= estimate_payload_mb(bbox=_FL_BBOX, geometry="lines")
 
 
-# --------------------------------------------------------------------------- #
-# Input validation (``storm_tracks.validate``, pre-cache).
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.parametrize(
@@ -277,9 +265,6 @@ def test_resolve_years_rejects(y0: Any, y1: Any) -> None:
         st._resolve_years(y0, y1)
 
 
-# --------------------------------------------------------------------------- #
-# IBTrACS file selection.
-# --------------------------------------------------------------------------- #
 
 
 def test_select_files_recent_uses_last3years() -> None:
@@ -303,9 +288,6 @@ def test_select_files_too_many_basins_rejected() -> None:
         st._select_ibtracs_files((-170.0, -30.0, 170.0, 30.0), 2000, 2001)
 
 
-# --------------------------------------------------------------------------- #
-# CSV parsing + bbox selection.
-# --------------------------------------------------------------------------- #
 
 
 def test_parse_ibtracs_filters_and_fallbacks() -> None:
@@ -352,9 +334,6 @@ def test_saffir_labels() -> None:
     assert st._saffir_label(99) == "unknown"
 
 
-# --------------------------------------------------------------------------- #
-# Feature builders (delegate returns features; vector_fgb serializes).
-# --------------------------------------------------------------------------- #
 
 
 def test_line_features_shape_and_single_fix_drop() -> None:
@@ -396,9 +375,6 @@ def test_point_features_shape_excludes_lat_lon() -> None:
         assert "forecast_track_zip" not in f["properties"]
 
 
-# --------------------------------------------------------------------------- #
-# NHC active-storms parsing.
-# --------------------------------------------------------------------------- #
 
 
 def test_parse_current_storms_mixed_coords() -> None:
@@ -421,9 +397,6 @@ def test_parse_current_storms_schema_drift_is_upstream_error() -> None:
         st._parse_current_storms(b"{}")
 
 
-# --------------------------------------------------------------------------- #
-# Pure envelope hook (layer_id / name / provenance replay).
-# --------------------------------------------------------------------------- #
 
 
 def test_envelope_hook_historical_layer_id_and_name() -> None:
@@ -465,9 +438,6 @@ def test_envelope_hook_pre_channel_defaults() -> None:
     assert out["storm_names"] == []
 
 
-# --------------------------------------------------------------------------- #
-# END-TO-END via the promoted router closure (network seam mocked + fake_s3).
-# --------------------------------------------------------------------------- #
 
 
 def test_end_to_end_historical_lines_happy_path(monkeypatch, fake_s3) -> None:
@@ -622,9 +592,6 @@ def test_active_upstream_url_used(monkeypatch, fake_s3) -> None:
     assert urls == [NHC_CURRENT_STORMS_URL]
 
 
-# --------------------------------------------------------------------------- #
-# THE CHANNEL: cache-hit replay of mode / storm_count / storm_names.
-# --------------------------------------------------------------------------- #
 
 
 def test_cache_hit_replays_provenance_identically(monkeypatch, fake_s3) -> None:

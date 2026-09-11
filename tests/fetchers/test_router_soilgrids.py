@@ -30,9 +30,6 @@ def spec():
     return compose_specs_from_tree()["fetch_soilgrids"]
 
 
-# --------------------------------------------------------------------------- #
-# Spec identity + metadata flags (twin-identical; SPEC-IDENTITY rule).
-# --------------------------------------------------------------------------- #
 
 
 def test_spec_identity(spec):
@@ -60,9 +57,6 @@ def test_metadata_flags_twin_identical(spec):
     assert m.payload_mb_estimator_name == "estimate_payload_mb"
 
 
-# --------------------------------------------------------------------------- #
-# Param gates + enum alias tables.
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.parametrize("raw,canon", [
@@ -105,9 +99,6 @@ def test_too_large_bbox_typed_error(spec):
     assert getattr(ei.value, "error_code", "") == "SOILGRIDS_INPUT_INVALID"
 
 
-# --------------------------------------------------------------------------- #
-# URL templating (property/depth -> the ISRIC VRT object).
-# --------------------------------------------------------------------------- #
 
 
 def test_url_template_fills_property_depth(spec):
@@ -130,9 +121,6 @@ def test_url_template_fills_property_depth(spec):
         "https://files.isric.org/soilgrids/latest/data/phh2o/phh2o_5-15cm_mean.vrt")
 
 
-# --------------------------------------------------------------------------- #
-# Coverage fast-reject (honesty, no network).
-# --------------------------------------------------------------------------- #
 
 
 def test_antarctica_is_empty(spec):
@@ -142,9 +130,6 @@ def test_antarctica_is_empty(spec):
     assert getattr(ei.value, "error_code", "") == "SOILGRIDS_EMPTY"
 
 
-# --------------------------------------------------------------------------- #
-# Per-property scale + serialize + all-nodata honesty (synthetic 4326 source).
-# --------------------------------------------------------------------------- #
 
 
 @contextlib.contextmanager

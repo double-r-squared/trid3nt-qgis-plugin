@@ -23,9 +23,6 @@ from trid3nt_server.adapters.scripted_adapter import set_script
 from trid3nt_contracts import new_ulid
 
 
-# ---------------------------------------------------------------------------
-# Record shape (pure builder)
-# ---------------------------------------------------------------------------
 
 
 def test_build_turn_record_shape():
@@ -79,9 +76,6 @@ def test_build_turn_record_tolerates_absent_usage_as_null():
     assert rec["error_class"] == "upstream_provider"
 
 
-# ---------------------------------------------------------------------------
-# Emit -> JSONL sink (async, fire-and-forget) + reader
-# ---------------------------------------------------------------------------
 
 
 def _read_jsonl(path: str) -> list[dict]:
@@ -152,9 +146,6 @@ def test_load_turn_records_missing_file_returns_empty():
     assert tel.load_turn_records("/nonexistent/turns.jsonl") == []
 
 
-# ---------------------------------------------------------------------------
-# Per-model summary aggregation
-# ---------------------------------------------------------------------------
 
 
 def _rec(model, provider="openai", prompt=None, completion=None, reasoning=None,
@@ -241,9 +232,6 @@ async def test_summary_endpoint_folds_turns_by_model():
         os.unlink(path)
 
 
-# ---------------------------------------------------------------------------
-# Reasoning-token capture at the openai usage seam
-# ---------------------------------------------------------------------------
 
 
 class _Namespace:
@@ -297,9 +285,6 @@ async def test_openai_usage_carries_reasoning_tokens_when_reported():
     assert usage_events[0].reasoning_token_count is None
 
 
-# ---------------------------------------------------------------------------
-# End-to-end: the turn loop emits exactly ONE record per turn
-# ---------------------------------------------------------------------------
 
 
 @dataclass

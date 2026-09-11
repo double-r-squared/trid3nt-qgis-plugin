@@ -93,9 +93,6 @@ def test_length_mismatch_raises():
         pearson_r2([1.0, 2.0], [1.0])
 
 
-# ---------------------------------------------------------------------------
-# Hydrograph overlay chart helper.
-# ---------------------------------------------------------------------------
 
 
 def test_overlay_two_series_valid_spec_with_skill_in_caption():

@@ -20,10 +20,8 @@ sys.path.insert(0, str(drivers_dir()))
 import selafin_cli_driver as D  # noqa: E402
 
 
-# --------------------------------------------------------------------------- #
 # One contour whose SOUTH-WEST corner lies on a liquid face, which is the
 # geometry the two numbering rules disagree on.
-# --------------------------------------------------------------------------- #
 #: A rectangle walked counter-clockwise from its own south-west corner. Ranks
 #: 11, 0, 1 are the west face and rank 0 IS the corner, so the run the engine
 #: opens first is the one that straddles row 0.
@@ -76,9 +74,6 @@ def test_a_lone_liquid_point_between_two_solid_ones_refuses_as_the_engine_does()
         D._liquid_boundaries(x, y, bnodes, codes, lengths)
 
 
-# --------------------------------------------------------------------------- #
-# The keyword is read off the quad, so the two files cannot disagree.
-# --------------------------------------------------------------------------- #
 def test_the_keyword_is_read_off_the_quad_the_boundary_file_carries():
     assert D._prescribes(D._ROLE_CODES["outflow"]) == "elevation"
     assert D._prescribes(D._ROLE_CODES["inflow"]) == "flowrate"
@@ -149,9 +144,6 @@ def test_the_free_exit_role_prescribes_nothing_as_a_stated_choice():
     assert slots["PRESCRIBED_ELEVATIONS"] == [0.0, 0.0]
 
 
-# --------------------------------------------------------------------------- #
-# A pinched boundary: the walk that numbers it is the only one that can say so.
-# --------------------------------------------------------------------------- #
 def test_a_walk_whose_rings_share_a_node_refuses_naming_them():
     """IPOBO is a permutation of 1..NPTFR, so a node two rings both pass through
     would need two positions and gets the second. What follows is an index error

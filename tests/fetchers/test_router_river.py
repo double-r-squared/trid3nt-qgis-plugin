@@ -75,9 +75,6 @@ def _validated(**raw: Any) -> dict[str, Any]:
     return router.validate_params(RIVER_SPEC, raw)
 
 
-# --------------------------------------------------------------------------- #
-# Registration.
-# --------------------------------------------------------------------------- #
 
 
 def test_river_promoted_as_router_spec():
@@ -98,9 +95,6 @@ def test_river_docstring_describes_osm_primary_and_dropped_leg():
     assert "NHDPlus HR HUC4 region-download fallback leg was removed" in doc
 
 
-# --------------------------------------------------------------------------- #
-# Waterway class-vocabulary resolution (the PURE hook).
-# --------------------------------------------------------------------------- #
 
 
 def test_resolve_waterway_classes_default_and_aliases():
@@ -128,9 +122,6 @@ def test_resolve_waterway_classes_rejects_unknown_tokens():
         r("RIVER_GEOMETRY", "INPUT_INVALID", 42)  # type: ignore[arg-type]
 
 
-# --------------------------------------------------------------------------- #
-# The tag the library is asked for, and the source label kept for back-compat.
-# --------------------------------------------------------------------------- #
 
 
 def test_river_asks_the_library_for_the_resolved_waterway_set(monkeypatch):
@@ -161,9 +152,6 @@ def test_river_source_aliases_resolve():
         assert _validated(bbox=list(_KANSAS), source=alias)["source"] == "nhdplus_hr"
 
 
-# --------------------------------------------------------------------------- #
-# Parse hook: LineString extraction, bbox clip (fills + no spill), honest empty.
-# --------------------------------------------------------------------------- #
 
 
 def test_river_parse_fills_bbox_and_clips_spill(monkeypatch):
@@ -197,9 +185,6 @@ def test_river_parse_empty_yields_header_only_fgb(monkeypatch):
     assert isinstance(fgb, bytes) and len(fgb) > 0
 
 
-# --------------------------------------------------------------------------- #
-# Guardrail: the 5000 km^2 area gate (max_bbox_km2).
-# --------------------------------------------------------------------------- #
 
 
 def test_river_oversized_bbox_rejected_km2():
@@ -209,9 +194,6 @@ def test_river_oversized_bbox_rejected_km2():
     assert "km^2" in str(ei.value)
 
 
-# --------------------------------------------------------------------------- #
-# End-to-end LayerURI + cache-key stability.
-# --------------------------------------------------------------------------- #
 
 
 def _inject_read_through(monkeypatch, store: dict[str, bytes]):

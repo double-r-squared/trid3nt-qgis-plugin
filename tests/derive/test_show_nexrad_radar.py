@@ -20,9 +20,6 @@ from trid3nt_server.tools.display.show_nexrad_radar.show_nexrad_radar import (
     show_nexrad_radar,
 )
 
-# ---------------------------------------------------------------------------
-# Constants.
-# ---------------------------------------------------------------------------
 
 _LIVE_NEXRAD = os.environ.get("TRID3NT_TEST_LIVE_NEXRAD") == "1"
 
@@ -33,9 +30,6 @@ _FORT_MYERS_BBOX = (-82.0, 26.0, -81.0, 27.0)
 _IOWA_MESONET_HOST = "mesonet.agron.iastate.edu"
 
 
-# ---------------------------------------------------------------------------
-# Registration / metadata.
-# ---------------------------------------------------------------------------
 
 
 def test_tool_registered() -> None:
@@ -50,9 +44,6 @@ def test_tool_registered() -> None:
     assert entry.metadata.name == "show_nexrad_radar"
 
 
-# ---------------------------------------------------------------------------
-# Happy-path: each product produces a correctly-shaped LayerURI.
-# ---------------------------------------------------------------------------
 
 
 def test_default_product_n0r_returns_layeruri() -> None:
@@ -91,9 +82,6 @@ def test_product_vil_produces_distinct_layeruri() -> None:
     assert vil.style["kind"] == "continuous"
 
 
-# ---------------------------------------------------------------------------
-# bbox handling.
-# ---------------------------------------------------------------------------
 
 
 def test_bbox_none_returns_conus_layeruri() -> None:
@@ -129,9 +117,6 @@ def test_bbox_supplied_returns_scoped_layeruri() -> None:
     assert "26.0000" in layer.layer_id
 
 
-# ---------------------------------------------------------------------------
-# Typed errors (FR-AS-11).
-# ---------------------------------------------------------------------------
 
 
 def test_unknown_product_raises_typed_error() -> None:
@@ -170,9 +155,6 @@ def test_bbox_inverted_raises_typed_error() -> None:
         show_nexrad_radar(bbox=(-82.0, 27.0, -81.0, 26.0))
 
 
-# ---------------------------------------------------------------------------
-# URL builder direct.
-# ---------------------------------------------------------------------------
 
 
 def test_build_wms_url_includes_product_and_bbox() -> None:
@@ -190,12 +172,10 @@ def test_build_wms_url_unknown_product_raises() -> None:
         _build_wms_url("xyz", None)
 
 
-# ---------------------------------------------------------------------------
 # Live verification (env-guarded). Asserts the Iowa Mesonet WMS endpoint is
 # reachable — geographic-correctness gate for a service-URL-passthrough tool:
 # if the service is reachable AND the URL we composed is the documented
 # endpoint, then a bbox-scoped GetMap against it will scope to that bbox.
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.skipif(not _LIVE_NEXRAD, reason="TRID3NT_TEST_LIVE_NEXRAD!=1")

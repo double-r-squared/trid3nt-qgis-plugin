@@ -49,9 +49,6 @@ def _run(monkeypatch, name, slr_ft, res_deg=0.02, png=None, transport_exc=None):
     return raster_cog.execute(spec, params)
 
 
-# --------------------------------------------------------------------------- #
-# Registration + spec + retrieval surface.
-# --------------------------------------------------------------------------- #
 @pytest.mark.parametrize("name,source", list(zip(_NAMES, ("noaa_slr_confidence", "noaa_slr_marsh"))))
 def test_registered_spec_driven(name, source):
     assert name in TOOL_REGISTRY
@@ -72,9 +69,6 @@ def test_corpus_present():
         assert n in corpus and len(corpus[n]) >= 3
 
 
-# --------------------------------------------------------------------------- #
-# array_to_cog_bytes RGBA branch (the serializer extension, no-op for priors).
-# --------------------------------------------------------------------------- #
 def test_array_to_cog_bytes_rgba_branch():
     arr = np.zeros((4, 8, 10), dtype=np.uint8)
     arr[3] = 255  # opaque alpha
@@ -106,9 +100,6 @@ def test_array_to_cog_bytes_singleband_unchanged():
         assert np.isnan(ds.nodata)
 
 
-# --------------------------------------------------------------------------- #
-# mapserver_export mode: PNG32 -> georeferenced 4-band RGBA COG.
-# --------------------------------------------------------------------------- #
 @pytest.mark.parametrize("name,slr_ft", [("fetch_noaa_slr_confidence", 3.0),
                                          ("fetch_noaa_slr_marsh", 1.5)])
 def test_export_produces_valid_rgba_cog(monkeypatch, name, slr_ft):
@@ -138,9 +129,6 @@ def test_export_undecodable_body_raises_upstream(monkeypatch):
         _run(monkeypatch, "fetch_noaa_slr_confidence", 3.0, png=b'{"error":{"code":400}}')
 
 
-# --------------------------------------------------------------------------- #
-# Service-name resolution via the declarative map + typed input errors.
-# --------------------------------------------------------------------------- #
 def test_service_resolution_and_query(monkeypatch):
     seen = {}
 

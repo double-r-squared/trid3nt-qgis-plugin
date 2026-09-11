@@ -20,9 +20,6 @@ from trid3nt_server.adapters import model_selection as ms
 from trid3nt_server.telemetry import compute_args_hash, emit_tool_call_event
 from trid3nt_server.server.protocol.catalog_http import _aggregate_records, _normalize_record
 
-# ---------------------------------------------------------------------------
-# 1. emit_tool_call_event persists model_id in the local JSONL record
-# ---------------------------------------------------------------------------
 
 
 def _read_jsonl(path: str) -> list[dict]:
@@ -82,9 +79,6 @@ async def test_emit_model_id_none_is_stored_as_null():
         os.unlink(path)
 
 
-# ---------------------------------------------------------------------------
-# 2. _aggregate_records produces a by_model section
-# ---------------------------------------------------------------------------
 
 
 def _make_record(
@@ -196,9 +190,6 @@ def test_aggregate_empty_records_by_model_is_empty_list():
     assert summary["by_model"] == []
 
 
-# ---------------------------------------------------------------------------
-# 3. resolve_selected_model - the per-turn model id the client sends
-# ---------------------------------------------------------------------------
 
 
 def test_resolve_none_is_silent_default(monkeypatch):

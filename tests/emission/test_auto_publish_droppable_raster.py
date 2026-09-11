@@ -88,9 +88,6 @@ async def _run(emitter: PipelineEmitter, result):
     )
 
 
-# --------------------------------------------------------------------------- #
-# 1. The ordinary case: published once, unasked, and the map gets the result.
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio
@@ -148,9 +145,6 @@ async def test_every_layer_of_a_list_takes_the_same_trip(publish_recorder) -> No
     ]
 
 
-# --------------------------------------------------------------------------- #
-# 2. What the seam declines to touch.
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio
@@ -184,9 +178,6 @@ async def test_gs_raster_is_still_dropped_by_the_guardrail(publish_recorder) -> 
     assert _loaded_layers(sink) == []
 
 
-# --------------------------------------------------------------------------- #
-# 3. The honesty floor's new shape: a failed publish DEGRADES, never blanks.
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio

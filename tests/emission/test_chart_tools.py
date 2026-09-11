@@ -28,9 +28,6 @@ from trid3nt_contracts.chart_contracts import (
 )
 
 
-# ---------------------------------------------------------------------------
-# Synthetic-fixture helpers
-# ---------------------------------------------------------------------------
 
 
 def _make_raster(tmp_path: Path, values: np.ndarray, name: str = "r.tif") -> str:
@@ -97,9 +94,6 @@ def _assert_valid_interactive_chart(payload: dict, *, expect_source: str | None 
     return str(mark.get("type"))
 
 
-# ---------------------------------------------------------------------------
-# Core: interactivity guaranteed by construction
-# ---------------------------------------------------------------------------
 
 
 class TestInteractivityByConstruction:
@@ -140,9 +134,6 @@ class TestInteractivityByConstruction:
         assert all(layer["mark"]["tooltip"] is True for layer in spec_out["layer"])
 
 
-# ---------------------------------------------------------------------------
-# Data injection: inline records / vector layer / raster layer
-# ---------------------------------------------------------------------------
 
 
 class TestDataInjection:
@@ -189,9 +180,6 @@ class TestDataInjection:
         assert exc.value.error_code == "NO_DATA"
 
 
-# ---------------------------------------------------------------------------
-# Replication: the four culled chart shapes reproduced via generate_chart
-# ---------------------------------------------------------------------------
 
 
 class TestCulledShapeReplication:
@@ -230,9 +218,6 @@ class TestCulledShapeReplication:
         assert _assert_valid_interactive_chart(payload) == "bar"
 
 
-# ---------------------------------------------------------------------------
-# Row-cap + schema injection (build_chart_payload)
-# ---------------------------------------------------------------------------
 
 
 class TestRowCap:
@@ -255,9 +240,6 @@ class TestRowCap:
         assert len(payload["vega_lite_spec"]["data"]["values"]) == _MAX_ROWS
 
 
-# ---------------------------------------------------------------------------
-# is_chart_emission_result discriminator
-# ---------------------------------------------------------------------------
 
 
 class TestChartEmissionDiscriminator:
@@ -277,9 +259,6 @@ class TestChartEmissionDiscriminator:
         ) is False
 
 
-# ---------------------------------------------------------------------------
-# adapter.summarize_tool_result strips the spec for charts
-# ---------------------------------------------------------------------------
 
 
 class TestSummarizeChartEmission:
@@ -310,9 +289,6 @@ class TestSummarizeChartEmission:
         assert summary["result"]["count"] == 9
 
 
-# ---------------------------------------------------------------------------
-# server._maybe_emit_chart -- emission + persistence
-# ---------------------------------------------------------------------------
 
 
 class _FakeWS:
@@ -408,9 +384,6 @@ class TestEmitChart:
         assert len(ws.sent) == 1
 
 
-# ---------------------------------------------------------------------------
-# Dispatch-site detection: chart payload triggers emission, ordinary does not
-# ---------------------------------------------------------------------------
 
 
 def test_dispatch_detection_signal(tmp_path):
@@ -428,9 +401,6 @@ def test_dispatch_detection_signal(tmp_path):
     assert is_chart_emission_result(stats) is False
 
 
-# ---------------------------------------------------------------------------
-# Registration + categories
-# ---------------------------------------------------------------------------
 
 
 class TestRegistration:
@@ -455,9 +425,6 @@ class TestRegistration:
             assert dead not in TOOL_REGISTRY
 
 
-# --------------------------------------------------------------------------- #
-# _summarize_raster / _summarize_vector (compose_case_report's per-layer stats)
-# --------------------------------------------------------------------------- #
 
 
 def _summarizers():

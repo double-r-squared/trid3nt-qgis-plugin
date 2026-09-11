@@ -27,9 +27,6 @@ def specs():
     return compose_specs_from_tree()
 
 
-# --------------------------------------------------------------------------- #
-# GHSL fixed_tile_grid
-# --------------------------------------------------------------------------- #
 
 
 def _grid_cfg(specs):
@@ -131,9 +128,6 @@ def test_ghsl_input_errors(specs):
     assert ei.value.error_code == "GHSL_POPULATION_INPUT_INVALID"
 
 
-# --------------------------------------------------------------------------- #
-# admin_boundaries build_request planner + FIPS
-# --------------------------------------------------------------------------- #
 
 
 def test_admin_state_fips_for_bbox():
@@ -170,9 +164,6 @@ def test_admin_bad_level_enum(specs):
     assert ei.value.error_code == "ADMIN_BOUNDARY_LEVEL_INVALID"
 
 
-# --------------------------------------------------------------------------- #
-# The ZIP-member read (real local shapefile ZIPs, read through the driver)
-# --------------------------------------------------------------------------- #
 
 
 def _shapefile_zip(dir_path, polys):

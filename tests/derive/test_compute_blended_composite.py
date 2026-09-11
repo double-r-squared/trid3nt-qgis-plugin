@@ -26,9 +26,6 @@ from trid3nt_server.tools.derive.compute_blended_composite.compute_blended_compo
 PINNED_NOW = datetime(2026, 6, 16, 12, 0, 0, tzinfo=timezone.utc)
 
 
-# ---------------------------------------------------------------------------
-# Synthetic raster helpers (in-memory → temp file)
-# ---------------------------------------------------------------------------
 
 
 def _write_rgb_base(path: str, size: int = 600) -> np.ndarray:
@@ -130,9 +127,6 @@ def _write_gray_base(path: str, size: int = 600) -> np.ndarray:
     return gray.astype(np.float32)
 
 
-# ---------------------------------------------------------------------------
-# Fake GCS scaffolding for cache-shim isolation
-# ---------------------------------------------------------------------------
 
 
 class _S3Body:
@@ -207,9 +201,6 @@ def fake_storage():
     return FakeStorageClient()
 
 
-# ---------------------------------------------------------------------------
-# Test 1 — registration / auto-discovery
-# ---------------------------------------------------------------------------
 
 
 def test_compute_blended_composite_registered():
@@ -223,9 +214,6 @@ def test_compute_blended_composite_registered():
     assert entry.module == "trid3nt_server.tools.derive.compute_blended_composite.compute_blended_composite"
 
 
-# ---------------------------------------------------------------------------
-# Test 2 — handle resolution wiring (server resolves base/overlay handles)
-# ---------------------------------------------------------------------------
 
 
 def test_blend_resolvable_params_in_allowlist():
@@ -236,9 +224,6 @@ def test_blend_resolvable_params_in_allowlist():
     assert "overlay_layer_uri" in RESOLVABLE_URI_PARAMS
 
 
-# ---------------------------------------------------------------------------
-# Test 3 — multiply math + overviews + dims (the headline correctness test)
-# ---------------------------------------------------------------------------
 
 
 def test_compute_blended_composite_multiply_math(fake_storage):
@@ -293,9 +278,6 @@ def test_compute_blended_composite_multiply_math(fake_storage):
             )
 
 
-# ---------------------------------------------------------------------------
-# Test 3b — palette-INDEX base (embedded color table) keeps palette colors
-# ---------------------------------------------------------------------------
 
 
 def test_compute_blended_composite_palette_base_keeps_palette_colors(fake_storage):
@@ -355,9 +337,6 @@ def test_compute_blended_composite_palette_base_keeps_palette_colors(fake_storag
         assert non_gray_checks >= 1, "no non-gray palette pixel was exercised"
 
 
-# ---------------------------------------------------------------------------
-# Test 3c — single-band base with NO color table still broadcasts grayscale
-# ---------------------------------------------------------------------------
 
 
 def test_compute_blended_composite_grayscale_base_no_colormap_stays_gray(fake_storage):
@@ -402,9 +381,6 @@ def test_compute_blended_composite_grayscale_base_no_colormap_stays_gray(fake_st
             )
 
 
-# ---------------------------------------------------------------------------
-# Test 4 — invalid blend mode raises typed error
-# ---------------------------------------------------------------------------
 
 
 def test_compute_blended_composite_invalid_mode_raises(fake_storage):
@@ -418,9 +394,6 @@ def test_compute_blended_composite_invalid_mode_raises(fake_storage):
     assert exc_info.value.error_code == "INVALID_BLEND_MODE"
 
 
-# ---------------------------------------------------------------------------
-# Test 5 — LayerURI fields
-# ---------------------------------------------------------------------------
 
 
 def test_compute_blended_composite_returns_layer_uri_fields(fake_storage):
@@ -445,9 +418,6 @@ def test_compute_blended_composite_returns_layer_uri_fields(fake_storage):
     assert result.name.startswith("Shaded")
 
 
-# ---------------------------------------------------------------------------
-# Test 6 — cache hit skips re-blend
-# ---------------------------------------------------------------------------
 
 
 def test_compute_blended_composite_cache_hit_skips_fetch(fake_storage):
@@ -478,13 +448,11 @@ def test_compute_blended_composite_cache_hit_skips_fetch(fake_storage):
         assert second.uri == first.uri
 
 
-# ---------------------------------------------------------------------------
 # The description must tell the agent the BASE may be a
 # paletted/categorical raster (NLCD land cover) so it stops substituting
 # compute_colored_relief (elevation colors) as the blend base. The "bake NLCD
 # land cover into hillshade" demo rendered the wrong colors because the
 # description never said land cover could be the base directly.
-# ---------------------------------------------------------------------------
 
 
 def test_blend_description_says_base_may_be_paletted_categorical():

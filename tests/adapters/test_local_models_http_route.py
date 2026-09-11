@@ -66,9 +66,6 @@ def _dispatch() -> _FakeWriter:
     return writer
 
 
-# ---------------------------------------------------------------------------
-# Route gating (404 like any unknown path off the openai provider)
-# ---------------------------------------------------------------------------
 
 
 def test_route_absent_when_provider_is_not_openai(monkeypatch):
@@ -83,9 +80,6 @@ def test_route_absent_when_provider_is_scripted(monkeypatch):
     assert _status(bytes(writer.buffer)) == 404
 
 
-# ---------------------------------------------------------------------------
-# Happy path (MODEL_PROVIDER=openai)
-# ---------------------------------------------------------------------------
 
 
 def test_local_models_listed_with_default_first(monkeypatch):
@@ -128,9 +122,6 @@ def test_upstream_unreachable_is_typed_502(monkeypatch):
     assert "ollama down" in _body(out)["error"]
 
 
-# ---------------------------------------------------------------------------
-# _fetch_local_models parsing (fake httpx client, no network)
-# ---------------------------------------------------------------------------
 
 
 class _FakeResponse:
@@ -198,9 +189,6 @@ def test_fetch_local_models_null_default_when_env_unset(monkeypatch):
     assert payload["models"] == [{"id": "llama3.2:3b", "label": "llama3.2:3b"}]
 
 
-# ---------------------------------------------------------------------------
-# _ollama_tags_url derivation
-# ---------------------------------------------------------------------------
 
 
 def test_tags_url_strips_v1_suffix(monkeypatch):

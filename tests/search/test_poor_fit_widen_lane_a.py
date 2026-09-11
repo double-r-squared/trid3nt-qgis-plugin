@@ -22,9 +22,6 @@ from trid3nt_server.gates.tool_gating import (
 from trid3nt_contracts import new_ulid
 
 
-# ---------------------------------------------------------------------------
-# Pure helpers.
-# ---------------------------------------------------------------------------
 
 
 def test_widen_threshold_default(monkeypatch):
@@ -61,9 +58,6 @@ def test_widen_k_exceeds_gate_floor():
     assert WIDEN_K > 24
 
 
-# ---------------------------------------------------------------------------
-# Live gating block (openai path).
-# ---------------------------------------------------------------------------
 
 
 def _settings() -> ModelSettings:

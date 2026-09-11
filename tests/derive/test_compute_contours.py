@@ -29,9 +29,6 @@ from trid3nt_server.tools.derive.compute_contours.compute_contours import (
 PINNED_NOW = datetime(2026, 6, 17, 12, 0, 0, tzinfo=timezone.utc)
 
 
-# ---------------------------------------------------------------------------
-# Helpers: synthetic DEM + fake artifact bytes
-# ---------------------------------------------------------------------------
 
 
 def _write_synthetic_dem(
@@ -99,9 +96,6 @@ def _fake_contour_fgb_bytes() -> bytes:
             pass
 
 
-# ---------------------------------------------------------------------------
-# FakeStorageClient — minimal duck type for cache shim isolation
-# ---------------------------------------------------------------------------
 
 
 class _S3Body:
@@ -176,9 +170,6 @@ def fake_storage():
     return FakeStorageClient()
 
 
-# ---------------------------------------------------------------------------
-# Test 1 — registration
-# ---------------------------------------------------------------------------
 
 
 def test_compute_contours_registered():
@@ -189,9 +180,6 @@ def test_compute_contours_registered():
     assert entry.metadata.source_class == "contours"
 
 
-# ---------------------------------------------------------------------------
-# Test 2 — default-interval derivation from relief
-# ---------------------------------------------------------------------------
 
 
 def test_snap_to_nice_interval_never_zero_or_negative():
@@ -238,9 +226,6 @@ def test_derive_interval_flat_dem_falls_back_to_smallest():
     assert interval == 1.0
 
 
-# ---------------------------------------------------------------------------
-# Test 4 — gdal_contour invocation args (-a elev -i <interval>)
-# ---------------------------------------------------------------------------
 
 
 def test_run_gdal_contour_invocation_args():
@@ -273,9 +258,6 @@ def test_run_gdal_contour_invocation_args():
     assert "/tmp/in.tif" in cmd and "/tmp/out.fgb" in cmd
 
 
-# ---------------------------------------------------------------------------
-# Test 5 - vector LayerURI shape (bbox set, line reference, vector)
-# ---------------------------------------------------------------------------
 
 
 def test_compute_contours_layer_uri_shape(fake_storage):
@@ -335,9 +317,6 @@ def test_compute_contours_explicit_interval_in_name(fake_storage):
     assert "50" in result.layer_id
 
 
-# ---------------------------------------------------------------------------
-# Test 6 — binary-missing typed error
-# ---------------------------------------------------------------------------
 
 
 def test_compute_contours_binary_missing_raises(fake_storage):
@@ -362,9 +341,6 @@ def test_compute_contours_binary_missing_raises(fake_storage):
     assert exc_info.value.error_code == "GDAL_CONTOUR_UNAVAILABLE"
 
 
-# ---------------------------------------------------------------------------
-# Test 7 — no DEM input (neither dem_uri nor bbox) → typed error
-# ---------------------------------------------------------------------------
 
 
 def test_compute_contours_no_dem_input_raises():
@@ -373,9 +349,6 @@ def test_compute_contours_no_dem_input_raises():
     assert exc_info.value.error_code == "NO_DEM_INPUT"
 
 
-# ---------------------------------------------------------------------------
-# Test 8 — cache hit skips fetch (gdal_contour not invoked)
-# ---------------------------------------------------------------------------
 
 
 def test_compute_contours_cache_hit_skips_fetch(fake_storage):
@@ -420,9 +393,6 @@ def test_compute_contours_cache_hit_skips_fetch(fake_storage):
     assert result.layer_type == "vector"
 
 
-# ---------------------------------------------------------------------------
-# Test 9 — bbox-only path fetches the DEM via fetch_dem (shared acquisition)
-# ---------------------------------------------------------------------------
 
 
 def test_compute_contours_bbox_fetches_dem(fake_storage):

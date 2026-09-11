@@ -399,9 +399,6 @@ def test_one_author_word_declares_every_producer():
     assert fetcher.supplied("s3://mine/dem.tif").supplied_uri == "s3://mine/dem.tif"
 
 
-# --------------------------------------------------------------------------- #
-# ONE runner namespace: a registered tool name, else a dotted import path.
-# --------------------------------------------------------------------------- #
 
 
 def test_a_runner_can_name_a_registered_tool():
@@ -1415,9 +1412,6 @@ def test_validator_refuses_a_param_ref_in_a_data_producer():
         validate_plan(Plan("w", None, (Step(runner=f"{_HERE}.stub_step"),)), _params(), data)
 
 
-# ============================================================================ #
-# Revision coherence: leaks, re-derivation, eviction, the law-9 floor
-# ============================================================================ #
 
 # --- R3-1: a ParamRef may not leak past the late-binding seam ----------------- #
 def test_a_param_ref_refuses_every_silent_leak_path():

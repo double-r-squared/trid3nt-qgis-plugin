@@ -29,9 +29,6 @@ from trid3nt_server.tools.fetchers._router.executors import (
 from trid3nt_server.tools.fetchers._router.transforms import tiled_mosaic
 
 
-# --------------------------------------------------------------------------- #
-# Spec factories (validated SourceSpec objects).
-# --------------------------------------------------------------------------- #
 
 
 def _raster_spec() -> SourceSpec:
@@ -108,9 +105,6 @@ def _mosaic_spec(max_bbox_deg2=8.0, tile_deg2=0.5) -> SourceSpec:
     })
 
 
-# --------------------------------------------------------------------------- #
-# raster_cog
-# --------------------------------------------------------------------------- #
 
 
 def _synthetic_raster(bbox=(-117.5, 33.5, -116.5, 34.5), n=64):
@@ -142,9 +136,6 @@ def test_raster_execute_uses_fetch_source_array(monkeypatch):
         assert src.count == 1 and src.crs.to_string() == "EPSG:4326"
 
 
-# --------------------------------------------------------------------------- #
-# raster_cog: imageserver_export mode (landfire/usfs)
-# --------------------------------------------------------------------------- #
 
 
 def _imageserver_spec() -> SourceSpec:
@@ -271,9 +262,6 @@ def test_payload_ceil_mb_clips():
     assert est(bbox=[-112.0, 34.5, -111.99, 34.51]) == pytest.approx(0.05)
 
 
-# --------------------------------------------------------------------------- #
-# vector_fgb
-# --------------------------------------------------------------------------- #
 
 
 def _feature(lon, lat, name, kind):
@@ -341,9 +329,6 @@ def test_vector_ogr_staged_uri_is_typed_error_not_handed_to_a_driver():
         vector_ogr.build_query(spec, (-101, 39, -100, 41))
 
 
-# --------------------------------------------------------------------------- #
-# station_timeseries
-# --------------------------------------------------------------------------- #
 
 
 def _station_record(sid, lon, lat, values):
@@ -411,9 +396,6 @@ def test_station_catalog_staged_uri_is_typed_error_not_handed_to_httpx():
         station_timeseries._discover_stations(spec, (-81, 25, -79, 27))
 
 
-# --------------------------------------------------------------------------- #
-# tiled_mosaic transform
-# --------------------------------------------------------------------------- #
 
 
 def test_plan_tile_grid_single_tile_when_small():
@@ -484,10 +466,8 @@ def test_mosaic_hard_ceiling_redirects_with_typed_error():
 
 
 
-# --------------------------------------------------------------------------- #
 # phase-2 wave-2 ArcGIS-family additions: WHERE builder / column_map /
 # endpoint chain / int_range + date_compact params.
-# --------------------------------------------------------------------------- #
 
 
 def _wave2_spec(**over) -> SourceSpec:
@@ -620,9 +600,6 @@ def test_validate_int_range_and_date_compact():
         router_mod.validate_params(spec, {"bbox": [-1, 0, 1, 2], "date": "2020-13-40"})
 
 
-# --------------------------------------------------------------------------- #
-# raster_cog: serialize nodata/dtype directive (copernicus)
-# --------------------------------------------------------------------------- #
 
 
 def _serialize_spec(serialize: dict | None) -> SourceSpec:
@@ -670,9 +647,6 @@ def test_serialize_absent_is_nan_nodata_passthrough(monkeypatch):
     assert np.isnan(out[0, 1])
 
 
-# --------------------------------------------------------------------------- #
-# raster_cog: direct_window url_by_param + round_pixel + nodata_gate (wave-8; gcn250)
-# --------------------------------------------------------------------------- #
 
 
 class _FakeSrc:
@@ -749,9 +723,6 @@ def test_direct_window_nodata_gate_passes_with_data(monkeypatch):
     assert 80.0 in arr  # the one valid pixel survived; the gate did NOT fire
 
 
-# --------------------------------------------------------------------------- #
-# raster_cog: multi_url VRT fan-out mosaic (hrsl)
-# --------------------------------------------------------------------------- #
 
 
 class _FakeMember:
@@ -854,9 +825,6 @@ def test_parse_vrt_reads_grid_and_members():
     assert (srcs[0].dx, srcs[0].dy, srcs[0].dw, srcs[0].dh) == (0, 0, 4, 6)
 
 
-# --------------------------------------------------------------------------- #
-# raster_cog: gzip_object whole-object date-templated read (fold wave-9; chirps)
-# --------------------------------------------------------------------------- #
 
 
 def _gz_spec(**go_extra) -> SourceSpec:

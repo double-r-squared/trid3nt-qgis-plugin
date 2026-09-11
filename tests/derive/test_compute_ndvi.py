@@ -33,9 +33,6 @@ _PINNED_NOW = datetime(2026, 6, 22, 12, 0, 0, tzinfo=timezone.utc)
 _SC_BBOX = (-80.05, 32.75, -79.95, 32.82)
 
 
-# ---------------------------------------------------------------------------
-# In-memory S3 read-through injector (mirrors sibling test pattern).
-# ---------------------------------------------------------------------------
 
 
 class _FakeStore:
@@ -84,9 +81,6 @@ def _fake_item(scene_id: str = "S2_fake", cc: float = 1.0):
     )
 
 
-# ---------------------------------------------------------------------------
-# Registration / metadata.
-# ---------------------------------------------------------------------------
 
 
 def test_tool_is_registered() -> None:
@@ -116,9 +110,6 @@ def test_payload_estimator_scales_with_area() -> None:
     assert estimate_payload_mb(bbox=None) > 0
 
 
-# ---------------------------------------------------------------------------
-# bbox validation.
-# ---------------------------------------------------------------------------
 
 
 def test_degenerate_bbox_raises() -> None:
@@ -163,9 +154,6 @@ def test_bbox_error_not_retryable() -> None:
         pytest.fail("expected NDVIBboxError")
 
 
-# ---------------------------------------------------------------------------
-# Happy path (mocked STAC + band reads).
-# ---------------------------------------------------------------------------
 
 
 def _patched_band_read(width=20, height=14):
@@ -231,9 +219,6 @@ def test_cache_hit_does_not_refetch() -> None:
     assert second == first, "second identical call must hit the cache, not re-read"
 
 
-# ---------------------------------------------------------------------------
-# No-imagery honesty (data-source fallback norm).
-# ---------------------------------------------------------------------------
 
 
 def test_no_imagery_raises_typed_error() -> None:
@@ -256,9 +241,6 @@ def test_no_imagery_error_not_retryable() -> None:
         assert exc.retryable is False
 
 
-# ---------------------------------------------------------------------------
-# Cache-key determinism.
-# ---------------------------------------------------------------------------
 
 
 def test_distinct_bbox_distinct_cache_key() -> None:

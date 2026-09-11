@@ -20,9 +20,6 @@ from trid3nt_server.server import SessionState, _handle_max_turns_reached
 from trid3nt_server.main import MAX_TURNS_PER_SESSION
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
 
 # Valid 26-character ULIDs for test fixtures (ULIDs are base32-encoded, 26 chars).
 _SESSION_ID_A = "01AAAAAAAAAAAAAAAAAAAAAAA0"
@@ -51,9 +48,6 @@ def _make_state(session_id: str = _SESSION_ID_A) -> SessionState:
     return SessionState(session_id=session_id)
 
 
-# ---------------------------------------------------------------------------
-# Test 1: Turn counter increments correctly
-# ---------------------------------------------------------------------------
 
 def test_turn_counter_starts_at_zero():
     """A freshly created SessionState has turn_count == 0."""
@@ -69,9 +63,6 @@ def test_turn_counter_increments_on_each_dispatch():
         assert state.turn_count == expected
 
 
-# ---------------------------------------------------------------------------
-# Test 2: Cap fires at (MAX+1)th turn
-# ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
 async def test_cap_fires_and_emits_max_turns_reached():
@@ -132,9 +123,6 @@ async def test_cap_refuses_further_tool_calls_after_hitting_limit():
         assert ss["payload"]["status"] == "max_turns_reached"
 
 
-# ---------------------------------------------------------------------------
-# Test 3: New session starts with a fresh counter at 0
-# ---------------------------------------------------------------------------
 
 def test_new_session_starts_fresh_counter():
     """A new WebSocket connection creates a new SessionState with turn_count=0.
@@ -164,9 +152,6 @@ def test_multiple_sessions_have_independent_counters():
     assert state_b.turn_count == 3
 
 
-# ---------------------------------------------------------------------------
-# Test 4: Env-var override is parsed into MAX_TURNS_PER_SESSION
-# ---------------------------------------------------------------------------
 
 def test_max_turns_env_var_default():
     """MAX_TURNS_PER_SESSION defaults to 25 when the env var is absent."""
@@ -177,9 +162,6 @@ def test_max_turns_env_var_default():
     assert MAX_TURNS_PER_SESSION >= 1
 
 
-# ---------------------------------------------------------------------------
-# Test 5: session-state payload shape is valid (contracts round-trip)
-# ---------------------------------------------------------------------------
 
 def test_session_state_payload_active_status_default():
     """SessionStatePayload defaults status to 'active' — no regressions."""

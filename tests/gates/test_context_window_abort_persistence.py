@@ -97,10 +97,8 @@ def _persisted_rows(session_state):
     return agent_rows, tool_rows
 
 
-# --------------------------------------------------------------------------- #
 # BUG 1 -- terminal failure card ALWAYS persists, even on a dead socket, and
 # the abort verdict lands on the persisted partial-reply row.
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio
@@ -235,9 +233,6 @@ async def test_abort_after_a_real_tool_call_never_adds_fabrication_caveat(
         agent_tools.TOOL_REGISTRY.pop("abort_tool", None)
 
 
-# --------------------------------------------------------------------------- #
-# BUG 1 -- both persist-path and send-path failures are individually logged.
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio

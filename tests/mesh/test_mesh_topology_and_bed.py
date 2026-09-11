@@ -71,9 +71,6 @@ def test_an_empty_role_is_not_a_role(tmp_path):
     assert T.read_topology(str(path))["roles"] == {}
 
 
-# --------------------------------------------------------------------------- #
-# ``set_boundary_roles``: the op, on a mesh.
-# --------------------------------------------------------------------------- #
 def _lattice_mesh():
     """A 3x3 lon/lat node lattice, two triangles per square, one boundary loop.
 
@@ -134,9 +131,6 @@ def test_a_mesh_whose_cells_the_engine_realizes_has_no_walk_to_name_a_run_of():
     assert excinfo.value.error_code == "MESH_ROLES_UNSEGMENTABLE"
 
 
-# --------------------------------------------------------------------------- #
-# The contiguous-run matcher the op IS: a role is a RUN of one contour.
-# --------------------------------------------------------------------------- #
 #: A 200 m x 40 m strip of boundary nodes: the two 40 m end caps are the
 #: transects a section cut, and the two long sides are the water between them.
 _STRIP = np.array(
@@ -342,9 +336,6 @@ def test_the_refusal_names_WHICH_of_a_roles_faces_found_no_boundary():
     assert "open[1]" in str(excinfo.value)
 
 
-# --------------------------------------------------------------------------- #
-# ``set_bed``: the CORRECT DATA CLASS, and the substitution said out loud.
-# --------------------------------------------------------------------------- #
 def _bed_raster(tmp_path, value=-18.0):
     import rasterio
     from rasterio.transform import from_origin
@@ -475,9 +466,6 @@ def test_the_bed_is_fetched_past_the_extent_the_mesh_has_nodes_on():
     assert grown[2] > -75.70 and grown[3] > 36.20
 
 
-# --------------------------------------------------------------------------- #
-# The bed's provenance, in whichever shape the fetch answered.
-# --------------------------------------------------------------------------- #
 class _Row:
     def __init__(self, rung, coverage):
         self.rung = rung
@@ -551,9 +539,6 @@ def test_a_fetch_that_measured_nothing_still_says_so():
     assert "UNMEASURED" in P._provenance("fetch_topobathy", empty)
 
 
-# --------------------------------------------------------------------------- #
-# ONE centerline reading: the row order of a navigated flowline says nothing.
-# --------------------------------------------------------------------------- #
 def _flowline_collection(order):
     """A three-row navigated flowline as a FeatureCollection, rows in ``order``."""
     rows = [[[-83.40, 35.00], [-83.39, 35.00]],

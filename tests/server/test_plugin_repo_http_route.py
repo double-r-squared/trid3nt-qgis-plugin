@@ -20,9 +20,6 @@ import pytest
 from trid3nt_server import plugin_repo
 from trid3nt_server.server.protocol import catalog_http as tool_catalog_http
 
-# ---------------------------------------------------------------------------
-# Fixture repo helpers
-# ---------------------------------------------------------------------------
 
 _METADATA_TXT = """[general]
 name=TRID3NT
@@ -81,9 +78,6 @@ def fake_repo(tmp_path, monkeypatch):
     return repo_root
 
 
-# ---------------------------------------------------------------------------
-# package_plugin_repo -- deploy-time build
-# ---------------------------------------------------------------------------
 
 
 def test_package_builds_versioned_zip_and_index(fake_repo, tmp_path):
@@ -149,9 +143,6 @@ def test_package_missing_source_tree_raises(tmp_path, monkeypatch):
         plugin_repo.package_plugin_repo()
 
 
-# ---------------------------------------------------------------------------
-# version-drift warning (metadata-driven, never auto-bumped)
-# ---------------------------------------------------------------------------
 
 
 def test_drift_warns_when_tree_changes_but_version_does_not(fake_repo, caplog):
@@ -187,9 +178,6 @@ def test_no_drift_warning_on_identical_repackage(fake_repo):
     assert info["warned"] is False
 
 
-# ---------------------------------------------------------------------------
-# render_plugins_xml -- per-request host substitution
-# ---------------------------------------------------------------------------
 
 
 def test_render_substitutes_host(fake_repo):
@@ -216,9 +204,6 @@ def test_render_before_package_raises(fake_repo):
         plugin_repo.render_plugins_xml("myhost:8766")
 
 
-# ---------------------------------------------------------------------------
-# served_zip_path -- static serve + traversal guard
-# ---------------------------------------------------------------------------
 
 
 def test_served_zip_path_returns_packaged_file(fake_repo):
@@ -238,9 +223,6 @@ def test_served_zip_path_rejects(fake_repo, bad):
         plugin_repo.served_zip_path(bad)
 
 
-# ---------------------------------------------------------------------------
-# build_fresh_zip -- on-demand build straight from source, mtime-cached
-# ---------------------------------------------------------------------------
 
 
 def test_build_fresh_zip_layout_and_version(fake_repo):
@@ -316,9 +298,6 @@ def test_build_fresh_zip_cache_hits_when_source_unchanged(fake_repo, monkeypatch
     assert calls["n"] == 1  # second call was a cache hit, no rebuild
 
 
-# ---------------------------------------------------------------------------
-# build_version_payload
-# ---------------------------------------------------------------------------
 
 
 def test_build_version_payload_shape(fake_repo, monkeypatch):
@@ -345,9 +324,6 @@ def test_build_version_payload_degrades_without_git(fake_repo):
     assert payload["git_sha"] == "unknown"
 
 
-# ---------------------------------------------------------------------------
-# HTTP dispatch (tool_catalog_http._handle_http)
-# ---------------------------------------------------------------------------
 
 
 class _FakeReader:

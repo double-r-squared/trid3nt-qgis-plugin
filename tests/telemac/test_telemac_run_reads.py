@@ -126,9 +126,6 @@ def test_a_track_with_no_floats_at_any_instant_draws_no_slick(tmp_path):
     assert slick["features"] == [] and stats == {}
 
 
-# --------------------------------------------------------------------------- #
-# The outlet hydrograph: the flux the ENGINE printed across the declared boundary.
-# --------------------------------------------------------------------------- #
 def _balance(t_s: float, *fluxes: float, error: str = "0.1E-14") -> str:
     """One TELEMAC-2D water-volume balance block, in the engine's own spelling."""
     lines = ["                       BALANCE OF WATER VOLUME",
@@ -215,9 +212,6 @@ def test_the_engines_own_volume_closure_is_the_last_one_it_printed():
     assert R.continuity_rel_error("no closure here") is None
 
 
-# --------------------------------------------------------------------------- #
-# The wetted fraction: what the run says about the domain it did NOT wet.
-# --------------------------------------------------------------------------- #
 #: The depth variable name a solved TELEMAC-2D result actually carries: SELAFIN
 #: pads the name to 32 chars and trails the unit. Read off a real r2d_river.slf.
 _DEPTH_VAR = "WATER DEPTH"

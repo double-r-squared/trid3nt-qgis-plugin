@@ -17,9 +17,6 @@ from trid3nt_server.emission.publish import (
 )
 
 
-# --------------------------------------------------------------------------- #
-# Test 1 - publish is a MECHANISM, not a tool
-# --------------------------------------------------------------------------- #
 
 
 def test_publish_layer_is_not_a_registered_tool() -> None:
@@ -34,11 +31,9 @@ def test_publish_layer_is_not_a_registered_tool() -> None:
     assert callable(publish_layer)
 
 
-# --------------------------------------------------------------------------- #
 # derive_readable_layer_name: a bare-ULID layer_id must
 # never reach the layer summary as the display name when a better
 # signal (an explicit name, a declared label, or a URI path segment) exists.
-# --------------------------------------------------------------------------- #
 
 _BARE_ULID = "01KX5TEZ20BK86EE6DG8PSVFJK"
 

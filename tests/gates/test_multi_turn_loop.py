@@ -29,9 +29,6 @@ from trid3nt_server.adapters.adapter import (
 from trid3nt_contracts import new_ulid
 
 
-# ---------------------------------------------------------------------------
-# Test 1: summarize_tool_result shape coverage
-# ---------------------------------------------------------------------------
 
 
 def test_summarize_tool_result_dict_with_metrics():
@@ -100,9 +97,6 @@ def test_summarize_tool_result_list_truncated():
     assert "more items" in items[-1]
 
 
-# ---------------------------------------------------------------------------
-# Test 2: build_contents_from_history conversion
-# ---------------------------------------------------------------------------
 
 
 def test_build_contents_from_history_collapses_roles():
@@ -123,9 +117,6 @@ def test_build_contents_from_history_collapses_roles():
     assert contents[-1].parts[0].text == "Now show me protected areas."
 
 
-# ---------------------------------------------------------------------------
-# Test 3: build_function_call_content / build_function_response_content
-# ---------------------------------------------------------------------------
 
 
 def test_build_function_call_and_response_content_pair():
@@ -150,9 +141,6 @@ def test_build_function_call_and_response_content_pair():
     assert fr.response["status"] == "ok"
 
 
-# ---------------------------------------------------------------------------
-# Test 4: stream_events_with_contents — parity with single-turn dispatch
-# ---------------------------------------------------------------------------
 
 
 def _make_fake_chunk_with_function_call(name: str, args: dict, call_id: str = "c1"):
@@ -187,9 +175,6 @@ async def test_stream_events_with_contents_yields_function_call(fake_llm):
     assert events[0].args == {"query": "Fort Myers, FL"}
 
 
-# ---------------------------------------------------------------------------
-# Test 5: end-to-end multi-turn loop in _stream_model_reply
-# ---------------------------------------------------------------------------
 
 
 @dataclass
@@ -459,10 +444,8 @@ async def test_stream_model_reply_caps_runaway_loop(fake_llm):
     assert dispatch_count < MAX_TURN_ITERATIONS
 
 
-# ---------------------------------------------------------------------------
 # Live-wire narration-segment interleave (one bubble per contiguous
 # run of agent text between tool-call rounds).
-# ---------------------------------------------------------------------------
 
 
 def _make_fake_chunk_multi_call(calls):
@@ -723,7 +706,6 @@ async def test_stream_multiple_calls_one_round_single_finalize(fake_llm):
     ), "tool dispatches not interleaved between the two bubbles"
 
 
-# ---------------------------------------------------------------------------
 # F2: a turn SURVIVES the client WebSocket dropping.
 #
 # Log 2026-07-09 01:23 (trid3nt-local): the phone's WS died mid-turn; raw
@@ -735,7 +717,6 @@ async def test_stream_multiple_calls_one_round_single_finalize(fake_llm):
 # raise; the turn runs to completion and its rows persist for the case-open
 # replay), (b) the stream-failure handler separates ConnectionClosed (client
 # transport, log-only) from genuine model errors (still LLM_UNAVAILABLE).
-# ---------------------------------------------------------------------------
 
 from websockets.exceptions import ConnectionClosedError
 

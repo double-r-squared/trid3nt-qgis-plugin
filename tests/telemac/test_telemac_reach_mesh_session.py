@@ -129,9 +129,6 @@ def settle(monkeypatch, tmp_path):
     return _settle
 
 
-# --------------------------------------------------------------------------- #
-# 1. What the mesh measured: the dumper, then the settle against it.
-# --------------------------------------------------------------------------- #
 def _expected_settled(*, mesh_size_m: float, time_step_s: float,
                       do_sag: bool) -> dict:
     """What this ask MEANS, restated from the ask.
@@ -188,9 +185,6 @@ async def test_a_run_with_no_measured_mesh_measures_the_same_reach(settle):
                                                do_sag=False)
 
 
-# --------------------------------------------------------------------------- #
-# 2. The dt seam has a reader.
-# --------------------------------------------------------------------------- #
 @pytest.mark.asyncio
 async def test_a_refined_mesh_tightens_the_run_timestep(settle):
     """Refine at the gate and the run's dt follows the mesh, not the ask.
@@ -209,9 +203,6 @@ async def test_a_refined_mesh_tightens_the_run_timestep(settle):
     assert refined["mesh_size_m"] == 7.0
 
 
-# --------------------------------------------------------------------------- #
-# 3. What the worker is handed, and the refusals an unaccepted mesh raises.
-# --------------------------------------------------------------------------- #
 @pytest.mark.asyncio
 async def test_the_server_facts_carry_what_only_the_server_measured(settle):
     """A fact re-derived in the container is a second answer that can disagree with the

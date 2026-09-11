@@ -41,9 +41,6 @@ def _isolate_provider_env():
             os.environ[name] = value
 
 
-# ---------------------------------------------------------------------------
-# Minimal HTTP request/response harness (mirrors test_local_models_http_route)
-# ---------------------------------------------------------------------------
 
 
 class _FakeReader:
@@ -111,9 +108,6 @@ def _dispatch(path: str, body: bytes) -> _FakeWriter:
     return writer
 
 
-# ---------------------------------------------------------------------------
-# Route gating (404 like any unknown path off the openai provider)
-# ---------------------------------------------------------------------------
 
 
 def test_provider_config_absent_when_provider_is_not_openai(monkeypatch):
@@ -128,9 +122,6 @@ def test_provider_config_absent_when_provider_is_scripted(monkeypatch):
     assert _status(bytes(writer.buffer)) == 404
 
 
-# ---------------------------------------------------------------------------
-# Happy path -- env updated, cache reset, key not echoed
-# ---------------------------------------------------------------------------
 
 
 def test_provider_config_updates_env_and_returns_host(monkeypatch):
@@ -230,14 +221,12 @@ def test_provider_config_non_object_body_is_400(monkeypatch):
     assert _status(bytes(writer.buffer)) == 400
 
 
-# ---------------------------------------------------------------------------
 # base_url/model provider-coherence gate
 #
 # A dock Save pushes fields independently, so a base-URL-only push could strand
 # the previous provider's model id in place: the daemon then dialled an endpoint
 # that does not serve it and was silently un-runnable until restart. The gate
 # checks the RESOLVED pair before touching os.environ.
-# ---------------------------------------------------------------------------
 
 
 def _seed_provider_env(monkeypatch, base_url: str, model: str) -> None:
@@ -472,9 +461,6 @@ def test_probe_empty_or_unusable_body_does_not_reject(monkeypatch):
     assert _status(bytes(writer.buffer)) == 200
 
 
-# ---------------------------------------------------------------------------
-# Feature 2: _filter_openrouter_models (pure)
-# ---------------------------------------------------------------------------
 
 
 def test_filter_keeps_free_tool_capable_only():
@@ -529,9 +515,6 @@ def test_filter_handles_non_dict_payload():
     assert model_discovery._filter_openrouter_models({"data": "nope"}) == []
 
 
-# ---------------------------------------------------------------------------
-# Feature 2: _fetch_local_models routes to OpenRouter + caches (mocked httpx)
-# ---------------------------------------------------------------------------
 
 
 class _FakeResponse:

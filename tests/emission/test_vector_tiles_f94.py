@@ -25,9 +25,6 @@ from trid3nt_server.tools.vector_tiles import (
 )
 
 
-# --------------------------------------------------------------------------- #
-# Fixtures / builders
-# --------------------------------------------------------------------------- #
 
 
 def _polygon_fc(n: int, *, verts: int = 24) -> dict[str, Any]:
@@ -85,9 +82,6 @@ def _make_vector_layer(uri: str, layer_id: str) -> LayerURI:
     )
 
 
-# --------------------------------------------------------------------------- #
-# 1. densify_if_needed — threshold behavior
-# --------------------------------------------------------------------------- #
 
 
 def test_below_threshold_returns_unchanged() -> None:
@@ -195,9 +189,6 @@ def test_non_dict_input_is_passthrough() -> None:
     assert meta is None
 
 
-# --------------------------------------------------------------------------- #
-# 2. Emitter choke-point integration
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio

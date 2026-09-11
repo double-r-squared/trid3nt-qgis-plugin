@@ -62,9 +62,6 @@ def _tool_rows(session_state):
     return [m for m in session_state.chat_history if m.role == "tool"]
 
 
-# --------------------------------------------------------------------------- #
-# PART 1 -- card-lifecycle durability (mint_compaction_card / complete_compaction_card)
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio
@@ -142,10 +139,8 @@ async def test_mint_with_no_emitter_is_a_noop() -> None:
     assert step_id is None
 
 
-# --------------------------------------------------------------------------- #
 # PART 2 -- full dispatch-loop integration (server._stream_model_reply /
 # _dispatch_model_turn_and_persist against a mocked stream_events_with_contents)
-# --------------------------------------------------------------------------- #
 
 
 async def _drive_real_stream(ws, state, fake_stream):

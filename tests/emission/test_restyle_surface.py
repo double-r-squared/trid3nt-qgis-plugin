@@ -50,9 +50,6 @@ def published(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
     return calls
 
 
-# --------------------------------------------------------------------------- #
-# the ask against the declaration
-# --------------------------------------------------------------------------- #
 
 
 def test_the_ask_beats_the_declared_row_field_by_field(published) -> None:
@@ -113,9 +110,6 @@ def test_the_restyle_is_journaled_with_the_sentence_the_legend_says(
     assert notes == [f"restyle depth: {resolved.legend_note()}"]
 
 
-# --------------------------------------------------------------------------- #
-# the un-emit
-# --------------------------------------------------------------------------- #
 
 
 class _CapturingSink:

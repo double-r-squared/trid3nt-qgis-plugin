@@ -21,9 +21,6 @@ CASE_BBOX = [-92.0, 41.5, -91.0, 42.5]
 EXPLICIT = [-80.0, 25.0, -79.5, 25.5]
 
 
-# --------------------------------------------------------------------------- #
-# 1. The pure helper
-# --------------------------------------------------------------------------- #
 
 
 def _tool_required_bbox(bbox: list[float], detail: str = "x") -> dict:
@@ -131,9 +128,6 @@ class TestAutofillHelper:
         assert "active-aoi" in hits[0].getMessage()
 
 
-# --------------------------------------------------------------------------- #
-# 2. The session-state seam (_set_active_aoi_from_payload)
-# --------------------------------------------------------------------------- #
 
 
 class TestActiveAoiPayloadSeam:
@@ -176,9 +170,6 @@ class TestActiveAoiPayloadSeam:
         assert state.active_aoi_bbox == ACTIVE_AOI
 
 
-# --------------------------------------------------------------------------- #
-# 2b. The drawn-geometry session-state seam
-# --------------------------------------------------------------------------- #
 
 
 class TestDrawnGeometryPayloadSeam:
@@ -229,9 +220,6 @@ class TestDrawnGeometryPayloadSeam:
         }
 
 
-# --------------------------------------------------------------------------- #
-# 3. The real dispatch seam
-# --------------------------------------------------------------------------- #
 
 
 class MockWebSocket:

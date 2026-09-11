@@ -87,9 +87,6 @@ def _nudge_count(contents) -> int:
     )
 
 
-# ---------------------------------------------------------------------------
-# (a) no-silent-end
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -151,9 +148,6 @@ async def test_invariants_kill_switch(_scripted, monkeypatch):
     assert rounds == 2
 
 
-# ---------------------------------------------------------------------------
-# (b) bare-geocode backstop
-# ---------------------------------------------------------------------------
 
 _GEOCODE_RESULT = {"bbox": [-82.6, 27.9, -82.3, 28.1], "name": "Tampa"}
 
@@ -241,9 +235,6 @@ async def test_bare_geocode_kill_switch(_scripted, monkeypatch):
     assert rounds == 2
 
 
-# ---------------------------------------------------------------------------
-# Intent heuristic unit checks
-# ---------------------------------------------------------------------------
 
 
 def test_data_intent_heuristic():

@@ -30,9 +30,6 @@ from trid3nt_contracts import new_ulid
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 
-# ---------------------------------------------------------------------------
-# Pure logic: parse + decision.
-# ---------------------------------------------------------------------------
 
 
 def test_parse_absent_key_returns_none():
@@ -118,9 +115,6 @@ def test_bench_blocked_error_carries_typed_code():
     assert e2.error_code == BENCH_BLOCKED_CORRECT
 
 
-# ---------------------------------------------------------------------------
-# Live dispatch loop.
-# ---------------------------------------------------------------------------
 
 
 @dataclass

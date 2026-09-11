@@ -24,9 +24,6 @@ from trid3nt_server.gates.input_review import (
 from trid3nt_server.emission import pipeline_emitter as pe
 
 
-# --------------------------------------------------------------------------- #
-# Fakes
-# --------------------------------------------------------------------------- #
 class _FakeEmitter:
     """Minimal emitter: records envelopes, exposes a session_id."""
 
@@ -76,9 +73,6 @@ async def _drive(
     raise AssertionError("no fresh pending confirmation appeared")
 
 
-# --------------------------------------------------------------------------- #
-# Mode lever
-# --------------------------------------------------------------------------- #
 def test_mode_default_auto(monkeypatch) -> None:
     monkeypatch.delenv("TRID3NT_INPUT_GATE_MODE", raising=False)
     assert resolve_input_gate_mode(None) == "auto"
@@ -93,9 +87,6 @@ def test_mode_param_overrides_session_default(monkeypatch) -> None:
     assert resolve_input_gate_mode("auto") == "auto"
 
 
-# --------------------------------------------------------------------------- #
-# Render
-# --------------------------------------------------------------------------- #
 def test_render_lines_one_per_input() -> None:
     lines = render_input_review_lines(_entries())
     assert lines == [
@@ -104,9 +95,6 @@ def test_render_lines_one_per_input() -> None:
     ]
 
 
-# --------------------------------------------------------------------------- #
-# Auto mode: no-op pass-through (no pause, no envelope)
-# --------------------------------------------------------------------------- #
 @pytest.mark.asyncio
 async def test_auto_mode_is_noop(monkeypatch) -> None:
     monkeypatch.delenv("TRID3NT_INPUT_GATE_MODE", raising=False)
@@ -121,9 +109,6 @@ async def test_auto_mode_is_noop(monkeypatch) -> None:
     assert fake.sent == []  # no pause envelope
 
 
-# --------------------------------------------------------------------------- #
-# user_gated with NO live session: fail-open (proceed, labeled)
-# --------------------------------------------------------------------------- #
 @pytest.mark.asyncio
 async def test_user_gated_no_session_fails_open(monkeypatch) -> None:
     monkeypatch.setattr(pe, "current_emitter", lambda: None)
@@ -135,9 +120,6 @@ async def test_user_gated_no_session_fails_open(monkeypatch) -> None:
     assert out.mode == "user_gated"
 
 
-# --------------------------------------------------------------------------- #
-# user_gated proceed: pause emitted, entries stamped unchanged
-# --------------------------------------------------------------------------- #
 @pytest.mark.asyncio
 async def test_user_gated_proceed(monkeypatch) -> None:
     fake = _FakeEmitter()
@@ -161,9 +143,6 @@ async def test_user_gated_proceed(monkeypatch) -> None:
     assert not pending._PENDING_CONFIRMATIONS  # future cleaned up
 
 
-# --------------------------------------------------------------------------- #
-# user_gated cancel: no run
-# --------------------------------------------------------------------------- #
 @pytest.mark.asyncio
 async def test_user_gated_cancel(monkeypatch) -> None:
     fake = _FakeEmitter()
@@ -178,10 +157,8 @@ async def test_user_gated_cancel(monkeypatch) -> None:
     assert not pending._PENDING_CONFIRMATIONS
 
 
-# --------------------------------------------------------------------------- #
 # provide values (narrow_scope): revise a param -> re-present -> proceed.
 # The revised entry flips to user basis + the value updates (what-ran == approved).
-# --------------------------------------------------------------------------- #
 @pytest.mark.asyncio
 async def test_provide_values_then_proceed(monkeypatch) -> None:
     fake = _FakeEmitter()
@@ -215,9 +192,6 @@ async def test_provide_values_then_proceed(monkeypatch) -> None:
     assert len(fake.sent) == 2  # two presentations
 
 
-# --------------------------------------------------------------------------- #
-# 3-round bound: three provide-values in a row -> honest cancel.
-# --------------------------------------------------------------------------- #
 @pytest.mark.asyncio
 async def test_three_round_bound_then_cancel(monkeypatch) -> None:
     fake = _FakeEmitter()
@@ -240,9 +214,6 @@ async def test_three_round_bound_then_cancel(monkeypatch) -> None:
     assert not pending._PENDING_CONFIRMATIONS
 
 
-# --------------------------------------------------------------------------- #
-# reresolve callback: a provide-values reply can re-run a fetcher.
-# --------------------------------------------------------------------------- #
 @pytest.mark.asyncio
 async def test_reresolve_callback_invoked(monkeypatch) -> None:
     fake = _FakeEmitter()

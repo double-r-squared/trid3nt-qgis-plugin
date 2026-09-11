@@ -50,9 +50,6 @@ async def _create_case(ws, state, title) -> str:
     return case_id
 
 
-# --------------------------------------------------------------------------- #
-# 1. deselect — server-side root navigation
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio
@@ -112,9 +109,6 @@ async def test_reselect_after_deselect_reopens_case(file_persistence) -> None:
     assert state.active_case_id == case_a
 
 
-# --------------------------------------------------------------------------- #
-# 2. stream-scoped cancellation
-# --------------------------------------------------------------------------- #
 
 
 def _gated_stream(release: asyncio.Event, narration: str):

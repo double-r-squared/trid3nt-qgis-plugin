@@ -94,9 +94,6 @@ def _persistence_bound():
         set_persistence(saved)
 
 
-# --------------------------------------------------------------------------- #
-# 2a — _turn_case_bbox reads the cached Case AOI after a real case-select
-# --------------------------------------------------------------------------- #
 
 
 def test_turn_case_bbox_none_before_any_case() -> None:
@@ -161,9 +158,6 @@ def test_turn_case_bbox_none_when_id_present_but_no_cache() -> None:
     assert _turn_case_bbox(state) is None
 
 
-# --------------------------------------------------------------------------- #
-# 2b — the per-turn [Case state] note includes the layers + AOI reuse line
-# --------------------------------------------------------------------------- #
 
 
 def test_layers_present_note_includes_layers_and_aoi() -> None:
@@ -227,9 +221,6 @@ def test_per_turn_injection_shape_appends_case_state_user_turn() -> None:
     assert "flood-depth-A" in injected[-1]["text"]
 
 
-# --------------------------------------------------------------------------- #
-# 2c — a bare re-fetch short-circuits via the REAL _turn_case_bbox (no patch)
-# --------------------------------------------------------------------------- #
 
 _FETCHES: list[dict] = []
 

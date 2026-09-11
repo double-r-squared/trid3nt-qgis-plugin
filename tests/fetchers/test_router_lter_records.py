@@ -116,9 +116,6 @@ def _inject_transport(monkeypatch):
     monkeypatch.setattr(chained_resolution, "_get", lambda spec, plan: fake(plan))
 
 
-# --------------------------------------------------------------------------- #
-# Registration + shape.
-# --------------------------------------------------------------------------- #
 
 
 def test_lter_promoted_as_record_spec():
@@ -137,9 +134,6 @@ def test_lter_shape_is_record():
     assert LTER_SPEC.hooks.record == "lter_records.build_record"
 
 
-# --------------------------------------------------------------------------- #
-# Pure hooks.
-# --------------------------------------------------------------------------- #
 
 
 def test_parse_package_id_both_spellings():
@@ -188,9 +182,6 @@ def test_resolve_parse_merges_data_url_and_hints():
     assert update["_entity_name"] == "3037_BC9"
 
 
-# --------------------------------------------------------------------------- #
-# End-to-end route() -> record dict.
-# --------------------------------------------------------------------------- #
 
 
 def test_route_returns_discharge_series(monkeypatch):

@@ -87,9 +87,6 @@ async def _drive_real_stream(ws, state, fake_stream):
         )
 
 
-# --------------------------------------------------------------------------- #
-# BUG 3 — missing closing narration
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio
@@ -231,9 +228,6 @@ async def test_segments_already_streamed_no_double_narration(
         agent_tools.TOOL_REGISTRY.pop("bug3_tool", None)
 
 
-# --------------------------------------------------------------------------- #
-# BUG 4b — terminal failure persisted so reconnect replay surfaces it
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio

@@ -22,9 +22,6 @@ from trid3nt_server.tools.derive.spatial_query.spatial_query import (
 from trid3nt_server.tools.derive.spatial_query import spatial_query as sq_module
 
 
-# ---------------------------------------------------------------------------
-# Local geojson fixtures (offline; no MinIO needed)
-# ---------------------------------------------------------------------------
 
 
 def _write_geojson_points(tmp_path: Path, records: list[dict]) -> str:
@@ -89,9 +86,6 @@ def zone_path(tmp_path: Path) -> str:
     )
 
 
-# ---------------------------------------------------------------------------
-# Registration, metadata, category, fold proof
-# ---------------------------------------------------------------------------
 
 
 class TestRegistration:
@@ -137,9 +131,6 @@ class TestRegistration:
         assert "summarize_layer_statistics" not in CORE_FLOOR
 
 
-# ---------------------------------------------------------------------------
-# SQL happy paths - the folded trio's behavioral coverage, as SQL
-# ---------------------------------------------------------------------------
 
 
 class TestSqlHappyPaths:
@@ -241,9 +232,6 @@ class TestSqlHappyPaths:
         assert "TRUNCATED" in result["summary"]
 
 
-# ---------------------------------------------------------------------------
-# Read-only guard
-# ---------------------------------------------------------------------------
 
 
 class TestReadOnlyGuard:
@@ -320,9 +308,6 @@ class TestReadOnlyGuard:
         assert result["rows"][0][0] == pytest.approx(20.0)
 
 
-# ---------------------------------------------------------------------------
-# Typed errors
-# ---------------------------------------------------------------------------
 
 
 class TestTypedErrors:
@@ -385,9 +370,6 @@ class TestTypedErrors:
         assert exc.value.error_code == "LAYER_OPEN_FAILED"
 
 
-# ---------------------------------------------------------------------------
-# s3 staging fallback (offline: fake the shared boto3 reader, force httpfs off)
-# ---------------------------------------------------------------------------
 
 
 class TestS3StagingFallback:
@@ -432,9 +414,6 @@ class TestS3StagingFallback:
         assert exc.value.retryable is True
 
 
-# ---------------------------------------------------------------------------
-# Result materialization ("show me all X in Y" paints, not just tabulates)
-# ---------------------------------------------------------------------------
 
 
 class TestResultMaterialization:
@@ -655,9 +634,6 @@ class TestResultMaterialization:
         assert resolved["layer_refs"] == {"r": result.uri}
 
 
-# ---------------------------------------------------------------------------
-# Handle resolution (the dispatch seam the param name inherits)
-# ---------------------------------------------------------------------------
 
 
 class TestHandleResolution:
@@ -711,9 +687,6 @@ class TestHandleResolution:
             )
 
 
-# ---------------------------------------------------------------------------
-# Retrieval (hard rule: corpus + model-free retrieval check before acceptance)
-# ---------------------------------------------------------------------------
 
 
 #: One folded-tool phrasing per ask family; each must rank spatial_query

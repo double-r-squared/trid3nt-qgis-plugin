@@ -72,9 +72,6 @@ def test_writing_the_manifest_requires_a_cache_bucket(monkeypatch):
                         prefix="telemac")
 
 
-# --------------------------------------------------------------------------- #
-# What a QUESTION must produce, declared on the door it hands its sheet to.
-# --------------------------------------------------------------------------- #
 def _door(name: str):
     from trid3nt_server.tools import TOOL_REGISTRY
 
@@ -127,9 +124,6 @@ def test_only_an_uncoupled_question_can_be_continued_at_all():
         assert "continue_from" not in _rows(coupled), coupled
 
 
-# --------------------------------------------------------------------------- #
-# ONE manifest writer, and the CASE section it carries.
-# --------------------------------------------------------------------------- #
 def test_the_case_section_names_the_engine_the_file_and_the_results():
     from trid3nt_server.workflows.telemac.authoring.assembler import case_section
 

@@ -19,9 +19,6 @@ from trid3nt_server.tools.fetchers.us_states import (
 )
 
 
-# ---------------------------------------------------------------------------
-# Mapping shape
-# ---------------------------------------------------------------------------
 
 
 def test_fifty_states_plus_dc_have_names() -> None:
@@ -41,9 +38,6 @@ def test_marine_zone_codes_present_but_unnamed() -> None:
     assert "GM" not in STATE_CODE_TO_NAME
 
 
-# ---------------------------------------------------------------------------
-# resolve_state_code — the live-demo cases first
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize(
@@ -98,9 +92,6 @@ def test_resolve_state_code_non_string_returns_none() -> None:
     assert resolve_state_code(42) is None  # type: ignore[arg-type]
 
 
-# ---------------------------------------------------------------------------
-# Display names
-# ---------------------------------------------------------------------------
 
 
 def test_state_display_name_roundtrip() -> None:

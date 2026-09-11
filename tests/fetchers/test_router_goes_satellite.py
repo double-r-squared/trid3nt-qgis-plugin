@@ -62,9 +62,6 @@ def _install_fake_delegate_socket(
     monkeypatch.setattr(gs, "_reproject_and_clip", _fake_reproject)
 
 
-# --------------------------------------------------------------------------- #
-# Registry shape.
-# --------------------------------------------------------------------------- #
 
 
 def test_goes_satellite_registered_with_expected_metadata() -> None:
@@ -77,9 +74,6 @@ def test_goes_satellite_registered_with_expected_metadata() -> None:
     assert getattr(md, "payload_mb_estimator_name", None) == "estimate_payload_mb"
 
 
-# --------------------------------------------------------------------------- #
-# Typed-error envelope.
-# --------------------------------------------------------------------------- #
 
 
 def test_typed_error_hierarchy() -> None:
@@ -115,9 +109,6 @@ def test_estimate_payload_mb() -> None:
     assert gs.estimate_payload_mb(bbox=(-82.0, 26.0, -82.0, 26.0)) >= 0.05  # floor
 
 
-# --------------------------------------------------------------------------- #
-# Input validation (``goes_satellite.validate``, pre-cache).
-# --------------------------------------------------------------------------- #
 
 
 def test_validate_hook_bbox_none_raises_bbox_required() -> None:
@@ -168,9 +159,6 @@ def test_validate_hook_healthy_conus_bbox_passes() -> None:
     gs.validate_goes_satellite(None, {"bbox": _FL_BBOX})  # no raise
 
 
-# --------------------------------------------------------------------------- #
-# pre_resolve (satellite canon + 15-min valid_time rounding).
-# --------------------------------------------------------------------------- #
 
 
 def test_resolve_hook_normalizes_satellite() -> None:
@@ -260,9 +248,6 @@ def test_list_recent_keys_propagates_upstream_error_when_never_recovers(monkeypa
         gs._list_recent_keys("goes-19", lookback_hours=1)
 
 
-# --------------------------------------------------------------------------- #
-# Pure envelope hook (layer_id / the em-dash name / provenance replay).
-# --------------------------------------------------------------------------- #
 
 
 def test_envelope_hook_layer_id_and_em_dash_name() -> None:
@@ -289,9 +274,6 @@ def test_envelope_hook_pre_channel_defaults() -> None:
     assert "IR Window (Band 13)" in out["name"]
 
 
-# --------------------------------------------------------------------------- #
-# END-TO-END via the promoted router closure (no real netCDF; fake_s3).
-# --------------------------------------------------------------------------- #
 
 
 def test_end_to_end_visible_band_happy_path(monkeypatch, fake_s3) -> None:
@@ -336,9 +318,6 @@ def test_end_to_end_water_vapor_band(monkeypatch, fake_s3) -> None:
     assert "Water Vapor (Band 8)" in res.name
 
 
-# --------------------------------------------------------------------------- #
-# Typed errors via the full router drive.
-# --------------------------------------------------------------------------- #
 
 
 def test_end_to_end_bbox_none_raises_bbox_required(fake_s3) -> None:
@@ -411,9 +390,6 @@ def test_end_to_end_empty_window_propagates_from_delegate(monkeypatch, fake_s3) 
     assert ei.value.retryable is False
 
 
-# --------------------------------------------------------------------------- #
-# THE CHANNEL: cache-hit replay of satellite / band / scan_time.
-# --------------------------------------------------------------------------- #
 
 
 def test_cache_hit_replays_scan_provenance_identically(monkeypatch, fake_s3) -> None:

@@ -120,9 +120,6 @@ def _route_cache_to_inmemory_s3(monkeypatch):
         FakeStorageClient._active = None
 
 
-# ---------------------------------------------------------------------------
-# Registration: every tool lands with the right metadata.
-# ---------------------------------------------------------------------------
 
 
 def test_fetch_buildings_is_registered_with_static_30d():
@@ -168,9 +165,6 @@ def test_registry_contains_job_0039_subset_after_eager_import():
     assert len(names) >= 7
 
 
-# ---------------------------------------------------------------------------
-# round_bbox_to_resolution — engine-side quantization.
-# ---------------------------------------------------------------------------
 
 
 def test_round_bbox_to_resolution_is_deterministic():
@@ -213,9 +207,6 @@ def test_round_bbox_to_resolution_rejects_out_of_range_lat():
 
 
 
-# ---------------------------------------------------------------------------
-# geocode_location — mocked Nominatim.
-# ---------------------------------------------------------------------------
 
 
 def test_geocode_location_happy_path(monkeypatch):
@@ -258,13 +249,11 @@ def test_geocode_location_rejects_empty_query():
         geocode_location("   ")
 
 
-# ---------------------------------------------------------------------------
 # geocode_location — state-snap fallback.
 #
 # A vague/regional query ("south Florida") that geocodes to an arbitrary /
 # wrong-state OSM feature must snap to the full state bbox with an honest note,
 # while a PRECISE in-state query ("Fort Myers, FL") must pass through unchanged.
-# ---------------------------------------------------------------------------
 
 
 def _bind_geocode_cache(monkeypatch):
@@ -785,7 +774,6 @@ def test_resolve_state_bbox_falls_back_to_table(monkeypatch):
     assert bbox[1] <= lat <= bbox[3]
 
 
-# ---------------------------------------------------------------------------
 # "downtown Tampa" (and similar sub-locality phrasings) resolving
 # to a single building/POI footprint instead of a usable case AOI.
 #
@@ -795,7 +783,6 @@ def test_resolve_state_bbox_falls_back_to_table(monkeypatch):
 # ``_fetch_nominatim_geocode_bytes``: (a) prefer a place-class candidate over
 # a point-scale top hit for area-intent queries, (b) floor any surviving
 # sub-1km bbox to a 2 km square with an honest ``expansion_note``.
-# ---------------------------------------------------------------------------
 
 
 def test_geocode_open10_downtown_tampa_live_captured_regression(monkeypatch):
@@ -1088,9 +1075,6 @@ def test_bbox_long_axis_km_and_square_km_bbox_roundtrip():
     assert west < -82.4567888 < east
 
 
-# ---------------------------------------------------------------------------
-# fetch_landcover (NLCD MRLC WMS).
-# ---------------------------------------------------------------------------
 
 
 from trid3nt_server.tools.fetchers.climate.lookup_precip_return_period.lookup_precip_return_period import (  # noqa: E402 — after main test surface
@@ -1120,7 +1104,6 @@ def test_fetch_landcover_docstring_records_access_tier():
     assert "Tier" in doc
 
 # lookup_precip_return_period (NOAA Atlas 14 PFDS).
-# ---------------------------------------------------------------------------
 
 
 def test_lookup_precip_return_period_is_registered_with_static_30d():

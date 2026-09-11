@@ -68,9 +68,6 @@ def _read(fgb: bytes):
         os.unlink(p)
 
 
-# --------------------------------------------------------------------------- #
-# Spec identity (SPEC-IDENTITY rule).
-# --------------------------------------------------------------------------- #
 def test_spec_identity(spec):
     assert spec.name == "fetch_fault_sources"
     assert spec.shape == "vector-fgb"
@@ -85,9 +82,6 @@ def test_spec_identity(spec):
     assert (spec.ingest or {}).get("constant_cache", {}).get("file_id") == "gem_active_faults_harmonized"
 
 
-# --------------------------------------------------------------------------- #
-# Property-parse helpers (verbatim from the twin).
-# --------------------------------------------------------------------------- #
 def test_first_num_parses_triple_strings():
     assert fsh.first_num("(15.15,10.49,19.18)") == pytest.approx(15.15)
     assert fsh.first_num("(38,,)") == pytest.approx(38.0)
@@ -107,9 +101,6 @@ def test_trace_coords_linestring_and_multilinestring():
     assert fsh.trace_coords({"type": "Point", "coordinates": [0, 0]}) == []
 
 
-# --------------------------------------------------------------------------- #
-# parse_response: bbox filter + kinematic parse + honest-empty.
-# --------------------------------------------------------------------------- #
 def test_parse_filters_and_kinematic_parse(spec):
     feats = fsh.parse_response(spec, {"bbox": _SF_BBOX}, [_PAYLOAD])
     # Only the 2 in-AOI, slip>0, >=2-distinct faults survive.
@@ -144,9 +135,6 @@ def test_parse_bad_body_raises_upstream(spec):
     assert getattr(ei.value, "error_code", "") == "FAULT_SOURCES_UPSTREAM_ERROR"
 
 
-# --------------------------------------------------------------------------- #
-# envelope: kinematic-record reconstruction from the produced FGB.
-# --------------------------------------------------------------------------- #
 def test_envelope_reconstructs_records(spec):
     feats = fsh.parse_response(spec, {"bbox": _SF_BBOX}, [_PAYLOAD])
     fgb = features_to_fgb_bytes(feats, spec, {"bbox": _SF_BBOX})
@@ -174,9 +162,6 @@ def test_empty_record_shape(spec):
     assert rec["source"] == "GEM Global Active Faults (harmonized)"
 
 
-# --------------------------------------------------------------------------- #
-# build_request: ONE GET of the constant whole-world file (no AOI in URL).
-# --------------------------------------------------------------------------- #
 def test_build_request_constant_file(spec):
     plans = fsh.build_request(spec, {"bbox": _SF_BBOX})
     assert len(plans) == 1

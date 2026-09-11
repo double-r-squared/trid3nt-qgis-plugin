@@ -127,9 +127,6 @@ def test_a_mesh_with_no_domain_polygon_refuses_rather_than_waving_the_point_thro
     assert "no mapped shape" in str(excinfo.value)
 
 
-# --------------------------------------------------------------------------- #
-# A DERIVED release is settled against the MESH, not just against the line.
-# --------------------------------------------------------------------------- #
 def _mesh_holding(x_from: float, x_to: float, monkeypatch):
     """Stand in a mesh whose cells cover only ``x_from..x_to`` of the centerline."""
     import numpy as np
@@ -177,9 +174,6 @@ def test_a_centerline_the_mesh_never_holds_refuses(monkeypatch):
                                mesh=mesh, fraction=0.0)
 
 
-# --------------------------------------------------------------------------- #
-# The third question: is there WATER there when the run opens?
-# --------------------------------------------------------------------------- #
 #: Four nodes 100 m apart along one bank line. The engine solves a source at the
 #: node nearest it (``proxim.f``), so these are the only places a release can be.
 _NODES = [[0.0, 0.0], [100.0, 0.0], [200.0, 0.0], [300.0, 0.0]]

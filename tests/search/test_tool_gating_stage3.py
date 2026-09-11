@@ -34,9 +34,6 @@ from trid3nt_contracts import new_ulid
 agent_main._import_tools_registry()
 
 
-# ---------------------------------------------------------------------------
-# Unit: env resolution
-# ---------------------------------------------------------------------------
 
 
 def _full_registry_size() -> int:
@@ -68,9 +65,6 @@ def test_gating_topk_env_override_and_zero_disables(monkeypatch):
     assert gating_topk() == TOOL_GATING_TOPK_DEFAULT
 
 
-# ---------------------------------------------------------------------------
-# Unit: named-tool matching (alias/anchor match)
-# ---------------------------------------------------------------------------
 
 
 def test_named_tools_exact_name():
@@ -96,9 +90,6 @@ def test_named_tools_no_false_positive_on_substring():
     assert named_tools_in_text(None, {"fetch_dem"}) == set()
 
 
-# ---------------------------------------------------------------------------
-# Unit: the gate itself
-# ---------------------------------------------------------------------------
 
 
 def _ranked(n: int = 30) -> list[tuple[str, float]]:
@@ -160,9 +151,6 @@ def test_gate_disabled_at_k_zero():
     assert gate_tool_registry("x", dict(TOOL_REGISTRY), _ranked(), 0) is None
 
 
-# ---------------------------------------------------------------------------
-# Integration: provider scoping through _stream_model_reply
-# ---------------------------------------------------------------------------
 
 
 @dataclass
@@ -287,10 +275,8 @@ async def test_openai_gate_fails_open_on_cold_index(monkeypatch):
     assert len(captured["registry"]) == _full_registry_size()
 
 
-# ---------------------------------------------------------------------------
 # Door dissolution: engine templates are in the DEFAULT declarations
 # directly -- no door, no gate expansion; only tier=internal/catalog are withheld.
-# ---------------------------------------------------------------------------
 
 
 def _template_names() -> set[str]:

@@ -27,16 +27,10 @@ from trid3nt_server.tools.derive.compute_impervious_surface.compute_impervious_s
     compute_impervious_surface,
 )
 
-# ---------------------------------------------------------------------------
-# Pinned timestamp for deterministic cache keys
-# ---------------------------------------------------------------------------
 
 PINNED_NOW = datetime(2026, 6, 8, 12, 0, 0, tzinfo=timezone.utc)
 
 
-# ---------------------------------------------------------------------------
-# Synthetic-raster helpers
-# ---------------------------------------------------------------------------
 
 
 def _write_synthetic_landcover(
@@ -94,9 +88,6 @@ def _read_output_array(output_bytes: bytes) -> tuple[np.ndarray, dict]:
     return arr, profile
 
 
-# ---------------------------------------------------------------------------
-# FakeBlob / FakeStorageClient
-# ---------------------------------------------------------------------------
 
 
 class _S3Body:
@@ -176,9 +167,6 @@ def _route_cache_to_inmemory_s3(monkeypatch):
         FakeStorageClient._active = None
 
 
-# ---------------------------------------------------------------------------
-# Test 1 — registration
-# ---------------------------------------------------------------------------
 
 
 def test_compute_impervious_surface_registered():
@@ -190,9 +178,6 @@ def test_compute_impervious_surface_registered():
     assert entry.metadata.source_class == "impervious"
 
 
-# ---------------------------------------------------------------------------
-# Tests 2 — landcover dev-class derivation
-# ---------------------------------------------------------------------------
 
 
 def test_compute_impervious_from_landcover_classes_22_23_24():
@@ -233,9 +218,6 @@ def test_compute_impervious_from_landcover_classes_22_23_24():
     # row 3 would be 0.3 (class 22) not 0.0. The assertions above catch it.
 
 
-# ---------------------------------------------------------------------------
-# Test 3 — impervious-product scaling
-# ---------------------------------------------------------------------------
 
 
 def test_compute_impervious_from_impervious_product_scale_0_100():
@@ -274,9 +256,6 @@ def test_compute_impervious_from_impervious_product_scale_0_100():
     )
 
 
-# ---------------------------------------------------------------------------
-# Test 4 — nodata preservation
-# ---------------------------------------------------------------------------
 
 
 def test_compute_impervious_nodata_preserved_as_nan():
@@ -310,9 +289,6 @@ def test_compute_impervious_nodata_preserved_as_nan():
     assert np.isclose(out_arr[1, 2], 0.0)  # water
 
 
-# ---------------------------------------------------------------------------
-# Test 5 — bbox window
-# ---------------------------------------------------------------------------
 
 
 def test_compute_impervious_bbox_window_geographic_correctness():
@@ -371,9 +347,6 @@ def test_compute_impervious_bbox_window_geographic_correctness():
     assert abs(out_arr.mean() - 0.75) < 0.01
 
 
-# ---------------------------------------------------------------------------
-# Test 6a — cache miss writes
-# ---------------------------------------------------------------------------
 
 
 def test_compute_impervious_cache_miss_writes():
@@ -411,9 +384,6 @@ def test_compute_impervious_cache_miss_writes():
     assert np.allclose(out_arr, 0.3)
 
 
-# ---------------------------------------------------------------------------
-# Test 6b — cache hit
-# ---------------------------------------------------------------------------
 
 
 def test_compute_impervious_cache_hit_skips_compute():
@@ -453,9 +423,6 @@ def test_compute_impervious_cache_hit_skips_compute():
     assert list(storage.store.keys()) == [path]
 
 
-# ---------------------------------------------------------------------------
-# Test 7 — LayerURI fields
-# ---------------------------------------------------------------------------
 
 
 def test_compute_impervious_returns_layer_uri_fields():
@@ -483,9 +450,6 @@ def test_compute_impervious_returns_layer_uri_fields():
     assert "impervious-abc123" in result.layer_id
 
 
-# ---------------------------------------------------------------------------
-# Test 8 — download-failure typed-error path
-# ---------------------------------------------------------------------------
 
 
 def test_compute_impervious_raster_download_failure_raises():
@@ -501,9 +465,6 @@ def test_compute_impervious_raster_download_failure_raises():
     assert exc_info.value.error_code == "RASTER_DOWNLOAD_FAILED"
 
 
-# ---------------------------------------------------------------------------
-# Test 9 — non-developed classes all map to zero
-# ---------------------------------------------------------------------------
 
 
 def test_compute_impervious_non_developed_classes_map_to_zero():
@@ -529,9 +490,6 @@ def test_compute_impervious_non_developed_classes_map_to_zero():
     assert np.allclose(out_arr, 0.0)
 
 
-# ---------------------------------------------------------------------------
-# Test 10 — Bbox shape validation
-# ---------------------------------------------------------------------------
 
 
 def test_compute_impervious_degenerate_bbox_raises():
@@ -546,9 +504,6 @@ def test_compute_impervious_degenerate_bbox_raises():
     assert exc_info.value.error_code == "BBOX_OUTSIDE_RASTER"
 
 
-# ---------------------------------------------------------------------------
-# Direct-helper unit tests (lowest-level)
-# ---------------------------------------------------------------------------
 
 
 def test_derive_helper_developed_class_lookup():
@@ -590,9 +545,6 @@ def test_scale_helper_impervious_product_clipping():
     assert np.isclose(out[1, 2], 0.75)
 
 
-# ---------------------------------------------------------------------------
-# Live verification — env-guarded
-# ---------------------------------------------------------------------------
 
 # The kickoff requires ≥1 live test. The "live" path is: download a real NLCD
 # landcover GeoTIFF and run the developed-class derivation against it.

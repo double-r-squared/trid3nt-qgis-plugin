@@ -32,9 +32,6 @@ from trid3nt_contracts.execution import LayerURI
 from tests._fakes import MockMCPClient
 
 
-# --------------------------------------------------------------------------- #
-# Mocks / fixtures
-# --------------------------------------------------------------------------- #
 
 
 class MockWebSocket:
@@ -132,9 +129,6 @@ def _fresh_case_with_layers(case_id: str) -> CaseSummary:
     )
 
 
-# --------------------------------------------------------------------------- #
-# F53 — server-side delete
-# --------------------------------------------------------------------------- #
 
 
 def test_layer_delete_removes_from_emitter_and_emits_session_state(
@@ -363,9 +357,6 @@ def test_delete_case_loaded_layer_replace_not_union(
     ]
 
 
-# --------------------------------------------------------------------------- #
-# F54 — reuse-not-refetch note
-# --------------------------------------------------------------------------- #
 
 
 def test_present_note_lists_handle_and_uri() -> None:

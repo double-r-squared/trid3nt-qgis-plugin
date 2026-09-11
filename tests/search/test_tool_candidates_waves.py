@@ -128,9 +128,6 @@ async def test_auto_mode_emits_no_per_round_waves(monkeypatch):
     assert _cards(sock) == [], "auto mode must not surface per-round waves"
 
 
-# ---------------------------------------------------------------------------
-# stage-label derivation (unit).
-# ---------------------------------------------------------------------------
 
 
 def test_stage_label_from_candidate_categories_plurality():

@@ -143,9 +143,6 @@ def test_rainfall_excess_early_steps_zero_until_ia_satisfied():
     assert excess[1] > 0.0
 
 
-# --------------------------------------------------------------------------- #
-# CN-path selection (native vs preprocessing).
-# --------------------------------------------------------------------------- #
 def test_constant_intensity_selects_native():
     d = select_runoff_path(constant_intensity_mm_per_hr=12.5)
     assert isinstance(d, RunoffPathDecision)
@@ -173,9 +170,6 @@ def test_no_forcing_raises():
         select_runoff_path()
 
 
-# --------------------------------------------------------------------------- #
-# The node primitives every mesher output goes through.
-# --------------------------------------------------------------------------- #
 def test_reproject_to_utm_coweeta():
     # Coweeta NC ~ (-83.4, 35.05) -> UTM 17N = EPSG 32617.
     pts = np.array([[-83.40, 35.05], [-83.41, 35.06], [-83.39, 35.04]])
@@ -187,10 +181,8 @@ def test_reproject_to_utm_coweeta():
     assert 3.8e6 < xy[:, 1].mean() < 3.95e6
 
 
-# --------------------------------------------------------------------------- #
 # Per-node CN2 + Manning, as ``node_infiltration_fields`` composes them from
 # ``node_curve_numbers`` + ``landcover_cn_manning``.
-# --------------------------------------------------------------------------- #
 def test_node_fields_distributed():
     # 41 = deciduous forest -> CN 80 / n 0.20; 22 = developed low -> CN 89 / n 0.10
     codes = [41, 22, 41]

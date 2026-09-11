@@ -84,9 +84,6 @@ def _flat_layer(path: Path, value: float, *, layer_id: str, name: str, units: st
     return {"layer_id": layer_id, "name": name, "layer_type": "raster", "uri": str(path)}
 
 
-# --------------------------------------------------------------------------- #
-# Happy path
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio
@@ -130,9 +127,6 @@ async def test_empty_case_is_ok_empty_results(monkeypatch) -> None:
     assert result["results"] == []
 
 
-# --------------------------------------------------------------------------- #
-# Outside-bounds / nodata honesty
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio
@@ -173,9 +167,6 @@ async def test_unreadable_layer_is_per_layer_error(monkeypatch, tmp_path: Path) 
     assert result["results"][1]["value"] == pytest.approx(7.0)
 
 
-# --------------------------------------------------------------------------- #
-# Series grouping
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio
@@ -218,9 +209,6 @@ async def test_series_and_single_layer_both_present(monkeypatch, tmp_path: Path)
     assert "series" not in single
 
 
-# --------------------------------------------------------------------------- #
-# Layer cap
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio
@@ -237,9 +225,6 @@ async def test_layer_cap_truncates_and_flags(monkeypatch, tmp_path: Path) -> Non
     assert len(result["results"]) == MAX_PROBE_LAYERS
 
 
-# --------------------------------------------------------------------------- #
-# Typed errors
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio

@@ -43,9 +43,6 @@ def _da(values: np.ndarray):
     return da
 
 
-# --------------------------------------------------------------------------- #
-# Spec identity.
-# --------------------------------------------------------------------------- #
 
 
 def test_spec_identity():
@@ -70,9 +67,6 @@ def test_docstring_verbatim_nonempty():
     assert SPEC_SM.docstring and "Smoke" in SPEC_SM.docstring
 
 
-# --------------------------------------------------------------------------- #
-# delegate_validate: CONUS + forecast_hour horizon (pure, offline).
-# --------------------------------------------------------------------------- #
 
 
 def test_validate_conus_gate_rejects_non_conus():
@@ -112,9 +106,6 @@ def test_bad_cycle_format_rejected():
         H.validate_inputs(SPEC_FC, p)
 
 
-# --------------------------------------------------------------------------- #
-# delegate_resolve: s3fs cycle walk (mocked socket).
-# --------------------------------------------------------------------------- #
 
 
 def _patch_fs(monkeypatch, exists_fn):
@@ -155,9 +146,6 @@ def test_resolve_cycle_backstop_exhausted_not_available(monkeypatch):
     assert ei.value.retryable is True
 
 
-# --------------------------------------------------------------------------- #
-# read hook: array shaping + derived hypot (mocked component open).
-# --------------------------------------------------------------------------- #
 
 
 def _read_params(variable: str) -> dict[str, Any]:
@@ -190,9 +178,6 @@ def test_read_all_nan_raises_empty(monkeypatch):
     assert ei.value.error_code == "HRRR_SMOKE_EMPTY"
 
 
-# --------------------------------------------------------------------------- #
-# LayerURI stamps + payload estimate.
-# --------------------------------------------------------------------------- #
 
 
 def test_units_and_style_by_param():

@@ -25,9 +25,6 @@ def _populate_registry() -> None:
     _import_tools_registry()
 
 
-# ---------------------------------------------------------------------------
-# Fake-Gemini scaffolding (same shapes as test_multi_turn_loop.py)
-# ---------------------------------------------------------------------------
 
 
 def _make_fake_chunk_with_function_call(name: str, args: dict, call_id: str = "c1"):
@@ -91,9 +88,6 @@ async def _drive_loop(fake_llm, turns: list[dict], fake_invoke) -> tuple[list[li
     return contents_per_turn, sock, state
 
 
-# ---------------------------------------------------------------------------
-# FIX A at the server level: first-call dispatch for a real non-hot-set tool
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -146,9 +140,6 @@ async def test_first_call_to_real_non_hot_set_tool_dispatches(fake_llm) -> None:
     assert "compute_colored_relief" in state.visible_tools
 
 
-# ---------------------------------------------------------------------------
-# layer_handles_note in the function_response payload
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio

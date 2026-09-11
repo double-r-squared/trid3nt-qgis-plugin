@@ -24,9 +24,6 @@ from trid3nt_server.adapters.adapter import (
 from trid3nt_contracts import new_ulid
 
 
-# ---------------------------------------------------------------------------
-# Shared env / backoff seams
-# ---------------------------------------------------------------------------
 
 
 def test_provider_retries_env(monkeypatch):
@@ -44,9 +41,6 @@ def test_backoff_is_exponential(monkeypatch):
     assert provider_backoff_wait(10, cap=60.0) == 60.0  # capped
 
 
-# ---------------------------------------------------------------------------
-# OpenAI-compatible adapter
-# ---------------------------------------------------------------------------
 
 
 class TestOpenAIProviderDiscipline:
@@ -211,9 +205,6 @@ class TestOpenAIProviderDiscipline:
         assert classify_provider_error_class(RuntimeError("bug")) == "internal"
 
 
-# ---------------------------------------------------------------------------
-# Server turn loop: exhaustion -> honest narration + error_class
-# ---------------------------------------------------------------------------
 
 
 @dataclass

@@ -23,9 +23,6 @@ from trid3nt_server.emission.publish import (
 MOD = pl
 
 
-# --------------------------------------------------------------------------- #
-# GeoTIFF byte builders (mirror the F51 resolver test fixtures)
-# --------------------------------------------------------------------------- #
 
 
 def _continuous_geotiff_bytes(lo: float = 0.0, hi: float = 50.0, size: int = 64) -> bytes:
@@ -100,9 +97,6 @@ def _rgba_geotiff_bytes(bands: int = 4, size: int = 64) -> bytes:
         return mem.read()
 
 
-# --------------------------------------------------------------------------- #
-# legend_for_published_layer -- continuous
-# --------------------------------------------------------------------------- #
 
 
 _FLOOD = {"kind": "continuous", "ramp": "ylgnbu", "units": "m",
@@ -149,9 +143,6 @@ def test_continuous_legend_uses_real_percentile_range(
     assert legend.vmin >= 0.0 and legend.vmax <= 30.0 and legend.vmax > legend.vmin
 
 
-# --------------------------------------------------------------------------- #
-# legend_for_published_layer -- a file that paints itself
-# --------------------------------------------------------------------------- #
 
 
 def test_paletted_cog_has_no_key() -> None:
@@ -165,9 +156,6 @@ def test_paletted_cog_has_no_key() -> None:
     ) is None
 
 
-# --------------------------------------------------------------------------- #
-# legend_for_published_layer -- passthrough (NO legend = legacy render)
-# --------------------------------------------------------------------------- #
 
 
 def test_rgba_passthrough_has_no_legend() -> None:
@@ -186,9 +174,6 @@ def test_legend_fail_open_returns_none_on_unreadable_bytes() -> None:
     assert legend is not None and legend.qml is not None
 
 
-# --------------------------------------------------------------------------- #
-# URI stash round-trip + end-to-end s3 publish carries the legend
-# --------------------------------------------------------------------------- #
 
 
 # NOTE (TiTiler exit): ``build_titiler_tile_url`` - the legacy register-only
@@ -256,9 +241,6 @@ def test_publish_paletted_raster_stashes_no_key(
     assert pop_legend_for_uri(out) is None
 
 
-# --------------------------------------------------------------------------- #
-# the vector + mesh arms of the SAME resolution
-# --------------------------------------------------------------------------- #
 
 
 def test_a_vector_row_resolves_through_the_same_seam_without_reading_the_object(

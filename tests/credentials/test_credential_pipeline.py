@@ -61,9 +61,6 @@ from trid3nt_contracts.secrets import CredentialProvidedEnvelopePayload
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 
-# --------------------------------------------------------------------------- #
-# MockWebSocket — collects wire envelopes for assertion.
-# --------------------------------------------------------------------------- #
 
 
 class MockWebSocket:
@@ -79,7 +76,6 @@ class MockWebSocket:
             self.sent.append(raw)
 
 
-# =========================================================================== #
 # 1. FIRMS key resolution -- REMOVED with the twin.
 #
 # The twin's vault-first ``_resolve_map_key`` (Persistence.get_secret_value ->
@@ -90,12 +86,8 @@ class MockWebSocket:
 # no demo fallback, no key_fp). That hook resolution is covered offline by
 # test_router_firms.py; the removed twin-internal resolver tests are dropped here
 # rather than disabled (clean-as-you-go).
-# =========================================================================== #
 
 
-# =========================================================================== #
-# 2. Provider registry
-# =========================================================================== #
 
 
 def test_registry_firms_provider_metadata():
@@ -195,9 +187,6 @@ def test_build_credential_request_payload_unknown_provider_returns_none():
     assert payload is None
 
 
-# --------------------------------------------------------------------------- #
-# 2b. GENERIC classifier — credential detection across ALL keyed tools.
-# --------------------------------------------------------------------------- #
 
 
 def test_registry_all_keyed_tools_have_providers():
@@ -307,9 +296,6 @@ def test_generic_classifier_never_classifies_unknown_provider():
     )
 
 
-# --------------------------------------------------------------------------- #
-# 2c. Config-missing family — the ERA5 .cdsapirc LIVE BUG.
-# --------------------------------------------------------------------------- #
 
 
 def test_classifier_matches_cdsapirc_config_missing_message():
@@ -371,9 +357,6 @@ def test_signup_url_none_provider_round_trips_end_to_end():
     assert payload.secret_key_name == "TRID3NT_COPERNICUS_CDS_API_KEY"
 
 
-# --------------------------------------------------------------------------- #
-# 2d. Generic NAME-ONLY fallback helpers.
-# --------------------------------------------------------------------------- #
 
 
 def test_is_credential_shaped_error_is_provider_agnostic():
@@ -430,9 +413,6 @@ def test_generic_provider_id_is_not_a_real_scope():
     assert "generic" not in cr.TOOL_PROVIDER.values()
 
 
-# =========================================================================== #
-# 3 + 4. Server: auth-error → credential-request → retry
-# =========================================================================== #
 
 
 @pytest.fixture(autouse=True)
@@ -762,7 +742,6 @@ def test_cross_session_credential_provided_refused():
     asyncio.run(_run())
 
 
-# =========================================================================== #
 # 5. Generic NAME-ONLY fallback for UNREGISTERED tools.
 #
 # A credential-shaped failure from a tool with NO registered provider must
@@ -771,7 +750,6 @@ def test_cross_session_credential_provided_refused():
 # These drive _maybe_handle_credential_error directly, patching
 # _emit_credential_request_and_wait so the test is independent of whether the
 # 'generic' provider_id is yet a wire ProviderID Literal member.
-# =========================================================================== #
 
 
 class _UnregErr(RuntimeError):

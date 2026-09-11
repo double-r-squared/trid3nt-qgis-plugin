@@ -21,9 +21,6 @@ import trid3nt_server.tools  # noqa: F401 — eager-registers the full tool surf
 import trid3nt_server.workflows.solver.solver  # noqa: F401 — registers run_solver + wait_for_completion
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
 
 
 def _registry_snapshot() -> dict[str, AtomicToolMetadata]:
@@ -31,9 +28,6 @@ def _registry_snapshot() -> dict[str, AtomicToolMetadata]:
     return {t.metadata.name: t.metadata for t in get_registered_tools()}
 
 
-# ---------------------------------------------------------------------------
-# Field existence tests
-# ---------------------------------------------------------------------------
 
 
 def test_all_tools_have_four_annotation_fields():
@@ -69,9 +63,6 @@ def test_annotation_fields_are_bools():
     )
 
 
-# ---------------------------------------------------------------------------
-# Consistency checks
-# ---------------------------------------------------------------------------
 
 
 def test_write_tools_are_not_read_only():
@@ -158,9 +149,6 @@ def test_non_idempotent_write_tools_exist():
     )
 
 
-# ---------------------------------------------------------------------------
-# Spot-checks for high-stakes tools
-# ---------------------------------------------------------------------------
 
 
 
@@ -219,9 +207,6 @@ def test_web_fetch_annotations():
     assert meta.idempotent_hint is True
 
 
-# ---------------------------------------------------------------------------
-# Schema defaults test
-# ---------------------------------------------------------------------------
 
 
 def test_atomic_tool_metadata_annotation_defaults():
@@ -268,9 +253,6 @@ def test_register_tool_annotation_kwargs_override_defaults(empty_registry):
     assert registered.metadata.idempotent_hint is False
 
 
-# ---------------------------------------------------------------------------
-# Aggregate summary / smoke test
-# ---------------------------------------------------------------------------
 
 
 def test_annotation_summary():

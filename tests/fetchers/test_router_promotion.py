@@ -165,12 +165,10 @@ def test_pilot_degenerate_bbox_raises_twin_typed_error(name: str) -> None:
     assert excinfo.value.retryable is False
 
 
-# ---------------------------------------------------------------------------
 # Phase-2 wave-3: USGS water-data family input-validation (migrated from the
 # deleted twin tests test_fetch_usgs_water_quality + the NLDI slice of
 # test_pfdf_unlock_statsgo_nldi_3dep). All raise pre-network via the router's
 # validate_params + the delegating executor's pre_validate (offline).
-# ---------------------------------------------------------------------------
 
 
 def _route(name: str, **params):
@@ -224,13 +222,11 @@ def test_nldi_input_validation(params: dict) -> None:
     assert exc.value.retryable is False
 
 
-# ---------------------------------------------------------------------------
 # Phase-2 wave-4: CO-OPS currents snapshot (migrated from the deleted twin test
 # test_fetch_noaa_coops_currents -- the internal _parse_observed / _parse_predictions
 # helpers became the named `coops_currents` router transform). Input validation
 # routes through validate_params (offline, pre-network); the snapshot selector is
 # unit-tested directly with synthetic CO-OPS bodies.
-# ---------------------------------------------------------------------------
 
 import datetime as _dt  # noqa: E402
 

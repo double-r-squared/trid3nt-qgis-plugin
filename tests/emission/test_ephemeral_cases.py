@@ -24,9 +24,6 @@ from trid3nt_contracts import new_ulid, now_utc
 from trid3nt_contracts.case import CaseSummary
 
 
-# --------------------------------------------------------------------------- #
-# Helpers
-# --------------------------------------------------------------------------- #
 
 
 def _fresh_case(title: str = "Scratch flood scenario") -> CaseSummary:
@@ -61,9 +58,6 @@ class _CapturingSink:
         return [f for f in self.frames if f["type"] == "session-state"]
 
 
-# --------------------------------------------------------------------------- #
-# upsert_case: durable (no TTL stamp)
-# --------------------------------------------------------------------------- #
 
 
 def test_upsert_case_writes_no_expires_at(tmp_path: Path) -> None:
@@ -95,9 +89,6 @@ def test_upsert_case_authed_byte_identical_to_legacy(tmp_path: Path) -> None:
     assert doc == expected, "stored doc drifted from the expected shape"
 
 
-# --------------------------------------------------------------------------- #
-# Old-shape tolerance: a legacy ``expires_at`` never reaches the wire
-# --------------------------------------------------------------------------- #
 
 
 def test_doc_to_case_summary_drops_stale_expires_at() -> None:
@@ -147,9 +138,6 @@ def test_get_case_tolerates_legacy_expires_at(tmp_path: Path) -> None:
     assert "expires_at" not in fetched.model_dump(mode="json")
 
 
-# --------------------------------------------------------------------------- #
-# seed_chat_history: reconnect-resync primitive
-# --------------------------------------------------------------------------- #
 
 
 def test_seed_chat_history_carries_into_next_snapshot() -> None:

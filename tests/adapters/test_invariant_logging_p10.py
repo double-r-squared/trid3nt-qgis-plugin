@@ -95,9 +95,6 @@ async def _drive(script, dispatch_results, user_text):
     return sock, captured["contents"], captured["rounds"]
 
 
-# ---------------------------------------------------------------------------
-# P10 pin: geocode-only turn + the exact bench sim-ask -> the nudge FIRES
-# ---------------------------------------------------------------------------
 
 
 def test_p10_prompt_matches_data_intent_heuristic():
@@ -134,9 +131,6 @@ async def test_p10_shape_geocode_only_sim_ask_nudge_fires(
     )
 
 
-# ---------------------------------------------------------------------------
-# Skip logging: every terminal round explains why each invariant did not fire
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio

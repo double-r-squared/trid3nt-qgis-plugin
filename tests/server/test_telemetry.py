@@ -20,9 +20,6 @@ import pytest
 from trid3nt_server.telemetry import compute_args_hash, emit_tool_call_event
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
 
 
 def _read_jsonl(path: str) -> list[dict]:
@@ -63,9 +60,6 @@ async def _emit(path: str, **kwargs) -> None:
         await asyncio.sleep(0.1)
 
 
-# ---------------------------------------------------------------------------
-# Tests
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -222,9 +216,6 @@ async def test_error_fields_populated() -> None:
         os.unlink(path)
 
 
-# ---------------------------------------------------------------------------
-# Tool-retrieval SHADOW telemetry (tool-retrieval kickoff, orchestrator half).
-# ---------------------------------------------------------------------------
 
 
 def test_build_shadow_selection_record_shape() -> None:

@@ -29,9 +29,6 @@ from trid3nt_server.tools.fetchers._router.transport import (
 )
 
 
-# --------------------------------------------------------------------------- #
-# Fixtures: an in-memory COG + a controllable range-serving HTTP server.
-# --------------------------------------------------------------------------- #
 
 
 def _make_cog_bytes(n: int = 512) -> bytes:
@@ -151,9 +148,6 @@ def _fast_backoff(monkeypatch):
     monkeypatch.setattr(transport_client.time, "sleep", lambda *_a, **_k: None)
 
 
-# --------------------------------------------------------------------------- #
-# Correctness + preflight
-# --------------------------------------------------------------------------- #
 
 
 def test_windowed_read_pixel_identical(range_server):
@@ -197,9 +191,6 @@ def test_preflight_403_typed_auth(range_server):
     assert ei.value.retryable is False
 
 
-# --------------------------------------------------------------------------- #
-# Coalescing + parallel fetch (request-count assertions)
-# --------------------------------------------------------------------------- #
 
 
 def test_adjacent_blocks_merge_single_get(range_server):
@@ -227,9 +218,6 @@ def test_nonadjacent_runs_fetch_in_parallel(range_server):
     assert range_server.get_count - before == 2
 
 
-# --------------------------------------------------------------------------- #
-# Forced errors + retry authority
-# --------------------------------------------------------------------------- #
 
 
 def test_range_get_404_typed(range_server):
@@ -285,9 +273,6 @@ def test_retry_after_header_honored(range_server, monkeypatch):
     assert seen and seen[0] == pytest.approx(2.0, abs=0.01)
 
 
-# --------------------------------------------------------------------------- #
-# Bridge + truncation
-# --------------------------------------------------------------------------- #
 
 
 def test_mid_read_disconnect_bridges_typed_error(range_server):
@@ -317,10 +302,8 @@ def test_block_completeness_assertion(range_server):
     assert isinstance(g._error, TransportTruncatedError)
 
 
-# --------------------------------------------------------------------------- #
 # Migration edge matrix: raster_cog.direct_window through the transport maps to
 # the router A.6 frame (this is the 404->EMPTY split the /vsicurl/ path lost).
-# --------------------------------------------------------------------------- #
 
 from trid3nt_contracts.source_spec import SourceSpec  # noqa: E402
 from trid3nt_server.tools.fetchers._router.errors import (  # noqa: E402

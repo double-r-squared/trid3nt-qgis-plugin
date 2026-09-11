@@ -26,9 +26,6 @@ from trid3nt_server.adapters.adapter import (
 from trid3nt_contracts import new_ulid
 
 
-# ---------------------------------------------------------------------------
-# Test 1: structured error shape per the kickoff
-# ---------------------------------------------------------------------------
 
 
 def test_summarize_tool_result_error_carries_structured_fields():
@@ -76,9 +73,6 @@ def test_summarize_tool_result_error_typed_upstream_is_retryable():
     assert summary["retryable"] is True
 
 
-# ---------------------------------------------------------------------------
-# Test 2: heuristic classification for untyped exceptions
-# ---------------------------------------------------------------------------
 
 
 def test_classify_error_value_error_not_retryable():
@@ -129,9 +123,6 @@ def test_classify_error_typed_overrides_heuristic():
     assert retryable is True
 
 
-# ---------------------------------------------------------------------------
-# Test 3: JSON-serializable + budget-clean
-# ---------------------------------------------------------------------------
 
 
 def test_error_summary_is_json_serializable():
@@ -146,9 +137,6 @@ def test_error_summary_is_json_serializable():
     assert len(decoded["message"]) <= 500
 
 
-# ---------------------------------------------------------------------------
-# Test 4: end-to-end retry-and-succeed
-# ---------------------------------------------------------------------------
 
 
 def _make_fake_chunk_with_function_call(name: str, args: dict, call_id: str = "c1"):
@@ -275,9 +263,6 @@ async def test_stream_model_reply_retry_after_recoverable_failure(fake_llm):
     assert "second attempt" in text_seen.lower()
 
 
-# ---------------------------------------------------------------------------
-# Test 5: retry doesn't loop forever — MAX_TURN_ITERATIONS caps it
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -329,9 +314,6 @@ async def test_stream_model_reply_failed_retry_caps_at_max_iterations(fake_llm):
     assert dispatch_count["n"] > 0, "Expected at least one dispatch before breaker trip"
 
 
-# ---------------------------------------------------------------------------
-# Test 6: legacy ``error`` field preserved (no breaking-shape change)
-# ---------------------------------------------------------------------------
 
 
 def test_summarize_tool_result_error_legacy_alias_preserved():

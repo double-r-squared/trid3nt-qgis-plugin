@@ -59,9 +59,6 @@ def _write_synth_raster(
         dst.write(arr, 1)
 
 
-# --------------------------------------------------------------------------- #
-# Registry shape + category.
-# --------------------------------------------------------------------------- #
 
 
 def test_topobathy_registered_with_expected_metadata() -> None:
@@ -76,9 +73,6 @@ def test_topobathy_registered_with_expected_metadata() -> None:
 
 
 
-# --------------------------------------------------------------------------- #
-# Typed-error envelope.
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.parametrize(
@@ -106,9 +100,6 @@ def test_estimate_payload_mb_scales_with_bbox() -> None:
     assert estimate_payload_mb(bbox=None) > 0.0
 
 
-# --------------------------------------------------------------------------- #
-# Input validation -> TOPOBATHY_INPUT_INVALID (router bbox gate OR delegate_validate).
-# --------------------------------------------------------------------------- #
 
 
 def _assert_input_invalid(**kw: Any) -> None:
@@ -143,9 +134,6 @@ def test_rejects_non_finite_offset() -> None:
     _assert_input_invalid(bbox=_SMOKE_BBOX, navd88_offset_m=float("inf"))
 
 
-# --------------------------------------------------------------------------- #
-# Tile-index intersect math + ETOPO fallback selection + datum gate.
-# --------------------------------------------------------------------------- #
 
 
 def test_parse_tile_nw_corner() -> None:
@@ -192,9 +180,6 @@ def test_datum_gate_absent_signal_defaults_to_navd88() -> None:
     assert _classify_vertical_datum("", None, "tile") == 0.0
 
 
-# --------------------------------------------------------------------------- #
-# END-TO-END via the promoted router closure (synthetic rasters + fake_s3).
-# --------------------------------------------------------------------------- #
 
 
 def _patch_delegate_sources(monkeypatch, *, cudem_tiles, land_path, etopo_tiles=None):
@@ -305,9 +290,6 @@ def test_end_to_end_datum_mismatch_propagates(monkeypatch, tmp_path, fake_s3) ->
     assert ei.value.error_code == "TOPOBATHY_DATUM_MISMATCH"
 
 
-# --------------------------------------------------------------------------- #
-# THE CHANNEL: cache-hit replay + the labeled land_absent loud-degrade.
-# --------------------------------------------------------------------------- #
 
 
 def test_cache_hit_replays_provenance_identically(monkeypatch, tmp_path, fake_s3) -> None:
@@ -357,11 +339,9 @@ def test_land_absent_labeled_degrade(monkeypatch, tmp_path, fake_s3) -> None:
     assert "BATHYMETRY-ONLY" in res.fallback_warning
 
 
-# --------------------------------------------------------------------------- #
 # Deep-water rung: the 3DEP land leg's flat ocean-fill must not
 # clobber the ETOPO full-column bathy on a forced-bathy-base (offshore/tsunami)
 # fetch, so a rupture/basin-scale domain keeps a genuine deep column.
-# --------------------------------------------------------------------------- #
 
 
 def _write_ll_raster(path: str, bbox, nx: int, ny: int, arr: np.ndarray) -> None:

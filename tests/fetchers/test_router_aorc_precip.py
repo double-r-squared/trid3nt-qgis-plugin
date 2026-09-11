@@ -79,9 +79,6 @@ def _inject_read_through(monkeypatch, store: dict[str, bytes]):
     monkeypatch.setattr(router, "read_through", patched)
 
 
-# --------------------------------------------------------------------------- #
-# Registration + shape.
-# --------------------------------------------------------------------------- #
 
 
 def test_aorc_promoted_as_record_spec():
@@ -102,9 +99,6 @@ def test_aorc_shape_is_record():
     assert AORC_SPEC.hooks.record == "aorc_precip.build_record"
 
 
-# --------------------------------------------------------------------------- #
-# Pure hooks + end-to-end route() -> dict.
-# --------------------------------------------------------------------------- #
 
 
 def test_bbox_subset_snaps_to_nearest_when_empty():

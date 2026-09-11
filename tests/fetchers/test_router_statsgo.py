@@ -53,9 +53,6 @@ def _patch_statsgo_read(monkeypatch, values: Any, nodata: Any = None):
     monkeypatch.setattr(statsgo_mod, "read", fake_read)
 
 
-# --------------------------------------------------------------------------- #
-# Registration + spec shape.
-# --------------------------------------------------------------------------- #
 
 
 def test_statsgo_promoted_as_library_delegate_spec():
@@ -78,9 +75,6 @@ def test_statsgo_docstring_carried_verbatim():
     assert "STATSGO" in doc and "K-factor" in doc
 
 
-# --------------------------------------------------------------------------- #
-# Payload estimator (bbox_area) + field enum.
-# --------------------------------------------------------------------------- #
 
 
 def test_statsgo_payload_scales_with_bbox():
@@ -96,9 +90,6 @@ def test_statsgo_rejects_unknown_field():
         _vp(bbox=list(_KANSAS), field="NOPE")
 
 
-# --------------------------------------------------------------------------- #
-# CONUS pre-cache validate hook (the source-specific input gate).
-# --------------------------------------------------------------------------- #
 
 
 def test_statsgo_rejects_outside_conus_bbox():
@@ -112,9 +103,6 @@ def test_statsgo_conus_bbox_passes_validate():
     library_delegate.pre_validate(STATSGO_SPEC, _vp(bbox=list(_KANSAS), field="KFFACT"))
 
 
-# --------------------------------------------------------------------------- #
-# Delegate array -> COG + honest empty + upstream backstop.
-# --------------------------------------------------------------------------- #
 
 
 def test_statsgo_delegate_array_serializes_to_cog(monkeypatch):
@@ -144,9 +132,6 @@ def test_statsgo_library_error_maps_to_upstream(monkeypatch):
     assert "ScienceBase 503" in str(ei.value)
 
 
-# --------------------------------------------------------------------------- #
-# units / style-by-field LayerURI stamps.
-# --------------------------------------------------------------------------- #
 
 
 def test_statsgo_units_and_style_by_field():

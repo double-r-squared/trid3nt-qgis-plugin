@@ -30,9 +30,6 @@ from trid3nt_server.tools.search.web_fetch.web_fetch import (
 _LIVE_WEB = os.environ.get("TRID3NT_TEST_LIVE_WEB") == "1"
 
 
-# ---------------------------------------------------------------------------
-# Fake GCS plumbing (mirrors the pattern from test_data_fetch.py).
-# ---------------------------------------------------------------------------
 
 
 class FakeBlob:
@@ -111,9 +108,6 @@ def fake_storage(monkeypatch: pytest.MonkeyPatch) -> FakeStorageClient:
     return fake
 
 
-# ---------------------------------------------------------------------------
-# Mock httpx Client / Response.
-# ---------------------------------------------------------------------------
 
 
 class _MockResponse:
@@ -164,9 +158,6 @@ def _patch_httpx(monkeypatch: pytest.MonkeyPatch, mock_client: _MockClient) -> N
     )
 
 
-# ---------------------------------------------------------------------------
-# Synthetic HTML fixtures.
-# ---------------------------------------------------------------------------
 
 
 _HTML_RICH = """\
@@ -206,9 +197,6 @@ _HTML_NO_MAIN = """\
 """
 
 
-# ---------------------------------------------------------------------------
-# Registration.
-# ---------------------------------------------------------------------------
 
 
 def test_web_fetch_is_registered_with_dynamic_1h() -> None:
@@ -218,9 +206,6 @@ def test_web_fetch_is_registered_with_dynamic_1h() -> None:
     assert entry.metadata.cacheable is True
 
 
-# ---------------------------------------------------------------------------
-# URL canonicalization.
-# ---------------------------------------------------------------------------
 
 
 def test_canonicalize_url_lowercases_scheme_and_host() -> None:
@@ -252,9 +237,6 @@ def test_canonicalize_url_rejects_empty() -> None:
         _canonicalize_url("")
 
 
-# ---------------------------------------------------------------------------
-# main_text + metadata extraction.
-# ---------------------------------------------------------------------------
 
 
 def test_extract_main_text_strips_boilerplate_and_picks_main() -> None:
@@ -289,9 +271,6 @@ def test_extract_metadata_returns_og_and_meta_tags() -> None:
     assert md.get("twitter:card") == "summary_large_image"
 
 
-# ---------------------------------------------------------------------------
-# Cache miss → fetch + write; cache hit → no refetch.
-# ---------------------------------------------------------------------------
 
 
 def test_web_fetch_full_html_miss_writes_through_cache(
@@ -384,9 +363,6 @@ def test_web_fetch_cache_hit_skips_fetcher(
     assert second["content"] == first["content"]
 
 
-# ---------------------------------------------------------------------------
-# Error paths.
-# ---------------------------------------------------------------------------
 
 
 def test_web_fetch_bad_url_raises_input_error(
@@ -478,9 +454,6 @@ def test_web_fetch_unknown_extract_mode_raises_input_error(
         web_fetch("https://example.com/", extract="garbage")  # type: ignore[arg-type]
 
 
-# ---------------------------------------------------------------------------
-# Live verification (env-guarded).
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.skipif(not _LIVE_WEB, reason="set TRID3NT_TEST_LIVE_WEB=1 to run live network tests")

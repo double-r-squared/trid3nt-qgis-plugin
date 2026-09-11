@@ -18,9 +18,6 @@ from trid3nt_server.workflows.mesh.tool import (
 )
 
 
-# --------------------------------------------------------------------------- #
-# 1. Every template's mesh step carries the whole ask.
-# --------------------------------------------------------------------------- #
 #: Every declared recipe in the tree, at the body that declares it. The five
 #: river templates LIST the shared river part rather than each freezing a
 #: triangulation of their own, so the reach recipe is pinned once, where it is.
@@ -80,9 +77,6 @@ def test_a_step_override_replaces_a_param_and_leaves_the_program_alone(dotted):
     assert [op.fn for op in rebuilt.ops] == [op.fn for op in declared.ops]
 
 
-# --------------------------------------------------------------------------- #
-# 2. Order is the program, and duplicates are legal.
-# --------------------------------------------------------------------------- #
 def test_two_entries_of_one_op_survive_the_trip_in_order():
     """Two distance-sizing lines refine two corridors, so both must arrive."""
     from trid3nt_server.workflows.telemac.templates.rain_on_grid import rain_on_grid as template

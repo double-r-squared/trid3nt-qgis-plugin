@@ -46,9 +46,6 @@ def _gdf(fgb: bytes):
     return gpd.read_file(p, engine="pyogrio")
 
 
-# --------------------------------------------------------------------------- #
-# Registration parity: all five spec-served under the twin name.
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.parametrize("name", list(_SPECS))
@@ -58,9 +55,6 @@ def test_spec_served_under_twin_name(name):
     assert "_router._promoted" in TOOL_REGISTRY[name].fn.__module__
 
 
-# --------------------------------------------------------------------------- #
-# asos_metar: multi-state discovery (resolve) + bulk-CSV main fetch.
-# --------------------------------------------------------------------------- #
 
 
 def test_asos_resolve_discovers_and_parses_obs():
@@ -108,9 +102,6 @@ def test_asos_future_start_rejected():
     assert exc.value.error_code == "ASOS_METAR_INPUT_ERROR"
 
 
-# --------------------------------------------------------------------------- #
-# raws_weather: enrich EXPANDS station features into per-obs rows (best-effort).
-# --------------------------------------------------------------------------- #
 
 
 def test_raws_enrich_expands_and_best_effort_survives():
@@ -159,9 +150,6 @@ def test_raws_no_stations_raises_empty():
     assert exc.value.error_code == "RAWS_WEATHER_EMPTY"
 
 
-# --------------------------------------------------------------------------- #
-# snotel_snow: catalog main-fetch + batched enrich; degrade-to-locations + NO_STATIONS.
-# --------------------------------------------------------------------------- #
 
 
 def _snotel_catalog():
@@ -218,9 +206,6 @@ def test_snotel_no_stations_raises():
     assert exc.value.error_code == "SNOTEL_NO_STATIONS"
 
 
-# --------------------------------------------------------------------------- #
-# openaq: paging + per-location latest + sensor->parameter join (expanding).
-# --------------------------------------------------------------------------- #
 
 
 def test_openaq_paging_and_sensor_join():
@@ -249,9 +234,6 @@ def test_openaq_paging_and_sensor_join():
     assert g.iloc[0]["unit"] == "ug/m3"
 
 
-# --------------------------------------------------------------------------- #
-# Keyed missing-key credential parity (byte-identical typed error, pre-network).
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.parametrize(

@@ -58,9 +58,6 @@ def _fake_peak(run_id: str, reach_name: str) -> TelemacDyeLayerURI:
     )
 
 
-# ===========================================================================
-# (1) Tool registration + metadata.
-# ===========================================================================
 def test_telemac_river_dye_registered_as_engine_template():
     from trid3nt_server.tools import TOOL_REGISTRY
 
@@ -84,9 +81,6 @@ def test_docstring_routing_view_fits_the_truncation_budget():
     assert "telemac_do_sag" in telemac_river_dye.routing_doc  # negative routing
 
 
-# ===========================================================================
-# (2) Wire-arg normalization.
-# ===========================================================================
 def _workflow():
     from trid3nt_server.tools import TOOL_REGISTRY
 
@@ -192,9 +186,6 @@ def test_a_wind_bearing_wraps_rather_than_clamping():
     assert supplied["wind_direction_deg"] == pytest.approx(10.0)
 
 
-# ===========================================================================
-# (3) Declared bounds replace the inline clamps.
-# ===========================================================================
 def _resolve(**supplied):
     """The sheet the invocation resolves, over EVERY row the template declares.
 
@@ -303,9 +294,6 @@ def test_a_run_with_no_persisted_history_draws_no_chart():
     assert build_dye_chart(result=bare, params={"location": "the reach"}) is None
 
 
-# ===========================================================================
-# (4) The sequence the door builds.
-# ===========================================================================
 def test_the_sequence_validates_and_holds_the_run_after_the_fill():
     from trid3nt_server.workflows.runtime import validate_plan
 
@@ -358,9 +346,6 @@ def test_an_unknown_data_row_is_an_attribute_error_at_the_line_that_wrote_it():
         river.DATA.centreline
 
 
-# ===========================================================================
-# (5) The chain: dispatch + manifest overrides + layer return.
-# ===========================================================================
 def _install_step_mocks(captured: dict):
     from trid3nt_server.workflows.solver import solver as solver_mod
     from trid3nt_server.workflows.telemac.products import postprocess_telemac as pp_mod

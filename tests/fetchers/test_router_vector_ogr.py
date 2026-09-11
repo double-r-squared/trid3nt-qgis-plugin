@@ -67,9 +67,6 @@ def _esrijson_file(tmp_path, rows):
     return str(path)
 
 
-# --------------------------------------------------------------------------- #
-# The query the ESRIJSON driver opens.
-# --------------------------------------------------------------------------- #
 
 
 def test_query_pushes_the_bbox_envelope_and_the_where_clause():
@@ -136,9 +133,6 @@ def test_the_vsizip_path_reads_the_member_inside_the_remote_zip():
         "/vsizip//vsicurl/https://census.test/county.zip/tl_2024_us_county.shp")
 
 
-# --------------------------------------------------------------------------- #
-# The read: driver -> frame normalizer -> the declared schema.
-# --------------------------------------------------------------------------- #
 
 
 def _read_local(spec, path, params=None, monkeypatch=None):
@@ -205,9 +199,6 @@ def test_a_zipped_shapefile_reads_through_vsizip(tmp_path):
     assert list(df["NAME"]) == ["one"]
 
 
-# --------------------------------------------------------------------------- #
-# The honesty floor: an ArcGIS 200-with-an-error-body.
-# --------------------------------------------------------------------------- #
 
 
 def test_an_error_envelope_reaches_the_caller_verbatim(monkeypatch):
@@ -251,9 +242,6 @@ def test_a_status_failure_keeps_the_drivers_own_text(monkeypatch):
     assert "HTTP response code: 404" in str(exc)
 
 
-# --------------------------------------------------------------------------- #
-# The mirror chain.
-# --------------------------------------------------------------------------- #
 
 
 def test_a_same_dataset_mirror_is_tried_on_the_primarys_failure(monkeypatch):

@@ -174,9 +174,6 @@ def test_an_empty_field_still_yields_a_usable_scale():
     assert "unreadable" in scale.note, "the legend admits it never saw the data"
 
 
-# --------------------------------------------------------------------------- #
-# WHICH published layer an animation is held to
-# --------------------------------------------------------------------------- #
 
 
 def _packet_module():

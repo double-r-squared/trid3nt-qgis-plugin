@@ -24,9 +24,6 @@ from trid3nt_server.tools.fetchers._router.executors import vector_fgb, vector_o
 from trid3nt_server.tools.fetchers._router.transforms import fan_out
 
 
-# --------------------------------------------------------------------------- #
-# Fixtures.
-# --------------------------------------------------------------------------- #
 
 _POLY = {
     "type": "Polygon",
@@ -113,9 +110,6 @@ def _levees_like_spec() -> SourceSpec:
     })
 
 
-# --------------------------------------------------------------------------- #
-# float_list validation.
-# --------------------------------------------------------------------------- #
 
 
 def test_float_list_scalar_list_default():
@@ -139,9 +133,6 @@ def test_float_list_bad_value_and_type():
         router.validate_params(spec, {**base, "scenario_ft": True})   # bool rejected
 
 
-# --------------------------------------------------------------------------- #
-# fan_out.execute.
-# --------------------------------------------------------------------------- #
 
 
 def test_fanout_merge_stamp_and_order(monkeypatch):
@@ -186,9 +177,6 @@ def test_fanout_forced_upstream(monkeypatch):
         fan_out.execute(spec, params)
 
 
-# --------------------------------------------------------------------------- #
-# endpoint_by_param + properties_by_param.
-# --------------------------------------------------------------------------- #
 
 
 def test_endpoint_by_param_selects_sublayer():
@@ -220,9 +208,6 @@ def test_properties_by_param_honest_empty_header(monkeypatch):
     assert [c for c in gdf.columns if c != "geometry"] == ["SYSTEM_ID", "MAX_HEIGHT"]
 
 
-# --------------------------------------------------------------------------- #
-# Edge matrix: forced HTTP statuses + error envelope + unparseable + empty.
-# --------------------------------------------------------------------------- #
 
 
 def test_a_failed_driver_read_is_the_typed_upstream_class(monkeypatch):
@@ -260,9 +245,6 @@ def test_edge_empty_is_header_not_error(monkeypatch):
     assert len(gdf) == 0
 
 
-# --------------------------------------------------------------------------- #
-# esri-json ingest mode + percentile/fraction/raw column kinds.
-# --------------------------------------------------------------------------- #
 
 
 def _esri_json_indicator_spec() -> SourceSpec:

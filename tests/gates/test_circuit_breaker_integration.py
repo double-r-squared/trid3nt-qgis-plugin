@@ -26,9 +26,6 @@ from trid3nt_server.server import SessionState
 from trid3nt_contracts import new_ulid
 
 
-# ---------------------------------------------------------------------------
-# Shared helpers
-# ---------------------------------------------------------------------------
 
 
 @dataclass
@@ -80,9 +77,6 @@ def _contents_snapshot(fake_llm):
     return snapshots
 
 
-# ---------------------------------------------------------------------------
-# Test 1+2+3: 3 failures trip the breaker; 4th call is short-circuited
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -157,9 +151,6 @@ async def test_circuit_breaker_trips_on_third_failure_and_short_circuits_fourth(
     assert resp["retryable"] is False
 
 
-# ---------------------------------------------------------------------------
-# Test 3 (standalone): summarize_tool_result for CircuitBreakerError
-# ---------------------------------------------------------------------------
 
 
 def test_summarize_circuit_breaker_error_emits_wave49_envelope():
@@ -184,9 +175,6 @@ def test_summarize_circuit_breaker_error_is_json_serializable():
     assert decoded["error_code"] == "CIRCUIT_BREAKER_TRIPPED"
 
 
-# ---------------------------------------------------------------------------
-# Test 4: success after cooldown resets the counter
-# ---------------------------------------------------------------------------
 
 
 def test_circuit_breaker_success_after_auto_close_resets_counter():
@@ -206,9 +194,6 @@ def test_circuit_breaker_success_after_auto_close_resets_counter():
     assert cb._cooldown_until.get("fetch_dem") is None
 
 
-# ---------------------------------------------------------------------------
-# Test 5: circuit breaker is per-session (independent state instances)
-# ---------------------------------------------------------------------------
 
 
 def test_circuit_breaker_is_per_session():
@@ -225,10 +210,8 @@ def test_circuit_breaker_is_per_session():
     assert state_b.circuit_breaker.is_tripped("fetch_dem") is False
 
 
-# ---------------------------------------------------------------------------
 # Oklahoma-tornado bug: arg errors through the full server path
 # must NOT trip the breaker — so the model can self-correct and retry.
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -296,9 +279,6 @@ async def test_arg_errors_through_server_do_not_trip_breaker(fake_llm):
     )
 
 
-# ---------------------------------------------------------------------------
-# Test: CircuitBreakerError is not counted as a new failure
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio

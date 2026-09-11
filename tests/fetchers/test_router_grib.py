@@ -34,9 +34,6 @@ def spec():
     return compose_specs_from_tree()["fetch_mrms_qpe"]
 
 
-# --------------------------------------------------------------------------- #
-# Spec wiring
-# --------------------------------------------------------------------------- #
 
 
 def test_spec_is_grib_object_with_resolve_hooks(spec):
@@ -61,9 +58,6 @@ def test_promoted_tool_registered_under_twin_name():
     assert meta.cacheable is True
 
 
-# --------------------------------------------------------------------------- #
-# Accumulation normalization (alias table + resolve-hook raise)
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.parametrize("raw,canon", [("1h", "01H"), ("6h", "06H"), ("24h", "24H"),
@@ -85,9 +79,6 @@ def test_unknown_accumulation_raises_input_error(spec):
     assert ei.value.retryable is False
 
 
-# --------------------------------------------------------------------------- #
-# valid_time parsing
-# --------------------------------------------------------------------------- #
 
 
 def test_valid_time_zulu_parses_utc(spec):
@@ -110,9 +101,6 @@ def test_bad_valid_time_raises_input_error(spec):
     assert ei.value.error_code == "MRMS_QPE_INPUT_ERROR"
 
 
-# --------------------------------------------------------------------------- #
-# Resolve phase (pure): targeted first-present + latest max-key + typed errors
-# --------------------------------------------------------------------------- #
 
 
 def _list_xml(keys):
@@ -167,9 +155,6 @@ def test_resolve_parse_latest_empty_bucket_raises_upstream(spec):
     assert ei.value.retryable is True
 
 
-# --------------------------------------------------------------------------- #
-# grib_object decode (synthetic GeoTIFF stands in for the .grib2, GDAL-decoded)
-# --------------------------------------------------------------------------- #
 
 
 def _synthetic_mrms_gz(*, sentinels=True, shape=(350, 700)):
@@ -234,9 +219,6 @@ def test_grib_object_offshore_bbox_raises_empty(spec, patch_transport):
     assert ei.value.retryable is False
 
 
-# --------------------------------------------------------------------------- #
-# Payload estimator (synthesized bbox_area)
-# --------------------------------------------------------------------------- #
 
 
 def test_payload_estimate_positive_and_scales(spec):

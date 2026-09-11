@@ -53,9 +53,6 @@ def _case_docs(p: Persistence) -> list[dict]:
     return list(mcp._store.get(CASES_COLLECTION, {}).values())
 
 
-# --------------------------------------------------------------------------- #
-# Root-prompt auto-create
-# --------------------------------------------------------------------------- #
 
 
 def test_root_prompt_creates_named_active_case_before_turn(
@@ -252,9 +249,6 @@ def test_root_prompt_rehydration_failure_still_emits_nonnull_case_open(
     assert ss["case"]["case_id"] == state.active_case_id
 
 
-# --------------------------------------------------------------------------- #
-# Paths that must NOT auto-create
-# --------------------------------------------------------------------------- #
 
 
 def test_existing_case_path_unchanged(
@@ -329,9 +323,6 @@ def test_upsert_failure_falls_back_to_stateless(
     assert ws.sent == []
 
 
-# --------------------------------------------------------------------------- #
-# Integration: the live repro
-# --------------------------------------------------------------------------- #
 
 
 def test_integration_two_root_prompts_one_case(
@@ -362,12 +353,10 @@ def test_integration_two_root_prompts_one_case(
     assert [e["type"] for e in ws.sent].count("case-open") == 1
 
 
-# --------------------------------------------------------------------------- #
 # A3: a fresh Untitled Case must auto-name from its FIRST user
 # message reliably -- even when the turn later fails (LLM_UNAVAILABLE etc.) and
 # even across a transient persistence miss (the guard must not burn the one
 # naming attempt up front).
-# --------------------------------------------------------------------------- #
 
 
 def _untitled_case():

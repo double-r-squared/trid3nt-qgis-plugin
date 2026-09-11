@@ -29,9 +29,6 @@ _WA_STATE_BBOX = (-124.837922, 45.543029, -116.914037, 49.003324)
 fetch_dem = TOOL_REGISTRY["fetch_dem"].fn
 
 
-# --------------------------------------------------------------------------- #
-# Helpers.
-# --------------------------------------------------------------------------- #
 
 
 def _synth_array(bbox, resolution_m):
@@ -91,9 +88,6 @@ def _fake_dem_dataarray(bounds, crs="EPSG:4326"):
     return da
 
 
-# --------------------------------------------------------------------------- #
-# Registration.
-# --------------------------------------------------------------------------- #
 
 
 def test_fetch_dem_is_registered_with_static_30d():
@@ -104,9 +98,6 @@ def test_fetch_dem_is_registered_with_static_30d():
     # INTERMEDIATE raster: opts out of the auto-render (twin metadata flag).
 
 
-# --------------------------------------------------------------------------- #
-# Happy path + cache write-through.
-# --------------------------------------------------------------------------- #
 
 
 def test_fetch_dem_happy_path_writes_through_cache(monkeypatch, fake_s3):
@@ -137,9 +128,6 @@ def test_fetch_dem_rejects_continent_scale_bbox():
         fetch_dem(bbox=whole_conus, resolution_m=30)
 
 
-# --------------------------------------------------------------------------- #
-# Pixel-budget auto-coarsen.
-# --------------------------------------------------------------------------- #
 
 
 def test_fetch_dem_state_scale_no_hard_fail(monkeypatch, fake_s3):
@@ -174,9 +162,6 @@ def test_fetch_dem_tiny_bbox_native_resolution_untouched(monkeypatch, fake_s3):
     assert "coarsened" not in layer.name
 
 
-# --------------------------------------------------------------------------- #
-# Gated cross-dataset fallback + pins (0091 contract).
-# --------------------------------------------------------------------------- #
 
 
 def test_fetch_dem_pinned_3dep_upstream_failure_reraises(monkeypatch, fake_s3):
@@ -309,9 +294,6 @@ def test_fetch_dem_partial_coverage_propagates_not_ladder(monkeypatch, fake_s3):
     spy.assert_not_called()
 
 
-# --------------------------------------------------------------------------- #
-# source="copernicus" cross-sibling DISPATCH.
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.parametrize(
@@ -341,9 +323,6 @@ def test_fetch_dem_copernicus_dispatch_verbatim(monkeypatch, fake_s3, alias):
     assert not any("/static-30d/dem/" in k for k in fake_s3.store), fake_s3.store
 
 
-# --------------------------------------------------------------------------- #
-# Coverage gate (LANE-C): the DataArray reproject-bounds partial-coverage check.
-# --------------------------------------------------------------------------- #
 
 
 def test_fetch_3dep_full_coverage_passes(monkeypatch):

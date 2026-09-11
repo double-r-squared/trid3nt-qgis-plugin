@@ -32,9 +32,6 @@ def specs():
     return compose_specs_from_tree()
 
 
-# --------------------------------------------------------------------------- #
-# Spec identity + metadata flags (twin-identical; SPEC-IDENTITY rule).
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.parametrize("name,prefix,empty,cell", [
@@ -71,9 +68,6 @@ def test_landsat_role_and_units_split(specs):
     assert rgb.style["kind"] == "continuous"
 
 
-# --------------------------------------------------------------------------- #
-# Param gates + enum aliases.
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.parametrize("name,bad_bbox,code", [
@@ -103,9 +97,6 @@ def test_bad_band_combo_typed_error(specs):
     assert getattr(ei.value, "error_code", "") == "LANDSAT_BAND_COMBO_INVALID"
 
 
-# --------------------------------------------------------------------------- #
-# Composite render value behavior (synthetic source COGs, patched opener).
-# --------------------------------------------------------------------------- #
 
 
 @contextlib.contextmanager

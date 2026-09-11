@@ -26,9 +26,6 @@ from trid3nt_server.tools.derive.compute_colored_relief.compute_colored_relief i
 )
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
 
 
 _PINNED_NOW = datetime(2026, 6, 8, 12, 0, 0, tzinfo=timezone.utc)
@@ -113,9 +110,6 @@ def _count_bands(tif_path: str) -> int:
             return -1
 
 
-# ---------------------------------------------------------------------------
-# Fake GCS plumbing (mirrors test_tools_cache.py).
-# ---------------------------------------------------------------------------
 
 
 class _S3Body:
@@ -185,9 +179,6 @@ def _route_cache_to_inmemory_s3(monkeypatch):
         FakeStorageClient._active = None
 
 
-# ---------------------------------------------------------------------------
-# Registration tests (no gdaldem needed).
-# ---------------------------------------------------------------------------
 
 
 def test_compute_colored_relief_is_registered():
@@ -205,9 +196,6 @@ def test_four_ramp_presets_exist():
     assert _VALID_RAMPS == {"terrain", "elevation_blue_green", "grayscale", "viridis"}
 
 
-# ---------------------------------------------------------------------------
-# _write_ramp_file tests (no gdaldem needed).
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize("ramp", ["terrain", "elevation_blue_green", "grayscale", "viridis"])
@@ -243,9 +231,6 @@ def test_write_ramp_file_raises_on_unknown_ramp(tmp_path):
         _write_ramp_file("rainbow", str(tmp_path / "ramp.txt"))
 
 
-# ---------------------------------------------------------------------------
-# Synthetic DEM tests (require gdaldem on PATH).
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.skipif(not _GDALDEM_AVAILABLE, reason="gdaldem not on PATH")
@@ -279,9 +264,6 @@ def test_each_ramp_produces_multi_band_output(ramp: str):
                     pass
 
 
-# ---------------------------------------------------------------------------
-# Cache-integration tests (pure Python, no gdaldem).
-# ---------------------------------------------------------------------------
 
 
 def _make_fake_cog_bytes() -> bytes:
@@ -376,9 +358,6 @@ def test_cache_miss_writes_through():
     assert fetch_invoked["n"] == 1  # NOT incremented again
 
 
-# ---------------------------------------------------------------------------
-# LayerURI shape tests (no gdaldem, pure Python).
-# ---------------------------------------------------------------------------
 
 
 def test_compute_colored_relief_returns_correct_layer_uri_shape():

@@ -23,9 +23,6 @@ from trid3nt_server.tools.derive.clip_raster_to_polygon.clip_raster_to_polygon i
 )
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
 
 
 def _write_synthetic_raster(
@@ -92,9 +89,6 @@ def _write_polygon_fgb_multi(
     gdf.to_file(path, driver="FlatGeobuf", engine="pyogrio")
 
 
-# ---------------------------------------------------------------------------
-# Fake cache shim (in-memory S3 double)
-# ---------------------------------------------------------------------------
 
 
 class _S3Body:
@@ -164,9 +158,6 @@ def _route_cache_to_inmemory_s3(monkeypatch):
         FakeStorageClient._active = None
 
 
-# ---------------------------------------------------------------------------
-# Test 1 — registration check
-# ---------------------------------------------------------------------------
 
 
 def test_clip_raster_to_polygon_registered():
@@ -178,9 +169,6 @@ def test_clip_raster_to_polygon_registered():
     assert entry.metadata.source_class == "clip_raster_polygon"
 
 
-# ---------------------------------------------------------------------------
-# Test 2 — geographic correctness: square polygon yields correct extent
-# ---------------------------------------------------------------------------
 
 
 def test_clip_with_square_polygon_yields_correct_extent(tmp_path):
@@ -243,9 +231,6 @@ def test_clip_with_square_polygon_yields_correct_extent(tmp_path):
     assert "clip_raster_polygon" in result.uri
 
 
-# ---------------------------------------------------------------------------
-# Test 3 — polygon CRS mismatch is reprojected
-# ---------------------------------------------------------------------------
 
 
 def test_polygon_crs_mismatch_is_reprojected(tmp_path):
@@ -298,9 +283,6 @@ def test_polygon_crs_mismatch_is_reprojected(tmp_path):
     assert abs(bounds.top - 27.25) < tol, f"top={bounds.top}"
 
 
-# ---------------------------------------------------------------------------
-# Test 4 — feature_filter selects one polygon from multi-feature input
-# ---------------------------------------------------------------------------
 
 
 def test_feature_filter_selects_one_polygon(tmp_path):
@@ -358,9 +340,6 @@ def test_feature_filter_selects_one_polygon(tmp_path):
     assert "Right" in result.layer_id
 
 
-# ---------------------------------------------------------------------------
-# Test 5 — nodata_outside override
-# ---------------------------------------------------------------------------
 
 
 def test_nodata_outside_override(tmp_path):
@@ -411,9 +390,6 @@ def test_nodata_outside_override(tmp_path):
     assert np.any(out_data == 10.0), "expected at least one inside-polygon pixel == 10.0"
 
 
-# ---------------------------------------------------------------------------
-# Test 6 — cache miss then cache hit skips mask
-# ---------------------------------------------------------------------------
 
 
 def test_cache_miss_then_hit_skips_mask(tmp_path):
@@ -457,9 +433,6 @@ def test_cache_miss_then_hit_skips_mask(tmp_path):
     assert r1.uri == r2.uri
 
 
-# ---------------------------------------------------------------------------
-# Test 7 — empty filter raises typed error
-# ---------------------------------------------------------------------------
 
 
 def test_empty_filter_raises_typed_error(tmp_path):
@@ -488,9 +461,6 @@ def test_empty_filter_raises_typed_error(tmp_path):
     assert exc_info.value.error_code == "POLYGON_FILTER_EMPTY"
 
 
-# ---------------------------------------------------------------------------
-# Test 8 — unknown raster_uri
-# ---------------------------------------------------------------------------
 
 
 def test_unknown_raster_uri_raises_typed_error():
@@ -502,9 +472,6 @@ def test_unknown_raster_uri_raises_typed_error():
     assert exc_info.value.error_code == "UNKNOWN_RASTER_URI"
 
 
-# ---------------------------------------------------------------------------
-# Test 9 — unknown polygon_uri
-# ---------------------------------------------------------------------------
 
 
 def test_unknown_polygon_uri_raises_typed_error(tmp_path):
@@ -522,9 +489,6 @@ def test_unknown_polygon_uri_raises_typed_error(tmp_path):
     assert exc_info.value.error_code == "UNKNOWN_POLYGON_URI"
 
 
-# ---------------------------------------------------------------------------
-# Test 10 — live geographic-correctness end-to-end
-# ---------------------------------------------------------------------------
 
 
 _LIVE = os.environ.get("TRID3NT_TEST_LIVE_CLIP") == "1"
@@ -638,9 +602,6 @@ def test_live_clip_fortmyers_dem_to_lee_county_shape(tmp_path):
     )
 
 
-# ---------------------------------------------------------------------------
-# BBox path (folded clip_raster_to_bbox) -- rasterio.mask on a rectangle
-# ---------------------------------------------------------------------------
 
 
 def test_clip_with_bbox_yields_correct_extent(tmp_path):

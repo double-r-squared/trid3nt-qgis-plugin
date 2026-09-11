@@ -74,9 +74,6 @@ def _simulate_disconnect_finally(state: server.SessionState) -> None:
             server._register_live_turn(state.session_id, turn_key, t, state.emitter)
 
 
-# --------------------------------------------------------------------------- #
-# (a) disconnect does NOT cancel a (solver) turn
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio
@@ -109,9 +106,6 @@ async def test_solver_turn_survives_disconnect() -> None:
     assert task.done() and not task.cancelled()
 
 
-# --------------------------------------------------------------------------- #
-# (b) explicit cancel still cancels the detached turn (genuine cancellation)
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio
@@ -144,9 +138,6 @@ async def test_explicit_cancel_still_cancels_detached_turn() -> None:
     assert task.cancelled()
 
 
-# --------------------------------------------------------------------------- #
-# (c) a new connection for the same session re-binds the emitter sink
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio
@@ -188,7 +179,6 @@ async def test_reconnect_rebinds_emitter_to_new_socket() -> None:
     assert len(ws_old.sent) == frames_before_disconnect
 
 
-# --------------------------------------------------------------------------- #
 # (c2) the TERMINAL flood-depth layer survives a reconnect that lands AFTER the
 #      terminal emit was already pushed onto the dead launch socket. This is the
 #      real "floods render only the input layers, never the depth output" bug:
@@ -196,7 +186,6 @@ async def test_reconnect_rebinds_emitter_to_new_socket() -> None:
 #      onto the now-dead socket in the window before the browser's reconnect, and
 #      the rebind only replays the pipeline CARDS -- not the loaded-layers
 #      session-state -- so without the merge-seed the new socket never sees it.
-# --------------------------------------------------------------------------- #
 
 
 def _last_loaded_uris(ws: FakeWS) -> list[str]:
@@ -327,9 +316,6 @@ async def test_merge_loaded_layers_from_is_union_no_duplicate() -> None:
     assert fresh.merge_loaded_layers_from(live) == 0
 
 
-# --------------------------------------------------------------------------- #
-# (d) no leak: a completed turn is removed from the module registry
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio
@@ -383,9 +369,6 @@ async def test_no_bleed_across_sessions() -> None:
     await task
 
 
-# --------------------------------------------------------------------------- #
-# (e) a non-solver / cheap turn behaves as before (kept running + no leak)
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio
@@ -421,9 +404,6 @@ async def test_cheap_turn_finishes_and_no_leak_across_disconnect() -> None:
     assert session_id not in server._SESSION_LIVE_TURNS
 
 
-# --------------------------------------------------------------------------- #
-# supersede: a same-stream re-prompt cancels the prior (even detached) turn
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio

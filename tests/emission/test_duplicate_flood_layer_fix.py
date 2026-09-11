@@ -18,9 +18,6 @@ from trid3nt_server.emission.pipeline_emitter import PipelineEmitter
 from trid3nt_server.emission import presets
 
 
-# --------------------------------------------------------------------------- #
-# Shared fixtures
-# --------------------------------------------------------------------------- #
 
 
 class _Sink:
@@ -28,10 +25,8 @@ class _Sink:
         return None
 
 
-# --------------------------------------------------------------------------- #
 # THE STYLE BOUNDARY - the shape and its parameters come from what the producer
 # DECLARED, and a filename is not a declaration.
-# --------------------------------------------------------------------------- #
 
 
 class TestPublishBoundaryStyle:
@@ -68,10 +63,8 @@ class TestPublishBoundaryStyle:
         assert presets.from_row(layer.style) == presets.bare_default("continuous")
 
 
-# --------------------------------------------------------------------------- #
 # SAFETY NET - two publishes of the SAME underlying COG (different display URLs)
 # dedup to ONE loaded_layer.
-# --------------------------------------------------------------------------- #
 
 
 class TestDedupByIdentity:
@@ -131,10 +124,8 @@ class TestDedupByIdentity:
         assert ids == {first.layer_id, second.layer_id}
 
 
-# --------------------------------------------------------------------------- #
 # every appended layer carries a STABLE, MONOTONIC z_index, and an in-place
 # re-publish REUSES the superseded layer's slot (no renumbering).
-# --------------------------------------------------------------------------- #
 
 
 class TestStableMonotonicZIndex:

@@ -48,9 +48,6 @@ def _cap_gate_waits(monkeypatch):
     monkeypatch.setenv("TRID3NT_GATE_WAIT_CAP_S", "5")
 
 
-# =========================================================================== #
-# Geometry fixtures.
-# =========================================================================== #
 
 
 def _aoi_feature() -> dict[str, Any]:
@@ -101,9 +98,6 @@ def _full_drawn_fc() -> dict[str, Any]:
     }
 
 
-# =========================================================================== #
-# 1. PURE PARSE - the role split.
-# =========================================================================== #
 
 
 def test_split_features_by_role_buckets_all_roles():
@@ -164,9 +158,6 @@ def test_point_wrong_geometry_raises():
     assert ei.value.error_code == "SPATIAL_INPUT_POINT_NOT_POINT"
 
 
-# =========================================================================== #
-# 2. spatial-input-response -> the LLM-facing result.
-# =========================================================================== #
 
 
 def test_response_vector_draw_carries_the_drawn_roles():
@@ -251,9 +242,6 @@ def test_response_malformed_features_is_typed_error_second_layer():
     assert "aoi_bbox" not in r
 
 
-# =========================================================================== #
-# 3. Pending-future registry + inbound resolve + emit/await round-trip.
-# =========================================================================== #
 
 
 def test_registration_in_ws_routing_registries():
@@ -365,9 +353,6 @@ def test_emit_and_wait_timeout_returns_none(monkeypatch):
     assert asyncio.run(_run()) is None
 
 
-# =========================================================================== #
-# 4. request_spatial_input catalog tool — sentinel + invalid-mode typed error.
-# =========================================================================== #
 
 
 def test_request_spatial_input_tool_returns_sentinel():

@@ -81,9 +81,6 @@ def _frame_layers(tmp_path: Path, values=(0.5, 1.5, 2.5)) -> list[dict]:
     return layers
 
 
-# --------------------------------------------------------------------------- #
-# Frame-token parsing (web LayerPanel port)
-# --------------------------------------------------------------------------- #
 
 
 def test_parse_step_token() -> None:
@@ -136,9 +133,6 @@ def test_detect_sequences_ignores_vectors_and_duplicates() -> None:
     assert detect_frame_sequences(layers) == {}
 
 
-# --------------------------------------------------------------------------- #
-# Happy path
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio
@@ -230,9 +224,6 @@ async def test_unreadable_frame_is_honest_entry(monkeypatch, tmp_path: Path) -> 
     assert result["sampled_count"] == 1
 
 
-# --------------------------------------------------------------------------- #
-# Typed errors
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio
@@ -282,9 +273,6 @@ async def test_no_location_typed_error(monkeypatch, tmp_path: Path) -> None:
         await extract_timeseries_at_point(case_id="case-1")
 
 
-# --------------------------------------------------------------------------- #
-# Registration
-# --------------------------------------------------------------------------- #
 
 
 def test_registered_in_tool_registry() -> None:

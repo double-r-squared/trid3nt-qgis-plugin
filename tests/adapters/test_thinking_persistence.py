@@ -29,9 +29,6 @@ from trid3nt_contracts.case import CaseChatMessage
 _SECRET = "NEVER-IN-LLM-CONTENTS-8f3a"
 
 
-# ---------------------------------------------------------------------------
-# Harness: drive _stream_model_reply against a canned StreamEvent script
-# ---------------------------------------------------------------------------
 
 
 @dataclass
@@ -100,9 +97,6 @@ async def _drive_events(
     return sock, persisted
 
 
-# ---------------------------------------------------------------------------
-# Persist path: thinking rides the SAME agent row as the answer
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -205,9 +199,6 @@ def test_case_chat_message_thinking_is_additive():
     assert msg.thinking is None
 
 
-# ---------------------------------------------------------------------------
-# NEVER-REHYDRATE guard: thinking never reaches LLM-bound contents
-# ---------------------------------------------------------------------------
 
 
 def _all_part_texts(contents) -> str:

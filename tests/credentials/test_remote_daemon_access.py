@@ -54,9 +54,6 @@ def _make_auth_result(*, anonymous: bool = True) -> AuthResult:
     )
 
 
-# --------------------------------------------------------------------------- #
-# 1. derive_advertised_endpoints -- derived from the connection's local host
-# --------------------------------------------------------------------------- #
 
 
 def test_derive_endpoints_from_connection_host() -> None:
@@ -111,9 +108,6 @@ def test_derive_endpoints_bad_http_port_env_falls_back(
     assert ep.http_base == "http://192.168.1.10:8766"
 
 
-# --------------------------------------------------------------------------- #
-# 2. derive_advertised_endpoints -- env override wins, per field
-# --------------------------------------------------------------------------- #
 
 
 def test_derive_endpoints_env_override_both(
@@ -151,9 +145,6 @@ def test_derive_endpoints_env_override_with_no_host(
     assert ep.data_base is None
 
 
-# --------------------------------------------------------------------------- #
-# 3. derive_advertised_endpoints -- absent for old-stub / no-socket path
-# --------------------------------------------------------------------------- #
 
 
 def test_derive_endpoints_absent_without_host_or_env() -> None:
@@ -162,9 +153,6 @@ def test_derive_endpoints_absent_without_host_or_env() -> None:
     assert derive_advertised_endpoints("") is None
 
 
-# --------------------------------------------------------------------------- #
-# 4. build_auth_ack -- endpoints ride the ack; backward-compatible default
-# --------------------------------------------------------------------------- #
 
 
 def test_build_auth_ack_carries_endpoints() -> None:
@@ -205,9 +193,6 @@ def test_auth_ack_old_wire_without_endpoints_parses() -> None:
     assert back.endpoints is None
 
 
-# --------------------------------------------------------------------------- #
-# 5. verify_access_token -- on / off / mismatch
-# --------------------------------------------------------------------------- #
 
 
 def test_verify_access_token_disabled_by_default() -> None:
@@ -240,9 +225,6 @@ def test_verify_access_token_mismatch(monkeypatch: pytest.MonkeyPatch) -> None:
     assert verify_access_token(None) is False
 
 
-# --------------------------------------------------------------------------- #
-# Server integration: fake socket exercising _handle_auth_token / _ensure_*
-# --------------------------------------------------------------------------- #
 
 
 class _FakeWebSocket:

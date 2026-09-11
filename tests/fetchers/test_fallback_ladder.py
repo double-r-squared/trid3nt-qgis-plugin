@@ -50,9 +50,6 @@ def _ladder(*alternatives: Rung, user: Rung | None = None) -> Ladder:
     return Ladder(capability="test_cap", rungs=rungs, refuse_error_code="TEST_REFUSED")
 
 
-# --------------------------------------------------------------------------- #
-# Rung / Ladder schema.
-# --------------------------------------------------------------------------- #
 
 
 def test_ladder_requires_exactly_one_primary() -> None:
@@ -109,9 +106,6 @@ def test_terminal_rung_is_refuse() -> None:
     assert _ladder().terminal.consequence == "refuse"
 
 
-# --------------------------------------------------------------------------- #
-# The walker.
-# --------------------------------------------------------------------------- #
 
 
 def test_primary_serves_whole_request_and_is_recorded() -> None:
@@ -475,9 +469,6 @@ def test_render_fallback_line_is_silent_on_an_undegraded_run() -> None:
     assert render_fallback_line(act.to_contract()) is None
 
 
-# --------------------------------------------------------------------------- #
-# The loudness floor.
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.parametrize(
@@ -575,9 +566,6 @@ def test_unanswered_gate_on_a_live_session_is_a_decline() -> None:
     assert emitter.sent and emitter.sent[0][0] == "tool-payload-warning"
 
 
-# --------------------------------------------------------------------------- #
-# The SWAN bathymetry ladder: coverage math + the gap.
-# --------------------------------------------------------------------------- #
 
 
 def test_bathymetry_ladder_shape() -> None:
@@ -664,9 +652,6 @@ def test_unreachable_tile_index_never_claims_a_gap(monkeypatch) -> None:
     tb.validate_topobathy(None, {"bbox": list(_EXHIBIT_BBOX)})
 
 
-# --------------------------------------------------------------------------- #
-# End-to-end through the router: the A/B the exhibit demands.
-# --------------------------------------------------------------------------- #
 
 
 def _synth_raster(path: str, bbox, fill: float) -> None:
@@ -962,9 +947,6 @@ def test_the_land_legs_flat_ocean_fill_never_reaches_the_served_bed(
     assert float(np.nanmin(arr)) == pytest.approx(-30.0, abs=1.0)
 
 
-# --------------------------------------------------------------------------- #
-# A GAP + a faulted filling rung, end to end: what the composers actually see.
-# --------------------------------------------------------------------------- #
 
 
 class _Transient(Exception):
@@ -998,9 +980,6 @@ def test_a_transport_fault_on_the_filling_rung_is_not_a_bathymetry_verdict(
     assert "89% of AOI" in str(ei.value)             # the gap context
     assert "MinIO" in str(ei.value)                  # AND the cause
     assert isinstance(ei.value.__cause__, _Transient)
-# --------------------------------------------------------------------------- #
-# MEASURED paint: a partial ETOPO base may not claim the whole remainder.
-# --------------------------------------------------------------------------- #
 
 
 def _patch_total_cudem_loss_with_half_an_etopo(monkeypatch, tmp_path) -> None:
@@ -1072,9 +1051,6 @@ def test_a_partial_bed_with_no_cudem_gap_is_still_a_gap(
     assert rows["etopo_bathy_base"].coverage < 0.6
 
 
-# --------------------------------------------------------------------------- #
-# The NCEI regional FINE leg fills the hole -- and is not ignored.
-# --------------------------------------------------------------------------- #
 
 
 def _patch_partial_cudem_plus_regional_fine(monkeypatch, tmp_path) -> None:
@@ -1185,9 +1161,6 @@ def test_shares_that_do_not_sum_to_one_are_said_out_loud(caplog) -> None:
     assert "painted by a source outside the ladder or by nothing at all" in caplog.text
 
 
-# --------------------------------------------------------------------------- #
-# Decline semantics: a LATER gap may not retro-justify an EARLIER decline.
-# --------------------------------------------------------------------------- #
 
 
 def test_a_later_gap_never_retro_justifies_an_earlier_decline() -> None:
@@ -1259,9 +1232,6 @@ def test_a_transport_fault_after_a_decline_still_beats_the_decline_verdict(
     assert rows["alt1"].declined is True  # the decline still leaves its trace
 
 
-# --------------------------------------------------------------------------- #
-# An UNMEASURED serve carries no numbers anywhere on the envelope.
-# --------------------------------------------------------------------------- #
 
 
 def test_an_exempted_envelope_carries_no_numeric_shares(

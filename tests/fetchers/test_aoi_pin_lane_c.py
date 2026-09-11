@@ -53,10 +53,8 @@ def _persistence_bound():
         set_persistence(saved)
 
 
-# --------------------------------------------------------------------------- #
 # (a) the first bbox-carrying fetch pins the Case AOI, and every follow-up with
 #     no bbox or a drifted one runs at it
-# --------------------------------------------------------------------------- #
 
 
 def test_followup_fetch_defaults_to_pinned_aoi_end_to_end(
@@ -128,9 +126,6 @@ def test_followup_fetch_defaults_to_pinned_aoi_end_to_end(
     )
 
 
-# --------------------------------------------------------------------------- #
-# (c) a follow-up naming a DIFFERENT location is NOT forced to the old AOI
-# --------------------------------------------------------------------------- #
 
 
 def test_followup_different_location_not_forced_to_pin() -> None:
@@ -175,9 +170,6 @@ def test_fetch_default_snaps_drifted_but_honors_other(
     assert f("fetch_buildings", narrow, None) == narrow
 
 
-# --------------------------------------------------------------------------- #
-# The bbox-overlap test the four helpers share
-# --------------------------------------------------------------------------- #
 
 
 def test_the_three_bbox_helpers_agree_that_a_touching_edge_overlaps():

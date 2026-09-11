@@ -24,9 +24,6 @@ from trid3nt_server.tools.fetchers._router.hooks.topobathy import (
 COASTAL_AOI = (-85.75, 29.55, -85.25, 30.20)
 
 
-# --------------------------------------------------------------------------- #
-# The classifier: from the rows the reach chain already holds.
-# --------------------------------------------------------------------------- #
 
 
 def test_a_tidal_ftype_classifies_the_reach_as_coastal_estuary() -> None:
@@ -59,9 +56,6 @@ def test_the_classifier_never_guesses_a_class_from_an_unknown_ftype() -> None:
         tc.classify_water_body(water_features=[{"properties": {"ftype": 378}}])
 
 
-# --------------------------------------------------------------------------- #
-# The per-class ladders.
-# --------------------------------------------------------------------------- #
 
 
 def test_the_coastal_ladder_puts_bluetopo_above_the_cudem_composite() -> None:
@@ -149,9 +143,6 @@ def test_every_class_ladder_ends_at_refuse_with_the_rows_own_error_code() -> Non
         assert ladder.refuse_error_code == "TOPOBATHY_COVERAGE_GAP"
 
 
-# --------------------------------------------------------------------------- #
-# The BlueTopo source: discovery, the datum gate, and what a partial cover says.
-# --------------------------------------------------------------------------- #
 
 
 @pytest.fixture()
@@ -326,9 +317,6 @@ def test_the_envelope_states_the_datum_in_provenance() -> None:
     assert "NAVD88" in fields["name"]
 
 
-# --------------------------------------------------------------------------- #
-# The declaration itself.
-# --------------------------------------------------------------------------- #
 
 
 def test_the_bluetopo_spec_declares_the_delegate_hooks_and_the_result_model() -> None:
@@ -355,9 +343,6 @@ def test_the_topobathy_row_declares_the_water_body_class_it_ladders_on() -> None
     assert sorted(param.values or []) == sorted(tc.WATER_BODY_CLASSES)
 
 
-# --------------------------------------------------------------------------- #
-# The datum every bed source owes, stated on its own row.
-# --------------------------------------------------------------------------- #
 #: Every source a recipe may hand ``set_bed``: the rows whose quantity IS bed
 #: elevation. Read off the tree rather than listed, so a new one joins the rule
 #: by existing rather than by somebody remembering to add it here.

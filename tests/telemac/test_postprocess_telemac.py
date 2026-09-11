@@ -125,9 +125,6 @@ def test_rasterize_clips_to_channel_and_masks_subfloor():
     assert np.nanmax(grid) >= P.TELEMAC_DYE_WET_MGL
 
 
-# --------------------------------------------------------------------------- #
-# Barycentric (P1) rasterization of an open-water mesh: the dot-lattice fix.
-# --------------------------------------------------------------------------- #
 def _open_water_mesh(n=9, span=0.05, origin=(-87.6, 46.7)):
     """A regular triangulated node grid standing in for a coarse open-water mesh
     (nodes ~1 km apart over a lake AOI, the open-water geometry)."""

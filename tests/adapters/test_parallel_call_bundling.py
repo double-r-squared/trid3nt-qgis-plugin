@@ -32,9 +32,6 @@ class _FakeSocket:
         self.sent.append(msg)
 
 
-# ---------------------------------------------------------------------------
-# Test 1: producer accumulates parallel calls in one chunk
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -127,9 +124,6 @@ async def test_producer_yields_mixed_text_and_function_calls(fake_llm):
     assert events[1].name == "fetch_dem"
 
 
-# ---------------------------------------------------------------------------
-# Test 2: server loop dispatches all 3, bundles responses into ONE turn
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio

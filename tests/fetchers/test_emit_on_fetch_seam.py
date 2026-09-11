@@ -96,9 +96,6 @@ def _unbind(tokens):
     _DISPATCHED_TOOL.reset(tokens[1])
 
 
-# --------------------------------------------------------------------------- #
-# name builder
-# --------------------------------------------------------------------------- #
 def test_input_layer_name_shape_and_purpose():
     spec = _spec()
     assert input_layer_name(spec, {}, None) == "Input: 3dep (3dep, 3DEP 10 m)"
@@ -119,9 +116,6 @@ def test_input_layer_name_shape_and_purpose():
     )
 
 
-# --------------------------------------------------------------------------- #
-# worker-thread off-load path (the real composer path)
-# --------------------------------------------------------------------------- #
 @pytest.mark.asyncio
 async def test_raster_input_surfaced_via_worker_thread(monkeypatch):
     """A raster fetched by an OFF-LOADED sync fetcher (no running loop in that
@@ -191,9 +185,6 @@ async def test_vector_input_surfaced_on_loop():
     assert row.name == "Input: river geometry (osm)"
 
 
-# --------------------------------------------------------------------------- #
-# the gates
-# --------------------------------------------------------------------------- #
 @pytest.mark.asyncio
 async def test_record_source_never_attempts():
     """A record source (no visual form) surfaces nothing."""

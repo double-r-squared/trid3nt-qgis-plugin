@@ -55,9 +55,6 @@ def _patch_tnm_read(monkeypatch, values: Any = None, nodata: Any = None, exc: Ex
     monkeypatch.setattr(dem_mod, "read", fake_read)
 
 
-# --------------------------------------------------------------------------- #
-# Registration + spec shape.
-# --------------------------------------------------------------------------- #
 
 
 def test_3dep_promoted_as_library_delegate_spec():
@@ -80,9 +77,6 @@ def test_3dep_docstring_carried_verbatim():
     assert "3DEP" in doc and "arc-second" in doc
 
 
-# --------------------------------------------------------------------------- #
-# Payload estimator: per-resolution coefficient table + bbox scaling.
-# --------------------------------------------------------------------------- #
 
 
 def test_3dep_payload_scales_with_resolution():
@@ -112,9 +106,6 @@ def test_3dep_rejects_bad_max_tiles():
         _vp(bbox=list(_FORT_MYERS), max_tiles=10_000)
 
 
-# --------------------------------------------------------------------------- #
-# US-envelope pre-cache validate hook.
-# --------------------------------------------------------------------------- #
 
 
 def test_3dep_rejects_outside_us_bbox():
@@ -128,9 +119,6 @@ def test_3dep_us_bbox_passes_validate():
     library_delegate.pre_validate(SPEC, _vp(bbox=list(_FORT_MYERS)))
 
 
-# --------------------------------------------------------------------------- #
-# Delegate array -> COG + empty / tile-limit / upstream mapping.
-# --------------------------------------------------------------------------- #
 
 
 def test_3dep_delegate_array_serializes_to_cog(monkeypatch):
@@ -160,9 +148,6 @@ def test_3dep_library_error_maps_to_upstream(monkeypatch):
     assert "TNM 503" in str(ei.value)
 
 
-# --------------------------------------------------------------------------- #
-# LayerURI stamps.
-# --------------------------------------------------------------------------- #
 
 
 def test_3dep_layer_uri_stamps():

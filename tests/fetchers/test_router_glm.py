@@ -90,9 +90,6 @@ def _assert_valid_rgba_cog(data: bytes):
         assert ds.crs is not None and ds.crs.to_epsg() == 4326
 
 
-# --------------------------------------------------------------------------- #
-# Registration + surface parity.
-# --------------------------------------------------------------------------- #
 
 
 def test_glm_registered_and_served():
@@ -122,9 +119,6 @@ def test_glm_in_corpus():
     assert "fetch_glm_lightning" in corpus and len(corpus["fetch_glm_lightning"]) >= 3
 
 
-# --------------------------------------------------------------------------- #
-# frames_plan: single -> one-frame list; accumulation -> N; cache_params identity.
-# --------------------------------------------------------------------------- #
 
 
 def test_single_mode_is_a_one_frame_plan():
@@ -166,9 +160,6 @@ def test_satellite_spelling_normalized_in_plan():
     assert "(GOES-18)" in p.name
 
 
-# --------------------------------------------------------------------------- #
-# route(): list-return + one scrubber group + per-frame RGBA COG.
-# --------------------------------------------------------------------------- #
 
 
 def test_route_single_returns_one_frame_list_and_one_group(monkeypatch):
@@ -199,9 +190,6 @@ def test_route_accumulation_returns_ordered_scrubber_group(monkeypatch):
     assert _scrubs(layers)  # 3 contiguous declared windows, in order
 
 
-# --------------------------------------------------------------------------- #
-# Honesty floor: FrameDegraded skip + all-degrade / empty-window -> GLM_EMPTY.
-# --------------------------------------------------------------------------- #
 
 
 def test_empty_bucket_skipped_not_emitted_blank(monkeypatch):
@@ -251,9 +239,6 @@ def test_no_in_aoi_groups_surfaces_typed_empty(monkeypatch):
     assert getattr(ei.value, "error_code", None) == "GLM_EMPTY"
 
 
-# --------------------------------------------------------------------------- #
-# Typed input errors (pre-network).
-# --------------------------------------------------------------------------- #
 
 
 def test_unknown_satellite_raises_glm_input_invalid():
@@ -287,9 +272,6 @@ def test_tiny_accumulation_window_raises_input():
                                 "end_utc": "2025-09-07T18:03:00Z", "accumulation_window_s": 5})
 
 
-# --------------------------------------------------------------------------- #
-# Pure GED point-gridding math (relocated helpers).
-# --------------------------------------------------------------------------- #
 
 
 def test_bin_ged_places_energy_in_correct_north_up_cell():

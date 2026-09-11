@@ -21,9 +21,6 @@ from trid3nt_server.gates.circuit_breaker import (
 )
 
 
-# ---------------------------------------------------------------------------
-# Synthetic upstream / client-arg error classes (mirror real tool exceptions).
-# ---------------------------------------------------------------------------
 
 
 class _FakeUpstreamError(RuntimeError):
@@ -40,9 +37,6 @@ class _FakeArgError(RuntimeError):
     retryable = False
 
 
-# ---------------------------------------------------------------------------
-# Test 1: defaults
-# ---------------------------------------------------------------------------
 
 
 def test_default_threshold_and_cooldown():
@@ -52,9 +46,6 @@ def test_default_threshold_and_cooldown():
     assert cb.cooldown_s == _DEFAULT_COOLDOWN_S
 
 
-# ---------------------------------------------------------------------------
-# Test 2: threshold tripping
-# ---------------------------------------------------------------------------
 
 
 def test_below_threshold_not_tripped():
@@ -90,9 +81,6 @@ def test_cooldown_remaining_positive_when_tripped():
     assert 0 < remaining <= 60.0
 
 
-# ---------------------------------------------------------------------------
-# Test 3: cooldown expiry → auto-close
-# ---------------------------------------------------------------------------
 
 
 def test_cooldown_expiry_auto_closes_breaker():
@@ -135,9 +123,6 @@ def test_cooldown_remaining_zero_for_non_tripped_tool():
     assert cb.cooldown_remaining_s("fetch_dem") == 0.0
 
 
-# ---------------------------------------------------------------------------
-# Test 4: success resets the failure counter
-# ---------------------------------------------------------------------------
 
 
 def test_success_resets_failure_counter():
@@ -168,9 +153,6 @@ def test_success_on_clean_tool_is_noop():
     assert cb.is_tripped("fetch_dem") is False
 
 
-# ---------------------------------------------------------------------------
-# Test 5: env overrides
-# ---------------------------------------------------------------------------
 
 
 def test_env_override_threshold(monkeypatch):
@@ -213,9 +195,6 @@ def test_env_override_threshold_zero_falls_back(monkeypatch):
     assert cb.threshold == _DEFAULT_THRESHOLD
 
 
-# ---------------------------------------------------------------------------
-# Test 6: CircuitBreakerError shape
-# ---------------------------------------------------------------------------
 
 
 def test_circuit_breaker_error_shape():
@@ -247,9 +226,6 @@ def test_circuit_breaker_error_harvested_by_summarize():
     assert "fetch_stac" in summary["message"]
 
 
-# ---------------------------------------------------------------------------
-# Test 7: record_failure on an already-tripped breaker does not reset clock
-# ---------------------------------------------------------------------------
 
 
 def test_record_failure_on_tripped_breaker_does_not_reset_clock():
@@ -276,9 +252,6 @@ def test_record_failure_on_tripped_breaker_does_not_reset_clock():
     )
 
 
-# ---------------------------------------------------------------------------
-# Test 8: multiple tools are independent
-# ---------------------------------------------------------------------------
 
 
 def test_multiple_tools_are_independent():
@@ -294,13 +267,11 @@ def test_multiple_tools_are_independent():
     assert cb.is_tripped("fetch_wdpa") is False  # only 1 failure, threshold=2
 
 
-# ---------------------------------------------------------------------------
 # Test 9: failure classification.
 #
 # The breaker must trip ONLY on UPSTREAM/transient faults, NEVER on a
 # deterministic CLIENT/argument error — otherwise a burst of bad-arg calls
 # trips the breaker and the cooldown then BLOCKS the corrected-args retry.
-# ---------------------------------------------------------------------------
 
 
 def test_is_client_arg_error_classification():

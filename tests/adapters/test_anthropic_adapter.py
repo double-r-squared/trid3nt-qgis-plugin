@@ -27,9 +27,6 @@ from trid3nt_server.adapters.adapter import (
 )
 
 
-# --------------------------------------------------------------------------- #
-# Fixtures / doubles
-# --------------------------------------------------------------------------- #
 
 
 def _decl(name: str, description: str) -> genai_types.FunctionDeclaration:
@@ -134,9 +131,6 @@ def _status_error(cls, status: int, headers: dict[str, str] | None = None):
     return cls("boom", response=response, body=None)
 
 
-# --------------------------------------------------------------------------- #
-# Model + key resolution
-# --------------------------------------------------------------------------- #
 
 
 def test_default_model_is_sonnet_5(monkeypatch):
@@ -161,9 +155,6 @@ def test_missing_api_key_raises_honestly(monkeypatch):
         aa.anthropic_api_key()
 
 
-# --------------------------------------------------------------------------- #
-# Request shape
-# --------------------------------------------------------------------------- #
 
 
 def test_request_uses_adaptive_thinking_and_no_sampling_params(monkeypatch):
@@ -206,9 +197,6 @@ def test_tool_descriptions_are_not_truncated():
     assert schema["required"] == ["bbox"]
 
 
-# --------------------------------------------------------------------------- #
-# History conversion
-# --------------------------------------------------------------------------- #
 
 
 def test_tool_use_and_result_ids_pair_and_coalesce():
@@ -267,9 +255,6 @@ def test_empty_history_yields_synthetic_user_message():
     assert messages == [{"role": "user", "content": [{"type": "text", "text": "(context)"}]}]
 
 
-# --------------------------------------------------------------------------- #
-# Streaming -> StreamEvent union
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio
@@ -325,9 +310,6 @@ async def test_refusal_is_narrated_honestly(monkeypatch):
     assert any("declined" in t and "cyber" in t for t in texts)
 
 
-# --------------------------------------------------------------------------- #
-# Upstream-provider discipline
-# --------------------------------------------------------------------------- #
 
 
 def test_transient_classification():
@@ -404,9 +386,6 @@ def test_error_class_telemetry():
     )
 
 
-# --------------------------------------------------------------------------- #
-# Dispatch seam
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio

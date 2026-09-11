@@ -28,9 +28,6 @@ from trid3nt_contracts.execution import LayerURI
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 
-# ---------------------------------------------------------------------------
-# (c) fuzzy enum-arg correction
-# ---------------------------------------------------------------------------
 
 
 def _enum_fn(
@@ -86,9 +83,6 @@ def test_enum_fuzzy_ignores_non_literal_params(monkeypatch):
     assert out["bbox"] == "0,0,1,1"
 
 
-# ---------------------------------------------------------------------------
-# (d) geocode drift warning -- pure helper
-# ---------------------------------------------------------------------------
 
 _GEOCODED = [-82.6, 27.9, -82.3, 28.1]  # Tampa-ish
 
@@ -122,9 +116,6 @@ def test_drift_note_no_fire_without_bbox_arg():
     assert agent_server._geocode_drift_note(None, _GEOCODED, None) is None
 
 
-# ---------------------------------------------------------------------------
-# (d) geocode drift warning -- through the live dispatch loop
-# ---------------------------------------------------------------------------
 
 
 @dataclass
@@ -221,9 +212,6 @@ async def test_drift_warning_kill_switch(monkeypatch, fake_llm):
     assert "aoi_drift_warning" not in resp, sorted(resp)
 
 
-# ---------------------------------------------------------------------------
-# (a) refetch-dedupe kill-switch
-# ---------------------------------------------------------------------------
 
 _FETCHES: list[dict] = []
 

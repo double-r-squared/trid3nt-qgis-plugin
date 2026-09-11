@@ -22,9 +22,6 @@ from trid3nt_server.server import _send_loop_exhausted, SessionState
 from trid3nt_contracts import new_ulid
 
 
-# ---------------------------------------------------------------------------
-# Minimal socket helpers
-# ---------------------------------------------------------------------------
 
 
 @dataclass
@@ -46,9 +43,6 @@ class _BrokenSocket:
         raise OSError("connection reset")
 
 
-# ---------------------------------------------------------------------------
-# Test 1-4: _send_loop_exhausted envelope shape
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -117,9 +111,6 @@ async def test_send_loop_exhausted_is_not_error_envelope():
     assert sock.sent[0]["type"] != "error"
 
 
-# ---------------------------------------------------------------------------
-# Test 7: _send_loop_exhausted is best-effort (never raises)
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -135,9 +126,6 @@ async def test_send_loop_exhausted_best_effort_on_broken_socket():
         )
 
 
-# ---------------------------------------------------------------------------
-# Fake chunk helpers for end-to-end tests
-# ---------------------------------------------------------------------------
 
 
 def _make_fake_chunk_with_function_call(name: str, args: dict, call_id: str):
@@ -145,9 +133,6 @@ def _make_fake_chunk_with_function_call(name: str, args: dict, call_id: str):
     return {"tool_call": {"name": name, "args": args, "call_id": call_id}}
 
 
-# ---------------------------------------------------------------------------
-# Test 5: end-to-end — loop exhaustion emits loop_exhausted envelope
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -201,9 +186,6 @@ async def test_stream_model_reply_emits_loop_exhausted_on_cap(fake_llm):
     assert str(MAX_TURN_ITERATIONS) in payload["message"]
 
 
-# ---------------------------------------------------------------------------
-# Test 6: terminal agent-message-chunk (done=True) still fires after loop_exhausted
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio

@@ -42,9 +42,6 @@ def _artifact(**over) -> MeshArtifact:
     return MeshArtifact(**base)
 
 
-# --------------------------------------------------------------------------- #
-# Registration: one tool, and the meshers behind it.
-# --------------------------------------------------------------------------- #
 def test_build_mesh_registered_and_the_standalone_builder_is_gone():
     rt = TOOL_REGISTRY.get("build_mesh")
     assert rt is not None
@@ -85,9 +82,6 @@ def test_an_op_a_mesher_never_registered_is_refused_by_name():
     assert "open_boundary_side" in str(excinfo.value)
 
 
-# --------------------------------------------------------------------------- #
-# 2dm writer/reader round-trip (MDAL display face + supplied-mesh node parse).
-# --------------------------------------------------------------------------- #
 def test_2dm_round_trip():
     # two triangles in UTM metres.
     pts = np.array([[500000.0, 3880000.0], [500100.0, 3880000.0],
@@ -162,9 +156,6 @@ def test_read_2dm_rejects_empty():
         read_2dm_mesh(str(p))
 
 
-# --------------------------------------------------------------------------- #
-# The artifact answers for its own readiness.
-# --------------------------------------------------------------------------- #
 def test_a_solve_ready_mesh_names_no_reason():
     assert _artifact().unsolvable_reason() is None
 
@@ -187,9 +178,6 @@ def test_a_bedless_mesh_whose_bed_is_fitted_onto_a_staged_topology_is_ready():
     assert art.unsolvable_reason() is None
 
 
-# --------------------------------------------------------------------------- #
-# Sidecar-key derivation + case stash.
-# --------------------------------------------------------------------------- #
 def test_sidecar_key_derivation():
     got = sidecar_key_for_mesh_uri("s3://cache/mesh/01ABC/mesh.2dm")
     assert got == ("cache", "mesh/01ABC/mesh_artifact.json")

@@ -36,9 +36,6 @@ def _emitter() -> PipelineEmitter:
     return PipelineEmitter(session_id=new_ulid(), sink=_Sink())
 
 
-# ===========================================================================
-# (1) publish_input_layer -- the shared helper.
-# ===========================================================================
 @pytest.mark.asyncio
 async def test_publish_input_layer_forces_role_input_and_no_bbox():
     """A vector with role!=input + a bbox is COPIED to role="input" + bbox=None
@@ -147,11 +144,9 @@ async def test_publish_input_layer_swallows_add_loaded_layer_failure():
     assert ok is False
 
 
-# ===========================================================================
 # (1b) publish_raster_input_cog -- the EXISTING-COG raster input seam
 #      The bathymetry-consuming coastal templates surface their
 #      fetched topobathy the same way the flood DEM path does.
-# ===========================================================================
 _PUBLISH_LAYER_TARGET = (
     "trid3nt_server.emission.publish.publish_layer"
 )
@@ -275,7 +270,6 @@ async def test_publish_raster_input_cog_none_emitter_or_uri_noop():
 
 
 
-# ===========================================================================
 # (SWEEP) single-path guard.
 #
 # After the S2 collapse the emit-on-fetch router seam (route() ->
@@ -299,7 +293,6 @@ async def test_publish_raster_input_cog_none_emitter_or_uri_noop():
 # A NEW input-emission site fails this test: route the fetch through the seam
 # (its render declaration surfaces it for free) or, if it is genuinely one of
 # the exempt classes above, add it here WITH a reason.
-# ===========================================================================
 import pathlib  # noqa: E402
 import re  # noqa: E402
 

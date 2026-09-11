@@ -22,9 +22,6 @@ def _clean_cache():
     resolver._SESSION_CREDENTIALS.clear()
 
 
-# --------------------------------------------------------------------------- #
-# Resolution order
-# --------------------------------------------------------------------------- #
 
 
 def test_session_cache_resolves_for_keyed_tool():
@@ -59,9 +56,6 @@ def test_no_source_resolves_none(monkeypatch):
     assert resolver.resolve_credential("sess-1", "fetch_firms_active_fire") is None
 
 
-# --------------------------------------------------------------------------- #
-# Session-cache lifecycle
-# --------------------------------------------------------------------------- #
 
 
 def test_clear_session_drops_entries():
@@ -82,9 +76,6 @@ def test_sessions_isolated():
     assert resolver.resolve_credential("sess-2", "fetch_firms_active_fire") is None
 
 
-# --------------------------------------------------------------------------- #
-# The reshaped secret-add handler writes to the session cache
-# --------------------------------------------------------------------------- #
 
 
 class _NullWebSocket:

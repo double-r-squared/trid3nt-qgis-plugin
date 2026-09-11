@@ -33,9 +33,6 @@ _PINNED_NOW = datetime(2026, 6, 22, 12, 0, 0, tzinfo=timezone.utc)
 _AOI = (-112.30, 33.83, -112.20, 33.92)
 
 
-# ---------------------------------------------------------------------------
-# In-memory S3 read-through injector (mirrors the sibling compute_ndvi test).
-# ---------------------------------------------------------------------------
 
 
 class _FakeStore:
@@ -127,9 +124,6 @@ def _read_fgb(uri_bytes: bytes):
         os.unlink(p)
 
 
-# ---------------------------------------------------------------------------
-# Registration / metadata.
-# ---------------------------------------------------------------------------
 
 
 def test_tool_is_registered() -> None:
@@ -156,9 +150,6 @@ def test_payload_estimator_scales_with_area_and_floors() -> None:
     assert estimate_payload_mb(bbox=(-112.300, 33.830, -112.2999, 33.8301)) >= 0.05
 
 
-# ---------------------------------------------------------------------------
-# Input validation (typed, non-retryable).
-# ---------------------------------------------------------------------------
 
 
 def test_degenerate_bbox_raises() -> None:
@@ -200,9 +191,6 @@ def test_input_error_not_retryable() -> None:
         pytest.fail("expected WaterBodyBboxError")
 
 
-# ---------------------------------------------------------------------------
-# Happy path (mocked STAC + band reads; real vectorize + FGB write).
-# ---------------------------------------------------------------------------
 
 
 def test_happy_path_digitizes_water_and_roundtrips() -> None:
@@ -279,9 +267,6 @@ def test_cache_hit_does_not_refetch() -> None:
     assert calls["n"] == 1  # second call served from cache
 
 
-# ---------------------------------------------------------------------------
-# Honest empty paths (FR-AS-11 / data-source fallback norm).
-# ---------------------------------------------------------------------------
 
 
 def test_no_imagery_raises_typed_not_retryable() -> None:

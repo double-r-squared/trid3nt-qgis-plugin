@@ -23,16 +23,10 @@ from trid3nt_server.tools.derive.extract_landcover_class.extract_landcover_class
     extract_landcover_class,
 )
 
-# ---------------------------------------------------------------------------
-# Pinned timestamp for deterministic cache keys
-# ---------------------------------------------------------------------------
 
 PINNED_NOW = datetime(2026, 6, 8, 12, 0, 0, tzinfo=timezone.utc)
 
 
-# ---------------------------------------------------------------------------
-# FakeBlob / FakeStorageClient for cache shim isolation
-# ---------------------------------------------------------------------------
 
 
 class _S3Body:
@@ -102,9 +96,6 @@ def _route_cache_to_inmemory_s3(monkeypatch):
         FakeStorageClient._active = None
 
 
-# ---------------------------------------------------------------------------
-# Synthetic NLCD-coded raster builder
-# ---------------------------------------------------------------------------
 
 
 def _write_synthetic_nlcd(
@@ -172,9 +163,6 @@ def _read_tif_bytes_to_array(tif_bytes: bytes) -> tuple[np.ndarray, dict]:
             pass
 
 
-# ---------------------------------------------------------------------------
-# Test 1 — registration
-# ---------------------------------------------------------------------------
 
 
 def test_extract_landcover_class_registered():
@@ -186,9 +174,6 @@ def test_extract_landcover_class_registered():
     assert entry.metadata.source_class == "landcover_class"
 
 
-# ---------------------------------------------------------------------------
-# Test 2 — extract class=11 (water) → only water pixels become 1
-# ---------------------------------------------------------------------------
 
 
 def test_extract_single_class_water_only():
@@ -233,9 +218,6 @@ def test_extract_single_class_water_only():
         assert meta["nodata"] == 255
 
 
-# ---------------------------------------------------------------------------
-# Test 3 — extract multiple classes (forest 41/42/43)
-# ---------------------------------------------------------------------------
 
 
 def test_extract_multiple_classes_forest():
@@ -275,9 +257,6 @@ def test_extract_multiple_classes_forest():
         assert n_match == 1200, f"expected 1200 forest pixels; got {n_match}"
 
 
-# ---------------------------------------------------------------------------
-# Test 4 — bbox windowed read returns top-right quadrant
-# ---------------------------------------------------------------------------
 
 
 def test_bbox_window_read_top_right():
@@ -326,9 +305,6 @@ def test_bbox_window_read_top_right():
         )
 
 
-# ---------------------------------------------------------------------------
-# Test 5 — nodata pixels preserved as 255
-# ---------------------------------------------------------------------------
 
 
 def test_nodata_preserved():
@@ -365,9 +341,6 @@ def test_nodata_preserved():
         assert np.all(out_arr[rest_mask] == 1), "valid water pixels should be 1"
 
 
-# ---------------------------------------------------------------------------
-# Test 6 — cache miss → hit (recompute skipped on hit)
-# ---------------------------------------------------------------------------
 
 
 def test_cache_miss_hit_skips_recompute():
@@ -410,9 +383,6 @@ def test_cache_miss_hit_skips_recompute():
         assert r1.uri == r2.uri
 
 
-# ---------------------------------------------------------------------------
-# Test 7 — empty classes raises typed error
-# ---------------------------------------------------------------------------
 
 
 def test_empty_classes_raises_typed_error():
@@ -432,9 +402,6 @@ def test_empty_classes_raises_typed_error():
         assert exc_info.value.error_code == "CLASSES_EMPTY"
 
 
-# ---------------------------------------------------------------------------
-# Test 8 — invalid class code (255 reserved) raises typed error
-# ---------------------------------------------------------------------------
 
 
 def test_invalid_class_code_raises_typed_error():
@@ -454,9 +421,6 @@ def test_invalid_class_code_raises_typed_error():
         assert exc_info.value.error_code == "CLASSES_INVALID"
 
 
-# ---------------------------------------------------------------------------
-# Test 9 — LayerURI fields are correct
-# ---------------------------------------------------------------------------
 
 
 def test_returns_layer_uri_fields():
@@ -483,9 +447,6 @@ def test_returns_layer_uri_fields():
         assert "11" in result.layer_id and "21" in result.layer_id
 
 
-# ---------------------------------------------------------------------------
-# Test 10 — cache keys vary per (uri, classes, bbox)
-# ---------------------------------------------------------------------------
 
 
 def test_cache_keys_vary_across_params():
@@ -516,9 +477,6 @@ def test_cache_keys_vary_across_params():
     assert len(keys) == 4, f"expected 4 distinct keys; got {len(keys)}"
 
 
-# ---------------------------------------------------------------------------
-# Test 11 — LIVE (env-guarded): Fort Myers NLCD water mask, geography check
-# ---------------------------------------------------------------------------
 
 _LIVE_LANDCOVER = bool(os.environ.get("TRID3NT_TEST_LIVE_LANDCOVER"))
 

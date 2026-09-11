@@ -18,9 +18,6 @@ from trid3nt_contracts.case import CaseSessionState, CaseSummary
 from trid3nt_contracts.common import new_ulid, now_utc
 
 
-# --------------------------------------------------------------------------- #
-# Test doubles (mirror the existing server-test FakeWS / _FakePersistence)
-# --------------------------------------------------------------------------- #
 
 
 class FakeWS:
@@ -154,9 +151,6 @@ def _clean_registries():
         server._SESSION_CASE_LIST_HASH.update(saved_case_list_hash)
 
 
-# =========================================================================== #
-# JOB B: per-session connection registry + eager reaping
-# =========================================================================== #
 
 
 @pytest.mark.skip(reason="JOB B eager reaping DISABLED 2026-06-22: dual-socket-unsafe - reaped the legitimate sibling socket and killed in-flight turns with 4408; re-enable only dual-socket-aware + in-flight-safe. See server._reap_prior_session_connections note.")
@@ -268,9 +262,6 @@ def test_deregister_prunes_empty_session_bucket() -> None:
     assert server.session_connection_count(session_id) == 0
 
 
-# =========================================================================== #
-# JOB C: single-writer active-case authority (no keepalive flap)
-# =========================================================================== #
 
 
 @pytest.mark.asyncio
@@ -455,9 +446,6 @@ async def test_first_resume_replays_layers_through_real_emitter() -> None:
     )
 
 
-# =========================================================================== #
-# case-list emission storm - server-side change-guard
-# =========================================================================== #
 #
 # Root cause (live evidence, trid3nt-local/logs/agent.log): ``_emit_case_list``
 # had NO change-detection - every ``session-resume`` (the client's ~25s

@@ -25,9 +25,6 @@ from trid3nt_server.workflows.shared import cog_io  # noqa: E402
 from trid3nt_server.workflows.shared.cog_io import CogIoError  # noqa: E402
 
 
-# --------------------------------------------------------------------------- #
-# write_cog_4326_from_grid: already-4326 direct-write path (no warp).
-# --------------------------------------------------------------------------- #
 def _bbox_transform(bbox, w, h):
     return from_bounds(bbox[0], bbox[1], bbox[2], bbox[3], w, h)
 
@@ -95,9 +92,6 @@ def test_crs_guard_off_skips_roundtrip(tmp_path: Path) -> None:
         cog_io.safe_unlink(cog)
 
 
-# --------------------------------------------------------------------------- #
-# write_cog_4326_from_grid: projected -> 4326 warp path (resampling declared).
-# --------------------------------------------------------------------------- #
 def test_reproject_path_warps_to_4326(tmp_path: Path) -> None:
     # A small UTM-17N grid; warp to 4326 and assert the tag round-trips.
     grid = np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], dtype="float32")
@@ -197,9 +191,6 @@ def test_crs_guard_rejects_mistagged_geographic(tmp_path: Path) -> None:
     assert ei.value.stage == "CRS_MISMATCH"
 
 
-# --------------------------------------------------------------------------- #
-# reproject_cog_file_to_4326 (Landlab worker-field path).
-# --------------------------------------------------------------------------- #
 def test_reproject_file_to_4326_returns_bbox(tmp_path: Path) -> None:
     src = tmp_path / "field_utm.tif"
     grid = np.array([[0.2, 0.8], [0.9, 0.1]], dtype="float32")
@@ -237,9 +228,6 @@ def test_reproject_file_no_crs_raises_read(tmp_path: Path) -> None:
     assert ei.value.stage == "READ"
 
 
-# --------------------------------------------------------------------------- #
-# upload_cog: scheme-aware, ContentType, gs backend, file:// fallback.
-# --------------------------------------------------------------------------- #
 def test_upload_s3_uses_content_type_when_set(tmp_path: Path) -> None:
     cog = tmp_path / "x.tif"
     cog.write_bytes(b"tiff")

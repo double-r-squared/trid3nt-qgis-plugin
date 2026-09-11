@@ -55,9 +55,6 @@ _SITE_RDB = (
 ).encode()
 
 
-# --------------------------------------------------------------------------- #
-# Registration + hooks.
-# --------------------------------------------------------------------------- #
 
 
 def test_nwis_registered_and_spec_served(spec):
@@ -74,9 +71,6 @@ def test_nwis_hooks_registered():
         assert h in hooks.HOOK_REGISTRY
 
 
-# --------------------------------------------------------------------------- #
-# Parse: self-detecting IV / IV-window / Site + per-mode schema.
-# --------------------------------------------------------------------------- #
 
 
 def test_parse_iv_instantaneous_5col(spec):
@@ -106,9 +100,6 @@ def test_parse_empty_body_returns_empty(spec):
     assert hooks.HOOK_REGISTRY["usgs_nwis.parse"](spec, {"_mode": "instantaneous"}, [b""]) == []
 
 
-# --------------------------------------------------------------------------- #
-# resolve(): selector + window edge matrix.
-# --------------------------------------------------------------------------- #
 
 
 def _resolve_err(spec, params):
@@ -161,9 +152,6 @@ def test_resolve_over_120d_input_error(spec):
     assert _resolve_err(spec, {"bbox": [-82.4, 26.3, -81.6, 26.9], "start_date": "2024-01-01", "end_date": "2024-06-01"}) == "NWIS_GAUGES_INPUT_ERROR"
 
 
-# --------------------------------------------------------------------------- #
-# build_request plan ordering.
-# --------------------------------------------------------------------------- #
 
 
 def test_build_instantaneous_iv_then_site(spec):
@@ -185,9 +173,6 @@ def test_build_state_selector(spec):
     assert plans[0].params.get("stateCd") == "WA" and "bBox" not in plans[0].params
 
 
-# --------------------------------------------------------------------------- #
-# parse_fallback executor: IV-empty -> Site fallback; all-empty -> NO_STATIONS.
-# --------------------------------------------------------------------------- #
 
 
 def test_parse_fallback_iv_empty_uses_site(spec, monkeypatch):

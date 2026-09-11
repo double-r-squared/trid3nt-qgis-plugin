@@ -87,11 +87,9 @@ class _FakePersistence:
         return list(self._cases)
 
 
-# ---------------------------------------------------------------------------
 # Route availability: unconditional in the local build. ``solver_backend()``
 # is hardwired to local-docker, so the old cloud-posture 404 branch behind
 # ``_case_list_route_enabled`` is unreachable -- the env var is dead here.
-# ---------------------------------------------------------------------------
 
 
 def test_route_served_when_backend_env_unset(monkeypatch):
@@ -110,9 +108,6 @@ def test_route_served_when_backend_env_unset(monkeypatch):
     assert fake.calls == [LOCAL_SINGLE_USER_ID]
 
 
-# ---------------------------------------------------------------------------
-# Happy path (local single-user seam armed)
-# ---------------------------------------------------------------------------
 
 
 def test_case_list_happy_path_newest_first(monkeypatch):
@@ -152,9 +147,6 @@ def test_case_list_empty_is_ok(monkeypatch):
     assert _body(out) == {"cases": []}
 
 
-# ---------------------------------------------------------------------------
-# Persistence unbound -> honest 503
-# ---------------------------------------------------------------------------
 
 
 def test_case_list_persistence_unbound_503(monkeypatch):
@@ -165,9 +157,6 @@ def test_case_list_persistence_unbound_503(monkeypatch):
     assert _body(out)["error"] == "persistence unavailable"
 
 
-# ---------------------------------------------------------------------------
-# Sibling routes unaffected
-# ---------------------------------------------------------------------------
 
 
 def test_case_list_route_does_not_perturb_catalog():

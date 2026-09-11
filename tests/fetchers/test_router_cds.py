@@ -84,9 +84,6 @@ def _write_synthetic_gtsm_netcdf(out_path, station_lons, station_lats, n=24):
     ds.to_netcdf(out_path)
 
 
-# --------------------------------------------------------------------------- #
-# Registration + spec-shape.
-# --------------------------------------------------------------------------- #
 
 
 def test_both_cds_specs_load_and_register():
@@ -101,9 +98,6 @@ def test_hooks_registered():
         assert h in hooks.HOOK_REGISTRY
 
 
-# --------------------------------------------------------------------------- #
-# Input-validation parity (the twins' _validate_* helpers).
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.parametrize("params", [
@@ -132,9 +126,6 @@ def test_gtsm_validate_input_error(gtsm_spec, params):
     assert ei.value.retryable is False
 
 
-# --------------------------------------------------------------------------- #
-# CDS-failure classification parity (missing-key / auth / upstream).
-# --------------------------------------------------------------------------- #
 
 _ERA5_GOOD = dict(bbox=[-82.4, 26.3, -81.6, 26.9], variable="2m_temperature", start_date="2020-01-01", end_date="2020-01-01")
 _GTSM_GOOD = dict(bbox=[-70, 10, -60, 20], output="water_level", start_date="2017-09-05", end_date="2017-09-05")
@@ -169,9 +160,6 @@ def test_gtsm_classify(monkeypatch, gtsm_spec, exc, code, retry):
     assert ei.value.retryable is retry
 
 
-# --------------------------------------------------------------------------- #
-# Happy-path decode (mocked NetCDF): the delegate returns the expected shape.
-# --------------------------------------------------------------------------- #
 
 
 def test_era5_read_happy_path_array(monkeypatch, era5_spec):

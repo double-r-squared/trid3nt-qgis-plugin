@@ -131,9 +131,6 @@ def _nudge_seen(user_texts_per_call) -> int:
     )
 
 
-# --------------------------------------------------------------------------- #
-# (a) empty round -> retried with a nudge -> next round's tool call completes.
-# --------------------------------------------------------------------------- #
 def test_empty_round_is_retried_then_tool_completes(monkeypatch):
     rounds = [
         _empty_round(),  # round 1: qwen3 emits nothing -> must RETRY
@@ -158,9 +155,6 @@ def test_empty_round_is_retried_then_tool_completes(monkeypatch):
     assert _EMPTY_COMPLETION_NUDGE in user_texts[1]
 
 
-# --------------------------------------------------------------------------- #
-# (b) CAP+1 consecutive empty rounds stop at the cap -- no infinite loop.
-# --------------------------------------------------------------------------- #
 def test_empty_rounds_stop_at_cap(monkeypatch):
     from trid3nt_server.server import _EMPTY_COMPLETION_RETRY_CAP
 
@@ -182,9 +176,6 @@ def test_empty_rounds_stop_at_cap(monkeypatch):
     assert dispatch_log == []
 
 
-# --------------------------------------------------------------------------- #
-# (c) a normal (non-empty) text answer terminates in ONE round -- no retry.
-# --------------------------------------------------------------------------- #
 def test_normal_text_answer_no_spurious_retry(monkeypatch):
     rounds = [_text_round("Here is your answer.")]
     user_texts, model_calls, dispatch_log, _sock = _drive(
@@ -196,9 +187,6 @@ def test_normal_text_answer_no_spurious_retry(monkeypatch):
     assert dispatch_log == []
 
 
-# --------------------------------------------------------------------------- #
-# (d) the non-openai provider path NEVER retries an empty round.
-# --------------------------------------------------------------------------- #
 def test_non_openai_provider_never_retries(monkeypatch):
     # Two empty rounds queued, but the bedrock path must break on the FIRST one.
     rounds = [_empty_round(), _empty_round()]

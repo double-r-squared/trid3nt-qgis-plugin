@@ -97,9 +97,6 @@ def _mk_case_no_bbox():
     return _fresh_case_summary().model_copy(update={"bbox": None})
 
 
-# --------------------------------------------------------------------------- #
-# (a) a bbox-carrying fetch on a bbox-less Case durably pins the AOI
-# --------------------------------------------------------------------------- #
 
 
 def test_fetch_with_bbox_seeds_bboxless_case(
@@ -130,9 +127,6 @@ def test_fetch_with_bbox_seeds_bboxless_case(
     assert list(persisted.bbox) == list(_AOI)
 
 
-# --------------------------------------------------------------------------- #
-# (b) a repeated identical bbox does not redundantly upsert
-# --------------------------------------------------------------------------- #
 #
 # Direct unit calls to ``_pin_case_aoi_from_tool_bbox`` rather than the full
 # dispatch: a real fetch dispatch ALSO durably writes ``loaded_layers`` (the
@@ -192,9 +186,6 @@ def test_repeated_identical_bbox_no_redundant_upsert(
     assert list(persisted.bbox) == list(_AOI)
 
 
-# --------------------------------------------------------------------------- #
-# (c) a bbox CHANGE updates the persisted anchor (latest-wins)
-# --------------------------------------------------------------------------- #
 
 
 def test_bbox_change_updates_persisted_anchor(
@@ -245,9 +236,6 @@ def test_bbox_change_updates_persisted_anchor(
     assert list(persisted2.bbox) == list(_ELSEWHERE)
 
 
-# --------------------------------------------------------------------------- #
-# (d) no active Case -> no write, no crash
-# --------------------------------------------------------------------------- #
 
 
 def test_no_active_case_no_write(_persistence_bound, _stub_fetch_buildings) -> None:
@@ -271,9 +259,6 @@ def test_no_active_case_no_write(_persistence_bound, _stub_fetch_buildings) -> N
     assert upserts == []
 
 
-# --------------------------------------------------------------------------- #
-# (e) the [Case state] note carries the literal machine-usable bbox array
-# --------------------------------------------------------------------------- #
 
 
 def test_layers_present_note_has_literal_bbox_array() -> None:

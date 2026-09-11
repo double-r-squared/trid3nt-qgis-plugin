@@ -75,9 +75,6 @@ def _artifact(**over) -> MeshArtifact:
     return MeshArtifact(**base)
 
 
-# --------------------------------------------------------------------------- #
-# Registration.
-# --------------------------------------------------------------------------- #
 def test_build_mesh_registered():
     rt = TOOL_REGISTRY.get("build_mesh")
     assert rt is not None
@@ -113,9 +110,6 @@ def test_build_mesh_surfaces_in_top8():
         "build_mesh surfaces in NO top-8 for any of its corpus queries")
 
 
-# --------------------------------------------------------------------------- #
-# Router validation: every refusal names what was wrong.
-# --------------------------------------------------------------------------- #
 def test_an_unknown_mesher_refuses_naming_the_roster():
     with pytest.raises(MeshToolError) as excinfo:
         tool.build_mesh(mesher="no_such_mesher")
@@ -160,9 +154,6 @@ def test_late_bound_reads_pass_declaration_and_refuse_serialization():
     assert excinfo.value.error_code == "MESH_RECIPE_UNBOUND"
 
 
-# --------------------------------------------------------------------------- #
-# Resolution order: explicit > case discovery > declared default.
-# --------------------------------------------------------------------------- #
 def test_explicit_mesh_wins_over_a_discovered_one():
     stash_mesh_artifact("case-explicit", _artifact(name="discovered"))
     supplied = _artifact(mesh_id="01OTHER", name="supplied")
@@ -231,14 +222,12 @@ def test_nothing_supplied_declared_or_discovered_refuses():
     assert excinfo.value.error_code == "MESH_UNRESOLVED"
 
 
-# --------------------------------------------------------------------------- #
 # The declared contract is ROLE-KEYED: membership per role, checked at the door.
 #
 # The contract is a standalone Accepts declaration in the template's own
 # declarations.py, reached here the way every door reaches it - off the registry
 # by tool name - rather than restated. The MESH block states what the DEFAULT
 # BUILD produces and is not consulted here.
-# --------------------------------------------------------------------------- #
 def _tri_artifact(**over) -> MeshArtifact:
     return _artifact(
         mode="om2d", name="Point Judith Harbor of Refuge",
@@ -365,9 +354,6 @@ def test_case_discovery_offers_nothing_without_a_mesh_row():
     assert resolution.source == "declared"
 
 
-# --------------------------------------------------------------------------- #
-# Laziness: a declared recipe builds NOTHING.
-# --------------------------------------------------------------------------- #
 def test_a_recipe_builds_nothing(tmp_path):
     """A degenerate extent declares fine and only fails when a build is demanded."""
     recipe = tool.build_mesh(mesher="reg_grid", extent=(0.0, 0.0, 0.0, 0.0),
@@ -420,9 +406,6 @@ def test_ops_are_altered_and_removed_by_index():
     assert excinfo.value.error_code == "MESH_OP_INDEX"
 
 
-# --------------------------------------------------------------------------- #
-# The recipe IS the record.
-# --------------------------------------------------------------------------- #
 def test_the_journal_records_the_declaration_then_one_line_per_edit(tmp_path):
     session = MeshSession(_recipe(), workdir=tmp_path)
     session.set_params(resolution_m=250.0)
@@ -512,9 +495,6 @@ def test_a_recipe_edit_after_a_hand_edit_refuses_rather_than_discarding_it(tmp_p
     assert session.mesh.element_count > 2
 
 
-# --------------------------------------------------------------------------- #
-# Accept: the artifact a case discovers, and the recipe frozen onto it.
-# --------------------------------------------------------------------------- #
 def test_accept_freezes_the_recipe_as_the_artifacts_provenance(tmp_path):
     session = MeshSession(_recipe(), workdir=tmp_path, case_id="case-accept",
                           name="Coweeta lattice")
@@ -561,9 +541,6 @@ def test_probes_measure_the_lattice_and_number_the_recipe(tmp_path):
     assert probes["ops"] == []
 
 
-# --------------------------------------------------------------------------- #
-# The measured edge travels with the artifact, and the timestep reads it.
-# --------------------------------------------------------------------------- #
 def test_the_accepted_artifact_carries_what_was_measured_on_it(tmp_path):
     session = MeshSession(_recipe(), workdir=tmp_path)
     art = session.accept()
@@ -613,9 +590,6 @@ def test_the_timestep_falls_back_to_the_ask_when_no_mesh_exists_yet():
     assert suggest_time_step_s(10.0, mesh=_artifact()) == 0.5
 
 
-# --------------------------------------------------------------------------- #
-# The router's own door: bbox / location resolve into the ONE extent param.
-# --------------------------------------------------------------------------- #
 @pytest.mark.asyncio
 async def test_a_bbox_at_the_door_becomes_the_recipes_extent(monkeypatch):
     from trid3nt_server.workflows.mesh.meshers import MeshToolError

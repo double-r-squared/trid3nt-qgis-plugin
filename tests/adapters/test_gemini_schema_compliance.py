@@ -14,9 +14,6 @@ from typing import Any
 
 import pytest
 
-# ---------------------------------------------------------------------------
-# Path setup — allow running tests from the services/agent/ directory.
-# ---------------------------------------------------------------------------
 _SRC = Path(__file__).parent.parent.parent
 if str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
@@ -38,9 +35,6 @@ from trid3nt_server.tools import TOOL_REGISTRY  # noqa: E402,F401
 _main._import_tools_registry()
 
 
-# ---------------------------------------------------------------------------
-# Fixtures
-# ---------------------------------------------------------------------------
 
 @pytest.fixture(scope="module")
 def all_declarations() -> dict[str, genai_types.FunctionDeclaration]:
@@ -59,9 +53,6 @@ def tool_names() -> list[str]:
     return sorted(TOOL_REGISTRY.keys())
 
 
-# ---------------------------------------------------------------------------
-# Helper
-# ---------------------------------------------------------------------------
 
 _FORBIDDEN_KEYWORDS = ("anyOf", "oneOf", "allOf", "$ref")
 
@@ -95,9 +86,6 @@ def _walk_schema_for_violations(
     return found
 
 
-# ---------------------------------------------------------------------------
-# Test: all tools produce a declaration without raising
-# ---------------------------------------------------------------------------
 
 @pytest.mark.parametrize("tool_name", sorted(TOOL_REGISTRY.keys()))
 def test_every_tool_builds_declaration(tool_name: str) -> None:
@@ -128,9 +116,6 @@ def test_every_tool_builds_declaration(tool_name: str) -> None:
     # Tools with actual parameters must have a schema.
 
 
-# ---------------------------------------------------------------------------
-# Test: no anyOf / oneOf / allOf / $ref in any generated schema
-# ---------------------------------------------------------------------------
 
 def test_no_anyof_in_any_tool_schema(
     all_declarations: dict[str, genai_types.FunctionDeclaration],
@@ -160,9 +145,6 @@ def test_no_anyof_in_any_tool_schema(
     )
 
 
-# ---------------------------------------------------------------------------
-# Test: every property has an explicit type field
-# ---------------------------------------------------------------------------
 
 def test_every_property_has_type(
     all_declarations: dict[str, genai_types.FunctionDeclaration],
@@ -187,9 +169,6 @@ def test_every_property_has_type(
     )
 
 
-# ---------------------------------------------------------------------------
-# Test: no underscore-prefixed parameters survive to the final declaration
-# ---------------------------------------------------------------------------
 
 def test_no_private_params_in_declarations(
     all_declarations: dict[str, genai_types.FunctionDeclaration],
@@ -212,9 +191,6 @@ def test_no_private_params_in_declarations(
     )
 
 
-# ---------------------------------------------------------------------------
-# Test: _simplify_annotation handles key annotation patterns correctly
-# ---------------------------------------------------------------------------
 
 def test_simplify_tuple_to_list() -> None:
     """``tuple[float, float, float, float]`` simplifies to ``list[float]``."""
@@ -281,9 +257,6 @@ def test_simplify_passthrough_int_none() -> None:
     assert int in result.__args__, f"Expected int in args, got {result.__args__}"
 
 
-# ---------------------------------------------------------------------------
-# Test: build_tool_declarations produces the right count
-# ---------------------------------------------------------------------------
 
 def test_build_tool_declarations_covers_all_registry_tools() -> None:
     """``build_tool_declarations`` must produce one declaration per registry tool."""
@@ -297,9 +270,6 @@ def test_build_tool_declarations_covers_all_registry_tools() -> None:
     )
 
 
-# ---------------------------------------------------------------------------
-# Regression: specific tools known to have caused Vertex 400 in the past
-# ---------------------------------------------------------------------------
 
 _KNOWN_PROBLEMATIC_TOOLS = [
     "compute_hillshade",          # _storage_client typeless schema

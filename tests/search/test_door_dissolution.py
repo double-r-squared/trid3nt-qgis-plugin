@@ -58,9 +58,6 @@ def _full_registry():
     return TOOL_REGISTRY
 
 
-# ---------------------------------------------------------------------------
-# (1) Callability without doors.
-# ---------------------------------------------------------------------------
 def test_no_engine_door_survives():
     """No tool carries tier=door, and none of the 10 door names is registered."""
     reg = _full_registry()
@@ -102,9 +99,6 @@ def test_parked_templates_are_declared_off_the_surface_with_a_reason():
         assert name not in reg, f"{name} is pinned parked but registers a tool"
 
 
-# ---------------------------------------------------------------------------
-# (2) Retrieval matrix -- every template surfaces top-8 for >=1 natural query.
-# ---------------------------------------------------------------------------
 @pytest.fixture(scope="module")
 def warm_index():
     dd._get_index()  # hashed backend, no network model load

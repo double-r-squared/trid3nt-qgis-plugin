@@ -60,9 +60,6 @@ def long_alternating_history(pairs: int = 8, filler: int = 3000) -> list[genai_t
     return rows
 
 
-# ---------------------------------------------------------------------------
-# 1. Discovery matrix
-# ---------------------------------------------------------------------------
 
 
 def test_openrouter_parse_reads_context_length():
@@ -268,9 +265,6 @@ async def test_discovery_never_raises_when_the_provider_is_unreachable(monkeypat
     assert window.source == WINDOW_SOURCE_FALLBACK
 
 
-# ---------------------------------------------------------------------------
-# 2. The single trim strategy
-# ---------------------------------------------------------------------------
 
 
 def _window(tokens: int) -> ContextWindow:
@@ -446,9 +440,6 @@ async def test_anthropic_exact_counter_returns_the_provider_number():
     assert set(sent) == {"model", "messages", "system", "tools"}
 
 
-# ---------------------------------------------------------------------------
-# 3. Cache-prefix preservation
-# ---------------------------------------------------------------------------
 
 
 def _decls() -> list[genai_types.FunctionDeclaration]:
@@ -488,9 +479,6 @@ def test_anthropic_cache_prefix_is_byte_identical_across_a_trim():
     assert len(trimmed["messages"]) < len(full["messages"])
 
 
-# ---------------------------------------------------------------------------
-# 4. Overflow classification
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize(

@@ -26,9 +26,7 @@ from trid3nt_contracts.publish_manifest import (
 
 
 
-# --------------------------------------------------------------------------- #
 # Manifest fixtures (mirror the worker's build_manifest output exactly).
-# --------------------------------------------------------------------------- #
 
 
 def _depth_manifest_dict() -> dict:
@@ -89,9 +87,6 @@ def _depth_manifest_dict() -> dict:
     }
 
 
-# --------------------------------------------------------------------------- #
-# 1. Typed contract parse + schema-version reject.
-# --------------------------------------------------------------------------- #
 
 
 def test_parse_manifest_known_schema_version_validates():
@@ -141,9 +136,6 @@ def test_parse_manifest_accepts_bytes_body():
     assert m.schema_version == 1
 
 
-# --------------------------------------------------------------------------- #
-# 2. register_manifest_layers - raw cog_uri emission + legend stash + registration.
-# --------------------------------------------------------------------------- #
 
 
 @pytest.fixture()
@@ -214,9 +206,6 @@ def test_the_register_path_resolves_from_band_stats_without_reading_the_cog():
     assert bare.colormap == "viridis" and (bare.vmin, bare.vmax) == (1.0, 9.0)
 
 
-# --------------------------------------------------------------------------- #
-# 3. read_publish_manifest - present (parse) vs absent (fallback trigger).
-# --------------------------------------------------------------------------- #
 
 
 class _RR:

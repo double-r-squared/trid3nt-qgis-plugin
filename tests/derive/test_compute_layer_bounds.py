@@ -21,9 +21,6 @@ from trid3nt_server.tools.derive.compute_layer_bounds.compute_layer_bounds impor
 from trid3nt_contracts import new_ulid
 
 
-# --------------------------------------------------------------------------- #
-# Fixtures / helpers
-# --------------------------------------------------------------------------- #
 
 
 def _write_geojson(features: list[dict], crs_name: str | None = None) -> str:
@@ -52,9 +49,6 @@ def _make_emitter(captured: list[tuple[str, dict]]) -> PipelineEmitter:
     return PipelineEmitter(session_id=new_ulid(), sink=_sink)
 
 
-# --------------------------------------------------------------------------- #
-# Test 1 — correct bbox for a known vector
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio
@@ -85,9 +79,6 @@ async def test_returns_correct_bbox_for_known_vector() -> None:
     ]
 
 
-# --------------------------------------------------------------------------- #
-# Test 2 — emits zoom-to map-command with the computed bounds
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio
@@ -129,9 +120,6 @@ async def test_emits_zoom_to_map_command_with_those_bounds() -> None:
     assert emitted_bbox[3] == pytest.approx(26.68)
 
 
-# --------------------------------------------------------------------------- #
-# Test 3 — reprojects a non-4326 vector to WGS84
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio
@@ -164,9 +152,6 @@ async def test_reprojects_non_4326_vector_to_wgs84() -> None:
     assert result["min_lat"] < result["max_lat"]
 
 
-# --------------------------------------------------------------------------- #
-# Test 4 — correct bbox for a known raster
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio
@@ -206,9 +191,6 @@ async def test_returns_correct_bbox_for_known_raster() -> None:
     assert result["max_lat"] == pytest.approx(maxy)
 
 
-# --------------------------------------------------------------------------- #
-# Test 5 — pad_fraction expands the bbox symmetrically
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio
@@ -228,9 +210,6 @@ async def test_pad_fraction_expands_bbox() -> None:
     assert result["pad_fraction"] == pytest.approx(0.10)
 
 
-# --------------------------------------------------------------------------- #
-# Test 5b — pad_m: the METRE pad a fetch query window is reasoned in
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio
@@ -280,9 +259,6 @@ async def test_a_chained_layer_handle_is_read_as_the_uri_it_carries() -> None:
     assert result["bbox"] == pytest.approx([-124.16, 40.49, -124.04, 40.51])
 
 
-# --------------------------------------------------------------------------- #
-# Test 6 — typed error on an unknown URI (FR-AS-11)
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio
@@ -292,9 +268,6 @@ async def test_unknown_uri_raises_typed_error() -> None:
     assert ei.value.error_code == "UNKNOWN_LAYER_URI"
 
 
-# --------------------------------------------------------------------------- #
-# Test 7 — no emitter bound → no emit, no crash (UX action, not a gate)
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio
@@ -313,9 +286,6 @@ async def test_no_emitter_does_not_crash() -> None:
     assert result["bbox"] == [-1.0, 1.0, 1.0, 2.0]
 
 
-# --------------------------------------------------------------------------- #
-# Test 8 — registry + category + hot-set wiring
-# --------------------------------------------------------------------------- #
 
 
 def test_registered_and_in_hot_set() -> None:
@@ -330,9 +300,6 @@ def test_registered_and_in_hot_set() -> None:
     assert "compute_layer_bounds" in CORE_FLOOR
 
 
-# --------------------------------------------------------------------------- #
-# Test 9 — adapter SYSTEM_PROMPT carries the fit/zoom steer
-# --------------------------------------------------------------------------- #
 
 
 def test_adapter_steer_present() -> None:

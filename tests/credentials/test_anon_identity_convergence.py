@@ -84,9 +84,6 @@ class FakeMCPClient:
         return {}
 
 
-# --------------------------------------------------------------------------- #
-# Resolution: every connection lands on the fixed local user.
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio
@@ -172,9 +169,6 @@ async def test_token_path_resolves_to_local_user() -> None:
     assert res.user.user_id == LOCAL_SINGLE_USER_ID
 
 
-# --------------------------------------------------------------------------- #
-# Real local substrate (FileMCPClient) fidelity.
-# --------------------------------------------------------------------------- #
 
 from trid3nt_server.credentials import auth_handshake
 from trid3nt_server.persistence import FileMCPClient

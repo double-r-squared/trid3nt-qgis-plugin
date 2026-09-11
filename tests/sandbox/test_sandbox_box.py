@@ -31,9 +31,6 @@ def _tif(path: Path, value: float = 3.0) -> str:
     return str(path)
 
 
-# --------------------------------------------------------------------------- #
-# What a snippet computes comes back
-# --------------------------------------------------------------------------- #
 
 
 def test_a_snippet_runs_in_the_box_and_returns_what_it_computed() -> None:
@@ -105,9 +102,6 @@ def test_a_flood_of_prints_is_bounded_and_says_so() -> None:
     assert len(envelope["stdout"]) <= 70_000
 
 
-# --------------------------------------------------------------------------- #
-# SandboxIsNetworkNone
-# --------------------------------------------------------------------------- #
 
 
 def test_the_box_runs_with_the_network_off(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -145,9 +139,6 @@ def test_a_denied_egress_is_reported_as_blocked_rather_than_as_a_bug() -> None:
     assert envelope["status"] == "blocked", envelope
 
 
-# --------------------------------------------------------------------------- #
-# DataEntersStaged
-# --------------------------------------------------------------------------- #
 
 
 def test_a_local_raster_is_staged_and_opens_as_a_handle(tmp_path: Path) -> None:
@@ -202,9 +193,6 @@ def test_the_box_reaches_for_nothing_from_the_inside() -> None:
         assert f"import {reacher}" not in source
 
 
-# --------------------------------------------------------------------------- #
-# OffloadKeepsTheLoopUnblocked
-# --------------------------------------------------------------------------- #
 
 
 def test_the_tool_that_drives_the_box_is_always_offloaded() -> None:

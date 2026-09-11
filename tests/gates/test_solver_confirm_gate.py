@@ -66,7 +66,6 @@ def test_code_exec_request_in_hot_set() -> None:
     assert "code_exec_request" in CORE_FLOOR
 
 
-# --------------------------------------------------------------------------- #
 # Turn-memory fix (bbox-gate-retry-loop) - a live drive found a
 # model retrying ``fetch_landcover`` with corrected NON-bbox args after typed
 # errors (dataset='nlcd' -> 'nlcd_' -> 'nlcd_2021'); each valid-bbox retry
@@ -79,7 +78,6 @@ def test_code_exec_request_in_hot_set() -> None:
 # fetch_landcover skips the card entirely for a small AOI (no coarsening
 # needed) -- these tests use a Washington-state-scale bbox (mirrors the live
 # bug report) so the gate is the REAL thing, not the small-AOI skip path.
-# --------------------------------------------------------------------------- #
 
 _WA_BBOX = [-124.8, 45.5, -116.9, 49.0]
 _CA_BBOX = [-124.4, 32.5, -114.1, 42.0]  # a DIFFERENT state-scale bbox

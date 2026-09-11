@@ -66,9 +66,6 @@ def _register_gated_tool(name: str, gate: asyncio.Event) -> None:
     )
 
 
-# --------------------------------------------------------------------------- #
-# Inverted probe A: narration stays in the OWNING Case on a mid-stream switch.
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio
@@ -117,9 +114,6 @@ async def test_narration_stays_in_owning_case_on_midstream_switch(
     assert chat_b == [], f"Case B must stay clean, got {chat_b}"
 
 
-# --------------------------------------------------------------------------- #
-# Inverted probe B: tool card stays in the OWNING Case on a mid-dispatch switch.
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio
@@ -164,10 +158,8 @@ async def test_tool_card_stays_in_owning_case_on_middispatch_switch(
     assert tools_b == [], f"Case B must not receive Case A's tool card: {tools_b}"
 
 
-# --------------------------------------------------------------------------- #
 # Cancel-and-redispatch race: a NEW turn re-pins the binding while the OLD
 # turn's finally-persist is still pending. Entry-time capture must hold.
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio
@@ -217,11 +209,9 @@ async def test_new_turn_repin_does_not_steal_old_turn_narration(
     )
 
 
-# --------------------------------------------------------------------------- #
 # Auto-create hand-off guard (probe D, unchanged semantics): a root
 # prompt binds the auto-created Case BEFORE any write; user + tool + agent
 # rows all land in it.
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio
@@ -272,10 +262,8 @@ async def test_auto_created_case_receives_full_stream(
     assert rows[2].content == "Working. Done."
 
 
-# --------------------------------------------------------------------------- #
 # The turn's zoom-to emissions persist on accumulator-snapshot rows
 # (Case-reopen snap-to-location replays the LAST one).
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio

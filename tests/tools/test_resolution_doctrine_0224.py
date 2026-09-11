@@ -10,9 +10,6 @@ import pytest
 BBOX = (-95.05, 29.2, -94.6, 29.65)
 
 
-# --------------------------------------------------------------------------- #
-# R-C: honest GLOBAL-FALLBACK warning cause.
-# --------------------------------------------------------------------------- #
 from trid3nt_server.tools.fetchers._router.hooks.topobathy import (  # noqa: E402
     _compose_fallback_warnings,
 )
@@ -66,9 +63,6 @@ def test_rc_land_absent_labeled_degrade_appended():
     assert "land_absent" in w
 
 
-# --------------------------------------------------------------------------- #
-# R-B: sampled payload estimator.
-# --------------------------------------------------------------------------- #
 from trid3nt_server.tools import payload_sampling as ps  # noqa: E402
 from trid3nt_server.tools.payload_sampling import (  # noqa: E402
     SampledDensity,

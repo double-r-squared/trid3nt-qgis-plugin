@@ -43,9 +43,6 @@ from trid3nt_server.gates.context_budget import (
 )
 
 
-# ---------------------------------------------------------------------------
-# Helpers (mirror tests/gates/test_openai_adapter.py)
-# ---------------------------------------------------------------------------
 
 
 def user_content(text: str) -> genai_types.Content:
@@ -84,9 +81,6 @@ def mixed_narration_and_call_content(
     )
 
 
-# ---------------------------------------------------------------------------
-# 1. Token estimator
-# ---------------------------------------------------------------------------
 
 
 class TestEstimator:
@@ -115,9 +109,6 @@ class TestEstimator:
         assert estimate_tokens_for_tools([]) == 0
 
 
-# ---------------------------------------------------------------------------
-# Budget arithmetic
-# ---------------------------------------------------------------------------
 
 
 class TestBudget:
@@ -166,9 +157,6 @@ class TestBudget:
         assert proactive_target_ratio() == 0.75
 
 
-# ---------------------------------------------------------------------------
-# 2. Compaction ladder
-# ---------------------------------------------------------------------------
 
 
 class TestCompactionLadder:
@@ -286,10 +274,8 @@ class TestCompactionLadder:
         assert result.folded is False
 
 
-# ---------------------------------------------------------------------------
 # STILL-OVER-AFTER-STEP-A BUG (module docstring): live-reproduced shape --
 # ``dropped=7 hardened=0 folded=False`` while still ~6k tokens over budget.
-# ---------------------------------------------------------------------------
 
 
 class TestStillOverAfterStepABug:
@@ -387,9 +373,6 @@ class TestStillOverAfterStepABug:
         assert len(out[1].parts[0].text) <= 1000 + len(" ...[truncated]")
 
 
-# ---------------------------------------------------------------------------
-# 3. num_ctx discovery
-# ---------------------------------------------------------------------------
 
 
 class TestNumCtxDiscovery:
@@ -523,9 +506,6 @@ class TestNumCtxDiscovery:
         assert ctor.call_count == 1
 
 
-# ---------------------------------------------------------------------------
-# 4. Reactive clip guard
-# ---------------------------------------------------------------------------
 
 
 class TestClipGuard:
@@ -550,9 +530,6 @@ class TestClipGuard:
         assert "1k" in str(exc) or "0k" not in str(exc)
 
 
-# ---------------------------------------------------------------------------
-# 5. Fabrication backstop regex
-# ---------------------------------------------------------------------------
 
 
 class TestFabricationBackstop:
@@ -600,10 +577,8 @@ class TestFabricationBackstop:
         assert "not verified" in FABRICATION_CAVEAT
 
 
-# ---------------------------------------------------------------------------
 # BUG 1 / BUG 2: the abort-note builder wired
 # into the server's ``except ContextWindowExceededError`` handler.
-# ---------------------------------------------------------------------------
 
 
 class TestContextWindowAbortNote:

@@ -28,9 +28,6 @@ from trid3nt_server.tools.derive.enhance_satellite_image.enhance_satellite_image
 )
 
 
-# ---------------------------------------------------------------------------
-# Synthetic raster helpers
-# ---------------------------------------------------------------------------
 
 
 def _hazy_rgb(size: int = 64) -> np.ndarray:
@@ -77,9 +74,6 @@ def _grad_mag(channel: np.ndarray) -> float:
     return float(np.mean(np.abs(gx) + np.abs(gy)))
 
 
-# ===========================================================================
-# 1-6 : pure pass unit tests (no I/O)
-# ===========================================================================
 
 
 def test_estimate_haze_floor():
@@ -195,9 +189,6 @@ def test_apply_upscale_lanczos():
     assert noop.shape == rgb.shape
 
 
-# ===========================================================================
-# 7-15 : registry + COG round-trip tests
-# ===========================================================================
 
 
 def test_enhance_satellite_image_registered():
@@ -328,12 +319,10 @@ def test_enhance_alpha_preserved(tmp_path, monkeypatch_local_cache):
     assert alpha[: alpha.shape[0] // 4, : alpha.shape[1] // 4].max() == 0
 
 
-# ---------------------------------------------------------------------------
 # Local-cache fixture: route read_through writes to a temp dir + give the test a
 # way to read the written COG bytes back. The shared in-memory S3 double in
 # conftest already monkeypatches boto3; here we additionally capture the bytes
 # the tool writes so the round-trip tests can re-open the output COG.
-# ---------------------------------------------------------------------------
 
 
 @pytest.fixture

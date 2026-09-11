@@ -27,15 +27,9 @@ from trid3nt_server.tools.derive.compute_slope.compute_slope import (
     compute_slope,
 )
 
-# ---------------------------------------------------------------------------
-# Pinned timestamp for deterministic cache keys
-# ---------------------------------------------------------------------------
 
 PINNED_NOW = datetime(2026, 6, 8, 12, 0, 0, tzinfo=timezone.utc)
 
-# ---------------------------------------------------------------------------
-# Helpers: synthetic DEM creation
-# ---------------------------------------------------------------------------
 
 
 def _write_synthetic_dem(
@@ -83,17 +77,12 @@ def _read_slope_mean(path: str) -> float:
         return float(np.ma.filled(interior, np.nan).flatten()[~np.isnan(np.ma.filled(interior, np.nan).flatten())].mean())
 
 
-# ---------------------------------------------------------------------------
 # Cache shim tests run against the shared in-memory S3 double (``fake_s3``
 # fixture in conftest.py). GCP is decommissioned: the read-through writes /
 # reads via boto3 S3, so artifact URIs are ``s3://`` and the cache store is
 # keyed by object key.
-# ---------------------------------------------------------------------------
 
 
-# ---------------------------------------------------------------------------
-# Test 1 — registration check
-# ---------------------------------------------------------------------------
 
 
 def test_compute_slope_registered():
@@ -105,9 +94,6 @@ def test_compute_slope_registered():
     assert entry.metadata.source_class == "slope"
 
 
-# ---------------------------------------------------------------------------
-# Tests 2–4 — gdaldem subprocess correctness on synthetic DEM
-# ---------------------------------------------------------------------------
 
 # These tests invoke gdaldem directly, bypassing the cache shim, to verify
 # the GDAL command construction is correct. They are skipped when gdaldem is
@@ -175,9 +161,6 @@ def test_compute_slope_horn_vs_zeventhorne_both_succeed():
             )
 
 
-# ---------------------------------------------------------------------------
-# Tests 5–7 — cache shim integration (mocked GCS + mocked gdaldem)
-# ---------------------------------------------------------------------------
 
 
 def _make_fake_slope_bytes() -> bytes:
@@ -322,9 +305,6 @@ def test_compute_slope_returns_layer_uri_fields(fake_s3):
     assert "%" in result.name
 
 
-# ---------------------------------------------------------------------------
-# Tests 8–9 — error path coverage
-# ---------------------------------------------------------------------------
 
 
 def test_compute_slope_gdaldem_failure_raises_slope_compute_error(fake_s3):
@@ -360,9 +340,6 @@ def test_compute_slope_dem_download_failure_raises_slope_compute_error(fake_s3):
     assert exc_info.value.error_code == "DEM_DOWNLOAD_FAILED"
 
 
-# ---------------------------------------------------------------------------
-# Test — cache key varies across all 4 parameter combos
-# ---------------------------------------------------------------------------
 
 
 def test_cache_keys_vary_across_combos():

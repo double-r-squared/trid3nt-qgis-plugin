@@ -31,9 +31,6 @@ def spec():
     return compose_specs_from_tree()["fetch_jrc_global_surface_water"]
 
 
-# --------------------------------------------------------------------------- #
-# Spec identity + metadata flags (twin-identical; SPEC-IDENTITY rule).
-# --------------------------------------------------------------------------- #
 
 
 def test_spec_identity(spec):
@@ -66,9 +63,6 @@ def test_per_band_nodata_map(spec):
                           "seasonality": 0, "change": 253}
 
 
-# --------------------------------------------------------------------------- #
-# Param gates + enum aliases.
-# --------------------------------------------------------------------------- #
 
 
 def test_bad_band_typed_error(spec):
@@ -93,9 +87,6 @@ def test_too_large_bbox_typed_error(spec):
     assert getattr(ei.value, "error_code", "") == "JRC_GSW_BBOX_INVALID"
 
 
-# --------------------------------------------------------------------------- #
-# Colormap hook (pure, per-band ramp).
-# --------------------------------------------------------------------------- #
 
 
 def test_colormap_hook_per_band(spec):
@@ -109,9 +100,6 @@ def test_colormap_hook_per_band(spec):
     assert seas[0] == (0, 0, 0, 0)
 
 
-# --------------------------------------------------------------------------- #
-# Mosaic render value behaviour (synthetic source COGs, patched opener).
-# --------------------------------------------------------------------------- #
 
 
 @contextlib.contextmanager

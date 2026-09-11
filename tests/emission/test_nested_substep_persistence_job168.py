@@ -67,13 +67,11 @@ async def _create_case(ws, state, title="Nested Substep Case") -> str:
     return case_id
 
 
-# --------------------------------------------------------------------------- #
 # Composer tools: a registry fn whose body opens substep children.
 # ``_invoke_tool_via_emitter`` wraps the fn in ``emit_tool_call`` which binds
 # ``current_emitter()`` for the lifetime of the invoke, so the body's
 # ``substep(current_emitter(), ...)`` mints CHILD steps under the parent card --
 # exactly the live composer shape.
-# --------------------------------------------------------------------------- #
 
 
 COMPOSER_OK = "job168_composer_ok"
@@ -121,9 +119,6 @@ def composer_fails_tool():
         agent_tools.TOOL_REGISTRY.pop(COMPOSER_FAILS, None)
 
 
-# --------------------------------------------------------------------------- #
-# 1. Warm reopen: a composer's children round-trip through get_session_state.
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio
@@ -175,14 +170,8 @@ async def test_complete_parent_persists_ordered_children(
     ]
 
 
-# --------------------------------------------------------------------------- #
-# 2. BOX-OFF COLD VIEW: the case-view snapshot carries the children unchanged.
-# --------------------------------------------------------------------------- #
 
 
-# --------------------------------------------------------------------------- #
-# 3. A FAILED parent still nests its children.
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio
@@ -211,9 +200,6 @@ async def test_failed_parent_still_persists_children(
     assert card.children[1].error_code
 
 
-# --------------------------------------------------------------------------- #
-# 4. Backward compat: plain tool -> None children; legacy row (no field) loads.
-# --------------------------------------------------------------------------- #
 
 
 PLAIN_TOOL = "job168_plain_tool"

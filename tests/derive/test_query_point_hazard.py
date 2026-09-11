@@ -90,9 +90,6 @@ def depth_layer(tmp_path: Path) -> dict:
     }
 
 
-# --------------------------------------------------------------------------- #
-# Happy path
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio
@@ -208,9 +205,6 @@ async def test_unreadable_layer_is_per_layer_error(monkeypatch, depth_layer) -> 
     assert result["results"][1]["value"] == pytest.approx(1.75)
 
 
-# --------------------------------------------------------------------------- #
-# Typed errors
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio
@@ -271,9 +265,6 @@ async def test_geocode_failure_typed_error(monkeypatch, depth_layer) -> None:
         await query_point_hazard(place="somewhere", case_id="case-1")
 
 
-# --------------------------------------------------------------------------- #
-# Registration
-# --------------------------------------------------------------------------- #
 
 
 def test_registered_in_tool_registry() -> None:

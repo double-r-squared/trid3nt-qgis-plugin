@@ -83,9 +83,6 @@ def _stub_stn(monkeypatch, records):
     return seen
 
 
-# --------------------------------------------------------------------------- #
-# Seam mechanics.
-# --------------------------------------------------------------------------- #
 
 
 def test_envelope_hook_registered():
@@ -164,9 +161,6 @@ def test_apply_envelope_strips_protected_keys():
     assert out.n_marks == 3                 # additive field DID land
 
 
-# --------------------------------------------------------------------------- #
-# HWM hooks (migrated twin coverage).
-# --------------------------------------------------------------------------- #
 
 
 def test_resolve_build_skips_without_event():

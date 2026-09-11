@@ -31,10 +31,8 @@ from trid3nt_contracts.payload_warning import (
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 
-# --------------------------------------------------------------------------- #
 # Module-level estimator + tool body — referenced by NAME (the metadata
 # carries the identifier "estimate_payload_mb" + "estimate_payload_mb_huge").
-# --------------------------------------------------------------------------- #
 
 
 def estimate_payload_mb(**kwargs: Any) -> float:
@@ -52,9 +50,6 @@ def _dummy_tool(**kwargs: Any) -> dict:
     return {"received": dict(kwargs)}
 
 
-# --------------------------------------------------------------------------- #
-# MockWebSocket — collects wire envelopes for assertion.
-# --------------------------------------------------------------------------- #
 
 
 class MockWebSocket:
@@ -72,9 +67,6 @@ class MockWebSocket:
             self.sent.append(raw)
 
 
-# --------------------------------------------------------------------------- #
-# Registry snapshot fixture (shared with the sibling registry tests).
-# --------------------------------------------------------------------------- #
 
 
 @pytest.fixture(autouse=True)
@@ -118,9 +110,6 @@ async def _pump(n: int = 60) -> None:
         await asyncio.sleep(0.002)
 
 
-# --------------------------------------------------------------------------- #
-# Tests
-# --------------------------------------------------------------------------- #
 
 
 def test_no_estimator_means_no_gate() -> None:
@@ -440,9 +429,6 @@ def test_threshold_env_override() -> None:
             os.environ["TRID3NT_PAYLOAD_WARNING_MB"] = saved
 
 
-# --------------------------------------------------------------------------- #
-# Integration: _invoke_tool_via_emitter end-to-end with the gate.
-# --------------------------------------------------------------------------- #
 
 
 def test_invoke_tool_via_emitter_dispatches_after_proceed() -> None:

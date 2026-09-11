@@ -22,9 +22,6 @@ from trid3nt_server.adapters.adapter import (
 )
 
 
-# ---------------------------------------------------------------------------
-# Test 1: producer harvests signature off the Part
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -93,9 +90,6 @@ async def test_producer_rejects_non_bytes_signature(fake_llm):
     assert events[0].thought_signature is None
 
 
-# ---------------------------------------------------------------------------
-# Test 2: build_function_call_content attaches signature to the wrapping Part
-# ---------------------------------------------------------------------------
 
 
 def test_build_function_call_content_attaches_signature_to_part():
@@ -143,9 +137,6 @@ def test_build_function_call_content_omitted_signature_default():
     assert part.function_call.name == "foo"
 
 
-# ---------------------------------------------------------------------------
-# Test 3: build_contents_from_history preserves parts_blob across rebuild
-# ---------------------------------------------------------------------------
 
 
 def test_parts_blob_round_trips_function_call_with_signature():
@@ -256,9 +247,6 @@ def test_empty_blob_falls_back_to_text():
     assert contents[0].parts[0].text == "use text"
 
 
-# ---------------------------------------------------------------------------
-# Test 4: signature plumbing is forward-compat (no crash without Gemini 3)
-# ---------------------------------------------------------------------------
 
 
 def test_signature_plumbing_no_crash_on_25_default():

@@ -141,9 +141,6 @@ def _mock_s3_object(monkeypatch, data: bytes):
     return puts
 
 
-# ---------------------------------------------------------------------------
-# Happy path: vector
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -177,10 +174,8 @@ async def test_ingest_vector_happy_path(monkeypatch, fake_persistence):
     assert updated.bbox is None  # make_aoi defaulted False
 
 
-# ---------------------------------------------------------------------------
 # Happy path: raster (publish_layer mocked -- COG/TiTiler is its own tested
 # seam; this test only proves the ingest wiring around it)
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -257,9 +252,6 @@ async def test_ingest_raster_reprojects_non_4326_crs(monkeypatch, fake_persisten
     assert miny < maxy
 
 
-# ---------------------------------------------------------------------------
-# Validation failures
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -336,10 +328,8 @@ async def test_ingest_bad_s3_uri_rejected(fake_persistence):
         )
 
 
-# ---------------------------------------------------------------------------
 # Merge policy: a second push replaces-by-layer_id, an unrelated existing
 # entry survives untouched.
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -373,9 +363,6 @@ async def test_ingest_merges_alongside_existing_layers(monkeypatch, fake_persist
     assert len(updated.loaded_layer_summaries) == 2
 
 
-# ---------------------------------------------------------------------------
-# LLM tool wrapper (register_case_layer): thin wrapper around the core.
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio

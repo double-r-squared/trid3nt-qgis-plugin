@@ -58,9 +58,6 @@ def _walk(fraction: float, centerline_utm, monkeypatch):
     return lon, lat
 
 
-# --------------------------------------------------------------------------- #
-# 1. Chainage 0 is upstream, whichever way the document was written.
-# --------------------------------------------------------------------------- #
 @pytest.mark.parametrize("coords", [_COORDS, list(reversed(_COORDS))])
 def test_the_normalized_centerline_starts_at_the_seed(coords):
     """The seed decides the head; the document's vertex order does not.
@@ -82,9 +79,6 @@ def test_fraction_zero_is_the_upstream_end_and_one_is_the_downstream_end(monkeyp
     assert _walk(1.0, line, monkeypatch)[0] == pytest.approx(_COORDS[-1][0], abs=1e-6)
 
 
-# --------------------------------------------------------------------------- #
-# 2. Discrimination: the two fractions are not the same place.
-# --------------------------------------------------------------------------- #
 def test_a_tenth_lands_near_the_inflow_and_nine_tenths_near_the_outflow(monkeypatch):
     """A walk that ignored its argument would put both at the same station."""
     line = read_centerline_utm(_line(_COORDS), _UTM_EPSG, start_lonlat=_SEED)

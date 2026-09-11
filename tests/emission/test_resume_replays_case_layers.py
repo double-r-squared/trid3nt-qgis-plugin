@@ -112,9 +112,6 @@ def _session_states(ws: FakeWS) -> list[dict]:
     return out
 
 
-# --------------------------------------------------------------------------- #
-# (a) bare reconnect + active Case + NO live turn -> replays loaded_layers
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio
@@ -147,9 +144,6 @@ async def test_bare_resume_replays_active_case_layers() -> None:
     assert len(state.emitter.loaded_layers) == 2
 
 
-# --------------------------------------------------------------------------- #
-# (b) reconnect-while-solving -> exactly ONE set of frames (no dup writer)
-# --------------------------------------------------------------------------- #
 
 
 async def _gated_turn(release: asyncio.Event, emitter: PipelineEmitter) -> None:
@@ -207,9 +201,6 @@ async def test_resume_while_solving_single_emitter_no_dup() -> None:
     assert len(ws_old.sent) == old_after, "dead socket receives nothing further"
 
 
-# --------------------------------------------------------------------------- #
-# (c) reconnect with NO active Case -> replays nothing (no crash)
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio
@@ -254,11 +245,9 @@ async def test_bare_resume_persistence_unbound_no_crash() -> None:
     assert states[0]["payload"]["loaded_layers"] == []
 
 
-# --------------------------------------------------------------------------- #
 # (d) #147 reconnect-resync GAP B1: a bare reconnect ALSO seeds the emitter's
 #     chat-history mirror so the replayed session-state ships non-empty
 #     chat_history (the chat bubbles re-render, not just the layers).
-# --------------------------------------------------------------------------- #
 
 
 def _chat_msg(case_id: str, role: str, content: str) -> CaseChatMessage:

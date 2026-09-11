@@ -51,9 +51,6 @@ def _run(engine_dir: str, rid: str) -> dict:
     return read_run_diagnostics(rid, _run_dir=os.path.join(FIX, engine_dir))
 
 
-# --------------------------------------------------------------------------- #
-# Registration + envelope schema.
-# --------------------------------------------------------------------------- #
 
 
 def test_tool_is_registered_with_expected_metadata():
@@ -85,9 +82,6 @@ def test_envelope_shape_is_complete_for_every_engine(engine_dir, rid):
         assert env["mass_balance_source"] in ("reported", "derived")
 
 
-# --------------------------------------------------------------------------- #
-# Handle resolution.
-# --------------------------------------------------------------------------- #
 
 
 def test_resolve_bare_ulid():
@@ -114,9 +108,6 @@ def test_resolve_rejects_empty_handle():
         _resolve_run_handle("")
 
 
-# --------------------------------------------------------------------------- #
-# TELEMAC: failed run (negative) + healthy run.
-# --------------------------------------------------------------------------- #
 
 
 def test_telemac_failed_run_is_unhealthy_and_mass_balance_null():
@@ -142,9 +133,6 @@ def test_telemac_healthy_run_reports_listing_mass_balance():
     assert env["healthy"] is True
 
 
-# --------------------------------------------------------------------------- #
-# Typed errors (honesty floor: never a fabricated healthy envelope).
-# --------------------------------------------------------------------------- #
 
 
 def test_run_not_found_when_no_completion(tmp_path):
@@ -174,9 +162,6 @@ def test_handle_unresolved_raises_typed():
         read_run_diagnostics("garbage-not-a-ulid")
 
 
-# --------------------------------------------------------------------------- #
-# Production path: resolve an s3 handle + read via the solver S3 seam (FakeS3).
-# --------------------------------------------------------------------------- #
 
 
 class _FakeS3:
@@ -231,9 +216,6 @@ def test_production_s3_resolution_reads_via_solver_seam(_reset_solver_seams):
     )
 
 
-# --------------------------------------------------------------------------- #
-# Solver.py surgical change: completion.json now records the "solver" field.
-# --------------------------------------------------------------------------- #
 
 
 def test_write_local_completion_records_solver_field(_reset_solver_seams):

@@ -22,10 +22,8 @@ def _hung_call_error() -> TimeoutError:
     return TimeoutError("read timeout on the provider endpoint")
 
 
-# --------------------------------------------------------------------------- #
 # Server-level: a failed model call does NOT pin busy / wedge the loop.
 # THIS IS THE LOAD-BEARING ASSERT for the live-down fix.
-# --------------------------------------------------------------------------- #
 
 
 @dataclass

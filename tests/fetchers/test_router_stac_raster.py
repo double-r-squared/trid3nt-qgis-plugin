@@ -23,9 +23,6 @@ _BBOX = (-91.30, 30.30, -91.00, 30.55)
 _SRC_BOUNDS = (-91.35, 30.25, -90.95, 30.60)
 
 
-# --------------------------------------------------------------------------- #
-# Synthetic catalog: real pystac Items over local COGs.
-# --------------------------------------------------------------------------- #
 
 
 def _write_cog(tmp_path, array, *, dtype, nodata, colormap=None, name="src"):
@@ -114,9 +111,6 @@ def _float_ingest(**stac_over):
     return {"access": "stac", "render": "float", "native_cell_m": 1000.0, "stac": stac}
 
 
-# --------------------------------------------------------------------------- #
-# float render: the DN band math and the fill rule.
-# --------------------------------------------------------------------------- #
 
 
 def test_float_render_applies_scale_offset_and_fill(tmp_path):
@@ -177,9 +171,6 @@ def test_no_item_is_typed_empty():
     assert getattr(ei.value, "error_code", "") == "SYNTH_NO_COVERAGE"
 
 
-# --------------------------------------------------------------------------- #
-# The fuse: first-valid, in the supplied order.
-# --------------------------------------------------------------------------- #
 
 
 def test_mosaic_fuse_is_first_valid_in_search_order(tmp_path):
@@ -247,9 +238,6 @@ def test_mosaic_all_nodata_is_typed_empty(tmp_path):
     assert getattr(ei.value, "error_code", "") == "SYNTH_NO_COVERAGE"
 
 
-# --------------------------------------------------------------------------- #
-# Scene select.
-# --------------------------------------------------------------------------- #
 
 
 def test_select_latest_takes_the_most_recent_item(tmp_path):
@@ -290,9 +278,6 @@ def test_select_coverage_skips_scenes_without_the_asset(tmp_path):
     assert getattr(ei.value, "error_code", "") == "SYNTH_NO_COVERAGE"
 
 
-# --------------------------------------------------------------------------- #
-# The destination grid.
-# --------------------------------------------------------------------------- #
 
 
 def test_native_lattice_snaps_to_the_source_origin(tmp_path):
@@ -332,9 +317,6 @@ def test_pixel_cap_falls_back_to_the_metric_grid(tmp_path):
     assert resampling == "bilinear" and max(gb.shape) <= 64
 
 
-# --------------------------------------------------------------------------- #
-# The refusal that names what is missing.
-# --------------------------------------------------------------------------- #
 
 
 def test_netrc_gated_catalog_refuses_by_name(monkeypatch, tmp_path):
@@ -361,9 +343,6 @@ def test_netrc_gated_catalog_proceeds_once_the_entry_exists(monkeypatch, tmp_pat
         assert np.allclose(src.read(1), 2.0)
 
 
-# --------------------------------------------------------------------------- #
-# Param normalization: the collection / asset maps and their aliases.
-# --------------------------------------------------------------------------- #
 
 
 def _param_keyed_ingest():
@@ -452,10 +431,8 @@ def test_asset_suffix_matches_a_numbered_key(tmp_path):
     assert int(arr_out.max()) == 1
 
 
-# --------------------------------------------------------------------------- #
 # The honesty floor: a read failure is the spec's typed error, carrying what
 # the library said.
-# --------------------------------------------------------------------------- #
 
 
 def test_a_failed_asset_read_is_the_specs_typed_upstream_error(tmp_path):

@@ -108,12 +108,10 @@ def _local_mode(monkeypatch):
     monkeypatch.setenv("TRID3NT_SOLVER_BACKEND", "local-docker")
 
 
-# ---------------------------------------------------------------------------
 # Route availability: unconditional in the local build. ``solver_backend()``
 # is hardwired to local-docker, so the old outside-local-mode 404 branch
 # behind ``_ingest_layer_route_enabled`` is unreachable -- the env var no
 # longer gates these routes.
-# ---------------------------------------------------------------------------
 
 
 def test_ingest_layer_route_served_without_env_arming(monkeypatch):
@@ -142,9 +140,6 @@ def test_ingest_layer_file_route_served_without_env_arming(monkeypatch):
     assert _body_json(out) == {"s3_uri": "s3://cache/user-uploads/01ULID/x.tif"}
 
 
-# ---------------------------------------------------------------------------
-# POST /api/ingest-layer
-# ---------------------------------------------------------------------------
 
 
 def test_ingest_layer_post_happy_path(monkeypatch):
@@ -282,9 +277,6 @@ def test_ingest_layer_post_typed_input_error_400(monkeypatch):
     assert _status(out) == 400
 
 
-# ---------------------------------------------------------------------------
-# POST /api/ingest-layer-file
-# ---------------------------------------------------------------------------
 
 
 def test_ingest_layer_file_happy_path(monkeypatch):
@@ -343,9 +335,6 @@ def test_ingest_layer_file_oversized_413_before_read(monkeypatch):
     assert _status(out) == 413
 
 
-# ---------------------------------------------------------------------------
-# Sibling routes unaffected
-# ---------------------------------------------------------------------------
 
 
 def test_ingest_layer_routes_do_not_perturb_catalog():

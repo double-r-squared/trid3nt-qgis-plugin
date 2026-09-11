@@ -124,9 +124,6 @@ async def _wait_for_card(sock: _FakeSocket, timeout: float = 2.0) -> dict:
     )
 
 
-# ---------------------------------------------------------------------------
-# Emission conditions
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -189,9 +186,6 @@ async def test_ambiguity_margin_zero_disables_auto_asks(_scripted, monkeypatch):
     assert _candidate_envelopes(sock) == []
 
 
-# ---------------------------------------------------------------------------
-# Wait semantics
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -229,9 +223,6 @@ async def test_free_text_reply_feeds_back_as_clarification(
     ), texts
 
 
-# ---------------------------------------------------------------------------
-# Consumption seam hygiene
-# ---------------------------------------------------------------------------
 
 
 def test_resolve_rejects_wrong_session_and_unknown_id():

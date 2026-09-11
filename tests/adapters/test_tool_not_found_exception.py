@@ -29,9 +29,6 @@ from trid3nt_server.server import (
 from trid3nt_contracts import new_ulid
 
 
-# ---------------------------------------------------------------------------
-# Minimal WebSocket / SessionState helpers
-# ---------------------------------------------------------------------------
 
 
 @dataclass
@@ -47,9 +44,6 @@ def _make_session() -> SessionState:
     return SessionState(session_id=new_ulid())
 
 
-# ---------------------------------------------------------------------------
-# Test 1: ToolNotFoundError shape
-# ---------------------------------------------------------------------------
 
 
 def test_tool_not_found_error_shape_base_attributes():
@@ -95,9 +89,6 @@ def test_tool_not_found_error_classify_error_harvests_attributes():
     assert retryable is False
 
 
-# ---------------------------------------------------------------------------
-# Test 2: _invoke_tool_via_emitter raises on unknown tool
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -135,9 +126,6 @@ async def test_invoke_tool_via_emitter_no_longer_returns_none_for_unknown_tool()
     assert raised, "Expected ToolNotFoundError was not raised"
 
 
-# ---------------------------------------------------------------------------
-# Test 3: summarize_tool_result emits structured envelope for ToolNotFoundError
-# ---------------------------------------------------------------------------
 
 
 def test_summarize_tool_result_tool_not_found_emits_error_envelope():
@@ -176,9 +164,6 @@ def test_summarize_tool_result_no_result_still_works_for_genuine_none():
     assert "retryable" not in summary
 
 
-# ---------------------------------------------------------------------------
-# Test 4: multi-turn loop accumulates function_response with error envelope
-# ---------------------------------------------------------------------------
 
 
 def _make_fake_chunk_with_function_call(name: str, args: dict, call_id: str = "c1"):
@@ -279,10 +264,8 @@ async def test_multi_turn_loop_tool_not_found_feeds_error_to_gemini(fake_llm):
     )
 
 
-# ---------------------------------------------------------------------------
 # Test 5: /invoke directive surface (_dispatch_tool_and_persist) catches
 # ToolNotFoundError and emits a structured error envelope
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio

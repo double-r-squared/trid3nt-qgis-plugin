@@ -133,9 +133,6 @@ def test_the_artifact_holds_the_measurements_the_layer_reports(tmp_path):
     assert doc["features"][0]["geometry"]["type"] == "Polygon"
 
 
-# --------------------------------------------------------------------------- #
-# The refusals: nothing here invents a shape.
-# --------------------------------------------------------------------------- #
 def test_no_cut_at_all_refuses(tmp_path):
     with pytest.raises(SectionError) as excinfo:
         section(_BANK, _output_dir=str(tmp_path))

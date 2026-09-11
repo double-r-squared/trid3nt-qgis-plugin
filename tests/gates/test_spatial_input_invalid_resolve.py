@@ -32,11 +32,9 @@ from trid3nt_contracts.ws import (
 )
 
 
-# --------------------------------------------------------------------------- #
 # A "real" malformed reply: the exact shape the client can send -- a feature
 # tagged with a role the vocabulary does not carry. This is what makes
 # SpatialInputResponsePayload.model_validate raise in the WS handler.
-# --------------------------------------------------------------------------- #
 
 
 def _unknown_role_payload_dict(request_id: str) -> dict[str, Any]:
@@ -67,10 +65,8 @@ class _MockWebSocket:
         self.sent.append(raw)
 
 
-# --------------------------------------------------------------------------- #
 # Sanity: the unknown role really DOES raise in model_validate (so the WS
 # handler's except-ValidationError branch is the one that fires).
-# --------------------------------------------------------------------------- #
 
 
 def test_an_unknown_role_fails_model_validate():
@@ -80,10 +76,8 @@ def test_an_unknown_role_fails_model_validate():
     assert "role" in str(ei.value)
 
 
-# --------------------------------------------------------------------------- #
 # THE FIX: an invalid response for a PENDING request resolves the awaiting
 # future PROMPTLY with a typed error — NOT via the ~300s timeout path.
-# --------------------------------------------------------------------------- #
 
 
 def test_invalid_response_resolves_pending_future_promptly_not_via_timeout():
@@ -217,11 +211,9 @@ def test_handle_request_spatial_input_returns_typed_error_on_invalid_reply():
     assert elapsed < 5.0, f"resolved in {elapsed:.3f}s — must not be the TTL path"
 
 
-# --------------------------------------------------------------------------- #
 # Safety: a malformed reply that carries NO resolvable request_id must NOT
 # crash and must NOT resolve any other session's future (the WS handler then
 # only notifies the user — there is nothing to resolve).
-# --------------------------------------------------------------------------- #
 
 
 def test_fail_unknown_request_id_is_safe_noop():

@@ -22,9 +22,6 @@ from trid3nt_server.server import (
 from trid3nt_contracts import new_ulid
 
 
-# ---------------------------------------------------------------------------
-# Minimal socket + chunk helpers (mirror test_loop_exhausted_envelope.py)
-# ---------------------------------------------------------------------------
 
 
 @dataclass
@@ -48,9 +45,6 @@ def _settings() -> ModelSettings:
     )
 
 
-# ---------------------------------------------------------------------------
-# Unit: the terminal-composer classifier
-# ---------------------------------------------------------------------------
 
 
 def test_a_template_is_a_terminal_composer():
@@ -69,9 +63,6 @@ def test_unknown_tool_is_not_terminal_composer():
     assert _is_terminal_composer("definitely_not_a_tool") is False
 
 
-# ---------------------------------------------------------------------------
-# End-to-end: a delivered composer concludes crisply (NO loop_exhausted)
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -186,9 +177,6 @@ async def test_composer_function_response_carries_completion_directive(fake_llm)
     assert "DELIVERABLE COMPLETE" in follow_up, follow_up[:2000]
 
 
-# ---------------------------------------------------------------------------
-# Runaway guard INTACT: a turn that never delivers still trips loop_exhausted
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio

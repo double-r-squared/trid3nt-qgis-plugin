@@ -17,9 +17,6 @@ import yaml
 from trid3nt_contracts.execution import LayerURI, LivingAtlasLayerURI
 
 
-# --------------------------------------------------------------------------- #
-# Fixtures: two tiny harvested catalogs pointed at by env overrides.
-# --------------------------------------------------------------------------- #
 
 _AUTH_ENTRIES = [
     {
@@ -112,9 +109,6 @@ def la_catalogs(tmp_path, monkeypatch):
     lai.reset_index()
 
 
-# --------------------------------------------------------------------------- #
-# Loader.
-# --------------------------------------------------------------------------- #
 
 
 def test_loader_splits_and_validates(la_catalogs):
@@ -138,9 +132,6 @@ def test_loader_splits_and_validates(la_catalogs):
     assert get_entry("nope") is None
 
 
-# --------------------------------------------------------------------------- #
-# Search: two-pool composition.
-# --------------------------------------------------------------------------- #
 
 
 def test_search_authoritative_only_by_default(la_catalogs):
@@ -189,9 +180,6 @@ def test_search_last_resort_community(tmp_path, monkeypatch):
         lai.reset_index()
 
 
-# --------------------------------------------------------------------------- #
-# Fetch bridge (dynamic SourceSpec, monkeypatched route()).
-# --------------------------------------------------------------------------- #
 
 
 @pytest.fixture()
@@ -304,9 +292,6 @@ def test_probe_raises_subscription_on_token_required(la_catalogs, monkeypatch):
         fetch_living_atlas_layer(item_id="auth_wetlands_img", bbox=(-100.0, 30.0, -99.0, 31.0))
 
 
-# --------------------------------------------------------------------------- #
-# Harvest normalizer (stubbed sharing API via --fixture).
-# --------------------------------------------------------------------------- #
 
 
 def test_harvest_normalizes_and_splits(tmp_path):
@@ -355,9 +340,6 @@ def test_harvest_normalizes_and_splits(tmp_path):
     assert "<b>" not in a1["snippet"] and a1["extent"] == [-125.0, 24.0, -66.0, 50.0]
 
 
-# --------------------------------------------------------------------------- #
-# Corpus-first retrieval proof (model-free, top-8) for BOTH new tools.
-# --------------------------------------------------------------------------- #
 
 
 def test_new_tools_surface_in_top8():

@@ -67,9 +67,6 @@ def _stub_three_keys(monkeypatch):
     monkeypatch.setattr(EX, "read_through", fake_rt)
 
 
-# --------------------------------------------------------------------------- #
-# Registration + surface parity.
-# --------------------------------------------------------------------------- #
 
 
 def test_both_specs_registered_and_served():
@@ -105,9 +102,6 @@ def test_active_fire_signature_matches_twin():
     ]
 
 
-# --------------------------------------------------------------------------- #
-# frames_plan: per-frame cache_params BYTE-identity + naming + presets.
-# --------------------------------------------------------------------------- #
 
 
 def test_archive_fire_temperature_cache_params_byte_identical(_stub_three_keys):
@@ -156,9 +150,6 @@ def test_active_fire_cache_params_byte_identical(_stub_three_keys):
     assert p.layer_id == "goes-activefire-20260622140000--114.050-37.000"
 
 
-# --------------------------------------------------------------------------- #
-# route(): list-return + scrubber grouping over REAL names + honesty floor.
-# --------------------------------------------------------------------------- #
 
 
 def test_route_returns_an_ordered_playable_sequence(_stub_three_keys):
@@ -199,9 +190,6 @@ def test_honesty_floor_empty_window(monkeypatch):
     assert getattr(ei.value, "error_code", None) == "GOES_ARCHIVE_EMPTY"
 
 
-# --------------------------------------------------------------------------- #
-# Input errors: satellite normalization + band gate + missing bbox.
-# --------------------------------------------------------------------------- #
 
 
 def test_unknown_satellite_raises_loud_normalizer_error():
@@ -222,9 +210,6 @@ def test_unknown_band_raises_source_input_error():
     assert getattr(ei.value, "error_code", None) == "GOES_ARCHIVE_INPUT_INVALID"
 
 
-# --------------------------------------------------------------------------- #
-# Pure band-math core (relocated helpers).
-# --------------------------------------------------------------------------- #
 
 
 def test_fire_temperature_rgb_channel_stretches():

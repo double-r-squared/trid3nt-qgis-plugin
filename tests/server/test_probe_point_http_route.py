@@ -94,12 +94,10 @@ def _local_mode(monkeypatch):
     monkeypatch.setenv("TRID3NT_SOLVER_BACKEND", "local-docker")
 
 
-# ---------------------------------------------------------------------------
 # Route availability: unconditional in the local build. ``solver_backend()``
 # is hardwired to local-docker, so the old outside-local-mode 404 branch
 # behind ``_probe_point_route_enabled`` is unreachable -- the env var no
 # longer gates the route.
-# ---------------------------------------------------------------------------
 
 
 def test_probe_point_route_served_without_env_arming(monkeypatch):
@@ -113,9 +111,6 @@ def test_probe_point_route_served_without_env_arming(monkeypatch):
     assert "case_id" in _body_json(out)["error"]
 
 
-# ---------------------------------------------------------------------------
-# POST /api/probe-point
-# ---------------------------------------------------------------------------
 
 
 def test_probe_point_post_happy_path(monkeypatch):
@@ -215,9 +210,6 @@ def test_probe_point_post_unexpected_error_500(monkeypatch):
     assert _status(out) == 500
 
 
-# ---------------------------------------------------------------------------
-# Sibling routes unaffected
-# ---------------------------------------------------------------------------
 
 
 def test_probe_point_route_does_not_perturb_catalog():

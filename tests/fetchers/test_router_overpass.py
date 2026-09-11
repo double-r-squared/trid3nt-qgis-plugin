@@ -74,9 +74,6 @@ def _serve(monkeypatch, module, frame):
                         lambda spec, params, tags, *, timeout_s: frame)
 
 
-# --------------------------------------------------------------------------- #
-# Registration.
-# --------------------------------------------------------------------------- #
 
 
 def test_both_promoted_as_router_specs():
@@ -90,9 +87,6 @@ def test_both_promoted_as_router_specs():
         assert entry.fn.__module__.endswith(f"_promoted.{name}")
 
 
-# --------------------------------------------------------------------------- #
-# Roads: the highway vocabulary.
-# --------------------------------------------------------------------------- #
 
 
 def test_roads_default_classes_are_the_major_tier_sorted():
@@ -118,9 +112,6 @@ def test_roads_class_set_is_sorted_and_deduped():
         "motorway", "primary"]
 
 
-# --------------------------------------------------------------------------- #
-# Roads: the clip, which is what makes a network measured INSIDE an area.
-# --------------------------------------------------------------------------- #
 
 
 def test_roads_clip_keeps_only_the_in_aoi_run(monkeypatch):
@@ -176,9 +167,6 @@ def test_roads_empty_yields_header_only_fgb():
         assert col in gdf.columns
 
 
-# --------------------------------------------------------------------------- #
-# POIs: the five ways of naming one tag.
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.parametrize("params,expected", [
@@ -215,9 +203,6 @@ def test_pois_dirty_token_rejected():
         pois._resolve_tag("OVERPASS_POIS", "INPUT_INVALID", {"tag": "amenity=hos pital"})
 
 
-# --------------------------------------------------------------------------- #
-# POIs: one representative point per element, strictly inside the bbox.
-# --------------------------------------------------------------------------- #
 
 
 def test_pois_a_node_is_its_own_point_and_an_area_is_its_bbox_centre(monkeypatch):
@@ -261,9 +246,6 @@ def test_pois_zero_features_raises_no_features(monkeypatch):
     assert ei.value.retryable is False
 
 
-# --------------------------------------------------------------------------- #
-# The mirror chain and the error the library returns as data.
-# --------------------------------------------------------------------------- #
 
 
 class _Resp:
@@ -380,9 +362,6 @@ def test_a_mirror_that_only_ever_throttles_stops_being_retried():
         wrapped.post("https://mirror.test/api")
 
 
-# --------------------------------------------------------------------------- #
-# End-to-end router.route: LayerURI shape + cache-key stability.
-# --------------------------------------------------------------------------- #
 
 
 def _inject_read_through(monkeypatch, store: dict[str, bytes]):

@@ -21,9 +21,6 @@ from trid3nt_server.emission.pipeline_emitter import (
 )
 
 
-# --------------------------------------------------------------------------- #
-# Fixtures
-# --------------------------------------------------------------------------- #
 
 
 class _CapturingSink:
@@ -61,9 +58,6 @@ def _session_frames(sink: _CapturingSink) -> list[dict[str, Any]]:
     return [f for f in sink.frames if f["type"] == "session-state"]
 
 
-# --------------------------------------------------------------------------- #
-# 1. Happy-path state transitions
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio
@@ -87,9 +81,6 @@ async def test_happy_path_state_transitions(
     assert len(pids) == 1
 
 
-# --------------------------------------------------------------------------- #
-# 2. Replace-not-reconcile (Appendix A.7)
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio
@@ -114,9 +105,6 @@ async def test_replace_not_reconcile_full_snapshot(
     assert last["payload"]["steps"][1]["state"] == "pending"
 
 
-# --------------------------------------------------------------------------- #
-# 3. Error path
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio
@@ -170,9 +158,6 @@ async def test_mark_failed_rejects_malformed_error_code(
         emitter.current_snapshot()  # PipelineStepSummary regex fires here
 
 
-# --------------------------------------------------------------------------- #
-# 4. loaded_layers accumulation
-# --------------------------------------------------------------------------- #
 
 
 def _make_layer(uri: str, layer_id: str = "L1") -> LayerURI:
@@ -330,9 +315,6 @@ async def test_emit_tool_call_drops_raster_gs_uri(
     ]
 
 
-# --------------------------------------------------------------------------- #
-# 5. current_pipeline set + cleared
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio
@@ -359,9 +341,6 @@ async def test_current_pipeline_set_and_cleared(
     assert emitter.pipeline_id is None
 
 
-# --------------------------------------------------------------------------- #
-# 6. Cancel propagation (Invariant 8)
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio
@@ -404,9 +383,6 @@ async def test_error_classifier_buckets_known_exception_types(
     assert failed.error_code == "UPSTREAM_API_ERROR"
 
 
-# --------------------------------------------------------------------------- #
-# 7. loaded_layers dedup
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio
@@ -432,9 +408,6 @@ async def test_loaded_layers_dedup_by_uri(
     assert layers[0].name == "Demo DEM (refreshed)"
 
 
-# --------------------------------------------------------------------------- #
-# 8. No merge helper (structural A.7 enforcement)
-# --------------------------------------------------------------------------- #
 
 
 def test_no_merge_helper_exists() -> None:
@@ -451,9 +424,6 @@ def test_no_merge_helper_exists() -> None:
     )
 
 
-# --------------------------------------------------------------------------- #
-# 9. Vector inline-GeoJSON
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio
@@ -584,9 +554,6 @@ async def test_reset_loaded_layers_clears_inline_table(
     assert last["payload"]["loaded_layers"] == []
 
 
-# --------------------------------------------------------------------------- #
-# duration_ms stamping (the tool-timer requirement)
-# --------------------------------------------------------------------------- #
 
 
 def _stub_clock(emitter: PipelineEmitter, instants: list) -> None:
@@ -732,9 +699,6 @@ async def test_emit_tool_call_stamps_duration_end_to_end(
     assert last["duration_ms"] >= 0
 
 
-# --------------------------------------------------------------------------- #
-# The emission seam is a no-op for a passing layer
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio
@@ -777,12 +741,10 @@ async def test_emit_byte_identical_with_seam_for_passing_layers(
     assert seam_loaded[0]["uri"] == "https://qgis.run.app/wms?LAYERS=dem_1"
 
 
-# --------------------------------------------------------------------------- #
 # Terminal-on-RETURN (terminal-pipeline-card hardening) — a tool/workflow that
 # FAILS or is CANCELLED yet RETURNS (the solver poll path) must flip the card
 # to failed/cancelled, NOT green. Kills the "silent green on a dead solve" +
 # "card spins forever then mislabels success" symptom.
-# --------------------------------------------------------------------------- #
 
 
 def _run_result(status: str, **kw: Any):
@@ -996,9 +958,6 @@ async def test_update_current_progress_targets_running_step(
     assert last["payload"]["steps"][0]["progress_percent"] == 33
 
 
-# --------------------------------------------------------------------------- #
-# tool-io sidecar (tool-card-expand-output spec)
-# --------------------------------------------------------------------------- #
 
 
 def _tool_io_frames(sink: _CapturingSink) -> list[dict[str, Any]]:
@@ -1111,9 +1070,6 @@ async def test_emit_tool_io_non_serializable_degrades_to_str(
     assert "Weird" in p["function_response"]
 
 
-# --------------------------------------------------------------------------- #
-# J-B-part-i: terminal-state survives a dead/cycling socket + rebind replay
-# --------------------------------------------------------------------------- #
 
 
 class _ClosingSink:
@@ -1355,9 +1311,6 @@ async def test_rebind_sink_open_pipeline_replays_all_steps_mixed_states(
     assert by_id[sim_id]["state"] == "running"
 
 
-# --------------------------------------------------------------------------- #
-# Two-card sim observability
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio
@@ -1544,9 +1497,6 @@ async def test_route_sim_terminal_marks_complete_and_failed(
     assert _pipeline_frames(sink_cx)[-1]["payload"]["steps"][-1]["state"] == "cancelled"
 
 
-# --------------------------------------------------------------------------- #
-# 9b. Compaction card (Part A -- compaction UX)
-# --------------------------------------------------------------------------- #
 #
 # Wire-shape / lifecycle coverage against a FAKE (no-persist-hook) emitter --
 # the persistence-row shape and the full dispatch-loop integration are covered
@@ -1632,9 +1582,6 @@ class TestCompactionCard:
         assert compaction_complete_label(0, 0) == "Conversation compacted (0k -> 0k tokens)"
 
 
-# --------------------------------------------------------------------------- #
-# 10. Off-loop densify (WS-30s drop-cycle fix)
-# --------------------------------------------------------------------------- #
 #
 # Root cause: ``_read_vector_uri_as_geojson`` read the object off-loop (good) but
 # ran the CPU-heavy ``densify_if_needed`` BACK ON the asyncio loop after the
@@ -1876,9 +1823,6 @@ async def _read_vector_uri_as_geojson_for_test(uri: str) -> Any:
     return await _read_vector_uri_as_geojson(uri)
 
 
-# --------------------------------------------------------------------------- #
-# DATA-DRIVEN LEGEND carry-over (the render KEY reaches the wire)
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio

@@ -77,9 +77,6 @@ def _to_gdf(b: bytes) -> gpd.GeoDataFrame:
         os.unlink(p)
 
 
-# --------------------------------------------------------------------------- #
-# Spec identity.
-# --------------------------------------------------------------------------- #
 
 
 def test_spec_identity():
@@ -107,9 +104,6 @@ def test_promoted_signature_matches_twin():
     assert sig.parameters["source"].default == "osm"
 
 
-# --------------------------------------------------------------------------- #
-# features -- the slim layer and the tag bag off one read.
-# --------------------------------------------------------------------------- #
 
 
 def test_features_keeps_areal_footprints_slim_and_captures_the_tag_bag(monkeypatch):
@@ -149,9 +143,6 @@ def test_empty_features_raise_buildings_empty(monkeypatch):
     assert ei.value.error_code == "BUILDINGS_EMPTY"
 
 
-# --------------------------------------------------------------------------- #
-# Sidecar sibling-key derivation.
-# --------------------------------------------------------------------------- #
 
 
 def test_sidecar_uri_is_sibling_of_fgb():
@@ -164,9 +155,6 @@ def test_sidecar_uri_is_sibling_of_fgb():
     assert "/static-30d/buildings/" in side
 
 
-# --------------------------------------------------------------------------- #
-# Param validation.
-# --------------------------------------------------------------------------- #
 
 
 def test_bbox_required():

@@ -22,12 +22,10 @@ from trid3nt_server.tools.tool_arg_normalizer import (
 )
 
 
-# --------------------------------------------------------------------------- #
 # coerce_bbox_value — a bbox double-encoded as a JSON string arrives with
 # LITERAL surrounding quote chars (observed live: fetch_fault_sources' first
 # call failed with `"\"-122.5,37.5,-121.5,38.5\""` -> "bbox must be [min_lon...]").
 # The coercer must peel the wrapping quotes before parsing.
-# --------------------------------------------------------------------------- #
 
 
 def test_coerce_bbox_value_strips_wrapping_double_quotes() -> None:
@@ -59,13 +57,11 @@ def test_coerce_bbox_value_plain_forms_unaffected() -> None:
     assert coerce_bbox_value("garbage") is None
 
 
-# --------------------------------------------------------------------------- #
 # coerce_latlon — Bedrock Claude passes spill_location_latlon as a
 # STRING, not a JSON array. The naive ``tuple(float(v) for v in value)``
 # iterated the string's characters -> float('.') crash. coerce_latlon accepts
 # every string form AND a real list, and raises a typed error only when the
 # value is genuinely not two numbers.
-# --------------------------------------------------------------------------- #
 
 
 def test_coerce_latlon_real_list_passthrough() -> None:
@@ -151,9 +147,6 @@ def test_coerce_latlon_bad_nonstring_raises_typed_error(bad: Any) -> None:
         coerce_latlon(bad)
 
 
-# --------------------------------------------------------------------------- #
-# parse_forcing_string
-# --------------------------------------------------------------------------- #
 
 
 def test_parse_forcing_string_atlas14_year_only() -> None:
@@ -183,9 +176,6 @@ def test_parse_forcing_string_empty_returns_empty() -> None:
     assert parse_forcing_string("not a forcing spec") == {}
 
 
-# --------------------------------------------------------------------------- #
-# snake_case
-# --------------------------------------------------------------------------- #
 
 
 def test_snake_case_camel_to_snake() -> None:
@@ -200,9 +190,6 @@ def test_snake_case_single_lowercase_word() -> None:
     assert snake_case("bbox") == "bbox"
 
 
-# --------------------------------------------------------------------------- #
-# normalize_args — the public entry point
-# --------------------------------------------------------------------------- #
 
 
 def _fake_flood_tool(
@@ -405,10 +392,8 @@ def test_forcing_string_table(
         assert out.get("duration_hours") == expected_hour
 
 
-# ---------------------------------------------------------------------------
 # NWS alert tools — LLM-invented state kwargs land on "area" so the
 # precise server-side ?area= filter engages instead of the CONUS sweep.
-# ---------------------------------------------------------------------------
 
 
 def test_nws_conus_state_kwarg_maps_to_area() -> None:

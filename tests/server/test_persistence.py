@@ -25,9 +25,6 @@ from trid3nt_contracts.user import User
 from tests._fakes import MockMCPClient, _fresh_case_summary
 
 
-# --------------------------------------------------------------------------- #
-# Helpers
-# --------------------------------------------------------------------------- #
 
 
 def _fresh_chat_message(case_id: str, *, role="user") -> CaseChatMessage:
@@ -51,9 +48,6 @@ def _fresh_user_record() -> User:
     )
 
 
-# --------------------------------------------------------------------------- #
-# Case CRUD
-# --------------------------------------------------------------------------- #
 
 
 def test_get_case_returns_none_on_missing() -> None:
@@ -142,9 +136,6 @@ def test_delete_case_sets_status() -> None:
     assert fetched.status == "deleted"
 
 
-# --------------------------------------------------------------------------- #
-# Chat history + session state
-# --------------------------------------------------------------------------- #
 
 
 def test_append_chat_message_and_hydrate_session() -> None:
@@ -177,9 +168,6 @@ def test_session_state_for_missing_case_returns_tombstone() -> None:
     assert state.chat_history == []
 
 
-# --------------------------------------------------------------------------- #
-# Users (Auth/Users-track stub)
-# --------------------------------------------------------------------------- #
 
 
 def test_user_round_trip() -> None:

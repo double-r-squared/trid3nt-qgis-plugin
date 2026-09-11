@@ -24,9 +24,6 @@ from trid3nt_contracts import new_ulid
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 
-# ---------------------------------------------------------------------------
-# Pure helpers.
-# ---------------------------------------------------------------------------
 
 
 def test_search_tool_name_resolves_by_registry_lookup():
@@ -54,9 +51,6 @@ def test_parse_search_result_tolerates_junk():
     assert agent_server._tool_names_from_search_result({}) == []
 
 
-# ---------------------------------------------------------------------------
-# Live loop.
-# ---------------------------------------------------------------------------
 
 
 @dataclass

@@ -31,7 +31,6 @@ def specs():
     return compose_specs_from_tree()
 
 
-# --------------------------------------------------------------------------- #
 # SHAPE 1 -- spec.endpoint_fallback: a SAME-DATA mirror chain, and nothing else.
 #
 # It used to be spelled ``fallback`` and carried nine lists, eight of which named
@@ -39,7 +38,6 @@ def specs():
 # those eight could never execute -- but the spec card printed them to the model
 # as fallbacks this source has. A promise no code path can keep is the same lie
 # as a silent swap, told the other way round.
-# --------------------------------------------------------------------------- #
 
 
 def test_every_endpoint_fallback_entry_names_an_endpoint_of_its_own_spec(specs):
@@ -89,12 +87,10 @@ def test_the_spec_card_key_says_what_the_mechanism_is():
     assert '"fallback": list(spec.fallback)' not in card_src
 
 
-# --------------------------------------------------------------------------- #
 # SHAPE 3 -- an undeclared contributor to a declared result.
 #
 # A source the ladder does not declare paints part of the answer, so the rows a
 # reader gets do not add up to the raster they are reading.
-# --------------------------------------------------------------------------- #
 
 
 def test_every_ladder_is_a_complete_account_of_its_own_rungs():
@@ -133,12 +129,10 @@ def test_the_user_supplied_rung_is_visible_in_the_tool_schema(specs):
     assert param in specs["fetch_topobathy"].docstring
 
 
-# --------------------------------------------------------------------------- #
 # SHAPE 4 -- every EXPOSED fetch_topobathy call site declares its rung.
 #
 # A gate that fires only for opt-in callers is not a floor (F1b). The mesh joined
 # the four composers in F2.
-# --------------------------------------------------------------------------- #
 
 _TOPOBATHY_CALL = re.compile(r'fetch_topobathy(?:"\]\.fn)?\s*\(', re.M)
 
@@ -166,7 +160,6 @@ def test_every_topobathy_call_site_declares_a_rung():
     )
 
 
-# --------------------------------------------------------------------------- #
 # THE REGISTER -- naked substitutions that are NOT fixed, with their verdicts.
 #
 # These are the audit's SILENT physics/data rows. They are not ladders: no
@@ -174,7 +167,6 @@ def test_every_topobathy_call_site_declares_a_rung():
 # value, so the fix is the loudness class, not F2's
 # declared-degradation regime. They are registered here so the set cannot grow
 # quietly and so fixing one forces this table to change with it.
-# --------------------------------------------------------------------------- #
 
 #
 # Keyed by AUDIT ROW, not by file: a row can live in more than one file, so a

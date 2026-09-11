@@ -98,9 +98,6 @@ _SANTA_ROSA_YTD_RESPONSE = {
 }
 
 
-# --------------------------------------------------------------------------- #
-# Registration.
-# --------------------------------------------------------------------------- #
 
 
 def test_wfigs_promoted_as_router_spec():
@@ -119,9 +116,6 @@ def test_wfigs_shape_is_record():
     assert WFIGS_SPEC.output.ext == "json"
 
 
-# --------------------------------------------------------------------------- #
-# Pure hooks.
-# --------------------------------------------------------------------------- #
 
 
 def test_normalize_state_forms():
@@ -215,9 +209,6 @@ def test_build_request_rejects_bad_pad_and_name():
         wfh.build_request(WFIGS_SPEC, {"incident_name": "   "})
 
 
-# --------------------------------------------------------------------------- #
-# End-to-end route() -> record dict (not a LayerURI).
-# --------------------------------------------------------------------------- #
 
 
 def test_route_returns_discovery_record(monkeypatch):

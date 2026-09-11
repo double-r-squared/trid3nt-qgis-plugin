@@ -34,9 +34,6 @@ def _short_cap(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(box, "_CAP_SECONDS", 5)
 
 
-# --------------------------------------------------------------------------- #
-# Confirm-gate: tool body fails closed without approval
-# --------------------------------------------------------------------------- #
 
 
 def test_tool_body_refuses_without_confirmation() -> None:
@@ -47,9 +44,6 @@ def test_tool_body_refuses_without_confirmation() -> None:
     assert exc.value.retryable is False
 
 
-# --------------------------------------------------------------------------- #
-# Confirm-gate: server-side gate blocks / approves (reuses payload-warning seam)
-# --------------------------------------------------------------------------- #
 
 
 class _FakeWS:
@@ -138,11 +132,9 @@ async def test_server_gate_cancel_blocks_dispatch() -> None:
     assert exc.retryable is False
 
 
-# --------------------------------------------------------------------------- #
 # Approval timeout: unanswered card -> typed error,
 # turn completes, registry cleaned up. The QGIS plugin had no handler for the
 # code-exec-request envelope, so the F6 24h local gate wait hung the turn.
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio
@@ -224,9 +216,6 @@ def test_approval_timeout_env_parsing(monkeypatch: pytest.MonkeyPatch) -> None:
     assert server._code_exec_approval_timeout_s() == 180.0
 
 
-# --------------------------------------------------------------------------- #
-# Approved path: benign numpy end-to-end through the local sandbox
-# --------------------------------------------------------------------------- #
 
 
 def test_approved_benign_numpy_runs_end_to_end() -> None:
@@ -246,9 +235,6 @@ def test_approved_benign_numpy_runs_end_to_end() -> None:
     CodeExecResultPayload.model_validate(payload)
 
 
-# --------------------------------------------------------------------------- #
-# Blocked egress: honest status="blocked"
-# --------------------------------------------------------------------------- #
 
 
 def test_approved_blocked_egress_reports_blocked() -> None:
@@ -263,9 +249,6 @@ def test_approved_blocked_egress_reports_blocked() -> None:
     assert out[CODE_EXEC_RESULT_KEY]["status"] == "blocked"
 
 
-# --------------------------------------------------------------------------- #
-# Timeout: honest status="timeout"
-# --------------------------------------------------------------------------- #
 
 
 def test_approved_timeout_reports_timeout() -> None:
@@ -278,9 +261,6 @@ def test_approved_timeout_reports_timeout() -> None:
     assert out["duration_s"] >= 0
 
 
-# --------------------------------------------------------------------------- #
-# FINDING-1: oversized JSON-native string result -> truncated, valid JSON
-# --------------------------------------------------------------------------- #
 
 
 def test_finding1_oversized_string_result_truncated_honestly() -> None:
@@ -308,9 +288,6 @@ def test_finding1_oversized_container_result_too_large_descriptor() -> None:
     assert json.loads(json.dumps(out))["result"]["kind"] == "too_large"
 
 
-# --------------------------------------------------------------------------- #
-# function_response summary shape — compact, no full payload, no cost
-# --------------------------------------------------------------------------- #
 
 
 def test_summary_shape_is_compact_and_stripped() -> None:
@@ -373,9 +350,6 @@ def test_adapter_strips_full_payload_from_function_response() -> None:
     assert fr["status"] == "ok"
 
 
-# --------------------------------------------------------------------------- #
-# build_code_exec_result_payload mapping
-# --------------------------------------------------------------------------- #
 
 
 def test_build_payload_derives_truncated_from_result_marker() -> None:

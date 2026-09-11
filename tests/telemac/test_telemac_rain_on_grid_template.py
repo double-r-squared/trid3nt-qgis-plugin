@@ -84,9 +84,6 @@ def test_corpus_yaml_present_and_routes():
     assert any("runoff" in q.lower() for q in data["telemac_rain_on_grid"])
 
 
-# ===========================================================================
-# The DECLARATION: the plan value and the wire-signature door contract.
-# ===========================================================================
 def test_the_declared_plan_is_the_rain_on_grid_sequence():
     """aoi -> mesh -> infiltration -> settled -> sheet -> solve -> flood_depth,
     and the sequence VALIDATES against its own declared params and data."""
@@ -129,9 +126,6 @@ def test_constant_door_params_off_wire_scenario_and_user_ones_present():
     assert "mesh" not in wire
 
 
-# ===========================================================================
-# amc_condition_for: the three SCS words, and a refused fourth.
-# ===========================================================================
 def test_amc_condition_for_maps_the_three_words():
     from trid3nt_server.workflows.telemac.templates.rain_on_grid.cn_infiltration import (
         amc_condition_for,
@@ -151,9 +145,6 @@ def test_amc_condition_for_refuses_a_fourth_word():
         amc_condition_for("saturated")
 
 
-# ===========================================================================
-# The outlet hydrograph chart.
-# ===========================================================================
 def test_hydrograph_chart_none_with_no_series():
     from types import SimpleNamespace
 
@@ -207,9 +198,6 @@ def test_a_series_of_measured_zeros_is_drawn_and_labelled_a_measurement():
     assert "MEASURED ZERO outflow" in payload["caption"]
 
 
-# ===========================================================================
-# The dryness statement: what a correct-but-dry run says instead of refusing.
-# ===========================================================================
 def test_a_dry_run_states_its_dryness_in_its_own_numbers():
     from trid3nt_server.workflows.telemac.products.rain_on_grid import _dryness_note
 
@@ -236,9 +224,6 @@ def test_the_depth_field_decides_the_dryness_not_a_trace_of_outflow():
          "rainfall_volume_m3": 3.4e6}, rain_mm=156.7)
 
 
-# ===========================================================================
-# resolve_rain_event: the two rungs.
-# ===========================================================================
 def test_resolve_rain_event_design_storm_rung_no_window():
     from trid3nt_server.workflows.telemac.helpers.forcing import resolve_rain_event
 
@@ -305,11 +290,9 @@ def test_resolve_rain_event_hyetograph_rung_builds_hourly_blocks(monkeypatch):
     assert out["duration_s"] == 3 * 3600.0   # hyetograph span dominates the no-ask
 
 
-# ===========================================================================
 # The pour-point-first AOI (the live bug: a town bbox clipping the
 # upstream basin) - the surviving equivalent of the deleted
 # ``_aoi_from_pour_point`` / ``model_telemac_rain_on_grid`` dispatch tests.
-# ===========================================================================
 def test_aoi_from_pour_point_buffers_the_outlet():
     from trid3nt_server.workflows.telemac.helpers.catchment import catchment_aoi
     from trid3nt_server.workflows.telemac.templates.rain_on_grid.declarations import (
@@ -357,9 +340,6 @@ async def test_acquire_catchment_never_invents_a_pour_point():
     assert ei.value.error_code == "TELEMAC_ROG_PARAMS_INCOMPLETE"
 
 
-# ===========================================================================
-# The authored case: the steering file, the fields it names, and what solves it.
-# ===========================================================================
 def _accepted_catchment_mesh():
     """The mesh step's record for an accepted catchment, as the author reads it."""
     from types import SimpleNamespace

@@ -34,9 +34,6 @@ def _spec(**over):
     return LocalSolverSpec(**fields)
 
 
-# --------------------------------------------------------------------------- #
-# --network none: declared per spec, applied by the launcher
-# --------------------------------------------------------------------------- #
 
 
 def test_declared_network_lands_immediately_after_docker_run():
@@ -84,9 +81,6 @@ def test_every_telemac_spec_declares_no_network():
         assert LOCAL_SOLVER_SPEC_REGISTRY[name]().network == "none", name
 
 
-# --------------------------------------------------------------------------- #
-# Code provenance: which code made this run, and has it moved
-# --------------------------------------------------------------------------- #
 
 
 def test_an_unrecorded_code_identity_reads_as_unknown_not_as_clean():

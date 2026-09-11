@@ -26,9 +26,6 @@ from trid3nt_server.workflows.solver.solver import (
 )
 
 
-# --------------------------------------------------------------------------- #
-# Minimal fake S3 client (mirrors test_solver_local_docker.py)
-# --------------------------------------------------------------------------- #
 
 
 def _no_such_key(key: str) -> ClientError:
@@ -54,9 +51,6 @@ class FakeS3Client:
         return {}
 
 
-# --------------------------------------------------------------------------- #
-# Fixtures
-# --------------------------------------------------------------------------- #
 
 
 @pytest.fixture()
@@ -121,9 +115,6 @@ def _wait_completion(
     )
 
 
-# --------------------------------------------------------------------------- #
-# 4. Manifest written to rundir before subprocess launch
-# --------------------------------------------------------------------------- #
 
 
 def test_launch_writes_manifest_to_rundir(
@@ -186,9 +177,6 @@ def test_launch_writes_manifest_to_rundir(
     assert written.get("build_spec", {}).get("solver") == "landlab"
 
 
-# --------------------------------------------------------------------------- #
-# 5. Mocked subprocess: supervisor writes correct completion.json on exit 0
-# --------------------------------------------------------------------------- #
 
 
 def test_subprocess_runner_exit0_produces_ok_completion(
@@ -287,9 +275,6 @@ def test_subprocess_runner_nonzero_exit_produces_error_completion(
     assert completion["error"] is not None
 
 
-# --------------------------------------------------------------------------- #
-# 6. env_overrides propagated to subprocess environment
-# --------------------------------------------------------------------------- #
 
 
 def test_env_overrides_set_in_subprocess_environment(

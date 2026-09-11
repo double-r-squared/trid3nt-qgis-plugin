@@ -28,9 +28,6 @@ from trid3nt_server.adapters.adapter import (
 _TEMPLATE = "telemac_river_dye"
 
 
-# ---------------------------------------------------------------------------
-# Test 1: the template is in TOOL_REGISTRY and no door name survives
-# ---------------------------------------------------------------------------
 
 
 def test_engine_template_in_registry():
@@ -44,9 +41,6 @@ def test_engine_template_in_registry():
         )
 
 
-# ---------------------------------------------------------------------------
-# Test 2: build_tool_declarations includes the template
-# ---------------------------------------------------------------------------
 
 
 def test_build_tool_declarations_includes_the_template():
@@ -60,9 +54,6 @@ def test_build_tool_declarations_includes_the_template():
     )
 
 
-# ---------------------------------------------------------------------------
-# Test 3: stream_events yields FunctionCallEvent from mocked Gemini stream
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -99,9 +90,6 @@ async def test_stream_events_yields_function_call_event(fake_llm):
     assert evt.args.get("substance") == "dye"
 
 
-# ---------------------------------------------------------------------------
-# Test 4: stream_events yields TextDeltaEvent for a plain text chunk
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -123,9 +111,6 @@ async def test_stream_events_yields_text_delta_event(fake_llm):
     assert events[0].delta == "Hello, I can help with that."
 
 
-# ---------------------------------------------------------------------------
-# Test 5: SYSTEM_PROMPT names the live templates it routes to
-# ---------------------------------------------------------------------------
 
 
 def test_system_prompt_mentions_runoff_routing():
@@ -135,9 +120,6 @@ def test_system_prompt_mentions_runoff_routing():
     assert _TEMPLATE in SYSTEM_PROMPT
 
 
-# ---------------------------------------------------------------------------
-# Test 6: the template docstring carries the question's own words
-# ---------------------------------------------------------------------------
 
 
 def test_template_docstring_covers_user_intent():

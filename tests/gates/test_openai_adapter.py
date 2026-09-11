@@ -34,9 +34,6 @@ from trid3nt_server.gates.context_budget import (
 )
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
 
 def user_content(text: str) -> genai_types.Content:
     return genai_types.Content(
@@ -64,9 +61,6 @@ def user_fr_content(name: str, response: dict[str, Any], call_id: str | None = N
     return genai_types.Content(role="user", parts=[genai_types.Part(function_response=fr)])
 
 
-# ---------------------------------------------------------------------------
-# 1. contents_to_openai_messages
-# ---------------------------------------------------------------------------
 
 class TestContentsToOpenaiMessages:
 
@@ -175,9 +169,6 @@ class TestContentsToOpenaiMessages:
         assert len(tool_msgs) == 2
 
 
-# ---------------------------------------------------------------------------
-# 2. tool_declarations_to_openai_tools
-# ---------------------------------------------------------------------------
 
 class TestToolDeclarationsToOpenaiTools:
 
@@ -383,9 +374,6 @@ class TestToolDeclarationsToOpenaiTools:
         assert "query" in params.get("required", [])
 
 
-# ---------------------------------------------------------------------------
-# 3. stream_openai: synthetic chunk sequence (no network)
-# ---------------------------------------------------------------------------
 
 class TestStreamOpenai:
     """Test the streaming accumulator logic using a mock openai client."""
@@ -565,9 +553,6 @@ class TestStreamOpenai:
         assert "tools" not in captured_kwargs
 
 
-# ---------------------------------------------------------------------------
-# 4. openai_model precedence (F2: local hot-swap)
-# ---------------------------------------------------------------------------
 
 
 class TestOpenaiModelPrecedence:
@@ -615,11 +600,9 @@ class TestOpenaiModelPrecedence:
             openai_model("us.amazon.nova-pro-v1:0")
 
 
-# ---------------------------------------------------------------------------
 # 5. Context-budget wiring inside stream_openai (proactive
 #    compaction + the reactive clip-guard retry-then-typed-error path).
 #    ``discover_context_window`` is monkeypatched everywhere here -- no live Ollama.
-# ---------------------------------------------------------------------------
 
 
 def _text_chunk(text: str) -> MagicMock:
@@ -850,14 +833,12 @@ class TestContextBudgetWiring:
         assert "1k" in str(excinfo.value)
 
 
-# ---------------------------------------------------------------------------
 # BUG 3: a clipped/looping local generation
 # ran for ~22 minutes streaming 16k-26k tokens of looped narration before the
 # reactive clip guard (above) could react at stream end -- it only inspects
 # usage AFTER a round finishes. ``max_tokens`` bounds every request; the
 # proactive budget's reserve is COUPLED to the same cap (single source of
 # truth -- the budget tests pin it).
-# ---------------------------------------------------------------------------
 
 
 class TestMaxTokensCap:
@@ -928,7 +909,6 @@ class TestMaxTokensCap:
         assert reserve_output_tokens() == 512
 
 
-# --------------------------------------------------------------------------- #
 # A1: retry TRANSIENT UPSTREAM errors, not just 429.
 #
 # The nemotron :free endpoint surfaced "Upstream error from Nvidia:
@@ -937,7 +917,6 @@ class TestMaxTokensCap:
 # only RateLimitError was retried, so this died as a terminal LLM_UNAVAILABLE
 # even though the tool had already run + published. These tests pin the extended
 # retry policy in _create_stream_with_retry / _is_transient_upstream.
-# --------------------------------------------------------------------------- #
 class TestTransientUpstreamRetry:
     """_create_stream_with_retry retries transient upstream errors + a 429, but
     propagates genuine client (4xx) errors unchanged."""

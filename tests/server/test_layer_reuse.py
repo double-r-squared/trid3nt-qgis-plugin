@@ -36,9 +36,6 @@ def _buildings_layer(bbox=SOUTH_FL_BBOX, layer_id="buildings--82.0000-25.0000"):
     }
 
 
-# --------------------------------------------------------------------------- #
-# fetched-layer kind classification
-# --------------------------------------------------------------------------- #
 
 
 def test_fetched_kind_for_tool_maps_fetchers() -> None:
@@ -88,9 +85,6 @@ def test_a_result_layer_never_answers_a_fetch() -> None:
     )
 
 
-# --------------------------------------------------------------------------- #
-# bbox_encloses — fit / resize recognition
-# --------------------------------------------------------------------------- #
 
 
 def test_bbox_encloses_same_and_tighter() -> None:
@@ -102,9 +96,6 @@ def test_bbox_encloses_refuses_larger() -> None:
     assert not bbox_encloses(SOUTH_FL_BBOX, LARGER_BBOX)
 
 
-# --------------------------------------------------------------------------- #
-# find_reusable_fetched_layer
-# --------------------------------------------------------------------------- #
 
 
 def test_refetch_of_loaded_buildings_reuses_existing_layer() -> None:
@@ -219,9 +210,6 @@ def test_bbox_equivalent_still_works_for_fetch_paths() -> None:
     assert bbox_equivalent(SOUTH_FL_BBOX, [-82.001, 25.001, -79.999, 27.001])
 
 
-# --------------------------------------------------------------------------- #
-# the layers-present note
-# --------------------------------------------------------------------------- #
 
 
 def test_layers_present_note_tags_fetched_buildings_as_reusable_input_kind() -> None:

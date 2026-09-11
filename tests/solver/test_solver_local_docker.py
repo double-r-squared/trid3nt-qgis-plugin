@@ -36,9 +36,6 @@ from trid3nt_contracts.execution import ExecutionHandle, RunResult
 #: host, not its engine.
 _SOLVER = "telemac_river_dye"
 
-# --------------------------------------------------------------------------- #
-# Fakes — boto3-shaped S3 client + legacy GCS client + docker PATH shim
-# --------------------------------------------------------------------------- #
 
 
 def _no_such_key(key: str) -> ClientError:
@@ -153,9 +150,6 @@ esac
 """
 
 
-# --------------------------------------------------------------------------- #
-# Fixtures
-# --------------------------------------------------------------------------- #
 
 
 @pytest.fixture()
@@ -251,9 +245,6 @@ def _wait_for_completion_object(
     )
 
 
-# --------------------------------------------------------------------------- #
-# 2. local-docker run_solver — staging + detached launch + immediate handle
-# --------------------------------------------------------------------------- #
 
 
 def test_local_run_solver_requires_runs_bucket(
@@ -356,9 +347,6 @@ def test_local_manifest_dest_traversal_rejected(
     assert "escape" in str(exc_info.value)
 
 
-# --------------------------------------------------------------------------- #
-# 3+4. Supervisor completion.json (entrypoint schema) + wait_for_completion
-# --------------------------------------------------------------------------- #
 
 #: The EXACT key set the local supervisor writes. The worker-entrypoint schema
 #: PLUS two agent-side additions: the ``solver``
@@ -570,9 +558,6 @@ async def test_local_wait_emits_progress_via_emitter_binding(
 
 
 
-# --------------------------------------------------------------------------- #
-# publish_manifest_uri survives the supervisor's completion write
-# --------------------------------------------------------------------------- #
 
 
 def _write_completion(s3: FakeS3Client, run_id: str) -> dict:

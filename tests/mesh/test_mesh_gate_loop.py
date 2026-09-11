@@ -85,9 +85,6 @@ def _closed_gates(monkeypatch):
     assert not MOUNTED_TOOLS
 
 
-# --------------------------------------------------------------------------- #
-# Mount / unmount lifecycle.
-# --------------------------------------------------------------------------- #
 def test_no_gate_tool_is_mounted_before_a_gate_opens():
     assert not MOUNTED_TOOLS
     assert "mesh_accept" not in TOOL_REGISTRY
@@ -160,9 +157,6 @@ def test_mounted_tools_ride_the_retrieval_floor(tmp_path):
         "what is the weather", None, 8)
 
 
-# --------------------------------------------------------------------------- #
-# The agent lane: mesh_op edits the RECIPE, regenerates, re-presents.
-# --------------------------------------------------------------------------- #
 @pytest.mark.asyncio
 async def test_mesh_op_appends_regenerates_and_re_presents(tmp_path, monkeypatch):
     fake = _FakeEmitter()
@@ -293,9 +287,6 @@ async def test_adopting_a_hand_edited_layer_flags_the_mesh(tmp_path, monkeypatch
     mesh_gate.close_mesh_gate(gate)
 
 
-# --------------------------------------------------------------------------- #
-# AUTO builds inline: no card, no mounted tools.
-# --------------------------------------------------------------------------- #
 @pytest.mark.asyncio
 async def test_auto_mode_builds_inline_with_no_gate(tmp_path, monkeypatch):
     fake = _FakeEmitter()
@@ -337,9 +328,6 @@ async def test_session_lever_turns_the_gate_on(tmp_path, monkeypatch):
     assert [m for m, _ in fake.sent] == ["tool-payload-warning"]
 
 
-# --------------------------------------------------------------------------- #
-# The demanded lane: present, decide, accept.
-# --------------------------------------------------------------------------- #
 @pytest.mark.asyncio
 async def test_gate_presents_probes_then_accepts(tmp_path, monkeypatch):
     fake = _FakeEmitter()
@@ -429,9 +417,6 @@ async def test_gate_stops_asking_after_its_rounds(tmp_path, monkeypatch):
     assert excinfo.value.error_code == "MESH_GATE_NOT_APPROVED"
 
 
-# --------------------------------------------------------------------------- #
-# ONE card path: the agnostic params, the numbered recipe, the revert.
-# --------------------------------------------------------------------------- #
 def _card_rows(session) -> list[str]:
     """The gate card's row names for ``session``, built without a mesh.
 

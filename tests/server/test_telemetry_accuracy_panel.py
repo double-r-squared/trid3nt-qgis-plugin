@@ -28,9 +28,6 @@ from trid3nt_server.server.protocol.catalog_http import (
 from trid3nt_contracts.ws import SolveProgressPayload
 
 
-# --------------------------------------------------------------------------- #
-# Fixtures
-# --------------------------------------------------------------------------- #
 
 
 def _make_record(**overrides):
@@ -51,9 +48,6 @@ def _make_record(**overrides):
     return base
 
 
-# --------------------------------------------------------------------------- #
-# 1. result_usable classification
-# --------------------------------------------------------------------------- #
 
 
 def test_classify_result_usable_renderable_layer_uri():
@@ -126,9 +120,6 @@ def test_classify_result_usable_empty_layer_key_is_false():
     assert classify_result_usable("fetch_something", result, summary) is False
 
 
-# --------------------------------------------------------------------------- #
-# 2 + 3. aggregation: success/usability/routing/p50/p95
-# --------------------------------------------------------------------------- #
 
 
 def test_empty_summary_has_zeroed_accuracy_fields():
@@ -249,9 +240,6 @@ def test_aggregate_routing_accuracy_failed_then_retry_same_tool_is_ok():
     assert s["routing_accuracy_rate"] == 1.0
 
 
-# --------------------------------------------------------------------------- #
-# 4. solve_telemetry aggregation
-# --------------------------------------------------------------------------- #
 
 
 def test_aggregate_solve_telemetry_empty():
@@ -351,9 +339,6 @@ def test_build_telemetry_summary_solve_zero_state(tmp_path, monkeypatch):
     assert summary["solve_telemetry"] == _empty_solve_telemetry()
 
 
-# --------------------------------------------------------------------------- #
-# 5. LIVE solve-progress envelope shape
-# --------------------------------------------------------------------------- #
 
 
 def test_build_live_solve_progress_shape():

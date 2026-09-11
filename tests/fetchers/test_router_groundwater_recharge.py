@@ -74,9 +74,6 @@ def _patch_open(monkeypatch, arr, seen: dict | None = None):
     monkeypatch.setenv("AWS_ENDPOINT_URL", "http://minio.local:9000")
 
 
-# --------------------------------------------------------------------------- #
-# Spec identity + metadata flags.
-# --------------------------------------------------------------------------- #
 
 
 def test_spec_identity(spec):
@@ -132,9 +129,6 @@ def test_corpus_carries_natural_recharge_phrasings(spec):
     assert any("groundwater flow model" in q.lower() for q in spec.corpus)
 
 
-# --------------------------------------------------------------------------- #
-# Staged-object resolution: bucket/key in the spec, host from the environment.
-# --------------------------------------------------------------------------- #
 
 
 def test_both_sources_point_at_staged_objects(spec):
@@ -178,9 +172,6 @@ def test_source_param_selects_the_staged_object(spec, monkeypatch, source, fragm
     assert seen["url"] == f"http://minio.local:9000/trid3nt-cache/staged/groundwater_recharge/{fragment}"
 
 
-# --------------------------------------------------------------------------- #
-# Coverage limit + honesty floor.
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.parametrize("label,bbox", [
@@ -206,12 +197,10 @@ def test_all_nan_window_raises_empty_not_a_fabricated_layer(spec, monkeypatch):
     assert ei.value.error_code == "RECHARGE_EMPTY"
 
 
-# --------------------------------------------------------------------------- #
 # B1 follow-up: inland-water behavior differs by source (the corrected caveat).
 # reitz_2017 stamps inland water 0.0 (finite); wolock_2003 stamps it NaN. Live-
 # proven against the real staged Lake Michigan window (mean=0.0, all 144 pixels
 # finite on reitz_2017; all-NaN on wolock_2003, raising RECHARGE_EMPTY).
-# --------------------------------------------------------------------------- #
 
 
 def test_lake_michigan_reitz2017_serves_zero_not_an_error(spec, monkeypatch):
@@ -269,13 +258,11 @@ def test_caveats_state_the_true_inland_water_split(spec):
     assert "reitz_2017" in joined and "wolock_2003" in joined
 
 
-# --------------------------------------------------------------------------- #
 # B2 follow-up: a staged 404 is a config/upstream defect, never a coverage
 # answer. Live-proven: an unset AWS_ENDPOINT_URL and a configured-but-wrong
 # endpoint both raise RouterUpstreamError (RECHARGE_UPSTREAM_ERROR), never
 # RouterEmptyError -- CONUS is fully covered by the staged objects, so a 404
 # here is always a deployment defect.
-# --------------------------------------------------------------------------- #
 
 
 def test_missing_endpoint_raises_typed_config_error_not_empty(spec, monkeypatch):
@@ -311,9 +298,6 @@ def test_configured_endpoint_with_404_raises_typed_config_error_not_empty(spec, 
     assert "STAGED_OBJECT_UNAVAILABLE" in str(ei.value)
 
 
-# --------------------------------------------------------------------------- #
-# conus_bbox non-blocker: the spec's own staged-grid envelope, not gridmet's.
-# --------------------------------------------------------------------------- #
 
 
 def test_key_west_is_inside_the_specs_own_conus_envelope(spec):

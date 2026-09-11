@@ -25,15 +25,9 @@ from trid3nt_server.tools.derive.compute_aspect.compute_aspect import (
     compute_aspect,
 )
 
-# ---------------------------------------------------------------------------
-# Pinned timestamp for deterministic cache keys
-# ---------------------------------------------------------------------------
 
 PINNED_NOW = datetime(2026, 6, 8, 12, 0, 0, tzinfo=timezone.utc)
 
-# ---------------------------------------------------------------------------
-# Helpers: synthetic DEM creation
-# ---------------------------------------------------------------------------
 
 
 def _write_synthetic_dem_south_facing(
@@ -103,9 +97,6 @@ def _read_aspect_interior_values(path: str) -> np.ndarray:
     return interior
 
 
-# ---------------------------------------------------------------------------
-# FakeBlob / FakeStorageClient for cache shim tests
-# ---------------------------------------------------------------------------
 
 
 class _S3Body:
@@ -175,9 +166,6 @@ def _route_cache_to_inmemory_s3(monkeypatch):
         FakeStorageClient._active = None
 
 
-# ---------------------------------------------------------------------------
-# gdaldem availability check
-# ---------------------------------------------------------------------------
 
 _GDALDEM_AVAILABLE = (
     os.path.isfile(os.path.expanduser("~/miniforge3/envs/grace2/bin/gdaldem"))
@@ -192,9 +180,6 @@ _SKIP_GDALDEM = pytest.mark.skipif(
     reason="gdaldem binary not available in this environment",
 )
 
-# ---------------------------------------------------------------------------
-# Helper: fake GeoTIFF bytes (used as mock gdaldem output / mock DEM bytes)
-# ---------------------------------------------------------------------------
 
 
 def _make_fake_aspect_bytes() -> bytes:
@@ -229,9 +214,6 @@ def _fake_dem_bytes() -> bytes:
     return _make_fake_aspect_bytes()
 
 
-# ---------------------------------------------------------------------------
-# Test 1 — registration check
-# ---------------------------------------------------------------------------
 
 
 def test_compute_aspect_registered():
@@ -243,9 +225,6 @@ def test_compute_aspect_registered():
     assert entry.metadata.source_class == "aspect"
 
 
-# ---------------------------------------------------------------------------
-# Tests 2–5 — gdaldem subprocess correctness on synthetic DEMs
-# ---------------------------------------------------------------------------
 
 
 @_SKIP_GDALDEM
@@ -330,9 +309,6 @@ def test_compute_aspect_zero_for_flat_false():
         )
 
 
-# ---------------------------------------------------------------------------
-# Tests 6–8 — cache shim integration (mocked GCS + mocked gdaldem)
-# ---------------------------------------------------------------------------
 
 
 @pytest.fixture()
@@ -449,9 +425,6 @@ def test_compute_aspect_returns_layer_uri_fields():
     assert "ZevenbergenThorne" in result.name
 
 
-# ---------------------------------------------------------------------------
-# Tests 9–10 — error path coverage
-# ---------------------------------------------------------------------------
 
 
 def test_compute_aspect_gdaldem_failure_raises_aspect_compute_error():
@@ -489,9 +462,6 @@ def test_compute_aspect_dem_download_failure_raises_aspect_compute_error():
     assert exc_info.value.error_code == "DEM_DOWNLOAD_FAILED"
 
 
-# ---------------------------------------------------------------------------
-# Test 11 — cache key varies across all 4 parameter combos
-# ---------------------------------------------------------------------------
 
 
 def test_cache_keys_vary_across_combos():

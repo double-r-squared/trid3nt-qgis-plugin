@@ -94,9 +94,6 @@ def _patch_open(monkeypatch, arr, seen: dict | None = None, bbox=None):
     monkeypatch.setenv("AWS_ENDPOINT_URL", "http://minio.local:9000")
 
 
-# --------------------------------------------------------------------------- #
-# Spec identity + metadata flags.
-# --------------------------------------------------------------------------- #
 
 
 def test_spec_identity(spec):
@@ -210,9 +207,6 @@ def test_corpus_carries_the_natural_question(spec):
         assert "transmissivity" in joined
 
 
-# --------------------------------------------------------------------------- #
-# Staged-object resolution: bucket/key in the spec, host from the environment.
-# --------------------------------------------------------------------------- #
 
 
 def test_endpoint_is_a_staged_object(spec):
@@ -274,9 +268,6 @@ def test_staged_uri_without_a_key_is_refused():
         _staged.staged_object_url("s3://bucketonly")
 
 
-# --------------------------------------------------------------------------- #
-# Coverage envelope: the staged grid's REAL bounds, not the generic CONUS box.
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.parametrize("label,bbox", [
@@ -317,9 +308,6 @@ def test_key_west_passes_the_gate_and_fails_honestly_on_the_read(spec, monkeypat
     assert ei.value.error_code == f"{_PREFIX[spec.name]}_EMPTY"
 
 
-# --------------------------------------------------------------------------- #
-# Honesty floor: what the grid actually encodes.
-# --------------------------------------------------------------------------- #
 
 
 def test_off_domain_window_raises_empty_not_a_fabricated_layer(spec, monkeypatch):
@@ -360,9 +348,6 @@ def test_negative_depths_survive_the_read_unclamped(specs, monkeypatch):
     assert np.isfinite(out).all()
 
 
-# --------------------------------------------------------------------------- #
-# The caveats have to state the limits that were actually verified.
-# --------------------------------------------------------------------------- #
 
 
 def test_depth_caveats_state_the_verified_limits(specs):

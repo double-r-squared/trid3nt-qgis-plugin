@@ -58,9 +58,6 @@ def _fresh_state(session_id: str | None = None) -> SessionState:
     return SessionState(session_id=session_id or new_ulid())
 
 
-# --------------------------------------------------------------------------- #
-# Case lifecycle handlers
-# --------------------------------------------------------------------------- #
 
 
 def test_case_create_emits_case_open_and_case_list(_persistence_bound: Persistence) -> None:
@@ -482,9 +479,6 @@ def test_active_case_id_set_after_create_and_select(
     assert state.active_case_id == first_active
 
 
-# --------------------------------------------------------------------------- #
-# Chat persistence
-# --------------------------------------------------------------------------- #
 
 
 def test_persist_chat_turn_writes_when_active_case_set(
@@ -528,9 +522,6 @@ def test_persist_chat_turn_noop_when_no_active_case(
     assert chat_inserts == []
 
 
-# --------------------------------------------------------------------------- #
-# Integration: full Case flow
-# --------------------------------------------------------------------------- #
 
 
 def test_integration_e2e_case_flow(_persistence_bound: Persistence) -> None:

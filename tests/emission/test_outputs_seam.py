@@ -28,9 +28,6 @@ def _manifest(entries):
     )
 
 
-# --------------------------------------------------------------------------- #
-# Seam unit behaviour
-# --------------------------------------------------------------------------- #
 def test_temporal_grouping_and_deterministic_ids():
     entries = [
         build_entry(kind="raster", quantity="flood_depth", name="Peak flood depth",
@@ -146,9 +143,6 @@ def test_missing_manifest_is_a_noop():
     assert read_outputs_manifest(_Result()) is None
 
 
-# --------------------------------------------------------------------------- #
-# The mesh entry: one group, one scale
-# --------------------------------------------------------------------------- #
 def test_a_mesh_entry_paints_the_group_it_declares_on_the_published_range():
     """A results mesh carries every variable the solve wrote and has no band to read a
     range off, so the painted group and the range are both DECLARED - on the

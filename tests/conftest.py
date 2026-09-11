@@ -13,7 +13,6 @@ import pytest
 from trid3nt_server import tools as agent_tools
 
 
-# ---------------------------------------------------------------------------
 # Shared in-memory S3 double (GCP decommissioned — cache shim is S3-only).
 #
 # The cache read-through (``trid3nt_server.tools.cache``) and every tool
@@ -21,7 +20,6 @@ from trid3nt_server import tools as agent_tools
 # Tests that exercise the cache miss/hit/write paths monkeypatch that factory
 # to this in-memory double so no AWS credentials / network are needed and the
 # old injected ``google.cloud.storage`` client seam is fully retired.
-# ---------------------------------------------------------------------------
 
 
 class _S3Body:

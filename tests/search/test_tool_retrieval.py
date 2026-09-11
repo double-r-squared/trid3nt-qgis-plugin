@@ -27,9 +27,6 @@ def warm_index():
     yield
 
 
-# ---------------------------------------------------------------------------
-# The core floor covers the render + layer-analysis slots.
-# ---------------------------------------------------------------------------
 def test_core_floor_covers_render_and_analysis_slots():
     for name in ("generate_chart", "spatial_query"):
         assert name in CORE_FLOOR, f"{name} must be in CORE_FLOOR"
@@ -40,9 +37,6 @@ def test_core_floor_covers_render_and_analysis_slots():
     assert "publish_layer" not in CORE_FLOOR
 
 
-# ---------------------------------------------------------------------------
-# CORE-FLOOR: CORE_FLOOR is ALWAYS a subset of the result.
-# ---------------------------------------------------------------------------
 @pytest.mark.parametrize("query", ["model the flood", "", "show me lightning", "asdfqwer", "   "])
 @pytest.mark.parametrize("accrued", [None, "fresh", "seeded"])
 def test_core_floor_always_subset(warm_index, query, accrued):
@@ -53,9 +47,6 @@ def test_core_floor_always_subset(warm_index, query, accrued):
     assert CORE_FLOOR <= res
 
 
-# ---------------------------------------------------------------------------
-# NEVER-HIDE-MID-TASK: the result always contains the Case's accrued set.
-# ---------------------------------------------------------------------------
 def test_never_hide_mid_task(warm_index):
     accrued = {"telemac_river_dye", "compute_contours", "fetch_usgs_nwis_gauges"}
     # a query about something UNRELATED to the accrued tools.
@@ -77,9 +68,6 @@ def test_monotonic_growth_only_adds(warm_index):
     assert "fetch_dem" in r1 and "fetch_dem" in r2
 
 
-# ---------------------------------------------------------------------------
-# DETERMINISTIC.
-# ---------------------------------------------------------------------------
 def test_deterministic(warm_index):
     accrued = {"fetch_dem"}
     r1 = retrieve_visible_tools("show me the lightning over the storm", accrued, DEFAULT_K)
@@ -87,9 +75,6 @@ def test_deterministic(warm_index):
     assert r1 == r2
 
 
-# ---------------------------------------------------------------------------
-# k clamp [1, MAX_K].
-# ---------------------------------------------------------------------------
 def test_k_clamps_high(warm_index):
     res = retrieve_visible_tools("fetch radar reflectivity precipitation", None, 1000)
     discovered = res - set(CORE_FLOOR)
@@ -102,9 +87,6 @@ def test_k_clamps_low_and_bad(warm_index):
     assert CORE_FLOOR <= retrieve_visible_tools("fetch radar", None, "garbage")  # type: ignore[arg-type]
 
 
-# ---------------------------------------------------------------------------
-# FAIL-OPEN: error / cold index / empty ranking -> FULL registry.
-# ---------------------------------------------------------------------------
 def _pool_hidden_names() -> set[str]:
     """Registered pool-HIDDEN names: ``tier=internal`` only.
 
@@ -162,9 +144,6 @@ def test_cold_index_never_builds_on_hot_path(monkeypatch):
     _assert_full_failopen(res)
 
 
-# ---------------------------------------------------------------------------
-# Empty query -> floor only (does NOT dump the full catalog).
-# ---------------------------------------------------------------------------
 def test_empty_query_returns_floor_only(warm_index):
     assert retrieve_visible_tools("   ", None, DEFAULT_K) == set(CORE_FLOOR)
     accrued = {"fetch_dem"}
@@ -173,9 +152,6 @@ def test_empty_query_returns_floor_only(warm_index):
     assert set(TOOL_REGISTRY) - res  # full registry NOT dumped
 
 
-# ---------------------------------------------------------------------------
-# RECALL on covered fixtures (the result must surface the expected tool top-k).
-# ---------------------------------------------------------------------------
 _RECALL_FIXTURE = [
     ("show me the lightning over this storm from GOES", "fetch_glm_lightning"),
     ("detect the active fire hot pixels from GOES", "fetch_goes_active_fire"),
@@ -198,9 +174,6 @@ def test_recall_surfaces_expected_tool(warm_index, query, want):
     assert want in res, f"recall miss: {want!r} not surfaced for {query!r}"
 
 
-# ---------------------------------------------------------------------------
-# Corpus coverage: every registered tool has routing queries; no dead keys.
-# ---------------------------------------------------------------------------
 def _load_corpus():
     # Compose through the module's own loader (per-tool corpus.yaml tree +
     # residual) so the test never hardcodes the package depth or the split.

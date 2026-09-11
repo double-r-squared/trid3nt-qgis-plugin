@@ -24,9 +24,6 @@ def _layer(layer_type: str, uri: str, layer_id: str = "L1") -> LayerURI:
     )
 
 
-# --------------------------------------------------------------------------- #
-# Guardrail pass/block matrix
-# --------------------------------------------------------------------------- #
 
 
 def test_raster_s3_cog_uri_passes_identity() -> None:

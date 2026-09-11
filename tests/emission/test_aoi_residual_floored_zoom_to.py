@@ -87,10 +87,8 @@ def _stub_composer():
         reset_uri_registries_for_tests()
 
 
-# --------------------------------------------------------------------------- #
 # Keystone: geocode small bbox first, then a composer floored LayerURI -> the
 # LAST current_turn_map_commands zoom-to is the FLOORED bbox (not the small one)
-# --------------------------------------------------------------------------- #
 
 
 def test_floored_bbox_is_last_zoom_to_after_geocode_small_snap(
@@ -145,9 +143,6 @@ def test_floored_append_with_no_prior_geocode_snap(_stub_composer: str) -> None:
     assert _last_zoom_to_bbox(state.current_turn_map_commands) == _FLOORED_BBOX
 
 
-# --------------------------------------------------------------------------- #
-# Guards: dedupe + non-finite / wrong-shape / absent bbox
-# --------------------------------------------------------------------------- #
 
 
 def test_no_double_append_when_floored_equals_last_zoom_to(
@@ -212,9 +207,6 @@ def test_absent_layeruri_bbox_not_appended(_stub_composer: str) -> None:
     assert _last_zoom_to_bbox(state.current_turn_map_commands) == _GEOCODE_SMALL_BBOX
 
 
-# --------------------------------------------------------------------------- #
-# Pure-helper unit coverage
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.parametrize(

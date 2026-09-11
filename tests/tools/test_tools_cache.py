@@ -26,9 +26,6 @@ from trid3nt_server.tools.cache import (
 )
 
 
-# ---------------------------------------------------------------------------
-# Pure-function tests
-# ---------------------------------------------------------------------------
 
 
 def test_cache_key_is_deterministic_for_same_inputs():
@@ -133,15 +130,11 @@ def test_is_cacheable_per_ttl_class(ttl_class, cacheable, expected):
     assert is_cacheable(md) is expected
 
 
-# ---------------------------------------------------------------------------
-# read_through integration tests (S3-only — boto3 in-memory double)
-# ---------------------------------------------------------------------------
 #
 # GCP is decommissioned: the read-through writes/reads via boto3 S3. These
 # tests monkeypatch ``boto3.client`` to an in-memory double that models the
 # subset of the S3 API the cache shim touches: ``get_object`` /
 # ``put_object`` raising ``ClientError(NoSuchKey)`` on a miss.
-# ---------------------------------------------------------------------------
 
 
 class _FakeS3Client:

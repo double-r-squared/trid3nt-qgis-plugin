@@ -40,9 +40,6 @@ def _inject_read_through(monkeypatch):
     monkeypatch.setattr(router, "read_through", patched)
 
 
-# --------------------------------------------------------------------------- #
-# Registration + shape (the live-no-cache record surface).
-# --------------------------------------------------------------------------- #
 
 
 def test_slider_promoted_uncacheable_record():
@@ -73,9 +70,6 @@ def test_docstring_carried_verbatim():
     assert "cadence_seconds" in doc
 
 
-# --------------------------------------------------------------------------- #
-# Pure hooks: build_request URL + record enrichment.
-# --------------------------------------------------------------------------- #
 
 
 def test_build_request_url_matches_slider_template():
@@ -158,9 +152,6 @@ def test_record_non_json_raises_typed_upstream():
     assert exc.value.error_code == "SLIDER_UPSTREAM_ERROR"
 
 
-# --------------------------------------------------------------------------- #
-# End-to-end route() -> availability dict (live-no-cache, not a LayerURI).
-# --------------------------------------------------------------------------- #
 
 
 def test_route_returns_availability_dict(monkeypatch):

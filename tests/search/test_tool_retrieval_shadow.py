@@ -17,9 +17,6 @@ from trid3nt_server.adapters.adapter import ModelSettings
 from trid3nt_contracts import new_ulid
 
 
-# --------------------------------------------------------------------------- #
-# Minimal harness (mirrors test_multi_turn_loop).
-# --------------------------------------------------------------------------- #
 @dataclass
 class _FakeSocket:
     sent: list[str] = field(default_factory=list)
@@ -103,9 +100,6 @@ async def _drive_one_turn(
     return state, registries_seen, dispatch_log
 
 
-# --------------------------------------------------------------------------- #
-# 1. The selection event fires with mode="enforce".
-# --------------------------------------------------------------------------- #
 @pytest.mark.asyncio
 async def test_enforce_emits_selection_event(fake_llm):
     from trid3nt_server import server as agent_server
@@ -125,9 +119,6 @@ async def test_enforce_emits_selection_event(fake_llm):
     assert shadow_calls[0]["mode"] == "enforce"
 
 
-# --------------------------------------------------------------------------- #
-# 2. FAIL-OPEN on retrieval error / empty result.
-# --------------------------------------------------------------------------- #
 @pytest.mark.asyncio
 async def test_fail_open_on_retrieval_error(fake_llm):
     from trid3nt_server import server as agent_server
@@ -163,9 +154,6 @@ async def test_fail_open_on_empty_result(fake_llm):
     assert regs[0] is not TOOL_REGISTRY
 
 
-# --------------------------------------------------------------------------- #
-# 3. ENFORCE -- subsets, core-floor subset, monotonic no-shrink.
-# --------------------------------------------------------------------------- #
 @pytest.mark.asyncio
 async def test_enforce_subsets_registry_and_keeps_core_floor(fake_llm):
     from trid3nt_server import server as agent_server
@@ -233,9 +221,6 @@ async def test_enforce_visible_set_is_monotonic_across_turns(fake_llm):
     assert real[0] in set(regs[0])
 
 
-# --------------------------------------------------------------------------- #
-# 4. recall@k computation on a synthetic fixture.
-# --------------------------------------------------------------------------- #
 def test_compute_recall_at_k_synthetic():
     from trid3nt_server.server.protocol.catalog_http import compute_recall_at_k
 
@@ -349,9 +334,6 @@ def test_build_telemetry_summary_folds_recall_section(monkeypatch, tmp_path):
     assert rk["missed_tools"] == []
 
 
-# --------------------------------------------------------------------------- #
-# 5. fetch_glm_lightning is in the ALWAYS-OFFLOAD set.
-# --------------------------------------------------------------------------- #
 def test_fetch_glm_lightning_always_offloaded():
     from trid3nt_server import server as agent_server
 

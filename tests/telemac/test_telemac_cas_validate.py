@@ -79,9 +79,6 @@ def test_a_driver_that_could_not_run_at_all_refuses_too(tmp_path, monkeypatch):
         V.validate_authored_steering(tmp_path, {"t2d_river.cas": "telemac2d"})
 
 
-# --------------------------------------------------------------------------- #
-# The wiring: every DAMOCLES file the SERIALIZER wrote reaches the parser.
-# --------------------------------------------------------------------------- #
 def _submitted(monkeypatch, tmp_path, sheet) -> dict:
     """What the serializer offers the parser, and under which dictionary."""
     from trid3nt_server.workflows.telemac.authoring import serializer as Z

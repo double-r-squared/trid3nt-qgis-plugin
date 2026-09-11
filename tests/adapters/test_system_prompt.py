@@ -12,9 +12,6 @@ import re
 from trid3nt_server.adapters.adapter import SYSTEM_PROMPT
 
 
-# ---------------------------------------------------------------------------
-# Capability surface — the prompt names only tools that exist
-# ---------------------------------------------------------------------------
 
 #: Engine families purged from the registry. Their first name segment is gone
 #: from every registered tool, so only an explicit list can hold them out; a
@@ -86,9 +83,6 @@ def test_system_prompt_fidelity_ladder_is_engine_name_free() -> None:
     assert "CALIBRATION is the crux and comes LAST" in flat
 
 
-# ---------------------------------------------------------------------------
-# A2 — Named-tool follow-on dispatch
-# ---------------------------------------------------------------------------
 
 
 def test_system_prompt_has_named_tool_followon_section() -> None:
@@ -131,9 +125,6 @@ def test_system_prompt_carries_named_tool_example() -> None:
     assert "Cape Coral" in SYSTEM_PROMPT
 
 
-# ---------------------------------------------------------------------------
-# A5 — Geographic clipping pattern (in [admin-region])
-# ---------------------------------------------------------------------------
 
 
 def test_system_prompt_has_geographic_clipping_section() -> None:
@@ -169,13 +160,11 @@ def test_system_prompt_carries_admin_clipping_example() -> None:
     assert "Miami-Dade" in SYSTEM_PROMPT
 
 
-# ---------------------------------------------------------------------------
 # The compact layer-handle block replaces the handle-indirection,
 # publish-discipline and full-AOI-extent prose.
 # The harness now enforces these structurally: short handles (L1, L2, ...),
 # typed rejection of unknown URIs, auto-publish/emit seams, and bbox
 # auto-fill from the active AOI / case bbox.
-# ---------------------------------------------------------------------------
 
 
 def test_system_prompt_has_compact_layer_handle_block() -> None:
@@ -225,9 +214,6 @@ def test_system_prompt_keeps_always_narrate_section() -> None:
     assert "Always-narrate after tools complete" in SYSTEM_PROMPT
 
 
-# ---------------------------------------------------------------------------
-# Regression — the anti-fabrication behaviors must survive the amendment
-# ---------------------------------------------------------------------------
 
 
 def test_system_prompt_still_routes_rainfall_runoff() -> None:
@@ -264,9 +250,6 @@ def test_system_prompt_has_input_review_instruction() -> None:
     assert "Do not run the solver until the user has approved" in flat
 
 
-# ---------------------------------------------------------------------------
-# arg-error self-correct (Oklahoma-tornado bug)
-# ---------------------------------------------------------------------------
 
 
 def test_system_prompt_steers_self_correct_on_arg_error() -> None:
@@ -285,9 +268,6 @@ def test_system_prompt_says_full_state_name_accepted() -> None:
     assert "Oklahoma" in flat
 
 
-# ---------------------------------------------------------------------------
-# News-article spill forcing — extract, never invent
-# ---------------------------------------------------------------------------
 
 
 def test_system_prompt_never_invents_contamination_forcing() -> None:
@@ -307,11 +287,9 @@ def test_system_prompt_routes_the_news_article_spill_to_the_river_plume() -> Non
     assert "NEWS ARTICLE" in SYSTEM_PROMPT
 
 
-# ---------------------------------------------------------------------------
 # Shaded/baked land cover uses the land cover AS the blend
 # base (it is palette-aware); colored_relief is elevation colors, not
 # land-cover classes. Mirrors the compute_blended_composite description fix.
-# ---------------------------------------------------------------------------
 
 
 def test_system_prompt_has_shaded_landcover_base_section() -> None:
@@ -338,10 +316,8 @@ def test_system_prompt_forbids_colored_relief_as_landcover_base() -> None:
     assert "NOT substitute compute_colored_relief as the base" in flat
 
 
-# ---------------------------------------------------------------------------
 # Narration conciseness — be concise; do not re-explain the
 # same thing across retries or recap every step verbosely each turn.
-# ---------------------------------------------------------------------------
 
 
 def test_system_prompt_has_narration_conciseness_section() -> None:

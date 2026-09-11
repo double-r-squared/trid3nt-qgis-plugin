@@ -26,9 +26,6 @@ from trid3nt_server.gates.runaway_guard import (
     step_cap_for_model,
 )
 
-# --------------------------------------------------------------------------- #
-# Module unit tests (pure, deterministic)
-# --------------------------------------------------------------------------- #
 
 
 def test_abort_messages_are_honest_and_distinct():
@@ -97,9 +94,6 @@ def test_loop_watchdog_resets_on_progress_and_variation():
     assert wd.tripped() is None
 
 
-# --------------------------------------------------------------------------- #
-# Integration: the guards fire inside the per-turn driver
-# --------------------------------------------------------------------------- #
 
 
 @dataclass

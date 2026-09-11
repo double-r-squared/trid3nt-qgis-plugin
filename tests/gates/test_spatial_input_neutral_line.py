@@ -22,9 +22,6 @@ from trid3nt_contracts.common import new_ulid
 from trid3nt_contracts.ws import SpatialInputResponsePayload
 
 
-# --------------------------------------------------------------------------- #
-# Fixtures.
-# --------------------------------------------------------------------------- #
 
 
 def _line_feature() -> dict[str, Any]:
@@ -43,9 +40,6 @@ def _line_fc() -> dict[str, Any]:
     return {"type": "FeatureCollection", "features": [_line_feature()]}
 
 
-# --------------------------------------------------------------------------- #
-# 1. PURE PARSE - role=="line" -> plain coords.
-# --------------------------------------------------------------------------- #
 
 
 def test_split_features_by_role_buckets_line_role():
@@ -101,9 +95,6 @@ def test_line_and_aoi_coexist():
     assert parsed.n_lines == 1
 
 
-# --------------------------------------------------------------------------- #
-# 2. spatial-input-response -> result surfaces the line geometry.
-# --------------------------------------------------------------------------- #
 
 
 def test_response_neutral_line_carries_line_and_linestring():
@@ -149,11 +140,9 @@ def test_response_aoi_flow_has_no_line_keys():
     assert "line" not in result and "linestring" not in result
 
 
-# --------------------------------------------------------------------------- #
 # 3. The surfaced line geometry resolves in compute_cross_section.
 # There is no compute_terrain_profile; compute_cross_section is the
 #  surviving generic sample-along-line tool and carries _resolve_line_coords.
-# --------------------------------------------------------------------------- #
 
 
 def test_surfaced_line_feeds_compute_cross_section():
@@ -178,9 +167,6 @@ def test_surfaced_line_feeds_compute_cross_section():
     ]
 
 
-# --------------------------------------------------------------------------- #
-# 4. request_spatial_input tool carries `purpose` through the sentinel.
-# --------------------------------------------------------------------------- #
 
 
 def test_tool_rides_purpose_line_in_sentinel():

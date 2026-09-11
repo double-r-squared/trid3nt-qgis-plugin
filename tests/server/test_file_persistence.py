@@ -30,9 +30,6 @@ from trid3nt_contracts.case import CaseChatMessage, CaseSummary
 from trid3nt_contracts.common import new_ulid
 
 
-# --------------------------------------------------------------------------- #
-# Helpers
-# --------------------------------------------------------------------------- #
 
 
 def _fresh_case(title: str = "Hurricane Ian — Fort Myers flood scenario") -> CaseSummary:
@@ -58,9 +55,6 @@ def _fresh_chat(case_id: str, role: str, content: str, *, when: datetime) -> Cas
     )
 
 
-# --------------------------------------------------------------------------- #
-# Case CRUD round-trips
-# --------------------------------------------------------------------------- #
 
 
 def test_file_mcp_round_trip_case(tmp_path: Path) -> None:
@@ -145,9 +139,6 @@ def test_file_mcp_archive_then_delete(tmp_path: Path) -> None:
     assert fetched is not None and fetched.status == "deleted"
 
 
-# --------------------------------------------------------------------------- #
-# Chat history + session state
-# --------------------------------------------------------------------------- #
 
 
 def test_file_mcp_chat_round_trip(tmp_path: Path) -> None:
@@ -179,9 +170,6 @@ def test_file_mcp_chat_round_trip(tmp_path: Path) -> None:
     ]
 
 
-# --------------------------------------------------------------------------- #
-# Atomic-write semantics
-# --------------------------------------------------------------------------- #
 
 
 def test_file_mcp_atomic_writes_survive_partial_tmp(tmp_path: Path) -> None:
@@ -244,9 +232,6 @@ def test_file_mcp_delete_one_removes_the_document(tmp_path: Path) -> None:
     assert again["deletedCount"] == 0          # deleting nothing is not an error
 
 
-# --------------------------------------------------------------------------- #
-# is_dev_persistence_enabled() precedence
-# --------------------------------------------------------------------------- #
 
 
 def test_is_dev_persistence_enabled_default_on_when_unset(
@@ -273,9 +258,6 @@ def test_is_dev_persistence_enabled_on_when_explicitly_enabled(
     assert is_dev_persistence_enabled() is True
 
 
-# --------------------------------------------------------------------------- #
-# Server-side wiring
-# --------------------------------------------------------------------------- #
 
 
 def test_maybe_bind_dev_persistence_engages_file_fallback(
@@ -353,9 +335,6 @@ def test_make_file_persistence_default_dir(monkeypatch: pytest.MonkeyPatch) -> N
         assert (Path(td) / DEFAULT_DATABASE / f"{CASES_COLLECTION}.json").exists()
 
 
-# --------------------------------------------------------------------------- #
-# Layer-B rename migration (grace2_dev -> trid3nt_dev, ~/.grace2 -> ~/.trid3nt)
-# --------------------------------------------------------------------------- #
 
 
 def test_layer_b_migration_renames_legacy_db_dir(tmp_path: Path) -> None:

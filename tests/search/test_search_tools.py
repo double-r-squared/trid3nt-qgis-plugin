@@ -34,9 +34,6 @@ from trid3nt_server.tools.search.search_tools.search_tools import (
 )
 
 
-# ---------------------------------------------------------------------------
-# Fixtures.
-# ---------------------------------------------------------------------------
 
 
 @pytest.fixture(autouse=True)
@@ -49,9 +46,6 @@ def _fresh_index():
     _reset_index_for_tests()
 
 
-# ---------------------------------------------------------------------------
-# 1. Registration.
-# ---------------------------------------------------------------------------
 
 
 def test_search_tools_registered():
@@ -67,9 +61,6 @@ def test_search_tools_registered():
     assert md.supports_global_query is False
 
 
-# ---------------------------------------------------------------------------
-# 2. Top-3 routing fidelity.
-# ---------------------------------------------------------------------------
 
 
 def _run_top_k(query: str, k: int = 5) -> list[str]:
@@ -102,9 +93,6 @@ def test_search_tools_routes_canonical_queries(query: str, expected_tool: str):
     )
 
 
-# ---------------------------------------------------------------------------
-# 3. top_k respected + clamped.
-# ---------------------------------------------------------------------------
 
 
 def test_top_k_respected():
@@ -128,9 +116,6 @@ def test_top_k_non_numeric_falls_back():
     assert "results" in out
 
 
-# ---------------------------------------------------------------------------
-# 4. Empty / degenerate query handling.
-# ---------------------------------------------------------------------------
 
 
 def test_empty_query_returns_empty_results():
@@ -151,9 +136,6 @@ def test_non_string_query_does_not_crash():
     assert out_none == {"results": []}
 
 
-# ---------------------------------------------------------------------------
-# 5. Tokenizer.
-# ---------------------------------------------------------------------------
 
 
 def test_tokenize_basic():
@@ -178,9 +160,6 @@ def test_tokenize_handles_none_and_non_str():
     assert _tokenize(123) == []  # type: ignore[arg-type]
 
 
-# ---------------------------------------------------------------------------
-# 6. Reciprocal Rank Fusion properties.
-# ---------------------------------------------------------------------------
 
 
 def test_rrf_rank_aware_interleaving():
@@ -213,9 +192,6 @@ def test_rrf_single_ranking_preserves_order():
     assert fused_order == ranking
 
 
-# ---------------------------------------------------------------------------
-# 6b. Lexical-champion reinforcement (the DOOR RRF boost).
-# ---------------------------------------------------------------------------
 
 
 def test_lexical_reinforcement_lifts_bm25_champion_door():
@@ -255,9 +231,6 @@ def test_lexical_reinforcement_noop_without_bm25():
     assert [d for d, _ in out][0] == 2
 
 
-# ---------------------------------------------------------------------------
-# 7. Description snippets present and bounded.
-# ---------------------------------------------------------------------------
 
 
 def test_description_snippet_bounded_length():
@@ -280,9 +253,6 @@ def test_result_shape_is_complete():
         assert "matched_queries" in r and isinstance(r["matched_queries"], list)
 
 
-# ---------------------------------------------------------------------------
-# 8. matched_queries populated when synthetic corpus overlaps.
-# ---------------------------------------------------------------------------
 
 
 def test_matched_queries_populated_for_corpus_hit():
@@ -295,9 +265,6 @@ def test_matched_queries_populated_for_corpus_hit():
     assert isinstance(matched, list) and len(matched) > 0
 
 
-# ---------------------------------------------------------------------------
-# 9. Ignores extra kwargs (FR-AS-3 robustness against LLM-invented args).
-# ---------------------------------------------------------------------------
 
 
 def test_extra_kwargs_ignored():
@@ -314,7 +281,6 @@ def test_extra_kwargs_ignored():
     assert "results" in out
 
 
-# ---------------------------------------------------------------------------
 # 10. Typo query expansion (model-free fuzzy correction, stdlib difflib).
 #
 # Motivating live failure: "can you show me a gradinet relief ..." (typo for
@@ -322,7 +288,6 @@ def test_extra_kwargs_ignored():
 # and the hashed dense fallback is equally typo-blind. The fix expands
 # out-of-vocabulary query tokens with close vocabulary matches at QUERY time
 # only (expansion, never replacement); the LLM always sees the raw prompt.
-# ---------------------------------------------------------------------------
 
 
 def test_typo_gradinet_relief_routes_without_exact_corpus_queries(
@@ -430,11 +395,9 @@ def test_typo_query_ranking_is_deterministic():
     assert out_1 == out_3
 
 
-# ---------------------------------------------------------------------------
 # 11. Malformed corpus entries raise rather than silently drop (review-panel
 # finding: an unquoted YAML phrasing containing a colon parses as a one-key
 # dict, not a string -- that entry must be refused, not lost with no signal).
-# ---------------------------------------------------------------------------
 
 
 def test_non_string_corpus_entry_raises(tmp_path):

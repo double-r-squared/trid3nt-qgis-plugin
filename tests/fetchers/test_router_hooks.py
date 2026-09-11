@@ -52,9 +52,6 @@ def _fgb_records(feats, spec) -> gpd.GeoDataFrame:
         os.unlink(p)
 
 
-# --------------------------------------------------------------------------- #
-# Registry.
-# --------------------------------------------------------------------------- #
 
 
 def test_all_hooks_registered():
@@ -86,9 +83,6 @@ def test_register_spec_rejects_unknown_hook():
         reg._validate_hooks(bad)
 
 
-# --------------------------------------------------------------------------- #
-# earthquakes.
-# --------------------------------------------------------------------------- #
 
 
 def test_eq_build_request_url():
@@ -161,9 +155,6 @@ def test_eq_parse_rejects_non_featurecollection():
         pr(spec, {}, [json.dumps({"type": "NotAFC"}).encode()])
 
 
-# --------------------------------------------------------------------------- #
-# tsunami.
-# --------------------------------------------------------------------------- #
 
 
 def test_tsu_build_request_mode_page_bbox():
@@ -232,9 +223,6 @@ def test_tsu_paging_loop_and_too_large(monkeypatch):
     assert te.value.error_code == "TSUNAMI_EVENTS_RESULT_TOO_LARGE"
 
 
-# --------------------------------------------------------------------------- #
-# volcano (multi-request join via the executor).
-# --------------------------------------------------------------------------- #
 
 
 def test_vol_build_request_two_endpoints():
@@ -281,9 +269,6 @@ def test_vol_parse_bbox_filter_excludes():
         resolve_hook(spec.hooks.parse_response)(spec, {"bbox": [-100, 40, -90, 45]}, [alerts, coords])
 
 
-# --------------------------------------------------------------------------- #
-# nws_event (single-GET NWS /alerts/active; migrated from test_fetch_nws_event).
-# --------------------------------------------------------------------------- #
 
 
 def test_nws_build_request_url_state_and_events():
@@ -352,9 +337,6 @@ def test_nws_parse_empty_and_bad_body():
     assert ue.value.error_code == "NWS_EVENT_UPSTREAM_ERROR"
 
 
-# --------------------------------------------------------------------------- #
-# usace_nsi (single-POST NSI structures; migrated from test_fetch_usace_nsi).
-# --------------------------------------------------------------------------- #
 
 
 def test_nsi_build_request_post_body():
