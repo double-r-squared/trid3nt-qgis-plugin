@@ -1,10 +1,10 @@
 {
   "tool": "artemis_harbor_agitation",
-  "run_id": "01M28PWTMRFPZ2QETTCVQG79CH",
-  "commit": "2fba21a6f70cf14ec7820930e71f1314673f20e8-dirty",
-  "recorded_at": "2026-09-11T17:05:41.792756+00:00",
+  "run_id": "01M28SVA37CWY2W4Y0X166HRYB",
+  "commit": "e5e0a4bf6ebb05cc1a870257ce21ca118bb4ede4-dirty",
+  "recorded_at": "2026-09-11T17:57:18.753165+00:00",
   "engine": "telemac",
-  "wall_seconds": 25.117,
+  "wall_seconds": 29.143,
   "args": {
     "bbox": [
       -71.525,
@@ -243,7 +243,7 @@
     "kd_transect_max": 4.987552074453561e-06,
     "hs_max_m": 4.02045202255249,
     "mesh_size_m": 5.113541873062308,
-    "layer_uri": "s3://trid3nt-runs/01M28PWTMRFPZ2QETTCVQG79CH/overviews/01M28PX808RF4GB8SW8KFXAFS9.tif",
+    "layer_uri": "s3://trid3nt-runs/01M28SVA37CWY2W4Y0X166HRYB/overviews/01M28SVRCBKP3ZRC63M3CVHS1J.tif",
     "wave_period_s": 8.0,
     "wave_period_note": "Incident monochromatic wave period - a PRESCRIBED demo forcing, since no wave-forcing fetcher exists yet [supplied on this invocation]",
     "structure": null,
@@ -307,7 +307,7 @@
     },
     {
       "crs_authid": null,
-      "layer_id": "01M28PXAQ1ZPZNTJSSP14VDS5N",
+      "layer_id": "01M28SVVA62M9AVW53109VSWPT",
       "layer_type": "raster",
       "legend": {
         "colormap": "viridis",
@@ -324,7 +324,7 @@
       "reference_time": null,
       "role": "primary",
       "temporal": false,
-      "uri": "s3://trid3nt-runs/01M28PWTMRFPZ2QETTCVQG79CH/overviews/01M28PX808RF4GB8SW8KFXAFS9.tif",
+      "uri": "s3://trid3nt-runs/01M28SVA37CWY2W4Y0X166HRYB/overviews/01M28SVRCBKP3ZRC63M3CVHS1J.tif",
       "valid_from": null,
       "valid_to": null,
       "visible": true,

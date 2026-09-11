@@ -81,23 +81,23 @@ It publishes these layers onto the canvas:
 
 ## The proving run
 
-Run `01M28NDT0XJWV564A8ZVEB7TXR`, 2026-09-11T16:40:03.057516+00:00, 26.735 s, at commit `2fba21a6f70cf14ec7820930e71f1314673f20e8-dirty`.
+Run `01M28RVXXZW8AS9TMD6X0NBBX4`, 2026-09-11T17:40:10.496320+00:00, 25.987 s, at commit `e5e0a4bf6ebb05cc1a870257ce21ca118bb4ede4-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M28NDT0XJWV564A8ZVEB7TXR)](telemac_river_sediment_plume/telemac_river_sediment_plume.png)
+![Every layer the run published, stacked and framed on the result (run 01M28RVXXZW8AS9TMD6X0NBBX4)](telemac_river_sediment_plume/telemac_river_sediment_plume.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M28NDT0XJWV564A8ZVEB7TXR)*
+*Every layer the run published, stacked and framed on the result (run 01M28RVXXZW8AS9TMD6X0NBBX4)*
 
-![The solve, frame by frame (run 01M28NDT0XJWV564A8ZVEB7TXR)](telemac_river_sediment_plume/telemac_river_sediment_plume_animation.gif)
+![The solve, frame by frame (run 01M28RVXXZW8AS9TMD6X0NBBX4)](telemac_river_sediment_plume/telemac_river_sediment_plume_animation.gif)
 
-*The solve, frame by frame (run 01M28NDT0XJWV564A8ZVEB7TXR)*
+*The solve, frame by frame (run 01M28RVXXZW8AS9TMD6X0NBBX4)*
 
-![peak frame (run 01M28NDT0XJWV564A8ZVEB7TXR)](telemac_river_sediment_plume/telemac_river_sediment_plume_peak_frame.png)
+![peak frame (run 01M28RVXXZW8AS9TMD6X0NBBX4)](telemac_river_sediment_plume/telemac_river_sediment_plume_peak_frame.png)
 
-*peak frame (run 01M28NDT0XJWV564A8ZVEB7TXR)*
+*peak frame (run 01M28RVXXZW8AS9TMD6X0NBBX4)*
 
-![suspended sediment concentration - the chart the run persisted (run 01M28NDT0XJWV564A8ZVEB7TXR)](telemac_river_sediment_plume/telemac_river_sediment_plume_chart_suspended_sediment_concentration.png)
+![suspended sediment concentration - the chart the run persisted (run 01M28RVXXZW8AS9TMD6X0NBBX4)](telemac_river_sediment_plume/telemac_river_sediment_plume_chart_suspended_sediment_concentration.png)
 
-*suspended sediment concentration - the chart the run persisted (run 01M28NDT0XJWV564A8ZVEB7TXR)*
+*suspended sediment concentration - the chart the run persisted (run 01M28RVXXZW8AS9TMD6X0NBBX4)*
 
 ### The sheet it filled
 
@@ -149,5 +149,5 @@ await TOOL_REGISTRY['telemac_river_sediment_plume'].fn(
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M28NDT0XJWV564A8ZVEB7TXR` and commit `2fba21a6f70cf14ec7820930e71f1314673f20e8-dirty`. The full argument record is [`telemac_river_sediment_plume/run.json`](telemac_river_sediment_plume/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M28RVXXZW8AS9TMD6X0NBBX4` and commit `e5e0a4bf6ebb05cc1a870257ce21ca118bb4ede4-dirty`. The full argument record is [`telemac_river_sediment_plume/run.json`](telemac_river_sediment_plume/run.json).
 

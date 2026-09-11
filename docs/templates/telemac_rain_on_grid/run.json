@@ -1,10 +1,10 @@
 {
   "tool": "telemac_rain_on_grid",
-  "run_id": "01M28NZW9B3XPV4F0BY8BE942E",
-  "commit": "2fba21a6f70cf14ec7820930e71f1314673f20e8-dirty",
-  "recorded_at": "2026-09-11T16:52:33.472339+00:00",
+  "run_id": "01M28S5FHQS78XNTR8JHBM9F0P",
+  "commit": "e5e0a4bf6ebb05cc1a870257ce21ca118bb4ede4-dirty",
+  "recorded_at": "2026-09-11T17:48:03.860203+00:00",
   "engine": "telemac",
-  "wall_seconds": 244.25,
+  "wall_seconds": 250.184,
   "args": {
     "pour_point": "Point(lon=-83.40402, lat=35.05746, name=None)",
     "design_storm_mm_per_hr": 6.53,
@@ -381,7 +381,7 @@
       -83.39843378895853,
       35.073572656237715
     ],
-    "layer_uri": "s3://trid3nt-runs/01M28NZW9B3XPV4F0BY8BE942E/water_depth.tif"
+    "layer_uri": "s3://trid3nt-runs/01M28S5FHQS78XNTR8JHBM9F0P/water_depth.tif"
   },
   "mesh": {
     "mesh_size_m": null
@@ -456,7 +456,7 @@
     },
     {
       "crs_authid": null,
-      "layer_id": "telemac-outlet_hydrograph-01M28NZW9B3XPV4F0BY8BE942E",
+      "layer_id": "telemac-outlet_hydrograph-01M28S5FHQS78XNTR8JHBM9F0P",
       "layer_type": "vector",
       "legend": {
         "colormap": null,
@@ -473,7 +473,7 @@
       "reference_time": null,
       "role": "primary",
       "temporal": false,
-      "uri": "s3://trid3nt-runs/01M28NZW9B3XPV4F0BY8BE942E/outlet_hydrograph.geojson",
+      "uri": "s3://trid3nt-runs/01M28S5FHQS78XNTR8JHBM9F0P/outlet_hydrograph.geojson",
       "valid_from": null,
       "valid_to": null,
       "visible": true,
@@ -481,7 +481,7 @@
     },
     {
       "crs_authid": "EPSG:32617",
-      "layer_id": "model-results-mesh-01M28NZW9B3XPV4F0BY8BE942E",
+      "layer_id": "model-results-mesh-01M28S5FHQS78XNTR8JHBM9F0P",
       "layer_type": "mesh",
       "legend": {
         "colormap": "viridis",
@@ -495,10 +495,10 @@
       "name": "Model results (time series): watershed mesh",
       "opacity": null,
       "quantity": "model_results",
-      "reference_time": "2026-09-11T16:49:39+00:00",
+      "reference_time": "2026-09-11T17:45:08+00:00",
       "role": "context",
       "temporal": false,
-      "uri": "s3://trid3nt-runs/01M28NZW9B3XPV4F0BY8BE942E/r2d_rog.slf",
+      "uri": "s3://trid3nt-runs/01M28S5FHQS78XNTR8JHBM9F0P/r2d_rog.slf",
       "valid_from": null,
       "valid_to": null,
       "visible": true,
@@ -506,7 +506,7 @@
     },
     {
       "crs_authid": null,
-      "layer_id": "01M28P58TZFR1X7PXBBCKWBSC7",
+      "layer_id": "01M28SAX5XM2JJTV2YKNY2PE2B",
       "layer_type": "raster",
       "legend": {
         "colormap": "ylgnbu",
@@ -523,7 +523,7 @@
       "reference_time": null,
       "role": "primary",
       "temporal": false,
-      "uri": "s3://trid3nt-runs/01M28NZW9B3XPV4F0BY8BE942E/water_depth.tif",
+      "uri": "s3://trid3nt-runs/01M28S5FHQS78XNTR8JHBM9F0P/water_depth.tif",
       "valid_from": null,
       "valid_to": null,
       "visible": true,

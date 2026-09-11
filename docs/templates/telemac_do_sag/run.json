@@ -1,10 +1,10 @@
 {
   "tool": "telemac_do_sag",
-  "run_id": "01M28NHS5MXT77XXGBY44N8271",
-  "commit": "2fba21a6f70cf14ec7820930e71f1314673f20e8-dirty",
-  "recorded_at": "2026-09-11T16:42:11.215442+00:00",
+  "run_id": "01M28RZW1P4K64EKMJVJ2J2SD3",
+  "commit": "e5e0a4bf6ebb05cc1a870257ce21ca118bb4ede4-dirty",
+  "recorded_at": "2026-09-11T17:42:18.828144+00:00",
   "engine": "telemac",
-  "wall_seconds": 26.29,
+  "wall_seconds": 25.051,
   "args": {
     "location": "Eel River near Scotia, California",
     "discharge_m3s": 60.0,
@@ -420,7 +420,7 @@
     "bod_mixed_mgl": 3.469098542982656,
     "mean_velocity_mps": 0.6124773205557589,
     "mesh_size_m": 9.323,
-    "layer_uri": "s3://trid3nt-runs/01M28NHS5MXT77XXGBY44N8271/overviews/01M28NJ6D241KP008PMJN9H263.tif",
+    "layer_uri": "s3://trid3nt-runs/01M28RZW1P4K64EKMJVJ2J2SD3/overviews/01M28S09GW6N6PB0T28NGMC5VY.tif",
     "discharge_m3s": 60.0,
     "discharge_note": "Steady upstream CARRIER discharge - the river flow that dilutes and transports the release [supplied on this invocation]",
     "mesh_resolution_m": 12.0,
@@ -532,7 +532,7 @@
     },
     {
       "crs_authid": null,
-      "layer_id": "point-01M28NHJVDMBEAE7EY8KMNMAGY",
+      "layer_id": "point-01M28RZP1E5GTFYP8XEREHB130",
       "layer_type": "vector",
       "legend": {
         "colormap": null,
@@ -549,7 +549,7 @@
       "reference_time": null,
       "role": "context",
       "temporal": false,
-      "uri": "s3://trid3nt-runs/inputs/01M28NHJTA0QTZY1VCRZ47JCTV/point.geojson",
+      "uri": "s3://trid3nt-runs/inputs/01M28RZP13KKZSHFVA2YD7H8AX/point.geojson",
       "valid_from": null,
       "valid_to": null,
       "visible": true,
@@ -557,7 +557,7 @@
     },
     {
       "crs_authid": "EPSG:32610",
-      "layer_id": "model-results-mesh-01M28NHS5MXT77XXGBY44N8271",
+      "layer_id": "model-results-mesh-01M28RZW1P4K64EKMJVJ2J2SD3",
       "layer_type": "mesh",
       "legend": {
         "colormap": "viridis",
@@ -571,10 +571,10 @@
       "name": "Model results (time series): scotia_humboldt_county_california_95562_united_s",
       "opacity": null,
       "quantity": "model_results",
-      "reference_time": "2026-09-11T16:41:57+00:00",
+      "reference_time": "2026-09-11T17:42:04+00:00",
       "role": "context",
       "temporal": false,
-      "uri": "s3://trid3nt-runs/01M28NHS5MXT77XXGBY44N8271/r2d_river.slf",
+      "uri": "s3://trid3nt-runs/01M28RZW1P4K64EKMJVJ2J2SD3/r2d_river.slf",
       "valid_from": null,
       "valid_to": null,
       "visible": true,
@@ -582,7 +582,7 @@
     },
     {
       "crs_authid": null,
-      "layer_id": "01M28NJ926G7JADCP26S26CRCE",
+      "layer_id": "01M28S0C6N4SJNDZEFV5MZ5Q31",
       "layer_type": "raster",
       "legend": {
         "colormap": "rdylbu",
@@ -599,7 +599,7 @@
       "reference_time": null,
       "role": "primary",
       "temporal": false,
-      "uri": "s3://trid3nt-runs/01M28NHS5MXT77XXGBY44N8271/overviews/01M28NJ6D241KP008PMJN9H263.tif",
+      "uri": "s3://trid3nt-runs/01M28RZW1P4K64EKMJVJ2J2SD3/overviews/01M28S09GW6N6PB0T28NGMC5VY.tif",
       "valid_from": null,
       "valid_to": null,
       "visible": true,

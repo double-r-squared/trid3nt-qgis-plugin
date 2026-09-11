@@ -79,23 +79,23 @@ It publishes these layers onto the canvas:
 
 ## The proving run
 
-Run `01M28NN1BQVN9GAHFYHQ6WJ2KB`, 2026-09-11T16:43:57.672480+00:00, 23.787 s, at commit `2fba21a6f70cf14ec7820930e71f1314673f20e8-dirty`.
+Run `01M28RFK72DXH8Y8FMGSE3KY77`, 2026-09-11T17:33:25.448214+00:00, 24.194 s, at commit `e5e0a4bf6ebb05cc1a870257ce21ca118bb4ede4-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M28NN1BQVN9GAHFYHQ6WJ2KB)](telemac_river_dye/telemac_river_dye.png)
+![Every layer the run published, stacked and framed on the result (run 01M28RFK72DXH8Y8FMGSE3KY77)](telemac_river_dye/telemac_river_dye.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M28NN1BQVN9GAHFYHQ6WJ2KB)*
+*Every layer the run published, stacked and framed on the result (run 01M28RFK72DXH8Y8FMGSE3KY77)*
 
-![The solve, frame by frame (run 01M28NN1BQVN9GAHFYHQ6WJ2KB)](telemac_river_dye/telemac_river_dye_animation.gif)
+![The solve, frame by frame (run 01M28RFK72DXH8Y8FMGSE3KY77)](telemac_river_dye/telemac_river_dye_animation.gif)
 
-*The solve, frame by frame (run 01M28NN1BQVN9GAHFYHQ6WJ2KB)*
+*The solve, frame by frame (run 01M28RFK72DXH8Y8FMGSE3KY77)*
 
-![peak frame (run 01M28NN1BQVN9GAHFYHQ6WJ2KB)](telemac_river_dye/telemac_river_dye_peak_frame.png)
+![peak frame (run 01M28RFK72DXH8Y8FMGSE3KY77)](telemac_river_dye/telemac_river_dye_peak_frame.png)
 
-*peak frame (run 01M28NN1BQVN9GAHFYHQ6WJ2KB)*
+*peak frame (run 01M28RFK72DXH8Y8FMGSE3KY77)*
 
-![dye concentration - the chart the run persisted (run 01M28NN1BQVN9GAHFYHQ6WJ2KB)](telemac_river_dye/telemac_river_dye_chart_dye_concentration.png)
+![dye concentration - the chart the run persisted (run 01M28RFK72DXH8Y8FMGSE3KY77)](telemac_river_dye/telemac_river_dye_chart_dye_concentration.png)
 
-*dye concentration - the chart the run persisted (run 01M28NN1BQVN9GAHFYHQ6WJ2KB)*
+*dye concentration - the chart the run persisted (run 01M28RFK72DXH8Y8FMGSE3KY77)*
 
 ### The sheet it filled
 
@@ -149,5 +149,5 @@ await TOOL_REGISTRY['telemac_river_dye'].fn(
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M28NN1BQVN9GAHFYHQ6WJ2KB` and commit `2fba21a6f70cf14ec7820930e71f1314673f20e8-dirty`. The full argument record is [`telemac_river_dye/run.json`](telemac_river_dye/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M28RFK72DXH8Y8FMGSE3KY77` and commit `e5e0a4bf6ebb05cc1a870257ce21ca118bb4ede4-dirty`. The full argument record is [`telemac_river_dye/run.json`](telemac_river_dye/run.json).
 

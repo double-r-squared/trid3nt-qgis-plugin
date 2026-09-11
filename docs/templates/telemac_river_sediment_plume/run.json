@@ -1,10 +1,10 @@
 {
   "tool": "telemac_river_sediment_plume",
-  "run_id": "01M28NDT0XJWV564A8ZVEB7TXR",
-  "commit": "2fba21a6f70cf14ec7820930e71f1314673f20e8-dirty",
-  "recorded_at": "2026-09-11T16:40:03.057516+00:00",
+  "run_id": "01M28RVXXZW8AS9TMD6X0NBBX4",
+  "commit": "e5e0a4bf6ebb05cc1a870257ce21ca118bb4ede4-dirty",
+  "recorded_at": "2026-09-11T17:40:10.496320+00:00",
   "engine": "telemac",
-  "wall_seconds": 26.735,
+  "wall_seconds": 25.987,
   "args": {
     "location": "Eel River near Scotia, California",
     "discharge_m3s": 2.2,
@@ -434,7 +434,7 @@
     "net_bed_mass_kg": 66.90308,
     "deposit_fraction": 5.615383333333334,
     "mesh_size_m": 10.415,
-    "layer_uri": "s3://trid3nt-runs/01M28NDT0XJWV564A8ZVEB7TXR/overviews/01M28NE93NVF7A1EWNHT03CCAE.tif",
+    "layer_uri": "s3://trid3nt-runs/01M28RVXXZW8AS9TMD6X0NBBX4/overviews/01M28RWBZVC9MB0EGHG0A4D192.tif",
     "discharge_m3s": 2.2,
     "discharge_note": "Steady upstream CARRIER discharge - the river flow that dilutes and transports the release [supplied on this invocation]",
     "mesh_resolution_m": 12.0,
@@ -546,7 +546,7 @@
     },
     {
       "crs_authid": null,
-      "layer_id": "point-01M28NDM11H3K346W1D68KRSY2",
+      "layer_id": "point-01M28RVQVBVYCP4WSTFPYE8Y06",
       "layer_type": "vector",
       "legend": {
         "colormap": null,
@@ -563,7 +563,7 @@
       "reference_time": null,
       "role": "context",
       "temporal": false,
-      "uri": "s3://trid3nt-runs/inputs/01M28NDM0QZN8T6BWFY1ZD1A0D/point.geojson",
+      "uri": "s3://trid3nt-runs/inputs/01M28RVQV1MH8CST21T879QRP3/point.geojson",
       "valid_from": null,
       "valid_to": null,
       "visible": true,
@@ -571,7 +571,7 @@
     },
     {
       "crs_authid": null,
-      "layer_id": "telemac-bed_evolution-t593-01M28NDT0XJWV564A8ZVEB7TXR",
+      "layer_id": "telemac-bed_evolution-t593-01M28RVXXZW8AS9TMD6X0NBBX4",
       "layer_type": "raster",
       "legend": {
         "colormap": "rdbu",
@@ -588,7 +588,7 @@
       "reference_time": null,
       "role": "primary",
       "temporal": false,
-      "uri": "s3://trid3nt-runs/01M28NDT0XJWV564A8ZVEB7TXR/overviews/01M28NE9AESVWHS0NFYYTWCSKB.tif",
+      "uri": "s3://trid3nt-runs/01M28RVXXZW8AS9TMD6X0NBBX4/overviews/01M28RWC6DPEA6J6F5HAE3AQST.tif",
       "valid_from": null,
       "valid_to": null,
       "visible": true,
@@ -596,7 +596,7 @@
     },
     {
       "crs_authid": "EPSG:32610",
-      "layer_id": "model-results-mesh-01M28NDT0XJWV564A8ZVEB7TXR",
+      "layer_id": "model-results-mesh-01M28RVXXZW8AS9TMD6X0NBBX4",
       "layer_type": "mesh",
       "legend": {
         "colormap": "viridis",
@@ -610,10 +610,10 @@
       "name": "Model results (time series): scotia_humboldt_county_california_95562_united_s",
       "opacity": null,
       "quantity": "model_results",
-      "reference_time": "2026-09-11T16:39:47+00:00",
+      "reference_time": "2026-09-11T17:39:55+00:00",
       "role": "context",
       "temporal": false,
-      "uri": "s3://trid3nt-runs/01M28NDT0XJWV564A8ZVEB7TXR/r2d_river.slf",
+      "uri": "s3://trid3nt-runs/01M28RVXXZW8AS9TMD6X0NBBX4/r2d_river.slf",
       "valid_from": null,
       "valid_to": null,
       "visible": true,
@@ -621,7 +621,7 @@
     },
     {
       "crs_authid": null,
-      "layer_id": "01M28NEBZJATFZQ13121A8SGWR",
+      "layer_id": "01M28RWEY48PXANY5TKTNCZJWN",
       "layer_type": "raster",
       "legend": {
         "colormap": "oranges",
@@ -638,7 +638,7 @@
       "reference_time": null,
       "role": "primary",
       "temporal": false,
-      "uri": "s3://trid3nt-runs/01M28NDT0XJWV564A8ZVEB7TXR/overviews/01M28NE93NVF7A1EWNHT03CCAE.tif",
+      "uri": "s3://trid3nt-runs/01M28RVXXZW8AS9TMD6X0NBBX4/overviews/01M28RWBZVC9MB0EGHG0A4D192.tif",
       "valid_from": null,
       "valid_to": null,
       "visible": true,
