@@ -1,8 +1,10 @@
-"""The MESH display face: a built mesh as the SMS ``.2dm`` MDAL opens.
+"""The MESH display faces MDAL opens: a mesh file, and a dataset beside one.
 
 MDAL reads a ``.2dm`` directly as a mesh layer and turns the node z column into
 its "Bed Elevation" dataset. The format carries no CRS, so the layer row's
-``crs_authid`` is what names the coordinates the nodes are written in.
+``crs_authid`` is what names the coordinates the nodes are written in. A value
+per node that no mesh file carries is written as an SMS ASCII dataset - the
+least machinery MDAL reads - and loaded onto the mesh it was measured over.
 """
 
 from __future__ import annotations
@@ -11,8 +13,8 @@ from typing import Any, Mapping
 
 import numpy as np
 
-__all__ = ["MESH_ELEMENT_TAG", "MeshDisplayError", "mesh_display_path", "write_2dm",
-           "write_2dm_arrays"]
+__all__ = ["MESH_ELEMENT_TAG", "MeshDisplayError", "mesh_display_path",
+           "write_ascii_dataset", "write_2dm", "write_2dm_arrays"]
 
 #: The SMS element tag for a cell of N nodes. A cell of any other arity has no
 #: display face here and says so rather than being silently reshaped.
@@ -70,3 +72,24 @@ def write_2dm_arrays(points: Any, cells: Any, z: Any) -> str:
         zi = float(zz[i - 1]) if i - 1 < zz.size else 0.0
         lines.append(f"ND {i} {x:.6f} {y:.6f} {zi:.6f}")
     return "\n".join(lines) + "\n"
+
+
+def write_ascii_dataset(values: Any, *, name: str, nodes: int, cells: int,
+                        t: float = 0.0) -> str:
+    """One value per node as the SMS ASCII dataset text MDAL loads onto a mesh.
+
+    ``nodes`` and ``cells`` are the counts of the mesh this is measured over;
+    MDAL refuses the file against a mesh of any other size.
+    """
+    import numpy as np
+
+    column = np.asarray(values, dtype="float64").ravel()
+    if column.size != int(nodes):
+        raise MeshDisplayError(
+            "MESH_DATASET_NODE_COUNT",
+            f"{name!r} carries {column.size} values over a mesh of "
+            f"{int(nodes)} nodes; MDAL binds a dataset node for node.")
+    rows = "\n".join(f"{float(v):.6g}" for v in column)
+    return (f'DATASET\nOBJTYPE "mesh2d"\nBEGSCL\nND {int(nodes)}\n'
+            f'NC {int(cells)}\nNAME "{name}"\nTS 0 {float(t):.6f}\n'
+            f"{rows}\nENDDS\n")

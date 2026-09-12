@@ -31,7 +31,6 @@ produces. Pydantic v2 throughout; every model subclasses `GraceModel`
 | `execution` | `ModelSetup`, `ExecutionHandle`, `RunResult`, `LayerURI`, `LegendKey`, and the `LayerURI` result-model subclasses |
 | `telemac_contracts` | The TELEMAC result layers and their declared style rows |
 | `publish_manifest` | The typed reader for a worker's `publish_manifest.json` |
-| `outputs_manifest` | The `outputs.json` emit-on-solve manifest: a pure-stdlib writer and a tolerant reader |
 | `export_schemas` | Renders `contracts/schemas/` from the live models |
 
 ## Install

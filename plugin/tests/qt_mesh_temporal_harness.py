@@ -3,7 +3,8 @@
 Proved on the INSTALLED QGIS: MDAL opens a SELAFIN already temporal on a 1900
 reference the file never states; stamping moves the extent onto the DECLARED
 instant while a row declaring none keeps MDAL's axis; a preset style changes the
-renderer; a declared quantity binds to the group MDAL actually reports."""
+renderer; a declared quantity binds to the group MDAL actually reports; and a
+dataset file written BESIDE a mesh loads onto it as a group the preset binds."""
 
 from __future__ import annotations
 
@@ -142,6 +143,58 @@ def _mesh_binding(layers, slf_path: str, tmp: str) -> None:
     assert "no declared preset" in bare, bare
 
 
+def _dataset_beside_the_mesh(layers, slf_path: str, tmp: str) -> None:
+    """A derived group written beside the mesh loads onto it, and binds.
+
+    This is the whole of what a field output is now: the values the module
+    measured, as the SMS ASCII dataset MDAL reads, on the mesh they were
+    measured over."""
+    from trid3nt_server.render.mesh_display import write_ascii_dataset
+
+    mesh = QgsMeshLayer(slf_path, "with a derived group", "mdal")
+    assert mesh.isValid(), f"MDAL rejected {slf_path}"
+    before = _group_names(mesh)
+    nodes = mesh.dataProvider().vertexCount()
+    cells = mesh.dataProvider().faceCount()
+    values = [float("nan")] * nodes
+    values[0] = 5.0
+    values[3] = 0.0
+    group = "Peak dye concentration"
+    path = os.path.join(tmp, "dye_concentration.dat")
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write(write_ascii_dataset(values, name=group, nodes=nodes, cells=cells))
+
+    note = layers.LayerMaterializer._load_mesh_datasets(
+        _materializer(layers), mesh,
+        _event(layers, layer_id="L9", name="Peak dye concentration",
+               dataset_uris=[path]))
+    print(f"dataset note:{note}", flush=True)
+    assert "1 dataset group(s) loaded beside the mesh" in note, note
+    after = _group_names(mesh)
+    assert len(after) == len(before) + 1, f"{before} -> {after}"
+    assert after[-1] == group, after
+
+    layers._clamp_mesh_scalar_classification(mesh)
+    bind = layers.bind_declared_mesh_style(
+        mesh, {"qml": _MESH_QML.format(declared=group)}, tmp)
+    print(f"derived bind note:{bind}", flush=True)
+    assert "styled from the declared preset" in bind, bind
+    assert mesh.rendererSettings().activeScalarDatasetGroup() == len(after) - 1, (
+        "the derived group did not become the active one")
+    # The nodes written as nothing are nodata, not the ramp's bottom.
+    index = QgsMeshDatasetIndex(len(after) - 1, 0)
+    block = mesh.datasetValues(index, 0, 3)
+    read = [block.value(i).scalar() for i in range(3)]
+    assert read[0] == 5.0 and read[1] != read[1] and read[2] != read[2], read
+
+
+def _materializer(layers):
+    """A materializer whose session temp is a real directory and nothing else."""
+    made = object.__new__(layers.LayerMaterializer)
+    made._temp_dir = tempfile.mkdtemp(prefix="trid3nt_mesh_datasets_")
+    return made
+
+
 def _event(layers, **fields):
     row = dict(fields)
     return layers.LayerEvent(
@@ -239,6 +292,7 @@ def main(slf_path: str, tracer_slf_path: str) -> None:
         "QGIS did not keep the COG's own colour table")
 
     _mesh_binding(layers, tracer_slf_path, tmp)
+    _dataset_beside_the_mesh(layers, tracer_slf_path, tmp)
 
     print("QT-MESH-TEMPORAL-OK", flush=True)
 

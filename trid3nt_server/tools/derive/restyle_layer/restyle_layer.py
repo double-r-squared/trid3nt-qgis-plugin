@@ -13,7 +13,7 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.render import presets
 from trid3nt_server.tools import register_tool
-from trid3nt_server.workflows.publishing.style import (
+from trid3nt_server.render.restyle import (
     RestyleError,
     apply_style,
     set_hidden,

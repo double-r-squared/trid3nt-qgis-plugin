@@ -105,6 +105,11 @@ class ProjectLayerSummary(GraceModel):
     # CRS for these formats, so the run has to state it. ``None`` otherwise.
     crs_authid: str | None = None
 
+    # The MDAL dataset files a mesh row carries beside the groups its own file
+    # holds, loaded onto the layer before its declared group is bound. ``[]``
+    # for every other row.
+    dataset_uris: list[str] = Field(default_factory=list)
+
     # The instant a mesh row's dataset times are counted from. A SELAFIN records
     # no origin, so without it a scrubber reads 1900. ``None`` otherwise.
     reference_time: str | None = None

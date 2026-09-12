@@ -349,6 +349,10 @@ _CONTEXT_RASTER = {"layer_type": "raster", "role": "context",
                    "uri": "s3://trid3nt-cache/soilgrids/sand_5_15.tif"}
 _PRIMARY_RASTER = {"layer_type": "raster", "role": "primary",
                    "uri": "s3://trid3nt-runs/01RUNULID/budget.tif"}
+#: A run whose product is the MESH it solved on locates its prefix the same way:
+#: what makes a layer the run's is the bucket it was written to, not its format.
+_PRIMARY_MESH = {"layer_type": "mesh", "role": "primary",
+                 "uri": "s3://trid3nt-runs/01RUNULID/r2d_river.slf"}
 
 
 class _FakeS3:
@@ -372,7 +376,7 @@ def fake_s3(monkeypatch) -> _FakeS3:
     return s3
 
 
-def test_the_run_prefix_comes_from_the_primary_raster(fake_s3):
+def test_the_run_prefix_comes_from_the_primary_product(fake_s3):
     """Emit-on-fetch puts CONTEXT rasters on the canvas ahead of the result."""
     ev = _env()
     ev.layers = [_CONTEXT_RASTER, _PRIMARY_RASTER]
@@ -383,14 +387,23 @@ def test_the_run_prefix_comes_from_the_primary_raster(fake_s3):
     ev.require_run_products()
 
 
-def test_context_rasters_alone_locate_no_run_prefix(fake_s3):
+def test_a_mesh_product_locates_the_prefix_the_same_way(fake_s3):
+    """A TELEMAC field is the mesh the run solved on, and the prefix is the
+    bucket the run wrote to rather than any one format."""
+    ev = _env()
+    ev.layers = [_CONTEXT_RASTER, _PRIMARY_MESH]
+    _read_run_products(ev)
+    assert ev.run_id == "01RUNULID"
+    assert {b for b, _ in fake_s3.asked} == {"trid3nt-runs"}
+
+
+def test_context_layers_alone_locate_no_run_prefix(fake_s3):
     """The cache bucket is not a run prefix; `run_id="cache"` was a fabrication."""
     ev = _env()
     ev.layers = [_CONTEXT_RASTER]
     _read_run_products(ev)
     assert ev.run_id is None and fake_s3.asked == []
-    assert "no published PRIMARY raster" in ev.product_errors["run_id"]
-    assert "1 context raster" in ev.product_errors["run_id"]
+    assert "no published PRIMARY layer" in ev.product_errors["run_id"]
     with pytest.raises(LiveRunError, match="no run prefix"):
         ev.require_run_products()
 

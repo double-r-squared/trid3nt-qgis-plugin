@@ -7,6 +7,7 @@ than adding a fifth. The .qml written is a subset of QGIS's own style format.
 
 from __future__ import annotations
 
+import re
 import logging
 from dataclasses import dataclass, replace
 from typing import Any, Callable, Iterable, Literal, Mapping
@@ -303,6 +304,42 @@ def shared_range(
     if not found:
         return None
     return _widen((min(r[0] for r in found), max(r[1] for r in found)))
+
+
+#: A style row's ``range`` names the percentile the legend's top is capped at.
+_PERCENTILE_CAP = re.compile(r"p(\d+(?:\.\d+)?)")
+
+
+def measured_range(values: Any, row: Any = None, *, floor: float | None = None
+                   ) -> tuple[float, float]:
+    """The legend range a producer measured while it held the field.
+
+    A row that declares a ``center`` is a diverging ramp, ranged symmetrically
+    about it so the centre colour means the centre value on every run; one that
+    declares a ``floor`` pins the bottom there, and one that declares a
+    ``range`` of ``p<q>`` caps the top at that percentile of the field."""
+    import numpy as np
+
+    finite = np.asarray(values, dtype="float64").ravel()
+    finite = finite[np.isfinite(finite)]
+    hi = float(finite.max()) if finite.size else 0.0
+    lo = float(finite.min()) if finite.size else 0.0
+    declared = dict(row or {})
+    center = declared.get("center")
+    if center is not None:
+        reach = max(abs(hi - float(center)), abs(lo - float(center)))
+        return (round(float(center) - reach, 6), round(float(center) + reach, 6))
+    cap = _PERCENTILE_CAP.fullmatch(str(declared.get("range") or ""))
+    if cap is not None and finite.size:
+        hi = float(np.percentile(finite, float(cap.group(1))))
+    if declared.get("floor") is not None:
+        lo = float(declared["floor"])
+    elif floor is not None:
+        # A FLOORED field is read from zero: the floor is where the field stops
+        # being drawn, so the ramp's bottom is nothing rather than the faintest
+        # value still on it.
+        lo, hi = 0.0, max(hi, float(floor))
+    return (round(lo, 6), round(hi, 6))
 
 
 def band_range_reader(

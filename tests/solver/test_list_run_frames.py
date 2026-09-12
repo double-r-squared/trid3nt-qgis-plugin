@@ -1,12 +1,10 @@
-"""``list_run_frames``: the ORDERED animation-frame COG URIs of a run's layer.
+"""``list_run_frames``: the uris of the layers a completed run put on the map.
 
-The emit-on-solve ``outputs.json`` is the one frame source - frames are the
-raster entries carrying a physical ``t``. No match is an honest empty result
-with a typed reason, never a fabricated list."""
+The RUN RECORD is the one source - the publish stage writes every emitted layer
+onto the journal line. No match is an honest empty result with a typed reason,
+never a fabricated list."""
 
 from __future__ import annotations
-
-import json
 
 import pytest
 
@@ -14,142 +12,88 @@ from trid3nt_server.tools.meta.list_run_frames.list_run_frames import (
     ListRunFramesError,
     list_run_frames,
 )
+from trid3nt_server.workflows.runtime import journal
 
-_OUT_URI = "s3://runs-bucket/run-xyz/outputs.json"
-
-
-def _outputs_json(entries: list[dict]) -> str:
-    return json.dumps(
-        {
-            "schema_version": 1,
-            "engine": "sfincs",
-            "run_id": "run-xyz",
-            "entries": entries,
-        }
-    )
-
-
-def _entry(quantity: str, name: str, uri: str, t: float | None) -> dict:
-    e: dict = {"kind": "raster", "quantity": quantity, "name": name, "uri": uri}
-    if t is not None:
-        e["t"] = t
-    return e
+RID = "run-xyz"
 
 
 @pytest.fixture
-def _patch_run(monkeypatch):
-    """Patch the solver S3 helpers so the manifest reader resolves from an
-    in-memory body (no network). A ``None`` body = that object is absent."""
+def _journalled(tmp_path, monkeypatch):
+    """Write one run's record to a journal nothing else reads."""
+    path = tmp_path / "run_journal.jsonl"
+    monkeypatch.setattr(journal, "journal_path", lambda: path)
 
-    def _install(*, outputs_text: str | None = None):
-        from trid3nt_server import storage
-        from trid3nt_server.workflows.solver import solver
-
-        monkeypatch.setattr(storage, "runs_bucket", lambda: "runs-bucket")
-
-        def _read(uri: str) -> bytes:
-            if uri == _OUT_URI and outputs_text is not None:
-                return outputs_text.encode()
-            raise FileNotFoundError(uri)
-
-        monkeypatch.setattr(solver, "_read_object_bytes", _read)
+    def _install(outputs: list[dict] | None) -> None:
+        if outputs is None:
+            return
+        journal.append_record(journal.build_record(
+            run_id=RID, engine="telemac", module="telemac2d", sheet=(), answer={},
+            provenance=(), result=None, wall_seconds=1.0, origin="headless",
+            executed=(), replayed=(), notes=(), outputs=outputs))
 
     return _install
 
 
-def test_outputs_frames_returned_ordered_by_t(_patch_run) -> None:
-    """outputs.json frames come back ordered by the physical t; the non-temporal
-    peak entry is excluded and frame_no is the 1-based ordinal."""
-    entries = [
-        _entry("flood_depth", "Peak flood depth", "s3://b/peak.tif", None),
-        _entry("flood_depth", "Flood depth step 3", "s3://b/f3.tif", 1800.0),
-        _entry("flood_depth", "Flood depth step 1", "s3://b/f1.tif", 600.0),
-        _entry("flood_depth", "Flood depth step 2", "s3://b/f2.tif", 1200.0),
-    ]
-    _patch_run(outputs_text=_outputs_json(entries))
+def _layer(quantity: str, name: str, uri: str, layer_type: str = "mesh") -> dict:
+    return {"layer_id": f"telemac-{quantity}-{RID}", "name": name,
+            "layer_type": layer_type, "uri": uri, "quantity": quantity,
+            "units": "m"}
 
-    out = list_run_frames("run-xyz", layer="flood depth")
-    assert out["frame_count"] == 3
-    assert out["frame_uris"] == ["s3://b/f1.tif", "s3://b/f2.tif", "s3://b/f3.tif"]
-    assert [f["frame_no"] for f in out["frames"]] == [1, 2, 3]
-    assert [f["t"] for f in out["frames"]] == [600.0, 1200.0, 1800.0]
+
+def test_every_recorded_output_is_listed(_journalled) -> None:
+    _journalled([
+        _layer("water_depth", "Peak water depth", "s3://b/rog.slf"),
+        _layer("outlet_hydrograph", "Outlet hydrograph", "s3://b/outlet.geojson",
+               layer_type="vector"),
+    ])
+    out = list_run_frames(RID)
+    assert out["output_count"] == 2
+    assert [row["uri"] for row in out["outputs"]] == [
+        "s3://b/rog.slf", "s3://b/outlet.geojson"]
     assert "reason" not in out
 
 
-def test_outputs_matches_on_physical_quantity(_patch_run) -> None:
-    """The layer filter matches the entry's physical ``quantity`` as well as its
-    web grouping name."""
-    entries = [
-        _entry("flood_depth", "Depth step 1", "s3://b/f1.tif", 60.0),
-        _entry("wave_height", "Wave step 1", "s3://b/w1.tif", 60.0),
-    ]
-    _patch_run(outputs_text=_outputs_json(entries))
-
-    assert list_run_frames("run-xyz", layer="flood_depth")["frame_uris"] == [
-        "s3://b/f1.tif"
-    ]
-    assert list_run_frames("run-xyz", layer="wave_height")["frame_uris"] == [
-        "s3://b/w1.tif"
-    ]
+def test_matches_on_the_physical_quantity(_journalled) -> None:
+    _journalled([_layer("water_depth", "Peak water depth", "s3://b/rog.slf"),
+                 _layer("bed_evolution", "Bed evolution", "s3://b/gaia.slf")])
+    out = list_run_frames(RID, layer="water depth")
+    assert [row["quantity"] for row in out["outputs"]] == ["water_depth"]
 
 
-def test_blank_layer_lists_all_frames(_patch_run) -> None:
-    """An empty ``layer`` lists ALL frames regardless of name."""
-    entries = [
-        _entry("flood_depth", "Flood depth step 1", "s3://b/flood1.tif", 60.0),
-        _entry("wave_height", "Wave height step 1", "s3://b/wave1.tif", 120.0),
-    ]
-    _patch_run(outputs_text=_outputs_json(entries))
-
-    out = list_run_frames("run-xyz", layer="")
-    assert set(out["frame_uris"]) == {"s3://b/flood1.tif", "s3://b/wave1.tif"}
-    assert out["frame_count"] == 2
+def test_matches_on_the_layer_name(_journalled) -> None:
+    _journalled([_layer("bed_evolution", "Bed evolution", "s3://b/gaia.slf")])
+    assert list_run_frames(RID, layer="Bed evolution")["output_count"] == 1
 
 
-def test_no_manifest_returns_honest_empty(_patch_run) -> None:
-    """No manifest -> honest empty result (frame_count 0 + a reason), NOT a
-    crash and NOT a fabricated list."""
-    _patch_run()
-    out = list_run_frames("run-xyz", layer="flood_depth")
-    assert out["frame_count"] == 0
-    assert out["frame_uris"] == []
-    assert "reason" in out and "no outputs.json" in out["reason"]
+def test_no_record_is_an_honest_empty(_journalled) -> None:
+    _journalled(None)
+    out = list_run_frames(RID)
+    assert out["output_count"] == 0 and out["outputs"] == []
+    assert "no record" in out["reason"]
 
 
-def test_no_matching_frames_returns_honest_empty(_patch_run) -> None:
-    """A manifest with no matching frame -> honest empty result + reason."""
-    _patch_run(
-        outputs_text=_outputs_json(
-            [_entry("wave_height", "Wave height step 1", "s3://b/w1.tif", 60.0)]
-        )
-    )
-    out = list_run_frames("run-xyz", layer="flood_depth")
-    assert out["frame_count"] == 0
-    assert out["frame_uris"] == []
-    assert "reason" in out and "outputs.json" in out["reason"]
+def test_no_match_names_what_the_run_did_publish(_journalled) -> None:
+    _journalled([_layer("bed_evolution", "Bed evolution", "s3://b/gaia.slf")])
+    out = list_run_frames(RID, layer="lightning")
+    assert out["output_count"] == 0
+    assert "1 layer(s)" in out["reason"] and "lightning" in out["reason"]
 
 
-def test_peak_only_outputs_manifest_returns_honest_empty(_patch_run) -> None:
-    """A peak-only run (no temporal entries) is an honest empty listing."""
-    _patch_run(
-        outputs_text=_outputs_json(
-            [_entry("flood_depth", "Peak flood depth", "s3://b/peak.tif", None)]
-        ),
-    )
-    out = list_run_frames("run-xyz", layer="flood_depth")
-    assert out["frame_count"] == 0
-    assert "reason" in out
-
-
-def test_missing_run_id_raises() -> None:
-    """A blank run_id raises the typed error (FR-AS-11)."""
-    with pytest.raises(ListRunFramesError) as exc:
+def test_a_missing_run_id_refuses_typed() -> None:
+    with pytest.raises(ListRunFramesError) as ei:
         list_run_frames("")
-    assert exc.value.error_code == "MISSING_RUN_ID"
+    assert ei.value.error_code == "MISSING_RUN_ID"
 
 
-def test_list_run_frames_is_registered() -> None:
-    """The tool is wired into the registry (import-time @register_tool)."""
-    import trid3nt_server.tools as tools
+def test_the_tool_reads_no_object_store(monkeypatch, _journalled) -> None:
+    """The record is the one registry: a reader that reached the store for a
+    second one would fail here."""
+    from trid3nt_server import storage
 
-    assert "list_run_frames" in tools.TOOL_REGISTRY
+    def _refuse(*_a, **_k):
+        raise AssertionError("list_run_frames reached the object store")
+
+    monkeypatch.setattr(storage, "client", _refuse)
+    monkeypatch.setattr(storage, "runs_bucket", _refuse)
+    _journalled([_layer("water_depth", "Peak water depth", "s3://b/rog.slf")])
+    assert list_run_frames(RID)["output_count"] == 1

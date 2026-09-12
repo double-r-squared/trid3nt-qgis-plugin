@@ -18,8 +18,7 @@ from trid3nt_contracts.common import SyntheticInput
 from trid3nt_contracts.execution import AnswerLayerURI
 from trid3nt_contracts.payload_warning import ParamSheet, ParamSheetRow
 
-from trid3nt_server.workflows.publishing import Deliverable, Line, Profile
-from trid3nt_server.workflows.publishing.publish import publish
+from trid3nt_server.render.formats import publish
 from trid3nt_server.workflows.runtime import (
     ParamRef,
     PlanValidationError,
@@ -34,10 +33,13 @@ from trid3nt_server.workflows.telemac.errors import TelemacError
 from trid3nt_server.workflows.telemac.modules import wrapper_for
 from trid3nt_server.workflows.telemac.modules.module import SlotRefused
 from trid3nt_server.workflows.telemac.modules.outputs import (
+    Line,
     Measure,
     OutputEmpty,
     Primitive,
+    Profile,
     Solved,
+    deliver,
 )
 from trid3nt_server.workflows.telemac.modules.sheet import Origin, Sheet
 from trid3nt_server.workflows.telemac.modules.sheet import fill as fill_slots
@@ -81,6 +83,9 @@ class Door:
     #: The primitives the template reads off the solved run, each with how it
     #: is published; ``captions`` names each variable's quantity in the
     #: template's words; ``answer`` names the measures the run answers with.
+    #: WHICH of the results MDAL opens as the mesh a derived dataset group is
+    #: drawn over; empty means the result the run is read from is that mesh.
+    display_file: str = ""
     outputs: Sequence[Primitive] = ()
     captions: Mapping[str, str] = field(default_factory=dict)
     answer: Mapping[str, Measure] = field(default_factory=dict)
@@ -150,7 +155,7 @@ class Door:
                  kwargs={"sheet": Ref("sheet"), "settled": Ref("settled"),
                          "results": list(self.results),
                          "steering": self.steering_file, "prefix": self.prefix,
-                         "dispatch": self.dispatch,
+                         "dispatch": self.dispatch, "display": self.display_file,
                          "compute_class": self.compute_class}).named("solve"),
             self._outputs_step(params),
         ]
@@ -261,15 +266,16 @@ async def publish_outputs(*, run: Mapping[str, Any], outputs: Sequence[Primitive
                              else other.times),
                           values=other.values),)
         reads[primitive.key] = replace(read, lines=lines)
-    published = await publish(
-        run_id=str(run["run_id"]), engine="telemac", name=str(run["name"]),
-        where=str(params.get("location") or run["name"]),
-        reference_time=run.get("started_at"),
-        items=[Deliverable(read=reads[primitive.key], mode=primitive.publish,
-                           caption=captions.get(primitive.variable or primitive.kind,
-                                                primitive.kind),
-                           style=primitive.style)
-               for primitive in outputs])
+    name, where = str(run["name"]), str(params.get("location") or run["name"])
+    items = await asyncio.to_thread(
+        lambda: [deliver(primitive, reads[primitive.key],
+                         solved[primitive.module or str(run["module"])],
+                         caption=captions.get(
+                             primitive.variable or primitive.kind, primitive.kind),
+                         name=name, where=where)
+                 for primitive in outputs])
+    published = await publish(run_id=str(run["run_id"]), engine="telemac",
+                              name=name, items=items)
     answered = {name: measure.answer(
                     None if reads[measure.primitive] is None
                     else reads[measure.primitive].measures.get(measure.stat),
@@ -279,9 +285,9 @@ async def publish_outputs(*, run: Mapping[str, Any], outputs: Sequence[Primitive
         raise SlotRefused(
             "the outputs list publishes no layer, so the run has nothing to lead "
             "with; list at least one .layer().")
-    logger.info("telemac outputs published run_id=%s layers=%d charts=%d "
-                "animations=%d answer=%s", run["run_id"], len(published.layers),
-                len(published.charts), published.animations, answered)
+    logger.info("telemac outputs published run_id=%s layers=%d charts=%d answer=%s",
+                run["run_id"], len(published.layers), len(published.charts),
+                answered)
     return AnswerLayerURI(**published.primary.model_dump(), answer=answered)
 
 
@@ -325,7 +331,8 @@ async def fill_sheet(*, steering: type, produced: Mapping[str, Any],
 
 async def run_sheet(*, sheet: Sheet, settled: Mapping[str, Any],
                     results: Sequence[str], steering: str, prefix: str,
-                    dispatch: str, compute_class: Any) -> dict[str, Any]:
+                    dispatch: str, compute_class: Any,
+                    display: str = "") -> dict[str, Any]:
     """A complete sheet: serialize, stage, hand it to the box -> the run handle.
 
     Nothing is listed as readable that the run does not carry."""
@@ -342,6 +349,7 @@ async def run_sheet(*, sheet: Sheet, settled: Mapping[str, Any],
         coupling=None if not coupled else str(coupled).split(";")[0].lower(),
         continue_from=settled.get("continue_from"))
     return {**settled, **handle, "module": sheet.module,
+            "display_basename": display or None,
             "tracer_names": dict(sheet.resolved()).get("NAMES OF TRACERS")}
 
 

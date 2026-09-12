@@ -754,7 +754,7 @@ quantity contributes is a PARAMETER of one of them. It resolves a row plus a
 raster into a concrete scale, into the sentence the legend says about it, and
 into the `.qml` the map loads. The data-driven rescale LOGIC is code and stays
 code (reading band statistics is not a declaration); the POLICY is declared.
-`emission/publish.py` keeps only the two FILE guards - an embedded palette and
+`render/publish.py` keeps only the two FILE guards - an embedded palette and
 an RGB(A) composite - because those are facts about the file, not about the
 style, and each is a way a ramp would corrupt an already-painted image.
 
@@ -803,7 +803,7 @@ outputs auto-emit, intermediates included: they are useful input
 checks, and the user hides what they don't want). The mechanism -
 the style resolution (`resolve_layer_style`), overview enforcement,
 layer registration - moves OUT of the publish_layer tool file into
-`emission/` as its single home. The registered `publish_layer` tool is
+`render/` as its single home. The registered `publish_layer` tool is
 then DELETED (DELETION_LEDGER entry QUEUED 2026-08-24; condition: a
 live case shows a derive raster on the map with zero publish call,
 plus flood canary green).

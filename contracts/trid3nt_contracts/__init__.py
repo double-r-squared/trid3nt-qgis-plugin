@@ -56,13 +56,6 @@ from .message import (
     ToolDeclaration,
     ToolResponse,
 )
-from .outputs_manifest import (
-    OUTPUTS_MANIFEST_SCHEMA_VERSION,
-    OUTPUT_KINDS,
-    OutputEntry,
-    OutputsManifest,
-    parse_outputs_manifest,
-)
 from .processing_contracts import (
     CodeExecRequestPayload,
     ProcessingRequestPayload,
@@ -88,7 +81,6 @@ __all__ = [
     "gate_spec",
     "message",
     "payload_warning",
-    "outputs_manifest",
     "processing_contracts",
     "region_choice",
     "secrets",
@@ -101,12 +93,6 @@ __all__ = [
     "ToolCall",
     "ToolDeclaration",
     "ToolResponse",
-    # outputs.json manifest: writer + tolerant reader
-    "OUTPUTS_MANIFEST_SCHEMA_VERSION",
-    "OUTPUT_KINDS",
-    "OutputEntry",
-    "OutputsManifest",
-    "parse_outputs_manifest",
     # chart emission
     "ChartEmissionPayload",
     "SessionChartRecord",

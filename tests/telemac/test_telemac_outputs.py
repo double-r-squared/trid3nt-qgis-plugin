@@ -13,7 +13,8 @@ from typing import Any
 import numpy as np
 import pytest
 
-from trid3nt_server.workflows.publishing import Field, Frames, Published, Series
+from trid3nt_server.render.formats import Published
+from trid3nt_server.workflows.telemac.modules.outputs import Field, Frames, Series
 from trid3nt_server.workflows.telemac.modules import (
     T2D,
     Measure,
@@ -48,6 +49,12 @@ def _solved(run: dict[str, Any] | None = None, body: Any = T2D) -> Solved:
                    "mesh_size_m": 7.5, "mesh_resolution_label": "7.5 m measured",
                    "started_at": "2026-01-01T00:00:00+00:00", **(run or {})},
                   body)
+
+
+@pytest.fixture(autouse=True)
+def _store(fake_s3):
+    """The run prefix a derived dataset group is written to, in memory."""
+    return fake_s3
 
 
 @pytest.fixture()
@@ -92,9 +99,46 @@ def test_the_envelope_is_the_peak_every_node_reached_and_when(solved):
     assert read.floor == pytest.approx(4.0)
     assert read.measures["active_frames"] == 2
     assert read.units == "mg/L" and read.name == "DYE"
-    # the nodes are handed over in lon/lat, with the element table beside them
-    assert -124.0 < float(read.lon[0]) < -122.0
-    assert np.asarray(read.ikle).shape == (4, 3)
+
+
+def test_an_envelope_is_delivered_as_a_dataset_group_beside_the_results(solved,
+                                                                       _store):
+    """A field the result file carries no group for is written beside it as the
+    SMS ASCII dataset MDAL loads onto the mesh it was measured over, with the
+    nodes below its floor written as nothing."""
+    from trid3nt_server.workflows.telemac.modules.outputs import deliver
+
+    primitive = max_over_time("T1").layer(style={"kind": "continuous",
+                                                 "ramp": "reds"})
+    read = T2D.OUTPUTS["max_over_time"].read(primitive, solved)
+    item = deliver(primitive, read, solved, caption="dye concentration",
+                   name="reach", where="the Wabash")
+    mesh_product = item.product
+    assert mesh_product.file == "r2d.slf"
+    assert mesh_product.datasets == ("dye_concentration.dat",)
+    assert mesh_product.group == "Dye concentration"
+    assert mesh_product.epsg == 32610 and mesh_product.t is None
+    # ranged from nothing, because the floor is where the field stops being drawn
+    assert mesh_product.value_range == (0.0, 80.0)
+    written = _store.store["RID/dye_concentration.dat"].decode()
+    assert written.startswith('DATASET\nOBJTYPE "mesh2d"\nBEGSCL\nND 5\nNC 4\n')
+    assert 'NAME "Dye concentration"' in written
+    assert written.strip().splitlines()[-6:] == ["10", "80", "5", "50", "60", "ENDDS"]
+
+
+def test_a_node_below_the_read_s_floor_is_written_as_nothing(solved, _store):
+    """Where a tracer is below its own visible edge the dataset carries nothing,
+    so the basemap shows through rather than the ramp's palest colour."""
+    from trid3nt_server.workflows.telemac.modules.outputs import deliver
+
+    primitive = field("T1", t=0).layer(style={"kind": "continuous"})
+    read = T2D.OUTPUTS["field"].read(primitive, solved)
+    item = deliver(primitive, read, solved, caption="dye concentration",
+                   name="reach", where="the Wabash")
+    assert item.product.datasets == ("dye_concentration-t0.dat",)
+    assert item.product.t == 0.0
+    written = _store.store["RID/dye_concentration-t0.dat"].decode()
+    assert written.strip().splitlines()[-6:] == ["nan"] * 5 + ["ENDDS"]
 
 
 def test_the_series_is_the_domain_maximum_at_each_instant(solved):
@@ -256,13 +300,18 @@ def test_publish_outputs_reads_once_publishes_each_and_answers(monkeypatch, solv
                 "reach_m": field("T1", t="every").measure("travel_m"),
                 "edge_m": mesh().measure("size_m")},
         params={"location": "the Wabash"}))
-    assert [(d.mode, type(d.read).__name__, d.caption) for d in seen["items"]] == [
-        ("animate", "Frames", "dye concentration"),
-        ("layer", "Field", "dye concentration"),
-        ("chart", "Series", "dye concentration")]
+    assert [(type(d.product).__name__, d.caption) for d in seen["items"]] == [
+        ("Mesh", "dye concentration"),
+        ("Mesh", "dye concentration"),
+        ("Chart", "dye concentration")]
+    # The animation paints the group the result file carries; the envelope is
+    # the group the module wrote beside it.
+    assert seen["items"][0].product.frames == 4
+    assert seen["items"][0].product.group == "DYE"
+    assert seen["items"][1].product.datasets == ("dye_concentration.dat",)
     assert seen["items"][1].style == {"kind": "continuous"}
-    assert (seen["run_id"], seen["engine"], seen["name"], seen["where"]) == (
-        "RID", "telemac", "reach", "the Wabash")
+    assert (seen["run_id"], seen["engine"], seen["name"]) == (
+        "RID", "telemac", "reach")
     assert result.answer == {"cmax": 80.0, "t_peak": 60.0,
                              "reach_m": pytest.approx(result.answer["reach_m"]),
                              "edge_m": 7.5}
@@ -370,7 +419,7 @@ def test_a_profile_is_the_variable_per_station_down_the_line_at_the_instant(
         coupled):
     """Depth-weighted per station, the dry node dropped, the minimum found and
     placed, and the along-line speed the flow travelled at."""
-    from trid3nt_server.workflows.publishing import Profile
+    from trid3nt_server.workflows.telemac.modules.outputs import Profile
     from trid3nt_server.workflows.telemac.modules.outputs import profile
 
     read = T2D.OUTPUTS["profile"].read(profile("T2", along=_line(coupled)), coupled)
@@ -451,7 +500,7 @@ def test_the_drogues_are_the_track_at_three_written_instants(monkeypatch, couple
     import tempfile
     from pathlib import Path
 
-    from trid3nt_server.workflows.publishing import Track
+    from trid3nt_server.workflows.telemac.modules.outputs import Track
 
     track = Path(tempfile.mkdtemp()) / "drogues.txt"
     track.write_text(
@@ -504,7 +553,7 @@ def test_publish_outputs_rejoins_the_anchors_and_draws_the_reference_lines(
         monkeypatch, coupled):
     from trid3nt_contracts.execution import LayerURI
 
-    from trid3nt_server.workflows.publishing import Line
+    from trid3nt_server.workflows.telemac.modules.outputs import Line
     from trid3nt_server.workflows.telemac import workflow as door
     from trid3nt_server.workflows.telemac.modules.outputs import profile
 
@@ -531,8 +580,9 @@ def test_publish_outputs_rejoins_the_anchors_and_draws_the_reference_lines(
         anchors=[{"at": None, "along": None}, {"at": None, "along": _line(coupled)},
                  {"at": None, "along": _line(coupled)}],
         params={"location": "the Eel", "do_standard_mgl": 5.0}))
-    chart = seen["items"][1].read
-    assert [line.label for line in chart.lines] == ["standard"]
+    chart = seen["items"][1].product.payload
+    assert any(row["series"] == "standard"
+               for row in chart["vega_lite_spec"]["data"]["values"])
     assert result.answer == {"low": 6.0}
 
 
@@ -811,8 +861,8 @@ def test_a_chart_s_reference_may_be_another_primitive_drawn_as_a_line(
         answer={"dt": column("T1").measure("top_minus_bottom"),
                 "dt0": column("T1", t=0).measure("top_minus_bottom")},
         params={"location": "the lake"}))
-    chart = seen["items"][1].read
-    assert [line.label for line in chart.lines] == ["water temperature at t = 0 s"]
-    assert chart.lines[0].values.tolist() == [25.0, 20.0, 15.0]
-    assert chart.lines[0].x.tolist() == [0.0, 10.0, 20.0]
+    rows = seen["items"][1].product.payload["vega_lite_spec"]["data"]["values"]
+    beside = [r for r in rows if r["series"] == "water temperature at t = 0 s"]
+    assert [r["value"] for r in beside] == [25.0, 20.0, 15.0]
+    assert [r["x_m"] for r in beside] == [0.0, 10.0, 20.0]
     assert result.answer == {"dt": 8.0, "dt0": 10.0}

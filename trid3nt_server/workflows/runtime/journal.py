@@ -16,8 +16,9 @@ from typing import Any, Mapping, Sequence
 
 logger = logging.getLogger("trid3nt_server.workflows.runtime.journal")
 
-__all__ = ["append_record", "bind_notes", "drain_notes", "journal_note",
-           "journal_path", "read_records", "run_origin"]
+__all__ = ["append_record", "bind_notes", "bind_outputs", "drain_notes",
+           "drain_outputs", "journal_note", "journal_outputs", "journal_path",
+           "read_records", "run_origin", "run_outputs"]
 
 #: The notes the step now running has written for THIS run's record. Bound by the
 #: interpreter for the length of a plan, the way the domain is: a producer deep in
@@ -35,6 +36,32 @@ def journal_note(text: str) -> None:
     notes = _NOTES.get()
     if notes is not None:
         notes.append(str(text))
+
+
+#: The layers the run in progress has published. Bound beside the notes and
+#: drained into the record, which is what makes the record the ONE place a run's
+#: outputs are read back from once the session that saw them is gone.
+_OUTPUTS: contextvars.ContextVar[list[dict[str, Any]] | None] = contextvars.ContextVar(
+    "trid3nt_run_outputs", default=None)
+
+
+def journal_outputs(layers: Sequence[Mapping[str, Any]]) -> None:
+    """Record the layers the run in progress published. Outside a plan, a no-op."""
+    published = _OUTPUTS.get()
+    if published is not None:
+        published.extend(dict(layer) for layer in layers)
+
+
+def bind_outputs() -> contextvars.Token:
+    """Open an outputs channel for one plan run -> the token that closes it."""
+    return _OUTPUTS.set([])
+
+
+def drain_outputs(token: contextvars.Token) -> list[dict[str, Any]]:
+    """Close the channel and return the layers written into it."""
+    published = _OUTPUTS.get() or []
+    _OUTPUTS.reset(token)
+    return list(published)
 
 
 def bind_notes() -> contextvars.Token:
@@ -113,7 +140,8 @@ def build_record(*, run_id: str | None, engine: str | None,
                  executed: Sequence[str], replayed: Sequence[str],
                  notes: Sequence[str], fill: Mapping[str, str] | None = None,
                  parent_run_id: str | None = None,
-                 overrides: Sequence[str] = ()) -> dict[str, Any]:
+                 overrides: Sequence[str] = (),
+                 outputs: Sequence[Mapping[str, Any]] = ()) -> dict[str, Any]:
     """One run record, from what the publish stage already holds.
     ``parent_run_id`` + ``overrides`` make the journal a CHAIN rather than a pile:
     the line says which parent it came from and which values moved."""
@@ -139,6 +167,10 @@ def build_record(*, run_id: str | None, engine: str | None,
         "executed": list(executed),
         "replayed": list(replayed),
         "notes": list(notes),
+        # WHAT THE RUN PUT ON THE MAP, as the publish stage emitted it. The one
+        # place a finished run's outputs are read back from: the artifacts are
+        # delete-on-whim and the session that saw the layers ends.
+        "outputs": [dict(layer) for layer in outputs],
     }
 
 
@@ -184,3 +216,15 @@ def _small(value: Any) -> Any:
     if isinstance(value, (str, int, float, bool)) or value is None:
         return value
     return str(value)
+
+
+def run_outputs(run_id: str) -> list[dict[str, Any]]:
+    """The layers the named run published, off its own record; ``[]`` when the
+    journal has no line for it. The record is APPEND-ONLY, so the last line for
+    a run id is the one that stands."""
+    for record in reversed(read_records()):
+        if str(record.get("run_id") or "") == str(run_id):
+            published = record.get("outputs")
+            return [dict(row) for row in published if isinstance(row, dict)] \
+                if isinstance(published, list) else []
+    return []

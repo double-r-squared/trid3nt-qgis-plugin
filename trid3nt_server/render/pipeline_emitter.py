@@ -631,6 +631,9 @@ def summary_of(layer: LayerURI) -> ProjectLayerSummary:
         # Mesh CRS: an MDAL mesh reports an empty native crs(), so the plugin's
         # _add_mesh needs the run to state it. None for raster/vector.
         crs_authid=getattr(layer, "crs_authid", None),
+        # The dataset files a mesh row's derived groups were written to, beside
+        # the mesh they are measured over.
+        dataset_uris=list(getattr(layer, "dataset_uris", None) or ()),
         # The instant the mesh's seconds are counted from, so the plugin's
         # temporal stamp reads the run's own clock.
         reference_time=getattr(layer, "reference_time", None),

@@ -330,8 +330,6 @@ def test_an_unknown_data_row_is_an_attribute_error_at_the_line_that_wrote_it():
 def _install_step_mocks(captured: dict):
     from trid3nt_server.render import publish as emission_publish
     from trid3nt_server.workflows.solver import solver as solver_mod
-    from trid3nt_server.workflows.publishing import cog as cog_mod
-    from trid3nt_server.workflows.publishing import publish as publish_mod
     from trid3nt_server.workflows.runtime import run_products as products_mod
     from trid3nt_server.workflows.telemac.modules import outputs as outputs_mod
     from trid3nt_server.workflows.mesh import step as mesh_step
@@ -443,10 +441,6 @@ def _install_step_mocks(captured: dict):
         captured["pp_basename"] = basename
         return "/tmp/telemac/does-not-matter.slf"
 
-    def _fake_upload(local, run_id, bucket, *, dest_filename, **_kw):
-        captured["uploaded"] = dest_filename
-        return f"s3://runs/{run_id}/{dest_filename}"
-
     def _fake_publish_layer(*, layer_uri, layer_id, style=None, **_kw):
         captured["published"] = layer_id
         captured["publish_style"] = style
@@ -484,15 +478,19 @@ def _install_step_mocks(captured: dict):
                      lambda rid: {"utm_epsg": 32611}),
         patch.object(solver_mod, "download_result", _fake_download),
         patch.object(outputs_mod, "read_selafin", lambda _path: _fake_result()),
-        patch.object(cog_mod, "upload_cog", _fake_upload),
         patch.object(emission_publish, "publish_layer", _fake_publish_layer),
-        patch.object(publish_mod, "publish_results_mesh_via_seam", _amock(0)),
         patch.object(asm_mod, "publish_point", _capture_marker),
         patch.object(products_mod, "persist_run_products", _amock([])),
         patch.object(solver_mod, "run_solver", _fake_run_solver),
         patch.object(solver_mod, "wait_for_completion", _amock(_FakeRunResult())),
         patch.object(solver_mod, "set_emitter_binding", lambda *a, **k: None),
     ]
+
+
+@pytest.fixture(autouse=True)
+def _store(fake_s3):
+    """The run prefix the outputs step writes its dataset groups to, in memory."""
+    return fake_s3
 
 
 def _run_tool(tmp_path, monkeypatch, captured: dict, overrides=(), water=None,
@@ -512,7 +510,7 @@ def _run_tool(tmp_path, monkeypatch, captured: dict, overrides=(), water=None,
 
 
 def test_the_chain_geocodes_dispatches_and_stages_the_resolved_sheet(
-        tmp_path, monkeypatch):
+        tmp_path, monkeypatch, _store):
     captured: dict = {}
     peak = _run_tool(tmp_path, monkeypatch, captured,
                      location="Twin Falls, Idaho", spill_fraction=0.4,
@@ -520,7 +518,12 @@ def test_the_chain_geocodes_dispatches_and_stages_the_resolved_sheet(
                      reach_length_km=4.0, sim_duration_s=1800.0)
 
     assert isinstance(peak, AnswerLayerURI)
-    assert peak.uri == "https://tiles/dye_peak.png"
+    # The run LEADS with the mesh it solved on, under the dataset group the
+    # outputs list named first - no COG of a field the mesh already carries.
+    assert peak.layer_type == "mesh"
+    assert peak.uri == "s3://trid3nt-runs/TELERID/r2d_river.slf"
+    assert peak.style["dataset_group"] == "DYE"
+    assert peak.crs_authid == "EPSG:32611"
     # The answer is read off the solved result the outputs list named: the
     # tracer's envelope peak, when it peaked, and the accepted mesh's edge.
     assert peak.answer["dye_cmax_mgl"] == pytest.approx(97.3)
@@ -528,10 +531,11 @@ def test_the_chain_geocodes_dispatches_and_stages_the_resolved_sheet(
     assert peak.answer["active_frames"] == 2
     assert peak.answer["mesh_size_m"] is not None
     assert peak.quantity == "dye_concentration"
-    assert peak.name.startswith("Peak dye concentration (")
-    assert peak.legend is not None and peak.legend.vmax == pytest.approx(97.3)
-    assert captured["published"] == "telemac-dye_concentration-TELERID"
-    assert captured["uploaded"] == "dye_concentration.tif"
+    assert peak.name.startswith("Dye concentration over time (")
+    # The envelope rides beside it as the group the module wrote next to the
+    # results, ranged on the same scale.
+    written = _store.store["TELERID/dye_concentration.dat"].decode()
+    assert 'NAME "Dye concentration"' in written
 
     # The place was GEOCODED, never hand-typed.
     assert captured["geocode_query"] == "Twin Falls, Idaho"

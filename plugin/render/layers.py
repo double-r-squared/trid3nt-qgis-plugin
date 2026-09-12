@@ -784,6 +784,7 @@ class LayerMaterializer:
             f"mesh '{event.name}' added (staged to session temp; MDAL "
             f"{os.path.splitext(local_path)[1].lstrip('.') or 'mesh'})"
         )
+        note += self._load_mesh_datasets(layer, event)
         crs_authid = (event.raw or {}).get("crs_authid")
         if isinstance(crs_authid, str) and crs_authid:
             crs = QgsCoordinateReferenceSystem(crs_authid)
@@ -806,6 +807,36 @@ class LayerMaterializer:
         if temporal_note:
             note += temporal_note
         return self._add_to_group(layer, event, note)
+
+    def _load_mesh_datasets(self, layer, event: LayerEvent) -> str:
+        """Load the row's own dataset files onto the mesh, before it is styled.
+
+        A derived group is written BESIDE the mesh it was measured over, so the
+        layer that paints one has to carry both files. Every outcome is a note.
+        """
+        declared = (event.raw or {}).get("dataset_uris")
+        if not isinstance(declared, list) or not declared:
+            return ""
+        loaded, missed = 0, []
+        for index, uri in enumerate(declared):
+            if not isinstance(uri, str) or not uri:
+                continue
+            if uri.startswith("s3://"):
+                ext = os.path.splitext(uri.split("?", 1)[0])[1] or ".dat"
+                path = self._stage_s3_to_session(
+                    uri, f"{_safe_filename(event.name)}_{event.layer_id[:8]}"
+                         f"_{index}{ext}")
+            else:
+                path = uri if os.path.isfile(uri) else None
+            if path and layer.addDatasets(path):
+                loaded += 1
+            else:
+                missed.append(uri)
+        note = f" -- {loaded} dataset group(s) loaded beside the mesh" if loaded else ""
+        if missed:
+            note += (f" -- MDAL rejected or could not stage "
+                     f"{', '.join(repr(u) for u in missed)}")
+        return note
 
     # -- project insertion helper -------------------------------------------- #
 

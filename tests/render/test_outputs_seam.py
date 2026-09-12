@@ -1,180 +1,88 @@
-"""The emit-on-solve seam consumer.
+"""A run's outputs come off the run RECORD, and from nowhere else.
 
-Seam unit behaviour over a synthetic ``outputs.json``: temporal grouping,
-deterministic idempotent layer ids, registered-quantity pinned styling,
-unknown-quantity neutral-ramp fallback, and the missing-manifest no-op.
+The publish stage writes every layer it emitted onto the journal line; a reader
+that names a run id reads that field. No second registry, no object-store read.
 """
 
 from __future__ import annotations
 
 import pytest
 
-from trid3nt_contracts.outputs_manifest import (
-    append_entries,
-    build_entry,
-    parse_outputs_manifest,
-)
-from trid3nt_server.render.outputs_seam import (
-    build_layers_from_outputs,
-    read_outputs_manifest,
-)
+from trid3nt_server.render.outputs_seam import quantity_label, run_outputs
+from trid3nt_server.workflows.runtime import journal
 
-RID = "01SEAMTEST00000000000000000"
+RID = "01JRUNRUNRUNRUNRUNRUNRUNRU"
 
 
-def _manifest(entries):
-    return parse_outputs_manifest(
-        append_entries(None, engine="sfincs", run_id=RID, new=entries)
-    )
+@pytest.fixture
+def _journal(tmp_path, monkeypatch):
+    path = tmp_path / "run_journal.jsonl"
+    monkeypatch.setattr(journal, "journal_path", lambda: path)
+    return path
 
 
-def test_temporal_grouping_and_deterministic_ids():
-    entries = [
-        build_entry(kind="raster", quantity="flood_depth", name="Peak flood depth",
-                    uri="s3://b/%s/flood_depth_peak.tif" % RID, units="meters"),
-        # deliberately out-of-order t to prove the seam sorts.
-        build_entry(kind="raster", quantity="flood_depth", name="Flood depth step 2",
-                    uri="s3://b/%s/flood_depth_frame_02.tif" % RID, t=1800.0, units="meters"),
-        build_entry(kind="raster", quantity="flood_depth", name="Flood depth step 1",
-                    uri="s3://b/%s/flood_depth_frame_01.tif" % RID, t=0.0, units="meters"),
-    ]
-    res = build_layers_from_outputs(_manifest(entries), run_id=RID)
-    ids = [l.layer_id for l in res.layers]
-    assert ids == [
-        f"flood-depth-peak-{RID}",
-        f"flood-depth-frame-01-{RID}",
-        f"flood-depth-frame-02-{RID}",
-    ]
-    assert [l.role for l in res.layers] == ["primary", "context", "context"]
-    # temporal group membership + t on the replay records (ADR item 7).
-    frames = {f.layer_id: f for f in res.frames}
-    assert frames[f"flood-depth-peak-{RID}"].t is None
-    assert frames[f"flood-depth-frame-01-{RID}"].t == 0.0
-    assert frames[f"flood-depth-frame-01-{RID}"].group_id == f"flood-depth-{RID}"
-    # idempotence: a re-poll mints the SAME ids.
-    res2 = build_layers_from_outputs(_manifest(entries), run_id=RID)
-    assert [l.layer_id for l in res2.layers] == ids
+def _record(**overrides):
+    base = dict(
+        run_id=RID, engine="telemac", module="telemac2d", sheet=(), answer={},
+        provenance=(), result=None, wall_seconds=1.0, origin="headless",
+        executed=(), replayed=(), notes=(),
+        outputs=[{"layer_id": "telemac-dye-1", "name": "Peak dye concentration",
+                  "layer_type": "mesh", "uri": "s3://runs/RID/river.slf",
+                  "quantity": "dye_concentration", "units": "mg/L"}])
+    base.update(overrides)
+    return journal.build_record(**base)
 
 
-def test_a_solved_raster_derives_its_row_from_its_own_kind_and_quantity():
-    entries = [build_entry(kind="raster", quantity="flood_depth",
-                           name="Peak flood depth",
-                           uri="s3://b/%s/flood_depth_peak.tif" % RID, units="meters")]
-    res = build_layers_from_outputs(_manifest(entries), run_id=RID)
-    assert res.layers[0].style == {"kind": "continuous", "label": "Flood depth",
-                                   "units": "meters"}
+def test_outputs_read_off_the_record(_journal) -> None:
+    journal.append_record(_record())
+    published = run_outputs(RID)
+    assert [row["quantity"] for row in published] == ["dye_concentration"]
+    assert published[0]["uri"] == "s3://runs/RID/river.slf"
 
 
-def test_no_quantity_can_be_unregistered_because_nothing_registers_one():
-    # The quantity nobody put in a table still gets its own title and its own
-    # range - there is no table to be missing from, so there is no fallback.
-    entries = [build_entry(kind="raster", quantity="mystery_field",
-                           name="Mystery", uri="s3://b/%s/mystery.tif" % RID)]
-    res = build_layers_from_outputs(_manifest(entries), run_id=RID)
-    assert res.layers[0].style == {"kind": "continuous", "label": "Mystery field"}
+def test_a_run_nobody_journalled_is_empty(_journal) -> None:
+    assert run_outputs(RID) == []
+    assert run_outputs("") == []
 
 
-def test_scalar_is_log_only():
-    entries = [
-        build_entry(kind="scalar", quantity="mass_balance", name="Mass balance",
-                    uri="s3://b/%s/mb.json" % RID),
-    ]
-    res = build_layers_from_outputs(_manifest(entries), run_id=RID)
-    assert res.layers == []
-    assert res.scalar_count == 1
+def test_the_last_line_for_a_run_stands(_journal) -> None:
+    journal.append_record(_record())
+    journal.append_record(_record(outputs=[{"layer_id": "x", "name": "Bed evolution",
+                                            "layer_type": "mesh", "uri": "s3://r/g.slf",
+                                            "quantity": "bed_evolution"}]))
+    assert [row["quantity"] for row in run_outputs(RID)] == ["bed_evolution"]
 
 
-def test_mesh_entry_publishes_native_mesh_layer(tmp_path):
-    """A mesh entry publishes a native mesh layer.
+def test_the_seam_reads_no_object_store(monkeypatch, _journal) -> None:
+    """The record is the ONE source: a seam that reached the store for a second
+    registry would fail here rather than quietly reading one."""
+    from trid3nt_server import storage
 
-    Role context, the CRS threaded from the entry, no bbox because the driver derives
-    the extent, and a deterministic id whose stem is the idempotence key."""
-    reach = "Coweeta"
-    mesh_uri = "s3://trid3nt-runs/%s/r2d_rog.slf" % RID
-    entries = [
-        # peak entry (whole-run record, skipped under frames_only).
-        build_entry(kind="raster", quantity="flood_depth",
-                    name="Peak depth (%s)" % reach,
-                    uri="s3://trid3nt-runs/%s/telemac_wse_max.tif" % RID,
-                    bbox=[-83.5, 35.0, -83.4, 35.1]),
-        build_entry(kind="mesh", quantity="model_results",
-                    name="Model results (time series): %s" % reach,
-                    uri=mesh_uri, crs_authid="EPSG:32617"),
-    ]
-    manifest = _manifest(entries)
+    def _refuse(*_a, **_k):
+        raise AssertionError("the outputs seam reached the object store")
 
-    # frames_only=True (the composer path): the seam builds ONLY the mesh.
-    res = build_layers_from_outputs(
-        manifest, run_id=RID, bbox=(-83.5, 35.0, -83.4, 35.1), frames_only=True
-    )
-    assert len(res.layers) == 1 and res.mesh_count == 1
-    mesh = res.layers[0]
-
-    # Field-for-field vs the bespoke _publish_full_results_mesh (byte-equivalence).
-    assert mesh.name == "Model results (time series): %s" % reach
-    assert mesh.layer_type == "mesh"
-    assert mesh.uri == mesh_uri
-    assert mesh.style == {"kind": "mesh", "label": "Model results",
-                          "dataset_group": "model_results"}
-    assert mesh.role == "context"
-    assert mesh.bbox is None  # NOT the composer AOI -- MDAL derives it.
-    assert mesh.crs_authid == "EPSG:32617"
-    # The ONE explained divergence: layer_id stem (idempotence key).
-    assert mesh.layer_id == "model-results-mesh-%s" % RID
-    assert mesh.layer_id != "rog-results-%s" % RID
-    # idempotence: a re-poll mints the SAME id.
-    res2 = build_layers_from_outputs(manifest, run_id=RID, frames_only=True)
-    assert res2.layers[0].layer_id == mesh.layer_id
-
-    # frames_only=False: the mesh is STILL built (it is the temporal artifact),
-    # alongside the standalone peak.
-    res3 = build_layers_from_outputs(manifest, run_id=RID, frames_only=False)
-    assert res3.mesh_count == 1
-    assert sorted(l.layer_type for l in res3.layers) == ["mesh", "raster"]
-    mesh3 = [l for l in res3.layers if l.layer_type == "mesh"][0]
-    assert mesh3.role == "context" and mesh3.crs_authid == "EPSG:32617"
+    monkeypatch.setattr(storage, "client", _refuse)
+    monkeypatch.setattr(storage, "runs_bucket", _refuse)
+    journal.append_record(_record())
+    assert run_outputs(RID)[0]["layer_type"] == "mesh"
 
 
-def test_missing_manifest_is_a_noop():
-    class _Result:
-        run_id = "01NOSUCHRUN0000000000000000"
+def test_the_publish_stage_writes_the_field() -> None:
+    """What render publishes is what the record carries: the channel the publish
+    stage writes through is the one the record is built from."""
+    from trid3nt_contracts.execution import LayerURI
+    from trid3nt_server.render.formats import record_run_outputs
 
-    # No outputs.json object exists for this run -> None (byte-identical no-op).
-    assert read_outputs_manifest(_Result()) is None
-
-
-def test_a_mesh_entry_paints_the_group_it_declares_on_the_published_range():
-    """A results mesh carries every variable the solve wrote and has no band to read a
-    range off, so the painted group and the range are both DECLARED - on the
-    published max-over-time range that puts the canvas and the still on one scale."""
-    from trid3nt_server.render.outputs_seam import entry_style
-
-    manifest = _manifest([
-        build_entry(kind="mesh", quantity="model_results",
-                    name="Model results (time series): watershed",
-                    uri="s3://b/%s/r2d_rog.slf" % RID, units="m",
-                    crs_authid="EPSG:32617", dataset_group="WATER DEPTH",
-                    band_stats={"p2": 0.0, "p98": 9.9493}),
-    ])
-    entry = manifest.entries[0]
-    row = entry_style(entry)
-    assert row["kind"] == "mesh"
-    assert row["dataset_group"] == "WATER DEPTH"
-    assert row["scale"] == {"policy": "fixed", "range": [0.0, 9.9493]}
-
-    layers = build_layers_from_outputs(manifest, run_id=RID).layers
-    assert [l.quantity for l in layers] == ["model_results"]
+    token = journal.bind_outputs()
+    record_run_outputs([LayerURI(layer_id="a", name="Peak depth", layer_type="mesh",
+                                 uri="s3://runs/R/m.slf", quantity="water_depth",
+                                 units="m")])
+    written = journal.drain_outputs(token)
+    assert written == [{"layer_id": "a", "name": "Peak depth", "layer_type": "mesh",
+                        "uri": "s3://runs/R/m.slf", "quantity": "water_depth",
+                        "units": "m"}]
 
 
-def test_a_mesh_entry_without_a_declared_group_falls_back_to_its_quantity():
-    """The quantity stands in when nothing names a group - a producer that
-    declares neither gets the reader's own default rather than a wrong bind."""
-    from trid3nt_server.render.outputs_seam import entry_style
-
-    manifest = _manifest([
-        build_entry(kind="mesh", quantity="water_depth", name="Mesh",
-                    uri="s3://b/%s/m.slf" % RID),
-    ])
-    row = entry_style(manifest.entries[0])
-    assert row["dataset_group"] == "water_depth"
-    assert "scale" not in row
+def test_quantity_label_says_the_quantity_out_loud() -> None:
+    assert quantity_label("flood_depth") == "Flood depth"
+    assert quantity_label("") == "Value"

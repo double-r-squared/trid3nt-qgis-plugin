@@ -20,7 +20,6 @@ join the run as the sixth slice.
 | `mesh/` | the meshers, the mesh gate, topology and bed | 7 | 226 |
 | `model/` | the SysML model conformance check | 1 | 19 |
 | `plugin/` | the plugin seams the server suite reads offline, by `ast` | 1 | 3 |
-| `publishing/` | the one publisher: a field to a layer, a series or a profile to a chart, a field over time to an animation, a track to a vector layer, a series at a station to the point layer carrying it; the rasterizers, the COG seam and the styling seam a restyle goes through | 4 | 48 |
 | `runtime/` | the declarative runtime, the run journal | 8 | 270 |
 | `scripts/` | the dev instruments, the live-run harness and the proof renderers, skipped when `dev/` is absent | 6 | 47 |
 | `search/` | dataset and tool retrieval, the OGC adapter | 16 | 209 |
@@ -43,7 +42,7 @@ else has one.
 Six slices by subsystem, each its own foreground invocation, from the repo root:
 
     make test-fetchers        # tests/fetchers                                                                      1585
-    make test-spatial         # tests/derive tests/render tests/mesh tests/publishing                              995
+    make test-spatial         # tests/derive tests/render tests/mesh                              995
     make test-engines         # tests/telemac tests/runtime tests/solver tests/search                                989
     make test-server          # tests/server tests/inputs tests/gates tests/credentials tests/model tests/scripts   1118
     make test-model-surface   # tests/adapters tests/tools                                                           664

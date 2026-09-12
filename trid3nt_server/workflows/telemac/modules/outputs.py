@@ -1,4 +1,5 @@
-"""A module's outputs: the primitive set, and the read of each off a solved run.
+"""A module's outputs: the primitive set, the read of each off a solved run, and
+the format that read is delivered in.
 
 A primitive is named from the module's variable vocabulary - ``field("T1", t)``,
 ``series("H")``, ``max_over_time("T1")``, ``profile("T1", along)``, ``extent()``,
@@ -16,26 +17,28 @@ import shutil
 import subprocess
 import tempfile
 from dataclasses import dataclass, replace
+from dataclasses import field as dataclass_field
 from functools import cached_property
 from pathlib import Path
 from typing import Any, Mapping
 
+from trid3nt_server.render.formats import Chart, Deliverable, Mesh, Vector
 from trid3nt_server.workflows.mesh.meshers.drivers import drivers_dir
-from trid3nt_server.workflows.publishing import (
-    Field,
-    Frames,
-    Profile,
-    Read,
-    Series,
-    Track,
-)
 from trid3nt_server.workflows.runtime import DeclarativeError
 
 logger = logging.getLogger("trid3nt_server.workflows.telemac.modules.outputs")
 
 __all__ = [
     "PRIMITIVES",
+    "Field",
+    "Frames",
+    "Line",
     "Measure",
+    "Profile",
+    "Read",
+    "Series",
+    "Track",
+    "deliver",
     "OutputEmpty",
     "Primitive",
     "SelafinReadError",
@@ -68,6 +71,91 @@ TRACER_FLOOR = 1e-3
 #: The engine spells a variable's unit in capitals after the name; these are
 #: the SI spellings a reader expects for the ones that are not plain lower-case.
 _UNITS = {"MG/L": "mg/L", "G/L": "g/L", "MGO2/L": "mgO2/L", "DEGC": "degC"}
+
+
+# -- what a primitive READ, as a value ------------------------------------- #
+
+@dataclass(frozen=True, kw_only=True)
+class Read:
+    """What one primitive measured, by name. A bare read publishes nothing."""
+
+    measures: Mapping[str, Any] = dataclass_field(default_factory=dict)
+
+
+@dataclass(frozen=True, kw_only=True)
+class Field(Read):
+    """One variable over the 2D nodes at one instant, or its envelope over time.
+
+    ``t`` is the instant, ``None`` the envelope; ``plane`` names which plane of a
+    3D result this is, ``None`` on a 2D one; a node below ``floor`` is nothing."""
+
+    name: str
+    units: str
+    values: Any
+    t: float | None = None
+    plane: str | None = None
+    floor: float | None = None
+
+
+@dataclass(frozen=True, kw_only=True)
+class Line:
+    """One more line on a chart, over the chart's own x axis: a reference the
+    caller computed beside the read, drawn under its own label."""
+
+    label: str
+    x: Any
+    values: Any
+
+
+@dataclass(frozen=True, kw_only=True)
+class Series(Read):
+    """One variable over time: the domain maximum at each instant, or a point's."""
+
+    name: str
+    units: str
+    times: Any
+    values: Any
+    #: Where the series was read - ``"the domain maximum"`` or a point's name.
+    at: str
+    #: The station the series was read at, in lon/lat; ``None`` for a maximum.
+    lon: float | None = None
+    lat: float | None = None
+    lines: tuple[Line, ...] = ()
+
+
+@dataclass(frozen=True, kw_only=True)
+class Profile(Read):
+    """One variable along a line at one instant: a value per station."""
+
+    name: str
+    units: str
+    distance_m: Any
+    values: Any
+    #: What the x axis IS - ``"downstream distance"``.
+    along: str
+    lines: tuple[Line, ...] = ()
+
+
+@dataclass(frozen=True, kw_only=True)
+class Track(Read):
+    """Positions at written instants, as a GeoJSON FeatureCollection in lon/lat."""
+
+    features: Mapping[str, Any]
+
+
+@dataclass(frozen=True, kw_only=True)
+class Frames(Read):
+    """One variable over time, as the result file an animation plays from."""
+
+    name: str
+    units: str
+    #: The result file's basename under the run prefix.
+    file: str
+    #: The dataset group the mesh reader binds the variable by.
+    group: str
+    epsg: int
+    reference_time: str | None
+    frames: int
 
 
 class SelafinReadError(RuntimeError):
@@ -303,6 +391,10 @@ class Solved:
         self.run_id = str(run["run_id"])
         self.utm_epsg = int(run["utm_epsg"])
         self.result_file = str(getattr(body, "RESULT_FILE", "") or run["result_basename"])
+        # WHICH of the run's files MDAL opens as the mesh a derived group is
+        # drawn over. A 3D result is no mesh format: the module writes the 2D
+        # result beside it, and that is the mesh its planes are read onto.
+        self.display_file = str(run.get("display_basename") or self.result_file)
 
     @cached_property
     def result(self) -> dict[str, Any]:
@@ -333,6 +425,18 @@ class Solved:
         lon, lat = back.transform(np.asarray(self.result["x"]),
                                   np.asarray(self.result["y"]))
         return np.asarray(lon), np.asarray(lat)
+
+    @property
+    def display_mesh(self) -> tuple[int, int]:
+        """``(nodes, cells)`` of the 2D mesh a derived dataset group is bound to."""
+        return int(self.result["npoin2"]), int(self.result["nelem2"])
+
+    @cached_property
+    def bbox(self) -> tuple[float, float, float, float]:
+        """The lon/lat box the solved mesh spans - where the camera flies."""
+        lon, lat = self.lonlat
+        return (float(lon.min()), float(lat.min()),
+                float(lon.max()), float(lat.max()))
 
     def variable(self, token: str) -> tuple[str, str]:
         """``(result variable, units)`` for a token of the module's vocabulary.
@@ -500,10 +604,8 @@ def read_field(primitive: Primitive, solved: Solved) -> Read:
     # measures are the frame's own; the envelope only sets the visible edge.
     index = (int(primitive.t) if isinstance(primitive.t, int)
              else int(np.argmin(np.abs(times - float(primitive.t)))))
-    lon, lat = solved.lonlat
     frame = values[index]
-    return Field(name=name, units=units, lon=lon, lat=lat,
-                 ikle=solved.result["ikle2"], values=frame,
+    return Field(name=name, units=units, values=frame,
                  t=float(times[index]), plane=solved.plane_label(primitive.plane),
                  floor=_floor(primitive.variable, values),
                  measures={"max": float(frame.max()), "min": float(frame.min()),
@@ -591,14 +693,12 @@ def read_max_over_time(primitive: Primitive, solved: Solved) -> Field:
     name, units, values = solved.frames(primitive.variable, primitive.plane)
     times = np.asarray(solved.result["times"], dtype="float64")
     measures = _envelope(primitive.variable, times, values)
-    lon, lat = solved.lonlat
     envelope = values.max(axis=0)
     # The extreme and the field: one pit can set the maximum while the field the
     # run produced sits orders of magnitude below it, so the 99th percentile of
     # the envelope rides beside the maximum.
     measures["p99"] = float(np.percentile(envelope, 99))
-    return Field(name=name, units=units, lon=lon, lat=lat,
-                 ikle=solved.result["ikle2"], values=envelope,
+    return Field(name=name, units=units, values=envelope,
                  plane=solved.plane_label(primitive.plane),
                  floor=_floor(primitive.variable, values),
                  measures=measures)
@@ -901,3 +1001,167 @@ PRIMITIVES: Mapping[str, Any] = {
     "profile": read_profile, "extent": read_extent, "mesh": read_mesh,
     "mass_balance": read_mass_balance,
 }
+
+
+# -- the format each read is delivered in ----------------------------------- #
+
+#: What a derived dataset group's file is called under the run prefix. The stem
+#: keys the layer too, so one output's group never overwrites another's.
+_DATASET_SUFFIX = ".dat"
+
+
+def deliver(primitive: Primitive, read: Read, solved: Solved, *, caption: str,
+            name: str, where: str) -> Deliverable:
+    """One read, in the format QGIS opens it in.
+
+    A field is the mesh the run solved on with one dataset group selected - the
+    group the result file carries when the whole time series is played, and a
+    group written beside it when the read is one instant or an envelope. A
+    series or a profile is a chart payload; a track and a station are GeoJSON."""
+    from trid3nt_server.render.formats import quantity_of
+
+    quantity = quantity_of(caption)
+    if isinstance(read, Frames):
+        return Deliverable(
+            product=Mesh(file=read.file, group=read.group, epsg=read.epsg,
+                         reference_time=read.reference_time, frames=read.frames,
+                         units=read.units, bbox=solved.bbox),
+            caption=caption, style=primitive.style)
+    if isinstance(read, Field):
+        return Deliverable(product=_derived_group(read, solved, caption=caption,
+                                                  quantity=quantity,
+                                                  style=primitive.style),
+                           caption=caption, style=primitive.style)
+    if isinstance(read, Track):
+        return Deliverable(product=Vector(features=read.features),
+                           caption=caption, style=primitive.style)
+    if isinstance(read, Series) and primitive.publish == "station":
+        return Deliverable(
+            product=_station(read, caption=caption,
+                             reference_time=solved.run.get("started_at")),
+            caption=caption,
+            # A station is a point a reader locates the series by, not a
+            # quantity painted over the domain.
+            style={"kind": "reference", "geometry": "point"})
+    return Deliverable(product=Chart(payload=_chart(read, caption=caption,
+                                                    where=where)),
+                       caption=caption, style=primitive.style)
+
+
+def _derived_group(read: Field, solved: Solved, *, caption: str, quantity: str,
+                   style: Any) -> Mesh:
+    """A read the result file carries no group for -> one written beside it.
+
+    The values are written as the SMS ASCII dataset MDAL loads onto the mesh
+    they were measured over; a node below the read's floor is written as nothing
+    so the field draws where it is visible and the basemap shows through where
+    it is not."""
+    import numpy as np
+
+    from trid3nt_server import storage
+    from trid3nt_server.render import presets
+    from trid3nt_server.render.mesh_display import write_ascii_dataset
+
+    values = np.asarray(read.values, dtype="float64").copy()
+    if read.floor is not None:
+        values[values < float(read.floor)] = np.nan
+    label = f"{caption[:1].upper()}{caption[1:]}"
+    group = (label if read.t is None
+             else f"{label} at t = {float(read.t):g} s")
+    if read.plane is not None:
+        group = f"{group}, {read.plane}"
+    stem = quantity if read.plane is None else f"{quantity}_{_token(read.plane)}"
+    instant = "" if read.t is None else f"-t{int(read.t)}"
+    basename = f"{stem}{instant}{_DATASET_SUFFIX}"
+    nodes, cells = solved.display_mesh
+    storage.client().put_object(
+        Bucket=storage.runs_bucket(), Key=f"{solved.run_id}/{basename}",
+        Body=write_ascii_dataset(values, name=group, nodes=nodes, cells=cells,
+                                 t=0.0 if read.t is None else float(read.t)
+                                 ).encode("utf-8"),
+        ContentType="text/plain")
+    return Mesh(file=solved.display_file, group=group, epsg=solved.utm_epsg,
+                datasets=(basename,), bbox=solved.bbox, t=read.t, plane=read.plane,
+                units=read.units,
+                value_range=presets.measured_range(values, style,
+                                                   floor=read.floor))
+
+
+def _token(text: str) -> str:
+    return "_".join(str(text).strip().lower().split())
+
+
+def _station(read: Series, *, caption: str, reference_time: str | None
+             ) -> Vector:
+    """A series at a station -> ONE point feature carrying the series inline.
+
+    ``time_series_csv`` rows are ``iso,value`` counted from ``reference_time``,
+    the same instant the run's frames are counted from; with no instant to count
+    from the rows carry the run's own seconds."""
+    from datetime import datetime, timedelta
+
+    if read.lon is None or read.lat is None:
+        raise OutputEmpty(f"the series {read.name!r} was read {read.at}, which is "
+                          "no station to publish it at.")
+    origin = (datetime.fromisoformat(reference_time.replace("Z", "+00:00"))
+              if reference_time else None)
+    rows = []
+    for t, v in zip(read.times, read.values):
+        stamp = ((origin + timedelta(seconds=float(t))).isoformat()
+                 if origin is not None else f"{float(t):.3f}")
+        rows.append(f"{stamp},{float(v):.6f}")
+    label = f"{caption[:1].upper()}{caption[1:]}"
+    feature = {
+        "type": "Feature",
+        "geometry": {"type": "Point",
+                     "coordinates": [round(float(read.lon), 6),
+                                     round(float(read.lat), 6)]},
+        "properties": {"name": f"{label} {read.at}", "quantity": _token(caption),
+                       "units": read.units, "variable": read.name,
+                       "reference_time": reference_time,
+                       "n_timesteps": len(rows),
+                       "time_series_csv": "\n".join(rows) + "\n"},
+    }
+    return Vector(features={"type": "FeatureCollection", "features": [feature]},
+                  units=read.units)
+
+
+def _chart(read: Series | Profile, *, caption: str, where: str) -> dict[str, Any]:
+    """A series or a profile -> the chart payload the dock renders, titled by the
+    caption; every reference line rides as its own named series."""
+    from trid3nt_server.render.charts import build_chart_payload
+
+    title = f"{caption[:1].upper()}{caption[1:]}"
+    if isinstance(read, Profile):
+        x, at = [float(d) for d in read.distance_m], read.along
+        xfield, axis = "x_m", f"{at[:1].upper()}{at[1:]} (m)"
+    else:
+        x, at = [float(t) for t in read.times], read.at
+        xfield, axis = "t_s", "Time (s)"
+    values = [float(v) for v in read.values]
+    rows = [{xfield: a, "value": v, "series": title} for a, v in zip(x, values)]
+    for line in read.lines:
+        rows += [{xfield: float(a), "value": float(v), "series": line.label}
+                 for a, v in zip(line.x, line.values)]
+    encoding = {"x": {"field": xfield, "type": "quantitative", "title": axis},
+                "y": {"field": "value", "type": "quantitative",
+                      "title": f"{title} ({read.units})"}}
+    if read.lines:
+        encoding["color"] = {"field": "series", "type": "nominal", "title": None}
+    peak = max(range(len(values)), key=values.__getitem__) if values else 0
+    low = min(range(len(values)), key=values.__getitem__) if values else 0
+    what = (f"; lowest {values[low]:.3g} {read.units} at {x[low]:.0f} m"
+            if isinstance(read, Profile) else
+            f"; peaks at {values[peak]:.3g} {read.units} at t = {x[peak]:.0f} s")
+    return build_chart_payload(
+        vega_lite_spec={
+            "mark": {"type": "line", "point": not read.lines},
+            "data": {"values": rows},
+            "encoding": encoding,
+        },
+        title=f"{title}, {at} - {where}",
+        caption=(f"The {caption}, {at}, at each of {len(x)} "
+                 + ("stations" if isinstance(read, Profile) else "output times")
+                 + (what if values else "") + "."
+                 + "".join(f" {line.label} is drawn beside it." for line in read.lines)),
+    )

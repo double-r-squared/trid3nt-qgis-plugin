@@ -41,7 +41,7 @@ from .errors import (
     ParamRefLeakedError,
     StepFailedError,
 )
-from .journal import bind_notes, drain_notes
+from .journal import bind_notes, bind_outputs, drain_notes, drain_outputs
 from .ledger import LedgerRecord, StepLedger, inputs_digest, invocation_key
 from .params import Param, ResolvedParams
 from .plan import (
@@ -84,6 +84,9 @@ class RunResult:
     #: product, so the caller can persist the run's own chart rather than leaving
     #: a verifier to rebuild one from the scalars and hope it matches.
     charts: dict[str, Any] = field(default_factory=dict)
+    #: Every layer the run published, as the publish stage emitted it. Carried
+    #: onto the run's own record, which outlives the session that saw them.
+    outputs: list[dict[str, Any]] = field(default_factory=list)
     #: One record per node this run completed, REPLAYED ones included. The ledger
     #: tombstones itself at completion, so these are gone from it the moment the
     #: plan ends; a derivation of this run reads them from the snapshot the
@@ -136,6 +139,7 @@ async def interpret(
     out = RunResult(value=None, entries=entries, params=params)
     token = bind_domain(domain)
     notes_token = bind_notes()
+    outputs_token = bind_outputs()
     final_index = _final_recordable_index(nodes)
     first_step = next((n.index for n in nodes if n.kind == "step"), None)
     self_reviewed = any(n.step.self_gating for n in nodes)
@@ -210,6 +214,7 @@ async def interpret(
         # In the FINALLY so a run that failed still carries what it measured: the
         # note a step wrote on its way to the failure is often the reason for it.
         out.notes.extend(drain_notes(notes_token))
+        out.outputs.extend(drain_outputs(outputs_token))
     # The terminal leak guard: a ParamRef in what the caller receives is a
     # declaration that escaped binding, never data. Three surfaces, three budgets,
     # one shared cycle guard - so the value that is also a step result is walked

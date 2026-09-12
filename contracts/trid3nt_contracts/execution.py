@@ -185,6 +185,11 @@ class LayerURI(GraceModel):
     # "all real" - which is why a narration renders these rather than assuming a
     # baked constant was measured.
     synthetic_inputs: list[SyntheticInput] = Field(default_factory=list)
+    # The MDAL dataset files a ``layer_type="mesh"`` row carries beside its own
+    # groups: a derived group the run wrote next to the mesh it was measured
+    # over, loaded onto the layer before the declared group is bound. ``[]`` for
+    # every other row, and for a mesh whose file already carries what it paints.
+    dataset_uris: list[str] = Field(default_factory=list)
     # The CRS authority id for a ``layer_type="mesh"`` row: a mesh reader
     # reports an empty CRS for these formats, so the run has to state it.
     # ``None`` for a raster or vector row, whose CRS rides in the bytes.

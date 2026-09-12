@@ -334,6 +334,13 @@
       "default": null,
       "title": "Crs Authid"
     },
+    "dataset_uris": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Dataset Uris",
+      "type": "array"
+    },
     "fallback_note": {
       "anyOf": [
         {

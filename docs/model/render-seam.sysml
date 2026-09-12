@@ -136,10 +136,13 @@ package RenderSeam {
 
     part def OutputsSeamPoint {
         doc /*
-        The solve-side half of automatic emission. A solver leg writes its
-        outputs manifest; every entry becomes a registered, styled layer, with
-        its picture derived from what the entry says it IS - the kind, the
-        quantity, the units - so no worker ever bakes a style.
+        The solve-side half of automatic emission, and the format set it
+        accepts. A run's outputs list arrives as products QGIS opens - a COG, a
+        GeoJSON, an MDAL mesh with the dataset files beside it, a chart payload
+        - and each becomes a registered, styled layer whose picture follows from
+        what the product IS, so no producer ever bakes a style. What it
+        published is written onto the run's own record as it goes: one registry
+        for a run's outputs, never two.
         */
     }
 
@@ -420,7 +423,7 @@ package RenderSeam {
 
     part restyleSurface : RestyleSurface {
         doc /*
-        code: trid3nt_server/workflows/publishing/style.py
+        code: trid3nt_server/render/restyle.py
         */
         port askIn : AskIn;
         port rowOut : RowOut;
@@ -452,7 +455,7 @@ package RenderSeam {
 
     part outputsSeamPoint : OutputsSeamPoint {
         doc /*
-        code: trid3nt_server/render/outputs_seam.py
+        code: trid3nt_server/render/formats.py
         */
         port layerOut : LayerOut;
         port recordOut : RecordOut;
@@ -591,8 +594,8 @@ package RenderSeam {
     requirement def EmissionIsAutomatic {
         doc /*
         A produced layer appears. There is no verb for showing one, on either
-        arm - a fetch emits what it fetched, a solve emits every entry its
-        outputs manifest names - and there is no opt-out, so an intermediate is
+        arm - a fetch emits what it fetched, a solve emits every product its
+        outputs list names - and there is no opt-out, so an intermediate is
         a layer too and the reader hides what they did not want to see.
 
         This is why there is no way to produce a layer and forget to display
@@ -677,7 +680,7 @@ package RenderSeam {
     verify requirement OneScalePerQuantity by
         "tests/render/test_publish_layer_legend.py::test_the_layer_ships_the_qml_the_map_loads_over_that_same_range";
     verify requirement OneScalePerQuantity by
-        "tests/render/test_outputs_seam.py::test_a_mesh_entry_paints_the_group_it_declares_on_the_published_range";
+        "tests/render/test_formats.py::test_a_mesh_product_paints_the_group_it_declares_on_the_shared_range";
     verify requirement OneScalePerQuantity by
         "tests/scripts/test_animation_legend_stability.py::test_the_published_range_is_found_by_quantity_not_by_the_title_it_was_painted_under";
     verify requirement OneScalePerQuantity by
@@ -689,11 +692,11 @@ package RenderSeam {
     verify requirement UserChoiceBeatsPreset by
         "tests/render/test_presets.py::test_the_override_wins_field_by_field_over_the_declaration";
     verify requirement UserChoiceBeatsPreset by
-        "tests/publishing/test_restyle_surface.py::test_the_ask_beats_the_declared_row_field_by_field";
+        "tests/render/test_restyle_surface.py::test_the_ask_beats_the_declared_row_field_by_field";
     verify requirement UserChoiceBeatsPreset by
-        "tests/publishing/test_restyle_surface.py::test_an_ask_nobody_made_leaves_the_declaration_alone";
+        "tests/render/test_restyle_surface.py::test_an_ask_nobody_made_leaves_the_declaration_alone";
     verify requirement UserChoiceBeatsPreset by
-        "tests/publishing/test_restyle_surface.py::test_a_comparison_paints_every_layer_on_the_one_range";
+        "tests/render/test_restyle_surface.py::test_a_comparison_paints_every_layer_on_the_one_range";
     verify requirement UserChoiceBeatsPreset by
         "plugin/tests/test_raster_render.py::test_a_case_reopen_adopts_its_own_layers_and_loads_no_style_over_them";
     verify requirement UserChoiceBeatsPreset by
@@ -708,9 +711,9 @@ package RenderSeam {
     verify requirement EmissionIsAutomatic by
         "tests/render/test_auto_publish_droppable_raster.py::test_publish_for_emission_is_the_only_seam";
     verify requirement EmissionIsAutomatic by
-        "tests/publishing/test_restyle_surface.py::test_hiding_a_layer_is_the_un_emit_and_unhiding_puts_it_back";
+        "tests/render/test_restyle_surface.py::test_hiding_a_layer_is_the_un_emit_and_unhiding_puts_it_back";
     verify requirement EmissionIsAutomatic by
-        "tests/publishing/test_restyle_surface.py::test_hiding_a_layer_nobody_published_refuses_rather_than_creating_one";
+        "tests/render/test_restyle_surface.py::test_hiding_a_layer_nobody_published_refuses_rather_than_creating_one";
     verify requirement EmissionIsAutomatic by
         "plugin/tests/test_raster_render.py::test_a_visibility_flip_on_a_row_already_seen_reaches_the_layer_tree";
 

@@ -16,7 +16,7 @@ from trid3nt_server.render import presets
 from trid3nt_server.render.presets import Resolved, Scale
 from trid3nt_server.workflows.runtime.journal import journal_note
 
-logger = logging.getLogger("trid3nt_server.workflows.publishing.style")
+logger = logging.getLogger("trid3nt_server.render.restyle")
 
 __all__ = ["RestyleError", "apply_style", "restyled_row", "scale_override",
            "set_hidden"]

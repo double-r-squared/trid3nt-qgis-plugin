@@ -38,7 +38,7 @@ function-locally to keep the `server <-> gates` package edge acyclic.
 
 `workflows/mesh/gate.py` rides this same spine for the one gate whose card is
 not the whole interaction. Under USER-GATED a built mesh is presented as an
-editable MDAL layer (through `emission.publish_input_layer`) plus its numeric
+editable MDAL layer (through `render.publish_input_layer`) plus its numeric
 probes, and the gate MOUNTS one agent tool per edit action the building mesher
 registered -- `mesh_edit_<action>`, plus `mesh_accept` and `mesh_restart` --
 into `TOOL_REGISTRY` for exactly as long as the session is open. A mounted tool

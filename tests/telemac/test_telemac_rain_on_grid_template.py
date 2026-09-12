@@ -106,7 +106,7 @@ def test_the_outputs_are_the_depth_and_the_flux_across_the_outlet():
     """The depth animates and its envelope is the map; the flux the engine printed
     across the outlet is charted and placed as the station that carries it, under
     the one name the calibration seam pairs against a gauge."""
-    from trid3nt_server.workflows.publishing import quantity_of
+    from trid3nt_server.render.formats import quantity_of
     from trid3nt_server.workflows.telemac.templates.rain_on_grid.rain_on_grid import (
         ANSWER, CAPTIONS, OUTPUTS,
     )

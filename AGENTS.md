@@ -13,11 +13,13 @@ touch, BEFORE writing code. Inherit the structure; do not improvise.
   `fetch` produces data from outside through a declared source spec
   the router executes, `derive` ingests data and outputs data - with
   `search`, `display` and `meta` beside them as infrastructure),
-  `emission/` (the one emission seam, layer publication, the raster
-  publish mechanism and the emit-on-solve seam), `workflows/` (the
-  declarative `runtime/`, the `mesh/` front, the typed `inputs/`, the
-  generic `publishing/`, the `solver/` seam, and the engine package
-  `telemac/`), `gates/` (GateSpec engine + cards + pending
+  `render/` (the FORMAT SET a product reaches the map in - a COG
+  raster, a GeoJSON vector, an MDAL mesh with the dataset files beside
+  it, a chart payload - the one emission seam, the publish mechanism,
+  the presets and the restyle seam), `workflows/` (the declarative
+  `runtime/`, the `mesh/` front, the typed `inputs/`, the `solver/`
+  executor, and the engine package `telemac/`), `gates/` (GateSpec
+  engine + cards + pending
   registries), `adapters/` (LLM providers - the ONLY place provider
   nouns appear), `server/` (session/ turn/ dispatch/ protocol/),
   `persistence.py`, `storage.py` (the object store's one client and the
@@ -91,12 +93,13 @@ touch, BEFORE writing code. Inherit the structure; do not improvise.
 8. Emission belongs to the framework, not the workflow. Workflows hold
    orchestration and judgment; plumbing belongs to the framework.
    Inputs surface via the emit-on-fetch seam (`purpose=` on router
-   fetches); results via the emit-on-solve seam (the solver leg writes
-   `outputs.json`; the seam publishes every entry - never omit frames,
-   cadence is the deck-side `output_interval_min` lever, failure
-   retracts nothing). Gates are DECLARED (GateSpec metadata + pure
-   estimate/pin providers owned by the engine). Hand-wired emission or
-   gating in a composer is a defect.
+   fetches); results reach the map through `render`'s format set, and
+   what a run published is written onto its own journal record as it is
+   emitted - one registry, never two. Cadence is the deck-side
+   `output_interval_min` lever and failure retracts nothing. Gates are
+   DECLARED (GateSpec metadata + pure estimate/pin providers owned by
+   the engine). Hand-wired emission or gating in a composer is a
+   defect.
 
 9. NEVER INVENT THE WORLD. No demo/synthetic physics baked into
    product code - a physics-consequential value with no real data

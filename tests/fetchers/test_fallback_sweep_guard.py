@@ -177,16 +177,7 @@ def test_every_topobathy_call_site_declares_a_rung():
 # exact-whitespace marker false-alarms on a reformat. It is still only an anchor,
 # not a semantic check: a site could in principle keep its constant and lose its
 # defect, so a failure here means LOOK, not "broken".
-_PARKED_SILENT_SUBSTITUTIONS: dict[str, tuple[str, str, str]] = {
-    "row 11 -- COG CRS guess": (
-        "trid3nt_server/workflows/publishing/cog.py",
-        'ds.attrs.get("crs", "EPSG:3857")',
-        "audit row 11: a COG whose dataset carries no CRS is TAGGED EPSG:3857 and "
-        "written, so pixel coordinates that were never Web Mercator get a Web "
-        "Mercator georeference. Logged only. PARKED: raise vs "
-        "keep guessing is NATE's call.",
-    ),
-}
+_PARKED_SILENT_SUBSTITUTIONS: dict[str, tuple[str, str, str]] = {}
 
 
 def test_the_parked_silent_substitutions_are_still_exactly_these():
@@ -220,7 +211,10 @@ def test_the_register_covers_every_parked_row_the_adr_names():
 
     Most left the tree with the code that carried them; the register is the mechanism
     that keeps the REMAINING set from shrinking quietly."""
-    parked_rows = {"11"}
+    # Empty: every parked row left the tree with the code that carried it. Row
+    # 11's EPSG:3857 tag rode the grid-to-COG writer, which has no producer now
+    # that a field is a dataset group on the mesh it was solved over.
+    parked_rows: set[str] = set()
     registered = {
         key.split()[1].rstrip("ab") for key in _PARKED_SILENT_SUBSTITUTIONS
     }

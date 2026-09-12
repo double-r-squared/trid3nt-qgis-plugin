@@ -292,6 +292,9 @@ telemac3d_stratified_flow = register_workflow(
                             "level_note": Ref("lake_level.note"),
                             "result_basename": _RESULT_3D}),
         results=(_RESULT_3D, _RESULT_2D),
+        # A 3D SELAFIN is no mesh format MDAL opens: the module writes the 2D
+        # result over the same mesh, and a plane of a 3D field is drawn onto it.
+        display_file=_RESULT_2D,
         steering_file=_STEERING_FILE, prefix="telemac3d",
         dispatch=f"{_ENGINE}.solve_case", compute_class=P.compute_class,
         outputs=OUTPUTS, captions=CAPTIONS, answer=ANSWER,

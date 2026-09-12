@@ -13,7 +13,7 @@ import pytest
 
 from tests._fakes.reach_chain import install_reach_chain
 
-from trid3nt_server.workflows.publishing import Line, Profile
+from trid3nt_server.workflows.telemac.modules.outputs import Line, Profile
 from trid3nt_server.workflows.telemac.templates.do_sag.streeter_phelps import (
     overlay,
     sp_critical_point,

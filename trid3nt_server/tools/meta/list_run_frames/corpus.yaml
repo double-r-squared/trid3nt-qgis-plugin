@@ -1,8 +1,8 @@
 list_run_frames:
-- list the per-step flood depth frames for this run so I can animate them
-- give me the ordered frame URIs for the lightning sequence from that solve
-- I want to run a glow effect over every GLM flash frame in this run
-- get all the animation-frame COGs for the flood depth layer of this simulation
-- what are the time-step frame URIs for this run? I want a first/peak/last panel
-- pull the ordered frames of the wave field so a script can process each one
-- enumerate the frame layers from this run's manifest for a temporal max
+- what are the object-store uris of the layers that run put on the map
+- give me the path to the results mesh from that solve so a script can open it
+- list every output of this run with its quantity and units
+- I have the run id - where are its products stored
+- pull the uri of the water depth layer this run published
+- enumerate what that simulation published so I can process the files
+- which files did this run leave behind for the dye concentration layer

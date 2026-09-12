@@ -16,7 +16,7 @@ import math
 
 from typing import Any, Mapping
 
-from trid3nt_server.workflows.publishing import Line, Profile
+from trid3nt_server.workflows.telemac.modules.outputs import Line, Profile
 
 __all__ = ["overlay", "sp_do_profile", "sp_critical_point"]
 
