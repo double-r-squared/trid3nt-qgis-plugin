@@ -1,7 +1,7 @@
 """The agent-side payload-warning gate, end to end over a mock socket.
 
 A small payload dispatches directly; a medium one emits the warning and pauses;
-``proceed`` dispatches, ``cancel`` raises USER_INPUT_CANCELLED, ``narrow_scope``
+``proceed`` dispatches, ``cancel`` raises PAYLOAD_WARNING_CANCELLED, ``narrow_scope``
 dispatches the revised args; a hard cap omits ``proceed`` from the options; every
 decision is audited. The dummy tools live on a snapshot-restored registry."""
 
@@ -214,10 +214,10 @@ def test_cancel_decision_skips_dispatch() -> None:
 
     should, _params = asyncio.run(_run())
     assert should is False
-    # The gate sent an error envelope with USER_INPUT_CANCELLED.
+    # The gate sent an error envelope carrying its OWN code.
     errors = [e for e in ws.sent if e["type"] == "error"]
     assert len(errors) == 1
-    assert errors[0]["payload"]["error_code"] == "USER_INPUT_CANCELLED"
+    assert errors[0]["payload"]["error_code"] == "PAYLOAD_WARNING_CANCELLED"
     assert "cancel_tool" in errors[0]["payload"]["message"]
     assert state.payload_warning_audit_log[0]["decision"] == "cancel"
 
@@ -512,11 +512,11 @@ def test_invoke_tool_via_emitter_skips_after_cancel() -> None:
     assert raised[0].error_code == "PAYLOAD_WARNING_CANCELLED"
     assert raised[0].retryable is False
     assert "integration_cancel_tool" in str(raised[0])
-    # No tool-call-start envelope: the emitter never opened a pipeline.
+    # No tool-call-start envelope: the tool body never ran.
     assert not any(e["type"] == "tool-call-start" for e in ws.sent)
-    # USER_INPUT_CANCELLED frame WAS emitted by the gate (pre-raise side effect).
+    # The gate's own code rode the wire (pre-raise side effect).
     assert any(
         e["type"] == "error"
-        and e["payload"]["error_code"] == "USER_INPUT_CANCELLED"
+        and e["payload"]["error_code"] == "PAYLOAD_WARNING_CANCELLED"
         for e in ws.sent
     )

@@ -55,6 +55,14 @@ and re-presents, `cancel` refuses the run.
 
 - Gates on tools are DECLARED (GateSpec metadata + pure providers), NEVER
   hand-wired in server code.
+- A DECLINE IS NOT AN ERROR. A card answered with `cancel` raises a
+  `UserDeclinedError` carrying the gate's own wire code
+  (`PAYLOAD_WARNING_CANCELLED`, `CODE_EXEC_CANCELLED`,
+  `SOLVER_CONFIRMATION_CANCELLED`). Three seams read its `declined` marker: the
+  pipeline emitter marks the step CANCELLED rather than failed, the result
+  summarizer hands the model `status="declined"` naming the card and what it
+  asked, and the circuit breaker leaves the tool's retry budget alone. A
+  card nobody ANSWERS is a different thing and keeps its timeout code.
 - INPUT_REQUIRED has two modes (AUTO labeled-defaults vs USER-GATED); the
   model never invents physics for un-fetchable inputs.
 - A mounted tool never shadows a registered one, and never outlives the thing

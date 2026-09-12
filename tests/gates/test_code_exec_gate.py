@@ -72,7 +72,7 @@ async def test_cancel_blocks_dispatch_and_leaks_nothing() -> None:
     assert should_run is False
     assert "confirmed" not in effective and effective["code_exec_id"]
     err = next(e for e in ws.sent if e.get("type") == "error")
-    assert err["payload"]["error_code"] == "USER_INPUT_CANCELLED"
+    assert err["payload"]["error_code"] == "CODE_EXEC_CANCELLED"
     assert not _PENDING_CONFIRMATIONS
     exc = CodeExecConfirmationCancelledError("01TESTCXID")
     assert exc.error_code == "CODE_EXEC_CANCELLED" and exc.retryable is False

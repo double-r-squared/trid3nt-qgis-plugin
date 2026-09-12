@@ -124,6 +124,17 @@ class TestDockUiBatch(unittest.TestCase):
         leave zero tool cards (the empty stale 'Tools' shell is gone)."""
         self.assertIn("[F3] no-tool turn minted zero tool cards", self._stdout())
 
+    def test_declined_tool_card_is_not_a_failure(self):
+        """A cancelled step is the user's decision at a gate card.
+
+        The card tints amber rather than red and the row carries the no-entry glyph,
+        so a decline never reads as a tool that failed."""
+        self.assertIn(
+            "[F4b] a decline is not an error: amber card, no-entry glyph, "
+            "no red",
+            self._stdout(),
+        )
+
     def test_error_notes_wrap_and_fold(self):
         """Error notes wrap like every other chat text and consecutive ones fold.
 

@@ -107,6 +107,13 @@ ErrorCode = Literal[
     "CLARIFICATION_TIMEOUT",
     "USER_INPUT_CANCELLED",
     "CANCELLED",
+    # A gate CARD the user answered with cancel. A decline is the user's
+    # decision and NOT a failure, so each gate carries its own code rather than
+    # one generic cancellation: a client reads which card was declined and
+    # renders that step cancelled rather than failed.
+    "PAYLOAD_WARNING_CANCELLED",
+    "CODE_EXEC_CANCELLED",
+    "SOLVER_CONFIRMATION_CANCELLED",
     # A prompt that stayed over the model's context window even after one
     # recompaction and retry. DISTINCT from LLM_UNAVAILABLE: a genuinely
     # oversized Case, not a transient outage, so the honest guidance is to start

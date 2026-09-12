@@ -161,8 +161,18 @@ class ToolCircuitBreaker:
     ) -> None:
         """Increment the consecutive-failure counter; trip it at the threshold.
 
-        Client/arg and operator-class faults are SKIPPED; an unclassifiable
-        failure (``error=None``) counts, the conservative default."""
+        A user decline, a client/arg fault and an operator-class fault are all
+        SKIPPED; an unclassifiable failure (``error=None``) counts, the
+        conservative default."""
+        if getattr(error, "declined", False):
+            # The user answered a gate card with cancel. That is their decision,
+            # not the tool's fault, so it never consumes the tool's retry budget.
+            logger.debug(
+                "circuit-breaker: tool=%r was DECLINED at a gate card; "
+                "NOT counting toward trip threshold",
+                tool_name,
+            )
+            return
         if is_client_arg_error(error):
             # Model-side / deterministic arg fault: the counter is left alone so
             # a corrected-args retry is never blocked by the cooldown.

@@ -191,11 +191,12 @@ async def _gate_on_confirm(
     )
 
     if decision_payload.decision == "cancel":
-        # Explicit cancel: fail-closed (no run).
+        # Explicit cancel: fail-closed (no run). The wire carries the gate's OWN
+        # code, so a client tells a declined card from any other cancellation.
         await _send_error(
             websocket,
             state.session_id,
-            "USER_INPUT_CANCELLED",
+            "SOLVER_CONFIRMATION_CANCELLED",
             f"{tool_name} declined by user "
             f"(decision={decision_payload.decision!r}); the solver did not run",
         )
@@ -219,7 +220,7 @@ async def _gate_on_confirm(
             await _send_error(
                 websocket,
                 state.session_id,
-                "USER_INPUT_CANCELLED",
+                "SOLVER_CONFIRMATION_CANCELLED",
                 f"{tool_name} declined by user "
                 f"(decision={decision_payload.decision!r}); the solver did not run",
             )
@@ -231,7 +232,7 @@ async def _gate_on_confirm(
         await _send_error(
             websocket,
             state.session_id,
-            "USER_INPUT_CANCELLED",
+            "SOLVER_CONFIRMATION_CANCELLED",
             f"{tool_name} declined by user "
             f"(decision={decision_payload.decision!r}); the solver did not run",
         )
@@ -458,7 +459,7 @@ async def _maybe_gate_on_payload_warning(
         await _send_error(
             websocket,
             state.session_id,
-            "USER_INPUT_CANCELLED",
+            "PAYLOAD_WARNING_CANCELLED",
             f"tool {tool_name!r} cancelled by user at payload-warning gate "
             f"(estimated {estimated_mb:.1f} MB)",
         )
@@ -571,7 +572,7 @@ async def _gate_on_code_exec(
         await _send_error(
             websocket,
             state.session_id,
-            "USER_INPUT_CANCELLED",
+            "CODE_EXEC_CANCELLED",
             f"run_pyqgis {code_exec_id!r} declined by user "
             f"(decision={decision_payload.decision!r}); the code did not run",
         )

@@ -988,7 +988,8 @@ print("[F3] no-tool turn minted zero tool cards; real tool step still mints")
 
 # ---- 10. F4: tool-card border tracks the aggregate state -------------------- #
 # Neutral (palette mid) while running, GREEN once every tool completed,
-# RED when any failed/cancelled -- same palette as the row text colors.
+# RED when any failed, AMBER when the user declined one -- same palette as the
+# row text colors.
 
 f4_entry = _AssistantEntry(dock.messages_layout)
 f4_entry.render_tool_card(
@@ -1023,6 +1024,41 @@ assert "#f85149" in f4_card.styleSheet(), (
     f"failed card border not red: {f4_card.styleSheet()!r}"
 )
 print("[F4] tool-card border: neutral running -> green success -> red failure")
+
+# ---- 10b. A DECLINE IS NOT AN ERROR ---------------------------------------- #
+# A cancelled step is the user's answer at a gate card. It must never read as a
+# failure: the card tints amber rather than red, and the row carries the
+# no-entry glyph rather than the failure x.
+
+# A FRESH card, so the assertions read this render alone: the superseded rows
+# of the card above are deleteLater()'d and still answer findChildren.
+f4b_entry = _AssistantEntry(dock.messages_layout)
+f4b_entry.render_tool_card(
+    [
+        {"label": "fetch_dem", "state": "complete", "nested": False},
+        {"label": "run_pyqgis", "state": "cancelled", "nested": False},
+    ],
+    [],
+)
+pump()
+f4_card = f4b_entry._tool_card
+assert f4_card is not None, "F4b card not minted"
+assert "#d29922" in f4_card.styleSheet(), (
+    f"declined card border not amber: {f4_card.styleSheet()!r}"
+)
+assert "#f85149" not in f4_card.styleSheet(), (
+    f"declined card border reads as a failure: {f4_card.styleSheet()!r}"
+)
+_f4_labels = f4_card.findChildren(QLabel)
+_f4_texts = [lab.text() for lab in _f4_labels]
+assert "\u2298" in _f4_texts, f"declined row lost its glyph: {_f4_texts!r}"
+assert "\u2717" not in _f4_texts, f"declined row shows the failure x: {_f4_texts!r}"
+_f4_declined_row = [lab for lab in _f4_labels if lab.text() == "run_pyqgis"]
+assert _f4_declined_row and "#d29922" in _f4_declined_row[0].styleSheet(), (
+    "declined row text is not amber: "
+    f"{[lab.styleSheet() for lab in _f4_declined_row]!r}"
+)
+print("[F4b] a decline is not an error: amber card, no-entry glyph, no red")
 
 # ---- 11. F7: error notes wrap with the view + consecutive errors fold ------- #
 # Red error lines (the case-open rehydrate "MinIO

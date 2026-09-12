@@ -212,7 +212,7 @@ async def test_cancel_fails_closed() -> None:
     await canceller
     assert should_run is False
     err = next(e for e in ws.sent if e.get("type") == "error")
-    assert err["payload"]["error_code"] == "USER_INPUT_CANCELLED"
+    assert err["payload"]["error_code"] == "SOLVER_CONFIRMATION_CANCELLED"
 
 
 @pytest.mark.asyncio

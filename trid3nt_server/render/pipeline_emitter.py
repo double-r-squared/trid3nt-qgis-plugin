@@ -1677,8 +1677,16 @@ class PipelineEmitter:
                 self.last_tool_children = self._collect_children(step_id)
                 raise
             except Exception as exc:  # noqa: BLE001 -- classify-and-re-raise
-                code, message = self._classify_exception(exc)
-                await self.mark_failed(step_id, error_code=code, error_message=message)
+                # A gate card the user declined carries ``declined``: that is a
+                # decision, not a fault, so the card ends cancelled and no error
+                # code is stamped on it.
+                if getattr(exc, "declined", False):
+                    await self.mark_cancelled(step_id)
+                else:
+                    code, message = self._classify_exception(exc)
+                    await self.mark_failed(
+                        step_id, error_code=code, error_message=message
+                    )
                 self.last_tool_step = self._to_summary(step_id)
                 # A FAILED parent card IS persisted, so its children are
                 # snapshotted and the replayed card still nests its timeline.

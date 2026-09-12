@@ -19,6 +19,9 @@
         "CLARIFICATION_TIMEOUT",
         "USER_INPUT_CANCELLED",
         "CANCELLED",
+        "PAYLOAD_WARNING_CANCELLED",
+        "CODE_EXEC_CANCELLED",
+        "SOLVER_CONFIRMATION_CANCELLED",
         "CONTEXT_WINDOW_EXCEEDED"
       ],
       "title": "Error Code",

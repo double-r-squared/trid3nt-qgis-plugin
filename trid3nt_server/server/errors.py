@@ -2,9 +2,26 @@
 
 Each type carries an ``error_code`` and a ``retryable`` flag that the result
 summarizer harvests, so a gate refusal reaches the model as a structured
-function response and the turn completes honestly."""
+function response and the turn completes honestly. A DECLINE is a separate
+class from a failure: ``UserDeclinedError`` marks the user's own answer."""
 
 from __future__ import annotations
+
+
+class UserDeclinedError(RuntimeError):
+    """The user answered a gate card with cancel, so the tool never ran.
+    ``declined`` is the marker three seams read without importing this module:
+    the pipeline emitter marks the step cancelled rather than failed, the result
+    summarizer hands the model a declined result rather than an error, and the
+    circuit breaker leaves the tool's retry budget alone. ``decline_note`` names
+    the card and what it asked, in the words the model relays."""
+
+    declined: bool = True
+    retryable: bool = False
+
+    def __init__(self, message: str, decline_note: str) -> None:
+        super().__init__(message)
+        self.decline_note = decline_note
 
 
 class ToolNotFoundError(RuntimeError):
@@ -26,34 +43,38 @@ class ToolNotFoundError(RuntimeError):
         self.valid_tools = hint
 
 
-class PayloadWarningCancelledError(RuntimeError):
+class PayloadWarningCancelledError(UserDeclinedError):
     """Raised when the payload-warning gate skips dispatch on a cancel or a
     timeout; ``retryable=False``, so the model narrates the cancellation rather
     than re-issuing the same call at the same scope."""
 
     error_code: str = "PAYLOAD_WARNING_CANCELLED"
-    retryable: bool = False
 
     def __init__(self, tool_name: str) -> None:
         super().__init__(
             f"tool {tool_name!r} dispatch cancelled via payload-warning gate "
-            "(user chose 'cancel' or gate timed out)"
+            "(user chose 'cancel' or gate timed out)",
+            f"The user declined the payload-size warning card for {tool_name}, "
+            "which asked whether to fetch a payload this large. The tool did "
+            "not run.",
         )
         self.tool_name = tool_name
 
 
-class CodeExecConfirmationCancelledError(RuntimeError):
+class CodeExecConfirmationCancelledError(UserDeclinedError):
     """Raised when the ``run_pyqgis`` confirm gate denies the run on a cancel or
     a timeout; the gate fails closed and ``retryable=False``, since the user
     declined to run THIS code."""
 
     error_code: str = "CODE_EXEC_CANCELLED"
-    retryable: bool = False
 
     def __init__(self, code_exec_id: str) -> None:
         super().__init__(
             f"run_pyqgis {code_exec_id!r} cancelled at the confirm gate "
-            "(user chose 'cancel' or gate timed out); the code did not run"
+            "(user chose 'cancel' or gate timed out); the code did not run",
+            "The user declined the code-approval card for run_pyqgis, which "
+            "asked permission to run the proposed snippet in their QGIS "
+            "session. The code did not run.",
         )
         self.code_exec_id = code_exec_id
 
@@ -78,18 +99,20 @@ class CodeExecApprovalTimeoutError(RuntimeError):
         self.timeout_s = timeout_s
 
 
-class SolverConfirmationCancelledError(RuntimeError):
+class SolverConfirmationCancelledError(UserDeclinedError):
     """Raised when a solver confirm gate denies the dispatch; cancel, timeout and
     disconnect all fail closed and ``retryable=False``, so the model narrates the
     decline instead of re-dispatching the same run."""
 
     error_code: str = "SOLVER_CONFIRMATION_CANCELLED"
-    retryable: bool = False
 
     def __init__(self, tool_name: str) -> None:
         super().__init__(
             f"{tool_name} declined at the parameter-confirmation gate "
-            "(user chose 'cancel' or the gate timed out); the solver did not run"
+            "(user chose 'cancel' or the gate timed out); the solver did not run",
+            f"The user declined the parameter-confirmation card for "
+            f"{tool_name}, which asked whether to start the run with the "
+            "parameters it showed. The run did not start.",
         )
         self.tool_name = tool_name
 

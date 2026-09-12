@@ -61,14 +61,17 @@ _GATE_NOTE_STYLE = "border: none; color: palette(mid); font-size: 8pt;"
 _CHIP_STATE_COLORS = {
     "complete": "#3fb950",   # green -- success
     "failed": "#f85149",     # red -- failure
-    "cancelled": "#f85149",  # red -- failure
+    # Amber, the caution gate's own colour: a cancelled step is the user's
+    # decision at a card, never a failure, and must not read as one.
+    "cancelled": "#d29922",
 }
 _CHIP_PENDING_COLOR = "#8b949e"  # grey -- pending / running / unknown
 
 
 def _tool_chip_style(state: Optional[str]) -> str:
     """The outlined tool-chip stylesheet, its border and text colour driven
-    off the step state: green complete, grey in progress, red failed."""
+    off the step state: green complete, grey in progress, red failed, amber
+    declined."""
     color = _CHIP_STATE_COLORS.get((state or "").lower(), _CHIP_PENDING_COLOR)
     return (
         f"font-family: monospace; font-size: 8pt; color: {color}; "
@@ -126,11 +129,18 @@ def _tool_status_style(state: Optional[str]) -> str:
 
 
 # The ascii spinner cycles on a QTimer while a row is RUNNING; a terminal row
-# shows a check or an x instead. These are text symbols, never emoji.
+# shows its own glyph instead. These are text symbols, never emoji. A cancelled
+# row gets the no-entry sign, not the x: the user declined, nothing broke.
 _SPINNER_FRAMES = ("|", "/", "-", "\\")
 _STATUS_GLYPH_DONE = "✓"  # check mark
 _STATUS_GLYPH_FAIL = "✗"  # ballot x
-_TERMINAL_STATES = {"complete", "failed", "cancelled"}
+_STATUS_GLYPH_DECLINED = "⊘"  # circled division slash
+_TERMINAL_GLYPHS = {
+    "complete": _STATUS_GLYPH_DONE,
+    "failed": _STATUS_GLYPH_FAIL,
+    "cancelled": _STATUS_GLYPH_DECLINED,
+}
+_TERMINAL_STATES = set(_TERMINAL_GLYPHS)
 
 
 def _is_running_state(state: Optional[str]) -> bool:
@@ -654,6 +664,7 @@ class _ToolCard(QFrame):
         self._clear_body()
         any_running = False
         any_failed = False
+        any_declined = False
         n_tools = 0
         for row in inner_rows:
             label = str(row.get("label") or "")
@@ -665,12 +676,13 @@ class _ToolCard(QFrame):
             running = _is_running_state(state)
             if running:
                 any_running = True
-            # A failed/cancelled row (or a replayed error row) taints the
-            # whole card's aggregate state -> red border below.
-            if (state or "").lower() in ("failed", "cancelled") or bool(
-                row.get("is_error")
-            ):
+            # A failed row (or a replayed error row) taints the whole card's
+            # aggregate state -> red border below. A CANCELLED row does not: it
+            # is the user's decline, and it tints the card amber instead.
+            if (state or "").lower() == "failed" or bool(row.get("is_error")):
                 any_failed = True
+            elif (state or "").lower() == "cancelled":
+                any_declined = True
 
             row_w = QWidget()
             rl = QHBoxLayout(row_w)
@@ -700,9 +712,9 @@ class _ToolCard(QFrame):
                 self._spinner_labels.append(status)
             else:
                 status.setText(
-                    _STATUS_GLYPH_FAIL
-                    if (state or "").lower() in ("failed", "cancelled")
-                    else _STATUS_GLYPH_DONE
+                    _TERMINAL_GLYPHS.get(
+                        (state or "").lower(), _STATUS_GLYPH_DONE
+                    )
                 )
             rl.addWidget(status)
             self._body_lay.addWidget(row_w)
@@ -743,11 +755,14 @@ class _ToolCard(QFrame):
 
         self._title.setText(f"Tools ({n_tools})" if n_tools else "Tools")
 
-        # The card BORDER carries the aggregate
-        # outcome -- red the moment any tool failed/cancelled, green once
-        # every tool is terminal-and-successful, neutral while running.
+        # The card BORDER carries the aggregate outcome -- red the moment any
+        # tool failed, amber when the user declined one and nothing failed,
+        # green once every tool is terminal-and-successful, neutral while
+        # running.
         if any_failed:
             border = _CHIP_STATE_COLORS["failed"]
+        elif any_declined and not any_running:
+            border = _CHIP_STATE_COLORS["cancelled"]
         elif n_tools and not any_running:
             border = _CHIP_STATE_COLORS["complete"]
         else:
