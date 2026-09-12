@@ -394,7 +394,7 @@ def upload_cog(
             )
         dest = f"s3://{bucket}/{run_id}/{dest_filename}"
         try:
-            from trid3nt_server.workflows.solver.solver import _get_s3_client
+            from trid3nt_server import storage
 
             kwargs: dict[str, Any] = {
                 "Bucket": bucket,
@@ -405,7 +405,7 @@ def upload_cog(
             # ``content_type=None`` omits the ContentType header entirely.
             with local_cog.open("rb") as fh:
                 kwargs["Body"] = fh
-                _get_s3_client().put_object(**kwargs)
+                storage.client().put_object(**kwargs)
         except Exception as exc:  # noqa: BLE001
             raise CogIoError(
                 "UPLOAD",

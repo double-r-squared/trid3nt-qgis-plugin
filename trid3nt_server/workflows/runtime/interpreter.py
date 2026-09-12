@@ -806,9 +806,9 @@ def _artifact_state(uri: str) -> str:
         if not bucket or not key:
             return _ABSENT
         try:
-            from trid3nt_server.workflows.solver.solver import _get_s3_client
+            from trid3nt_server import storage
 
-            _get_s3_client().head_object(Bucket=bucket, Key=key)
+            storage.client().head_object(Bucket=bucket, Key=key)
             return _LIVE
         except Exception as exc:  # noqa: BLE001 - answered, never propagated
             return _ABSENT if _is_not_found(exc) else _UNREACHABLE

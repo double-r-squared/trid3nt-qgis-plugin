@@ -13,6 +13,7 @@ import logging
 import os
 import signal
 import subprocess
+import tempfile
 import threading
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -23,16 +24,19 @@ from trid3nt_contracts import new_ulid
 from trid3nt_contracts.execution import ExecutionHandle, RunResult
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
+from trid3nt_server import storage
+from trid3nt_server.storage import StorageError
 from trid3nt_server.tools import register_tool
+
+from .compute_class import COMPUTE_CLASS_ALIAS
 
 __all__ = [
     "run_solver",
     "wait_for_completion",
     "SolverNotRegisteredError",
     "SolverDispatchError",
+    "RunOutputMissing",
     "set_emitter_binding",
-    "set_runs_bucket",
-    "set_s3_client",
     "SOLVER_BACKEND_LOCAL_DOCKER",
     "LOCAL_DOCKER_WORKFLOW_NAME",
     "LOCAL_EXEC_WORKFLOW_NAME",
@@ -47,6 +51,8 @@ __all__ = [
     "DEFAULT_TIMEOUT_S",
     "PROGRESS_CLAMP_MAX",
     "PROGRESS_TERMINAL",
+    "dispatch_and_wait",
+    "download_result",
 ]
 
 logger = logging.getLogger("trid3nt_server.workflows.solver.solver")
@@ -123,36 +129,24 @@ DEFAULT_LOCAL_RUNS_DIR: str = "/opt/trid3nt/runs"
 DOCKER_KILL_TIMEOUT_S: float = 25.0
 
 
-#: The compute-class vocabulary, in ONE place: what a caller may say, mapped onto
-#: the ``ExecutionHandle.ComputeClass`` contract. ``medium`` is a retained SYNONYM
-#: of the contract's ``standard`` - it is still the spelling most template Params
-#: declare, and renaming it is a fleet-wide model-facing change rather than a
-#: dispatch one. Everything that validates a compute class reads this map; nobody
-#: keeps a second copy of the set.
-COMPUTE_CLASS_ALIAS: dict[str, str] = {
-    "small": "small",
-    "medium": "standard",
-    "standard": "standard",
-    "large": "large",
-    "xlarge": "xlarge",
-    "gpu": "gpu",
-}
-
-
-
-
 class SolverNotRegisteredError(ValueError):
     """``solver`` is not in ``SOLVER_WORKFLOW_REGISTRY``.
     Its own type, distinct from a params-invalid error, so the agent surface can
     say which solvers ARE registered rather than blaming the arguments."""
 
 
-class SolverDispatchError(RuntimeError):
+class SolverDispatchError(StorageError):
     """The backend dispatch or the completion-manifest read failed.
     The ``error_code`` attribute carries the typed code, so a downstream wrapper
     re-emits it verbatim rather than re-deriving one."""
 
     error_code: str = "SOLVER_DISPATCH_FAILED"
+
+
+class RunOutputMissing(SolverDispatchError):
+    """A completed run's named artifact was not downloadable from its prefix."""
+
+    error_code: str = "RUN_OUTPUT_MISSING"
 
 
 
@@ -168,8 +162,6 @@ class EmitterBinding:
 
 
 _EMITTER_BINDING: EmitterBinding | None = None
-_RUNS_BUCKET: str | None = None
-_S3_CLIENT: Any | None = None
 
 
 def set_emitter_binding(binding: EmitterBinding | None) -> None:
@@ -177,58 +169,6 @@ def set_emitter_binding(binding: EmitterBinding | None) -> None:
     ``None`` clears it, and the polling loop falls back to no-op emission."""
     global _EMITTER_BINDING
     _EMITTER_BINDING = binding
-
-
-def set_runs_bucket(name: str | None) -> None:
-    """Override the runs-bucket name. ``None`` restores the env-based default."""
-    global _RUNS_BUCKET
-    _RUNS_BUCKET = name
-
-
-def set_s3_client(client: Any) -> None:
-    """Bind the boto3 S3 client used for ALL local-backend S3 I/O.
-    ``None`` restores the lazy default, which reads its endpoint and credentials
-    from the ambient environment. The whole staged-solve chain shares this seam."""
-    global _S3_CLIENT
-    _S3_CLIENT = client
-
-
-def _get_s3_client() -> Any:
-    """Return the bound S3 client or lazily construct the boto3 default.
-    boto3, never s3fs, which falls back to anonymous credentials; imported lazily
-    so a process that dispatches no solver never pays for it."""
-    if _S3_CLIENT is not None:
-        return _S3_CLIENT
-    try:
-        import boto3  # type: ignore[import-not-found]
-    except Exception as exc:  # noqa: BLE001
-        raise SolverDispatchError(
-            f"boto3 not importable: {exc}; the local-docker solver backend "
-            "requires boto3 for S3 staging/upload."
-        ) from exc
-    return boto3.client("s3", region_name=os.environ.get("AWS_REGION", "us-west-2"))
-
-
-def _get_runs_bucket() -> str:
-    """The overridden runs bucket, or ``TRID3NT_RUNS_BUCKET``, or the default name."""
-    if _RUNS_BUCKET is not None:
-        return _RUNS_BUCKET
-    return os.environ.get("TRID3NT_RUNS_BUCKET", "trid3nt-runs")
-
-
-def _get_local_runs_bucket() -> str:
-    """Runs bucket under the local backend, with NO default at all.
-    An unset ``TRID3NT_RUNS_BUCKET`` fails loudly: a default would let every run
-    upload into a bucket nobody provisioned and call it a success."""
-    if _RUNS_BUCKET is not None:
-        return _RUNS_BUCKET
-    bucket = (os.environ.get("TRID3NT_RUNS_BUCKET") or "").strip()
-    if not bucket:
-        raise SolverDispatchError(
-            "TRID3NT_RUNS_BUCKET must be set when TRID3NT_SOLVER_BACKEND="
-            "local-docker; there is no default runs bucket."
-        )
-    return bucket
 
 
 # The local backend envelope, one shape for every solver: stage the manifest's
@@ -243,20 +183,6 @@ def _utc_now_iso() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def _split_object_uri(uri: str) -> tuple[str, str, str]:
-    """Split ``s3://bucket/key`` into ``(scheme, bucket, key)``.
-    Only ``s3://`` is supported; anything else raises ``SolverDispatchError``."""
-    prefix = "s3://"
-    if uri.startswith(prefix):
-        bucket, _, key = uri[len(prefix):].partition("/")
-        if not bucket or not key:
-            raise SolverDispatchError(f"malformed s3:// URI: {uri!r}")
-        return "s3", bucket, key
-    raise SolverDispatchError(
-        f"unsupported object URI scheme: {uri!r} (expected s3://)"
-    )
-
-
 def _read_object_bytes(uri: str) -> bytes:
     """Read one object's bytes, resolved BY SCHEME: ``s3://`` via boto3, a
     ``file://`` or bare local path through the filesystem."""
@@ -264,8 +190,8 @@ def _read_object_bytes(uri: str) -> bytes:
         return Path(uri[len("file://"):]).read_bytes()
     if not uri.startswith("s3://"):
         return Path(uri).read_bytes()
-    _scheme, bucket, key = _split_object_uri(uri)
-    resp = _get_s3_client().get_object(Bucket=bucket, Key=key)
+    _scheme, bucket, key = storage.split_object_uri(uri)
+    resp = storage.client().get_object(Bucket=bucket, Key=key)
     return resp["Body"].read()
 
 
@@ -278,9 +204,9 @@ def _download_object(uri: str, dest: Path) -> None:
         src = Path(uri[len("file://"):] if uri.startswith("file://") else uri)
         dest.write_bytes(src.read_bytes())
         return
-    _scheme, bucket, key = _split_object_uri(uri)
+    _scheme, bucket, key = storage.split_object_uri(uri)
     logger.info("local-docker staging %s -> %s", uri, dest)
-    resp = _get_s3_client().get_object(Bucket=bucket, Key=key)
+    resp = storage.client().get_object(Bucket=bucket, Key=key)
     import shutil
 
     with dest.open("wb") as fh:
@@ -482,7 +408,7 @@ def _supervise_local_run(run: _LocalRun) -> None:
         error_msg = f"{type(exc).__name__}: {exc}"
 
     try:
-        s3 = _get_s3_client()
+        s3 = storage.client()
     except Exception as exc:  # noqa: BLE001 -- no client, nothing more we can do
         logger.error(
             "local-docker supervisor could not build S3 client run_id=%s: %s "
@@ -580,7 +506,7 @@ def launch_local_solver(
             f"compute_class {compute_class!r} not recognized; allowed: "
             f"{sorted(COMPUTE_CLASS_ALIAS)}"
         )
-    runs_bucket = _get_local_runs_bucket()  # fail fast on missing env
+    runs_bucket = storage.local_runs_bucket()  # fail fast on missing env
 
     run_id = run_id or new_ulid()
     submitted_at = datetime.now(timezone.utc)
@@ -843,7 +769,7 @@ def _try_get_completion_s3(runs_bucket: str, run_id: str) -> dict[str, Any] | No
     """Poll ``s3://<runs_bucket>/<run_id>/completion.json`` once. ``None`` when the
     object is absent or transiently unreadable; malformed JSON RAISES, an
     object-store PUT being atomic, so a parse failure is real corruption."""
-    s3 = _get_s3_client()
+    s3 = storage.client()
     try:
         resp = s3.get_object(Bucket=runs_bucket, Key=f"{run_id}/completion.json")
         data = resp["Body"].read()
@@ -929,7 +855,7 @@ async def _wait_for_completion_local(
     """``wait_for_completion`` body for a local handle: poll the completion.json
     object under the run prefix on the caller's cadence, ramping progress and
     stopping at the timeout."""
-    runs_bucket = _get_local_runs_bucket()
+    runs_bucket = storage.local_runs_bucket()
     deadline = handle.submitted_at.timestamp() + float(timeout_s)
     loop = asyncio.get_running_loop()
 
@@ -1170,6 +1096,73 @@ async def wait_for_completion(
     )
 
 
+
+
+async def dispatch_and_wait(*, solver: str, manifest_uri: str, compute_class: str,
+                            module: str, label: str, timeout_s: float,
+                            grid_resolution_m: float | None = None,
+                            active_cell_count: int | None = None
+                            ) -> tuple[Any, str]:
+    """Dispatch a staged manifest, drive the cards, wait, and hand back the result.
+
+    Judges nothing: a non-complete status is the caller's error to raise."""
+    from trid3nt_server.emission.pipeline_emitter import (
+        current_emitter,
+        mint_dispatch_and_sim_cards,
+        route_sim_terminal,
+    )
+
+    from .solve_progress import drive_live_solve_progress
+
+    emitter = current_emitter()
+    handle = run_solver(solver=solver, model_setup_uri=manifest_uri,
+                        compute_class=compute_class)
+    run_id = handle.run_id
+    logger.info("%s dispatching %s -> %s", solver, label, manifest_uri)
+    sim_step_id = await mint_dispatch_and_sim_cards(
+        emitter=emitter, solver=solver, module=module, handle=handle,
+        compute_class=compute_class)
+    if emitter is not None and sim_step_id is not None:
+        set_emitter_binding(EmitterBinding(emitter=emitter, step_id=sim_step_id))
+    progress = asyncio.ensure_future(drive_live_solve_progress(
+        emitter=emitter, run_id=run_id, solver=solver,
+        grid_resolution_m=grid_resolution_m, active_cell_count=active_cell_count,
+        vcpus=None, eta_seconds=None))
+
+    run_result = None
+    try:
+        run_result = await wait_for_completion(handle, timeout_s=timeout_s)
+    except asyncio.CancelledError:
+        logger.info("%s %s solve cancelled awaiting solver", solver, label)
+        await route_sim_terminal(emitter, sim_step_id, run_result=None)
+        raise
+    finally:
+        progress.cancel()
+        try:
+            await progress
+        except (asyncio.CancelledError, Exception):  # noqa: BLE001
+            pass
+        set_emitter_binding(None)
+    await route_sim_terminal(emitter, sim_step_id, run_result=run_result)
+    return run_result, (getattr(run_result, "run_id", None) or run_id)
+
+
+def download_result(run_id: str, basename: str) -> str:
+    """Download one of a run's result files to a local path a postprocess reads.
+
+    The caller owns the temp file: read it, then unlink it."""
+    bucket = storage.runs_bucket()
+    local = str(Path(tempfile.mkdtemp(prefix=f"run-{run_id}-")) / basename)
+    try:
+        body = storage.client().get_object(
+            Bucket=bucket, Key=f"{run_id}/{basename}")["Body"].read()
+        with open(local, "wb") as fh:
+            fh.write(body)
+    except Exception as exc:  # noqa: BLE001
+        raise RunOutputMissing(
+            f"run {run_id} completed but s3://{bucket}/{run_id}/{basename} was "
+            f"not downloadable: {exc}") from exc
+    return local
 
 
 def _to_utc(value: Any) -> datetime | None:

@@ -314,9 +314,9 @@ class MeshSession:
 
 
 def _s3_client() -> Any:
-    from trid3nt_server.workflows.solver.solver import _get_s3_client
+    from trid3nt_server import storage
 
-    return _get_s3_client()
+    return storage.client()
 
 
 def _build(mesher: Mesher, recipe: MeshRecipe) -> Mesh:

@@ -21,13 +21,12 @@ import pytest
 from botocore.exceptions import ClientError
 
 import trid3nt_server.workflows.solver.solver as solver_mod
+from trid3nt_server import storage
 from trid3nt_server.workflows.solver.solver import (
     LOCAL_DOCKER_WORKFLOW_NAME,
     SolverDispatchError,
     run_solver,
     set_emitter_binding,
-    set_runs_bucket,
-    set_s3_client,
     wait_for_completion,
 )
 from trid3nt_contracts.execution import ExecutionHandle, RunResult
@@ -155,18 +154,16 @@ esac
 @pytest.fixture()
 def reset_seams():
     """Reset every solver DI seam + the local-run registry around each test."""
-    for setter in (set_s3_client,):
-        setter(None)
+    storage.set_client(None)
     set_emitter_binding(None)
-    set_runs_bucket(None)
+    storage.set_runs_bucket(None)
     solver_mod._LOCAL_RUNS.clear()
     try:
         yield
     finally:
-        for setter in (set_s3_client,):
-            setter(None)
+        storage.set_client(None)
         set_emitter_binding(None)
-        set_runs_bucket(None)
+        storage.set_runs_bucket(None)
         solver_mod._LOCAL_RUNS.clear()
 
 
@@ -253,15 +250,15 @@ def test_local_run_solver_requires_runs_bucket(
     """No GCP-named default on AWS: a missing TRID3NT_RUNS_BUCKET fails loudly."""
     monkeypatch.delenv("TRID3NT_RUNS_BUCKET", raising=False)
     s3 = FakeS3Client()
-    set_s3_client(s3)
+    storage.set_client(s3)
     uri = _seed_manifest(s3)
-    with pytest.raises(SolverDispatchError) as exc_info:
+    with pytest.raises(storage.StorageError) as exc_info:
         run_solver(solver=_SOLVER, model_setup_uri=uri)
     assert "TRID3NT_RUNS_BUCKET" in str(exc_info.value)
 
 
 def test_local_run_solver_rejects_plain_path(reset_seams, local_env, docker_shim) -> None:
-    set_s3_client(FakeS3Client())
+    storage.set_client(FakeS3Client())
     with pytest.raises(SolverDispatchError):
         run_solver(solver=_SOLVER, model_setup_uri="/tmp/manifest.json")
 
@@ -273,7 +270,7 @@ def test_local_run_solver_stages_manifest_and_launches_docker(
     into ``$TRID3NT_RUNS_DIR/<run_id>/`` (the ``gs_uri`` field name carries ``s3://``
     values, resolved by scheme), docker launched detached, handle returned at once."""
     s3 = FakeS3Client()
-    set_s3_client(s3)
+    storage.set_client(s3)
     uri = _seed_manifest(s3)
 
     handle = run_solver(solver=_SOLVER, model_setup_uri=uri, compute_class="medium")
@@ -314,7 +311,7 @@ def test_local_manifest_gs_uri_field_with_gs_scheme_rejected(
     no longer resolvable (the GCS staging fallback is removed) — staging the
     run fails with a typed ``SolverDispatchError`` (unsupported scheme)."""
     s3 = FakeS3Client()
-    set_s3_client(s3)
+    storage.set_client(s3)
     manifest = {
         "inputs": [
             {"gs_uri": "gs://legacy-gcs-bucket/staged/t2d.cas", "dest": "t2d.cas"}
@@ -334,7 +331,7 @@ def test_local_manifest_dest_traversal_rejected(
     reset_seams, local_env: Path, docker_shim: Path
 ) -> None:
     s3 = FakeS3Client()
-    set_s3_client(s3)
+    storage.set_client(s3)
     s3.objects[("setup-bucket", "evil/x")] = b"x"
     manifest = {
         "inputs": [{"gs_uri": "s3://setup-bucket/evil/x", "dest": "../../escape.txt"}],
@@ -382,7 +379,7 @@ async def test_local_ok_path_completion_schema_outputs_and_wait(
     reset_seams, local_env: Path, docker_shim: Path
 ) -> None:
     s3 = FakeS3Client()
-    set_s3_client(s3)
+    storage.set_client(s3)
     uri = _seed_manifest(s3)
 
     handle = run_solver(solver=_SOLVER, model_setup_uri=uri)
@@ -438,7 +435,7 @@ async def test_local_error_path_always_writes_completion(
     (status="error", entrypoint parity) and wait surfaces SOLVER_FAILED."""
     (docker_shim / "behavior").write_text("fail")
     s3 = FakeS3Client()
-    set_s3_client(s3)
+    storage.set_client(s3)
     uri = _seed_manifest(s3)
 
     handle = run_solver(solver=_SOLVER, model_setup_uri=uri)
@@ -470,7 +467,7 @@ async def test_local_cancel_chain_docker_kill_plus_cancelled_completion(
     all well inside the ≤30 s budget — then CancelledError re-raises."""
     (docker_shim / "behavior").write_text("hang")
     s3 = FakeS3Client()
-    set_s3_client(s3)
+    storage.set_client(s3)
     uri = _seed_manifest(s3)
 
     handle = run_solver(solver=_SOLVER, model_setup_uri=uri)
@@ -509,7 +506,7 @@ async def test_local_wait_timeout_returns_solver_timeout_and_kills(
 ) -> None:
     (docker_shim / "behavior").write_text("hang")
     s3 = FakeS3Client()
-    set_s3_client(s3)
+    storage.set_client(s3)
     uri = _seed_manifest(s3)
 
     handle = run_solver(solver=_SOLVER, model_setup_uri=uri)
@@ -542,7 +539,7 @@ async def test_local_wait_emits_progress_via_emitter_binding(
             self.calls.append((step_id, pct))
 
     s3 = FakeS3Client()
-    set_s3_client(s3)
+    storage.set_client(s3)
     uri = _seed_manifest(s3)
     emitter = _CapturingEmitter()
     set_emitter_binding(solver_mod.EmitterBinding(emitter=emitter, step_id="s1"))

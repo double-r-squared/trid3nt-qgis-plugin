@@ -788,9 +788,9 @@ package SteeringSurface {
     verify requirement TheOpenSetIsCompleteAndRequiredIsTheObligFiles by
         "tests/telemac/test_telemac_run_reads.py::test_the_engine_s_own_demand_is_read_by_name_out_of_the_listing";
     verify requirement TheOpenSetIsCompleteAndRequiredIsTheObligFiles by
-        "tests/telemac/test_run_telemac_chain.py::test_classify_exit_names_the_keyword_lecdon_asked_for";
+        "tests/telemac/test_telemac_engine.py::test_classify_exit_names_the_keyword_lecdon_asked_for";
     verify requirement TheOpenSetIsCompleteAndRequiredIsTheObligFiles by
-        "tests/telemac/test_run_telemac_chain.py::test_classify_exit_invents_no_demand_where_the_engine_made_none";
+        "tests/telemac/test_telemac_engine.py::test_classify_exit_invents_no_demand_where_the_engine_made_none";
 
     satisfy requirement ANoDefaultKeywordIsTheTemplatesToState by slot;
     satisfy requirement ANoDefaultKeywordIsTheTemplatesToState by sheet;

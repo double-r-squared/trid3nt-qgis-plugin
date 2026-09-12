@@ -26,7 +26,7 @@ from trid3nt_server.workflows.telemac.modules.artemis import (
     BOUNDARY_FILENAME,
     IncidentWave,
 )
-from trid3nt_server.workflows.telemac.solving.solve import compute_class
+from trid3nt_server.workflows.solver.compute_class import compute_class
 from trid3nt_server.workflows.telemac.templates.agitation.declarations import (
     ACCEPTS,
     DOC,
@@ -40,7 +40,7 @@ __all__ = ["ANSWER", "CAPTIONS", "DATA", "MESH", "OUTPUTS", "PARAMS", "STEERING"
            "artemis_harbor_agitation"]
 
 _AUTHORING = "trid3nt_server.workflows.telemac.authoring"
-_SOLVING = "trid3nt_server.workflows.telemac.solving.solve"
+_ENGINE = "trid3nt_server.workflows.telemac.engine"
 _TEMPLATE = "trid3nt_server.workflows.telemac.templates.agitation"
 
 #: What the run directory holds the run's files under - the deck's own GEOMETRY /
@@ -214,7 +214,7 @@ artemis_harbor_agitation = register_workflow(
                             "result_basename": _RESULT}),
         results=(_RESULT,),
         steering_file=_STEERING_FILE, prefix="artemis",
-        dispatch=f"{_SOLVING}.solve_case", compute_class=P.compute_class,
+        dispatch=f"{_ENGINE}.solve_case", compute_class=P.compute_class,
         outputs=OUTPUTS, captions=CAPTIONS, answer=ANSWER,
         review_title="Review the incident wave, the structure and the mesh"),
     data=DATA,

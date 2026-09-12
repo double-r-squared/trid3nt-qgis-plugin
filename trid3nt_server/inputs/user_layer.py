@@ -104,9 +104,9 @@ def _split_s3_uri(uri: str) -> tuple[str, str]:
 
 def _s3_client():
     """The ONE object-store client (bound or lazily built), never a second one."""
-    from trid3nt_server.workflows.solver.solver import _get_s3_client
+    from trid3nt_server import storage
 
-    return _get_s3_client()
+    return storage.client()
 
 
 def _head_object_size(s3_uri: str) -> int:
@@ -294,9 +294,9 @@ async def _ingest_vector(
 
     fgb_bytes = await asyncio.to_thread(_write_fgb_bytes, gdf)
 
-    from trid3nt_server.workflows.solver.solver import _get_runs_bucket
+    from trid3nt_server import storage
 
-    runs_bucket = _get_runs_bucket()
+    runs_bucket = storage.runs_bucket()
     fgb_key = f"case-data/{case_id}/{layer_id}.fgb"
     fgb_uri = f"s3://{runs_bucket}/{fgb_key}"
     await asyncio.to_thread(

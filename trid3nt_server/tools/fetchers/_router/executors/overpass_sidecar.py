@@ -47,9 +47,9 @@ def _write_sidecar(spec: SourceSpec, params: dict[str, Any], ext: str, payload: 
         rest = uri[len("s3://"):]
         bucket, _, obj_key = rest.partition("/")
         body = json.dumps(payload, separators=(",", ":")).encode("utf-8")
-        from trid3nt_server.workflows.solver.solver import _get_s3_client
+        from trid3nt_server import storage
 
-        s3 = _get_s3_client()
+        s3 = storage.client()
         s3.put_object(Bucket=bucket, Key=obj_key, Body=body, ContentType="application/json")
         logger.info(
             "router.overpass_sidecar: wrote sidecar (side write, library-owned) "

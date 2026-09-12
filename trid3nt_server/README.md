@@ -16,6 +16,7 @@ on one machine against one user; the only wire shapes it speaks are
 | `errors.py` | `DeclarativeError` - the base every typed failure carries its `error_code` on, below both the input layer and the declarative library. |
 | `persistence.py` | The typed wrapper over the document store: cases, layers, chat, run snapshots. |
 | `plugin_repo.py` | The QGIS custom plugin repository the daemon serves: the versioned zip, `plugins.xml` and its manifest. |
+| `storage.py` | The object store every run reaches through: the bound S3 client and the two readings of the runs bucket - the one a read of a past run falls back on, and the one an upload refuses to default. |
 | `telemetry.py` | The JSONL sink: one line per tool call, turn, shadow selection and solve completion. |
 
 ## Subfolders
@@ -28,7 +29,6 @@ on one machine against one user; the only wire shapes it speaks are
 | `fallbacks/` | Declared degradation: ladders as data, and the one walker. |
 | `gates/` | The agent-loop gates - confirm, review, draw, budget, runaway. |
 | `inputs/` | Every input into the system as a typed value: a Point, an Extent and a Shape, each with one ingestion from every form a user hands it in, and the user's own file adopted as a layer. |
-| `sandbox/` | The code-exec box: the container a user-confirmed snippet runs in. |
 | `server/` | The daemon core: connection loop, turn engine, dispatch, session state. |
 | `tools/` | The registered tool surface: fetchers and derive tools, with search and meta beside them. |
 | `workflows/` | The declarative engine layer: the runtime, the mesh front, TELEMAC. |

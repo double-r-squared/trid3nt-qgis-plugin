@@ -117,13 +117,13 @@ def stage_telemac_manifest(*, section: str, config: Mapping[str, Any],
         raise TelemacError(
             "TRID3NT_CACHE_BUCKET must be set to stage the TELEMAC manifest.",
             error_code="TELEMAC_STAGING_FAILED")
-    from trid3nt_server.workflows.solver.solver import _get_s3_client
+    from trid3nt_server import storage
 
     manifest = {section: dict(config), "run_id": run_tag,
                 "inputs": list(inputs or []), "telemac_args": [],
                 "outputs": list(outputs), **dict(extra or {})}
     key = f"{prefix or section}/{run_tag}/manifest.json"
-    _get_s3_client().put_object(
+    storage.client().put_object(
         Bucket=cache_bucket, Key=key,
         Body=json.dumps(manifest, indent=2).encode("utf-8"),
         ContentType="application/json")
@@ -147,10 +147,10 @@ def _cache_bucket() -> str:
 def _upload_authored(rundir: Path, run_tag: str, names: Sequence[str],
                      prefix: str) -> list[dict[str, str]]:
     """Upload every file this authoring wrote -> the manifest rows staging them."""
-    from trid3nt_server.workflows.solver.solver import _get_s3_client
+    from trid3nt_server import storage
 
     bucket = _cache_bucket()
-    s3 = _get_s3_client()
+    s3 = storage.client()
     rows: list[dict[str, str]] = []
     for name in names:
         key = f"{prefix}/{run_tag}/{name}"

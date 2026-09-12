@@ -1160,9 +1160,9 @@ def _read_tags_from_sidecars(fid: str) -> dict[str, Any] | None:
     prefix = sentinel.rsplit("KEY", 1)[0]  # cache/static-30d/buildings/
     suffix = f".{sidecar_ext}"
     try:
-        from trid3nt_server.workflows.solver.solver import _get_s3_client
+        from trid3nt_server import storage
 
-        s3 = _get_s3_client()
+        s3 = storage.client()
         paginator = s3.get_paginator("list_objects_v2")
         for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
             for obj in page.get("Contents", []) or []:

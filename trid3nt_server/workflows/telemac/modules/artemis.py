@@ -138,7 +138,7 @@ def incident_height(cli_text: str) -> float:
 
 def _kd(solved: Any) -> tuple[str, str, Any]:
     """``KD``: the wave height over the incident height the run was forced with."""
-    from ..solving.solve import download_result
+    from trid3nt_server.workflows.solver.solver import download_result
 
     local = download_result(solved.run_id, BOUNDARY_FILENAME)
     try:

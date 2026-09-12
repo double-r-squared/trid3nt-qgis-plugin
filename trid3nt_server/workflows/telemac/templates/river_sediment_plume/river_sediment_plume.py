@@ -37,7 +37,7 @@ from trid3nt_server.workflows.telemac.modules.telemac2d import (
     TracerNames,
     Wind,
 )
-from trid3nt_server.workflows.telemac.solving.solve import compute_class
+from trid3nt_server.workflows.solver.compute_class import compute_class
 from trid3nt_server.workflows.telemac.templates.river_sediment_plume.declarations import (
     ACCEPTS, DOC, PARAMS, PARAMS as P,
 )
@@ -49,7 +49,7 @@ __all__ = ["ANSWER", "CAPTIONS", "DATA", "MESH", "OUTPUTS", "PARAMS", "STEERING"
 
 _AUTHORING = "trid3nt_server.workflows.telemac.authoring"
 _REACH = "trid3nt_server.workflows.telemac.templates.reach"
-_SOLVING = "trid3nt_server.workflows.telemac.solving.solve"
+_ENGINE = "trid3nt_server.workflows.telemac.engine"
 
 #: The names the run directory holds this run's files under. They are the deck's
 #: own STEERING / GEOMETRY / BOUNDARY CONDITIONS / RESULTS statements, so the
@@ -320,7 +320,7 @@ telemac_river_sediment_plume = register_workflow(
                             "friction_coefficient": P.friction_coefficient}),
         results=(_RESULT, RESULT_FILENAME),
         steering_file=_STEERING_FILE, prefix="telemac",
-        dispatch=f"{_SOLVING}.solve_reach", compute_class=P.compute_class,
+        dispatch=f"{_ENGINE}.solve_case", compute_class=P.compute_class,
         outputs=OUTPUTS, captions=CAPTIONS, answer=ANSWER,
         review_title="Review the sediment-plume scenario"),
     data=DATA,

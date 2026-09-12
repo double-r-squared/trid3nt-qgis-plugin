@@ -222,31 +222,43 @@ def _stage_uri_local(uri: str, tmpdir: str, label: str) -> str:
     return uri
 
 
+def _raster_bbox_4326(local: str) -> tuple[float, float, float, float]:
+    """A raster file's extent in EPSG:4326, held to the AOI clamp."""
+    import rasterio
+    from rasterio.warp import transform_bounds
+
+    try:
+        with rasterio.open(local) as src:
+            if src.crs is None:
+                raise DebrisFlowInputError("the DEM raster carries no CRS.")
+            if src.crs.to_epsg() == 4326:
+                b = src.bounds
+                bbox = (b.left, b.bottom, b.right, b.top)
+            else:
+                bbox = transform_bounds(src.crs, "EPSG:4326", *src.bounds)
+    except DebrisFlowError:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        raise DebrisFlowInputError(f"could not open DEM raster {local!r}: {exc}") from exc
+    return _validate_bbox(tuple(float(v) for v in bbox))
+
+
 def _load_dem(
-    bbox: tuple[float, float, float, float],
-    dem_uri: str | None,
+    dem_uri: Any,
     tmpdir: str,
     notes: list[str],
-) -> Any:
-    """Load the DEM (override URI or fetch_copernicus_dem), projected to UTM."""
+) -> tuple[Any, tuple[float, float, float, float]]:
+    """The DEM the caller handed in, projected to UTM, with its EPSG:4326 extent."""
     from pfdf.raster import Raster
 
-    if dem_uri is not None:
-        local = _stage_uri_local(dem_uri, tmpdir, "dem")
-        source_note = f"DEM from caller-supplied dem_uri ({dem_uri})."
-    else:
-        try:
-            from trid3nt_server.tools import TOOL_REGISTRY
-
-            layer = TOOL_REGISTRY["fetch_copernicus_dem"].fn(bbox=bbox)
-        except DebrisFlowError:
-            raise
-        except Exception as exc:  # noqa: BLE001
-            raise DebrisFlowUpstreamError(
-                f"fetch_copernicus_dem failed for bbox={bbox}: {exc}"
-            ) from exc
-        local = _stage_uri_local(layer.uri, tmpdir, "dem")
-        source_note = "DEM: Copernicus GLO-30 (30 m) via fetch_copernicus_dem."
+    if not isinstance(dem_uri, str) or not dem_uri.strip():
+        raise DebrisFlowInputError(
+            "dem_uri is required: fetch_copernicus_dem over the burned AOI and "
+            "pass its uri."
+        )
+    local = _stage_uri_local(dem_uri, tmpdir, "dem")
+    source_note = f"DEM from dem_uri ({dem_uri})."
+    bbox = _raster_bbox_4326(local)
     try:
         dem = Raster.from_file(local)
     except Exception as exc:  # noqa: BLE001
@@ -267,7 +279,7 @@ def _load_dem(
             )
         dem.reproject(crs=utm)
     notes.append(source_note)
-    return dem
+    return dem, bbox
 
 
 def _align_to_dem(raster: Any, dem: Any) -> Any:
@@ -340,94 +352,13 @@ def _severity_from_uri(
     return barc4, dnbr
 
 
-def _severity_from_mtbs(
-    bbox: tuple[float, float, float, float], dem: Any, tmpdir: str, notes: list[str]
-) -> tuple[Any, Any]:
-    """Rasterize MTBS fire perimeters as a severity substrate; they are boundary
-    POLYGONS, so the interior is assumed uniformly MODERATE severity.
-    """
-    from pfdf.raster import Raster
-
-    try:
-        from trid3nt_server.tools import TOOL_REGISTRY
-        from trid3nt_server.tools.fetchers._fetch_common import FetchError
-        _fetch_mtbs = TOOL_REGISTRY["fetch_mtbs_burn_severity"].fn
-    except Exception as exc:  # noqa: BLE001
-        raise DebrisFlowDependencyError(
-            f"fetch_mtbs_burn_severity unavailable: {exc}"
-        ) from exc
-
-    try:
-        layer = _fetch_mtbs(bbox=bbox)
-    except FetchError as exc:
-        raise DebrisFlowUpstreamError(
-            f"MTBS burned-area query failed for bbox={bbox}: {exc}"
-        ) from exc
-    local = _stage_uri_local(layer.uri, tmpdir, "mtbs")
-
-    try:
-        import geopandas as gpd
-    except ImportError as exc:
-        raise DebrisFlowDependencyError(f"geopandas unavailable: {exc}") from exc
-    try:
-        gdf = gpd.read_file(local)
-    except Exception as exc:  # noqa: BLE001
-        raise DebrisFlowUpstreamError(
-            f"could not read MTBS FlatGeobuf {local!r}: {exc}"
-        ) from exc
-    if len(gdf) == 0:
-        raise NoBurnDataError(
-            f"No MTBS-mapped fire intersects the AOI {bbox!r}. The post-fire "
-            "debris-flow models (Staley 2017 M1 + Gartner 2014) only apply to "
-            "BURNED terrain -- pick an AOI over a mapped fire, or pass "
-            "severity_uri with a BARC4/dNBR burn-severity raster."
-        )
-
-    try:
-        from rasterio.features import rasterize
-    except ImportError as exc:
-        raise DebrisFlowDependencyError(f"rasterio unavailable: {exc}") from exc
-
-    try:
-        gdf = gdf.set_crs(4326, allow_override=False) if gdf.crs is None else gdf
-        gdf = gdf.to_crs(dem.crs)
-        shapes = [(geom, 3) for geom in gdf.geometry if geom is not None and not geom.is_empty]
-        burned = rasterize(
-            shapes,
-            out_shape=dem.shape,
-            transform=dem.affine,
-            fill=1,  # unburned
-            dtype=np.int16,
-        )
-    except Exception as exc:  # noqa: BLE001
-        raise DebrisFlowUpstreamError(
-            f"rasterizing MTBS perimeters onto the DEM grid failed: {exc}"
-        ) from exc
-
-    barc4 = Raster.from_array(burned.astype(np.int16), spatial=dem, nodata=0)
-    dnbr_arr = np.where(burned == 3, _DNBR_BY_BARC4[3], 0.0).astype(np.float32)
-    dnbr = Raster.from_array(dnbr_arr, spatial=dem, nodata=-32768.0)
-    fire_names = [
-        str(n) for n in gdf.get("FIRE_NAME", []) if isinstance(n, str) and n.strip()
-    ][:5]
-    notes.append(
-        "Burn severity FALLBACK: MTBS supplies fire-perimeter polygons, not the "
-        "per-pixel BARC4 raster -- assumed uniform MODERATE severity (BARC4 "
-        f"class 3, dNBR {_DNBR_BY_BARC4[3]:.0f}) inside the mapped perimeter(s)"
-        + (f" ({', '.join(fire_names)})" if fire_names else "")
-        + ". Pass severity_uri with a real BARC4/dNBR raster for a calibrated run."
-    )
-    return barc4, dnbr
-
-
 def _load_kf(
-    bbox: tuple[float, float, float, float],
     kf_uri: str | None,
     dem: Any,
     tmpdir: str,
     notes: list[str],
 ) -> Any:
-    """Load the KF-factor raster (override / STATSGO KFFACT / constant fallback)."""
+    """The KF-factor raster the caller handed in, else a noted constant."""
     from pfdf.raster import Raster
 
     if kf_uri is not None:
@@ -439,32 +370,21 @@ def _load_kf(
                 f"could not open KF-factor raster {local!r}: {exc}"
             ) from exc
         _align_to_dem(kf, dem)
-        notes.append(f"KF-factor from caller-supplied kf_uri ({kf_uri}).")
+        notes.append(f"KF-factor from kf_uri ({kf_uri}).")
         return kf
 
-    try:
-
-        from trid3nt_server.tools import TOOL_REGISTRY
-        fetch_statsgo_soils = TOOL_REGISTRY["fetch_statsgo_soils"].fn
-
-        layer = fetch_statsgo_soils(bbox=bbox, field="KFFACT")
-        local = _stage_uri_local(layer.uri, tmpdir, "kf")
-        kf = Raster.from_file(local)
-        _align_to_dem(kf, dem)
-        notes.append("KF-factor: USGS STATSGO KFFACT (30 m) via fetch_statsgo_soils.")
-        return kf
-    except Exception as exc:  # noqa: BLE001 -- documented constant fallback
-        kf = Raster.from_array(
-            np.full(dem.shape, _KF_CONSTANT_FALLBACK, dtype=np.float32),
-            spatial=dem,
-            nodata=-1.0,
-        )
-        notes.append(
-            f"KF-factor FALLBACK: STATSGO KFFACT unavailable ({exc}); using a "
-            f"constant KF-factor of {_KF_CONSTANT_FALLBACK} across the AOI. "
-            "Pass kf_uri for soil-resolved results."
-        )
-        return kf
+    kf = Raster.from_array(
+        np.full(dem.shape, _KF_CONSTANT_FALLBACK, dtype=np.float32),
+        spatial=dem,
+        nodata=-1.0,
+    )
+    notes.append(
+        f"KF-factor FALLBACK: no kf_uri given; using a constant KF-factor of "
+        f"{_KF_CONSTANT_FALLBACK} across the AOI. Fetch STATSGO KFFACT "
+        "(fetch_statsgo_soils, field=KFFACT) and pass kf_uri for soil-resolved "
+        "results."
+    )
+    return kf
 
 
 
@@ -483,11 +403,11 @@ def _write_segments_geojson(
             f.write(payload)
         return path
     try:
-        from trid3nt_server.workflows.solver.solver import _get_runs_bucket, _get_s3_client
+        from trid3nt_server import storage
 
-        bucket = _get_runs_bucket()
+        bucket = storage.runs_bucket()
         key = f"debris-flow-{seed}/{filename}"
-        _get_s3_client().put_object(
+        storage.client().put_object(
             Bucket=bucket,
             Key=key,
             Body=payload,
@@ -504,14 +424,13 @@ def _write_segments_geojson(
 
 @register_tool(
     _METADATA,
-    # Writes only its own run artifact; open-world when fetching its inputs.
-    open_world_hint=True,
+    # Writes only its own run artifact over layers it was handed.
+    open_world_hint=False,
 )
 def model_debris_flow(
-    bbox: tuple[float, float, float, float],
+    dem_uri: str,
+    severity_uri: str,
     rainfall_intensity_mm_h: float = 24.0,
-    dem_uri: str | None = None,
-    severity_uri: str | None = None,
     kf_uri: str | None = None,
     min_burned_fraction: float = 0.01,
     *,
@@ -525,21 +444,22 @@ def model_debris_flow(
     burn scar. The chain is DEM -> watershed -> stream segments -> Staley 2017
     LIKELIHOOD -> Gartner 2014 VOLUME -> Cannon 2010 HAZARD class. Not for
     unburned terrain, nor for rainfall flooding (``telemac_rain_on_grid``).
+    Fetch the layers first and pass their uris: the DEM
+    (``fetch_copernicus_dem``), the burn severity (``fetch_mtbs_burn_severity``
+    or a BARC4/dNBR raster), and for soil-resolved KF the STATSGO KFFACT raster
+    (``fetch_statsgo_soils``, field=KFFACT).
 
     Params:
-        bbox: EPSG:4326, clamped to 0.15 deg per side.
+        dem_uri: the DEM layer, at most 0.15 deg per side.
+        severity_uri: a BARC4 class raster or a continuous dNBR raster.
         rainfall_intensity_mm_h: peak 15-min design storm, default 24, driving
             both models.
-        dem_uri: override DEM; default Copernicus GLO-30.
-        severity_uri: override BARC4 or dNBR raster; default MTBS perimeters
-            at uniform moderate severity.
-        kf_uri: override soil KF raster; default STATSGO, then a noted 0.2.
+        kf_uri: soil KF raster; absent, a noted constant 0.2.
         min_burned_fraction: burned fraction below which it refuses.
 
     Returns GeoJSON LineStrings carrying ``likelihood``, ``volume_m3`` and
     ``hazard_class`` per segment, with per-class counts and honest notes.
     """
-    q_bbox = _validate_bbox(bbox)
     intensity = _validate_intensity(rainfall_intensity_mm_h)
     try:
         min_burned = float(min_burned_fraction)
@@ -564,13 +484,17 @@ def model_debris_flow(
 
     notes: list[str] = []
 
+    if not isinstance(severity_uri, str) or not severity_uri.strip():
+        raise DebrisFlowInputError(
+            "severity_uri is required: fetch the burn severity first "
+            "(fetch_mtbs_burn_severity over the AOI, or a BARC4/dNBR raster) and "
+            "pass its uri."
+        )
+
     with tempfile.TemporaryDirectory(prefix="trid3nt_debris_flow_") as tmpdir:
-        dem = _load_dem(q_bbox, dem_uri, tmpdir, notes)
-        if severity_uri is not None:
-            barc4, dnbr = _severity_from_uri(severity_uri, dem, tmpdir, notes)
-        else:
-            barc4, dnbr = _severity_from_mtbs(q_bbox, dem, tmpdir, notes)
-        kf = _load_kf(q_bbox, kf_uri, dem, tmpdir, notes)
+        dem, q_bbox = _load_dem(dem_uri, tmpdir, notes)
+        barc4, dnbr = _severity_from_uri(severity_uri, dem, tmpdir, notes)
+        kf = _load_kf(kf_uri, dem, tmpdir, notes)
 
         try:
             isburned = pfdf_severity.mask(barc4, ["low", "moderate", "high"])
@@ -585,8 +509,7 @@ def model_debris_flow(
                 f"Burned fraction of the AOI is {burned_fraction:.4f} "
                 f"(< min_burned_fraction={min_burned}). The post-fire "
                 "debris-flow models only apply to BURNED terrain -- pick an "
-                "AOI over a mapped fire, or pass severity_uri with a "
-                "BARC4/dNBR burn-severity raster."
+                "AOI over a mapped fire and pass its severity raster."
             )
 
         try:

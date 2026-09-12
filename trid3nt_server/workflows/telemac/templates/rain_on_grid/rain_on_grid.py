@@ -33,7 +33,7 @@ from trid3nt_server.workflows.telemac.modules.telemac2d import (
     Rain,
     Rating,
 )
-from trid3nt_server.workflows.telemac.solving.solve import compute_class
+from trid3nt_server.workflows.solver.compute_class import compute_class
 from trid3nt_server.workflows.telemac.templates.rain_on_grid.declarations import (
     DOC,
     LANDCOVER_CN_MANNING,
@@ -50,7 +50,7 @@ __all__ = ["ANSWER", "CAPTIONS", "DATA", "MESH", "OUTPUTS", "PARAMS", "STEERING"
 
 _AUTHORING = "trid3nt_server.workflows.telemac.authoring"
 _TEMPLATE = "trid3nt_server.workflows.telemac.templates.rain_on_grid"
-_SOLVING = "trid3nt_server.workflows.telemac.solving.solve"
+_ENGINE = "trid3nt_server.workflows.telemac.engine"
 
 _CODE = "TELEMAC_ROG_PARAMS_INVALID"
 
@@ -307,7 +307,7 @@ telemac_rain_on_grid = register_workflow(
                             "output_interval_min": ParamRef("output_interval_min")}),
         results=(_RESULT,),
         steering_file=_STEERING_FILE, prefix="telemac_rog",
-        dispatch=f"{_SOLVING}.solve_case", compute_class=P.compute_class,
+        dispatch=f"{_ENGINE}.solve_case", compute_class=P.compute_class,
         outputs=OUTPUTS, captions=CAPTIONS, answer=ANSWER,
         review_title="Review the storm, the catchment and the mesh band"),
     data=DATA,

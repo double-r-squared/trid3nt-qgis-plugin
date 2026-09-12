@@ -198,54 +198,6 @@ def _load_observations_from_uri(observations_layer_uri: str, tmpdir: str) -> Any
     return gdf
 
 
-def _fetch_observations_from_bbox(
-    bbox: tuple[float, float, float, float], tmpdir: str, notes: list[str]
-) -> Any:
-    """USGS groundwater readings over ``bbox`` as a GeoDataFrame, resolved through
-    the in-process router rather than the LLM-facing wrapper.
-    """
-    import geopandas as gpd
-
-    from trid3nt_server.tools.fetchers._router import router
-    from trid3nt_server.tools.fetchers._router.errors import RouterError
-    from trid3nt_server.tools.fetchers._router.registration import get_spec
-
-    spec = get_spec("fetch_usgs_groundwater_levels")
-    if spec is None:
-        raise ResidualsUpstreamError(
-            "fetch_usgs_groundwater_levels spec is not registered; cannot fetch observations"
-        )
-    try:
-        params = router.validate_params(spec, {"bbox": list(bbox)})
-        fgb_bytes = router.select_executor(spec)(spec, params)
-    except RouterError as exc:
-        ec = getattr(exc, "error_code", "") or ""
-        if ec.endswith("NO_WELLS"):
-            raise ResidualsNoObservationsError(
-                f"no USGS groundwater observations available for bbox={bbox!r}: {exc}"
-            ) from exc
-        if not getattr(exc, "retryable", True):
-            raise ResidualsInputError(str(exc)) from exc
-        raise ResidualsUpstreamError(str(exc)) from exc
-
-    local = os.path.join(tmpdir, "usgs_groundwater_levels.fgb")
-    with open(local, "wb") as f:
-        f.write(fgb_bytes)
-    try:
-        gdf = gpd.read_file(local)
-    except Exception as exc:  # noqa: BLE001
-        raise ResidualsUpstreamError(
-            f"could not read the fetched USGS groundwater FlatGeobuf: {exc}"
-        ) from exc
-    notes.append(
-        f"Observations: USGS groundwater monitoring wells via "
-        f"fetch_usgs_groundwater_levels over bbox={tuple(round(v, 4) for v in bbox)}."
-    )
-    return gdf
-
-
-
-
 def _resolve_observed_field(gdf: Any, observed_value_field: str | None) -> str:
     """Pick the observed-value column: caller-supplied verbatim, else auto."""
     columns = [c for c in gdf.columns if c != "geometry"]
@@ -380,11 +332,11 @@ def _write_output(payload: bytes, seed: str, output_dir: str | None) -> str:
             f.write(payload)
         return path
     try:
-        from trid3nt_server.workflows.solver.solver import _get_runs_bucket, _get_s3_client
+        from trid3nt_server import storage
 
-        bucket = _get_runs_bucket()
+        bucket = storage.runs_bucket()
         key = f"model-residuals-{seed}/{filename}"
-        _get_s3_client().put_object(
+        storage.client().put_object(
             Bucket=bucket,
             Key=key,
             Body=payload,
@@ -414,17 +366,12 @@ def _build_legend(max_abs_residual: float, units: str | None) -> LegendKey:
 
 @register_tool(
     _METADATA,
-    # Annotations: may fetch its own USGS groundwater observations (external
-    # API) when observations_layer_uri is not passed -- the same
-    # input-fetching-composer shape as compute_flood_depth_damage, so
-    # open_world_hint=True is honest (listed in
-    # test_tool_annotations._OPEN_WORLD_COMPUTE_EXCEPTIONS).
-    open_world_hint=True,
+    # Reads two layers it was handed; nothing external.
+    open_world_hint=False,
 )
 def compute_model_residuals(
     model_layer_uri: str,
-    observations_layer_uri: str | None = None,
-    bbox: tuple[float, float, float, float] | None = None,
+    observations_layer_uri: str,
     observed_value_field: str | None = None,
     *,
     _output_dir: str | None = None,
@@ -437,7 +384,9 @@ def compute_model_residuals(
     COG against USGS wells, a plume COG against measured concentrations. Samples
     bilinearly in the footprint and returns ``observed - simulated`` per point
     plus mean error, RMSE, MAE and bias. Not for zonal aggregation, for running
-    the model, or for a model-to-model diff, which has no observations.
+    the model, or for a model-to-model diff, which has no observations. Fetch
+    the observations first (``fetch_usgs_groundwater_levels`` over the model's
+    bbox, or any point layer of measurements) and pass their uri.
 
     UNITS: the result ALWAYS carries a ``units_warning``. USGS depth-to-water is
     NOT an elevation, so it is not a valid residual against a head raster
@@ -445,22 +394,18 @@ def compute_model_residuals(
 
     Params:
         model_layer_uri: the MODEL raster to evaluate, any single band.
-        observations_layer_uri: a point layer of real measurements. Exactly
-            one of this and ``bbox`` is required.
-        bbox: EPSG:4326; USGS groundwater observations are fetched over it.
+        observations_layer_uri: a point layer of real measurements.
         observed_value_field: taken VERBATIM when given, else auto-detected.
     """
     if not isinstance(model_layer_uri, str) or not model_layer_uri.strip():
         raise ResidualsInputError(
             f"model_layer_uri must be a non-empty URI string; got {model_layer_uri!r}"
         )
-    has_layer = isinstance(observations_layer_uri, str) and observations_layer_uri.strip()
-    has_bbox = bbox is not None
-    if not has_layer and not has_bbox:
+    if not isinstance(observations_layer_uri, str) or not observations_layer_uri.strip():
         raise ResidualsInputError(
-            "compute_model_residuals requires either observations_layer_uri "
-            "(an existing point layer) or bbox (to fetch USGS groundwater "
-            "observations directly)."
+            "observations_layer_uri is required: fetch the observations first "
+            "(fetch_usgs_groundwater_levels over the model's bbox) and pass "
+            "the point layer's uri."
         )
 
     try:
@@ -503,14 +448,10 @@ def compute_model_residuals(
             src.close()
 
         # ---- Load observations. --------------------------------------
-        if has_layer:
-            gdf = _load_observations_from_uri(observations_layer_uri, tmpdir)  # type: ignore[arg-type]
-            notes.append(
-                f"Observations from caller-supplied observations_layer_uri "
-                f"({observations_layer_uri})."
-            )
-        else:
-            gdf = _fetch_observations_from_bbox(bbox, tmpdir, notes)  # type: ignore[arg-type]
+        gdf = _load_observations_from_uri(observations_layer_uri, tmpdir)
+        notes.append(
+            f"Observations from observations_layer_uri ({observations_layer_uri})."
+        )
 
         if len(gdf) == 0:
             raise ResidualsNoObservationsError(

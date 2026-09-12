@@ -12,6 +12,7 @@ import os
 
 import pytest
 
+from trid3nt_server import storage
 from trid3nt_server.tools import TOOL_REGISTRY
 from trid3nt_server.workflows.solver import solver
 from trid3nt_server.workflows.solver import diagnostics as _diag
@@ -188,8 +189,8 @@ class _FakeS3:
 @pytest.fixture
 def _reset_solver_seams():
     yield
-    solver.set_s3_client(None)
-    solver.set_runs_bucket(None)
+    storage.set_client(None)
+    storage.set_runs_bucket(None)
 
 
 def test_production_s3_resolution_reads_via_solver_seam(_reset_solver_seams):
@@ -204,8 +205,8 @@ def test_production_s3_resolution_reads_via_solver_seam(_reset_solver_seams):
         fake.objects[(bucket, f"{_TELEMAC_FAIL_RID}/{name}")] = open(
             os.path.join(src, name), "rb"
         ).read()
-    solver.set_s3_client(fake)
-    solver.set_runs_bucket(bucket)
+    storage.set_client(fake)
+    storage.set_runs_bucket(bucket)
 
     # Resolve from an s3 OBJECT uri beneath the run prefix (no _run_dir).
     handle = f"s3://{bucket}/{_TELEMAC_FAIL_RID}/full_listing.log"
@@ -220,7 +221,7 @@ def test_production_s3_resolution_reads_via_solver_seam(_reset_solver_seams):
 
 def test_write_local_completion_records_the_engine_field(_reset_solver_seams):
     fake = _FakeS3()
-    solver.set_s3_client(fake)
+    storage.set_client(fake)
     solver._write_local_completion(
         fake,
         runs_bucket="trid3nt-runs",

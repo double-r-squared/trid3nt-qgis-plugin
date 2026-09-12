@@ -77,13 +77,15 @@ def test_an_unknown_rung_refuses_rather_than_substituting() -> None:
 
     Seating one gave a caller who asked for 'xlarge' a medium solve with no provenance
     row saying so."""
-    from trid3nt_server.workflows.telemac.errors import TelemacError
-    from trid3nt_server.workflows.telemac.solving.solve import compute_class
+    from trid3nt_server.workflows.solver.compute_class import (
+        ComputeClassUnknown,
+        compute_class,
+    )
 
     coerce = compute_class()
-    with pytest.raises(TelemacError) as excinfo:
+    with pytest.raises(ComputeClassUnknown) as excinfo:
         coerce({"compute_class": "enormous"})
-    assert excinfo.value.error_code == "TELEMAC_COMPUTE_CLASS_UNKNOWN"
+    assert excinfo.value.error_code == "COMPUTE_CLASS_UNKNOWN"
     assert "enormous" in str(excinfo.value)
     assert coerce({"compute_class": "  Small "}) == {"compute_class": "small"}
 
@@ -92,6 +94,6 @@ def test_an_unknown_rung_refuses_rather_than_substituting() -> None:
                                   {"compute_class": ""}, {"compute_class": "   "}])
 def test_compute_class_abstains_when_absent(args: dict) -> None:
     """Absent, null, and blank are the same non-answer: emit nothing."""
-    from trid3nt_server.workflows.telemac.solving.solve import compute_class
+    from trid3nt_server.workflows.solver.compute_class import compute_class
 
     assert compute_class()(args) == {}

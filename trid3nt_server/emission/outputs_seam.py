@@ -73,13 +73,11 @@ def read_outputs_manifest(run_result: Any) -> OutputsManifest | None:
     if not run_id:
         return None
     try:
-        from trid3nt_server.workflows.solver.solver import (
-            _get_runs_bucket,
-            _read_object_bytes,
-        )
+        from trid3nt_server import storage
+        from trid3nt_server.workflows.solver.solver import _read_object_bytes
         from trid3nt_contracts.outputs_manifest import OUTPUTS_MANIFEST_BASENAME
 
-        runs_bucket = _get_runs_bucket()
+        runs_bucket = storage.runs_bucket()
         uri = f"s3://{runs_bucket}/{run_id}/{OUTPUTS_MANIFEST_BASENAME}"
         raw = _read_object_bytes(uri)
     except Exception as exc:  # noqa: BLE001 -- absent/unreadable -> no-op fallback

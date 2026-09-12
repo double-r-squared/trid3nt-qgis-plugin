@@ -101,7 +101,7 @@ def _write_and_read_mesh_layers(
     """Write ``outputs.json`` then read it back into the seam's mesh LayerURIs.
 
     Runs off the event loop; ``[]`` on any miss."""
-    from trid3nt_server.workflows.solver.solver import _get_runs_bucket
+    from trid3nt_server import storage
     from trid3nt_server.emission.outputs_seam import (
         build_layers_from_outputs,
         read_outputs_manifest,
@@ -109,7 +109,7 @@ def _write_and_read_mesh_layers(
     from .manifest import write_outputs_manifest
     import types as _types
 
-    runs_bucket = _get_runs_bucket()
+    runs_bucket = storage.runs_bucket()
     mesh_uri = f"s3://{runs_bucket}/{run_id}/{mesh_basename}"
     entries = _build_entries(
         run_id=run_id,

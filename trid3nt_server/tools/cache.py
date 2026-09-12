@@ -278,10 +278,10 @@ def _read_through_s3(
     the sidecar is replayed on a hit and written on a miss; without one, no-op."""
     from botocore.exceptions import ClientError
 
-    from trid3nt_server.workflows.solver.solver import _get_s3_client
+    from trid3nt_server import storage
 
     bucket, obj_key = _split_s3_uri(uri)
-    s3 = _get_s3_client()
+    s3 = storage.client()
     if not force_refresh:
         try:
             resp = s3.get_object(Bucket=bucket, Key=obj_key)

@@ -12,6 +12,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server import storage
 from trid3nt_server.workflows.solver.solver import (
     NFR_P_4_TARGET_SECONDS,
     PROGRESS_CLAMP_MAX,
@@ -20,8 +21,6 @@ from trid3nt_server.workflows.solver.solver import (
     _progress_percent,
     run_solver,
     set_emitter_binding,
-    set_runs_bucket,
-    set_s3_client,
 )
 
 
@@ -32,14 +31,14 @@ def reset_solver_di_seams():
     """Reset the module-level DI handles before and after each test so the
     bindings from one test don't leak into the next."""
     set_emitter_binding(None)
-    set_runs_bucket(None)
-    set_s3_client(None)
+    storage.set_runs_bucket(None)
+    storage.set_client(None)
     try:
         yield
     finally:
         set_emitter_binding(None)
-        set_runs_bucket(None)
-        set_s3_client(None)
+        storage.set_runs_bucket(None)
+        storage.set_client(None)
 
 
 

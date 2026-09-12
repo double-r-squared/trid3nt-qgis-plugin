@@ -320,6 +320,18 @@ def _resample_to_grid(
 
 
 
+def _raster_bbox_4326(src: Any) -> tuple[float, float, float, float]:
+    """An open raster's extent in EPSG:4326."""
+    from rasterio.warp import transform_bounds
+
+    if src.crs is None:
+        raise SedimentYieldInputError("the DEM raster carries no CRS.")
+    if src.crs.to_epsg() == 4326:
+        b = src.bounds
+        return (float(b.left), float(b.bottom), float(b.right), float(b.top))
+    return tuple(float(v) for v in transform_bounds(src.crs, "EPSG:4326", *src.bounds))
+
+
 def _cell_size_m(dem_src: Any) -> tuple[float, float]:
     """``(dx_m, dy_m)`` cell size in METRES: the transform's own pixel sizes on a
     projected CRS, converted at the centre latitude on a geographic one.
@@ -373,41 +385,28 @@ def _ls_factor(dem: np.ndarray, dx_m: float, dy_m: float, notes: list[str]) -> n
 
 
 def _load_k(
-    bbox: tuple[float, float, float, float],
     k_uri: str | None,
     dem_src: Any,
     tmpdir: str,
     notes: list[str],
 ) -> np.ndarray:
-    """The K-factor grid: ``k_uri``, else STATSGO KFFACT, else a noted constant."""
+    """The K-factor grid: ``k_uri``, else a noted constant."""
     if k_uri is not None:
         local = _stage_uri_local(k_uri, tmpdir, "k")
         k = _resample_to_grid(local, "k", dem_src, categorical=False)
-        notes.append(f"K-factor from caller-supplied k_uri ({k_uri}).")
+        notes.append(f"K-factor from k_uri ({k_uri}).")
         return k
-    try:
-        # Registry seam: fetch_statsgo_soils is now a spec-driven
-        # library-delegate router tool (pfdf), resolved by name (twin deleted).
-        from trid3nt_server.tools import TOOL_REGISTRY
-        fetch_statsgo_soils = TOOL_REGISTRY["fetch_statsgo_soils"].fn
-
-        layer = fetch_statsgo_soils(bbox=bbox, field="KFFACT")
-        local = _stage_uri_local(layer.uri, tmpdir, "k")
-        k = _resample_to_grid(local, "k", dem_src, categorical=False)
-        notes.append("K-factor: USGS STATSGO KFFACT (30 m) via fetch_statsgo_soils.")
-        return k
-    except Exception as exc:  # noqa: BLE001 -- documented constant fallback
-        notes.append(
-            f"K-factor FALLBACK: STATSGO KFFACT unavailable ({exc}); using a "
-            f"constant K-factor of {_K_CONSTANT_FALLBACK} across the AOI. "
-            "Pass k_uri for soil-resolved results."
-        )
-        return np.full(dem_src.shape, _K_CONSTANT_FALLBACK, dtype=np.float64)
+    notes.append(
+        f"K-factor FALLBACK: no k_uri given; using a constant K-factor of "
+        f"{_K_CONSTANT_FALLBACK} across the AOI. Fetch STATSGO KFFACT "
+        "(fetch_statsgo_soils, field=KFFACT) and pass k_uri for soil-resolved "
+        "results."
+    )
+    return np.full(dem_src.shape, _K_CONSTANT_FALLBACK, dtype=np.float64)
 
 
 def _load_c(
-    bbox: tuple[float, float, float, float],
-    landcover_uri: str | None,
+    landcover_uri: Any,
     dem_src: Any,
     tmpdir: str,
     notes: list[str],
@@ -415,29 +414,13 @@ def _load_c(
     """The C-factor grid, mapped from IO LULC classes; a class carrying no cover
     information stays NaN rather than taking a fabricated factor.
     """
-    if landcover_uri is not None:
-        local = _stage_uri_local(landcover_uri, tmpdir, "landcover")
-        source_note = f"C-factor land cover from caller-supplied landcover_uri ({landcover_uri})"
-    else:
-        try:
-            # data-router fold: fetch_esri_landcover_10m is now a promoted
-            # spec-driven tool -- resolve the callable seam by registry name.
-            from trid3nt_server.tools import TOOL_REGISTRY as _TR
-
-            _lc = _TR.get("fetch_esri_landcover_10m")
-            if _lc is None:
-                raise SedimentYieldUpstreamError("fetch_esri_landcover_10m is not registered")
-            layer = _lc.fn(bbox=bbox)
-        except SedimentYieldError:
-            raise
-        except Exception as exc:  # noqa: BLE001
-            raise SedimentYieldUpstreamError(
-                f"fetch_esri_landcover_10m failed for bbox={bbox}: {exc}"
-            ) from exc
-        local = _stage_uri_local(layer.uri, tmpdir, "landcover")
-        source_note = (
-            "C-factor land cover: Esri/IO 10 m annual LULC via fetch_esri_landcover_10m"
+    if not isinstance(landcover_uri, str) or not landcover_uri.strip():
+        raise SedimentYieldInputError(
+            "landcover_uri is required: fetch_esri_landcover_10m over the DEM's "
+            "extent and pass its uri."
         )
+    local = _stage_uri_local(landcover_uri, tmpdir, "landcover")
+    source_note = f"C-factor land cover from landcover_uri ({landcover_uri})"
     classes = _resample_to_grid(local, "landcover", dem_src, categorical=True)
 
     c = np.full(dem_src.shape, np.nan, dtype=np.float64)
@@ -505,11 +488,11 @@ def _write_output(payload: bytes, seed: str, output_dir: str | None) -> str:
             f.write(payload)
         return path
     try:
-        from trid3nt_server.workflows.solver.solver import _get_runs_bucket, _get_s3_client
+        from trid3nt_server import storage
 
-        bucket = _get_runs_bucket()
+        bucket = storage.runs_bucket()
         key = f"sediment-yield-{seed}/{filename}"
-        _get_s3_client().put_object(
+        storage.client().put_object(
             Bucket=bucket,
             Key=key,
             Body=payload,
@@ -543,41 +526,40 @@ def _build_legend() -> LegendKey:
 
 @register_tool(
     _METADATA,
-    # Annotations: writes only its own run artifact; open-world when fetching
-    # DEM / STATSGO / land-cover inputs.
-    open_world_hint=True,
+    # Writes only its own run artifact over layers it was handed.
+    open_world_hint=False,
 )
 def compute_sediment_yield(
-    bbox: tuple[float, float, float, float],
+    dem_uri: str,
+    landcover_uri: str,
     rainfall_erosivity: float | None = None,
-    dem_uri: str | None = None,
     k_uri: str | None = None,
-    landcover_uri: str | None = None,
     *,
     _output_dir: str | None = None,
     # absorb LLM-invented kwargs.
     **_extra_ignored: Any,
 ) -> SedimentYieldLayerURI:
-    """Map annual soil loss over an AOI with the RUSLE erosion model (A = R*K*LS*C*P, t/ha/yr).
+    """Map annual soil loss over a DEM with the RUSLE erosion model (A = R*K*LS*C*P, t/ha/yr).
 
     Use for where erosion is worst in a watershed, soil-loss maps for fields,
     erosion risk after land-use change, sediment-source screening above a
     reservoir. Hillslope sheet and rill erosion only: not in-channel transport,
     not post-fire debris flows (``model_debris_flow``), and not a single storm -
-    RUSLE is a long-term ANNUAL average.
+    RUSLE is a long-term ANNUAL average. Fetch the layers first and pass their
+    uris: the DEM (``fetch_copernicus_dem``), the land cover
+    (``fetch_esri_landcover_10m``), and for soil-resolved K the STATSGO KFFACT
+    raster (``fetch_statsgo_soils``, field=KFFACT).
 
     Params:
-        bbox: EPSG:4326, clamped to 0.2 deg per side.
+        dem_uri: the DEM layer, at most 0.2 deg per side.
+        landcover_uri: an Esri/IO 10 m LULC raster over the same extent.
         rainfall_erosivity: R in MJ mm/(ha h yr); the default is a noted
             constant 300 - pass the local R for absolute accuracy.
-        dem_uri: override DEM; default Copernicus GLO-30.
-        k_uri: override K raster; default STATSGO KFFACT, then a noted 0.2.
-        landcover_uri: override; default ``fetch_esri_landcover_10m``.
+        k_uri: K-factor raster; absent, a noted constant 0.2.
 
     Returns raw t/ha/yr with headline statistics and honest notes. Slope length
     is the cell size and P is 1.0, so this maps hot spots, not design values.
     """
-    q_bbox = _validate_bbox(bbox)
     notes: list[str] = []
     r_factor = _validate_erosivity(rainfall_erosivity, notes)
 
@@ -586,25 +568,17 @@ def compute_sediment_yield(
     except ImportError as exc:
         raise SedimentYieldDependencyError(f"rasterio not importable: {exc}") from exc
 
-    with tempfile.TemporaryDirectory(prefix="trid3nt_sediment_yield_") as tmpdir:
-        if dem_uri is not None:
-            dem_local = _stage_uri_local(dem_uri, tmpdir, "dem")
-            notes.append(f"DEM from caller-supplied dem_uri ({dem_uri}).")
-        else:
-            try:
-                from trid3nt_server.tools import TOOL_REGISTRY
+    if not isinstance(dem_uri, str) or not dem_uri.strip():
+        raise SedimentYieldInputError(
+            "dem_uri is required: fetch_copernicus_dem over the AOI and pass its uri."
+        )
 
-                layer = TOOL_REGISTRY["fetch_copernicus_dem"].fn(bbox=q_bbox)
-            except SedimentYieldError:
-                raise
-            except Exception as exc:  # noqa: BLE001
-                raise SedimentYieldUpstreamError(
-                    f"fetch_copernicus_dem failed for bbox={q_bbox}: {exc}"
-                ) from exc
-            dem_local = _stage_uri_local(layer.uri, tmpdir, "dem")
-            notes.append("DEM: Copernicus GLO-30 (30 m) via fetch_copernicus_dem.")
+    with tempfile.TemporaryDirectory(prefix="trid3nt_sediment_yield_") as tmpdir:
+        dem_local = _stage_uri_local(dem_uri, tmpdir, "dem")
+        notes.append(f"DEM from dem_uri ({dem_uri}).")
         dem, dem_src = _open_band(dem_local, "dem")
         try:
+            q_bbox = _validate_bbox(_raster_bbox_4326(dem_src))
             if not np.isfinite(dem).any():
                 raise SedimentYieldInputError(
                     f"DEM raster {dem_local!r} has no valid cells over the AOI."
@@ -613,8 +587,8 @@ def compute_sediment_yield(
 
             dx_m, dy_m = _cell_size_m(dem_src)
             ls = _ls_factor(dem, dx_m, dy_m, notes)
-            k = _load_k(q_bbox, k_uri, dem_src, tmpdir, notes)
-            c = _load_c(q_bbox, landcover_uri, dem_src, tmpdir, notes)
+            k = _load_k(k_uri, dem_src, tmpdir, notes)
+            c = _load_c(landcover_uri, dem_src, tmpdir, notes)
 
 
             a = r_factor * k * ls * c * _P_FACTOR

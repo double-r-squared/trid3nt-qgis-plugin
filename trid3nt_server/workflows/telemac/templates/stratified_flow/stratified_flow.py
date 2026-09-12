@@ -23,7 +23,7 @@ from trid3nt_server.workflows.telemac.modules.telemac3d import (
     VerticalGrid,
     Wind,
 )
-from trid3nt_server.workflows.telemac.solving.solve import compute_class
+from trid3nt_server.workflows.solver.compute_class import compute_class
 from trid3nt_server.workflows.telemac.templates.stratified_flow.declarations import (
     BASIN_HALF_DEG,
     DOC,
@@ -37,7 +37,7 @@ __all__ = ["ANSWER", "CAPTIONS", "DATA", "MESH", "OUTPUTS", "PARAMS", "STEERING"
 
 _AUTHORING = "trid3nt_server.workflows.telemac.authoring"
 _TEMPLATE = "trid3nt_server.workflows.telemac.templates.stratified_flow"
-_SOLVING = "trid3nt_server.workflows.telemac.solving.solve"
+_ENGINE = "trid3nt_server.workflows.telemac.engine"
 
 #: What the run directory holds the run's files under - the deck's own 3D and 2D
 #: RESULT FILE statements. The 3D file is the answer; the 2D file is the depth
@@ -293,7 +293,7 @@ telemac3d_stratified_flow = register_workflow(
                             "result_basename": _RESULT_3D}),
         results=(_RESULT_3D, _RESULT_2D),
         steering_file=_STEERING_FILE, prefix="telemac3d",
-        dispatch=f"{_SOLVING}.solve_case", compute_class=P.compute_class,
+        dispatch=f"{_ENGINE}.solve_case", compute_class=P.compute_class,
         outputs=OUTPUTS, captions=CAPTIONS, answer=ANSWER,
         review_title="Review the prescribed column, the wind and the mesh"),
     data=DATA,

@@ -195,55 +195,24 @@ def _stage_uri_local(uri: str, tmpdir: str, label: str) -> str:
     return uri
 
 
-def _load_assets(
-    assets_uri: str | None,
-    raster_bbox_4326: tuple[float, float, float, float],
-    tmpdir: str,
-    notes: list[str],
-) -> Any:
-    """Structure points: caller-supplied ``assets_uri`` or NSI over the bounds."""
+def _load_assets(assets_uri: Any, tmpdir: str, notes: list[str]) -> Any:
+    """Structure points from the layer the caller handed in."""
     import geopandas as gpd
 
-    if assets_uri is not None:
-        local = _stage_uri_local(assets_uri, tmpdir, "assets")
-        try:
-            gdf = gpd.read_file(local)
-        except Exception as exc:  # noqa: BLE001
-            raise FloodDamageInputError(
-                f"could not open assets_uri {assets_uri!r}: {exc}"
-            ) from exc
-        notes.append(f"Structures from caller-supplied assets_uri ({assets_uri}).")
-    else:
-        west, south, east, north = raster_bbox_4326
-        span = max(east - west, north - south)
-        if span > 1.0:
-            raise FloodDamageInputError(
-                f"the depth raster spans {span:.2f} deg -- larger than the "
-                "USACE NSI ~1-degree query limit. Pass assets_uri, or clip the "
-                "depth raster (clip_raster_to_polygon) and re-run per tile."
-            )
-        try:
-            from trid3nt_server.tools import TOOL_REGISTRY
-
-            layer = TOOL_REGISTRY["fetch_usace_nsi"].fn(bbox=raster_bbox_4326)
-        except FloodDamageError:
-            raise
-        except Exception as exc:  # noqa: BLE001
-            raise FloodDamageUpstreamError(
-                f"fetch_usace_nsi failed over the depth raster bounds "
-                f"{raster_bbox_4326}: {exc}"
-            ) from exc
-        local = _stage_uri_local(layer.uri, tmpdir, "assets")
-        try:
-            gdf = gpd.read_file(local)
-        except Exception as exc:  # noqa: BLE001
-            raise FloodDamageUpstreamError(
-                f"could not open the fetched NSI FlatGeobuf: {exc}"
-            ) from exc
-        notes.append(
-            "Structures: USACE National Structure Inventory via fetch_usace_nsi "
-            f"over the depth raster bounds {tuple(round(v, 4) for v in raster_bbox_4326)}."
+    if not isinstance(assets_uri, str) or not assets_uri.strip():
+        raise FloodDamageInputError(
+            "assets_uri is required: fetch the structure inventory first "
+            "(fetch_usace_nsi over the depth raster's bounds, or fetch_buildings) "
+            "and pass its uri."
         )
+    local = _stage_uri_local(assets_uri, tmpdir, "assets")
+    try:
+        gdf = gpd.read_file(local)
+    except Exception as exc:  # noqa: BLE001
+        raise FloodDamageInputError(
+            f"could not open assets_uri {assets_uri!r}: {exc}"
+        ) from exc
+    notes.append(f"Structures from assets_uri ({assets_uri}).")
 
     if len(gdf) == 0:
         raise FloodDamageNoStructuresError(
@@ -278,11 +247,11 @@ def _write_output(payload: bytes, seed: str, output_dir: str | None) -> str:
             f.write(payload)
         return path
     try:
-        from trid3nt_server.workflows.solver.solver import _get_runs_bucket, _get_s3_client
+        from trid3nt_server import storage
 
-        bucket = _get_runs_bucket()
+        bucket = storage.runs_bucket()
         key = f"flood-depth-damage-{seed}/{filename}"
-        _get_s3_client().put_object(
+        storage.client().put_object(
             Bucket=bucket,
             Key=key,
             Body=payload,
@@ -299,13 +268,12 @@ def _write_output(payload: bytes, seed: str, output_dir: str | None) -> str:
 
 @register_tool(
     _METADATA,
-    # Fetches its own NSI structure inventory from the external USACE API
-    # unless assets_uri is passed, so open_world_hint=True is honest.
-    open_world_hint=True,
+    # Reads two layers it was handed; nothing external.
+    open_world_hint=False,
 )
 def compute_flood_depth_damage(
     depth_raster_uri: str,
-    assets_uri: str | None = None,
+    assets_uri: str,
     depth_units: str = "m",
     *,
     _output_dir: str | None = None,
@@ -318,14 +286,14 @@ def compute_flood_depth_damage(
     damage screen, or a scenario ranking. It reads a depth raster; it does NOT
     simulate the flood. HONEST SCOPE: one aggregate curve, structure value
     only, no contents or uncertainty - not a component-level assessment. Not
-    for non-flood hazards, nor outside NSI coverage without ``assets_uri``.
+    for non-flood hazards. Fetch the structures first (``fetch_usace_nsi`` over
+    the depth raster's bounds) and pass their uri.
 
     Params:
         depth_raster_uri: depth COG; positive is depth above ground, nodata
             or <= 0 is dry.
         assets_uri: structure points with optional ``val_struct``,
-            ``found_ht``, ``occtype``. Default ``fetch_usace_nsi`` over the
-            raster bounds, which must span 1 degree or less.
+            ``found_ht``, ``occtype`` (the NSI columns).
         depth_units: "m" (default) or "ft".
 
     Returns FlatGeobuf points carrying per-structure depth, damage fraction and
@@ -376,7 +344,7 @@ def compute_flood_depth_damage(
                 for v in transform_bounds(src.crs, "EPSG:4326", *src.bounds)
             )
 
-            gdf = _load_assets(assets_uri, bbox_4326, tmpdir, notes)
+            gdf = _load_assets(assets_uri, tmpdir, notes)
 
             # src.sample takes coordinates in the raster's own CRS.
             pts = gdf.to_crs(src.crs)

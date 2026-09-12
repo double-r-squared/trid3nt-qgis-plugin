@@ -213,11 +213,11 @@ def _vector_layer(read: Track, *, run_id: str, engine: str, name: str,
     """A track -> ONE GeoJSON in the run's store, as a vector layer on the map."""
     import json
 
-    from trid3nt_server.workflows.solver.solver import _get_runs_bucket, _get_s3_client
+    from trid3nt_server import storage
 
     quantity = quantity_of(caption)
-    bucket, key = _get_runs_bucket(), f"{run_id}/{quantity}.geojson"
-    _get_s3_client().put_object(Bucket=bucket, Key=key,
+    bucket, key = storage.runs_bucket(), f"{run_id}/{quantity}.geojson"
+    storage.client().put_object(Bucket=bucket, Key=key,
                                 Body=json.dumps(read.features).encode("utf-8"),
                                 ContentType="application/geo+json")
     points = [xy for feature in read.features.get("features", ())
@@ -246,7 +246,7 @@ def _station_layer(read: Series, *, run_id: str, engine: str, name: str,
     import json
     from datetime import datetime, timedelta
 
-    from trid3nt_server.workflows.solver.solver import _get_runs_bucket, _get_s3_client
+    from trid3nt_server import storage
 
     if read.lon is None or read.lat is None:
         raise ValueError(f"the series {read.name!r} was read {read.at}, which is "
@@ -271,8 +271,8 @@ def _station_layer(read: Series, *, run_id: str, engine: str, name: str,
                        "n_timesteps": len(rows),
                        "time_series_csv": "\n".join(rows) + "\n"},
     }
-    bucket, key = _get_runs_bucket(), f"{run_id}/{quantity}.geojson"
-    _get_s3_client().put_object(
+    bucket, key = storage.runs_bucket(), f"{run_id}/{quantity}.geojson"
+    storage.client().put_object(
         Bucket=bucket, Key=key,
         Body=json.dumps({"type": "FeatureCollection",
                          "features": [feature]}).encode("utf-8"),

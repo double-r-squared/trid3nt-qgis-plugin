@@ -18,11 +18,10 @@ import pytest
 from botocore.exceptions import ClientError
 
 import trid3nt_server.workflows.solver.solver as solver_mod
+from trid3nt_server import storage
 from trid3nt_server.workflows.solver.solver import (
     LOCAL_SOLVER_SPEC_REGISTRY,
     set_emitter_binding,
-    set_runs_bucket,
-    set_s3_client,
 )
 
 
@@ -56,18 +55,16 @@ class FakeS3Client:
 @pytest.fixture()
 def reset_seams():
     """Reset solver DI seams and in-flight run registry around each test."""
-    for setter in (set_s3_client,):
-        setter(None)
+    storage.set_client(None)
     set_emitter_binding(None)
-    set_runs_bucket(None)
+    storage.set_runs_bucket(None)
     solver_mod._LOCAL_RUNS.clear()
     try:
         yield
     finally:
-        for setter in (set_s3_client,):
-            setter(None)
+        storage.set_client(None)
         set_emitter_binding(None)
-        set_runs_bucket(None)
+        storage.set_runs_bucket(None)
         solver_mod._LOCAL_RUNS.clear()
 
 
@@ -127,7 +124,7 @@ def test_launch_writes_manifest_to_rundir(
     from trid3nt_server.workflows.solver.solver import launch_local_solver, LocalSolverSpec
 
     s3 = FakeS3Client()
-    set_s3_client(s3)
+    storage.set_client(s3)
 
     # Seed a minimal manifest.
     manifest = {
@@ -189,7 +186,7 @@ def test_subprocess_runner_exit0_produces_ok_completion(
     from trid3nt_server.workflows.solver.solver import launch_local_solver, LocalSolverSpec
 
     s3 = FakeS3Client()
-    set_s3_client(s3)
+    storage.set_client(s3)
 
     manifest = {
         "inputs": [],
@@ -242,7 +239,7 @@ def test_subprocess_runner_nonzero_exit_produces_error_completion(
     from trid3nt_server.workflows.solver.solver import launch_local_solver, LocalSolverSpec
 
     s3 = FakeS3Client()
-    set_s3_client(s3)
+    storage.set_client(s3)
 
     manifest = {"inputs": [], "build_spec": {}, "outputs": []}
     s3.objects[("b", "m.json")] = json.dumps(manifest).encode()
@@ -287,7 +284,7 @@ def test_env_overrides_set_in_subprocess_environment(
     from trid3nt_server.workflows.solver.solver import launch_local_solver, LocalSolverSpec
 
     s3 = FakeS3Client()
-    set_s3_client(s3)
+    storage.set_client(s3)
 
     manifest = {"inputs": [], "build_spec": {}, "outputs": []}
     s3.objects[("b", "env_test.json")] = json.dumps(manifest).encode()

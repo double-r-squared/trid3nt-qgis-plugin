@@ -42,9 +42,10 @@ def _patch_run(monkeypatch):
     in-memory body (no network). A ``None`` body = that object is absent."""
 
     def _install(*, outputs_text: str | None = None):
+        from trid3nt_server import storage
         from trid3nt_server.workflows.solver import solver
 
-        monkeypatch.setattr(solver, "_get_runs_bucket", lambda: "runs-bucket")
+        monkeypatch.setattr(storage, "runs_bucket", lambda: "runs-bucket")
 
         def _read(uri: str) -> bytes:
             if uri == _OUT_URI and outputs_text is not None:
@@ -152,27 +153,3 @@ def test_list_run_frames_is_registered() -> None:
     import trid3nt_server.tools as tools
 
     assert "list_run_frames" in tools.TOOL_REGISTRY
-
-
-def test_frame_uris_feed_code_exec_multiframe_contract(_patch_run) -> None:
-    """The frame_uris list is exactly a valid multi-frame layer_refs value for
-    code_exec_request (the contract round-trips it)."""
-    from trid3nt_contracts import new_ulid
-    from trid3nt_contracts.sandbox_contracts import CodeExecRequestPayload
-
-    _patch_run(
-        outputs_text=_outputs_json(
-            [
-                _entry("flood_depth", "Flood depth step 1", "s3://b/f0.tif", 60.0),
-                _entry("flood_depth", "Flood depth step 2", "s3://b/f1.tif", 120.0),
-            ]
-        )
-    )
-    out = list_run_frames("run-xyz", layer="flood_depth")
-
-    payload = CodeExecRequestPayload(
-        code_exec_id=new_ulid(),
-        python_code="result = len(frames)",
-        layer_refs={"frames": out["frame_uris"]},
-    )
-    assert payload.layer_refs["frames"] == ["s3://b/f0.tif", "s3://b/f1.tif"]

@@ -54,7 +54,7 @@ def _solved(run: dict[str, Any] | None = None, body: Any = T2D) -> Solved:
 def solved(monkeypatch, telemac_result):
     _reach(telemac_result)
     monkeypatch.setattr(
-        "trid3nt_server.workflows.telemac.solving.solve.download_result",
+        "trid3nt_server.workflows.solver.solver.download_result",
         lambda run_id, basename, error_code=None: "/tmp/does-not-matter.slf")
     return _solved()
 
@@ -141,7 +141,7 @@ def test_a_tracer_that_never_rose_above_its_floor_refuses(monkeypatch,
                    ikle=[[0, 1, 2]], times=[0.0, 1.0],
                    data={"DYE": [[0.0, 0.0, 0.0], [1e-5, 0.0, 0.0]]})
     monkeypatch.setattr(
-        "trid3nt_server.workflows.telemac.solving.solve.download_result",
+        "trid3nt_server.workflows.solver.solver.download_result",
         lambda run_id, basename, error_code=None: "/tmp/does-not-matter.slf")
     with pytest.raises(OutputEmpty, match="never exceeded its floor"):
         T2D.OUTPUTS["max_over_time"].read(max_over_time("T1"), _solved())
@@ -158,7 +158,7 @@ def test_the_extent_and_the_mesh_are_measures_off_the_result_and_the_run(solved)
 
 def test_the_mass_balance_is_the_engine_s_own_closure(monkeypatch, solved):
     monkeypatch.setattr(
-        "trid3nt_server.workflows.telemac.solving.solve.download_result",
+        "trid3nt_server.workflows.solver.solver.download_result",
         lambda run_id, basename, error_code=None: _listing(monkeypatch))
     read = T2D.OUTPUTS["mass_balance"].read(mass_balance(), solved)
     assert read.measures["continuity_rel_error"] == pytest.approx(-1.2e-7)
@@ -324,7 +324,7 @@ def _coupled_reach(telemac_result) -> dict[str, Any]:
 def coupled(monkeypatch, telemac_result):
     _coupled_reach(telemac_result)
     monkeypatch.setattr(
-        "trid3nt_server.workflows.telemac.solving.solve.download_result",
+        "trid3nt_server.workflows.solver.solver.download_result",
         lambda run_id, basename, error_code=None: "/tmp/does-not-matter.slf")
     return _solved()
 
@@ -461,7 +461,7 @@ def test_the_drogues_are_the_track_at_three_written_instants(monkeypatch, couple
         "ZONE T=\"t\", SOLUTIONTIME= 120.0\n1, 500200.0, 4400000.0\n"
         "ZONE T=\"t\", SOLUTIONTIME= 180.0\n1, 500300.0, 4400000.0\n")
     monkeypatch.setattr(
-        "trid3nt_server.workflows.telemac.solving.solve.download_result",
+        "trid3nt_server.workflows.solver.solver.download_result",
         lambda run_id, basename, error_code=None: str(track))
     from trid3nt_server.workflows.telemac.modules.outputs import drogues
 
@@ -561,7 +561,7 @@ def catchment(monkeypatch, solved):
     """The reach's result read as a catchment's: two liquid boundaries the settle
     placed, the outlet at the east face, and the listing the engine printed."""
     monkeypatch.setattr(
-        "trid3nt_server.workflows.telemac.solving.solve.download_result",
+        "trid3nt_server.workflows.solver.solver.download_result",
         lambda run_id, basename, error_code=None: _catchment_listing(monkeypatch))
     return _solved({"liquid_boundaries": [
         {"number": 1, "role": "rating_curve", "x": 500120.0, "y": 4400055.0},
@@ -667,7 +667,7 @@ def test_the_agitation_coefficient_is_the_wave_height_over_the_stamped_incident(
         "2 2 2 0.0 0.0 0.0 0.0 2 0.0 0.0 0.0 3 3\n",
         open_nodes=[0, 1], structure_nodes=[2], height_m=2.0, reflection_coef=0.5))
     monkeypatch.setattr(
-        "trid3nt_server.workflows.telemac.solving.solve.download_result",
+        "trid3nt_server.workflows.solver.solver.download_result",
         lambda run_id, basename, error_code=None: str(cli))
     solved = _solved({"result_basename": "res_agitation.slf"}, body=ART)
     kd = ART.OUTPUTS["field"].read(field("KD", t=-1), solved)
@@ -712,7 +712,7 @@ def basin(monkeypatch, telemac_result):
 
     _basin(telemac_result)
     monkeypatch.setattr(
-        "trid3nt_server.workflows.telemac.solving.solve.download_result",
+        "trid3nt_server.workflows.solver.solver.download_result",
         lambda run_id, basename, error_code=None: "/tmp/does-not-matter.slf")
     return _solved({"result_basename": "res3d_basin.slf",
                     "tracer_names": ["TEMPERATURE     DEGC"]}, body=T3D)

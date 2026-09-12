@@ -36,10 +36,10 @@ _SOLVE_INPUTS = [
 
 def _stage(monkeypatch, case: dict, *, outputs: list[str] | None = None,
            inputs: list[dict[str, str]] | None = None) -> dict:
-    import trid3nt_server.workflows.solver.solver as solver_mod
+    from trid3nt_server import storage
 
     fake = _FakeS3()
-    monkeypatch.setattr(solver_mod, "_get_s3_client", lambda: fake)
+    monkeypatch.setattr(storage, "client", lambda: fake)
     monkeypatch.setenv("TRID3NT_CACHE_BUCKET", "test-cache")
     _write_manifest(case, "RUNTAG", outputs=outputs or ["r2d_river.slf"],
                     inputs=inputs or [], prefix="telemac")
@@ -61,11 +61,11 @@ def test_an_unstaged_manifest_carries_an_empty_inputs_list(monkeypatch):
 
 
 def test_writing_the_manifest_requires_a_cache_bucket(monkeypatch):
-    import trid3nt_server.workflows.solver.solver as solver_mod
+    from trid3nt_server import storage
 
     from trid3nt_server.workflows.telemac.errors import TelemacError
 
-    monkeypatch.setattr(solver_mod, "_get_s3_client", lambda: _FakeS3())
+    monkeypatch.setattr(storage, "client", lambda: _FakeS3())
     monkeypatch.delenv("TRID3NT_CACHE_BUCKET", raising=False)
     with pytest.raises(TelemacError):
         _write_manifest(_CASE, "RUNTAG", outputs=["r2d_river.slf"], inputs=[],
@@ -210,11 +210,11 @@ def test_the_case_names_the_module_the_DECK_says_it_couples_with():
 
 
 def test_the_one_writer_stages_every_front_under_its_own_prefix(monkeypatch):
-    import trid3nt_server.workflows.solver.solver as solver_mod
+    from trid3nt_server import storage
     from trid3nt_server.workflows.telemac.authoring.assembler import stage_telemac_manifest
 
     fake = _FakeS3()
-    monkeypatch.setattr(solver_mod, "_get_s3_client", lambda: fake)
+    monkeypatch.setattr(storage, "client", lambda: fake)
     monkeypatch.setenv("TRID3NT_CACHE_BUCKET", "test-cache")
     uri = stage_telemac_manifest(
         section="agitation", config={"name": "harbour"}, run_tag="RUNTAG",

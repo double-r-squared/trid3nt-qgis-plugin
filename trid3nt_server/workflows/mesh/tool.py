@@ -161,13 +161,13 @@ def supplied_mesh_artifact(explicit: Any, *,
     """The mesh a run was HANDED, resolved and checked against the calling row.
 
     ``None`` for an unfilled slot; a refusal, never a fall-through, otherwise."""
-    from trid3nt_server.workflows.solver.solver import _get_s3_client
+    from trid3nt_server import storage
 
     if explicit is None or not str(explicit).strip():
         return None
     return resolve_mesh(explicit=explicit,
                         accepts=accepts_for(tool_name),
-                        s3_client=_get_s3_client()).artifact
+                        s3_client=storage.client()).artifact
 
 
 def mesh_kind(art: MeshArtifact) -> Any:

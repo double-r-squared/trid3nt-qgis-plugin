@@ -3,8 +3,9 @@
 A workflow is a declaration: `PARAMS` and `DATA` class bodies plus the steps the
 door builds out of them, which the interpreter walks. `runtime/` is the language
 and the machinery that executes it, `mesh/` builds the domain a solve runs on,
-`publishing/` turns what a solve read into what the map loads, `solver/`
-dispatches the box, and each engine package holds the templates that speak it.
+`publishing/` turns what a solve read into what the map loads, `solver/` is the
+one executor, and each engine package holds the templates that speak it and the
+one file that specializes the executor to it.
 
 ## Files
 
@@ -19,8 +20,8 @@ dispatches the box, and each engine package holds the templates that speak it.
 | `runtime/` | The declarative library - the value types, the six doors, the validator, the interpreter, the skeleton and the run's records. See below. |
 | `mesh/` | The one mesh front: router, meshers, session, gate, artifact. Has its own map. |
 | `publishing/` | A field becomes a layer, a series a chart, a field over time an animation - written once for every engine, with the COG writer, the styling seam and the outputs manifest beside it. Has its own map. |
-| `solver/` | Solve dispatch and what came back: `solver.py` (the box), `solve_progress.py` (the live progress heartbeat a long solve emits while it runs), `code_provenance.py` (which code produced a run), `diagnostics/` (the one `read_run_diagnostics` dispatcher plus its per-engine parsers), `corpus.yaml` (routing phrasings). |
-| `telemac/` | The TELEMAC engine: the module wrappers, eight templates over them, and the fill/run door. Has its own map. |
+| `solver/` | The one executor, which knows no engine: `solver.py` (the box - launch, supervise, poll, dispatch-and-wait, download a result), `compute_class.py` (the ladder a caller may name and the coercion onto it), `solve_progress.py` (the live progress heartbeat a long solve emits while it runs), `code_provenance.py` (which code produced a run), `diagnostics/` (the one `read_run_diagnostics` dispatcher plus its per-engine parsers), `corpus.yaml` (routing phrasings). |
+| `telemac/` | The TELEMAC engine: the module wrappers, eight templates over them, the fill/run door, and the one engine file the executor is specialized by. Has its own map. |
 
 ## `runtime/` - the declarative library
 

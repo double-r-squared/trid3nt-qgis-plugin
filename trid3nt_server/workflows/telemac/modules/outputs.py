@@ -306,7 +306,7 @@ class Solved:
 
     @cached_property
     def result(self) -> dict[str, Any]:
-        from ..solving.solve import download_result
+        from trid3nt_server.workflows.solver.solver import download_result
 
         local = download_result(self.run_id, self.result_file)
         try:
@@ -316,7 +316,7 @@ class Solved:
 
     @cached_property
     def listing(self) -> str:
-        from ..solving.solve import download_result
+        from trid3nt_server.workflows.solver.solver import download_result
 
         local = download_result(self.run_id, "full_listing.log")
         try:
@@ -864,7 +864,7 @@ def read_drogues(primitive: Primitive, solved: Solved) -> Track:
     import numpy as np
     from pyproj import Transformer
 
-    from ..solving.solve import download_result
+    from trid3nt_server.workflows.solver.solver import download_result
     from .telemac2d import DROGUES_FILENAME
 
     local = download_result(solved.run_id, DROGUES_FILENAME)

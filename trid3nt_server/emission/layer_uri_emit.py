@@ -226,14 +226,11 @@ def _cog_object_exists(cog_uri: str) -> bool:
     Any lookup failure reads as absent and never raises, so a fabricated uri is
     only ever registered once the store has confirmed it real.
     """
-    from trid3nt_server.workflows.solver.solver import (
-        _get_s3_client,
-        _split_object_uri,
-    )
+    from trid3nt_server import storage
 
     try:
-        _, bucket, key = _split_object_uri(cog_uri)
-        _get_s3_client().head_object(Bucket=bucket, Key=key)
+        _, bucket, key = storage.split_object_uri(cog_uri)
+        storage.client().head_object(Bucket=bucket, Key=key)
         return True
     except Exception:  # noqa: BLE001 -- absent / unreachable == do not register
         return False

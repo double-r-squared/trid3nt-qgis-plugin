@@ -183,7 +183,7 @@ def test_an_invented_compute_class_refuses_at_the_ladder():
     supplied, err = _norm(location="X", compute_class="dye_spill")
     assert supplied == {}
     assert err["status"] == "error"
-    assert err["error_code"] == "TELEMAC_COMPUTE_CLASS_UNKNOWN"
+    assert err["error_code"] == "COMPUTE_CLASS_UNKNOWN"
     assert "dye_spill" in err["error_message"]
 
 
@@ -336,7 +336,7 @@ def _install_step_mocks(captured: dict):
     from trid3nt_server.workflows.telemac.modules import outputs as outputs_mod
     from trid3nt_server.workflows.mesh import step as mesh_step
     from trid3nt_server.workflows.telemac.templates import reach as reach_mod
-    from trid3nt_server.workflows.telemac.solving import solve as solve_mod
+    from trid3nt_server.workflows.telemac import engine as engine_mod
     from trid3nt_server.workflows.telemac.authoring import assembler as asm_mod
     from trid3nt_server.workflows.telemac.authoring import serializer as ser_mod
 
@@ -437,7 +437,7 @@ def _install_step_mocks(captured: dict):
         captured["compute_class"] = compute_class
         return _FakeHandle()
 
-    def _fake_download(run_id, basename, error_code=None):
+    def _fake_download(run_id, basename):
         """The solved result's download: what run it was asked under is kept."""
         captured["pp_run_id"] = run_id
         captured["pp_basename"] = basename
@@ -480,9 +480,9 @@ def _install_step_mocks(captured: dict):
                      lambda lon, lat, valid_time=None: {
                          "m3s": 312.0, "reference_time": "2026-01-01T12:00:00+00:00",
                          "product": "analysis_assim", "layer": None}),
-        patch.object(solve_mod, "read_run_metrics",
+        patch.object(engine_mod, "read_run_metrics",
                      lambda rid: {"utm_epsg": 32611}),
-        patch.object(solve_mod, "download_result", _fake_download),
+        patch.object(solver_mod, "download_result", _fake_download),
         patch.object(outputs_mod, "read_selafin", lambda _path: _fake_result()),
         patch.object(cog_mod, "upload_cog", _fake_upload),
         patch.object(emission_publish, "publish_layer", _fake_publish_layer),
@@ -664,7 +664,7 @@ def test_a_derived_release_sits_on_the_DECLARED_centerline(tmp_path, monkeypatch
 
 
 def test_a_step_failure_maps_to_the_typed_error_envelope(tmp_path, monkeypatch):
-    from trid3nt_server.workflows.telemac.solving import solve as solve_mod
+    from trid3nt_server.workflows.telemac import engine as engine_mod
     from trid3nt_server.workflows.telemac.errors import TelemacError
 
     async def _boom(**_kw):
@@ -672,7 +672,7 @@ def test_a_step_failure_maps_to_the_typed_error_envelope(tmp_path, monkeypatch):
 
     captured: dict = {}
     out = _run_tool(tmp_path, monkeypatch, captured, location="Twin Falls, Idaho",
-                    overrides=[patch.object(solve_mod, "solve_reach", _boom)])
+                    overrides=[patch.object(engine_mod, "solve_case", _boom)])
     assert out["status"] == "error"
     assert out["error_code"] == "TELEMAC_RUN_FAILED"
 

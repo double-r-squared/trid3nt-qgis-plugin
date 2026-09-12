@@ -74,7 +74,7 @@ def test_the_telemac_spec_declares_no_network():
 
     The posture is the image's rather than per-module: one spec serves every
     module, and it stages what it used to fetch inside the container."""
-    import trid3nt_server.workflows.telemac.solving.run_telemac  # noqa: F401
+    import trid3nt_server.workflows.telemac.engine  # noqa: F401
     from trid3nt_server.workflows.solver.solver import LOCAL_SOLVER_SPEC_REGISTRY
 
     assert LOCAL_SOLVER_SPEC_REGISTRY["telemac"]().network == "none"

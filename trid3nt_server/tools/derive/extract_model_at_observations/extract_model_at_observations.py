@@ -393,24 +393,6 @@ def _resolve_observed_quantity(
     )
 
 
-def _fetch_ground_dem(
-    bbox_4326: tuple[float, float, float, float], tmpdir: str
-) -> tuple[str, str]:
-    """``(local_path, source_label)`` for a ground-elevation DEM over the AOI; any
-    failure raises, for the caller to turn into a quantity mismatch.
-    """
-    from trid3nt_server.tools import TOOL_REGISTRY
-
-    fetch_dem = TOOL_REGISTRY["fetch_dem"].fn
-    layer = fetch_dem(bbox=tuple(bbox_4326))
-    local = _stage_local(layer.uri, tmpdir, "ground_dem")
-    label = f"3DEP/GLO-30 ground DEM via fetch_dem ({layer.uri}; meters above NAVD88)"
-    fb = getattr(layer, "fallback_note", None)
-    if fb:
-        label += f" [{fb}]"
-    return local, label
-
-
 def _sample_ground_elev(dem_local: str, gdf: Any) -> np.ndarray:
     """Ground elevation per observation point, in ``gdf`` row order; NaN where the
     point is off-extent or on nodata, which the caller drops.
@@ -596,14 +578,11 @@ def _write_paired_fgb(gdf: Any, seed: str, output_dir: str | None) -> str:
             f.write(payload)
         return path
     try:
-        from trid3nt_server.workflows.solver.solver import (
-            _get_runs_bucket,
-            _get_s3_client,
-        )
+        from trid3nt_server import storage
 
-        bucket = _get_runs_bucket()
+        bucket = storage.runs_bucket()
         key = f"model-obs-pairs-{seed}/{filename}"
-        _get_s3_client().put_object(
+        storage.client().put_object(
             Bucket=bucket,
             Key=key,
             Body=payload,
@@ -765,27 +744,19 @@ def _pair_raster_static(
         g4326 = gdf.to_crs(4326)
         gb = g4326.total_bounds  # (minx, miny, maxx, maxy)
         obs_bbox_4326 = (float(gb[0]), float(gb[1]), float(gb[2]), float(gb[3]))
-        dem_local: str | None = None
-        if ground_elevation_uri:
-            dem_local = _stage_local(ground_elevation_uri, tmpdir, "ground_dem")
-            ground_source = f"caller-supplied ground DEM ({ground_elevation_uri})"
-        else:
-            try:
-                dem_local, ground_source = _fetch_ground_dem(obs_bbox_4326, tmpdir)
-            except Exception as exc:  # noqa: BLE001
-                logger.info("ground DEM auto-fetch failed for quantity conversion: %s", exc)
-                dem_local = None
-        if dem_local is None:
+        if not ground_elevation_uri:
             raise PairingQuantityMismatchError(
                 f"model quantity is {model_qlabel!r} (a {model_fam}) but the "
                 f"observed quantity is {obs_qlabel!r} (an {obs_fam}); a "
                 "water-surface ELEVATION and a DEPTH above ground are NOT "
                 "directly comparable (their difference is dominated by ground "
                 "elevation). Reconciling them requires sampling a ground-"
-                "elevation DEM, but none was supplied (ground_elevation_uri) and "
-                "none could be fetched for the AOI. Pass ground_elevation_uri "
-                "(a DEM COG covering the observations) to convert WSE<->depth."
+                "elevation DEM: fetch_dem over the observations "
+                f"{tuple(round(v, 4) for v in obs_bbox_4326)} and pass its uri as "
+                "ground_elevation_uri to convert WSE<->depth."
             )
+        dem_local = _stage_local(ground_elevation_uri, tmpdir, "ground_dem")
+        ground_source = f"ground DEM ({ground_elevation_uri})"
         ground = _sample_ground_elev(dem_local, gdf)
 
     # Reproject to the model CRS for sampling (record any per-point failure).

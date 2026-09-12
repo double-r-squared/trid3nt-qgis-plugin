@@ -228,7 +228,7 @@ def test_a_series_chart_keeps_its_time_axis_and_its_points():
 
 
 def test_a_track_becomes_a_vector_layer_in_the_run_s_own_store(monkeypatch):
-    from trid3nt_server.workflows.solver import solver as solver_mod
+    from trid3nt_server import storage
 
     put = {}
 
@@ -236,8 +236,8 @@ def test_a_track_becomes_a_vector_layer_in_the_run_s_own_store(monkeypatch):
         def put_object(self, **kw):
             put.update(kw)
 
-    monkeypatch.setattr(solver_mod, "_get_runs_bucket", lambda: "runs")
-    monkeypatch.setattr(solver_mod, "_get_s3_client", lambda: _S3())
+    monkeypatch.setattr(storage, "runs_bucket", lambda: "runs")
+    monkeypatch.setattr(storage, "client", lambda: _S3())
     track = Track(features={"type": "FeatureCollection", "features": [
         {"type": "Feature", "geometry": {"type": "MultiPoint",
                                          "coordinates": [[-124.1, 40.5], [-124.0, 40.6]]},
@@ -327,7 +327,7 @@ def test_a_series_at_a_station_becomes_the_point_layer_that_carries_it(monkeypat
     gauge's ``time_series_csv`` reads this one the same way."""
     import json
 
-    from trid3nt_server.workflows.solver import solver as solver_mod
+    from trid3nt_server import storage
 
     put = {}
 
@@ -335,8 +335,8 @@ def test_a_series_at_a_station_becomes_the_point_layer_that_carries_it(monkeypat
         def put_object(self, **kw):
             put.update(kw)
 
-    monkeypatch.setattr(solver_mod, "_get_runs_bucket", lambda: "runs")
-    monkeypatch.setattr(solver_mod, "_get_s3_client", lambda: _S3())
+    monkeypatch.setattr(storage, "runs_bucket", lambda: "runs")
+    monkeypatch.setattr(storage, "client", lambda: _S3())
     read = Series(name="FLUX BOUNDARY", units="m3/s",
                   times=np.array([0.0, 1800.0]), values=np.array([0.0, 4.5]),
                   at="at the outlet", lon=-83.4, lat=35.05,

@@ -22,11 +22,10 @@ join the run as the sixth slice.
 | `plugin/` | the plugin seams the server suite reads offline, by `ast` | 1 | 3 |
 | `publishing/` | the one publisher: a field to a layer, a series or a profile to a chart, a field over time to an animation, a track to a vector layer, a series at a station to the point layer carrying it; the rasterizers, the COG seam and the styling seam a restyle goes through | 4 | 48 |
 | `runtime/` | the declarative runtime, the run journal | 8 | 270 |
-| `sandbox/` | the code-exec sandbox | 2 | 34 |
 | `scripts/` | the dev instruments, the live-run harness and the proof renderers, skipped when `dev/` is absent | 6 | 47 |
 | `search/` | dataset and tool retrieval, the OGC adapter | 18 | 280 |
 | `server/` | the HTTP and WS routes, dispatch reuse, persistence, telemetry | 27 | 562 |
-| `solver/` | the solver seam, the run reads, the engine-room posture | 6 | 53 |
+| `solver/` | the executor, the run reads, the engine-room posture, the import graph that keeps it engine-free | 7 | 54 |
 | `telemac/` | the TELEMAC templates, the module surface and its primitives, the listing reads, authoring | 24 | 456 |
 | `tools/` | the registry, the arg normalizer, the tool cache | 14 | 402 |
 
@@ -46,7 +45,7 @@ Six slices by subsystem, each its own foreground invocation, from the repo root:
     make test-fetchers        # tests/fetchers                                 1561
     make test-spatial         # tests/derive tests/emission tests/mesh tests/publishing   1204
     make test-engines         # tests/telemac tests/runtime tests/solver tests/search   1061
-    make test-server          # tests/server tests/inputs tests/gates tests/credentials tests/sandbox tests/model tests/scripts   1160
+    make test-server          # tests/server tests/inputs tests/gates tests/credentials tests/model tests/scripts   1126
     make test-model-surface   # tests/adapters tests/tools                      667
     make test-packages        # contracts/tests plugin/tests tests/plugin       821
 

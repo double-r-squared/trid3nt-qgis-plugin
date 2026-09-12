@@ -174,9 +174,10 @@ def _load_completion(
         return completion, run_id, path, None
 
     runs_bucket, run_id = _resolve_run_handle(run_handle)
+    from trid3nt_server import storage
     from trid3nt_server.workflows.solver import solver
 
-    bucket = runs_bucket or solver._get_runs_bucket()
+    bucket = runs_bucket or storage.runs_bucket()
     completion = solver._try_get_completion_s3(bucket, run_id)
     if completion is None:
         raise DiagnosticsRunNotFound(

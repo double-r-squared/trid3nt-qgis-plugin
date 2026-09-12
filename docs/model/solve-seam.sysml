@@ -368,14 +368,14 @@ package SolveSeam {
 
     part solveStep : SolveStep {
         doc /*
-        code: trid3nt_server/workflows/telemac/solving/solve.py
+        code: trid3nt_server/workflows/telemac/engine.py
         */
         port completionIn : CompletionIn;
     }
 
     part launcherArm : LauncherArm {
         doc /*
-        code: trid3nt_server/workflows/telemac/solving/run_telemac.py
+        code: trid3nt_server/workflows/telemac/engine.py
         */
         port metricsIn : MetricsIn;
         port completionOut : CompletionOut;
@@ -564,6 +564,17 @@ package SolveSeam {
         A solver that returns zero without writing its result has not solved
         anything, and the exit code alone never decides it - on either side of
         the seam.
+        */
+    }
+
+    requirement def ExecutorKnowsNoEngine {
+        doc /*
+        One executor over one file per engine: the executor stages, launches,
+        supervises and polls, and an engine contributes its spec, its verdict
+        on an exit and its wait. An executor that imports an engine has an
+        engine's knowledge in it, and the next engine arrives as a branch.
+
+        forbid: trid3nt_server.workflows.solver -> trid3nt_server.workflows.telemac
         */
     }
 
@@ -919,7 +930,14 @@ package SolveSeam {
     verify requirement CorrectEndIsTheSuccessConvention by
         "workers/telemac/test_entrypoint.py::test_a_clean_exit_that_wrote_no_result_is_not_a_solve";
     verify requirement CorrectEndIsTheSuccessConvention by
-        "tests/telemac/test_run_telemac_chain.py::test_classify_exit_clean_exit_but_no_correct_end_is_error";
+        "tests/telemac/test_telemac_engine.py::test_classify_exit_clean_exit_but_no_correct_end_is_error";
+
+    satisfy requirement ExecutorKnowsNoEngine by supervisor;
+    satisfy requirement ExecutorKnowsNoEngine by launcherArm;
+    verify requirement ExecutorKnowsNoEngine by
+        "tests/solver/test_executor_import_graph.py::test_the_executor_imports_no_engine";
+    verify requirement ExecutorKnowsNoEngine by
+        "tests/model/test_model_conformance.py::test_the_model_conforms_to_the_tree";
 
     satisfy requirement WorkersNeverImportServer by workerEntrypoint;
     satisfy requirement WorkersNeverImportServer by telapyChild;

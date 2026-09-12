@@ -37,10 +37,10 @@ def persist_run_activations(
     if not run_id or not activations:
         return None
     try:
-        from trid3nt_server.workflows.solver.solver import _get_runs_bucket
+        from trid3nt_server import storage
 
 
-        bucket = _get_runs_bucket()
+        bucket = storage.runs_bucket()
         key = f"{run_id}/{ACTIVATIONS_KEY}"
         payload = {
             "schema_version": 1,
@@ -48,11 +48,11 @@ def persist_run_activations(
             "note": capability_note,
             "activations": [_row(a) for a in activations],
         }
-        from trid3nt_server.workflows.solver.solver import _get_s3_client
+        from trid3nt_server import storage
 
         # A sidecar of its own: the activations are a server-side fact about
         # the inputs the composer fetched, not something the worker wrote.
-        _get_s3_client().put_object(
+        storage.client().put_object(
             Bucket=bucket,
             Key=key,
             Body=json.dumps(payload, indent=2).encode("utf-8"),

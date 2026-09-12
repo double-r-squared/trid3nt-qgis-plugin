@@ -150,17 +150,14 @@ def river_seed_from_geometry(river_uri: str) -> tuple[float, float] | None:
 
     The longest line is the main stem; ``None`` on any failure, never a guess."""
     try:
-        from trid3nt_server.workflows.solver.solver import (
-            _get_s3_client,
-            _split_object_uri,
-        )
+        from trid3nt_server import storage
 
         if river_uri.startswith(("s3://", "gs://")):
-            _scheme, bucket, key = _split_object_uri(river_uri)
+            _scheme, bucket, key = storage.split_object_uri(river_uri)
             tmp = tempfile.NamedTemporaryFile(
                 suffix=".fgb", delete=False, prefix="telemac_river_seed_")
             tmp.close()
-            resp = _get_s3_client().get_object(Bucket=bucket, Key=key)
+            resp = storage.client().get_object(Bucket=bucket, Key=key)
             with open(tmp.name, "wb") as fh:
                 fh.write(resp["Body"].read())
             local_fgb = tmp.name
@@ -242,15 +239,15 @@ def _read_vector_features(uri: str) -> list[dict[str, Any]]:
 
     import geopandas as gpd
 
-    from trid3nt_server.workflows.solver.solver import _get_s3_client, _split_object_uri
+    from trid3nt_server import storage
 
     if uri.startswith(("s3://", "gs://")):
-        _scheme, bucket, key = _split_object_uri(uri)
+        _scheme, bucket, key = storage.split_object_uri(uri)
         tmp = tempfile.NamedTemporaryFile(suffix=".fgb", delete=False,
                                           prefix="telemac_reach_")
         tmp.close()
         with open(tmp.name, "wb") as fh:
-            fh.write(_get_s3_client().get_object(Bucket=bucket, Key=key)["Body"].read())
+            fh.write(storage.client().get_object(Bucket=bucket, Key=key)["Body"].read())
         path = tmp.name
     else:
         path = uri
@@ -479,7 +476,7 @@ def _gridmet_domain_mean_pr(bbox: tuple[float, float, float, float],
     from rasterio.io import MemoryFile
 
     from trid3nt_server.tools import TOOL_REGISTRY
-    from trid3nt_server.workflows.solver.solver import _get_s3_client
+    from trid3nt_server import storage
 
     try:
         layer = TOOL_REGISTRY["fetch_gridmet"].fn(
@@ -496,7 +493,7 @@ def _gridmet_domain_mean_pr(bbox: tuple[float, float, float, float],
     try:
         if str(uri).startswith("s3://"):
             bucket, _, key = str(uri)[len("s3://"):].partition("/")
-            data = _get_s3_client().get_object(Bucket=bucket, Key=key)["Body"].read()
+            data = storage.client().get_object(Bucket=bucket, Key=key)["Body"].read()
             with MemoryFile(data) as mem, mem.open() as ds:
                 arr = ds.read(1, masked=True).astype("float64")
         else:
@@ -751,16 +748,13 @@ def _nwm_nearest_streamflow(seed_lon: float, seed_lat: float,
     try:
         import geopandas as gpd  # lazy: never imported on the offline path
 
-        from trid3nt_server.workflows.solver.solver import (
-            _get_s3_client,
-            _split_object_uri,
-        )
+        from trid3nt_server import storage
 
-        _scheme, bucket, key = _split_object_uri(str(uri))
+        _scheme, bucket, key = storage.split_object_uri(str(uri))
         fd, local = tempfile.mkstemp(prefix="nwm-",
                                      suffix=os.path.splitext(key)[1] or ".fgb")
         os.close(fd)
-        resp = _get_s3_client().get_object(Bucket=bucket, Key=key)
+        resp = storage.client().get_object(Bucket=bucket, Key=key)
         with open(local, "wb") as fh:
             fh.write(resp["Body"].read())
         gdf = gpd.read_file(local, engine="pyogrio")

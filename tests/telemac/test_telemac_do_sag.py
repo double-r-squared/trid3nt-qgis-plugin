@@ -218,7 +218,7 @@ def _stub_reach_pipeline(monkeypatch, order, seen, *, layer, review, tmp_path=No
     from trid3nt_server.gates import input_review as gate_mod
     from trid3nt_server.workflows.mesh import step as mesh_step_mod
     from trid3nt_server.workflows.telemac.templates import reach as reach_mod
-    from trid3nt_server.workflows.telemac.solving import solve as solve_mod
+    from trid3nt_server.workflows.telemac import engine as engine_mod
     from trid3nt_server.workflows.telemac.authoring import assembler as asm_mod
     from trid3nt_server.workflows.telemac import workflow as door_mod
 
@@ -263,7 +263,7 @@ def _stub_reach_pipeline(monkeypatch, order, seen, *, layer, review, tmp_path=No
                             "liquid_boundary_order": ["inflow"],
                             "liquid_boundary_prescribes": ["flowrate"]}))
     monkeypatch.setattr(door_mod, "run_sheet", _step("run", {"run_id": "R"}))
-    monkeypatch.setattr(solve_mod, "solve_reach", _step("solve", {"run_id": "R"}))
+    monkeypatch.setattr(engine_mod, "solve_case", _step("solve", {"run_id": "R"}))
     monkeypatch.setattr(door_mod, "publish_outputs", _step("outputs", layer))
     monkeypatch.setattr(gate_mod, "gate_input_review", review)
 
@@ -337,7 +337,7 @@ async def test_the_declared_plan_composes_the_shared_steps_in_order(monkeypatch,
 async def test_a_cancelled_review_refuses_before_the_solve(monkeypatch, tmp_path):
     monkeypatch.setenv("TRID3NT_DEV_PERSISTENCE_DIR", str(tmp_path / "persistence"))
     from trid3nt_server.workflows.telemac.templates.do_sag.do_sag import telemac_do_sag
-    from trid3nt_server.workflows.telemac.solving import solve as solve_mod
+    from trid3nt_server.workflows.telemac import engine as engine_mod
 
     order: list[str] = []
     seen: dict = {}
@@ -354,7 +354,7 @@ async def test_a_cancelled_review_refuses_before_the_solve(monkeypatch, tmp_path
     async def _solve_must_not_run(**_kw):
         raise AssertionError("the solve ran past a cancelled review")
 
-    monkeypatch.setattr(solve_mod, "solve_reach", _solve_must_not_run)
+    monkeypatch.setattr(engine_mod, "solve_case", _solve_must_not_run)
 
     out = await telemac_do_sag(location="Eel River near Scotia, California",
                                input_mode="user_gated")

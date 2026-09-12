@@ -160,39 +160,40 @@ def _stage_uri_local(uri: str, tmpdir: str, label: str) -> str:
         )
     return uri
 
-#: What the delineation DEM IS FOR, carried onto the emitted layer. D8 routing
-#: needs a natively GEOGRAPHIC grid, so this raster is Copernicus GLO-30 by
-#: METHOD rather than by preference; a run that also fetches a 3DEP bed then puts
-#: two DEMs on the canvas.
-_DEM_PURPOSE = "D8 flow routing (geographic grid); not the model bed"
-
-
-def _stage_dem(
-    bbox: tuple[float, float, float, float],
-    dem_uri: str | None,
-    tmpdir: str,
-    notes: list[str],
-) -> str:
-    """Local DEM path (override or fetch_copernicus_dem)."""
-    if dem_uri is not None:
-        local = _stage_uri_local(dem_uri, tmpdir, "dem")
-        notes.append(f"DEM from caller-supplied dem_uri ({dem_uri}).")
-        return local
-    try:
-        from trid3nt_server.tools import TOOL_REGISTRY
-
-        layer = TOOL_REGISTRY["fetch_copernicus_dem"].fn(bbox=bbox,
-                                                         purpose=_DEM_PURPOSE)
-    except HydrologyPrimitivesError:
-        raise
-    except Exception as exc:  # noqa: BLE001
-        raise HydrologyUpstreamError(
-            f"fetch_copernicus_dem failed for bbox={bbox}: {exc}"
-        ) from exc
-    local = _stage_uri_local(layer.uri, tmpdir, "dem")
-    notes.append("DEM: Copernicus GLO-30 (30 m) via fetch_copernicus_dem, for "
-                 f"{_DEM_PURPOSE}.")
+def _stage_dem(dem_uri: Any, tmpdir: str, notes: list[str]) -> str:
+    """The local path of the DEM the caller handed in; a missing one is a typed
+    refusal naming the fetch that supplies it, never a fetch of its own."""
+    if not isinstance(dem_uri, str) or not dem_uri.strip():
+        raise HydrologyInputError(
+            "dem_uri is required: fetch a DEM over the area first "
+            "(fetch_copernicus_dem for a geographic 30 m grid, fetch_dem for 3DEP) "
+            "and pass its uri."
+        )
+    local = _stage_uri_local(dem_uri, tmpdir, "dem")
+    notes.append(f"DEM from dem_uri ({dem_uri}).")
     return local
+
+
+def _dem_bbox_4326(dem_path: str) -> tuple[float, float, float, float]:
+    """The DEM's own extent in EPSG:4326, held to the CPU-bound AOI clamp."""
+    import rasterio
+    from rasterio.warp import transform_bounds
+
+    try:
+        with rasterio.open(dem_path) as src:
+            crs, bounds = src.crs, src.bounds
+    except Exception as exc:  # noqa: BLE001
+        raise HydrologyInputError(
+            f"could not open DEM raster {dem_path!r}: {exc}"
+        ) from exc
+    if crs is None:
+        raise HydrologyInputError(f"DEM raster {dem_path!r} carries no CRS.")
+    if crs.to_epsg() == 4326:
+        bbox = (bounds.left, bounds.bottom, bounds.right, bounds.top)
+    else:
+        bbox = transform_bounds(crs, "EPSG:4326", *bounds)
+    return _validate_bbox(tuple(float(v) for v in bbox))
+
 
 def _open_dem(dem_path: str) -> tuple[Any, Any]:
     """``(grid, dem)`` for a DEM raster, behind the typed open failure."""
@@ -345,11 +346,11 @@ def _write_geojson(
             f.write(payload)
         return path
     try:
-        from trid3nt_server.workflows.solver.solver import _get_runs_bucket, _get_s3_client
+        from trid3nt_server import storage
 
-        bucket = _get_runs_bucket()
+        bucket = storage.runs_bucket()
         key = f"{prefix}-{seed}/{filename}"
-        _get_s3_client().put_object(
+        storage.client().put_object(
             Bucket=bucket,
             Key=key,
             Body=payload,

@@ -294,7 +294,7 @@ async def publish_point(emitter: Any, pt: Point, *, label: str, basis: str,
 def _upload(pt: Point, basis: str, context: str) -> str:
     from trid3nt_contracts import new_ulid
 
-    from trid3nt_server.workflows.solver.solver import _get_runs_bucket, _get_s3_client
+    from trid3nt_server import storage
 
     body = json.dumps({
         "type": "FeatureCollection",
@@ -306,9 +306,9 @@ def _upload(pt: Point, basis: str, context: str) -> str:
                          "coordinates": [round(pt.lon, 6), round(pt.lat, 6)]},
         }],
     }).encode("utf-8")
-    bucket = _get_runs_bucket()
+    bucket = storage.runs_bucket()
     key = f"inputs/{new_ulid()}/point.geojson"
-    _get_s3_client().put_object(Bucket=bucket, Key=key, Body=body,
+    storage.client().put_object(Bucket=bucket, Key=key, Body=body,
                                 ContentType="application/geo+json")
     return f"s3://{bucket}/{key}"
 
