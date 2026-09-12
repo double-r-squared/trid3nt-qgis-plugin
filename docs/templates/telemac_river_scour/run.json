@@ -1,10 +1,10 @@
 {
   "tool": "telemac_river_scour",
-  "run_id": "01M29CGPTX3T5QVG55G9X2J69P",
-  "commit": "41dce38251d378c3cdfa057442999a2c9390bc4e-dirty",
-  "recorded_at": "2026-09-11T23:23:34.500077+00:00",
+  "run_id": "01M29WZG3YM7C1ZS606QXQN68K",
+  "commit": "7e26bf9a27e306e6030ca684366093ac397e5267-dirty",
+  "recorded_at": "2026-09-12T04:11:16.332982+00:00",
   "engine": "telemac",
-  "wall_seconds": 29.3,
+  "wall_seconds": 26.491,
   "args": {
     "location": "Eel River near Scotia, California",
     "discharge_m3s": 2.2,
@@ -201,83 +201,6 @@
       "basis": "default_demo",
       "units": null,
       "consequence": "numerical",
-      "note": "declared scenario default",
-      "clamped_from": null,
-      "real_source": null
-    },
-    {
-      "name": "dredging",
-      "value": false,
-      "door": "scenario",
-      "basis": "default_demo",
-      "units": null,
-      "consequence": "scenario",
-      "note": "declared scenario default",
-      "clamped_from": null,
-      "real_source": null
-    },
-    {
-      "name": "dredge_mode",
-      "value": "scheduled",
-      "door": "scenario",
-      "basis": "default_demo",
-      "units": null,
-      "consequence": "scenario",
-      "note": "declared scenario default",
-      "clamped_from": null,
-      "real_source": null
-    },
-    {
-      "name": "dredge_volume_m3",
-      "value": 4000.0,
-      "door": "scenario",
-      "basis": "default_demo",
-      "units": "m^3",
-      "consequence": "scenario",
-      "note": "declared scenario default",
-      "clamped_from": null,
-      "real_source": null
-    },
-    {
-      "name": "dredge_crit_depth_m",
-      "value": 0.3,
-      "door": "scenario",
-      "basis": "default_demo",
-      "units": "m",
-      "consequence": "scenario",
-      "note": "declared scenario default",
-      "clamped_from": null,
-      "real_source": null
-    },
-    {
-      "name": "dredge_dig_depth_m",
-      "value": 1.5,
-      "door": "scenario",
-      "basis": "default_demo",
-      "units": "m",
-      "consequence": "scenario",
-      "note": "declared scenario default",
-      "clamped_from": null,
-      "real_source": null
-    },
-    {
-      "name": "dredge_disposal",
-      "value": false,
-      "door": "scenario",
-      "basis": "default_demo",
-      "units": null,
-      "consequence": "scenario",
-      "note": "declared scenario default",
-      "clamped_from": null,
-      "real_source": null
-    },
-    {
-      "name": "dredge_bank_offset_m",
-      "value": 5.0,
-      "door": "scenario",
-      "basis": "default_demo",
-      "units": "m",
-      "consequence": "scenario",
       "note": "declared scenario default",
       "clamped_from": null,
       "real_source": null
@@ -514,55 +437,6 @@
       "real_source": null
     },
     {
-      "param": "dredging",
-      "value": "False",
-      "basis": "default_demo",
-      "note": "Arm the NESTOR channel-maintenance dig/dump rule on top of the mobile bed [declared scenario default]",
-      "real_source": null
-    },
-    {
-      "param": "dredge_mode",
-      "value": "scheduled",
-      "basis": "default_demo",
-      "note": "Dredging rule: scheduled (remove a target volume over a window) | criterion (dig only where the bed silts within tolerance of grade) [declared scenario default]",
-      "real_source": null
-    },
-    {
-      "param": "dredge_volume_m3",
-      "value": 4000.0,
-      "basis": "default_demo",
-      "note": "Scheduled-mode target dredged volume [declared scenario default]",
-      "real_source": null
-    },
-    {
-      "param": "dredge_crit_depth_m",
-      "value": 0.3,
-      "basis": "default_demo",
-      "note": "Criterion-mode siltation tolerance above the design grade [declared scenario default]",
-      "real_source": null
-    },
-    {
-      "param": "dredge_dig_depth_m",
-      "value": 1.5,
-      "basis": "default_demo",
-      "note": "Criterion-mode dig target below the design grade [declared scenario default]",
-      "real_source": null
-    },
-    {
-      "param": "dredge_disposal",
-      "value": "False",
-      "basis": "default_demo",
-      "note": "Also place the dug spoil in a downstream disposal zone [declared scenario default]",
-      "real_source": null
-    },
-    {
-      "param": "dredge_bank_offset_m",
-      "value": 5.0,
-      "basis": "default_demo",
-      "note": "Bank setback the dig field is held back from the mapped water's edge, so the cut does not undercut the bank it is dug beside. It is also what excludes a stretch too narrow to dredge: narrower than twice the setback and no field survives there [declared scenario default]",
-      "real_source": null
-    },
-    {
       "param": "river_geometry_uri",
       "value": "derived",
       "basis": "derived",
@@ -613,7 +487,7 @@
     "marker_cmax_mgl": 94.071044921875,
     "active_frames": 30,
     "mesh_size_m": 10.415,
-    "layer_uri": "s3://trid3nt-runs/01M29CGPTX3T5QVG55G9X2J69P/overviews/01M29CH52QC09A2HRKQZ600RFR.tif",
+    "layer_uri": "s3://trid3nt-runs/01M29WZG3YM7C1ZS606QXQN68K/overviews/01M29WZYAS6R4CD5910NG2CXXG.tif",
     "discharge_m3s": 2.2,
     "discharge_note": "Steady upstream CARRIER discharge - the river flow that dilutes and transports the release [supplied on this invocation]",
     "mesh_resolution_m": 12.0,
@@ -729,7 +603,7 @@
     },
     {
       "crs_authid": null,
-      "layer_id": "point-01M29CGGKXYVHGV80E7CV089J0",
+      "layer_id": "point-01M29WZA13RW6J2DTP3CTZYNXV",
       "layer_type": "vector",
       "legend": {
         "colormap": null,
@@ -747,7 +621,7 @@
       "reference_time": null,
       "role": "context",
       "temporal": false,
-      "uri": "s3://trid3nt-runs/inputs/01M29CGGKMB04EB5WD44GHFPHE/point.geojson",
+      "uri": "s3://trid3nt-runs/inputs/01M29WZA0T4Q70D518FM5SEW1V/point.geojson",
       "valid_from": null,
       "valid_to": null,
       "visible": true,
@@ -755,7 +629,7 @@
     },
     {
       "crs_authid": null,
-      "layer_id": "telemac-marker_concentration-01M29CGPTX3T5QVG55G9X2J69P",
+      "layer_id": "telemac-marker_concentration-01M29WZG3YM7C1ZS606QXQN68K",
       "layer_type": "raster",
       "legend": {
         "colormap": "reds",
@@ -773,7 +647,7 @@
       "reference_time": null,
       "role": "primary",
       "temporal": false,
-      "uri": "s3://trid3nt-runs/01M29CGPTX3T5QVG55G9X2J69P/overviews/01M29CH59EKB6C83C0S0DFQ1YK.tif",
+      "uri": "s3://trid3nt-runs/01M29WZG3YM7C1ZS606QXQN68K/overviews/01M29WZYHNA0TP68B3Z7XMQ71T.tif",
       "valid_from": null,
       "valid_to": null,
       "visible": true,
@@ -781,7 +655,7 @@
     },
     {
       "crs_authid": "EPSG:32610",
-      "layer_id": "model-results-mesh-01M29CGPTX3T5QVG55G9X2J69P",
+      "layer_id": "model-results-mesh-01M29WZG3YM7C1ZS606QXQN68K",
       "layer_type": "mesh",
       "legend": {
         "colormap": "viridis",
@@ -796,10 +670,10 @@
       "opacity": null,
       "origin": null,
       "quantity": "model_results",
-      "reference_time": "2026-09-11T23:23:19+00:00",
+      "reference_time": "2026-09-12T04:11:01+00:00",
       "role": "context",
       "temporal": false,
-      "uri": "s3://trid3nt-runs/01M29CGPTX3T5QVG55G9X2J69P/gaia_river.slf",
+      "uri": "s3://trid3nt-runs/01M29WZG3YM7C1ZS606QXQN68K/gaia_river.slf",
       "valid_from": null,
       "valid_to": null,
       "visible": true,
@@ -807,7 +681,7 @@
     },
     {
       "crs_authid": null,
-      "layer_id": "01M29CH812P1EJWDE60FGBBJ37",
+      "layer_id": "01M29X017C0WQM08XAX29B2P5H",
       "layer_type": "raster",
       "legend": {
         "colormap": "rdbu",
@@ -825,7 +699,7 @@
       "reference_time": null,
       "role": "primary",
       "temporal": false,
-      "uri": "s3://trid3nt-runs/01M29CGPTX3T5QVG55G9X2J69P/overviews/01M29CH52QC09A2HRKQZ600RFR.tif",
+      "uri": "s3://trid3nt-runs/01M29WZG3YM7C1ZS606QXQN68K/overviews/01M29WZYAS6R4CD5910NG2CXXG.tif",
       "valid_from": null,
       "valid_to": null,
       "visible": true,
