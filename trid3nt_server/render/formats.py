@@ -199,9 +199,13 @@ def _titles(item: Deliverable, *, name: str) -> tuple[str, str]:
     if getattr(product, "frames", None):
         return f"{label} over time{where}", legend
     t = getattr(product, "t", None)
-    if t is None:
+    if t is not None:
+        return f"{legend} at t = {float(t):g} s{where}", legend
+    # A field with no instant is the ENVELOPE over the run; a vector is what it
+    # is, and calling a track a peak would name a reading nobody took.
+    if isinstance(product, Mesh):
         return f"Peak {caption}{where}", legend
-    return f"{legend} at t = {float(t):g} s{where}", legend
+    return f"{label}{where}", legend
 
 
 def _style_row(item: Deliverable, *, kind: str, label: str,

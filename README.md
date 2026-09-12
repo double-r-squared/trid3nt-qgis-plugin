@@ -102,7 +102,7 @@ Each has its own map README.
 | directory | what it is |
 | --- | --- |
 | `plugin/` | The QGIS plugin - the only client. |
-| `trid3nt_server/` | The daemon: turn loop, tool dispatch, gates, emission, workflows. |
+| `trid3nt_server/` | The daemon: turn loop, tool dispatch, gates, render, workflows. |
 | `contracts/` | The shared pydantic contracts both sides import. |
 | `workers/` | The solver worker images - the engine room. |
 | `scripts/` | The entry points you type, and the model checker. |

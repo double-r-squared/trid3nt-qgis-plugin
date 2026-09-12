@@ -26,7 +26,7 @@ an environment value rather than a code path.
 | LLM | Ollama `qwen3:8b-16k`, or any OpenAI-compatible endpoint | `MODEL_PROVIDER=openai` + `openai_adapter.py` |
 | Object storage | MinIO on `:9000` (S3-compatible) | `AWS_ENDPOINT_URL` |
 | Persistence | FilePersistence -- JSON store on disk | `TRID3NT_DEV_PERSISTENCE_DIR` |
-| Raster rendering | the QGIS plugin opens COGs from MinIO natively via GDAL `/vsis3` and styles them client-side | `publish_layer` emits the `s3://` COG URI |
+| Rendering | the QGIS plugin opens what the store holds natively - a COG through GDAL `/vsis3`, a mesh staged for MDAL - and styles it client-side from the declared row | `render/` emits the `s3://` uri and the `.qml` |
 | Solvers | local docker per engine | `TRID3NT_SOLVER_BACKEND`, per-engine gates |
 
 Data fetchers need internet (USGS/NOAA/OSM/etc. are public HTTPS or anonymous public S3) but
@@ -75,8 +75,9 @@ graph TD
 ```
 
 The flow: prompt -> LLM tool selection -> fetch/compute tools ->
-solver dispatch -> COG outputs in the runs bucket -> `publish_layer` emits the `s3://` COG URI ->
-the QGIS plugin opens it via GDAL `/vsis3` and applies the envelope's legend/style client-side.
+solver dispatch -> the run's outputs in the runs bucket -> `render/` emits the `s3://` uri in the
+format QGIS opens it in - a COG, a GeoJSON, the solver's own mesh with the dataset files written
+beside it - and the plugin loads it and applies the envelope's legend/style client-side.
 One store, one scheme: the buckets are private, the read is signed, and the store's endpoint is
 GDAL configuration the plugin sets once - so a remote store is an endpoint value, not a code path.
 Only the substrate under each seam changes.

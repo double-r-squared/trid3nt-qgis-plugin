@@ -1,7 +1,10 @@
-"""COG encoding - the publication step that makes a raster renderable.
+"""COG encoding - RENDER'S ONE WRITER of the raster format.
 
-Best-effort by contract: a failed encode returns the input bytes unchanged, so a
-raster that renders slowly is still published.
+Every raster that reaches the map crosses it, driven by ``publish.publish_layer``:
+a fetched raster, a raster an engine's transform module normalized into one. A
+mesh is never written here - a field the mesh already carries is a dataset group
+on it. Best-effort by contract: a failed encode returns the input bytes
+unchanged, so a raster that renders slowly is still published.
 """
 
 from __future__ import annotations

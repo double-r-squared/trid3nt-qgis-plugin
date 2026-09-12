@@ -103,6 +103,7 @@ def test_a_vector_is_written_as_the_geojson_it_arrived_as(_store) -> None:
                                       caption="oil slick track")])
     layer = published.primary
     assert layer.layer_type == "vector"
+    assert layer.name == "Oil slick track (reach)"
     assert layer.uri == "s3://trid3nt-runs/RID/oil_slick_track.geojson"
     assert json.loads(_store.store["RID/oil_slick_track.geojson"]) == features
     assert layer.bbox == (-114.3, 42.5, -114.2, 42.6)
