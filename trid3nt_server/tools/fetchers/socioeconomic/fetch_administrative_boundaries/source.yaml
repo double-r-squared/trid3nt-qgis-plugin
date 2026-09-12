@@ -71,8 +71,8 @@ docstring: |-
     hazard layer (e.g. county boundaries over a flood inundation surface).
   - Workflow must aggregate or label results by jurisdiction -- state, county,
     city, or ZIP code.
-  - User asks for a geographic boundary before calling
-    ``clip_raster_to_polygon`` or ``spatial_query``.
+  - User asks for a geographic boundary before clipping a layer to it in the
+    session (``run_qgis_algorithm``).
   - ``geocode_location`` returned a bbox but the workflow needs the actual
     polygon for precise clipping.
 

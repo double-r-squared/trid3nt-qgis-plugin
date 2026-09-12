@@ -68,8 +68,7 @@ docstring: |-
         soil thickness over Camp Fire footprint").
       - Post-fire debris-flow workflow (M1 / M3 / M4 logistic models
         from Staley et al. 2017) needs catchment-aggregated soil
-        covariates. Pair with ``spatial_query`` over a
-        burn-perimeter or watershed polygon.
+        covariates over a burn-perimeter or watershed polygon.
       - Hydrologic / runoff modeling needs a CONUS-wide soil substrate
         when SSURGO is too detailed or unavailable for the bbox.
 
@@ -110,14 +109,12 @@ docstring: |-
   or ``"statsgo_thick"``,
       ``units="centimeters"`` for THICK and ``None`` for KFFACT.
       Downstream tools consume the COG as a catchment-aggregation input
-      (typically via ``spatial_query`` against a watershed
-      polygon from ``fetch_administrative_boundaries`` /
-      ``fetch_nhdplus_nldi_navigate`` basin).
+      against a watershed polygon from ``fetch_administrative_boundaries`` /
+      ``fetch_nhdplus_nldi_navigate`` basin.
 
   Cross-tool dependencies:
-      - Composes WITH: ``spatial_query`` (catchment-mean
-        KFFACT for pfdf debris-flow scoring); ``clip_raster_to_polygon``
-        (clip to a burn perimeter / watershed).
+      - Composes WITH: ``model_debris_flow`` (its KF-factor layer); a clip to a
+        burn perimeter or watershed in the session.
       - Sibling: ``fetch_gcn250_curve_numbers`` (global SCS CN raster -- overlaps semantically with KFFACT-as-HSG-proxy but is global +
         AMC-tiered; prefer GCN250 when leaving CONUS).
       - Upstream source: USGS ScienceBase STATSGO COG collection via

@@ -108,10 +108,8 @@ docstring: |-
       (NOT an error).
 
   Cross-tool dependencies:
-      - Composed by the code_exec playground (open-water channel of a
+      - Composed in the session by ``run_pyqgis`` (open-water channel of a
         habitat-impact assessment, alongside ``fetch_nwi_wetlands``).
-      - Feeds ``spatial_query`` (waterbody area inside a footprint, or
-        waterbodies within a place).
 
   Resilience: PRIMARY NHDPlus_HR ->
   FALLBACK medium-resolution NHD Waterbody -> honest

@@ -204,10 +204,8 @@ docstring: |-
   Cross-tool dependencies:
       Consumes optional bbox from ``fetch_administrative_boundaries`` /
       ``geocode_location`` (typical agent workflow: geocode "Lake Mead" ->
-      derive bbox -> call this tool). Feeds into ``spatial_query``
-      (clip dams to watershed / county / Case AOI), and into
-      exposure/loss composers that pair dam location with modeled
-      hazard footprints.
+      derive bbox -> call this tool). Feeds the exposure/loss composers
+      that pair dam location with modeled hazard footprints.
 
   Cache: ``static-30d`` (NID is updated quarterly at fastest; a 30-day
   bucket gives ~12x amortization). Cache key: SHA-256 of bbox-rounded-6dp

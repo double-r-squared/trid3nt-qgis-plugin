@@ -116,9 +116,8 @@ docstring: |-
     (``"12071"`` for Lee County FL), or bbox tuple
     ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326 (converted to
     point center for NWS zone lookup -- use state/FIPS when the user names
-    one; for sub-state areas prefer clipping to the admin polygon via
-    ``fetch_administrative_boundaries`` + ``spatial_query``
-    instead of trusting a rectangle).
+    one; for sub-state areas prefer clipping to the admin polygon from
+    ``fetch_administrative_boundaries`` instead of trusting a rectangle).
   - ``event_types`` (list[str] or None): NWS event-type filter strings, e.g.
     ``["Hurricane Warning", "Flood Warning"]``. ``None`` returns all types.
   - ``status`` (str): one of ``"actual"`` (default), ``"exercise"``,

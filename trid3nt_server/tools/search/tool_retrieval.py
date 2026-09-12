@@ -62,11 +62,11 @@ CORE_FLOOR: frozenset[str] = frozenset(
         "fetch_nws_alerts_conus",
         "fetch_nws_event",
         "search_tools",
-        "code_exec_request",
+        "run_qgis_algorithm",
+        "run_pyqgis",
         "compute_layer_bounds",
         "request_spatial_input",
         "generate_chart",
-        "spatial_query",
     }
 )
 

@@ -157,8 +157,7 @@ docstring: |-
       Consumes a bbox typically derived from ``geocode_location`` /
       ``fetch_administrative_boundaries`` or a fire footprint
       (``fetch_firms_active_fire`` / ``fetch_goes_active_fire``). Pairs with
-      those fire layers for the smoke-exposure overlay, and feeds
-      ``spatial_query`` for AOI-scoped AQI summaries.
+      those fire layers for the smoke-exposure overlay.
 
   Cache: ``dynamic-1h`` (AQI is a current-hour observation; the AirNow feed
   updates hourly). Cache key includes the bbox (6dp), the parameter set, and

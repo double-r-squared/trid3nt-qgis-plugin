@@ -105,14 +105,14 @@ card._candidate_radios[0][0].setChecked(True)
 card.confirm_btn.click()
 pump()
 assert tool_choice_sends == [
-    (STUB_TOOL_CANDIDATES_REQUEST_ID, "spatial_query", None)
+    (STUB_TOOL_CANDIDATES_REQUEST_ID, "compute_layer_bounds", None)
 ], f"pick send wrong: {tool_choice_sends}"
 assert card.answered
 assert not card.confirm_btn.isEnabled(), "card must lock after answering"
 # Picker UX: every picker this harness shows lands
 # in the SAME (never-_send-reset) turn, so the chip carries the running
 # "Step N" prefix -- this is card 1 of the sequence below.
-assert card.summary_lbl.text() == "Step 1: picked spatial_query", card.summary_lbl.text()
+assert card.summary_lbl.text() == "Step 1: picked compute_layer_bounds", card.summary_lbl.text()
 assert card._summary_container.isVisible() and not card._body.isVisible()
 card.confirm_btn.click()  # locked -- a second answer must not send
 card.decide_btn.click()
@@ -120,13 +120,13 @@ pump()
 assert len(tool_choice_sends) == 1, "single-answer lock violated"
 
 # A later turn event must NOT re-fold an ANSWERED card to "agent proceeded".
-dock._on_event("chunk", {"delta": "Running spatial_query."})
+dock._on_event("chunk", {"delta": "Running compute_layer_bounds."})
 pump()
-assert card.summary_lbl.text() == "Step 1: picked spatial_query", (
+assert card.summary_lbl.text() == "Step 1: picked compute_layer_bounds", (
     "answered chip was clobbered by the supersede sweep"
 )
 assert dock._open_tool_pickers == [], "answered card must leave the open list"
-print("[pick] one send + lock + chip 'picked spatial_query' ok")
+print("[pick] one send + lock + chip 'picked compute_layer_bounds' ok")
 
 # ---- 3. FREE TEXT ---------------------------------------------------------- #
 
@@ -175,7 +175,7 @@ pump()
 card4 = [c for c in picker_cards() if not c.answered][0]
 n_before = len(tool_choice_sends)
 # The turn moves on (server timeout_s fail-open) -- the card must fold.
-dock._on_event("chunk", {"delta": "No answer -- proceeding with spatial_query."})
+dock._on_event("chunk", {"delta": "No answer -- proceeding with compute_layer_bounds."})
 pump()
 assert card4.answered, "unanswered card must fold when the turn moves on"
 assert card4.summary_lbl.text() == "Step 4: agent proceeded", card4.summary_lbl.text()

@@ -79,7 +79,7 @@ docstring: |-
   - "Where are the power transmission lines near [place]?"; "show the electric
     grid in this area"; "what high-voltage lines cross this footprint?".
   - A hazard / exposure workflow needs the transmission network inside a flood
-    / fire / surge / earthquake footprint (intersect with ``spatial_query``).
+    / fire / surge / earthquake footprint.
   - Lifeline resilience: which corridors / voltage classes are hazard-exposed.
 
   **When NOT to use:**

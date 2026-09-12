@@ -118,8 +118,8 @@ docstring: |-
   **When NOT to use:**
   - County- or bbox-scoped queries -- use ``fetch_nws_event`` with a 5-digit
     county FIPS or a bbox; for sub-state areas of interest, clip the result
-    to the admin polygon (``fetch_administrative_boundaries`` +
-    ``spatial_query``) rather than trusting a rectangle.
+    to the admin polygon from ``fetch_administrative_boundaries`` rather than
+    trusting a rectangle.
   - Historical weather events -- NWS active-alerts is current-only (0-7 day
     horizon); use ``fetch_storm_events_db`` for historical data.
   - International alerts -- NWS covers US states, territories, and marine

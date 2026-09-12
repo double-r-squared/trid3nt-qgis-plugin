@@ -259,9 +259,8 @@ async def query_point_hazard(
     this point?" or "what do all the layers say at Fort Myers pier?" --
     one call reads the whole loaded raster stack at a point instead of N
     zonal calls. Resolves ``lon``/``lat`` or a geocoded ``place``. Do NOT
-    use for: area statistics (``spatial_query``); a time series over frames
-    (``extract_timeseries_at_point``); vector layers (skipped here; use
-    vector query tools).
+    use for: a time series over frames (``extract_timeseries_at_point``);
+    vector layers (skipped here; use vector query tools).
 
     Params:
         lon/lat: explicit EPSG:4326 coords (both required if used; wins

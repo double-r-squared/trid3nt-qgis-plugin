@@ -208,7 +208,7 @@ TOOL_CANDIDATES_ROW: dict[str, Any] = {
     "stage_label": "Data step",
     "candidates": [
         {
-            "tool_name": "spatial_query",
+            "tool_name": "compute_layer_bounds",
             "summary": "Query/summarize features of a loaded layer",
             "score": 0.62,
         },
@@ -263,7 +263,7 @@ WAVE_TOOL_CANDIDATES_STEP2: dict[str, Any] = {
             "score": 0.60,
         },
         {
-            "tool_name": "spatial_query",
+            "tool_name": "compute_layer_bounds",
             "summary": "Query/summarize features of a loaded layer",
             "score": 0.50,
         },
@@ -697,7 +697,7 @@ class StubAgentServer:
                         "agent-message-chunk",
                         {
                             "message_id": "m-pick",
-                            "delta": "No answer -- proceeding with spatial_query.",
+                            "delta": "No answer -- proceeding with compute_layer_bounds.",
                             "done": True,
                         },
                         case_id=case_id,
@@ -1037,7 +1037,7 @@ class StubAgentServer:
                 elif free_text:
                     delta = "Taking your guidance: " + str(free_text)
                 else:
-                    delta = "Agent decided: spatial_query."
+                    delta = "Agent decided: compute_layer_bounds."
                 await send(
                     "agent-message-chunk",
                     {"message_id": "m-pick", "delta": delta, "done": True},

@@ -28,7 +28,7 @@ def warm_index():
 
 
 def test_core_floor_covers_render_and_analysis_slots():
-    for name in ("generate_chart", "spatial_query"):
+    for name in ("generate_chart", "compute_layer_bounds"):
         assert name in CORE_FLOOR, f"{name} must be in CORE_FLOOR"
     # There is no publish_layer in the floor and no publish_layer tool:
     # emission is automatic, so there is no "display this" intent to keep
@@ -48,12 +48,12 @@ def test_core_floor_always_subset(warm_index, query, accrued):
 
 
 def test_never_hide_mid_task(warm_index):
-    accrued = {"telemac_river_dye", "compute_contours", "fetch_usgs_nwis_gauges"}
+    accrued = {"telemac_river_dye", "compute_cross_section", "fetch_usgs_nwis_gauges"}
     # a query about something UNRELATED to the accrued tools.
     res = retrieve_visible_tools("show me the lightning over the storm", accrued, DEFAULT_K)
     assert accrued <= res
     assert "telemac_river_dye" in res  # dispatched stays
-    assert "compute_contours" in res  # explicit stays
+    assert "compute_cross_section" in res  # explicit stays
 
 
 def test_monotonic_growth_only_adds(warm_index):
@@ -162,7 +162,8 @@ _RECALL_FIXTURE = [
      "artemis_harbor_agitation"),
     ("how far downstream does a dye spill travel in this river",
      "telemac_river_dye"),
-    ("draw the topographic contour lines from the elevation", "compute_contours"),
+    ("compute the slope from the DEM on the map", "run_qgis_algorithm"),
+    ("run this pyqgis script in my qgis session", "run_pyqgis"),
     ("what telemac keyword controls the bottom friction law", "describe_keywords"),
     ("read every raster on this case at this spot", "probe_point"),
     ("put these two runs on the same colour scale so I can compare them",

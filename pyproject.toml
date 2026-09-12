@@ -90,12 +90,6 @@ dependencies = [
     # carries adaptive thinking, the prompt-cache usage fields, and
     # AsyncAnthropic messages.stream() with get_final_message().
     "anthropic>=1,<2",
-    # duckdb runs the read-only SQL of the spatial_query tool over a case's
-    # vector layers via its spatial extension (ST_Read). The spatial and
-    # httpfs extensions download on first INSTALL and cache under
-    # ~/.duckdb/extensions; a cold offline box degrades with a typed
-    # EXTENSION_UNAVAILABLE error rather than a stack trace.
-    "duckdb>=1",
     # spotpy.objectivefunctions is the pinned source of NSE/KGE/PBIAS/RSR/
     # RMSE/R2 - no bespoke reimplementation of a metric spotpy provides. Pure
     # numpy + scipy, so it installs cleanly on the offline box.

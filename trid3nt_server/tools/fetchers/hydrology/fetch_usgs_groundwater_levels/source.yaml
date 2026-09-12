@@ -145,8 +145,7 @@ docstring: |-
   Cross-tool dependencies:
       - Composes WITH: ``geocode_location``
         (derive a bbox or surface a state from a place name BEFORE this call),
-        ``fetch_administrative_boundaries`` (state/county framing),
-        ``spatial_query`` (aggregate readings inside a polygon).
+        ``fetch_administrative_boundaries`` (state/county framing).
       - Upstream data source: USGS Water Data OGC API
         (api.waterdata.usgs.gov/ogcapi/v0 -- latest-field-measurements +
         monitoring-locations).

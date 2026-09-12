@@ -146,9 +146,9 @@ def generate_chart(
 
     Use for ANY chart the user asks to SEE: histogram, value-vs-time series,
     damage-state (DS0..DS4) bars, choropleth class breaks, scatter, heatmap.
-    Compose bins / classes / series in the playground (code_exec_request /
-    spatial_query) and pass them as ``records``. Do NOT use for a numeric
-    answer (spatial_query); a layer renders on the map by itself.
+    Compose bins / classes / series in the session (run_pyqgis)
+    and pass them as ``records``. Do NOT use for a numeric answer; a layer
+    renders on the map by itself.
 
     Params:
         vega_lite_spec: Vega-Lite v5 dict; supply ``mark`` (bar / line /

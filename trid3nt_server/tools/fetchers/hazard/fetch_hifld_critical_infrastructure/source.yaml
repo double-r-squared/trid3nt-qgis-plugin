@@ -96,7 +96,7 @@ docstring: |
   - "Where are the hospitals / schools / fire stations / police stations near
     [place]?"; "show critical infrastructure in this area".
   - A hazard / exposure workflow needs life-safety facility locations inside a
-    flood / fire / surge footprint (intersect with ``spatial_query``).
+    flood / fire / surge footprint.
   - Evacuation / shelter / damage-assessment context overlays.
 
   **When NOT to use:**

@@ -131,16 +131,14 @@ docstring: |-
       deep blue, VE coastal-high-hazard red, X minimal-hazard pale,
       D undetermined hatched). Downstream tools consume:
       ``FLD_ZONE`` (categorical legend), ``STATIC_BFE`` (numeric depth
-      narration), ``SFHA_TF`` (boolean intersect summary by
-      ``spatial_query``).
+      narration), ``SFHA_TF`` (the in-or-out flag).
 
   Cross-tool dependencies:
       - Often paired with ``fetch_administrative_boundaries`` (TIGER county
-        / city polygon) -> ``spatial_query`` to produce the "FEMA
-        flood zones in [place]" clipped output the user typically wants.
-      - Feeds ``spatial_query`` for "% of [parcel] inside SFHA"
-        summaries, and a structural-loss assessment for the NSI
-        structure inventory x NFHL intersection.
+        / city polygon) to produce the "FEMA flood zones in [place]" clipped
+        output the user typically wants.
+      - Feeds a structural-loss assessment for the NSI structure inventory
+        x NFHL intersection.
       - Companion to a hydraulic model run (``build_mesh``,
         ``run_solver``) when the user wants regulatory-vs-modeled
         comparison side-by-side.

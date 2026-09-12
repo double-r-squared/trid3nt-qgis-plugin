@@ -119,8 +119,7 @@ docstring: "OpenAQ global air-quality latest measurements as a FlatGeobuf point 
   \ 5xx / 422 / non-JSON / network failure\n        (retryable).\n\nCross-tool dependencies:\n    Consumes\
   \ optional bbox from ``fetch_administrative_boundaries`` /\n    ``geocode_location`` (geocode \"Delhi\"\
   \ -> derive bbox -> call this tool).\n    Pairs with ``fetch_hrrr_smoke`` / satellite aerosol layers\
-  \ for\n    observed-vs-modeled air-quality comparison, and feeds\n    ``spatial_query`` for population-weighted\
-  \ exposure.\n\nCache: ``dynamic-1h`` (OpenAQ latest values refresh as new readings land;\nan hourly\
+  \ for\n    observed-vs-modeled air-quality comparison.\n\nCache: ``dynamic-1h`` (OpenAQ latest values refresh as new readings land;\nan hourly\
   \ window balances freshness against the API rate budget). Cache\nkey: SHA-256 of (bbox rounded-6dp,\
   \ parameters) + the top-of-hour vintage.\nThe key intentionally omits the api_key -- the underlying\
   \ measurements do\nnot vary by caller."

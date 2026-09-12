@@ -102,8 +102,8 @@ def test_classify_result_usable_modeled_with_layers_is_true():
 def test_classify_result_usable_data_payload_is_true():
     """A non-layer data tool returning a populated dict is a usable result."""
     result = {"count": 42, "mean_depth_m": 1.7}
-    summary = summarize_tool_result("spatial_query", result)
-    assert classify_result_usable("spatial_query", result, summary) is True
+    summary = summarize_tool_result("compute_layer_bounds", result)
+    assert classify_result_usable("compute_layer_bounds", result, summary) is True
 
 
 def test_classify_result_usable_none_result_is_none():

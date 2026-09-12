@@ -188,39 +188,26 @@ from .fetchers._router.registration import register_specs_from_tree as _register
 _register_router_specs()
 
 # -- derive (compute / clip / extract / vector-edit / charts) --
-from .derive.clip_raster_to_polygon import clip_raster_to_polygon  # noqa: E402,F401
 # The two generic geometry composition links: one document out of several layers
 # (``combine``), and the two ends of a line (``endpoints``).
 from .derive.combine import combine  # noqa: E402,F401
-from .derive.compute_aspect import compute_aspect  # noqa: E402,F401
-from .derive.compute_blended_composite import compute_blended_composite  # noqa: E402,F401
-from .derive.compute_building_density import compute_building_density  # noqa: E402,F401
-from .derive.compute_change_detection import compute_change_detection  # noqa: E402,F401
-from .derive.compute_colored_relief import compute_colored_relief  # noqa: E402,F401
-from .derive.compute_contours import compute_contours  # noqa: E402,F401
 from .derive.compute_cross_section import compute_cross_section  # noqa: E402,F401
 from .derive.compute_exposure_summary import compute_exposure_summary  # noqa: E402,F401
 from .derive.compute_flood_depth_damage import compute_flood_depth_damage  # noqa: E402,F401
 # flood-extent skill (raster/vector confusion).
 from .derive.compute_flood_extent_skill import compute_flood_extent_skill  # noqa: E402,F401
-from .derive.compute_hillshade import compute_hillshade  # noqa: E402,F401
 from .derive.compute_idf_curve import compute_idf_curve  # noqa: E402,F401
-from .derive.compute_impervious_surface import compute_impervious_surface  # noqa: E402,F401
 from .derive.compute_layer_bounds import compute_layer_bounds  # noqa: E402,F401
 from .derive.compute_model_residuals import compute_model_residuals  # noqa: E402,F401
-from .derive.compute_ndvi import compute_ndvi  # noqa: E402,F401
 from .derive.compute_sediment_yield import compute_sediment_yield  # noqa: E402,F401
 # model-fit skill metrics (spotpy).
 from .derive.compute_skill_metrics import compute_skill_metrics  # noqa: E402,F401
-from .derive.compute_slope import compute_slope  # noqa: E402,F401
 from .derive.delineate_watershed import delineate_watershed  # noqa: E402,F401
 # A line through a shape's centroid along a bearing: what a profile is read along
 # when the read runs ACROSS a feature rather than down the domain's own axis.
 from .derive.derive_transect import derive_transect  # noqa: E402,F401
 from .derive.digitize_water_body import digitize_water_body  # noqa: E402,F401
-from .derive.enhance_satellite_image import enhance_satellite_image  # noqa: E402,F401
 from .derive.endpoints import endpoints  # noqa: E402,F401
-from .derive.extract_landcover_class import extract_landcover_class  # noqa: E402,F401
 # model-vs-observation pairing primitive.
 from .derive.extract_model_at_observations import extract_model_at_observations  # noqa: E402,F401
 from .derive.extract_stream_network import extract_stream_network  # noqa: E402,F401
@@ -229,9 +216,11 @@ from .derive.charts.generate_chart import generate_chart  # noqa: E402,F401
 from .derive.probe_point import probe_point  # noqa: E402,F401
 from .derive.query_point_hazard import query_point_hazard  # noqa: E402,F401
 from .derive.restyle_layer import restyle_layer  # noqa: E402,F401 - DISPLAY-state re-emission of an already-published layer
+# The two session tools: each is a request on the plugin wire, run in the
+# user's own QGIS session; the code one never runs without the approval card.
+from .derive.run_pyqgis import run_pyqgis  # noqa: E402,F401
+from .derive.run_qgis_algorithm import run_qgis_algorithm  # noqa: E402,F401
 from .derive.section import section  # noqa: E402,F401
-# The one read-only SQL surface over published layers.
-from .derive.spatial_query import spatial_query  # noqa: E402,F401
 
 # -- simulation (engine bridges, model_* engines, solver seam) --
 # Run-diagnostics dispatcher: one registered tool over the per-engine parser
@@ -255,8 +244,7 @@ from .search.search_spatial_functions import search_spatial_functions  # noqa: E
 from .search.search_living_atlas import search_living_atlas  # noqa: E402,F401
 from .search.fetch_living_atlas_layer import fetch_living_atlas_layer  # noqa: E402,F401
 
-# -- meta (web fetch, code exec, case utilities) --
-from .meta.code_exec_tool import code_exec_tool  # noqa: E402,F401
+# -- meta (web fetch, case utilities) --
 from .meta.compose_case_report import compose_case_report  # noqa: E402,F401
 from .meta.list_run_frames import list_run_frames  # noqa: E402,F401
 # describe_keywords: the READ over the TELEMAC module catalogs - the only way the

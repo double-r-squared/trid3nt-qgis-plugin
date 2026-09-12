@@ -158,8 +158,8 @@ async def probe_point(
     (lon, lat) pair, a "lat,lon" string, a selected point layer or a place name.
     A stack of animation frames comes back as ONE series, not N rows.
 
-    Do NOT use for: area statistics (`spatial_query`); one layer's time series
-    (`extract_timeseries_at_point`); vector layers, which a point read skips.
+    Do NOT use for: one layer's time series (`extract_timeseries_at_point`);
+    vector layers, which a point read skips.
 
     Returns the point, the case, and one result per raster: its value, units and
     any note. A layer outside its extent, on nodata or unreadable is a null with

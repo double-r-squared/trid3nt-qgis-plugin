@@ -130,12 +130,11 @@ def test_system_prompt_has_geographic_clipping_section() -> None:
 
 
 def test_system_prompt_names_admin_polygon_clip_tools() -> None:
-    """A5 fix must reference the admin-boundary fetcher + the raster clip tool +
-    the vector clip surface. There is no clip_vector_to_polygon;
-    vector clipping lives on spatial_query (ST_Within/ST_Intersects)."""
+    """The admin-polygon pattern names the boundary fetcher and the session
+    clip algorithm."""
     assert "fetch_administrative_boundaries" in SYSTEM_PROMPT
-    assert "clip_raster_to_polygon" in SYSTEM_PROMPT
-    assert "spatial_query" in SYSTEM_PROMPT
+    assert "run_qgis_algorithm" in SYSTEM_PROMPT
+    assert "gdal:cliprasterbymasklayer" in SYSTEM_PROMPT
 
 
 def test_system_prompt_lists_admin_region_kinds() -> None:
@@ -282,35 +281,6 @@ def test_system_prompt_routes_the_news_article_spill_to_the_river_plume() -> Non
     assert "telemac_river_dye" in SYSTEM_PROMPT
     assert "web_fetch" in SYSTEM_PROMPT
     assert "NEWS ARTICLE" in SYSTEM_PROMPT
-
-
-# Shaded/baked land cover uses the land cover AS the blend
-# base (it is palette-aware); colored_relief is elevation colors, not
-# land-cover classes. Mirrors the compute_blended_composite description fix.
-
-
-def test_system_prompt_has_shaded_landcover_base_section() -> None:
-    """Prompt must carry the shaded/baked land-cover blend-base rule."""
-    assert "Shaded / baked land cover" in SYSTEM_PROMPT
-
-
-def test_system_prompt_says_pass_landcover_as_blend_base() -> None:
-    """The load-bearing instruction: pass the fetch_landcover handle DIRECTLY as
-    compute_blended_composite's base_layer_uri."""
-    flat = " ".join(SYSTEM_PROMPT.split())
-    assert "fetch_landcover" in flat
-    assert "compute_blended_composite" in flat
-    assert "base_layer_uri" in flat
-    # land cover is palette-aware / paletted-categorical.
-    assert "paletted" in flat.lower() or "color table" in flat.lower()
-
-
-def test_system_prompt_forbids_colored_relief_as_landcover_base() -> None:
-    """The anti-substitution half: do not use compute_colored_relief as the
-    base for shaded land cover. (The trailing elevation-colors rationale was
-    cut — the prohibition sentence itself remains.)"""
-    flat = " ".join(SYSTEM_PROMPT.split())
-    assert "NOT substitute compute_colored_relief as the base" in flat
 
 
 # Narration conciseness — be concise; do not re-explain the

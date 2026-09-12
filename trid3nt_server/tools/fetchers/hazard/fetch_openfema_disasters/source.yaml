@@ -154,8 +154,7 @@ docstring: |-
   Cross-tool dependencies:
       - Composes WITH: ``geocode_location``
         (place name -> bbox / state before this call),
-        ``fetch_administrative_boundaries`` (county framing),
-        ``spatial_query`` (declaration count as a county attribute).
+        ``fetch_administrative_boundaries`` (county framing).
       - Distinct from: ``fetch_fema_nfhl_zones`` (NFHL flood zones -- a
         regulatory boundary, not a declaration record); the live-hazard feeds
         (NWS warnings, FIRMS / GOES fire, MRMS) -- declarations are historical.

@@ -21,9 +21,10 @@ from trid3nt_contracts.region_choice import (
     RegionChoiceProvidedEnvelopePayload,
     RegionChoiceRequestEnvelopePayload,
 )
-from trid3nt_contracts.sandbox_contracts import (
+from trid3nt_contracts.processing_contracts import (
     CodeExecRequestPayload,
-    CodeExecResultPayload,
+    ProcessingRequestPayload,
+    ProcessingResponsePayload,
 )
 
 # Re-export the secrets payloads onto ``ws`` so the inline lambdas below stay
@@ -705,7 +706,7 @@ def test_tool_candidates_round_trip(session_id: str) -> None:
         request_id=new_ulid(),
         stage_label="Analysis step",
         candidates=[
-            ws.ToolCandidate(tool_name="spatial_query", summary="stats", score=0.7),
+            ws.ToolCandidate(tool_name="compute_layer_bounds", summary="stats", score=0.7),
         ],
         reason="ask_mode",
         timeout_s=45.0,
@@ -713,7 +714,7 @@ def test_tool_candidates_round_trip(session_id: str) -> None:
     dumped = _roundtrip_idempotent(_wrap(payload, session_id))
     assert dumped["type"] == "tool-candidates"
     assert dumped["payload"]["reason"] == "ask_mode"
-    assert dumped["payload"]["candidates"][0]["tool_name"] == "spatial_query"
+    assert dumped["payload"]["candidates"][0]["tool_name"] == "compute_layer_bounds"
 
 
 def test_tool_candidates_reason_closed_enum() -> None:
@@ -740,9 +741,9 @@ def test_tool_candidates_empty_candidates_allowed(session_id: str) -> None:
 def test_tool_choice_three_shapes(session_id: str) -> None:
     """Pick / free-text / let-agent-decide all round-trip; the both-None
     shape is the explicit 'agent decides' reply, not an error."""
-    pick = ws.ToolChoicePayload(request_id=new_ulid(), tool_name="spatial_query")
+    pick = ws.ToolChoicePayload(request_id=new_ulid(), tool_name="compute_layer_bounds")
     dumped = _roundtrip_idempotent(_wrap(pick, session_id))
-    assert dumped["payload"]["tool_name"] == "spatial_query"
+    assert dumped["payload"]["tool_name"] == "compute_layer_bounds"
     assert dumped["payload"]["free_text"] is None
 
     free = ws.ToolChoicePayload(
@@ -884,21 +885,22 @@ def test_every_a3_a4_a4b_payload_round_trips(session_id: str) -> None:
             },
             title="Damage distribution",
         ),
-        # — python-sandbox code-exec envelopes (Stage 2)
+        # the code approval card and the session processing pair
         "code-exec-request": lambda: CodeExecRequestPayload(
             code_exec_id=new_ulid(),
-            python_code="result = dem.read(1).mean()",
-            layer_refs={"dem": "gs://bucket/dem.tif"},
-            rationale="mean elevation",
+            python_code="result = iface.activeLayer().name()",
+            rationale="name the active layer",
         ),
-        "code-exec-result": lambda: CodeExecResultPayload(
-            code_exec_id=new_ulid(),
+        "processing-request": lambda: ProcessingRequestPayload(
+            request_id=new_ulid(),
+            kind="algorithm",
+            algorithm="native:slope",
+            params={"INPUT": "DEM", "Z_FACTOR": 1.0},
+        ),
+        "processing-response": lambda: ProcessingResponsePayload(
+            request_id=new_ulid(),
             status="ok",
-            stdout_tail="done\n",
-            stderr_tail="",
-            result={"kind": "json", "value": 42},
-            truncated=False,
-            duration_s=0.5,
+            result={"layer_name": "Slope", "kind": "raster"},
         ),
         # region-disambiguation picker (state-bbox-fallback narrowing). Request
         # is agent->client (whole-state default + candidate counties); provided
@@ -945,7 +947,7 @@ def test_every_a3_a4_a4b_payload_round_trips(session_id: str) -> None:
             stage_label="Data step",
             candidates=[
                 ws.ToolCandidate(
-                    tool_name="spatial_query",
+                    tool_name="compute_layer_bounds",
                     summary="Query/summarize features of a loaded layer",
                     score=0.62,
                 ),
@@ -959,7 +961,7 @@ def test_every_a3_a4_a4b_payload_round_trips(session_id: str) -> None:
             timeout_s=60.0,
         ),
         "tool-choice": lambda: ws.ToolChoicePayload(
-            request_id=new_ulid(), tool_name="spatial_query"
+            request_id=new_ulid(), tool_name="compute_layer_bounds"
         ),
         # tool-io — raw args + function_response sidecar for the tool-card
         # expander (tool-card-expand-output spec).

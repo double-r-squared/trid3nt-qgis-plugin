@@ -801,16 +801,15 @@ def _match_synthetic_queries(
 
 #: Generic operator/shape tokens that appear in many utility tool names but
 #: that the LLM uses descriptively in queries. Skipped by the name-substring
-#: ranker so e.g. "flood zone polygons" doesn't over-boost
-#: ``clip_raster_to_polygon`` over the
-#: data-intent target ``fetch_fema_nfhl_zones``.
+#: ranker so e.g. "flood zone polygons" doesn't over-boost a polygon-named
+#: utility over the data-intent target ``fetch_fema_nfhl_zones``.
 _NAME_RANKER_GENERICS: set[str] = {
     "polygon",
     "polygons",
     # Bare domain nouns: content channels route these; letting
     # them earn NAME-channel RRF terms made name-bearing tools (fetch_buildings,
     # compute_flood_depth_damage) structurally unbeatable for analytical asks
-    # like "summary statistics for the building layer" (spatial_query fold).
+    # like "summary statistics for the building layer".
     "building",
     "buildings",
     "flood",

@@ -7,6 +7,7 @@ inline row cap holds, the summarizer strips the spec, and the emit persists."""
 
 from __future__ import annotations
 
+import asyncio
 import json
 from pathlib import Path
 
@@ -284,7 +285,7 @@ class TestSummarizeChartEmission:
         from trid3nt_server.adapters.adapter import summarize_tool_result
 
         ordinary = {"columns": ["count"], "rows": [[9]], "row_count": 1, "count": 9}
-        summary = summarize_tool_result("spatial_query", ordinary)
+        summary = summarize_tool_result("compute_layer_bounds", ordinary)
         assert summary["status"] == "ok"
         assert summary["result"]["count"] == 9
 
@@ -387,18 +388,19 @@ class TestEmitChart:
 
 
 def test_dispatch_detection_signal(tmp_path):
-    from trid3nt_server.tools.derive.spatial_query.spatial_query import spatial_query
+    from trid3nt_server.tools.derive.compute_layer_bounds.compute_layer_bounds import (
+        compute_layer_bounds,
+    )
 
     records = [{"x": 0.1 * i, "y": 0.1 * i, "v": float(i)} for i in range(4)]
     vec_path = _make_geojson_points(tmp_path, records)
 
     chart = generate_chart(vega_lite_spec=_bar_spec(), title="t",
                            records=[{"label": "a", "count": 1}])
-    stats = spatial_query(sql="SELECT count(*) AS n, avg(v) AS mean FROM pts",
-                          layer_refs={"pts": vec_path})
+    bounds = asyncio.run(compute_layer_bounds(layer_uri=vec_path, fit_map=False))
 
     assert is_chart_emission_result(chart) is True
-    assert is_chart_emission_result(stats) is False
+    assert is_chart_emission_result(bounds) is False
 
 
 
