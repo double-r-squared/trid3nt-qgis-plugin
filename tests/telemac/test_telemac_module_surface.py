@@ -23,7 +23,7 @@ from trid3nt_server.workflows.telemac.modules import (
     T2D,
     draw,
     fill,
-    load_dictionary,
+    load_module_input,
     run,
 )
 from trid3nt_server.workflows.telemac.modules.module import UNSET, Module
@@ -35,7 +35,7 @@ _EXPOSED = ("telemac2d", "telemac3d", "artemis", "waqtel", "gaia")
 
 def test_every_slot_carries_the_dictionary_s_own_name_and_help():
     for module in _EXPOSED:
-        dictionary = load_dictionary(module)
+        dictionary = load_module_input(module)
         assert dictionary, module
         for identifier, slot in dictionary.items():
             assert slot.identifier == identifier
@@ -50,7 +50,7 @@ def test_the_identifier_is_the_keyword_and_nothing_invented():
     Where the mechanical spelling IS an identifier it is the identifier; where it is
     not, the image's own map decides, which is why the map is read out of the image."""
     for module in _EXPOSED:
-        for slot in load_dictionary(module).values():
+        for slot in load_module_input(module).values():
             mechanical = "".join(c if c.isalnum() else "_"
                                  for c in slot.keyword.strip())
             assert slot.identifier.isidentifier()
@@ -102,7 +102,7 @@ def test_a_wrapper_is_a_declaration_and_refuses_to_be_a_value():
 
 
 def test_an_unexposed_module_refuses_naming_the_ones_there_are():
-    with pytest.raises(SlotRefused, match="no dictionary"):
+    with pytest.raises(SlotRefused, match="no module input"):
         Module("nosuchmodule")
 
 
@@ -348,7 +348,7 @@ def test_a_composite_sets_only_what_its_value_s_presence_defines():
     for module in _EXPOSED:
         source = (modules / f"{module}.py").read_text(encoding="utf-8")
         tree = ast.parse(source)
-        dictionary = load_dictionary(module)
+        dictionary = load_module_input(module)
         constants = {
             node.targets[0].id: node.value.value
             for node in tree.body
@@ -733,7 +733,7 @@ def test_a_coupled_body_states_only_what_its_caller_handed_it():
     opinions = []
     for (module, body), (first, second) in _COUPLED_CALLS.items():
         wrapper = WRAPPERS[module]
-        dictionary = load_dictionary(module)
+        dictionary = load_module_input(module)
         one = {name: row.value for name, row in fill(
             wrapper, **dict(getattr(wrapper, body)(**first)["slots"])).filled.items()}
         two = {name: row.value for name, row in fill(
@@ -939,7 +939,7 @@ def test_the_basin_states_how_its_tracer_is_carried_and_under_what_ceiling():
     deck advects temperature by whatever the VELOCITIES use. The template states the
     scheme, its ceiling and the step, each from a param and so each overridable."""
     from trid3nt_server.workflows.runtime import param_rows
-    from trid3nt_server.workflows.telemac.modules import load_dictionary
+    from trid3nt_server.workflows.telemac.modules import load_module_input
     from trid3nt_server.workflows.telemac.templates.stratified_flow.declarations import (
         PARAMS,
     )
@@ -948,7 +948,7 @@ def test_the_basin_states_how_its_tracer_is_carried_and_under_what_ceiling():
     )
 
     rows = {row.name: row for row in param_rows(PARAMS)}
-    slot = load_dictionary("telemac3d")["SCHEME_FOR_ADVECTION_OF_TRACERS"]
+    slot = load_module_input("telemac3d")["SCHEME_FOR_ADVECTION_OF_TRACERS"]
     assert slot.engine_default is UNSET
     scheme = rows["tracer_advection_scheme"].default
     # The NERD family, by the engine's own naming: telemac2d's TREATMENT OF
@@ -1190,12 +1190,12 @@ def test_the_fill_docstring_names_the_module_its_rubriques_and_its_open_slots():
         body = entry.fn.workflow.plan_decl.steering
         doc = entry.fn.__doc__
         assert f"Sheet: {body.MODULE}" in doc, name
-        assert f"dictionary has {len(body.DICTIONARY)} keywords" in doc, name
+        assert f"dictionary has {len(body.MODULE_INPUT)} keywords" in doc, name
         assert "Open mandatory slots:" in doc, name
         assert "describe_keywords" in doc and "keywords=" in doc, name
         stated = set(body.ASSERTED) | set(entry.fn.workflow.plan_decl.slots)
         for identifier in stated:
-            slot = body.DICTIONARY.get(identifier)
+            slot = body.MODULE_INPUT.get(identifier)
             if slot is not None and slot.rubrique:
                 assert slot.rubrique[0] in doc, f"{name}: {slot.keyword}"
 
@@ -1211,7 +1211,7 @@ def test_every_required_file_is_the_template_s_own_statement():
         door = TOOL_REGISTRY[name].fn.workflow.plan_decl
         body = door.steering
         stated = set(body.ASSERTED) | set(door.slots)
-        unstated = sorted(slot.keyword for n, slot in body.DICTIONARY.items()
+        unstated = sorted(slot.keyword for n, slot in body.MODULE_INPUT.items()
                           if slot.is_required and n not in stated)
         assert not unstated, f"{name} leaves {unstated} to something else"
 
@@ -1243,7 +1243,7 @@ def test_the_card_shows_what_is_set_and_open_and_folds_the_rest_by_rubrique():
 
     sheet = _filled(**{"LAW OF BOTTOM FRICTION": 4})
     rows = {row.name: row for row in card_rows(sheet)}
-    assert len(rows) == len(T2D.DICTIONARY)
+    assert len(rows) == len(T2D.MODULE_INPUT)
     assert not rows["LAW_OF_BOTTOM_FRICTION"].advanced
     assert rows["LAW_OF_BOTTOM_FRICTION"].origin == "user"
     assert rows["LAW_OF_BOTTOM_FRICTION"].source_badge == "user"
@@ -1324,7 +1324,7 @@ def test_the_serializer_is_the_only_module_that_writes_a_keyword_into_a_deck():
     A keyword formatted into a string anywhere else is a second author of the format,
     caught here by the dictionary's own names rather than by a maintained list."""
     keywords = {slot.keyword for module in _EXPOSED + ("tomawac",)
-                for slot in load_dictionary(module).values()}
+                for slot in load_module_input(module).values()}
     offenders = {}
     for tree_root in (Path("trid3nt_server"), Path("workers")):
         for path in sorted(tree_root.rglob("*.py")):

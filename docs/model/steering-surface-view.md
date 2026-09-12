@@ -122,7 +122,7 @@ What the wrapper offers a body and a fill: the module it wraps, its whole keywor
 | item | type | required |
 | --- | --- | --- |
 | `MODULE` | String | required |
-| `DICTIONARY` | Map | required |
+| `MODULE_INPUT` | Map | required |
 | `COMPOSITES` | Map | required |
 | `ASSERTED` | Map | required |
 

@@ -63,7 +63,7 @@ reader that knows a question.
 | file | what it is |
 | --- | --- |
 | `__init__.py` | The door: the wrappers, the two acts, and the primitive set. |
-| `module.py` | What a slot, a wrapper, a composite, an output and a defined token ARE, and the dictionary loader that makes a wrapper out of `dictionary/<module>.json`. |
+| `module.py` | What a slot, a wrapper, a composite, an output and a defined token ARE, and the loader that makes a wrapper out of `module_input/<module>.json`. |
 | `sheet.py` | The sheet - filled slots with their provenance, the files a composite named, the slots still open - and `fill` / `run`. |
 | `outputs.py` | The primitive set - `field`, `series`, `max_over_time`, `profile`, `extent`, `mesh`, `mass_balance` - and `drogues` and `column`, with the read of each off a solved run through `read_selafin`, the engine's own reader inside the image, and the `Measure` a template names an answer by. |
 | `listing.py` | What a solved run's own listing says, read on the server: the engine's demand, GAIA's closure, the water-volume closure per period and whole, and the flux across a liquid boundary. |
@@ -74,3 +74,9 @@ reader that knows a question.
 | `artemis.py` | The ARTEMIS wrapper: the incident wave, which the module reads out of the boundary file rather than the deck, so the composite restamps the pair the mesh recipe wrote; and the wave vocabulary. |
 | `waqtel.py` | The WAQTEL wrapper: the O2 process and the degradation a carrier names as coupled bodies, whose slots serialize into WAQTEL's own steering file while the coupling keywords land on the carrier's sheet; a degradation given nothing couples nothing. |
 | `gaia.py` | The GAIA wrapper: the bed and the suspension a carrier names as coupled bodies, expanded from a gradation or a class and its concentration, the NESTOR dredging composite, and its primitives over the module's own result file. |
+
+## Subfolders
+
+| folder | what it is |
+| --- | --- |
+| `module_input/` | The module's input vocabulary: one JSON per exposed module, as the engine's own dictionary publishes it. See its own map. |

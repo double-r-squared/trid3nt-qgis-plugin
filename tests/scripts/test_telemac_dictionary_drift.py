@@ -1,6 +1,6 @@
 """The committed TELEMAC dictionaries are the image's dictionaries, not a copy of them.
 
-The dictionary under ``workflows/telemac/dictionary/`` is generated data, valid only
+The dictionary under ``workflows/telemac/modules/module_input/`` is generated data, valid only
 while it agrees with the engine's own keyword dictionaries, so this re-extracts
 in-image and compares. Without the image the check SKIPS - it never passes on
 absence."""
@@ -35,7 +35,7 @@ def _extractor():
 def test_every_exposed_module_has_a_committed_dictionary():
     extractor = _extractor()
     committed = {path.stem: json.loads(path.read_text())
-                 for path in extractor.dictionary_dir().glob("*.json")}
+                 for path in extractor.module_input_dir().glob("*.json")}
     assert set(committed) == set(extractor.MODULES)
     assert sum(len(c["keywords"]) for c in committed.values()) == _TOTAL_KEYWORDS
     for module, dictionary in committed.items():
@@ -51,7 +51,7 @@ def test_every_exposed_module_has_a_committed_dictionary():
 def test_the_help_carries_no_markup_into_the_surface():
     """A slot's desc is what a reader is given, so no LaTeX may survive in it."""
     extractor = _extractor()
-    for path in extractor.dictionary_dir().glob("*.json"):
+    for path in extractor.module_input_dir().glob("*.json"):
         assert "\\" not in path.read_text(), (
             f"{path.name} still carries LaTeX; widen de_latex in the extractor")
 
@@ -63,7 +63,7 @@ def test_the_committed_dictionary_is_what_the_image_says_today(tmp_path):
                     "the dictionary is extracted from are only in that image")
     extractor.extract_dictionaries(tmp_path)
     for module in extractor.MODULES:
-        committed = (extractor.dictionary_dir() / f"{module}.json").read_text()
+        committed = (extractor.module_input_dir() / f"{module}.json").read_text()
         assert (tmp_path / f"{module}.json").read_text() == committed, (
             f"{module}.json has drifted from the image's dictionary; re-run "
             "dev/instruments/extract_telemac_dictionary.py and read the diff")

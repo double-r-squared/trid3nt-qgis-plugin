@@ -13,7 +13,7 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.tools import register_tool
 
-from .module import dictionary_dir, load_dictionary
+from .module import module_input_dir, load_module_input
 
 __all__ = ["DescribeKeywordsError", "describe_keywords"]
 
@@ -43,7 +43,7 @@ class DescribeKeywordsError(RuntimeError):
 
 
 def _exposed() -> list[str]:
-    return sorted(path.stem for path in dictionary_dir().glob("*.json"))
+    return sorted(path.stem for path in module_input_dir().glob("*.json"))
 
 
 def _words(text: str) -> list[str]:
@@ -127,7 +127,7 @@ def describe_keywords(module: str = "telemac2d", query: str = "",
             "UNKNOWN_MODULE",
             f"there is no keyword dictionary for {module!r}; the exposed modules are "
             f"{', '.join(_exposed())}.")
-    dictionary = load_dictionary(name)
+    dictionary = load_module_input(name)
     if not str(query or "").strip():
         sections: dict[str, int] = {}
         for slot in dictionary.values():

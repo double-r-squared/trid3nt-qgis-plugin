@@ -1,4 +1,4 @@
-# `workflows/telemac/dictionary/` - the engine's own dictionaries
+# `modules/module_input/` - the module's input vocabulary
 
 One JSON per exposed module, extracted IN-IMAGE from the module's dico by
 `dev/instruments/extract_telemac_dictionary.py` and committed. Never hand edited: a
@@ -6,9 +6,9 @@ transcribed keyword table is a second answer to a question the engine already
 answers, and `tests/scripts/test_telemac_dictionary_drift.py` re-extracts from the image
 when one is present and fails on any difference.
 
-A row carries what the dictionary says about one keyword - its raw name, the
-identifier the image's own spaces-to-underscores map spells it by, its type and
-size, its help de-LaTeXed to plain text, its rubrique, its level, its engine
+A row carries what the engine's dictionary says about one keyword - its raw name,
+the identifier the image's own spaces-to-underscores map spells it by, its type
+and size, its help de-LaTeXed to plain text, its rubrique, its level, its engine
 default, whether SUBMIT marks it a file, and whether APPARENCE marks its list
 unbounded. `modules/module.py` reads a file here into the wrapper's slots.
 

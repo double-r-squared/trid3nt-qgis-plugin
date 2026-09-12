@@ -84,7 +84,7 @@ class Sheet:
         """Every keyword the dictionary gives no default for and nothing has set.
 
         Informational and COMPLETE: what this run leaves to the engine, whole."""
-        return tuple(slot for name, slot in self.body.DICTIONARY.items()
+        return tuple(slot for name, slot in self.body.MODULE_INPUT.items()
                      if slot.is_open and name not in self.filled)
 
     def required(self) -> tuple[Slot, ...]:
@@ -117,7 +117,7 @@ class Sheet:
 def _in_dictionary_order(body: type,
                       filled: Mapping[str, Filled]) -> list[tuple[str, Filled]]:
     """The dictionary's own order - the order a sheet is read down."""
-    return [(name, filled[name]) for name in body.DICTIONARY if name in filled]
+    return [(name, filled[name]) for name in body.MODULE_INPUT if name in filled]
 
 
 def fill(source: type | Sheet, *, template: str = "",
@@ -127,7 +127,7 @@ def fill(source: type | Sheet, *, template: str = "",
 
     Repeatable; an unknown keyword refuses BY NAME and None states nothing."""
     body, standing, pending = _standing(source, template)
-    dictionary = body.DICTIONARY
+    dictionary = body.MODULE_INPUT
     composites = body.COMPOSITES
     for name, value in slots.items():
         if name not in composites:
@@ -201,7 +201,7 @@ def _standing(source: type | Sheet, template: str = "",
     # because a bare wrapper has no template to name.
     provenance = Provenance(Origin.TEMPLATE, template or source.__name__)
     for name, value in source.ASSERTED.items():
-        slot = source.DICTIONARY.get(name)
+        slot = source.MODULE_INPUT.get(name)
         if slot is None or value is None or _late(value):
             pending[name] = (value, provenance)
         else:

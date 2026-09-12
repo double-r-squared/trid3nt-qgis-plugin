@@ -104,12 +104,12 @@ class Door:
         Read off the declaration itself, never claimed by prose."""
         body = self.steering
         stated = set(body.ASSERTED) | set(self.slots)
-        touched = sorted({body.DICTIONARY[name].rubrique[0] for name in stated
-                          if name in body.DICTIONARY and body.DICTIONARY[name].rubrique})
-        open_required = sorted(slot.keyword for name, slot in body.DICTIONARY.items()
+        touched = sorted({body.MODULE_INPUT[name].rubrique[0] for name in stated
+                          if name in body.MODULE_INPUT and body.MODULE_INPUT[name].rubrique})
+        open_required = sorted(slot.keyword for name, slot in body.MODULE_INPUT.items()
                                if slot.is_required and name not in stated)
         return (
-            f"Sheet: {body.MODULE}, whose dictionary has {len(body.DICTIONARY)} "
+            f"Sheet: {body.MODULE}, whose dictionary has {len(body.MODULE_INPUT)} "
             f"keywords. This template states {len(stated)} of them, under "
             f"{', '.join(touched)}. Open mandatory slots: "
             f"{', '.join(open_required) if open_required else 'none'}. Every "
@@ -367,7 +367,7 @@ def card_rows(sheet: Sheet) -> list[ParamSheetRow]:
     # The advanced fold reads down the dictionary's own RUBRIQUES, and inside one
     # down the dictionary's own order - the sections the engine's documentation
     # is written in, rather than a flat thousand-row list.
-    rest = [slot for name, slot in sheet.body.DICTIONARY.items()
+    rest = [slot for name, slot in sheet.body.MODULE_INPUT.items()
             if name not in sheet.filled and not slot.is_required]
     return rows + [_default_row(slot) for slot in
                    sorted(rest, key=lambda slot: _group(slot))]
@@ -400,7 +400,7 @@ async def _review(sheet: Sheet, *, workflow: str, title: str,
             outcome.cancel_reason or f"{workflow} was cancelled at the review.",
             error_code="USER_INPUT_CANCELLED")
     return {name: value for name, value in outcome.params.items()
-            if name in sheet.body.DICTIONARY or name in sheet.body.COMPOSITES}
+            if name in sheet.body.MODULE_INPUT or name in sheet.body.COMPOSITES}
 
 
 def _slot_row(name: str, row: Any) -> ParamSheetRow:

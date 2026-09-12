@@ -22,8 +22,8 @@ __all__ = [
     "Output",
     "Slot",
     "SlotRefused",
-    "dictionary_dir",
-    "load_dictionary",
+    "load_module_input",
+    "module_input_dir",
 ]
 
 
@@ -44,15 +44,15 @@ UNSET = _Unset()
 
 #: Class attributes a wrapper carries that are never keyword assertions.
 _RESERVED = frozenset((
-    "MODULE", "DICTIONARY", "COMPOSITES", "OUTPUTS", "ASSERTED",
+    "MODULE", "MODULE_INPUT", "COMPOSITES", "OUTPUTS", "ASSERTED",
     "VARIABLES", "LISTING", "DERIVED", "RESULT_FILE", "composites", "outputs",
     "slot",
 ))
 
 
-def dictionary_dir() -> Path:
-    """Where the committed dictionaries live."""
-    return Path(__file__).resolve().parents[1] / "dictionary"
+def module_input_dir() -> Path:
+    """Where the committed module inputs live."""
+    return Path(__file__).resolve().parent / "module_input"
 
 
 @dataclass(frozen=True, slots=True)
@@ -175,14 +175,14 @@ class Output:
 
 
 @lru_cache(maxsize=None)
-def load_dictionary(module: str) -> Mapping[str, Slot]:
+def load_module_input(module: str) -> Mapping[str, Slot]:
     """The module's whole keyword surface, keyed by the identifier it is written
     under. The dictionary's own order is kept: a sheet reads down it."""
-    path = dictionary_dir() / f"{module}.json"
+    path = module_input_dir() / f"{module}.json"
     if not path.is_file():
         raise SlotRefused(
-            f"no dictionary for {module!r}; the exposed modules are "
-            f"{sorted(p.stem for p in dictionary_dir().glob('*.json'))}.")
+            f"no module input for {module!r}; the exposed modules are "
+            f"{sorted(p.stem for p in module_input_dir().glob('*.json'))}.")
     rows = json.loads(path.read_text())["keywords"]
     return MappingProxyType({row["identifier"]: Slot(
         keyword=row["keyword"], identifier=row["identifier"], type=row["type"],
@@ -208,21 +208,21 @@ class _Body(type):
                 f"{cls.__name__} is a declaration, not a value; fill() makes a "
                 "sheet from it.")
         (name,) = args
-        dictionary = load_dictionary(name)
+        module_input = load_module_input(name)
         return _Body(name.upper(), (Module,), {
-            "__doc__": f"The {name} keyword surface: {len(dictionary)} slots.",
-            "MODULE": name, "DICTIONARY": dictionary,
+            "__doc__": f"The {name} keyword surface: {len(module_input)} slots.",
+            "MODULE": name, "MODULE_INPUT": module_input,
             "COMPOSITES": MappingProxyType({}), "OUTPUTS": MappingProxyType({}),
             "ASSERTED": MappingProxyType({}),
         })
 
     def __new__(mcls, name: str, bases: tuple, namespace: dict) -> type:
         cls = super().__new__(mcls, name, bases, dict(namespace))
-        dictionary = namespace.get("DICTIONARY") or getattr(cls, "DICTIONARY", None)
-        if dictionary is None or "DICTIONARY" in namespace:
+        module_input = namespace.get("MODULE_INPUT") or getattr(cls, "MODULE_INPUT", None)
+        if module_input is None or "MODULE_INPUT" in namespace:
             return cls
         _refuse_extended_body(cls, bases)
-        cls.ASSERTED = MappingProxyType(_asserted(cls, namespace, dictionary))
+        cls.ASSERTED = MappingProxyType(_asserted(cls, namespace, module_input))
         return cls
 
 
@@ -280,7 +280,7 @@ class Module(metaclass=_Body):
     #: The engine module this wraps, e.g. ``telemac2d``.
     MODULE: str = ""
     #: Every keyword the module has, by identifier.
-    DICTIONARY: Mapping[str, Slot] = MappingProxyType({})
+    MODULE_INPUT: Mapping[str, Slot] = MappingProxyType({})
     COMPOSITES: Mapping[str, Composite] = MappingProxyType({})
     OUTPUTS: Mapping[str, Output] = MappingProxyType({})
     #: The module's variable vocabulary: mnemonic -> (result name, unit).
@@ -315,11 +315,11 @@ class Module(metaclass=_Body):
     @classmethod
     def slot(cls, identifier: str) -> Slot:
         """One slot by identifier, or the refusal that names the nearest."""
-        found = cls.DICTIONARY.get(identifier)
+        found = cls.MODULE_INPUT.get(identifier)
         if found is None:
             raise SlotRefused(
                 f"{cls.MODULE} has no keyword {identifier!r}."
-                f"{_nearest(identifier, cls.DICTIONARY, cls.COMPOSITES)}")
+                f"{_nearest(identifier, cls.MODULE_INPUT, cls.COMPOSITES)}")
         return found
 
     @classmethod
@@ -329,10 +329,10 @@ class Module(metaclass=_Body):
         dictionary itself spells."""
         wanted = str(name).strip()
         by_keyword = {slot.keyword: identifier
-                      for identifier, slot in cls.DICTIONARY.items()}
+                      for identifier, slot in cls.MODULE_INPUT.items()}
         if wanted in by_keyword:
             return by_keyword[wanted]
-        if wanted in cls.DICTIONARY or wanted in cls.COMPOSITES:
+        if wanted in cls.MODULE_INPUT or wanted in cls.COMPOSITES:
             return wanted
         close = difflib.get_close_matches(
             wanted.upper(), list(by_keyword) + list(cls.COMPOSITES), n=3)
@@ -344,7 +344,7 @@ class Module(metaclass=_Body):
 def _unshadowed(cls: type, registered: Mapping[str, Any]) -> list[tuple[str, Any]]:
     """Registrations whose names are the wrapper's own to give."""
     for name in registered:
-        if name in cls.DICTIONARY:
+        if name in cls.MODULE_INPUT:
             raise SlotRefused(
                 f"{cls.MODULE} already has the keyword {name!r}; a registration "
                 "may not shadow a keyword.")

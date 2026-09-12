@@ -221,7 +221,7 @@ package SteeringSurface {
         asserts - empty on the wrapper itself, by law.
         */
         item MODULE : String;
-        item DICTIONARY : Map;
+        item MODULE_INPUT : Map;
         item COMPOSITES : Map;
         item ASSERTED : Map;
     }

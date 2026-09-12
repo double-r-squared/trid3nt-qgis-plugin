@@ -9,7 +9,7 @@ from __future__ import annotations
 from types import MappingProxyType
 from typing import Mapping
 
-from .module import Composite, Module, Output, Slot, SlotRefused, load_dictionary
+from .module import Composite, Module, Output, Slot, SlotRefused, load_module_input
 from .outputs import (
     Measure,
     Primitive,
@@ -32,7 +32,7 @@ __all__ = [
     "ART", "Composite", "Filled", "GAIA", "Measure", "Module", "Output",
     "Primitive", "Sheet", "SheetIncomplete", "Slot", "SlotRefused", "T2D", "T3D",
     "WAQTEL", "WRAPPERS", "column", "draw", "extent", "field", "fill",
-    "load_dictionary", "mass_balance", "max_over_time", "mesh", "run", "series",
+    "load_module_input", "mass_balance", "max_over_time", "mesh", "run", "series",
     "wrapper_for",
 ]
 
