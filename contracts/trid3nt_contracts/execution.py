@@ -64,6 +64,10 @@ class LegendKey(GraceModel):
     #: What the quantity is measured in, and what the legend calls it.
     units: str | None = None
     label: str | None = None
+    #: Where the field STOPS BEING DRAWN, when it has such an edge. ``vmin`` IS
+    #: this value on a floored field; a renderer reading the key masks below it
+    #: rather than painting the ramp's bottom over an absent region.
+    floor: float | None = None
     #: The resolved preset as a QGIS ``.qml`` document - the ONE record of how
     #: the layer is painted, swatches and class breaks included, and what the
     #: map loads. ``None`` for a layer whose file already carries its colours:

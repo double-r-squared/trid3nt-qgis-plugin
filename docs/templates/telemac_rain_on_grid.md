@@ -71,37 +71,37 @@ It publishes these layers onto the canvas:
 - Input: mesh bed (dem, 3DEP 1-10 m US lidar (default 10 m); Copernicus GLO-30 30 m global via source=copernicus, datum NAVD88 (metres, positive up))
 - Input: river geometry (river_geometry)
 - Input: land cover (landcover)
-- Outlet hydrograph (watershed mesh)
-- Model results (time series): watershed mesh
 - Peak water depth (watershed mesh)
+- Outlet hydrograph (watershed mesh)
+- Water depth over time (watershed mesh)
 
 ## The proving run
 
-Run `01M28S5FHQS78XNTR8JHBM9F0P`, 2026-09-11T17:48:03.860203+00:00, 250.184 s, at commit `41dce38251d378c3cdfa057442999a2c9390bc4e-dirty`.
+Run `01M2BBV9SQ05CDASWTRGZZY0YB`, 2026-09-12T17:53:00.500977+00:00, 244.579 s, at commit `bbfef467280c737219afd96302606d0d1be77b95-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M28S5FHQS78XNTR8JHBM9F0P)](telemac_rain_on_grid/telemac_rain_on_grid.png)
+![Every layer the run published, stacked and framed on the result (run 01M2BBV9SQ05CDASWTRGZZY0YB)](telemac_rain_on_grid/telemac_rain_on_grid.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M28S5FHQS78XNTR8JHBM9F0P)*
+*Every layer the run published, stacked and framed on the result (run 01M2BBV9SQ05CDASWTRGZZY0YB)*
 
-![The solve, frame by frame - flow_dynamics (run 01M28S5FHQS78XNTR8JHBM9F0P)](telemac_rain_on_grid/telemac_rain_on_grid_animation_flow_dynamics.gif)
+![The solve, frame by frame - flow_dynamics (run 01M2BBV9SQ05CDASWTRGZZY0YB)](telemac_rain_on_grid/telemac_rain_on_grid_animation_flow_dynamics.gif)
 
-*The solve, frame by frame - flow_dynamics (run 01M28S5FHQS78XNTR8JHBM9F0P)*
+*The solve, frame by frame - flow_dynamics (run 01M2BBV9SQ05CDASWTRGZZY0YB)*
 
-![The solve, frame by frame - inundation_depth (run 01M28S5FHQS78XNTR8JHBM9F0P)](telemac_rain_on_grid/telemac_rain_on_grid_animation_inundation_depth.gif)
+![The solve, frame by frame - inundation_depth (run 01M2BBV9SQ05CDASWTRGZZY0YB)](telemac_rain_on_grid/telemac_rain_on_grid_animation_inundation_depth.gif)
 
-*The solve, frame by frame - inundation_depth (run 01M28S5FHQS78XNTR8JHBM9F0P)*
+*The solve, frame by frame - inundation_depth (run 01M2BBV9SQ05CDASWTRGZZY0YB)*
 
-![flow dynamics peak frame (run 01M28S5FHQS78XNTR8JHBM9F0P)](telemac_rain_on_grid/telemac_rain_on_grid_flow_dynamics_peak_frame.png)
+![flow dynamics peak frame (run 01M2BBV9SQ05CDASWTRGZZY0YB)](telemac_rain_on_grid/telemac_rain_on_grid_flow_dynamics_peak_frame.png)
 
-*flow dynamics peak frame (run 01M28S5FHQS78XNTR8JHBM9F0P)*
+*flow dynamics peak frame (run 01M2BBV9SQ05CDASWTRGZZY0YB)*
 
-![inundation depth peak frame (run 01M28S5FHQS78XNTR8JHBM9F0P)](telemac_rain_on_grid/telemac_rain_on_grid_inundation_depth_peak_frame.png)
+![inundation depth peak frame (run 01M2BBV9SQ05CDASWTRGZZY0YB)](telemac_rain_on_grid/telemac_rain_on_grid_inundation_depth_peak_frame.png)
 
-*inundation depth peak frame (run 01M28S5FHQS78XNTR8JHBM9F0P)*
+*inundation depth peak frame (run 01M2BBV9SQ05CDASWTRGZZY0YB)*
 
-![outlet hydrograph - the chart the run persisted (run 01M28S5FHQS78XNTR8JHBM9F0P)](telemac_rain_on_grid/telemac_rain_on_grid_chart_outlet_hydrograph.png)
+![outlet hydrograph - the chart the run persisted (run 01M2BBV9SQ05CDASWTRGZZY0YB)](telemac_rain_on_grid/telemac_rain_on_grid_chart_outlet_hydrograph.png)
 
-*outlet hydrograph - the chart the run persisted (run 01M28S5FHQS78XNTR8JHBM9F0P)*
+*outlet hydrograph - the chart the run persisted (run 01M2BBV9SQ05CDASWTRGZZY0YB)*
 
 ### The sheet it filled
 
@@ -145,5 +145,5 @@ await TOOL_REGISTRY['telemac_rain_on_grid'].fn(
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M28S5FHQS78XNTR8JHBM9F0P` and commit `41dce38251d378c3cdfa057442999a2c9390bc4e-dirty`. The full argument record is [`telemac_rain_on_grid/run.json`](telemac_rain_on_grid/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2BBV9SQ05CDASWTRGZZY0YB` and commit `bbfef467280c737219afd96302606d0d1be77b95-dirty`. The full argument record is [`telemac_rain_on_grid/run.json`](telemac_rain_on_grid/run.json).
 

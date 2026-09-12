@@ -84,6 +84,18 @@
           "default": null,
           "title": "Colormap"
         },
+        "floor": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Floor"
+        },
         "kind": {
           "enum": [
             "continuous",

@@ -176,6 +176,26 @@ def test_an_empty_field_still_yields_a_usable_scale():
 
 
 
+def test_the_gif_masks_below_the_floor_its_published_still_masks_at(tmp_path):
+    """One field, one absent region: the published still writes its below-floor
+    nodes as nothing and the mesh shader clips there, so the frames do too."""
+    module = _animation_module()
+    values = _frames()
+    floor = float(np.percentile(values, 60.0))
+    row = {**STYLE, "floor": floor}
+    assert module.declared_floor(row) == floor
+    assert module.declared_floor(STYLE) is None
+
+    masked = module.render_frames(
+        _triangulation(), values, list(range(values.shape[0])),
+        bbox_ll=(-85.5, 29.9, -85.3, 30.1), units="mg/L", title="floored",
+        run_id="TEST", source_name="synthetic.slf", variable="TRACER",
+        gif_path=tmp_path / "floored.gif", peak_path=tmp_path / "floored.png",
+        style=row, axes_factory=module.plain_axes)
+    # the scale is read over what is DRAWN, so its bottom cannot sit under the floor
+    assert masked["vmin"] >= floor
+
+
 def _packet_module():
     spec = importlib.util.spec_from_file_location(
         "assemble_proof_packet", DEV / "packet" / "assemble_proof_packet.py")
@@ -287,4 +307,5 @@ def test_the_gif_resolves_the_ramp_its_panel_was_painted_through():
                                  quantity="bed_evolution", module="gaia"))
     assert scale["published_range"] == [-0.005267, 0.005267]
     assert scale["published_style"] == {"kind": "continuous", "ramp": "rdbu",
-                                        "units": "m", "label": "Bed evolution (m)"}
+                                        "units": "m", "label": "Bed evolution (m)",
+                                        "floor": None}

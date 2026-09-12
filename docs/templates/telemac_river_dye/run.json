@@ -1,10 +1,10 @@
 {
   "tool": "telemac_river_dye",
-  "run_id": "01M2A9Q69W6MY8ER7SWZ90SGT4",
-  "commit": "1fc6f9f990169d1f2cc52112d88c229901f1114d-dirty",
-  "recorded_at": "2026-09-12T07:53:53.907893+00:00",
+  "run_id": "01M2BBBABM23F17Z52XC666T2G",
+  "commit": "bbfef467280c737219afd96302606d0d1be77b95-dirty",
+  "recorded_at": "2026-09-12T17:41:37.600860+00:00",
   "engine": "telemac",
-  "wall_seconds": 25.385,
+  "wall_seconds": 26.744,
   "args": {
     "location": "Eel River near Scotia, California",
     "discharge_m3s": 2.2,
@@ -12,6 +12,7 @@
     "spill_fraction": 0.25,
     "spill_duration_s": 120.0,
     "source_q_m3s": 8.0,
+    "release": "Point(lon=-124.0983, lat=40.4921, name='outfall-a')",
     "dye_concentration_mgl": 100.0,
     "reach_length_km": 1.0,
     "sim_duration_s": 600.0,
@@ -79,6 +80,17 @@
       "door": "user",
       "basis": "user",
       "units": "m^3/s",
+      "consequence": "scenario",
+      "note": "supplied on this invocation",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "release",
+      "value": "Point(lon=-124.0983, lat=40.4921, name='outfall-a')",
+      "door": "user",
+      "basis": "user",
+      "units": null,
       "consequence": "scenario",
       "note": "supplied on this invocation",
       "clamped_from": null,
@@ -250,17 +262,6 @@
       "real_source": null
     },
     {
-      "name": "release",
-      "value": null,
-      "door": "user",
-      "basis": "user",
-      "units": null,
-      "consequence": "scenario",
-      "note": "not supplied (declared optional)",
-      "clamped_from": null,
-      "real_source": null
-    },
-    {
       "name": "decaying_substance",
       "value": null,
       "door": "question",
@@ -349,6 +350,13 @@
       "real_source": null
     },
     {
+      "param": "release",
+      "value": "lon=-124.098, lat=40.4921, name=outfall-a",
+      "basis": "user",
+      "note": "Where the substance enters the water, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer, or a place name; its name becomes the tracer's name [supplied on this invocation]",
+      "real_source": null
+    },
+    {
       "param": "dye_concentration_mgl",
       "value": 100.0,
       "basis": "user",
@@ -426,13 +434,6 @@
       "real_source": null
     },
     {
-      "param": "release",
-      "value": "derived",
-      "basis": "derived",
-      "note": "not supplied; the release sits at spill_fraction along the meshed reach; the downstream distance is measured from there",
-      "real_source": null
-    },
-    {
       "param": "decaying_substance",
       "value": "derived",
       "basis": "derived",
@@ -448,12 +449,12 @@
     }
   ],
   "answer": {
-    "dye_cmax_mgl": 98.6875228881836,
+    "dye_cmax_mgl": 98.22479248046875,
     "dye_peak_time_s": 118.72799682617188,
-    "plume_reach_m": 56.7,
+    "plume_reach_m": 59.4,
     "active_frames": 30,
     "mesh_size_m": 7.763,
-    "layer_uri": "s3://trid3nt-runs/01M2A9Q69W6MY8ER7SWZ90SGT4/r2d_river.slf",
+    "layer_uri": "s3://trid3nt-runs/01M2BBBABM23F17Z52XC666T2G/r2d_river.slf",
     "discharge_m3s": 2.2,
     "discharge_note": "Steady upstream CARRIER discharge - the river flow that dilutes and transports the release [supplied on this invocation]",
     "mesh_resolution_m": 10.0,
@@ -471,6 +472,7 @@
       "layer_type": "vector",
       "legend": {
         "colormap": null,
+        "floor": null,
         "kind": "reference",
         "label": null,
         "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <renderer-v2 type=\"singleSymbol\" symbollevels=\"0\" forceraster=\"0\" enableorderby=\"0\" referencescale=\"-1\">\n    <symbols>\n      <symbol name=\"0\" type=\"line\" alpha=\"1\" force_rhr=\"0\" clip_to_extent=\"1\" frame_rate=\"10\" is_animated=\"0\">\n        <layer class=\"SimpleLine\" enabled=\"1\" locked=\"0\" pass=\"0\">\n          <Option type=\"Map\">\n            <Option name=\"line_color\" type=\"QString\" value=\"59,125,216,255\"/>\n        <Option name=\"line_width\" type=\"QString\" value=\"0.66\"/>\n        <Option name=\"line_width_unit\" type=\"QString\" value=\"MM\"/>\n            <Option name=\"style\" type=\"QString\" value=\"solid\"/>\n          </Option>\n        </layer>\n      </symbol>\n    </symbols>\n  </renderer-v2>\n</qgis>\n",
@@ -495,10 +497,11 @@
       "crs_authid": null,
       "dataset_group": null,
       "dataset_uris": [],
-      "layer_id": "input-nhdplus_nldi-5c4eb42bf394",
+      "layer_id": "input-nhdplus_nldi-6fa1b8fda949",
       "layer_type": "vector",
       "legend": {
         "colormap": null,
+        "floor": null,
         "kind": "reference",
         "label": null,
         "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <renderer-v2 type=\"singleSymbol\" symbollevels=\"0\" forceraster=\"0\" enableorderby=\"0\" referencescale=\"-1\">\n    <symbols>\n      <symbol name=\"0\" type=\"line\" alpha=\"1\" force_rhr=\"0\" clip_to_extent=\"1\" frame_rate=\"10\" is_animated=\"0\">\n        <layer class=\"SimpleLine\" enabled=\"1\" locked=\"0\" pass=\"0\">\n          <Option type=\"Map\">\n            <Option name=\"line_color\" type=\"QString\" value=\"59,125,216,255\"/>\n        <Option name=\"line_width\" type=\"QString\" value=\"0.66\"/>\n        <Option name=\"line_width_unit\" type=\"QString\" value=\"MM\"/>\n            <Option name=\"style\" type=\"QString\" value=\"solid\"/>\n          </Option>\n        </layer>\n      </symbol>\n    </symbols>\n  </renderer-v2>\n</qgis>\n",
@@ -513,7 +516,7 @@
       "reference_time": null,
       "role": "context",
       "temporal": false,
-      "uri": "s3://trid3nt-cache/cache/static-30d/nhdplus_nldi/3e294d7e16a1a7d1f7e28c1ad9e94b67.fgb",
+      "uri": "s3://trid3nt-cache/cache/static-30d/nhdplus_nldi/4f4ca23e9920731f15fb0a3fbc08f3e8.fgb",
       "valid_from": null,
       "valid_to": null,
       "visible": true,
@@ -527,6 +530,7 @@
       "layer_type": "vector",
       "legend": {
         "colormap": null,
+        "floor": null,
         "kind": "reference",
         "label": null,
         "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <renderer-v2 type=\"singleSymbol\" symbollevels=\"0\" forceraster=\"0\" enableorderby=\"0\" referencescale=\"-1\">\n    <symbols>\n      <symbol name=\"0\" type=\"fill\" alpha=\"1\" force_rhr=\"0\" clip_to_extent=\"1\" frame_rate=\"10\" is_animated=\"0\">\n        <layer class=\"SimpleFill\" enabled=\"1\" locked=\"0\" pass=\"0\">\n          <Option type=\"Map\">\n            <Option name=\"color\" type=\"QString\" value=\"59,125,216,255\"/>\n        <Option name=\"outline_color\" type=\"QString\" value=\"35,35,35,255\"/>\n        <Option name=\"outline_width\" type=\"QString\" value=\"0.26\"/>\n            <Option name=\"style\" type=\"QString\" value=\"solid\"/>\n          </Option>\n        </layer>\n      </symbol>\n    </symbols>\n  </renderer-v2>\n</qgis>\n",
@@ -555,6 +559,7 @@
       "layer_type": "raster",
       "legend": {
         "colormap": "gray",
+        "floor": null,
         "kind": "continuous",
         "label": "Elevation",
         "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <pipe>\n    <rasterrenderer type=\"singlebandpseudocolor\" band=\"1\" opacity=\"1\" alphaBand=\"-1\" classificationMin=\"14\" classificationMax=\"423.417981\" nodataColor=\"\">\n      <rastershader>\n        <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"14\" maximumValue=\"423.417981\" labelPrecision=\"4\">\n          <item value=\"14\" color=\"#000000\" alpha=\"255\" label=\"14 m\"/>\n          <item value=\"116.3544952\" color=\"#404040\" alpha=\"255\" label=\"116.354 m\"/>\n          <item value=\"218.7089905\" color=\"#808080\" alpha=\"255\" label=\"218.709 m\"/>\n          <item value=\"321.0634857\" color=\"#c0c0c0\" alpha=\"255\" label=\"321.063 m\"/>\n          <item value=\"423.417981\" color=\"#ffffff\" alpha=\"255\" label=\"423.418 m\"/>\n        </colorrampshader>\n      </rastershader>\n    </rasterrenderer>\n  </pipe>\n</qgis>\n",
@@ -579,10 +584,11 @@
       "crs_authid": null,
       "dataset_group": null,
       "dataset_uris": [],
-      "layer_id": "point-01M2A9Q0V97AZJR487KESBE8B0",
+      "layer_id": "point-01M2BBB3WNM51ZB0107D6Z3C2C",
       "layer_type": "vector",
       "legend": {
         "colormap": null,
+        "floor": null,
         "kind": "reference",
         "label": null,
         "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <renderer-v2 type=\"singleSymbol\" symbollevels=\"0\" forceraster=\"0\" enableorderby=\"0\" referencescale=\"-1\">\n    <symbols>\n      <symbol name=\"0\" type=\"marker\" alpha=\"1\" force_rhr=\"0\" clip_to_extent=\"1\" frame_rate=\"10\" is_animated=\"0\">\n        <layer class=\"SimpleMarker\" enabled=\"1\" locked=\"0\" pass=\"0\">\n          <Option type=\"Map\">\n            <Option name=\"color\" type=\"QString\" value=\"59,125,216,255\"/>\n        <Option name=\"outline_color\" type=\"QString\" value=\"35,35,35,255\"/>\n        <Option name=\"outline_width\" type=\"QString\" value=\"0.26\"/>\n        <Option name=\"size\" type=\"QString\" value=\"2.4\"/>\n        <Option name=\"size_unit\" type=\"QString\" value=\"MM\"/>\n        <Option name=\"name\" type=\"QString\" value=\"circle\"/>\n            <Option name=\"style\" type=\"QString\" value=\"solid\"/>\n          </Option>\n        </layer>\n      </symbol>\n    </symbols>\n  </renderer-v2>\n</qgis>\n",
@@ -590,14 +596,14 @@
         "vmax": null,
         "vmin": null
       },
-      "name": "Release point (derived) - scotia_humboldt_county_california_95562_united_s",
+      "name": "Release point 'outfall-a' (user) - scotia_humboldt_county_california_95562_united_s",
       "opacity": null,
       "origin": null,
       "quantity": null,
       "reference_time": null,
       "role": "context",
       "temporal": false,
-      "uri": "s3://trid3nt-runs/inputs/01M2A9Q0V0GC4Y5M3940M4CJXQ/point.geojson",
+      "uri": "s3://trid3nt-runs/inputs/01M2BBB3WADWAPRDXY3FQ97NNN/point.geojson",
       "valid_from": null,
       "valid_to": null,
       "visible": true,
@@ -607,18 +613,19 @@
       "crs_authid": "EPSG:32610",
       "dataset_group": "Dye concentration",
       "dataset_uris": [
-        "s3://trid3nt-runs/01M2A9Q69W6MY8ER7SWZ90SGT4/dye_concentration.dat"
+        "s3://trid3nt-runs/01M2BBBABM23F17Z52XC666T2G/dye_concentration.dat"
       ],
-      "layer_id": "telemac-dye_concentration-01M2A9Q69W6MY8ER7SWZ90SGT4",
+      "layer_id": "telemac-dye_concentration-01M2BBBABM23F17Z52XC666T2G",
       "layer_type": "mesh",
       "legend": {
         "colormap": "reds",
+        "floor": 4.9112396240234375,
         "kind": "mesh",
         "label": "Dye concentration",
-        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <mesh-renderer-settings>\n    <active-dataset-group scalar=\"0\" vector=\"-1\"/>\n    <scalar-settings group=\"0\" min-val=\"0\" max-val=\"98.687523\" opacity=\"1\" interpolation-method=\"no-resampling\">\n      <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"0\" maximumValue=\"98.687523\" labelPrecision=\"4\">\n        <item value=\"0\" color=\"#fff5f0\" alpha=\"255\" label=\"0 mg/L\"/>\n        <item value=\"24.67188075\" color=\"#fcbba1\" alpha=\"255\" label=\"24.6719 mg/L\"/>\n        <item value=\"49.3437615\" color=\"#fb694a\" alpha=\"255\" label=\"49.3438 mg/L\"/>\n        <item value=\"74.01564225\" color=\"#ca181d\" alpha=\"255\" label=\"74.0156 mg/L\"/>\n        <item value=\"98.687523\" color=\"#67000d\" alpha=\"255\" label=\"98.6875 mg/L\"/>\n      </colorrampshader>\n    </scalar-settings>\n  </mesh-renderer-settings>\n  <name-to-global-index global-index=\"0\" name=\"Dye concentration\"/>\n</qgis>\n",
+        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <mesh-renderer-settings>\n    <active-dataset-group scalar=\"0\" vector=\"-1\"/>\n    <scalar-settings group=\"0\" min-val=\"4.911239624\" max-val=\"98.224793\" opacity=\"1\" interpolation-method=\"no-resampling\">\n      <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"1\" minimumValue=\"4.911239624\" maximumValue=\"98.224793\" labelPrecision=\"4\">\n        <item value=\"4.911239624\" color=\"#fff5f0\" alpha=\"255\" label=\"4.91124 mg/L\"/>\n        <item value=\"28.23962797\" color=\"#fcbba1\" alpha=\"255\" label=\"28.2396 mg/L\"/>\n        <item value=\"51.56801631\" color=\"#fb694a\" alpha=\"255\" label=\"51.568 mg/L\"/>\n        <item value=\"74.89640466\" color=\"#ca181d\" alpha=\"255\" label=\"74.8964 mg/L\"/>\n        <item value=\"98.224793\" color=\"#67000d\" alpha=\"255\" label=\"98.2248 mg/L\"/>\n      </colorrampshader>\n    </scalar-settings>\n  </mesh-renderer-settings>\n  <name-to-global-index global-index=\"0\" name=\"Dye concentration\"/>\n</qgis>\n",
         "units": "mg/L",
-        "vmax": 98.687523,
-        "vmin": 0.0
+        "vmax": 98.224793,
+        "vmin": 4.9112396240234375
       },
       "name": "Peak dye concentration (scotia_humboldt_county_california_95562_united_s)",
       "opacity": null,
@@ -627,7 +634,7 @@
       "reference_time": null,
       "role": "primary",
       "temporal": false,
-      "uri": "s3://trid3nt-runs/01M2A9Q69W6MY8ER7SWZ90SGT4/r2d_river.slf",
+      "uri": "s3://trid3nt-runs/01M2BBBABM23F17Z52XC666T2G/r2d_river.slf",
       "valid_from": null,
       "valid_to": null,
       "visible": true,
@@ -635,27 +642,28 @@
     },
     {
       "crs_authid": "EPSG:32610",
-      "dataset_group": "DYE",
+      "dataset_group": "outfall-a",
       "dataset_uris": [],
-      "layer_id": "01M2A9QNRV699TH64NE0DPJSD3",
+      "layer_id": "01M2BBBV0852Q0RDR654R1VG8Q",
       "layer_type": "mesh",
       "legend": {
         "colormap": "reds",
+        "floor": 4.9112396240234375,
         "kind": "mesh",
         "label": "Dye concentration",
-        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <mesh-renderer-settings>\n    <active-dataset-group scalar=\"0\" vector=\"-1\"/>\n    <scalar-settings group=\"0\" min-val=\"0\" max-val=\"98.687523\" opacity=\"1\" interpolation-method=\"no-resampling\">\n      <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"0\" maximumValue=\"98.687523\" labelPrecision=\"4\">\n        <item value=\"0\" color=\"#fff5f0\" alpha=\"255\" label=\"0 mg/L\"/>\n        <item value=\"24.67188075\" color=\"#fcbba1\" alpha=\"255\" label=\"24.6719 mg/L\"/>\n        <item value=\"49.3437615\" color=\"#fb694a\" alpha=\"255\" label=\"49.3438 mg/L\"/>\n        <item value=\"74.01564225\" color=\"#ca181d\" alpha=\"255\" label=\"74.0156 mg/L\"/>\n        <item value=\"98.687523\" color=\"#67000d\" alpha=\"255\" label=\"98.6875 mg/L\"/>\n      </colorrampshader>\n    </scalar-settings>\n  </mesh-renderer-settings>\n  <name-to-global-index global-index=\"0\" name=\"DYE\"/>\n</qgis>\n",
+        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <mesh-renderer-settings>\n    <active-dataset-group scalar=\"0\" vector=\"-1\"/>\n    <scalar-settings group=\"0\" min-val=\"4.911239624\" max-val=\"98.224793\" opacity=\"1\" interpolation-method=\"no-resampling\">\n      <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"1\" minimumValue=\"4.911239624\" maximumValue=\"98.224793\" labelPrecision=\"4\">\n        <item value=\"4.911239624\" color=\"#fff5f0\" alpha=\"255\" label=\"4.91124 mg/L\"/>\n        <item value=\"28.23962797\" color=\"#fcbba1\" alpha=\"255\" label=\"28.2396 mg/L\"/>\n        <item value=\"51.56801631\" color=\"#fb694a\" alpha=\"255\" label=\"51.568 mg/L\"/>\n        <item value=\"74.89640466\" color=\"#ca181d\" alpha=\"255\" label=\"74.8964 mg/L\"/>\n        <item value=\"98.224793\" color=\"#67000d\" alpha=\"255\" label=\"98.2248 mg/L\"/>\n      </colorrampshader>\n    </scalar-settings>\n  </mesh-renderer-settings>\n  <name-to-global-index global-index=\"0\" name=\"outfall-a\"/>\n</qgis>\n",
         "units": "mg/L",
-        "vmax": 98.687523,
-        "vmin": 0.0
+        "vmax": 98.224793,
+        "vmin": 4.9112396240234375
       },
       "name": "Dye concentration over time (scotia_humboldt_county_california_95562_united_s)",
       "opacity": null,
       "origin": null,
       "quantity": "dye_concentration",
-      "reference_time": "2026-09-12T07:53:40+00:00",
+      "reference_time": "2026-09-12T17:41:22+00:00",
       "role": "primary",
       "temporal": false,
-      "uri": "s3://trid3nt-runs/01M2A9Q69W6MY8ER7SWZ90SGT4/r2d_river.slf",
+      "uri": "s3://trid3nt-runs/01M2BBBABM23F17Z52XC666T2G/r2d_river.slf",
       "valid_from": null,
       "valid_to": null,
       "visible": true,

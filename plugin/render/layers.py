@@ -414,9 +414,13 @@ def bind_declared_mesh_style(layer, legend: Optional[dict], temp_dir: str) -> st
             return (f" -- the declared preset for {declared!r} did not bind; "
                     "MDAL's own default group stands")
         scalar = layer.rendererSettings().scalarSettings(index)
+        # A CLIPPED shader leaves part of the mesh unpainted on purpose - below
+        # the field's floor the quantity is absent - so the note says so rather
+        # than leaving a reader to read holes as a failed render.
+        clipped = ", clipped below" if scalar.colorRampShader().clip() else ""
         return (f" -- {bound.strip()!r} styled from the declared preset "
                 f"({scalar.classificationMinimum():g} to "
-                f"{scalar.classificationMaximum():g})")
+                f"{scalar.classificationMaximum():g}{clipped})")
     except Exception as exc:  # noqa: BLE001 -- honest note, never a lost layer
         return f" -- mesh style load failed ({type(exc).__name__}: {exc})"
 

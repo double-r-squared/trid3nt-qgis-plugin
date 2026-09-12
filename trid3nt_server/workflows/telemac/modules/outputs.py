@@ -156,6 +156,10 @@ class Frames(Read):
     epsg: int
     reference_time: str | None
     frames: int
+    #: Where the variable stops being drawn. A group the RESULT FILE carries
+    #: cannot be rewritten with nothing below it, so the floor travels on the
+    #: style row and the renderer masks there.
+    floor: float | None = None
 
 
 class SelafinReadError(RuntimeError):
@@ -592,13 +596,14 @@ def read_field(primitive: Primitive, solved: Solved) -> Read:
     times = np.asarray(solved.result["times"], dtype="float64")
     measures = _envelope(primitive.variable, times, values)
     if primitive.t == "every":
+        floor = _floor(primitive.variable, values)
         measures["travel_m"] = _travel_m(np.asarray(solved.result["x"]),
                                          np.asarray(solved.result["y"]),
-                                         values, _floor(primitive.variable, values))
+                                         values, floor)
         return Frames(name=name, units=units, file=solved.result_file,
                       group=name.strip(), epsg=solved.utm_epsg,
                       reference_time=solved.run.get("started_at"),
-                      frames=int(times.size), measures=measures)
+                      frames=int(times.size), floor=floor, measures=measures)
     # An int is a frame index, counted from the file's own first frame; a float
     # is an instant in seconds, read at the nearest frame the engine wrote. The
     # measures are the frame's own; the envelope only sets the visible edge.
@@ -1025,7 +1030,7 @@ def deliver(primitive: Primitive, read: Read, solved: Solved, *, caption: str,
         return Deliverable(
             product=Mesh(file=read.file, group=read.group, epsg=read.epsg,
                          reference_time=read.reference_time, frames=read.frames,
-                         units=read.units, bbox=solved.bbox),
+                         units=read.units, bbox=solved.bbox, floor=read.floor),
             caption=caption, style=primitive.style)
     if isinstance(read, Field):
         return Deliverable(product=_derived_group(read, solved, caption=caption,
@@ -1055,7 +1060,8 @@ def _derived_group(read: Field, solved: Solved, *, caption: str, quantity: str,
     The values are written as the SMS ASCII dataset MDAL loads onto the mesh
     they were measured over; a node below the read's floor is written as nothing
     so the field draws where it is visible and the basemap shows through where
-    it is not."""
+    it is not. The floor rides on the product too, so the animation of the same
+    quantity - whose group the result file carries - masks where this one does."""
     import numpy as np
 
     from trid3nt_server import storage
@@ -1082,7 +1088,7 @@ def _derived_group(read: Field, solved: Solved, *, caption: str, quantity: str,
         ContentType="text/plain")
     return Mesh(file=solved.display_file, group=group, epsg=solved.utm_epsg,
                 datasets=(basename,), bbox=solved.bbox, t=read.t, plane=read.plane,
-                units=read.units,
+                units=read.units, floor=read.floor,
                 value_range=presets.measured_range(values, style,
                                                    floor=read.floor))
 

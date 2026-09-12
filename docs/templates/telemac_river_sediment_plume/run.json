@@ -1,10 +1,10 @@
 {
   "tool": "telemac_river_sediment_plume",
-  "run_id": "01M2AA49SB93PREF122DS03BMP",
-  "commit": "1fc6f9f990169d1f2cc52112d88c229901f1114d-dirty",
-  "recorded_at": "2026-09-12T08:01:04.631029+00:00",
+  "run_id": "01M2BBJ9RJP02TKG5SAES5YRYE",
+  "commit": "bbfef467280c737219afd96302606d0d1be77b95-dirty",
+  "recorded_at": "2026-09-12T17:45:27.670852+00:00",
   "engine": "telemac",
-  "wall_seconds": 26.17,
+  "wall_seconds": 27.484,
   "args": {
     "location": "Eel River near Scotia, California",
     "discharge_m3s": 2.2,
@@ -434,7 +434,7 @@
     "net_bed_mass_kg": 66.90308,
     "deposit_fraction": 5.615383333333334,
     "mesh_size_m": 10.415,
-    "layer_uri": "s3://trid3nt-runs/01M2AA49SB93PREF122DS03BMP/r2d_river.slf",
+    "layer_uri": "s3://trid3nt-runs/01M2BBJ9RJP02TKG5SAES5YRYE/r2d_river.slf",
     "discharge_m3s": 2.2,
     "discharge_note": "Steady upstream CARRIER discharge - the river flow that dilutes and transports the release [supplied on this invocation]",
     "mesh_resolution_m": 12.0,
@@ -452,6 +452,7 @@
       "layer_type": "vector",
       "legend": {
         "colormap": null,
+        "floor": null,
         "kind": "reference",
         "label": null,
         "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <renderer-v2 type=\"singleSymbol\" symbollevels=\"0\" forceraster=\"0\" enableorderby=\"0\" referencescale=\"-1\">\n    <symbols>\n      <symbol name=\"0\" type=\"line\" alpha=\"1\" force_rhr=\"0\" clip_to_extent=\"1\" frame_rate=\"10\" is_animated=\"0\">\n        <layer class=\"SimpleLine\" enabled=\"1\" locked=\"0\" pass=\"0\">\n          <Option type=\"Map\">\n            <Option name=\"line_color\" type=\"QString\" value=\"59,125,216,255\"/>\n        <Option name=\"line_width\" type=\"QString\" value=\"0.66\"/>\n        <Option name=\"line_width_unit\" type=\"QString\" value=\"MM\"/>\n            <Option name=\"style\" type=\"QString\" value=\"solid\"/>\n          </Option>\n        </layer>\n      </symbol>\n    </symbols>\n  </renderer-v2>\n</qgis>\n",
@@ -480,6 +481,7 @@
       "layer_type": "vector",
       "legend": {
         "colormap": null,
+        "floor": null,
         "kind": "reference",
         "label": null,
         "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <renderer-v2 type=\"singleSymbol\" symbollevels=\"0\" forceraster=\"0\" enableorderby=\"0\" referencescale=\"-1\">\n    <symbols>\n      <symbol name=\"0\" type=\"line\" alpha=\"1\" force_rhr=\"0\" clip_to_extent=\"1\" frame_rate=\"10\" is_animated=\"0\">\n        <layer class=\"SimpleLine\" enabled=\"1\" locked=\"0\" pass=\"0\">\n          <Option type=\"Map\">\n            <Option name=\"line_color\" type=\"QString\" value=\"59,125,216,255\"/>\n        <Option name=\"line_width\" type=\"QString\" value=\"0.66\"/>\n        <Option name=\"line_width_unit\" type=\"QString\" value=\"MM\"/>\n            <Option name=\"style\" type=\"QString\" value=\"solid\"/>\n          </Option>\n        </layer>\n      </symbol>\n    </symbols>\n  </renderer-v2>\n</qgis>\n",
@@ -508,6 +510,7 @@
       "layer_type": "vector",
       "legend": {
         "colormap": null,
+        "floor": null,
         "kind": "reference",
         "label": null,
         "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <renderer-v2 type=\"singleSymbol\" symbollevels=\"0\" forceraster=\"0\" enableorderby=\"0\" referencescale=\"-1\">\n    <symbols>\n      <symbol name=\"0\" type=\"fill\" alpha=\"1\" force_rhr=\"0\" clip_to_extent=\"1\" frame_rate=\"10\" is_animated=\"0\">\n        <layer class=\"SimpleFill\" enabled=\"1\" locked=\"0\" pass=\"0\">\n          <Option type=\"Map\">\n            <Option name=\"color\" type=\"QString\" value=\"59,125,216,255\"/>\n        <Option name=\"outline_color\" type=\"QString\" value=\"35,35,35,255\"/>\n        <Option name=\"outline_width\" type=\"QString\" value=\"0.26\"/>\n            <Option name=\"style\" type=\"QString\" value=\"solid\"/>\n          </Option>\n        </layer>\n      </symbol>\n    </symbols>\n  </renderer-v2>\n</qgis>\n",
@@ -536,6 +539,7 @@
       "layer_type": "raster",
       "legend": {
         "colormap": "gray",
+        "floor": null,
         "kind": "continuous",
         "label": "Elevation",
         "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <pipe>\n    <rasterrenderer type=\"singlebandpseudocolor\" band=\"1\" opacity=\"1\" alphaBand=\"-1\" classificationMin=\"14\" classificationMax=\"423.417981\" nodataColor=\"\">\n      <rastershader>\n        <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"14\" maximumValue=\"423.417981\" labelPrecision=\"4\">\n          <item value=\"14\" color=\"#000000\" alpha=\"255\" label=\"14 m\"/>\n          <item value=\"116.3544952\" color=\"#404040\" alpha=\"255\" label=\"116.354 m\"/>\n          <item value=\"218.7089905\" color=\"#808080\" alpha=\"255\" label=\"218.709 m\"/>\n          <item value=\"321.0634857\" color=\"#c0c0c0\" alpha=\"255\" label=\"321.063 m\"/>\n          <item value=\"423.417981\" color=\"#ffffff\" alpha=\"255\" label=\"423.418 m\"/>\n        </colorrampshader>\n      </rastershader>\n    </rasterrenderer>\n  </pipe>\n</qgis>\n",
@@ -560,10 +564,11 @@
       "crs_authid": null,
       "dataset_group": null,
       "dataset_uris": [],
-      "layer_id": "point-01M2AA43TH610BJY3KYGSV1E9R",
+      "layer_id": "point-01M2BBJ3Q6CTAHJD21FWYS3SK7",
       "layer_type": "vector",
       "legend": {
         "colormap": null,
+        "floor": null,
         "kind": "reference",
         "label": null,
         "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <renderer-v2 type=\"singleSymbol\" symbollevels=\"0\" forceraster=\"0\" enableorderby=\"0\" referencescale=\"-1\">\n    <symbols>\n      <symbol name=\"0\" type=\"marker\" alpha=\"1\" force_rhr=\"0\" clip_to_extent=\"1\" frame_rate=\"10\" is_animated=\"0\">\n        <layer class=\"SimpleMarker\" enabled=\"1\" locked=\"0\" pass=\"0\">\n          <Option type=\"Map\">\n            <Option name=\"color\" type=\"QString\" value=\"59,125,216,255\"/>\n        <Option name=\"outline_color\" type=\"QString\" value=\"35,35,35,255\"/>\n        <Option name=\"outline_width\" type=\"QString\" value=\"0.26\"/>\n        <Option name=\"size\" type=\"QString\" value=\"2.4\"/>\n        <Option name=\"size_unit\" type=\"QString\" value=\"MM\"/>\n        <Option name=\"name\" type=\"QString\" value=\"circle\"/>\n            <Option name=\"style\" type=\"QString\" value=\"solid\"/>\n          </Option>\n        </layer>\n      </symbol>\n    </symbols>\n  </renderer-v2>\n</qgis>\n",
@@ -578,7 +583,7 @@
       "reference_time": null,
       "role": "context",
       "temporal": false,
-      "uri": "s3://trid3nt-runs/inputs/01M2AA43T86J2QZ95KB5K690D5/point.geojson",
+      "uri": "s3://trid3nt-runs/inputs/01M2BBJ3PXCNRKHQ6Q8RBMYY51/point.geojson",
       "valid_from": null,
       "valid_to": null,
       "visible": true,
@@ -588,18 +593,19 @@
       "crs_authid": "EPSG:32610",
       "dataset_group": "Suspended sediment concentration",
       "dataset_uris": [
-        "s3://trid3nt-runs/01M2AA49SB93PREF122DS03BMP/suspended_sediment_concentration.dat"
+        "s3://trid3nt-runs/01M2BBJ9RJP02TKG5SAES5YRYE/suspended_sediment_concentration.dat"
       ],
-      "layer_id": "telemac-suspended_sediment_concentration-01M2AA49SB93PREF122DS03BMP",
+      "layer_id": "telemac-suspended_sediment_concentration-01M2BBJ9RJP02TKG5SAES5YRYE",
       "layer_type": "mesh",
       "legend": {
         "colormap": "oranges",
+        "floor": 0.0022340867668390273,
         "kind": "mesh",
         "label": "Suspended sediment concentration",
-        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <mesh-renderer-settings>\n    <active-dataset-group scalar=\"0\" vector=\"-1\"/>\n    <scalar-settings group=\"0\" min-val=\"0\" max-val=\"0.044682\" opacity=\"1\" interpolation-method=\"no-resampling\">\n      <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"0\" maximumValue=\"0.044682\" labelPrecision=\"4\">\n        <item value=\"0\" color=\"#fff5eb\" alpha=\"255\" label=\"0 mg/L\"/>\n        <item value=\"0.0111705\" color=\"#fdd0a2\" alpha=\"255\" label=\"0.0111705 mg/L\"/>\n        <item value=\"0.022341\" color=\"#fd8c3b\" alpha=\"255\" label=\"0.022341 mg/L\"/>\n        <item value=\"0.0335115\" color=\"#d84801\" alpha=\"255\" label=\"0.0335115 mg/L\"/>\n        <item value=\"0.044682\" color=\"#7f2704\" alpha=\"255\" label=\"0.044682 mg/L\"/>\n      </colorrampshader>\n    </scalar-settings>\n  </mesh-renderer-settings>\n  <name-to-global-index global-index=\"0\" name=\"Suspended sediment concentration\"/>\n</qgis>\n",
+        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <mesh-renderer-settings>\n    <active-dataset-group scalar=\"0\" vector=\"-1\"/>\n    <scalar-settings group=\"0\" min-val=\"0.002234086767\" max-val=\"0.044682\" opacity=\"1\" interpolation-method=\"no-resampling\">\n      <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"1\" minimumValue=\"0.002234086767\" maximumValue=\"0.044682\" labelPrecision=\"4\">\n        <item value=\"0.002234086767\" color=\"#fff5eb\" alpha=\"255\" label=\"0.00223409 mg/L\"/>\n        <item value=\"0.01284606508\" color=\"#fdd0a2\" alpha=\"255\" label=\"0.0128461 mg/L\"/>\n        <item value=\"0.02345804338\" color=\"#fd8c3b\" alpha=\"255\" label=\"0.023458 mg/L\"/>\n        <item value=\"0.03407002169\" color=\"#d84801\" alpha=\"255\" label=\"0.03407 mg/L\"/>\n        <item value=\"0.044682\" color=\"#7f2704\" alpha=\"255\" label=\"0.044682 mg/L\"/>\n      </colorrampshader>\n    </scalar-settings>\n  </mesh-renderer-settings>\n  <name-to-global-index global-index=\"0\" name=\"Suspended sediment concentration\"/>\n</qgis>\n",
         "units": "mg/L",
         "vmax": 0.044682,
-        "vmin": 0.0
+        "vmin": 0.0022340867668390273
       },
       "name": "Peak suspended sediment concentration (scotia_humboldt_county_california_95562_united_s)",
       "opacity": null,
@@ -608,7 +614,7 @@
       "reference_time": null,
       "role": "primary",
       "temporal": false,
-      "uri": "s3://trid3nt-runs/01M2AA49SB93PREF122DS03BMP/r2d_river.slf",
+      "uri": "s3://trid3nt-runs/01M2BBJ9RJP02TKG5SAES5YRYE/r2d_river.slf",
       "valid_from": null,
       "valid_to": null,
       "visible": true,
@@ -618,12 +624,13 @@
       "crs_authid": "EPSG:32610",
       "dataset_group": "Bed evolution at t = 593.94 s",
       "dataset_uris": [
-        "s3://trid3nt-runs/01M2AA49SB93PREF122DS03BMP/bed_evolution-t593.dat"
+        "s3://trid3nt-runs/01M2BBJ9RJP02TKG5SAES5YRYE/bed_evolution-t593.dat"
       ],
-      "layer_id": "telemac-bed_evolution-t593-01M2AA49SB93PREF122DS03BMP",
+      "layer_id": "telemac-bed_evolution-t593-01M2BBJ9RJP02TKG5SAES5YRYE",
       "layer_type": "mesh",
       "legend": {
         "colormap": "rdbu",
+        "floor": null,
         "kind": "mesh",
         "label": "Bed evolution",
         "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <mesh-renderer-settings>\n    <active-dataset-group scalar=\"0\" vector=\"-1\"/>\n    <scalar-settings group=\"0\" min-val=\"-0.000125\" max-val=\"0.000125\" opacity=\"1\" interpolation-method=\"no-resampling\">\n      <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"-0.000125\" maximumValue=\"0.000125\" labelPrecision=\"4\">\n        <item value=\"-0.000125\" color=\"#67001f\" alpha=\"255\" label=\"-0.000125 m\"/>\n        <item value=\"-6.25e-05\" color=\"#e58368\" alpha=\"255\" label=\"-6.25e-05 m\"/>\n        <item value=\"0\" color=\"#f6f7f7\" alpha=\"255\" label=\"0 m\"/>\n        <item value=\"6.25e-05\" color=\"#68abd0\" alpha=\"255\" label=\"6.25e-05 m\"/>\n        <item value=\"0.000125\" color=\"#053061\" alpha=\"255\" label=\"0.000125 m\"/>\n      </colorrampshader>\n    </scalar-settings>\n  </mesh-renderer-settings>\n  <name-to-global-index global-index=\"0\" name=\"Bed evolution at t = 593.94 s\"/>\n</qgis>\n",
@@ -638,7 +645,7 @@
       "reference_time": null,
       "role": "primary",
       "temporal": false,
-      "uri": "s3://trid3nt-runs/01M2AA49SB93PREF122DS03BMP/gaia_river.slf",
+      "uri": "s3://trid3nt-runs/01M2BBJ9RJP02TKG5SAES5YRYE/gaia_river.slf",
       "valid_from": null,
       "valid_to": null,
       "visible": true,
@@ -648,25 +655,26 @@
       "crs_authid": "EPSG:32610",
       "dataset_group": "NCOH SEDIMENT1",
       "dataset_uris": [],
-      "layer_id": "01M2AA4TE962Q6NV3TAGXKK4X6",
+      "layer_id": "01M2BBJVQVTM8AA6RNVXNRSVXE",
       "layer_type": "mesh",
       "legend": {
         "colormap": "oranges",
+        "floor": 0.0022340867668390273,
         "kind": "mesh",
         "label": "Suspended sediment concentration",
-        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <mesh-renderer-settings>\n    <active-dataset-group scalar=\"0\" vector=\"-1\"/>\n    <scalar-settings group=\"0\" min-val=\"0\" max-val=\"0.044682\" opacity=\"1\" interpolation-method=\"no-resampling\">\n      <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"0\" maximumValue=\"0.044682\" labelPrecision=\"4\">\n        <item value=\"0\" color=\"#fff5eb\" alpha=\"255\" label=\"0 mg/L\"/>\n        <item value=\"0.0111705\" color=\"#fdd0a2\" alpha=\"255\" label=\"0.0111705 mg/L\"/>\n        <item value=\"0.022341\" color=\"#fd8c3b\" alpha=\"255\" label=\"0.022341 mg/L\"/>\n        <item value=\"0.0335115\" color=\"#d84801\" alpha=\"255\" label=\"0.0335115 mg/L\"/>\n        <item value=\"0.044682\" color=\"#7f2704\" alpha=\"255\" label=\"0.044682 mg/L\"/>\n      </colorrampshader>\n    </scalar-settings>\n  </mesh-renderer-settings>\n  <name-to-global-index global-index=\"0\" name=\"NCOH SEDIMENT1\"/>\n</qgis>\n",
+        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <mesh-renderer-settings>\n    <active-dataset-group scalar=\"0\" vector=\"-1\"/>\n    <scalar-settings group=\"0\" min-val=\"0.002234086767\" max-val=\"0.044682\" opacity=\"1\" interpolation-method=\"no-resampling\">\n      <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"1\" minimumValue=\"0.002234086767\" maximumValue=\"0.044682\" labelPrecision=\"4\">\n        <item value=\"0.002234086767\" color=\"#fff5eb\" alpha=\"255\" label=\"0.00223409 mg/L\"/>\n        <item value=\"0.01284606508\" color=\"#fdd0a2\" alpha=\"255\" label=\"0.0128461 mg/L\"/>\n        <item value=\"0.02345804338\" color=\"#fd8c3b\" alpha=\"255\" label=\"0.023458 mg/L\"/>\n        <item value=\"0.03407002169\" color=\"#d84801\" alpha=\"255\" label=\"0.03407 mg/L\"/>\n        <item value=\"0.044682\" color=\"#7f2704\" alpha=\"255\" label=\"0.044682 mg/L\"/>\n      </colorrampshader>\n    </scalar-settings>\n  </mesh-renderer-settings>\n  <name-to-global-index global-index=\"0\" name=\"NCOH SEDIMENT1\"/>\n</qgis>\n",
         "units": "mg/L",
         "vmax": 0.044682,
-        "vmin": 0.0
+        "vmin": 0.0022340867668390273
       },
       "name": "Suspended sediment concentration over time (scotia_humboldt_county_california_95562_united_s)",
       "opacity": null,
       "origin": null,
       "quantity": "suspended_sediment_concentration",
-      "reference_time": "2026-09-12T08:00:50+00:00",
+      "reference_time": "2026-09-12T17:45:11+00:00",
       "role": "primary",
       "temporal": false,
-      "uri": "s3://trid3nt-runs/01M2AA49SB93PREF122DS03BMP/r2d_river.slf",
+      "uri": "s3://trid3nt-runs/01M2BBJ9RJP02TKG5SAES5YRYE/r2d_river.slf",
       "valid_from": null,
       "valid_to": null,
       "visible": true,

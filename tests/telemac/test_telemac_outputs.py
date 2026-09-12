@@ -13,6 +13,7 @@ from typing import Any
 import numpy as np
 import pytest
 
+from trid3nt_server.render import presets
 from trid3nt_server.render.formats import Published
 from trid3nt_server.workflows.telemac.modules.outputs import Field, Frames, Series
 from trid3nt_server.workflows.telemac.modules import (
@@ -118,8 +119,10 @@ def test_an_envelope_is_delivered_as_a_dataset_group_beside_the_results(solved,
     assert mesh_product.datasets == ("dye_concentration.dat",)
     assert mesh_product.group == "Dye concentration"
     assert mesh_product.epsg == 32610 and mesh_product.t is None
-    # ranged from nothing, because the floor is where the field stops being drawn
-    assert mesh_product.value_range == (0.0, 80.0)
+    # ranged FROM the floor: below it the field is not drawn at all, so the
+    # ramp starts where it starts being visible
+    assert mesh_product.floor == pytest.approx(4.0)
+    assert mesh_product.value_range == (4.0, 80.0)
     written = _store.store["RID/dye_concentration.dat"].decode()
     assert written.startswith('DATASET\nOBJTYPE "mesh2d"\nBEGSCL\nND 5\nNC 4\n')
     assert 'NAME "Dye concentration"' in written
@@ -168,6 +171,26 @@ def test_the_field_over_every_instant_is_the_frames_an_animation_plays(solved):
     # how far the plume's centroid moved from where it first appeared
     assert read.measures["travel_m"] > 0.0
     assert read.measures["active_frames"] == 2
+    # the animation carries the same floor the still masks at
+    assert read.floor == pytest.approx(4.0)
+
+
+def test_the_animations_style_row_carries_the_floor_the_shader_clips_at(solved):
+    """A group the RESULT FILE carries cannot be written with nothing below its
+    floor, so the row is what masks it - and the range starts there."""
+    from trid3nt_server.render.formats import _mesh_layer
+    from trid3nt_server.workflows.telemac.modules.outputs import deliver
+
+    primitive = field("T1", t="every").animate()
+    read = T2D.OUTPUTS["field"].read(primitive, solved)
+    item = deliver(primitive, read, solved, caption="dye concentration",
+                   name="reach", where="the Wabash")
+    assert item.product.floor == pytest.approx(4.0)
+    layer = _mesh_layer(item, run_id="RID", engine="telemac", name="reach",
+                        value_range=(4.0, 80.0))
+    assert layer.style["floor"] == pytest.approx(4.0)
+    resolved_qml = presets.qml(presets.resolve(presets.from_row(layer.style)))
+    assert 'clip="1"' in resolved_qml and 'minimumValue="4"' in resolved_qml
 
 
 def test_a_field_at_an_instant_is_that_frame(solved):

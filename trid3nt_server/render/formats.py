@@ -63,6 +63,10 @@ class Mesh:
     plane: str | None = None
     units: str | None = None
     value_range: tuple[float, float] | None = None
+    #: Where the field stops being drawn. The group written beside the mesh
+    #: carries nothing below it; the RESULT FILE's own group carries the values,
+    #: so the style row is what masks them.
+    floor: float | None = None
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -210,17 +214,23 @@ def _titles(item: Deliverable, *, name: str) -> tuple[str, str]:
 
 def _style_row(item: Deliverable, *, kind: str, label: str,
                value_range: tuple[float, float] | None,
-               dataset_group: str | None = None) -> dict[str, Any]:
+               dataset_group: str | None = None,
+               floor: float | None = None) -> dict[str, Any]:
     """The declared row, shaped for the format the product arrived in.
 
     The producer declares the ramp, the units and where the legend is ranged
     from; the FORMAT decides which of the four shapes draws it."""
+    # The declared row's ``center`` / ``floor`` / ``range`` are instructions for
+    # MEASURING a range and the measurement is already done; ``floor`` here is
+    # the edge the PRODUCT measured, which the renderer still has to mask on.
     row = {k: v for k, v in dict(item.style or {}).items()
            if k not in ("center", "floor", "range")}
     row["kind"] = kind
     row.setdefault("label", label)
     if dataset_group is not None:
         row["dataset_group"] = dataset_group
+    if floor is not None:
+        row["floor"] = float(floor)
     if value_range is not None:
         row["scale"] = {"policy": "fixed",
                         "range": [float(value_range[0]), float(value_range[1])]}
@@ -250,7 +260,7 @@ def _mesh_layer(item: Deliverable, *, run_id: str, engine: str, name: str,
         dataset_uris=[f"s3://{bucket}/{run_id}/{basename}"
                       for basename in mesh.datasets],
         style=_style_row(item, kind="mesh", label=label, value_range=value_range,
-                         dataset_group=mesh.group),
+                         dataset_group=mesh.group, floor=mesh.floor),
         quantity=quantity, role="primary", units=mesh.units, bbox=mesh.bbox,
         crs_authid=f"EPSG:{int(mesh.epsg)}",
         reference_time=mesh.reference_time)

@@ -4,7 +4,9 @@ Proved on the INSTALLED QGIS: MDAL opens a SELAFIN already temporal on a 1900
 reference the file never states; stamping moves the extent onto the DECLARED
 instant while a row declaring none keeps MDAL's axis; a preset style changes the
 renderer; a declared quantity binds to the group MDAL actually reports; and a
-dataset file written BESIDE a mesh loads onto it as a group the preset binds."""
+dataset file written BESIDE a mesh loads onto it as a group the preset binds; a
+preset that ranges from a field's floor clips below it, so the RESULT FILE's own
+group masks where the derived group's nodata does."""
 
 from __future__ import annotations
 
@@ -44,17 +46,17 @@ _QML = (
 
 
 #: The mesh preset as its writer writes it, with the DECLARED quantity in the
-#: binding row QGIS remaps by name.
+#: binding row QGIS remaps by name and the shader's clip flag as it writes it.
 _MESH_QML = (
     "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n"
     '<qgis version="3.40.6" styleCategories="Symbology">\n'
     "  <mesh-renderer-settings>\n"
     '    <active-dataset-group scalar="0" vector="-1"/>\n'
-    '    <scalar-settings group="0" min-val="0" max-val="5" opacity="1"'
+    '    <scalar-settings group="0" min-val="{lo}" max-val="5" opacity="1"'
     ' interpolation-method="no-resampling">\n'
     '      <colorrampshader colorRampType="INTERPOLATED" classificationMode="1"'
-    ' clip="0" minimumValue="0" maximumValue="5" labelPrecision="4">\n'
-    '        <item value="0" color="#a50026" alpha="255" label="0 mg/L"/>\n'
+    ' clip="{clip}" minimumValue="{lo}" maximumValue="5" labelPrecision="4">\n'
+    '        <item value="{lo}" color="#a50026" alpha="255" label="{lo} mg/L"/>\n'
     '        <item value="5" color="#313695" alpha="255" label="5 mg/L"/>\n'
     "      </colorrampshader>\n"
     "    </scalar-settings>\n"
@@ -68,6 +70,11 @@ _MESH_QML = (
 #: group that is none of these is the one the binding proof declares.
 _HYDRODYNAMIC = ("VELOCITY", "WATER DEPTH", "FREE SURFACE", "BOTTOM")
 _DECLARED_ABSENT = "model_results"
+
+
+def _mesh_qml(*, declared: str, clip: int = 0, lo: str = "0") -> str:
+    """The mesh preset document, at the clip and range a case is proving."""
+    return _MESH_QML.format(declared=declared, clip=clip, lo=lo)
 
 
 def _write(tmp: str, stem: str, document: str) -> str:
@@ -98,7 +105,7 @@ def _mesh_binding(layers, slf_path: str, tmp: str) -> None:
     # quantity is not how MDAL spells the group, so no group binds.
     unbound = QgsMeshLayer(slf_path, "unbound", "mdal")
     _msg, ok = unbound.loadNamedStyle(
-        _write(tmp, "unbound", _MESH_QML.format(declared=declared)))
+        _write(tmp, "unbound", _mesh_qml(declared=declared)))
     assert ok, "QGIS rejected the mesh document outright"
     dropped = unbound.rendererSettings().activeScalarDatasetGroup()
     assert dropped == -1, (
@@ -109,7 +116,7 @@ def _mesh_binding(layers, slf_path: str, tmp: str) -> None:
     # wins on the one group it binds.
     layers._clamp_mesh_scalar_classification(mesh)
     note = layers.bind_declared_mesh_style(
-        mesh, {"qml": _MESH_QML.format(declared=declared)}, tmp)
+        mesh, {"qml": _mesh_qml(declared=declared)}, tmp)
     print(f"bind note:{note}", flush=True)
     assert "styled from the declared preset" in note, note
     assert names[index].strip() in note, note
@@ -132,7 +139,7 @@ def _mesh_binding(layers, slf_path: str, tmp: str) -> None:
     absent = QgsMeshLayer(slf_path, "absent", "mdal")
     before = absent.rendererSettings().activeScalarDatasetGroup()
     note = layers.bind_declared_mesh_style(
-        absent, {"qml": _MESH_QML.format(declared=_DECLARED_ABSENT)}, tmp)
+        absent, {"qml": _mesh_qml(declared=_DECLARED_ABSENT)}, tmp)
     print(f"unmatched note:{note}", flush=True)
     assert _DECLARED_ABSENT in note and "default group stands" in note, note
     assert absent.rendererSettings().activeScalarDatasetGroup() == before, (
@@ -176,7 +183,7 @@ def _dataset_beside_the_mesh(layers, slf_path: str, tmp: str) -> None:
 
     layers._clamp_mesh_scalar_classification(mesh)
     bind = layers.bind_declared_mesh_style(
-        mesh, {"qml": _MESH_QML.format(declared=group)}, tmp)
+        mesh, {"qml": _mesh_qml(declared=group)}, tmp)
     print(f"derived bind note:{bind}", flush=True)
     assert "styled from the declared preset" in bind, bind
     assert mesh.rendererSettings().activeScalarDatasetGroup() == len(after) - 1, (
@@ -186,6 +193,33 @@ def _dataset_beside_the_mesh(layers, slf_path: str, tmp: str) -> None:
     block = mesh.datasetValues(index, 0, 3)
     read = [block.value(i).scalar() for i in range(3)]
     assert read[0] == 5.0 and read[1] != read[1] and read[2] != read[2], read
+
+
+def _floored_group_clips(layers, slf_path: str, tmp: str) -> None:
+    """A preset ranged from a field's floor CLIPS below it, through the load.
+
+    A group the result file carries cannot be rewritten with nothing under its
+    floor, so the shader is what masks it; QGIS drops the flag with the rest of
+    the block if the document is not shaped the way the writer shapes it."""
+    mesh = QgsMeshLayer(slf_path, "floored tracer", "mdal")
+    assert mesh.isValid(), f"MDAL rejected {slf_path}"
+    names = _group_names(mesh)
+    index = next(i for i, n in enumerate(names)
+                 if not n.strip().upper().startswith(_HYDRODYNAMIC))
+    declared = names[index].split()[0]
+
+    layers._clamp_mesh_scalar_classification(mesh)
+    note = layers.bind_declared_mesh_style(
+        mesh, {"qml": _mesh_qml(declared=declared, clip=1, lo="0.25")}, tmp)
+    print(f"clipped bind note:{note}", flush=True)
+    assert "styled from the declared preset" in note, note
+    assert "clipped below" in note, note
+    shader = mesh.rendererSettings().scalarSettings(index).colorRampShader()
+    assert shader.clip(), "the shader's clip flag did not survive the load"
+    assert shader.minimumValue() == 0.25, shader.minimumValue()
+    # QGIS's own read of a below-floor value: shaded is False, so nothing paints.
+    assert shader.shade(0.1)[0] is False, shader.shade(0.1)
+    assert shader.shade(1.0)[0] is True, shader.shade(1.0)
 
 
 def _materializer(layers):
@@ -292,6 +326,7 @@ def main(slf_path: str, tracer_slf_path: str) -> None:
         "QGIS did not keep the COG's own colour table")
 
     _mesh_binding(layers, tracer_slf_path, tmp)
+    _floored_group_clips(layers, tracer_slf_path, tmp)
     _dataset_beside_the_mesh(layers, tracer_slf_path, tmp)
 
     print("QT-MESH-TEMPORAL-OK", flush=True)

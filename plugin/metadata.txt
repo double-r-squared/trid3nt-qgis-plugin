@@ -5,9 +5,14 @@ qgisMaximumVersion=4.99
 supportsQt6=True
 description=TRID3NT agent chat dock -- ask for geospatial data or a hazard simulation in plain language and the answer arrives as styled layers on the canvas.
 about=Dockable chat panel that drives a TRID3NT agent over ws:// (this box or a tailnet peer). Every layer the agent publishes is STREAMED in place as a native QGIS layer -- COG rasters and FlatGeobuf vectors read ranged from the object store via GDAL /vsis3/ (no project download); the one format with no /vsi layer (MDAL meshes) stages to a session-scoped temp dir cleaned up when the dock closes. Simulation gate card, drawn-rectangle AOI on every message, capped-jitter auto-reconnect with queued sends, and case switching (open any existing case's chat) that restores its layers in one gesture. The TRID3NT stack (agent, MinIO, Ollama) must be installed and running separately -- the plugin never starts or stops it.
-version=0.3.25
+version=0.3.26
 author=Nate Almanza
-changelog=0.3.25 - The session runs the geoprocessing. Two agent tools ride the
+changelog=0.3.26 - A mesh field with a FLOOR is not painted below it. A preset
+    whose range starts at the field's floor carries the shader's clip flag, so
+    the nodes where the quantity is absent show the basemap through rather than
+    the ramp's palest colour - the same picture the still already showed, now on
+    the animation too. The layer note says when a mesh is clipped.
+    0.3.25 - The session runs the geoprocessing. Two agent tools ride the
     wire as a processing-request: run_qgis_algorithm runs a Processing
     algorithm over canvas layers named in its params and adds the output to
     the project; run_pyqgis executes an approved snippet in this session's

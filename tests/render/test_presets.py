@@ -208,6 +208,55 @@ def test_a_mesh_document_binds_its_group_by_name_because_an_index_does_not_survi
     assert doc.find("./name-to-global-index").get("name") == "WATER DEPTH"
 
 
+def test_a_mesh_ranged_from_its_floor_clips_below_it():
+    """The RESULT FILE's own group carries every node, so the shader is the mask."""
+    resolved = presets.resolve(
+        Preset(kind="mesh", dataset_group="DYE", floor=0.25,
+               scale=Scale(policy="fixed", range=(0.25, 5.0))))
+    shader = _doc(resolved).find(
+        "./mesh-renderer-settings/scalar-settings/colorrampshader")
+    assert shader.get("clip") == "1"
+    assert shader.get("minimumValue") == "0.25"
+
+
+def test_a_mesh_ranged_from_anything_but_its_floor_does_not_clip():
+    """QGIS's clip drops values on BOTH sides, so a range the floor did not set
+    would clip live values away."""
+    unfloored = presets.resolve(
+        Preset(kind="mesh", dataset_group="DYE",
+               scale=Scale(policy="fixed", range=(0.0, 5.0))))
+    widened = presets.resolve(
+        Preset(kind="mesh", dataset_group="DYE", floor=0.25,
+               scale=Scale(policy="fixed", range=(0.0, 5.0))))
+    for resolved in (unfloored, widened):
+        assert _doc(resolved).find(
+            "./mesh-renderer-settings/scalar-settings/colorrampshader"
+        ).get("clip") == "0"
+
+
+def test_a_floored_field_is_ranged_from_its_floor_not_from_zero():
+    assert presets.measured_range([1.0, 4.0, 9.0], floor=0.5) == (0.5, 9.0)
+    # a row that DECLARES a floor is pinning the legend's bottom, and wins
+    assert presets.measured_range([1.0, 9.0], {"floor": 0}, floor=0.5) == (0.0, 9.0)
+
+
+def test_a_legend_end_never_rounds_into_the_field_it_ends():
+    """Where the shader clips, a top rounded DOWN erases the field's own peak."""
+    peak = 94.0252914428711
+    lo, hi = presets.measured_range([0.5000004, peak])
+    assert hi >= peak and lo <= 0.5000004
+    # the floor is the bottom EXACTLY: that identity is what licenses the clip
+    floored = presets.measured_range([5.0, peak], floor=4.911237891)
+    assert floored[0] == 4.911237891 and floored[1] >= peak
+
+
+def test_the_legend_key_carries_the_floor_a_renderer_masks_on():
+    key = presets.legend_key({"kind": "mesh", "dataset_group": "DYE",
+                              "floor": 0.25},
+                             value_range=(0.25, 5.0))
+    assert key.floor == 0.25 and key.vmin == 0.25
+
+
 def test_a_label_with_xml_punctuation_survives_the_writer():
     resolved = presets.resolve(Preset(units='m<sup>3</sup>/s & "cfs"'))
     items = _doc(resolved).findall("./pipe/rasterrenderer/rastershader/colorrampshader/item")

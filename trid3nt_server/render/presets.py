@@ -7,6 +7,7 @@ than adding a fifth. The .qml written is a subset of QGIS's own style format.
 
 from __future__ import annotations
 
+import math
 import re
 import logging
 from dataclasses import dataclass, replace
@@ -131,6 +132,10 @@ class Preset:
     #: The MDAL group a mesh preset paints. QGIS binds it by NAME; an index does
     #: not survive the load.
     dataset_group: str | None = None
+    #: Where the field STOPS BEING DRAWN. A floored field is ranged from here
+    #: and nothing below it is painted, so the still and the animation of one
+    #: quantity show the same absent region.
+    floor: float | None = None
 
     def titled(self, label: str | None, units: str | None) -> "Preset":
         """The same preset speaking for a particular quantity."""
@@ -194,6 +199,8 @@ def from_row(row: Any) -> Preset:
         color=str(row.get("color") or base.color),
         attribute=row.get("attribute") or base.attribute,
         dataset_group=row.get("dataset_group") or base.dataset_group,
+        floor=(float(row["floor"]) if row.get("floor") is not None
+               else base.floor),
     )
 
 
@@ -310,6 +317,16 @@ def shared_range(
 _PERCENTILE_CAP = re.compile(r"p(\d+(?:\.\d+)?)")
 
 
+def _legend_end(value: float, *, up: bool) -> float:
+    """Six decimals, rounded AWAY from the field.
+
+    A legend end rounded INTO the data labels a colour as the extreme while
+    values run past it - and where the shader clips, those values are not drawn
+    at all, so the field's own peak disappears."""
+    step = 1e6
+    return (math.ceil(value * step) if up else math.floor(value * step)) / step
+
+
 def measured_range(values: Any, row: Any = None, *, floor: float | None = None
                    ) -> tuple[float, float]:
     """The legend range a producer measured while it held the field.
@@ -328,18 +345,21 @@ def measured_range(values: Any, row: Any = None, *, floor: float | None = None
     center = declared.get("center")
     if center is not None:
         reach = max(abs(hi - float(center)), abs(lo - float(center)))
-        return (round(float(center) - reach, 6), round(float(center) + reach, 6))
+        return (_legend_end(float(center) - reach, up=False),
+                _legend_end(float(center) + reach, up=True))
     cap = _PERCENTILE_CAP.fullmatch(str(declared.get("range") or ""))
     if cap is not None and finite.size:
         hi = float(np.percentile(finite, float(cap.group(1))))
     if declared.get("floor") is not None:
         lo = float(declared["floor"])
     elif floor is not None:
-        # A FLOORED field is read from zero: the floor is where the field stops
-        # being drawn, so the ramp's bottom is nothing rather than the faintest
-        # value still on it.
-        lo, hi = 0.0, max(hi, float(floor))
-    return (round(lo, 6), round(hi, 6))
+        # A FLOORED field is read FROM its floor: below it the field is not
+        # drawn at all, so a ramp that started lower would spend colours on an
+        # absent region and the legend would read its bottom as a value. The
+        # bottom is the floor EXACTLY, because that identity is what says the
+        # shader may clip there.
+        return (float(floor), _legend_end(max(hi, float(floor)), up=True))
+    return (_legend_end(lo, up=False), _legend_end(hi, up=True))
 
 
 def band_range_reader(
@@ -430,11 +450,11 @@ def _ramp_items(resolved: Resolved, indent: str) -> str:
     return "\n".join(rows)
 
 
-def _colorrampshader(resolved: Resolved, indent: str) -> str:
+def _colorrampshader(resolved: Resolved, indent: str, *, clip: bool = False) -> str:
     lo, hi = resolved.range or _SAFE_RANGE
     return (
         f'{indent}<colorrampshader colorRampType="INTERPOLATED" classificationMode="1"'
-        f' clip="0" minimumValue="{lo:.10g}" maximumValue="{hi:.10g}"'
+        f' clip="{1 if clip else 0}" minimumValue="{lo:.10g}" maximumValue="{hi:.10g}"'
         f' labelPrecision="4">\n'
         f"{_ramp_items(resolved, indent + '  ')}\n"
         f"{indent}</colorrampshader>")
@@ -537,6 +557,18 @@ def _reference_qml(resolved: Resolved) -> str:
         "  </renderer-v2>\n")
 
 
+def _clips_below_floor(resolved: Resolved) -> bool:
+    """Does this resolution range FROM the field's floor, and so clip below it?
+
+    QGIS's clip drops values on both sides of the range, so it is set only when
+    the range's bottom IS the floor - a range resolved from anything else (a
+    fallback, a span shared with another product) would clip live values away.
+    """
+    floor = resolved.preset.floor
+    return (floor is not None and resolved.range is not None
+            and resolved.range[0] == floor)
+
+
 def _mesh_qml(resolved: Resolved) -> str:
     lo, hi = resolved.range or _SAFE_RANGE
     group = resolved.preset.dataset_group or ""
@@ -549,7 +581,7 @@ def _mesh_qml(resolved: Resolved) -> str:
         '    <active-dataset-group scalar="0" vector="-1"/>\n'
         f'    <scalar-settings group="0" min-val="{lo:.10g}" max-val="{hi:.10g}"'
         ' opacity="1" interpolation-method="no-resampling">\n'
-        f"{_colorrampshader(resolved, '      ')}\n"
+        f"{_colorrampshader(resolved, '      ', clip=_clips_below_floor(resolved))}\n"
         "    </scalar-settings>\n"
         "  </mesh-renderer-settings>\n"
         f"{binding}")
@@ -573,6 +605,7 @@ def legend_key(row: Any, *, value_range: tuple[float, float] | None = None,
         vmax=resolved.range[1] if resolved.range else None,
         units=preset.units,
         label=preset.label,
+        floor=preset.floor,
         qml=qml(resolved),
     )
 

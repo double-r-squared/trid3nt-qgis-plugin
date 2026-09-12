@@ -61,9 +61,9 @@ The values the template declares. `desc` is what the model reads when it fills o
 
 | field | the proving run's value |
 |---|---|
-| `dye_cmax_mgl` | 98.6875228881836 |
+| `dye_cmax_mgl` | 98.22479248046875 |
 | `dye_peak_time_s` | 118.72799682617188 |
-| `plume_reach_m` | 56.7 |
+| `plume_reach_m` | 59.4 |
 | `active_frames` | 30 |
 | `mesh_size_m` | 7.763 |
 
@@ -73,29 +73,29 @@ It publishes these layers onto the canvas:
 - Input: nhdplus nldi (nhdplus_nldi)
 - Input: nhd area water (nhd_area_water)
 - Input: river bed elevation (copernicus_dem, datum EGM2008 geoid (metres, positive up))
-- Release point (derived) - scotia_humboldt_county_california_95562_united_s
+- Release point 'outfall-a' (user) - scotia_humboldt_county_california_95562_united_s
 - Peak dye concentration (scotia_humboldt_county_california_95562_united_s)
 - Dye concentration over time (scotia_humboldt_county_california_95562_united_s)
 
 ## The proving run
 
-Run `01M2A9Q69W6MY8ER7SWZ90SGT4`, 2026-09-12T07:53:53.907893+00:00, 25.385 s, at commit `1fc6f9f990169d1f2cc52112d88c229901f1114d-dirty`.
+Run `01M2BBBABM23F17Z52XC666T2G`, 2026-09-12T17:41:37.600860+00:00, 26.744 s, at commit `bbfef467280c737219afd96302606d0d1be77b95-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M2A9Q69W6MY8ER7SWZ90SGT4)](telemac_river_dye/telemac_river_dye.png)
+![Every layer the run published, stacked and framed on the result (run 01M2BBBABM23F17Z52XC666T2G)](telemac_river_dye/telemac_river_dye.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M2A9Q69W6MY8ER7SWZ90SGT4)*
+*Every layer the run published, stacked and framed on the result (run 01M2BBBABM23F17Z52XC666T2G)*
 
-![The solve, frame by frame (run 01M2A9Q69W6MY8ER7SWZ90SGT4)](telemac_river_dye/telemac_river_dye_animation.gif)
+![The solve, frame by frame (run 01M2BBBABM23F17Z52XC666T2G)](telemac_river_dye/telemac_river_dye_animation.gif)
 
-*The solve, frame by frame (run 01M2A9Q69W6MY8ER7SWZ90SGT4)*
+*The solve, frame by frame (run 01M2BBBABM23F17Z52XC666T2G)*
 
-![peak frame (run 01M2A9Q69W6MY8ER7SWZ90SGT4)](telemac_river_dye/telemac_river_dye_peak_frame.png)
+![peak frame (run 01M2BBBABM23F17Z52XC666T2G)](telemac_river_dye/telemac_river_dye_peak_frame.png)
 
-*peak frame (run 01M2A9Q69W6MY8ER7SWZ90SGT4)*
+*peak frame (run 01M2BBBABM23F17Z52XC666T2G)*
 
-![dye concentration - the chart the run persisted (run 01M2A9Q69W6MY8ER7SWZ90SGT4)](telemac_river_dye/telemac_river_dye_chart_dye_concentration.png)
+![dye concentration - the chart the run persisted (run 01M2BBBABM23F17Z52XC666T2G)](telemac_river_dye/telemac_river_dye_chart_dye_concentration.png)
 
-*dye concentration - the chart the run persisted (run 01M2A9Q69W6MY8ER7SWZ90SGT4)*
+*dye concentration - the chart the run persisted (run 01M2BBBABM23F17Z52XC666T2G)*
 
 ### The sheet it filled
 
@@ -109,6 +109,7 @@ Every slot the run resolved, with where the value came from. The engine's own de
 | `spill_fraction` | 0.25 | - | user | supplied on this invocation |
 | `spill_duration_s` | 120.0 | s | user | supplied on this invocation |
 | `source_q_m3s` | 8.0 | m^3/s | user | supplied on this invocation |
+| `release` | Point(lon=-124.0983, lat=40.4921, name='outfall-a') | - | user | supplied on this invocation |
 | `dye_concentration_mgl` | 100.0 | mg/L | user | supplied on this invocation |
 | `reach_length_km` | 1.0 | km | user | supplied on this invocation |
 | `sim_duration_s` | 600.0 | s | user | supplied on this invocation |
@@ -124,7 +125,6 @@ Every slot the run resolved, with where the value came from. The engine's own de
 | `rainfall_mm_per_day` | - | mm/day | user | not supplied (declared optional) |
 | `evaporation_mm_per_day` | - | mm/day | user | not supplied (declared optional) |
 | `rainfall_gridmet_window` | - | - | user | not supplied (declared optional) |
-| `release` | - | - | user | not supplied (declared optional) |
 | `decaying_substance` | - | - | prompt_interpreted | not supplied (declared optional) |
 | `decay_half_life_hours` | - | h | user | not supplied (declared optional) |
 | `decay_rate_per_day` | - | 1/day | user | not supplied (declared optional) |
@@ -142,6 +142,7 @@ await TOOL_REGISTRY['telemac_river_dye'].fn(
     mesh_resolution_m=10.0,
     output_interval_min=0.333,
     reach_length_km=1.0,
+    release="Point(lon=-124.0983, lat=40.4921, name='outfall-a')",
     sim_duration_s=600.0,
     source_q_m3s=8.0,
     spill_duration_s=120.0,
@@ -149,5 +150,5 @@ await TOOL_REGISTRY['telemac_river_dye'].fn(
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2A9Q69W6MY8ER7SWZ90SGT4` and commit `1fc6f9f990169d1f2cc52112d88c229901f1114d-dirty`. The full argument record is [`telemac_river_dye/run.json`](telemac_river_dye/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2BBBABM23F17Z52XC666T2G` and commit `bbfef467280c737219afd96302606d0d1be77b95-dirty`. The full argument record is [`telemac_river_dye/run.json`](telemac_river_dye/run.json).
 

@@ -38,6 +38,13 @@ the declared group by name. A node below the read's floor is written as nothing,
 so the field draws where it is visible and the basemap shows through where it is
 not.
 
+A group the RESULT FILE carries cannot be rewritten that way - the animation
+plays from the engine's own SELAFIN - so the floor travels on the layer's style
+row instead: the shader ranges FROM the floor and sets the colour ramp's
+`clip`, and QGIS leaves every below-floor node unpainted. One field, one absent
+region, on the still and on the animation. The packet's own GIF renderer masks
+at the same edge, off the same row.
+
 A 3D SELAFIN is NOT an MDAL mesh: MDAL rejects the file. TELEMAC-3D writes the
 2D result beside it, and that file is the mesh a plane is drawn onto - the run
 states it as `display_basename`.
@@ -48,8 +55,11 @@ A producer declares a style ROW (`kind`, `ramp`, `units`, `label`, and where the
 legend is ranged from: a `center` for a diverging ramp, a `floor`, a `p<q>` cap).
 The FORMAT decides which of the four preset shapes draws it; the row's range
 semantics are how the producer MEASURED the range, and what the layer carries is
-the range itself, as a fixed `scale`. Every product of one quantity is ranged
-together, so a still and its animation read on one ramp.
+the range itself, as a fixed `scale` - plus, on a mesh, the `floor` the PRODUCT
+measured, because the mask is still ahead of the renderer. Every product of one
+quantity is ranged together, so a still and its animation read on one ramp, and
+a legend end rounds AWAY from the field so no value falls outside the range that
+clips against it.
 
 There are no preset NAMES: `presets.py` closes a four-kind family (continuous
 raster, classed vector-or-raster, reference outline, mesh dataset group) and

@@ -187,6 +187,7 @@ def legend_for_published_layer(
             vmax=resolved.range[1] if resolved.range else None,
             units=preset.units or units,
             label=preset.label,
+            floor=preset.floor,
             qml=resolved.qml(),
         )
     except Exception as exc:  # noqa: BLE001 - never block a publish on the legend
