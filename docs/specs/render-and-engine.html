@@ -23,10 +23,10 @@
 </style>
 
 <h1>Render and the Engine File</h1>
-<p class="rev">rev 1 &middot; 2026-09-11 &middot; render accepts a format set and an engine carries one transform; one file per engine over one executor; derive narrowed to simulation automation with QGIS's own algorithms and PyQGIS run in the user's session; the attics. The wave after the module-is-the-unit wave.</p>
+<p class="rev">rev 1a &middot; 2026-09-12 &middot; render accepts a format set and an engine carries one transform; one file per engine over one executor; derive narrowed to simulation automation with QGIS's own algorithms and PyQGIS run in the user's session; the attics. The wave after the module-is-the-unit wave.</p>
 
 <h2>1. Render: a format set, a default style, a transform per engine</h2>
-<p>The package that turns data into what the user sees is named <code>render</code> (it is <code>emission</code> today). It accepts exactly what QGIS opens and nothing else: a raster as a COG, a vector as GeoJSON, GPKG or FlatGeobuf, a mesh in any MDAL format (SELAFIN, 2dm, UGRID, HEC-RAS 2D HDF), a series or a profile as a chart payload. Each arrives with its declared style row from <code>styles.yaml</code> (kind, ramp, units, floor, range cap); the default style carries the weight. A user's restyle is the edit of a style, kept beside the presets as its own seam. An engine whose output is not in the set carries ONE transform module beside its module surface that normalizes it; an engine whose output is in the set carries none.</p>
+<p>The package that turns data into what the user sees is named <code>render</code> (it is <code>emission</code> today). It accepts exactly what QGIS opens and nothing else: a raster as a COG, a vector as GeoJSON, GPKG or FlatGeobuf, a mesh in any MDAL format (SELAFIN, 2dm, UGRID, HEC-RAS 2D HDF), a series or a profile as a chart payload. Each arrives with the style row declared beside the product that draws it (kind, ramp, units, floor, range cap); the default style carries the weight. A user's restyle is the edit of a style, kept beside the presets as its own seam. An engine whose output is not in the set carries ONE transform module beside its module surface that normalizes it; an engine whose output is in the set carries none.</p>
 <div class="scroll">
 <pre class="mermaid">
 flowchart LR
