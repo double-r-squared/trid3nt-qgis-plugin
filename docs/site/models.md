@@ -2,7 +2,7 @@
 
 The LLM is pluggable through the OpenAI-compatible seam (`MODEL_PROVIDER=openai` +
 `TRID3NT_OPENAI_BASE_URL`). This page records what has actually been measured locally: which
-models can drive the 161-tool agent, why the default is what it is, and what the routing
+models can drive the 148-tool agent, why the default is what it is, and what the routing
 benchmarks say.
 
 Reference box for all numbers below: consumer desktop with an NVIDIA RTX 2060 SUPER (8 GB
@@ -48,7 +48,7 @@ system-suffix seam -- harmless for models that ignore it).
 
 ## Tool retrieval (top-K)
 
-An 8B model cannot reliably pick the right tool out of a registry this size (161 tools
+An 8B model cannot reliably pick the right tool out of a registry this size (148 tools
 today, 176 when the bench below ran), so the local build always runs the retrieval
 layer: each turn, the user text is ranked against the tool corpus (BM25 +
 name-substring + local dense embeddings, fused with RRF, reusing

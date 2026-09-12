@@ -45,7 +45,7 @@ graph TD
     subgraph Agent["Agent (host venv, venvs/agent)"]
         WS["WS :8765 (chat protocol)"]
         HTTP["HTTP :8766 (tool catalog, stats)"]
-        Tools["161 tools + tool retrieval (top-K)"]
+        Tools["148 tools + tool retrieval (top-K)"]
         FP["FilePersistence\ndata/persistence/"]
     end
 
