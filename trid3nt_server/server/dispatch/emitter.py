@@ -188,7 +188,6 @@ _ALWAYS_OFFLOAD_SYNC_TOOLS = frozenset(
         # reads the run's outputs listing over the network
         "list_run_frames",
         # STAC sign plus windowed warp-read and COG / FlatGeobuf write
-        "fetch_surface_water_ndwi",
         "fetch_sentinel2_truecolor",
         "fetch_sentinel1_sar",
         "fetch_landsat_imagery",

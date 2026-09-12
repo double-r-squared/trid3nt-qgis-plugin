@@ -119,12 +119,11 @@ docstring: |-
   - "Where has the river EVER flooded?" (the long-term flood envelope) ->
     ``occurrence``.
   - "Is this reservoir / lake shrinking?" -> ``change``.
-  - A long-term water BASELINE to compare against a current NDWI snapshot from
-    ``fetch_surface_water_ndwi``.
+  - A long-term water BASELINE to compare against a current scene.
 
   **When NOT to use:**
-  - Outlining water in ONE recent scene -> ``fetch_surface_water_ndwi`` (NDWI) or
-    ``fetch_sentinel2_truecolor``.
+  - Outlining water in ONE recent scene -> ``fetch_sentinel2_truecolor``, then
+    NDWI and ``gdal:polygonize`` over its bands in the session.
   - A modeled flood DEPTH surface -> a hydraulic model run (e.g.
     ``telemac_rain_on_grid``).
   - FEMA regulatory flood ZONES -> ``fetch_fema_nfhl_zones``.

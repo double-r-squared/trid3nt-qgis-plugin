@@ -72,8 +72,6 @@ docstring: |-
     both when the user wants "all water + wetland habitat".
   - ``fetch_jrc_global_surface_water`` -- that is a global surface-water RASTER
     (occurrence %), not classified wetland polygons.
-  - ``fetch_surface_water_ndwi`` -- that CV-vectorizes one water body from imagery;
-    NWI is the pre-mapped national inventory.
   Do NOT use for: FEMA regulatory flood zones (``fetch_fema_nfhl_zones``),
   administrative boundaries (``fetch_administrative_boundaries``), or soil types
   (``fetch_soilgrids`` / ``fetch_statsgo_soils``).

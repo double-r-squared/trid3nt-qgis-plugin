@@ -180,7 +180,6 @@ from .fetchers.climate.fetch_idf_curve import fetch_idf_curve  # noqa: E402,F401
 from .fetchers.climate.lookup_precip_return_period import lookup_precip_return_period  # noqa: E402,F401
 
 # -- fetchers/hydrology --
-from .fetchers.hydrology.fetch_surface_water_ndwi import fetch_surface_water_ndwi  # noqa: E402,F401
 
 # -- fetchers/socioeconomic --
 from .fetchers.socioeconomic.geocode_location import geocode_location  # noqa: E402,F401
