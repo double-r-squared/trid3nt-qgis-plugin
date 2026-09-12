@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, Mapping, Sequence
 
 from trid3nt_contracts.execution import LayerURI
@@ -112,6 +112,7 @@ async def publish(*, run_id: str, engine: str, name: str,
     from trid3nt_server.workflows.runtime.run_products import persist_run_products
 
     shared = _shared_ranges(items)
+    items = _one_row_per_quantity(items)
     layers: list[LayerURI] = []
     charts: dict[str, Any] = {}
     for item in items:
@@ -153,6 +154,20 @@ def record_run_outputs(layers: Sequence[LayerURI]) -> None:
                                       include={"layer_id", "name", "layer_type",
                                                "uri", "quantity", "units"})
                      for layer in layers])
+
+
+def _one_row_per_quantity(items: Sequence[Deliverable]) -> list[Deliverable]:
+    """A product that declared no style takes the row its QUANTITY declared.
+
+    One quantity is read on one ramp as well as one range: a still and the
+    animation beside it on two ramps is a picture of two variables."""
+    declared: dict[str, Mapping[str, Any]] = {}
+    for item in items:
+        if item.style:
+            declared.setdefault(quantity_of(item.caption), item.style)
+    return [item if item.style
+            else replace(item, style=declared.get(quantity_of(item.caption)))
+            for item in items]
 
 
 def _shared_ranges(items: Sequence[Deliverable]
@@ -218,9 +233,13 @@ def _mesh_layer(item: Deliverable, *, run_id: str, engine: str, name: str,
     quantity = quantity_of(item.caption)
     title, label = _titles(item, name=name)
     stem = quantity if mesh.plane is None else f"{quantity}_{quantity_of(mesh.plane)}"
-    instant = "" if mesh.t is None else f"-t{int(mesh.t)}"
+    # WHICH group of one quantity this layer paints, in its id: the file's own
+    # over time, or a group written beside it for one instant or an envelope.
+    # Two layers of one file and one quantity are two products, not one.
+    which = ("-over-time" if mesh.frames
+             else "" if mesh.t is None else f"-t{int(mesh.t)}")
     return LayerURI(
-        layer_id=f"{engine}-{stem}{instant}-{run_id}",
+        layer_id=f"{engine}-{stem}{which}-{run_id}",
         name=title,
         layer_type="mesh",
         uri=f"s3://{bucket}/{run_id}/{mesh.file}",

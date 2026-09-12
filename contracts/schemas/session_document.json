@@ -474,6 +474,18 @@
           "default": null,
           "title": "Crs Authid"
         },
+        "dataset_group": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Dataset Group"
+        },
         "dataset_uris": {
           "items": {
             "type": "string"

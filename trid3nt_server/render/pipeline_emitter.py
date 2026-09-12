@@ -632,8 +632,9 @@ def summary_of(layer: LayerURI) -> ProjectLayerSummary:
         # _add_mesh needs the run to state it. None for raster/vector.
         crs_authid=getattr(layer, "crs_authid", None),
         # The dataset files a mesh row's derived groups were written to, beside
-        # the mesh they are measured over.
+        # the mesh they are measured over, and WHICH group this row paints.
         dataset_uris=list(getattr(layer, "dataset_uris", None) or ()),
+        dataset_group=(getattr(layer, "style", None) or {}).get("dataset_group"),
         # The instant the mesh's seconds are counted from, so the plugin's
         # temporal stamp reads the run's own clock.
         reference_time=getattr(layer, "reference_time", None),
@@ -1406,13 +1407,15 @@ class PipelineEmitter:
 
     async def add_loaded_layer(self, layer: LayerURI) -> None:
         """Append a ``LayerURI`` to ``loaded_layers`` and emit a fresh frame.
-        DEDUP BY URI: one store and one scheme mean two publishes of the same COG
-        name the same uri, so the fresher row REPLACES the older in place.
+        DEDUP BY WHAT THE ROW PAINTS: one store and one scheme mean two publishes
+        of the same COG name the same uri, so the fresher row REPLACES the older
+        in place. A mesh file carries many dataset groups and a run publishes one
+        row per group it wants read, so a mesh row is its uri AND its group.
         """
         summary = summary_of(layer)
-        # Dedup by uri -- in-place replace if present, else append.
         for i, existing in enumerate(self._loaded_layers):
-            if existing.uri == summary.uri:
+            if (existing.uri, existing.dataset_group) == (summary.uri,
+                                                          summary.dataset_group):
                 # Drop the SUPERSEDED layer_id's side tables (inline GeoJSON /
                 # density meta) so a merge cannot leave an orphan keyed on the
                 # old id. No-op for raster flood layers (no inline GeoJSON).

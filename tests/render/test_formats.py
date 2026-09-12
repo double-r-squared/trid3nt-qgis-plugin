@@ -36,11 +36,13 @@ def _publish(items, *, run_id="RID", name="reach"):
 def test_a_mesh_product_paints_the_group_it_declares_on_the_shared_range() -> None:
     """The still and the animation of one quantity are two layers over one file,
     and both are painted on the range that spans them."""
+    # The animation declares no row of its own: a template states the style
+    # beside the read it styles, and the quantity carries it to the rest.
     animation = Deliverable(
         product=Mesh(file="r2d.slf", group="DYE", epsg=32611, frames=12,
                      reference_time="2026-01-01T00:00:00+00:00", units="mg/L",
                      value_range=(0.0, 40.0)),
-        caption="dye concentration", style={"kind": "continuous", "ramp": "reds"})
+        caption="dye concentration")
     envelope = Deliverable(
         product=Mesh(file="r2d.slf", group="Dye concentration", epsg=32611,
                      datasets=("dye_concentration.dat",), units="mg/L",
@@ -56,9 +58,14 @@ def test_a_mesh_product_paints_the_group_it_declares_on_the_shared_range() -> No
     assert published.layers[1].style["dataset_group"] == "Dye concentration"
     assert published.layers[1].dataset_uris == [
         "s3://trid3nt-runs/RID/dye_concentration.dat"]
-    # ONE scale: both products of the quantity carry the range that spans them.
+    # ONE scale AND one ramp: both products of the quantity are read the same.
     for layer in published.layers:
         assert layer.style["scale"] == {"policy": "fixed", "range": [0.0, 97.3]}
+        assert layer.style["ramp"] == "reds"
+    # Two products of one file and one quantity are two layers, never one.
+    assert [layer.layer_id for layer in published.layers] == [
+        "telemac-dye_concentration-over-time-RID",
+        "telemac-dye_concentration-RID"]
     assert published.primary.crs_authid == "EPSG:32611"
     assert published.primary.reference_time == "2026-01-01T00:00:00+00:00"
 
@@ -150,3 +157,34 @@ def test_the_producer_s_range_semantics_do_not_reach_the_preset_row() -> None:
 def test_quantity_of_spells_the_caption() -> None:
     assert quantity_of("  Suspended Sediment Concentration ") == (
         "suspended_sediment_concentration")
+
+
+def test_two_groups_of_one_mesh_file_are_two_rows_on_the_canvas() -> None:
+    """The emitter dedups by WHAT a row paints. One mesh file carries many
+    dataset groups, so its uri alone is not what identifies a row."""
+    import asyncio
+
+    from trid3nt_contracts.execution import LayerURI
+    from trid3nt_server.render.pipeline_emitter import PipelineEmitter
+
+    from trid3nt_contracts import new_ulid
+
+    emitter = PipelineEmitter(session_id=new_ulid(), sink=_swallow)
+    for group in ("DYE", "Peak dye concentration"):
+        asyncio.run(emitter.add_loaded_layer(LayerURI(
+            layer_id=f"telemac-{group}-RID", name=group, layer_type="mesh",
+            uri="s3://runs/RID/r2d.slf", quantity="dye_concentration",
+            style={"kind": "mesh", "dataset_group": group})))
+    rows = emitter.loaded_layers
+    assert [row.dataset_group for row in rows] == ["DYE", "Peak dye concentration"]
+    # A re-publish of the SAME group still replaces in place.
+    asyncio.run(emitter.add_loaded_layer(LayerURI(
+        layer_id="telemac-DYE-RID", name="DYE restyled", layer_type="mesh",
+        uri="s3://runs/RID/r2d.slf", quantity="dye_concentration",
+        style={"kind": "mesh", "dataset_group": "DYE"})))
+    assert len(emitter.loaded_layers) == 2
+    assert emitter.loaded_layers[0].name == "DYE restyled"
+
+
+async def _swallow(_text: str) -> None:
+    return None

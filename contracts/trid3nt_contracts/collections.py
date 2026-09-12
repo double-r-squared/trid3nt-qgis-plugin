@@ -110,6 +110,11 @@ class ProjectLayerSummary(GraceModel):
     # for every other row.
     dataset_uris: list[str] = Field(default_factory=list)
 
+    # WHICH of a mesh's dataset groups this row paints. One mesh file carries
+    # many, and a run publishes one layer per group it wants read, so the group
+    # is half of what identifies a mesh row. ``None`` for every other row.
+    dataset_group: str | None = None
+
     # The instant a mesh row's dataset times are counted from. A SELAFIN records
     # no origin, so without it a scrubber reads 1900. ``None`` otherwise.
     reference_time: str | None = None
