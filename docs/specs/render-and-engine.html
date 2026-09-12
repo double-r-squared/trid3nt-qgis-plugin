@@ -1,0 +1,93 @@
+<title>Render and the Engine File</title>
+<style>
+  :root { --bg: #ffffff; --fg: #111111; --line: #999999; --code-bg: #f4f4f4;
+          --kw: #0000cc; --str: #a31515; --com: #008000; --num: #098658; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --bg: #1b1b1b; --fg: #e6e6e6; --line: #666666; --code-bg: #2a2a2a;
+          --kw: #569cd6; --str: #ce9178; --com: #6a9955; --num: #b5cea8; }
+  }
+  :root[data-theme="dark"] { --bg: #1b1b1b; --fg: #e6e6e6; --line: #666666; --code-bg: #2a2a2a;
+          --kw: #569cd6; --str: #ce9178; --com: #6a9955; --num: #b5cea8; }
+  body { background: var(--bg); color: var(--fg); font-family: serif; line-height: 1.4; margin: 0 auto; max-width: 60em; padding: 1.5em 1em 4em; }
+  h1 { font-size: 1.6em; border-bottom: 1px solid var(--line); padding-bottom: .2em; }
+  h2 { font-size: 1.25em; border-bottom: 1px solid var(--line); padding-bottom: .15em; margin-top: 1.8em; }
+  code, pre { font-family: monospace; font-size: .95em; }
+  code { background: var(--code-bg); padding: 0 .25em; }
+  pre:not(.mermaid) { background: var(--code-bg); border: 1px solid var(--line); border-left: 4px solid var(--line); padding: .6em .8em; overflow-x: auto; }
+  table { border-collapse: collapse; margin: .8em 0; }
+  th, td { border: 1px solid var(--line); padding: .3em .6em; text-align: left; vertical-align: top; }
+  th { background: var(--code-bg); }
+  .scroll { overflow-x: auto; }
+  .rev { font-size: .85em; }
+  p { max-width: 72ch; }
+</style>
+
+<h1>Render and the Engine File</h1>
+<p class="rev">rev 1 &middot; 2026-09-11 &middot; render accepts a format set and an engine carries one transform; one file per engine over one executor; derive narrowed to simulation automation with QGIS's own algorithms and PyQGIS run in the user's session; the attics. The wave after the module-is-the-unit wave.</p>
+
+<h2>1. Render: a format set, a default style, a transform per engine</h2>
+<p>The package that turns data into what the user sees is named <code>render</code> (it is <code>emission</code> today). It accepts exactly what QGIS opens and nothing else: a raster as a COG, a vector as GeoJSON, GPKG or FlatGeobuf, a mesh in any MDAL format (SELAFIN, 2dm, UGRID, HEC-RAS 2D HDF), a series or a profile as a chart payload. Each arrives with its declared style row from <code>styles.yaml</code> (kind, ramp, units, floor, range cap); the default style carries the weight. A user's restyle is the edit of a style, kept beside the presets as its own seam. An engine whose output is not in the set carries ONE transform module beside its module surface that normalizes it; an engine whose output is in the set carries none.</p>
+<div class="scroll">
+<pre class="mermaid">
+flowchart LR
+    T2D["TELEMAC results<br/>SELAFIN = an MDAL mesh<br/>every dataset group, its time axis"] -- "no transform" --> R["render<br/>raster | vector | mesh | chart<br/>default style rows, restyle seam, the registry, the wire"]
+    GC["GeoClaw fort.q"] -- "geoclaw/transform.py -> raster or UGRID" --> R
+    MF["MODFLOW heads"] -- "modflow/transform.py -> raster per layer" --> R
+    R --> Q["QGIS: the layer, the temporal controller, the chart dock"]
+</pre>
+</div>
+<table>
+<tr><th>a TELEMAC output</th><th>becomes</th></tr>
+<tr><td><code>field(name, t)</code></td><td>the results mesh layer with that dataset group selected at that time; no per-field COG is painted</td></tr>
+<tr><td><code>field(name, t="every").animate()</code></td><td>the same mesh layer under the temporal controller; the packet GIF is a dev render off the mesh</td></tr>
+<tr><td><code>max_over_time(name)</code>, a derived field</td><td>one extra dataset group written beside the results, computed by the module outputs</td></tr>
+<tr><td><code>series</code>, <code>profile</code></td><td>a chart payload</td></tr>
+<tr><td>an answer</td><td>a measure on the sheet; never a layer</td></tr>
+</table>
+<p><code>workflows/publishing</code> dissolves: the field painter and the per-field COG writes go; the read shaping folds into the module outputs; the results-mesh publication is render's mesh kind; the restyle seam moves beside the presets; the COG writer is render's one writer. <code>outputs.json</code> retires as a second registry: its writer goes and its two readers (the outputs seam, the run-frames tool) read the run record, which already knows a run's outputs.</p>
+
+<h2>2. One executor, one file per engine</h2>
+<table>
+<tr><th>home</th><th>holds</th></tr>
+<tr><td><code>workflows/solver</code> (the executor)</td><td>the spec type and registry; launch a container from a staged run directory; wait and poll; the emitter binding; dispatch-and-wait; download a result; the compute-class coercion; code provenance; the progress heartbeat. It knows no engine.</td></tr>
+<tr><td><code>storage</code> (a seam lifted out of the executor)</td><td>the S3 client and the bucket names, which ten non-solver modules reach for today</td></tr>
+<tr><td><code>telemac/engine.py</code> (the one specialization)</td><td>the <code>LocalSolverSpec</code> and its exit classifier, the metrics filename, the wait estimate from the sheet's own DURATION and TIME_STEP. The unit an attic engine copies back.</td></tr>
+</table>
+<p><code>telemac/solving</code> goes: <code>solve_reach</code> and the <code>Solve</code> class are the plan era's twin of <code>solve_case</code>; the two templates that still name <code>solve_reach</code> call the one run path. <code>telemac/dictionary</code> is renamed <code>telemac/modules/module_input</code>, the module's input vocabulary beside the wrappers that read it.</p>
+
+<h2>3. Derive: simulation automation only; QGIS does the rest in the session</h2>
+<p>A derive tool exists to automate the simulation process for the supported engines: domain geometry, observation pairing and skill, the analytic models the templates overlay, point reads, restyle. Each takes a layer and returns a layer or a value; none fetches. The thirteen tools that reimplement QGIS and GDAL algorithms in numpy (hillshade, slope, aspect, contours, clip, NDVI, colored relief, blended composite, change detection, impervious surface, landcover class, building density, satellite enhance) leave for the attic as one set. In their place, two generic registered tools executed in the user's QGIS session through the plugin wire:</p>
+<table>
+<tr><th>tool</th><th>does</th><th>gate</th></tr>
+<tr><td><code>run_qgis_algorithm(algorithm, params)</code></td><td>the plugin runs <code>processing.run</code> in the session over named canvas layers and adds the output to the project; the layer summary comes back</td><td>none; the Processing Toolbox runs unasked over the user's own layers</td></tr>
+<tr><td><code>run_pyqgis(code)</code></td><td>the plugin executes the code in the session's Python and returns its result</td><td>the existing code-execution approval card; <code>ConsequentialCodeIsUserGated</code> holds</td></tr>
+</table>
+<p>No algorithm corpus, no ranker, no sequence machinery: the model knows the basic algorithms and PyQGIS, and the docstrings point at the QGIS processing reference. The model fetches, and when the layer exists, runs the algorithm. Every other corpus stays as it is. The container sandbox and its code-exec tool retire to the attic; the session is the one code path.</p>
+
+<h2>4. Attics</h2>
+<table>
+<tr><th>capability</th><th>to</th><th>why</th></tr>
+<tr><td>the thirteen derive reimplementations, with their tests and corpus</td><td>scope attic, one manifest</td><td>QGIS ships them</td></tr>
+<tr><td><code>spatial_query</code> (duckdb) and its dependency</td><td>scope attic</td><td>outside the simulation scope</td></tr>
+<tr><td><code>authoring/dredging.py</code> with the GAIA dredging composite and the two templates' dredge params</td><td>attic</td><td>hardcoded origin, field names and grade rules; returns with NESTOR adopted properly</td></tr>
+<tr><td>the container sandbox and <code>code_exec_tool</code></td><td>attic</td><td>the session is the code path</td></tr>
+</table>
+
+<h2>5. Guards</h2>
+<table>
+<tr><th>check</th><th>kind</th></tr>
+<tr><td>no module under <code>render/</code> paints a field or reshapes an engine's read; no engine module writes a COG of a field the mesh already carries</td><td>lint</td></tr>
+<tr><td>no derive tool calls a fetch tool or the cache</td><td>lint</td></tr>
+<tr><td>the executor imports no engine; an engine file imports the executor only</td><td>unit test (import graph)</td></tr>
+<tr><td>a session code request never runs without the approval card</td><td>unit test, existing requirement</td></tr>
+<tr><td>a run's outputs are read from the run record only</td><td>unit test</td></tr>
+</table>
+
+<h2>6. Legs and acceptance</h2>
+<table>
+<tr><th>leg</th><th>lands</th></tr>
+<tr><td>A, three parallel slices on disjoint trees</td><td>A1 the thirteen tools out, the two session tools and the plugin handlers in, the sandbox retired, derive tools take layers; A2 the attics of duckdb and dredging, the module_input rename; A3 the engine file, the executor, the storage seam</td></tr>
+<tr><td>B, serial</td><td>the render rename; publishing dissolved under section 1; outputs.json retired; the derived dataset groups; the eight canaries as the proof</td></tr>
+<tr><td>C</td><td>fresh eyes over sections 1 to 5; the LOC table against 88,107; the conformance table</td></tr>
+</table>
+<p>Accepted when: render accepts only the format set and a TELEMAC field is the mesh layer, not a COG; one file per engine and an executor that imports no engine; the storage seam stands alone; no derive tool fetches; the two session tools run live through the plugin (an algorithm over a fetched DEM, a gated code request); the four attics hold their manifests; every slice, the model checker, the lints and the smoke are green; the eight canaries pass with packets; the product pure LOC row is reported against 88,107.</p>
