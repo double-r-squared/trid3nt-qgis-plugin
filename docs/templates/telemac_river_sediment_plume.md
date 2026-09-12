@@ -81,7 +81,7 @@ It publishes these layers onto the canvas:
 
 ## The proving run
 
-Run `01M28RVXXZW8AS9TMD6X0NBBX4`, 2026-09-11T17:40:10.496320+00:00, 25.987 s, at commit `212b02a5a902fd904fca41bc5939d0dd0abec820-dirty`.
+Run `01M28RVXXZW8AS9TMD6X0NBBX4`, 2026-09-11T17:40:10.496320+00:00, 25.987 s, at commit `41dce38251d378c3cdfa057442999a2c9390bc4e-dirty`.
 
 ![Every layer the run published, stacked and framed on the result (run 01M28RVXXZW8AS9TMD6X0NBBX4)](telemac_river_sediment_plume/telemac_river_sediment_plume.png)
 
@@ -149,5 +149,5 @@ await TOOL_REGISTRY['telemac_river_sediment_plume'].fn(
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M28RVXXZW8AS9TMD6X0NBBX4` and commit `212b02a5a902fd904fca41bc5939d0dd0abec820-dirty`. The full argument record is [`telemac_river_sediment_plume/run.json`](telemac_river_sediment_plume/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M28RVXXZW8AS9TMD6X0NBBX4` and commit `41dce38251d378c3cdfa057442999a2c9390bc4e-dirty`. The full argument record is [`telemac_river_sediment_plume/run.json`](telemac_river_sediment_plume/run.json).
 

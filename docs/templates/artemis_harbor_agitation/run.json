@@ -1,7 +1,7 @@
 {
   "tool": "artemis_harbor_agitation",
   "run_id": "01M28SVA37CWY2W4Y0X166HRYB",
-  "commit": "e5e0a4bf6ebb05cc1a870257ce21ca118bb4ede4-dirty",
+  "commit": "41dce38251d378c3cdfa057442999a2c9390bc4e-dirty",
   "recorded_at": "2026-09-11T17:57:18.753165+00:00",
   "engine": "telemac",
   "wall_seconds": 29.143,

@@ -1,10 +1,10 @@
 {
   "tool": "telemac_river_dye",
-  "run_id": "01M28RFK72DXH8Y8FMGSE3KY77",
-  "commit": "212b02a5a902fd904fca41bc5939d0dd0abec820-dirty",
-  "recorded_at": "2026-09-11T17:33:25.448214+00:00",
+  "run_id": "01M29WC038Q21GZ7W5MR94BTJZ",
+  "commit": "41dce38251d378c3cdfa057442999a2c9390bc4e-dirty",
+  "recorded_at": "2026-09-12T04:00:36.338370+00:00",
   "engine": "telemac",
-  "wall_seconds": 24.194,
+  "wall_seconds": 30.123,
   "args": {
     "location": "Eel River near Scotia, California",
     "discharge_m3s": 2.2,
@@ -453,7 +453,7 @@
     "plume_reach_m": 56.7,
     "active_frames": 30,
     "mesh_size_m": 7.763,
-    "layer_uri": "s3://trid3nt-runs/01M28RFK72DXH8Y8FMGSE3KY77/overviews/01M28RG0KVD1SSV7H31NWWBYWP.tif",
+    "layer_uri": "s3://trid3nt-runs/01M29WC038Q21GZ7W5MR94BTJZ/overviews/01M29WCDHQKXYHA719V7KTGG8A.tif",
     "discharge_m3s": 2.2,
     "discharge_note": "Steady upstream CARRIER discharge - the river flow that dilutes and transports the release [supplied on this invocation]",
     "mesh_resolution_m": 10.0,
@@ -569,7 +569,7 @@
     },
     {
       "crs_authid": null,
-      "layer_id": "point-01M28RFDPBJ8RB4DGS4PT0TV5E",
+      "layer_id": "point-01M29WBS65CCS8CV9AAD46JXNM",
       "layer_type": "vector",
       "legend": {
         "colormap": null,
@@ -587,7 +587,7 @@
       "reference_time": null,
       "role": "context",
       "temporal": false,
-      "uri": "s3://trid3nt-runs/inputs/01M28RFDP10CGF7AXXKT9Q0CST/point.geojson",
+      "uri": "s3://trid3nt-runs/inputs/01M29WBS5T0X3SG8MHK1ME6PS4/point.geojson",
       "valid_from": null,
       "valid_to": null,
       "visible": true,
@@ -595,7 +595,7 @@
     },
     {
       "crs_authid": "EPSG:32610",
-      "layer_id": "model-results-mesh-01M28RFK72DXH8Y8FMGSE3KY77",
+      "layer_id": "model-results-mesh-01M29WC038Q21GZ7W5MR94BTJZ",
       "layer_type": "mesh",
       "legend": {
         "colormap": "viridis",
@@ -610,10 +610,10 @@
       "opacity": null,
       "origin": null,
       "quantity": "model_results",
-      "reference_time": "2026-09-11T17:33:11+00:00",
+      "reference_time": "2026-09-12T04:00:22+00:00",
       "role": "context",
       "temporal": false,
-      "uri": "s3://trid3nt-runs/01M28RFK72DXH8Y8FMGSE3KY77/r2d_river.slf",
+      "uri": "s3://trid3nt-runs/01M29WC038Q21GZ7W5MR94BTJZ/r2d_river.slf",
       "valid_from": null,
       "valid_to": null,
       "visible": true,
@@ -621,7 +621,7 @@
     },
     {
       "crs_authid": null,
-      "layer_id": "01M28RG3FT8V8FYCST545R12WB",
+      "layer_id": "01M29WCGB5DNR42MZZQDRZTWG7",
       "layer_type": "raster",
       "legend": {
         "colormap": "reds",
@@ -639,7 +639,7 @@
       "reference_time": null,
       "role": "primary",
       "temporal": false,
-      "uri": "s3://trid3nt-runs/01M28RFK72DXH8Y8FMGSE3KY77/overviews/01M28RG0KVD1SSV7H31NWWBYWP.tif",
+      "uri": "s3://trid3nt-runs/01M29WC038Q21GZ7W5MR94BTJZ/overviews/01M29WCDHQKXYHA719V7KTGG8A.tif",
       "valid_from": null,
       "valid_to": null,
       "visible": true,

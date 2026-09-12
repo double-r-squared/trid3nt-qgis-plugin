@@ -83,7 +83,7 @@ It publishes these layers onto the canvas:
 
 ## The proving run
 
-Run `01M28RKCJ38BRY7PQHT68VPM0R`, 2026-09-11T17:35:30.473753+00:00, 26.437 s, at commit `212b02a5a902fd904fca41bc5939d0dd0abec820-dirty`.
+Run `01M28RKCJ38BRY7PQHT68VPM0R`, 2026-09-11T17:35:30.473753+00:00, 26.437 s, at commit `41dce38251d378c3cdfa057442999a2c9390bc4e-dirty`.
 
 ![Every layer the run published, stacked and framed on the result (run 01M28RKCJ38BRY7PQHT68VPM0R)](telemac_river_oil_spill/telemac_river_oil_spill.png)
 
@@ -155,5 +155,5 @@ await TOOL_REGISTRY['telemac_river_oil_spill'].fn(
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M28RKCJ38BRY7PQHT68VPM0R` and commit `212b02a5a902fd904fca41bc5939d0dd0abec820-dirty`. The full argument record is [`telemac_river_oil_spill/run.json`](telemac_river_oil_spill/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M28RKCJ38BRY7PQHT68VPM0R` and commit `41dce38251d378c3cdfa057442999a2c9390bc4e-dirty`. The full argument record is [`telemac_river_oil_spill/run.json`](telemac_river_oil_spill/run.json).
 

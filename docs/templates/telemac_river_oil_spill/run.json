@@ -1,7 +1,7 @@
 {
   "tool": "telemac_river_oil_spill",
   "run_id": "01M28RKCJ38BRY7PQHT68VPM0R",
-  "commit": "212b02a5a902fd904fca41bc5939d0dd0abec820-dirty",
+  "commit": "41dce38251d378c3cdfa057442999a2c9390bc4e-dirty",
   "recorded_at": "2026-09-11T17:35:30.473753+00:00",
   "engine": "telemac",
   "wall_seconds": 26.437,

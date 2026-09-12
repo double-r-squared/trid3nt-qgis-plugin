@@ -55,7 +55,7 @@ It publishes these layers onto the canvas:
 
 ## The proving run
 
-Run `01M28SVA37CWY2W4Y0X166HRYB`, 2026-09-11T17:57:18.753165+00:00, 29.143 s, at commit `e5e0a4bf6ebb05cc1a870257ce21ca118bb4ede4-dirty`.
+Run `01M28SVA37CWY2W4Y0X166HRYB`, 2026-09-11T17:57:18.753165+00:00, 29.143 s, at commit `41dce38251d378c3cdfa057442999a2c9390bc4e-dirty`.
 
 ![Every layer the run published, stacked and framed on the result (run 01M28SVA37CWY2W4Y0X166HRYB)](artemis_harbor_agitation/artemis_harbor_agitation.png)
 
@@ -104,5 +104,5 @@ await TOOL_REGISTRY['artemis_harbor_agitation'].fn(
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M28SVA37CWY2W4Y0X166HRYB` and commit `e5e0a4bf6ebb05cc1a870257ce21ca118bb4ede4-dirty`. The full argument record is [`artemis_harbor_agitation/run.json`](artemis_harbor_agitation/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M28SVA37CWY2W4Y0X166HRYB` and commit `41dce38251d378c3cdfa057442999a2c9390bc4e-dirty`. The full argument record is [`artemis_harbor_agitation/run.json`](artemis_harbor_agitation/run.json).
 

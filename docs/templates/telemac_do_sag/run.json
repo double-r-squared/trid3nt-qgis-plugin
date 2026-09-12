@@ -1,7 +1,7 @@
 {
   "tool": "telemac_do_sag",
   "run_id": "01M28RZW1P4K64EKMJVJ2J2SD3",
-  "commit": "e5e0a4bf6ebb05cc1a870257ce21ca118bb4ede4-dirty",
+  "commit": "41dce38251d378c3cdfa057442999a2c9390bc4e-dirty",
   "recorded_at": "2026-09-11T17:42:18.828144+00:00",
   "engine": "telemac",
   "wall_seconds": 25.051,
