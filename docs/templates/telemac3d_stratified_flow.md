@@ -47,14 +47,14 @@ The values the template declares. `desc` is what the model reads when it fills o
 
 | field | the proving run's value |
 |---|---|
-| `stratification_dt` | 2.6819019317626953 |
-| `stratification_dt_init` | 7.5611572265625 |
-| `column_mean_final_c` | 23.969105949002305 |
-| `column_mean_init_c` | 23.811355715523327 |
-| `column_depth_m` | 8.832509815692902 |
-| `u_surface` | -0.008695162832736969 |
-| `u_bottom` | -0.023475583642721176 |
-| `depth_avg_u` | -3.167872917196778e-05 |
+| `stratification_dt` | 2.7294349670410156 |
+| `stratification_dt_init` | 7.641584396362305 |
+| `column_mean_final_c` | 23.944111817896683 |
+| `column_mean_init_c` | 23.783706021149186 |
+| `column_depth_m` | 8.86849918961525 |
+| `u_surface` | -0.008783945813775063 |
+| `u_bottom` | -0.023826031014323235 |
+| `depth_avg_u` | -3.5040193190768616e-05 |
 | `planes` | 13 |
 | `mesh_size_m` | 32.9447594688078 |
 
@@ -68,23 +68,23 @@ It publishes these layers onto the canvas:
 
 ## The proving run
 
-Run `01M2AAB9QYC01WP88KVPEZZWVJ`, 2026-09-12T08:05:53.251455+00:00, 91.959 s, at commit `5e2907b4265235d44c1dab167666006f1738079d-dirty`.
+Run `01M2BEMZMVNQXYEXK9QQMEGDWN`, 2026-09-12T18:40:19.368053+00:00, 89.654 s, at commit `9cdbf9d171078d872e16d42d88935951541ab267-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M2AAB9QYC01WP88KVPEZZWVJ)](telemac3d_stratified_flow/telemac3d_stratified_flow.png)
+![Every layer the run published, stacked and framed on the result (run 01M2BEMZMVNQXYEXK9QQMEGDWN)](telemac3d_stratified_flow/telemac3d_stratified_flow.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M2AAB9QYC01WP88KVPEZZWVJ)*
+*Every layer the run published, stacked and framed on the result (run 01M2BEMZMVNQXYEXK9QQMEGDWN)*
 
-![The solve, frame by frame (run 01M2AAB9QYC01WP88KVPEZZWVJ)](telemac3d_stratified_flow/telemac3d_stratified_flow_animation.gif)
+![The solve, frame by frame (run 01M2BEMZMVNQXYEXK9QQMEGDWN)](telemac3d_stratified_flow/telemac3d_stratified_flow_animation.gif)
 
-*The solve, frame by frame (run 01M2AAB9QYC01WP88KVPEZZWVJ)*
+*The solve, frame by frame (run 01M2BEMZMVNQXYEXK9QQMEGDWN)*
 
-![final frame (run 01M2AAB9QYC01WP88KVPEZZWVJ)](telemac3d_stratified_flow/telemac3d_stratified_flow_final_frame.png)
+![final frame (run 01M2BEMZMVNQXYEXK9QQMEGDWN)](telemac3d_stratified_flow/telemac3d_stratified_flow_final_frame.png)
 
-*final frame (run 01M2AAB9QYC01WP88KVPEZZWVJ)*
+*final frame (run 01M2BEMZMVNQXYEXK9QQMEGDWN)*
 
-![water temperature - the chart the run persisted (run 01M2AAB9QYC01WP88KVPEZZWVJ)](telemac3d_stratified_flow/telemac3d_stratified_flow_chart_water_temperature.png)
+![water temperature - the chart the run persisted (run 01M2BEMZMVNQXYEXK9QQMEGDWN)](telemac3d_stratified_flow/telemac3d_stratified_flow_chart_water_temperature.png)
 
-*water temperature - the chart the run persisted (run 01M2AAB9QYC01WP88KVPEZZWVJ)*
+*water temperature - the chart the run persisted (run 01M2BEMZMVNQXYEXK9QQMEGDWN)*
 
 ### The sheet it filled
 
@@ -128,5 +128,5 @@ await TOOL_REGISTRY['telemac3d_stratified_flow'].fn(
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2AAB9QYC01WP88KVPEZZWVJ` and commit `5e2907b4265235d44c1dab167666006f1738079d-dirty`. The full argument record is [`telemac3d_stratified_flow/run.json`](telemac3d_stratified_flow/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2BEMZMVNQXYEXK9QQMEGDWN` and commit `9cdbf9d171078d872e16d42d88935951541ab267-dirty`. The full argument record is [`telemac3d_stratified_flow/run.json`](telemac3d_stratified_flow/run.json).
 

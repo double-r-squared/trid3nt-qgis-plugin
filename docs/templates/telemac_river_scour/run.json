@@ -1,10 +1,10 @@
 {
   "tool": "telemac_river_scour",
-  "run_id": "01M2BBNYEJ30N0YCTQ2ZH0C6DE",
-  "commit": "bbfef467280c737219afd96302606d0d1be77b95-dirty",
-  "recorded_at": "2026-09-12T17:47:25.984333+00:00",
+  "run_id": "01M2BDVG00HWNNAV0XMC13W100",
+  "commit": "9cdbf9d171078d872e16d42d88935951541ab267-dirty",
+  "recorded_at": "2026-09-12T18:25:25.237271+00:00",
   "engine": "telemac",
-  "wall_seconds": 25.674,
+  "wall_seconds": 27.327,
   "args": {
     "location": "Eel River near Scotia, California",
     "discharge_m3s": 2.2,
@@ -487,7 +487,7 @@
     "marker_cmax_mgl": 94.071044921875,
     "active_frames": 30,
     "mesh_size_m": 10.415,
-    "layer_uri": "s3://trid3nt-runs/01M2BBNYEJ30N0YCTQ2ZH0C6DE/gaia_river.slf",
+    "layer_uri": "s3://trid3nt-runs/01M2BDVG00HWNNAV0XMC13W100/gaia_river.slf",
     "discharge_m3s": 2.2,
     "discharge_note": "Steady upstream CARRIER discharge - the river flow that dilutes and transports the release [supplied on this invocation]",
     "mesh_resolution_m": 12.0,
@@ -617,7 +617,7 @@
       "crs_authid": null,
       "dataset_group": null,
       "dataset_uris": [],
-      "layer_id": "point-01M2BBNREV2AV6DYBVB49D3XBN",
+      "layer_id": "point-01M2BDV9YHY3Y11ZNFKZ9V9115",
       "layer_type": "vector",
       "legend": {
         "colormap": null,
@@ -636,7 +636,7 @@
       "reference_time": null,
       "role": "context",
       "temporal": false,
-      "uri": "s3://trid3nt-runs/inputs/01M2BBNREH6AC4R1VEPWTMMJT9/point.geojson",
+      "uri": "s3://trid3nt-runs/inputs/01M2BDV9Y8PPRJ4EQAXF7CTPN3/point.geojson",
       "valid_from": null,
       "valid_to": null,
       "visible": true,
@@ -646,7 +646,7 @@
       "crs_authid": "EPSG:32610",
       "dataset_group": "CUMUL BED EVOL",
       "dataset_uris": [],
-      "layer_id": "telemac-bed_evolution-over-time-01M2BBNYEJ30N0YCTQ2ZH0C6DE",
+      "layer_id": "telemac-bed_evolution-over-time-01M2BDVG00HWNNAV0XMC13W100",
       "layer_type": "mesh",
       "legend": {
         "colormap": "rdbu",
@@ -662,10 +662,10 @@
       "opacity": null,
       "origin": null,
       "quantity": "bed_evolution",
-      "reference_time": "2026-09-12T17:47:11+00:00",
+      "reference_time": "2026-09-12T18:25:10+00:00",
       "role": "primary",
       "temporal": false,
-      "uri": "s3://trid3nt-runs/01M2BBNYEJ30N0YCTQ2ZH0C6DE/gaia_river.slf",
+      "uri": "s3://trid3nt-runs/01M2BDVG00HWNNAV0XMC13W100/gaia_river.slf",
       "valid_from": null,
       "valid_to": null,
       "visible": true,
@@ -675,9 +675,9 @@
       "crs_authid": "EPSG:32610",
       "dataset_group": "Marker concentration",
       "dataset_uris": [
-        "s3://trid3nt-runs/01M2BBNYEJ30N0YCTQ2ZH0C6DE/marker_concentration.dat"
+        "s3://trid3nt-runs/01M2BDVG00HWNNAV0XMC13W100/marker_concentration.dat"
       ],
-      "layer_id": "telemac-marker_concentration-01M2BBNYEJ30N0YCTQ2ZH0C6DE",
+      "layer_id": "telemac-marker_concentration-01M2BDVG00HWNNAV0XMC13W100",
       "layer_type": "mesh",
       "legend": {
         "colormap": "reds",
@@ -696,7 +696,7 @@
       "reference_time": null,
       "role": "primary",
       "temporal": false,
-      "uri": "s3://trid3nt-runs/01M2BBNYEJ30N0YCTQ2ZH0C6DE/r2d_river.slf",
+      "uri": "s3://trid3nt-runs/01M2BDVG00HWNNAV0XMC13W100/r2d_river.slf",
       "valid_from": null,
       "valid_to": null,
       "visible": true,
@@ -706,9 +706,9 @@
       "crs_authid": "EPSG:32610",
       "dataset_group": "Bed evolution at t = 593.94 s",
       "dataset_uris": [
-        "s3://trid3nt-runs/01M2BBNYEJ30N0YCTQ2ZH0C6DE/bed_evolution-t593.dat"
+        "s3://trid3nt-runs/01M2BDVG00HWNNAV0XMC13W100/bed_evolution-t593.dat"
       ],
-      "layer_id": "01M2BBPF8ZQRWMGB8NMQYH31PV",
+      "layer_id": "01M2BDW13QES7PGDBTZKQB4VWM",
       "layer_type": "mesh",
       "legend": {
         "colormap": "rdbu",
@@ -727,7 +727,7 @@
       "reference_time": null,
       "role": "primary",
       "temporal": false,
-      "uri": "s3://trid3nt-runs/01M2BBNYEJ30N0YCTQ2ZH0C6DE/gaia_river.slf",
+      "uri": "s3://trid3nt-runs/01M2BDVG00HWNNAV0XMC13W100/gaia_river.slf",
       "valid_from": null,
       "valid_to": null,
       "visible": true,

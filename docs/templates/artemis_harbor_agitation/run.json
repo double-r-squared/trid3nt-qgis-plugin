@@ -1,10 +1,10 @@
 {
   "tool": "artemis_harbor_agitation",
-  "run_id": "01M2AAG8DFJJZ1CC40G252DQ0C",
-  "commit": "5e2907b4265235d44c1dab167666006f1738079d-dirty",
-  "recorded_at": "2026-09-12T08:07:36.488212+00:00",
+  "run_id": "01M2BET3CH28QCGHEK3Q1FTNCJ",
+  "commit": "9cdbf9d171078d872e16d42d88935951541ab267-dirty",
+  "recorded_at": "2026-09-12T18:42:07.036724+00:00",
   "engine": "telemac",
-  "wall_seconds": 28.118,
+  "wall_seconds": 26.129,
   "args": {
     "bbox": [
       -71.525,
@@ -243,7 +243,7 @@
     "kd_transect_max": 4.987552074453561e-06,
     "hs_max_m": 4.02045202255249,
     "mesh_size_m": 5.113541873062308,
-    "layer_uri": "s3://trid3nt-runs/01M2AAG8DFJJZ1CC40G252DQ0C/res_agitation.slf",
+    "layer_uri": "s3://trid3nt-runs/01M2BET3CH28QCGHEK3Q1FTNCJ/res_agitation.slf",
     "wave_period_s": 8.0,
     "wave_period_note": "Incident monochromatic wave period - a PRESCRIBED demo forcing, since no wave-forcing fetcher exists yet [supplied on this invocation]",
     "structure": null,
@@ -263,6 +263,7 @@
       "layer_type": "vector",
       "legend": {
         "colormap": null,
+        "floor": null,
         "kind": "reference",
         "label": null,
         "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <renderer-v2 type=\"singleSymbol\" symbollevels=\"0\" forceraster=\"0\" enableorderby=\"0\" referencescale=\"-1\">\n    <symbols>\n      <symbol name=\"0\" type=\"line\" alpha=\"1\" force_rhr=\"0\" clip_to_extent=\"1\" frame_rate=\"10\" is_animated=\"0\">\n        <layer class=\"SimpleLine\" enabled=\"1\" locked=\"0\" pass=\"0\">\n          <Option type=\"Map\">\n            <Option name=\"line_color\" type=\"QString\" value=\"59,125,216,255\"/>\n        <Option name=\"line_width\" type=\"QString\" value=\"0.66\"/>\n        <Option name=\"line_width_unit\" type=\"QString\" value=\"MM\"/>\n            <Option name=\"style\" type=\"QString\" value=\"solid\"/>\n          </Option>\n        </layer>\n      </symbol>\n    </symbols>\n  </renderer-v2>\n</qgis>\n",
@@ -291,6 +292,7 @@
       "layer_type": "raster",
       "legend": {
         "colormap": "gray",
+        "floor": null,
         "kind": "continuous",
         "label": "Elevation",
         "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <pipe>\n    <rasterrenderer type=\"singlebandpseudocolor\" band=\"1\" opacity=\"1\" alphaBand=\"-1\" classificationMin=\"-17.11725845\" classificationMax=\"-1.519824672\" nodataColor=\"\">\n      <rastershader>\n        <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"-17.11725845\" maximumValue=\"-1.519824672\" labelPrecision=\"4\">\n          <item value=\"-17.11725845\" color=\"#000000\" alpha=\"255\" label=\"-17.1173 m\"/>\n          <item value=\"-13.21790001\" color=\"#404040\" alpha=\"255\" label=\"-13.2179 m\"/>\n          <item value=\"-9.318541563\" color=\"#808080\" alpha=\"255\" label=\"-9.31854 m\"/>\n          <item value=\"-5.419183117\" color=\"#c0c0c0\" alpha=\"255\" label=\"-5.41918 m\"/>\n          <item value=\"-1.519824672\" color=\"#ffffff\" alpha=\"255\" label=\"-1.51982 m\"/>\n        </colorrampshader>\n      </rastershader>\n    </rasterrenderer>\n  </pipe>\n</qgis>\n",
@@ -315,12 +317,13 @@
       "crs_authid": "EPSG:32619",
       "dataset_group": "Agitation coefficient at t = 8 s",
       "dataset_uris": [
-        "s3://trid3nt-runs/01M2AAG8DFJJZ1CC40G252DQ0C/agitation_coefficient-t8.dat"
+        "s3://trid3nt-runs/01M2BET3CH28QCGHEK3Q1FTNCJ/agitation_coefficient-t8.dat"
       ],
-      "layer_id": "01M2AAGS56VPCFFCD87J8C1EM8",
+      "layer_id": "01M2BETKG1NS363NP40DX4TFHV",
       "layer_type": "mesh",
       "legend": {
         "colormap": "viridis",
+        "floor": null,
         "kind": "mesh",
         "label": "Agitation coefficient (Hs/H0)",
         "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <mesh-renderer-settings>\n    <active-dataset-group scalar=\"0\" vector=\"-1\"/>\n    <scalar-settings group=\"0\" min-val=\"0\" max-val=\"2.179907\" opacity=\"1\" interpolation-method=\"no-resampling\">\n      <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"0\" maximumValue=\"2.179907\" labelPrecision=\"4\">\n        <item value=\"0\" color=\"#440154\" alpha=\"255\" label=\"0\"/>\n        <item value=\"0.54497675\" color=\"#3b528b\" alpha=\"255\" label=\"0.544977\"/>\n        <item value=\"1.0899535\" color=\"#21918c\" alpha=\"255\" label=\"1.08995\"/>\n        <item value=\"1.63493025\" color=\"#5ec962\" alpha=\"255\" label=\"1.63493\"/>\n        <item value=\"2.179907\" color=\"#fde725\" alpha=\"255\" label=\"2.17991\"/>\n      </colorrampshader>\n    </scalar-settings>\n  </mesh-renderer-settings>\n  <name-to-global-index global-index=\"0\" name=\"Agitation coefficient at t = 8 s\"/>\n</qgis>\n",
@@ -335,7 +338,7 @@
       "reference_time": null,
       "role": "primary",
       "temporal": false,
-      "uri": "s3://trid3nt-runs/01M2AAG8DFJJZ1CC40G252DQ0C/res_agitation.slf",
+      "uri": "s3://trid3nt-runs/01M2BET3CH28QCGHEK3Q1FTNCJ/res_agitation.slf",
       "valid_from": null,
       "valid_to": null,
       "visible": true,

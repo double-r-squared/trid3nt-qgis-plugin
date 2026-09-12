@@ -1,10 +1,10 @@
 {
   "tool": "telemac_river_sediment_plume",
-  "run_id": "01M2BBJ9RJP02TKG5SAES5YRYE",
-  "commit": "bbfef467280c737219afd96302606d0d1be77b95-dirty",
-  "recorded_at": "2026-09-12T17:45:27.670852+00:00",
+  "run_id": "01M2BDQRCDCN19CKCTJ4XN6XST",
+  "commit": "9cdbf9d171078d872e16d42d88935951541ab267-dirty",
+  "recorded_at": "2026-09-12T18:23:23.392075+00:00",
   "engine": "telemac",
-  "wall_seconds": 27.484,
+  "wall_seconds": 28.009,
   "args": {
     "location": "Eel River near Scotia, California",
     "discharge_m3s": 2.2,
@@ -434,7 +434,7 @@
     "net_bed_mass_kg": 66.90308,
     "deposit_fraction": 5.615383333333334,
     "mesh_size_m": 10.415,
-    "layer_uri": "s3://trid3nt-runs/01M2BBJ9RJP02TKG5SAES5YRYE/r2d_river.slf",
+    "layer_uri": "s3://trid3nt-runs/01M2BDQRCDCN19CKCTJ4XN6XST/r2d_river.slf",
     "discharge_m3s": 2.2,
     "discharge_note": "Steady upstream CARRIER discharge - the river flow that dilutes and transports the release [supplied on this invocation]",
     "mesh_resolution_m": 12.0,
@@ -564,7 +564,7 @@
       "crs_authid": null,
       "dataset_group": null,
       "dataset_uris": [],
-      "layer_id": "point-01M2BBJ3Q6CTAHJD21FWYS3SK7",
+      "layer_id": "point-01M2BDQHRBHBDBHZNW2PGD0HMK",
       "layer_type": "vector",
       "legend": {
         "colormap": null,
@@ -583,7 +583,7 @@
       "reference_time": null,
       "role": "context",
       "temporal": false,
-      "uri": "s3://trid3nt-runs/inputs/01M2BBJ3PXCNRKHQ6Q8RBMYY51/point.geojson",
+      "uri": "s3://trid3nt-runs/inputs/01M2BDQHQXPCWKT7T5CN7EBZD7/point.geojson",
       "valid_from": null,
       "valid_to": null,
       "visible": true,
@@ -593,9 +593,9 @@
       "crs_authid": "EPSG:32610",
       "dataset_group": "Suspended sediment concentration",
       "dataset_uris": [
-        "s3://trid3nt-runs/01M2BBJ9RJP02TKG5SAES5YRYE/suspended_sediment_concentration.dat"
+        "s3://trid3nt-runs/01M2BDQRCDCN19CKCTJ4XN6XST/suspended_sediment_concentration.dat"
       ],
-      "layer_id": "telemac-suspended_sediment_concentration-01M2BBJ9RJP02TKG5SAES5YRYE",
+      "layer_id": "telemac-suspended_sediment_concentration-01M2BDQRCDCN19CKCTJ4XN6XST",
       "layer_type": "mesh",
       "legend": {
         "colormap": "oranges",
@@ -614,7 +614,7 @@
       "reference_time": null,
       "role": "primary",
       "temporal": false,
-      "uri": "s3://trid3nt-runs/01M2BBJ9RJP02TKG5SAES5YRYE/r2d_river.slf",
+      "uri": "s3://trid3nt-runs/01M2BDQRCDCN19CKCTJ4XN6XST/r2d_river.slf",
       "valid_from": null,
       "valid_to": null,
       "visible": true,
@@ -624,9 +624,9 @@
       "crs_authid": "EPSG:32610",
       "dataset_group": "Bed evolution at t = 593.94 s",
       "dataset_uris": [
-        "s3://trid3nt-runs/01M2BBJ9RJP02TKG5SAES5YRYE/bed_evolution-t593.dat"
+        "s3://trid3nt-runs/01M2BDQRCDCN19CKCTJ4XN6XST/bed_evolution-t593.dat"
       ],
-      "layer_id": "telemac-bed_evolution-t593-01M2BBJ9RJP02TKG5SAES5YRYE",
+      "layer_id": "telemac-bed_evolution-t593-01M2BDQRCDCN19CKCTJ4XN6XST",
       "layer_type": "mesh",
       "legend": {
         "colormap": "rdbu",
@@ -645,7 +645,7 @@
       "reference_time": null,
       "role": "primary",
       "temporal": false,
-      "uri": "s3://trid3nt-runs/01M2BBJ9RJP02TKG5SAES5YRYE/gaia_river.slf",
+      "uri": "s3://trid3nt-runs/01M2BDQRCDCN19CKCTJ4XN6XST/gaia_river.slf",
       "valid_from": null,
       "valid_to": null,
       "visible": true,
@@ -655,7 +655,7 @@
       "crs_authid": "EPSG:32610",
       "dataset_group": "NCOH SEDIMENT1",
       "dataset_uris": [],
-      "layer_id": "01M2BBJVQVTM8AA6RNVXNRSVXE",
+      "layer_id": "01M2BDRA2D7M1ZY37TXDADPAXY",
       "layer_type": "mesh",
       "legend": {
         "colormap": "oranges",
@@ -671,10 +671,10 @@
       "opacity": null,
       "origin": null,
       "quantity": "suspended_sediment_concentration",
-      "reference_time": "2026-09-12T17:45:11+00:00",
+      "reference_time": "2026-09-12T18:23:07+00:00",
       "role": "primary",
       "temporal": false,
-      "uri": "s3://trid3nt-runs/01M2BBJ9RJP02TKG5SAES5YRYE/r2d_river.slf",
+      "uri": "s3://trid3nt-runs/01M2BDQRCDCN19CKCTJ4XN6XST/r2d_river.slf",
       "valid_from": null,
       "valid_to": null,
       "visible": true,
