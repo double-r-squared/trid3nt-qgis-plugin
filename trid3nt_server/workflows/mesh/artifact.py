@@ -195,7 +195,7 @@ def find_case_mesh_artifacts(
     ``case_id=None`` means the active turn's case."""
     if case_id is None:
         try:
-            from trid3nt_server.emission.pipeline_emitter import current_turn_case
+            from trid3nt_server.render.pipeline_emitter import current_turn_case
             case_id = current_turn_case()
         except Exception:  # noqa: BLE001
             case_id = None

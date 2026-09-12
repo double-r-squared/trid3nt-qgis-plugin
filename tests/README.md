@@ -13,7 +13,7 @@ join the run as the sixth slice.
 | `adapters/` | provider adapters, the message IR, the turn loop, the stream persistence | 22 | 288 |
 | `credentials/` | credential resolution, the auth handshake, identity | 7 | 95 |
 | `derive/` | the derive tools, the two session tools | 19 | 261 |
-| `emission/` | the emitter, the uri registry, publication, charts | 35 | 460 |
+| `render/` | the emitter, the uri registry, publication, the format set, charts | 35 | 460 |
 | `fetchers/` | the fetch router, its executors, hooks and fallbacks | 67 | 1585 |
 | `gates/` | the gates, the code-exec approval gate, the context budget, the circuit breaker | 22 | 317 |
 | `inputs/` | the typed inputs: a Point, an Extent, a Shape, each from every form it arrives in, the user-input normalizers under them, the AOI acquired from any of them, and a user's own file adopted as a layer | 7 | 92 |
@@ -43,7 +43,7 @@ else has one.
 Six slices by subsystem, each its own foreground invocation, from the repo root:
 
     make test-fetchers        # tests/fetchers                                                                      1585
-    make test-spatial         # tests/derive tests/emission tests/mesh tests/publishing                              995
+    make test-spatial         # tests/derive tests/render tests/mesh tests/publishing                              995
     make test-engines         # tests/telemac tests/runtime tests/solver tests/search                                989
     make test-server          # tests/server tests/inputs tests/gates tests/credentials tests/model tests/scripts   1118
     make test-model-surface   # tests/adapters tests/tools                                                           664

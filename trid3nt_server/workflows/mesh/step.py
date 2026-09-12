@@ -46,7 +46,7 @@ async def build_declared_mesh(*, mesh: dict[str, Any], name: Any = None,
     A SUPPLIED mesh is adopted whole - never rebuilt, never re-gated."""
     import asyncio
 
-    from trid3nt_server.emission.pipeline_emitter import current_turn_case
+    from trid3nt_server.render.pipeline_emitter import current_turn_case
     from trid3nt_server.workflows.mesh.gate import gate_mesh_build
     from trid3nt_server.workflows.mesh.session import MeshSession
     from trid3nt_server.workflows.mesh.tool import (

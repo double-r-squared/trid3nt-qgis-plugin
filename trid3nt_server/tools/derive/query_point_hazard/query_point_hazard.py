@@ -110,7 +110,7 @@ def resolve_case_id(case_id: Any, error_cls: type[Exception] = NoCaseBoundError)
     if case_id is not None and str(case_id).strip():
         return str(case_id).strip()
     try:
-        from trid3nt_server.emission.pipeline_emitter import current_turn_case
+        from trid3nt_server.render.pipeline_emitter import current_turn_case
 
         bound = current_turn_case()
     except Exception:  # noqa: BLE001

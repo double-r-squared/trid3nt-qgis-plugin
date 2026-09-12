@@ -52,7 +52,7 @@ seam list, from the TELEMAC templates:
 
 4. **The steps** -- `workflows/<engine>/steps/`: the deck writer and the product
    reader the row names. A product raster declares the QUANTITY it computed and
-   carries a declared `style` row on its `LayerURI`; `trid3nt_server/emission/presets.py`
+   carries a declared `style` row on its `LayerURI`; `trid3nt_server/render/presets.py`
    resolves that row into one of the four preset kinds.
 
 5. **Discovery + wiring**:

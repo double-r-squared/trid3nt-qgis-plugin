@@ -20,7 +20,7 @@ from trid3nt_server.workflows.mesh.artifact import (
     stash_mesh_artifact,
     stashed_mesh_artifacts,
 )
-from trid3nt_server.emission.mesh_display import write_2dm_arrays
+from trid3nt_server.render.mesh_display import write_2dm_arrays
 from trid3nt_server.workflows.mesh.meshers import (
     MeshToolError,
     get_mesher,

@@ -264,7 +264,7 @@ async def build_mesh(
     """
     import asyncio
 
-    from trid3nt_server.emission.pipeline_emitter import (
+    from trid3nt_server.render.pipeline_emitter import (
         current_emitter, current_turn_case,
     )
     from trid3nt_server.gates.input_review import resolve_input_gate_mode

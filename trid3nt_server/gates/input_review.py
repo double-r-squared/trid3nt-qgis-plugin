@@ -267,7 +267,7 @@ async def gate_input_review(
 
     # user_gated: needs a live session to pause on. current_emitter() is bound at
     # turn entry; a headless direct-call has none -> fail OPEN (labeled, no block).
-    from trid3nt_server.emission.pipeline_emitter import current_emitter
+    from trid3nt_server.render.pipeline_emitter import current_emitter
     from trid3nt_server.gates.pending import (
         _register_pending_confirmation,
         _pop_pending_confirmation,

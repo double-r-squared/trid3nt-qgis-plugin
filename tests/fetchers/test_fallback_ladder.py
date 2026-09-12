@@ -514,7 +514,7 @@ def test_auto_mode_refuses_a_synthetic_rung_without_asking_a_live_session(
     gate TTL; the labeled default applies immediately."""
     import asyncio as _asyncio
 
-    from trid3nt_server.emission import pipeline_emitter as pe
+    from trid3nt_server.render import pipeline_emitter as pe
 
     class _Loop:
         @staticmethod
@@ -1315,7 +1315,7 @@ def test_the_walker_still_stamps_a_rung_a_capability_lays_down_itself() -> None:
 def test_emit_seam_carries_activation_rows_onto_a_reemitted_layer() -> None:
     from trid3nt_contracts.common import FallbackActivation
     from trid3nt_contracts.execution import LayerURI
-    from trid3nt_server.emission.layer_uri_emit import emit_layer_uri
+    from trid3nt_server.render.layer_uri_emit import emit_layer_uri
 
     layer = LayerURI(
         layer_id="input-topobathy-abc", name="Coastal bed", layer_type="raster",

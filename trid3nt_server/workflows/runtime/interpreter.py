@@ -20,7 +20,7 @@ from typing import Any, Iterable, Mapping, Sequence
 
 from trid3nt_contracts.common import SyntheticInput
 
-from trid3nt_server.emission.pipeline_emitter import (
+from trid3nt_server.render.pipeline_emitter import (
     begin_substeps,
     current_emitter,
     emit_chart_payloads,

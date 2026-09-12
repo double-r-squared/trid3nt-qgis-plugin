@@ -49,7 +49,7 @@ def test_a_field_becomes_one_styled_layer_named_by_its_caption(monkeypatch):
     """The COG is written, uploaded, published through the chokepoint; the
     legend spans the field's own range from its floor's zero; the name, the
     quantity and the units come off the caption and the read."""
-    from trid3nt_server.emission import publish as emission_publish
+    from trid3nt_server.render import publish as emission_publish
     from trid3nt_server.workflows.publishing import cog
 
     seen = {}
@@ -88,7 +88,7 @@ def test_a_field_becomes_one_styled_layer_named_by_its_caption(monkeypatch):
 
 
 def test_a_field_at_an_instant_is_named_for_it_and_ranged_on_itself(monkeypatch):
-    from trid3nt_server.emission import publish as emission_publish
+    from trid3nt_server.render import publish as emission_publish
     from trid3nt_server.workflows.publishing import cog
 
     monkeypatch.setattr(cog, "upload_cog",
@@ -107,7 +107,7 @@ def test_a_field_at_an_instant_is_named_for_it_and_ranged_on_itself(monkeypatch)
 
 
 def test_a_publish_failure_never_retracts_the_layer(monkeypatch):
-    from trid3nt_server.emission import publish as emission_publish
+    from trid3nt_server.render import publish as emission_publish
     from trid3nt_server.workflows.publishing import cog
 
     monkeypatch.setattr(cog, "upload_cog",
@@ -255,8 +255,8 @@ def test_every_layer_past_the_first_is_surfaced_beside_it(monkeypatch):
     through the extra-layer seam, as results of the solve."""
     from trid3nt_contracts.execution import LayerURI
 
-    from trid3nt_server.emission import layer_uri_emit
-    from trid3nt_server.emission import pipeline_emitter
+    from trid3nt_server.render import layer_uri_emit
+    from trid3nt_server.render import pipeline_emitter
 
     surfaced = []
     layers = iter([LayerURI(layer_id="A", name="a", layer_type="raster", uri="s3://a"),
@@ -283,7 +283,7 @@ def test_every_layer_past_the_first_is_surfaced_beside_it(monkeypatch):
 def test_a_row_with_a_centre_ranges_the_legend_symmetrically_about_it(monkeypatch):
     """A diverging ramp's middle colour has to mean the centre value, so a signed
     field is ranged by its larger limb on both sides of the declared centre."""
-    from trid3nt_server.emission import publish as emission_publish
+    from trid3nt_server.render import publish as emission_publish
     from trid3nt_server.workflows.publishing import cog
 
     monkeypatch.setattr(cog, "upload_cog", lambda *a, **k: "s3://runs/RID/x.tif")
@@ -302,7 +302,7 @@ def test_a_row_with_a_floor_and_a_percentile_cap_ranges_the_legend_by_them(
     """A declared ``floor`` pins the legend's bottom where a standard has to stay
     on the ramp; a declared ``range`` of ``p<q>`` caps its top at that percentile
     so one pit cannot paint the rest of the field one colour."""
-    from trid3nt_server.emission import publish as emission_publish
+    from trid3nt_server.render import publish as emission_publish
     from trid3nt_server.workflows.publishing import cog
 
     monkeypatch.setattr(cog, "upload_cog", lambda *a, **k: "s3://runs/RID/x.tif")
@@ -367,7 +367,7 @@ def test_two_planes_of_one_quantity_share_a_scale_and_are_named_apart(monkeypatc
     """One quantity, one scale: the surface and the bottom of a 3D field are
     ranged over both, and each layer carries its plane in its id, its file and
     its name."""
-    from trid3nt_server.emission import publish as emission_publish
+    from trid3nt_server.render import publish as emission_publish
     from trid3nt_server.workflows.publishing import cog
     from trid3nt_server.workflows.runtime import run_products
 
@@ -385,7 +385,7 @@ def test_two_planes_of_one_quantity_share_a_scale_and_are_named_apart(monkeypatc
         return []
 
     monkeypatch.setattr(publish_mod, "publish_input_layer", _surface, raising=False)
-    monkeypatch.setattr("trid3nt_server.emission.layer_uri_emit.publish_input_layer",
+    monkeypatch.setattr("trid3nt_server.render.layer_uri_emit.publish_input_layer",
                         _surface)
     monkeypatch.setattr(run_products, "persist_run_products", _persist)
     surface = _field(name="TEMPERATURE", units="degC", floor=None, t=3600.0,

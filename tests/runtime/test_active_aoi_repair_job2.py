@@ -25,7 +25,7 @@ from trid3nt_server.server import (
     set_persistence,
 )
 from trid3nt_server.tools import RegisteredTool
-from trid3nt_server.emission.uri_registry import reset_uri_registries_for_tests
+from trid3nt_server.render.uri_registry import reset_uri_registries_for_tests
 from trid3nt_contracts.case import CaseCommandEnvelopePayload
 from trid3nt_contracts.common import new_ulid
 from trid3nt_contracts.execution import LayerURI

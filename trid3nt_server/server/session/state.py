@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 
     from trid3nt_contracts.ws import PipelineStep
 
-    from trid3nt_server.emission.pipeline_emitter import PipelineEmitter
+    from trid3nt_server.render.pipeline_emitter import PipelineEmitter
 
 logger = logging.getLogger("trid3nt_server.server")
 

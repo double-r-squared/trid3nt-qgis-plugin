@@ -8,10 +8,10 @@ from trid3nt_contracts import new_ulid, now_utc
 from trid3nt_contracts.ws import AgentMessageChunkPayload, AgentThinkingChunkPayload, PipelineStatePayload, PipelineStep
 from trid3nt_server.adapters.adapter import CompactionCompleteEvent, CompactionStartEvent, FunctionCallEvent, MAX_TURN_ITERATIONS, ModelSettings, SYSTEM_PROMPT, TextDeltaEvent, ThinkingDeltaEvent, UpstreamProviderError, UsageMetadataEvent, build_contents_from_history, build_function_call_content, build_function_response_content, build_layers_present_note, build_tool_declarations, build_user_text_content, classify_provider_error_class, classify_result_usable, stream_events_with_contents, summarize_tool_result
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.emission.charts import is_chart_emission_result
+from trid3nt_server.render.charts import is_chart_emission_result
 from trid3nt_server.tools.search.tool_retrieval import CORE_FLOOR
-from trid3nt_server.emission.pipeline_emitter import bind_turn_case, bind_turn_drawn_geometry, complete_compaction_card, mint_compaction_card
-from trid3nt_server.emission.uri_registry import get_uri_registry
+from trid3nt_server.render.pipeline_emitter import bind_turn_case, bind_turn_drawn_geometry, complete_compaction_card, mint_compaction_card
+from trid3nt_server.render.uri_registry import get_uri_registry
 from trid3nt_server.gates.circuit_breaker import CircuitBreakerError
 # The gate engine (trid3nt_server.gates.confirm) is imported function-locally in
 # _stream_model_reply -- deferred to break the server<->gates load cycle.

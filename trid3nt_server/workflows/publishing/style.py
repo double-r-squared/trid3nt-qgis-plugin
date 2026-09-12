@@ -12,8 +12,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from trid3nt_server.emission import presets
-from trid3nt_server.emission.presets import Resolved, Scale
+from trid3nt_server.render import presets
+from trid3nt_server.render.presets import Resolved, Scale
 from trid3nt_server.workflows.runtime.journal import journal_note
 
 logger = logging.getLogger("trid3nt_server.workflows.publishing.style")
@@ -79,7 +79,7 @@ async def set_hidden(layer_id: str, hidden: bool) -> bool:
 
     False when no emitter is bound or the session never loaded that layer.
     """
-    from trid3nt_server.emission.pipeline_emitter import current_emitter
+    from trid3nt_server.render.pipeline_emitter import current_emitter
 
     emitter = current_emitter()
     if emitter is None:
@@ -105,7 +105,7 @@ def apply_style(*, layer_uri: str, layer_id: str,
     if not layer_uri or not layer_id:
         raise RestyleError("a restyle needs both the layer's uri and its layer id.")
 
-    from trid3nt_server.emission.publish import publish_layer
+    from trid3nt_server.render.publish import publish_layer
 
     row = restyled_row(declared, kind=kind, ramp=ramp, label=label, units=units)
     override = scale_override(policy=policy, value_range=value_range,
@@ -119,7 +119,7 @@ def apply_style(*, layer_uri: str, layer_id: str,
 
 
 def _range_reader(layer_uri: str) -> Any:
-    from trid3nt_server.emission.publish import _read_raster_bytes
+    from trid3nt_server.render.publish import _read_raster_bytes
 
     def _read(scale: Scale) -> tuple[float, float] | None:
         return presets.band_range_reader(_read_raster_bytes(layer_uri))(scale)

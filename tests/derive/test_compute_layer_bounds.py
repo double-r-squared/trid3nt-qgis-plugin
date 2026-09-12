@@ -13,7 +13,7 @@ import tempfile
 
 import pytest
 
-from trid3nt_server.emission.pipeline_emitter import PipelineEmitter
+from trid3nt_server.render.pipeline_emitter import PipelineEmitter
 from trid3nt_server.tools.derive.compute_layer_bounds.compute_layer_bounds import (
     ComputeLayerBoundsError,
     compute_layer_bounds,
@@ -272,7 +272,7 @@ async def test_unknown_uri_raises_typed_error() -> None:
 
 @pytest.mark.asyncio
 async def test_no_emitter_does_not_crash() -> None:
-    from trid3nt_server.emission.pipeline_emitter import current_emitter
+    from trid3nt_server.render.pipeline_emitter import current_emitter
 
     assert current_emitter() is None  # precondition
     pts = [_point_feature(-1.0, 1.0), _point_feature(1.0, 2.0)]

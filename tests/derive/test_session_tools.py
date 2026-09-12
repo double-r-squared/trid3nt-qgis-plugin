@@ -16,7 +16,7 @@ import yaml
 from trid3nt_contracts import new_ulid
 from trid3nt_contracts.processing_contracts import ProcessingResponsePayload
 
-from trid3nt_server.emission import pipeline_emitter as pe
+from trid3nt_server.render import pipeline_emitter as pe
 from trid3nt_server.server import processing
 from trid3nt_server.tools import TOOL_REGISTRY
 from trid3nt_server.tools.derive.run_pyqgis.run_pyqgis import (

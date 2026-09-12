@@ -748,7 +748,7 @@ is.** A step that computed a depth field says `flood_depth`; a fetcher carries a
 manifest entry's kind, quantity and units. There are no preset NAMES, so there
 is no table a quantity can be missing from and nothing to drift between.
 
-**One family, four kinds.** `trid3nt_server/emission/presets.py` holds the four
+**One family, four kinds.** `trid3nt_server/render/presets.py` holds the four
 renderer shapes (continuous raster, classed, reference, mesh) and everything a
 quantity contributes is a PARAMETER of one of them. It resolves a row plus a
 raster into a concrete scale, into the sentence the legend says about it, and

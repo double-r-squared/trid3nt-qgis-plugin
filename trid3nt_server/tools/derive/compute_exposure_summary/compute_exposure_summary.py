@@ -73,7 +73,7 @@ _SESSION_EXPOSURE: dict[str, dict[str, Any]] = {}
 
 def _record_session_exposure(result: dict[str, Any]) -> None:
     try:
-        from trid3nt_server.emission.pipeline_emitter import current_turn_case
+        from trid3nt_server.render.pipeline_emitter import current_turn_case
 
         key = current_turn_case() or _GLOBAL_KEY
     except Exception:  # noqa: BLE001 -- store is best-effort, never a gate

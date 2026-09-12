@@ -55,8 +55,8 @@ async def publish(*, run_id: str, engine: str, name: str, where: str,
     Layers first, so an animation of the same quantity adopts its scale; the
     first layer is the run's primary and is the step's own return, and every
     layer after it is surfaced beside it."""
-    from trid3nt_server.emission.layer_uri_emit import publish_input_layer
-    from trid3nt_server.emission.pipeline_emitter import (
+    from trid3nt_server.render.layer_uri_emit import publish_input_layer
+    from trid3nt_server.render.pipeline_emitter import (
         current_emitter,
         emit_chart_payloads,
     )
@@ -162,8 +162,8 @@ def _layer(read: Field, *, run_id: str, engine: str, name: str, caption: str,
     import numpy as np
     from rasterio.transform import from_bounds
 
-    from trid3nt_server.emission import presets
-    from trid3nt_server.emission.publish import PublishLayerError, publish_layer
+    from trid3nt_server.render import presets
+    from trid3nt_server.render.publish import PublishLayerError, publish_layer
 
     quantity = quantity_of(caption)
     which = quantity + ("" if read.plane is None else f"_{quantity_of(read.plane)}")
@@ -291,7 +291,7 @@ def _station_layer(read: Series, *, run_id: str, engine: str, name: str,
 def _chart(read: Series | Profile, *, caption: str, where: str) -> dict[str, Any]:
     """A series or a profile -> the chart spec the dock renders, titled by the
     caption; every reference line rides as its own named series."""
-    from trid3nt_server.emission.charts import build_chart_payload
+    from trid3nt_server.render.charts import build_chart_payload
 
     title = f"{caption[:1].upper()}{caption[1:]}"
     if isinstance(read, Profile):

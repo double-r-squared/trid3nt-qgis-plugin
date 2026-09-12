@@ -12,7 +12,7 @@ from typing import Any
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.tools import register_tool
-from trid3nt_server.emission.charts import (
+from trid3nt_server.render.charts import (
     ChartToolError,
     _MAX_ROWS,
     _layer_type,

@@ -9,8 +9,8 @@ from trid3nt_contracts import new_ulid, now_utc
 from trid3nt_contracts.execution import LayerURI
 from trid3nt_server.tools import TOOL_REGISTRY
 from trid3nt_server.tools.tool_arg_normalizer import autofill_missing_bbox, normalize_args
-from trid3nt_server.emission.pipeline_emitter import PipelineEmitter, bind_turn_case, bind_turn_drawn_geometry
-from trid3nt_server.emission.uri_registry import activate_registry, deactivate_registry, get_uri_registry
+from trid3nt_server.render.pipeline_emitter import PipelineEmitter, bind_turn_case, bind_turn_drawn_geometry
+from trid3nt_server.render.uri_registry import activate_registry, deactivate_registry, get_uri_registry
 # The gate engine (trid3nt_server.gates.confirm) is imported function-locally in
 # _invoke_tool_via_emitter -- deferred to break the server<->gates load cycle.
 from trid3nt_server.gates.tool_gating import BenchBlockedError

@@ -9,7 +9,7 @@ from datetime import datetime
 from trid3nt_contracts import new_ulid, now_utc
 from trid3nt_contracts.case import CaseChatMessage, ToolCardRecord
 from trid3nt_contracts.ws import AgentMessageChunkPayload, ErrorCode
-from trid3nt_server.emission.pipeline_emitter import _json_for_tool_io
+from trid3nt_server.render.pipeline_emitter import _json_for_tool_io
 from trid3nt_server.server.session.case_state import _touch_session_record, _turn_case_id
 from trid3nt_server.server.session.persistence_ref import get_persistence
 from trid3nt_server.server.session.state import SessionState

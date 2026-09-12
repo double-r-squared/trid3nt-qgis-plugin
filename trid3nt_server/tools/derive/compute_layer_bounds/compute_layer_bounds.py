@@ -346,7 +346,7 @@ async def compute_layer_bounds(
     # there is nothing to fire at, and the bbox is still returned.
     map_fitted = False
     if fit_map:
-        from trid3nt_server.emission.pipeline_emitter import current_emitter
+        from trid3nt_server.render.pipeline_emitter import current_emitter
 
         emitter = current_emitter()
         if emitter is not None:

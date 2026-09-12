@@ -257,7 +257,7 @@ def test_bad_erosivity_raises(synthetic_inputs) -> None:
 def test_the_declared_breaks_are_the_paint() -> None:
     """ONE table: the declared row's classes are the swatches the legend shows
     and the ranges the .qml paints."""
-    from trid3nt_server.emission import presets
+    from trid3nt_server.render import presets
     from trid3nt_server.tools.derive.compute_sediment_yield.compute_sediment_yield import (
         _STYLE,
     )

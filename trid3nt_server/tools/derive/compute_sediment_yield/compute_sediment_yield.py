@@ -517,7 +517,7 @@ _STYLE: dict = {
 
 def _build_legend() -> LegendKey:
     """The declared style row, resolved - the same table the paint uses."""
-    from trid3nt_server.emission import presets
+    from trid3nt_server.render import presets
 
     return presets.legend_key(_STYLE)
 

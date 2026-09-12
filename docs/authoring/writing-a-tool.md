@@ -113,7 +113,7 @@ Return one of:
 
 When your tool returns a `LayerURI` whose `uri` is a raw `s3://` COG for a
 RASTER, the emission seam publishes it on the way out (`publish_for_emission` in
-`trid3nt_server/emission/layer_uri_emit.py`, which calls `publish_layer` off the
+`trid3nt_server/render/layer_uri_emit.py`, which calls `publish_layer` off the
 event loop). There is no per-tool opt-out flag: a raster that should not be seen
 is one the tool does not return. A failed publish degrades to the unstyled
 `s3://` COG rather than dropping the layer. Vectors render inline as GeoJSON.

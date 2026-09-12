@@ -11,7 +11,7 @@ separately below. An unused parameter is reclassified from `variable` to
 |---|---|---|---|---|
 | `return` | unreachable_code | trid3nt_server/server/protocol/connections.py:63 | 100 | 30 |
 | `token_envelope` | parameter | trid3nt_server/credentials/auth_handshake.py:127 | 100 | 1 |
-| `unquote` | import | trid3nt_server/emission/uri_registry.py:18 | 90 | 1 |
+| `unquote` | import | trid3nt_server/render/uri_registry.py:18 | 90 | 1 |
 | `default_seconds` | parameter | trid3nt_server/gates/confirm.py:90 | 100 | 1 |
 | `raw_user_text` | parameter | trid3nt_server/server/dispatch/emitter.py:813 | 100 | 1 |
 | `entry_id` | parameter | trid3nt_server/tools/search/fetch_living_atlas_layer/fetch_living_atlas_layer.py:128 | 100 | 1 |
@@ -37,8 +37,8 @@ one reached dynamically. Treat as candidates, not verdicts.
 | `pin_fetch_resolution` | function | trid3nt_server/gates/cards/solver_confirm.py:251 | 17 |
 | `upsert_session_record` | method | trid3nt_server/persistence.py:438 | 16 |
 | `read_raster_bytes` | function | trid3nt_server/tools/derive/_gdal_runner.py:108 | 16 |
-| `update_compute_status` | method | trid3nt_server/emission/pipeline_emitter.py:1261 | 14 |
-| `update_current_progress` | method | trid3nt_server/emission/pipeline_emitter.py:1132 | 13 |
+| `update_compute_status` | method | trid3nt_server/render/pipeline_emitter.py:1261 | 14 |
+| `update_current_progress` | method | trid3nt_server/render/pipeline_emitter.py:1132 | 13 |
 | `run_forever` | method | plugin/net/trid3nt_client.py:1600 | 12 |
 | `format_number` | function | plugin/render/formatting.py:83 | 12 |
 | `describe` | method | trid3nt_server/workflows/runtime/plan.py:284 | 12 |
@@ -49,7 +49,7 @@ one reached dynamically. Treat as candidates, not verdicts.
 | `_canvas_bbox4326` | method | plugin/ui/dock.py:709 | 9 |
 | `_tool_chip_style` | function | plugin/ui/cards.py:69 | 8 |
 | `_default_corpus_path` | function | trid3nt_server/server/protocol/catalog_http.py:42 | 7 |
-| `uri_for_short` | method | trid3nt_server/emission/uri_registry.py:282 | 6 |
+| `uri_for_short` | method | trid3nt_server/render/uri_registry.py:282 | 6 |
 | `coverage_summary` | method | trid3nt_server/fallbacks/walker.py:141 | 6 |
 | `read_stdout_optional` | method | trid3nt_server/workflows/solver/diagnostics/_common.py:228 | 6 |
 | `_toggle_connection` | method | plugin/ui/dock.py:1271 | 5 |
@@ -58,8 +58,8 @@ one reached dynamically. Treat as candidates, not verdicts.
 | `with_value` | method | trid3nt_server/workflows/runtime/params.py:205 | 5 |
 | `current_chart_id` | method | plugin/ui/charts_window.py:322 | 4 |
 | `_round_bbox_to_6dp` | function | trid3nt_server/tools/fetchers/_router/hooks/topobathy.py:369 | 4 |
-| `current_turn_drawn_geometry` | function | trid3nt_server/emission/pipeline_emitter.py:105 | 3 |
-| `known_handles` | method | trid3nt_server/emission/uri_registry.py:704 | 3 |
+| `current_turn_drawn_geometry` | function | trid3nt_server/render/pipeline_emitter.py:105 | 3 |
+| `known_handles` | method | trid3nt_server/render/uri_registry.py:704 | 3 |
 | `_toggle_thinking` | method | plugin/ui/cards.py:871 | 2 |
 | `_obj_uri` | function | trid3nt_server/tools/cache.py:220 | 2 |
 | `mtime` | method | trid3nt_server/tools/fetchers/_router/transport/range_file.py:163 | 2 |

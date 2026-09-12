@@ -274,7 +274,7 @@ async def publish_point(emitter: Any, pt: Point, *, label: str, basis: str,
         from trid3nt_contracts import new_ulid
         from trid3nt_contracts.execution import LayerURI
 
-        from trid3nt_server.emission.layer_uri_emit import publish_input_layer
+        from trid3nt_server.render.layer_uri_emit import publish_input_layer
 
         title = f"{label} {pt.name!r}" if pt.name else label
         layer = LayerURI(
@@ -330,7 +330,7 @@ def point_arg(param: str, *, tool: str, prompt: str, code: str = _CODE
 
 
 def _gated(input_mode: Any) -> bool:
-    from trid3nt_server.emission.pipeline_emitter import current_emitter
+    from trid3nt_server.render.pipeline_emitter import current_emitter
     from trid3nt_server.gates.input_review import resolve_input_gate_mode
 
     return (resolve_input_gate_mode(input_mode) == "user_gated"

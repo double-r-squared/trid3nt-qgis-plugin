@@ -1106,7 +1106,7 @@ async def dispatch_and_wait(*, solver: str, manifest_uri: str, compute_class: st
     """Dispatch a staged manifest, drive the cards, wait, and hand back the result.
 
     Judges nothing: a non-complete status is the caller's error to raise."""
-    from trid3nt_server.emission.pipeline_emitter import (
+    from trid3nt_server.render.pipeline_emitter import (
         current_emitter,
         mint_dispatch_and_sim_cards,
         route_sim_terminal,

@@ -12,7 +12,7 @@ import asyncio
 import pytest
 
 from trid3nt_contracts.payload_warning import PayloadConfirmationEnvelopePayload
-from trid3nt_server.emission import pipeline_emitter as pe
+from trid3nt_server.render import pipeline_emitter as pe
 from trid3nt_server.gates import pending
 from trid3nt_server.tools import MOUNTED_TOOLS, TOOL_REGISTRY, mount_tool
 from trid3nt_server.workflows.mesh import gate as mesh_gate
@@ -270,7 +270,7 @@ async def test_accept_tool_freezes_the_mesh_and_unmounts(tmp_path, monkeypatch):
 async def test_adopting_a_hand_edited_layer_flags_the_mesh(tmp_path, monkeypatch):
     import numpy as np
 
-    from trid3nt_server.emission.mesh_display import write_2dm
+    from trid3nt_server.render.mesh_display import write_2dm
     from trid3nt_server.workflows.mesh.meshers import Mesh
 
     monkeypatch.setattr(pe, "current_emitter", lambda: _FakeEmitter())

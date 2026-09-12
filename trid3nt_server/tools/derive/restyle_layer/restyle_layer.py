@@ -11,7 +11,7 @@ from typing import Any, Literal
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
-from trid3nt_server.emission import presets
+from trid3nt_server.render import presets
 from trid3nt_server.tools import register_tool
 from trid3nt_server.workflows.publishing.style import (
     RestyleError,
@@ -154,7 +154,7 @@ def _ids(layer_ids: list[str] | str | None) -> list[str]:
 
 
 def _resolve_uris(ids: list[str]) -> dict[str, str | None]:
-    from trid3nt_server.emission.uri_registry import lookup_uri_for_handle
+    from trid3nt_server.render.uri_registry import lookup_uri_for_handle
 
     return {layer_id: lookup_uri_for_handle(layer_id) for layer_id in ids}
 
@@ -162,7 +162,7 @@ def _resolve_uris(ids: list[str]) -> dict[str, str | None]:
 def _declared_row(uri: str | None) -> dict[str, Any] | None:
     """The row this layer was published under, so a restyle overrides rather
     than replaces it."""
-    from trid3nt_server.emission.publish import pop_legend_for_uri
+    from trid3nt_server.render.publish import pop_legend_for_uri
 
     legend = pop_legend_for_uri(uri or "")
     if legend is None:
@@ -173,7 +173,7 @@ def _declared_row(uri: str | None) -> dict[str, Any] | None:
 
 
 def _band_range(uri: str | None) -> tuple[float, float] | None:
-    from trid3nt_server.emission.publish import _read_raster_bytes
+    from trid3nt_server.render.publish import _read_raster_bytes
 
     if not uri:
         return None

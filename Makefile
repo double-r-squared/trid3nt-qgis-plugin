@@ -29,7 +29,7 @@ PYTEST = env -u TRID3NT_CACHE_BUCKET venvs/agent/bin/python -m pytest \
          -p no:cacheprovider --timeout=300 -q
 
 test-fetchers:      ; $(PYTEST) tests/fetchers
-test-spatial:       ; $(PYTEST) tests/derive tests/emission tests/mesh tests/publishing
+test-spatial:       ; $(PYTEST) tests/derive tests/render tests/mesh tests/publishing
 test-engines:       ; $(PYTEST) tests/telemac tests/runtime tests/solver tests/search
 test-server:        ; $(PYTEST) tests/server tests/inputs tests/gates tests/credentials tests/model tests/scripts
 test-model-surface: ; $(PYTEST) tests/adapters tests/tools

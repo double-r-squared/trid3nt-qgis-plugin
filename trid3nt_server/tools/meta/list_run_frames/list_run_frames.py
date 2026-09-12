@@ -97,7 +97,7 @@ def list_run_frames(run_id: str, layer: str = "flood_depth") -> dict[str, Any]:
         raise ListRunFramesError("MISSING_RUN_ID", "list_run_frames requires a run_id")
 
     # The reader NEVER raises: a None return is the honest "no manifest" path.
-    from trid3nt_server.emission.outputs_seam import read_outputs_manifest
+    from trid3nt_server.render.outputs_seam import read_outputs_manifest
 
     shim = _RunIdShim(str(run_id))
     frames: list[dict[str, Any]] = []

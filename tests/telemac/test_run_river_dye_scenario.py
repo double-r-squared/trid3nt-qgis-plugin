@@ -328,7 +328,7 @@ def test_an_unknown_data_row_is_an_attribute_error_at_the_line_that_wrote_it():
 
 
 def _install_step_mocks(captured: dict):
-    from trid3nt_server.emission import publish as emission_publish
+    from trid3nt_server.render import publish as emission_publish
     from trid3nt_server.workflows.solver import solver as solver_mod
     from trid3nt_server.workflows.publishing import cog as cog_mod
     from trid3nt_server.workflows.publishing import publish as publish_mod

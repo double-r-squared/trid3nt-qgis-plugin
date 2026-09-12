@@ -93,7 +93,7 @@ def _layer_stats_line(layer: dict[str, Any], tmpdir: str) -> str:
     """One honest stats fragment for a layer; NEVER raises - an unreadable layer
     comes back as a "statistics unavailable" sentence. The staged artifact is read
     directly, so the report never routes through the cache bucket."""
-    from trid3nt_server.emission.charts import (
+    from trid3nt_server.render.charts import (
         _layer_type,
         _materialize_uri,
         _summarize_raster,

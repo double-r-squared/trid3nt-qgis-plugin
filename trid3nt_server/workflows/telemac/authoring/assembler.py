@@ -533,7 +533,7 @@ async def settle_release(
 
     A supplied point is held inside the domain; an unplaced one sits ``fraction``
     down the reach; both land on the nearest node holding water at t0."""
-    from trid3nt_server.emission.pipeline_emitter import current_emitter
+    from trid3nt_server.render.pipeline_emitter import current_emitter
 
     utm_epsg = int(getattr(mesh.get("artifact"), "utm_epsg", 0) or 0)
     # The centerline is read head-to-tail from the seed the navigate was walked

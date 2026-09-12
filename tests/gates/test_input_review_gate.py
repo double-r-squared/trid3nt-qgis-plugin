@@ -21,7 +21,7 @@ from trid3nt_server.gates.input_review import (
     render_input_review_lines,
     resolve_input_gate_mode,
 )
-from trid3nt_server.emission import pipeline_emitter as pe
+from trid3nt_server.render import pipeline_emitter as pe
 
 
 class _FakeEmitter:

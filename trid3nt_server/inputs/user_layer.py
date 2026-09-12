@@ -368,7 +368,7 @@ async def _ingest_raster(
     # Reuse publish_layer VERBATIM -- it owns COG-overview enforcement, style
     # resolution and registration for an s3:// raster. It is a blocking (sync)
     # call (boto3 + rasterio internally); run it off the event loop.
-    from trid3nt_server.emission.publish import PublishLayerError, publish_layer
+    from trid3nt_server.render.publish import PublishLayerError, publish_layer
 
     try:
         published_uri = await asyncio.to_thread(
@@ -380,7 +380,7 @@ async def _ingest_raster(
             error_code=getattr(exc, "error_code", "RASTER_PUBLISH_FAILED"),
         ) from exc
 
-    from trid3nt_server.emission.publish import derive_readable_layer_name
+    from trid3nt_server.render.publish import derive_readable_layer_name
 
     # A user upload declares no quantity: the bytes are a raster of unknown
     # physical meaning, and its filename is not a measurement. It publishes on
@@ -405,8 +405,8 @@ async def _register_on_case(
     """Mint ``layer`` as the Case's own row, pinning the AOI when asked.
 
     A missing case or unbound persistence raises ``CaseNotFoundError``."""
-    from trid3nt_server.emission.layer_uri_emit import emit_layer_uri
-    from trid3nt_server.emission.pipeline_emitter import summary_of
+    from trid3nt_server.render.layer_uri_emit import emit_layer_uri
+    from trid3nt_server.render.pipeline_emitter import summary_of
     from trid3nt_server.server import get_persistence
 
     p = get_persistence()

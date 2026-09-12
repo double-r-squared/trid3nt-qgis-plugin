@@ -102,7 +102,7 @@ def _write_and_read_mesh_layers(
 
     Runs off the event loop; ``[]`` on any miss."""
     from trid3nt_server import storage
-    from trid3nt_server.emission.outputs_seam import (
+    from trid3nt_server.render.outputs_seam import (
         build_layers_from_outputs,
         read_outputs_manifest,
     )
@@ -180,7 +180,7 @@ async def publish_results_mesh_via_seam(
         return 0
     if emitter is None or not mesh_layers:
         return 0
-    from trid3nt_server.emission.layer_uri_emit import publish_input_layer
+    from trid3nt_server.render.layer_uri_emit import publish_input_layer
 
     emitted = 0
     for layer in mesh_layers:

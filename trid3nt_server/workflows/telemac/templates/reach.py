@@ -700,8 +700,8 @@ async def _surface_discharge_station_layer(layer: Any) -> None:
     if layer is None:
         return
     try:
-        from trid3nt_server.emission.layer_uri_emit import publish_input_layer
-        from trid3nt_server.emission.pipeline_emitter import current_emitter
+        from trid3nt_server.render.layer_uri_emit import publish_input_layer
+        from trid3nt_server.render.pipeline_emitter import current_emitter
 
         emitter = current_emitter()
         if emitter is None:

@@ -120,7 +120,7 @@ async def run_in_session(
 ) -> "ProcessingResponsePayload":
     """Emit one ``processing-request`` on the turn's session and WAIT for its
     response; an ``error`` response is raised as the session's own message."""
-    from trid3nt_server.emission.pipeline_emitter import current_emitter
+    from trid3nt_server.render.pipeline_emitter import current_emitter
 
     emitter = current_emitter()
     if emitter is None:

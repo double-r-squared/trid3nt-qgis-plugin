@@ -187,7 +187,7 @@ async def test_ingest_vector_happy_path(monkeypatch, fake_persistence):
 
 @pytest.mark.asyncio
 async def test_ingest_raster_happy_path(monkeypatch, fake_persistence):
-    from trid3nt_server.emission import publish as publish_layer_mod
+    from trid3nt_server.render import publish as publish_layer_mod
 
     case_id = new_ulid()
     fake_persistence._cases[case_id] = _case(case_id)
@@ -235,7 +235,7 @@ async def test_ingest_raster_happy_path(monkeypatch, fake_persistence):
 async def test_ingest_raster_reprojects_non_4326_crs(monkeypatch, fake_persistence):
     """A raster in EPSG:3857 is reprojected to a EPSG:4326 bbox (proves the
     rasterio.warp.transform_bounds branch, not just the already-4326 path)."""
-    from trid3nt_server.emission import publish as publish_layer_mod
+    from trid3nt_server.render import publish as publish_layer_mod
 
     case_id = new_ulid()
     fake_persistence._cases[case_id] = _case(case_id)

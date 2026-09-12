@@ -344,7 +344,7 @@ class Workflow:
         """Append this run to the run journal - one seam, every engine.
         Called from publish, the one point where the sheet, the answer, the
         provenance rows and the wall time are all in hand at once."""
-        from trid3nt_server.emission.pipeline_emitter import current_emitter
+        from trid3nt_server.render.pipeline_emitter import current_emitter
 
         sheet = run.params.rows() if run.params is not None else ()
         journal.append_record(journal.build_record(

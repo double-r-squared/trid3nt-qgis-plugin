@@ -16,7 +16,7 @@ from trid3nt_server.gates.input_review import (
     gate_input_review,
     physics_refusal_reason,
 )
-from trid3nt_server.emission import pipeline_emitter as pe
+from trid3nt_server.render import pipeline_emitter as pe
 
 _SERVER_ROOT = pathlib.Path(__file__).resolve().parents[2] / "trid3nt_server"
 

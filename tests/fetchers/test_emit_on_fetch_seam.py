@@ -19,16 +19,16 @@ from trid3nt_server.tools.fetchers._router.emit_on_fetch import (
     input_layer_name,
     maybe_emit_input_on_fetch,
 )
-from trid3nt_server.emission.pipeline_emitter import (
+from trid3nt_server.render.pipeline_emitter import (
     _CURRENT_EMITTER,
     _DISPATCHED_TOOL,
     PipelineEmitter,
 )
 
 _PUBLISH_LAYER_TARGET = (
-    "trid3nt_server.emission.publish.publish_layer"
+    "trid3nt_server.render.publish.publish_layer"
 )
-_COG_EXISTS_TARGET = "trid3nt_server.emission.layer_uri_emit._cog_object_exists"
+_COG_EXISTS_TARGET = "trid3nt_server.render.layer_uri_emit._cog_object_exists"
 
 
 class _Sink:
@@ -164,7 +164,7 @@ async def test_vector_input_surfaced_on_loop():
                    loop=asyncio.get_running_loop())
     try:
         with patch(
-            "trid3nt_server.emission.pipeline_emitter._read_vector_uri_as_geojson",
+            "trid3nt_server.render.pipeline_emitter._read_vector_uri_as_geojson",
             return_value={"type": "FeatureCollection", "features": []},
         ):
             maybe_emit_input_on_fetch(

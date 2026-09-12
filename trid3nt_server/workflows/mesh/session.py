@@ -18,7 +18,7 @@ import numpy as np
 from trid3nt_contracts import new_ulid
 from trid3nt_contracts.execution import LayerURI
 
-from trid3nt_server.emission.mesh_display import mesh_display_path, write_2dm
+from trid3nt_server.render.mesh_display import mesh_display_path, write_2dm
 from trid3nt_server.workflows.mesh.grid_geometry import M_PER_DEG_LAT
 from trid3nt_server.workflows.mesh.artifact import (
     MeshArtifact,

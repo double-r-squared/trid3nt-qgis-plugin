@@ -99,7 +99,7 @@ venvs/agent/bin/python dev/instruments/code_graph.py
 |---|---|---|---|
 | `return` | unreachable_code | trid3nt_server/server/protocol/connections.py:63 | 30 |
 | `token_envelope` | parameter | trid3nt_server/credentials/auth_handshake.py:127 | 1 |
-| `unquote` | import | trid3nt_server/emission/uri_registry.py:18 | 1 |
+| `unquote` | import | trid3nt_server/render/uri_registry.py:18 | 1 |
 | `default_seconds` | parameter | trid3nt_server/gates/confirm.py:90 | 1 |
 | `raw_user_text` | parameter | trid3nt_server/server/dispatch/emitter.py:813 | 1 |
 | `entry_id` | parameter | trid3nt_server/tools/search/fetch_living_atlas_layer/fetch_living_atlas_layer.py:128 | 1 |
@@ -108,7 +108,7 @@ venvs/agent/bin/python dev/instruments/code_graph.py
 
 ## Package-level edge matrix (cross-package import edges)
 
-| from \ to | contracts | plugin | scripts | tests | trid3nt_contracts | trid3nt_server | trid3nt_server.__main__ | trid3nt_server.adapters | trid3nt_server.credentials | trid3nt_server.emission | trid3nt_server.errors | trid3nt_server.fallbacks | trid3nt_server.gates | trid3nt_server.inputs | trid3nt_server.main | trid3nt_server.persistence | trid3nt_server.plugin_repo | trid3nt_server.server | trid3nt_server.storage | trid3nt_server.telemetry | trid3nt_server.tools | trid3nt_server.workflows | workers |
+| from \ to | contracts | plugin | scripts | tests | trid3nt_contracts | trid3nt_server | trid3nt_server.__main__ | trid3nt_server.adapters | trid3nt_server.credentials | trid3nt_server.render | trid3nt_server.errors | trid3nt_server.fallbacks | trid3nt_server.gates | trid3nt_server.inputs | trid3nt_server.main | trid3nt_server.persistence | trid3nt_server.plugin_repo | trid3nt_server.server | trid3nt_server.storage | trid3nt_server.telemetry | trid3nt_server.tools | trid3nt_server.workflows | workers |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | contracts | . | . | . | . | 51 | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . |
 | plugin | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . |
@@ -119,7 +119,7 @@ venvs/agent/bin/python dev/instruments/code_graph.py
 | trid3nt_server.__main__ | . | . | . | . | . | . | . | . | . | . | . | . | . | . | 1 | . | . | . | . | . | . | . | . |
 | trid3nt_server.adapters | . | . | . | . | 4 | . | . | . | 1 | . | . | . | 3 | . | . | . | . | 1 | . | . | . | . | . |
 | trid3nt_server.credentials | . | . | . | . | 3 | . | . | . | . | . | . | . | . | . | . | 1 | . | . | . | . | . | . | . |
-| trid3nt_server.emission | . | . | . | . | 14 | . | . | . | . | . | . | . | 1 | . | . | . | . | . | 3 | . | 3 | 2 | . |
+| trid3nt_server.render | . | . | . | . | 14 | . | . | . | . | . | . | . | 1 | . | . | . | . | . | 3 | . | 3 | 2 | . |
 | trid3nt_server.errors | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . |
 | trid3nt_server.fallbacks | . | . | . | . | 1 | . | . | . | . | . | . | . | 1 | . | . | . | . | . | 1 | . | 1 | . | . |
 | trid3nt_server.gates | . | . | . | . | 22 | . | . | 1 | 4 | 3 | . | . | . | 2 | . | . | . | 8 | . | . | 9 | . | . |

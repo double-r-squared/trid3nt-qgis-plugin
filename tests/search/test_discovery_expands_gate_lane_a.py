@@ -19,7 +19,7 @@ from trid3nt_server import tools as agent_tools
 from trid3nt_server.adapters.adapter import ModelSettings
 from trid3nt_server.tools.search.tool_retrieval import CORE_FLOOR
 from trid3nt_server.tools import RegisteredTool
-from trid3nt_server.emission.uri_registry import reset_uri_registries_for_tests
+from trid3nt_server.render.uri_registry import reset_uri_registries_for_tests
 from trid3nt_contracts import new_ulid
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 

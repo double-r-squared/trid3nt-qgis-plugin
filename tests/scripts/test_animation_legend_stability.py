@@ -18,7 +18,7 @@ pytest.importorskip("PIL")
 
 import numpy as np  # noqa: E402
 
-from trid3nt_server.emission import presets  # noqa: E402
+from trid3nt_server.render import presets  # noqa: E402
 
 DEV = Path(__file__).resolve().parents[2] / "dev"
 SCRIPT = DEV / "packet" / "render_selafin_animation.py"

@@ -113,7 +113,7 @@ def test_payload_estimate_declared(spec):
 def test_the_spec_declares_how_its_raster_is_drawn(spec):
     """A row nobody declared renders on the bare default, saying nothing about
     a modelled recharge field."""
-    from trid3nt_server.emission import presets
+    from trid3nt_server.render import presets
 
     row = spec.output.style
     assert presets.from_row(row).kind == "continuous"

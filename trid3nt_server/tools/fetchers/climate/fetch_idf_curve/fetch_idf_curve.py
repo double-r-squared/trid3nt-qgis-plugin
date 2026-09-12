@@ -15,7 +15,7 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.tools import register_tool
 from trid3nt_server.tools.cache import read_through
-from trid3nt_server.emission.charts import build_chart_payload
+from trid3nt_server.render.charts import build_chart_payload
 from ..._fetch_common import FetchError
 from ..lookup_precip_return_period import lookup_precip_return_period as _pfds
 

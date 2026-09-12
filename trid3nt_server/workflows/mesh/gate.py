@@ -202,8 +202,8 @@ async def present_mesh(gate: MeshGate) -> dict[str, Any]:
     """Put the mesh on the map and read it -> the layer, the probes, the recipe.
 
     The display face is an MDAL mesh layer, which is what makes it editable."""
-    from trid3nt_server.emission.layer_uri_emit import publish_input_layer
-    from trid3nt_server.emission.pipeline_emitter import current_emitter
+    from trid3nt_server.render.layer_uri_emit import publish_input_layer
+    from trid3nt_server.render.pipeline_emitter import current_emitter
 
     session = gate.session
     layer = await asyncio.to_thread(session.snapshot)
@@ -270,7 +270,7 @@ async def gate_mesh_build(session: MeshSession, *, tool_name: str,
     """Build the demanded mesh under the gate -> the accepted :class:`MeshArtifact`.
 
     AUTO, or a headless run with no session to present on, builds inline."""
-    from trid3nt_server.emission.pipeline_emitter import current_emitter
+    from trid3nt_server.render.pipeline_emitter import current_emitter
 
     emitter = current_emitter()
     if emitter is None or resolve_input_gate_mode(input_mode) == "auto":

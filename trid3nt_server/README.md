@@ -25,7 +25,7 @@ on one machine against one user; the only wire shapes it speaks are
 | --- | --- |
 | `adapters/` | The LLM provider adapters, behind one shared IR. |
 | `credentials/` | The connect handshake and the per-provider credential registry. |
-| `emission/` | Everything a computed layer passes through on its way to the map. |
+| `render/` | The format set a product reaches the map in - a COG raster, a GeoJSON vector, an MDAL mesh, a chart payload - and everything it passes through on the way. |
 | `fallbacks/` | Declared degradation: ladders as data, and the one walker. |
 | `gates/` | The agent-loop gates - confirm, review, draw, budget, runaway. |
 | `inputs/` | Every input into the system as a typed value: a Point, an Extent and a Shape, each with one ingestion from every form a user hands it in, and the user's own file adopted as a layer. |

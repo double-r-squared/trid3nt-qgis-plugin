@@ -356,7 +356,7 @@ def test_corpus() -> None:
 
 
 def test_uri_registry_resolvable_params() -> None:
-    from trid3nt_server.emission.uri_registry import RESOLVABLE_URI_PARAMS
+    from trid3nt_server.render.uri_registry import RESOLVABLE_URI_PARAMS
 
     assert "model_layer_uri" in RESOLVABLE_URI_PARAMS
     assert "observations_layer_uri" in RESOLVABLE_URI_PARAMS

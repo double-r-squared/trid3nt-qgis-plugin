@@ -94,7 +94,7 @@ def confirm_fallback(
         )
         return default
 
-    from trid3nt_server.emission.pipeline_emitter import current_emitter
+    from trid3nt_server.render.pipeline_emitter import current_emitter
 
     # Callable from a worker thread (the fetch path is off-loaded): the
     # coroutine is driven onto the emitter's bound loop, which is free while the
