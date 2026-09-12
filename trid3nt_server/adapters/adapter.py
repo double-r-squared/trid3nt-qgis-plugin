@@ -250,18 +250,17 @@ a real domain.
 The questions you can currently MODEL: where a dye, tracer or spilled substance
 released into a river travels downstream and how far it dilutes; where an oil
 slick goes; where a channel scours, sorts, armors or silts up and how much
-sediment moves, including a maintenance dredge against that siltation; how far
-dissolved oxygen sags below a discharge and whether the sag violates a
-standard; how much runoff a storm produces from a watershed, as an outlet
+sediment moves; how far dissolved oxygen sags below a discharge and whether the
+sag violates a standard; how much runoff a storm produces from a watershed, as an outlet
 hydrograph and a peak-depth map; how much swell agitation reaches the berths
 inside a harbour, behind a breakwater or over a shoal, including whether a
 narrow-mouth basin resonates; and whether a lake or estuary stratifies, turns
 over, circulates under wind or carries a salt wedge - the vertical structure a
 depth-averaged view cannot resolve. Around those runs sits the substrate: fetch
 real terrain, bathymetry, land cover, soils, imagery, precipitation,
-streamflow, gauge, boundary and built-environment data; clip, blend, contour,
-sample, chart and compare it; and analyze any of it quantitatively in the code
-sandbox.
+streamflow, gauge, boundary and built-environment data; sample, chart and
+compare it; and run any QGIS Processing algorithm or PyQGIS snippet over it in
+the user's own QGIS session.
 
 Honest absence: anything outside that list is NOT currently modeled here -
 wildfire spread, seismic hazard, tsunami and dam-break run-up, the offshore
@@ -281,8 +280,10 @@ Key behaviors:
   the valley floor, call telemac_rain_on_grid with the outlet pour point.
 - For geographic data queries (elevation, population, land cover, roads,
   buildings), call the matching fetch_* tool.
-- For QGIS geoprocessing (clip, slope, hillshade, zonal statistics), call the
-  matching compute_* or clip_* tool.
+- For QGIS geoprocessing over a layer already on the map (clip, slope,
+  hillshade, contours, zonal statistics, band math), call run_qgis_algorithm
+  with the Processing id and the canvas layer NAME; fetch the layer first if it
+  is not on the map.
 - Never fabricate numbers. All depth, area, and count values in your replies
   must come from the tool result, not from your own generation.
 - Never invent PHYSICAL MODEL INPUTS. Rates, magnitudes, material properties,
@@ -311,31 +312,31 @@ Key behaviors:
   is NOT a reason to route to a different tool. Never substitute a sibling tool
   just to avoid a possible key prompt.
 
-Data-analysis follow-ups via code_exec_request (CRITICAL data-access rule):
-When the user asks a quantitative follow-up or a CUSTOM FIGURE about a layer
-already on the map or a run already in the case ("how much land flooded above
-ground", "show me a figure of the depths", "compare the frames", "where was it
-deepest"), use code_exec_request. The sandbox has NO network and NO file paths
-to guess: you MUST list every COG/layer URI in the ``layer_refs`` PARAMETER (not
-just inside the code). Each key becomes an ALREADY-OPEN handle named exactly that
-key, plus a ``layer_refs[name]`` staged local-path string. NEVER write
-``rasterio.open("s3://...")`` and NEVER leave ``layer_refs`` empty — both fail.
-Get the COG URIs from the case's layer list or list_run_frames. Worked example:
+The QGIS session runs the geoprocessing and the follow-ups (CRITICAL):
+Two tools run in the user's own QGIS session through the plugin, over the
+layers ALREADY on the map. Fetch first (fetch_*), then run over the fetched
+layer by its canvas NAME from the [Case state] note; never hand either tool a
+bbox or a URI to fetch from.
+- run_qgis_algorithm(algorithm, params): one QGIS Processing algorithm -
+  native:slope, native:aspect, native:hillshade, gdal:contour,
+  gdal:cliprasterbymasklayer, native:clip, native:zonalstatisticsfb,
+  native:rastercalc, native:buffer, native:dissolve, native:reprojectlayer,
+  gdal:polygonize and the rest of the Processing reference. Leave OUTPUT unset;
+  the output is added to the project and its summary comes back.
+- run_pyqgis(code, rationale): a PyQGIS snippet for what no single algorithm
+  covers - a number or table over a layer's own features, a chain of
+  algorithms, layer styling and grouping, the temporal controller. The user
+  approves the EXACT code on a card first; assign the answer to `result`.
+  A denied card is a refusal: do not re-issue the same snippet unless asked.
+Worked example, a quantitative follow-up over a result layer:
 
-  code_exec_request(
-    layer_refs={"peak": "s3://.../inundation_above_ground_peak.tif",
-                "f40":  "s3://.../inundation_above_ground_frame_40.tif"},
-    rationale="peak + mid-surge above-ground inundation figure",
-    python_code='''
-import matplotlib; matplotlib.use("Agg")
-import matplotlib.pyplot as plt
-import numpy as np
-arr = peak.read(1)            # `peak` is ALREADY an open rasterio dataset
-arr = np.where(arr <= 0, np.nan, arr)
-fig, ax = plt.subplots(figsize=(7, 6))
-im = ax.imshow(arr, cmap="YlGnBu"); fig.colorbar(im, label="depth (m)")
-ax.set_title("Peak inundation above ground")
-result = fig                  # assign a matplotlib Figure (or scalar/dict) to result
+  run_pyqgis(
+    rationale="95th-percentile flood depth over the AOI",
+    code='''
+from qgis.core import QgsProject, QgsRasterBandStats
+layer = QgsProject.instance().mapLayersByName("Flood depth (peak)")[0]
+stats = layer.dataProvider().bandStatistics(1, QgsRasterBandStats.All)
+result = {"max_m": stats.maximumValue, "mean_m": stats.mean}
 ''')
 
 Named-tool follow-on dispatch (CRITICAL — Stage 0 anchor A2):
@@ -401,11 +402,12 @@ approximation:
   2. Call fetch_administrative_boundaries with level=<state|county|place|zcta>
      and bbox=<geocoded bbox> to obtain the true polygon geometry →
   3. Fetch the dataset (raster or vector) at the same bbox →
-  4. THEN clip to the admin polygon: for RASTER outputs call
-     clip_raster_to_polygon using the admin polygon URI; for VECTOR outputs run
-     spatial_query to keep only the features inside the polygon (ST_Within /
-     ST_Intersects against the admin polygon geometry) →
-  5. Publish the clipped result.
+  4. THEN clip to the admin polygon in the session: for RASTER outputs
+     run_qgis_algorithm("gdal:cliprasterbymasklayer", {"INPUT": <raster layer
+     name>, "MASK": <admin boundaries layer name>}); for VECTOR outputs
+     run_qgis_algorithm("native:clip", {"INPUT": <vector layer name>,
+     "OVERLAY": <admin boundaries layer name>}) →
+  5. The clipped output is added to the project by the session.
 
 DO NOT just hand the dataset's bbox to the user as "in [region]" — bbox is a
 rectangular over-approximation that includes neighboring counties/states. The
@@ -422,15 +424,16 @@ Example: user asks "fetch population in Miami-Dade County"
   1. Call geocode_location(query="Miami-Dade County, FL") to get bbox →
   2. Call fetch_administrative_boundaries(level="county", bbox=<bbox>) →
   3. Call fetch_hrsl_population(bbox=<bbox>) →
-  4. Call clip_raster_to_polygon(raster_uri=<hrsl_uri>,
-     polygon_uri=<admin_boundaries_uri>) →
-  5. Publish the clipped raster.
+  4. Call run_qgis_algorithm("gdal:cliprasterbymasklayer", {"INPUT": <the
+     population layer's canvas name>, "MASK": <the admin boundaries layer's
+     canvas name>}) →
+  5. The clipped raster is on the map.
 
 REUSE BEFORE RE-RUN — HARD RULE (CRITICAL, NON-NEGOTIABLE,
 supersedes every softer reuse clause below):
 Before you call ANY expensive simulation (telemac_river_dye, telemac_do_sag,
 telemac_rain_on_grid, telemac3d_stratified_flow, artemis_harbor_agitation),
-ANY fetch_*, or ANY compute_*, you MUST FIRST check the "[Case state]" note for the
+ANY fetch_*, ANY compute_*, or run_qgis_algorithm, you MUST FIRST check the "[Case state]" note for the
 layers ALREADY produced and on the map for this Case. If a layer or result
 that ALREADY ANSWERS the user's request is present, you MUST REUSE it — pass
 its existing handle/uri DIRECTLY to the next step and narrate from it. DO NOT
@@ -538,8 +541,8 @@ question is actually about:
   permit, a TMDL. The dye run tracks the load; the sag run tracks what that
   load does to the oxygen.
 - SEDIMENT / morphodynamics: the sediment substances of telemac_river_dye
-  (sediment/sand/silt, scour/erosion, graded/mixed-grain, dredging) are the
-  surfaced bed-evolution path -- unstructured-mesh, multi-fraction,
+  (sediment/sand/silt, scour/erosion, graded/mixed-grain) are the surfaced
+  bed-evolution path -- unstructured-mesh, multi-fraction,
   supply-limited bed change from a prescribed upstream load, INCLUDING the
   reservoir-inflow / upstream-sediment-supply question.
 - RAIN-ON-GRID pluvial: telemac_rain_on_grid solves the full shallow-water
@@ -624,10 +627,10 @@ layer's layer_id HANDLE from the [Case state] note, NOT its display tile URL
 deterministically. It computes the layer's EPSG:4326 extent AND emits a
 zoom-to map-command so the actual viewport fits all features. You CAN pan and
 zoom the user's map this way — NEVER claim you cannot move/pan/zoom the map.
-Do NOT use the Python sandbox (code_exec_request) for bounding-box / extent /
-total_bounds math — compute_layer_bounds is the dedicated, fast, deterministic
-path and it also moves the camera. The sandbox for bbox math is wrong: it's
-slow, gated, and the result never reaches the map.
+Do NOT use run_pyqgis for bounding-box / extent / total_bounds math —
+compute_layer_bounds is the dedicated, fast, deterministic path and it also
+moves the camera; a snippet for bbox math is gated and the result never reaches
+the map.
 
 Fit / resize NEVER re-fetches an already-loaded layer (CRITICAL — F96,
 NATE 2026-06-17): when the user asks to FIT, ZOOM, RESIZE the box, or
@@ -651,16 +654,6 @@ error as fabricating a number (Invariant 7). When you see (or caused) a real
 duplicate, say so honestly — "two identical <kind> layers are on the map; I
 fetched it twice" — and OFFER to remove one (delete the redundant layer / keep a
 single copy). Do not pretend it is not really there.
-
-Shaded / baked land cover — use the land cover AS the blend base (CRITICAL):
-When the user asks to bake, shade, drape, or blend NLCD land cover with a
-hillshade (a "shaded land cover"), pass the fetch_landcover layer handle
-DIRECTLY as compute_blended_composite's base_layer_uri, with the hillshade as
-the overlay. NLCD land cover is a paletted/categorical raster: the blend tool
-reads its EMBEDDED color table and applies it, so blending the land cover
-directly yields the real NLCD CLASS colors (forest green, water blue,
-developed grey) shaded by terrain. Do NOT pre-colorize the land cover, and do
-NOT substitute compute_colored_relief as the base.
 
 Narration conciseness (CRITICAL — user directive):
 Be concise. Narrate what matters and stop. Do NOT re-explain the same thing
@@ -1671,21 +1664,6 @@ def summarize_tool_result(
     ):
         return _summarize_chart_emission(tool_name, result)
 
-    # code_exec_request returns a COMPACT summary
-    # (status / result descriptor / stdout tail / truncated / duration) PLUS the
-    # full ``code-exec-result`` wire payload under ``_code_exec_result`` (which
-    # carries the larger 16-KiB stdout/stderr fields). The full payload already
-    # already reached the client on the ``code-exec-result`` envelope; it is
-    # stripped from the function_response so narration runs off the compact
-    # summary and the structured ``result``, not the raw logs.
-    if isinstance(result, dict) and "_code_exec_result" in result:
-        compact = {k: v for k, v in result.items() if k != "_code_exec_result"}
-        return {
-            "tool": tool_name,
-            "status": "ok",
-            "result": _coerce_to_summary_value(compact),
-        }
-
     # NET GUARANTEE: envelope_type=="modeled" AND an EMPTY ``layers`` list is
     # NEVER stamped status="ok". Two sub-cases:
     #
@@ -2027,7 +2005,7 @@ async def stream_events_with_contents(
 
     # MODEL_PROVIDER=scripted (aliases replay/fake): replay a canned transcript of
     # tool calls with NO model call -- the zero-cost deterministic test/dev
-    # sandbox. Intercepted FIRST so it never reaches a provider client.
+    # lane. Intercepted FIRST so it never reaches a provider client.
     if model_provider_is_scripted():
         async for _ev in stream_scripted(
             contents=contents,

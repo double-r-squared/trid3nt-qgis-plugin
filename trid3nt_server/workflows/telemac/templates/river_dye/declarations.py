@@ -221,7 +221,7 @@ DOC = dict(
     ),
     not_for=(
         "an OIL slick (`telemac_river_oil_spill`); bed SCOUR, deposition, grain "
-        "sorting or dredging (`telemac_river_scour`); a SUSPENDED sediment plume "
+        "sorting (`telemac_river_scour`); a SUSPENDED sediment plume "
         "settling onto the bed (`telemac_river_sediment_plume`); "
         "dissolved-oxygen sag (`telemac_do_sag`); rainfall-runoff flood depth "
         "(`telemac_rain_on_grid`). Groundwater plumes, and dam-break or tsunami "

@@ -1,8 +1,7 @@
 """Engine template ``telemac_river_scour`` - a mobile bed under a river reach.
 
 TELEMAC-2D coupled with GAIA over a real reach: where the bed scours and
-re-deposits, and whether a graded mixture SORTS as it goes. The NESTOR dig/dump
-rule layers a channel-maintenance dredge on top of the same bed."""
+re-deposits, and whether a graded mixture SORTS as it goes."""
 
 from __future__ import annotations
 
@@ -35,11 +34,10 @@ from trid3nt_server.workflows.telemac.modules.telemac2d import (
     Boundaries,
     Rain,
     Release,
-    TimeOrigin,
     TracerNames,
     Wind,
 )
-from trid3nt_server.workflows.telemac.solving.solve import compute_class
+from trid3nt_server.workflows.solver.compute_class import compute_class
 from trid3nt_server.workflows.telemac.templates.river_scour.declarations import (
     ACCEPTS, DOC, GRADATION_PRESETS, PARAMS, PARAMS as P,
 )
@@ -51,7 +49,7 @@ __all__ = ["ANSWER", "CAPTIONS", "DATA", "MESH", "OUTPUTS", "PARAMS", "STEERING"
 
 _AUTHORING = "trid3nt_server.workflows.telemac.authoring"
 _REACH = "trid3nt_server.workflows.telemac.templates.reach"
-_SOLVING = "trid3nt_server.workflows.telemac.solving.solve"
+_ENGINE = "trid3nt_server.workflows.telemac.engine"
 
 #: The names the run directory holds this run's files under. They are the deck's
 #: own STEERING / GEOMETRY / BOUNDARY CONDITIONS / RESULTS statements, so the
@@ -60,19 +58,6 @@ _STEERING_FILE = "t2d_river.cas"
 _GEOMETRY = "river.slf"
 _BOUNDARY = "river.cli"
 _RESULT = "r2d_river.slf"
-
-#: WHERE along the reach a maintenance dredge acts, and OVER WHAT stretch of the
-#: run. A dig at mid-reach with the spoil placed well downstream of it is the
-#: shape of a maintenance campaign; the window opens after the flow has
-#: established and closes before the run does, so the bed has time to respond to
-#: what was dug. The dig RATE is the criterion mode's own, in metres per second
-#: of bed lowering.
-_DIG_STATION_FRAC = 0.5
-_DUMP_STATION_FRAC = 0.85
-_DREDGE_ZONE_LEN_M = 200.0
-_DREDGE_START_FRAC = 0.15
-_DREDGE_END_FRAC = 0.95
-_DREDGE_RATE_M_PER_S = 5.0e-4
 
 #: How far past the centerline the mapped banks are ASKED for. The water that
 #: belongs to this reach reaches past the line - a far channel behind a mid-river
@@ -227,8 +212,7 @@ class STEERING(T2D):
                         until_s=Ref("settled.until_s"))]
 
     #: The bed itself: one class or a mixture, bedload on, a real stock to scour
-    #: into, and the NESTOR files when a dredge rule was armed. The classes of a
-    #: MIXTURE shelter each other, and formula 1 is the engine's own Egiazaroff
+    #: into. The classes of a MIXTURE shelter each other, and formula 1 is the engine's own Egiazaroff
     #: hiding factor; a single class hides behind nothing and never reads it. A
     #: sorted mixture additionally prints the SURFACE D50 its grading is read
     #: from, which a single class has none of; the listing's own sediment
@@ -239,10 +223,7 @@ class STEERING(T2D):
                          formula=P.bedload_formula, hiding_factor_formula=1,
                          morphological_factor=P.morphological_factor,
                          printouts="B,E", mixture_printouts="B,E,D50",
-                         mass_balance=True, dredging=Ref("dredge"))]
-    #: NESTOR reads absolute DATES; a run without it leaves the dictionary's own
-    #: origin, which is what states nothing here.
-    time_origin = TimeOrigin(at=Ref("dredge.time_origin"))
+                         mass_balance=True)]
 
     wind = Wind(speed_mps=P.wind_speed_mps, from_deg=P.wind_direction_deg)
     rain = Rain(mm_per_day=Ref("rain.mm_per_day"), tracers=1)
@@ -326,25 +307,7 @@ telemac_river_scour = register_workflow(
                               "centerline": DATA.centerline, "seed": Ref("seed"),
                               "reach": Ref("reach"), "fraction": P.spill_fraction,
                               "label": "Release point"}
-                      ).named("release"),
-                 Step(runner=f"{_AUTHORING}.dredging.dredge", stage="author",
-                      kwargs={"on": P.dredging, "mesh": Ref("mesh"),
-                              "centerline": DATA.centerline, "seed": Ref("seed"),
-                              "reach_polygon": DATA.reach_polygon,
-                              "duration_s": P.sim_duration_s,
-                              "field": {"bank_offset_m": P.dredge_bank_offset_m,
-                                        "zone_len_m": _DREDGE_ZONE_LEN_M,
-                                        "station_frac": _DIG_STATION_FRAC,
-                                        "disposal_station_frac": _DUMP_STATION_FRAC,
-                                        "disposal": P.dredge_disposal},
-                              "rule": {"mode": P.dredge_mode,
-                                       "start_frac": _DREDGE_START_FRAC,
-                                       "end_frac": _DREDGE_END_FRAC,
-                                       "rate_m_per_s": _DREDGE_RATE_M_PER_S,
-                                       "volume_m3": P.dredge_volume_m3,
-                                       "crit_depth_m": P.dredge_crit_depth_m,
-                                       "dig_depth_m": P.dredge_dig_depth_m}}
-                      ).named("dredge")),
+                      ).named("release"),),
         settle=Step(runner=f"{_AUTHORING}.assembler.settle_reach", stage="author",
                     kwargs={"reach": Ref("reach"), "seed": Ref("seed"),
                             "mesh": Ref("mesh"), "centerline": DATA.centerline,
@@ -356,7 +319,7 @@ telemac_river_scour = register_workflow(
                             "friction_coefficient": P.friction_coefficient}),
         results=(_RESULT, RESULT_FILENAME),
         steering_file=_STEERING_FILE, prefix="telemac",
-        dispatch=f"{_SOLVING}.solve_reach", compute_class=P.compute_class,
+        dispatch=f"{_ENGINE}.solve_case", compute_class=P.compute_class,
         outputs=OUTPUTS, captions=CAPTIONS, answer=ANSWER,
         review_title="Review the mobile-bed scenario"),
     data=DATA,

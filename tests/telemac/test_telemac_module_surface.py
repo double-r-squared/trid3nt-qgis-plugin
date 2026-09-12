@@ -823,20 +823,6 @@ def test_a_class_outside_the_formulae_s_window_refuses_by_size():
         _bed(gradation=[[100.0, 0.5], [3000.0, 0.5]])
 
 
-def test_dredging_names_every_nestor_file_or_none_of_them():
-    """NESTOR reads all three on every action, so a run naming two of them is a
-    run it cannot read."""
-    from trid3nt_server.workflows.telemac.modules.gaia import Dredging
-
-    sheet = _bed(dredging=Dredging(action="A", polygon="P", surface_ref="R"))
-    written = dict(sheet.resolved())
-    assert written["NESTOR"] is True
-    assert sorted(sheet.files) == ["nestor.act", "nestor.pol", "nestor.ref"]
-    plain = _bed()
-    assert "NESTOR" not in dict(plain.resolved())
-    assert not plain.files
-
-
 def test_every_wrapper_binds_the_primitive_set_and_nothing_question_named():
     """An output is a primitive named from the module's own variables: a field,
     a series, an envelope, the extent, the mesh, the mass balance. WAQTEL writes

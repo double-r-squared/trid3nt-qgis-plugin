@@ -179,38 +179,6 @@ class PARAMS:
         desc="Simulated physical time; the morphological factor is what makes a "
              "short window produce a readable bed change")
 
-    # -- channel maintenance dredging (NESTOR) ------------------------------ #
-    dredging = Param(
-        door=doors.SCENARIO, default=False, type=bool, consequence="scenario",
-        desc="Arm the NESTOR channel-maintenance dig/dump rule on top of the "
-             "mobile bed")
-    dredge_mode = Param(
-        door=doors.SCENARIO, default="scheduled", consequence="scenario",
-        desc="Dredging rule: scheduled (remove a target volume over a window) | "
-             "criterion (dig only where the bed silts within tolerance of grade)")
-    dredge_volume_m3 = Param(
-        door=doors.SCENARIO, default=4000.0, bounds=(1.0, 1.0e7),
-        units="m^3", consequence="scenario",
-        desc="Scheduled-mode target dredged volume")
-    dredge_crit_depth_m = Param(
-        door=doors.SCENARIO, default=0.3, bounds=(0.01, 20.0),
-        units="m", consequence="scenario",
-        desc="Criterion-mode siltation tolerance above the design grade")
-    dredge_dig_depth_m = Param(
-        door=doors.SCENARIO, default=1.5, bounds=(0.05, 30.0),
-        units="m", consequence="scenario",
-        desc="Criterion-mode dig target below the design grade")
-    dredge_disposal = Param(
-        door=doors.SCENARIO, default=False, type=bool, consequence="scenario",
-        desc="Also place the dug spoil in a downstream disposal zone")
-    dredge_bank_offset_m = Param(
-        door=doors.SCENARIO, default=5.0,
-        bounds=(0.0, 200.0), units="m", user_lever=True, consequence="scenario",
-        desc="Bank setback the dig field is held back from the mapped water's "
-             "edge, so the cut does not undercut the bank it is dug beside. It "
-             "is also what excludes a stretch too narrow to dredge: narrower "
-             "than twice the setback and no field survives there")
-
     # -- numerics + geometry (the advanced fold) ---------------------------- #
     mesh_resolution_m = Param(
         door=doors.SCENARIO, default=14.0, user_lever=True,
@@ -224,9 +192,8 @@ DOC = dict(
     routing=(
         "THE tool for \"where does the bed scour and where does it re-deposit\" - "
         "erodible-bed morphodynamics below a dam, weir or bridge contraction, "
-        "bedload transport and bed evolution under a flood, how a GRADED grain "
-        "mixture sorts and armors, and channel-maintenance DREDGING against "
-        "siltation (NESTOR dig/dump). TELEMAC-2D coupled with GAIA over a REAL "
+        "bedload transport and bed evolution under a flood, and how a GRADED grain "
+        "mixture sorts and armors. TELEMAC-2D coupled with GAIA over a REAL "
         "NHDPlus reach with real NHDArea banks. Returns a bed-evolution map plus "
         "the time-stepped mesh. Supply `location` OR `bbox`."
     ),

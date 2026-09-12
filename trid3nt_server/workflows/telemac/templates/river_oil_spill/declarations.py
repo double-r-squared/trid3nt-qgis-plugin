@@ -210,7 +210,7 @@ DOC = dict(
     ),
     not_for=(
         "a conservative dye or contaminant plume with no slick "
-        "(`telemac_river_dye`); bed SCOUR or dredging (`telemac_river_scour`); a "
+        "(`telemac_river_dye`); bed SCOUR (`telemac_river_scour`); a "
         "SUSPENDED sediment plume (`telemac_river_sediment_plume`); "
         "dissolved-oxygen sag (`telemac_do_sag`). Weathering, evaporation and "
         "beaching are the module's own and are not calibrated here"

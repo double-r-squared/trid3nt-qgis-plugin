@@ -12,8 +12,8 @@ in a sibling module and is named on the outputs list.
 ONE TEMPLATE PER QUESTION. A structural fork of the deck - a tracer, an oil
 slick and a moving bed fill DIFFERENT slots, not different values - is a
 different template, never a switch on a param. What varies WITHIN one question is
-a composite that states nothing when it is given nothing: a decay rate, a
-dredging rule, a wind, a hyetograph against a constant rate.
+a composite that states nothing when it is given nothing: a decay rate, a wind,
+a hyetograph against a constant rate.
 
 ## The templates
 
@@ -23,7 +23,7 @@ dredging rule, a wind, a hyetograph against a constant rate.
 | `reach.py` | The ONE shared DATA row module, by exception: the reach rows two or more river templates read - the geocode, the seed, the flowline, the two coverage measures, the carrier discharge at the cycle the ask names, the signed net rain, the event-time coercion - and the steps that name them. A template restates its own keywords and params; it names these rows. |
 | `river_dye/` | `telemac_river_dye` - a conservative plume down a reach, decaying when a decaying substance is named (its die-off presets are the template's values); its release is a Point slot whose name the tracer takes. |
 | `river_oil_spill/` | `telemac_river_oil_spill` - an oil slick on a reach: the floats' track beside the dissolved fraction; the oil presets are the template's values. |
-| `river_scour/` | `telemac_river_scour` - a mobile bed under a reach: the bed evolution off GAIA's own result, the bed over time, a marker beside them, and the NESTOR dredge rule; the gradation presets are the template's values. |
+| `river_scour/` | `telemac_river_scour` - a mobile bed under a reach: the bed evolution off GAIA's own result, the bed over time and a marker beside them; the gradation presets are the template's values. |
 | `river_sediment_plume/` | `telemac_river_sediment_plume` - one settling class over a bed with no stock, so only what was injected deposits; `river_sediment_plume/injected_mass.py` resolves the mass the pulse put in, which the deposited fraction is measured against. |
 | `do_sag/` | `telemac_do_sag` - an outfall's BOD load to the dissolved-oxygen profile downstream, drawn against the Streeter-Phelps closed form in `streeter_phelps.py` and the standard. |
 | `rain_on_grid/` | `telemac_rain_on_grid` - a storm over a catchment to the peak depth and the outlet hydrograph, charted and placed as the station that carries it; the land-cover table its infiltration surface is read from is the template's value, and `rain_on_grid/storm.py` resolves the storm it is driven by, a real hyetograph or a constant design rate. |

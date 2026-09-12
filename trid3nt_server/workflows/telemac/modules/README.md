@@ -73,7 +73,7 @@ reader that knows a question.
 | `telemac3d.py` | The TELEMAC-3D wrapper: the vertical grid keyword pair and its refusal, the water column a run is initialized from, and the wind. |
 | `artemis.py` | The ARTEMIS wrapper: the incident wave, which the module reads out of the boundary file rather than the deck, so the composite restamps the pair the mesh recipe wrote; and the wave vocabulary. |
 | `waqtel.py` | The WAQTEL wrapper: the O2 process and the degradation a carrier names as coupled bodies, whose slots serialize into WAQTEL's own steering file while the coupling keywords land on the carrier's sheet; a degradation given nothing couples nothing. |
-| `gaia.py` | The GAIA wrapper: the bed and the suspension a carrier names as coupled bodies, expanded from a gradation or a class and its concentration, the NESTOR dredging composite, and its primitives over the module's own result file. |
+| `gaia.py` | The GAIA wrapper: the bed and the suspension a carrier names as coupled bodies, expanded from a gradation or a class and its concentration, and its primitives over the module's own result file. |
 
 ## Subfolders
 

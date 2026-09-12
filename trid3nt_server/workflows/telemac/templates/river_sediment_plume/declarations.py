@@ -177,7 +177,7 @@ DOC = dict(
         "`bbox`."
     ),
     not_for=(
-        "bed SCOUR, an erodible bed, grain sorting or dredging "
+        "bed SCOUR, an erodible bed or grain sorting "
         "(`telemac_river_scour`); a conservative dye or contaminant plume "
         "(`telemac_river_dye`); an OIL slick (`telemac_river_oil_spill`); "
         "dissolved-oxygen sag (`telemac_do_sag`)"

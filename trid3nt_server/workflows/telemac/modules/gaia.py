@@ -1,4 +1,4 @@
-"""The GAIA wrapper: its dictionary, the sediment composites, and NESTOR.
+"""The GAIA wrapper: its module input and the two sediment composites.
 
 GAIA runs UNDER a hydrodynamic module and states no value of its own: the bed
 and the suspension expand what a template handed them, and the density the
@@ -14,8 +14,7 @@ from .module import Module
 from .outputs import PRIMITIVES
 
 __all__ = ["GAIA", "GRAIN_UM_MAX", "GRAIN_UM_MIN", "STEERING_FILENAME",
-           "RESULT_FILENAME", "VARIABLES", "ACTION_FILENAME", "POLYGON_FILENAME",
-           "SURFACE_REF_FILENAME", "Bed", "Dredging", "Suspension"]
+           "RESULT_FILENAME", "VARIABLES", "Bed", "Suspension"]
 
 #: The module's variable vocabulary, by the mnemonic VARIABLES FOR GRAPHIC
 #: PRINTOUTS spells: the result-file name and the unit. The evolution is
@@ -29,9 +28,6 @@ VARIABLES: Mapping[str, tuple[str, str]] = MappingProxyType({
 STEERING_FILENAME = "gaia_river.cas"
 #: GAIA's own result SELAFIN, carrying CUMUL BED EVOL.
 RESULT_FILENAME = "gaia_river.slf"
-ACTION_FILENAME = "nestor.act"
-POLYGON_FILENAME = "nestor.pol"
-SURFACE_REF_FILENAME = "nestor.ref"
 
 
 #: The grain-size window the transport formulae are authored for, in microns.
@@ -44,17 +40,17 @@ _MGL_TO_KGM3 = 1.0e-3
 
 
 class _Gaia(Module("gaia")):  # type: ignore[misc]
-    """The dictionary, the two sediment bodies, and NESTOR as one value."""
+    """The module input and the two sediment bodies."""
 
     @classmethod
     def bed(cls, *, geometry: Any, boundary: Any, mass_balance: Any,
-            dredging: Any = None, **bed: Any) -> Mapping[str, Any]:
+            **bed: Any) -> Mapping[str, Any]:
         """A non-cohesive bed with a real stock, one class or a mixture that SORTS.
 
         ``bed`` is the ``Bed`` value; the shape follows the gradation it resolves."""
         return _body({"GEOMETRY_FILE": geometry, "BOUNDARY_CONDITIONS_FILE": boundary,
                       "RESULTS_FILE": RESULT_FILENAME, "MASS_BALANCE": mass_balance,
-                      "bed": Bed(**bed), "dredging": dredging})
+                      "bed": Bed(**bed)})
 
     @classmethod
     def suspended(cls, *, geometry: Any, boundary: Any, mass_balance: Any,
@@ -158,29 +154,6 @@ def _suspension(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
              "VARIABLES_FOR_GRAPHIC_PRINTOUTS": str(value["printouts"])}, {})
 
 
-def Dredging(*, action: Any, polygon: Any, surface_ref: Any  # noqa: N802
-             ) -> Mapping[str, Any]:
-    """NESTOR dig and dump on the erodible bed, as one value.
-
-    The three files ride together: a run naming two is one NESTOR cannot read."""
-    return {"action": action, "polygon": polygon,
-            "surface_ref": surface_ref}
-
-
-def _dredging(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
-                                                 Mapping[str, Any]]:
-    """The NESTOR value -> the keywords it means and the files they name."""
-    if not value["action"]:
-        # No dig was cut, so this run states no dredging at all.
-        return ({}, {})
-    return ({"NESTOR": True, "NESTOR_ACTION_FILE": ACTION_FILENAME,
-             "NESTOR_POLYGON_FILE": POLYGON_FILENAME,
-             "NESTOR_SURFACE_REFERENCE_FILE": SURFACE_REF_FILENAME},
-            {ACTION_FILENAME: value["action"],
-             POLYGON_FILENAME: value["polygon"],
-             SURFACE_REF_FILENAME: value["surface_ref"]})
-
-
 def _metres(micron: Any) -> float:
     """A diameter stated in the micron the question is asked in, as GAIA's metres."""
     return float(micron) * 1.0e-6
@@ -196,5 +169,5 @@ GAIA = _Gaia
 GAIA.VARIABLES = VARIABLES
 #: The result the primitives read: GAIA writes its own file beside the carrier's.
 GAIA.RESULT_FILE = RESULT_FILENAME
-GAIA.composites(bed=_bed, suspension=_suspension, dredging=_dredging)
+GAIA.composites(bed=_bed, suspension=_suspension)
 GAIA.outputs(**PRIMITIVES)

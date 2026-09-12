@@ -6,8 +6,8 @@ Bed SCOUR and DEPOSITION in a river reach: a mobile bed under a flow.
 
 |  |  |
 |---|---|
-| module | `telemac2d` - 376 keywords in its dictionary, of which this template states 32 |
-| solves | `trid3nt_server.workflows.telemac.solving.solve.solve_reach` |
+| module | `telemac2d` - 376 keywords in its dictionary, of which this template states 31 |
+| solves | `trid3nt_server.workflows.telemac.engine.solve_case` |
 | engine defaults | every keyword this template does not state keeps the engine's own default; `describe_keywords` names it with that default, and `keywords={...}` sets it |
 
 ## The data it consumes
@@ -56,13 +56,6 @@ The values the template declares. `desc` is what the model reads when it fills o
 | `tracer_concentration_mgl` | scenario | mg/L | 100.0 | Concentration of the marker tracer released at the source, which is what the deposited fraction is measured against |
 | `reach_length_km` | scenario | km | 6.0 | Modeled reach length downstream of the release; a longer reach is coarsened under the mesh node budget |
 | `sim_duration_s` | scenario | s | 3600.0 | Simulated physical time; the morphological factor is what makes a short window produce a readable bed change |
-| `dredging` | scenario | - | False | Arm the NESTOR channel-maintenance dig/dump rule on top of the mobile bed |
-| `dredge_mode` | scenario | - | scheduled | Dredging rule: scheduled (remove a target volume over a window) \| criterion (dig only where the bed silts within tolerance of grade) |
-| `dredge_volume_m3` | scenario | m^3 | 4000.0 | Scheduled-mode target dredged volume |
-| `dredge_crit_depth_m` | scenario | m | 0.3 | Criterion-mode siltation tolerance above the design grade |
-| `dredge_dig_depth_m` | scenario | m | 1.5 | Criterion-mode dig target below the design grade |
-| `dredge_disposal` | scenario | - | False | Also place the dug spoil in a downstream disposal zone |
-| `dredge_bank_offset_m` | scenario | m | 5.0 | Bank setback the dig field is held back from the mapped water's edge, so the cut does not undercut the bank it is dug beside. It is also what excludes a stretch too narrow to dredge: narrower than twice the setback and no field survives there |
 | `mesh_resolution_m` | scenario | m | 14.0 | Target element edge length the reach is triangulated at; scour depth is a resolution-bound class and a coarse mesh reads it low |
 
 ## What it answers
