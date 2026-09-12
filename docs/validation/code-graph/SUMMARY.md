@@ -10,28 +10,28 @@ venvs/agent/bin/python dev/instruments/code_graph.py
 
 | metric | value |
 |---|---|
-| modules scanned | 940 |
-| total loc | 228030 |
-| reachable from roots | 392 (102477 loc) |
+| modules scanned | 921 |
+| total loc | 224671 |
+| reachable from roots | 378 (100322 loc) |
 | test-only-reachable | 83 |
 | script-only-reachable | 0 |
 | orphans (product) | 19 |
 | package markers excluded from orphans | 104 |
 | orphans (scripts/ entry modules) | 0 |
-| test modules | 379 |
-| import edges | 3008 |
-| dynamic (string-resolved) edges | 173 |
-| reference call-site edges | 12197 |
-| unattributed call sites | 55383 |
-| dead symbols (conf >= 80) | 8 |
-| unused callables (conf 60 tier) | 40 |
+| test modules | 374 |
+| import edges | 2971 |
+| dynamic (string-resolved) edges | 170 |
+| reference call-site edges | 12043 |
+| unattributed call sites | 54824 |
+| dead symbols (conf >= 80) | 6 |
+| unused callables (conf 60 tier) | 41 |
 | vulture findings muted by whitelist | 39 |
 
 ## Honesty checks
 
 - Known-culled modules from this arc still present: **0** (all confirmed gone)
 - grimp modules with no file in the scanned universe: 0
-- Call sites the import table could not attribute: 55383 (builtins, locals, methods on non-imported objects -- counted, not guessed).
+- Call sites the import table could not attribute: 54824 (builtins, locals, methods on non-imported objects -- counted, not guessed).
 - Out of scope, so its imports anchor nothing: `experiments/`, `third_party/`.
 
 ## False-positive classes handled
@@ -99,37 +99,35 @@ venvs/agent/bin/python dev/instruments/code_graph.py
 |---|---|---|---|
 | `return` | unreachable_code | trid3nt_server/server/protocol/connections.py:63 | 30 |
 | `token_envelope` | parameter | trid3nt_server/credentials/auth_handshake.py:127 | 1 |
-| `unquote` | import | trid3nt_server/render/uri_registry.py:18 | 1 |
 | `default_seconds` | parameter | trid3nt_server/gates/confirm.py:90 | 1 |
-| `raw_user_text` | parameter | trid3nt_server/server/dispatch/emitter.py:813 | 1 |
+| `unquote` | import | trid3nt_server/render/uri_registry.py:18 | 1 |
+| `raw_user_text` | parameter | trid3nt_server/server/dispatch/emitter.py:862 | 1 |
 | `entry_id` | parameter | trid3nt_server/tools/search/fetch_living_atlas_layer/fetch_living_atlas_layer.py:128 | 1 |
-| `gs_backend` | parameter | trid3nt_server/workflows/publishing/cog.py:373 | 1 |
-| `runs_bucket_default` | parameter | trid3nt_server/workflows/publishing/cog.py:375 | 1 |
 
 ## Package-level edge matrix (cross-package import edges)
 
-| from \ to | contracts | plugin | scripts | tests | trid3nt_contracts | trid3nt_server | trid3nt_server.__main__ | trid3nt_server.adapters | trid3nt_server.credentials | trid3nt_server.render | trid3nt_server.errors | trid3nt_server.fallbacks | trid3nt_server.gates | trid3nt_server.inputs | trid3nt_server.main | trid3nt_server.persistence | trid3nt_server.plugin_repo | trid3nt_server.server | trid3nt_server.storage | trid3nt_server.telemetry | trid3nt_server.tools | trid3nt_server.workflows | workers |
+| from \ to | contracts | plugin | scripts | tests | trid3nt_contracts | trid3nt_server | trid3nt_server.__main__ | trid3nt_server.adapters | trid3nt_server.credentials | trid3nt_server.errors | trid3nt_server.fallbacks | trid3nt_server.gates | trid3nt_server.inputs | trid3nt_server.main | trid3nt_server.persistence | trid3nt_server.plugin_repo | trid3nt_server.render | trid3nt_server.server | trid3nt_server.storage | trid3nt_server.telemetry | trid3nt_server.tools | trid3nt_server.workflows | workers |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| contracts | . | . | . | . | 51 | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . |
-| plugin | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . |
+| contracts | . | . | . | . | 49 | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . |
+| plugin | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | 1 | . | . | . | . | . | . |
 | scripts | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . |
-| tests | . | 3 | 1 | . | 259 | 1 | . | 69 | 9 | 73 | . | 4 | 39 | 22 | 16 | 32 | 1 | 102 | 8 | 10 | 507 | 253 | . |
+| tests | . | 3 | 1 | . | 260 | 1 | . | 70 | 9 | . | 4 | 41 | 22 | 16 | 31 | 1 | 79 | 102 | 7 | 10 | 511 | 242 | . |
 | trid3nt_contracts | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . |
 | trid3nt_server | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . |
-| trid3nt_server.__main__ | . | . | . | . | . | . | . | . | . | . | . | . | . | . | 1 | . | . | . | . | . | . | . | . |
-| trid3nt_server.adapters | . | . | . | . | 4 | . | . | . | 1 | . | . | . | 3 | . | . | . | . | 1 | . | . | . | . | . |
-| trid3nt_server.credentials | . | . | . | . | 3 | . | . | . | . | . | . | . | . | . | . | 1 | . | . | . | . | . | . | . |
-| trid3nt_server.render | . | . | . | . | 14 | . | . | . | . | . | . | . | 1 | . | . | . | . | . | 3 | . | 3 | 2 | . |
+| trid3nt_server.__main__ | . | . | . | . | . | . | . | . | . | . | . | . | . | 1 | . | . | . | . | . | . | . | . | . |
+| trid3nt_server.adapters | . | . | . | . | 4 | . | . | . | 1 | . | . | 3 | . | . | . | . | . | . | . | . | 2 | . | . |
+| trid3nt_server.credentials | . | . | . | . | 3 | . | . | . | . | . | . | . | . | . | 1 | . | . | . | . | . | . | . | . |
 | trid3nt_server.errors | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . |
-| trid3nt_server.fallbacks | . | . | . | . | 1 | . | . | . | . | . | . | . | 1 | . | . | . | . | . | 1 | . | 1 | . | . |
-| trid3nt_server.gates | . | . | . | . | 22 | . | . | 1 | 4 | 3 | . | . | . | 2 | . | . | . | 8 | . | . | 9 | . | . |
-| trid3nt_server.inputs | . | . | . | . | 5 | . | . | . | 1 | 5 | 1 | . | 2 | . | . | . | . | 1 | 2 | . | 4 | 1 | . |
-| trid3nt_server.main | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | 1 | . | 1 | . | 1 | 4 | 1 | . |
+| trid3nt_server.fallbacks | . | . | . | . | 1 | . | . | . | . | . | . | 1 | . | . | . | . | . | . | 1 | . | 1 | . | . |
+| trid3nt_server.gates | . | . | . | . | 22 | . | . | 1 | 4 | . | . | . | 2 | . | . | . | 3 | 8 | . | . | 9 | . | . |
+| trid3nt_server.inputs | . | . | . | . | 5 | . | . | . | 1 | 1 | . | 2 | . | . | . | . | 5 | 1 | 2 | . | 4 | 1 | . |
+| trid3nt_server.main | . | . | . | . | . | . | . | 1 | . | . | . | . | . | . | 1 | . | . | 1 | . | 1 | 4 | 1 | . |
 | trid3nt_server.persistence | . | . | . | . | 4 | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . |
 | trid3nt_server.plugin_repo | . | . | . | . | . | . | . | 1 | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . |
-| trid3nt_server.server | . | . | . | . | 32 | 1 | . | 9 | 4 | 12 | . | . | 14 | 2 | 2 | 2 | 1 | . | 1 | 2 | 15 | . | . |
+| trid3nt_server.render | . | . | . | . | 13 | . | . | . | . | . | . | 1 | . | . | . | . | . | . | 3 | . | 4 | 5 | . |
+| trid3nt_server.server | . | . | . | . | 31 | 1 | . | 9 | 4 | . | . | 14 | 4 | 2 | 2 | 1 | 12 | . | 1 | 2 | 17 | . | . |
 | trid3nt_server.storage | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . |
-| trid3nt_server.telemetry | . | . | . | . | . | 1 | . | . | . | . | . | . | . | . | . | 1 | . | 1 | . | . | . | . | . |
-| trid3nt_server.tools | . | . | . | . | 138 | . | . | . | . | 15 | . | 3 | 2 | 8 | 1 | . | . | 2 | 8 | 2 | . | 17 | . |
-| trid3nt_server.workflows | . | . | . | . | 44 | . | . | . | . | 22 | 1 | . | 7 | 43 | . | 3 | . | . | 13 | 1 | 25 | . | . |
+| trid3nt_server.telemetry | . | . | . | . | . | 1 | . | . | . | . | . | . | . | . | 1 | . | . | 1 | . | . | . | . | . |
+| trid3nt_server.tools | . | . | . | . | 135 | . | . | . | . | . | 3 | 2 | 8 | 1 | . | . | 16 | 2 | 8 | 2 | . | 16 | . |
+| trid3nt_server.workflows | . | . | . | . | 32 | . | . | . | . | 1 | . | 7 | 43 | . | 3 | . | 17 | . | 10 | 1 | 23 | . | . |
 | workers | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | 1 | . |
