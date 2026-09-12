@@ -19,12 +19,12 @@ __all__ = [
 ]
 
 
-#: Half-side (deg) of the AOI a catchment is delineated inside, centred on the
-#: OUTLET. +-0.14 deg is a 0.28-deg box: comfortably under the 0.3-deg D8
-#: watershed-primitive clamp, and generous enough to contain one headwater basin
-#: upstream of its outlet. The delineation TRUNCATES at the box edge, so this must
-#: over-cover; a box that clips the basin mid-hillslope answers a smaller
-#: question and says nothing.
+#: Half-side (deg) of the AOI the bed DEM is fetched over and the catchment is
+#: delineated inside, centred on the OUTLET. +-0.14 deg is a 0.28-deg box:
+#: generous enough to contain one headwater basin upstream of its outlet, and at
+#: the bed resolution below a DEM of it stays inside the D8 cell clamp. The
+#: delineation TRUNCATES at the DEM edge, so this must over-cover; a box that
+#: clips the basin mid-hillslope answers a smaller question and says nothing.
 POUR_POINT_BUFFER_DEG: float = 0.14
 
 #: The edge-length BAND a catchment interior is triangulated between: fine in the

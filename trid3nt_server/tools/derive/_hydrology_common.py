@@ -24,7 +24,7 @@ from trid3nt_server.tools import register_tool
 __all__ = [
     "HydrologyPrimitivesError",
     "HydrologyInputError",
-    "HydrologyAoiTooLargeError",
+    "HydrologyDemTooLargeError",
     "HydrologyDependencyError",
     "HydrologyUpstreamError",
     "write_conditioned_dem",
@@ -47,10 +47,10 @@ class HydrologyInputError(HydrologyPrimitivesError):
     error_code = "HYDROLOGY_INPUT_INVALID"
     retryable = False
 
-class HydrologyAoiTooLargeError(HydrologyInputError):
-    """The AOI exceeds the CPU-bound clamp (> 0.3 degrees per side)."""
+class HydrologyDemTooLargeError(HydrologyInputError):
+    """The DEM carries more cells than the CPU-bound D8 clamp admits."""
 
-    error_code = "HYDROLOGY_AOI_TOO_LARGE"
+    error_code = "HYDROLOGY_DEM_TOO_LARGE"
     retryable = False
 
 class HydrologyDependencyError(HydrologyPrimitivesError):
@@ -68,8 +68,12 @@ class HydrologyUpstreamError(HydrologyPrimitivesError):
     retryable = True
 
 
-#: CPU-bound AOI clamp (degrees per side): ~1100x1100 cells at 30 m.
-_MAX_AOI_DEG: float = 0.3
+#: CPU-bound clamp on the D8 chain, in the DEM's own CELLS - which is what the
+#: chain costs. Degrees are not a cost: a projected DEM's degree extent is its
+#: map bulge, and one grid of cells conditions in the same time wherever it sits
+#: and whatever it spans. A 4000 x 4000 grid conditions in about forty seconds
+#: here, measured on the pysheds chain below.
+_MAX_DEM_CELLS: int = 16_000_000
 
 _ENGINE_NOTE = (
     "Engine: pysheds D8 (fill_pits -> fill_depressions -> resolve_flats -> "
@@ -104,7 +108,7 @@ def _import_pysheds() -> Any:
     return Grid
 
 def _validate_bbox(bbox: Any) -> tuple[float, float, float, float]:
-    """Validate + normalize the bbox; enforce the CPU-bound AOI clamp."""
+    """Validate + normalize a lon/lat bbox."""
     if not isinstance(bbox, (tuple, list)) or len(bbox) != 4:
         raise HydrologyInputError(
             f"bbox must be (min_lon, min_lat, max_lon, max_lat); got {bbox!r}"
@@ -124,13 +128,6 @@ def _validate_bbox(bbox: Any) -> tuple[float, float, float, float]:
     if west >= east or south >= north:
         raise HydrologyInputError(
             f"bbox is degenerate (min must be < max on both axes): {bbox!r}"
-        )
-    if (east - west) > _MAX_AOI_DEG or (north - south) > _MAX_AOI_DEG:
-        raise HydrologyAoiTooLargeError(
-            f"AOI {bbox!r} exceeds the watershed-primitive clamp of "
-            f"{_MAX_AOI_DEG} degrees per side "
-            f"(got {east - west:.3f} x {north - south:.3f} deg). D8 analysis "
-            "is CPU-bounded; pick a single-watershed AOI."
         )
     return (west, south, east, north)
 
@@ -175,7 +172,7 @@ def _stage_dem(dem_uri: Any, tmpdir: str, notes: list[str]) -> str:
 
 
 def _dem_bbox_4326(dem_path: str) -> tuple[float, float, float, float]:
-    """The DEM's own extent in EPSG:4326, held to the CPU-bound AOI clamp."""
+    """The DEM's own extent in EPSG:4326, whatever projection it was written in."""
     import rasterio
     from rasterio.warp import transform_bounds
 
@@ -196,15 +193,28 @@ def _dem_bbox_4326(dem_path: str) -> tuple[float, float, float, float]:
 
 
 def _open_dem(dem_path: str) -> tuple[Any, Any]:
-    """``(grid, dem)`` for a DEM raster, behind the typed open failure."""
+    """``(grid, dem)`` for a DEM raster, held to the D8 cell clamp.
+
+    Every path into the conditioning chain opens its DEM here, so the clamp is
+    stated once and no caller can reach the chain around it.
+    """
     Grid = _import_pysheds()
     try:
         grid = Grid.from_raster(dem_path)
-        return grid, grid.read_raster(dem_path)
+        dem = grid.read_raster(dem_path)
     except Exception as exc:  # noqa: BLE001
         raise HydrologyInputError(
             f"could not open DEM raster {dem_path!r}: {exc}"
         ) from exc
+    rows, cols = int(grid.shape[0]), int(grid.shape[1])
+    if rows * cols > _MAX_DEM_CELLS:
+        raise HydrologyDemTooLargeError(
+            f"DEM {dem_path!r} carries {rows * cols:,} cells "
+            f"({rows:,} x {cols:,}), past the D8 clamp of "
+            f"{_MAX_DEM_CELLS:,}. Fetch the DEM over a smaller area, or at a "
+            "coarser resolution_m, and pass that layer instead."
+        )
+    return grid, dem
 
 
 def _conditioned(grid: Any, dem: Any) -> Any:

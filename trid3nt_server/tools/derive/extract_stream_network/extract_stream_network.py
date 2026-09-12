@@ -150,7 +150,7 @@ def extract_stream_network(
     (``delineate_watershed``). Fetch the DEM first and pass its uri.
 
     Params:
-        dem_uri: the DEM layer, at most 0.3 deg per side.
+        dem_uri: the DEM layer, at most 16 million cells.
         accumulation_threshold: min upslope cell count to be channel
             (default 500, ~0.45 km^2 at 30m). Lower=denser network.
 

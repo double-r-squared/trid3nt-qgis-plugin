@@ -102,7 +102,7 @@ class DATA:
     # clicked outlet may move to reach the channel is a fact about the D8 grid,
     # which is where it is declared.
     basin = tool("delineate_watershed", pour_point=[Ref("aoi.lon"), Ref("aoi.lat")],
-                 bbox=Ref("aoi.bbox"), dem_uri=Ref("dem.uri"))
+                 dem_uri=Ref("dem.uri"))
 
 
 #: The MESH RECIPE, frozen at declaration and building nothing at import. The

@@ -246,7 +246,7 @@ async def test_the_aoi_is_the_box_around_the_outlet_not_the_geocoded_place():
                             half_deg=POUR_POINT_BUFFER_DEG, default_name="watershed")
     aoi = out["bbox"]
     assert aoi[0] < pp[0] < aoi[2] and aoi[1] < pp[1] < aoi[3]
-    # each side under the 0.3-deg D8 clamp, centred on the outlet
+    # one headwater basin's span, centred on the outlet
     assert (aoi[2] - aoi[0]) <= 0.3 and (aoi[3] - aoi[1]) <= 0.3
     assert abs((aoi[2] - aoi[0]) - 2 * POUR_POINT_BUFFER_DEG) < 1e-9
     assert (out["lon"], out["lat"]) == pp

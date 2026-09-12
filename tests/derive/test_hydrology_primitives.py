@@ -20,7 +20,8 @@ from shapely.ops import unary_union
 from trid3nt_contracts.execution import LayerURI
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.derive._hydrology_common import HydrologyAoiTooLargeError, HydrologyInputError
+from trid3nt_server.tools.derive import _hydrology_common
+from trid3nt_server.tools.derive._hydrology_common import HydrologyDemTooLargeError, HydrologyInputError
 from trid3nt_server.tools.derive.delineate_watershed.delineate_watershed import WatershedLayerURI, delineate_watershed
 from trid3nt_server.tools.derive.extract_stream_network.extract_stream_network import NoStreamsError, StreamNetworkLayerURI, extract_stream_network
 
@@ -239,7 +240,7 @@ def test_a_projected_dem_still_answers_in_the_4326_the_layer_declares(
 
 @pytest.fixture()
 def wide_dem(tmp_path) -> str:
-    """A ten-cell DEM spanning a full degree: past the CPU clamp on extent alone."""
+    """A ten-cell DEM spanning a full degree: EXTENT is not what the clamp reads."""
     transform = from_bounds(-118.0, 34.0, -117.0, 34.05, 10, 10)
     path = str(tmp_path / "wide.tif")
     with rasterio.open(
@@ -250,11 +251,36 @@ def wide_dem(tmp_path) -> str:
     return path
 
 
-def test_aoi_clamp_raises(wide_dem) -> None:
-    with pytest.raises(HydrologyAoiTooLargeError):
-        extract_stream_network(dem_uri=wide_dem)
-    with pytest.raises(HydrologyAoiTooLargeError):
-        delineate_watershed(pour_point=(-117.5, 34.02), dem_uri=wide_dem)
+@pytest.fixture()
+def dense_dem(tmp_path) -> str:
+    """A DEM past the cell clamp, written without materializing its band.
+
+    The clamp is read off the raster's declared shape, so the header alone
+    settles it and nothing here allocates sixteen million cells."""
+    side = int(_hydrology_common._MAX_DEM_CELLS ** 0.5) + 1
+    transform = from_bounds(-117.6, 34.0, -117.5, 34.1, side, side)
+    path = str(tmp_path / "dense.tif")
+    with rasterio.open(
+        path, "w", driver="GTiff", height=side, width=side, count=1,
+        dtype="float32", crs="EPSG:4326", transform=transform, nodata=-9999.0,
+        tiled=True, sparse_ok=True,
+    ) as dst:
+        pass
+    return path
+
+
+def test_wide_extent_is_not_a_clamp(wide_dem, tmp_path) -> None:
+    """A full degree of longitude over ten cells costs ten cells of D8."""
+    result = delineate_watershed(pour_point=(-117.5, 34.02), dem_uri=wide_dem,
+                                 _output_dir=str(tmp_path))
+    assert isinstance(result, WatershedLayerURI) and result.cell_count > 0
+
+
+def test_cell_clamp_raises(dense_dem) -> None:
+    with pytest.raises(HydrologyDemTooLargeError):
+        extract_stream_network(dem_uri=dense_dem)
+    with pytest.raises(HydrologyDemTooLargeError):
+        delineate_watershed(pour_point=(-117.55, 34.05), dem_uri=dense_dem)
 
 
 def _bowl_dem(path: str, origin_lon: float, top_lat: float, dx: float, n: int) -> tuple:

@@ -120,7 +120,7 @@ def _grid_epsg(grid: Any) -> int | None:
 
 def _cell_area_km2(grid: Any) -> float:
     """Approximate cell area in km^2, degrees converted at the centre latitude on
-    a geographic grid, which is adequate over the 0.3-degree AOI clamp.
+    a geographic grid, which is adequate over one catchment's span.
     """
     affine = grid.affine
     res_x, res_y = abs(affine.a), abs(affine.e)
@@ -155,8 +155,6 @@ def delineate_watershed(
     snap_threshold: int = _SNAP_THRESHOLD_CELLS,
     *,
     _output_dir: str | None = None,
-    # absorb LLM-invented kwargs.
-    **_extra_ignored: Any,
 ) -> WatershedLayerURI:
     """Delineate the watershed (drainage basin) upstream of a pour point (D8 flow analysis via pysheds).
 
@@ -169,8 +167,8 @@ def delineate_watershed(
     Params:
         pour_point: (lon, lat) outlet, snapped to the nearest cell with at
             least ``snap_threshold`` upslope cells.
-        dem_uri: the DEM layer over the analysis extent, at most 0.3 deg per
-            side. The basin is TRUNCATED at the DEM edge, so fetch a larger DEM
+        dem_uri: the DEM layer the basin is traced in, at most 16 million
+            cells. The basin is TRUNCATED at the DEM edge, so fetch a larger DEM
             when the result looks clipped.
         snap_threshold: upslope-cell count defining a flow line, default 100.
 
