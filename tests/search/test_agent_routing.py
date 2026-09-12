@@ -16,10 +16,10 @@ import pytest
 from trid3nt_server import tools as agent_tools
 from trid3nt_server.adapters.adapter import (
     FunctionCallEvent,
-    SYSTEM_PROMPT,
     TextDeltaEvent,
     build_tool_declarations,
     stream_events,
+    system_prompt,
 )
 
 
@@ -76,7 +76,7 @@ async def test_stream_events_yields_function_call_event(fake_llm):
         "gemini-2.5-pro",
         "Track a dye release down the river at Fort Myers, FL",
         tool_declarations=[],  # declarations already built; skip here
-        system_prompt=SYSTEM_PROMPT,
+        system_prompt=system_prompt(),
     ):
         events.append(event)
 
@@ -113,11 +113,12 @@ async def test_stream_events_yields_text_delta_event(fake_llm):
 
 
 
-def test_system_prompt_mentions_runoff_routing():
-    """System prompt must instruct the model to call the rain-on-grid template
-    for the runoff question, and it must name the river-plume template too."""
-    assert "telemac_rain_on_grid" in SYSTEM_PROMPT
-    assert _TEMPLATE in SYSTEM_PROMPT
+def test_system_prompt_routes_the_registered_templates():
+    """The prompt's tool list is built from the registry, so every registered
+    template is reachable from it by name."""
+    prompt = system_prompt()
+    assert "telemac_rain_on_grid" in prompt
+    assert _TEMPLATE in prompt
 
 
 

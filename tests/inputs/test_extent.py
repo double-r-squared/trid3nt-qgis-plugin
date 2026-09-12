@@ -62,3 +62,43 @@ def test_a_value_of_no_readable_shape_refuses_under_the_callers_code(bad):
     with pytest.raises(UserInputError) as ei:
         _ingest(bad, label="aoi", code="TELEMAC_PARAMS_INVALID")
     assert ei.value.error_code == "TELEMAC_PARAMS_INVALID"
+
+
+def test_two_boxes_are_the_same_extent_within_a_tenth_of_a_metre():
+    from trid3nt_server.inputs.extent import bbox_equivalent
+
+    box = [-114.4, 42.5, -114.2, 42.7]
+    assert bbox_equivalent(box, list(box))
+    assert bbox_equivalent(Extent(tuple(box)), box)
+    assert bbox_equivalent(box, [-114.4000001, 42.5, -114.2, 42.7])
+    # A real move of the area is never "the same extent".
+    assert not bbox_equivalent(box, [-114.41, 42.5, -114.2, 42.7])
+    # Nothing is equivalent to nothing, and an unreadable value never matches.
+    assert not bbox_equivalent(None, box)
+    assert not bbox_equivalent("x", box)
+    assert not bbox_equivalent(box, [1, 2, 3])
+
+
+def test_a_touching_edge_overlaps_here_and_in_every_fetcher_that_asks():
+    """One shapely rule behind three call sites, with one documented semantics."""
+    from trid3nt_server.inputs.extent import bbox_overlaps
+    from trid3nt_server.tools.fetchers.socioeconomic.fetch_field_boundaries.hooks import (
+        _bbox_intersects as fields_intersects,
+    )
+    from trid3nt_server.tools.fetchers.terrain.fetch_dem.hooks import (
+        _bbox_intersects as dem_intersects,
+    )
+
+    cases = [
+        (((0, 0, 1, 1), (2, 2, 3, 3)), False),   # disjoint
+        (((0, 0, 2, 2), (1, 1, 3, 3)), True),    # partial overlap
+        (((0, 0, 4, 4), (1, 1, 2, 2)), True),    # contained
+        (((0, 0, 1, 1), (1, 0, 2, 1)), True),    # shared vertical edge
+        (((0, 0, 1, 1), (0, 1, 1, 2)), True),    # shared horizontal edge
+        (((0, 0, 1, 1), (1, 1, 2, 2)), True),    # single shared corner
+        (((1, 1, 1, 1), (0, 0, 2, 2)), True),    # zero-area box inside
+    ]
+    for helper in (bbox_overlaps, dem_intersects, fields_intersects):
+        for (a, b), expected in cases:
+            assert helper(a, b) is expected, (helper.__module__, a, b)
+    assert not bbox_overlaps(None, (0, 0, 1, 1))

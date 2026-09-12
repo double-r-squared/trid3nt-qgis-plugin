@@ -520,3 +520,10 @@ def test_invoke_tool_via_emitter_skips_after_cancel() -> None:
         and e["payload"]["error_code"] == "PAYLOAD_WARNING_CANCELLED"
         for e in ws.sent
     )
+    # A DECLINE IS NOT AN ERROR: the tool still got a step, and that step is
+    # CANCELLED - never failed.
+    states = [e for e in ws.sent if e["type"] == "pipeline-state"]
+    assert states, "a declined gate minted no pipeline step"
+    steps = states[-1]["payload"]["steps"]
+    declined = [s for s in steps if s["tool_name"] == "integration_cancel_tool"]
+    assert declined and declined[-1]["state"] == "cancelled", steps

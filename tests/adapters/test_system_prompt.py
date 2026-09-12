@@ -9,9 +9,9 @@ from __future__ import annotations
 
 import re
 
-from trid3nt_server.adapters.adapter import SYSTEM_PROMPT
+from trid3nt_server.adapters.adapter import build_tool_section, system_prompt
 
-
+SYSTEM_PROMPT = system_prompt()
 
 #: Engine families purged from the registry. Their first name segment is gone
 #: from every registered tool, so only an explicit list can hold them out; a
@@ -49,11 +49,20 @@ def test_system_prompt_names_no_absent_tool() -> None:
             raise AssertionError(f"prompt names {token!r}, absent from the registry")
 
 
-def test_system_prompt_states_the_live_modelling_surface() -> None:
-    """The capability paragraph reads as question classes the live templates
-    answer, and every family the ruling names is reachable."""
-    flat = " ".join(SYSTEM_PROMPT.split())
-    assert "The questions you can currently MODEL" in flat
+def test_the_tool_list_is_generated_from_the_registry() -> None:
+    """Every model-facing tool the registry holds is named in the prompt beside
+    the first line of its routing docstring, and nothing else is."""
+    import trid3nt_server.tools as agent_tools
+
+    section = build_tool_section(agent_tools.TOOL_REGISTRY)
+    assert section in SYSTEM_PROMPT
+    named = {ln.split(":", 1)[0][2:] for ln in section.splitlines()}
+    facing = {
+        name
+        for name, entry in agent_tools.TOOL_REGISTRY.items()
+        if getattr(entry.metadata, "tier", "general") != "internal"
+    }
+    assert named == facing
     for name in (
         "telemac_river_dye",
         "telemac_do_sag",
@@ -61,7 +70,23 @@ def test_system_prompt_states_the_live_modelling_surface() -> None:
         "telemac3d_stratified_flow",
         "artemis_harbor_agitation",
     ):
-        assert name in SYSTEM_PROMPT, f"live template {name!r} unreachable from the prompt"
+        assert f"- {name}: " in section, f"live template {name!r} is not listed"
+    # An internal seam is registry-resolvable and never offered to the model.
+    assert "fetch_copernicus_dem" not in named
+
+
+def test_a_tool_line_is_its_routing_docstrings_first_line() -> None:
+    """The line a tool gets is the one IT declares - nothing is written here."""
+    import inspect
+
+    import trid3nt_server.tools as agent_tools
+
+    section = build_tool_section(agent_tools.TOOL_REGISTRY)
+    for name in ("telemac_rain_on_grid", "fetch_hrrr_forecast"):
+        fn = agent_tools.TOOL_REGISTRY[name].fn
+        doc = getattr(fn, "routing_doc", None) or inspect.getdoc(fn)
+        first = next(ln.strip() for ln in doc.splitlines() if ln.strip())
+        assert f"- {name}: {first}" in section
 
 
 def test_system_prompt_declares_honest_absence() -> None:
@@ -199,6 +224,13 @@ def test_system_prompt_removed_blocks_stay_removed() -> None:
         "Full-AOI extent for every overlay",  # full-AOI publish paragraph
         "It NEVER means shrink the area or the bbox",
         "ELEVATION colors",                   # trailing colored-relief note
+        # Hand-written tool lists: the registry-built section carries these now,
+        # and a second list of the same tools rots the moment one changes.
+        "New Wave 4.10 endpoints",
+        "OVERLAP routing",
+        "Satellite fire-animation routing",
+        "Tool-signature note",
+        "Skip discovery. Dispatch directly",
     ):
         assert phrase not in flat, (
             f"removed-block phrase {phrase!r} reappeared - the publish-discipline block is cut"

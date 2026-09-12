@@ -6,7 +6,7 @@ import asyncio
 import logging
 from trid3nt_contracts import new_ulid, now_utc
 from trid3nt_contracts.ws import AgentMessageChunkPayload, AgentThinkingChunkPayload, PipelineStatePayload, PipelineStep
-from trid3nt_server.adapters.adapter import CompactionCompleteEvent, CompactionStartEvent, FunctionCallEvent, MAX_TURN_ITERATIONS, ModelSettings, SYSTEM_PROMPT, TextDeltaEvent, ThinkingDeltaEvent, UpstreamProviderError, UsageMetadataEvent, build_contents_from_history, build_function_call_content, build_function_response_content, build_layers_present_note, build_tool_declarations, build_user_text_content, classify_provider_error_class, classify_result_usable, stream_events_with_contents, summarize_tool_result
+from trid3nt_server.adapters.adapter import CompactionCompleteEvent, CompactionStartEvent, FunctionCallEvent, MAX_TURN_ITERATIONS, ModelSettings, TextDeltaEvent, ThinkingDeltaEvent, UpstreamProviderError, UsageMetadataEvent, build_contents_from_history, build_function_call_content, build_function_response_content, build_layers_present_note, build_tool_declarations, build_user_text_content, classify_provider_error_class, classify_result_usable, stream_events_with_contents, summarize_tool_result, system_prompt
 from trid3nt_server.tools import TOOL_REGISTRY
 from trid3nt_server.render.charts import is_chart_emission_result
 from trid3nt_server.tools.search.tool_retrieval import CORE_FLOOR
@@ -539,7 +539,7 @@ async def _stream_model_reply(
                 settings.model,
                 contents,
                 tool_declarations=tool_decls,
-                system_prompt=SYSTEM_PROMPT,
+                system_prompt=system_prompt(),
                 model_cache_ref=state.model_cache_ref,
                 model_id=model_id,
                 show_thinking=show_thinking,
@@ -887,12 +887,13 @@ async def _stream_model_reply(
             # response back into contents so the next model turn sees them.
             for call in turn_function_calls:
                 # Dispatch through the registry and emitter (the model's
-                # tool choice IS the classification). Routing failures (TOOL_NOT_FOUND,
-                # PAYLOAD_WARNING_CANCELLED) raise typed exceptions so the except-block
-                # below routes them through summarize_tool_result(error=...) -- a
-                # structured {status: "error", error_code: str, retryable: bool}
-                # envelope the model can distinguish from "tool ran and returned nothing"
-                # (a typed error).
+                # tool choice IS the classification). A routing failure
+                # (TOOL_NOT_FOUND) and a gate DECLINE both raise typed
+                # exceptions, so the except-block below routes them through
+                # summarize_tool_result(error=...) -- a structured envelope the
+                # model tells apart from "tool ran and returned nothing": an
+                # error carries a code and a retry flag, a decline carries
+                # status="declined" and the card the user answered.
                 dispatch_error: BaseException | None = None
                 result: Any = None
                 # CRISP-END: set True iff THIS call is a
@@ -1072,12 +1073,23 @@ async def _stream_model_reply(
                     # Propagate cancel through the loop -- handled below.
                     raise
                 except Exception as exc:  # noqa: BLE001 -- surface to the model
-                    logger.exception(
-                        "tool dispatch raised session=%s tool=%s err=%s",
-                        state.session_id,
-                        call.name,
-                        exc,
-                    )
+                    if getattr(exc, "declined", False):
+                        # The user answered a gate card with cancel. Nothing
+                        # went wrong, so it is not logged as a fault.
+                        logger.info(
+                            "tool declined at a gate card session=%s tool=%s "
+                            "code=%s",
+                            state.session_id,
+                            call.name,
+                            getattr(exc, "error_code", None),
+                        )
+                    else:
+                        logger.exception(
+                            "tool dispatch raised session=%s tool=%s err=%s",
+                            state.session_id,
+                            call.name,
+                            exc,
+                        )
                     # Record failure, passing the exception so the breaker counts ONLY
                     # upstream/transient faults toward the trip threshold. Deterministic
                     # CLIENT/arg errors (*ArgError, BboxInvalidError, ValueError/TypeError
@@ -1194,13 +1206,16 @@ async def _stream_model_reply(
                     else None
                 )
                 # Guard against a STALE last_tool_step: a dispatch that raised
-                # BEFORE the emitter created a step (ToolNotFoundError, payload-
-                # warning cancel) leaves the prior tool's step on the accessor.
-                # Only stamp IO when the recorded step is THIS tool's step.
+                # BEFORE the emitter created a step (ToolNotFoundError) leaves
+                # the prior tool's step on the accessor. Only stamp IO when the
+                # recorded step is THIS tool's step.
                 if _io_step is not None and _io_step.tool_name != call.name:
                     _io_step = None
                 if _io_step is not None:
-                    _io_is_error = dispatch_error is not None or (
+                    # The summary IS the verdict: a raised exception already
+                    # stamps status="error" there, and a gate DECLINE stamps
+                    # status="declined", which must not paint the row red.
+                    _io_is_error = (
                         isinstance(summary, dict)
                         and summary.get("status") == "error"
                     )

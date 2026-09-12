@@ -12,7 +12,7 @@ from trid3nt_server.tools import TOOL_REGISTRY
 from trid3nt_server.render.pipeline_emitter import current_turn_case
 from trid3nt_server.main import MAX_TURNS_PER_SESSION
 from trid3nt_server.server.config import _ambiguity_margin_threshold, _tool_choice_timeout_s
-from trid3nt_server.server.dispatch.aoi import _bbox_overlaps
+from trid3nt_server.inputs.extent import bbox_overlaps
 from trid3nt_server.server.dispatch.emitter import _ensure_emitter
 from trid3nt_server.server.dispatch.persist import _persist_chat_turn
 from trid3nt_server.server.interactions import _pop_pending_tool_choice, _register_pending_tool_choice
@@ -135,9 +135,9 @@ def _geocode_drift_note(
         cand = _coerce_bbox4(args.get(key))
         if cand is None:
             continue
-        if _bbox_overlaps(cand, geocode_bbox):
+        if bbox_overlaps(cand, geocode_bbox):
             return None
-        if active_aoi is not None and _bbox_overlaps(cand, active_aoi):
+        if active_aoi is not None and bbox_overlaps(cand, active_aoi):
             return None
         gc = _coerce_bbox4(geocode_bbox)
         return (

@@ -1,9 +1,9 @@
 """The server-side reuse guard short-circuits a redundant RE-FETCH.
 
-A bare follow-up carries no bbox of its own, so its AOI resolves to the Case AOI
-and a loaded same-kind layer answers it: the fetcher runs ONCE and the response
-carries the reused signal. A genuinely different or larger AOI re-fetches, and
-``force_refetch`` bypasses the guard. The Case AOI is supplied hermetically."""
+A bare follow-up carries no bbox of its own, so it fills from the Case AOI and
+lands on the cache key the loaded layer already carries: the fetcher runs ONCE
+and the response carries the reused signal. A genuinely different AOI is
+different bytes and re-fetches, and ``force_refetch`` bypasses the guard."""
 
 from __future__ import annotations
 
@@ -72,6 +72,20 @@ _FETCHES: list[dict] = []
 _CASE_AOI = (-96.8, 40.7, -96.6, 40.9)
 
 
+def _cache_uri(tool_name: str, params: dict) -> str:
+    """The uri a real fetch of ``tool_name`` would land these params under - the
+    address the reuse guard keys on, so a stub has to land at it too."""
+    from trid3nt_server.tools.cache import cache_path
+    from trid3nt_server.tools.fetchers._router.registration import get_spec
+    from trid3nt_server.tools.fetchers._router.router import prospective_cache_key
+
+    spec = get_spec(tool_name)
+    key = prospective_cache_key(spec, params)
+    assert key is not None, f"{tool_name} computed no cache key for {params}"
+    path = cache_path(spec.source_class, spec.cache.ttl_class, key, spec.output.ext)
+    return f"s3://trid3nt-cache/{path}"
+
+
 @pytest.fixture(autouse=True)
 def _stub_fetch_dem(monkeypatch):
     name = "fetch_dem"
@@ -81,15 +95,14 @@ def _stub_fetch_dem(monkeypatch):
     # Supply a Case AOI hermetically (avoids persistence/active_case plumbing).
     monkeypatch.setattr(server, "_turn_case_bbox", lambda state: _CASE_AOI)
 
-    def _fn(bbox=None, **_kw) -> LayerURI:
+    def _fn(bbox, **_kw) -> LayerURI:
         _FETCHES.append({"bbox": bbox})
-        bb = tuple(bbox) if bbox else _CASE_AOI
         return LayerURI(
             layer_id=f"dem-{len(_FETCHES)}",
-            name="Elevation (DEM)",  # carries the 'dem' kind marker via name
+            name="Elevation (DEM)",
             layer_type="raster",
-            uri="s3://x/dem.tif",
-            bbox=bb,  # type: ignore[arg-type]
+            uri=_cache_uri(name, {"bbox": bbox}),
+            bbox=tuple(bbox),  # type: ignore[arg-type]
         )
 
     meta = AtomicToolMetadata(name=name, ttl_class="live-no-cache", cacheable=False)
@@ -124,10 +137,10 @@ async def test_bare_followup_reuses_loaded_layer() -> None:
     assert isinstance(first, LayerURI)
     assert len(_FETCHES) == 1
 
-    # Bare follow-up: no bbox -> requested AOI resolves to the Case AOI -> a
-    # same-kind loaded layer answers it -> short-circuit, no re-fetch.
+    # Bare follow-up: no bbox -> fills from the Case AOI -> the same cache key
+    # the loaded layer carries -> short-circuit, no re-fetch.
     second = await server._invoke_tool_via_emitter(ws, state, "fetch_dem", {})
-    assert len(_FETCHES) == 1, "bare follow-up wrongly re-fetched (F96 backstop failed)"
+    assert len(_FETCHES) == 1, "bare follow-up wrongly re-fetched"
     _assert_reused(second)
 
 

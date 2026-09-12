@@ -10,22 +10,22 @@ join the run as the sixth slice.
 |---|---|---:|---:|
 | `_fakes/` | shared doubles: the MCP client, the websocket, the case summary, the reach chain, the read-through injector | - | - |
 | `fixtures/` | data the tests read; no code | - | - |
-| `adapters/` | provider adapters, the message IR, the turn loop, the stream persistence | 22 | 288 |
+| `adapters/` | provider adapters, the message IR, the turn loop, the stream persistence | 22 | 289 |
 | `credentials/` | credential resolution, the auth handshake, identity | 7 | 95 |
 | `derive/` | the derive tools, the two session tools | 19 | 262 |
 | `render/` | the emitter, the uri registry, publication, the format set, charts | 36 | 471 |
-| `fetchers/` | the fetch router, its executors, hooks and fallbacks | 66 | 1570 |
-| `gates/` | the gates, the code-exec approval gate, the context budget, the circuit breaker | 22 | 317 |
-| `inputs/` | the typed inputs: a Point, an Extent, a Shape, each from every form it arrives in, the user-input normalizers under them, the AOI acquired from any of them, and a user's own file adopted as a layer | 7 | 92 |
+| `fetchers/` | the fetch router, its executors, hooks and fallbacks | 65 | 1566 |
+| `gates/` | the gates, a declined card at each of them, the code-exec approval gate, the context budget, the circuit breaker | 23 | 327 |
+| `inputs/` | the typed inputs: a Point, an Extent, a Shape, each from every form it arrives in, the user-input normalizers under them, the AOI acquired from any of them, and a user's own file adopted as a layer | 7 | 94 |
 | `mesh/` | the meshers, the mesh gate, topology and bed | 7 | 226 |
 | `model/` | the SysML model conformance check | 1 | 19 |
 | `plugin/` | the plugin seams the server suite reads offline, by `ast` | 1 | 3 |
-| `runtime/` | the declarative runtime, the run journal | 8 | 270 |
+| `runtime/` | the declarative runtime, the run journal | 7 | 264 |
 | `scripts/` | the dev instruments, the live-run harness and the proof renderers, skipped when `dev/` is absent | 6 | 49 |
 | `search/` | dataset and tool retrieval, the OGC adapter | 16 | 209 |
-| `server/` | the HTTP and WS routes, dispatch reuse, persistence, telemetry | 27 | 548 |
-| `solver/` | the executor, the run reads, the engine-room posture, the import graph that keeps it engine-free | 7 | 54 |
-| `telemac/` | the TELEMAC templates, the module surface and its primitives, the listing reads, authoring | 24 | 459 |
+| `server/` | the HTTP and WS routes, the fetch short-circuit and the Case AOI, persistence, telemetry | 28 | 547 |
+| `solver/` | the executor, the run reads, the engine-room posture, the import graph that keeps it engine-free | 7 | 53 |
+| `telemac/` | the TELEMAC templates, the module surface and its primitives, the listing reads, authoring | 25 | 459 |
 | `tools/` | the registry, the arg normalizer, the tool cache | 14 | 376 |
 
 | file | what it is |
@@ -41,12 +41,12 @@ else has one.
 
 Six slices by subsystem, each its own foreground invocation, from the repo root:
 
-    make test-fetchers        # tests/fetchers                                                                      1570
+    make test-fetchers        # tests/fetchers                                                                      1566
     make test-spatial         # tests/derive tests/render tests/mesh                              959
-    make test-engines         # tests/telemac tests/runtime tests/solver tests/search                                991
-    make test-server          # tests/server tests/inputs tests/gates tests/credentials tests/model tests/scripts   1119
-    make test-model-surface   # tests/adapters tests/tools                                                           664
-    make test-packages        # contracts/tests plugin/tests tests/plugin                                            811
+    make test-engines         # tests/telemac tests/runtime tests/solver tests/search                                985
+    make test-server          # tests/server tests/inputs tests/gates tests/credentials tests/model tests/scripts   1131
+    make test-model-surface   # tests/adapters tests/tools                                                           665
+    make test-packages        # contracts/tests plugin/tests tests/plugin                                            810
 
 The prose guards - history markers, dead references, the package maps, the
 template pages, banner comments - are LINTS rather than tests: they read the

@@ -133,11 +133,15 @@ class UriResolutionError(RuntimeError):
 
 @dataclass
 class UriRecord:
-    """One registered layer/artifact: handle → its one exact URI."""
+    """One registered layer/artifact: handle -> its one exact URI, and where the
+    layer came from - the tool that produced it, and for a FETCHED one the dataset
+    and the cache key its bytes are addressed by."""
 
     handle: str
     uri: str | None = None  # the object-store uri; a layer has exactly one
     tool_name: str | None = None  # producer (for the inventory message)
+    dataset: str | None = None  # the fetch source class; None for a produced layer
+    cache_key: str | None = None  # the fetch key; None for a produced layer
     seq: int = 0  # registration order (recency tie-breaks)
 
 
@@ -231,6 +235,15 @@ class SessionUriRegistry:
             self._records[handle] = rec
             self._evict_if_needed()
         if uri:
+            # The fetch that landed this layer addressed its bytes by a cache key,
+            # and the uri IS that address, so the key a repeat fetch would compute
+            # is matchable here without the producer threading it through.
+            # Imported here: the tool package pulls the server in at import time.
+            from trid3nt_server.tools.cache import parse_cache_path
+
+            fetched = parse_cache_path(uri)
+            if fetched is not None:
+                rec.dataset, rec.cache_key = fetched
             if rec.uri and rec.uri != uri:
                 logger.info(
                     "uri_registry[%s]: handle %r uri updated %s -> %s",
@@ -700,6 +713,17 @@ class SessionUriRegistry:
 
         lines = ", ".join(_one(r) for r in layer_recs[:_ERROR_HANDLES_CAP])
         return f"Known handles: {lines}."
+
+    def handle_for_cache_key(self, cache_key: str | None) -> str | None:
+        """The LAYER handle whose fetch landed under ``cache_key``, newest first.
+        Exact key: two fetches share it only when the same source was asked the
+        same question inside one TTL window, which is the same bytes."""
+        if not cache_key:
+            return None
+        for handle, rec in reversed(list(self._records.items())):
+            if rec.cache_key == cache_key and not handle.startswith("uri:"):
+                return handle
+        return None
 
     def known_handles(self) -> list[str]:
         """The registered handles, minted fuzzy-match records excluded."""

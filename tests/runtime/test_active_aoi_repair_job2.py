@@ -225,23 +225,37 @@ def test_per_turn_injection_shape_appends_case_state_user_turn() -> None:
 _FETCHES: list[dict] = []
 
 
+def _cache_uri(tool_name: str, params: dict) -> str:
+    """The uri a real fetch of ``tool_name`` would land these params under - the
+    address the reuse guard keys on, so a stub has to land at it too."""
+    from trid3nt_server.tools.cache import cache_path
+    from trid3nt_server.tools.fetchers._router.registration import get_spec
+    from trid3nt_server.tools.fetchers._router.router import prospective_cache_key
+
+    spec = get_spec(tool_name)
+    key = prospective_cache_key(spec, params)
+    assert key is not None, f"{tool_name} computed no cache key for {params}"
+    path = cache_path(spec.source_class, spec.cache.ttl_class, key, spec.output.ext)
+    return f"s3://trid3nt-cache/{path}"
+
+
 @pytest.fixture()
 def _stub_fetch_dem():
-    """Launch-counting ``fetch_dem`` stub returning a DEM layer at an AOI."""
+    """Launch-counting ``fetch_dem`` stub landing a DEM layer at the cache
+    address a real fetch of the same params would."""
     name = "fetch_dem"
     original = agent_tools.TOOL_REGISTRY.get(name)
     _FETCHES.clear()
     reset_uri_registries_for_tests()
 
-    def _fn(bbox=None, **_kw) -> LayerURI:
+    def _fn(bbox, **_kw) -> LayerURI:
         _FETCHES.append({"bbox": bbox})
-        bb = tuple(bbox) if bbox else _CASE_AOI
         return LayerURI(
             layer_id=f"dem-{len(_FETCHES)}",
-            name="Elevation (DEM)",  # carries the 'dem' kind marker via name
+            name="Elevation (DEM)",
             layer_type="raster",
-            uri="s3://x/dem.tif",
-            bbox=bb,  # type: ignore[arg-type]
+            uri=_cache_uri(name, {"bbox": bbox}),
+            bbox=tuple(bbox),  # type: ignore[arg-type]
         )
 
     meta = AtomicToolMetadata(name=name, ttl_class="live-no-cache", cacheable=False)
@@ -282,14 +296,14 @@ def test_bare_followup_refetch_short_circuits_via_real_case_bbox(
     assert isinstance(first, LayerURI)
     assert len(_FETCHES) == 1
 
-    # Bare follow-up: NO bbox -> requested AOI resolves to the Case AOI via the
-    # real cache -> the loaded same-kind layer answers it -> short-circuit.
+    # Bare follow-up: NO bbox -> fills from the Case AOI via the real cache ->
+    # the loaded layer's own cache key answers it -> short-circuit.
     second = asyncio.run(
         server._invoke_tool_via_emitter(ws, state, "fetch_dem", {})
     )
     assert len(_FETCHES) == 1, (
-        "bare follow-up re-fetched a duplicate — the real _turn_case_bbox did "
-        "not feed the fetch reuse guard (JOB 2 repair regressed)"
+        "bare follow-up re-fetched a duplicate - the real _turn_case_bbox did "
+        "not feed the fetch fill rule"
     )
     assert isinstance(second, dict)
     assert second.get("reused") is True
@@ -300,7 +314,8 @@ def test_bare_followup_refetch_short_circuits_via_real_case_bbox(
 def test_bare_followup_refetches_without_case_bbox(
     _persistence_bound: Persistence, _stub_fetch_dem
 ) -> None:
-    """Control: with NO cached AOI a bare follow-up cannot resolve, so it re-fetches.
+    """Control: with NO cached AOI a bare follow-up fills from nothing, so the
+    fetch runs with no bbox at all and its own typed error owns the refusal.
 
     ``case_bbox`` is never populated, which is what makes the short-circuit in the
     previous test attributable to that cache rather than to some other dedup."""
@@ -313,9 +328,8 @@ def test_bare_followup_refetches_without_case_bbox(
     )
     assert len(_FETCHES) == 1
 
-    # Bare follow-up with no AOI anchor -> re-fetch (conservative, by design).
-    res = asyncio.run(
-        server._invoke_tool_via_emitter(ws, state, "fetch_dem", {})
-    )
-    assert len(_FETCHES) == 2
-    assert isinstance(res, LayerURI)
+    # Bare follow-up with no AOI anchor: nothing fills the slot, so the tool is
+    # called without one and refuses rather than guessing an area.
+    with pytest.raises(TypeError):
+        asyncio.run(server._invoke_tool_via_emitter(ws, state, "fetch_dem", {}))
+    assert len(_FETCHES) == 1

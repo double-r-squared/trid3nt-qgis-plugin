@@ -28,4 +28,4 @@ declared beside them.
 | `presets.py` | The preset family: four data kinds, one `.qml` writer, and the range a producer measured. |
 | `publish.py` | The raster publish mechanism - write the COG, register it, notify. |
 | `restyle.py` | THE restyle seam, beside the presets: the user's edit of a declared style. |
-| `uri_registry.py` | The session-scoped layer-handle registry - one uri per layer. |
+| `uri_registry.py` | The session-scoped layer-handle registry - one uri per layer, with the producer and, for a fetched layer, the dataset and cache key its uri addresses. |

@@ -216,16 +216,30 @@ async def test_drift_warning_kill_switch(monkeypatch, fake_llm):
 _FETCHES: list[dict] = []
 
 
+def _cache_uri(tool_name: str, params: dict) -> str:
+    """The uri a real fetch of ``tool_name`` would land these params under - the
+    address the reuse guard keys on, so a stub has to land at it too."""
+    from trid3nt_server.tools.cache import cache_path
+    from trid3nt_server.tools.fetchers._router.registration import get_spec
+    from trid3nt_server.tools.fetchers._router.router import prospective_cache_key
+
+    spec = get_spec(tool_name)
+    key = prospective_cache_key(spec, params)
+    assert key is not None, f"{tool_name} computed no cache key for {params}"
+    path = cache_path(spec.source_class, spec.cache.ttl_class, key, spec.output.ext)
+    return f"s3://trid3nt-cache/{path}"
+
+
 @pytest.fixture()
 def _stub_fetch_tool():
-    """Shadow fetch_buildings (fetch-class, not confirm-gated, and a
-    recognized F96 fetched KIND so the dedupe has something to key on)."""
+    """Shadow fetch_buildings (fetch-class and not confirm-gated), landing its
+    layer at the cache address a real fetch of the same params would."""
     name = "fetch_buildings"
     original = agent_tools.TOOL_REGISTRY.get(name)
     _FETCHES.clear()
     reset_uri_registries_for_tests()
 
-    def _fn(bbox=None, **_kw) -> LayerURI:
+    def _fn(bbox, **_kw) -> LayerURI:
         _FETCHES.append({"bbox": bbox})
         # Raster-shaped so the emitter keeps the layer without attempting a
         # vector densify read.
@@ -233,7 +247,7 @@ def _stub_fetch_tool():
             layer_id=f"buildings-{len(_FETCHES)}",
             name="Building Footprints",
             layer_type="raster",
-            uri=f"s3://x/buildings-{len(_FETCHES)}.tif",
+            uri=_cache_uri(name, {"bbox": bbox}),
             bbox=tuple(bbox),
         )
 
@@ -251,7 +265,8 @@ def _stub_fetch_tool():
         reset_uri_registries_for_tests()
 
 
-_BUILDINGS_BBOX = [-81.0, 25.0, -80.0, 26.0]
+#: Inside the buildings source's own area cap, so the request validates and has a key.
+_BUILDINGS_BBOX = [-81.0, 25.0, -80.95, 25.05]
 
 
 @pytest.mark.asyncio
@@ -259,11 +274,6 @@ async def test_fetch_reuse_kill_switch_disables_short_circuit(
     _stub_fetch_tool, monkeypatch
 ):
     monkeypatch.setenv("TRID3NT_FETCH_REUSE", "0")
-    # Same Case-AOI anchor as the fire test below -- the ONLY variable in
-    # this pair is the kill-switch.
-    monkeypatch.setattr(
-        agent_server, "_turn_case_bbox", lambda state: list(_BUILDINGS_BBOX)
-    )
     ws = _FakeSocket()
     state = agent_server.SessionState(session_id=new_ulid())
     await agent_server._invoke_tool_via_emitter(
@@ -279,13 +289,8 @@ async def test_fetch_reuse_kill_switch_disables_short_circuit(
 
 @pytest.mark.asyncio
 async def test_fetch_reuse_default_still_fires(_stub_fetch_tool, monkeypatch):
-    """Sanity: with the switch unset the F96 dedupe short-circuits the refetch."""
+    """Sanity: with the switch unset the repeat fetch short-circuits."""
     monkeypatch.delenv("TRID3NT_FETCH_REUSE", raising=False)
-    # ProjectLayerSummary carries no per-layer bbox, so the F96 comparison
-    # anchors on the Case AOI (same hermetic seam the F96 dispatch test uses).
-    monkeypatch.setattr(
-        agent_server, "_turn_case_bbox", lambda state: list(_BUILDINGS_BBOX)
-    )
     ws = _FakeSocket()
     state = agent_server.SessionState(session_id=new_ulid())
     await agent_server._invoke_tool_via_emitter(
@@ -294,4 +299,4 @@ async def test_fetch_reuse_default_still_fires(_stub_fetch_tool, monkeypatch):
     await agent_server._invoke_tool_via_emitter(
         ws, state, "fetch_buildings", {"bbox": list(_BUILDINGS_BBOX)}
     )
-    assert len(_FETCHES) == 1, "F96 refetch dedupe regressed"
+    assert len(_FETCHES) == 1, "the repeat-fetch short-circuit regressed"

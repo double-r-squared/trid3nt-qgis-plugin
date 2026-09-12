@@ -22,7 +22,9 @@ __all__ = [
     "CACHE_BUCKET",
     "CACHE_KEY_HEX_LEN",
     "compute_cache_key",
+    "cache_key_for",
     "cache_path",
+    "parse_cache_path",
     "ttl_bucket_vintage",
     "is_cacheable",
     "read_through",
@@ -89,12 +91,51 @@ def compute_cache_key(
     return digest[:CACHE_KEY_HEX_LEN]
 
 
+def cache_key_for(
+    metadata: AtomicToolMetadata,
+    params: dict[str, Any],
+    *,
+    source_id: str | None = None,
+    now: datetime | None = None,
+) -> str:
+    """The key this tool reads and writes ``params`` under. ``read_through`` calls
+    it for the object it stores, so a caller asking the key a fetch WOULD land on
+    gets the same string or none at all."""
+    return compute_cache_key(
+        source_id or metadata.source_class or metadata.name,
+        params,
+        metadata.ttl_class,
+        now=now,
+    )
+
+
 def cache_path(source_class: str, ttl_class: TTLClass, key: str, ext: str) -> str:
     """Object path under the cache bucket, TTL class above source class:
     ``cache/<ttl-class>/<source-class>/<key>.<ext>``. The bucket's lifecycle rules
     are written against that nesting."""
     ext_clean = ext.lstrip(".")
     return f"cache/{ttl_class}/{source_class}/{key}.{ext_clean}"
+
+
+def parse_cache_path(uri: str | None) -> tuple[str, str] | None:
+    """The inverse of :func:`cache_path`: a cached artifact's uri to its source
+    class and key, ``None`` for any uri this module did not write. A layer whose
+    uri parses IS a fetched artifact, and the key is the one its fetch computed."""
+    if not uri:
+        return None
+    body = uri.split("://", 1)[-1]
+    parts = body.split("/")
+    try:
+        i = parts.index("cache")
+    except ValueError:
+        return None
+    if len(parts) - i != 4:
+        return None
+    _ttl, source_class, filename = parts[i + 1:]
+    key = filename.rsplit(".", 1)[0]
+    if not source_class or not key:
+        return None
+    return source_class, key
 
 
 def is_cacheable(metadata: AtomicToolMetadata) -> bool:
@@ -375,7 +416,7 @@ def read_through(
             "should have caught this; refusing to write under cache/<None>/."
         )
 
-    key = compute_cache_key(source_id, params, metadata.ttl_class, now=now)
+    key = cache_key_for(metadata, params, source_id=source_id, now=now)
     path = cache_path(metadata.source_class, metadata.ttl_class, key, ext)
 
     uri = f"s3://{bucket}/{path}"

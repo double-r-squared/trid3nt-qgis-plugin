@@ -151,6 +151,12 @@ def run(argv: list[str] | None = None) -> int:
     tool_names = sorted(tools.TOOL_REGISTRY.keys())
     logger.info("tool registry loaded: %d tool(s): %s", n_tools, tool_names)
 
+    # The routing prompt names the tools THIS registry holds, so it is built here,
+    # once the registry is complete, rather than at first turn.
+    from .adapters.adapter import system_prompt
+
+    logger.info("routing prompt built: %d chars", len(system_prompt()))
+
     # Retention: prune tool-call telemetry segments beyond the last
     # TRID3NT_TELEMETRY_KEEP (default 3). Best-effort; never blocks boot.
     try:

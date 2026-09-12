@@ -17,7 +17,7 @@ from .user_input import UserInputError, lonlat_bbox
 
 from .geometry import flatten_geometries, read_geometry_doc
 
-__all__ = ["Extent", "extent"]
+__all__ = ["Extent", "bbox_equivalent", "bbox_overlaps", "extent"]
 
 _CODE = "EXTENT_INVALID"
 _LAYER_SCHEMES = ("s3://", "gs://", "file://", "/", "./")
@@ -30,6 +30,46 @@ class Extent:
 
     bbox: tuple[float, float, float, float]
     name: str | None = None
+
+
+#: Tolerance (degrees) two boxes agree within to be the SAME extent - about 0.1 m
+#: at the equator, so only a re-derived box that rounds differently passes, never
+#: a real move of the area.
+_SAME_EXTENT_DEG = 1e-6
+
+
+def bbox_equivalent(a: Any, b: Any, *, tol: float = _SAME_EXTENT_DEG) -> bool:
+    """Whether two boxes name the same extent. Either side may be an ``Extent``,
+    four numbers, or nothing at all; nothing is equivalent to nothing."""
+    left = _as_bbox(a)
+    right = _as_bbox(b)
+    if left is None or right is None:
+        return False
+    return all(abs(x - y) <= tol for x, y in zip(left, right))
+
+
+def bbox_overlaps(a: Any, b: Any) -> bool:
+    """Whether two boxes share any ground, touching edges included. Either side may
+    be an ``Extent``, four numbers, or nothing at all."""
+    from shapely.geometry import box
+
+    left = _as_bbox(a)
+    right = _as_bbox(b)
+    if left is None or right is None:
+        return False
+    return box(*left).intersects(box(*right))
+
+
+def _as_bbox(value: Any) -> tuple[float, float, float, float] | None:
+    """Four floats out of an ``Extent`` or any 4-sequence, else ``None``."""
+    if isinstance(value, Extent):
+        return value.bbox
+    if not isinstance(value, Sequence) or isinstance(value, str) or len(value) != 4:
+        return None
+    try:
+        return tuple(float(v) for v in value)  # type: ignore[return-value]
+    except (TypeError, ValueError):
+        return None
 
 
 async def extent(value: Any, *, label: str = "extent", code: str = _CODE,

@@ -476,8 +476,11 @@ def test_auth_error_emits_credential_request_and_retries_on_provided():
             )
         )
         # Let the dispatch emit the credential-request + register its future.
-        for _ in range(50):
-            await asyncio.sleep(0)
+        for _ in range(500):
+            # A real yield, not a bare sleep(0): the dispatch crosses a thread
+            # before it reaches the credential gate, and a zero-sleep never
+            # gives the thread a turn.
+            await asyncio.sleep(0.002)
             req = [e for e in ws.sent if e["type"] == "credential-request"]
             if req and server._PENDING_CREDENTIALS:
                 break
@@ -533,8 +536,11 @@ def test_reshaped_flow_pushes_to_session_cache_then_retry_resolves():
                 {"bbox": [-124.0, 32.5, -114.0, 42.0]},
             )
         )
-        for _ in range(50):
-            await asyncio.sleep(0)
+        for _ in range(500):
+            # A real yield, not a bare sleep(0): the dispatch crosses a thread
+            # before it reaches the credential gate, and a zero-sleep never
+            # gives the thread a turn.
+            await asyncio.sleep(0.002)
             req = [e for e in ws.sent if e["type"] == "credential-request"]
             if req and server._PENDING_CREDENTIALS:
                 break
@@ -594,8 +600,11 @@ def test_credential_request_envelope_never_carries_raw_key():
                 {"bbox": [-124.0, 32.5, -114.0, 42.0], "map_key": RAW_KEY},
             )
         )
-        for _ in range(50):
-            await asyncio.sleep(0)
+        for _ in range(500):
+            # A real yield, not a bare sleep(0): the dispatch crosses a thread
+            # before it reaches the credential gate, and a zero-sleep never
+            # gives the thread a turn.
+            await asyncio.sleep(0.002)
             if server._PENDING_CREDENTIALS:
                 break
         req = [e for e in ws.sent if e["type"] == "credential-request"]
@@ -637,8 +646,11 @@ def test_declined_credential_surfaces_original_error():
                 {"bbox": [-124.0, 32.5, -114.0, 42.0]},
             )
         )
-        for _ in range(50):
-            await asyncio.sleep(0)
+        for _ in range(500):
+            # A real yield, not a bare sleep(0): the dispatch crosses a thread
+            # before it reaches the credential gate, and a zero-sleep never
+            # gives the thread a turn.
+            await asyncio.sleep(0.002)
             if server._PENDING_CREDENTIALS:
                 break
         req = [e for e in ws.sent if e["type"] == "credential-request"]
@@ -676,8 +688,11 @@ def test_one_prompt_per_tool_per_turn_no_infinite_loop():
                 {"bbox": [-124.0, 32.5, -114.0, 42.0]},
             )
         )
-        for _ in range(50):
-            await asyncio.sleep(0)
+        for _ in range(500):
+            # A real yield, not a bare sleep(0): the dispatch crosses a thread
+            # before it reaches the credential gate, and a zero-sleep never
+            # gives the thread a turn.
+            await asyncio.sleep(0.002)
             if server._PENDING_CREDENTIALS:
                 break
         req = [e for e in ws.sent if e["type"] == "credential-request"]

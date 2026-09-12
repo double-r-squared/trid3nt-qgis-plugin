@@ -11,7 +11,7 @@ the cache shim are the two seams they all pass through.
 | file | what it is |
 | --- | --- |
 | `__init__.py` | The registry: the `@register_tool(metadata)` decorator, `TOOL_REGISTRY`, and the sorted snapshot the agent loop builds its tool declarations from. |
-| `cache.py` | The cache shim - content-addressed read-through / write-on-miss, the sole writer of the cache bucket's `cache/` prefix. |
+| `cache.py` | The cache shim - content-addressed read-through / write-on-miss, the sole writer of the cache bucket's `cache/` prefix, and the read of that address back to the dataset and key it names. |
 | `_example_tool_template.py` | A complete, working, trivial registered tool to copy when starting a new one. |
 | `payload_sampling.py` | Sampled payload-size estimation, so the size a warning quotes is measured rather than modelled. |
 | `tool_arg_normalizer.py` | Call-site kwargs cleanup, so an invented argument does not fail a call the tool could still take. |

@@ -42,7 +42,7 @@ def _gate_spec_for_source(spec: SourceSpec) -> GateSpec | None:
     return None
 
 from .._fetch_common import _validate_bbox, round_bbox_to_resolution
-from ...cache import ProvenanceRecorder, read_through
+from ...cache import ProvenanceRecorder, cache_key_for, is_cacheable, read_through
 from .errors import (
     bbox_error_suffix,
     router_input_error,
@@ -59,6 +59,7 @@ __all__ = [
     "synthesize_payload_estimator",
     "validate_params",
     "select_executor",
+    "prospective_cache_key",
     "try_dispatch",
     "route",
 ]
@@ -609,6 +610,32 @@ def resolve_style_row(spec: SourceSpec, params: dict[str, Any]) -> dict[str, Any
         if isinstance(mapped, dict):
             row = {**row, **mapped}
     return row
+
+
+def prospective_cache_key(spec: SourceSpec, raw_params: dict[str, Any]) -> str | None:
+    """The key a fetch of ``spec`` with ``raw_params`` would land its artifact under,
+    else ``None``. It runs the same validation and pre-cache-key resolve ``route``
+    does, so the two agree; a ``pre_resolve`` that reaches the network does that
+    work again here, which is why the caller runs this off the event loop.
+
+    ``None`` for an uncacheable source, for a frames list (one key per frame), for
+    params that do not validate, and for a source whose key depends on a delegate
+    round trip ``route`` owns - each simply does not reuse."""
+    metadata = synthesize_metadata(spec)
+    hooks = spec.hooks
+    if not is_cacheable(metadata) or spec.shape == "animation_frames":
+        return None
+    if hooks is not None and (hooks.delegate_resolve or hooks.resolve_build):
+        return None
+    try:
+        params = validate_params(spec, raw_params)
+        if hooks is not None and hooks.pre_resolve:
+            from .hooks import resolve_hook
+
+            params = {**params, **resolve_hook(hooks.pre_resolve)(spec, params)}
+    except Exception:  # noqa: BLE001 -- a request that cannot resolve has no key
+        return None
+    return cache_key_for(metadata, params)
 
 
 def build_layer_uri(spec: SourceSpec, params: dict[str, Any], uri: str) -> LayerURI:

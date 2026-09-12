@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import os
 import logging
+from dataclasses import dataclass
 from trid3nt_contracts import new_ulid, now_utc
 from trid3nt_contracts.execution import LayerURI
 from trid3nt_server.tools import TOOL_REGISTRY
@@ -15,16 +16,15 @@ from trid3nt_server.render.uri_registry import activate_registry, deactivate_reg
 # _invoke_tool_via_emitter -- deferred to break the server<->gates load cycle.
 from trid3nt_server.gates.tool_gating import BenchBlockedError
 from trid3nt_server.server.config import _env_flag
-from trid3nt_server.server.dispatch.aoi import _maybe_default_fetch_bbox_to_pinned_aoi, _pin_case_aoi_from_tool_bbox
+from trid3nt_server.server.dispatch.aoi import pin_case_aoi_from_solve
 from trid3nt_server.server.dispatch.persist import _VALID_ERROR_CODES, _persist_chart_record, _persist_chat_turn, _persist_tool_card
 from trid3nt_server.server.dispatch.results import _run_to_completion_shielded
-from trid3nt_server.server.dispatch.layer_reuse import _ReuseEntry, fetched_kind_for_tool, find_reusable_fetched_layer
-from trid3nt_server.server.errors import CodeExecConfirmationCancelledError, PayloadWarningCancelledError, SolverConfirmationCancelledError, ToolNotFoundError
+from trid3nt_server.server.errors import CodeExecConfirmationCancelledError, PayloadWarningCancelledError, SolverConfirmationCancelledError, ToolNotFoundError, UserDeclinedError
 from trid3nt_server.server.session.case_state import _persist_case_layer_handles, _persist_case_loaded_layers, _turn_case_bbox, _turn_case_id
 from trid3nt_server.server.session.state import SessionState
 from trid3nt_server.server.spatial import _is_finite_bbox4, _last_zoom_to_bbox
 from trid3nt_server.server.turn.wire import _emit_turn_complete, _send_error
-from typing import Any
+from typing import Any, NoReturn
 from websockets.asyncio.server import ServerConnection
 
 logger = logging.getLogger("trid3nt_server.server")
@@ -325,6 +325,58 @@ def _assert_sync_offload_safe() -> None:
         n_candidates,
     )
 
+@dataclass
+class _ReuseEntry:
+    """A ``RegisteredTool``-shaped stand-in for the reuse short-circuit: the real
+    tool's ``metadata``, so the card and the telemetry label are unchanged, over an
+    ``fn`` that returns the EXISTING layer instead of producing it again."""
+
+    metadata: Any
+    layer: LayerURI
+
+    @property
+    def fn(self) -> Any:
+        layer = self.layer
+
+        def _return_existing(**_ignored: Any) -> LayerURI:
+            return layer
+
+        return _return_existing
+
+
+def _reusable_fetch_layer(
+    state: SessionState, tool_name: str, params: dict
+) -> LayerURI | None:
+    """The layer already on this Case whose bytes THIS fetch would re-produce, by
+    the cache key both address. ``None`` for a tool that is not a declared source,
+    for an uncacheable one, and for a key no layer on the Case carries."""
+    from trid3nt_server.tools.fetchers._router.registration import get_spec
+    from trid3nt_server.tools.fetchers._router.router import prospective_cache_key
+
+    spec = get_spec(tool_name)
+    if spec is None or state.emitter is None:
+        return None
+    handle = get_uri_registry(state.session_id).handle_for_cache_key(
+        prospective_cache_key(spec, params)
+    )
+    if handle is None:
+        return None
+    for row in reversed(list(state.emitter.loaded_layers or [])):
+        if getattr(row, "layer_id", None) != handle:
+            continue
+        # The case row is what survives a reopen, so the layer is rebuilt from
+        # it; its legend rides along so the re-emit paints what it painted.
+        return LayerURI(
+            layer_id=row.layer_id,
+            name=row.name,
+            layer_type=row.layer_type,
+            uri=row.uri,
+            role=row.role,
+            legend=row.legend,
+        )
+    return None
+
+
 async def _invoke_tool_via_emitter(
     websocket: ServerConnection,
     state: SessionState,
@@ -387,6 +439,21 @@ async def _invoke_tool_via_emitter(
     # input the model sent both live and at completion.
     _original_tool_args = dict(params)
 
+    async def _declined(exc: BaseException) -> NoReturn:
+        # A gate the user declined still gets a CARD: mint this tool's step and
+        # end it through the emitter, which marks a declined step cancelled and
+        # leaves it as the dispatch's terminal step. The exception then travels
+        # the same path any tool exception does. The trailing raise keeps the
+        # gate FAIL-CLOSED: an emitter that returned instead of re-raising must
+        # not let the declined tool run.
+        async def _decline() -> Any:
+            raise exc
+
+        await state.emitter.emit_tool_call(
+            name=entry.metadata.name, tool_name=tool_name, invoke=_decline
+        )
+        raise exc
+
     # Bind this dispatch to the turn's Case ONCE, up front. The
     # .qgs routing, tool-card persist, and layer attribution below all use
     # this capture -- a mid-dispatch ``case-command(select)`` must not re-aim
@@ -408,12 +475,10 @@ async def _invoke_tool_via_emitter(
         websocket, state, tool_name, params
     )
     if not should_dispatch:
-        # Raises PayloadWarningCancelledError so the model sees a structured
-        # envelope ({status: "error", error_code:
-        # "PAYLOAD_WARNING_CANCELLED", retryable: False}) instead of
-        # {"status": "no_result"}, which it cannot interpret. retryable=False
-        # because the user explicitly cancelled.
-        raise PayloadWarningCancelledError(tool_name)
+        # Raises PayloadWarningCancelledError so the model reads a DECLINED
+        # result naming the card instead of {"status": "no_result"}, which it
+        # cannot interpret. retryable=False: the user chose not to fetch this.
+        await _declined(PayloadWarningCancelledError(tool_name))
 
     # run_pyqgis confirm gate: running arbitrary Python in the user's session
     # is a consequential action -- the user MUST approve the exact code first.
@@ -433,8 +498,10 @@ async def _invoke_tool_via_emitter(
         params.pop("code_exec_id", None)
         should_run, params = await _gate_on_code_exec(websocket, state, params)
         if not should_run:
-            raise CodeExecConfirmationCancelledError(
-                params.get("code_exec_id", "unknown")
+            await _declined(
+                CodeExecConfirmationCancelledError(
+                    params.get("code_exec_id", "unknown")
+                )
             )
 
     # Centralized kwarg sweep: the model routinely invents kwargs that don't
@@ -464,70 +531,40 @@ async def _invoke_tool_via_emitter(
         case_bbox=_turn_case_bbox(state),
     )
 
-    # Default a bbox-taking FETCH to the pinned Case AOI: a same-area follow-up
-    # is forced onto the pinned extent so all layers cover the SAME AOI by
-    # construction; a genuinely DIFFERENT place (disjoint) or an explicit WIDEN
-    # (encloses the pin) is honored. Runs BEFORE the reuse guard so the reuse
-    # comparison sees the snapped bbox. No-op when no AOI is pinned.
-    params = _maybe_default_fetch_bbox_to_pinned_aoi(
-        tool_name, params, _turn_case_bbox(state)
-    )
-
-    # Deterministic reuse backstop for FETCHERS: a fit, resize or re-show
-    # follow-up would otherwise re-fetch and mint a SECOND identical layer, so a
-    # same-kind loaded layer that already ENCLOSES the requested AOI
-    # short-circuits to that handle. Any ambiguity falls through to a fetch, and
-    # a truthy force_refetch/refetch/force kwarg is the explicit escape hatch,
+    # A repeat fetch that would land on a cache key a layer of this Case ALREADY
+    # carries is the same bytes, so it hands back that layer instead of minting a
+    # second identical one on the map. The key is exact - the same source asked
+    # the same question inside one TTL window - and anything else falls through
+    # to the fetch. A truthy force_refetch/refetch/force is the escape hatch,
     # stripped before the real dispatch.
     _reuse_note: str | None = None
-    if fetched_kind_for_tool(tool_name) is not None:
-        _force_refetch = any(
-            bool(params.get(k)) for k in ("force_refetch", "refetch", "force")
-        )
-        for _k in ("force_refetch", "refetch", "force"):
-            params.pop(_k, None)
-        # ``TRID3NT_FETCH_REUSE=0`` disables the short-circuit; the guard-control
-        # strip above stays unconditional either way.
-        if (
-            not _force_refetch
-            and state.emitter is not None
-            and _env_flag("TRID3NT_FETCH_REUSE", True)
-        ):
-            fetch_case_bbox = _turn_case_bbox(state)
-            fmatch = find_reusable_fetched_layer(
-                tool_name,
-                params,
-                state.emitter.loaded_layers,
-                case_bbox=fetch_case_bbox,
-            )
-            if fmatch is not None:
-                logger.info(
-                    "layer_reuse[%s]: FETCH SHORT-CIRCUIT %s -> reusing "
-                    "layer_id=%s (not re-fetching)",
-                    state.session_id, tool_name, fmatch.layer_id,
-                )
-                _reuse_note = (
-                    f"Reusing the existing {fmatch.kind} layer already on the map "
-                    f"(layer '{fmatch.name}', handle={fmatch.layer_id}) for this "
-                    "AOI — the data was NOT re-fetched. For a fit / zoom / resize, "
-                    "call compute_layer_bounds on this handle; do not re-fetch "
-                    "unless the user asks for a different/larger area or an "
-                    "explicit refresh."
-                )
-                _reused_fetch_layer = LayerURI(
-                    layer_id=fmatch.layer_id,
-                    name=fmatch.name,
-                    layer_type=fmatch.layer_type,  # type: ignore[arg-type]
-                    uri=fmatch.uri,
-                    bbox=fmatch.bbox,
-                )
-                entry = _ReuseEntry(entry.metadata, _reused_fetch_layer)
-
-    # Anchor the Case AOI from THIS bbox-carrying fetch's final params, after
-    # the reuse guard, so it never perturbs its read of the prior pin.
-    await _pin_case_aoi_from_tool_bbox(
-        state, case_id=turn_case_id, tool_name=tool_name, params=params
+    _force_refetch = any(
+        bool(params.get(k)) for k in ("force_refetch", "refetch", "force")
     )
+    for _k in ("force_refetch", "refetch", "force"):
+        params.pop(_k, None)
+    # ``TRID3NT_FETCH_REUSE=0`` disables the short-circuit; the guard-control
+    # strip above stays unconditional either way.
+    if not _force_refetch and _env_flag("TRID3NT_FETCH_REUSE", True):
+        # Off the loop: predicting the key runs the source's own pre-cache-key
+        # resolve, which may reach the network.
+        _existing = await asyncio.to_thread(
+            _reusable_fetch_layer, state, tool_name, params
+        )
+        if _existing is not None:
+            logger.info(
+                "fetch-reuse[%s]: %s -> the layer already on the case "
+                "(layer_id=%s); not re-fetching",
+                state.session_id, tool_name, _existing.layer_id,
+            )
+            _reuse_note = (
+                f"Reusing the layer already on the map for this request "
+                f"(layer '{_existing.name}', handle={_existing.layer_id}) - the "
+                "data was NOT re-fetched. For a fit / zoom / resize, call "
+                "compute_layer_bounds on this handle; re-fetch only for a "
+                "different area or an explicit refresh."
+            )
+            entry = _ReuseEntry(entry.metadata, _existing)
 
     # Confirmation-before-consequence, driven by the tool's declared gate spec;
     # membership IS that spec's presence, never a name set. A model-supplied
@@ -544,7 +581,7 @@ async def _invoke_tool_via_emitter(
             websocket, state, tool_name, params
         )
         if not should_run:
-            raise SolverConfirmationCancelledError(tool_name)
+            await _declined(SolverConfirmationCancelledError(tool_name))
 
     # Layer-handle indirection kills the URI-mangling class: every URI-consuming
     # param resolves through the session registry - a known handle to its
@@ -781,13 +818,30 @@ async def _invoke_tool_via_emitter(
                 {"command": "zoom-to", "args": {"bbox": _floored_bbox}}
             )
 
+    # PIN the Case AOI to the extent the run solved over: a completed workflow
+    # publishes its primary layer at the floored domain, which is the run's own
+    # extent, so every later fetch that states no area fills from the ground the
+    # run covered. A reuse short-circuit pinned when it was first produced.
+    if (
+        not isinstance(entry, _ReuseEntry)
+        and hasattr(entry.fn, "workflow")
+        and isinstance(result, LayerURI)
+        and _is_finite_bbox4(result.bbox)
+    ):
+        try:
+            await pin_case_aoi_from_solve(
+                state, case_id=turn_case_id, bbox=result.bbox
+            )
+        except Exception:  # noqa: BLE001 -- the pin is a side effect, never break
+            logger.debug("aoi-pin failed", exc_info=True)
+
     # On a reuse short-circuit the emitter has ALREADY re-loaded the existing
     # layer onto the map, so what remains is an unambiguous function response
     # saying this is the EXISTING result, letting the model narrate honestly
     # instead of retrying. The compact dict replaces the bare layer return;
     # nothing renderable is lost, because the map update already happened.
     if _reuse_note is not None and isinstance(result, LayerURI):
-        logger.info("layer_reuse note=%s", _reuse_note)
+        logger.info("fetch-reuse note=%s", _reuse_note)
         return {
             "status": "reused_existing",
             "reused": True,
@@ -846,12 +900,16 @@ async def _dispatch_tool_and_persist(
                 str(exc),
                 retryable=exc.retryable,
             )
-        except PayloadWarningCancelledError as exc:
+        except UserDeclinedError as exc:
+            # The user answered a gate card with cancel. Its own code is on the
+            # wire's error list, so it goes out verbatim and is never logged as
+            # a fault.
             logger.info(
-                "/invoke directive cancelled via payload-warning gate "
-                "session=%s tool=%s",
+                "/invoke directive declined at a gate card session=%s tool=%s "
+                "code=%s",
                 state.session_id,
                 tool_name,
+                exc.error_code,
             )
             await _send_error(
                 websocket,
