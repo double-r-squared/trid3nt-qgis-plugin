@@ -1,10 +1,10 @@
 {
   "tool": "artemis_harbor_agitation",
-  "run_id": "01M28SVA37CWY2W4Y0X166HRYB",
-  "commit": "41dce38251d378c3cdfa057442999a2c9390bc4e-dirty",
-  "recorded_at": "2026-09-11T17:57:18.753165+00:00",
+  "run_id": "01M2AAG8DFJJZ1CC40G252DQ0C",
+  "commit": "5e2907b4265235d44c1dab167666006f1738079d-dirty",
+  "recorded_at": "2026-09-12T08:07:36.488212+00:00",
   "engine": "telemac",
-  "wall_seconds": 29.143,
+  "wall_seconds": 28.118,
   "args": {
     "bbox": [
       -71.525,
@@ -243,7 +243,7 @@
     "kd_transect_max": 4.987552074453561e-06,
     "hs_max_m": 4.02045202255249,
     "mesh_size_m": 5.113541873062308,
-    "layer_uri": "s3://trid3nt-runs/01M28SVA37CWY2W4Y0X166HRYB/overviews/01M28SVRCBKP3ZRC63M3CVHS1J.tif",
+    "layer_uri": "s3://trid3nt-runs/01M2AAG8DFJJZ1CC40G252DQ0C/res_agitation.slf",
     "wave_period_s": 8.0,
     "wave_period_note": "Incident monochromatic wave period - a PRESCRIBED demo forcing, since no wave-forcing fetcher exists yet [supplied on this invocation]",
     "structure": null,
@@ -257,6 +257,8 @@
   "layers": [
     {
       "crs_authid": null,
+      "dataset_group": null,
+      "dataset_uris": [],
       "layer_id": "input-osm_coastline-2087b73a76bf",
       "layer_type": "vector",
       "legend": {
@@ -270,6 +272,7 @@
       },
       "name": "Input: the shoreline this domain is cut from (osm_coastline)",
       "opacity": null,
+      "origin": null,
       "quantity": null,
       "reference_time": null,
       "role": "context",
@@ -282,6 +285,8 @@
     },
     {
       "crs_authid": null,
+      "dataset_group": null,
+      "dataset_uris": [],
       "layer_id": "input-topobathy-ab0c88198ba8",
       "layer_type": "raster",
       "legend": {
@@ -295,6 +300,7 @@
       },
       "name": "Input: topobathy (topobathy, CUDEM 1/9\" ~3 m nearshore; ETOPO 2022 15\" ~450 m offshore fallback; 3DEP 10 m land, datum NAVD88 (metres, positive up))",
       "opacity": null,
+      "origin": null,
       "quantity": null,
       "reference_time": null,
       "role": "context",
@@ -306,25 +312,30 @@
       "z_index": 1
     },
     {
-      "crs_authid": null,
-      "layer_id": "01M28SVVA62M9AVW53109VSWPT",
-      "layer_type": "raster",
+      "crs_authid": "EPSG:32619",
+      "dataset_group": "Agitation coefficient at t = 8 s",
+      "dataset_uris": [
+        "s3://trid3nt-runs/01M2AAG8DFJJZ1CC40G252DQ0C/agitation_coefficient-t8.dat"
+      ],
+      "layer_id": "01M2AAGS56VPCFFCD87J8C1EM8",
+      "layer_type": "mesh",
       "legend": {
         "colormap": "viridis",
-        "kind": "continuous",
+        "kind": "mesh",
         "label": "Agitation coefficient (Hs/H0)",
-        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <pipe>\n    <rasterrenderer type=\"singlebandpseudocolor\" band=\"1\" opacity=\"1\" alphaBand=\"-1\" classificationMin=\"0\" classificationMax=\"2.179907\" nodataColor=\"\">\n      <rastershader>\n        <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"0\" maximumValue=\"2.179907\" labelPrecision=\"4\">\n          <item value=\"0\" color=\"#440154\" alpha=\"255\" label=\"0 Hs/H0\"/>\n          <item value=\"0.54497675\" color=\"#3b528b\" alpha=\"255\" label=\"0.544977 Hs/H0\"/>\n          <item value=\"1.0899535\" color=\"#21918c\" alpha=\"255\" label=\"1.08995 Hs/H0\"/>\n          <item value=\"1.63493025\" color=\"#5ec962\" alpha=\"255\" label=\"1.63493 Hs/H0\"/>\n          <item value=\"2.179907\" color=\"#fde725\" alpha=\"255\" label=\"2.17991 Hs/H0\"/>\n        </colorrampshader>\n      </rastershader>\n    </rasterrenderer>\n  </pipe>\n</qgis>\n",
+        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <mesh-renderer-settings>\n    <active-dataset-group scalar=\"0\" vector=\"-1\"/>\n    <scalar-settings group=\"0\" min-val=\"0\" max-val=\"2.179907\" opacity=\"1\" interpolation-method=\"no-resampling\">\n      <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"0\" maximumValue=\"2.179907\" labelPrecision=\"4\">\n        <item value=\"0\" color=\"#440154\" alpha=\"255\" label=\"0\"/>\n        <item value=\"0.54497675\" color=\"#3b528b\" alpha=\"255\" label=\"0.544977\"/>\n        <item value=\"1.0899535\" color=\"#21918c\" alpha=\"255\" label=\"1.08995\"/>\n        <item value=\"1.63493025\" color=\"#5ec962\" alpha=\"255\" label=\"1.63493\"/>\n        <item value=\"2.179907\" color=\"#fde725\" alpha=\"255\" label=\"2.17991\"/>\n      </colorrampshader>\n    </scalar-settings>\n  </mesh-renderer-settings>\n  <name-to-global-index global-index=\"0\" name=\"Agitation coefficient at t = 8 s\"/>\n</qgis>\n",
         "units": "Hs/H0",
         "vmax": 2.179907,
         "vmin": 0.0
       },
       "name": "Agitation coefficient (Hs/H0) at t = 8 s (harbour_mesh)",
       "opacity": null,
+      "origin": null,
       "quantity": "agitation_coefficient",
       "reference_time": null,
       "role": "primary",
       "temporal": false,
-      "uri": "s3://trid3nt-runs/01M28SVA37CWY2W4Y0X166HRYB/overviews/01M28SVRCBKP3ZRC63M3CVHS1J.tif",
+      "uri": "s3://trid3nt-runs/01M2AAG8DFJJZ1CC40G252DQ0C/res_agitation.slf",
       "valid_from": null,
       "valid_to": null,
       "visible": true,

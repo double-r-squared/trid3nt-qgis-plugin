@@ -70,28 +70,28 @@ It publishes these layers onto the canvas:
 - Input: nhd area water (nhd_area_water)
 - Input: river bed elevation (copernicus_dem, datum EGM2008 geoid (metres, positive up))
 - Outfall (user) - scotia_humboldt_county_california_95562_united_s
-- Model results (time series): scotia_humboldt_county_california_95562_united_s
+- Dissolved oxygen over time (scotia_humboldt_county_california_95562_united_s)
 - Dissolved oxygen (mgO2/L) at t = 581.102 s (scotia_humboldt_county_california_95562_united_s)
 
 ## The proving run
 
-Run `01M28RZW1P4K64EKMJVJ2J2SD3`, 2026-09-11T17:42:18.828144+00:00, 25.051 s, at commit `41dce38251d378c3cdfa057442999a2c9390bc4e-dirty`.
+Run `01M2AA7NZGMX0CNQKPMJKXTSHS`, 2026-09-12T08:02:54.307515+00:00, 24.026 s, at commit `1fc6f9f990169d1f2cc52112d88c229901f1114d-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M28RZW1P4K64EKMJVJ2J2SD3)](telemac_do_sag/telemac_do_sag.png)
+![Every layer the run published, stacked and framed on the result (run 01M2AA7NZGMX0CNQKPMJKXTSHS)](telemac_do_sag/telemac_do_sag.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M28RZW1P4K64EKMJVJ2J2SD3)*
+*Every layer the run published, stacked and framed on the result (run 01M2AA7NZGMX0CNQKPMJKXTSHS)*
 
-![The solve, frame by frame (run 01M28RZW1P4K64EKMJVJ2J2SD3)](telemac_do_sag/telemac_do_sag_animation.gif)
+![The solve, frame by frame (run 01M2AA7NZGMX0CNQKPMJKXTSHS)](telemac_do_sag/telemac_do_sag_animation.gif)
 
-*The solve, frame by frame (run 01M28RZW1P4K64EKMJVJ2J2SD3)*
+*The solve, frame by frame (run 01M2AA7NZGMX0CNQKPMJKXTSHS)*
 
-![final frame (run 01M28RZW1P4K64EKMJVJ2J2SD3)](telemac_do_sag/telemac_do_sag_final_frame.png)
+![final frame (run 01M2AA7NZGMX0CNQKPMJKXTSHS)](telemac_do_sag/telemac_do_sag_final_frame.png)
 
-*final frame (run 01M28RZW1P4K64EKMJVJ2J2SD3)*
+*final frame (run 01M2AA7NZGMX0CNQKPMJKXTSHS)*
 
-![dissolved oxygen - the chart the run persisted (run 01M28RZW1P4K64EKMJVJ2J2SD3)](telemac_do_sag/telemac_do_sag_chart_dissolved_oxygen.png)
+![dissolved oxygen - the chart the run persisted (run 01M2AA7NZGMX0CNQKPMJKXTSHS)](telemac_do_sag/telemac_do_sag_chart_dissolved_oxygen.png)
 
-*dissolved oxygen - the chart the run persisted (run 01M28RZW1P4K64EKMJVJ2J2SD3)*
+*dissolved oxygen - the chart the run persisted (run 01M2AA7NZGMX0CNQKPMJKXTSHS)*
 
 ### The sheet it filled
 
@@ -144,5 +144,5 @@ await TOOL_REGISTRY['telemac_do_sag'].fn(
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M28RZW1P4K64EKMJVJ2J2SD3` and commit `41dce38251d378c3cdfa057442999a2c9390bc4e-dirty`. The full argument record is [`telemac_do_sag/run.json`](telemac_do_sag/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2AA7NZGMX0CNQKPMJKXTSHS` and commit `1fc6f9f990169d1f2cc52112d88c229901f1114d-dirty`. The full argument record is [`telemac_do_sag/run.json`](telemac_do_sag/run.json).
 

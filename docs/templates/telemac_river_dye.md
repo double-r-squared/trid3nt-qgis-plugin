@@ -74,28 +74,28 @@ It publishes these layers onto the canvas:
 - Input: nhd area water (nhd_area_water)
 - Input: river bed elevation (copernicus_dem, datum EGM2008 geoid (metres, positive up))
 - Release point (derived) - scotia_humboldt_county_california_95562_united_s
-- Model results (time series): scotia_humboldt_county_california_95562_united_s
 - Peak dye concentration (scotia_humboldt_county_california_95562_united_s)
+- Dye concentration over time (scotia_humboldt_county_california_95562_united_s)
 
 ## The proving run
 
-Run `01M29WC038Q21GZ7W5MR94BTJZ`, 2026-09-12T04:00:36.338370+00:00, 30.123 s, at commit `41dce38251d378c3cdfa057442999a2c9390bc4e-dirty`.
+Run `01M2A9Q69W6MY8ER7SWZ90SGT4`, 2026-09-12T07:53:53.907893+00:00, 25.385 s, at commit `1fc6f9f990169d1f2cc52112d88c229901f1114d-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M29WC038Q21GZ7W5MR94BTJZ)](telemac_river_dye/telemac_river_dye.png)
+![Every layer the run published, stacked and framed on the result (run 01M2A9Q69W6MY8ER7SWZ90SGT4)](telemac_river_dye/telemac_river_dye.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M29WC038Q21GZ7W5MR94BTJZ)*
+*Every layer the run published, stacked and framed on the result (run 01M2A9Q69W6MY8ER7SWZ90SGT4)*
 
-![The solve, frame by frame (run 01M29WC038Q21GZ7W5MR94BTJZ)](telemac_river_dye/telemac_river_dye_animation.gif)
+![The solve, frame by frame (run 01M2A9Q69W6MY8ER7SWZ90SGT4)](telemac_river_dye/telemac_river_dye_animation.gif)
 
-*The solve, frame by frame (run 01M29WC038Q21GZ7W5MR94BTJZ)*
+*The solve, frame by frame (run 01M2A9Q69W6MY8ER7SWZ90SGT4)*
 
-![peak frame (run 01M29WC038Q21GZ7W5MR94BTJZ)](telemac_river_dye/telemac_river_dye_peak_frame.png)
+![peak frame (run 01M2A9Q69W6MY8ER7SWZ90SGT4)](telemac_river_dye/telemac_river_dye_peak_frame.png)
 
-*peak frame (run 01M29WC038Q21GZ7W5MR94BTJZ)*
+*peak frame (run 01M2A9Q69W6MY8ER7SWZ90SGT4)*
 
-![dye concentration - the chart the run persisted (run 01M29WC038Q21GZ7W5MR94BTJZ)](telemac_river_dye/telemac_river_dye_chart_dye_concentration.png)
+![dye concentration - the chart the run persisted (run 01M2A9Q69W6MY8ER7SWZ90SGT4)](telemac_river_dye/telemac_river_dye_chart_dye_concentration.png)
 
-*dye concentration - the chart the run persisted (run 01M29WC038Q21GZ7W5MR94BTJZ)*
+*dye concentration - the chart the run persisted (run 01M2A9Q69W6MY8ER7SWZ90SGT4)*
 
 ### The sheet it filled
 
@@ -149,5 +149,5 @@ await TOOL_REGISTRY['telemac_river_dye'].fn(
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M29WC038Q21GZ7W5MR94BTJZ` and commit `41dce38251d378c3cdfa057442999a2c9390bc4e-dirty`. The full argument record is [`telemac_river_dye/run.json`](telemac_river_dye/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2A9Q69W6MY8ER7SWZ90SGT4` and commit `1fc6f9f990169d1f2cc52112d88c229901f1114d-dirty`. The full argument record is [`telemac_river_dye/run.json`](telemac_river_dye/run.json).
 

@@ -75,29 +75,29 @@ It publishes these layers onto the canvas:
 - Input: nhd area water (nhd_area_water)
 - Input: river bed elevation (copernicus_dem, datum EGM2008 geoid (metres, positive up))
 - Release point (derived) - scotia_humboldt_county_california_95562_united_s
-- Bed evolution (m) at t = 593.94 s (scotia_humboldt_county_california_95562_united_s)
-- Model results (time series): scotia_humboldt_county_california_95562_united_s
 - Peak suspended sediment concentration (scotia_humboldt_county_california_95562_united_s)
+- Bed evolution (m) at t = 593.94 s (scotia_humboldt_county_california_95562_united_s)
+- Suspended sediment concentration over time (scotia_humboldt_county_california_95562_united_s)
 
 ## The proving run
 
-Run `01M28RVXXZW8AS9TMD6X0NBBX4`, 2026-09-11T17:40:10.496320+00:00, 25.987 s, at commit `41dce38251d378c3cdfa057442999a2c9390bc4e-dirty`.
+Run `01M2AA49SB93PREF122DS03BMP`, 2026-09-12T08:01:04.631029+00:00, 26.17 s, at commit `1fc6f9f990169d1f2cc52112d88c229901f1114d-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M28RVXXZW8AS9TMD6X0NBBX4)](telemac_river_sediment_plume/telemac_river_sediment_plume.png)
+![Every layer the run published, stacked and framed on the result (run 01M2AA49SB93PREF122DS03BMP)](telemac_river_sediment_plume/telemac_river_sediment_plume.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M28RVXXZW8AS9TMD6X0NBBX4)*
+*Every layer the run published, stacked and framed on the result (run 01M2AA49SB93PREF122DS03BMP)*
 
-![The solve, frame by frame (run 01M28RVXXZW8AS9TMD6X0NBBX4)](telemac_river_sediment_plume/telemac_river_sediment_plume_animation.gif)
+![The solve, frame by frame (run 01M2AA49SB93PREF122DS03BMP)](telemac_river_sediment_plume/telemac_river_sediment_plume_animation.gif)
 
-*The solve, frame by frame (run 01M28RVXXZW8AS9TMD6X0NBBX4)*
+*The solve, frame by frame (run 01M2AA49SB93PREF122DS03BMP)*
 
-![peak frame (run 01M28RVXXZW8AS9TMD6X0NBBX4)](telemac_river_sediment_plume/telemac_river_sediment_plume_peak_frame.png)
+![peak frame (run 01M2AA49SB93PREF122DS03BMP)](telemac_river_sediment_plume/telemac_river_sediment_plume_peak_frame.png)
 
-*peak frame (run 01M28RVXXZW8AS9TMD6X0NBBX4)*
+*peak frame (run 01M2AA49SB93PREF122DS03BMP)*
 
-![suspended sediment concentration - the chart the run persisted (run 01M28RVXXZW8AS9TMD6X0NBBX4)](telemac_river_sediment_plume/telemac_river_sediment_plume_chart_suspended_sediment_concentration.png)
+![suspended sediment concentration - the chart the run persisted (run 01M2AA49SB93PREF122DS03BMP)](telemac_river_sediment_plume/telemac_river_sediment_plume_chart_suspended_sediment_concentration.png)
 
-*suspended sediment concentration - the chart the run persisted (run 01M28RVXXZW8AS9TMD6X0NBBX4)*
+*suspended sediment concentration - the chart the run persisted (run 01M2AA49SB93PREF122DS03BMP)*
 
 ### The sheet it filled
 
@@ -149,5 +149,5 @@ await TOOL_REGISTRY['telemac_river_sediment_plume'].fn(
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M28RVXXZW8AS9TMD6X0NBBX4` and commit `41dce38251d378c3cdfa057442999a2c9390bc4e-dirty`. The full argument record is [`telemac_river_sediment_plume/run.json`](telemac_river_sediment_plume/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2AA49SB93PREF122DS03BMP` and commit `1fc6f9f990169d1f2cc52112d88c229901f1114d-dirty`. The full argument record is [`telemac_river_sediment_plume/run.json`](telemac_river_sediment_plume/run.json).
 

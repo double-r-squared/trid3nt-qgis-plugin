@@ -1,10 +1,10 @@
 {
   "tool": "telemac_river_dye",
-  "run_id": "01M29WC038Q21GZ7W5MR94BTJZ",
-  "commit": "41dce38251d378c3cdfa057442999a2c9390bc4e-dirty",
-  "recorded_at": "2026-09-12T04:00:36.338370+00:00",
+  "run_id": "01M2A9Q69W6MY8ER7SWZ90SGT4",
+  "commit": "1fc6f9f990169d1f2cc52112d88c229901f1114d-dirty",
+  "recorded_at": "2026-09-12T07:53:53.907893+00:00",
   "engine": "telemac",
-  "wall_seconds": 30.123,
+  "wall_seconds": 25.385,
   "args": {
     "location": "Eel River near Scotia, California",
     "discharge_m3s": 2.2,
@@ -453,7 +453,7 @@
     "plume_reach_m": 56.7,
     "active_frames": 30,
     "mesh_size_m": 7.763,
-    "layer_uri": "s3://trid3nt-runs/01M29WC038Q21GZ7W5MR94BTJZ/overviews/01M29WCDHQKXYHA719V7KTGG8A.tif",
+    "layer_uri": "s3://trid3nt-runs/01M2A9Q69W6MY8ER7SWZ90SGT4/r2d_river.slf",
     "discharge_m3s": 2.2,
     "discharge_note": "Steady upstream CARRIER discharge - the river flow that dilutes and transports the release [supplied on this invocation]",
     "mesh_resolution_m": 10.0,
@@ -465,6 +465,8 @@
   "layers": [
     {
       "crs_authid": null,
+      "dataset_group": null,
+      "dataset_uris": [],
       "layer_id": "input-river_geometry-94e6990c51b1",
       "layer_type": "vector",
       "legend": {
@@ -491,6 +493,8 @@
     },
     {
       "crs_authid": null,
+      "dataset_group": null,
+      "dataset_uris": [],
       "layer_id": "input-nhdplus_nldi-5c4eb42bf394",
       "layer_type": "vector",
       "legend": {
@@ -517,6 +521,8 @@
     },
     {
       "crs_authid": null,
+      "dataset_group": null,
+      "dataset_uris": [],
       "layer_id": "input-nhd_area_water-bf200d54dada",
       "layer_type": "vector",
       "legend": {
@@ -543,6 +549,8 @@
     },
     {
       "crs_authid": null,
+      "dataset_group": null,
+      "dataset_uris": [],
       "layer_id": "input-copernicus_dem-10fdc3134f39",
       "layer_type": "raster",
       "legend": {
@@ -569,7 +577,9 @@
     },
     {
       "crs_authid": null,
-      "layer_id": "point-01M29WBS65CCS8CV9AAD46JXNM",
+      "dataset_group": null,
+      "dataset_uris": [],
+      "layer_id": "point-01M2A9Q0V97AZJR487KESBE8B0",
       "layer_type": "vector",
       "legend": {
         "colormap": null,
@@ -587,7 +597,7 @@
       "reference_time": null,
       "role": "context",
       "temporal": false,
-      "uri": "s3://trid3nt-runs/inputs/01M29WBS5T0X3SG8MHK1ME6PS4/point.geojson",
+      "uri": "s3://trid3nt-runs/inputs/01M2A9Q0V0GC4Y5M3940M4CJXQ/point.geojson",
       "valid_from": null,
       "valid_to": null,
       "visible": true,
@@ -595,39 +605,17 @@
     },
     {
       "crs_authid": "EPSG:32610",
-      "layer_id": "model-results-mesh-01M29WC038Q21GZ7W5MR94BTJZ",
+      "dataset_group": "Dye concentration",
+      "dataset_uris": [
+        "s3://trid3nt-runs/01M2A9Q69W6MY8ER7SWZ90SGT4/dye_concentration.dat"
+      ],
+      "layer_id": "telemac-dye_concentration-01M2A9Q69W6MY8ER7SWZ90SGT4",
       "layer_type": "mesh",
       "legend": {
-        "colormap": "viridis",
-        "kind": "mesh",
-        "label": "Model results",
-        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <mesh-renderer-settings>\n    <active-dataset-group scalar=\"0\" vector=\"-1\"/>\n    <scalar-settings group=\"0\" min-val=\"0\" max-val=\"98.687523\" opacity=\"1\" interpolation-method=\"no-resampling\">\n      <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"0\" maximumValue=\"98.687523\" labelPrecision=\"4\">\n        <item value=\"0\" color=\"#440154\" alpha=\"255\" label=\"0 mg/L\"/>\n        <item value=\"24.67188075\" color=\"#3b528b\" alpha=\"255\" label=\"24.6719 mg/L\"/>\n        <item value=\"49.3437615\" color=\"#21918c\" alpha=\"255\" label=\"49.3438 mg/L\"/>\n        <item value=\"74.01564225\" color=\"#5ec962\" alpha=\"255\" label=\"74.0156 mg/L\"/>\n        <item value=\"98.687523\" color=\"#fde725\" alpha=\"255\" label=\"98.6875 mg/L\"/>\n      </colorrampshader>\n    </scalar-settings>\n  </mesh-renderer-settings>\n  <name-to-global-index global-index=\"0\" name=\"DYE\"/>\n</qgis>\n",
-        "units": "mg/L",
-        "vmax": 98.687523,
-        "vmin": 0.0
-      },
-      "name": "Model results (time series): scotia_humboldt_county_california_95562_united_s",
-      "opacity": null,
-      "origin": null,
-      "quantity": "model_results",
-      "reference_time": "2026-09-12T04:00:22+00:00",
-      "role": "context",
-      "temporal": false,
-      "uri": "s3://trid3nt-runs/01M29WC038Q21GZ7W5MR94BTJZ/r2d_river.slf",
-      "valid_from": null,
-      "valid_to": null,
-      "visible": true,
-      "z_index": 5
-    },
-    {
-      "crs_authid": null,
-      "layer_id": "01M29WCGB5DNR42MZZQDRZTWG7",
-      "layer_type": "raster",
-      "legend": {
         "colormap": "reds",
-        "kind": "continuous",
-        "label": "Dye concentration (mg/L)",
-        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <pipe>\n    <rasterrenderer type=\"singlebandpseudocolor\" band=\"1\" opacity=\"1\" alphaBand=\"-1\" classificationMin=\"0\" classificationMax=\"98.687523\" nodataColor=\"\">\n      <rastershader>\n        <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"0\" maximumValue=\"98.687523\" labelPrecision=\"4\">\n          <item value=\"0\" color=\"#fff5f0\" alpha=\"255\" label=\"0 mg/L\"/>\n          <item value=\"24.67188075\" color=\"#fcbba1\" alpha=\"255\" label=\"24.6719 mg/L\"/>\n          <item value=\"49.3437615\" color=\"#fb694a\" alpha=\"255\" label=\"49.3438 mg/L\"/>\n          <item value=\"74.01564225\" color=\"#ca181d\" alpha=\"255\" label=\"74.0156 mg/L\"/>\n          <item value=\"98.687523\" color=\"#67000d\" alpha=\"255\" label=\"98.6875 mg/L\"/>\n        </colorrampshader>\n      </rastershader>\n    </rasterrenderer>\n  </pipe>\n</qgis>\n",
+        "kind": "mesh",
+        "label": "Dye concentration",
+        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <mesh-renderer-settings>\n    <active-dataset-group scalar=\"0\" vector=\"-1\"/>\n    <scalar-settings group=\"0\" min-val=\"0\" max-val=\"98.687523\" opacity=\"1\" interpolation-method=\"no-resampling\">\n      <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"0\" maximumValue=\"98.687523\" labelPrecision=\"4\">\n        <item value=\"0\" color=\"#fff5f0\" alpha=\"255\" label=\"0 mg/L\"/>\n        <item value=\"24.67188075\" color=\"#fcbba1\" alpha=\"255\" label=\"24.6719 mg/L\"/>\n        <item value=\"49.3437615\" color=\"#fb694a\" alpha=\"255\" label=\"49.3438 mg/L\"/>\n        <item value=\"74.01564225\" color=\"#ca181d\" alpha=\"255\" label=\"74.0156 mg/L\"/>\n        <item value=\"98.687523\" color=\"#67000d\" alpha=\"255\" label=\"98.6875 mg/L\"/>\n      </colorrampshader>\n    </scalar-settings>\n  </mesh-renderer-settings>\n  <name-to-global-index global-index=\"0\" name=\"Dye concentration\"/>\n</qgis>\n",
         "units": "mg/L",
         "vmax": 98.687523,
         "vmin": 0.0
@@ -639,7 +627,35 @@
       "reference_time": null,
       "role": "primary",
       "temporal": false,
-      "uri": "s3://trid3nt-runs/01M29WC038Q21GZ7W5MR94BTJZ/overviews/01M29WCDHQKXYHA719V7KTGG8A.tif",
+      "uri": "s3://trid3nt-runs/01M2A9Q69W6MY8ER7SWZ90SGT4/r2d_river.slf",
+      "valid_from": null,
+      "valid_to": null,
+      "visible": true,
+      "z_index": 5
+    },
+    {
+      "crs_authid": "EPSG:32610",
+      "dataset_group": "DYE",
+      "dataset_uris": [],
+      "layer_id": "01M2A9QNRV699TH64NE0DPJSD3",
+      "layer_type": "mesh",
+      "legend": {
+        "colormap": "reds",
+        "kind": "mesh",
+        "label": "Dye concentration",
+        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <mesh-renderer-settings>\n    <active-dataset-group scalar=\"0\" vector=\"-1\"/>\n    <scalar-settings group=\"0\" min-val=\"0\" max-val=\"98.687523\" opacity=\"1\" interpolation-method=\"no-resampling\">\n      <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"0\" maximumValue=\"98.687523\" labelPrecision=\"4\">\n        <item value=\"0\" color=\"#fff5f0\" alpha=\"255\" label=\"0 mg/L\"/>\n        <item value=\"24.67188075\" color=\"#fcbba1\" alpha=\"255\" label=\"24.6719 mg/L\"/>\n        <item value=\"49.3437615\" color=\"#fb694a\" alpha=\"255\" label=\"49.3438 mg/L\"/>\n        <item value=\"74.01564225\" color=\"#ca181d\" alpha=\"255\" label=\"74.0156 mg/L\"/>\n        <item value=\"98.687523\" color=\"#67000d\" alpha=\"255\" label=\"98.6875 mg/L\"/>\n      </colorrampshader>\n    </scalar-settings>\n  </mesh-renderer-settings>\n  <name-to-global-index global-index=\"0\" name=\"DYE\"/>\n</qgis>\n",
+        "units": "mg/L",
+        "vmax": 98.687523,
+        "vmin": 0.0
+      },
+      "name": "Dye concentration over time (scotia_humboldt_county_california_95562_united_s)",
+      "opacity": null,
+      "origin": null,
+      "quantity": "dye_concentration",
+      "reference_time": "2026-09-12T07:53:40+00:00",
+      "role": "primary",
+      "temporal": false,
+      "uri": "s3://trid3nt-runs/01M2A9Q69W6MY8ER7SWZ90SGT4/r2d_river.slf",
       "valid_from": null,
       "valid_to": null,
       "visible": true,

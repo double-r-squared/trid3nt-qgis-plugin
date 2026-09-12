@@ -77,29 +77,29 @@ It publishes these layers onto the canvas:
 - Input: nhd area water (nhd_area_water)
 - Input: river bed elevation (copernicus_dem, datum EGM2008 geoid (metres, positive up))
 - Release point (derived) - scotia_humboldt_county_california_95562_united_s
+- Bed evolution over time (scotia_humboldt_county_california_95562_united_s)
 - Peak marker concentration (scotia_humboldt_county_california_95562_united_s)
-- Model results (time series): scotia_humboldt_county_california_95562_united_s
 - Bed evolution (m) at t = 593.94 s (scotia_humboldt_county_california_95562_united_s)
 
 ## The proving run
 
-Run `01M29WZG3YM7C1ZS606QXQN68K`, 2026-09-12T04:11:16.332982+00:00, 26.491 s, at commit `7e26bf9a27e306e6030ca684366093ac397e5267-dirty`.
+Run `01M2AA0YEP3WM6X6HVG283ZH8P`, 2026-09-12T07:59:14.725916+00:00, 27.152 s, at commit `1fc6f9f990169d1f2cc52112d88c229901f1114d-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M29WZG3YM7C1ZS606QXQN68K)](telemac_river_scour/telemac_river_scour.png)
+![Every layer the run published, stacked and framed on the result (run 01M2AA0YEP3WM6X6HVG283ZH8P)](telemac_river_scour/telemac_river_scour.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M29WZG3YM7C1ZS606QXQN68K)*
+*Every layer the run published, stacked and framed on the result (run 01M2AA0YEP3WM6X6HVG283ZH8P)*
 
-![The solve, frame by frame (run 01M29WZG3YM7C1ZS606QXQN68K)](telemac_river_scour/telemac_river_scour_animation.gif)
+![The solve, frame by frame (run 01M2AA0YEP3WM6X6HVG283ZH8P)](telemac_river_scour/telemac_river_scour_animation.gif)
 
-*The solve, frame by frame (run 01M29WZG3YM7C1ZS606QXQN68K)*
+*The solve, frame by frame (run 01M2AA0YEP3WM6X6HVG283ZH8P)*
 
-![final frame (run 01M29WZG3YM7C1ZS606QXQN68K)](telemac_river_scour/telemac_river_scour_final_frame.png)
+![final frame (run 01M2AA0YEP3WM6X6HVG283ZH8P)](telemac_river_scour/telemac_river_scour_final_frame.png)
 
-*final frame (run 01M29WZG3YM7C1ZS606QXQN68K)*
+*final frame (run 01M2AA0YEP3WM6X6HVG283ZH8P)*
 
-![marker concentration - the chart the run persisted (run 01M29WZG3YM7C1ZS606QXQN68K)](telemac_river_scour/telemac_river_scour_chart_marker_concentration.png)
+![marker concentration - the chart the run persisted (run 01M2AA0YEP3WM6X6HVG283ZH8P)](telemac_river_scour/telemac_river_scour_chart_marker_concentration.png)
 
-*marker concentration - the chart the run persisted (run 01M29WZG3YM7C1ZS606QXQN68K)*
+*marker concentration - the chart the run persisted (run 01M2AA0YEP3WM6X6HVG283ZH8P)*
 
 ### The sheet it filled
 
@@ -154,5 +154,5 @@ await TOOL_REGISTRY['telemac_river_scour'].fn(
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M29WZG3YM7C1ZS606QXQN68K` and commit `7e26bf9a27e306e6030ca684366093ac397e5267-dirty`. The full argument record is [`telemac_river_scour/run.json`](telemac_river_scour/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2AA0YEP3WM6X6HVG283ZH8P` and commit `1fc6f9f990169d1f2cc52112d88c229901f1114d-dirty`. The full argument record is [`telemac_river_scour/run.json`](telemac_river_scour/run.json).
 
