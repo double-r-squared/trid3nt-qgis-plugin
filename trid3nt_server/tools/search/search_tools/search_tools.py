@@ -899,9 +899,8 @@ async def search_tools(
 
     ROUTING: a free-text need with no obvious tool in mind - "show me flood zones",
     "hurricane wind probabilities" - where a narrow shortlist beats scanning the
-    whole surface. NOT for enumerating every tool (the registry is the inventory),
-    NOT for a DuckDB spatial SQL function (`search_spatial_functions`), and NOT to
-    dispatch a run.
+    whole surface. NOT for enumerating every tool (the registry is the inventory)
+    and NOT to dispatch a run.
 
     `query` is required and non-empty; `top_k` is clamped to [1, 25]. A degenerate
     empty query returns an empty result rather than raising.

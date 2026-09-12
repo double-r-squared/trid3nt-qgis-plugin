@@ -1,4 +1,4 @@
-digitize_water_body:
+fetch_surface_water_ndwi:
 - outline / digitize the boundary of a lake or reservoir
 - vectorize this water body into polygons
 - where is the open surface water in this area

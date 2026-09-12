@@ -176,7 +176,11 @@ def clear_registry_for_tests() -> None:
 # block.
 
 # -- fetchers/climate --
+from .fetchers.climate.fetch_idf_curve import fetch_idf_curve  # noqa: E402,F401
 from .fetchers.climate.lookup_precip_return_period import lookup_precip_return_period  # noqa: E402,F401
+
+# -- fetchers/hydrology --
+from .fetchers.hydrology.fetch_surface_water_ndwi import fetch_surface_water_ndwi  # noqa: E402,F401
 
 # -- fetchers/socioeconomic --
 from .fetchers.socioeconomic.geocode_location import geocode_location  # noqa: E402,F401
@@ -196,7 +200,6 @@ from .derive.compute_exposure_summary import compute_exposure_summary  # noqa: E
 from .derive.compute_flood_depth_damage import compute_flood_depth_damage  # noqa: E402,F401
 # flood-extent skill (raster/vector confusion).
 from .derive.compute_flood_extent_skill import compute_flood_extent_skill  # noqa: E402,F401
-from .derive.compute_idf_curve import compute_idf_curve  # noqa: E402,F401
 from .derive.compute_layer_bounds import compute_layer_bounds  # noqa: E402,F401
 from .derive.compute_model_residuals import compute_model_residuals  # noqa: E402,F401
 from .derive.compute_sediment_yield import compute_sediment_yield  # noqa: E402,F401
@@ -206,7 +209,6 @@ from .derive.delineate_watershed import delineate_watershed  # noqa: E402,F401
 # A line through a shape's centroid along a bearing: what a profile is read along
 # when the read runs ACROSS a feature rather than down the domain's own axis.
 from .derive.derive_transect import derive_transect  # noqa: E402,F401
-from .derive.digitize_water_body import digitize_water_body  # noqa: E402,F401
 from .derive.endpoints import endpoints  # noqa: E402,F401
 # model-vs-observation pairing primitive.
 from .derive.extract_model_at_observations import extract_model_at_observations  # noqa: E402,F401
@@ -237,7 +239,6 @@ from trid3nt_server.workflows.solver import solver  # noqa: E402,F401
 
 # -- discovery (dataset/tool retrieval) --
 from .search.search_tools import search_tools  # noqa: E402,F401
-from .search.search_spatial_functions import search_spatial_functions  # noqa: E402,F401
 # ESRI Living Atlas: a scoped search over the harvested catalog plus a generic
 # fetch bridge. Registered here, in-process, so both surface in the tool-retrieval
 # index for their corpus queries. The two harvested YAML catalogs are DATA.

@@ -120,10 +120,10 @@ docstring: |-
     ``occurrence``.
   - "Is this reservoir / lake shrinking?" -> ``change``.
   - A long-term water BASELINE to compare against a current NDWI snapshot from
-    ``digitize_water_body``.
+    ``fetch_surface_water_ndwi``.
 
   **When NOT to use:**
-  - Outlining water in ONE recent scene -> ``digitize_water_body`` (NDWI) or
+  - Outlining water in ONE recent scene -> ``fetch_surface_water_ndwi`` (NDWI) or
     ``fetch_sentinel2_truecolor``.
   - A modeled flood DEPTH surface -> a hydraulic model run (e.g.
     ``telemac_rain_on_grid``).

@@ -1,4 +1,4 @@
-"""Unit tests for ``compute_idf_curve``, with no network.
+"""Unit tests for ``fetch_idf_curve``, with no network.
 
 The upstream fetch is monkeypatched with a verbatim CSV capture and the cache is
 a pass-through, so the whole pipeline runs offline. Covered: the chart payload's
@@ -13,14 +13,14 @@ from types import SimpleNamespace
 import pytest
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.derive.compute_idf_curve import compute_idf_curve as idf_mod
-from trid3nt_server.tools.fetchers.climate.lookup_precip_return_period import lookup_precip_return_period as df_mod
+from trid3nt_server.tools.fetchers.climate.fetch_idf_curve import fetch_idf_curve as idf_mod
+from trid3nt_server.tools.fetchers.climate.lookup_precip_return_period import lookup_precip_return_period as pfds_mod
 from trid3nt_server.emission.charts import is_chart_emission_result
-from trid3nt_server.tools.derive.compute_idf_curve.compute_idf_curve import (
+from trid3nt_server.tools.fetchers.climate.fetch_idf_curve.fetch_idf_curve import (
     IdfCurveInputError,
     IdfCurveNoCoverageError,
     IdfCurveUpstreamError,
-    compute_idf_curve,
+    fetch_idf_curve,
 )
 
 # Verbatim Atlas 14 PFDS response for the Fort Myers center - the same
@@ -85,8 +85,8 @@ def _rows(payload: dict) -> list[dict]:
 
 
 def test_registered() -> None:
-    entry = TOOL_REGISTRY["compute_idf_curve"]
-    assert entry.fn is compute_idf_curve
+    entry = TOOL_REGISTRY["fetch_idf_curve"]
+    assert entry.fn is fetch_idf_curve
     assert entry.metadata.cacheable is True
     assert entry.metadata.ttl_class == "static-30d"
     assert entry.metadata.source_class == "idf_curve"
@@ -94,7 +94,7 @@ def test_registered() -> None:
 
 
 def test_intensity_chart_payload(offline_pfds) -> None:
-    payload = compute_idf_curve(location=LOCATION)
+    payload = fetch_idf_curve(location=LOCATION)
 
     # House chart-emission contract (the agent loop's detection predicate).
     assert is_chart_emission_result(payload)
@@ -124,7 +124,7 @@ def test_intensity_chart_payload(offline_pfds) -> None:
 
 
 def test_depth_mode(offline_pfds) -> None:
-    payload = compute_idf_curve(location=LOCATION, y_axis="depth")
+    payload = fetch_idf_curve(location=LOCATION, y_axis="depth")
     spec = payload["vega_lite_spec"]
     assert spec["encoding"]["y"]["title"] == "Depth (inches)"
     assert "scale" not in spec["encoding"]["y"]  # linear y for depth (DDF)
@@ -138,7 +138,7 @@ def test_depth_mode(offline_pfds) -> None:
 
 def test_bbox_center_accepted(offline_pfds) -> None:
     # bbox centered on the Fort Myers point: center = (lat 26.6, lon -81.9).
-    payload = compute_idf_curve(location=(-82.0, 26.5, -81.8, 26.7))
+    payload = fetch_idf_curve(location=(-82.0, 26.5, -81.8, 26.7))
     assert is_chart_emission_result(payload)
     # The fetch was issued at the snapped bbox center.
     (lat, lon) = offline_pfds[0]
@@ -148,7 +148,7 @@ def test_bbox_center_accepted(offline_pfds) -> None:
 
 def test_out_of_area_raises_no_coverage(monkeypatch) -> None:
     def _out_of_area(lat: float, lon: float) -> bytes:
-        raise df_mod.UpstreamAPIError(
+        raise pfds_mod.UpstreamAPIError(
             f"NOAA Atlas 14 PFDS returned no precip-frequency data for "
             f"(lat={lat}, lon={lon}) -- point may be outside the Atlas 14 "
             "project areas."
@@ -163,12 +163,12 @@ def test_out_of_area_raises_no_coverage(monkeypatch) -> None:
         ),
     )
     with pytest.raises(IdfCurveNoCoverageError):
-        compute_idf_curve(location=(46.325, -122.733))  # Toutle / PNW
+        fetch_idf_curve(location=(46.325, -122.733))  # Toutle / PNW
 
 
 def test_network_failure_raises_upstream(monkeypatch) -> None:
     def _boom(lat: float, lon: float) -> bytes:
-        raise df_mod.UpstreamAPIError("connection reset by peer")
+        raise pfds_mod.UpstreamAPIError("connection reset by peer")
 
     monkeypatch.setattr(idf_mod, "_fetch_pfds_matrix_bytes", _boom)
     monkeypatch.setattr(
@@ -179,25 +179,25 @@ def test_network_failure_raises_upstream(monkeypatch) -> None:
         ),
     )
     with pytest.raises(IdfCurveUpstreamError):
-        compute_idf_curve(location=LOCATION)
+        fetch_idf_curve(location=LOCATION)
 
 
 def test_bad_location_raises() -> None:
     with pytest.raises(IdfCurveInputError):
-        compute_idf_curve(location=(1.0, 2.0, 3.0))  # type: ignore[arg-type]
+        fetch_idf_curve(location=(1.0, 2.0, 3.0))  # type: ignore[arg-type]
     with pytest.raises(IdfCurveInputError):
-        compute_idf_curve(location=(200.0, 0.0))  # lat out of range
+        fetch_idf_curve(location=(200.0, 0.0))  # lat out of range
     with pytest.raises(IdfCurveInputError):
-        compute_idf_curve(location="Houston")  # type: ignore[arg-type]
+        fetch_idf_curve(location="Houston")  # type: ignore[arg-type]
 
 
 def test_bad_y_axis_raises(offline_pfds) -> None:
     with pytest.raises(IdfCurveInputError):
-        compute_idf_curve(location=LOCATION, y_axis="volume")
+        fetch_idf_curve(location=LOCATION, y_axis="volume")
 
 
 def test_corpus() -> None:
     from trid3nt_server.tools.search.search_tools import search_tools as dd
 
     corpus = dd._load_corpus()
-    assert len(corpus.get("compute_idf_curve", [])) >= 5
+    assert len(corpus.get("fetch_idf_curve", [])) >= 5

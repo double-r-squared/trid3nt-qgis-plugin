@@ -10,11 +10,11 @@ join the run as the sixth slice.
 |---|---|---:|---:|
 | `_fakes/` | shared doubles: the MCP client, the websocket, the case summary, the reach chain, the read-through injector | - | - |
 | `fixtures/` | data the tests read; no code | - | - |
-| `adapters/` | provider adapters, the message IR, the turn loop, the stream persistence | 22 | 291 |
+| `adapters/` | provider adapters, the message IR, the turn loop, the stream persistence | 22 | 288 |
 | `credentials/` | credential resolution, the auth handshake, identity | 7 | 95 |
-| `derive/` | the derive tools, the two session tools | 21 | 285 |
+| `derive/` | the derive tools, the two session tools | 19 | 261 |
 | `emission/` | the emitter, the uri registry, publication, charts | 35 | 460 |
-| `fetchers/` | the fetch router, its executors, hooks and fallbacks | 65 | 1561 |
+| `fetchers/` | the fetch router, its executors, hooks and fallbacks | 67 | 1585 |
 | `gates/` | the gates, the code-exec approval gate, the context budget, the circuit breaker | 22 | 317 |
 | `inputs/` | the typed inputs: a Point, an Extent, a Shape, each from every form it arrives in, the user-input normalizers under them, the AOI acquired from any of them, and a user's own file adopted as a layer | 7 | 92 |
 | `mesh/` | the meshers, the mesh gate, topology and bed | 7 | 226 |
@@ -23,10 +23,10 @@ join the run as the sixth slice.
 | `publishing/` | the one publisher: a field to a layer, a series or a profile to a chart, a field over time to an animation, a track to a vector layer, a series at a station to the point layer carrying it; the rasterizers, the COG seam and the styling seam a restyle goes through | 4 | 48 |
 | `runtime/` | the declarative runtime, the run journal | 8 | 270 |
 | `scripts/` | the dev instruments, the live-run harness and the proof renderers, skipped when `dev/` is absent | 6 | 47 |
-| `search/` | dataset and tool retrieval, the OGC adapter | 17 | 220 |
-| `server/` | the HTTP and WS routes, dispatch reuse, persistence, telemetry | 27 | 549 |
+| `search/` | dataset and tool retrieval, the OGC adapter | 16 | 209 |
+| `server/` | the HTTP and WS routes, dispatch reuse, persistence, telemetry | 27 | 548 |
 | `solver/` | the executor, the run reads, the engine-room posture, the import graph that keeps it engine-free | 7 | 54 |
-| `telemac/` | the TELEMAC templates, the module surface and its primitives, the listing reads, authoring | 24 | 456 |
+| `telemac/` | the TELEMAC templates, the module surface and its primitives, the listing reads, authoring | 25 | 456 |
 | `tools/` | the registry, the arg normalizer, the tool cache | 14 | 376 |
 
 | file | what it is |
@@ -42,12 +42,12 @@ else has one.
 
 Six slices by subsystem, each its own foreground invocation, from the repo root:
 
-    make test-fetchers        # tests/fetchers                                 1561
-    make test-spatial         # tests/derive tests/emission tests/mesh tests/publishing   1019
-    make test-engines         # tests/telemac tests/runtime tests/solver tests/search   1000
-    make test-server          # tests/server tests/inputs tests/gates tests/credentials tests/model tests/scripts   1119
-    make test-model-surface   # tests/adapters tests/tools                      664
-    make test-packages        # contracts/tests plugin/tests tests/plugin       811
+    make test-fetchers        # tests/fetchers                                                                      1585
+    make test-spatial         # tests/derive tests/emission tests/mesh tests/publishing                              995
+    make test-engines         # tests/telemac tests/runtime tests/solver tests/search                                989
+    make test-server          # tests/server tests/inputs tests/gates tests/credentials tests/model tests/scripts   1118
+    make test-model-surface   # tests/adapters tests/tools                                                           664
+    make test-packages        # contracts/tests plugin/tests tests/plugin                                            811
 
 The prose guards - history markers, dead references, the package maps, the
 template pages, banner comments - are LINTS rather than tests: they read the

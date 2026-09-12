@@ -1,4 +1,4 @@
-compute_idf_curve:
+fetch_idf_curve:
 - show me the IDF curve for Houston
 - rainfall intensity duration frequency chart for this location
 - plot design storm intensities for all return periods here

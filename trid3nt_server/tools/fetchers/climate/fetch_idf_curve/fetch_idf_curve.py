@@ -1,7 +1,9 @@
-"""``compute_idf_curve`` - the full NOAA Atlas 14 IDF curve chart for a point.
+"""``fetch_idf_curve`` - the full NOAA Atlas 14 IDF curve chart for a point.
 
-A point outside the Atlas 14 project areas raises a typed no-coverage error: the
-Atlas-2 two-anchor reconstruction is not a published IDF family.
+The PFDS endpoint ``lookup_precip_return_period`` reads a single design depth
+from, read instead for the whole duration x ARI matrix and charted. A point
+outside the Atlas 14 project areas raises a typed no-coverage error: the Atlas-2
+two-anchor reconstruction is not a published IDF family.
 """
 from __future__ import annotations
 
@@ -12,25 +14,26 @@ from typing import Any
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.tools import register_tool
-from trid3nt_server.tools.fetchers.climate.lookup_precip_return_period import lookup_precip_return_period as _df
 from trid3nt_server.tools.cache import read_through
 from trid3nt_server.emission.charts import build_chart_payload
+from ..._fetch_common import FetchError
+from ..lookup_precip_return_period import lookup_precip_return_period as _pfds
 
 __all__ = [
-    "compute_idf_curve",
+    "fetch_idf_curve",
     "IdfCurveError",
     "IdfCurveInputError",
     "IdfCurveNoCoverageError",
     "IdfCurveUpstreamError",
 ]
 
-logger = logging.getLogger("trid3nt_server.tools.derive.compute_idf_curve.compute_idf_curve")
+logger = logging.getLogger("trid3nt_server.tools.fetchers.climate.fetch_idf_curve.fetch_idf_curve")
 
 
 
 
-class IdfCurveError(RuntimeError):
-    """Base class for compute_idf_curve failures."""
+class IdfCurveError(FetchError):
+    """Base class for fetch_idf_curve failures."""
 
     error_code: str = "IDF_CURVE_ERROR"
     retryable: bool = True
@@ -59,7 +62,7 @@ class IdfCurveUpstreamError(IdfCurveError):
 
 
 _METADATA = AtomicToolMetadata(
-    name="compute_idf_curve",
+    name="fetch_idf_curve",
     ttl_class="static-30d",
     source_class="idf_curve",
     cacheable=True,
@@ -68,7 +71,7 @@ _METADATA = AtomicToolMetadata(
 
 def _fetch_pfds_matrix_bytes(lat: float, lon: float) -> bytes:
     """The full Atlas 14 PFDS CSV at the snapped point."""
-    return _df._fetch_atlas14_pfds_bytes(lat, lon)
+    return _pfds._fetch_atlas14_pfds_bytes(lat, lon)
 
 
 
@@ -112,7 +115,7 @@ def _resolve_latlon(location: Any) -> tuple[float, float]:
     # Hits the external NOAA PFDS API, so open_world_hint=True is honest.
     open_world_hint=True,
 )
-def compute_idf_curve(
+def fetch_idf_curve(
     location: tuple[float, float],
     y_axis: str = "intensity",
     # absorb LLM-invented kwargs.
@@ -120,12 +123,12 @@ def compute_idf_curve(
 ) -> dict[str, Any]:
     """Chart the full NOAA Atlas 14 IDF (intensity-duration-frequency) curve for a point.
 
-    Use this (not ``fetch_climate_normals`` or a fetch_* rainfall tool) for
-    the full Atlas 14 IDF CHART -- "IDF curve for Houston", picking a design
-    storm before a pluvial rainfall-runoff run, comparing cloudburst vs soaker
-    depths. Do NOT use for: one specific depth (``lookup_precip_return_period``,
-    same endpoint, scalar); observed rainfall (``fetch_mrms_qpe`` /
-    ``fetch_usgs_nwis_gauges``); points outside Atlas 14 coverage (Pacific
+    Use for the whole Atlas 14 IDF CHART -- "IDF curve for Houston", picking a
+    design storm before a pluvial rainfall-runoff run, comparing cloudburst vs
+    soaker depths. Do NOT use for: one specific depth
+    (``lookup_precip_return_period``, same endpoint, scalar); the climate
+    baseline (``fetch_climate_normals``); observed rainfall (``fetch_mrms_qpe``
+    / ``fetch_usgs_nwis_gauges``); points outside Atlas 14 coverage (Pacific
     NW/Intermountain West; OCONUS beyond PR/USVI) -- raises an honest
     no-coverage error.
 
@@ -145,7 +148,7 @@ def compute_idf_curve(
             f"y_axis must be 'intensity' or 'depth'; got {y_axis!r}"
         )
 
-    lat_q, lon_q = _df._quantize_lonlat_to_atlas14_grid(lat, lon)
+    lat_q, lon_q = _pfds._quantize_lonlat_to_atlas14_grid(lat, lon)
 
     params = {
         "lat": lat_q,
@@ -161,7 +164,7 @@ def compute_idf_curve(
             ext="csv",
             fetch_fn=lambda: _fetch_pfds_matrix_bytes(lat_q, lon_q),
         )
-    except _df.UpstreamAPIError as exc:
+    except _pfds.UpstreamAPIError as exc:
         # The PFDS answers "not within a project area" for an out-of-coverage
         # point, and the fetcher raises the same error class for that and for a
         # true network failure, so only the message separates them.
@@ -176,7 +179,7 @@ def compute_idf_curve(
             f"NOAA Atlas 14 PFDS fetch failed for (lat={lat_q}, lon={lon_q}): {exc}"
         ) from exc
 
-    parsed = _df._parse_atlas14_csv(result.data.decode("utf-8"))
+    parsed = _pfds._parse_atlas14_csv(result.data.decode("utf-8"))
     matrix: dict[str, dict[int, float]] = parsed["matrix"]
     if not matrix:
         raise IdfCurveUpstreamError(
@@ -187,11 +190,11 @@ def compute_idf_curve(
     # One inline row per (duration, ARI) cell.
     intensity = mode == "intensity"
     rows: list[dict[str, Any]] = []
-    for label, hours in _df._ATLAS14_DURATIONS_HR.items():
+    for label, hours in _pfds._ATLAS14_DURATIONS_HR.items():
         depths = matrix.get(label)
         if not depths:
             continue  # honest: chart only what the PFDS published
-        for ari in _df._ATLAS14_ARI_YEARS:
+        for ari in _pfds._ATLAS14_ARI_YEARS:
             depth_in = depths.get(ari)
             if depth_in is None or not math.isfinite(depth_in) or depth_in <= 0:
                 continue
@@ -214,7 +217,7 @@ def compute_idf_curve(
     y_title = "Intensity (in/hr)" if intensity else "Depth (inches)"
     # Classic IDF charts are log-log; a depth (DDF) chart reads better linear.
     y_scale: dict[str, Any] = {"type": "log"} if intensity else {}
-    ari_order = [f"{a}-yr" for a in _df._ATLAS14_ARI_YEARS]
+    ari_order = [f"{a}-yr" for a in _pfds._ATLAS14_ARI_YEARS]
     spec: dict[str, Any] = {
         "title": "NOAA Atlas 14 IDF curve",
         "data": {"values": rows},
@@ -251,7 +254,7 @@ def compute_idf_curve(
         f"{'intensity in/hr' if intensity else 'depth inches'}"
     )
     logger.info(
-        "compute_idf_curve (lat=%s lon=%s mode=%s) -> %d rows cache_hit=%s",
+        "fetch_idf_curve (lat=%s lon=%s mode=%s) -> %d rows cache_hit=%s",
         lat_q,
         lon_q,
         mode,

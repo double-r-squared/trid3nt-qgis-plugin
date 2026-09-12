@@ -1,7 +1,9 @@
-"""``digitize_water_body`` - NDWI surface-water polygons.
+"""``fetch_surface_water_ndwi`` - open-water polygons off a Sentinel-2 scene.
 
-``NDWI > 0`` is McFeeters' cutoff and the threshold is a caller lever. No scene
-and no water are both typed refusals, never an empty layer read as success.
+The green and NIR bands read through the Planetary Computer's STAC catalog,
+differenced into NDWI, thresholded and vectorized. ``NDWI > 0`` is McFeeters'
+cutoff and the threshold is a caller lever. No scene and no water are both typed
+refusals, never an empty layer read as success.
 """
 from __future__ import annotations
 
@@ -15,61 +17,61 @@ from trid3nt_contracts.execution import LayerURI
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.tools import register_tool
-from trid3nt_server.tools.fetchers._fetch_common import bbox_pixel_dims
-from trid3nt_server.tools.derive import _pc_search
 from trid3nt_server.tools.cache import read_through
+from ..._fetch_common import FetchError, bbox_pixel_dims
+from . import _pc_search
 
 __all__ = [
-    "digitize_water_body",
+    "fetch_surface_water_ndwi",
     "estimate_payload_mb",
-    "WaterBodyError",
-    "WaterBodyBboxError",
-    "WaterBodyNoImageryError",
-    "WaterBodyNoWaterError",
-    "WaterBodyUpstreamError",
+    "SurfaceWaterError",
+    "SurfaceWaterBboxError",
+    "SurfaceWaterNoImageryError",
+    "SurfaceWaterNoWaterError",
+    "SurfaceWaterUpstreamError",
 ]
 
-logger = logging.getLogger("trid3nt_server.tools.derive.digitize_water_body.digitize_water_body")
+logger = logging.getLogger("trid3nt_server.tools.fetchers.hydrology.fetch_surface_water_ndwi.fetch_surface_water_ndwi")
 
 
 
 
-class WaterBodyError(RuntimeError):
-    """Base class for digitize_water_body failures."""
+class SurfaceWaterError(FetchError):
+    """Base class for fetch_surface_water_ndwi failures."""
 
-    error_code = "WATER_BODY_ERROR"
+    error_code = "SURFACE_WATER_ERROR"
     retryable = True
 
 
-class WaterBodyBboxError(WaterBodyError):
+class SurfaceWaterBboxError(SurfaceWaterError):
     """Malformed / out-of-range / degenerate / too-large bbox or bad threshold."""
 
-    error_code = "WATER_BODY_INPUT_INVALID"
+    error_code = "SURFACE_WATER_INPUT_INVALID"
     retryable = False
 
 
-class WaterBodyNoImageryError(WaterBodyError):
+class SurfaceWaterNoImageryError(SurfaceWaterError):
     """No Sentinel-2 scene covers the bbox in the window under the cloud cap; an
     honest miss, never a fabricated layer.
     """
 
-    error_code = "WATER_BODY_NO_IMAGERY"
+    error_code = "SURFACE_WATER_NO_IMAGERY"
     retryable = False
 
 
-class WaterBodyNoWaterError(WaterBodyError):
+class SurfaceWaterNoWaterError(SurfaceWaterError):
     """A scene was read but no open water sits above the NDWI threshold: an honest
     result for a dry AOI, to narrate rather than emit as an empty layer.
     """
 
-    error_code = "WATER_BODY_NO_WATER"
+    error_code = "SURFACE_WATER_NO_WATER"
     retryable = False
 
 
-class WaterBodyUpstreamError(WaterBodyError):
+class SurfaceWaterUpstreamError(SurfaceWaterError):
     """A PC STAC search / asset read / vectorization / FGB write failed."""
 
-    error_code = "WATER_BODY_UPSTREAM_ERROR"
+    error_code = "SURFACE_WATER_UPSTREAM_ERROR"
     retryable = True
 
 
@@ -109,9 +111,9 @@ _STYLE = {"kind": "reference", "geometry": "polygon"}
 
 
 _METADATA = AtomicToolMetadata(
-    name="digitize_water_body",
+    name="fetch_surface_water_ndwi",
     ttl_class="static-30d",
-    source_class="digitize_water_body",
+    source_class="surface_water_ndwi",
     cacheable=True,
     supports_global_query=False,
     payload_mb_estimator_name="estimate_payload_mb",
@@ -141,25 +143,26 @@ def estimate_payload_mb(
 
 def _validate_bbox(bbox: tuple[float, float, float, float]) -> None:
     if len(bbox) != 4:
-        raise WaterBodyBboxError(
+        raise SurfaceWaterBboxError(
             f"bbox must be (min_lon, min_lat, max_lon, max_lat); got {bbox!r}"
         )
     min_lon, min_lat, max_lon, max_lat = bbox
     if not all(math.isfinite(v) for v in bbox):
-        raise WaterBodyBboxError(f"bbox contains non-finite values: {bbox!r}")
+        raise SurfaceWaterBboxError(f"bbox contains non-finite values: {bbox!r}")
     if not (-180.0 <= min_lon <= 180.0 and -180.0 <= max_lon <= 180.0):
-        raise WaterBodyBboxError(f"bbox lon out of [-180,180]: {bbox!r}")
+        raise SurfaceWaterBboxError(f"bbox lon out of [-180,180]: {bbox!r}")
     if not (-90.0 <= min_lat <= 90.0 and -90.0 <= max_lat <= 90.0):
-        raise WaterBodyBboxError(f"bbox lat out of [-90,90]: {bbox!r}")
+        raise SurfaceWaterBboxError(f"bbox lat out of [-90,90]: {bbox!r}")
     if min_lon >= max_lon or min_lat >= max_lat:
-        raise WaterBodyBboxError(
+        raise SurfaceWaterBboxError(
             f"bbox is degenerate (min must be < max on both axes): {bbox!r}"
         )
     area = (max_lon - min_lon) * (max_lat - min_lat)
     if area > _MAX_BBOX_DEG2:
-        raise WaterBodyBboxError(
+        raise SurfaceWaterBboxError(
             f"bbox area {area:.3f} deg^2 exceeds {_MAX_BBOX_DEG2} deg^2 guardrail "
-            "for digitize_water_body (Sentinel-2 NDWI is AOI-scoped; narrow the bbox)."
+            "for fetch_surface_water_ndwi (Sentinel-2 NDWI is AOI-scoped; narrow "
+            "the bbox)."
         )
 
 
@@ -167,11 +170,11 @@ def _validate_threshold(ndwi_threshold: float) -> float:
     try:
         thr = float(ndwi_threshold)
     except (TypeError, ValueError) as exc:
-        raise WaterBodyBboxError(
+        raise SurfaceWaterBboxError(
             f"ndwi_threshold must be numeric; got {ndwi_threshold!r}"
         ) from exc
     if not math.isfinite(thr) or not (-1.0 <= thr <= 1.0):
-        raise WaterBodyBboxError(
+        raise SurfaceWaterBboxError(
             f"ndwi_threshold must be a finite value in [-1, 1]; got {thr!r}"
         )
     return thr
@@ -181,11 +184,11 @@ def _validate_min_area(min_area_m2: float) -> float:
     try:
         a = float(min_area_m2)
     except (TypeError, ValueError) as exc:
-        raise WaterBodyBboxError(
+        raise SurfaceWaterBboxError(
             f"min_area_m2 must be numeric; got {min_area_m2!r}"
         ) from exc
     if not math.isfinite(a) or a < 0.0:
-        raise WaterBodyBboxError(
+        raise SurfaceWaterBboxError(
             f"min_area_m2 must be a finite value >= 0; got {a!r}"
         )
     return a
@@ -217,7 +220,7 @@ def _read_band_window(
     height_px: int,
 ) -> Any:
     """``signed_href`` warped to EPSG:4326 and windowed to ``bbox`` as a 2-D
-    float32 masked array; any read failure raises ``WaterBodyUpstreamError``.
+    float32 masked array; any read failure raises ``SurfaceWaterUpstreamError``.
     """
     import numpy as np
     import rasterio
@@ -243,15 +246,15 @@ def _read_band_window(
                     dst_nodata=0,
                 )
         return np.ma.masked_equal(dst.astype("float32"), 0.0)
-    except WaterBodyError:
+    except SurfaceWaterError:
         raise
     except Exception as exc:  # noqa: BLE001  --  translate any rasterio/GDAL error
-        raise WaterBodyUpstreamError(
+        raise SurfaceWaterUpstreamError(
             f"Sentinel-2 band read failed (href={signed_href[:120]!r}): {exc}"
         ) from exc
 
 
-def _digitize_water_fgb_bytes(
+def _water_polygons_fgb_bytes(
     bbox: tuple[float, float, float, float],
     datetime_range: str,
     max_cloud_cover: float,
@@ -274,18 +277,18 @@ def _digitize_water_fgb_bytes(
             sort_by_cloud=True,
         )
     except _pc_search.PCStacNoItemsError as exc:
-        raise WaterBodyNoImageryError(
+        raise SurfaceWaterNoImageryError(
             f"no Sentinel-2 imagery for bbox={bbox} in {datetime_range} "
             f"under {max_cloud_cover}% cloud cover: {exc}"
         ) from exc
     except _pc_search.PCStacError as exc:
-        raise WaterBodyUpstreamError(
+        raise SurfaceWaterUpstreamError(
             f"Sentinel-2 STAC search failed: {exc}"
         ) from exc
 
     assets = getattr(item, "assets", {}) or {}
     if _GREEN_BAND not in assets or _NIR_BAND not in assets:
-        raise WaterBodyUpstreamError(
+        raise SurfaceWaterUpstreamError(
             f"Sentinel-2 item {getattr(item, 'id', '?')} missing "
             f"{_GREEN_BAND}/{_NIR_BAND} assets (have {sorted(assets)[:8]})"
         )
@@ -311,7 +314,7 @@ def _digitize_water_fgb_bytes(
     ndwi = np.ma.masked_where(np.abs(denom) < 1e-6, ndwi)
 
     if ndwi.count() == 0:
-        raise WaterBodyNoImageryError(
+        raise SurfaceWaterNoImageryError(
             f"Sentinel-2 scene {getattr(item, 'id', '?')} produced an all-nodata "
             f"NDWI over bbox={bbox} (scene does not actually cover the AOI)."
         )
@@ -321,7 +324,7 @@ def _digitize_water_fgb_bytes(
     water_mask = np.ma.filled(ndwi > ndwi_threshold, False).astype(np.uint8)
     water_px = int(water_mask.sum())
     if water_px == 0:
-        raise WaterBodyNoWaterError(
+        raise SurfaceWaterNoWaterError(
             f"no open water above NDWI > {ndwi_threshold} in Sentinel-2 scene "
             f"{getattr(item, 'id', '?')} over bbox={bbox} "
             f"(valid_px={int(ndwi.count())}). The AOI shows no surface water in "
@@ -344,7 +347,7 @@ def _digitize_water_fgb_bytes(
             if val == 1
         ]
     except Exception as exc:  # noqa: BLE001
-        raise WaterBodyUpstreamError(
+        raise SurfaceWaterUpstreamError(
             f"water-mask vectorization failed for bbox={bbox}: {exc}"
         ) from exc
 
@@ -352,7 +355,7 @@ def _digitize_water_fgb_bytes(
         # Mask had water pixels but no closed polygon emerged  --  treat as
         # honest no-water (defensive; shapes() over a non-empty mask yields
         # at least one polygon in practice).
-        raise WaterBodyNoWaterError(
+        raise SurfaceWaterNoWaterError(
             f"water mask over bbox={bbox} produced no polygons "
             f"(water_px={water_px}); no mappable surface water."
         )
@@ -371,12 +374,12 @@ def _digitize_water_fgb_bytes(
         if min_area_m2 > 0.0:
             gdf = gdf[gdf["area_m2"] >= min_area_m2].copy()
     except Exception as exc:  # noqa: BLE001
-        raise WaterBodyUpstreamError(
+        raise SurfaceWaterUpstreamError(
             f"water-polygon area filtering failed for bbox={bbox}: {exc}"
         ) from exc
 
     if len(gdf) == 0:
-        raise WaterBodyNoWaterError(
+        raise SurfaceWaterNoWaterError(
             f"all detected water polygons over bbox={bbox} were smaller than "
             f"min_area_m2={min_area_m2} m^2 (only NDWI specks; no mappable water "
             "body). Lower min_area_m2 to keep small ponds."
@@ -397,7 +400,7 @@ def _digitize_water_fgb_bytes(
         with open(tmp_fgb, "rb") as fh:
             fgb_bytes = fh.read()
     except Exception as exc:  # noqa: BLE001
-        raise WaterBodyUpstreamError(
+        raise SurfaceWaterUpstreamError(
             f"water FlatGeobuf write failed for bbox={bbox}: {exc}"
         ) from exc
     finally:
@@ -408,7 +411,7 @@ def _digitize_water_fgb_bytes(
                 pass
 
     logger.info(
-        "digitize_water_body: scene=%s cc=%.3f bbox=%s -> %d polygon(s) "
+        "fetch_surface_water_ndwi: scene=%s cc=%.3f bbox=%s -> %d polygon(s) "
         "(%.1f m^2 total, water_px=%d/%d) -> %d-byte FGB",
         getattr(item, "id", "?"),
         float(getattr(item, "properties", {}).get("eo:cloud_cover", -1.0)),
@@ -432,7 +435,7 @@ def _digitize_water_fgb_bytes(
     # open_world_hint like every other tool that hits an external API.
     open_world_hint=True,
 )
-def digitize_water_body(
+def fetch_surface_water_ndwi(
     bbox: tuple[float, float, float, float],
     start_date: str | None = None,
     end_date: str | None = None,
@@ -446,9 +449,12 @@ def digitize_water_body(
 
     Use when outlining a lake, reservoir, pond or wide river reach, for a vector
     water footprint to intersect with other layers, or to compare extent between
-    two dates. Not for vegetation vigor (an NDVI in the session), land-cover classes
-    (``fetch_landcover``), regulatory floodplains (``fetch_fema_nfhl_zones``),
-    modeled inundation, or SLR bathtub footprints.
+    two dates -- one recent Sentinel-2 scene, vectorized. Not for the multi-decade
+    water-occurrence climatology (``fetch_jrc_global_surface_water``), an
+    operational flood-water product (``fetch_opera_dswx``), vegetation vigor (an
+    NDVI in the session), land-cover classes (``fetch_landcover``), regulatory
+    floodplains (``fetch_fema_nfhl_zones``), modeled inundation, or SLR bathtub
+    footprints.
 
     Params:
         bbox: EPSG:4326, at most 0.5 deg^2.
@@ -491,12 +497,12 @@ def digitize_water_body(
         metadata=_METADATA,
         params=params,
         ext="fgb",
-        fetch_fn=lambda: _digitize_water_fgb_bytes(
+        fetch_fn=lambda: _water_polygons_fgb_bytes(
             q_bbox, dt_range, max_cc, thr, min_area
         ),
     )
     assert result.uri is not None, (
-        "digitize_water_body is cacheable; uri must be set by read_through"
+        "fetch_surface_water_ndwi is cacheable; uri must be set by read_through"
     )
 
     return LayerURI(

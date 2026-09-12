@@ -89,19 +89,11 @@ def test_write_tools_are_not_read_only():
     )
 
 
-#: compute_*-named tools that still reach an external endpoint. A derive tool
-#: takes a layer and never fetches; the one entry here is a fetch that draws a
-#: chart, awaiting its move to the fetchers.
-_OPEN_WORLD_COMPUTE_EXCEPTIONS = {
-    "compute_idf_curve",
-}
-
-
 def test_open_world_tools_are_fetchers_or_external():
     """``open_world_hint=True`` must not include a ``compute_*`` or ``clip_*`` tool.
 
-    Those are local GDAL transforms with no external call; the input-fetching
-    composers are the documented exceptions in ``_OPEN_WORLD_COMPUTE_EXCEPTIONS``."""
+    A derive tool takes a layer and never fetches, so a compute-named tool that
+    reached an external endpoint would be a second, unwatched fetcher."""
     snapshot = _registry_snapshot()
     open_world_names = {n for n, m in snapshot.items() if m.open_world_hint}
     assert open_world_names, (
@@ -109,10 +101,7 @@ def test_open_world_tools_are_fetchers_or_external():
     )
     # Compute and clip tools must NOT be open-world.
     local_compute = {
-        n
-        for n in open_world_names
-        if n.startswith(("compute_", "clip_"))
-        and n not in _OPEN_WORLD_COMPUTE_EXCEPTIONS
+        n for n in open_world_names if n.startswith(("compute_", "clip_"))
     }
     assert not local_compute, (
         f"compute_* / clip_* tools incorrectly flagged open_world_hint=True: "

@@ -1,4 +1,4 @@
-"""Shared Planetary Computer STAC access for the derive tools.
+"""Planetary Computer STAC access for the NDWI surface-water fetch.
 
 Signing is applied at the catalog client, so an item's asset hrefs arrive
 readable by GDAL. Every call here is plain sync and must never touch the loop.

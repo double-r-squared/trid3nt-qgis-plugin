@@ -182,6 +182,5 @@ include = ["trid3nt_server*"]
 [tool.setuptools.package-data]
 trid3nt_server = [
     "tools/tool_query_corpus.yaml",
-    "tools/duckdb_spatial_functions.json",
     "tools/README.md",
 ]

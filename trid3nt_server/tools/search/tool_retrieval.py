@@ -35,7 +35,7 @@ MAX_K = 25
 
 # SEARCH IS THE FRONT DOOR; ENUMERATION IS THE EXCEPTION. A surface that is
 # large, documented and touched OCCASIONALLY per turn is reached by ranking it -
-# the catalog, the data sources, the spatial functions. A surface that is SMALL
+# the catalog, the data sources, the engine keywords. A surface that is SMALL
 # and needed on MOST turns is enumerated, because a lookup for it would be pure
 # overhead. A browse TREE over either is the shape this refuses: it multiplies
 # wrong turns, each one a full round trip, and grows dead ends faster than the

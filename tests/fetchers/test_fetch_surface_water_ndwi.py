@@ -1,4 +1,4 @@
-"""Unit tests for the ``digitize_water_body`` atomic tool.
+"""Unit tests for the ``fetch_surface_water_ndwi`` atomic tool.
 
 The catalog search and the band reader are patched, so no real scene is fetched;
 the vectorization, the area filter and the FlatGeobuf write run for real over the
@@ -15,14 +15,14 @@ import numpy as np
 import pytest
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.derive.digitize_water_body import digitize_water_body as wb_mod
-from trid3nt_server.tools.derive.digitize_water_body.digitize_water_body import (
+from trid3nt_server.tools.fetchers.hydrology.fetch_surface_water_ndwi import fetch_surface_water_ndwi as wb_mod
+from trid3nt_server.tools.fetchers.hydrology.fetch_surface_water_ndwi.fetch_surface_water_ndwi import (
     _METADATA,
     _STYLE,
-    WaterBodyBboxError,
-    WaterBodyNoImageryError,
-    WaterBodyNoWaterError,
-    digitize_water_body,
+    SurfaceWaterBboxError,
+    SurfaceWaterNoImageryError,
+    SurfaceWaterNoWaterError,
+    fetch_surface_water_ndwi,
     estimate_payload_mb,
 )
 
@@ -127,11 +127,11 @@ def _read_fgb(uri_bytes: bytes):
 
 
 def test_tool_is_registered() -> None:
-    assert "digitize_water_body" in TOOL_REGISTRY
-    meta = TOOL_REGISTRY["digitize_water_body"].metadata
-    assert meta.name == "digitize_water_body"
+    assert "fetch_surface_water_ndwi" in TOOL_REGISTRY
+    meta = TOOL_REGISTRY["fetch_surface_water_ndwi"].metadata
+    assert meta.name == "fetch_surface_water_ndwi"
     assert meta.ttl_class == "static-30d"
-    assert meta.source_class == "digitize_water_body"
+    assert meta.source_class == "surface_water_ndwi"
     assert meta.cacheable is True
     assert meta.payload_mb_estimator_name == "estimate_payload_mb"
 
@@ -153,42 +153,42 @@ def test_payload_estimator_scales_with_area_and_floors() -> None:
 
 
 def test_degenerate_bbox_raises() -> None:
-    with pytest.raises(WaterBodyBboxError):
-        digitize_water_body(bbox=(-112.30, 33.83, -112.30, 33.83))
+    with pytest.raises(SurfaceWaterBboxError):
+        fetch_surface_water_ndwi(bbox=(-112.30, 33.83, -112.30, 33.83))
 
 
 def test_out_of_range_bbox_raises() -> None:
-    with pytest.raises(WaterBodyBboxError, match="lon out of"):
-        digitize_water_body(bbox=(-200.0, 33.0, -112.0, 34.0))
+    with pytest.raises(SurfaceWaterBboxError, match="lon out of"):
+        fetch_surface_water_ndwi(bbox=(-200.0, 33.0, -112.0, 34.0))
 
 
 def test_nonfinite_bbox_raises() -> None:
-    with pytest.raises(WaterBodyBboxError, match="non-finite"):
-        digitize_water_body(bbox=(float("nan"), 33.0, -112.0, 34.0))
+    with pytest.raises(SurfaceWaterBboxError, match="non-finite"):
+        fetch_surface_water_ndwi(bbox=(float("nan"), 33.0, -112.0, 34.0))
 
 
 def test_too_large_bbox_raises() -> None:
-    with pytest.raises(WaterBodyBboxError, match="guardrail"):
-        digitize_water_body(bbox=(-114.0, 31.0, -111.0, 34.0))  # 9 deg^2
+    with pytest.raises(SurfaceWaterBboxError, match="guardrail"):
+        fetch_surface_water_ndwi(bbox=(-114.0, 31.0, -111.0, 34.0))  # 9 deg^2
 
 
 def test_bad_threshold_raises() -> None:
-    with pytest.raises(WaterBodyBboxError, match="ndwi_threshold"):
-        digitize_water_body(bbox=_AOI, ndwi_threshold=2.0)
+    with pytest.raises(SurfaceWaterBboxError, match="ndwi_threshold"):
+        fetch_surface_water_ndwi(bbox=_AOI, ndwi_threshold=2.0)
 
 
 def test_bad_min_area_raises() -> None:
-    with pytest.raises(WaterBodyBboxError, match="min_area_m2"):
-        digitize_water_body(bbox=_AOI, min_area_m2=-5.0)
+    with pytest.raises(SurfaceWaterBboxError, match="min_area_m2"):
+        fetch_surface_water_ndwi(bbox=_AOI, min_area_m2=-5.0)
 
 
 def test_input_error_not_retryable() -> None:
     try:
-        digitize_water_body(bbox=(-112.30, 33.83, -112.30, 33.83))
-    except WaterBodyBboxError as exc:
+        fetch_surface_water_ndwi(bbox=(-112.30, 33.83, -112.30, 33.83))
+    except SurfaceWaterBboxError as exc:
         assert exc.retryable is False
     else:
-        pytest.fail("expected WaterBodyBboxError")
+        pytest.fail("expected SurfaceWaterBboxError")
 
 
 
@@ -203,7 +203,7 @@ def test_happy_path_digitizes_water_and_roundtrips() -> None:
     with patch.object(wb_mod._pc_search, "search_least_cloudy_item", return_value=_fake_item()), \
          patch.object(wb_mod, "_read_band_window", _half_water_reader()), \
          patch.object(wb_mod, "read_through", rt):
-        layer = digitize_water_body(
+        layer = fetch_surface_water_ndwi(
             bbox=_AOI, start_date="2025-04-01", end_date="2026-06-01"
         )
 
@@ -250,7 +250,7 @@ def test_cache_hit_does_not_refetch() -> None:
     rt = _make_read_through_injector(fake)
     calls = {"n": 0}
 
-    real_fetch = wb_mod._digitize_water_fgb_bytes
+    real_fetch = wb_mod._water_polygons_fgb_bytes
 
     def counting_fetch(*a, **k):
         calls["n"] += 1
@@ -258,10 +258,10 @@ def test_cache_hit_does_not_refetch() -> None:
 
     with patch.object(wb_mod._pc_search, "search_least_cloudy_item", return_value=_fake_item()), \
          patch.object(wb_mod, "_read_band_window", _half_water_reader()), \
-         patch.object(wb_mod, "_digitize_water_fgb_bytes", counting_fetch), \
+         patch.object(wb_mod, "_water_polygons_fgb_bytes", counting_fetch), \
          patch.object(wb_mod, "read_through", rt):
-        layer1 = digitize_water_body(bbox=_AOI, start_date="2025-04-01", end_date="2026-06-01")
-        layer2 = digitize_water_body(bbox=_AOI, start_date="2025-04-01", end_date="2026-06-01")
+        layer1 = fetch_surface_water_ndwi(bbox=_AOI, start_date="2025-04-01", end_date="2026-06-01")
+        layer2 = fetch_surface_water_ndwi(bbox=_AOI, start_date="2025-04-01", end_date="2026-06-01")
 
     assert layer1.uri == layer2.uri
     assert calls["n"] == 1  # second call served from cache
@@ -270,7 +270,7 @@ def test_cache_hit_does_not_refetch() -> None:
 
 
 def test_no_imagery_raises_typed_not_retryable() -> None:
-    """An empty STAC search -> WaterBodyNoImageryError, not a fabricated layer."""
+    """An empty STAC search -> SurfaceWaterNoImageryError, not a fabricated layer."""
     fake = _FakeStore()
     rt = _make_read_through_injector(fake)
 
@@ -279,13 +279,13 @@ def test_no_imagery_raises_typed_not_retryable() -> None:
 
     with patch.object(wb_mod._pc_search, "search_least_cloudy_item", side_effect=_raise_no_items), \
          patch.object(wb_mod, "read_through", rt):
-        with pytest.raises(WaterBodyNoImageryError) as exc_info:
-            digitize_water_body(bbox=_AOI, start_date="2025-04-01", end_date="2026-06-01")
+        with pytest.raises(SurfaceWaterNoImageryError) as exc_info:
+            fetch_surface_water_ndwi(bbox=_AOI, start_date="2025-04-01", end_date="2026-06-01")
     assert exc_info.value.retryable is False
 
 
 def test_no_water_raises_typed_not_retryable() -> None:
-    """An all-land scene (NDWI < 0 everywhere) -> WaterBodyNoWaterError, never an
+    """An all-land scene (NDWI < 0 everywhere) -> SurfaceWaterNoWaterError, never an
     empty FGB that reads as success."""
     fake = _FakeStore()
     rt = _make_read_through_injector(fake)
@@ -293,8 +293,8 @@ def test_no_water_raises_typed_not_retryable() -> None:
     with patch.object(wb_mod._pc_search, "search_least_cloudy_item", return_value=_fake_item()), \
          patch.object(wb_mod, "_read_band_window", _all_land_reader()), \
          patch.object(wb_mod, "read_through", rt):
-        with pytest.raises(WaterBodyNoWaterError) as exc_info:
-            digitize_water_body(bbox=_AOI, start_date="2025-04-01", end_date="2026-06-01")
+        with pytest.raises(SurfaceWaterNoWaterError) as exc_info:
+            fetch_surface_water_ndwi(bbox=_AOI, start_date="2025-04-01", end_date="2026-06-01")
     assert exc_info.value.retryable is False
 
 
@@ -314,8 +314,8 @@ def test_min_area_floor_rejects_specks_as_no_water() -> None:
     with patch.object(wb_mod._pc_search, "search_least_cloudy_item", return_value=_fake_item()), \
          patch.object(wb_mod, "_read_band_window", all_water), \
          patch.object(wb_mod, "read_through", rt):
-        with pytest.raises(WaterBodyNoWaterError, match="min_area_m2"):
-            digitize_water_body(
+        with pytest.raises(SurfaceWaterNoWaterError, match="min_area_m2"):
+            fetch_surface_water_ndwi(
                 bbox=_AOI,
                 start_date="2025-04-01",
                 end_date="2026-06-01",

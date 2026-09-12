@@ -13,7 +13,6 @@ the cache shim are the two seams they all pass through.
 | `__init__.py` | The registry: the `@register_tool(metadata)` decorator, `TOOL_REGISTRY`, and the sorted snapshot the agent loop builds its tool declarations from. |
 | `cache.py` | The cache shim - content-addressed read-through / write-on-miss, the sole writer of the cache bucket's `cache/` prefix. |
 | `_example_tool_template.py` | A complete, working, trivial registered tool to copy when starting a new one. |
-| `duckdb_spatial_functions.json` | The DuckDB spatial-function reference `search_spatial_functions` answers from. |
 | `payload_sampling.py` | Sampled payload-size estimation, so the size a warning quotes is measured rather than modelled. |
 | `tool_arg_normalizer.py` | Call-site kwargs cleanup, so an invented argument does not fail a call the tool could still take. |
 | `tool_query_corpus.yaml` | The routing phrasings tool retrieval scores an ask against. |
@@ -27,7 +26,7 @@ the cache shim are the two seams they all pass through.
 | `derive/` | The simulation-automation tools - domain geometry, observation pairing and skill, the analytic overlays, point reads, restyle - one folder per tool, flat, plus the shared GDAL, geometry, hydrology and chart cores; and the two session tools (`run_qgis_algorithm`, `run_pyqgis`), each a request the plugin runs in the user's QGIS session. A derive tool takes a layer and never fetches. |
 | `fetchers/` | Data fetchers, one folder per phenomenon measured (`climate`, `hazard`, `hydrology`, `imagery`, `ocean`, `socioeconomic`, `soil`, `terrain`, `weather`), plus the shared helpers at its root and `_router/`. See below. |
 | `meta/` | Utility tools: `compose_case_report`, `list_run_frames`, `spatial_input_tool`. |
-| `search/` | Dataset and tool discovery: `search_living_atlas` and `fetch_living_atlas_layer` over the harvested Living Atlas, `search_spatial_functions`, `search_tools` retrieval, the OGC adapter and `web_fetch`. |
+| `search/` | Dataset and tool discovery: `search_living_atlas` and `fetch_living_atlas_layer` over the harvested Living Atlas, `search_tools` retrieval, the OGC adapter and `web_fetch`. |
 
 ## `fetchers/` - the router and its shared root
 
