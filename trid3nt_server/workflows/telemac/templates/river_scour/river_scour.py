@@ -5,10 +5,6 @@ re-deposits, and whether a graded mixture SORTS as it goes."""
 
 from __future__ import annotations
 
-from trid3nt_contracts.telemac_contracts import (
-    TELEMAC_BED_EVOLUTION_STYLE,
-    TELEMAC_DYE_STYLE,
-)
 from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
 
 from trid3nt_server.workflows.runtime import (
@@ -229,14 +225,24 @@ class STEERING(T2D):
     rain = Rain(mm_per_day=Ref("rain.mm_per_day"), tracers=1)
 
 
+#: The GAIA bed-evolution field, in the metres the module writes: deposition
+#: positive, erosion negative, so the ramp diverges about zero and the legend is
+#: ranged symmetrically about that centre.
+BED_EVOLUTION_STYLE = {"kind": "mesh", "ramp": "rdbu", "units": "m",
+                       "label": "Bed evolution", "center": 0.0}
+
+#: The marker-concentration field, on the ramp a dissolved tracer is read on.
+MARKER_STYLE = {"kind": "mesh", "ramp": "reds", "units": "mg/L",
+                "label": "Marker concentration"}
+
 #: What the solved run is read for: the bed's cumulative evolution off GAIA's own
 #: result as the map and, over time, as the animation - the CHANGE is the answer,
 #: where the bed's absolute relief is terrain the run did not make - the marker's
 #: envelope beside it and its reach-wide history as the chart.
 OUTPUTS = [
-    field("E", t=-1, module="gaia").layer(style=TELEMAC_BED_EVOLUTION_STYLE),
+    field("E", t=-1, module="gaia").layer(style=BED_EVOLUTION_STYLE),
     field("E", t="every", module="gaia").animate(),
-    max_over_time("T1").layer(style=TELEMAC_DYE_STYLE),
+    max_over_time("T1").layer(style=MARKER_STYLE),
     series("T1").chart(),
 ]
 CAPTIONS = {"E": "bed evolution", "B": "bed elevation", "T1": "marker concentration"}

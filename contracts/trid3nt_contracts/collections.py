@@ -94,7 +94,7 @@ class ProjectLayerSummary(GraceModel):
     #: WHERE the layer came from, read by a person. ``user`` is a file the user
     #: pushed in themselves; ``None`` is the system saying nothing.
     origin: Literal["user"] | None = None
-    temporal: bool  # carries a temporal config
+    temporal: bool  # computed: the row states its own [valid_from, valid_to)
 
     # Layer-stack arbitration. A client absent both falls back to fully opaque
     # and its own default order.

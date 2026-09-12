@@ -273,34 +273,6 @@
       ],
       "title": "SyntheticInput",
       "type": "object"
-    },
-    "TemporalConfig": {
-      "additionalProperties": false,
-      "description": "WMS-T temporal config for a time-varying layer.",
-      "properties": {
-        "end": {
-          "format": "date-time",
-          "title": "End",
-          "type": "string"
-        },
-        "start": {
-          "format": "date-time",
-          "title": "Start",
-          "type": "string"
-        },
-        "step_seconds": {
-          "exclusiveMinimum": 0,
-          "title": "Step Seconds",
-          "type": "integer"
-        }
-      },
-      "required": [
-        "start",
-        "end",
-        "step_seconds"
-      ],
-      "title": "TemporalConfig",
-      "type": "object"
     }
   },
   "additionalProperties": false,
@@ -466,17 +438,6 @@
       },
       "title": "Synthetic Inputs",
       "type": "array"
-    },
-    "temporal": {
-      "anyOf": [
-        {
-          "$ref": "#/$defs/TemporalConfig"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null
     },
     "units": {
       "anyOf": [

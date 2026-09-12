@@ -5,7 +5,6 @@ spill travels downstream and what its peak concentration is."""
 
 from __future__ import annotations
 
-from trid3nt_contracts.telemac_contracts import TELEMAC_DYE_STYLE
 from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
 
 from trid3nt_server.workflows.runtime import (
@@ -233,11 +232,15 @@ class STEERING(T2D):
                                    presets=DECAY_PRESETS)]
 
 
+#: The dye-concentration field, on the ramp a dissolved tracer is read on.
+DYE_STYLE = {"kind": "mesh", "ramp": "reds", "units": "mg/L",
+             "label": "Dye concentration"}
+
 #: What the solved run is read for: the tracer over time as the animation, its
 #: envelope as the map, its reach-wide history as the chart.
 OUTPUTS = [
     field("T1", t="every").animate(),
-    max_over_time("T1").layer(style=TELEMAC_DYE_STYLE),
+    max_over_time("T1").layer(style=DYE_STYLE),
     series("T1").chart(),
 ]
 CAPTIONS = {"T1": "dye concentration"}

@@ -6,7 +6,6 @@ what dissolved."""
 
 from __future__ import annotations
 
-from trid3nt_contracts.telemac_contracts import TELEMAC_DYE_STYLE
 from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
 
 from trid3nt_server.workflows.runtime import (
@@ -226,12 +225,17 @@ class STEERING(T2D):
     rain = Rain(mm_per_day=Ref("rain.mm_per_day"), tracers=1)
 
 
+#: The dissolved-oil concentration field, on the ramp a dissolved tracer is
+#: read on.
+OIL_STYLE = {"kind": "mesh", "ramp": "reds", "units": "mg/L",
+             "label": "Dissolved oil concentration"}
+
 #: What the solved run is read for: the dissolved fraction over time as the
 #: animation, its envelope as the map, its reach-wide history as the chart, and
 #: the floats' track as the slick beside them.
 OUTPUTS = [
     field("T1", t="every").animate(),
-    max_over_time("T1").layer(style=TELEMAC_DYE_STYLE),
+    max_over_time("T1").layer(style=OIL_STYLE),
     series("T1").chart(),
     drogues().layer(),
 ]

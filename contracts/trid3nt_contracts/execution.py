@@ -13,7 +13,6 @@ from typing import Any, Literal
 from pydantic import Field
 
 from .common import FallbackActivation, GraceModel, SyntheticInput, ULIDStr, UTCDatetime
-from .envelope import TemporalConfig
 
 __all__ = [
     "AnswerLayerURI",
@@ -164,7 +163,6 @@ class LayerURI(GraceModel):
     #: identity, and it is what a still, a frame and an animation of one field
     #: are held to a single scale by.
     quantity: str | None = None
-    temporal: TemporalConfig | None = None  # present iff time-varying
     role: Literal["primary", "context", "input"] = "primary"
     #: WHERE the layer came from, read by a person. ``user`` is a file the user
     #: pushed in themselves; ``None`` is the system saying nothing. Nothing

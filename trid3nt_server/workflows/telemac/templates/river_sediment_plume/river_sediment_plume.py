@@ -5,10 +5,6 @@ with NO stock at all, so nothing erodes and only what was injected can deposit."
 
 from __future__ import annotations
 
-from trid3nt_contracts.telemac_contracts import (
-    TELEMAC_BED_EVOLUTION_STYLE,
-    TELEMAC_SEDIMENT_CONCENTRATION_STYLE,
-)
 from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
 
 from trid3nt_server.workflows.runtime import (
@@ -231,14 +227,25 @@ class STEERING(T2D):
     rain = Rain(mm_per_day=Ref("rain.mm_per_day"), tracers=2)
 
 
+#: The GAIA bed-evolution field, in the metres the module writes: deposition
+#: positive, erosion negative, so the ramp diverges about zero and the legend is
+#: ranged symmetrically about that centre.
+BED_EVOLUTION_STYLE = {"kind": "mesh", "ramp": "rdbu", "units": "m",
+                       "label": "Bed evolution", "center": 0.0}
+
+#: The SUSPENDED-SEDIMENT concentration field - a grain load, on its own ramp so
+#: it never reads as a dissolved field published beside it.
+SEDIMENT_STYLE = {"kind": "mesh", "ramp": "oranges", "units": "mg/L",
+                  "label": "Suspended sediment concentration"}
+
 #: What the solved run is read for: the suspended class over time as the
 #: animation, its envelope as the map, its reach-wide history as the chart, and
 #: what settled onto the bed off GAIA's own result.
 OUTPUTS = [
     field("T2", t="every").animate(),
-    max_over_time("T2").layer(style=TELEMAC_SEDIMENT_CONCENTRATION_STYLE),
+    max_over_time("T2").layer(style=SEDIMENT_STYLE),
     series("T2").chart(),
-    field("E", t=-1, module="gaia").layer(style=TELEMAC_BED_EVOLUTION_STYLE),
+    field("E", t=-1, module="gaia").layer(style=BED_EVOLUTION_STYLE),
 ]
 CAPTIONS = {"T2": "suspended sediment concentration", "E": "bed evolution"}
 

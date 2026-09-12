@@ -69,10 +69,12 @@ seam list, from the TELEMAC templates:
 
 Each new engine adds, roughly in order:
 
-1. **A result contract** in `contracts/trid3nt_contracts/<engine>_contracts.py`:
-   the headline `LayerURI` subclass carrying the typed scalars the agent
-   narrates, mirroring `telemac_contracts.py`. A product's style is declared on
-   the layer it rides, once, in the reader that builds it.
+1. **A result contract**: every result layer rides the shared `LayerURI` shapes
+   in `contracts/trid3nt_contracts/execution.py`, and a run's headline layer is
+   the `AnswerLayerURI` carrying its measures. An engine adds a subclass there
+   only when it has typed scalars of its own the agent narrates. A product's
+   STYLE row is not a contract: it is declared beside the template that draws
+   it, referenced by that template's `OUTPUTS`.
 
 2. **A worker** under `workers/<engine>/`: an `entrypoint.py` plus the deck
    builders. The worker is an ENGINE ROOM - a staged run dir in, results out, no

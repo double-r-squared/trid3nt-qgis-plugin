@@ -18,7 +18,6 @@ from trid3nt_contracts.envelope import (
     ForcingSummary,
     Provenance,
     ResultLayer,
-    TemporalConfig,
 )
 
 
@@ -45,11 +44,6 @@ def _modeled_flood_envelope() -> AssessmentEnvelope:
                 name="Flood depth (m)",
                 layer_type="raster",
                 uri="gs://trid3nt/runs/01HX/depth.cog.tif",
-                temporal=TemporalConfig(
-                    start="2022-09-28T00:00:00Z",
-                    end="2022-09-30T00:00:00Z",
-                    step_seconds=3600,
-                ),
                 role="primary",
                 units="meters",
             )
@@ -183,33 +177,3 @@ def test_grid_resolution_must_be_positive() -> None:
             grid_resolution_m=0.0,
             simulation_duration_hours=24,
         )
-
-
-def test_result_layer_aligns_with_load_layer_args() -> None:
-    """The visualization seam: ResultLayer fields map onto map-command load-layer
-    args without translation (layer_id, optional temporal)."""
-    from trid3nt_contracts.ws import LoadLayerArgs
-
-    rl = ResultLayer(
-        layer_id="run-01HX-flood-depth",
-        name="Flood depth (m)",
-        layer_type="raster",
-        uri="gs://trid3nt/runs/01HX/depth.cog.tif",
-        temporal=TemporalConfig(
-            start="2022-09-28T00:00:00Z",
-            end="2022-09-30T00:00:00Z",
-            step_seconds=3600,
-        ),
-        role="primary",
-    )
-    args = LoadLayerArgs(
-        layer_id=rl.layer_id,
-        temporal={
-            "start": rl.temporal.model_dump(mode="json")["start"],
-            "end": rl.temporal.model_dump(mode="json")["end"],
-            "step_seconds": rl.temporal.step_seconds,
-        },
-    )
-    # No transformations required beyond plumbing layer_id -- the visualization
-    # seam holds.
-    assert args.layer_id == rl.layer_id

@@ -6,7 +6,6 @@ permanently lost, so there is no subsurface return flow and no baseflow."""
 
 from __future__ import annotations
 
-from trid3nt_contracts.telemac_contracts import TELEMAC_MAX_DEPTH_STYLE
 from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
 
 from trid3nt_server.workflows.runtime import (
@@ -221,12 +220,17 @@ class STEERING(T2D):
                     note=Ref("settled.rating.note"))
 
 
+#: The MAX WATER DEPTH field: depth above ground, no datum, always positive,
+#: on the wet-blue ramp an inundation field is read on.
+MAX_DEPTH_STYLE = {"kind": "mesh", "ramp": "ylgnbu", "units": "m",
+                   "label": "Max water depth"}
+
 #: What the solved run is read for: the depth over time as the animation, its
 #: envelope as the map, and the flux the engine printed across the outlet as the
 #: hydrograph - charted, and placed on the map as the station that carries it.
 OUTPUTS = [
     field("H", t="every").animate(),
-    max_over_time("H").layer(style=TELEMAC_MAX_DEPTH_STYLE),
+    max_over_time("H").layer(style=MAX_DEPTH_STYLE),
     series("FLUX", at=P.pour_point).chart(),
     series("FLUX", at=P.pour_point).station(),
 ]

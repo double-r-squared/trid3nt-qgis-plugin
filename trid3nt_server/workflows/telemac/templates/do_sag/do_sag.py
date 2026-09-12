@@ -6,7 +6,6 @@ to and the closed form the process reduces to."""
 
 from __future__ import annotations
 
-from trid3nt_contracts.telemac_contracts import TELEMAC_DO_STYLE
 from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
 
 from trid3nt_server.workflows.runtime import (
@@ -207,11 +206,18 @@ class STEERING(T2D):
                           respiration_r=0.0)]
 
 
+#: The DISSOLVED-OXYGEN field from a WAQTEL O2 run. rdylbu, NOT reversed: low
+#: oxygen reads red and high reads blue, which is the direction a deficit is
+#: read in. The legend floors at zero so a standard in the low single digits
+#: stays on the ramp beside a river that never fell below six.
+OXYGEN_STYLE = {"kind": "mesh", "ramp": "rdylbu", "units": "mg/L",
+                "label": "Dissolved oxygen", "floor": 0}
+
 #: What the solved run is read for: the oxygen at the last instant as the map,
 #: the oxygen over time as the animation, and the oxygen down the reach as the
 #: chart, with the organic load, the closed form and the standard drawn beside it.
 OUTPUTS = [
-    field("T2", t=-1).layer(style=TELEMAC_DO_STYLE),
+    field("T2", t=-1).layer(style=OXYGEN_STYLE),
     field("T2", t="every").animate(),
     profile("T2", along=DATA.centerline).chart(reference=streeter_phelps.overlay),
 ]

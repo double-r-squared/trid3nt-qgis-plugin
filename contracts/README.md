@@ -29,7 +29,6 @@ produces. Pydantic v2 throughout; every model subclasses `GraceModel`
 | `gate_spec` | The declarative confirm gate a tool carries, and the levers its card offers |
 | `tool_metadata` | The required tool-docstring sections and the `tool_category` vocabulary |
 | `execution` | `ModelSetup`, `ExecutionHandle`, `RunResult`, `LayerURI`, `LegendKey`, and the `LayerURI` result-model subclasses |
-| `telemac_contracts` | The TELEMAC result layers and their declared style rows |
 | `publish_manifest` | The typed reader for a worker's `publish_manifest.json` |
 | `export_schemas` | Renders `contracts/schemas/` from the live models |
 

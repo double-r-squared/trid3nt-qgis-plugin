@@ -6,7 +6,6 @@ standing waves are visible rather than averaged away."""
 
 from __future__ import annotations
 
-from trid3nt_contracts.telemac_contracts import TELEMAC_AGITATION_STYLE
 from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
 
 from trid3nt_server.workflows.runtime import (
@@ -137,13 +136,19 @@ class STEERING(ART):
                                  reflection_coef=P.reflection_coef)
 
 
+#: The ARTEMIS agitation coefficient Kd = Hs/H0 - a dimensionless amplification
+#: ratio, not a wave height. The legend is capped at the 99.5th percentile: the
+#: standing wave against the open boundary sets the field's maximum, and a ramp
+#: run to it paints the harbour interior one colour.
+AGITATION_STYLE = {"kind": "mesh", "range": "p99.5"}
+
 #: What the solved run is read for: the agitation coefficient over the harbour,
 #: at the one instant an elliptic solve writes, and along the transect through
 #: the structure. The profile keeps the nodes within one finest mesh edge of the
 #: line: the band the structure's own nodes were laid at, so the read is the
 #: line's and not a mean over the whole harbour's width.
 OUTPUTS = [
-    field("KD", t=-1).layer(style=TELEMAC_AGITATION_STYLE),
+    field("KD", t=-1).layer(style=AGITATION_STYLE),
     profile("KD", along=DATA.transect, within_m=P.mesh_min_edge_m).chart(),
 ]
 CAPTIONS = {"KD": "agitation coefficient"}

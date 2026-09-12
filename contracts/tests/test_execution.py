@@ -8,7 +8,7 @@ import pytest
 from pydantic import ValidationError
 
 from trid3nt_contracts.common import new_ulid
-from trid3nt_contracts.envelope import ResultLayer, TemporalConfig
+from trid3nt_contracts.envelope import ResultLayer
 from trid3nt_contracts.execution import (
     ExecutionHandle,
     LayerURI,
@@ -16,7 +16,6 @@ from trid3nt_contracts.execution import (
     ModelSetup,
     RunResult,
 )
-from trid3nt_contracts.ws import LoadLayerArgs, MapTemporal
 
 
 def test_model_setup_roundtrip() -> None:
@@ -69,35 +68,6 @@ def test_run_result_status_supports_cancelled() -> None:
     a = rr.model_dump(mode="json")
     again = RunResult.model_validate(a).model_dump(mode="json")
     assert a == again
-
-
-def test_layer_uri_maps_field_for_field_onto_load_layer_args() -> None:
-    """The visualization seam: LayerURI -> map-command load-layer with no
-    translation beyond plumbing layer_id."""
-    layer = LayerURI(
-        layer_id="run-01HX-flood-depth",
-        name="Flood depth (m)",
-        layer_type="raster",
-        uri="gs://trid3nt/runs/01HX/depth.cog.tif",
-        temporal=TemporalConfig(
-            start="2022-09-28T00:00:00Z",
-            end="2022-09-30T00:00:00Z",
-            step_seconds=3600,
-        ),
-        role="primary",
-        units="meters",
-    )
-    args = LoadLayerArgs(
-        layer_id=layer.layer_id,
-        temporal=MapTemporal(
-            start=layer.temporal.start,
-            end=layer.temporal.end,
-            step_seconds=layer.temporal.step_seconds,
-        ),
-    )
-    assert args.layer_id == layer.layer_id
-    assert args.temporal is not None
-    assert args.temporal.step_seconds == layer.temporal.step_seconds
 
 
 

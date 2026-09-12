@@ -34,7 +34,6 @@ __all__ = [
     "EnvelopeType",
     "ForcingSummary",
     "ResultLayer",
-    "TemporalConfig",
     "DataSource",
     "Provenance",
     "CatalogReference",
@@ -69,14 +68,6 @@ class ForcingSummary(GraceModel):
     inputs_uri: str | None = None  # the forcing data file, if any
 
 
-class TemporalConfig(GraceModel):
-    """WMS-T temporal config for a time-varying layer."""
-
-    start: UTCDatetime
-    end: UTCDatetime
-    step_seconds: int = Field(gt=0)
-
-
 class ResultLayer(GraceModel):
     """A renderable result layer.
     Field-for-field alignable with the ``load-layer`` map command so a client
@@ -87,7 +78,6 @@ class ResultLayer(GraceModel):
     layer_type: Literal["raster", "vector"]
     uri: str  # canonical object-store location
     style: dict[str, Any] | None = None  # the DECLARED style row
-    temporal: TemporalConfig | None = None  # present iff layer is time-varying
     role: Literal["primary", "context", "input"]
     units: str | None = None  # e.g., "meters", "m/s", or None for categorical
     # The declared style resolved against this layer - concrete range and the

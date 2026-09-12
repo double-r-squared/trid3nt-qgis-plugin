@@ -28,7 +28,6 @@ consumer branches on its discriminator rather than on a string it recognised.
 | `region_choice.py` | The region-narrowing picker: the request that pauses a turn, and its reply. |
 | `secrets.py` | The per-Case secret envelopes; `secret-add` is the only one that carries key material. |
 | `source_spec.py` | `SourceSpec` - the generic data-router source specification, as data. |
-| `telemac_contracts.py` | One `LayerURI` subclass per TELEMAC product, each carrying the scalars a narration cites. |
 | `tool_metadata.py` | The tool docstring sections and the `tool_category` vocabulary. |
 | `tool_registry.py` | `AtomicToolMetadata` - what every registered tool declares. |
 | `user.py` | The User account record. |

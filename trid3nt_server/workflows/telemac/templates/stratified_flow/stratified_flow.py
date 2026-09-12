@@ -6,7 +6,6 @@ MIXING DOWNWARD. The basin is CLOSED: it names no liquid boundary."""
 
 from __future__ import annotations
 
-from trid3nt_contracts.telemac_contracts import TELEMAC3D_STRATIFICATION_STYLE
 from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
 
 from trid3nt_server.workflows.runtime import ParamRef, Ref, Step, register_workflow
@@ -193,6 +192,10 @@ class STEERING(T3D):
     wind = Wind(speed_mps=P.wind_speed_mps, from_deg=P.wind_direction_deg)
 
 
+#: A TELEMAC-3D plane of a strictly positive field - temperature C, salinity
+#: psu - on a sequential ramp; the caption names the variable.
+STRATIFICATION_STYLE = {"kind": "mesh", "ramp": "viridis"}
+
 #: What the solved run is read for: the temperature on the surface plane and on
 #: the bed plane as the pair of maps whose contrast a depth average cannot show,
 #: and the column at the deepest node as the chart, the prescribed initial column
@@ -200,8 +203,8 @@ class STEERING(T3D):
 #: the two curves enclose the same heat and a surface that fell is the warm
 #: layer mixed downward.
 OUTPUTS = [
-    field("T1", t=-1).layer(style=TELEMAC3D_STRATIFICATION_STYLE),
-    field("T1", t=-1, plane=0).layer(style=TELEMAC3D_STRATIFICATION_STYLE),
+    field("T1", t=-1).layer(style=STRATIFICATION_STYLE),
+    field("T1", t=-1, plane=0).layer(style=STRATIFICATION_STYLE),
     column("T1").chart(reference=column("T1", t=0)),
 ]
 CAPTIONS = {"T1": "water temperature"}
