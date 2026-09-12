@@ -231,39 +231,7 @@ class TestDispatchResolve:
                 {"layer_uri": "s3://trid3nt-runs/01KXNOPE/never_made.tif"},
             )
 
-    def test_code_exec_layer_refs_values_resolve(self) -> None:
-        reg = self._reg()
-        reg.register_tool_result(
-            "list_run_frames", {"frames": [{"uri": FRAME_COG}]}
-        )
-        frame_short = reg.short_for_uri(FRAME_COG)
-        assert frame_short is not None
-        out = reg.resolve_params(
-            "code_exec_request",
-            {
-                "python_code": "result = peak.read(1).max()",
-                "layer_refs": {
-                    "peak": "L1",  # short handle
-                    "frame": FRAME_COG,  # verbatim registered uri
-                    "frames": [frame_short, FRAME_COG],  # list-valued ref
-                },
-            },
-        )
-        refs = out["layer_refs"]
-        assert refs["peak"] == COG_A
-        assert refs["frame"] == FRAME_COG
-        assert refs["frames"] == [FRAME_COG, FRAME_COG]
-        # python_code is never touched.
-        assert out["python_code"] == "result = peak.read(1).max()"
 
-    def test_code_exec_layer_refs_unknown_handle_rejects_typed(self) -> None:
-        reg = self._reg()
-        with pytest.raises(UriResolutionError) as exc_info:
-            reg.resolve_params(
-                "code_exec_request",
-                {"layer_refs": {"peak": "L42"}},
-            )
-        assert "layer_refs[peak]" in str(exc_info.value)
 
 
 

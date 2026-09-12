@@ -80,12 +80,12 @@ def _matches_layer(entry: Any, layer: str) -> bool:
 def list_run_frames(run_id: str, layer: str = "flood_depth") -> dict[str, Any]:
     """List the ordered animation-frame COG URIs for a completed run's layer.
 
-    ROUTING: a PER-FRAME visualization over a time-stepped solve in the Python
-    sandbox - a temporal glow over a flash sequence, a first/peak/last panel, a
-    per-step max - where the ordered frame URIs go in as a multi-frame `layer_refs`
-    entry (`{"frames": [<uri>, ...]}`). NOT for a single non-animated layer (pass
-    its URI straight to the sandbox), NOT to fetch data, and NOT to render a
-    standard scrubber - the frames the seam publishes are already grouped.
+    ROUTING: a PER-FRAME read over a time-stepped solve - a temporal glow over a
+    flash sequence, a first/peak/last panel, a per-step max - where the ordered
+    frame URIs feed a run_pyqgis snippet or a Processing algorithm per frame.
+    NOT for a single non-animated layer (pass its URI straight on), NOT to fetch
+    data, and NOT to render a standard scrubber - the frames the seam publishes
+    are already grouped.
 
     `layer` is matched on the grouping name or the physical quantity; `""` lists ALL
     frame layers. Returns {run_id, layer, frame_count, frame_uris, frames:

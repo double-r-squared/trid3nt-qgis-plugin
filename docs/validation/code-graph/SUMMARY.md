@@ -10,28 +10,28 @@ venvs/agent/bin/python dev/instruments/code_graph.py
 
 | metric | value |
 |---|---|
-| modules scanned | 977 |
-| total loc | 242529 |
-| reachable from roots | 420 (109909 loc) |
+| modules scanned | 940 |
+| total loc | 228030 |
+| reachable from roots | 392 (102477 loc) |
 | test-only-reachable | 83 |
 | script-only-reachable | 0 |
-| orphans (product) | 18 |
+| orphans (product) | 19 |
 | package markers excluded from orphans | 104 |
 | orphans (scripts/ entry modules) | 0 |
-| test modules | 389 |
-| import edges | 3144 |
-| dynamic (string-resolved) edges | 184 |
-| reference call-site edges | 12632 |
-| unattributed call sites | 58541 |
+| test modules | 379 |
+| import edges | 3008 |
+| dynamic (string-resolved) edges | 173 |
+| reference call-site edges | 12197 |
+| unattributed call sites | 55383 |
 | dead symbols (conf >= 80) | 8 |
-| unused callables (conf 60 tier) | 36 |
+| unused callables (conf 60 tier) | 40 |
 | vulture findings muted by whitelist | 39 |
 
 ## Honesty checks
 
 - Known-culled modules from this arc still present: **0** (all confirmed gone)
 - grimp modules with no file in the scanned universe: 0
-- Call sites the import table could not attribute: 58541 (builtins, locals, methods on non-imported objects -- counted, not guessed).
+- Call sites the import table could not attribute: 55383 (builtins, locals, methods on non-imported objects -- counted, not guessed).
 - Out of scope, so its imports anchor nothing: `experiments/`, `third_party/`.
 
 ## False-positive classes handled
@@ -64,6 +64,7 @@ venvs/agent/bin/python dev/instruments/code_graph.py
 | `trid3nt_server.tools.fetchers.weather.fetch_airnow_air_quality.hooks` | 165 | trid3nt_server/tools/fetchers/weather/fetch_airnow_air_quality/hooks.py |
 | `trid3nt_server.tools.fetchers.socioeconomic.fetch_usace_nsi.hooks` | 142 | trid3nt_server/tools/fetchers/socioeconomic/fetch_usace_nsi/hooks.py |
 | `trid3nt_server.tools.fetchers.weather.fetch_nws_event.hooks` | 125 | trid3nt_server/tools/fetchers/weather/fetch_nws_event/hooks.py |
+| `trid3nt_server.tools.derive._gdal_runner` | 123 | trid3nt_server/tools/derive/_gdal_runner.py |
 | `trid3nt_server.tools.fetchers.ocean.fetch_osm_breakwaters.hooks` | 98 | trid3nt_server/tools/fetchers/ocean/fetch_osm_breakwaters/hooks.py |
 | `trid3nt_server.tools.fetchers.ocean.fetch_osm_coastline.hooks` | 59 | trid3nt_server/tools/fetchers/ocean/fetch_osm_coastline/hooks.py |
 
@@ -100,34 +101,35 @@ venvs/agent/bin/python dev/instruments/code_graph.py
 | `token_envelope` | parameter | trid3nt_server/credentials/auth_handshake.py:127 | 1 |
 | `unquote` | import | trid3nt_server/emission/uri_registry.py:18 | 1 |
 | `default_seconds` | parameter | trid3nt_server/gates/confirm.py:90 | 1 |
-| `raw_user_text` | parameter | trid3nt_server/server/dispatch/emitter.py:822 | 1 |
+| `raw_user_text` | parameter | trid3nt_server/server/dispatch/emitter.py:813 | 1 |
 | `entry_id` | parameter | trid3nt_server/tools/search/fetch_living_atlas_layer/fetch_living_atlas_layer.py:128 | 1 |
 | `gs_backend` | parameter | trid3nt_server/workflows/publishing/cog.py:373 | 1 |
 | `runs_bucket_default` | parameter | trid3nt_server/workflows/publishing/cog.py:375 | 1 |
 
 ## Package-level edge matrix (cross-package import edges)
 
-| from \ to | contracts | plugin | scripts | tests | trid3nt_contracts | trid3nt_server | trid3nt_server.__main__ | trid3nt_server.adapters | trid3nt_server.credentials | trid3nt_server.emission | trid3nt_server.fallbacks | trid3nt_server.gates | trid3nt_server.inputs | trid3nt_server.main | trid3nt_server.persistence | trid3nt_server.plugin_repo | trid3nt_server.sandbox | trid3nt_server.server | trid3nt_server.telemetry | trid3nt_server.tools | trid3nt_server.workflows | workers |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| contracts | . | . | . | . | 52 | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . |
-| plugin | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . |
-| scripts | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . |
-| tests | . | 3 | 1 | . | 264 | 1 | . | 70 | 9 | 76 | 4 | 37 | 16 | 16 | 32 | 1 | 3 | 99 | 10 | 551 | 260 | . |
-| trid3nt_contracts | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . |
-| trid3nt_server | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . |
-| trid3nt_server.__main__ | . | . | . | . | . | . | . | . | . | . | . | . | . | 1 | . | . | . | . | . | . | . | . |
-| trid3nt_server.adapters | . | . | . | . | 4 | . | . | . | 1 | . | . | 3 | . | . | . | . | . | 1 | . | . | . | . |
-| trid3nt_server.credentials | . | . | . | . | 3 | . | . | . | . | . | . | . | . | . | 1 | . | . | . | . | . | . | . |
-| trid3nt_server.emission | . | . | . | . | 14 | . | . | . | . | . | . | 1 | . | . | . | . | . | . | . | 3 | 4 | . |
-| trid3nt_server.fallbacks | . | . | . | . | 1 | . | . | . | . | . | . | 1 | . | . | . | . | . | . | . | 1 | 1 | . |
-| trid3nt_server.gates | . | . | . | . | 22 | . | . | 1 | 4 | 3 | . | . | 1 | . | . | . | . | 8 | . | 9 | 1 | . |
-| trid3nt_server.inputs | . | . | . | . | 5 | . | . | . | 1 | 5 | . | 2 | . | . | . | . | . | 1 | . | 4 | 6 | . |
-| trid3nt_server.main | . | . | . | . | . | . | . | . | . | . | . | . | . | . | 1 | . | . | 1 | 1 | 12 | 1 | . |
-| trid3nt_server.persistence | . | . | . | . | 4 | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . |
-| trid3nt_server.plugin_repo | . | . | . | . | . | . | . | 1 | . | . | . | . | . | . | . | . | . | . | . | . | . | . |
-| trid3nt_server.sandbox | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | 1 | . | . |
-| trid3nt_server.server | . | . | . | . | 29 | 1 | . | 9 | 4 | 11 | . | 14 | 1 | 2 | 2 | 1 | . | . | 2 | 17 | 2 | . |
-| trid3nt_server.telemetry | . | . | . | . | . | 1 | . | . | . | . | . | . | . | . | 1 | . | . | 1 | . | . | . | . |
-| trid3nt_server.tools | . | . | . | . | 167 | . | . | . | . | 21 | 3 | 2 | 7 | 1 | . | . | 1 | . | 2 | . | 27 | . |
-| trid3nt_server.workflows | . | . | . | . | 44 | . | . | . | . | 22 | . | 7 | 38 | . | 3 | . | . | . | 1 | 25 | . | . |
-| workers | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | 1 | . |
+| from \ to | contracts | plugin | scripts | tests | trid3nt_contracts | trid3nt_server | trid3nt_server.__main__ | trid3nt_server.adapters | trid3nt_server.credentials | trid3nt_server.emission | trid3nt_server.errors | trid3nt_server.fallbacks | trid3nt_server.gates | trid3nt_server.inputs | trid3nt_server.main | trid3nt_server.persistence | trid3nt_server.plugin_repo | trid3nt_server.server | trid3nt_server.storage | trid3nt_server.telemetry | trid3nt_server.tools | trid3nt_server.workflows | workers |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| contracts | . | . | . | . | 51 | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . |
+| plugin | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . |
+| scripts | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . |
+| tests | . | 3 | 1 | . | 259 | 1 | . | 69 | 9 | 73 | . | 4 | 39 | 22 | 16 | 32 | 1 | 102 | 8 | 10 | 507 | 253 | . |
+| trid3nt_contracts | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . |
+| trid3nt_server | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . |
+| trid3nt_server.__main__ | . | . | . | . | . | . | . | . | . | . | . | . | . | . | 1 | . | . | . | . | . | . | . | . |
+| trid3nt_server.adapters | . | . | . | . | 4 | . | . | . | 1 | . | . | . | 3 | . | . | . | . | 1 | . | . | . | . | . |
+| trid3nt_server.credentials | . | . | . | . | 3 | . | . | . | . | . | . | . | . | . | . | 1 | . | . | . | . | . | . | . |
+| trid3nt_server.emission | . | . | . | . | 14 | . | . | . | . | . | . | . | 1 | . | . | . | . | . | 3 | . | 3 | 2 | . |
+| trid3nt_server.errors | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . |
+| trid3nt_server.fallbacks | . | . | . | . | 1 | . | . | . | . | . | . | . | 1 | . | . | . | . | . | 1 | . | 1 | . | . |
+| trid3nt_server.gates | . | . | . | . | 22 | . | . | 1 | 4 | 3 | . | . | . | 2 | . | . | . | 8 | . | . | 9 | . | . |
+| trid3nt_server.inputs | . | . | . | . | 5 | . | . | . | 1 | 5 | 1 | . | 2 | . | . | . | . | 1 | 2 | . | 4 | 1 | . |
+| trid3nt_server.main | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | 1 | . | 1 | . | 1 | 4 | 1 | . |
+| trid3nt_server.persistence | . | . | . | . | 4 | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . |
+| trid3nt_server.plugin_repo | . | . | . | . | . | . | . | 1 | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . |
+| trid3nt_server.server | . | . | . | . | 32 | 1 | . | 9 | 4 | 12 | . | . | 14 | 2 | 2 | 2 | 1 | . | 1 | 2 | 15 | . | . |
+| trid3nt_server.storage | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . |
+| trid3nt_server.telemetry | . | . | . | . | . | 1 | . | . | . | . | . | . | . | . | . | 1 | . | 1 | . | . | . | . | . |
+| trid3nt_server.tools | . | . | . | . | 138 | . | . | . | . | 15 | . | 3 | 2 | 8 | 1 | . | . | 2 | 8 | 2 | . | 17 | . |
+| trid3nt_server.workflows | . | . | . | . | 44 | . | . | . | . | 22 | 1 | . | 7 | 43 | . | 3 | . | . | 13 | 1 | 25 | . | . |
+| workers | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | 1 | . |

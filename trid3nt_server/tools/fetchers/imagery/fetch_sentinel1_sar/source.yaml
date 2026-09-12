@@ -134,7 +134,7 @@ docstring: |-
   **When NOT to use:**
   - A natural-color "what does it look like" picture -- use
     ``fetch_sentinel2_truecolor`` (10 m optical) or ``fetch_landsat_imagery``.
-  - A vegetation index -- use ``compute_ndvi``.
+  - A vegetation index -- band math over optical imagery in the session.
   - Areas / windows with no Sentinel-1 pass (widen the window); a no-imagery
     result is an honest typed error, never a fabricated layer.
 

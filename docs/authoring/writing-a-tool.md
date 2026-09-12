@@ -6,11 +6,13 @@ raster/vector compute, or an irreducible primitive. Follow the six steps below
 and your tool will register at import time, route from natural-language prompts,
 render its output on the map, and pass the mandatory acceptance checks.
 
-> Scope reminder (a project norm): atomic tools are DATA fetchers and
-> irreducible primitives ONLY. Composed, multi-layer analyses belong in the
-> `code_exec` python playground, not in a new tool. If your idea is "fetch X" or
-> "compute one primitive from a raster", it is a tool. If it is "combine layers
-> A, B, C into an impact number", it is a playground composition.
+> Scope reminder (a project norm): atomic tools are DATA fetchers and the
+> simulation-automation primitives ONLY. Standard geoprocessing runs in the
+> user's QGIS session through `run_qgis_algorithm`, and composed, multi-layer
+> analyses through `run_pyqgis`, not in a new tool. If your idea is "fetch X" it
+> is a fetch spec; if it is "pair a model with observations" it is a derive
+> tool; if it is "slope of the DEM" or "combine layers A, B, C into an impact
+> number", it is the session's work.
 
 A DATA FETCHER is not written in Python at all: it is DECLARED as a
 `source.yaml` beside a `corpus.yaml` under `trid3nt_server/tools/fetchers/`, and
@@ -20,8 +22,8 @@ path - the derive, display, search and meta primitives.
 
 Two files are your templates. Read them next to this guide:
 
-- Canonical real example (a cached raster compute returning a map layer):
-  `trid3nt_server/tools/derive/compute_slope/compute_slope.py`
+- Canonical real example (a read over a handed-in layer returning a chart):
+  `trid3nt_server/tools/derive/compute_cross_section/compute_cross_section.py`
 - Copy-me starter (a trivial, dependency-free compute):
   `trid3nt_server/tools/_example_tool_template.py`
 
@@ -34,10 +36,9 @@ Everything below cites real code. Line numbers drift; grep the symbol.
 1. The tool **function** + its **metadata** (`AtomicToolMetadata`) in its own
    DIRECTORY under `trid3nt_server/tools/<subpackage>/<tool_name>/`, holding
    `<tool_name>.py`, `corpus.yaml` and an `__init__.py`. Pick the subpackage by
-   what the tool IS: `derive/` (compute_* / clip_* / extract_* / charts),
-   `display/` (live map overlays that transfer no data), `search/` (catalog and
-   tool retrieval), or `meta/` (utilities: the code_exec box, case report,
-   spatial input). `cache.py`, `vector_tiles.py` and `tool_arg_normalizer.py`
+   what the tool IS: `derive/` (compute_* / extract_* / charts / the two
+   session tools), `search/` (catalog and tool retrieval), or `meta/`
+   (utilities: case report, run frames, spatial input). `cache.py`, `vector_tiles.py` and `tool_arg_normalizer.py`
    deliberately stay at `tools/` root.
 2. The **`@register_tool`** decorator (registers it in `TOOL_REGISTRY`).
 3. An **eager import** in `trid3nt_server/tools/__init__.py`
@@ -54,15 +55,15 @@ Everything below cites real code. Line numbers drift; grep the symbol.
 ### Signature conventions
 
 ```python
-def compute_slope(
-    dem_uri: str,
-    output_unit: Literal["degrees", "percent"] = "degrees",
-    algorithm: Literal["Horn", "ZevenbergenThorne"] = "Horn",
+def compute_cross_section(
+    layer_uri: str,
+    line: Any,
+    n_stations: int = _DEFAULT_N_STATIONS,
+    extra_layer_uris: list[str] | None = None,
     *,
-    _storage_client: object | None = None,
-    _bucket: str | None = None,
+    _created_turn_id: str | None = None,
     **_extra_ignored: Any,
-) -> LayerURI:
+) -> dict[str, Any]:
     ...
 ```
 
@@ -71,9 +72,12 @@ def compute_slope(
   (`adapter.py`, `FunctionDeclaration.from_callable_with_api_option`). Give every
   param a real type hint. Prefer `Literal[...]` enums for closed choices -- they
   survive schema generation and pin the LLM to valid values.
-- **`bbox` is `tuple[float, float, float, float]`** = `(min_lon, min_lat,
-  max_lon, max_lat)` in EPSG:4326. `_normalize_callable_for_gemini`
-  (`adapter.py`) maps `tuple[float, ...]` to a JSON `list[float]` at the boundary.
+- **A derive tool takes a LAYER** (`layer_uri`, `dem_uri`, ...) and never
+  fetches: the fetch tool that declares the data runs first, and the tool
+  refuses, naming that fetch, when the layer was not given. `dev/lint/derive_fetches.py`
+  refuses a registry lookup, a `read_through` or a fetcher import under
+  `tools/derive`. A `bbox` belongs to a fetch spec, as `(min_lon, min_lat,
+  max_lon, max_lat)` in EPSG:4326.
 - **Trailing `**_extra_ignored: Any`.** Absorbs LLM over-supply. Underscore-
   prefixed params are stripped from the LLM-facing schema by
   `_strip_private_params` (`adapter.py`), so they are invisible to the model but
@@ -81,7 +85,7 @@ def compute_slope(
 
 ### Sync vs async
 
-- **Compute and fetch tools are normally sync `def`** (like `compute_slope`).
+- **Compute tools are normally sync `def`** (like `compute_cross_section`).
   If the work is heavy/loop-blocking, do NOT block the asyncio loop yourself --
   the server offloads named heavy sync tools to a thread through
   `_ALWAYS_OFFLOAD_SYNC_TOOLS` (`server/dispatch/emitter.py`), which refuses to
@@ -113,26 +117,28 @@ RASTER, the emission seam publishes it on the way out (`publish_for_emission` in
 event loop). There is no per-tool opt-out flag: a raster that should not be seen
 is one the tool does not return. A failed publish degrades to the unstyled
 `s3://` COG rather than dropping the layer. Vectors render inline as GeoJSON.
-See `compute_slope`'s `LayerURI(...)` return for the construction, style row
-included.
+See `delineate_watershed`'s `WatershedLayerURI(...)` return for the
+construction, style row included.
 
 ### Caching
 
-If your tool is a network fetcher, wrap the byte-producing call in `read_through`
-(from `trid3nt_server.tools.cache`):
+Only a FETCHER caches, and a fetcher is declared, not coded. The one hand-written
+exception, `lookup_precip_return_period` (a point read of an endpoint that returns
+a scalar, not a layer), wraps its byte-producing call in `read_through` (from
+`trid3nt_server.tools.cache`):
 
 ```python
 result = read_through(
-    metadata=_COMPUTE_SLOPE_METADATA,
+    metadata=_METADATA,
     params=params,          # dict that fully keys the request
-    ext="tif",
+    ext="csv",
     fetch_fn=_fetch,
 )
 ```
 
 `read_through` keys the cache off `metadata` + `params`; on a hit it returns the
-stored uri without refetching. (The copy-me template is `cacheable=False`, so it
-does NOT use `read_through` at all.)
+stored uri without refetching. A derive tool never calls it: the layer it reads
+was cached by the fetch that produced it.
 
 ### The error / fallback convention
 
@@ -178,14 +184,14 @@ construction):
 A bad combination raises `ValidationError` at import, before the tool is on the
 wire.
 
-Real metadata (`compute_slope/compute_slope.py`):
+Real metadata (`compute_cross_section/compute_cross_section.py`):
 
 ```python
-_COMPUTE_SLOPE_METADATA = AtomicToolMetadata(
-    name="compute_slope",
-    ttl_class="static-30d",
-    source_class="slope",
-    cacheable=True,
+_METADATA = AtomicToolMetadata(
+    name="compute_cross_section",
+    ttl_class="live-no-cache",
+    source_class="workflow_dispatch",
+    cacheable=False,
 )
 ```
 
@@ -193,8 +199,8 @@ Decorate the function. Any non-`None` decorator kwarg overrides the metadata via
 `model_copy(update=...)` and re-validates (fail-fast):
 
 ```python
-@register_tool(_COMPUTE_SLOPE_METADATA)
-def compute_slope(dem_uri, output_unit="degrees", algorithm="Horn", **_extra_ignored):
+@register_tool(_METADATA)
+def compute_cross_section(layer_uri, line, n_stations=_DEFAULT_N_STATIONS, **_extra_ignored):
     ...
 ```
 
@@ -214,7 +220,7 @@ import block near the bottom of
 `trid3nt_server/tools/__init__.py`:
 
 ```python
-from .derive.compute_slope import compute_slope  # noqa: E402,F401
+from .derive.compute_cross_section import compute_cross_section  # noqa: E402,F401
 ```
 
 The block is grouped by subpackage and sorted; add your line to the group
@@ -253,15 +259,15 @@ though it is registered.
 
 Add 5-10 realistic, natural user-prompt queries keyed by your function name, in
 the `corpus.yaml` beside your module. Cover synonyms, regional variants, and
-adjacent intent. Real entry (`derive/compute_slope/corpus.yaml`):
+adjacent intent. Real entry (`derive/compute_cross_section/corpus.yaml`):
 
 ```yaml
-compute_slope:
-- show me the slope map for this watershed
-- I need terrain steepness for landslide susceptibility analysis
-- calculate the gradient of the hillside in this burn scar
-- which areas around the dam are the steepest?
-- give me a slope raster over the Camp Fire footprint for debris-flow risk
+compute_cross_section:
+- draw a section view of the ground and water surface along this line
+- plot the flood depth along the road through this neighborhood
+- give me a cross-section profile of the head surface versus the land surface across the seepage zone
+- overlay the DEM and the bathymetry along this transect so I can see bank to channel
+- show me the freeboard along the levee, ground line versus water surface on one chart
 ```
 
 Follow the no-downtown-city and natural-prompts-no-bbox norms: use place names,
@@ -282,8 +288,8 @@ from trid3nt_server.tools.search.search_tools import search_tools as dd
 from trid3nt_server.tools.search.tool_retrieval import retrieve_visible_tools
 
 dd._get_index()  # warm the BM25 + dense index from TOOL_REGISTRY + corpus
-name = "compute_slope"
-for q in ["show me the slope map for this watershed"]:
+name = "compute_cross_section"
+for q in ["show the elevation profile across this ridge"]:
     vis = retrieve_visible_tools(q, None, 8)
     assert name in vis, f"{name} not surfaced for {q!r}"
     assert len(vis) < len(TOOL_REGISTRY), "full registry == cold fail-open, not real routing"
@@ -300,7 +306,7 @@ case so it proves the CORPUS actually routes.
 
 The test tree MIRRORS the product tree, so a derive tool's test is
 `tests/derive/test_<your_tool>.py`. Model it on
-`tests/derive/test_compute_slope.py`. A minimal test asserts three things:
+`tests/derive/test_compute_cross_section.py`. A minimal test asserts three things:
 registration + metadata, the corpus coverage, and the tool's own behavior
 (called directly via `TOOL_REGISTRY[name].fn`, since the decorator returns the
 undecorated function):
@@ -309,17 +315,16 @@ undecorated function):
 from trid3nt_server.tools import TOOL_REGISTRY
 
 def test_registered():
-    assert "compute_slope" in TOOL_REGISTRY
-    m = TOOL_REGISTRY["compute_slope"].metadata
-    assert m.source_class == "slope"
-    assert m.ttl_class == "static-30d" and m.cacheable is True
+    assert "compute_cross_section" in TOOL_REGISTRY
+    m = TOOL_REGISTRY["compute_cross_section"].metadata
+    assert m.ttl_class == "live-no-cache" and m.cacheable is False
 
 def test_corpus():
     import pathlib, yaml
-    from trid3nt_server.tools.derive.compute_slope import compute_slope as mod
+    from trid3nt_server.tools.derive.compute_cross_section import compute_cross_section as mod
     p = pathlib.Path(mod.__file__).resolve().parent / "corpus.yaml"
     corpus = yaml.safe_load(p.read_text())
-    assert len(corpus["compute_slope"]) >= 3
+    assert len(corpus["compute_cross_section"]) >= 3
 ```
 
 Monkeypatch the network and the object store (see the sibling test's stubs) so
@@ -379,8 +384,8 @@ To copy it into your own tool:
    `name=` in the metadata, and `__all__`.
 2. Replace the body with your fetch/compute; return a `LayerURI` (map layer) or a
    dict (scalar/tabular).
-3. Set the metadata correctly for your case (a fetcher: `cacheable=True` +
-   `ttl_class="static-30d"` + a `source_class` + `open_world_hint=True`).
+3. Set the metadata correctly for your case (a derive tool over a handed-in
+   layer: `cacheable=False` + `ttl_class="live-no-cache"` + `open_world_hint=False`).
 4. Delete the `TRID3NT_ENABLE_EXAMPLE_TOOL` gate; decorate the function directly
    with `@register_tool(_METADATA, ...)`.
 5. Add the eager import (step 3), the corpus (step 4), and the test (step 5).

@@ -29,6 +29,7 @@ markers (directories the runtime walks for data, not modules to import).
 | `trid3nt_server.tools.fetchers.weather.fetch_airnow_air_quality.hooks` | 165 | trid3nt_server/tools/fetchers/weather/fetch_airnow_air_quality/hooks.py | no importer in any scanned tree |
 | `trid3nt_server.tools.fetchers.socioeconomic.fetch_usace_nsi.hooks` | 142 | trid3nt_server/tools/fetchers/socioeconomic/fetch_usace_nsi/hooks.py | no importer in any scanned tree |
 | `trid3nt_server.tools.fetchers.weather.fetch_nws_event.hooks` | 125 | trid3nt_server/tools/fetchers/weather/fetch_nws_event/hooks.py | no importer in any scanned tree |
+| `trid3nt_server.tools.derive._gdal_runner` | 123 | trid3nt_server/tools/derive/_gdal_runner.py | no importer in any scanned tree |
 | `trid3nt_server.tools.fetchers.ocean.fetch_osm_breakwaters.hooks` | 98 | trid3nt_server/tools/fetchers/ocean/fetch_osm_breakwaters/hooks.py | no importer in any scanned tree |
 | `trid3nt_server.tools.fetchers.ocean.fetch_osm_coastline.hooks` | 59 | trid3nt_server/tools/fetchers/ocean/fetch_osm_coastline/hooks.py | no importer in any scanned tree |
 

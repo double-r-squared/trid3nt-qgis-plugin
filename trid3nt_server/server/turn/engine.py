@@ -94,7 +94,7 @@ def _stage_label_for_tool(tool_name: str) -> str:
         return "visualization"
     if tool_name.startswith(
         ("compute_", "run_", "model_", "spatial_", "query_", "analyze_", "aggregate_")
-    ) or tool_name.startswith("code_exec"):
+    ):
         return "analysis"
     return "tool-selection"
 

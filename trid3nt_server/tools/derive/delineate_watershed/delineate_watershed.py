@@ -21,16 +21,12 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.tools import register_tool
 from trid3nt_server.tools.derive._hydrology_common import (
-    HydrologyAoiTooLargeError,
     HydrologyInputError,
     HydrologyPrimitivesError,
     _ENGINE_NOTE,
-    _MAX_AOI_DEG,
     _condition_dem,
-    _import_pysheds,
+    _dem_bbox_4326,
     _stage_dem,
-    _stage_uri_local,
-    _validate_bbox,
     _write_geojson,
     snap_and_delineate_index_space,
 )
@@ -63,9 +59,6 @@ class WatershedLayerURI(LayerURI):
     snapped_pour_point: tuple[float, float] | None = None
     notes: list[str] = []
 
-#: Auto-bbox half-side (degrees) around the pour point when no bbox is given.
-_AUTO_BBOX_DEG: float = 0.1
-
 #: Default snap threshold (upslope cells) for pour-point snapping.
 _SNAP_THRESHOLD_CELLS: int = 100
 
@@ -94,17 +87,6 @@ def _validate_pour_point(pour_point: Any) -> tuple[float, float]:
             f"pour_point out of lon/lat range: {pour_point!r}"
         )
     return (lon, lat)
-
-def _auto_bbox(
-    lon: float, lat: float, half_side_deg: float = _AUTO_BBOX_DEG / 2.0
-) -> tuple[float, float, float, float]:
-    """The 0.1-degree default box centered on the pour point."""
-    return (
-        max(lon - half_side_deg, -180.0),
-        max(lat - half_side_deg, -90.0),
-        min(lon + half_side_deg, 180.0),
-        min(lat + half_side_deg, 90.0),
-    )
 
 def _snap_to_stream(
     acc: np.ndarray,
@@ -164,13 +146,12 @@ def _cell_area_km2(grid: Any) -> float:
 
 @register_tool(
     _WATERSHED_METADATA,
-    # Writes only its own run artifact; open-world when fetching the DEM.
-    open_world_hint=True,
+    # Writes only its own run artifact over a layer it was handed.
+    open_world_hint=False,
 )
 def delineate_watershed(
     pour_point: tuple[float, float],
-    bbox: tuple[float, float, float, float] | None = None,
-    dem_uri: str | None = None,
+    dem_uri: str,
     snap_threshold: int = _SNAP_THRESHOLD_CELLS,
     *,
     _output_dir: str | None = None,
@@ -180,36 +161,23 @@ def delineate_watershed(
     """Delineate the watershed (drainage basin) upstream of a pour point (D8 flow analysis via pysheds).
 
     Use for what drains to this point, gauge, outfall or dam site, or as an AOI
-    mask for ``clip_raster_to_polygon``. Not for the stream network itself
+    mask to clip a raster to in the session. Not for the stream network itself
     (``extract_stream_network``) or regional named basins
-    (``fetch_nhdplus_nldi_navigate``); this is a local DEM delineation.
+    (``fetch_nhdplus_nldi_navigate``); this is a local DEM delineation. Fetch the
+    DEM first (``fetch_copernicus_dem`` or ``fetch_dem``) and pass its uri.
 
     Params:
         pour_point: (lon, lat) outlet, snapped to the nearest cell with at
             least ``snap_threshold`` upslope cells.
-        bbox: analysis extent, at most 0.3 deg per side; default a 0.1-deg
-            box on the pour point. The basin is TRUNCATED at that edge, so
-            enlarge it when the result looks clipped.
-        dem_uri: override DEM; default Copernicus GLO-30.
+        dem_uri: the DEM layer over the analysis extent, at most 0.3 deg per
+            side. The basin is TRUNCATED at the DEM edge, so fetch a larger DEM
+            when the result looks clipped.
         snap_threshold: upslope-cell count defining a flow line, default 100.
 
     Returns the catchment polygon with its area, cell count, requested and
     snapped pour points, and honest notes.
     """
     lon, lat = _validate_pour_point(pour_point)
-    if bbox is None:
-        q_bbox = _validate_bbox(_auto_bbox(lon, lat))
-        auto_note = (
-            f"bbox auto-derived: {_AUTO_BBOX_DEG:g}-degree box centered on the "
-            "pour point (pass bbox to widen)."
-        )
-    else:
-        q_bbox = _validate_bbox(bbox)
-        auto_note = None
-    if not (q_bbox[0] <= lon <= q_bbox[2] and q_bbox[1] <= lat <= q_bbox[3]):
-        raise HydrologyInputError(
-            f"pour_point {(lon, lat)} is outside the analysis bbox {q_bbox!r}."
-        )
     try:
         snap_cells = int(snap_threshold)
     except (TypeError, ValueError) as exc:
@@ -222,11 +190,14 @@ def delineate_watershed(
         )
 
     notes: list[str] = [_ENGINE_NOTE]
-    if auto_note:
-        notes.append(auto_note)
 
     with tempfile.TemporaryDirectory(prefix="trid3nt_watershed_") as tmpdir:
-        dem_path = _stage_dem(q_bbox, dem_uri, tmpdir, notes)
+        dem_path = _stage_dem(dem_uri, tmpdir, notes)
+        q_bbox = _dem_bbox_4326(dem_path)
+        if not (q_bbox[0] <= lon <= q_bbox[2] and q_bbox[1] <= lat <= q_bbox[3]):
+            raise HydrologyInputError(
+                f"pour_point {(lon, lat)} is outside the DEM extent {q_bbox!r}."
+            )
         grid, fdir, acc = _condition_dem(dem_path)
         # The D8 trace runs in the DEM's own grid, and a supplied DEM is under no
         # obligation to be lon/lat - 3DEP arrives in Albers metres. The pour point
@@ -270,8 +241,8 @@ def delineate_watershed(
         if cell_count == 0:
             raise EmptyWatershedError(
                 f"The pour point {(lon, lat)} produced an EMPTY catchment -- "
-                "it likely sits on the AOI edge or off the flow grid. Move the "
-                "pour point onto the channel or enlarge the bbox."
+                "it likely sits on the DEM edge or off the flow grid. Move the "
+                "pour point onto the channel or fetch a larger DEM."
             )
         from shapely.geometry import mapping
         from shapely.ops import transform as _transform
@@ -289,9 +260,9 @@ def delineate_watershed(
         )
         if edge:
             notes.append(
-                "Catchment touches the AOI edge -- the TRUE watershed may "
-                "extend beyond the bbox (area is a lower bound). Re-run with "
-                "a larger bbox for the full basin."
+                "Catchment touches the DEM edge -- the TRUE watershed may "
+                "extend beyond it (area is a lower bound). Re-run over a "
+                "larger DEM for the full basin."
             )
 
         fc = {

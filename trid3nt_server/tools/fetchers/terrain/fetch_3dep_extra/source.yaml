@@ -132,9 +132,8 @@ docstring: |-
       debris-flow watershed delineation.
 
   Cross-tool dependencies:
-      - Composes WITH: ``compute_slope`` / ``compute_aspect`` /
-        ``compute_hillshade`` / ``compute_colored_relief`` (terrain
-        derivatives); ``clip_raster_to_polygon`` (clip to a watershed
+      - Composes WITH: ``run_qgis_algorithm`` (slope, aspect, hillshade and
+        the other terrain derivatives; a clip to a watershed
         / burn perimeter); pfdf debris-flow workflows that depend on
         the 1/9 arc-second channel DEM.
       - Sibling: ``fetch_dem`` -- the canonical 10 m / 30 m path. Use

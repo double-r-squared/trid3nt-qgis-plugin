@@ -1,6 +1,6 @@
 {
   "additionalProperties": false,
-  "description": "``code-exec-request``, emitted BEFORE the sandbox runs.\nApproval returns on a payload-confirmation whose ``warning_id`` equals\n``code_exec_id``. The consequential act is running code, not a billed run.",
+  "description": "``code-exec-request``, emitted BEFORE a code request reaches the session.\nApproval returns on a payload-confirmation whose ``warning_id`` equals\n``code_exec_id``; anything but ``proceed`` fails closed.",
   "properties": {
     "code_exec_id": {
       "title": "Code Exec Id",
@@ -11,23 +11,6 @@
       "default": "code-exec-request",
       "title": "Envelope Type",
       "type": "string"
-    },
-    "layer_refs": {
-      "additionalProperties": {
-        "anyOf": [
-          {
-            "type": "string"
-          },
-          {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          }
-        ]
-      },
-      "title": "Layer Refs",
-      "type": "object"
     },
     "python_code": {
       "maxLength": 65536,

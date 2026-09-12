@@ -14,6 +14,7 @@ import numpy as np
 import pytest
 import rasterio
 from rasterio.transform import from_bounds
+from rasterio.warp import transform_bounds
 
 from trid3nt_contracts.execution import LayerURI
 
@@ -26,9 +27,6 @@ from trid3nt_server.tools.derive.model_debris_flow.model_debris_flow import (
     model_debris_flow,
 )
 
-# Small legal AOI (bbox is used for validation/labeling only when all three
-# override URIs are supplied; the synthetic rasters carry their own UTM grid).
-BBOX = (-117.05, 34.00, -116.95, 34.05)
 
 # Synthetic grid: 60x60 at 30 m in UTM zone 11N.
 N = 60
@@ -93,7 +91,6 @@ def test_full_pipeline_synthetic(synthetic_inputs, tmp_path) -> None:
     out_dir.mkdir()
 
     result = model_debris_flow(
-        bbox=BBOX,
         rainfall_intensity_mm_h=40.0,
         dem_uri=dem_path,
         severity_uri=sev_path,
@@ -113,7 +110,8 @@ def test_full_pipeline_synthetic(synthetic_inputs, tmp_path) -> None:
 
     assert result.layer_type == "vector"
     assert result.style == {"kind": "reference", "geometry": "line"}
-    assert tuple(result.bbox) == BBOX
+    exp = transform_bounds(CRS, "EPSG:4326", X0, Y0, X0 + N * RES, Y0 + N * RES)
+    assert tuple(result.bbox) == pytest.approx(exp, abs=1e-6)
 
     # The GeoJSON artifact exists locally (offline write path) and carries the
     # three required per-segment properties.
@@ -161,7 +159,6 @@ def test_dnbr_severity_input(synthetic_inputs, tmp_path) -> None:
     out_dir.mkdir()
 
     result = model_debris_flow(
-        bbox=BBOX,
         dem_uri=dem_path,
         severity_uri=dnbr_path,
         kf_uri=kf_path,
@@ -172,11 +169,17 @@ def test_dnbr_severity_input(synthetic_inputs, tmp_path) -> None:
     assert any("severity.estimate" in note for note in result.notes)
 
 
-def test_aoi_clamp_raises() -> None:
+def test_aoi_clamp_raises(synthetic_inputs, tmp_path) -> None:
+    _dem, sev_path, kf_path = synthetic_inputs
+    wide = str(tmp_path / "wide.tif")
+    with rasterio.open(
+        wide, "w", driver="GTiff", height=10, width=10, count=1, dtype="float32",
+        crs="EPSG:4326", transform=from_bounds(-117.3, 34.0, -117.0, 34.05, 10, 10),
+        nodata=-9999.0,
+    ) as dst:
+        dst.write(np.zeros((10, 10), dtype="float32"), 1)
     with pytest.raises(AoiTooLargeError):
-        model_debris_flow(bbox=(-117.3, 34.0, -117.0, 34.05))  # 0.3 deg wide
-    with pytest.raises(AoiTooLargeError):
-        model_debris_flow(bbox=(-117.1, 34.0, -117.0, 34.3))  # 0.3 deg tall
+        model_debris_flow(dem_uri=wide, severity_uri=sev_path, kf_uri=kf_path)
 
 
 def test_no_burn_raises(synthetic_inputs, tmp_path) -> None:
@@ -187,27 +190,24 @@ def test_no_burn_raises(synthetic_inputs, tmp_path) -> None:
     )
     with pytest.raises(NoBurnDataError):
         model_debris_flow(
-            bbox=BBOX,
-            dem_uri=dem_path,
+                dem_uri=dem_path,
             severity_uri=unburned_path,
             kf_uri=kf_path,
             _output_dir=str(tmp_path),
         )
 
 
-def test_bad_bbox_raises() -> None:
-    with pytest.raises(DebrisFlowInputError):
-        model_debris_flow(bbox=(-117.0, 34.05, -117.05, 34.00))  # reversed
-    with pytest.raises(DebrisFlowInputError):
-        model_debris_flow(bbox=(-117.0, 34.0, -116.99))  # wrong arity
-    with pytest.raises(DebrisFlowInputError):
-        model_debris_flow(bbox=("a", 34.0, -116.99, 34.05))  # non-numeric
+def test_missing_layers_refuse_never_fetch(synthetic_inputs) -> None:
+    dem_path, sev_path, _kf = synthetic_inputs
+    with pytest.raises(DebrisFlowInputError, match="fetch_copernicus_dem"):
+        model_debris_flow(dem_uri=None, severity_uri=sev_path)
+    with pytest.raises(DebrisFlowInputError, match="fetch_mtbs_burn_severity"):
+        model_debris_flow(dem_uri=dem_path, severity_uri="")
 
 
-def test_bad_intensity_raises() -> None:
-    with pytest.raises(DebrisFlowInputError):
-        model_debris_flow(bbox=BBOX, rainfall_intensity_mm_h=0.0)
-    with pytest.raises(DebrisFlowInputError):
-        model_debris_flow(bbox=BBOX, rainfall_intensity_mm_h=9999.0)
-    with pytest.raises(DebrisFlowInputError):
-        model_debris_flow(bbox=BBOX, rainfall_intensity_mm_h="wet")
+def test_bad_intensity_raises(synthetic_inputs) -> None:
+    dem_path, sev_path, _kf = synthetic_inputs
+    for bad in (0.0, 9999.0, "wet"):
+        with pytest.raises(DebrisFlowInputError):
+            model_debris_flow(dem_uri=dem_path, severity_uri=sev_path,
+                              rainfall_intensity_mm_h=bad)

@@ -56,7 +56,7 @@ non-empty frames never reads `status=ok`.
 When the AOI should be the ACTIVE fire rather than a named place: fetch FIRMS hot
 pixels over a broad region, then cluster to the densest hotspot. This ~15-line
 snippet is the whole of the former `_densest_hotspot_bbox` -- run it in
-`code_exec_request`:
+`run_pyqgis`:
 
 ```python
 import math
@@ -97,15 +97,15 @@ the playground -- was DELETED (its stated consumer, `model_groundwater`, was
 never built; see the deletion commit and `docs/DELETION_LEDGER.md`, "cleanup
 wave phase 1"). Per the analysis-is-playground norm, cross-source claim
 reconciliation is straight-line code over the fetched text, not a bespoke
-library import -- the model composes it inline in `code_exec_request`, the
+library import -- the model composes it inline in `run_pyqgis`, the
 same way Recipe B composes `densest_hotspot_bbox` inline.
 
 1. Per source, dispatch by type: `web_fetch(url, extract="main_text")` for
    article URLs; `fetch_nws_event(area)` for an NWS state/county; and
    `fetch_storm_events_db(year, state)` for a Storm-Events entry. Extract the
    text for each (title + body for URLs; layer name for the structured sources).
-2. Reconcile the fetched texts into best-supported claims IN THE PLAYGROUND
-   (`code_exec_request`) with a short inline reconciliation pass: for each
+2. Reconcile the fetched texts into best-supported claims IN THE SESSION
+   (`run_pyqgis`) with a short inline reconciliation pass: for each
    `claim_target` (e.g. `"location"`, `"date"`, `"scale"`, `"contaminant"`,
    `"casualties"`), pull a keyword-window candidate value out of each source's
    text, then keep the value the most sources agree on (ties broken by the
@@ -150,7 +150,7 @@ same way Recipe B composes `densest_hotspot_bbox` inline.
    user approves does a downstream solver (e.g. the `run_modflow` door) run.
 
 Fired-tool set for this recipe: `web_fetch` + `fetch_nws_event` +
-`fetch_storm_events_db` -> `code_exec_request` (the inline reconciliation
+`fetch_storm_events_db` -> `run_pyqgis` (the inline reconciliation
 above) -> `geocode_location`, producing the same derived-param +
 geocoded-bbox envelope the composer once did.
 

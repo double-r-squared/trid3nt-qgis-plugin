@@ -56,25 +56,14 @@ Two more tools are key-gated but surface it as a sweep `FAIL` further downstream
 | `catalog_fetch` | FAIL | 8 | OGCAdapterError: OGC ARCGIS_REST GET failed for url=https://hazards.fema.gov/arcgis/rest/s |
 | `catalog_search` | PASS | 0 |  |
 | `clip_raster_to_bbox` | PASS | 1 |  |
-| `clip_raster_to_polygon` | PASS | 0 |  |
 | `clip_vector_to_polygon` | PASS | 0 |  |
-| `code_exec_request` | FAIL | 0 | CodeExecConfirmationRequired: code_exec_request requires user confirmation before running: |
-| `compute_aspect` | PASS | 0 |  |
-| `compute_blended_composite` | PASS | 0 |  |
-| `compute_building_density` | PASS | 66 |  |
 | `compute_canopy_height` | PASS | 40 |  |
-| `compute_colored_relief` | PASS | 0 |  |
-| `compute_contours` | PASS | 13 |  |
 | `compute_cross_section` | PASS | 0 |  |
-| `compute_hillshade` | PASS | 0 |  |
 | `compute_home_range_kde` | PASS | 1 |  |
 | `compute_impact_envelope` | SKIP-ARGS | 0 | required params not fabricatable: ['flood_layer_uri'] |
-| `compute_impervious_surface` | PASS | 0 |  |
 | `compute_layer_bounds` | PASS | 0 |  |
 | `compute_movement_trajectory` | FAIL | 0 | MovementTrajectoryError: points layer 's3://trid3nt-cache/cache/dynamic-1h/usgs_earthquake |
-| `compute_ndvi` | PASS | 8 |  |
 | `compute_overtopping` | PASS | 0 |  |
-| `compute_slope` | PASS | 0 |  |
 | `compute_terrain_profile` | PASS | 0 |  |
 | `compute_wave_nomograph` | PASS | 0 |  |
 | `compute_zonal_statistics` | PASS | 0 |  |
@@ -83,8 +72,6 @@ Two more tools are key-gated but surface it as a sweep `FAIL` further downstream
 | `describe_qgis_algorithm` | FAIL | 0 | RuntimeError: QGIS discovery tool invoked but worker submitter is not bound; agent service |
 | `digitize_water_body` | PASS | 13 |  |
 | `discover_dataset` | PASS | 2 |  |
-| `enhance_satellite_image` | FAIL | 0 | EnhanceSatelliteImageError: input has 1 band(s); enhance_satellite_image polishes 3(+)-ban |
-| `extract_landcover_class` | PASS | 0 |  |
 | `fetch_3dep_extra` | PASS | 9 |  |
 | `fetch_administrative_boundaries` | PASS | 36 |  |
 | `fetch_airnow_air_quality` | KEY | 0 | AirNowMissingKeyError: no AirNow API key available: pass api_key=..., secret_ref=..., or s |

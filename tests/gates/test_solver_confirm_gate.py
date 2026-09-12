@@ -57,13 +57,13 @@ def test_dispatch_source_contains_strip_and_gate() -> None:
     assert "SolverConfirmationCancelledError" in src
 
 
-def test_code_exec_request_in_hot_set() -> None:
-    """code_exec_request must be in the always-visible retrieval floor so it is
-    never retrieved out (round-4 live showed a false 'cannot run Python'
-    narration when it was not reachable)."""
+def test_session_tools_in_hot_set() -> None:
+    """The two session tools sit in the always-visible retrieval floor, so the
+    model never narrates a false 'cannot run that' when one is not retrieved."""
     from trid3nt_server.tools.search.tool_retrieval import CORE_FLOOR
 
-    assert "code_exec_request" in CORE_FLOOR
+    assert "run_pyqgis" in CORE_FLOOR
+    assert "run_qgis_algorithm" in CORE_FLOOR
 
 
 # Turn-memory fix (bbox-gate-retry-loop) - a live drive found a

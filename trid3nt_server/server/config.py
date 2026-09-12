@@ -25,18 +25,16 @@ def _tool_retrieval_k() -> int:
         return DEFAULT_K
 
 
-# The ``code_exec_request`` confirm gate validity window (seconds). On expiry
-# the gate fails closed and the sandbox does not run. The code-exec gate itself
-# no longer waits on this constant; it survives because the credential,
-# region-choice and solver-confirm gates borrow it as their default window.
+# The default decision window (seconds) the credential, region-choice and
+# solver-confirm gates share; the code-exec gate has its own below.
 CODE_EXEC_CONFIRM_TIMEOUT_SECONDS: int = int(
     os.environ.get("TRID3NT_CODE_EXEC_CONFIRM_TIMEOUT", "300")
 )
 
-# The code-exec gate has its OWN bounded approval window that applies in every
-# lane. When no confirmation answers the card in time the gate raises the typed
-# ``CodeExecApprovalTimeoutError``, so the model narrates honestly and the turn
-# COMPLETES. Read LIVE, not as an import-time snapshot, so a flip is honored.
+# The code-exec gate (``run_pyqgis``) has its OWN bounded approval window that
+# applies in every lane. When no confirmation answers the card in time the gate
+# raises the typed ``CodeExecApprovalTimeoutError``, so the model narrates
+# honestly and the turn COMPLETES. Read LIVE, not as an import-time snapshot.
 CODE_EXEC_APPROVAL_TIMEOUT_DEFAULT_S: float = 180.0
 
 

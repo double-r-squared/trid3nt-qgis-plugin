@@ -8,7 +8,6 @@ from trid3nt_contracts import new_ulid, now_utc
 from trid3nt_contracts.ws import AgentMessageChunkPayload, AgentThinkingChunkPayload, PipelineStatePayload, PipelineStep
 from trid3nt_server.adapters.adapter import CompactionCompleteEvent, CompactionStartEvent, FunctionCallEvent, MAX_TURN_ITERATIONS, ModelSettings, SYSTEM_PROMPT, TextDeltaEvent, ThinkingDeltaEvent, UpstreamProviderError, UsageMetadataEvent, build_contents_from_history, build_function_call_content, build_function_response_content, build_layers_present_note, build_tool_declarations, build_user_text_content, classify_provider_error_class, classify_result_usable, stream_events_with_contents, summarize_tool_result
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.meta.code_exec_tool.code_exec_tool import is_code_exec_result
 from trid3nt_server.emission.charts import is_chart_emission_result
 from trid3nt_server.tools.search.tool_retrieval import CORE_FLOOR
 from trid3nt_server.emission.pipeline_emitter import bind_turn_case, bind_turn_drawn_geometry, complete_compaction_card, mint_compaction_card
@@ -23,7 +22,7 @@ from trid3nt_server.server.config import _env_flag, _tool_retrieval_k
 from trid3nt_server.server.dispatch.emitter import _invoke_tool_via_emitter
 from trid3nt_server.server.dispatch.helpers import _DELIVERABLE_COMPLETE_DIRECTIVE, _DISCOVERY_EXPAND_CAP, _EMPTY_COMPLETION_NUDGE, _EMPTY_COMPLETION_RETRY_CAP, _POST_DELIVERABLE_WRAPUP_ROUNDS, _default_declarable_registry, _dispatch_made_progress, _gate_expander_tool_names, _is_terminal_composer, _tool_names_from_search_result
 from trid3nt_server.server.dispatch.persist import _TURN_NARRATION_BY_TASK, _TURN_OPEN_SEGMENT_BY_TASK, _TURN_SEGMENTS_PERSISTED_BY_TASK, _TURN_TERMINAL_ACC_PERSISTED_BY_TASK, _finalize_segment, _persist_chat_turn, _persist_terminal_failure_card
-from trid3nt_server.server.dispatch.results import _maybe_emit_chart, _maybe_emit_code_exec_result
+from trid3nt_server.server.dispatch.results import _maybe_emit_chart
 from trid3nt_server.server.session.case_state import _turn_case_bbox, _turn_case_id
 from trid3nt_server.server.session.state import SessionState
 from trid3nt_server.server.spatial import _aoi_zoom_to_bbox, _coerce_bbox4
@@ -1005,14 +1004,6 @@ async def _stream_model_reply(
                     # is persisted too, so it replays on rehydration.
                     if is_chart_emission_result(result):
                         await _maybe_emit_chart(websocket, state, result)
-                    # Emit a code-exec-result WS envelope whenever code_exec_request returns
-                    # a result carrying the full code-exec-result payload (key signal:
-                    # _code_exec_result with envelope_type == "code-exec-result"). Fires IN
-                    # ADDITION to the standard function_response -- the client gets the full
-                    # result card via the envelope, the model gets the COMPACT summary (spec
-                    # stripped by summarize_tool_result).
-                    if is_code_exec_result(result):
-                        await _maybe_emit_code_exec_result(websocket, state, result)
                     # Record success so the consecutive-failure counter
                     # resets -- a recovered tool should not stay penalised.
                     state.circuit_breaker.record_success(call.name)

@@ -141,7 +141,7 @@ docstring: |-
 
   Cross-tool dependencies:
       - Composes WITH: ``geocode_location``
-        (bbox derivation from place name), the code_exec playground
+        (bbox derivation from place name), a run_pyqgis snippet
         (wind and pressure claims from ASOS).
       - Complements: ``fetch_era5_reanalysis`` (gridded global reanalysis),
         ``fetch_mrms_qpe`` (radar precipitation), ``fetch_goes_satellite``

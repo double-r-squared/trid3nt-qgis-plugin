@@ -138,7 +138,7 @@ docstring: |-
   - US analysis that must match the NLCD class schema / Manning's roughness
     mapping -- use ``fetch_landcover`` (NLCD, CONUS).
   - A natural-color picture of the area -- use ``fetch_sentinel2_truecolor``.
-  - Continuous greenness -- use ``compute_ndvi``.
+  - Continuous greenness -- band math over optical imagery in the session.
   - A single-point class lookup -- this returns a raster.
 
   **Parameters:**

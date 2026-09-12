@@ -148,16 +148,15 @@ docstring: |-
       carrying the requested variable's forecast slice, EPSG:4326,
       float32, NaN nodata. ``layer_type="raster"``, ``role="primary"``,
       ``units`` per the variable (``"kg m-3"``, ``"kg m-2"``, or ``"1"``).
-      Downstream consumers (the code_exec playground,
-      ``clip_raster_to_polygon``) read the COG and treat it as a
+      Downstream consumers (a session snippet or algorithm)
+      read the COG and treat it as a
       single-band scalar field.
 
   Cross-tool dependencies:
       - Consumes nothing (Tier-1 substrate fetcher; no upstream tool).
-      - Feeds: AOI zonal stats in the code_exec playground (aggregate to admin
-        boundaries or county / ZIP code area-weighted exposure),
-        ``clip_raster_to_polygon`` (further sub-clip to fire footprint
-        or admin polygon), ``clip_raster_to_polygon`` (bbox or polygon sub-clip).
+      - Feeds: AOI zonal stats in the session (aggregate to admin
+        boundaries or county / ZIP code area-weighted exposure), a further
+        sub-clip to a fire footprint or admin polygon in the session.
       - Composes with: ``fetch_nifc_fire_perimeters`` (active wildfire
         polygons -- overlay smoke plume on the burning area),
         ``fetch_firms_active_fire`` (VIIRS/MODIS hot spots -- overlay

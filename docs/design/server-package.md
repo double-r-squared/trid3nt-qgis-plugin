@@ -61,10 +61,10 @@ logs to `logs/agent.log`, and writes a PID to `run/agent.pid`. See
 - Persistence (cases / sessions / users / secret refs / audit) through the
   `Persistence` seam: **file persistence only**
   (`TRID3NT_DEV_PERSISTENCE_DIR`); there is no cloud backend in this build.
-- Heavy or sandboxed compute runs locally: TELEMAC and the mesher through
-  locally built docker images, the `code_exec` box in a network-none container
-  (`sandbox/`) -- see [Engines](../site/engines.md) for what a shipped engine
-  means here. No cloud queue.
+- Heavy compute runs locally: TELEMAC and the mesher through locally built
+  docker images -- see [Engines](../site/engines.md) for what a shipped engine
+  means here. Geoprocessing and ad hoc code run in the user's QGIS session
+  through the plugin (`run_qgis_algorithm`, `run_pyqgis`). No cloud queue.
 - Every wire message validated through `trid3nt_contracts` -- no hand-rolled
   JSON.
 

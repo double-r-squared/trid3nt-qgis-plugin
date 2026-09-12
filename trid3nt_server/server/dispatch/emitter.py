@@ -128,15 +128,15 @@ def _running_emitter_step_id(emitter: Any, tool_name: str) -> str | None:
 #
 # ``TRID3NT_SYNC_TOOL_OFFLOAD`` selects the mode with no code change:
 #   ""/"off"             -> disabled; sync tools stay on the loop.
-#   "subset"             -> off-load only the pure compute_*/clip_* family.
+#   "subset"             -> off-load only the pure compute_* family.
 #   "global"/"all"/"on"  -> off-load every sync tool body.
 _SYNC_OFFLOAD_MODE = os.environ.get("TRID3NT_SYNC_TOOL_OFFLOAD", "off").strip().lower()
 
 _SYNC_OFFLOAD_GLOBAL_VALUES = frozenset({"global", "all", "on", "1", "true", "yes"})
 
-#: The subset mode's cohort: the pure-compute and pure-clip families, which take
-#: no emitter and do CPU-bound GDAL or numpy work.
-_SYNC_OFFLOAD_SUBSET_PREFIXES = ("compute_", "clip_")
+#: The subset mode's cohort: the pure-compute family, which takes no emitter and
+#: does CPU-bound GDAL or numpy work.
+_SYNC_OFFLOAD_SUBSET_PREFIXES = ("compute_",)
 
 #: ALWAYS off-loaded whatever the env mode says: a hand-audited, TIGHT set of
 #: sync tools whose bodies do multi-second synchronous work - tile merge,
@@ -158,7 +158,6 @@ _ALWAYS_OFFLOAD_SYNC_TOOLS = frozenset(
         "fetch_dem",
         "fetch_3dep_extra",
         "fetch_landcover",
-        "extract_landcover_class",
         "fetch_population",
         "fetch_hrsl_population",
         "fetch_gcn250_curve_numbers",
@@ -180,15 +179,12 @@ _ALWAYS_OFFLOAD_SYNC_TOOLS = frozenset(
         "fetch_goes_active_fire",
         "fetch_gtsm_tide_surge",
         # STAC raster readers: sign, windowed /vsicurl warp-read, COG write
-        "compute_ndvi",
         "fetch_naip",
         # multi-granule netCDF download plus in-AOI group filter and raster write
         "fetch_glm_lightning",
         # record fetchers: a windowed Zarr stream, and a multi-MB entity download
         "fetch_aorc_precip",
         "fetch_lter_records",
-        # stages every layer_ref into the run dir, then blocks on a container run
-        "code_exec_request",
         # reads the run's outputs listing over the network
         "list_run_frames",
         # STAC sign plus windowed warp-read and COG / FlatGeobuf write
@@ -204,9 +200,7 @@ _ALWAYS_OFFLOAD_SYNC_TOOLS = frozenset(
         "fetch_soilgrids",
         "fetch_esri_landcover_10m",
         "fetch_noaa_sst",
-        # two Sentinel-2 scenes read per band, vectorized, written as one FGB
-        "compute_change_detection",
-        # stages an s3 COG, fetches an inventory, samples, writes an FGB
+        # stages an s3 COG and an inventory, samples, writes an FGB
         "compute_flood_depth_damage",
         "compute_model_residuals",
     }
@@ -422,23 +416,20 @@ async def _invoke_tool_via_emitter(
         # because the user explicitly cancelled.
         raise PayloadWarningCancelledError(tool_name)
 
-    # code_exec_request confirm gate: running arbitrary Python is a
-    # consequential action -- the user MUST approve the exact code first. The
-    # gate emits a ``code-exec-request`` card, blocks on the SAME
+    # run_pyqgis confirm gate: running arbitrary Python in the user's session
+    # is a consequential action -- the user MUST approve the exact code first.
+    # The gate emits a ``code-exec-request`` card, blocks on the SAME
     # ``pending_payload_warnings`` future seam (code_exec_id == warning_id),
     # and on approval injects ``confirmed=True`` + the minted ``code_exec_id``
-    # into params so the tool body dispatches the sandbox. A direct
-    # programmatic call that already carries ``confirmed=True`` (a trusted
-    # composer/test) is NOT re-gated, but an LLM-issued call never carries it,
-    # so the gate is mandatory on the LLM path. Fail-closed: cancel/timeout
-    # raises a typed, non-retryable error so the model narrates the decline and
-    # does not re-run the same snippet.
+    # into params so the tool body sends the session its request. Fail-closed:
+    # cancel/timeout raises a typed, non-retryable error so the model narrates
+    # the decline and does not re-run the same snippet.
     #
     # STRIP a model-supplied confirmed/code_exec_id BEFORE gating: the gate is
     # server-owned, so user confirmation is mandatory on every model-issued
-    # code_exec call, and only an explicit approval inside the gate re-injects
-    # them. A trusted programmatic caller invokes the tool function directly.
-    if tool_name == "code_exec_request":
+    # call, and only an explicit approval inside the gate re-injects them. A
+    # trusted programmatic caller invokes the tool function directly.
+    if tool_name == "run_pyqgis":
         params.pop("confirmed", None)
         params.pop("code_exec_id", None)
         should_run, params = await _gate_on_code_exec(websocket, state, params)

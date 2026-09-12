@@ -20,7 +20,7 @@ produces. Pydantic v2 throughout; every model subclasses `GraceModel`
 | `region_choice` | The region-narrowing picker request and its reply |
 | `payload_warning` | The payload gate: the warning envelope, its confirmation, and the granularity, time-scale and param-sheet rows |
 | `chart_contracts` | The `chart-emission` envelope, its Vega-Lite structural check, and the persisted chart record |
-| `sandbox_contracts` | The code-exec confirm request and run result |
+| `processing_contracts` | The session processing request/response pair and the code approval card |
 | `envelope` | `AssessmentEnvelope` and its supporting types, including the flood subtype |
 | `collections` | The persisted collection documents, the vector-index and TTL configs, and the catalog substrate |
 | `catalog` | `CatalogEntry` - one vetted public data source in the curated catalog |

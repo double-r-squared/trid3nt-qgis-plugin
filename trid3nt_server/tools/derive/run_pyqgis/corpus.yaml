@@ -1,0 +1,11 @@
+run_pyqgis:
+- run this pyqgis script in my qgis session
+- run some python code over the layer on the map
+- write a short script that counts the features in the selected layer
+- loop over the parcels and add an attribute with the area of each
+- chain a buffer and a clip in one script
+- compute the mean of the raster inside the polygon with python
+- group these layers under one node in the layer tree
+- set the temporal controller to step through the frames
+- read the attribute table of the layer and give me a summary
+- edit the geometry of these features with pyqgis

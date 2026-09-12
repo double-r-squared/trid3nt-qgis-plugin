@@ -174,21 +174,32 @@ PAYLOAD_WARNING_HARDCAP_ROW: dict[str, Any] = dict(
 STUB_CODE_EXEC_ID = "01STUBCODEEXECAAAAAAAAAAAA"
 
 # A code-exec-request payload field-for-field the CodeExecRequestPayload
-# contract (contracts .../sandbox_contracts.py). The confirmation reply rides
-# the EXISTING tool-payload-confirmation envelope with warning_id ==
+# contract (contracts .../processing_contracts.py). The confirmation reply
+# rides the EXISTING tool-payload-confirmation envelope with warning_id ==
 # code_exec_id (the server's shared confirm-gate seam, _gate_on_code_exec --
 # no new client verb). Without plugin handling for this envelope the agent
-# blocks on the gate forever.
+# blocks on the gate forever. On approval the live server sends the code to
+# the session as a processing-request and pauses on the processing-response.
 CODE_EXEC_REQUEST_ROW: dict[str, Any] = {
     "envelope_type": "code-exec-request",
     "code_exec_id": STUB_CODE_EXEC_ID,
-    "python_code": (
-        "import numpy as np\n"
-        "depth = layer_handles['depth'].read(1)\n"
-        "result = float(np.percentile(depth[depth > 0], 95))\n"
-    ),
-    "layer_refs": {"depth": "s3://trid3nt-runs/flood/depth.tif"},
-    "rationale": "Compute the 95th-percentile flood depth over the AOI.",
+    "python_code": "result = 2 + 2\n",
+    "rationale": "Add two numbers in the session.",
+}
+
+STUB_PROCESSING_CODE_REQUEST_ID = "01STUBPROCESSINGCODEAAAAAA"
+STUB_PROCESSING_ALG_REQUEST_ID = "01STUBPROCESSINGALGAAAAAAA"
+
+# An algorithm processing-request field-for-field the ProcessingRequestPayload
+# contract: the session runs it over the canvas layer named in params and
+# answers with a processing-response the server pauses on.
+PROCESSING_ALG_REQUEST_ROW: dict[str, Any] = {
+    "request_id": STUB_PROCESSING_ALG_REQUEST_ID,
+    "kind": "algorithm",
+    "algorithm": "native:slope",
+    "params": {"INPUT": "DEM", "Z_FACTOR": 1.0},
+    "code": None,
+    "code_exec_id": None,
 }
 
 STUB_TOOL_CANDIDATES_REQUEST_ID = "01STUBTOOLPICKAAAAAAAAAAAA"
@@ -427,6 +438,8 @@ class StubAgentServer:
         self.region_choices: list[dict] = []
         #: spatial-input-response payloads (LANE A spatial-input gate-WAIT).
         self.spatial_inputs: list[dict] = []
+        #: processing-response payloads (the session's answers).
+        self.processing_responses: list[dict] = []
         #: auto/ask carrier: every ``tool_choice_mode`` value PRESENT
         #: on a user-message payload (omitted keys are not recorded -- the
         #: default-auto send stays byte-identical, mirroring aoi_bbox).
@@ -639,6 +652,15 @@ class StubAgentServer:
                     self._pending_gate_case = case_id
                     await send(
                         "code-exec-request", CODE_EXEC_REQUEST_ROW, case_id=case_id
+                    )
+                    continue
+                if "run-algorithm" in text:
+                    # A session gate-WAIT: the agent asks the session to run
+                    # an algorithm and BLOCKS until the processing-response
+                    # arrives -- handled in the processing-response branch.
+                    self._pending_gate_case = case_id
+                    await send(
+                        "processing-request", PROCESSING_ALG_REQUEST_ROW, case_id=case_id
                     )
                     continue
                 if "need-key" in text:
@@ -907,34 +929,21 @@ class StubAgentServer:
                     # The code-exec confirm reply (warning_id == code_exec_id;
                     # the live server FAIL-CLOSES anything != "proceed").
                     if decision == "proceed":
-                        # LANE A: the run OUTCOME rides an
-                        # ADDITIONAL code-exec-result envelope, IN
-                        # ADDITION to the narration -- the dock folds it into
-                        # the approved card's chip.
+                        # The approved code goes to the SESSION as a
+                        # processing-request; the turn stays paused until the
+                        # processing-response arrives (handled below).
                         await send(
-                            "code-exec-result",
+                            "processing-request",
                             {
-                                "envelope_type": "code-exec-result",
+                                "request_id": STUB_PROCESSING_CODE_REQUEST_ID,
+                                "kind": "code",
+                                "algorithm": None,
+                                "params": {},
+                                "code": CODE_EXEC_REQUEST_ROW["python_code"],
                                 "code_exec_id": STUB_CODE_EXEC_ID,
-                                "status": "ok",
-                                "stdout_tail": "",
-                                "stderr_tail": "",
-                                "result": {"kind": "scalar", "value": 0.31},
-                                "truncated": False,
-                                "duration_s": 1.4,
                             },
                             case_id=gate_case,
                         )
-                        await send(
-                            "agent-message-chunk",
-                            {
-                                "message_id": "m-code",
-                                "delta": "Code executed.",
-                                "done": True,
-                            },
-                            case_id=gate_case,
-                        )
-                        await send("turn-complete", {}, case_id=gate_case)
                     else:
                         await send(
                             "turn-complete", {"cancelled": True}, case_id=gate_case
@@ -1082,6 +1091,27 @@ class StubAgentServer:
                 await send(
                     "agent-message-chunk",
                     {"message_id": "m-spatial", "delta": delta, "done": True},
+                    case_id=gate_case,
+                )
+                await send("turn-complete", {}, case_id=gate_case)
+            elif etype == "processing-response":
+                # The session's answer to a processing-request (contract
+                # ProcessingResponsePayload): resolves the paused turn with
+                # the layer summary or the snippet's result, or its error.
+                payload = env.get("payload") or {}
+                self.processing_responses.append(payload)
+                gate_case = getattr(self, "_pending_gate_case", None)
+                if payload.get("status") == "ok":
+                    result = payload.get("result") or {}
+                    if payload.get("request_id") == STUB_PROCESSING_CODE_REQUEST_ID:
+                        delta = f"Code executed: result={result.get('value')!r}."
+                    else:
+                        delta = f"Algorithm done: {result.get('layer_name')} on the map."
+                else:
+                    delta = f"The session reported an error: {payload.get('error')}"
+                await send(
+                    "agent-message-chunk",
+                    {"message_id": "m-processing", "delta": delta, "done": True},
                     case_id=gate_case,
                 )
                 await send("turn-complete", {}, case_id=gate_case)

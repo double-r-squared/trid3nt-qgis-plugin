@@ -1,5 +1,5 @@
-"""Post-tool result handling: code-exec and chart emission, plus the shielded
-persistence await.
+"""Post-tool result handling: chart emission, plus the shielded persistence
+await.
 
 Auto-publishing a raster rides the one emission seam; nothing here decides
 whether a layer is visible."""
@@ -9,7 +9,6 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import Awaitable
-from trid3nt_server.tools.meta.code_exec_tool.code_exec_tool import CODE_EXEC_RESULT_KEY
 from trid3nt_server.server.dispatch.persist import _persist_chart_record
 from trid3nt_server.server.session.state import SessionState
 from typing import Any
@@ -47,41 +46,6 @@ async def _run_to_completion_shielded(coro: Awaitable[Any]) -> None:
     if cancelled:
         # The write landed; now honor the parent cancellation.
         raise asyncio.CancelledError
-
-async def _maybe_emit_code_exec_result(
-    websocket: ServerConnection,
-    state: SessionState,
-    code_exec_result: dict,
-) -> None:
-    """Emit a ``code-exec-result`` envelope beside the function response, which
-    carries only the compact summary. Best-effort, and never persisted: a
-    re-opened Case replays chat and charts, not transient computations."""
-    import json as _json
-
-    payload = code_exec_result.get(CODE_EXEC_RESULT_KEY)
-    if not isinstance(payload, dict):
-        return
-    try:
-        await websocket.send(
-            _json.dumps(
-                {
-                    "type": "code-exec-result",
-                    "session_id": state.session_id,
-                    "payload": payload,
-                }
-            )
-        )
-        logger.info(
-            "code-exec-result emitted session=%s code_exec_id=%s status=%s truncated=%s",
-            state.session_id,
-            payload.get("code_exec_id"),
-            payload.get("status"),
-            payload.get("truncated"),
-        )
-    except Exception:  # noqa: BLE001 -- side effect, never bubble up
-        logger.exception(
-            "code-exec-result emission failed session=%s", state.session_id
-        )
 
 async def _maybe_emit_chart(
     websocket: ServerConnection,

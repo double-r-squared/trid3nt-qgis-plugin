@@ -76,25 +76,13 @@ _SAMPLE_VECTOR_URI = "s3://trid3nt-cache/cache/static-30d/vector/sample.fgb"
 # These are plausible real-world values, NOT magic that would make the tool
 # succeed (network/GCS access is expected to fail — only TypeError is forbidden).
 _MINIMAL_VALID_PARAMS: dict[str, dict[str, Any]] = {
-    "clip_raster_to_polygon": {
-        "raster_uri": _SAMPLE_RASTER_URI,
-        "polygon_uri": _SAMPLE_VECTOR_URI,
-    },
-    "compute_aspect": {"dem_uri": _SAMPLE_DEM_URI},
-    "compute_building_density": {"bbox": _SAMPLE_BBOX},
-    "compute_colored_relief": {"dem_uri": _SAMPLE_DEM_URI},
-    "compute_hillshade": {"dem_uri": _SAMPLE_DEM_URI},
-    "compute_impervious_surface": {"landcover_uri": _SAMPLE_LANDCOVER_URI},
-    "compute_slope": {"dem_uri": _SAMPLE_DEM_URI},
     "generate_chart": {
         "vega_lite_spec": {"mark": "bar", "encoding": {}},
         "title": "t",
         "records": [{"label": "a", "count": 1}],
     },
-    "extract_landcover_class": {
-        "landcover_uri": _SAMPLE_LANDCOVER_URI,
-        "classes": [21],
-    },
+    "run_qgis_algorithm": {"algorithm": "native:slope", "params": {"INPUT": "DEM"}},
+    "run_pyqgis": {"code": "result = 1"},
     "fetch_administrative_boundaries": {
         "level": "county",
         "bbox": _SAMPLE_BBOX,

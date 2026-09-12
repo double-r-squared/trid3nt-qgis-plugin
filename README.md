@@ -9,9 +9,9 @@ only client) and the server it drives; one clone is a working end-to-end setup.
 - **Fetch measured data** from 99 declared sources through one router - terrain,
   hydrology, climate, weather, imagery, ocean, soil, hazard, socioeconomic - as
   native QGIS layers, never a download folder.
-- **Compose an analysis** in the code-exec playground: 161 registered tools, and
-  anything they do not cover written as a confirmed snippet against the layers
-  already on the case.
+- **Run the geoprocessing in your own QGIS session**: any Processing algorithm
+  over the layers on the map, and anything the tools do not cover written as a
+  confirmed PyQGIS snippet the plugin runs in place.
 - **Author, mesh, run and read back** a TELEMAC hydrodynamic run: a real reach or
   catchment, a triangulated domain, a solved result, and the layers, charts and
   animation that came out of it.

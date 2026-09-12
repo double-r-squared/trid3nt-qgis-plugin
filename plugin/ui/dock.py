@@ -75,6 +75,7 @@ from ..net.run_invocation import USAGE as _RUN_USAGE_HINT, parse_run_invocation
 from ..net.ws_bridge import AgentBridge
 from ..plugin_settings import PluginSettings
 from ..render import probe
+from ..render.processing import run_processing_request
 from ..render.layers import (
     LayerMaterializer,
     configure_store_access,
@@ -245,9 +246,9 @@ class Trid3ntDock(QDockWidget):
         # reset on case switch (_clear_messages -- the widgets die with the
         # message list).
         self._open_tool_pickers: List[ToolCandidatesCard] = []
-        # Approved code-exec cards keyed by code_exec_id
-        # so the later ``code-exec-result`` envelope can update the right
-        # card's folded chip with the run outcome; reset on case switch
+        # Approved code-exec cards keyed by code_exec_id so the
+        # processing-request that follows an approval can fold its outcome
+        # into the right card's chip; reset on case switch
         # (_clear_messages -- the widgets die with the message list).
         self._code_exec_cards: Dict[str, CodeExecCard] = {}
         # The latest ``secrets-list`` roster (parsed
@@ -1807,11 +1808,11 @@ class Trid3ntDock(QDockWidget):
             # turn. The card is wired to the canvas point and AOI tools, and
             # Cancel closes the gate.
             self._show_spatial_input_card(data)
-        elif kind == "code-exec-result":
-            # The run outcome that follows an approved
-            # code-exec-request -- update the code-exec card's folded chip
-            # with the honest terminal status.
-            self._on_code_exec_result(data)
+        elif kind == "processing-request":
+            # A gate WAIT: the agent asks THIS session to run an algorithm or
+            # an approved snippet and PAUSES until the response lands, so the
+            # envelope is answered here, on the GUI thread, never dropped.
+            self._on_processing_request(data)
         elif kind == "secrets-list":
             # The per-user/per-Case secret roster --
             # store it for the settings/secrets state (minimal honest
@@ -2134,7 +2135,7 @@ class Trid3ntDock(QDockWidget):
 
     def _show_code_exec_card(self, payload: dict) -> None:
         """Render the code-exec HARD confirm gate as an inline approval card.
-        The agent does not run the sandbox until the decision rides back, so a
+        The agent does not send the code until the decision rides back, so a
         malformed envelope is noted honestly rather than dropped."""
         request = gate.parse_code_exec_request(payload)
         if request is None:
@@ -2146,8 +2147,8 @@ class Trid3ntDock(QDockWidget):
             )
             return
         card = CodeExecCard(request, self._on_code_exec_decision)
-        # Track the card by code_exec_id so the later
-        # code-exec-result envelope updates THIS card's chip with the outcome.
+        # Track the card by code_exec_id so the processing-request that follows
+        # the approval folds its outcome into THIS card's chip.
         self._code_exec_cards[request.code_exec_id] = card
         self.messages_layout.insertWidget(self.messages_layout.count() - 1, card)
         self._close_pending_for_card()
@@ -2162,21 +2163,31 @@ class Trid3ntDock(QDockWidget):
         except Exception as exc:  # noqa: BLE001
             self._note(f"code-exec confirmation send failed: {exc}", error=True)
 
-    def _on_code_exec_result(self, payload: dict) -> None:
-        """Fold a run outcome into its approved code-exec card's chip.
-        FIRE-AND-FORGET: a malformed envelope, or a result for a card that is
-        gone, is dropped rather than crashing."""
-        result = gate.parse_code_exec_result(payload)
-        if result is None:
-            return
-        card = self._code_exec_cards.get(result.code_exec_id)
+    def _on_processing_request(self, payload: dict) -> None:
+        """Run the request in this session and answer it; a code request also
+        folds its outcome into the card that approved it. The agent is paused
+        on the reply, so an exception here still answers with its message."""
+        response = run_processing_request(payload, iface=self.iface)
+        try:
+            self.bridge.send_processing_response(**response)
+        except Exception as exc:  # noqa: BLE001
+            self._note(f"processing response send failed: {exc}", error=True)
+        code_exec_id = payload.get("code_exec_id")
+        card = self._code_exec_cards.get(code_exec_id) if isinstance(code_exec_id, str) else None
         if card is None:
             return
+        outcome = gate.CodeExecResult(
+            code_exec_id=code_exec_id,
+            status=str(response.get("status") or "error"),
+            stdout_tail=str(response.get("stdout") or ""),
+            stderr_tail=str(response.get("error") or ""),
+            result=response.get("result") if isinstance(response.get("result"), dict) else None,
+        )
         try:
-            card.update_from_result(result)
+            card.update_from_result(outcome)
         except RuntimeError:
             # The underlying C++ widget died (case switch raced the result).
-            self._code_exec_cards.pop(result.code_exec_id, None)
+            self._code_exec_cards.pop(code_exec_id, None)
 
     # -- secrets-list roster (settings/secrets state) --------------------------- #
 

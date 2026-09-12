@@ -89,30 +89,11 @@ def test_write_tools_are_not_read_only():
     )
 
 
-#: compute_*-named tools that legitimately ARE open-world: composers that
-#: FETCH their own inputs (external APIs) rather than transforming a handed-in
-#: raster. compute_sediment_yield (RUSLE) fetches Copernicus DEM + STATSGO
-#: KFFACT + Esri/IO land cover when no override URIs are passed, so its
-#: open_world_hint=True is HONEST -- flipping it to False to satisfy the
-#: naming lint would misannotate a real external-API caller.
-#: Quick-win batch: compute_change_detection fetches its own
-#: two-date Sentinel-2 inputs (PC STAC) unless both imagery_*_uri overrides
-#: are passed -- the same input-fetching-composer shape as
-#: compute_sediment_yield, so its open_world_hint=True is honest too.
-#: compute_idf_curve hits the external NOAA PFDS API (the same endpoint as
-#: lookup_precip_return_period), so its open_world_hint=True is honest.
-#: compute_flood_depth_damage fetches the USACE NSI structure inventory
-#: (external API) unless assets_uri is passed, so it is honest too.
-#: compute_model_residuals fetches its own USGS groundwater observations
-#: (external OGC API) when observations_layer_uri is not passed -- the same
-#: input-fetching-composer shape as compute_flood_depth_damage, so it is
-#: honest too.
+#: compute_*-named tools that still reach an external endpoint. A derive tool
+#: takes a layer and never fetches; the one entry here is a fetch that draws a
+#: chart, awaiting its move to the fetchers.
 _OPEN_WORLD_COMPUTE_EXCEPTIONS = {
-    "compute_sediment_yield",
-    "compute_change_detection",
     "compute_idf_curve",
-    "compute_flood_depth_damage",
-    "compute_model_residuals",
 }
 
 
@@ -185,15 +166,17 @@ def test_fetch_dem_annotations():
     assert meta.idempotent_hint is True, "fetch_dem is cached / idempotent"
 
 
-def test_compute_hillshade_annotations():
-    """compute_hillshade: read-only + local + idempotent."""
+def test_session_tool_annotations():
+    """The two session tools write to the user's project and mint a request
+    each call: not read-only, not open-world, not idempotent."""
     snapshot = _registry_snapshot()
-    assert "compute_hillshade" in snapshot, "compute_hillshade not registered"
-    meta = snapshot["compute_hillshade"]
-    assert meta.read_only_hint is True
-    assert meta.open_world_hint is False, "compute_hillshade is local GDAL"
-    assert meta.destructive_hint is False
-    assert meta.idempotent_hint is True
+    for name in ("run_qgis_algorithm", "run_pyqgis"):
+        assert name in snapshot, f"{name} not registered"
+        meta = snapshot[name]
+        assert meta.read_only_hint is False
+        assert meta.open_world_hint is False, f"{name} runs in the session, not the world"
+        assert meta.destructive_hint is False
+        assert meta.idempotent_hint is False
 
 
 def test_web_fetch_annotations():

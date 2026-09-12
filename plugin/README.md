@@ -207,7 +207,7 @@ make clean     # remove build artifacts
 | --- | --- |
 | `net/` | The connection layer: the stdlib-only WebSocket client, the Qt bridge, the background tasks, the auth broker, one run invocation. |
 | `ui/` | The dock and every widget in it: the chat, the cards, the gate, the charts window, the draw tools, the cases and settings dialogs. |
-| `render/` | What arrives from the agent, turned into QGIS: layers, the point probe, message formatting. |
+| `render/` | What arrives from the agent, turned into QGIS: layers, the point probe, message formatting, and a processing request run in this session. |
 | `case/` | The case's own canvas seams: the AOI, and pushing one of your layers up. |
 | `docs/` | The screenshots this page embeds. |
 | `tests/` | The plugin's own suite - pure-Python, with the Qt-wiring subset run in a subprocess. |

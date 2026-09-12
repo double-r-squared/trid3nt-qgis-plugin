@@ -21,18 +21,13 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.tools import register_tool
 from trid3nt_server.tools.derive._hydrology_common import (
-    HydrologyAoiTooLargeError,
-    HydrologyDependencyError,
     HydrologyInputError,
     HydrologyPrimitivesError,
     HydrologyUpstreamError,
     _ENGINE_NOTE,
-    _MAX_AOI_DEG,
     _condition_dem,
-    _import_pysheds,
+    _dem_bbox_4326,
     _stage_dem,
-    _stage_uri_local,
-    _validate_bbox,
     _write_geojson,
 )
 
@@ -133,13 +128,12 @@ def _trace_stream_network(
 
 @register_tool(
     _STREAMS_METADATA,
-    # Writes only its own run artifact; open-world when fetching the DEM.
-    open_world_hint=True,
+    # Writes only its own run artifact over a layer it was handed.
+    open_world_hint=False,
 )
 def extract_stream_network(
-    bbox: tuple[float, float, float, float],
+    dem_uri: str,
     accumulation_threshold: int = 500,
-    dem_uri: str | None = None,
     *,
     _output_dir: str | None = None,
     # absorb LLM-invented kwargs.
@@ -153,19 +147,17 @@ def extract_stream_network(
     show where to put the pour point). Do NOT use for: mapped/named
     rivers (``fetch_river_geometry``/``fetch_nhdplus_nldi_navigate`` --
     surveyed, not DEM-derived); the basin boundary
-    (``delineate_watershed``).
+    (``delineate_watershed``). Fetch the DEM first and pass its uri.
 
     Params:
-        bbox: EPSG:4326, clamped to <= 0.3 deg per side.
+        dem_uri: the DEM layer, at most 0.3 deg per side.
         accumulation_threshold: min upslope cell count to be channel
             (default 500, ~0.45 km^2 at 30m). Lower=denser network.
-        dem_uri: optional override DEM; default Copernicus GLO-30.
 
     Returns GeoJSON LineStrings, one per branch, with the segment count, the
     threshold used, an approximate total length and honest notes. No cell over
     the threshold is a typed refusal, not an empty layer.
     """
-    q_bbox = _validate_bbox(bbox)
     try:
         threshold = int(accumulation_threshold)
     except (TypeError, ValueError) as exc:
@@ -181,7 +173,8 @@ def extract_stream_network(
     notes: list[str] = [_ENGINE_NOTE]
 
     with tempfile.TemporaryDirectory(prefix="trid3nt_streams_") as tmpdir:
-        dem_path = _stage_dem(q_bbox, dem_uri, tmpdir, notes)
+        dem_path = _stage_dem(dem_uri, tmpdir, notes)
+        q_bbox = _dem_bbox_4326(dem_path)
         grid, fdir, acc = _condition_dem(dem_path)
 
         acc_arr = np.asarray(acc)
@@ -190,7 +183,7 @@ def extract_stream_network(
                 f"No cell reaches the {threshold}-cell accumulation threshold "
                 f"over {q_bbox!r} (max accumulation "
                 f"{int(acc_arr.max()) if acc_arr.size else 0} cells). Lower "
-                "accumulation_threshold or enlarge the bbox."
+                "accumulation_threshold or fetch a larger DEM."
             )
         try:
             lines = _trace_stream_network(

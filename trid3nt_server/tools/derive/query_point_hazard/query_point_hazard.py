@@ -76,19 +76,11 @@ _METADATA = AtomicToolMetadata(
 
 
 
-def _geocode_place(place: str) -> dict[str, Any]:
-    """Forward-geocode ``place`` through the shared geocoder."""
-    from trid3nt_server.tools.fetchers.socioeconomic.geocode_location.geocode_location import geocode_location
-
-    return geocode_location(query=place)
-
-
 def resolve_point(
-    lon: Any, lat: Any, place: Any, error_cls: type[Exception] = PointHazardInputError
+    lon: Any, lat: Any, error_cls: type[Exception] = PointHazardInputError
 ) -> tuple[float, float, str]:
-    """``(lon, lat, label)`` from an explicit pair or a place name; a missing or
-    invalid location raises ``error_cls``, and a geocode failure keeps its reason.
-    """
+    """``(lon, lat, label)`` from an explicit pair; a missing or invalid location
+    raises ``error_cls``. A place name is geocoded by the caller first."""
     if lon is not None or lat is not None:
         try:
             flon, flat = float(lon), float(lat)
@@ -105,25 +97,9 @@ def resolve_point(
             )
         return flon, flat, f"({flon:.5f}, {flat:.5f})"
 
-    if place is not None and str(place).strip():
-        try:
-            geo = _geocode_place(str(place).strip())
-        except Exception as exc:  # noqa: BLE001 -- surface the real reason
-            raise error_cls(
-                f"could not geocode place {place!r}: {exc}"
-            ) from exc
-        try:
-            flon = float(geo["longitude"])
-            flat = float(geo["latitude"])
-        except (KeyError, TypeError, ValueError) as exc:
-            raise error_cls(
-                f"geocoder returned no usable centroid for {place!r}: {geo!r}"
-            ) from exc
-        label = str(geo.get("name") or place)
-        return flon, flat, label
-
     raise error_cls(
-        "provide a location: either lon AND lat, or a free-text place name."
+        "provide a location as lon AND lat (geocode a place name first with "
+        "geocode_location)."
     )
 
 
@@ -239,16 +215,15 @@ def sample_raster_at_point(
 
 @register_tool(
     _METADATA,
-    # Reads case state + layer artifacts; may geocode via Nominatim.
+    # Reads case state + layer artifacts; nothing external.
     read_only_hint=True,
-    open_world_hint=True,
+    open_world_hint=False,
     destructive_hint=False,
     idempotent_hint=True,
 )
 async def query_point_hazard(
     lon: float | None = None,
     lat: float | None = None,
-    place: str | None = None,
     case_id: str | None = None,
     # absorb LLM-invented kwargs.
     **_extra_ignored: Any,
@@ -258,21 +233,19 @@ async def query_point_hazard(
     Use this when: "what's the flood depth at my house / 123 Main St /
     this point?" or "what do all the layers say at Fort Myers pier?" --
     one call reads the whole loaded raster stack at a point instead of N
-    zonal calls. Resolves ``lon``/``lat`` or a geocoded ``place``. Do NOT
+    zonal calls. Takes ``lon``/``lat``; geocode a place name first. Do NOT
     use for: a time series over frames (``extract_timeseries_at_point``);
     vector layers (skipped here; use vector query tools).
 
     Params:
-        lon/lat: explicit EPSG:4326 coords (both required if used; wins
-            over ``place``).
-        place: free-text place name to geocode.
+        lon/lat: explicit EPSG:4326 coords, both required.
         case_id: Case to sample; default the turn's bound Case.
 
     Returns the location, the case, and one result per raster layer carrying its
     value, units and any note. A per-layer failure is an honest entry, never a
     fabricated number; no layers at all is a typed refusal.
     """
-    q_lon, q_lat, label = resolve_point(lon, lat, place)
+    q_lon, q_lat, label = resolve_point(lon, lat)
     resolved_case = resolve_case_id(case_id)
     layers, _case_bbox, case_title, _case = await layers_from_case(resolved_case)
 

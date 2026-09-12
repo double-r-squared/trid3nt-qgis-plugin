@@ -89,7 +89,7 @@ docstring: |-
       - As the structure-exposure asset layer for a building-loss or
         exposure-value analysis -- NSI carries the HAZUS occupancy class
         AND per-structure replacement value, removing both the
-        ``compute_building_density`` default-RES1 proxy AND the
+        default-RES1 proxy AND the
         ``_REPLACEMENT_VALUE_DEFAULTS_USD`` per-class fallback. This is
         the **preferred** structure-exposure substrate inside CONUS.
       - User asks for exposed value or repair cost estimates that need a
@@ -99,14 +99,14 @@ docstring: |-
 
   When NOT to use:
       - Outside the United States -- NSI only covers CONUS + AK + HI + the
-        U.S. territories. Use ``compute_building_density`` (Microsoft
-        Global ML Building Footprints) for international queries instead.
+        U.S. territories. Use ``fetch_buildings`` (building footprints) for
+        international queries instead.
       - For bbox spans larger than ~1 degree per axis -- NSI rejects
         oversized queries with a 500. Split into tiles and call once per
-        tile, or use ``compute_building_density`` for the regional
-        aggregate.
-      - For aggregate building density rasters -- ``compute_building_density``
-        is the right primitive when you want a raster of building counts
+        tile, or aggregate footprints in the session for the regional
+        count.
+      - For aggregate building density rasters -- a count of ``fetch_buildings``
+        footprints per cell in the session, when you want a raster of building counts
         per cell, not point features.
       - For HRSL population grids -- ``fetch_hrsl_population`` is the
         dedicated tool when you only need persons-per-cell, not per-
@@ -162,7 +162,7 @@ docstring: |-
         occupancy + structure values rather than a class-default
         fallback. This is the **preferred** structure-exposure substrate
         when the bbox is inside CONUS -- prefer NSI when available and
-        fall back to ``compute_building_density`` only outside the US.
+        fall back to ``fetch_buildings`` only outside the US.
       - Complementary to ``fetch_hrsl_population`` (population grid),
         ``fetch_administrative_boundaries`` (admin polygons for zonal
         aggregation), and ``fetch_roads_osm`` (road network) for full

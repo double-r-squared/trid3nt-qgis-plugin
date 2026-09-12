@@ -283,17 +283,16 @@ def test_extra_kwargs_ignored():
 
 # 10. Typo query expansion (model-free fuzzy correction, stdlib difflib).
 #
-# Motivating live failure: "can you show me a gradinet relief ..." (typo for
-# "gradient") missed compute_colored_relief -- the BM25 channel is exact-token
-# and the hashed dense fallback is equally typo-blind. The fix expands
-# out-of-vocabulary query tokens with close vocabulary matches at QUERY time
-# only (expansion, never replacement); the LLM always sees the raw prompt.
+# A typo'd domain word misses the BM25 channel, which is exact-token, and the
+# hashed dense fallback is equally typo-blind. The fix expands out-of-vocabulary
+# query tokens with close vocabulary matches at QUERY time only (expansion,
+# never replacement); the LLM always sees the raw prompt.
 
 
-def test_typo_gradinet_relief_routes_without_exact_corpus_queries(
+def test_typo_watershd_routes_without_exact_corpus_queries(
     tmp_path, monkeypatch
 ):
-    """A typo'd ask still surfaces ``compute_colored_relief`` in the top 5.
+    """A typo'd ask still surfaces ``delineate_watershed`` in the top 5.
 
     Its exact corpus queries are stripped, so the correct token has to survive in the
     vocabulary through other tools for the fuzzy correction to fire."""
@@ -302,38 +301,38 @@ def test_typo_gradinet_relief_routes_without_exact_corpus_queries(
     corpus = _load_corpus()
     stripped = [
         q
-        for q in corpus.get("compute_colored_relief", [])
-        if "gradient relief" not in q.lower()
+        for q in corpus.get("delineate_watershed", [])
+        if "watershed" not in q.lower()
     ]
-    assert stripped != corpus.get("compute_colored_relief", []), (
-        "expected to strip at least one 'gradient relief' corpus query"
+    assert stripped != corpus.get("delineate_watershed", []), (
+        "expected to strip at least one 'watershed' corpus query"
     )
-    corpus["compute_colored_relief"] = stripped
+    corpus["delineate_watershed"] = stripped
     corpus_file = tmp_path / "corpus_stripped.yaml"
     corpus_file.write_text(_yaml.safe_dump(corpus))
     monkeypatch.setenv("TRID3NT_TOOL_CORPUS_YAML", str(corpus_file))
     _reset_index_for_tests()  # rebuild against the stripped corpus
 
-    # Mechanism: the typo token is out-of-vocab and corrects to "gradient".
+    # Mechanism: the typo token is out-of-vocab and corrects to "watershed".
     index = discover_module._get_index()
-    assert "gradinet" not in index.vocabulary
-    assert "gradient" in index.vocabulary
-    assert "gradient" in _close_vocab_matches("gradinet", index.vocabulary)
+    assert "watershd" not in index.vocabulary
+    assert "watershed" in index.vocabulary
+    assert "watershed" in _close_vocab_matches("watershd", index.vocabulary)
 
     # Ranking: the raw typo phrase lands the target in the top-5.
-    top = _run_top_k("can you show me a gradinet relief over this bbox", k=5)
-    assert "compute_colored_relief" in top, (
-        f"expected compute_colored_relief in top-5 for typo query; got {top}"
+    top = _run_top_k("delineate the watershd that drains to this point", k=5)
+    assert "delineate_watershed" in top, (
+        f"expected delineate_watershed in top-5 for typo query; got {top}"
     )
 
 
 @pytest.mark.parametrize(
     "query,expected_tool",
     [
-        # "hillshde" is the discriminating case: WITHOUT expansion it misses
-        # the top-5 entirely; with expansion the
-        # correction "hillshade" carries BM25 + name-substring.
-        ("hillshde of this terrain", "compute_hillshade"),
+        # "watershd" is the discriminating case: WITHOUT expansion it misses
+        # the top-5 entirely; with expansion the correction "watershed" carries
+        # BM25 + name-substring.
+        ("watershd above this gauge", "delineate_watershed"),
         ("floof depth for this neighborhood", "compute_flood_depth_damage"),
     ],
 )
@@ -350,7 +349,7 @@ def test_in_vocab_tokens_are_not_expanded():
     and a fully in-vocabulary token list round-trips unchanged."""
     index = discover_module._get_index()
     vocab = index.vocabulary
-    for tok in ("flood", "hillshade", "gradient", "relief", "elevation"):
+    for tok in ("flood", "hillshade", "watershed", "catchment", "elevation"):
         assert tok in vocab, f"test precondition: {tok!r} should be in-vocab"
         assert _close_vocab_matches(tok, vocab) == ()
     tokens = ["flood", "depth", "hillshade"]
@@ -376,11 +375,11 @@ def test_expansion_appends_never_replaces():
     """Original tokens stay first (order + content intact); corrections are
     appended after them."""
     index = discover_module._get_index()
-    tokens = _tokenize("gradinet relief over this bbox")
+    tokens = _tokenize("watershd above this gauge")
     expanded = _expand_query_tokens(tokens, index.vocabulary)
     assert expanded[: len(tokens)] == tokens
-    assert "gradinet" in expanded  # the typo itself is NOT removed
-    assert "gradient" in expanded[len(tokens):]
+    assert "watershd" in expanded  # the typo itself is NOT removed
+    assert "watershed" in expanded[len(tokens):]
 
 
 def test_typo_query_ranking_is_deterministic():

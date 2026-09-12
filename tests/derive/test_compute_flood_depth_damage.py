@@ -116,7 +116,7 @@ def test_registered() -> None:
     assert entry.fn is compute_flood_depth_damage
     assert entry.metadata.cacheable is False
     assert entry.metadata.ttl_class == "live-no-cache"
-    assert entry.metadata.open_world_hint is True  # fetches NSI
+    assert entry.metadata.open_world_hint is False  # reads the layers it is handed
 
 
 def test_curve_interpolation() -> None:
@@ -241,39 +241,12 @@ def test_no_structures_raises(depth_and_assets, tmp_path) -> None:
         )
 
 
-def test_nsi_fetch_used_when_no_assets(depth_and_assets, tmp_path, monkeypatch) -> None:
-    raster, assets = depth_and_assets
-    # fetch_usace_nsi is spec-driven; the consumer resolves it via the
-    # registry, so patch the (frozen) RegisteredTool's fn there.
-    import dataclasses
-
-    from trid3nt_server.tools import TOOL_REGISTRY
-
-    captured: dict = {}
-
-    def _fake_nsi(bbox, **_kw):
-        captured["bbox"] = bbox
-        return LayerURI(
-            layer_id="nsi-test",
-            name="NSI (test)",
-            layer_type="vector",
-            uri=assets,
+def test_missing_assets_is_a_refusal_never_a_fetch(depth_and_assets, tmp_path) -> None:
+    raster, _assets = depth_and_assets
+    with pytest.raises(FloodDamageInputError, match="fetch_usace_nsi"):
+        compute_flood_depth_damage(
+            depth_raster_uri=raster, assets_uri=None, _output_dir=str(tmp_path)
         )
-
-    monkeypatch.setitem(
-        TOOL_REGISTRY, "fetch_usace_nsi",
-        dataclasses.replace(TOOL_REGISTRY["fetch_usace_nsi"], fn=_fake_nsi),
-    )
-    result = compute_flood_depth_damage(
-        depth_raster_uri=raster, _output_dir=str(tmp_path)
-    )
-    assert result.n_structures == 4
-    # NSI was queried with the raster's EPSG:4326 bounds.
-    exp_bbox = transform_bounds(
-        CRS, "EPSG:4326", X0, Y0, X0 + N * RES, Y0 + N * RES
-    )
-    assert captured["bbox"] == pytest.approx(exp_bbox, abs=1e-6)
-    assert any("National Structure Inventory" in n for n in result.notes)
 
 
 def test_bad_units_raises(depth_and_assets, tmp_path) -> None:

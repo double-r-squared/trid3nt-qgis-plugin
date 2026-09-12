@@ -104,28 +104,6 @@ _METADATA = AtomicToolMetadata(
 
 
 
-def _fetch_population_layer(
-    bbox: tuple[float, float, float, float], dataset: str
-) -> Any:
-    """WorldPop raster ``LayerURI`` for ``bbox``, resolved through the registry;
-    only ``.uri`` is read, as a single-band COG.
-    """
-    from trid3nt_server.tools import TOOL_REGISTRY
-
-    fetch_population = TOOL_REGISTRY["fetch_population"].fn
-    return fetch_population(bbox=bbox, dataset=dataset)
-
-
-def _fetch_buildings_layer(bbox: tuple[float, float, float, float]) -> Any:
-    """Building-footprint vector ``LayerURI`` (the fetch_buildings seam)."""
-    from trid3nt_server.tools import TOOL_REGISTRY
-
-    fetch_buildings = TOOL_REGISTRY["fetch_buildings"].fn
-    return fetch_buildings(bbox=bbox)
-
-
-
-
 def _stage_uri_local(uri: str, tmpdir: str, label: str) -> str:
     """Return a local file path for ``uri`` (s3:// download or local path)."""
     if uri.startswith("s3://"):
@@ -183,22 +161,21 @@ def _footprint_area_km2(
 
 
 def _population_in_footprint(
-    bbox_4326: tuple[float, float, float, float],
+    population_layer_uri: str,
     wet: np.ndarray,
     hazard_transform: Any,
     hazard_crs: Any,
-    dataset: str,
     tmpdir: str,
     notes: list[str],
 ) -> int:
-    """Sum WorldPop people over footprint cells, the mask transferred nearest onto
-    the population grid; any failure raises for the caller to record per-component.
+    """Sum the people of a population raster over footprint cells, the mask
+    transferred nearest onto the population grid; any failure raises for the
+    caller to record per-component.
     """
     import rasterio
     from rasterio.warp import Resampling, reproject
 
-    layer = _fetch_population_layer(bbox_4326, dataset)
-    pop_local = _stage_uri_local(str(layer.uri), tmpdir, "population")
+    pop_local = _stage_uri_local(population_layer_uri, tmpdir, "population")
     with rasterio.open(pop_local) as pop_src:
         pop = pop_src.read(1).astype(np.float64)
         pop_nodata = pop_src.nodata
@@ -218,8 +195,8 @@ def _population_in_footprint(
     selected = (mask_on_pop == 1) & valid
     population = int(round(float(pop[selected].sum())))
     notes.append(
-        f"Population: WorldPop ({dataset}) cells whose center falls on the "
-        "hazard footprint (nearest-neighbor mask transfer). WorldPop cells "
+        f"Population: cells of {population_layer_uri} whose center falls on the "
+        "hazard footprint (nearest-neighbor mask transfer). Population cells "
         "are coarser than most hazard grids, so edge cells are counted "
         "whole-cell -- a screening estimate, not a parcel census."
     )
@@ -227,7 +204,7 @@ def _population_in_footprint(
 
 
 def _buildings_in_footprint(
-    bbox_4326: tuple[float, float, float, float],
+    buildings_layer_uri: str,
     hazard_local: str,
     wet_test: Any,
     tmpdir: str,
@@ -237,8 +214,7 @@ def _buildings_in_footprint(
     import geopandas as gpd
     import rasterio
 
-    layer = _fetch_buildings_layer(bbox_4326)
-    bld_local = _stage_uri_local(str(layer.uri), tmpdir, "buildings")
+    bld_local = _stage_uri_local(buildings_layer_uri, tmpdir, "buildings")
     gdf = gpd.read_file(bld_local)
     gdf = gdf[gdf.geometry.notna()]
     if gdf.crs is None:
@@ -246,8 +222,8 @@ def _buildings_in_footprint(
     total = int(len(gdf))
     if total == 0:
         notes.append(
-            "Buildings: the footprint fetch returned zero buildings in the "
-            "hazard bbox; exposed-building count is an honest 0."
+            "Buildings: the footprint layer holds zero buildings; the "
+            "exposed-building count is an honest 0."
         )
         return 0
 
@@ -275,8 +251,7 @@ def _buildings_in_footprint(
 
 @register_tool(
     _METADATA,
-    # An analysis composer over a caller-named hazard raster: the external
-    # surface belongs to fetch_population and fetch_buildings, not to this.
+    # An analysis over three layers the caller names; nothing external.
     read_only_hint=True,
     open_world_hint=False,
     destructive_hint=False,
@@ -284,8 +259,9 @@ def _buildings_in_footprint(
 )
 def compute_exposure_summary(
     hazard_layer_uri: str,
+    population_layer_uri: str | None = None,
+    buildings_layer_uri: str | None = None,
     threshold: float | None = None,
-    population_dataset: str = "worldpop_2020",
     # absorb LLM-invented kwargs.
     **_extra_ignored: Any,
 ) -> dict[str, Any]:
@@ -294,14 +270,18 @@ def compute_exposure_summary(
     Use for "how many people or buildings are in the flood zone?" right after
     a flood, surge or plume solve produces a depth or intensity raster, and for
     situation-report headline numbers. Not for dollar losses
-    (``compute_flood_depth_damage``) or generic raster-in-zone stats.
+    (``compute_flood_depth_damage``) or generic raster-in-zone stats. Fetch the
+    population raster (``fetch_population``) and the footprints
+    (``fetch_buildings``) over the hazard's bbox first and pass their uris.
 
     Params:
         hazard_layer_uri: hazard raster (band 1 defines the footprint).
+        population_layer_uri: a population-count raster; absent, the
+            population component is None with its reason.
+        buildings_layer_uri: a building-footprint vector layer; absent, the
+            buildings component is None with its reason.
         threshold: footprint cutoff in raster units (e.g. 0.5 for >=0.5m
             depth). ``None`` (default) = any positive/wet cell.
-        population_dataset: WorldPop vintage token (default
-            ``"worldpop_2020"``).
 
     Returns population, buildings, area_km2, the threshold, bbox, per-component
     errors and notes. A failed component is None with its reason, never
@@ -404,8 +384,13 @@ def compute_exposure_summary(
         # ---- Population (per-component degrade). ---------------------------
         population: int | None = None
         try:
+            if not population_layer_uri:
+                raise ExposureInputError(
+                    "no population_layer_uri given: fetch_population over the "
+                    "hazard bbox and pass its uri"
+                )
             population = _population_in_footprint(
-                bbox_4326, wet, transform, crs, population_dataset, tmpdir, notes
+                population_layer_uri, wet, transform, crs, tmpdir, notes
             )
         except Exception as exc:  # noqa: BLE001 -- honest per-component degrade
             errors["population"] = f"{type(exc).__name__}: {exc}"
@@ -416,8 +401,13 @@ def compute_exposure_summary(
         # ---- Buildings (per-component degrade). ----------------------------
         buildings: int | None = None
         try:
+            if not buildings_layer_uri:
+                raise ExposureInputError(
+                    "no buildings_layer_uri given: fetch_buildings over the "
+                    "hazard bbox and pass its uri"
+                )
             buildings = _buildings_in_footprint(
-                bbox_4326, hazard_local, _wet_test, tmpdir, notes
+                buildings_layer_uri, hazard_local, _wet_test, tmpdir, notes
             )
         except Exception as exc:  # noqa: BLE001 -- honest per-component degrade
             errors["buildings"] = f"{type(exc).__name__}: {exc}"

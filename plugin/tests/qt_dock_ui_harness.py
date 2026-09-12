@@ -645,16 +645,16 @@ sent_confirms = []
 dock.bridge.confirm_payload = (
     lambda wid, dec, rev=None: sent_confirms.append((wid, dec, rev))
 )
+sent_processing = []
+dock.bridge.send_processing_response = (
+    lambda **response: sent_processing.append(response)
+)
 
 CODE_REQ = {
     "envelope_type": "code-exec-request",
     "code_exec_id": "01HARNESSCODEEXECAAAAAAAAA",
     "python_code": "result = 1 + 1\n",
-    "layer_refs": {
-        "depth": "s3://bucket/depth.tif",
-        "frames": ["s3://a.tif", "s3://b.tif"],
-    },
-    "rationale": "Compute a sum over the depth layer.",
+    "rationale": "Compute a sum in the session.",
 }
 dock._add_user_bubble("what is the p95 depth?")
 ce_pre = _AssistantEntry(dock.messages_layout)
@@ -686,17 +686,11 @@ ce_card.code_toggle.click()
 pump()
 assert ce_card.code_view.isVisible(), "show-code toggle did not expand the preview"
 assert ce_card.code_toggle.text() == "hide code", "toggle label did not flip"
-# Rationale + layer lines render in the body.
+# The rationale renders in the body.
 from qgis.PyQt.QtWidgets import QLabel as _QLabel  # noqa: E402
 
 ce_texts = [l.text() for l in ce_card.findChildren(_QLabel)]
 assert any("Compute a sum" in t for t in ce_texts), "rationale missing from card"
-assert any("depth: s3://bucket/depth.tif" in t for t in ce_texts), (
-    "layer line missing from card"
-)
-assert any("frames: 2 frames" in t for t in ce_texts), (
-    "multi-frame layer line missing from card"
-)
 # Run -> ONE confirmation (proceed, revised None), locked + folded to a chip.
 ce_card.run_btn.click()
 pump()
@@ -713,6 +707,32 @@ assert "approved" in ce_card.summary_lbl.text().lower(), (
 )
 ce_card._run()  # locked: answered exactly once, never a double send
 assert len(sent_confirms) == 1, "locked card re-sent a confirmation"
+# The approved code comes back as a processing-request: the dock runs it in
+# THIS session, answers on the wire, and folds the outcome into the card.
+dock._on_event("processing-request", {
+    "request_id": "01HARNESSPROCESSINGAAAAAAA",
+    "kind": "code",
+    "code": CODE_REQ["python_code"],
+    "code_exec_id": CODE_REQ["code_exec_id"],
+})
+pump()
+assert sent_processing and sent_processing[-1]["status"] == "ok", sent_processing
+assert sent_processing[-1]["request_id"] == "01HARNESSPROCESSINGAAAAAAA"
+assert sent_processing[-1]["result"] == {"value": 2}, sent_processing[-1]
+assert "succeeded" in ce_card.summary_lbl.text().lower(), (
+    f"outcome chip wrong: {ce_card.summary_lbl.text()!r}"
+)
+ce_texts = [l.text() for l in ce_card.findChildren(_QLabel)]
+assert any("Result: 2" in t for t in ce_texts), "result line missing from card"
+# A snippet that raises answers with its traceback, never a fabricated result.
+dock._on_event("processing-request", {
+    "request_id": "01HARNESSPROCESSINGBBBBBBB",
+    "kind": "code",
+    "code": "result = undefined_name\n",
+})
+pump()
+assert sent_processing[-1]["status"] == "error", sent_processing[-1]
+assert "NameError" in sent_processing[-1]["error"], sent_processing[-1]
 # Deny path on a second card.
 dock._on_event(
     "code-exec-request", dict(CODE_REQ, code_exec_id="01HARNESSCODEEXECBBBBBBBBB")
@@ -736,7 +756,8 @@ assert len(dock.messages_host.findChildren(CodeExecCard)) == n_ce_cards, (
 )
 dock._on_event("turn-complete", {})
 print("[code-exec] approval card: inline order, collapsed verbatim preview, "
-      "Run=proceed / Deny=cancel via tool-payload-confirmation, lock + chip")
+      "Run=proceed / Deny=cancel via tool-payload-confirmation, lock + chip, "
+      "the session runs the approved code and folds the outcome in")
 
 # ---- 8b. Credential-request key-entry card -------------------------------- #
 # The agent's credential-request envelope previously had ZERO handling (the

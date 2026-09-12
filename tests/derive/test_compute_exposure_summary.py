@@ -1,8 +1,8 @@
 """Tests for ``compute_exposure_summary`` (hazard-footprint exposure).
 
-No network: the WorldPop / buildings fetch seams
-(``_fetch_population_layer`` / ``_fetch_buildings_layer``) are monkeypatched
-to synthetic local artifacts; the hazard raster is a tiny local GeoTIFF.
+No network: the population raster and the footprints are handed in as tiny
+local layers, the way the fetched ones arrive; the hazard raster is a tiny local
+GeoTIFF. A missing layer is a per-component reason, never a fetch.
 """
 
 from __future__ import annotations
@@ -84,17 +84,18 @@ def buildings_layer(tmp_path: Path) -> SimpleNamespace:
 
 
 @pytest.fixture()
-def patched_fetchers(monkeypatch, population_layer, buildings_layer):
-    monkeypatch.setattr(
-        mod, "_fetch_population_layer", lambda bbox, dataset: population_layer
-    )
-    monkeypatch.setattr(mod, "_fetch_buildings_layer", lambda bbox: buildings_layer)
+def layers(population_layer, buildings_layer) -> dict:
+    """The two fetched layers, by the parameter names the tool takes them under."""
+    return {
+        "population_layer_uri": population_layer.uri,
+        "buildings_layer_uri": buildings_layer.uri,
+    }
 
 
 
 
-def test_exposure_happy_path(hazard_path: Path, patched_fetchers) -> None:
-    result = compute_exposure_summary(hazard_layer_uri=str(hazard_path))
+def test_exposure_happy_path(hazard_path: Path, layers) -> None:
+    result = compute_exposure_summary(hazard_layer_uri=str(hazard_path), **layers)
 
     # Wet half = 50 cells x 10 people/cell.
     assert result["population"] == 500
@@ -110,15 +111,15 @@ def test_exposure_happy_path(hazard_path: Path, patched_fetchers) -> None:
     assert result["bbox"] == pytest.approx(list(_BBOX), abs=1e-6)
 
 
-def test_exposure_area_matches_geometry(hazard_path: Path, patched_fetchers) -> None:
-    result = compute_exposure_summary(hazard_layer_uri=str(hazard_path))
+def test_exposure_area_matches_geometry(hazard_path: Path, layers) -> None:
+    result = compute_exposure_summary(hazard_layer_uri=str(hazard_path), **layers)
     # Half of a ~0.1 x 0.1 deg box at ~30N: ~ (0.05 deg * 96.4 km/deg-lon)
     # x (0.1 deg * 110.5 km/deg-lat) ~= 53 km^2. Accept a generous band.
     assert 40.0 < result["area_km2"] < 70.0
 
 
 def test_threshold_shrinks_footprint(
-    tmp_path: Path, patched_fetchers, population_layer, buildings_layer
+    tmp_path: Path, layers
 ) -> None:
     # Depth gradient: only the leftmost 2 columns exceed 3.0.
     data = np.zeros((10, 10), dtype="float32")
@@ -127,14 +128,14 @@ def test_threshold_shrinks_footprint(
     data[:, 2] = 1.0
     path = _write_raster(tmp_path / "grad.tif", data)
 
-    result = compute_exposure_summary(hazard_layer_uri=str(path), threshold=3.0)
+    result = compute_exposure_summary(hazard_layer_uri=str(path), threshold=3.0, **layers)
     assert result["threshold"] == 3.0
     assert result["footprint_cell_count"] == 20
     assert result["population"] == 200  # 20 cells x 10 people
 
 
-def test_session_store_records_result(hazard_path: Path, patched_fetchers) -> None:
-    result = compute_exposure_summary(hazard_layer_uri=str(hazard_path))
+def test_session_store_records_result(hazard_path: Path, layers) -> None:
+    result = compute_exposure_summary(hazard_layer_uri=str(hazard_path), **layers)
     stored = get_session_exposure(None)
     assert stored is not None
     assert stored["population"] == result["population"]
@@ -144,54 +145,53 @@ def test_session_store_records_result(hazard_path: Path, patched_fetchers) -> No
 
 
 def test_population_failure_degrades_per_component(
-    hazard_path: Path, monkeypatch, buildings_layer
+    hazard_path: Path, tmp_path: Path, buildings_layer
 ) -> None:
-    def _boom(bbox, dataset):
-        raise RuntimeError("WorldPop upstream 503")
-
-    monkeypatch.setattr(mod, "_fetch_population_layer", _boom)
-    monkeypatch.setattr(mod, "_fetch_buildings_layer", lambda bbox: buildings_layer)
-
-    result = compute_exposure_summary(hazard_layer_uri=str(hazard_path))
+    result = compute_exposure_summary(
+        hazard_layer_uri=str(hazard_path),
+        population_layer_uri=str(tmp_path / "missing_pop.tif"),
+        buildings_layer_uri=buildings_layer.uri,
+    )
     assert result["population"] is None
-    assert "WorldPop upstream 503" in result["errors"]["population"]
+    assert "missing_pop.tif" in result["errors"]["population"]
     # Buildings + area still computed.
     assert result["buildings"] == 2
     assert result["area_km2"] > 0.0
 
 
 def test_buildings_failure_degrades_per_component(
-    hazard_path: Path, monkeypatch, population_layer
+    hazard_path: Path, tmp_path: Path, population_layer
 ) -> None:
-    monkeypatch.setattr(
-        mod, "_fetch_population_layer", lambda bbox, dataset: population_layer
+    result = compute_exposure_summary(
+        hazard_layer_uri=str(hazard_path),
+        population_layer_uri=population_layer.uri,
+        buildings_layer_uri=str(tmp_path / "missing_buildings.geojson"),
     )
-
-    def _boom(bbox):
-        raise RuntimeError("Overpass timeout")
-
-    monkeypatch.setattr(mod, "_fetch_buildings_layer", _boom)
-
-    result = compute_exposure_summary(hazard_layer_uri=str(hazard_path))
     assert result["buildings"] is None
-    assert "Overpass timeout" in result["errors"]["buildings"]
+    assert "missing_buildings" in result["errors"]["buildings"]
     assert result["population"] == 500
 
 
+def test_absent_layers_are_named_never_fetched(hazard_path: Path) -> None:
+    result = compute_exposure_summary(hazard_layer_uri=str(hazard_path))
+    assert result["population"] is None and result["buildings"] is None
+    assert "fetch_population" in result["errors"]["population"]
+    assert "fetch_buildings" in result["errors"]["buildings"]
+    assert result["area_km2"] > 0.0
 
 
-def test_empty_footprint_raises_typed_error(tmp_path: Path, patched_fetchers) -> None:
+def test_empty_footprint_raises_typed_error(tmp_path: Path, layers) -> None:
     data = np.zeros((10, 10), dtype="float32")  # entirely dry
     path = _write_raster(tmp_path / "dry.tif", data)
     with pytest.raises(ExposureEmptyFootprintError):
-        compute_exposure_summary(hazard_layer_uri=str(path))
+        compute_exposure_summary(hazard_layer_uri=str(path), **layers)
 
 
 def test_threshold_above_all_values_raises_empty(
-    hazard_path: Path, patched_fetchers
+    hazard_path: Path, layers
 ) -> None:
     with pytest.raises(ExposureEmptyFootprintError):
-        compute_exposure_summary(hazard_layer_uri=str(hazard_path), threshold=99.0)
+        compute_exposure_summary(hazard_layer_uri=str(hazard_path), threshold=99.0, **layers)
 
 
 def test_missing_uri_raises_input_error() -> None:
@@ -212,14 +212,14 @@ def test_non_finite_threshold_raises_input_error(hazard_path: Path) -> None:
 
 
 def test_nodata_cells_excluded_from_footprint(
-    tmp_path: Path, patched_fetchers
+    tmp_path: Path, layers
 ) -> None:
     # Left half wet, right half nodata (-9999): only 50 wet cells, and the
     # nodata cells are neither wet nor valid.
     data = np.full((10, 10), -9999.0, dtype="float32")
     data[:, :5] = 1.0
     path = _write_raster(tmp_path / "nd.tif", data, nodata=-9999.0)
-    result = compute_exposure_summary(hazard_layer_uri=str(path))
+    result = compute_exposure_summary(hazard_layer_uri=str(path), **layers)
     assert result["footprint_cell_count"] == 50
 
 

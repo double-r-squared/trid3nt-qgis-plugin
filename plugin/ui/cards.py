@@ -1303,14 +1303,6 @@ class CodeExecCard(QFrame):
             rationale_lbl.setStyleSheet(_GATE_BODY_STYLE)
             lay.addWidget(rationale_lbl)
 
-        # Which of the user's layers the code can touch (contract intent).
-        for line in gate.code_exec_layer_lines(request):
-            layer_lbl = QLabel(line)
-            layer_lbl.setWordWrap(True)
-            layer_lbl.setTextFormat(Qt.TextFormat.PlainText)
-            layer_lbl.setStyleSheet(_GATE_NOTE_STYLE)
-            lay.addWidget(layer_lbl)
-
         # Collapsed monospace preview of the EXACT code -- expandable,
         # read-only (verbatim, never a paraphrase).
         self.code_toggle = QPushButton("show code")
@@ -1398,7 +1390,7 @@ class CodeExecCard(QFrame):
         self.details_toggle.setChecked(False)
         self.details_toggle.setText("show details")
 
-    # -- run outcome (code-exec-result)
+    # -- run outcome
 
     def update_from_result(self, result: gate.CodeExecResult) -> None:
         """Fold the run OUTCOME into this card. The chip carries the HONEST

@@ -16,6 +16,7 @@ import numpy as np
 import pytest
 import rasterio
 from rasterio.transform import from_bounds
+from rasterio.warp import transform_bounds
 
 from trid3nt_contracts.execution import LayerURI
 
@@ -29,9 +30,6 @@ from trid3nt_server.tools.derive.compute_sediment_yield.compute_sediment_yield i
     compute_sediment_yield,
 )
 
-# Small legal AOI (bbox is used for validation/labeling only when all three
-# override URIs are supplied; the synthetic rasters carry their own UTM grid).
-BBOX = (-117.05, 34.00, -116.95, 34.05)
 
 # Synthetic grid: 40x40 at 30 m in UTM zone 11N.
 N = 40
@@ -106,7 +104,6 @@ def test_rusle_matches_hand_computed_cell(synthetic_inputs, tmp_path) -> None:
     out_dir.mkdir()
 
     result = compute_sediment_yield(
-        bbox=BBOX,
         rainfall_erosivity=R_TEST,
         dem_uri=dem_path,
         k_uri=k_path,
@@ -122,7 +119,8 @@ def test_rusle_matches_hand_computed_cell(synthetic_inputs, tmp_path) -> None:
     assert result.style["kind"] == "classed"
     assert result.style["units"] == "t/ha/yr"
     assert result.units == "t/ha/yr"
-    assert tuple(result.bbox) == BBOX
+    exp = transform_bounds(CRS, "EPSG:4326", X0, Y0, X0 + N * RES, Y0 + N * RES)
+    assert tuple(result.bbox) == pytest.approx(exp, abs=1e-6)
     assert result.rainfall_erosivity == R_TEST
     assert isinstance(result.notes, list) and result.notes
 
@@ -159,7 +157,6 @@ def test_default_r_is_honest(synthetic_inputs, tmp_path) -> None:
     out_dir.mkdir()
 
     result = compute_sediment_yield(
-        bbox=BBOX,
         dem_uri=dem_path,
         k_uri=k_path,
         landcover_uri=lc_path,
@@ -171,38 +168,20 @@ def test_default_r_is_honest(synthetic_inputs, tmp_path) -> None:
     assert np.isclose(result.mean_soil_loss_t_ha_yr, expected, rtol=1e-3)
 
 
-def test_k_fallback_constant_with_note(
-    synthetic_inputs, tmp_path, monkeypatch
-) -> None:
+def test_k_fallback_constant_with_note(synthetic_inputs, tmp_path) -> None:
     dem_path, _k_path, lc_path = synthetic_inputs
     out_dir = tmp_path / "out_kfb"
     out_dir.mkdir()
 
-    # No k_uri + STATSGO down -> documented constant 0.2 fallback with a note.
-    # fetch_statsgo_soils is now a spec-driven library-delegate router tool (ADR
-    # 0074); compute_sediment_yield resolves it via TOOL_REGISTRY, so patch the
-    # registry entry's fn to simulate STATSGO being offline.
-    import dataclasses
-
-    from trid3nt_server.tools import TOOL_REGISTRY
-
-    def _boom(**_kw):
-        raise RuntimeError("STATSGO offline (test)")
-
-    monkeypatch.setitem(
-        TOOL_REGISTRY,
-        "fetch_statsgo_soils",
-        dataclasses.replace(TOOL_REGISTRY["fetch_statsgo_soils"], fn=_boom),
-    )
-
+    # No k_uri -> the documented constant 0.2 with a note naming the fetch.
     result = compute_sediment_yield(
-        bbox=BBOX,
         rainfall_erosivity=R_TEST,
         dem_uri=dem_path,
         landcover_uri=lc_path,
         _output_dir=str(out_dir),
     )
-    assert any("K-factor FALLBACK" in note for note in result.notes)
+    assert any("K-factor FALLBACK" in note and "fetch_statsgo_soils" in note
+               for note in result.notes)
     expected = _expected_a(R_TEST, 0.2, C_BY_IO_LULC_CLASS[5])
     assert np.isclose(result.mean_soil_loss_t_ha_yr, expected, rtol=1e-3)
 
@@ -215,7 +194,6 @@ def test_water_class_yields_zero(synthetic_inputs, tmp_path) -> None:
     out_dir.mkdir()
 
     result = compute_sediment_yield(
-        bbox=BBOX,
         rainfall_erosivity=R_TEST,
         dem_uri=dem_path,
         k_uri=k_path,
@@ -234,7 +212,6 @@ def test_unknown_class_is_nodata(synthetic_inputs, tmp_path) -> None:
     out_dir.mkdir()
 
     result = compute_sediment_yield(
-        bbox=BBOX,
         rainfall_erosivity=R_TEST,
         dem_uri=dem_path,
         k_uri=k_path,
@@ -248,29 +225,33 @@ def test_unknown_class_is_nodata(synthetic_inputs, tmp_path) -> None:
     assert (a[10:, :] != nodata).all()
 
 
-def test_aoi_clamp_raises() -> None:
+def test_aoi_clamp_raises(synthetic_inputs, tmp_path) -> None:
+    _dem, _k, lc_path = synthetic_inputs
+    wide = str(tmp_path / "wide.tif")
+    with rasterio.open(
+        wide, "w", driver="GTiff", height=10, width=10, count=1, dtype="float32",
+        crs="EPSG:4326", transform=from_bounds(-117.5, 34.0, -117.0, 34.05, 10, 10),
+        nodata=-9999.0,
+    ) as dst:
+        dst.write(np.zeros((10, 10), dtype="float32"), 1)
     with pytest.raises(SedimentYieldAoiTooLargeError):
-        compute_sediment_yield(bbox=(-117.5, 34.0, -117.0, 34.05))  # 0.5 wide
-    with pytest.raises(SedimentYieldAoiTooLargeError):
-        compute_sediment_yield(bbox=(-117.1, 34.0, -117.0, 34.5))  # 0.5 tall
+        compute_sediment_yield(dem_uri=wide, landcover_uri=lc_path)
 
 
-def test_bad_bbox_raises() -> None:
-    with pytest.raises(SedimentYieldInputError):
-        compute_sediment_yield(bbox=(-117.0, 34.05, -117.05, 34.00))  # reversed
-    with pytest.raises(SedimentYieldInputError):
-        compute_sediment_yield(bbox=(-117.0, 34.0, -116.99))  # wrong arity
-    with pytest.raises(SedimentYieldInputError):
-        compute_sediment_yield(bbox=("a", 34.0, -116.99, 34.05))  # non-numeric
+def test_missing_layers_refuse_never_fetch(synthetic_inputs) -> None:
+    dem_path, _k, lc_path = synthetic_inputs
+    with pytest.raises(SedimentYieldInputError, match="fetch_copernicus_dem"):
+        compute_sediment_yield(dem_uri=None, landcover_uri=lc_path)
+    with pytest.raises(SedimentYieldInputError, match="fetch_esri_landcover_10m"):
+        compute_sediment_yield(dem_uri=dem_path, landcover_uri="")
 
 
 def test_bad_erosivity_raises(synthetic_inputs) -> None:
-    with pytest.raises(SedimentYieldInputError):
-        compute_sediment_yield(bbox=BBOX, rainfall_erosivity=0.0)
-    with pytest.raises(SedimentYieldInputError):
-        compute_sediment_yield(bbox=BBOX, rainfall_erosivity=1e9)
-    with pytest.raises(SedimentYieldInputError):
-        compute_sediment_yield(bbox=BBOX, rainfall_erosivity="wet")
+    dem_path, _k, lc_path = synthetic_inputs
+    for bad in (0.0, 1e9, "wet"):
+        with pytest.raises(SedimentYieldInputError):
+            compute_sediment_yield(dem_uri=dem_path, landcover_uri=lc_path,
+                                   rainfall_erosivity=bad)
 
 
 def test_the_declared_breaks_are_the_paint() -> None:

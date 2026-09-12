@@ -107,13 +107,12 @@ def test_eager_import_registers_meta_tools():
     A module-level ``@register_tool`` fires at package import with no fixture, and
     the dead ``mongo_query`` stub must NOT be there."""
     # No fixture: we deliberately use the live registry populated by import.
-    assert "code_exec_request" in agent_tools.TOOL_REGISTRY
+    assert "run_pyqgis" in agent_tools.TOOL_REGISTRY
     assert "mongo_query" not in agent_tools.TOOL_REGISTRY
 
-    ce = agent_tools.TOOL_REGISTRY["code_exec_request"]
+    ce = agent_tools.TOOL_REGISTRY["run_pyqgis"]
     assert ce.metadata.ttl_class == "live-no-cache"
     assert ce.metadata.cacheable is False
-    assert ce.metadata.source_class is None
 
 
 def test_misconfigured_metadata_fails_at_construction():
@@ -178,7 +177,6 @@ def test_global_query_scope_audit():
         "fetch_firms_active_fire",   # FIRMS AREA endpoint rejects a global bbox
         "fetch_hrsl_population",
         "fetch_nwi_wetlands",
-        "clip_raster_to_polygon",
     ):
         assert bbox_required in registry, f"{bbox_required} not registered"
         assert (

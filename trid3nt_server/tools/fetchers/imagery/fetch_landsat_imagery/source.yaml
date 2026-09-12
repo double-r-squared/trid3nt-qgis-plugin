@@ -231,7 +231,7 @@ docstring: |-
   **When NOT to use:**
   - US sub-meter aerial detail -- use ``fetch_naip`` (~1 m vs 30 m).
   - Recent fine-grained natural color -- ``fetch_sentinel2_truecolor`` (10 m).
-  - A continuous vegetation INDEX -- ``compute_ndvi`` (Sentinel-2 NDVI).
+  - A continuous vegetation INDEX -- band math over the fetched bands in the session.
   - Areas fully clouded in the window (raise the window / ``max_cloud_cover``);
     a no-imagery result is an honest typed error, never a fabricated layer.
 

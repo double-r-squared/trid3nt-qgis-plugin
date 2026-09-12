@@ -1,0 +1,56 @@
+{
+  "additionalProperties": false,
+  "description": "``processing-response``: what the session produced, client -> agent.\n``status`` is the honest terminal outcome; ``result`` is the layer summary\nof an algorithm's output or the JSON-coerced ``result`` of a snippet.",
+  "properties": {
+    "error": {
+      "anyOf": [
+        {
+          "maxLength": 16384,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Error"
+    },
+    "request_id": {
+      "title": "Request Id",
+      "type": "string"
+    },
+    "result": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Result"
+    },
+    "status": {
+      "enum": [
+        "ok",
+        "error"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "stdout": {
+      "default": "",
+      "maxLength": 16384,
+      "title": "Stdout",
+      "type": "string"
+    }
+  },
+  "required": [
+    "request_id",
+    "status"
+  ],
+  "title": "ProcessingResponsePayload",
+  "type": "object"
+}

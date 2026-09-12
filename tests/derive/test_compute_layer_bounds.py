@@ -307,8 +307,8 @@ def test_adapter_steer_present() -> None:
 
     prompt = SYSTEM_PROMPT.lower()
     assert "compute_layer_bounds" in SYSTEM_PROMPT
-    # Steers the agent away from the sandbox for bbox math.
-    assert "do not use the python sandbox" in prompt
+    # Steers the agent away from a snippet for bbox math.
+    assert "do not use run_pyqgis for bounding-box" in prompt
     # Asserts the agent CAN drive the map view.
     assert "never claim you cannot" in prompt
     # Names the fit/zoom/resize trigger.

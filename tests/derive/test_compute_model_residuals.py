@@ -106,7 +106,7 @@ def test_registered() -> None:
     assert entry.fn is compute_model_residuals
     assert entry.metadata.cacheable is False
     assert entry.metadata.ttl_class == "live-no-cache"
-    assert entry.metadata.open_world_hint is True  # may fetch USGS wells
+    assert entry.metadata.open_world_hint is False  # reads the layers it is handed
 
 
 def test_residuals_matches_hand_computed(tmp_path) -> None:
@@ -334,61 +334,17 @@ def test_missing_field_raises(tmp_path) -> None:
         )
 
 
-def test_bbox_fetch_path(tmp_path, monkeypatch) -> None:
+def test_missing_observations_refuse_never_fetch(tmp_path) -> None:
     raster = _write_head_raster(str(tmp_path / "head.tif"))
-
-    # Build a synthetic USGS-shaped FlatGeobuf the mocked shared core returns.
-    lon, lat = _utm_to_lonlat(*_cell_center(5, 20))
-    gdf = gpd.GeoDataFrame(
-        {
-            "site_no": ["12345"],
-            "water_level": [BASE + SLOPE * 5 + 4.0],
-            "parameter_code": ["72150"],
-            "vertical_datum": ["NAVD88"],
-            "unit": ["ft"],
-        },
-        geometry=[Point(lon, lat)],
-        crs="EPSG:4326",
-    )
-    with tempfile.NamedTemporaryFile(suffix=".fgb", delete=False) as f:
-        fgb_path = f.name
-    gdf.to_file(fgb_path, driver="FlatGeobuf", engine="pyogrio")
-    with open(fgb_path, "rb") as f:
-        fgb_bytes = f.read()
-
-    # fetch_usgs_groundwater_levels is spec-driven; the composer resolves
-    # its FGB bytes via the router seam (get_spec + validate_params + executor), so
-    # mock the executor the re-point calls.
-    from trid3nt_server.tools.fetchers._router import router as gw_router
-
-    captured: dict = {}
-
-    def _fake_exec(spec, params):
-        captured["bbox"] = tuple(params["bbox"])
-        return fgb_bytes
-
-    monkeypatch.setattr(gw_router, "select_executor", lambda spec: _fake_exec)
-
-    bbox = (-120.0, 34.0, -119.0, 35.0)
-    result = compute_model_residuals(
-        model_layer_uri=raster, bbox=bbox, _output_dir=str(tmp_path)
-    )
-    assert result.n_points == 1
-    assert result.mean_error == pytest.approx(4.0, abs=1e-3)
-    assert captured["bbox"] == pytest.approx(bbox, abs=1e-5)
-    assert any("fetch_usgs_groundwater_levels" in n for n in result.notes)
-
-
-def test_no_selector_raises(tmp_path) -> None:
-    raster = _write_head_raster(str(tmp_path / "head.tif"))
-    with pytest.raises(ResidualsInputError):
-        compute_model_residuals(model_layer_uri=raster, _output_dir=str(tmp_path))
+    with pytest.raises(ResidualsInputError, match="fetch_usgs_groundwater_levels"):
+        compute_model_residuals(model_layer_uri=raster, observations_layer_uri=None,
+                                _output_dir=str(tmp_path))
 
 
 def test_bad_model_uri_raises(tmp_path) -> None:
     with pytest.raises(ResidualsInputError):
         compute_model_residuals(
-            model_layer_uri="", bbox=(-120.0, 34.0, -119.0, 35.0), _output_dir=str(tmp_path)
+            model_layer_uri="", observations_layer_uri="obs.fgb", _output_dir=str(tmp_path)
         )
 
 

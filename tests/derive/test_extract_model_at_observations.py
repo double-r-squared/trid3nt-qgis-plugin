@@ -533,34 +533,26 @@ def test_wse_to_depth_negative_flag(tmp_path) -> None:
     assert flag_col["POS"] == ""
 
 
-def test_quantity_mismatch_no_ground_raises(tmp_path, monkeypatch) -> None:
-    # Model DEPTH vs observed WSE with NO ground source (and the auto-fetch
-    # patched to fail, keeping the test offline) -> typed QuantityMismatchError,
-    # never a silent apples-vs-oranges pairing.
-    def _boom(*_a, **_k):
-        raise RuntimeError("ground DEM unavailable (offline test)")
-
-    monkeypatch.setattr(exmod, "_fetch_ground_dem", _boom)
+def test_quantity_mismatch_no_ground_raises(tmp_path) -> None:
+    # Model DEPTH vs observed WSE with NO ground source -> typed
+    # QuantityMismatchError naming the fetch, never a fetch of its own and never
+    # a silent apples-vs-oranges pairing.
     bbox = (-95.6, 29.70, -95.40, 29.80)
     model = _write_constant_raster_4326(str(tmp_path / "flood_depth.tif"), bbox, value=5.0)
     obs = _write_obs_lonlat(
         str(tmp_path / "obs.geojson"),
         [{"lon": -95.50, "lat": 29.75, "hwm_id": "H1", "elev_ft": 50.0}],
     )
-    with pytest.raises(PairingQuantityMismatchError):
+    with pytest.raises(PairingQuantityMismatchError, match="fetch_dem"):
         extract_model_at_observations(
             model_layer_uri=model, observations_layer_uri=obs,
             _output_dir=str(tmp_path),
         )
 
 
-def test_quantity_match_depth_vs_depth_no_conversion(tmp_path, monkeypatch) -> None:
+def test_quantity_match_depth_vs_depth_no_conversion(tmp_path) -> None:
     # A DEPTH model vs a DEPTH observation (height_above_gnd) needs NO
-    # conversion -- and must NOT attempt any ground-DEM fetch.
-    def _fail_if_called(*_a, **_k):
-        raise AssertionError("_fetch_ground_dem must not be called on a match")
-
-    monkeypatch.setattr(exmod, "_fetch_ground_dem", _fail_if_called)
+    # conversion and no ground DEM.
     bbox = (-95.6, 29.70, -95.40, 29.80)
     model = _write_constant_raster_4326(str(tmp_path / "flood_depth.tif"), bbox, value=3.0)
     obs = _write_obs_lonlat(

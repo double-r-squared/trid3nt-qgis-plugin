@@ -1,0 +1,15 @@
+run_qgis_algorithm:
+- run a qgis processing algorithm on this layer
+- compute the slope from the DEM on the map
+- hillshade the elevation layer that is already loaded
+- draw contour lines from the terrain layer
+- clip this raster to the county polygon
+- zonal statistics of the depth raster inside the polygons
+- buffer the roads layer by 50 meters
+- dissolve these parcels into one polygon
+- reproject the layer to UTM
+- polygonize the flooded cells into a vector layer
+- "raster calculator: subtract the two DEMs"
+- run native:slope over the fetched DEM
+- compute aspect from the elevation grid
+- ndvi from the red and near infrared bands of the imagery

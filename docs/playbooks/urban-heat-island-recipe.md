@@ -4,7 +4,7 @@ Status: LIVE recipe (cleanup wave phase 2, 2026-08-25). Replaces the DEMOTED
 `compute_urban_heat_island` atomic tool, whose cut is rowed in
 `docs/DELETION_LEDGER.md`. Both maps the question needs are already registered
 fetchers; the analysis between them is per-class arithmetic over two staged
-rasters, so it lives in the python playground (`code_exec_request`), not a
+rasters, so it lives in the QGIS session (`run_pyqgis`), not a
 bespoke tool.
 
 ## Why this is a recipe, not a tool

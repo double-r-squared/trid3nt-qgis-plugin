@@ -118,9 +118,9 @@ docstring: |-
     ground look like here?" -- render with the ``continuous_dem`` QML preset.
   - A hydraulic model setup requires a
     DEM for the model grid; this tool supplies it.
-  - Pre-processing step before ``compute_slope``, ``compute_hillshade``,
-    ``compute_aspect``, or an AOI-scoped raster summary composed in the
-    code_exec playground (zonal stats over a polygon).
+  - Pre-processing step before slope, hillshade, aspect or an AOI-scoped
+    raster summary run in the session with ``run_qgis_algorithm`` (zonal stats
+    over a polygon).
 
   **When NOT to use:**
   - Coverage outside the continental US with the DEFAULT source -- 3DEP is

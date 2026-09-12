@@ -3,7 +3,8 @@
 The DEM is a SYNTHETIC south-draining V-valley passed through the override uri,
 so the full D8 chain runs for real. The delineated polygon holds the snapped pour
 point and the upstream axis and excludes a downstream one; the network follows
-the valley centre line; the threshold, the AOI clamp and bad inputs refuse typed."""
+the valley centre line; the threshold, the extent clamp and bad inputs refuse
+typed, and a missing DEM is a refusal rather than a fetch."""
 
 from __future__ import annotations
 
@@ -20,7 +21,7 @@ from trid3nt_contracts.execution import LayerURI
 
 from trid3nt_server.tools import TOOL_REGISTRY
 from trid3nt_server.tools.derive._hydrology_common import HydrologyAoiTooLargeError, HydrologyInputError
-from trid3nt_server.tools.derive.delineate_watershed.delineate_watershed import WatershedLayerURI, _auto_bbox, delineate_watershed
+from trid3nt_server.tools.derive.delineate_watershed.delineate_watershed import WatershedLayerURI, delineate_watershed
 from trid3nt_server.tools.derive.extract_stream_network.extract_stream_network import NoStreamsError, StreamNetworkLayerURI, extract_stream_network
 
 # Synthetic geographic grid: 60x60 cells of 0.001 deg.
@@ -84,7 +85,6 @@ def test_watershed_contains_pour_point(valley_dem, tmp_path) -> None:
 
     result = delineate_watershed(
         pour_point=pour,
-        bbox=BBOX,
         dem_uri=valley_dem,
         _output_dir=str(out_dir),
     )
@@ -122,7 +122,6 @@ def test_watershed_excludes_downstream_cells(valley_dem, tmp_path) -> None:
 
     result = delineate_watershed(
         pour_point=pour,
-        bbox=BBOX,
         dem_uri=valley_dem,
         _output_dir=str(out_dir),
     )
@@ -145,7 +144,6 @@ def test_streams_follow_valley(valley_dem, tmp_path) -> None:
     # sit on the valley axis. Lower thresholds legitimately add wall
     # tributaries (real D8 convergence), which is not what this test pins.
     result = extract_stream_network(
-        bbox=BBOX,
         accumulation_threshold=500,
         dem_uri=valley_dem,
         _output_dir=str(out_dir),
@@ -178,7 +176,6 @@ def test_streams_follow_valley(valley_dem, tmp_path) -> None:
 def test_no_streams_raises(valley_dem, tmp_path) -> None:
     with pytest.raises(NoStreamsError):
         extract_stream_network(
-            bbox=BBOX,
             accumulation_threshold=10 * N * N,  # impossible: > total cells
             dem_uri=valley_dem,
             _output_dir=str(tmp_path),
@@ -219,7 +216,7 @@ def test_a_projected_dem_still_answers_in_the_4326_the_layer_declares(
     out_dir.mkdir()
     pour = _lonlat(CENTER_COL, 54)
 
-    result = delineate_watershed(pour_point=pour, bbox=BBOX,
+    result = delineate_watershed(pour_point=pour,
                                  dem_uri=valley_dem_5070,
                                  _output_dir=str(out_dir))
 
@@ -240,23 +237,24 @@ def test_a_projected_dem_still_answers_in_the_4326_the_layer_declares(
     assert polygon.buffer(RES).contains(Point(lon_snap, lat_snap))
 
 
-def test_auto_bbox_is_0p1_deg() -> None:
-    lon, lat = -117.0, 34.0
-    west, south, east, north = _auto_bbox(lon, lat)
-    assert east - west == pytest.approx(0.1)
-    assert north - south == pytest.approx(0.1)
-    assert west + 0.05 == pytest.approx(lon)
-    assert south + 0.05 == pytest.approx(lat)
+@pytest.fixture()
+def wide_dem(tmp_path) -> str:
+    """A ten-cell DEM spanning a full degree: past the CPU clamp on extent alone."""
+    transform = from_bounds(-118.0, 34.0, -117.0, 34.05, 10, 10)
+    path = str(tmp_path / "wide.tif")
+    with rasterio.open(
+        path, "w", driver="GTiff", height=10, width=10, count=1, dtype="float32",
+        crs="EPSG:4326", transform=transform, nodata=-9999.0,
+    ) as dst:
+        dst.write(np.zeros((10, 10), dtype="float32"), 1)
+    return path
 
 
-def test_aoi_clamp_raises() -> None:
+def test_aoi_clamp_raises(wide_dem) -> None:
     with pytest.raises(HydrologyAoiTooLargeError):
-        extract_stream_network(bbox=(-118.0, 34.0, -117.0, 34.05))  # 1.0 wide
+        extract_stream_network(dem_uri=wide_dem)
     with pytest.raises(HydrologyAoiTooLargeError):
-        delineate_watershed(
-            pour_point=(-117.5, 34.0),
-            bbox=(-118.0, 33.9, -117.0, 34.1),
-        )
+        delineate_watershed(pour_point=(-117.5, 34.02), dem_uri=wide_dem)
 
 
 def _bowl_dem(path: str, origin_lon: float, top_lat: float, dx: float, n: int) -> tuple:
@@ -288,7 +286,7 @@ def test_index_space_beats_coordinate_path_on_convergent_dem(tmp_path) -> None:
     from trid3nt_server.tools.derive._hydrology_common import _condition_dem
 
     dem = str(tmp_path / "bowl.tif")
-    pour, bbox = _bowl_dem(dem, -83.50, 35.10, 0.001, 40)
+    pour, _bbox = _bowl_dem(dem, -83.50, 35.10, 0.001, 40)
 
     # OLD path: coordinate-space catchment at the exact outlet coordinate.
     grid, fdir, _acc = _condition_dem(dem)
@@ -304,7 +302,7 @@ def test_index_space_beats_coordinate_path_on_convergent_dem(tmp_path) -> None:
     out = tmp_path / "out"
     out.mkdir()
     result = delineate_watershed(
-        pour_point=pour, bbox=bbox, dem_uri=dem, _output_dir=str(out))
+        pour_point=pour, dem_uri=dem, _output_dir=str(out))
 
     assert coord_cells < 30, (
         f"expected the coordinate path to sliver; got {coord_cells} cells")
@@ -321,11 +319,11 @@ def test_delineation_alignment_invariant(tmp_path) -> None:
     counts: list[int] = []
     for i, shift in enumerate((0.0, 0.0003, 0.0007, 0.00013, 0.0005)):
         dem = str(tmp_path / f"bowl_{i}.tif")
-        pour, bbox = _bowl_dem(dem, -83.50 + shift, 35.10 + shift, 0.001, 40)
+        pour, _bbox = _bowl_dem(dem, -83.50 + shift, 35.10 + shift, 0.001, 40)
         out = tmp_path / f"out_{i}"
         out.mkdir()
         result = delineate_watershed(
-            pour_point=pour, bbox=bbox, dem_uri=dem, _output_dir=str(out))
+            pour_point=pour, dem_uri=dem, _output_dir=str(out))
         counts.append(result.cell_count)
 
     assert min(counts) >= 100, f"a shift collapsed the basin: {counts}"
@@ -336,33 +334,32 @@ def test_delineation_alignment_invariant(tmp_path) -> None:
 def test_bad_inputs_raise(valley_dem, tmp_path) -> None:
     # Bad pour point shapes / values.
     with pytest.raises(HydrologyInputError):
-        delineate_watershed(pour_point=(-117.0,))  # wrong arity
+        delineate_watershed(pour_point=(-117.0,), dem_uri=valley_dem)  # wrong arity
     with pytest.raises(HydrologyInputError):
-        delineate_watershed(pour_point=("a", 34.0))  # non-numeric
+        delineate_watershed(pour_point=("a", 34.0), dem_uri=valley_dem)  # non-numeric
     with pytest.raises(HydrologyInputError):
-        delineate_watershed(pour_point=(-500.0, 34.0))  # out of range
-    # Pour point outside the supplied bbox.
+        delineate_watershed(pour_point=(-500.0, 34.0), dem_uri=valley_dem)  # out of range
+    # Pour point outside the DEM.
     with pytest.raises(HydrologyInputError):
-        delineate_watershed(pour_point=(-116.0, 34.02), bbox=BBOX)
+        delineate_watershed(pour_point=(-116.0, 34.02), dem_uri=valley_dem)
     # Bad snap threshold.
     with pytest.raises(HydrologyInputError):
         delineate_watershed(
-            pour_point=_lonlat(CENTER_COL, 50), bbox=BBOX, snap_threshold=0
+            pour_point=_lonlat(CENTER_COL, 50), dem_uri=valley_dem, snap_threshold=0
         )
-    # Bad bbox shapes.
+    # No DEM: the tool never fetches one.
     with pytest.raises(HydrologyInputError):
-        extract_stream_network(bbox=(-117.0, 34.05, -117.05, 34.00))  # reversed
+        extract_stream_network(dem_uri="")
     with pytest.raises(HydrologyInputError):
-        extract_stream_network(bbox=(-117.0, 34.0, -116.99))  # wrong arity
+        delineate_watershed(pour_point=_lonlat(CENTER_COL, 50), dem_uri=None)
     # Bad accumulation threshold.
     with pytest.raises(HydrologyInputError):
-        extract_stream_network(bbox=BBOX, accumulation_threshold="lots")
+        extract_stream_network(dem_uri=valley_dem, accumulation_threshold="lots")
     with pytest.raises(HydrologyInputError):
-        extract_stream_network(bbox=BBOX, accumulation_threshold=1)
+        extract_stream_network(dem_uri=valley_dem, accumulation_threshold=1)
     # Missing local DEM path.
     with pytest.raises(HydrologyInputError):
         extract_stream_network(
-            bbox=BBOX,
             dem_uri=str(tmp_path / "missing.tif"),
             _output_dir=str(tmp_path),
         )

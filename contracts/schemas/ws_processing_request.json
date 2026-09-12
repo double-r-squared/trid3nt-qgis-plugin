@@ -1,0 +1,69 @@
+{
+  "additionalProperties": false,
+  "description": "``processing-request``: one thing for the session to run, agent -> client.\nAn ``algorithm`` request names a Processing algorithm id and its parameters\n(canvas layers by name); a ``code`` request carries the approved snippet.",
+  "properties": {
+    "algorithm": {
+      "anyOf": [
+        {
+          "maxLength": 200,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Algorithm"
+    },
+    "code": {
+      "anyOf": [
+        {
+          "maxLength": 65536,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Code"
+    },
+    "code_exec_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Code Exec Id"
+    },
+    "kind": {
+      "enum": [
+        "algorithm",
+        "code"
+      ],
+      "title": "Kind",
+      "type": "string"
+    },
+    "params": {
+      "additionalProperties": true,
+      "title": "Params",
+      "type": "object"
+    },
+    "request_id": {
+      "title": "Request Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "request_id",
+    "kind"
+  ],
+  "title": "ProcessingRequestPayload",
+  "type": "object"
+}

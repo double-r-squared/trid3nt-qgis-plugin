@@ -4,5 +4,5 @@ list_run_frames:
 - I want to run a glow effect over every GLM flash frame in this run
 - get all the animation-frame COGs for the flood depth layer of this simulation
 - what are the time-step frame URIs for this run? I want a first/peak/last panel
-- pull the ordered frames of the wave field so the sandbox can process each one
+- pull the ordered frames of the wave field so a script can process each one
 - enumerate the frame layers from this run's manifest for a temporal max

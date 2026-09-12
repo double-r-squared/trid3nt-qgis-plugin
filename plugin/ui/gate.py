@@ -21,11 +21,9 @@ __all__ = [
     "SpatialInputRequest",
     "ToolCandidate",
     "ToolCandidatesRequest",
-    "code_exec_layer_lines",
     "code_exec_result_chip",
     "code_exec_result_lines",
     "credential_note_lines",
-    "parse_code_exec_result",
     "parse_credential_request",
     "estimate_cells",
     "estimate_eta_seconds",
@@ -416,7 +414,6 @@ class CodeExecRequest:
 
     code_exec_id: str
     python_code: str
-    layer_refs: dict = field(default_factory=dict)
     rationale: str = ""
     raw: dict = field(default_factory=dict)
 
@@ -433,12 +430,10 @@ def parse_code_exec_request(payload: dict) -> Optional[CodeExecRequest]:
     python_code = payload.get("python_code")
     if not isinstance(python_code, str) or not python_code.strip():
         return None
-    layer_refs = payload.get("layer_refs")
     rationale = payload.get("rationale")
     return CodeExecRequest(
         code_exec_id=code_exec_id,
         python_code=python_code,
-        layer_refs=layer_refs if isinstance(layer_refs, dict) else {},
         rationale=rationale if isinstance(rationale, str) else "",
         raw=payload,
     )
@@ -449,19 +444,6 @@ def resolve_code_exec_decision(approve: bool) -> GateDecision:
     ``revised_args`` is ALWAYS None: proceed and cancel forbid it, and
     ``narrow_scope`` is never offered here."""
     return GateDecision("proceed" if approve else "cancel", None)
-
-
-def code_exec_layer_lines(request: CodeExecRequest) -> list:
-    """One honest line per layer the sandbox will receive ("var: uri"; a
-    multi-frame LIST value reads "var: N frames") -- so the user sees which
-    of their layers the code can touch before approving."""
-    lines = []
-    for var, ref in (request.layer_refs or {}).items():
-        if isinstance(ref, list):
-            lines.append(f"{var}: {len(ref)} frames")
-        else:
-            lines.append(f"{var}: {ref}")
-    return lines
 
 
 #
@@ -1006,14 +988,14 @@ def spatial_input_summary(request: SpatialInputRequest, wire: dict) -> str:
 
 
 #
-# ``code_exec_id`` joins the result back to the card that approved it. The
-# status is the HONEST terminal outcome and is never dressed up. Fire-and-
-# forget: no reply is expected or sent.
+# The outcome of the code the session ran, joined to the card that approved it
+# by ``code_exec_id``. The status is the HONEST terminal outcome and is never
+# dressed up.
 
 
 @dataclass
 class CodeExecResult:
-    """Parsed ``code-exec-result`` payload (defensive; raw kept)."""
+    """What the session produced for one approved snippet."""
 
     code_exec_id: str
     status: str
@@ -1022,41 +1004,10 @@ class CodeExecResult:
     result: Optional[dict] = None
     truncated: bool = False
     duration_s: float = 0.0
-    raw: dict = field(default_factory=dict)
 
     @property
     def ok(self) -> bool:
         return self.status == "ok"
-
-
-def parse_code_exec_result(payload: dict) -> Optional[CodeExecResult]:
-    """Parse a raw ``code-exec-result`` payload dict; None when the envelope
-    is unusable -- no ``code_exec_id`` (nothing to join to the request card)
-    or no ``status`` (no honest outcome to show)."""
-    if not isinstance(payload, dict):
-        return None
-    code_exec_id = payload.get("code_exec_id")
-    if not isinstance(code_exec_id, str) or not code_exec_id:
-        return None
-    status = payload.get("status")
-    if not isinstance(status, str) or not status:
-        return None
-    result = payload.get("result")
-    duration = payload.get("duration_s")
-    return CodeExecResult(
-        code_exec_id=code_exec_id,
-        status=status,
-        stdout_tail=str(payload.get("stdout_tail") or ""),
-        stderr_tail=str(payload.get("stderr_tail") or ""),
-        result=result if isinstance(result, dict) else None,
-        truncated=bool(payload.get("truncated")),
-        duration_s=(
-            float(duration)
-            if isinstance(duration, (int, float)) and not isinstance(duration, bool)
-            else 0.0
-        ),
-        raw=payload,
-    )
 
 
 def code_exec_result_chip(result: CodeExecResult) -> str:
@@ -1081,9 +1032,8 @@ def code_exec_result_lines(result: CodeExecResult) -> list:
     """The honest body lines for the code-exec result (the tails + a result
     descriptor summary) -- every value is a structured envelope field."""
     lines: list = []
-    kind = (result.result or {}).get("kind") if result.result else None
-    if isinstance(kind, str) and kind:
-        lines.append(f"Result: {kind}")
+    if result.result and "value" in result.result:
+        lines.append(f"Result: {result.result['value']!r}"[:400])
     if result.stdout_tail.strip():
         lines.append("stdout: " + result.stdout_tail.strip())
     if result.stderr_tail.strip():

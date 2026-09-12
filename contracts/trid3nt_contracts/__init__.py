@@ -19,8 +19,8 @@ from . import (
     gate_spec,
     message,
     payload_warning,
+    processing_contracts,
     region_choice,
-    sandbox_contracts,
     secrets,
     tool_metadata,
     tool_registry,
@@ -63,10 +63,10 @@ from .outputs_manifest import (
     OutputsManifest,
     parse_outputs_manifest,
 )
-from .sandbox_contracts import (
+from .processing_contracts import (
     CodeExecRequestPayload,
-    CodeExecResultPayload,
-    CodeExecStatus,
+    ProcessingRequestPayload,
+    ProcessingResponsePayload,
 )
 
 __version__ = "0.1.0"
@@ -89,8 +89,8 @@ __all__ = [
     "message",
     "payload_warning",
     "outputs_manifest",
+    "processing_contracts",
     "region_choice",
-    "sandbox_contracts",
     "secrets",
     "tool_metadata",
     "tool_registry",
@@ -110,10 +110,10 @@ __all__ = [
     # chart emission
     "ChartEmissionPayload",
     "SessionChartRecord",
-    # python-sandbox code exec
+    # the session processing pair and the code approval card
     "CodeExecRequestPayload",
-    "CodeExecResultPayload",
-    "CodeExecStatus",
+    "ProcessingRequestPayload",
+    "ProcessingResponsePayload",
     # common primitives
     "GraceModel",
     "ULIDStr",

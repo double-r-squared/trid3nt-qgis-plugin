@@ -43,17 +43,17 @@ class PayloadWarningCancelledError(RuntimeError):
 
 
 class CodeExecConfirmationCancelledError(RuntimeError):
-    """Raised when the ``code_exec_request`` confirm gate denies the run on a
-    cancel or a timeout; the gate fails closed and ``retryable=False``, since the
-    user declined to run THIS code."""
+    """Raised when the ``run_pyqgis`` confirm gate denies the run on a cancel or
+    a timeout; the gate fails closed and ``retryable=False``, since the user
+    declined to run THIS code."""
 
     error_code: str = "CODE_EXEC_CANCELLED"
     retryable: bool = False
 
     def __init__(self, code_exec_id: str) -> None:
         super().__init__(
-            f"code_exec_request {code_exec_id!r} cancelled at the confirm gate "
-            "(user chose 'cancel' or gate timed out); the sandbox did not run"
+            f"run_pyqgis {code_exec_id!r} cancelled at the confirm gate "
+            "(user chose 'cancel' or gate timed out); the code did not run"
         )
         self.code_exec_id = code_exec_id
 
@@ -68,9 +68,9 @@ class CodeExecApprovalTimeoutError(RuntimeError):
 
     def __init__(self, code_exec_id: str, timeout_s: float) -> None:
         super().__init__(
-            f"code_exec_request {code_exec_id!r} approval card was not answered "
+            f"run_pyqgis {code_exec_id!r} approval card was not answered "
             f"within {timeout_s:.0f}s (no confirmation arrived from the user "
-            "interface); the sandbox did not run. Tell the user their approval "
+            "interface); the code did not run. Tell the user their approval "
             "was required but never received, and do not re-issue the identical "
             "snippet unless they ask to retry."
         )

@@ -95,7 +95,7 @@ _DEFAULT_NDWI_THRESHOLD = 0.0
 #: ~10 pixels.
 _DEFAULT_MIN_AREA_M2 = 1000.0
 
-#: bbox area guardrail (deg^2)  --  matches compute_ndvi. A Sentinel-2 read over
+#: bbox area guardrail (deg^2). A Sentinel-2 read over
 #: a huge AOI spans many MGRS tiles + materializes an enormous grid; the
 #: atomic-tool surface is AOI-scoped. ~0.5 deg^2 ~ a county-ish extent.
 _MAX_BBOX_DEG2 = 0.5
@@ -446,7 +446,7 @@ def digitize_water_body(
 
     Use when outlining a lake, reservoir, pond or wide river reach, for a vector
     water footprint to intersect with other layers, or to compare extent between
-    two dates. Not for vegetation vigor (``compute_ndvi``), land-cover classes
+    two dates. Not for vegetation vigor (an NDVI in the session), land-cover classes
     (``fetch_landcover``), regulatory floodplains (``fetch_fema_nfhl_zones``),
     modeled inundation, or SLR bathtub footprints.
 

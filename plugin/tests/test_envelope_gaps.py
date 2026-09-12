@@ -22,7 +22,6 @@ from stub_server import (  # noqa: E402
     SPATIAL_INPUT_BBOX_ROW,
     SPATIAL_INPUT_POINT_ROW,
     SPATIAL_INPUT_VECTOR_ROW,
-    STUB_CODE_EXEC_ID,
     STUB_REGION_CHOICE_REQUEST_ID,
     STUB_REGION_ID,
     STUB_SPATIAL_POINT_REQUEST_ID,
@@ -127,45 +126,6 @@ class TestSpatialInputParsing(unittest.TestCase):
         self.assertTrue(wire["cancelled"])
         self.assertIsNone(wire["geometry_type"])
         self.assertIsNone(wire["coordinates"])
-
-
-
-
-class TestCodeExecResultParsing(unittest.TestCase):
-    def test_parse_fields(self):
-        res = gate.parse_code_exec_result(
-            {
-                "code_exec_id": STUB_CODE_EXEC_ID,
-                "status": "ok",
-                "stdout_tail": "done",
-                "result": {"kind": "scalar", "value": 0.31},
-                "duration_s": 1.4,
-            }
-        )
-        self.assertEqual(res.code_exec_id, STUB_CODE_EXEC_ID)
-        self.assertTrue(res.ok)
-        self.assertEqual(res.result["kind"], "scalar")
-        self.assertEqual(res.duration_s, 1.4)
-
-    def test_parse_malformed_is_none(self):
-        self.assertIsNone(gate.parse_code_exec_result({"status": "ok"}))
-        self.assertIsNone(
-            gate.parse_code_exec_result({"code_exec_id": "x"})  # no status
-        )
-        self.assertIsNone(gate.parse_code_exec_result(None))
-
-    def test_chip_is_honest(self):
-        # A blocked/timeout run is NEVER dressed up as ok.
-        blocked = gate.parse_code_exec_result(
-            {"code_exec_id": "x", "status": "blocked", "truncated": True}
-        )
-        chip = gate.code_exec_result_chip(blocked)
-        self.assertIn("blocked", chip)
-        self.assertIn("truncated", chip)
-        ok = gate.parse_code_exec_result(
-            {"code_exec_id": "x", "status": "ok", "duration_s": 2}
-        )
-        self.assertIn("succeeded", gate.code_exec_result_chip(ok))
 
 
 
@@ -321,24 +281,6 @@ class TestSpatialInputRoundTrip(_RoundTripBase):
         self.assertIn("without it", chunk.data["delta"])
         self._await_kind("turn-complete")
         self.assertTrue(self.server.spatial_inputs[-1]["cancelled"])
-
-
-class TestCodeExecResultRoundTrip(_RoundTripBase):
-    def test_result_follows_approved_run(self):
-        self.client.send_chat("please run-code the depth analysis")
-        ev = self._await_kind("code-exec-request")
-        req = gate.parse_code_exec_request(ev.data)
-        decision = gate.resolve_code_exec_decision(True)
-        self.client.confirm_payload(
-            req.code_exec_id, decision.decision, decision.revised_args
-        )
-        # The run outcome surfaces as its own kind, never "raw".
-        res_ev = self._await_kind("code-exec-result")
-        res = gate.parse_code_exec_result(res_ev.data)
-        self.assertEqual(res.code_exec_id, STUB_CODE_EXEC_ID)
-        self.assertTrue(res.ok)
-        self.assertIn("succeeded", gate.code_exec_result_chip(res))
-        self._await_kind("turn-complete")
 
 
 class TestSecretsListRoundTrip(_RoundTripBase):

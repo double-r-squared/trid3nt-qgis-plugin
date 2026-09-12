@@ -108,7 +108,7 @@ docstring: |-
     the ESA WorldCover branch, but that branch currently raises
     ``UpstreamAPIError`` (forward-looking).
   - Single-point landcover classification -- this tool returns a raster;
-    use ``extract_landcover_class`` for a point lookup.
+    read the class at a point with ``probe_point``.
   - Continent-scale bboxes (> 5,000,000 km^2) -- the tool raises
     ``BboxInvalidError`` at that hard ceiling. State-scale and
     multi-state-scale bboxes are served by auto-coarsening the resolution

@@ -1,6 +1,6 @@
 """Atomic tool ``compute_layer_bounds`` - layer extent, and fit the map to it.
 
-Extent math never goes through ``code_exec_request``: this is the deterministic
+Extent math never goes through ``run_pyqgis``: this is the deterministic
 path, and it also emits the ``zoom-to`` that makes the view follow the answer.
 """
 from __future__ import annotations
@@ -295,7 +295,7 @@ async def compute_layer_bounds(
 
     Use when the user asks to fit the map to a layer, zoom to all the points,
     resize the bbox to encompass features, or wants a layer's extent. NEVER use
-    ``code_exec_request`` for extent math - this is the deterministic path and
+    ``run_pyqgis`` for extent math - this is the deterministic path and
     it moves the view too.
 
     Params:

@@ -1441,6 +1441,28 @@ class AgentClient:
             queue_if_closed=True,
         )
 
+    def send_processing_response(
+        self,
+        request_id: str,
+        status: str,
+        result: Optional[dict] = None,
+        error: Optional[str] = None,
+        stdout: str = "",
+    ) -> None:
+        """Answer a ``processing-request`` with what the session produced."""
+        self._send(
+            "processing-response",
+            {
+                "request_id": request_id,
+                "status": status,
+                "result": result,
+                "error": error,
+                "stdout": stdout,
+            },
+            case_id=self.case_id,
+            queue_if_closed=True,
+        )
+
     # -- event pump ---------------------------------------------------------- #
 
     def next_event(self, timeout: float = 1.0) -> Optional[AgentEvent]:
@@ -1518,10 +1540,14 @@ class AgentClient:
         if etype == "tool-payload-warning":
             return AgentEvent("payload-warning", payload)
         if etype == "code-exec-request":
-            # The agent BLOCKS before running sandbox Python until a
-            # ``tool-payload-confirmation`` whose ``warning_id`` equals this
-            # request's ``code_exec_id`` arrives.
+            # The agent BLOCKS before sending a code request to this session
+            # until a ``tool-payload-confirmation`` whose ``warning_id`` equals
+            # this request's ``code_exec_id`` arrives.
             return AgentEvent("code-exec-request", payload)
+        if etype == "processing-request":
+            # A gate WAIT: the agent asks THIS session to run an algorithm or an
+            # approved snippet and PAUSES until the processing-response lands.
+            return AgentEvent("processing-request", payload)
         if etype == "credential-request":
             # A keyed tool hit a missing or invalid key and the agent PAUSED
             # it to ask for the credential by name. The pause has a
@@ -1554,10 +1580,6 @@ class AgentClient:
             # turn until a response arrives. Cancel sends ``cancelled=True``
             # and closes the gate.
             return AgentEvent("spatial-input-request", payload)
-        if etype == "code-exec-result":
-            # The run OUTCOME after an approved code-exec-request:
-            # fire-and-forget, no reply expected.
-            return AgentEvent("code-exec-result", payload)
         if etype == "secrets-list":
             # The per-Case secret roster. Raw key values NEVER ride here --
             # only vault_ref records.

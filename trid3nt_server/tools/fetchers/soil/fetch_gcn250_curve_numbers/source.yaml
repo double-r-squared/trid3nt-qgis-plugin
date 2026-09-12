@@ -60,7 +60,7 @@ payload_estimate:
 
 caveats:
   - "global ~250 m SCS curve numbers (Jaafar 2019, 84 N to 57 S; no Antarctica/far-Arctic); an all-nodata window (over open water / off coverage) -> GCN250_EMPTY (never a fabricated layer)"
-  - "CONUS work prefers NLCD-derived CNs (~30 m) via compute_impervious_surface + extract_landcover_class; CN is an SCS depth-loss method, NOT a rational-method runoff coefficient"
+  - "CONUS work prefers NLCD-derived CNs (~30 m) from an NLCD land-cover raster reclassified in the session; CN is an SCS depth-loss method, NOT a rational-method runoff coefficient"
 
 # corpus lifted from sibling corpus.yaml.
 
@@ -90,8 +90,8 @@ docstring: |-
   **When NOT to use:**
   - DO NOT use for CONUS work when NLCD is available -- NLCD-derived curve
     numbers at ~30 m resolve urban heterogeneity far better than GCN250's
-    250 m grid; use ``compute_impervious_surface`` + ``extract_landcover_class``
-    for the NLCD pipeline.
+    250 m grid; reclassify a ``fetch_landcover`` raster in the session for the
+    NLCD pipeline.
   - DO NOT use as a runoff coefficient -- CN is an SCS depth-loss method;
     the rational method uses ``C``, not CN. These are different empirical
     relationships.

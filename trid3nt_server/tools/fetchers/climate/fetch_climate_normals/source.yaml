@@ -115,7 +115,7 @@ docstring: |-
   Cross-tool dependencies:
       - Composes WITH: ``geocode_location``
         (bbox derivation from a place name),
-        the code_exec playground (baseline-vs-observed framing).
+        a run_pyqgis snippet (baseline-vs-observed framing).
       - Complements: ``fetch_asos_metar`` (observed surface weather),
         ``fetch_era5_reanalysis`` (gridded reanalysis),
         ``fetch_chirps_precipitation`` (global precipitation climatology).

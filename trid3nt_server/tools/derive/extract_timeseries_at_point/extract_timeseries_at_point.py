@@ -180,7 +180,6 @@ def detect_frame_sequences(
 async def extract_timeseries_at_point(
     lon: float | None = None,
     lat: float | None = None,
-    place: str | None = None,
     layer: str | None = None,
     case_id: str | None = None,
     # absorb LLM-invented kwargs.
@@ -197,9 +196,8 @@ async def extract_timeseries_at_point(
     observations.
 
     Params:
-        lon/lat: explicit EPSG:4326 coords, both required, winning over
-            ``place``.
-        place: free-text place name to geocode.
+        lon/lat: explicit EPSG:4326 coords, both required; geocode a place
+            name first.
         layer: sequence-stem selector; default the Case's largest sequence.
         case_id: Case to read; default the turn's bound Case.
 
@@ -207,7 +205,7 @@ async def extract_timeseries_at_point(
     An unreadable or nodata frame is an honest ``value=None``, never gap-filled;
     no detectable sequence is a typed refusal.
     """
-    q_lon, q_lat, label = resolve_point(lon, lat, place, TimeseriesInputError)
+    q_lon, q_lat, label = resolve_point(lon, lat, TimeseriesInputError)
     resolved_case = resolve_case_id(case_id, NoCaseBoundError)
     layers, _case_bbox, case_title, _case = await layers_from_case(
         resolved_case, TimeseriesUpstreamError

@@ -309,7 +309,7 @@ def section(
 
     Use for the reach of a river between two points, or clipping a polygon to an
     area. What it returns is a DOMAIN: hand it to ``build_mesh(mesher='om2d',
-    extent=<this uri>)`` or ``clip_raster_to_polygon``. The river chain is
+    extent=<this uri>)`` or clip a raster to it in the session. The river chain is
     ``fetch_nhd_area_water`` -> ``section(between=[upstream, downstream])``. Not
     for a drainage basin, and not for widening a line: a line has no banks.
 

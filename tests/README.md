@@ -12,10 +12,10 @@ join the run as the sixth slice.
 | `fixtures/` | data the tests read; no code | - | - |
 | `adapters/` | provider adapters, the message IR, the turn loop, the stream persistence | 22 | 291 |
 | `credentials/` | credential resolution, the auth handshake, identity | 7 | 95 |
-| `derive/` | the derive tools | 34 | 468 |
-| `emission/` | the emitter, the uri registry, publication, charts | 35 | 462 |
+| `derive/` | the derive tools, the two session tools | 21 | 285 |
+| `emission/` | the emitter, the uri registry, publication, charts | 35 | 460 |
 | `fetchers/` | the fetch router, its executors, hooks and fallbacks | 65 | 1561 |
-| `gates/` | the gates, the context budget, the circuit breaker | 21 | 311 |
+| `gates/` | the gates, the code-exec approval gate, the context budget, the circuit breaker | 22 | 317 |
 | `inputs/` | the typed inputs: a Point, an Extent, a Shape, each from every form it arrives in, the user-input normalizers under them, the AOI acquired from any of them, and a user's own file adopted as a layer | 7 | 92 |
 | `mesh/` | the meshers, the mesh gate, topology and bed | 7 | 226 |
 | `model/` | the SysML model conformance check | 1 | 19 |
@@ -23,11 +23,11 @@ join the run as the sixth slice.
 | `publishing/` | the one publisher: a field to a layer, a series or a profile to a chart, a field over time to an animation, a track to a vector layer, a series at a station to the point layer carrying it; the rasterizers, the COG seam and the styling seam a restyle goes through | 4 | 48 |
 | `runtime/` | the declarative runtime, the run journal | 8 | 270 |
 | `scripts/` | the dev instruments, the live-run harness and the proof renderers, skipped when `dev/` is absent | 6 | 47 |
-| `search/` | dataset and tool retrieval, the OGC adapter | 18 | 280 |
-| `server/` | the HTTP and WS routes, dispatch reuse, persistence, telemetry | 27 | 562 |
+| `search/` | dataset and tool retrieval, the OGC adapter | 17 | 220 |
+| `server/` | the HTTP and WS routes, dispatch reuse, persistence, telemetry | 27 | 549 |
 | `solver/` | the executor, the run reads, the engine-room posture, the import graph that keeps it engine-free | 7 | 54 |
 | `telemac/` | the TELEMAC templates, the module surface and its primitives, the listing reads, authoring | 24 | 456 |
-| `tools/` | the registry, the arg normalizer, the tool cache | 14 | 402 |
+| `tools/` | the registry, the arg normalizer, the tool cache | 14 | 376 |
 
 | file | what it is |
 |---|---|
@@ -43,11 +43,11 @@ else has one.
 Six slices by subsystem, each its own foreground invocation, from the repo root:
 
     make test-fetchers        # tests/fetchers                                 1561
-    make test-spatial         # tests/derive tests/emission tests/mesh tests/publishing   1204
-    make test-engines         # tests/telemac tests/runtime tests/solver tests/search   1061
-    make test-server          # tests/server tests/inputs tests/gates tests/credentials tests/model tests/scripts   1126
-    make test-model-surface   # tests/adapters tests/tools                      667
-    make test-packages        # contracts/tests plugin/tests tests/plugin       821
+    make test-spatial         # tests/derive tests/emission tests/mesh tests/publishing   1019
+    make test-engines         # tests/telemac tests/runtime tests/solver tests/search   1000
+    make test-server          # tests/server tests/inputs tests/gates tests/credentials tests/model tests/scripts   1119
+    make test-model-surface   # tests/adapters tests/tools                      664
+    make test-packages        # contracts/tests plugin/tests tests/plugin       811
 
 The prose guards - history markers, dead references, the package maps, the
 template pages, banner comments - are LINTS rather than tests: they read the
@@ -73,7 +73,7 @@ pytest-visible test asserts only that the harness exited 0 and printed its
 marker. A harness that stops asserting still exits 0 and still prints its
 marker, so the shim stays green forever.
 
-Eight carry the `qt_harness_shim` marker (`pytest -m qt_harness_shim` lists
+Nine carry the `qt_harness_shim` marker (`pytest -m qt_harness_shim` lists
 them):
 
 | test | marker it reads |
@@ -86,8 +86,9 @@ them):
 | `test_qt_bridge.py::TestQtBridgeStart` | `QT-BRIDGE-OK` |
 | `test_remote_endpoints.py::TestRemoteEndpointsDock` | `REMOTE-ENDPOINTS-OK` |
 | `test_provider_config.py::TestDockProviderConfigWiring` | `SAVE_PAYLOAD_OK` + `MODEL_REPOPULATE_OK` |
+| `test_processing.py::TestProcessingInQgis` | the three `[processing]` lines: an algorithm over a canvas layer by name, a snippet, a raising snippet |
 
-The ninth the ruling names, `test_install_dependencies.py`, carries NO marker:
+The tenth the ruling names, `test_install_dependencies.py`, carries NO marker:
 read end to end it drives no Qt harness - its `TestMain` cases assert the
 product's own return codes over a mocked `subprocess.run`. It is a product test
 and is not an exception.

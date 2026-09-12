@@ -1,9 +1,9 @@
 """Tests for ``query_point_hazard`` (sample every case raster at a point).
 
 No network / no DynamoDB: persistence is a fake monkeypatched onto
-``trid3nt_server.telemetry.get_persistence`` (the open_case_in_qgis seam) and
-the geocoder seam (``_geocode_place``) is stubbed. Layers are tiny local
-GeoTIFFs referenced from synthetic ``loaded_layer_summaries`` dicts.
+``trid3nt_server.telemetry.get_persistence`` (the open_case_in_qgis seam). The
+point arrives as lon/lat; a place name is geocoded by the caller first. Layers
+are tiny local GeoTIFFs referenced from synthetic ``loaded_layer_summaries``.
 """
 
 from __future__ import annotations
@@ -137,23 +137,6 @@ async def test_multiple_layers_and_vector_skip(
 
 
 @pytest.mark.asyncio
-async def test_geocoded_place_path(monkeypatch, depth_layer) -> None:
-    _install_case(monkeypatch, [depth_layer])
-    monkeypatch.setattr(
-        mod,
-        "_geocode_place",
-        lambda place: {
-            "name": "Mexico Beach, FL",
-            "longitude": _PT_LON,
-            "latitude": _PT_LAT,
-        },
-    )
-    result = await query_point_hazard(place="Mexico Beach", case_id="case-1")
-    assert result["location"]["label"] == "Mexico Beach, FL"
-    assert result["results"][0]["value"] == pytest.approx(1.75)
-
-
-@pytest.mark.asyncio
 async def test_point_outside_extent_is_honest_none(
     monkeypatch, depth_layer
 ) -> None:
@@ -254,17 +237,10 @@ async def test_unknown_case_typed_error(monkeypatch, depth_layer) -> None:
 
 
 @pytest.mark.asyncio
-async def test_geocode_failure_typed_error(monkeypatch, depth_layer) -> None:
+async def test_place_name_is_not_geocoded_here(monkeypatch, depth_layer) -> None:
     _install_case(monkeypatch, [depth_layer])
-
-    def _boom(place):
-        raise RuntimeError("nominatim down")
-
-    monkeypatch.setattr(mod, "_geocode_place", _boom)
-    with pytest.raises(PointHazardInputError):
+    with pytest.raises(PointHazardInputError, match="geocode_location"):
         await query_point_hazard(place="somewhere", case_id="case-1")
-
-
 
 
 def test_registered_in_tool_registry() -> None:

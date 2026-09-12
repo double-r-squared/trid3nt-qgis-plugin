@@ -81,9 +81,9 @@ def test_fetch_tools_in_fetch_confirm_set() -> None:
     assert not (server.FETCH_CONFIRM_TOOLS & server.SOLVER_CONFIRM_TOOLS)
     # The no-finer-knob fetchers are NOT gated.
     assert "fetch_naip" not in server.FETCH_CONFIRM_TOOLS
-    assert "compute_ndvi" not in server.FETCH_CONFIRM_TOOLS
+    assert "run_qgis_algorithm" not in server.FETCH_CONFIRM_TOOLS
     assert "fetch_naip" not in server.SOLVER_CONFIRM_TOOLS
-    assert "compute_ndvi" not in server.SOLVER_CONFIRM_TOOLS
+    assert "run_qgis_algorithm" not in server.SOLVER_CONFIRM_TOOLS
 
 
 @pytest.mark.asyncio

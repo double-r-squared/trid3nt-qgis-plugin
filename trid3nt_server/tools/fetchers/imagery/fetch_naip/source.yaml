@@ -82,14 +82,14 @@ docstring: |-
 
   **When to use:**
   - User wants a high-res aerial / true-color basemap for a US area.
-  - As the aerial BASE layer under a stack composed in the code_exec
-    playground (``geocode_location`` + ``fetch_naip``), under NDVI or a
+  - As the aerial BASE layer under a stack composed in the session
+    (``geocode_location`` + ``fetch_naip``), under NDVI or a
     flood-extent overlay.
 
   **When NOT to use:**
   - Outside the US (NAIP is CONUS + HI + PR + USVI only) -- a no-coverage
     result is an honest typed error, not a fabricated layer.
-  - Vegetation index (use ``compute_ndvi``) or land-cover classes (use
+  - Vegetation index (band math in the session) or land-cover classes (use
     ``fetch_landcover``).
   - Very large AOIs -- NAIP is sub-meter; the tool caps the bbox to a small
     neighborhood / preserve (~0.06 deg^2).

@@ -1,8 +1,9 @@
-// plane: tool | system: code-exec
+// plane: tool | system: session-code
 //
-// The tool plane's modeled seams: the box a user-confirmed snippet runs in, and
-// the read over the engine keyword dictionaries a caller reaches a surface too large
-// to carry through.
+// The tool plane's modeled seams: the two tools that run in the user's QGIS
+// session through the plugin wire, the approval card in front of the code one,
+// and the read over the engine keyword dictionaries a caller reaches a surface
+// too large to carry through.
 //
 // SysML v2 TEXTUAL notation, restricted to the subset the project checker
 // reads. Conventions as the other seams: ``code:`` binds a block to the module
@@ -18,49 +19,81 @@
 package ToolPlane {
 
     doc /*
-    The escape hatch for ad-hoc computation is the one tool that runs code
-    nobody wrote in advance, so what contains it has to be structural rather
-    than careful. It is a container with no network: the denial is on the
-    launch line, where a snippet cannot reach it, instead of inside the
-    interpreter where a determined payload rebinds past it.
+    The session is the one code path. A tool that runs an algorithm or a
+    snippet does not run it on the daemon: it emits a request on the plugin
+    wire, the user's own QGIS session runs it over the layers on the canvas,
+    and the answer comes back on the same wire. Nothing the daemon holds - no
+    container, no interpreter of its own - executes what the model wrote.
 
-    The same posture decides where data comes from. A box with no network
-    cannot fetch, so everything a snippet reads is STAGED into the run
-    directory first, by the process that holds the credentials and answers to
-    the gates. Fetch first, analyze second: a world-read stays visible to the
-    substrate that governs world-reads, and the analysis runs on what it was
-    handed.
+    Running code the user did not write is a consequential act, so the code
+    request is fronted by the approval card: the exact snippet, verbatim, and
+    a Run the user presses. The approval is the server's to grant; a flag the
+    model supplies is stripped before the gate is reached.
 
-    The run is synchronous and takes seconds, so the tool that drives it is
-    off-loaded off the event loop. A box run on the loop is a stalled
-    heartbeat, which is a disconnected client.
+    A derive tool takes a layer and never fetches. The world-read stays on the
+    fetch path, where it is declared, cached and gated; the session tools take
+    canvas layers by NAME and the rest of the derive set takes a layer uri.
     */
 
-    // ----------------------------------------------------------------- //
     // Blocks
-    // ----------------------------------------------------------------- //
 
-    part def CodeExecTool {
+    part def SessionCodeTool {
         doc /*
-        The confirmed snippet's entry point: the gate's result comes in, the
-        box's envelope goes back out as the payload the card and the narration
-        both read.
+        ``run_pyqgis``: the registered entry for a snippet. It refuses to run
+        without the gate's approval, asks the session, and returns what the
+        session produced.
         */
     }
 
-    part def SandboxBox {
+    part def SessionAlgorithmTool {
         doc /*
-        The host end. It stages every ref into a private run directory, builds
-        the one constrained launch line, and reads back what the driver wrote -
-        or states honestly that nothing was written.
+        ``run_qgis_algorithm``: the registered entry for one Processing
+        algorithm over canvas layers named in its params.
         */
     }
 
-    part def SandboxDriver {
+    part def CodeExecGate {
         doc /*
-        The engine room inside the box: staged paths opened as handles, the
-        snippet executed, its result converted and bounded. It imports nothing
-        from the server package - the mount is the only thing connecting them.
+        The approval card in front of a code request: emits the verbatim code,
+        waits a bounded time on the user's decision, and injects the approval
+        only on a ``proceed``.
+        */
+    }
+
+    part def ToolDispatch {
+        doc /*
+        The tool-call site. Before the gate it strips any approval the model
+        supplied, so consent is asked for and answered by different hands.
+        */
+    }
+
+    part def SessionRequest {
+        doc /*
+        The one place a request leaves the daemon for the session and its
+        answer is awaited: the pending registry, the bounded wait, the typed
+        refusals for no session, no answer and an error answer.
+        */
+    }
+
+    part def ConnectionLoop {
+        doc /*
+        The websocket loop, where the session's answer arrives and resolves
+        the pending request on a session match.
+        */
+    }
+
+    part def SessionExecutor {
+        doc /*
+        The plugin end: runs ``processing.run`` over the project's layers and
+        adds the output, or executes the approved snippet in the session's
+        Python, and answers with the outcome as it happened.
+        */
+    }
+
+    part def ApprovalCard {
+        doc /*
+        The plugin's parse of the code approval card: the id the decision is
+        keyed by and the exact code the user reads before pressing Run.
         */
     }
 
@@ -71,119 +104,155 @@ package ToolPlane {
         */
     }
 
-    part def ToolDispatch {
-        doc /*
-        Where a sync tool body is routed onto a worker thread instead of the
-        event loop, and the set that is routed there unconditionally.
-        */
-    }
-
-    // ----------------------------------------------------------------- //
     // Ports
-    // ----------------------------------------------------------------- //
 
+    port def ApprovalOut;
+    port def ApprovalIn;
+    port def CardOut;
+    port def CardIn;
+    port def AskOut;
+    port def AskIn;
     port def RequestOut;
     port def RequestIn;
-    port def PayloadOut;
-    port def PayloadIn;
-    port def EnvelopeOut;
-    port def EnvelopeIn;
-    port def OffloadOut;
-    port def OffloadIn;
+    port def ResponseOut;
+    port def ResponseIn;
 
-    // ----------------------------------------------------------------- //
     // Interfaces - the seam contracts, by their real key names
-    // ----------------------------------------------------------------- //
 
-    interface def SnippetRequest {
+    interface def StrippedApproval {
         doc /*
-        What the tool hands the box: the exact code the user approved, and the
-        layers it may touch. ``layer_refs`` is the whole data surface - a
-        snippet reads what is named here and has no other way to reach
-        anything, which is what makes the approval card an honest account of
-        what the code can see.
-
-        constructor: submit_sandbox_job
+        What the dispatch removes from a model-issued call before the gate sees
+        it: the approval flag and the card id, so only the gate can put them
+        back.
         */
-        item python_code : String;
-        item layer_refs : Map;
-        item timeout_seconds : Integer [0..1];
+        item confirmed : Boolean;
+        item code_exec_id : String;
     }
 
-    interface def StagedPayload {
+    interface def GrantedApproval {
         doc /*
-        The run directory's own payload, written before the container starts.
-        Its ``layer_refs`` are BOX-SIDE paths under the staged directory, not
-        the URIs the tool passed: by the time the driver reads this, every byte
-        it names is already on local disk.
+        What the gate injects on the user's ``proceed``: the approval and the
+        id of the card it was given on, which the tool carries to the session
+        so the outcome joins that card.
         */
-        item python_code : String;
-        item layer_refs : Map;
+        item confirmed : Boolean;
+        item code_exec_id : String;
     }
 
-    interface def RunEnvelope {
+    interface def CodeApprovalCard {
         doc /*
-        What one run produced. ``status`` is the terminal honesty: a snippet
-        that hit the network boundary comes back ``blocked`` and one that ran
-        past its cap comes back ``timeout``, never dressed up as a result. The
-        truncation flags are the other half of that - a bounded stream says it
-        was bounded rather than presenting a head as the whole.
-
-        ``layer_errors`` names each ref that could not be staged or opened, so
-        a missing layer is a stated gap the snippet and the narration can both
-        see rather than a silent empty handle.
+        The card the user reads: the id the decision is keyed by, the exact
+        code, and its caption. No layer list: the session's own project is the
+        surface, and the user is looking at it.
         */
+        item code_exec_id : String;
+        item python_code : String;
+        item rationale : String [0..1];
+    }
+
+    interface def SessionAsk {
+        doc /*
+        What a tool hands the request seam: the kind of thing to run and its
+        body - an algorithm id with its params, or the approved code.
+
+        constructor: run_in_session
+        */
+        item kind : String;
+        item algorithm : String [0..1];
+        item params : Map [0..1];
+        item code : String [0..1];
+        item code_exec_id : String [0..1];
+    }
+
+    interface def ProcessingRequest {
+        doc /*
+        The envelope on the wire: one request the session runs, keyed by an
+        unguessable id the answer echoes.
+        */
+        item request_id : String;
+        item kind : String;
+        item algorithm : String [0..1];
+        item params : Map;
+        item code : String [0..1];
+        item code_exec_id : String [0..1];
+    }
+
+    interface def ProcessingResponse {
+        doc /*
+        What the session produced. ``status`` is the honest terminal outcome;
+        an ``error`` is the session's own traceback, never a message this side
+        wrote about it.
+        */
+        item request_id : String;
         item status : String;
-        item stdout : String;
-        item stderr : String;
-        item result : Map;
-        item error : String;
-        item stdout_truncated : Boolean;
-        item stderr_truncated : Boolean;
-        item layer_errors : Map [0..1];
-        item duration_s : Real [0..1];
-        item wallclock_cap_seconds : Integer [0..1];
+        item result : Map [0..1];
+        item error : String [0..1];
+        item stdout : String [0..1];
     }
 
-    interface def SyncOffloadRouting {
-        doc /*
-        The tool name the dispatch routes off the loop unconditionally. It is
-        declared as data on the dispatch side and satisfied by the tool body
-        being emit-free, which is what makes running it in a worker thread
-        safe.
-        */
-        item code_exec_request : String;
-    }
-
-    // ----------------------------------------------------------------- //
     // Parts - bound to the modules they ARE
-    // ----------------------------------------------------------------- //
 
-    part codeExecTool : CodeExecTool {
+    part runPyqgis : SessionCodeTool {
         doc /*
-        code: trid3nt_server/tools/meta/code_exec_tool/code_exec_tool.py
+        code: trid3nt_server/tools/derive/run_pyqgis/run_pyqgis.py
         */
-        port requestOut : RequestOut;
-        port envelopeIn : EnvelopeIn;
-        port offloadOut : OffloadOut;
+        port approvalIn : ApprovalIn;
+        port askOut : AskOut;
     }
 
-    part sandboxBox : SandboxBox {
+    part runQgisAlgorithm : SessionAlgorithmTool {
         doc /*
-        code: trid3nt_server/sandbox/box.py
+        code: trid3nt_server/tools/derive/run_qgis_algorithm/run_qgis_algorithm.py
+        */
+        port askOut : AskOut;
+    }
+
+    part codeExecGate : CodeExecGate {
+        doc /*
+        code: trid3nt_server/gates/confirm.py
+        */
+        port approvalIn : ApprovalIn;
+        port approvalOut : ApprovalOut;
+        port cardOut : CardOut;
+    }
+
+    part toolDispatch : ToolDispatch {
+        doc /*
+        code: trid3nt_server/server/dispatch/emitter.py
+        */
+        port approvalOut : ApprovalOut;
+    }
+
+    part sessionRequest : SessionRequest {
+        doc /*
+        code: trid3nt_server/server/processing.py
+        */
+        port askIn : AskIn;
+        port requestOut : RequestOut;
+        port responseIn : ResponseIn;
+    }
+
+    part connectionLoop : ConnectionLoop {
+        doc /*
+        code: trid3nt_server/server/protocol/loop.py
+        */
+        port responseIn : ResponseIn;
+        port responseOut : ResponseOut;
+    }
+
+    part sessionExecutor : SessionExecutor {
+        doc /*
+        code: plugin/render/processing.py
         */
         port requestIn : RequestIn;
-        port payloadOut : PayloadOut;
-        port envelopeIn : EnvelopeIn;
-        port envelopeOut : EnvelopeOut;
+        port responseOut : ResponseOut;
     }
 
-    part sandboxDriver : SandboxDriver {
+    part approvalCard : ApprovalCard {
         doc /*
-        code: trid3nt_server/sandbox/driver.py
+        code: plugin/ui/gate.py
         */
-        port payloadIn : PayloadIn;
-        port envelopeOut : EnvelopeOut;
+        port cardIn : CardIn;
     }
 
     part keywordLookup : KeywordLookup {
@@ -192,106 +261,90 @@ package ToolPlane {
         */
     }
 
-    part toolDispatch : ToolDispatch {
-        doc /*
-        code: trid3nt_server/server/dispatch/emitter.py
-        */
-        port offloadIn : OffloadIn;
-    }
-
-    // ----------------------------------------------------------------- //
     // Hops
-    // ----------------------------------------------------------------- //
 
-    interface snippetDispatched : SnippetRequest
-        connect codeExecTool.requestOut to sandboxBox.requestIn;
+    interface approvalStripped : StrippedApproval
+        connect toolDispatch.approvalOut to codeExecGate.approvalIn;
 
-    interface payloadStaged : StagedPayload
-        connect sandboxBox.payloadOut to sandboxDriver.payloadIn;
+    interface cardPresented : CodeApprovalCard
+        connect codeExecGate.cardOut to approvalCard.cardIn;
 
-    interface envelopeWritten : RunEnvelope
-        connect sandboxDriver.envelopeOut to sandboxBox.envelopeIn;
+    interface approvalGranted : GrantedApproval
+        connect codeExecGate.approvalOut to runPyqgis.approvalIn;
 
-    interface envelopeReturned : RunEnvelope
-        connect sandboxBox.envelopeOut to codeExecTool.envelopeIn;
+    interface codeAsked : SessionAsk
+        connect runPyqgis.askOut to sessionRequest.askIn;
 
-    interface offloadDeclared : SyncOffloadRouting
-        connect codeExecTool.offloadOut to toolDispatch.offloadIn;
+    interface algorithmAsked : SessionAsk
+        connect runQgisAlgorithm.askOut to sessionRequest.askIn;
 
-    // ----------------------------------------------------------------- //
+    interface requestEmitted : ProcessingRequest
+        connect sessionRequest.requestOut to sessionExecutor.requestIn;
+
+    interface responseAnswered : ProcessingResponse
+        connect sessionExecutor.responseOut to connectionLoop.responseIn;
+
+    interface responseResolved : ProcessingResponse
+        connect connectionLoop.responseOut to sessionRequest.responseIn;
+
     // The laws this seam is governed by
-    // ----------------------------------------------------------------- //
-
-    requirement def SandboxIsNetworkNone {
-        doc /*
-        The box runs with the network OFF, declared on the launch line. A
-        snippet is code nobody reviewed, so containment cannot be a guard the
-        same interpreter runs: a monkeypatched socket is rebindable and a
-        credential-scrubbed environment is only as good as its allowlist. A
-        container with no interfaces is neither - the kernel refuses the packet
-        whether it came from urllib, ctypes or a shelled-out binary.
-
-        The denial being structural is what lets the seam be honest about it: a
-        snippet that reaches for the world comes back ``blocked``, carrying the
-        failure exactly as the box met it rather than a message this code wrote
-        about it.
-
-        The driver enforces the other half by depending on nothing: a module
-        inside the box that could import the server package could import its
-        fetchers, and the boundary would be one edge away from gone.
-
-        forbid: trid3nt_server.sandbox.driver -> trid3nt_server
-        */
-    }
-
-    requirement def DataEntersStaged {
-        doc /*
-        The box takes files and values HANDED to it and fetches nothing. Every
-        ref is materialized into the run directory by the host - the process
-        that holds the credentials and answers to the gates - and the payload
-        the driver reads names local paths only.
-
-        This is the same rule the substrate keeps everywhere: a world-read
-        happens on the fetch path where it is visible, cached and gated, and
-        never as a side effect of some other operation. A snippet that could
-        open a URI would be a second, unwatched fetcher inside the one place
-        that is meant to compute.
-
-        A ref that cannot be staged is NAMED rather than silently dropped: the
-        original string is handed through and the reason rides in
-        ``layer_errors``, so the snippet fails on a stated absence.
-        */
-    }
-
-    requirement def OffloadKeepsTheLoopUnblocked {
-        doc /*
-        The tool that drives the box is off-loaded unconditionally. One run is
-        a container start, a staging fetch and seconds of compute, all
-        synchronous; run on the event loop it starves the heartbeat and the
-        client reconnects mid-analysis.
-
-        The off-load is safe because the tool body is emit-free - the confirm
-        card is emitted on the loop before dispatch and the result envelope
-        after it - so no worker thread ever touches the loop.
-        */
-    }
 
     requirement def ConsequentialCodeIsUserGated {
         doc /*
-        The box runs code nobody reviewed in advance, so the person whose data it
-        touches is the one who lets it run. The tool body REFUSES an unconfirmed
-        call outright, and the confirmation is the SERVER's to grant: a
-        model-supplied approval flag is stripped before the gate is reached, so
-        asking for consent and answering for it cannot be the same act.
+        The session runs code nobody reviewed in advance, so the person whose
+        project it touches is the one who lets it run. The tool body REFUSES an
+        unconfirmed call outright, and the confirmation is the SERVER's to
+        grant: a model-supplied approval flag is stripped before the gate is
+        reached, so asking for consent and answering for it cannot be the same
+        act.
 
         The wait is BOUNDED. A gate nobody answers expires into a typed refusal
         and drops its pending entry, because a turn held open forever is a turn
         the user cannot see failing - and the same expiry runs when the waiting
         task is cancelled, so a dropped connection leaves no entry behind.
 
-        The approval card states the code verbatim and the layers it may touch,
-        which is only an honest account because the staged surface is the whole
-        of what the snippet can reach.
+        The approval card states the code verbatim; the surface it can reach is
+        the project the user is looking at.
+        */
+    }
+
+    requirement def TheSessionIsTheOneCodePath {
+        doc /*
+        Nothing on the daemon executes what the model wrote. The daemon holds no
+        container and no interpreter for a snippet: the request leaves for the
+        session, and only the session's own Python and Processing framework run
+        it. The modules that carry a request may not spawn a process of their
+        own.
+
+        forbid: trid3nt_server.tools.derive.run_pyqgis -> subprocess
+        forbid: trid3nt_server.tools.derive.run_qgis_algorithm -> subprocess
+        forbid: trid3nt_server.server.processing -> subprocess
+        */
+    }
+
+    requirement def ASessionAnswersOrRefuses {
+        doc /*
+        A session request resolves in one of four ways and fabricates in none:
+        the session's answer; no live session, a typed refusal before anything
+        is sent; no answer within the window, a typed refusal with the pending
+        entry dropped; an error answer, the session's own message raised as the
+        tool's error. A reply from a session that is not the owner is refused.
+        */
+    }
+
+    requirement def ADeriveToolNeverFetches {
+        doc /*
+        A derive tool takes a layer and returns a layer or a value. The layer
+        it needs is fetched first by the fetch tool that declares it, and the
+        tool refuses, naming that fetch, when the layer was not given - it never
+        reaches the registry for a fetcher, the cache shim's read-through, or a
+        fetch tool module. The session tools take canvas layers by name for the
+        same reason: the model fetches, and when the layer exists, runs.
+
+        forbid: trid3nt_server.tools.derive.run_pyqgis -> trid3nt_server.tools.fetchers
+        forbid: trid3nt_server.tools.derive.run_qgis_algorithm -> trid3nt_server.tools.fetchers
+        forbid: trid3nt_server.tools.derive.run_pyqgis -> trid3nt_server.tools.cache
+        forbid: trid3nt_server.tools.derive.run_qgis_algorithm -> trid3nt_server.tools.cache
         */
     }
 
@@ -312,26 +365,65 @@ package ToolPlane {
         */
     }
 
-    // ----------------------------------------------------------------- //
     // Allocations
-    // ----------------------------------------------------------------- //
 
-    satisfy requirement ConsequentialCodeIsUserGated by codeExecTool;
+    satisfy requirement ConsequentialCodeIsUserGated by runPyqgis;
+    satisfy requirement ConsequentialCodeIsUserGated by codeExecGate;
     satisfy requirement ConsequentialCodeIsUserGated by toolDispatch;
     verify requirement ConsequentialCodeIsUserGated by
-        "tests/sandbox/test_code_exec_tool.py::test_tool_body_refuses_without_confirmation";
+        "tests/derive/test_session_tools.py::test_run_pyqgis_refuses_without_the_card";
     verify requirement ConsequentialCodeIsUserGated by
-        "tests/sandbox/test_code_exec_tool.py::test_dispatch_strips_llm_supplied_confirmed_for_code_exec";
+        "tests/gates/test_code_exec_gate.py::test_dispatch_strips_a_model_supplied_approval";
     verify requirement ConsequentialCodeIsUserGated by
-        "tests/sandbox/test_code_exec_tool.py::test_server_gate_approve_injects_confirmed";
+        "tests/gates/test_code_exec_gate.py::test_approve_injects_confirmed_and_the_card_carries_the_code";
     verify requirement ConsequentialCodeIsUserGated by
-        "tests/sandbox/test_code_exec_tool.py::test_server_gate_cancel_blocks_dispatch";
+        "tests/gates/test_code_exec_gate.py::test_cancel_blocks_dispatch_and_leaks_nothing";
     verify requirement ConsequentialCodeIsUserGated by
-        "tests/sandbox/test_code_exec_tool.py::test_server_gate_timeout_raises_typed_and_cleans_registry";
+        "tests/gates/test_code_exec_gate.py::test_an_unanswered_card_expires_typed";
     verify requirement ConsequentialCodeIsUserGated by
-        "tests/sandbox/test_code_exec_tool.py::test_server_gate_cleanup_on_task_cancel";
+        "tests/gates/test_code_exec_gate.py::test_a_cancelled_wait_drops_its_entry";
     verify requirement ConsequentialCodeIsUserGated by
         "tests/gates/test_gate_timeout_local.py::test_local_timeout_is_finite";
+
+    satisfy requirement TheSessionIsTheOneCodePath by runPyqgis;
+    satisfy requirement TheSessionIsTheOneCodePath by sessionRequest;
+    satisfy requirement TheSessionIsTheOneCodePath by sessionExecutor;
+    verify requirement TheSessionIsTheOneCodePath by
+        "tests/derive/test_session_tools.py::test_confirmed_code_request_rides_the_wire";
+    verify requirement TheSessionIsTheOneCodePath by
+        "tests/derive/test_session_tools.py::test_algorithm_request_rides_the_wire_and_returns_the_summary";
+    verify requirement TheSessionIsTheOneCodePath by
+        "tests/model/test_model_conformance.py::test_the_model_conforms_to_the_tree";
+
+    satisfy requirement ASessionAnswersOrRefuses by sessionRequest;
+    satisfy requirement ASessionAnswersOrRefuses by connectionLoop;
+    verify requirement ASessionAnswersOrRefuses by
+        "tests/derive/test_session_tools.py::test_no_session_is_a_typed_refusal";
+    verify requirement ASessionAnswersOrRefuses by
+        "tests/derive/test_session_tools.py::test_a_wait_that_runs_out_is_typed_and_cleans_up";
+    verify requirement ASessionAnswersOrRefuses by
+        "tests/derive/test_session_tools.py::test_an_error_reply_is_the_sessions_own_message";
+    verify requirement ASessionAnswersOrRefuses by
+        "tests/derive/test_session_tools.py::test_a_cross_session_reply_is_refused";
+
+    satisfy requirement ADeriveToolNeverFetches by runPyqgis;
+    satisfy requirement ADeriveToolNeverFetches by runQgisAlgorithm;
+    verify requirement ADeriveToolNeverFetches by
+        "tests/derive/test_hydrology_primitives.py::test_bad_inputs_raise";
+    verify requirement ADeriveToolNeverFetches by
+        "tests/derive/test_compute_flood_depth_damage.py::test_missing_assets_is_a_refusal_never_a_fetch";
+    verify requirement ADeriveToolNeverFetches by
+        "tests/derive/test_compute_sediment_yield.py::test_missing_layers_refuse_never_fetch";
+    verify requirement ADeriveToolNeverFetches by
+        "tests/derive/test_model_debris_flow.py::test_missing_layers_refuse_never_fetch";
+    verify requirement ADeriveToolNeverFetches by
+        "tests/derive/test_compute_model_residuals.py::test_missing_observations_refuse_never_fetch";
+    verify requirement ADeriveToolNeverFetches by
+        "tests/derive/test_compute_exposure_summary.py::test_absent_layers_are_named_never_fetched";
+    verify requirement ADeriveToolNeverFetches by
+        "tests/derive/test_query_point_hazard.py::test_place_name_is_not_geocoded_here";
+    verify requirement ADeriveToolNeverFetches by
+        "tests/model/test_model_conformance.py::test_the_model_conforms_to_the_tree";
 
     satisfy requirement ASurfaceTooLargeToCarryIsReached by keywordLookup;
     verify requirement ASurfaceTooLargeToCarryIsReached by
@@ -344,37 +436,4 @@ package ToolPlane {
         "tests/search/test_describe_keywords.py::test_a_module_with_no_catalog_refuses_naming_the_ones_there_are";
     verify requirement ASurfaceTooLargeToCarryIsReached by
         "tests/search/test_describe_keywords.py::test_every_corpus_phrasing_surfaces_the_tool_model_free";
-
-    satisfy requirement SandboxIsNetworkNone by sandboxBox;
-    satisfy requirement SandboxIsNetworkNone by sandboxDriver;
-    verify requirement SandboxIsNetworkNone by
-        "tests/sandbox/test_sandbox_box.py::test_the_box_runs_with_the_network_off";
-    verify requirement SandboxIsNetworkNone by
-        "tests/sandbox/test_sandbox_box.py::test_a_snippet_cannot_reach_the_network";
-    verify requirement SandboxIsNetworkNone by
-        "tests/sandbox/test_sandbox_box.py::test_a_denied_egress_is_reported_as_blocked_rather_than_as_a_bug";
-    verify requirement SandboxIsNetworkNone by
-        "tests/model/test_model_conformance.py::test_the_model_conforms_to_the_tree";
-
-    satisfy requirement DataEntersStaged by sandboxBox;
-    satisfy requirement DataEntersStaged by sandboxDriver;
-    verify requirement DataEntersStaged by
-        "tests/sandbox/test_sandbox_box.py::test_a_local_raster_is_staged_and_opens_as_a_handle";
-    verify requirement DataEntersStaged by
-        "tests/sandbox/test_sandbox_box.py::test_a_remote_ref_is_fetched_by_the_host_before_the_box_starts";
-    verify requirement DataEntersStaged by
-        "tests/sandbox/test_sandbox_box.py::test_frames_stage_as_an_ordered_list";
-    verify requirement DataEntersStaged by
-        "tests/sandbox/test_sandbox_box.py::test_a_ref_that_cannot_be_staged_is_named_rather_than_crashing_the_run";
-    verify requirement DataEntersStaged by
-        "tests/sandbox/test_sandbox_box.py::test_the_box_reaches_for_nothing_from_the_inside";
-
-    satisfy requirement OffloadKeepsTheLoopUnblocked by codeExecTool;
-    satisfy requirement OffloadKeepsTheLoopUnblocked by toolDispatch;
-    verify requirement OffloadKeepsTheLoopUnblocked by
-        "tests/sandbox/test_sandbox_box.py::test_the_tool_that_drives_the_box_is_always_offloaded";
-    verify requirement OffloadKeepsTheLoopUnblocked by
-        "tests/sandbox/test_sandbox_box.py::test_the_offload_keeps_the_loop_unblocked";
-    verify requirement OffloadKeepsTheLoopUnblocked by
-        "tests/tools/test_sync_tool_offload_stage0.py::test_gate_refuses_emitting_sync_tool";
 }

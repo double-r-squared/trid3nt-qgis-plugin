@@ -322,6 +322,19 @@ class AgentWorker(QObject):
                 cancelled=cancelled,
             )
 
+    def send_processing_response(
+        self,
+        request_id: str,
+        status: str,
+        result: Optional[dict] = None,
+        error: Optional[str] = None,
+        stdout: str = "",
+    ) -> None:
+        if self.client is not None:
+            self.client.send_processing_response(
+                request_id, status, result=result, error=error, stdout=stdout
+            )
+
 
 class AgentBridge(QObject):
     """Owns the QThread + worker pair; the dock talks only to this."""
@@ -508,4 +521,17 @@ class AgentBridge(QObject):
                 features=features,
                 name=name,
                 cancelled=cancelled,
+            )
+
+    def send_processing_response(
+        self,
+        request_id: str,
+        status: str,
+        result: Optional[dict] = None,
+        error: Optional[str] = None,
+        stdout: str = "",
+    ) -> None:
+        if self._worker is not None:
+            self._worker.send_processing_response(
+                request_id, status, result=result, error=error, stdout=stdout
             )

@@ -19,7 +19,7 @@ from trid3nt_contracts import new_ulid
 
 @pytest.fixture(scope="module", autouse=True)
 def _populate_registry() -> None:
-    """The full registry must be loaded so compute_colored_relief is real."""
+    """The full registry must be loaded so compute_cross_section is real."""
     from trid3nt_server.main import _import_tools_registry
 
     _import_tools_registry()
@@ -92,7 +92,7 @@ async def _drive_loop(fake_llm, turns: list[dict], fake_invoke) -> tuple[list[li
 
 @pytest.mark.asyncio
 async def test_first_call_to_real_non_hot_set_tool_dispatches(fake_llm) -> None:
-    """The FIRST call to compute_colored_relief (a real tool outside the core
+    """The FIRST call to compute_cross_section (a real tool outside the core
     floor) must dispatch and stick in the Case's monotonic visible set."""
     from trid3nt_server import server as agent_server
 
@@ -101,8 +101,8 @@ async def test_first_call_to_real_non_hot_set_tool_dispatches(fake_llm) -> None:
     async def _fake_invoke(_ws, state, name, args):
         dispatch_log.append(name)
         result = {
-            "layer_id": "colored-relief-boulder",
-            "uri": "gs://grace2-tool-cache/colored_relief/deadbeef1234.tif",
+            "layer_id": "cross-section-boulder",
+            "uri": "gs://grace2-tool-cache/cross_section/deadbeef1234.tif",
             "ramp": "terrain",
         }
         # Mirror the real _invoke_tool_via_emitter: register the result's
@@ -116,28 +116,28 @@ async def test_first_call_to_real_non_hot_set_tool_dispatches(fake_llm) -> None:
         fake_llm,
         [
             _make_fake_chunk_with_function_call(
-                "compute_colored_relief",
+                "compute_cross_section",
                 {"dem_uri": "gs://grace2-tool-cache/dem/boulder.tif", "ramp": "terrain"},
                 "call-relief",
             ),
-            _make_fake_chunk_with_text("Computed the colored relief for Boulder."),
+            _make_fake_chunk_with_text("Computed the cross section for Boulder."),
         ],
         _fake_invoke,
     )
 
     # Dispatched on the first call — exactly once, no detours.
-    assert dispatch_log == ["compute_colored_relief"]
+    assert dispatch_log == ["compute_cross_section"]
     # Exactly two Gemini turns: the call turn + the terminal narration.
     assert len(contents_per_turn) == 2
     # The function_response Gemini saw is an ok envelope, not the bounce.
     payloads = _function_response_payloads(contents_per_turn)
     assert payloads, "no function_response reached the second Gemini turn"
     name, payload = payloads[0]
-    assert name == "compute_colored_relief"
+    assert name == "compute_cross_section"
     assert payload.get("error_code") != "OUT_OF_ALLOWED_SET"
     assert payload.get("status") == "ok"
     # It persists in the Case's monotonic visible set (never hidden mid-task).
-    assert "compute_colored_relief" in state.visible_tools
+    assert "compute_cross_section" in state.visible_tools
 
 
 
@@ -150,8 +150,8 @@ async def test_layer_producing_tool_response_carries_handle_instruction(fake_llm
 
     async def _fake_invoke(_ws, state, name, args):
         result = {
-            "layer_id": "colored-relief-boulder",
-            "uri": "gs://grace2-tool-cache/colored_relief/deadbeef1234.tif",
+            "layer_id": "cross-section-boulder",
+            "uri": "gs://grace2-tool-cache/cross_section/deadbeef1234.tif",
             "ramp": "terrain",
         }
         agent_server.get_uri_registry(state.session_id).register_tool_result(
@@ -163,7 +163,7 @@ async def test_layer_producing_tool_response_carries_handle_instruction(fake_llm
         fake_llm,
         [
             _make_fake_chunk_with_function_call(
-                "compute_colored_relief",
+                "compute_cross_section",
                 {"dem_uri": "gs://grace2-tool-cache/dem/boulder.tif", "ramp": "terrain"},
                 "call-relief",
             ),
@@ -178,7 +178,7 @@ async def test_layer_producing_tool_response_carries_handle_instruction(fake_llm
 
     # The handle announcement is present...
     handles = payload.get("layer_handles")
-    assert handles and "colored-relief-boulder" in handles
+    assert handles and "cross-section-boulder" in handles
 
     # ...and the note carries the handle discipline.
     note = payload.get("layer_handles_note", "")

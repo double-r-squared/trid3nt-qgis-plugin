@@ -730,13 +730,16 @@ from .chart_contracts import (  # noqa: E402
 
 AGENT_TO_CLIENT_PAYLOADS.update(CHART_AGENT_TO_CLIENT_PAYLOADS)
 
-# Both code-exec envelopes are agent -> client; the approval REPLY rides the
-# existing payload-confirmation message rather than a new shape.
-from .sandbox_contracts import (  # noqa: E402
-    SANDBOX_AGENT_TO_CLIENT_PAYLOADS,
+# The session processing pair: the request (and the code approval card in
+# front of it) is agent -> client, the response is client -> agent; the
+# approval REPLY rides the existing payload-confirmation message.
+from .processing_contracts import (  # noqa: E402
+    PROCESSING_AGENT_TO_CLIENT_PAYLOADS,
+    PROCESSING_CLIENT_TO_AGENT_PAYLOADS,
 )
 
-AGENT_TO_CLIENT_PAYLOADS.update(SANDBOX_AGENT_TO_CLIENT_PAYLOADS)
+AGENT_TO_CLIENT_PAYLOADS.update(PROCESSING_AGENT_TO_CLIENT_PAYLOADS)
+CLIENT_TO_AGENT_PAYLOADS.update(PROCESSING_CLIENT_TO_AGENT_PAYLOADS)
 
 # The region-narrowing request is agent -> client and its reply is
 # client -> agent.

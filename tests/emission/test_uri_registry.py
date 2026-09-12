@@ -736,13 +736,7 @@ class TestDemHintInventoryText:
         # The hint fires on the remaining branch-4 raise (a display-face URL
         # whose LAYERS= handle was never produced; storage URIs fail open).
         reg = make_registry("sess-dem-hint")
-        for tool in (
-            "compute_hillshade",
-            "compute_slope",
-            "compute_aspect",
-            "compute_contours",
-            "compute_cross_section",
-        ):
+        for tool in ("compute_cross_section",):
             with pytest.raises(UriResolutionError) as exc_info:
                 reg.resolve_params(
                     tool,

@@ -13,7 +13,7 @@ from trid3nt_contracts import new_ulid, now_utc
 from trid3nt_contracts.gate_spec import GateSpec
 from trid3nt_contracts.payload_warning import PayloadConfirmationEnvelopePayload, PayloadWarningEnvelopePayload
 from trid3nt_contracts.region_choice import RegionChoiceProvidedEnvelopePayload
-from trid3nt_contracts.sandbox_contracts import CodeExecRequestPayload
+from trid3nt_contracts.processing_contracts import CodeExecRequestPayload
 from trid3nt_contracts.secrets import CredentialProvidedEnvelopePayload
 from trid3nt_contracts.ws import SpatialInputResponsePayload
 from trid3nt_server.credentials.credential_registry import CredentialProvider, generic_provider_for_tool, is_credential_error, is_credential_shaped_error, provider_for_tool
@@ -486,25 +486,25 @@ async def _gate_on_code_exec(
     state: SessionState,
     params: dict,
 ) -> tuple[bool, dict]:
-    """Confirm gate for ``code_exec_request`` -- MANDATORY, fail-closed.
+    """Confirm gate for ``run_pyqgis`` -- MANDATORY, fail-closed.
 
-    The user must approve the EXACT code before the sandbox runs; ``narrow_scope``
-    is not offered for a code snippet and is treated as a cancel."""
+    The user must approve the EXACT code before the session runs it;
+    ``narrow_scope`` is not offered for a code snippet and is treated as a cancel."""
     # Returns (should_dispatch, effective_params): on approval, params plus
     # ``confirmed`` and the ``code_exec_id`` the request card carried, so the
     # request and result cards correlate. On cancel, (False, params), and the
     # caller raises a typed non-retryable error the model narrates.
-    python_code = params.get("python_code")
+    python_code = params.get("code")
     if not isinstance(python_code, str) or not python_code.strip():
         # No code to confirm -- let the tool body raise its own params error.
         return True, params
 
     code_exec_id = new_ulid()
+    rationale = params.get("rationale")
     request_payload = CodeExecRequestPayload(
         code_exec_id=code_exec_id,
         python_code=python_code,
-        layer_refs=params.get("layer_refs") or {},
-        rationale=params.get("rationale"),
+        rationale=rationale[:512] if isinstance(rationale, str) else None,
     )
 
     # Create the future the inbound ``tool-payload-confirmation`` handler completes
@@ -517,11 +517,10 @@ async def _gate_on_code_exec(
         _new_envelope("code-exec-request", state.session_id, request_payload)
     )
     logger.info(
-        "code-exec-request emitted session=%s code_exec_id=%s code_len=%d n_layers=%d",
+        "code-exec-request emitted session=%s code_exec_id=%s code_len=%d",
         state.session_id,
         code_exec_id,
         len(python_code),
-        len(request_payload.layer_refs),
     )
 
     # This wait deliberately bypasses the local-lane 24h override: an
@@ -548,8 +547,8 @@ async def _gate_on_code_exec(
             websocket,
             state.session_id,
             "CONFIRMATION_TIMEOUT",
-            f"code_exec_request {code_exec_id!r} approval card was not answered "
-            f"within {approval_timeout_s:.0f}s; the sandbox did not run",
+            f"run_pyqgis {code_exec_id!r} approval card was not answered "
+            f"within {approval_timeout_s:.0f}s; the code did not run",
         )
         # Typed resolution of the parked tool call: propagates to the tool
         # dispatch except-handler -> summarize_tool_result(error=...) -> a
@@ -573,13 +572,13 @@ async def _gate_on_code_exec(
             websocket,
             state.session_id,
             "USER_INPUT_CANCELLED",
-            f"code_exec_request {code_exec_id!r} declined by user "
-            f"(decision={decision_payload.decision!r}); the sandbox did not run",
+            f"run_pyqgis {code_exec_id!r} declined by user "
+            f"(decision={decision_payload.decision!r}); the code did not run",
         )
-        return False, params
+        return False, {**params, "code_exec_id": code_exec_id}
 
     # Approved: inject the gate-cleared flags so the tool body dispatches with the
-    # SAME code_exec_id the request card carried (so request/result cards correlate).
+    # SAME code_exec_id the request card carried, so the result joins its card.
     approved = dict(params)
     approved["confirmed"] = True
     approved["code_exec_id"] = code_exec_id

@@ -22,22 +22,22 @@ def test_should_offload_modes(monkeypatch: pytest.MonkeyPatch) -> None:
     # probe the pure env-mode behaviour).
     for off in ("off", "", "maybe", "0", "false"):
         monkeypatch.setattr(server, "_SYNC_OFFLOAD_MODE", off)
-        assert server._should_offload_sync_tool("compute_slope") is False
+        assert server._should_offload_sync_tool("compute_cross_section") is False
         assert server._should_offload_sync_tool("geocode_location") is False
         # ...but the always-set off-loads even in off/unknown mode.
         assert server._should_offload_sync_tool("fetch_topobathy") is True
 
-    # Subset -> the compute_*/clip_* families (plus the always-set).
+    # Subset -> the compute_* family (plus the always-set).
     monkeypatch.setattr(server, "_SYNC_OFFLOAD_MODE", "subset")
-    assert server._should_offload_sync_tool("compute_slope") is True
-    assert server._should_offload_sync_tool("clip_raster_to_polygon") is True
+    assert server._should_offload_sync_tool("compute_cross_section") is True
+    assert server._should_offload_sync_tool("compute_cross_section") is True
     assert server._should_offload_sync_tool("geocode_location") is False
     assert server._should_offload_sync_tool("sfincs_flood") is False
 
     # Global aliases -> every tool.
     for glob in ("global", "all", "on", "1", "true", "yes"):
         monkeypatch.setattr(server, "_SYNC_OFFLOAD_MODE", glob)
-        assert server._should_offload_sync_tool("compute_slope") is True
+        assert server._should_offload_sync_tool("compute_cross_section") is True
         assert server._should_offload_sync_tool("fetch_era5_reanalysis") is True
 
 

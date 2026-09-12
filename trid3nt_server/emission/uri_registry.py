@@ -20,7 +20,6 @@ from urllib.parse import parse_qs, unquote, urlparse
 logger = logging.getLogger("trid3nt_server.emission.uri_registry")
 
 __all__ = [
-    "NESTED_REF_PARAMS",
     "RESOLVABLE_URI_PARAMS",
     "SHORT_HANDLE_RE",
     "SessionUriRegistry",
@@ -58,8 +57,6 @@ RESOLVABLE_URI_PARAMS: frozenset[str] = frozenset(
         "vector_uri",
         "polygon_uri",
         "dem_uri",
-        "base_layer_uri",  # compute_blended_composite base raster
-        "overlay_layer_uri",  # compute_blended_composite overlay raster
         "landcover_uri",
         "hazard_uri",
         "model_setup_uri",
@@ -79,12 +76,6 @@ RESOLVABLE_URI_PARAMS: frozenset[str] = frozenset(
     }
 )
 
-#: Params whose VALUES are handle/URI mappings (not a single string).
-#: ``code_exec_request.layer_refs`` is ``{var_name: layer_uri}`` (values may
-#: also be LISTS of URIs); every string value resolves through the same
-#: four-branch machinery as the flat ``*_uri`` params above. ``layer_uris`` is
-#: the documented alias the LLM sometimes uses.
-NESTED_REF_PARAMS: frozenset[str] = frozenset({"layer_refs", "layer_uris"})
 
 #: The short per-case layer-handle shape the registry mints at the
 #: emit seam (``L1``, ``L2``, ...). Case-insensitive on resolve (``l3`` works);
@@ -113,15 +104,7 @@ _ERROR_HANDLES_CAP = 10
 #: layers yet" fallback fires for one of these, the message names ``fetch_dem``:
 #: a generic solver example steers a terrain-derivative ask away from the call
 #: it actually needs.
-_DEM_CONSUMING_TOOLS: frozenset[str] = frozenset(
-    {
-        "compute_hillshade",
-        "compute_slope",
-        "compute_aspect",
-        "compute_contours",
-        "compute_cross_section",
-    }
-)
+_DEM_CONSUMING_TOOLS: frozenset[str] = frozenset({"compute_cross_section"})
 
 
 
@@ -503,13 +486,6 @@ class SessionUriRegistry:
             return params
         out = dict(params)
         for name, value in params.items():
-            # Nested handle/URI mappings (code_exec layer_refs) --
-            # every string VALUE resolves; keys (variable names) untouched.
-            if name in NESTED_REF_PARAMS and isinstance(value, dict):
-                resolved_refs = self._resolve_ref_mapping(tool_name, name, value)
-                if resolved_refs != value:
-                    out[name] = resolved_refs
-                continue
             if name not in RESOLVABLE_URI_PARAMS or not isinstance(value, str):
                 continue
             resolved = self._resolve_one(tool_name, name, value)
@@ -524,42 +500,6 @@ class SessionUriRegistry:
                 )
                 out[name] = resolved
         return out
-
-    def _resolve_ref_mapping(
-        self, tool_name: str, param_name: str, refs: dict
-    ) -> dict:
-        """Resolve every string value of a ``layer_refs``-style dict.
-
-        List values resolve member-wise; the typed reject names the offending key.
-        """
-        out = dict(refs)
-        changed = False
-        for key, ref in refs.items():
-            slot = f"{param_name}[{key}]"
-            if isinstance(ref, str):
-                resolved = self._resolve_one(tool_name, slot, ref)
-                if resolved != ref:
-                    logger.warning(
-                        "uri_registry[%s]: %s.%s resolved %r -> %r",
-                        self.session_id,
-                        tool_name,
-                        slot,
-                        ref,
-                        resolved,
-                    )
-                    out[key] = resolved
-                    changed = True
-            elif isinstance(ref, (list, tuple)):
-                new_seq = [
-                    self._resolve_one(tool_name, slot, item)
-                    if isinstance(item, str)
-                    else item
-                    for item in ref
-                ]
-                if list(new_seq) != list(ref):
-                    out[key] = type(ref)(new_seq)
-                    changed = True
-        return out if changed else refs
 
     def _resolve_one(self, tool_name: str, param_name: str, value: str) -> str:
         v = value.strip()
