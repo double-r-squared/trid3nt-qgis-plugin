@@ -1,7 +1,7 @@
 {
   "tool": "telemac_river_scour",
   "run_id": "01M2BDVG00HWNNAV0XMC13W100",
-  "commit": "9cdbf9d171078d872e16d42d88935951541ab267-dirty",
+  "commit": "5ff259cad6cedab2d12a68e79c663b99b1499884-dirty",
   "recorded_at": "2026-09-12T18:25:25.237271+00:00",
   "engine": "telemac",
   "wall_seconds": 27.327,

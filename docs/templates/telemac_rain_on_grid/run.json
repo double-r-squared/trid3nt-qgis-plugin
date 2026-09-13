@@ -1,10 +1,10 @@
 {
   "tool": "telemac_rain_on_grid",
-  "run_id": "01M2BE130GPVBN0HBW51FY1QT1",
-  "commit": "9cdbf9d171078d872e16d42d88935951541ab267-dirty",
-  "recorded_at": "2026-09-12T18:31:17.549263+00:00",
+  "run_id": "01M2EBK39ZK0YXRFDHTGZH5PRV",
+  "commit": "5ff259cad6cedab2d12a68e79c663b99b1499884-dirty",
+  "recorded_at": "2026-09-13T21:46:25.049222+00:00",
   "engine": "telemac",
-  "wall_seconds": 254.555,
+  "wall_seconds": 253.171,
   "args": {
     "pour_point": "Point(lon=-83.40402, lat=35.05746, name=None)",
     "design_storm_mm_per_hr": 6.53,
@@ -381,7 +381,7 @@
       -83.39843378895853,
       35.073572656237715
     ],
-    "layer_uri": "s3://trid3nt-runs/01M2BE130GPVBN0HBW51FY1QT1/r2d_rog.slf"
+    "layer_uri": "s3://trid3nt-runs/01M2EBK39ZK0YXRFDHTGZH5PRV/r2d_rog.slf"
   },
   "mesh": {
     "mesh_size_m": null
@@ -397,7 +397,6 @@
         "colormap": "gray",
         "floor": null,
         "kind": "continuous",
-        "label": "Elevation",
         "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <pipe>\n    <rasterrenderer type=\"singlebandpseudocolor\" band=\"1\" opacity=\"1\" alphaBand=\"-1\" classificationMin=\"621.4646606\" classificationMax=\"1382.789062\" nodataColor=\"\">\n      <rastershader>\n        <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"621.4646606\" maximumValue=\"1382.789062\" labelPrecision=\"4\">\n          <item value=\"621.4646606\" color=\"#000000\" alpha=\"255\" label=\"621.465 m\"/>\n          <item value=\"811.7957611\" color=\"#404040\" alpha=\"255\" label=\"811.796 m\"/>\n          <item value=\"1002.126862\" color=\"#808080\" alpha=\"255\" label=\"1002.13 m\"/>\n          <item value=\"1192.457962\" color=\"#c0c0c0\" alpha=\"255\" label=\"1192.46 m\"/>\n          <item value=\"1382.789062\" color=\"#ffffff\" alpha=\"255\" label=\"1382.79 m\"/>\n        </colorrampshader>\n      </rastershader>\n    </rasterrenderer>\n  </pipe>\n</qgis>\n",
         "units": "m",
         "vmax": 1382.7890625,
@@ -426,7 +425,6 @@
         "colormap": null,
         "floor": null,
         "kind": "reference",
-        "label": null,
         "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <renderer-v2 type=\"singleSymbol\" symbollevels=\"0\" forceraster=\"0\" enableorderby=\"0\" referencescale=\"-1\">\n    <symbols>\n      <symbol name=\"0\" type=\"line\" alpha=\"1\" force_rhr=\"0\" clip_to_extent=\"1\" frame_rate=\"10\" is_animated=\"0\">\n        <layer class=\"SimpleLine\" enabled=\"1\" locked=\"0\" pass=\"0\">\n          <Option type=\"Map\">\n            <Option name=\"line_color\" type=\"QString\" value=\"59,125,216,255\"/>\n        <Option name=\"line_width\" type=\"QString\" value=\"0.66\"/>\n        <Option name=\"line_width_unit\" type=\"QString\" value=\"MM\"/>\n            <Option name=\"style\" type=\"QString\" value=\"solid\"/>\n          </Option>\n        </layer>\n      </symbol>\n    </symbols>\n  </renderer-v2>\n</qgis>\n",
         "units": null,
         "vmax": null,
@@ -469,15 +467,14 @@
       "crs_authid": "EPSG:32617",
       "dataset_group": "Water depth",
       "dataset_uris": [
-        "s3://trid3nt-runs/01M2BE130GPVBN0HBW51FY1QT1/water_depth.dat"
+        "s3://trid3nt-runs/01M2EBK39ZK0YXRFDHTGZH5PRV/water_depth.dat"
       ],
-      "layer_id": "telemac-water_depth-01M2BE130GPVBN0HBW51FY1QT1",
+      "layer_id": "telemac-water_depth-01M2EBK39ZK0YXRFDHTGZH5PRV",
       "layer_type": "mesh",
       "legend": {
         "colormap": "ylgnbu",
         "floor": null,
         "kind": "mesh",
-        "label": "Max water depth",
         "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <mesh-renderer-settings>\n    <active-dataset-group scalar=\"0\" vector=\"-1\"/>\n    <scalar-settings group=\"0\" min-val=\"0\" max-val=\"9.9493\" opacity=\"1\" interpolation-method=\"no-resampling\">\n      <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"0\" maximumValue=\"9.9493\" labelPrecision=\"4\">\n        <item value=\"0\" color=\"#ffffd9\" alpha=\"255\" label=\"0 m\"/>\n        <item value=\"2.487325\" color=\"#c6e9b4\" alpha=\"255\" label=\"2.48732 m\"/>\n        <item value=\"4.97465\" color=\"#40b5c4\" alpha=\"255\" label=\"4.97465 m\"/>\n        <item value=\"7.461975\" color=\"#225da8\" alpha=\"255\" label=\"7.46197 m\"/>\n        <item value=\"9.9493\" color=\"#081d58\" alpha=\"255\" label=\"9.9493 m\"/>\n      </colorrampshader>\n    </scalar-settings>\n  </mesh-renderer-settings>\n  <name-to-global-index global-index=\"0\" name=\"Water depth\"/>\n</qgis>\n",
         "units": "m",
         "vmax": 9.9493,
@@ -490,7 +487,7 @@
       "reference_time": null,
       "role": "primary",
       "temporal": false,
-      "uri": "s3://trid3nt-runs/01M2BE130GPVBN0HBW51FY1QT1/r2d_rog.slf",
+      "uri": "s3://trid3nt-runs/01M2EBK39ZK0YXRFDHTGZH5PRV/r2d_rog.slf",
       "valid_from": null,
       "valid_to": null,
       "visible": true,
@@ -500,13 +497,12 @@
       "crs_authid": null,
       "dataset_group": null,
       "dataset_uris": [],
-      "layer_id": "telemac-outlet_hydrograph-01M2BE130GPVBN0HBW51FY1QT1",
+      "layer_id": "telemac-outlet_hydrograph-01M2EBK39ZK0YXRFDHTGZH5PRV",
       "layer_type": "vector",
       "legend": {
         "colormap": null,
         "floor": null,
         "kind": "reference",
-        "label": "Outlet hydrograph (m3/s)",
         "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <renderer-v2 type=\"singleSymbol\" symbollevels=\"0\" forceraster=\"0\" enableorderby=\"0\" referencescale=\"-1\">\n    <symbols>\n      <symbol name=\"0\" type=\"marker\" alpha=\"1\" force_rhr=\"0\" clip_to_extent=\"1\" frame_rate=\"10\" is_animated=\"0\">\n        <layer class=\"SimpleMarker\" enabled=\"1\" locked=\"0\" pass=\"0\">\n          <Option type=\"Map\">\n            <Option name=\"color\" type=\"QString\" value=\"59,125,216,255\"/>\n        <Option name=\"outline_color\" type=\"QString\" value=\"35,35,35,255\"/>\n        <Option name=\"outline_width\" type=\"QString\" value=\"0.26\"/>\n        <Option name=\"size\" type=\"QString\" value=\"2.4\"/>\n        <Option name=\"size_unit\" type=\"QString\" value=\"MM\"/>\n        <Option name=\"name\" type=\"QString\" value=\"circle\"/>\n            <Option name=\"style\" type=\"QString\" value=\"solid\"/>\n          </Option>\n        </layer>\n      </symbol>\n    </symbols>\n  </renderer-v2>\n</qgis>\n",
         "units": "m3/s",
         "vmax": null,
@@ -519,7 +515,7 @@
       "reference_time": null,
       "role": "primary",
       "temporal": false,
-      "uri": "s3://trid3nt-runs/01M2BE130GPVBN0HBW51FY1QT1/outlet_hydrograph.geojson",
+      "uri": "s3://trid3nt-runs/01M2EBK39ZK0YXRFDHTGZH5PRV/outlet_hydrograph.geojson",
       "valid_from": null,
       "valid_to": null,
       "visible": true,
@@ -529,13 +525,12 @@
       "crs_authid": "EPSG:32617",
       "dataset_group": "WATER DEPTH",
       "dataset_uris": [],
-      "layer_id": "01M2BE6STMYKM1RWCW17ASMCAJ",
+      "layer_id": "01M2EBRS8XGCG1416X3YCVRRA0",
       "layer_type": "mesh",
       "legend": {
         "colormap": "ylgnbu",
         "floor": null,
         "kind": "mesh",
-        "label": "Max water depth",
         "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <mesh-renderer-settings>\n    <active-dataset-group scalar=\"0\" vector=\"-1\"/>\n    <scalar-settings group=\"0\" min-val=\"0\" max-val=\"9.9493\" opacity=\"1\" interpolation-method=\"no-resampling\">\n      <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"0\" maximumValue=\"9.9493\" labelPrecision=\"4\">\n        <item value=\"0\" color=\"#ffffd9\" alpha=\"255\" label=\"0 m\"/>\n        <item value=\"2.487325\" color=\"#c6e9b4\" alpha=\"255\" label=\"2.48732 m\"/>\n        <item value=\"4.97465\" color=\"#40b5c4\" alpha=\"255\" label=\"4.97465 m\"/>\n        <item value=\"7.461975\" color=\"#225da8\" alpha=\"255\" label=\"7.46197 m\"/>\n        <item value=\"9.9493\" color=\"#081d58\" alpha=\"255\" label=\"9.9493 m\"/>\n      </colorrampshader>\n    </scalar-settings>\n  </mesh-renderer-settings>\n  <name-to-global-index global-index=\"0\" name=\"WATER DEPTH\"/>\n</qgis>\n",
         "units": "m",
         "vmax": 9.9493,
@@ -545,10 +540,10 @@
       "opacity": null,
       "origin": null,
       "quantity": "water_depth",
-      "reference_time": "2026-09-12T18:28:13+00:00",
+      "reference_time": "2026-09-13T21:43:21+00:00",
       "role": "primary",
       "temporal": false,
-      "uri": "s3://trid3nt-runs/01M2BE130GPVBN0HBW51FY1QT1/r2d_rog.slf",
+      "uri": "s3://trid3nt-runs/01M2EBK39ZK0YXRFDHTGZH5PRV/r2d_rog.slf",
       "valid_from": null,
       "valid_to": null,
       "visible": true,

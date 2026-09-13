@@ -77,31 +77,31 @@ It publishes these layers onto the canvas:
 
 ## The proving run
 
-Run `01M2BE130GPVBN0HBW51FY1QT1`, 2026-09-12T18:31:17.549263+00:00, 254.555 s, at commit `9cdbf9d171078d872e16d42d88935951541ab267-dirty`.
+Run `01M2EBK39ZK0YXRFDHTGZH5PRV`, 2026-09-13T21:46:25.049222+00:00, 253.171 s, at commit `5ff259cad6cedab2d12a68e79c663b99b1499884-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M2BE130GPVBN0HBW51FY1QT1)](telemac_rain_on_grid/telemac_rain_on_grid.png)
+![Every layer the run published, stacked and framed on the result (run 01M2EBK39ZK0YXRFDHTGZH5PRV)](telemac_rain_on_grid/telemac_rain_on_grid.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M2BE130GPVBN0HBW51FY1QT1)*
+*Every layer the run published, stacked and framed on the result (run 01M2EBK39ZK0YXRFDHTGZH5PRV)*
 
-![The solve, frame by frame - flow_dynamics (run 01M2BE130GPVBN0HBW51FY1QT1)](telemac_rain_on_grid/telemac_rain_on_grid_animation_flow_dynamics.gif)
+![The solve, frame by frame - flow_dynamics (run 01M2EBK39ZK0YXRFDHTGZH5PRV)](telemac_rain_on_grid/telemac_rain_on_grid_animation_flow_dynamics.gif)
 
-*The solve, frame by frame - flow_dynamics (run 01M2BE130GPVBN0HBW51FY1QT1)*
+*The solve, frame by frame - flow_dynamics (run 01M2EBK39ZK0YXRFDHTGZH5PRV)*
 
-![The solve, frame by frame - inundation_depth (run 01M2BE130GPVBN0HBW51FY1QT1)](telemac_rain_on_grid/telemac_rain_on_grid_animation_inundation_depth.gif)
+![The solve, frame by frame - inundation_depth (run 01M2EBK39ZK0YXRFDHTGZH5PRV)](telemac_rain_on_grid/telemac_rain_on_grid_animation_inundation_depth.gif)
 
-*The solve, frame by frame - inundation_depth (run 01M2BE130GPVBN0HBW51FY1QT1)*
+*The solve, frame by frame - inundation_depth (run 01M2EBK39ZK0YXRFDHTGZH5PRV)*
 
-![flow dynamics peak frame (run 01M2BE130GPVBN0HBW51FY1QT1)](telemac_rain_on_grid/telemac_rain_on_grid_flow_dynamics_peak_frame.png)
+![flow dynamics peak frame (run 01M2EBK39ZK0YXRFDHTGZH5PRV)](telemac_rain_on_grid/telemac_rain_on_grid_flow_dynamics_peak_frame.png)
 
-*flow dynamics peak frame (run 01M2BE130GPVBN0HBW51FY1QT1)*
+*flow dynamics peak frame (run 01M2EBK39ZK0YXRFDHTGZH5PRV)*
 
-![inundation depth peak frame (run 01M2BE130GPVBN0HBW51FY1QT1)](telemac_rain_on_grid/telemac_rain_on_grid_inundation_depth_peak_frame.png)
+![inundation depth peak frame (run 01M2EBK39ZK0YXRFDHTGZH5PRV)](telemac_rain_on_grid/telemac_rain_on_grid_inundation_depth_peak_frame.png)
 
-*inundation depth peak frame (run 01M2BE130GPVBN0HBW51FY1QT1)*
+*inundation depth peak frame (run 01M2EBK39ZK0YXRFDHTGZH5PRV)*
 
-![outlet hydrograph - the chart the run persisted (run 01M2BE130GPVBN0HBW51FY1QT1)](telemac_rain_on_grid/telemac_rain_on_grid_chart_outlet_hydrograph.png)
+![outlet hydrograph - the chart the run persisted (run 01M2EBK39ZK0YXRFDHTGZH5PRV)](telemac_rain_on_grid/telemac_rain_on_grid_chart_outlet_hydrograph.png)
 
-*outlet hydrograph - the chart the run persisted (run 01M2BE130GPVBN0HBW51FY1QT1)*
+*outlet hydrograph - the chart the run persisted (run 01M2EBK39ZK0YXRFDHTGZH5PRV)*
 
 ### The sheet it filled
 
@@ -145,5 +145,5 @@ await TOOL_REGISTRY['telemac_rain_on_grid'].fn(
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2BE130GPVBN0HBW51FY1QT1` and commit `9cdbf9d171078d872e16d42d88935951541ab267-dirty`. The full argument record is [`telemac_rain_on_grid/run.json`](telemac_rain_on_grid/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2EBK39ZK0YXRFDHTGZH5PRV` and commit `5ff259cad6cedab2d12a68e79c663b99b1499884-dirty`. The full argument record is [`telemac_rain_on_grid/run.json`](telemac_rain_on_grid/run.json).
 

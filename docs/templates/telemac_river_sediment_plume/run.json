@@ -1,7 +1,7 @@
 {
   "tool": "telemac_river_sediment_plume",
   "run_id": "01M2BDQRCDCN19CKCTJ4XN6XST",
-  "commit": "9cdbf9d171078d872e16d42d88935951541ab267-dirty",
+  "commit": "5ff259cad6cedab2d12a68e79c663b99b1499884-dirty",
   "recorded_at": "2026-09-12T18:23:23.392075+00:00",
   "engine": "telemac",
   "wall_seconds": 28.009,
