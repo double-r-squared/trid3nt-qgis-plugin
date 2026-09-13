@@ -20,7 +20,7 @@ from trid3nt_server.gates import confirm
 from trid3nt_server.gates.pending import _PENDING_CONFIRMATIONS
 from trid3nt_server.server import config
 from trid3nt_server.server.dispatch import emitter as dispatch
-from trid3nt_server.server.errors import CodeExecApprovalTimeoutError, CodeExecConfirmationCancelledError
+from trid3nt_server.server.errors import CodeExecConfirmationCancelledError, GateConfirmationTimeoutError
 
 
 class _FakeWS:
@@ -82,10 +82,11 @@ async def test_cancel_blocks_dispatch_and_leaks_nothing() -> None:
 async def test_an_unanswered_card_expires_typed(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("TRID3NT_CODE_EXEC_APPROVAL_TIMEOUT_S", "0.2")
     ws, state = _FakeWS(), _FakeState()
-    with pytest.raises(CodeExecApprovalTimeoutError) as excinfo:
+    with pytest.raises(GateConfirmationTimeoutError) as excinfo:
         await confirm._gate_on_code_exec(ws, state, {"code": "result = 1"})  # type: ignore[arg-type]
-    assert excinfo.value.error_code == "CODE_EXEC_APPROVAL_TIMEOUT"
+    assert excinfo.value.error_code == "CONFIRMATION_TIMEOUT"
     assert excinfo.value.retryable is False
+    assert "declin" not in str(excinfo.value).lower()
     assert any(e.get("type") == "code-exec-request" for e in ws.sent)
     err = next(e for e in ws.sent if e.get("type") == "error")
     assert err["payload"]["error_code"] == "CONFIRMATION_TIMEOUT"

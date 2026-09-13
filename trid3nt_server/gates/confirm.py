@@ -23,7 +23,7 @@ from trid3nt_server.gates.cards import _build_credential_request_payload, _build
 from trid3nt_server.gates.cards.estimate import call_provider
 from trid3nt_server.gates.pending import _pop_pending_confirmation, _register_pending_confirmation
 from trid3nt_server.server.config import CODE_EXEC_CONFIRM_TIMEOUT_SECONDS, _code_exec_approval_timeout_s
-from trid3nt_server.server.errors import CodeExecApprovalTimeoutError, SpatialInputInvalidResponseError
+from trid3nt_server.server.errors import GateConfirmationTimeoutError, SpatialInputInvalidResponseError
 from trid3nt_server.server.interactions import _pop_pending_credential, _register_pending_credential
 from trid3nt_server.server.session.state import SessionState
 from trid3nt_server.server.spatial import _pop_pending_region_choice, _pop_pending_spatial_input, _register_pending_region_choice, _register_pending_spatial_input
@@ -107,8 +107,8 @@ async def _gate_on_confirm(
 ) -> tuple[bool, dict]:
     """The ONE gate engine, driven by a tool's declared ``GateSpec``.
 
-    Fail-OPEN on an estimate fault or a ``None`` envelope; fail-CLOSED on a
-    timeout or an explicit cancel."""
+    Fail-OPEN on an estimate fault or a ``None`` envelope; fail-CLOSED on an
+    explicit cancel, and on a deadline nobody answered, which RAISES."""
     # Build the confirm card via the tool's declared ESTIMATE provider, a pure
     # function named by dotted path and imported lazily. Any failure fails OPEN:
     # the gate must never mask a parameter problem behind a confusing confirm
@@ -160,9 +160,10 @@ async def _gate_on_confirm(
         gate_spec.kind,
     )
 
+    wait_s = _gate_wait_timeout(CODE_EXEC_CONFIRM_TIMEOUT_SECONDS)
     try:
         decision_payload: PayloadConfirmationEnvelopePayload = await asyncio.wait_for(
-            fut, timeout=_gate_wait_timeout(CODE_EXEC_CONFIRM_TIMEOUT_SECONDS)
+            fut, timeout=wait_s
         )
     except asyncio.TimeoutError:
         logger.warning(
@@ -178,7 +179,12 @@ async def _gate_on_confirm(
             f"{tool_name} parameter-confirmation gate timed out; "
             "the solver did not run",
         )
-        return False, params
+        # Nobody answered, which is nobody's decision: the typed timeout keeps
+        # the call fail-closed while reading to the model as the card expiring,
+        # never as the user declining it.
+        raise GateConfirmationTimeoutError(
+            "parameter-confirmation card", tool_name, wait_s
+        ) from None
     finally:
         _pop_pending_confirmation(warning_id)
 
@@ -322,12 +328,13 @@ async def _maybe_gate_on_payload_warning(
 ) -> tuple[bool, dict]:
     """Run the payload-warning gate before dispatching ``tool_name``.
 
-    Never raises: a gate fault logs and falls through to dispatch, the gate
-    being a UX nudge that must not break the tool it guards."""
+    A gate FAULT never raises: it logs and falls through to dispatch, the gate
+    being a UX nudge that must not break the tool it guards. A card nobody
+    answers raises the typed timeout."""
     # Returns (should_dispatch, effective_params): (True, params) when no
     # warning is needed or the user proceeds; (True, revised_args) on
-    # narrow_scope; (False, params) on cancel or timeout, where the caller
-    # surfaces a typed failure to chat. An audit entry is appended to
+    # narrow_scope; (False, params) on cancel, where the caller surfaces a typed
+    # decline to chat. An audit entry is appended to
     # ``state.payload_warning_audit_log`` on both emission AND decision.
     entry = TOOL_REGISTRY.get(tool_name)
     if entry is None:
@@ -423,9 +430,10 @@ async def _maybe_gate_on_payload_warning(
 
     # Await the confirmation (TTL on the envelope is advisory; we honour it
     # with an asyncio timeout so the dispatch coroutine doesn't hang forever).
+    wait_s = _gate_wait_timeout(warning_payload.ttl_seconds)
     try:
         decision_payload: PayloadConfirmationEnvelopePayload = await asyncio.wait_for(
-            fut, timeout=_gate_wait_timeout(warning_payload.ttl_seconds)
+            fut, timeout=wait_s
         )
     except asyncio.TimeoutError:
         audit_entry["decision"] = "timeout"
@@ -441,7 +449,11 @@ async def _maybe_gate_on_payload_warning(
             "CONFIRMATION_TIMEOUT",
             f"tool {tool_name!r} payload-warning gate timed out",
         )
-        return False, params
+        # The audit row says timeout and so does the model's narration: a card
+        # that expired is not the user cancelling the fetch.
+        raise GateConfirmationTimeoutError(
+            "payload-size warning card", tool_name, wait_s
+        ) from None
     finally:
         _pop_pending_confirmation(warning_id)
 
@@ -490,7 +502,8 @@ async def _gate_on_code_exec(
     """Confirm gate for ``run_pyqgis`` -- MANDATORY, fail-closed.
 
     The user must approve the EXACT code before the session runs it;
-    ``narrow_scope`` is not offered for a code snippet and is treated as a cancel."""
+    ``narrow_scope`` is not offered for a code snippet and is treated as a
+    cancel, and a card nobody answers raises the typed timeout."""
     # Returns (should_dispatch, effective_params): on approval, params plus
     # ``confirmed`` and the ``code_exec_id`` the request card carried, so the
     # request and result cards correlate. On cancel, (False, params), and the
@@ -540,10 +553,6 @@ async def _gate_on_code_exec(
             code_exec_id,
             approval_timeout_s,
         )
-        # The WS envelope's ``error_code`` is a closed Literal in the read-only
-        # contracts, so the wire code stays the contract-valid
-        # CONFIRMATION_TIMEOUT; the DISTINCT typed code raised below rides the
-        # function_response surface, which is free-form.
         await _send_error(
             websocket,
             state.session_id,
@@ -553,8 +562,11 @@ async def _gate_on_code_exec(
         )
         # Typed resolution of the parked tool call: propagates to the tool
         # dispatch except-handler -> summarize_tool_result(error=...) -> a
-        # structured function_response the LLM narrates -- the turn COMPLETES.
-        raise CodeExecApprovalTimeoutError(code_exec_id, approval_timeout_s)
+        # structured function_response the LLM narrates -- the turn COMPLETES,
+        # reading the card as expired rather than as a refusal to run the code.
+        raise GateConfirmationTimeoutError(
+            "code-approval card", f"run_pyqgis {code_exec_id}", approval_timeout_s
+        ) from None
     finally:
         # Runs on approve, deny, timeout, AND CancelledError (session close /
         # turn cancel) -- the registry never leaks a dead future.

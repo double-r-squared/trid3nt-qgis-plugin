@@ -61,8 +61,12 @@ and re-presents, `cancel` refuses the run.
   `SOLVER_CONFIRMATION_CANCELLED`). Three seams read its `declined` marker: the
   pipeline emitter marks the step CANCELLED rather than failed, the result
   summarizer hands the model `status="declined"` naming the card and what it
-  asked, and the circuit breaker leaves the tool's retry budget alone. A
-  card nobody ANSWERS is a different thing and keeps its timeout code.
+  asked, and the circuit breaker leaves the tool's retry budget alone.
+- A TIMEOUT IS NOT A DECLINE. A card nobody answers before its deadline raises
+  `GateConfirmationTimeoutError` at all three gates: `CONFIRMATION_TIMEOUT` on
+  the wire and on the model's result, the step marked FAILED rather than
+  cancelled, and a narration that says the card expired unanswered and never
+  that the user declined it.
 - INPUT_REQUIRED has two modes (AUTO labeled-defaults vs USER-GATED); the
   model never invents physics for un-fetchable inputs.
 - A mounted tool never shadows a registered one, and never outlives the thing

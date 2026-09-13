@@ -1,9 +1,10 @@
-"""A decline is not an error, at every seam a declined gate card reaches.
+"""A decline is not an error, and a timeout is not a decline.
 
 Each of the three gates - the payload-size warning, the ``run_pyqgis`` code
 approval and the run confirmation - answers a cancel with ITS OWN wire code, a
 pipeline step marked cancelled rather than failed, and a plain declined result
-for the model. The circuit breaker leaves the declined tool's budget alone."""
+for the model; the circuit breaker leaves the declined tool's budget alone. A
+card nobody answers is a different outcome at all three of those seams."""
 
 from __future__ import annotations
 
@@ -23,6 +24,7 @@ from trid3nt_server.gates.pending import _PENDING_CONFIRMATIONS
 from trid3nt_server.server import SessionState, _invoke_tool_via_emitter
 from trid3nt_server.server.errors import (
     CodeExecConfirmationCancelledError,
+    GateConfirmationTimeoutError,
     PayloadWarningCancelledError,
     SolverConfirmationCancelledError,
     UserDeclinedError,
@@ -33,7 +35,7 @@ from trid3nt_server.tools import TOOL_REGISTRY, RegisteredTool
 #: The three declines, each with the tool whose gate raises it and the code it
 #: must carry, so every assertion below runs against all three.
 DECLINES = [
-    ("payload_warning_decline_tool", PayloadWarningCancelledError, "PAYLOAD_WARNING_CANCELLED"),
+    ("payload_warning_gate_tool", PayloadWarningCancelledError, "PAYLOAD_WARNING_CANCELLED"),
     ("run_pyqgis", CodeExecConfirmationCancelledError, "CODE_EXEC_CANCELLED"),
     ("fetch_dem", SolverConfirmationCancelledError, "SOLVER_CONFIRMATION_CANCELLED"),
 ]
@@ -41,7 +43,7 @@ DECLINES = [
 #: Params that reach each tool's gate without touching the network: the gate
 #: answers before any tool body runs.
 PARAMS: dict[str, dict] = {
-    "payload_warning_decline_tool": {"mb": 50.0},
+    "payload_warning_gate_tool": {"mb": 50.0},
     "run_pyqgis": {"code": "result = 1 + 1", "rationale": "proof"},
     "fetch_dem": {"bbox": [-114.48, 42.55, -114.46, 42.57]},
 }
@@ -65,7 +67,7 @@ def _cap_gate_waits(monkeypatch) -> None:
 def _register_the_payload_warning_tool() -> None:
     """Add the one dummy beside the real registry; the other two gates are the
     real ``run_pyqgis`` and ``fetch_dem`` entries."""
-    name = "payload_warning_decline_tool"
+    name = "payload_warning_gate_tool"
     TOOL_REGISTRY[name] = RegisteredTool(
         metadata=AtomicToolMetadata(
             name=name,
@@ -115,6 +117,23 @@ async def _decline(tool_name: str) -> tuple[_FakeWS, BaseException]:
     finally:
         await canceller
     return ws, excinfo.value
+
+
+async def _expire(tool_name: str) -> tuple[_FakeWS, BaseException]:
+    """Dispatch ``tool_name`` and answer NOTHING; return the wire + error."""
+    ws, state = _FakeWS(), SessionState(session_id=new_ulid())
+    with pytest.raises(GateConfirmationTimeoutError) as excinfo:
+        await _invoke_tool_via_emitter(ws, state, tool_name, dict(PARAMS[tool_name]))
+    assert not _PENDING_CONFIRMATIONS, "an expired card left its future registered"
+    return ws, excinfo.value
+
+
+def _expired(tool_name: str, monkeypatch) -> tuple[_FakeWS, BaseException]:
+    """``_expire`` with both deadline knobs tightened - the code-approval card
+    reads its own, the other two the shared cap."""
+    monkeypatch.setenv("TRID3NT_GATE_WAIT_CAP_S", "0.2")
+    monkeypatch.setenv("TRID3NT_CODE_EXEC_APPROVAL_TIMEOUT_S", "0.2")
+    return asyncio.run(_expire(tool_name))
 
 
 @pytest.mark.parametrize("tool_name,exc_type,code", DECLINES)
@@ -175,3 +194,55 @@ def test_a_decline_does_not_consume_the_tools_retry_budget() -> None:
     for _ in range(5):
         breaker.record_failure("fetch_dem", SolverConfirmationCancelledError("fetch_dem"))
     assert breaker.is_tripped("fetch_dem") is False
+
+
+@pytest.mark.parametrize("tool_name,exc_type,code", DECLINES)
+def test_an_unanswered_card_carries_the_timeout_code_not_the_decline_code(
+    tool_name: str, exc_type: type, code: str, monkeypatch
+) -> None:
+    """Nobody answered, so the wire and the raised error both say
+    CONFIRMATION_TIMEOUT - never the gate's cancel code."""
+    ws, exc = _expired(tool_name, monkeypatch)
+    assert isinstance(exc, GateConfirmationTimeoutError)
+    assert not isinstance(exc, UserDeclinedError)
+    assert exc.error_code == "CONFIRMATION_TIMEOUT"
+    errors = [e for e in ws.sent if e["type"] == "error"]
+    assert errors, f"{tool_name} expired without an error envelope"
+    assert errors[-1]["payload"]["error_code"] == "CONFIRMATION_TIMEOUT"
+    assert not any(e["payload"]["error_code"] == code for e in errors)
+    assert ErrorPayload(error_code="CONFIRMATION_TIMEOUT", message="x")
+
+
+@pytest.mark.parametrize("tool_name,exc_type,code", DECLINES)
+def test_an_unanswered_card_fails_its_step_where_a_decline_cancels_it(
+    tool_name: str, exc_type: type, code: str, monkeypatch
+) -> None:
+    """The tool still gets a step; an expired card FAILS it, which is the state a
+    decline never uses."""
+    ws, _exc = _expired(tool_name, monkeypatch)
+    states = [e for e in ws.sent if e["type"] == "pipeline-state"]
+    assert states, f"{tool_name} expired without minting a step"
+    steps = states[-1]["payload"]["steps"]
+    mine = [s for s in steps if s["tool_name"] == tool_name]
+    assert mine, steps
+    assert mine[-1]["state"] == "failed", mine[-1]
+    assert not any(s["state"] == "cancelled" for s in steps), steps
+
+
+@pytest.mark.parametrize("tool_name,exc_type,code", DECLINES)
+def test_the_model_reads_an_unanswered_card_not_a_decline(
+    tool_name: str, exc_type: type, code: str, monkeypatch
+) -> None:
+    """The model's tool result says the card went unanswered and never says the
+    user declined, so a deadline is not narrated as a decision."""
+    _ws, exc = _expired(tool_name, monkeypatch)
+    summary = summarize_tool_result(tool_name, None, error=exc)
+    assert summary["status"] == "error"
+    assert summary["error_code"] == "CONFIRMATION_TIMEOUT"
+    assert summary["retryable"] is False
+    assert "unanswered" in summary["message"]
+    assert "declin" not in summary["message"].lower()
+    # And the decline's own narration is the one it never borrows.
+    declined = summarize_tool_result(tool_name, None, error=exc_type(tool_name))
+    assert summary["message"] != declined["message"]
+    assert declined["status"] == "declined"

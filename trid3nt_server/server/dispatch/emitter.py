@@ -19,12 +19,12 @@ from trid3nt_server.server.config import _env_flag
 from trid3nt_server.server.dispatch.aoi import pin_case_aoi_from_solve
 from trid3nt_server.server.dispatch.persist import _VALID_ERROR_CODES, _persist_chart_record, _persist_chat_turn, _persist_tool_card
 from trid3nt_server.server.dispatch.results import _run_to_completion_shielded
-from trid3nt_server.server.errors import CodeExecConfirmationCancelledError, PayloadWarningCancelledError, SolverConfirmationCancelledError, ToolNotFoundError, UserDeclinedError
+from trid3nt_server.server.errors import CodeExecConfirmationCancelledError, GateConfirmationTimeoutError, PayloadWarningCancelledError, SolverConfirmationCancelledError, ToolNotFoundError, UserDeclinedError
 from trid3nt_server.server.session.case_state import _persist_case_layer_handles, _persist_case_loaded_layers, _turn_case_bbox, _turn_case_id
 from trid3nt_server.server.session.state import SessionState
 from trid3nt_server.server.spatial import _is_finite_bbox4, _last_zoom_to_bbox
 from trid3nt_server.server.turn.wire import _emit_turn_complete, _send_error
-from typing import Any, NoReturn
+from typing import Any, Awaitable, Callable
 from websockets.asyncio.server import ServerConnection
 
 logger = logging.getLogger("trid3nt_server.server")
@@ -439,20 +439,33 @@ async def _invoke_tool_via_emitter(
     # input the model sent both live and at completion.
     _original_tool_args = dict(params)
 
-    async def _declined(exc: BaseException) -> NoReturn:
-        # A gate the user declined still gets a CARD: mint this tool's step and
-        # end it through the emitter, which marks a declined step cancelled and
-        # leaves it as the dispatch's terminal step. The exception then travels
-        # the same path any tool exception does. The trailing raise keeps the
-        # gate FAIL-CLOSED: an emitter that returned instead of re-raising must
-        # not let the declined tool run.
-        async def _decline() -> Any:
-            raise exc
+    async def _through_gate(
+        gate: Awaitable[tuple[bool, dict]],
+        decline: Callable[[dict], BaseException],
+    ) -> dict:
+        # Returns the approved params, or ends this tool at the gate. Either
+        # refusal still gets a CARD: mint this tool's step and end it through
+        # the emitter, which marks a DECLINED step cancelled and a card nobody
+        # answered failed, and leaves it as the dispatch's terminal step. The
+        # exception then travels the same path any tool exception does. The
+        # trailing raise keeps the gate FAIL-CLOSED: an emitter that returned
+        # instead of re-raising must not let the refused tool run.
+        try:
+            should_run, effective = await gate
+        except GateConfirmationTimeoutError as expired:
+            refusal: BaseException = expired
+        else:
+            if should_run:
+                return effective
+            refusal = decline(effective)
+
+        async def _refuse() -> Any:
+            raise refusal
 
         await state.emitter.emit_tool_call(
-            name=entry.metadata.name, tool_name=tool_name, invoke=_decline
+            name=entry.metadata.name, tool_name=tool_name, invoke=_refuse
         )
-        raise exc
+        raise refusal
 
     # Bind this dispatch to the turn's Case ONCE, up front. The
     # .qgs routing, tool-card persist, and layer attribution below all use
@@ -470,15 +483,14 @@ async def _invoke_tool_via_emitter(
     # ``payload_mb_estimator_name`` and the estimate exceeds the warning
     # threshold, emit ``tool-payload-warning`` and await
     # ``tool-payload-confirmation``. Skip / revise dispatch per the user's
-    # decision. No-op when the tool didn't declare an estimator.
-    should_dispatch, params = await _maybe_gate_on_payload_warning(
-        websocket, state, tool_name, params
+    # decision. No-op when the tool didn't declare an estimator. A cancel raises
+    # PayloadWarningCancelledError so the model reads a DECLINED result naming
+    # the card instead of {"status": "no_result"}, which it cannot interpret.
+    # retryable=False: the user chose not to fetch this.
+    params = await _through_gate(
+        _maybe_gate_on_payload_warning(websocket, state, tool_name, params),
+        lambda _approved: PayloadWarningCancelledError(tool_name),
     )
-    if not should_dispatch:
-        # Raises PayloadWarningCancelledError so the model reads a DECLINED
-        # result naming the card instead of {"status": "no_result"}, which it
-        # cannot interpret. retryable=False: the user chose not to fetch this.
-        await _declined(PayloadWarningCancelledError(tool_name))
 
     # run_pyqgis confirm gate: running arbitrary Python in the user's session
     # is a consequential action -- the user MUST approve the exact code first.
@@ -486,8 +498,8 @@ async def _invoke_tool_via_emitter(
     # ``pending_payload_warnings`` future seam (code_exec_id == warning_id),
     # and on approval injects ``confirmed=True`` + the minted ``code_exec_id``
     # into params so the tool body sends the session its request. Fail-closed:
-    # cancel/timeout raises a typed, non-retryable error so the model narrates
-    # the decline and does not re-run the same snippet.
+    # a cancel raises a typed, non-retryable decline the model narrates, and an
+    # unanswered card its own timeout; neither re-runs the same snippet.
     #
     # STRIP a model-supplied confirmed/code_exec_id BEFORE gating: the gate is
     # server-owned, so user confirmation is mandatory on every model-issued
@@ -496,13 +508,12 @@ async def _invoke_tool_via_emitter(
     if tool_name == "run_pyqgis":
         params.pop("confirmed", None)
         params.pop("code_exec_id", None)
-        should_run, params = await _gate_on_code_exec(websocket, state, params)
-        if not should_run:
-            await _declined(
-                CodeExecConfirmationCancelledError(
-                    params.get("code_exec_id", "unknown")
-                )
-            )
+        params = await _through_gate(
+            _gate_on_code_exec(websocket, state, params),
+            lambda refused: CodeExecConfirmationCancelledError(
+                refused.get("code_exec_id", "unknown")
+            ),
+        )
 
     # Centralized kwarg sweep: the model routinely invents kwargs that don't
     # exist on our tools (``run_name``, ``scenario_id``,
@@ -577,11 +588,10 @@ async def _invoke_tool_via_emitter(
     if _gate_spec is not None and not isinstance(entry, _ReuseEntry):
         if _gate_spec.kind == "solver":
             params.pop("confirmed", None)
-        should_run, params = await _gate_with_turn_memory(
-            websocket, state, tool_name, params
+        params = await _through_gate(
+            _gate_with_turn_memory(websocket, state, tool_name, params),
+            lambda _approved: SolverConfirmationCancelledError(tool_name),
         )
-        if not should_run:
-            await _declined(SolverConfirmationCancelledError(tool_name))
 
     # Layer-handle indirection kills the URI-mangling class: every URI-consuming
     # param resolves through the session registry - a known handle to its

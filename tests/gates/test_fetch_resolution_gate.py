@@ -218,17 +218,18 @@ async def test_cancel_fails_closed() -> None:
 @pytest.mark.asyncio
 async def test_timeout_fails_closed(monkeypatch) -> None:
     from trid3nt_server import server
+    from trid3nt_server.server.errors import GateConfirmationTimeoutError
 
     monkeypatch.setattr(server, "CODE_EXEC_CONFIRM_TIMEOUT_SECONDS", 0)
-    # No client answers the card: the F6 local-lane gate would wait 24h, so the
-    # LANE C cap forces the honest timeout path quickly (a tight override of the
+    # No client answers the card: the local-lane gate would wait 24h, so the
+    # cap forces the honest timeout path quickly (a tight override of the
     # autouse 5s net keeps this pure-timeout assertion fast).
     monkeypatch.setenv("TRID3NT_GATE_WAIT_CAP_S", "0.05")
     ws, state = _FakeWS(), _FakeState()
-    should_run, _ = await server._gate_on_solver_confirm(  # type: ignore[arg-type]
-        ws, state, "fetch_topobathy", _fetch_params()
-    )
-    assert should_run is False
+    with pytest.raises(GateConfirmationTimeoutError):
+        await server._gate_on_solver_confirm(  # type: ignore[arg-type]
+            ws, state, "fetch_topobathy", _fetch_params()
+        )
     err = next(e for e in ws.sent if e.get("type") == "error")
     assert err["payload"]["error_code"] == "CONFIRMATION_TIMEOUT"
     # No stuck pending entry after the timeout (the finally pops it).
