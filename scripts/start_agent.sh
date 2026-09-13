@@ -53,6 +53,11 @@ export TRID3NT_AGENT_HOST="${TRID3NT_AGENT_HOST:-0.0.0.0}"
 # Python owns log rotation at this exact path (main.py's RotatingFileHandler).
 export TRID3NT_AGENT_LOG_FILE="${TRID3NT_AGENT_LOG_FILE:-$LOG_FILE}"
 
+# The worker images live in the ROOTLESS docker engine, whose socket is per-user.
+# A CLI context is a client-side setting the daemon never inherits, so the
+# endpoint is STATED here; set DOCKER_HOST yourself to reach any other engine.
+export DOCKER_HOST="${DOCKER_HOST:-unix://${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/docker.sock}"
+
 # Appended to the local model's system prompt (openai path only).
 export TRID3NT_OPENAI_EXTRA_SYSTEM="${TRID3NT_OPENAI_EXTRA_SYSTEM:-Never end a reply with an offer, suggestion, or recommendation for a next step (no 'Would you like...', no 'I can also...'). State what was done or found, then stop. The user decides what happens next. Fetch and composer tools publish their own layers. If a fetch returns no data, say so and stop.}"
 

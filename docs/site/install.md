@@ -237,10 +237,12 @@ make minio                                   # MinIO + bucket init (if not alrea
 sg docker -c 'bash scripts/start_agent.sh'   # agent (WS :8765, HTTP :8766) -- inside the docker group
 ```
 
-Each start script is stop-then-start (kills a prior instance via its pidfile), writes a PID to
-`run/*.pid`, and logs to `logs/*.log`. `make agent` also works but does not enter the docker
-group -- use the `sg docker -c` form so the agent can reach the docker socket for the
-container-backed engines. `make up` runs `minio` then `agent` in one shot (same caveat: prefix
+`start_agent.sh` exports `DOCKER_HOST` pointing at the rootless docker socket when you have not
+set it, since that is the engine holding the locally built worker images -- set it yourself
+(`unix:///var/run/docker.sock`) for a rootful daemon. Each start script is stop-then-start (kills
+a prior instance via its pidfile), writes a PID to `run/*.pid`, and logs to `logs/*.log`. `make
+agent` also works but does not enter the docker group -- use the `sg docker -c` form so the agent
+can reach the docker socket for the container-backed engines. `make up` runs `minio` then `agent` in one shot (same caveat: prefix
 with `sg docker -c` if your shell has not picked up the `docker` group yet).
 
 Check and stop:

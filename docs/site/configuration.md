@@ -53,6 +53,7 @@ The variables below are the complete shipped file, grouped by concern.
 | `TRID3NT_SWAN_IMAGE` | `trid3nt-local/swan:latest` | SWAN container image, built locally from `workers/swan/Dockerfile`. |
 | `TRID3NT_RUNS_DIR` | `<repo>/data/runs` | Host rundir root for local solves; mounted into engine containers at `/data`. The code default `/opt/grace2/runs` does not exist on a dev box -- set it. |
 | `TRID3NT_OQ_BIN` | `<repo>/venvs/agent/bin/oq` | Path to the OpenQuake `oq` CLI (installed into the agent venv). First run needs a one-time `oq engine --upgrade-db`. |
+| `DOCKER_HOST` | _(unset)_ | Docker endpoint the agent dispatches containers to. Unset, `scripts/start_agent.sh` states the rootless socket (`unix://$XDG_RUNTIME_DIR/docker.sock`), which is where the locally built worker images live; set it yourself for a rootful daemon (`unix:///var/run/docker.sock`) or a remote engine. |
 
 ## Meshing
 
