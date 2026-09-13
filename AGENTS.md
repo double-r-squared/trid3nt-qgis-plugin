@@ -41,9 +41,11 @@ touch, BEFORE writing code. Inherit the structure; do not improvise.
   the generated pages), `packet/` (the delivery renderers), `drivers/`
   (the live drive lane), `testing/` (the live-run harness and the
   canaries), `staging/` and `local/`. `docs/` - the manual, the directory
-  maps, the specs, the model, the generated template pages and the
-  ledgers. The repo carries the SYSTEM; the rulings record - what was
-  decided and why - is kept outside it.
+  maps, the model, the design pages and the generated template pages.
+  The repo carries the SYSTEM; the reading material - specs, proposals,
+  recipes, research and the three ledgers - sits in gitignored
+  `docs/local/`, backed up and off the remote, and the rulings record -
+  what was decided and why - is kept outside the repo entirely.
 
 ## The laws
 
@@ -77,7 +79,7 @@ touch, BEFORE writing code. Inherit the structure; do not improvise.
    parents[N] depths) moves WITH it - grep the old path to zero, clear
    bytecode after tree moves.
 5. Delete, don't disable. Deletions register in
-   docs/DELETION_LEDGER.md with trace evidence. Before deleting or
+   docs/local/DELETION_LEDGER.md with trace evidence. Before deleting or
    building around anything, verify the kickoff's load-bearing claims
    against the code and the ledger - kickoffs can carry stale
    premises, and a correct stop beats a wrong execution.

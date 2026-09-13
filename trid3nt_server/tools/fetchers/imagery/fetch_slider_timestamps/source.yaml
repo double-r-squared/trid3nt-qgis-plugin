@@ -20,8 +20,7 @@ docstring: |
   When to use:
       - "which GOES/VIIRS frames are available over this window?"
       - "what is the SLIDER cadence for this product?"
-      - snapping a requested animation window to the nearest real frames
-        (the frame-animation playground recipe's availability step).
+      - snapping a requested animation window to the nearest real frames.
 
   When NOT to use:
       - fetching the imagery itself (use the ``*_animation`` fetchers).

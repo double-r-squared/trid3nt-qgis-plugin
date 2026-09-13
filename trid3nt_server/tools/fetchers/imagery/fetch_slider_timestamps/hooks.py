@@ -1,7 +1,7 @@
 """slider_timestamps record hooks: the SLIDER availability index.
 
-One GET of the availability index, parsed and enriched into the availability and cadence
-dict the frame-animation recipe stands on. LIVE-NO-CACHE: the router short-circuits the
+One GET of the availability index, parsed and enriched into an availability and cadence
+dict. LIVE-NO-CACHE: the router short-circuits the
 cache, because the index turns over every few minutes."""
 
 from __future__ import annotations

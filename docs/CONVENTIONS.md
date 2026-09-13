@@ -25,7 +25,7 @@ structure it builds on.
 
 ## The spec
 
-A spec is ONE self-contained HTML page under `docs/specs/`, written before the
+A spec is ONE self-contained HTML page under `docs/local/specs/`, written before the
 work it commits to. One numbered section per concern; a vocabulary table when a
 term is load-bearing; the real surface quoted as code rather than paraphrased;
 mermaid for every diagram; plain language in place of pattern names. Everything

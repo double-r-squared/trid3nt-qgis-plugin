@@ -8,7 +8,7 @@ The dated MEASUREMENTS this folder used to carry - censuses, conformance walks,
 audits, LOC ledgers - are gone. A measurement is evidence about the day it was
 taken, and evidence is not something the repo keeps: what a measurement proved
 is stated as a constraint at the line it governs, as a requirement in
-`docs/model/`, or as a row in `docs/DELETION_LEDGER.md`, and the reading itself
+`docs/model/`, or as a row in `docs/local/DELETION_LEDGER.md`, and the reading itself
 is retaken by re-running the instrument.
 
 | what | written by | holds |

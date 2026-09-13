@@ -60,3 +60,6 @@ ollama/
 
 # dev tools: not product, not on the remote; the backup timer archives them
 dev/
+
+# the reading material - decisions, proposals, recipes, ledgers - local, backed up, off the remote
+docs/local/

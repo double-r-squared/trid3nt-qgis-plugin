@@ -10,7 +10,7 @@
 //
 // This seam exists because a bed is the one input a model cannot be honest
 // without and cannot check for itself. Every requirement below is a decision
-// from the bathymetry methodology (docs/research/bathymetry-sources.md), named
+// from the bathymetry methodology (docs/local/research/bathymetry-sources.md), named
 // in its doc, allocated to the code that embodies it and verified by a test
 // that exists.
 
