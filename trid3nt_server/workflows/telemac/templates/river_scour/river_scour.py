@@ -229,11 +229,10 @@ class STEERING(T2D):
 #: positive, erosion negative, so the ramp diverges about zero and the legend is
 #: ranged symmetrically about that centre.
 BED_EVOLUTION_STYLE = {"kind": "mesh", "ramp": "rdbu", "units": "m",
-                       "label": "Bed evolution", "center": 0.0}
+                       "center": 0.0}
 
 #: The marker-concentration field, on the ramp a dissolved tracer is read on.
-MARKER_STYLE = {"kind": "mesh", "ramp": "reds", "units": "mg/L",
-                "label": "Marker concentration"}
+MARKER_STYLE = {"kind": "mesh", "ramp": "reds", "units": "mg/L"}
 
 #: What the solved run is read for: the bed's cumulative evolution off GAIA's own
 #: result as the map and, over time, as the animation - the CHANGE is the answer,

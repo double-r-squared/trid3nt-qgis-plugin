@@ -52,7 +52,6 @@ output:
     kind: continuous
     ramp: rdylbu_r
     units: m
-    label: Water table depth (modelled)
     scale:
       policy: fixed
       range: [0, 50]

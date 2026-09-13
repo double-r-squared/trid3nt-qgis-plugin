@@ -67,19 +67,19 @@ output:
     by_param:
       param: variable
       map:
-        fm100: {kind: continuous, ramp: ylgn, units: '%', label: Gridmet fm100,
+        fm100: {kind: continuous, ramp: ylgn, units: '%',
                 scale: {policy: fixed, range: [0, 40], transform: linear}}
-        fm1000: {kind: continuous, ramp: ylgn, units: '%', label: Gridmet fm1000,
+        fm1000: {kind: continuous, ramp: ylgn, units: '%',
                  scale: {policy: fixed, range: [0, 40], transform: linear}}
-        pdsi: {kind: continuous, ramp: rdbu, units: index, label: Gridmet pdsi,
+        pdsi: {kind: continuous, ramp: rdbu, units: index,
                scale: {policy: fixed, range: [-6, 6], transform: linear}}
-        pr: {kind: continuous, ramp: blues, units: mm, label: Gridmet pr,
+        pr: {kind: continuous, ramp: blues, units: mm,
              scale: {policy: fixed, range: [0, 100], transform: linear}}
-        tmmn: {kind: continuous, ramp: rdylbu_r, units: K, label: Gridmet tmmn,
+        tmmn: {kind: continuous, ramp: rdylbu_r, units: K,
                scale: {policy: fixed, range: [250, 320], transform: linear}}
-        tmmx: {kind: continuous, ramp: rdylbu_r, units: K, label: Gridmet tmmx,
+        tmmx: {kind: continuous, ramp: rdylbu_r, units: K,
                scale: {policy: fixed, range: [250, 320], transform: linear}}
-        vs: {kind: continuous, units: 'm s-1', label: Gridmet vs,
+        vs: {kind: continuous, units: 'm s-1',
              scale: {policy: fixed, range: [0, 25], transform: linear}}
   emit_bbox: false             # the LayerURI omits bbox
 

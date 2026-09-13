@@ -126,7 +126,6 @@ _STYLE: dict = {
     "geometry": "point",
     "attribute": "damage_fraction",
     "units": "fraction of structure value",
-    "label": "Flood damage (HAZUS-style screening)",
     "classes": [list(c) for c in DAMAGE_FRACTION_CLASSES],
 }
 

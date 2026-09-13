@@ -1,8 +1,9 @@
 """``restyle_layer`` - THE presentation surface for layers already on the map. It
 cannot CREATE one (a uri nothing published is a typed refusal) and it cannot invent
 a renderer (every layer is drawn by one of four preset shapes, and a restyle only
-parameterises one of them). It takes a LIST because two layers being compared must
-be painted on ONE range or the picture is of two colour maps, not of a difference."""
+parameterises one of them). A title RENAMES the layer where the user reads it. It
+takes a LIST because two layers being compared must be painted on ONE range or the
+picture is of two colour maps, not of a difference."""
 
 from __future__ import annotations
 
@@ -17,6 +18,7 @@ from trid3nt_server.render.restyle import (
     RestyleError,
     apply_style,
     set_hidden,
+    set_name,
 )
 
 __all__ = ["restyle_layer"]
@@ -63,7 +65,7 @@ async def restyle_layer(
     shared_scale: bool = False,
     **_extra_ignored: Any,
 ) -> dict[str, Any]:
-    """RE-PAINT, RETITLE or HIDE layers already on the map - zero recompute.
+    """RE-PAINT, RENAME or HIDE layers already on the map - zero recompute.
 
     ROUTING: "rescale that layer", "the plume is all one colour, stretch it", "put
     these two on the same scale", "show that on a log scale", "change the colour
@@ -71,14 +73,17 @@ async def restyle_layer(
     layer", "bring it back". Presentation is DISPLAY STATE: nothing is re-solved and
     no number changes. NOT for creating a layer - it must already be published.
 
-    `hide` suppresses every other argument. `policy="fixed"` needs both min_value
-    and max_value; `data` scales to the layer's own values. `shared_scale` over
-    several layer_ids paints them all on ONE range. `clip_low`/`clip_high` are
-    percentile bounds. An omitted argument keeps what the layer was published with.
+    `title` RENAMES the layer in the user's layer list. `units` is the suffix on
+    every legend tick. `hide` suppresses every other argument. `policy="fixed"`
+    needs both min_value and max_value; `data` scales to the layer's own values.
+    `shared_scale` over several layer_ids paints them all on ONE range.
+    `clip_low`/`clip_high` are percentile bounds. An omitted argument keeps what
+    the layer was published with.
 
-    Returns `status="ok"` and, per layer, the resolved shape plus the LEGEND
-    SENTENCE naming the scale policy and its range - narrate that sentence, the
-    colours cannot say it. On failure `status="error"` with `error_code`.
+    Returns `status="ok"` and, per layer, the resolved shape, the new name when
+    a title renamed it, plus the LEGEND SENTENCE naming the scale policy and its
+    range - narrate that sentence, the colours cannot say it. On failure
+    `status="error"` with `error_code`.
     """
     ids = _ids(layer_ids)
     if not ids:
@@ -114,6 +119,16 @@ async def restyle_layer(
             f"nothing published {missing} - restyle_layer re-paints a layer that is "
             "already on the map; it cannot create one.")
 
+    if title is not None:
+        # The name rides the layer row the client already reads, so the canvas,
+        # the layer list and the case's persisted row carry one rename.
+        unnamed = [lid for lid in ids if not await set_name(lid, title)]
+        if unnamed:
+            return _error(
+                "LAYER_NOT_PUBLISHED",
+                f"nothing published {unnamed} - restyle_layer renames a layer "
+                "that is already on the map; it cannot create one.")
+
     value_range = ((float(min_value), float(max_value))
                    if min_value is not None and max_value is not None else None)
     clip = ((float(clip_low), float(clip_high))
@@ -130,15 +145,18 @@ async def restyle_layer(
         try:
             style = apply_style(layer_uri=uri, layer_id=layer_id,
                                 declared=_declared_row(uri), kind=kind, ramp=ramp,
-                                label=title, units=units, policy=policy,
+                                units=units, policy=policy,
                                 value_range=value_range, transform=transform,
                                 clip=clip, shared=shared)
         except RestyleError as exc:
             return _error(exc.error_code, str(exc))
-        out.append({"layer_id": layer_id, "kind": style.preset.kind,
-                    "ramp": style.preset.ramp,
-                    "range": list(style.range) if style.range else None,
-                    "legend": style.legend_note()})
+        row = {"layer_id": layer_id, "kind": style.preset.kind,
+               "ramp": style.preset.ramp,
+               "range": list(style.range) if style.range else None,
+               "legend": style.legend_note()}
+        if title is not None:
+            row["name"] = title
+        out.append(row)
     return {"status": "ok", "layers": out,
             "shared_scale": bool(shared is not None),
             "note": ("one range across every layer listed" if shared is not None
@@ -169,7 +187,7 @@ def _declared_row(uri: str | None) -> dict[str, Any] | None:
         return None
     ramp = legend.colormap if isinstance(legend.colormap, str) else None
     return {"kind": legend.kind, "ramp": ramp or presets.DEFAULT_RAMP,
-            "units": legend.units, "label": legend.label}
+            "units": legend.units}
 
 
 def _band_range(uri: str | None) -> tuple[float, float] | None:

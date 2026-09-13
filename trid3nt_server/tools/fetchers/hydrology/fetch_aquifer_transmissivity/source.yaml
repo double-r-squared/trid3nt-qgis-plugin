@@ -50,7 +50,6 @@ output:
   style:
     kind: continuous
     units: m^2/day
-    label: Surficial aquifer transmissivity (modelled)
     scale:
       policy: fixed
       range: [1, 1000]

@@ -1863,14 +1863,13 @@ async def test_legend_on_layer_uri_flows_to_session_state(
             vmin=0.0,
             vmax=4.0,
             units="damage_state",
-            label="Damage state",
         ),
     )
     await emitter.add_loaded_layer(layer)
 
     summary = _session_frames(sink)[-1]["payload"]["loaded_layers"][-1]
     assert summary["legend"] is not None
-    assert summary["legend"]["label"] == "Damage state"
+    assert summary["legend"]["units"] == "damage_state"
     assert summary["legend"]["kind"] == "classed"
     assert summary["legend"]["vmin"] == 0.0 and summary["legend"]["vmax"] == 4.0
 
@@ -1888,7 +1887,7 @@ async def test_legend_lifted_from_publish_stash_by_uri(
     cog_uri = "s3://b/x.tif"
     _stash_legend_for_uri(
         cog_uri,
-        LegendKey(kind="continuous", colormap="ylgnbu", vmin=0.0, vmax=3.0, label="Flood depth"),
+        LegendKey(kind="continuous", colormap="ylgnbu", vmin=0.0, vmax=3.0, units="m"),
     )
     # The wrap-site rebuilds the LayerURI from the bare string -> no legend on it.
     layer = LayerURI(

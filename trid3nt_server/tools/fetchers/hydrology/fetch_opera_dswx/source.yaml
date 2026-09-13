@@ -87,7 +87,6 @@ output:
   emit_bbox: true
   style:
     kind: classed
-    label: Surface water extent
 
 cache:
   ttl_class: static-30d

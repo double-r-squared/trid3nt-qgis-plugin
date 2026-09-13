@@ -117,7 +117,7 @@ def test_the_spec_declares_how_its_raster_is_drawn(spec):
 
     row = spec.output.style
     assert presets.from_row(row).kind == "continuous"
-    assert row["units"] and row["label"]
+    assert row["units"]
 
 
 def test_corpus_carries_natural_recharge_phrasings(spec):

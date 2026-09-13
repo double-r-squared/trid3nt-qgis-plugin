@@ -29,8 +29,7 @@ if not DEV.is_dir():
 
 #: The style row the synthetic field is drawn by - the same row the published
 #: raster of that quantity carries.
-STYLE = {"kind": "continuous", "ramp": "reds", "units": "mg/L",
-         "label": "Plume concentration"}
+STYLE = {"kind": "continuous", "ramp": "reds", "units": "mg/L"}
 
 #: Where the colorbar and its labels sit in the produced figure, as a fraction of
 #: image width. Everything the frames animate is left of this; a change to the
@@ -216,11 +215,11 @@ def test_the_published_range_is_found_by_quantity_not_by_the_title_it_was_painte
     evidence = {"layers": [
         {"name": "Max water depth (watershed mesh)", "layer_type": "raster",
          "quantity": "water_depth",
-         "legend": {"kind": "continuous", "label": "Max water depth",
+         "legend": {"kind": "continuous", "units": "m",
                     "vmin": 0.0, "vmax": 9.9493}},
         {"name": "Input: mesh bed", "layer_type": "raster",
          "quantity": None,
-         "legend": {"kind": "continuous", "label": "Elevation",
+         "legend": {"kind": "continuous", "units": "m",
                     "vmin": 621.0, "vmax": 1382.0}},
     ]}
     scale = packet.published_scale(
@@ -240,14 +239,14 @@ def test_a_quantity_the_run_never_published_has_nothing_to_agree_with():
     evidence = {"layers": [
         {"name": "Max water depth", "layer_type": "raster",
          "quantity": "water_depth",
-         "legend": {"kind": "continuous", "label": "Max water depth",
+         "legend": {"kind": "continuous", "units": "m",
                     "vmin": 0.0, "vmax": 9.9}},
     ]}
     scale = packet.published_scale(
         evidence, ProofAnimation(variable="VELOCITY MAGNITUDE", units="m/s",
                                  quantity="flow_velocity"))
     assert scale["published_range"] is None
-    assert scale["run_raster_presets"] == ["Max water depth"]
+    assert scale["run_raster_layers"] == ["Max water depth"]
 
 
 def test_a_log_ramp_takes_the_published_top_and_its_own_declared_floor():
@@ -299,7 +298,6 @@ def test_the_gif_resolves_the_ramp_its_panel_was_painted_through():
         {"name": "Bed evolution (m) at t = 3600 s (snake)", "layer_type": "raster",
          "quantity": "bed_evolution",
          "legend": {"kind": "continuous", "colormap": "rdbu", "units": "m",
-                    "label": "Bed evolution (m)",
                     "vmin": -0.005267, "vmax": 0.005267}},
     ]}
     scale = packet.published_scale(
@@ -307,5 +305,4 @@ def test_the_gif_resolves_the_ramp_its_panel_was_painted_through():
                                  quantity="bed_evolution", module="gaia"))
     assert scale["published_range"] == [-0.005267, 0.005267]
     assert scale["published_style"] == {"kind": "continuous", "ramp": "rdbu",
-                                        "units": "m", "label": "Bed evolution (m)",
-                                        "floor": None}
+                                        "units": "m", "floor": None}

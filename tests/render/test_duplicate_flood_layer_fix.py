@@ -32,16 +32,16 @@ class _Sink:
 class TestPublishBoundaryStyle:
     def test_a_declared_row_is_what_draws_the_layer(self) -> None:
         preset = presets.from_row({"kind": "continuous", "ramp": "ylgnbu",
-                                   "units": "m", "label": "Flood depth"})
-        assert (preset.kind, preset.ramp, preset.label) == (
-            "continuous", "ylgnbu", "Flood depth")
+                                   "units": "m"})
+        assert (preset.kind, preset.ramp, preset.units) == (
+            "continuous", "ylgnbu", "m")
 
     def test_a_layer_that_declares_nothing_gets_its_kinds_bare_default(self) -> None:
         # No row: the physical meaning is unknown, so the layer takes a single
         # ramp over its OWN range, never a physical band somebody guessed.
         preset = presets.from_row(None)
         assert preset == presets.bare_default("continuous")
-        assert preset.label is None and preset.units is None
+        assert preset.units is None
 
     def test_the_resolver_cannot_see_a_filename(self) -> None:
         """The anti-guess pin: a file name and a layer id are NAMES, not measurements.

@@ -1,7 +1,7 @@
 """The presentation surface: the ask beats the declaration, and hide is the un-emit.
 
 Emission is automatic, so nothing here puts a layer on the map; this covers what
-a reader may change afterwards - the shape, the ramp, the title, the range, and
+a reader may change afterwards - the shape, the ramp, the name, the range, and
 whether it is on the canvas - and the two rules that make those predictable: an
 ask wins field by field, and an ask nobody made leaves the declaration alone."""
 
@@ -17,7 +17,7 @@ from trid3nt_server.render import pipeline_emitter as emitter_module
 from trid3nt_server.render import publish as publish_module
 from trid3nt_server.render import restyle as restyle_module
 from trid3nt_server.render.pipeline_emitter import PipelineEmitter
-from trid3nt_server.render.restyle import RestyleError, apply_style
+from trid3nt_server.render.restyle import RestyleError, apply_style, restyled_row
 from trid3nt_server.tools.derive.restyle_layer.restyle_layer import restyle_layer
 
 #: A declared row with something to say in every field, so an override that
@@ -26,7 +26,6 @@ DECLARED = {
     "kind": "continuous",
     "ramp": "reds",
     "units": "m",
-    "label": "Flood depth",
     "scale": {"policy": "fixed", "range": [0.0, 1.0], "transform": "linear"},
 }
 
@@ -61,22 +60,34 @@ def test_the_ask_beats_the_declared_row_field_by_field(published) -> None:
     assert resolved.range == (0.0, 30.0)
     # The fields nobody asked about are still the data's own.
     assert resolved.preset.units == "m"
-    assert resolved.preset.label == "Flood depth"
     assert resolved.kind == "continuous"
     # The publish path gets the SAME row, so the .qml it writes is this one.
     assert published[0]["style"]["ramp"] == "blues"
-    assert published[0]["style"]["label"] == "Flood depth"
+    assert published[0]["style"]["units"] == "m"
 
 
 def test_an_ask_nobody_made_leaves_the_declaration_alone(published) -> None:
     resolved = apply_style(layer_uri=URI, layer_id="depth", declared=DECLARED,
-                           label="Depth over the floodplain")
+                           ramp="blues")
 
-    assert resolved.preset.label == "Depth over the floodplain"
+    assert resolved.preset.ramp == "blues"
     # No scale ask was made, so the declared fixed scale stands - it is not
     # merged over with an empty override that would re-assert the defaults.
     assert resolved.range == (0.0, 1.0)
     assert resolved.legend_note() == "fixed domain scale: 0 to 1 m"
+
+
+def test_a_style_row_carries_no_label(published) -> None:
+    """A row's units are live - every legend tick ends in them - and a row has
+    nothing else to say about what the layer is CALLED: the name is the layer's
+    own, and ``title`` renames the layer rather than annotating its legend."""
+    row = restyled_row(DECLARED, kind="classed", ramp="blues", units="mm")
+
+    assert "label" not in row
+    assert row["units"] == "mm"
+
+    apply_style(layer_uri=URI, layer_id="depth", declared=DECLARED, units="mm")
+    assert "label" not in published[0]["style"]
 
 
 def test_a_kind_outside_the_family_is_refused_rather_than_painted(published) -> None:
@@ -155,6 +166,42 @@ async def test_hiding_a_layer_is_the_un_emit_and_unhiding_puts_it_back(
     shown = await restyle_layer(layer_ids="depth", hide=False)
     assert shown["status"] == "ok"
     assert _row(sink)["visible"] is True
+
+
+@pytest.fixture()
+def on_the_map(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Every handle resolves to the one published uri, and no bytes are read."""
+    from trid3nt_server.render import uri_registry
+
+    monkeypatch.setattr(uri_registry, "lookup_uri_for_handle", lambda handle: URI)
+    monkeypatch.setattr(publish_module, "_read_raster_bytes", lambda uri: None)
+
+
+@pytest.mark.asyncio
+async def test_a_title_renames_the_layer_on_the_row_the_client_reads(
+    bound_emitter, published, on_the_map
+) -> None:
+    """The retitle promise, kept: the new name rides the layer row out to the
+    canvas and the tool reports the name it set."""
+    _emitter, sink = bound_emitter
+
+    renamed = await restyle_layer(layer_ids="depth", title="Depth at the wharf")
+
+    assert renamed["status"] == "ok"
+    assert renamed["layers"][0]["layer_id"] == "depth"
+    assert renamed["layers"][0]["name"] == "Depth at the wharf"
+    assert _row(sink)["name"] == "Depth at the wharf"
+
+
+@pytest.mark.asyncio
+async def test_renaming_a_layer_nobody_published_refuses_rather_than_creating_one(
+    bound_emitter, published, on_the_map
+) -> None:
+    refused = await restyle_layer(layer_ids="nothing-published",
+                                  title="Depth at the wharf")
+
+    assert refused["status"] == "error"
+    assert refused["error_code"] == "LAYER_NOT_PUBLISHED"
 
 
 @pytest.mark.asyncio

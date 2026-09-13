@@ -386,7 +386,7 @@ async def _ingest_raster(
     # physical meaning, and its filename is not a measurement. It publishes on
     # the continuous kind's bare default - the field's own range under a single
     # ramp - never on a physical band inferred from what the file is called.
-    layer_name = derive_readable_layer_name(name, layer_id, None, published_uri)
+    layer_name = derive_readable_layer_name(name, layer_id, published_uri)
 
     layer = LayerURI(layer_id=layer_id, name=layer_name, layer_type="raster",
                      uri=published_uri, role="input", origin="user")

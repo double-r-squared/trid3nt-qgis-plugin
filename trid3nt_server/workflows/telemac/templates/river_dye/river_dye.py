@@ -233,8 +233,7 @@ class STEERING(T2D):
 
 
 #: The dye-concentration field, on the ramp a dissolved tracer is read on.
-DYE_STYLE = {"kind": "mesh", "ramp": "reds", "units": "mg/L",
-             "label": "Dye concentration"}
+DYE_STYLE = {"kind": "mesh", "ramp": "reds", "units": "mg/L"}
 
 #: What the solved run is read for: the tracer over time as the animation, its
 #: envelope as the map, its reach-wide history as the chart.

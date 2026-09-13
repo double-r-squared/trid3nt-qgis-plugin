@@ -105,7 +105,7 @@ def test_fetch_dem_happy_path_writes_through_cache(monkeypatch, fake_s3):
     layer = fetch_dem(bbox=FORT_MYERS_BBOX, resolution_m=10)
     assert isinstance(layer, DemLayerURI)
     assert layer.layer_type == "raster"
-    assert layer.style == {"kind": "continuous", "ramp": "gray", "units": "m", "label": "Elevation"}
+    assert layer.style == {"kind": "continuous", "ramp": "gray", "units": "m"}
     assert layer.uri.startswith("s3://trid3nt-cache/cache/static-30d/dem/")
     assert layer.uri.endswith(".tif")
     assert layer.units == "meters"

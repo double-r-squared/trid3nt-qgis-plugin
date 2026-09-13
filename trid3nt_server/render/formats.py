@@ -191,28 +191,28 @@ def _shared_ranges(items: Sequence[Deliverable]
             for quantity, ranges in found.items()}
 
 
-def _titles(item: Deliverable, *, name: str) -> tuple[str, str]:
-    """``(the layer's name, the legend's label)`` for one product."""
+def _title(item: Deliverable, *, name: str) -> str:
+    """The layer's name for one product - what a reader calls it in the list."""
     product = item.product
     caption = item.caption
     label = f"{caption[:1].upper()}{caption[1:]}"
     units = getattr(product, "units", None)
-    legend = f"{label} ({units})" if units else label
+    measured = f"{label} ({units})" if units else label
     plane = getattr(product, "plane", None)
     where = f"{', ' + plane if plane else ''} ({name})"
     if getattr(product, "frames", None):
-        return f"{label} over time{where}", legend
+        return f"{label} over time{where}"
     t = getattr(product, "t", None)
     if t is not None:
-        return f"{legend} at t = {float(t):g} s{where}", legend
+        return f"{measured} at t = {float(t):g} s{where}"
     # A field with no instant is the ENVELOPE over the run; a vector is what it
     # is, and calling a track a peak would name a reading nobody took.
     if isinstance(product, Mesh):
-        return f"Peak {caption}{where}", legend
-    return f"{label}{where}", legend
+        return f"Peak {caption}{where}"
+    return f"{label}{where}"
 
 
-def _style_row(item: Deliverable, *, kind: str, label: str,
+def _style_row(item: Deliverable, *, kind: str,
                value_range: tuple[float, float] | None,
                dataset_group: str | None = None,
                floor: float | None = None) -> dict[str, Any]:
@@ -226,7 +226,6 @@ def _style_row(item: Deliverable, *, kind: str, label: str,
     row = {k: v for k, v in dict(item.style or {}).items()
            if k not in ("center", "floor", "range")}
     row["kind"] = kind
-    row.setdefault("label", label)
     if dataset_group is not None:
         row["dataset_group"] = dataset_group
     if floor is not None:
@@ -245,7 +244,7 @@ def _mesh_layer(item: Deliverable, *, run_id: str, engine: str, name: str,
     mesh: Mesh = item.product  # type: ignore[assignment]
     bucket = storage.runs_bucket()
     quantity = quantity_of(item.caption)
-    title, label = _titles(item, name=name)
+    title = _title(item, name=name)
     stem = quantity if mesh.plane is None else f"{quantity}_{quantity_of(mesh.plane)}"
     # WHICH group of one quantity this layer paints, in its id: the file's own
     # over time, or a group written beside it for one instant or an envelope.
@@ -259,7 +258,7 @@ def _mesh_layer(item: Deliverable, *, run_id: str, engine: str, name: str,
         uri=f"s3://{bucket}/{run_id}/{mesh.file}",
         dataset_uris=[f"s3://{bucket}/{run_id}/{basename}"
                       for basename in mesh.datasets],
-        style=_style_row(item, kind="mesh", label=label, value_range=value_range,
+        style=_style_row(item, kind="mesh", value_range=value_range,
                          dataset_group=mesh.group, floor=mesh.floor),
         quantity=quantity, role="primary", units=mesh.units, bbox=mesh.bbox,
         crs_authid=f"EPSG:{int(mesh.epsg)}",
@@ -271,11 +270,11 @@ def _raster_layer(item: Deliverable, *, run_id: str, engine: str, name: str,
     """A COG in the store -> ONE raster layer, styled by the declared row."""
     raster: Raster = item.product  # type: ignore[assignment]
     quantity = quantity_of(item.caption)
-    title, label = _titles(item, name=name)
+    title = _title(item, name=name)
     return LayerURI(
         layer_id=f"{engine}-{quantity}-{run_id}",
         name=title, layer_type="raster", uri=raster.uri,
-        style=_style_row(item, kind="continuous", label=label,
+        style=_style_row(item, kind="continuous",
                          value_range=value_range or raster.value_range),
         quantity=quantity, role="primary", units=raster.units, bbox=raster.bbox)
 
@@ -295,11 +294,11 @@ def _vector_layer(item: Deliverable, *, run_id: str, engine: str,
         Bucket=bucket, Key=key,
         Body=json.dumps(vector.features).encode("utf-8"),
         ContentType="application/geo+json")
-    title, label = _titles(item, name=name)
+    title = _title(item, name=name)
     return LayerURI(
         layer_id=f"{engine}-{quantity}-{run_id}",
         name=title, layer_type="vector", uri=f"s3://{bucket}/{key}",
-        style=_style_row(item, kind="reference", label=label, value_range=None),
+        style=_style_row(item, kind="reference", value_range=None),
         quantity=quantity, role="primary", units=vector.units,
         bbox=_features_bbox(vector.features))
 

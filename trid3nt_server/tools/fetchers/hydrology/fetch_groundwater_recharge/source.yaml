@@ -59,7 +59,6 @@ output:
     kind: continuous
     ramp: blues
     units: mm/yr
-    label: Groundwater recharge mm yr
     scale:
       policy: fixed
       range: [0, 800]

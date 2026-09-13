@@ -52,21 +52,19 @@ def test_a_declaration_that_names_no_parameters_gets_its_kinds_bare_default():
 
 def test_a_quantity_parameterises_the_preset_it_never_mints_one():
     depth = presets.from_row({
-        "kind": "continuous", "ramp": "ylgnbu", "units": "m", "label": "Flood depth",
+        "kind": "continuous", "ramp": "ylgnbu", "units": "m",
         "scale": {"policy": "data", "transform": "percentile", "clip": [2, 98],
                   "range": [0, 3]}})
     velocity = presets.from_row({
-        "kind": "continuous", "ramp": "plasma", "units": "m/s",
-        "label": "Flow velocity"})
+        "kind": "continuous", "ramp": "plasma", "units": "m/s"})
     assert depth.kind == velocity.kind == "continuous"
-    assert (depth.units, depth.label, depth.ramp) == ("m", "Flood depth", "ylgnbu")
-    assert (velocity.units, velocity.label, velocity.ramp) == (
-        "m/s", "Flow velocity", "plasma")
+    assert (depth.units, depth.ramp) == ("m", "ylgnbu")
+    assert (velocity.units, velocity.ramp) == ("m/s", "plasma")
 
 
-def test_titling_a_preset_for_a_quantity_leaves_the_shape_alone():
-    titled = presets.bare_default("continuous").titled("Head", "m")
-    assert (titled.kind, titled.label, titled.units) == ("continuous", "Head", "m")
+def test_reading_a_preset_in_units_leaves_the_shape_alone():
+    read = presets.bare_default("continuous").in_units("m")
+    assert (read.kind, read.units) == ("continuous", "m")
 
 
 

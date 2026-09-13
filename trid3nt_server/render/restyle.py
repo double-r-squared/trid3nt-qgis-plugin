@@ -19,7 +19,7 @@ from trid3nt_server.workflows.runtime.journal import journal_note
 logger = logging.getLogger("trid3nt_server.render.restyle")
 
 __all__ = ["RestyleError", "apply_style", "restyled_row", "scale_override",
-           "set_hidden"]
+           "set_hidden", "set_name"]
 
 
 class RestyleError(RuntimeError):
@@ -52,7 +52,6 @@ def scale_override(*, policy: str | None = None,
 def restyled_row(declared: dict[str, Any] | None, *,
                  kind: str | None = None,
                  ramp: str | None = None,
-                 label: str | None = None,
                  units: str | None = None) -> dict[str, Any]:
     """The declared row with the caller's presentation asks laid over it.
 
@@ -67,8 +66,6 @@ def restyled_row(declared: dict[str, Any] | None, *,
         row["kind"] = kind
     if ramp is not None:
         row["ramp"] = ramp
-    if label is not None:
-        row["label"] = label
     if units is not None:
         row["units"] = units
     return row
@@ -87,11 +84,23 @@ async def set_hidden(layer_id: str, hidden: bool) -> bool:
     return await emitter.set_layer_visible(layer_id, not hidden)
 
 
+async def set_name(layer_id: str, name: str) -> bool:
+    """Rename a layer on the canvas. The retitle.
+
+    False when no emitter is bound or the session never loaded that layer.
+    """
+    from trid3nt_server.render.pipeline_emitter import current_emitter
+
+    emitter = current_emitter()
+    if emitter is None:
+        return False
+    return await emitter.set_layer_name(layer_id, name)
+
+
 def apply_style(*, layer_uri: str, layer_id: str,
                 declared: dict[str, Any] | None = None,
                 kind: str | None = None,
                 ramp: str | None = None,
-                label: str | None = None,
                 units: str | None = None,
                 policy: str | None = None,
                 value_range: tuple[float, float] | None = None,
@@ -107,7 +116,7 @@ def apply_style(*, layer_uri: str, layer_id: str,
 
     from trid3nt_server.render.publish import publish_layer
 
-    row = restyled_row(declared, kind=kind, ramp=ramp, label=label, units=units)
+    row = restyled_row(declared, kind=kind, ramp=ramp, units=units)
     override = scale_override(policy=policy, value_range=value_range,
                               transform=transform, clip=clip)
     publish_layer(layer_uri=layer_uri, layer_id=layer_id, style=row,

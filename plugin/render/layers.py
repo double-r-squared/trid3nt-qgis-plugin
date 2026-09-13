@@ -661,10 +661,12 @@ class LayerMaterializer:
         self.last_added_layers = []
         for event in events:
             if event.layer_id in self._added_ids:
-                # A layer already on the canvas can still be TAKEN OFF it: the
-                # un-emit half of the presentation surface arrives as a
-                # visibility flip on a row this materializer has already seen.
-                self._apply_visibility(event)
+                # A layer already on the canvas can still be TAKEN OFF it or
+                # RENAMED: the un-emit and retitle halves of the presentation
+                # surface arrive as a changed row this materializer has seen.
+                for layer in self._loaded(event.layer_id):
+                    self._apply_visibility(layer, event)
+                    self._apply_name(layer, event)
                 continue
             try:
                 note = self._materialize_one(event)
@@ -873,17 +875,29 @@ class LayerMaterializer:
         self.last_added_layers.append(layer)
         return note
 
-    def _apply_visibility(self, event) -> None:
+    def _loaded(self, layer_id: str) -> List:
+        """The project's layers stamped with ``layer_id``. Never raises."""
+        try:
+            return [layer for layer in QgsProject.instance().mapLayers().values()
+                    if layer.customProperty("trid3nt/layer_id") == layer_id]
+        except Exception:  # noqa: BLE001 -- a lookup is never fatal
+            return []
+
+    def _apply_visibility(self, layer, event) -> None:
         """Match the layer tree to the row's ``visible``. Never raises."""
         try:
-            root = QgsProject.instance().layerTreeRoot()
-            for layer in QgsProject.instance().mapLayers().values():
-                if layer.customProperty("trid3nt/layer_id") != event.layer_id:
-                    continue
-                node = root.findLayer(layer.id())
-                if node is not None and node.isVisible() != bool(event.visible):
-                    node.setItemVisibilityChecked(bool(event.visible))
+            node = QgsProject.instance().layerTreeRoot().findLayer(layer.id())
+            if node is not None and node.isVisible() != bool(event.visible):
+                node.setItemVisibilityChecked(bool(event.visible))
         except Exception:  # noqa: BLE001 -- visibility is best-effort, never fatal
+            pass
+
+    def _apply_name(self, layer, event) -> None:
+        """Match the layer to the row's ``name`` - the retitle. Never raises."""
+        try:
+            if event.name and layer.name() != event.name:
+                layer.setName(event.name)
+        except Exception:  # noqa: BLE001 -- a rename is best-effort, never fatal
             pass
 
     # -- extent union (canvas-zoom fallback) ----------------------------------- #

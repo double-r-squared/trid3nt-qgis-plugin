@@ -81,7 +81,6 @@ output:
     kind: continuous
     ramp: rdylbu_r
     units: K
-    label: Hrrr 2m temperature
     scale:
       policy: fixed
       range: [250, 320]
@@ -93,7 +92,6 @@ output:
           kind: continuous
           ramp: rdbu
           units: m/s
-          label: Hrrr 10m u wind
           scale:
             policy: fixed
             range: [-25, 25]
@@ -102,7 +100,6 @@ output:
           kind: continuous
           ramp: rdbu
           units: m/s
-          label: Hrrr 10m v wind
           scale:
             policy: fixed
             range: [-25, 25]
@@ -112,7 +109,6 @@ output:
         10m_wind_speed:
           kind: continuous
           units: m/s
-          label: Wind speed
           scale:
             policy: fixed
             range: [0, 25]

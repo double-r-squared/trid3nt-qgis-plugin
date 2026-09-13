@@ -176,4 +176,4 @@ def test_the_bed_spec_is_registered_and_pins_one_product_of_the_mosaic():
         spec.ingest["imageserver"]["export_query"]["mosaicRule"]
     assert "Low Water Datum" in (spec.vertical_datum or "")
     assert spec.output.role == "input"
-    assert spec.output.style == {"kind": "continuous", "ramp": "gray", "units": "m", "label": "Elevation"}
+    assert spec.output.style == {"kind": "continuous", "ramp": "gray", "units": "m"}

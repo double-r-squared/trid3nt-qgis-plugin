@@ -186,7 +186,6 @@ def legend_for_published_layer(
             vmin=resolved.range[0] if resolved.range else None,
             vmax=resolved.range[1] if resolved.range else None,
             units=preset.units or units,
-            label=preset.label,
             floor=preset.floor,
             qml=resolved.qml(),
         )
@@ -633,22 +632,19 @@ def _short_disambiguator(layer_id: str) -> str:
 def derive_readable_layer_name(
     name: str | None,
     layer_id: str,
-    style: dict[str, Any] | None,
     layer_uri: str,
 ) -> str:
     """Derive a human-readable layer name for the layer list.
 
     An explicit non-ULID ``name`` returns verbatim; a derived one is disambiguated.
     """
-    # Precedence: an explicit non-ULID name, then the declared row's label, then a
-    # human segment of the source uri, then "Layer". A bare ULID must never reach
-    # the layer summary while any of the later signals is available.
+    # Precedence: an explicit non-ULID name, then a human segment of the source
+    # uri, then "Layer". A bare ULID must never reach the layer summary while
+    # any of the later signals is available.
     if name and name.strip() and not _looks_like_ulid(name.strip()):
         return name.strip()
 
-    label = (style or {}).get("label") or _label_from_uri(layer_uri)
-    if not label:
-        label = "Layer"
+    label = _label_from_uri(layer_uri) or "Layer"
     return f"{label} {_short_disambiguator(layer_id)}"
 
 

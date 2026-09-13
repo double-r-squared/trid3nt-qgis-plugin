@@ -48,7 +48,6 @@ How a layer draws, declared with the DATA and never with the run. The row picks 
 | `kind` | String | required |
 | `ramp` | String | required |
 | `units` | String | required |
-| `label` | String | required |
 | `scale` | Map | required |
 | `classes` | Map | optional |
 | `geometry` | String | optional |
@@ -111,22 +110,21 @@ One preset resolved against one layer: the concrete range, what the legend says 
 | `kind` | String | required |
 | `vmin` | Real | required |
 | `vmax` | Real | required |
-| `label` | String | required |
 | `qml` | String | required |
 | `colormap` | String | optional |
 | `units` | String | optional |
 
 ### `RestyleAsk`
 
-What a reader wants changed about a layer already on the map. Every field is an OVERRIDE laid over what the data declared, and a field nobody asked about is left alone rather than re-asserted as a default - which is what makes a user's choice beat the preset instead of racing it. ``hidden`` is the un-emit and its inverse: taking a layer off the canvas is a presentation act like any other, so it lives here rather than as a second emission verb. ``shared`` is the comparison case - one range resolved across several layers at once, because two layers a reader is comparing on two ranges is a picture of two colour maps rather than of a difference.
+What a reader wants changed about a layer already on the map. Every field is an OVERRIDE laid over what the data declared, and a field nobody asked about is left alone rather than re-asserted as a default - which is what makes a user's choice beat the preset instead of racing it. ``hidden`` is the un-emit and its inverse: taking a layer off the canvas is a presentation act like any other, so it lives here rather than as a second emission verb. ``name`` is the retitle: it renames the layer where the reader meets it, on the same row the canvas is rebuilt from, so there is no second name to keep in step. ``shared`` is the comparison case - one range resolved across several layers at once, because two layers a reader is comparing on two ranges is a picture of two colour maps rather than of a difference.
 
 | item | type | required |
 | --- | --- | --- |
 | `layer_id` | String | required |
 | `hidden` | Boolean | required |
+| `name` | String | required |
 | `kind` | String | required |
 | `ramp` | String | required |
-| `label` | String | required |
 | `units` | String | required |
 | `policy` | String | required |
 | `value_range` | RealList | required |

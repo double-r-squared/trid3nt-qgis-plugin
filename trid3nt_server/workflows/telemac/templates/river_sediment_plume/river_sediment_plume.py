@@ -231,12 +231,11 @@ class STEERING(T2D):
 #: positive, erosion negative, so the ramp diverges about zero and the legend is
 #: ranged symmetrically about that centre.
 BED_EVOLUTION_STYLE = {"kind": "mesh", "ramp": "rdbu", "units": "m",
-                       "label": "Bed evolution", "center": 0.0}
+                       "center": 0.0}
 
 #: The SUSPENDED-SEDIMENT concentration field - a grain load, on its own ramp so
 #: it never reads as a dissolved field published beside it.
-SEDIMENT_STYLE = {"kind": "mesh", "ramp": "oranges", "units": "mg/L",
-                  "label": "Suspended sediment concentration"}
+SEDIMENT_STYLE = {"kind": "mesh", "ramp": "oranges", "units": "mg/L"}
 
 #: What the solved run is read for: the suspended class over time as the
 #: animation, its envelope as the map, its reach-wide history as the chart, and

@@ -82,7 +82,6 @@ def test_legend_key_constructs_continuous_from_real_data_range() -> None:
         vmin=0.12,  # the real p2 the producer computed (NOT a hardcoded 0)
         vmax=3.47,  # the real p98 (NOT a hardcoded 3)
         units="meters",
-        label="Flood depth",
     )
     assert legend.kind == "continuous"
     assert legend.colormap == "reds"
@@ -99,16 +98,15 @@ def test_legend_key_constructs_continuous_from_real_data_range() -> None:
 
 
 def test_legend_key_constructs_categorical() -> None:
-    """A categorical key names what the layer is read as; the swatches
+    """A categorical key states the shape it is drawn in; the swatches
     themselves live in the ``.qml`` the map loads, not beside it."""
     legend = LegendKey(
         kind="classed",
-        label="Damage state",
         units=None,
         qml="<qgis/>",
     )
     assert legend.kind == "classed"
-    assert legend.label == "Damage state" and legend.qml == "<qgis/>"
+    assert legend.qml == "<qgis/>"
     # a classed key carries no continuous range
     assert legend.colormap is None and legend.vmin is None and legend.vmax is None
 
@@ -129,7 +127,6 @@ def test_layer_uri_carries_legend_and_round_trips() -> None:
             vmin=0.12,
             vmax=3.47,
             units="meters",
-            label="Flood depth",
         ),
     )
     a = layer.model_dump(mode="json")
@@ -165,10 +162,10 @@ def test_result_layer_mirrors_legend_and_round_trips() -> None:
         layer_type="vector",
         uri="s3://trid3nt/runs/01HX/damage.fgb",
         role="primary",
-        legend=LegendKey(kind="classed", label="Damage state", qml="<qgis/>"),
+        legend=LegendKey(kind="classed", qml="<qgis/>"),
     )
     assert result.legend is not None
-    assert result.legend.label == "Damage state"
+    assert result.legend.qml == "<qgis/>"
     a = result.model_dump(mode="json")
     again = ResultLayer.model_validate(a).model_dump(mode="json")
     assert a == again

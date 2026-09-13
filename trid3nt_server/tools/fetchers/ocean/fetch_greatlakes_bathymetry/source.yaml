@@ -62,7 +62,6 @@ output:
     kind: continuous
     ramp: gray
     units: m
-    label: Elevation
   emit_bbox: true
 cache:
   ttl_class: static-30d

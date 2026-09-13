@@ -13,8 +13,8 @@ join the run as the sixth slice.
 | `adapters/` | provider adapters, the message IR, the turn loop, the stream persistence | 22 | 289 |
 | `credentials/` | credential resolution, the auth handshake, identity | 7 | 95 |
 | `derive/` | the derive tools, the two session tools | 19 | 262 |
-| `render/` | the emitter, the uri registry, publication, the format set, charts | 36 | 471 |
-| `fetchers/` | the fetch router, its executors, hooks and fallbacks | 65 | 1566 |
+| `render/` | the emitter, the uri registry, publication, the format set, charts | 36 | 473 |
+| `fetchers/` | the fetch router, its executors, hooks and fallbacks | 65 | 1565 |
 | `gates/` | the gates, a declined card at each of them, the code-exec approval gate, the context budget, the circuit breaker | 23 | 327 |
 | `inputs/` | the typed inputs: a Point, an Extent, a Shape, each from every form it arrives in, the user-input normalizers under them, the AOI acquired from any of them, and a user's own file adopted as a layer | 7 | 94 |
 | `mesh/` | the meshers, the mesh gate, topology and bed | 7 | 226 |
@@ -41,12 +41,12 @@ else has one.
 
 Six slices by subsystem, each its own foreground invocation, from the repo root:
 
-    make test-fetchers        # tests/fetchers                                                                      1566
-    make test-spatial         # tests/derive tests/render tests/mesh                              959
+    make test-fetchers        # tests/fetchers                                                                      1565
+    make test-spatial         # tests/derive tests/render tests/mesh                              961
     make test-engines         # tests/telemac tests/runtime tests/solver tests/search                                985
     make test-server          # tests/server tests/inputs tests/gates tests/credentials tests/model tests/scripts   1131
     make test-model-surface   # tests/adapters tests/tools                                                           665
-    make test-packages        # contracts/tests plugin/tests tests/plugin                                            810
+    make test-packages        # contracts/tests plugin/tests tests/plugin                                            811
 
 The prose guards - history markers, dead references, the package maps, the
 template pages, banner comments - are LINTS rather than tests: they read the
@@ -64,7 +64,7 @@ leaves nothing behind. The baseline is **all six slices, zero failures**.
 
 ## Standing exceptions
 
-A test tests a product behavior, never the harness. Nine tests in
+A test tests a product behavior, never the harness. Ten tests in
 `plugin/tests/` break that rule and are named here rather than quietly
 tolerated: Qt cannot be imported in-process alongside the server suite, so the
 product assertions live inside a `qt_*_harness.py` subprocess and the
@@ -72,7 +72,7 @@ pytest-visible test asserts only that the harness exited 0 and printed its
 marker. A harness that stops asserting still exits 0 and still prints its
 marker, so the shim stays green forever.
 
-Nine carry the `qt_harness_shim` marker (`pytest -m qt_harness_shim` lists
+Ten carry the `qt_harness_shim` marker (`pytest -m qt_harness_shim` lists
 them):
 
 | test | marker it reads |
@@ -82,12 +82,13 @@ them):
 | `test_dock_ui.py::TestDockUiBatch` | `DOCK-UI-OK` |
 | `test_case_bbox.py::TestCaseBboxDock` | `CASE-BBOX-OK` |
 | `test_mesh_temporal.py::TestQtMeshTemporalAndDeclaredStyle` | `QT-MESH-TEMPORAL-OK` |
+| `test_layer_rename.py::TestQtLayerRename` | `QT-LAYER-RENAME-OK` |
 | `test_qt_bridge.py::TestQtBridgeStart` | `QT-BRIDGE-OK` |
 | `test_remote_endpoints.py::TestRemoteEndpointsDock` | `REMOTE-ENDPOINTS-OK` |
 | `test_provider_config.py::TestDockProviderConfigWiring` | `SAVE_PAYLOAD_OK` + `MODEL_REPOPULATE_OK` |
 | `test_processing.py::TestProcessingInQgis` | the three `[processing]` lines: an algorithm over a canvas layer by name, a snippet, a raising snippet |
 
-The tenth the ruling names, `test_install_dependencies.py`, carries NO marker:
+The eleventh the ruling names, `test_install_dependencies.py`, carries NO marker:
 read end to end it drives no Qt harness - its `TestMain` cases assert the
 product's own return codes over a mocked `subprocess.run`. It is a product test
 and is not an exception.

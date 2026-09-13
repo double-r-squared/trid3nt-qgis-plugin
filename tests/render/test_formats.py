@@ -151,7 +151,7 @@ def test_the_producer_s_range_semantics_do_not_reach_the_preset_row() -> None:
         style={"kind": "continuous", "ramp": "rdbu", "center": 0.0,
                "floor": 0, "range": "p99.5"})])
     row = published.primary.style
-    assert set(row) == {"kind", "ramp", "label", "dataset_group", "scale"}
+    assert set(row) == {"kind", "ramp", "dataset_group", "scale"}
     assert row["kind"] == "mesh" and row["scale"]["range"] == [-0.4, 0.4]
 
 

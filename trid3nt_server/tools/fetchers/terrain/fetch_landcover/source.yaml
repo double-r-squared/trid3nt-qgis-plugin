@@ -62,7 +62,6 @@ output:
   role: input
   style:
     kind: classed
-    label: Land Cover
   result_model: LandcoverResult
 cache:
   ttl_class: static-30d

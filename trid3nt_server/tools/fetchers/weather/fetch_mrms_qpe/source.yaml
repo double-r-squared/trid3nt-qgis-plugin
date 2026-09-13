@@ -64,7 +64,6 @@ output:
     kind: continuous
     ramp: blues
     units: mm
-    label: Precipitation mm
     scale:
       policy: fixed
       range: [0, 100]

@@ -118,7 +118,6 @@ class Preset:
     kind: Kind = "continuous"
     ramp: str = DEFAULT_RAMP
     units: str | None = None
-    label: str | None = None
     scale: Scale = Scale()
     #: ``(lower, upper, "#rrggbb", label)`` breaks - what makes a preset classed.
     classes: tuple[tuple[float, float, str, str], ...] = ()
@@ -137,9 +136,9 @@ class Preset:
     #: quantity show the same absent region.
     floor: float | None = None
 
-    def titled(self, label: str | None, units: str | None) -> "Preset":
-        """The same preset speaking for a particular quantity."""
-        return replace(self, label=label or self.label, units=units or self.units)
+    def in_units(self, units: str | None) -> "Preset":
+        """The same preset reading its scale in a particular unit."""
+        return replace(self, units=units or self.units)
 
 
 _BARE: dict[Kind, Preset] = {
@@ -191,7 +190,6 @@ def from_row(row: Any) -> Preset:
         kind=base.kind,
         ramp=str(row.get("ramp") or base.ramp),
         units=row.get("units") if row.get("units") is not None else base.units,
-        label=row.get("label") if row.get("label") is not None else base.label,
         scale=_scale_from(row.get("scale"), base.scale),
         classes=tuple((float(c[0]), float(c[1]), str(c[2]), str(c[3]))
                       for c in (row.get("classes") or ())),
@@ -588,14 +586,14 @@ def _mesh_qml(resolved: Resolved) -> str:
 
 
 def legend_key(row: Any, *, value_range: tuple[float, float] | None = None,
-               label: str | None = None, units: str | None = None) -> Any:
+               units: str | None = None) -> Any:
     """A declared row plus a range a producer already measured, as the wire key.
 
     For a producer that measured while it held the field: nothing re-reads the COG.
     """
     from trid3nt_contracts.execution import LegendKey
 
-    preset = from_row(row).titled(label, units)
+    preset = from_row(row).in_units(units)
     resolved = (Resolved(preset, value_range, FIXED) if value_range is not None
                 else resolve(preset))
     return LegendKey(
@@ -604,7 +602,6 @@ def legend_key(row: Any, *, value_range: tuple[float, float] | None = None,
         vmin=resolved.range[0] if resolved.range else None,
         vmax=resolved.range[1] if resolved.range else None,
         units=preset.units,
-        label=preset.label,
         floor=preset.floor,
         qml=qml(resolved),
     )

@@ -51,7 +51,6 @@ output:
     kind: continuous
     ramp: gray
     units: m
-    label: Elevation
   emit_bbox: true
   display_name: NOAA BlueTopo bathymetry (NAVD88)
   result_model: BlueTopoResult

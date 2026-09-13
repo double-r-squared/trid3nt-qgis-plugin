@@ -210,8 +210,7 @@ class STEERING(T2D):
 #: oxygen reads red and high reads blue, which is the direction a deficit is
 #: read in. The legend floors at zero so a standard in the low single digits
 #: stays on the ramp beside a river that never fell below six.
-OXYGEN_STYLE = {"kind": "mesh", "ramp": "rdylbu", "units": "mg/L",
-                "label": "Dissolved oxygen", "floor": 0}
+OXYGEN_STYLE = {"kind": "mesh", "ramp": "rdylbu", "units": "mg/L", "floor": 0}
 
 #: What the solved run is read for: the oxygen at the last instant as the map,
 #: the oxygen over time as the animation, and the oxygen down the reach as the

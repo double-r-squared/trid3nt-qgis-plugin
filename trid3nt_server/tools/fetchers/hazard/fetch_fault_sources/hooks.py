@@ -236,7 +236,7 @@ def envelope(
     plural = "trace" if n == 1 else "traces"
     return {
         "name": f"Active fault {plural} ({n})",
-        "legend": LegendKey(kind="classed", label="Active faults (GEM)"),
+        "legend": LegendKey(kind="classed"),
         "catalog": str(params.get("catalog") or "gem"),
         "fault_count": n,
         "faults": faults,

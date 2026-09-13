@@ -510,7 +510,6 @@ def _write_output(payload: bytes, seed: str, output_dir: str | None) -> str:
 _STYLE: dict = {
     "kind": "classed",
     "units": "t/ha/yr",
-    "label": "Annual soil loss (RUSLE)",
     "classes": [list(c) for c in SEDIMENT_YIELD_LOG_CLASSES],
 }
 

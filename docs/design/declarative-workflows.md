@@ -780,14 +780,17 @@ RANGE, because the colours cannot.
 
 **Presentation is DISPLAY STATE.** Restyling recomputes nothing and changes no
 number, so all of it is available after the fact: `restyle_layer` re-paints,
-retitles, rescales or HIDES an already-published layer, and takes several layer
-ids plus `shared_scale` for an honest comparison. `hide=True` is the un-emit and
-`hide=False` puts the layer back. It deliberately cannot CREATE a layer - a uri
-nothing published is a typed refusal.
+RENAMES, rescales or HIDES an already-published layer, and takes several layer
+ids plus `shared_scale` for an honest comparison. A `title` renames the layer
+where the reader meets it: the new name rides the layer row the canvas is
+rebuilt from, so the map, the case and the agent call it one thing. `hide=True`
+is the un-emit and `hide=False` puts the layer back. It deliberately cannot
+CREATE a layer - a uri nothing published is a typed refusal.
 
 **Charts read the same vocabulary.** A chart's axis title and a layer's legend
-label come from one place, so the picture and the map cannot disagree about what a
-field is called or what it is measured in.
+take their units from one place, so the picture and the map cannot disagree about
+what a field is measured in. What the field is CALLED is the layer's own name -
+stated once, on the row, never a second time beside the colours.
 
 **Coherence.** A published raster's maximum and the run's headline scalar for the
 same quantity agree within a stated tolerance, and the resolved range CONTAINS the

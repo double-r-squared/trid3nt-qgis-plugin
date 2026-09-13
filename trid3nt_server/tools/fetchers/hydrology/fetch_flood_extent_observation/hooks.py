@@ -165,8 +165,7 @@ def envelope(spec: SourceSpec, params: dict[str, Any], layer: Any, data: bytes |
     ]
     return {
         "name": f"Observed flood extent (MODIS {obs_date.isoformat()})",
-        "legend": LegendKey(
-            kind="classed", label="Observed flood extent (MODIS MCDWD)"),
+        "legend": LegendKey(kind="classed"),
         "product": _PRODUCT,
         "observation_date": obs_date.isoformat(),
         "class_breakdown": summary["class_breakdown"],

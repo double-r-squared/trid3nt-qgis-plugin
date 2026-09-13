@@ -84,7 +84,6 @@ output:
     kind: continuous
     ramp: gray
     units: m
-    label: Elevation
   emit_bbox: true
   result_model: TopobathyResult
   provenance: true

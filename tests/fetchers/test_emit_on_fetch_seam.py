@@ -64,8 +64,7 @@ def _spec(
 
 
 #: What the DEM spec declares about how its raster draws.
-_DEM_STYLE = {"kind": "continuous", "ramp": "gray", "units": "m",
-              "label": "Elevation"}
+_DEM_STYLE = {"kind": "continuous", "ramp": "gray", "units": "m"}
 
 
 def _raster_layer(uri: str = "s3://cache/3dep/aoi.tif") -> LayerURI:

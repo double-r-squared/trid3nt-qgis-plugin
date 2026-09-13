@@ -225,7 +225,6 @@ package RenderSeam {
         item kind : String;
         item ramp : String;
         item units : String;
-        item label : String;
         item scale : Map;
         item classes : Map [0..1];
         item geometry : String [0..1];
@@ -281,7 +280,6 @@ package RenderSeam {
         item kind : String;
         item vmin : Real;
         item vmax : Real;
-        item label : String;
         item qml : String;
         item colormap : String [0..1];
         item units : String [0..1];
@@ -322,7 +320,9 @@ package RenderSeam {
 
         ``hidden`` is the un-emit and its inverse: taking a layer off the
         canvas is a presentation act like any other, so it lives here rather
-        than as a second emission verb.
+        than as a second emission verb. ``name`` is the retitle: it renames the
+        layer where the reader meets it, on the same row the canvas is rebuilt
+        from, so there is no second name to keep in step.
 
         ``shared`` is the comparison case - one range resolved across several
         layers at once, because two layers a reader is comparing on two ranges
@@ -330,9 +330,9 @@ package RenderSeam {
         */
         item layer_id : String;
         item hidden : Boolean;
+        item name : String;
         item kind : String;
         item ramp : String;
-        item label : String;
         item units : String;
         item policy : String;
         item value_range : RealList;

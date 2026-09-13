@@ -358,7 +358,6 @@ def _build_legend(max_abs_residual: float, units: str | None) -> LegendKey:
         vmin=-span,
         vmax=span,
         units=units,
-        label="Model residual (observed - simulated)",
     )
 
 

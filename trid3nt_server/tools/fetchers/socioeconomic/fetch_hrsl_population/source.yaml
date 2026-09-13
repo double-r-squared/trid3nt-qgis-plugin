@@ -43,7 +43,6 @@ output:
     kind: continuous
     ramp: magma
     units: people/km^2
-    label: Population density
     scale:
       policy: fixed
       range: [0, 250]

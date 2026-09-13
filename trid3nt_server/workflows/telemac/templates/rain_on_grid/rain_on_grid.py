@@ -222,8 +222,7 @@ class STEERING(T2D):
 
 #: The MAX WATER DEPTH field: depth above ground, no datum, always positive,
 #: on the wet-blue ramp an inundation field is read on.
-MAX_DEPTH_STYLE = {"kind": "mesh", "ramp": "ylgnbu", "units": "m",
-                   "label": "Max water depth"}
+MAX_DEPTH_STYLE = {"kind": "mesh", "ramp": "ylgnbu", "units": "m"}
 
 #: What the solved run is read for: the depth over time as the animation, its
 #: envelope as the map, and the flux the engine printed across the outlet as the

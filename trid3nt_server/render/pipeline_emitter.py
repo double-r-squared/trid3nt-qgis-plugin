@@ -935,6 +935,19 @@ class PipelineEmitter:
                 return True
         return False
 
+    async def set_layer_name(self, layer_id: str, name: str) -> bool:
+        """Rename a published layer. The row carries the new name to the client.
+        False when this session never loaded that layer - renaming what nobody
+        published is a refusal rather than a no-op.
+        """
+        for summary in self._loaded_layers:
+            if summary.layer_id == layer_id:
+                if summary.name != name:
+                    summary.name = name
+                    await self.emit_session_state()
+                return True
+        return False
+
     def reset_loaded_layers(self, layers: list[dict] | None) -> None:
         """Replace the in-memory loaded layers from a persisted snapshot.
         ``None`` or ``[]`` FLUSHES. A malformed entry is skipped rather than

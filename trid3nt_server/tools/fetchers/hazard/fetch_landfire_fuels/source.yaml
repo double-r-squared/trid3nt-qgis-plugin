@@ -58,7 +58,6 @@ output:
   emit_bbox: false
   style:
     kind: classed
-    label: Land Cover
     by_param:
       param: layer
       map:

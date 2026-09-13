@@ -47,7 +47,6 @@ output:
     kind: continuous
     ramp: gnbu
     units: m
-    label: Surficial saturated thickness (modelled)
     scale:
       policy: fixed
       range: [0, 150]

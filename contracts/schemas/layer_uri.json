@@ -106,18 +106,6 @@
           "title": "Kind",
           "type": "string"
         },
-        "label": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Label"
-        },
         "qml": {
           "anyOf": [
             {

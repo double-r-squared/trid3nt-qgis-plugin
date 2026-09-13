@@ -100,7 +100,6 @@ def _rgba_geotiff_bytes(bands: int = 4, size: int = 64) -> bytes:
 
 
 _FLOOD = {"kind": "continuous", "ramp": "ylgnbu", "units": "m",
-          "label": "Flood depth",
           "scale": {"policy": "fixed", "range": [0, 3], "transform": "linear"}}
 
 
@@ -111,7 +110,7 @@ def test_a_fixed_row_paints_and_labels_the_range_it_declared() -> None:
     assert legend.kind == "continuous"
     assert legend.colormap == "ylgnbu"
     assert (legend.vmin, legend.vmax) == (0.0, 3.0)
-    assert legend.label == "Flood depth"
+    assert legend.units == "m"
 
 
 def test_the_layer_ships_the_qml_the_map_loads_over_that_same_range() -> None:
@@ -150,7 +149,7 @@ def test_paletted_cog_has_no_key() -> None:
     renderer IS the render, so there is no key to state and nothing may
     override the colours the file already has."""
     assert legend_for_published_layer(
-        {"kind": "classed", "label": "Land Cover"},
+        {"kind": "classed"},
         "s3://b/nlcd.tif",
         raster_bytes=_paletted_geotiff_bytes(),
     ) is None
@@ -249,12 +248,10 @@ def test_a_vector_row_resolves_through_the_same_seam_without_reading_the_object(
 
     monkeypatch.setattr(MOD, "_read_raster_bytes", _never)
     legend = legend_for_published_layer(
-        {"kind": "reference", "geometry": "line", "color": "#1f78b4",
-         "label": "River geometry"},
+        {"kind": "reference", "geometry": "line", "color": "#1f78b4"},
         "s3://b/rivers.fgb")
     assert legend is not None
     assert legend.kind == "reference"
-    assert legend.label == "River geometry"
     assert '<renderer-v2 type="singleSymbol"' in legend.qml
     assert 'class="SimpleLine"' in legend.qml
 

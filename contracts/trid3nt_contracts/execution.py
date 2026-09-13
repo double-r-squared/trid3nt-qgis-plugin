@@ -60,9 +60,8 @@ class LegendKey(GraceModel):
     #: The ONE range the layer is read on. ``None`` for a reference layer.
     vmin: float | None = None
     vmax: float | None = None
-    #: What the quantity is measured in, and what the legend calls it.
+    #: What the quantity is measured in - the suffix on every legend tick.
     units: str | None = None
-    label: str | None = None
     #: Where the field STOPS BEING DRAWN, when it has such an edge. ``vmin`` IS
     #: this value on a floored field; a renderer reading the key masks below it
     #: rather than painting the ramp's bottom over an absent region.
