@@ -13,7 +13,7 @@ separately below. An unused parameter is reclassified from `variable` to
 | `token_envelope` | parameter | trid3nt_server/credentials/auth_handshake.py:127 | 100 | 1 |
 | `default_seconds` | parameter | trid3nt_server/gates/confirm.py:90 | 100 | 1 |
 | `unquote` | import | trid3nt_server/render/uri_registry.py:18 | 90 | 1 |
-| `raw_user_text` | parameter | trid3nt_server/server/dispatch/emitter.py:862 | 100 | 1 |
+| `raw_user_text` | parameter | trid3nt_server/server/dispatch/emitter.py:866 | 100 | 1 |
 | `entry_id` | parameter | trid3nt_server/tools/search/fetch_living_atlas_layer/fetch_living_atlas_layer.py:128 | 100 | 1 |
 
 ## Callable tier (confidence 60): unused functions, methods, classes
@@ -25,7 +25,7 @@ one reached dynamically. Treat as candidates, not verdicts.
 |---|---|---|---|
 | `write_fort14` | function | trid3nt_server/workflows/mesh/shared/formats/mesh_formats.py:93 | 83 |
 | `mesh_quality_report` | function | trid3nt_server/workflows/mesh/shared/formats/mesh_formats.py:203 | 59 |
-| `serve_user_supplied_bed` | function | trid3nt_server/tools/fetchers/_router/hooks/topobathy.py:1693 | 35 |
+| `serve_user_supplied_bed` | function | trid3nt_server/tools/fetchers/_router/hooks/topobathy.py:1693 | 34 |
 | `run_gdal` | function | trid3nt_server/tools/derive/_gdal_runner.py:75 | 31 |
 | `scan_third_party_imports` | function | plugin/install_dependencies.py:249 | 28 |
 | `get_session_record` | method | trid3nt_server/persistence.py:572 | 27 |
@@ -35,8 +35,8 @@ one reached dynamically. Treat as candidates, not verdicts.
 | `pin_fetch_resolution` | function | trid3nt_server/gates/cards/solver_confirm.py:251 | 17 |
 | `upsert_session_record` | method | trid3nt_server/persistence.py:438 | 16 |
 | `read_raster_bytes` | function | trid3nt_server/tools/derive/_gdal_runner.py:108 | 16 |
-| `update_compute_status` | method | trid3nt_server/render/pipeline_emitter.py:1265 | 14 |
-| `update_current_progress` | method | trid3nt_server/render/pipeline_emitter.py:1136 | 13 |
+| `update_compute_status` | method | trid3nt_server/render/pipeline_emitter.py:1278 | 14 |
+| `update_current_progress` | method | trid3nt_server/render/pipeline_emitter.py:1149 | 13 |
 | `run_forever` | method | plugin/net/trid3nt_client.py:1600 | 12 |
 | `format_number` | function | plugin/render/formatting.py:83 | 12 |
 | `describe` | method | trid3nt_server/workflows/runtime/plan.py:284 | 12 |

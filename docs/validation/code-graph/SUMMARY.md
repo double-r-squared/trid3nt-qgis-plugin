@@ -10,19 +10,19 @@ venvs/agent/bin/python dev/instruments/code_graph.py
 
 | metric | value |
 |---|---|
-| modules scanned | 921 |
-| total loc | 224671 |
-| reachable from roots | 378 (100322 loc) |
+| modules scanned | 923 |
+| total loc | 224916 |
+| reachable from roots | 378 (100373 loc) |
 | test-only-reachable | 83 |
 | script-only-reachable | 0 |
 | orphans (product) | 19 |
 | package markers excluded from orphans | 104 |
 | orphans (scripts/ entry modules) | 0 |
-| test modules | 374 |
-| import edges | 2971 |
-| dynamic (string-resolved) edges | 170 |
-| reference call-site edges | 12043 |
-| unattributed call sites | 54824 |
+| test modules | 376 |
+| import edges | 2975 |
+| dynamic (string-resolved) edges | 171 |
+| reference call-site edges | 12060 |
+| unattributed call sites | 54879 |
 | dead symbols (conf >= 80) | 6 |
 | unused callables (conf 60 tier) | 41 |
 | vulture findings muted by whitelist | 39 |
@@ -31,7 +31,7 @@ venvs/agent/bin/python dev/instruments/code_graph.py
 
 - Known-culled modules from this arc still present: **0** (all confirmed gone)
 - grimp modules with no file in the scanned universe: 0
-- Call sites the import table could not attribute: 54824 (builtins, locals, methods on non-imported objects -- counted, not guessed).
+- Call sites the import table could not attribute: 54879 (builtins, locals, methods on non-imported objects -- counted, not guessed).
 - Out of scope, so its imports anchor nothing: `experiments/`, `third_party/`.
 
 ## False-positive classes handled
@@ -72,7 +72,7 @@ venvs/agent/bin/python dev/instruments/code_graph.py
 
 | module | loc | path |
 |---|---|---|
-| `trid3nt_server.tools.fetchers._router.hooks.topobathy` | 1787 | trid3nt_server/tools/fetchers/_router/hooks/topobathy.py |
+| `trid3nt_server.tools.fetchers._router.hooks.topobathy` | 1786 | trid3nt_server/tools/fetchers/_router/hooks/topobathy.py |
 | `trid3nt_server.tools.fetchers.imagery._goes_archive_core` | 1134 | trid3nt_server/tools/fetchers/imagery/_goes_archive_core.py |
 | `trid3nt_server.tools.fetchers.weather.fetch_storm_tracks.hooks` | 931 | trid3nt_server/tools/fetchers/weather/fetch_storm_tracks/hooks.py |
 | `scripts.model_check` | 720 | scripts/model_check.py |
@@ -101,7 +101,7 @@ venvs/agent/bin/python dev/instruments/code_graph.py
 | `token_envelope` | parameter | trid3nt_server/credentials/auth_handshake.py:127 | 1 |
 | `default_seconds` | parameter | trid3nt_server/gates/confirm.py:90 | 1 |
 | `unquote` | import | trid3nt_server/render/uri_registry.py:18 | 1 |
-| `raw_user_text` | parameter | trid3nt_server/server/dispatch/emitter.py:862 | 1 |
+| `raw_user_text` | parameter | trid3nt_server/server/dispatch/emitter.py:866 | 1 |
 | `entry_id` | parameter | trid3nt_server/tools/search/fetch_living_atlas_layer/fetch_living_atlas_layer.py:128 | 1 |
 
 ## Package-level edge matrix (cross-package import edges)
@@ -111,7 +111,7 @@ venvs/agent/bin/python dev/instruments/code_graph.py
 | contracts | . | . | . | . | 49 | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . |
 | plugin | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | 1 | . | . | . | . | . | . |
 | scripts | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . |
-| tests | . | 3 | 1 | . | 260 | 1 | . | 70 | 9 | . | 4 | 41 | 22 | 16 | 31 | 1 | 79 | 102 | 7 | 10 | 511 | 242 | . |
+| tests | . | 3 | 1 | . | 260 | 1 | . | 70 | 9 | . | 4 | 41 | 22 | 16 | 31 | 1 | 80 | 102 | 7 | 10 | 511 | 242 | . |
 | trid3nt_contracts | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . |
 | trid3nt_server | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . |
 | trid3nt_server.__main__ | . | . | . | . | . | . | . | . | . | . | . | . | . | 1 | . | . | . | . | . | . | . | . | . |

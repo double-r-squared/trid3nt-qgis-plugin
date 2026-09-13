@@ -154,8 +154,8 @@ class LayerURI(GraceModel):
     # rather than streams.
     layer_type: Literal["raster", "vector", "mesh"]
     uri: str  # COG / FlatGeobuf / GeoParquet / UGRID netCDF
-    #: The DECLARED style row - ``{kind, ramp, units, label, scale, classes,
-    #: geometry, color}``. ``None`` = the kind's bare default.
+    #: The DECLARED style row - ``{kind, ramp, units, scale, classes, geometry,
+    #: color, floor, range}``. ``None`` = the kind's bare default.
     style: dict[str, Any] | None = None
     #: The PHYSICAL QUANTITY this layer carries, as its producer names it. A
     #: title is prose and may be rewritten; the quantity is the layer's

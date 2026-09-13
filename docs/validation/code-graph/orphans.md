@@ -40,7 +40,7 @@ thing keeping the module alive; deleting both is one move.
 
 | module | loc | path | evidence |
 |---|---|---|---|
-| `trid3nt_server.tools.fetchers._router.hooks.topobathy` | 1787 | trid3nt_server/tools/fetchers/_router/hooks/topobathy.py | imported only by tests.fetchers.test_bathymetry_data_seam, tests.fetchers.test_fallback_ladder, tests.fetchers.test_fallback_sweep_guard, tests.fetchers.test_router_topobathy ... |
+| `trid3nt_server.tools.fetchers._router.hooks.topobathy` | 1786 | trid3nt_server/tools/fetchers/_router/hooks/topobathy.py | imported only by tests.fetchers.test_bathymetry_data_seam, tests.fetchers.test_fallback_ladder, tests.fetchers.test_fallback_sweep_guard, tests.fetchers.test_router_topobathy ... |
 | `trid3nt_server.tools.fetchers.imagery._goes_archive_core` | 1134 | trid3nt_server/tools/fetchers/imagery/_goes_archive_core.py | imported only by tests.fetchers.test_router_glm, tests.fetchers.test_router_goes_archive, trid3nt_server.tools.fetchers._router.hooks.goes_archive, trid3nt_server.tools.fetchers.weather.fetch_glm_lightning.hooks |
 | `trid3nt_server.tools.fetchers.weather.fetch_storm_tracks.hooks` | 931 | trid3nt_server/tools/fetchers/weather/fetch_storm_tracks/hooks.py | imported only by tests.fetchers.test_router_storm_tracks |
 | `scripts.model_check` | 720 | scripts/model_check.py | imported only by tests.model.test_model_conformance |
@@ -68,7 +68,7 @@ thing keeping the module alive; deleting both is one move.
 | `trid3nt_server.tools.fetchers.socioeconomic.fetch_field_boundaries.hooks` | 203 | trid3nt_server/tools/fetchers/socioeconomic/fetch_field_boundaries/hooks.py | imported only by tests.fetchers.test_router_field_boundaries, tests.inputs.test_extent |
 | `trid3nt_server.tools.fetchers.hazard.fetch_epa_frs_facilities.hooks` | 200 | trid3nt_server/tools/fetchers/hazard/fetch_epa_frs_facilities/hooks.py | imported only by tests.fetchers.test_router_arcgis_odd |
 | `trid3nt_server.tools.fetchers.weather.fetch_aorc_precip.hooks` | 186 | trid3nt_server/tools/fetchers/weather/fetch_aorc_precip/hooks.py | imported only by tests.fetchers.test_router_aorc_precip |
-| `trid3nt_server.tools.fetchers.hydrology.fetch_flood_extent_observation.hooks` | 177 | trid3nt_server/tools/fetchers/hydrology/fetch_flood_extent_observation/hooks.py | imported only by tests.fetchers.test_router_flood_extent_observation |
+| `trid3nt_server.tools.fetchers.hydrology.fetch_flood_extent_observation.hooks` | 176 | trid3nt_server/tools/fetchers/hydrology/fetch_flood_extent_observation/hooks.py | imported only by tests.fetchers.test_router_flood_extent_observation |
 | `trid3nt_server.tools.fetchers.hazard.fetch_firms_active_fire.hooks` | 165 | trid3nt_server/tools/fetchers/hazard/fetch_firms_active_fire/hooks.py | imported only by tests.fetchers.test_router_firms |
 | `trid3nt_server.workflows.mesh.meshers.drivers.telemac_dico_driver` | 161 | trid3nt_server/workflows/mesh/meshers/drivers/telemac_dico_driver.py | imported only by tests.mesh.test_mesh_om2d |
 | `trid3nt_server.tools.fetchers.socioeconomic.fetch_overpass_pois.hooks` | 160 | trid3nt_server/tools/fetchers/socioeconomic/fetch_overpass_pois/hooks.py | imported only by tests.fetchers.test_router_overpass |
