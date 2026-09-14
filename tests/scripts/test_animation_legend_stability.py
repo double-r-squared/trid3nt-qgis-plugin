@@ -195,6 +195,64 @@ def test_the_gif_masks_below_the_floor_its_published_still_masks_at(tmp_path):
     assert masked["vmin"] >= floor
 
 
+@functools.lru_cache(maxsize=1)
+def _doc_size_module():
+    """The page-weight seam, imported by path - ``dev/packet/`` is not a package."""
+    spec = importlib.util.spec_from_file_location(
+        "doc_size", DEV / "packet" / "doc_size.py")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules.setdefault("doc_size", module)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _ramp_stops(name: str, count: int) -> list[tuple[int, ...]]:
+    import matplotlib
+
+    cmap = matplotlib.colormaps[name]
+    return [tuple(round(channel * 255) for channel in cmap(i / (count - 1))[:3])
+            for i in range(count)]
+
+
+def _ground():
+    """A frame a basemap dominates: many colours, none of them blue-dominant,
+    which is what spends a median cut's whole budget before the ramp is reached."""
+    from PIL import Image
+
+    rng = np.random.default_rng(20260913)
+    size = (480, 480)
+    tile = np.stack([rng.integers(0, 256, size), rng.integers(0, 256, size),
+                     rng.integers(0, 140, size)], axis=-1)
+    return Image.fromarray(tile.astype("uint8"))
+
+
+def test_the_palette_reserves_the_ramps_stops_before_the_cut_takes_the_rest():
+    """A palette read off a green basemap has no blue in it, so RdBu's blue half
+    snaps to the ground: the stops are taken out of the budget first, and a pixel
+    painted at one comes back at it."""
+    from PIL import Image
+
+    doc = _doc_size_module()
+    ground = _ground()
+    stops = _ramp_stops("RdBu", 32)
+
+    palette = doc.reserved_palette([ground], ("RdBu",))
+    entries = {tuple(palette.getpalette()[i:i + 3]) for i in range(0, 768, 3)}
+    assert set(stops) <= entries, "a stop the palette lacks is a colour a reader loses"
+    assert {(0, 0, 0), (255, 255, 255)} <= entries, "the wireframe and the legend"
+
+    painted = ground.copy()
+    painted.paste(Image.new("RGB", (6, 6), tuple(stops[-1])), (10, 10))
+    kept = painted.quantize(palette=doc.reserved_palette([painted], ("RdBu",)),
+                            dither=Image.Dither.NONE)
+    assert kept.convert("RGB").getpixel((12, 12)) == stops[-1]
+
+    cut = {tuple(painted.quantize(colors=256).getpalette()[i:i + 3])
+           for i in range(0, 768, 3)}
+    assert stops[-1] not in cut, (
+        "the unreserved cut must miss the stop, or this test proves nothing")
+
+
 def _packet_module():
     spec = importlib.util.spec_from_file_location(
         "assemble_proof_packet", DEV / "packet" / "assemble_proof_packet.py")

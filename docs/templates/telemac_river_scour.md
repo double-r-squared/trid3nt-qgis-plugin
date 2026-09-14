@@ -65,7 +65,7 @@ The values the template declares. `desc` is what the model reads when it fills o
 | `bed_evolution_max_m` | 0.0016452783020213246 |
 | `bed_evolution_min_m` | -0.005266561172902584 |
 | `net_bed_mass_kg` | -746.0278 |
-| `surface_d50_spread_m` | - |
+| `surface_d50_spread_m` | not read: D50 (MEAN DIAMETER) is not among the variables the result carries (['BOTTOM', 'CUMUL BED EVOL']). |
 | `marker_cmax_mgl` | 94.071044921875 |
 | `active_frames` | 30 |
 | `mesh_size_m` | 10.415 |
@@ -83,23 +83,23 @@ It publishes these layers onto the canvas:
 
 ## The proving run
 
-Run `01M2BDVG00HWNNAV0XMC13W100`, 2026-09-12T18:25:25.237271+00:00, 27.327 s, at commit `5ff259cad6cedab2d12a68e79c663b99b1499884-dirty`.
+Run `01M2F0J3HN7VJFNWQTQV602GMJ`, 2026-09-14T03:50:03.475983+00:00, 26.346 s, at commit `5a382b2c1233267ddc1ce964d430e4cf255e85bc-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M2BDVG00HWNNAV0XMC13W100)](telemac_river_scour/telemac_river_scour.png)
+![Every layer the run published, stacked and framed on the result (run 01M2F0J3HN7VJFNWQTQV602GMJ)](telemac_river_scour/telemac_river_scour.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M2BDVG00HWNNAV0XMC13W100)*
+*Every layer the run published, stacked and framed on the result (run 01M2F0J3HN7VJFNWQTQV602GMJ)*
 
-![The solve, frame by frame (run 01M2BDVG00HWNNAV0XMC13W100)](telemac_river_scour/telemac_river_scour_animation.gif)
+![The solve, frame by frame (run 01M2F0J3HN7VJFNWQTQV602GMJ)](telemac_river_scour/telemac_river_scour_animation.gif)
 
-*The solve, frame by frame (run 01M2BDVG00HWNNAV0XMC13W100)*
+*The solve, frame by frame (run 01M2F0J3HN7VJFNWQTQV602GMJ)*
 
-![final frame (run 01M2BDVG00HWNNAV0XMC13W100)](telemac_river_scour/telemac_river_scour_final_frame.png)
+![final frame (run 01M2F0J3HN7VJFNWQTQV602GMJ)](telemac_river_scour/telemac_river_scour_final_frame.png)
 
-*final frame (run 01M2BDVG00HWNNAV0XMC13W100)*
+*final frame (run 01M2F0J3HN7VJFNWQTQV602GMJ)*
 
-![marker concentration - the chart the run persisted (run 01M2BDVG00HWNNAV0XMC13W100)](telemac_river_scour/telemac_river_scour_chart_marker_concentration.png)
+![marker concentration - the chart the run persisted (run 01M2F0J3HN7VJFNWQTQV602GMJ)](telemac_river_scour/telemac_river_scour_chart_marker_concentration.png)
 
-*marker concentration - the chart the run persisted (run 01M2BDVG00HWNNAV0XMC13W100)*
+*marker concentration - the chart the run persisted (run 01M2F0J3HN7VJFNWQTQV602GMJ)*
 
 ### The sheet it filled
 
@@ -154,5 +154,5 @@ await TOOL_REGISTRY['telemac_river_scour'].fn(
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2BDVG00HWNNAV0XMC13W100` and commit `5ff259cad6cedab2d12a68e79c663b99b1499884-dirty`. The full argument record is [`telemac_river_scour/run.json`](telemac_river_scour/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2F0J3HN7VJFNWQTQV602GMJ` and commit `5a382b2c1233267ddc1ce964d430e4cf255e85bc-dirty`. The full argument record is [`telemac_river_scour/run.json`](telemac_river_scour/run.json).
 

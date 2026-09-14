@@ -81,19 +81,19 @@ It publishes these layers onto the canvas:
 
 ## The proving run
 
-Run `01M2EX39CDWWSA21NA5AF69DZA`, 2026-09-14T02:49:32.262116+00:00, 26.141 s, at commit `3c57ff0163565f0991037f53ddd43df8bac595e6`.
+Run `01M2F0EMKVTQDDXE6KCF41ZS9N`, 2026-09-14T03:48:09.561332+00:00, 28.306 s, at commit `5a382b2c1233267ddc1ce964d430e4cf255e85bc-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M2EX39CDWWSA21NA5AF69DZA)](telemac_river_dredging/telemac_river_dredging.png)
+![Every layer the run published, stacked and framed on the result (run 01M2F0EMKVTQDDXE6KCF41ZS9N)](telemac_river_dredging/telemac_river_dredging.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M2EX39CDWWSA21NA5AF69DZA)*
+*Every layer the run published, stacked and framed on the result (run 01M2F0EMKVTQDDXE6KCF41ZS9N)*
 
-![The solve, frame by frame (run 01M2EX39CDWWSA21NA5AF69DZA)](telemac_river_dredging/telemac_river_dredging_animation.gif)
+![The solve, frame by frame (run 01M2F0EMKVTQDDXE6KCF41ZS9N)](telemac_river_dredging/telemac_river_dredging_animation.gif)
 
-*The solve, frame by frame (run 01M2EX39CDWWSA21NA5AF69DZA)*
+*The solve, frame by frame (run 01M2F0EMKVTQDDXE6KCF41ZS9N)*
 
-![final frame (run 01M2EX39CDWWSA21NA5AF69DZA)](telemac_river_dredging/telemac_river_dredging_final_frame.png)
+![final frame (run 01M2F0EMKVTQDDXE6KCF41ZS9N)](telemac_river_dredging/telemac_river_dredging_final_frame.png)
 
-*final frame (run 01M2EX39CDWWSA21NA5AF69DZA)*
+*final frame (run 01M2F0EMKVTQDDXE6KCF41ZS9N)*
 
 ### The sheet it filled
 
@@ -151,5 +151,5 @@ await TOOL_REGISTRY['telemac_river_dredging'].fn(
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2EX39CDWWSA21NA5AF69DZA` and commit `3c57ff0163565f0991037f53ddd43df8bac595e6`. The full argument record is [`telemac_river_dredging/run.json`](telemac_river_dredging/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2F0EMKVTQDDXE6KCF41ZS9N` and commit `5a382b2c1233267ddc1ce964d430e4cf255e85bc-dirty`. The full argument record is [`telemac_river_dredging/run.json`](telemac_river_dredging/run.json).
 
