@@ -26,7 +26,11 @@ from trid3nt_server.workflows.telemac.modules import (
     mesh,
     series,
 )
-from trid3nt_server.workflows.telemac.modules.outputs import OutputEmpty, Solved
+from trid3nt_server.workflows.telemac.modules.outputs import (
+    NOT_READ,
+    OutputEmpty,
+    Solved,
+)
 
 
 def _reach(telemac_result, *, tracer_name: str = "DYE") -> dict[str, Any]:
@@ -262,8 +266,19 @@ def test_a_measure_held_against_a_sheet_value_answers_a_ratio_or_a_verdict():
     assert fraction.answer(3.0, 0.0) is None and fraction.answer(None, 12.0) is None
     verdict = series("T2").measure("min").below(5.0)
     assert verdict.answer(4.2, 5.0) is True and verdict.answer(6.0, 5.0) is False
-    assert verdict.answer(4.2, None) is None
     assert deposited.answer(3.0, None) == 3.0
+
+
+def test_a_measure_held_to_a_param_nobody_supplied_says_it_was_not_asked():
+    """The verdict is a question, and a question nobody asked has no null answer:
+    the measure names the param the run never supplied and the delivery passes."""
+    from trid3nt_server.workflows.runtime import ParamRef
+
+    verdict = series("T2").measure("min").below(ParamRef("do_standard_mgl"))
+    assert verdict.held_to == "do_standard_mgl"
+    assert verdict.answer(4.2, None) == (
+        "not asked: do_standard_mgl was not supplied")
+    assert series("T2").measure("min").below(5.0).held_to is None
 
 
 def test_a_field_at_an_instant_carries_its_spread(solved):
@@ -513,10 +528,11 @@ def test_a_profile_keeps_only_the_nodes_within_the_stated_band(coupled):
     assert profile("T2", along="l", within_m=1.0) != profile("T2", along="l")
 
 
-def test_an_answer_over_a_variable_the_run_never_wrote_is_nothing(monkeypatch,
-                                                                    solved):
-    """A listed output the result lacks refuses; a measure alone over one is
-    an answer of nothing - a single-class bed writes no surface D50 to spread."""
+def test_an_answer_over_a_variable_the_run_never_wrote_states_its_reason(
+        monkeypatch, solved):
+    """A listed output the result lacks refuses; a measure alone over one answers
+    with the REASON the read came back empty - a single-class bed writes no
+    surface D50 to spread - so nobody reads a null off a sheet and guesses."""
     from trid3nt_contracts.execution import LayerURI
 
     from trid3nt_server.workflows.telemac import workflow as door
@@ -535,7 +551,9 @@ def test_an_answer_over_a_variable_the_run_never_wrote_is_nothing(monkeypatch,
         answer={"spread": field("Q", t=-1).measure("spread"),
                 "cmax": max_over_time("T1").measure("max")},
         params={}))
-    assert result.answer == {"spread": None, "cmax": 80.0}
+    assert result.answer["cmax"] == 80.0
+    assert result.answer["spread"].startswith(NOT_READ)
+    assert "is not among the variables the result carries" in result.answer["spread"]
     with pytest.raises(OutputEmpty):
         asyncio.run(door.publish_outputs(
             run=run, outputs=[field("Q", t=-1).layer(style={"kind": "continuous"})],

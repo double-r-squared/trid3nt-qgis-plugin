@@ -29,6 +29,8 @@ from trid3nt_server.workflows.runtime import DeclarativeError
 logger = logging.getLogger("trid3nt_server.workflows.telemac.modules.outputs")
 
 __all__ = [
+    "NOT_ASKED",
+    "NOT_READ",
     "PRIMITIVES",
     "Field",
     "Frames",
@@ -305,6 +307,16 @@ class Primitive:
         return replace(self, publish=None, style=None, reference=None)
 
 
+#: What a measure answers when the value it is held to was never supplied. A
+#: question nobody asked is not a gap in the delivery, so the sheet states it and
+#: the answer PASSES; the sentence rides the answer itself, which is the seam a
+#: measure already has for saying something a number cannot.
+NOT_ASKED = "not asked: "
+#: What a measure answers when the read it names came back empty: the reason,
+#: prefixed so a delivery refuses the sentence rather than reading it as an answer.
+NOT_READ = "not read: "
+
+
 @dataclass(frozen=True)
 class Measure:
     """A measure of a primitive's read, named by a template as an answer.
@@ -316,24 +328,31 @@ class Measure:
     stat: str
     op: str | None = None
     against: Any = None
+    held_to: str | None = None
 
     def over(self, value: Any) -> "Measure":
         """This measure divided by ``value``, a number or a declared param."""
-        return replace(self, op="over", against=value)
+        return replace(self, op="over", against=value, held_to=_named(value))
 
     def below(self, value: Any) -> "Measure":
         """Whether this measure lies below ``value``, a number or a declared param."""
-        return replace(self, op="below", against=value)
+        return replace(self, op="below", against=value, held_to=_named(value))
 
     def answer(self, measured: Any, against: Any) -> Any:
         """The answer this measure names, off what was read and what it is held to."""
         if measured is None or self.op is None:
             return measured
         if against is None:
-            return None
+            return (f"{NOT_ASKED}{self.held_to or 'the value it is held to'} "
+                    "was not supplied")
         if self.op == "over":
             return None if not float(against) else float(measured) / float(against)
         return bool(float(measured) < float(against))
+
+
+def _named(value: Any) -> str | None:
+    """The declared param a measure is held to, or ``None`` for a literal."""
+    return getattr(value, "name", None)
 
 
 def field(name: str, t: Any = -1, *, plane: int | None = None,

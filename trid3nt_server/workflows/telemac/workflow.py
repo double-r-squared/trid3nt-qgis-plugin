@@ -33,6 +33,7 @@ from trid3nt_server.workflows.telemac.errors import TelemacError
 from trid3nt_server.workflows.telemac.modules import wrapper_for
 from trid3nt_server.workflows.telemac.modules.module import SlotRefused
 from trid3nt_server.workflows.telemac.modules.outputs import (
+    NOT_READ,
     Line,
     Measure,
     OutputEmpty,
@@ -227,6 +228,7 @@ async def publish_outputs(*, run: Mapping[str, Any], outputs: Sequence[Primitive
               for (name, m), p in zip(answer.items(), listed[len(outputs):])}
     solved: dict[str, Solved] = {}
     published_keys = {primitive.key for primitive in outputs}
+    empty: dict[Primitive, str] = {}
 
     def _read(key: Primitive) -> Any:
         module = key.module or str(run["module"])
@@ -234,11 +236,13 @@ async def publish_outputs(*, run: Mapping[str, Any], outputs: Sequence[Primitive
             solved[module] = Solved(run, wrapper_for(module))
         try:
             return solved[module].body.OUTPUTS[key.kind].read(key, solved[module])
-        except OutputEmpty:
-            # A run that carried nothing a measure could read answers with
-            # nothing; a published output that is missing is a refusal.
+        except OutputEmpty as exc:
+            # A run that carried nothing a measure could read answers with the
+            # REASON it carried nothing, which the delivery refuses; a published
+            # output that is missing is a refusal here.
             if key in published_keys:
                 raise
+            empty[key] = str(exc)
             return None
 
     def _beside(primitive: Primitive) -> Primitive | None:
@@ -276,11 +280,16 @@ async def publish_outputs(*, run: Mapping[str, Any], outputs: Sequence[Primitive
                  for primitive in outputs])
     published = await publish(run_id=str(run["run_id"]), engine="telemac",
                               name=name, items=items)
-    answered = {name: measure.answer(
-                    None if reads[measure.primitive] is None
-                    else reads[measure.primitive].measures.get(measure.stat),
-                    measure.against)
-                for name, measure in answer.items()}
+
+    def _answered(measure: Measure) -> Any:
+        if measure.primitive in empty:
+            return f"{NOT_READ}{empty[measure.primitive]}"
+        read = reads[measure.primitive]
+        return measure.answer(
+            None if read is None else read.measures.get(measure.stat),
+            measure.against)
+
+    answered = {name: _answered(measure) for name, measure in answer.items()}
     if published.primary is None:
         raise SlotRefused(
             "the outputs list publishes no layer, so the run has nothing to lead "
