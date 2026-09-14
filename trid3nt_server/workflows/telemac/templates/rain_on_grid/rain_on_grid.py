@@ -161,7 +161,6 @@ class STEERING(T2D):
     RESULTS_FILE = _RESULT
     TITLE = Ref("settled.title")
 
-    VARIABLES_FOR_GRAPHIC_PRINTOUTS = "U,V,H,S,B"
     GRAPHIC_PRINTOUT_PERIOD = Ref("settled.graphic_period")
     LISTING_PRINTOUT_PERIOD = Ref("settled.graphic_period")
     DURATION = Ref("settled.duration_s")
@@ -220,20 +219,14 @@ class STEERING(T2D):
                     note=Ref("settled.rating.note"))
 
 
-#: The MAX WATER DEPTH field: depth above ground, no datum, always positive,
-#: on the wet-blue ramp an inundation field is read on.
-MAX_DEPTH_STYLE = {"kind": "mesh", "ramp": "ylgnbu", "units": "m"}
-
-#: What the solved run is read for: the depth over time as the animation, its
-#: envelope as the map, and the flux the engine printed across the outlet as the
-#: hydrograph - charted, and placed on the map as the station that carries it.
+#: What this question PLACES: the flux the engine printed across the outlet the
+#: user gave, as the hydrograph - charted, and on the map as the station that
+#: carries it.
 OUTPUTS = [
-    field("H", t="every").animate(),
-    max_over_time("H").layer(style=MAX_DEPTH_STYLE),
     series("FLUX", at=P.pour_point).chart(),
     series("FLUX", at=P.pour_point).station(),
 ]
-CAPTIONS = {"H": "water depth", "FLUX": "outlet hydrograph"}
+CAPTIONS = {"FLUX": "outlet hydrograph"}
 
 #: The run's ANSWER, as the numbers a reader has to be able to check, each a
 #: measure of one of the reads above. The volumes are the engine's own final

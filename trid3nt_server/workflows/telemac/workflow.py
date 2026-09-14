@@ -33,6 +33,7 @@ from trid3nt_server.workflows.telemac.errors import TelemacError
 from trid3nt_server.workflows.telemac.modules import wrapper_for
 from trid3nt_server.workflows.telemac.modules.module import SlotRefused
 from trid3nt_server.workflows.telemac.modules.outputs import (
+    NOT_ASKED,
     NOT_READ,
     Line,
     Measure,
@@ -81,9 +82,11 @@ class Door:
     #: The dispatch the staged run goes to, by the path it is resolved at CALL
     #: time. WHICH box entry is the template's, not the sheet's.
     dispatch: str
-    #: The primitives the template reads off the solved run, each with how it
-    #: is published; ``captions`` names each variable's quantity in the
-    #: template's words; ``answer`` names the measures the run answers with.
+    #: The reads the template PLACES - a series at a point the user gives, a
+    #: profile along a line - each with how it is published; ``captions`` names
+    #: those in the template's words; ``answer`` names the measures the run
+    #: answers with. What the run WRITES is the module's own table and is
+    #: published whether a template lists anything or not.
     #: WHICH of the results MDAL opens as the mesh a derived dataset group is
     #: drawn over; empty means the result the run is read from is that mesh.
     display_file: str = ""
@@ -162,11 +165,10 @@ class Door:
         ]
 
     def _outputs_step(self, params: Mapping[str, Any]) -> Step:
-        """The publish step, checked: every published variable has its caption."""
-        if not self.outputs:
-            raise PlanValidationError(
-                "OUTPUTS lists nothing; a template reads its answer off the solved "
-                "run through the primitives it lists.")
+        """The publish step, checked: every PLACED read has its caption.
+
+        A template that reads nothing the user gives a place lists nothing: what
+        the run writes is the module's table, published without being asked."""
         for primitive in self.outputs:
             if primitive.publish is None:
                 raise PlanValidationError(
@@ -197,6 +199,18 @@ class Door:
                             "params": dict(params)}).named("outputs")
 
 
+def _painted(row: Mapping[str, Any]) -> list[Primitive]:
+    """One table row -> what the run publishes of it: the final frame as the
+    layer, and the whole series as the animation where it varies in time."""
+    from trid3nt_server.workflows.telemac.modules.outputs import field
+
+    token, module, style = row["token"], row["module"], row.get("style")
+    painted = [field(token, t=-1, module=module).layer(style=style)]
+    if row.get("varies"):
+        painted.append(field(token, t="every", module=module).animate())
+    return painted
+
+
 def _unanchored(primitive: Primitive) -> Primitive:
     return replace(primitive, at=None, along=None, within=None, over=None)
 
@@ -213,13 +227,19 @@ async def publish_outputs(*, run: Mapping[str, Any], outputs: Sequence[Primitive
                           anchors: Sequence[Mapping[str, Any]] = (),
                           against: Mapping[str, Any] | None = None
                           ) -> AnswerLayerURI:
-    """Read the listed primitives off the solved run, publish each, answer.
+    """Read what the run wrote off it, publish every variable, answer.
 
-    Each module's result is read ONCE; every primitive and every answer reads
-    from it, a coupled module's own file through its own wrapper. A chart's
-    reference is a callable computing lines beside the read, or another
-    primitive read where the chart's own is anchored and drawn as a line. A
-    listed output the result lacks refuses; an answer over one is ``None``."""
+    The module's TABLE is the outputs list: every row of the host's and of each
+    coupled module's, styled from the row, painted at the final frame and
+    animated where it varies in time; a row the result does not carry is
+    skipped. The template's own list is the reads it PLACED beside them. Each
+    module's result is read ONCE; a coupled module's own file goes through its
+    own wrapper. A chart's reference is a callable computing lines beside the
+    read, or another primitive read where the chart's own is anchored and drawn
+    as a line. A placed read the result lacks refuses; an answer over one is
+    ``None``."""
+    table = [p for row in (run.get("module_output") or ())
+             for p in _painted(row)]
     listed = [*outputs, *(m.primitive for m in answer.values())]
     if anchors:
         listed = [_anchored(p, a) for p, a in zip(listed, anchors)]
@@ -235,7 +255,7 @@ async def publish_outputs(*, run: Mapping[str, Any], outputs: Sequence[Primitive
         if module not in solved:
             solved[module] = Solved(run, wrapper_for(module))
         try:
-            return solved[module].body.OUTPUTS[key.kind].read(key, solved[module])
+            return solved[module].body.READS[key.kind](key, solved[module])
         except OutputEmpty as exc:
             # A run that carried nothing a measure could read answers with the
             # REASON it carried nothing, which the delivery refuses; a published
@@ -251,7 +271,7 @@ async def publish_outputs(*, run: Mapping[str, Any], outputs: Sequence[Primitive
             return None
         return replace(reference, at=primitive.at, along=primitive.along).key
 
-    wanted = {primitive.key for primitive in outputs}
+    wanted = {primitive.key for primitive in (*table, *outputs)}
     wanted |= {measure.primitive for measure in answer.values()}
     wanted |= {_beside(p) for p in outputs if _beside(p) is not None}
     reads = await asyncio.to_thread(lambda: {key: _read(key) for key in wanted})
@@ -271,18 +291,25 @@ async def publish_outputs(*, run: Mapping[str, Any], outputs: Sequence[Primitive
                           values=other.values),)
         reads[primitive.key] = replace(read, lines=lines)
     name, where = str(run["name"]), str(params.get("location") or run["name"])
+
+    def _delivered(primitive: Primitive, caption: str) -> Any:
+        return deliver(primitive, reads[primitive.key],
+                       solved[primitive.module or str(run["module"])],
+                       caption=caption, name=name, where=where)
+
     items = await asyncio.to_thread(
-        lambda: [deliver(primitive, reads[primitive.key],
-                         solved[primitive.module or str(run["module"])],
-                         caption=captions.get(
-                             primitive.variable or primitive.kind, primitive.kind),
-                         name=name, where=where)
-                 for primitive in outputs])
+        lambda: [_delivered(primitive, reads[primitive.key].name.strip().lower())
+                 for primitive in table if reads[primitive.key] is not None]
+        + [_delivered(primitive, captions.get(primitive.variable or primitive.kind,
+                                              primitive.kind))
+           for primitive in outputs])
     published = await publish(run_id=str(run["run_id"]), engine="telemac",
                               name=name, items=items)
 
     def _answered(measure: Measure) -> Any:
         if measure.primitive in empty:
+            if measure.unasked and measure.against is None:
+                return f"{NOT_ASKED}{measure.unasked}"
             return f"{NOT_READ}{empty[measure.primitive]}"
         read = reads[measure.primitive]
         return measure.answer(
@@ -292,8 +319,8 @@ async def publish_outputs(*, run: Mapping[str, Any], outputs: Sequence[Primitive
     answered = {name: _answered(measure) for name, measure in answer.items()}
     if published.primary is None:
         raise SlotRefused(
-            "the outputs list publishes no layer, so the run has nothing to lead "
-            "with; list at least one .layer().")
+            f"the {run['module']} run wrote none of the variables its module "
+            "rows, so it published nothing and there is nothing to paint.")
     logger.info("telemac outputs published run_id=%s layers=%d charts=%d answer=%s",
                 run["run_id"], len(published.layers), len(published.charts),
                 answered)
@@ -344,7 +371,10 @@ async def run_sheet(*, sheet: Sheet, settled: Mapping[str, Any],
                     display: str = "") -> dict[str, Any]:
     """A complete sheet: serialize, stage, hand it to the box -> the run handle.
 
-    Nothing is listed as readable that the run does not carry."""
+    Nothing is listed as readable that the run does not carry. The handle names
+    every variable the deck asked for, because what the run wrote is decided
+    here - where the coupled bodies and the declared tracers are both in hand -
+    and not again where it is read."""
     module, _, attribute = str(dispatch).rpartition(".")
     to_the_box = getattr(import_module(module), attribute)
     coupled = dict(sheet.resolved()).get("COUPLING WITH")
@@ -359,6 +389,9 @@ async def run_sheet(*, sheet: Sheet, settled: Mapping[str, Any],
         continue_from=settled.get("continue_from"))
     return {**settled, **handle, "module": sheet.module,
             "display_basename": display or None,
+            "module_output": [{"token": token, "module": module,
+                               "style": row.style, "varies": row.varies}
+                              for token, module, row in sheet.published()],
             "tracer_names": dict(sheet.resolved()).get("NAMES OF TRACERS")}
 
 
@@ -376,10 +409,12 @@ _ORIGIN_DOORS: Mapping[Origin, tuple[str, str]] = {
 
 
 def card_rows(sheet: Sheet) -> list[ParamSheetRow]:
-    """The sheet as the card renders it: what is SET, what is OPEN, then the rest.
+    """The sheet as the card renders it: what is SET, what the run WRITES, what
+    is OPEN, then the rest.
 
     The rest is the whole module, folded under advanced with its engine default."""
     rows = [_slot_row(name, row) for name, row in sheet.filled.items()]
+    rows += _written_rows(sheet)
     rows += [_open_row(slot) for slot in sheet.required()]
     # The advanced fold reads down the dictionary's own RUBRIQUES, and inside one
     # down the dictionary's own order - the sections the engine's documentation
@@ -388,6 +423,30 @@ def card_rows(sheet: Sheet) -> list[ParamSheetRow]:
             if name not in sheet.filled and not slot.is_required]
     return rows + [_default_row(slot) for slot in
                    sorted(rest, key=lambda slot: _group(slot))]
+
+
+def _written_rows(sheet: Sheet) -> list[ParamSheetRow]:
+    """What each deck of this run WRITES, expanded, in the module's own order.
+
+    The keyword is generated from the module's table, so the card states it here
+    rather than reading it off a slot nobody filled."""
+    from trid3nt_server.workflows.telemac.modules import wrapper_for
+
+    decks = [(sheet.body, [row.name for row in sheet.tracers])]
+    decks += [(wrapper_for(body["module"]), []) for body in sheet.coupled]
+    rows = []
+    for body, tracers in decks:
+        if not body.PRINTOUTS:
+            continue
+        slot = body.slot(body.PRINTOUTS)
+        rows.append(ParamSheetRow(
+            name=f"{body.MODULE}.{slot.identifier}",
+            value=[body.MODULE_OUTPUT[token].name for token in body.written()]
+            + tracers,
+            desc=slot.desc[:512], door="scenario", basis="derived",
+            editable=False, group=_group(slot),
+            source_badge=f"the {body.MODULE} module's own variable table"))
+    return rows
 
 
 async def _review(sheet: Sheet, *, workflow: str, title: str,

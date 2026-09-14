@@ -20,10 +20,15 @@ holds the boundary in both directions.
 
 ## What a TELEMAC output becomes
 
+Which variables a run publishes is the MODULE's statement - its `MODULE_OUTPUT`
+table, one row per variable with the style it draws under - and not the
+template's; the door turns every row the result carries into the two products
+below. What a template adds is the reads it PLACES on the user's geometry.
+
 | a primitive | the product |
 |---|---|
 | `field(name, t="every").animate()` | the results mesh layer, painting the dataset group the result file carries for that variable, with the run's own reference time so the temporal controller scrubs the right clock |
-| `field(name, t)` | the same mesh, painting a single-step group the module outputs wrote beside the results for that instant |
+| `field(name, t)` | the same mesh, painting a single-step group the publish wrote beside the results for that instant - one per table row, at the run's final frame |
 | `max_over_time(name)`, a plane of a 3D result, a variable the module DERIVES | the same, for a group no result file carries |
 | `series`, `profile`, `column` | a chart payload |
 | `drogues()`, a series at a station | a GeoJSON vector layer |
@@ -32,7 +37,7 @@ holds the boundary in both directions.
 A derived group is written as the SMS ASCII dataset (`DATASET / BEGSCL / ND /
 NC / NAME / TS`) - the least machinery MDAL reads - by
 `render/mesh_display.write_ascii_dataset`, uploaded under the run prefix by the
-module outputs, and named on the layer's `dataset_uris`. The plugin stages the
+publish, and named on the layer's `dataset_uris`. The plugin stages the
 mesh and every dataset file, calls `addDatasets` on each, and only then binds
 the declared group by name. A node below the read's floor is written as nothing,
 so the field draws where it is visible and the basemap shows through where it is

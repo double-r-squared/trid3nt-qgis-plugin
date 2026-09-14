@@ -6,7 +6,7 @@ One wrapper per TELEMAC module. A wrapper is the module's own dictionary, read a
 
 `describe_keywords(module=..., query=...)` is the read over any of these dictionaries - it answers with the keyword, the engine's own help text, its choices and its default.
 
-| module | keywords | composites | outputs |
+| module | keywords | composites | reads |
 |---|---|---|---|
 | `artemis` | 118 | `incident_wave` | `extent`, `field`, `mass_balance`, `max_over_time`, `mesh`, `profile`, `series` |
 | `gaia` | 148 | `bed`, `dredging`, `suspension` | `extent`, `field`, `mass_balance`, `max_over_time`, `mesh`, `profile`, `series` |
@@ -14,5 +14,52 @@ One wrapper per TELEMAC module. A wrapper is the module's own dictionary, read a
 | `telemac3d` | 355 | `column`, `vertical_grid`, `wind` | `column`, `extent`, `field`, `mass_balance`, `max_over_time`, `mesh`, `profile`, `series` |
 | `waqtel` | 91 | `degradation` | - |
 
-A COMPOSITE is one value standing for a keyword group, so the group cannot half-arrive. An OUTPUT binds a result file to the reader that publishes it.
+A COMPOSITE is one value standing for a keyword group, so the group cannot half-arrive. A READ is a primitive over what the module wrote.
+
+## What each module writes
+
+The module's own output table. Every row a run's result carries is published - the final frame as a layer on the mesh the run solved on, styled from the row, and an animation beside it where the row varies in time. The printouts keyword the engine reads is generated from this table; no template states one.
+
+### `artemis`
+
+| mnemonic | the result file calls it | unit | ramp | varies in time | asked of the engine |
+|---|---|---|---|---|---|
+| `HS` | WAVE HEIGHT | m | `ylgnbu` | no | yes |
+| `PHAS` | WAVE PHASE | rad | `hsv` | no | yes |
+| `ZS` | FREE SURFACE | m | `blues` | no | yes |
+| `ZF` | BOTTOM | m | `terrain` | no | yes |
+| `KD` | KD | Hs/H0 | - | no | no - derived over the result |
+
+### `gaia`
+
+| mnemonic | the result file calls it | unit | ramp | varies in time | asked of the engine |
+|---|---|---|---|---|---|
+| `E` | CUMUL BED EVOL | m | `rdbu` | yes | yes |
+| `D50` | MEAN DIAMETER | m | `cividis` | yes | yes |
+| `TOB` | BED SHEAR STRESS | N/m2 | `inferno` | yes | yes |
+
+### `telemac2d`
+
+| mnemonic | the result file calls it | unit | ramp | varies in time | asked of the engine |
+|---|---|---|---|---|---|
+| `U` | VELOCITY U | m/s | `rdbu` | yes | yes |
+| `V` | VELOCITY V | m/s | `rdbu` | yes | yes |
+| `H` | WATER DEPTH | m | `ylgnbu` | yes | yes |
+| `S` | FREE SURFACE | m | `blues` | yes | yes |
+| `B` | BOTTOM | m | `terrain` | no | yes |
+| `F` | FROUDE NUMBER | - | `magma` | yes | yes |
+| `Q` | SCALAR FLOWRATE | m2/s | `viridis` | yes | yes |
+| `M` | SCALAR VELOCITY | m/s | `viridis` | yes | yes |
+| `T` | TRACER | - | `reds` | yes | no - one row per declared tracer |
+| `FLUX` | FLUX BOUNDARY | m3/s | - | yes | no - printed in the listing |
+
+### `telemac3d`
+
+| mnemonic | the result file calls it | unit | ramp | varies in time | asked of the engine |
+|---|---|---|---|---|---|
+| `Z` | ELEVATION Z | m | `blues` | yes | yes |
+| `U` | VELOCITY U | m/s | `rdbu` | yes | yes |
+| `V` | VELOCITY V | m/s | `rdbu` | yes | yes |
+| `W` | VELOCITY W | m/s | `rdbu` | yes | yes |
+| `TA` | TRACER | - | `viridis` | yes | no - one row per declared tracer |
 

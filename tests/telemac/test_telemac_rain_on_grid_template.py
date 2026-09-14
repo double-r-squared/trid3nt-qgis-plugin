@@ -102,17 +102,17 @@ def test_the_declared_plan_is_the_rain_on_grid_sequence():
     validate_plan(plan, workflow.params, workflow.data)
 
 
-def test_the_outputs_are_the_depth_and_the_flux_across_the_outlet():
-    """The depth animates and its envelope is the map; the flux the engine printed
-    across the outlet is charted and placed as the station that carries it, under
-    the one name the calibration seam pairs against a gauge."""
+def test_the_outputs_are_the_flux_across_the_outlet_the_user_placed():
+    """The depth is the module's to publish; what this template lists is the read
+    the user gives a place - the flux the engine printed across the outlet,
+    charted and placed as the station that carries it, under the one name the
+    calibration seam pairs against a gauge."""
     from trid3nt_server.render.formats import quantity_of
     from trid3nt_server.workflows.telemac.templates.rain_on_grid.rain_on_grid import (
         ANSWER, CAPTIONS, OUTPUTS,
     )
 
     assert [(p.kind, p.variable, p.publish) for p in OUTPUTS] == [
-        ("field", "H", "animate"), ("max_over_time", "H", "layer"),
         ("series", "FLUX", "chart"), ("series", "FLUX", "station")]
     assert quantity_of(CAPTIONS["FLUX"]) == "outlet_hydrograph"
     assert {"peak_discharge_m3s", "runoff_volume_m3", "rainfall_volume_m3",

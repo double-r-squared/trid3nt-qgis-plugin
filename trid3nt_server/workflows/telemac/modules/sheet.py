@@ -15,7 +15,7 @@ from typing import Any, Callable, Mapping, Sequence
 from trid3nt_server.workflows.runtime import ParamRef, Ref
 from trid3nt_server.workflows.runtime.plan import declared_reads
 
-from .module import Slot, SlotRefused
+from .module import Output, Slot, SlotRefused
 
 __all__ = ["Filled", "Origin", "Provenance", "Sheet", "SheetIncomplete", "draw",
            "fill", "run"]
@@ -90,6 +90,57 @@ class Sheet:
     def required(self) -> tuple[Slot, ...]:
         """The open slots a run cannot begin without: the dictionary's OBLIG files."""
         return tuple(slot for slot in self.open() if slot.is_required)
+
+    @property
+    def coupled(self) -> tuple[Mapping[str, Any], ...]:
+        """The coupled bodies this deck names, in the order it names them."""
+        return tuple(content for content in self.files.values()
+                     if isinstance(content, Mapping) and "slots" in content)
+
+    @property
+    def tracers(self) -> tuple[Output, ...]:
+        """Every tracer this run's result carries: the ones the deck declares,
+        then the ones each coupled module appends behind them.
+
+        A name is 32 characters - the name in the first 16, the unit after."""
+        from . import wrapper_for
+
+        row = self.body.MODULE_OUTPUT.get(self.body.TRACER)
+        rows = []
+        for declared in dict(self.resolved()).get("NAMES OF TRACERS") or ():
+            padded = str(declared).ljust(32)
+            rows.append(Output(name=padded[:16].strip(), unit=padded[16:].strip(),
+                               style=row.style if row is not None else None))
+        for body in self.coupled:
+            appends = wrapper_for(body["module"]).APPENDS
+            rows += list(appends(body)) if appends is not None else []
+        return tuple(rows)
+
+    def printouts(self) -> Mapping[str, str]:
+        """THIS deck's variables keyword, generated from its module's table."""
+        return self.body.printouts(tracers=len(self.tracers))
+
+    def published(self) -> tuple[tuple[str, str, Output], ...]:
+        """Every variable this run's results carry, as ``(token, module, row)``.
+
+        The host's table first, then its tracers by position, then each coupled
+        module's own - the order the engine wrote them in."""
+        from . import wrapper_for
+
+        body = self.body
+        rows = [(token, self.module, row)
+                for token, row in body.MODULE_OUTPUT.items()
+                if token not in body.LISTING and token != body.TRACER]
+        # A tracer is read by its POSITION among the carrier's own, which is the
+        # token the primitives spell whatever the keyword calls it.
+        rows += [(f"T{n}", self.module, row)
+                 for n, row in enumerate(self.tracers, start=1)]
+        for coupled in self.coupled:
+            wrapper = wrapper_for(coupled["module"])
+            rows += [(token, coupled["module"], row)
+                     for token, row in wrapper.MODULE_OUTPUT.items()
+                     if token not in wrapper.LISTING and token != wrapper.TRACER]
+        return tuple(rows)
 
     def resolved(self) -> tuple[tuple[str, Any], ...]:
         """``(keyword, value)`` for everything the deck states, in dictionary order.

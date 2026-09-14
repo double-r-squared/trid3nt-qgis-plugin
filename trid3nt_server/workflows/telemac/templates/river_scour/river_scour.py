@@ -183,9 +183,6 @@ class STEERING(T2D):
     # are clamped after the flux was computed.
     MASS_BALANCE = True
 
-    # A coupled run drives the module's own launcher whole rather than the
-    # stepped arm, so it writes no restart record and cannot be continued.
-    VARIABLES_FOR_GRAPHIC_PRINTOUTS = "U,V,H,S,B,T1"
     GRAPHIC_PRINTOUT_PERIOD = Ref("settled.graphic_period")
     DURATION = P.sim_duration_s
 
@@ -218,44 +215,30 @@ class STEERING(T2D):
                          d50_um=P.grain_size_um, thickness_m=P.bed_thickness_m,
                          formula=P.bedload_formula, hiding_factor_formula=1,
                          morphological_factor=P.morphological_factor,
-                         printouts="B,E", mixture_printouts="B,E,D50",
                          mass_balance=True)]
 
     wind = Wind(speed_mps=P.wind_speed_mps, from_deg=P.wind_direction_deg)
     rain = Rain(mm_per_day=Ref("rain.mm_per_day"), tracers=1)
 
 
-#: The GAIA bed-evolution field, in the metres the module writes: deposition
-#: positive, erosion negative, so the ramp diverges about zero and the legend is
-#: ranged symmetrically about that centre.
-BED_EVOLUTION_STYLE = {"kind": "mesh", "ramp": "rdbu", "units": "m",
-                       "center": 0.0}
-
-#: The marker-concentration field, on the ramp a dissolved tracer is read on.
-MARKER_STYLE = {"kind": "mesh", "ramp": "reds", "units": "mg/L"}
-
-#: What the solved run is read for: the bed's cumulative evolution off GAIA's own
-#: result as the map and, over time, as the animation - the CHANGE is the answer,
-#: where the bed's absolute relief is terrain the run did not make - the marker's
-#: envelope beside it and its reach-wide history as the chart.
+#: What this question PLACES: the marker's reach-wide history as the chart.
 OUTPUTS = [
-    field("E", t=-1, module="gaia").layer(style=BED_EVOLUTION_STYLE),
-    field("E", t="every", module="gaia").animate(),
-    max_over_time("T1").layer(style=MARKER_STYLE),
     series("T1").chart(),
 ]
-CAPTIONS = {"E": "bed evolution", "B": "bed elevation", "T1": "marker concentration"}
+CAPTIONS = {"T1": "marker concentration"}
 
-#: The run's ANSWER, as the numbers a reader has to be able to check, each a
-#: measure of one of the reads above. The evolution is signed: deposition
-#: positive, scour negative. The surface D50 is written for a MIXTURE only, so
-#: its spread - the sorting signature, in the metres the module writes - is
-#: nothing on a single-class bed, which cannot sort.
+#: The run's ANSWER, as the numbers a reader has to be able to check. The
+#: evolution is signed: deposition positive, scour negative. The surface D50 is
+#: written for a MIXTURE only, so its spread - the sorting signature, in the
+#: metres the module writes - is a question a single-class bed was never asked.
 ANSWER = {
     "bed_evolution_max_m": field("E", t=-1, module="gaia").measure("max"),
     "bed_evolution_min_m": field("E", t=-1, module="gaia").measure("min"),
     "net_bed_mass_kg": mass_balance(module="gaia").measure("sediment_net_bed_mass_kg"),
-    "surface_d50_spread_m": field("D50", t=-1, module="gaia").measure("spread"),
+    "surface_d50_spread_m": field("D50", t=-1, module="gaia").measure("spread")
+                            .needs(P.sediment_gradation,
+                                   without="the bed is one class; ask for a "
+                                           "mixture to read a surface D50"),
     "marker_cmax_mgl": max_over_time("T1").measure("max"),
     "active_frames": series("T1").measure("active_frames"),
     "mesh_size_m": mesh().measure("size_m"),

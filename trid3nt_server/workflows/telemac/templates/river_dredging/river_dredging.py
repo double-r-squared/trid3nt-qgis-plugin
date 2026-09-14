@@ -33,7 +33,7 @@ from trid3nt_server.workflows.telemac.templates.river_dredging.declarations impo
 from trid3nt_server.workflows.telemac.templates import reach
 from trid3nt_server.workflows.telemac.workflow import Door, TelemacWorkflow
 
-__all__ = ["ANSWER", "CAPTIONS", "DATA", "MESH", "OUTPUTS", "PARAMS", "STEERING",
+__all__ = ["ANSWER", "DATA", "MESH", "PARAMS", "STEERING",
            "telemac_river_dredging"]
 
 _AUTHORING = "trid3nt_server.workflows.telemac.authoring"
@@ -175,7 +175,6 @@ class STEERING(T2D):
     # own volumes are printed into the same listing.
     MASS_BALANCE = True
 
-    VARIABLES_FOR_GRAPHIC_PRINTOUTS = "U,V,H,S,B"
     GRAPHIC_PRINTOUT_PERIOD = Ref("settled.graphic_period")
     DURATION = P.sim_duration_s
 
@@ -198,7 +197,6 @@ class STEERING(T2D):
         gradation=None, presets={}, d50_um=P.grain_size_um,
         thickness_m=P.bed_thickness_m, formula=P.bedload_formula,
         hiding_factor_formula=1, morphological_factor=P.morphological_factor,
-        printouts="B,E", mixture_printouts="B,E,D50",
         dredging=Dredging(
             actions=[Dig(field=Ref("dredge.dredge_area"),
                          level=_REFERENCE_LEVEL,
@@ -217,25 +215,6 @@ class STEERING(T2D):
             reference=Ref("dredge.profiles"),
             origin=P.time_origin))]
 
-
-#: The GAIA bed-evolution field, in the metres the module writes: deposition
-#: positive, the dredged cut negative, so the ramp diverges about zero and the
-#: legend is ranged symmetrically about that centre.
-BED_EVOLUTION_STYLE = {"kind": "mesh", "ramp": "rdbu", "units": "m",
-                       "center": 0.0}
-#: The bed the run ends on, as terrain rather than as change.
-BED_STYLE = {"kind": "mesh", "ramp": "terrain", "units": "m"}
-
-#: What the solved run is read for: the bed's cumulative evolution off GAIA's own
-#: result as the map and, over time, as the animation - the CHANGE is the answer,
-#: where the bed's absolute relief is terrain the run did not make - and the
-#: host's own bottom beside them, which is the channel the dredge left.
-OUTPUTS = [
-    field("E", t=-1, module="gaia").layer(style=BED_EVOLUTION_STYLE),
-    field("E", t="every", module="gaia").animate(),
-    field("B", t=-1).layer(style=BED_STYLE),
-]
-CAPTIONS = {"E": "bed evolution", "B": "bed elevation"}
 
 #: The run's ANSWER. The two volumes are the engine's OWN report lines, summed
 #: over the maintenance passes it printed; the two bed changes are the evolution
@@ -317,7 +296,7 @@ telemac_river_dredging = register_workflow(
         results=(_RESULT, RESULT_FILENAME),
         steering_file=_STEERING_FILE, prefix="telemac",
         dispatch=f"{_ENGINE}.solve_case", compute_class=P.compute_class,
-        outputs=OUTPUTS, captions=CAPTIONS, answer=ANSWER,
+        answer=ANSWER,
         review_title="Review the dredge, the bed and the mesh"),
     data=DATA,
     accepts=ACCEPTS,

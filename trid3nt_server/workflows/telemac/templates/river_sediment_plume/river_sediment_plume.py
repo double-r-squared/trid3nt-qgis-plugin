@@ -183,12 +183,6 @@ class STEERING(T2D):
     # are clamped after the flux was computed.
     MASS_BALANCE = True
 
-    # A coupled run drives the module's own launcher whole rather than the
-    # stepped arm, so it writes no restart record and cannot be continued.
-    #: GAIA's suspended class arrives at the carrier as a SECOND tracer, so the
-    #: file has to output it and every array sized to the tracer count carries
-    #: two values - the visible half of what this fork costs.
-    VARIABLES_FOR_GRAPHIC_PRINTOUTS = "U,V,H,S,B,T1,T2"
     GRAPHIC_PRINTOUT_PERIOD = Ref("settled.graphic_period")
     DURATION = P.sim_duration_s
 
@@ -221,32 +215,18 @@ class STEERING(T2D):
                                d50_um=P.grain_size_um,
                                concentration_mgl=P.sediment_concentration_mgl,
                                transport_formula=3, advection_scheme=[1],
-                               printouts="B,E", mass_balance=True)]
+                               mass_balance=True)]
 
     wind = Wind(speed_mps=P.wind_speed_mps, from_deg=P.wind_direction_deg)
     rain = Rain(mm_per_day=Ref("rain.mm_per_day"), tracers=2)
 
 
-#: The GAIA bed-evolution field, in the metres the module writes: deposition
-#: positive, erosion negative, so the ramp diverges about zero and the legend is
-#: ranged symmetrically about that centre.
-BED_EVOLUTION_STYLE = {"kind": "mesh", "ramp": "rdbu", "units": "m",
-                       "center": 0.0}
-
-#: The SUSPENDED-SEDIMENT concentration field - a grain load, on its own ramp so
-#: it never reads as a dissolved field published beside it.
-SEDIMENT_STYLE = {"kind": "mesh", "ramp": "oranges", "units": "mg/L"}
-
-#: What the solved run is read for: the suspended class over time as the
-#: animation, its envelope as the map, its reach-wide history as the chart, and
-#: what settled onto the bed off GAIA's own result.
+#: What this question PLACES: the suspended class's reach-wide history as the
+#: chart.
 OUTPUTS = [
-    field("T2", t="every").animate(),
-    max_over_time("T2").layer(style=SEDIMENT_STYLE),
     series("T2").chart(),
-    field("E", t=-1, module="gaia").layer(style=BED_EVOLUTION_STYLE),
 ]
-CAPTIONS = {"T2": "suspended sediment concentration", "E": "bed evolution"}
+CAPTIONS = {"T2": "suspended sediment concentration"}
 
 #: The run's ANSWER, as the numbers a reader has to be able to check, each a
 #: measure of one of the reads above; the deposited fraction is the listing's

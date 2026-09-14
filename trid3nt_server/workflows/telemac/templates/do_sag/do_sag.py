@@ -17,7 +17,7 @@ from trid3nt_server.workflows.runtime import (
 from trid3nt_server.workflows.mesh.tool import mesh_op, tool
 from trid3nt_server.inputs import point_arg
 from trid3nt_server.inputs.aoi import location_or_bbox
-from trid3nt_server.workflows.telemac.modules import T2D, WAQTEL, field, mesh
+from trid3nt_server.workflows.telemac.modules import T2D, WAQTEL, mesh
 from trid3nt_server.workflows.telemac.modules.outputs import profile
 from trid3nt_server.workflows.telemac.modules.telemac2d import Boundaries, Release
 from trid3nt_server.workflows.telemac.templates.do_sag import streeter_phelps
@@ -166,9 +166,6 @@ class STEERING(T2D):
     # are clamped after the flux was computed.
     MASS_BALANCE = True
 
-    # A coupled run drives the module's own launcher whole rather than the
-    # stepped arm, so it writes no restart record and cannot be continued.
-    VARIABLES_FOR_GRAPHIC_PRINTOUTS = "U,V,H,S,B,T1,T2,T3,T4"
     GRAPHIC_PRINTOUT_PERIOD = Ref("settled.graphic_period")
     DURATION = P.sim_duration_s
 
@@ -206,21 +203,12 @@ class STEERING(T2D):
                           respiration_r=0.0)]
 
 
-#: The DISSOLVED-OXYGEN field from a WAQTEL O2 run. rdylbu, NOT reversed: low
-#: oxygen reads red and high reads blue, which is the direction a deficit is
-#: read in. The legend floors at zero so a standard in the low single digits
-#: stays on the ramp beside a river that never fell below six.
-OXYGEN_STYLE = {"kind": "mesh", "ramp": "rdylbu", "units": "mg/L", "floor": 0}
-
-#: What the solved run is read for: the oxygen at the last instant as the map,
-#: the oxygen over time as the animation, and the oxygen down the reach as the
-#: chart, with the organic load, the closed form and the standard drawn beside it.
+#: What this question PLACES: the oxygen down the reach as the chart, with the
+#: closed form and the standard drawn beside it.
 OUTPUTS = [
-    field("T2", t=-1).layer(style=OXYGEN_STYLE),
-    field("T2", t="every").animate(),
     profile("T2", along=DATA.centerline).chart(reference=streeter_phelps.overlay),
 ]
-CAPTIONS = {"T2": "dissolved oxygen", "T3": "organic load"}
+CAPTIONS = {"T2": "dissolved oxygen"}
 
 #: The run's ANSWER, as the numbers a reader has to be able to check, each a
 #: measure of one of the reads above: how low the oxygen bottoms out and where,

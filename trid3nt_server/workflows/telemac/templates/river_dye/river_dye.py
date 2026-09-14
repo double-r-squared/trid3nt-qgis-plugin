@@ -190,7 +190,6 @@ class STEERING(T2D):
     #: the only one asked to write this.
     RESTART_FILE = _RESTART
 
-    VARIABLES_FOR_GRAPHIC_PRINTOUTS = "U,V,H,S,B,T1"
     GRAPHIC_PRINTOUT_PERIOD = Ref("settled.graphic_period")
     DURATION = P.sim_duration_s
 
@@ -232,14 +231,8 @@ class STEERING(T2D):
                                    presets=DECAY_PRESETS)]
 
 
-#: The dye-concentration field, on the ramp a dissolved tracer is read on.
-DYE_STYLE = {"kind": "mesh", "ramp": "reds", "units": "mg/L"}
-
-#: What the solved run is read for: the tracer over time as the animation, its
-#: envelope as the map, its reach-wide history as the chart.
+#: What this question PLACES: the tracer's reach-wide history as the chart.
 OUTPUTS = [
-    field("T1", t="every").animate(),
-    max_over_time("T1").layer(style=DYE_STYLE),
     series("T1").chart(),
 ]
 CAPTIONS = {"T1": "dye concentration"}

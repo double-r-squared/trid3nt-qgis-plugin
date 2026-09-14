@@ -329,6 +329,9 @@ class Measure:
     op: str | None = None
     against: Any = None
     held_to: str | None = None
+    #: What the sheet states INSTEAD when the value above was never supplied and
+    #: the read came back empty: the question was not asked, not missed.
+    unasked: str | None = None
 
     def over(self, value: Any) -> "Measure":
         """This measure divided by ``value``, a number or a declared param."""
@@ -337,6 +340,14 @@ class Measure:
     def below(self, value: Any) -> "Measure":
         """Whether this measure lies below ``value``, a number or a declared param."""
         return replace(self, op="below", against=value, held_to=_named(value))
+
+    def needs(self, value: Any, *, without: str) -> "Measure":
+        """Asked only where ``value`` was supplied; ``without`` says what the run
+        is instead, and a delivery PASSES on that sentence rather than refusing.
+
+        The lever is the user's: a run nobody asked the question of has no gap."""
+        return replace(self, against=value, held_to=_named(value),
+                       unasked=str(without))
 
     def answer(self, measured: Any, against: Any) -> Any:
         """The answer this measure names, off what was read and what it is held to."""
@@ -482,12 +493,12 @@ class Solved:
             padded = str(names[index]).ljust(32)
             wanted, unit = padded[:16].strip(), padded[16:].strip()
         else:
-            table = getattr(self.body, "VARIABLES", {})
+            table = getattr(self.body, "MODULE_OUTPUT", {})
             if upper not in table:
                 raise OutputEmpty(
-                    f"{token!r} is not in the {self.body.MODULE} variable "
-                    f"vocabulary ({', '.join(table)}).")
-            wanted, unit = table[upper]
+                    f"{token!r} is not a variable {self.body.MODULE} writes "
+                    f"({', '.join(table)}).")
+            wanted, unit = table[upper].name, table[upper].unit
         for name in self.result["varnames"]:
             if name.strip().upper() == wanted.upper():
                 return name, _UNITS.get(unit.upper(), unit.lower())
@@ -738,7 +749,8 @@ def _boundary_series(primitive: Primitive, solved: Solved) -> Series:
     flows_arr = np.asarray(flows, dtype="float64")
     measures = _envelope(primitive.variable, times_arr, flows_arr[:, None])
     measures["integral"] = round(float(np.trapezoid(flows_arr, times_arr)), 3)
-    name, unit = solved.body.VARIABLES[primitive.variable]
+    row = solved.body.MODULE_OUTPUT[primitive.variable]
+    name, unit = row.name, row.unit
     lon, lat = Transformer.from_crs(solved.utm_epsg, 4326, always_xy=True).transform(
         float(nearest["x"]), float(nearest["y"]))
     return Series(name=name, units=_UNITS.get(unit.upper(), unit.lower()),
@@ -918,7 +930,7 @@ def read_profile(primitive: Primitive, solved: Solved) -> Profile:
     weight, along = np.ones(x.size), None
     if primitive.within is not None:
         weight = np.where(off <= float(primitive.within), weight, 0.0)
-    if all(token in solved.body.VARIABLES for token in ("H", "U", "V")):
+    if all(token in solved.body.MODULE_OUTPUT for token in ("H", "U", "V")):
         depth = solved.frames("H", primitive.plane)[2][index]
         weight = weight * np.where(depth > _PROFILE_WET_M, depth, 0.0)
         u = solved.frames("U", primitive.plane)[2][index]

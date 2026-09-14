@@ -3,11 +3,18 @@
 A template is the recipe (`<name>.py`), its declarations (`declarations.py`) and
 its routing phrasings (`corpus.yaml`). The recipe is VALUES: a STEERING body of
 the module's own raw keywords restated whole, the DATA chain it consumes, the
-MESH recipe it triangulates on, the OUTPUTS it reads off the solved run with the
-CAPTIONS that name them and the ANSWER measured from them, and the door it hands
-them to; the declarations carry every value it can be given, the preset tables
-among them. A template defines no function; an analytic reference it draws lives
-in a sibling module and is named on the outputs list.
+MESH recipe it triangulates on, the OUTPUTS it PLACES - the reads that need a
+place the user gives - with the CAPTIONS that name them, the ANSWER measured off
+the solved run, and the door it hands them to; the declarations carry every
+value it can be given, the preset tables among them. A template defines no
+function; an analytic reference it draws lives in a sibling module and is named
+on the outputs list.
+
+A template states NO OUTPUT OF ITS OWN. What the run writes, how each variable
+is styled and what it is captioned are the MODULE's, stated once in its output
+table (`../modules/README.md`); a template naming a printout list or a style row
+is refused by the template-grammar lint. A question with no placed read lists
+nothing at all.
 
 ONE TEMPLATE PER QUESTION. A structural fork of the deck - a tracer, an oil
 slick and a moving bed fill DIFFERENT slots, not different values - is a

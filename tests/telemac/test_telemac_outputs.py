@@ -83,7 +83,7 @@ def test_a_named_release_renames_the_tracer_the_reads_find(solved, telemac_resul
 
 
 def test_a_token_outside_the_vocabulary_refuses_by_name(solved):
-    with pytest.raises(OutputEmpty, match="not in the telemac2d variable"):
+    with pytest.raises(OutputEmpty, match="not a variable telemac2d writes"):
         solved.variable("XX")
     with pytest.raises(OutputEmpty, match="declares 1"):
         solved.variable("T2")
@@ -95,7 +95,7 @@ def test_a_variable_the_result_does_not_carry_refuses(solved):
 
 
 def test_the_envelope_is_the_peak_every_node_reached_and_when(solved):
-    read = T2D.OUTPUTS["max_over_time"].read(max_over_time("T1"), solved)
+    read = T2D.READS["max_over_time"](max_over_time("T1"), solved)
     assert isinstance(read, Field)
     assert list(read.values) == [10.0, 80.0, 5.0, 50.0, 60.0]
     assert read.measures["max"] == 80.0
@@ -115,7 +115,7 @@ def test_an_envelope_is_delivered_as_a_dataset_group_beside_the_results(solved,
 
     primitive = max_over_time("T1").layer(style={"kind": "continuous",
                                                  "ramp": "reds"})
-    read = T2D.OUTPUTS["max_over_time"].read(primitive, solved)
+    read = T2D.READS["max_over_time"](primitive, solved)
     item = deliver(primitive, read, solved, caption="dye concentration",
                    name="reach", where="the Wabash")
     mesh_product = item.product
@@ -139,7 +139,7 @@ def test_a_node_below_the_read_s_floor_is_written_as_nothing(solved, _store):
     from trid3nt_server.workflows.telemac.modules.outputs import deliver
 
     primitive = field("T1", t=0).layer(style={"kind": "continuous"})
-    read = T2D.OUTPUTS["field"].read(primitive, solved)
+    read = T2D.READS["field"](primitive, solved)
     item = deliver(primitive, read, solved, caption="dye concentration",
                    name="reach", where="the Wabash")
     assert item.product.datasets == ("dye_concentration-t0.dat",)
@@ -149,7 +149,7 @@ def test_a_node_below_the_read_s_floor_is_written_as_nothing(solved, _store):
 
 
 def test_the_series_is_the_domain_maximum_at_each_instant(solved):
-    read = T2D.OUTPUTS["series"].read(series("T1"), solved)
+    read = T2D.READS["series"](series("T1"), solved)
     assert isinstance(read, Series)
     assert list(read.times) == [0.0, 60.0, 120.0, 180.0]
     assert list(read.values) == [0.0, 80.0, 50.0, 0.0]
@@ -161,13 +161,13 @@ def test_a_series_at_a_point_reads_the_nearest_node(solved):
 
     lon, lat = solved.lonlat
     at = Point(float(lon[1]), float(lat[1]), "outfall-a")
-    read = T2D.OUTPUTS["series"].read(series("T1", at=at), solved)
+    read = T2D.READS["series"](series("T1", at=at), solved)
     assert list(read.values) == [0.0, 80.0, 30.0, 0.0]
     assert read.at == "at outfall-a"
 
 
 def test_the_field_over_every_instant_is_the_frames_an_animation_plays(solved):
-    read = T2D.OUTPUTS["field"].read(field("T1", t="every"), solved)
+    read = T2D.READS["field"](field("T1", t="every"), solved)
     assert isinstance(read, Frames)
     assert (read.file, read.group, read.epsg, read.frames) == (
         "r2d.slf", "DYE", 32610, 4)
@@ -186,7 +186,7 @@ def test_the_animations_style_row_carries_the_floor_the_shader_clips_at(solved):
     from trid3nt_server.workflows.telemac.modules.outputs import deliver
 
     primitive = field("T1", t="every").animate()
-    read = T2D.OUTPUTS["field"].read(primitive, solved)
+    read = T2D.READS["field"](primitive, solved)
     item = deliver(primitive, read, solved, caption="dye concentration",
                    name="reach", where="the Wabash")
     assert item.product.floor == pytest.approx(4.0)
@@ -198,11 +198,11 @@ def test_the_animations_style_row_carries_the_floor_the_shader_clips_at(solved):
 
 
 def test_a_field_at_an_instant_is_that_frame(solved):
-    last = T2D.OUTPUTS["field"].read(field("T1"), solved)
+    last = T2D.READS["field"](field("T1"), solved)
     assert last.t == 180.0 and list(last.values) == [0.0] * 5
-    second = T2D.OUTPUTS["field"].read(field("T1", t=1), solved)
+    second = T2D.READS["field"](field("T1", t=1), solved)
     assert second.t == 60.0 and list(second.values) == [10.0, 80.0, 5.0, 40.0, 60.0]
-    nearest = T2D.OUTPUTS["field"].read(field("T1", t=130.0), solved)
+    nearest = T2D.READS["field"](field("T1", t=130.0), solved)
     assert nearest.t == 120.0
 
 
@@ -215,14 +215,14 @@ def test_a_tracer_that_never_rose_above_its_floor_refuses(monkeypatch,
         "trid3nt_server.workflows.solver.solver.download_result",
         lambda run_id, basename, error_code=None: "/tmp/does-not-matter.slf")
     with pytest.raises(OutputEmpty, match="never exceeded its floor"):
-        T2D.OUTPUTS["max_over_time"].read(max_over_time("T1"), _solved())
+        T2D.READS["max_over_time"](max_over_time("T1"), _solved())
 
 
 def test_the_extent_and_the_mesh_are_measures_off_the_result_and_the_run(solved):
-    box = T2D.OUTPUTS["extent"].read(extent(), solved).measures
+    box = T2D.READS["extent"](extent(), solved).measures
     assert box["bbox"][0] < box["bbox"][2] and box["bbox"][1] < box["bbox"][3]
     assert box["wetted_fraction"] == pytest.approx(1.0)
-    facts = T2D.OUTPUTS["mesh"].read(mesh(), solved).measures
+    facts = T2D.READS["mesh"](mesh(), solved).measures
     assert facts["nodes"] == 5 and facts["elements"] == 4 and facts["planes"] == 1
     assert facts["size_m"] == 7.5
 
@@ -231,7 +231,7 @@ def test_the_mass_balance_is_the_engine_s_own_closure(monkeypatch, solved):
     monkeypatch.setattr(
         "trid3nt_server.workflows.solver.solver.download_result",
         lambda run_id, basename, error_code=None: _listing(monkeypatch))
-    read = T2D.OUTPUTS["mass_balance"].read(mass_balance(), solved)
+    read = T2D.READS["mass_balance"](mass_balance(), solved)
     assert read.measures["continuity_rel_error"] == pytest.approx(-1.2e-7)
 
 
@@ -282,7 +282,7 @@ def test_a_measure_held_to_a_param_nobody_supplied_says_it_was_not_asked():
 
 
 def test_a_field_at_an_instant_carries_its_spread(solved):
-    frame = T2D.OUTPUTS["field"].read(field("T1", t=1), solved)
+    frame = T2D.READS["field"](field("T1", t=1), solved)
     assert frame.measures["spread"] == 75.0
 
 
@@ -292,7 +292,7 @@ def test_a_field_measured_over_an_area_reads_only_the_nodes_inside_it(solved,
     values the read carries - and so the layer it publishes - stay the domain's."""
     import json
 
-    whole = T2D.OUTPUTS["field"].read(field("T1", t=1), solved)
+    whole = T2D.READS["field"](field("T1", t=1), solved)
     lon, lat = solved.lonlat
     # A box around the first two nodes, which hold 10 and 80 of the frame's five.
     pad = 1e-4
@@ -304,7 +304,7 @@ def test_a_field_measured_over_an_area_reads_only_the_nodes_inside_it(solved,
                          [float(lon[:2].max()) + pad, float(lat[:2].max()) + pad],
                          [float(lon[:2].min()) - pad, float(lat[:2].max()) + pad],
                          [float(lon[:2].min()) - pad, float(lat[:2].min()) - pad]]]}))
-    inside = T2D.OUTPUTS["field"].read(field("T1", t=1, over=str(box)), solved)
+    inside = T2D.READS["field"](field("T1", t=1, over=str(box)), solved)
     assert inside.measures["nodes"] == 2
     assert (inside.measures["max"], inside.measures["min"]) == (80.0, 10.0)
     assert list(inside.values) == list(whole.values)
@@ -321,7 +321,7 @@ def test_an_area_holding_no_node_refuses_rather_than_measuring_nothing(solved,
         "coordinates": [[[10.0, 10.0], [10.1, 10.0], [10.1, 10.1],
                          [10.0, 10.1], [10.0, 10.0]]]}))
     with pytest.raises(OutputEmpty, match="holds no node"):
-        T2D.OUTPUTS["field"].read(field("T1", t=1, over=str(box)), solved)
+        T2D.READS["field"](field("T1", t=1, over=str(box)), solved)
 
 
 # -- the door: the outputs list, read and published -------------------------- #
@@ -466,7 +466,7 @@ def test_a_tracer_a_coupled_process_appended_is_read_by_position_with_its_unit(
 
 
 def test_a_field_at_an_instant_measures_that_frame_s_own_extremes(coupled):
-    last = T2D.OUTPUTS["field"].read(field("T2", t=-1), coupled)
+    last = T2D.READS["field"](field("T2", t=-1), coupled)
     assert (last.measures["max"], last.measures["min"], last.measures["t"]) == (
         9.0, 6.0, 600.0)
     # oxygen is everywhere above a tracer's edge - a river carries it before
@@ -498,7 +498,7 @@ def test_a_profile_is_the_variable_per_station_down_the_line_at_the_instant(
     from trid3nt_server.workflows.telemac.modules.outputs import Profile
     from trid3nt_server.workflows.telemac.modules.outputs import profile
 
-    read = T2D.OUTPUTS["profile"].read(profile("T2", along=_line(coupled)), coupled)
+    read = T2D.READS["profile"](profile("T2", along=_line(coupled)), coupled)
     assert isinstance(read, Profile)
     assert read.along == "downstream distance" and read.units == "mgO2/L"
     # four wet nodes, four stations; the last node was dry at the instant
@@ -514,15 +514,15 @@ def test_a_profile_keeps_only_the_nodes_within_the_stated_band(coupled):
     over the whole width; without a band the whole domain is the profile."""
     from trid3nt_server.workflows.telemac.modules.outputs import profile
 
-    whole = T2D.OUTPUTS["profile"].read(profile("T2", along=_line(coupled)), coupled)
+    whole = T2D.READS["profile"](profile("T2", along=_line(coupled)), coupled)
     assert whole.measures["stations"] == 4
     # a one-metre band keeps the three nodes ON the line, and the last of those
     # is dry at the instant: two wet stations is no profile, which is the band
     # being applied
     with pytest.raises(OutputEmpty, match="needs three"):
-        T2D.OUTPUTS["profile"].read(
+        T2D.READS["profile"](
             profile("T2", along=_line(coupled), within_m=1.0), coupled)
-    wide = T2D.OUTPUTS["profile"].read(
+    wide = T2D.READS["profile"](
         profile("T2", along=_line(coupled), within_m=20.0), coupled)
     assert list(wide.values) == list(whole.values)
     assert profile("T2", along="l", within_m=1.0) != profile("T2", along="l")
@@ -565,9 +565,9 @@ def test_a_profile_runs_the_way_the_solved_flow_goes(coupled):
     orients the chainage, so the mix point stays where the water carries it."""
     from trid3nt_server.workflows.telemac.modules.outputs import profile
 
-    forward = T2D.OUTPUTS["profile"].read(profile("T3", along=_line(coupled)),
+    forward = T2D.READS["profile"](profile("T3", along=_line(coupled)),
                                           coupled)
-    against = T2D.OUTPUTS["profile"].read(
+    against = T2D.READS["profile"](
         profile("T3", along=_line(coupled, reverse=True)), coupled)
     assert list(forward.values) == list(against.values) == [0.0, 20.0, 15.0, 10.0]
     assert forward.measures["x_max_m"] == pytest.approx(against.measures["x_max_m"])
@@ -593,7 +593,7 @@ def test_the_drogues_are_the_track_at_three_written_instants(monkeypatch, couple
         lambda run_id, basename, error_code=None: str(track))
     from trid3nt_server.workflows.telemac.modules.outputs import drogues
 
-    read = T2D.OUTPUTS["drogues"].read(drogues(), coupled)
+    read = T2D.READS["drogues"](drogues(), coupled)
     assert isinstance(read, Track)
     assert [f["properties"]["t_s"] for f in read.features["features"]] == [
         0.0, 120.0, 180.0]
@@ -608,7 +608,7 @@ def test_a_primitive_names_the_coupled_module_whose_result_it_reads():
     bed = field("E", t=-1, module="gaia")
     assert bed.module == "gaia" and bed.key.module == "gaia"
     assert field("E", t=-1).key != bed.key and hash(bed.key) != hash(field("E").key)
-    assert GAIA.OUTPUTS["field"].read is T2D.OUTPUTS["field"].read
+    assert GAIA.READS["field"] is T2D.READS["field"]
 
 
 def test_the_door_carries_a_primitive_s_point_and_line_beside_the_list(monkeypatch):
@@ -705,7 +705,7 @@ def test_a_series_of_the_printed_flux_reads_the_boundary_nearest_the_point(catch
 
     lon, lat = catchment.lonlat
     outlet = Point(float(lon[1]), float(lat[1]), "outlet")
-    read = T2D.OUTPUTS["series"].read(series("FLUX", at=outlet), catchment)
+    read = T2D.READS["series"](series("FLUX", at=outlet), catchment)
     assert isinstance(read, Series)
     assert list(read.times) == [600.0, 1200.0] and list(read.values) == [2.0, 6.0]
     assert (read.name, read.units, read.at) == ("FLUX BOUNDARY", "m3/s", "at outlet")
@@ -714,7 +714,7 @@ def test_a_series_of_the_printed_flux_reads_the_boundary_nearest_the_point(catch
     assert read.measures["truncated"] is True
     assert read.measures["integral"] == pytest.approx(2400.0)
     # the other face, by a pair rather than a Point, named by its number
-    other = T2D.OUTPUTS["series"].read(
+    other = T2D.READS["series"](
         series("FLUX", at=(float(lon[0]), float(lat[0]))), catchment)
     assert list(other.values) == [-8.0, -1.0]
     assert other.at == "at liquid boundary 2"
@@ -723,9 +723,9 @@ def test_a_series_of_the_printed_flux_reads_the_boundary_nearest_the_point(catch
 def test_a_printed_token_needs_a_point_and_a_run_that_placed_its_boundaries(
         catchment, solved):
     with pytest.raises(OutputEmpty, match="needs the Point"):
-        T2D.OUTPUTS["series"].read(series("FLUX"), catchment)
+        T2D.READS["series"](series("FLUX"), catchment)
     with pytest.raises(OutputEmpty, match="records no liquid boundary"):
-        T2D.OUTPUTS["series"].read(series("FLUX", at=(0.0, 0.0)), solved)
+        T2D.READS["series"](series("FLUX", at=(0.0, 0.0)), solved)
 
 
 def test_the_water_balance_carries_the_final_block_and_the_rain_that_fell(catchment):
@@ -734,7 +734,7 @@ def test_the_water_balance_carries_the_final_block_and_the_rain_that_fell(catchm
     routine printed over the meshed area, and the coefficient their ratio."""
     from trid3nt_server.workflows.telemac.modules.outputs import mesh_area_m2
 
-    read = T2D.OUTPUTS["mass_balance"].read(mass_balance(), catchment)
+    read = T2D.READS["mass_balance"](mass_balance(), catchment)
     area = mesh_area_m2(catchment.result)
     assert read.measures["continuity_rel_error"] == pytest.approx(-1.2e-7)
     assert read.measures["outflow_volume_m3"] == 1200.0
@@ -752,11 +752,11 @@ def test_the_envelope_carries_its_p99_beside_its_maximum_and_the_extent_its_area
     99th percentile of the envelope rides beside it."""
     from trid3nt_server.workflows.telemac.modules.outputs import mesh_area_m2
 
-    read = T2D.OUTPUTS["max_over_time"].read(max_over_time("T1"), solved)
+    read = T2D.READS["max_over_time"](max_over_time("T1"), solved)
     assert read.measures["max"] == 80.0
     assert read.measures["p99"] == pytest.approx(np.percentile([10, 80, 5, 50, 60], 99))
     assert read.measures["truncated"] is False
-    box = T2D.OUTPUTS["extent"].read(extent(), solved).measures
+    box = T2D.READS["extent"](extent(), solved).measures
     assert box["area_km2"] == pytest.approx(mesh_area_m2(solved.result) / 1.0e6)
 
 
@@ -764,11 +764,11 @@ def test_a_series_at_a_point_carries_the_station_it_was_read_at(solved):
     from trid3nt_server.inputs import Point
 
     lon, lat = solved.lonlat
-    read = T2D.OUTPUTS["series"].read(
+    read = T2D.READS["series"](
         series("T1", at=Point(float(lon[1]), float(lat[1]))), solved)
     assert (read.lon, read.lat) == (pytest.approx(float(lon[1])),
                                     pytest.approx(float(lat[1])))
-    assert T2D.OUTPUTS["series"].read(series("T1"), solved).lon is None
+    assert T2D.READS["series"](series("T1"), solved).lon is None
 
 
 # -- a variable the module defines, and the planes a 3D result stacks --------- #
@@ -799,12 +799,12 @@ def test_the_agitation_coefficient_is_the_wave_height_over_the_stamped_incident(
         "trid3nt_server.workflows.solver.solver.download_result",
         lambda run_id, basename, error_code=None: str(cli))
     solved = _solved({"result_basename": "res_agitation.slf"}, body=ART)
-    kd = ART.OUTPUTS["field"].read(field("KD", t=-1), solved)
+    kd = ART.READS["field"](field("KD", t=-1), solved)
     assert kd.name == "KD" and kd.units == "Hs/H0"
     assert kd.values.tolist() == [0.5, 0.25, 1.5]
     assert (kd.measures["max"], kd.floor, kd.plane) == (1.5, None, None)
     # the token the module does not define reads the result's own array
-    assert ART.OUTPUTS["field"].read(field("HS", t=-1), solved).measures["max"] == 3.0
+    assert ART.READS["field"](field("HS", t=-1), solved).measures["max"] == 3.0
 
 
 def test_a_boundary_file_stamping_no_single_incident_height_refuses():
@@ -851,7 +851,7 @@ def test_a_column_reads_the_planes_at_the_deepest_node_as_depth_below_the_surfac
         basin):
     from trid3nt_server.workflows.telemac.modules import T3D, column
 
-    read = T3D.OUTPUTS["column"].read(column("T1"), basin)
+    read = T3D.READS["column"](column("T1"), basin)
     assert (read.name, read.units, read.along) == (
         "TEMPERATURE", "degC", "depth below the surface")
     assert read.distance_m.tolist() == [0.0, 10.0, 20.0]
@@ -861,9 +861,9 @@ def test_a_column_reads_the_planes_at_the_deepest_node_as_depth_below_the_surfac
     assert read.measures["mean"] == pytest.approx(20.0)
     assert (read.measures["depth_m"], read.measures["t"], read.measures["planes"]) == (
         20.0, 3600.0, 3)
-    initial = T3D.OUTPUTS["column"].read(column("T1", t=0), basin)
+    initial = T3D.READS["column"](column("T1", t=0), basin)
     assert initial.measures["top_minus_bottom"] == 10.0
-    wind = T3D.OUTPUTS["column"].read(column("U"), basin)
+    wind = T3D.READS["column"](column("U"), basin)
     assert (wind.measures["top"], wind.measures["bottom"]) == (0.02, -0.02)
     assert wind.measures["mean"] == pytest.approx(0.0)
 
@@ -872,7 +872,7 @@ def test_a_column_at_a_point_reads_the_nearest_node(basin):
     from trid3nt_server.workflows.telemac.modules import T3D, column
 
     lon, lat = basin.lonlat
-    read = T3D.OUTPUTS["column"].read(
+    read = T3D.READS["column"](
         column("T1", at={"lon": float(lon[2]), "lat": float(lat[2]), "name": "berth"}),
         basin)
     assert read.values.tolist() == [21.0, 20.0, 19.0]
@@ -890,9 +890,9 @@ def test_a_column_needs_the_planes_of_a_3d_result(solved):
 def test_a_plane_of_a_3d_field_is_named_bottom_first(basin):
     from trid3nt_server.workflows.telemac.modules import T3D
 
-    surface = T3D.OUTPUTS["field"].read(field("T1", t=-1), basin)
-    bottom = T3D.OUTPUTS["field"].read(field("T1", t=-1, plane=0), basin)
-    middle = T3D.OUTPUTS["field"].read(field("T1", t=-1, plane=1), basin)
+    surface = T3D.READS["field"](field("T1", t=-1), basin)
+    bottom = T3D.READS["field"](field("T1", t=-1, plane=0), basin)
+    middle = T3D.READS["field"](field("T1", t=-1, plane=1), basin)
     assert (surface.plane, bottom.plane, middle.plane) == (
         "surface plane", "bottom plane", "plane 2 of 3")
     assert surface.values.tolist() == [23.0, 24.0, 21.0]
@@ -904,13 +904,13 @@ def test_a_tracer_everywhere_above_its_edge_is_drawn_and_ranged_whole(basin):
     visible edge, so the layer ranges over the field rather than from zero."""
     from trid3nt_server.workflows.telemac.modules import T3D
 
-    surface = T3D.OUTPUTS["field"].read(field("T1", t=-1), basin)
+    surface = T3D.READS["field"](field("T1", t=-1), basin)
     assert surface.floor is None
-    assert T3D.OUTPUTS["max_over_time"].read(max_over_time("T1"), basin).floor is None
+    assert T3D.READS["max_over_time"](max_over_time("T1"), basin).floor is None
 
 
 def test_a_2d_field_names_no_plane(solved):
-    assert T2D.OUTPUTS["field"].read(field("T1", t=-1), solved).plane is None
+    assert T2D.READS["field"](field("T1", t=-1), solved).plane is None
 
 
 def test_a_chart_s_reference_may_be_another_primitive_drawn_as_a_line(

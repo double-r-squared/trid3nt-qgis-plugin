@@ -11,19 +11,33 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Mapping, Sequence
 
-from .module import Module
+from .module import Module, Output
 from .outputs import PRIMITIVES
 
-__all__ = ["ART", "BOUNDARY_FILENAME", "IncidentWave", "VARIABLES",
+__all__ = ["ART", "BOUNDARY_FILENAME", "IncidentWave", "MODULE_OUTPUT",
            "incident_height", "stamp_boundary_rows"]
 
-#: The module's variable vocabulary, by the mnemonic VARIABLES FOR GRAPHIC
-#: PRINTOUTS spells: the result-file name and the unit. A mild-slope solve is
-#: steady, so every field is read at its one frame.
-VARIABLES: Mapping[str, tuple[str, str]] = MappingProxyType({
-    "HS": ("WAVE HEIGHT", "M"), "PHAS": ("WAVE PHASE", "RAD"),
-    "U0": ("U0", "M/S"), "V0": ("V0", "M/S"), "S": ("FREE SURFACE", "M"),
-    "ZF": ("BOTTOM", "M"), "H": ("WATER DEPTH", "M"), "INC": ("WAVE INCIDENCE", "DEG"),
+#: What the module WRITES, by the mnemonic VARIABLES FOR GRAPHIC PRINTOUTS
+#: spells: the result-file name, the unit and how it draws. A mild-slope solve
+#: is steady, so nothing here varies in time and every field is read at its one
+#: frame. ``KD`` is the coefficient the module DERIVES over them, published like
+#: the rest and never asked of the engine.
+MODULE_OUTPUT: Mapping[str, Output] = MappingProxyType({
+    "HS": Output("WAVE HEIGHT", "m", varies=False,
+                 style={"kind": "mesh", "ramp": "ylgnbu", "units": "m",
+                        "floor": 0}),
+    "PHAS": Output("WAVE PHASE", "rad", varies=False,
+                   style={"kind": "mesh", "ramp": "hsv", "units": "rad"}),
+    "ZS": Output("FREE SURFACE", "m", varies=False,
+                 style={"kind": "mesh", "ramp": "blues", "units": "m"}),
+    "ZF": Output("BOTTOM", "m", varies=False,
+                 style={"kind": "mesh", "ramp": "terrain", "units": "m"}),
+    # KD is a dimensionless amplification ratio, not a wave height. The legend
+    # is capped at the 99.5th percentile: the standing wave against the open
+    # boundary sets the field's maximum, and a ramp run to it paints the basin
+    # interior one colour.
+    "KD": Output("KD", "Hs/H0", varies=False,
+                 style={"kind": "mesh", "range": "p99.5"}),
 })
 
 #: What the restamped boundary file is called in the run directory. The deck's own
@@ -150,7 +164,8 @@ def _kd(solved: Any) -> tuple[str, str, Any]:
 
 
 ART = Module("artemis")
-ART.VARIABLES = VARIABLES
+ART.MODULE_OUTPUT = MODULE_OUTPUT
 ART.DERIVED = MappingProxyType({"KD": _kd})
+ART.PRINTOUTS = "VARIABLES_FOR_GRAPHIC_PRINTOUTS"
 ART.composites(incident_wave=_incident_wave)
-ART.outputs(**PRIMITIVES)
+ART.reads(**PRIMITIVES)

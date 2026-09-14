@@ -283,11 +283,11 @@ def test_the_sequence_validates_and_holds_the_run_after_the_fill():
     assert [s.label for s in steps if s.self_gating] == ["sheet"]
     assert steps[0].rebinds_domain          # the geocode binds the reach AOI
     assert steps[-2].consequential          # the run is the consequential node
-    # The outputs step carries the template's list as values: what is read off
-    # the solved run, how each is published, and what the run answers with.
+    # The outputs step carries the template's own list as values: the reads it
+    # PLACED, how each is published, and what the run answers with. What the run
+    # WRITES is the module's table and is on no template's list.
     listed = steps[-1].kwargs["outputs"]
     assert [(p.kind, p.variable, p.publish) for p in listed] == [
-        ("field", "T1", "animate"), ("max_over_time", "T1", "layer"),
         ("series", "T1", "chart")]
     assert steps[-1].kwargs["captions"] == {"T1": "dye concentration"}
     assert set(steps[-1].kwargs["answer"]) == {
@@ -518,11 +518,12 @@ def test_the_chain_geocodes_dispatches_and_stages_the_resolved_sheet(
                      reach_length_km=4.0, sim_duration_s=1800.0)
 
     assert isinstance(peak, AnswerLayerURI)
-    # The run LEADS with the mesh it solved on, under the dataset group the
-    # outputs list named first - no COG of a field the mesh already carries.
+    # The run comes back on the mesh it solved on, at the FIRST variable its
+    # module writes that the result carries - there is no leading layer, because
+    # every group rides that one mesh and the camera takes its extent.
     assert peak.layer_type == "mesh"
     assert peak.uri == "s3://trid3nt-runs/TELERID/r2d_river.slf"
-    assert peak.style["dataset_group"] == "DYE"
+    assert peak.style["dataset_group"] == "Water depth at t = 1260 s"
     assert peak.crs_authid == "EPSG:32611"
     # The answer is read off the solved result the outputs list named: the
     # tracer's envelope peak, when it peaked, and the accepted mesh's edge.
@@ -530,12 +531,12 @@ def test_the_chain_geocodes_dispatches_and_stages_the_resolved_sheet(
     assert peak.answer["dye_peak_time_s"] == pytest.approx(420.0)
     assert peak.answer["active_frames"] == 2
     assert peak.answer["mesh_size_m"] is not None
-    assert peak.quantity == "dye_concentration"
-    assert peak.name.startswith("Dye concentration over time (")
-    # The envelope rides beside it as the group the module wrote next to the
-    # results, ranged on the same scale.
-    written = _store.store["TELERID/dye_concentration.dat"].decode()
-    assert 'NAME "Dye concentration"' in written
+    assert peak.quantity == "water_depth"
+    assert peak.name.startswith("Water depth (m) at t = 1260 s (")
+    # The tracer rides beside it under the name the RESULT FILE carries it by,
+    # written as the group the module put next to the results.
+    written = _store.store["TELERID/dye-t1260.dat"].decode()
+    assert 'NAME "Dye at t = 1260 s"' in written
 
     # The place was GEOCODED, never hand-typed.
     assert captured["geocode_query"] == "Twin Falls, Idaho"

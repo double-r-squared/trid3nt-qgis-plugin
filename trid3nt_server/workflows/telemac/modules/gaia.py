@@ -13,21 +13,37 @@ from __future__ import annotations
 from types import MappingProxyType
 from typing import Any, Mapping
 
-from .module import Module, SlotRefused
+from .module import Module, Output, SlotRefused
 from .outputs import PRIMITIVES
 
-__all__ = ["GAIA", "GRAIN_UM_MAX", "GRAIN_UM_MIN", "STEERING_FILENAME",
-           "RESULT_FILENAME", "VARIABLES", "Backfill", "Bed", "Dig", "Dredging",
-           "Dump", "SaveWaterLevel", "Suspension"]
+__all__ = ["GAIA", "GRAIN_UM_MAX", "GRAIN_UM_MIN", "MODULE_OUTPUT",
+           "STEERING_FILENAME", "RESULT_FILENAME", "Backfill", "Bed", "Dig",
+           "Dredging", "Dump", "SaveWaterLevel", "Suspension"]
 
-#: The module's variable vocabulary, by the mnemonic VARIABLES FOR GRAPHIC
-#: PRINTOUTS spells: the result-file name and the unit. The evolution is
-#: cumulative, so its last frame is the whole event's bed change.
-VARIABLES: Mapping[str, tuple[str, str]] = MappingProxyType({
-    "B": ("BOTTOM", "M"), "E": ("CUMUL BED EVOL", "M"),
-    "QS": ("SOLID DISCH", "M2/S"), "D50": ("MEAN DIAMETER", "M"),
-    "TOB": ("BED SHEAR STRESS", "N/M2"),
+#: What the module WRITES, by the mnemonic VARIABLES FOR GRAPHIC PRINTOUTS
+#: spells: the result-file name, the unit and how it draws. The BED ITSELF is
+#: not here: it is the carrier's own BOTTOM, rowed once on the carrier's table,
+#: and rowing it again would put two layers of one field on one mesh. What is
+#: here is what the sediment module ADDS. The evolution is cumulative, so its
+#: last frame is the whole event's bed change - signed, deposition positive, on
+#: a ramp diverging about zero. A surface diameter is written for a MIXTURE
+#: only; a single class has none, and the row is skipped.
+MODULE_OUTPUT: Mapping[str, Output] = MappingProxyType({
+    "E": Output("CUMUL BED EVOL", "m",
+                style={"kind": "mesh", "ramp": "rdbu", "units": "m",
+                       "center": 0.0}),
+    "D50": Output("MEAN DIAMETER", "m",
+                  style={"kind": "mesh", "ramp": "cividis", "units": "m"}),
+    "TOB": Output("BED SHEAR STRESS", "N/m2",
+                  style={"kind": "mesh", "ramp": "inferno", "units": "N/m2",
+                         "floor": 0}),
 })
+
+#: The class GAIA appends to its carrier's tracers when the body carries a
+#: suspension: one tracer per suspended class, which the carrier never counts.
+_SUSPENDED = Output("NCOH SEDIMENT", "g/L",
+                    style={"kind": "mesh", "ramp": "oranges", "units": "g/L",
+                           "floor": 0})
 
 STEERING_FILENAME = "gaia_river.cas"
 #: GAIA's own result SELAFIN, carrying CUMUL BED EVOL.
@@ -75,24 +91,21 @@ class _Gaia(Module("gaia")):  # type: ignore[misc]
 
 def Bed(*, gradation: Any, presets: Any, d50_um: Any,  # noqa: N802
         thickness_m: Any, formula: Any, hiding_factor_formula: Any,
-        morphological_factor: Any, printouts: Any,
-        mixture_printouts: Any) -> Mapping[str, Any]:
+        morphological_factor: Any) -> Mapping[str, Any]:
     """The erodible bed as one value: a gradation (a preset name in ``presets``
     or fine-to-coarse ``[d50_um, fraction]`` pairs) or the single ``d50_um``."""
     return {"gradation": gradation, "presets": presets, "d50_um": d50_um,
             "thickness_m": thickness_m, "formula": formula,
             "hiding_factor_formula": hiding_factor_formula,
-            "morphological_factor": morphological_factor,
-            "printouts": printouts, "mixture_printouts": mixture_printouts}
+            "morphological_factor": morphological_factor}
 
 
 def Suspension(*, d50_um: Any, concentration_mgl: Any,  # noqa: N802
-               transport_formula: Any, advection_scheme: Any,
-               printouts: Any) -> Mapping[str, Any]:
+               transport_formula: Any, advection_scheme: Any) -> Mapping[str, Any]:
     """The one settling class as one value, its source concentration in mg/L."""
     return {"d50_um": d50_um, "concentration_mgl": concentration_mgl,
             "transport_formula": transport_formula,
-            "advection_scheme": advection_scheme, "printouts": printouts}
+            "advection_scheme": advection_scheme}
 
 
 def Dredging(*, actions: Any, reference: Any,  # noqa: N802
@@ -203,18 +216,17 @@ def _windowed(micron: float) -> float:
 
 
 def _bed(value: Mapping[str, Any]) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
-    """The bed value -> the CLASSES lists, the stock, bedload, and what it prints."""
+    """The bed value -> the CLASSES lists, the stock and the bedload."""
     classes = _classes(value["gradation"], value["presets"])
     if classes:
         shape = {"CLASSES_TYPE_OF_SEDIMENT": ["NCO" for _ in classes],
                  "CLASSES_SEDIMENT_DIAMETERS": [_metres(um) for um, _ in classes],
                  "CLASSES_INITIAL_FRACTION": [fraction for _, fraction in classes],
-                 "HIDING_FACTOR_FORMULA": int(value["hiding_factor_formula"]),
-                 "VARIABLES_FOR_GRAPHIC_PRINTOUTS": str(value["mixture_printouts"])}
+                 "HIDING_FACTOR_FORMULA": int(value["hiding_factor_formula"])}
     else:
         shape = {"CLASSES_TYPE_OF_SEDIMENT": ["NCO"],
-                 "CLASSES_SEDIMENT_DIAMETERS": [_metres(_windowed(float(value["d50_um"])))],
-                 "VARIABLES_FOR_GRAPHIC_PRINTOUTS": str(value["printouts"])}
+                 "CLASSES_SEDIMENT_DIAMETERS": [
+                     _metres(_windowed(float(value["d50_um"])))]}
     return ({**shape, "BED_LOAD_FOR_ALL_SANDS": True,
              "BED_LOAD_TRANSPORT_FORMULA_FOR_ALL_SANDS": int(value["formula"]),
              "LAYERS_INITIAL_THICKNESS": [max(float(value["thickness_m"]), 0.01)],
@@ -233,8 +245,7 @@ def _suspension(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
              "SCHEME_FOR_ADVECTION_OF_SUSPENDED_SEDIMENTS": [
                  int(v) for v in value["advection_scheme"]],
              "SUSPENDED_SEDIMENTS_CONCENTRATION_VALUES_AT_THE_SOURCES": [
-                 max(float(value["concentration_mgl"]) * _MGL_TO_KGM3, 0.0)],
-             "VARIABLES_FOR_GRAPHIC_PRINTOUTS": str(value["printouts"])}, {})
+                 max(float(value["concentration_mgl"]) * _MGL_TO_KGM3, 0.0)]}, {})
 
 
 def _metres(micron: Any) -> float:
@@ -248,9 +259,17 @@ def _body(slots: Mapping[str, Any]) -> Mapping[str, Any]:
             "slots": dict(slots)}
 
 
+def _appended(body: Mapping[str, Any]) -> tuple[Output, ...]:
+    """The tracers this coupled body puts on its carrier's result: one per
+    suspended class, and none at all over a bed the carrier only erodes."""
+    return (_SUSPENDED,) if "suspension" in dict(body.get("slots") or {}) else ()
+
+
 GAIA = _Gaia
-GAIA.VARIABLES = VARIABLES
+GAIA.MODULE_OUTPUT = MODULE_OUTPUT
+GAIA.PRINTOUTS = "VARIABLES_FOR_GRAPHIC_PRINTOUTS"
 #: The result the primitives read: GAIA writes its own file beside the carrier's.
 GAIA.RESULT_FILE = RESULT_FILENAME
 GAIA.composites(bed=_bed, suspension=_suspension, dredging=_dredging)
-GAIA.outputs(**PRIMITIVES)
+GAIA.appends(_appended)
+GAIA.reads(**PRIMITIVES)

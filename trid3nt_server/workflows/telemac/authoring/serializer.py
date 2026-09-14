@@ -2,7 +2,8 @@
 
 telapy's ``TelemacCas`` is the only writer of the format. What it writes is read
 straight back by the engine's own parser against the engine's own dictionary, so
-a value outside a keyword's CHOIX is caught there and never on inspection."""
+a value outside a keyword's CHOIX is caught there and never on inspection. The
+variables keyword is the module's table, generated per deck as it is written."""
 
 from __future__ import annotations
 
@@ -44,10 +45,13 @@ def _spread(sheet: Any, rundir: Path, steering: str,
             decks: dict[str, dict[str, Any]]) -> None:
     """``sheet`` and everything it names, onto the disk and into ``decks``.
 
-    A coupled body is not content: it is filled against its own module's dictionary."""
+    A coupled body is not content: it is filled against its own module's
+    dictionary. What each deck WRITES is its module's own table, generated here
+    rather than restated by whoever asked the question."""
     from ..modules import fill, wrapper_for
 
-    decks[steering] = {"module": sheet.module, "values": dict(sheet.resolved())}
+    decks[steering] = {"module": sheet.module,
+                       "values": {**dict(sheet.resolved()), **sheet.printouts()}}
     for basename, content in sheet.files.items():
         if isinstance(content, Mapping) and "slots" in content:
             _spread(fill(wrapper_for(content["module"]), **dict(content["slots"])),

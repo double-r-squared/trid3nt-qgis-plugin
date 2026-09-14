@@ -184,10 +184,10 @@ def test_the_door_declares_the_run_mode_read_for_the_sheet_review():
 
 
 # --- the outputs list: the oxygen field, its animation, its profile ---------- #
-def test_the_outputs_list_reads_the_oxygen_and_charts_it_down_the_reach():
-    """The oxygen is the SECOND tracer the O2 process appends, read at the last
-    instant as the map and down the centerline as the chart; the load is read
-    for the answer, and the closed form rides the chart as a reference."""
+def test_the_outputs_list_charts_the_oxygen_down_the_centerline():
+    """The oxygen field is the module's to publish; what this template lists is
+    the read the user gives a line - the oxygen down the centerline as the
+    chart, with the closed form riding it as a reference."""
     from trid3nt_server.workflows.telemac.templates.do_sag.do_sag import (
         ANSWER,
         CAPTIONS,
@@ -195,10 +195,9 @@ def test_the_outputs_list_reads_the_oxygen_and_charts_it_down_the_reach():
     )
 
     assert [(p.kind, p.variable, p.t, p.publish) for p in OUTPUTS] == [
-        ("field", "T2", -1, "layer"), ("field", "T2", "every", "animate"),
         ("profile", "T2", -1, "chart")]
-    assert OUTPUTS[2].reference is overlay
-    assert CAPTIONS == {"T2": "dissolved oxygen", "T3": "organic load"}
+    assert OUTPUTS[0].reference is overlay
+    assert CAPTIONS == {"T2": "dissolved oxygen"}
     assert {name: (m.primitive.kind, m.primitive.variable, m.stat)
             for name, m in ANSWER.items()} == {
         "do_min_mgl": ("profile", "T2", "min"),

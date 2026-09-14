@@ -1,17 +1,32 @@
 """The WAQTEL wrapper: its dictionary, and the two coupled bodies a carrier names.
 
 WAQTEL runs UNDER a hydrodynamic module and states only what its caller handed
-it. It binds no OUTPUTS: it writes no result file of its own, and the oxygen and
-the organic load are tracers on the carrier's result."""
+it. It writes no result file of its own and rows no output: what its processes
+produce are TRACERS APPENDED to the carrier's own, which it states by process."""
 
 from __future__ import annotations
 
 import math
 from typing import Any, Mapping
 
-from .module import Module
+from .module import Module, Output
 
 __all__ = ["WAQTEL", "STEERING_FILENAME"]
+
+#: What each process puts on the carrier's result, in the order the engine
+#: appends them behind the tracers the carrier declares. Degradation (17) acts
+#: on a tracer the carrier already has, so it appends none.
+_APPENDED: Mapping[int, tuple[Output, ...]] = {
+    2: (Output("DISSOLVED O2", "mgO2/L",
+               style={"kind": "mesh", "ramp": "rdylbu", "units": "mg/L",
+                      "floor": 0}),
+        Output("ORGANIC LOAD", "mgO2/L",
+               style={"kind": "mesh", "ramp": "oranges", "units": "mg/L",
+                      "floor": 0}),
+        Output("NH4 LOAD", "mg/L",
+               style={"kind": "mesh", "ramp": "magma", "units": "mg/L",
+                      "floor": 0})),
+}
 
 #: Hours to the per-hour law and days to the per-day law, as the dictionary's
 #: LAW OF TRACERS DEGRADATION numbers them; a named substance reads its preset,
@@ -92,5 +107,11 @@ def _body(process: int, **slots: Any) -> Mapping[str, Any]:
             "process": process, "slots": dict(slots)}
 
 
+def _appended(body: Mapping[str, Any]) -> tuple[Output, ...]:
+    """The tracers this coupled body puts on its carrier's result, by process."""
+    return _APPENDED.get(int(body.get("process") or 0), ())
+
+
 WAQTEL = _Waqtel
 WAQTEL.composites(degradation=_degradation)
+WAQTEL.appends(_appended)

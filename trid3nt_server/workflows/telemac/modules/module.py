@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import difflib
 import json
+import re
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
@@ -44,9 +45,9 @@ UNSET = _Unset()
 
 #: Class attributes a wrapper carries that are never keyword assertions.
 _RESERVED = frozenset((
-    "MODULE", "MODULE_INPUT", "COMPOSITES", "OUTPUTS", "ASSERTED",
-    "VARIABLES", "LISTING", "DERIVED", "RESULT_FILE", "composites", "outputs",
-    "slot",
+    "MODULE", "MODULE_INPUT", "COMPOSITES", "READS", "ASSERTED",
+    "MODULE_OUTPUT", "LISTING", "DERIVED", "PRINTOUTS", "TRACER", "APPENDS",
+    "RESULT_FILE", "composites", "reads", "appends", "printouts", "slot",
 ))
 
 
@@ -168,10 +169,15 @@ class Composite:
 
 @dataclass(frozen=True, slots=True)
 class Output:
-    """One of the module's outputs: a primitive, bound to the read of it."""
+    """One variable the module writes: what the result file calls it, the unit it
+    is read in, the style row it draws under, and whether it varies in time.
+
+    A row that does not vary is painted and never animated."""
 
     name: str
-    read: Callable[..., Any]
+    unit: str = ""
+    style: Mapping[str, Any] | None = None
+    varies: bool = True
 
 
 @lru_cache(maxsize=None)
@@ -212,7 +218,7 @@ class _Body(type):
         return _Body(name.upper(), (Module,), {
             "__doc__": f"The {name} keyword surface: {len(module_input)} slots.",
             "MODULE": name, "MODULE_INPUT": module_input,
-            "COMPOSITES": MappingProxyType({}), "OUTPUTS": MappingProxyType({}),
+            "COMPOSITES": MappingProxyType({}), "READS": MappingProxyType({}),
             "ASSERTED": MappingProxyType({}),
         })
 
@@ -273,7 +279,7 @@ def _nearest(key: str, dictionary: Mapping[str, Slot],
 
 
 class Module(metaclass=_Body):
-    """A module's dictionary, its composites and its outputs. It asserts nothing.
+    """A module's dictionary, its composites, what it writes and how it is read.
 
     There is no hook for a default: the engine's default is the whole position."""
 
@@ -282,15 +288,27 @@ class Module(metaclass=_Body):
     #: Every keyword the module has, by identifier.
     MODULE_INPUT: Mapping[str, Slot] = MappingProxyType({})
     COMPOSITES: Mapping[str, Composite] = MappingProxyType({})
-    OUTPUTS: Mapping[str, Output] = MappingProxyType({})
-    #: The module's variable vocabulary: mnemonic -> (result name, unit).
-    VARIABLES: Mapping[str, tuple[str, str]] = MappingProxyType({})
-    #: The tokens of that vocabulary the module PRINTS in its listing rather
-    #: than writes to its result file; a series of one is read off the listing.
+    #: What the module WRITES, by the mnemonic its printouts keyword spells: one
+    #: row per variable, and the whole statement - a variable the dictionary
+    #: offers and this table does not row is not written.
+    MODULE_OUTPUT: Mapping[str, Output] = MappingProxyType({})
+    #: The primitives over that output: kind -> the read of it off a solved run.
+    READS: Mapping[str, Callable[..., Any]] = MappingProxyType({})
+    #: The rows the module PRINTS in its listing rather than writes to its result
+    #: file; a series of one is read off the listing.
     LISTING: frozenset[str] = frozenset()
-    #: The tokens of that vocabulary the module defines OVER the variables its
-    #: result carries, each ``(solved) -> (name, units, values(nframes, npoin2))``.
+    #: The rows the module defines OVER the variables its result carries, each
+    #: ``(solved) -> (name, units, values(nframes, npoin2))``.
     DERIVED: Mapping[str, Callable[..., Any]] = MappingProxyType({})
+    #: The keyword the table is written into, by identifier; empty on a module
+    #: that writes no result of its own.
+    PRINTOUTS: str = ""
+    #: The token a tracer takes in that keyword, which is also the row its style
+    #: is under; empty on a module with no tracer surface.
+    TRACER: str = ""
+    #: What this module APPENDS to its carrier's tracers, ``(body) -> rows``;
+    #: ``None`` where it appends none.
+    APPENDS: Callable[[Any], Any] | None = None
     #: The result file the primitives read; empty reads the run's own.
     RESULT_FILE: str = ""
     #: What THIS body asserts - empty on a wrapper, by law.
@@ -305,12 +323,42 @@ class Module(metaclass=_Body):
                for name, fn in _unshadowed(cls, expanders)}})
 
     @classmethod
-    def outputs(cls, **readers: Callable[..., Any]) -> None:
-        """Register the module's outputs: primitive -> the read of it."""
-        cls.OUTPUTS = MappingProxyType({
-            **cls.OUTPUTS,
-            **{name: Output(name=name, read=fn)
-               for name, fn in _unshadowed(cls, readers)}})
+    def reads(cls, **readers: Callable[..., Any]) -> None:
+        """Register the primitives over the module's output: kind -> the read."""
+        cls.READS = MappingProxyType({**cls.READS, **dict(_unshadowed(cls, readers))})
+
+    @classmethod
+    def appends(cls, expand: Callable[[Any], Any]) -> None:
+        """Register what a coupled body of this module appends to its carrier."""
+        cls.APPENDS = staticmethod(expand)
+
+    @classmethod
+    def written(cls) -> tuple[str, ...]:
+        """The tokens the printouts keyword carries, past the run's tracers.
+
+        A row the module prints or derives is published or read, never asked for."""
+        return tuple(token for token in cls.MODULE_OUTPUT
+                     if token not in cls.LISTING and token not in cls.DERIVED
+                     and token != cls.TRACER)
+
+    @classmethod
+    def printouts(cls, *, tracers: int = 0) -> Mapping[str, str]:
+        """The table as the keyword the engine reads it from, or nothing at all.
+
+        Every token is checked against the dictionary's own choices, so a table
+        the engine would not spell refuses here rather than in the Fortran."""
+        if not cls.PRINTOUTS:
+            return {}
+        slot = cls.slot(cls.PRINTOUTS)
+        tokens = list(cls.written())
+        if cls.TRACER:
+            tokens += [f"{cls.TRACER}{n}" for n in range(1, int(tracers) + 1)]
+        for token in tokens:
+            if not _spelled(token, slot):
+                raise SlotRefused(
+                    f"{cls.MODULE} rows {token!r}, which {slot.keyword} does not "
+                    f"spell; its choices are {sorted(slot.choices or ())}.")
+        return {slot.keyword: ",".join(tokens)}
 
     @classmethod
     def slot(cls, identifier: str) -> Slot:
@@ -339,6 +387,17 @@ class Module(metaclass=_Body):
         raise SlotRefused(
             f"{cls.MODULE} has no keyword {wanted!r}."
             + (f" Did you mean {', '.join(repr(c) for c in close)}?" if close else ""))
+
+
+#: How the dictionary spells a NUMBERED token: the index is written ``i``, so
+#: ``T1`` is the choice ``Ti`` and ``TA1`` the choice ``TAi``.
+_INDEXED = re.compile(r"\d+$")
+
+
+def _spelled(token: str, slot: Slot) -> bool:
+    """Is ``token`` one the keyword's own choices carry, numbered or plain?"""
+    choices = slot.choices or ()
+    return token in choices or _INDEXED.sub("i", token) in choices
 
 
 def _unshadowed(cls: type, registered: Mapping[str, Any]) -> list[tuple[str, Any]]:

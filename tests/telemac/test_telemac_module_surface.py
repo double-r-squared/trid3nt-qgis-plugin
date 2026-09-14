@@ -702,20 +702,19 @@ _COUPLED_CALLS = {
         {"geometry": "a.slf", "boundary": "a.cli",
          "gradation": [(63.0, 0.4), (200.0, 0.6)], "presets": {}, "d50_um": 120.0,
          "thickness_m": 5.0, "formula": 1, "hiding_factor_formula": 1,
-         "morphological_factor": 10.0, "printouts": "B,E",
-         "mixture_printouts": "B,E,D50", "mass_balance": True},
+         "morphological_factor": 10.0, "mass_balance": True},
         {"geometry": "b.slf", "boundary": "b.cli",
          "gradation": None, "presets": {"x": [[1.0, 1.0]]}, "d50_um": 90.0,
          "thickness_m": 1.5, "formula": 3,
          "hiding_factor_formula": 0, "morphological_factor": 4.0,
-         "printouts": "E", "mixture_printouts": "E,D50", "mass_balance": False}),
+         "mass_balance": False}),
     ("gaia", "suspended"): (
         {"geometry": "a.slf", "boundary": "a.cli", "d50_um": 30.0,
          "concentration_mgl": 250.0, "transport_formula": 3,
-         "advection_scheme": [1], "printouts": "B,E", "mass_balance": True},
+         "advection_scheme": [1], "mass_balance": True},
         {"geometry": "b.slf", "boundary": "b.cli", "d50_um": 12.0,
          "concentration_mgl": 750.0, "transport_formula": 2,
-         "advection_scheme": [5], "printouts": "B,E,D50",
+         "advection_scheme": [5],
          "mass_balance": False}),
 }
 
@@ -786,8 +785,7 @@ def _bed(**over):
                  presets={"graded_sand": [[100.0, 0.34], [400.0, 0.33],
                                           [1000.0, 0.33]]},
                  d50_um=200.0, thickness_m=5.0, formula=1, hiding_factor_formula=1,
-                 morphological_factor=10.0, printouts="B,E",
-                 mixture_printouts="B,E,D50", mass_balance=True)
+                 morphological_factor=10.0, mass_balance=True)
     return fill(GAIA, **dict(GAIA.bed(**{**asked, **over})["slots"]))
 
 
@@ -802,19 +800,19 @@ def test_the_gaia_classes_lists_are_three_of_one_length():
     assert written["CLASSES SEDIMENT DIAMETERS"] == pytest.approx(
         [63.0e-6, 200.0e-6, 600.0e-6])
     assert written["HIDING FACTOR FORMULA"] == 1
-    assert written["VARIABLES FOR GRAPHIC PRINTOUTS"] == "B,E,D50"
+    # WHAT the module writes is its own table, not the bed's business.
+    assert "VARIABLES FOR GRAPHIC PRINTOUTS" not in written
     assert "CLASSES SEDIMENT DENSITY" not in written
 
 
 def test_a_gradation_by_preset_name_or_too_few_classes_resolves_the_bed_shape():
     """A preset name is the mixture it names, renormalized; one pair cannot sort
-    and the bed is the single class at d50, printing no grading."""
+    and the bed is the single class at d50."""
     by_name = dict(_bed(gradation="graded_sand").resolved())
     assert len(by_name["CLASSES INITIAL FRACTION"]) == 3
     assert sum(by_name["CLASSES INITIAL FRACTION"]) == pytest.approx(1.0)
     single = dict(_bed(gradation=[[300.0, 1.0]]).resolved())
     assert single["CLASSES SEDIMENT DIAMETERS"] == pytest.approx([200.0e-6])
-    assert single["VARIABLES FOR GRAPHIC PRINTOUTS"] == "B,E"
     assert "HIDING FACTOR FORMULA" not in single
 
 
@@ -832,17 +830,17 @@ def test_every_wrapper_binds_the_primitive_set_and_nothing_question_named():
     from trid3nt_server.workflows.telemac.modules.outputs import PRIMITIVES
 
     for wrapper in (T2D, T3D, ART, GAIA):
-        assert set(PRIMITIVES) <= set(wrapper.OUTPUTS), wrapper.MODULE
-        assert wrapper.VARIABLES, wrapper.MODULE
-        assert all(callable(output.read) for output in wrapper.OUTPUTS.values())
-    # The outputs past the set are what a module carries that the others do
+        assert set(PRIMITIVES) <= set(wrapper.READS), wrapper.MODULE
+        assert wrapper.MODULE_OUTPUT, wrapper.MODULE
+        assert all(callable(read) for read in wrapper.READS.values())
+    # The reads past the set are what a module carries that the others do
     # not: the particle track TELEMAC-2D itself writes, and the planes a
     # TELEMAC-3D result stacks, read down as a column.
-    assert set(T2D.OUTPUTS) - set(PRIMITIVES) == {"drogues"}
-    assert set(T3D.OUTPUTS) - set(PRIMITIVES) == {"column"}
+    assert set(T2D.READS) - set(PRIMITIVES) == {"drogues"}
+    assert set(T3D.READS) - set(PRIMITIVES) == {"column"}
     for wrapper in (ART, GAIA):
-        assert sorted(wrapper.OUTPUTS) == sorted(PRIMITIVES), wrapper.MODULE
-    assert not WAQTEL.OUTPUTS
+        assert sorted(wrapper.READS) == sorted(PRIMITIVES), wrapper.MODULE
+    assert not WAQTEL.READS and not WAQTEL.MODULE_OUTPUT
     # GAIA writes its own result beside the carrier's, so its primitives read it.
     assert GAIA.RESULT_FILE == "gaia_river.slf"
     assert T2D.RESULT_FILE == ""
@@ -1155,14 +1153,14 @@ def test_a_template_reads_its_answer_through_the_primitives_its_module_binds():
             body = door.steering
             for primitive in door.outputs:
                 reader = WRAPPERS[primitive.module] if primitive.module else body
-                assert primitive.kind in reader.OUTPUTS, (name, primitive)
+                assert primitive.kind in reader.READS, (name, primitive)
                 assert primitive.publish in ("layer", "chart", "animate", "station")
                 assert (primitive.variable or primitive.kind) in door.captions, (
                     name, primitive)
             for measure in door.answer.values():
                 reader = (WRAPPERS[measure.primitive.module]
                           if measure.primitive.module else body)
-                assert measure.primitive.kind in reader.OUTPUTS, (name, measure)
+                assert measure.primitive.kind in reader.READS, (name, measure)
             continue
         readers[name] = door.read(None).runner
     assert "telemac_river_dye" not in readers
@@ -1232,7 +1230,12 @@ def test_the_card_shows_what_is_set_and_open_and_folds_the_rest_by_rubrique():
 
     sheet = _filled(**{"LAW OF BOTTOM FRICTION": 4})
     rows = {row.name: row for row in card_rows(sheet)}
-    assert len(rows) == len(T2D.MODULE_INPUT)
+    # Every keyword, plus the one row the module states rather than a fill: the
+    # variables it writes, expanded, which no slot on this sheet carries.
+    assert len(rows) == len(T2D.MODULE_INPUT) + 1
+    written = rows["telemac2d.VARIABLES_FOR_GRAPHIC_PRINTOUTS"]
+    assert written.value[:3] == ["VELOCITY U", "VELOCITY V", "WATER DEPTH"]
+    assert not written.editable and not written.advanced
     assert not rows["LAW_OF_BOTTOM_FRICTION"].advanced
     assert rows["LAW_OF_BOTTOM_FRICTION"].origin == "user"
     assert rows["LAW_OF_BOTTOM_FRICTION"].source_badge == "user"

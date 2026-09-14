@@ -34,28 +34,49 @@ resolved.
 Two acts, and only two. `fill` is repeatable and decides nothing. `run` is
 explicit, on a complete sheet, and it is where execution stops being held.
 
-A wrapper's OUTPUTS are the PRIMITIVE SET, named from the module's own variable
-vocabulary: `field(name, t)`, `series(name, at)`, `max_over_time(name)`,
-`profile(name, along, t)`, `extent()`, `mesh()`, `mass_balance()`, plus the
-outputs past the set a module carries for itself - TELEMAC-2D's `drogues()`,
-the particle track it writes, and TELEMAC-3D's `column(name, at, t)`, a
-variable down the planes its result stacks. A field of a 3D result reads one
-plane (`plane=`, bottom first; unstated, the surface) and is named by it. A
-module may DEFINE a token over the variables its result carries - ARTEMIS's
-`KD`, the wave height over the incident height its boundary file stamps - and
-the primitives read it as any other. A primitive names the coupled module whose
-own result it reads (`module=`), and a tracer a coupled process appended behind
-the carrier's declared ones is the carrier's `T<n>` by position. A series of a token the module PRINTS rather than writes - TELEMAC-2D's `FLUX`,
-the discharge across a liquid boundary - is read off the listing at the boundary
-the Point lies on. A profile names the line it runs along and, where the line is
-a transect rather than the domain's own axis, how far off it a node still counts
-(`within_m=`). A template lists primitives with how each is published -
-`.layer()`, `.chart(reference=)`, `.animate()`, `.station()` - and names its
-answer as measures of them, each held against a sheet value where a verdict
-needs one (`.over(P.x)` the ratio, `.below(P.x)` the comparison); a chart's
-reference is a callable computing lines beside the read or another primitive
-drawn as one. An answer over a variable the run did not write is nothing rather
-than a refusal; a listed output that is missing refuses. The wrapper binds no
+A wrapper's MODULE_OUTPUT is the table of what the module WRITES: one row per
+engine variable, keyed by the mnemonic the module's own printouts keyword
+spells (ARTEMIS `ZS`, not `S`), carrying the name the result file gives it, its
+unit, the style row it draws under and whether it varies in time. The table is
+the whole statement - a variable the dictionary offers and the table does not
+row is not written - and the printouts keyword is GENERATED from it as the deck
+is serialized, for the host and for every coupled module, with every token
+checked against the keyword's own choices. A run publishes every row its result
+carries: the final frame as a layer, styled from the row, and the whole series
+as an animation where the row varies. A row the result does not carry is
+skipped. A row the module PRINTS in its listing (TELEMAC-2D's `FLUX`) or
+DERIVES over the variables its result carries (ARTEMIS's `KD`) is published or
+read but never asked of the engine. The `TRACER` row is the run's tracers - one
+per NAMES OF TRACERS entry, read by position as `T<n>` - and a module that
+appends tracers to its carrier states those rows and their styles itself
+through one hook (WAQTEL by process, GAIA per suspended class); the carrier
+never counts them.
+
+A wrapper's READS are the PRIMITIVE SET over that output, named from the
+module's own variables: `field(name, t)`, `series(name, at)`,
+`max_over_time(name)`, `profile(name, along, t)`, `extent()`, `mesh()`,
+`mass_balance()`, plus the reads past the set a module carries for itself -
+TELEMAC-2D's `drogues()`, the particle track it writes, and TELEMAC-3D's
+`column(name, at, t)`, a variable down the planes its result stacks. A field of
+a 3D result reads one plane (`plane=`, bottom first; unstated, the surface) and
+is named by it. A primitive names the coupled module whose own result it reads
+(`module=`). A series of a printed token is read off the listing at the
+boundary the Point lies on. A profile names the line it runs along and, where
+the line is a transect rather than the domain's own axis, how far off it a node
+still counts (`within_m=`).
+
+A template lists only the reads it PLACES - a series at a point the user gives,
+a profile along a line, the track a module writes - with how each is published
+(`.layer()`, `.chart(reference=)`, `.animate()`, `.station()`) and a caption for
+each; it states no style, no printout list and no caption for a variable. It
+names its answer as measures of the primitives, each held against a sheet value
+where a verdict needs one (`.over(P.x)` the ratio, `.below(P.x)` the
+comparison) and against the lever a question needs where the run may never have
+been asked it (`.needs(P.x, without=...)`). A chart's reference is a callable
+computing lines beside the read or another primitive drawn as one. An answer
+over a variable the run did not write states the REASON and the delivery
+refuses it; one over a lever nobody supplied says the question was not asked and
+the delivery passes. A placed read that is missing refuses. The wrapper binds no
 reader that knows a question.
 
 ## Files
@@ -63,17 +84,17 @@ reader that knows a question.
 | file | what it is |
 | --- | --- |
 | `__init__.py` | The door: the wrappers, the two acts, and the primitive set. |
-| `module.py` | What a slot, a wrapper, a composite, an output and a defined token ARE, and the loader that makes a wrapper out of `module_input/<module>.json`. |
-| `sheet.py` | The sheet - filled slots with their provenance, the files a composite named, the slots still open - and `fill` / `run`. |
-| `outputs.py` | The primitive set - `field`, `series`, `max_over_time`, `profile`, `extent`, `mesh`, `mass_balance` - and `drogues` and `column`, with the read of each off a solved run through `read_selafin`, the engine's own reader inside the image, and the `Measure` a template names an answer by. |
+| `module.py` | What a slot, a wrapper, a composite and an output row ARE, the loader that makes a wrapper out of `module_input/<module>.json`, and the generation of a module's printouts keyword from its own table. |
+| `sheet.py` | The sheet - filled slots with their provenance, the files a composite named, the slots still open, the coupled bodies it couples, the tracers its result carries and every variable it publishes - and `fill` / `run`. |
+| `outputs.py` | The primitive set - `field`, `series`, `max_over_time`, `profile`, `extent`, `mesh`, `mass_balance` - and `drogues` and `column`, with the read of each off a solved run through `read_selafin`, the engine's own reader inside the image, and the `Measure` a template names an answer by, with the two sentences a measure answers with when it cannot be read or was never asked. |
 | `listing.py` | What a solved run's own listing says, read on the server: the engine's demand, GAIA's closure, the water-volume closure per period and whole, and the flux across a liquid boundary. |
 | `describe.py` | `describe_keywords` - the read over a module's dictionary, which is how the whole keyword surface is reached rather than carried in a docstring. |
 | `corpus.yaml` | The routing phrasings that reach `describe_keywords`. |
-| `telemac2d.py` | The TELEMAC-2D wrapper: the releases, wind, rain, oil, friction, runoff, infiltration (the curve-number and roughness surface read off the land cover at the fill), rating, hyetograph, time-origin and coupling groups, the module's variable vocabulary with the flux it prints rather than writes, and the drogues track it writes. |
-| `telemac3d.py` | The TELEMAC-3D wrapper: the vertical grid keyword pair and its refusal, the water column a run is initialized from, and the wind. |
-| `artemis.py` | The ARTEMIS wrapper: the incident wave, which the module reads out of the boundary file rather than the deck, so the composite restamps the pair the mesh recipe wrote; and the wave vocabulary. |
-| `waqtel.py` | The WAQTEL wrapper: the O2 process and the degradation a carrier names as coupled bodies, whose slots serialize into WAQTEL's own steering file while the coupling keywords land on the carrier's sheet; a degradation given nothing couples nothing. |
-| `gaia.py` | The GAIA wrapper: the bed and the suspension a carrier names as coupled bodies, expanded from a gradation or a class and its concentration, the DREDGE the engine offers as keywords on this deck rather than as a module of its own - its action values, and the three files it names - and its primitives over the module's own result file. |
+| `telemac2d.py` | The TELEMAC-2D wrapper: the releases, wind, rain, oil, friction, runoff, infiltration (the curve-number and roughness surface read off the land cover at the fill), rating, hyetograph, time-origin and coupling groups, the module's output table with the tracer row and the flux it prints rather than writes, and the drogues track it writes. |
+| `telemac3d.py` | The TELEMAC-3D wrapper: the vertical grid keyword pair and its refusal, the water column a run is initialized from, the wind, and the output table its 3D printouts keyword is written from. |
+| `artemis.py` | The ARTEMIS wrapper: the incident wave, which the module reads out of the boundary file rather than the deck, so the composite restamps the pair the mesh recipe wrote; the wave output table; and the KD coefficient it derives over that table. |
+| `waqtel.py` | The WAQTEL wrapper: the O2 process and the degradation a carrier names as coupled bodies, whose slots serialize into WAQTEL's own steering file while the coupling keywords land on the carrier's sheet; a degradation given nothing couples nothing; and the tracers each process appends to its carrier's result. |
+| `gaia.py` | The GAIA wrapper: the bed and the suspension a carrier names as coupled bodies, expanded from a gradation or a class and its concentration, the DREDGE the engine offers as keywords on this deck rather than as a module of its own - its action values, and the three files it names - its output table and the class a suspension appends to its carrier's tracers, and its primitives over the module's own result file. |
 
 ## Subfolders
 

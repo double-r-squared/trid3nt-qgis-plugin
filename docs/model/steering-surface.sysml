@@ -34,12 +34,13 @@ package SteeringSurface {
     read straight back by the engine's own parser, staged, and handed to the box.
 
     The module is the unit the whole surface is built around. A question is a
-    template: values over one module - a body of keywords, DATA rows, an outputs
-    list, captions - and nothing below it knows the question exists. A wrapper's
-    outputs are primitives named from the module's variable vocabulary, the
-    run record carries the engine and the module, every filled slot carries one
-    of six origins, and the adapters build their turns from an IR of this
-    repo's own. A point anywhere in the system is one typed Point.
+    template: values over one module - a body of keywords, DATA rows, the reads
+    it PLACES, captions - and nothing below it knows the question exists. What a
+    run WRITES is the module's own output table, and the reads over it are
+    primitives named from that table; the run record carries the engine and the
+    module, every filled slot carries one of six origins, and the adapters build
+    their turns from an IR of this repo's own. A point anywhere in the system is
+    one typed Point.
     */
 
     // ----------------------------------------------------------------- //
@@ -81,8 +82,10 @@ package SteeringSurface {
 
     part def Output {
         doc /*
-        A module's output bound to the reader that publishes it. A binding, not
-        a new reader.
+        One variable the module writes: the name its result file carries it
+        under, its unit, the style row it draws under and whether it varies in
+        time. The table of those rows is the module's whole statement about
+        what a run of it produces.
         */
     }
 
@@ -688,11 +691,11 @@ package SteeringSurface {
         composite own a carrier slot out of sight. What varies WITHIN one
         question is a composite that states nothing when it is given nothing.
 
-        The rule holds on the READING side too. Each template LISTS the
-        primitives its question reads, off the module's own OUTPUTS bindings
-        and, for a coupled module's own result, through that module's wrapper;
-        a single publisher branching on a substance-class string put the fork
-        back in the products, one level down from where a person reads it.
+        The rule holds on the READING side too. Each template LISTS the reads
+        its question PLACES, off the module's own READS registry and, for a
+        coupled module's own result, through that module's wrapper; a single
+        publisher branching on a substance-class string put the fork back in the
+        products, one level down from where a person reads it.
         */
     }
 
@@ -729,11 +732,34 @@ package SteeringSurface {
         doc /*
         The engine's module is the unit. A template is values over one module
         and composes nothing, so nothing is frozen: a body that states one
-        tracer is two on the fill. A wrapper's outputs are primitives named from
-        the module's own variables and never from a question. A run is recorded
+        tracer is two on the fill. A wrapper's reads are primitives named from
+        the module's own output table and never from a question. A run is recorded
         under its engine and its module, with no template field; every filled
         slot carries one of the six origins the card renders. The adapters
         build a turn from the contracts IR and import no provider SDK for it.
+        */
+    }
+
+    requirement def OutputsAreTheModules {
+        doc /*
+        What a run writes, how each variable is drawn and what it is called are
+        the MODULE's, stated once in its output table and never by the template
+        that asked the question. The printouts keyword is generated from that
+        table as the deck is serialized - for the host and for every coupled
+        module - with each token checked against the keyword's own choices; a
+        template restating it, or naming a style of its own, is refused.
+
+        Everything the table rows and the result carries is published: the
+        final frame as a layer styled from the row, and an animation where the
+        row varies in time. There is no leading layer and no ranking among the
+        rows, because every group rides the one mesh the run solved on and the
+        camera takes its extent; the order is the dictionary's. A row the
+        result does not carry is skipped rather than refused, and a row a module
+        prints in its listing or derives over its own variables is read or
+        published but never asked of the engine.
+
+        What a template keeps is the QUESTION: the keywords, the reads that need
+        a place the user gives, the answer, and the captions for those.
         */
     }
 
@@ -980,6 +1006,26 @@ package SteeringSurface {
         "tests/adapters/test_message_ir.py::test_the_conversation_is_built_from_the_ir_alone";
     verify requirement ModuleIsTheUnit by
         "tests/adapters/test_message_ir.py::test_no_provider_sdk_is_imported_for_the_ir";
+
+    satisfy requirement OutputsAreTheModules by wrapper;
+    satisfy requirement OutputsAreTheModules by output;
+    satisfy requirement OutputsAreTheModules by sheet;
+    satisfy requirement OutputsAreTheModules by serializer;
+    satisfy requirement OutputsAreTheModules by door;
+    verify requirement OutputsAreTheModules by
+        "tests/telemac/test_telemac_module_outputs.py::test_no_template_states_a_style_or_a_printout_list";
+    verify requirement OutputsAreTheModules by
+        "tests/telemac/test_telemac_module_outputs.py::test_the_printouts_keyword_is_the_table_and_the_run_s_own_tracers";
+    verify requirement OutputsAreTheModules by
+        "tests/telemac/test_telemac_module_outputs.py::test_a_token_the_keyword_does_not_spell_refuses_before_the_engine_reads_it";
+    verify requirement OutputsAreTheModules by
+        "tests/telemac/test_telemac_module_outputs.py::test_every_row_the_result_carries_is_painted_and_a_varying_one_animated";
+    verify requirement OutputsAreTheModules by
+        "tests/telemac/test_telemac_module_outputs.py::test_a_row_the_result_does_not_carry_is_skipped_and_a_placed_read_refuses";
+    verify requirement OutputsAreTheModules by
+        "tests/telemac/test_telemac_module_outputs.py::test_a_coupled_module_states_the_tracers_it_appends_and_its_own_table";
+    verify requirement OutputsAreTheModules by
+        "tests/telemac/test_telemac_module_outputs.py::test_the_card_carries_every_variable_each_deck_writes";
 
     satisfy requirement InputsAreTypedPrimitives by point;
     satisfy requirement InputsAreTypedPrimitives by canvasGate;

@@ -38,8 +38,7 @@ def _sheet(*actions: Any, reference: Any = None):
     return fill(GAIA, **dict(GAIA.bed(
         geometry="a.slf", boundary="a.cli", mass_balance=True,
         gradation=None, presets={}, d50_um=200.0, thickness_m=5.0, formula=1,
-        hiding_factor_formula=1, morphological_factor=10.0, printouts="B,E",
-        mixture_printouts="B,E,D50",
+        hiding_factor_formula=1, morphological_factor=10.0,
         dredging=Dredging(actions=list(actions),
                           reference=_PROFILES if reference is None else reference,
                           origin=_ORIGIN))["slots"]))
@@ -169,7 +168,7 @@ def test_a_dredge_over_a_bed_with_no_stock_refuses_by_name():
         GAIA.suspended(geometry="a.slf", boundary="a.cli", mass_balance=True,
                        d50_um=30.0, concentration_mgl=250.0,
                        transport_formula=3, advection_scheme=[1],
-                       printouts="B,E", dredging=Dredging(
+                       dredging=Dredging(
                            actions=[], reference=_PROFILES, origin=_ORIGIN))
 
 

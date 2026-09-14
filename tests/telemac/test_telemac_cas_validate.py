@@ -128,7 +128,7 @@ def test_a_coupled_reach_submits_the_coupled_modules_steering_too(tmp_path,
     bed = fill(T2D, coupling=[GAIA.bed(
         geometry="river.slf", boundary="river.cli", gradation=None, presets={},
         d50_um=200.0, thickness_m=5.0, formula=1, hiding_factor_formula=1,
-        morphological_factor=10.0, printouts="B,E", mixture_printouts="B,E,D50",
+        morphological_factor=10.0,
         mass_balance=True)])
     assert _submitted(monkeypatch, tmp_path / "sed", bed) == {
         "t2d_river.cas": "telemac2d", "gaia_river.cas": "gaia"}

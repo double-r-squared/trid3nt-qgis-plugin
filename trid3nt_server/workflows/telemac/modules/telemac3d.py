@@ -11,18 +11,26 @@ from typing import Any, Mapping
 
 from trid3nt_server.workflows.runtime import DeclarativeError
 
-from .module import Module
+from .module import Module, Output
 from .outputs import PRIMITIVES, read_column
 
-__all__ = ["T3D", "Column", "USER_FORTRAN_DIR", "VARIABLES",
+__all__ = ["T3D", "Column", "MODULE_OUTPUT", "USER_FORTRAN_DIR",
            "VerticalGridUnresolved", "VerticalGrid", "plan_vertical_grid"]
 
-#: The module's variable vocabulary, by the mnemonic VARIABLES FOR 3D GRAPHIC
-#: PRINTOUTS spells: the result-file name and the unit. A 3D variable is read on
-#: one plane, bottom first; ``T<n>`` is the n-th NAMES OF TRACERS entry.
-VARIABLES: Mapping[str, tuple[str, str]] = MappingProxyType({
-    "Z": ("ELEVATION Z", "M"), "U": ("VELOCITY U", "M/S"),
-    "V": ("VELOCITY V", "M/S"), "W": ("VELOCITY W", "M/S"),
+#: A signed component reads about zero, so its ramp diverges there.
+_SIGNED = {"kind": "mesh", "ramp": "rdbu", "units": "m/s", "center": 0.0}
+
+#: What the module WRITES, by the mnemonic VARIABLES FOR 3D GRAPHIC PRINTOUTS
+#: spells: the result-file name, the unit and how it draws. A 3D variable is
+#: read on one plane, bottom first; ``TA`` is the TRACER row, one per NAMES OF
+#: TRACERS entry.
+MODULE_OUTPUT: Mapping[str, Output] = MappingProxyType({
+    "Z": Output("ELEVATION Z", "m",
+                style={"kind": "mesh", "ramp": "blues", "units": "m"}),
+    "U": Output("VELOCITY U", "m/s", style=_SIGNED),
+    "V": Output("VELOCITY V", "m/s", style=_SIGNED),
+    "W": Output("VELOCITY W", "m/s", style=_SIGNED),
+    "TA": Output("TRACER", "", style={"kind": "mesh", "ramp": "viridis"}),
 })
 
 
@@ -273,6 +281,8 @@ def _wind(value: Mapping[str, Any]) -> tuple[Mapping[str, Any], Mapping[str, Any
 
 
 T3D = Module("telemac3d")
-T3D.VARIABLES = VARIABLES
+T3D.MODULE_OUTPUT = MODULE_OUTPUT
+T3D.PRINTOUTS = "VARIABLES_FOR_3D_GRAPHIC_PRINTOUTS"
+T3D.TRACER = "TA"
 T3D.composites(vertical_grid=_vertical_grid, column=_column, wind=_wind)
-T3D.outputs(**PRIMITIVES, column=read_column)
+T3D.reads(**PRIMITIVES, column=read_column)

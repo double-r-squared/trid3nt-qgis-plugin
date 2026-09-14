@@ -11,24 +11,44 @@ import math
 from types import MappingProxyType
 from typing import Any, Mapping, Sequence
 
-from .module import Module
+from .module import Module, Output
 from .outputs import PRIMITIVES, read_drogues
 
 __all__ = ["T2D", "Boundaries", "Continuation", "Friction", "Hyetograph",
-           "Infiltration", "Oil", "Rain", "Rating", "Release", "Runoff",
-           "TimeOrigin", "TracerNames", "Wind", "SOURCES_FILENAME", "VARIABLES"]
+           "Infiltration", "MODULE_OUTPUT", "Oil", "Rain", "Rating", "Release",
+           "Runoff", "TimeOrigin", "TracerNames", "Wind", "SOURCES_FILENAME"]
 
-#: The module's variable vocabulary, by the mnemonic VARIABLES FOR GRAPHIC
-#: PRINTOUTS spells: the name the result file carries it under, and its unit.
-#: ``T<n>`` is the n-th NAMES OF TRACERS entry and is resolved off the run.
-#: ``FLUX`` is the one the module PRINTS rather than writes: the discharge
-#: across each liquid boundary, in its own water-volume balance.
-VARIABLES: Mapping[str, tuple[str, str]] = MappingProxyType({
-    "U": ("VELOCITY U", "M/S"), "V": ("VELOCITY V", "M/S"),
-    "H": ("WATER DEPTH", "M"), "S": ("FREE SURFACE", "M"),
-    "B": ("BOTTOM", "M"), "F": ("FROUDE NUMBER", ""),
-    "Q": ("SCALAR FLOWRATE", "M2/S"), "M": ("SCALAR VELOCITY", "M/S"),
-    "FLUX": ("FLUX BOUNDARY", "M3/S"),
+#: A signed component reads about zero, so its ramp diverges there and the
+#: legend is ranged symmetrically; a depth-like field is floored where it stops
+#: being water and a terrain field is relief the run did not make.
+_SIGNED = {"kind": "mesh", "ramp": "rdbu", "units": "m/s", "center": 0.0}
+_TERRAIN = {"kind": "mesh", "ramp": "terrain", "units": "m"}
+_LEVEL = {"kind": "mesh", "ramp": "blues", "units": "m"}
+
+#: What the module WRITES, by the mnemonic VARIABLES FOR GRAPHIC PRINTOUTS
+#: spells: the name the result file carries it under, its unit and how it draws.
+#: ``T`` is the TRACER row - one per NAMES OF TRACERS entry, plus whatever a
+#: coupled module appends behind them. ``FLUX`` is the one the module PRINTS
+#: rather than writes: the discharge across each liquid boundary, in its own
+#: water-volume balance.
+MODULE_OUTPUT: Mapping[str, Output] = MappingProxyType({
+    "U": Output("VELOCITY U", "m/s", style=_SIGNED),
+    "V": Output("VELOCITY V", "m/s", style=_SIGNED),
+    "H": Output("WATER DEPTH", "m",
+                style={"kind": "mesh", "ramp": "ylgnbu", "units": "m", "floor": 0}),
+    "S": Output("FREE SURFACE", "m", style=_LEVEL),
+    "B": Output("BOTTOM", "m", style=_TERRAIN, varies=False),
+    "F": Output("FROUDE NUMBER", "",
+                style={"kind": "mesh", "ramp": "magma", "floor": 0}),
+    "Q": Output("SCALAR FLOWRATE", "m2/s",
+                style={"kind": "mesh", "ramp": "viridis", "units": "m2/s",
+                       "floor": 0}),
+    "M": Output("SCALAR VELOCITY", "m/s",
+                style={"kind": "mesh", "ramp": "viridis", "units": "m/s",
+                       "floor": 0}),
+    "T": Output("TRACER", "",
+                style={"kind": "mesh", "ramp": "reds", "floor": 0}),
+    "FLUX": Output("FLUX BOUNDARY", "m3/s"),
 })
 LISTING: frozenset[str] = frozenset({"FLUX"})
 
@@ -554,11 +574,13 @@ def _hyetograph(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
 
 
 T2D = Module("telemac2d")
-T2D.VARIABLES = VARIABLES
+T2D.MODULE_OUTPUT = MODULE_OUTPUT
 T2D.LISTING = LISTING
+T2D.PRINTOUTS = "VARIABLES_FOR_GRAPHIC_PRINTOUTS"
+T2D.TRACER = "T"
 T2D.composites(releases=_releases, wind=_wind, continue_from=_continue_from,
                oil=_oil, rain=_rain, coupling=_coupling,
                boundaries=_boundaries, runoff=_runoff, friction=_friction,
                infiltration=_infiltration, rating=_rating, hyetograph=_hyetograph,
                time_origin=_time_origin, tracer_names=_tracer_names)
-T2D.outputs(**PRIMITIVES, drogues=read_drogues)
+T2D.reads(**PRIMITIVES, drogues=read_drogues)
