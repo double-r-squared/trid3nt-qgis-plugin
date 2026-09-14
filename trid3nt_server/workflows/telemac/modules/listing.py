@@ -2,7 +2,7 @@
 
 The worker is the engine room: it runs a steering file and writes what the engine
 printed, and everything derived from the listing is read HERE. Every function is
-BEST-EFFORT: a parse that fails returns nothing and the primary layer stands."""
+BEST-EFFORT: a parse that fails returns nothing and the run's layers stand."""
 
 from __future__ import annotations
 

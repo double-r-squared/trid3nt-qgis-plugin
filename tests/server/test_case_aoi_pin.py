@@ -1,6 +1,6 @@
 """The Case AOI is the extent a run solved over, and a later fetch fills from it.
 
-A completed workflow publishes its primary layer at the domain it solved, so that
+A completed workflow returns its own record at the domain it solved, so that
 box is written onto the Case and cached in the session; the write is skipped at
 the same extent and follows a changed one. A plain fetch states an area, it does
 not decide the Case's."""

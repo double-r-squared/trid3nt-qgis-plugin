@@ -829,7 +829,7 @@ async def _invoke_tool_via_emitter(
             )
 
     # PIN the Case AOI to the extent the run solved over: a completed workflow
-    # publishes its primary layer at the floored domain, which is the run's own
+    # returns its own record at the floored domain, which is the run's own
     # extent, so every later fetch that states no area fills from the ground the
     # run covered. A reuse short-circuit pinned when it was first produced.
     if (
