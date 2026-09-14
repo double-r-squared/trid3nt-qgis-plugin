@@ -75,6 +75,7 @@ It publishes these layers onto the canvas:
 - Input: nhd area water (nhd_area_water)
 - Input: river bed elevation (copernicus_dem, datum EGM2008 geoid (metres, positive up))
 - Release point (derived) - scotia_humboldt_county_california_95562_united_s
+- Velocity u (m/s) at t = 593.94 s (scotia_humboldt_county_california_95562_united_s)
 - Velocity u over time (scotia_humboldt_county_california_95562_united_s)
 - Velocity v (m/s) at t = 593.94 s (scotia_humboldt_county_california_95562_united_s)
 - Velocity v over time (scotia_humboldt_county_california_95562_united_s)
@@ -95,29 +96,31 @@ It publishes these layers onto the canvas:
 - Ncoh sediment1 over time (scotia_humboldt_county_california_95562_united_s)
 - Cumul bed evol (m) at t = 593.94 s (scotia_humboldt_county_california_95562_united_s)
 - Cumul bed evol over time (scotia_humboldt_county_california_95562_united_s)
+- Mean diameter m at t = 593.94 s (scotia_humboldt_county_california_95562_united_s)
+- Mean diameter m over time (scotia_humboldt_county_california_95562_united_s)
 - Bed shear stress (n/m2) at t = 593.94 s (scotia_humboldt_county_california_95562_united_s)
 - Bed shear stress over time (scotia_humboldt_county_california_95562_united_s)
-- Velocity u (m/s) at t = 593.94 s (scotia_humboldt_county_california_95562_united_s)
+- scotia_humboldt_county_california_95562_united_s
 
 ## The proving run
 
-Run `01M2F7821D8W9XKSXDGSSFK11E`, 2026-09-14T05:46:54.782740+00:00, 26.237 s, at commit `e766867a5a6296cb173fa756d162fe5cc15ba2d8-dirty`.
+Run `01M2GNFGG431SX89YQ0YMD8PPF`, 2026-09-14T19:14:54.120766+00:00, 27.177 s, at commit `c06075fe30c18c4bf3619f40299b09edffefc4c0-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M2F7821D8W9XKSXDGSSFK11E)](telemac_river_sediment_plume/telemac_river_sediment_plume.png)
+![Every layer the run published, stacked and framed on the result (run 01M2GNFGG431SX89YQ0YMD8PPF)](telemac_river_sediment_plume/telemac_river_sediment_plume.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M2F7821D8W9XKSXDGSSFK11E)*
+*Every layer the run published, stacked and framed on the result (run 01M2GNFGG431SX89YQ0YMD8PPF)*
 
-![The solve, frame by frame (run 01M2F7821D8W9XKSXDGSSFK11E)](telemac_river_sediment_plume/telemac_river_sediment_plume_animation.gif)
+![The solve, frame by frame (run 01M2GNFGG431SX89YQ0YMD8PPF)](telemac_river_sediment_plume/telemac_river_sediment_plume_animation.gif)
 
-*The solve, frame by frame (run 01M2F7821D8W9XKSXDGSSFK11E)*
+*The solve, frame by frame (run 01M2GNFGG431SX89YQ0YMD8PPF)*
 
-![peak frame (run 01M2F7821D8W9XKSXDGSSFK11E)](telemac_river_sediment_plume/telemac_river_sediment_plume_peak_frame.png)
+![peak frame (run 01M2GNFGG431SX89YQ0YMD8PPF)](telemac_river_sediment_plume/telemac_river_sediment_plume_peak_frame.png)
 
-*peak frame (run 01M2F7821D8W9XKSXDGSSFK11E)*
+*peak frame (run 01M2GNFGG431SX89YQ0YMD8PPF)*
 
-![suspended sediment concentration - the chart the run persisted (run 01M2F7821D8W9XKSXDGSSFK11E)](telemac_river_sediment_plume/telemac_river_sediment_plume_chart_suspended_sediment_concentration.png)
+![suspended sediment concentration - the chart the run persisted (run 01M2GNFGG431SX89YQ0YMD8PPF)](telemac_river_sediment_plume/telemac_river_sediment_plume_chart_suspended_sediment_concentration.png)
 
-*suspended sediment concentration - the chart the run persisted (run 01M2F7821D8W9XKSXDGSSFK11E)*
+*suspended sediment concentration - the chart the run persisted (run 01M2GNFGG431SX89YQ0YMD8PPF)*
 
 ### The sheet it filled
 
@@ -169,5 +172,5 @@ await TOOL_REGISTRY['telemac_river_sediment_plume'].fn(
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2F7821D8W9XKSXDGSSFK11E` and commit `e766867a5a6296cb173fa756d162fe5cc15ba2d8-dirty`. The full argument record is [`telemac_river_sediment_plume/run.json`](telemac_river_sediment_plume/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2GNFGG431SX89YQ0YMD8PPF` and commit `c06075fe30c18c4bf3619f40299b09edffefc4c0-dirty`. The full argument record is [`telemac_river_sediment_plume/run.json`](telemac_river_sediment_plume/run.json).
 

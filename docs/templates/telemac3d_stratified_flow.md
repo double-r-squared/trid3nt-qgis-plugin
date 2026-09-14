@@ -47,14 +47,14 @@ The values the template declares. `desc` is what the model reads when it fills o
 
 | field | the proving run's value |
 |---|---|
-| `stratification_dt` | 2.762819290161133 |
-| `stratification_dt_init` | 7.698604583740234 |
-| `column_mean_final_c` | 23.926112250246746 |
-| `column_mean_init_c` | 23.76379657799038 |
-| `column_depth_m` | 8.894492268562317 |
-| `u_surface` | -0.008851914666593075 |
-| `u_bottom` | -0.024083677679300308 |
-| `depth_avg_u` | -3.7610802823793814e-05 |
+| `stratification_dt` | 2.7462081909179688 |
+| `stratification_dt_init` | 7.670253753662109 |
+| `column_mean_final_c` | 23.9351189729488 |
+| `column_mean_init_c` | 23.7737553488566 |
+| `column_depth_m` | 8.8814956843853 |
+| `u_surface` | -0.008817627094686031 |
+| `u_bottom` | -0.0239544864743948 |
+| `depth_avg_u` | -3.636007518623313e-05 |
 | `planes` | 13 |
 | `mesh_size_m` | 32.9447594688078 |
 
@@ -63,6 +63,7 @@ It publishes these layers onto the canvas:
 - Input: nhd waterbodies (nhd_waterbodies)
 - Input: greatlakes bathymetry (greatlakes_bathymetry, NCEI Great Lakes bathymetry is gridded at 3 arc-seconds (~90 m); 1800 px/deg is ~62 m, datum each Great Lake's own Low Water Datum (metres, positive up))
 - Input: greatlakes water level (greatlakes_water_level, datum each Great Lake's own Low Water Datum (metres, positive up))
+- Elevation z (m) at t = 3600 s, surface plane (basin_mesh)
 - Elevation z over time (basin_mesh)
 - Velocity u (m/s) at t = 3600 s, surface plane (basin_mesh)
 - Velocity u over time (basin_mesh)
@@ -72,27 +73,27 @@ It publishes these layers onto the canvas:
 - Velocity w over time (basin_mesh)
 - Temperature (degC) at t = 3600 s, surface plane (basin_mesh)
 - Temperature over time (basin_mesh)
-- Elevation z (m) at t = 3600 s, surface plane (basin_mesh)
+- basin_mesh
 
 ## The proving run
 
-Run `01M2F879JA4CKTA77X0C3FYXB4`, 2026-09-14T06:04:59.941097+00:00, 92.107 s, at commit `e766867a5a6296cb173fa756d162fe5cc15ba2d8-dirty`.
+Run `01M2GPX6APX8R0R0PESGVWQA6J`, 2026-09-14T19:40:52.465381+00:00, 91.089 s, at commit `c06075fe30c18c4bf3619f40299b09edffefc4c0-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M2F879JA4CKTA77X0C3FYXB4)](telemac3d_stratified_flow/telemac3d_stratified_flow.png)
+![Every layer the run published, stacked and framed on the result (run 01M2GPX6APX8R0R0PESGVWQA6J)](telemac3d_stratified_flow/telemac3d_stratified_flow.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M2F879JA4CKTA77X0C3FYXB4)*
+*Every layer the run published, stacked and framed on the result (run 01M2GPX6APX8R0R0PESGVWQA6J)*
 
-![The solve, frame by frame (run 01M2F879JA4CKTA77X0C3FYXB4)](telemac3d_stratified_flow/telemac3d_stratified_flow_animation.gif)
+![The solve, frame by frame (run 01M2GPX6APX8R0R0PESGVWQA6J)](telemac3d_stratified_flow/telemac3d_stratified_flow_animation.gif)
 
-*The solve, frame by frame (run 01M2F879JA4CKTA77X0C3FYXB4)*
+*The solve, frame by frame (run 01M2GPX6APX8R0R0PESGVWQA6J)*
 
-![final frame (run 01M2F879JA4CKTA77X0C3FYXB4)](telemac3d_stratified_flow/telemac3d_stratified_flow_final_frame.png)
+![final frame (run 01M2GPX6APX8R0R0PESGVWQA6J)](telemac3d_stratified_flow/telemac3d_stratified_flow_final_frame.png)
 
-*final frame (run 01M2F879JA4CKTA77X0C3FYXB4)*
+*final frame (run 01M2GPX6APX8R0R0PESGVWQA6J)*
 
-![water temperature - the chart the run persisted (run 01M2F879JA4CKTA77X0C3FYXB4)](telemac3d_stratified_flow/telemac3d_stratified_flow_chart_water_temperature.png)
+![water temperature - the chart the run persisted (run 01M2GPX6APX8R0R0PESGVWQA6J)](telemac3d_stratified_flow/telemac3d_stratified_flow_chart_water_temperature.png)
 
-*water temperature - the chart the run persisted (run 01M2F879JA4CKTA77X0C3FYXB4)*
+*water temperature - the chart the run persisted (run 01M2GPX6APX8R0R0PESGVWQA6J)*
 
 ### The sheet it filled
 
@@ -136,5 +137,5 @@ await TOOL_REGISTRY['telemac3d_stratified_flow'].fn(
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2F879JA4CKTA77X0C3FYXB4` and commit `e766867a5a6296cb173fa756d162fe5cc15ba2d8-dirty`. The full argument record is [`telemac3d_stratified_flow/run.json`](telemac3d_stratified_flow/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2GPX6APX8R0R0PESGVWQA6J` and commit `c06075fe30c18c4bf3619f40299b09edffefc4c0-dirty`. The full argument record is [`telemac3d_stratified_flow/run.json`](telemac3d_stratified_flow/run.json).
 

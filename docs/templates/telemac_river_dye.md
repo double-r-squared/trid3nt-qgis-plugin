@@ -74,6 +74,7 @@ It publishes these layers onto the canvas:
 - Input: nhd area water (nhd_area_water)
 - Input: river bed elevation (copernicus_dem, datum EGM2008 geoid (metres, positive up))
 - Release point (derived) - scotia_humboldt_county_california_95562_united_s
+- Velocity u (m/s) at t = 593.64 s (scotia_humboldt_county_california_95562_united_s)
 - Velocity u over time (scotia_humboldt_county_california_95562_united_s)
 - Velocity v (m/s) at t = 593.64 s (scotia_humboldt_county_california_95562_united_s)
 - Velocity v over time (scotia_humboldt_county_california_95562_united_s)
@@ -90,27 +91,27 @@ It publishes these layers onto the canvas:
 - Scalar velocity over time (scotia_humboldt_county_california_95562_united_s)
 - Dye (mg/L) at t = 593.64 s (scotia_humboldt_county_california_95562_united_s)
 - Dye over time (scotia_humboldt_county_california_95562_united_s)
-- Velocity u (m/s) at t = 593.64 s (scotia_humboldt_county_california_95562_united_s)
+- scotia_humboldt_county_california_95562_united_s
 
 ## The proving run
 
-Run `01M2F6W3NRXR35YVM1P9WFN2PW`, 2026-09-14T05:40:22.823360+00:00, 26.343 s, at commit `e766867a5a6296cb173fa756d162fe5cc15ba2d8-dirty`.
+Run `01M2GNPFQ2077S20779R8FWZNH`, 2026-09-14T19:18:40.725276+00:00, 26.198 s, at commit `c06075fe30c18c4bf3619f40299b09edffefc4c0-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M2F6W3NRXR35YVM1P9WFN2PW)](telemac_river_dye/telemac_river_dye.png)
+![Every layer the run published, stacked and framed on the result (run 01M2GNPFQ2077S20779R8FWZNH)](telemac_river_dye/telemac_river_dye.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M2F6W3NRXR35YVM1P9WFN2PW)*
+*Every layer the run published, stacked and framed on the result (run 01M2GNPFQ2077S20779R8FWZNH)*
 
-![The solve, frame by frame (run 01M2F6W3NRXR35YVM1P9WFN2PW)](telemac_river_dye/telemac_river_dye_animation.gif)
+![The solve, frame by frame (run 01M2GNPFQ2077S20779R8FWZNH)](telemac_river_dye/telemac_river_dye_animation.gif)
 
-*The solve, frame by frame (run 01M2F6W3NRXR35YVM1P9WFN2PW)*
+*The solve, frame by frame (run 01M2GNPFQ2077S20779R8FWZNH)*
 
-![peak frame (run 01M2F6W3NRXR35YVM1P9WFN2PW)](telemac_river_dye/telemac_river_dye_peak_frame.png)
+![peak frame (run 01M2GNPFQ2077S20779R8FWZNH)](telemac_river_dye/telemac_river_dye_peak_frame.png)
 
-*peak frame (run 01M2F6W3NRXR35YVM1P9WFN2PW)*
+*peak frame (run 01M2GNPFQ2077S20779R8FWZNH)*
 
-![dye concentration - the chart the run persisted (run 01M2F6W3NRXR35YVM1P9WFN2PW)](telemac_river_dye/telemac_river_dye_chart_dye_concentration.png)
+![dye concentration - the chart the run persisted (run 01M2GNPFQ2077S20779R8FWZNH)](telemac_river_dye/telemac_river_dye_chart_dye_concentration.png)
 
-*dye concentration - the chart the run persisted (run 01M2F6W3NRXR35YVM1P9WFN2PW)*
+*dye concentration - the chart the run persisted (run 01M2GNPFQ2077S20779R8FWZNH)*
 
 ### The sheet it filled
 
@@ -164,5 +165,5 @@ await TOOL_REGISTRY['telemac_river_dye'].fn(
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2F6W3NRXR35YVM1P9WFN2PW` and commit `e766867a5a6296cb173fa756d162fe5cc15ba2d8-dirty`. The full argument record is [`telemac_river_dye/run.json`](telemac_river_dye/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2GNPFQ2077S20779R8FWZNH` and commit `c06075fe30c18c4bf3619f40299b09edffefc4c0-dirty`. The full argument record is [`telemac_river_dye/run.json`](telemac_river_dye/run.json).
 

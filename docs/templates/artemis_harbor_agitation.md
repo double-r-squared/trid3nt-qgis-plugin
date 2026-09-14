@@ -51,27 +51,28 @@ It publishes these layers onto the canvas:
 
 - Input: the shoreline this domain is cut from (osm_coastline)
 - Input: topobathy (topobathy, CUDEM 1/9" ~3 m nearshore; ETOPO 2022 15" ~450 m offshore fallback; 3DEP 10 m land, datum NAVD88 (metres, positive up))
+- Wave height (m) at t = 8 s (harbour_mesh)
 - Wave phase (rad) at t = 8 s (harbour_mesh)
 - Free surface (m) at t = 8 s (harbour_mesh)
 - Bottom (m) at t = 8 s (harbour_mesh)
 - Kd (Hs/H0) at t = 8 s (harbour_mesh)
-- Wave height (m) at t = 8 s (harbour_mesh)
+- harbour_mesh
 
 ## The proving run
 
-Run `01M2F84QGF7HED9MPGBE49B5X4`, 2026-09-14T06:02:32.814525+00:00, 24.79 s, at commit `e766867a5a6296cb173fa756d162fe5cc15ba2d8-dirty`.
+Run `01M2GPSF8H698ETFJMMRXTNZ8K`, 2026-09-14T19:37:46.947176+00:00, 25.935 s, at commit `c06075fe30c18c4bf3619f40299b09edffefc4c0`.
 
-![Every layer the run published, stacked and framed on the result (run 01M2F84QGF7HED9MPGBE49B5X4)](artemis_harbor_agitation/artemis_harbor_agitation.png)
+![Every layer the run published, stacked and framed on the result (run 01M2GPSF8H698ETFJMMRXTNZ8K)](artemis_harbor_agitation/artemis_harbor_agitation.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M2F84QGF7HED9MPGBE49B5X4)*
+*Every layer the run published, stacked and framed on the result (run 01M2GPSF8H698ETFJMMRXTNZ8K)*
 
-![peak frame (run 01M2F84QGF7HED9MPGBE49B5X4)](artemis_harbor_agitation/artemis_harbor_agitation_peak_frame.png)
+![peak frame (run 01M2GPSF8H698ETFJMMRXTNZ8K)](artemis_harbor_agitation/artemis_harbor_agitation_peak_frame.png)
 
-*peak frame (run 01M2F84QGF7HED9MPGBE49B5X4)*
+*peak frame (run 01M2GPSF8H698ETFJMMRXTNZ8K)*
 
-![agitation coefficient - the chart the run persisted (run 01M2F84QGF7HED9MPGBE49B5X4)](artemis_harbor_agitation/artemis_harbor_agitation_chart_agitation_coefficient.png)
+![agitation coefficient - the chart the run persisted (run 01M2GPSF8H698ETFJMMRXTNZ8K)](artemis_harbor_agitation/artemis_harbor_agitation_chart_agitation_coefficient.png)
 
-*agitation coefficient - the chart the run persisted (run 01M2F84QGF7HED9MPGBE49B5X4)*
+*agitation coefficient - the chart the run persisted (run 01M2GPSF8H698ETFJMMRXTNZ8K)*
 
 ### The sheet it filled
 
@@ -108,5 +109,5 @@ await TOOL_REGISTRY['artemis_harbor_agitation'].fn(
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2F84QGF7HED9MPGBE49B5X4` and commit `e766867a5a6296cb173fa756d162fe5cc15ba2d8-dirty`. The full argument record is [`artemis_harbor_agitation/run.json`](artemis_harbor_agitation/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2GPSF8H698ETFJMMRXTNZ8K` and commit `c06075fe30c18c4bf3619f40299b09edffefc4c0`. The full argument record is [`artemis_harbor_agitation/run.json`](artemis_harbor_agitation/run.json).
 

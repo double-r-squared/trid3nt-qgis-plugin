@@ -71,6 +71,7 @@ It publishes these layers onto the canvas:
 - Input: mesh bed (dem, 3DEP 1-10 m US lidar (default 10 m); Copernicus GLO-30 30 m global via source=copernicus, datum NAVD88 (metres, positive up))
 - Input: river geometry (river_geometry)
 - Input: land cover (landcover)
+- Velocity u (m/s) at t = 108000 s (watershed mesh)
 - Velocity u over time (watershed mesh)
 - Velocity v (m/s) at t = 108000 s (watershed mesh)
 - Velocity v over time (watershed mesh)
@@ -86,35 +87,35 @@ It publishes these layers onto the canvas:
 - Scalar velocity (m/s) at t = 108000 s (watershed mesh)
 - Scalar velocity over time (watershed mesh)
 - Outlet hydrograph (watershed mesh)
-- Velocity u (m/s) at t = 108000 s (watershed mesh)
+- watershed mesh
 
 ## The proving run
 
-Run `01M2F7GP511NA5RZ9N1DMFSHND`, 2026-09-14T05:54:16.578519+00:00, 246.039 s, at commit `e766867a5a6296cb173fa756d162fe5cc15ba2d8-dirty`.
+Run `01M2GP3XQJENSXTD763387Z9TN`, 2026-09-14T19:28:41.878005+00:00, 244.784 s, at commit `c06075fe30c18c4bf3619f40299b09edffefc4c0-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M2F7GP511NA5RZ9N1DMFSHND)](telemac_rain_on_grid/telemac_rain_on_grid.png)
+![Every layer the run published, stacked and framed on the result (run 01M2GP3XQJENSXTD763387Z9TN)](telemac_rain_on_grid/telemac_rain_on_grid.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M2F7GP511NA5RZ9N1DMFSHND)*
+*Every layer the run published, stacked and framed on the result (run 01M2GP3XQJENSXTD763387Z9TN)*
 
-![The solve, frame by frame - flow_dynamics (run 01M2F7GP511NA5RZ9N1DMFSHND)](telemac_rain_on_grid/telemac_rain_on_grid_animation_flow_dynamics.gif)
+![The solve, frame by frame - flow_dynamics (run 01M2GP3XQJENSXTD763387Z9TN)](telemac_rain_on_grid/telemac_rain_on_grid_animation_flow_dynamics.gif)
 
-*The solve, frame by frame - flow_dynamics (run 01M2F7GP511NA5RZ9N1DMFSHND)*
+*The solve, frame by frame - flow_dynamics (run 01M2GP3XQJENSXTD763387Z9TN)*
 
-![The solve, frame by frame - inundation_depth (run 01M2F7GP511NA5RZ9N1DMFSHND)](telemac_rain_on_grid/telemac_rain_on_grid_animation_inundation_depth.gif)
+![The solve, frame by frame - inundation_depth (run 01M2GP3XQJENSXTD763387Z9TN)](telemac_rain_on_grid/telemac_rain_on_grid_animation_inundation_depth.gif)
 
-*The solve, frame by frame - inundation_depth (run 01M2F7GP511NA5RZ9N1DMFSHND)*
+*The solve, frame by frame - inundation_depth (run 01M2GP3XQJENSXTD763387Z9TN)*
 
-![flow dynamics peak frame (run 01M2F7GP511NA5RZ9N1DMFSHND)](telemac_rain_on_grid/telemac_rain_on_grid_flow_dynamics_peak_frame.png)
+![flow dynamics peak frame (run 01M2GP3XQJENSXTD763387Z9TN)](telemac_rain_on_grid/telemac_rain_on_grid_flow_dynamics_peak_frame.png)
 
-*flow dynamics peak frame (run 01M2F7GP511NA5RZ9N1DMFSHND)*
+*flow dynamics peak frame (run 01M2GP3XQJENSXTD763387Z9TN)*
 
-![inundation depth peak frame (run 01M2F7GP511NA5RZ9N1DMFSHND)](telemac_rain_on_grid/telemac_rain_on_grid_inundation_depth_peak_frame.png)
+![inundation depth peak frame (run 01M2GP3XQJENSXTD763387Z9TN)](telemac_rain_on_grid/telemac_rain_on_grid_inundation_depth_peak_frame.png)
 
-*inundation depth peak frame (run 01M2F7GP511NA5RZ9N1DMFSHND)*
+*inundation depth peak frame (run 01M2GP3XQJENSXTD763387Z9TN)*
 
-![outlet hydrograph - the chart the run persisted (run 01M2F7GP511NA5RZ9N1DMFSHND)](telemac_rain_on_grid/telemac_rain_on_grid_chart_outlet_hydrograph.png)
+![outlet hydrograph - the chart the run persisted (run 01M2GP3XQJENSXTD763387Z9TN)](telemac_rain_on_grid/telemac_rain_on_grid_chart_outlet_hydrograph.png)
 
-*outlet hydrograph - the chart the run persisted (run 01M2F7GP511NA5RZ9N1DMFSHND)*
+*outlet hydrograph - the chart the run persisted (run 01M2GP3XQJENSXTD763387Z9TN)*
 
 ### The sheet it filled
 
@@ -158,5 +159,5 @@ await TOOL_REGISTRY['telemac_rain_on_grid'].fn(
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2F7GP511NA5RZ9N1DMFSHND` and commit `e766867a5a6296cb173fa756d162fe5cc15ba2d8-dirty`. The full argument record is [`telemac_rain_on_grid/run.json`](telemac_rain_on_grid/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2GP3XQJENSXTD763387Z9TN` and commit `c06075fe30c18c4bf3619f40299b09edffefc4c0-dirty`. The full argument record is [`telemac_rain_on_grid/run.json`](telemac_rain_on_grid/run.json).
 

@@ -75,6 +75,7 @@ It publishes these layers onto the canvas:
 - Input: nhdplus nldi (nhdplus_nldi)
 - Input: nhd area water (nhd_area_water)
 - Input: river bed elevation (copernicus_dem, datum EGM2008 geoid (metres, positive up))
+- Velocity u (m/s) at t = 593.94 s (scotia_humboldt_county_california_95562_united_s)
 - Velocity u over time (scotia_humboldt_county_california_95562_united_s)
 - Velocity v (m/s) at t = 593.94 s (scotia_humboldt_county_california_95562_united_s)
 - Velocity v over time (scotia_humboldt_county_california_95562_united_s)
@@ -95,23 +96,23 @@ It publishes these layers onto the canvas:
 - Mean diameter m over time (scotia_humboldt_county_california_95562_united_s)
 - Bed shear stress (n/m2) at t = 593.94 s (scotia_humboldt_county_california_95562_united_s)
 - Bed shear stress over time (scotia_humboldt_county_california_95562_united_s)
-- Velocity u (m/s) at t = 593.94 s (scotia_humboldt_county_california_95562_united_s)
+- scotia_humboldt_county_california_95562_united_s
 
 ## The proving run
 
-Run `01M2GEPJEYEP62EE38S4WRXCQY`, 2026-09-14T17:16:24.653254+00:00, 29.348 s, at commit `e766867a5a6296cb173fa756d162fe5cc15ba2d8-dirty`.
+Run `01M2GMW1YTJ5MS4MZV5S7Q2WSK`, 2026-09-14T19:04:15.604623+00:00, 27.171 s, at commit `c06075fe30c18c4bf3619f40299b09edffefc4c0-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M2GEPJEYEP62EE38S4WRXCQY)](telemac_river_dredging/telemac_river_dredging.png)
+![Every layer the run published, stacked and framed on the result (run 01M2GMW1YTJ5MS4MZV5S7Q2WSK)](telemac_river_dredging/telemac_river_dredging.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M2GEPJEYEP62EE38S4WRXCQY)*
+*Every layer the run published, stacked and framed on the result (run 01M2GMW1YTJ5MS4MZV5S7Q2WSK)*
 
-![The solve, frame by frame (run 01M2GEPJEYEP62EE38S4WRXCQY)](telemac_river_dredging/telemac_river_dredging_animation.gif)
+![The solve, frame by frame (run 01M2GMW1YTJ5MS4MZV5S7Q2WSK)](telemac_river_dredging/telemac_river_dredging_animation.gif)
 
-*The solve, frame by frame (run 01M2GEPJEYEP62EE38S4WRXCQY)*
+*The solve, frame by frame (run 01M2GMW1YTJ5MS4MZV5S7Q2WSK)*
 
-![final frame (run 01M2GEPJEYEP62EE38S4WRXCQY)](telemac_river_dredging/telemac_river_dredging_final_frame.png)
+![final frame (run 01M2GMW1YTJ5MS4MZV5S7Q2WSK)](telemac_river_dredging/telemac_river_dredging_final_frame.png)
 
-*final frame (run 01M2GEPJEYEP62EE38S4WRXCQY)*
+*final frame (run 01M2GMW1YTJ5MS4MZV5S7Q2WSK)*
 
 ### The sheet it filled
 
@@ -169,5 +170,5 @@ await TOOL_REGISTRY['telemac_river_dredging'].fn(
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2GEPJEYEP62EE38S4WRXCQY` and commit `e766867a5a6296cb173fa756d162fe5cc15ba2d8-dirty`. The full argument record is [`telemac_river_dredging/run.json`](telemac_river_dredging/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2GMW1YTJ5MS4MZV5S7Q2WSK` and commit `c06075fe30c18c4bf3619f40299b09edffefc4c0-dirty`. The full argument record is [`telemac_river_dredging/run.json`](telemac_river_dredging/run.json).
 
