@@ -1,10 +1,10 @@
 {
   "tool": "telemac_river_dredging",
-  "run_id": "01M2EREMPP4Z9NC6JHCVH8SXVK",
-  "commit": "d341f5de11746c960c7d687adeb134d461f118e2",
-  "recorded_at": "2026-09-14T01:28:23.024430+00:00",
+  "run_id": "01M2EX39CDWWSA21NA5AF69DZA",
+  "commit": "4ccc1576361b1185b9fcf05e6004fa5a75e49bbe-dirty",
+  "recorded_at": "2026-09-14T02:49:32.262116+00:00",
   "engine": "telemac",
-  "wall_seconds": 28.446,
+  "wall_seconds": 26.141,
   "args": {
     "location": "Eel River near Scotia, California",
     "discharge_m3s": 2.2,
@@ -479,11 +479,12 @@
   "answer": {
     "dug_volume_m3": 4709.386117,
     "dumped_volume_m3": 4709.386117,
+    "dredge_report": "the volumes are the engine's own report lines, summed over the passes that finished inside the run's clock",
     "dredged_bed_change_m": -0.9470365047454834,
     "dumped_bed_change_m": 1.034358263015747,
     "net_bed_mass_kg": -728.4404,
     "mesh_size_m": 10.415,
-    "layer_uri": "s3://trid3nt-runs/01M2EREMPP4Z9NC6JHCVH8SXVK/gaia_river.slf",
+    "layer_uri": "s3://trid3nt-runs/01M2EX39CDWWSA21NA5AF69DZA/gaia_river.slf",
     "discharge_m3s": 2.2,
     "discharge_note": "Steady upstream discharge the reach is dredged under - the flow that shoals the channel and carries the disturbed material [supplied on this invocation]",
     "mesh_resolution_m": 12.0,
@@ -609,7 +610,7 @@
       "crs_authid": "EPSG:32610",
       "dataset_group": "CUMUL BED EVOL",
       "dataset_uris": [],
-      "layer_id": "telemac-bed_evolution-over-time-01M2EREMPP4Z9NC6JHCVH8SXVK",
+      "layer_id": "telemac-bed_evolution-over-time-01M2EX39CDWWSA21NA5AF69DZA",
       "layer_type": "mesh",
       "legend": {
         "colormap": "rdbu",
@@ -624,10 +625,10 @@
       "opacity": null,
       "origin": null,
       "quantity": "bed_evolution",
-      "reference_time": "2026-09-14T01:28:06+00:00",
+      "reference_time": "2026-09-14T02:49:17+00:00",
       "role": "primary",
       "temporal": false,
-      "uri": "s3://trid3nt-runs/01M2EREMPP4Z9NC6JHCVH8SXVK/gaia_river.slf",
+      "uri": "s3://trid3nt-runs/01M2EX39CDWWSA21NA5AF69DZA/gaia_river.slf",
       "valid_from": null,
       "valid_to": null,
       "visible": true,
@@ -637,9 +638,9 @@
       "crs_authid": "EPSG:32610",
       "dataset_group": "Bed elevation at t = 593.94 s",
       "dataset_uris": [
-        "s3://trid3nt-runs/01M2EREMPP4Z9NC6JHCVH8SXVK/bed_elevation-t593.dat"
+        "s3://trid3nt-runs/01M2EX39CDWWSA21NA5AF69DZA/bed_elevation-t593.dat"
       ],
-      "layer_id": "telemac-bed_elevation-t593-01M2EREMPP4Z9NC6JHCVH8SXVK",
+      "layer_id": "telemac-bed_elevation-t593-01M2EX39CDWWSA21NA5AF69DZA",
       "layer_type": "mesh",
       "legend": {
         "colormap": "terrain",
@@ -657,7 +658,7 @@
       "reference_time": null,
       "role": "primary",
       "temporal": false,
-      "uri": "s3://trid3nt-runs/01M2EREMPP4Z9NC6JHCVH8SXVK/r2d_river.slf",
+      "uri": "s3://trid3nt-runs/01M2EX39CDWWSA21NA5AF69DZA/r2d_river.slf",
       "valid_from": null,
       "valid_to": null,
       "visible": true,
@@ -667,9 +668,9 @@
       "crs_authid": "EPSG:32610",
       "dataset_group": "Bed evolution at t = 593.94 s",
       "dataset_uris": [
-        "s3://trid3nt-runs/01M2EREMPP4Z9NC6JHCVH8SXVK/bed_evolution-t593.dat"
+        "s3://trid3nt-runs/01M2EX39CDWWSA21NA5AF69DZA/bed_evolution-t593.dat"
       ],
-      "layer_id": "01M2ERF7C4GHFNT3NS9X9DK4T4",
+      "layer_id": "01M2EX3VD6Z9FZMCDWD7GCR6GK",
       "layer_type": "mesh",
       "legend": {
         "colormap": "rdbu",
@@ -687,7 +688,7 @@
       "reference_time": null,
       "role": "primary",
       "temporal": false,
-      "uri": "s3://trid3nt-runs/01M2EREMPP4Z9NC6JHCVH8SXVK/gaia_river.slf",
+      "uri": "s3://trid3nt-runs/01M2EX39CDWWSA21NA5AF69DZA/gaia_river.slf",
       "valid_from": null,
       "valid_to": null,
       "visible": true,

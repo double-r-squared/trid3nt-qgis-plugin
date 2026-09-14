@@ -63,6 +63,7 @@ The values the template declares. `desc` is what the model reads when it fills o
 |---|---|
 | `dug_volume_m3` | 4709.386117 |
 | `dumped_volume_m3` | 4709.386117 |
+| `dredge_report` | the volumes are the engine's own report lines, summed over the passes that finished inside the run's clock |
 | `dredged_bed_change_m` | -0.9470365047454834 |
 | `dumped_bed_change_m` | 1.034358263015747 |
 | `net_bed_mass_kg` | -728.4404 |
@@ -80,19 +81,19 @@ It publishes these layers onto the canvas:
 
 ## The proving run
 
-Run `01M2EREMPP4Z9NC6JHCVH8SXVK`, 2026-09-14T01:28:23.024430+00:00, 28.446 s, at commit `d341f5de11746c960c7d687adeb134d461f118e2`.
+Run `01M2EX39CDWWSA21NA5AF69DZA`, 2026-09-14T02:49:32.262116+00:00, 26.141 s, at commit `4ccc1576361b1185b9fcf05e6004fa5a75e49bbe-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M2EREMPP4Z9NC6JHCVH8SXVK)](telemac_river_dredging/telemac_river_dredging.png)
+![Every layer the run published, stacked and framed on the result (run 01M2EX39CDWWSA21NA5AF69DZA)](telemac_river_dredging/telemac_river_dredging.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M2EREMPP4Z9NC6JHCVH8SXVK)*
+*Every layer the run published, stacked and framed on the result (run 01M2EX39CDWWSA21NA5AF69DZA)*
 
-![The solve, frame by frame (run 01M2EREMPP4Z9NC6JHCVH8SXVK)](telemac_river_dredging/telemac_river_dredging_animation.gif)
+![The solve, frame by frame (run 01M2EX39CDWWSA21NA5AF69DZA)](telemac_river_dredging/telemac_river_dredging_animation.gif)
 
-*The solve, frame by frame (run 01M2EREMPP4Z9NC6JHCVH8SXVK)*
+*The solve, frame by frame (run 01M2EX39CDWWSA21NA5AF69DZA)*
 
-![final frame (run 01M2EREMPP4Z9NC6JHCVH8SXVK)](telemac_river_dredging/telemac_river_dredging_final_frame.png)
+![final frame (run 01M2EX39CDWWSA21NA5AF69DZA)](telemac_river_dredging/telemac_river_dredging_final_frame.png)
 
-*final frame (run 01M2EREMPP4Z9NC6JHCVH8SXVK)*
+*final frame (run 01M2EX39CDWWSA21NA5AF69DZA)*
 
 ### The sheet it filled
 
@@ -150,5 +151,5 @@ await TOOL_REGISTRY['telemac_river_dredging'].fn(
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2EREMPP4Z9NC6JHCVH8SXVK` and commit `d341f5de11746c960c7d687adeb134d461f118e2`. The full argument record is [`telemac_river_dredging/run.json`](telemac_river_dredging/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2EX39CDWWSA21NA5AF69DZA` and commit `4ccc1576361b1185b9fcf05e6004fa5a75e49bbe-dirty`. The full argument record is [`telemac_river_dredging/run.json`](telemac_river_dredging/run.json).
 
