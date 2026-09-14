@@ -35,7 +35,7 @@ The module's own output table. Every row a run's result carries is published - t
 | mnemonic | the result file calls it | unit | ramp | varies in time | asked of the engine |
 |---|---|---|---|---|---|
 | `E` | CUMUL BED EVOL | m | `rdbu` | yes | yes |
-| `D50` | MEAN DIAMETER | m | `cividis` | yes | yes |
+| `D50` | MEAN DIAMETER M | - | `cividis` | yes | yes |
 | `TOB` | BED SHEAR STRESS | N/m2 | `inferno` | yes | yes |
 
 ### `telemac2d`

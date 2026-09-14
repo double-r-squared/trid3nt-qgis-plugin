@@ -65,7 +65,7 @@ The values the template declares. `desc` is what the model reads when it fills o
 | `bed_evolution_max_m` | 0.0016452783020213246 |
 | `bed_evolution_min_m` | -0.005266561172902584 |
 | `net_bed_mass_kg` | -746.0278 |
-| `surface_d50_spread_m` | not read: D50 (MEAN DIAMETER) is not among the variables the result carries (['BOTTOM', 'CUMUL BED EVOL']). |
+| `surface_d50_spread_m` | 0.0 |
 | `marker_cmax_mgl` | 94.071044921875 |
 | `active_frames` | 30 |
 | `mesh_size_m` | 10.415 |
@@ -77,29 +77,49 @@ It publishes these layers onto the canvas:
 - Input: nhd area water (nhd_area_water)
 - Input: river bed elevation (copernicus_dem, datum EGM2008 geoid (metres, positive up))
 - Release point (derived) - scotia_humboldt_county_california_95562_united_s
-- Bed evolution over time (scotia_humboldt_county_california_95562_united_s)
-- Peak marker concentration (scotia_humboldt_county_california_95562_united_s)
-- Bed evolution (m) at t = 593.94 s (scotia_humboldt_county_california_95562_united_s)
+- Velocity u over time (scotia_humboldt_county_california_95562_united_s)
+- Velocity v (m/s) at t = 593.94 s (scotia_humboldt_county_california_95562_united_s)
+- Velocity v over time (scotia_humboldt_county_california_95562_united_s)
+- Water depth (m) at t = 593.94 s (scotia_humboldt_county_california_95562_united_s)
+- Water depth over time (scotia_humboldt_county_california_95562_united_s)
+- Free surface (m) at t = 593.94 s (scotia_humboldt_county_california_95562_united_s)
+- Free surface over time (scotia_humboldt_county_california_95562_united_s)
+- Bottom (m) at t = 593.94 s (scotia_humboldt_county_california_95562_united_s)
+- Froude number at t = 593.94 s (scotia_humboldt_county_california_95562_united_s)
+- Froude number over time (scotia_humboldt_county_california_95562_united_s)
+- Scalar flowrate (m2/s) at t = 593.94 s (scotia_humboldt_county_california_95562_united_s)
+- Scalar flowrate over time (scotia_humboldt_county_california_95562_united_s)
+- Scalar velocity (m/s) at t = 593.94 s (scotia_humboldt_county_california_95562_united_s)
+- Scalar velocity over time (scotia_humboldt_county_california_95562_united_s)
+- Marker (mg/L) at t = 593.94 s (scotia_humboldt_county_california_95562_united_s)
+- Marker over time (scotia_humboldt_county_california_95562_united_s)
+- Cumul bed evol (m) at t = 593.94 s (scotia_humboldt_county_california_95562_united_s)
+- Cumul bed evol over time (scotia_humboldt_county_california_95562_united_s)
+- Mean diameter m at t = 593.94 s (scotia_humboldt_county_california_95562_united_s)
+- Mean diameter m over time (scotia_humboldt_county_california_95562_united_s)
+- Bed shear stress (n/m2) at t = 593.94 s (scotia_humboldt_county_california_95562_united_s)
+- Bed shear stress over time (scotia_humboldt_county_california_95562_united_s)
+- Velocity u (m/s) at t = 593.94 s (scotia_humboldt_county_california_95562_united_s)
 
 ## The proving run
 
-Run `01M2F0J3HN7VJFNWQTQV602GMJ`, 2026-09-14T03:50:03.475983+00:00, 26.346 s, at commit `5a382b2c1233267ddc1ce964d430e4cf255e85bc-dirty`.
+Run `01M2GEWP2WB9FF2ZDCFYZNFHR0`, 2026-09-14T17:19:45.518383+00:00, 27.006 s, at commit `e766867a5a6296cb173fa756d162fe5cc15ba2d8-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M2F0J3HN7VJFNWQTQV602GMJ)](telemac_river_scour/telemac_river_scour.png)
+![Every layer the run published, stacked and framed on the result (run 01M2GEWP2WB9FF2ZDCFYZNFHR0)](telemac_river_scour/telemac_river_scour.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M2F0J3HN7VJFNWQTQV602GMJ)*
+*Every layer the run published, stacked and framed on the result (run 01M2GEWP2WB9FF2ZDCFYZNFHR0)*
 
-![The solve, frame by frame (run 01M2F0J3HN7VJFNWQTQV602GMJ)](telemac_river_scour/telemac_river_scour_animation.gif)
+![The solve, frame by frame (run 01M2GEWP2WB9FF2ZDCFYZNFHR0)](telemac_river_scour/telemac_river_scour_animation.gif)
 
-*The solve, frame by frame (run 01M2F0J3HN7VJFNWQTQV602GMJ)*
+*The solve, frame by frame (run 01M2GEWP2WB9FF2ZDCFYZNFHR0)*
 
-![final frame (run 01M2F0J3HN7VJFNWQTQV602GMJ)](telemac_river_scour/telemac_river_scour_final_frame.png)
+![final frame (run 01M2GEWP2WB9FF2ZDCFYZNFHR0)](telemac_river_scour/telemac_river_scour_final_frame.png)
 
-*final frame (run 01M2F0J3HN7VJFNWQTQV602GMJ)*
+*final frame (run 01M2GEWP2WB9FF2ZDCFYZNFHR0)*
 
-![marker concentration - the chart the run persisted (run 01M2F0J3HN7VJFNWQTQV602GMJ)](telemac_river_scour/telemac_river_scour_chart_marker_concentration.png)
+![marker concentration - the chart the run persisted (run 01M2GEWP2WB9FF2ZDCFYZNFHR0)](telemac_river_scour/telemac_river_scour_chart_marker_concentration.png)
 
-*marker concentration - the chart the run persisted (run 01M2F0J3HN7VJFNWQTQV602GMJ)*
+*marker concentration - the chart the run persisted (run 01M2GEWP2WB9FF2ZDCFYZNFHR0)*
 
 ### The sheet it filled
 
@@ -154,5 +174,5 @@ await TOOL_REGISTRY['telemac_river_scour'].fn(
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2F0J3HN7VJFNWQTQV602GMJ` and commit `5a382b2c1233267ddc1ce964d430e4cf255e85bc-dirty`. The full argument record is [`telemac_river_scour/run.json`](telemac_river_scour/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2GEWP2WB9FF2ZDCFYZNFHR0` and commit `e766867a5a6296cb173fa756d162fe5cc15ba2d8-dirty`. The full argument record is [`telemac_river_scour/run.json`](telemac_river_scour/run.json).
 

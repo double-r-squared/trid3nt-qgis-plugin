@@ -75,29 +75,49 @@ It publishes these layers onto the canvas:
 - Input: nhd area water (nhd_area_water)
 - Input: river bed elevation (copernicus_dem, datum EGM2008 geoid (metres, positive up))
 - Release point (derived) - scotia_humboldt_county_california_95562_united_s
-- Peak suspended sediment concentration (scotia_humboldt_county_california_95562_united_s)
-- Bed evolution (m) at t = 593.94 s (scotia_humboldt_county_california_95562_united_s)
-- Suspended sediment concentration over time (scotia_humboldt_county_california_95562_united_s)
+- Velocity u over time (scotia_humboldt_county_california_95562_united_s)
+- Velocity v (m/s) at t = 593.94 s (scotia_humboldt_county_california_95562_united_s)
+- Velocity v over time (scotia_humboldt_county_california_95562_united_s)
+- Water depth (m) at t = 593.94 s (scotia_humboldt_county_california_95562_united_s)
+- Water depth over time (scotia_humboldt_county_california_95562_united_s)
+- Free surface (m) at t = 593.94 s (scotia_humboldt_county_california_95562_united_s)
+- Free surface over time (scotia_humboldt_county_california_95562_united_s)
+- Bottom (m) at t = 593.94 s (scotia_humboldt_county_california_95562_united_s)
+- Froude number at t = 593.94 s (scotia_humboldt_county_california_95562_united_s)
+- Froude number over time (scotia_humboldt_county_california_95562_united_s)
+- Scalar flowrate (m2/s) at t = 593.94 s (scotia_humboldt_county_california_95562_united_s)
+- Scalar flowrate over time (scotia_humboldt_county_california_95562_united_s)
+- Scalar velocity (m/s) at t = 593.94 s (scotia_humboldt_county_california_95562_united_s)
+- Scalar velocity over time (scotia_humboldt_county_california_95562_united_s)
+- Marker (mg/L) at t = 593.94 s (scotia_humboldt_county_california_95562_united_s)
+- Marker over time (scotia_humboldt_county_california_95562_united_s)
+- Ncoh sediment1 (g/L) at t = 593.94 s (scotia_humboldt_county_california_95562_united_s)
+- Ncoh sediment1 over time (scotia_humboldt_county_california_95562_united_s)
+- Cumul bed evol (m) at t = 593.94 s (scotia_humboldt_county_california_95562_united_s)
+- Cumul bed evol over time (scotia_humboldt_county_california_95562_united_s)
+- Bed shear stress (n/m2) at t = 593.94 s (scotia_humboldt_county_california_95562_united_s)
+- Bed shear stress over time (scotia_humboldt_county_california_95562_united_s)
+- Velocity u (m/s) at t = 593.94 s (scotia_humboldt_county_california_95562_united_s)
 
 ## The proving run
 
-Run `01M2BDQRCDCN19CKCTJ4XN6XST`, 2026-09-12T18:23:23.392075+00:00, 28.009 s, at commit `5ff259cad6cedab2d12a68e79c663b99b1499884-dirty`.
+Run `01M2F7821D8W9XKSXDGSSFK11E`, 2026-09-14T05:46:54.782740+00:00, 26.237 s, at commit `e766867a5a6296cb173fa756d162fe5cc15ba2d8-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M2BDQRCDCN19CKCTJ4XN6XST)](telemac_river_sediment_plume/telemac_river_sediment_plume.png)
+![Every layer the run published, stacked and framed on the result (run 01M2F7821D8W9XKSXDGSSFK11E)](telemac_river_sediment_plume/telemac_river_sediment_plume.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M2BDQRCDCN19CKCTJ4XN6XST)*
+*Every layer the run published, stacked and framed on the result (run 01M2F7821D8W9XKSXDGSSFK11E)*
 
-![The solve, frame by frame (run 01M2BDQRCDCN19CKCTJ4XN6XST)](telemac_river_sediment_plume/telemac_river_sediment_plume_animation.gif)
+![The solve, frame by frame (run 01M2F7821D8W9XKSXDGSSFK11E)](telemac_river_sediment_plume/telemac_river_sediment_plume_animation.gif)
 
-*The solve, frame by frame (run 01M2BDQRCDCN19CKCTJ4XN6XST)*
+*The solve, frame by frame (run 01M2F7821D8W9XKSXDGSSFK11E)*
 
-![peak frame (run 01M2BDQRCDCN19CKCTJ4XN6XST)](telemac_river_sediment_plume/telemac_river_sediment_plume_peak_frame.png)
+![peak frame (run 01M2F7821D8W9XKSXDGSSFK11E)](telemac_river_sediment_plume/telemac_river_sediment_plume_peak_frame.png)
 
-*peak frame (run 01M2BDQRCDCN19CKCTJ4XN6XST)*
+*peak frame (run 01M2F7821D8W9XKSXDGSSFK11E)*
 
-![suspended sediment concentration - the chart the run persisted (run 01M2BDQRCDCN19CKCTJ4XN6XST)](telemac_river_sediment_plume/telemac_river_sediment_plume_chart_suspended_sediment_concentration.png)
+![suspended sediment concentration - the chart the run persisted (run 01M2F7821D8W9XKSXDGSSFK11E)](telemac_river_sediment_plume/telemac_river_sediment_plume_chart_suspended_sediment_concentration.png)
 
-*suspended sediment concentration - the chart the run persisted (run 01M2BDQRCDCN19CKCTJ4XN6XST)*
+*suspended sediment concentration - the chart the run persisted (run 01M2F7821D8W9XKSXDGSSFK11E)*
 
 ### The sheet it filled
 
@@ -149,5 +169,5 @@ await TOOL_REGISTRY['telemac_river_sediment_plume'].fn(
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2BDQRCDCN19CKCTJ4XN6XST` and commit `5ff259cad6cedab2d12a68e79c663b99b1499884-dirty`. The full argument record is [`telemac_river_sediment_plume/run.json`](telemac_river_sediment_plume/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2F7821D8W9XKSXDGSSFK11E` and commit `e766867a5a6296cb173fa756d162fe5cc15ba2d8-dirty`. The full argument record is [`telemac_river_sediment_plume/run.json`](telemac_river_sediment_plume/run.json).
 

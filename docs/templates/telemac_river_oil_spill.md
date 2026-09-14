@@ -61,11 +61,11 @@ The values the template declares. `desc` is what the model reads when it fills o
 
 | field | the proving run's value |
 |---|---|
-| `oil_cmax_mgl` | 94.0217514038086 |
+| `oil_cmax_mgl` | 94.02247619628906 |
 | `oil_peak_time_s` | 118.78800201416016 |
-| `plume_reach_m` | 54.0 |
+| `plume_reach_m` | 54.1 |
 | `active_frames` | 30 |
-| `slick_drift_m` | 85.5 |
+| `slick_drift_m` | 85.4 |
 | `floats_released` | 100 |
 | `floats_remaining` | 100 |
 | `mesh_size_m` | 10.415 |
@@ -77,29 +77,44 @@ It publishes these layers onto the canvas:
 - Input: nhd area water (nhd_area_water)
 - Input: river bed elevation (copernicus_dem, datum EGM2008 geoid (metres, positive up))
 - Release point (derived) - scotia_humboldt_county_california_95562_united_s
-- Peak dissolved oil concentration (scotia_humboldt_county_california_95562_united_s)
+- Velocity u over time (scotia_humboldt_county_california_95562_united_s)
+- Velocity v (m/s) at t = 593.94 s (scotia_humboldt_county_california_95562_united_s)
+- Velocity v over time (scotia_humboldt_county_california_95562_united_s)
+- Water depth (m) at t = 593.94 s (scotia_humboldt_county_california_95562_united_s)
+- Water depth over time (scotia_humboldt_county_california_95562_united_s)
+- Free surface (m) at t = 593.94 s (scotia_humboldt_county_california_95562_united_s)
+- Free surface over time (scotia_humboldt_county_california_95562_united_s)
+- Bottom (m) at t = 593.94 s (scotia_humboldt_county_california_95562_united_s)
+- Froude number at t = 593.94 s (scotia_humboldt_county_california_95562_united_s)
+- Froude number over time (scotia_humboldt_county_california_95562_united_s)
+- Scalar flowrate (m2/s) at t = 593.94 s (scotia_humboldt_county_california_95562_united_s)
+- Scalar flowrate over time (scotia_humboldt_county_california_95562_united_s)
+- Scalar velocity (m/s) at t = 593.94 s (scotia_humboldt_county_california_95562_united_s)
+- Scalar velocity over time (scotia_humboldt_county_california_95562_united_s)
+- Oil (mg/L) at t = 593.94 s (scotia_humboldt_county_california_95562_united_s)
+- Oil over time (scotia_humboldt_county_california_95562_united_s)
 - Oil slick track (scotia_humboldt_county_california_95562_united_s)
-- Dissolved oil concentration over time (scotia_humboldt_county_california_95562_united_s)
+- Velocity u (m/s) at t = 593.94 s (scotia_humboldt_county_california_95562_united_s)
 
 ## The proving run
 
-Run `01M2BDM553674C6W735QSPBTBY`, 2026-09-12T18:21:23.421199+00:00, 24.084 s, at commit `5ff259cad6cedab2d12a68e79c663b99b1499884-dirty`.
+Run `01M2F71QVWZ0VKYZDYN76MKY9P`, 2026-09-14T05:43:27.385044+00:00, 26.554 s, at commit `e766867a5a6296cb173fa756d162fe5cc15ba2d8-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M2BDM553674C6W735QSPBTBY)](telemac_river_oil_spill/telemac_river_oil_spill.png)
+![Every layer the run published, stacked and framed on the result (run 01M2F71QVWZ0VKYZDYN76MKY9P)](telemac_river_oil_spill/telemac_river_oil_spill.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M2BDM553674C6W735QSPBTBY)*
+*Every layer the run published, stacked and framed on the result (run 01M2F71QVWZ0VKYZDYN76MKY9P)*
 
-![The solve, frame by frame (run 01M2BDM553674C6W735QSPBTBY)](telemac_river_oil_spill/telemac_river_oil_spill_animation.gif)
+![The solve, frame by frame (run 01M2F71QVWZ0VKYZDYN76MKY9P)](telemac_river_oil_spill/telemac_river_oil_spill_animation.gif)
 
-*The solve, frame by frame (run 01M2BDM553674C6W735QSPBTBY)*
+*The solve, frame by frame (run 01M2F71QVWZ0VKYZDYN76MKY9P)*
 
-![peak frame (run 01M2BDM553674C6W735QSPBTBY)](telemac_river_oil_spill/telemac_river_oil_spill_peak_frame.png)
+![peak frame (run 01M2F71QVWZ0VKYZDYN76MKY9P)](telemac_river_oil_spill/telemac_river_oil_spill_peak_frame.png)
 
-*peak frame (run 01M2BDM553674C6W735QSPBTBY)*
+*peak frame (run 01M2F71QVWZ0VKYZDYN76MKY9P)*
 
-![dissolved oil concentration - the chart the run persisted (run 01M2BDM553674C6W735QSPBTBY)](telemac_river_oil_spill/telemac_river_oil_spill_chart_dissolved_oil_concentration.png)
+![dissolved oil concentration - the chart the run persisted (run 01M2F71QVWZ0VKYZDYN76MKY9P)](telemac_river_oil_spill/telemac_river_oil_spill_chart_dissolved_oil_concentration.png)
 
-*dissolved oil concentration - the chart the run persisted (run 01M2BDM553674C6W735QSPBTBY)*
+*dissolved oil concentration - the chart the run persisted (run 01M2F71QVWZ0VKYZDYN76MKY9P)*
 
 ### The sheet it filled
 
@@ -155,5 +170,5 @@ await TOOL_REGISTRY['telemac_river_oil_spill'].fn(
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2BDM553674C6W735QSPBTBY` and commit `5ff259cad6cedab2d12a68e79c663b99b1499884-dirty`. The full argument record is [`telemac_river_oil_spill/run.json`](telemac_river_oil_spill/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2F71QVWZ0VKYZDYN76MKY9P` and commit `e766867a5a6296cb173fa756d162fe5cc15ba2d8-dirty`. The full argument record is [`telemac_river_oil_spill/run.json`](telemac_river_oil_spill/run.json).
 
