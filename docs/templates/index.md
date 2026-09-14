@@ -2,7 +2,7 @@
 
 # Templates
 
-8 registered templates, one per question. A template declares raw engine keywords over a module wrapper; `fill` sets the sheet and `run` solves it. The wrappers are in [`../modules.md`](../modules.md).
+9 registered templates, one per question. A template declares raw engine keywords over a module wrapper; `fill` sets the sheet and `run` solves it. The wrappers are in [`../modules.md`](../modules.md).
 
 ## [`artemis_harbor_agitation`](artemis_harbor_agitation.md)
 
@@ -35,6 +35,14 @@ Module `telemac2d`, proving run `01M2BWKHCWHWEHY2SX4A3SFDPB`.
 How much RUNOFF a storm produces from this WATERSHED, as an outlet hydrograph and a flood-depth map.
 
 Module `telemac2d`, proving run `01M2EBK39ZK0YXRFDHTGZH5PRV`.
+
+## [`telemac_river_dredging`](telemac_river_dredging.md)
+
+[![telemac_river_dredging](telemac_river_dredging/telemac_river_dredging.png)](telemac_river_dredging.md)
+
+MAINTENANCE DREDGING of a navigation channel: how much comes out, and what the bed does.
+
+Module `telemac2d`, proving run `01M2EREMPP4Z9NC6JHCVH8SXVK`.
 
 ## [`telemac_river_dye`](telemac_river_dye.md)
 

@@ -1,0 +1,697 @@
+{
+  "tool": "telemac_river_dredging",
+  "run_id": "01M2EREMPP4Z9NC6JHCVH8SXVK",
+  "commit": "d341f5de11746c960c7d687adeb134d461f118e2",
+  "recorded_at": "2026-09-14T01:28:23.024430+00:00",
+  "engine": "telemac",
+  "wall_seconds": 28.446,
+  "args": {
+    "location": "Eel River near Scotia, California",
+    "discharge_m3s": 2.2,
+    "output_interval_min": 0.333,
+    "reach_length_km": 1.0,
+    "sim_duration_s": 600.0,
+    "mesh_resolution_m": 12.0,
+    "design_depth_m": 1.0,
+    "trigger_depth_m": 1.0,
+    "dredge_start_s": 600.0,
+    "dredge_end_s": 3600.0,
+    "dredge_repeat_s": 1800.0,
+    "dig_rate_m_per_s": 0.02,
+    "dump_rate_m_per_s": 0.02,
+    "grain_size_um": 200.0,
+    "bed_thickness_m": 5.0
+  },
+  "sheet": [
+    {
+      "name": "location",
+      "value": "Eel River near Scotia, California",
+      "door": "user",
+      "basis": "user",
+      "units": null,
+      "consequence": "aoi",
+      "note": "supplied on this invocation",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "discharge_m3s",
+      "value": 2.2,
+      "door": "user",
+      "basis": "user",
+      "units": "m^3/s",
+      "consequence": "physics",
+      "note": "supplied on this invocation",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "output_interval_min",
+      "value": 0.333,
+      "door": "user",
+      "basis": "user",
+      "units": "min",
+      "consequence": "numerical",
+      "note": "supplied on this invocation",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "reach_length_km",
+      "value": 1.0,
+      "door": "user",
+      "basis": "user",
+      "units": "km",
+      "consequence": "aoi",
+      "note": "supplied on this invocation",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "sim_duration_s",
+      "value": 600.0,
+      "door": "user",
+      "basis": "user",
+      "units": "s",
+      "consequence": "numerical",
+      "note": "supplied on this invocation",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "mesh_resolution_m",
+      "value": 12.0,
+      "door": "user",
+      "basis": "user",
+      "units": "m",
+      "consequence": "numerical",
+      "note": "supplied on this invocation",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "design_depth_m",
+      "value": 1.0,
+      "door": "user",
+      "basis": "user",
+      "units": "m",
+      "consequence": "scenario",
+      "note": "supplied on this invocation",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "trigger_depth_m",
+      "value": 1.0,
+      "door": "user",
+      "basis": "user",
+      "units": "m",
+      "consequence": "scenario",
+      "note": "supplied on this invocation",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "dredge_start_s",
+      "value": 600.0,
+      "door": "user",
+      "basis": "user",
+      "units": "s",
+      "consequence": "scenario",
+      "note": "supplied on this invocation",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "dredge_end_s",
+      "value": 3600.0,
+      "door": "user",
+      "basis": "user",
+      "units": "s",
+      "consequence": "scenario",
+      "note": "supplied on this invocation",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "dredge_repeat_s",
+      "value": 1800.0,
+      "door": "user",
+      "basis": "user",
+      "units": "s",
+      "consequence": "scenario",
+      "note": "supplied on this invocation",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "dig_rate_m_per_s",
+      "value": 0.02,
+      "door": "user",
+      "basis": "user",
+      "units": "m/s",
+      "consequence": "scenario",
+      "note": "supplied on this invocation",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "dump_rate_m_per_s",
+      "value": 0.02,
+      "door": "user",
+      "basis": "user",
+      "units": "m/s",
+      "consequence": "scenario",
+      "note": "supplied on this invocation",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "grain_size_um",
+      "value": 200.0,
+      "door": "user",
+      "basis": "user",
+      "units": "um",
+      "consequence": "scenario",
+      "note": "supplied on this invocation",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "bed_thickness_m",
+      "value": 5.0,
+      "door": "user",
+      "basis": "user",
+      "units": "m",
+      "consequence": "scenario",
+      "note": "supplied on this invocation",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "compute_class",
+      "value": "medium",
+      "door": "constant",
+      "basis": "default_demo",
+      "units": null,
+      "consequence": "numerical",
+      "note": "declared constant default",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "time_origin",
+      "value": [
+        2000,
+        1,
+        1,
+        0,
+        0,
+        0
+      ],
+      "door": "scenario",
+      "basis": "default_demo",
+      "units": null,
+      "consequence": "scenario",
+      "note": "declared scenario default",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "min_volume_m3",
+      "value": 0.0,
+      "door": "scenario",
+      "basis": "default_demo",
+      "units": "m^3",
+      "consequence": "scenario",
+      "note": "declared scenario default",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "bedload_formula",
+      "value": 1,
+      "door": "scenario",
+      "basis": "default_demo",
+      "units": null,
+      "consequence": "numerical",
+      "note": "declared scenario default",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "morphological_factor",
+      "value": 10.0,
+      "door": "scenario",
+      "basis": "default_demo",
+      "units": null,
+      "consequence": "numerical",
+      "note": "declared scenario default",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "bbox",
+      "value": null,
+      "door": "user",
+      "basis": "user",
+      "units": null,
+      "consequence": "aoi",
+      "note": "not supplied (declared optional)",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "river_geometry_uri",
+      "value": null,
+      "door": "user",
+      "basis": "user",
+      "units": null,
+      "consequence": "aoi",
+      "note": "not supplied (declared optional)",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "event_time",
+      "value": null,
+      "door": "question",
+      "basis": "prompt_interpreted",
+      "units": null,
+      "consequence": "scenario",
+      "note": "not supplied (declared optional)",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "friction_coefficient",
+      "value": null,
+      "door": "user",
+      "basis": "user",
+      "units": null,
+      "consequence": "numerical",
+      "note": "not supplied (declared optional)",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "friction_law",
+      "value": null,
+      "door": "user",
+      "basis": "user",
+      "units": null,
+      "consequence": "numerical",
+      "note": "not supplied (declared optional)",
+      "clamped_from": null,
+      "real_source": null
+    }
+  ],
+  "provenance": [
+    {
+      "param": "location",
+      "value": "Eel River near Scotia, California",
+      "basis": "user",
+      "note": "Place name on the river, geocoded to the reach [supplied on this invocation]",
+      "real_source": null
+    },
+    {
+      "param": "discharge_m3s",
+      "value": 2.2,
+      "basis": "user",
+      "note": "Steady upstream discharge the reach is dredged under - the flow that shoals the channel and carries the disturbed material [supplied on this invocation]",
+      "real_source": null
+    },
+    {
+      "param": "output_interval_min",
+      "value": 0.333,
+      "basis": "user",
+      "note": "Result-writing cadence; unset keeps the steering file's own period [supplied on this invocation]",
+      "real_source": null
+    },
+    {
+      "param": "reach_length_km",
+      "value": 1.0,
+      "basis": "user",
+      "note": "Modeled reach length downstream of the seed; a longer reach is coarsened under the mesh node budget [supplied on this invocation]",
+      "real_source": null
+    },
+    {
+      "param": "sim_duration_s",
+      "value": 600.0,
+      "basis": "user",
+      "note": "Simulated physical time the dredge campaign runs over; the morphological factor is what makes a short window produce a readable bed change [supplied on this invocation]",
+      "real_source": null
+    },
+    {
+      "param": "mesh_resolution_m",
+      "value": 12.0,
+      "basis": "user",
+      "note": "Target element edge length the reach is triangulated at; the dredged volume is the sum over the nodes inside the field, so a coarse mesh resolves a narrow fairway badly [supplied on this invocation]",
+      "real_source": null
+    },
+    {
+      "param": "design_depth_m",
+      "value": 1.0,
+      "basis": "user",
+      "note": "Depth the fairway is dredged TO, under the reference water surface the run opens at - the design draught plus its overdepth [supplied on this invocation]",
+      "real_source": null
+    },
+    {
+      "param": "trigger_depth_m",
+      "value": 1.0,
+      "basis": "user",
+      "note": "Depth at which a node is dredged: the bed is worked wherever it sits shallower than this under the reference surface. Equal to design_depth_m keeps the channel exactly at grade; SMALLER than it lets the channel shoal before the dredger returns, and a trigger DEEPER than the grade would mark a node for a cut that is above its own bed [supplied on this invocation]",
+      "real_source": null
+    },
+    {
+      "param": "dredge_start_s",
+      "value": 600.0,
+      "basis": "user",
+      "note": "When the first dredging pass begins, in seconds of the BED's own clock - the run's morphological time, sim_duration_s x morphological_factor [supplied on this invocation]",
+      "real_source": null
+    },
+    {
+      "param": "dredge_end_s",
+      "value": 3600.0,
+      "basis": "user",
+      "note": "When the campaign stops, on the same bed clock: no further pass begins after it, and a pass already cutting runs on until it reaches grade [supplied on this invocation]",
+      "real_source": null
+    },
+    {
+      "param": "dredge_repeat_s",
+      "value": 1800.0,
+      "basis": "user",
+      "note": "Maintenance interval on the bed clock: how long after a pass starts the next one begins, if the channel has shoaled past trigger_depth_m again [supplied on this invocation]",
+      "real_source": null
+    },
+    {
+      "param": "dig_rate_m_per_s",
+      "value": 0.02,
+      "basis": "user",
+      "note": "How fast the dredger lowers the bed, as metres of bed per second of SOLVER time at a working node - the plant's capacity, not a physical rate. A pass reports its volume only once it has reached grade, so this and the cut it has to make are what decide whether the run sees a completed pass at all [supplied on this invocation]",
+      "real_source": null
+    },
+    {
+      "param": "dump_rate_m_per_s",
+      "value": 0.02,
+      "basis": "user",
+      "note": "How fast the spoil is laid into the dump area, as metres of bed per second of solver time at a receiving node; a pass is not finished until its spoil is placed [supplied on this invocation]",
+      "real_source": null
+    },
+    {
+      "param": "grain_size_um",
+      "value": 200.0,
+      "basis": "user",
+      "note": "Median grain diameter d50 of the bed the channel shoals with - ~200 um fine sand, ~20 um silt (all modeled non-cohesive) [supplied on this invocation]",
+      "real_source": null
+    },
+    {
+      "param": "bed_thickness_m",
+      "value": 5.0,
+      "basis": "user",
+      "note": "Depth of the erodible sediment stock the dredger can cut into [supplied on this invocation]",
+      "real_source": null
+    },
+    {
+      "param": "compute_class",
+      "value": "medium",
+      "basis": "default_demo",
+      "note": "Solve sizing class [declared constant default]",
+      "real_source": null
+    },
+    {
+      "param": "time_origin",
+      "value": "[2000, 1, 1, 0, 0, 0]",
+      "basis": "default_demo",
+      "note": "The calendar instant the run's clock starts at, as [year, month, day, hour, minute, second] - the origin every dredge schedule is dated against and the one the deck states [declared scenario default]",
+      "real_source": null
+    },
+    {
+      "param": "min_volume_m3",
+      "value": 0.0,
+      "basis": "default_demo",
+      "note": "Least volume worth moving around a node before it is dredged at all; 0 works every node past the trigger [declared scenario default]",
+      "real_source": null
+    },
+    {
+      "param": "bedload_formula",
+      "value": 1,
+      "basis": "default_demo",
+      "note": "GAIA bed-load law: 1=Meyer-Peter-Mueller, 2=Einstein-Brown, 7=van Rijn [declared scenario default]",
+      "real_source": null
+    },
+    {
+      "param": "morphological_factor",
+      "value": 10.0,
+      "basis": "default_demo",
+      "note": "Amplifies bed change per hydraulic step so a short campaign yields a readable depth; a speed-up lever, not a rate [declared scenario default]",
+      "real_source": null
+    },
+    {
+      "param": "river_geometry_uri",
+      "value": "derived",
+      "basis": "derived",
+      "note": "not supplied; the reach flowline is fetched fresh for the AOI",
+      "real_source": null
+    },
+    {
+      "param": "event_time",
+      "value": "derived",
+      "basis": "derived",
+      "note": "not supplied; the carrier discharge is read at the MOST RECENT published NWM cycle",
+      "real_source": null
+    },
+    {
+      "param": "friction_coefficient",
+      "value": "derived",
+      "basis": "derived",
+      "note": "not supplied; the reach is solved at Strickler 33.0, which is also the roughness its outflow stage is derived as a normal depth at",
+      "real_source": null
+    },
+    {
+      "param": "friction_law",
+      "value": "derived",
+      "basis": "derived",
+      "note": "not supplied; the coefficient is read as a Strickler one",
+      "real_source": null
+    }
+  ],
+  "answer": {
+    "dug_volume_m3": 4709.386117,
+    "dumped_volume_m3": 4709.386117,
+    "dredged_bed_change_m": -0.9470365047454834,
+    "dumped_bed_change_m": 1.034358263015747,
+    "net_bed_mass_kg": -728.4404,
+    "mesh_size_m": 10.415,
+    "layer_uri": "s3://trid3nt-runs/01M2EREMPP4Z9NC6JHCVH8SXVK/gaia_river.slf",
+    "discharge_m3s": 2.2,
+    "discharge_note": "Steady upstream discharge the reach is dredged under - the flow that shoals the channel and carries the disturbed material [supplied on this invocation]",
+    "mesh_resolution_m": 12.0,
+    "mesh_resolution_note": "Target element edge length the reach is triangulated at; the dredged volume is the sum over the nodes inside the field, so a coarse mesh resolves a narrow fairway badly [supplied on this invocation]"
+  },
+  "mesh": {
+    "mesh_size_m": null
+  },
+  "layers": [
+    {
+      "crs_authid": null,
+      "dataset_group": null,
+      "dataset_uris": [],
+      "layer_id": "input-river_geometry-94e6990c51b1",
+      "layer_type": "vector",
+      "legend": {
+        "colormap": null,
+        "floor": null,
+        "kind": "reference",
+        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <renderer-v2 type=\"singleSymbol\" symbollevels=\"0\" forceraster=\"0\" enableorderby=\"0\" referencescale=\"-1\">\n    <symbols>\n      <symbol name=\"0\" type=\"line\" alpha=\"1\" force_rhr=\"0\" clip_to_extent=\"1\" frame_rate=\"10\" is_animated=\"0\">\n        <layer class=\"SimpleLine\" enabled=\"1\" locked=\"0\" pass=\"0\">\n          <Option type=\"Map\">\n            <Option name=\"line_color\" type=\"QString\" value=\"59,125,216,255\"/>\n        <Option name=\"line_width\" type=\"QString\" value=\"0.66\"/>\n        <Option name=\"line_width_unit\" type=\"QString\" value=\"MM\"/>\n            <Option name=\"style\" type=\"QString\" value=\"solid\"/>\n          </Option>\n        </layer>\n      </symbol>\n    </symbols>\n  </renderer-v2>\n</qgis>\n",
+        "units": null,
+        "vmax": null,
+        "vmin": null
+      },
+      "name": "Input: OSM waterways (map context; the modeled river is the NLDI centerline) (river_geometry)",
+      "opacity": null,
+      "origin": null,
+      "quantity": null,
+      "reference_time": null,
+      "role": "context",
+      "temporal": false,
+      "uri": "s3://trid3nt-cache/cache/static-30d/river_geometry/9412f6a5eac9c6f84d832bb06a259bca.fgb",
+      "valid_from": null,
+      "valid_to": null,
+      "visible": true,
+      "z_index": 0
+    },
+    {
+      "crs_authid": null,
+      "dataset_group": null,
+      "dataset_uris": [],
+      "layer_id": "input-nhdplus_nldi-5c4eb42bf394",
+      "layer_type": "vector",
+      "legend": {
+        "colormap": null,
+        "floor": null,
+        "kind": "reference",
+        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <renderer-v2 type=\"singleSymbol\" symbollevels=\"0\" forceraster=\"0\" enableorderby=\"0\" referencescale=\"-1\">\n    <symbols>\n      <symbol name=\"0\" type=\"line\" alpha=\"1\" force_rhr=\"0\" clip_to_extent=\"1\" frame_rate=\"10\" is_animated=\"0\">\n        <layer class=\"SimpleLine\" enabled=\"1\" locked=\"0\" pass=\"0\">\n          <Option type=\"Map\">\n            <Option name=\"line_color\" type=\"QString\" value=\"59,125,216,255\"/>\n        <Option name=\"line_width\" type=\"QString\" value=\"0.66\"/>\n        <Option name=\"line_width_unit\" type=\"QString\" value=\"MM\"/>\n            <Option name=\"style\" type=\"QString\" value=\"solid\"/>\n          </Option>\n        </layer>\n      </symbol>\n    </symbols>\n  </renderer-v2>\n</qgis>\n",
+        "units": null,
+        "vmax": null,
+        "vmin": null
+      },
+      "name": "Input: nhdplus nldi (nhdplus_nldi)",
+      "opacity": null,
+      "origin": null,
+      "quantity": null,
+      "reference_time": null,
+      "role": "context",
+      "temporal": false,
+      "uri": "s3://trid3nt-cache/cache/static-30d/nhdplus_nldi/3e294d7e16a1a7d1f7e28c1ad9e94b67.fgb",
+      "valid_from": null,
+      "valid_to": null,
+      "visible": true,
+      "z_index": 1
+    },
+    {
+      "crs_authid": null,
+      "dataset_group": null,
+      "dataset_uris": [],
+      "layer_id": "input-nhd_area_water-bf200d54dada",
+      "layer_type": "vector",
+      "legend": {
+        "colormap": null,
+        "floor": null,
+        "kind": "reference",
+        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <renderer-v2 type=\"singleSymbol\" symbollevels=\"0\" forceraster=\"0\" enableorderby=\"0\" referencescale=\"-1\">\n    <symbols>\n      <symbol name=\"0\" type=\"fill\" alpha=\"1\" force_rhr=\"0\" clip_to_extent=\"1\" frame_rate=\"10\" is_animated=\"0\">\n        <layer class=\"SimpleFill\" enabled=\"1\" locked=\"0\" pass=\"0\">\n          <Option type=\"Map\">\n            <Option name=\"color\" type=\"QString\" value=\"59,125,216,255\"/>\n        <Option name=\"outline_color\" type=\"QString\" value=\"35,35,35,255\"/>\n        <Option name=\"outline_width\" type=\"QString\" value=\"0.26\"/>\n            <Option name=\"style\" type=\"QString\" value=\"solid\"/>\n          </Option>\n        </layer>\n      </symbol>\n    </symbols>\n  </renderer-v2>\n</qgis>\n",
+        "units": null,
+        "vmax": null,
+        "vmin": null
+      },
+      "name": "Input: nhd area water (nhd_area_water)",
+      "opacity": null,
+      "origin": null,
+      "quantity": null,
+      "reference_time": null,
+      "role": "context",
+      "temporal": false,
+      "uri": "s3://trid3nt-cache/cache/static-30d/nhd_area_water/d16260183c08f87793aa0f87c33d1958.fgb",
+      "valid_from": null,
+      "valid_to": null,
+      "visible": true,
+      "z_index": 2
+    },
+    {
+      "crs_authid": null,
+      "dataset_group": null,
+      "dataset_uris": [],
+      "layer_id": "input-copernicus_dem-10fdc3134f39",
+      "layer_type": "raster",
+      "legend": {
+        "colormap": "gray",
+        "floor": null,
+        "kind": "continuous",
+        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <pipe>\n    <rasterrenderer type=\"singlebandpseudocolor\" band=\"1\" opacity=\"1\" alphaBand=\"-1\" classificationMin=\"14\" classificationMax=\"423.417981\" nodataColor=\"\">\n      <rastershader>\n        <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"14\" maximumValue=\"423.417981\" labelPrecision=\"4\">\n          <item value=\"14\" color=\"#000000\" alpha=\"255\" label=\"14 m\"/>\n          <item value=\"116.3544952\" color=\"#404040\" alpha=\"255\" label=\"116.354 m\"/>\n          <item value=\"218.7089905\" color=\"#808080\" alpha=\"255\" label=\"218.709 m\"/>\n          <item value=\"321.0634857\" color=\"#c0c0c0\" alpha=\"255\" label=\"321.063 m\"/>\n          <item value=\"423.417981\" color=\"#ffffff\" alpha=\"255\" label=\"423.418 m\"/>\n        </colorrampshader>\n      </rastershader>\n    </rasterrenderer>\n  </pipe>\n</qgis>\n",
+        "units": "m",
+        "vmax": 423.41798095703115,
+        "vmin": 14.0
+      },
+      "name": "Input: river bed elevation (copernicus_dem, datum EGM2008 geoid (metres, positive up))",
+      "opacity": null,
+      "origin": null,
+      "quantity": null,
+      "reference_time": null,
+      "role": "context",
+      "temporal": false,
+      "uri": "s3://trid3nt-cache/cache/static-30d/copernicus_dem/a7f87e92c511538651360b3a7cf4f00a.tif",
+      "valid_from": null,
+      "valid_to": null,
+      "visible": true,
+      "z_index": 3
+    },
+    {
+      "crs_authid": "EPSG:32610",
+      "dataset_group": "CUMUL BED EVOL",
+      "dataset_uris": [],
+      "layer_id": "telemac-bed_evolution-over-time-01M2EREMPP4Z9NC6JHCVH8SXVK",
+      "layer_type": "mesh",
+      "legend": {
+        "colormap": "rdbu",
+        "floor": null,
+        "kind": "mesh",
+        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <mesh-renderer-settings>\n    <active-dataset-group scalar=\"0\" vector=\"-1\"/>\n    <scalar-settings group=\"0\" min-val=\"-1.034359\" max-val=\"1.034359\" opacity=\"1\" interpolation-method=\"no-resampling\">\n      <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"-1.034359\" maximumValue=\"1.034359\" labelPrecision=\"4\">\n        <item value=\"-1.034359\" color=\"#67001f\" alpha=\"255\" label=\"-1.03436 m\"/>\n        <item value=\"-0.5171795\" color=\"#e58368\" alpha=\"255\" label=\"-0.51718 m\"/>\n        <item value=\"0\" color=\"#f6f7f7\" alpha=\"255\" label=\"0 m\"/>\n        <item value=\"0.5171795\" color=\"#68abd0\" alpha=\"255\" label=\"0.517179 m\"/>\n        <item value=\"1.034359\" color=\"#053061\" alpha=\"255\" label=\"1.03436 m\"/>\n      </colorrampshader>\n    </scalar-settings>\n  </mesh-renderer-settings>\n  <name-to-global-index global-index=\"0\" name=\"CUMUL BED EVOL\"/>\n</qgis>\n",
+        "units": "m",
+        "vmax": 1.034359,
+        "vmin": -1.034359
+      },
+      "name": "Bed evolution over time (scotia_humboldt_county_california_95562_united_s)",
+      "opacity": null,
+      "origin": null,
+      "quantity": "bed_evolution",
+      "reference_time": "2026-09-14T01:28:06+00:00",
+      "role": "primary",
+      "temporal": false,
+      "uri": "s3://trid3nt-runs/01M2EREMPP4Z9NC6JHCVH8SXVK/gaia_river.slf",
+      "valid_from": null,
+      "valid_to": null,
+      "visible": true,
+      "z_index": 4
+    },
+    {
+      "crs_authid": "EPSG:32610",
+      "dataset_group": "Bed elevation at t = 593.94 s",
+      "dataset_uris": [
+        "s3://trid3nt-runs/01M2EREMPP4Z9NC6JHCVH8SXVK/bed_elevation-t593.dat"
+      ],
+      "layer_id": "telemac-bed_elevation-t593-01M2EREMPP4Z9NC6JHCVH8SXVK",
+      "layer_type": "mesh",
+      "legend": {
+        "colormap": "terrain",
+        "floor": null,
+        "kind": "mesh",
+        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <mesh-renderer-settings>\n    <active-dataset-group scalar=\"0\" vector=\"-1\"/>\n    <scalar-settings group=\"0\" min-val=\"12.552963\" max-val=\"44.951321\" opacity=\"1\" interpolation-method=\"no-resampling\">\n      <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"12.552963\" maximumValue=\"44.951321\" labelPrecision=\"4\">\n        <item value=\"12.552963\" color=\"#440154\" alpha=\"255\" label=\"12.553 m\"/>\n        <item value=\"20.6525525\" color=\"#3b528b\" alpha=\"255\" label=\"20.6526 m\"/>\n        <item value=\"28.752142\" color=\"#21918c\" alpha=\"255\" label=\"28.7521 m\"/>\n        <item value=\"36.8517315\" color=\"#5ec962\" alpha=\"255\" label=\"36.8517 m\"/>\n        <item value=\"44.951321\" color=\"#fde725\" alpha=\"255\" label=\"44.9513 m\"/>\n      </colorrampshader>\n    </scalar-settings>\n  </mesh-renderer-settings>\n  <name-to-global-index global-index=\"0\" name=\"Bed elevation at t = 593.94 s\"/>\n</qgis>\n",
+        "units": "m",
+        "vmax": 44.951321,
+        "vmin": 12.552963
+      },
+      "name": "Bed elevation (m) at t = 593.94 s (scotia_humboldt_county_california_95562_united_s)",
+      "opacity": null,
+      "origin": null,
+      "quantity": "bed_elevation",
+      "reference_time": null,
+      "role": "primary",
+      "temporal": false,
+      "uri": "s3://trid3nt-runs/01M2EREMPP4Z9NC6JHCVH8SXVK/r2d_river.slf",
+      "valid_from": null,
+      "valid_to": null,
+      "visible": true,
+      "z_index": 5
+    },
+    {
+      "crs_authid": "EPSG:32610",
+      "dataset_group": "Bed evolution at t = 593.94 s",
+      "dataset_uris": [
+        "s3://trid3nt-runs/01M2EREMPP4Z9NC6JHCVH8SXVK/bed_evolution-t593.dat"
+      ],
+      "layer_id": "01M2ERF7C4GHFNT3NS9X9DK4T4",
+      "layer_type": "mesh",
+      "legend": {
+        "colormap": "rdbu",
+        "floor": null,
+        "kind": "mesh",
+        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <mesh-renderer-settings>\n    <active-dataset-group scalar=\"0\" vector=\"-1\"/>\n    <scalar-settings group=\"0\" min-val=\"-1.034359\" max-val=\"1.034359\" opacity=\"1\" interpolation-method=\"no-resampling\">\n      <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"-1.034359\" maximumValue=\"1.034359\" labelPrecision=\"4\">\n        <item value=\"-1.034359\" color=\"#67001f\" alpha=\"255\" label=\"-1.03436 m\"/>\n        <item value=\"-0.5171795\" color=\"#e58368\" alpha=\"255\" label=\"-0.51718 m\"/>\n        <item value=\"0\" color=\"#f6f7f7\" alpha=\"255\" label=\"0 m\"/>\n        <item value=\"0.5171795\" color=\"#68abd0\" alpha=\"255\" label=\"0.517179 m\"/>\n        <item value=\"1.034359\" color=\"#053061\" alpha=\"255\" label=\"1.03436 m\"/>\n      </colorrampshader>\n    </scalar-settings>\n  </mesh-renderer-settings>\n  <name-to-global-index global-index=\"0\" name=\"Bed evolution at t = 593.94 s\"/>\n</qgis>\n",
+        "units": "m",
+        "vmax": 1.034359,
+        "vmin": -1.034359
+      },
+      "name": "Bed evolution (m) at t = 593.94 s (scotia_humboldt_county_california_95562_united_s)",
+      "opacity": null,
+      "origin": null,
+      "quantity": "bed_evolution",
+      "reference_time": null,
+      "role": "primary",
+      "temporal": false,
+      "uri": "s3://trid3nt-runs/01M2EREMPP4Z9NC6JHCVH8SXVK/gaia_river.slf",
+      "valid_from": null,
+      "valid_to": null,
+      "visible": true,
+      "z_index": 6
+    }
+  ]
+}
