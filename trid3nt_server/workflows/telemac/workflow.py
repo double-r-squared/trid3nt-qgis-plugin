@@ -181,8 +181,8 @@ class Door:
         # held against, are reads the run resolves; they ride beside the list,
         # where the plan's binder walks, and rejoin it at publish.
         listed = [*self.outputs, *(m.primitive for m in self.answer.values())]
-        anchors = [{"at": p.at, "along": p.along, "within": p.within}
-                   for p in listed]
+        anchors = [{"at": p.at, "along": p.along, "within": p.within,
+                    "over": p.over} for p in listed]
         return Step(runner=f"{_TELEMAC}.workflow.publish_outputs", stage="publish",
                     kwargs={"run": Ref("solve"),
                             "outputs": [_unanchored(p) for p in self.outputs],
@@ -197,12 +197,12 @@ class Door:
 
 
 def _unanchored(primitive: Primitive) -> Primitive:
-    return replace(primitive, at=None, along=None, within=None)
+    return replace(primitive, at=None, along=None, within=None, over=None)
 
 
 def _anchored(primitive: Primitive, anchor: Mapping[str, Any]) -> Primitive:
     return replace(primitive, at=anchor["at"], along=anchor["along"],
-                   within=anchor.get("within"))
+                   within=anchor.get("within"), over=anchor.get("over"))
 
 
 async def publish_outputs(*, run: Mapping[str, Any], outputs: Sequence[Primitive],

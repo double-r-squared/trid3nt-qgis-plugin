@@ -1,20 +1,24 @@
-"""The GAIA wrapper: its module input and the two sediment composites.
+"""The GAIA wrapper: its module input, the two sediment composites and the dredge.
 
 GAIA runs UNDER a hydrodynamic module and states no value of its own: the bed
 and the suspension expand what a template handed them, and the density the
 dictionary defaults to (quartz) is unwritten. Cohesive sediment is approximated
-as very fine non-cohesive; the Krone/Partheniades path is not exposed."""
+as very fine non-cohesive; the Krone/Partheniades path is not exposed. The dredge
+is NESTOR, which the engine offers as keywords on this deck rather than as a
+module of its own: armed here, the material it moves goes through the per-class
+mass evolution GAIA computes its bed evolution and its sediment balance from."""
 
 from __future__ import annotations
 
 from types import MappingProxyType
 from typing import Any, Mapping
 
-from .module import Module
+from .module import Module, SlotRefused
 from .outputs import PRIMITIVES
 
 __all__ = ["GAIA", "GRAIN_UM_MAX", "GRAIN_UM_MIN", "STEERING_FILENAME",
-           "RESULT_FILENAME", "VARIABLES", "Bed", "Suspension"]
+           "RESULT_FILENAME", "VARIABLES", "Backfill", "Bed", "Dig", "Dredging",
+           "Dump", "SaveWaterLevel", "Suspension"]
 
 #: The module's variable vocabulary, by the mnemonic VARIABLES FOR GRAPHIC
 #: PRINTOUTS spells: the result-file name and the unit. The evolution is
@@ -44,20 +48,26 @@ class _Gaia(Module("gaia")):  # type: ignore[misc]
 
     @classmethod
     def bed(cls, *, geometry: Any, boundary: Any, mass_balance: Any,
-            **bed: Any) -> Mapping[str, Any]:
+            dredging: Any = None, **bed: Any) -> Mapping[str, Any]:
         """A non-cohesive bed with a real stock, one class or a mixture that SORTS.
 
-        ``bed`` is the ``Bed`` value; the shape follows the gradation it resolves."""
+        ``bed`` is the ``Bed`` value; ``dredging`` the ``Dredging`` moved out of it."""
         return _body({"GEOMETRY_FILE": geometry, "BOUNDARY_CONDITIONS_FILE": boundary,
                       "RESULTS_FILE": RESULT_FILENAME, "MASS_BALANCE": mass_balance,
-                      "bed": Bed(**bed)})
+                      "bed": Bed(**bed), "dredging": dredging})
 
     @classmethod
     def suspended(cls, *, geometry: Any, boundary: Any, mass_balance: Any,
-                  **suspension: Any) -> Mapping[str, Any]:
+                  dredging: Any = None, **suspension: Any) -> Mapping[str, Any]:
         """ONE settling class over a bed with NO stock: supply-limited.
 
         Zero thickness, so only the pulse deposits; a SECOND carrier tracer."""
+        if dredging is not None:
+            raise SlotRefused(
+                "a dredge moves material out of a bed and into another, and this "
+                "body is a suspension over a bed with NO stock - there is nothing "
+                "to dig and nowhere the dumped material would be accounted. State "
+                "the dredge on a bed().")
         return _body({"GEOMETRY_FILE": geometry, "BOUNDARY_CONDITIONS_FILE": boundary,
                       "RESULTS_FILE": RESULT_FILENAME, "MASS_BALANCE": mass_balance,
                       "suspension": Suspension(**suspension)})
@@ -83,6 +93,79 @@ def Suspension(*, d50_um: Any, concentration_mgl: Any,  # noqa: N802
     return {"d50_um": d50_um, "concentration_mgl": concentration_mgl,
             "transport_formula": transport_formula,
             "advection_scheme": advection_scheme, "printouts": printouts}
+
+
+def Dredging(*, actions: Any, reference: Any,  # noqa: N802
+             origin: Any) -> Mapping[str, Any]:
+    """The dredge as one value: what is done, the surface its levels are read
+    from, and the run's own time origin every action is dated against."""
+    return {"actions": list(actions), "reference": reference, "origin": origin}
+
+
+def Dig(*, field: Any, start: Any, end: Any, volume: Any = None,  # noqa: N802
+        rate: Any = None, depth: Any = None, crit_depth: Any = None,
+        repeat: Any = None, min_volume: Any = None,
+        min_volume_radius: Any = None, level: Any = None, dump: Any = None,
+        dump_rate: Any = None) -> Mapping[str, Any]:
+    """Material taken out of ``field``, optionally dumped into ``dump``.
+
+    A stated ``volume`` digs that much between the two times (Dig_by_time); a
+    stated ``rate`` digs to ``depth`` below the reference wherever the bed sits
+    shallower than ``crit_depth`` under it, every ``repeat`` (Dig_by_criterion)."""
+    if (volume is None) == (rate is None):
+        raise SlotRefused(
+            "a dig states a volume OR a rate: a volume is the material taken "
+            "between the two times, a rate is the speed the bed is taken down to "
+            "the grade at whenever the criterion is met. Stating both, or "
+            "neither, names no action the engine has.")
+    return {"type": "Dig_by_time" if volume is not None else "Dig_by_criterion",
+            "field": field, "start": start, "end": end, "volume": volume,
+            "rate": rate, "depth": depth, "crit_depth": crit_depth,
+            "repeat": repeat, "min_volume": min_volume,
+            "min_volume_radius": min_volume_radius, "level": level,
+            "dump": dump, "dump_rate": dump_rate}
+
+
+def Dump(*, field: Any, start: Any, end: Any, volume: Any,  # noqa: N802
+         grain_class: Any) -> Mapping[str, Any]:
+    """``volume`` of material put into ``field`` between the two times.
+
+    ``grain_class`` is one fraction per sediment class, summing to one; the
+    engine refuses a RATE on a timed dump, which is the dig action's own keyword."""
+    return {"type": "Dump_by_time", "field": field, "start": start, "end": end,
+            "volume": volume, "grain_class": list(grain_class)}
+
+
+def Backfill(*, field: Any, start: Any, end: Any,  # noqa: N802
+             crit_depth: Any, level: Any, grain_class: Any) -> Mapping[str, Any]:
+    """``field`` filled back up to ``crit_depth`` under the reference level."""
+    return {"type": "Backfill_to_level", "field": field, "start": start,
+            "end": end, "crit_depth": crit_depth, "level": level,
+            "grain_class": list(grain_class)}
+
+
+def SaveWaterLevel(*, start: Any, level: Any) -> Mapping[str, Any]:  # noqa: N802
+    """The free surface at ``start``, saved into ``level`` for a later action.
+
+    ``level`` is WATERLVL1..WATERLVL3, and an action reading one refuses unless
+    a save wrote it earlier in the file."""
+    return {"type": "Save_water_level", "start": start, "level": level}
+
+
+def _dredging(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
+                                                 Mapping[str, Any]]:
+    """The dredge -> NESTOR armed on this deck, and the three files it reads.
+
+    The restart file is not among them: this composite authors none, so the
+    action file states RESTART = FALSE and the deck names no file that is absent."""
+    from ..authoring import nestor
+
+    return ({"NESTOR": True,
+             "NESTOR_ACTION_FILE": nestor.ACTION_FILENAME,
+             "NESTOR_POLYGON_FILE": nestor.POLYGON_FILENAME,
+             "NESTOR_SURFACE_REFERENCE_FILE": nestor.REFERENCE_FILENAME},
+            nestor.files(value["actions"], reference=value["reference"],
+                         origin=value["origin"]))
 
 
 def _classes(gradation: Any, presets: Mapping[str, Any]
@@ -169,5 +252,5 @@ GAIA = _Gaia
 GAIA.VARIABLES = VARIABLES
 #: The result the primitives read: GAIA writes its own file beside the carrier's.
 GAIA.RESULT_FILE = RESULT_FILENAME
-GAIA.composites(bed=_bed, suspension=_suspension)
+GAIA.composites(bed=_bed, suspension=_suspension, dredging=_dredging)
 GAIA.outputs(**PRIMITIVES)

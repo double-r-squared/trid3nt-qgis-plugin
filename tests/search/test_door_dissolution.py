@@ -24,6 +24,7 @@ EXPECTED_TEMPLATES = {
     "telemac_river_oil_spill",
     "telemac_river_scour",
     "telemac_river_sediment_plume",
+    "telemac_river_dredging",
     "telemac_do_sag",
     "telemac_rain_on_grid",
     "telemac3d_stratified_flow",

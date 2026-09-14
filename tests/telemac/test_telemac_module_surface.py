@@ -850,11 +850,11 @@ def test_every_wrapper_binds_the_primitive_set_and_nothing_question_named():
 
 # -- the flip: one template per question, and the door's own review ----------- #
 
-#: The eight questions the surface answers. Six run on the fill/run door; the two
-#: open-water fronts still declare a plan and are Stage 3's.
+#: The nine questions the surface answers. Seven run on the fill/run door; the
+#: two open-water fronts still declare a plan and are Stage 3's.
 _FLIPPED = ("telemac_river_dye", "telemac_river_oil_spill", "telemac_river_scour",
             "telemac_river_sediment_plume", "telemac_do_sag",
-            "telemac_rain_on_grid")
+            "telemac_rain_on_grid", "telemac_river_dredging")
 
 
 def _bodies():
@@ -869,7 +869,10 @@ def _bodies():
 def test_a_structural_fork_is_a_template_and_never_a_switch():
     """Four questions release something into the same reach and each fills DIFFERENT
     slots for it. The arity of the carrier's tracer surface moves with the fork,
-    which is why each body states it rather than a composite owning it out of sight."""
+    which is why each body states it rather than a composite owning it out of sight.
+
+    The dredge releases NOTHING into the reach, so it prescribes no tracer at
+    all: an empty list would be a keyword with nothing after it."""
     from trid3nt_server.workflows.telemac.modules.telemac2d import Boundaries
 
     measured = {"inflow_q_m3s": 50.0, "outflow_stage_m": 97.8,
@@ -882,9 +885,9 @@ def test_a_structural_fork_is_a_template_and_never_a_switch():
             continue
         slots, _files = T2D.COMPOSITES["boundaries"].expand(
             Boundaries(measured=measured, tracers=[0.0] * len(stated["tracers"])))
-        arity[name] = len(slots["PRESCRIBED_TRACERS_VALUES"])
+        arity[name] = len(slots.get("PRESCRIBED_TRACERS_VALUES", ()))
     assert arity == {"telemac_river_dye": 2, "telemac_river_oil_spill": 2,
-                     "telemac_river_scour": 2,
+                     "telemac_river_scour": 2, "telemac_river_dredging": 0,
                      "telemac_river_sediment_plume": 4, "telemac_do_sag": 8}
 
 

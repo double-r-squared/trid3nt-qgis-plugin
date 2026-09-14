@@ -336,7 +336,11 @@ def _boundaries(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
         tracers += per_tracer
     return ({"PRESCRIBED_FLOWRATES": flowrates,
              "PRESCRIBED_ELEVATIONS": elevations,
-             "PRESCRIBED_TRACERS_VALUES": tracers}, {})
+             # A run with no tracers prescribes none. An EMPTY list is not that
+             # statement - it is a keyword with nothing after it, which DAMOCLES
+             # reads as the next line's business.
+             **({} if not tracers else
+                {"PRESCRIBED_TRACERS_VALUES": tracers})}, {})
 
 
 def Runoff(*, node_xy: Any, cn2: Any, antecedent_moisture: Any,  # noqa: N802

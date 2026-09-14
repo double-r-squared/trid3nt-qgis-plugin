@@ -23,4 +23,5 @@ anything is staged.
 | `cas_validate.py` | The ONE door to the image for the steering format, in both directions: telapy writes, the engine's own reader reads back, and every authored file is parsed against its own dictionary before anything is staged. |
 | `serializer.py` | A sheet of raw keywords, written by telapy as the engine's own steering file and read straight back by the engine's own parser. The ONE writer of the steering format. |
 | `oil.py` | The oil module's two input files as content: the preset in the module reader's own format, and the release routine this run's step and point are compiled into. |
+| `nestor.py` | The dredge's three input files as content: the actions in the reader's own `Keyword = value` grammar, the polygons that name the fields the three leading numerals identify them by, and the surface reference its levels are read from. |
 | `oil_templates/` | The engine's own release routine, shipped here because the release coordinates are compiled INTO it. |

@@ -25,7 +25,7 @@ join the run as the sixth slice.
 | `search/` | dataset and tool retrieval, the OGC adapter | 16 | 209 |
 | `server/` | the HTTP and WS routes, the fetch short-circuit and the Case AOI, persistence, telemetry | 28 | 547 |
 | `solver/` | the executor, the run reads, the engine-room posture, the import graph that keeps it engine-free | 7 | 53 |
-| `telemac/` | the TELEMAC templates, the module surface and its primitives, the listing reads, authoring | 25 | 459 |
+| `telemac/` | the TELEMAC templates, the module surface and its primitives, the listing reads, authoring | 26 | 473 |
 | `tools/` | the registry, the arg normalizer, the tool cache | 14 | 376 |
 
 | file | what it is |
@@ -43,7 +43,7 @@ Six slices by subsystem, each its own foreground invocation, from the repo root:
 
     make test-fetchers        # tests/fetchers                                                                      1565
     make test-spatial         # tests/derive tests/render tests/mesh                              961
-    make test-engines         # tests/telemac tests/runtime tests/solver tests/search                                985
+    make test-engines         # tests/telemac tests/runtime tests/solver tests/search                                999
     make test-server          # tests/server tests/inputs tests/gates tests/credentials tests/model tests/scripts   1131
     make test-model-surface   # tests/adapters tests/tools                                                           665
     make test-packages        # contracts/tests plugin/tests tests/plugin                                            811

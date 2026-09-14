@@ -271,6 +271,44 @@ def test_a_field_at_an_instant_carries_its_spread(solved):
     assert frame.measures["spread"] == 75.0
 
 
+def test_a_field_measured_over_an_area_reads_only_the_nodes_inside_it(solved,
+                                                                      tmp_path):
+    """``over`` narrows what the MEASURES are taken within and nothing else: the
+    values the read carries - and so the layer it publishes - stay the domain's."""
+    import json
+
+    whole = T2D.OUTPUTS["field"].read(field("T1", t=1), solved)
+    lon, lat = solved.lonlat
+    # A box around the first two nodes, which hold 10 and 80 of the frame's five.
+    pad = 1e-4
+    box = tmp_path / "area.geojson"
+    box.write_text(json.dumps({
+        "type": "Polygon",
+        "coordinates": [[[float(lon[:2].min()) - pad, float(lat[:2].min()) - pad],
+                         [float(lon[:2].max()) + pad, float(lat[:2].min()) - pad],
+                         [float(lon[:2].max()) + pad, float(lat[:2].max()) + pad],
+                         [float(lon[:2].min()) - pad, float(lat[:2].max()) + pad],
+                         [float(lon[:2].min()) - pad, float(lat[:2].min()) - pad]]]}))
+    inside = T2D.OUTPUTS["field"].read(field("T1", t=1, over=str(box)), solved)
+    assert inside.measures["nodes"] == 2
+    assert (inside.measures["max"], inside.measures["min"]) == (80.0, 10.0)
+    assert list(inside.values) == list(whole.values)
+    assert whole.measures["max"] == 80.0 and whole.measures["min"] == 5.0
+
+
+def test_an_area_holding_no_node_refuses_rather_than_measuring_nothing(solved,
+                                                                       tmp_path):
+    import json
+
+    box = tmp_path / "elsewhere.geojson"
+    box.write_text(json.dumps({
+        "type": "Polygon",
+        "coordinates": [[[10.0, 10.0], [10.1, 10.0], [10.1, 10.1],
+                         [10.0, 10.1], [10.0, 10.0]]]}))
+    with pytest.raises(OutputEmpty, match="holds no node"):
+        T2D.OUTPUTS["field"].read(field("T1", t=1, over=str(box)), solved)
+
+
 # -- the door: the outputs list, read and published -------------------------- #
 
 def test_the_door_refuses_a_published_variable_with_no_caption():

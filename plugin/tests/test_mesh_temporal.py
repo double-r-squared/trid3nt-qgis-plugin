@@ -24,14 +24,30 @@ _RUNS_DIR = os.environ.get("TRID3NT_RUNS_DIR") or os.path.join(
 #: The rain-on-grid result: the four hydrodynamic groups on a time axis.
 _ROG_RESULT = "r2d_rog.slf"
 #: The river result: those same groups plus the tracer the binding proof
-#: declares. Every river run carries one, so the basename is the whole selector.
+#: declares. Not every river run carries one - a question about the bed declares
+#: no tracer at all - so the deck beside the result is read too.
 _TRACER_RESULT = "r2d_river.slf"
+#: The deck a river run is written under, and the keyword a run that carries a
+#: tracer states in it.
+_RIVER_DECK = "t2d_river.cas"
+_TRACER_KEYWORD = "NAMES OF TRACERS"
 
 
-def _newest(result: str) -> str | None:
+def _newest(result: str, *, with_tracer: bool = False) -> str | None:
     """The newest local run's ``result`` file, or ``None`` when there is none."""
-    found = glob.glob(os.path.join(_RUNS_DIR, "*", result))
+    found = [path for path in glob.glob(os.path.join(_RUNS_DIR, "*", result))
+             if not with_tracer or _states_a_tracer(path)]
     return max(found, key=os.path.getmtime) if found else None
+
+
+def _states_a_tracer(result: str) -> bool:
+    """Did the run that wrote ``result`` declare a tracer, by its own deck?"""
+    try:
+        with open(os.path.join(os.path.dirname(result), _RIVER_DECK),
+                  encoding="latin-1") as deck:
+            return _TRACER_KEYWORD in deck.read()
+    except OSError:
+        return False
 
 
 @pytest.mark.qt_harness_shim
@@ -59,7 +75,8 @@ class TestQtMeshTemporalAndDeclaredStyle(unittest.TestCase):
         py = self._qgis_python()
         if py is None:
             self.skipTest("no interpreter with qgis.core available")
-        fixtures = [_newest(name) for name in (_ROG_RESULT, _TRACER_RESULT)]
+        fixtures = [_newest(_ROG_RESULT),
+                    _newest(_TRACER_RESULT, with_tracer=True)]
         if not all(fixtures):
             self.skipTest(
                 f"no solved {_ROG_RESULT} and {_TRACER_RESULT} under {_RUNS_DIR}; "

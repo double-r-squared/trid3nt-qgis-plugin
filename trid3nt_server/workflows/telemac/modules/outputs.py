@@ -261,6 +261,10 @@ class Primitive:
     #: it a node still belongs to the profile; ``None`` reads the whole domain.
     along: Any = None
     within: Any = None
+    #: The AREA a field's measures are taken within, as a geometry source;
+    #: ``None`` measures the whole domain. What is PUBLISHED is the whole field
+    #: either way - an area narrows the answer, never the picture.
+    over: Any = None
     #: The plane of a 3D variable, bottom first; ``None`` on a 2D module.
     plane: int | None = None
     #: The coupled module whose result this reads; ``None`` reads the run's own.
@@ -272,7 +276,8 @@ class Primitive:
 
     def __hash__(self) -> int:
         return hash((self.kind, self.variable, repr(self.t), repr(self.at),
-                     repr(self.along), repr(self.within), self.plane, self.module))
+                     repr(self.along), repr(self.within), repr(self.over),
+                     self.plane, self.module))
 
     def layer(self, *, style: Mapping[str, Any] | None = None) -> "Primitive":
         """Publish this field as a layer on the map, styled by ``style``."""
@@ -332,9 +337,12 @@ class Measure:
 
 
 def field(name: str, t: Any = -1, *, plane: int | None = None,
-          module: str | None = None) -> Primitive:
-    """A variable over the domain at an instant, or over every instant."""
-    return Primitive("field", variable=name, t=t, plane=plane, module=module)
+          module: str | None = None, over: Any = None) -> Primitive:
+    """A variable over the domain at an instant, or over every instant.
+
+    ``over`` narrows what the MEASURES are taken within to one area."""
+    return Primitive("field", variable=name, t=t, plane=plane, module=module,
+                     over=over)
 
 
 def series(name: str, at: Any = None, *, plane: int | None = None,
@@ -610,12 +618,41 @@ def read_field(primitive: Primitive, solved: Solved) -> Read:
     index = (int(primitive.t) if isinstance(primitive.t, int)
              else int(np.argmin(np.abs(times - float(primitive.t)))))
     frame = values[index]
+    inside = (frame if primitive.over is None
+              else frame[_within(primitive.over, solved, frame.size)])
     return Field(name=name, units=units, values=frame,
                  t=float(times[index]), plane=solved.plane_label(primitive.plane),
                  floor=_floor(primitive.variable, values),
-                 measures={"max": float(frame.max()), "min": float(frame.min()),
-                           "spread": float(frame.max() - frame.min()),
+                 measures={"max": float(inside.max()), "min": float(inside.min()),
+                           "mean": float(inside.mean()),
+                           "spread": float(inside.max() - inside.min()),
+                           "nodes": int(inside.size),
                            "t": float(times[index]), "frames": int(times.size)})
+
+
+def _within(over: Any, solved: Solved, nodes: int) -> Any:
+    """The nodes inside ``over``, as a mask over the first ``nodes`` of the result.
+
+    An area the mesh has no node in is a refusal: a measure over nothing would
+    read as a bed that did not move."""
+    import numpy as np
+    from shapely import contains_xy
+    from shapely.geometry import shape as _shape
+    from shapely.ops import unary_union
+
+    from trid3nt_server.inputs.geometry import (
+        flatten_geometries, read_geometry_doc,
+    )
+
+    lon, lat = solved.lonlat
+    area = unary_union([_shape(g)
+                        for g in flatten_geometries(read_geometry_doc(over))])
+    mask = np.asarray(contains_xy(area, lon[:nodes], lat[:nodes]))
+    if not mask.any():
+        raise OutputEmpty(
+            "the area a measure was asked over holds no node of the mesh the run "
+            "solved on, so there is nothing in it to read.")
+    return mask
 
 
 def _point(at: Any) -> Any:
@@ -789,11 +826,17 @@ def read_mass_balance(primitive: Primitive, solved: Solved) -> Read:
     The water balance carries the final block's volumes, outflow-positive
     across the liquid boundaries like the flux series, and where the runoff
     routine printed the rainfall it accumulated, the volume that fell on the
-    meshed domain and the fraction of it that left."""
-    from .listing import continuity_rel_error, final_balance, gaia_mass_balance
+    meshed domain and the fraction of it that left. The sediment balance carries
+    the per-class closure and, where a dredge ran, the volumes it moved."""
+    from .listing import (
+        continuity_rel_error, final_balance, gaia_mass_balance, nestor_volumes,
+    )
 
     if solved.body.MODULE == "gaia":
-        return Read(measures=gaia_mass_balance(solved.listing))
+        # The dredge's own figures ride here because they close the same bed: a
+        # run that armed no dredge printed none and carries none.
+        return Read(measures={**gaia_mass_balance(solved.listing),
+                              **nestor_volumes(solved.listing)})
     measures: dict[str, Any] = {
         "continuity_rel_error": continuity_rel_error(solved.listing)}
     final = final_balance(solved.listing)

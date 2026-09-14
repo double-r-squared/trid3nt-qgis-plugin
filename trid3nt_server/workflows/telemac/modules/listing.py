@@ -18,6 +18,7 @@ __all__ = [
     "engine_demand",
     "final_balance",
     "gaia_mass_balance",
+    "nestor_volumes",
 ]
 
 #: GAIA prints its closure once per class under this heading, in kg. The block is
@@ -32,6 +33,40 @@ _GAIA_FIELDS: tuple[tuple[str, str, int], ...] = (
     ("CUMULATED BED EVOLUTIONS", "sediment_net_bed_mass_kg", 6),
     ("CUMULATED LOST MASS", "sediment_mass_lost_kg", 8),
 )
+
+
+#: What NESTOR reports per action, in its own words: the label it prints the
+#: figure under -> the metric name. Every line it writes opens with ``?>``. The
+#: criterion dig reports the volume of the LAST maintenance period and resets its
+#: own sum at the next one, so the run's figure is the SUM over what it printed.
+#: The timed dump's own line reports the volume the action was GIVEN rather than
+#: one the run measured, and is not read.
+_NESTOR_FIELDS: tuple[tuple[str, str], ...] = (
+    (r"dug volume\s*\[m\^3\]", "dug_volume_m3"),
+    (r"dumped vol\s*\[m\^3\]", "dumped_volume_m3"),
+    (r"relocated volume\s*\[m\*\*3\]", "relocated_volume_m3"),
+    (r"removed volume\s*\[m\*\*3\]", "removed_volume_m3"),
+)
+
+
+def nestor_volumes(listing_text: str) -> dict[str, Any]:
+    """What the dredge moved, off the lines NESTOR printed into the listing.
+
+    A figure the run never printed is absent; each is the sum over the actions
+    and the maintenance periods that reported it."""
+    out: dict[str, Any] = {}
+    for pattern, name in _NESTOR_FIELDS:
+        found = re.findall(r"\?>\s*" + pattern + r"\s*:\s*([-+\d.EeDd]+)",
+                           listing_text or "")
+        values = []
+        for raw in found:
+            try:
+                values.append(float(raw.replace("D", "E").replace("d", "e")))
+            except ValueError:
+                continue
+        if values:
+            out[name] = round(sum(values), 6) + 0.0
+    return out
 
 
 #: How LECDON asks for a keyword it will not start without. The engine names the

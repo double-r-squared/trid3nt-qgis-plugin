@@ -265,6 +265,10 @@ from trid3nt_server.workflows.telemac.templates.do_sag.do_sag import telemac_do_
 from trid3nt_server.workflows.telemac.templates.river_oil_spill.river_oil_spill import telemac_river_oil_spill as _telemac_river_oil_spill  # noqa: E402,F401 - reach oil-slick front (engine=telemac, tier=template)
 from trid3nt_server.workflows.telemac.templates.river_scour.river_scour import telemac_river_scour as _telemac_river_scour  # noqa: E402,F401 - reach mobile-bed front (engine=telemac, tier=template)
 from trid3nt_server.workflows.telemac.templates.river_sediment_plume.river_sediment_plume import telemac_river_sediment_plume as _telemac_river_sediment_plume  # noqa: E402,F401 - reach suspended-sediment front (engine=telemac, tier=template)
+# The reach's one WORKED question: a dredger driven by NESTOR on the sediment
+# deck, so the material it moves rides the same per-class mass evolution the bed
+# evolution and the sediment balance are computed from.
+from trid3nt_server.workflows.telemac.templates.river_dredging.river_dredging import telemac_river_dredging as _telemac_river_dredging  # noqa: E402,F401 - reach maintenance-dredge front (engine=telemac, tier=template)
 # The CATCHMENT front. Its one liquid boundary is declared on the mesh ask at the
 # delineation's snapped pour point, so the outlet hydrograph is the flux through
 # the nodes that role landed on.

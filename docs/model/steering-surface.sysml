@@ -327,7 +327,9 @@ package SteeringSurface {
         doc /*
         The composites are the WRAPPER's, so they live in the wrapper files -
         one value standing for the keyword group the module reads it as. The
-        coupled modules carry their own beside them (waqtel.py, gaia.py).
+        coupled modules carry their own beside them (waqtel.py, gaia.py), and a
+        capability the engine offers only as keywords on one of those decks is
+        a composite there rather than a surface of its own.
         code: trid3nt_server/workflows/telemac/modules/telemac2d.py
         */
         port surfaceOut : SurfaceOut;
@@ -619,6 +621,26 @@ package SteeringSurface {
         */
     }
 
+    requirement def ACapabilityOnAHostDeckIsAComposite {
+        doc /*
+        A module the engine gives its own dictionary, its own deck and its own
+        results is a WRAPPER. A capability it expresses as KEYWORDS ON A HOST'S
+        DECK is a COMPOSITE on that host's wrapper and never a wrapper of its
+        own: there is no dictionary for a second surface to be the keyword table
+        of, and one written by hand would be the transcription this seam exists
+        to stop.
+
+        WHICH host, where more than one deck spells the same keywords, is the
+        engine's to decide as well. The dredge's keywords stand on the
+        hydrodynamic deck and on the sediment deck, and only the sediment path
+        puts the material it moves through the per-class mass evolution the bed
+        evolution and the sediment balance are computed from - the other adds a
+        thickness to the bottom with no stock, no grain classes and no
+        accounting behind it. The composite lives on the deck whose own closure
+        carries the result, and the other path is not exposed.
+        */
+    }
+
     requirement def NoBodyExtendsABody {
         doc /*
         A body extends its module's wrapper and nothing else. A value two
@@ -885,6 +907,15 @@ package SteeringSurface {
         "tests/telemac/test_telemac_module_surface.py::test_a_continuation_names_the_file_and_leaves_its_format_to_the_template";
     verify requirement CompositesSetOnlyPresence by
         "tests/telemac/test_telemac_module_surface.py::test_a_curve_number_field_names_no_model_and_the_template_does";
+
+    satisfy requirement ACapabilityOnAHostDeckIsAComposite by composite;
+    satisfy requirement ACapabilityOnAHostDeckIsAComposite by wrapper;
+    verify requirement ACapabilityOnAHostDeckIsAComposite by
+        "tests/telemac/test_telemac_nestor_dredge.py::test_the_dredge_arms_nestor_and_names_the_files_it_wrote";
+    verify requirement ACapabilityOnAHostDeckIsAComposite by
+        "tests/telemac/test_telemac_nestor_dredge.py::test_the_carrier_deck_has_no_dredge_of_its_own";
+    verify requirement ACapabilityOnAHostDeckIsAComposite by
+        "tests/telemac/test_telemac_nestor_dredge.py::test_a_dredge_over_a_bed_with_no_stock_refuses_by_name";
 
     satisfy requirement NoBodyExtendsABody by wrapper;
     verify requirement NoBodyExtendsABody by
