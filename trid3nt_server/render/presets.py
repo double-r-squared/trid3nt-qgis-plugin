@@ -47,6 +47,9 @@ DEFAULT_RAMP = "viridis"
 #: and no reader needs a ramp library of its own. Five stops at t = 0, .25,
 #: .5, .75, 1 of the matplotlib / ColorBrewer ramp of that name; ``hsv`` is
 #: closed deliberately (a compass bearing wraps, so 0 and 360 are one colour).
+#: ``terrain`` is the exception: relief needs more than five stops, and its low
+#: end is land rather than the sub-sea blue matplotlib's own terrain opens on,
+#: so it is that ramp's LAND range (t = .25 to 1) at eight stops.
 _RAMP_STOPS: dict[str, tuple[str, ...]] = {
     "viridis": ("#440154", "#3b528b", "#21918c", "#5ec962", "#fde725"),
     "magma": ("#000004", "#51127c", "#b73779", "#fc8961", "#fcfdbf"),
@@ -64,6 +67,8 @@ _RAMP_STOPS: dict[str, tuple[str, ...]] = {
     "ylgnbu": ("#ffffd9", "#c6e9b4", "#40b5c4", "#225da8", "#081d58"),
     "ylorrd": ("#ffffcc", "#fed976", "#fd8c3c", "#e2191c", "#800026"),
     "gnbu": ("#f7fcf0", "#ccebc5", "#7accc4", "#2a8bbe", "#084081"),
+    "terrain": ("#01cc66", "#6de27c", "#d9f791", "#dad085", "#a48b68",
+                "#93756e", "#c9bab7", "#ffffff"),
     "gray": ("#000000", "#404040", "#808080", "#c0c0c0", "#ffffff"),
     "hsv": ("#ff0000", "#b3ff00", "#00ffff", "#4d00ff", "#ff0000"),
 }

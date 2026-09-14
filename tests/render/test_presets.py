@@ -147,6 +147,16 @@ def test_an_unknown_ramp_takes_the_default_never_grey():
         presets.DEFAULT_RAMP)
 
 
+def test_the_relief_ramp_is_land_coloured_and_is_not_the_default():
+    """A bed is relief, so its ramp is a hypsometric one the table carries
+    itself: it resolves to its own stops rather than warning through to the
+    default, and it opens on land rather than on sub-sea blue."""
+    stops = presets.ramp_stops("terrain")
+    assert stops != presets.ramp_stops(presets.DEFAULT_RAMP)
+    red, green, blue = (int(stops[0][i:i + 2], 16) for i in (1, 3, 5))
+    assert green > red and green > blue
+
+
 def test_the_compass_ramp_is_closed_because_a_bearing_wraps():
     stops = presets.ramp_stops("hsv")
     assert stops[0] == stops[-1]

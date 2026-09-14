@@ -206,10 +206,8 @@ class STEERING(T2D):
 
     #: The bed itself: one class or a mixture, bedload on, a real stock to scour
     #: into. The classes of a MIXTURE shelter each other, and formula 1 is the engine's own Egiazaroff
-    #: hiding factor; a single class hides behind nothing and never reads it. A
-    #: sorted mixture additionally prints the SURFACE D50 its grading is read
-    #: from, which a single class has none of; the listing's own sediment
-    #: balance is what the net bed mass is read off.
+    #: hiding factor; a single class hides behind nothing and never reads it.
+    #: The listing's own sediment balance is what the net bed mass is read off.
     coupling = [GAIA.bed(geometry=_GEOMETRY, boundary=_BOUNDARY,
                          gradation=P.sediment_gradation, presets=GRADATION_PRESETS,
                          d50_um=P.grain_size_um, thickness_m=P.bed_thickness_m,
@@ -228,17 +226,14 @@ OUTPUTS = [
 CAPTIONS = {"T1": "marker concentration"}
 
 #: The run's ANSWER, as the numbers a reader has to be able to check. The
-#: evolution is signed: deposition positive, scour negative. The surface D50 is
-#: written for a MIXTURE only, so its spread - the sorting signature, in the
-#: metres the module writes - is a question a single-class bed was never asked.
+#: evolution is signed: deposition positive, scour negative. The surface D50
+#: spread is the sorting signature, in the metres the module writes: one class
+#: cannot sort, so a single-class bed reads zero and a mixture reads its grading.
 ANSWER = {
     "bed_evolution_max_m": field("E", t=-1, module="gaia").measure("max"),
     "bed_evolution_min_m": field("E", t=-1, module="gaia").measure("min"),
     "net_bed_mass_kg": mass_balance(module="gaia").measure("sediment_net_bed_mass_kg"),
-    "surface_d50_spread_m": field("D50", t=-1, module="gaia").measure("spread")
-                            .needs(P.sediment_gradation,
-                                   without="the bed is one class; ask for a "
-                                           "mixture to read a surface D50"),
+    "surface_d50_spread_m": field("D50", t=-1, module="gaia").measure("spread"),
     "marker_cmax_mgl": max_over_time("T1").measure("max"),
     "active_frames": series("T1").measure("active_frames"),
     "mesh_size_m": mesh().measure("size_m"),

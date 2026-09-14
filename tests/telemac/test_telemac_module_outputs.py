@@ -212,4 +212,4 @@ def test_the_card_carries_every_variable_each_deck_writes():
         "VELOCITY U", "VELOCITY V", "WATER DEPTH", "FREE SURFACE", "BOTTOM",
         "FROUDE NUMBER", "SCALAR FLOWRATE", "SCALAR VELOCITY", "MARKER"]
     assert rows["gaia.VARIABLES_FOR_GRAPHIC_PRINTOUTS"].value == [
-        "CUMUL BED EVOL", "MEAN DIAMETER", "BED SHEAR STRESS"]
+        "CUMUL BED EVOL", "MEAN DIAMETER M", "BED SHEAR STRESS"]

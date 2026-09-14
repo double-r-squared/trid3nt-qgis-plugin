@@ -26,13 +26,14 @@ __all__ = ["GAIA", "GRAIN_UM_MAX", "GRAIN_UM_MIN", "MODULE_OUTPUT",
 #: and rowing it again would put two layers of one field on one mesh. What is
 #: here is what the sediment module ADDS. The evolution is cumulative, so its
 #: last frame is the whole event's bed change - signed, deposition positive, on
-#: a ramp diverging about zero. A surface diameter is written for a MIXTURE
-#: only; a single class has none, and the row is skipped.
+#: a ramp diverging about zero. The surface diameter is written whatever the
+#: gradation, and the engine packs its unit letter into the 32-character NAME
+#: field rather than the unit field beside it.
 MODULE_OUTPUT: Mapping[str, Output] = MappingProxyType({
     "E": Output("CUMUL BED EVOL", "m",
                 style={"kind": "mesh", "ramp": "rdbu", "units": "m",
                        "center": 0.0}),
-    "D50": Output("MEAN DIAMETER", "m",
+    "D50": Output("MEAN DIAMETER M", "",
                   style={"kind": "mesh", "ramp": "cividis", "units": "m"}),
     "TOB": Output("BED SHEAR STRESS", "N/m2",
                   style={"kind": "mesh", "ramp": "inferno", "units": "N/m2",

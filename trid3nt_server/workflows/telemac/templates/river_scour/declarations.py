@@ -218,8 +218,8 @@ DOC = dict(
         "On success the bed-evolution layer (a `LayerURI`, metres, deposition "
         "positive and scour negative) - the emitter loads the map and animates "
         "the bed beside it - whose `answer` carries `bed_evolution_max_m` / "
-        "`bed_evolution_min_m` / `net_bed_mass_kg` / `surface_d50_spread_m` (a "
-        "mixture's sorting signature, nothing on a single class) / "
+        "`bed_evolution_min_m` / `net_bed_mass_kg` / `surface_d50_spread_m` (the "
+        "bed's sorting signature, zero on a single class) / "
         "`marker_cmax_mgl`; narrate those typed numbers. On failure a dict with `status=\"error\"` + "
         "`error_code`."
     ),

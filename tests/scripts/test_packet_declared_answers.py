@@ -2,7 +2,8 @@
 
 A measure answers with prose in two cases, and they are opposite verdicts: a read
 that came back EMPTY states why and is a gap in the delivery, while a measure held
-to a value nobody supplied states that nobody asked and is not.
+to a value nobody supplied states that nobody asked and is not. A chart is judged
+the same way: against what the template PLACED, never against its absence.
 """
 
 from __future__ import annotations
@@ -68,3 +69,14 @@ def test_a_measure_nobody_asked_passes_and_a_null_one_does_not():
     gaps = packet.unanswered(TEMPLATE, _metrics(**{key: None, other: asked}))
     assert len(gaps) == 1 and "answered null" in gaps[0]
     assert asked in gaps[0], "the sentence the run did state rides on the gap line"
+
+
+def test_a_chart_is_a_gap_only_where_the_template_places_one():
+    """A chart is a read a template gives a place. A template that places none
+    owes none, so a run that persisted no spec is complete; one that places a
+    chart and persisted no spec is short a deliverable."""
+    packet = _packet_module()
+    assert packet.unplaced_chart("telemac_river_dredging", {}) == []
+    gaps = packet.unplaced_chart(TEMPLATE, {})
+    assert len(gaps) == 1 and gaps[0].startswith("chart:")
+    assert packet.unplaced_chart(TEMPLATE, {"chart_spec": {"marker": {}}}) == []
