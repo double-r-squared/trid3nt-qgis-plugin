@@ -1,7 +1,7 @@
 {
   "tool": "telemac_river_dredging",
   "run_id": "01M2EX39CDWWSA21NA5AF69DZA",
-  "commit": "4ccc1576361b1185b9fcf05e6004fa5a75e49bbe-dirty",
+  "commit": "3c57ff0163565f0991037f53ddd43df8bac595e6",
   "recorded_at": "2026-09-14T02:49:32.262116+00:00",
   "engine": "telemac",
   "wall_seconds": 26.141,

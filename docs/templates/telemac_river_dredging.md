@@ -81,7 +81,7 @@ It publishes these layers onto the canvas:
 
 ## The proving run
 
-Run `01M2EX39CDWWSA21NA5AF69DZA`, 2026-09-14T02:49:32.262116+00:00, 26.141 s, at commit `4ccc1576361b1185b9fcf05e6004fa5a75e49bbe-dirty`.
+Run `01M2EX39CDWWSA21NA5AF69DZA`, 2026-09-14T02:49:32.262116+00:00, 26.141 s, at commit `3c57ff0163565f0991037f53ddd43df8bac595e6`.
 
 ![Every layer the run published, stacked and framed on the result (run 01M2EX39CDWWSA21NA5AF69DZA)](telemac_river_dredging/telemac_river_dredging.png)
 
@@ -151,5 +151,5 @@ await TOOL_REGISTRY['telemac_river_dredging'].fn(
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2EX39CDWWSA21NA5AF69DZA` and commit `4ccc1576361b1185b9fcf05e6004fa5a75e49bbe-dirty`. The full argument record is [`telemac_river_dredging/run.json`](telemac_river_dredging/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2EX39CDWWSA21NA5AF69DZA` and commit `3c57ff0163565f0991037f53ddd43df8bac595e6`. The full argument record is [`telemac_river_dredging/run.json`](telemac_river_dredging/run.json).
 
