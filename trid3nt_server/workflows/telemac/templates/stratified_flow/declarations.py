@@ -165,9 +165,9 @@ DOC = dict(
          "died without unwinding left on disk."),
     ),
     returns=(
-        "On success an `AnswerLayerURI` - the SURFACE-plane water temperature "
-        "COG the run leads with, the BOTTOM-plane companion beside it on the same "
-        "scale, and the column at the deepest node charted against the "
+        "On success the run's record (an `AnswerLayerURI`): every variable its "
+        "module wrote, styled on one mesh layer, animated where it varies, "
+        "plus the temperature column at the deepest node charted against the "
         "prescribed initial column. Its `answer` carries `stratification_dt` "
         "(the surviving top-to-bottom difference) against `stratification_dt_init`, "
         "the depth-weighted `column_mean_final_c` / `column_mean_init_c` whose "

@@ -122,9 +122,9 @@ def published(monkeypatch, fake_s3, telemac_result):
 
     async def _publish(*, run_id, engine, name, items):
         seen.extend(items)
-        return Published(primary=LayerURI(
+        return Published(layers=(LayerURI(
             layer_id="L", name="Water depth", layer_type="mesh",
-            uri="s3://runs/RID/r2d.slf", quantity="water_depth"))
+            uri="s3://runs/RID/r2d.slf", quantity="water_depth"),))
 
     monkeypatch.setattr(door, "publish", _publish)
     return seen, _run(telemac_result, monkeypatch)
@@ -213,3 +213,93 @@ def test_the_card_carries_every_variable_each_deck_writes():
         "FROUDE NUMBER", "SCALAR FLOWRATE", "SCALAR VELOCITY", "MARKER"]
     assert rows["gaia.VARIABLES_FOR_GRAPHIC_PRINTOUTS"].value == [
         "CUMUL BED EVOL", "MEAN DIAMETER M", "BED SHEAR STRESS"]
+
+
+def test_the_published_order_is_the_table_order_across_host_and_coupled(
+        monkeypatch, fake_s3, telemac_result):
+    """Nothing leads: every layer is surfaced, the host's table first and each
+    coupled module's behind it, and the run returns its own record."""
+    from trid3nt_server.render import layer_uri_emit
+    from trid3nt_server.workflows.telemac import workflow as door
+
+    surfaced: list[str] = []
+
+    async def _surface(_emitter, layer, *, role="input", fallbacks=None):
+        surfaced.append(layer.name)
+        return True
+
+    monkeypatch.setattr(layer_uri_emit, "publish_input_layer", _surface)
+    monkeypatch.setattr(
+        "trid3nt_server.workflows.solver.solver.download_result",
+        lambda run_id, basename, error_code=None: "/tmp/does-not-matter.slf")
+    x = [500000.0, 500120.0, 500000.0, 500120.0, 500060.0]
+    y = [4400000.0, 4400000.0, 4400110.0, 4400110.0, 4400055.0]
+    telemac_result(varnames=["WATER DEPTH", "CUMUL BED EVOL"], x=x, y=y,
+                   ikle=[[0, 1, 4], [1, 3, 4], [2, 3, 4], [0, 2, 4]],
+                   times=[0.0, 60.0],
+                   data={"WATER DEPTH": [[2.0] * 5, [2.5] * 5],
+                         "CUMUL BED EVOL": [[0.0] * 5,
+                                            [0.1, 0.2, 0.0, -0.1, 0.05]]})
+    sheet = fill(T2D, coupling=[GAIA.bed(
+        geometry="a.slf", boundary="a.cli", mass_balance=True, gradation=None,
+        presets={}, d50_um=200.0, thickness_m=5.0, formula=1,
+        hiding_factor_formula=1, morphological_factor=10.0)])
+    run = {"run_id": "RID", "utm_epsg": 32610, "result_basename": "r2d.slf",
+           "module": "telemac2d", "name": "reach",
+           "started_at": "2026-01-01T00:00:00+00:00",
+           "module_output": [{"token": token, "module": module,
+                              "style": row.style, "varies": row.varies}
+                             for token, module, row in sheet.published()]}
+    record = asyncio.run(door.publish_outputs(run=run, outputs=[], captions={},
+                                              answer={}, params={}))
+
+    # The host's row is first and the coupled module's is behind it - the order
+    # the two tables state, with each still followed by its own animation.
+    assert surfaced == ["Water depth (m) at t = 60 s (reach)",
+                        "Water depth over time (reach)",
+                        "Cumul bed evol (m) at t = 60 s (reach)",
+                        "Cumul bed evol over time (reach)"]
+    # The return is the run's record: the mesh every group rides, no group bound
+    # and nothing measured on it.
+    assert record.uri.endswith("/RID/r2d.slf")
+    assert record.style == {"kind": "reference"}
+    assert record.layer_id == "telemac-RID" and record.answer == {}
+
+
+def test_the_card_carries_a_generated_keyword_once_per_deck():
+    """A keyword the sheet GENERATES is not an engine default: it states the
+    module's own variable table once, and never again under the advanced fold."""
+    from trid3nt_server.workflows.telemac.workflow import card_rows
+
+    sheet = fill(T2D, coupling=[GAIA.bed(
+        geometry="a.slf", boundary="a.cli", mass_balance=True, gradation=None,
+        presets={}, d50_um=200.0, thickness_m=5.0, formula=1,
+        hiding_factor_formula=1, morphological_factor=10.0)])
+    printouts = [row for row in card_rows(sheet)
+                 if row.name.endswith(".VARIABLES_FOR_GRAPHIC_PRINTOUTS")
+                 or row.name == "VARIABLES_FOR_GRAPHIC_PRINTOUTS"]
+    assert [row.name for row in printouts] == [
+        "telemac2d.VARIABLES_FOR_GRAPHIC_PRINTOUTS",
+        "gaia.VARIABLES_FOR_GRAPHIC_PRINTOUTS"]
+    assert all(row.source_badge.endswith("own variable table")
+               for row in printouts)
+
+
+def test_every_module_that_appends_rows_is_on_the_modules_page():
+    """A module that writes no table of its own still states what it APPENDS, so
+    the page carries it - and the hook hands back exactly what it declared."""
+    from trid3nt_server.workflows.telemac.modules import WRAPPERS
+
+    page = (Path(__file__).resolve().parents[2]
+            / "docs" / "modules.md").read_text(encoding="utf-8")
+    appending = {module: wrapper for module, wrapper in WRAPPERS.items()
+                 if wrapper.APPENDABLE}
+    assert set(appending) == {"gaia", "waqtel"}
+    for module, wrapper in sorted(appending.items()):
+        assert f"### `{module}`" in page
+        for condition, rows in wrapper.APPENDABLE:
+            assert f"appended by {condition}: " in page
+            for row in rows:
+                assert f"`{row.name}`" in page
+    declared = [row for _, rows in WAQTEL.APPENDABLE for row in rows]
+    assert list(WAQTEL.APPENDS({"process": 2})) == declared

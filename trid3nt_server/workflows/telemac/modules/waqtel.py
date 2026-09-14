@@ -113,5 +113,7 @@ def _appended(body: Mapping[str, Any]) -> tuple[Output, ...]:
 
 
 WAQTEL = _Waqtel
+WAQTEL.APPENDABLE = tuple((f"process {process}", rows)
+                          for process, rows in sorted(_APPENDED.items()))
 WAQTEL.composites(degradation=_degradation)
 WAQTEL.appends(_appended)

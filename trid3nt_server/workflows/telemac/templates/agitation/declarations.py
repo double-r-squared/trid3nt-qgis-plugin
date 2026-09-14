@@ -155,9 +155,10 @@ DOC = dict(
          "died without unwinding left on disk."),
     ),
     returns=(
-        "On success an `AnswerLayerURI` - the agitation coefficient Kd = Hs/H0 "
-        "COG the run leads with and the Kd transect through the structure along "
-        "the incident wave charted beside it, its `answer` carrying `kd_max`, "
+        "On success the run's record (an `AnswerLayerURI`): every variable its "
+        "module wrote, styled on one mesh layer, animated where it varies, "
+        "the derived agitation coefficient Kd = Hs/H0 among them, plus the Kd "
+        "profile through the structure charted. Its `answer` carries `kd_max`, "
         "`kd_transect_min` and `kd_transect_max` (Kd along that transect - the "
         "lee against the exposed approach), `hs_max_m` and `mesh_size_m`; "
         "narrate those typed numbers. kd_max is often a standing wave against "

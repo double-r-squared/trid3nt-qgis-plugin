@@ -258,9 +258,10 @@ DOC = dict(
          "died without unwinding left on disk."),
     ),
     returns=(
-        "On success the peak water-depth layer (a `LayerURI`) - the emitter loads "
-        "the map, animates the depth over the run and places the outlet "
-        "hydrograph as a station layer beside it - whose `answer` carries "
+        "On success the run's record (an `AnswerLayerURI`): every variable its "
+        "module wrote, styled on one mesh layer, animated where it varies, "
+        "plus the outlet hydrograph charted at the pour point and placed there "
+        "as a station. Its `answer` carries "
         "`peak_discharge_m3s` / `peak_discharge_time_s` / `runoff_volume_m3` / "
         "`rainfall_volume_m3` / `runoff_coefficient` / `catchment_area_km2` / "
         "`continuity_rel_error`, plus `max_depth_peak_m` beside `max_depth_p99_m` "

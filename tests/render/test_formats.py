@@ -51,10 +51,10 @@ def test_a_mesh_product_paints_the_group_it_declares_on_the_shared_range() -> No
     published = _publish([animation, envelope])
 
     assert [layer.layer_type for layer in published.layers] == ["mesh", "mesh"]
-    assert published.primary.name == "Dye concentration over time (reach)"
+    assert published.layers[0].name == "Dye concentration over time (reach)"
     assert published.layers[1].name == "Peak dye concentration (reach)"
-    assert published.primary.uri == "s3://trid3nt-runs/RID/r2d.slf"
-    assert published.primary.style["dataset_group"] == "DYE"
+    assert published.layers[0].uri == "s3://trid3nt-runs/RID/r2d.slf"
+    assert published.layers[0].style["dataset_group"] == "DYE"
     assert published.layers[1].style["dataset_group"] == "Dye concentration"
     assert published.layers[1].dataset_uris == [
         "s3://trid3nt-runs/RID/dye_concentration.dat"]
@@ -66,8 +66,8 @@ def test_a_mesh_product_paints_the_group_it_declares_on_the_shared_range() -> No
     assert [layer.layer_id for layer in published.layers] == [
         "telemac-dye_concentration-over-time-RID",
         "telemac-dye_concentration-RID"]
-    assert published.primary.crs_authid == "EPSG:32611"
-    assert published.primary.reference_time == "2026-01-01T00:00:00+00:00"
+    assert published.layers[0].crs_authid == "EPSG:32611"
+    assert published.layers[0].reference_time == "2026-01-01T00:00:00+00:00"
 
 
 def test_an_instant_names_the_time_it_was_read_at() -> None:
@@ -76,8 +76,8 @@ def test_an_instant_names_the_time_it_was_read_at() -> None:
                      epsg=32611, datasets=("bed_evolution-t3600.dat",),
                      t=3600.0, units="m", value_range=(-0.5, 0.5)),
         caption="bed evolution", style={"kind": "continuous", "ramp": "rdbu"})])
-    assert published.primary.name == "Bed evolution (m) at t = 3600 s (reach)"
-    assert published.primary.layer_id == "telemac-bed_evolution-t3600-RID"
+    assert published.layers[0].name == "Bed evolution (m) at t = 3600 s (reach)"
+    assert published.layers[0].layer_id == "telemac-bed_evolution-t3600-RID"
 
 
 def test_a_plane_of_a_3d_result_is_named_and_keyed_by_its_plane() -> None:
@@ -88,9 +88,9 @@ def test_a_plane_of_a_3d_result_is_named_and_keyed_by_its_plane() -> None:
                                  plane="bottom plane", units="degC",
                                  value_range=(15.0, 25.0)),
                     caption="water temperature", style={"kind": "continuous"})])
-    assert published.primary.layer_id == (
+    assert published.layers[0].layer_id == (
         "telemac-water_temperature_bottom_plane-RID")
-    assert "bottom plane" in published.primary.name
+    assert "bottom plane" in published.layers[0].name
 
 
 def test_a_vector_is_written_as_the_geojson_it_arrived_as(_store) -> None:
@@ -101,7 +101,7 @@ def test_a_vector_is_written_as_the_geojson_it_arrived_as(_store) -> None:
          "properties": {}}]}
     published = _publish([Deliverable(product=Vector(features=features),
                                       caption="oil slick track")])
-    layer = published.primary
+    layer = published.layers[0]
     assert layer.layer_type == "vector"
     assert layer.name == "Oil slick track (reach)"
     assert layer.uri == "s3://trid3nt-runs/RID/oil_slick_track.geojson"
@@ -118,7 +118,7 @@ def test_a_single_point_vector_gets_an_honest_box() -> None:
              "properties": {}}]}),
         caption="outlet hydrograph",
         style={"kind": "reference", "geometry": "point"})])
-    west, south, east, north = published.primary.bbox
+    west, south, east, north = published.layers[0].bbox
     assert east - west == pytest.approx(0.004) and north - south == pytest.approx(0.004)
 
 
@@ -127,16 +127,16 @@ def test_a_raster_is_the_cog_already_in_the_store() -> None:
         product=Raster(uri="s3://cache/dem.tif", bbox=(-1.0, 2.0, -0.5, 2.5),
                        units="m", value_range=(0.0, 100.0)),
         caption="ground elevation", style={"kind": "continuous"})])
-    assert published.primary.layer_type == "raster"
-    assert published.primary.uri == "s3://cache/dem.tif"
-    assert published.primary.style["scale"]["range"] == [0.0, 100.0]
+    assert published.layers[0].layer_type == "raster"
+    assert published.layers[0].uri == "s3://cache/dem.tif"
+    assert published.layers[0].style["scale"]["range"] == [0.0, 100.0]
 
 
 def test_a_chart_is_a_payload_and_never_a_layer() -> None:
     payload = {"chart_id": "C", "title": "Dye at the bridge"}
     published = _publish([Deliverable(product=Chart(payload=payload),
                                       caption="dye concentration")])
-    assert published.layers == () and published.primary is None
+    assert published.layers == ()
     assert published.charts == {"dye_concentration": payload}
 
 
@@ -150,7 +150,7 @@ def test_the_producer_s_range_semantics_do_not_reach_the_preset_row() -> None:
         caption="bed evolution",
         style={"kind": "continuous", "ramp": "rdbu", "center": 0.0,
                "floor": 0, "range": "p99.5"})])
-    row = published.primary.style
+    row = published.layers[0].style
     assert set(row) == {"kind", "ramp", "dataset_group", "scale"}
     assert row["kind"] == "mesh" and row["scale"]["range"] == [-0.4, 0.4]
 

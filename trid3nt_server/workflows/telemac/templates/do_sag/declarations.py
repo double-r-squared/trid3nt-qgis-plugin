@@ -189,11 +189,12 @@ DOC = dict(
          "died without unwinding left on disk."),
     ),
     returns=(
-        "On success the dissolved-oxygen layer (a `LayerURI`) - the emitter loads "
-        "the field map and animates the result mesh beside it - whose `answer` "
-        "carries `do_min_mgl` / `do_below_standard` (the minimum judged against "
+        "On success the run's record (an `AnswerLayerURI`): every variable its "
+        "modules wrote, styled on one mesh layer, animated where it varies, "
+        "plus the oxygen profile on its Streeter-Phelps curve. `answer` "
+        "carries `do_min_mgl` / `do_below_standard` (vs "
         "`do_standard_mgl`) / `do_min_distance_m` / `bod_mixed_mgl` / "
-        "`mean_velocity_mps`; narrate those typed numbers. On failure a dict with "
-        "`status=\"error\"` + `error_code`."
+        "`mean_velocity_mps`; narrate those typed numbers. On failure a dict "
+        "with `status=\"error\"` + `error_code`."
     ),
 )

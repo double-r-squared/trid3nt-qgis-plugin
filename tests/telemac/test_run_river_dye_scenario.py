@@ -250,7 +250,7 @@ def test_the_granularity_lever_reads_back_beside_the_edge_the_mesh_was_built_at(
 
     workflow = _workflow()
     sheet = _resolve(mesh_resolution_m=10.0)
-    metrics = workflow.answer(_peak_layer(mesh_size_m=7.763).model_copy(
+    metrics = workflow.answer(_run_record(mesh_size_m=7.763).model_copy(
         update={"synthetic_inputs": merge_provenance(
             [], provenance_entries(sheet, workflow.params))}))
     assert metrics["dye_cmax_mgl"] == 4.9
@@ -259,11 +259,11 @@ def test_the_granularity_lever_reads_back_beside_the_edge_the_mesh_was_built_at(
     assert "supplied on this invocation" in metrics["mesh_resolution_note"]
 
 
-def _peak_layer(**answer: Any) -> AnswerLayerURI:
-    """The layer a published outputs list leads with, carrying the answer."""
+def _run_record(**answer: Any) -> AnswerLayerURI:
+    """A run's record, carrying the answer."""
     return AnswerLayerURI(
-        layer_id="L", name="Peak dye concentration (reach)", layer_type="raster",
-        uri="s3://runs/x.tif", quantity="dye_concentration",
+        layer_id="telemac-RID", name="reach", layer_type="mesh",
+        uri="s3://runs/RID/r2d.slf", style={"kind": "reference"},
         answer={"dye_cmax_mgl": 4.9, "dye_peak_time_s": 200.0, **answer})
 
 
@@ -512,27 +512,25 @@ def _run_tool(tmp_path, monkeypatch, captured: dict, overrides=(), water=None,
 def test_the_chain_geocodes_dispatches_and_stages_the_resolved_sheet(
         tmp_path, monkeypatch, _store):
     captured: dict = {}
-    peak = _run_tool(tmp_path, monkeypatch, captured,
+    record = _run_tool(tmp_path, monkeypatch, captured,
                      location="Twin Falls, Idaho", spill_fraction=0.4,
                      spill_duration_s=600.0, dye_concentration_mgl=250.0,
                      reach_length_km=4.0, sim_duration_s=1800.0)
 
-    assert isinstance(peak, AnswerLayerURI)
-    # The run comes back on the mesh it solved on, at the FIRST variable its
-    # module writes that the result carries - there is no leading layer, because
-    # every group rides that one mesh and the camera takes its extent.
-    assert peak.layer_type == "mesh"
-    assert peak.uri == "s3://trid3nt-runs/TELERID/r2d_river.slf"
-    assert peak.style["dataset_group"] == "Water depth at t = 1260 s"
-    assert peak.crs_authid == "EPSG:32611"
+    assert isinstance(record, AnswerLayerURI)
+    # The run comes back as its own record - the mesh it solved on, binding no
+    # group, because every group rides that one mesh and the camera takes its
+    # extent.
+    assert record.layer_type == "mesh"
+    assert record.uri == "s3://trid3nt-runs/TELERID/r2d_river.slf"
+    assert record.style == {"kind": "reference"} and record.quantity is None
+    assert record.crs_authid == "EPSG:32611"
     # The answer is read off the solved result the outputs list named: the
     # tracer's envelope peak, when it peaked, and the accepted mesh's edge.
-    assert peak.answer["dye_cmax_mgl"] == pytest.approx(97.3)
-    assert peak.answer["dye_peak_time_s"] == pytest.approx(420.0)
-    assert peak.answer["active_frames"] == 2
-    assert peak.answer["mesh_size_m"] is not None
-    assert peak.quantity == "water_depth"
-    assert peak.name.startswith("Water depth (m) at t = 1260 s (")
+    assert record.answer["dye_cmax_mgl"] == pytest.approx(97.3)
+    assert record.answer["dye_peak_time_s"] == pytest.approx(420.0)
+    assert record.answer["active_frames"] == 2
+    assert record.answer["mesh_size_m"] is not None
     # The tracer rides beside it under the name the RESULT FILE carries it by,
     # written as the group the module put next to the results.
     written = _store.store["TELERID/dye-t1260.dat"].decode()
@@ -564,16 +562,16 @@ def test_the_chain_geocodes_dispatches_and_stages_the_resolved_sheet(
     # condition, and the sheet's own row says it was derived from the model.
     assert settled["inflow_q_m3s"] == pytest.approx(312.0)
     assert deck["PRESCRIBED FLOWRATES"] == [0.0, pytest.approx(312.0)]
-    q_row = next(r for r in peak.synthetic_inputs if r.param == "discharge_m3s")
+    q_row = next(r for r in record.synthetic_inputs if r.param == "discharge_m3s")
     assert q_row.basis == "derived" and "Water Model" in (q_row.note or "")
 
 
 def test_a_prefetched_flowline_is_reused_instead_of_refetched(tmp_path, monkeypatch):
     captured: dict = {}
     provided = "s3://trid3nt-cache/cache/static-30d/river_geometry/prefetched.fgb"
-    peak = _run_tool(tmp_path, monkeypatch, captured,
+    record = _run_tool(tmp_path, monkeypatch, captured,
                      location="Twin Falls, Idaho", river_geometry_uri=provided)
-    assert isinstance(peak, AnswerLayerURI)
+    assert isinstance(record, AnswerLayerURI)
     assert captured["seed_uri"] == provided
     assert "river_bbox" not in captured  # fetch_river_geometry never ran
 
@@ -584,11 +582,11 @@ def test_the_seed_falls_back_to_the_centroid_when_extraction_misses(
     from trid3nt_server.workflows.telemac.templates import reach as reach_mod
 
     captured: dict = {}
-    peak = _run_tool(
+    record = _run_tool(
         tmp_path, monkeypatch, captured, location="Twin Falls, Idaho",
         overrides=[patch.object(reach_mod, "river_seed_from_geometry",
                                 lambda uri: None)])
-    assert isinstance(peak, AnswerLayerURI)
+    assert isinstance(record, AnswerLayerURI)
     settled = captured["settled"]
     assert settled["seed_lon"] == pytest.approx(-114.4609, abs=1e-3)
     assert settled["seed_lat"] == pytest.approx(42.5629, abs=1e-3)
@@ -737,10 +735,10 @@ def test_a_partly_mapped_reach_proceeds_and_says_how_much_was_mapped(
     from tests._fakes.reach_chain import WATER_GAPPED
 
     captured: dict = {}
-    peak = _run_tool(tmp_path, monkeypatch, captured, location="Twin Falls, Idaho",
+    record = _run_tool(tmp_path, monkeypatch, captured, location="Twin Falls, Idaho",
                      water=WATER_GAPPED)
-    assert isinstance(peak, AnswerLayerURI)
-    note = peak.fallback_note or ""
+    assert isinstance(record, AnswerLayerURI)
+    note = record.fallback_note or ""
     assert "50.0%" in note
     assert "flowline" in note
 

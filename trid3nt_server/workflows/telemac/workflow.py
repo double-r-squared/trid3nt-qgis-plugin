@@ -317,14 +317,34 @@ async def publish_outputs(*, run: Mapping[str, Any], outputs: Sequence[Primitive
             measure.against)
 
     answered = {name: _answered(measure) for name, measure in answer.items()}
-    if published.primary is None:
+    if not published.layers:
         raise SlotRefused(
             f"the {run['module']} run wrote none of the variables its module "
             "rows, so it published nothing and there is nothing to paint.")
     logger.info("telemac outputs published run_id=%s layers=%d charts=%d answer=%s",
                 run["run_id"], len(published.layers), len(published.charts),
                 answered)
-    return AnswerLayerURI(**published.primary.model_dump(), answer=answered)
+    host = str(run["module"])
+    if host not in solved:
+        solved[host] = Solved(run, wrapper_for(host))
+    return await asyncio.to_thread(_record, solved[host], name=name,
+                                   answer=answered)
+
+
+def _record(solved: Solved, *, name: str,
+            answer: Mapping[str, Any]) -> AnswerLayerURI:
+    """The run's own record: the mesh every published group rides, and the answer.
+
+    It binds no group and ranks none of the rows the run published, so it is
+    DRAWN rather than measured; its extent is what the camera frames."""
+    from trid3nt_server import storage
+
+    return AnswerLayerURI(
+        layer_id=f"telemac-{solved.run_id}", name=name, layer_type="mesh",
+        uri=f"s3://{storage.runs_bucket()}/{solved.run_id}/{solved.display_file}",
+        style={"kind": "reference"}, bbox=solved.bbox,
+        crs_authid=f"EPSG:{solved.utm_epsg}",
+        reference_time=solved.run.get("started_at"), answer=dict(answer))
 
 
 async def fill_sheet(*, steering: type, produced: Mapping[str, Any],
@@ -418,11 +438,23 @@ def card_rows(sheet: Sheet) -> list[ParamSheetRow]:
     rows += [_open_row(slot) for slot in sheet.required()]
     # The advanced fold reads down the dictionary's own RUBRIQUES, and inside one
     # down the dictionary's own order - the sections the engine's documentation
-    # is written in, rather than a flat thousand-row list.
+    # is written in, rather than a flat thousand-row list. A keyword the sheet
+    # GENERATES is already a written row above; the fold is engine DEFAULTS, and
+    # a generated value is not one.
+    generated = {body.PRINTOUTS for body, _ in _decks(sheet)}
     rest = [slot for name, slot in sheet.body.MODULE_INPUT.items()
-            if name not in sheet.filled and not slot.is_required]
+            if name not in sheet.filled and name not in generated
+            and not slot.is_required]
     return rows + [_default_row(slot) for slot in
                    sorted(rest, key=lambda slot: _group(slot))]
+
+
+def _decks(sheet: Sheet) -> list[tuple[Any, list[str]]]:
+    """Every body this run writes a deck for, and the tracers each carries."""
+    from trid3nt_server.workflows.telemac.modules import wrapper_for
+
+    return ([(sheet.body, [row.name for row in sheet.tracers])]
+            + [(wrapper_for(body["module"]), []) for body in sheet.coupled])
 
 
 def _written_rows(sheet: Sheet) -> list[ParamSheetRow]:
@@ -430,12 +462,8 @@ def _written_rows(sheet: Sheet) -> list[ParamSheetRow]:
 
     The keyword is generated from the module's table, so the card states it here
     rather than reading it off a slot nobody filled."""
-    from trid3nt_server.workflows.telemac.modules import wrapper_for
-
-    decks = [(sheet.body, [row.name for row in sheet.tracers])]
-    decks += [(wrapper_for(body["module"]), []) for body in sheet.coupled]
     rows = []
-    for body, tracers in decks:
+    for body, tracers in _decks(sheet):
         if not body.PRINTOUTS:
             continue
         slot = body.slot(body.PRINTOUTS)

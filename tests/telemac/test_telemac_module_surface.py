@@ -1230,9 +1230,11 @@ def test_the_card_shows_what_is_set_and_open_and_folds_the_rest_by_rubrique():
 
     sheet = _filled(**{"LAW OF BOTTOM FRICTION": 4})
     rows = {row.name: row for row in card_rows(sheet)}
-    # Every keyword, plus the one row the module states rather than a fill: the
-    # variables it writes, expanded, which no slot on this sheet carries.
-    assert len(rows) == len(T2D.MODULE_INPUT) + 1
+    # Every keyword, with the generated one standing as the row the MODULE
+    # states - the variables it writes, expanded - instead of as a fold row
+    # carrying an engine default no run of this sheet uses.
+    assert len(rows) == len(T2D.MODULE_INPUT)
+    assert "VARIABLES_FOR_GRAPHIC_PRINTOUTS" not in rows
     written = rows["telemac2d.VARIABLES_FOR_GRAPHIC_PRINTOUTS"]
     assert written.value[:3] == ["VELOCITY U", "VELOCITY V", "WATER DEPTH"]
     assert not written.editable and not written.advanced

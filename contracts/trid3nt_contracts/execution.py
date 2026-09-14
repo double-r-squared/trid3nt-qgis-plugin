@@ -209,9 +209,9 @@ class LayerURI(GraceModel):
 
 
 class AnswerLayerURI(LayerURI):
-    """The layer a published outputs list leads with, carrying the run's answer.
-    ``answer`` holds the scalars the template named, each read off the same
-    outputs the layers, charts and animations were published from."""
+    """A solved run's own record: the mesh every published group rides, and the
+    answer. ``answer`` holds the scalars the template named, each read off the
+    same outputs the layers, charts and animations were published from."""
 
     answer: dict[str, Any] = Field(default_factory=dict)
 

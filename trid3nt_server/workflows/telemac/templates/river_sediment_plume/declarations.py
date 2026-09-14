@@ -193,9 +193,10 @@ DOC = dict(
          "every step from the top."),
     ),
     returns=(
-        "On success the peak suspended-concentration layer (a `LayerURI`) - the "
-        "emitter loads the map, animates the result mesh and loads the bed "
-        "evolution beside it - whose `answer` carries `suspended_cmax` / "
+        "On success the run's record (an `AnswerLayerURI`): every variable its "
+        "modules wrote, styled on one mesh layer, animated where it varies, "
+        "the bed evolution among them, plus the suspended-sediment series "
+        "charted. Its `answer` carries `suspended_cmax` / "
         "`plume_reach_m` / `bed_evolution_max_m` / `net_bed_mass_kg` / "
         "`deposit_fraction` (the deposited mass over the injected mass); narrate "
         "those typed numbers. On failure a dict with `status=\"error\"` + "

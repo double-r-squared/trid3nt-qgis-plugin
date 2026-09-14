@@ -18,7 +18,7 @@ A COMPOSITE is one value standing for a keyword group, so the group cannot half-
 
 ## What each module writes
 
-The module's own output table. Every row a run's result carries is published - the final frame as a layer on the mesh the run solved on, styled from the row, and an animation beside it where the row varies in time. The printouts keyword the engine reads is generated from this table; no template states one.
+The module's own output table. Every row a run's result carries is published - the final frame as a layer on the mesh the run solved on, styled from the row, and an animation beside it where the row varies in time. The printouts keyword the engine reads is generated from this table; no template states one. A module that runs under a carrier writes no table of its own and APPENDS its rows to the carrier's result instead; those are listed under the module that states them.
 
 ### `artemis`
 
@@ -37,6 +37,8 @@ The module's own output table. Every row a run's result carries is published - t
 | `E` | CUMUL BED EVOL | m | `rdbu` | yes | yes |
 | `D50` | MEAN DIAMETER M | - | `cividis` | yes | yes |
 | `TOB` | BED SHEAR STRESS | N/m2 | `inferno` | yes | yes |
+
+appended by each suspended class: `NCOH SEDIMENT` (g/L, ramp `oranges`)
 
 ### `telemac2d`
 
@@ -62,4 +64,8 @@ The module's own output table. Every row a run's result carries is published - t
 | `V` | VELOCITY V | m/s | `rdbu` | yes | yes |
 | `W` | VELOCITY W | m/s | `rdbu` | yes | yes |
 | `TA` | TRACER | - | `viridis` | yes | no - one row per declared tracer |
+
+### `waqtel`
+
+appended by process 2: `DISSOLVED O2` (mgO2/L, ramp `rdylbu`), `ORGANIC LOAD` (mgO2/L, ramp `oranges`), `NH4 LOAD` (mg/L, ramp `magma`)
 

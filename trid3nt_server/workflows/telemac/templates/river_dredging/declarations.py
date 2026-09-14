@@ -209,9 +209,11 @@ DOC = dict(
          "every step from the top."),
     ),
     returns=(
-        "On success the bed-evolution layer (a `LayerURI`, metres, deposition "
-        "positive and the dredged cut negative) - the emitter loads the map and "
-        "animates the bed beside it - whose `answer` carries `dug_volume_m3` / "
+        "On success the run's record (an `AnswerLayerURI`): every variable its "
+        "modules wrote, styled on one mesh layer, animated where it varies, "
+        "the bed evolution in metres among them (deposition positive, the "
+        "dredged cut negative), and no read the template placed. Its `answer` "
+        "carries `dug_volume_m3` / "
         "`dumped_volume_m3` (the engine's own report lines, summed over the "
         "maintenance passes it printed) beside `dredge_report`, which states "
         "why they read as they do and says so when a pass did not finish inside "

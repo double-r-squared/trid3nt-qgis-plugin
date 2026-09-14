@@ -267,6 +267,7 @@ def _appended(body: Mapping[str, Any]) -> tuple[Output, ...]:
 
 
 GAIA = _Gaia
+GAIA.APPENDABLE = (("each suspended class", (_SUSPENDED,)),)
 GAIA.MODULE_OUTPUT = MODULE_OUTPUT
 GAIA.PRINTOUTS = "VARIABLES_FOR_GRAPHIC_PRINTOUTS"
 #: The result the primitives read: GAIA writes its own file beside the carrier's.

@@ -9,13 +9,10 @@ not arrive, and every product carries the style row its producer declared."""
 from __future__ import annotations
 
 import asyncio
-import logging
 from dataclasses import dataclass, field, replace
 from typing import Any, Mapping, Sequence
 
 from trid3nt_contracts.execution import LayerURI
-
-logger = logging.getLogger("trid3nt_server.render.formats")
 
 __all__ = ["Chart", "Deliverable", "Mesh", "Published", "Raster", "Vector",
            "publish", "quantity_of"]
@@ -88,9 +85,8 @@ class Deliverable:
 
 @dataclass(frozen=True)
 class Published:
-    """What one outputs list left behind: the layer it leads with, and the rest."""
+    """What one outputs list left behind: the layers it surfaced, and the charts."""
 
-    primary: LayerURI | None
     layers: tuple[LayerURI, ...] = ()
     charts: Mapping[str, Any] = field(default_factory=dict)
 
@@ -103,11 +99,10 @@ def quantity_of(caption: str) -> str:
 
 async def publish(*, run_id: str, engine: str, name: str,
                   items: Sequence[Deliverable]) -> Published:
-    """Publish every deliverable -> what the run leads with, and the rest.
+    """Publish every deliverable -> the layers it surfaced, and its charts.
 
-    Layers first, so the camera flies to the run's own product; the first layer
-    is the run's primary and the step's own return, and every layer after it is
-    surfaced beside it."""
+    Every layer is surfaced in the order the deliverables arrived in, because no
+    product of a run ranks another; the camera rides the run's own record."""
     from trid3nt_server.render.layer_uri_emit import publish_input_layer
     from trid3nt_server.render.pipeline_emitter import (
         current_emitter,
@@ -132,7 +127,7 @@ async def publish(*, run_id: str, engine: str, name: str,
             layers.append(await asyncio.to_thread(
                 _vector_layer, item, run_id=run_id, engine=engine, name=name))
     emitter = current_emitter()
-    for layer in layers[1:]:
+    for layer in layers:
         await publish_input_layer(emitter, layer, role="primary")
     for item in items:
         if isinstance(item.product, Chart):
@@ -141,13 +136,7 @@ async def publish(*, run_id: str, engine: str, name: str,
     if charts:
         await persist_run_products(run_id, charts=charts, metrics=None)
     record_run_outputs(layers)
-    primary = layers[0] if layers else None
-    if emitter is not None and primary is not None and primary.bbox:
-        try:
-            await emitter.emit_map_command("zoom-to", {"bbox": list(primary.bbox)})
-        except Exception as exc:  # noqa: BLE001 - the camera never fails a publish
-            logger.warning("zoom-to failed: %s", exc)
-    return Published(primary=primary, layers=tuple(layers), charts=charts)
+    return Published(layers=tuple(layers), charts=charts)
 
 
 def record_run_outputs(layers: Sequence[LayerURI]) -> None:

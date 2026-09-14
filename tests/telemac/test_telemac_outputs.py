@@ -358,10 +358,10 @@ def test_publish_outputs_reads_once_publishes_each_and_answers(monkeypatch, solv
 
     async def _publish(**kwargs):
         seen.update(kwargs)
-        return Published(primary=LayerURI(
+        return Published(layers=(LayerURI(
             layer_id="L", name="Peak dye concentration (reach)",
             layer_type="raster", uri="s3://runs/RID/dye_concentration.tif",
-            quantity="dye_concentration"))
+            quantity="dye_concentration"),))
 
     monkeypatch.setattr(door, "publish", _publish)
     run = {**solved.run, "module": "telemac2d"}
@@ -392,7 +392,9 @@ def test_publish_outputs_reads_once_publishes_each_and_answers(monkeypatch, solv
                              "reach_m": pytest.approx(result.answer["reach_m"]),
                              "edge_m": 7.5}
     assert result.answer["reach_m"] > 0.0
-    assert result.layer_id == "L" and result.quantity == "dye_concentration"
+    # The return is the run's own record, not one of the layers it published.
+    assert result.layer_id == "telemac-RID" and result.quantity is None
+    assert result.uri.endswith("/RID/r2d.slf")
 
 
 def test_the_answer_rides_the_layer_and_the_skeleton_reads_it_there():
@@ -538,10 +540,10 @@ def test_an_answer_over_a_variable_the_run_never_wrote_states_its_reason(
     from trid3nt_server.workflows.telemac import workflow as door
 
     async def _publish(**kwargs):
-        return Published(primary=LayerURI(
+        return Published(layers=(LayerURI(
             layer_id="L", name="Peak dye concentration (reach)",
             layer_type="raster", uri="s3://runs/RID/dye_concentration.tif",
-            quantity="dye_concentration"))
+            quantity="dye_concentration"),))
 
     monkeypatch.setattr(door, "publish", _publish)
     run = {**solved.run, "module": "telemac2d"}
@@ -640,9 +642,9 @@ def test_publish_outputs_rejoins_the_anchors_and_draws_the_reference_lines(
 
     async def _publish(**kwargs):
         seen.update(kwargs)
-        return Published(primary=LayerURI(
+        return Published(layers=(LayerURI(
             layer_id="L", name="Dissolved oxygen (reach)", layer_type="raster",
-            uri="s3://runs/RID/dissolved_oxygen.tif", quantity="dissolved_oxygen"))
+            uri="s3://runs/RID/dissolved_oxygen.tif", quantity="dissolved_oxygen"),))
 
     def _reference(read, reads, params):
         assert params["do_standard_mgl"] == 5.0
@@ -926,9 +928,9 @@ def test_a_chart_s_reference_may_be_another_primitive_drawn_as_a_line(
 
     async def _publish(**kwargs):
         seen.update(kwargs)
-        return Published(primary=LayerURI(
+        return Published(layers=(LayerURI(
             layer_id="L", name="Water temperature (basin)", layer_type="raster",
-            uri="s3://runs/RID/water_temperature.tif", quantity="water_temperature"))
+            uri="s3://runs/RID/water_temperature.tif", quantity="water_temperature"),))
 
     monkeypatch.setattr(door, "publish", _publish)
     run = {**basin.run, "module": "telemac3d"}

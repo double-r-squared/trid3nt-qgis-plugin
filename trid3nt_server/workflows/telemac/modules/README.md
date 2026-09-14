@@ -49,8 +49,9 @@ DERIVES over the variables its result carries (ARTEMIS's `KD`) is published or
 read but never asked of the engine. The `TRACER` row is the run's tracers - one
 per NAMES OF TRACERS entry, read by position as `T<n>` - and a module that
 appends tracers to its carrier states those rows and their styles itself
-through one hook (WAQTEL by process, GAIA per suspended class); the carrier
-never counts them.
+through one hook (WAQTEL by process, GAIA per suspended class), over rows it
+declares in APPENDABLE so what it may append is readable without a body to run
+the hook against; the carrier never counts them.
 
 A wrapper's READS are the PRIMITIVE SET over that output, named from the
 module's own variables: `field(name, t)`, `series(name, at)`,
@@ -67,9 +68,12 @@ still counts (`within_m=`).
 
 A template lists only the reads it PLACES - a series at a point the user gives,
 a profile along a line, the track a module writes - with how each is published
-(`.layer()`, `.chart(reference=)`, `.animate()`, `.station()`) and a caption for
-each; it states no style, no printout list and no caption for a variable. It
-names its answer as measures of the primitives, each held against a sheet value
+(`.chart(reference=)`, `.station()`, and `.layer()` for the track alone) and a
+caption for each; it states no style, no printout list and no caption for a
+variable, and it paints nothing over the domain: a field, an envelope, the
+extent or the mesh published as a layer or an animation is what the module's own
+table already states, and the grammar lint refuses it. It names its answer
+as measures of the primitives, each held against a sheet value
 where a verdict needs one (`.over(P.x)` the ratio, `.below(P.x)` the
 comparison) and against the lever a question needs where the run may never have
 been asked it (`.needs(P.x, without=...)`). A chart's reference is a callable

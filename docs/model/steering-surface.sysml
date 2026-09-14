@@ -1026,6 +1026,8 @@ package SteeringSurface {
         "tests/telemac/test_telemac_module_outputs.py::test_a_coupled_module_states_the_tracers_it_appends_and_its_own_table";
     verify requirement OutputsAreTheModules by
         "tests/telemac/test_telemac_module_outputs.py::test_the_card_carries_every_variable_each_deck_writes";
+    verify requirement OutputsAreTheModules by
+        "tests/telemac/test_telemac_module_outputs.py::test_the_published_order_is_the_table_order_across_host_and_coupled";
 
     satisfy requirement InputsAreTypedPrimitives by point;
     satisfy requirement InputsAreTypedPrimitives by canvasGate;

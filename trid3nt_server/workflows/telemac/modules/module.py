@@ -47,6 +47,7 @@ UNSET = _Unset()
 _RESERVED = frozenset((
     "MODULE", "MODULE_INPUT", "COMPOSITES", "READS", "ASSERTED",
     "MODULE_OUTPUT", "LISTING", "DERIVED", "PRINTOUTS", "TRACER", "APPENDS",
+    "APPENDABLE",
     "RESULT_FILE", "composites", "reads", "appends", "printouts", "slot",
 ))
 
@@ -309,6 +310,10 @@ class Module(metaclass=_Body):
     #: What this module APPENDS to its carrier's tracers, ``(body) -> rows``;
     #: ``None`` where it appends none.
     APPENDS: Callable[[Any], Any] | None = None
+    #: The rows that hook can append and WHEN, as ``(condition, rows)`` the hook
+    #: itself reads - so what a module may put on its carrier is enumerable
+    #: without a body to run it against.
+    APPENDABLE: tuple[tuple[str, tuple[Output, ...]], ...] = ()
     #: The result file the primitives read; empty reads the run's own.
     RESULT_FILE: str = ""
     #: What THIS body asserts - empty on a wrapper, by law.
