@@ -240,10 +240,13 @@ CAPTIONS = {"E": "bed evolution", "B": "bed elevation"}
 #: The run's ANSWER. The two volumes are the engine's OWN report lines, summed
 #: over the maintenance passes it printed; the two bed changes are the evolution
 #: field read inside each area, so the cut is the dredged area's minimum and the
-#: heap is the spoil ground's maximum.
+#: heap is the spoil ground's maximum. A pass that does not finish inside the
+#: run's clock prints no volume at all, so the report states why the two volumes
+#: read as they do rather than leaving a reader with an unexplained blank.
 ANSWER = {
     "dug_volume_m3": mass_balance(module="gaia").measure("dug_volume_m3"),
     "dumped_volume_m3": mass_balance(module="gaia").measure("dumped_volume_m3"),
+    "dredge_report": mass_balance(module="gaia").measure("dredge_report"),
     "dredged_bed_change_m": field("E", t=-1, module="gaia",
                                   over=DATA.dredge_area).measure("min"),
     "dumped_bed_change_m": field("E", t=-1, module="gaia",

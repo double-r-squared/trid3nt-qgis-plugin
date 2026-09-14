@@ -47,17 +47,29 @@ _NESTOR_FIELDS: tuple[tuple[str, str], ...] = (
     (r"relocated volume\s*\[m\*\*3\]", "relocated_volume_m3"),
     (r"removed volume\s*\[m\*\*3\]", "removed_volume_m3"),
 )
+#: NESTOR marks every line it writes, from its own initialisation banner onward,
+#: so the marker's absence means the deck armed no dredge at all.
+_NESTOR_MARK = "?>"
+#: An action prints this when it ACTIVATES and its volume line only when a pass
+#: FINISHES, so the two together say whether a pass ran and whether it completed.
+#: The activation line carries the action type the deck named it by.
+_NESTOR_START = re.compile(r"\?>\s*(?:re)?start action\s*:\s*(\S+)")
+#: The instant an activation happened, on the bed's own clock. The nominal start
+#: prints under the same words behind ``nominal``, which the space class excludes.
+_NESTOR_START_TIME = re.compile(r"\?>\s+start time\s*\[s\]\s*:\s*([-+\d.EeDd]+)")
 
 
 def nestor_volumes(listing_text: str) -> dict[str, Any]:
     """What the dredge moved, off the lines NESTOR printed into the listing.
 
     A figure the run never printed is absent; each is the sum over the actions
-    and the maintenance periods that reported it."""
+    and the maintenance periods that reported it. ``dredge_report`` states what
+    the engine's own lines say the dredge did, so a run that moved the bed
+    without printing a volume says why rather than answering nothing."""
+    text = listing_text or ""
     out: dict[str, Any] = {}
     for pattern, name in _NESTOR_FIELDS:
-        found = re.findall(r"\?>\s*" + pattern + r"\s*:\s*([-+\d.EeDd]+)",
-                           listing_text or "")
+        found = re.findall(r"\?>\s*" + pattern + r"\s*:\s*([-+\d.EeDd]+)", text)
         values = []
         for raw in found:
             try:
@@ -66,7 +78,28 @@ def nestor_volumes(listing_text: str) -> dict[str, Any]:
                 continue
         if values:
             out[name] = round(sum(values), 6) + 0.0
+    if _NESTOR_MARK not in text:
+        return out
+    out["dredge_report"] = _dredge_report(text, finished=bool(out))
     return out
+
+
+def _dredge_report(listing_text: str, *, finished: bool) -> str:
+    """Why the dredge's volumes read as they do, in the engine's own terms."""
+    if finished:
+        return ("the volumes are the engine's own report lines, summed over the "
+                "passes that finished inside the run's clock")
+    started = _NESTOR_START.findall(listing_text)
+    if not started:
+        return ("no dredging pass began inside the run's clock, so the engine "
+                "printed no volume: the schedule starts later than the run "
+                "reaches on the bed's clock")
+    when = [float(raw.replace("D", "E").replace("d", "e"))
+            for raw in _NESTOR_START_TIME.findall(listing_text)]
+    at = f" at {when[-1]:g} s" if when else ""
+    return (f"a {started[-1]} pass started{at} and had not cut to grade when the "
+            "run's clock ended; the engine prints a volume only for a pass that "
+            "finishes, so the bed moved with no volume to state it")
 
 
 #: How LECDON asks for a keyword it will not start without. The engine names the

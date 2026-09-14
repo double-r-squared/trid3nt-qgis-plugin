@@ -613,6 +613,8 @@ def _dredge_field(source: Any, name: str, *, utm_epsg: int,
 
     An area holding no mesh node is refused: nothing in it could be moved."""
     import numpy as np
+    from shapely import contains_xy
+    from shapely.geometry import Polygon
 
     geometry = to_utm(source, utm_epsg)
     parts = sorted(getattr(geometry, "geoms", [geometry]),
@@ -622,12 +624,14 @@ def _dredge_field(source: Any, name: str, *, utm_epsg: int,
             f"the {name} area carries no polygon, so it bounds nothing to work "
             "on. Draw the area on the canvas or supply a polygon layer.",
             error_code="TELEMAC_DREDGE_AREA_EMPTY")
+    # The engine reads a field as ONE closed ring, so both the file and the guard
+    # take that ring: a bent or rotated area whose bounding box holds nodes its
+    # interior does not would otherwise pass here and find nothing at the solve.
+    worked = Polygon(parts[0].exterior)
     ring = [[round(float(x), 3), round(float(y), 3)]
-            for x, y in parts[0].exterior.coords]
+            for x, y in worked.exterior.coords]
     xy = np.asarray(node_xy, dtype=float)
-    minx, miny, maxx, maxy = parts[0].bounds
-    inside = ((xy[:, 0] >= minx) & (xy[:, 0] <= maxx)
-              & (xy[:, 1] >= miny) & (xy[:, 1] <= maxy))
+    inside = np.asarray(contains_xy(worked, xy[:, 0], xy[:, 1]))
     if not bool(inside.any()):
         raise TelemacError(
             f"the {name} area holds no node of the mesh this run solves on, so "

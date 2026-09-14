@@ -195,7 +195,78 @@ def test_the_volumes_are_read_off_the_engine_s_own_report_lines():
         " ?>        dumped vol  [m^3]  :    700.0",
         " ?>   relocated volume [m**3] :    100.0",
     ))
-    assert nestor_volumes(listing) == {"dug_volume_m3": 2000.75,
-                                       "dumped_volume_m3": 1800.0,
-                                       "relocated_volume_m3": 100.0}
+    read = nestor_volumes(listing)
+    assert {k: v for k, v in read.items() if k != "dredge_report"} == {
+        "dug_volume_m3": 2000.75, "dumped_volume_m3": 1800.0,
+        "relocated_volume_m3": 100.0}
+    assert "summed over the passes that finished" in read["dredge_report"]
     assert nestor_volumes("") == {}
+
+
+#: The engine's own activation line, verbatim: it prints this when an action
+#: STARTS and its volume line only when a pass finishes.
+_STARTED = "\n".join((
+    " ?>          action number    :   1",
+    " ?>          start action     : Dig_by_criterion",
+    " ?>  nominal start time  [s]  :    82800.000000000000",
+    " ?>          start time  [s]  :    82800.000000000000",
+    " ?>          FieldDig         : 101_dredge_area",
+))
+
+
+def test_a_pass_that_did_not_finish_is_stated_rather_than_left_null():
+    """TimeEnd stops the next pass, not the one cutting, so a pass that has not
+    reached grade when the clock runs out prints no volume at all."""
+    from trid3nt_server.workflows.telemac.modules.listing import nestor_volumes
+
+    read = nestor_volumes(_STARTED)
+    assert "dug_volume_m3" not in read and "dumped_volume_m3" not in read
+    assert read["dredge_report"] == (
+        "a Dig_by_criterion pass started at 82800 s and had not cut to grade "
+        "when the run's clock ended; the engine prints a volume only for a pass "
+        "that finishes, so the bed moved with no volume to state it")
+
+
+def test_a_dredge_that_never_began_is_told_apart_from_one_that_did_not_finish():
+    """NESTOR marks its initialisation banner too, so a run that armed a dredge
+    whose schedule the clock never reached is not read as a run without one."""
+    from trid3nt_server.workflows.telemac.modules.listing import nestor_volumes
+
+    banner = " ?>       Each info line is marked with the Lable"
+    assert nestor_volumes(banner)["dredge_report"].startswith(
+        "no dredging pass began inside the run's clock")
+
+
+#: An L in lon/lat: the notch is the quadrant its bounding box holds and its
+#: interior does not.
+_L_SHAPE = {"type": "Polygon", "coordinates": [[
+    [-124.10, 40.50], [-124.09, 40.50], [-124.09, 40.505], [-124.095, 40.505],
+    [-124.095, 40.51], [-124.10, 40.51], [-124.10, 40.50]]]}
+#: A point in the notch: inside the box, outside the L.
+_IN_THE_NOTCH = (-124.0915, 40.5085)
+#: A point in the L's own arm.
+_IN_THE_ARM = (-124.0975, 40.5025)
+
+
+def _nodes_at(*lonlat: tuple[float, float]):
+    from shapely.geometry import mapping, Point as _Point
+
+    from trid3nt_server.workflows.telemac.authoring.assembler import to_utm
+
+    return [list(to_utm(mapping(_Point(lon, lat)), 32610).coords)[0]
+            for lon, lat in lonlat]
+
+
+def test_a_dredge_area_is_guarded_by_its_polygon_not_its_bounding_box():
+    """The engine works the ring, so an area whose box holds nodes its interior
+    does not has nothing in it to move and refuses before the solve."""
+    from trid3nt_server.workflows.telemac.authoring.assembler import _dredge_field
+    from trid3nt_server.workflows.telemac.errors import TelemacError
+
+    with pytest.raises(TelemacError, match="holds no node") as refused:
+        _dredge_field(_L_SHAPE, "dredge_area", utm_epsg=32610,
+                      node_xy=_nodes_at(_IN_THE_NOTCH))
+    assert refused.value.error_code == "TELEMAC_DREDGE_AREA_OFF_MESH"
+    field = _dredge_field(_L_SHAPE, "dredge_area", utm_epsg=32610,
+                          node_xy=_nodes_at(_IN_THE_NOTCH, _IN_THE_ARM))
+    assert field["label"] == "dredge_area" and len(field["vertices"]) == 7
