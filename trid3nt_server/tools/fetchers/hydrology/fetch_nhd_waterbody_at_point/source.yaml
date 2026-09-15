@@ -1,0 +1,169 @@
+# ONE waterbody from one seed point: the NHD waterbody service the bbox fetcher
+# already reaches, queried over a small envelope, and the pick - the body the seed
+# stands in, else the nearest inside the stated distance - made at parse. The two
+# endpoints are the same dataset at two resolutions, so they are a mirror chain.
+schema_version: v1
+
+name: fetch_nhd_waterbody_at_point
+source_class: nhd_waterbody_at_point
+error_prefix: NHD_WATERBODY
+input_error_suffix: INPUT_INVALID
+empty_error_suffix: NO_WATERBODY
+shape: vector-fgb
+supports_global_query: false
+
+endpoints:
+  data:
+    url: "https://hydro.nationalmap.gov/arcgis/rest/services/NHDPlus_HR/MapServer/9/query"
+    # The whole row is asked for because the two mirrors name their columns in
+    # different case; the parse reads them case-insensitively. The generalization
+    # tolerance is the shoreline detail a mesh needs rather than every vertex.
+    query:
+      where: "1=1"
+      geometryType: "esriGeometryEnvelope"
+      inSR: "4326"
+      outSR: "4326"
+      spatialRel: "esriSpatialRelIntersects"
+      outFields: "*"
+      returnGeometry: "true"
+      maxAllowableOffset: "0.00005"
+      resultRecordCount: "100"
+      f: "geojson"
+  medium:
+    url: "https://hydro.nationalmap.gov/arcgis/rest/services/nhd/MapServer/12/query"
+    query:
+      where: "1=1"
+      geometryType: "esriGeometryEnvelope"
+      inSR: "4326"
+      outSR: "4326"
+      spatialRel: "esriSpatialRelIntersects"
+      outFields: "*"
+      returnGeometry: "true"
+      maxAllowableOffset: "0.00005"
+      resultRecordCount: "100"
+      f: "geojson"
+endpoint_fallback: [medium]
+
+auth:
+  mode: none
+  user_agent: trid3nt_default
+
+params:
+  seed_point: {type: point, required: true}
+  search_distance_km: {type: float, default: 2.0, min: 0.0, max: 25.0}
+
+ingest:
+  http_source:
+    # The two mirrors are the same dataset at two resolutions: first success wins.
+    endpoint_fallback: true
+  properties:
+    - part
+    - gnis_name
+    - gnis_id
+    - permanent_identifier
+    - ftype
+    - fcode
+    - reachcode
+    - areasqkm
+    - seed_distance_km
+
+hooks:
+  build_request: nhd_waterbody_at_point.build_request
+  parse_response: nhd_waterbody_at_point.parse_response
+
+normalize:
+  crs: "EPSG:4326"
+  units: null
+
+output:
+  layer_type: vector
+  ext: fgb
+  role: primary
+  display_name: "NHD waterbody"
+  bbox_from_features:
+    pad: 0.002
+  style:
+    kind: reference
+    geometry: polygon
+
+cache:
+  ttl_class: static-30d
+payload_estimate:
+  model: per_feature
+  kb_per_feature: 120.0
+  features_per_sq_deg: 1.0
+  floor_mb: 0.05
+  ceil_mb: 5.0
+
+caveats:
+  - "ONE waterbody comes back, never a set: the body the seed stands IN, else the nearest one whose edge is within search_distance_km, else a refusal naming the nearest body and how far away it is - the query looks three times search_distance_km so that refusal can say what was there"
+  - "a seed inside several nested outlines takes the SMALLEST containing body, which is the one a person pointing at that spot means"
+  - "US and territories only (USGS NHD); the high-resolution service is primary and the medium-resolution service is its same-data mirror"
+  - "open water only - lakes, ponds, reservoirs, playas, estuaries; a vegetated wetland is fetch_nwi_wetlands and a river's mapped surface is fetch_river_reach"
+  - "the outline is generalized to about 5 m, which is shoreline detail a mesh can carry rather than every surveyed vertex"
+
+docstring: |-
+  Fetch ONE NHD WATERBODY POLYGON from one seed point -> a lake, pond or reservoir as a model domain.
+
+  What it does:
+      Queries the USGS NHD waterbody service around the seed and returns the ONE
+      body that seed names: the polygon the point falls inside, or - when it
+      falls on land - the nearest waterbody whose edge lies within
+      ``search_distance_km``. Beyond that distance it REFUSES by name, saying
+      which body was nearest and how far it was, rather than handing back a lake
+      the user did not mean. One row comes back, tagged ``part="waterbody"``,
+      carrying the body's GNIS name and id.
+
+  When to use:
+      - A lake, pond, reservoir or impoundment question needs a DOMAIN: hand the
+        polygon to ``build_mesh(extent=...)``. A closed body has no boundary
+        runs, and none are returned.
+      - The user names or points at a water body - "model Lake Mead", "the pond
+        behind the dam here", "wind setup on this reservoir". Geocode the name
+        with ``geocode_location`` and seed this with the point.
+      - You want the body's identity - its GNIS name and id - not every polygon
+        in a box.
+
+  When NOT to use:
+      - DO NOT use for a stretch of RIVER - that is ``fetch_river_reach``.
+      - DO NOT use for a catchment - that is ``fetch_watershed``.
+      - DO NOT use to map EVERY waterbody in an area - that is
+        ``fetch_nhd_waterbodies``, which takes a bbox and returns the set.
+      - DO NOT use for vegetated wetlands (``fetch_nwi_wetlands``), for global
+        surface water (``fetch_jrc_global_surface_water``), or outside the US.
+
+  Parameters:
+      seed_point: ``(lon, lat)`` in EPSG:4326, on the water or beside it.
+          Example, Lake Mead off Boulder Beach, NV: ``(-114.80, 36.06)``.
+      search_distance_km: how far from a seed on LAND a waterbody may be and
+          still be the one meant, default ``2.0``, range ``[0, 25]``. ``0``
+          demands the seed be inside the body.
+
+  Returns:
+      ``LayerURI`` for a FlatGeobuf in EPSG:4326 carrying one polygon with
+      ``part``, ``gnis_name`` (null for many small ponds), ``gnis_id``,
+      ``permanent_identifier``, ``ftype`` (390 LakePond, 436 Reservoir, 361
+      Playa, 466 SwampMarsh, 493 Estuary, 378 IceMass), ``fcode``,
+      ``reachcode``, ``areasqkm`` (the source's own area) and
+      ``seed_distance_km`` (0.0 when the seed is inside it).
+      ``layer_type="vector"``, ``role="primary"``.
+
+  Rendering: a VECTOR layer renders INLINE on the map automatically.
+
+  Cross-tool dependencies:
+      - Upstream: ``geocode_location`` for the seed from a lake's name.
+      - Composes WITH: ``build_mesh`` (the polygon is its extent),
+        ``fetch_dem`` and the bathymetry fetchers (the bed under it).
+      - Upstream data source: USGS National Hydrography Dataset.
+
+  Cache: ``ttl_class="static-30d"``, keyed on the seed and the distance; mapped
+  shorelines are multi-year stable.
+
+  Errors:
+      - ``NHD_WATERBODY_INPUT_INVALID``: a malformed seed point.
+      - ``NHD_WATERBODY_NO_WATERBODY``: nothing mapped near the seed, or the
+        nearest body is beyond ``search_distance_km`` - the message names it and
+        its distance.
+      - ``NHD_WATERBODY_UPSTREAM_ERROR``: both NHD mirrors failed.
+
+  Tier-1 free. No API key.

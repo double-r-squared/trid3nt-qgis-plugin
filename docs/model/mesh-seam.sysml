@@ -314,8 +314,9 @@ package MeshSeam {
         doc /*
         The whole ask the box is handed: the domain to cut from, the edge band in
         metres, the numbers that make a rebuild reproduce, and the ops as data.
-        Exactly one domain is stated - a shoreline to cut the water side from, or
-        a polygon to mesh the interior of.
+        The domain is a POLYGON, and the stretches of its edge the water crosses
+        travel beside it - the edge that is left is the shoreline every sizing
+        function measures.
 
         The op names travel VERBATIM and the driver calls them verbatim: their
         kwargs bind in the box, against the real signature, because the library
@@ -328,8 +329,8 @@ package MeshSeam {
         item max_iter : Integer;
         item pre_ops : OpList;
         item post_ops : OpList;
-        item shoreline_shp : FileName [0..1];
-        item domain_geojson : FileName [0..1];
+        item domain_geojson : FileName;
+        item open_runs_geojson : FileName [0..1];
     }
 
     interface def BoxMeshArrays {

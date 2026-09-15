@@ -16,6 +16,7 @@ from .temporal import TemporalSpec, spec_from
 
 __all__ = [
     "BED",
+    "OBSERVATION",
     "RUNS",
     "CoversAOI",
     "DOMAIN",
@@ -36,6 +37,12 @@ __all__ = [
 DOMAIN = "domain"
 BED = "bed"
 RUNS = "runs"
+
+#: The slot a run OPENS ON: one measured value read off whatever reports it near
+#: this domain, in the unit the keyword reads. Engine-neutral for the same reason
+#: the three above are - somebody measured something somewhere at some time - and
+#: the value it yields is reachable as ``Ref("<row>.value")``.
+OBSERVATION = "observation"
 
 
 # A ROW NAMES ITS PRODUCER; RETRIEVAL NEVER PICKS ONE. What a run stands on is
@@ -216,6 +223,11 @@ class DataDecl(Row):
     #: What the sheet says when a context row came back empty. Stated by the
     #: template in its own words about what is not there.
     absent_note: str = ""
+    #: What this slot's ingestion is told about the value it is handed - the
+    #: point a nearest-site query ranks against, the unit the keyword reads.
+    #: Declared on the row because only the row knows them; a late-bound read
+    #: here is bound before the ingestion runs, like a producer's own kwargs.
+    coercion: Mapping[str, Any] = field(default_factory=lambda: MappingProxyType({}))
 
     _row_attr = "name"
     _ref_type = DataRef
@@ -268,6 +280,10 @@ class DataDecl(Row):
         """This slot's declared type on the generated tool's signature.
         Always a string: the declared shape rides along as :class:`SuppliedGeometry`
         metadata rather than narrowing the type."""
+        if self.role == OBSERVATION:
+            # A reading is a record to read it off, or the number itself: a user
+            # who knows what the water opens at states it and it stands.
+            return str | float | None
         if self.role == BED:
             # A bed is a surface, a survey, OR a depth in metres: a schema that
             # advertised only a layer name would refuse the pond the user can
@@ -297,6 +313,14 @@ class DataDecl(Row):
                     "depth in metres below the free surface"
                     + ("; unfilled, the template's own producer supplies it."
                        if self.producer is not None else "."))
+        if self.role == OBSERVATION:
+            return (f"{self.coercion.get('measures') or 'the value'} this run "
+                    "opens on: a layer of sites that report it, or the number "
+                    "itself"
+                    + (f" in {self.coercion['to_units']}"
+                       if self.coercion.get("to_units") else "")
+                    + ("; unfilled, the template's own producer looks for one."
+                       if self.producer is not None else "."))
         shape = f"a {self.geometry} layer" if self.geometry else "a layer"
         tail = ("absent is legal and the run reports it" if self.is_optional
                 else "required - the template names no source for it")
@@ -306,6 +330,10 @@ class DataDecl(Row):
         """Refuse a supplied artifact whose CLASS is not the shape this slot declared.
 
         Suffix-deep and no deeper; an unclassifiable artifact passes."""
+        if self.role == OBSERVATION:
+            # A reading arrives as a record OR as the number itself, and a
+            # number has no artifact class to judge.
+            return
         if self.role == BED:
             # A bed takes every class a survey arrives in EXCEPT a mesh: a
             # solved domain is not an elevation source, and adopting one would
@@ -388,6 +416,20 @@ class DataDecl(Row):
         the user's layer, or the domain producer that measured the edge."""
         row = self if producer is None else self(producer)
         return replace(row, role=RUNS, geometry="polyline", is_optional=True)
+
+    def observation(self, producer: Producer | None = None, *, near: Any = None,
+                    units: Any = None, measures: str = "this value",
+                    opens: str = "", value_field: str = "value") -> "DataDecl":
+        """ONE MEASURED VALUE this run opens on, in the unit the keyword reads.
+
+        ``near`` is the point the nearest reporting site is chosen against,
+        ``value_field`` the property the source reports it under, ``measures``
+        what the row is looking for and ``opens`` what the run journal says it
+        opened on; a number supplied here stands over any record."""
+        row = self if producer is None else self(producer)
+        return replace(row, role=OBSERVATION, coercion=MappingProxyType(
+            {"near": near, "to_units": units, "measures": measures,
+             "opens": opens, "field": value_field}))
 
     def bed(self, producer: Producer | None = None) -> "DataDecl":
         """THE BED: what every node of the domain carries for elevation.

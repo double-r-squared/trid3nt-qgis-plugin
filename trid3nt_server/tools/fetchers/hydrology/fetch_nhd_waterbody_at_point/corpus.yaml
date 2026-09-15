@@ -1,0 +1,9 @@
+fetch_nhd_waterbody_at_point:
+- get me this lake as a model domain
+- the pond outline at this point
+- which waterbody is at this location and what is it called
+- reservoir polygon to solve over, from a point on it
+- give me Lake Mead's outline so I can mesh it
+- the lake boundary nearest this spot
+- one waterbody polygon from a seed point
+- the outline of the pond behind this dam

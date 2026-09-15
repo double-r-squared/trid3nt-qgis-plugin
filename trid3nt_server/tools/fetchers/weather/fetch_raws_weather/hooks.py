@@ -1,8 +1,9 @@
 """raws_weather hooks: Iowa Mesonet RAWS fire-weather stations.
 
-PHASE R discovers stations across every state overlapping the bbox and merges them, with
-the resolved date window, into params pre-cache-key, so a now-relative default window
-still enters the cache key."""
+PHASE R discovers stations across every state overlapping the DISCOVERY box - the
+request bbox grown by search_radius_km - and merges them, with the resolved date
+window, into params pre-cache-key, so a now-relative default window still enters the
+cache key."""
 
 # The MAIN FETCH is a no-op: the build returns no plan and the parse synthesizes one
 # feature per resolved station. PHASE E is the per-station-per-day observation matrix,
@@ -13,6 +14,8 @@ still enters the cache key."""
 from __future__ import annotations
 
 import json
+import logging
+import math
 from datetime import date as _date
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -21,6 +24,8 @@ from trid3nt_contracts.source_spec import SourceSpec
 
 from ..._router import hooks as _hooks
 from ..._router.errors import router_empty_error, router_input_error
+
+logger = logging.getLogger(__name__)
 
 __all__ = ["resolve_build", "resolve_parse", "build_request", "parse_response", "enrich_plan", "enrich_merge"]
 
@@ -110,14 +115,40 @@ def _overlaps(bbox: tuple[float, ...], sb: tuple[float, float, float, float]) ->
     return not (e1 < w2 or w1 > e2 or n1 < s2 or s1 > n2)
 
 
+def _discovery_box(params: dict[str, Any]) -> tuple[float, float, float, float]:
+    """The box stations are LOOKED FOR in: the request bbox grown by the radius.
+
+    RAWS are sited on ridges and in clearings for fire weather, tens of kilometres
+    from the water or the town the question is about, so a box the size of the area
+    asked about routinely holds no station at all."""
+    west, south, east, north = (float(v) for v in params["bbox"])
+    radius = float(params.get("search_radius_km") or 0.0)
+    pad = radius / 111.0
+    pad_lon = pad / max(0.2, math.cos(math.radians(0.5 * (south + north))))
+    return (west - pad_lon, south - pad, east + pad_lon, north + pad)
+
+
+def _km_from_bbox(bbox: tuple[float, ...], lon: float, lat: float) -> float:
+    """Kilometres from the requested bbox to a station, zero for one inside it.
+
+    The nearest stations are the ones the question is about, so this orders the
+    candidates before the station cap decides which of them are fetched."""
+    west, south, east, north = (float(v) for v in bbox)
+    d_lon = max(west - lon, 0.0, lon - east)
+    d_lat = max(south - lat, 0.0, lat - north)
+    scale = math.cos(math.radians(0.5 * (south + north)))
+    return math.hypot(d_lon * 111.0 * scale, d_lat * 111.0)
+
+
 
 
 @_hooks.register_hook("raws_weather.resolve_build")
 def resolve_build(spec: SourceSpec, params: dict[str, Any]) -> list["_hooks.RequestPlan"]:
-    """Validate the window, then GET the per-state DCP GeoJSON for each overlapping state."""
+    """Validate the window, then GET the per-state DCP GeoJSON for each state the
+    DISCOVERY box overlaps."""
     sc = spec.error_code_prefix
     _resolve_dates(sc, params)  # validate pre-network
-    bbox = tuple(float(v) for v in params["bbox"])
+    bbox = _discovery_box(params)
     plans: list[_hooks.RequestPlan] = []
     for state in _IEM_DCP_STATES:
         sb = _STATE_BBOX.get(state)
@@ -126,8 +157,11 @@ def resolve_build(spec: SourceSpec, params: dict[str, Any]) -> list["_hooks.Requ
     if not plans:
         raise router_empty_error(
             sc,
-            f"No IEM-archived RAWS stations found inside bbox={list(params['bbox'])}; "
-            f"RAWS coverage is heaviest in the western US fire belt",
+            f"No IEM-archived RAWS stations within "
+            f"{float(params.get('search_radius_km') or 0.0):g} km of "
+            f"bbox={list(params['bbox'])}; RAWS coverage is heaviest in the "
+            "western US fire belt - widen search_radius_km or use "
+            "fetch_asos_metar",
             spec.empty_error_suffix,
         )
     return plans
@@ -137,12 +171,13 @@ def resolve_build(spec: SourceSpec, params: dict[str, Any]) -> list["_hooks.Requ
 def resolve_parse(spec: SourceSpec, params: dict[str, Any], bodies: list[bytes]) -> dict[str, Any]:
     """Keep RAWS-named stations in the bbox; merge stations + resolved dates."""
     sc = spec.error_code_prefix
-    bbox = tuple(float(v) for v in params["bbox"])
-    west, south, east, north = bbox
+    asked = tuple(float(v) for v in params["bbox"])
+    west, south, east, north = _discovery_box(params)
     # bodies arrive in resolve_build's per-overlapping-state order, so the state
     # each station's obhistory network= belongs to is the body's owning state.
     overlap_states = [s for s in _IEM_DCP_STATES
-                      if _STATE_BBOX.get(s) is not None and _overlaps(bbox, _STATE_BBOX[s])]
+                      if _STATE_BBOX.get(s) is not None
+                      and _overlaps(_discovery_box(params), _STATE_BBOX[s])]
     stations: list[dict[str, Any]] = []
     seen: set[str] = set()
     for state, raw in zip(overlap_states, bodies):
@@ -168,16 +203,21 @@ def resolve_parse(spec: SourceSpec, params: dict[str, Any], bodies: list[bytes])
             stations.append({
                 "sid": str(sid), "lon": lon, "lat": lat, "sname": sname,
                 "state": state, "elevation": props.get("elevation"),
+                "distance_km": round(_km_from_bbox(asked, lon, lat), 3),
             })
-            if len(stations) >= _MAX_STATIONS:
-                break
-        if len(stations) >= _MAX_STATIONS:
-            break
+    stations.sort(key=lambda st: st["distance_km"])
+    if len(stations) > _MAX_STATIONS:
+        logger.info("raws_weather: %d stations in the discovery box; keeping the "
+                    "%d nearest the requested bbox", len(stations), _MAX_STATIONS)
+        stations = stations[:_MAX_STATIONS]
     if not stations:
         raise router_empty_error(
             sc,
-            f"No IEM-archived RAWS stations found inside bbox={list(params['bbox'])}; "
-            f"RAWS coverage is heaviest in the western US fire belt",
+            f"No IEM-archived RAWS stations within "
+            f"{float(params.get('search_radius_km') or 0.0):g} km of "
+            f"bbox={list(params['bbox'])}; RAWS coverage is heaviest in the "
+            "western US fire belt - widen search_radius_km or use "
+            "fetch_asos_metar",
             spec.empty_error_suffix,
         )
     start_d, end_d = _resolve_dates(sc, params)

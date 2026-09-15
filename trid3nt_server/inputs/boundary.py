@@ -15,7 +15,8 @@ from typing import Any, Iterable, Mapping, Sequence
 from .point import Point
 from .user_input import UserInputError, lonlat_point
 
-__all__ = ["BoundaryRun", "RUN_TYPES", "WALL", "boundary_runs", "roles_from_runs"]
+__all__ = ["BoundaryRun", "OPEN_TYPES", "RATING", "RUN_TYPES", "WALL",
+           "boundary_runs", "roles_from_runs"]
 
 logger = logging.getLogger("trid3nt_server.inputs.boundary")
 
@@ -24,7 +25,16 @@ _CODE = "BOUNDARY_RUN_INVALID"
 #: What a stretch of the edge carries. ``wall`` is the default and is never
 #: prescribed: it is what the edge already is where no run names it.
 WALL = "wall"
-RUN_TYPES: tuple[str, ...] = (WALL, "inflow", "outflow", "open")
+#: The run whose level is read off a STAGE-DISCHARGE CURVE rather than held at a
+#: constant - a catchment outlet, where the level rises and falls with whatever
+#: the domain delivers to it. Spelled as the engine role it prescribes, so a run
+#: type IS the role and no vocabulary translates into another.
+RATING = "rating_curve"
+RUN_TYPES: tuple[str, ...] = (WALL, "inflow", "outflow", "open", RATING)
+#: The runs the water CROSSES. Their stretches of the edge are not shoreline: a
+#: sizing function that measured them would size the domain toward a line the
+#: water runs through rather than toward where it meets land.
+OPEN_TYPES: tuple[str, ...] = ("inflow", "outflow", "open", RATING)
 
 
 @dataclass(frozen=True, slots=True)
@@ -109,9 +119,10 @@ def _row(value: Any, label: str, code: str) -> BoundaryRun:
     props = dict(value.get("properties") or {})
     geometry = value.get("geometry")
     kind = str(props.get("type") or value.get("type") or WALL)
-    if kind not in RUN_TYPES and isinstance(geometry, Mapping):
+    if kind == "Feature":
         # A drawn feature's own GeoJSON ``type`` is "Feature"; the run's type is
         # a property on it, and an unnamed one is the wall the edge already is.
+        # Any OTHER word is a type somebody meant, and it is refused by name.
         kind = WALL
     name = props.get("name") or value.get("name")
     if isinstance(geometry, Mapping):

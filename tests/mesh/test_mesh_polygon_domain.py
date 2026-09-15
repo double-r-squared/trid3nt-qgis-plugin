@@ -1,9 +1,10 @@
-"""Offline tests for the POLYGON-DOMAIN path: a domain another tool produced.
+"""Offline tests for the ONE domain path: the closed polygon a run solves over.
 
-A recipe's extent takes a bbox or a polygon; the bbox path cuts the water side of
-the GSHHG shoreline, the polygon path meshes the interior it is handed against
-that polygon's own boundary. Both reach the same ``om.generate_mesh``, so what is
-tested is the seam: the config, the refusals each owns, and the provenance."""
+A recipe's extent is that polygon - drawn, the user's layer, or one a producer
+measured - and the mesher meshes its interior against its own boundary. THE
+SHORELINE IS THAT BOUNDARY: the sizing functions measure the polygon's edge minus
+the stretches an inflow, an outflow or an open run names. What is tested is the
+seam: the config, the refusals it owns, the provenance, and which edge is shore."""
 
 from __future__ import annotations
 
@@ -18,7 +19,6 @@ import pytest
 from trid3nt_server.workflows.mesh.meshers import MeshToolError
 from trid3nt_server.workflows.mesh.meshers import om2d as OM2D
 from trid3nt_server.workflows.mesh.meshers import reg_grid as REG_GRID
-from trid3nt_server.workflows.mesh.shoreline import Shoreline
 from trid3nt_server.workflows.mesh.tool import mesh_op, tool
 
 _AOI = (-75.80, 36.10, -75.70, 36.20)
@@ -45,9 +45,8 @@ def _stub_om2d(monkeypatch, tmp_path, *, stats=None):
     """Answer the container call with a known mesh, and record what was sent."""
     sent: dict[str, object] = {}
 
-    def fake_run_op(rundir, op, config_name, produces, *, shoreline_dir=None):
+    def fake_run_op(rundir, op, config_name, produces):
         sent["config"] = json.loads(Path(rundir, config_name).read_text())
-        sent["shoreline"] = None if shoreline_dir is None else str(shoreline_dir)
         sent["rundir"] = str(rundir)
         np.savez(Path(rundir, "om2d_mesh.npz"), points=_POINTS, cells=_CELLS,
                  pfix=np.empty((0, 2)))
@@ -63,28 +62,15 @@ def _stub_om2d(monkeypatch, tmp_path, *, stats=None):
         return {"geo_slf": Path(rundir, "mesh.slf"), "cli": Path(rundir, "mesh.cli"),
                 "stats": {"nptfr": 4, "n_liquid_boundaries": 1}}
 
-    shoreline = tmp_path / "shoreline" / "GSHHS_i_L1.shp"
-    shoreline.parent.mkdir(parents=True, exist_ok=True)
-    shoreline.write_bytes(b"shp")
-    monkeypatch.setenv("TRID3NT_GSHHG_SHP", str(shoreline))
     monkeypatch.setenv("TRID3NT_RUNS_DIR", str(tmp_path))
     monkeypatch.setattr(OM2D, "_run_op", fake_run_op)
-    # WHICH shoreline serves a box extent is the ladder's own question, tested
-    # where the ladder is; here the rung is pinned so the two paths differ in the
-    # extent alone.
-    monkeypatch.setattr(
-        OM2D, "resolve_shoreline",
-        lambda bbox, resolution_m, rundir: Shoreline(
-            path=shoreline, rung="gshhg GSHHS_i_L1.shp",
-            note="shoreline ladder: pinned for this test"))
     monkeypatch.setattr(
         "trid3nt_server.workflows.mesh.shared.selafin_cli.write_telemac_pair",
         fake_pair)
     return sent
 
 
-def test_the_extent_param_takes_a_box_or_a_polygon():
-    assert _recipe(extent=_AOI).extent == _AOI
+def test_the_extent_param_takes_the_polygon_however_it_was_written():
     for supplied in (json.dumps(_BASIN), _BASIN):
         assert _recipe(extent=supplied).extent
 
@@ -95,17 +81,45 @@ def test_the_polygon_domain_is_the_om2d_mesher_not_a_second_one():
     assert registered_meshers() == ("om2d", "reg_grid")
 
 
-def test_a_supplied_polygon_is_staged_for_the_box_with_no_shoreline(
-        monkeypatch, tmp_path):
+def test_the_polygon_is_staged_and_nothing_else_is_mounted(monkeypatch, tmp_path):
     sent = _stub_om2d(monkeypatch, tmp_path)
     OM2D.build(_recipe())
     config = sent["config"]
     assert config["domain_geojson"] == "/data/domain.geojson"
-    assert config["shoreline_shp"] is None
-    # No shoreline to mount: the box gets no /shoreline bind at all.
-    assert sent["shoreline"] is None
+    assert config["open_runs_geojson"] is None
     staged = json.loads(Path(sent["rundir"], "domain.geojson").read_text())
     assert staged["geometries"] == [_BASIN]
+
+
+def test_a_domains_own_runs_travel_as_the_edge_the_water_crosses(
+        monkeypatch, tmp_path):
+    """The shoreline is the edge MINUS the runs, so which stretches the water
+    crosses has to reach the box; a wall run prescribes nothing and stays shore."""
+    from trid3nt_server.inputs.domain import domain as ingest
+
+    sent = _stub_om2d(monkeypatch, tmp_path)
+    reach = ingest({"type": "FeatureCollection", "features": [
+        {"type": "Feature", "properties": {"part": "reach"}, "geometry": _BASIN},
+        {"type": "Feature", "properties": {"part": "inflow"},
+         "geometry": {"type": "LineString",
+                      "coordinates": [[-75.78, 36.12], [-75.78, 36.18]]}},
+        {"type": "Feature", "properties": {"part": "outflow"},
+         "geometry": {"type": "LineString",
+                      "coordinates": [[-75.72, 36.12], [-75.72, 36.18]]}}]})
+    OM2D.build(_recipe(extent=reach))
+    assert sent["config"]["open_runs_geojson"] == "/data/open_runs.geojson"
+    staged = json.loads(Path(sent["rundir"], "open_runs.geojson").read_text())
+    assert [f["properties"]["type"] for f in staged["features"]] == [
+        "inflow", "outflow"]
+
+
+def test_a_drawn_pond_states_no_run_so_its_whole_edge_is_shore(
+        monkeypatch, tmp_path):
+    from trid3nt_server.inputs.domain import domain as ingest
+
+    sent = _stub_om2d(monkeypatch, tmp_path)
+    OM2D.build(_recipe(extent=ingest(_BASIN)))
+    assert sent["config"]["open_runs_geojson"] is None
 
 
 def test_the_box_is_seeded_inside_the_polygons_own_bounds(monkeypatch, tmp_path):
@@ -151,16 +165,6 @@ def test_a_ceiling_an_op_states_is_never_overridden_by_the_multiple(
     assert sent["config"]["max_edge_length_m"] == pytest.approx(1000.0)
 
 
-def test_the_shoreline_path_is_untouched_by_the_polygon_path(monkeypatch, tmp_path):
-    sent = _stub_om2d(monkeypatch, tmp_path)
-    OM2D.build(_recipe(extent=_AOI))
-    config = sent["config"]
-    assert config["shoreline_shp"] == "/shoreline/GSHHS_i_L1.shp"
-    assert config["domain_geojson"] is None
-    assert tuple(config["bbox"]) == _AOI
-    assert sent["shoreline"].endswith("shoreline")
-
-
 def test_the_layer_a_chained_row_produced_enters_as_the_geometry_it_carries(
         monkeypatch, tmp_path):
     """The section tool returns a LAYER, and the extent takes it: read through the
@@ -188,24 +192,15 @@ def test_a_polygon_domain_can_come_from_a_file_a_tool_wrote(monkeypatch, tmp_pat
     assert sent["config"]["domain_geojson"] == "/data/domain.geojson"
 
 
-def test_the_mesh_states_that_its_domain_was_supplied_not_cut_from_a_shoreline(
+def test_the_mesh_states_the_polygon_it_was_cut_from(
         monkeypatch, tmp_path):
     _stub_om2d(monkeypatch, tmp_path)
     mesh = OM2D.build(_recipe())
     provenance = mesh.meta["artifact"]["provenance"]
-    assert provenance["domain_source"] == "supplied polygon domain (1 part(s))"
+    assert provenance["domain_source"] == "domain polygon (1 part(s))"
     assert "GSHHG" not in provenance["sizing_source"]
-    assert provenance["sizing_source"].startswith("supplied polygon domain")
+    assert provenance["sizing_source"].startswith("domain polygon")
     assert "polygon_sdf(interior)" in provenance["sizing_source"]
-
-
-def test_the_shoreline_mesh_still_names_the_shoreline_it_was_cut_from(
-        monkeypatch, tmp_path):
-    _stub_om2d(monkeypatch, tmp_path,
-               stats={"sizing_functions": ["feature_sizing_function"]})
-    mesh = OM2D.build(_recipe(extent=_AOI))
-    provenance = mesh.meta["artifact"]["provenance"]
-    assert provenance["domain_source"] == "gshhg GSHHS_i_L1.shp land polygons"
 
 
 def test_the_boundary_record_carries_the_domain_it_was_walked_on(
@@ -213,7 +208,7 @@ def test_the_boundary_record_carries_the_domain_it_was_walked_on(
     _stub_om2d(monkeypatch, tmp_path)
     mesh = OM2D.build(_recipe())
     info = mesh.meta["artifact"]["open_boundary_info"]
-    assert info["source"] == "supplied polygon domain (1 part(s))"
+    assert info["source"] == "domain polygon (1 part(s))"
 
 
 def test_an_extent_carrying_no_polygon_refuses_rather_than_widen_a_line(
@@ -341,7 +336,61 @@ def _stub_build(driver):
     build.sizing = []
     build.holes = None
     build.hole_geoms = []
-    build.shoreline = None
     build.smoothed = None
+    build.region = None
+    build.domain_rings = [ring for ring in _BASIN["coordinates"]]
+    build.shoreline = driver._EdgeShoreline(build.domain_rings, [], build.min_deg,
+                                            build.bbox)
     build.sdf = driver._PolygonDomain([shape(_BASIN)], 0.002, build.bbox)
     return build
+
+
+def test_the_shoreline_the_sizing_functions_measure_is_the_polygons_own_edge(driver):
+    """A sizing function reads four things off a shoreline; the polygon's edge
+    answers all four, so feature sizing binds on any domain, coastal or not."""
+    build = _stub_build(driver)
+    shore = build.shoreline
+    assert shore.bbox == build.bbox and shore.h0 == build.min_deg
+    assert shore.points.shape[1] == 2 and shore.points.shape[0] > 4
+    assert shore.mainland.shape[0] == shore.points.shape[0]
+    assert shore.inner.shape == (0, 2)
+    assert build.environment()["shoreline"] is shore
+
+
+def test_a_reach_with_two_open_runs_drops_those_stretches_from_the_shore(driver):
+    """The banks are shore and the two end faces are not: what the water crosses
+    is not where it meets land."""
+    rings = list(_BASIN["coordinates"])
+    inflow = [(-75.78, 36.12), (-75.78, 36.18)]
+    outflow = [(-75.72, 36.12), (-75.72, 36.18)]
+    whole = driver._EdgeShoreline(rings, [], 0.0005, (-75.78, -75.72, 36.12, 36.18))
+    cut = driver._EdgeShoreline(rings, [inflow, outflow], 0.0005,
+                                (-75.78, -75.72, 36.12, 36.18))
+    assert cut.dropped > 0
+    assert cut.points.shape[0] < whole.points.shape[0]
+    # Nothing ALONG either face survives: a face's own end is a corner the bank
+    # shares with it, and that is the only point of it that can still be shore.
+    for face in (inflow, outflow):
+        middle = np.array([0.5 * (face[0][0] + face[1][0]),
+                           0.5 * (face[0][1] + face[1][1])])
+        assert np.hypot(*(cut.points - middle).T).min() > 0.02
+
+
+def test_an_island_ring_is_shore_too(driver):
+    """Islands are land: the water meets them, so they size the mesh."""
+    lake = [_BASIN["coordinates"][0],
+            [[-75.755, 36.148], [-75.745, 36.148], [-75.745, 36.152],
+             [-75.755, 36.152], [-75.755, 36.148]]]
+    shore = driver._EdgeShoreline(lake, [], 0.0005, (-75.78, -75.72, 36.12, 36.18))
+    assert shore.inner.shape[0] > 0
+    assert shore.points.shape[0] == shore.inner.shape[0] + shore.mainland.shape[0]
+
+
+def test_a_domain_whose_whole_edge_is_crossed_refuses_by_name(driver):
+    """No shore is no domain: a sizing function would measure nothing."""
+    ring = [[[0.0, 0.0], [0.01, 0.0], [0.01, 0.01], [0.0, 0.01], [0.0, 0.0]]]
+    corners = [(0.0, 0.0), (0.01, 0.0), (0.01, 0.01), (0.0, 0.01)]
+    whole_edge = [[corners[i], corners[(i + 1) % 4]] for i in range(4)]
+    with pytest.raises(driver._Refusal) as excinfo:
+        driver._EdgeShoreline(ring, whole_edge, 0.005, (0.0, 0.01, 0.0, 0.01))
+    assert excinfo.value.document["code"] == "MESH_DOMAIN_HAS_NO_SHORELINE"

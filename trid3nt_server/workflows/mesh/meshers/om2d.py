@@ -29,7 +29,6 @@ from trid3nt_server.workflows.mesh.meshers import (
     register_mesher,
 )
 from trid3nt_server.workflows.mesh.meshers.drivers import drivers_dir
-from trid3nt_server.workflows.mesh.shoreline import resolve_shoreline
 
 logger = logging.getLogger("trid3nt_server.workflows.mesh.meshers.om2d")
 
@@ -128,7 +127,7 @@ def build(recipe: Any) -> Mesh:
     resolution_m = float(recipe.resolution_m or _DEFAULT_RESOLUTION_M)
     rundir = _rundir()
     notes: list[str] = []
-    domain = _domain(recipe.extent, rundir, resolution_m, notes)
+    domain = _domain(recipe.extent, rundir)
 
     pre = [op for op in ops if op.phase == PRE]
     post = [op for op in ops if op.phase == POST]
@@ -139,10 +138,9 @@ def build(recipe: Any) -> Mesh:
                   if op.origin == "primitives"), len(post))
     config = {
         "bbox": list(domain.bbox),
-        "shoreline_shp": (f"/shoreline/{domain.shoreline.name}"
-                          if domain.shoreline is not None else None),
-        "domain_geojson": (f"/data/{domain.polygon_name}"
-                           if domain.polygon_name is not None else None),
+        "domain_geojson": f"/data/{domain.polygon_name}",
+        "open_runs_geojson": (None if domain.open_runs_name is None
+                              else f"/data/{domain.open_runs_name}"),
         "min_edge_length_m": resolution_m,
         "max_edge_length_m": _MAX_EL_FACTOR * resolution_m,
         "seed": _SEED,
@@ -153,9 +151,7 @@ def build(recipe: Any) -> Mesh:
                      for i, op in enumerate(post[:split])],
     }
     (rundir / "om2d_config.json").write_text(json.dumps(config))
-    _run_op(rundir, "build", "om2d_config.json", "om2d_mesh.npz",
-            shoreline_dir=None if domain.shoreline is None
-            else domain.shoreline.parent)
+    _run_op(rundir, "build", "om2d_config.json", "om2d_mesh.npz")
 
     mesh, stats = _read_built(rundir, domain, resolution_m, ops)
     mesh = _apply_tail(mesh, post[split:], rundir, resolution_m, notes)
@@ -394,46 +390,61 @@ def _walk_length_m(geod: Any, walk: list[list[float]]) -> float:
 
 @dataclass(frozen=True)
 class _Domain:
-    """What the mesh is cut from: the shoreline, or a supplied polygon.
+    """The polygon the mesh is cut from, and the stretches of its edge the water
+    crosses - which are the edge that is not shoreline."""
 
-    Exactly one of ``shoreline`` and ``polygon_name`` is set."""
-
-    #: The lon/lat box the triangulator seeds inside: the extent itself on the
-    #: shoreline path, the polygon's own bounds on the other.
+    #: The lon/lat box the triangulator seeds inside: the polygon's own bounds.
     bbox: tuple[float, float, float, float]
     source: str
-    shoreline: Path | None = None
-    polygon_name: str | None = None
+    polygon_name: str
+    open_runs_name: str | None = None
 
 
-def _domain(extent: Any, rundir: Path, resolution_m: float,
-            notes: list[str]) -> _Domain:
+def _domain(extent: Any, rundir: Path) -> _Domain:
     """Resolve the recipe's extent into the domain the box cuts the mesh from."""
     if extent is None:
         raise MeshToolError(
             "MESH_EXTENT_MISSING",
-            "mesher 'om2d' cuts its domain from an extent and this recipe "
-            "declares none; give it a (min_lon, min_lat, max_lon, max_lat) box or "
-            "a polygon another tool produced.")
-    if isinstance(extent, (tuple, list)):
-        bbox = tuple(float(v) for v in extent)
-        served = resolve_shoreline(bbox, resolution_m, rundir)
-        notes.append(served.note)
-        source = f"{served.rung} land polygons"
-        return _Domain(bbox=_lonlat_bounds(bbox, source),
-                       source=source, shoreline=served.path)
-    polygons = _polygons(op_geometry(extent))
+            "mesher 'om2d' cuts its domain from a POLYGON and this recipe "
+            "declares none; give it the closed outline the equations are solved "
+            "over - drawn, the user's own layer, or one a producer measured.")
+    box = (isinstance(extent, (tuple, list)) and len(extent) == 4
+           and all(isinstance(v, (int, float)) for v in extent))
+    polygons = [] if box else _polygons(op_geometry(extent))
     if not polygons:
         raise MeshToolError(
             "MESH_DOMAIN_NOT_A_POLYGON",
             f"the extent {extent!r} carries no polygon, so there is no interior "
-            "to mesh; supply a bbox, or a polygon another tool produced.")
+            "to mesh. A BOX IS NOT A DOMAIN: the water is cut out of one before "
+            "a mesh is built - derive_water_polygon over the box and a fetched "
+            "coastline - and the polygon that leaves is what is meshed.")
     name = "domain.geojson"
     (rundir / name).write_text(json.dumps(
         {"type": "GeometryCollection", "geometries": polygons}))
-    source = f"supplied polygon domain ({len(polygons)} part(s))"
+    source = f"domain polygon ({len(polygons)} part(s))"
     return _Domain(bbox=_lonlat_bounds(_geometry_bounds(polygons), source),
-                   source=source, polygon_name=name)
+                   source=source, polygon_name=name,
+                   open_runs_name=_open_runs(extent, rundir))
+
+
+def _open_runs(extent: Any, rundir: Path) -> str | None:
+    """The faces of this domain's edge the water CROSSES, staged, or ``None``.
+
+    The shoreline is where the water meets land, so an inflow, an outflow or an
+    open run is the edge that is not shoreline and every sizing function measures
+    what is left. A domain that states no run is shore the whole way round."""
+    from trid3nt_server.inputs.boundary import OPEN_TYPES
+
+    crossed = [run for run in (getattr(extent, "runs", None) or ())
+               if run.type in OPEN_TYPES]
+    if not crossed:
+        return None
+    name = "open_runs.geojson"
+    (rundir / name).write_text(json.dumps({
+        "type": "FeatureCollection",
+        "features": [{"type": "Feature", "properties": {"type": run.type},
+                      "geometry": run.face} for run in crossed]}))
+    return name
 
 
 def _lonlat_bounds(bbox: tuple[float, ...], source: str) -> tuple[float, ...]:
@@ -495,17 +506,14 @@ def _rundir() -> Path:
     return rundir
 
 
-def _run_op(rundir: Path, op: str, config_name: str, produces: str, *,
-            shoreline_dir: Path | None = None) -> None:
+def _run_op(rundir: Path, op: str, config_name: str, produces: str) -> None:
     """One driver op in the OceanMesh2D box, or a typed refusal carrying its output."""
     image = os.environ.get("TRID3NT_MESH_IMAGE") or _MESH_IMAGE_DEFAULT
     argv = [
         "docker", "run", "--rm", "--network", "none",
-        "-v", f"{drivers_dir()}:/drivers:ro", "-v", f"{rundir}:/data"]
-    if shoreline_dir is not None:
-        argv += ["-v", f"{shoreline_dir}:/shoreline:ro"]
-    argv += ["--entrypoint", "python", image,
-             f"/drivers/{_INCONTAINER_SCRIPT}", op, f"/data/{config_name}", "/data"]
+        "-v", f"{drivers_dir()}:/drivers:ro", "-v", f"{rundir}:/data",
+        "--entrypoint", "python", image,
+        f"/drivers/{_INCONTAINER_SCRIPT}", op, f"/data/{config_name}", "/data"]
     logger.info("om2d mesher %s: %s", op, " ".join(argv))
     cp = subprocess.run(argv, capture_output=True, text=True,
                         timeout=_CONTAINER_TIMEOUT_S)

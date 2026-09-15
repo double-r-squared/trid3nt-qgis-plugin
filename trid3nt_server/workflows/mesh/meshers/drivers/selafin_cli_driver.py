@@ -124,9 +124,9 @@ def _refuse_shared_ring_nodes(contours) -> None:
         f"only {len(seen)} distinct nodes: {len(shared)} node(s) - {named}{more} "
         "- lie on more than one ring, so the domain is pinched to a point there "
         "and has no IPOBO permutation to be numbered by. It is a domain the "
-        "extent cut into pieces that touch rather than a mesh defect: cut it "
-        "from a shoreline that resolves the ask, or narrow the extent to the "
-        "water body the question is about.")
+        "domain cut into pieces that touch rather than a mesh defect: give it "
+        "an outline whose narrows the asked edge can resolve, or narrow the "
+        "domain to the water body the question is about.")
 
 
 def _boundary(x, y, ikle):

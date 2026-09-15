@@ -16,7 +16,7 @@ from .module import Module, Output
 from .outputs import PRIMITIVES, read_drogues
 
 __all__ = ["T2D", "Atmosphere", "Boundaries", "Continuation", "Friction",
-           "Hyetograph", "Infiltration", "MODULE_OUTPUT", "Oil", "Rain",
+           "Hyetograph", "Infiltration", "MODULE_OUTPUT", "Oil", "Rain", "Storm",
            "Rating", "Release", "Runoff", "TimeOrigin", "TracerNames", "Wind",
            "SOURCES_FILENAME"]
 
@@ -537,25 +537,68 @@ def _rating(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
             {RATING_FILENAME: "\n".join(lines) + "\n"})
 
 
-def Hyetograph(*, blocks: Any, until_s: Any, fortran: Any  # noqa: N802
-               ) -> Mapping[str, Any]:
-    """A real gross storm, read per timestep out of a block file."""
-    return MappingProxyType({"blocks": blocks, "until_s": until_s,
-                             "fortran": fortran})
+#: The interval a measured rainfall record is accumulated over. Every gross-rain
+#: product this run is driven by publishes hourly totals, and a storm read per
+#: timestep out of a block file is read as the total over the block it is in.
+_STORM_INTERVAL_S = 3600.0
 
 
-def _hyetograph(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
-                                                   Mapping[str, Any]]:
-    """The storm blocks -> the data file and the user Fortran that reads them.
+def Storm(*, mm_per_hr: Any, hours: Any, until_s: Any,  # noqa: N802
+          series: Any = None, tracers: Any = 0, fortran: Any = None
+          ) -> Mapping[str, Any]:
+    """The storm over the domain: a measured record, or a constant design rate.
 
-    Each block is ``[t_end_s, gross_mm]``, with a dry tail past the last instant."""
-    if not value["blocks"]:
-        # A constant design rate drives this run, so no block file is read and
-        # the engine's own compiled branch stands.
-        return ({}, {})
+    ``series`` is hourly gross millimetres as the record reported them; where it
+    is absent the constant rate over ``hours`` is what drives the run. WHICH of
+    the two a run gets is the ask's, stated where the value is."""
+    return MappingProxyType({"mm_per_hr": mm_per_hr, "hours": hours,
+                             "until_s": until_s, "series": series,
+                             "tracers": tracers, "fortran": fortran})
+
+
+def _storm(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
+                                              Mapping[str, Any]]:
+    """The storm -> either the block file and its reader, or the rate keywords.
+
+    A record is blocks of ``[t_end_s, gross_mm]`` assembled from its own hourly
+    totals, with a dry tail past the last simulated instant so the recession limb
+    has somewhere to fall; a design rate is the engine's own constant branch."""
+    series = value.get("series")
+    if series is None:
+        rate = value["mm_per_hr"]
+        if rate is None:
+            return ({}, {})
+        return ({"RAIN_OR_EVAPORATION": True,
+                 "RAIN_OR_EVAPORATION_IN_MM_PER_DAY": float(rate) * 24.0,
+                 **_rain_tracers(value["tracers"]),
+                 # A window is stated only when it CLOSES inside the run: a storm
+                 # that outlasts the horizon never stops, and a keyword saying so
+                 # would be an end nothing reaches.
+                 **({} if value["hours"] is None
+                    or float(value["hours"]) * _STORM_INTERVAL_S
+                    >= float(value["until_s"])
+                    else {"DURATION_OF_RAIN_OR_EVAPORATION_IN_HOURS":
+                          float(value["hours"])})}, {})
+    millimetres = [max(0.0, float(v)) for v in series]
+    if len(millimetres) < 2:
+        raise ValueError(f"a measured storm carries {len(millimetres)} interval(s); "
+                         "a hyetograph needs at least two. Widen the window, or "
+                         "state a design rate.")
+    blocks = [(float((i + 1) * _STORM_INTERVAL_S), millimetres[i])
+              for i in range(len(millimetres))]
+    keywords, files = _blocks_file(blocks, value["until_s"], value["fortran"])
+    return ({**keywords, **_rain_tracers(value["tracers"])}, files)
+
+
+def _blocks_file(blocks: Any, until_s: Any,
+                 fortran: Any) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
+    """Gross rain per interval -> the block file and the routine that reads it.
+
+    Each block is ``[t_end_s, gross_mm]``; the tail past the last simulated
+    instant is dry, so a storm that stops inside the run stops in the file too."""
     rows: list[tuple[float, float]] = []
     previous = 0.0
-    for t_end, millimetres in value["blocks"]:
+    for t_end, millimetres in blocks:
         t_end, millimetres = float(t_end), float(millimetres)
         if t_end <= previous:
             raise ValueError("hyetograph times must strictly increase; got "
@@ -567,17 +610,49 @@ def _hyetograph(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
         previous = t_end
     if not rows:
         raise ValueError("the hyetograph has no intervals.")
-    tail = float(value["until_s"]) + 3600.0
+    tail = float(until_s) + _STORM_INTERVAL_S
     if rows[-1][0] < tail:
         rows.append((tail, 0.0))
+    if not fortran:
+        raise ValueError(
+            "a measured storm is read per timestep by a user Fortran routine and "
+            "this run names none; state the routine the image bakes, or drive the "
+            "run with a design rate.")
     lines = ["#HYETOGRAPH FILE (block type; mm per interval)",
              "#T (s) RAINFALL (mm)", "0.",
              *(f"{t:.3f} {mm:.5f}" for t, mm in rows)]
     return ({"FORMATTED_DATA_FILE_1": HYETOGRAPH_FILENAME,
              # QUOTED by the writer: a value opening on '/' would be a comment to
              # DAMOCLES, which erases the keyword AND swallows the line after it.
-             "FORTRAN_FILE": str(value["fortran"])},
+             "FORTRAN_FILE": str(fortran)},
             {HYETOGRAPH_FILENAME: "\n".join(lines) + "\n"})
+
+
+def Hyetograph(*, blocks: Any, until_s: Any, fortran: Any  # noqa: N802
+               ) -> Mapping[str, Any]:
+    """A real gross storm, read per timestep out of a block file."""
+    return MappingProxyType({"blocks": blocks, "until_s": until_s,
+                             "fortran": fortran})
+
+
+def _hyetograph(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
+                                                   Mapping[str, Any]]:
+    """The storm blocks -> the data file and the user Fortran that reads them."""
+    if not value["blocks"]:
+        # A constant design rate drives this run, so no block file is read and
+        # the engine's own compiled branch stands.
+        return ({}, {})
+    return _blocks_file(value["blocks"], value["until_s"], value["fortran"])
+
+
+def _rain_tracers(tracers: Any) -> Mapping[str, Any]:
+    """The rainwater concentrations DAMOCLES demands, one per tracer, or nothing.
+
+    An EMPTY list is not the statement that a run carries no tracer - it is a
+    keyword with nothing after it, which DAMOCLES reads as the next line."""
+    count = int(tracers or 0)
+    return {} if not count else {
+        "VALUES_OF_TRACERS_IN_THE_RAIN": [0.0] * count}
 
 
 T2D = Module("telemac2d")
@@ -589,6 +664,7 @@ T2D.composites(releases=_releases, wind=_wind, continue_from=_continue_from,
                atmosphere=expand_for_telemac2d,
                oil=_oil, rain=_rain, coupling=_coupling,
                boundaries=_boundaries, runoff=_runoff, friction=_friction,
-               infiltration=_infiltration, rating=_rating, hyetograph=_hyetograph,
+               infiltration=_infiltration, rating=_rating, storm=_storm,
+               hyetograph=_hyetograph,
                time_origin=_time_origin, tracer_names=_tracer_names)
 T2D.reads(**PRIMITIVES, drogues=read_drogues)

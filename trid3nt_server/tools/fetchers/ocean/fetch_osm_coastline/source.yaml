@@ -56,16 +56,15 @@ docstring: |-
   **What it does:** Queries the OpenStreetMap Overpass API for ways tagged
   ``natural=coastline`` that touch the requested bbox and returns each one
   WHOLE, in EPSG:4326, serialized to FlatGeobuf and cached for 30 days.
-  OSM coastline is drawn at street resolution (metres), which is one to two
-  orders of magnitude finer than the global GSHHG shoreline datasets, so it
-  is the rung that can describe a harbour, a breakwater entrance or a
-  narrow inlet. The vector renders inline on the map automatically.
+  OSM coastline is drawn at street resolution (metres), fine enough to
+  describe a harbour, a breakwater entrance or a narrow inlet. The vector
+  renders inline on the map automatically.
 
   **When to use:**
   - The user asks where the shore runs, or wants the coastline drawn.
-  - A harbour-scale domain has to be cut from the real land-water edge:
-    this is the shoreline rung ``build_mesh(mesher='om2d')`` climbs to when
-    the asked triangle edge is finer than a global shoreline can describe.
+  - A domain has to be cut from the real land-water edge: hand this layer
+    and the box to ``derive_water_polygon``, which returns the water inside
+    the box as the closed polygon ``build_mesh`` is cut from.
 
   **When NOT to use:**
   - DO NOT use for a LAKE, reservoir or inland water body -- OSM maps those

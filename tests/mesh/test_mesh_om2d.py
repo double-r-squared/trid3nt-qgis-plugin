@@ -23,10 +23,16 @@ from trid3nt_server.workflows.mesh.meshers import (
     resolve_op,
 )
 from trid3nt_server.workflows.mesh.meshers import om2d as OM2D
-from trid3nt_server.workflows.mesh.shoreline import Shoreline
 from trid3nt_server.workflows.mesh.tool import mesh_op, tool
 
 _AOI = (-75.80, 36.10, -75.70, 36.20)
+
+#: The DOMAIN every recipe here is cut from: the polygon the equations are solved
+#: over. A box is not a domain any more - the water is cut out of one before the
+#: mesher sees it - so the extent is a closed outline throughout.
+_DOMAIN = {"type": "Polygon", "coordinates": [[
+    [-75.79, 36.11], [-75.71, 36.11], [-75.71, 36.19], [-75.79, 36.19],
+    [-75.79, 36.11]]]}
 
 #: Four nodes, two triangles, in lon/lat inside the AOI - the shape the box returns.
 _POINTS = np.array([[-75.78, 36.12], [-75.74, 36.12],
@@ -35,7 +41,8 @@ _CELLS = np.array([[0, 1, 2], [1, 3, 2]], dtype=np.int64)
 
 
 def _recipe(**over):
-    ask = {"mesher": "om2d", "extent": _AOI, "resolution_m": 60.0, "ops": []}
+    ask = {"mesher": "om2d", "extent": json.dumps(_DOMAIN), "resolution_m": 60.0,
+           "ops": []}
     ask.update(over)
     return tool.build_mesh(**ask)
 
@@ -92,8 +99,8 @@ def test_the_boxs_own_typed_refusal_reaches_the_caller_with_its_escalation(
     shoreline there; the driver writes the refusal and the host re-raises it typed."""
     import subprocess
 
-    document = {"code": "MESH_SHORELINE_DOES_NOT_DESCRIBE_EXTENT",
-                "message": "the shoreline carries no land boundary over ...",
+    document = {"code": "MESH_DOMAIN_HAS_NO_SHORELINE",
+                "message": "every stretch of this domain's edge is named ...",
                 "escalation": {"tool": "fetch_nhd_waterbodies",
                                "overrides": {"bbox": list(_AOI)}}}
 
@@ -102,11 +109,9 @@ def test_the_boxs_own_typed_refusal_reaches_the_caller_with_its_escalation(
         return subprocess.CompletedProcess(argv, 3, "OM2D_REFUSED", "")
 
     monkeypatch.setattr(OM2D.subprocess, "run", fake_run)
-    monkeypatch.setenv("TRID3NT_GSHHG_SHP", str(tmp_path / "gshhg.shp"))
-    (tmp_path / "gshhg.shp").write_bytes(b"")
     with pytest.raises(MeshToolError) as excinfo:
         OM2D._run_op(tmp_path, "build", "om2d_config.json", "om2d_mesh.npz")
-    assert excinfo.value.error_code == "MESH_SHORELINE_DOES_NOT_DESCRIBE_EXTENT"
+    assert excinfo.value.error_code == "MESH_DOMAIN_HAS_NO_SHORELINE"
     assert excinfo.value.escalation["tool"] == "fetch_nhd_waterbodies"
 
 
@@ -138,7 +143,8 @@ def test_the_default_rim_carries_no_opinion_the_adapter_invented():
 
 
 def test_omitting_ops_takes_the_default_and_declaring_replaces_it_wholesale():
-    assert [op.fn for op in tool.build_mesh(mesher="om2d", extent=_AOI).ops] == \
+    assert [op.fn for op in tool.build_mesh(
+        mesher="om2d", extent=json.dumps(_DOMAIN)).ops] == \
         [op.fn for op in get_mesher("om2d").default_ops]
     assert _recipe(ops=[mesh_op("laplacian2")]).ops[0].fn == "laplacian2"
     assert len(_recipe(ops=[mesh_op("laplacian2")]).ops) == 1
@@ -197,10 +203,9 @@ def _stub_om2d(monkeypatch, tmp_path, *, pfix=None, stats=None,
     """Answer the container calls with a known mesh, and record what was sent."""
     sent: dict[str, object] = {"configs": []}
 
-    def fake_run_op(rundir, op, config_name, produces, *, shoreline_dir=None):
+    def fake_run_op(rundir, op, config_name, produces):
         config = json.loads(Path(rundir, config_name).read_text())
         sent["configs"].append((op, config))
-        sent["shoreline_dir"] = str(shoreline_dir)
         if op == "build":
             sent["config"] = config
             np.savez(Path(rundir, "om2d_mesh.npz"),
@@ -228,19 +233,7 @@ def _stub_om2d(monkeypatch, tmp_path, *, pfix=None, stats=None,
                           "liquid_boundary_roles": ["open"],
                           "liquid_boundary_prescribes": ["elevation"]}}
 
-    shoreline = tmp_path / "shoreline" / "GSHHS_i_L1.shp"
-    shoreline.parent.mkdir(parents=True, exist_ok=True)
-    shoreline.write_bytes(b"shp")
-    monkeypatch.setenv("TRID3NT_GSHHG_SHP", str(shoreline))
     monkeypatch.setenv("TRID3NT_RUNS_DIR", str(tmp_path))
-    # WHICH shoreline serves is the ladder's own question, tested where the
-    # ladder is; these tests are about what the adapter does with the one it is
-    # handed, so the rung is pinned rather than climbed.
-    monkeypatch.setattr(
-        OM2D, "resolve_shoreline",
-        lambda bbox, resolution_m, rundir: Shoreline(
-            path=shoreline, rung="gshhg GSHHS_i_L1.shp",
-            note="shoreline ladder: pinned for this test"))
     monkeypatch.setattr(OM2D, "_run_op", fake_run_op)
     monkeypatch.setattr(
         "trid3nt_server.workflows.mesh.shared.selafin_cli.write_telemac_pair",
@@ -278,17 +271,16 @@ def test_the_one_size_word_threads_as_the_librarys_own_edge_defaults(
     assert sent["config"]["seed"] == OM2D._SEED
 
 
-def test_the_mounted_shoreline_is_the_rung_the_ladder_served(monkeypatch, tmp_path):
+def test_the_domain_polygon_is_the_only_thing_the_box_is_cut_from(
+        monkeypatch, tmp_path):
+    """One path: the polygon. The mesher mounts no shoreline substrate of its own,
+    because the shoreline IS the polygon's edge."""
     sent = _stub_om2d(monkeypatch, tmp_path)
     mesh = OM2D.build(_recipe())
-    assert sent["config"]["shoreline_shp"] == "/shoreline/GSHHS_i_L1.shp"
-    assert sent["config"]["domain_geojson"] is None
-    assert sent["shoreline_dir"].endswith("shoreline")
-    # The rung is JOURNALLED: a domain's shape is the first thing an answer
-    # depends on, so which substrate cut it rides on the mesh.
+    assert sent["config"]["domain_geojson"] == "/data/domain.geojson"
+    assert "shoreline_shp" not in sent["config"]
     provenance = mesh.meta["artifact"]["provenance"]
-    assert "gshhg GSHHS_i_L1.shp" in provenance["domain_source"]
-    assert any("shoreline ladder" in note for note in provenance["op_notes"])
+    assert provenance["domain_source"] == "domain polygon (1 part(s))"
 
 
 def test_a_recipe_with_no_extent_refuses_before_anything_is_staged():
@@ -297,10 +289,25 @@ def test_a_recipe_with_no_extent_refuses_before_anything_is_staged():
     assert excinfo.value.error_code == "MESH_EXTENT_MISSING"
 
 
+def test_a_box_extent_refuses_and_names_the_cut_that_makes_it_a_domain(
+        monkeypatch, tmp_path):
+    """A box is not a domain: the water is cut out of it BEFORE the mesher, and
+    the refusal names the derive that does it."""
+    _stub_om2d(monkeypatch, tmp_path)
+    with pytest.raises(MeshToolError) as excinfo:
+        OM2D.build(_recipe(extent=_AOI))
+    assert excinfo.value.error_code == "MESH_DOMAIN_NOT_A_POLYGON"
+    assert "derive_water_polygon" in str(excinfo.value)
+
+
 def test_a_projected_extent_is_named_for_what_it_is(monkeypatch, tmp_path):
     _stub_om2d(monkeypatch, tmp_path)
     with pytest.raises(MeshToolError) as excinfo:
-        OM2D.build(_recipe(extent=(430000.0, 3990000.0, 440000.0, 4000000.0)))
+        OM2D.build(_recipe(extent=json.dumps({
+            "type": "Polygon", "coordinates": [[
+                [430000.0, 3990000.0], [440000.0, 3990000.0],
+                [440000.0, 4000000.0], [430000.0, 4000000.0],
+                [430000.0, 3990000.0]]]})))
     assert excinfo.value.error_code == "MESH_DOMAIN_NOT_LONLAT"
     assert "projected" in str(excinfo.value)
 
@@ -428,8 +435,8 @@ def test_an_op_that_renumbers_after_a_primitive_refuses_by_name(
     _no_fetch_bed(monkeypatch)
     real = OM2D._run_op
 
-    def shrinking(rundir, op, config_name, produces, *, shoreline_dir=None):
-        real(rundir, op, config_name, produces, shoreline_dir=shoreline_dir)
+    def shrinking(rundir, op, config_name, produces):
+        real(rundir, op, config_name, produces)
         if op != "post":
             return
         config = json.loads(Path(rundir, config_name).read_text())

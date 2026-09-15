@@ -113,13 +113,25 @@ def _reading(props: Mapping[str, Any], field: str,
 def observation(source: Any, *, near: Any = None, field: str = "value",
                 units_field: str = "unit", to_units: Any = None,
                 series_field: str = "time_series_csv",
-                measures: str = "this value", label: str = "observation",
-                code: str = _CODE) -> Observation:
-    """THE ingestion: a fetched or supplied point layer -> ONE measured value.
+                measures: str = "this value", opens: str = "",
+                label: str = "observation",
+                code: str = _CODE) -> Observation | None:
+    """THE ingestion: a fetched point layer, or a STATED value -> one reading.
 
     ``near`` ranks the candidates when the source carries several - a fetch that
-    already asked for the nearest station returns one and nothing is ranked.
-    ``to_units`` is the unit the slot reads; nothing that reports refuses typed."""
+    already asked for the nearest station returns one and nothing is ranked;
+    ``to_units`` is the unit the slot reads. A number is the value the caller
+    stated, which stands over any record; ``opens`` says on the run journal what
+    this run opened on, because a sample is a moment and its age is the reader's
+    business. Nothing that reports refuses typed."""
+    if source is None:
+        return None
+    stated = _stated(source)
+    if stated is not None:
+        found = Observation(value=stated,
+                            units=str(to_units) if to_units is not None else None)
+        _journal(found, opens=opens, stated=True)
+        return found
     candidates: list[tuple[float, dict[str, Any], tuple[str | None, float]]] = []
     for feature in _features(source):
         props = feature.get("properties") or {}
@@ -137,16 +149,43 @@ def observation(source: Any, *, near: Any = None, field: str = "value",
     props = feature.get("properties") or {}
     units = props.get(units_field)
     value = convert(raw, units, to_units) if to_units is not None else float(raw)
-    stated = props.get("distance_km")
-    return Observation(
+    reported = props.get("distance_km")
+    found = Observation(
         value=float(value),
         units=str(to_units) if to_units is not None else (
             str(units) if units is not None else None),
         site_id=_text(props, "site_id", "station_id"),
         site_name=_text(props, "site_name", "station_name"),
         sampled=sampled,
-        distance_km=float(stated) if stated is not None else (
+        distance_km=float(reported) if reported is not None else (
             distance_km if distance_km != float("inf") else None))
+    _journal(found, opens=opens, stated=False)
+    return found
+
+
+def _stated(source: Any) -> float | None:
+    """The value a caller STATED, or ``None`` when the source is a record.
+
+    A bool is not a reading: ``True`` would enter the sheet as 1.0."""
+    if isinstance(source, bool):
+        return None
+    if isinstance(source, (int, float)):
+        return float(source)
+    return None
+
+
+def _journal(found: Observation, *, opens: str, stated: bool) -> None:
+    """Say on the run journal what this run opened on, where it says what it is.
+
+    Off a run there is no journal and nothing is said."""
+    if not opens:
+        return
+    from trid3nt_server.workflows.runtime import journal_note
+
+    units = f" {found.units}" if found.units else ""
+    journal_note(f"{opens} {found.value:.3f}{units}, the value stated on the "
+                 "call, which stands over any record."
+                 if stated else note(found, opens=opens))
 
 
 def note(found: Observation, *, opens: str) -> str:
@@ -178,7 +217,9 @@ def _distance_km(feature: Mapping[str, Any], near: Any) -> float:
 
     if near is None:
         return float("inf")
-    lon, lat = float(near[0]), float(near[1])
+    lon, lat = ((float(near.lon), float(near.lat))
+                if hasattr(near, "lon") and hasattr(near, "lat")
+                else (float(near[0]), float(near[1])))
     coords = (feature.get("geometry") or {}).get("coordinates")
     while isinstance(coords, (list, tuple)) and coords and \
             isinstance(coords[0], (list, tuple)):

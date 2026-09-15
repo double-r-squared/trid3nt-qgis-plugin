@@ -22,7 +22,6 @@ carrying that recipe as its provenance - is what the solve reads.
 | `op_tool.py` | `mesh_op` - the runtime face of the word a recipe is written in: append, alter by index or remove one call on the open session's recipe, then regenerate. |
 | `recipe.py` | `MeshRecipe` - the one mesh-defining object, its editing methods, its JSON form and the plain mapping a plan step carries it as. |
 | `session.py` | `MeshSession` - the mesh under construction: it holds THE recipe, regenerates on every change, and journals the edit events to `mesh_recipe.jsonl`. |
-| `shoreline.py` | The shoreline LADDER a box extent is cut from: `fetch_osm_coastline` at harbour scale (open ways closed into land by OSM's own land-on-the-left rule), then the machine-local GSHHG L1 shapefile named by `TRID3NT_GSHHG_SHP` as the coarse rung. The coarsest rung that still resolves the ask serves; when none does, the refusal names them all. |
 | `step.py` | The declared MESH step: the template's frozen recipe, built under the gate, as the one step every plan puts before its author stage. |
 | `tool.py` | `build_mesh` - the router. Builds a validated recipe, and is the author word `tool.build_mesh` reaches; also the supplied-mesh resolution order. |
 | `topology.py` | The accepted topology a geometry file cannot state: which contiguous run of boundary nodes carries which declared role, written and read back. |

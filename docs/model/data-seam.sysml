@@ -114,12 +114,11 @@ package DataSeam {
         */
     }
 
-    part def ShorelineLadder {
+    part def WaterCut {
         doc /*
-        The shoreline a box extent is cut from, as a ladder with a stated
-        fidelity per rung: the coarsest rung that resolves the ask serves it, a
-        rung that yields nothing hands over, and an ask no rung resolves is
-        refused by name.
+        The derive that turns a box and a mapped coastline into the WATER inside
+        it: the faces the ways split the box into, classified by the direction
+        each way was drawn, with the wet ones returned as one polygon.
         */
     }
 
@@ -359,9 +358,9 @@ package DataSeam {
         port gapOut : GapOut;
     }
 
-    part shorelineLadder : ShorelineLadder {
+    part waterCut : WaterCut {
         doc /*
-        code: trid3nt_server/workflows/mesh/shoreline.py
+        code: trid3nt_server/tools/derive/derive_water_polygon/derive_water_polygon.py
         */
     }
 
@@ -667,20 +666,20 @@ package DataSeam {
         */
     }
 
-    requirement def TheShorelineIsALadderWithStatedFidelity {
+    requirement def TheShorelineIsTheDomainsOwnEdge {
         doc /*
-        A declarative OSM coastline fetcher is the HARBOUR-SCALE rung of the
-        shoreline a domain is cut from, and GSHHG at full resolution is the
-        COARSE rung; the ladder resolves the file, the rung is journaled, and
-        an ask below every rung's coverage refuses BY NAME.
+        A shoreline is where the water meets land. The DOMAIN is the closed
+        polygon the equations are solved over, so its own boundary - islands
+        included - is that shoreline, minus the stretches a run of type inflow,
+        outflow, open or rating_curve names, which are the edge the water
+        CROSSES. Every sizing function measures what is left, on any domain: a
+        drawn pond, a reach section, a harbour basin.
 
-        A shoreline is the same kind of input as a bed and carries the same
-        obligation: a substrate coarser than the triangles asked for does not
-        produce a coarser domain, it produces scraps that touch at points, which
-        the mesh acceptance then refuses. Naming the coverage is what turns that
-        into an answer a caller can act on. The machine-local rung is named by
-        TRID3NT_GSHHG_SHP and nothing exports it on a caller's behalf: unset, it
-        states no resolution, is walked last, and is named in the refusal.
+        There is therefore ONE mesher path and no box extent: a box is not a
+        domain, and cutting the water out of one is a derive over that box and a
+        mapped coastline, useful on its own and written as a DATA row by the
+        template that wants it. A domain whose whole edge is crossed has no
+        shore for a sizing function to measure and is refused by name.
         */
     }
 
@@ -881,19 +880,24 @@ package DataSeam {
     verify requirement AStoppedRungNeverShips by
         "tests/fetchers/test_bathymetry_data_seam.py::test_the_synthetic_slot_is_stated_as_deferred_rather_than_forgotten";
 
-    satisfy requirement TheShorelineIsALadderWithStatedFidelity by shorelineLadder;
-    satisfy requirement TheShorelineIsALadderWithStatedFidelity by
-        coastlineDeclaration;
-    verify requirement TheShorelineIsALadderWithStatedFidelity by
-        "tests/mesh/test_mesh_shoreline_ladder.py::test_a_coarse_ask_is_served_by_the_local_file_without_a_fetch";
-    verify requirement TheShorelineIsALadderWithStatedFidelity by
-        "tests/mesh/test_mesh_shoreline_ladder.py::test_a_harbour_ask_climbs_past_a_shoreline_that_cannot_describe_it";
-    verify requirement TheShorelineIsALadderWithStatedFidelity by
-        "tests/mesh/test_mesh_shoreline_ladder.py::test_an_ask_no_rung_resolves_refuses_naming_every_rung";
-    verify requirement TheShorelineIsALadderWithStatedFidelity by
-        "tests/mesh/test_mesh_shoreline_ladder.py::test_an_unset_shoreline_variable_is_named_rather_than_exported";
-    verify requirement TheShorelineIsALadderWithStatedFidelity by
-        "tests/mesh/test_mesh_shoreline_ladder.py::test_the_land_is_on_the_left_of_the_way_the_way_was_drawn";
+    satisfy requirement TheShorelineIsTheDomainsOwnEdge by waterCut;
+    satisfy requirement TheShorelineIsTheDomainsOwnEdge by coastlineDeclaration;
+    verify requirement TheShorelineIsTheDomainsOwnEdge by
+        "tests/mesh/test_mesh_polygon_domain.py::test_the_shoreline_the_sizing_functions_measure_is_the_polygons_own_edge";
+    verify requirement TheShorelineIsTheDomainsOwnEdge by
+        "tests/mesh/test_mesh_polygon_domain.py::test_a_reach_with_two_open_runs_drops_those_stretches_from_the_shore";
+    verify requirement TheShorelineIsTheDomainsOwnEdge by
+        "tests/mesh/test_mesh_polygon_domain.py::test_an_island_ring_is_shore_too";
+    verify requirement TheShorelineIsTheDomainsOwnEdge by
+        "tests/mesh/test_mesh_polygon_domain.py::test_a_domain_whose_whole_edge_is_crossed_refuses_by_name";
+    verify requirement TheShorelineIsTheDomainsOwnEdge by
+        "tests/mesh/test_mesh_om2d.py::test_a_box_extent_refuses_and_names_the_cut_that_makes_it_a_domain";
+    verify requirement TheShorelineIsTheDomainsOwnEdge by
+        "tests/derive/test_derive_water_polygon.py::test_the_water_is_the_side_the_way_does_not_have_its_land_on";
+    verify requirement TheShorelineIsTheDomainsOwnEdge by
+        "tests/derive/test_derive_water_polygon.py::test_reversing_the_way_moves_the_water_to_the_other_side";
+    verify requirement TheShorelineIsTheDomainsOwnEdge by
+        "tests/derive/test_derive_water_polygon.py::test_a_way_that_ends_inside_the_box_divides_nothing_and_refuses";
 
     satisfy requirement TheDomainIsOneSlotHoweverItIsFilled by domainSlot;
     satisfy requirement TheDomainIsOneSlotHoweverItIsFilled by slotDoor;

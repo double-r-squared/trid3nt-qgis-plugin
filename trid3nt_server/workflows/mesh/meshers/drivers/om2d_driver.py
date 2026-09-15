@@ -87,6 +87,22 @@ def _m_per_deg(mid_lat_deg: float) -> float:
     return 111_320.0 * max(0.15, math.cos(math.radians(mid_lat_deg)))
 
 
+def _open_faces(path) -> list:
+    """The faces of the domain's edge the WATER crosses, as coordinate walks.
+
+    Nothing staged means nothing crosses: the edge is shore the whole way round.
+    """
+    if not path:
+        return []
+    doc = json.load(open(path))
+    walks = []
+    for feature in (doc.get("features") or ()):
+        coords = ((feature or {}).get("geometry") or {}).get("coordinates") or []
+        if len(coords) >= 2:
+            walks.append([(float(x), float(y)) for x, y in coords])
+    return walks
+
+
 def _load_geoms(path: str) -> list:
     doc = json.load(open(path))
     feats = doc.get("features") if isinstance(doc, dict) else None
@@ -164,10 +180,11 @@ class _Holes(om.Domain):
         return np.where(inside, -d, d)
 
 
-# The polygon path cannot use ``om.Shoreline``: it meshes only water touching the
-# region boundary and cannot mesh a fully enclosed interior, so the signed
-# distance is measured against the polygon's own densified boundary. Both paths
-# still triangulate through the authentic ``om.generate_mesh``.
+# The domain is a POLYGON and ``om.Shoreline`` cannot be it: that class meshes
+# only water touching the region boundary and cannot mesh a fully enclosed
+# interior, so the signed distance is measured against the polygon's own
+# densified boundary. The triangulation is still the authentic
+# ``om.generate_mesh``.
 class _PolygonDomain(om.Domain):
     """A supplied polygon as an oceanmesh domain: signed distance, negative inside.
 
@@ -188,6 +205,82 @@ class _PolygonDomain(om.Domain):
         d, _ = self.tree.query(xq, k=1)
         inside = contains_xy(self.union, xq[:, 0], xq[:, 1])
         return np.where(inside, -d, d)
+
+
+class _EdgeShoreline:
+    """THE SHORELINE: the domain polygon's own edge, minus what the water crosses.
+
+    A shoreline is where the water meets land, and the sizing functions that
+    measure one read exactly four things off it - ``bbox``, ``h0``, ``mainland``
+    and ``inner`` - so the polygon's outer ring stands as the mainland, its
+    island rings as the inner, and the stretches an inflow, an outflow or an
+    open run names are not shore and are dropped."""
+
+    def __init__(self, rings, open_faces, step: float, bbox) -> None:
+        self.bbox = bbox
+        self.h0 = step
+        self.boubox = np.asarray(_boubox(bbox), dtype=float)
+        walked = [np.asarray(_resample(list(ring), step), dtype=float)
+                  for ring in rings]
+        kept = [_shore_points(walk, open_faces) for walk in walked]
+        self.mainland = _stacked(kept[:1])
+        self.inner = _stacked(kept[1:])
+        self.dropped = sum(walk.shape[0] for walk in walked) \
+            - sum(part.shape[0] for part in kept)
+        if not self.points.shape[0]:
+            raise _Refusal(
+                "MESH_DOMAIN_HAS_NO_SHORELINE",
+                "every stretch of this domain's edge is named by an inflow, an "
+                "outflow or an open run, so none of it is shoreline and there is "
+                "nothing for a sizing function to measure the water against. A "
+                "domain has banks: state runs across the edge the water crosses "
+                "and leave the rest as the wall it already is.")
+
+    @property
+    def points(self) -> np.ndarray:
+        return np.vstack((self.inner, self.mainland))
+
+
+def _boubox(bbox) -> list[tuple[float, float]]:
+    """The region box as a closed ring, in the (xmin, xmax, ymin, ymax) order
+    oceanmesh states an extent in."""
+    xmin, xmax, ymin, ymax = (float(v) for v in bbox)
+    return [(xmin, ymin), (xmax, ymin), (xmax, ymax), (xmin, ymax), (xmin, ymin)]
+
+
+def _stacked(parts) -> np.ndarray:
+    """One (N,2) array from several rings' points; empty stays (0,2)."""
+    usable = [part for part in parts if part.shape[0]]
+    return np.vstack(usable) if usable else np.empty((0, 2), dtype=float)
+
+
+def _shore_points(points: np.ndarray, open_faces) -> np.ndarray:
+    """One walked ring, minus each open run's own stretch of it.
+
+    A run names two points ON the edge, and the stretch it names is the SHORTER
+    way round the ring between them - the same reading the boundary roles take,
+    so the nodes a run will carry are the nodes the shoreline does not."""
+    if points.shape[0] < 2 or not open_faces:
+        return points
+    keep = np.ones(points.shape[0], dtype=bool)
+    tree = cKDTree(points)
+    for face in open_faces:
+        ends = np.asarray([face[0], face[-1]], dtype=float)
+        _d, found = tree.query(ends, k=1)
+        start, end = int(found[0]), int(found[1])
+        if start == end:
+            continue
+        for index in _arc(points.shape[0], start, end):
+            keep[index] = False
+    return points[keep]
+
+
+def _arc(size: int, start: int, end: int) -> list[int]:
+    """The SHORTER of the two ways round a closed ring from ``start`` to ``end``."""
+    forward = (end - start) % size
+    if 2 * forward <= size:
+        return [(start + step) % size for step in range(forward + 1)]
+    return [(start - step) % size for step in range(size - forward + 1)]
 
 
 class _Build:
@@ -212,49 +305,19 @@ class _Build:
         self.rim_walk = np.empty(0, dtype=np.int64)
         self.rim_target = None
         self.rim_tolerance = None
-        self.shoreline = None
         self.smoothed = None
-        self.domain_rings: list = []
-        if cfg.get("domain_geojson"):
-            geoms = _load_geoms(cfg["domain_geojson"])
-            self.sdf = _PolygonDomain(geoms, self.min_deg, self.bbox)
-            self.domain_rings = [ring for geom in geoms
-                                 for ring in _outline_coords(geom)]
-            self.active.append("polygon_sdf(interior)")
-        else:
-            self.smoothed = True
-            try:
-                self.shoreline = om.Shoreline(
-                    cfg["shoreline_shp"], self.region.bbox, self.min_deg)
-            except Exception:  # noqa: BLE001
-                # The shoreline smoothing moving-average throws a GEOS
-                # side-location conflict on some GSHHG geometries; the unsmoothed
-                # shoreline still meshes.
-                self.smoothed = False
-                self.shoreline = om.Shoreline(
-                    cfg["shoreline_shp"], self.region.bbox, self.min_deg,
-                    smooth_shoreline=False)
-            if not (len(self.shoreline.mainland) or len(self.shoreline.inner)):
-                raise _Refusal(
-                    "MESH_SHORELINE_DOES_NOT_DESCRIBE_EXTENT",
-                    "the shoreline carries no land boundary over the extent "
-                    f"{cfg['bbox']}, so there is nothing here to cut water from: "
-                    "the signed distance falls back to the box itself and the "
-                    "whole extent - streets included - meshes as open water. "
-                    "GSHHG L1 describes the boundary between land and OCEAN, so "
-                    "a lake, a reservoir or an inland water body is not in it. "
-                    "Fetch the water body and mesh ITS polygon: build_mesh takes "
-                    "a polygon extent and cuts the same domain from its interior.",
-                    {"tool": "fetch_nhd_waterbodies",
-                     "overrides": {"bbox": list(cfg["bbox"])}})
-            self.sdf = om.signed_distance_function(self.shoreline)
-            # The RIM on this path is the extent's own box: the shoreline is the
-            # land boundary and the sizing ops are what shape it, while the box
-            # edges are where the water simply continues past the ask.
-            self.domain_rings = [[(xmin, ymin), (xmax, ymin), (xmax, ymax),
-                                  (xmin, ymax), (xmin, ymin)]]
-            self.active.append(
-                f"shoreline_sdf({cfg['shoreline_shp'].rsplit('/', 1)[-1]})")
+        geoms = _load_geoms(cfg["domain_geojson"])
+        self.sdf = _PolygonDomain(geoms, self.min_deg, self.bbox)
+        self.domain_rings = [ring for geom in geoms
+                             for ring in _outline_coords(geom)]
+        open_faces = _open_faces(cfg.get("open_runs_geojson"))
+        self.shoreline = _EdgeShoreline(self.domain_rings, open_faces,
+                                        self.min_deg, self.bbox)
+        self.active.append("polygon_sdf(interior)")
+        self.active.append(
+            "edge_shoreline(%d points, %d dropped to %d open run(s))"
+            % (self.shoreline.points.shape[0], self.shoreline.dropped,
+               len(open_faces)))
 
     # -- the environment a pre op's unstated parameters are filled from ---- #
     def environment(self) -> dict:
@@ -601,8 +664,10 @@ def op_build(cfg: dict, out: str) -> int:
                   % getattr(om, "__version__", "?"),
         "sizing_functions": build.active,
         "ops": reports,
-        # None on the polygon path: there is no shoreline to have smoothed.
+        # Always None: the shoreline is the domain polygon's own edge, which is
+        # the outline the caller handed over and is never smoothed under it.
         "shoreline_smoothed": build.smoothed,
+        "shoreline_points": int(build.shoreline.points.shape[0]),
         "seed": int(cfg.get("seed", 0)),
         "min_edge_length_m": cfg["min_edge_length_m"],
         "max_edge_length_m": cfg["max_edge_length_m"],
@@ -878,7 +943,7 @@ def main() -> int:
     # Contract (host <-> container over the mounted /data dir):
     #   argv[1] = <op>   argv[2] = /data/<config>.json   argv[3] = /data
     #
-    #   build  config: bbox, EITHER shoreline_shp OR domain_geojson,
+    #   build  config: bbox, domain_geojson, optional open_runs_geojson,
     #          min_edge_length_m, max_edge_length_m, seed, max_iter,
     #          pre_ops [{fn, kwargs}], post_ops [{fn, kwargs}]. Stages the
     #          domain, runs the pre ops into a sizing function, generates, runs

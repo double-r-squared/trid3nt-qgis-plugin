@@ -26,6 +26,11 @@ params:
     type: str
     required: false
     schema_optional: true
+  search_radius_km:
+    type: float
+    default: 60.0
+    min: 0.0
+    max: 200.0
 hooks:
   resolve_build: raws_weather.resolve_build
   resolve_parse: raws_weather.resolve_parse
@@ -71,6 +76,12 @@ payload_estimate:
   kb_per_feature: 0.175
   floor_mb: 0.001
 caveats:
+- 'The station-discovery box is the request bbox GROWN by search_radius_km (default 60 km):
+  RAWS are sited on ridges and in clearings for fire weather, routinely tens of kilometres
+  from the water or the town the question is about, so a box the size of the area asked
+  about holds no station at all. Stations are ordered by distance from the REQUESTED bbox
+  before the 50-station cap, so the nearest ones are always the ones fetched. The box is a
+  BOX, so a station off one of its corners can stand up to 1.4 x the radius from the bbox.'
 - Iowa Mesonet RAWS fire-weather stations; multi-state per-state DCP-GeoJSON RAWS discovery (states overlapping
   the bbox) then per-station-per-day obhistory (best-effort); one point per observation row. US fire belt.
   No RAWS in bbox / no obs -> RAWS_WEATHER_EMPTY.
@@ -128,6 +139,13 @@ docstring: |-
           requests full calendar days). Defaults to 1 day before ``end_time``
           (or 1 day before today when both are omitted). RAWS data at IEM
           extends back to the early 2000s for most western US stations.
+      search_radius_km: How far OUTSIDE ``bbox`` a station may stand and still
+          describe this sky, in km. Default ``60.0`` -- RAWS sit on ridges and in
+          clearings for fire weather, tens of kilometres from the water or the
+          town the question is about, so a box the size of the area asked about
+          usually holds no station. ``0.0`` restricts discovery to inside the
+          bbox itself. Stations are ordered by distance from ``bbox`` before the
+          50-station cap, so widening this never displaces a nearer station.
       end_time: End date as ISO-8601 string. Defaults to today (UTC).
           Maximum window is ``_MAX_DATE_RANGE_DAYS`` (14 days) per call.
           Wider historical windows should be requested in separate calls
@@ -148,6 +166,6 @@ docstring: |-
         ``gust`` (wind resultant kt), ``solar_rad`` (W/m2),
         ``precip_in`` (in). Missing values are ``null``.
 
-  Cache: ``dynamic-1h`` -- identical ``(bbox-4dp, start_date, end_date)``
-  calls within the same UTC hour reuse the cached FlatGeobuf.
+  Cache: ``dynamic-1h`` -- identical ``(bbox-4dp, search_radius_km, start_date,
+  end_date)`` calls within the same UTC hour reuse the cached FlatGeobuf.
 

@@ -88,6 +88,18 @@ def test_the_mesh_is_built_over_the_domain_slot_at_the_runtimes_own_lever():
     assert [op.fn for op in recipe.ops][-2:] == ["set_bed", "set_boundary_roles"]
 
 
+def test_the_rim_is_sized_because_nothing_else_in_the_library_sizes_it():
+    """Every domain is cut from a shoreline now, and no sizing function measures
+    the domain's own outline: an undeclared rim meshes an order of magnitude past
+    the size word, and the granularity lever is the user's."""
+    from trid3nt_server.workflows.mesh.tool import recipe_from_plan_value
+
+    workflow = _workflow(Door(steering=STEERING))
+    recipe = recipe_from_plan_value(workflow.plan.steps[0].kwargs["mesh"])
+    rim = recipe.ops[0]
+    assert (rim.fn, dict(rim.kwargs)) == ("set_rim_size", {})
+
+
 def test_the_bed_op_takes_the_one_row_the_merge_derive_produced():
     """A survey where it has data and the surface elsewhere is ONE bed, composed
     in the DATA body; the op takes that row and nothing beside it."""

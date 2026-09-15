@@ -461,8 +461,15 @@ class DispatchSpec(GraceModel):
     One declared param value serves the request from a NAMED sibling, returning
     that tool's result VERBATIM - its cache prefix, its ids, no double fetch."""
 
-    # The seam is DELIBERATELY NARROW - one sanctioned exception to the rule that
-    # a tool does not compose another:
+    # The no-composition rule governs the DECLARATIVE surface: what a spec states
+    # is one source, and this is the only field on it that names a sibling. A
+    # delegate hook may still reach a sibling tool when that sibling OWNS a
+    # ladder the caller would otherwise have to restate - its source order, its
+    # budget, its user-gated rung - re-raising its typed errors verbatim and
+    # naming the caller's own retry. That reach is code, not data; a declared
+    # ``from_tool`` field waits for a second caller to want the same shape.
+    #
+    # The seam here is DELIBERATELY NARROW:
     #   - ONE target per condition: ``to`` is a single string, never a list.
     #   - SPEC-DECLARED only: ``to`` and ``equals_any`` are literals, never
     #     hook-computed.

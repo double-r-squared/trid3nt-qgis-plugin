@@ -1,0 +1,171 @@
+# The mirror of fetch_river_reach: a pour point in, a domain out. The DEM over the
+# buffer window is the sibling DEM fetcher's - its source ladder, its cache prefix -
+# and the D8 delineation runs on ingestion, so the basin, the outlet run it drains
+# through and the DEM the trace used come back as one artifact.
+schema_version: v1
+
+name: fetch_watershed
+source_class: watershed
+error_prefix: WATERSHED
+input_error_suffix: INPUT_INVALID
+empty_error_suffix: EMPTY
+shape: vector-fgb
+supports_global_query: false
+
+endpoints:
+  # Documentary: the elevation source the delegate reaches through fetch_dem, which
+  # owns the socket, the resolution budget and the user-gated Copernicus rung.
+  elevation:
+    url: "https://elevation.nationalmap.gov/"
+
+auth:
+  mode: none
+  user_agent: trid3nt_default
+
+params:
+  pour_point: {type: point, required: true}
+  buffer_km: {type: float, default: 10.0, min: 1.0, max: 50.0}
+  resolution_m: {type: int, default: 30, min: 1, max: 120}
+  dem_source:
+    type: enum
+    values: [auto, 3dep, copernicus]
+    lowercase: true
+    default: auto
+
+ingest:
+  access: library_delegate
+  delegate:
+    library: watershed_d8
+    # The DEM download and the D8 conditioning of up to 16 million cells are both
+    # inside this one call.
+    timeout_s: 300.0
+  # The one schema every row of the artifact carries; ``part`` says which row it is.
+  properties:
+    - part
+    - type
+    - area_km2
+    - cell_count
+    - pour_point_lon
+    - pour_point_lat
+    - snapped_lon
+    - snapped_lat
+    - dem_uri
+    - dem_source
+    - dem_resolution_m
+    - notes
+
+hooks:
+  delegate: watershed.read
+  delegate_validate: watershed.validate
+
+normalize:
+  crs: "EPSG:4326"
+  units: null
+
+output:
+  layer_type: vector
+  ext: fgb
+  role: primary
+  display_name: "Watershed domain"
+  bbox_from_features:
+    pad: 0.002
+  style:
+    kind: reference
+    geometry: polygon
+
+cache:
+  ttl_class: static-30d
+payload_estimate:
+  model: bbox_area
+  mb_per_sq_deg: 0.0001
+  floor_mb: 0.05
+  ceil_mb: 0.5
+
+resolution_declarations:
+- param: resolution_m
+  unit: m
+  min_value: 1
+  native_hint: the DEM's own native grid - 3DEP 1-10 m US lidar, Copernicus GLO-30 30 m global
+  constraint_source: data
+  rationale: the D8 trace runs in the DEM's cells, so the delineation is only as fine as the elevation grid under it
+
+caveats:
+  - "the basin is traced in the DEM over a square window of side 2 x buffer_km centred on the pour point; a basin that reaches the edge of that window is REFUSED by name rather than returned clipped, and the refusal states the buffer_km that would hold it"
+  - "the window is held to 4000 cells per axis (16 million cells), which is both the D8 clamp and the DEM fetcher's pixel budget: a fine resolution_m over a wide buffer_km refuses pre-network naming both levers"
+  - "the pour point is SNAPPED to the nearest cell carrying at least 100 upslope cells, so a point clicked beside the channel still delineates the channel's basin; the snapped point is on every row"
+  - "the outlet run is the stretch of the traced edge the snapped outlet lies on, cut to the outlet cell plus one either side, and typed with the boundary slot's own rating-curve run type (rating_curve today): a catchment outlet prescribes a stage-discharge relation rather than a stated level"
+  - "3DEP is US-only; dem_source=copernicus serves the global GLO-30 30 m grid, and on the auto path a 3DEP outage raises the DEM fetcher's own user-gated swap rather than substituting silently"
+
+docstring: |-
+  Build a WATERSHED DOMAIN from one pour point -> the basin polygon, its outlet boundary run, and the DEM the trace used.
+
+  What it does:
+      Fetches the elevation grid over a square window around the pour point,
+      conditions it and traces the D8 catchment that drains through the point.
+      One artifact comes back carrying two rows, each tagged ``part``:
+      ``basin`` (the closed polygon the equations are solved over) and
+      ``outlet`` (two points on the basin edge, the stretch the water leaves
+      through, typed ``rating_curve`` - the level there is read off a
+      stage-discharge curve, not held at a stated value). Every row carries the uri of the DEM the trace
+      ran in, so the bed over the basin is read from that same grid rather than
+      fetched a second time.
+
+  When to use:
+      - A rainfall-runoff question needs a DOMAIN: what drains to this gauge,
+        this outfall, this reservoir inlet, this culvert.
+      - "the catchment above the gauge at Otto", "the basin that drains to this
+        point", "delineate the watershed here and model rain on it".
+      - Hand the ``basin`` row to ``build_mesh(extent=...)`` and the ``outlet``
+        row to the boundary roles.
+
+  When NOT to use:
+      - DO NOT use for a stretch of RIVER between two ends - that is
+        ``fetch_river_reach``, this tool's mirror.
+      - DO NOT use for a lake, pond or reservoir outline -
+        ``fetch_nhd_waterbody_at_point``.
+      - DO NOT use for a named regional basin or the upstream flowline network -
+        that is ``fetch_nhdplus_nldi_navigate``.
+      - DO NOT use to get the DEM itself - that is ``fetch_dem``.
+
+  Parameters:
+      pour_point: ``(lon, lat)`` in EPSG:4326, the outlet the basin drains to.
+          It is snapped to the nearest channel cell. Example, the gauged Coweeta
+          Creek headwater near Otto, NC: ``(-83.40402, 35.05746)``.
+      buffer_km: half-width of the square DEM window around the pour point,
+          default ``10.0``, range ``[1, 50]``. A basin larger than the window is
+          refused, not clipped - raise this and ask again.
+      resolution_m: the DEM grid the trace runs in, default ``30``. Finer costs
+          cells quadratically and the window is capped at 4000 cells per axis.
+      dem_source: ``"auto"`` (default) takes US 3DEP lidar, ``"copernicus"``
+          the global GLO-30 30 m grid, ``"3dep"`` pins 3DEP.
+
+  Returns:
+      ``LayerURI`` for a FlatGeobuf in EPSG:4326 whose rows carry ``part``,
+      ``type``, ``area_km2`` (the traced drainage area), ``cell_count``,
+      ``pour_point_lon`` / ``pour_point_lat`` as asked, ``snapped_lon`` /
+      ``snapped_lat`` as traced, ``dem_uri``, ``dem_source``,
+      ``dem_resolution_m`` and ``notes`` (the delineation's own honest notes).
+      ``layer_type="vector"``, ``role="primary"``.
+
+  Rendering: a VECTOR layer renders INLINE on the map automatically.
+
+  Cross-tool dependencies:
+      - Upstream: ``geocode_location`` for the pour point from a place name,
+        ``fetch_usgs_nwis_gauges`` for a gauge to put the pour point on.
+      - Composes WITH: ``build_mesh`` (the ``basin`` row is its extent),
+        ``fetch_dem`` (which serves the grid this reads).
+      - Upstream data sources: USGS 3DEP, or Copernicus GLO-30.
+
+  Cache: ``ttl_class="static-30d"``, keyed on the pour point, the buffer, the
+  resolution and the DEM source; terrain is multi-year stable.
+
+  Errors:
+      - ``WATERSHED_INPUT_INVALID``: a malformed or out-of-range pour point, or
+        a window over the 4000-cell-per-axis budget.
+      - ``WATERSHED_TRUNCATED``: the basin reaches the window edge; the message
+        names the ``buffer_km`` to retry with.
+      - ``WATERSHED_EMPTY``: the pour point traced no catchment at all.
+      - ``WATERSHED_UPSTREAM_ERROR``: the DEM fetch or the delineation failed,
+        quoting the underlying tool's own error verbatim.
+
+  Tier-1 free. No API key.

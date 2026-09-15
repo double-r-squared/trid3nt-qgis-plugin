@@ -9,7 +9,7 @@ it was filled. A body of water that exists in no fetcher is filled the same way.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Mapping
 
 from .boundary import RUN_TYPES, WALL, BoundaryRun, boundary_runs
@@ -38,6 +38,32 @@ class Domain:
     #: A reach fetcher returns the section and the two faces it was cut between
     #: as one artifact, and a run the user draws lands the same way.
     runs: tuple[BoundaryRun, ...] = ()
+    #: The geometries a producer measured BESIDE the polygon, under its own names
+    #: - a reach's centerline, a catchment's snapped outlet. Each is addressable
+    #: as ``Ref("<row>.<name>")``, so a question that needs one asks for that one
+    #: rather than for the whole artifact; a drawn outline carries none and a
+    #: template that reads one on a domain without it is refused by name.
+    companions: Mapping[str, dict[str, Any]] = field(default_factory=dict)
+
+    def __getattr__(self, name: str) -> Any:
+        """A named companion geometry, read as an attribute of the domain.
+
+        Only what the producer measured: anything else is an AttributeError, so
+        a ref to a companion this domain has not got refuses at binding."""
+        try:
+            return object.__getattribute__(self, "companions")[name]
+        except KeyError:
+            raise AttributeError(name) from None
+
+    @property
+    def centroid(self) -> tuple[float, float]:
+        """A lon/lat point INSIDE this polygon - what a nearest-site query ranks
+        against. A representative point, never the average of the vertices: a
+        crescent bay's mean vertex sits on land."""
+        from shapely.geometry import shape as _shape
+
+        point = _shape(self.geometry).representative_point()
+        return (float(point.x), float(point.y))
 
     @property
     def bbox(self) -> tuple[float, float, float, float]:
@@ -69,11 +95,12 @@ def domain(value: Any, *, label: str = "domain",
         doc = read_geometry_doc(uri.strip())
         logger.info("%s: read from %s", label, uri)
         return Domain(_one_polygon(doc, label, code), _named(value), uri.strip(),
-                      _runs_of(value, label, code) or _prescribed(doc, label, code))
+                      _runs_of(value, label, code) or _prescribed(doc, label, code),
+                      _companions(doc))
     if isinstance(value, Mapping):
         return Domain(_one_polygon(value, label, code), _named(value),
                       _uri_of(value), _runs_of(value, label, code)
-                      or _prescribed(value, label, code))
+                      or _prescribed(value, label, code), _companions(value))
     ring = polygon_ring(value, label=label, code=code)
     return Domain(_closed(ring or []))
 
@@ -155,6 +182,27 @@ def _prescribed(doc: Any, label: str, code: str) -> tuple[BoundaryRun, ...]:
                 and str(geometry.get("type")) == "LineString":
             rows.append({**feature, "properties": {**properties, "type": kind}})
     return boundary_runs(rows, label=f"{label} runs", code=code) if rows else ()
+
+
+def _companions(doc: Any) -> dict[str, dict[str, Any]]:
+    """The geometries a producer wrote beside its polygon, by the name it gave.
+
+    A producer names each row by what it IS - ``centerline``, ``outlet`` - and
+    the slot keeps every row that is neither the polygon nor a run under that
+    name. A row naming a run type is a boundary run and is read as one."""
+    if not isinstance(doc, Mapping) or doc.get("type") != "FeatureCollection":
+        return {}
+    found: dict[str, dict[str, Any]] = {}
+    for feature in (doc.get("features") or ()):
+        properties = dict((feature or {}).get("properties") or {})
+        name = str(properties.get("part") or properties.get("name") or "").strip()
+        geometry = (feature or {}).get("geometry") or {}
+        kind = str(geometry.get("type") or "")
+        if not name or name in RUN_TYPES or not kind \
+                or kind in ("Polygon", "MultiPolygon"):
+            continue
+        found.setdefault(name, dict(geometry))
+    return found
 
 
 def _named(value: Any) -> str | None:

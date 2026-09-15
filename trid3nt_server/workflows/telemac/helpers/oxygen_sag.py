@@ -1,4 +1,4 @@
-"""Streeter-Phelps (1925): the closed-form dissolved-oxygen sag down a reach.
+"""Streeter-Phelps (1925): the closed-form dissolved-oxygen deficit down a reach.
 
 Pure arithmetic over a travel time. The WAQTEL O2 process reduces EXACTLY to
 this ODE when the eutrophication and benthic sources are zeroed (photosynthesis
@@ -50,7 +50,7 @@ def do_profile(distance_m: list[float], velocity_mps: float,
 def critical_point(velocity_mps: float, saturation_mgl: float, bod0_mgl: float,
                    deficit0_mgl: float, k1_per_day: float, k2_per_day: float
                    ) -> dict[str, float]:
-    """The sag: its travel time, its distance downstream and the minimum DO there.
+    """Where the deficit is deepest: travel time, distance downstream, minimum DO.
 
     ``tc = 1/(k2-k1) ln[(k2/k1)(1 - D0(k2-k1)/(k1 L0))]``; ``Dc = (k1/k2) L0
     e^{-k1 tc}``; ``min DO = Cs - Dc``."""

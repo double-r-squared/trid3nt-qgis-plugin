@@ -152,3 +152,67 @@ def test_a_templates_own_row_wins_over_the_lever_of_that_name():
 def test_a_lever_the_runtime_does_not_declare_refuses_by_name():
     with pytest.raises(PlanValidationError, match="is not a runtime lever"):
         with_levers((), ("friction_law",))
+
+
+_SITES = {"type": "FeatureCollection", "features": [
+    {"type": "Feature", "geometry": {"type": "Point", "coordinates": [0.1, 0.1]},
+     "properties": {"value": 50.0, "unit": "degF", "site_id": "NEAR",
+                    "site_name": "a gauge", "result_date": "2026-03-04"}}]}
+
+
+class _OBSERVED:
+    """A row whose PRODUCER is a record and whose VALUE is one reading."""
+
+    opening = Data.observation(
+        tool("fetch_usgs_water_quality", characteristic="temperature"),
+        near=Ref("station"), units="degC", measures="a water temperature",
+        opens="the water opens at")
+
+
+def _answered(monkeypatch, value: Any):
+    from trid3nt_server.workflows.runtime import interpreter
+
+    async def _found(env, producer, label):
+        return producer, value
+
+    monkeypatch.setattr(interpreter, "_walk_ladder", _found)
+    monkeypatch.setattr(interpreter, "_record_for",
+                        lambda *a, **k: _Record())
+    return interpreter
+
+
+class _Record:
+    """The ledger row a produced artifact writes; nothing here reads it."""
+
+    index = -1
+    node = ""
+
+
+def test_an_observation_row_yields_the_reading_not_the_record(monkeypatch):
+    """``Ref("<row>.value")`` reaches a keyword, which is the whole seam: the
+    nearest site, the unit and the sample's age are the slot's own ingestion."""
+    import dataclasses
+
+    interpreter = _answered(monkeypatch, _SITES)
+    monkeypatch.setattr(dataclasses, "replace", lambda obj, **kw: obj)
+    env = interpreter._Env(params=None, data={}, results={"station": (0.11, 0.1)})
+    found = asyncio.run(interpreter._produce(env, data_rows(_OBSERVED)[0]))
+    assert found.value == pytest.approx(10.0)
+    assert found.units == "degC" and found.site_id == "NEAR"
+
+
+def test_the_coercion_a_row_declares_is_bound_before_the_ingestion_runs():
+    """``near`` is a late-bound read like any producer kwarg: the point the
+    nearest site is ranked against is measured by a step, not written by hand."""
+    row = data_rows(_OBSERVED)[0]
+    assert row.coercion["near"] == Ref("station")
+    assert row.coercion["opens"] == "the water opens at"
+
+
+def test_a_supplied_number_supersedes_the_record_through_the_same_slot(monkeypatch):
+    from trid3nt_server.workflows.runtime import interpreter
+
+    env = interpreter._Env(params=None, data={}, results={"station": (0.11, 0.1)},
+                           supplied={"opening": 11.5})
+    found = asyncio.run(interpreter._produce(env, data_rows(_OBSERVED)[0]))
+    assert found.value == pytest.approx(11.5) and found.units == "degC"

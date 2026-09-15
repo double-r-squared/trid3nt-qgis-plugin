@@ -250,12 +250,14 @@ async def build_mesh(
     or domain a solver runs on", "author the model domain".
 
     Params:
-        mesher: om2d (OceanMesh2D triangles, cut from the shoreline or from a
-            polygon) or reg_grid (a uniform lattice).
+        mesher: om2d (OceanMesh2D triangles over a polygon's interior) or
+            reg_grid (a uniform lattice over a box).
         kind: unstructured_tri | structured_grid.
         location: place naming the domain. Supply this OR bbox.
         bbox: AOI (min_lon, min_lat, max_lon, max_lat) in EPSG:4326.
-        extent: a POLYGON to mesh the interior of, not bbox.
+        extent: the POLYGON to mesh the interior of - what om2d takes, and what
+            its edge is read as the shoreline of. A box is not a domain: cut the
+            water out of one with derive_water_polygon first.
         resolution_m: the finest cell or triangle edge, in metres.
         ops: the ordered program, [{"fn": name, ...kwargs}], calling the mesh
             library's own functions plus set_bed and set_boundary_roles. Omit for

@@ -203,6 +203,12 @@ _ALWAYS_OFFLOAD_SYNC_TOOLS = frozenset(
         "derive_survey_surface",
         # two windowed warp-reads onto one union grid plus two COG writes
         "derive_merge_rasters",
+        # the sibling DEM fetch over the whole window, then a D8 condition and
+        # trace over up to 16 million cells, in one sync call
+        "fetch_watershed",
+        # a delegate that owns its own socket: up to six survey ZIPs downloaded
+        # and read out of their geodatabases in one call
+        "fetch_ehydro_surveys",
     }
 )
 

@@ -42,8 +42,8 @@ logger = logging.getLogger("trid3nt_server.workflows.telemac.authoring.assembler
 __all__ = ["BASIN_BOUNDARY", "BASIN_GEOMETRY", "HARBOUR_GEOMETRY",
            "case_section", "mesh_nodes", "new_rundir", "settle_basin",
            "settle_catchment", "settle_domain", "settle_dredge",
-           "settle_harbour", "settle_reach", "settle_release", "stage_run",
-           "stage_telemac_manifest", "to_utm"]
+           "settle_harbour", "settle_open_channel", "settle_reach",
+           "settle_release", "stage_run", "stage_telemac_manifest", "to_utm"]
 
 #: The names the run directory holds an open-water domain's staged geometry
 #: under - the decks' own GEOMETRY / BOUNDARY CONDITIONS statements. A harbour
@@ -470,28 +470,71 @@ def _station_on_mesh(*, centerline_utm: Any, mesh: Any,
         error_code="TELEMAC_SOURCE_OFF_MESH")
 
 
+def _inside_domain(point: Point, polygon: Any, label: str) -> Point:
+    """Refuse a point the meshed domain does not hold; hold one it does.
+
+    What a domain with no channel through it can say about a placed point: it is
+    inside or it is not, and moving it would be this step choosing the place."""
+    from shapely.geometry import Point as _P, shape as _shape
+    from shapely.ops import transform as _transform
+    from pyproj import Transformer
+
+    from trid3nt_server.inputs.geometry import (
+        flatten_geometries, read_geometry_doc, utm_epsg_for,
+    )
+    from trid3nt_server.inputs.point import PointOutsideDomainError
+
+    shapes = [_shape(g) for g in flatten_geometries(read_geometry_doc(polygon))
+              if str(g.get("type")) in ("Polygon", "MultiPolygon")]
+    if not shapes:
+        raise TelemacError(
+            f"the domain carries no polygon, so there is no shape the {label} "
+            "could be inside of.", error_code="TELEMAC_DOMAIN_NOT_A_POLYGON")
+    from shapely.ops import unary_union
+
+    domain_ll = unary_union(shapes).buffer(0)
+    epsg = utm_epsg_for(float(domain_ll.centroid.x), float(domain_ll.centroid.y))
+    forward = Transformer.from_crs(4326, epsg, always_xy=True)
+    domain_m = _transform(forward.transform, domain_ll)
+    here = _P(*forward.transform(point.lon, point.lat))
+    if not domain_m.covers(here):
+        raise PointOutsideDomainError(point, label=label,
+                                      distance_m=float(here.distance(domain_m)))
+    return point
+
+
 async def _settle_release(
     point: Point | None, *, mesh: dict[str, Any],
     centerline: Any, centerline_utm: Any, utm_epsg: int, fraction: float,
-    node_xy: Any, initial_state: Mapping[str, Any],
+    node_xy: Any, initial_state: Mapping[str, Any], label: str,
 ) -> tuple[Point, str]:
     """WHERE the source enters the water -> the settled Point and how it was decided.
 
     A supplied point the domain polygon does not hold raises rather than moves."""
-    # With no point placed the source sits at ``fraction`` along the declared
-    # centerline, walked downstream to the first station the ACCEPTED MESH holds:
-    # the centerline is the whole navigated stretch and the mesh is only the part
-    # of it the mapped banks left, so "on the line" and "in the domain" are two
-    # different claims and only the second one solves.
+    # With no point placed the source sits at ``fraction`` along the domain's own
+    # CENTERLINE companion, walked downstream to the first station the ACCEPTED
+    # MESH holds: the centerline is the whole navigated stretch and the mesh is
+    # only the part of it the mapped banks left, so "on the line" and "in the
+    # domain" are two different claims and only the second one solves.
     if point is None:
+        if centerline_utm is None:
+            raise TelemacError(
+                f"this domain offers no centerline for the {label} to be placed "
+                "along, so where the substance enters the water is not something "
+                "the run can derive. Place the point.",
+                error_code="TELEMAC_RELEASE_UNPLACED")
         (lon, lat), note = await asyncio.to_thread(
             _station_on_mesh, centerline_utm=centerline_utm, mesh=mesh,
             fraction=fraction)
         placed = Point(lon, lat)
+    elif centerline is None:
+        placed = await asyncio.to_thread(
+            _inside_domain, point, _domain_polygon(mesh.get("artifact")), label)
+        note = "supplied point, inside the modeled domain"
     else:
         placed, moved_m = await asyncio.to_thread(
             contain, point, domain=_domain_polygon(mesh.get("artifact")),
-            flowline=centerline, label="source")
+            flowline=centerline, label=label)
         note = ("supplied point, inside the modeled domain and on the flowline"
                 if moved_m <= 0.0 else
                 f"supplied point, inside the modeled domain; moved {moved_m:.0f} m "
@@ -504,15 +547,15 @@ async def _settle_release(
     wet_utm, moved_m, node = await asyncio.to_thread(
         snap_to_wet, as_utm(placed, utm_epsg),
         node_xy=node_xy, wet=initial_state["wet"], state=initial_state["note"],
-        label="source")
+        label=label)
     settled = (f"solved at mesh node {node}, which holds water at t0 "
                f"({initial_state['note']}), so nothing was moved")
     if moved_m > 0.0:
         settled = (f"moved {moved_m:.1f} m onto mesh node {node}, the nearest one "
                    f"holding water at t0 - the node it landed on was dry "
                    f"({initial_state['note']})")
-    logger.info("source settled: %s", settled)
-    journal_note(f"source point: {settled}."
+    logger.info("%s settled: %s", label, settled)
+    journal_note(f"{label}: {settled}."
                  + (f" Before that: {note}." if note else ""))
     lon, lat = _to_lonlat_point(wet_utm, utm_epsg)
     return Point(lon, lat, placed.name), "; ".join(
@@ -523,36 +566,37 @@ async def settle_release(
     *,
     point: Point | None,
     mesh: dict[str, Any],
-    centerline: Any,
-    seed: dict[str, Any],
-    reach: dict[str, Any],
-    fraction: float,
     label: str,
+    domain: Any = None,
+    fraction: float = 0.5,
     continue_from: str | None = None,
 ) -> dict[str, Any]:
     """Where a source enters the water, settled against the ACCEPTED mesh.
 
-    A supplied point is held inside the domain; an unplaced one sits ``fraction``
-    down the reach; both land on the nearest node holding water at t0."""
+    A supplied point is held inside the domain - and onto the channel where the
+    domain has a CENTERLINE companion; an unplaced one sits ``fraction`` along
+    that centerline. Both land on the nearest node holding water at t0, and a
+    domain with no centerline and no placed point refuses rather than guessing."""
     from trid3nt_server.render.pipeline_emitter import current_emitter
 
     utm_epsg = int(getattr(mesh.get("artifact"), "utm_epsg", 0) or 0)
-    # The centerline is read head-to-tail from the seed the navigate was walked
-    # downstream FROM, so ``fraction`` counts from upstream.
-    centerline_utm = await asyncio.to_thread(
-        read_centerline_utm, centerline, utm_epsg,
-        start_lonlat=(float(seed["lon"]), float(seed["lat"])))
+    # The producer's own centerline runs head-to-tail the way the water does, so
+    # ``fraction`` counts from upstream without a seed to orient it.
+    centerline = getattr(domain, "companions", {}).get("centerline")
+    centerline_utm = None if centerline is None else await asyncio.to_thread(
+        read_centerline_utm, centerline, utm_epsg)
     node_xy, _bed = await asyncio.to_thread(mesh_nodes, mesh)
     initial_state = await asyncio.to_thread(_initial_state, continue_from, len(node_xy))
     placed, note = await _settle_release(
         point, mesh=mesh, centerline=centerline, centerline_utm=centerline_utm,
         utm_epsg=utm_epsg, fraction=fraction, node_xy=node_xy,
-        initial_state=initial_state)
+        initial_state=initial_state, label=label)
     # The marker rides BEFORE the solve, so the user sees the input against the
     # mesh rather than only in the results, and it carries the SETTLED point.
     await publish_point(current_emitter(), placed, label=label,
                         basis="user" if point is not None else "derived",
-                        context=reach["slug"])
+                        context=_slug(getattr(domain, "name", None)
+                                      or str(mesh.get("mesh_id") or "domain")))
     at = as_utm(placed, utm_epsg)
     return {"at": [round(at[0], 3), round(at[1], 3)],
             "lon": round(placed.lon, 6), "lat": round(placed.lat, 6),
@@ -1057,6 +1101,143 @@ async def settle_domain(
             "result_slf": result,
             "bed_source": facts["bed_source"]},
     }
+
+
+async def settle_open_channel(
+    *,
+    mesh: dict[str, Any],
+    friction_law: int,
+    friction_coefficient: float,
+    carrier: Any = None,
+    discharge_m3s: float | None = None,
+) -> dict[str, Any]:
+    """The OPEN-CHANNEL hydraulics on top of any domain: what the inflow carries,
+    what the outflow holds, and the depth the run opens at.
+
+    The flow is the one the user stated, else the one the carrier record reports;
+    the stage is a NORMAL DEPTH over the section the outflow run cuts, derived at
+    the roughness the deck is written at, and the run opens bed-parallel at that
+    same depth - the equilibrium its own downstream boundary holds it to rather
+    than a blanket depth draining into it."""
+    artifact = mesh.get("artifact")
+    utm_epsg = int(getattr(artifact, "utm_epsg", 0) or 0)
+    node_xy, node_bed = await asyncio.to_thread(mesh_nodes, mesh)
+    topology = await asyncio.to_thread(
+        read_topology, _mesh_field(mesh, "topology_uri", missing=_mesh_missing))
+    law, coefficient = int(friction_law), float(friction_coefficient)
+    inflow_q, discharge_note = _carried_discharge(carrier, discharge_m3s)
+    bed = _measured_channel(topology["roles"], node_xy, node_bed)
+    normal = normal_depth_stage(bed, law=law, coefficient=coefficient,
+                                discharge_q=inflow_q)
+    journal_note(
+        f"open channel: constant depth {normal['depth_m']:.3f} m - the SAME "
+        f"normal depth the outflow stage {normal['stage_m']:.3f} m is derived as "
+        f"({normal['q_m3s']:g} m3/s over the measured outflow section at "
+        f"{normal['law']} {normal['coefficient']:g}). Bed-parallel at the "
+        f"friction slope {normal['slope']:.6f}, which IS the uniform-flow "
+        f"surface. {discharge_note}")
+    measured = mesh.get("min_edge_m")
+    return {
+        "utm_epsg": utm_epsg,
+        "depth_m": round(float(normal["depth_m"]), 3),
+        "outflow_stage_m": round(float(normal["stage_m"]), 3),
+        "inflow_q_m3s": inflow_q,
+        "friction_law": law,
+        "friction_coefficient": coefficient,
+        # The step the channel is stable at is the ACCEPTED mesh's, measured on
+        # its own cells: a question that opens its own hydraulics reads it here
+        # rather than waiting for the domain step it runs ahead of.
+        "time_step_s": suggest_time_step_s(
+            max(float(measured if measured is not None else 0.0), MESH_H_FLOOR_M),
+            mesh=artifact),
+        "discharge_note": discharge_note,
+        "normal": {k: (round(v, 6) if isinstance(v, float) else v)
+                   for k, v in normal.items()},
+    }
+
+
+def _carried_discharge(carrier: Any, stated: float | None) -> tuple[float, str]:
+    """What the inflow run carries, and where the number came from -> refuses.
+
+    A stated flow stands over any record; with neither there is no flow to
+    impose and the run says which of the two is missing."""
+    if stated is not None and float(stated) > 0.0:
+        return float(stated), f"the discharge {float(stated):g} m3/s was stated."
+    reported = _reported_discharge(carrier)
+    if reported is None:
+        raise TelemacError(
+            "the inflow run carries a discharge and this run has neither a "
+            "stated one nor a record reporting one over this domain. State the "
+            "flow, or name a source that reaches this water.",
+            error_code="TELEMAC_INFLOW_DISCHARGE_UNMEASURED")
+    value, note = reported
+    return value, note
+
+
+def _reported_discharge(carrier: Any) -> tuple[float, str] | None:
+    """The streamflow the carrier OBSERVATION reports, with what reported it.
+
+    ``None`` where nothing came - a context row whose source held nothing. A
+    record that never passed its slot's ingestion is refused by name rather than
+    read here: choosing the nearest site is what the observation slot does."""
+    from trid3nt_server.inputs.observation import Observation
+
+    if carrier is None:
+        return None
+    if isinstance(carrier, (int, float)) and not isinstance(carrier, bool):
+        return float(carrier), "the discharge was handed over as a number."
+    if not isinstance(carrier, Observation):
+        raise TelemacError(
+            f"the carrier for this run arrived as {type(carrier).__name__}, which "
+            "is a record rather than a reading: which site reports the flow and "
+            "how old the sample is are the observation slot's to decide. Declare "
+            "the row as Data.observation(...) so one value reaches this step.",
+            error_code="TELEMAC_CARRIER_UNINGESTED")
+    return float(carrier.value), (
+        f"the discharge {carrier.value:g} m3/s is what "
+        f"{carrier.site_name or carrier.site_id or 'the carrier record'} reported"
+        + (f" on {carrier.sampled}" if carrier.sampled else "") + ".")
+
+
+def _measured_channel(roles: Mapping[str, Any], node_xy: Any,
+                      node_bed: Any) -> dict[str, Any]:
+    """What the accepted mesh says about the channel the outflow stage rests on.
+
+    The two bed medians are over the nodes the inflow and outflow runs name, and
+    the fall between them over the distance between them IS the friction slope -
+    measured on the mesh rather than on a line laid beside it."""
+    import numpy as np
+
+    bed = None if node_bed is None else np.asarray(node_bed, dtype=float)
+    xy = None if node_xy is None else np.asarray(node_xy, dtype=float)
+    medians: dict[str, float] = {}
+    centres: dict[str, Any] = {}
+    role_nodes: dict[str, list[int]] = {}
+    for role in ("inflow", "outflow"):
+        nodes = [int(n) for n in ((roles or {}).get(role) or ())]
+        if bed is None or not nodes or max(nodes) >= bed.shape[0]:
+            raise TelemacError(
+                f"the outflow stage is derived over the painted bed at the "
+                f"{role!r} run's own nodes, and the accepted mesh carries "
+                f"{0 if bed is None else bed.shape[0]} bed values under roles "
+                f"{sorted(roles or {})}; an open channel names an inflow run and "
+                "an outflow run on its domain's edge.",
+                error_code="TELEMAC_MESH_BED_UNMEASURED")
+        median = float(np.nanmedian(bed[nodes]))
+        if not np.isfinite(median):
+            raise TelemacError(
+                f"every node the {role!r} run names carries an unpainted bed, so "
+                "the outflow stage has no ground to be measured from.",
+                error_code="TELEMAC_MESH_BED_UNMEASURED")
+        medians[role] = median
+        centres[role] = xy[nodes].mean(axis=0)
+        role_nodes[role] = nodes
+    length = float(np.hypot(*(centres["outflow"] - centres["inflow"])))
+    return {"bed_top_m": medians["inflow"],
+            "bed_drop_m": medians["inflow"] - medians["outflow"],
+            "reach_length_m": round(length, 3),
+            "outflow_section": _face_section(role_nodes["outflow"], node_xy, bed,
+                                             missing=_reach_section_unmeasured)}
 
 
 def _graphic_period(output_interval_min: float | None, time_step_s: float) -> int:

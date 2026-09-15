@@ -12,20 +12,20 @@ join the run as the sixth slice.
 | `fixtures/` | data the tests read; no code | - | - |
 | `adapters/` | provider adapters, the message IR, the turn loop, the stream persistence | 22 | 289 |
 | `credentials/` | credential resolution, the auth handshake, identity | 7 | 95 |
-| `derive/` | the derive tools, the two session tools | 26 | 328 |
+| `derive/` | the derive tools, the two session tools | 27 | 337 |
 | `render/` | the emitter, the uri registry, publication, the format set, charts | 36 | 474 |
-| `fetchers/` | the fetch router, its executors, hooks and fallbacks | 66 | 1529 |
+| `fetchers/` | the fetch router, its executors, hooks and fallbacks | 69 | 1565 |
 | `gates/` | the gates, a declined card at each of them, the code-exec approval gate, the context budget, the circuit breaker | 23 | 336 |
-| `inputs/` | the typed inputs: a Point, an Extent, a Shape, the domain, the bed and the boundary runs, each from every form it arrives in, the user-input normalizers under them, the AOI acquired from any of them, and a user's own file adopted as a layer | 12 | 145 |
-| `mesh/` | the meshers, the mesh gate, topology, the bed over the one source it takes and the runs that prescribe a role | 8 | 234 |
+| `inputs/` | the typed inputs: a Point, an Extent, a Shape, the domain with the companions its producer measured, the bed, the boundary runs and the observation a run opens on, each from every form it arrives in, the user-input normalizers under them, the AOI acquired from any of them, and a user's own file adopted as a layer | 13 | 157 |
+| `mesh/` | the meshers, the mesh gate, topology, the bed over the one source it takes, the runs that prescribe a role and the shoreline the domain's own edge is | 7 | 230 |
 | `model/` | the SysML model conformance check | 1 | 19 |
 | `plugin/` | the plugin seams the server suite reads offline, by `ast` | 1 | 3 |
-| `runtime/` | the declarative runtime, its engine-neutral slots and levers, the run journal | 8 | 275 |
+| `runtime/` | the declarative runtime, its engine-neutral slots and levers, the run journal | 8 | 278 |
 | `scripts/` | the dev instruments, the live-run harness and the proof renderers, skipped when `dev/` is absent | 8 | 57 |
 | `search/` | dataset and tool retrieval, the OGC adapter | 16 | 209 |
 | `server/` | the HTTP and WS routes, the fetch short-circuit and the Case AOI, persistence, telemetry | 28 | 552 |
 | `solver/` | the executor, the run reads, the engine-room posture, the import graph that keeps it engine-free | 7 | 53 |
-| `telemac/` | the TELEMAC templates, the module surface, what each module writes and the primitives that read it, the listing reads, authoring | 33 | 649 |
+| `telemac/` | the TELEMAC templates, the module surface, what each module writes and the primitives that read it, the listing reads, authoring | 36 | 672 |
 | `tools/` | the registry, the arg normalizer, the tool cache | 14 | 376 |
 
 | file | what it is |

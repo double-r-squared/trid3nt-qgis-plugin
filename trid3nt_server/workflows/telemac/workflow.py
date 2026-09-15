@@ -252,7 +252,13 @@ class Door:
             mesh=self.mesh if self.mesh is not None else tool.build_mesh(
                 mesher=self.mesher, kind=self.kind, extent=DataRef(domain),
                 resolution_m=ParamRef("mesh_resolution_m"),
-                ops=[*_clean_ops(),
+                # THE RIM IS THE ASK'S TO SIZE, and every domain is cut from a
+                # shoreline now: no sizing function the library has measures the
+                # domain's own outline, so an undeclared rim comes back an order
+                # of magnitude past the size word and the granularity lever is
+                # the user's. No edge is stated, so the rim takes the recipe's
+                # own size word.
+                ops=[mesh_op("set_rim_size"), *_clean_ops(),
                      mesh_op("set_bed", source=DataRef(beds[0])),
                      # The runs come from wherever they were stated: the row
                      # the user fills, or the domain's own producer, which

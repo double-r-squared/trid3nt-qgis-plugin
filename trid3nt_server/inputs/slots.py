@@ -11,11 +11,12 @@ from __future__ import annotations
 import logging
 from typing import Any, Callable, Mapping
 
-from trid3nt_server.workflows.runtime.data import BED, DOMAIN, RUNS
+from trid3nt_server.workflows.runtime.data import BED, DOMAIN, OBSERVATION, RUNS
 
 from .bed import bed
 from .boundary import boundary_runs
 from .domain import domain
+from .observation import observation
 
 __all__ = ["DRAW_PURPOSES", "ask_on_canvas", "ingest_slot"]
 
@@ -27,6 +28,7 @@ _INGESTIONS: Mapping[str, Callable[..., Any]] = {
     DOMAIN: domain,
     BED: bed,
     RUNS: boundary_runs,
+    OBSERVATION: observation,
 }
 
 #: What the canvas offers for a slot the user fills by hand: the draw kind, and
@@ -40,13 +42,19 @@ DRAW_PURPOSES: Mapping[str, tuple[str, str, str]] = {
 }
 
 
-def ingest_slot(role: str, value: Any, *, label: str = "") -> Any:
+def ingest_slot(role: str, value: Any, *, label: str = "",
+                **coercion: Any) -> Any:
     """One slot's value, through the ingestion its ROLE reads.
 
-    A role nothing here knows returns the value as it came: the slot is then
-    whatever its own consumer makes of it."""
+    ``coercion`` is what the ROW told its slot about the value - the point a
+    nearest site is ranked against, the unit a keyword reads. A role nothing here
+    knows returns the value as it came: the slot is then whatever its own
+    consumer makes of it."""
     read = _INGESTIONS.get(str(role))
-    return value if read is None else read(value, label=label or str(role))
+    if read is None:
+        return value
+    return read(value, label=label or str(role),
+                **{k: v for k, v in coercion.items() if v is not None})
 
 
 async def ask_on_canvas(role: str, *, tool: str, param: str,

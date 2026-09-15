@@ -293,7 +293,7 @@ async def _produce(env: _Env, decl: DataDecl) -> Any:
     handed_in = env.supplied.get(decl.name)
     if handed_in is not None:
         _validate_supplied(decl, handed_in, decl.supplied_validate)
-        return await _ingested(decl, handed_in)
+        return await _ingested(env, decl, handed_in)
     producer = decl.producer
     if producer is None and decl.role:
         # A SLOT the caller did not fill and no producer answers is asked for on
@@ -322,14 +322,14 @@ async def _produce(env: _Env, decl: DataDecl) -> Any:
         )
     if producer.supplied_uri:
         _validate_supplied(decl, producer.supplied_uri, producer.supplied_validate)
-        return await _ingested(decl, producer.supplied_uri)
+        return await _ingested(env, decl, producer.supplied_uri)
     cached = env.ledger.replay_data(decl.name) if (env.ledger and env.resume) else None
     if cached is not None and await _artifacts_live(cached):
         value = _rehydrate(cached)
         if value is not _UNREPLAYABLE:
             env.data_records.append(cached)
             logger.info("data %s REPLAYED from ledger", decl.name)
-            return value
+            return await _ingested(env, decl, value)
     label = _data_step_label(decl.name)
     if decl.is_context:
         return await _context(env, decl, label)
@@ -340,10 +340,10 @@ async def _produce(env: _Env, decl: DataDecl) -> Any:
         record, index=-1, node=_data_step_label(decl.name)))
     if env.ledger is not None:
         await env.ledger.record_data(decl.name, record)
-    return await _ingested(decl, value)
+    return await _ingested(env, decl, value)
 
 
-async def _ingested(decl: DataDecl, value: Any) -> Any:
+async def _ingested(env: _Env, decl: DataDecl, value: Any) -> Any:
     """A SLOT's value through the one ingestion its role reads; a plain row's
     value as it came.
 
@@ -354,8 +354,9 @@ async def _ingested(decl: DataDecl, value: Any) -> Any:
         return value
     from trid3nt_server.inputs.slots import ingest_slot
 
+    coercion = await _bind_value(dict(decl.coercion), env)
     return await asyncio.to_thread(ingest_slot, decl.role, value,
-                                   label=decl.name)
+                                   label=decl.name, **coercion)
 
 
 async def _context(env: _Env, decl: DataDecl, label: str) -> Any:
@@ -366,6 +367,11 @@ async def _context(env: _Env, decl: DataDecl, label: str) -> Any:
     gate error is a channel the caller still has to see."""
     try:
         answered, value = await _walk_ladder(env, decl.producer, label)
+        # The ingestion is INSIDE the absence: a source that answered with rows
+        # its slot finds nothing usable in - sites that report another
+        # characteristic, a survey with no soundings - held nothing for this run
+        # either, and a context row says so rather than refusing.
+        ingested = await _ingested(env, decl, value)
     except asyncio.CancelledError:
         raise
     except Exception as exc:  # noqa: BLE001 - any empty source is the absence
@@ -381,7 +387,7 @@ async def _context(env: _Env, decl: DataDecl, label: str) -> Any:
         record, index=-1, node=label))
     if env.ledger is not None:
         await env.ledger.record_data(decl.name, record)
-    return value
+    return ingested
 
 
 async def _walk_ladder(env: _Env, producer: Producer,
@@ -431,6 +437,11 @@ def _validate_supplied(decl: DataDecl, supplied: Any, validate: Any) -> None:
     declared SHAPE against the artifact's class, and - under ``CoversAOI`` - that a
     domain with an extent is bound. The artifact's own extent is never read."""
     decl.refuse_wrong_shape(supplied)
+    if isinstance(supplied, (int, float)) and not isinstance(supplied, bool):
+        # A NUMBER is not an artifact: a stated depth or a stated reading has no
+        # extent for a coverage check to be about, and it covers the domain by
+        # construction - which is why a slot takes one at all.
+        return
     if validate is not CoversAOI:
         return
     dom = current_domain()

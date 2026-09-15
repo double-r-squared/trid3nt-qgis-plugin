@@ -105,6 +105,38 @@ def _resolve_layer_to_local_path(
 
 
 
+def _addressed(source: Any) -> str:
+    """What this call measured, as the address it had - or as what it was.
+
+    A drawn shape has no address, and naming its type is the whole of what an
+    honest echo can say about it."""
+    if isinstance(source, str):
+        return source
+    uri = getattr(source, "uri", None)
+    return str(uri) if uri else f"inline {type(source).__name__}"
+
+
+def _inline_bounds(source: Any) -> tuple[float, float, float, float] | None:
+    """The extent of a value that carries its own GEOMETRY, or ``None``.
+
+    A slot's typed value - a drawn domain, a shape the user picked - has no
+    address to open, so its bounds are read off the geometry in hand."""
+    collection = getattr(source, "as_feature_collection", None)
+    if not callable(collection):
+        return None
+    from shapely.geometry import shape as _shape
+    from shapely.ops import unary_union
+
+    from trid3nt_server.inputs.geometry import flatten_geometries
+
+    shapes = [_shape(g) for g in flatten_geometries(collection())]
+    if not shapes:
+        raise ComputeLayerBoundsError(
+            "EMPTY_LAYER", f"{source!r} carries no geometry to measure.")
+    minx, miny, maxx, maxy = unary_union(shapes).bounds
+    return (float(minx), float(miny), float(maxx), float(maxy))
+
+
 def _detect_layer_type(uri: str) -> str | None:
     """``"raster"`` or ``"vector"`` from the extension, else None for the caller
     to probe rasterio and then geopandas.
@@ -282,7 +314,7 @@ def _apply_pad_m(
     idempotent_hint=True,
 )
 async def compute_layer_bounds(
-    layer_uri: str,
+    layer_uri: Any,
     pad_fraction: float = 0.0,
     pad_m: float = 0.0,
     *,
@@ -299,8 +331,9 @@ async def compute_layer_bounds(
     it moves the view too.
 
     Params:
-        layer_uri: the layer's ``layer_id`` handle, or an s3:// URI or local
-            path. The extent is reprojected to EPSG:4326.
+        layer_uri: the layer's ``layer_id`` handle, an s3:// URI or local
+            path, or a shape that carries its own geometry - a domain drawn on
+            the canvas has no address to open. The extent is EPSG:4326.
         pad_fraction: fractional pad per side; 0.0 (default) is exact.
         pad_m: pad per side in METRES, for a query window that must reach a
             stated distance past the layer. Applied after ``pad_fraction``.
@@ -311,26 +344,30 @@ async def compute_layer_bounds(
     """
     computed_at = datetime.now(timezone.utc).isoformat()
 
-    local_path, is_temp = _resolve_layer_to_local_path(layer_uri, _storage_client)
-    try:
-        layer_type = _detect_layer_type(local_path) or _detect_layer_type(layer_uri)
-        if layer_type == "raster":
-            raw_bbox = _bounds_from_raster(local_path)
-        elif layer_type == "vector":
-            raw_bbox = _bounds_from_vector(local_path)
-        else:
-            try:
+    inline = _inline_bounds(layer_uri)
+    if inline is not None:
+        raw_bbox, layer_type = inline, "vector"
+    else:
+        local_path, is_temp = _resolve_layer_to_local_path(layer_uri, _storage_client)
+        try:
+            layer_type = _detect_layer_type(local_path) or _detect_layer_type(layer_uri)
+            if layer_type == "raster":
                 raw_bbox = _bounds_from_raster(local_path)
-                layer_type = "raster"
-            except ComputeLayerBoundsError:
+            elif layer_type == "vector":
                 raw_bbox = _bounds_from_vector(local_path)
-                layer_type = "vector"
-    finally:
-        if is_temp:
-            try:
-                os.unlink(local_path)
-            except OSError:
-                pass
+            else:
+                try:
+                    raw_bbox = _bounds_from_raster(local_path)
+                    layer_type = "raster"
+                except ComputeLayerBoundsError:
+                    raw_bbox = _bounds_from_vector(local_path)
+                    layer_type = "vector"
+        finally:
+            if is_temp:
+                try:
+                    os.unlink(local_path)
+                except OSError:
+                    pass
 
     if not all(math.isfinite(v) for v in raw_bbox):
         raise ComputeLayerBoundsError(
@@ -374,6 +411,6 @@ async def compute_layer_bounds(
         "pad_fraction": max(0.0, float(pad_fraction)),
         "pad_m": max(0.0, float(pad_m)),
         "map_fitted": map_fitted,
-        "layer_uri": layer_uri,
+        "layer_uri": _addressed(layer_uri),
         "computed_at": computed_at,
     }
