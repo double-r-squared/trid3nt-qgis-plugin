@@ -115,17 +115,29 @@ touch, BEFORE writing code. Inherit the structure; do not improvise.
 ## How to write code here
 
 - EVERY KIND OF CODE HAS ONE HOME. The engine's module is the unit: a
-  template is values over one module - keywords, DATA rows, an outputs
-  list, captions - and nothing below the template layer names a
-  template or a question. A piece that writes an engine input file is
-  authoring; one that expands a value into keywords is a composite on
-  the wrapper; one that reads a variable off a result is a primitive;
-  one that fetches or resamples is a DATA row; one that validates or
-  places a geometry is a method on Point, Extent or Shape; one that
-  fails is a module-level error. `helpers/` holds ONLY a pure physics or
-  numerics function none of those express - no fetch, no geometry, no
-  file, no failure of its own. A tool is `fetch` or `derive`; a third
-  kind invents a schism to justify.
+  template is values over one module - keywords, DATA rows, placed
+  reads, an answer, captions for those - and nothing below the
+  template layer names a template or a question. A template package
+  holds its template module, its declarations and its corpus, and
+  NOTHING ELSE: no helper module, no function of its own. A piece
+  that writes an engine input file is authoring; one that expands a
+  value into keywords or files is a composite on the wrapper, and it
+  carries only what the dictionary does not - a keyword the module
+  already has is stated by its name on the body, never re-mapped
+  through a named argument; one that reads a variable off a result is
+  a primitive; what the module writes is its output table, never a
+  template's choice; one that fetches is a fetcher and a DATA row
+  names it; one that fails is a module-level error. A tool is `fetch`
+  or `derive`; a third kind invents a schism to justify. DERIVE is a
+  function over input, never a fetch: a standalone process that takes
+  a layer or a value and gives one back, useful on its own outside any
+  template, knowing nothing about slots. COERCION is what a slot does
+  to what it is handed so it fits - small, scoped to that slot, run on
+  ingestion, never exposed as a tool (a Point takes a pair or a named
+  pick; the Atmosphere composite turns a dew point into vapour
+  pressure and puts the series on the run's clock); a coercion may
+  call a derive, never a fetch. The line: would anyone call it without
+  the slot? Yes is a derive tool; no is that slot's coercion.
 - SIMPLICITY: prefer the boring solution. Reuse an existing seam,
   convention, or pattern before inventing anything. Before adding a
   flag, mode, field, or knob: name who reads it - no reader, no
