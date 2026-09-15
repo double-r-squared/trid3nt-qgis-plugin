@@ -690,14 +690,18 @@ _COUPLED_CALLS = {
         {"substance": "y", "half_life_hours": 0.0, "rate_per_day": 0.7,
          "presets": {"y": {"law": 1, "coef": 2.0}}}),
     ("waqtel", "o2"): (
-        {"water_temp_c": 20.0, "salinity_ppt": 0.0, "k1_per_day": 0.3,
-         "k4_per_day": 0.0, "k2_per_day": 0.9, "k2_formula": 0,
-         "saturation_mgl": 9.0, "benthic_demand": 0.0, "photosynthesis_p": 0.0,
-         "respiration_r": 0.0},
-        {"water_temp_c": 11.5, "salinity_ppt": 33.0, "k1_per_day": 0.44,
-         "k4_per_day": 0.35, "k2_per_day": 1.7, "k2_formula": 2,
-         "saturation_mgl": 11.2, "benthic_demand": 0.1,
-         "photosynthesis_p": 1.0, "respiration_r": 0.06}),
+        {"WATER_TEMPERATURE": 20.0, "WATER_SALINITY": 0.0,
+         "CONSTANT_OF_DEGRADATION_OF_ORGANIC_LOAD_K1": 0.3,
+         "CONSTANT_OF_NITRIFICATION_KINETIC_K4": 0.0,
+         "K2_REAERATION_COEFFICIENT": 0.9, "FORMULA_FOR_COMPUTING_K2": 0,
+         "O2_SATURATION_DENSITY_OF_WATER__CS_": 9.0, "BENTHIC_DEMAND": 0.0,
+         "PHOTOSYNTHESIS_P": 0.0, "VEGETAL_RESPIRATION_R": 0.0},
+        {"WATER_TEMPERATURE": 11.5, "WATER_SALINITY": 33.0,
+         "CONSTANT_OF_DEGRADATION_OF_ORGANIC_LOAD_K1": 0.44,
+         "CONSTANT_OF_NITRIFICATION_KINETIC_K4": 0.35,
+         "K2_REAERATION_COEFFICIENT": 1.7, "FORMULA_FOR_COMPUTING_K2": 2,
+         "O2_SATURATION_DENSITY_OF_WATER__CS_": 11.2, "BENTHIC_DEMAND": 0.1,
+         "PHOTOSYNTHESIS_P": 1.0, "VEGETAL_RESPIRATION_R": 0.06}),
     ("gaia", "bed"): (
         {"geometry": "a.slf", "boundary": "a.cli",
          "gradation": [(63.0, 0.4), (200.0, 0.6)], "presets": {}, "d50_um": 120.0,
@@ -768,10 +772,13 @@ def _hashable(value):
 def test_a_coupled_body_is_checked_against_its_own_module_s_dictionary():
     from trid3nt_server.workflows.telemac.modules import WAQTEL
 
-    body = WAQTEL.o2(water_temp_c=20.0, salinity_ppt=0.0, k1_per_day=0.3,
-                     k4_per_day=0.0, k2_per_day=0.9, k2_formula=0,
-                     saturation_mgl=9.0, benthic_demand=0.0,
-                     photosynthesis_p=0.0, respiration_r=0.0)
+    body = WAQTEL.o2(
+        WATER_TEMPERATURE=20.0, WATER_SALINITY=0.0,
+        CONSTANT_OF_DEGRADATION_OF_ORGANIC_LOAD_K1=0.3,
+        CONSTANT_OF_NITRIFICATION_KINETIC_K4=0.0,
+        FORMULA_FOR_COMPUTING_K2=0, K2_REAERATION_COEFFICIENT=0.9,
+        O2_SATURATION_DENSITY_OF_WATER__CS_=9.0, BENTHIC_DEMAND=0.0,
+        PHOTOSYNTHESIS_P=0.0, VEGETAL_RESPIRATION_R=0.0)
     sheet = fill(WAQTEL, **dict(body["slots"]))
     assert dict(sheet.resolved())["O2 SATURATION DENSITY OF WATER (CS)"] == 9.0
     with pytest.raises(SlotRefused, match="is REAL"):
@@ -848,10 +855,12 @@ def test_every_wrapper_binds_the_primitive_set_and_nothing_question_named():
 
 # -- the flip: one template per question, and the door's own review ----------- #
 
-#: The nine questions the surface answers. Seven run on the fill/run door; the
+#: The twelve questions the surface answers. Ten run on the fill/run door; the
 #: two open-water fronts still declare a plan and are Stage 3's.
 _FLIPPED = ("telemac_river_dye", "telemac_river_oil_spill", "telemac_river_scour",
             "telemac_river_sediment_plume", "telemac_do_sag",
+            "telemac_river_temperature", "telemac_river_micropollutant",
+            "telemac_river_eutrophication",
             "telemac_rain_on_grid", "telemac_river_dredging")
 
 
@@ -865,8 +874,8 @@ def _bodies():
 
 
 def test_a_structural_fork_is_a_template_and_never_a_switch():
-    """Four questions release something into the same reach and each fills DIFFERENT
-    slots for it. The arity of the carrier's tracer surface moves with the fork,
+    """Several questions release something into the same reach and each fills
+    DIFFERENT slots for it. The arity of the carrier's tracer surface moves with the fork,
     which is why each body states it rather than a composite owning it out of sight.
 
     The dredge releases NOTHING into the reach, so it prescribes no tracer at
@@ -886,7 +895,10 @@ def test_a_structural_fork_is_a_template_and_never_a_switch():
         arity[name] = len(slots.get("PRESCRIBED_TRACERS_VALUES", ()))
     assert arity == {"telemac_river_dye": 2, "telemac_river_oil_spill": 2,
                      "telemac_river_scour": 2, "telemac_river_dredging": 0,
-                     "telemac_river_sediment_plume": 4, "telemac_do_sag": 8}
+                     "telemac_river_sediment_plume": 4, "telemac_do_sag": 8,
+                     "telemac_river_temperature": 2,
+                     "telemac_river_micropollutant": 10,
+                     "telemac_river_eutrophication": 16}
 
 
 def test_no_flipped_body_branches_on_anything():
@@ -1009,10 +1021,12 @@ def test_every_open_water_recipe_carries_the_boundary_cleaning_chain():
 
 # -- the LLM surface: the raw floor, the docstring, the card ------------------ #
 
-#: Every question on the surface. All eight fill and run through the door, so all
-#: eight carry the floor, the sheet line and the card.
+#: Every question on the surface. All eleven fill and run through the door, so all
+#: eleven carry the floor, the sheet line and the card.
 _TEMPLATES = ("telemac_river_dye", "telemac_river_oil_spill", "telemac_river_scour",
               "telemac_river_sediment_plume", "telemac_do_sag",
+              "telemac_river_temperature", "telemac_river_micropollutant",
+              "telemac_river_eutrophication",
               "telemac_rain_on_grid", "artemis_harbor_agitation",
               "telemac3d_stratified_flow")
 

@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import datetime as _dt
 import logging
+import math
 import os
 import re
 import tempfile
@@ -47,8 +48,10 @@ __all__ = [
     "measure_mesh_coverage",
     "measure_water_coverage",
     "reach_seed",
+    "WaterTemperature",
     "resolve_carrier_discharge",
     "resolve_rain_forcing",
+    "resolve_water_temperature",
 ]
 
 _HERE = "trid3nt_server.workflows.telemac.templates.reach"
@@ -687,6 +690,76 @@ def CarrierDischarge(*, seed: Any, explicit: Any, event_time: Any = None) -> Ste
     return Step(runner=f"{_HERE}.resolve_carrier_discharge", stage="acquire",
                 kwargs={"seed": seed, "explicit": explicit, "event_time": event_time}
                 ).named("carrier_discharge")
+
+
+#: The Water Quality Portal's own word for what a thermometer in a river reads.
+_WATER_TEMPERATURE = "temperature"
+
+
+async def resolve_water_temperature(*, sample: Any, supplied: float | None,
+                                    seed: dict[str, Any]) -> dict[str, Any]:
+    """The water temperature the reach opens at and carries in at its upstream
+    face, from the nearest sample site in the fetched record.
+
+    A stated value stands; otherwise the nearest site that reports one, with the
+    sample DATE on the note, because a sample is a moment and not a climatology.
+    No site REFUSES rather than opening at a guess."""
+    if supplied is not None:
+        return {"water_temp_c": float(supplied), "site": None,
+                "note": f"the reach opens at the stated {float(supplied):g} C."}
+    from trid3nt_server.inputs.geometry import source_uri
+
+    lon, lat = float(seed["lon"]), float(seed["lat"])
+    rows = await asyncio.to_thread(_read_vector_features, str(source_uri(sample)))
+    sites = sorted(
+        ((_km_from(row, lon, lat), row.get("properties") or {}) for row in rows
+         if (row.get("properties") or {}).get("value") is not None
+         and (row.get("geometry") or {}).get("coordinates")),
+        key=lambda found: found[0])
+    if not sites:
+        raise TelemacError(
+            "no Water Quality Portal site near the reach reports a water "
+            "temperature, so the temperature this reach opens at and carries in "
+            "at its upstream face is not measured anywhere near it; state "
+            "initial_water_temp_c.",
+            error_code="TELEMAC_WATER_TEMPERATURE_UNMEASURED")
+    distance_km, row = sites[0]
+    sampled = str(row.get("result_date") or "").strip() or "an undated sample"
+    celsius = _celsius(float(row["value"]), str(row.get("unit") or ""))
+    return {"water_temp_c": round(celsius, 2), "site": row.get("site_id"),
+            "note": (f"the reach opens at {celsius:.2f} C, the water temperature "
+                     f"the site {row.get('site_id')} "
+                     f"({row.get('site_name') or 'unnamed'}), {distance_km:.0f} km "
+                     f"from the reach, reported on {sampled} as "
+                     f"{float(row['value']):g} {row.get('unit') or 'deg C'}. That "
+                     "is a SAMPLE at a moment, not the week's mean; the run's own "
+                     "weather is what moves the reach off it.")}
+
+
+def WaterTemperature(*, sample: Any, supplied: Any, seed: Any) -> Step:  # noqa: N802
+    """What the reach opens at, named ``opening``. A STEP, not Data: it reads
+    the resolved seed and a fetched record, neither of which a producer names."""
+    return Step(runner=f"{_HERE}.resolve_water_temperature", stage="author",
+                kwargs={"sample": sample, "supplied": supplied, "seed": seed}
+                ).named("opening")
+
+
+def _km_from(row: dict[str, Any], lon: float, lat: float) -> float:
+    """How far a feature is from the reach seed. Ranking only has to ORDER the
+    sites, so the local flat-earth distance is the whole of what it needs."""
+    east, north = row["geometry"]["coordinates"][:2]
+    return math.hypot((float(east) - lon) * 111.32 * math.cos(math.radians(lat)),
+                      (float(north) - lat) * 110.57)
+
+
+def _celsius(value: float, unit: str) -> float:
+    """One reported water temperature in degrees Celsius.
+
+    The portal federates state and federal programs, so the unit travels with the
+    row rather than being the portal's; a Fahrenheit row is converted by name."""
+    if "f" in unit.lower().replace("deg", "").replace("c", ""):
+        return (value - 32.0) / 1.8
+    return value
 
 
 async def _surface_discharge_station_layer(layer: Any) -> None:

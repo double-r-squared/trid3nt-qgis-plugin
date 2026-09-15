@@ -254,10 +254,10 @@ from .meta.spatial_input_tool import spatial_input_tool  # noqa: E402,F401
 from .search.web_fetch import web_fetch  # noqa: E402,F401
 
 # Workflow-composer registrations; each module carries its OWN @register_tool.
-# The five REACH templates (engine="telemac", tier="template"). ONE TEMPLATE PER
+# The REACH templates (engine="telemac", tier="template"). ONE TEMPLATE PER
 # QUESTION: a tracer, an oil slick, a moving bed, a settling class and an oxygen
 # sag fill DIFFERENT slots of the same deck, so routing picks a template rather
-# than a substance word picking a branch. All five LIST the shared river part,
+# than a substance word picking a branch. Every one LISTS the shared river part,
 # whose two end faces are the transects the inflow and the outflow are prescribed
 # on; the edge length is an explicit sheet value on every one of them.
 from trid3nt_server.workflows.telemac.templates.river_dye.river_dye import telemac_river_dye as _telemac_river_dye  # noqa: E402,F401 - reach conservative-plume front (engine=telemac, tier=template)
@@ -265,6 +265,12 @@ from trid3nt_server.workflows.telemac.templates.do_sag.do_sag import telemac_do_
 from trid3nt_server.workflows.telemac.templates.river_oil_spill.river_oil_spill import telemac_river_oil_spill as _telemac_river_oil_spill  # noqa: E402,F401 - reach oil-slick front (engine=telemac, tier=template)
 from trid3nt_server.workflows.telemac.templates.river_scour.river_scour import telemac_river_scour as _telemac_river_scour  # noqa: E402,F401 - reach mobile-bed front (engine=telemac, tier=template)
 from trid3nt_server.workflows.telemac.templates.river_sediment_plume.river_sediment_plume import telemac_river_sediment_plume as _telemac_river_sediment_plume  # noqa: E402,F401 - reach suspended-sediment front (engine=telemac, tier=template)
+# The three WAQTEL process questions over the same reach: the heat budget under a
+# real week of weather, a sorbing substance partitioning onto the river's sediment,
+# and what one pass down an enriched reach does to its nutrients and its oxygen.
+from trid3nt_server.workflows.telemac.templates.river_temperature.river_temperature import telemac_river_temperature as _telemac_river_temperature  # noqa: E402,F401 - reach water-temperature front (engine=telemac, tier=template)
+from trid3nt_server.workflows.telemac.templates.river_micropollutant.river_micropollutant import telemac_river_micropollutant as _telemac_river_micropollutant  # noqa: E402,F401 - reach sorbing-pollutant front (engine=telemac, tier=template)
+from trid3nt_server.workflows.telemac.templates.river_eutrophication.river_eutrophication import telemac_river_eutrophication as _telemac_river_eutrophication  # noqa: E402,F401 - reach nutrient-enrichment front (engine=telemac, tier=template)
 # The reach's one WORKED question: a dredger driven by NESTOR on the sediment
 # deck, so the material it moves rides the same per-class mass evolution the bed
 # evolution and the sediment balance are computed from.
