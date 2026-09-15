@@ -51,7 +51,9 @@ per NAMES OF TRACERS entry, read by position as `T<n>` - and a module that
 appends tracers to its carrier states those rows and their styles itself
 through one hook (WAQTEL by process, GAIA per suspended class), over rows it
 declares in APPENDABLE so what it may append is readable without a body to run
-the hook against; the carrier never counts them.
+the hook against; the carrier never counts them. A row whose name a carrier
+tracer already carries is ADOPTED rather than appended, which is the match the
+engine itself makes on the first sixteen characters of the name.
 
 A wrapper's READS are the PRIMITIVE SET over that output, named from the
 module's own variables: `field(name, t)`, `series(name, at)`,
@@ -94,10 +96,10 @@ reader that knows a question.
 | `listing.py` | What a solved run's own listing says, read on the server: the engine's demand, GAIA's closure, the water-volume closure per period and whole, and the flux across a liquid boundary. |
 | `describe.py` | `describe_keywords` - the read over a module's dictionary, which is how the whole keyword surface is reached rather than carried in a docstring. |
 | `corpus.yaml` | The routing phrasings that reach `describe_keywords`. |
-| `telemac2d.py` | The TELEMAC-2D wrapper: the releases, wind, rain, oil, friction, runoff, infiltration (the curve-number and roughness surface read off the land cover at the fill), rating, hyetograph, time-origin and coupling groups, the module's output table with the tracer row and the flux it prints rather than writes, and the drogues track it writes. |
-| `telemac3d.py` | The TELEMAC-3D wrapper: the vertical grid keyword pair and its refusal, the water column a run is initialized from, the wind, and the output table its 3D printouts keyword is written from. |
+| `telemac2d.py` | The TELEMAC-2D wrapper: the releases, wind, rain, atmosphere, oil, friction, runoff, infiltration (the curve-number and roughness surface read off the land cover at the fill), rating, hyetograph, time-origin and coupling groups, the module's output table with the tracer row and the flux it prints rather than writes, and the drogues track it writes. |
+| `telemac3d.py` | The TELEMAC-3D wrapper: the vertical grid keyword pair and its refusal, the water column a run is initialized from, the wind, the atmosphere it reads the same file for as TELEMAC-2D does, and the output table its 3D printouts keyword is written from. |
 | `artemis.py` | The ARTEMIS wrapper: the incident wave, which the module reads out of the boundary file rather than the deck, so the composite restamps the pair the mesh recipe wrote; the wave output table; and the KD coefficient it derives over that table. |
-| `waqtel.py` | The WAQTEL wrapper: the O2 process and the degradation a carrier names as coupled bodies, whose slots serialize into WAQTEL's own steering file while the coupling keywords land on the carrier's sheet; a degradation given nothing couples nothing; and the tracers each process appends to its carrier's result. |
+| `waqtel.py` | The WAQTEL wrapper: the thermal, O2, micropollutant, eutrophication and degradation processes a carrier names as coupled bodies, each carrying its process number and the keywords stated under their own names, whose slots serialize into WAQTEL's own steering file while the coupling keywords land on the carrier's sheet; a degradation given nothing couples nothing; and the tracers each process appends to its carrier's result. |
 | `gaia.py` | The GAIA wrapper: the bed and the suspension a carrier names as coupled bodies, expanded from a gradation or a class and its concentration, the DREDGE the engine offers as keywords on this deck rather than as a module of its own - its action values, and the three files it names - its output table and the class a suspension appends to its carrier's tracers, and its primitives over the module's own result file. |
 
 ## Subfolders

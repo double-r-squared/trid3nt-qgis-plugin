@@ -61,10 +61,12 @@ def test_the_printouts_keyword_is_the_table_and_the_run_s_own_tracers():
     sheet = fill(T2D, NUMBER_OF_TRACERS=1,
                  NAMES_OF_TRACERS=["DYE             MG/L"],
                  coupling=[WAQTEL.o2(
-                     water_temp_c=20.0, salinity_ppt=0.0, k1_per_day=0.3,
-                     k4_per_day=0.0, k2_per_day=0.5, k2_formula=0,
-                     saturation_mgl=9.1, benthic_demand=0.0,
-                     photosynthesis_p=0.0, respiration_r=0.0)])
+        WATER_TEMPERATURE=20.0, WATER_SALINITY=0.0,
+        CONSTANT_OF_DEGRADATION_OF_ORGANIC_LOAD_K1=0.3,
+        CONSTANT_OF_NITRIFICATION_KINETIC_K4=0.0,
+        FORMULA_FOR_COMPUTING_K2=0, K2_REAERATION_COEFFICIENT=0.5,
+        O2_SATURATION_DENSITY_OF_WATER__CS_=9.1, BENTHIC_DEMAND=0.0,
+        PHOTOSYNTHESIS_P=0.0, VEGETAL_RESPIRATION_R=0.0)])
     # One declared tracer, three the O2 process appends behind it.
     assert [row.name for row in sheet.tracers] == [
         "DYE", "DISSOLVED O2", "ORGANIC LOAD", "NH4 LOAD"]
@@ -301,5 +303,6 @@ def test_every_module_that_appends_rows_is_on_the_modules_page():
             assert f"appended by {condition}: " in page
             for row in rows:
                 assert f"`{row.name}`" in page
-    declared = [row for _, rows in WAQTEL.APPENDABLE for row in rows]
-    assert list(WAQTEL.APPENDS({"process": 2})) == declared
+    for condition, rows in WAQTEL.APPENDABLE:
+        process = int(condition.split()[-1])
+        assert list(WAQTEL.APPENDS({"process": process})) == list(rows)

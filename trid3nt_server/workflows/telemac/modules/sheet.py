@@ -7,7 +7,7 @@ is informational; REQUIRED, the dictionary's OBLIG files, is what a run refuses 
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import Enum
 from types import MappingProxyType
 from typing import Any, Callable, Mapping, Sequence
@@ -113,7 +113,20 @@ class Sheet:
                                style=row.style if row is not None else None))
         for body in self.coupled:
             appends = wrapper_for(body["module"]).APPENDS
-            rows += list(appends(body)) if appends is not None else []
+            for appended in (list(appends(body)) if appends is not None else []):
+                # ADOPTED, NOT APPENDED. The engine adds a module's tracer only
+                # when no tracer already carries that name in its first sixteen
+                # characters, so a carrier that declared one keeps it - with the
+                # NAME and UNIT it declared, which are what the result file
+                # carries - and the module attaches its process to it. The STYLE
+                # is the appending module's either way: the carrier's is the
+                # generic tracer row, which says nothing about what this one is.
+                held = next((n for n, row in enumerate(rows)
+                             if row.name == appended.name), None)
+                if held is None:
+                    rows.append(appended)
+                elif appended.style is not None:
+                    rows[held] = replace(rows[held], style=appended.style)
         return tuple(rows)
 
     def printouts(self) -> Mapping[str, str]:

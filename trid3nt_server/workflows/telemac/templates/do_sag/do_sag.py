@@ -195,12 +195,13 @@ class STEERING(T2D):
     #: closed form holds under) and zeroes the three sources the closed form has
     #: no term for - nitrification, benthic demand, and photosynthesis less
     #: respiration.
-    coupling = [WAQTEL.o2(water_temp_c=P.water_temp_c, salinity_ppt=0.0,
-                          k1_per_day=P.k1_per_day, k4_per_day=0.0,
-                          k2_per_day=P.k2_per_day, k2_formula=0,
-                          saturation_mgl=P.do_saturation_mgl,
-                          benthic_demand=0.0, photosynthesis_p=0.0,
-                          respiration_r=0.0)]
+    coupling = [WAQTEL.o2(
+        WATER_TEMPERATURE=P.water_temp_c, WATER_SALINITY=0.0,
+        CONSTANT_OF_DEGRADATION_OF_ORGANIC_LOAD_K1=P.k1_per_day,
+        CONSTANT_OF_NITRIFICATION_KINETIC_K4=0.0,
+        FORMULA_FOR_COMPUTING_K2=0, K2_REAERATION_COEFFICIENT=P.k2_per_day,
+        O2_SATURATION_DENSITY_OF_WATER__CS_=P.do_saturation_mgl,
+        BENTHIC_DEMAND=0.0, PHOTOSYNTHESIS_P=0.0, VEGETAL_RESPIRATION_R=0.0)]
 
 
 #: What this question PLACES: the oxygen down the reach as the chart, with the

@@ -119,9 +119,12 @@ def test_a_coupled_reach_submits_the_coupled_modules_steering_too(tmp_path,
     from trid3nt_server.workflows.telemac.modules import GAIA, T2D, WAQTEL, fill
 
     o2 = fill(T2D, coupling=[WAQTEL.o2(
-        water_temp_c=20.0, salinity_ppt=0.0, k1_per_day=0.3, k4_per_day=0.0,
-        k2_per_day=0.9, k2_formula=0, saturation_mgl=9.0, benthic_demand=0.0,
-        photosynthesis_p=0.0, respiration_r=0.0)])
+        WATER_TEMPERATURE=20.0, WATER_SALINITY=0.0,
+        CONSTANT_OF_DEGRADATION_OF_ORGANIC_LOAD_K1=0.3,
+        CONSTANT_OF_NITRIFICATION_KINETIC_K4=0.0,
+        FORMULA_FOR_COMPUTING_K2=0, K2_REAERATION_COEFFICIENT=0.9,
+        O2_SATURATION_DENSITY_OF_WATER__CS_=9.0, BENTHIC_DEMAND=0.0,
+        PHOTOSYNTHESIS_P=0.0, VEGETAL_RESPIRATION_R=0.0)])
     assert _submitted(monkeypatch, tmp_path / "o2", o2) == {
         "t2d_river.cas": "telemac2d", "t2d_river.waqtel": "waqtel"}
 
