@@ -12,20 +12,20 @@ join the run as the sixth slice.
 | `fixtures/` | data the tests read; no code | - | - |
 | `adapters/` | provider adapters, the message IR, the turn loop, the stream persistence | 22 | 289 |
 | `credentials/` | credential resolution, the auth handshake, identity | 7 | 95 |
-| `derive/` | the derive tools, the two session tools | 19 | 262 |
+| `derive/` | the derive tools, the two session tools | 21 | 287 |
 | `render/` | the emitter, the uri registry, publication, the format set, charts | 36 | 474 |
-| `fetchers/` | the fetch router, its executors, hooks and fallbacks | 65 | 1565 |
+| `fetchers/` | the fetch router, its executors, hooks and fallbacks | 62 | 1477 |
 | `gates/` | the gates, a declined card at each of them, the code-exec approval gate, the context budget, the circuit breaker | 23 | 336 |
 | `inputs/` | the typed inputs: a Point, an Extent, a Shape, each from every form it arrives in, the user-input normalizers under them, the AOI acquired from any of them, and a user's own file adopted as a layer | 7 | 94 |
 | `mesh/` | the meshers, the mesh gate, topology and bed | 7 | 226 |
 | `model/` | the SysML model conformance check | 1 | 19 |
 | `plugin/` | the plugin seams the server suite reads offline, by `ast` | 1 | 3 |
 | `runtime/` | the declarative runtime, the run journal | 7 | 264 |
-| `scripts/` | the dev instruments, the live-run harness and the proof renderers, skipped when `dev/` is absent | 7 | 53 |
+| `scripts/` | the dev instruments, the live-run harness and the proof renderers, skipped when `dev/` is absent | 8 | 57 |
 | `search/` | dataset and tool retrieval, the OGC adapter | 16 | 209 |
-| `server/` | the HTTP and WS routes, the fetch short-circuit and the Case AOI, persistence, telemetry | 28 | 548 |
+| `server/` | the HTTP and WS routes, the fetch short-circuit and the Case AOI, persistence, telemetry | 28 | 543 |
 | `solver/` | the executor, the run reads, the engine-room posture, the import graph that keeps it engine-free | 7 | 53 |
-| `telemac/` | the TELEMAC templates, the module surface, what each module writes and the primitives that read it, the listing reads, authoring | 27 | 617 |
+| `telemac/` | the TELEMAC templates, the module surface, what each module writes and the primitives that read it, the listing reads, authoring | 30 | 622 |
 | `tools/` | the registry, the arg normalizer, the tool cache | 14 | 376 |
 
 | file | what it is |
@@ -41,10 +41,10 @@ else has one.
 
 Six slices by subsystem, each its own foreground invocation, from the repo root:
 
-    make test-fetchers        # tests/fetchers                                                                      1565
-    make test-spatial         # tests/derive tests/render tests/mesh                              962
-    make test-engines         # tests/telemac tests/runtime tests/solver tests/search                               1143
-    make test-server          # tests/server tests/inputs tests/gates tests/credentials tests/model tests/scripts   1145
+    make test-fetchers        # tests/fetchers                                                                      1477
+    make test-spatial         # tests/derive tests/render tests/mesh                                                 987
+    make test-engines         # tests/telemac tests/runtime tests/solver tests/search                               1148
+    make test-server          # tests/server tests/inputs tests/gates tests/credentials tests/model tests/scripts   1144
     make test-model-surface   # tests/adapters tests/tools                                                           665
     make test-packages        # contracts/tests plugin/tests tests/plugin                                            811
 
