@@ -1,10 +1,10 @@
 {
   "tool": "telemac_river_micropollutant",
-  "run_id": "01M2H5WKY448P5NZQ83BYYYMX3",
-  "commit": "75a63378d41a93f5cd9be25b0ef2124cc675a0e5-dirty",
-  "recorded_at": "2026-09-15T00:02:19.317049+00:00",
+  "run_id": "01M2HG9ASXE40K9MF2GQCZRN9Y",
+  "commit": "80e141fee6381b28cbe4f48992ba63bf480c0c55-dirty",
+  "recorded_at": "2026-09-15T03:04:01.681727+00:00",
   "engine": "telemac",
-  "wall_seconds": 94.983,
+  "wall_seconds": 96.419,
   "args": {
     "location": "Eel River near Scotia, California",
     "discharge_m3s": 60.0,
@@ -28,7 +28,6 @@
       "units": null,
       "consequence": "aoi",
       "note": "supplied on this invocation",
-      "clamped_from": null,
       "real_source": null
     },
     {
@@ -39,7 +38,6 @@
       "units": "m^3/s",
       "consequence": "physics",
       "note": "supplied on this invocation",
-      "clamped_from": null,
       "real_source": null
     },
     {
@@ -50,7 +48,6 @@
       "units": "min",
       "consequence": "numerical",
       "note": "supplied on this invocation",
-      "clamped_from": null,
       "real_source": null
     },
     {
@@ -61,7 +58,6 @@
       "units": "km",
       "consequence": "aoi",
       "note": "supplied on this invocation",
-      "clamped_from": null,
       "real_source": null
     },
     {
@@ -72,7 +68,6 @@
       "units": null,
       "consequence": "scenario",
       "note": "supplied on this invocation",
-      "clamped_from": null,
       "real_source": null
     },
     {
@@ -83,7 +78,6 @@
       "units": "s",
       "consequence": "scenario",
       "note": "supplied on this invocation",
-      "clamped_from": null,
       "real_source": null
     },
     {
@@ -94,7 +88,6 @@
       "units": "m^3/s",
       "consequence": "scenario",
       "note": "supplied on this invocation",
-      "clamped_from": null,
       "real_source": null
     },
     {
@@ -105,7 +98,6 @@
       "units": "mg/L",
       "consequence": "scenario",
       "note": "supplied on this invocation",
-      "clamped_from": null,
       "real_source": null
     },
     {
@@ -116,7 +108,6 @@
       "units": "mg/L",
       "consequence": "physics",
       "note": "supplied on this invocation",
-      "clamped_from": null,
       "real_source": null
     },
     {
@@ -127,7 +118,6 @@
       "units": null,
       "consequence": "scenario",
       "note": "supplied on this invocation",
-      "clamped_from": null,
       "real_source": null
     },
     {
@@ -138,7 +128,6 @@
       "units": "s",
       "consequence": "numerical",
       "note": "supplied on this invocation",
-      "clamped_from": null,
       "real_source": null
     },
     {
@@ -149,7 +138,6 @@
       "units": "m",
       "consequence": "numerical",
       "note": "supplied on this invocation",
-      "clamped_from": null,
       "real_source": null
     },
     {
@@ -160,7 +148,6 @@
       "units": null,
       "consequence": "numerical",
       "note": "declared constant default",
-      "clamped_from": null,
       "real_source": null
     },
     {
@@ -171,7 +158,6 @@
       "units": null,
       "consequence": "scenario",
       "note": "declared scenario default",
-      "clamped_from": null,
       "real_source": null
     },
     {
@@ -182,7 +168,6 @@
       "units": null,
       "consequence": "aoi",
       "note": "not supplied (declared optional)",
-      "clamped_from": null,
       "real_source": null
     },
     {
@@ -193,7 +178,6 @@
       "units": null,
       "consequence": "aoi",
       "note": "not supplied (declared optional)",
-      "clamped_from": null,
       "real_source": null
     },
     {
@@ -204,7 +188,6 @@
       "units": null,
       "consequence": "scenario",
       "note": "not supplied (declared optional)",
-      "clamped_from": null,
       "real_source": null
     },
     {
@@ -215,7 +198,6 @@
       "units": null,
       "consequence": "numerical",
       "note": "not supplied (declared optional)",
-      "clamped_from": null,
       "real_source": null
     },
     {
@@ -226,7 +208,6 @@
       "units": null,
       "consequence": "numerical",
       "note": "not supplied (declared optional)",
-      "clamped_from": null,
       "real_source": null
     },
     {
@@ -237,7 +218,6 @@
       "units": "1/s",
       "consequence": "physics",
       "note": "not supplied (declared optional)",
-      "clamped_from": null,
       "real_source": null
     },
     {
@@ -248,7 +228,6 @@
       "units": "m/s",
       "consequence": "physics",
       "note": "not supplied (declared optional)",
-      "clamped_from": null,
       "real_source": null
     },
     {
@@ -259,7 +238,6 @@
       "units": "m^3/kg",
       "consequence": "physics",
       "note": "not supplied (declared optional)",
-      "clamped_from": null,
       "real_source": null
     },
     {
@@ -270,7 +248,6 @@
       "units": "1/s",
       "consequence": "physics",
       "note": "not supplied (declared optional)",
-      "clamped_from": null,
       "real_source": null
     },
     {
@@ -281,7 +258,6 @@
       "units": null,
       "consequence": "scenario",
       "note": "not supplied (declared optional)",
-      "clamped_from": null,
       "real_source": null
     }
   ],
@@ -457,7 +433,7 @@
     "bed_sorbed_final_mean_mgl": 0.0005755947248232069,
     "bed_over_dissolved": 5284.858032126134,
     "mesh_size_m": 10.415,
-    "layer_uri": "s3://trid3nt-runs/01M2H5WKY448P5NZQ83BYYYMX3/r2d_river.slf",
+    "layer_uri": "s3://trid3nt-runs/01M2HG9ASXE40K9MF2GQCZRN9Y/r2d_river.slf",
     "discharge_m3s": 60.0,
     "discharge_note": "Steady upstream CARRIER discharge - the river flow that dilutes and transports the release [supplied on this invocation]",
     "mesh_resolution_m": 12.0,
@@ -583,7 +559,7 @@
       "crs_authid": null,
       "dataset_group": null,
       "dataset_uris": [],
-      "layer_id": "point-01M2H5VGN8E9Y223P6DAE4K43H",
+      "layer_id": "point-01M2HG87F2E28ZR4MXZAMRP9GJ",
       "layer_type": "vector",
       "legend": {
         "colormap": null,
@@ -601,7 +577,7 @@
       "reference_time": null,
       "role": "context",
       "temporal": false,
-      "uri": "s3://trid3nt-runs/inputs/01M2H5VGMYB55PFE0ZQKV8J3AW/point.geojson",
+      "uri": "s3://trid3nt-runs/inputs/01M2HG87ERZRQTA3QP5ZKEH4G3/point.geojson",
       "valid_from": null,
       "valid_to": null,
       "visible": true,
@@ -611,7 +587,7 @@
       "crs_authid": null,
       "dataset_group": null,
       "dataset_uris": [],
-      "layer_id": "point-01M2H5VGQ8R003EAMPS5V12YVR",
+      "layer_id": "point-01M2HG87H5BX7XJH7QDBC3A8VQ",
       "layer_type": "vector",
       "legend": {
         "colormap": null,
@@ -629,7 +605,7 @@
       "reference_time": null,
       "role": "context",
       "temporal": false,
-      "uri": "s3://trid3nt-runs/inputs/01M2H5VGPZ38M3P7XHKANGJ7V6/point.geojson",
+      "uri": "s3://trid3nt-runs/inputs/01M2HG87GV3295D0959J3ZN626/point.geojson",
       "valid_from": null,
       "valid_to": null,
       "visible": true,
@@ -637,29 +613,27 @@
     },
     {
       "crs_authid": "EPSG:32610",
-      "dataset_group": "Velocity u at t = 3583.44 s",
-      "dataset_uris": [
-        "s3://trid3nt-runs/01M2H5WKY448P5NZQ83BYYYMX3/velocity_u-t3583.dat"
-      ],
-      "layer_id": "telemac-velocity_u-t3583-01M2H5WKY448P5NZQ83BYYYMX3",
+      "dataset_group": "VELOCITY U",
+      "dataset_uris": [],
+      "layer_id": "telemac-velocity_u-over-time-01M2HG9ASXE40K9MF2GQCZRN9Y",
       "layer_type": "mesh",
       "legend": {
         "colormap": "rdbu",
         "floor": null,
         "kind": "mesh",
-        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <mesh-renderer-settings>\n    <active-dataset-group scalar=\"0\" vector=\"-1\"/>\n    <scalar-settings group=\"0\" min-val=\"-1.122787\" max-val=\"1.122787\" opacity=\"1\" interpolation-method=\"no-resampling\">\n      <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"-1.122787\" maximumValue=\"1.122787\" labelPrecision=\"4\">\n        <item value=\"-1.122787\" color=\"#67001f\" alpha=\"255\" label=\"-1.12279 m/s\"/>\n        <item value=\"-0.5613935\" color=\"#e58368\" alpha=\"255\" label=\"-0.561393 m/s\"/>\n        <item value=\"0\" color=\"#f6f7f7\" alpha=\"255\" label=\"0 m/s\"/>\n        <item value=\"0.5613935\" color=\"#68abd0\" alpha=\"255\" label=\"0.561394 m/s\"/>\n        <item value=\"1.122787\" color=\"#053061\" alpha=\"255\" label=\"1.12279 m/s\"/>\n      </colorrampshader>\n    </scalar-settings>\n  </mesh-renderer-settings>\n  <name-to-global-index global-index=\"0\" name=\"Velocity u at t = 3583.44 s\"/>\n</qgis>\n",
+        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <mesh-renderer-settings>\n    <active-dataset-group scalar=\"0\" vector=\"-1\"/>\n    <scalar-settings group=\"0\" min-val=\"-2.13945\" max-val=\"2.13945\" opacity=\"1\" interpolation-method=\"no-resampling\">\n      <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"-2.13945\" maximumValue=\"2.13945\" labelPrecision=\"4\">\n        <item value=\"-2.13945\" color=\"#67001f\" alpha=\"255\" label=\"-2.13945 m/s\"/>\n        <item value=\"-1.069725\" color=\"#e58368\" alpha=\"255\" label=\"-1.06973 m/s\"/>\n        <item value=\"0\" color=\"#f6f7f7\" alpha=\"255\" label=\"0 m/s\"/>\n        <item value=\"1.069725\" color=\"#68abd0\" alpha=\"255\" label=\"1.06973 m/s\"/>\n        <item value=\"2.13945\" color=\"#053061\" alpha=\"255\" label=\"2.13945 m/s\"/>\n      </colorrampshader>\n    </scalar-settings>\n  </mesh-renderer-settings>\n  <name-to-global-index global-index=\"0\" name=\"VELOCITY U\"/>\n</qgis>\n",
         "units": "m/s",
-        "vmax": 1.122787,
-        "vmin": -1.122787
+        "vmax": 2.13945,
+        "vmin": -2.13945
       },
-      "name": "Velocity u (m/s) at t = 3583.44 s (scotia_humboldt_county_california_95562_united_s)",
+      "name": "Velocity u over time (scotia_humboldt_county_california_95562_united_s)",
       "opacity": null,
       "origin": null,
       "quantity": "velocity_u",
-      "reference_time": null,
+      "reference_time": "2026-09-15T03:03:07+00:00",
       "role": "primary",
       "temporal": false,
-      "uri": "s3://trid3nt-runs/01M2H5WKY448P5NZQ83BYYYMX3/r2d_river.slf",
+      "uri": "s3://trid3nt-runs/01M2HG9ASXE40K9MF2GQCZRN9Y/r2d_river.slf",
       "valid_from": null,
       "valid_to": null,
       "visible": true,
@@ -667,27 +641,27 @@
     },
     {
       "crs_authid": "EPSG:32610",
-      "dataset_group": "VELOCITY U",
+      "dataset_group": "VELOCITY V",
       "dataset_uris": [],
-      "layer_id": "telemac-velocity_u-over-time-01M2H5WKY448P5NZQ83BYYYMX3",
+      "layer_id": "telemac-velocity_v-over-time-01M2HG9ASXE40K9MF2GQCZRN9Y",
       "layer_type": "mesh",
       "legend": {
         "colormap": "rdbu",
         "floor": null,
         "kind": "mesh",
-        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <mesh-renderer-settings>\n    <active-dataset-group scalar=\"0\" vector=\"-1\"/>\n    <scalar-settings group=\"0\" min-val=\"-1.122787\" max-val=\"1.122787\" opacity=\"1\" interpolation-method=\"no-resampling\">\n      <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"-1.122787\" maximumValue=\"1.122787\" labelPrecision=\"4\">\n        <item value=\"-1.122787\" color=\"#67001f\" alpha=\"255\" label=\"-1.12279 m/s\"/>\n        <item value=\"-0.5613935\" color=\"#e58368\" alpha=\"255\" label=\"-0.561393 m/s\"/>\n        <item value=\"0\" color=\"#f6f7f7\" alpha=\"255\" label=\"0 m/s\"/>\n        <item value=\"0.5613935\" color=\"#68abd0\" alpha=\"255\" label=\"0.561394 m/s\"/>\n        <item value=\"1.122787\" color=\"#053061\" alpha=\"255\" label=\"1.12279 m/s\"/>\n      </colorrampshader>\n    </scalar-settings>\n  </mesh-renderer-settings>\n  <name-to-global-index global-index=\"0\" name=\"VELOCITY U\"/>\n</qgis>\n",
+        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <mesh-renderer-settings>\n    <active-dataset-group scalar=\"0\" vector=\"-1\"/>\n    <scalar-settings group=\"0\" min-val=\"-1.83083\" max-val=\"1.83083\" opacity=\"1\" interpolation-method=\"no-resampling\">\n      <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"-1.83083\" maximumValue=\"1.83083\" labelPrecision=\"4\">\n        <item value=\"-1.83083\" color=\"#67001f\" alpha=\"255\" label=\"-1.83083 m/s\"/>\n        <item value=\"-0.915415\" color=\"#e58368\" alpha=\"255\" label=\"-0.915415 m/s\"/>\n        <item value=\"0\" color=\"#f6f7f7\" alpha=\"255\" label=\"0 m/s\"/>\n        <item value=\"0.915415\" color=\"#68abd0\" alpha=\"255\" label=\"0.915415 m/s\"/>\n        <item value=\"1.83083\" color=\"#053061\" alpha=\"255\" label=\"1.83083 m/s\"/>\n      </colorrampshader>\n    </scalar-settings>\n  </mesh-renderer-settings>\n  <name-to-global-index global-index=\"0\" name=\"VELOCITY V\"/>\n</qgis>\n",
         "units": "m/s",
-        "vmax": 1.122787,
-        "vmin": -1.122787
+        "vmax": 1.83083,
+        "vmin": -1.83083
       },
-      "name": "Velocity u over time (scotia_humboldt_county_california_95562_united_s)",
+      "name": "Velocity v over time (scotia_humboldt_county_california_95562_united_s)",
       "opacity": null,
       "origin": null,
-      "quantity": "velocity_u",
-      "reference_time": "2026-09-15T00:01:24+00:00",
+      "quantity": "velocity_v",
+      "reference_time": "2026-09-15T03:03:07+00:00",
       "role": "primary",
       "temporal": false,
-      "uri": "s3://trid3nt-runs/01M2H5WKY448P5NZQ83BYYYMX3/r2d_river.slf",
+      "uri": "s3://trid3nt-runs/01M2HG9ASXE40K9MF2GQCZRN9Y/r2d_river.slf",
       "valid_from": null,
       "valid_to": null,
       "visible": true,
@@ -695,29 +669,27 @@
     },
     {
       "crs_authid": "EPSG:32610",
-      "dataset_group": "Velocity v at t = 3583.44 s",
-      "dataset_uris": [
-        "s3://trid3nt-runs/01M2H5WKY448P5NZQ83BYYYMX3/velocity_v-t3583.dat"
-      ],
-      "layer_id": "telemac-velocity_v-t3583-01M2H5WKY448P5NZQ83BYYYMX3",
+      "dataset_group": "WATER DEPTH",
+      "dataset_uris": [],
+      "layer_id": "telemac-water_depth-over-time-01M2HG9ASXE40K9MF2GQCZRN9Y",
       "layer_type": "mesh",
       "legend": {
-        "colormap": "rdbu",
+        "colormap": "ylgnbu",
         "floor": null,
         "kind": "mesh",
-        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <mesh-renderer-settings>\n    <active-dataset-group scalar=\"0\" vector=\"-1\"/>\n    <scalar-settings group=\"0\" min-val=\"-1.080538\" max-val=\"1.080538\" opacity=\"1\" interpolation-method=\"no-resampling\">\n      <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"-1.080538\" maximumValue=\"1.080538\" labelPrecision=\"4\">\n        <item value=\"-1.080538\" color=\"#67001f\" alpha=\"255\" label=\"-1.08054 m/s\"/>\n        <item value=\"-0.540269\" color=\"#e58368\" alpha=\"255\" label=\"-0.540269 m/s\"/>\n        <item value=\"0\" color=\"#f6f7f7\" alpha=\"255\" label=\"0 m/s\"/>\n        <item value=\"0.540269\" color=\"#68abd0\" alpha=\"255\" label=\"0.540269 m/s\"/>\n        <item value=\"1.080538\" color=\"#053061\" alpha=\"255\" label=\"1.08054 m/s\"/>\n      </colorrampshader>\n    </scalar-settings>\n  </mesh-renderer-settings>\n  <name-to-global-index global-index=\"0\" name=\"Velocity v at t = 3583.44 s\"/>\n</qgis>\n",
-        "units": "m/s",
-        "vmax": 1.080538,
-        "vmin": -1.080538
+        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <mesh-renderer-settings>\n    <active-dataset-group scalar=\"0\" vector=\"-1\"/>\n    <scalar-settings group=\"0\" min-val=\"0\" max-val=\"1.881584\" opacity=\"1\" interpolation-method=\"no-resampling\">\n      <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"0\" maximumValue=\"1.881584\" labelPrecision=\"4\">\n        <item value=\"0\" color=\"#ffffd9\" alpha=\"255\" label=\"0 m\"/>\n        <item value=\"0.470396\" color=\"#c6e9b4\" alpha=\"255\" label=\"0.470396 m\"/>\n        <item value=\"0.940792\" color=\"#40b5c4\" alpha=\"255\" label=\"0.940792 m\"/>\n        <item value=\"1.411188\" color=\"#225da8\" alpha=\"255\" label=\"1.41119 m\"/>\n        <item value=\"1.881584\" color=\"#081d58\" alpha=\"255\" label=\"1.88158 m\"/>\n      </colorrampshader>\n    </scalar-settings>\n  </mesh-renderer-settings>\n  <name-to-global-index global-index=\"0\" name=\"WATER DEPTH\"/>\n</qgis>\n",
+        "units": "m",
+        "vmax": 1.881584,
+        "vmin": 0.0
       },
-      "name": "Velocity v (m/s) at t = 3583.44 s (scotia_humboldt_county_california_95562_united_s)",
+      "name": "Water depth over time (scotia_humboldt_county_california_95562_united_s)",
       "opacity": null,
       "origin": null,
-      "quantity": "velocity_v",
-      "reference_time": null,
+      "quantity": "water_depth",
+      "reference_time": "2026-09-15T03:03:07+00:00",
       "role": "primary",
       "temporal": false,
-      "uri": "s3://trid3nt-runs/01M2H5WKY448P5NZQ83BYYYMX3/r2d_river.slf",
+      "uri": "s3://trid3nt-runs/01M2HG9ASXE40K9MF2GQCZRN9Y/r2d_river.slf",
       "valid_from": null,
       "valid_to": null,
       "visible": true,
@@ -725,27 +697,27 @@
     },
     {
       "crs_authid": "EPSG:32610",
-      "dataset_group": "VELOCITY V",
+      "dataset_group": "FREE SURFACE",
       "dataset_uris": [],
-      "layer_id": "telemac-velocity_v-over-time-01M2H5WKY448P5NZQ83BYYYMX3",
+      "layer_id": "telemac-free_surface-over-time-01M2HG9ASXE40K9MF2GQCZRN9Y",
       "layer_type": "mesh",
       "legend": {
-        "colormap": "rdbu",
+        "colormap": "blues",
         "floor": null,
         "kind": "mesh",
-        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <mesh-renderer-settings>\n    <active-dataset-group scalar=\"0\" vector=\"-1\"/>\n    <scalar-settings group=\"0\" min-val=\"-1.080538\" max-val=\"1.080538\" opacity=\"1\" interpolation-method=\"no-resampling\">\n      <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"-1.080538\" maximumValue=\"1.080538\" labelPrecision=\"4\">\n        <item value=\"-1.080538\" color=\"#67001f\" alpha=\"255\" label=\"-1.08054 m/s\"/>\n        <item value=\"-0.540269\" color=\"#e58368\" alpha=\"255\" label=\"-0.540269 m/s\"/>\n        <item value=\"0\" color=\"#f6f7f7\" alpha=\"255\" label=\"0 m/s\"/>\n        <item value=\"0.540269\" color=\"#68abd0\" alpha=\"255\" label=\"0.540269 m/s\"/>\n        <item value=\"1.080538\" color=\"#053061\" alpha=\"255\" label=\"1.08054 m/s\"/>\n      </colorrampshader>\n    </scalar-settings>\n  </mesh-renderer-settings>\n  <name-to-global-index global-index=\"0\" name=\"VELOCITY V\"/>\n</qgis>\n",
-        "units": "m/s",
-        "vmax": 1.080538,
-        "vmin": -1.080538
+        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <mesh-renderer-settings>\n    <active-dataset-group scalar=\"0\" vector=\"-1\"/>\n    <scalar-settings group=\"0\" min-val=\"13.659584\" max-val=\"45.875653\" opacity=\"1\" interpolation-method=\"no-resampling\">\n      <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"13.659584\" maximumValue=\"45.875653\" labelPrecision=\"4\">\n        <item value=\"13.659584\" color=\"#f7fbff\" alpha=\"255\" label=\"13.6596 m\"/>\n        <item value=\"21.71360125\" color=\"#c6dbef\" alpha=\"255\" label=\"21.7136 m\"/>\n        <item value=\"29.7676185\" color=\"#6aaed6\" alpha=\"255\" label=\"29.7676 m\"/>\n        <item value=\"37.82163575\" color=\"#2070b4\" alpha=\"255\" label=\"37.8216 m\"/>\n        <item value=\"45.875653\" color=\"#08306b\" alpha=\"255\" label=\"45.8757 m\"/>\n      </colorrampshader>\n    </scalar-settings>\n  </mesh-renderer-settings>\n  <name-to-global-index global-index=\"0\" name=\"FREE SURFACE\"/>\n</qgis>\n",
+        "units": "m",
+        "vmax": 45.875653,
+        "vmin": 13.659584
       },
-      "name": "Velocity v over time (scotia_humboldt_county_california_95562_united_s)",
+      "name": "Free surface over time (scotia_humboldt_county_california_95562_united_s)",
       "opacity": null,
       "origin": null,
-      "quantity": "velocity_v",
-      "reference_time": "2026-09-15T00:01:24+00:00",
+      "quantity": "free_surface",
+      "reference_time": "2026-09-15T03:03:07+00:00",
       "role": "primary",
       "temporal": false,
-      "uri": "s3://trid3nt-runs/01M2H5WKY448P5NZQ83BYYYMX3/r2d_river.slf",
+      "uri": "s3://trid3nt-runs/01M2HG9ASXE40K9MF2GQCZRN9Y/r2d_river.slf",
       "valid_from": null,
       "valid_to": null,
       "visible": true,
@@ -753,127 +725,11 @@
     },
     {
       "crs_authid": "EPSG:32610",
-      "dataset_group": "Water depth at t = 3583.44 s",
-      "dataset_uris": [
-        "s3://trid3nt-runs/01M2H5WKY448P5NZQ83BYYYMX3/water_depth-t3583.dat"
-      ],
-      "layer_id": "telemac-water_depth-t3583-01M2H5WKY448P5NZQ83BYYYMX3",
-      "layer_type": "mesh",
-      "legend": {
-        "colormap": "ylgnbu",
-        "floor": null,
-        "kind": "mesh",
-        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <mesh-renderer-settings>\n    <active-dataset-group scalar=\"0\" vector=\"-1\"/>\n    <scalar-settings group=\"0\" min-val=\"0\" max-val=\"1.881414\" opacity=\"1\" interpolation-method=\"no-resampling\">\n      <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"0\" maximumValue=\"1.881414\" labelPrecision=\"4\">\n        <item value=\"0\" color=\"#ffffd9\" alpha=\"255\" label=\"0 m\"/>\n        <item value=\"0.4703535\" color=\"#c6e9b4\" alpha=\"255\" label=\"0.470353 m\"/>\n        <item value=\"0.940707\" color=\"#40b5c4\" alpha=\"255\" label=\"0.940707 m\"/>\n        <item value=\"1.4110605\" color=\"#225da8\" alpha=\"255\" label=\"1.41106 m\"/>\n        <item value=\"1.881414\" color=\"#081d58\" alpha=\"255\" label=\"1.88141 m\"/>\n      </colorrampshader>\n    </scalar-settings>\n  </mesh-renderer-settings>\n  <name-to-global-index global-index=\"0\" name=\"Water depth at t = 3583.44 s\"/>\n</qgis>\n",
-        "units": "m",
-        "vmax": 1.881414,
-        "vmin": 0.0
-      },
-      "name": "Water depth (m) at t = 3583.44 s (scotia_humboldt_county_california_95562_united_s)",
-      "opacity": null,
-      "origin": null,
-      "quantity": "water_depth",
-      "reference_time": null,
-      "role": "primary",
-      "temporal": false,
-      "uri": "s3://trid3nt-runs/01M2H5WKY448P5NZQ83BYYYMX3/r2d_river.slf",
-      "valid_from": null,
-      "valid_to": null,
-      "visible": true,
-      "z_index": 10
-    },
-    {
-      "crs_authid": "EPSG:32610",
-      "dataset_group": "WATER DEPTH",
-      "dataset_uris": [],
-      "layer_id": "telemac-water_depth-over-time-01M2H5WKY448P5NZQ83BYYYMX3",
-      "layer_type": "mesh",
-      "legend": {
-        "colormap": "ylgnbu",
-        "floor": null,
-        "kind": "mesh",
-        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <mesh-renderer-settings>\n    <active-dataset-group scalar=\"0\" vector=\"-1\"/>\n    <scalar-settings group=\"0\" min-val=\"0\" max-val=\"1.881414\" opacity=\"1\" interpolation-method=\"no-resampling\">\n      <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"0\" maximumValue=\"1.881414\" labelPrecision=\"4\">\n        <item value=\"0\" color=\"#ffffd9\" alpha=\"255\" label=\"0 m\"/>\n        <item value=\"0.4703535\" color=\"#c6e9b4\" alpha=\"255\" label=\"0.470353 m\"/>\n        <item value=\"0.940707\" color=\"#40b5c4\" alpha=\"255\" label=\"0.940707 m\"/>\n        <item value=\"1.4110605\" color=\"#225da8\" alpha=\"255\" label=\"1.41106 m\"/>\n        <item value=\"1.881414\" color=\"#081d58\" alpha=\"255\" label=\"1.88141 m\"/>\n      </colorrampshader>\n    </scalar-settings>\n  </mesh-renderer-settings>\n  <name-to-global-index global-index=\"0\" name=\"WATER DEPTH\"/>\n</qgis>\n",
-        "units": "m",
-        "vmax": 1.881414,
-        "vmin": 0.0
-      },
-      "name": "Water depth over time (scotia_humboldt_county_california_95562_united_s)",
-      "opacity": null,
-      "origin": null,
-      "quantity": "water_depth",
-      "reference_time": "2026-09-15T00:01:24+00:00",
-      "role": "primary",
-      "temporal": false,
-      "uri": "s3://trid3nt-runs/01M2H5WKY448P5NZQ83BYYYMX3/r2d_river.slf",
-      "valid_from": null,
-      "valid_to": null,
-      "visible": true,
-      "z_index": 11
-    },
-    {
-      "crs_authid": "EPSG:32610",
-      "dataset_group": "Free surface at t = 3583.44 s",
-      "dataset_uris": [
-        "s3://trid3nt-runs/01M2H5WKY448P5NZQ83BYYYMX3/free_surface-t3583.dat"
-      ],
-      "layer_id": "telemac-free_surface-t3583-01M2H5WKY448P5NZQ83BYYYMX3",
-      "layer_type": "mesh",
-      "legend": {
-        "colormap": "blues",
-        "floor": null,
-        "kind": "mesh",
-        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <mesh-renderer-settings>\n    <active-dataset-group scalar=\"0\" vector=\"-1\"/>\n    <scalar-settings group=\"0\" min-val=\"13.886359\" max-val=\"44.951653\" opacity=\"1\" interpolation-method=\"no-resampling\">\n      <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"13.886359\" maximumValue=\"44.951653\" labelPrecision=\"4\">\n        <item value=\"13.886359\" color=\"#f7fbff\" alpha=\"255\" label=\"13.8864 m\"/>\n        <item value=\"21.6526825\" color=\"#c6dbef\" alpha=\"255\" label=\"21.6527 m\"/>\n        <item value=\"29.419006\" color=\"#6aaed6\" alpha=\"255\" label=\"29.419 m\"/>\n        <item value=\"37.1853295\" color=\"#2070b4\" alpha=\"255\" label=\"37.1853 m\"/>\n        <item value=\"44.951653\" color=\"#08306b\" alpha=\"255\" label=\"44.9517 m\"/>\n      </colorrampshader>\n    </scalar-settings>\n  </mesh-renderer-settings>\n  <name-to-global-index global-index=\"0\" name=\"Free surface at t = 3583.44 s\"/>\n</qgis>\n",
-        "units": "m",
-        "vmax": 44.951653,
-        "vmin": 13.886359
-      },
-      "name": "Free surface (m) at t = 3583.44 s (scotia_humboldt_county_california_95562_united_s)",
-      "opacity": null,
-      "origin": null,
-      "quantity": "free_surface",
-      "reference_time": null,
-      "role": "primary",
-      "temporal": false,
-      "uri": "s3://trid3nt-runs/01M2H5WKY448P5NZQ83BYYYMX3/r2d_river.slf",
-      "valid_from": null,
-      "valid_to": null,
-      "visible": true,
-      "z_index": 12
-    },
-    {
-      "crs_authid": "EPSG:32610",
-      "dataset_group": "FREE SURFACE",
-      "dataset_uris": [],
-      "layer_id": "telemac-free_surface-over-time-01M2H5WKY448P5NZQ83BYYYMX3",
-      "layer_type": "mesh",
-      "legend": {
-        "colormap": "blues",
-        "floor": null,
-        "kind": "mesh",
-        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <mesh-renderer-settings>\n    <active-dataset-group scalar=\"0\" vector=\"-1\"/>\n    <scalar-settings group=\"0\" min-val=\"13.886359\" max-val=\"44.951653\" opacity=\"1\" interpolation-method=\"no-resampling\">\n      <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"13.886359\" maximumValue=\"44.951653\" labelPrecision=\"4\">\n        <item value=\"13.886359\" color=\"#f7fbff\" alpha=\"255\" label=\"13.8864 m\"/>\n        <item value=\"21.6526825\" color=\"#c6dbef\" alpha=\"255\" label=\"21.6527 m\"/>\n        <item value=\"29.419006\" color=\"#6aaed6\" alpha=\"255\" label=\"29.419 m\"/>\n        <item value=\"37.1853295\" color=\"#2070b4\" alpha=\"255\" label=\"37.1853 m\"/>\n        <item value=\"44.951653\" color=\"#08306b\" alpha=\"255\" label=\"44.9517 m\"/>\n      </colorrampshader>\n    </scalar-settings>\n  </mesh-renderer-settings>\n  <name-to-global-index global-index=\"0\" name=\"FREE SURFACE\"/>\n</qgis>\n",
-        "units": "m",
-        "vmax": 44.951653,
-        "vmin": 13.886359
-      },
-      "name": "Free surface over time (scotia_humboldt_county_california_95562_united_s)",
-      "opacity": null,
-      "origin": null,
-      "quantity": "free_surface",
-      "reference_time": "2026-09-15T00:01:24+00:00",
-      "role": "primary",
-      "temporal": false,
-      "uri": "s3://trid3nt-runs/01M2H5WKY448P5NZQ83BYYYMX3/r2d_river.slf",
-      "valid_from": null,
-      "valid_to": null,
-      "visible": true,
-      "z_index": 13
-    },
-    {
-      "crs_authid": "EPSG:32610",
       "dataset_group": "Bottom at t = 3583.44 s",
       "dataset_uris": [
-        "s3://trid3nt-runs/01M2H5WKY448P5NZQ83BYYYMX3/bottom-t3583.dat"
+        "s3://trid3nt-runs/01M2HG9ASXE40K9MF2GQCZRN9Y/bottom-t3583.dat"
       ],
-      "layer_id": "telemac-bottom-t3583-01M2H5WKY448P5NZQ83BYYYMX3",
+      "layer_id": "telemac-bottom-t3583-01M2HG9ASXE40K9MF2GQCZRN9Y",
       "layer_type": "mesh",
       "legend": {
         "colormap": "terrain",
@@ -891,7 +747,119 @@
       "reference_time": null,
       "role": "primary",
       "temporal": false,
-      "uri": "s3://trid3nt-runs/01M2H5WKY448P5NZQ83BYYYMX3/r2d_river.slf",
+      "uri": "s3://trid3nt-runs/01M2HG9ASXE40K9MF2GQCZRN9Y/r2d_river.slf",
+      "valid_from": null,
+      "valid_to": null,
+      "visible": true,
+      "z_index": 10
+    },
+    {
+      "crs_authid": "EPSG:32610",
+      "dataset_group": "FROUDE NUMBER",
+      "dataset_uris": [],
+      "layer_id": "telemac-froude_number-over-time-01M2HG9ASXE40K9MF2GQCZRN9Y",
+      "layer_type": "mesh",
+      "legend": {
+        "colormap": "magma",
+        "floor": null,
+        "kind": "mesh",
+        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <mesh-renderer-settings>\n    <active-dataset-group scalar=\"0\" vector=\"-1\"/>\n    <scalar-settings group=\"0\" min-val=\"0\" max-val=\"4179.112793\" opacity=\"1\" interpolation-method=\"no-resampling\">\n      <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"0\" maximumValue=\"4179.112793\" labelPrecision=\"4\">\n        <item value=\"0\" color=\"#000004\" alpha=\"255\" label=\"0\"/>\n        <item value=\"1044.778198\" color=\"#51127c\" alpha=\"255\" label=\"1044.78\"/>\n        <item value=\"2089.556397\" color=\"#b73779\" alpha=\"255\" label=\"2089.56\"/>\n        <item value=\"3134.334595\" color=\"#fc8961\" alpha=\"255\" label=\"3134.33\"/>\n        <item value=\"4179.112793\" color=\"#fcfdbf\" alpha=\"255\" label=\"4179.11\"/>\n      </colorrampshader>\n    </scalar-settings>\n  </mesh-renderer-settings>\n  <name-to-global-index global-index=\"0\" name=\"FROUDE NUMBER\"/>\n</qgis>\n",
+        "units": "",
+        "vmax": 4179.112793,
+        "vmin": 0.0
+      },
+      "name": "Froude number over time (scotia_humboldt_county_california_95562_united_s)",
+      "opacity": null,
+      "origin": null,
+      "quantity": "froude_number",
+      "reference_time": "2026-09-15T03:03:07+00:00",
+      "role": "primary",
+      "temporal": false,
+      "uri": "s3://trid3nt-runs/01M2HG9ASXE40K9MF2GQCZRN9Y/r2d_river.slf",
+      "valid_from": null,
+      "valid_to": null,
+      "visible": true,
+      "z_index": 11
+    },
+    {
+      "crs_authid": "EPSG:32610",
+      "dataset_group": "SCALAR FLOWRATE",
+      "dataset_uris": [],
+      "layer_id": "telemac-scalar_flowrate-over-time-01M2HG9ASXE40K9MF2GQCZRN9Y",
+      "layer_type": "mesh",
+      "legend": {
+        "colormap": "viridis",
+        "floor": null,
+        "kind": "mesh",
+        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <mesh-renderer-settings>\n    <active-dataset-group scalar=\"0\" vector=\"-1\"/>\n    <scalar-settings group=\"0\" min-val=\"0\" max-val=\"2.806093\" opacity=\"1\" interpolation-method=\"no-resampling\">\n      <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"0\" maximumValue=\"2.806093\" labelPrecision=\"4\">\n        <item value=\"0\" color=\"#440154\" alpha=\"255\" label=\"0 m2/s\"/>\n        <item value=\"0.70152325\" color=\"#3b528b\" alpha=\"255\" label=\"0.701523 m2/s\"/>\n        <item value=\"1.4030465\" color=\"#21918c\" alpha=\"255\" label=\"1.40305 m2/s\"/>\n        <item value=\"2.10456975\" color=\"#5ec962\" alpha=\"255\" label=\"2.10457 m2/s\"/>\n        <item value=\"2.806093\" color=\"#fde725\" alpha=\"255\" label=\"2.80609 m2/s\"/>\n      </colorrampshader>\n    </scalar-settings>\n  </mesh-renderer-settings>\n  <name-to-global-index global-index=\"0\" name=\"SCALAR FLOWRATE\"/>\n</qgis>\n",
+        "units": "m2/s",
+        "vmax": 2.806093,
+        "vmin": 0.0
+      },
+      "name": "Scalar flowrate over time (scotia_humboldt_county_california_95562_united_s)",
+      "opacity": null,
+      "origin": null,
+      "quantity": "scalar_flowrate",
+      "reference_time": "2026-09-15T03:03:07+00:00",
+      "role": "primary",
+      "temporal": false,
+      "uri": "s3://trid3nt-runs/01M2HG9ASXE40K9MF2GQCZRN9Y/r2d_river.slf",
+      "valid_from": null,
+      "valid_to": null,
+      "visible": true,
+      "z_index": 12
+    },
+    {
+      "crs_authid": "EPSG:32610",
+      "dataset_group": "SCALAR VELOCITY",
+      "dataset_uris": [],
+      "layer_id": "telemac-scalar_velocity-over-time-01M2HG9ASXE40K9MF2GQCZRN9Y",
+      "layer_type": "mesh",
+      "legend": {
+        "colormap": "viridis",
+        "floor": null,
+        "kind": "mesh",
+        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <mesh-renderer-settings>\n    <active-dataset-group scalar=\"0\" vector=\"-1\"/>\n    <scalar-settings group=\"0\" min-val=\"0\" max-val=\"2.157486\" opacity=\"1\" interpolation-method=\"no-resampling\">\n      <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"0\" maximumValue=\"2.157486\" labelPrecision=\"4\">\n        <item value=\"0\" color=\"#440154\" alpha=\"255\" label=\"0 m/s\"/>\n        <item value=\"0.5393715\" color=\"#3b528b\" alpha=\"255\" label=\"0.539372 m/s\"/>\n        <item value=\"1.078743\" color=\"#21918c\" alpha=\"255\" label=\"1.07874 m/s\"/>\n        <item value=\"1.6181145\" color=\"#5ec962\" alpha=\"255\" label=\"1.61811 m/s\"/>\n        <item value=\"2.157486\" color=\"#fde725\" alpha=\"255\" label=\"2.15749 m/s\"/>\n      </colorrampshader>\n    </scalar-settings>\n  </mesh-renderer-settings>\n  <name-to-global-index global-index=\"0\" name=\"SCALAR VELOCITY\"/>\n</qgis>\n",
+        "units": "m/s",
+        "vmax": 2.157486,
+        "vmin": 0.0
+      },
+      "name": "Scalar velocity over time (scotia_humboldt_county_california_95562_united_s)",
+      "opacity": null,
+      "origin": null,
+      "quantity": "scalar_velocity",
+      "reference_time": "2026-09-15T03:03:07+00:00",
+      "role": "primary",
+      "temporal": false,
+      "uri": "s3://trid3nt-runs/01M2HG9ASXE40K9MF2GQCZRN9Y/r2d_river.slf",
+      "valid_from": null,
+      "valid_to": null,
+      "visible": true,
+      "z_index": 13
+    },
+    {
+      "crs_authid": "EPSG:32610",
+      "dataset_group": "MICRO POLLUTANT",
+      "dataset_uris": [],
+      "layer_id": "telemac-micro_pollutant-over-time-01M2HG9ASXE40K9MF2GQCZRN9Y",
+      "layer_type": "mesh",
+      "legend": {
+        "colormap": "reds",
+        "floor": 0.8726418495178223,
+        "kind": "mesh",
+        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <mesh-renderer-settings>\n    <active-dataset-group scalar=\"0\" vector=\"-1\"/>\n    <scalar-settings group=\"0\" min-val=\"0\" max-val=\"17.452837\" opacity=\"1\" interpolation-method=\"no-resampling\">\n      <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"0\" maximumValue=\"17.452837\" labelPrecision=\"4\">\n        <item value=\"0\" color=\"#fff5f0\" alpha=\"255\" label=\"0 mg/L\"/>\n        <item value=\"4.36320925\" color=\"#fcbba1\" alpha=\"255\" label=\"4.36321 mg/L\"/>\n        <item value=\"8.7264185\" color=\"#fb694a\" alpha=\"255\" label=\"8.72642 mg/L\"/>\n        <item value=\"13.08962775\" color=\"#ca181d\" alpha=\"255\" label=\"13.0896 mg/L\"/>\n        <item value=\"17.452837\" color=\"#67000d\" alpha=\"255\" label=\"17.4528 mg/L\"/>\n      </colorrampshader>\n    </scalar-settings>\n  </mesh-renderer-settings>\n  <name-to-global-index global-index=\"0\" name=\"MICRO POLLUTANT\"/>\n</qgis>\n",
+        "units": "mg/L",
+        "vmax": 17.452837,
+        "vmin": 0.0
+      },
+      "name": "Micro pollutant over time (scotia_humboldt_county_california_95562_united_s)",
+      "opacity": null,
+      "origin": null,
+      "quantity": "micro_pollutant",
+      "reference_time": "2026-09-15T03:03:07+00:00",
+      "role": "primary",
+      "temporal": false,
+      "uri": "s3://trid3nt-runs/01M2HG9ASXE40K9MF2GQCZRN9Y/r2d_river.slf",
       "valid_from": null,
       "valid_to": null,
       "visible": true,
@@ -899,271 +867,9 @@
     },
     {
       "crs_authid": "EPSG:32610",
-      "dataset_group": "Froude number at t = 3583.44 s",
-      "dataset_uris": [
-        "s3://trid3nt-runs/01M2H5WKY448P5NZQ83BYYYMX3/froude_number-t3583.dat"
-      ],
-      "layer_id": "telemac-froude_number-t3583-01M2H5WKY448P5NZQ83BYYYMX3",
-      "layer_type": "mesh",
-      "legend": {
-        "colormap": "magma",
-        "floor": null,
-        "kind": "mesh",
-        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <mesh-renderer-settings>\n    <active-dataset-group scalar=\"0\" vector=\"-1\"/>\n    <scalar-settings group=\"0\" min-val=\"0\" max-val=\"5.422231\" opacity=\"1\" interpolation-method=\"no-resampling\">\n      <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"0\" maximumValue=\"5.422231\" labelPrecision=\"4\">\n        <item value=\"0\" color=\"#000004\" alpha=\"255\" label=\"0\"/>\n        <item value=\"1.35555775\" color=\"#51127c\" alpha=\"255\" label=\"1.35556\"/>\n        <item value=\"2.7111155\" color=\"#b73779\" alpha=\"255\" label=\"2.71112\"/>\n        <item value=\"4.06667325\" color=\"#fc8961\" alpha=\"255\" label=\"4.06667\"/>\n        <item value=\"5.422231\" color=\"#fcfdbf\" alpha=\"255\" label=\"5.42223\"/>\n      </colorrampshader>\n    </scalar-settings>\n  </mesh-renderer-settings>\n  <name-to-global-index global-index=\"0\" name=\"Froude number at t = 3583.44 s\"/>\n</qgis>\n",
-        "units": "",
-        "vmax": 5.422231,
-        "vmin": 0.0
-      },
-      "name": "Froude number at t = 3583.44 s (scotia_humboldt_county_california_95562_united_s)",
-      "opacity": null,
-      "origin": null,
-      "quantity": "froude_number",
-      "reference_time": null,
-      "role": "primary",
-      "temporal": false,
-      "uri": "s3://trid3nt-runs/01M2H5WKY448P5NZQ83BYYYMX3/r2d_river.slf",
-      "valid_from": null,
-      "valid_to": null,
-      "visible": true,
-      "z_index": 15
-    },
-    {
-      "crs_authid": "EPSG:32610",
-      "dataset_group": "FROUDE NUMBER",
-      "dataset_uris": [],
-      "layer_id": "telemac-froude_number-over-time-01M2H5WKY448P5NZQ83BYYYMX3",
-      "layer_type": "mesh",
-      "legend": {
-        "colormap": "magma",
-        "floor": null,
-        "kind": "mesh",
-        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <mesh-renderer-settings>\n    <active-dataset-group scalar=\"0\" vector=\"-1\"/>\n    <scalar-settings group=\"0\" min-val=\"0\" max-val=\"5.422231\" opacity=\"1\" interpolation-method=\"no-resampling\">\n      <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"0\" maximumValue=\"5.422231\" labelPrecision=\"4\">\n        <item value=\"0\" color=\"#000004\" alpha=\"255\" label=\"0\"/>\n        <item value=\"1.35555775\" color=\"#51127c\" alpha=\"255\" label=\"1.35556\"/>\n        <item value=\"2.7111155\" color=\"#b73779\" alpha=\"255\" label=\"2.71112\"/>\n        <item value=\"4.06667325\" color=\"#fc8961\" alpha=\"255\" label=\"4.06667\"/>\n        <item value=\"5.422231\" color=\"#fcfdbf\" alpha=\"255\" label=\"5.42223\"/>\n      </colorrampshader>\n    </scalar-settings>\n  </mesh-renderer-settings>\n  <name-to-global-index global-index=\"0\" name=\"FROUDE NUMBER\"/>\n</qgis>\n",
-        "units": "",
-        "vmax": 5.422231,
-        "vmin": 0.0
-      },
-      "name": "Froude number over time (scotia_humboldt_county_california_95562_united_s)",
-      "opacity": null,
-      "origin": null,
-      "quantity": "froude_number",
-      "reference_time": "2026-09-15T00:01:24+00:00",
-      "role": "primary",
-      "temporal": false,
-      "uri": "s3://trid3nt-runs/01M2H5WKY448P5NZQ83BYYYMX3/r2d_river.slf",
-      "valid_from": null,
-      "valid_to": null,
-      "visible": true,
-      "z_index": 16
-    },
-    {
-      "crs_authid": "EPSG:32610",
-      "dataset_group": "Scalar flowrate at t = 3583.44 s",
-      "dataset_uris": [
-        "s3://trid3nt-runs/01M2H5WKY448P5NZQ83BYYYMX3/scalar_flowrate-t3583.dat"
-      ],
-      "layer_id": "telemac-scalar_flowrate-t3583-01M2H5WKY448P5NZQ83BYYYMX3",
-      "layer_type": "mesh",
-      "legend": {
-        "colormap": "viridis",
-        "floor": null,
-        "kind": "mesh",
-        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <mesh-renderer-settings>\n    <active-dataset-group scalar=\"0\" vector=\"-1\"/>\n    <scalar-settings group=\"0\" min-val=\"0\" max-val=\"1.297767\" opacity=\"1\" interpolation-method=\"no-resampling\">\n      <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"0\" maximumValue=\"1.297767\" labelPrecision=\"4\">\n        <item value=\"0\" color=\"#440154\" alpha=\"255\" label=\"0 m2/s\"/>\n        <item value=\"0.32444175\" color=\"#3b528b\" alpha=\"255\" label=\"0.324442 m2/s\"/>\n        <item value=\"0.6488835\" color=\"#21918c\" alpha=\"255\" label=\"0.648883 m2/s\"/>\n        <item value=\"0.97332525\" color=\"#5ec962\" alpha=\"255\" label=\"0.973325 m2/s\"/>\n        <item value=\"1.297767\" color=\"#fde725\" alpha=\"255\" label=\"1.29777 m2/s\"/>\n      </colorrampshader>\n    </scalar-settings>\n  </mesh-renderer-settings>\n  <name-to-global-index global-index=\"0\" name=\"Scalar flowrate at t = 3583.44 s\"/>\n</qgis>\n",
-        "units": "m2/s",
-        "vmax": 1.297767,
-        "vmin": 0.0
-      },
-      "name": "Scalar flowrate (m2/s) at t = 3583.44 s (scotia_humboldt_county_california_95562_united_s)",
-      "opacity": null,
-      "origin": null,
-      "quantity": "scalar_flowrate",
-      "reference_time": null,
-      "role": "primary",
-      "temporal": false,
-      "uri": "s3://trid3nt-runs/01M2H5WKY448P5NZQ83BYYYMX3/r2d_river.slf",
-      "valid_from": null,
-      "valid_to": null,
-      "visible": true,
-      "z_index": 17
-    },
-    {
-      "crs_authid": "EPSG:32610",
-      "dataset_group": "SCALAR FLOWRATE",
-      "dataset_uris": [],
-      "layer_id": "telemac-scalar_flowrate-over-time-01M2H5WKY448P5NZQ83BYYYMX3",
-      "layer_type": "mesh",
-      "legend": {
-        "colormap": "viridis",
-        "floor": null,
-        "kind": "mesh",
-        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <mesh-renderer-settings>\n    <active-dataset-group scalar=\"0\" vector=\"-1\"/>\n    <scalar-settings group=\"0\" min-val=\"0\" max-val=\"1.297767\" opacity=\"1\" interpolation-method=\"no-resampling\">\n      <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"0\" maximumValue=\"1.297767\" labelPrecision=\"4\">\n        <item value=\"0\" color=\"#440154\" alpha=\"255\" label=\"0 m2/s\"/>\n        <item value=\"0.32444175\" color=\"#3b528b\" alpha=\"255\" label=\"0.324442 m2/s\"/>\n        <item value=\"0.6488835\" color=\"#21918c\" alpha=\"255\" label=\"0.648883 m2/s\"/>\n        <item value=\"0.97332525\" color=\"#5ec962\" alpha=\"255\" label=\"0.973325 m2/s\"/>\n        <item value=\"1.297767\" color=\"#fde725\" alpha=\"255\" label=\"1.29777 m2/s\"/>\n      </colorrampshader>\n    </scalar-settings>\n  </mesh-renderer-settings>\n  <name-to-global-index global-index=\"0\" name=\"SCALAR FLOWRATE\"/>\n</qgis>\n",
-        "units": "m2/s",
-        "vmax": 1.297767,
-        "vmin": 0.0
-      },
-      "name": "Scalar flowrate over time (scotia_humboldt_county_california_95562_united_s)",
-      "opacity": null,
-      "origin": null,
-      "quantity": "scalar_flowrate",
-      "reference_time": "2026-09-15T00:01:24+00:00",
-      "role": "primary",
-      "temporal": false,
-      "uri": "s3://trid3nt-runs/01M2H5WKY448P5NZQ83BYYYMX3/r2d_river.slf",
-      "valid_from": null,
-      "valid_to": null,
-      "visible": true,
-      "z_index": 18
-    },
-    {
-      "crs_authid": "EPSG:32610",
-      "dataset_group": "Scalar velocity at t = 3583.44 s",
-      "dataset_uris": [
-        "s3://trid3nt-runs/01M2H5WKY448P5NZQ83BYYYMX3/scalar_velocity-t3583.dat"
-      ],
-      "layer_id": "telemac-scalar_velocity-t3583-01M2H5WKY448P5NZQ83BYYYMX3",
-      "layer_type": "mesh",
-      "legend": {
-        "colormap": "viridis",
-        "floor": null,
-        "kind": "mesh",
-        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <mesh-renderer-settings>\n    <active-dataset-group scalar=\"0\" vector=\"-1\"/>\n    <scalar-settings group=\"0\" min-val=\"0\" max-val=\"1.207094\" opacity=\"1\" interpolation-method=\"no-resampling\">\n      <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"0\" maximumValue=\"1.207094\" labelPrecision=\"4\">\n        <item value=\"0\" color=\"#440154\" alpha=\"255\" label=\"0 m/s\"/>\n        <item value=\"0.3017735\" color=\"#3b528b\" alpha=\"255\" label=\"0.301773 m/s\"/>\n        <item value=\"0.603547\" color=\"#21918c\" alpha=\"255\" label=\"0.603547 m/s\"/>\n        <item value=\"0.9053205\" color=\"#5ec962\" alpha=\"255\" label=\"0.90532 m/s\"/>\n        <item value=\"1.207094\" color=\"#fde725\" alpha=\"255\" label=\"1.20709 m/s\"/>\n      </colorrampshader>\n    </scalar-settings>\n  </mesh-renderer-settings>\n  <name-to-global-index global-index=\"0\" name=\"Scalar velocity at t = 3583.44 s\"/>\n</qgis>\n",
-        "units": "m/s",
-        "vmax": 1.207094,
-        "vmin": 0.0
-      },
-      "name": "Scalar velocity (m/s) at t = 3583.44 s (scotia_humboldt_county_california_95562_united_s)",
-      "opacity": null,
-      "origin": null,
-      "quantity": "scalar_velocity",
-      "reference_time": null,
-      "role": "primary",
-      "temporal": false,
-      "uri": "s3://trid3nt-runs/01M2H5WKY448P5NZQ83BYYYMX3/r2d_river.slf",
-      "valid_from": null,
-      "valid_to": null,
-      "visible": true,
-      "z_index": 19
-    },
-    {
-      "crs_authid": "EPSG:32610",
-      "dataset_group": "SCALAR VELOCITY",
-      "dataset_uris": [],
-      "layer_id": "telemac-scalar_velocity-over-time-01M2H5WKY448P5NZQ83BYYYMX3",
-      "layer_type": "mesh",
-      "legend": {
-        "colormap": "viridis",
-        "floor": null,
-        "kind": "mesh",
-        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <mesh-renderer-settings>\n    <active-dataset-group scalar=\"0\" vector=\"-1\"/>\n    <scalar-settings group=\"0\" min-val=\"0\" max-val=\"1.207094\" opacity=\"1\" interpolation-method=\"no-resampling\">\n      <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"0\" maximumValue=\"1.207094\" labelPrecision=\"4\">\n        <item value=\"0\" color=\"#440154\" alpha=\"255\" label=\"0 m/s\"/>\n        <item value=\"0.3017735\" color=\"#3b528b\" alpha=\"255\" label=\"0.301773 m/s\"/>\n        <item value=\"0.603547\" color=\"#21918c\" alpha=\"255\" label=\"0.603547 m/s\"/>\n        <item value=\"0.9053205\" color=\"#5ec962\" alpha=\"255\" label=\"0.90532 m/s\"/>\n        <item value=\"1.207094\" color=\"#fde725\" alpha=\"255\" label=\"1.20709 m/s\"/>\n      </colorrampshader>\n    </scalar-settings>\n  </mesh-renderer-settings>\n  <name-to-global-index global-index=\"0\" name=\"SCALAR VELOCITY\"/>\n</qgis>\n",
-        "units": "m/s",
-        "vmax": 1.207094,
-        "vmin": 0.0
-      },
-      "name": "Scalar velocity over time (scotia_humboldt_county_california_95562_united_s)",
-      "opacity": null,
-      "origin": null,
-      "quantity": "scalar_velocity",
-      "reference_time": "2026-09-15T00:01:24+00:00",
-      "role": "primary",
-      "temporal": false,
-      "uri": "s3://trid3nt-runs/01M2H5WKY448P5NZQ83BYYYMX3/r2d_river.slf",
-      "valid_from": null,
-      "valid_to": null,
-      "visible": true,
-      "z_index": 20
-    },
-    {
-      "crs_authid": "EPSG:32610",
-      "dataset_group": "Micro pollutant at t = 3583.44 s",
-      "dataset_uris": [
-        "s3://trid3nt-runs/01M2H5WKY448P5NZQ83BYYYMX3/micro_pollutant-t3583.dat"
-      ],
-      "layer_id": "telemac-micro_pollutant-t3583-01M2H5WKY448P5NZQ83BYYYMX3",
-      "layer_type": "mesh",
-      "legend": {
-        "colormap": "reds",
-        "floor": 0.8726418495178223,
-        "kind": "mesh",
-        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <mesh-renderer-settings>\n    <active-dataset-group scalar=\"0\" vector=\"-1\"/>\n    <scalar-settings group=\"0\" min-val=\"-1e-06\" max-val=\"1e-06\" opacity=\"1\" interpolation-method=\"no-resampling\">\n      <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"-1e-06\" maximumValue=\"1e-06\" labelPrecision=\"4\">\n        <item value=\"-1e-06\" color=\"#fff5f0\" alpha=\"255\" label=\"-1e-06 mg/L\"/>\n        <item value=\"-5e-07\" color=\"#fcbba1\" alpha=\"255\" label=\"-5e-07 mg/L\"/>\n        <item value=\"0\" color=\"#fb694a\" alpha=\"255\" label=\"0 mg/L\"/>\n        <item value=\"5e-07\" color=\"#ca181d\" alpha=\"255\" label=\"5e-07 mg/L\"/>\n        <item value=\"1e-06\" color=\"#67000d\" alpha=\"255\" label=\"1e-06 mg/L\"/>\n      </colorrampshader>\n    </scalar-settings>\n  </mesh-renderer-settings>\n  <name-to-global-index global-index=\"0\" name=\"Micro pollutant at t = 3583.44 s\"/>\n</qgis>\n",
-        "units": "mg/L",
-        "vmax": 1e-06,
-        "vmin": -1e-06
-      },
-      "name": "Micro pollutant (mg/L) at t = 3583.44 s (scotia_humboldt_county_california_95562_united_s)",
-      "opacity": null,
-      "origin": null,
-      "quantity": "micro_pollutant",
-      "reference_time": null,
-      "role": "primary",
-      "temporal": false,
-      "uri": "s3://trid3nt-runs/01M2H5WKY448P5NZQ83BYYYMX3/r2d_river.slf",
-      "valid_from": null,
-      "valid_to": null,
-      "visible": true,
-      "z_index": 21
-    },
-    {
-      "crs_authid": "EPSG:32610",
-      "dataset_group": "MICRO POLLUTANT",
-      "dataset_uris": [],
-      "layer_id": "telemac-micro_pollutant-over-time-01M2H5WKY448P5NZQ83BYYYMX3",
-      "layer_type": "mesh",
-      "legend": {
-        "colormap": "reds",
-        "floor": 0.8726418495178223,
-        "kind": "mesh",
-        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <mesh-renderer-settings>\n    <active-dataset-group scalar=\"0\" vector=\"-1\"/>\n    <scalar-settings group=\"0\" min-val=\"-1e-06\" max-val=\"1e-06\" opacity=\"1\" interpolation-method=\"no-resampling\">\n      <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"-1e-06\" maximumValue=\"1e-06\" labelPrecision=\"4\">\n        <item value=\"-1e-06\" color=\"#fff5f0\" alpha=\"255\" label=\"-1e-06 mg/L\"/>\n        <item value=\"-5e-07\" color=\"#fcbba1\" alpha=\"255\" label=\"-5e-07 mg/L\"/>\n        <item value=\"0\" color=\"#fb694a\" alpha=\"255\" label=\"0 mg/L\"/>\n        <item value=\"5e-07\" color=\"#ca181d\" alpha=\"255\" label=\"5e-07 mg/L\"/>\n        <item value=\"1e-06\" color=\"#67000d\" alpha=\"255\" label=\"1e-06 mg/L\"/>\n      </colorrampshader>\n    </scalar-settings>\n  </mesh-renderer-settings>\n  <name-to-global-index global-index=\"0\" name=\"MICRO POLLUTANT\"/>\n</qgis>\n",
-        "units": "mg/L",
-        "vmax": 1e-06,
-        "vmin": -1e-06
-      },
-      "name": "Micro pollutant over time (scotia_humboldt_county_california_95562_united_s)",
-      "opacity": null,
-      "origin": null,
-      "quantity": "micro_pollutant",
-      "reference_time": "2026-09-15T00:01:24+00:00",
-      "role": "primary",
-      "temporal": false,
-      "uri": "s3://trid3nt-runs/01M2H5WKY448P5NZQ83BYYYMX3/r2d_river.slf",
-      "valid_from": null,
-      "valid_to": null,
-      "visible": true,
-      "z_index": 22
-    },
-    {
-      "crs_authid": "EPSG:32610",
-      "dataset_group": "Suspended load at t = 3583.44 s",
-      "dataset_uris": [
-        "s3://trid3nt-runs/01M2H5WKY448P5NZQ83BYYYMX3/suspended_load-t3583.dat"
-      ],
-      "layer_id": "telemac-suspended_load-t3583-01M2H5WKY448P5NZQ83BYYYMX3",
-      "layer_type": "mesh",
-      "legend": {
-        "colormap": "oranges",
-        "floor": 1.5002410888671875,
-        "kind": "mesh",
-        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <mesh-renderer-settings>\n    <active-dataset-group scalar=\"0\" vector=\"-1\"/>\n    <scalar-settings group=\"0\" min-val=\"0\" max-val=\"30.004822\" opacity=\"1\" interpolation-method=\"no-resampling\">\n      <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"0\" maximumValue=\"30.004822\" labelPrecision=\"4\">\n        <item value=\"0\" color=\"#fff5eb\" alpha=\"255\" label=\"0 mg/L\"/>\n        <item value=\"7.5012055\" color=\"#fdd0a2\" alpha=\"255\" label=\"7.50121 mg/L\"/>\n        <item value=\"15.002411\" color=\"#fd8c3b\" alpha=\"255\" label=\"15.0024 mg/L\"/>\n        <item value=\"22.5036165\" color=\"#d84801\" alpha=\"255\" label=\"22.5036 mg/L\"/>\n        <item value=\"30.004822\" color=\"#7f2704\" alpha=\"255\" label=\"30.0048 mg/L\"/>\n      </colorrampshader>\n    </scalar-settings>\n  </mesh-renderer-settings>\n  <name-to-global-index global-index=\"0\" name=\"Suspended load at t = 3583.44 s\"/>\n</qgis>\n",
-        "units": "mg/L",
-        "vmax": 30.004822,
-        "vmin": 0.0
-      },
-      "name": "Suspended load (mg/L) at t = 3583.44 s (scotia_humboldt_county_california_95562_united_s)",
-      "opacity": null,
-      "origin": null,
-      "quantity": "suspended_load",
-      "reference_time": null,
-      "role": "primary",
-      "temporal": false,
-      "uri": "s3://trid3nt-runs/01M2H5WKY448P5NZQ83BYYYMX3/r2d_river.slf",
-      "valid_from": null,
-      "valid_to": null,
-      "visible": true,
-      "z_index": 23
-    },
-    {
-      "crs_authid": "EPSG:32610",
       "dataset_group": "SUSPENDED LOAD",
       "dataset_uris": [],
-      "layer_id": "telemac-suspended_load-over-time-01M2H5WKY448P5NZQ83BYYYMX3",
+      "layer_id": "telemac-suspended_load-over-time-01M2HG9ASXE40K9MF2GQCZRN9Y",
       "layer_type": "mesh",
       "legend": {
         "colormap": "oranges",
@@ -1178,50 +884,20 @@
       "opacity": null,
       "origin": null,
       "quantity": "suspended_load",
-      "reference_time": "2026-09-15T00:01:24+00:00",
+      "reference_time": "2026-09-15T03:03:07+00:00",
       "role": "primary",
       "temporal": false,
-      "uri": "s3://trid3nt-runs/01M2H5WKY448P5NZQ83BYYYMX3/r2d_river.slf",
+      "uri": "s3://trid3nt-runs/01M2HG9ASXE40K9MF2GQCZRN9Y/r2d_river.slf",
       "valid_from": null,
       "valid_to": null,
       "visible": true,
-      "z_index": 24
-    },
-    {
-      "crs_authid": "EPSG:32610",
-      "dataset_group": "Bed sediments at t = 3583.44 s",
-      "dataset_uris": [
-        "s3://trid3nt-runs/01M2H5WKY448P5NZQ83BYYYMX3/bed_sediments-t3583.dat"
-      ],
-      "layer_id": "telemac-bed_sediments-t3583-01M2H5WKY448P5NZQ83BYYYMX3",
-      "layer_type": "mesh",
-      "legend": {
-        "colormap": "ylorrd",
-        "floor": 0.03220821619033814,
-        "kind": "mesh",
-        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <mesh-renderer-settings>\n    <active-dataset-group scalar=\"0\" vector=\"-1\"/>\n    <scalar-settings group=\"0\" min-val=\"0\" max-val=\"0.644165\" opacity=\"1\" interpolation-method=\"no-resampling\">\n      <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"0\" maximumValue=\"0.644165\" labelPrecision=\"4\">\n        <item value=\"0\" color=\"#ffffcc\" alpha=\"255\" label=\"0 mg/L\"/>\n        <item value=\"0.16104125\" color=\"#fed976\" alpha=\"255\" label=\"0.161041 mg/L\"/>\n        <item value=\"0.3220825\" color=\"#fd8c3c\" alpha=\"255\" label=\"0.322082 mg/L\"/>\n        <item value=\"0.48312375\" color=\"#e2191c\" alpha=\"255\" label=\"0.483124 mg/L\"/>\n        <item value=\"0.644165\" color=\"#800026\" alpha=\"255\" label=\"0.644165 mg/L\"/>\n      </colorrampshader>\n    </scalar-settings>\n  </mesh-renderer-settings>\n  <name-to-global-index global-index=\"0\" name=\"Bed sediments at t = 3583.44 s\"/>\n</qgis>\n",
-        "units": "mg/L",
-        "vmax": 0.644165,
-        "vmin": 0.0
-      },
-      "name": "Bed sediments (mg/L) at t = 3583.44 s (scotia_humboldt_county_california_95562_united_s)",
-      "opacity": null,
-      "origin": null,
-      "quantity": "bed_sediments",
-      "reference_time": null,
-      "role": "primary",
-      "temporal": false,
-      "uri": "s3://trid3nt-runs/01M2H5WKY448P5NZQ83BYYYMX3/r2d_river.slf",
-      "valid_from": null,
-      "valid_to": null,
-      "visible": true,
-      "z_index": 25
+      "z_index": 15
     },
     {
       "crs_authid": "EPSG:32610",
       "dataset_group": "BED SEDIMENTS",
       "dataset_uris": [],
-      "layer_id": "telemac-bed_sediments-over-time-01M2H5WKY448P5NZQ83BYYYMX3",
+      "layer_id": "telemac-bed_sediments-over-time-01M2HG9ASXE40K9MF2GQCZRN9Y",
       "layer_type": "mesh",
       "legend": {
         "colormap": "ylorrd",
@@ -1236,108 +912,48 @@
       "opacity": null,
       "origin": null,
       "quantity": "bed_sediments",
-      "reference_time": "2026-09-15T00:01:24+00:00",
+      "reference_time": "2026-09-15T03:03:07+00:00",
       "role": "primary",
       "temporal": false,
-      "uri": "s3://trid3nt-runs/01M2H5WKY448P5NZQ83BYYYMX3/r2d_river.slf",
+      "uri": "s3://trid3nt-runs/01M2HG9ASXE40K9MF2GQCZRN9Y/r2d_river.slf",
       "valid_from": null,
       "valid_to": null,
       "visible": true,
-      "z_index": 26
-    },
-    {
-      "crs_authid": "EPSG:32610",
-      "dataset_group": "Abs. susp. load. at t = 3583.44 s",
-      "dataset_uris": [
-        "s3://trid3nt-runs/01M2H5WKY448P5NZQ83BYYYMX3/abs._susp._load.-t3583.dat"
-      ],
-      "layer_id": "telemac-abs._susp._load.-t3583-01M2H5WKY448P5NZQ83BYYYMX3",
-      "layer_type": "mesh",
-      "legend": {
-        "colormap": "magma",
-        "floor": 0.4727670669555664,
-        "kind": "mesh",
-        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <mesh-renderer-settings>\n    <active-dataset-group scalar=\"0\" vector=\"-1\"/>\n    <scalar-settings group=\"0\" min-val=\"-1e-06\" max-val=\"1e-06\" opacity=\"1\" interpolation-method=\"no-resampling\">\n      <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"-1e-06\" maximumValue=\"1e-06\" labelPrecision=\"4\">\n        <item value=\"-1e-06\" color=\"#000004\" alpha=\"255\" label=\"-1e-06 mg/L\"/>\n        <item value=\"-5e-07\" color=\"#51127c\" alpha=\"255\" label=\"-5e-07 mg/L\"/>\n        <item value=\"0\" color=\"#b73779\" alpha=\"255\" label=\"0 mg/L\"/>\n        <item value=\"5e-07\" color=\"#fc8961\" alpha=\"255\" label=\"5e-07 mg/L\"/>\n        <item value=\"1e-06\" color=\"#fcfdbf\" alpha=\"255\" label=\"1e-06 mg/L\"/>\n      </colorrampshader>\n    </scalar-settings>\n  </mesh-renderer-settings>\n  <name-to-global-index global-index=\"0\" name=\"Abs. susp. load. at t = 3583.44 s\"/>\n</qgis>\n",
-        "units": "mg/L",
-        "vmax": 1e-06,
-        "vmin": -1e-06
-      },
-      "name": "Abs. susp. load. (mg/L) at t = 3583.44 s (scotia_humboldt_county_california_95562_united_s)",
-      "opacity": null,
-      "origin": null,
-      "quantity": "abs._susp._load.",
-      "reference_time": null,
-      "role": "primary",
-      "temporal": false,
-      "uri": "s3://trid3nt-runs/01M2H5WKY448P5NZQ83BYYYMX3/r2d_river.slf",
-      "valid_from": null,
-      "valid_to": null,
-      "visible": true,
-      "z_index": 27
+      "z_index": 16
     },
     {
       "crs_authid": "EPSG:32610",
       "dataset_group": "ABS. SUSP. LOAD.",
       "dataset_uris": [],
-      "layer_id": "telemac-abs._susp._load.-over-time-01M2H5WKY448P5NZQ83BYYYMX3",
+      "layer_id": "telemac-abs._susp._load.-over-time-01M2HG9ASXE40K9MF2GQCZRN9Y",
       "layer_type": "mesh",
       "legend": {
         "colormap": "magma",
         "floor": 0.4727670669555664,
         "kind": "mesh",
-        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <mesh-renderer-settings>\n    <active-dataset-group scalar=\"0\" vector=\"-1\"/>\n    <scalar-settings group=\"0\" min-val=\"-1e-06\" max-val=\"1e-06\" opacity=\"1\" interpolation-method=\"no-resampling\">\n      <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"-1e-06\" maximumValue=\"1e-06\" labelPrecision=\"4\">\n        <item value=\"-1e-06\" color=\"#000004\" alpha=\"255\" label=\"-1e-06 mg/L\"/>\n        <item value=\"-5e-07\" color=\"#51127c\" alpha=\"255\" label=\"-5e-07 mg/L\"/>\n        <item value=\"0\" color=\"#b73779\" alpha=\"255\" label=\"0 mg/L\"/>\n        <item value=\"5e-07\" color=\"#fc8961\" alpha=\"255\" label=\"5e-07 mg/L\"/>\n        <item value=\"1e-06\" color=\"#fcfdbf\" alpha=\"255\" label=\"1e-06 mg/L\"/>\n      </colorrampshader>\n    </scalar-settings>\n  </mesh-renderer-settings>\n  <name-to-global-index global-index=\"0\" name=\"ABS. SUSP. LOAD.\"/>\n</qgis>\n",
+        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <mesh-renderer-settings>\n    <active-dataset-group scalar=\"0\" vector=\"-1\"/>\n    <scalar-settings group=\"0\" min-val=\"0\" max-val=\"9.455342\" opacity=\"1\" interpolation-method=\"no-resampling\">\n      <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"0\" maximumValue=\"9.455342\" labelPrecision=\"4\">\n        <item value=\"0\" color=\"#000004\" alpha=\"255\" label=\"0 mg/L\"/>\n        <item value=\"2.3638355\" color=\"#51127c\" alpha=\"255\" label=\"2.36384 mg/L\"/>\n        <item value=\"4.727671\" color=\"#b73779\" alpha=\"255\" label=\"4.72767 mg/L\"/>\n        <item value=\"7.0915065\" color=\"#fc8961\" alpha=\"255\" label=\"7.09151 mg/L\"/>\n        <item value=\"9.455342\" color=\"#fcfdbf\" alpha=\"255\" label=\"9.45534 mg/L\"/>\n      </colorrampshader>\n    </scalar-settings>\n  </mesh-renderer-settings>\n  <name-to-global-index global-index=\"0\" name=\"ABS. SUSP. LOAD.\"/>\n</qgis>\n",
         "units": "mg/L",
-        "vmax": 1e-06,
-        "vmin": -1e-06
+        "vmax": 9.455342,
+        "vmin": 0.0
       },
       "name": "Abs. susp. load. over time (scotia_humboldt_county_california_95562_united_s)",
       "opacity": null,
       "origin": null,
       "quantity": "abs._susp._load.",
-      "reference_time": "2026-09-15T00:01:24+00:00",
+      "reference_time": "2026-09-15T03:03:07+00:00",
       "role": "primary",
       "temporal": false,
-      "uri": "s3://trid3nt-runs/01M2H5WKY448P5NZQ83BYYYMX3/r2d_river.slf",
+      "uri": "s3://trid3nt-runs/01M2HG9ASXE40K9MF2GQCZRN9Y/r2d_river.slf",
       "valid_from": null,
       "valid_to": null,
       "visible": true,
-      "z_index": 28
-    },
-    {
-      "crs_authid": "EPSG:32610",
-      "dataset_group": "Absorb. bed sed. at t = 3583.44 s",
-      "dataset_uris": [
-        "s3://trid3nt-runs/01M2H5WKY448P5NZQ83BYYYMX3/absorb._bed_sed.-t3583.dat"
-      ],
-      "layer_id": "telemac-absorb._bed_sed.-t3583-01M2H5WKY448P5NZQ83BYYYMX3",
-      "layer_type": "mesh",
-      "legend": {
-        "colormap": "plasma",
-        "floor": 0.001,
-        "kind": "mesh",
-        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <mesh-renderer-settings>\n    <active-dataset-group scalar=\"0\" vector=\"-1\"/>\n    <scalar-settings group=\"0\" min-val=\"0\" max-val=\"0.005532\" opacity=\"1\" interpolation-method=\"no-resampling\">\n      <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"0\" maximumValue=\"0.005532\" labelPrecision=\"4\">\n        <item value=\"0\" color=\"#0d0887\" alpha=\"255\" label=\"0 mg/L\"/>\n        <item value=\"0.001383\" color=\"#7e03a8\" alpha=\"255\" label=\"0.001383 mg/L\"/>\n        <item value=\"0.002766\" color=\"#cc4778\" alpha=\"255\" label=\"0.002766 mg/L\"/>\n        <item value=\"0.004149\" color=\"#f89540\" alpha=\"255\" label=\"0.004149 mg/L\"/>\n        <item value=\"0.005532\" color=\"#f0f921\" alpha=\"255\" label=\"0.005532 mg/L\"/>\n      </colorrampshader>\n    </scalar-settings>\n  </mesh-renderer-settings>\n  <name-to-global-index global-index=\"0\" name=\"Absorb. bed sed. at t = 3583.44 s\"/>\n</qgis>\n",
-        "units": "mg/L",
-        "vmax": 0.005532,
-        "vmin": 0.0
-      },
-      "name": "Absorb. bed sed. (mg/L) at t = 3583.44 s (scotia_humboldt_county_california_95562_united_s)",
-      "opacity": null,
-      "origin": null,
-      "quantity": "absorb._bed_sed.",
-      "reference_time": null,
-      "role": "primary",
-      "temporal": false,
-      "uri": "s3://trid3nt-runs/01M2H5WKY448P5NZQ83BYYYMX3/r2d_river.slf",
-      "valid_from": null,
-      "valid_to": null,
-      "visible": true,
-      "z_index": 29
+      "z_index": 17
     },
     {
       "crs_authid": "EPSG:32610",
       "dataset_group": "ABSORB. BED SED.",
       "dataset_uris": [],
-      "layer_id": "telemac-absorb._bed_sed.-over-time-01M2H5WKY448P5NZQ83BYYYMX3",
+      "layer_id": "telemac-absorb._bed_sed.-over-time-01M2HG9ASXE40K9MF2GQCZRN9Y",
       "layer_type": "mesh",
       "legend": {
         "colormap": "plasma",
@@ -1352,20 +968,20 @@
       "opacity": null,
       "origin": null,
       "quantity": "absorb._bed_sed.",
-      "reference_time": "2026-09-15T00:01:24+00:00",
+      "reference_time": "2026-09-15T03:03:07+00:00",
       "role": "primary",
       "temporal": false,
-      "uri": "s3://trid3nt-runs/01M2H5WKY448P5NZQ83BYYYMX3/r2d_river.slf",
+      "uri": "s3://trid3nt-runs/01M2HG9ASXE40K9MF2GQCZRN9Y/r2d_river.slf",
       "valid_from": null,
       "valid_to": null,
       "visible": true,
-      "z_index": 30
+      "z_index": 18
     },
     {
       "crs_authid": "EPSG:32610",
       "dataset_group": null,
       "dataset_uris": [],
-      "layer_id": "01M2H5YBM4D5E3WHF1MPMHPPXF",
+      "layer_id": "01M2HGB2G8NC769R8CGDQ39JF8",
       "layer_type": "mesh",
       "legend": {
         "colormap": null,
@@ -1380,14 +996,14 @@
       "opacity": null,
       "origin": null,
       "quantity": null,
-      "reference_time": "2026-09-15T00:01:24+00:00",
+      "reference_time": "2026-09-15T03:03:07+00:00",
       "role": "primary",
       "temporal": false,
-      "uri": "s3://trid3nt-runs/01M2H5WKY448P5NZQ83BYYYMX3/r2d_river.slf",
+      "uri": "s3://trid3nt-runs/01M2HG9ASXE40K9MF2GQCZRN9Y/r2d_river.slf",
       "valid_from": null,
       "valid_to": null,
       "visible": true,
-      "z_index": 31
+      "z_index": 19
     }
   ]
 }

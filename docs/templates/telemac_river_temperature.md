@@ -71,45 +71,37 @@ It publishes these layers onto the canvas:
 - Input: usgs water quality (usgs_water_quality)
 - Temperature station (user) - scotia_humboldt_county_california_95562_united_s
 - Input: raws weather (raws_weather)
-- Velocity u (m/s) at t = 3546.73 s (scotia_humboldt_county_california_95562_united_s)
 - Velocity u over time (scotia_humboldt_county_california_95562_united_s)
-- Velocity v (m/s) at t = 3546.73 s (scotia_humboldt_county_california_95562_united_s)
 - Velocity v over time (scotia_humboldt_county_california_95562_united_s)
-- Water depth (m) at t = 3546.73 s (scotia_humboldt_county_california_95562_united_s)
 - Water depth over time (scotia_humboldt_county_california_95562_united_s)
-- Free surface (m) at t = 3546.73 s (scotia_humboldt_county_california_95562_united_s)
 - Free surface over time (scotia_humboldt_county_california_95562_united_s)
 - Bottom (m) at t = 3546.73 s (scotia_humboldt_county_california_95562_united_s)
-- Froude number at t = 3546.73 s (scotia_humboldt_county_california_95562_united_s)
 - Froude number over time (scotia_humboldt_county_california_95562_united_s)
-- Scalar flowrate (m2/s) at t = 3546.73 s (scotia_humboldt_county_california_95562_united_s)
 - Scalar flowrate over time (scotia_humboldt_county_california_95562_united_s)
-- Scalar velocity (m/s) at t = 3546.73 s (scotia_humboldt_county_california_95562_united_s)
 - Scalar velocity over time (scotia_humboldt_county_california_95562_united_s)
-- Temperature (deg) at t = 3546.73 s (scotia_humboldt_county_california_95562_united_s)
 - Temperature over time (scotia_humboldt_county_california_95562_united_s)
 - Water temperature (scotia_humboldt_county_california_95562_united_s)
 - scotia_humboldt_county_california_95562_united_s
 
 ## The proving run
 
-Run `01M2H4DR1TB8Z2R0ENB98B4JBX`, 2026-09-14T23:36:33.161999+00:00, 88.294 s, at commit `75a63378d41a93f5cd9be25b0ef2124cc675a0e5-dirty`.
+Run `01M2HG0Z5RFAHPMYWJG862SQJM`, 2026-09-15T02:59:17.342915+00:00, 90.988 s, at commit `80e141fee6381b28cbe4f48992ba63bf480c0c55`.
 
-![Every layer the run published, stacked and framed on the result (run 01M2H4DR1TB8Z2R0ENB98B4JBX)](telemac_river_temperature/telemac_river_temperature.png)
+![Every layer the run published, stacked and framed on the result (run 01M2HG0Z5RFAHPMYWJG862SQJM)](telemac_river_temperature/telemac_river_temperature.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M2H4DR1TB8Z2R0ENB98B4JBX)*
+*Every layer the run published, stacked and framed on the result (run 01M2HG0Z5RFAHPMYWJG862SQJM)*
 
-![The solve, frame by frame (run 01M2H4DR1TB8Z2R0ENB98B4JBX)](telemac_river_temperature/telemac_river_temperature_animation.gif)
+![The solve, frame by frame (run 01M2HG0Z5RFAHPMYWJG862SQJM)](telemac_river_temperature/telemac_river_temperature_animation.gif)
 
-*The solve, frame by frame (run 01M2H4DR1TB8Z2R0ENB98B4JBX)*
+*The solve, frame by frame (run 01M2HG0Z5RFAHPMYWJG862SQJM)*
 
-![final frame (run 01M2H4DR1TB8Z2R0ENB98B4JBX)](telemac_river_temperature/telemac_river_temperature_final_frame.png)
+![final frame (run 01M2HG0Z5RFAHPMYWJG862SQJM)](telemac_river_temperature/telemac_river_temperature_final_frame.png)
 
-*final frame (run 01M2H4DR1TB8Z2R0ENB98B4JBX)*
+*final frame (run 01M2HG0Z5RFAHPMYWJG862SQJM)*
 
-![water temperature - the chart the run persisted (run 01M2H4DR1TB8Z2R0ENB98B4JBX)](telemac_river_temperature/telemac_river_temperature_chart_water_temperature.png)
+![water temperature - the chart the run persisted (run 01M2HG0Z5RFAHPMYWJG862SQJM)](telemac_river_temperature/telemac_river_temperature_chart_water_temperature.png)
 
-*water temperature - the chart the run persisted (run 01M2H4DR1TB8Z2R0ENB98B4JBX)*
+*water temperature - the chart the run persisted (run 01M2HG0Z5RFAHPMYWJG862SQJM)*
 
 ### The sheet it filled
 
@@ -124,7 +116,7 @@ Every slot the run resolved, with where the value came from. The engine's own de
 | `station` | Point(lon=-124.0983, lat=40.4921, name=None) | - | user | supplied on this invocation |
 | `output_interval_min` | 1.0 | min | user | supplied on this invocation |
 | `reach_length_km` | 0.5 | km | user | supplied on this invocation |
-| `sim_duration_s` | 3600.0 | s | user | supplied on this invocation; CLAMPED from 1800 to the declared minimum 3600 s |
+| `sim_duration_s` | 3600.0 | s | user | supplied on this invocation |
 | `mesh_resolution_m` | 12.0 | m | user | supplied on this invocation |
 | `compute_class` | medium | - | default_demo | declared constant default |
 | `bbox` | - | - | user | not supplied (declared optional) |
@@ -152,5 +144,5 @@ await TOOL_REGISTRY['telemac_river_temperature'].fn(
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2H4DR1TB8Z2R0ENB98B4JBX` and commit `75a63378d41a93f5cd9be25b0ef2124cc675a0e5-dirty`. The full argument record is [`telemac_river_temperature/run.json`](telemac_river_temperature/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2HG0Z5RFAHPMYWJG862SQJM` and commit `80e141fee6381b28cbe4f48992ba63bf480c0c55`. The full argument record is [`telemac_river_temperature/run.json`](telemac_river_temperature/run.json).
 

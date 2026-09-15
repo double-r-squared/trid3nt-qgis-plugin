@@ -79,70 +79,55 @@ It publishes these layers onto the canvas:
 - Input: nhd area water (nhd_area_water)
 - Input: river bed elevation (copernicus_dem, datum EGM2008 geoid (metres, positive up))
 - Input: observed water temperature (usgs_water_quality)
-- Velocity u (m/s) at t = 3586.8 s (scotia_humboldt_county_california_95562_united_s)
 - Velocity u over time (scotia_humboldt_county_california_95562_united_s)
-- Velocity v (m/s) at t = 3586.8 s (scotia_humboldt_county_california_95562_united_s)
 - Velocity v over time (scotia_humboldt_county_california_95562_united_s)
-- Water depth (m) at t = 3586.8 s (scotia_humboldt_county_california_95562_united_s)
 - Water depth over time (scotia_humboldt_county_california_95562_united_s)
-- Free surface (m) at t = 3586.8 s (scotia_humboldt_county_california_95562_united_s)
 - Free surface over time (scotia_humboldt_county_california_95562_united_s)
 - Bottom (m) at t = 3586.8 s (scotia_humboldt_county_california_95562_united_s)
-- Froude number at t = 3586.8 s (scotia_humboldt_county_california_95562_united_s)
 - Froude number over time (scotia_humboldt_county_california_95562_united_s)
-- Scalar flowrate (m2/s) at t = 3586.8 s (scotia_humboldt_county_california_95562_united_s)
 - Scalar flowrate over time (scotia_humboldt_county_california_95562_united_s)
-- Scalar velocity (m/s) at t = 3586.8 s (scotia_humboldt_county_california_95562_united_s)
 - Scalar velocity over time (scotia_humboldt_county_california_95562_united_s)
-- Phyto biomass (micro_g/l) at t = 3586.8 s (scotia_humboldt_county_california_95562_united_s)
 - Phyto biomass over time (scotia_humboldt_county_california_95562_united_s)
-- Dissolved po4 (mg/L) at t = 3586.8 s (scotia_humboldt_county_california_95562_united_s)
 - Dissolved po4 over time (scotia_humboldt_county_california_95562_united_s)
-- Por non assimil (mg/L) at t = 3586.8 s (scotia_humboldt_county_california_95562_united_s)
 - Por non assimil over time (scotia_humboldt_county_california_95562_united_s)
-- Dissolved no3 (mg/L) at t = 3586.8 s (scotia_humboldt_county_california_95562_united_s)
 - Dissolved no3 over time (scotia_humboldt_county_california_95562_united_s)
-- Nor non assim (mg/L) at t = 3586.8 s (scotia_humboldt_county_california_95562_united_s)
 - Nor non assim over time (scotia_humboldt_county_california_95562_united_s)
-- Nh4 load (mgnh4/l) at t = 3586.8 s (scotia_humboldt_county_california_95562_united_s)
 - Nh4 load over time (scotia_humboldt_county_california_95562_united_s)
-- Organic load (mgO2/L) at t = 3586.8 s (scotia_humboldt_county_california_95562_united_s)
 - Organic load over time (scotia_humboldt_county_california_95562_united_s)
-- Dissolved o2 (mgO2/L) at t = 3586.8 s (scotia_humboldt_county_california_95562_united_s)
 - Dissolved o2 over time (scotia_humboldt_county_california_95562_united_s)
 - scotia_humboldt_county_california_95562_united_s
 
 ## The proving run
 
-Run `01M2H412TJ0BW1KA5YD3S4EE48`, 2026-09-14T23:29:19.370681+00:00, 35.159 s, at commit `75a63378d41a93f5cd9be25b0ef2124cc675a0e5-dirty`.
+Run `01M2HGPJGC50366310WC8ZAMH7`, 2026-09-15T03:10:46.435410+00:00, 35.786 s, at commit `80e141fee6381b28cbe4f48992ba63bf480c0c55-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M2H412TJ0BW1KA5YD3S4EE48)](telemac_river_eutrophication/telemac_river_eutrophication.png)
+![Every layer the run published, stacked and framed on the result (run 01M2HGPJGC50366310WC8ZAMH7)](telemac_river_eutrophication/telemac_river_eutrophication.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M2H412TJ0BW1KA5YD3S4EE48)*
+*Every layer the run published, stacked and framed on the result (run 01M2HGPJGC50366310WC8ZAMH7)*
 
-![The solve, frame by frame - biomass (run 01M2H412TJ0BW1KA5YD3S4EE48)](telemac_river_eutrophication/telemac_river_eutrophication_animation_biomass.gif)
+![The solve, frame by frame - biomass (run 01M2HGPJGC50366310WC8ZAMH7)](telemac_river_eutrophication/telemac_river_eutrophication_animation_biomass.gif)
 
-*The solve, frame by frame - biomass (run 01M2H412TJ0BW1KA5YD3S4EE48)*
+*The solve, frame by frame - biomass (run 01M2HGPJGC50366310WC8ZAMH7)*
 
-![The solve, frame by frame - oxygen (run 01M2H412TJ0BW1KA5YD3S4EE48)](telemac_river_eutrophication/telemac_river_eutrophication_animation_oxygen.gif)
+![The solve, frame by frame - oxygen (run 01M2HGPJGC50366310WC8ZAMH7)](telemac_river_eutrophication/telemac_river_eutrophication_animation_oxygen.gif)
 
-*The solve, frame by frame - oxygen (run 01M2H412TJ0BW1KA5YD3S4EE48)*
+*The solve, frame by frame - oxygen (run 01M2HGPJGC50366310WC8ZAMH7)*
 
-![biomass final frame (run 01M2H412TJ0BW1KA5YD3S4EE48)](telemac_river_eutrophication/telemac_river_eutrophication_biomass_final_frame.png)
+![biomass final frame (run 01M2HGPJGC50366310WC8ZAMH7)](telemac_river_eutrophication/telemac_river_eutrophication_biomass_final_frame.png)
 
-*biomass final frame (run 01M2H412TJ0BW1KA5YD3S4EE48)*
+*biomass final frame (run 01M2HGPJGC50366310WC8ZAMH7)*
 
-![oxygen final frame (run 01M2H412TJ0BW1KA5YD3S4EE48)](telemac_river_eutrophication/telemac_river_eutrophication_oxygen_final_frame.png)
+![oxygen final frame (run 01M2HGPJGC50366310WC8ZAMH7)](telemac_river_eutrophication/telemac_river_eutrophication_oxygen_final_frame.png)
 
-*oxygen final frame (run 01M2H412TJ0BW1KA5YD3S4EE48)*
+*oxygen final frame (run 01M2HGPJGC50366310WC8ZAMH7)*
 
-![dissolved o2 - the chart the run persisted (run 01M2H412TJ0BW1KA5YD3S4EE48)](telemac_river_eutrophication/telemac_river_eutrophication_chart_dissolved_o2.png)
+![dissolved o2 - the chart the run persisted (run 01M2HGPJGC50366310WC8ZAMH7)](telemac_river_eutrophication/telemac_river_eutrophication_chart_dissolved_o2.png)
 
-*dissolved o2 - the chart the run persisted (run 01M2H412TJ0BW1KA5YD3S4EE48)*
+*dissolved o2 - the chart the run persisted (run 01M2HGPJGC50366310WC8ZAMH7)*
 
-![phyto biomass - the chart the run persisted (run 01M2H412TJ0BW1KA5YD3S4EE48)](telemac_river_eutrophication/telemac_river_eutrophication_chart_phyto_biomass.png)
+![phyto biomass - the chart the run persisted (run 01M2HGPJGC50366310WC8ZAMH7)](telemac_river_eutrophication/telemac_river_eutrophication_chart_phyto_biomass.png)
 
-*phyto biomass - the chart the run persisted (run 01M2H412TJ0BW1KA5YD3S4EE48)*
+*phyto biomass - the chart the run persisted (run 01M2HGPJGC50366310WC8ZAMH7)*
 
 ### The sheet it filled
 
@@ -155,7 +140,7 @@ Every slot the run resolved, with where the value came from. The engine's own de
 | `output_interval_min` | 0.333 | min | user | supplied on this invocation |
 | `station` | Point(lon=-124.0983, lat=40.4921, name=None) | - | user | supplied on this invocation |
 | `reach_length_km` | 0.5 | km | user | supplied on this invocation |
-| `sim_duration_s` | 3600.0 | s | user | supplied on this invocation; CLAMPED from 600 to the declared minimum 3600 s |
+| `sim_duration_s` | 3600.0 | s | user | supplied on this invocation |
 | `mesh_resolution_m` | 12.0 | m | user | supplied on this invocation |
 | `compute_class` | medium | - | default_demo | declared constant default |
 | `initial_phyto_ug_l` | 2.0 | ug/L | default_demo | declared scenario default |
@@ -193,5 +178,5 @@ await TOOL_REGISTRY['telemac_river_eutrophication'].fn(
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2H412TJ0BW1KA5YD3S4EE48` and commit `75a63378d41a93f5cd9be25b0ef2124cc675a0e5-dirty`. The full argument record is [`telemac_river_eutrophication/run.json`](telemac_river_eutrophication/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2HGPJGC50366310WC8ZAMH7` and commit `80e141fee6381b28cbe4f48992ba63bf480c0c55-dirty`. The full argument record is [`telemac_river_eutrophication/run.json`](telemac_river_eutrophication/run.json).
 

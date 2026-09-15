@@ -75,60 +75,48 @@ It publishes these layers onto the canvas:
 - Input: river bed elevation (copernicus_dem, datum EGM2008 geoid (metres, positive up))
 - Release point (user) - scotia_humboldt_county_california_95562_united_s
 - Monitoring point (derived) - scotia_humboldt_county_california_95562_united_s
-- Velocity u (m/s) at t = 3583.44 s (scotia_humboldt_county_california_95562_united_s)
 - Velocity u over time (scotia_humboldt_county_california_95562_united_s)
-- Velocity v (m/s) at t = 3583.44 s (scotia_humboldt_county_california_95562_united_s)
 - Velocity v over time (scotia_humboldt_county_california_95562_united_s)
-- Water depth (m) at t = 3583.44 s (scotia_humboldt_county_california_95562_united_s)
 - Water depth over time (scotia_humboldt_county_california_95562_united_s)
-- Free surface (m) at t = 3583.44 s (scotia_humboldt_county_california_95562_united_s)
 - Free surface over time (scotia_humboldt_county_california_95562_united_s)
 - Bottom (m) at t = 3583.44 s (scotia_humboldt_county_california_95562_united_s)
-- Froude number at t = 3583.44 s (scotia_humboldt_county_california_95562_united_s)
 - Froude number over time (scotia_humboldt_county_california_95562_united_s)
-- Scalar flowrate (m2/s) at t = 3583.44 s (scotia_humboldt_county_california_95562_united_s)
 - Scalar flowrate over time (scotia_humboldt_county_california_95562_united_s)
-- Scalar velocity (m/s) at t = 3583.44 s (scotia_humboldt_county_california_95562_united_s)
 - Scalar velocity over time (scotia_humboldt_county_california_95562_united_s)
-- Micro pollutant (mg/L) at t = 3583.44 s (scotia_humboldt_county_california_95562_united_s)
 - Micro pollutant over time (scotia_humboldt_county_california_95562_united_s)
-- Suspended load (mg/L) at t = 3583.44 s (scotia_humboldt_county_california_95562_united_s)
 - Suspended load over time (scotia_humboldt_county_california_95562_united_s)
-- Bed sediments (mg/L) at t = 3583.44 s (scotia_humboldt_county_california_95562_united_s)
 - Bed sediments over time (scotia_humboldt_county_california_95562_united_s)
-- Abs. susp. load. (mg/L) at t = 3583.44 s (scotia_humboldt_county_california_95562_united_s)
 - Abs. susp. load. over time (scotia_humboldt_county_california_95562_united_s)
-- Absorb. bed sed. (mg/L) at t = 3583.44 s (scotia_humboldt_county_california_95562_united_s)
 - Absorb. bed sed. over time (scotia_humboldt_county_california_95562_united_s)
 - scotia_humboldt_county_california_95562_united_s
 
 ## The proving run
 
-Run `01M2H5WKY448P5NZQ83BYYYMX3`, 2026-09-15T00:02:19.317049+00:00, 94.983 s, at commit `75a63378d41a93f5cd9be25b0ef2124cc675a0e5-dirty`.
+Run `01M2HG9ASXE40K9MF2GQCZRN9Y`, 2026-09-15T03:04:01.681727+00:00, 96.419 s, at commit `80e141fee6381b28cbe4f48992ba63bf480c0c55-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M2H5WKY448P5NZQ83BYYYMX3)](telemac_river_micropollutant/telemac_river_micropollutant.png)
+![Every layer the run published, stacked and framed on the result (run 01M2HG9ASXE40K9MF2GQCZRN9Y)](telemac_river_micropollutant/telemac_river_micropollutant.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M2H5WKY448P5NZQ83BYYYMX3)*
+*Every layer the run published, stacked and framed on the result (run 01M2HG9ASXE40K9MF2GQCZRN9Y)*
 
-![The solve, frame by frame - dissolved (run 01M2H5WKY448P5NZQ83BYYYMX3)](telemac_river_micropollutant/telemac_river_micropollutant_animation_dissolved.gif)
+![The solve, frame by frame - dissolved (run 01M2HG9ASXE40K9MF2GQCZRN9Y)](telemac_river_micropollutant/telemac_river_micropollutant_animation_dissolved.gif)
 
-*The solve, frame by frame - dissolved (run 01M2H5WKY448P5NZQ83BYYYMX3)*
+*The solve, frame by frame - dissolved (run 01M2HG9ASXE40K9MF2GQCZRN9Y)*
 
-![The solve, frame by frame - on_the_bed (run 01M2H5WKY448P5NZQ83BYYYMX3)](telemac_river_micropollutant/telemac_river_micropollutant_animation_on_the_bed.gif)
+![The solve, frame by frame - on_the_bed (run 01M2HG9ASXE40K9MF2GQCZRN9Y)](telemac_river_micropollutant/telemac_river_micropollutant_animation_on_the_bed.gif)
 
-*The solve, frame by frame - on_the_bed (run 01M2H5WKY448P5NZQ83BYYYMX3)*
+*The solve, frame by frame - on_the_bed (run 01M2HG9ASXE40K9MF2GQCZRN9Y)*
 
-![dissolved peak frame (run 01M2H5WKY448P5NZQ83BYYYMX3)](telemac_river_micropollutant/telemac_river_micropollutant_dissolved_peak_frame.png)
+![dissolved peak frame (run 01M2HG9ASXE40K9MF2GQCZRN9Y)](telemac_river_micropollutant/telemac_river_micropollutant_dissolved_peak_frame.png)
 
-*dissolved peak frame (run 01M2H5WKY448P5NZQ83BYYYMX3)*
+*dissolved peak frame (run 01M2HG9ASXE40K9MF2GQCZRN9Y)*
 
-![on the bed final frame (run 01M2H5WKY448P5NZQ83BYYYMX3)](telemac_river_micropollutant/telemac_river_micropollutant_on_the_bed_final_frame.png)
+![on the bed final frame (run 01M2HG9ASXE40K9MF2GQCZRN9Y)](telemac_river_micropollutant/telemac_river_micropollutant_on_the_bed_final_frame.png)
 
-*on the bed final frame (run 01M2H5WKY448P5NZQ83BYYYMX3)*
+*on the bed final frame (run 01M2HG9ASXE40K9MF2GQCZRN9Y)*
 
-![dissolved micropollutant - the chart the run persisted (run 01M2H5WKY448P5NZQ83BYYYMX3)](telemac_river_micropollutant/telemac_river_micropollutant_chart_dissolved_micropollutant.png)
+![dissolved micropollutant - the chart the run persisted (run 01M2HG9ASXE40K9MF2GQCZRN9Y)](telemac_river_micropollutant/telemac_river_micropollutant_chart_dissolved_micropollutant.png)
 
-*dissolved micropollutant - the chart the run persisted (run 01M2H5WKY448P5NZQ83BYYYMX3)*
+*dissolved micropollutant - the chart the run persisted (run 01M2HG9ASXE40K9MF2GQCZRN9Y)*
 
 ### The sheet it filled
 
@@ -182,5 +170,5 @@ await TOOL_REGISTRY['telemac_river_micropollutant'].fn(
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2H5WKY448P5NZQ83BYYYMX3` and commit `75a63378d41a93f5cd9be25b0ef2124cc675a0e5-dirty`. The full argument record is [`telemac_river_micropollutant/run.json`](telemac_river_micropollutant/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2HG9ASXE40K9MF2GQCZRN9Y` and commit `80e141fee6381b28cbe4f48992ba63bf480c0c55-dirty`. The full argument record is [`telemac_river_micropollutant/run.json`](telemac_river_micropollutant/run.json).
 
