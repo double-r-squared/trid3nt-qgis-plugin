@@ -110,15 +110,17 @@ def test_the_plan_reads_as_the_universal_stage_sequence():
     assert [s.name for s in plan.declared()][-1] == "outputs"
 
 
-def test_declared_bounds_clamp_the_wq_knobs():
-    from trid3nt_server.workflows.runtime import resolve_params
+def test_a_wq_knob_outside_its_declared_bounds_refuses():
+    from trid3nt_server.workflows.runtime import GateRefusedError, resolve_params
 
     wf = _workflow()
-    p = asyncio.run(resolve_params(wf.params, {"location": "x", "reach_length_km": 900.0,
-                                               "k1_per_day": 0.0}))
-    assert p.value_of("reach_length_km") == 15.0 \
-        and "CLAMPED" in p.row("reach_length_km").note
-    assert p.value_of("k1_per_day") == 0.01
+    for outside in ({"reach_length_km": 900.0}, {"k1_per_day": 0.0}):
+        with pytest.raises(GateRefusedError, match="outside the declared range"):
+            asyncio.run(resolve_params(wf.params, {"location": "x", **outside}))
+    p = asyncio.run(resolve_params(wf.params, {"location": "x",
+                                               "reach_length_km": 15.0,
+                                               "k1_per_day": 0.01}))
+    assert p.value_of("reach_length_km") == 15.0 and p.value_of("k1_per_day") == 0.01
 
 
 @pytest.mark.asyncio

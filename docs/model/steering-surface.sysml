@@ -749,14 +749,20 @@ package SteeringSurface {
         module - with each token checked against the keyword's own choices; a
         template restating it, or naming a style of its own, is refused.
 
-        Everything the table rows and the result carries is published: the
-        final frame as a layer styled from the row, and an animation where the
-        row varies in time. There is no leading layer and no ranking among the
-        rows, because every group rides the one mesh the run solved on and the
-        camera takes its extent; the order is the dictionary's. A row the
-        result does not carry is skipped rather than refused, and a row a module
-        prints in its listing or derives over its own variables is read or
-        published but never asked of the engine.
+        Everything the table rows and the result carries is published as ONE
+        layer styled from the row: the TEMPORAL layer where the row varies in
+        time, the final frame where it does not. A still beside a time series
+        would be a copy of a frame that layer already carries, so a picture of
+        one instant is a render of the temporal layer rather than a second
+        product. That layer's legend is ranged over EVERY frame of the record,
+        never over the last frame alone - a variable that peaks and flushes
+        would otherwise be ranged on an empty field and paint blank while the
+        run's own data reached the top of its scale. There is no leading layer
+        and no ranking among the rows, because every group rides the one mesh
+        the run solved on and the camera takes its extent; the order is the
+        dictionary's. A row the result does not carry is skipped rather than
+        refused, and a row a module prints in its listing or derives over its
+        own variables is read or published but never asked of the engine.
 
         What a template keeps is the QUESTION: the keywords, the reads that need
         a place the user gives, the answer, and the captions for those.
@@ -1039,7 +1045,9 @@ package SteeringSurface {
     verify requirement OutputsAreTheModules by
         "tests/telemac/test_telemac_module_outputs.py::test_a_token_the_keyword_does_not_spell_refuses_before_the_engine_reads_it";
     verify requirement OutputsAreTheModules by
-        "tests/telemac/test_telemac_module_outputs.py::test_every_row_the_result_carries_is_painted_and_a_varying_one_animated";
+        "tests/telemac/test_telemac_module_outputs.py::test_a_varying_row_is_one_temporal_layer_and_a_still_row_its_frame";
+    verify requirement OutputsAreTheModules by
+        "tests/telemac/test_telemac_module_outputs.py::test_a_temporal_layer_is_ranged_over_the_record_not_its_last_frame";
     verify requirement OutputsAreTheModules by
         "tests/telemac/test_telemac_module_outputs.py::test_a_row_the_result_does_not_carry_is_skipped_and_a_placed_read_refuses";
     verify requirement OutputsAreTheModules by

@@ -280,27 +280,29 @@ async def test_question_beats_the_labeled_default():
 
 
 @pytest.mark.asyncio
-async def test_bounds_clamp_leaves_a_provenance_note():
-    p = await resolve_params(
-        [Param("a", desc="d", door=doors.SCENARIO, default=1.0, bounds=(0.0, 5.0),
-               units="m")],
-        {"a": 99.0},
-    )
-    assert p.value_of("a") == 5.0
-    assert p.row("a").clamped_from == 99.0
-    assert "CLAMPED" in p.row("a").note
+async def test_a_value_outside_its_bounds_refuses_by_name_and_never_clamps():
+    """The lever is the user's: a value moved onto the bound would run a question
+    nobody asked and say nothing while it did it."""
+    declared = [Param("a", desc="d", door=doors.SCENARIO, default=1.0,
+                      bounds=(0.0, 5.0), units="m")]
+    with pytest.raises(Exception) as exc:
+        await resolve_params(declared, {"a": 99.0})
+    assert "a=99 m is outside the declared range 0 to 5 m" in str(exc.value)
+    p = await resolve_params(declared, {"a": 5.0})
+    assert p.value_of("a") == 5.0 and "outside" not in p.row("a").note
 
 
 @pytest.mark.asyncio
-async def test_clamping_compares_numbers_and_does_not_retype_the_param():
+async def test_the_bound_compares_numbers_and_does_not_retype_the_param():
     """A row that declares int must not resolve to a float.
 
-    The clamp reads bounds as numbers, which is right; handing back what it read
-    makes an engine keyword refuse later and name the KEYWORD, not the declaration."""
+    The bound reads its ends as numbers, which is right; handing back what it
+    read makes an engine keyword refuse later and name the KEYWORD, not the
+    declaration."""
     declared = Param("levels", desc="d", door=doors.SCENARIO, default=13,
                      bounds=(5.0, 30.0), type=int)
     for supplied, expected in (({"levels": 13}, 13), ({}, 13),
-                               ({"levels": 99}, 30), ({"levels": 1}, 5)):
+                               ({"levels": 30}, 30), ({"levels": 5}, 5)):
         resolved = await resolve_params([declared], supplied)
         value = resolved.value_of("levels")
         assert value == expected and isinstance(value, int), (supplied, value)

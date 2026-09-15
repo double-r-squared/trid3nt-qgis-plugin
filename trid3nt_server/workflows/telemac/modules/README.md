@@ -42,9 +42,9 @@ the whole statement - a variable the dictionary offers and the table does not
 row is not written - and the printouts keyword is GENERATED from it as the deck
 is serialized, for the host and for every coupled module, with every token
 checked against the keyword's own choices. A run publishes every row its result
-carries: the final frame as a layer, styled from the row, and the whole series
-as an animation where the row varies. A row the result does not carry is
-skipped. A row the module PRINTS in its listing (TELEMAC-2D's `FLUX`) or
+carries as ONE layer, styled from the row: the temporal layer where the row
+varies in time - ranged over every frame of the record - and the final frame
+where it does not. A row the result does not carry is skipped. A row the module PRINTS in its listing (TELEMAC-2D's `FLUX`) or
 DERIVES over the variables its result carries (ARTEMIS's `KD`) is published or
 read but never asked of the engine. The `TRACER` row is the run's tracers - one
 per NAMES OF TRACERS entry, read by position as `T<n>` - and a module that

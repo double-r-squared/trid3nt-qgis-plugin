@@ -91,15 +91,15 @@ def test_a_token_the_keyword_does_not_spell_refuses_before_the_engine_reads_it()
         GAIA.MODULE_OUTPUT = original
 
 
-def _run(telemac_result, monkeypatch) -> dict[str, Any]:
+def _run(telemac_result, monkeypatch, dye=None) -> dict[str, Any]:
     """A two-variable reach result, and the run handle a solve hands the publish."""
     x = [500000.0, 500120.0, 500000.0, 500120.0, 500060.0]
     y = [4400000.0, 4400000.0, 4400110.0, 4400110.0, 4400055.0]
-    depth = [[2.0] * 5, [2.5] * 5]
-    dye = [[0.0] * 5, [10.0, 80.0, 5.0, 40.0, 60.0]]
+    dye = dye if dye is not None else [[0.0] * 5, [10.0, 80.0, 5.0, 40.0, 60.0]]
+    depth = [[2.0] * 5] * len(dye)
     telemac_result(varnames=["WATER DEPTH", "DYE"], x=x, y=y,
                    ikle=[[0, 1, 4], [1, 3, 4], [2, 3, 4], [0, 2, 4]],
-                   times=[0.0, 60.0],
+                   times=[float(60 * n) for n in range(len(dye))],
                    data={"WATER DEPTH": depth, "DYE": dye})
     monkeypatch.setattr(
         "trid3nt_server.workflows.solver.solver.download_result",
@@ -132,25 +132,50 @@ def published(monkeypatch, fake_s3, telemac_result):
     return seen, _run(telemac_result, monkeypatch)
 
 
-def test_every_row_the_result_carries_is_painted_and_a_varying_one_animated(
-        published):
-    """A variable's still is the FINAL FRAME and its caption is the engine's own
-    result-file name; a row that varies in time animates beside it."""
+def test_a_varying_row_is_one_temporal_layer_and_a_still_row_its_frame(published):
+    """A row that varies in time publishes ONE layer - the temporal one, styled;
+    its caption is the engine's own result-file name."""
     from trid3nt_server.render.formats import Mesh
     from trid3nt_server.workflows.telemac import workflow as door
 
     seen, run = published
     asyncio.run(door.publish_outputs(run=run, outputs=[], captions={},
                                      answer={}, params={}))
-    # Two variables the result carries, each a still and an animation, captioned
-    # by the name the result file gives it - so both are one quantity on one
-    # scale, and neither caption came from a template.
-    assert [item.caption for item in seen] == [
-        "water depth", "water depth", "dye", "dye"]
-    still, moving = seen[0].product, seen[1].product
-    assert isinstance(still, Mesh) and still.t == 60.0 and still.frames is None
-    assert moving.frames == 2 and moving.group == "WATER DEPTH"
+    # Two variables the result carries, ONE layer each, captioned by the name the
+    # result file gives it - so neither caption came from a template.
+    assert [item.caption for item in seen] == ["water depth", "dye"]
+    depth, dye = seen[0].product, seen[1].product
+    assert isinstance(depth, Mesh) and depth.frames == 2 and depth.t is None
+    assert depth.group == "WATER DEPTH" and dye.group == "DYE"
     assert seen[0].style["ramp"] == "ylgnbu"
+
+
+def test_a_temporal_layer_is_ranged_over_the_record_not_its_last_frame(
+        monkeypatch, fake_s3, telemac_result):
+    """A tracer that peaks then flushes is ranged over every frame: ranged on the
+    last frame alone the legend collapses and the animation paints blank."""
+    from trid3nt_server.render.formats import Published
+    from trid3nt_server.workflows.telemac import workflow as door
+
+    seen: list[Any] = []
+
+    async def _publish(*, run_id, engine, name, items):
+        seen.extend(items)
+        return Published(layers=(LayerURI(
+            layer_id="L", name="Dye", layer_type="mesh",
+            uri="s3://runs/RID/r2d.slf", quantity="dye"),))
+
+    monkeypatch.setattr(door, "publish", _publish)
+    run = _run(telemac_result, monkeypatch,
+               dye=[[0.0] * 5, [25.0] * 5, [0.0] * 5])
+    asyncio.run(door.publish_outputs(run=run, outputs=[], captions={},
+                                     answer={}, params={}))
+    dye = next(item.product for item in seen if item.caption == "dye")
+    assert dye.frames == 3
+    # The tracer's own visible edge is the bottom and its RECORD peak the top.
+    assert dye.value_range[1] == pytest.approx(25.0)
+    # The tracer row declares its own floor, and a declared floor pins the bottom.
+    assert dye.value_range[0] == pytest.approx(0.0)
 
 
 def test_a_row_the_result_does_not_carry_is_skipped_and_a_placed_read_refuses(
@@ -256,10 +281,8 @@ def test_the_published_order_is_the_table_order_across_host_and_coupled(
                                               answer={}, params={}))
 
     # The host's row is first and the coupled module's is behind it - the order
-    # the two tables state, with each still followed by its own animation.
-    assert surfaced == ["Water depth (m) at t = 60 s (reach)",
-                        "Water depth over time (reach)",
-                        "Cumul bed evol (m) at t = 60 s (reach)",
+    # the two tables state, one temporal layer each.
+    assert surfaced == ["Water depth over time (reach)",
                         "Cumul bed evol over time (reach)"]
     # The return is the run's record: the mesh every group rides, no group bound
     # and nothing measured on it.

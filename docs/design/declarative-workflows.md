@@ -30,7 +30,7 @@ A workflow file has three parts, none of which execute anything:
 
 1. PARAMS - frozen `Param` declarations (values: numbers, strings,
    flags, drawn coordinates). Resolve through the doors; render as the
-   form; clamp by declared bounds.
+   form; refuse a value outside the declared bounds.
 2. DATA - a CLASS BODY, one row per artifact (rasters, layers, meshes,
    decks). The attribute NAME is the row name; the value is the row's
    PRODUCER description, written with the one author word `tool(...)`,
@@ -180,7 +180,7 @@ author's:
 |---|---|---|
 | the model's tool docstring | `render_docstring(view="full")` | it fills the params, so it needs the sheet in prose |
 | the catalog / choose-a-tool page | `render_docstring(view="routing")` (via `fn.routing_doc`) | it only helps someone PICK the tool, and it must fit the 1000-char truncation budget |
-| the FORM CARD | the `ParamSheet` itself | an edit surface needs the declaration structurally - bounds to clamp to, units to label with, a badge saying where the value came from - not a paragraph about it |
+| the FORM CARD | the `ParamSheet` itself | an edit surface needs the declaration structurally - the bounds a value is held to, units to label with, a badge saying where the value came from - not a paragraph about it |
 
 ## The Domain environment
 

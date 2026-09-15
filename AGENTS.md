@@ -127,7 +127,10 @@ touch, BEFORE writing code. Inherit the structure; do not improvise.
   through a named argument; one that reads a variable off a result is
   a primitive; what the module writes is its output table, never a
   template's choice; one that fetches is a fetcher and a DATA row
-  names it; one that fails is a module-level error. A tool is `fetch`
+  names it; one that fails is a module-level error. `helpers/` holds
+  ONLY a pure physics or numerics function none of those express - no
+  fetch, no geometry, no file - and what it cannot compute it refuses
+  by naming the input, knowing nothing about the run. A tool is `fetch`
   or `derive`; a third kind invents a schism to justify. DERIVE is a
   function over input, never a fetch: a standalone process that takes
   a layer or a value and gives one back, useful on its own outside any

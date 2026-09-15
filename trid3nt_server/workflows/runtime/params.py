@@ -135,8 +135,9 @@ class Param(Row):
             # The wire-type inference ends in `str`, and a NUMBER advertised to the
             # model as a string is a schema that lies: the model sends "12", the
             # writer multiplies a string, and nothing refused on the way. The
-            # two honest declarations are bounds (which also clamp) or an explicit
-            # type; guessing between them is not this class's call.
+            # two honest declarations are bounds (which also refuse outside the
+            # range) or an explicit type; guessing between them is not this
+            # class's call.
             raise PlanValidationError(
                 f"Param {self.name!r} has the numeric default {self.default!r} but "
                 "declares neither bounds nor type, so the wire would advertise it "
@@ -198,7 +199,6 @@ class ResolvedParam:
     units: str | None = None
     consequence: str = "scenario"
     note: str = ""
-    clamped_from: Any = None
     real_source: str | None = None
     required_missing: bool = False
 

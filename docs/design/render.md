@@ -22,13 +22,14 @@ holds the boundary in both directions.
 
 Which variables a run publishes is the MODULE's statement - its `MODULE_OUTPUT`
 table, one row per variable with the style it draws under - and not the
-template's; the door turns every row the result carries into the two products
-below. What a template adds is the reads it PLACES on the user's geometry.
+template's; the door turns every row the result carries into ONE of the products
+below - the temporal layer where the row varies in time, the final frame where
+it does not. What a template adds is the reads it PLACES on the user's geometry.
 
 | a primitive | the product |
 |---|---|
-| `field(name, t="every").animate()` | the results mesh layer, painting the dataset group the result file carries for that variable, with the run's own reference time so the temporal controller scrubs the right clock |
-| `field(name, t)` | the same mesh, painting a single-step group the publish wrote beside the results for that instant - one per table row, at the run's final frame |
+| `field(name, t="every").animate(style=)` | the results mesh layer, painting the dataset group the result file carries for that variable, ranged over EVERY frame of the record, with the run's own reference time so the temporal controller scrubs the right clock |
+| `field(name, t)` | the same mesh, painting a single-step group the publish wrote beside the results for that instant - what a row that does NOT vary in time publishes, at the run's final frame |
 | `max_over_time(name)`, a plane of a 3D result, a variable the module DERIVES | the same, for a group no result file carries |
 | `series`, `profile`, `column` | a chart payload |
 | `drogues()`, a series at a station | a GeoJSON vector layer |
@@ -46,9 +47,8 @@ not.
 A group the RESULT FILE carries cannot be rewritten that way - the animation
 plays from the engine's own SELAFIN - so the floor travels on the layer's style
 row instead: the shader ranges FROM the floor and sets the colour ramp's
-`clip`, and QGIS leaves every below-floor node unpainted. One field, one absent
-region, on the still and on the animation. The packet's own GIF renderer masks
-at the same edge, off the same row.
+`clip`, and QGIS leaves every below-floor node unpainted. The packet's own GIF
+renderer masks at the same edge, off the same row.
 
 A 3D SELAFIN is NOT an MDAL mesh: MDAL rejects the file. TELEMAC-3D writes the
 2D result beside it, and that file is the mesh a plane is drawn onto - the run
@@ -61,10 +61,12 @@ legend is ranged from: a `center` for a diverging ramp, a `floor`, a `p<q>` cap)
 The FORMAT decides which of the four preset shapes draws it; the row's range
 semantics are how the producer MEASURED the range, and what the layer carries is
 the range itself, as a fixed `scale` - plus, on a mesh, the `floor` the PRODUCT
-measured, because the mask is still ahead of the renderer. Every product of one
-quantity is ranged together, so a still and its animation read on one ramp, and
-a legend end rounds AWAY from the field so no value falls outside the range that
-clips against it.
+measured, because the mask is still ahead of the renderer. A TEMPORAL layer is
+ranged over every frame of the record, never over its last frame alone: a
+variable that peaks and flushes would otherwise be ranged on an empty field and
+paint blank. Every product of one quantity is ranged together, so two planes of
+one variable read on one ramp, and a legend end rounds AWAY from the field so no
+value falls outside the range that clips against it.
 
 There are no preset NAMES: `presets.py` closes a four-kind family (continuous
 raster, classed vector-or-raster, reference outline, mesh dataset group) and

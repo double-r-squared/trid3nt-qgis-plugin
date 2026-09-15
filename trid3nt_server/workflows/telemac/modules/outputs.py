@@ -151,6 +151,10 @@ class Frames(Read):
 
     name: str
     units: str
+    #: Every frame over the 2D nodes. A temporal layer's legend is measured over
+    #: the WHOLE record: ranged on the last frame alone, a variable that peaks
+    #: and flushes paints its animation against an empty field.
+    values: Any
     #: The result file's basename under the run prefix.
     file: str
     #: The dataset group the mesh reader binds the variable by.
@@ -289,9 +293,12 @@ class Primitive:
         """Publish this series or profile as a chart, ``reference`` lines beside it."""
         return replace(self, publish="chart", reference=reference)
 
-    def animate(self) -> "Primitive":
-        """Publish this field over time as an animation of the result file."""
-        return replace(self, publish="animate")
+    def animate(self, *, style: Mapping[str, Any] | None = None) -> "Primitive":
+        """Publish this field over time as ONE temporal layer, styled by ``style``.
+
+        A time-varying variable has no still layer beside it: the layer carries
+        every frame, and a picture of one instant is a render of that layer."""
+        return replace(self, publish="animate", style=style)
 
     def station(self) -> "Primitive":
         """Publish this series at its Point as a station layer carrying it."""
@@ -667,7 +674,8 @@ def read_field(primitive: Primitive, solved: Solved) -> Read:
         measures["travel_m"] = _travel_m(np.asarray(solved.result["x"]),
                                          np.asarray(solved.result["y"]),
                                          values, floor)
-        return Frames(name=name, units=units, file=solved.result_file,
+        return Frames(name=name, units=units, values=values,
+                      file=solved.result_file,
                       group=name.strip(), epsg=solved.utm_epsg,
                       reference_time=solved.run.get("started_at"),
                       frames=int(times.size), floor=floor, measures=measures)
@@ -1133,6 +1141,7 @@ def deliver(primitive: Primitive, read: Read, solved: Solved, *, caption: str,
     group the result file carries when the whole time series is played, and a
     group written beside it when the read is one instant or an envelope. A
     series or a profile is a chart payload; a track and a station are GeoJSON."""
+    from trid3nt_server.render import presets
     from trid3nt_server.render.formats import quantity_of
 
     quantity = quantity_of(caption)
@@ -1140,7 +1149,9 @@ def deliver(primitive: Primitive, read: Read, solved: Solved, *, caption: str,
         return Deliverable(
             product=Mesh(file=read.file, group=read.group, epsg=read.epsg,
                          reference_time=read.reference_time, frames=read.frames,
-                         units=read.units, bbox=solved.bbox, floor=read.floor),
+                         units=read.units, bbox=solved.bbox, floor=read.floor,
+                         value_range=presets.measured_range(
+                             read.values, primitive.style, floor=read.floor)),
             caption=caption, style=primitive.style)
     if isinstance(read, Field):
         return Deliverable(product=_derived_group(read, solved, caption=caption,

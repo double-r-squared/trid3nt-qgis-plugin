@@ -186,7 +186,6 @@ def _row(row: Any) -> dict[str, Any]:
         "units": getattr(row, "units", None),
         "consequence": getattr(row, "consequence", None),
         "note": getattr(row, "note", "") or None,
-        "clamped_from": _small(getattr(row, "clamped_from", None)),
         "real_source": getattr(row, "real_source", None),
     }
 

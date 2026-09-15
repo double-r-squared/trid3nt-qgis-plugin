@@ -200,7 +200,11 @@ def test_the_field_over_every_instant_is_the_frames_an_animation_plays(solved):
 
 def test_the_animations_style_row_carries_the_floor_the_shader_clips_at(solved):
     """A group the RESULT FILE carries cannot be written with nothing below its
-    floor, so the row is what masks it - and the range starts there."""
+    floor, so the row is what masks it - and the range starts there.
+
+    This tracer PEAKS at 80 and flushes to nothing: the temporal layer's range is
+    the record's, so the legend spans what the run carried rather than collapsing
+    onto the empty last frame."""
     from trid3nt_server.render.formats import _mesh_layer
     from trid3nt_server.workflows.telemac.modules.outputs import deliver
 
@@ -209,8 +213,9 @@ def test_the_animations_style_row_carries_the_floor_the_shader_clips_at(solved):
     item = deliver(primitive, read, solved, caption="dye concentration",
                    name="reach", where="the Wabash")
     assert item.product.floor == pytest.approx(4.0)
+    assert item.product.value_range == pytest.approx((4.0, 80.0))
     layer = _mesh_layer(item, run_id="RID", engine="telemac", name="reach",
-                        value_range=(4.0, 80.0))
+                        value_range=item.product.value_range)
     assert layer.style["floor"] == pytest.approx(4.0)
     resolved_qml = presets.qml(presets.resolve(presets.from_row(layer.style)))
     assert 'clip="1"' in resolved_qml and 'minimumValue="4"' in resolved_qml

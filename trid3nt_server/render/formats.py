@@ -152,8 +152,8 @@ def record_run_outputs(layers: Sequence[LayerURI]) -> None:
 def _one_row_per_quantity(items: Sequence[Deliverable]) -> list[Deliverable]:
     """A product that declared no style takes the row its QUANTITY declared.
 
-    One quantity is read on one ramp as well as one range: a still and the
-    animation beside it on two ramps is a picture of two variables."""
+    One quantity is read on one ramp as well as one range: two products of it on
+    two ramps is a picture of two variables."""
     declared: dict[str, Mapping[str, Any]] = {}
     for item in items:
         if item.style:
@@ -167,8 +167,8 @@ def _shared_ranges(items: Sequence[Deliverable]
                    ) -> dict[str, tuple[float, float] | None]:
     """ONE range per quantity, over every product that measured one.
 
-    Two planes of one variable and the still beside the animation read on one
-    ramp, because the colour has to mean the same value on all of them."""
+    Two planes of one variable read on one ramp, because the colour has to mean
+    the same value on both of them."""
     from trid3nt_server.render import presets
 
     found: dict[str, list[tuple[float, float] | None]] = {}

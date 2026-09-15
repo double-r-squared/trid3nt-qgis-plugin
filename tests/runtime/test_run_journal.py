@@ -30,7 +30,7 @@ def _row(name, value, **kw):
                            basis=kw.get("basis", "default_demo"),
                            units=kw.get("units"), consequence=kw.get("consequence",
                                                                     "scenario"),
-                           note=kw.get("note", ""), clamped_from=kw.get("clamped_from"),
+                           note=kw.get("note", ""),
                            real_source=kw.get("real_source"))
 
 
@@ -75,7 +75,7 @@ def test_a_sheet_row_carries_its_door_and_its_basis_not_just_the_number():
     row = _record()["sheet"][0]
     assert row == {"name": "reach_length_km", "value": 15.0, "door": "user",
                    "basis": "user", "units": "km", "consequence": "physics",
-                   "note": None, "clamped_from": None, "real_source": "nhd"}
+                   "note": None, "real_source": "nhd"}
 
 
 def test_the_record_carries_the_answer_the_provenance_the_mesh_and_the_wall_time():

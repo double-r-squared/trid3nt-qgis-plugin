@@ -1,7 +1,7 @@
-"""The param resolver: the six doors, in order, with bounds clamping.
+"""The param resolver: the six doors, in order, held to the declared bounds.
 
-Every resolution leaves a provenance row; a clamp leaves a note naming the
-declared bound it hit.
+Every resolution leaves a provenance row; a value outside its declared bounds
+refuses by name rather than being moved quietly onto the bound.
 """
 
 from __future__ import annotations
@@ -229,8 +229,8 @@ async def rederive_revised(
 async def _rederive_row(param: Param, rows: Mapping[str, ResolvedParam],
                         current: ResolvedParam, note: str) -> ResolvedParam | None:
     """Re-run one derivation; ``None`` when it cannot run yet or lands unchanged.
-    Compared AFTER ``_finish``, so a raw value that moves but clamps back onto the
-    same declared bound reads as unchanged."""
+    Compared AFTER ``_finish``, so an int-typed row whose derivation moves within
+    one whole unit reads as unchanged."""
     try:
         value = await _derive(param, rows)
     except ParamNotResolved:
@@ -262,7 +262,6 @@ _SOURCED_BASES = frozenset({"derived", "fetched"})
 def _finish(param: Param, value: Any, door: str, note: str, *,
             basis: str | None = None,
             real_source: str | None = None) -> ResolvedParam:
-    clamped_from = None
     if param.bounds is not None:
         coerced = _as_float(value)
         if coerced is None:
@@ -271,24 +270,25 @@ def _finish(param: Param, value: Any, door: str, note: str, *,
                 f"{param.bounds} ({param.units or 'no units'}). It is not silently defaulted."
             )
         lo, hi = float(param.bounds[0]), float(param.bounds[1])
-        pinned = min(max(coerced, lo), hi)
-        if pinned != coerced:
-            clamped_from = coerced
-            note = (f"{note}; CLAMPED from {coerced:g} to the declared "
-                    f"{'minimum' if pinned == lo else 'maximum'} {pinned:g}"
-                    f"{' ' + param.units if param.units else ''}").lstrip("; ")
-        # Clamping compares numbers; it does not RETYPE the param. A row that
+        if not lo <= coerced <= hi:
+            # The lever is the user's. A value moved onto the bound runs a
+            # question nobody asked and says nothing while it does it.
+            units = f" {param.units}" if param.units else ""
+            raise GateRefusedError(
+                f"{param.name}={coerced:g}{units} is outside the declared range "
+                f"{lo:g} to {hi:g}{units}; state a value inside it."
+            )
+        # The bound compares numbers; it does not RETYPE the param. A row that
         # declares int and resolves to a float states a value its own
         # declaration says it cannot hold, and an engine keyword typed INTEGER
         # refuses it several steps later, naming the keyword rather than this.
-        value = int(pinned) if param.type is int else pinned
+        value = int(coerced) if param.type is int else coerced
     if basis is None:
         basis = "user" if door in (doors.USER, doors.GATE) else _basis(param, door)
     source = real_source if real_source is not None else param.real_source
     return ResolvedParam(
         name=param.name, value=value, door=door, basis=basis,
         units=param.units, consequence=param.consequence, note=note,
-        clamped_from=clamped_from,
         real_source=source if basis in _SOURCED_BASES else None,
     )
 

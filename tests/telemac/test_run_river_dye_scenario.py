@@ -204,24 +204,25 @@ def _resolve(**supplied):
                                       {"location": "X", **supplied}))
 
 
-def test_declared_bounds_clamp_and_label_the_domain_extent():
-    """An out-of-window reach length is clamped AND the clamp is on the record."""
-    p = _resolve(reach_length_km=50.0)
-    assert p.value_of("reach_length_km") == 15.0
-    assert "CLAMPED" in p.row("reach_length_km").note
+def test_a_domain_extent_outside_the_declared_window_refuses():
+    """An out-of-window reach length refuses by name; one inside it stands."""
+    from trid3nt_server.workflows.runtime import GateRefusedError
 
-    p2 = _resolve(reach_length_km=6.0)
-    assert p2.value_of("reach_length_km") == 6.0
-    assert "CLAMPED" not in p2.row("reach_length_km").note
+    with pytest.raises(GateRefusedError, match="reach_length_km=50 km is outside"):
+        _resolve(reach_length_km=50.0)
+    assert _resolve(reach_length_km=6.0).value_of("reach_length_km") == 6.0
 
 
 def test_declared_bounds_keep_the_source_inside_the_reach():
     """spill_fraction=1.0 planted the source ON the outflow boundary and aborted
-    the solve; the declared bound is what keeps it strictly interior."""
-    assert _resolve(spill_fraction=1.0).value_of("spill_fraction") == 0.9
-    assert _resolve(spill_fraction=0.0).value_of("spill_fraction") == 0.05
-    assert _resolve(sim_duration_s=999999.0).value_of("sim_duration_s") == 14400.0
-    assert _resolve(source_q_m3s=100.0).value_of("source_q_m3s") == 30.0
+    the solve; the declared bound is what refuses it rather than moving it."""
+    from trid3nt_server.workflows.runtime import GateRefusedError
+
+    for outside in ({"spill_fraction": 1.0}, {"spill_fraction": 0.0},
+                    {"sim_duration_s": 999999.0}, {"source_q_m3s": 100.0}):
+        with pytest.raises(GateRefusedError, match="outside the declared range"):
+            _resolve(**outside)
+    assert _resolve(spill_fraction=0.9).value_of("spill_fraction") == 0.9
 
 
 def test_a_non_numeric_bounded_arg_refuses_it_is_never_defaulted():
@@ -531,10 +532,9 @@ def test_the_chain_geocodes_dispatches_and_stages_the_resolved_sheet(
     assert record.answer["dye_peak_time_s"] == pytest.approx(420.0)
     assert record.answer["active_frames"] == 2
     assert record.answer["mesh_size_m"] is not None
-    # The tracer rides beside it under the name the RESULT FILE carries it by,
-    # written as the group the module put next to the results.
-    written = _store.store["TELERID/dye-t1260.dat"].decode()
-    assert 'NAME "Dye at t = 1260 s"' in written
+    # A TIME-VARYING row publishes the temporal layer alone, so nothing is
+    # written beside the results for it: the still is a frame that layer carries.
+    assert not [key for key in _store.store if key.endswith("-t1260.dat")]
 
     # The place was GEOCODED, never hand-typed.
     assert captured["geocode_query"] == "Twin Falls, Idaho"

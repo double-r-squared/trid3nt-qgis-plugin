@@ -200,15 +200,17 @@ class Door:
 
 
 def _painted(row: Mapping[str, Any]) -> list[Primitive]:
-    """One table row -> what the run publishes of it: the final frame as the
-    layer, and the whole series as the animation where it varies in time."""
+    """One table row -> the ONE layer the run publishes of it: the temporal layer
+    where the row varies in time, the final frame where it does not.
+
+    A still beside a time series is a copy of a frame the temporal layer already
+    carries; a picture of one instant is a render of that layer."""
     from trid3nt_server.workflows.telemac.modules.outputs import field
 
     token, module, style = row["token"], row["module"], row.get("style")
-    painted = [field(token, t=-1, module=module).layer(style=style)]
     if row.get("varies"):
-        painted.append(field(token, t="every", module=module).animate())
-    return painted
+        return [field(token, t="every", module=module).animate(style=style)]
+    return [field(token, t=-1, module=module).layer(style=style)]
 
 
 def _unanchored(primitive: Primitive) -> Primitive:
@@ -230,9 +232,9 @@ async def publish_outputs(*, run: Mapping[str, Any], outputs: Sequence[Primitive
     """Read what the run wrote off it, publish every variable, answer.
 
     The module's TABLE is the outputs list: every row of the host's and of each
-    coupled module's, styled from the row, painted at the final frame and
-    animated where it varies in time; a row the result does not carry is
-    skipped. The template's own list is the reads it PLACED beside them. Each
+    coupled module's, styled from the row and published as ONE layer - the
+    temporal one where the row varies in time, the final frame where it does
+    not; a row the result does not carry is skipped. The template's own list is the reads it PLACED beside them. Each
     module's result is read ONCE; a coupled module's own file goes through its
     own wrapper. A chart's reference is a callable computing lines beside the
     read, or another primitive read where the chart's own is anchored and drawn
