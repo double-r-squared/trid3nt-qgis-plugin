@@ -1,0 +1,124 @@
+schema_version: v1
+name: fetch_satellite_imagery
+source_class: satellite_imagery
+shape: animation_frames
+error_prefix: SATELLITE_IMAGERY
+input_error_suffix: INPUT_INVALID
+empty_error_suffix: EMPTY
+
+docstring: |-
+  Satellite imagery over a time window: ordered RGB frames of ANY product the CIRA SLIDER viewer serves.
+
+  **What it does:** Pulls the rendered RGB imagery CIRA/RAMMB SLIDER publishes for
+  a satellite, a sector and a product, across a UTC window, and returns an
+  ORDERED list of per-frame EPSG:4326 RGB COGs clipped to the AOI, each named
+  with its real UTC scan time. The frames render on the map and the scrubber
+  animates them. The cadence is the satellite's own: a geostationary bird scans
+  on a clock, so you set ``step_minutes``; a polar bird gives you the passes it
+  flew, so you filter them with ``day_only``.
+
+  **When to use:**
+  - Any satellite timelapse: true colour, fire, dust, snow, water vapour, an
+    individual band -- geostationary minutes-to-hours, or polar over days.
+  - A single frame: give one instant (or omit the window for the latest scan).
+  - Live weather / fire / smoke context under a map, or a loop of an event.
+
+  **When NOT to use:**
+  - Raw radiances or brightness temperatures to compute on: these are rendered
+    pictures, so fetch the ABI archive and derive over it instead.
+  - Fire pixel detections or perimeters: use the detection fetchers.
+
+  **Parameters:**
+  - ``bbox`` (tuple): ``(min_lon, min_lat, max_lon, max_lat)`` EPSG:4326.
+    Required.
+  - ``satellite`` (str, default ``"goes-19"``): a satellite the viewer serves --
+    ``"goes-19"`` (East), ``"goes-18"`` (West), ``"jpss"`` (the SNPP / NOAA-20
+    polar pass set). An unserved name is refused with the list.
+  - ``sector`` (str, default ``"conus"``): that satellite's sector slug.
+  - ``product`` (str): the product AS THE SERVER NAMES IT -- e.g. ``"geocolor"``,
+    ``"fire_temperature"``, ``"cira_natural_fire_color"``, ``"band_13"``,
+    ``"cira_geocolor"``. The allowed set is read from the server's own index at
+    call time; an unknown name is refused with the served list. Omitted, it is
+    that sector's default product.
+  - ``start_utc`` / ``end_utc`` (str): ISO-8601 UTC bounds. Equal bounds (or an
+    omitted ``start_utc``) mean ONE frame, the scan nearest that instant; omit
+    both for the latest scan.
+  - ``step_minutes`` (int): GEOSTATIONARY only -- the cadence to thin to.
+    Omitted, the sector's native cadence. Refused for a polar satellite.
+  - ``day_only`` (bool, default True): POLAR only -- keep passes in local
+    daylight at the AOI. Refused for a geostationary satellite.
+
+  **Returns:** an ORDERED ``list[LayerURI]`` (ascending UTC), each a 3-band
+  uint8 RGB COG (``layer_type="raster"``, ``role="context"``) named
+  ``"<SAT> <product> step <N> <ISO>"`` and stamped with its own validity window,
+  which is what the scrubber plays.
+
+  NOTE: georeferencing is the approximate SLIDER sector-extent mapping (SLIDER
+  ships no projection); the imagery and cadence are the real product. A sector
+  with no stated registration is refused rather than guessed. An AOI with no
+  imagery pixels raises a typed error.
+
+# The SLIDER tile substrate the frames hooks build URLs against, and the viewer's own
+# definition file, which is the ONLY list of satellites, sectors and products; the
+# executor fetches neither, so both are documentary here.
+endpoints:
+  slider:
+    url: https://rammb-slider.cira.colostate.edu/data/imagery/
+  product_index:
+    url: https://rammb-slider.cira.colostate.edu/js/define-products.js
+
+params:
+  bbox:
+    type: bbox
+    required: true
+    quantize: round_6dp
+  satellite:
+    type: str
+    default: goes-19
+  sector:
+    type: str
+    default: conus
+  product:
+    type: str
+    schema_optional: true
+  start_utc:
+    type: str
+    schema_optional: true
+  end_utc:
+    type: str
+    schema_optional: true
+  step_minutes:
+    type: int
+    schema_optional: true
+  day_only:
+    type: bool
+    schema_optional: true
+
+hooks:
+  frames_plan: satellite_imagery.frames_plan
+  frame_bytes: satellite_imagery.frame_bytes
+
+normalize:
+  crs: EPSG:4326
+
+output:
+  layer_type: raster
+  ext: tif
+  role: context
+  style:
+    kind: continuous
+  emit_bbox: true
+
+cache:
+  ttl_class: dynamic-1h
+
+payload_estimate:
+  model: bbox_area
+  floor_mb: 0.05
+  mb_per_sq_deg: 2.0
+
+caveats:
+  - The satellite, sector and product vocabularies are read from the server's own index at call time; an unserved name is refused with the list the server publishes, never silently substituted.
+  - Georeferencing is the approximate SLIDER sector-extent mapping (SLIDER publishes no projection); a sector with no stated registration is refused rather than guessed.
+  - The imagery is a RENDERED RGB picture, not radiances; anything computed from pixel values belongs on the raw archive instead.
+  - A frame with no imagery pixels over the AOI is dropped with a recorded degradation; a window where every frame is empty raises a typed SATELLITE_IMAGERY_EMPTY.

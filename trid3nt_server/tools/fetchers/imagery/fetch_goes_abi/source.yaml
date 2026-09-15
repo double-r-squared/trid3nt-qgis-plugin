@@ -1,0 +1,131 @@
+# The raw GOES ABI archive on the anonymous public noaa-goes S3 buckets: the caller
+# names the bands, the window and the step, and gets one multi-band COG per step in
+# physical units. Nothing is computed from the radiances here - a composite, an index
+# or a detection is a derive over the layer this returns.
+schema_version: v1
+name: fetch_goes_abi
+source_class: goes_abi
+shape: animation_frames
+error_prefix: GOES_ABI
+input_error_suffix: INPUT_INVALID
+empty_error_suffix: EMPTY
+
+docstring: |-
+  Fetch RAW GOES ABI bands over an AOI as one multi-band COG per time step.
+
+  **What it does:** lists the ``ABI-L2-MCMIPC`` objects - the Cloud and Moisture
+  Imagery multi-band CONUS product, which carries all sixteen ABI channels in one
+  netCDF at a common 2 km grid - on the anonymous public ``noaa-goesNN`` S3 archive,
+  keeps the archived scan nearest each ``step_minutes`` instant in the window, and
+  writes the bands you asked for onto one EPSG:4326 grid over the AOI. Each output
+  band carries its ABI band number, its wavelength and its unit in the band
+  description: bands 1-6 are reflectance factors (dimensionless 0-1), bands 7-16 are
+  brightness temperatures in kelvin. Values are the CF-unscaled physical numbers, not
+  a stretched picture.
+
+  **When to use:**
+  - You want the NUMBERS: a brightness temperature, a reflectance, a band difference.
+  - You are feeding a derive that computes over bands - a true-colour composite, an
+    active-fire split-window discriminator, a cloud or moisture index.
+  - You want a historical window: the archive reaches back over the whole
+    operational record of the bird, unlike a recent-frames imagery server.
+
+  **When NOT to use:**
+  - You want a RENDERED product to look at - GeoColor, Fire Temperature, an air-mass
+    or dust RGB. Those are rendered by the imagery server; ask
+    ``fetch_satellite_imagery`` for the product by name.
+  - You want point fire detections from a polar sensor
+    (``fetch_firms_active_fire``).
+
+  **Parameters:**
+  - ``bbox`` (list): ``[min_lon, min_lat, max_lon, max_lat]`` EPSG:4326. Required.
+  - ``bands`` (list[int]): the ABI band numbers to return, 1-16, ascending in the
+    output. Required - there is no default band, because which band answers the
+    question is the question. 1 = 0.47 um blue, 2 = 0.64 um red, 3 = 0.86 um veggie
+    NIR, 4 = 1.37 um cirrus, 5 = 1.6 um snow/ice, 6 = 2.2 um cloud particle size,
+    7 = 3.9 um shortwave window, 8/9/10 = 6.2/6.9/7.3 um water vapour, 11 = 8.4 um
+    cloud-top phase, 12 = 9.6 um ozone, 13 = 10.3 um clean longwave window,
+    14 = 11.2 um longwave window, 15 = 12.3 um dirty longwave window, 16 = 13.3 um
+    carbon dioxide.
+  - ``satellite`` (str): ``goes-18`` (West, default), ``goes-19`` (East),
+    ``goes-16`` (the historical East).
+  - ``start_utc`` / ``end_utc`` (str): ISO-8601 UTC window bounds, e.g.
+    ``"2026-09-10T19:00:00Z"``. Omitted, the most recent hour is used.
+  - ``step_minutes`` (int): the spacing between returned frames, default 10. The
+    CONUS scan cadence is 5 minutes, so a smaller step returns the native scans and
+    a larger one thins them; the archived scan NEAREST each step instant is taken.
+
+  **Returns:** an ORDERED ``list[LayerURI]`` (ascending UTC), each a multi-band
+  float32 COG over the AOI, bands in ascending ABI band order, named
+  ``"GOES ABI bands <list> step <N> <ISO> (<SAT>)"``. A window with no archived
+  objects, or an AOI entirely off the sector, raises a typed error - it never emits
+  a blank frame.
+
+# The anonymous public archive the frames hooks list and read; the executor performs
+# no transport of its own here - the frame_bytes hook owns the per-frame download.
+endpoints:
+  archive_s3:
+    url: https://noaa-goes18.s3.amazonaws.com/
+
+params:
+  bbox:
+    type: bbox
+    required: true
+    quantize: round_6dp
+  bands:
+    type: float_list
+    required: true
+    values: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
+  satellite:
+    type: enum
+    values: [goes-16, goes-18, goes-19]
+    default: goes-18
+    lowercase: true
+  start_utc:
+    type: str
+    schema_optional: true
+  end_utc:
+    type: str
+    schema_optional: true
+  step_minutes:
+    type: int
+    default: 10
+    min: 1
+    max: 1440
+
+# The per-frame object mode: the frame cap the even-subsample falls back on, and the
+# window taken when the caller states neither bound.
+ingest:
+  abi:
+    max_frames: 144
+    default_window_minutes: 60
+
+hooks:
+  frames_plan: goes_abi.frames_plan
+  frame_bytes: goes_abi.frame_bytes
+
+normalize:
+  crs: EPSG:4326
+  units: mixed
+
+output:
+  layer_type: raster
+  ext: tif
+  role: context
+  style:
+    kind: continuous
+  emit_bbox: true
+
+cache:
+  ttl_class: dynamic-1h
+
+payload_estimate:
+  model: bbox_area
+  floor_mb: 0.05
+  mb_per_sq_deg: 2.0
+
+caveats:
+  - Raw ABI-L2-MCMIPC bands from the anonymous public noaa-goes S3 archive in physical units - reflectance factor for bands 1-6, kelvin for bands 7-16 - at the product's common 2 km grid; each band's number, wavelength and unit are in its band description.
+  - The MCMIPC product covers the CONUS sector only, so an AOI outside the scanned sector of that bird raises a typed GOES_ABI_EMPTY error rather than an empty frame.
+  - Nothing is computed from the radiances here; a composite or a detection is a derive over the returned layer.
+  - A window with no archived objects raises a typed GOES_ABI_EMPTY error; a single off-disk or upstream-failed frame is recorded and skipped.

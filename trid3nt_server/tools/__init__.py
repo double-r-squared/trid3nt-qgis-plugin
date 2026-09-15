@@ -205,9 +205,11 @@ from .derive.compute_sediment_yield import compute_sediment_yield  # noqa: E402,
 # model-fit skill metrics (spotpy).
 from .derive.compute_skill_metrics import compute_skill_metrics  # noqa: E402,F401
 from .derive.delineate_watershed import delineate_watershed  # noqa: E402,F401
+from .derive.derive_active_fire import derive_active_fire  # noqa: E402,F401
 # A line through a shape's centroid along a bearing: what a profile is read along
 # when the read runs ACROSS a feature rather than down the domain's own axis.
 from .derive.derive_transect import derive_transect  # noqa: E402,F401
+from .derive.derive_true_color import derive_true_color  # noqa: E402,F401
 from .derive.endpoints import endpoints  # noqa: E402,F401
 # model-vs-observation pairing primitive.
 from .derive.extract_model_at_observations import extract_model_at_observations  # noqa: E402,F401

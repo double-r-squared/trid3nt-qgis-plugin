@@ -29,21 +29,20 @@ def test_fetch_topobathy_in_always_set() -> None:
     assert "fetch_topobathy" in server._ALWAYS_OFFLOAD_SYNC_TOOLS
 
 
-def test_goes_archive_animation_in_always_set() -> None:
-    """``fetch_goes_archive_animation`` off-loads like its sibling.
+def test_goes_abi_in_always_set() -> None:
+    """``fetch_goes_abi`` off-loads like its sibling.
 
     Called directly it loops over dozens of frames, each a large netCDF download,
     reproject and COG write, which on the loop starves the WS heartbeat."""
-    assert "fetch_goes_archive_animation" in server._ALWAYS_OFFLOAD_SYNC_TOOLS
-    assert server._should_offload_sync_tool("fetch_goes_archive_animation") is True
+    assert "fetch_goes_abi" in server._ALWAYS_OFFLOAD_SYNC_TOOLS
+    assert server._should_offload_sync_tool("fetch_goes_abi") is True
 
 
-def test_goes_active_fire_in_always_set() -> None:
-    """fetch_goes_active_fire reuses the SAME per-frame archive download +
-    reproject + COG-write core (_fetch_archive_frame_cog_bytes) in a multi-frame
-    sync loop, so it has the identical loop-block hazard and must off-load too."""
-    assert "fetch_goes_active_fire" in server._ALWAYS_OFFLOAD_SYNC_TOOLS
-    assert server._should_offload_sync_tool("fetch_goes_active_fire") is True
+def test_satellite_imagery_in_always_set() -> None:
+    """``fetch_satellite_imagery`` runs the same hazard on the rendered substrate:
+    one tile-stitch, reproject and COG write per scan, in a multi-frame sync loop."""
+    assert "fetch_satellite_imagery" in server._ALWAYS_OFFLOAD_SYNC_TOOLS
+    assert server._should_offload_sync_tool("fetch_satellite_imagery") is True
 
 
 def test_always_set_offloads_even_in_off_mode(

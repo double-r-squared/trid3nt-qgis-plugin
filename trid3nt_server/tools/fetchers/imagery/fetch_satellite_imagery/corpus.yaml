@@ -1,0 +1,19 @@
+fetch_satellite_imagery:
+- show me the current satellite image of the hurricane
+- display the current cloud cover over the wildfire area
+- I need current CONUS cloud imagery for the tropical cyclone
+- overlay the GOES water vapor channel on the map for synoptic context
+- show me the satellite view of this storm right now
+- I want GOES-19 infrared imagery for the storm approaching the coast
+- animate GOES GeoColor over this area for the last six hours
+- make a GOES satellite timelapse of the fire evolving over the afternoon
+- recreate the CIRA geostationary fire animation over this window at five minute cadence
+- build a scrubbable GOES fire temperature loop over this AOI and time range
+- give me the combined GeoFire loop where the active fire glows on the true-color scene
+- recreate the JPSS VIIRS Day Fire animation over a four-day window
+- animate the polar satellite passes over this area day by day
+- show every daytime VIIRS overpass of the fire as a scrubbable frame
+- animate the satellite imagery over this region and snap to whatever frames are available
+- what satellite frames are available over this window and what is their cadence
+- show the smoke plume evolving on satellite imagery over the afternoon
+- pull the Himawari or GOES imagery for this sector over this time range

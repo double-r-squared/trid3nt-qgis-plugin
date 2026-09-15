@@ -168,15 +168,11 @@ _ALWAYS_OFFLOAD_SYNC_TOOLS = frozenset(
         "fetch_hrrr_forecast",
         "fetch_hrrr_smoke",
         "fetch_mrms_qpe",
-        "fetch_goes_satellite",
-        # per-frame stitch, reproject and COG-write loop, one chain per timestamp
-        "fetch_goes_animation",
-        "fetch_goes_blend_animation",
-        "fetch_viirs_day_fire",
+        # per-frame tile stitch, reproject and COG-write loop, one chain per scan
+        "fetch_satellite_imagery",
         # up to 144 archive frames in ONE sync call, each a ~54 MB netCDF
         # download plus reproject and COG write
-        "fetch_goes_archive_animation",
-        "fetch_goes_active_fire",
+        "fetch_goes_abi",
         "fetch_gtsm_tide_surge",
         # STAC raster readers: sign, windowed /vsicurl warp-read, COG write
         "fetch_naip",

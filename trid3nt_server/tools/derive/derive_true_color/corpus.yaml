@@ -1,0 +1,9 @@
+derive_true_color:
+- make a true colour picture from these raw satellite bands
+- composite the visible bands of this ABI layer into natural colour
+- turn this multi-band GOES layer into an RGB I can look at
+- I want the daytime scene in natural colour from these radiances
+- build the natural-colour base image for this satellite frame
+- give me the true-colour view of this imagery layer
+- composite bands 1 2 3 into a colour image
+- what does this satellite frame look like to the eye

@@ -1,0 +1,10 @@
+derive_active_fire:
+- find the actively burning pixels in this satellite layer
+- run the split-window active fire test on these ABI bands
+- which cells in this frame are on fire and which are just hot ground
+- detect fire hot spots from the 3.9 and 11.2 micron brightness temperatures
+- flag the burning cells in this multi-band imagery layer
+- give me active fire detections from these raw satellite radiances
+- screen this frame for cells hot enough and contrasty enough to be burning
+- apply the fire discriminator to this layer with a stricter threshold
+- how many pixels in this scene pass the active fire test

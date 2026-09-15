@@ -1,0 +1,12 @@
+fetch_goes_abi:
+- get me the raw GOES ABI bands over this area as numbers not a picture
+- fetch ABI band 7 and band 14 brightness temperatures for this bbox last hour
+- I need the 3.9 micron and 11.2 micron channels from GOES for a fire check
+- download the visible ABI bands 1 2 3 over this AOI every 20 minutes
+- raw GOES multi-band imagery in kelvin and reflectance for a band difference
+- pull the GOES ABI archive for this window so I can compute a composite myself
+- give me the ABI channels over this fire for the last hour at ten minute steps
+- the multi-band GOES file for this bbox, I want to do the band math myself
+- historical GOES ABI radiances for a past afternoon over this county
+- the imagery server only keeps recent frames, pull the GOES archive for this older window
+- build a scrubber over a past date from the raw GOES archive, not just the recent frames
