@@ -85,23 +85,23 @@ It publishes these layers onto the canvas:
 
 ## The proving run
 
-Run `01M2HG0Z5RFAHPMYWJG862SQJM`, 2026-09-15T02:59:17.342915+00:00, 90.988 s, at commit `80e141fee6381b28cbe4f48992ba63bf480c0c55`.
+Run `01M2HT8T54CAEX53N1VH7S234R`, 2026-09-15T05:58:30.613274+00:00, 100.962 s, at commit `ad80fc708f8e79070559d6e31e57162ed83008e2-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M2HG0Z5RFAHPMYWJG862SQJM)](telemac_river_temperature/telemac_river_temperature.png)
+![Every layer the run published, stacked and framed on the result (run 01M2HT8T54CAEX53N1VH7S234R)](telemac_river_temperature/telemac_river_temperature.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M2HG0Z5RFAHPMYWJG862SQJM)*
+*Every layer the run published, stacked and framed on the result (run 01M2HT8T54CAEX53N1VH7S234R)*
 
-![The solve, frame by frame (run 01M2HG0Z5RFAHPMYWJG862SQJM)](telemac_river_temperature/telemac_river_temperature_animation.gif)
+![The solve, frame by frame (run 01M2HT8T54CAEX53N1VH7S234R)](telemac_river_temperature/telemac_river_temperature_animation.gif)
 
-*The solve, frame by frame (run 01M2HG0Z5RFAHPMYWJG862SQJM)*
+*The solve, frame by frame (run 01M2HT8T54CAEX53N1VH7S234R)*
 
-![final frame (run 01M2HG0Z5RFAHPMYWJG862SQJM)](telemac_river_temperature/telemac_river_temperature_final_frame.png)
+![final frame (run 01M2HT8T54CAEX53N1VH7S234R)](telemac_river_temperature/telemac_river_temperature_final_frame.png)
 
-*final frame (run 01M2HG0Z5RFAHPMYWJG862SQJM)*
+*final frame (run 01M2HT8T54CAEX53N1VH7S234R)*
 
-![water temperature - the chart the run persisted (run 01M2HG0Z5RFAHPMYWJG862SQJM)](telemac_river_temperature/telemac_river_temperature_chart_water_temperature.png)
+![water temperature - the chart the run persisted (run 01M2HT8T54CAEX53N1VH7S234R)](telemac_river_temperature/telemac_river_temperature_chart_water_temperature.png)
 
-*water temperature - the chart the run persisted (run 01M2HG0Z5RFAHPMYWJG862SQJM)*
+*water temperature - the chart the run persisted (run 01M2HT8T54CAEX53N1VH7S234R)*
 
 ### The sheet it filled
 
@@ -144,5 +144,5 @@ await TOOL_REGISTRY['telemac_river_temperature'].fn(
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2HG0Z5RFAHPMYWJG862SQJM` and commit `80e141fee6381b28cbe4f48992ba63bf480c0c55`. The full argument record is [`telemac_river_temperature/run.json`](telemac_river_temperature/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2HT8T54CAEX53N1VH7S234R` and commit `ad80fc708f8e79070559d6e31e57162ed83008e2-dirty`. The full argument record is [`telemac_river_temperature/run.json`](telemac_river_temperature/run.json).
 

@@ -99,35 +99,35 @@ It publishes these layers onto the canvas:
 
 ## The proving run
 
-Run `01M2HGPJGC50366310WC8ZAMH7`, 2026-09-15T03:10:46.435410+00:00, 35.786 s, at commit `80e141fee6381b28cbe4f48992ba63bf480c0c55-dirty`.
+Run `01M2HSYSR2VP81VWZ2108E64CD`, 2026-09-15T05:52:34.584626+00:00, 39.942 s, at commit `ad80fc708f8e79070559d6e31e57162ed83008e2`.
 
-![Every layer the run published, stacked and framed on the result (run 01M2HGPJGC50366310WC8ZAMH7)](telemac_river_eutrophication/telemac_river_eutrophication.png)
+![Every layer the run published, stacked and framed on the result (run 01M2HSYSR2VP81VWZ2108E64CD)](telemac_river_eutrophication/telemac_river_eutrophication.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M2HGPJGC50366310WC8ZAMH7)*
+*Every layer the run published, stacked and framed on the result (run 01M2HSYSR2VP81VWZ2108E64CD)*
 
-![The solve, frame by frame - biomass (run 01M2HGPJGC50366310WC8ZAMH7)](telemac_river_eutrophication/telemac_river_eutrophication_animation_biomass.gif)
+![The solve, frame by frame - biomass (run 01M2HSYSR2VP81VWZ2108E64CD)](telemac_river_eutrophication/telemac_river_eutrophication_animation_biomass.gif)
 
-*The solve, frame by frame - biomass (run 01M2HGPJGC50366310WC8ZAMH7)*
+*The solve, frame by frame - biomass (run 01M2HSYSR2VP81VWZ2108E64CD)*
 
-![The solve, frame by frame - oxygen (run 01M2HGPJGC50366310WC8ZAMH7)](telemac_river_eutrophication/telemac_river_eutrophication_animation_oxygen.gif)
+![The solve, frame by frame - oxygen (run 01M2HSYSR2VP81VWZ2108E64CD)](telemac_river_eutrophication/telemac_river_eutrophication_animation_oxygen.gif)
 
-*The solve, frame by frame - oxygen (run 01M2HGPJGC50366310WC8ZAMH7)*
+*The solve, frame by frame - oxygen (run 01M2HSYSR2VP81VWZ2108E64CD)*
 
-![biomass final frame (run 01M2HGPJGC50366310WC8ZAMH7)](telemac_river_eutrophication/telemac_river_eutrophication_biomass_final_frame.png)
+![biomass final frame (run 01M2HSYSR2VP81VWZ2108E64CD)](telemac_river_eutrophication/telemac_river_eutrophication_biomass_final_frame.png)
 
-*biomass final frame (run 01M2HGPJGC50366310WC8ZAMH7)*
+*biomass final frame (run 01M2HSYSR2VP81VWZ2108E64CD)*
 
-![oxygen final frame (run 01M2HGPJGC50366310WC8ZAMH7)](telemac_river_eutrophication/telemac_river_eutrophication_oxygen_final_frame.png)
+![oxygen final frame (run 01M2HSYSR2VP81VWZ2108E64CD)](telemac_river_eutrophication/telemac_river_eutrophication_oxygen_final_frame.png)
 
-*oxygen final frame (run 01M2HGPJGC50366310WC8ZAMH7)*
+*oxygen final frame (run 01M2HSYSR2VP81VWZ2108E64CD)*
 
-![dissolved o2 - the chart the run persisted (run 01M2HGPJGC50366310WC8ZAMH7)](telemac_river_eutrophication/telemac_river_eutrophication_chart_dissolved_o2.png)
+![dissolved o2 - the chart the run persisted (run 01M2HSYSR2VP81VWZ2108E64CD)](telemac_river_eutrophication/telemac_river_eutrophication_chart_dissolved_o2.png)
 
-*dissolved o2 - the chart the run persisted (run 01M2HGPJGC50366310WC8ZAMH7)*
+*dissolved o2 - the chart the run persisted (run 01M2HSYSR2VP81VWZ2108E64CD)*
 
-![phyto biomass - the chart the run persisted (run 01M2HGPJGC50366310WC8ZAMH7)](telemac_river_eutrophication/telemac_river_eutrophication_chart_phyto_biomass.png)
+![phyto biomass - the chart the run persisted (run 01M2HSYSR2VP81VWZ2108E64CD)](telemac_river_eutrophication/telemac_river_eutrophication_chart_phyto_biomass.png)
 
-*phyto biomass - the chart the run persisted (run 01M2HGPJGC50366310WC8ZAMH7)*
+*phyto biomass - the chart the run persisted (run 01M2HSYSR2VP81VWZ2108E64CD)*
 
 ### The sheet it filled
 
@@ -178,5 +178,5 @@ await TOOL_REGISTRY['telemac_river_eutrophication'].fn(
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2HGPJGC50366310WC8ZAMH7` and commit `80e141fee6381b28cbe4f48992ba63bf480c0c55-dirty`. The full argument record is [`telemac_river_eutrophication/run.json`](telemac_river_eutrophication/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2HSYSR2VP81VWZ2108E64CD` and commit `ad80fc708f8e79070559d6e31e57162ed83008e2`. The full argument record is [`telemac_river_eutrophication/run.json`](telemac_river_eutrophication/run.json).
 

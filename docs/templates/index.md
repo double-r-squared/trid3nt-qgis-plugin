@@ -58,7 +58,7 @@ Module `telemac2d`, proving run `01M2GNPFQ2077S20779R8FWZNH`.
 
 NUTRIENT ENRICHMENT down a river reach: algal growth, nutrient drawdown and the oxygen response over one pass.
 
-Module `telemac2d`, proving run `01M2HGPJGC50366310WC8ZAMH7`.
+Module `telemac2d`, proving run `01M2HSYSR2VP81VWZ2108E64CD`.
 
 ## [`telemac_river_micropollutant`](telemac_river_micropollutant.md)
 
@@ -98,5 +98,5 @@ Module `telemac2d`, proving run `01M2GNFGG431SX89YQ0YMD8PPF`.
 
 WATER TEMPERATURE down a river reach under a week of real weather.
 
-Module `telemac2d`, proving run `01M2HG0Z5RFAHPMYWJG862SQJM`.
+Module `telemac2d`, proving run `01M2HT8T54CAEX53N1VH7S234R`.
 
