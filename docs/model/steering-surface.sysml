@@ -912,6 +912,8 @@ package SteeringSurface {
         "tests/telemac/test_telemac_module_surface.py::test_a_template_reads_its_answer_through_the_primitives_its_module_binds";
     verify requirement OneTemplatePerQuestion by
         "tests/telemac/test_telemac_outputs.py::test_a_primitive_names_the_coupled_module_whose_result_it_reads";
+    verify requirement OneTemplatePerQuestion by
+        "tests/telemac/test_telemac_outputs.py::test_a_series_at_a_point_is_measured_at_that_point";
 
     satisfy requirement ReviewIsTheDoorsView by door;
     verify requirement ReviewIsTheDoorsView by
@@ -933,6 +935,16 @@ package SteeringSurface {
         "tests/telemac/test_telemac_module_surface.py::test_a_continuation_names_the_file_and_leaves_its_format_to_the_template";
     verify requirement CompositesSetOnlyPresence by
         "tests/telemac/test_telemac_module_surface.py::test_a_curve_number_field_names_no_model_and_the_template_does";
+    verify requirement CompositesSetOnlyPresence by
+        "tests/telemac/test_telemac_atmosphere.py::test_a_series_left_out_writes_no_column_and_shifts_none_of_the_others";
+    verify requirement CompositesSetOnlyPresence by
+        "tests/telemac/test_telemac_atmosphere.py::test_a_host_handed_no_weather_states_no_file";
+    verify requirement CompositesSetOnlyPresence by
+        "tests/telemac/test_telemac_atmosphere.py::test_the_thermal_body_states_only_the_keywords_it_was_given";
+    verify requirement CompositesSetOnlyPresence by
+        "tests/telemac/test_telemac_micropollutant.py::test_a_constant_nobody_states_is_left_to_the_engine";
+    verify requirement CompositesSetOnlyPresence by
+        "tests/telemac/test_telemac_eutrophication.py::test_a_body_states_only_what_it_was_handed";
 
     satisfy requirement ACapabilityOnAHostDeckIsAComposite by composite;
     satisfy requirement ACapabilityOnAHostDeckIsAComposite by wrapper;
@@ -942,6 +954,14 @@ package SteeringSurface {
         "tests/telemac/test_telemac_nestor_dredge.py::test_the_carrier_deck_has_no_dredge_of_its_own";
     verify requirement ACapabilityOnAHostDeckIsAComposite by
         "tests/telemac/test_telemac_nestor_dredge.py::test_a_dredge_over_a_bed_with_no_stock_refuses_by_name";
+    verify requirement ACapabilityOnAHostDeckIsAComposite by
+        "tests/telemac/test_telemac_atmosphere.py::test_both_hosts_name_the_same_file_and_state_no_unit_of_their_own";
+    verify requirement ACapabilityOnAHostDeckIsAComposite by
+        "tests/telemac/test_telemac_atmosphere.py::test_each_host_writes_the_columns_its_own_source_term_reads";
+    verify requirement ACapabilityOnAHostDeckIsAComposite by
+        "tests/telemac/test_telemac_micropollutant.py::test_the_body_names_the_process_and_the_carrier_states_it";
+    verify requirement ACapabilityOnAHostDeckIsAComposite by
+        "tests/telemac/test_telemac_eutrophication.py::test_the_carrier_states_the_process_and_the_steering_file";
 
     satisfy requirement NoBodyExtendsABody by wrapper;
     verify requirement NoBodyExtendsABody by
@@ -1024,6 +1044,20 @@ package SteeringSurface {
         "tests/telemac/test_telemac_module_outputs.py::test_a_row_the_result_does_not_carry_is_skipped_and_a_placed_read_refuses";
     verify requirement OutputsAreTheModules by
         "tests/telemac/test_telemac_module_outputs.py::test_a_coupled_module_states_the_tracers_it_appends_and_its_own_table";
+    verify requirement OutputsAreTheModules by
+        "tests/telemac/test_telemac_atmosphere.py::test_the_thermal_process_appends_its_temperature_to_a_carrier_with_no_tracer";
+    verify requirement OutputsAreTheModules by
+        "tests/telemac/test_telemac_atmosphere.py::test_a_temperature_the_carrier_declares_is_adopted_rather_than_appended";
+    verify requirement OutputsAreTheModules by
+        "tests/telemac/test_telemac_atmosphere.py::test_the_thermal_rows_are_declared_data_on_the_wrapper";
+    verify requirement OutputsAreTheModules by
+        "tests/telemac/test_telemac_micropollutant.py::test_the_rows_are_declared_data_on_the_wrapper";
+    verify requirement OutputsAreTheModules by
+        "tests/telemac/test_telemac_micropollutant.py::test_the_dissolved_row_a_carrier_declares_is_ADOPTED_never_appended";
+    verify requirement OutputsAreTheModules by
+        "tests/telemac/test_telemac_eutrophication.py::test_eutro_appends_the_eight_tracers_in_the_engines_order";
+    verify requirement OutputsAreTheModules by
+        "tests/telemac/test_telemac_eutrophication.py::test_biomass_appends_the_first_five";
     verify requirement OutputsAreTheModules by
         "tests/telemac/test_telemac_module_outputs.py::test_the_card_carries_every_variable_each_deck_writes";
     verify requirement OutputsAreTheModules by

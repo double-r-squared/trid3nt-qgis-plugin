@@ -2,7 +2,7 @@
 
 # Templates
 
-9 registered templates, one per question. A template declares raw engine keywords over a module wrapper; `fill` sets the sheet and `run` solves it. The wrappers are in [`../modules.md`](../modules.md).
+12 registered templates, one per question. A template declares raw engine keywords over a module wrapper; `fill` sets the sheet and `run` solves it. The wrappers are in [`../modules.md`](../modules.md).
 
 ## [`artemis_harbor_agitation`](artemis_harbor_agitation.md)
 
@@ -52,6 +52,22 @@ A DYE / TRACER / CONTAMINANT plume that TRAVELS DOWNSTREAM in a RIVER (surface w
 
 Module `telemac2d`, proving run `01M2GNPFQ2077S20779R8FWZNH`.
 
+## [`telemac_river_eutrophication`](telemac_river_eutrophication.md)
+
+[![telemac_river_eutrophication](telemac_river_eutrophication/telemac_river_eutrophication.png)](telemac_river_eutrophication.md)
+
+NUTRIENT ENRICHMENT down a river reach: algal growth, nutrient drawdown and the oxygen response over one pass.
+
+Module `telemac2d`, proving run `01M2H412TJ0BW1KA5YD3S4EE48`.
+
+## [`telemac_river_micropollutant`](telemac_river_micropollutant.md)
+
+[![telemac_river_micropollutant](telemac_river_micropollutant/telemac_river_micropollutant.png)](telemac_river_micropollutant.md)
+
+A SORBING substance in a RIVER: how much stays DISSOLVED and how much ends up ON THE BED.
+
+Module `telemac2d`, proving run `01M2H5WKY448P5NZQ83BYYYMX3`.
+
 ## [`telemac_river_oil_spill`](telemac_river_oil_spill.md)
 
 [![telemac_river_oil_spill](telemac_river_oil_spill/telemac_river_oil_spill.png)](telemac_river_oil_spill.md)
@@ -75,4 +91,12 @@ Module `telemac2d`, proving run `01M2GN2534D6GMNFVJ89C3SGHS`.
 A SUSPENDED SEDIMENT plume in a RIVER: it settles and deposits on the bed.
 
 Module `telemac2d`, proving run `01M2GNFGG431SX89YQ0YMD8PPF`.
+
+## [`telemac_river_temperature`](telemac_river_temperature.md)
+
+[![telemac_river_temperature](telemac_river_temperature/telemac_river_temperature.png)](telemac_river_temperature.md)
+
+WATER TEMPERATURE down a river reach under a week of real weather.
+
+Module `telemac2d`, proving run `01M2H4DR1TB8Z2R0ENB98B4JBX`.
 

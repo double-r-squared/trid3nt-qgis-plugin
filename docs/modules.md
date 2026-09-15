@@ -10,8 +10,8 @@ One wrapper per TELEMAC module. A wrapper is the module's own dictionary, read a
 |---|---|---|---|
 | `artemis` | 118 | `incident_wave` | `extent`, `field`, `mass_balance`, `max_over_time`, `mesh`, `profile`, `series` |
 | `gaia` | 148 | `bed`, `dredging`, `suspension` | `extent`, `field`, `mass_balance`, `max_over_time`, `mesh`, `profile`, `series` |
-| `telemac2d` | 376 | `boundaries`, `continue_from`, `coupling`, `friction`, `hyetograph`, `infiltration`, `oil`, `rain`, `rating`, `releases`, `runoff`, `time_origin`, `tracer_names`, `wind` | `drogues`, `extent`, `field`, `mass_balance`, `max_over_time`, `mesh`, `profile`, `series` |
-| `telemac3d` | 355 | `column`, `vertical_grid`, `wind` | `column`, `extent`, `field`, `mass_balance`, `max_over_time`, `mesh`, `profile`, `series` |
+| `telemac2d` | 376 | `atmosphere`, `boundaries`, `continue_from`, `coupling`, `friction`, `hyetograph`, `infiltration`, `oil`, `rain`, `rating`, `releases`, `runoff`, `time_origin`, `tracer_names`, `wind` | `drogues`, `extent`, `field`, `mass_balance`, `max_over_time`, `mesh`, `profile`, `series` |
+| `telemac3d` | 355 | `atmosphere`, `column`, `vertical_grid`, `wind` | `column`, `extent`, `field`, `mass_balance`, `max_over_time`, `mesh`, `profile`, `series` |
 | `waqtel` | 91 | `degradation` | - |
 
 A COMPOSITE is one value standing for a keyword group, so the group cannot half-arrive. A READ is a primitive over what the module wrote.
@@ -68,4 +68,12 @@ appended by each suspended class: `NCOH SEDIMENT` (g/L, ramp `oranges`)
 ### `waqtel`
 
 appended by process 2: `DISSOLVED O2` (mgO2/L, ramp `rdylbu`), `ORGANIC LOAD` (mgO2/L, ramp `oranges`), `NH4 LOAD` (mg/L, ramp `magma`)
+
+appended by process 3: `PHYTO BIOMASS` (ug/L, ramp `greens`), `DISSOLVED PO4` (mg/L, ramp `ylorrd`), `POR NON ASSIM` (mg/L, ramp `plasma`), `DISSOLVED NO3` (mg/L, ramp `gnbu`), `NOR NON ASSIM` (mg/L, ramp `cividis`)
+
+appended by process 5: `PHYTO BIOMASS` (ug/L, ramp `greens`), `DISSOLVED PO4` (mg/L, ramp `ylorrd`), `POR NON ASSIMIL` (mg/L, ramp `plasma`), `DISSOLVED NO3` (mg/L, ramp `gnbu`), `NOR NON ASSIM` (mg/L, ramp `cividis`), `NH4 LOAD` (mg/L, ramp `magma`), `ORGANIC LOAD` (mgO2/L, ramp `oranges`), `DISSOLVED O2` (mgO2/L, ramp `rdylbu`)
+
+appended by process 7: `SUSPENDED LOAD` (mg/L, ramp `oranges`), `BED SEDIMENTS` (mg/L, ramp `ylorrd`), `MICRO POLLUTANT` (mg/L, ramp `reds`), `ABS. SUSP. LOAD.` (mg/L, ramp `magma`), `ABSORB. BED SED.` (mg/L, ramp `plasma`)
+
+appended by process 11: `TEMPERATURE` (oC, ramp `rdylbu_r`)
 
