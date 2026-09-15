@@ -27,8 +27,16 @@ from trid3nt_server.tools.fetchers.imagery._satellite_slider import (
 _BBOX = (-122.5, 39.5, -121.5, 40.5)
 _SPEC = reg.get_spec("fetch_satellite_imagery")
 
+#: The geostationary registration the index publishes for a full disk: where the bird
+#: sits, how far away, and the scan angle its disk subtends in zoom-0 pixels.
+_LAT_LON_QUERY = {
+    "lon0": -137.0, "sat_alt": 42171.7, "max_rad_x": 0.151337, "max_rad_y": 0.150988,
+    "disk_radius_x_z0": 338, "disk_radius_y_z0": 337,
+}
+
 #: A stand-in for the server's definition file, in its shape: a menu heading, a product
-#: one sector excludes, a fixed sub-satellite longitude on the geostationary birds only.
+#: one sector excludes, the registration on the geostationary birds only, and a
+#: steerable mesoscale box, which nothing can place on the ground.
 _INDEX = {
     "goes-18": {
         "sectors": {
@@ -36,11 +44,18 @@ _INDEX = {
                 "default_product": "geocolor",
                 "defaults": {"minutes_between_images": 5},
                 "missing_products": ["cira_blended_tpw"],
+                "tile_size": 625, "max_zoom_level": 4,
             },
             "full_disk": {
                 "default_product": "geocolor",
                 "defaults": {"minutes_between_images": 10},
-                "lat_lon_query": {"lon0": -137.0},
+                "lat_lon_query": _LAT_LON_QUERY,
+                "tile_size": 678, "max_zoom_level": 5,
+            },
+            "mesoscale_01": {
+                "default_product": "geocolor",
+                "defaults": {"minutes_between_images": 1},
+                "tile_size": 500, "max_zoom_level": 2,
             },
         },
         "products": {
@@ -55,6 +70,7 @@ _INDEX = {
             "conus": {
                 "default_product": "cira_geocolor",
                 "defaults": {"minutes_between_images": 51},
+                "tile_size": 500, "max_zoom_level": 5,
             }
         },
         "products": {
@@ -67,7 +83,8 @@ _INDEX = {
             "full_disk": {
                 "default_product": "geocolor",
                 "defaults": {"minutes_between_images": 10},
-                "lat_lon_query": {"lon0": 140.69},
+                "lat_lon_query": dict(_LAT_LON_QUERY, lon0=140.69),
+                "tile_size": 688, "max_zoom_level": 5,
             }
         },
         "products": {"geocolor": {"product_title": "GeoColor (CIRA)"}},
@@ -104,6 +121,7 @@ def stub(monkeypatch):
     """The index, the availability read and the object store, all off the network."""
     monkeypatch.setattr(SI, "load_index", lambda sc, **kw: _INDEX)
     monkeypatch.setattr(SI, "pick_zoom_for_aoi", lambda *a, **k: 3)
+    monkeypatch.setattr(SI, "usable_zoom", lambda *a, **k: a[4])
     monkeypatch.setattr(
         EX, "read_through",
         lambda metadata, params, ext, fetch_fn: _R(uri=f"s3://fake/{params['ts_int']}.tif"),
@@ -173,10 +191,16 @@ def test_product_excluded_by_the_sector_is_refused(stub):
         _run(satellite="goes-18", sector="conus", product="cira_blended_tpw")
 
 
-def test_sector_without_a_stated_registration_is_refused(stub):
+def test_a_sector_nothing_can_place_on_the_ground_is_refused(stub):
     with pytest.raises(RouterInputError) as ei:
-        _run(satellite="himawari", sector="full_disk")
-    assert "registration" in str(ei.value)
+        _run(satellite="goes-18", sector="mesoscale_01")
+    assert "goes-18/full_disk" in str(ei.value)
+
+
+def test_a_disk_the_index_registers_is_served(stub):
+    layers = _run(lambda: stub(_GEO_TS), satellite="himawari", sector="full_disk",
+                  end_utc="2026-09-14T20:33:00Z")
+    assert len(layers) == 1 and layers[0].name.startswith("HIMAWARI geocolor")
 
 
 def test_day_only_is_refused_for_a_geostationary_satellite(stub):

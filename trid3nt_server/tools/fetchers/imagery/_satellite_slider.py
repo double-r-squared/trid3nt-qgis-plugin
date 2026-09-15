@@ -1,20 +1,20 @@
 """Shared SLIDER tile substrate for the rendered-imagery fetcher.
 
 Owns the primitives the fetcher does not re-implement: the JSON time-index reader, the
-tile-grid stitch into one square mosaic in the satellite's fixed-grid pixel space, and
-the reproject and COG write with its all-NaN honesty guard. Nothing here composites -
-what is computed from a picture is a derive over the layer."""
+sector registration that says where a square mosaic sits on the ground, the tile-grid
+stitch into one square mosaic, and the reproject and COG write with its all-NaN honesty
+guard. Nothing here composites - what is computed from a picture is a derive over the
+layer."""
 
-# GEOREFERENCING, stated so no caller over-reads a frame. SLIDER carries NO projection
-# metadata: it is a pure pixel-mosaic service, exposing no proj4 and no scan-angle
-# extents. The PRECISE georeference for the geostationary sectors is the ABI fixed-grid
-# projection; the polar sectors are a remap whose exact projection is not published. So
-# this module uses an APPROXIMATE linear pixel-to-lon/lat mapping over a documented
-# per-sector bounding box (``_SECTOR_LATLON_EXTENT``). The error is small for
-# well-inside-sector AOIs and LARGE near the limb, and the emitted layer is labelled
-# "approximate georeferencing": the imagery is the real product at the real cadence,
-# but the pixel-to-ground registration is a sector-extent approximation. An
-# all-transparent or empty AOI crop NEVER reads as success.
+# GEOREFERENCING. A SLIDER mosaic is a SQUARE of pixels in the grid its imagery was
+# rendered on, and that grid is never lon/lat: a geostationary sector is linear in the
+# satellite's SCAN ANGLES, so a lon/lat box over it stretches everything away from the
+# sub-satellite point, and a sub-window sector pads its scan to a square with blank
+# rows, so a mapping that spreads the declared latitudes over the whole square lands
+# every row in the wrong place. Each registered sector therefore carries the projection
+# its pixels are linear in and the extent of the square in that projection, and the AOI
+# crop is a reprojection out of it. A sector this module cannot register is REFUSED, not
+# approximated. An all-transparent or empty AOI crop NEVER reads as success.
 
 from __future__ import annotations
 
@@ -32,18 +32,19 @@ __all__ = [
     "SliderUpstreamError",
     "SliderEmptyError",
     "SLIDER_BASE",
-    "TILE_SIZE",
-    "SECTOR_MAX_ZOOM",
     "build_tile_url",
     "build_times_url",
     "fetch_slider_timestamps",
     "ts_int_to_iso",
     "ts_int_to_datetime",
+    "sector_registration",
+    "registered_sectors",
+    "aoi_projected_bounds",
     "pick_zoom_for_aoi",
+    "usable_zoom",
     "stitch_slider_mosaic",
     "mosaic_to_cog_bytes",
     "rgb_array_to_cog_bytes",
-    "_SECTOR_LATLON_EXTENT",
 ]
 
 logger = logging.getLogger("trid3nt_server.tools.fetchers.imagery._satellite_slider")
@@ -90,49 +91,139 @@ _TIMES_TEMPLATE = (
     SLIDER_BASE + "/data/json/{sat}/{sector}/{product}/latest_times.json"
 )
 
-#: Per-sector tile pixel size (px). CONFIRMED from define-products.js + live PNG
-#: dims. Keyed by (sat, sector).
-TILE_SIZE: dict[tuple[str, str], int] = {
-    ("goes-18", "conus"): 625,
-    ("goes-18", "full_disk"): 678,
-    ("goes-19", "conus"): 625,
-    ("goes-19", "full_disk"): 678,
-    ("jpss", "conus"): 500,
-    ("jpss", "northern_hemisphere"): 1000,
-    ("jpss", "southern_hemisphere"): 1000,
+#: The geodetic frame the scan angles are resolved on. The index states the satellite's
+#: distance from the Earth's centre; the perspective height a geostationary projection
+#: takes is that distance less the equatorial radius.
+_EARTH_A_M = 6378137.0
+_EARTH_B_M = 6356752.314140356
+
+#: The scan-angle axis the imagery sweeps along. The viewer renders every satellite it
+#: carries on the same convention, which a coastline measurement confirms: the other
+#: convention lands the coast kilometres off the coast it is drawn on.
+_SWEEP_AXIS = "x"
+
+#: Sub-window sectors the index publishes no ``lat_lon_query`` for, as the square
+#: mosaic's LEFT scan angle, TOP scan angle and angular width, in radians on the parent
+#: satellite's fixed grid. Measured by carrying the sector's own coastline overlay onto
+#: the same satellite's registered full disk, which draws the same coastline: the
+#: measurement is what the server itself renders, not a guess. The square is wider than
+#: the scan - the sector's imagery is padded to a square with blank rows - and the
+#: padding falls out of the registration rather than being stated.
+_MEASURED_GEOS_SQUARE: dict[tuple[str, str], tuple[float, float, float]] = {
+    ("goes-18", "conus"): (-0.069960, 0.156250, 0.139920),
+    ("goes-19", "conus"): (-0.101302, 0.156250, 0.139920),
 }
 
-#: Per-sector max zoom level (CONFIRMED from define-products.js).
-SECTOR_MAX_ZOOM: dict[tuple[str, str], int] = {
-    ("goes-18", "conus"): 4,
-    ("goes-18", "full_disk"): 5,
-    ("goes-19", "conus"): 4,
-    ("goes-19", "full_disk"): 5,
-    ("jpss", "conus"): 5,
-    ("jpss", "northern_hemisphere"): 5,
-    ("jpss", "southern_hemisphere"): 5,
+#: Sectors drawn on a grid of their own - a polar pass set remapped onto a conic the
+#: server publishes nothing about - as that projection and the square mosaic's extent in
+#: it, in metres. Measured by carrying fetched shorelines onto the shoreline the sector's
+#: own overlay draws, over landmarks spread to the sector's corners and its middle, and
+#: settled on the WORST of them rather than their average. The parameters are what that
+#: measurement arrived at, not a standard grid recognised by name, and no landmark it was
+#: measured on sits more than about one mosaic pixel - three and a half kilometres - from
+#: where the server draws it, which is the accuracy an AOI crop from this sector carries.
+_MEASURED_GRID: dict[tuple[str, str], tuple[str, tuple[float, float, float, float]]] = {
+    ("jpss", "conus"): (
+        "+proj=lcc +lat_1=36.60346 +lat_2=38.52876 +lat_0=36.60346 +lon_0=-99.70693 "
+        "+R=6371229 +units=m +no_defs",
+        (-3094184.9, -2843213.4, 3309536.9, 3560508.4)),
 }
 
-#: APPROXIMATE per-sector lat/lon extent (west, south, east, north) used for the
-#: linear pixel -> lon/lat georeference (see module GEOREFERENCING note). These
-#: are sector coverage envelopes, NOT exact fixed-grid corners -- they bound the
-#: square SLIDER mosaic. Accurate for AOIs well inside the sector; LIVE-VERIFY
-#: for limb-edge AOIs. The GOES CONUS sector for GOES-West is actually the PACUS
-#: window; the envelope below covers the western CONUS + eastern Pacific the
-#: GOES-18 "conus" product spans.
-_SECTOR_LATLON_EXTENT: dict[tuple[str, str], tuple[float, float, float, float]] = {
-    # GOES-18 (West) CONUS / PACUS sector approx envelope.
-    ("goes-18", "conus"): (-152.1, 14.6, -52.4, 56.8),
-    ("goes-19", "conus"): (-152.1, 14.6, -52.4, 56.8),
-    # Full disk: the visible Earth disk from the sub-satellite point. We bound a
-    # generous square; only AOIs near disk center reproject acceptably.
-    ("goes-18", "full_disk"): (-180.0, -81.3, -8.0, 81.3),
-    ("goes-19", "full_disk"): (-141.0, -81.3, -9.0, 81.3),
-    # JPSS CONUS remap envelope (approx; LIVE-VERIFY).
-    ("jpss", "conus"): (-152.1, 14.6, -52.4, 56.8),
-    ("jpss", "northern_hemisphere"): (-180.0, 0.0, 180.0, 90.0),
-    ("jpss", "southern_hemisphere"): (-180.0, -90.0, 180.0, 0.0),
-}
+
+def _geostationary_crs(lat_lon_query: dict[str, Any]) -> str:
+    """The satellite's own projection, from the parameters the index publishes for it."""
+    height = float(lat_lon_query["sat_alt"]) * 1000.0 - _EARTH_A_M
+    return (
+        f"+proj=geos +lon_0={float(lat_lon_query['lon0'])} +h={height} "
+        f"+a={_EARTH_A_M} +b={_EARTH_B_M} +sweep={_SWEEP_AXIS} +units=m +no_defs"
+    )
+
+
+def _full_disk_square(lat_lon_query: dict[str, Any], tile_size: int) -> tuple[float, ...]:
+    """The full-disk mosaic's extent in projected metres. The index states the disk's
+    RADIUS in zoom-0 pixels and the scan angle that radius subtends, so the square's own
+    half-width is that angle scaled by however far the square runs past the disk."""
+    height = float(lat_lon_query["sat_alt"]) * 1000.0 - _EARTH_A_M
+    half_x = (tile_size / 2.0) / float(
+        lat_lon_query["disk_radius_x_z0"]) * float(lat_lon_query["max_rad_x"]) * height
+    half_y = (tile_size / 2.0) / float(
+        lat_lon_query["disk_radius_y_z0"]) * float(lat_lon_query["max_rad_y"]) * height
+    return (-half_x, -half_y, half_x, half_y)
+
+
+def sector_registration(
+    satellite: str, sector: str, sat_entry: dict[str, Any]
+) -> dict[str, Any] | None:
+    """Where a sector's square mosaic sits on the ground: the projection its pixels are
+    linear in and the square's extent in that projection. ``None`` for a sector nothing
+    registers - a steerable mesoscale box, a remap whose grid the server does not
+    publish - which the caller must refuse rather than approximate."""
+    sectors = sat_entry.get("sectors") or {}
+    entry = sectors.get(sector) or {}
+    tile_size = int(entry.get("tile_size") or 0)
+    own_query = entry.get("lat_lon_query")
+    if own_query and tile_size:
+        return {"crs": _geostationary_crs(own_query),
+                "extent": list(_full_disk_square(own_query, tile_size))}
+    square = _MEASURED_GEOS_SQUARE.get((satellite, sector))
+    if square is not None:
+        parent = next(
+            (s.get("lat_lon_query") for s in sectors.values() if s.get("lat_lon_query")),
+            None)
+        if parent is None:
+            return None
+        height = float(parent["sat_alt"]) * 1000.0 - _EARTH_A_M
+        west, north, span = (v * height for v in square)
+        return {"crs": _geostationary_crs(parent),
+                "extent": [west, north - span, west + span, north]}
+    grid = _MEASURED_GRID.get((satellite, sector))
+    if grid is not None:
+        return {"crs": grid[0], "extent": list(grid[1])}
+    return None
+
+
+def registered_sectors(index: dict[str, Any]) -> list[str]:
+    """``satellite/sector`` for every sector this substrate can place on the ground."""
+    return sorted(
+        f"{satellite}/{sector}"
+        for satellite, sat_entry in index.items()
+        for sector in (sat_entry.get("sectors") or {})
+        if sector_registration(satellite, sector, sat_entry) is not None
+    )
+
+
+#: How finely an AOI's outline is walked before it is projected. A lon/lat box is a
+#: curve in a satellite's scan angles, so its corners alone would miss the bulge.
+_AOI_RING_STEPS = 48
+
+
+def aoi_projected_bounds(
+    registration: dict[str, Any], bbox: tuple[float, float, float, float]
+) -> tuple[float, float, float, float]:
+    """The AOI's outline carried into the sector's projection, as a bounding box in that
+    projection. An AOI the projection cannot resolve - beyond the visible limb - has no
+    bounds and raises the typed empty error."""
+    import numpy as np
+    from pyproj import CRS, Transformer
+
+    steps = np.linspace(0.0, 1.0, _AOI_RING_STEPS)
+    lons = np.concatenate([
+        bbox[0] + steps * (bbox[2] - bbox[0]), np.full(steps.shape, bbox[2]),
+        bbox[2] - steps * (bbox[2] - bbox[0]), np.full(steps.shape, bbox[0])])
+    lats = np.concatenate([
+        np.full(steps.shape, bbox[1]), bbox[1] + steps * (bbox[3] - bbox[1]),
+        np.full(steps.shape, bbox[3]), bbox[3] - steps * (bbox[3] - bbox[1])])
+    transformer = Transformer.from_crs(
+        CRS.from_epsg(4326), CRS.from_user_input(registration["crs"]), always_xy=True)
+    x, y = transformer.transform(lons, lats)
+    finite = np.isfinite(x) & np.isfinite(y)
+    if not finite.any():
+        raise SliderEmptyError(
+            f"AOI bbox={tuple(bbox)} does not resolve in this sector's projection; it "
+            "is beyond the visible limb from this satellite")
+    return (float(x[finite].min()), float(y[finite].min()),
+            float(x[finite].max()), float(y[finite].max()))
+
 
 _USER_AGENT = (
     "trid3nt/0.1 (Hazard Modeling Agent; "
@@ -250,8 +341,8 @@ def fetch_slider_timestamps(
 
 
 def pick_zoom_for_aoi(
-    sat: str,
-    sector: str,
+    registration: dict[str, Any],
+    sector_entry: dict[str, Any],
     bbox: tuple[float, float, float, float],
     *,
     target_px: int = 768,
@@ -260,65 +351,77 @@ def pick_zoom_for_aoi(
     """Pick the SMALLEST zoom whose AOI-spanning tile count stays at or below
     ``max_tiles`` while giving at least ``target_px`` across the AOI, clamped to the
     sector's own zoom range. The tile ceiling is what bounds per-frame download cost."""
-    max_zoom = SECTOR_MAX_ZOOM.get((sat, sector), 4)
-    ext = _SECTOR_LATLON_EXTENT.get((sat, sector))
-    tsize = TILE_SIZE.get((sat, sector), 625)
-    if ext is None:
-        return min(2, max_zoom)
-    west, south, east, north = ext
-    aoi_w = max(1e-6, bbox[2] - bbox[0])
-    aoi_h = max(1e-6, bbox[3] - bbox[1])
-    sec_w = max(1e-6, east - west)
-    sec_h = max(1e-6, north - south)
-    frac = max(aoi_w / sec_w, aoi_h / sec_h)  # AOI fraction of the sector
+    max_zoom = int(sector_entry.get("max_zoom_level") or 4)
+    tile_size = int(sector_entry.get("tile_size") or 625)
+    west, south, east, north = registration["extent"]
+    aoi = aoi_projected_bounds(registration, bbox)
+    frac = max((aoi[2] - aoi[0]) / max(1e-9, east - west),
+               (aoi[3] - aoi[1]) / max(1e-9, north - south))
+    frac = min(1.0, max(frac, 1e-9))
 
     best = 0
-    for z in range(0, max_zoom + 1):
-        side_px = tsize * (2 ** z)
-        aoi_px = frac * side_px
+    for zoom in range(0, max_zoom + 1):
+        aoi_px = frac * tile_size * (2 ** zoom)
         # Tiles spanning the AOI on the longer axis (+1 for boundary overlap).
-        tiles_span = math.ceil(frac * (2 ** z)) + 1
+        tiles_span = math.ceil(frac * (2 ** zoom)) + 1
         n_tiles = tiles_span * tiles_span
-        best = z
+        best = zoom
         if aoi_px >= target_px and n_tiles >= max_tiles:
             break
         if n_tiles > max_tiles:
-            best = max(0, z - 1)
+            best = max(0, zoom - 1)
             break
     return min(max(best, 0), max_zoom)
 
 
+def usable_zoom(
+    sat: str,
+    sector: str,
+    product: str,
+    ts_int: int,
+    zoom: int,
+    *,
+    session: requests.Session | None = None,
+) -> int:
+    """The deepest zoom at or below ``zoom`` this product is actually tiled at. The index
+    states the zoom the VIEWER offers a sector, which is not the zoom every product is
+    rendered to, and asking for one that is not there returns nothing at all. The probe
+    is the centre tile, which is the sub-satellite point on a disk and mid-sector
+    otherwise, so a transparent corner never reads as an absent zoom."""
+    sess = session or requests
+    for level in range(zoom, -1, -1):
+        middle = (2 ** level) // 2
+        url = build_tile_url(sat, sector, product, ts_int, level, middle, middle)
+        try:
+            resp = sess.get(
+                url, headers={"User-Agent": _USER_AGENT}, timeout=_TILE_TIMEOUT_S,
+                allow_redirects=True)
+        except requests.RequestException as exc:
+            raise SliderUpstreamError(
+                f"SLIDER tile probe failed ({sat}/{sector}/{product} z{level}): {exc}"
+            ) from exc
+        if resp.status_code == 200:
+            return level
+    raise SliderEmptyError(
+        f"SLIDER has no {sat}/{sector}/{product} tiles at any zoom for ts={ts_int}")
 
 
 def _aoi_to_pixel_window(
-    sat: str,
-    sector: str,
+    registration: dict[str, Any],
     bbox: tuple[float, float, float, float],
     side_px: int,
 ) -> tuple[int, int, int, int]:
-    """Map an AOI bbox to an inclusive-min, exclusive-max pixel window under the
-    approximate linear sector extent. Row 0 is north and column 0 is west, and the
-    window is clamped to the sector side."""
-    west, south, east, north = _SECTOR_LATLON_EXTENT[(sat, sector)]
-    sec_w = east - west
-    sec_h = north - south
-
-    def _x(lon: float) -> float:
-        return (lon - west) / sec_w * side_px
-
-    def _y(lat: float) -> float:
-        # north -> row 0; south -> row side_px.
-        return (north - lat) / sec_h * side_px
-
-    x0 = _x(bbox[0])
-    x1 = _x(bbox[2])
-    # north has the smaller row index.
-    y_top = _y(bbox[3])
-    y_bot = _y(bbox[1])
-    px_min_x = int(max(0, math.floor(min(x0, x1))))
-    px_max_x = int(min(side_px, math.ceil(max(x0, x1))))
-    px_min_y = int(max(0, math.floor(min(y_top, y_bot))))
-    px_max_y = int(min(side_px, math.ceil(max(y_top, y_bot))))
+    """Map an AOI bbox to an inclusive-min, exclusive-max pixel window on the square
+    mosaic. Row 0 is the square's top edge and column 0 its left edge, both in the
+    sector's own projection, and the window is clamped to the square."""
+    west, south, east, north = registration["extent"]
+    x_min, y_min, x_max, y_max = aoi_projected_bounds(registration, bbox)
+    span_x = max(1e-9, east - west)
+    span_y = max(1e-9, north - south)
+    px_min_x = int(max(0, math.floor((x_min - west) / span_x * side_px)))
+    px_max_x = int(min(side_px, math.ceil((x_max - west) / span_x * side_px)))
+    px_min_y = int(max(0, math.floor((north - y_max) / span_y * side_px)))
+    px_max_y = int(min(side_px, math.ceil((north - y_min) / span_y * side_px)))
     return px_min_x, px_min_y, px_max_x, px_max_y
 
 
@@ -329,22 +432,25 @@ def stitch_slider_mosaic(
     ts_int: int,
     zoom: int,
     bbox: tuple[float, float, float, float],
+    registration: dict[str, Any],
+    tile_size: int,
     *,
     session: requests.Session | None = None,
 ) -> tuple[Any, tuple[float, float, float, float]]:
     """Download and stitch the tiles covering an AOI for one timestamp, returning the
-    ``(H, W, 3)`` block and its lat/lon box. ONLY intersecting tiles are fetched, and a
-    404 tile is treated as transparent; every tile failing raises upstream."""
+    ``(H, W, 3)`` block and its extent in the sector's own projection. ONLY intersecting
+    tiles are fetched, and a 404 tile is treated as transparent; every tile failing
+    raises upstream."""
     import numpy as np
     from PIL import Image
 
-    tsize = TILE_SIZE.get((sat, sector), 625)
+    tsize = int(tile_size)
     n_tiles = 2 ** zoom
     side_px = tsize * n_tiles
     sess = session or requests
 
     px_min_x, px_min_y, px_max_x, px_max_y = _aoi_to_pixel_window(
-        sat, sector, bbox, side_px
+        registration, bbox, side_px
     )
     if px_max_x <= px_min_x or px_max_y <= px_min_y:
         raise SliderEmptyError(
@@ -407,38 +513,33 @@ def stitch_slider_mosaic(
             f"({sat}/{sector}/{product} z{zoom}); likely no coverage this pass"
         )
 
-    # lat/lon extent of the stitched block (the tile-aligned outer box).
-    west, south, east, north = _SECTOR_LATLON_EXTENT[(sat, sector)]
-    sec_w = east - west
-    sec_h = north - south
-    block_px_x0 = tx_min * tsize
-    block_px_x1 = (tx_max + 1) * tsize
-    block_px_y0 = ty_min * tsize
-    block_px_y1 = (ty_max + 1) * tsize
-    blk_west = west + block_px_x0 / side_px * sec_w
-    blk_east = west + block_px_x1 / side_px * sec_w
-    blk_north = north - block_px_y0 / side_px * sec_h
-    blk_south = north - block_px_y1 / side_px * sec_h
+    west, south, east, north = registration["extent"]
+    span_x = east - west
+    span_y = north - south
+    blk_west = west + tx_min * tsize / side_px * span_x
+    blk_east = west + (tx_max + 1) * tsize / side_px * span_x
+    blk_north = north - ty_min * tsize / side_px * span_y
+    blk_south = north - (ty_max + 1) * tsize / side_px * span_y
     return canvas, (blk_west, blk_south, blk_east, blk_north)
-
-
 
 
 def mosaic_to_cog_bytes(
     rgb_array: Any,
     mosaic_extent: tuple[float, float, float, float],
+    src_crs: str,
     aoi_bbox: tuple[float, float, float, float],
     *,
     out_res_deg: float = 0.01,
 ) -> bytes:
-    """Reproject and clip a stitched RGB mosaic to a 3-band EPSG:4326 COG over the AOI.
-    A crop with NO non-zero pixel -- the AOI fell on a transparent or off-grid region --
-    raises the typed empty error rather than writing a blank layer."""
+    """Reproject and clip a stitched RGB mosaic OUT of the sector's own projection to a
+    3-band EPSG:4326 COG over the AOI. A crop with NO non-zero pixel -- the AOI fell on
+    a transparent or off-grid region -- raises the typed empty error rather than writing
+    a blank layer."""
 
-    # The source transform is built from the stitched block's own lat/lon box over its
-    # (H, W); each band then reprojects onto a regular grid clipped to the AOI at
-    # ``out_res_deg``; the result is written as a 3-band uint8 COG, which the publish
-    # seam renders directly with no colormap.
+    # The source transform is built from the stitched block's own extent in the sector's
+    # projection over its (H, W); each band then reprojects onto a regular lon/lat grid
+    # clipped to the AOI at ``out_res_deg``; the result is written as a 3-band uint8 COG,
+    # which the publish seam renders directly with no colormap.
     import numpy as np
     import rasterio
     from rasterio.transform import from_bounds
@@ -469,7 +570,7 @@ def mosaic_to_cog_bytes(
                 source=src_band,
                 destination=dst_band,
                 src_transform=src_transform,
-                src_crs="EPSG:4326",
+                src_crs=src_crs,
                 dst_transform=out_transform,
                 dst_crs="EPSG:4326",
                 resampling=Resampling.bilinear,
@@ -488,8 +589,6 @@ def mosaic_to_cog_bytes(
         )
 
     return rgb_array_to_cog_bytes(out_rgb, out_transform, out_w, out_h)
-
-
 
 
 def rgb_array_to_cog_bytes(

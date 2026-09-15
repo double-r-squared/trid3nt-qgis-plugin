@@ -32,9 +32,12 @@ docstring: |-
   - ``bbox`` (tuple): ``(min_lon, min_lat, max_lon, max_lat)`` EPSG:4326.
     Required.
   - ``satellite`` (str, default ``"goes-19"``): a satellite the viewer serves --
-    ``"goes-19"`` (East), ``"goes-18"`` (West), ``"jpss"`` (the SNPP / NOAA-20
-    polar pass set). An unserved name is refused with the list.
-  - ``sector`` (str, default ``"conus"``): that satellite's sector slug.
+    ``"goes-19"`` (East), ``"goes-18"`` (West), ``"himawari"``, ``"gk2a"``, a
+    Meteosat, ``"jpss"`` (the SNPP / NOAA-20 polar pass set). An unserved name is
+    refused with the list.
+  - ``sector`` (str, default ``"conus"``): that satellite's sector slug. A sector
+    whose grid cannot be placed on the ground -- a steerable mesoscale box -- is
+    refused with the registered list.
   - ``product`` (str): the product AS THE SERVER NAMES IT -- e.g. ``"geocolor"``,
     ``"fire_temperature"``, ``"cira_natural_fire_color"``, ``"band_13"``,
     ``"cira_geocolor"``. The allowed set is read from the server's own index at
@@ -53,10 +56,11 @@ docstring: |-
   ``"<SAT> <product> step <N> <ISO>"`` and stamped with its own validity window,
   which is what the scrubber plays.
 
-  NOTE: georeferencing is the approximate SLIDER sector-extent mapping (SLIDER
-  ships no projection); the imagery and cadence are the real product. A sector
-  with no stated registration is refused rather than guessed. An AOI with no
-  imagery pixels raises a typed error.
+  NOTE: a geostationary sector is registered through the satellite's own
+  projection, built from the parameters the server's index publishes for it, and a
+  sub-window sector through a window measured against that same disk; a sector
+  neither reaches is refused rather than guessed. An AOI with no imagery pixels
+  raises a typed error.
 
 # The SLIDER tile substrate the frames hooks build URLs against, and the viewer's own
 # definition file, which is the ONLY list of satellites, sectors and products; the
@@ -119,6 +123,6 @@ payload_estimate:
 
 caveats:
   - The satellite, sector and product vocabularies are read from the server's own index at call time; an unserved name is refused with the list the server publishes, never silently substituted.
-  - Georeferencing is the approximate SLIDER sector-extent mapping (SLIDER publishes no projection); a sector with no stated registration is refused rather than guessed.
+  - A sector is registered through the projection its pixels are linear in - the satellite's own geostationary projection from the index's published parameters, or a sub-window measured against that disk - and reprojected out of it onto the AOI; a sector neither reaches is refused rather than approximated.
   - The imagery is a RENDERED RGB picture, not radiances; anything computed from pixel values belongs on the raw archive instead.
   - A frame with no imagery pixels over the AOI is dropped with a recorded degradation; a window where every frame is empty raises a typed SATELLITE_IMAGERY_EMPTY.

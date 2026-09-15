@@ -19,7 +19,6 @@ import requests
 from trid3nt_contracts.source_spec import SourceSpec
 
 from ...imagery._satellite_slider import (
-    _SECTOR_LATLON_EXTENT,
     _USER_AGENT,
     SliderEmptyError,
     SliderError,
@@ -27,6 +26,9 @@ from ...imagery._satellite_slider import (
     fetch_slider_timestamps,
     mosaic_to_cog_bytes,
     pick_zoom_for_aoi,
+    registered_sectors,
+    usable_zoom,
+    sector_registration,
     stitch_slider_mosaic,
     ts_int_to_datetime,
     ts_int_to_iso,
@@ -217,10 +219,13 @@ def _round_bbox(bbox: Any) -> tuple[float, float, float, float]:
     return tuple(round(float(v), _BBOX_QUANTIZE_DP) for v in bbox)  # type: ignore[return-value]
 
 
-def _pick(spec: SourceSpec, params: dict[str, Any], index: dict[str, Any]) -> tuple[str, str, str]:
+def _pick(
+    spec: SourceSpec, params: dict[str, Any], index: dict[str, Any]
+) -> tuple[str, str, str, dict[str, Any]]:
     """Resolve satellite, sector and product against the server's index, defaulting the
-    product to the sector's own. Anything the server does not serve raises the typed
-    INPUT error listing what it does."""
+    product to the sector's own, and register the sector on the ground. Anything the
+    server does not serve, or does not let this substrate place on the ground, raises
+    the typed INPUT error listing what it does."""
     sc, suffix = spec.error_code_prefix, spec.input_error_suffix
     satellite = str(params.get("satellite") or "").strip().lower()
     if satellite not in index:
@@ -237,12 +242,13 @@ def _pick(spec: SourceSpec, params: dict[str, Any], index: dict[str, Any]) -> tu
             f"{sorted(sat_entry['sectors'])}",
             suffix,
         )
-    if (satellite, sector) not in _SECTOR_LATLON_EXTENT:
+    registration = sector_registration(satellite, sector, sat_entry)
+    if registration is None:
         raise router_input_error(
             sc,
-            f"{satellite}/{sector} has no stated ground registration; SLIDER publishes "
-            "no projection for it, so an AOI crop would be a guess. Georeferenced "
-            f"sectors: {sorted(_SECTOR_LATLON_EXTENT)}",
+            f"{satellite}/{sector} cannot be placed on the ground: the server publishes "
+            "no projection for it and nothing has measured one, so an AOI crop would be "
+            f"a guess. Registered sectors: {registered_sectors(index)}",
             suffix,
         )
     served = sector_products(sat_entry, sector)
@@ -256,7 +262,7 @@ def _pick(spec: SourceSpec, params: dict[str, Any], index: dict[str, Any]) -> tu
             f"{sorted(served)}",
             suffix,
         )
-    return satellite, sector, product
+    return satellite, sector, product, registration
 
 
 @register_hook("satellite_imagery.frames_plan")
@@ -267,8 +273,9 @@ def frames_plan(spec: SourceSpec, params: dict[str, Any]) -> list[FramePlan]:
     sc, suffix = spec.error_code_prefix, spec.input_error_suffix
     bbox = _round_bbox(params["bbox"])
     index = load_index(sc)
-    satellite, sector, product = _pick(spec, params, index)
+    satellite, sector, product, registration = _pick(spec, params, index)
     sat_entry = index[satellite]
+    sector_entry = sat_entry["sectors"][sector]
     geostationary = is_geostationary(sat_entry)
 
     step_minutes = params.get("step_minutes")
@@ -302,9 +309,7 @@ def frames_plan(spec: SourceSpec, params: dict[str, Any]) -> list[FramePlan]:
     except SliderError as exc:
         raise router_upstream_error(sc, str(exc))
 
-    native = sat_entry["sectors"][sector].get("defaults", {}).get(
-        "minutes_between_images"
-    )
+    native = sector_entry.get("defaults", {}).get("minutes_between_images")
     if native is None:
         raise router_upstream_error(
             sc, f"the index states no cadence for {satellite}/{sector}"
@@ -342,7 +347,11 @@ def frames_plan(spec: SourceSpec, params: dict[str, Any]) -> list[FramePlan]:
             spec.empty_error_suffix,
         )
 
-    zoom = pick_zoom_for_aoi(satellite, sector, bbox)
+    try:
+        zoom = usable_zoom(satellite, sector, product, frames[0],
+                           pick_zoom_for_aoi(registration, sector_entry, bbox))
+    except SliderError as exc:
+        raise router_upstream_error(sc, str(exc))
     windows = frame_windows([ts_int_to_iso(ts) for ts in frames])
     plans: list[FramePlan] = []
     for frame_no, ts_int in enumerate(frames, start=1):
@@ -357,6 +366,8 @@ def frames_plan(spec: SourceSpec, params: dict[str, Any]) -> list[FramePlan]:
                     "product": product,
                     "ts_int": ts_int,
                     "zoom": zoom,
+                    "tile_size": int(sector_entry["tile_size"]),
+                    "registration": registration,
                 },
                 name=f"{satellite.upper()} {product} step {frame_no} {iso}",
                 layer_id=(
@@ -379,8 +390,10 @@ def frame_bytes(spec: SourceSpec, params: dict[str, Any], frame: FramePlan) -> b
     bbox = tuple(cp["bbox"])  # type: ignore[assignment]
     try:
         rgb, mosaic_extent = stitch_slider_mosaic(
-            cp["satellite"], cp["sector"], cp["product"], cp["ts_int"], cp["zoom"], bbox
+            cp["satellite"], cp["sector"], cp["product"], cp["ts_int"], cp["zoom"],
+            bbox, cp["registration"], cp["tile_size"]
         )
-        return mosaic_to_cog_bytes(rgb, mosaic_extent, bbox)
+        return mosaic_to_cog_bytes(
+            rgb, mosaic_extent, cp["registration"]["crs"], bbox)
     except (SliderEmptyError, SliderUpstreamError) as exc:
         raise FrameDegraded(str(exc)) from exc
