@@ -11,12 +11,14 @@ import math
 from types import MappingProxyType
 from typing import Any, Mapping, Sequence
 
+from ..authoring.atmosphere import Atmosphere, expand_for_telemac2d
 from .module import Module, Output
 from .outputs import PRIMITIVES, read_drogues
 
-__all__ = ["T2D", "Boundaries", "Continuation", "Friction", "Hyetograph",
-           "Infiltration", "MODULE_OUTPUT", "Oil", "Rain", "Rating", "Release",
-           "Runoff", "TimeOrigin", "TracerNames", "Wind", "SOURCES_FILENAME"]
+__all__ = ["T2D", "Atmosphere", "Boundaries", "Continuation", "Friction",
+           "Hyetograph", "Infiltration", "MODULE_OUTPUT", "Oil", "Rain",
+           "Rating", "Release", "Runoff", "TimeOrigin", "TracerNames", "Wind",
+           "SOURCES_FILENAME"]
 
 #: A signed component reads about zero, so its ramp diverges there and the
 #: legend is ranged symmetrically; a depth-like field is floored where it stops
@@ -579,6 +581,7 @@ T2D.LISTING = LISTING
 T2D.PRINTOUTS = "VARIABLES_FOR_GRAPHIC_PRINTOUTS"
 T2D.TRACER = "T"
 T2D.composites(releases=_releases, wind=_wind, continue_from=_continue_from,
+               atmosphere=expand_for_telemac2d,
                oil=_oil, rain=_rain, coupling=_coupling,
                boundaries=_boundaries, runoff=_runoff, friction=_friction,
                infiltration=_infiltration, rating=_rating, hyetograph=_hyetograph,

@@ -11,10 +11,11 @@ from typing import Any, Mapping
 
 from trid3nt_server.workflows.runtime import DeclarativeError
 
+from ..authoring.atmosphere import Atmosphere, expand_for_telemac3d
 from .module import Module, Output
 from .outputs import PRIMITIVES, read_column
 
-__all__ = ["T3D", "Column", "MODULE_OUTPUT", "USER_FORTRAN_DIR",
+__all__ = ["T3D", "Atmosphere", "Column", "MODULE_OUTPUT", "USER_FORTRAN_DIR",
            "VerticalGridUnresolved", "VerticalGrid", "plan_vertical_grid"]
 
 #: A signed component reads about zero, so its ramp diverges there.
@@ -284,5 +285,6 @@ T3D = Module("telemac3d")
 T3D.MODULE_OUTPUT = MODULE_OUTPUT
 T3D.PRINTOUTS = "VARIABLES_FOR_3D_GRAPHIC_PRINTOUTS"
 T3D.TRACER = "TA"
-T3D.composites(vertical_grid=_vertical_grid, column=_column, wind=_wind)
+T3D.composites(vertical_grid=_vertical_grid, column=_column, wind=_wind,
+               atmosphere=expand_for_telemac3d)
 T3D.reads(**PRIMITIVES, column=read_column)
