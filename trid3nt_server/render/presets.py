@@ -330,6 +330,23 @@ def _legend_end(value: float, *, up: bool) -> float:
     return (math.ceil(value * step) if up else math.floor(value * step)) / step
 
 
+def declared_peak(values: Any, row: Any = None) -> float:
+    """How large a row says its own field gets: the ``p<q>`` percentile of what
+    was read where it caps the range, the maximum otherwise.
+
+    The legend's top and a field's visible edge are both this number, so a
+    record maximum a drying node carries moves neither."""
+    import numpy as np
+
+    finite = np.asarray(values, dtype="float64").ravel()
+    finite = finite[np.isfinite(finite)]
+    if not finite.size:
+        return 0.0
+    cap = _PERCENTILE_CAP.fullmatch(str(dict(row or {}).get("range") or ""))
+    return (float(np.percentile(finite, float(cap.group(1)))) if cap is not None
+            else float(finite.max()))
+
+
 def measured_range(values: Any, row: Any = None, *, floor: float | None = None
                    ) -> tuple[float, float]:
     """The legend range a producer measured while it held the field.
@@ -342,17 +359,14 @@ def measured_range(values: Any, row: Any = None, *, floor: float | None = None
 
     finite = np.asarray(values, dtype="float64").ravel()
     finite = finite[np.isfinite(finite)]
-    hi = float(finite.max()) if finite.size else 0.0
-    lo = float(finite.min()) if finite.size else 0.0
     declared = dict(row or {})
+    hi = declared_peak(finite, declared)
+    lo = float(finite.min()) if finite.size else 0.0
     center = declared.get("center")
     if center is not None:
         reach = max(abs(hi - float(center)), abs(lo - float(center)))
         return (_legend_end(float(center) - reach, up=False),
                 _legend_end(float(center) + reach, up=True))
-    cap = _PERCENTILE_CAP.fullmatch(str(declared.get("range") or ""))
-    if cap is not None and finite.size:
-        hi = float(np.percentile(finite, float(cap.group(1))))
     if declared.get("floor") is not None:
         lo = float(declared["floor"])
     elif floor is not None:

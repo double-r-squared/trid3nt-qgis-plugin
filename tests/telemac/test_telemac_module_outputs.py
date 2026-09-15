@@ -178,6 +178,24 @@ def test_a_temporal_layer_is_ranged_over_the_record_not_its_last_frame(
     assert dye.value_range[0] == pytest.approx(0.0)
 
 
+def test_the_froude_row_caps_its_legend_off_the_wet_dry_edge():
+    """|u|/sqrt(gh) at a node with no depth is a number in the thousands and the
+    water beside it is subcritical; ranged on that node the ramp is one colour."""
+    import numpy as np
+
+    from trid3nt_server.render import presets
+    from trid3nt_server.workflows.telemac.modules.telemac2d import MODULE_OUTPUT
+
+    style = MODULE_OUTPUT["F"].style
+    assert style["range"] == "p99.9"
+    # A reach record's own shape: a subcritical field with a handful of drying
+    # nodes carrying the edge value the solver leaves there.
+    record = np.concatenate([np.linspace(0.0, 0.46, 9995), np.full(5, 4179.0)])
+    lo, hi = presets.measured_range(record, style)
+    assert lo == 0.0, "the declared floor still pins the bottom"
+    assert 0.4 < hi < 1.0, hi
+
+
 def test_a_row_the_result_does_not_carry_is_skipped_and_a_placed_read_refuses(
         published):
     """The table is what the module writes; what a run actually wrote is what it

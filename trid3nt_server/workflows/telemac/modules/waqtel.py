@@ -28,7 +28,12 @@ _DEGRADATION = 17
 #: One style per appended variable, stated where the rows that carry it are. A
 #: variable two processes both write draws the same way under either.
 _TEMPERATURE = {"kind": "mesh", "ramp": "rdylbu_r", "units": "C"}
-_O2_STYLE = {"kind": "mesh", "ramp": "rdylbu", "units": "mg/L", "floor": 0}
+#: The oxygen is a depth-averaged concentration the engine advects as depth
+#: TIMES concentration, so a node drying out divides by a vanishing depth and
+#: leaves the balance by two orders of magnitude for the step it dries on. The
+#: legend's top is the 99.9th percentile of what was read, not that step.
+_O2_STYLE = {"kind": "mesh", "ramp": "rdylbu", "units": "mg/L", "floor": 0,
+             "range": "p99.9"}
 _ORGANIC = {"kind": "mesh", "ramp": "oranges", "units": "mg/L", "floor": 0}
 _NH4 = {"kind": "mesh", "ramp": "magma", "units": "mg/L", "floor": 0}
 _ALGAE = {"kind": "mesh", "ramp": "greens", "units": "ug/L", "floor": 0}

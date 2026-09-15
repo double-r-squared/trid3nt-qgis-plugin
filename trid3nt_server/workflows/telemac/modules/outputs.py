@@ -528,6 +528,20 @@ class Solved:
             f"{token} ({wanted}) is not among the variables the result carries "
             f"({self.result['varnames']}).")
 
+    def style(self, token: str) -> Any:
+        """The style row THIS run's output table carries for a token.
+
+        A read is deduplicated by a primitive stripped of its publishing, so what
+        a variable draws by is the run's own table row and never the publishing
+        primitive's - and legend and mask read the one declaration."""
+        upper = str(token).strip().upper()
+        module = str(self.body.MODULE).upper()
+        for row in self.run.get("module_output") or ():
+            if (str(row.get("token")).strip().upper() == upper
+                    and str(row.get("module")).upper() == module):
+                return row.get("style")
+        return None
+
     def _appended_tracer(self, token: str, names: list[Any], index: int
                          ) -> tuple[str, str]:
         """A tracer a coupled module appended behind the carrier's declared ones.
@@ -601,24 +615,30 @@ def _is_tracer(token: str) -> bool:
 
 
 def _edge(token: str, peak: float) -> float | None:
-    """A tracer's visible edge, a fraction of its own peak; nothing for the rest."""
+    """A tracer's visible edge, a fraction of the peak its row declares; nothing
+    for the rest."""
     return (max(TRACER_FLOOR, TRACER_EDGE_FRACTION * peak) if _is_tracer(token)
             else None)
 
 
-def _floor(token: str, values: Any) -> float | None:
+def _floor(token: str, values: Any, row: Any = None) -> float | None:
     """Where a variable stops being drawn: a tracer's edge, where the tracer HAS
     one. A tracer that is everywhere above its edge - a temperature, a salinity -
     is a field with no absent region, and is drawn and ranged whole."""
-    edge = _edge(token, float(values.max()))
+    from trid3nt_server.render import presets
+
+    edge = _edge(token, presets.declared_peak(values, row))
     return edge if edge is not None and float(values.min()) < edge else None
 
 
-def _envelope(token: str, times: Any, values: Any) -> dict[str, Any]:
+def _envelope(token: str, times: Any, values: Any, row: Any = None
+              ) -> dict[str, Any]:
     """The measures a series over time carries: its peak and its trough with the
     instants they fall on, where it stands at the end, how far it swings between
     the two, and how many frames it was read over."""
     import numpy as np
+
+    from trid3nt_server.render import presets
 
     per_frame = values.max(axis=1)
     peak_i = int(np.argmax(per_frame))
@@ -634,7 +654,10 @@ def _envelope(token: str, times: Any, values: Any) -> dict[str, Any]:
                                 "frames": int(values.shape[0]),
                                 "truncated": bool(times.size > 1
                                                   and peak_i == times.size - 1)}
-    edge = _edge(token, peak)
+    # The edge is a fraction of the magnitude the ROW declares, the same
+    # statistic the legend's top reads: taking it off a record maximum a drying
+    # node carries would mask the whole field the run produced.
+    edge = _edge(token, presets.declared_peak(values, row))
     if edge is not None and peak < edge:
         raise OutputEmpty(
             f"{token} never exceeded its floor {edge:.4g} anywhere (peak {peak:.4g}).")
@@ -668,9 +691,11 @@ def read_field(primitive: Primitive, solved: Solved) -> Read:
 
     name, units, values = solved.frames(primitive.variable, primitive.plane)
     times = np.asarray(solved.result["times"], dtype="float64")
-    measures = _envelope(primitive.variable, times, values)
+    measures = _envelope(primitive.variable, times, values,
+                         solved.style(primitive.variable))
     if primitive.t == "every":
-        floor = _floor(primitive.variable, values)
+        floor = _floor(primitive.variable, values,
+                       solved.style(primitive.variable))
         measures["travel_m"] = _travel_m(np.asarray(solved.result["x"]),
                                          np.asarray(solved.result["y"]),
                                          values, floor)
@@ -689,7 +714,8 @@ def read_field(primitive: Primitive, solved: Solved) -> Read:
               else frame[_within(primitive.over, solved, frame.size)])
     return Field(name=name, units=units, values=frame,
                  t=float(times[index]), plane=solved.plane_label(primitive.plane),
-                 floor=_floor(primitive.variable, values),
+                 floor=_floor(primitive.variable, values,
+                              solved.style(primitive.variable)),
                  measures={"max": float(inside.max()), "min": float(inside.min()),
                            "mean": float(inside.mean()),
                            "spread": float(inside.max() - inside.min()),
@@ -748,7 +774,8 @@ def read_series(primitive: Primitive, solved: Solved) -> Series:
     if primitive.at is None:
         return Series(name=name, units=units, times=times, values=values.max(axis=1),
                       at="the domain maximum",
-                      measures=_envelope(primitive.variable, times, values))
+                      measures=_envelope(primitive.variable, times, values,
+                                         solved.style(primitive.variable)))
     point = _point(primitive.at)
     node = solved.node_at(point)
     lon, lat = solved.lonlat
@@ -758,7 +785,8 @@ def read_series(primitive: Primitive, solved: Solved) -> Series:
                   at=f"at {point.name or 'the point'}",
                   lon=float(lon[node]), lat=float(lat[node]),
                   measures=_envelope(primitive.variable, times,
-                                     values[:, node:node + 1]))
+                                     values[:, node:node + 1],
+                                     solved.style(primitive.variable)))
 
 
 def _boundary_series(primitive: Primitive, solved: Solved) -> Series:
@@ -789,7 +817,8 @@ def _boundary_series(primitive: Primitive, solved: Solved) -> Series:
                           f"{nearest['number']}.")
     times_arr = np.asarray(times, dtype="float64")
     flows_arr = np.asarray(flows, dtype="float64")
-    measures = _envelope(primitive.variable, times_arr, flows_arr[:, None])
+    measures = _envelope(primitive.variable, times_arr, flows_arr[:, None],
+                         solved.style(primitive.variable))
     measures["integral"] = round(float(np.trapezoid(flows_arr, times_arr)), 3)
     row = solved.body.MODULE_OUTPUT[primitive.variable]
     name, unit = row.name, row.unit
@@ -807,7 +836,8 @@ def read_max_over_time(primitive: Primitive, solved: Solved) -> Field:
 
     name, units, values = solved.frames(primitive.variable, primitive.plane)
     times = np.asarray(solved.result["times"], dtype="float64")
-    measures = _envelope(primitive.variable, times, values)
+    measures = _envelope(primitive.variable, times, values,
+                         solved.style(primitive.variable))
     envelope = values.max(axis=0)
     # The extreme and the field: one pit can set the maximum while the field the
     # run produced sits orders of magnitude below it, so the 99th percentile of
@@ -815,7 +845,8 @@ def read_max_over_time(primitive: Primitive, solved: Solved) -> Field:
     measures["p99"] = float(np.percentile(envelope, 99))
     return Field(name=name, units=units, values=envelope,
                  plane=solved.plane_label(primitive.plane),
-                 floor=_floor(primitive.variable, values),
+                 floor=_floor(primitive.variable, values,
+                              solved.style(primitive.variable)),
                  measures=measures)
 
 

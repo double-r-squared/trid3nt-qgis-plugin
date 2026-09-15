@@ -319,7 +319,6 @@ telemac_river_temperature = register_workflow(
     accepts=ACCEPTS,
     answer=tuple(ANSWER),
     provenance=(("discharge_m3s", "discharge_note"),
-                ("initial_water_temp_c", "initial_water_temp_note"),
                 ("mesh_resolution_m", "mesh_resolution_note")),
     # The peak is a saturated maximum over a reach-scale field, so it is not a
     # resolution class. WHERE the warming is greatest along the line is a local

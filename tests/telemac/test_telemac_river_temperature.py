@@ -72,6 +72,35 @@ def test_a_fahrenheit_row_is_converted_rather_than_read_as_celsius(monkeypatch):
     assert out["water_temp_c"] == pytest.approx(20.0, abs=0.01)
 
 
+def test_the_site_the_reach_opens_at_reaches_the_run_journal(monkeypatch):
+    """The opening temperature is settled against a fetched record, so where it
+    came from belongs on the record that outlives the session rather than on an
+    answer row that can only say the value was derived."""
+    from trid3nt_server.workflows.runtime import journal
+
+    token = journal.bind_notes()
+    try:
+        _opening(monkeypatch, [_site(
+            {"site_id": "USGS-11477000", "site_name": "EEL R A SCOTIA CA",
+             "value": 16.4, "unit": "deg C", "result_date": "2026-08-28"})])
+        notes = journal.drain_notes(token)
+    except BaseException:
+        journal.drain_notes(token)
+        raise
+    assert len(notes) == 1
+    assert "USGS-11477000" in notes[0] and "2026-08-28" in notes[0]
+    assert "km from the reach" in notes[0]
+
+
+def test_the_answer_no_longer_promises_a_provenance_row_for_the_opening():
+    """A Step-derived value has no resolved param row, so a declared provenance
+    name for it reads "derived" and carries no note at all."""
+    declared = {name for name, _ in
+                template.telemac_river_temperature.workflow.answer_provenance}
+    assert "initial_water_temp_c" not in declared
+    assert "discharge_m3s" in declared, "the fetched carrier still rides the answer"
+
+
 def test_no_measured_water_temperature_refuses_rather_than_opening_at_a_guess(
         monkeypatch):
     with pytest.raises(TelemacError, match="not measured anywhere near it"):

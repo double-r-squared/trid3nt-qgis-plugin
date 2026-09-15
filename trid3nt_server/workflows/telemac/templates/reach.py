@@ -704,9 +704,14 @@ async def resolve_water_temperature(*, sample: Any, supplied: float | None,
     A stated value stands; otherwise the nearest site that reports one, with the
     sample DATE on the note, because a sample is a moment and not a climatology.
     No site REFUSES rather than opening at a guess."""
+    # WHERE the opening temperature came from is on the RUN JOURNAL, not on the
+    # answer: the value is settled here against a fetched record, and a reader
+    # weeks later has the site, its distance and the sample date in the one place
+    # that outlives the session.
     if supplied is not None:
-        return {"water_temp_c": float(supplied), "site": None,
-                "note": f"the reach opens at the stated {float(supplied):g} C."}
+        note = f"the reach opens at the stated {float(supplied):g} C."
+        journal_note(note)
+        return {"water_temp_c": float(supplied), "site": None, "note": note}
     from trid3nt_server.inputs.geometry import source_uri
 
     lon, lat = float(seed["lon"]), float(seed["lat"])
@@ -726,14 +731,15 @@ async def resolve_water_temperature(*, sample: Any, supplied: float | None,
     distance_km, row = sites[0]
     sampled = str(row.get("result_date") or "").strip() or "an undated sample"
     celsius = _celsius(float(row["value"]), str(row.get("unit") or ""))
+    note = (f"the reach opens at {celsius:.2f} C, the water temperature the site "
+            f"{row.get('site_id')} ({row.get('site_name') or 'unnamed'}), "
+            f"{distance_km:.0f} km from the reach, reported on {sampled} as "
+            f"{float(row['value']):g} {row.get('unit') or 'deg C'}. That is a "
+            "SAMPLE at a moment, not the week's mean; the run's own weather is "
+            "what moves the reach off it.")
+    journal_note(note)
     return {"water_temp_c": round(celsius, 2), "site": row.get("site_id"),
-            "note": (f"the reach opens at {celsius:.2f} C, the water temperature "
-                     f"the site {row.get('site_id')} "
-                     f"({row.get('site_name') or 'unnamed'}), {distance_km:.0f} km "
-                     f"from the reach, reported on {sampled} as "
-                     f"{float(row['value']):g} {row.get('unit') or 'deg C'}. That "
-                     "is a SAMPLE at a moment, not the week's mean; the run's own "
-                     "weather is what moves the reach off it.")}
+            "note": note}
 
 
 def WaterTemperature(*, sample: Any, supplied: Any, seed: Any) -> Step:  # noqa: N802

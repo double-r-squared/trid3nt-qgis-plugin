@@ -40,8 +40,13 @@ MODULE_OUTPUT: Mapping[str, Output] = MappingProxyType({
                 style={"kind": "mesh", "ramp": "ylgnbu", "units": "m", "floor": 0}),
     "S": Output("FREE SURFACE", "m", style=_LEVEL),
     "B": Output("BOTTOM", "m", style=_TERRAIN, varies=False),
+    # The Froude number divides the speed by the square root of the depth, so a
+    # node at the wet-dry edge divides by a vanishing depth and carries a value
+    # in the thousands while the water it borders is subcritical. The legend's
+    # top is the 99.9th percentile of what was read: the ramp reads the river.
     "F": Output("FROUDE NUMBER", "",
-                style={"kind": "mesh", "ramp": "magma", "floor": 0}),
+                style={"kind": "mesh", "ramp": "magma", "floor": 0,
+                       "range": "p99.9"}),
     "Q": Output("SCALAR FLOWRATE", "m2/s",
                 style={"kind": "mesh", "ramp": "viridis", "units": "m2/s",
                        "floor": 0}),
