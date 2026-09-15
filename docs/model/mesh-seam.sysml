@@ -638,6 +638,14 @@ package MeshSeam {
         would be a cross-dataset bed nobody wrote down. A domain the primary does
         not cover refuses in the fetcher's own words, and what ACTUALLY painted
         the bed rides back rather than what was asked for.
+
+        The bed is ONE source here. A survey over a wider surface is a spatial
+        MERGE of two available layers, which is a derive - useful on its own,
+        outside any slot - and it is composed in the DATA body before this op
+        runs: the primary paints every cell it measured, the fallback paints
+        what is left, and a sidecar records which won at each cell. A fetcher's
+        ladder is a different thing entirely, and one is never spelled as the
+        other. A node the one surface does not cover refuses by count.
         */
     }
 
@@ -788,6 +796,12 @@ package MeshSeam {
         "tests/mesh/test_mesh_topology_and_bed.py::test_the_interpolation_is_a_visible_default_off_a_declared_roster";
     verify requirement CorrectDataClassAtSetBed by
         "tests/mesh/test_mesh_topology_and_bed.py::test_the_journal_names_the_rung_that_ACTUALLY_painted_the_bed";
+    verify requirement CorrectDataClassAtSetBed by
+        "tests/mesh/test_bed_sources_and_runs.py::test_the_bed_is_one_source_and_two_are_merged_before_the_op";
+    verify requirement CorrectDataClassAtSetBed by
+        "tests/mesh/test_bed_sources_and_runs.py::test_a_domain_no_source_covers_refuses_by_name";
+    verify requirement CorrectDataClassAtSetBed by
+        "tests/mesh/test_bed_sources_and_runs.py::test_a_stated_depth_is_a_flat_bed_below_the_free_surface";
 
     satisfy requirement BoundaryRolesAreContiguousRuns by sharedPrimitives;
     satisfy requirement BoundaryRolesAreContiguousRuns by om2dAdapter;
@@ -797,6 +811,10 @@ package MeshSeam {
         "tests/mesh/test_mesh_topology_and_bed.py::test_a_run_that_wraps_the_contours_origin_stays_one_run";
     verify requirement BoundaryRolesAreContiguousRuns by
         "tests/mesh/test_mesh_topology_and_bed.py::test_one_role_declared_across_two_faces_lands_as_two_sections";
+    verify requirement BoundaryRolesAreContiguousRuns by
+        "tests/mesh/test_bed_sources_and_runs.py::test_boundary_runs_prescribe_the_roles_their_types_name";
+    verify requirement BoundaryRolesAreContiguousRuns by
+        "tests/mesh/test_bed_sources_and_runs.py::test_runs_and_named_faces_are_the_same_statement";
     verify requirement BoundaryRolesAreContiguousRuns by
         "tests/mesh/test_mesh_topology_and_bed.py::test_a_node_two_declared_faces_both_claim_refuses";
     verify requirement BoundaryRolesAreContiguousRuns by

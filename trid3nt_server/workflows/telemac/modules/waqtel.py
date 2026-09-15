@@ -27,20 +27,20 @@ _DEGRADATION = 17
 
 #: One style per appended variable, stated where the rows that carry it are. A
 #: variable two processes both write draws the same way under either.
+#:
+#: A BACKGROUND variable - one the water already carries everywhere - is ranged
+#: over what was measured on the wet nodes and pins no bottom: oxygen sitting
+#: between 8.0 and 8.7 mg/L on a ramp pinned to zero spends half a percent of
+#: its colours on the whole answer.
 _TEMPERATURE = {"kind": "mesh", "ramp": "rdylbu_r", "units": "C"}
-#: The oxygen is a depth-averaged concentration the engine advects as depth
-#: TIMES concentration, so a node drying out divides by a vanishing depth and
-#: leaves the balance by two orders of magnitude for the step it dries on. The
-#: legend's top is the 99.9th percentile of what was read, not that step.
-_O2_STYLE = {"kind": "mesh", "ramp": "rdylbu", "units": "mg/L", "floor": 0,
-             "range": "p99.9"}
-_ORGANIC = {"kind": "mesh", "ramp": "oranges", "units": "mg/L", "floor": 0}
-_NH4 = {"kind": "mesh", "ramp": "magma", "units": "mg/L", "floor": 0}
-_ALGAE = {"kind": "mesh", "ramp": "greens", "units": "ug/L", "floor": 0}
-_PO4 = {"kind": "mesh", "ramp": "ylorrd", "units": "mg/L", "floor": 0}
-_POR = {"kind": "mesh", "ramp": "plasma", "units": "mg/L", "floor": 0}
-_NO3 = {"kind": "mesh", "ramp": "gnbu", "units": "mg/L", "floor": 0}
-_NOR = {"kind": "mesh", "ramp": "cividis", "units": "mg/L", "floor": 0}
+_O2_STYLE = {"kind": "mesh", "ramp": "rdylbu", "units": "mg/L"}
+_ORGANIC = {"kind": "mesh", "ramp": "oranges", "units": "mg/L"}
+_NH4 = {"kind": "mesh", "ramp": "magma", "units": "mg/L"}
+_ALGAE = {"kind": "mesh", "ramp": "greens", "units": "ug/L"}
+_PO4 = {"kind": "mesh", "ramp": "ylorrd", "units": "mg/L"}
+_POR = {"kind": "mesh", "ramp": "plasma", "units": "mg/L"}
+_NO3 = {"kind": "mesh", "ramp": "gnbu", "units": "mg/L"}
+_NOR = {"kind": "mesh", "ramp": "cividis", "units": "mg/L"}
 _SUSPENDED = {"kind": "mesh", "ramp": "oranges", "units": "mg/L", "floor": 0}
 _DEPOSITED = {"kind": "mesh", "ramp": "ylorrd", "units": "mg/L", "floor": 0}
 _DISSOLVED = {"kind": "mesh", "ramp": "reds", "units": "mg/L", "floor": 0}
@@ -54,29 +54,35 @@ _ON_DEPOSITED = {"kind": "mesh", "ramp": "plasma", "units": "mg/L", "floor": 0}
 #: carrier already has, so it appends none. The third algal tracer is one
 #: quantity under two spellings - EUTRO writes ``POR NON ASSIMIL``, BIOMASS the
 #: shorter ``POR NON ASSIM`` - so the two row sets cannot share it.
+#: WHAT HAS AN EDGE. A process variable of the water column - oxygen, a nutrient,
+#: the temperature - is everywhere the water is, so masking it below a fraction
+#: of its own peak erases the field rather than shaping it. A micropollutant is
+#: PUT INTO the water, so the ground it has reached has a boundary to draw.
 _APPENDED: Mapping[int, tuple[Output, ...]] = MappingProxyType({
-    _O2: (Output("DISSOLVED O2", "mgO2/L", style=_O2_STYLE),
-          Output("ORGANIC LOAD", "mgO2/L", style=_ORGANIC),
-          Output("NH4 LOAD", "mg/L", style=_NH4)),
-    _BIOMASS: (Output("PHYTO BIOMASS", "ug/L", style=_ALGAE),
-               Output("DISSOLVED PO4", "mg/L", style=_PO4),
-               Output("POR NON ASSIM", "mg/L", style=_POR),
-               Output("DISSOLVED NO3", "mg/L", style=_NO3),
-               Output("NOR NON ASSIM", "mg/L", style=_NOR)),
-    _EUTRO: (Output("PHYTO BIOMASS", "ug/L", style=_ALGAE),
-             Output("DISSOLVED PO4", "mg/L", style=_PO4),
-             Output("POR NON ASSIMIL", "mg/L", style=_POR),
-             Output("DISSOLVED NO3", "mg/L", style=_NO3),
-             Output("NOR NON ASSIM", "mg/L", style=_NOR),
-             Output("NH4 LOAD", "mg/L", style=_NH4),
-             Output("ORGANIC LOAD", "mgO2/L", style=_ORGANIC),
-             Output("DISSOLVED O2", "mgO2/L", style=_O2_STYLE)),
-    _MICROPOL: (Output("SUSPENDED LOAD", "mg/L", style=_SUSPENDED),
-                Output("BED SEDIMENTS", "mg/L", style=_DEPOSITED),
-                Output("MICRO POLLUTANT", "mg/L", style=_DISSOLVED),
-                Output("ABS. SUSP. LOAD.", "mg/L", style=_ON_SUSPENDED),
-                Output("ABSORB. BED SED.", "mg/L", style=_ON_DEPOSITED)),
-    _THERMAL: (Output("TEMPERATURE", "oC", style=_TEMPERATURE),),
+    _O2: (Output("DISSOLVED O2", "mgO2/L", style=_O2_STYLE, has_edge=False),
+          Output("ORGANIC LOAD", "mgO2/L", style=_ORGANIC, has_edge=False),
+          Output("NH4 LOAD", "mg/L", style=_NH4, has_edge=False)),
+    _BIOMASS: (Output("PHYTO BIOMASS", "ug/L", style=_ALGAE, has_edge=False),
+               Output("DISSOLVED PO4", "mg/L", style=_PO4, has_edge=False),
+               Output("POR NON ASSIM", "mg/L", style=_POR, has_edge=False),
+               Output("DISSOLVED NO3", "mg/L", style=_NO3, has_edge=False),
+               Output("NOR NON ASSIM", "mg/L", style=_NOR, has_edge=False)),
+    _EUTRO: (Output("PHYTO BIOMASS", "ug/L", style=_ALGAE, has_edge=False),
+             Output("DISSOLVED PO4", "mg/L", style=_PO4, has_edge=False),
+             Output("POR NON ASSIMIL", "mg/L", style=_POR, has_edge=False),
+             Output("DISSOLVED NO3", "mg/L", style=_NO3, has_edge=False),
+             Output("NOR NON ASSIM", "mg/L", style=_NOR, has_edge=False),
+             Output("NH4 LOAD", "mg/L", style=_NH4, has_edge=False),
+             Output("ORGANIC LOAD", "mgO2/L", style=_ORGANIC, has_edge=False),
+             Output("DISSOLVED O2", "mgO2/L", style=_O2_STYLE, has_edge=False)),
+    _MICROPOL: (Output("SUSPENDED LOAD", "mg/L", style=_SUSPENDED, has_edge=True),
+                Output("BED SEDIMENTS", "mg/L", style=_DEPOSITED, has_edge=True),
+                Output("MICRO POLLUTANT", "mg/L", style=_DISSOLVED, has_edge=True),
+                Output("ABS. SUSP. LOAD.", "mg/L", style=_ON_SUSPENDED,
+                       has_edge=True),
+                Output("ABSORB. BED SED.", "mg/L", style=_ON_DEPOSITED,
+                       has_edge=True)),
+    _THERMAL: (Output("TEMPERATURE", "oC", style=_TEMPERATURE, has_edge=False),),
 })
 
 #: The ELEVEN keywords EUTRO reads and BIOMASS does not - every one a term in the

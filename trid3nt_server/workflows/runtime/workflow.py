@@ -18,6 +18,7 @@ from . import journal, snapshot
 from .accepts import Accepts
 from .data import DataDecl, data_rows
 from .errors import DeclarativeError, PlanValidationError, WorkflowParkedError
+from .levers import with_levers
 from .params import Param, ResolvedParams, doors, param_rows
 from .plan import Plan, Ref, Step
 from .resolution import SensitivityDecl, answered, sensitivity_notes
@@ -72,12 +73,14 @@ class Workflow:
                  sensitivity: Sequence[tuple[str, str]] = (),
                  validity: Sequence[Validity] = (),
                  coerce: Sequence[Callable[[dict], Mapping[str, Any]]] = (),
-                 accepts: Accepts | None = None) -> None:
+                 accepts: Accepts | None = None,
+                 levers: Sequence[str] = ()) -> None:
         self.metadata = metadata
         self.name = metadata.name
         #: The declared PARAMS rows, in class-body order - the template hands over
-        #: the body itself and the row names are the attribute names on it.
-        self.params = param_rows(params)
+        #: the body itself and the row names are the attribute names on it - plus
+        #: each RUNTIME LEVER this declaration takes rather than restating.
+        self.params = with_levers(param_rows(params), levers)
         #: The declared DATA rows, the same way.
         self.data = data_rows(data)
         #: What this template accepts when something is SUPPLIED to it, role by
@@ -240,7 +243,7 @@ class Workflow:
         The wire argument carries the slot's own name, so "which layer is this" is
         answerable from the declaration alone."""
         return {decl.name: wire[decl.name] for decl in self.data
-                if decl.producer is None and wire.get(decl.name) is not None}
+                if decl.fills_from_user and wire.get(decl.name) is not None}
 
     def _error(self, code: str, exc: BaseException) -> dict[str, Any]:
         """The failure, plus whatever auxiliary products the run also lost on the way."""
@@ -406,6 +409,7 @@ def register_workflow(
     validity: Sequence[Validity] = (),
     coerce: Sequence[Callable[[dict], Mapping[str, Any]]] = (),
     accepts: Accepts | None = None,
+    levers: Sequence[str] | None = None,
     doc: Mapping[str, Any] | None = None,
     extra_args: Sequence[tuple[str, Any]] = (),
     **register_kwargs: Any,
@@ -419,10 +423,16 @@ def register_workflow(
     from trid3nt_server.tools import register_tool
 
     params = param_rows(params)
+    # WHICH runtime levers this declaration takes without restating them. The
+    # PLAN is what reads them - the stages the workflow class owns - so a plan
+    # that states its own set answers for one the caller did not.
+    if levers is None:
+        levers = tuple(getattr(plan, "levers", ()) or ())
     workflow = facade(metadata=metadata, params=params, plan=plan, data=data,
                       answer=answer, provenance=provenance,
                       sensitivity=sensitivity, validity=validity, coerce=coerce,
-                      accepts=accepts)
+                      accepts=accepts, levers=levers)
+    params = workflow.params
 
     async def _run(**wire: Any) -> Any:
         if parked:
@@ -469,9 +479,9 @@ def register_workflow(
 def _context_doc(data: Sequence[DataDecl],
                  controls: Sequence[tuple[str, str]]) -> dict[str, Any]:
     """The docstring's ``context`` rows, and the ``controls`` with the slots taken out.
-    A producer-less slot is documented ONCE: its shape from the declaration, the
-    template's own prose appended, and its control row dropped."""
-    slots = tuple(decl for decl in data if decl.producer is None)
+    A slot a CALLER can fill is documented ONCE: its shape from the declaration,
+    the template's own prose appended, and its control row dropped."""
+    slots = tuple(decl for decl in data if decl.fills_from_user)
     names = {decl.name for decl in slots}
     written = dict(controls)
     return {
@@ -512,7 +522,7 @@ def _wire_signature(params: Sequence[Param], extra: Sequence[tuple[str, Any]],
     # declared SHAPE travels on the annotation, which is the schema's own record
     # of what the argument accepts.
     entries += [(decl.name, decl.wire_annotation, None) for decl in data
-                if decl.producer is None]
+                if decl.fills_from_user]
     entries += [(name, ann, None) for name, ann in extra]
     entries += list(_CONTROLS)
     seen: set[str] = set()

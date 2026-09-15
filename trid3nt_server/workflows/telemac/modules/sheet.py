@@ -109,8 +109,13 @@ class Sheet:
         rows = []
         for declared in dict(self.resolved()).get("NAMES OF TRACERS") or ():
             padded = str(declared).ljust(32)
+            # A TRACER is an injected quantity unless the module that put it
+            # there says otherwise, so a carrier's own row states the edge for
+            # the ones it declares and an appending module states its own below.
             rows.append(Output(name=padded[:16].strip(), unit=padded[16:].strip(),
-                               style=row.style if row is not None else None))
+                               style=row.style if row is not None else None,
+                               has_edge=True if row is None or row.has_edge is None
+                               else row.has_edge))
         for body in self.coupled:
             appends = wrapper_for(body["module"]).APPENDS
             for appended in (list(appends(body)) if appends is not None else []):
@@ -125,8 +130,17 @@ class Sheet:
                              if row.name == appended.name), None)
                 if held is None:
                     rows.append(appended)
-                elif appended.style is not None:
-                    rows[held] = replace(rows[held], style=appended.style)
+                else:
+                    # WHAT the variable is, is the appending module's statement:
+                    # it attached the process, so its style and its edge are the
+                    # ones that describe the quantity the carrier now carries.
+                    rows[held] = replace(
+                        rows[held],
+                        style=(appended.style if appended.style is not None
+                               else rows[held].style),
+                        has_edge=(appended.has_edge
+                                  if appended.has_edge is not None
+                                  else rows[held].has_edge))
         return tuple(rows)
 
     def printouts(self) -> Mapping[str, str]:

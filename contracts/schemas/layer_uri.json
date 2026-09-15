@@ -466,6 +466,18 @@
       ],
       "default": null,
       "title": "Valid To"
+    },
+    "vertical_datum": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Vertical Datum"
     }
   },
   "required": [

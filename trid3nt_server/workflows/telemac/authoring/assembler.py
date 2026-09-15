@@ -41,8 +41,8 @@ logger = logging.getLogger("trid3nt_server.workflows.telemac.authoring.assembler
 
 __all__ = ["BASIN_BOUNDARY", "BASIN_GEOMETRY", "HARBOUR_GEOMETRY",
            "case_section", "mesh_nodes", "new_rundir", "settle_basin",
-           "settle_catchment", "settle_dredge", "settle_harbour",
-           "settle_reach", "settle_release", "stage_run",
+           "settle_catchment", "settle_domain", "settle_dredge",
+           "settle_harbour", "settle_reach", "settle_release", "stage_run",
            "stage_telemac_manifest", "to_utm"]
 
 #: The names the run directory holds an open-water domain's staged geometry
@@ -974,6 +974,88 @@ async def settle_reach(
             # measures the file it names.
             "result_slf": "r2d_river.slf",
             "bed_source": bed_source},
+    }
+
+
+def _domain_unmeasured(message: str) -> Exception:
+    return TelemacError(message, error_code="TELEMAC_DOMAIN_UNMEASURED")
+
+
+async def settle_domain(
+    *,
+    mesh: dict[str, Any],
+    sim_duration_s: float,
+    name: str = "",
+    geometry: str = "geometry.slf",
+    boundary: str = "boundary.cli",
+    result: str = "results.slf",
+    mesh_resolution_m: float | None = None,
+    output_interval_min: float | None = None,
+    continue_from: str | None = None,
+) -> dict[str, Any]:
+    """Everything ANY domain measures before a keyword is set: the mesh it was
+    handed, the clock the run turns on, and the files the box is given.
+
+    Engine-neutral about the water: nothing here knows a reach from a lake. What
+    a question derives ON TOP of this - a normal depth, an outlet rating curve -
+    is that question's own settle step, reading this one's numbers."""
+    facts = _mesh_facts(mesh, missing=_domain_unmeasured)
+    measured = mesh.get("min_edge_m")
+    mesh_size_m = round(max(float(measured if measured is not None
+                                  else mesh_resolution_m or 0.0),
+                            MESH_H_FLOOR_M), 3)
+    mesh_resolution_label = (
+        f"{mesh_size_m:.3g} m measured minimum edge over "
+        f"{facts['mesh_element_count']} elements" if measured is not None
+        else f"{mesh_size_m:.3g} m asked edge (mesh unmeasured)")
+    time_step_s = suggest_time_step_s(mesh_size_m, mesh=mesh.get("artifact"))
+    node_xy, _bed = await asyncio.to_thread(mesh_nodes, mesh)
+    initial_state = await asyncio.to_thread(_initial_state, continue_from,
+                                            len(node_xy))
+    topology = await asyncio.to_thread(
+        read_topology, _mesh_field(mesh, "topology_uri", missing=_mesh_missing))
+    start_time_s = float(initial_state["start_s"] or 0.0)
+    duration_s = float(sim_duration_s)
+    slug = _slug(name or facts["mesh_name"])
+    return {
+        "name": slug,
+        "title": f"{slug} DOMAIN",
+        "location_name": name or facts["mesh_name"],
+        "utm_epsg": facts["utm_epsg"],
+        "mesh_id": mesh.get("mesh_id"),
+        "mesh_size_m": mesh_size_m,
+        "mesh_resolution_label": mesh_resolution_label,
+        "mesh_resolution_asked_m": mesh_resolution_m,
+        "time_step_s": time_step_s,
+        "graphic_period": _graphic_period(output_interval_min, time_step_s),
+        "duration_s": duration_s,
+        "start_time_s": start_time_s,
+        "until_s": start_time_s + duration_s,
+        "initial_state": initial_state["note"],
+        # WHICH dataset painted the mesh's nodes, and where each one stopped: a
+        # two-source bed says how much of the domain the survey covered.
+        "bed_source": facts["bed_source"],
+        "liquid_boundary_order": list(topology["liquid_boundary_order"]),
+        "liquid_boundary_prescribes": list(topology["liquid_boundary_prescribes"]),
+        "continue_from": _PREVIOUS_DEST if continue_from else None,
+        "mesh_inputs": [
+            {"gs_uri": _mesh_field(mesh, "slf_uri", missing=_mesh_missing),
+             "dest": geometry},
+            {"gs_uri": _mesh_field(mesh, "cli_uri", missing=_mesh_missing),
+             "dest": boundary},
+            *([{"gs_uri": str(continue_from), "dest": _PREVIOUS_DEST}]
+              if continue_from else [])],
+        "server_facts": {
+            "utm_epsg": facts["utm_epsg"],
+            "bbox": [round(float(v), 6) for v in facts["lonlat_bounds"]],
+            "npoin": facts["mesh_node_count"],
+            "nelem": facts["mesh_element_count"],
+            "mesh_size_m": mesh_size_m,
+            "name": slug,
+            "duration_s": duration_s,
+            "time_step_s": time_step_s,
+            "result_slf": result,
+            "bed_source": facts["bed_source"]},
     }
 
 

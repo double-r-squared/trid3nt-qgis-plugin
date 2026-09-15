@@ -839,10 +839,11 @@ def region_choice_summary(
 
 #
 # The agent asks the user to pick a geometry: a point, a dragged bbox, or a
-# drawn shape whose purpose is either an area or a line. This plugin answers
-# the first two through the canvas point-emit and extent tools, and the third
-# through the vertex-capture tool -- a polygon for an area, a polyline for a
-# line. ``cancelled`` is the decline path and closes the gate.
+# drawn shape whose purpose is an area (an aoi, a solved domain) or a line (a
+# neutral section, a boundary run). This plugin answers the first two through
+# the canvas point-emit and extent tools, and the third through the
+# vertex-capture tool -- a polygon for an area, a polyline for a line.
+# ``cancelled`` is the decline path and closes the gate.
 
 
 @dataclass
@@ -861,7 +862,8 @@ class SpatialInputRequest:
         """``"polygon"`` / ``"polyline"`` for a drawable vector_draw, else ``""``."""
         if self.mode != "vector_draw":
             return ""
-        return {"aoi": "polygon", "line": "polyline"}.get(self.purpose, "")
+        return {"aoi": "polygon", "domain": "polygon",
+                "line": "polyline", "boundary run": "polyline"}.get(self.purpose, "")
 
 
 def parse_spatial_input_request(payload: dict) -> Optional[SpatialInputRequest]:
@@ -884,7 +886,8 @@ def parse_spatial_input_request(payload: dict) -> Optional[SpatialInputRequest]:
         mode=mode,
         title=title if isinstance(title, str) else "",
         description=description if isinstance(description, str) else "",
-        purpose=purpose if purpose in ("aoi", "line") else "aoi",
+        purpose=purpose if purpose in (
+            "aoi", "line", "domain", "boundary run") else "aoi",
         raw=payload,
     )
 

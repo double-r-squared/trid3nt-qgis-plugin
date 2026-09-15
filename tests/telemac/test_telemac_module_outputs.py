@@ -111,7 +111,8 @@ def _run(telemac_result, monkeypatch, dye=None) -> dict[str, Any]:
             "tracer_names": ["DYE             MG/L"],
             "started_at": "2026-01-01T00:00:00+00:00",
             "module_output": [{"token": token, "module": module,
-                               "style": row.style, "varies": row.varies}
+                               "style": row.style, "varies": row.varies,
+                               "has_edge": bool(row.has_edge)}
                               for token, module, row in sheet.published()]}
 
 
@@ -178,22 +179,28 @@ def test_a_temporal_layer_is_ranged_over_the_record_not_its_last_frame(
     assert dye.value_range[0] == pytest.approx(0.0)
 
 
-def test_the_froude_row_caps_its_legend_off_the_wet_dry_edge():
+def test_the_froude_row_is_ranged_over_the_wet_nodes_and_not_capped():
     """|u|/sqrt(gh) at a node with no depth is a number in the thousands and the
-    water beside it is subcritical; ranged on that node the ramp is one colour."""
+    water beside it is subcritical. Those nodes are outside the WET MASK the
+    legend is taken over, so the ramp reads the river with no percentile cap
+    clipping the real peak off the top."""
     import numpy as np
 
     from trid3nt_server.render import presets
+    from trid3nt_server.workflows.telemac.modules.outputs import _drawn
     from trid3nt_server.workflows.telemac.modules.telemac2d import MODULE_OUTPUT
 
     style = MODULE_OUTPUT["F"].style
-    assert style["range"] == "p99.9"
+    assert "range" not in style, "the wet mask ranges this row, not a cap"
     # A reach record's own shape: a subcritical field with a handful of drying
     # nodes carrying the edge value the solver leaves there.
     record = np.concatenate([np.linspace(0.0, 0.46, 9995), np.full(5, 4179.0)])
-    lo, hi = presets.measured_range(record, style)
+    wet = np.concatenate([np.full(9995, True), np.full(5, False)])
+    lo, hi = presets.measured_range(_drawn(record, wet), style)
     assert lo == 0.0, "the declared floor still pins the bottom"
     assert 0.4 < hi < 1.0, hi
+    # and the real peak is NOT clipped: the top is what the wet nodes reached.
+    assert hi >= 0.46
 
 
 def test_a_row_the_result_does_not_carry_is_skipped_and_a_placed_read_refuses(
@@ -293,7 +300,8 @@ def test_the_published_order_is_the_table_order_across_host_and_coupled(
            "module": "telemac2d", "name": "reach",
            "started_at": "2026-01-01T00:00:00+00:00",
            "module_output": [{"token": token, "module": module,
-                              "style": row.style, "varies": row.varies}
+                              "style": row.style, "varies": row.varies,
+                              "has_edge": bool(row.has_edge)}
                              for token, module, row in sheet.published()]}
     record = asyncio.run(door.publish_outputs(run=run, outputs=[], captions={},
                                               answer={}, params={}))

@@ -101,46 +101,44 @@ def test_the_rows_of_one_process_are_told_apart_by_their_ramps():
     assert len(set(ramps)) == len(ramps)
 
 
-def test_the_oxygen_row_caps_its_legend_off_the_drying_node():
+def test_the_oxygen_row_is_ranged_over_the_wet_nodes_and_pins_no_bottom():
     """The oxygen is advected as depth times concentration, so the step a node
-    dries on carries hundreds of mg/L and the water it borders carries 8.7."""
+    dries on carries hundreds of mg/L; those nodes are outside the wet mask the
+    legend is taken over. What is left is a field between 8.0 and 8.7 mg/L, and
+    a ramp pinned to zero would spend half a percent of its colours on it."""
     import numpy as np
 
     from trid3nt_server.render import presets
+    from trid3nt_server.workflows.telemac.modules.outputs import _drawn
 
     style = {row.name: row.style for row in APPENDED[EUTRO]}["DISSOLVED O2"]
-    assert style["range"] == "p99.9"
+    assert "range" not in style and "floor" not in style
     # A reach record's own shape: a near-constant saturated field and the one
     # node-step the drying front threw out of the balance.
     record = np.concatenate([np.full(9999, 8.667), [664.697]])
-    lo, hi = presets.measured_range(record, style)
-    assert lo == 0.0, "the declared floor still pins the bottom"
+    wet = np.concatenate([np.full(9999, True), [False]])
+    lo, hi = presets.measured_range(_drawn(record, wet), style)
     assert hi == pytest.approx(8.667, abs=0.01), hi
+    assert lo > 0.0, "a background variable is ranged over what it measured"
 
 
-def test_the_oxygen_mask_sits_under_the_field_the_legend_ranges():
-    """A tracer's visible edge is a fraction of the magnitude its row declares.
+def test_a_background_variable_declares_no_visible_edge():
+    """A quantity the water already carries everywhere has no boundary to draw:
+    masking it below a fraction of its own peak erases the field. A RELEASED
+    quantity is the opposite case, and the micropollutant rows say so."""
+    from trid3nt_server.workflows.telemac.modules.outputs import _floor
 
-    Read off the record maximum instead, the oxygen's edge lands at 33 mg/L over
-    an 8.7 mg/L field and every frame is masked to nothing."""
+    background = {row.name: row for row in APPENDED[EUTRO]}
+    assert background["DISSOLVED O2"].has_edge is False
+    assert all(row.has_edge is False for row in APPENDED[EUTRO])
+    assert all(row.has_edge is True for row in APPENDED[waqtel._MICROPOL])
     import numpy as np
 
-    from trid3nt_server.render import presets
-    from trid3nt_server.workflows.telemac.modules import outputs
-
-    style = {row.name: row.style for row in APPENDED[EUTRO]}["DISSOLVED O2"]
-    # A reach record's own shape: dry nodes at zero, the saturated water, and
-    # the one node-step the drying front threw out of the balance.
     record = np.concatenate([np.zeros(200), np.full(9799, 8.667), [664.697]])
-    floor = outputs._floor("T8", record, style)
-    assert floor == pytest.approx(0.05 * 8.667, abs=0.01), floor
-    assert floor < 8.667, "the saturated field is drawn, not masked"
-    assert floor <= presets.measured_range(record, style)[1]
-    # The same record on a row that declares no cap is what the ruling names:
+    assert _floor(False, record, background["DISSOLVED O2"].style) is None
+    # the same record on a row that DOES declare an edge is the ruled contrast:
     # an edge above the whole field, and every frame masked to nothing.
-    uncapped = outputs._floor("T8", record, {"floor": 0})
-    assert uncapped == pytest.approx(33.23, abs=0.01)
-    assert uncapped > 8.667
+    assert _floor(True, record, {"floor": 0}) == pytest.approx(33.23, abs=0.01)
 
 
 def test_the_three_oxygen_rows_draw_as_the_oxygen_process_already_draws_them():

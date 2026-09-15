@@ -612,7 +612,11 @@ class SpatialInputRequestPayload(GraceModel):
     #   gates on at least one polygon, returned tagged as an aoi.
     # - ``"line"`` - a NEUTRAL elevation or section line, returned tagged as a
     #   line. It carries no barrier semantics.
-    purpose: Literal["aoi", "line"] = "aoi"
+    # - ``"domain"`` - the closed outline a run is solved over: the area tools,
+    #   returned tagged as an aoi.
+    # - ``"boundary run"`` - a stretch of that outline carrying a boundary
+    #   condition: the line tools, returned tagged as a line.
+    purpose: Literal["aoi", "line", "domain", "boundary run"] = "aoi"
     suggested_view: SuggestedView | None = None
     reference_layers: list[ReferenceLayer] = Field(default_factory=list)
     default_timeout_seconds: int = 300

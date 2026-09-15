@@ -1,0 +1,130 @@
+"""``fetch_ehydro_surveys``: the survey index, and what each survey states about itself.
+
+The index picks the newest survey or the window, and the package's own points carry
+the datum and the unit the depths are in. Covered with that, the refusals: an
+unparseable window, a window wider than the download cap, an extent with no survey,
+and a survey that states no datum or a unit nothing here can convert."""
+
+from __future__ import annotations
+
+import datetime as _dt
+
+import pytest
+
+from trid3nt_server.tools.fetchers._router.errors import RouterEmptyError, RouterInputError
+from trid3nt_server.tools.fetchers._router.spec import compose_specs_from_tree
+from trid3nt_server.tools.fetchers.hydrology.fetch_ehydro_surveys import hooks as eh
+
+
+@pytest.fixture(scope="module")
+def spec():
+    return compose_specs_from_tree()["fetch_ehydro_surveys"]
+
+
+def _epoch_ms(iso: str) -> float:
+    return _dt.datetime.fromisoformat(iso).replace(
+        tzinfo=_dt.timezone.utc).timestamp() * 1000.0
+
+
+def _feature(date: str, survey_id: str = "X", location: str = "https://example/x.ZIP"):
+    return {"type": "Feature", "geometry": {"type": "Polygon", "coordinates": []},
+            "properties": {"surveyjobidpk": survey_id, "surveydateend": _epoch_ms(date),
+                           "sourcedatalocation": location}}
+
+
+def _points(datum="CRD", uom="usSurveyFoot", depth=10.0):
+    import geopandas as gpd
+    from shapely.geometry import Point
+
+    return gpd.GeoDataFrame(
+        {eh._DATUM_FIELD: [datum, datum], eh._UOM_FIELD: [uom, uom],
+         eh._DEPTH_FIELD: [depth, depth + 1.0]},
+        geometry=[Point(-122.67, 45.52), Point(-122.68, 45.53)], crs="EPSG:4326")
+
+
+def test_the_source_states_no_datum_of_its_own_because_each_survey_states_one(spec):
+    # A consumer asking this source for ONE datum must be refused by name rather
+    # than handed the first survey's - the rows carry the truth.
+    assert spec.vertical_datum is None
+    assert "vertical_datum" in (spec.ingest or {})["properties"]
+
+
+def test_an_unparseable_window_refuses_before_the_network(spec):
+    with pytest.raises(RouterInputError) as excinfo:
+        eh.validate(spec, {"bbox": [-122.7, 45.5, -122.6, 45.6], "since": "last week"})
+    assert excinfo.value.error_code == "EHYDRO_INPUT_INVALID"
+
+
+def test_without_a_window_the_newest_survey_is_the_one(spec):
+    picked = eh._selected(spec, [_feature("2024-01-01", "old"),
+                                 _feature("2026-09-09", "new")], None)
+    assert [f["properties"]["surveyjobidpk"] for f in picked] == ["new"]
+
+
+def test_a_window_returns_every_survey_that_ends_in_it_newest_first(spec):
+    picked = eh._selected(spec, [_feature("2024-01-01", "old"),
+                                 _feature("2026-01-01", "mid"),
+                                 _feature("2026-09-09", "new")],
+                          _dt.date(2025, 1, 1))
+    assert [f["properties"]["surveyjobidpk"] for f in picked] == ["new", "mid"]
+
+
+def test_a_window_past_the_download_cap_refuses_rather_than_truncating(spec):
+    many = [_feature(f"2026-0{n}-01", f"s{n}") for n in range(1, 9)]
+    with pytest.raises(RouterInputError) as excinfo:
+        eh._selected(spec, many, _dt.date(2025, 1, 1))
+    assert str(eh._MAX_SURVEYS) in str(excinfo.value)
+
+
+def test_an_extent_with_no_survey_refuses_by_name(spec):
+    with pytest.raises(RouterEmptyError) as excinfo:
+        eh._selected(spec, [], None)
+    assert excinfo.value.error_code == "EHYDRO_NO_SURVEY"
+
+
+def test_a_window_newer_than_every_survey_names_the_newest_there_is(spec):
+    with pytest.raises(RouterEmptyError) as excinfo:
+        eh._selected(spec, [_feature("2024-01-01")], _dt.date(2026, 1, 1))
+    assert "2024-01-01" in str(excinfo.value)
+
+
+def test_the_stated_unit_is_what_the_depths_are_converted_from(spec):
+    datum, uom, scale = eh._stated(spec, _points(), "X")
+    assert (datum, uom) == ("CRD", "usSurveyFoot")
+    assert scale == pytest.approx(0.3048006, abs=1e-6)
+    assert eh._stated(spec, _points(uom="meter"), "X")[2] == 1.0
+
+
+def test_a_survey_that_states_no_datum_refuses_by_name(spec):
+    with pytest.raises(RouterInputError) as excinfo:
+        eh._stated(spec, _points(datum=None), "WR_03")
+    assert "WR_03" in str(excinfo.value)
+
+
+def test_a_unit_nothing_here_converts_refuses_by_name(spec):
+    with pytest.raises(RouterInputError) as excinfo:
+        eh._stated(spec, _points(uom="fathom"), "WR_03")
+    assert "fathom" in str(excinfo.value)
+
+
+def test_two_datums_over_one_survey_are_refused_rather_than_chosen_between(spec):
+    points = _points()
+    points.loc[1, eh._DATUM_FIELD] = "MLLW"
+    with pytest.raises(RouterInputError):
+        eh._stated(spec, points, "WR_03")
+
+
+def test_the_survey_surfaces_from_its_own_corpus_phrasings():
+    from pathlib import Path
+
+    import yaml
+
+    from trid3nt_server.tools.search.search_tools import search_tools as dd
+    from trid3nt_server.tools.search.tool_retrieval import retrieve_visible_tools
+
+    dd._get_index()
+    here = Path(eh.__file__).resolve().parent
+    queries = (yaml.safe_load((here / "corpus.yaml").read_text()) or {})["fetch_ehydro_surveys"]
+    assert queries
+    assert any("fetch_ehydro_surveys" in retrieve_visible_tools(q, None, 8) for q in queries), (
+        "fetch_ehydro_surveys surfaces in NO top-8 for any of its corpus queries")

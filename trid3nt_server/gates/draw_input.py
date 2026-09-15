@@ -22,6 +22,9 @@ __all__ = ["DrawGeometry", "DrawOutcome", "gate_draw_input"]
 #: vector-draw surface with the purpose that shows only the tool they need.
 DrawGeometry = Literal["point", "polyline", "polygon", "rectangle"]
 
+#: The client mode each draw kind rides, and the purpose it rides under when the
+#: caller names none. A SLOT names its own purpose - a domain, a boundary run -
+#: and the card then offers only the tool that slot needs.
 _AFFORDANCE: dict[str, tuple[str, str | None]] = {
     "point": ("point", None),
     "rectangle": ("bbox", None),
@@ -52,10 +55,12 @@ async def gate_draw_input(
     param: str,
     geometry: str,
     prompt: str,
+    purpose: str | None = None,
     ttl_seconds: int = _DEFAULT_TTL_SECONDS,
 ) -> DrawOutcome:
     """Present the draw card and WAIT for the geometry.
 
+    ``purpose`` is what the card offers tools for; unstated, the draw kind's own.
     Returns an unstamped value, or a ``reason`` for the caller's typed refusal."""
     affordance = _AFFORDANCE.get(geometry)
     if affordance is None:
@@ -66,7 +71,8 @@ async def gate_draw_input(
     if emitter is None:
         return DrawOutcome(reason="there is no live map session to draw on")
 
-    mode, purpose = affordance
+    mode, default_purpose = affordance
+    purpose = purpose or default_purpose
     request_id = new_ulid()
     payload = SpatialInputRequestPayload(
         request_id=request_id,

@@ -40,6 +40,11 @@ def jsonable(value: Any) -> Any:
         return value
     if isinstance(value, MeshOp):
         return {"op": value.fn, **{k: jsonable(v) for k, v in value.kwargs.items()}}
+    collection = getattr(value, "as_feature_collection", None)
+    if callable(collection):
+        # A typed SLOT value records as the geometry it is: the recipe has to
+        # replay from what was meshed, and a drawn domain has no address.
+        return jsonable(collection())
     if getattr(value, "uri", None):
         # A declared data row arrives as the layer its producer returned, and the
         # meshers read it through the same unwrap: the recipe records the ADDRESS

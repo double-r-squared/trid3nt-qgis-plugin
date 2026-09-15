@@ -171,14 +171,21 @@ class Composite:
 @dataclass(frozen=True, slots=True)
 class Output:
     """One variable the module writes: what the result file calls it, the unit it
-    is read in, the style row it draws under, and whether it varies in time.
+    is read in, the style row it draws under, whether it varies in time, and
+    whether it has a visible EDGE.
 
-    A row that does not vary is painted and never animated."""
+    A row that does not vary is painted and never animated. A row with an edge
+    is a quantity INJECTED into the domain, masked below a fraction of its own
+    magnitude so what is visible reads as the shape it has; a variable the water
+    already carries is everywhere and is drawn whole. ``None`` leaves it to the
+    table the row is read off: a tracer row has an edge, a written variable
+    does not."""
 
     name: str
     unit: str = ""
     style: Mapping[str, Any] | None = None
     varies: bool = True
+    has_edge: bool | None = None
 
 
 @lru_cache(maxsize=None)

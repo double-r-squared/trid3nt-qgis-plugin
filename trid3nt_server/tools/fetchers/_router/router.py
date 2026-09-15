@@ -686,6 +686,10 @@ def build_layer_uri(spec: SourceSpec, params: dict[str, Any], uri: str) -> Layer
         role=role,
         units=units,
         bbox=bbox,
+        # What the SOURCE ROW states its elevations are counted from, carried on
+        # the layer it produced so a consumer reads the row it was handed. A
+        # source whose data states its own zero per feature declares none here.
+        vertical_datum=spec.vertical_datum or None,
     )
 
 

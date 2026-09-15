@@ -1,7 +1,8 @@
-"""Shared core of the pysheds hydrology primitives.
+"""Shared core the derive tools call: what several of them would otherwise each hold.
 
-The typed error hierarchy, the pysheds import seam, DEM staging and
-conditioning, bbox validation and the shared GeoJSON writer.
+The typed error hierarchy, the pysheds import seam, DEM staging and conditioning,
+bbox validation, and the two artifact writers - a FeatureCollection and a COG -
+that every derive writing a layer of its own reaches the object store through.
 """
 
 from __future__ import annotations
@@ -27,6 +28,8 @@ __all__ = [
     "HydrologyDemTooLargeError",
     "HydrologyDependencyError",
     "HydrologyUpstreamError",
+    "RasterWriteError",
+    "write_cog",
     "write_conditioned_dem",
 ]
 
@@ -371,3 +374,79 @@ def _write_geojson(
         raise HydrologyUpstreamError(
             f"failed to upload {prefix} GeoJSON to the runs bucket: {exc}"
         ) from exc
+
+
+class RasterWriteError(RuntimeError):
+    """A raster artifact that could not be written, under the caller's own code."""
+
+    error_code: str
+    retryable: bool = False
+
+    def __init__(self, error_code: str, message: str) -> None:
+        super().__init__(message)
+        self.error_code = error_code
+
+
+def write_cog(band: Any, *, crs: Any, transform: Any, prefix: str, seed: str,
+              output_dir: str | None, code: str, nodata: float | None = None,
+              photometric: str | None = None) -> str:
+    """Write a raster as a COG and return its uri: a local path when ``output_dir``
+    is given, else an ``s3://`` key in the runs bucket.
+
+    ``band`` is ``(height, width)`` or ``(count, height, width)``; its dtype and
+    shape are the profile. The COG driver is not always built into the GDAL a box
+    carries, so a tiled GTiff is the labeled second try rather than a failure."""
+    import rasterio
+
+    array = np.asarray(band)
+    shape = array.shape if array.ndim == 3 else (1, *array.shape)
+    handle, path = tempfile.mkstemp(suffix=".tif", prefix=f"trid3nt_{prefix}_")
+    os.close(handle)
+    try:
+        profile: dict[str, Any] = {
+            "driver": "COG", "dtype": str(array.dtype), "count": shape[0],
+            "height": shape[1], "width": shape[2], "crs": crs,
+            "transform": transform, "compress": "DEFLATE",
+        }
+        if nodata is not None:
+            profile["nodata"] = nodata
+        if photometric:
+            profile["photometric"] = photometric
+        try:
+            destination = rasterio.open(path, "w", **profile)
+        except Exception as exc:  # noqa: BLE001 - the COG driver may be unavailable
+            logger.warning("%s: COG write failed (%s); GTiff", prefix, exc)
+            profile["driver"], profile["tiled"] = "GTiff", True
+            profile.pop("photometric", None)
+            destination = rasterio.open(path, "w", **profile)
+        with destination:
+            if array.ndim == 3:
+                destination.write(array)
+            else:
+                destination.write(array, 1)
+        with open(path, "rb") as opened:
+            payload = opened.read()
+    finally:
+        try:
+            os.unlink(path)
+        except OSError:
+            pass
+
+    filename = f"{prefix}_{seed}.tif"
+    if output_dir is not None:
+        local = os.path.join(output_dir, filename)
+        with open(local, "wb") as opened:
+            opened.write(payload)
+        return local
+    try:
+        from trid3nt_server import storage
+
+        bucket = storage.runs_bucket()
+        key = f"{prefix.replace('_', '-')}-{seed}/{filename}"
+        storage.client().put_object(
+            Bucket=bucket, Key=key, Body=payload, ContentType="image/tiff")
+        return f"s3://{bucket}/{key}"
+    except Exception as exc:  # noqa: BLE001
+        raise RasterWriteError(
+            code, f"the {prefix.replace('_', ' ')} could not be written to the "
+                  f"runs bucket: {exc}") from exc

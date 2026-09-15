@@ -6,6 +6,11 @@ ONE ingestion function that takes every form and returns the typed value, and
 one home for what is done with that value afterwards: where a point is allowed
 to be, what a shape's lines are, how an AOI becomes the bound domain.
 
+The engine-neutral SLOTS a solved run stands on live here too - the domain it is
+solved over, the bed its nodes carry, the runs of its edge that carry a boundary
+condition. A raster engine fills the same three with a grid, so none of them
+belongs to an engine package.
+
 Nothing here knows a template, a question or an engine. A slot names the kind it
 takes and the role it plays; the ingestion is the same for every slot of that
 kind, whichever workflow or route asked. A user's own FILE is an input of the
@@ -15,7 +20,11 @@ same standing, and it enters here too.
 
 | file | what it is |
 | --- | --- |
-| `__init__.py` | The door: the three kinds and their ingestions. |
+| `__init__.py` | The door: the kinds and their ingestions. |
+| `domain.py` | `Domain` - the closed polygon a run is solved over - and `domain`, its ingestion from a drawing, the user's layer, a fetched waterbody or a typed ring; the runs a producer cut its polygon between, read off the artifact it returned; the outer ring a mesher's extent reads. |
+| `bed.py` | `Bed` - what the domain's nodes carry for elevation - and `bed`, its ingestion from a surface, a layer of soundings, or a depth in metres below the free surface; the derive a point survey is interpolated by, named. ONE source: a survey over a wider surface is merged into one row by `derive_merge_rasters` before it gets here. |
+| `boundary.py` | `BoundaryRun` - two Points on the domain's edge and a type - and `boundary_runs`, its ingestion from drawn lines, typed rows or a producer's own runs; the faces each run prescribes, walls excluded. |
+| `slots.py` | The door onto the three: which ingestion each ROLE reads through, and what the canvas offers for a slot a user fills by hand. |
 | `point.py` | `Point` - one location with an optional name - and `point`, its ingestion from a pick, a pair, a `"lat,lon"` string, a point layer or a geocoded place; the pick-or-wire coercion; containment in a domain, the move onto a wet node, the UTM projection and the context layer. |
 | `extent.py` | `Extent` - one lon/lat box with an optional name - and `extent`, its ingestion from a bbox pick, the canvas AOI, a place or a layer's bounds; and what a box means against another - the same extent, or overlapping ground. |
 | `shape.py` | `Shape` - one feature collection with an optional name - and `shape`, its ingestion from the draw, a stored layer, a geometry or typed vertices; its `polylines` and `polygons`. |
@@ -23,4 +32,5 @@ same standing, and it enters here too.
 | `geometry.py` | Reading a GEOMETRY SOURCE - a layer object, its uri, a path or inline GeoJSON - flattened to its geometries, and the one UTM-zone rule. |
 | `user_input.py` | The user-input species: clicks, sketches and typed values, normalized once per SHAPE, with the coercions that carry the wire route through the same normalizers. |
 | `layer_fields.py` | Reading one field off whatever shape a fetched layer arrived in. |
+| `vertical_datum.py` | The ZERO two sources count from - read off the layer that states it, or off the source row a bare name declares - and the refusal that names the two when they differ or one states none. |
 | `user_layer.py` | A file the USER pushed in: staged to object storage, validated and converted, then minted as a layer on their case with origin `user`. |

@@ -1,0 +1,9 @@
+derive_survey_surface:
+- interpolate these soundings into a surface
+- turn this point survey into a raster I can drape a mesh on
+- grid these depth points at 5 metres
+- make a continuous bed from scattered survey points
+- IDW these sounding points onto a grid
+- I have a CSV of depths, give me a surface
+- rasterize the survey points into a bathymetry raster
+- build the bed surface from this sounding layer

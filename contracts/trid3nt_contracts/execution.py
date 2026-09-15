@@ -206,6 +206,12 @@ class LayerURI(GraceModel):
     # wrong data class. ``None`` for a layer that is not one frame.
     valid_from: str | None = None
     valid_to: str | None = None
+    #: The ZERO this layer's elevations are counted from, as its own source
+    #: states it. Two surfaces are on one axis only when this agrees, so a
+    #: consumer that places one over another reads it HERE - on the layer it was
+    #: handed - rather than looking the producer's spec up by name. ``None`` is
+    #: the layer saying nothing, which is never the same as NAVD88.
+    vertical_datum: str | None = None
 
 
 class AnswerLayerURI(LayerURI):

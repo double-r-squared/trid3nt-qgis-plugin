@@ -58,6 +58,19 @@ _TELEMAC = "trid3nt_server.workflows.telemac"
 #: write: the mesh it solved on, the deck it read, the listing and the metrics.
 _ALWAYS_READABLE = ("full_listing.log", "telemac_metrics.json")
 
+#: The mesher's own clean passes, under its own names, that every domain gets
+#: before anything is imposed on it. They change the TOPOLOGY, so they run ahead
+#: of the bed and the roles - a renumbering after a primitive painted node values
+#: is refused by the mesher itself.
+def _clean_ops() -> list[Any]:
+    from trid3nt_server.workflows.mesh.tool import mesh_op
+
+    return [mesh_op("delete_boundary_faces"),
+            mesh_op("delete_faces_connected_to_one_face"),
+            mesh_op("laplacian2"),
+            mesh_op("make_mesh_boundaries_traversable"),
+            mesh_op("fix_mesh", delete_unused=True)]
+
 
 @dataclass(frozen=True, slots=True)
 class Door:
@@ -68,20 +81,24 @@ class Door:
     #: The STEERING body: the module wrapper plus the slots this question asserts.
     steering: type
     #: The step that MEASURES what the sheet is filled from, named ``settled``.
-    settle: Step
+    #: UNSTATED, the workflow owns its own stages off the declared slots and a
+    #: template states only what differs.
+    settle: Step | None = None
     #: The steps that establish the modelled world, and what the mesh is built
-    #: over - the name one of them was ``.named()`` by.
-    domain: tuple[Step, ...]
-    mesh: Any
-    mesh_on: str
+    #: over - the name one of them was ``.named()`` by. Both are empty on a
+    #: template whose world IS its domain slot.
+    domain: tuple[Step, ...] = ()
+    mesh: Any = None
+    mesh_on: str = ""
     #: The engine files this run has to write for it to have solved anything.
-    results: tuple[str, ...]
+    #: Unstated, the deck's own RESULTS FILE is the one.
+    results: tuple[str, ...] = ()
     #: What the run directory calls the deck, and where the staged files live.
-    steering_file: str
-    prefix: str
+    steering_file: str = ""
+    prefix: str = "telemac"
     #: The dispatch the staged run goes to, by the path it is resolved at CALL
     #: time. WHICH box entry is the template's, not the sheet's.
-    dispatch: str
+    dispatch: str = f"{_TELEMAC}.engine.solve_case"
     #: The reads the template PLACES - a series at a point the user gives, a
     #: profile along a line - each with how it is published; ``captions`` names
     #: those in the template's words; ``answer`` names the measures the run
@@ -106,6 +123,35 @@ class Door:
     #: The DATA slot a caller may hand a built mesh in instead of the recipe.
     #: Filled, that mesh is adopted whole; unfilled, the recipe above is the mesh.
     supplied_mesh: Any = None
+    #: What the workflow meshes the domain with when it owns the stages.
+    mesher: str = "om2d"
+    kind: str = "unstructured_tri"
+
+    @property
+    def owns_stages(self) -> bool:
+        """Does the WORKFLOW build this template's stages off its slots?
+
+        A template that hands over its own settle step states the plan itself,
+        and keeps every param that plan reads."""
+        return self.settle is None
+
+    @property
+    def levers(self) -> tuple[str, ...]:
+        """The runtime levers the stages this door builds READ.
+
+        A template that states its own plan declares its own params, so nothing
+        is seated on its behalf."""
+        from trid3nt_server.workflows.runtime.levers import LEVER_NAMES
+
+        return LEVER_NAMES if self.owns_stages else ()
+
+    def _file(self, keyword: str, fallback: str) -> str:
+        """One file the deck itself names, read off the body that names it.
+
+        The deck's own GEOMETRY / BOUNDARY CONDITIONS / RESULTS statements ARE
+        the run directory's names; restating them would let the two drift."""
+        stated = self.steering.ASSERTED.get(keyword)
+        return str(stated) if isinstance(stated, str) and stated else fallback
 
     def sheet_doc(self) -> str:
         """The ENGINE SURFACE line of this template's docstring.
@@ -129,6 +175,8 @@ class Door:
 
     def __call__(self, ops: Workflow) -> list[Any]:
         """The step sequence: the world, then fill, then run, then the outputs."""
+        if self.owns_stages:
+            return self._from_slots(ops).__call__(ops)
         params = {prm.name: ParamRef(prm.name) for prm in ops.params}
         # Every DATA row and every producer the body may READ, under the name
         # it names it by. A body states what it will hold; this is where the
@@ -163,6 +211,69 @@ class Door:
                          "compute_class": self.compute_class}).named("solve"),
             self._outputs_step(params),
         ]
+
+    def _from_slots(self, ops: Workflow) -> "Door":
+        """This door with the stages the WORKFLOW owns filled in from the slots.
+
+        The domain, the bed, the runs and the mesh resolution are declared once
+        on the runtime, so the plan that reads them is built once here rather
+        than restated by every template."""
+        from trid3nt_server.workflows.mesh.tool import mesh_op, tool
+        from trid3nt_server.workflows.runtime.data import BED, DOMAIN, RUNS
+        from trid3nt_server.workflows.runtime.plan import DataRef
+
+        slots: dict[str, list[str]] = {}
+        for row in ops.data:
+            if row.role:
+                slots.setdefault(row.role, []).append(row.name)
+        domain = (slots.get(DOMAIN) or [""])[0]
+        if not domain:
+            raise PlanValidationError(
+                f"{ops.name} lets the workflow own its stages and declares no "
+                "domain: a run solves over a polygon, so the DATA body needs one "
+                "row written Data.domain(...).")
+        beds = slots.get(BED) or []
+        if not beds:
+            raise PlanValidationError(
+                f"{ops.name} lets the workflow own its stages and declares no "
+                "bed: every node carries an elevation, so the DATA body needs a "
+                "row written Data.bed(...).")
+        if len(beds) > 1:
+            raise PlanValidationError(
+                f"{ops.name} declares {len(beds)} bed rows ({beds}); the bed is "
+                "ONE source. A survey over a wider surface is composed by the "
+                "merge derive into the one row this slot takes.")
+        geometry = self._file("GEOMETRY_FILE", "geometry.slf")
+        boundary = self._file("BOUNDARY_CONDITIONS_FILE", "boundary.cli")
+        result = self._file("RESULTS_FILE", "results.slf")
+        declared = {prm.name for prm in ops.params}
+        return replace(
+            self,
+            mesh=self.mesh if self.mesh is not None else tool.build_mesh(
+                mesher=self.mesher, kind=self.kind, extent=DataRef(domain),
+                resolution_m=ParamRef("mesh_resolution_m"),
+                ops=[*_clean_ops(),
+                     mesh_op("set_bed", source=DataRef(beds[0])),
+                     # The runs come from wherever they were stated: the row
+                     # the user fills, or the domain's own producer, which
+                     # measured the edge it cut the polygon between.
+                     mesh_op("set_boundary_roles",
+                             runs=DataRef((slots.get(RUNS) or [domain])[0]))]),
+            mesh_on=self.mesh_on or domain,
+            results=self.results or (result,),
+            steering_file=self.steering_file
+            or f"{self.steering.MODULE}_{ops.name}.cas",
+            settle=Step(
+                runner=f"{_TELEMAC}.authoring.assembler.settle_domain",
+                stage="author",
+                kwargs={"mesh": Ref("mesh"),
+                        "geometry": geometry, "boundary": boundary,
+                        "result": result,
+                        "mesh_resolution_m": ParamRef("mesh_resolution_m"),
+                        **{name: ParamRef(name)
+                           for name in ("name", "sim_duration_s",
+                                        "output_interval_min", "continue_from")
+                           if name in declared}}))
 
     def _outputs_step(self, params: Mapping[str, Any]) -> Step:
         """The publish step, checked: every PLACED read has its caption.
@@ -421,7 +532,8 @@ async def run_sheet(*, sheet: Sheet, settled: Mapping[str, Any],
     return {**settled, **handle, "module": sheet.module,
             "display_basename": display or None,
             "module_output": [{"token": token, "module": module,
-                               "style": row.style, "varies": row.varies}
+                               "style": row.style, "varies": row.varies,
+                               "has_edge": bool(row.has_edge)}
                               for token, module, row in sheet.published()],
             "tracer_names": dict(sheet.resolved()).get("NAMES OF TRACERS")}
 

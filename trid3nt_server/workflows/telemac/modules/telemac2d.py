@@ -41,12 +41,12 @@ MODULE_OUTPUT: Mapping[str, Output] = MappingProxyType({
     "S": Output("FREE SURFACE", "m", style=_LEVEL),
     "B": Output("BOTTOM", "m", style=_TERRAIN, varies=False),
     # The Froude number divides the speed by the square root of the depth, so a
-    # node at the wet-dry edge divides by a vanishing depth and carries a value
-    # in the thousands while the water it borders is subcritical. The legend's
-    # top is the 99.9th percentile of what was read: the ramp reads the river.
+    # node the run never wet divides by a vanishing depth and carries a value in
+    # the thousands. Those nodes are outside the wet mask the legend and the
+    # measures are both taken over, so the ramp reads the river without a cap
+    # clipping the real peak.
     "F": Output("FROUDE NUMBER", "",
-                style={"kind": "mesh", "ramp": "magma", "floor": 0,
-                       "range": "p99.9"}),
+                style={"kind": "mesh", "ramp": "magma", "floor": 0}),
     "Q": Output("SCALAR FLOWRATE", "m2/s",
                 style={"kind": "mesh", "ramp": "viridis", "units": "m2/s",
                        "floor": 0}),

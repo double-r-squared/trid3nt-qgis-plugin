@@ -1,0 +1,9 @@
+fetch_river_reach:
+- give me the river reach around this point so I can model it
+- I want the domain for a 3 km stretch of river starting here
+- get the reach polygon and its inflow and outflow boundaries
+- cut me a river domain from this seed point going downstream
+- the banks and the centerline for this stretch of the Willamette
+- reach polygon with the upstream and downstream faces for a mesh
+- a river domain to solve over, from a point on the channel
+- set up the stretch of river above this gauge as a model domain

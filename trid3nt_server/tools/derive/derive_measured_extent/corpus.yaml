@@ -1,0 +1,8 @@
+derive_measured_extent:
+- where does this bathymetry survey actually have data
+- clip the lake polygon to the part the survey sounded
+- the real coverage of this DEM rather than its rectangle
+- the measured footprint of this raster as a polygon
+- narrow the water body to where the bed was measured
+- what ground does this survey actually cover
+- give me the valid data extent of this grid

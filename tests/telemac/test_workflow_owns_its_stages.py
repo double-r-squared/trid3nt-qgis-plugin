@@ -1,0 +1,196 @@
+"""The door the WORKFLOW owns: the stages built from the declared slots.
+
+Offline: nothing is built and nothing is solved. What is proved is the PLAN a
+template gets when it states only what differs, and that a template still
+handing over its own stages runs exactly as it did.
+"""
+
+from __future__ import annotations
+
+import pytest
+from trid3nt_contracts.tool_registry import AtomicToolMetadata
+
+from trid3nt_server.workflows.runtime import (
+    Data,
+    DataRef,
+    Param,
+    ParamRef,
+    PlanValidationError,
+    Ref,
+    Step,
+    doors,
+    tool,
+)
+from trid3nt_server.workflows.runtime.levers import LEVER_NAMES
+from trid3nt_server.workflows.telemac.modules import T2D
+from trid3nt_server.workflows.telemac.workflow import Door, TelemacWorkflow
+
+_METADATA = AtomicToolMetadata(
+    name="telemac_water_temperature", ttl_class="live-no-cache",
+    source_class="workflow_dispatch", cacheable=False, engine="telemac",
+    tier="template")
+
+
+class STEERING(T2D):
+    """The deck: a body of water under a week of weather."""
+
+    GEOMETRY_FILE = "domain.slf"
+    BOUNDARY_CONDITIONS_FILE = "domain.cli"
+    RESULTS_FILE = "r2d_domain.slf"
+    TITLE = Ref("settled.title")
+    DURATION = ParamRef("sim_duration_s")
+
+
+class PARAMS:
+    sim_duration_s = Param(
+        door=doors.SCENARIO, default=604800.0, bounds=(3600.0, 1209600.0),
+        units="s", desc="Simulated time")
+
+
+class DATA:
+    domain = Data.domain(tool("fetch_river_reach", seed_point=[1.0, 2.0]))
+    survey = Data(tool("fetch_ehydro_surveys", bbox=[0, 0, 1, 1])).context()
+    surveyed_bed = Data(tool("derive_survey_surface", points=survey,
+                             resolution_m=ParamRef("mesh_resolution_m"))).context()
+    terrain = Data(tool("fetch_copernicus_dem", bbox=[0, 0, 1, 1]))
+    bed = Data.bed(tool("derive_merge_rasters", primary=surveyed_bed,
+                        fallback=terrain))
+    runs = Data.runs()
+
+
+def _workflow(door: Door, data: type = DATA, params: type = PARAMS
+              ) -> TelemacWorkflow:
+    return TelemacWorkflow(metadata=_METADATA, params=params, plan=door,
+                           data=data, levers=door.levers)
+
+
+def _steps(workflow: TelemacWorkflow) -> list[str]:
+    return [step.label for step in workflow.plan.steps]
+
+
+def test_a_template_that_states_only_what_differs_gets_the_whole_plan():
+    """No domain steps, no mesh recipe, no settle, no file names: the workflow
+    builds its stages from the slots and the deck's own statements."""
+    workflow = _workflow(Door(steering=STEERING))
+    assert _steps(workflow) == ["mesh", "settled", "sheet", "solve", "outputs"]
+    assert [step.stage for step in workflow.plan.steps] == [
+        "mesh", "author", "author", "solve", "publish"]
+
+
+def test_the_mesh_is_built_over_the_domain_slot_at_the_runtimes_own_lever():
+    from trid3nt_server.workflows.mesh.tool import recipe_from_plan_value
+
+    workflow = _workflow(Door(steering=STEERING))
+    recipe = recipe_from_plan_value(workflow.plan.steps[0].kwargs["mesh"])
+    assert recipe.mesher == "om2d" and recipe.kind == "unstructured_tri"
+    assert recipe.extent == DataRef("domain")
+    assert recipe.resolution_m.name == "mesh_resolution_m"
+    assert [op.fn for op in recipe.ops][-2:] == ["set_bed", "set_boundary_roles"]
+
+
+def test_the_bed_op_takes_the_one_row_the_merge_derive_produced():
+    """A survey where it has data and the surface elsewhere is ONE bed, composed
+    in the DATA body; the op takes that row and nothing beside it."""
+    from trid3nt_server.workflows.mesh.tool import recipe_from_plan_value
+
+    workflow = _workflow(Door(steering=STEERING))
+    recipe = recipe_from_plan_value(workflow.plan.steps[0].kwargs["mesh"])
+    bed = next(op for op in recipe.ops if op.fn == "set_bed")
+    assert bed.kwargs == {"source": DataRef("bed")}
+    runs = next(op for op in recipe.ops if op.fn == "set_boundary_roles")
+    assert runs.kwargs == {"runs": DataRef("runs")}
+
+
+def test_a_second_bed_row_refuses_by_name():
+    """The bed is one source: a template that declares two is saying which wins
+    somewhere the mesh op cannot see."""
+    class TWO_BEDS:
+        domain = Data.domain(tool("fetch_river_reach", seed_point=[1.0, 2.0]))
+        survey = Data.bed(tool("fetch_ehydro_surveys", bbox=[0, 0, 1, 1]))
+        terrain = Data.bed(tool("fetch_copernicus_dem", bbox=[0, 0, 1, 1]))
+
+    with pytest.raises(PlanValidationError) as excinfo:
+        _workflow(Door(steering=STEERING), data=TWO_BEDS).plan
+    assert "the bed is ONE source" in str(excinfo.value)
+
+
+def test_a_template_with_no_runs_row_takes_the_domain_producers_own():
+    """A reach fetcher returns the section AND the two faces it was cut between,
+    so a template that declares no runs row is not a template with no runs."""
+    from trid3nt_server.workflows.mesh.tool import recipe_from_plan_value
+
+    class NO_RUNS:
+        domain = Data.domain(tool("fetch_river_reach", seed_point=[1.0, 2.0]))
+        terrain = Data.bed()
+
+    workflow = _workflow(Door(steering=STEERING), data=NO_RUNS)
+    recipe = recipe_from_plan_value(workflow.plan.steps[0].kwargs["mesh"])
+    runs = next(op for op in recipe.ops if op.fn == "set_boundary_roles")
+    assert runs.kwargs == {"runs": DataRef("domain")}
+
+
+def test_the_settle_step_reads_the_files_the_deck_itself_names():
+    workflow = _workflow(Door(steering=STEERING))
+    settle = workflow.plan.steps[1]
+    assert settle.runner.endswith("assembler.settle_domain")
+    assert settle.kwargs["geometry"] == "domain.slf"
+    assert settle.kwargs["boundary"] == "domain.cli"
+    assert settle.kwargs["result"] == "r2d_domain.slf"
+    assert settle.kwargs["sim_duration_s"].name == "sim_duration_s"
+    # a param this template does not declare is not read on its behalf
+    assert "continue_from" not in settle.kwargs
+
+
+def test_the_runtime_levers_are_seated_so_the_template_states_none_of_them():
+    workflow = _workflow(Door(steering=STEERING))
+    assert [prm.name for prm in workflow.params] == [
+        "sim_duration_s", *LEVER_NAMES]
+
+
+def test_the_domain_and_the_bed_reach_the_wire_as_the_slots_they_are():
+    """What the user hands in supersedes the producer the template preferred, so
+    both slots are arguments even though both name a source."""
+    supplied = workflow_wire(_workflow(Door(steering=STEERING)))
+    assert {"domain", "bed", "runs"} <= supplied
+
+
+def workflow_wire(workflow: TelemacWorkflow) -> set[str]:
+    return {decl.name for decl in workflow.data if decl.fills_from_user}
+
+
+def test_a_template_with_no_domain_refuses_at_import():
+    class NO_DOMAIN:
+        terrain = Data.bed()
+
+    with pytest.raises(PlanValidationError, match="declares no domain"):
+        _workflow(Door(steering=STEERING), data=NO_DOMAIN)
+
+
+def test_a_template_with_no_bed_refuses_at_import():
+    class NO_BED:
+        domain = Data.domain()
+
+    with pytest.raises(PlanValidationError, match="declares no bed"):
+        _workflow(Door(steering=STEERING), data=NO_BED)
+
+
+def test_a_template_that_still_hands_over_its_own_stages_runs_as_it_did():
+    """The transition is ADDITIVE: a door that states its settle step owns its
+    plan, and nothing is seated on its behalf."""
+    own = Door(steering=STEERING,
+               settle=Step(runner="x.settle", kwargs={}),
+               domain=(Step(runner="x.geocode", kwargs={}).named("reach"),),
+               mesh=tool.build_mesh(mesher="om2d", extent=Ref("reach"),
+                                    resolution_m=14.0, ops=[]),
+               mesh_on="reach", results=("r2d_domain.slf",),
+               steering_file="t2d.cas", prefix="telemac", dispatch="x.solve")
+    assert own.owns_stages is False and own.levers == ()
+
+    class OWN_DATA:
+        domain = Data.domain()
+        bed = Data.bed()
+
+    workflow = _workflow(own, data=OWN_DATA)
+    assert _steps(workflow) == ["reach", "mesh", "settled", "sheet", "solve",
+                               "outputs"]
+    assert [prm.name for prm in workflow.params] == ["sim_duration_s"]

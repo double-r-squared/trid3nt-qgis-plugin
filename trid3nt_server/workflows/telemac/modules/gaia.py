@@ -42,7 +42,9 @@ MODULE_OUTPUT: Mapping[str, Output] = MappingProxyType({
 
 #: The class GAIA appends to its carrier's tracers when the body carries a
 #: suspension: one tracer per suspended class, which the carrier never counts.
-_SUSPENDED = Output("NCOH SEDIMENT", "g/L",
+#: A suspended class is PUT into the water, so what it reaches has a visible
+#: edge and the water beyond it is not a faint wash of the same colour.
+_SUSPENDED = Output("NCOH SEDIMENT", "g/L", has_edge=True,
                     style={"kind": "mesh", "ramp": "oranges", "units": "g/L",
                            "floor": 0})
 

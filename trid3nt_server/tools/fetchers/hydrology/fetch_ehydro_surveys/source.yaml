@@ -1,0 +1,163 @@
+# USACE eHydro: one ArcGIS layer indexes every published survey, and each survey's
+# own ZIP carries the measured soundings in its geodatabase. The index query, the
+# ZIP read and the per-survey join are one delegate's socket work, so no executor
+# phase is added for one source.
+schema_version: v1
+
+name: fetch_ehydro_surveys
+source_class: ehydro_surveys
+error_prefix: EHYDRO
+input_error_suffix: INPUT_INVALID
+empty_error_suffix: NO_SURVEY
+shape: vector-fgb
+supports_global_query: false
+
+endpoints:
+  # Documentary for the ZIP host (the delegate owns the socket); the index query
+  # is the one the delegate builds its request from.
+  index:
+    url: "https://services7.arcgis.com/n1YM8pTrFmm7L4hs/arcgis/rest/services/eHydro_Survey_Data/FeatureServer/0/query"
+  surveys:
+    url: "https://ehydroprod.blob.core.usgovcloudapi.net/ehydro-surveys"
+auth:
+  mode: none
+  user_agent: trid3nt_default
+
+params:
+  bbox: {type: bbox, required: true, quantize: round_6dp, error_suffix: BBOX_INVALID}
+  since:
+    type: iso_date
+    schema_optional: true
+
+gates:
+  max_bbox_deg2: 1.0
+
+ingest:
+  access: library_delegate
+  delegate:
+    library: ehydro_survey_zip
+    # The shared transport owns the socket, its per-operation timeout and the
+    # retry authority; this states that timeout rather than a second one.
+    timeout_s: 60.0
+  properties:
+    - part
+    - survey_id
+    - survey_date
+    - district
+    - feature_name
+    - survey_type
+    - vertical_datum
+    - source_uom
+    - depth_below_datum_m
+    - sounding_count
+
+hooks:
+  delegate: ehydro.read
+  delegate_validate: ehydro.validate
+
+normalize:
+  crs: "EPSG:4326"
+  units: m
+  quantity: depth_below_datum
+  # Each survey states its OWN vertical datum (CRD on the Willamette, MLLW on a
+  # coast, NAVD88 elsewhere), so this source cannot state one for all of them: the
+  # datum rides on every row instead, and a survey that states none refuses.
+  datum: null
+
+output:
+  layer_type: vector
+  ext: fgb
+  role: primary
+  display_name: "USACE eHydro channel survey"
+  bbox_from_features:
+    pad: 0.002
+  style:
+    kind: continuous
+    geometry: point
+    ramp: ylgnbu
+    units: m
+    label: "Depth below survey datum"
+
+cache:
+  ttl_class: semi-static-7d
+payload_estimate:
+  model: bbox_area
+  mb_per_sq_deg: 200.0
+  floor_mb: 0.2
+  ceil_mb: 50.0
+
+caveats:
+  - "the soundings are DEPTHS BELOW the survey's own stated datum, positive down, in metres - not elevations; the datum is on every row and is a local project datum on many rivers (Columbia River Datum on the Willamette), so a bed built from these needs a deliberate datum shift"
+  - "a survey whose points state no vertical datum or no unit of measure refuses by name rather than guessing one"
+  - "coverage is the NAVIGATION CHANNEL, not the whole water surface: a survey covers the dredged prism and leaves the banks unmeasured, so the share of a domain it covers is always partial"
+  - "without ``since`` only the NEWEST survey intersecting the bbox is returned; ``since`` returns every survey ending on or after that date, up to six, and refuses over that rather than truncating silently"
+  - "USACE districts publish on their own schedules; a reach with no navigation project has no survey at all"
+
+docstring: |-
+  Fetch USACE eHydro CHANNEL SURVEY soundings + the survey footprint for a bbox -> the measured bed.
+
+  What it does:
+      Looks the bbox up in the USACE eHydro survey index (one ArcGIS layer over
+      every published survey), takes the NEWEST survey intersecting it, downloads
+      that survey's own package and reads the soundings out of its geodatabase.
+      One artifact comes back, its rows tagged ``part``: ``survey`` (the survey
+      footprint polygon) and ``sounding`` (the measured points). Every row carries
+      the survey's id and date and - read from the survey's own data, never
+      assumed - its ``vertical_datum`` and the unit its depths were measured in.
+
+  When to use:
+      - A river, harbour or navigation-channel model needs a REAL surveyed bed:
+        this is the measured channel, at metre scale, where a 10 m DEM makes the
+        channel a puddle.
+      - "how deep is the channel here", "the latest dredging survey", "the
+        surveyed bathymetry for this reach".
+      - Pair with ``derive_survey_surface`` to turn the points into the
+        bed raster a mesh is draped on.
+
+  When NOT to use:
+      - DO NOT use for open-coast or shelf bathymetry - use ``fetch_bluetopo``
+        or ``fetch_topobathy``; eHydro maps dredged channels only.
+      - DO NOT use for land elevation - use ``fetch_dem``.
+      - DO NOT use outside the US, and do not expect coverage on a river with no
+        federal navigation project.
+      - DO NOT treat the values as elevations: they are depths below the
+        survey's stated datum, positive downward.
+
+  Parameters:
+      bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326. Surveys
+          INTERSECTING it are returned whole, so a survey can reach well past
+          the window.
+      since: optional ISO date. Absent, only the newest survey comes back;
+          present, every survey ending on or after it does, newest first, up to
+          six - which is how a bed is compared against an earlier one.
+
+  Returns:
+      ``LayerURI`` for a FlatGeobuf in EPSG:4326 carrying ``part``,
+      ``survey_id``, ``survey_date``, ``district``, ``feature_name``,
+      ``survey_type``, ``vertical_datum``, ``source_uom``,
+      ``depth_below_datum_m`` (on the sounding rows) and ``sounding_count`` (on
+      the survey row). ``layer_type="vector"``, ``units="m"``.
+
+  Rendering: a VECTOR layer renders INLINE on the map automatically.
+
+  Cross-tool dependencies:
+      - Composes WITH: ``fetch_river_reach`` (the domain the survey is read
+        over), ``derive_survey_surface`` (points -> a bed raster),
+        ``fetch_dem`` (the banks the survey does not measure).
+      - Upstream data source: USACE eHydro
+        (https://navigation.usace.army.mil/Survey/Hydro).
+
+  Cache: ``ttl_class="semi-static-7d"``; districts publish a given channel every
+  few weeks to months.
+
+  Errors:
+      - ``EHYDRO_BBOX_INVALID`` / ``EHYDRO_INPUT_INVALID``: a malformed bbox, a
+        bbox over the area gate, or an unparseable ``since``.
+      - ``EHYDRO_NO_SURVEY``: no survey intersects the bbox (or none since that
+        date).
+      - ``EHYDRO_INPUT_INVALID`` also names a survey whose points state no
+        vertical datum or no unit, and a ``since`` window holding more than six
+        surveys.
+      - ``EHYDRO_UPSTREAM_ERROR``: the index or the survey package failed.
+
+  Tier-1 free. No API key.

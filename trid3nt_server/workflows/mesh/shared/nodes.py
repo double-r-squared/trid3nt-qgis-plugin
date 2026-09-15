@@ -68,10 +68,13 @@ def reproject_nodes_to_utm(points_lonlat: Any) -> tuple[Any, int]:
 
 
 def sample_raster_at_nodes(raster_path: Any, points_lonlat: Any,
-                           interp: str = "nearest") -> Any:
+                           interp: str = "nearest",
+                           fill_holes: bool = True) -> Any:
     """Sample a raster at (N,2) lon/lat nodes -> (N,) values, holes filled.
 
-    ``nearest`` returns a value the grid holds; ``bilinear`` interpolates."""
+    ``nearest`` returns a value the grid holds; ``bilinear`` interpolates.
+    ``fill_holes=False`` leaves a node the grid has nothing for as NaN, which is
+    what a caller with a SECOND source to try has to be able to see."""
     import numpy as np
     import rasterio
     from rasterio.warp import transform as warp_transform
@@ -100,7 +103,7 @@ def sample_raster_at_nodes(raster_path: Any, points_lonlat: Any,
                             dtype=float)[:, 0]
     if nodata is not None:
         vals[vals == nodata] = np.nan
-    if np.isnan(vals).any():
+    if fill_holes and np.isnan(vals).any():
         # Nodata becomes the finite mean rather than NaN: a field with holes in
         # it is not a field a solver can start from, and a hole at one node
         # would propagate a NaN through the whole free surface.

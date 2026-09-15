@@ -1,0 +1,8 @@
+derive_coverage:
+- how much of this reach do the mapped water polygons actually cover
+- what fraction of the centerline lies inside the mesh that was built
+- measure how much of this line falls inside that polygon
+- how much of the river is mapped as water and how much is only a flowline
+- did the triangulation hold the whole reach or only part of it
+- what percentage of the flowline is covered by the water body layer
+- how much of the centerline is inside the domain

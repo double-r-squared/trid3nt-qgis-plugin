@@ -63,10 +63,17 @@ def op_raster(source: Any) -> Path:
 def op_geometry(source: Any) -> dict[str, Any]:
     """A geometry source -> GeoJSON, whatever vector format it arrived in.
 
-    A source is inline GeoJSON, an object-store uri, a path, or a layer handle."""
+    A source is a typed SLOT value, inline GeoJSON, an object-store uri, a path,
+    or a layer handle."""
     from trid3nt_server.tools.cache import read_object_bytes_s3
     from trid3nt_server.inputs.geometry import source_uri
 
+    # A slot's typed value carries its own collection: reading it back off an
+    # address would re-open what is already in hand, and a drawn domain has no
+    # address at all.
+    collection = getattr(source, "as_feature_collection", None)
+    if callable(collection):
+        return collection()
     resolved = source_uri(source)
     if isinstance(resolved, Mapping):
         return dict(resolved)

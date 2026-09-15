@@ -198,6 +198,11 @@ _ALWAYS_OFFLOAD_SYNC_TOOLS = frozenset(
         # stages an s3 COG and an inventory, samples, writes an FGB
         "compute_flood_depth_damage",
         "compute_model_residuals",
+        # a KD-tree over every sounding, then an IDW pass per cell of a metre-
+        # scale grid, then a COG write
+        "derive_survey_surface",
+        # two windowed warp-reads onto one union grid plus two COG writes
+        "derive_merge_rasters",
     }
 )
 

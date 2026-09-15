@@ -10,8 +10,6 @@ the bands arrive on the layer.
 from __future__ import annotations
 
 import logging
-import os
-import tempfile
 import uuid
 from datetime import datetime, timezone
 from typing import Any
@@ -21,6 +19,7 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.tools import register_tool
 from trid3nt_server.tools.derive._abi_layer import read_bands
+from trid3nt_server.tools.derive._hydrology_common import write_cog
 
 __all__ = ["TrueColorError", "TrueColorLayerURI", "derive_true_color"]
 
@@ -159,58 +158,6 @@ def _observation_geometry(
     return solar_cos, np.cos(view_zenith), turn_cos
 
 
-def _write_cog(rgb: Any, grid: dict[str, Any], seed: str, output_dir: str | None) -> str:
-    """Write the ``(3, H, W)`` uint8 composite and return its uri: a local path when
-    ``output_dir`` is given, else an ``s3://`` key in the runs bucket."""
-    import rasterio
-
-    fd, path = tempfile.mkstemp(suffix=".tif", prefix="trid3nt_truecolor_")
-    os.close(fd)
-    try:
-        profile = {
-            "driver": "COG", "dtype": "uint8", "count": 3,
-            "height": grid["height"], "width": grid["width"],
-            "crs": grid["crs"], "transform": grid["transform"],
-            "compress": "DEFLATE", "photometric": "RGB",
-        }
-        try:
-            dst = rasterio.open(path, "w", **profile)
-        except Exception as exc:  # noqa: BLE001 -- the COG driver may be unavailable
-            logger.warning("derive_true_color: COG write failed (%s); using GTiff", exc)
-            profile["driver"] = "GTiff"
-            profile["tiled"] = True
-            profile.pop("photometric", None)
-            dst = rasterio.open(path, "w", **profile)
-        with dst:
-            dst.write(rgb)
-        with open(path, "rb") as handle:
-            payload = handle.read()
-    finally:
-        try:
-            os.unlink(path)
-        except OSError:
-            pass
-
-    filename = f"true_color_{seed}.tif"
-    if output_dir is not None:
-        local = os.path.join(output_dir, filename)
-        with open(local, "wb") as handle:
-            handle.write(payload)
-        return local
-    try:
-        from trid3nt_server import storage
-
-        bucket = storage.runs_bucket()
-        key = f"true-color-{seed}/{filename}"
-        storage.client().put_object(
-            Bucket=bucket, Key=key, Body=payload, ContentType="image/tiff")
-        return f"s3://{bucket}/{key}"
-    except Exception as exc:  # noqa: BLE001
-        raise TrueColorError(
-            "TRUE_COLOR_WRITE_FAILED",
-            f"the composite could not be written to the runs bucket: {exc}") from exc
-
-
 @register_tool(
     _METADATA,
     # Reads only the layer it is handed and writes its own artifact.
@@ -292,7 +239,9 @@ def derive_true_color(
     rgb = np.clip(np.rint(stretched * 255.0), 0, 255).astype(np.uint8)
 
     seed = uuid.uuid4().hex[:8]
-    uri = _write_cog(rgb, grid, seed, _output_dir)
+    uri = write_cog(rgb, crs=grid["crs"], transform=grid["transform"],
+                    prefix="true_color", seed=seed, output_dir=_output_dir,
+                    code="TRUE_COLOR_WRITE_FAILED", photometric="RGB")
     logger.info(
         "derive_true_color: %dx%d composite, %.1f%% of the crop lit",
         grid["width"], grid["height"], lit * 100.0)

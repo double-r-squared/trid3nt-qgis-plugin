@@ -1,0 +1,8 @@
+derive_raster_mean:
+- what is the mean rainfall over this catchment
+- average this raster over the area I am modelling
+- one number for this gridded field over the domain
+- the domain mean precipitation for the storm window
+- average the grid over this polygon
+- mean value of this raster inside the watershed
+- what is the average temperature across this grid

@@ -49,6 +49,20 @@ def _reach(telemac_result, *, tracer_name: str = "DYE") -> dict[str, Any]:
                           data={"WATER DEPTH": depth, tracer_name: dye})
 
 
+def _table(body: Any = T2D, tracers: int = 1) -> list[dict[str, Any]]:
+    """The run's own module-output table, as the solve step writes it.
+
+    A read asks the RECORD what a variable draws by and whether it has a visible
+    edge, so a test that states no table is testing a run nobody could have."""
+    from trid3nt_server.workflows.telemac.modules.sheet import fill
+
+    sheet = fill(body, NUMBER_OF_TRACERS=tracers,
+                 NAMES_OF_TRACERS=["DYE             MG/L"][:tracers])
+    return [{"token": token, "module": module, "style": row.style,
+             "varies": row.varies, "has_edge": bool(row.has_edge)}
+            for token, module, row in sheet.published()]
+
+
 def _solved(run: dict[str, Any] | None = None, body: Any = T2D) -> Solved:
     return Solved({"run_id": "RID", "utm_epsg": 32610, "result_basename": "r2d.slf",
                    "tracer_names": ["DYE             MG/L"], "name": "reach",
@@ -70,6 +84,19 @@ def solved(monkeypatch, telemac_result):
         "trid3nt_server.workflows.solver.solver.download_result",
         lambda run_id, basename, error_code=None: "/tmp/does-not-matter.slf")
     return _solved()
+
+
+@pytest.fixture()
+def tabled(monkeypatch, telemac_result):
+    """The same reach with the run's own MODULE TABLE on the record.
+
+    Whether a variable has a visible edge is that table's statement, so a read
+    that masks at one is read off a run that carries the table a solve writes."""
+    _reach(telemac_result)
+    monkeypatch.setattr(
+        "trid3nt_server.workflows.solver.solver.download_result",
+        lambda run_id, basename, error_code=None: "/tmp/does-not-matter.slf")
+    return _solved({"module": "telemac2d", "module_output": _table()})
 
 
 def test_a_tracer_token_resolves_to_the_declared_tracer_name_and_its_unit(solved):
@@ -95,8 +122,8 @@ def test_a_variable_the_result_does_not_carry_refuses(solved):
         solved.variable("S")
 
 
-def test_the_envelope_is_the_peak_every_node_reached_and_when(solved):
-    read = T2D.READS["max_over_time"](max_over_time("T1"), solved)
+def test_the_envelope_is_the_peak_every_node_reached_and_when(tabled):
+    read = T2D.READS["max_over_time"](max_over_time("T1"), tabled)
     assert isinstance(read, Field)
     assert list(read.values) == [10.0, 80.0, 5.0, 50.0, 60.0]
     assert read.measures["max"] == 80.0
@@ -107,7 +134,7 @@ def test_the_envelope_is_the_peak_every_node_reached_and_when(solved):
     assert read.units == "mg/L" and read.name == "DYE"
 
 
-def test_an_envelope_is_delivered_as_a_dataset_group_beside_the_results(solved,
+def test_an_envelope_is_delivered_as_a_dataset_group_beside_the_results(tabled,
                                                                        _store):
     """A field the result file carries no group for is written beside it as the
     SMS ASCII dataset MDAL loads onto the mesh it was measured over, with the
@@ -116,8 +143,8 @@ def test_an_envelope_is_delivered_as_a_dataset_group_beside_the_results(solved,
 
     primitive = max_over_time("T1").layer(style={"kind": "continuous",
                                                  "ramp": "reds"})
-    read = T2D.READS["max_over_time"](primitive, solved)
-    item = deliver(primitive, read, solved, caption="dye concentration",
+    read = T2D.READS["max_over_time"](primitive, tabled)
+    item = deliver(primitive, read, tabled, caption="dye concentration",
                    name="reach", where="the Wabash")
     mesh_product = item.product
     assert mesh_product.file == "r2d.slf"
@@ -134,14 +161,14 @@ def test_an_envelope_is_delivered_as_a_dataset_group_beside_the_results(solved,
     assert written.strip().splitlines()[-6:] == ["10", "80", "5", "50", "60", "ENDDS"]
 
 
-def test_a_node_below_the_read_s_floor_is_written_as_nothing(solved, _store):
+def test_a_node_below_the_read_s_floor_is_written_as_nothing(tabled, _store):
     """Where a tracer is below its own visible edge the dataset carries nothing,
     so the basemap shows through rather than the ramp's palest colour."""
     from trid3nt_server.workflows.telemac.modules.outputs import deliver
 
     primitive = field("T1", t=0).layer(style={"kind": "continuous"})
-    read = T2D.READS["field"](primitive, solved)
-    item = deliver(primitive, read, solved, caption="dye concentration",
+    read = T2D.READS["field"](primitive, tabled)
+    item = deliver(primitive, read, tabled, caption="dye concentration",
                    name="reach", where="the Wabash")
     assert item.product.datasets == ("dye_concentration-t0.dat",)
     assert item.product.t == 0.0
@@ -185,8 +212,8 @@ def test_a_series_at_a_point_is_measured_at_that_point(solved):
     assert [here[stat] for stat in ("min", "last", "range")] == [0.0, 0.0, 80.0]
 
 
-def test_the_field_over_every_instant_is_the_frames_an_animation_plays(solved):
-    read = T2D.READS["field"](field("T1", t="every"), solved)
+def test_the_field_over_every_instant_is_the_frames_an_animation_plays(tabled):
+    read = T2D.READS["field"](field("T1", t="every"), tabled)
     assert isinstance(read, Frames)
     assert (read.file, read.group, read.epsg, read.frames) == (
         "r2d.slf", "DYE", 32610, 4)
@@ -198,7 +225,7 @@ def test_the_field_over_every_instant_is_the_frames_an_animation_plays(solved):
     assert read.floor == pytest.approx(4.0)
 
 
-def test_the_animations_style_row_carries_the_floor_the_shader_clips_at(solved):
+def test_the_animations_style_row_carries_the_floor_the_shader_clips_at(tabled):
     """A group the RESULT FILE carries cannot be written with nothing below its
     floor, so the row is what masks it - and the range starts there.
 
@@ -209,8 +236,8 @@ def test_the_animations_style_row_carries_the_floor_the_shader_clips_at(solved):
     from trid3nt_server.workflows.telemac.modules.outputs import deliver
 
     primitive = field("T1", t="every").animate()
-    read = T2D.READS["field"](primitive, solved)
-    item = deliver(primitive, read, solved, caption="dye concentration",
+    read = T2D.READS["field"](primitive, tabled)
+    item = deliver(primitive, read, tabled, caption="dye concentration",
                    name="reach", where="the Wabash")
     assert item.product.floor == pytest.approx(4.0)
     assert item.product.value_range == pytest.approx((4.0, 80.0))
@@ -239,7 +266,9 @@ def test_a_tracer_that_never_rose_above_its_floor_refuses(monkeypatch,
         "trid3nt_server.workflows.solver.solver.download_result",
         lambda run_id, basename, error_code=None: "/tmp/does-not-matter.slf")
     with pytest.raises(OutputEmpty, match="never exceeded its floor"):
-        T2D.READS["max_over_time"](max_over_time("T1"), _solved())
+        T2D.READS["max_over_time"](
+            max_over_time("T1"),
+            _solved({"module": "telemac2d", "module_output": _table()}))
 
 
 def test_the_extent_and_the_mesh_are_measures_off_the_result_and_the_run(solved):

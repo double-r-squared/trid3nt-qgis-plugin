@@ -82,7 +82,9 @@
       "default": "aoi",
       "enum": [
         "aoi",
-        "line"
+        "line",
+        "domain",
+        "boundary run"
       ],
       "title": "Purpose",
       "type": "string"

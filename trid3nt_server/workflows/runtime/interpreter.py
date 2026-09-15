@@ -135,7 +135,7 @@ async def interpret(
 
     env = _Env(params=params, data={d.name: d for d in data}, results={},
                input_mode=input_mode, keywords=dict(keywords or {}), ledger=ledger,
-               resume=resume, supplied=dict(supplied or {}))
+               resume=resume, supplied=dict(supplied or {}), workflow=plan.name)
     out = RunResult(value=None, entries=entries, params=params)
     token = bind_domain(domain)
     notes_token = bind_notes()
@@ -191,10 +191,7 @@ async def interpret(
         # An unfilled context slot is LABELLED, never silent: the run answered a
         # slightly different question than one that had the layer, and the reader
         # is the only one who can decide whether that matters.
-        for name in env.absences:
-            out.notes.append(
-                f"the optional {name!r} context layer was not supplied, so the run "
-                "modelled the domain without it")
+        out.notes.extend(env.absences)
         await env.ledger.complete()
     except Exception as exc:
         # The failed attempt CARRIES what it got done, so the skeleton can record
@@ -266,6 +263,8 @@ class _Env:
     data: dict[str, DataDecl]
     results: dict[str, Any]
     input_mode: str | None = None
+    #: The workflow this walk belongs to - what a gate card names as the asker.
+    workflow: str = ""
     #: The raw keyword floor this invocation carried, by the name the caller used.
     keywords: dict[str, Any] = field(default_factory=dict)
     ledger: StepLedger | None = None
@@ -275,7 +274,8 @@ class _Env:
     #: Artifacts SUPPLIED rather than produced - a layer handle, a file uri, a
     #: gate's answer. What satisfies a producer-less ``Data`` slot.
     supplied: dict[str, Any] = field(default_factory=dict)
-    #: Absences worth narrating: an optional Data nothing satisfied.
+    #: Absences worth narrating, each as the SENTENCE the run carries: an
+    #: optional Data nothing satisfied, or a context row whose source was empty.
     absences: list[str] = field(default_factory=list)
     #: One record per produced Data, replayed ones included - the Data half of what
     #: a derivation of this run inherits.
@@ -293,13 +293,25 @@ async def _produce(env: _Env, decl: DataDecl) -> Any:
     handed_in = env.supplied.get(decl.name)
     if handed_in is not None:
         _validate_supplied(decl, handed_in, decl.supplied_validate)
-        return handed_in
+        return await _ingested(decl, handed_in)
     producer = decl.producer
+    if producer is None and decl.role:
+        # A SLOT the caller did not fill and no producer answers is asked for on
+        # the canvas, where the user has one. A declined drawing is not a value:
+        # the slot's own refusal below is what a reader then sees.
+        from trid3nt_server.inputs.slots import ask_on_canvas
+
+        drawn = await ask_on_canvas(decl.role, tool=env.workflow,
+                                    param=decl.name, input_mode=env.input_mode)
+        if drawn is not None:
+            return drawn
     if producer is None:
         # A producer-less slot: nothing was handed in, and naming a default
         # fetcher for it would be this library inventing the source.
         if decl.is_optional:
-            env.absences.append(decl.name)
+            env.absences.append(
+                f"the optional {decl.name!r} context layer was not supplied, so "
+                "the run modelled the domain without it")
             logger.info("data %s is an optional slot nothing satisfied; the run "
                         "proceeds without it", decl.name)
             return None
@@ -310,7 +322,7 @@ async def _produce(env: _Env, decl: DataDecl) -> Any:
         )
     if producer.supplied_uri:
         _validate_supplied(decl, producer.supplied_uri, producer.supplied_validate)
-        return producer.supplied_uri
+        return await _ingested(decl, producer.supplied_uri)
     cached = env.ledger.replay_data(decl.name) if (env.ledger and env.resume) else None
     if cached is not None and await _artifacts_live(cached):
         value = _rehydrate(cached)
@@ -319,11 +331,54 @@ async def _produce(env: _Env, decl: DataDecl) -> Any:
             logger.info("data %s REPLAYED from ledger", decl.name)
             return value
     label = _data_step_label(decl.name)
+    if decl.is_context:
+        return await _context(env, decl, label)
     answered, value = await _walk_ladder(env, producer, label)
     record = _record_for(decl.name, answered.runner, value,
                          inputs_key=inputs_digest(answered.kwargs))
     env.data_records.append(dataclasses.replace(
         record, index=-1, node=_data_step_label(decl.name)))
+    if env.ledger is not None:
+        await env.ledger.record_data(decl.name, record)
+    return await _ingested(decl, value)
+
+
+async def _ingested(decl: DataDecl, value: Any) -> Any:
+    """A SLOT's value through the one ingestion its role reads; a plain row's
+    value as it came.
+
+    The whole point of a slot is that what fills it reads the same afterwards,
+    so the ingestion runs wherever the value entered. Off the loop: reading a
+    layer's geometry is object-store IO, and the plan is walked on it."""
+    if not decl.role:
+        return value
+    from trid3nt_server.inputs.slots import ingest_slot
+
+    return await asyncio.to_thread(ingest_slot, decl.role, value,
+                                   label=decl.name)
+
+
+async def _context(env: _Env, decl: DataDecl, label: str) -> Any:
+    """A CONTEXT row: produced where the source has something, absent where it
+    does not, and the run continues either way under its own stated sentence.
+
+    Only an empty SOURCE is an absence - a cancelled run is not, and a retryable
+    gate error is a channel the caller still has to see."""
+    try:
+        answered, value = await _walk_ladder(env, decl.producer, label)
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:  # noqa: BLE001 - any empty source is the absence
+        if getattr(exc, "retryable", False):
+            raise
+        env.absences.append(f"{decl.context_sentence} ({exc})")
+        logger.info("data %s is CONTEXT and its source held nothing (%s); the run "
+                    "continues", decl.name, exc)
+        return None
+    record = _record_for(decl.name, answered.runner, value,
+                         inputs_key=inputs_digest(answered.kwargs))
+    env.data_records.append(dataclasses.replace(
+        record, index=-1, node=label))
     if env.ledger is not None:
         await env.ledger.record_data(decl.name, record)
     return value

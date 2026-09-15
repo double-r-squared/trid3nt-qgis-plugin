@@ -15,7 +15,10 @@ from .plan import DataRef, Row, body_rows
 from .temporal import TemporalSpec, spec_from
 
 __all__ = [
+    "BED",
+    "RUNS",
     "CoversAOI",
+    "DOMAIN",
     "Data",
     "DataDecl",
     "Producer",
@@ -25,6 +28,14 @@ __all__ = [
     "data_rows",
     "tool",
 ]
+
+#: The three ENGINE-NEUTRAL slots a solved run stands on, named as ROLES rather
+#: than as rows: the closed polygon the equations are solved over, the elevation
+#: every node of it carries, and the named stretches of its edge. A raster engine
+#: fills the same three with a grid, so no word here belongs to an engine.
+DOMAIN = "domain"
+BED = "bed"
+RUNS = "runs"
 
 
 # A ROW NAMES ITS PRODUCER; RETRIEVAL NEVER PICKS ONE. What a run stands on is
@@ -195,6 +206,16 @@ class DataDecl(Row):
     #: How a supplied artifact is checked against the domain - BOUND-DOMAIN-ONLY
     #: under ``CoversAOI`` (see :class:`_CoversAOI`), which is not a coverage test.
     supplied_validate: Any = CoversAOI
+    #: Which engine-neutral SLOT this row is, or ``""`` for a plain row. A slot
+    #: is filled the same way whatever fills it - a drawing, the user's layer, or
+    #: a producer - and nothing downstream branches on which.
+    role: str = ""
+    #: This row is CONTEXT: it names a producer, and its absence continues the
+    #: run under the sentence below rather than refusing.
+    is_context: bool = False
+    #: What the sheet says when a context row came back empty. Stated by the
+    #: template in its own words about what is not there.
+    absent_note: str = ""
 
     _row_attr = "name"
     _ref_type = DataRef
@@ -207,12 +228,28 @@ class DataDecl(Row):
                 f"Data {self.name!r} declares a producer AND .optional(): a producer "
                 "either produces the artifact or fails typed, so there is no absence "
                 "for optional to describe. Drop the producer to make it a context "
-                "slot, or drop .optional()."
+                "slot, or declare it .context(), which states what the run says "
+                "when the source is empty."
+            )
+        if self.is_context and self.producer is None:
+            raise PlanValidationError(
+                f"Data {self.name!r} declares .context() with no producer: a context "
+                "row is a PRODUCER whose absence is legal, and a row with no "
+                "producer already says absence with .optional()."
             )
 
     @property
     def is_supplied(self) -> bool:
         return getattr(self.producer, "supplied_uri", None) is not None
+
+    @property
+    def fills_from_user(self) -> bool:
+        """Is this row on the WIRE for a caller to fill?
+
+        Every producer-less row is, and so is a SLOT that names a producer: a
+        drawn domain or a surveyed bed supersedes the fetcher the template
+        preferred, and the run reads one value either way."""
+        return self.producer is None or bool(self.role)
 
     @property
     def producer_kwargs(self) -> Mapping[str, Any]:
@@ -231,6 +268,11 @@ class DataDecl(Row):
         """This slot's declared type on the generated tool's signature.
         Always a string: the declared shape rides along as :class:`SuppliedGeometry`
         metadata rather than narrowing the type."""
+        if self.role == BED:
+            # A bed is a surface, a survey, OR a depth in metres: a schema that
+            # advertised only a layer name would refuse the pond the user can
+            # describe in one number.
+            return str | float | None
         if self.geometry is None:
             return str | None
         return Annotated[str | None, SuppliedGeometry(self.geometry)]
@@ -238,7 +280,23 @@ class DataDecl(Row):
     @property
     def doc_line(self) -> str:
         """What the model reads about this slot: the shape it takes, and whether
-        absence is legal. The slot names no source, so the shape is all it can say."""
+        absence is legal. A plain slot names no source, so the shape is all it can
+        say; a SLOT that names a producer says what standing a supplied value has."""
+        if self.role == DOMAIN:
+            return ("the closed polygon this run solves over, as a uri, a layer "
+                    "name or a drawn shape"
+                    + ("; unfilled, the template's own producer finds one."
+                       if self.producer is not None else "."))
+        if self.role == RUNS:
+            return ("the stretches of the domain's edge that carry a boundary "
+                    "condition - each two points on the edge and a type "
+                    "(inflow, outflow, open); a closed body states none")
+        if self.role == BED:
+            return ("what the domain's nodes carry for elevation: a DEM, a "
+                    "bathymetry or survey raster, a layer of soundings, or a "
+                    "depth in metres below the free surface"
+                    + ("; unfilled, the template's own producer supplies it."
+                       if self.producer is not None else "."))
         shape = f"a {self.geometry} layer" if self.geometry else "a layer"
         tail = ("absent is legal and the run reports it" if self.is_optional
                 else "required - the template names no source for it")
@@ -248,6 +306,16 @@ class DataDecl(Row):
         """Refuse a supplied artifact whose CLASS is not the shape this slot declared.
 
         Suffix-deep and no deeper; an unclassifiable artifact passes."""
+        if self.role == BED:
+            # A bed takes every class a survey arrives in EXCEPT a mesh: a
+            # solved domain is not an elevation source, and adopting one would
+            # paint the nodes from something nobody measured the ground with.
+            if artifact_class(value) == "mesh":
+                raise SuppliedGeometryError(
+                    f"Data {self.name!r} is the BED slot: it takes a raster "
+                    "surface, a layer of soundings or a depth in metres, and "
+                    f"what was supplied reads as a mesh ({value!r}).")
+            return
         if self.geometry is None:
             return
         found = artifact_class(value)
@@ -282,6 +350,62 @@ class DataDecl(Row):
         """Absence is legal, and LABELLED: the run says the slot went unfilled."""
         return replace(self, is_optional=True)
 
+    def __call__(self, producer: Producer) -> "DataDecl":
+        """This row, produced by ``producer``: what ``Data(tool(...))`` declares.
+
+        The row shape a modifier is written on - ``Data(tool(...)).context()`` -
+        where a bare ``tool(...)`` row has nothing to write one on."""
+        if not isinstance(producer, Producer):
+            raise PlanValidationError(
+                f"Data(...) takes a producer - tool(name, **kwargs) - and was "
+                f"given {type(producer).__name__} ({producer!r}).")
+        if self.producer is not None:
+            raise PlanValidationError(
+                f"Data {self.name!r} already names a producer; a row is produced "
+                "one way.")
+        return replace(self, producer=producer)
+
+    def context(self, absent: str = "") -> "DataDecl":
+        """This producer row is CONTEXT: its absence continues the run.
+
+        ``absent`` is the sentence the sheet carries when the source held
+        nothing near this domain; unstated, the row's own name says it."""
+        return replace(self, is_context=True, absent_note=str(absent or ""))
+
+    def domain(self, producer: Producer | None = None) -> "DataDecl":
+        """THE DOMAIN: the closed polygon the equations are solved over.
+
+        Geometry only, and one slot however it is filled - drawn on the canvas,
+        the user's own layer, or the ``producer`` this question prefers."""
+        row = self if producer is None else self(producer)
+        return replace(row, role=DOMAIN, geometry="polygon")
+
+    def runs(self, producer: Producer | None = None) -> "DataDecl":
+        """THE BOUNDARY RUNS: named stretches of the domain's edge.
+
+        Zero or more, each two points on the edge and a type; a closed body
+        states none and its mesh has only walls. Filled by the user's drawing,
+        the user's layer, or the domain producer that measured the edge."""
+        row = self if producer is None else self(producer)
+        return replace(row, role=RUNS, geometry="polyline", is_optional=True)
+
+    def bed(self, producer: Producer | None = None) -> "DataDecl":
+        """THE BED: what every node of the domain carries for elevation.
+
+        A DEM, a bathymetry or survey raster, a layer of soundings, or a stated
+        depth below the free surface - one slot, and the mesh records which
+        source actually painted each node."""
+        row = self if producer is None else self(producer)
+        return replace(row, role=BED)
+
+    @property
+    def context_sentence(self) -> str:
+        """What the run says when this context row's source held nothing."""
+        if self.absent_note:
+            return self.absent_note
+        return (f"no {self.name.replace('_', ' ')} near this domain; the stated "
+                "value stands")
+
 
 #: The unfilled CONTEXT SLOT a ``DATA`` body writes its modifiers onto. Every
 #: modifier returns a fresh row, so the prototype itself is never a template's
@@ -297,6 +421,11 @@ def data_rows(body: Any) -> tuple[DataDecl, ...]:
     for value in body_rows(body, (Producer, DataDecl)):
         if isinstance(value, Producer):
             rows.append(DataDecl(name=value.row, producer=_bound_producer(value)))
+        elif value.producer is not None:
+            # A row written as ``Data(tool(...))`` carries its producer on the
+            # DECLARATION, and its reads of sibling rows are bound here for the
+            # same reason a bare producer row's are.
+            rows.append(replace(value, producer=_bound_producer(value.producer)))
         else:
             rows.append(value)
     return tuple(rows)

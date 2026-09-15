@@ -41,36 +41,132 @@ _PIT_FILL = "pit_fill"
 _BED_MARGIN_FRAC = 0.02
 def set_bed(mesh: Mesh, source: Any, interp: str = "nearest",
             condition: str | None = None) -> Mesh:
-    """Paint every node's elevation from a TOPOBATHY source -> the mesh, bedded.
+    """Paint every node's elevation from the bed slot -> the mesh, bedded.
 
-    ``source`` is a raster fetcher's name, an object-store uri, or a layer."""
-    from trid3nt_server.workflows.mesh.shared.nodes import sample_raster_at_nodes
+    ``source`` is ONE surface - a raster fetcher's name, an object-store uri, a
+    layer, a layer of soundings, or a depth in metres below the free surface. A
+    bed built from a measurement over a wider surface is composed BEFORE here,
+    by the merge derive, and arrives as the one layer it produced."""
+    import numpy as np
 
     if str(interp) not in _INTERPOLATIONS:
         raise MeshToolError(
             "MESH_OP_BAD_VALUE",
             f"set_bed reads a raster {list(_INTERPOLATIONS)}, not {interp!r}.")
     lonlat = _lonlat_nodes(mesh)
-    raster, provenance, note = _bed_raster(source, _grown(_extent(lonlat)))
-    if condition:
-        raster, provenance = _conditioned(raster, provenance, condition)
-    bed = sample_raster_at_nodes(str(raster), lonlat, interp=str(interp))
+    box = _grown(_extent(lonlat))
+    cell_m = _node_spacing_m(mesh)
+    values, provenance, note = _painted(source, lonlat, box, interp, condition,
+                                        cell_m)
+    unpainted = int((~np.isfinite(values)).sum())
+    if unpainted:
+        raise MeshToolError(
+            "MESH_BED_UNPAINTED",
+            f"{unpainted} of {values.size} nodes have no elevation from "
+            f"{provenance}: the domain reaches past the surface it was given. "
+            "Merge that surface with one that covers the rest, name a source "
+            "that covers it whole, or state the depth this water body holds.")
+    painted = f"{provenance} at {values.size} nodes"
     logger.info("set_bed: %d nodes painted from %s (%s)",
-                bed.shape[0], provenance, interp)
+                values.size, provenance, interp)
     return _with_meta(
-        dataclasses.replace(mesh, bed=bed),
-        bed_source=provenance,
+        dataclasses.replace(mesh, bed=np.asarray(values, dtype=float)),
+        bed_source=painted,
+        bed_sources=[provenance],
         bed_fallback_note=note,
         synthetic_inputs=[
             *(mesh.meta.get("synthetic_inputs") or []),
-            {"param": "mesh_bed", "value": provenance, "basis": "fetched",
-             "consequence": "physics", "real_source_if_any": provenance,
+            {"param": "mesh_bed", "value": painted, "basis": "fetched",
+             "consequence": "physics", "real_source_if_any": painted,
              "note": "the elevation every node carries; a solver reads it as the "
                      "domain's bathymetry"}])
 
 
-def set_boundary_roles(mesh: Mesh, **roles: Any) -> Mesh:
+def _painted(source: Any, lonlat: Any, box: tuple[float, float, float, float],
+             interp: str, condition: str | None, cell_m: float
+             ) -> tuple[Any, str, str | None]:
+    """One bed source sampled at the nodes -> ``(values, provenance, note)``.
+
+    A node the source has nothing for comes back NaN, which is what lets a
+    second source paint it; a STATED DEPTH covers every node by construction."""
+    import numpy as np
+
+    from trid3nt_server.inputs.bed import DEPTH, POINTS, bed as read_bed
+    from trid3nt_server.workflows.mesh.shared.nodes import sample_raster_at_nodes
+
+    slot = read_bed(source, label="bed")
+    if slot is None:
+        raise MeshToolError(
+            "MESH_BED_UNRESOLVED",
+            "set_bed was given no source, so the mesh has no elevation to carry.")
+    if slot.kind == DEPTH:
+        # A DEPTH is stated below the free surface, and the surface a run opens
+        # at is its own zero, so the bed it describes is a flat bottom at minus
+        # that depth. Every node is covered, which is why it never falls back.
+        depth = float(slot.depth_m or 0.0)
+        return (np.full(np.asarray(lonlat).shape[0], -depth, dtype=float),
+                f"stated depth {depth:g} m below the free surface", None)
+    if slot.kind == POINTS:
+        raster, provenance = _interpolated_survey(slot.source, cell_m)
+        note = None
+    else:
+        raster, provenance, note = _bed_raster(slot.source, box)
+    if condition:
+        raster, provenance = _conditioned(raster, provenance, condition)
+    values = sample_raster_at_nodes(str(raster), lonlat, interp=str(interp),
+                                    fill_holes=False)
+    return values, provenance, note
+
+
+def _node_spacing_m(mesh: Mesh) -> float:
+    """This mesh's own median element edge, in metres - the scale a bed has to
+    resolve. A surface finer than the elements buys nothing, and one coarser
+    loses the channel the elements were sized for."""
+    import numpy as np
+
+    if not mesh.has_cells:
+        return 0.0
+    xy, _epsg = _metre_nodes(mesh)
+    cells = np.asarray(mesh.cells, dtype=int)
+    lengths = []
+    for a, b in ((0, 1), (1, 2), (2, 0)):
+        lengths.append(np.hypot(*(xy[cells[:, b]] - xy[cells[:, a]]).T))
+    return float(np.median(np.concatenate(lengths)))
+
+
+def _interpolated_survey(layer: Any, cell_m: float) -> tuple[Any, str]:
+    """A layer of SOUNDINGS through the derive that turns it into a surface.
+
+    Called by NAME: interpolating scattered measurements is useful outside any
+    slot, so it is a tool, and a tree without it refuses saying which one."""
+    from trid3nt_server.inputs.bed import SURVEY_DERIVE
+    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt_server.inputs.geometry import source_uri
+
+    if SURVEY_DERIVE not in TOOL_REGISTRY:
+        raise MeshToolError(
+            "MESH_BED_SURVEY_UNINTERPOLATED",
+            f"the bed was handed a layer of soundings and {SURVEY_DERIVE!r} is "
+            "not registered, so there is nothing to turn the points into the "
+            "surface the nodes are sampled from. Supply a survey RASTER, or "
+            "register the derive.")
+    if not cell_m:
+        raise MeshToolError(
+            "MESH_BED_SURVEY_UNSCALED",
+            "this mesh states no cells of its own, so there is no element scale "
+            "to interpolate the soundings at; supply a survey raster instead.")
+    surface = TOOL_REGISTRY[SURVEY_DERIVE].fn(points=layer,
+                                              resolution_m=float(cell_m))
+    return op_raster(surface), (f"{SURVEY_DERIVE} at {cell_m:.3g} m over the "
+                                f"supplied soundings ({source_uri(layer)})")
+
+
+def set_boundary_roles(mesh: Mesh, runs: Any = None, **roles: Any) -> Mesh:
     """Which CONTIGUOUS runs of the boundary carry which role -> the mesh, roled.
+
+    ``runs`` is the BOUNDARY RUNS the domain slot carries - two points on the
+    edge and a type each, from a template, a producer or the user's drawing -
+    and stating none is an answer: a closed body's edge is solid wall whole.
 
     ``roles`` is ``{role: face}`` or ``{role: [face, ...]}`` - ``inflow``,
     ``outflow``, ``open``, ``rating_curve``, ``free_exit`` - each face a geometry
@@ -92,7 +188,8 @@ def set_boundary_roles(mesh: Mesh, **roles: Any) -> Mesh:
 
     from trid3nt_server.workflows.mesh.shared.nodes import boundary_contours
 
-    if not roles:
+    declared = _declared_faces(runs, roles)
+    if not declared:
         return mesh
     if not mesh.has_cells:
         raise MeshToolError(
@@ -104,13 +201,12 @@ def set_boundary_roles(mesh: Mesh, **roles: Any) -> Mesh:
     if not contours:
         raise MeshToolError(
             "MESH_BOUNDARY_UNSEGMENTED",
-            f"boundary roles {sorted(roles)} were declared but this mesh's "
+            f"boundary roles {sorted(declared)} were declared but this mesh's "
             "boundary walk found no nodes to carry them.")
     points_m, utm_epsg = _metre_nodes(mesh)
     tr = Transformer.from_crs(4326, int(utm_epsg), always_xy=True)
-    faces = {str(role): [_transform(tr.transform, _shape(face))
-                         for face in _faces(role, value)]
-             for role, value in roles.items()}
+    faces = {role: [_transform(tr.transform, _shape(face)) for face in value]
+             for role, value in declared.items()}
     xy = np.asarray(points_m, dtype=float)
     # The tolerance is measured off the mesh and gates the FACE, not its anchors:
     # a triangulator conforms to a polygon within an edge along its sides and
@@ -148,6 +244,22 @@ def set_boundary_roles(mesh: Mesh, **roles: Any) -> Mesh:
                            for role, runs in matched.items()}},
         boundary_role_runs={**dict(mesh.meta.get("boundary_role_runs") or {}),
                             **{role: len(runs) for role, runs in matched.items()}})
+
+
+def _declared_faces(runs: Any, roles: Mapping[str, Any]
+                    ) -> dict[str, list[dict[str, Any]]]:
+    """Every face this call prescribes, by role: the runs and the named roles.
+
+    A run of type ``wall`` prescribes nothing - the edge is already wall where
+    nothing names it - so a body whose runs are all walls declares no face."""
+    from trid3nt_server.inputs.boundary import boundary_runs, roles_from_runs
+
+    out: dict[str, list[dict[str, Any]]] = {}
+    for role, value in roles.items():
+        out.setdefault(str(role), []).extend(_faces(str(role), value))
+    for role, faces in roles_from_runs(boundary_runs(runs)).items():
+        out.setdefault(role, []).extend(faces)
+    return {role: faces for role, faces in out.items() if faces}
 
 
 def _bed_raster(source: Any, bbox: tuple[float, float, float, float]

@@ -377,6 +377,64 @@ package DataSeam {
         */
     }
 
+    part def DomainSlot {
+        doc /*
+        The one row a run is solved over: a closed polygon, geometry only.
+        Drawn, picked, fetched or purely surveyed, it reads the same afterwards.
+        */
+    }
+
+    part def BedSlot {
+        doc /*
+        The one row every node's elevation comes from, over every shape a user
+        can have it in: a surface, a layer of soundings, or a stated depth.
+        */
+    }
+
+    part def BoundaryRunSlot {
+        doc /*
+        The named stretches of the domain's edge, each two points and a type.
+        Zero of them is an answer: a closed body's edge is solid wall whole.
+        */
+    }
+
+    part def ContextRow {
+        doc /*
+        A producer row whose absence is legal, and SAID: the run continues and
+        the sheet carries the sentence the row states.
+        */
+    }
+
+    part domainSlot : DomainSlot {
+        doc /*
+        code: trid3nt_server/inputs/domain.py
+        */
+    }
+
+    part bedSlot : BedSlot {
+        doc /*
+        code: trid3nt_server/inputs/bed.py
+        */
+    }
+
+    part boundaryRunSlot : BoundaryRunSlot {
+        doc /*
+        code: trid3nt_server/inputs/boundary.py
+        */
+    }
+
+    part slotDoor : DomainSlot {
+        doc /*
+        code: trid3nt_server/inputs/slots.py
+        */
+    }
+
+    part contextRow : ContextRow {
+        doc /*
+        code: trid3nt_server/workflows/runtime/data.py
+        */
+    }
+
     part lakeDeclaration : BedSourceDeclaration {
         doc /*
         code: trid3nt_server/tools/fetchers/ocean/fetch_greatlakes_bathymetry/source.yaml
@@ -575,11 +633,19 @@ package DataSeam {
         eHydro, the navigable primary: its queryable surface is one layer of
         survey-boundary polygons carrying a horizontal projection and no
         vertical datum field at all, with the soundings behind per-survey bulk
-        archives on another host. A bed whose datum is unknowable from its index
-        cannot state its datum, so it cannot be on this ladder. What the
-        methodology leaves under it is BlueTopo alone, and one source is not a
-        degradation path - so the navigable class has no ladder either and
+        archives on another host. A LADDER RUNG has to state its datum on the
+        source row, before it fetches, so it cannot be one - and what the
+        methodology leaves under it is BlueTopo alone, which is not a
+        degradation path either. The navigable class therefore has no ladder and
         refuses, naming the stopped primary.
+
+        That is a statement about LADDERS, not about eHydro. A survey states its
+        own zero on its own features - a local project datum on many rivers -
+        and that is read where the soundings are, so eHydro is a DATA row of its
+        own: the row states the datum per feature, the surface derived from it
+        carries what those features stated, and the merge that places it over a
+        terrain surface refuses two different zeros BY NAME. A per-source zero
+        and a per-row zero are both stated; neither is ever assumed.
 
         NXSDB, the small-stream primary: its measurements carry depth below the
         water surface and no bed elevation and no vertical datum, published as
@@ -615,6 +681,70 @@ package DataSeam {
         into an answer a caller can act on. The machine-local rung is named by
         TRID3NT_GSHHG_SHP and nothing exports it on a caller's behalf: unset, it
         states no resolution, is walked last, and is named in the refusal.
+        */
+    }
+
+    requirement def TheDomainIsOneSlotHoweverItIsFilled {
+        doc /*
+        A template solves over any body of water: drawn, picked, fetched, or
+        purely surveyed. The DOMAIN is one row - a closed polygon, geometry only
+        - and nothing downstream branches on where it came from, because the
+        moment a consumer can tell, half the ways of filling it stop working.
+
+        A slot that names a producer is still on the WIRE: what the user hands in
+        supersedes the source the template preferred, and that is the whole of
+        how a body of water no fetcher knows gets modelled. Fetchers are one way
+        to fill a slot, never the linchpin.
+        */
+    }
+
+    requirement def OneBedOverEverySourceAUserCanHave {
+        doc /*
+        The bed is one seam fed by whatever the user has: a fetched DEM, a
+        bathymetry or survey raster, a layer of soundings, or a stated depth
+        below the free surface. The slot takes ONE source, and it is one row.
+
+        A bed built from a survey over a wider surface is EXISTING COMPOSITION,
+        not new vocabulary: a survey row declared context, a terrain row, and a
+        merged row that is a derive over the two - primary over fallback by
+        coverage, with a sidecar recording which input won at each cell, and the
+        terrain passing through unchanged where no survey was published. The
+        derive is useful outside any slot, which is why it is a tool rather than
+        a second argument on the mesh op, and a fetcher's ladder - which is
+        about a source being unavailable - is never spelled as one.
+
+        A node the source does not cover REFUSES by name. Filling the hole with
+        the mean of what was covered is a bed nobody measured, and it reads as
+        data everywhere downstream.
+        */
+    }
+
+    requirement def ABoundaryRunIsTwoPointsAndAType {
+        doc /*
+        A run is two Points on the domain's edge and a type - wall by default,
+        inflow, outflow, open. A template or a producer states zero or more, and
+        STATING NONE IS AN ANSWER: a closed body has no liquid boundary and its
+        mesh has only walls, so nothing is prescribed where nothing is named.
+
+        A PRODUCER that cut its polygon between two faces returns those faces as
+        rows of the same artifact, and the domain slot reads them off it: the
+        producer names which row is which in its OWN vocabulary, and the slot
+        reads that rather than asking a fetcher to speak the slot's. A row
+        naming a stretch that prescribes nothing is the wall the edge already
+        is, and is not a run.
+        */
+    }
+
+    requirement def AContextRowsAbsenceContinuesTheRun {
+        doc /*
+        A producer row declared as CONTEXT continues the run when its source held
+        nothing, and the sheet carries the sentence the row states. Every other
+        producer row still fails typed: the difference is declared, not inferred,
+        because a row that is load-bearing and a row that is background look
+        identical from inside the fetch.
+
+        The refusal for a producer row declared .optional() stands: absence with
+        nothing said about it is the failure mode this row was written to end.
         */
     }
 
@@ -700,6 +830,12 @@ package DataSeam {
         "tests/telemac/test_open_water_domains.py::test_water_no_gauge_watches_refuses_rather_than_opening_at_the_datum";
     verify requirement AFreeSurfaceAndABedShareOneStatedDatum by
         "tests/telemac/test_open_water_domains.py::test_the_thermocline_is_stated_below_the_water_top_not_the_datum";
+    verify requirement AFreeSurfaceAndABedShareOneStatedDatum by
+        "tests/derive/test_derive_merge_rasters.py::test_two_datums_refuse_by_name";
+    verify requirement AFreeSurfaceAndABedShareOneStatedDatum by
+        "tests/derive/test_derive_merge_rasters.py::test_an_unstated_datum_refuses";
+    verify requirement AFreeSurfaceAndABedShareOneStatedDatum by
+        "tests/inputs/test_vertical_datum.py::test_a_layer_states_its_own_datum_and_a_name_reads_its_source_row";
 
     satisfy requirement BedSourceStatesItsDatum by blueTopoSource;
     satisfy requirement BedSourceStatesItsDatum by blueTopoDeclaration;
@@ -758,6 +894,70 @@ package DataSeam {
         "tests/mesh/test_mesh_shoreline_ladder.py::test_an_unset_shoreline_variable_is_named_rather_than_exported";
     verify requirement TheShorelineIsALadderWithStatedFidelity by
         "tests/mesh/test_mesh_shoreline_ladder.py::test_the_land_is_on_the_left_of_the_way_the_way_was_drawn";
+
+    satisfy requirement TheDomainIsOneSlotHoweverItIsFilled by domainSlot;
+    satisfy requirement TheDomainIsOneSlotHoweverItIsFilled by slotDoor;
+    satisfy requirement TheDomainIsOneSlotHoweverItIsFilled by contextRow;
+    verify requirement TheDomainIsOneSlotHoweverItIsFilled by
+        "tests/runtime/test_domain_bed_and_context_slots.py::test_a_domain_row_is_one_slot_however_it_is_filled";
+    verify requirement TheDomainIsOneSlotHoweverItIsFilled by
+        "tests/inputs/test_slot_inputs.py::test_a_drawn_ring_a_geojson_polygon_and_a_collection_read_the_same";
+    verify requirement TheDomainIsOneSlotHoweverItIsFilled by
+        "tests/inputs/test_slot_inputs.py::test_several_polygons_are_one_domain_with_parts";
+    verify requirement TheDomainIsOneSlotHoweverItIsFilled by
+        "tests/inputs/test_slot_inputs.py::test_a_shape_that_is_not_closed_refuses_rather_than_being_squared_off";
+    verify requirement TheDomainIsOneSlotHoweverItIsFilled by
+        "tests/telemac/test_workflow_owns_its_stages.py::test_the_domain_and_the_bed_reach_the_wire_as_the_slots_they_are";
+
+    satisfy requirement OneBedOverEverySourceAUserCanHave by bedSlot;
+    satisfy requirement OneBedOverEverySourceAUserCanHave by bedPainter;
+    verify requirement OneBedOverEverySourceAUserCanHave by
+        "tests/inputs/test_slot_inputs.py::test_the_bed_slot_says_which_shape_it_was_handed";
+    verify requirement OneBedOverEverySourceAUserCanHave by
+        "tests/mesh/test_bed_sources_and_runs.py::test_a_stated_depth_is_a_flat_bed_below_the_free_surface";
+    verify requirement OneBedOverEverySourceAUserCanHave by
+        "tests/mesh/test_bed_sources_and_runs.py::test_the_bed_is_one_source_and_two_are_merged_before_the_op";
+    verify requirement OneBedOverEverySourceAUserCanHave by
+        "tests/derive/test_derive_merge_rasters.py::test_the_primary_wins_where_it_measured_and_the_fallback_fills_the_rest";
+    verify requirement OneBedOverEverySourceAUserCanHave by
+        "tests/derive/test_derive_merge_rasters.py::test_the_sidecar_says_which_input_painted_each_cell";
+    verify requirement OneBedOverEverySourceAUserCanHave by
+        "tests/derive/test_derive_merge_rasters.py::test_an_absent_primary_passes_the_other_surface_through";
+    verify requirement OneBedOverEverySourceAUserCanHave by
+        "tests/mesh/test_bed_sources_and_runs.py::test_a_domain_no_source_covers_refuses_by_name";
+    verify requirement OneBedOverEverySourceAUserCanHave by
+        "tests/mesh/test_bed_sources_and_runs.py::test_a_layer_of_soundings_goes_through_the_derive_at_the_meshs_own_scale";
+    verify requirement OneBedOverEverySourceAUserCanHave by
+        "tests/mesh/test_bed_sources_and_runs.py::test_a_tree_without_the_soundings_derive_says_which_one_is_missing";
+    verify requirement OneBedOverEverySourceAUserCanHave by
+        "tests/telemac/test_workflow_owns_its_stages.py::test_the_bed_op_takes_the_one_row_the_merge_derive_produced";
+    verify requirement OneBedOverEverySourceAUserCanHave by
+        "tests/telemac/test_workflow_owns_its_stages.py::test_a_second_bed_row_refuses_by_name";
+
+    verify requirement ABoundaryRunIsTwoPointsAndAType by
+        "tests/inputs/test_slot_inputs.py::test_a_domain_producer_hands_over_the_runs_it_cut_the_polygon_between";
+    satisfy requirement ABoundaryRunIsTwoPointsAndAType by boundaryRunSlot;
+    satisfy requirement ABoundaryRunIsTwoPointsAndAType by bedPainter;
+    verify requirement ABoundaryRunIsTwoPointsAndAType by
+        "tests/inputs/test_slot_inputs.py::test_a_run_is_two_points_on_the_edge_and_a_type";
+    verify requirement ABoundaryRunIsTwoPointsAndAType by
+        "tests/inputs/test_slot_inputs.py::test_a_drawn_line_is_the_run_between_its_two_ends";
+    verify requirement ABoundaryRunIsTwoPointsAndAType by
+        "tests/inputs/test_slot_inputs.py::test_a_closed_body_states_no_run_and_prescribes_nothing";
+    verify requirement ABoundaryRunIsTwoPointsAndAType by
+        "tests/mesh/test_bed_sources_and_runs.py::test_boundary_runs_prescribe_the_roles_their_types_name";
+    verify requirement ABoundaryRunIsTwoPointsAndAType by
+        "tests/mesh/test_bed_sources_and_runs.py::test_a_closed_body_states_no_run_and_the_mesh_has_only_walls";
+
+    satisfy requirement AContextRowsAbsenceContinuesTheRun by contextRow;
+    verify requirement AContextRowsAbsenceContinuesTheRun by
+        "tests/runtime/test_domain_bed_and_context_slots.py::test_a_context_rows_absence_continues_the_run_and_says_so";
+    verify requirement AContextRowsAbsenceContinuesTheRun by
+        "tests/runtime/test_domain_bed_and_context_slots.py::test_a_hard_producer_row_still_refuses_when_its_source_is_empty";
+    verify requirement AContextRowsAbsenceContinuesTheRun by
+        "tests/runtime/test_domain_bed_and_context_slots.py::test_context_needs_a_producer_and_optional_still_refuses_one";
+    verify requirement AContextRowsAbsenceContinuesTheRun by
+        "tests/runtime/test_domain_bed_and_context_slots.py::test_a_context_row_states_what_the_sheet_says_when_its_source_is_empty";
 
     satisfy requirement ThalwegBurningIsNeverABedSource by blueTopoSource;
     satisfy requirement ThalwegBurningIsNeverABedSource by waterBodyClassifier;
