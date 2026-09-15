@@ -111,6 +111,13 @@ def test_a_host_handed_no_weather_states_no_file(wrapper):
     assert dict(fill(wrapper, atmosphere=Atmosphere()).resolved()) == {}
 
 
+@pytest.mark.parametrize("wrapper", [T2D, T3D])
+def test_a_series_with_no_clock_refuses_rather_than_being_dropped(wrapper):
+    with pytest.raises(TelemacError) as refusal:
+        fill(wrapper, atmosphere=Atmosphere(air_temp_c=[12.0, 14.0])).resolved()
+    assert "air_temp_c" in str(refusal.value)
+
+
 # -- what a fetched station record becomes ----------------------------------- #
 
 def _observation(hour: int, **overrides):

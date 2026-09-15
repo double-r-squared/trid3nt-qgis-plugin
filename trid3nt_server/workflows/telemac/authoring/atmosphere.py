@@ -172,6 +172,12 @@ def _expand(value: Mapping[str, Any], columns: Sequence[str]
     The host opens that file only when it has a reason to read the weather - a
     coupled water-quality module, a wind, an air pressure."""
     if value.get("times_s") is None and value.get("observed") is None:
+        stated = [name for name in COLUMNS if value.get(name) is not None]
+        if stated:
+            raise TelemacError(
+                f"{', '.join(stated)} came with no clock to read them on; state "
+                "times_s beside the series, or hand the slot a fetched record.",
+                error_code="TELEMAC_WEATHER_INCOMPLETE")
         # Neither a clock nor a record came, so no weather was resolved.
         return ({}, {})
     return ({"ASCII_ATMOSPHERIC_DATA_FILE": ATMOSPHERE_FILENAME},
