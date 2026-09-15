@@ -61,12 +61,16 @@ legend is ranged from: a `center` for a diverging ramp, a `floor`, a `p<q>` cap)
 The FORMAT decides which of the four preset shapes draws it; the row's range
 semantics are how the producer MEASURED the range, and what the layer carries is
 the range itself, as a fixed `scale` - plus, on a mesh, the `floor` the PRODUCT
-measured, because the mask is still ahead of the renderer. A TEMPORAL layer is
-ranged over every frame of the record, never over its last frame alone: a
-variable that peaks and flushes would otherwise be ranged on an empty field and
-paint blank. Every product of one quantity is ranged together, so two planes of
-one variable read on one ramp, and a legend end rounds AWAY from the field so no
-value falls outside the range that clips against it.
+measured, because the mask is still ahead of the renderer. A `p<q>` cap feeds
+BOTH of those through one seam, `presets.declared_peak`: the legend's top and
+the magnitude a mask edge is taken as a fraction of are the same statistic, so
+a record maximum one drying node carries moves neither and a legend can never
+range over a field its own mask hid. A TEMPORAL layer is ranged over every
+frame of the record, never over its last frame alone: a variable that peaks and
+flushes would otherwise be ranged on an empty field and paint blank. Every
+product of one quantity is ranged together, so two planes of one variable read
+on one ramp, and a legend end rounds AWAY from the field so no value falls
+outside the range that clips against it.
 
 There are no preset NAMES: `presets.py` closes a four-kind family (continuous
 raster, classed vector-or-raster, reference outline, mesh dataset group) and
