@@ -110,7 +110,7 @@ docstring: |-
     model output. There is no HRRR-Smoke "observation"; use
     ``fetch_airnow_air_quality`` for measured surface particulate.
   - Active fire detection -- use ``fetch_firms_active_fire`` (NASA VIIRS/
-    MODIS hot spots) or ``fetch_goes_satellite`` (GOES-East/West fire
+    MODIS hot spots) or ``fetch_satellite_imagery`` (GOES-East/West fire
     products). HRRR-Smoke ingests these as forcing; it does not produce
     them.
   - Fire perimeters -- use ``fetch_nifc_fire_perimeters`` (active) or

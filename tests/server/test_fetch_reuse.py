@@ -74,7 +74,7 @@ def test_the_predicted_key_is_the_one_the_source_would_land_under() -> None:
     # A source whose key depends on a resolve round trip does not predict, and
     # neither does a frames list - one key per frame, no single address.
     assert prospective_cache_key(get_spec("fetch_mrms_qpe"), {"bbox": AOI}) is None
-    assert prospective_cache_key(get_spec("fetch_goes_animation"),
+    assert prospective_cache_key(get_spec("fetch_satellite_imagery"),
                                  {"bbox": AOI}) is None
 
 

@@ -244,6 +244,6 @@ def _download_to_tempfile(url: str, *, session: requests.Session | None = None) 
             pass
         raise
     logger.info(
-        "fetch_goes_satellite: downloaded %d bytes to %s", os.path.getsize(path), path
+        "goes archive: downloaded %d bytes to %s", os.path.getsize(path), path
     )
     return path

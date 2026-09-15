@@ -90,7 +90,7 @@ docstring: |-
   - For areas outside the United States and its territories -> the USDM is
     US-only; an out-of-coverage bbox returns an honest empty layer.
   - For active-fire detections -> use ``fetch_firms_active_fire`` /
-    ``fetch_goes_active_fire`` (drought is the antecedent dryness, not fire).
+    ``fetch_firms_active_fire`` (drought is the antecedent dryness, not fire).
 
   **Parameters:**
       bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326. Required.

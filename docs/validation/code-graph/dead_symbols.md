@@ -13,7 +13,7 @@ separately below. An unused parameter is reclassified from `variable` to
 | `token_envelope` | parameter | trid3nt_server/credentials/auth_handshake.py:127 | 100 | 1 |
 | `default_seconds` | parameter | trid3nt_server/gates/confirm.py:90 | 100 | 1 |
 | `unquote` | import | trid3nt_server/render/uri_registry.py:18 | 90 | 1 |
-| `raw_user_text` | parameter | trid3nt_server/server/dispatch/emitter.py:866 | 100 | 1 |
+| `raw_user_text` | parameter | trid3nt_server/server/dispatch/emitter.py:872 | 100 | 1 |
 | `entry_id` | parameter | trid3nt_server/tools/search/fetch_living_atlas_layer/fetch_living_atlas_layer.py:128 | 100 | 1 |
 
 ## Callable tier (confidence 60): unused functions, methods, classes
@@ -34,7 +34,6 @@ one reached dynamically. Treat as candidates, not verdicts.
 | `_selection_bbox4326` | method | plugin/ui/dock.py:719 | 17 |
 | `pin_fetch_resolution` | function | trid3nt_server/gates/cards/solver_confirm.py:251 | 17 |
 | `upsert_session_record` | method | trid3nt_server/persistence.py:438 | 16 |
-| `read_raster_bytes` | function | trid3nt_server/tools/derive/_gdal_runner.py:108 | 16 |
 | `update_compute_status` | method | trid3nt_server/render/pipeline_emitter.py:1278 | 14 |
 | `update_current_progress` | method | trid3nt_server/render/pipeline_emitter.py:1149 | 13 |
 | `run_forever` | method | plugin/net/trid3nt_client.py:1600 | 12 |
@@ -69,8 +68,8 @@ one reached dynamically. Treat as candidates, not verdicts.
 
 | rule | muted |
 |---|---|
-| declarative row/field DSL: read off the class by the framework | 11 |
-| descriptor/typing decorator | 5 |
+| declarative row/field DSL: read off the class by the framework | 19 |
+| descriptor/typing decorator | 6 |
 | dunder: interpreter-called | 4 |
 | protocol/framework-called name | 14 |
 | registry decorator: no static caller by construction | 4 |

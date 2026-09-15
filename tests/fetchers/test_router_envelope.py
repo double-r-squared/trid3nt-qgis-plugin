@@ -106,8 +106,7 @@ def test_envelope_is_strict_no_op_for_priors():
         "fetch_high_water_marks", "fetch_fault_sources",
         "fetch_landcover", "fetch_flood_extent_observation",
         "fetch_dem", "fetch_topobathy", "fetch_bluetopo",
-        "fetch_storm_tracks", "fetch_goes_satellite",
-        "fetch_noaa_nwm_streamflow",
+        "fetch_storm_tracks", "fetch_noaa_nwm_streamflow",
     }
     with_env = {s.name for s in _SPECS.values() if s.hooks is not None and s.hooks.envelope}
     with_rm = {s.name for s in _SPECS.values() if s.output.result_model}

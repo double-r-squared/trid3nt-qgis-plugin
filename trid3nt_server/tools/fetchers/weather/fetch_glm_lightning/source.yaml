@@ -99,7 +99,7 @@ docstring: |-
 
   **When NOT to use:**
   - Ground-based cloud-to-ground strike points (use a CG-network tool, not GLM).
-  - A scrubbable ABI imagery loop (use ``fetch_goes_archive_animation``).
+  - A scrubbable ABI imagery loop (use ``fetch_satellite_imagery``).
 
   **Parameters:**
   - ``bbox`` (tuple): ``(min_lon, min_lat, max_lon, max_lat)`` EPSG:4326. Required.

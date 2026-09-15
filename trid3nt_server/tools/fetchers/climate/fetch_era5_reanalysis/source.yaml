@@ -142,7 +142,7 @@ docstring: |-
   **When NOT to use:**
   - DO NOT use for real-time / forecast data -- ERA5 lags by 5 days (ERA5T
     preliminary) or 3 months (finalised); use ``fetch_hrrr_forecast`` or
-    ``fetch_goes_satellite`` for live/near-real-time queries.
+    ``fetch_satellite_imagery`` for live/near-real-time queries.
   - DO NOT use for CONUS precipitation when MRMS is available -- MRMS QPE is
     1 km gauge-corrected vs ERA5's 27 km; use ``fetch_mrms_qpe`` instead.
   - DO NOT use for sub-hourly timesteps; ERA5 is hourly minimum.

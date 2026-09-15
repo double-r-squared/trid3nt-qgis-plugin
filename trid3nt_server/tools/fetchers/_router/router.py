@@ -81,8 +81,8 @@ def synthesize_metadata(spec: SourceSpec) -> AtomicToolMetadata:
         name=spec.name,
         ttl_class=spec.cache.ttl_class,
         source_class=spec.source_class,          # cache prefix (NOT the error prefix)
-        # A live-no-cache spec (an availability index that turns over continuously,
-        # fetch_slider_timestamps) is uncacheable by construction: read_through
+        # A live-no-cache spec (one whose answer turns over continuously) is
+        # uncacheable by construction: read_through
         # short-circuits it and the AtomicToolMetadata cross-field validator forbids
         # cacheable=True with ttl_class=live-no-cache.
         cacheable=spec.cache.ttl_class != "live-no-cache",

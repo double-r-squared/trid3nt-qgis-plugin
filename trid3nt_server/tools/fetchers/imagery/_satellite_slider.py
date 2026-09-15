@@ -1,8 +1,9 @@
-"""Shared SLIDER tile substrate for the satellite fire-animation fetchers.
+"""Shared SLIDER tile substrate for the rendered-imagery fetcher.
 
-Owns the three primitives neither fetcher re-implements: the JSON time-index reader, the
+Owns the primitives the fetcher does not re-implement: the JSON time-index reader, the
 tile-grid stitch into one square mosaic in the satellite's fixed-grid pixel space, and
-the reproject and COG write with its all-NaN honesty guard."""
+the reproject and COG write with its all-NaN honesty guard. Nothing here composites -
+what is computed from a picture is a derive over the layer."""
 
 # GEOREFERENCING, stated so no caller over-reads a frame. SLIDER carries NO projection
 # metadata: it is a pure pixel-mosaic service, exposing no proj4 and no scan-angle
@@ -41,13 +42,7 @@ __all__ = [
     "pick_zoom_for_aoi",
     "stitch_slider_mosaic",
     "mosaic_to_cog_bytes",
-    "rgb_cog_bytes_to_array",
     "rgb_array_to_cog_bytes",
-    "reproject_rgb_to_grid",
-    "blend_geocolor_fire_temperature",
-    "FIRE_BLEND_RED_FLOOR",
-    "FIRE_BLEND_RED_OVER_BLUE",
-    "FIRE_BLEND_MAX_ALPHA",
     "_SECTOR_LATLON_EXTENT",
 ]
 
@@ -544,166 +539,3 @@ def rgb_array_to_cog_bytes(
             os.unlink(out_path)
         except OSError:
             pass
-
-
-def rgb_cog_bytes_to_array(cog_bytes: bytes) -> tuple[Any, Any, int, int]:
-    """Read 3-band RGB COG bytes in memory to ``(rgb, transform, W, H)``, the first three
-    bands plus the georeference a blend must preserve. An unreadable or sub-3-band
-    raster raises the typed upstream error."""
-    import numpy as np
-    import rasterio
-
-    try:
-        with rasterio.MemoryFile(cog_bytes) as mem:
-            with mem.open() as src:
-                if src.count < 3:
-                    raise SliderUpstreamError(
-                        f"RGB COG has {src.count} band(s); expected >= 3"
-                    )
-                rgb = src.read([1, 2, 3]).astype(np.uint8)
-                return rgb, src.transform, int(src.width), int(src.height)
-    except SliderError:
-        raise
-    except Exception as exc:  # noqa: BLE001 -- a corrupt COG is upstream-bad
-        raise SliderUpstreamError(f"could not read RGB COG bytes: {exc}") from exc
-
-
-def reproject_rgb_to_grid(
-    rgb: Any,
-    src_transform: Any,
-    dst_transform: Any,
-    dst_w: int,
-    dst_h: int,
-) -> Any:
-    """Reproject a ``(3, H, W)`` EPSG:4326 RGB array onto a target grid: a same-CRS
-    regrid, never a CRS change. The DEFENSIVE co-registration step in the blend, for
-    when two frames that should be pixel-aligned are not."""
-    import numpy as np
-    from rasterio.warp import Resampling, reproject
-
-    rgb = np.asarray(rgb, dtype=np.uint8)
-    out = np.zeros((3, dst_h, dst_w), dtype=np.uint8)
-    for b in range(3):
-        dst_band = np.zeros((dst_h, dst_w), dtype=np.uint8)
-        reproject(
-            source=np.ascontiguousarray(rgb[b]),
-            destination=dst_band,
-            src_transform=src_transform,
-            src_crs="EPSG:4326",
-            dst_transform=dst_transform,
-            dst_crs="EPSG:4326",
-            resampling=Resampling.bilinear,
-        )
-        out[b] = dst_band
-    return out
-
-
-#
-# CIRA publishes a combined "GeoColor and Fire Temperature" product: GeoColor is
-# the true-color base (shows the scene + smoke + clouds), and the Fire
-# Temperature SWIR composite is overlaid ONLY where there is active fire, so the
-# fire glows on top of an otherwise-untouched true-color image. We reproduce that
-# look with a MASKED ALPHA-OVERLAY (chosen over a plain screen/lighten max blend
-# because max-blend brightens the whole scene -- clouds and bright land -- and
-# washes out the true color; the masked overlay keeps smoke/clouds/terrain true-
-# color and lets ONLY the fire pixels glow, which is the CIRA result).
-#
-# Fire mask (from the Fire Temperature RGB recipe R=C07 3.9um BT, G=C06 2.2um,
-# B=C05 1.6um): active-fire pixels are bright in the RED channel (hot 3.9um) and
-# red dominates over blue (the non-fire SWIR scene -- water/cloud/cool land --
-# renders darker / blue-grey). So mask = (red is high) AND (red exceeds blue by a
-# margin). A soft alpha ramp over the floor gives the hottest cores full overlay
-# and the fire edges a partial glow, matching the CIRA blend's feathered look.
-# All three thresholds are tunable module constants (LIVE-VERIFY / tune on box).
-
-#: Red-channel floor (0-255): Fire Temperature pixels at or above this red value
-#: are candidate active-fire (hot 3.9um BT). Below it, the GeoColor base shows
-#: through untouched.
-FIRE_BLEND_RED_FLOOR: int = 110
-
-#: Required red-over-blue margin (0-255): a fire pixel's red must exceed its blue
-#: by at least this so cool blue-ish SWIR scene (cloud/water) is NOT masked as
-#: fire even when it is moderately bright.
-FIRE_BLEND_RED_OVER_BLUE: int = 25
-
-#: Maximum overlay alpha (0..1) at the hottest fire core. < 1.0 keeps a touch of
-#: the GeoColor base even under the brightest fire so the composite never looks
-#: like a flat paste; 0.92 reads as a near-opaque glow.
-FIRE_BLEND_MAX_ALPHA: float = 0.92
-
-
-def blend_geocolor_fire_temperature(
-    geocolor_cog_bytes: bytes,
-    fire_temp_cog_bytes: bytes,
-) -> bytes:
-    """Blend a co-temporal GeoColor and Fire Temperature pair into ONE COG, preserving
-    the GeoColor frame's georeference. A composite with no non-zero pixel raises the
-    typed empty error, so the honesty floor holds at the blend too."""
-
-    # GeoColor is the BASE and the fire colour is alpha-overlaid ONLY where the
-    # active-fire mask is hot -- a high red 3.9um brightness temperature AND red over
-    # blue -- so smoke, cloud and terrain stay true-colour while the fire glows. If the
-    # two grids differ at all, the fire frame is reprojected onto the base grid first,
-    # so the per-pixel blend is always valid.
-    import numpy as np
-
-    base_rgb, base_transform, base_w, base_h = rgb_cog_bytes_to_array(
-        geocolor_cog_bytes
-    )
-    fire_rgb, fire_transform, fire_w, fire_h = rgb_cog_bytes_to_array(
-        fire_temp_cog_bytes
-    )
-
-    # Defensive co-registration: align the Fire Temperature frame to the GeoColor
-    # grid if (for any reason) they are not already pixel-identical. The common
-    # case (same AOI + resolution) skips the warp.
-    same_grid = (
-        fire_w == base_w
-        and fire_h == base_h
-        and np.allclose(
-            np.asarray(fire_transform, dtype=float)[:6],
-            np.asarray(base_transform, dtype=float)[:6],
-            atol=1e-9,
-        )
-    )
-    if not same_grid:
-        logger.info(
-            "_satellite_slider: blend co-registering Fire Temperature %sx%s -> "
-            "GeoColor grid %sx%s",
-            fire_w,
-            fire_h,
-            base_w,
-            base_h,
-        )
-        fire_rgb = reproject_rgb_to_grid(
-            fire_rgb, fire_transform, base_transform, base_w, base_h
-        )
-
-    base = base_rgb.astype(np.float32)
-    fire = fire_rgb.astype(np.float32)
-
-    red = fire[0]
-    blue = fire[2]
-
-    # Active-fire mask: hot red AND red dominates blue. Soft alpha ramps from 0 at
-    # the red floor up to FIRE_BLEND_MAX_ALPHA as red saturates, so the hottest
-    # cores get a near-opaque glow and the fire edges a partial overlay (feathered
-    # CIRA look). Pixels failing either gate get alpha 0 (GeoColor untouched).
-    floor = float(FIRE_BLEND_RED_FLOOR)
-    denom = max(1.0, 255.0 - floor)
-    ramp = np.clip((red - floor) / denom, 0.0, 1.0)
-    hot = (red >= floor) & ((red - blue) >= float(FIRE_BLEND_RED_OVER_BLUE))
-    alpha = np.where(hot, ramp * float(FIRE_BLEND_MAX_ALPHA), 0.0).astype(np.float32)
-
-    # Per-pixel alpha composite: out = base*(1-a) + fire*a, broadcast over 3 bands.
-    a3 = alpha[np.newaxis, :, :]
-    out = base * (1.0 - a3) + fire * a3
-    out_rgb = np.clip(np.rint(out), 0, 255).astype(np.uint8)
-
-    if not out_rgb.any():
-        raise SliderEmptyError(
-            "blended GeoColor + Fire Temperature frame has no pixels (both "
-            "inputs were empty); refusing to emit an empty blended frame"
-        )
-
-    return rgb_array_to_cog_bytes(out_rgb, base_transform, base_w, base_h)

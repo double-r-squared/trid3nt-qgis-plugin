@@ -10,28 +10,28 @@ venvs/agent/bin/python dev/instruments/code_graph.py
 
 | metric | value |
 |---|---|
-| modules scanned | 923 |
-| total loc | 224916 |
-| reachable from roots | 378 (100373 loc) |
-| test-only-reachable | 83 |
+| modules scanned | 940 |
+| total loc | 228976 |
+| reachable from roots | 398 (104785 loc) |
+| test-only-reachable | 79 |
 | script-only-reachable | 0 |
-| orphans (product) | 19 |
-| package markers excluded from orphans | 104 |
+| orphans (product) | 18 |
+| package markers excluded from orphans | 99 |
 | orphans (scripts/ entry modules) | 0 |
-| test modules | 376 |
-| import edges | 2975 |
-| dynamic (string-resolved) edges | 171 |
-| reference call-site edges | 12060 |
-| unattributed call sites | 54879 |
+| test modules | 382 |
+| import edges | 3064 |
+| dynamic (string-resolved) edges | 190 |
+| reference call-site edges | 12535 |
+| unattributed call sites | 55605 |
 | dead symbols (conf >= 80) | 6 |
-| unused callables (conf 60 tier) | 41 |
-| vulture findings muted by whitelist | 39 |
+| unused callables (conf 60 tier) | 40 |
+| vulture findings muted by whitelist | 48 |
 
 ## Honesty checks
 
 - Known-culled modules from this arc still present: **0** (all confirmed gone)
 - grimp modules with no file in the scanned universe: 0
-- Call sites the import table could not attribute: 54879 (builtins, locals, methods on non-imported objects -- counted, not guessed).
+- Call sites the import table could not attribute: 55605 (builtins, locals, methods on non-imported objects -- counted, not guessed).
 - Out of scope, so its imports anchor nothing: `experiments/`, `third_party/`.
 
 ## False-positive classes handled
@@ -64,7 +64,6 @@ venvs/agent/bin/python dev/instruments/code_graph.py
 | `trid3nt_server.tools.fetchers.weather.fetch_airnow_air_quality.hooks` | 165 | trid3nt_server/tools/fetchers/weather/fetch_airnow_air_quality/hooks.py |
 | `trid3nt_server.tools.fetchers.socioeconomic.fetch_usace_nsi.hooks` | 142 | trid3nt_server/tools/fetchers/socioeconomic/fetch_usace_nsi/hooks.py |
 | `trid3nt_server.tools.fetchers.weather.fetch_nws_event.hooks` | 125 | trid3nt_server/tools/fetchers/weather/fetch_nws_event/hooks.py |
-| `trid3nt_server.tools.derive._gdal_runner` | 123 | trid3nt_server/tools/derive/_gdal_runner.py |
 | `trid3nt_server.tools.fetchers.ocean.fetch_osm_breakwaters.hooks` | 98 | trid3nt_server/tools/fetchers/ocean/fetch_osm_breakwaters/hooks.py |
 | `trid3nt_server.tools.fetchers.ocean.fetch_osm_coastline.hooks` | 59 | trid3nt_server/tools/fetchers/ocean/fetch_osm_coastline/hooks.py |
 
@@ -73,20 +72,20 @@ venvs/agent/bin/python dev/instruments/code_graph.py
 | module | loc | path |
 |---|---|---|
 | `trid3nt_server.tools.fetchers._router.hooks.topobathy` | 1786 | trid3nt_server/tools/fetchers/_router/hooks/topobathy.py |
-| `trid3nt_server.tools.fetchers.imagery._goes_archive_core` | 1134 | trid3nt_server/tools/fetchers/imagery/_goes_archive_core.py |
 | `trid3nt_server.tools.fetchers.weather.fetch_storm_tracks.hooks` | 931 | trid3nt_server/tools/fetchers/weather/fetch_storm_tracks/hooks.py |
 | `scripts.model_check` | 720 | scripts/model_check.py |
-| `trid3nt_server.tools.fetchers.imagery._satellite_slider` | 709 | trid3nt_server/tools/fetchers/imagery/_satellite_slider.py |
 | `trid3nt_server.tools.fetchers.hydrology.fetch_noaa_nwm_streamflow.hooks` | 618 | trid3nt_server/tools/fetchers/hydrology/fetch_noaa_nwm_streamflow/hooks.py |
+| `trid3nt_server.tools.fetchers.imagery._satellite_slider` | 541 | trid3nt_server/tools/fetchers/imagery/_satellite_slider.py |
 | `trid3nt_server.tools.fetchers.terrain.fetch_dem.hooks` | 484 | trid3nt_server/tools/fetchers/terrain/fetch_dem/hooks.py |
+| `trid3nt_server.tools.fetchers.imagery._goes_archive_core` | 461 | trid3nt_server/tools/fetchers/imagery/_goes_archive_core.py |
 | `trid3nt_server.tools.fetchers.hazard.fetch_openfema_disasters.hooks` | 435 | trid3nt_server/tools/fetchers/hazard/fetch_openfema_disasters/hooks.py |
 | `trid3nt_server.tools.fetchers.weather.fetch_glm_lightning.hooks` | 433 | trid3nt_server/tools/fetchers/weather/fetch_glm_lightning/hooks.py |
-| `trid3nt_server.tools.fetchers.imagery.fetch_goes_satellite.hooks` | 421 | trid3nt_server/tools/fetchers/imagery/fetch_goes_satellite/hooks.py |
 | `trid3nt_server.tools.fetchers.ocean.fetch_bluetopo.hooks` | 404 | trid3nt_server/tools/fetchers/ocean/fetch_bluetopo/hooks.py |
+| `trid3nt_server.tools.fetchers.imagery.fetch_satellite_imagery.hooks` | 386 | trid3nt_server/tools/fetchers/imagery/fetch_satellite_imagery/hooks.py |
 | `trid3nt_server.tools.fetchers.hydrology.fetch_lter_records.hooks` | 339 | trid3nt_server/tools/fetchers/hydrology/fetch_lter_records/hooks.py |
-| `trid3nt_server.tools.fetchers._router.hooks.goes_animation` | 338 | trid3nt_server/tools/fetchers/_router/hooks/goes_animation.py |
 | `trid3nt_server.tools.fetchers._router.hooks.topobathy_class` | 318 | trid3nt_server/tools/fetchers/_router/hooks/topobathy_class.py |
 | `trid3nt_server.tools.fetchers._router.hooks.hrrr` | 311 | trid3nt_server/tools/fetchers/_router/hooks/hrrr.py |
+| `trid3nt_server.tools.fetchers.imagery.fetch_goes_abi.hooks` | 311 | trid3nt_server/tools/fetchers/imagery/fetch_goes_abi/hooks.py |
 | `trid3nt_server.tools.fetchers.hydrology.fetch_high_water_marks.hooks` | 310 | trid3nt_server/tools/fetchers/hydrology/fetch_high_water_marks/hooks.py |
 | `trid3nt_server.tools.fetchers.hazard.fetch_fema_nfhl_zones.hooks` | 276 | trid3nt_server/tools/fetchers/hazard/fetch_fema_nfhl_zones/hooks.py |
 | `trid3nt_server.tools.fetchers.hazard.fetch_fault_sources.hooks` | 265 | trid3nt_server/tools/fetchers/hazard/fetch_fault_sources/hooks.py |
@@ -101,7 +100,7 @@ venvs/agent/bin/python dev/instruments/code_graph.py
 | `token_envelope` | parameter | trid3nt_server/credentials/auth_handshake.py:127 | 1 |
 | `default_seconds` | parameter | trid3nt_server/gates/confirm.py:90 | 1 |
 | `unquote` | import | trid3nt_server/render/uri_registry.py:18 | 1 |
-| `raw_user_text` | parameter | trid3nt_server/server/dispatch/emitter.py:866 | 1 |
+| `raw_user_text` | parameter | trid3nt_server/server/dispatch/emitter.py:872 | 1 |
 | `entry_id` | parameter | trid3nt_server/tools/search/fetch_living_atlas_layer/fetch_living_atlas_layer.py:128 | 1 |
 
 ## Package-level edge matrix (cross-package import edges)
@@ -111,7 +110,7 @@ venvs/agent/bin/python dev/instruments/code_graph.py
 | contracts | . | . | . | . | 49 | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . |
 | plugin | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | 1 | . | . | . | . | . | . |
 | scripts | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . |
-| tests | . | 3 | 1 | . | 260 | 1 | . | 70 | 9 | . | 4 | 41 | 22 | 16 | 31 | 1 | 80 | 102 | 7 | 10 | 511 | 242 | . |
+| tests | . | 3 | 1 | . | 260 | 1 | . | 70 | 9 | . | 4 | 41 | 24 | 16 | 31 | 1 | 82 | 103 | 7 | 10 | 497 | 276 | . |
 | trid3nt_contracts | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . |
 | trid3nt_server | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . |
 | trid3nt_server.__main__ | . | . | . | . | . | . | . | . | . | . | . | . | . | 1 | . | . | . | . | . | . | . | . | . |
@@ -128,6 +127,6 @@ venvs/agent/bin/python dev/instruments/code_graph.py
 | trid3nt_server.server | . | . | . | . | 31 | 1 | . | 9 | 4 | . | . | 14 | 4 | 2 | 2 | 1 | 12 | . | 1 | 2 | 17 | . | . |
 | trid3nt_server.storage | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . |
 | trid3nt_server.telemetry | . | . | . | . | . | 1 | . | . | . | . | . | . | . | . | 1 | . | . | 1 | . | . | . | . | . |
-| trid3nt_server.tools | . | . | . | . | 135 | . | . | . | . | . | 3 | 2 | 8 | 1 | . | . | 16 | 2 | 8 | 2 | . | 16 | . |
-| trid3nt_server.workflows | . | . | . | . | 32 | . | . | . | . | 1 | . | 7 | 43 | . | 3 | . | 17 | . | 10 | 1 | 23 | . | . |
+| trid3nt_server.tools | . | . | . | . | 137 | . | . | . | . | . | 3 | 2 | 9 | 1 | . | . | 16 | 2 | 9 | 2 | . | 20 | . |
+| trid3nt_server.workflows | . | . | . | . | 36 | . | . | . | . | 1 | . | 7 | 55 | . | 3 | . | 17 | . | 11 | 1 | 23 | . | . |
 | workers | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | 1 | . |

@@ -154,7 +154,7 @@ def test_empty_query_returns_floor_only(warm_index):
 
 _RECALL_FIXTURE = [
     ("show me the lightning over this storm from GOES", "fetch_glm_lightning"),
-    ("detect the active fire hot pixels from GOES", "fetch_goes_active_fire"),
+    ("detect the active fire hot pixels from GOES", "derive_active_fire"),
     ("get the elevation DEM for this area", "fetch_dem"),
     ("geocode this city to a bounding box", "geocode_location"),
     ("fetch high resolution aerial imagery for this area", "fetch_naip"),

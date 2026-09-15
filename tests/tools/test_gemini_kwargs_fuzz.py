@@ -97,7 +97,7 @@ _MINIMAL_VALID_PARAMS: dict[str, dict[str, Any]] = {
     },
     "fetch_firms_active_fire": {"bbox": _SAMPLE_BBOX},
     "fetch_gcn250_curve_numbers": {"bbox": _SAMPLE_BBOX},
-    "fetch_goes_satellite": {"bbox": _SAMPLE_BBOX},
+    "fetch_satellite_imagery": {"bbox": _SAMPLE_BBOX},
     "fetch_gtsm_tide_surge": {
         "bbox": _SAMPLE_BBOX,
         "start_date": "2022-09-28",

@@ -144,7 +144,7 @@ docstring: |-
         (bbox derivation from place name), a run_pyqgis snippet
         (wind and pressure claims from ASOS).
       - Complements: ``fetch_era5_reanalysis`` (gridded global reanalysis),
-        ``fetch_mrms_qpe`` (radar precipitation), ``fetch_goes_satellite``
+        ``fetch_mrms_qpe`` (radar precipitation), ``fetch_satellite_imagery``
         (satellite imagery), ``fetch_raws_weather`` (fire-weather stations).
       - Superseded for current NWS alerts: ``fetch_nws_alerts_conus``,
         ``fetch_nws_event``.

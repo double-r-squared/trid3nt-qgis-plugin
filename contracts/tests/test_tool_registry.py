@@ -221,7 +221,7 @@ def test_atomic_tool_metadata_accepts_supports_global_query_true() -> None:
 def test_atomic_tool_metadata_accepts_payload_mb_estimator_name() -> None:
     """Tools wire a callable name reference for the Wave-2 chat-warning gate."""
     meta = AtomicToolMetadata(
-        name="fetch_goes_satellite",
+        name="fetch_satellite_imagery",
         ttl_class="dynamic-1h",
         source_class="goes",
         cacheable=True,
@@ -338,7 +338,7 @@ def test_atomic_tool_metadata_advertises_global_policy_to_llm_catalog() -> None:
     so the LLM can compose workflows that respect each tool's bbox policy."""
     # Tool that requires bbox: supports_global_query=False (default).
     meta_required = AtomicToolMetadata(
-        name="fetch_goes_satellite",
+        name="fetch_satellite_imagery",
         ttl_class="dynamic-1h",
         source_class="goes",
     )
