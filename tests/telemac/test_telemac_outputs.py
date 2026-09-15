@@ -30,6 +30,7 @@ from trid3nt_server.workflows.telemac.modules.outputs import (
     NOT_READ,
     OutputEmpty,
     Solved,
+    profile,
 )
 
 
@@ -166,6 +167,24 @@ def test_a_series_at_a_point_reads_the_nearest_node(solved):
     assert read.at == "at outfall-a"
 
 
+def test_a_series_at_a_point_is_measured_at_that_point(solved):
+    """A question asked at a place is answered there. The domain's own extremes
+    answer a different question, and reading them here was a wrong number."""
+    from trid3nt_server.inputs import Point
+
+    lon, lat = solved.lonlat
+    at = Point(float(lon[1]), float(lat[1]), "outfall-a")
+    here = T2D.READS["series"](series("T1", at=at), solved).measures
+    everywhere = T2D.READS["series"](series("T1"), solved).measures
+    assert (here["max"], here["t_max"]) == (80.0, 60.0)
+    assert (here["min"], here["t_min"]) == (0.0, 0.0)
+    assert (here["last"], here["range"]) == (0.0, 80.0)
+    # The point crested at the same instant the domain did and fell further off
+    # it, so the two disagree on the measures the series is read for.
+    assert everywhere["max"] == 80.0
+    assert [here[stat] for stat in ("min", "last", "range")] == [0.0, 0.0, 80.0]
+
+
 def test_the_field_over_every_instant_is_the_frames_an_animation_plays(solved):
     read = T2D.READS["field"](field("T1", t="every"), solved)
     assert isinstance(read, Frames)
@@ -267,6 +286,20 @@ def test_a_measure_held_against_a_sheet_value_answers_a_ratio_or_a_verdict():
     verdict = series("T2").measure("min").below(5.0)
     assert verdict.answer(4.2, 5.0) is True and verdict.answer(6.0, 5.0) is False
     assert deposited.answer(3.0, None) == 3.0
+
+
+def test_a_measure_held_against_another_measure_is_a_ratio_of_two_reads():
+    """A ratio whose denominator is itself a read, which is how a partition is
+    stated; the denominator is read UNPLACED, so a placed one refuses."""
+    from trid3nt_server.workflows.runtime import DeclarativeError
+
+    total = field("T1").measure("mean")
+    ratio = field("T5").measure("mean").over(total)
+    assert ratio.against == total and ratio.held_to == "mean of T1"
+    assert ratio.answer(3.0, 12.0) == 0.25
+    with pytest.raises(DeclarativeError, match="unplaced read"):
+        field("T5").measure("mean").over(
+            profile("T1", along="line.geojson").measure("mean"))
 
 
 def test_a_measure_held_to_a_param_nobody_supplied_says_it_was_not_asked():

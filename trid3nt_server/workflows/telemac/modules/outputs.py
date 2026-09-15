@@ -334,7 +334,19 @@ class Measure:
     unasked: str | None = None
 
     def over(self, value: Any) -> "Measure":
-        """This measure divided by ``value``, a number or a declared param."""
+        """This measure divided by ``value``: a number, a declared param, or
+        ANOTHER MEASURE, which makes a ratio between two reads expressible.
+
+        A measure held against another reads its own primitive UNANCHORED, so
+        the place a ratio's denominator is read at is not a slot the user fills."""
+        placed = isinstance(value, Measure) and any(
+            getattr(value.primitive, slot) is not None
+            for slot in ("at", "along", "over"))
+        if placed:
+            raise DeclarativeError(
+                f"{value.primitive.kind}({value.primitive.variable}) is held to a "
+                "place the run resolves, and a measure used as a DENOMINATOR is "
+                "read without one; hold this measure to an unplaced read.")
         return replace(self, op="over", against=value, held_to=_named(value))
 
     def below(self, value: Any) -> "Measure":
@@ -362,7 +374,10 @@ class Measure:
 
 
 def _named(value: Any) -> str | None:
-    """The declared param a measure is held to, or ``None`` for a literal."""
+    """What a measure is held to: a declared param's name, another read's own
+    words, or ``None`` for a literal."""
+    if isinstance(value, Measure):
+        return f"{value.stat} of {value.primitive.variable}"
     return getattr(value, "name", None)
 
 
@@ -511,12 +526,19 @@ class Solved:
         """A tracer a coupled module appended behind the carrier's declared ones.
 
         The result lists tracers in declared order, so the n-th sits n-1 past the
-        first declared name; its unit is the one the record stores."""
+        first declared name; where the carrier declares NONE, the appended ones
+        begin where the host's own table ends. The unit is the record's."""
         varnames = list(self.result["varnames"])
         units = list(self.result.get("varunits") or [""] * len(varnames))
-        first = str(names[0]).ljust(32)[:16].strip().upper() if names else None
-        start = next((i for i, name in enumerate(varnames)
-                      if name.strip().upper() == first), None)
+        if names:
+            first = str(names[0]).ljust(32)[:16].strip().upper()
+            start = next((i for i, name in enumerate(varnames)
+                          if name.strip().upper() == first), None)
+        else:
+            own = {row.name.strip().upper()
+                   for row in self.body.MODULE_OUTPUT.values()}
+            start = next((i for i, name in enumerate(varnames)
+                          if name.strip().upper() not in own), None)
         position = None if start is None else start + index
         if position is None or position >= len(varnames):
             raise OutputEmpty(
@@ -586,7 +608,9 @@ def _floor(token: str, values: Any) -> float | None:
 
 
 def _envelope(token: str, times: Any, values: Any) -> dict[str, Any]:
-    """The measures a variable over time carries: its peak, when, how long, how far."""
+    """The measures a series over time carries: its peak and its trough with the
+    instants they fall on, where it stands at the end, how far it swings between
+    the two, and how many frames it was read over."""
     import numpy as np
 
     per_frame = values.max(axis=1)
@@ -594,7 +618,12 @@ def _envelope(token: str, times: Any, values: Any) -> dict[str, Any]:
     peak = float(per_frame[peak_i])
     # A peak on the last instant is where the window closed, not where the
     # variable crested: the run was still rising, so the peak is a floor.
+    low_i = int(np.argmin(per_frame))
     measures: dict[str, Any] = {"max": peak, "t_max": float(times[peak_i]),
+                                "min": float(per_frame[low_i]),
+                                "t_min": float(times[low_i]),
+                                "last": float(per_frame[-1]),
+                                "range": peak - float(per_frame[low_i]),
                                 "frames": int(values.shape[0]),
                                 "truncated": bool(times.size > 1
                                                   and peak_i == times.size - 1)}
@@ -699,24 +728,29 @@ def _point(at: Any) -> Any:
 def read_series(primitive: Primitive, solved: Solved) -> Series:
     """``series(name, at)``: the domain maximum per instant, or a Point's value.
 
-    A token the module prints rather than writes is read off the listing, at
-    the liquid boundary the Point lies on."""
+    The measures are the returned series' own, whichever it is. A token the
+    module prints rather than writes is read off the listing, at the liquid
+    boundary the Point lies on."""
     import numpy as np
 
     if primitive.variable in solved.body.LISTING:
         return _boundary_series(primitive, solved)
     name, units, values = solved.frames(primitive.variable, primitive.plane)
     times = np.asarray(solved.result["times"], dtype="float64")
-    measures = _envelope(primitive.variable, times, values)
     if primitive.at is None:
         return Series(name=name, units=units, times=times, values=values.max(axis=1),
-                      at="the domain maximum", measures=measures)
+                      at="the domain maximum",
+                      measures=_envelope(primitive.variable, times, values))
     point = _point(primitive.at)
     node = solved.node_at(point)
     lon, lat = solved.lonlat
+    # The measures are the SERIES' own: a question asked at a point is answered
+    # at that point, and the domain's extremes answer a different question.
     return Series(name=name, units=units, times=times, values=values[:, node],
                   at=f"at {point.name or 'the point'}",
-                  lon=float(lon[node]), lat=float(lat[node]), measures=measures)
+                  lon=float(lon[node]), lat=float(lat[node]),
+                  measures=_envelope(primitive.variable, times,
+                                     values[:, node:node + 1]))
 
 
 def _boundary_series(primitive: Primitive, solved: Solved) -> Series:
@@ -914,7 +948,8 @@ def read_profile(primitive: Primitive, solved: Solved) -> Profile:
     stated distance of it or the whole domain. The line runs the way the solved
     flow goes when the module carries velocities; its own order otherwise. The
     measures carry the minimum and maximum with their stations, and the
-    depth-weighted mean along-line speed when velocities are carried."""
+    depth-weighted mean along-line speed when velocities are carried, and the
+    swing between the two ends of the range."""
     import numpy as np
 
     from trid3nt_server.workflows.mesh.shared.nodes import read_centerline_utm
@@ -959,6 +994,7 @@ def read_profile(primitive: Primitive, solved: Solved) -> Profile:
     measures: dict[str, Any] = {
         "min": float(means_arr[lo]), "x_min_m": distance[lo],
         "max": float(means_arr[hi]), "x_max_m": distance[hi],
+        "range": float(means_arr[hi] - means_arr[lo]),
         "t": float(times[index]), "stations": len(distance),
         "velocity_mps": (None if along is None else
                          float((along * weight).sum() / weight.sum()))}

@@ -273,6 +273,10 @@ async def publish_outputs(*, run: Mapping[str, Any], outputs: Sequence[Primitive
 
     wanted = {primitive.key for primitive in (*table, *outputs)}
     wanted |= {measure.primitive for measure in answer.values()}
+    # A measure held against ANOTHER measure reads that one too; its primitive
+    # carries no anchor, so it needs no place resolved for it.
+    wanted |= {m.against.primitive for m in answer.values()
+               if isinstance(m.against, Measure)}
     wanted |= {_beside(p) for p in outputs if _beside(p) is not None}
     reads = await asyncio.to_thread(lambda: {key: _read(key) for key in wanted})
     for primitive in outputs:
@@ -311,10 +315,15 @@ async def publish_outputs(*, run: Mapping[str, Any], outputs: Sequence[Primitive
             if measure.unasked and measure.against is None:
                 return f"{NOT_ASKED}{measure.unasked}"
             return f"{NOT_READ}{empty[measure.primitive]}"
+        against = measure.against
+        if isinstance(against, Measure):
+            if against.primitive in empty:
+                return f"{NOT_READ}{empty[against.primitive]}"
+            other = reads[against.primitive]
+            against = None if other is None else other.measures.get(against.stat)
         read = reads[measure.primitive]
         return measure.answer(
-            None if read is None else read.measures.get(measure.stat),
-            measure.against)
+            None if read is None else read.measures.get(measure.stat), against)
 
     answered = {name: _answered(measure) for name, measure in answer.items()}
     if not published.layers:
