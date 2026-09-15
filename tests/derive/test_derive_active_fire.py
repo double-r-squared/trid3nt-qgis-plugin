@@ -1,10 +1,12 @@
-"""The split-window discriminator as a derive over a layer.
+"""The fire discriminator as a derive over a layer.
 
-Covered: the published defaults; that the split gate - not the absolute one - is
-what rejects sunlit ground hot in both windows; the per-detection properties and
-the cell-centre geometry; the refusals for a layer without the window bands and
-for a crop where nothing burns; and the band-description contract the raw ABI
-fetcher writes and this derive reads back. No network. ASCII only."""
+Covered: the published defaults; that the split gate - not the absolute one -
+rejects ground hot in both windows, and that the background-contrast test rejects
+a crop that is hot everywhere at once, which no pair of floors can; the
+per-detection properties and the cell-centre geometry; the refusals for a layer
+without the window bands, for a crop where nothing is hot, for a crop where
+nothing stands out, and for a negative contrast; and the band-description contract
+the raw ABI fetcher writes and this derive reads back. No network. ASCII only."""
 
 from __future__ import annotations
 
@@ -77,12 +79,14 @@ def test_published_defaults_are_the_thresholds(scene, tmp_path):
         layer=scene, _output_dir=str(tmp_path))
     assert layer.bt_shortwave_min_k == 310.0
     assert layer.bt_split_min_k == 10.0
+    assert layer.background_sigma == 3.0
 
 
 def test_only_the_burning_cells_are_flagged(scene, tmp_path):
     layer = TOOL_REGISTRY["derive_active_fire"].fn(
         layer=scene, _output_dir=str(tmp_path))
     assert layer.fire_pixel_count == 2
+    assert layer.candidate_cell_count == 2
     assert layer.max_bt_shortwave_k == 335.0
     assert layer.max_bt_split_k == 43.0
     assert layer.layer_type == "vector"
@@ -128,6 +132,52 @@ def test_nothing_burning_is_refused_with_the_strongest_signal_named(tmp_path):
     assert caught.value.error_code == "ACTIVE_FIRE_NO_DETECTIONS"
     assert "305.0 K" in str(caught.value)
     assert "6.0 K" in str(caught.value)
+
+
+def test_a_crop_hot_everywhere_at_once_is_refused(tmp_path):
+    """The control the two floors cannot answer: every cell clears both of them, so
+    every cell is a candidate and none has a background to stand out from."""
+    shortwave = np.full((30, 30), 330.0, dtype="float32")
+    longwave = np.full((30, 30), 310.0, dtype="float32")
+    layer = _abi_layer(tmp_path, {7: shortwave, 14: longwave}, "hot_ground.tif")
+    with pytest.raises(ActiveFireError) as caught:
+        TOOL_REGISTRY["derive_active_fire"].fn(
+            layer=layer, _output_dir=str(tmp_path))
+    assert caught.value.error_code == "ACTIVE_FIRE_NO_DETECTIONS"
+    assert "900 cells pass both window tests" in str(caught.value)
+
+
+def _checkered(tmp_path, hot_k: float, name: str) -> str:
+    """A crop whose background really varies - alternating cells 10 K apart, so the
+    background standard deviation is 5 K - with one hotter cell at its centre."""
+    shortwave = np.where(
+        (np.indices((30, 30)).sum(axis=0) % 2) == 0, 305.0, 295.0).astype("float32")
+    longwave = np.full((30, 30), 292.0, dtype="float32")
+    shortwave[15, 15] = hot_k
+    return _abi_layer(tmp_path, {7: shortwave, 14: longwave}, name)
+
+
+def test_a_candidate_inside_its_background_spread_is_not_a_detection(tmp_path):
+    """The contrast is measured in the background's own standard deviations: at the
+    default three, a cell 13 K above a background that varies by 5 K is not fire."""
+    layer = _checkered(tmp_path, 313.0, "spread.tif")
+    with pytest.raises(ActiveFireError) as caught:
+        TOOL_REGISTRY["derive_active_fire"].fn(
+            layer=layer, _output_dir=str(tmp_path))
+    assert caught.value.error_code == "ACTIVE_FIRE_NO_DETECTIONS"
+    assert "1 cells pass both window tests" in str(caught.value)
+
+    relaxed = TOOL_REGISTRY["derive_active_fire"].fn(
+        layer=layer, background_sigma=1.0, _output_dir=str(tmp_path))
+    assert relaxed.fire_pixel_count == 1
+    assert relaxed.background_sigma == 1.0
+
+
+def test_a_negative_contrast_is_refused(scene):
+    with pytest.raises(ActiveFireError) as caught:
+        TOOL_REGISTRY["derive_active_fire"].fn(
+            layer=scene, background_sigma=-1.0)
+    assert caught.value.error_code == "ACTIVE_FIRE_INPUT_INVALID"
 
 
 def test_a_layer_without_the_longwave_band_is_refused(tmp_path):
