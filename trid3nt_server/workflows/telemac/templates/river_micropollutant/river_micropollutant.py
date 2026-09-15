@@ -246,7 +246,8 @@ _RES_SPEC = ResolutionSpec(
     param="mesh_resolution_m",
     unit="m",
     min_value=3.0,
-    native_hint="NHD channel geometry + 3DEP terrain; edge sized from reach width",
+    native_hint="NHD channel geometry + Copernicus GLO-30 terrain; edge sized "
+                "from reach width",
     constraint_source="solver",
     rationale=(
         "explicit target edge length; 3 m is the absolute finest the builder "
