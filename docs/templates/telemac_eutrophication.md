@@ -56,71 +56,68 @@ The values the template declares. `desc` is what the model reads when it fills o
 
 | field | the proving run's value |
 |---|---|
-| `phyto_max_ug_l` | 1.9957708809879515 |
-| `phyto_max_distance_m` | 7490.067773293982 |
-| `phyto_growth_ratio` | 0.9978854404939758 |
-| `no3_remaining_ratio` | 1.0007651560421205 |
-| `po4_remaining_ratio` | 0.9998920767679583 |
-| `do_min_mgl` | 8.56004334142457 |
-| `do_min_distance_m` | 5950.0538385980235 |
+| `phyto_max_ug_l` | 2.0047595500946045 |
+| `phyto_max_distance_m` | 1132.6260841785036 |
+| `phyto_growth_ratio` | 1.0023797750473022 |
+| `no3_remaining_ratio` | 1.0 |
+| `po4_remaining_ratio` | 0.9994436055421829 |
+| `do_min_mgl` | 8.598508834838867 |
+| `do_min_distance_m` | 791.835934956653 |
 | `do_below_standard` | False |
-| `pass_velocity_mps` | 0.010262294590028993 |
-| `mesh_size_m` | 11.711 |
+| `pass_velocity_mps` | 0.02354461915948074 |
+| `mesh_size_m` | 14.704 |
 
 It publishes these layers onto the canvas:
 
-- Input: river reach (river_reach)
-- Input: channel survey soundings (ehydro_surveys)
-- Input: bed elevation (dem, 3DEP 1-10 m US lidar (default 10 m); Copernicus GLO-30 30 m global via source=copernicus, datum NAVD88 (metres, positive up))
-- Velocity u over time (river_reach_domain_mesh)
-- Velocity v over time (river_reach_domain_mesh)
-- Water depth over time (river_reach_domain_mesh)
-- Free surface over time (river_reach_domain_mesh)
-- Bottom (m) at t = 7149.2 s (river_reach_domain_mesh)
-- Froude number over time (river_reach_domain_mesh)
-- Scalar flowrate over time (river_reach_domain_mesh)
-- Scalar velocity over time (river_reach_domain_mesh)
-- Phyto biomass over time (river_reach_domain_mesh)
-- Dissolved po4 over time (river_reach_domain_mesh)
-- Por non assimil over time (river_reach_domain_mesh)
-- Dissolved no3 over time (river_reach_domain_mesh)
-- Nor non assim over time (river_reach_domain_mesh)
-- Nh4 load over time (river_reach_domain_mesh)
-- Organic load over time (river_reach_domain_mesh)
-- Dissolved o2 over time (river_reach_domain_mesh)
-- river_reach_domain_mesh
+- Velocity u over time (domain_mesh)
+- Velocity v over time (domain_mesh)
+- Water depth over time (domain_mesh)
+- Free surface over time (domain_mesh)
+- Bottom (m) at t = 7056 s (domain_mesh)
+- Froude number over time (domain_mesh)
+- Scalar flowrate over time (domain_mesh)
+- Scalar velocity over time (domain_mesh)
+- Phyto biomass over time (domain_mesh)
+- Dissolved po4 over time (domain_mesh)
+- Por non assimil over time (domain_mesh)
+- Dissolved no3 over time (domain_mesh)
+- Nor non assim over time (domain_mesh)
+- Nh4 load over time (domain_mesh)
+- Organic load over time (domain_mesh)
+- Dissolved o2 over time (domain_mesh)
+- domain_mesh
 
 ## The proving run
 
-Run `01M2NEN0Y2NRSXJ6W9WH9GCWQA`, 2026-09-16T15:52:28.406096+00:00, 73.409 s, at commit `9ed0d08f4fe78cc3984c7efe2aa099ddc5f936e3-dirty`.
+Run `01M2P18V99422ANEV22NH7F547`, 2026-09-16T21:17:11.586602+00:00, 25.882 s, at commit `1883ff4c1867377c3bb4efdec4e2a87450e5fefa-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M2NEN0Y2NRSXJ6W9WH9GCWQA)](telemac_eutrophication/telemac_eutrophication.png)
+![Every layer the run published, stacked and framed on the result (run 01M2P18V99422ANEV22NH7F547)](telemac_eutrophication/telemac_eutrophication.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M2NEN0Y2NRSXJ6W9WH9GCWQA)*
+*Every layer the run published, stacked and framed on the result (run 01M2P18V99422ANEV22NH7F547)*
 
-![The solve, frame by frame - biomass (run 01M2NEN0Y2NRSXJ6W9WH9GCWQA)](telemac_eutrophication/telemac_eutrophication_animation_biomass.gif)
+![The solve, frame by frame - biomass (run 01M2P18V99422ANEV22NH7F547)](telemac_eutrophication/telemac_eutrophication_animation_biomass.gif)
 
-*The solve, frame by frame - biomass (run 01M2NEN0Y2NRSXJ6W9WH9GCWQA)*
+*The solve, frame by frame - biomass (run 01M2P18V99422ANEV22NH7F547)*
 
-![The solve, frame by frame - oxygen (run 01M2NEN0Y2NRSXJ6W9WH9GCWQA)](telemac_eutrophication/telemac_eutrophication_animation_oxygen.gif)
+![The solve, frame by frame - oxygen (run 01M2P18V99422ANEV22NH7F547)](telemac_eutrophication/telemac_eutrophication_animation_oxygen.gif)
 
-*The solve, frame by frame - oxygen (run 01M2NEN0Y2NRSXJ6W9WH9GCWQA)*
+*The solve, frame by frame - oxygen (run 01M2P18V99422ANEV22NH7F547)*
 
-![biomass final frame (run 01M2NEN0Y2NRSXJ6W9WH9GCWQA)](telemac_eutrophication/telemac_eutrophication_biomass_final_frame.png)
+![biomass final frame (run 01M2P18V99422ANEV22NH7F547)](telemac_eutrophication/telemac_eutrophication_biomass_final_frame.png)
 
-*biomass final frame (run 01M2NEN0Y2NRSXJ6W9WH9GCWQA)*
+*biomass final frame (run 01M2P18V99422ANEV22NH7F547)*
 
-![oxygen final frame (run 01M2NEN0Y2NRSXJ6W9WH9GCWQA)](telemac_eutrophication/telemac_eutrophication_oxygen_final_frame.png)
+![oxygen final frame (run 01M2P18V99422ANEV22NH7F547)](telemac_eutrophication/telemac_eutrophication_oxygen_final_frame.png)
 
-*oxygen final frame (run 01M2NEN0Y2NRSXJ6W9WH9GCWQA)*
+*oxygen final frame (run 01M2P18V99422ANEV22NH7F547)*
 
-![dissolved o2 - the chart the run persisted (run 01M2NEN0Y2NRSXJ6W9WH9GCWQA)](telemac_eutrophication/telemac_eutrophication_chart_dissolved_o2.png)
+![dissolved o2 - the chart the run persisted (run 01M2P18V99422ANEV22NH7F547)](telemac_eutrophication/telemac_eutrophication_chart_dissolved_o2.png)
 
-*dissolved o2 - the chart the run persisted (run 01M2NEN0Y2NRSXJ6W9WH9GCWQA)*
+*dissolved o2 - the chart the run persisted (run 01M2P18V99422ANEV22NH7F547)*
 
-![phyto biomass - the chart the run persisted (run 01M2NEN0Y2NRSXJ6W9WH9GCWQA)](telemac_eutrophication/telemac_eutrophication_chart_phyto_biomass.png)
+![phyto biomass - the chart the run persisted (run 01M2P18V99422ANEV22NH7F547)](telemac_eutrophication/telemac_eutrophication_chart_phyto_biomass.png)
 
-*phyto biomass - the chart the run persisted (run 01M2NEN0Y2NRSXJ6W9WH9GCWQA)*
+*phyto biomass - the chart the run persisted (run 01M2P18V99422ANEV22NH7F547)*
 
 ### The sheet it filled
 
@@ -128,8 +125,6 @@ Every slot the run resolved, with where the value came from. The engine's own de
 
 | param | value | units | basis | provenance |
 |---|---|---|---|---|
-| `seed` | Point(lon=-122.6691667, lat=45.5175, name=None) | - | user | supplied on this invocation |
-| `station` | Point(lon=-122.669784, lat=45.518485, name=None) | - | user | supplied on this invocation |
 | `sim_duration_s` | 7200.0 | s | user | supplied on this invocation |
 | `mesh_resolution_m` | 40.0 | m | user | supplied on this invocation |
 | `initial_phyto_ug_l` | 2.0 | ug/L | default_demo | declared scenario default |
@@ -146,6 +141,8 @@ Every slot the run resolved, with where the value came from. The engine's own de
 | `vertical_frame` | NAVD88 | - | default_demo | declared constant default |
 | `do_saturation_mgl` | 8.667 | mg/L | derived | derived by trid3nt_server.workflows.telemac.helpers.water_quality.do_saturation_mgl |
 | `initial_do_mgl` | 8.667 | mg/L | derived | derived by trid3nt_server.workflows.telemac.helpers.water_quality.upstream_do_mgl |
+| `seed` | - | - | user | not supplied (declared optional) |
+| `station` | - | - | user | not supplied (declared optional) |
 | `secchi_depth_m` | - | m | user | not supplied (declared optional) |
 | `event_time` | - | - | prompt_interpreted | not supplied (declared optional) |
 
@@ -156,11 +153,9 @@ from trid3nt_server.tools import TOOL_REGISTRY
 
 await TOOL_REGISTRY['telemac_eutrophication'].fn(
     mesh_resolution_m=40.0,
-    seed='Point(lon=-122.6691667, lat=45.5175, name=None)',
     sim_duration_s=7200.0,
-    station='Point(lon=-122.669784, lat=45.518485, name=None)',
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2NEN0Y2NRSXJ6W9WH9GCWQA` and commit `9ed0d08f4fe78cc3984c7efe2aa099ddc5f936e3-dirty`. The full argument record is [`telemac_eutrophication/run.json`](telemac_eutrophication/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2P18V99422ANEV22NH7F547` and commit `1883ff4c1867377c3bb4efdec4e2a87450e5fefa-dirty`. The full argument record is [`telemac_eutrophication/run.json`](telemac_eutrophication/run.json).
 

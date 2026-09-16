@@ -56,49 +56,46 @@ The values the template declares. `desc` is what the model reads when it fills o
 | `bed_evolution_min_m` | 0.0 |
 | `net_bed_mass_kg` | 0.0 |
 | `surface_d50_spread_m` | 0.0 |
-| `marker_cmax_mgl` | 3.9394562244415283 |
-| `active_frames` | 9 |
-| `mesh_size_m` | 20.888 |
+| `marker_cmax_mgl` | 11.497621536254883 |
+| `active_frames` | 24 |
+| `mesh_size_m` | 14.704 |
 
 It publishes these layers onto the canvas:
 
-- Input: river reach (river_reach)
-- Input: ehydro surveys (ehydro_surveys)
-- Input: bed elevation (dem, 3DEP 1-10 m US lidar (default 10 m); Copernicus GLO-30 30 m global via source=copernicus, datum NAVD88 (metres, positive up))
-- Release point (user) - river_reach_domain
-- Velocity u over time (river_reach_domain_mesh)
-- Velocity v over time (river_reach_domain_mesh)
-- Water depth over time (river_reach_domain_mesh)
-- Free surface over time (river_reach_domain_mesh)
-- Bottom (m) at t = 1800 s (river_reach_domain_mesh)
-- Froude number over time (river_reach_domain_mesh)
-- Scalar flowrate over time (river_reach_domain_mesh)
-- Scalar velocity over time (river_reach_domain_mesh)
-- Marker over time (river_reach_domain_mesh)
-- Cumul bed evol over time (river_reach_domain_mesh)
-- Mean diameter m over time (river_reach_domain_mesh)
-- Bed shear stress over time (river_reach_domain_mesh)
-- river_reach_domain_mesh
+- Release point (user) - 01m2nzmz2my4bs6y4r5z295fsm
+- Velocity u over time (domain_mesh)
+- Velocity v over time (domain_mesh)
+- Water depth over time (domain_mesh)
+- Free surface over time (domain_mesh)
+- Bottom (m) at t = 1764 s (domain_mesh)
+- Froude number over time (domain_mesh)
+- Scalar flowrate over time (domain_mesh)
+- Scalar velocity over time (domain_mesh)
+- Marker over time (domain_mesh)
+- Cumul bed evol over time (domain_mesh)
+- Mean diameter m over time (domain_mesh)
+- Bed shear stress over time (domain_mesh)
+- domain_mesh
 
 ## The proving run
 
-Run `01M2NE8CJV07DW30WJKG1DFSME`, 2026-09-16T15:44:54.371851+00:00, 29.856 s, at commit `9ed0d08f4fe78cc3984c7efe2aa099ddc5f936e3-dirty`.
+Run `01M2NZNACVVCJH5GJBX9VQEE5N`, 2026-09-16T20:49:03.768874+00:00, 28.964 s, at commit `1883ff4c1867377c3bb4efdec4e2a87450e5fefa-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M2NE8CJV07DW30WJKG1DFSME)](telemac_bed_scour/telemac_bed_scour.png)
+![Every layer the run published, stacked and framed on the result (run 01M2NZNACVVCJH5GJBX9VQEE5N)](telemac_bed_scour/telemac_bed_scour.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M2NE8CJV07DW30WJKG1DFSME)*
+*Every layer the run published, stacked and framed on the result (run 01M2NZNACVVCJH5GJBX9VQEE5N)*
 
-![The solve, frame by frame (run 01M2NE8CJV07DW30WJKG1DFSME)](telemac_bed_scour/telemac_bed_scour_animation.gif)
+![The solve, frame by frame (run 01M2NZNACVVCJH5GJBX9VQEE5N)](telemac_bed_scour/telemac_bed_scour_animation.gif)
 
-*The solve, frame by frame (run 01M2NE8CJV07DW30WJKG1DFSME)*
+*The solve, frame by frame (run 01M2NZNACVVCJH5GJBX9VQEE5N)*
 
-![final frame (run 01M2NE8CJV07DW30WJKG1DFSME)](telemac_bed_scour/telemac_bed_scour_final_frame.png)
+![final frame (run 01M2NZNACVVCJH5GJBX9VQEE5N)](telemac_bed_scour/telemac_bed_scour_final_frame.png)
 
-*final frame (run 01M2NE8CJV07DW30WJKG1DFSME)*
+*final frame (run 01M2NZNACVVCJH5GJBX9VQEE5N)*
 
-![marker concentration - the chart the run persisted (run 01M2NE8CJV07DW30WJKG1DFSME)](telemac_bed_scour/telemac_bed_scour_chart_marker_concentration.png)
+![marker concentration - the chart the run persisted (run 01M2NZNACVVCJH5GJBX9VQEE5N)](telemac_bed_scour/telemac_bed_scour_chart_marker_concentration.png)
 
-*marker concentration - the chart the run persisted (run 01M2NE8CJV07DW30WJKG1DFSME)*
+*marker concentration - the chart the run persisted (run 01M2NZNACVVCJH5GJBX9VQEE5N)*
 
 ### The sheet it filled
 
@@ -141,5 +138,5 @@ await TOOL_REGISTRY['telemac_bed_scour'].fn(
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2NE8CJV07DW30WJKG1DFSME` and commit `9ed0d08f4fe78cc3984c7efe2aa099ddc5f936e3-dirty`. The full argument record is [`telemac_bed_scour/run.json`](telemac_bed_scour/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2NZNACVVCJH5GJBX9VQEE5N` and commit `1883ff4c1867377c3bb4efdec4e2a87450e5fefa-dirty`. The full argument record is [`telemac_bed_scour/run.json`](telemac_bed_scour/run.json).
 

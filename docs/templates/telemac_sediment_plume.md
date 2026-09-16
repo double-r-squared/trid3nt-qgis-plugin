@@ -49,55 +49,52 @@ The values the template declares. `desc` is what the model reads when it fills o
 
 | field | the proving run's value |
 |---|---|
-| `suspended_cmax` | 0.0021729166619479656 |
-| `suspended_peak_time_s` | 200.0 |
-| `plume_reach_m` | 0.0 |
-| `active_frames` | 2 |
-| `bed_evolution_max_m` | 3.914834451279603e-05 |
-| `net_bed_mass_kg` | 200.7035 |
-| `deposit_fraction` | 0.8362645833333333 |
-| `mesh_size_m` | 20.888 |
+| `suspended_cmax` | 0.00831255316734314 |
+| `suspended_peak_time_s` | 294.0 |
+| `plume_reach_m` | 20.9 |
+| `active_frames` | 9 |
+| `bed_evolution_max_m` | 2.482693707861472e-05 |
+| `net_bed_mass_kg` | 245.6905 |
+| `deposit_fraction` | 1.0237104166666666 |
+| `mesh_size_m` | 14.704 |
 
 It publishes these layers onto the canvas:
 
-- Input: river reach (river_reach)
-- Input: channel survey soundings (ehydro_surveys)
-- Input: bed elevation (dem, 3DEP 1-10 m US lidar (default 10 m); Copernicus GLO-30 30 m global via source=copernicus, datum NAVD88 (metres, positive up))
-- Release point (user) - river_reach_domain
-- Velocity u over time (river_reach_domain_mesh)
-- Velocity v over time (river_reach_domain_mesh)
-- Water depth over time (river_reach_domain_mesh)
-- Free surface over time (river_reach_domain_mesh)
-- Bottom (m) at t = 1800 s (river_reach_domain_mesh)
-- Froude number over time (river_reach_domain_mesh)
-- Scalar flowrate over time (river_reach_domain_mesh)
-- Scalar velocity over time (river_reach_domain_mesh)
-- Marker over time (river_reach_domain_mesh)
-- Ncoh sediment1 over time (river_reach_domain_mesh)
-- Cumul bed evol over time (river_reach_domain_mesh)
-- Mean diameter m over time (river_reach_domain_mesh)
-- Bed shear stress over time (river_reach_domain_mesh)
-- river_reach_domain_mesh
+- Release point (user) - 01m2p5hvrdadk4fyn4yrk2f3e2
+- Velocity u over time (domain_mesh)
+- Velocity v over time (domain_mesh)
+- Water depth over time (domain_mesh)
+- Free surface over time (domain_mesh)
+- Bottom (m) at t = 1764 s (domain_mesh)
+- Froude number over time (domain_mesh)
+- Scalar flowrate over time (domain_mesh)
+- Scalar velocity over time (domain_mesh)
+- Marker over time (domain_mesh)
+- Ncoh sediment1 over time (domain_mesh)
+- Cumul bed evol over time (domain_mesh)
+- Mean diameter m over time (domain_mesh)
+- Bed shear stress over time (domain_mesh)
+- domain_mesh
 
 ## The proving run
 
-Run `01M2NEJCAHZ668EZV635SRE4CS`, 2026-09-16T15:50:22.079819+00:00, 29.215 s, at commit `9ed0d08f4fe78cc3984c7efe2aa099ddc5f936e3-dirty`.
+Run `01M2P5J6CMXPT7SCK8DZE8Z027`, 2026-09-16T22:32:13.958312+00:00, 29.507 s, at commit `1883ff4c1867377c3bb4efdec4e2a87450e5fefa-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M2NEJCAHZ668EZV635SRE4CS)](telemac_sediment_plume/telemac_sediment_plume.png)
+![Every layer the run published, stacked and framed on the result (run 01M2P5J6CMXPT7SCK8DZE8Z027)](telemac_sediment_plume/telemac_sediment_plume.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M2NEJCAHZ668EZV635SRE4CS)*
+*Every layer the run published, stacked and framed on the result (run 01M2P5J6CMXPT7SCK8DZE8Z027)*
 
-![The solve, frame by frame (run 01M2NEJCAHZ668EZV635SRE4CS)](telemac_sediment_plume/telemac_sediment_plume_animation.gif)
+![The solve, frame by frame (run 01M2P5J6CMXPT7SCK8DZE8Z027)](telemac_sediment_plume/telemac_sediment_plume_animation.gif)
 
-*The solve, frame by frame (run 01M2NEJCAHZ668EZV635SRE4CS)*
+*The solve, frame by frame (run 01M2P5J6CMXPT7SCK8DZE8Z027)*
 
-![peak frame (run 01M2NEJCAHZ668EZV635SRE4CS)](telemac_sediment_plume/telemac_sediment_plume_peak_frame.png)
+![peak frame (run 01M2P5J6CMXPT7SCK8DZE8Z027)](telemac_sediment_plume/telemac_sediment_plume_peak_frame.png)
 
-*peak frame (run 01M2NEJCAHZ668EZV635SRE4CS)*
+*peak frame (run 01M2P5J6CMXPT7SCK8DZE8Z027)*
 
-![suspended sediment concentration - the chart the run persisted (run 01M2NEJCAHZ668EZV635SRE4CS)](telemac_sediment_plume/telemac_sediment_plume_chart_suspended_sediment_concentration.png)
+![suspended sediment concentration - the chart the run persisted (run 01M2P5J6CMXPT7SCK8DZE8Z027)](telemac_sediment_plume/telemac_sediment_plume_chart_suspended_sediment_concentration.png)
 
-*suspended sediment concentration - the chart the run persisted (run 01M2NEJCAHZ668EZV635SRE4CS)*
+*suspended sediment concentration - the chart the run persisted (run 01M2P5J6CMXPT7SCK8DZE8Z027)*
 
 ### The sheet it filled
 
@@ -137,5 +134,5 @@ await TOOL_REGISTRY['telemac_sediment_plume'].fn(
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2NEJCAHZ668EZV635SRE4CS` and commit `9ed0d08f4fe78cc3984c7efe2aa099ddc5f936e3-dirty`. The full argument record is [`telemac_sediment_plume/run.json`](telemac_sediment_plume/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2P5J6CMXPT7SCK8DZE8Z027` and commit `1883ff4c1867377c3bb4efdec4e2a87450e5fefa-dirty`. The full argument record is [`telemac_sediment_plume/run.json`](telemac_sediment_plume/run.json).
 

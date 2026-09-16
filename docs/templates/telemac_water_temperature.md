@@ -45,27 +45,25 @@ The values the template declares. `desc` is what the model reads when it fills o
 
 | field | the proving run's value |
 |---|---|
-| `peak_temperature_c` | 13.503317832946777 |
-| `peak_temperature_time_s` | 3516.0 |
-| `final_temperature_c` | 13.503317832946777 |
-| `diurnal_range_c` | 0.0033178329467773438 |
-| `temperature_spread_c` | 5.249677658081055 |
-| `mean_velocity_mps` | 0.019017657972490658 |
-| `mesh_size_m` | 11.711 |
+| `peak_temperature_c` | 18.0 |
+| `peak_temperature_time_s` | 0.0 |
+| `final_temperature_c` | 14.703310012817383 |
+| `diurnal_range_c` | 3.296689987182617 |
+| `temperature_spread_c` | 3.7622804641723633 |
+| `mean_velocity_mps` | 0.2002688355034483 |
+| `mesh_size_m` | 3.0 |
 
 It publishes these layers onto the canvas:
 
 - Input: river reach (river_reach)
-- Input: ehydro surveys (ehydro_surveys)
 - Input: bed elevation (dem, 3DEP 1-10 m US lidar (default 10 m); Copernicus GLO-30 30 m global via source=copernicus, datum NAVD88 (metres, positive up))
-- Temperature station (user) - river_reach_domain
+- Temperature station (derived) - river_reach_domain
 - Input: raws weather (raws_weather)
-- Input: usgs water quality (usgs_water_quality)
 - Velocity u over time (river_reach_domain_mesh)
 - Velocity v over time (river_reach_domain_mesh)
 - Water depth over time (river_reach_domain_mesh)
 - Free surface over time (river_reach_domain_mesh)
-- Bottom (m) at t = 3516 s (river_reach_domain_mesh)
+- Bottom (m) at t = 3600 s (river_reach_domain_mesh)
 - Froude number over time (river_reach_domain_mesh)
 - Scalar flowrate over time (river_reach_domain_mesh)
 - Scalar velocity over time (river_reach_domain_mesh)
@@ -75,23 +73,23 @@ It publishes these layers onto the canvas:
 
 ## The proving run
 
-Run `01M2NEY8SFVACJPPB2YBHAWD77`, 2026-09-16T15:57:28.772544+00:00, 113.577 s, at commit `9ed0d08f4fe78cc3984c7efe2aa099ddc5f936e3-dirty`.
+Run `01M2P6F7TFWPPD24ZRXP4VPRG1`, 2026-09-16T22:49:32.626699+00:00, 152.185 s, at commit `1883ff4c1867377c3bb4efdec4e2a87450e5fefa-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M2NEY8SFVACJPPB2YBHAWD77)](telemac_water_temperature/telemac_water_temperature.png)
+![Every layer the run published, stacked and framed on the result (run 01M2P6F7TFWPPD24ZRXP4VPRG1)](telemac_water_temperature/telemac_water_temperature.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M2NEY8SFVACJPPB2YBHAWD77)*
+*Every layer the run published, stacked and framed on the result (run 01M2P6F7TFWPPD24ZRXP4VPRG1)*
 
-![The solve, frame by frame (run 01M2NEY8SFVACJPPB2YBHAWD77)](telemac_water_temperature/telemac_water_temperature_animation.gif)
+![The solve, frame by frame (run 01M2P6F7TFWPPD24ZRXP4VPRG1)](telemac_water_temperature/telemac_water_temperature_animation.gif)
 
-*The solve, frame by frame (run 01M2NEY8SFVACJPPB2YBHAWD77)*
+*The solve, frame by frame (run 01M2P6F7TFWPPD24ZRXP4VPRG1)*
 
-![final frame (run 01M2NEY8SFVACJPPB2YBHAWD77)](telemac_water_temperature/telemac_water_temperature_final_frame.png)
+![final frame (run 01M2P6F7TFWPPD24ZRXP4VPRG1)](telemac_water_temperature/telemac_water_temperature_final_frame.png)
 
-*final frame (run 01M2NEY8SFVACJPPB2YBHAWD77)*
+*final frame (run 01M2P6F7TFWPPD24ZRXP4VPRG1)*
 
-![water temperature - the chart the run persisted (run 01M2NEY8SFVACJPPB2YBHAWD77)](telemac_water_temperature/telemac_water_temperature_chart_water_temperature.png)
+![water temperature - the chart the run persisted (run 01M2P6F7TFWPPD24ZRXP4VPRG1)](telemac_water_temperature/telemac_water_temperature_chart_water_temperature.png)
 
-*water temperature - the chart the run persisted (run 01M2NEY8SFVACJPPB2YBHAWD77)*
+*water temperature - the chart the run persisted (run 01M2P6F7TFWPPD24ZRXP4VPRG1)*
 
 ### The sheet it filled
 
@@ -99,14 +97,14 @@ Every slot the run resolved, with where the value came from. The engine's own de
 
 | param | value | units | basis | provenance |
 |---|---|---|---|---|
-| `seed` | Point(lon=-122.6691667, lat=45.5175, name=None) | - | user | supplied on this invocation |
+| `seed` | Point(lon=-120.009, lat=44.793, name=None) | - | user | supplied on this invocation |
 | `weather_start` | 2026-09-12 | - | user | supplied on this invocation |
 | `weather_end` | 2026-09-15 | - | user | supplied on this invocation |
-| `station` | Point(lon=-122.669784, lat=45.518485, name=None) | - | user | supplied on this invocation |
 | `sim_duration_s` | 3600.0 | s | user | supplied on this invocation |
-| `mesh_resolution_m` | 40.0 | m | user | supplied on this invocation |
+| `mesh_resolution_m` | 12.0 | m | user | supplied on this invocation |
+| `vertical_frame` | EGM2008 | - | user | supplied on this invocation |
 | `compute_class` | medium | - | default_demo | declared constant default |
-| `vertical_frame` | NAVD88 | - | default_demo | declared constant default |
+| `station` | - | - | user | not supplied (declared optional) |
 | `event_time` | - | - | prompt_interpreted | not supplied (declared optional) |
 
 ### Reproduce
@@ -115,14 +113,14 @@ Every slot the run resolved, with where the value came from. The engine's own de
 from trid3nt_server.tools import TOOL_REGISTRY
 
 await TOOL_REGISTRY['telemac_water_temperature'].fn(
-    mesh_resolution_m=40.0,
-    seed='Point(lon=-122.6691667, lat=45.5175, name=None)',
+    mesh_resolution_m=12.0,
+    seed='Point(lon=-120.009, lat=44.793, name=None)',
     sim_duration_s=3600.0,
-    station='Point(lon=-122.669784, lat=45.518485, name=None)',
+    vertical_frame='EGM2008',
     weather_end='2026-09-15',
     weather_start='2026-09-12',
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2NEY8SFVACJPPB2YBHAWD77` and commit `9ed0d08f4fe78cc3984c7efe2aa099ddc5f936e3-dirty`. The full argument record is [`telemac_water_temperature/run.json`](telemac_water_temperature/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2P6F7TFWPPD24ZRXP4VPRG1` and commit `1883ff4c1867377c3bb4efdec4e2a87450e5fefa-dirty`. The full argument record is [`telemac_water_temperature/run.json`](telemac_water_temperature/run.json).
 

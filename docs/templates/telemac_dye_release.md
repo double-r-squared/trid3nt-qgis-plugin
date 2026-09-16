@@ -51,48 +51,45 @@ The values the template declares. `desc` is what the model reads when it fills o
 
 | field | the proving run's value |
 |---|---|
-| `dye_cmax_mgl` | 3.9394562244415283 |
-| `dye_peak_time_s` | 400.0 |
-| `plume_reach_m` | 21.3 |
-| `active_frames` | 9 |
-| `mesh_size_m` | 20.888 |
+| `dye_cmax_mgl` | 11.497621536254883 |
+| `dye_peak_time_s` | 294.0 |
+| `plume_reach_m` | 37.9 |
+| `active_frames` | 24 |
+| `mesh_size_m` | 14.704 |
 
 It publishes these layers onto the canvas:
 
-- Input: river reach (river_reach)
-- Input: ehydro surveys (ehydro_surveys)
-- Input: bed elevation (dem, 3DEP 1-10 m US lidar (default 10 m); Copernicus GLO-30 30 m global via source=copernicus, datum NAVD88 (metres, positive up))
-- Release point (user) - river_reach_domain
-- Velocity u over time (river_reach_domain_mesh)
-- Velocity v over time (river_reach_domain_mesh)
-- Water depth over time (river_reach_domain_mesh)
-- Free surface over time (river_reach_domain_mesh)
-- Bottom (m) at t = 1800 s (river_reach_domain_mesh)
-- Froude number over time (river_reach_domain_mesh)
-- Scalar flowrate over time (river_reach_domain_mesh)
-- Scalar velocity over time (river_reach_domain_mesh)
-- Dye over time (river_reach_domain_mesh)
-- river_reach_domain_mesh
+- Release point (user) - 01m2p0y1qq42vhkznvb1v919je
+- Velocity u over time (domain_mesh)
+- Velocity v over time (domain_mesh)
+- Water depth over time (domain_mesh)
+- Free surface over time (domain_mesh)
+- Bottom (m) at t = 1764 s (domain_mesh)
+- Froude number over time (domain_mesh)
+- Scalar flowrate over time (domain_mesh)
+- Scalar velocity over time (domain_mesh)
+- Dye over time (domain_mesh)
+- domain_mesh
 
 ## The proving run
 
-Run `01M2NCGYX48CDT1AM8NC7CHR8Y`, 2026-09-16T15:14:35.351431+00:00, 27.197 s, at commit `9ed0d08f4fe78cc3984c7efe2aa099ddc5f936e3-dirty`.
+Run `01M2P0YAJ95G61VPM6YMPM9A3Q`, 2026-09-16T21:11:24.747046+00:00, 23.645 s, at commit `1883ff4c1867377c3bb4efdec4e2a87450e5fefa-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M2NCGYX48CDT1AM8NC7CHR8Y)](telemac_dye_release/telemac_dye_release.png)
+![Every layer the run published, stacked and framed on the result (run 01M2P0YAJ95G61VPM6YMPM9A3Q)](telemac_dye_release/telemac_dye_release.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M2NCGYX48CDT1AM8NC7CHR8Y)*
+*Every layer the run published, stacked and framed on the result (run 01M2P0YAJ95G61VPM6YMPM9A3Q)*
 
-![The solve, frame by frame (run 01M2NCGYX48CDT1AM8NC7CHR8Y)](telemac_dye_release/telemac_dye_release_animation.gif)
+![The solve, frame by frame (run 01M2P0YAJ95G61VPM6YMPM9A3Q)](telemac_dye_release/telemac_dye_release_animation.gif)
 
-*The solve, frame by frame (run 01M2NCGYX48CDT1AM8NC7CHR8Y)*
+*The solve, frame by frame (run 01M2P0YAJ95G61VPM6YMPM9A3Q)*
 
-![peak frame (run 01M2NCGYX48CDT1AM8NC7CHR8Y)](telemac_dye_release/telemac_dye_release_peak_frame.png)
+![peak frame (run 01M2P0YAJ95G61VPM6YMPM9A3Q)](telemac_dye_release/telemac_dye_release_peak_frame.png)
 
-*peak frame (run 01M2NCGYX48CDT1AM8NC7CHR8Y)*
+*peak frame (run 01M2P0YAJ95G61VPM6YMPM9A3Q)*
 
-![dye concentration - the chart the run persisted (run 01M2NCGYX48CDT1AM8NC7CHR8Y)](telemac_dye_release/telemac_dye_release_chart_dye_concentration.png)
+![dye concentration - the chart the run persisted (run 01M2P0YAJ95G61VPM6YMPM9A3Q)](telemac_dye_release/telemac_dye_release_chart_dye_concentration.png)
 
-*dye concentration - the chart the run persisted (run 01M2NCGYX48CDT1AM8NC7CHR8Y)*
+*dye concentration - the chart the run persisted (run 01M2P0YAJ95G61VPM6YMPM9A3Q)*
 
 ### The sheet it filled
 
@@ -134,5 +131,5 @@ await TOOL_REGISTRY['telemac_dye_release'].fn(
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2NCGYX48CDT1AM8NC7CHR8Y` and commit `9ed0d08f4fe78cc3984c7efe2aa099ddc5f936e3-dirty`. The full argument record is [`telemac_dye_release/run.json`](telemac_dye_release/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2P0YAJ95G61VPM6YMPM9A3Q` and commit `1883ff4c1867377c3bb4efdec4e2a87450e5fefa-dirty`. The full argument record is [`telemac_dye_release/run.json`](telemac_dye_release/run.json).
 

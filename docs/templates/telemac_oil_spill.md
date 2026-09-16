@@ -51,52 +51,49 @@ The values the template declares. `desc` is what the model reads when it fills o
 
 | field | the proving run's value |
 |---|---|
-| `oil_cmax_mgl` | 3.9393863677978516 |
-| `oil_peak_time_s` | 400.0 |
-| `plume_reach_m` | 21.3 |
-| `active_frames` | 9 |
-| `slick_drift_m` | 40.1 |
+| `oil_cmax_mgl` | 11.496940612792969 |
+| `oil_peak_time_s` | 294.0 |
+| `plume_reach_m` | 38.0 |
+| `active_frames` | 24 |
+| `slick_drift_m` | 56.5 |
 | `floats_released` | 100 |
 | `floats_remaining` | 100 |
-| `mesh_size_m` | 20.888 |
+| `mesh_size_m` | 14.704 |
 
 It publishes these layers onto the canvas:
 
-- Input: river reach (river_reach)
-- Input: ehydro surveys (ehydro_surveys)
-- Input: bed elevation (dem, 3DEP 1-10 m US lidar (default 10 m); Copernicus GLO-30 30 m global via source=copernicus, datum NAVD88 (metres, positive up))
-- Release point (user) - river_reach_domain
-- Velocity u over time (river_reach_domain_mesh)
-- Velocity v over time (river_reach_domain_mesh)
-- Water depth over time (river_reach_domain_mesh)
-- Free surface over time (river_reach_domain_mesh)
-- Bottom (m) at t = 1800 s (river_reach_domain_mesh)
-- Froude number over time (river_reach_domain_mesh)
-- Scalar flowrate over time (river_reach_domain_mesh)
-- Scalar velocity over time (river_reach_domain_mesh)
-- Oil over time (river_reach_domain_mesh)
-- Oil slick track (river_reach_domain_mesh)
-- river_reach_domain_mesh
+- Release point (user) - 01m2p216myypfprfkawhgctfbx
+- Velocity u over time (domain_mesh)
+- Velocity v over time (domain_mesh)
+- Water depth over time (domain_mesh)
+- Free surface over time (domain_mesh)
+- Bottom (m) at t = 1764 s (domain_mesh)
+- Froude number over time (domain_mesh)
+- Scalar flowrate over time (domain_mesh)
+- Scalar velocity over time (domain_mesh)
+- Oil over time (domain_mesh)
+- Oil slick track (domain_mesh)
+- domain_mesh
 
 ## The proving run
 
-Run `01M2NEDJXQEJYHPWTM7V6SRS43`, 2026-09-16T15:47:41.977989+00:00, 27.12 s, at commit `9ed0d08f4fe78cc3984c7efe2aa099ddc5f936e3-dirty`.
+Run `01M2P21FM16GG9KPEA3WC5QV20`, 2026-09-16T21:30:38.550487+00:00, 25.538 s, at commit `1883ff4c1867377c3bb4efdec4e2a87450e5fefa-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M2NEDJXQEJYHPWTM7V6SRS43)](telemac_oil_spill/telemac_oil_spill.png)
+![Every layer the run published, stacked and framed on the result (run 01M2P21FM16GG9KPEA3WC5QV20)](telemac_oil_spill/telemac_oil_spill.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M2NEDJXQEJYHPWTM7V6SRS43)*
+*Every layer the run published, stacked and framed on the result (run 01M2P21FM16GG9KPEA3WC5QV20)*
 
-![The solve, frame by frame (run 01M2NEDJXQEJYHPWTM7V6SRS43)](telemac_oil_spill/telemac_oil_spill_animation.gif)
+![The solve, frame by frame (run 01M2P21FM16GG9KPEA3WC5QV20)](telemac_oil_spill/telemac_oil_spill_animation.gif)
 
-*The solve, frame by frame (run 01M2NEDJXQEJYHPWTM7V6SRS43)*
+*The solve, frame by frame (run 01M2P21FM16GG9KPEA3WC5QV20)*
 
-![peak frame (run 01M2NEDJXQEJYHPWTM7V6SRS43)](telemac_oil_spill/telemac_oil_spill_peak_frame.png)
+![peak frame (run 01M2P21FM16GG9KPEA3WC5QV20)](telemac_oil_spill/telemac_oil_spill_peak_frame.png)
 
-*peak frame (run 01M2NEDJXQEJYHPWTM7V6SRS43)*
+*peak frame (run 01M2P21FM16GG9KPEA3WC5QV20)*
 
-![dissolved oil concentration - the chart the run persisted (run 01M2NEDJXQEJYHPWTM7V6SRS43)](telemac_oil_spill/telemac_oil_spill_chart_dissolved_oil_concentration.png)
+![dissolved oil concentration - the chart the run persisted (run 01M2P21FM16GG9KPEA3WC5QV20)](telemac_oil_spill/telemac_oil_spill_chart_dissolved_oil_concentration.png)
 
-*dissolved oil concentration - the chart the run persisted (run 01M2NEDJXQEJYHPWTM7V6SRS43)*
+*dissolved oil concentration - the chart the run persisted (run 01M2P21FM16GG9KPEA3WC5QV20)*
 
 ### The sheet it filled
 
@@ -140,5 +137,5 @@ await TOOL_REGISTRY['telemac_oil_spill'].fn(
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2NEDJXQEJYHPWTM7V6SRS43` and commit `9ed0d08f4fe78cc3984c7efe2aa099ddc5f936e3-dirty`. The full argument record is [`telemac_oil_spill/run.json`](telemac_oil_spill/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2P21FM16GG9KPEA3WC5QV20` and commit `1883ff4c1867377c3bb4efdec4e2a87450e5fefa-dirty`. The full argument record is [`telemac_oil_spill/run.json`](telemac_oil_spill/run.json).
 

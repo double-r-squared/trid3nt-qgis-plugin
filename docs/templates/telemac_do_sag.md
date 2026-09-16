@@ -50,51 +50,48 @@ The values the template declares. `desc` is what the model reads when it fills o
 
 | field | the proving run's value |
 |---|---|
-| `do_min_mgl` | 8.944321621543363 |
+| `do_min_mgl` | 8.823598924737228 |
 | `do_below_standard` | False |
-| `do_min_distance_m` | 69.24522524599003 |
-| `bod_mixed_mgl` | 0.862466945702669 |
-| `mean_velocity_mps` | 0.010015246088846314 |
-| `mesh_size_m` | 14.524 |
+| `do_min_distance_m` | 631.4641000287232 |
+| `bod_mixed_mgl` | 2.3361525026584142 |
+| `mean_velocity_mps` | 0.03412298823772628 |
+| `mesh_size_m` | 14.704 |
 
 It publishes these layers onto the canvas:
 
-- Input: river reach (river_reach)
-- Input: ehydro surveys (ehydro_surveys)
-- Input: bed elevation (dem, 3DEP 1-10 m US lidar (default 10 m); Copernicus GLO-30 30 m global via source=copernicus, datum NAVD88 (metres, positive up))
-- Outfall (user) - river_reach_domain
-- Velocity u over time (river_reach_domain_mesh)
-- Velocity v over time (river_reach_domain_mesh)
-- Water depth over time (river_reach_domain_mesh)
-- Free surface over time (river_reach_domain_mesh)
-- Bottom (m) at t = 7114.8 s (river_reach_domain_mesh)
-- Froude number over time (river_reach_domain_mesh)
-- Scalar flowrate over time (river_reach_domain_mesh)
-- Scalar velocity over time (river_reach_domain_mesh)
-- Dissolved o2 over time (river_reach_domain_mesh)
-- Organic load over time (river_reach_domain_mesh)
-- Nh4 load over time (river_reach_domain_mesh)
-- river_reach_domain_mesh
+- Outfall (user) - 01m2p0bdcb1mkd4yx4yp06dmpy
+- Velocity u over time (domain_mesh)
+- Velocity v over time (domain_mesh)
+- Water depth over time (domain_mesh)
+- Free surface over time (domain_mesh)
+- Bottom (m) at t = 7166.25 s (domain_mesh)
+- Froude number over time (domain_mesh)
+- Scalar flowrate over time (domain_mesh)
+- Scalar velocity over time (domain_mesh)
+- Dissolved o2 over time (domain_mesh)
+- Organic load over time (domain_mesh)
+- Nh4 load over time (domain_mesh)
+- domain_mesh
 
 ## The proving run
 
-Run `01M2NDATE3PRGAYJJZCNECYM8Y`, 2026-09-16T15:29:02.939908+00:00, 51.269 s, at commit `9ed0d08f4fe78cc3984c7efe2aa099ddc5f936e3-dirty`.
+Run `01M2P0BPV8747AX79QCCW25TS5`, 2026-09-16T21:01:15.109184+00:00, 24.493 s, at commit `1883ff4c1867377c3bb4efdec4e2a87450e5fefa-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M2NDATE3PRGAYJJZCNECYM8Y)](telemac_do_sag/telemac_do_sag.png)
+![Every layer the run published, stacked and framed on the result (run 01M2P0BPV8747AX79QCCW25TS5)](telemac_do_sag/telemac_do_sag.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M2NDATE3PRGAYJJZCNECYM8Y)*
+*Every layer the run published, stacked and framed on the result (run 01M2P0BPV8747AX79QCCW25TS5)*
 
-![The solve, frame by frame (run 01M2NDATE3PRGAYJJZCNECYM8Y)](telemac_do_sag/telemac_do_sag_animation.gif)
+![The solve, frame by frame (run 01M2P0BPV8747AX79QCCW25TS5)](telemac_do_sag/telemac_do_sag_animation.gif)
 
-*The solve, frame by frame (run 01M2NDATE3PRGAYJJZCNECYM8Y)*
+*The solve, frame by frame (run 01M2P0BPV8747AX79QCCW25TS5)*
 
-![final frame (run 01M2NDATE3PRGAYJJZCNECYM8Y)](telemac_do_sag/telemac_do_sag_final_frame.png)
+![final frame (run 01M2P0BPV8747AX79QCCW25TS5)](telemac_do_sag/telemac_do_sag_final_frame.png)
 
-*final frame (run 01M2NDATE3PRGAYJJZCNECYM8Y)*
+*final frame (run 01M2P0BPV8747AX79QCCW25TS5)*
 
-![dissolved oxygen - the chart the run persisted (run 01M2NDATE3PRGAYJJZCNECYM8Y)](telemac_do_sag/telemac_do_sag_chart_dissolved_oxygen.png)
+![dissolved oxygen - the chart the run persisted (run 01M2P0BPV8747AX79QCCW25TS5)](telemac_do_sag/telemac_do_sag_chart_dissolved_oxygen.png)
 
-*dissolved oxygen - the chart the run persisted (run 01M2NDATE3PRGAYJJZCNECYM8Y)*
+*dissolved oxygen - the chart the run persisted (run 01M2P0BPV8747AX79QCCW25TS5)*
 
 ### The sheet it filled
 
@@ -137,5 +134,5 @@ await TOOL_REGISTRY['telemac_do_sag'].fn(
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2NDATE3PRGAYJJZCNECYM8Y` and commit `9ed0d08f4fe78cc3984c7efe2aa099ddc5f936e3-dirty`. The full argument record is [`telemac_do_sag/run.json`](telemac_do_sag/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2P0BPV8747AX79QCCW25TS5` and commit `1883ff4c1867377c3bb4efdec4e2a87450e5fefa-dirty`. The full argument record is [`telemac_do_sag/run.json`](telemac_do_sag/run.json).
 
