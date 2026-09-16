@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from typing import Any, Mapping
 
 from .geometry import read_geometry_doc, source_uri
-from .vertical_datum import DatumError, align, datum_of
+from .vertical_datum import DatumError, align, datum_of, onto_frame
 
 __all__ = ["Observation", "ObservationError", "convert", "note",
            "observation"]
@@ -203,8 +203,10 @@ def _onto_datum(source: Any, props: Mapping[str, Any], to_datum: Any,
     on = {"vertical_datum": props.get(_DATUM_FIELD) or datum_of(source),
           "name": _text(props, *_SITE_FIELDS) or label}
     try:
-        aligned = align(on, {"vertical_datum": str(to_datum), "name": "this slot"},
-                        offset=offset, code_prefix="OBSERVATION_")
+        aligned = (align(on, {"vertical_datum": str(to_datum),
+                              "name": "this slot"}, offset=offset,
+                         code_prefix="OBSERVATION_") if offset is not None
+                   else onto_frame(on, to_datum, code_prefix="OBSERVATION_"))
     except DatumError as exc:
         raise ObservationError(exc.error_code, str(exc)) from exc
     return (aligned.datum, aligned.shift_m, aligned.note)

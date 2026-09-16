@@ -414,6 +414,13 @@ package DataSeam {
         */
     }
 
+    part def VerticalFrame {
+        doc /*
+        The ONE zero a run counts every elevation from, and the coercion that
+        brings a source published on another onto it.
+        */
+    }
+
     part def ContextRow {
         doc /*
         A producer row whose absence is legal, and SAID: the run continues and
@@ -460,6 +467,18 @@ package DataSeam {
     part contextRow : ContextRow {
         doc /*
         code: trid3nt_server/workflows/runtime/data.py
+        */
+    }
+
+    part verticalFrame : VerticalFrame {
+        doc /*
+        code: trid3nt_server/inputs/vertical_datum.py
+        */
+    }
+
+    part frameLever : VerticalFrame {
+        doc /*
+        code: trid3nt_server/workflows/runtime/levers.py
         */
     }
 
@@ -648,6 +667,31 @@ package DataSeam {
         datum, which is where the bed is counted from, so the rim of a surveyed
         basin carries no water at all. Clipping that rim away would be a
         threshold on values; giving it its real water is the observation.
+        */
+    }
+
+    requirement def TheRunHasOneVerticalFrame {
+        doc /*
+        A run counts every elevation it ingests from ONE zero, and that zero is
+        the RUNTIME's: a lever beside the compute class, NAVD88 by default,
+        never a row a question writes. A template that named its own datum would
+        make the frame a property of the question rather than of the run, and
+        two questions over one water body would then answer on two axes.
+
+        A source published on another frame reaches the run's through a shift
+        somebody MEASURED, in one order: the shift the source publishes about
+        itself - a district's project datum states in the survey's own metadata
+        how far it sits above a national frame, and no service serves that -
+        else the offset the runtime declares and fetch_vertical_datum_offset
+        produces between the two frames at the point the run stands on. A pair
+        nothing measures refuses naming BOTH frames rather than laying one over
+        the other, because a shift nobody measured is indistinguishable from a
+        measurement to every reader downstream.
+
+        What a slot does with a source that states NO datum is that slot's own
+        statement and not this one's: a surface of depths has to know the zero
+        they are counted below and refuses without it, while an elevation
+        surface somebody handed this run stands on the run's frame.
         */
     }
 
@@ -928,6 +972,21 @@ package DataSeam {
         "tests/mesh/test_mesh_topology_and_bed.py::test_the_bed_card_states_the_datum_and_the_native_cell_of_its_source";
     verify requirement OneSourceReadsOnOneStatedDatum by
         "tests/fetchers/test_emit_on_fetch_seam.py::test_input_layer_name_shape_and_purpose";
+
+    satisfy requirement TheRunHasOneVerticalFrame by verticalFrame;
+    satisfy requirement TheRunHasOneVerticalFrame by frameLever;
+    satisfy requirement TheRunHasOneVerticalFrame by bedSlot;
+    satisfy requirement TheRunHasOneVerticalFrame by freeSurfaceReader;
+    verify requirement TheRunHasOneVerticalFrame by
+        "tests/runtime/test_domain_bed_and_context_slots.py::test_every_elevation_slot_is_read_on_the_runs_own_vertical_frame";
+    verify requirement TheRunHasOneVerticalFrame by
+        "tests/inputs/test_vertical_datum.py::test_a_survey_reaches_the_runs_frame_through_the_shift_it_publishes";
+    verify requirement TheRunHasOneVerticalFrame by
+        "tests/inputs/test_vertical_datum.py::test_a_source_publishing_no_shift_has_the_offset_fetched";
+    verify requirement TheRunHasOneVerticalFrame by
+        "tests/inputs/test_vertical_datum.py::test_a_pair_nothing_measures_refuses_naming_both_frames";
+    verify requirement TheRunHasOneVerticalFrame by
+        "tests/inputs/test_slot_inputs.py::test_the_bed_slot_says_which_shape_it_was_handed";
 
     satisfy requirement AStoppedRungNeverShips by waterBodyClassifier;
     satisfy requirement AStoppedRungNeverShips by coastalComposite;

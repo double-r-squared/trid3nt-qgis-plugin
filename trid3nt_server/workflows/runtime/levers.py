@@ -14,7 +14,13 @@ from typing import Any, Sequence
 from .errors import PlanValidationError
 from .params import Param, doors
 
-__all__ = ["LEVERS", "LEVER_NAMES", "lever", "with_levers"]
+__all__ = ["LEVERS", "LEVER_NAMES", "VERTICAL_FRAME", "lever", "run_frame",
+           "with_levers"]
+
+#: The vertical frame a run counts elevations from where nothing states another.
+#: NAVD88 is what the national terrain, the bathymetry and the gauges this
+#: substrate reaches are published on.
+VERTICAL_FRAME = "NAVD88"
 
 #: The declared levers, in the order a card reads them. Each one is a value the
 #: skeleton or the mesh front reads, never a value a question asks about.
@@ -44,6 +50,12 @@ LEVERS: tuple[Param, ...] = (
                "retention, and a request deeper than one refuses typed"),
     Param(name="compute_class", door=doors.CONSTANT, default="medium",
           consequence="numerical", desc="Solve sizing class"),
+    Param(name="vertical_frame", door=doors.CONSTANT, default=VERTICAL_FRAME,
+          consequence="physics",
+          desc="Vertical datum this run counts every elevation from - the bed "
+               "under it and the level over it. A source published on another "
+               "frame reaches this one through a measured offset, and a pair "
+               "nobody publishes an offset between refuses by name"),
 )
 
 
@@ -64,6 +76,16 @@ def lever(name: str, **stated: Any) -> Param:
             f"{list(LEVER_NAMES)}. Declare the value as a Param of the question "
             "that asks it.")
     return replace(found, **stated)
+
+
+def run_frame(params: Any) -> str:
+    """The vertical frame THIS run counts elevations from.
+
+    Every slot that ingests an elevation is read against one frame, so it is the
+    runtime's and not a row any question writes; a run that states none stands on
+    the lever's own default."""
+    stated = params.value_of("vertical_frame") if params is not None else None
+    return str(stated or VERTICAL_FRAME)
 
 
 def with_levers(declared: Sequence[Param],

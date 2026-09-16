@@ -16,7 +16,12 @@ from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
 
 __all__ = ["Alignment", "DatumError", "Offset", "align", "datum_of", "names_frame",
-           "offset_row", "one_datum", "one_frame"]
+           "offset_row", "one_datum", "one_frame", "onto_frame", "published_offset"]
+
+#: The fetch that measures one frame's zero against another's at a point. The
+#: RUNTIME declares this row where a source reaches the run on another frame and
+#: publishes no shift of its own; no question writes it.
+OFFSET_FETCH = "fetch_vertical_datum_offset"
 
 
 class DatumError(RuntimeError):
@@ -227,3 +232,102 @@ def align(source: Any, onto: Any, *, offset: Any = None,
                 "these; name the offset the two sources actually need.")
     return Alignment(datum=there, shift_m=bridge.metres,
                      note=f"read on {there} through a stated offset of {bridge.note}")
+
+
+def published_offset(source: Any) -> Offset | None:
+    """The shift a source publishes about ITSELF, or ``None``.
+
+    A survey measured on a district's project datum states in its own metadata
+    how far that zero sits above a national frame; nothing else knows it, and a
+    service will not serve a datum nobody but its owner uses."""
+    metres = getattr(source, "datum_offset_m", None)
+    if isinstance(source, Mapping):
+        metres = source.get("datum_offset_m", metres)
+    onto = (source.get("datum_offset_frame") if isinstance(source, Mapping)
+            else getattr(source, "datum_offset_frame", None))
+    if metres is None or not onto:
+        return None
+    return Offset(metres=float(metres), from_frame=datum_of(source),
+                  to_frame=str(onto).strip(),
+                  source=f"{_label(source)}'s own metadata")
+
+
+def onto_frame(source: Any, frame: Any, *, at: Any = None,
+               code_prefix: str = "") -> Alignment:
+    """Read ``source``'s elevations on the RUN's vertical frame, or refuse by name.
+
+    One frame per run, so every elevation a run ingests is brought onto it here:
+    a source already on it is not shifted, one that publishes its own shift is
+    moved by that measurement, and one that publishes none has the offset fetched
+    between the two frames at the point the run stands on. A pair nothing
+    measures refuses naming both frames rather than laying one over the other.
+
+    A run that names no frame asks nothing, and an unstated zero refuses the way
+    it does anywhere else - what a slot does with a source that states none is
+    that slot's own statement."""
+    wanted = str(frame or "").strip()
+    here = datum_of(source)
+    if not wanted:
+        return Alignment(datum=here, shift_m=0.0, note="")
+    onto = {"vertical_datum": wanted, "name": "the run's vertical frame"}
+    if not here or one_frame([here, wanted]):
+        return align(source, onto, code_prefix=code_prefix)
+    bridge = published_offset(source) or _fetched_offset(here, wanted, at)
+    return align(source, onto, offset=bridge, code_prefix=code_prefix)
+
+
+def _fetched_offset(here: str, wanted: str, at: Any) -> Offset | None:
+    """The offset between two frames at a point, as the fetch measures it.
+
+    ``None`` where the fetch is not registered, serves neither frame, or has no
+    point to ask at - the alignment then refuses naming the pair, which is the
+    honest answer. A district's project datum lands here, and the offset it needs
+    is published on the survey that uses it rather than by any service."""
+    from trid3nt_server.tools import TOOL_REGISTRY
+
+    point = _point_of(at)
+    served = _served_frames()
+    source, target = _as_served(here, served), _as_served(wanted, served)
+    if point is None or not (source and target) or OFFSET_FETCH not in TOOL_REGISTRY:
+        return None
+    record = TOOL_REGISTRY[OFFSET_FETCH].fn(point=list(point), from_frame=source,
+                                            to_frame=target)
+    return offset_row(record)
+
+
+def _served_frames() -> tuple[str, ...]:
+    """The frames the offset fetch transforms between, as it names them."""
+    from trid3nt_server.tools.fetchers._router.registration import get_spec
+
+    try:
+        return tuple((get_spec(OFFSET_FETCH).params["from_frame"]).values or ())
+    except (KeyError, AttributeError):
+        return ()
+
+
+def _as_served(datum: str, served: Sequence[str]) -> str:
+    """This stated datum as the frame name the fetch knows, or "".
+
+    A source states its zero in its own words, and a service takes one word."""
+    return next((name for name in served if names_frame(datum, name)), "")
+
+
+def _point_of(at: Any) -> tuple[float, float] | None:
+    """The lon/lat the offset is asked at: what the caller named, else the centre
+    of the domain the run is standing on."""
+    if at is not None:
+        lon = getattr(at, "lon", None)
+        lat = getattr(at, "lat", None)
+        if lon is not None and lat is not None:
+            return float(lon), float(lat)
+        pair = list(at)
+        if len(pair) == 2:
+            return float(pair[0]), float(pair[1])
+    from trid3nt_server.workflows.runtime.domain import current_domain
+
+    domain = current_domain()
+    box = getattr(domain, "bbox", None) if domain is not None else None
+    if not box:
+        return None
+    west, south, east, north = (float(v) for v in box)
+    return (west + east) / 2.0, (south + north) / 2.0

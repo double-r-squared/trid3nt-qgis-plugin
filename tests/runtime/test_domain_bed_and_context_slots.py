@@ -305,7 +305,7 @@ def test_a_hard_producer_row_still_refuses_when_its_source_is_empty(monkeypatch)
 
 def test_the_runtime_declares_the_levers_a_template_no_longer_restates():
     assert LEVER_NAMES == ("mesh_resolution_m", "sim_duration_s", "event_time",
-                           "compute_class")
+                           "compute_class", "vertical_frame")
     seated = with_levers((), LEVER_NAMES)
     assert [p.name for p in seated] == list(LEVER_NAMES)
     # a lever nothing takes is never seated: a param with no reader is not one
@@ -317,7 +317,8 @@ def test_a_templates_own_row_wins_over_the_lever_of_that_name():
                 bounds=(3.0, 500.0), desc="coarser: this answer is reach-scale")
     seated = with_levers((own,), LEVER_NAMES)
     assert [p.name for p in seated] == ["mesh_resolution_m", "sim_duration_s",
-                                        "event_time", "compute_class"]
+                                        "event_time", "compute_class",
+                                        "vertical_frame"]
     assert seated[0].default == 25.0
 
 
@@ -433,6 +434,22 @@ def test_a_context_row_over_a_window_nobody_stated_is_not_asked(monkeypatch):
     assert env.absences == [
         "no hourly rainfall record over this catchment for that window "
         "(rain_start_date (the start_date this row reads) was not stated)"]
+
+
+def test_every_elevation_slot_is_read_on_the_runs_own_vertical_frame(
+        monkeypatch: pytest.MonkeyPatch):
+    """One frame per run, stated once as a runtime lever: the bed is read on it
+    and the level is read on it, and nothing else a run ingests is an elevation."""
+    from trid3nt_server.workflows.runtime import interpreter
+    from trid3nt_server.workflows.runtime.data import BED, DISCHARGE, LEVEL
+
+    env = interpreter._Env(params=_Params({}), data={}, results={})
+    assert interpreter._on_the_run_s_frame(env, BED) == {"frame": "NAVD88"}
+    assert interpreter._on_the_run_s_frame(env, LEVEL) == {"to_datum": "NAVD88"}
+    assert interpreter._on_the_run_s_frame(env, DISCHARGE) == {}
+    stated = interpreter._Env(params=_Params({"vertical_frame": "IGLD85"}),
+                              data={}, results={})
+    assert interpreter._on_the_run_s_frame(stated, BED) == {"frame": "IGLD85"}
 
 
 class _Params:

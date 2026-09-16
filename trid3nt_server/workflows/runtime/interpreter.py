@@ -32,7 +32,7 @@ from trid3nt_server.gates.input_review import (
 )
 
 from .data import (
-    COMPOSED_OVER, DOMAIN, LINE, RUNS, CoversAOI, DataDecl, Producer)
+    BED, COMPOSED_OVER, DOMAIN, LEVEL, LINE, RUNS, CoversAOI, DataDecl, Producer)
 from .domain import Domain, bind_domain, current_domain, domain_from_result, reset_domain
 from .errors import (
     SuppliedCoverageError,
@@ -417,6 +417,7 @@ async def _ingested(env: _Env, decl: DataDecl, value: Any, *,
     told = {k: v for k, v in decl.coercion.items()
             if not (supplied and k == COMPOSED_OVER)}
     coercion = await _bind_value(told, env)
+    coercion.update(_on_the_run_s_frame(env, decl.role))
     ingested = await asyncio.to_thread(ingest_slot, decl.role, value,
                                        label=decl.name, **coercion)
     if decl.role == DOMAIN and ingested is not None:
@@ -427,6 +428,22 @@ async def _ingested(env: _Env, decl: DataDecl, value: Any, *,
                            geometry=dict(ingested.geometry),
                            label=ingested.name))
     return ingested
+
+
+def _on_the_run_s_frame(env: _Env, role: str) -> dict[str, Any]:
+    """What an ELEVATION slot is told about the run's own vertical frame.
+
+    One frame per run, stated once as a runtime lever: a bed is read on it and a
+    level is read on it, so neither is a row a question writes. Nothing else a
+    run ingests is an elevation, and a slot that is handed a frame it does not
+    need would demand a datum of a temperature."""
+    from .levers import run_frame
+
+    if role == BED:
+        return {"frame": run_frame(env.params)}
+    if role == LEVEL:
+        return {"to_datum": run_frame(env.params)}
+    return {}
 
 
 async def _context(env: _Env, decl: DataDecl, label: str) -> Any:

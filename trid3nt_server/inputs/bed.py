@@ -5,14 +5,14 @@ bathymetry raster, a survey raster, a layer of soundings, or a stated depth belo
 the free surface. The slot says WHICH of those it was handed; what a mesher does
 with each is the mesher's, and nothing above here branches on where it came from.
 Two things happen on the way in, because only the slot knows the bed is an
-ELEVATION: a survey's depths are turned into elevations on the frame that survey
-publishes itself against, and a narrow measurement is composed over the wider
-surface the row names beside it.
+ELEVATION: a survey's depths are turned into elevations and read on the RUN's own
+vertical frame, and a narrow measurement is composed over the wider surface the
+row names beside it - both surfaces on that one frame before either is laid over
+the other.
 """
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass
 from typing import Any, Mapping
 
@@ -20,8 +20,6 @@ from .user_input import UserInputError
 
 __all__ = ["Bed", "DEPTH", "MERGE_DERIVE", "POINTS", "RASTER", "SURVEY_DERIVE",
            "bed"]
-
-logger = logging.getLogger("trid3nt_server.inputs.bed")
 
 _CODE = "BED_INVALID"
 
@@ -66,7 +64,7 @@ class Bed:
         return self.kind == DEPTH
 
 
-def bed(value: Any, *, over: Any = None, label: str = "bed",
+def bed(value: Any, *, over: Any = None, frame: Any = None, label: str = "bed",
         code: str = _CODE) -> Bed | None:
     """THE ingestion: a raster, a sounding layer, or a depth in metres -> Bed.
 
@@ -74,11 +72,14 @@ def bed(value: Any, *, over: Any = None, label: str = "bed",
     DEPTH below the free surface; a vector artifact is a point survey; everything
     else is a surface. ``over`` is the wider surface this one is composed over -
     the terrain a channel survey measures only part of - and it is what the bed
-    is where the measurement stops, or whole where the measurement never came."""
+    is where the measurement stops, or whole where the measurement never came.
+    ``frame`` is the RUN's vertical frame, which the runtime states once and
+    every elevation here is read on."""
     if isinstance(value, Bed):
         return value
     if value is None:
-        return bed(over, label=label, code=code) if over is not None else None
+        return (bed(over, frame=frame, label=label, code=code)
+                if over is not None else None)
     depth = _depth(value)
     if depth is not None:
         lo, hi = _DEPTH_RANGE_M
@@ -105,9 +106,12 @@ def bed(value: Any, *, over: Any = None, label: str = "bed",
                 "surface and let the mesh interpolate the points at its own "
                 "element scale.", code=code)
         return Bed(kind=POINTS, source=value)
-    surface = _elevation(value, label, code)
+    surface = _elevation(value, label, code, frame)
+    if over is None:
+        return Bed(kind=RASTER, source=surface)
     return Bed(kind=RASTER,
-               source=surface if over is None else _composed(surface, over))
+               source=_composed(surface, _elevation(over, f"{label} surface",
+                                                    code, frame)))
 
 
 def _depth(value: Any) -> float | None:
@@ -127,37 +131,63 @@ def _depth(value: Any) -> float | None:
     return None
 
 
-def _elevation(layer: Any, label: str, code: str) -> Any:
-    """A surface of DEPTHS below a survey's own zero, read as ELEVATIONS.
+def _elevation(layer: Any, label: str, code: str, frame: Any) -> Any:
+    """One surface on the RUN's vertical frame, counted UP.
 
-    The flip and the shift are one step and they live here: the interpolator
-    grids what it was given, the merge only ever adds an offset somebody
-    measured, and the bed is the one place that knows which way is up. A survey
-    that publishes no shift onto a national frame refuses by name - inventing
-    one would be indistinguishable from a measurement downstream."""
-    if not str(getattr(layer, "quantity", "") or "").startswith(_DEPTH_QUANTITY):
+    The flip is the bed slot's, because only the slot knows a bed is an
+    elevation; the SHIFT onto the run's frame is the vertical-frame coercion's,
+    the one every elevation the run ingests goes through. A source whose zero
+    reaches the run's frame through nothing refuses by name - inventing a shift
+    would be indistinguishable from a measurement downstream."""
+    from .vertical_datum import DatumError, datum_of, onto_frame
+
+    depths = str(getattr(layer, "quantity", "") or "").startswith(_DEPTH_QUANTITY)
+    zero = datum_of(layer)
+    if depths and not zero:
+        raise UserInputError(
+            f"the {label} is a surface of DEPTHS and states no zero they are "
+            "counted below, so nothing can read them as the elevations a bed "
+            "carries. Name a survey whose own metadata publishes its datum, or "
+            "supply a bed already measured as elevations.", code=code)
+    if not zero:
+        # A SURFACE SOMEBODY HANDED THIS RUN states no zero of its own and stands
+        # on the run's frame: checking it against a datum nobody wrote down would
+        # refuse every bed a user surveyed for this question.
         return layer
+    try:
+        aligned = onto_frame(layer, frame, code_prefix="BED_")
+    except DatumError as exc:
+        raise UserInputError(
+            f"the {label} counts from {zero} and this run counts from "
+            f"{frame}: {exc}", code=code) from exc
+    if not (depths or aligned.shift_m):
+        return layer
+    _journal(label, layer, aligned, depths)
+    return _flipped(layer, aligned.shift_m, aligned.datum or zero, label, code,
+                    depths=depths)
+
+
+def _journal(label: str, layer: Any, aligned: Any, depths: bool) -> None:
+    """What the run SAYS about the bed it ingested: the flip, and the shift.
+
+    On the run's journal and not in a log line - the shift a bed was moved by is
+    part of the answer, and a reader of the packet has to see it."""
+    from trid3nt_server.workflows.runtime import journal_note
     from .vertical_datum import datum_of
 
-    offset_m = getattr(layer, "datum_offset_m", None)
-    frame = str(getattr(layer, "datum_offset_frame", "") or "")
     zero = datum_of(layer) or "its own datum"
-    if offset_m is None or not frame:
-        raise UserInputError(
-            f"the {label} is a surface of DEPTHS below {zero}, and nothing "
-            "states how far that zero sits above a national frame, so the "
-            "depths cannot be read as the elevations a bed carries. Name a "
-            "survey whose own metadata publishes the shift, or supply a bed "
-            "already measured as elevations.", code=code)
-    logger.info("%s: depths below %s read as elevations on %s - the survey's own "
-                "rows put %s at %+.4f m on %s", label, zero, frame, zero,
-                offset_m, frame)
-    return _flipped(layer, float(offset_m), frame, label, code)
+    counted = (f"the {label} is a surface of DEPTHS below {zero}, read as "
+               f"elevations counted up from it" if depths else
+               f"the {label} is a surface of elevations on {zero}")
+    moved = (f"and it is {aligned.note}" if aligned.shift_m
+             else f"and {zero} IS this run's frame")
+    journal_note(f"{counted}, {moved}.")
 
 
 def _flipped(layer: Any, offset_m: float, frame: str, label: str,
-             code: str) -> Any:
-    """The same grid, each cell ``offset - depth``: one raster, written once."""
+             code: str, *, depths: bool) -> Any:
+    """The same grid on the run's frame: ``offset - depth``, or ``value +
+    offset``. One raster, written once."""
     import tempfile
     import uuid
 
@@ -176,9 +206,11 @@ def _flipped(layer: Any, offset_m: float, frame: str, label: str,
     seed = uuid.uuid4().hex[:8]
     with tempfile.TemporaryDirectory(prefix="bed-elevation-") as scratch:
         with rasterio.open(_stage_uri_local(uri, scratch, "bed")) as src:
-            depths = src.read(1, masked=True).filled(np.nan).astype("float32")
+            read = src.read(1, masked=True).filled(np.nan).astype("float32")
             crs, transform = src.crs, src.transform
-        written = write_cog(np.float32(offset_m) - depths, crs=crs,
+        values = (np.float32(offset_m) - read if depths
+                  else read + np.float32(offset_m))
+        written = write_cog(values, crs=crs,
                             transform=transform, prefix="bed_elevation",
                             seed=seed, output_dir=None,
                             code="BED_ELEVATION_WRITE_FAILED",

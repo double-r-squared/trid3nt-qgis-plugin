@@ -7,7 +7,6 @@ OVER, and neither carries a branch that compensates for the wrong one."""
 from __future__ import annotations
 
 import dataclasses
-import logging
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -18,8 +17,6 @@ from trid3nt_server.workflows.mesh.meshers import (
     fetch_activation_rows,
     fetch_fallback_note,
 )
-
-logger = logging.getLogger("trid3nt_server.workflows.mesh.shared.primitives")
 
 __all__ = ["set_bed", "set_boundary_roles"]
 
@@ -67,8 +64,7 @@ def set_bed(mesh: Mesh, source: Any, interp: str = "nearest",
             "Merge that surface with one that covers the rest, name a source "
             "that covers it whole, or state the depth this water body holds.")
     painted = f"{provenance} at {values.size} nodes"
-    logger.info("set_bed: %d nodes painted from %s (%s)",
-                values.size, provenance, interp)
+    _journal_bed(source, provenance, lonlat, values.size)
     return _with_meta(
         dataclasses.replace(mesh, bed=np.asarray(values, dtype=float)),
         bed_source=painted,
@@ -85,6 +81,42 @@ def set_bed(mesh: Mesh, source: Any, interp: str = "nearest",
              "consequence": "physics", "real_source_if_any": painted,
              "note": "the elevation every node carries; a solver reads it as the "
                      "domain's bathymetry"}])
+
+
+def _journal_bed(source: Any, provenance: str, lonlat: Any, nodes: int) -> None:
+    """What the run SAYS about the bed its nodes were painted from.
+
+    On the run journal and not in a log line: which dataset reached each node is
+    part of the answer, and a composed bed is two datasets whose shares of the
+    NODES a reader has to be able to see."""
+    from trid3nt_server.workflows.runtime import journal_note
+
+    shares = _node_shares(source, lonlat)
+    journal_note(f"bed: {provenance} painted all {nodes} nodes."
+                 if shares is None else
+                 f"bed: {provenance} painted {nodes} nodes - the measurement "
+                 f"reached {shares[0] * 100.0:.1f}% of them and the wider "
+                 f"surface under it {shares[1] * 100.0:.1f}%.")
+
+
+def _node_shares(source: Any, lonlat: Any) -> tuple[float, float] | None:
+    """The share of the NODES each input of a composed bed painted, or ``None``.
+
+    The merge writes which input won at each CELL; a node takes the cell it
+    stands in, so the shares a run reports are the ones its own solve reads."""
+    import numpy as np
+
+    from trid3nt_server.inputs.bed import bed as read_bed
+    from trid3nt_server.workflows.mesh.shared.nodes import sample_raster_at_nodes
+
+    slot = read_bed(source, label="bed")
+    uri = str(getattr(getattr(slot, "source", None), "provenance_uri", "") or "")
+    if not uri:
+        return None
+    won = np.asarray(sample_raster_at_nodes(uri, lonlat, interp="nearest",
+                                            fill_holes=False))
+    total = float(won.size) or 1.0
+    return (float((won == 0).sum()) / total, float((won == 1).sum()) / total)
 
 
 def _stated_depth(source: Any) -> bool:
