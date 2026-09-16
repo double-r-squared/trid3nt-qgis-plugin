@@ -80,23 +80,23 @@ It publishes these layers onto the canvas:
 
 ## The proving run
 
-Run `01M2N30WVR6CS915REDWZWR7C7`, 2026-09-16T12:28:31.950468+00:00, 26.049 s, at commit `6d4a8675695837fac08133baa3c42ed4c30ee559-dirty`.
+Run `01M2NEDJXQEJYHPWTM7V6SRS43`, 2026-09-16T15:47:41.977989+00:00, 27.12 s, at commit `9ed0d08f4fe78cc3984c7efe2aa099ddc5f936e3-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M2N30WVR6CS915REDWZWR7C7)](telemac_oil_spill/telemac_oil_spill.png)
+![Every layer the run published, stacked and framed on the result (run 01M2NEDJXQEJYHPWTM7V6SRS43)](telemac_oil_spill/telemac_oil_spill.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M2N30WVR6CS915REDWZWR7C7)*
+*Every layer the run published, stacked and framed on the result (run 01M2NEDJXQEJYHPWTM7V6SRS43)*
 
-![The solve, frame by frame (run 01M2N30WVR6CS915REDWZWR7C7)](telemac_oil_spill/telemac_oil_spill_animation.gif)
+![The solve, frame by frame (run 01M2NEDJXQEJYHPWTM7V6SRS43)](telemac_oil_spill/telemac_oil_spill_animation.gif)
 
-*The solve, frame by frame (run 01M2N30WVR6CS915REDWZWR7C7)*
+*The solve, frame by frame (run 01M2NEDJXQEJYHPWTM7V6SRS43)*
 
-![peak frame (run 01M2N30WVR6CS915REDWZWR7C7)](telemac_oil_spill/telemac_oil_spill_peak_frame.png)
+![peak frame (run 01M2NEDJXQEJYHPWTM7V6SRS43)](telemac_oil_spill/telemac_oil_spill_peak_frame.png)
 
-*peak frame (run 01M2N30WVR6CS915REDWZWR7C7)*
+*peak frame (run 01M2NEDJXQEJYHPWTM7V6SRS43)*
 
-![dissolved oil concentration - the chart the run persisted (run 01M2N30WVR6CS915REDWZWR7C7)](telemac_oil_spill/telemac_oil_spill_chart_dissolved_oil_concentration.png)
+![dissolved oil concentration - the chart the run persisted (run 01M2NEDJXQEJYHPWTM7V6SRS43)](telemac_oil_spill/telemac_oil_spill_chart_dissolved_oil_concentration.png)
 
-*dissolved oil concentration - the chart the run persisted (run 01M2N30WVR6CS915REDWZWR7C7)*
+*dissolved oil concentration - the chart the run persisted (run 01M2NEDJXQEJYHPWTM7V6SRS43)*
 
 ### The sheet it filled
 
@@ -140,5 +140,5 @@ await TOOL_REGISTRY['telemac_oil_spill'].fn(
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2N30WVR6CS915REDWZWR7C7` and commit `6d4a8675695837fac08133baa3c42ed4c30ee559-dirty`. The full argument record is [`telemac_oil_spill/run.json`](telemac_oil_spill/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2NEDJXQEJYHPWTM7V6SRS43` and commit `9ed0d08f4fe78cc3984c7efe2aa099ddc5f936e3-dirty`. The full argument record is [`telemac_oil_spill/run.json`](telemac_oil_spill/run.json).
 

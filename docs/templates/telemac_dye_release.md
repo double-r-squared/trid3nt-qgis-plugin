@@ -76,23 +76,23 @@ It publishes these layers onto the canvas:
 
 ## The proving run
 
-Run `01M2MW1QJY19QQYDVQKK3CNRYK`, 2026-09-16T10:26:39.050423+00:00, 29.236 s, at commit `6d4a8675695837fac08133baa3c42ed4c30ee559`.
+Run `01M2NCGYX48CDT1AM8NC7CHR8Y`, 2026-09-16T15:14:35.351431+00:00, 27.197 s, at commit `9ed0d08f4fe78cc3984c7efe2aa099ddc5f936e3-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M2MW1QJY19QQYDVQKK3CNRYK)](telemac_dye_release/telemac_dye_release.png)
+![Every layer the run published, stacked and framed on the result (run 01M2NCGYX48CDT1AM8NC7CHR8Y)](telemac_dye_release/telemac_dye_release.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M2MW1QJY19QQYDVQKK3CNRYK)*
+*Every layer the run published, stacked and framed on the result (run 01M2NCGYX48CDT1AM8NC7CHR8Y)*
 
-![The solve, frame by frame (run 01M2MW1QJY19QQYDVQKK3CNRYK)](telemac_dye_release/telemac_dye_release_animation.gif)
+![The solve, frame by frame (run 01M2NCGYX48CDT1AM8NC7CHR8Y)](telemac_dye_release/telemac_dye_release_animation.gif)
 
-*The solve, frame by frame (run 01M2MW1QJY19QQYDVQKK3CNRYK)*
+*The solve, frame by frame (run 01M2NCGYX48CDT1AM8NC7CHR8Y)*
 
-![peak frame (run 01M2MW1QJY19QQYDVQKK3CNRYK)](telemac_dye_release/telemac_dye_release_peak_frame.png)
+![peak frame (run 01M2NCGYX48CDT1AM8NC7CHR8Y)](telemac_dye_release/telemac_dye_release_peak_frame.png)
 
-*peak frame (run 01M2MW1QJY19QQYDVQKK3CNRYK)*
+*peak frame (run 01M2NCGYX48CDT1AM8NC7CHR8Y)*
 
-![dye concentration - the chart the run persisted (run 01M2MW1QJY19QQYDVQKK3CNRYK)](telemac_dye_release/telemac_dye_release_chart_dye_concentration.png)
+![dye concentration - the chart the run persisted (run 01M2NCGYX48CDT1AM8NC7CHR8Y)](telemac_dye_release/telemac_dye_release_chart_dye_concentration.png)
 
-*dye concentration - the chart the run persisted (run 01M2MW1QJY19QQYDVQKK3CNRYK)*
+*dye concentration - the chart the run persisted (run 01M2NCGYX48CDT1AM8NC7CHR8Y)*
 
 ### The sheet it filled
 
@@ -134,5 +134,5 @@ await TOOL_REGISTRY['telemac_dye_release'].fn(
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2MW1QJY19QQYDVQKK3CNRYK` and commit `6d4a8675695837fac08133baa3c42ed4c30ee559`. The full argument record is [`telemac_dye_release/run.json`](telemac_dye_release/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2NCGYX48CDT1AM8NC7CHR8Y` and commit `9ed0d08f4fe78cc3984c7efe2aa099ddc5f936e3-dirty`. The full argument record is [`telemac_dye_release/run.json`](telemac_dye_release/run.json).
 

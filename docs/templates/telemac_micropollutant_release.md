@@ -84,31 +84,31 @@ It publishes these layers onto the canvas:
 
 ## The proving run
 
-Run `01M2N4JY6DWPQT7R3HFQMDFVM2`, 2026-09-16T12:56:41.632655+00:00, 107.359 s, at commit `6d4a8675695837fac08133baa3c42ed4c30ee559-dirty`.
+Run `01M2NDHRAEJ0HH7ZQJ1E7H1JMZ`, 2026-09-16T15:33:21.165004+00:00, 109.152 s, at commit `9ed0d08f4fe78cc3984c7efe2aa099ddc5f936e3-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M2N4JY6DWPQT7R3HFQMDFVM2)](telemac_micropollutant_release/telemac_micropollutant_release.png)
+![Every layer the run published, stacked and framed on the result (run 01M2NDHRAEJ0HH7ZQJ1E7H1JMZ)](telemac_micropollutant_release/telemac_micropollutant_release.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M2N4JY6DWPQT7R3HFQMDFVM2)*
+*Every layer the run published, stacked and framed on the result (run 01M2NDHRAEJ0HH7ZQJ1E7H1JMZ)*
 
-![The solve, frame by frame - dissolved (run 01M2N4JY6DWPQT7R3HFQMDFVM2)](telemac_micropollutant_release/telemac_micropollutant_release_animation_dissolved.gif)
+![The solve, frame by frame - dissolved (run 01M2NDHRAEJ0HH7ZQJ1E7H1JMZ)](telemac_micropollutant_release/telemac_micropollutant_release_animation_dissolved.gif)
 
-*The solve, frame by frame - dissolved (run 01M2N4JY6DWPQT7R3HFQMDFVM2)*
+*The solve, frame by frame - dissolved (run 01M2NDHRAEJ0HH7ZQJ1E7H1JMZ)*
 
-![The solve, frame by frame - on_the_bed (run 01M2N4JY6DWPQT7R3HFQMDFVM2)](telemac_micropollutant_release/telemac_micropollutant_release_animation_on_the_bed.gif)
+![The solve, frame by frame - on_the_bed (run 01M2NDHRAEJ0HH7ZQJ1E7H1JMZ)](telemac_micropollutant_release/telemac_micropollutant_release_animation_on_the_bed.gif)
 
-*The solve, frame by frame - on_the_bed (run 01M2N4JY6DWPQT7R3HFQMDFVM2)*
+*The solve, frame by frame - on_the_bed (run 01M2NDHRAEJ0HH7ZQJ1E7H1JMZ)*
 
-![dissolved peak frame (run 01M2N4JY6DWPQT7R3HFQMDFVM2)](telemac_micropollutant_release/telemac_micropollutant_release_dissolved_peak_frame.png)
+![dissolved peak frame (run 01M2NDHRAEJ0HH7ZQJ1E7H1JMZ)](telemac_micropollutant_release/telemac_micropollutant_release_dissolved_peak_frame.png)
 
-*dissolved peak frame (run 01M2N4JY6DWPQT7R3HFQMDFVM2)*
+*dissolved peak frame (run 01M2NDHRAEJ0HH7ZQJ1E7H1JMZ)*
 
-![on the bed final frame (run 01M2N4JY6DWPQT7R3HFQMDFVM2)](telemac_micropollutant_release/telemac_micropollutant_release_on_the_bed_final_frame.png)
+![on the bed final frame (run 01M2NDHRAEJ0HH7ZQJ1E7H1JMZ)](telemac_micropollutant_release/telemac_micropollutant_release_on_the_bed_final_frame.png)
 
-*on the bed final frame (run 01M2N4JY6DWPQT7R3HFQMDFVM2)*
+*on the bed final frame (run 01M2NDHRAEJ0HH7ZQJ1E7H1JMZ)*
 
-![dissolved micropollutant - the chart the run persisted (run 01M2N4JY6DWPQT7R3HFQMDFVM2)](telemac_micropollutant_release/telemac_micropollutant_release_chart_dissolved_micropollutant.png)
+![dissolved micropollutant - the chart the run persisted (run 01M2NDHRAEJ0HH7ZQJ1E7H1JMZ)](telemac_micropollutant_release/telemac_micropollutant_release_chart_dissolved_micropollutant.png)
 
-*dissolved micropollutant - the chart the run persisted (run 01M2N4JY6DWPQT7R3HFQMDFVM2)*
+*dissolved micropollutant - the chart the run persisted (run 01M2NDHRAEJ0HH7ZQJ1E7H1JMZ)*
 
 ### The sheet it filled
 
@@ -151,5 +151,5 @@ await TOOL_REGISTRY['telemac_micropollutant_release'].fn(
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2N4JY6DWPQT7R3HFQMDFVM2` and commit `6d4a8675695837fac08133baa3c42ed4c30ee559-dirty`. The full argument record is [`telemac_micropollutant_release/run.json`](telemac_micropollutant_release/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2NDHRAEJ0HH7ZQJ1E7H1JMZ` and commit `9ed0d08f4fe78cc3984c7efe2aa099ddc5f936e3-dirty`. The full argument record is [`telemac_micropollutant_release/run.json`](telemac_micropollutant_release/run.json).
 

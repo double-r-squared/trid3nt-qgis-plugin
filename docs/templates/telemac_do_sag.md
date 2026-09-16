@@ -78,23 +78,23 @@ It publishes these layers onto the canvas:
 
 ## The proving run
 
-Run `01M2N2TW89M5P6EQ4KW2D3AWF7`, 2026-09-16T12:25:34.707631+00:00, 78.179 s, at commit `6d4a8675695837fac08133baa3c42ed4c30ee559-dirty`.
+Run `01M2NDATE3PRGAYJJZCNECYM8Y`, 2026-09-16T15:29:02.939908+00:00, 51.269 s, at commit `9ed0d08f4fe78cc3984c7efe2aa099ddc5f936e3-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M2N2TW89M5P6EQ4KW2D3AWF7)](telemac_do_sag/telemac_do_sag.png)
+![Every layer the run published, stacked and framed on the result (run 01M2NDATE3PRGAYJJZCNECYM8Y)](telemac_do_sag/telemac_do_sag.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M2N2TW89M5P6EQ4KW2D3AWF7)*
+*Every layer the run published, stacked and framed on the result (run 01M2NDATE3PRGAYJJZCNECYM8Y)*
 
-![The solve, frame by frame (run 01M2N2TW89M5P6EQ4KW2D3AWF7)](telemac_do_sag/telemac_do_sag_animation.gif)
+![The solve, frame by frame (run 01M2NDATE3PRGAYJJZCNECYM8Y)](telemac_do_sag/telemac_do_sag_animation.gif)
 
-*The solve, frame by frame (run 01M2N2TW89M5P6EQ4KW2D3AWF7)*
+*The solve, frame by frame (run 01M2NDATE3PRGAYJJZCNECYM8Y)*
 
-![final frame (run 01M2N2TW89M5P6EQ4KW2D3AWF7)](telemac_do_sag/telemac_do_sag_final_frame.png)
+![final frame (run 01M2NDATE3PRGAYJJZCNECYM8Y)](telemac_do_sag/telemac_do_sag_final_frame.png)
 
-*final frame (run 01M2N2TW89M5P6EQ4KW2D3AWF7)*
+*final frame (run 01M2NDATE3PRGAYJJZCNECYM8Y)*
 
-![dissolved oxygen - the chart the run persisted (run 01M2N2TW89M5P6EQ4KW2D3AWF7)](telemac_do_sag/telemac_do_sag_chart_dissolved_oxygen.png)
+![dissolved oxygen - the chart the run persisted (run 01M2NDATE3PRGAYJJZCNECYM8Y)](telemac_do_sag/telemac_do_sag_chart_dissolved_oxygen.png)
 
-*dissolved oxygen - the chart the run persisted (run 01M2N2TW89M5P6EQ4KW2D3AWF7)*
+*dissolved oxygen - the chart the run persisted (run 01M2NDATE3PRGAYJJZCNECYM8Y)*
 
 ### The sheet it filled
 
@@ -137,5 +137,5 @@ await TOOL_REGISTRY['telemac_do_sag'].fn(
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2N2TW89M5P6EQ4KW2D3AWF7` and commit `6d4a8675695837fac08133baa3c42ed4c30ee559-dirty`. The full argument record is [`telemac_do_sag/run.json`](telemac_do_sag/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2NDATE3PRGAYJJZCNECYM8Y` and commit `9ed0d08f4fe78cc3984c7efe2aa099ddc5f936e3-dirty`. The full argument record is [`telemac_do_sag/run.json`](telemac_do_sag/run.json).
 

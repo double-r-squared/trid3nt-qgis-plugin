@@ -82,23 +82,23 @@ It publishes these layers onto the canvas:
 
 ## The proving run
 
-Run `01M2N3648PWA5E44G18SP1ZQ5G`, 2026-09-16T12:31:27.082390+00:00, 31.207 s, at commit `6d4a8675695837fac08133baa3c42ed4c30ee559-dirty`.
+Run `01M2NE8CJV07DW30WJKG1DFSME`, 2026-09-16T15:44:54.371851+00:00, 29.856 s, at commit `9ed0d08f4fe78cc3984c7efe2aa099ddc5f936e3-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M2N3648PWA5E44G18SP1ZQ5G)](telemac_bed_scour/telemac_bed_scour.png)
+![Every layer the run published, stacked and framed on the result (run 01M2NE8CJV07DW30WJKG1DFSME)](telemac_bed_scour/telemac_bed_scour.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M2N3648PWA5E44G18SP1ZQ5G)*
+*Every layer the run published, stacked and framed on the result (run 01M2NE8CJV07DW30WJKG1DFSME)*
 
-![The solve, frame by frame (run 01M2N3648PWA5E44G18SP1ZQ5G)](telemac_bed_scour/telemac_bed_scour_animation.gif)
+![The solve, frame by frame (run 01M2NE8CJV07DW30WJKG1DFSME)](telemac_bed_scour/telemac_bed_scour_animation.gif)
 
-*The solve, frame by frame (run 01M2N3648PWA5E44G18SP1ZQ5G)*
+*The solve, frame by frame (run 01M2NE8CJV07DW30WJKG1DFSME)*
 
-![final frame (run 01M2N3648PWA5E44G18SP1ZQ5G)](telemac_bed_scour/telemac_bed_scour_final_frame.png)
+![final frame (run 01M2NE8CJV07DW30WJKG1DFSME)](telemac_bed_scour/telemac_bed_scour_final_frame.png)
 
-*final frame (run 01M2N3648PWA5E44G18SP1ZQ5G)*
+*final frame (run 01M2NE8CJV07DW30WJKG1DFSME)*
 
-![marker concentration - the chart the run persisted (run 01M2N3648PWA5E44G18SP1ZQ5G)](telemac_bed_scour/telemac_bed_scour_chart_marker_concentration.png)
+![marker concentration - the chart the run persisted (run 01M2NE8CJV07DW30WJKG1DFSME)](telemac_bed_scour/telemac_bed_scour_chart_marker_concentration.png)
 
-*marker concentration - the chart the run persisted (run 01M2N3648PWA5E44G18SP1ZQ5G)*
+*marker concentration - the chart the run persisted (run 01M2NE8CJV07DW30WJKG1DFSME)*
 
 ### The sheet it filled
 
@@ -141,5 +141,5 @@ await TOOL_REGISTRY['telemac_bed_scour'].fn(
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2N3648PWA5E44G18SP1ZQ5G` and commit `6d4a8675695837fac08133baa3c42ed4c30ee559-dirty`. The full argument record is [`telemac_bed_scour/run.json`](telemac_bed_scour/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2NE8CJV07DW30WJKG1DFSME` and commit `9ed0d08f4fe78cc3984c7efe2aa099ddc5f936e3-dirty`. The full argument record is [`telemac_bed_scour/run.json`](telemac_bed_scour/run.json).
 

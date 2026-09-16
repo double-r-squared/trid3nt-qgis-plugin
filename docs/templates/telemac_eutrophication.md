@@ -92,35 +92,35 @@ It publishes these layers onto the canvas:
 
 ## The proving run
 
-Run `01M2N3J7R7RGH5TETJXWQ9PGDE`, 2026-09-16T12:38:41.712146+00:00, 71.877 s, at commit `6d4a8675695837fac08133baa3c42ed4c30ee559-dirty`.
+Run `01M2NEN0Y2NRSXJ6W9WH9GCWQA`, 2026-09-16T15:52:28.406096+00:00, 73.409 s, at commit `9ed0d08f4fe78cc3984c7efe2aa099ddc5f936e3-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M2N3J7R7RGH5TETJXWQ9PGDE)](telemac_eutrophication/telemac_eutrophication.png)
+![Every layer the run published, stacked and framed on the result (run 01M2NEN0Y2NRSXJ6W9WH9GCWQA)](telemac_eutrophication/telemac_eutrophication.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M2N3J7R7RGH5TETJXWQ9PGDE)*
+*Every layer the run published, stacked and framed on the result (run 01M2NEN0Y2NRSXJ6W9WH9GCWQA)*
 
-![The solve, frame by frame - biomass (run 01M2N3J7R7RGH5TETJXWQ9PGDE)](telemac_eutrophication/telemac_eutrophication_animation_biomass.gif)
+![The solve, frame by frame - biomass (run 01M2NEN0Y2NRSXJ6W9WH9GCWQA)](telemac_eutrophication/telemac_eutrophication_animation_biomass.gif)
 
-*The solve, frame by frame - biomass (run 01M2N3J7R7RGH5TETJXWQ9PGDE)*
+*The solve, frame by frame - biomass (run 01M2NEN0Y2NRSXJ6W9WH9GCWQA)*
 
-![The solve, frame by frame - oxygen (run 01M2N3J7R7RGH5TETJXWQ9PGDE)](telemac_eutrophication/telemac_eutrophication_animation_oxygen.gif)
+![The solve, frame by frame - oxygen (run 01M2NEN0Y2NRSXJ6W9WH9GCWQA)](telemac_eutrophication/telemac_eutrophication_animation_oxygen.gif)
 
-*The solve, frame by frame - oxygen (run 01M2N3J7R7RGH5TETJXWQ9PGDE)*
+*The solve, frame by frame - oxygen (run 01M2NEN0Y2NRSXJ6W9WH9GCWQA)*
 
-![biomass final frame (run 01M2N3J7R7RGH5TETJXWQ9PGDE)](telemac_eutrophication/telemac_eutrophication_biomass_final_frame.png)
+![biomass final frame (run 01M2NEN0Y2NRSXJ6W9WH9GCWQA)](telemac_eutrophication/telemac_eutrophication_biomass_final_frame.png)
 
-*biomass final frame (run 01M2N3J7R7RGH5TETJXWQ9PGDE)*
+*biomass final frame (run 01M2NEN0Y2NRSXJ6W9WH9GCWQA)*
 
-![oxygen final frame (run 01M2N3J7R7RGH5TETJXWQ9PGDE)](telemac_eutrophication/telemac_eutrophication_oxygen_final_frame.png)
+![oxygen final frame (run 01M2NEN0Y2NRSXJ6W9WH9GCWQA)](telemac_eutrophication/telemac_eutrophication_oxygen_final_frame.png)
 
-*oxygen final frame (run 01M2N3J7R7RGH5TETJXWQ9PGDE)*
+*oxygen final frame (run 01M2NEN0Y2NRSXJ6W9WH9GCWQA)*
 
-![dissolved o2 - the chart the run persisted (run 01M2N3J7R7RGH5TETJXWQ9PGDE)](telemac_eutrophication/telemac_eutrophication_chart_dissolved_o2.png)
+![dissolved o2 - the chart the run persisted (run 01M2NEN0Y2NRSXJ6W9WH9GCWQA)](telemac_eutrophication/telemac_eutrophication_chart_dissolved_o2.png)
 
-*dissolved o2 - the chart the run persisted (run 01M2N3J7R7RGH5TETJXWQ9PGDE)*
+*dissolved o2 - the chart the run persisted (run 01M2NEN0Y2NRSXJ6W9WH9GCWQA)*
 
-![phyto biomass - the chart the run persisted (run 01M2N3J7R7RGH5TETJXWQ9PGDE)](telemac_eutrophication/telemac_eutrophication_chart_phyto_biomass.png)
+![phyto biomass - the chart the run persisted (run 01M2NEN0Y2NRSXJ6W9WH9GCWQA)](telemac_eutrophication/telemac_eutrophication_chart_phyto_biomass.png)
 
-*phyto biomass - the chart the run persisted (run 01M2N3J7R7RGH5TETJXWQ9PGDE)*
+*phyto biomass - the chart the run persisted (run 01M2NEN0Y2NRSXJ6W9WH9GCWQA)*
 
 ### The sheet it filled
 
@@ -162,5 +162,5 @@ await TOOL_REGISTRY['telemac_eutrophication'].fn(
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2N3J7R7RGH5TETJXWQ9PGDE` and commit `6d4a8675695837fac08133baa3c42ed4c30ee559-dirty`. The full argument record is [`telemac_eutrophication/run.json`](telemac_eutrophication/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2NEN0Y2NRSXJ6W9WH9GCWQA` and commit `9ed0d08f4fe78cc3984c7efe2aa099ddc5f936e3-dirty`. The full argument record is [`telemac_eutrophication/run.json`](telemac_eutrophication/run.json).
 
