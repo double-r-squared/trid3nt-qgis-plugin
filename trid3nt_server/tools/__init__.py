@@ -279,21 +279,21 @@ from .search.web_fetch import web_fetch  # noqa: E402,F401
 # than a substance word picking a branch. Every one LISTS the shared river part,
 # whose two end faces are the transects the inflow and the outflow are prescribed
 # on; the edge length is an explicit sheet value on every one of them.
-from trid3nt_server.workflows.telemac.templates.river_dye.river_dye import telemac_river_dye as _telemac_river_dye  # noqa: E402,F401 - reach conservative-plume front (engine=telemac, tier=template)
+from trid3nt_server.workflows.telemac.templates.dye_release.dye_release import telemac_dye_release as _telemac_dye_release  # noqa: E402,F401 - reach conservative-plume front (engine=telemac, tier=template)
 from trid3nt_server.workflows.telemac.templates.do_sag.do_sag import telemac_do_sag as _telemac_do_sag  # noqa: E402,F401 - reach dissolved-oxygen front (engine=telemac, tier=template)
-from trid3nt_server.workflows.telemac.templates.river_oil_spill.river_oil_spill import telemac_river_oil_spill as _telemac_river_oil_spill  # noqa: E402,F401 - reach oil-slick front (engine=telemac, tier=template)
-from trid3nt_server.workflows.telemac.templates.river_scour.river_scour import telemac_river_scour as _telemac_river_scour  # noqa: E402,F401 - reach mobile-bed front (engine=telemac, tier=template)
-from trid3nt_server.workflows.telemac.templates.river_sediment_plume.river_sediment_plume import telemac_river_sediment_plume as _telemac_river_sediment_plume  # noqa: E402,F401 - reach suspended-sediment front (engine=telemac, tier=template)
+from trid3nt_server.workflows.telemac.templates.oil_spill.oil_spill import telemac_oil_spill as _telemac_oil_spill  # noqa: E402,F401 - reach oil-slick front (engine=telemac, tier=template)
+from trid3nt_server.workflows.telemac.templates.bed_scour.bed_scour import telemac_bed_scour as _telemac_bed_scour  # noqa: E402,F401 - reach mobile-bed front (engine=telemac, tier=template)
+from trid3nt_server.workflows.telemac.templates.sediment_plume.sediment_plume import telemac_sediment_plume as _telemac_sediment_plume  # noqa: E402,F401 - reach suspended-sediment front (engine=telemac, tier=template)
 # The three WAQTEL process questions over the same reach: the heat budget under a
 # real week of weather, a sorbing substance partitioning onto the river's sediment,
 # and what one pass down an enriched reach does to its nutrients and its oxygen.
-from trid3nt_server.workflows.telemac.templates.river_temperature.river_temperature import telemac_river_temperature as _telemac_river_temperature  # noqa: E402,F401 - reach water-temperature front (engine=telemac, tier=template)
-from trid3nt_server.workflows.telemac.templates.river_micropollutant.river_micropollutant import telemac_river_micropollutant as _telemac_river_micropollutant  # noqa: E402,F401 - reach sorbing-pollutant front (engine=telemac, tier=template)
-from trid3nt_server.workflows.telemac.templates.river_eutrophication.river_eutrophication import telemac_river_eutrophication as _telemac_river_eutrophication  # noqa: E402,F401 - reach nutrient-enrichment front (engine=telemac, tier=template)
+from trid3nt_server.workflows.telemac.templates.water_temperature.water_temperature import telemac_water_temperature as _telemac_water_temperature  # noqa: E402,F401 - reach water-temperature front (engine=telemac, tier=template)
+from trid3nt_server.workflows.telemac.templates.micropollutant_release.micropollutant_release import telemac_micropollutant_release as _telemac_micropollutant_release  # noqa: E402,F401 - reach sorbing-pollutant front (engine=telemac, tier=template)
+from trid3nt_server.workflows.telemac.templates.eutrophication.eutrophication import telemac_eutrophication as _telemac_eutrophication  # noqa: E402,F401 - reach nutrient-enrichment front (engine=telemac, tier=template)
 # The reach's one WORKED question: a dredger driven by NESTOR on the sediment
 # deck, so the material it moves rides the same per-class mass evolution the bed
 # evolution and the sediment balance are computed from.
-from trid3nt_server.workflows.telemac.templates.river_dredging.river_dredging import telemac_river_dredging as _telemac_river_dredging  # noqa: E402,F401 - reach maintenance-dredge front (engine=telemac, tier=template)
+from trid3nt_server.workflows.telemac.templates.channel_dredging.channel_dredging import telemac_channel_dredging as _telemac_channel_dredging  # noqa: E402,F401 - reach maintenance-dredge front (engine=telemac, tier=template)
 # The CATCHMENT front. Its one liquid boundary is declared on the mesh ask at the
 # delineation's snapped pour point, so the outlet hydrograph is the flux through
 # the nodes that role landed on.

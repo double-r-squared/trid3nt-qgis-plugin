@@ -36,65 +36,65 @@ How much RUNOFF a storm produces from this WATERSHED, as an outlet hydrograph an
 
 Module `telemac2d`, proving run `01M2GP3XQJENSXTD763387Z9TN`.
 
-## [`telemac_river_dredging`](telemac_river_dredging.md)
+## [`telemac_channel_dredging`](telemac_channel_dredging.md)
 
-[![telemac_river_dredging](telemac_river_dredging/telemac_river_dredging.png)](telemac_river_dredging.md)
+[![telemac_channel_dredging](telemac_channel_dredging/telemac_channel_dredging.png)](telemac_channel_dredging.md)
 
 MAINTENANCE DREDGING of a navigation channel: how much comes out, and what the bed does.
 
 Module `telemac2d`, proving run `01M2GMW1YTJ5MS4MZV5S7Q2WSK`.
 
-## [`telemac_river_dye`](telemac_river_dye.md)
+## [`telemac_dye_release`](telemac_dye_release.md)
 
-[![telemac_river_dye](telemac_river_dye/telemac_river_dye.png)](telemac_river_dye.md)
+[![telemac_dye_release](telemac_dye_release/telemac_dye_release.png)](telemac_dye_release.md)
 
 A DYE / TRACER / CONTAMINANT plume that TRAVELS DOWNSTREAM in a RIVER (surface water).
 
 Module `telemac2d`, proving run `01M2GNPFQ2077S20779R8FWZNH`.
 
-## [`telemac_river_eutrophication`](telemac_river_eutrophication.md)
+## [`telemac_eutrophication`](telemac_eutrophication.md)
 
-[![telemac_river_eutrophication](telemac_river_eutrophication/telemac_river_eutrophication.png)](telemac_river_eutrophication.md)
+[![telemac_eutrophication](telemac_eutrophication/telemac_eutrophication.png)](telemac_eutrophication.md)
 
 NUTRIENT ENRICHMENT down a river reach: algal growth, nutrient drawdown and the oxygen response over one pass.
 
 Module `telemac2d`, proving run `01M2HSYSR2VP81VWZ2108E64CD`.
 
-## [`telemac_river_micropollutant`](telemac_river_micropollutant.md)
+## [`telemac_micropollutant_release`](telemac_micropollutant_release.md)
 
-[![telemac_river_micropollutant](telemac_river_micropollutant/telemac_river_micropollutant.png)](telemac_river_micropollutant.md)
+[![telemac_micropollutant_release](telemac_micropollutant_release/telemac_micropollutant_release.png)](telemac_micropollutant_release.md)
 
 A SORBING substance in a RIVER: how much stays DISSOLVED and how much ends up ON THE BED.
 
 Module `telemac2d`, proving run `01M2HG9ASXE40K9MF2GQCZRN9Y`.
 
-## [`telemac_river_oil_spill`](telemac_river_oil_spill.md)
+## [`telemac_oil_spill`](telemac_oil_spill.md)
 
-[![telemac_river_oil_spill](telemac_river_oil_spill/telemac_river_oil_spill.png)](telemac_river_oil_spill.md)
+[![telemac_oil_spill](telemac_oil_spill/telemac_oil_spill.png)](telemac_oil_spill.md)
 
 An OIL SLICK released into a RIVER: floating particles plus the dissolved fraction.
 
 Module `telemac2d`, proving run `01M2GNW5YZVT75K4S0G5VMAXA0`.
 
-## [`telemac_river_scour`](telemac_river_scour.md)
+## [`telemac_bed_scour`](telemac_bed_scour.md)
 
-[![telemac_river_scour](telemac_river_scour/telemac_river_scour.png)](telemac_river_scour.md)
+[![telemac_bed_scour](telemac_bed_scour/telemac_bed_scour.png)](telemac_bed_scour.md)
 
 Bed SCOUR and DEPOSITION in a river reach: a mobile bed under a flow.
 
 Module `telemac2d`, proving run `01M2GN2534D6GMNFVJ89C3SGHS`.
 
-## [`telemac_river_sediment_plume`](telemac_river_sediment_plume.md)
+## [`telemac_sediment_plume`](telemac_sediment_plume.md)
 
-[![telemac_river_sediment_plume](telemac_river_sediment_plume/telemac_river_sediment_plume.png)](telemac_river_sediment_plume.md)
+[![telemac_sediment_plume](telemac_sediment_plume/telemac_sediment_plume.png)](telemac_sediment_plume.md)
 
 A SUSPENDED SEDIMENT plume in a RIVER: it settles and deposits on the bed.
 
 Module `telemac2d`, proving run `01M2GNFGG431SX89YQ0YMD8PPF`.
 
-## [`telemac_river_temperature`](telemac_river_temperature.md)
+## [`telemac_water_temperature`](telemac_water_temperature.md)
 
-[![telemac_river_temperature](telemac_river_temperature/telemac_river_temperature.png)](telemac_river_temperature.md)
+[![telemac_water_temperature](telemac_water_temperature/telemac_water_temperature.png)](telemac_water_temperature.md)
 
 WATER TEMPERATURE down a river reach under a week of real weather.
 

@@ -25,7 +25,7 @@ from trid3nt_server.adapters.adapter import (
 
 #: The engine template these three tests route through - a registered template
 #: whose docstring is the model's only routing signal for its question class.
-_TEMPLATE = "telemac_river_dye"
+_TEMPLATE = "telemac_dye_release"
 
 
 

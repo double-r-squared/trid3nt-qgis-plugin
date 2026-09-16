@@ -240,7 +240,7 @@ def test_compute_recall_at_k_synthetic():
             "session_id": "S1",
             "turn_id": "TB",
             "k": 25,
-            "visible_tools": ["fetch_topobathy", "telemac_river_dye"],
+            "visible_tools": ["fetch_topobathy", "telemac_dye_release"],
         },
     ]
     tool_records = [
@@ -250,7 +250,7 @@ def test_compute_recall_at_k_synthetic():
         {"source": "llm", "session_id": "S1", "turn_id": "TA", "tool_name": "telemac_rain_on_grid"},
         # Turn B -- river-plume.
         {"source": "llm", "session_id": "S1", "turn_id": "TB", "tool_name": "fetch_topobathy"},
-        {"source": "llm", "session_id": "S1", "turn_id": "TB", "tool_name": "telemac_river_dye"},
+        {"source": "llm", "session_id": "S1", "turn_id": "TB", "tool_name": "telemac_dye_release"},
         # A workflow-sourced dispatch must be IGNORED by recall.
         {"source": "workflow", "session_id": "S1", "turn_id": "TA", "tool_name": "restyle_layer"},
         # A dispatch with NO shadow row (different turn) -- excluded.

@@ -48,11 +48,11 @@ def test_core_floor_always_subset(warm_index, query, accrued):
 
 
 def test_never_hide_mid_task(warm_index):
-    accrued = {"telemac_river_dye", "compute_cross_section", "fetch_usgs_nwis_gauges"}
+    accrued = {"telemac_dye_release", "compute_cross_section", "fetch_usgs_nwis_gauges"}
     # a query about something UNRELATED to the accrued tools.
     res = retrieve_visible_tools("show me the lightning over the storm", accrued, DEFAULT_K)
     assert accrued <= res
-    assert "telemac_river_dye" in res  # dispatched stays
+    assert "telemac_dye_release" in res  # dispatched stays
     assert "compute_cross_section" in res  # explicit stays
 
 
@@ -161,7 +161,7 @@ _RECALL_FIXTURE = [
     ("how much does incoming swell amplify inside this harbour basin",
      "artemis_harbor_agitation"),
     ("how far downstream does a dye spill travel in this river",
-     "telemac_river_dye"),
+     "telemac_dye_release"),
     ("compute the slope from the DEM on the map", "run_qgis_algorithm"),
     ("run this pyqgis script in my qgis session", "run_pyqgis"),
     ("what telemac keyword controls the bottom friction law", "describe_keywords"),

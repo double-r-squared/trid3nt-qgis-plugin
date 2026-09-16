@@ -26,7 +26,7 @@ if not DEV.is_dir():
 
 #: A registered template whose ANSWER names more than one field, so the gap list
 #: is read against a real declaration rather than a stub nobody ships.
-TEMPLATE = "telemac_river_scour"
+TEMPLATE = "telemac_bed_scour"
 
 
 @functools.lru_cache(maxsize=1)
@@ -76,7 +76,7 @@ def test_a_chart_is_a_gap_only_where_the_template_places_one():
     owes none, so a run that persisted no spec is complete; one that places a
     chart and persisted no spec is short a deliverable."""
     packet = _packet_module()
-    assert packet.unplaced_chart("telemac_river_dredging", {}) == []
+    assert packet.unplaced_chart("telemac_channel_dredging", {}) == []
     gaps = packet.unplaced_chart(TEMPLATE, {})
     assert len(gaps) == 1 and gaps[0].startswith("chart:")
     assert packet.unplaced_chart(TEMPLATE, {"chart_spec": {"marker": {}}}) == []

@@ -56,9 +56,9 @@ def _packet(root: Path, template: str, run_id: str, *, age_days: float) -> Path:
 def test_the_sweep_keeps_seven_days_and_drops_what_is_older(tmp_path, monkeypatch):
     module = _packet_module()
     monkeypatch.setattr(module, "PACKET_ROOT", str(tmp_path))
-    fresh = _packet(tmp_path, "telemac_river_dye", "RUN_TODAY", age_days=0.0)
-    inside = _packet(tmp_path, "telemac_river_dye", "RUN_SIX_DAYS", age_days=6.0)
-    stale = _packet(tmp_path, "telemac_river_dye", "RUN_EIGHT_DAYS", age_days=8.0)
+    fresh = _packet(tmp_path, "telemac_dye_release", "RUN_TODAY", age_days=0.0)
+    inside = _packet(tmp_path, "telemac_dye_release", "RUN_SIX_DAYS", age_days=6.0)
+    stale = _packet(tmp_path, "telemac_dye_release", "RUN_EIGHT_DAYS", age_days=8.0)
     ancient = _packet(tmp_path, "telemac_do_sag", "RUN_LAST_MONTH", age_days=30.0)
 
     removed = module.prune_packets()
@@ -68,7 +68,7 @@ def test_the_sweep_keeps_seven_days_and_drops_what_is_older(tmp_path, monkeypatc
     assert not stale.exists()
     assert not ancient.exists()
     assert sorted(removed) == ["telemac_do_sag/RUN_LAST_MONTH",
-                               "telemac_river_dye/RUN_EIGHT_DAYS"]
+                               "telemac_dye_release/RUN_EIGHT_DAYS"]
 
 
 def test_keep_days_is_the_lever(tmp_path, monkeypatch):
@@ -87,7 +87,7 @@ def test_a_replaced_file_keeps_its_packet_alive(tmp_path, monkeypatch):
     """A re-render writes over the files without touching the folder's stat."""
     module = _packet_module()
     monkeypatch.setattr(module, "PACKET_ROOT", str(tmp_path))
-    directory = _packet(tmp_path, "telemac_river_dye", "RUN_REPLACED", age_days=30.0)
+    directory = _packet(tmp_path, "telemac_dye_release", "RUN_REPLACED", age_days=30.0)
     (directory / "packet.json").write_text("re-rendered", encoding="utf-8")
 
     assert module.prune_packets() == []

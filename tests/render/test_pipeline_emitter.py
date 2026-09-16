@@ -1421,7 +1421,7 @@ async def test_mint_cards_name_the_case_not_the_shared_solver_id(
 ) -> None:
     """A family whose legs share one solver id still labels each run its own.
 
-    Every TELEMAC template dispatches the ``telemac_river_dye`` solver, so the
+    Every TELEMAC template dispatches the ``telemac_dye_release`` solver, so the
     solver id cannot name the card without labelling every sibling after one leg.
     """
     from trid3nt_server.render import pipeline_emitter as pe

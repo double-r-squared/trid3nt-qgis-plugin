@@ -316,11 +316,11 @@ _SHADOW_RECORD_TYPE = "tool_retrieval_shadow"
 #: the right template. Keys must be registered engine templates; a key that no
 #: longer registers reports a permanently empty flow.
 _FLOW_BY_SOLVER_TOOL: dict[str, str] = {
-    "telemac_river_dye": "river-plume",
-    "telemac_river_oil_spill": "river-oil-slick",
-    "telemac_river_scour": "river-mobile-bed",
-    "telemac_river_sediment_plume": "river-sediment-plume",
-    "telemac_river_dredging": "river-dredging",
+    "telemac_dye_release": "river-plume",
+    "telemac_oil_spill": "river-oil-slick",
+    "telemac_bed_scour": "river-mobile-bed",
+    "telemac_sediment_plume": "river-sediment-plume",
+    "telemac_channel_dredging": "river-dredging",
     "telemac_do_sag": "oxygen-sag",
     "telemac_rain_on_grid": "rainfall-runoff",
     "telemac3d_stratified_flow": "stratified-flow",

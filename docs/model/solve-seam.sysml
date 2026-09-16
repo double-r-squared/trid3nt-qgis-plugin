@@ -57,10 +57,11 @@ package SolveSeam {
         */
     }
 
-    part def WaterDomainClip {
+    part def BedPainter {
         doc /*
-        The water a question is asked about, narrowed to the part of it a bed
-        survey actually sounded, before anything is triangulated.
+        The one op that gives every node of a domain its elevation, off the one
+        source the bed slot carries - and refuses, by name and by count, the
+        nodes that source never measured.
         */
     }
 
@@ -335,9 +336,9 @@ package SolveSeam {
         port meshIn : MeshIn;
     }
 
-    part basinDomainClip : WaterDomainClip {
+    part bedPainter : BedPainter {
         doc /*
-        code: trid3nt_server/workflows/telemac/templates/stratified_flow/measured_bed.py
+        code: trid3nt_server/workflows/mesh/shared/primitives.py
         */
     }
 
@@ -737,25 +738,26 @@ package SolveSeam {
         */
     }
 
-    requirement def AWaterDomainIsClippedToItsMeasuredBed {
+    requirement def EveryNodeCarriesAMeasuredBed {
         doc /*
-        A water domain is the mapped water polygon INTERSECT the bed raster's
-        valid-data footprint. A mapped polygon says where the water is; a
-        survey says where its floor was sounded, and the two disagree over an
-        arm or a slip - so meshing the difference builds elements the bed
-        painter has nothing to give. A water domain has no bed where nobody
-        measured.
+        A domain is a polygon a question was asked over; a survey says where its
+        floor was sounded, and the two disagree over an arm or a slip. The domain
+        is NOT narrowed to the survey: the answer to "the survey does not reach
+        this water" is a bed that does.
 
-        The footprint is measured from the raster's own MASK, never from a
-        threshold on its values: a nodata cell and a cell sounded at zero depth
-        are different statements and only the mask tells them apart. The clip is
-        journaled with the area it kept against the area the polygon mapped,
-        beside the node count of the mesh built on it. A clip that meets nothing
-        REFUSES by name - the answer to "the survey does not reach this water"
-        is a bed that does, never a domain nobody sounded.
+        So the bed slot takes ONE source and the composition is a spatial MERGE
+        of the two available layers, done by a derive before the op: the survey
+        wins every cell it measured, the wider surface fills the rest, and the
+        sidecar records which input painted each cell. A ladder would pick one
+        source for the whole domain and could not say that; this picks one per
+        cell and writes it down. The merge refuses two different vertical datums
+        by name, and refuses a surface that states none - a floor whose zero
+        nobody carried is a floor nobody can place.
 
-        ONE fetch serves both readers: the clip and the paint read the same
-        survey, or a node lands where the clip said nothing was measured.
+        What survives of the clip is the REFUSAL. The painter names the count of
+        nodes the one source did not measure rather than filling them, because a
+        node given an elevation nobody sounded is a bed the run then answers
+        over.
         */
     }
 
@@ -831,13 +833,17 @@ package SolveSeam {
     verify requirement OneNumberDefinesTheStructure by
         "tests/telemac/test_open_water_domains.py::test_a_lone_node_between_two_of_another_kind_is_not_a_face";
 
-    satisfy requirement AWaterDomainIsClippedToItsMeasuredBed by basinDomainClip;
-    verify requirement AWaterDomainIsClippedToItsMeasuredBed by
-        "tests/telemac/test_open_water_domains.py::test_the_basin_is_the_water_the_survey_actually_sounded";
-    verify requirement AWaterDomainIsClippedToItsMeasuredBed by
-        "tests/telemac/test_open_water_domains.py::test_water_the_survey_never_reached_refuses_rather_than_meshing";
-    verify requirement AWaterDomainIsClippedToItsMeasuredBed by
-        "tests/telemac/test_open_water_domains.py::test_the_basin_reads_the_same_survey_it_was_clipped_to";
+    satisfy requirement EveryNodeCarriesAMeasuredBed by bedPainter;
+    verify requirement EveryNodeCarriesAMeasuredBed by
+        "tests/mesh/test_bed_sources_and_runs.py::test_a_domain_no_source_covers_refuses_by_name";
+    verify requirement EveryNodeCarriesAMeasuredBed by
+        "tests/mesh/test_bed_sources_and_runs.py::test_the_bed_is_one_source_and_two_are_merged_before_the_op";
+    verify requirement EveryNodeCarriesAMeasuredBed by
+        "tests/derive/test_derive_merge_rasters.py::test_the_primary_wins_where_it_measured_and_the_fallback_fills_the_rest";
+    verify requirement EveryNodeCarriesAMeasuredBed by
+        "tests/derive/test_derive_merge_rasters.py::test_the_sidecar_says_which_input_painted_each_cell";
+    verify requirement EveryNodeCarriesAMeasuredBed by
+        "tests/derive/test_derive_merge_rasters.py::test_two_datums_refuse_by_name";
 
     satisfy requirement BoundaryCodesMatchTheSteering by topologyWriter;
     satisfy requirement BoundaryCodesMatchTheSteering by assembler;
@@ -883,7 +889,7 @@ package SolveSeam {
     verify requirement OutflowStageIsNormalDepth by
         "tests/telemac/test_telemac_outflow_stage.py::test_the_outflow_face_is_measured_as_a_transect_of_the_painted_bed";
     verify requirement OutflowStageIsNormalDepth by
-        "tests/telemac/test_telemac_outflow_stage.py::test_the_reach_length_is_walked_along_the_line_the_mesh_was_built_over";
+        "tests/telemac/test_telemac_outflow_stage.py::test_the_channel_length_is_measured_between_the_two_runs_own_centres";
     verify requirement OutflowStageIsNormalDepth by
         "tests/telemac/test_telemac_outflow_stage.py::test_a_bigger_discharge_stands_higher_in_the_same_channel";
     verify requirement OutflowStageIsNormalDepth by
@@ -892,7 +898,7 @@ package SolveSeam {
         "tests/telemac/test_telemac_outflow_stage.py::test_an_input_the_stage_cannot_be_derived_from_refuses_by_name";
 
     verify requirement OutflowStageIsNormalDepth by
-        "tests/telemac/test_telemac_module_surface.py::test_the_reach_body_is_written_at_the_derivation_it_was_solved_for";
+        "tests/telemac/test_telemac_module_surface.py::test_the_open_channel_body_is_written_at_the_derivation_it_was_solved_for";
     verify requirement OutflowStageIsNormalDepth by
         "tests/telemac/test_telemac_outflow_stage.py::test_a_flatter_reach_stands_higher_for_the_same_flow";
 

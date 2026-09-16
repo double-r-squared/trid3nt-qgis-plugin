@@ -107,8 +107,8 @@ def test_the_engine_field_is_the_only_thing_an_engine_resolves_from():
     )
 
     assert resolve_engine("TELEMAC") == "telemac"
-    assert resolve_engine("telemac_river_dye") is None
-    assert engine_paths("telemac_river_dye") == ()
+    assert resolve_engine("telemac_dye_release") is None
+    assert engine_paths("telemac_dye_release") == ()
 
 
 def test_code_identity_stamps_a_sha_and_a_dirty_flag():

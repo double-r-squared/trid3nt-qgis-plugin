@@ -3,7 +3,7 @@
 NATE-shaped design (2026-08-21/23 discussion). V1 LANDED -
 do_sag MIGRATED. WAVE 2 LANDED - the FORM and DRAW cards, on
 the existing spines, plugin 0.3.17. WAVE 3 LANDED -
-telemac_river_dye MIGRATED (3,469 -> 671 lines over a shared
+telemac_dye_release MIGRATED (3,469 -> 671 lines over a shared
 `workflows/telemac/` family), the form card's first live proof,
 and the live-run harness (`dev/testing/`). WAVE 4 LANDED
 - the GENERALIZATION CHECKPOINT PASSED:
@@ -451,7 +451,7 @@ A-green with B-red isolates a fault to the interaction machinery.
    ledger + resume, plan validator, form + draw cards (plugin), the
    Domain environment.
 2. do_sag migration (314 lines - fast ergonomic feedback).
-3. river_dye migration (the full-contact proof; R3 acceptance;
+3. dye_release migration (the full-contact proof; R3 acceptance;
    net-LOC meter on).
 4. GENERALIZATION CHECKPOINT: one SWMM and one MODFLOW template
    before any mass conversion. DONE (wave 4) - PASSED.
@@ -460,7 +460,7 @@ A-green with B-red isolates a fault to the interaction machinery.
    family completion, HEC-RAS tail (skippable). Two items queued out
    of the checkpoint: the SWMM Green-Ampt trio derived from the same
    texture fit as the aquifer column (a physics change, NATE's), and
-   river_dye's carrier discharge adopting the DERIVED door, which
+   dye_release's carrier discharge adopting the DERIVED door, which
    closes wave 3's delta 1 with no library change.
    SWMM waves, per wave 5's tranche plan: **A - the standalone solve
    templates (LANDED)**; B - the published-deck trio, where a fetched
@@ -485,7 +485,7 @@ A-green with B-red isolates a fault to the interaction machinery.
 Agreed in the 2026-08-24 architecture discussion (rulings recorded in
 docs/IDEAS.md, 2026-08-24/25 entries); this section is the contract the
 family campaign builds. Status: BUILT and hardened on the two-template cohort
-(`telemac_do_sag` + `telemac_river_dye`, the workflow skeleton) - PROPOSED for the FLEET
+(`telemac_do_sag` + `telemac_dye_release`, the workflow skeleton) - PROPOSED for the FLEET
 until NATE redlines the cohort result. What the cohort taught, recorded here so
 the contract and the code do not drift:
 
@@ -625,7 +625,7 @@ There is no Builder DSL (rejected twice); optional plain helpers only.
 ### The registration factory
 
 The ~70-line `_normalize` / `_with_notes` / `_physical_answer` +
-try/except tool-body tails repeated in do_sag.py and river_dye.py are
+try/except tool-body tails repeated in do_sag.py and dye_release.py are
 absorbed into library-generated registration. The LANDED signature:
 
     register_workflow(facade, metadata, PARAMS, plan,

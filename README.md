@@ -39,10 +39,10 @@ proving run and that run's figures: [docs/templates/index.md](docs/templates/ind
 
 | template | the question it answers |
 | --- | --- |
-| `telemac_river_dye` | A dye / tracer / contaminant plume travelling downstream in a river. |
-| `telemac_river_oil_spill` | An oil slick on a river: floating particles plus the dissolved fraction. |
-| `telemac_river_scour` | Bed scour and deposition in a reach: a mobile bed under a flow. |
-| `telemac_river_sediment_plume` | A suspended sediment plume that settles and deposits on the bed. |
+| `telemac_dye_release` | A dye / tracer / contaminant plume travelling downstream in a river. |
+| `telemac_oil_spill` | An oil slick on a river: floating particles plus the dissolved fraction. |
+| `telemac_bed_scour` | Bed scour and deposition in a reach: a mobile bed under a flow. |
+| `telemac_sediment_plume` | A suspended sediment plume that settles and deposits on the bed. |
 | `telemac_do_sag` | The dissolved-oxygen sag below a discharge (the TMDL / permit question). |
 | `telemac_rain_on_grid` | How much runoff a storm produces from a watershed, as a hydrograph and a depth map. |
 | `artemis_harbor_agitation` | The wave agitation a declared structure leaves inside a harbour. |

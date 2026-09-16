@@ -159,7 +159,7 @@ async def test_vector_input_surfaced_on_loop():
     import asyncio
 
     emitter = _emitter()
-    tokens = _bind(emitter, dispatched="model_river_dye_scenario",
+    tokens = _bind(emitter, dispatched="model_dye_release_scenario",
                    loop=asyncio.get_running_loop())
     try:
         with patch(

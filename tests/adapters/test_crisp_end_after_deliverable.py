@@ -49,7 +49,7 @@ def _settings() -> ModelSettings:
 
 def test_a_template_is_a_terminal_composer():
     """A top-level engine template is recognized as a terminal deliverable."""
-    assert _is_terminal_composer("telemac_river_dye") is True
+    assert _is_terminal_composer("telemac_dye_release") is True
 
 
 def test_helper_compute_tool_is_not_terminal_composer():
@@ -77,7 +77,7 @@ async def test_delivered_composer_concludes_without_loop_exhausted(fake_llm):
         if i == 0:
             # Deliver the SFINCS flood depth layer.
             return _make_fake_chunk_with_function_call(
-                "telemac_river_dye",
+                "telemac_dye_release",
                 {"location": "Mexico Beach"},
                 "call-composer",
             )
@@ -93,7 +93,7 @@ async def test_delivered_composer_concludes_without_loop_exhausted(fake_llm):
 
     async def _dispatch(_ws, _state, name, _args):
         dispatches["n"] += 1
-        if name == "telemac_river_dye":
+        if name == "telemac_dye_release":
             # Layer-bearing deliverable -> _dispatch_made_progress is True.
             return {"status": "ok", "layers": ["flood-depth"], "layer_id": "flood-depth-cog"}
         # A bare ack -> NO progress (the post-deliverable idle shape).
@@ -145,7 +145,7 @@ async def test_composer_function_response_carries_completion_directive(fake_llm)
     def _next_turn(i, _c):
         if i == 0:
             return _make_fake_chunk_with_function_call(
-                "telemac_river_dye", {"location": "X"}, "call-composer"
+                "telemac_dye_release", {"location": "X"}, "call-composer"
             )
         return _make_fake_chunk_with_function_call(
             "fetch_dem", {"bbox": [0, 0, i + 1, i + 1]}, f"c-{i + 1}"
@@ -154,7 +154,7 @@ async def test_composer_function_response_carries_completion_directive(fake_llm)
     fake_llm.on_call(_next_turn)
 
     async def _dispatch(_ws, _state, name, _args):
-        if name == "telemac_river_dye":
+        if name == "telemac_dye_release":
             return {"status": "ok", "layers": ["d"], "layer_id": "d-cog"}
         return {"ok": True}
 

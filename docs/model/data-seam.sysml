@@ -99,10 +99,10 @@ package DataSeam {
 
     part def FreeSurfaceReader {
         doc /*
-        The producer that turns an observed water level into the elevation a run
-        opens at: it picks the gauge nearest the AOI, takes the reading, and
-        compares the two source rows' stated datums before the number is used
-        as an elevation over that bed.
+        The slot ingestion that turns an observed water level into the elevation
+        a run opens at: it ranks the reporting sites against the domain, takes
+        the nearest reading in the unit the keyword reads, and says on the run
+        journal which site reported it and when.
         */
     }
 
@@ -397,6 +397,14 @@ package DataSeam {
         */
     }
 
+    part def ExtentSlot {
+        doc /*
+        The RECTANGLE a question is asked inside - the window a domain is cut
+        out of - however the caller names it: a box picked on the canvas, four
+        numbers, a place, or a layer's bounds.
+        */
+    }
+
     part def ContextRow {
         doc /*
         A producer row whose absence is legal, and SAID: the run continues and
@@ -428,6 +436,12 @@ package DataSeam {
         */
     }
 
+    part extentSlot : ExtentSlot {
+        doc /*
+        code: trid3nt_server/inputs/extent.py
+        */
+    }
+
     part contextRow : ContextRow {
         doc /*
         code: trid3nt_server/workflows/runtime/data.py
@@ -448,7 +462,7 @@ package DataSeam {
 
     part freeSurfaceReader : FreeSurfaceReader {
         doc /*
-        code: trid3nt_server/workflows/telemac/templates/stratified_flow/lake_level.py
+        code: trid3nt_server/inputs/observation.py
         */
     }
 
@@ -744,6 +758,26 @@ package DataSeam {
 
         The refusal for a producer row declared .optional() stands: absence with
         nothing said about it is the failure mode this row was written to end.
+
+        A tail read off a row that is WHOLLY ABSENT reads as nothing, exactly as
+        a field that is present and empty does - otherwise the keyword reading a
+        context row refuses the very run the row was declared to let continue.
+        */
+    }
+
+    requirement def ABoxIsNotADomainAndIsItsOwnSlot {
+        doc /*
+        A box has no shoreline, so it is not a domain and the mesher refuses one
+        by name. What it IS is the window a question is asked inside, and a
+        question that cuts its domain out of one declares that window as its own
+        slot - which is what puts a canvas ask back where the domain's producer
+        took it away: a slot with a producer is never drawn, so a harbour whose
+        water is CUT would otherwise have nothing a user with nothing can fill.
+
+        One role, one ingestion, one draw purpose: a rectangle picked on the
+        canvas, four numbers, a place or a layer's bounds all read as ``.bbox``
+        afterwards, and the raster engines fill the same slot with the grid
+        window they solve on.
         */
     }
 
@@ -822,11 +856,11 @@ package DataSeam {
     satisfy requirement AFreeSurfaceAndABedShareOneStatedDatum by lakeDeclaration;
     satisfy requirement AFreeSurfaceAndABedShareOneStatedDatum by freeSurfaceReader;
     verify requirement AFreeSurfaceAndABedShareOneStatedDatum by
-        "tests/telemac/test_open_water_domains.py::test_the_level_is_the_nearest_gauges_last_reading";
+        "tests/telemac/test_telemac3d_stratified_flow.py::test_the_level_the_free_surface_opens_at_is_one_measured_value";
     verify requirement AFreeSurfaceAndABedShareOneStatedDatum by
-        "tests/telemac/test_open_water_domains.py::test_a_level_and_a_bed_on_two_datums_refuse_by_name";
+        "tests/telemac/test_telemac3d_stratified_flow.py::test_an_ungauged_body_of_water_continues_the_run";
     verify requirement AFreeSurfaceAndABedShareOneStatedDatum by
-        "tests/telemac/test_open_water_domains.py::test_water_no_gauge_watches_refuses_rather_than_opening_at_the_datum";
+        "tests/inputs/test_slot_inputs.py::test_each_slot_reads_through_the_ingestion_its_role_names";
     verify requirement AFreeSurfaceAndABedShareOneStatedDatum by
         "tests/telemac/test_open_water_domains.py::test_the_thermocline_is_stated_below_the_water_top_not_the_datum";
     verify requirement AFreeSurfaceAndABedShareOneStatedDatum by
@@ -953,6 +987,17 @@ package DataSeam {
     verify requirement ABoundaryRunIsTwoPointsAndAType by
         "tests/mesh/test_bed_sources_and_runs.py::test_a_closed_body_states_no_run_and_the_mesh_has_only_walls";
 
+    satisfy requirement ABoxIsNotADomainAndIsItsOwnSlot by extentSlot;
+    satisfy requirement ABoxIsNotADomainAndIsItsOwnSlot by slotDoor;
+    verify requirement ABoxIsNotADomainAndIsItsOwnSlot by
+        "tests/inputs/test_slot_inputs.py::test_an_extent_slot_reads_a_box_however_the_caller_named_it";
+    verify requirement ABoxIsNotADomainAndIsItsOwnSlot by
+        "tests/inputs/test_slot_inputs.py::test_only_the_slots_a_user_can_draw_are_offered_on_the_canvas";
+    verify requirement ABoxIsNotADomainAndIsItsOwnSlot by
+        "tests/telemac/test_agitation_template.py::test_the_box_is_an_extent_slot_the_canvas_offers_a_rectangle_for";
+    verify requirement ABoxIsNotADomainAndIsItsOwnSlot by
+        "tests/telemac/test_agitation_template.py::test_the_mesh_is_cut_from_the_domain_polygon_and_not_from_a_box";
+
     satisfy requirement AContextRowsAbsenceContinuesTheRun by contextRow;
     verify requirement AContextRowsAbsenceContinuesTheRun by
         "tests/runtime/test_domain_bed_and_context_slots.py::test_a_context_rows_absence_continues_the_run_and_says_so";
@@ -962,6 +1007,10 @@ package DataSeam {
         "tests/runtime/test_domain_bed_and_context_slots.py::test_context_needs_a_producer_and_optional_still_refuses_one";
     verify requirement AContextRowsAbsenceContinuesTheRun by
         "tests/runtime/test_domain_bed_and_context_slots.py::test_a_context_row_states_what_the_sheet_says_when_its_source_is_empty";
+    verify requirement AContextRowsAbsenceContinuesTheRun by
+        "tests/runtime/test_domain_bed_and_context_slots.py::test_a_tail_read_off_a_wholly_absent_row_is_nothing";
+    verify requirement AContextRowsAbsenceContinuesTheRun by
+        "tests/runtime/test_domain_bed_and_context_slots.py::test_the_sheet_reads_a_wholly_absent_row_as_nothing";
 
     satisfy requirement ThalwegBurningIsNeverABedSource by blueTopoSource;
     satisfy requirement ThalwegBurningIsNeverABedSource by waterBodyClassifier;

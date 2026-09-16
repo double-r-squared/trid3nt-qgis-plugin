@@ -20,15 +20,15 @@ from trid3nt_server.tools.search.tool_retrieval import retrieve_visible_tools
 #: template that stops registering is a capability that silently left, and the
 #: retrieval matrix below is only a guarantee if the roster it walks is fixed.
 EXPECTED_TEMPLATES = {
-    "telemac_river_dye",
-    "telemac_river_oil_spill",
-    "telemac_river_scour",
-    "telemac_river_sediment_plume",
-    "telemac_river_dredging",
+    "telemac_dye_release",
+    "telemac_oil_spill",
+    "telemac_bed_scour",
+    "telemac_sediment_plume",
+    "telemac_channel_dredging",
     "telemac_do_sag",
-    "telemac_river_temperature",
-    "telemac_river_micropollutant",
-    "telemac_river_eutrophication",
+    "telemac_water_temperature",
+    "telemac_micropollutant_release",
+    "telemac_eutrophication",
     "telemac_rain_on_grid",
     "telemac3d_stratified_flow",
     "artemis_harbor_agitation",
