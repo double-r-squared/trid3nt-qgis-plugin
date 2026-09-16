@@ -485,13 +485,26 @@ class Solved:
             Path(local).unlink(missing_ok=True)
 
     @cached_property
+    def xy(self) -> tuple[Any, Any]:
+        """The node coordinates of the 2D mesh every read is taken over.
+
+        A 3D result stores NPLAN copies of the 2D mesh and its coordinate arrays
+        span all of them, while every value a read holds has been reduced to one
+        plane - so the first NPOIN2 of them are the nodes those values stand on."""
+        import numpy as np
+
+        nodes = int(self.result["npoin2"])
+        return (np.asarray(self.result["x"])[:nodes],
+                np.asarray(self.result["y"])[:nodes])
+
+    @cached_property
     def lonlat(self) -> tuple[Any, Any]:
         import numpy as np
         from pyproj import Transformer
 
+        x, y = self.xy
         back = Transformer.from_crs(self.utm_epsg, 4326, always_xy=True)
-        lon, lat = back.transform(np.asarray(self.result["x"]),
-                                  np.asarray(self.result["y"]))
+        lon, lat = back.transform(x, y)
         return np.asarray(lon), np.asarray(lat)
 
     @property
@@ -696,8 +709,8 @@ class Solved:
         from trid3nt_server.inputs.point import as_utm
 
         px, py = as_utm(_point(at), self.utm_epsg)
-        return int(np.argmin(np.hypot(np.asarray(self.result["x"]) - px,
-                                      np.asarray(self.result["y"]) - py)))
+        x, y = self.xy
+        return int(np.argmin(np.hypot(x - px, y - py)))
 
 
 def _edge(has_edge: bool, peak: float) -> float | None:
@@ -825,9 +838,8 @@ def read_field(primitive: Primitive, solved: Solved) -> Read:
     measures = _envelope(primitive.variable, times, values, row, edge, wet)
     if primitive.t == "every":
         floor = _floor(edge, values, row, wet)
-        measures["travel_m"] = _travel_m(np.asarray(solved.result["x"]),
-                                         np.asarray(solved.result["y"]),
-                                         _drawn(values, wet), floor)
+        x, y = solved.xy
+        measures["travel_m"] = _travel_m(x, y, _drawn(values, wet), floor)
         # The values a temporal layer carries HERE are what its legend is
         # measured over, and the layer paints the result file's own group: a
         # node the run never wet moves neither the range nor the picture.
@@ -1147,8 +1159,7 @@ def read_profile(primitive: Primitive, solved: Solved) -> Profile:
     times = np.asarray(solved.result["times"], dtype="float64")
     index = (int(primitive.t) if isinstance(primitive.t, int)
              else int(np.argmin(np.abs(times - float(primitive.t)))))
-    x = np.asarray(solved.result["x"], dtype="float64")
-    y = np.asarray(solved.result["y"], dtype="float64")
+    x, y = (np.asarray(v, dtype="float64") for v in solved.xy)
     line = read_centerline_utm(primitive.along, solved.utm_epsg)
     s, axis, off = _chainage(x, y, line)
     weight, along = np.ones(x.size), None

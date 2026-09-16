@@ -968,6 +968,18 @@ def test_a_plane_of_a_3d_field_is_named_bottom_first(basin):
     assert bottom.values.tolist() == [17.0, 16.0, 19.0]
 
 
+def test_a_3d_read_stands_on_the_plane_s_own_nodes(basin):
+    """A 3D result's coordinate arrays span every plane and a read holds one
+    plane's values, so the nodes a measure is taken over are the 2D mesh's."""
+    from trid3nt_server.workflows.telemac.modules import T3D
+
+    assert basin.result["npoin"] == 9 and basin.result["npoin2"] == 3
+    assert len(basin.xy[0]) == 3 and len(basin.lonlat[0]) == 3
+    frames = T3D.READS["field"](field("T1", t="every"), basin)
+    assert frames.measures["travel_m"] is not None
+    assert T3D.READS["field"](field("T1", t=-1), basin).measures["nodes"] == 3
+
+
 def test_a_tracer_everywhere_above_its_edge_is_drawn_and_ranged_whole(basin):
     """A temperature is a tracer with no absent region: nothing is cut at a
     visible edge, so the layer ranges over the field rather than from zero."""

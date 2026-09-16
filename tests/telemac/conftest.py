@@ -53,8 +53,10 @@ def telemac_result(monkeypatch: pytest.MonkeyPatch):
             "nplan": nplan,
             "npoin2": len(x),
             "nelem2": len(ikle),
-            "x": np.asarray(x, dtype="float64"),
-            "y": np.asarray(y, dtype="float64"),
+            # A 3D file's coordinate arrays span NPOIN3: every plane carries its
+            # own copy of the 2D mesh, which is what the engine's reader returns.
+            "x": np.tile(np.asarray(x, dtype="float64"), nplan),
+            "y": np.tile(np.asarray(y, dtype="float64"), nplan),
             # 0-based, as the reader returns it.
             "ikle": np.asarray(ikle, dtype="int64"),
             "ikle2": np.asarray(ikle, dtype="int64"),
