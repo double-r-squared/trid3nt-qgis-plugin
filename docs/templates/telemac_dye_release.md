@@ -50,57 +50,45 @@ The values the template declares. `desc` is what the model reads when it fills o
 
 | field | the proving run's value |
 |---|---|
-| `dye_cmax_mgl` | 98.6875228881836 |
-| `dye_peak_time_s` | 118.72799682617188 |
-| `plume_reach_m` | 56.7 |
-| `active_frames` | 30 |
-| `mesh_size_m` | 7.763 |
+| `dye_cmax_mgl` | 11.17357349395752 |
+| `dye_peak_time_s` | 294.0 |
+| `plume_reach_m` | 38.9 |
+| `active_frames` | 12 |
+| `mesh_size_m` | 14.704 |
 
 It publishes these layers onto the canvas:
 
-- Input: OSM waterways (map context; the modeled river is the NLDI centerline) (river_geometry)
-- Input: nhdplus nldi (nhdplus_nldi)
-- Input: nhd area water (nhd_area_water)
-- Input: river bed elevation (copernicus_dem, datum EGM2008 geoid (metres, positive up))
-- Release point (derived) - scotia_humboldt_county_california_95562_united_s
-- Velocity u (m/s) at t = 593.64 s (scotia_humboldt_county_california_95562_united_s)
-- Velocity u over time (scotia_humboldt_county_california_95562_united_s)
-- Velocity v (m/s) at t = 593.64 s (scotia_humboldt_county_california_95562_united_s)
-- Velocity v over time (scotia_humboldt_county_california_95562_united_s)
-- Water depth (m) at t = 593.64 s (scotia_humboldt_county_california_95562_united_s)
-- Water depth over time (scotia_humboldt_county_california_95562_united_s)
-- Free surface (m) at t = 593.64 s (scotia_humboldt_county_california_95562_united_s)
-- Free surface over time (scotia_humboldt_county_california_95562_united_s)
-- Bottom (m) at t = 593.64 s (scotia_humboldt_county_california_95562_united_s)
-- Froude number at t = 593.64 s (scotia_humboldt_county_california_95562_united_s)
-- Froude number over time (scotia_humboldt_county_california_95562_united_s)
-- Scalar flowrate (m2/s) at t = 593.64 s (scotia_humboldt_county_california_95562_united_s)
-- Scalar flowrate over time (scotia_humboldt_county_california_95562_united_s)
-- Scalar velocity (m/s) at t = 593.64 s (scotia_humboldt_county_california_95562_united_s)
-- Scalar velocity over time (scotia_humboldt_county_california_95562_united_s)
-- Dye (mg/L) at t = 593.64 s (scotia_humboldt_county_california_95562_united_s)
-- Dye over time (scotia_humboldt_county_california_95562_united_s)
-- scotia_humboldt_county_california_95562_united_s
+- Release point (user) - 01m2m9jy8wxs1pr1fxzq2mcye3
+- Velocity u over time (domain_mesh)
+- Velocity v over time (domain_mesh)
+- Water depth over time (domain_mesh)
+- Free surface over time (domain_mesh)
+- Bottom (m) at t = 1764 s (domain_mesh)
+- Froude number over time (domain_mesh)
+- Scalar flowrate over time (domain_mesh)
+- Scalar velocity over time (domain_mesh)
+- Dye over time (domain_mesh)
+- domain_mesh
 
 ## The proving run
 
-Run `01M2GNPFQ2077S20779R8FWZNH`, 2026-09-14T19:18:40.725276+00:00, 26.198 s, at commit `c06075fe30c18c4bf3619f40299b09edffefc4c0-dirty`.
+Run `01M2M9K6XYYV1JXXWAWV4VH7K8`, 2026-09-16T05:04:08.391022+00:00, 22.963 s, at commit `f261dca1458988817e7433530a9a7e0e755c3960`.
 
-![The solve, frame by frame - nimation (run 01M2GNPFQ2077S20779R8FWZNH)](telemac_dye_release/telemac_river_dye_animation.gif)
+![Every layer the run published, stacked and framed on the result (run 01M2M9K6XYYV1JXXWAWV4VH7K8)](telemac_dye_release/telemac_dye_release.png)
 
-*The solve, frame by frame - nimation (run 01M2GNPFQ2077S20779R8FWZNH)*
+*Every layer the run published, stacked and framed on the result (run 01M2M9K6XYYV1JXXWAWV4VH7K8)*
 
-![eak frame (run 01M2GNPFQ2077S20779R8FWZNH)](telemac_dye_release/telemac_river_dye_peak_frame.png)
+![The solve, frame by frame (run 01M2M9K6XYYV1JXXWAWV4VH7K8)](telemac_dye_release/telemac_dye_release_animation.gif)
 
-*eak frame (run 01M2GNPFQ2077S20779R8FWZNH)*
+*The solve, frame by frame (run 01M2M9K6XYYV1JXXWAWV4VH7K8)*
 
-![dye concentration - the chart the run persisted (run 01M2GNPFQ2077S20779R8FWZNH)](telemac_dye_release/telemac_river_dye_chart_dye_concentration.png)
+![peak frame (run 01M2M9K6XYYV1JXXWAWV4VH7K8)](telemac_dye_release/telemac_dye_release_peak_frame.png)
 
-*dye concentration - the chart the run persisted (run 01M2GNPFQ2077S20779R8FWZNH)*
+*peak frame (run 01M2M9K6XYYV1JXXWAWV4VH7K8)*
 
-![ (run 01M2GNPFQ2077S20779R8FWZNH)](telemac_dye_release/telemac_river_dye.png)
+![dye concentration - the chart the run persisted (run 01M2M9K6XYYV1JXXWAWV4VH7K8)](telemac_dye_release/telemac_dye_release_chart_dye_concentration.png)
 
-* (run 01M2GNPFQ2077S20779R8FWZNH)*
+*dye concentration - the chart the run persisted (run 01M2M9K6XYYV1JXXWAWV4VH7K8)*
 
 ### The sheet it filled
 
@@ -108,32 +96,22 @@ Every slot the run resolved, with where the value came from. The engine's own de
 
 | param | value | units | basis | provenance |
 |---|---|---|---|---|
-| `location` | Eel River near Scotia, California | - | user | supplied on this invocation |
-| `discharge_m3s` | 2.2 | m^3/s | user | supplied on this invocation |
-| `output_interval_min` | 0.333 | min | user | supplied on this invocation |
+| `release` | Point(lon=-122.6691667, lat=45.5175, name=None) | - | user | supplied on this invocation |
 | `spill_fraction` | 0.25 | - | user | supplied on this invocation |
-| `spill_duration_s` | 120.0 | s | user | supplied on this invocation |
+| `spill_duration_s` | 300.0 | s | user | supplied on this invocation |
 | `source_q_m3s` | 8.0 | m^3/s | user | supplied on this invocation |
 | `dye_concentration_mgl` | 100.0 | mg/L | user | supplied on this invocation |
-| `reach_length_km` | 1.0 | km | user | supplied on this invocation |
-| `sim_duration_s` | 600.0 | s | user | supplied on this invocation |
-| `mesh_resolution_m` | 10.0 | m | user | supplied on this invocation |
-| `compute_class` | medium | - | default_demo | declared constant default |
+| `sim_duration_s` | 1800.0 | s | user | supplied on this invocation |
+| `mesh_resolution_m` | 40.0 | m | user | supplied on this invocation |
 | `wind_speed_mps` | 0.0 | m/s | default_demo | declared scenario default |
 | `wind_direction_deg` | 0.0 | deg | default_demo | declared scenario default |
-| `bbox` | - | - | user | not supplied (declared optional) |
-| `river_geometry_uri` | - | - | user | not supplied (declared optional) |
-| `event_time` | - | - | prompt_interpreted | not supplied (declared optional) |
-| `friction_coefficient` | - | - | user | not supplied (declared optional) |
-| `friction_law` | - | - | user | not supplied (declared optional) |
+| `compute_class` | medium | - | default_demo | declared constant default |
 | `rainfall_mm_per_day` | - | mm/day | user | not supplied (declared optional) |
-| `evaporation_mm_per_day` | - | mm/day | user | not supplied (declared optional) |
-| `rainfall_gridmet_window` | - | - | user | not supplied (declared optional) |
-| `release` | - | - | user | not supplied (declared optional) |
 | `decaying_substance` | - | - | prompt_interpreted | not supplied (declared optional) |
 | `decay_half_life_hours` | - | h | user | not supplied (declared optional) |
 | `decay_rate_per_day` | - | 1/day | user | not supplied (declared optional) |
 | `continue_from` | - | - | user | not supplied (declared optional) |
+| `event_time` | - | - | prompt_interpreted | not supplied (declared optional) |
 
 ### Reproduce
 
@@ -141,18 +119,15 @@ Every slot the run resolved, with where the value came from. The engine's own de
 from trid3nt_server.tools import TOOL_REGISTRY
 
 await TOOL_REGISTRY['telemac_dye_release'].fn(
-    discharge_m3s=2.2,
     dye_concentration_mgl=100.0,
-    location='Eel River near Scotia, California',
-    mesh_resolution_m=10.0,
-    output_interval_min=0.333,
-    reach_length_km=1.0,
-    sim_duration_s=600.0,
+    mesh_resolution_m=40.0,
+    release='Point(lon=-122.6691667, lat=45.5175, name=None)',
+    sim_duration_s=1800.0,
     source_q_m3s=8.0,
-    spill_duration_s=120.0,
+    spill_duration_s=300.0,
     spill_fraction=0.25,
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2GNPFQ2077S20779R8FWZNH` and commit `c06075fe30c18c4bf3619f40299b09edffefc4c0-dirty`. The full argument record is [`telemac_dye_release/run.json`](telemac_dye_release/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2M9K6XYYV1JXXWAWV4VH7K8` and commit `f261dca1458988817e7433530a9a7e0e755c3960`. The full argument record is [`telemac_dye_release/run.json`](telemac_dye_release/run.json).
 

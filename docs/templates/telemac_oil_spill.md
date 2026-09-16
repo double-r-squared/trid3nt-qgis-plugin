@@ -50,61 +50,49 @@ The values the template declares. `desc` is what the model reads when it fills o
 
 | field | the proving run's value |
 |---|---|
-| `oil_cmax_mgl` | 94.02247619628906 |
-| `oil_peak_time_s` | 118.78800201416016 |
-| `plume_reach_m` | 54.1 |
-| `active_frames` | 30 |
-| `slick_drift_m` | 85.5 |
+| `oil_cmax_mgl` | 11.172884941101074 |
+| `oil_peak_time_s` | 294.0 |
+| `plume_reach_m` | 39.0 |
+| `active_frames` | 12 |
+| `slick_drift_m` | 58.0 |
 | `floats_released` | 100 |
 | `floats_remaining` | 100 |
-| `mesh_size_m` | 10.415 |
+| `mesh_size_m` | 14.704 |
 
 It publishes these layers onto the canvas:
 
-- Input: OSM waterways (map context; the modeled river is the NLDI centerline) (river_geometry)
-- Input: nhdplus nldi (nhdplus_nldi)
-- Input: nhd area water (nhd_area_water)
-- Input: river bed elevation (copernicus_dem, datum EGM2008 geoid (metres, positive up))
-- Release point (derived) - scotia_humboldt_county_california_95562_united_s
-- Velocity u (m/s) at t = 593.94 s (scotia_humboldt_county_california_95562_united_s)
-- Velocity u over time (scotia_humboldt_county_california_95562_united_s)
-- Velocity v (m/s) at t = 593.94 s (scotia_humboldt_county_california_95562_united_s)
-- Velocity v over time (scotia_humboldt_county_california_95562_united_s)
-- Water depth (m) at t = 593.94 s (scotia_humboldt_county_california_95562_united_s)
-- Water depth over time (scotia_humboldt_county_california_95562_united_s)
-- Free surface (m) at t = 593.94 s (scotia_humboldt_county_california_95562_united_s)
-- Free surface over time (scotia_humboldt_county_california_95562_united_s)
-- Bottom (m) at t = 593.94 s (scotia_humboldt_county_california_95562_united_s)
-- Froude number at t = 593.94 s (scotia_humboldt_county_california_95562_united_s)
-- Froude number over time (scotia_humboldt_county_california_95562_united_s)
-- Scalar flowrate (m2/s) at t = 593.94 s (scotia_humboldt_county_california_95562_united_s)
-- Scalar flowrate over time (scotia_humboldt_county_california_95562_united_s)
-- Scalar velocity (m/s) at t = 593.94 s (scotia_humboldt_county_california_95562_united_s)
-- Scalar velocity over time (scotia_humboldt_county_california_95562_united_s)
-- Oil (mg/L) at t = 593.94 s (scotia_humboldt_county_california_95562_united_s)
-- Oil over time (scotia_humboldt_county_california_95562_united_s)
-- Oil slick track (scotia_humboldt_county_california_95562_united_s)
-- scotia_humboldt_county_california_95562_united_s
+- Release point (user) - 01m2m9n1fpbt8cyb9mdhzsaxmz
+- Velocity u over time (domain_mesh)
+- Velocity v over time (domain_mesh)
+- Water depth over time (domain_mesh)
+- Free surface over time (domain_mesh)
+- Bottom (m) at t = 1764 s (domain_mesh)
+- Froude number over time (domain_mesh)
+- Scalar flowrate over time (domain_mesh)
+- Scalar velocity over time (domain_mesh)
+- Oil over time (domain_mesh)
+- Oil slick track (domain_mesh)
+- domain_mesh
 
 ## The proving run
 
-Run `01M2GNW5YZVT75K4S0G5VMAXA0`, 2026-09-14T19:21:47.481845+00:00, 24.536 s, at commit `c06075fe30c18c4bf3619f40299b09edffefc4c0-dirty`.
+Run `01M2M9N9ZVZVBM90DG0MHCV0ZP`, 2026-09-16T05:05:17.116277+00:00, 22.861 s, at commit `f261dca1458988817e7433530a9a7e0e755c3960-dirty`.
 
-![The solve, frame by frame - spill_animation (run 01M2GNW5YZVT75K4S0G5VMAXA0)](telemac_oil_spill/telemac_river_oil_spill_animation.gif)
+![Every layer the run published, stacked and framed on the result (run 01M2M9N9ZVZVBM90DG0MHCV0ZP)](telemac_oil_spill/telemac_oil_spill.png)
 
-*The solve, frame by frame - spill_animation (run 01M2GNW5YZVT75K4S0G5VMAXA0)*
+*Every layer the run published, stacked and framed on the result (run 01M2M9N9ZVZVBM90DG0MHCV0ZP)*
 
-![spill peak frame (run 01M2GNW5YZVT75K4S0G5VMAXA0)](telemac_oil_spill/telemac_river_oil_spill_peak_frame.png)
+![The solve, frame by frame (run 01M2M9N9ZVZVBM90DG0MHCV0ZP)](telemac_oil_spill/telemac_oil_spill_animation.gif)
 
-*spill peak frame (run 01M2GNW5YZVT75K4S0G5VMAXA0)*
+*The solve, frame by frame (run 01M2M9N9ZVZVBM90DG0MHCV0ZP)*
 
-![dissolved oil concentration - the chart the run persisted (run 01M2GNW5YZVT75K4S0G5VMAXA0)](telemac_oil_spill/telemac_river_oil_spill_chart_dissolved_oil_concentration.png)
+![peak frame (run 01M2M9N9ZVZVBM90DG0MHCV0ZP)](telemac_oil_spill/telemac_oil_spill_peak_frame.png)
 
-*dissolved oil concentration - the chart the run persisted (run 01M2GNW5YZVT75K4S0G5VMAXA0)*
+*peak frame (run 01M2M9N9ZVZVBM90DG0MHCV0ZP)*
 
-![spill (run 01M2GNW5YZVT75K4S0G5VMAXA0)](telemac_oil_spill/telemac_river_oil_spill.png)
+![dissolved oil concentration - the chart the run persisted (run 01M2M9N9ZVZVBM90DG0MHCV0ZP)](telemac_oil_spill/telemac_oil_spill_chart_dissolved_oil_concentration.png)
 
-*spill (run 01M2GNW5YZVT75K4S0G5VMAXA0)*
+*dissolved oil concentration - the chart the run persisted (run 01M2M9N9ZVZVBM90DG0MHCV0ZP)*
 
 ### The sheet it filled
 
@@ -112,32 +100,22 @@ Every slot the run resolved, with where the value came from. The engine's own de
 
 | param | value | units | basis | provenance |
 |---|---|---|---|---|
-| `location` | Eel River near Scotia, California | - | user | supplied on this invocation |
-| `discharge_m3s` | 2.2 | m^3/s | user | supplied on this invocation |
-| `output_interval_min` | 0.333 | min | user | supplied on this invocation |
-| `spill_duration_s` | 120.0 | s | user | supplied on this invocation |
+| `release` | Point(lon=-122.6691667, lat=45.5175, name=None) | - | user | supplied on this invocation |
+| `spill_duration_s` | 300.0 | s | user | supplied on this invocation |
 | `source_q_m3s` | 8.0 | m^3/s | user | supplied on this invocation |
-| `oil_type` | light_crude | - | user | supplied on this invocation |
 | `oil_concentration_mgl` | 100.0 | mg/L | user | supplied on this invocation |
-| `reach_length_km` | 1.0 | km | user | supplied on this invocation |
-| `sim_duration_s` | 600.0 | s | user | supplied on this invocation |
+| `oil_type` | light_crude | - | user | supplied on this invocation |
 | `n_drogues` | 100 | - | user | supplied on this invocation |
 | `oil_release_step` | 60 | - | user | supplied on this invocation |
-| `mesh_resolution_m` | 12.0 | m | user | supplied on this invocation |
-| `compute_class` | medium | - | default_demo | declared constant default |
+| `sim_duration_s` | 1800.0 | s | user | supplied on this invocation |
+| `mesh_resolution_m` | 40.0 | m | user | supplied on this invocation |
 | `spill_fraction` | 0.25 | - | default_demo | declared scenario default |
+| `drogues_period_s` | 60.0 | s | default_demo | declared scenario default |
 | `wind_speed_mps` | 0.0 | m/s | default_demo | declared scenario default |
 | `wind_direction_deg` | 0.0 | deg | default_demo | declared scenario default |
-| `drogues_period_s` | 60.0 | s | default_demo | declared scenario default |
-| `bbox` | - | - | user | not supplied (declared optional) |
-| `river_geometry_uri` | - | - | user | not supplied (declared optional) |
-| `event_time` | - | - | prompt_interpreted | not supplied (declared optional) |
-| `friction_coefficient` | - | - | user | not supplied (declared optional) |
-| `friction_law` | - | - | user | not supplied (declared optional) |
+| `compute_class` | medium | - | default_demo | declared constant default |
 | `rainfall_mm_per_day` | - | mm/day | user | not supplied (declared optional) |
-| `evaporation_mm_per_day` | - | mm/day | user | not supplied (declared optional) |
-| `rainfall_gridmet_window` | - | - | user | not supplied (declared optional) |
-| `release` | - | - | user | not supplied (declared optional) |
+| `event_time` | - | - | prompt_interpreted | not supplied (declared optional) |
 
 ### Reproduce
 
@@ -145,20 +123,17 @@ Every slot the run resolved, with where the value came from. The engine's own de
 from trid3nt_server.tools import TOOL_REGISTRY
 
 await TOOL_REGISTRY['telemac_oil_spill'].fn(
-    discharge_m3s=2.2,
-    location='Eel River near Scotia, California',
-    mesh_resolution_m=12.0,
+    mesh_resolution_m=40.0,
     n_drogues=100,
     oil_concentration_mgl=100.0,
     oil_release_step=60,
     oil_type='light_crude',
-    output_interval_min=0.333,
-    reach_length_km=1.0,
-    sim_duration_s=600.0,
+    release='Point(lon=-122.6691667, lat=45.5175, name=None)',
+    sim_duration_s=1800.0,
     source_q_m3s=8.0,
-    spill_duration_s=120.0,
+    spill_duration_s=300.0,
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2GNW5YZVT75K4S0G5VMAXA0` and commit `c06075fe30c18c4bf3619f40299b09edffefc4c0-dirty`. The full argument record is [`telemac_oil_spill/run.json`](telemac_oil_spill/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2M9N9ZVZVBM90DG0MHCV0ZP` and commit `f261dca1458988817e7433530a9a7e0e755c3960-dirty`. The full argument record is [`telemac_oil_spill/run.json`](telemac_oil_spill/run.json).
 

@@ -45,38 +45,36 @@ The values the template declares. `desc` is what the model reads when it fills o
 
 | field | the proving run's value |
 |---|---|
-| `kd_max` | 4.02045202255249 |
-| `kd_transect_min` | 1.9933346639966487e-11 |
-| `kd_transect_max` | 4.987552074453561e-06 |
-| `hs_max_m` | 4.02045202255249 |
-| `mesh_size_m` | 5.113541873062308 |
+| `kd_max` | 2.35201358795166 |
+| `kd_transect_min` | 0.007066548801958561 |
+| `kd_transect_max` | 1.461745023727417 |
+| `hs_max_m` | 2.35201358795166 |
+| `mesh_size_m` | 17.686783234540215 |
 
 It publishes these layers onto the canvas:
 
-- Input: the shoreline this domain is cut from (osm_coastline)
-- Input: topobathy (topobathy, CUDEM 1/9" ~3 m nearshore; ETOPO 2022 15" ~450 m offshore fallback; 3DEP 10 m land, datum NAVD88 (metres, positive up))
-- Wave height (m) at t = 8 s (harbour_mesh)
-- Wave phase (rad) at t = 8 s (harbour_mesh)
-- Free surface (m) at t = 8 s (harbour_mesh)
-- Bottom (m) at t = 8 s (harbour_mesh)
-- Kd (Hs/H0) at t = 8 s (harbour_mesh)
-- harbour_mesh
+- Wave height (m) at t = 8 s (domain_mesh)
+- Wave phase (rad) at t = 8 s (domain_mesh)
+- Free surface (m) at t = 8 s (domain_mesh)
+- Bottom (m) at t = 8 s (domain_mesh)
+- Kd (Hs/H0) at t = 8 s (domain_mesh)
+- domain_mesh
 
 ## The proving run
 
-Run `01M2GPSF8H698ETFJMMRXTNZ8K`, 2026-09-14T19:37:46.947176+00:00, 25.935 s, at commit `c06075fe30c18c4bf3619f40299b09edffefc4c0`.
+Run `01M2M9ZPWZGZG1QKDDQ68EFE4S`, 2026-09-16T05:10:58.045813+00:00, 20.869 s, at commit `f261dca1458988817e7433530a9a7e0e755c3960-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M2GPSF8H698ETFJMMRXTNZ8K)](artemis_harbor_agitation/artemis_harbor_agitation.png)
+![Every layer the run published, stacked and framed on the result (run 01M2M9ZPWZGZG1QKDDQ68EFE4S)](artemis_harbor_agitation/artemis_harbor_agitation.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M2GPSF8H698ETFJMMRXTNZ8K)*
+*Every layer the run published, stacked and framed on the result (run 01M2M9ZPWZGZG1QKDDQ68EFE4S)*
 
-![peak frame (run 01M2GPSF8H698ETFJMMRXTNZ8K)](artemis_harbor_agitation/artemis_harbor_agitation_peak_frame.png)
+![peak frame (run 01M2M9ZPWZGZG1QKDDQ68EFE4S)](artemis_harbor_agitation/artemis_harbor_agitation_peak_frame.png)
 
-*peak frame (run 01M2GPSF8H698ETFJMMRXTNZ8K)*
+*peak frame (run 01M2M9ZPWZGZG1QKDDQ68EFE4S)*
 
-![agitation coefficient - the chart the run persisted (run 01M2GPSF8H698ETFJMMRXTNZ8K)](artemis_harbor_agitation/artemis_harbor_agitation_chart_agitation_coefficient.png)
+![agitation coefficient - the chart the run persisted (run 01M2M9ZPWZGZG1QKDDQ68EFE4S)](artemis_harbor_agitation/artemis_harbor_agitation_chart_agitation_coefficient.png)
 
-*agitation coefficient - the chart the run persisted (run 01M2GPSF8H698ETFJMMRXTNZ8K)*
+*agitation coefficient - the chart the run persisted (run 01M2M9ZPWZGZG1QKDDQ68EFE4S)*
 
 ### The sheet it filled
 
@@ -84,18 +82,16 @@ Every slot the run resolved, with where the value came from. The engine's own de
 
 | param | value | units | basis | provenance |
 |---|---|---|---|---|
-| `bbox` | [-71.525, 41.338, -71.492, 41.368] | - | user | supplied on this invocation |
 | `wave_period_s` | 8.0 | s | user | supplied on this invocation |
 | `wave_height_m` | 1.0 | m | user | supplied on this invocation |
 | `wave_direction_deg` | 160.0 | deg | user | supplied on this invocation |
 | `reflection_coef` | 0.3 | - | user | supplied on this invocation |
-| `mesh_min_edge_m` | 25.0 | m | user | supplied on this invocation |
-| `compute_class` | medium | - | user | supplied on this invocation |
+| `mesh_min_edge_m` | 35.0 | m | user | supplied on this invocation |
+| `open_depth_threshold_m` | -3.0 | m | user | supplied on this invocation |
 | `mesh_grade` | 0.2 | - | default_demo | declared constant default |
 | `barrier_width_m` | 20.0 | m | default_demo | declared scenario default |
 | `transect_length_m` | 1500.0 | m | default_demo | declared scenario default |
-| `open_depth_threshold_m` | -12.0 | m | default_demo | declared scenario default |
-| `location` | - | - | prompt_interpreted | not supplied (declared optional) |
+| `compute_class` | medium | - | default_demo | declared constant default |
 
 ### Reproduce
 
@@ -103,9 +99,8 @@ Every slot the run resolved, with where the value came from. The engine's own de
 from trid3nt_server.tools import TOOL_REGISTRY
 
 await TOOL_REGISTRY['artemis_harbor_agitation'].fn(
-    bbox=[-71.525, 41.338, -71.492, 41.368],
-    compute_class='medium',
-    mesh_min_edge_m=25.0,
+    mesh_min_edge_m=35.0,
+    open_depth_threshold_m=-3.0,
     reflection_coef=0.3,
     wave_direction_deg=160.0,
     wave_height_m=1.0,
@@ -113,5 +108,5 @@ await TOOL_REGISTRY['artemis_harbor_agitation'].fn(
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2GPSF8H698ETFJMMRXTNZ8K` and commit `c06075fe30c18c4bf3619f40299b09edffefc4c0`. The full argument record is [`artemis_harbor_agitation/run.json`](artemis_harbor_agitation/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2M9ZPWZGZG1QKDDQ68EFE4S` and commit `f261dca1458988817e7433530a9a7e0e755c3960-dirty`. The full argument record is [`artemis_harbor_agitation/run.json`](artemis_harbor_agitation/run.json).
 

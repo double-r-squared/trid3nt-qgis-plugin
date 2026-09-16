@@ -44,54 +44,49 @@ The values the template declares. `desc` is what the model reads when it fills o
 
 | field | the proving run's value |
 |---|---|
-| `peak_temperature_c` | 9.544106483459473 |
-| `peak_temperature_time_s` | 3546.72607421875 |
-| `final_temperature_c` | 9.544106483459473 |
-| `diurnal_range_c` | 0.044106483459472656 |
-| `temperature_spread_c` | - |
-| `mean_velocity_mps` | 0.5902288277725102 |
-| `mesh_size_m` | 9.323 |
+| `peak_temperature_c` | 18.110376358032227 |
+| `peak_temperature_time_s` | 3528.0 |
+| `final_temperature_c` | 18.110376358032227 |
+| `diurnal_range_c` | 0.11037635803222656 |
+| `temperature_spread_c` | 0.11039161682128906 |
+| `mean_velocity_mps` | 0.04373142819945948 |
+| `mesh_size_m` | 14.704 |
 
 It publishes these layers onto the canvas:
 
-- Input: OSM waterways (map context; the modeled river is the NLDI centerline) (river_geometry)
-- Input: nhdplus nldi (nhdplus_nldi)
-- Input: nhd area water (nhd_area_water)
-- Input: river bed elevation (copernicus_dem, datum EGM2008 geoid (metres, positive up))
-- Input: usgs water quality (usgs_water_quality)
-- Temperature station (user) - scotia_humboldt_county_california_95562_united_s
+- Temperature station (user) - 01m2m9sj1v2tbgyd5mbatyttse
 - Input: raws weather (raws_weather)
-- Velocity u over time (scotia_humboldt_county_california_95562_united_s)
-- Velocity v over time (scotia_humboldt_county_california_95562_united_s)
-- Water depth over time (scotia_humboldt_county_california_95562_united_s)
-- Free surface over time (scotia_humboldt_county_california_95562_united_s)
-- Bottom (m) at t = 3546.73 s (scotia_humboldt_county_california_95562_united_s)
-- Froude number over time (scotia_humboldt_county_california_95562_united_s)
-- Scalar flowrate over time (scotia_humboldt_county_california_95562_united_s)
-- Scalar velocity over time (scotia_humboldt_county_california_95562_united_s)
-- Temperature over time (scotia_humboldt_county_california_95562_united_s)
-- Water temperature (scotia_humboldt_county_california_95562_united_s)
-- scotia_humboldt_county_california_95562_united_s
+- Velocity u over time (domain_mesh)
+- Velocity v over time (domain_mesh)
+- Water depth over time (domain_mesh)
+- Free surface over time (domain_mesh)
+- Bottom (m) at t = 3528 s (domain_mesh)
+- Froude number over time (domain_mesh)
+- Scalar flowrate over time (domain_mesh)
+- Scalar velocity over time (domain_mesh)
+- Temperature over time (domain_mesh)
+- Water temperature (domain_mesh)
+- domain_mesh
 
 ## The proving run
 
-Run `01M2HT8T54CAEX53N1VH7S234R`, 2026-09-15T05:58:30.613274+00:00, 100.962 s, at commit `ad80fc708f8e79070559d6e31e57162ed83008e2-dirty`.
+Run `01M2M9V2WTSEC2PMX5TCXN36HW`, 2026-09-16T05:08:56.640320+00:00, 94.357 s, at commit `f261dca1458988817e7433530a9a7e0e755c3960-dirty`.
 
-![The solve, frame by frame (run 01M2HT8T54CAEX53N1VH7S234R)](telemac_water_temperature/telemac_river_temperature_animation.gif)
+![Every layer the run published, stacked and framed on the result (run 01M2M9V2WTSEC2PMX5TCXN36HW)](telemac_water_temperature/telemac_water_temperature.png)
 
-*The solve, frame by frame (run 01M2HT8T54CAEX53N1VH7S234R)*
+*Every layer the run published, stacked and framed on the result (run 01M2M9V2WTSEC2PMX5TCXN36HW)*
 
-![final frame (run 01M2HT8T54CAEX53N1VH7S234R)](telemac_water_temperature/telemac_river_temperature_final_frame.png)
+![The solve, frame by frame (run 01M2M9V2WTSEC2PMX5TCXN36HW)](telemac_water_temperature/telemac_water_temperature_animation.gif)
 
-*final frame (run 01M2HT8T54CAEX53N1VH7S234R)*
+*The solve, frame by frame (run 01M2M9V2WTSEC2PMX5TCXN36HW)*
 
-![water temperature - the chart the run persisted (run 01M2HT8T54CAEX53N1VH7S234R)](telemac_water_temperature/telemac_river_temperature_chart_water_temperature.png)
+![final frame (run 01M2M9V2WTSEC2PMX5TCXN36HW)](telemac_water_temperature/telemac_water_temperature_final_frame.png)
 
-*water temperature - the chart the run persisted (run 01M2HT8T54CAEX53N1VH7S234R)*
+*final frame (run 01M2M9V2WTSEC2PMX5TCXN36HW)*
 
-![ (run 01M2HT8T54CAEX53N1VH7S234R)](telemac_water_temperature/telemac_river_temperature.png)
+![water temperature - the chart the run persisted (run 01M2M9V2WTSEC2PMX5TCXN36HW)](telemac_water_temperature/telemac_water_temperature_chart_water_temperature.png)
 
-* (run 01M2HT8T54CAEX53N1VH7S234R)*
+*water temperature - the chart the run persisted (run 01M2M9V2WTSEC2PMX5TCXN36HW)*
 
 ### The sheet it filled
 
@@ -99,22 +94,14 @@ Every slot the run resolved, with where the value came from. The engine's own de
 
 | param | value | units | basis | provenance |
 |---|---|---|---|---|
-| `location` | Eel River near Scotia, California | - | user | supplied on this invocation |
-| `discharge_m3s` | 60.0 | m^3/s | user | supplied on this invocation |
-| `weather_start` | 2026-09-10 | - | user | supplied on this invocation |
-| `weather_end` | 2026-09-13 | - | user | supplied on this invocation |
-| `station` | Point(lon=-124.0983, lat=40.4921, name=None) | - | user | supplied on this invocation |
-| `output_interval_min` | 1.0 | min | user | supplied on this invocation |
-| `reach_length_km` | 0.5 | km | user | supplied on this invocation |
+| `weather_start` | 2026-09-11 | - | user | supplied on this invocation |
+| `weather_end` | 2026-09-14 | - | user | supplied on this invocation |
+| `station` | Point(lon=-122.6666, lat=45.5175, name=None) | - | user | supplied on this invocation |
 | `sim_duration_s` | 3600.0 | s | user | supplied on this invocation |
-| `mesh_resolution_m` | 12.0 | m | user | supplied on this invocation |
+| `mesh_resolution_m` | 40.0 | m | user | supplied on this invocation |
 | `compute_class` | medium | - | default_demo | declared constant default |
-| `bbox` | - | - | user | not supplied (declared optional) |
-| `river_geometry_uri` | - | - | user | not supplied (declared optional) |
+| `seed` | - | - | user | not supplied (declared optional) |
 | `event_time` | - | - | prompt_interpreted | not supplied (declared optional) |
-| `initial_water_temp_c` | - | C | user | not supplied (declared optional) |
-| `friction_coefficient` | - | - | user | not supplied (declared optional) |
-| `friction_law` | - | - | user | not supplied (declared optional) |
 
 ### Reproduce
 
@@ -122,17 +109,13 @@ Every slot the run resolved, with where the value came from. The engine's own de
 from trid3nt_server.tools import TOOL_REGISTRY
 
 await TOOL_REGISTRY['telemac_water_temperature'].fn(
-    discharge_m3s=60.0,
-    location='Eel River near Scotia, California',
-    mesh_resolution_m=12.0,
-    output_interval_min=1.0,
-    reach_length_km=0.5,
+    mesh_resolution_m=40.0,
     sim_duration_s=3600.0,
-    station='Point(lon=-124.0983, lat=40.4921, name=None)',
-    weather_end='2026-09-13',
-    weather_start='2026-09-10',
+    station='Point(lon=-122.6666, lat=45.5175, name=None)',
+    weather_end='2026-09-14',
+    weather_start='2026-09-11',
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2HT8T54CAEX53N1VH7S234R` and commit `ad80fc708f8e79070559d6e31e57162ed83008e2-dirty`. The full argument record is [`telemac_water_temperature/run.json`](telemac_water_temperature/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2M9V2WTSEC2PMX5TCXN36HW` and commit `f261dca1458988817e7433530a9a7e0e755c3960-dirty`. The full argument record is [`telemac_water_temperature/run.json`](telemac_water_temperature/run.json).
 

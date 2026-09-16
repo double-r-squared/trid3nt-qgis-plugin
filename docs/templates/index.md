@@ -10,7 +10,7 @@
 
 The WAVE AGITATION (Kd = Hs/H0) a declared structure leaves inside a harbour, a marina or any sheltered basin.
 
-Module `artemis`, proving run `01M2GPSF8H698ETFJMMRXTNZ8K`.
+Module `artemis`, proving run `01M2M9ZPWZGZG1QKDDQ68EFE4S`.
 
 ## [`telemac3d_stratified_flow`](telemac3d_stratified_flow.md)
 
@@ -22,9 +22,11 @@ Module `telemac3d`, proving run `01M2GPX6APX8R0R0PESGVWQA6J`.
 
 ## [`telemac_bed_scour`](telemac_bed_scour.md)
 
+[![telemac_bed_scour](telemac_bed_scour/telemac_bed_scour.png)](telemac_bed_scour.md)
+
 Bed SCOUR and DEPOSITION under a body of water: a mobile bed under a flow.
 
-Module `telemac2d`, proving run `01M2GN2534D6GMNFVJ89C3SGHS`.
+Module `telemac2d`, proving run `01M2M9QFR8WHK5KQGZQ2JYE1H0`.
 
 ## [`telemac_channel_dredging`](telemac_channel_dredging.md)
 
@@ -42,9 +44,11 @@ Module `telemac2d`, proving run `01M2HH0XSVVXHH2NFT4F8ETMAW`.
 
 ## [`telemac_dye_release`](telemac_dye_release.md)
 
+[![telemac_dye_release](telemac_dye_release/telemac_dye_release.png)](telemac_dye_release.md)
+
 A DYE / TRACER / CONTAMINANT plume released into a body of surface water and carried by its flow.
 
-Module `telemac2d`, proving run `01M2GNPFQ2077S20779R8FWZNH`.
+Module `telemac2d`, proving run `01M2M9K6XYYV1JXXWAWV4VH7K8`.
 
 ## [`telemac_eutrophication`](telemac_eutrophication.md)
 
@@ -60,9 +64,11 @@ Module `telemac2d`, proving run `01M2HG9ASXE40K9MF2GQCZRN9Y`.
 
 ## [`telemac_oil_spill`](telemac_oil_spill.md)
 
+[![telemac_oil_spill](telemac_oil_spill/telemac_oil_spill.png)](telemac_oil_spill.md)
+
 An OIL SLICK released onto a body of surface water: floating particles plus the dissolved fraction.
 
-Module `telemac2d`, proving run `01M2GNW5YZVT75K4S0G5VMAXA0`.
+Module `telemac2d`, proving run `01M2M9N9ZVZVBM90DG0MHCV0ZP`.
 
 ## [`telemac_rain_on_grid`](telemac_rain_on_grid.md)
 
@@ -80,7 +86,9 @@ Module `telemac2d`, proving run `01M2GNFGG431SX89YQ0YMD8PPF`.
 
 ## [`telemac_water_temperature`](telemac_water_temperature.md)
 
+[![telemac_water_temperature](telemac_water_temperature/telemac_water_temperature.png)](telemac_water_temperature.md)
+
 WATER TEMPERATURE over a body of water under a week of real weather.
 
-Module `telemac2d`, proving run `01M2HT8T54CAEX53N1VH7S234R`.
+Module `telemac2d`, proving run `01M2M9V2WTSEC2PMX5TCXN36HW`.
 
