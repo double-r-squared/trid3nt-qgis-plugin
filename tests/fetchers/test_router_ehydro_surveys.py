@@ -73,7 +73,20 @@ def test_a_window_past_the_download_cap_refuses_rather_than_truncating(spec):
     many = [_feature(f"2026-0{n}-01", f"s{n}") for n in range(1, 9)]
     with pytest.raises(RouterInputError) as excinfo:
         eh._selected(spec, many, _dt.date(2025, 1, 1))
-    assert str(eh._MAX_SURVEYS) in str(excinfo.value)
+    message = str(excinfo.value)
+    assert str(eh._MAX_SURVEYS) in message and "8 surveys" in message
+    # The ceiling is the ASK's, not an absence: the window is what moves.
+    assert excinfo.value.error_code == "EHYDRO_INPUT_INVALID"
+    assert "Move since forward" in message
+
+
+def test_a_full_index_page_states_the_count_as_the_floor_it_is(spec):
+    """The index answers one page, so a window that fills it holds AT LEAST that."""
+    page = [_feature("2026-01-%02d" % (n % 28 + 1), f"s{n}")
+            for n in range(eh._INDEX_RECORDS)]
+    with pytest.raises(RouterInputError) as excinfo:
+        eh._selected(spec, page, _dt.date(2025, 1, 1))
+    assert f"at least {eh._INDEX_RECORDS} surveys" in str(excinfo.value)
 
 
 def test_an_extent_with_no_survey_refuses_by_name(spec):

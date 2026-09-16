@@ -40,6 +40,14 @@ _LOOK_FACTOR = 3.0
 #: with area, because the service takes an envelope and not a point.
 _MIN_LOOK_KM = 1.0
 
+#: The largest body this hands back as a DOMAIN, in square kilometres. A mesh over
+#: one polygon is a node budget: at 100 m - already coarse for a lake question - an
+#: equilateral triangulation spends about 115 nodes per square kilometre, so this
+#: ceiling is already a quarter of a million nodes before the bed is painted. A
+#: GREAT LAKE IS NOT A CANVAS DOMAIN - the smallest of them is nine times this, and
+#: a seed anywhere along one of their shores lands in it.
+_MAX_AREA_KM2 = 2000.0
+
 
 def _seed(spec: SourceSpec, params: dict[str, Any]) -> tuple[float, float]:
     """The validated ``(lon, lat)`` the waterbody is named by."""
@@ -98,6 +106,18 @@ def _picked(shapes: list[Any], point: Any) -> tuple[int, float]:
     return index, float(shapes[index].distance(point))
 
 
+def _area_km2(geometry: Any) -> float:
+    """The body's surface area, measured on the ellipsoid.
+
+    A lake wide enough to argue about spans several UTM zones, where a projected
+    area is a different number at each end of it."""
+    from pyproj import Geod
+    from shapely.geometry import shape
+
+    area, _perimeter = Geod(ellps="WGS84").geometry_area_perimeter(shape(geometry))
+    return abs(float(area)) / 1.0e6
+
+
 @register_hook("nhd_waterbody_at_point.parse_response")
 def parse_response(spec: SourceSpec, params: dict[str, Any],
                    bodies: list[bytes]) -> list[dict]:
@@ -141,9 +161,23 @@ def parse_response(spec: SourceSpec, params: dict[str, Any],
             spec.empty_error_suffix,
         )
 
+    area_km2 = _area_km2(picked["geometry"])
+    if area_km2 > _MAX_AREA_KM2:
+        raise router_input_error(
+            sc,
+            f"the seed at ({lon}, {lat}) lands in {name or 'an unnamed waterbody'}, "
+            f"{area_km2:,.0f} km2 of open water, past the {_MAX_AREA_KM2:,.0f} km2 "
+            "this returns as a model domain - a mesh over it spends a quarter of a "
+            "million nodes at a 100 m edge before the bed is painted, and a Great "
+            "Lake is not a canvas domain. Draw the bay, the harbour or the shore "
+            "section the question is about and hand that outline over as the "
+            "domain.",
+            spec.input_error_suffix,
+        )
+
     properties = picked.get("properties") or {}
-    logger.info("nhd_waterbody_at_point: %s, %.3f km from the seed",
-                name or "unnamed", metres / 1000.0)
+    logger.info("nhd_waterbody_at_point: %s, %.0f km2, %.3f km from the seed",
+                name or "unnamed", area_km2, metres / 1000.0)
     return [{"type": "Feature", "geometry": picked["geometry"], "properties": {
         "part": "waterbody",
         "gnis_name": name,

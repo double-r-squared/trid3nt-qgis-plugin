@@ -110,6 +110,25 @@ def test_a_body_beyond_the_allowance_refuses_naming_it_and_how_far(spec):
     assert "Walden Pond" in message and "km, beyond the 0.1 km" in message
 
 
+def test_an_inland_sea_refuses_by_name_with_the_area_it_found(spec):
+    """A Great Lake is not a canvas domain, and the refusal says so with a number.
+
+    The seed lands IN it, so nothing about the pick is wrong - what is wrong is
+    handing that polygon to a mesher, and the refusal names the way through."""
+    lake = _pond(*_SEED, 0.5, {**_WALDEN, "gnis_name": "An inland sea"})
+    with pytest.raises(RouterInputError) as excinfo:
+        wb.parse_response(spec, _params(), [_body(lake)])
+    message = str(excinfo.value)
+    assert excinfo.value.error_code == "NHD_WATERBODY_INPUT_INVALID"
+    assert "An inland sea" in message and "km2" in message
+    assert "Draw the bay" in message
+
+
+def test_a_body_under_the_ceiling_is_returned(spec):
+    rows = wb.parse_response(spec, _params(), [_body(_pond(*_SEED, 0.1, _WALDEN))])
+    assert rows[0]["properties"]["part"] == "waterbody"
+
+
 def test_nothing_mapped_near_the_seed_refuses_by_name(spec):
     with pytest.raises(RouterEmptyError) as excinfo:
         wb.parse_response(spec, _params(), [_body()])

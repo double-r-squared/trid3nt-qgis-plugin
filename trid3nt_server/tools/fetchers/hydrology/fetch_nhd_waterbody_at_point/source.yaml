@@ -98,6 +98,7 @@ payload_estimate:
 caveats:
   - "ONE waterbody comes back, never a set: the body the seed stands IN, else the nearest one whose edge is within search_distance_km, else a refusal naming the nearest body and how far away it is - the query looks three times search_distance_km so that refusal can say what was there"
   - "a seed inside several nested outlines takes the SMALLEST containing body, which is the one a person pointing at that spot means"
+  - "a body over 2,000 km2 REFUSES by name with the area it found: a mesh over it is a quarter of a million nodes at a 100 m edge before the bed is painted, and a Great Lake is not a canvas domain - the refusal names the draw-the-outline path"
   - "US and territories only (USGS NHD); the high-resolution service is primary and the medium-resolution service is its same-data mirror"
   - "open water only - lakes, ponds, reservoirs, playas, estuaries; a vegetated wetland is fetch_nwi_wetlands and a river's mapped surface is fetch_river_reach"
   - "the outline is generalized to about 5 m, which is shoreline detail a mesh can carry rather than every surveyed vertex"
@@ -112,7 +113,10 @@ docstring: |-
       ``search_distance_km``. Beyond that distance it REFUSES by name, saying
       which body was nearest and how far it was, rather than handing back a lake
       the user did not mean. One row comes back, tagged ``part="waterbody"``,
-      carrying the body's GNIS name and id.
+      carrying the body's GNIS name and id. UP TO 2,000 km2: a seed on a Great
+      Lake or any inland sea is refused by name with the area it found, because
+      the domain for a question on water that size is the bay, harbour or shore
+      section it is about, drawn on the canvas.
 
   When to use:
       - A lake, pond, reservoir or impoundment question needs a DOMAIN: hand the
@@ -160,7 +164,8 @@ docstring: |-
   shorelines are multi-year stable.
 
   Errors:
-      - ``NHD_WATERBODY_INPUT_INVALID``: a malformed seed point.
+      - ``NHD_WATERBODY_INPUT_INVALID``: a malformed seed point, or a body past
+        the 2,000 km2 ceiling - the message names the body and its area.
       - ``NHD_WATERBODY_NO_WATERBODY``: nothing mapped near the seed, or the
         nearest body is beyond ``search_distance_km`` - the message names it and
         its distance.

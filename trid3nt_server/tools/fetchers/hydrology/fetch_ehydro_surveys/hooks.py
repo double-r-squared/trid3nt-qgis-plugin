@@ -154,9 +154,13 @@ def _selected(spec: SourceSpec, features: list[dict[str, Any]],
             spec.empty_error_suffix,
         )
     if len(window) > _MAX_SURVEYS:
+        # The index answered with its newest page, so a window that fills the page
+        # holds at least that many and the count is stated as the floor it is.
+        floor = "at least " if len(features) >= _INDEX_RECORDS else ""
+        counted = f"{floor}{len(window)}"
         raise router_input_error(
             sc,
-            f"{len(window)} surveys end on or after {since.isoformat()} over this "
+            f"{counted} surveys end on or after {since.isoformat()} over this "
             f"extent, more than the {_MAX_SURVEYS} this fetch will download. Move "
             "since forward, or narrow the bbox.",
             spec.input_error_suffix,

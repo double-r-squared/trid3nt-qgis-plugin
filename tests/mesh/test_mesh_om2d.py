@@ -123,13 +123,14 @@ def test_an_unknown_op_refuses_with_the_nearest_names():
 
 
 def test_the_default_recipe_is_hard_baked_and_visible():
-    """An undeclared ask gets its rim sized, the clean chain, then the bed.
+    """An undeclared ask gets its rim sized, the clean passes, then the bed.
 
     The rim is in the list because nothing else sizes it: every sizing function the
-    library has measures the shoreline."""
+    library has measures the shoreline. No smoothing pass: it folds elements beside
+    a rim locked at one spacing."""
     assert [op.fn for op in get_mesher("om2d").default_ops] == [
         "set_rim_size", "delete_boundary_faces",
-        "delete_faces_connected_to_one_face", "laplacian2",
+        "delete_faces_connected_to_one_face",
         "make_mesh_boundaries_traversable", "fix_mesh", "set_bed"]
     bed = get_mesher("om2d").default_ops[-1]
     assert bed.kwargs["source"] == "fetch_topobathy"
@@ -559,11 +560,27 @@ def test_two_nodes_a_fraction_of_a_metre_apart_are_fused_into_one():
     assert depths.shape[0] == 4
 
 
-def test_an_element_with_no_area_is_not_kept():
-    points = np.array([[0.0, 0.0], [1.0, 0.0], [0.0, 1.0], [2.0, 0.0]])
-    cells = np.array([[0, 1, 2], [0, 1, 3]], dtype=np.int64)   # second is collinear
-    keep = OM2D._has_area(points, cells)
-    assert keep.tolist() == [True, False]
+def test_three_nodes_on_one_line_are_not_an_element():
+    """Collinear, or a fraction of a millimetre off it, is not a triangle.
+
+    A node relaxed onto the line between two rim nodes leaves edges with no second
+    face to pair with, and the walk that numbers a TELEMAC geometry reads them as
+    another rim - the domain comes back "pinched" over a mesh nobody drew wrong."""
+    points = np.array([[0.0, 0.0], [58.82, 0.0], [36.76, 0.0], [36.76, 0.0002],
+                       [20.0, 30.0]])
+    cells = np.array([[0, 1, 4], [0, 1, 2], [0, 1, 3]], dtype=np.int64)
+    assert OM2D._has_area(points, cells).tolist() == [True, False, False]
+
+
+def test_the_finest_element_of_a_graded_mesh_is_still_an_element():
+    """The collapse test measures the ELEMENT, never the mesh around it.
+
+    A shoreline sized a hundredth of the offshore edge is the granularity asked
+    for, not dust."""
+    points = np.array([[0.0, 0.0], [4.0, 0.0], [2.0, 3.5],
+                       [400.0, 0.0], [200.0, 350.0]])
+    cells = np.array([[0, 1, 2], [0, 3, 4]], dtype=np.int64)
+    assert OM2D._has_area(points, cells).tolist() == [True, True]
 
 
 def test_a_mesh_carrying_a_collapsed_element_reports_the_repair(

@@ -57,9 +57,13 @@ _DEFAULT_RESOLUTION_M = 40.0
 #: ``max_edge_length`` instead.
 _MAX_EL_FACTOR = 10.0
 
-#: The fraction of the MEDIAN element area below which an element has collapsed:
-#: no area to invert, and a solver refuses the whole mesh over it.
-_COLLAPSED_AREA_FRAC = 1e-9
+#: How far an element's apex may sit off the line of its longest side, as a
+#: fraction of that side, before the three nodes are ONE LINE. Such an element has
+#: no area to invert and no orientation to read, and the boundary walk that
+#: numbers a TELEMAC geometry counts its edges as a second rim - which is the
+#: "pinched" domain a solver refuses the whole mesh over. Measured on the element
+#: itself, so a graded mesh's finest elements are not judged against its coarsest.
+_COLLAPSED_HEIGHT_FRAC = 1e-3
 
 #: How close two nodes may sit before a single-precision geometry file writes them
 #: as one point, in metres. A UTM northing spends its mantissa on seven digits,
@@ -104,17 +108,25 @@ _OCEANMESH_ON_A_MESH = (
 _OM2D_PRIMITIVES = ("set_obstacle", "set_region_size", "set_rim_size")
 
 #: The ops list an undeclared ask gets. Hard-baked and visible: the rim at the
-#: size word, the library's own clean chain in the order it is meant to run, then
-#: the bed. It sizes no INTERIOR - what a domain should be sized toward is the
-#: ask's own knowledge. The RIM is the one exception: no sizing function the
-#: library has measures the extent's own outline, so an ask that names none comes
-#: back with the boundary a solver forces its open condition on running an order
-#: of magnitude past the size word. A declared recipe replaces this list wholesale.
+#: size word, the library's clean passes, then the bed. It sizes no INTERIOR -
+#: what a domain should be sized toward is the ask's own knowledge. The RIM is the
+#: one exception: no sizing function the library has measures the extent's own
+#: outline, so an ask that names none comes back with the boundary a solver forces
+#: its open condition on running an order of magnitude past the size word. A
+#: declared recipe replaces this list wholesale.
+#:
+#: NO SMOOTHING PASS. ``laplacian2`` moves every interior node to the average of
+#: its neighbours with no test that the elements around it stay unfolded, and a
+#: node beside a rim locked at one spacing has most of its neighbours strung along
+#: that rim: the average lands past its own opposite edges and two elements end up
+#: covering the same ground - each still counter-clockwise, so nothing that reads
+#: signed area sees it, and the boundary walk that numbers the geometry meets the
+#: unpaired edges as extra rims. The generator already relaxed these positions
+#: against the sizing lattice.
 _DEFAULT_OPS = (
     mesh_op("set_rim_size"),
     mesh_op("delete_boundary_faces"),
     mesh_op("delete_faces_connected_to_one_face"),
-    mesh_op("laplacian2"),
     mesh_op("make_mesh_boundaries_traversable"),
     mesh_op("fix_mesh", delete_unused=True),
     mesh_op("set_bed", source="fetch_topobathy", interp="nearest"),
@@ -596,7 +608,7 @@ def _merge_coincident(points: Any, cells: Any,
 
 
 def _has_area(points: Any, cells: Any) -> Any:
-    """Which elements have area a solver can invert, relative to the median one."""
+    """Which elements are a triangle rather than three points on one line."""
     import numpy as np
 
     xy = np.asarray(points, dtype=float)
@@ -604,8 +616,11 @@ def _has_area(points: Any, cells: Any) -> Any:
     a, b, c = xy[tri[:, 0]], xy[tri[:, 1]], xy[tri[:, 2]]
     twice = np.abs((b[:, 0] - a[:, 0]) * (c[:, 1] - a[:, 1])
                    - (c[:, 0] - a[:, 0]) * (b[:, 1] - a[:, 1]))
-    median = float(np.median(twice))
-    return twice > _COLLAPSED_AREA_FRAC * median if median > 0.0 else twice > 0.0
+    longest = np.maximum.reduce([np.hypot(*(b - a).T), np.hypot(*(c - b).T),
+                                 np.hypot(*(a - c).T)])
+    # twice / longest IS the apex's distance from that side, so the comparison is
+    # the same test without the division a collapsed element makes unsafe.
+    return twice > _COLLAPSED_HEIGHT_FRAC * longest ** 2
 
 
 def _conformal_probe(points_m: Any, pfix: Any, utm_epsg: int) -> dict[str, Any]:
