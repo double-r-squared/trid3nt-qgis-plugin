@@ -11,15 +11,16 @@ trips and the geodatabase read, and states the datum the survey states.
 # ``derive_survey_surface`` over these points, not something to invent here.
 #
 # The values are DEPTHS BELOW the survey's own datum, positive down, in the unit the
-# points state. Nothing here converts between datums: a project datum like CRD sits
-# a stated distance above NAVD88 at one river mile only, and a shift nobody measured
-# would be indistinguishable from a measurement downstream.
+# points state. Nothing here converts between datums: the package's own metadata
+# states how far its project datum sits above a national frame, and that sentence is
+# reported as it was measured - applying it is the bed slot's, never this fetch's.
 
 from __future__ import annotations
 
 import datetime as _dt
 import logging
 import math
+import re
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -43,8 +44,17 @@ _OUT_FIELDS = (
 #: How many of the newest surveys the index query asks for, and how many a ``since``
 #: window may return. The cap is a refusal rather than a truncation: each survey is
 #: its own multi-megabyte package, and a silently dropped one is a bed with a hole.
+#: It sits above what the default window returns over a long reach - a district
+#: surveys a busy channel in overlapping passes, and twelve kilometres of one
+#: holds seven in a year - so the refusal is for a window somebody widened by
+#: hand, never for the one this fetch asks on its own.
 _INDEX_RECORDS = 25
-_MAX_SURVEYS = 6
+_MAX_SURVEYS = 12
+
+#: How far back an unstated window reaches. ONE year: a dredged channel is
+#: resurveyed on that order, so a year holds the passes that together cover the
+#: reach without asking for more packages than the cap allows.
+_WINDOW_DAYS = 365
 
 #: The feature class carrying the measured soundings, and the three fields a bed
 #: cannot be built without.
@@ -69,11 +79,11 @@ _METRES_PER_UNIT = {
 }
 
 
-def _since(spec: SourceSpec, params: dict[str, Any]) -> _dt.date | None:
-    """The ``since`` bound as a date, or None when the request wants the newest only."""
+def _since(spec: SourceSpec, params: dict[str, Any]) -> _dt.date:
+    """The ``since`` bound as a date - the stated one, else the default window."""
     raw = params.get("since")
     if raw is None or not str(raw).strip():
-        return None
+        return _dt.date.today() - _dt.timedelta(days=_WINDOW_DAYS)
     try:
         return _dt.date.fromisoformat(str(raw).strip())
     except ValueError as exc:
@@ -129,8 +139,8 @@ def _survey_date(feature: dict[str, Any]) -> _dt.date | None:
 
 
 def _selected(spec: SourceSpec, features: list[dict[str, Any]],
-              since: _dt.date | None) -> list[dict[str, Any]]:
-    """The surveys this request asks for: the newest one, or the window, newest first."""
+              since: _dt.date) -> list[dict[str, Any]]:
+    """The surveys whose window this request asks for, newest first."""
     sc = spec.error_code_prefix
     dated = [(f, _survey_date(f)) for f in features]
     usable = [(f, d) for f, d in dated if d is not None
@@ -143,8 +153,6 @@ def _selected(spec: SourceSpec, features: list[dict[str, Any]],
             spec.empty_error_suffix,
         )
     usable.sort(key=lambda row: row[1], reverse=True)
-    if since is None:
-        return [usable[0][0]]
     window = [f for f, d in usable if d >= since]
     if not window:
         raise router_empty_error(
@@ -168,15 +176,21 @@ def _selected(spec: SourceSpec, features: list[dict[str, Any]],
     return window
 
 
-def _soundings(spec: SourceSpec, url: str, survey_id: str) -> Any:
+def _package(spec: SourceSpec, url: str, survey_id: str) -> Any:
+    """The survey's own ZIP, opened once: the soundings and the metadata are in it."""
+    try:
+        return get_zip(get_client(), url)
+    except TransportError as exc:
+        raise router_upstream_error(
+            spec.error_code_prefix,
+            f"survey {survey_id} could not be downloaded: {exc}")
+
+
+def _soundings(spec: SourceSpec, archive: Any, survey_id: str) -> Any:
     """The survey package's own SurveyPoint feature class, in EPSG:4326."""
     import geopandas as gpd
 
     sc = spec.error_code_prefix
-    try:
-        archive = get_zip(get_client(), url)
-    except TransportError as exc:
-        raise router_upstream_error(sc, f"survey {survey_id} could not be downloaded: {exc}")
     names = sorted({name.split("/")[0] for name in archive.namelist()})
     gdb = next((n for n in names if n.lower().endswith(".gdb")), None)
     if gdb is None:
@@ -201,6 +215,58 @@ def _soundings(spec: SourceSpec, url: str, survey_id: str) -> Any:
                 spec.input_error_suffix,
             )
     return points.to_crs(4326) if points.crs is not None else points
+
+
+#: The national frames a district's metadata names its project datum against, by
+#: the words the published sentence spells them in. A frame nobody here can name
+#: is reported as no offset at all rather than as a guess.
+_FRAME_WORDS: tuple[tuple[str, str], ...] = (
+    ("north american vertical datum of 1988", "NAVD88"),
+    ("navd 88", "NAVD88"),
+    ("navd88", "NAVD88"),
+    ("national geodetic vertical datum of 1929", "NGVD29"),
+    ("ngvd 29", "NGVD29"),
+    ("ngvd29", "NGVD29"),
+    ("mean lower low water", "MLLW"),
+    ("mllw", "MLLW"),
+    ("international great lakes datum", "IGLD85"),
+    ("igld 85", "IGLD85"),
+)
+
+#: The published sentence a project datum's offset is stated in: "CRD is 5.28 feet
+#: above the North American Vertical Datum of 1988". The unit is the survey's own
+#: word for it, and "below" is the same measurement read the other way.
+_OFFSET_SENTENCE = re.compile(
+    r"(?P<datum>[A-Za-z0-9 ]{2,40}?)\s+is\s+(?P<value>[0-9]+(?:\.[0-9]+)?)\s+"
+    r"(?P<unit>[A-Za-z]+)\s+(?P<sense>above|below)\s+(?P<frame>[^.]{3,120})",
+    re.IGNORECASE)
+
+
+def _published_offset(archive: Any, survey_id: str) -> tuple[float | None, str]:
+    """How far this survey's own datum sits above a national frame, off its metadata.
+
+    A district publishes the shift as a sentence in the package's XML abstract and
+    nowhere machine-readable, so the sentence is what is read. ``(None, "")``
+    wherever no sentence names a frame this can spell - a shift nobody measured is
+    never invented, and the bed slot refuses instead."""
+    for name in archive.namelist():
+        if not name.lower().endswith(".xml"):
+            continue
+        text = " ".join(archive.read(name).decode("utf-8", "replace").split())
+        for match in _OFFSET_SENTENCE.finditer(text):
+            frame_text = match.group("frame").lower()
+            frame = next((frame for words, frame in _FRAME_WORDS
+                          if words in frame_text), "")
+            scale = _METRES_PER_UNIT.get(
+                match.group("unit").lower().rstrip("s").replace(" ", ""))
+            if not frame or scale is None:
+                continue
+            metres = float(match.group("value")) * scale
+            signed = metres if match.group("sense").lower() == "above" else -metres
+            logger.info("ehydro: survey %s states its datum %+.4f m on %s",
+                        survey_id, signed, frame)
+            return round(signed, 4), frame
+    return None, ""
 
 
 def _stated(spec: SourceSpec, points: Any, survey_id: str) -> tuple[str, str, float]:
@@ -240,8 +306,10 @@ def read(spec: SourceSpec, params: dict[str, Any], *, timeout_s: float) -> list[
     for feature in surveys:
         properties = feature.get("properties") or {}
         survey_id = str(properties.get("surveyjobidpk") or "")
-        points = _soundings(spec, str(properties.get("sourcedatalocation")), survey_id)
+        archive = _package(spec, str(properties.get("sourcedatalocation")), survey_id)
+        points = _soundings(spec, archive, survey_id)
         datum, uom, scale = _stated(spec, points, survey_id)
+        offset_m, offset_frame = _published_offset(archive, survey_id)
         date = _survey_date(feature)
         common = {
             "survey_id": survey_id,
@@ -251,6 +319,8 @@ def read(spec: SourceSpec, params: dict[str, Any], *, timeout_s: float) -> list[
             "survey_type": properties.get("surveytype"),
             "vertical_datum": datum,
             "source_uom": uom,
+            "datum_offset_m": offset_m,
+            "datum_offset_frame": offset_frame or None,
         }
         rows.append({
             "type": "Feature", "geometry": feature.get("geometry"),
@@ -267,6 +337,8 @@ def read(spec: SourceSpec, params: dict[str, Any], *, timeout_s: float) -> list[
                 "properties": {**common, "part": "sounding", "sounding_count": None,
                                "depth_below_datum_m": round(float(depth) * scale, 4)},
             })
-        logger.info("ehydro: survey %s (%s) -> %d sounding(s), datum %s",
-                    survey_id, common["survey_date"], len(points), datum)
+        logger.info("ehydro: survey %s (%s) -> %d sounding(s), datum %s, offset %s",
+                    survey_id, common["survey_date"], len(points), datum,
+                    f"{offset_m:+.4f} m on {offset_frame}" if offset_m is not None
+                    else "unpublished")
     return rows

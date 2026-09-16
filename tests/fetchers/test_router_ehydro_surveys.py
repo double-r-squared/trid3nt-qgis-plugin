@@ -1,7 +1,8 @@
 """``fetch_ehydro_surveys``: the survey index, and what each survey states about itself.
 
-The index picks the newest survey or the window, and the package's own points carry
-the datum and the unit the depths are in. Covered with that, the refusals: an
+The index picks the window - the last year where none is stated - and the package's
+own points carry the datum and the unit the depths are in, its metadata the shift
+between that datum and a national frame. Covered with that, the refusals: an
 unparseable window, a window wider than the download cap, an extent with no survey,
 and a survey that states no datum or a unit nothing here can convert."""
 
@@ -55,10 +56,10 @@ def test_an_unparseable_window_refuses_before_the_network(spec):
     assert excinfo.value.error_code == "EHYDRO_INPUT_INVALID"
 
 
-def test_without_a_window_the_newest_survey_is_the_one(spec):
-    picked = eh._selected(spec, [_feature("2024-01-01", "old"),
-                                 _feature("2026-09-09", "new")], None)
-    assert [f["properties"]["surveyjobidpk"] for f in picked] == ["new"]
+def test_an_unstated_window_is_the_last_year(spec):
+    """The window lives here and not in the templates that ask for a bed."""
+    asked = eh._since(spec, {"bbox": [-122.7, 45.5, -122.6, 45.6]})
+    assert _dt.date.today() - asked == _dt.timedelta(days=eh._WINDOW_DAYS)
 
 
 def test_a_window_returns_every_survey_that_ends_in_it_newest_first(spec):
@@ -70,11 +71,13 @@ def test_a_window_returns_every_survey_that_ends_in_it_newest_first(spec):
 
 
 def test_a_window_past_the_download_cap_refuses_rather_than_truncating(spec):
-    many = [_feature(f"2026-0{n}-01", f"s{n}") for n in range(1, 9)]
+    many = [_feature("2026-01-%02d" % n, f"s{n}")
+            for n in range(1, eh._MAX_SURVEYS + 2)]
     with pytest.raises(RouterInputError) as excinfo:
         eh._selected(spec, many, _dt.date(2025, 1, 1))
     message = str(excinfo.value)
-    assert str(eh._MAX_SURVEYS) in message and "8 surveys" in message
+    assert str(eh._MAX_SURVEYS) in message
+    assert f"{eh._MAX_SURVEYS + 1} surveys" in message
     # The ceiling is the ASK's, not an absence: the window is what moves.
     assert excinfo.value.error_code == "EHYDRO_INPUT_INVALID"
     assert "Move since forward" in message
@@ -91,7 +94,7 @@ def test_a_full_index_page_states_the_count_as_the_floor_it_is(spec):
 
 def test_an_extent_with_no_survey_refuses_by_name(spec):
     with pytest.raises(RouterEmptyError) as excinfo:
-        eh._selected(spec, [], None)
+        eh._selected(spec, [], _dt.date(2025, 1, 1))
     assert excinfo.value.error_code == "EHYDRO_NO_SURVEY"
 
 
@@ -141,3 +144,36 @@ def test_the_survey_surfaces_from_its_own_corpus_phrasings():
     assert queries
     assert any("fetch_ehydro_surveys" in retrieve_visible_tools(q, None, 8) for q in queries), (
         "fetch_ehydro_surveys surfaces in NO top-8 for any of its corpus queries")
+
+
+def test_the_published_offset_is_read_off_the_package_metadata(spec):
+    """The district writes the shift as a sentence and nowhere machine-readable."""
+    archive = _Archive({"WR_03.XML": (
+        "Soundings are shown in feet and indicate depths below Columbia River "
+        "Datum. CRD is 5.28 feet above the North American Vertical Datum of 1988 "
+        "(NAVD 88 Geoid 09) at Willamette River Mile 9.7.")})
+    assert eh._published_offset(archive, "WR_03") == (1.6093, "NAVD88")
+
+
+def test_a_package_that_publishes_no_offset_states_none(spec):
+    archive = _Archive({"X.XML": "Soundings are in feet below MLLW.",
+                        "X.txt": "CRD is 5.28 feet above NAVD 88"})
+    assert eh._published_offset(archive, "X") == (None, "")
+
+
+def test_a_datum_stated_below_the_frame_reads_the_other_way(spec):
+    archive = _Archive({"X.XML": "LWRP is 1.5 meters below NAVD 88 at the gauge."})
+    assert eh._published_offset(archive, "X") == (-1.5, "NAVD88")
+
+
+class _Archive:
+    """A ZIP stand-in: the member names and the bytes behind each."""
+
+    def __init__(self, members: dict[str, str]) -> None:
+        self._members = members
+
+    def namelist(self) -> list[str]:
+        return list(self._members)
+
+    def read(self, name: str) -> bytes:
+        return self._members[name].encode("utf-8")

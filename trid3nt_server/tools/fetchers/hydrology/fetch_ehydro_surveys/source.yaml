@@ -50,6 +50,8 @@ ingest:
     - source_uom
     - depth_below_datum_m
     - sounding_count
+    - datum_offset_m
+    - datum_offset_frame
 
 hooks:
   delegate: ehydro.read
@@ -90,7 +92,8 @@ caveats:
   - "the soundings are DEPTHS BELOW the survey's own stated datum, positive down, in metres - not elevations; the datum is on every row and is a local project datum on many rivers (Columbia River Datum on the Willamette), so a bed built from these needs a deliberate datum shift"
   - "a survey whose points state no vertical datum or no unit of measure refuses by name rather than guessing one"
   - "coverage is the NAVIGATION CHANNEL, not the whole water surface: a survey covers the dredged prism and leaves the banks unmeasured, so the share of a domain it covers is always partial"
-  - "without ``since`` only the NEWEST survey intersecting the bbox is returned; ``since`` returns every survey ending on or after that date, up to six, and refuses over that rather than truncating silently"
+  - "without ``since`` the window is the last YEAR, which is the order a dredged channel is resurveyed on; ``since`` returns every survey ending on or after that date, up to twelve, and refuses over that rather than truncating silently"
+  - "``datum_offset_m`` is the shift the survey's OWN package metadata publishes between its project datum and a national frame (``datum_offset_frame``), read off the sentence the district wrote it in; it is null where the package states none, and applying it is the consumer's"
   - "USACE districts publish on their own schedules; a reach with no navigation project has no survey at all"
 
 docstring: |-
@@ -98,8 +101,9 @@ docstring: |-
 
   What it does:
       Looks the bbox up in the USACE eHydro survey index (one ArcGIS layer over
-      every published survey), takes the NEWEST survey intersecting it, downloads
-      that survey's own package and reads the soundings out of its geodatabase.
+      every published survey), takes the surveys in the window intersecting it,
+      downloads each survey's own package and reads the soundings out of its
+      geodatabase.
       One artifact comes back, its rows tagged ``part``: ``survey`` (the survey
       footprint polygon) and ``sounding`` (the measured points). Every row carries
       the survey's id and date and - read from the survey's own data, never
@@ -127,14 +131,16 @@ docstring: |-
       bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326. Surveys
           INTERSECTING it are returned whole, so a survey can reach well past
           the window.
-      since: optional ISO date. Absent, only the newest survey comes back;
-          present, every survey ending on or after it does, newest first, up to
-          six - which is how a bed is compared against an earlier one.
+      since: optional ISO date. Absent, the window is the last year; present,
+          every survey ending on or after it comes back, newest first, up to
+          twelve - which is how a bed is compared against an earlier one.
 
   Returns:
       ``LayerURI`` for a FlatGeobuf in EPSG:4326 carrying ``part``,
       ``survey_id``, ``survey_date``, ``district``, ``feature_name``,
-      ``survey_type``, ``vertical_datum``, ``source_uom``,
+      ``survey_type``, ``vertical_datum``, ``source_uom``, ``datum_offset_m``
+      and ``datum_offset_frame`` (the shift the package's own metadata publishes
+      between its datum and a national frame, null where it publishes none),
       ``depth_below_datum_m`` (on the sounding rows) and ``sounding_count`` (on
       the survey row). ``layer_type="vector"``, ``units="m"``.
 
@@ -156,8 +162,8 @@ docstring: |-
       - ``EHYDRO_NO_SURVEY``: no survey intersects the bbox (or none since that
         date).
       - ``EHYDRO_INPUT_INVALID`` also names a survey whose points state no
-        vertical datum or no unit, and a ``since`` window holding more than six
-        surveys.
+        vertical datum or no unit, and a ``since`` window holding more than
+        twelve surveys.
       - ``EHYDRO_UPSTREAM_ERROR``: the index or the survey package failed.
 
   Tier-1 free. No API key.
