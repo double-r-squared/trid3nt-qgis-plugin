@@ -16,7 +16,6 @@ from trid3nt_server.workflows.runtime import (
     register_workflow,
 )
 from trid3nt_server.workflows.mesh.tool import mesh_op, tool
-from trid3nt_server.inputs.aoi import AcquireAoi, location_or_bbox
 from trid3nt_server.workflows.telemac.authoring.assembler import HARBOUR_GEOMETRY
 from trid3nt_server.workflows.telemac.modules import field, mesh
 from trid3nt_server.workflows.telemac.modules.outputs import profile
@@ -29,7 +28,6 @@ from trid3nt_server.workflows.solver.compute_class import compute_class
 from trid3nt_server.workflows.telemac.templates.agitation.declarations import (
     ACCEPTS,
     DOC,
-    HARBOR_HALF_DEG,
     PARAMS,
     PARAMS as P,
 )
@@ -40,7 +38,7 @@ __all__ = ["ANSWER", "CAPTIONS", "DATA", "MESH", "OUTPUTS", "PARAMS", "STEERING"
 
 _AUTHORING = "trid3nt_server.workflows.telemac.authoring"
 _ENGINE = "trid3nt_server.workflows.telemac.engine"
-_TEMPLATE = "trid3nt_server.workflows.telemac.templates.agitation"
+_INPUTS = "trid3nt_server.inputs"
 
 #: What the run directory holds the run's files under - the deck's own GEOMETRY /
 #: RESULTS statements. The boundary file is the incident wave's and is named by
@@ -50,11 +48,43 @@ _STEERING_FILE = "art_agitation.cas"
 
 
 class DATA:
-    """What the run consumes from the world.
+    """What the run consumes from the world: the water, its bed, the structure.
 
-    A SLOT and a row over it: this template names no default source for a
-    structure, and the transect is laid through whatever structure it is handed."""
+    A harbour basin is the WATER a coastline leaves inside the window the
+    question is asked in, so the domain is CUT rather than fetched whole; a user
+    who already holds the basin's outline supplies it and the cut never runs.
+    The transect is laid through whatever structure the run is handed."""
 
+    #: The window the sheltering question is asked in. Produced on demand, so a
+    #: caller who supplies the basin outline below is never asked to draw one.
+    box = Data.extent()
+    #: The land-water EDGE at survey resolution. OpenStreetMap draws a coastline
+    #: way with the land on its LEFT, and that direction is the whole of the
+    #: classification the cut below makes.
+    coast = Data(tool("fetch_osm_coastline", bbox=Ref("box.bbox")))
+    #: THE DOMAIN: the water the coastline leaves inside the box. A polygon is
+    #: what a mesh is cut from and a coastline is a line, so this row is the step
+    #: between the two; a basin the user outlines supersedes it.
+    domain = Data.domain(tool("derive_water_polygon", coastline=coast,
+                              extent=Ref("box.bbox")))
+    #: TOPOBATHY is the class a bed is defined over and CUDEM's nearshore
+    #: collection covers a surveyed harbour, so the bed the wave refracts over is
+    #: the surveyed sea floor. The source's own default target is ONE UTM zone,
+    #: so a harbour outside it would be warped across ten zones before anything
+    #: sampled it; lon/lat is what the nodes are sampled in.
+    seafloor = Data(tool("fetch_topobathy", bbox=Ref("domain.bbox"),
+                         target_crs="EPSG:4326"))
+    #: The LAND-AND-SHORE surface the survey's own footprint stops short of. A
+    #: cut water polygon follows the coastline to the metre and a delivered tile
+    #: ends on its own grid, so the two disagree by a node at the rim.
+    terrain = Data(tool("fetch_dem", bbox=Ref("domain.bbox"),
+                        purpose="bed elevation"))
+    #: ONE bed: the survey where it sounded, the terrain everywhere else, both on
+    #: NAVD88 - and the merge refuses two datums by name rather than writing a
+    #: step into the floor a wave then refracts over. Supply a survey raster, a
+    #: layer of soundings or a depth in metres and that is the bed instead.
+    bed = Data.bed(tool("derive_merge_rasters", primary=seafloor,
+                        fallback=terrain))
     structure = Data.supplied(geometry="polyline")
     #: The line the agitation is read along: through the structure's centroid,
     #: along the incident wave (a propagation direction, so the trig convention
@@ -62,14 +92,15 @@ class DATA:
     transect = tool("derive_transect", shape=structure,
                     bearing_deg=P.wave_direction_deg, convention="trig",
                     length_m=P.transect_length_m)
-    #: The domain itself, when the caller has one. Unfilled, MESH below cuts it
-    #: from the shoreline; filled, that mesh is what the wave is solved on and
-    #: the recipe is not run.
+    #: The domain as a MESH, when the caller has one already. Unfilled, MESH
+    #: below is what the wave is solved on.
     mesh = Data.supplied(geometry="mesh").optional()
 
 
 #: The MESH RECIPE, frozen at declaration and building nothing at import. The
-#: structure is punched out of the water with its outline locked in FIRST, and
+#: domain polygon's own edge IS the shoreline the sizing function measures, so
+#: the recipe hands the mesher that polygon and nothing restates where the water
+#: is. The structure is punched out of it with its outline locked in FIRST, and
 #: the shoreline sizing is built over the domain that leaves - so the band around
 #: the cut is graded rather than a discontinuity the triangulator has to absorb.
 #: The domain's own rim is sized between the two, which is where the one op that
@@ -77,17 +108,18 @@ class DATA:
 MESH = tool.build_mesh(
     mesher="om2d",
     kind="unstructured_tri",
-    extent=Ref("aoi.bbox"),
+    extent=DATA.domain,
     resolution_m=P.mesh_min_edge_m,
     ops=[
-        mesh_op("set_obstacle", geometry=Ref("barrier")),
+        mesh_op("set_obstacle", geometry=Ref("footprint")),
         mesh_op("feature_sizing_function"),
-        # THE RIM IS THE ASK'S TO SIZE. Nothing else sizes it: every sizing
-        # function measures the shoreline, and the AOI's own box is not one, so
-        # an undeclared rim comes back an order of magnitude past the size word
-        # and the band where it meets the shoreline triangulates into slivers.
-        # No edge is stated, so the rim is locked at the recipe's own size word -
-        # the value the basin's rim is sized at.
+        # THE RIM IS THE ASK'S TO SIZE. Nothing else sizes it: a sizing function
+        # measures the water's own shape - the feature width, the distance to a
+        # line, the wavelength over a depth - and out in the open approach every
+        # one of those is coarse, so an undeclared rim comes back an order of
+        # magnitude past the size word and the band behind it triangulates into
+        # slivers. That rim is the boundary a solver forces its open condition
+        # on. No edge is stated, so it is locked at the recipe's own size word.
         mesh_op("set_rim_size"),
         mesh_op("enforce_mesh_gradation", gradation=P.mesh_grade),
         mesh_op("delete_boundary_faces"),
@@ -95,10 +127,7 @@ MESH = tool.build_mesh(
         mesh_op("laplacian2"),
         mesh_op("make_mesh_boundaries_traversable"),
         mesh_op("fix_mesh", delete_unused=True),
-        # TOPOBATHY is the class a bed is defined over and CUDEM's nearshore
-        # collection covers a surveyed harbour, so no substitution is declared
-        # here: the bed the wave refracts over is the surveyed sea floor.
-        mesh_op("set_bed", source="fetch_topobathy"),
+        mesh_op("set_bed", source=DATA.bed),
         # EVERY stretch the library reads as ocean at this depth opens. A harbour
         # has more than one mouth, and picking one of them would number a
         # multi-mouth domain as single-mouth.
@@ -186,18 +215,16 @@ artemis_harbor_agitation = register_workflow(
     TelemacWorkflow, _ARTEMIS_METADATA, PARAMS,
     Door(
         steering=STEERING,
-        # The AOI, and then the structure as a water-removing FOOTPRINT - both
-        # before the mesh, because the domain is the water the structure is
-        # subtracted FROM and a centreline bounds no area to subtract.
-        domain=(AcquireAoi(location=P.location, bbox=P.bbox,
-                           half_deg=HARBOR_HALF_DEG, default_name="harbour",
-                           code_prefix="ARTEMIS").named("aoi"),
-                Step(runner=f"{_TEMPLATE}.barrier.barrier_footprint",
-                     stage="prep",
-                     kwargs={"structure": DATA.structure,
-                             "width_m": ParamRef("barrier_width_m")}
-                     ).named("barrier"),),
-        mesh=MESH, mesh_on="aoi", supplied_mesh=DATA.mesh,
+        # The structure as a water-removing FOOTPRINT, before the mesh: the
+        # domain is the water the structure is subtracted FROM and a centreline
+        # bounds no area to subtract.
+        domain=(Step(runner=f"{_INPUTS}.structure.structure", stage="prep",
+                     kwargs={"value": DATA.structure,
+                             "width_m": ParamRef("barrier_width_m"),
+                             "asked": "the structure this question asks about",
+                             "code": "ARTEMIS_STRUCTURE_INVALID"}
+                     ).named("footprint"),),
+        mesh=MESH, mesh_on="domain", supplied_mesh=DATA.mesh,
         settle=Step(runner=f"{_AUTHORING}.assembler.settle_harbour",
                     stage="author",
                     kwargs={"mesh": Ref("mesh"), "structure": DATA.structure,
@@ -223,12 +250,6 @@ artemis_harbor_agitation = register_workflow(
     # A phase-RESOLVING solve is the most mesh-dependent of the family: Kd peaks
     # inside a diffraction fringe the coarse mesh averages away.
     sensitivity=(("kd_max", "peak"),),
-    coerce=(
-        location_or_bbox("artemis_harbor_agitation", code_prefix="ARTEMIS",
-                         hint="For a natural prompt like 'is the marina at <place> "
-                              "sheltered', pass location='<place>' and the "
-                              "breakwater layer as structure=."),
-        compute_class(),
-    ),
+    coerce=(compute_class(),),
     doc=DOC,
 )

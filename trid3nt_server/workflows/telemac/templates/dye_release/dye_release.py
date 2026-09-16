@@ -1,9 +1,8 @@
-"""Engine template ``telemac_do_sag`` - the dissolved-oxygen sag below a discharge.
+"""Engine template ``telemac_dye_release`` - a conservative plume through a body of water.
 
-TELEMAC-2D coupled with WAQTEL O2 over the channel this run solves on - a reach
-walked downstream from the outfall, or a polygon the user supplies: where DO
-bottoms out below a continuous discharge, against the standard the water is held
-to and the closed form the process reduces to."""
+TELEMAC-2D shallow water over the domain this run solves on - a river reach
+walked from the release point, a lake the user draws, a polygon they own: how far
+a dye, tracer or contaminant spill travels and what its peak concentration is."""
 
 from __future__ import annotations
 
@@ -17,37 +16,45 @@ from trid3nt_server.workflows.runtime import (
     register_workflow,
     tool,
 )
-from trid3nt_server.inputs import point_arg
+from trid3nt_server.inputs import point_arg, user_input
 from trid3nt_server.inputs.instant import event_time
+from trid3nt_server.workflows.telemac.modules import (
+    T2D,
+    WAQTEL,
+    field,
+    max_over_time,
+    mesh,
+    series,
+)
+from trid3nt_server.workflows.telemac.modules.telemac2d import (
+    Boundaries,
+    Continuation,
+    Rain,
+    Release,
+    TracerNames,
+    Wind,
+)
 from trid3nt_server.workflows.solver.compute_class import compute_class
-from trid3nt_server.workflows.telemac.modules import T2D, WAQTEL, mesh
-from trid3nt_server.workflows.telemac.modules.outputs import profile
-from trid3nt_server.workflows.telemac.modules.telemac2d import Boundaries, Release
-from trid3nt_server.workflows.telemac.templates.do_sag import streeter_phelps
-from trid3nt_server.workflows.telemac.templates.do_sag.declarations import (
-    ACCEPTS, DOC, PARAMS, PARAMS as P,
+from trid3nt_server.workflows.telemac.templates.dye_release.declarations import (
+    ACCEPTS, DECAY_PRESETS, DOC, PARAMS, PARAMS as P,
 )
 from trid3nt_server.workflows.telemac.workflow import Door, TelemacWorkflow
 
 __all__ = ["ANSWER", "CAPTIONS", "DATA", "OUTPUTS", "PARAMS", "STEERING",
-           "telemac_do_sag"]
+           "telemac_dye_release"]
 
 _AUTHORING = "trid3nt_server.workflows.telemac.authoring"
 
-#: The file the run directory holds this run's picture under. The deck's own
-#: RESULTS statement names it, so the Door restates nothing.
+#: The files the run directory holds beside the deck's own statements. The
+#: restart is the engine's full state at its last instant in double precision,
+#: which is what a continuation reads; the results file is a picture of the run.
 _RESULT = "r2d_domain.slf"
+_RESTART = "restart_domain.slf"
 
-#: How far the reach producer walks downstream from the outfall when this
-#: question has to find its own domain. A sag critical point is often several km
-#: below the discharge, so the stretch has to outrun it; a user who wants another
-#: one supplies the domain polygon, which supersedes the producer.
-_REACH_LENGTH_KM = 12.0
-
-#: How far down the domain's own centerline the outfall sits when no point was
-#: placed. It is what holds the source node off the inflow face rather than on
-#: it, where it would compete with the boundary condition for the same node.
-_OUTFALL_FRAC = 0.02
+#: How far the reach producer walks downstream from the release point when this
+#: question has to find its own domain. A user who wants another stretch supplies
+#: the domain polygon, which supersedes the producer.
+_REACH_LENGTH_KM = 6.0
 
 #: The roughness this deck is solved at, and the law it is read under: Strickler,
 #: the coefficient an unsurveyed channel is screened at. ONE number, stated once,
@@ -65,12 +72,10 @@ _SURVEY_SINCE = "2015-01-01"
 class DATA:
     """The three slots this run stands on, and the flow that fills its inflow."""
 
-    # The outfall names which stretch to model: the reach is walked DOWNSTREAM
-    # from it, so the sag develops inside the domain rather than past its end. A
-    # domain the user supplies supersedes this.
+    # A release named up front also names which stretch to model: the reach is
+    # walked downstream from it. A domain the user supplies supersedes this.
     domain = Data.domain(tool("fetch_river_reach",
-                              seed_point=[Ref("outfall_coords.lon"),
-                                          Ref("outfall_coords.lat")],
+                              seed_point=[Ref("release.lon"), Ref("release.lat")],
                               distance_km=_REACH_LENGTH_KM))
     # THE MEASUREMENT. A domain with no federal navigation project has no
     # published survey, and the sheet says so rather than refusing.
@@ -96,8 +101,9 @@ class DATA:
     bed = Data.bed(tool("derive_merge_rasters", primary=surveyed_bed,
                         fallback=terrain))
     # The carrier flow the inflow run prescribes, where the user stated none.
-    # ONE reading off whatever reports nearest the water, because the dilution
-    # the whole sag rests on is a number and not a layer.
+    # ONE reading, not the grid the model published: which reach segment reports
+    # it is ranked against the domain's own interior point, and the step that
+    # opens the channel refuses a record nobody chose from.
     carrier = Data.observation(
         tool("fetch_noaa_nwm_streamflow", bbox=Ref("domain.bbox"),
              valid_time=ParamRef("event_time")),
@@ -108,7 +114,7 @@ class DATA:
 
 
 class STEERING(T2D):
-    """The deck: a channel, an OUTFALL, and the four tracers the O2 process runs."""
+    """The deck: a body of water, and ONE conservative tracer released into it."""
 
     GEOMETRY_FILE = "domain.slf"
     BOUNDARY_CONDITIONS_FILE = "domain.cli"
@@ -122,16 +128,16 @@ class STEERING(T2D):
 
     # The run OPENS at the derived normal depth, laid bed-parallel. Not a
     # constant elevation at the outflow stage: the stage is derived only where
-    # the channel FALLS, so a horizontal surface at the outlet's level leaves
-    # every node upstream of it dry - the flowrate face among them - and the
-    # engine refuses a discharge it has no water to impose.
+    # the domain FALLS, so a horizontal surface at the outlet's level leaves every
+    # node upstream of it dry - the flowrate face among them - and the engine
+    # refuses a discharge it has no water to impose.
     INITIAL_CONDITIONS = "CONSTANT DEPTH"
     INITIAL_DEPTH = Ref("channel.depth_m")
 
     LAW_OF_BOTTOM_FRICTION = _FRICTION_LAW
     FRICTION_COEFFICIENT = _FRICTION_COEFFICIENT
 
-    # The advection of momentum and depth, and the SUPG the channel is stable
+    # The advection of momentum and depth, and the SUPG the domain is stable
     # under. The tracer advects under the engine's own scheme and diffusivity.
     TYPE_OF_ADVECTION = [1, 5]
     SUPG_OPTION = [0, 0]
@@ -150,79 +156,80 @@ class STEERING(T2D):
     # are clamped after the flux was computed.
     MASS_BALANCE = True
 
+    #: The engine's own last instant, in the double precision a continuation
+    #: reads. An uncoupled run is the only one that can be continued, so it is
+    #: the only one asked to write this.
+    RESTART_FILE = _RESTART
+
     GRAPHIC_PRINTOUT_PERIOD = Ref("settled.graphic_period")
     DURATION = P.sim_duration_s
 
-    # The carrier declares ONE tracer; WAQTEL's O2 process appends DISSOLVED O2,
-    # ORGANIC LOAD and NH4 LOAD behind it, which is why every array sized to the
-    # tracer count below carries four values.
     NUMBER_OF_TRACERS = 1
-    NAMES_OF_TRACERS = ["DYE             MG/L"]
-    INITIAL_VALUES_OF_TRACERS = [0.0, P.upstream_do_mgl, 0.0, 0.0]
+    #: The tracer is called what the user called the release point, when a
+    #: picked or named point came; the template's own name stands otherwise.
+    tracer_names = TracerNames(names=["DYE             MG/L"],
+                               named_by=Ref("source.name"))
+    INITIAL_VALUES_OF_TRACERS = [0.0]
 
-    #: CLEAN WATER at every liquid boundary: no organic load, its own oxygen. The
-    #: load enters at the source, so which boundary the engine numbers first
-    #: cannot decide the answer. The walk is the mesh's own; the flow the inflow
-    #: carries and the level the outflow holds are the open channel's.
+    #: The carrier's own boundary values, in the order the engine numbers its
+    #: liquid boundaries: the walk the mesh measured, the flow the inflow run
+    #: carries and the level the outflow run holds. ONE tracer, so every liquid
+    #: boundary carries one clean value - the arity of that list is what moves
+    #: when the question does.
     boundaries = Boundaries(
         measured={"liquid_boundary_order": Ref("settled.liquid_boundary_order"),
                   "liquid_boundary_prescribes":
                       Ref("settled.liquid_boundary_prescribes"),
                   "inflow_q_m3s": Ref("channel.inflow_q_m3s"),
                   "outflow_stage_m": Ref("channel.outflow_stage_m")},
-        tracers=[0.0, P.upstream_do_mgl, 0.0, 0.0])
+        tracers=[0.0])
 
-    #: The OUTFALL: a permitted discharge does not pulse, so the flow and its
-    #: concentrations hold flat across the whole run and the water reaches the
-    #: steady-state sag the question is asked about.
-    releases = [Release(at=Ref("outfall.at"), q=P.effluent_q_m3s,
-                        tracers=[0.0, P.effluent_do_mgl, P.effluent_bod_mgl, 0.0],
-                        window_s=None, until_s=Ref("settled.until_s"))]
+    #: A FINITE pulse at a point source inside the domain, so the slug advects
+    #: away and dilutes instead of saturating the water.
+    releases = [Release(at=Ref("source.at"), q=P.source_q_m3s,
+                        tracers=[P.dye_concentration_mgl],
+                        window_s=P.spill_duration_s,
+                        until_s=Ref("settled.until_s"))]
 
-    #: Deoxygenation balanced by surface reaeration, and nothing else: the
-    #: modelled curve is the closed form the question is asked against, so this
-    #: run states FRESH water, a CONSTANT reaeration rate (formula 0, the one the
-    #: closed form holds under) and zeroes the three sources the closed form has
-    #: no term for - nitrification, benthic demand, and photosynthesis less
-    #: respiration.
-    coupling = [WAQTEL.o2(
-        WATER_TEMPERATURE=P.water_temp_c, WATER_SALINITY=0.0,
-        CONSTANT_OF_DEGRADATION_OF_ORGANIC_LOAD_K1=P.k1_per_day,
-        CONSTANT_OF_NITRIFICATION_KINETIC_K4=0.0,
-        FORMULA_FOR_COMPUTING_K2=0, K2_REAERATION_COEFFICIENT=P.k2_per_day,
-        O2_SATURATION_DENSITY_OF_WATER__CS_=P.do_saturation_mgl,
-        BENTHIC_DEMAND=0.0, PHOTOSYNTHESIS_P=0.0, VEGETAL_RESPIRATION_R=0.0)]
+    #: The restart this deck is read at. A continuation reads the last record of
+    #: a RESTART FILE, which the engine writes in double precision, so the
+    #: single-precision default would read a double file as a single one.
+    PREVIOUS_COMPUTATION_FILE_FORMAT = "SERAFIND"
+
+    #: The three optional forcings. Each states NOTHING when it was given
+    #: nothing: no wind speed is no wind, no stated rate is no rain, and a run
+    #: that continues nothing states its own initial conditions.
+    wind = Wind(speed_mps=P.wind_speed_mps, from_deg=P.wind_direction_deg)
+    rain = Rain(mm_per_day=P.rainfall_mm_per_day, tracers=1)
+    continue_from = Continuation(previous=Ref("settled.continue_from"))
+    #: First-order degradation on the same tracer - no new tracer - when a
+    #: decaying substance was named or a half-life stated; nothing otherwise.
+    coupling = [WAQTEL.degradation(substance=P.decaying_substance,
+                                   half_life_hours=P.decay_half_life_hours,
+                                   rate_per_day=P.decay_rate_per_day,
+                                   presets=DECAY_PRESETS)]
 
 
-#: What this question PLACES: the oxygen down the channel as the chart, with the
-#: closed form and the standard drawn beside it. The line is the one the domain's
-#: own producer measured and hands over beside its polygon.
+#: What this question PLACES: the tracer's domain-wide history as the chart.
 OUTPUTS = [
-    profile("T2", along=Ref("domain.centerline")
-            ).chart(reference=streeter_phelps.overlay),
+    series("T1").chart(),
 ]
-CAPTIONS = {"T2": "dissolved oxygen"}
+CAPTIONS = {"T1": "dye concentration"}
 
 #: The run's ANSWER, as the numbers a reader has to be able to check, each a
-#: measure of one of the reads above: how low the oxygen bottoms out and where,
-#: whether that is below the standard the water is held to, the mixed load that
-#: drove it, and the speed it travelled at.
+#: measure of one of the reads above.
 ANSWER = {
-    "do_min_mgl": profile("T2", along=Ref("domain.centerline")).measure("min"),
-    "do_below_standard": profile("T2", along=Ref("domain.centerline"))
-                         .measure("min").below(P.do_standard_mgl),
-    "do_min_distance_m": profile("T2", along=Ref("domain.centerline"))
-                         .measure("x_min_m"),
-    "bod_mixed_mgl": profile("T3", along=Ref("domain.centerline")).measure("max"),
-    "mean_velocity_mps": profile("T2", along=Ref("domain.centerline"))
-                         .measure("velocity_mps"),
+    "dye_cmax_mgl": max_over_time("T1").measure("max"),
+    "dye_peak_time_s": max_over_time("T1").measure("t_max"),
+    "plume_reach_m": field("T1", t="every").measure("travel_m"),
+    "active_frames": field("T1", t="every").measure("active_frames"),
     "mesh_size_m": mesh().measure("size_m"),
 }
 
 
 #: DECLARED mesh_resolution_m range. The solver floor is the finest edge the mesh
-#: builder authors regardless of ask; below it a screening run gains nothing.
-#: There is no fixed coarse ceiling - the node budget coarsens a long domain
+#: builder authors regardless of ask; below it a screening plume gains nothing.
+#: There is no fixed coarse ceiling - the node budget coarsens a large domain
 #: WITHIN this declaration, and the effective edge stays >= 2 cells across it.
 _RES_SPEC = ResolutionSpec(
     param="mesh_resolution_m",
@@ -232,13 +239,17 @@ _RES_SPEC = ResolutionSpec(
     constraint_source="solver",
     rationale=(
         "explicit target edge length; 3 m is the absolute finest the builder "
-        "authors, a long domain is further coarsened under the mesh node budget "
+        "authors, a large domain is further coarsened under the mesh node budget "
         "(self-labeled); no fixed coarse ceiling"
     ),
 )
 
+#: The mesh gate this template stops at is the STANDARD one - the mesh step opens
+#: a session, presents the built domain as an editable layer with its probes, and
+#: takes every edit action the ``om2d`` mesher registers - so this template
+#: declares no solver gate of its own.
 _METADATA = AtomicToolMetadata(
-    name="telemac_do_sag",
+    name="telemac_dye_release",
     ttl_class="live-no-cache",
     source_class="workflow_dispatch",
     cacheable=False,
@@ -248,7 +259,7 @@ _METADATA = AtomicToolMetadata(
 )
 
 
-telemac_do_sag = register_workflow(
+telemac_dye_release = register_workflow(
     TelemacWorkflow, _METADATA,
     PARAMS,
     Door(
@@ -265,30 +276,38 @@ telemac_do_sag = register_workflow(
                          "friction_law": _FRICTION_LAW,
                          "friction_coefficient": _FRICTION_COEFFICIENT}
                  ).named("channel"),
-            # WHERE the discharge enters the water, settled against the accepted
-            # mesh before the sheet reads it.
+            # WHERE the source enters the water, settled against the accepted
+            # mesh before the sheet reads it. The domain rides along because an
+            # unplaced release sits its fraction along that domain's centerline
+            # companion, and a supplied point is snapped onto the same line.
             Step(runner=f"{_AUTHORING}.assembler.settle_release", stage="author",
-                 kwargs={"point": P.outfall_coords, "mesh": Ref("mesh"),
-                         "domain": Ref("domain"), "fraction": _OUTFALL_FRAC,
-                         "label": "Outfall"}).named("outfall")),
+                 kwargs={"point": P.release, "mesh": Ref("mesh"),
+                         "domain": Ref("domain"),
+                         "fraction": P.spill_fraction,
+                         "label": "Release point",
+                         "continue_from": P.continue_from}).named("source")),
+        results=(_RESULT, _RESTART),
         compute_class=ParamRef("compute_class"),
         outputs=OUTPUTS, captions=CAPTIONS, answer=ANSWER,
-        review_title="Review the outfall and the water it discharges to"),
+        review_title="Review the tracer-release scenario"),
     data=DATA,
     accepts=ACCEPTS,
     answer=tuple(ANSWER),
     provenance=(("discharge_m3s", "discharge_note"),
                 ("mesh_resolution_m", "mesh_resolution_note")),
-    # WHERE the sag sits is a local-feature LOCATION and moves with the element
-    # that resolves it. The DO minimum itself is a saturated maximum - a
-    # converged class - so it carries no label.
-    sensitivity=(("do_min_distance_m", "location"),),
+    # The dye maximum is the canonical peak class: measured 6x LOW on the coarse
+    # mesh, because a concentration peak lives inside one element. How far the
+    # plume REACHED is a front location and moves with it.
+    sensitivity=(("dye_cmax_mgl", "peak"),
+                 ("plume_reach_m", "location")),
     coerce=(
-        point_arg("outfall_coords", tool="telemac_do_sag",
-                  prompt="Click on the water where the outfall discharges",
+        point_arg("release", tool="telemac_dye_release",
+                  prompt="Click on the water where the substance enters it",
                   code="TELEMAC_PARAMS_INVALID"),
         event_time(),
         compute_class(),
+        user_input.bearing("wind_direction_deg", label="wind_direction_deg",
+                           code="TELEMAC_PARAMS_INVALID"),
     ),
     doc=DOC,
 )

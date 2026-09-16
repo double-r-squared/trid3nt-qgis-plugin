@@ -1,6 +1,7 @@
 # Template routing phrasings: the ARTEMIS phase-resolving harbour-agitation
 # engine answers ONE question - does the declared structure shelter the water
 # behind it - so every phrasing here names a structure and the water it shelters.
+# The water is the domain slot and may be any sheltered basin, drawn or supplied.
 artemis_harbor_agitation:
 - how much does incoming swell amplify inside this harbour basin
 - wave agitation and tranquility behind the breakwater in the marina
@@ -8,4 +9,5 @@ artemis_harbor_agitation:
 - diffraction of waves around a breakwater tip into the sheltered lee
 - where does diffracted wave energy still reach behind the harbour breakwater
 - agitation coefficient Kd inside the small-craft harbour under a storm swell
+- does the mole I drew shelter the basin behind it from the swell
 - phase-resolving harbour wave agitation to complement the TOMAWAC spectral field

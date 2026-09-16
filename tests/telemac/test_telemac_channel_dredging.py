@@ -1,0 +1,186 @@
+"""The maintenance-dredge template as VALUES: the slots it stands on and the
+plan the workflow builds from them.
+
+Offline: nothing is fetched, meshed or solved. What is proved is the
+DECLARATION - one domain row, one composed bed row, the reading the inflow
+opens on, the two areas the template names no source for, the runtime levers it
+no longer restates, and the two stages it still owns because this question
+measures them on top of the domain.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+import yaml
+
+from trid3nt_server.workflows.runtime import DataRef, Ref
+from trid3nt_server.workflows.runtime.levers import LEVER_NAMES
+from trid3nt_server.workflows.telemac.templates.channel_dredging import channel_dredging
+
+_WORKFLOW = channel_dredging.telemac_channel_dredging.workflow
+_ANSWER = channel_dredging.ANSWER
+_STEERING = channel_dredging.STEERING
+#: The package the corpus sits in, read off the module so a rename moves both.
+_PACKAGE = Path(channel_dredging.__file__).parent
+
+#: What the domain wave took off every template: the keyword twins the module's
+#: dictionary already describes, the domain twins the slots replaced, and the
+#: two levers the runtime declares once.
+_DISSOLVED = {"location", "bbox", "river_geometry_uri", "reach_length_km",
+              "friction_coefficient", "friction_law", "output_interval_min"}
+
+
+def _rows() -> dict:
+    return {row.name: row for row in _WORKFLOW.data}
+
+
+def _steps() -> dict:
+    return {step.label: step for step in _WORKFLOW.plan.steps}
+
+
+def _recipe():
+    from trid3nt_server.workflows.mesh.tool import recipe_from_plan_value
+
+    return recipe_from_plan_value(_WORKFLOW.plan.steps[0].kwargs["mesh"])
+
+
+def test_the_domain_is_one_row_the_reach_fetcher_produces():
+    """The five chained rows are one slot with a producer: a seed on the water,
+    a distance along it, and the polygon comes back with its two end faces."""
+    domain = _rows()["domain"]
+    assert domain.role == "domain" and domain.geometry == "polygon"
+    assert domain.producer.runner == "fetch_river_reach"
+    assert set(domain.producer.kwargs) == {"seed_point", "distance_km"}
+    assert domain.producer.kwargs["distance_km"] == channel_dredging._REACH_LENGTH_KM
+
+
+def test_the_bed_is_one_row_the_merge_composed_from_the_survey_and_the_terrain():
+    """set_bed takes ONE source: the survey where it measured and the terrain
+    everywhere else are composed into that one row by the merge derive."""
+    rows = _rows()
+    bed = rows["bed"]
+    assert bed.role == "bed"
+    assert bed.producer.runner == "derive_merge_rasters"
+    assert bed.producer.kwargs == {"primary": DataRef("surveyed_bed"),
+                                   "fallback": DataRef("terrain")}
+    assert rows["surveyed_bed"].producer.runner == "derive_survey_surface"
+    assert rows["terrain"].producer.runner == "fetch_dem"
+    assert [row.name for row in _WORKFLOW.data if row.role == "bed"] == ["bed"]
+
+
+def test_an_unsurveyed_channel_still_runs_and_the_sheet_says_which_bed_it_got():
+    """A channel with no federal navigation project has no published survey.
+    Both survey rows are CONTEXT, so the terrain passes through the merge and
+    the run carries the sentence rather than refusing."""
+    rows = _rows()
+    assert rows["survey"].is_context and rows["surveyed_bed"].is_context
+    assert "terrain surface stands" in rows["survey"].context_sentence
+    assert "terrain surface stands" in rows["surveyed_bed"].context_sentence
+
+
+def test_the_flow_the_channel_is_dredged_under_is_one_reading_not_a_record():
+    """The inflow carries ONE number. Which site reports it and how old the
+    sample is are the observation slot's to decide, so the row is ingested
+    rather than handed to the settle as a fetched layer."""
+    carrier = _rows()["carrier"]
+    assert carrier.role == "observation" and carrier.is_context
+    assert carrier.producer.runner == "fetch_noaa_nwm_streamflow"
+    assert carrier.coercion["field"] == "streamflow_cms"
+    assert carrier.coercion["near"] == Ref("domain.centroid")
+    assert carrier.coercion["measures"] == "a streamflow"
+
+
+def test_the_workflow_owns_every_stage_but_the_two_this_question_measures():
+    """No domain steps, no mesh recipe, no settle, no file names. The open-
+    channel hydraulics and the dredge's own areas are measured on top of the
+    domain, so those two steps stay the template's."""
+    assert _WORKFLOW.plan_decl.owns_stages
+    assert [step.label for step in _WORKFLOW.plan.steps] == [
+        "mesh", "channel", "dredge", "settled", "sheet", "solve", "outputs"]
+    settle = _steps()["settled"]
+    assert settle.runner.endswith("assembler.settle_domain")
+    assert (settle.kwargs["geometry"], settle.kwargs["boundary"],
+            settle.kwargs["result"]) == ("channel.slf", "channel.cli",
+                                         "r2d_channel.slf")
+
+
+def test_the_deck_is_written_at_the_roughness_its_own_stage_is_derived_at():
+    """A stage derived at one number under a deck written at another is a level
+    the run never sits at, so the two read the same module constant."""
+    channel = _steps()["channel"]
+    assert channel.runner.endswith("assembler.settle_open_channel")
+    assert channel.kwargs["friction_law"] == _STEERING.ASSERTED[
+        "LAW_OF_BOTTOM_FRICTION"]
+    assert channel.kwargs["friction_coefficient"] == _STEERING.ASSERTED[
+        "FRICTION_COEFFICIENT"]
+    assert _STEERING.ASSERTED["INITIAL_DEPTH"] == Ref("channel.depth_m")
+
+
+def test_the_dredge_reads_its_levels_off_the_domains_own_centerline():
+    """The reference surface is cross-sections down the channel at the depth the
+    run opens at, so it reads the centerline the domain's producer wrote beside
+    the polygon - not a line the template chains for itself."""
+    dredge = _steps()["dredge"]
+    assert dredge.runner.endswith("assembler.settle_dredge")
+    # The DOMAIN itself: the step reads the centerline its producer wrote beside
+    # the polygon and the end its inflow run names, so nothing is chained twice.
+    assert dredge.kwargs["domain"] == Ref("domain")
+    assert "centerline" not in dredge.kwargs and "seed" not in dredge.kwargs
+    assert dredge.kwargs["settled"] == Ref("channel")
+    assert set(dredge.kwargs["areas"]) == {"dredge_area", "dump_area"}
+
+
+def test_the_mesh_is_built_over_the_domain_slot_at_the_runtime_lever():
+    recipe = _recipe()
+    assert recipe.extent == DataRef("domain")
+    assert recipe.resolution_m.name == "mesh_resolution_m"
+    bed = next(op for op in recipe.ops if op.fn == "set_bed")
+    assert bed.kwargs == {"source": DataRef("bed")}
+
+
+def test_the_boundary_roles_come_from_the_domain_producers_own_runs():
+    """The reach fetcher returns the section and the two faces it was cut
+    between, so this template declares no runs row and still gets both."""
+    runs = next(op for op in _recipe().ops if op.fn == "set_boundary_roles")
+    assert runs.kwargs == {"runs": DataRef("domain")}
+    assert [row.name for row in _WORKFLOW.data if row.role == "runs"] == []
+
+
+def test_the_runtime_levers_are_seated_and_no_baseline_param_is_restated():
+    declared = [prm.name for prm in _WORKFLOW.params]
+    assert declared[-len(LEVER_NAMES):] == list(LEVER_NAMES)
+    assert _DISSOLVED.isdisjoint(declared)
+
+
+def test_every_slot_a_user_can_fill_reaches_the_wire():
+    """A fairway the port supplies supersedes the fetched reach, a surveyed
+    raster supersedes the merge and a stated flow supersedes the reading, so
+    all three are arguments though all three name a source; the two areas have
+    no source to supersede."""
+    assert {row.name for row in _WORKFLOW.data if row.fills_from_user} == {
+        "domain", "bed", "carrier", "dredge_area", "dump_area"}
+
+
+def test_the_two_areas_name_no_source_and_take_polygons():
+    rows = _rows()
+    for name in ("dredge_area", "dump_area"):
+        assert rows[name].producer is None and rows[name].geometry == "polygon"
+        assert not rows[name].is_optional
+
+
+def test_a_dredge_releases_nothing_so_it_prescribes_no_tracer():
+    assert _STEERING.ASSERTED["boundaries"]["tracers"] == []
+
+
+def test_the_answer_is_the_engine_s_own_lines_and_the_change_inside_each_area():
+    assert set(_WORKFLOW.answer_fields) == set(_ANSWER)
+    assert _ANSWER["dredged_bed_change_m"].primitive.over == DataRef("dredge_area")
+    assert _ANSWER["dumped_bed_change_m"].primitive.over == DataRef("dump_area")
+
+
+def test_the_corpus_key_is_the_registered_name():
+    corpus = yaml.safe_load((_PACKAGE / "corpus.yaml").read_text(encoding="utf-8"))
+    assert list(corpus) == [_WORKFLOW.name]
+    assert all(phrase == phrase.strip() and phrase.isascii()
+               for phrase in corpus[_WORKFLOW.name])

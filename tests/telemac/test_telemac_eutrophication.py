@@ -233,11 +233,11 @@ def test_a_biomass_carrier_carries_five():
 
 
 def _template():
-    from trid3nt_server.workflows.telemac.templates.river_eutrophication import (
-        river_eutrophication,
+    from trid3nt_server.workflows.telemac.templates.eutrophication import (
+        eutrophication,
     )
 
-    return river_eutrophication
+    return eutrophication
 
 
 def test_the_template_asks_for_the_oxygen_half():
@@ -287,7 +287,7 @@ def test_the_window_is_one_pass_rather_than_a_season():
     """A reach flushes in hours; the default window is two days of passes."""
     from trid3nt_server.workflows.runtime import param_rows
 
-    from trid3nt_server.workflows.telemac.templates.river_eutrophication import (
+    from trid3nt_server.workflows.telemac.templates.eutrophication import (
         declarations,
     )
 
@@ -378,3 +378,143 @@ def test_a_carrier_declaring_no_tracer_counts_them_from_its_own_table():
     assert read.variable("T8")[0].strip() == "DISSOLVED O2"
     with pytest.raises(OutputEmpty):
         read.variable("T9")
+
+
+# -- the domain wave: three slots, seated levers, no restated plan ------------ #
+
+
+def _plan():
+    return _template().telemac_eutrophication.workflow
+
+
+def test_the_workflow_owns_the_stages_and_the_template_adds_its_own_two():
+    """The template states no mesh recipe, no file names and no settle step: the
+    domain, the bed and the runs are what the plan is built from. What it DOES
+    add is the one thing a question with a CURRENT derives on top of an
+    engine-neutral domain: the uniform-flow opening the deck is written at."""
+    assert [step.label for step in _plan().plan.steps] == [
+        "mesh", "channel", "settled", "sheet", "solve", "outputs"]
+
+
+def test_the_mesh_is_built_over_the_domain_slot_at_the_runtimes_lever():
+    from trid3nt_server.workflows.mesh.tool import recipe_from_plan_value
+    from trid3nt_server.workflows.runtime import DataRef
+
+    recipe = recipe_from_plan_value(_plan().plan.steps[0].kwargs["mesh"])
+    assert recipe.extent == DataRef("domain")
+    assert recipe.resolution_m.name == "mesh_resolution_m"
+    bed = next(op for op in recipe.ops if op.fn == "set_bed")
+    assert bed.kwargs == {"source": DataRef("bed")}
+    # no runs row is declared, so the two faces the domain's producer cut the
+    # polygon between are the boundary runs
+    runs = next(op for op in recipe.ops if op.fn == "set_boundary_roles")
+    assert runs.kwargs == {"runs": DataRef("domain")}
+
+
+def test_the_bed_is_one_row_composed_from_the_survey_over_the_terrain():
+    """set_bed takes ONE source. A survey covers the channel and the terrain
+    covers the banks, so the two are merged by a derive before the slot sees
+    them, and the survey's absence is legal."""
+    rows = {row.name: row for row in _plan().data}
+    assert rows["bed"].role == "bed"
+    assert rows["bed"].producer.runner == "derive_merge_rasters"
+    assert [name for name, row in rows.items() if row.role == "bed"] == ["bed"]
+    assert rows["survey"].is_context and rows["surveyed_bed"].is_context
+    assert "terrain surface stands" in rows["survey"].context_sentence
+
+
+def test_the_water_temperature_record_is_one_reading_off_the_nearest_site():
+    """The engine reads ONE water temperature, and the portal returns sample
+    SITES. Which of them the run is judged against is the observation slot's
+    choice, ranked from inside the domain, and the journal carries the site and
+    the date because a sample is a moment."""
+    from trid3nt_server.workflows.runtime import Ref
+
+    row = {r.name: r for r in _plan().data}["water_temperature"]
+    assert row.role == "observation"
+    assert row.producer.runner == "fetch_usgs_water_quality"
+    assert row.coercion["near"] == Ref("domain.centroid")
+    assert row.coercion["to_units"] == "degC"
+    assert row.coercion["opens"]
+
+
+def test_water_nobody_sampled_is_a_sentence_rather_than_a_refusal():
+    """A place with no sample is a fact about the place, not a reason to refuse
+    a run whose temperature is stated anyway."""
+    row = {r.name: r for r in _plan().data}["water_temperature"]
+    assert row.is_context
+    assert "the stated value stands" in row.context_sentence
+
+
+def test_the_stated_temperature_is_what_the_deck_reads():
+    """The row is what the stated number is READ AGAINST; it never fills the
+    keyword. A domain with no sample would otherwise leave the growth, the
+    mortality and the oxygen ceiling with no temperature at all."""
+    assert _template().STEERING.ASSERTED["coupling"][0]["slots"][
+        "WATER_TEMPERATURE"].name == "water_temp_c"
+
+
+def test_the_three_slots_reach_the_wire_so_a_drawn_body_supersedes_the_fetch():
+    filled = {row.name for row in _plan().data if row.fills_from_user}
+    assert {"domain", "bed"} <= filled
+
+
+def test_the_runtime_levers_are_seated_and_no_keyword_twin_is_declared():
+    """A template declares no param the dictionary or the runtime already
+    describes; mesh_resolution_m is restated only because this question's
+    default differs from the runtime's."""
+    declared = {prm.name for prm in _plan().params}
+    assert {"event_time", "compute_class", "mesh_resolution_m"} <= declared
+    assert not declared & {"location", "bbox", "river_geometry_uri",
+                           "reach_length_km", "friction_coefficient",
+                           "friction_law", "output_interval_min"}
+
+
+def test_the_carrier_flow_is_one_reading_the_open_channel_step_can_read():
+    """The discharge the inflow prescribes is the National Water Model's own
+    row, read where the user stated no number - and read as ONE value, because
+    the step that opens the channel refuses a record nobody chose a site from."""
+    from trid3nt_server.workflows.runtime import Ref
+
+    row = {r.name: r for r in _plan().data}["carrier"]
+    assert row.is_context and row.producer.runner == "fetch_noaa_nwm_streamflow"
+    assert row.role == "observation"
+    assert row.coercion["near"] == Ref("domain.centroid")
+    assert row.coercion["field"] == "streamflow_cms"
+
+
+def test_the_longitudinal_reads_are_taken_along_the_domains_own_centerline():
+    """The producer measured the line and it rides on the domain artifact, so
+    the template asks the domain for it rather than walking the network twice.
+    A body of water whose producer measured none refuses the read by name."""
+    from trid3nt_server.workflows.runtime import Ref
+
+    template = _template()
+    along = {p.along for p in template.OUTPUTS if p.kind == "profile"}
+    along |= {m.primitive.along for m in template.ANSWER.values()
+              if m.primitive.kind == "profile"}
+    assert along == {Ref("domain.centerline")}
+    assert "centerline" not in {row.name for row in _plan().data}
+
+
+def test_the_stretch_the_producer_walks_is_the_templates_own_number():
+    """Reach length is a domain twin: the runtime and the domain slot describe
+    how far the water runs, so the template states its opinion of the value
+    instead of declaring a param for it. A user who wants another stretch
+    supplies the domain polygon."""
+    from trid3nt_server.workflows.telemac.templates.eutrophication import (
+        eutrophication,
+    )
+
+    assert "reach_length_km" not in {prm.name for prm in _plan().params}
+    domain = {r.name: r for r in _plan().data}["domain"]
+    assert domain.producer.kwargs["distance_km"] == \
+        eutrophication._REACH_LENGTH_KM
+
+
+def test_the_survey_is_gridded_on_the_field_the_soundings_carry():
+    """eHydro rows carry several numbers; the one the bed is made of is named
+    rather than guessed, and a guess would grid the sounding count."""
+    rows = {row.name: row for row in _plan().data}
+    assert rows["surveyed_bed"].producer.kwargs["value_field"] == \
+        "depth_below_datum_m"

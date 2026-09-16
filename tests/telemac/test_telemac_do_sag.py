@@ -1,8 +1,10 @@
-"""WAQTEL O2 dissolved-oxygen sag: offline V and V plus the tool tests.
+"""WAQTEL O2 dissolved-oxygen sag: offline V and V plus the template's own tests.
 
 No solve, no network. A live solve's O2 profile is a committed fixture, re-checked
 here against the Streeter-Phelps closed form deterministically, so a regression in
-the O2 machinery is caught without re-solving."""
+the O2 machinery is caught without re-solving. Beside it: the engine-neutral slots
+the converted template stands on, the stages the workflow builds from them, and
+the deck those stages fill."""
 import asyncio
 import json
 from pathlib import Path
@@ -11,39 +13,18 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from tests._fakes.reach_chain import install_reach_chain
-
-from trid3nt_server.workflows.telemac.modules.outputs import Line, Profile
-from trid3nt_server.workflows.telemac.templates.do_sag.streeter_phelps import (
-    overlay,
-    sp_critical_point,
-    sp_do_profile,
+from trid3nt_server.workflows.telemac.helpers.oxygen_sag import (
+    critical_point,
+    do_profile,
 )
+from trid3nt_server.workflows.telemac.modules.outputs import Line, Profile
+from trid3nt_server.workflows.telemac.templates.do_sag.streeter_phelps import overlay
 
 _FIXTURE = Path(__file__).parents[1] / "fixtures" / "telemac_o2_sp_idealized_profile.json"
 
-
-# --- Streeter-Phelps closed form: known-value + shape ----------------------- #
-def test_sp_critical_point_known_values():
-    # k1=5, k2=10 /d, Cs=9, L0=20, D0=0: tc=ln(2)/5 d, min DO = Cs - (k1/k2)L0 e^{-k1 tc}
-    crit = sp_critical_point(0.5, 9.0, 20.0, 0.0, 5.0, 10.0)
-    assert crit["min_do_mgl"] == pytest.approx(4.0, abs=1e-6)   # 9 - 0.5*20*0.5
-    assert crit["tc_day"] == pytest.approx(np.log(2.0) / 5.0, abs=1e-9)
-
-
-def test_sp_profile_is_a_sag():
-    xs = list(np.linspace(0, 12000, 200))
-    do, _ = sp_do_profile(xs, 0.54, 9.0, 20.0, 0.0, 5.0, 10.0)
-    do = np.asarray(do)
-    i = int(do.argmin())
-    assert 0 < i < len(do) - 1            # interior minimum (a genuine sag)
-    assert do[0] > do[i] and do[-1] > do[i]  # drops then recovers
-    assert do.min() < 5.0                 # sags below the 5 mg/L standard
-
-
-def test_sp_k1_equals_k2_limit_is_finite():
-    do, d = sp_do_profile([0, 1000, 5000], 0.5, 9.0, 20.0, 1.0, 3.0, 3.0)
-    assert all(np.isfinite(do)) and all(np.isfinite(d))
+#: The Willamette at Portland (USGS 14211720) - the canary reach this question's
+#: domain producer is walked from.
+_PORTLAND = (-122.6735, 45.5175)
 
 
 # --- COMMITTED live V&V: WAQTEL O2 solve vs Streeter-Phelps ------------------ #
@@ -55,9 +36,9 @@ def test_waqtel_o2_reproduces_streeter_phelps():
     x = np.asarray(d["x"]); o2 = np.asarray(d["o2"])
     U = float(np.mean(d["U"]))
     D0 = p["Cs"] - p["up_do"]
-    sp, _ = sp_do_profile(list(x), U, p["Cs"], p["L0"], D0, p["k1_day"], p["k2_day"])
+    sp, _ = do_profile(list(x), U, p["Cs"], p["L0"], D0, p["k1_day"], p["k2_day"])
     sp = np.asarray(sp)
-    crit = sp_critical_point(U, p["Cs"], p["L0"], D0, p["k1_day"], p["k2_day"])
+    crit = critical_point(U, p["Cs"], p["L0"], D0, p["k1_day"], p["k2_day"])
     i = int(o2.argmin())
     # sag minimum matches the analytic sag minimum
     assert abs(o2[i] - crit["min_do_mgl"]) < 0.05
@@ -69,11 +50,27 @@ def test_waqtel_o2_reproduces_streeter_phelps():
     assert o2[i] < p["standard"]
 
 
-# --- tool arg handling (no dispatch) ---------------------------------------- #
+# --- the declaration --------------------------------------------------------- #
 def _workflow():
     from trid3nt_server.tools import TOOL_REGISTRY
 
     return TOOL_REGISTRY["telemac_do_sag"].fn.workflow
+
+
+def _template():
+    from trid3nt_server.workflows.telemac.templates.do_sag import do_sag
+
+    return do_sag
+
+
+def _steps():
+    return list(_workflow().plan.declared())
+
+
+def _resolve(**supplied):
+    from trid3nt_server.workflows.runtime import resolve_params
+
+    return asyncio.run(resolve_params(_workflow().params, dict(supplied)))
 
 
 def test_do_saturation_temperature_relation():
@@ -87,48 +84,167 @@ def test_do_saturation_temperature_relation():
 
 
 def test_declared_params_and_plan_validate():
-    from trid3nt_server.workflows.runtime import resolve_params, validate_plan
+    from trid3nt_server.workflows.runtime import validate_plan
 
     wf = _workflow()
-    p = asyncio.run(resolve_params(wf.params,
-                                   {"location": "Eel River near Scotia, California"}))
+    resolved = _resolve()
     validate_plan(wf.plan, wf.params, wf.data)
-    assert p.value_of("do_saturation_mgl") == pytest.approx(9.022, abs=1e-3)  # Cs at 20 C
-    assert p.value_of("upstream_do_mgl") == p.value_of("do_saturation_mgl")   # saturated inflow
-    assert p.row("k1_per_day").consequence == "numerical"    # never refuses in auto
+    assert resolved.value_of("do_saturation_mgl") == pytest.approx(9.022, abs=1e-3)
+    assert resolved.value_of("upstream_do_mgl") == resolved.value_of("do_saturation_mgl")
+    assert resolved.row("k1_per_day").consequence == "numerical"  # never refuses in auto
 
 
-def test_the_plan_reads_as_the_universal_stage_sequence():
-    """The skeleton owns the sequence; the facade's five ops stamp each step."""
-    from trid3nt_server.workflows.runtime import resolve_params
+def test_the_params_are_the_questions_own_plus_the_runtimes_levers():
+    """No keyword twin, no domain twin, no lever restated: the dictionary
+    describes the roughness and the cadence, the slots describe the water, and
+    the runtime declares the granularity, the moment and the sizing class."""
+    from trid3nt_server.workflows.runtime.levers import LEVER_NAMES
 
-    wf = _workflow()
-    plan = wf.plan
-    stages = [s.stage for s in plan.declared() if s.stage]
-    assert stages == ["acquire", "acquire", "acquire", "mesh", "mesh",
-                      "author", "author", "author", "solve", "publish"]
-    assert [s.name for s in plan.declared()][-1] == "outputs"
+    declared = {p.name for p in _workflow().params}
+    assert not declared & {"friction_law", "friction_coefficient",
+                           "output_interval_min"}
+    assert not declared & {"location", "bbox", "river_geometry_uri",
+                           "reach_length_km"}
+    seated = [p.name for p in _workflow().params]
+    assert seated[-len(LEVER_NAMES):] == list(LEVER_NAMES)
+    # The roughness the outflow stage is derived at is the roughness the deck is
+    # written at - one number, stated once on the body.
+    steering = _template().STEERING
+    assert steering.LAW_OF_BOTTOM_FRICTION == 3
+    assert steering.FRICTION_COEFFICIENT == 33.0
+
+
+def test_the_three_slots_are_the_world_this_run_stands_on():
+    """One domain, one bed composed by the merge derive, and no runs row - so the
+    reach producer's own two faces are what the mesh prescribes on."""
+    from trid3nt_server.workflows.runtime import DataRef, data_rows
+    from trid3nt_server.workflows.runtime.data import BED, DOMAIN, RUNS
+
+    rows = data_rows(_template().DATA)
+    assert [d.name for d in rows] == ["domain", "survey", "surveyed_bed",
+                                      "terrain", "bed", "carrier"]
+    by_name = {d.name: d for d in rows}
+    assert by_name["domain"].role == DOMAIN
+    assert by_name["domain"].producer.runner == "fetch_river_reach"
+    assert by_name["bed"].role == BED
+    assert by_name["bed"].producer.runner == "derive_merge_rasters"
+    assert by_name["bed"].producer.kwargs["primary"] == DataRef("surveyed_bed")
+    assert by_name["bed"].producer.kwargs["fallback"] == DataRef("terrain")
+    assert not [d for d in rows if d.role == RUNS]
+    # The bed is a MERGE of two available layers, never a fallback chain.
+    assert all(d.producer.ladder_rungs == () for d in rows)
+    # Both slots reach the wire: what the user supplies supersedes the producer.
+    assert by_name["domain"].fills_from_user and by_name["bed"].fills_from_user
+
+
+def test_an_unsurveyed_domain_still_runs_on_the_terrain_alone():
+    """The survey and the surface gridded from it are CONTEXT: absent, the run
+    continues and the sheet says which side was missing."""
+    from trid3nt_server.workflows.runtime import data_rows
+
+    by_name = {d.name: d for d in data_rows(_template().DATA)}
+    assert by_name["survey"].is_context and by_name["surveyed_bed"].is_context
+    assert "terrain surface stands" in by_name["survey"].context_sentence
+    assert by_name["terrain"].is_context is False
+
+
+def test_the_carrier_is_one_reading_ranked_against_the_domain():
+    """The dilution the whole sag rests on is a NUMBER, so the row is the
+    observation slot: the nearest reporting site, the field it reports under, and
+    a stated number that stands over any record."""
+    from trid3nt_server.workflows.runtime import Ref, data_rows
+    from trid3nt_server.workflows.runtime.data import OBSERVATION
+
+    carrier = {d.name: d for d in data_rows(_template().DATA)}["carrier"]
+    assert carrier.role == OBSERVATION
+    assert carrier.producer.runner == "fetch_noaa_nwm_streamflow"
+    assert carrier.coercion["near"] == Ref("domain.centroid")
+    assert carrier.coercion["field"] == "streamflow_cms"
+    # The nearest-site choice is the SLOT's, so the fetch is not asked for it.
+    assert "near" not in carrier.producer.kwargs
+    assert carrier.is_context
+
+
+def test_the_outfall_seeds_the_domain_producer():
+    """The outfall names which stretch to model, and the wire carries no second
+    spelling of the same point."""
+    import inspect
+
+    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt_server.workflows.runtime import Ref, data_rows
+
+    domain = data_rows(_template().DATA)[0]
+    assert domain.producer.kwargs["seed_point"] == [Ref("outfall_coords.lon"),
+                                                    Ref("outfall_coords.lat")]
+    wire = set(inspect.signature(TOOL_REGISTRY["telemac_do_sag"].fn).parameters)
+    assert "outfall_coords" in wire
+    assert {"domain", "bed"} <= wire
+    assert not {"location", "bbox", "river_geometry_uri", "reach_length_km",
+                "outfall_lat", "outfall_lon"} & wire
+
+
+def test_the_workflow_owns_the_stages_and_the_template_states_what_differs():
+    steps = _steps()
+    assert [s.label for s in steps] == ["mesh", "channel", "outfall", "settled",
+                                        "sheet", "solve", "outputs"]
+    # The review is the door's VIEW of the sheet it just filled, so the run is
+    # held on the fill itself rather than in front of a step that has not run.
+    assert [s.label for s in steps if s.self_gating] == ["sheet"]
+    assert steps[-2].consequential
+    channel = steps[1]
+    assert channel.runner.endswith("assembler.settle_open_channel")
+    assert channel.kwargs["friction_law"] == 3
+    assert channel.kwargs["friction_coefficient"] == 33.0
+    # An unplaced outfall sits along the domain's OWN centerline companion, so
+    # the step is handed the domain rather than a line of its own.
+    outfall = steps[2]
+    assert outfall.runner.endswith("assembler.settle_release")
+    assert set(outfall.kwargs) == {"point", "mesh", "domain", "fraction", "label"}
+
+
+def test_the_mesh_is_built_over_the_domain_slot_at_the_runtimes_own_lever():
+    from trid3nt_server.workflows.mesh.tool import recipe_from_plan_value
+    from trid3nt_server.workflows.runtime import DataRef
+
+    recipe = recipe_from_plan_value(_steps()[0].kwargs["mesh"])
+    assert recipe.mesher == "om2d" and recipe.kind == "unstructured_tri"
+    assert recipe.extent == DataRef("domain")
+    assert recipe.resolution_m.name == "mesh_resolution_m"
+    # The rim is sized FIRST: no sizing function measures the domain's own edge.
+    assert recipe.ops[0].fn == "set_rim_size"
+    bed = next(op for op in recipe.ops if op.fn == "set_bed")
+    assert bed.kwargs == {"source": DataRef("bed")}
+    runs = next(op for op in recipe.ops if op.fn == "set_boundary_roles")
+    assert runs.kwargs == {"runs": DataRef("domain")}
+
+
+def test_the_settle_step_reads_the_files_the_deck_itself_names():
+    settle = _steps()[3]
+    assert settle.runner.endswith("assembler.settle_domain")
+    assert settle.kwargs["geometry"] == "domain.slf"
+    assert settle.kwargs["boundary"] == "domain.cli"
+    assert settle.kwargs["result"] == "r2d_domain.slf"
+    # A coupled run drives the module's own launcher whole, so it is asked for
+    # the carrier's result and nothing else.
+    assert list(_steps()[5].kwargs["results"]) == ["r2d_domain.slf"]
+
+
+def test_no_step_names_a_template_module_as_a_tool():
+    """The reach chain is dissolved: nothing this template runs is reached by
+    module path into the templates tree."""
+    assert not [s.runner for s in _steps() if ".templates." in s.runner]
 
 
 def test_a_wq_knob_outside_its_declared_bounds_refuses():
-    from trid3nt_server.workflows.runtime import GateRefusedError, resolve_params
+    from trid3nt_server.workflows.runtime import GateRefusedError
 
-    wf = _workflow()
-    for outside in ({"reach_length_km": 900.0}, {"k1_per_day": 0.0}):
+    for outside in ({"k1_per_day": 0.0}, {"effluent_bod_mgl": 0.0},
+                    {"sim_duration_s": 1.0}):
         with pytest.raises(GateRefusedError, match="outside the declared range"):
-            asyncio.run(resolve_params(wf.params, {"location": "x", **outside}))
-    p = asyncio.run(resolve_params(wf.params, {"location": "x",
-                                               "reach_length_km": 15.0,
-                                               "k1_per_day": 0.01}))
-    assert p.value_of("reach_length_km") == 15.0 and p.value_of("k1_per_day") == 0.01
-
-
-@pytest.mark.asyncio
-async def test_do_sag_requires_location_or_bbox():
-    from trid3nt_server.workflows.telemac.templates.do_sag.do_sag import telemac_do_sag
-    out = await telemac_do_sag()
-    assert isinstance(out, dict) and out["status"] == "error"
-    assert out["error_code"] == "TELEMAC_PARAMS_INCOMPLETE"
+            _resolve(**outside)
+    resolved = _resolve(k1_per_day=0.01, effluent_bod_mgl=0.1)
+    assert resolved.value_of("k1_per_day") == 0.01
+    assert resolved.value_of("effluent_bod_mgl") == 0.1
 
 
 # --- the outfall: absent DERIVES, malformed REFUSES -------------------------- #
@@ -136,39 +252,33 @@ async def test_do_sag_requires_location_or_bbox():
                                  [200.0, 10.0], ["a", "b"]])
 @pytest.mark.asyncio
 async def test_malformed_outfall_coords_refuse_they_never_fall_back(bad):
-    """A garbage discharge location must not silently become the reach seed.
+    """A garbage discharge location must not silently become the domain seed.
 
     A bare word is not garbage: it is a place name the geocoder is asked about."""
-    from trid3nt_server.workflows.telemac.templates.do_sag.do_sag import telemac_do_sag
-    out = await telemac_do_sag(location="Eel River near Scotia, California",
-                               outfall_coords=bad)
+    out = await _template().telemac_do_sag(outfall_coords=bad)
     assert isinstance(out, dict) and out["error_code"] == "TELEMAC_PARAMS_INVALID"
     assert "outfall_coords" in out["error_message"]
 
 
 def test_an_absent_outfall_leaves_a_derived_provenance_row():
     """The user has to see what the sag distance is measured FROM."""
-    from trid3nt_server.workflows.runtime import provenance_entries, resolve_params
+    from trid3nt_server.workflows.runtime import provenance_entries
 
-    wf = _workflow()
-    p = asyncio.run(resolve_params(wf.params, {"location": "Eel River near Scotia"}))
-    row = next(r for r in provenance_entries(p, wf.params)
+    row = next(r for r in provenance_entries(_resolve(), _workflow().params)
                if r.param == "outfall_coords")
     assert row.basis == "derived"
-    assert "mid-reach" in (row.note or "")
+    assert "centerline" in (row.note or "")
 
 
 def test_a_supplied_outfall_is_carried_as_a_user_row():
-    from trid3nt_server.workflows.runtime import provenance_entries, resolve_params
-
-    wf = _workflow()
     from trid3nt_server.inputs import Point
+    from trid3nt_server.workflows.runtime import provenance_entries
 
-    supplied, err = asyncio.run(wf._normalize({"location": "x",
-                                               "outfall_coords": ["-124.1", "40.5"]}))
-    assert err is None and supplied["outfall_coords"] == Point(-124.1, 40.5)
-    p = asyncio.run(resolve_params(wf.params, supplied))
-    row = next(r for r in provenance_entries(p, wf.params)
+    supplied, err = asyncio.run(
+        _workflow()._normalize({"outfall_coords": ["-122.6735", "45.5175"]}))
+    assert err is None and supplied["outfall_coords"] == Point(*_PORTLAND)
+    row = next(r for r in provenance_entries(_resolve(**supplied),
+                                             _workflow().params)
                if r.param == "outfall_coords")
     assert row.basis == "user"
 
@@ -179,219 +289,99 @@ def test_the_door_declares_the_run_mode_read_for_the_sheet_review():
     review of the filled sheet is silently lost."""
     from trid3nt_server.workflows.runtime import RunMode
 
-    wf = _workflow()
-    review = next(s for s in wf.plan.declared() if s.name == "sheet")
+    review = next(s for s in _steps() if s.name == "sheet")
     assert review.kwargs["input_mode"] is RunMode
     assert review.self_gating is True    # so no gate may be declared in front
 
 
-# --- the outputs list: the oxygen field, its animation, its profile ---------- #
-def test_the_outputs_list_charts_the_oxygen_down_the_centerline():
+# --- the outputs list: the oxygen profile along what the domain offers -------- #
+def test_the_outputs_list_charts_the_oxygen_along_the_domains_centerline():
     """The oxygen field is the module's to publish; what this template lists is
-    the read the user gives a line - the oxygen down the centerline as the
-    chart, with the closed form riding it as a reference."""
-    from trid3nt_server.workflows.telemac.templates.do_sag.do_sag import (
-        ANSWER,
-        CAPTIONS,
-        OUTPUTS,
-    )
+    the read the user gives a line - and the line is the CENTERLINE COMPANION the
+    domain's own producer measured beside its polygon."""
+    from trid3nt_server.workflows.runtime import Ref
 
-    assert [(p.kind, p.variable, p.t, p.publish) for p in OUTPUTS] == [
+    do_sag = _template()
+    assert [(p.kind, p.variable, p.t, p.publish) for p in do_sag.OUTPUTS] == [
         ("profile", "T2", -1, "chart")]
-    assert OUTPUTS[0].reference is overlay
-    assert CAPTIONS == {"T2": "dissolved oxygen"}
+    assert do_sag.OUTPUTS[0].reference is overlay
+    assert do_sag.OUTPUTS[0].along == Ref("domain.centerline")
+    assert do_sag.CAPTIONS == {"T2": "dissolved oxygen"}
     assert {name: (m.primitive.kind, m.primitive.variable, m.stat)
-            for name, m in ANSWER.items()} == {
+            for name, m in do_sag.ANSWER.items()} == {
         "do_min_mgl": ("profile", "T2", "min"),
         "do_below_standard": ("profile", "T2", "min"),
         "do_min_distance_m": ("profile", "T2", "x_min_m"),
         "bod_mixed_mgl": ("profile", "T3", "max"),
         "mean_velocity_mps": ("profile", "T2", "velocity_mps"),
         "mesh_size_m": ("mesh", None, "size_m")}
+    assert {m.primitive.along for m in do_sag.ANSWER.values()
+            if m.primitive.kind == "profile"} == {Ref("domain.centerline")}
     # the verdict is the minimum held below the standard the sheet declares
-    assert ANSWER["do_below_standard"].op == "below"
-    assert ANSWER["do_below_standard"].against.name == "do_standard_mgl"
+    assert do_sag.ANSWER["do_below_standard"].op == "below"
+    assert do_sag.ANSWER["do_below_standard"].against.name == "do_standard_mgl"
 
 
-# --- the REAL composition, driven through the declared plan ------------------ #
-def _stub_reach_pipeline(monkeypatch, order, seen, *, layer, review, tmp_path=None):
-    """Patch the shared trees at the modules the plan's runners resolve to."""
-    from trid3nt_server.gates import input_review as gate_mod
-    from trid3nt_server.workflows.mesh import step as mesh_step_mod
-    from trid3nt_server.workflows.telemac.templates import reach as reach_mod
-    from trid3nt_server.workflows.telemac import engine as engine_mod
-    from trid3nt_server.workflows.telemac.authoring import assembler as asm_mod
-    from trid3nt_server.workflows.telemac import workflow as door_mod
-
-    def _step(name, ret):
-        async def _inner(**kwargs):
-            order.append(name)
-            seen[name] = kwargs
-            return ret
-        return _inner
-
-    reach = {"bbox": (-124.2, 40.4, -124.0, 40.6), "name": "Eel", "slug": "eel"}
-    monkeypatch.setattr(reach_mod, "geocode_reach", _step("geocode", reach))
-    monkeypatch.setattr(reach_mod, "fetch_reach_flowline",
-                        _step("rivers", "s3://r/rivers.geojson"))
-    monkeypatch.setattr(reach_mod, "reach_seed",
-                        _step("seed", {"lon": -124.1, "lat": 40.5,
-                                       "source": "flowline"}))
-    monkeypatch.setattr(reach_mod, "resolve_carrier_discharge",
-                        _step("discharge", {"m3s": 2.0, "basis": "fetched",
-                                            "note": "NWM 2.0 m3/s"}))
-    monkeypatch.setattr(mesh_step_mod, "build_declared_mesh",
-                        _step("mesh", {"mesh_id": "M", "slf_uri": "s3://m/river.slf",
-                                       "topology_uri": "s3://m/mesh_topology.json",
-                                       "min_edge_m": 9.0}))
-    # The mesh session stands in, so its display face is a uri nothing wrote: what
-    # the mesh holds of the reach is measured in its own test module.
-    monkeypatch.setattr(reach_mod, "_meshed_fraction",
-                        lambda mesh, centerline: 1.0)
-    if tmp_path is not None:
-        install_reach_chain(monkeypatch, tmp_path, seen)
-    monkeypatch.setattr(asm_mod, "settle_release",
-                        _step("outfall", {"at": [0.0, 0.0], "name": None}))
-    monkeypatch.setattr(asm_mod, "settle_reach",
-                        _step("settled", {
-                            "name": "eel", "title": "eel REACH",
-                            "graphic_period": 200, "until_s": 3700.0,
-                            "time_step_s": 1.0, "depth_m": 1.2,
-                            "friction_law": 3, "friction_coefficient": 33.0,
-                            "mesh_inputs": [], "server_facts": {},
-                            "continue_from": None, "inflow_q_m3s": 2.0,
-                            "outflow_stage_m": 1.0,
-                            "liquid_boundary_order": ["inflow"],
-                            "liquid_boundary_prescribes": ["flowrate"]}))
-    monkeypatch.setattr(door_mod, "run_sheet", _step("run", {"run_id": "R"}))
-    monkeypatch.setattr(engine_mod, "solve_case", _step("solve", {"run_id": "R"}))
-    monkeypatch.setattr(door_mod, "publish_outputs", _step("outputs", layer))
-    monkeypatch.setattr(gate_mod, "gate_input_review", review)
+# --- the deck those stages fill ---------------------------------------------- #
+_SETTLED = {"title": "willamette DOMAIN", "time_step_s": 1.0,
+            "graphic_period": 200, "until_s": 3700.0,
+            "liquid_boundary_order": ["inflow", "outflow"],
+            "liquid_boundary_prescribes": ["flowrate", "elevation"]}
+_CHANNEL = {"depth_m": 1.2, "inflow_q_m3s": 2.0, "outflow_stage_m": 1.0}
 
 
-@pytest.mark.asyncio
-async def test_the_declared_plan_composes_the_shared_steps_in_order(monkeypatch,
-                                                                    tmp_path):
-    """The declared plan itself, not a stand-in.
+def _filled(**supplied):
+    from trid3nt_server.workflows.telemac.workflow import fill_sheet
 
-    Geocode, flowline, seed, discharge, corridor mesh, settle, review, run, solve,
-    outputs - with the outfall riding as the reach SEED, never as a dye release."""
-    monkeypatch.setenv("TRID3NT_DEV_PERSISTENCE_DIR", str(tmp_path / "persistence"))
-    from trid3nt_contracts.execution import AnswerLayerURI
-    from trid3nt_server.workflows.telemac.templates.do_sag.do_sag import telemac_do_sag
+    resolved = _resolve(**supplied)
+    return asyncio.run(fill_sheet(
+        steering=_template().STEERING,
+        produced={"settled": _SETTLED, "channel": _CHANNEL,
+                  "outfall": {"at": [0.0, 0.0], "name": None}},
+        params={row.name: resolved.value_of(row.name)
+                for row in _workflow().params},
+        slots={}, workflow="telemac_do_sag", title="", keywords={},
+        input_mode="auto"))
 
-    order: list[str] = []
-    seen: dict = {}
-    layer = AnswerLayerURI(
-        layer_id="t", name="Dissolved oxygen (mg/L) at t = 600 s (eel)",
-        layer_type="raster", uri="s3://b/k.tif", role="primary",
-        quantity="dissolved_oxygen",
-        answer={"do_min_mgl": 8.0, "do_min_distance_m": 100.0,
-                "bod_mixed_mgl": 20.0, "mean_velocity_mps": 0.4,
-                "mesh_size_m": 9.0})
 
-    async def _review(**kwargs):
-        order.append("review")
-        seen["review"] = kwargs
-        from trid3nt_server.gates.input_review import ReviewOutcome
-
-        return ReviewOutcome(proceed=True, entries=list(kwargs["entries"]),
-                             params=dict(kwargs["params"]))
-
-    _stub_reach_pipeline(monkeypatch, order, seen, layer=layer, review=_review,
-                         tmp_path=tmp_path)
-
-    out = await telemac_do_sag(
-        location="Eel River near Scotia, California", upstream_do_mgl=7.5,
-        outfall_coords=[-124.11, 40.51], input_mode="user_gated")
-
-    assert not isinstance(out, dict), out
-    assert order == ["geocode", "rivers", "seed", "discharge", "mesh", "outfall",
-                     "settled", "review", "run", "outputs"]
-    # the outfall pins the MESHED water body, so it rides as the reach seed the
-    # ONE centerline is navigated from - never as a dye release point
-    from trid3nt_server.inputs import Point
-
-    assert seen["seed"]["supplied"] == Point(-124.11, 40.51)
-    assert seen["outfall"]["point"] == Point(-124.11, 40.51)
-    assert seen["outfall"]["label"] == "Outfall"
-    # The body reads the declared upstream oxygen where it states its boundary
-    # and its initial state, and the user's own value reaches the deck.
-    body = seen["run"]["sheet"].body
-    assert body.ASSERTED["boundaries"]["tracers"][1].name == "upstream_do_mgl"
-    filled = dict(seen["run"]["sheet"].resolved())
-    assert filled["PRESCRIBED TRACERS VALUES"][1] == pytest.approx(7.5)
+def test_the_deck_opens_at_the_derived_depth_and_the_declared_oxygen():
+    """The run opens at the normal depth the OPEN CHANNEL derived, and the
+    oxygen the reach carries in is the user's number reaching both the initial
+    state and every liquid boundary."""
+    sheet = _filled(upstream_do_mgl=7.5)
+    filled = dict(sheet.resolved())
+    assert filled["INITIAL DEPTH"] == pytest.approx(1.2)
     assert filled["INITIAL VALUES OF TRACERS"] == [0.0, 7.5, 0.0, 0.0]
-    # The O2 process is the coupled body's own sheet: the rates and the
-    # saturation the template declared, and a constant reaeration formula.
-    o2 = dict(seen["run"]["sheet"].files["t2d_river.waqtel"]["slots"])
+    assert filled["PRESCRIBED TRACERS VALUES"][1] == pytest.approx(7.5)
+    assert filled["PRESCRIBED FLOWRATES"] == [pytest.approx(2.0), 0.0]
+    assert filled["PRESCRIBED ELEVATIONS"] == [0.0, pytest.approx(1.0)]
+    assert filled["LAW OF BOTTOM FRICTION"] == 3
+    assert filled["FRICTION COEFFICIENT"] == pytest.approx(33.0)
+
+
+def test_the_o2_process_is_the_coupled_bodys_own_sheet():
+    """The rates and the saturation the template declared, and a CONSTANT
+    reaeration formula - the one the closed form holds under."""
+    sheet = _filled()
+    o2 = dict(sheet.files["t2d_river.waqtel"]["slots"])
     assert (o2["CONSTANT_OF_DEGRADATION_OF_ORGANIC_LOAD_K1"],
             o2["K2_REAERATION_COEFFICIENT"], o2["FORMULA_FOR_COMPUTING_K2"],
-            o2["O2_SATURATION_DENSITY_OF_WATER__CS_"]) == (0.3, 0.9, 0,
-                                                         pytest.approx(9.022))
-    assert seen["review"]["mode"] == "user_gated"
-    # the door renders the SHEET it just filled, and holds there
-    assert seen["review"]["param_sheet"].workflow == "telemac_do_sag"
-
-
-@pytest.mark.asyncio
-async def test_a_cancelled_review_refuses_before_the_solve(monkeypatch, tmp_path):
-    monkeypatch.setenv("TRID3NT_DEV_PERSISTENCE_DIR", str(tmp_path / "persistence"))
-    from trid3nt_server.workflows.telemac.templates.do_sag.do_sag import telemac_do_sag
-    from trid3nt_server.workflows.telemac import engine as engine_mod
-
-    order: list[str] = []
-    seen: dict = {}
-
-    async def _cancelled(**_kw):
-        from trid3nt_server.gates.input_review import ReviewOutcome
-
-        return ReviewOutcome(proceed=False, entries=[], params={},
-                             cancelled=True, cancel_reason="user declined")
-
-    _stub_reach_pipeline(monkeypatch, order, seen, layer=None, review=_cancelled,
-                         tmp_path=tmp_path)
-
-    async def _solve_must_not_run(**_kw):
-        raise AssertionError("the solve ran past a cancelled review")
-
-    monkeypatch.setattr(engine_mod, "solve_case", _solve_must_not_run)
-
-    out = await telemac_do_sag(location="Eel River near Scotia, California",
-                               input_mode="user_gated")
-    assert isinstance(out, dict) and out["error_code"] == "USER_INPUT_CANCELLED"
-    assert "solve" not in order
-
-
-# --- mesh granularity: the MEASURED edge, never a re-derived one ------------- #
-def test_the_run_records_the_edge_the_accepted_mesh_was_measured_at():
-    """DS-3: the granularity a run is judged on is the built mesh's own minimum
-    edge, not the number that was asked for and not one re-derived from a channel
-    width nobody surveyed."""
-    from trid3nt_server.workflows.telemac.helpers.time_step import suggest_time_step_s
-
-    # The measured edge drives the CFL step; the asked edge only stands in until
-    # a mesh exists to measure.
-    measured = {"probes": {"edge_length_m": {"min": 8.0}}}
-    assert suggest_time_step_s(20.0, mesh=_Measured(measured)) == \
-        suggest_time_step_s(8.0)
-
-
-class _Measured:
-    def __init__(self, doc):
-        self.probes = doc["probes"]
+            o2["O2_SATURATION_DENSITY_OF_WATER__CS_"]) == (
+        0.3, 0.9, 0, pytest.approx(9.022, abs=1e-3))
+    # Nitrification, benthic demand and photosynthesis have no term in the
+    # closed form the answer is graded against, so this run zeroes all three.
+    assert (o2["CONSTANT_OF_NITRIFICATION_KINETIC_K4"], o2["BENTHIC_DEMAND"],
+            o2["PHOTOSYNTHESIS_P"], o2["VEGETAL_RESPIRATION_R"]) == (0.0,) * 4
 
 
 # --- the analytical overlay: anchored, and honest about absence ------------- #
 def _profile(x, values, *, velocity=0.5, units="mg/L") -> Profile:
-    import numpy as np
-
     return Profile(name="DISSOLVED O2", units=units, distance_m=np.asarray(x),
                    values=np.asarray(values), along="downstream distance",
                    measures={"min": min(values), "velocity_mps": velocity})
 
 
-def _load(x, values) -> tuple:
+def _load(x, values) -> dict:
     from trid3nt_server.workflows.telemac.modules import field
     from trid3nt_server.workflows.telemac.modules.outputs import profile
 
@@ -417,6 +407,7 @@ def test_the_overlay_is_anchored_at_the_modeled_mix_point():
     assert list(closed.x) == xs[2:] and len(closed.values) == 4
     assert closed.values[0] == pytest.approx(do[2])   # anchored ON the modeled state
     assert lines[0].values == [5.0, 5.0] and list(lines[1].values) == bod
+    assert all(isinstance(line, Line) for line in lines)
 
 
 @pytest.mark.parametrize("velocity,bod", [
@@ -431,11 +422,11 @@ def test_the_overlay_draws_no_closed_form_it_cannot_anchor(velocity, bod):
 
 
 def test_the_overlay_reproduces_the_closed_form_it_is_graded_against():
-    """Deterministic grading: fed a profile that IS sp_do_profile, the overlay
+    """Deterministic grading: fed a profile that IS the closed form, the overlay
     returns that same profile - so a stated deviation is the solve's, not the
     overlay's."""
     xs = [0.0, 500.0, 1000.0, 1500.0, 2000.0, 2500.0]
-    do_exact, _ = sp_do_profile(xs, 0.4, 9.0, 20.0, 0.5, 2.0, 6.0)
+    do_exact, _ = do_profile(xs, 0.4, 9.0, 20.0, 0.5, 2.0, 6.0)
     bod = [20.0] + [0.0] * 5          # the mix point is bin 0
     lines = overlay(_profile(xs, do_exact, velocity=0.4), _load(xs, bod), _PARAMS)
     assert lines[-1].values == pytest.approx(do_exact, abs=1e-9)

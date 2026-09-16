@@ -1,0 +1,288 @@
+"""The dye-release template: its PARAMS, its slots, and the plan the workflow owns.
+
+Exercised in ISOLATION - no network, no docker, no engine. Pinned: registration
+and metadata, the wire-arg normalization and its refusals, the declared bounds,
+the three engine-neutral slots the DATA body declares, and the stages the
+workflow class builds from them.
+"""
+
+from __future__ import annotations
+
+import asyncio
+from typing import Any
+
+import pytest
+
+_PORTLAND = (-122.6735, 45.5175)  # the Willamette at USGS 14211720
+
+
+def _workflow():
+    from trid3nt_server.tools import TOOL_REGISTRY
+
+    return TOOL_REGISTRY["telemac_dye_release"].fn.workflow
+
+
+def _norm(**kw):
+    base: dict[str, Any] = {
+        "release": None, "compute_class": None, "wind_direction_deg": None,
+        "input_mode": "auto",
+    }
+    base.update(kw)
+    return asyncio.run(_workflow()._normalize(base))
+
+
+def _resolve(**supplied):
+    """The sheet this invocation resolves, over every row the template declares."""
+    from trid3nt_server.workflows.runtime import resolve_params
+
+    return asyncio.run(resolve_params(_workflow().params, dict(supplied)))
+
+
+def _steps():
+    return list(_workflow().plan.declared())
+
+
+def test_registered_as_an_engine_template():
+    from trid3nt_server.tools import TOOL_REGISTRY
+
+    entry = TOOL_REGISTRY.get("telemac_dye_release")
+    assert entry is not None
+    assert entry.metadata.source_class == "workflow_dispatch"
+    assert entry.metadata.engine == "telemac"
+    assert entry.metadata.tier == "template"
+    assert entry.metadata.cacheable is False
+    assert entry.metadata.ttl_class == "live-no-cache"
+    assert TOOL_REGISTRY.get("run_telemac") is None
+
+
+def test_docstring_routing_view_fits_the_truncation_budget():
+    from trid3nt_server.workflows.telemac.templates.dye_release.dye_release import (
+        telemac_dye_release,
+    )
+
+    head = telemac_dye_release.routing_doc.split("\nReturns:")[0]
+    assert len(head) <= 1000
+    # The question class, not the body of water: nothing here says the answer is
+    # only a river's.
+    assert "river reach" not in head.lower().split("do not use")[0]
+
+
+@pytest.mark.parametrize("value", [
+    [-122.6735, 45.5175],
+    "45.5175,-122.6735",
+    {"coordinates": [-122.6735, 45.5175], "name": "outfall-a"},
+])
+def test_every_release_point_form_reaches_the_one_point_slot(value):
+    from trid3nt_server.inputs import Point
+
+    supplied, err = _norm(release=value)
+    assert err is None
+    got = supplied["release"]
+    assert isinstance(got, Point) and (got.lon, got.lat) == _PORTLAND
+
+
+def test_a_malformed_release_point_refuses_it_never_falls_back():
+    from trid3nt_server.workflows.telemac.templates.dye_release.dye_release import (
+        telemac_dye_release,
+    )
+
+    out = asyncio.run(telemac_dye_release(release=[200.0, 10.0]))
+    assert out["error_code"] == "TELEMAC_PARAMS_INVALID"
+    out = asyncio.run(telemac_dye_release(release={"name": "x"}))
+    assert out["error_code"] == "TELEMAC_PARAMS_INVALID"
+
+
+def test_an_invented_compute_class_refuses_at_the_ladder():
+    """A rung the dispatcher cannot serve is REFUSED, not quietly re-seated."""
+    supplied, err = _norm(compute_class="dye_spill")
+    assert supplied == {}
+    assert err["error_code"] == "COMPUTE_CLASS_UNKNOWN"
+    assert "dye_spill" in err["error_message"]
+
+
+def test_a_wind_bearing_wraps_rather_than_clamping():
+    supplied, _ = _norm(wind_direction_deg=370.0)
+    assert supplied["wind_direction_deg"] == pytest.approx(10.0)
+
+
+def test_declared_bounds_keep_the_source_inside_the_domain():
+    """spill_fraction=1.0 planted the source ON the outflow boundary and aborted
+    the solve; the declared bound refuses it rather than moving it."""
+    from trid3nt_server.workflows.runtime import GateRefusedError
+
+    for outside in ({"spill_fraction": 1.0}, {"spill_fraction": 0.0},
+                    {"sim_duration_s": 999999.0}, {"source_q_m3s": 100.0}):
+        with pytest.raises(GateRefusedError, match="outside the declared range"):
+            _resolve(**outside)
+    assert _resolve(spill_fraction=0.9).value_of("spill_fraction") == 0.9
+
+
+def test_a_non_numeric_bounded_arg_refuses_it_is_never_defaulted():
+    from trid3nt_server.workflows.runtime import GateRefusedError
+
+    with pytest.raises(GateRefusedError):
+        _resolve(source_q_m3s="a lot")
+
+
+def test_an_absent_carrier_discharge_leaves_a_derived_provenance_row():
+    """The user has to see that dilution is governed by a fetched value."""
+    from trid3nt_server.workflows.runtime import provenance_entries
+
+    row = next(r for r in provenance_entries(_resolve(), _workflow().params)
+               if r.param == "discharge_m3s")
+    assert row.basis == "derived"
+    assert "National Water Model" in (row.note or "")
+
+
+def test_the_params_are_the_questions_own_plus_the_runtimes_levers():
+    """No keyword twin, no domain twin, no lever restated: the dictionary
+    describes the roughness and the cadence, the slots describe the water, and
+    the runtime declares the granularity, the moment and the box."""
+    from trid3nt_server.workflows.runtime.levers import LEVER_NAMES
+    from trid3nt_server.workflows.telemac.templates.dye_release.declarations import (
+        PARAMS,
+    )
+    from trid3nt_server.workflows.runtime import param_rows
+
+    declared = {p.name for p in param_rows(PARAMS)}
+    assert not declared & {"friction_law", "friction_coefficient",
+                           "output_interval_min"}
+    assert not declared & {"location", "bbox", "river_geometry_uri",
+                           "reach_length_km", "mesh_resolution_m"}
+    assert not declared & set(LEVER_NAMES)
+    seated = [p.name for p in _workflow().params]
+    assert seated[-len(LEVER_NAMES):] == list(LEVER_NAMES)
+
+
+def test_the_data_body_is_the_three_slots_and_what_composes_them():
+    """The domain, the one bed the merge derive composed, and the rows that feed
+    it - each context row an absence the run continues under."""
+    from trid3nt_server.workflows.runtime import DataRef, Ref, data_rows
+    from trid3nt_server.workflows.telemac.templates.dye_release.dye_release import DATA
+
+    rows = data_rows(DATA)
+    assert [d.name for d in rows] == ["domain", "survey", "surveyed_bed",
+                                      "terrain", "bed", "carrier"]
+    by_name = {d.name: d for d in rows}
+    assert by_name["domain"].role == "domain"
+    assert by_name["domain"].geometry == "polygon"
+    assert by_name["domain"].producer.runner == "fetch_river_reach"
+    assert by_name["bed"].role == "bed"
+    assert by_name["bed"].producer.runner == "derive_merge_rasters"
+    # ONE bed: the survey where it measured, the terrain everywhere else.
+    assert by_name["bed"].producer.kwargs["primary"] == DataRef("surveyed_bed")
+    assert by_name["bed"].producer.kwargs["fallback"] == DataRef("terrain")
+    assert [d.name for d in rows if d.is_context] == ["survey", "surveyed_bed",
+                                                      "carrier"]
+    # ONE READING, not the published grid: the step that opens the channel
+    # refuses a record nobody chose a site from, so the flow arrives ingested.
+    carrier = by_name["carrier"]
+    assert carrier.role == "observation"
+    assert carrier.coercion["field"] == "streamflow_cms"
+    assert carrier.coercion["near"] == Ref("domain.centroid")
+    assert "terrain surface stands" in by_name["survey"].context_sentence
+    # No row here is superseded by a supplied artifact and none declares a
+    # ladder: the bed is a MERGE of two available layers, never a fallback chain.
+    assert all(d.producer.supplied_uri is None for d in rows)
+    assert all(d.producer.ladder_rungs == () for d in rows)
+
+
+def test_the_release_point_seeds_the_domain_producer():
+    """A release named up front also names which stretch to model, and the wire
+    carries no second spelling of the same point."""
+    import inspect
+
+    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt_server.workflows.runtime import Ref, data_rows
+    from trid3nt_server.workflows.telemac.templates.dye_release.dye_release import DATA
+
+    domain = data_rows(DATA)[0]
+    assert domain.producer.kwargs["seed_point"] == [Ref("release.lon"),
+                                                    Ref("release.lat")]
+    wire = set(inspect.signature(TOOL_REGISTRY["telemac_dye_release"].fn).parameters)
+    assert "release" in wire
+    assert not {"release_coords", "release_lat", "release_lon", "location",
+                "bbox", "reach_length_km", "river_geometry_uri"} & wire
+
+
+def test_the_domain_and_the_bed_reach_the_wire_as_the_slots_they_are():
+    """What the user hands in supersedes the producer the template preferred, so
+    a pond outline, a stated depth and a stated flow run this question with no
+    fetch at all. The rows between - the survey and the terrain the bed is merged
+    from - are the template's own working and stay off the wire."""
+    import inspect
+
+    from trid3nt_server.tools import TOOL_REGISTRY
+
+    wire = set(inspect.signature(TOOL_REGISTRY["telemac_dye_release"].fn).parameters)
+    assert {"domain", "bed", "carrier"} <= wire
+    assert {"survey", "terrain"}.isdisjoint(wire)
+
+
+def test_the_workflow_owns_the_stages_and_the_template_states_what_differs():
+    from trid3nt_server.workflows.runtime import Ref, validate_plan
+
+    wf = _workflow()
+    validate_plan(wf.plan, wf.params, wf.data)
+    steps = _steps()
+    assert [s.label for s in steps] == ["mesh", "channel", "source", "settled",
+                                        "sheet", "solve", "outputs"]
+    # The review is the door's VIEW of the sheet it just filled, so the run is
+    # held on the fill itself rather than in front of a step that has not run.
+    assert [s.label for s in steps if s.self_gating] == ["sheet"]
+    assert steps[-2].consequential
+    # The release reads the DOMAIN, not a centerline row of its own: an unplaced
+    # point sits its fraction along the companion the producer wrote beside the
+    # polygon, and a supplied one is snapped onto the same line.
+    source = next(s for s in steps if s.label == "source")
+    assert source.kwargs["domain"] == Ref("domain")
+    listed = steps[-1].kwargs["outputs"]
+    assert [(p.kind, p.variable, p.publish) for p in listed] == [
+        ("series", "T1", "chart")]
+    assert steps[-1].kwargs["captions"] == {"T1": "dye concentration"}
+    assert set(steps[-1].kwargs["answer"]) == {
+        "dye_cmax_mgl", "dye_peak_time_s", "plume_reach_m", "active_frames",
+        "mesh_size_m"}
+
+
+def test_the_mesh_is_built_over_the_domain_slot_at_the_runtimes_own_lever():
+    from trid3nt_server.workflows.mesh.tool import recipe_from_plan_value
+    from trid3nt_server.workflows.runtime import DataRef
+
+    recipe = recipe_from_plan_value(_steps()[0].kwargs["mesh"])
+    assert recipe.mesher == "om2d" and recipe.kind == "unstructured_tri"
+    assert recipe.extent == DataRef("domain")
+    assert recipe.resolution_m.name == "mesh_resolution_m"
+    bed = next(op for op in recipe.ops if op.fn == "set_bed")
+    assert bed.kwargs == {"source": DataRef("bed")}
+    # No runs row: the domain producer cut the polygon between two faces and
+    # hands them over with it.
+    runs = next(op for op in recipe.ops if op.fn == "set_boundary_roles")
+    assert runs.kwargs == {"runs": DataRef("domain")}
+
+
+def test_the_settle_step_reads_the_files_the_deck_itself_names():
+    settle = _steps()[3]
+    assert settle.runner.endswith("assembler.settle_domain")
+    assert settle.kwargs["geometry"] == "domain.slf"
+    assert settle.kwargs["boundary"] == "domain.cli"
+    assert settle.kwargs["result"] == "r2d_domain.slf"
+    assert settle.kwargs["sim_duration_s"].name == "sim_duration_s"
+    # The restart travels beside the result: a continuation reads it, and the
+    # deck's own RESULTS statement cannot name it.
+    assert list(_steps()[5].kwargs["results"]) == ["r2d_domain.slf",
+                                                   "restart_domain.slf"]
+
+
+def test_no_step_names_a_template_module_as_a_tool():
+    """The reach chain is dissolved: nothing this template runs is reached by
+    module path into the templates tree."""
+    assert not [s.runner for s in _steps()
+                if ".templates." in s.runner]
+
+
+def test_an_unknown_data_row_is_an_attribute_error_at_the_line_that_wrote_it():
+    from trid3nt_server.workflows.telemac.templates.dye_release.dye_release import DATA
+
+    with pytest.raises(AttributeError):
+        DATA.centreline

@@ -2,8 +2,9 @@
 
 Offline. What is proved here is the tracer bookkeeping the whole deck hangs off -
 five rows, in the engine's order, with the declared one adopted rather than
-doubled - the keywords the coupled body carries by their own names, and the
-refusal that keeps the second sorption site out of a five-row process."""
+doubled - the keywords the coupled body carries by their own names, the refusal
+that keeps the second sorption site out of a five-row process, and the three
+engine-neutral slots the converted template now stands on."""
 
 from __future__ import annotations
 
@@ -110,8 +111,8 @@ def test_the_rows_are_declared_data_on_the_wrapper():
 
 
 def _template():
-    from trid3nt_server.workflows.telemac.templates.river_micropollutant import (
-        river_micropollutant as template,
+    from trid3nt_server.workflows.telemac.templates.micropollutant_release import (
+        micropollutant_release as template,
     )
 
     return template
@@ -173,9 +174,8 @@ def test_the_answer_reads_all_three_phases_at_the_last_instant():
 def test_the_declared_params_and_the_plan_validate():
     from trid3nt_server.workflows.runtime import resolve_params, validate_plan
 
-    workflow = _template().telemac_river_micropollutant.workflow
-    resolved = asyncio.run(resolve_params(
-        workflow.params, {"location": "Eel River near Scotia, California"}))
+    workflow = _template().telemac_micropollutant_release.workflow
+    resolved = asyncio.run(resolve_params(workflow.params, {}))
     validate_plan(workflow.plan, workflow.params, workflow.data)
     # Nothing fetches suspended sediment, so the sorbent is a STATED condition.
     assert resolved.value_of("ambient_spm_mgl") == 30.0
@@ -185,16 +185,102 @@ def test_the_declared_params_and_the_plan_validate():
         assert resolved.value_of(name) is None
 
 
+def test_the_template_declares_none_of_the_runtime_s_own_rows():
+    """The domain, the bed, the granularity, the moment and the sizing class are
+    the runtime's; the deck's roughness and cadence are keywords the dictionary
+    describes. What is left is the question's own."""
+    from trid3nt_server.workflows.runtime.levers import LEVER_NAMES
+
+    workflow = _template().telemac_micropollutant_release.workflow
+    declared = [prm.name for prm in workflow.params]
+    assert declared[-len(LEVER_NAMES):] == list(LEVER_NAMES)
+    for gone in ("location", "bbox", "river_geometry_uri", "reach_length_km",
+                 "friction_law", "friction_coefficient", "output_interval_min"):
+        assert gone not in declared
+    steering = _template().STEERING
+    assert steering.LAW_OF_BOTTOM_FRICTION == 3
+    assert steering.FRICTION_COEFFICIENT == 33.0
+
+
+def test_the_three_slots_are_the_world_this_run_stands_on():
+    """One domain, one bed composed by the merge derive, and no runs row - so the
+    reach producer's own two faces are what the mesh prescribes on."""
+    from trid3nt_server.workflows.runtime.data import BED, DOMAIN, RUNS
+
+    data = {decl.name: decl for decl in
+            _template().telemac_micropollutant_release.workflow.data}
+    assert data["domain"].role == DOMAIN
+    assert data["domain"].producer.runner == "fetch_river_reach"
+    assert data["bed"].role == BED
+    assert data["bed"].producer.runner == "derive_merge_rasters"
+    assert not [d for d in data.values() if d.role == RUNS]
+    # Both slots reach the wire: what the user supplies supersedes the producer.
+    assert data["domain"].fills_from_user and data["bed"].fills_from_user
+
+
+def test_the_carrier_reaches_the_channel_as_ONE_reading_never_the_record():
+    """The step that opens the channel refuses a record nobody chose a site
+    from, so the flow is an OBSERVATION ranked against the domain's own point."""
+    from trid3nt_server.workflows.runtime import Ref
+    from trid3nt_server.workflows.runtime.data import OBSERVATION
+
+    data = {decl.name: decl for decl in
+            _template().telemac_micropollutant_release.workflow.data}
+    carrier = data["carrier"]
+    assert carrier.role == OBSERVATION and carrier.is_context
+    assert carrier.coercion["near"] == Ref("domain.centroid")
+    assert carrier.coercion["field"] == "streamflow_cms"
+
+
+def test_both_placed_points_carry_the_domain_they_are_placed_along():
+    """Neither point is required, and an unplaced one sits its fraction along
+    the domain's centerline companion - which only the domain carries."""
+    from trid3nt_server.workflows.runtime import Ref
+
+    plan = _template().telemac_micropollutant_release.workflow.plan
+    placed = [step for step in plan.declared()
+              if step.name in ("source", "monitoring")]
+    assert [step.kwargs["domain"] for step in placed] == [Ref("domain")] * 2
+
+
+def test_an_unsurveyed_domain_still_runs_on_the_terrain_alone():
+    """The survey and the surface gridded from it are CONTEXT: absent, the run
+    continues and the sheet says which side was missing."""
+    data = {decl.name: decl for decl in
+            _template().telemac_micropollutant_release.workflow.data}
+    assert data["survey"].is_context and data["surveyed_bed"].is_context
+    assert "terrain surface stands" in data["survey"].context_sentence
+    assert data["terrain"].is_context is False
+
+
+def test_the_mesh_the_workflow_builds_paints_the_one_bed_row():
+    from trid3nt_server.workflows.mesh.tool import recipe_from_plan_value
+    from trid3nt_server.workflows.runtime import DataRef
+
+    plan = _template().telemac_micropollutant_release.workflow.plan
+    recipe = recipe_from_plan_value(plan.steps[0].kwargs["mesh"])
+    assert recipe.extent == DataRef("domain")
+    assert recipe.resolution_m.name == "mesh_resolution_m"
+    bed = next(op for op in recipe.ops if op.fn == "set_bed")
+    assert bed.kwargs == {"source": DataRef("bed")}
+    runs = next(op for op in recipe.ops if op.fn == "set_boundary_roles")
+    assert runs.kwargs == {"runs": DataRef("domain")}
+
+
 def test_the_plan_reads_as_the_universal_stage_sequence():
-    plan = _template().telemac_river_micropollutant.workflow.plan
+    plan = _template().telemac_micropollutant_release.workflow.plan
+    assert [step.name for step in plan.declared()] == [
+        "mesh", "channel", "source", "monitoring", "settled", "sheet", "solve",
+        "outputs"]
     assert [step.stage for step in plan.declared() if step.stage] == [
-        "acquire", "acquire", "acquire", "mesh", "mesh",
-        "author", "author", "author", "author", "solve", "publish"]
-    assert [step.name for step in plan.declared()][-1] == "outputs"
+        "mesh", "author", "author", "author", "author", "author", "solve",
+        "publish"]
 
 
 @pytest.mark.asyncio
-async def test_the_template_requires_a_location_or_a_bbox():
-    out = await _template().telemac_river_micropollutant()
+async def test_auto_mode_refuses_the_sorbent_nobody_measured():
+    """Nothing fetches suspended sediment, so the labeled default is an invented
+    physics value and an auto run refuses it instead of solving on it."""
+    out = await _template().telemac_micropollutant_release()
     assert isinstance(out, dict) and out["status"] == "error"
-    assert out["error_code"] == "TELEMAC_PARAMS_INCOMPLETE"
+    assert out["error_code"] == "PHYSICS_INPUT_REQUIRED"

@@ -15,7 +15,7 @@ import pytest
 #: natural prompt each one is asked. The parked declarations are absent: a tool
 #: off the model surface has no invocation for a provenance row to describe.
 TELEMAC_TEMPLATES: tuple[tuple[str, str], ...] = (
-    ("telemac_river_dye", "the Wabash River near Lafayette, Indiana"),
+    ("telemac_dye_release", "the Wabash River near Lafayette, Indiana"),
     ("telemac_do_sag", "the Wabash River near Lafayette, Indiana"),
     ("telemac3d_stratified_flow", "Lake Mead"),
     ("artemis_harbor_agitation", "Marquette Harbor, Michigan"),
@@ -64,7 +64,7 @@ def test_a_supplied_compute_class_still_reads_as_the_users() -> None:
     from trid3nt_server.tools import TOOL_REGISTRY
     from trid3nt_server.workflows.runtime.resolver import resolve_params
 
-    workflow = TOOL_REGISTRY["telemac_river_dye"].fn.workflow
+    workflow = TOOL_REGISTRY["telemac_dye_release"].fn.workflow
     supplied, err = asyncio.run(workflow._normalize(
         {"location": "the Wabash River", "compute_class": "LARGE"}))
     assert err is None, err

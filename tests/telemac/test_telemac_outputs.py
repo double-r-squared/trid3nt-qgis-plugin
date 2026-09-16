@@ -395,17 +395,17 @@ def test_an_area_holding_no_node_refuses_rather_than_measuring_nothing(solved,
 
 def test_the_door_refuses_a_published_variable_with_no_caption():
     from trid3nt_server.workflows.runtime import PlanValidationError
-    from trid3nt_server.workflows.telemac.templates.river_dye.river_dye import (
-        telemac_river_dye,
+    from trid3nt_server.workflows.telemac.templates.dye_release.dye_release import (
+        telemac_dye_release,
     )
     from trid3nt_server.workflows.telemac.workflow import Door
 
-    door = telemac_river_dye.workflow.plan_decl
+    door = telemac_dye_release.workflow.plan_decl
     with pytest.raises(PlanValidationError, match="no caption"):
-        Door(**{**_fields(door), "captions": {}})(telemac_river_dye.workflow)
+        Door(**{**_fields(door), "captions": {}})(telemac_dye_release.workflow)
     with pytest.raises(PlanValidationError, match="no .layer"):
         Door(**{**_fields(door), "outputs": [max_over_time("T1")]})(
-            telemac_river_dye.workflow)
+            telemac_dye_release.workflow)
 
 
 def _fields(door: Any) -> dict[str, Any]:
@@ -471,7 +471,7 @@ def test_the_answer_rides_the_layer_and_the_skeleton_reads_it_there():
 
     from trid3nt_server.tools import TOOL_REGISTRY
 
-    workflow = TOOL_REGISTRY["telemac_river_dye"].fn.workflow
+    workflow = TOOL_REGISTRY["telemac_dye_release"].fn.workflow
     layer = AnswerLayerURI(layer_id="L", name="n", layer_type="raster", uri="s3://x",
                            answer={"dye_cmax_mgl": 4.5, "plume_reach_m": 120.0,
                                    "mesh_size_m": 9.0})
@@ -683,7 +683,7 @@ def test_a_primitive_names_the_coupled_module_whose_result_it_reads():
 def test_the_door_carries_a_primitive_s_point_and_line_beside_the_list(monkeypatch):
     """A read's point or line is a declared read the plan binds; it rides beside
     the list as anchors and the publish step rejoins it to its primitive."""
-    from trid3nt_server.workflows.runtime import DataRef
+    from trid3nt_server.workflows.runtime import Ref
     from trid3nt_server.workflows.telemac.templates.do_sag.do_sag import (
         telemac_do_sag,
     )
@@ -694,7 +694,7 @@ def test_the_door_carries_a_primitive_s_point_and_line_beside_the_list(monkeypat
     assert all(p.along is None and p.at is None for p in listed)
     anchors = step.kwargs["anchors"]
     assert len(anchors) == len(listed) + len(step.kwargs["answer"])
-    assert anchors[2]["along"] == DataRef("centerline")
+    assert anchors[2]["along"] == Ref("domain.centerline")
 
 
 def test_publish_outputs_rejoins_the_anchors_and_draws_the_reference_lines(

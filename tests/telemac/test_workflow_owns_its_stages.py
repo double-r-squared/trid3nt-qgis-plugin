@@ -166,6 +166,24 @@ def test_the_domain_and_the_bed_reach_the_wire_as_the_slots_they_are():
     assert {"domain", "bed", "runs"} <= supplied
 
 
+def test_a_row_the_deck_never_reads_is_demand_pulled_not_fetched():
+    """EVERY FETCHED ROW HAS A SUPPLIED TWIN, which only holds if supplying the
+    twin stops the fetch. The fill is handed the rows the deck NAMES; a row that
+    exists only to feed another row's producer is produced when that producer
+    runs, and never when the row it feeds was handed in."""
+    from trid3nt_server.tools import TOOL_REGISTRY
+
+    workflow = TOOL_REGISTRY["telemac_dye_release"].fn.workflow
+    rows = {row.name for row in workflow.data}
+    assert {"survey", "surveyed_bed", "terrain", "bed", "domain"} <= rows
+    sheet = next(step for step in workflow.plan.declared()
+                 if step.label == "sheet")
+    named = set(sheet.kwargs["produced"])
+    # the bed chain is read by the MESH's own set_bed op, never by the deck
+    assert not named & {"survey", "surveyed_bed", "terrain", "bed", "domain"}
+    assert "channel" in named and "settled" in named
+
+
 def workflow_wire(workflow: TelemacWorkflow) -> set[str]:
     return {decl.name for decl in workflow.data if decl.fills_from_user}
 

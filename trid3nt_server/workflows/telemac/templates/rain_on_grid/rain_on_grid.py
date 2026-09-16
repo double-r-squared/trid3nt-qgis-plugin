@@ -1,22 +1,27 @@
-"""Engine template ``telemac_rain_on_grid`` - a storm over a delineated watershed.
+"""Engine template ``telemac_rain_on_grid`` - a storm over the ground it falls on.
 
-APPLICABILITY (Godara, Bruland and Alfredsen 2024, Front. Water 6:1384205):
-single-storm flash floods in small steep catchments; infiltrated water is
-permanently lost, so there is no subsurface return flow and no baseflow."""
+TELEMAC-2D full shallow-water overland flow across the domain this run solves on
+- the catchment traced upslope of a pour point, a basin the user draws, a
+polygon they own - with SCS curve-number infiltration under it and one outlet
+below. APPLICABILITY (Godara, Bruland and Alfredsen 2024, Front. Water
+6:1384205): single-storm flash floods in small steep catchments; infiltrated
+water is permanently lost, so there is no subsurface return flow and no
+baseflow."""
 
 from __future__ import annotations
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
 
 from trid3nt_server.workflows.runtime import (
+    Data,
     ParamRef,
     Ref,
     Step,
     register_workflow,
+    tool,
 )
-from trid3nt_server.workflows.mesh.tool import mesh_op, tool
-from trid3nt_server.inputs import point_arg, user_input
-from trid3nt_server.inputs.aoi import AcquireAoi
+from trid3nt_server.workflows.mesh.tool import mesh_op
+from trid3nt_server.inputs import point_arg
 from trid3nt_server.workflows.telemac.modules import (
     T2D,
     extent,
@@ -27,10 +32,9 @@ from trid3nt_server.workflows.telemac.modules import (
     series,
 )
 from trid3nt_server.workflows.telemac.modules.telemac2d import (
-    Hyetograph,
     Infiltration,
-    Rain,
     Rating,
+    Storm,
 )
 from trid3nt_server.workflows.solver.compute_class import compute_class
 from trid3nt_server.workflows.telemac.templates.rain_on_grid.declarations import (
@@ -40,7 +44,6 @@ from trid3nt_server.workflows.telemac.templates.rain_on_grid.declarations import
     NLCD_NATIVE_RESOLUTION_M,
     PARAMS,
     PARAMS as P,
-    POUR_POINT_BUFFER_DEG,
 )
 from trid3nt_server.workflows.telemac.workflow import Door, TelemacWorkflow
 
@@ -48,17 +51,38 @@ __all__ = ["ANSWER", "CAPTIONS", "DATA", "MESH", "OUTPUTS", "PARAMS", "STEERING"
            "telemac_rain_on_grid"]
 
 _AUTHORING = "trid3nt_server.workflows.telemac.authoring"
-_TEMPLATE = "trid3nt_server.workflows.telemac.templates.rain_on_grid"
-_ENGINE = "trid3nt_server.workflows.telemac.engine"
 
-_CODE = "TELEMAC_ROG_PARAMS_INVALID"
-
-#: The names the run directory holds a catchment's files under - the deck's own
-#: GEOMETRY / BOUNDARY CONDITIONS / RESULTS statements.
+#: The names the run directory holds this run's files under - the deck's own
+#: GEOMETRY / BOUNDARY CONDITIONS / RESULTS statements, which the workflow reads
+#: back off the deck rather than being told them twice.
 _GEOMETRY = "rog.slf"
 _BOUNDARY = "rog.cli"
 _RESULT = "r2d_rog.slf"
-_STEERING_FILE = "t2d_rog.cas"
+
+#: Half-width of the square DEM window the basin is traced inside, and the
+#: ground the trace and the bed are both read at. The delineation REFUSES a basin
+#: the window clips, so this over-covers one headwater catchment upstream of its
+#: outlet; at this cell it stays well inside the tracer's own pre-network budget.
+_BASIN_WINDOW_KM = 15.0
+_TERRAIN_RESOLUTION_M = 10
+
+#: 3DEP is PINNED, not preferred, on both rows that read the ground: a DSM
+#: (Copernicus GLO-30 includes forest canopy) puts the bed on the tree tops and
+#: routes the water down the wrong slopes. A pinned source never switches, so an
+#: outage surfaces the fetcher's own typed error naming copernicus and the
+#: substitution is the user's to make - which is what a cross-dataset swap has to
+#: be. ONE GROUND: the basin is delineated on the same product at the same cell
+#: the nodes are painted from, so the routing and the elevations cannot describe
+#: two different grounds.
+_TERRAIN_SOURCE = "3dep"
+
+#: The channel network mesh refinement is sized by distance to, and how fast the
+#: edge may grow between that band and the hillslopes.
+_CHANNEL_NETWORK = "nhdplus_hr"
+_MESH_GRADE = 0.20
+
+#: The land-cover product the per-node curve numbers and Manning n are keyed to.
+_LANDCOVER = "nlcd_2021"
 
 #: Where the image BAKES the RAINDEF=3 copy of the engine's own
 #: ``runoff_scs_cn.f``. The installed source hardcodes ``RAINDEF=1`` as a
@@ -69,86 +93,85 @@ _STEERING_FILE = "t2d_rog.cas"
 RAINDEF3_USER_FORTRAN = "/opt/trid3nt/user_fortran/raindef3"
 
 
-#: What the run consumes from the world. Every world-read is declared here rather
-#: than performed in a step: the fetcher router's cache, ladders, provenance and
-#: typed refusals live once, and a producer is where that middleware is reached
-#: from. A mesh the caller SUPPLIES is not among them - that is the mesh router's
-#: question, asked once at the build door and never again inside a template.
 class DATA:
-    # 3DEP is PINNED, not preferred: a DSM (Copernicus GLO-30 includes forest
-    # canopy) puts the bed on the tree tops and routes the water down the wrong
-    # slopes. A pinned source never switches, so a 3DEP outage surfaces the
-    # fetcher's own typed error naming copernicus and the substitution is the
-    # user's to make - which is what a cross-dataset swap has to be.
-    dem = tool("fetch_dem", bbox=Ref("aoi.bbox"), source="3dep",
-               resolution_m=P.bed_dem_resolution_m, purpose="mesh bed")
-    rivers = tool("fetch_river_geometry", bbox=Ref("aoi.bbox"),
-                  source=P.river_source, purpose="river geometry")
-    landcover = tool("fetch_landcover", bbox=Ref("aoi.bbox"),
-                     dataset=P.landcover_dataset,
-                     resolution_m=NLCD_NATIVE_RESOLUTION_M,
-                     purpose="land cover")
-    rain = tool(f"{_TEMPLATE}.storm.resolve_rain_event",
-                window=P.rain_window,
-                intensity_mm_per_hr=P.design_storm_mm_per_hr,
-                storm_duration_hr=P.storm_duration_hr,
-                sim_duration_hr=P.sim_duration_hr)
-    # THE DOMAIN, narrowed by CHAINING tools rather than by a mesher that grew a
-    # delineation of its own. The basin is the terrain's answer at the outlet,
-    # off the same bare-earth bed the nodes are sampled from - one acquisition,
-    # so the delineation and the elevations cannot describe two different grounds.
-    # The snap window is the delineation tool's own declared default: how far a
-    # clicked outlet may move to reach the channel is a fact about the D8 grid,
-    # which is where it is declared.
-    basin = tool("delineate_watershed", pour_point=[Ref("aoi.lon"), Ref("aoi.lat")],
-                 dem_uri=Ref("dem.uri"))
+    """The two slots this run stands on, the network its mesh refines toward,
+    and the surface its infiltration is read off."""
+
+    #: THE CATCHMENT. A pour point names which basin is modelled at all: the
+    #: producer snaps it onto the traced channel, walks the D8 grid upslope and
+    #: returns the divide with the outlet run it drains through. A basin the user
+    #: draws or owns supersedes it and carries its own runs, or none.
+    domain = Data.domain(tool("fetch_watershed",
+                              pour_point=[Ref("pour_point.lon"),
+                                          Ref("pour_point.lat")],
+                              buffer_km=_BASIN_WINDOW_KM,
+                              resolution_m=_TERRAIN_RESOLUTION_M,
+                              dem_source=_TERRAIN_SOURCE))
+    #: THE GROUND the water runs over. A bare-earth DEM is the correct class for
+    #: an OVERLAND domain - there is no channel bottom under a hillslope - and a
+    #: pond or a surveyed basin fills the same slot with its own surface or a
+    #: stated depth.
+    bed = Data.bed(tool("fetch_dem", bbox=Ref("domain.bbox"),
+                        source=_TERRAIN_SOURCE,
+                        resolution_m=_TERRAIN_RESOLUTION_M,
+                        purpose="mesh bed"))
+    rivers = Data(tool("fetch_river_geometry", bbox=Ref("domain.bbox"),
+                       source=_CHANNEL_NETWORK, purpose="river geometry"))
+    landcover = Data(tool("fetch_landcover", bbox=Ref("domain.bbox"),
+                          dataset=_LANDCOVER,
+                          resolution_m=NLCD_NATIVE_RESOLUTION_M,
+                          purpose="land cover"))
+    #: THE MEASURED STORM, as the hourly analysis of record published it over
+    #: this catchment. CONTEXT: a window nobody stated, a basin outside CONUS or
+    #: hours the record has not published yet leave the row absent and the design
+    #: storm drives the run, which the sheet says in those words.
+    rain = Data(tool("fetch_aorc_precip", bbox=Ref("domain.bbox"),
+                     start_date=ParamRef("rain_start_date"),
+                     end_date=ParamRef("rain_end_date"))
+                ).context("no hourly rainfall record over this catchment for "
+                          "that window; the design storm drives the run")
 
 
-#: The MESH RECIPE, frozen at declaration and building nothing at import. The
-#: extent is the CHAIN's product - the delineated basin - so the mesher
-#: triangulates a domain another tool measured rather than delineating one
-#: itself, and the channel network the mesh is refined TOWARD is named by the
-#: sizing op rather than folded into the domain.
+#: The MESH RECIPE this question states for itself, because a catchment is
+#: triangulated as a BAND - fine in the channel band, coarsening onto the
+#: hillslopes - and the workflow's own recipe resolves one edge over the whole
+#: domain. Everything else is the workflow's: the rim at the size word, the
+#: library's clean chain, the bed, the runs.
 MESH = tool.build_mesh(
     mesher="om2d",
     kind="unstructured_tri",
-    extent=Ref("basin"),
-    resolution_m=P.mesh_min_edge_m,
+    extent=DATA.domain,
+    resolution_m=P.mesh_resolution_m,
     ops=[
-        # Fine along the channel network, coarsening away from it, then held to
-        # a gradation - oceanmesh's own sizing functions under its own names.
+        # Fine along the channel network, coarsening away from it - oceanmesh's
+        # own sizing functions under its own names. No sizing function the
+        # library has measures the domain's own outline, so the rim is locked at
+        # the size word between the sizing and the gradation, and the gradation
+        # then holds the whole lattice.
         mesh_op("distance_sizing_from_line_function", line_file=DATA.rivers,
-                rate=P.mesh_grade, max_edge_length=P.mesh_max_edge_m),
-        mesh_op("enforce_mesh_gradation", gradation=P.mesh_grade),
+                rate=_MESH_GRADE, max_edge_length=P.mesh_max_edge_m),
+        mesh_op("set_rim_size"),
+        mesh_op("enforce_mesh_gradation", gradation=_MESH_GRADE),
         mesh_op("delete_boundary_faces"),
         mesh_op("delete_faces_connected_to_one_face"),
         mesh_op("laplacian2"),
         mesh_op("make_mesh_boundaries_traversable"),
         mesh_op("fix_mesh", delete_unused=True),
-        # ONE GROUND. The basin above was delineated on the pit-filled surface of
-        # this same DEM, so the bed the nodes are painted from is conditioned by
-        # the same chain: an unfilled sink under an overland solve ponds to its
-        # rim and sets the published peak depth from a terrain artifact the
-        # routing does not believe in. A bare-earth DEM is the correct class for
-        # an OVERLAND domain - there is no channel bottom under a hillslope.
-        mesh_op("set_bed", source=DATA.dem, condition="pit_fill"),
-        # THE OUTLET: the delineation's own accumulation-SNAPPED pour point,
-        # which is the point on the basin's boundary the terrain drains through.
-        # Every boundary node within the mesh's own mean boundary edge of it
-        # takes the role, and the hydrograph is the flux across exactly those
-        # nodes.
-        #
-        # A subcritical outlet needs ONE fact from outside, and the RATING CURVE
-        # role is where it comes from: the quad prescribes a water LEVEL and the
-        # run derives the Z(Q) that level is read off - a normal depth over the
-        # section this face cuts, swept over the flow range the storm can
-        # produce - so the outlet rises and falls with the hydrograph. The
-        # all-KSORT free exit is not the alternative: it is well-posed only while
-        # the normal velocity leaves, and propin_telemac2d.f refuses an entering
-        # one by name.
-        mesh_op("set_boundary_roles",
-                rating_curve={"type": "Point",
-                              "coordinates": Ref("basin.snapped_pour_point")}),
+        # ONE GROUND, CONDITIONED THE SAME WAY. The basin was traced on the
+        # pit-filled surface of this product, so the bed the nodes are painted
+        # from is conditioned by the same pass: an unfilled sink under an
+        # overland solve ponds to its rim and sets the published peak depth from
+        # a terrain artifact the routing does not believe in.
+        mesh_op("set_bed", source=DATA.bed, condition="pit_fill"),
+        # THE OUTLET, as the run the producer measured: the stretch of the
+        # divide the terrain drains through, cut at the snapped pour point. Its
+        # type is rating_curve, so the quad prescribes a water LEVEL and the
+        # curve beside the deck is what that level is read off - the outlet
+        # rises and falls with the hydrograph instead of standing at the
+        # boundary file's zero. The all-KSORT free exit is not the alternative:
+        # it is well-posed only while the normal velocity leaves, and
+        # propin_telemac2d.f refuses an entering one by name.
+        mesh_op("set_boundary_roles", runs=DATA.domain),
     ],
 )
 
@@ -163,8 +186,11 @@ class STEERING(T2D):
 
     GRAPHIC_PRINTOUT_PERIOD = Ref("settled.graphic_period")
     LISTING_PRINTOUT_PERIOD = Ref("settled.graphic_period")
-    DURATION = Ref("settled.duration_s")
-    TIME_STEP = P.time_step_s
+    DURATION = P.sim_duration_s
+    # The step the catchment is solved at follows the edge the accepted mesh was
+    # BUILT at rather than the edge that was asked for: an overland sheet is
+    # CFL-tight, and the channel band is the finest ground in the domain.
+    TIME_STEP = Ref("settled.time_step_s")
 
     # The catchment starts DRY, which is the dictionary's own initial condition,
     # and it carries no tracer: the outlet hydrograph is the product.
@@ -187,16 +213,20 @@ class STEERING(T2D):
     RAINFALL_RUNOFF_MODEL = 1
 
     #: The storm at every wet node, and the engine's own SCS-CN infiltration
-    #: under it. A constant design rate stops when the rain window closes so the
-    #: catchment drains and the recession limb appears; a real hyetograph brings
-    #: its own dry tail and states no window.
-    rain = Rain(mm_per_day=Ref("settled.rain_mm_per_day"), tracers=0,
-                hours=Ref("settled.rain_hours"))
+    #: under it. A series the caller states wins; else the hours the record
+    #: published. Either drives the run through the block file with a dry tail
+    #: past the last simulated instant; with neither, the constant design rate
+    #: stops when its own window closes, so the catchment drains and the
+    #: recession limb appears.
+    storm = Storm(mm_per_hr=P.design_storm_mm_per_hr, hours=P.storm_duration_hr,
+                  until_s=Ref("settled.until_s"), series=P.rain_series_mm,
+                  record=Ref("rain.precip_mm"),
+                  tracers=0, fortran=RAINDEF3_USER_FORTRAN)
     #: The infiltration surface, read off the land cover at the accepted mesh's
     #: own nodes when the sheet is filled: the curve number the engine
     #: interpolates and the Manning zones it runs over, one table for both.
     infiltration = Infiltration(
-        mesh=Ref("mesh"), landcover=Ref("settled.landcover"),
+        mesh=Ref("mesh"), landcover=DATA.landcover,
         table=LANDCOVER_CN_MANNING, unmapped=LANDCOVER_UNMAPPED,
         uniform_cn=P.curve_number,
         steep_slope_correction=P.steep_slope_correction,
@@ -204,19 +234,16 @@ class STEERING(T2D):
         # The standard initial abstraction, Ia/S = 0.2, the ratio the curve
         # numbers in the table were published against.
         initial_abstraction=1)
-    hyetograph = Hyetograph(blocks=Ref("settled.hyetograph_blocks"),
-                            until_s=Ref("settled.duration_s"),
-                            fortran=RAINDEF3_USER_FORTRAN)
 
     #: The DERIVED stage-discharge curve the outlet holds. ``bord.f`` reads it at
     #: every prescribed-depth boundary whose entry is 1, interpolates the
     #: elevation against that boundary's own measured flux and relaxes the depth
     #: toward it, so the outlet level rises and falls with the storm instead of
     #: standing at the boundary file's zero.
-    rating = Rating(at_boundary=Ref("settled.rating.at_boundary"),
-                    of_boundaries=Ref("settled.rating.of_boundaries"),
-                    rows=Ref("settled.rating.rows"),
-                    note=Ref("settled.rating.note"))
+    rating = Rating(at_boundary=Ref("outlet.at_boundary"),
+                    of_boundaries=Ref("outlet.of_boundaries"),
+                    rows=Ref("outlet.rows"),
+                    note=Ref("outlet.note"))
 
 
 #: What this question PLACES: the flux the engine printed across the outlet the
@@ -251,12 +278,12 @@ ANSWER = {
 }
 
 
-#: DECLARED mesh_min_edge_m range. 5 m is the finest the catchment triangulator
+#: DECLARED mesh_resolution_m range. 5 m is the finest the catchment triangulator
 #: authors; below it a screening runoff field gains nothing the bed does not
 #: already blur. There is no fixed coarse ceiling here - ``mesh_max_edge_m`` is
 #: the hillslope end of the same band and is declared separately.
-_ROG_RES_SPEC = ResolutionSpec(
-    param="mesh_min_edge_m",
+_RES_SPEC = ResolutionSpec(
+    param="mesh_resolution_m",
     unit="m",
     min_value=5.0,
     native_hint="USGS 3DEP bare-earth bed (10 m) + the NHDPlus HR channel network",
@@ -268,45 +295,41 @@ _ROG_RES_SPEC = ResolutionSpec(
     ),
 )
 
-_ROG_METADATA = AtomicToolMetadata(
+_METADATA = AtomicToolMetadata(
     name="telemac_rain_on_grid",
     ttl_class="live-no-cache",
     source_class="workflow_dispatch",
     cacheable=False,
     engine="telemac",
     tier="template",
-    resolution_specs=(_ROG_RES_SPEC,),
+    resolution_specs=(_RES_SPEC,),
 )
 
 
 telemac_rain_on_grid = register_workflow(
-    TelemacWorkflow, _ROG_METADATA, PARAMS,
+    TelemacWorkflow, _METADATA, PARAMS,
     Door(
         steering=STEERING,
-        # The OUTLET first, then the analysis window around it: the basin's shape
-        # is the terrain's answer rather than the geocoder's, so a place bbox
-        # cannot bound it.
-        domain=(AcquireAoi(location=P.location, bbox=P.bbox, around=P.pour_point,
-                           half_deg=POUR_POINT_BUFFER_DEG,
-                           default_name="watershed",
-                           code_prefix="TELEMAC_ROG").named("aoi"),),
-        mesh=MESH, mesh_on="aoi",
-        settle=Step(runner=f"{_AUTHORING}.assembler.settle_catchment",
-                    stage="author",
-                    kwargs={"catchment": Ref("mesh"),
-                            "rain": DATA.rain,
-                            "landcover": DATA.landcover,
-                            "roughness": LANDCOVER_CN_MANNING,
-                            "unmapped": LANDCOVER_UNMAPPED,
-                            "time_step_s": ParamRef("time_step_s"),
-                            "mesh_resolution_m": ParamRef("mesh_min_edge_m"),
-                            "output_interval_min": ParamRef("output_interval_min")}),
-        results=(_RESULT,),
-        steering_file=_STEERING_FILE, prefix="telemac_rog",
-        dispatch=f"{_ENGINE}.solve_case", compute_class=P.compute_class,
+        mesh=MESH,
+        produce=(
+            # The stage-discharge curve the outlet holds: a normal depth over
+            # the section that face cuts, swept over the flow range this storm
+            # can produce, at the roughness the deck writes at those same nodes.
+            Step(runner=f"{_AUTHORING}.assembler.settle_outlet_rating",
+                 stage="author",
+                 kwargs={"mesh": Ref("mesh"), "landcover": DATA.landcover,
+                         "roughness": LANDCOVER_CN_MANNING,
+                         "unmapped": LANDCOVER_UNMAPPED,
+                         "mm_per_hr": P.design_storm_mm_per_hr,
+                         "series": P.rain_series_mm,
+                         "record": Ref("rain.precip_mm")}).named("outlet"),),
+        compute_class=ParamRef("compute_class"),
         outputs=OUTPUTS, captions=CAPTIONS, answer=ANSWER,
         review_title="Review the storm, the catchment and the mesh band"),
     data=DATA,
+    # The moment a scenario is read at is seated for every template that reads a
+    # dated source; this run reads none, so it is not asked for.
+    levers=("compute_class",),
     answer=tuple(ANSWER),
     # The overland sheet's deepest point and the hydrograph crest are magnitude
     # maxima that live inside single elements, and a coarse element averages both
@@ -321,8 +344,7 @@ telemac_rain_on_grid = register_workflow(
         # a point that arrived either way means the same outlet.
         point_arg("pour_point", tool="telemac_rain_on_grid",
                   prompt="Click the catchment outlet the runoff drains to",
-                  code=_CODE),
-        user_input.bbox("bbox", label="analysis AOI", code=_CODE),
+                  code="TELEMAC_ROG_PARAMS_INVALID"),
         compute_class(),
     ),
     doc=DOC,

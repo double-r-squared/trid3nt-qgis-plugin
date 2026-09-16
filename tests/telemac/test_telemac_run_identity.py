@@ -13,14 +13,14 @@ from trid3nt_server.workflows.telemac.modules.sheet import Origin
 
 #: Every registered TELEMAC template, and the module its steering body fills.
 TEMPLATE_MODULES: tuple[tuple[str, str], ...] = (
-    ("telemac_river_dye", "telemac2d"),
-    ("telemac_river_oil_spill", "telemac2d"),
-    ("telemac_river_scour", "telemac2d"),
-    ("telemac_river_sediment_plume", "telemac2d"),
+    ("telemac_dye_release", "telemac2d"),
+    ("telemac_oil_spill", "telemac2d"),
+    ("telemac_bed_scour", "telemac2d"),
+    ("telemac_sediment_plume", "telemac2d"),
     ("telemac_do_sag", "telemac2d"),
-    ("telemac_river_temperature", "telemac2d"),
-    ("telemac_river_micropollutant", "telemac2d"),
-    ("telemac_river_eutrophication", "telemac2d"),
+    ("telemac_water_temperature", "telemac2d"),
+    ("telemac_micropollutant_release", "telemac2d"),
+    ("telemac_eutrophication", "telemac2d"),
     ("telemac_rain_on_grid", "telemac2d"),
     ("telemac3d_stratified_flow", "telemac3d"),
     ("artemis_harbor_agitation", "artemis"),
@@ -87,13 +87,13 @@ def test_the_run_record_carries_the_engine_and_the_module_and_no_template():
 
     record = journal.build_record(
         run_id="RUN1", engine="telemac", module="telemac2d",
-        fill={"DURATION": "template: telemac_river_dye",
+        fill={"DURATION": "template: telemac_dye_release",
               "GEOMETRY FILE": "producer: mesh"},
         sheet=(), answer={}, provenance=(), result=None,
         wall_seconds=1.0, origin="session", executed=(), replayed=(), notes=())
     assert record["engine"] == "telemac" and record["module"] == "telemac2d"
     assert "template" not in record
-    assert "template: telemac_river_dye" in record["fill"].values()
+    assert "template: telemac_dye_release" in record["fill"].values()
 
 
 def test_the_module_and_the_fill_are_read_off_the_solve_step_the_workflow_declares():

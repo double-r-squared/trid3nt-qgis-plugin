@@ -5,17 +5,12 @@ from __future__ import annotations
 from trid3nt_server.workflows.runtime import Accepts, Param, doors
 
 __all__ = ["ACCEPTS", "DEFAULT_BARRIER_WIDTH_M", "DEFAULT_GRADE",
-           "DEFAULT_MIN_EDGE_M", "DEFAULT_OPEN_DEPTH_M", "DOC",
-           "HARBOR_HALF_DEG", "PARAMS"]
+           "DEFAULT_MIN_EDGE_M", "DEFAULT_OPEN_DEPTH_M", "DOC", "PARAMS"]
 
 #: What may be SUPPLIED to this template instead of built. A triangulation is
 #: the only mesh an elliptic mild-slope solve reads, and the boundary numbering
 #: the incident wave is stamped onto is the pair writer's own.
 ACCEPTS = Accepts(mesh=("unstructured_tri",))
-
-#: A harbour approach is small: ~0.06 deg (~6 km) around a geocoded quay is the
-#: open-water box the sheltering question lives in.
-HARBOR_HALF_DEG = 0.06
 
 #: The finest triangle edge, where the shoreline and the structure are. The
 #: coarsest defaults to ten times it inside the mesher and the gradation op limits
@@ -38,21 +33,12 @@ DEFAULT_OPEN_DEPTH_M: float = -12.0
 
 
 class PARAMS:
-    # -- the question ------------------------------------------------------- #
-    location = Param(
-        door=doors.QUESTION, optional=True, consequence="aoi",
-        desc="Harbour or coastal place near the AOI (e.g. 'Point Judith, Rhode "
-             "Island'), geocoded")
-    bbox = Param(
-        door=doors.USER, optional=True, consequence="aoi",
-        type=tuple[float, float, float, float] | list[float] | str,
-        desc="Explicit AOI (min_lon,min_lat,max_lon,max_lat) EPSG:4326 - the "
-             "harbour approach the domain is cut from the shoreline inside")
-
-    # -- the structure -----------------------------------------------------  #
-    # NOT a Param. The thing that shelters is a SUPPLIED SLOT (``DATA`` in
-    # agitation.py): the template says it accepts a polyline and says nothing
-    # about where one comes from, because naming a default source for somebody's
+    # -- the world ---------------------------------------------------------- #
+    # NOT params. The water body, what its nodes carry for elevation and the
+    # thing that shelters are SLOTS (``DATA`` in agitation.py): the domain is a
+    # polygon the user outlines or the coastline cut produces; the bed is a
+    # surface, a survey or a depth; and the structure is a polyline the template
+    # names no source for, because naming a default source for somebody's
     # breakwater is an opinion the question does not carry.
 
     # -- the incident wave -------------------------------------------------- #
@@ -115,25 +101,42 @@ class PARAMS:
 
 DOC = dict(
     summary="The WAVE AGITATION (Kd = Hs/H0) a declared structure leaves inside a "
-            "harbour.",
+            "harbour, a marina or any sheltered basin.",
     routing=(
         "THE tool for \"does this breakwater shelter the berths\", \"how much does "
         "swell amplify inside this harbour\", \"wave agitation / tranquility in the "
         "basin\", \"diffraction behind a breakwater\". ARTEMIS phase-RESOLVING "
-        "elliptic mild-slope (Berkhoff) over a mesh cut from the real shoreline "
-        "with the structure punched out conformally and the seaward stretches "
-        "designated open: diffraction fringes and standing waves are the answer, "
-        "not an average. THE STRUCTURE IS THE QUESTION and is REQUIRED: pass "
-        "`structure=` a breakwater layer (`fetch_osm_breakwaters`) or a drawn "
-        "line. Supply a harbour `location` or `bbox`."
+        "elliptic mild-slope (Berkhoff) over a mesh cut from the real shoreline, "
+        "the structure punched out conformally and the seaward stretches open: "
+        "diffraction fringes and standing waves are the answer, not an average. "
+        "THE STRUCTURE IS THE QUESTION and is REQUIRED: pass `structure=` a "
+        "breakwater layer (`fetch_osm_breakwaters`) or a drawn line. Give "
+        "`domain=` the water as an outline or a polygon layer, or `box=` a "
+        "rectangle the mapped coastline is cut into water for you."
     ),
     not_for=(
         "the offshore SEA STATE or fetch-limited wind-wave growth; free-field "
-        "agitation with no structure in it; coastal storm-tide flooding; a river "
-        "plume (`telemac_river_dye`)"
+        "agitation with no structure in it; coastal storm-tide flooding; a "
+        "tracer released into a river channel"
     ),
     params=PARAMS,
     controls=(
+        ("box",
+         "NOT needed when `domain=` is filled - this is the other way to say "
+         "where the water is. A rectangle over the harbour as a LAYER (a uri or "
+         "a file, not four numbers): the mapped coastline divides it and the "
+         "water it leaves IS the domain. A box a coastline way crosses without "
+         "closing divides nothing and refuses by name rather than meshing a "
+         "shape nobody cut."),
+        ("domain",
+         "A harbour approach, a marina basin, or any water a structure shelters. "
+         "Its own edge is the SHORELINE the mesh is sized against, so a rough "
+         "outline is enough; unfilled, the box above is cut instead."),
+        ("bed",
+         "That producer is NOAA CUDEM nearshore topobathy over the domain - the "
+         "surveyed sea floor the wave refracts over. Hand it your own survey "
+         "raster, a layer of soundings, or a depth in metres for a basin nobody "
+         "has sounded."),
         ("structure",
          "REQUIRED. The barrier the question is about, as a polyline LAYER (the "
          "uri or handle from fetch_osm_breakwaters, or any line layer the user "

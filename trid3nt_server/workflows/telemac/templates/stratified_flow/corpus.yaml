@@ -1,6 +1,8 @@
 # Template routing phrasings: the TELEMAC-3D vertical-structure engine answers
 # ONE question - what the column does over the depth a 2D model averages away -
 # and the same run carries both the thermocline and the wind-driven circulation.
+# The body of water is whatever the ask gives it: a lake, a reservoir, a pond, a
+# quarry pit, an outline drawn on the canvas.
 telemac3d_stratified_flow:
 - does this lake stratify and hold its thermocline or does it turn over
 - thermal stratification and vertical temperature structure in a deep lake
@@ -11,3 +13,7 @@ telemac3d_stratified_flow:
 - surface versus bottom current opposition in a wind-driven lake
 - run a TELEMAC-3D baroclinic stratified-flow field for this lake or basin
 - how strong is the density stratification in this water body
+- will this reservoir stratify over the summer at the depth it holds
+- does the pond I drew hold a thermocline or mix top to bottom
+- vertical temperature profile through a quarry pit or flooded mine at a stated depth
+- stratification in a water body I have a bathymetry survey for

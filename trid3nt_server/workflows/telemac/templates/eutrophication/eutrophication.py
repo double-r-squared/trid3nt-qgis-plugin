@@ -1,0 +1,318 @@
+"""Engine template ``telemac_eutrophication`` - what one pass through
+enriched water does to it.
+
+TELEMAC-2D coupled with WAQTEL's eutrophication process over the domain the run
+is given: phytoplankton growing on stated nitrate and phosphate under stated
+light and temperature, and the oxygen budget that growth, its decay and the
+nitrification of its ammonium drive. Moving water flushes in hours, so the
+answer is the LONGITUDINAL change between the water that enters and the water
+that leaves - a seasonal bloom in standing water is a different question."""
+
+from __future__ import annotations
+
+from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
+
+from trid3nt_server.workflows.runtime import (
+    Data, ParamRef, Ref, Step, register_workflow, tool,
+)
+from trid3nt_server.inputs import point_arg
+from trid3nt_server.inputs.instant import event_time
+from trid3nt_server.workflows.solver.compute_class import compute_class
+from trid3nt_server.workflows.telemac.modules import T2D, WAQTEL, mesh, series
+from trid3nt_server.workflows.telemac.modules.outputs import profile
+from trid3nt_server.workflows.telemac.modules.telemac2d import Boundaries
+from trid3nt_server.workflows.telemac.templates.eutrophication.declarations import (
+    ACCEPTS, DOC, PARAMS, PARAMS as P,
+)
+from trid3nt_server.workflows.telemac.workflow import Door, TelemacWorkflow
+
+__all__ = ["ANSWER", "CAPTIONS", "DATA", "OUTPUTS", "PARAMS", "STEERING",
+           "telemac_eutrophication"]
+
+_AUTHORING = "trid3nt_server.workflows.telemac.authoring"
+
+#: The roughness this deck is solved at, and the law it is read under: Strickler,
+#: the coefficient an unsurveyed channel is screened at. ONE number, stated once,
+#: because the outflow stage is derived as a normal depth AT this roughness and a
+#: stage derived at one number under a deck written at another is a level the run
+#: never sits at. A user who knows the channel sets the keyword by name.
+_FRICTION_LAW = 3
+_FRICTION_COEFFICIENT = 33.0
+
+#: How far back a channel survey still describes the bed the water is moving
+#: over. Older soundings are still the measurement a terrain surface is not.
+_SURVEY_SINCE = "2015-01-01"
+
+#: How far downstream of the seed the producer walks when this question has to
+#: find its own water. It is also the LENGTH OF ONE PASS - the water grows algae
+#: for as long as it takes to travel this far - so it is stated long enough for
+#: the drawdown to show. A user who wants another stretch supplies the domain
+#: polygon, which supersedes the producer.
+_REACH_LENGTH_KM = 12.0
+
+#: The line every longitudinal read is taken along: the centerline the domain's
+#: own producer measured, which rides on the domain artifact beside the polygon.
+#: A body of water with no centerline refuses this read by name rather than
+#: reading nothing - a lake is a different question.
+_CENTERLINE = Ref("domain.centerline")
+
+#: FORMULA FOR COMPUTING CS: the oxygen saturation follows the STATED water
+#: temperature rather than the engine's constant ceiling, so the water is judged
+#: against the ceiling it actually has.
+_SATURATION_FROM_TEMPERATURE = 1
+
+
+class DATA:
+    """The domain and the bed this run stands on, and the two readings it opens
+    on: the flow the inflow carries, and the temperature the stated one is read
+    against."""
+
+    # THE DOMAIN. A polygon the caller supplies or draws supersedes this;
+    # unfilled, the stretch the seed stands on is cut from the mapped water and
+    # arrives with its two end transects - which is where the inflow and the
+    # outflow are prescribed - and with its centerline, which is the line every
+    # longitudinal read below is taken along.
+    domain = Data.domain(tool("fetch_river_reach",
+                              seed_point=[Ref("seed.lon"), Ref("seed.lat")],
+                              distance_km=_REACH_LENGTH_KM))
+
+    # THE BED, as one source composed from two. ABSENT is legal on the survey:
+    # water with no federal navigation project has no published sounding, and
+    # the sheet says so.
+    survey = Data(tool("fetch_ehydro_surveys", bbox=Ref("domain.bbox"),
+                       since=_SURVEY_SINCE,
+                       purpose="channel survey soundings")
+                  ).context("no published channel survey over this domain; "
+                            "the terrain surface stands")
+    # A survey is SOUNDINGS; the surface between them is a derive, and it is
+    # context for the same reason its input is. The soundings carry several
+    # numbers, so the one the bed is gridded from is named rather than guessed.
+    surveyed_bed = Data(tool("derive_survey_surface", points=survey,
+                             value_field="depth_below_datum_m",
+                             resolution_m=ParamRef("mesh_resolution_m"))
+                        ).context("the survey held no soundings to grid; "
+                                  "the terrain surface stands")
+    # GLO-30 is asked for on its OWN 1-arcsecond lattice, so the raster the nodes
+    # are sampled from carries the source pixels rather than a resample of them.
+    terrain = Data(tool("fetch_copernicus_dem", bbox=Ref("domain.bbox"),
+                        px_per_deg=3600.0, purpose="bed elevation"))
+    # ONE bed: the survey where it measured, the terrain everywhere else. With
+    # the survey absent the terrain passes through unchanged and the merge says
+    # which side was missing.
+    bed = Data.bed(tool("derive_merge_rasters", primary=surveyed_bed,
+                        fallback=terrain))
+
+    # The carrier flow the inflow run prescribes, where the user stated none.
+    # ONE reading, not the grid the model published: which reach segment reports
+    # it is ranked against the domain's own interior point, and the step that
+    # opens the channel refuses a record nobody chose from.
+    carrier = Data.observation(
+        tool("fetch_noaa_nwm_streamflow", bbox=Ref("domain.bbox"),
+             valid_time=ParamRef("event_time")),
+        near=Ref("domain.centroid"), value_field="streamflow_cms",
+        measures="a streamflow", opens="the carrier flow opens at"
+    ).context("the National Water Model published no streamflow over this "
+              "domain at that cycle")
+
+    # WHAT THE WATER IS ACTUALLY THIS WARM AT, as the record rather than as the
+    # deck's number. ONE reading off the nearest sample site, so the run journal
+    # says which site took it and when the sample was a moment: the stated
+    # temperature is read against this and the keyword is never filled from it.
+    # Nothing sampled near this domain is an absence the sheet states.
+    water_temperature = Data.observation(
+        tool("fetch_usgs_water_quality", bbox=Ref("domain.bbox"),
+             characteristic="temperature",
+             purpose="observed water temperature"),
+        near=Ref("domain.centroid"), units="degC",
+        measures="a water temperature",
+        opens="the nearest sampled water temperature is"
+    ).context("no water-quality site near this domain reports a water "
+              "temperature; the stated value stands")
+
+
+class STEERING(T2D):
+    """The deck: water carrying nutrients, and the eight tracers the
+    eutrophication process runs on them."""
+
+    GEOMETRY_FILE = "domain.slf"
+    BOUNDARY_CONDITIONS_FILE = "domain.cli"
+    RESULTS_FILE = "r2d_domain.slf"
+    TITLE = Ref("settled.title")
+
+    # The step the domain is solved at follows the edge the accepted mesh was
+    # BUILT at rather than the edge that was asked for.
+    TIME_STEP = Ref("settled.time_step_s")
+    LISTING_PRINTOUT_PERIOD = 500
+
+    # The run OPENS at the derived normal depth, laid bed-parallel. Not a
+    # constant elevation at the outflow stage: the stage is derived only where
+    # the water FALLS, so a horizontal surface at the outlet's level leaves every
+    # node upstream of it dry - the flowrate face among them - and the engine
+    # refuses a discharge it has no water to impose.
+    INITIAL_CONDITIONS = "CONSTANT DEPTH"
+    INITIAL_DEPTH = Ref("channel.depth_m")
+
+    LAW_OF_BOTTOM_FRICTION = _FRICTION_LAW
+    FRICTION_COEFFICIENT = _FRICTION_COEFFICIENT
+
+    # The advection of momentum and depth, and the SUPG the domain is stable
+    # under. The tracers advect under the engine's own scheme and diffusivity.
+    TYPE_OF_ADVECTION = [1, 5]
+    SUPG_OPTION = [0, 0]
+    MASS_LUMPING_ON_H = 1.0
+    CONTINUITY_CORRECTION = True
+    SOLVER = 1
+    SOLVER_ACCURACY = 1.0e-6
+    MAXIMUM_NUMBER_OF_ITERATIONS_FOR_SOLVER = 500
+    IMPLICITATION_FOR_DEPTH = 0.6
+    IMPLICITATION_FOR_VELOCITY = 0.6
+
+    # The engine accounts for its own water volume and prints one flux per liquid
+    # boundary. That is the only honest check that the level prescribed at a
+    # boundary reached it: a server-side integration of the depth and velocity
+    # fields reads near zero at a prescribed-depth face, where the boundary values
+    # are clamped after the flux was computed.
+    MASS_BALANCE = True
+
+    GRAPHIC_PRINTOUT_PERIOD = Ref("settled.graphic_period")
+    DURATION = P.sim_duration_s
+
+    #: The carrier declares NO tracer of its own - nothing is released into this
+    #: water - so all eight belong to the coupled process and arrive in the order
+    #: the engine appends them: PHY, PO4, POR, NO3, NOR, NH4, organic load, O2.
+    INITIAL_VALUES_OF_TRACERS = [
+        P.initial_phyto_ug_l, P.initial_po4_mgl, P.initial_por_mgl,
+        P.initial_no3_mgl, P.initial_nor_mgl, P.initial_nh4_mgl,
+        P.initial_organic_load_mgl, P.initial_do_mgl]
+
+    #: The SAME water at every liquid boundary as the domain opens holding: the
+    #: question is what one pass does to water of this composition, so water that
+    #: arrives different from the water already in it would answer a step change.
+    boundaries = Boundaries(
+        measured={"liquid_boundary_order": Ref("settled.liquid_boundary_order"),
+                  "liquid_boundary_prescribes":
+                      Ref("settled.liquid_boundary_prescribes"),
+                  "inflow_q_m3s": Ref("channel.inflow_q_m3s"),
+                  "outflow_stage_m": Ref("channel.outflow_stage_m")},
+        tracers=[P.initial_phyto_ug_l, P.initial_po4_mgl, P.initial_por_mgl,
+                 P.initial_no3_mgl, P.initial_nor_mgl, P.initial_nh4_mgl,
+                 P.initial_organic_load_mgl, P.initial_do_mgl])
+
+    #: Growth on the stated nutrients under the stated light, and the oxygen the
+    #: growth and its decay drive. The light is stated because the engine reads
+    #: none from a forcing file - the atmospheric file's radiation columns feed
+    #: the thermal budget and nothing else - and water in the dark cannot bloom;
+    #: the temperature because the engine's own is a cold-water number.
+    #: Every rate and half-saturation constant is the engine's own.
+    coupling = [WAQTEL.eutrophication(
+        oxygen=True,
+        WATER_TEMPERATURE=P.water_temp_c,
+        SUNSHINE_FLUX_DENSITY_ON_WATER_SURFACE=P.sunshine_w_m2,
+        SECCHI_DEPTH=P.secchi_depth_m,
+        FORMULA_FOR_COMPUTING_CS=_SATURATION_FROM_TEMPERATURE)]
+
+
+#: What this question PLACES: the bloom and the oxygen ALONG THE WATER'S PATH,
+#: which is the longitudinal change the question asks about, and the two of them
+#: over time where the user is watching.
+OUTPUTS = [
+    profile("T1", along=_CENTERLINE).chart(),
+    profile("T8", along=_CENTERLINE).chart(),
+    series("T1", at=P.station).chart(),
+    series("T8", at=P.station).chart(),
+]
+CAPTIONS = {"T1": "phyto biomass", "T8": "dissolved o2"}
+
+#: The run's ANSWER: what one pass did to the water, as the numbers a reader has
+#: to be able to check. Every ratio is held to the stated concentration the water
+#: ENTERED at - the boundaries hold that value flat, so it is the inlet, and the
+#: profile's other end is what the pass made of it.
+ANSWER = {
+    "phyto_max_ug_l": profile("T1", along=_CENTERLINE).measure("max"),
+    "phyto_max_distance_m": profile("T1", along=_CENTERLINE).measure("x_max_m"),
+    "phyto_growth_ratio": profile("T1", along=_CENTERLINE).measure("max")
+                          .over(P.initial_phyto_ug_l),
+    "no3_remaining_ratio": profile("T4", along=_CENTERLINE).measure("min")
+                           .over(P.initial_no3_mgl),
+    "po4_remaining_ratio": profile("T2", along=_CENTERLINE).measure("min")
+                           .over(P.initial_po4_mgl),
+    "do_min_mgl": profile("T8", along=_CENTERLINE).measure("min"),
+    "do_min_distance_m": profile("T8", along=_CENTERLINE).measure("x_min_m"),
+    "do_below_standard": profile("T8", along=_CENTERLINE).measure("min")
+                         .below(P.do_standard_mgl),
+    "pass_velocity_mps": profile("T8", along=_CENTERLINE)
+                         .measure("velocity_mps"),
+    "mesh_size_m": mesh().measure("size_m"),
+}
+
+
+#: DECLARED mesh_resolution_m range. The solver floor is the finest edge the mesh
+#: builder authors regardless of ask; below it a screening run gains nothing.
+#: There is no fixed coarse ceiling - the node budget coarsens a long domain
+#: WITHIN this declaration, and the effective edge stays >= 2 cells across the
+#: channel.
+_RES_SPEC = ResolutionSpec(
+    param="mesh_resolution_m",
+    unit="m",
+    min_value=3.0,
+    native_hint="USACE eHydro channel soundings over Copernicus GLO-30 terrain; "
+                "edge sized from the domain's width",
+    constraint_source="solver",
+    rationale=(
+        "explicit target edge length; 3 m is the absolute finest the builder "
+        "authors, a long domain is further coarsened under the mesh node budget "
+        "(self-labeled); no fixed coarse ceiling. The edge also sets the CFL "
+        "step, and this question is watched over days rather than hours"
+    ),
+)
+
+_METADATA = AtomicToolMetadata(
+    name="telemac_eutrophication",
+    ttl_class="live-no-cache",
+    source_class="workflow_dispatch",
+    cacheable=False,
+    engine="telemac",
+    tier="template",
+    resolution_specs=(_RES_SPEC,),
+)
+
+telemac_eutrophication = register_workflow(
+    TelemacWorkflow, _METADATA,
+    PARAMS,
+    Door(
+        steering=STEERING,
+        # The open-channel hydraulics this question needs on top of the domain:
+        # the carrier flow the inflow prescribes, the level the outflow holds,
+        # and the depth the run opens at, all measured over the accepted mesh at
+        # the roughness the deck is written at.
+        produce=(Step(runner=f"{_AUTHORING}.assembler.settle_open_channel",
+                      stage="author",
+                      kwargs={"mesh": Ref("mesh"), "carrier": Ref("carrier"),
+                              "discharge_m3s": P.discharge_m3s,
+                              "friction_law": _FRICTION_LAW,
+                              "friction_coefficient": _FRICTION_COEFFICIENT}
+                      ).named("channel"),),
+        compute_class=ParamRef("compute_class"),
+        outputs=OUTPUTS, captions=CAPTIONS, answer=ANSWER,
+        review_title="Review the water this run is carrying"),
+    data=DATA,
+    accepts=ACCEPTS,
+    answer=tuple(ANSWER),
+    provenance=(("discharge_m3s", "discharge_note"),
+                ("mesh_resolution_m", "mesh_resolution_note")),
+    # WHERE the oxygen bottoms out and where the biomass stands highest are
+    # local-feature LOCATIONS and move with the element that resolves them.
+    sensitivity=(("do_min_distance_m", "location"),
+                 ("phyto_max_distance_m", "location")),
+    coerce=(
+        point_arg("seed", tool="telemac_eutrophication",
+                  prompt="Click on the channel where the modelled stretch starts",
+                  code="TELEMAC_PARAMS_INVALID"),
+        point_arg("station", tool="telemac_eutrophication",
+                  prompt="Click where you want the water watched",
+                  code="TELEMAC_PARAMS_INVALID"),
+        event_time(),
+        compute_class(),
+    ),
+    doc=DOC,
+)

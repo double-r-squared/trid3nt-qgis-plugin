@@ -1,16 +1,25 @@
 """Engine template ``telemac3d_stratified_flow`` - what a 2D model cannot see.
 
-TELEMAC-3D over sigma layers with active-tracer baroclinic coupling. The run has
-NO surface heat exchange, so a falling surface temperature is the warm layer
-MIXING DOWNWARD. The basin is CLOSED: it names no liquid boundary."""
+TELEMAC-3D over sigma layers with active-tracer baroclinic coupling, over the
+body of water this run solves on: a lake, a reservoir, a pond, a quarry pit, an
+outline drawn on the canvas. The run has NO surface heat exchange, so a falling
+surface temperature is the warm layer MIXING DOWNWARD. The domain is CLOSED: it
+names no liquid boundary."""
 
 from __future__ import annotations
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
 
-from trid3nt_server.workflows.runtime import ParamRef, Ref, Step, register_workflow
-from trid3nt_server.workflows.mesh.tool import mesh_op, tool
-from trid3nt_server.inputs.aoi import AcquireAoi, location_or_bbox
+from trid3nt_server.workflows.runtime import (
+    Data,
+    ParamRef,
+    Ref,
+    Step,
+    register_workflow,
+    tool,
+)
+from trid3nt_server.inputs import point_arg, user_input
+from trid3nt_server.inputs.instant import event_time
 from trid3nt_server.workflows.telemac.authoring.assembler import (
     BASIN_BOUNDARY,
     BASIN_GEOMETRY,
@@ -24,81 +33,67 @@ from trid3nt_server.workflows.telemac.modules.telemac3d import (
 )
 from trid3nt_server.workflows.solver.compute_class import compute_class
 from trid3nt_server.workflows.telemac.templates.stratified_flow.declarations import (
-    BASIN_HALF_DEG,
     DOC,
     PARAMS,
     PARAMS as P,
 )
 from trid3nt_server.workflows.telemac.workflow import Door, TelemacWorkflow
 
-__all__ = ["ANSWER", "CAPTIONS", "DATA", "MESH", "OUTPUTS", "PARAMS", "STEERING",
+__all__ = ["ANSWER", "CAPTIONS", "DATA", "OUTPUTS", "PARAMS", "STEERING",
            "telemac3d_stratified_flow"]
 
 _AUTHORING = "trid3nt_server.workflows.telemac.authoring"
-_TEMPLATE = "trid3nt_server.workflows.telemac.templates.stratified_flow"
-_ENGINE = "trid3nt_server.workflows.telemac.engine"
 
 #: What the run directory holds the run's files under - the deck's own 3D and 2D
 #: RESULT FILE statements. The 3D file is the answer; the 2D file is the depth
 #: average the question exists to refuse, written because the engine's own
 #: printouts read it.
-#: The two documents the free surface arithmetic is done between, named once so
-#: the rows that fetch them and the step that compares their stated datums cannot
-#: drift apart.
-_BED = "fetch_greatlakes_bathymetry"
-_GAUGE = "fetch_greatlakes_water_level"
-
 _RESULT_3D = "res3d_basin.slf"
 _RESULT_2D = "res2d_basin.slf"
-_STEERING_FILE = "t3d_basin.cas"
+
+#: How often the solver prints a listing, in its own steps. The dictionary's own
+#: value is 1, which prints every step of a run whose answer is its settled state.
+_LISTING_PERIOD = 100
+
+#: How far from a seed standing on LAND the mapped body it names may be. A person
+#: pointing at a shore means the water they are pointing at; past this the
+#: producer refuses naming what was nearest rather than solving another lake.
+_SEED_SEARCH_KM = 2.0
 
 
 class DATA:
-    """What the run consumes from the world: the water body, narrowed to the ask.
+    """The two slots this run stands on, and the level its free surface opens at.
 
-    The narrowing is the CHAIN's; the bed is fetched ONCE and read twice."""
+    Every row is superseded by what the caller hands in, so the same declaration
+    solves a charted Great Lake and a pond nobody has ever mapped."""
 
-    water = tool("fetch_nhd_waterbodies", bbox=Ref("aoi.bbox"))
-    mapped = tool("section", polygon=water, within=Ref("aoi.bbox"))
-    # THE SUBSTITUTION, declared where a reader can see it. A bed is TOPOBATHY
-    # and the coastal CUDEM composite does not reach the Great Lakes at all - its
-    # own ladder refuses there - so this row names the NCEI bathymetry the lakes
-    # are charted on instead. Same data class, different survey, one stated
-    # datum: the basin is solved on the lake's own low water datum, which is
-    # where its bed is counted from and where its free surface starts.
-    bed = tool(_BED, bbox=Ref("aoi.bbox"))
-    # THE DAY the level is read over, and the gauges that watched it. A lake has
-    # a level and the run opens at it: the free surface is an OBSERVATION here,
-    # the way the carrier discharge is on a river, and it is read on the SAME
-    # datum the bed above is charted on.
-    day = tool(f"{_TEMPLATE}.lake_level.reading_day",
-               event_time=ParamRef("event_time"))
-    level = tool(_GAUGE, bbox=Ref("aoi.bbox"), start_date=Ref("day.date"),
-                 end_date=Ref("day.date"))
-
-
-#: The MESH RECIPE, frozen at declaration and building nothing at import. The
-#: extent is the CHAIN's product - the mapped water body cut to the AOI and then
-#: to the part of it the bed survey actually sounded - so the mesher triangulates
-#: a domain another tool measured. No stretch of its boundary is designated
-#: liquid, which is what a lake IS.
-MESH = tool.build_mesh(
-    mesher="om2d",
-    kind="unstructured_tri",
-    extent=Ref("basin.domain"),
-    resolution_m=P.mesh_min_edge_m,
-    ops=[
-        mesh_op("set_rim_size"),
-        mesh_op("delete_boundary_faces"),
-        mesh_op("delete_faces_connected_to_one_face"),
-        mesh_op("laplacian2"),
-        mesh_op("make_mesh_boundaries_traversable"),
-        mesh_op("fix_mesh", delete_unused=True),
-        # The SAME survey the domain was clipped to, so no node can land where
-        # the clip said nothing was measured.
-        mesh_op("set_bed", source=DATA.bed),
-    ],
-)
+    # DRAWN, picked, or the caller's own layer. A body of water is a closed
+    # polygon whether a fetcher maps it or nobody ever has, so the producer here
+    # is a PREFERENCE: where the ask names or points at a mapped body, its
+    # outline is the domain, and anything the caller supplies supersedes it.
+    domain = Data.domain(tool("fetch_nhd_waterbody_at_point",
+                              seed_point=[Ref("seed.lon"), Ref("seed.lat")],
+                              search_distance_km=_SEED_SEARCH_KM))
+    # The charted floor of the water this question is most often asked about. A
+    # bed is TOPOBATHY and the coastal composites do not reach the Great Lakes
+    # at all, so this row names the survey the lakes are charted on. Anywhere
+    # else the caller fills the same slot - a survey raster, a layer of
+    # soundings, or the depth in metres the water body holds.
+    bed = Data.bed(tool("fetch_greatlakes_bathymetry", bbox=Ref("domain.bbox"),
+                        purpose="bed elevation"))
+    # THE LEVEL the free surface opens at, over the day the run is about: ONE
+    # measured value off the nearest gauge that watched this water, the way a
+    # river opens on a carrier discharge, read on the SAME datum the charted bed
+    # above is counted from. ABSENT is legal - a pond has no gauge, and a bed
+    # stated as a depth is counted from the free surface itself, so the column
+    # opens at the bed's own zero and the sheet says so.
+    level = Data.observation(
+        tool("fetch_greatlakes_water_level", bbox=Ref("domain.bbox"),
+             start_date=Ref("reading_day"), end_date=Ref("reading_day")),
+        near=Ref("domain.centroid"), measures="a water level",
+        opens="the free surface opens at"
+    ).context("no water-level gauge published a reading over this domain that "
+              "day; the free surface opens at the zero the bed is counted from")
 
 
 class STEERING(T3D):
@@ -110,12 +105,12 @@ class STEERING(T3D):
     RD_RESULT_FILE = _RESULT_3D
     ED_RESULT_FILE = _RESULT_2D
 
-    # The step the basin is solved at follows the edge the accepted mesh was
-    # BUILT at, through the CFL producer the river part's step comes from.
+    # The step the water is solved at follows the edge the accepted mesh was
+    # BUILT at, through the CFL producer every domain's step comes from.
     TIME_STEP = Ref("settled.time_step_s")
-    NUMBER_OF_TIME_STEPS = Ref("settled.n_steps")
+    DURATION = P.sim_duration_s
     GRAPHIC_PRINTOUT_PERIOD = Ref("settled.graphic_period")
-    LISTING_PRINTOUT_PERIOD = Ref("settled.listing_period")
+    LISTING_PRINTOUT_PERIOD = _LISTING_PERIOD
     MASS_BALANCE = True
 
     NUMBER_OF_HORIZONTAL_LEVELS = P.levels
@@ -123,11 +118,11 @@ class STEERING(T3D):
     # basin-scale column buys nothing the hydrostatic one does not already show.
     NON_HYDROSTATIC_VERSION = False
 
-    # THE FREE SURFACE the basin opens at: flat, and at the level the gauge
-    # OBSERVED. The dictionary's own zero is the chart datum, which is where the
-    # bed is counted from - a lake left there has no water on its rim at all.
+    # THE FREE SURFACE the run opens at: flat, and at the level the gauge
+    # OBSERVED. The dictionary's own zero is the chart datum, which is where a
+    # charted bed is counted from - water left there has none on its rim at all.
     INITIAL_CONDITIONS = "CONSTANT ELEVATION"
-    INITIAL_ELEVATION = Ref("lake_level.elevation_m")
+    INITIAL_ELEVATION = Ref("basin.surface_m")
 
     # The ONE pair that cannot be left to the dictionary, measured both ways:
     # LECDON stops on "THE LAW OF BOTTOM FRICTION 5 IS ASKED / GIVE THE
@@ -139,8 +134,8 @@ class STEERING(T3D):
     LAW_OF_BOTTOM_FRICTION = 5
     FRICTION_COEFFICIENT_FOR_THE_BOTTOM = 0.01
 
-    # The diffusivities a screening basin is stable under. The dictionary's own
-    # 1e-6 is molecular; a basin at these scales is not solved at molecular
+    # The diffusivities a screening column is stable under. The dictionary's own
+    # 1e-6 is molecular; water at these scales is not solved at molecular
     # viscosity, and the tracer pair has no default at all.
     COEFFICIENT_FOR_HORIZONTAL_DIFFUSION_OF_VELOCITIES = 1.0e-4
     COEFFICIENT_FOR_VERTICAL_DIFFUSION_OF_VELOCITIES = 1.0e-4
@@ -160,32 +155,33 @@ class STEERING(T3D):
     AVERAGE_WATER_DENSITY = 1000.0
 
     # HOW THE TEMPERATURE IS CARRIED, and the ceiling that carriage runs under.
-    # The dictionary gives the tracer scheme no default, so an unstated deck
-    # advects the temperature by whatever the VELOCITIES are advected by; the
-    # ceiling governs schemes 13 and 14 and nothing else, so the two are one
-    # statement and are written together.
-    SCHEME_FOR_ADVECTION_OF_TRACERS = [P.tracer_advection_scheme]
-    MAXIMUM_NUMBER_OF_ITERATIONS_FOR_ADVECTION_SCHEMES = \
-        P.max_advection_iterations
+    # The dictionary gives the 3D tracer scheme no default, so an unstated deck
+    # advects the temperature by whatever the VELOCITIES are advected by (5, MURD
+    # PSI), which stops a baroclinic solve at its first tracer step. 13 is the
+    # NERD family the telemac2d dictionary defaults this same keyword to and the
+    # only one monotone across a thermocline; the ceiling governs schemes 13 and
+    # 14 and nothing else, so the two are one statement and are written together.
+    SCHEME_FOR_ADVECTION_OF_TRACERS = [13]
+    MAXIMUM_NUMBER_OF_ITERATIONS_FOR_ADVECTION_SCHEMES = 50
     # AND UNDER WHICH OPTION. The dictionary's own default here is 4, implicit,
     # and murd3d_pos answers to 1 and 2 only - an unstated deck loops "UNKNOWN
     # OPTION IN MURD3D_POS: 4 / OPTION 1 TAKEN INSTEAD" and stops on the explicit
     # option's own iteration ceiling. 2 is the predictor-corrector, which the
     # dictionary's own help calls the faster of the two where there are no tidal
-    # flats; a closed lake basin has none.
+    # flats; a closed body has none.
     SCHEME_OPTION_FOR_ADVECTION_OF_TRACERS = [2]
 
-    #: The sigma grid that can HOLD the declared thermocline over this basin's own
-    #: deepest column, or the refusal that says how many planes would.
+    #: The sigma grid that can HOLD the declared thermocline over this domain's
+    #: own deepest column, or the refusal that says how many planes would.
     vertical_grid = VerticalGrid(levels=P.levels,
-                                 max_depth_m=Ref("settled.max_depth_m"),
+                                 max_depth_m=Ref("basin.max_depth_m"),
                                  thermocline_depth_m=P.thermocline_depth_m)
     #: The column the run OPENS with, written into the engine's own initial-
     #: condition hook because no keyword carries a non-uniform tracer field.
-    column = Column(levels=P.levels, max_depth_m=Ref("settled.max_depth_m"),
+    column = Column(levels=P.levels, max_depth_m=Ref("basin.max_depth_m"),
                     thermocline_depth_m=P.thermocline_depth_m,
                     warm_c=P.warm_temp_c, cold_c=P.cold_temp_c,
-                    surface_m=Ref("lake_level.elevation_m"))
+                    surface_m=Ref("basin.surface_m"))
     #: The wind that decides whether the difference survives. A calm run states
     #: nothing here at all.
     wind = Wind(speed_mps=P.wind_speed_mps, from_deg=P.wind_direction_deg)
@@ -228,7 +224,7 @@ _TELEMAC3D_RES_SPEC = ResolutionSpec(
     constraint_source="solver",
     rationale=(
         "the VERTICAL degree of freedom, which is the one a 2D model has none of. "
-        "Too few planes for the declared thermocline over this basin's deepest "
+        "Too few planes for the declared thermocline over this domain's deepest "
         "column is a refusal naming the count that would work, not a coarser "
         "answer"
     ),
@@ -249,48 +245,30 @@ telemac3d_stratified_flow = register_workflow(
     TelemacWorkflow, _TELEMAC3D_METADATA, PARAMS,
     Door(
         steering=STEERING,
-        domain=(AcquireAoi(location=P.location, bbox=P.bbox,
-                           half_deg=BASIN_HALF_DEG, default_name="basin",
-                           code_prefix="TELEMAC3D").named("aoi"),
-                # The water the question is about, and then the part of it the
-                # bed survey sounded: a water domain has no bed where nobody
-                # measured, and meshing the difference builds elements the bed
-                # painter has nothing to give.
-                Step(runner=f"{_TEMPLATE}.measured_bed.basin_on_measured_bed",
-                     stage="prep",
-                     kwargs={"polygon": DATA.mapped,
-                             "bed": DATA.bed}).named("basin"),),
-        mesh=MESH, mesh_on="aoi",
-        # The level the basin opens at, before it is settled: the deepest column
-        # the vertical grid is planned over is the free surface MINUS the bed,
-        # so the surface has to exist before the mesh is measured.
-        produce=(Step(runner=f"{_TEMPLATE}.lake_level.observed_lake_level",
-                      stage="acquire",
-                      kwargs={"level": DATA.level, "gauge_source": _GAUGE,
-                              "bed_source": _BED,
-                              "aoi": Ref("aoi")}).named("lake_level"),),
-        settle=Step(runner=f"{_AUTHORING}.assembler.settle_basin",
-                    stage="author",
-                    kwargs={"mesh": Ref("mesh"),
-                            "warm_temp_c": ParamRef("warm_temp_c"),
-                            "cold_temp_c": ParamRef("cold_temp_c"),
-                            "thermocline_depth_m": ParamRef("thermocline_depth_m"),
-                            "wind_speed_mps": ParamRef("wind_speed_mps"),
-                            "wind_direction_deg": ParamRef("wind_direction_deg"),
-                            "levels": ParamRef("levels"),
-                            "sim_duration_hours": ParamRef("sim_duration_hours"),
-                            "time_step_s": ParamRef("time_step_s"),
-                            "output_interval_min": ParamRef("output_interval_min"),
-                            "surface_m": Ref("lake_level.elevation_m"),
-                            "domain_note": Ref("basin.note"),
-                            "level_note": Ref("lake_level.note"),
-                            "result_basename": _RESULT_3D}),
+        produce=(
+            # The calendar day the gauge record is asked over, from the moment
+            # the scenario is read at.
+            Step(runner="trid3nt_server.inputs.instant.day", stage="prep",
+                 kwargs={"value": ParamRef("event_time")}).named("reading_day"),
+            # The COLUMN this question needs on top of the domain: the free
+            # surface the run opens at, and the deepest column the accepted mesh
+            # carries under it. Both on the one datum the level and the bed state
+            # between them, which is what makes their difference a depth; an
+            # ungauged body opens at the zero its bed is counted from.
+            Step(runner=f"{_AUTHORING}.assembler.settle_basin", stage="author",
+                 kwargs={"mesh": Ref("mesh"),
+                         "level": Ref("level")}).named("basin"),
+        ),
+        # The two files the run has to write. Stated rather than read off the
+        # deck because a 3D deck names them 3D RESULT FILE and 2D RESULT FILE,
+        # and what the workflow reads back is the single RESULTS FILE a 2D deck
+        # states.
         results=(_RESULT_3D, _RESULT_2D),
         # A 3D SELAFIN is no mesh format MDAL opens: the module writes the 2D
         # result over the same mesh, and a plane of a 3D field is drawn onto it.
         display_file=_RESULT_2D,
-        steering_file=_STEERING_FILE, prefix="telemac3d",
-        dispatch=f"{_ENGINE}.solve_case", compute_class=P.compute_class,
+        prefix="telemac3d",
+        compute_class=ParamRef("compute_class"),
         outputs=OUTPUTS, captions=CAPTIONS, answer=ANSWER,
         review_title="Review the prescribed column, the wind and the mesh"),
     data=DATA,
@@ -298,19 +276,20 @@ telemac3d_stratified_flow = register_workflow(
     provenance=(("wind_speed_mps", "wind_note"),
                 ("thermocline_depth_m", "thermocline_note"),
                 ("levels", "levels_note"),
-                ("time_step_s", "time_step_note"),
-                ("tracer_advection_scheme", "tracer_advection_note"),
-                ("max_advection_iterations", "advection_ceiling_note")),
+                ("mesh_resolution_m", "mesh_resolution_note")),
     # The surface-to-bottom temperature difference is read ACROSS the thermocline,
     # the steepest gradient in the domain, and the planes are what resolve it.
     sensitivity=(("stratification_dt", "gradient"),
                  ("u_surface", "gradient"),
                  ("u_bottom", "gradient")),
     coerce=(
-        location_or_bbox("telemac3d_stratified_flow", code_prefix="TELEMAC3D",
-                         hint="For a natural prompt like 'does <lake> stratify', "
-                              "pass location='<lake>'."),
+        point_arg("seed", tool="telemac3d_stratified_flow",
+                  prompt="Click on the body of water this run solves over",
+                  code="TELEMAC3D_PARAMS_INVALID"),
+        event_time(),
         compute_class(),
+        user_input.bearing("wind_direction_deg", label="wind_direction_deg",
+                           code="TELEMAC3D_PARAMS_INVALID"),
     ),
     doc=DOC,
 )
