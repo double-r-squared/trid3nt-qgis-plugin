@@ -561,50 +561,85 @@ Two slot kinds, distinguished per slot:
   to catch. It belongs to the emission-unification wave, where the seam is
   the single home; a test pins that the skeleton emits no input layer of
   its own.
-- **abstract slots** - must-fill: physics and the EngineOps four. The
-  library refuses to register a template that leaves one empty.
+- **abstract slots** - must-fill: the physics and the four operations the
+  engine facade realizes. The library refuses to register a template that
+  leaves one empty.
 
-### EngineOps - the engine facade
+### The slots a run stands on
 
-Each engine subtype realizes exactly four abstract operations, and
-nothing else:
+A solved run stands on three ENGINE-NEUTRAL slots, declared in the DATA
+body and filled the same way whatever fills them - a drawing on the
+canvas, the user's own layer or file, or the producer the question
+prefers. Nothing downstream branches on which:
 
-    acquire_domain(**slots) -> tuple[Step, ...]
-    author(*, mesh, physics, forcing) -> Step
-    solve(**slots) -> Step
-    read(run, **slots) -> Step
+    domain = Data.domain(tool("fetch_river_reach", ...))   the closed polygon
+    runs   = Data.runs()                                   the edge's named stretches
+    bed    = Data.bed(tool("derive_merge_rasters", ...))   what every node carries
 
-Every operation takes its shaping values as SLOTS, so a template names
-what it means (`ops.acquire_domain(location=p.location, bbox=p.bbox,
-rivers=d.rivers, ...)`) rather than matching a positional `(p, d)`
-convention. `mesh` is the template's frozen `tool.build_mesh(...)` RECIPE;
-the facade translates its agnostic params into the deck keywords its
-writers know them by, and an OP is a call on a mesh library that shapes the
-mesh and means nothing to a deck.
+`domain` is geometry only. `runs` are zero or more stretches of its edge,
+each two points and a type (wall by default, inflow, outflow, open,
+rating_curve); a closed body states none, and a domain whose producer
+measured the edge it cut carries them without the template restating
+them. `bed` takes ONE source - a DEM, a bathymetry or survey raster, a
+layer of soundings, or a depth in metres below the free surface - and a
+measurement covering part of the domain is laid over the wider surface
+under it by the merge derive, in the DATA body, before the slot sees it.
 
-The four are MUST-FILL: `register_workflow` refuses a facade that leaves
-one unrealized, with a typed authoring error at import. A hole that
-reached run time would surface as a bare `NotImplementedError` flattened
-into `<ENGINE>_INTERNAL_ERROR` - a declaration defect wearing a runtime
-failure's clothes.
+Three more slots are declared the same way where a question needs them:
+`line`, the polyline a placed read is measured along (unfilled, the
+domain's producer answers with the centerline it measured); `extent`,
+the lon/lat rectangle a question is asked inside, which is not a domain
+because it has no shoreline; and `observation`, one measured value the
+run opens on, read by the roles `level` and `discharge` where the
+workflow has to know which row is which.
+
+Every slot's ingestion runs wherever the value entered
+(`inputs/slots.py`), so what fills it reads the same afterwards.
+
+### The vertical frame
+
+A run counts every elevation it ingests from ONE zero: a runtime lever
+beside the compute class, NAVD88 by default, never a row a question
+writes. The two ELEVATION slots - the bed under the water and the level
+over it - are read on it. A source published on another frame reaches it
+through a shift somebody MEASURED, in one order: the shift the source
+publishes about itself (a district's project datum is stated in the
+survey's own metadata, and no service serves it), else the offset the
+RUNTIME declares as a DATA row on `fetch_vertical_datum_offset`, at the
+point the run stands on, between the two frames. That row is journaled
+like any other producer, and the slot's coercion reads its value and
+fetches nothing. A pair nothing measures refuses naming BOTH frames
+rather than laying one over the other.
+
+### The context row
+
+A producer row whose absence is legal is declared `.context("...")`: the
+source is asked, an empty answer continues the run, and the sheet carries
+the sentence the template stated about what is not there. A load-bearing
+row stays hard and refuses. A producer-less slot says absence with
+`.optional()` instead, because there is no source to have been empty.
+
+### The producer ladder
+
+A row's producer may declare the rungs it degrades through -
+`.ladder(tool(...))` - and the interpreter walks them in order, records
+which one answered, and writes a note on the RUN saying so when a
+different DATASET answered the artifact. An exhausted ladder reports the
+last rung's own typed failure; it never degrades to a silent absence.
+
+### The engine facade
+
+A `Workflow` subclass is the engine's facade: it declares its solver
+family and the name of its solve step, and it OWNS the stages a run of
+that engine walks. A template states only what differs - its domain
+producer, its keywords, its placed reads, its answer - and hands them
+over as one declaration the facade builds the plan from.
 
 Facades are named by engine ONLY: `TelemacWorkflow`, `SwmmWorkflow`,
-`ModflowWorkflow`. Domain qualifiers are BANNED ("Reach" rejected: it
-welded a domain assumption into the engine facade; domain shape arrives
-through `acquire_domain` slots and shared domain steps). The facade's
-value is stability: the interface never changes while the mechanisms
-behind it - meshers, writers, readers - evolve freely.
-
-### Three step tiers
-
-- `workflows/shared/` - DOMAIN steps, engine-agnostic: forcing
-  resolvers, reach acquisition, soil/roughness derivations, temporal
-  transforms. Unifies the world's interface. (Filed by what varies,
-  never by who happened to build it - forcing is not TELEMAC mechanism.)
-- `workflows/<engine>/steps/` - ENGINE steps: deck writers, meshers,
-  result readers. The engine's weirdness ends here, normalized behind
-  EngineOps.
-- the skeleton + library plane both tiers plug into.
+`ModflowWorkflow`. Domain qualifiers are BANNED: a domain is a slot, so
+its shape is never a property of the engine that solves over it. The
+facade's value is stability - the interface holds while the mechanisms
+behind it, meshers and writers and readers, evolve freely.
 
 ### Slots are value objects
 

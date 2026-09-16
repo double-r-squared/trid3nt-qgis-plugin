@@ -158,16 +158,35 @@ def test_a_sheetless_warning_takes_the_back_compatible_path():
 
 
 # --- every driven run starts from the top ------------------------------------ #
+
+#: A registered template to drive against: the args a driver states are checked
+#: against a real declaration, so the check cannot pass on a name nothing has.
+_TOOL = "telemac_eutrophication"
 def test_a_driven_run_passes_restart_clean_by_default():
     """A driver run after a code change exists to exercise the code that changed,
     so any ledger under the same invocation key belongs to an older build."""
-    ev = _drive(LiveRun(tool="t", args={"location": "X"}, case_title="c"))
+    ev = _drive(LiveRun(tool=_TOOL, args={"carrier": 2.0}, case_title="c"))
     assert ev.args["restart_clean"] is True
 
 
 def test_a_declaration_that_names_the_flag_itself_still_wins():
-    ev = _drive(LiveRun(tool="t", args={"restart_clean": False}, case_title="c"))
+    ev = _drive(LiveRun(tool=_TOOL, args={"restart_clean": False}, case_title="c"))
     assert ev.args["restart_clean"] is False
+
+
+def test_a_driven_arg_the_tool_reads_nowhere_refuses_rather_than_being_swallowed():
+    """The generated signature absorbs a MODEL's over-supply; a driver is not a
+    model, and a value it states that lands nowhere is a row that fetches instead."""
+    with pytest.raises(LiveRunError, match="reads none of"):
+        _drive(LiveRun(tool=_TOOL, args={"reach_length_km": 6.0}, case_title="c"))
+
+
+def test_a_constant_door_param_is_read_even_though_the_signature_omits_it():
+    """A CONSTANT-door param is off the model-facing schema and still seats
+    through the sheet, so the DECLARATION is what says an arg lands somewhere."""
+    ev = _drive(LiveRun(tool=_TOOL, args={"vertical_frame": "EGM2008"},
+                        case_title="c"))
+    assert ev.args["vertical_frame"] == "EGM2008"
 
 
 def _drive(run: LiveRun) -> RunEvidence:
