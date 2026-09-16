@@ -4,7 +4,9 @@ A measurement that covers part of the ground and a wider surface that covers the
 rest are ONE surface only where a caller says which wins: the primary paints
 every cell it measured and the fallback paints what is left. Both are read onto
 one grid at the finer of the two cell sizes, and a sidecar records which input
-painted each cell so a reader can see where the measurement stopped.
+painted each cell so a reader can see where the measurement stopped. Two
+surfaces counting from DIFFERENT zeros meet only through an offset somebody
+measured, named on the call.
 """
 
 from __future__ import annotations
@@ -19,7 +21,7 @@ from trid3nt_contracts.execution import LayerURI
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.inputs.geometry import source_uri
-from trid3nt_server.inputs.vertical_datum import DatumError, one_datum
+from trid3nt_server.inputs.vertical_datum import Alignment, DatumError, align
 from trid3nt_server.tools import register_tool
 from trid3nt_server.tools.derive._hydrology_common import _stage_uri_local, write_cog
 
@@ -33,8 +35,9 @@ class MergeRastersError(RuntimeError):
     """A typed refusal: ``MERGE_RASTERS_NO_SOURCE``, ``MERGE_RASTERS_UNREADABLE``,
     ``MERGE_RASTERS_DISJOINT`` (the two cover no common ground),
     ``MERGE_RASTERS_RESOLUTION_INVALID`` (a grid past the cell ceiling),
-    ``MERGE_RASTERS_WRITE_FAILED``. ``MERGE_RASTERS_DATUM_UNSTATED`` and
-    ``MERGE_RASTERS_DATUMS_DIFFER`` come from the datum check itself.
+    ``MERGE_RASTERS_WRITE_FAILED``. ``MERGE_RASTERS_DATUM_UNSTATED``,
+    ``MERGE_RASTERS_DATUMS_DIFFER`` and ``MERGE_RASTERS_DATUM_OFFSET_MISMATCH``
+    come from the datum check itself.
     """
 
     error_code: str
@@ -56,6 +59,9 @@ class MergedRasterLayerURI(LayerURI):
     #: band, so the surface stays the one-band grid every sampler reads.
     provenance_uri: str | None = None
     resolution_m: float = 0.0
+    #: The metres added to the primary to read it on the fallback's datum, which
+    #: is zero wherever the two already counted from one zero.
+    datum_shift_m: float = 0.0
     notes: list[str] = []
 
 
@@ -159,6 +165,7 @@ def derive_merge_rasters(
     primary: Any = None,
     fallback: Any = None,
     resolution_m: float | None = None,
+    offset: Any = None,
     *,
     _output_dir: str | None = None,
     # absorb LLM-invented kwargs.
@@ -176,10 +183,12 @@ def derive_merge_rasters(
     measured; the fallback paints what is left; a cell neither measured stays
     nodata. Which input won at each cell is written as a sidecar raster.
 
-    The two must count their elevations from the SAME vertical datum. A survey
-    stating a local project datum and a DEM stating NAVD88 are metres apart on
-    the same ground, so the merge refuses by name rather than producing a
-    surface with a step in it.
+    The two must count their elevations from the SAME vertical datum, or the
+    call must state the OFFSET between them. A survey on a local project datum
+    and a DEM on NAVD88 are metres apart on the same ground, so without that
+    offset the merge refuses by name rather than producing a surface with a step
+    in it; with it, the primary is read on the fallback's datum and the result
+    says by how much and on whose authority.
 
     Do NOT use for: mosaicking tiles of ONE dataset (a fetcher's own ladder does
     that), or resampling a single raster.
@@ -191,10 +200,14 @@ def derive_merge_rasters(
         fallback: the surface that carries the rest.
         resolution_m: OPTIONAL cell size in metres for the merged grid. Default
             is the finer of the two inputs', which keeps the measurement.
+        offset: the measured offset between the two vertical datums, needed only
+            when they differ. The record ``fetch_vertical_datum_offset``
+            returns, or a survey's own published shift as metres. Positive means
+            the primary's zero sits ABOVE the fallback's.
 
     Returns the merged surface as a single-band raster, with the share each
-    input painted, the sidecar naming which won at each cell, and the datum both
-    count from.
+    input painted, the sidecar naming which won at each cell, the datum both end
+    up on and the shift that got them there.
     """
     import numpy as np
     import rasterio
@@ -207,7 +220,7 @@ def derive_merge_rasters(
     if primary is None or fallback is None:
         return _passed_through(primary if fallback is None else fallback,
                                absent="primary" if primary is None else "fallback")
-    datum = _one_datum(primary, fallback)
+    aligned = _aligned(primary, fallback, offset)
 
     seed = uuid.uuid4().hex[:8]
     with tempfile.TemporaryDirectory(prefix="merge-rasters-") as tmpdir:
@@ -217,6 +230,8 @@ def derive_merge_rasters(
             crs, width, height, transform, cell = _grid([a, b], resolution_m)
             over = _onto(a, crs, width, height, transform)
             below = _onto(b, crs, width, height, transform)
+        if aligned.shift_m:
+            over = over + np.float32(aligned.shift_m)
         won = np.where(np.isfinite(over), 0,
                        np.where(np.isfinite(below), 1, _PROVENANCE_NODATA))
         merged = np.where(np.isfinite(over), over, below).astype("float32")
@@ -246,8 +261,8 @@ def derive_merge_rasters(
         "and left as nodata.",
         f"Merged at {metres:.3g} m in {crs}, the finer of the two inputs unless "
         "a resolution was stated.",
-        f"Both surfaces count from {datum}." if datum else
-        "Neither surface states what it counts from.",
+        f"Both surfaces count from {aligned.datum}." if not aligned.shift_m else
+        f"The primary was {aligned.note}.",
     ]
     logger.info("derive_merge_rasters: %dx%d at %.3g m, primary %.1f%% / "
                 "fallback %.1f%%", width, height, metres, top_share * 100.0,
@@ -263,7 +278,8 @@ def derive_merge_rasters(
         quantity=getattr(primary, "quantity", None)
         or getattr(fallback, "quantity", None),
         bbox=_bbox_4326(crs, transform, width, height),
-        vertical_datum=datum or None,
+        vertical_datum=aligned.datum or None,
+        datum_shift_m=round(float(aligned.shift_m), 4),
         primary_fraction=round(top_share, 4),
         fallback_fraction=round(under_share, 4),
         provenance_uri=provenance,
@@ -283,10 +299,13 @@ def _bbox_4326(crs: Any, transform: Any, width: int, height: int
         crs, "EPSG:4326", west, south, east, north, densify_pts=21))
 
 
-def _one_datum(primary: Any, fallback: Any) -> str:
-    """The zero BOTH surfaces count from, or the refusal naming the two."""
+def _aligned(primary: Any, fallback: Any, offset: Any) -> Alignment:
+    """The zero both surfaces end up counting from, and what it cost to get there.
+
+    The FALLBACK's datum is the one the merge lands on: it is the wider surface,
+    so every cell the primary does not paint is already on it."""
     try:
-        return one_datum(primary, fallback, code_prefix="MERGE_RASTERS_")
+        return align(primary, fallback, offset=offset, code_prefix="MERGE_RASTERS_")
     except DatumError as exc:
         raise MergeRastersError(exc.error_code, str(exc)) from exc
 

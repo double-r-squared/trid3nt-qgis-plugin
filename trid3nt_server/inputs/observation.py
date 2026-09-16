@@ -2,9 +2,11 @@
 
 A gauge layer, a sample-site layer and a user's own point layer all carry the
 same thing - somebody measured something somewhere at some time - and a slot
-that opens on it needs the number in ITS unit with the site, the distance and
-the date travelling beside it. A sample is a moment, never a climatology, so
-what is read is said on the run journal rather than folded into the answer.
+that opens on it needs the number in ITS unit, on ITS datum, with the site, the
+distance and the date travelling beside it. A reading counted from a zero the
+slot does not read on moves onto it through an offset row the template names,
+never silently. A sample is a moment, never a climatology, so what is read is
+said on the run journal rather than folded into the answer.
 """
 
 from __future__ import annotations
@@ -14,6 +16,7 @@ from dataclasses import dataclass
 from typing import Any, Mapping
 
 from .geometry import read_geometry_doc, source_uri
+from .vertical_datum import DatumError, align, datum_of
 
 __all__ = ["Observation", "ObservationError", "convert", "note",
            "observation"]
@@ -35,6 +38,11 @@ _CELSIUS = ("degc", "c", "deg c", "celsius", "")
 _STAMP_FIELDS = ("result_date", "valid_time", "datetime", "date_time")
 _SITE_FIELDS = ("site_id", "station_id", "feature_id")
 
+#: What a ROW calls the zero its elevation is counted from. A portal that
+#: federates programs publishes readings on several, so the datum rides on the
+#: row and the layer's own is read only where the rows state none.
+_DATUM_FIELD = "vertical_datum"
+
 
 @dataclass(frozen=True, slots=True)
 class Observation:
@@ -46,6 +54,11 @@ class Observation:
     site_name: str | None = None
     sampled: str | None = None
     distance_km: float | None = None
+    #: What the value is counted from, once it is on the slot's datum, and what
+    #: the run says about the shift that got it there. Both empty on a reading
+    #: that is not an elevation.
+    datum: str | None = None
+    datum_note: str = ""
 
 
 class ObservationError(RuntimeError):
@@ -120,6 +133,7 @@ def _reading(props: Mapping[str, Any], field: str,
 def observation(source: Any, *, near: Any = None, field: str = "value",
                 units_field: str = "unit", to_units: Any = None,
                 series_field: str = "time_series_csv",
+                to_datum: Any = None, offset: Any = None,
                 measures: str = "this value", opens: str = "",
                 label: str = "observation",
                 code: str = _CODE) -> Observation | None:
@@ -127,16 +141,19 @@ def observation(source: Any, *, near: Any = None, field: str = "value",
 
     ``near`` ranks the candidates when the source carries several - a fetch that
     already asked for the nearest station returns one and nothing is ranked;
-    ``to_units`` is the unit the slot reads. A number is the value the caller
-    stated, which stands over any record; ``opens`` says on the run journal what
-    this run opened on, because a sample is a moment and its age is the reader's
-    business. Nothing that reports refuses typed."""
+    ``to_units`` is the unit the slot reads and ``to_datum`` the zero it counts
+    from, which a reading on another zero reaches only through the ``offset``
+    row. A number is the value the caller stated, which stands over any record
+    and is already on the slot's own datum; ``opens`` says on the run journal
+    what this run opened on, because a sample is a moment and its age is the
+    reader's business. Nothing that reports refuses typed."""
     if source is None:
         return None
     stated = _stated(source)
     if stated is not None:
         found = Observation(value=stated,
-                            units=str(to_units) if to_units is not None else None)
+                            units=str(to_units) if to_units is not None else None,
+                            datum=str(to_datum) if to_datum is not None else None)
         _journal(found, opens=opens, stated=True)
         return found
     candidates: list[tuple[float, dict[str, Any], tuple[str | None, float]]] = []
@@ -156,18 +173,38 @@ def observation(source: Any, *, near: Any = None, field: str = "value",
     props = feature.get("properties") or {}
     units = props.get(units_field)
     value = convert(raw, units, to_units) if to_units is not None else float(raw)
+    datum, shift, datum_note = _onto_datum(source, props, to_datum, offset, label)
     reported = props.get("distance_km")
     found = Observation(
-        value=float(value),
+        value=float(value) + shift,
         units=str(to_units) if to_units is not None else (
             str(units) if units is not None else None),
         site_id=_text(props, *_SITE_FIELDS),
         site_name=_text(props, "site_name", "station_name"),
         sampled=sampled,
         distance_km=float(reported) if reported is not None else (
-            distance_km if distance_km != float("inf") else None))
+            distance_km if distance_km != float("inf") else None),
+        datum=datum, datum_note=datum_note)
     _journal(found, opens=opens, stated=False)
     return found
+
+
+def _onto_datum(source: Any, props: Mapping[str, Any], to_datum: Any,
+                offset: Any, label: str) -> tuple[str | None, float, str]:
+    """This reading on the datum the slot reads, and what the shift cost.
+
+    A slot that names no datum is not asking for an elevation, so nothing is
+    checked."""
+    if to_datum is None:
+        return (None, 0.0, "")
+    on = {"vertical_datum": props.get(_DATUM_FIELD) or datum_of(source),
+          "name": _text(props, *_SITE_FIELDS) or label}
+    try:
+        aligned = align(on, {"vertical_datum": str(to_datum), "name": "this slot"},
+                        offset=offset, code_prefix="OBSERVATION_")
+    except DatumError as exc:
+        raise ObservationError(exc.error_code, str(exc)) from exc
+    return (aligned.datum, aligned.shift_m, aligned.note)
 
 
 def _stated(source: Any) -> float | None:
@@ -190,7 +227,8 @@ def _journal(found: Observation, *, opens: str, stated: bool) -> None:
     from trid3nt_server.workflows.runtime import journal_note
 
     units = f" {found.units}" if found.units else ""
-    journal_note(f"{opens} {found.value:.3f}{units}, the value stated on the "
+    on = f" on {found.datum}" if found.datum else ""
+    journal_note(f"{opens} {found.value:.3f}{units}{on}, the value stated on the "
                  "call, which stands over any record."
                  if stated else note(found, opens=opens))
 
@@ -203,9 +241,10 @@ def note(found: Observation, *, opens: str) -> str:
                else "")
     when = f" on {found.sampled}" if found.sampled else " at an undated moment"
     units = f" {found.units}" if found.units else ""
+    shifted = f" It was {found.datum_note}." if found.datum_note else ""
     return (f"{opens} {found.value:.3f}{units}, which {where}"
-            f"{how_far} reported{when}. That is a SAMPLE at a moment, not a "
-            "mean: the run's own forcing is what moves it from there.")
+            f"{how_far} reported{when}.{shifted} That is a SAMPLE at a moment, "
+            "not a mean: the run's own forcing is what moves it from there.")
 
 
 def _text(props: Mapping[str, Any], *keys: str) -> str | None:

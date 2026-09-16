@@ -1,0 +1,9 @@
+fetch_vertical_datum_offset:
+- how far above NAVD88 is the NGVD29 zero at this gauge
+- convert this water level from the gauge datum to NAVD88
+- what is the offset between NAVD88 and EGM2008 here
+- the survey is on MLLW and the DEM is on NAVD88, how many metres apart are they
+- give me the vertical datum shift at this point so the bed and the water level are on one axis
+- how much do I add to an NGVD29 elevation to read it on NAVD88
+- the Great Lakes low water datum as an elevation at this point
+- VDatum transformation between two vertical reference frames at a lon lat

@@ -4,7 +4,9 @@ Covered: the primary winning every cell it measured and the fallback filling the
 rest, the merged grid taking the finer cell over the union of both, the sidecar
 naming which input painted each cell, an absent row passing the other surface
 through, two different vertical datums refusing by name, an unstated datum
-refusing, two disjoint surfaces, and the registration."""
+refusing, a STATED OFFSET bringing two differing datums onto one axis while an
+offset between two other frames still refuses, two disjoint surfaces, and the
+registration."""
 
 from __future__ import annotations
 
@@ -146,3 +148,38 @@ def test_the_corpus_is_retrievable() -> None:
     assert any("derive_merge_rasters" in retrieve_visible_tools(q, None, 8)
                for q in queries), \
         "derive_merge_rasters surfaces in NO top-8 for any of its corpus queries"
+
+
+def test_a_stated_offset_reads_the_primary_on_the_fallback_s_datum(tmp_path) -> None:
+    merged = derive_merge_rasters(
+        primary=_survey("CRD"), fallback=_terrain("NAVD88"),
+        offset={"offset_m": 1.6093, "from_frame": "CRD", "to_frame": "NAVD88",
+                "source": "the survey's own metadata"},
+        _output_dir=str(tmp_path))
+    with rasterio.open(merged.uri) as surface, \
+            rasterio.open(merged.provenance_uri) as source:
+        values, won = surface.read(1), source.read(1)
+    assert merged.vertical_datum == "NAVD88"
+    assert merged.datum_shift_m == pytest.approx(1.6093)
+    # The survey measured -5.0 on ITS zero and reads 1.6093 m higher on the
+    # fallback's; the fallback itself is untouched.
+    assert float(values[won == 0].max()) == pytest.approx(-5.0 + 1.6093)
+    assert float(values[won == 1].min()) == pytest.approx(10.0)
+    assert "stated by the survey's own metadata" in merged.notes[-1]
+
+
+def test_an_offset_between_two_other_frames_refuses(tmp_path) -> None:
+    with pytest.raises(MergeRastersError) as excinfo:
+        derive_merge_rasters(
+            primary=_survey("CRD"), fallback=_terrain("NAVD88"),
+            offset={"offset_m": -1.131, "from_frame": "NAVD88",
+                    "to_frame": "EGM2008", "source": "NOAA VDatum"},
+            _output_dir=str(tmp_path))
+    assert excinfo.value.error_code == "MERGE_RASTERS_DATUM_OFFSET_MISMATCH"
+
+
+def test_one_datum_needs_no_offset_and_shifts_nothing(tmp_path) -> None:
+    merged = derive_merge_rasters(primary=_survey(), fallback=_terrain(),
+                                  offset=None, _output_dir=str(tmp_path))
+    assert merged.datum_shift_m == 0.0
+    assert "Both surfaces count from NAVD88." in merged.notes

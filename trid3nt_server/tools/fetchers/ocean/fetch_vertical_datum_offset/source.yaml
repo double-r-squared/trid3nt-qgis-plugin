@@ -1,0 +1,142 @@
+# NOAA VDatum's one REST call: a point, a source vertical frame and a target one
+# come back as a converted height. The request is sent with a source height of
+# ZERO, so the height that comes back IS the offset between the two frames at that
+# point, which is the number a bed and a water level are put on one axis with.
+schema_version: v1
+
+name: fetch_vertical_datum_offset
+source_class: vertical_datum_offset
+error_prefix: VDATUM
+input_error_suffix: INPUT_INVALID
+empty_error_suffix: NO_COVERAGE
+shape: record
+supports_global_query: false
+
+endpoints:
+  convert:
+    url: "https://vdatum.noaa.gov/vdatumweb/api/convert"
+auth:
+  mode: none
+  user_agent: trid3nt_default
+
+params:
+  point: {type: point, required: true}
+  from_frame:
+    type: enum
+    required: true
+    lowercase: true
+    values: [navd88, ngvd29, egm2008, mllw, mlw, mtl, lmsl, mhw, mhhw,
+             igld85, lwd_igld85]
+  to_frame:
+    type: enum
+    required: true
+    lowercase: true
+    values: [navd88, ngvd29, egm2008, mllw, mlw, mtl, lmsl, mhw, mhhw,
+             igld85, lwd_igld85]
+  # VDatum partitions its grids by region and serves no lookup from a point to
+  # the region that covers it, so the region is the caller's to name. The
+  # contiguous grids fail on tidal water a coastal region owns.
+  region:
+    type: enum
+    default: contiguous
+    lowercase: true
+    values: [contiguous, westcoast, chesapeak_delaware, wgom, ak, seak, as, hi,
+             prvi, gcnmi, sgi, spi, sli]
+
+hooks:
+  build_request: vdatum.build_request
+  record: vdatum.record
+
+normalize:
+  crs: "EPSG:4326"
+  units: m
+
+output:
+  layer_type: record
+  ext: json
+  emit_bbox: false
+
+cache:
+  # A geoid model and a tidal grid are republished on the order of years, and the
+  # offset at a fixed point does not move between them.
+  ttl_class: semi-static-7d
+
+# One small JSON object per call, whatever the point.
+payload_estimate:
+  model: bbox_area
+  mb_per_sq_deg: 0.001
+  floor_mb: 0.001
+  ceil_mb: 0.01
+
+caveats:
+  - "the offset is the height a ZERO on the source frame reads at on the target frame: add it to a source-frame elevation to read that elevation on the target frame"
+  - "VDatum serves the US and its territories only, and each region is its own grid: a point the named region does not cover refuses by name rather than returning a number"
+  - "a local PROJECT datum - the Columbia River Datum, a district's own station datum - is NOT a VDatum frame and refuses here; its offset is published on the survey that uses it"
+  - "an EGM2008 conversion runs through the ellipsoid and is NOT exactly reversible: the two directions at one point differ by a few centimetres, and VDatum reports no uncertainty for it"
+  - "the offset is a SHIFT and not a scaling: it is the same number whatever height it is applied to"
+
+docstring: |-
+  Offset in metres between two VERTICAL DATUMS at one point (NOAA VDatum) -> put a bed and a water level on one axis.
+
+  What it does:
+      Asks NOAA VDatum what a height of zero on ``from_frame`` reads at on
+      ``to_frame`` at this point. That number IS the offset between the two
+      frames there: ADD it to an elevation on ``from_frame`` to read the same
+      elevation on ``to_frame``. The frames each request pairs with, and the
+      geoid model each needs, are the service's own coupling and are sent for
+      you.
+
+  When to use:
+      - A gauge publishes its datum on NGVD29 and the bed is painted on NAVD88,
+        or a bathymetry is on MLLW and the terrain is on NAVD88: the two are
+        metres apart on the same ground and nothing may be laid over the other
+        until this number is known.
+      - "how far above NAVD88 is the NGVD29 zero here", "what do I add to read
+        this level on the DEM's datum", "the Great Lakes low water datum as an
+        elevation".
+      - Pair with ``derive_merge_rasters`` (two surfaces on different frames
+        merge only through a stated offset) and with a water-level reading whose
+        datum is not the bed's.
+
+  When NOT to use:
+      - DO NOT use for a local PROJECT datum - the Columbia River Datum, a
+        district's station datum. VDatum does not know them; the survey that
+        uses one publishes its own offset in its metadata.
+      - DO NOT use outside the US and its territories.
+      - DO NOT use to convert a horizontal coordinate: this is vertical only.
+
+  Parameters:
+      point: ``[lon, lat]`` in EPSG:4326, the place the offset is asked at. A
+          datum difference varies over the ground, so ask at the water the
+          question is about.
+      from_frame: the frame the number you HAVE is counted from.
+      to_frame: the frame you want to read it on.
+      region: which VDatum grid region covers the point. ``contiguous`` is the
+          default and covers inland CONUS; tidal water on the Pacific coast and
+          the tidal reach of its rivers is ``westcoast``, and the Gulf, the
+          Chesapeake and each territory have their own. VDatum offers no lookup
+          from a point to its region, so an uncovered point refuses and names
+          the region it was asked under.
+
+  Returns:
+      a JSON-compatible dict with ``offset_m`` (metres, positive up),
+      ``uncertainty_m`` (VDatum's own, or null where it reports none),
+      ``from_frame``, ``to_frame``, ``lon``, ``lat``, ``region`` and ``source``.
+
+  Cross-tool dependencies:
+      - Composes WITH: ``derive_merge_rasters``, ``fetch_ehydro_surveys``,
+        ``fetch_dem``, ``fetch_copernicus_dem``, ``fetch_usgs_nwis_gauges``,
+        ``fetch_noaa_coops_tides``.
+      - Upstream data source: NOAA VDatum (https://vdatum.noaa.gov/).
+
+  Cache: ``ttl_class="semi-static-7d"``.
+
+  Errors:
+      - ``VDATUM_INPUT_INVALID``: a frame or a region outside the sets above, a
+        malformed point, or a request VDatum rejects as a frame pairing it does
+        not serve.
+      - ``VDATUM_NO_COVERAGE``: the named region's grids do not reach this point.
+      - ``VDATUM_UPSTREAM_ERROR``: VDatum failed or answered with something that
+        is not its conversion record.
+
+  Tier-1 free. No API key.
