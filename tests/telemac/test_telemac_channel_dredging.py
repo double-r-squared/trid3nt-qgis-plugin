@@ -139,17 +139,27 @@ def test_the_mesh_is_built_over_the_domain_slot_at_the_runtime_lever():
     assert bed.kwargs == {"source": DataRef("bed")}
 
 
-def test_the_boundary_roles_come_from_the_domain_producers_own_runs():
+def test_the_boundary_roles_come_from_the_runs_slot():
     """The reach fetcher returns the section and the two faces it was cut
-    between, so this template declares no runs row and still gets both."""
+    between, and they ride on the domain into the runs slot; a domain that
+    carries none is asked for them, and an edge that names none is closed."""
     runs = next(op for op in _recipe().ops if op.fn == "set_boundary_roles")
-    assert runs.kwargs == {"runs": DataRef("domain")}
-    assert [row.name for row in _WORKFLOW.data if row.role == "runs"] == []
+    assert runs.kwargs == {"runs": DataRef("runs")}
+    row = next(row for row in _WORKFLOW.data if row.role == "runs")
+    assert (row.name, row.producer, row.is_optional) == ("runs", None, True)
 
 
 def test_the_runtime_levers_are_seated_and_no_baseline_param_is_restated():
     declared = [prm.name for prm in _WORKFLOW.params]
-    assert declared[-len(LEVER_NAMES):] == list(LEVER_NAMES)
+    # Every lever is on the sheet; the ones this question does not state for
+    # itself are seated at the end, in the order the runtime declares them, and
+    # one it differs on keeps its own place and its own opinion of the value.
+    from trid3nt_server.workflows.runtime import param_rows
+
+    own = [prm.name for prm in param_rows(channel_dredging.PARAMS)]
+    assert set(LEVER_NAMES) <= set(declared)
+    seated = [name for name in LEVER_NAMES if name not in own]
+    assert declared[-len(seated):] == seated
     assert _DISSOLVED.isdisjoint(declared)
 
 
@@ -159,7 +169,8 @@ def test_every_slot_a_user_can_fill_reaches_the_wire():
     all three are arguments though all three name a source; the two areas have
     no source to supersede."""
     assert {row.name for row in _WORKFLOW.data if row.fills_from_user} == {
-        "domain", "bed", "carrier", "dredge_area", "dump_area"}
+        "domain", "runs", "bed", "carrier", "stage", "dredge_area",
+        "dump_area"}
 
 
 def test_the_two_areas_name_no_source_and_take_polygons():

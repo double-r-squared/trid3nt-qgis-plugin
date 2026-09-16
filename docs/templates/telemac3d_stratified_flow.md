@@ -2,7 +2,7 @@
 
 # `telemac3d_stratified_flow`
 
-The 3D VERTICAL STRUCTURE of a water body a 2D depth-averaged model cannot resolve.
+The 3D VERTICAL STRUCTURE of a body of water a 2D depth-averaged model cannot resolve.
 
 |  |  |
 |---|---|
@@ -14,10 +14,8 @@ The 3D VERTICAL STRUCTURE of a water body a 2D depth-averaged model cannot resol
 
 | row | produced by | what it is | datum |
 |---|---|---|---|
-| `water` | `fetch_nhd_waterbodies` | USGS NHD waterbody polygons (lakes / ponds / reservoirs) as a vector layer. | - |
-| `mapped` | `section` | Cut a POLYGON LAYER down to the part between two points, or inside an extent -> a polygon layer. | - |
+| `domain` | `fetch_nhd_waterbody_at_point` | Fetch ONE NHD WATERBODY POLYGON from one seed point -> a lake, pond or reservoir as a model domain. | - |
 | `bed` | `fetch_greatlakes_bathymetry` | Fetch the NOAA NCEI Great Lakes lake-datum BATHYMETRY over a bbox as a float32 GeoTIFF. | each Great Lake's own Low Water Datum (metres, positive up) |
-| `day` | `trid3nt_server.workflows.telemac.templates.stratified_flow.lake_level.reading_day` | The DAY the gauge is read over, as the window the fetch asks for. | - |
 | `level` | `fetch_greatlakes_water_level` | Fetch the OBSERVED Great Lakes water level at NOAA CO-OPS gauges as a FlatGeobuf. | each Great Lake's own Low Water Datum (metres, positive up) |
 
 ## The sheet
@@ -26,21 +24,16 @@ The values the template declares. `desc` is what the model reads when it fills o
 
 | param | door | units | default | desc |
 |---|---|---|---|---|
-| `location` | question | - | optional | Lake or basin place near the AOI (e.g. 'Marquette, Michigan'), geocoded |
-| `bbox` | user | - | optional | Explicit AOI (min_lon,min_lat,max_lon,max_lat) EPSG:4326 - the stretch of the water body the column is solved over |
-| `warm_temp_c` | scenario | C | 25.0 | Epilimnion (warm surface layer) temperature - a PRESCRIBED demo column, since no met-forcing fetcher exists yet |
+| `seed` | user | - | optional | A point ON or beside the body of water this question is about, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer, or a place name. The mapped outline that point names becomes the domain; a domain supplied directly supersedes it, and a body nobody mapped is drawn |
+| `warm_temp_c` | scenario | C | 25.0 | Epilimnion (warm surface layer) temperature the column OPENS at. The run exchanges no heat with the atmosphere, so what happens to this difference is the whole answer |
 | `cold_temp_c` | scenario | C | 15.0 | Hypolimnion (cold bottom layer) temperature; the initial top-to-bottom difference is what the run either keeps or mixes away |
-| `thermocline_depth_m` | scenario | m | 8.0 | Depth of the thermocline below the surface. The vertical grid is planned to HOLD it and REFUSES when no admissible sigma stretch over the basin's deepest column can |
+| `thermocline_depth_m` | scenario | m | 8.0 | Depth of the thermocline below the free surface. The vertical grid is planned to HOLD it and REFUSES when no admissible sigma stretch over the domain's deepest column can |
 | `wind_speed_mps` | scenario | m/s | 0.0 | Sustained wind speed; 0 is CALM - the half of the pair in which the thermocline persists - and a nonzero value both mixes the column and drives the surface-downwind / return-flow-at-depth circulation reported beside the temperature |
 | `wind_direction_deg` | scenario | deg | 270.0 | Compass bearing the wind blows FROM (0=N, 90=E, 270=W) |
 | `levels` | scenario | - | 13 | Number of vertical sigma levels - the degree of freedom a 2D model does not have, so it is THE resolution lever here; too few for the declared thermocline is a refusal, not a coarser answer |
-| `mesh_min_edge_m` | scenario | m | 120.0 | Triangle edge the basin interior is meshed at; the 3D node count is this mesh's nodes times the sigma levels |
-| `event_time` | question | - | optional | The day the basin's OBSERVED lake level is read at the nearest CO-OPS gauge - from phrasing like 'during last Tuesday's blow'; an ISO date (e.g. '2026-09-05'). The run opens at the level that day closed on, so this is what makes a past event replayable |
-| `sim_duration_hours` | constant | h | 5.0 | Simulated duration - long enough for the column to settle or mix |
-| `time_step_s` | user | s | optional | Solver time step; unset derives it from the accepted mesh |
-| `tracer_advection_scheme` | constant | - | 13 | SCHEME FOR ADVECTION OF TRACERS - the NERD family (13, 14), which is the distributive scheme the iteration ceiling below governs and the only one that is monotone across a thermocline. 13 is the value the engine's own telemac2d dictionary defaults this same keyword to; the dictionary gives the 3D one no default at all, so unstated it falls back to the VELOCITIES scheme (5, MURD PSI), which is what stopped a baroclinic basin at its first tracer step |
-| `max_advection_iterations` | constant | - | 50 | MAXIMUM NUMBER OF ITERATIONS FOR ADVECTION SCHEMES - the ceiling the distributive schemes 13 and 14 sub-iterate under. Stated rather than defaulted because it is the number a run that stops on 'ITERATION NO. REACHED' is bounded by, and a reader of the deck cannot see a ceiling the deck does not write |
-| `output_interval_min` | user | min | optional | Result-writing cadence; the profile is read off the last frame, so this decides how much of the column's history is animatable |
+| `mesh_resolution_m` | scenario | m | 120.0 | Target triangle edge the water body's interior is meshed at. The horizontal spends its budget on COVERING the body rather than on detail; the 3D node count is this mesh's nodes times the levels |
+| `sim_duration_s` | constant | s | 18000.0 | Simulated duration - long enough for the column to settle or mix |
+| `event_time` | question | - | optional | The moment the scenario is read at - an ISO date or datetime ('2026-08-20' or '2026-08-20T06:00:00Z'), from phrasing like 'during last Tuesday's storm'. Each source keeps its own retention, and a request deeper than one refuses typed |
 | `compute_class` | constant | - | medium | Solve sizing class |
 
 ## What it answers

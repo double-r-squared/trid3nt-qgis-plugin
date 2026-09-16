@@ -2,7 +2,7 @@
 
 # `telemac_eutrophication`
 
-NUTRIENT ENRICHMENT down a river reach: algal growth, nutrient drawdown and the oxygen response over one pass.
+NUTRIENT ENRICHMENT in a body of water: algal growth, nutrient drawdown and the oxygen response over one pass through it.
 
 |  |  |
 |---|---|
@@ -14,14 +14,13 @@ NUTRIENT ENRICHMENT down a river reach: algal growth, nutrient drawdown and the 
 
 | row | produced by | what it is | datum |
 |---|---|---|---|
-| `rivers` | `trid3nt_server.workflows.telemac.templates.reach.fetch_reach_flowline` | The reach flowline FlatGeobuf over the CURRENT DOMAIN. Reference data. | - |
-| `centerline` | `fetch_nhdplus_nldi_navigate` | Walk the NHDPlus stream network from a seed in the requested direction. | - |
-| `ends` | `endpoints` | Take the TWO END POINTS of a line layer -> a point layer plus the pair itself. | - |
-| `window` | `compute_layer_bounds` | Get a layer's geographic extent AND fit/zoom/resize the map to it. | - |
-| `water` | `fetch_nhd_area_water` | Fetch NHD water-surface polygons (the two BANKS of a wide river, an estuary, a canal) inside a bounding box. | - |
-| `mapped_water` | `trid3nt_server.workflows.telemac.templates.reach.measure_water_coverage` | MEASURE how much of the reach the fetched water polygons map -> the water. | - |
-| `reach_polygon` | `section` | Cut a POLYGON LAYER down to the part between two points, or inside an extent -> a polygon layer. | - |
-| `dem` | `fetch_copernicus_dem` | Internal seam -- NOT a model-facing tool (tier="internal"). | EGM2008 geoid (metres, positive up) |
+| `domain` | `fetch_river_reach` | Build a RIVER REACH DOMAIN from one seed point -> the reach polygon, its inflow and outflow boundary runs, and the centerline. | - |
+| `runs` | supplied by the caller | the stretches of the domain's edge that carry a boundary condition - each two points on the edge and a type (inflow, outflow, open); a closed body states none | - |
+| `survey` | `fetch_ehydro_surveys` | Fetch USACE eHydro CHANNEL SURVEY soundings + the survey footprint for a bbox -> the measured bed. | - |
+| `surveyed_bed` | `derive_survey_surface` | Interpolate a POINT layer of measurements onto a raster surface -> a continuous grid. | - |
+| `terrain` | `fetch_copernicus_dem` | Internal seam -- NOT a model-facing tool (tier="internal"). | EGM2008 geoid (metres, positive up) |
+| `bed` | `derive_merge_rasters` | MERGE two overlapping surfaces into one, the PRIMARY winning where it measured. | - |
+| `carrier` | `fetch_noaa_nwm_streamflow` | Fetch NOAA National Water Model streamflow as a point FlatGeobuf. | - |
 | `water_temperature` | `fetch_usgs_water_quality` | Fetch REAL, OBSERVED water-quality sample sites as a point FlatGeobuf. | - |
 
 ## The sheet
@@ -30,32 +29,25 @@ The values the template declares. `desc` is what the model reads when it fills o
 
 | param | door | units | default | desc |
 |---|---|---|---|---|
-| `location` | question | - | optional | Place name on the river, geocoded to the reach |
-| `bbox` | user | - | optional | Explicit AOI (min_lon,min_lat,max_lon,max_lat) EPSG:4326, instead of a place |
-| `river_geometry_uri` | user | - | optional | Reuse an already-fetched river flowline for this reach instead of re-fetching it |
-| `discharge_m3s` | user | m^3/s | optional | Steady upstream discharge - the flow that carries the nutrients through the reach and sets how long the water has to grow algae in |
-| `event_time` | question | - | optional | The moment to read the carrier discharge cycle at - from phrasing like 'during last week's low flow'; an ISO date or datetime. The NWM PDS bucket retains only the last ~30 days of history; a deeper request refuses typed rather than silently reading a different cycle. |
-| `friction_coefficient` | user | - | optional | Bed roughness under friction_law |
-| `friction_law` | user | - | optional | Law interpreting friction_coefficient: 2=Chezy, 3=Strickler, 4=Manning |
-| `output_interval_min` | user | min | optional | Result-writing cadence; unset keeps the steering file's own period |
-| `compute_class` | constant | - | medium | Solve sizing class |
-| `station` | user | - | optional | Where on the reach to watch the biomass and the oxygen over time, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer, or a place name. The answers are all along-reach and do not move with it |
-| `reach_length_km` | scenario | km | 12.0 | Modeled reach length downstream of the seed. It is also the LENGTH OF ONE PASS: the water grows algae for as long as it takes to travel this far, so a longer reach is a longer growing time |
-| `initial_phyto_ug_l` | scenario | ug/L | 2.0 | Phytoplankton biomass in the water entering and filling the reach - the standing crop the pass grows FROM, and what the growth ratio in the answer is held to. Stated, not fetched: `fetch_usgs_water_quality` returns chlorophyll and nutrient sample SITES, and turning scattered sites into a reach-wide field is not a step this template takes on its own |
-| `initial_po4_mgl` | scenario | mg/L | 0.05 | Dissolved orthophosphate entering and filling the reach - with nitrate this is what limits how much grows over the pass. Stated against the observed record from `fetch_usgs_water_quality` (characteristic 'Phosphorus'), never fetched into the deck |
+| `seed` | user | - | optional | Where on the channel the modelled stretch STARTS, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer, or a place name geocoded first. The stretch walked downstream of it is the water one pass is measured over; supply the domain polygon instead and this is not read |
+| `station` | user | - | optional | Where to watch the biomass and the oxygen over time, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer, or a place name. The answers are all longitudinal and do not move with it |
+| `initial_phyto_ug_l` | scenario | ug/L | 2.0 | Phytoplankton biomass in the water entering and filling the domain - the standing crop the pass grows FROM, and what the growth ratio in the answer is held to. Stated, not fetched: `fetch_usgs_water_quality` returns chlorophyll and nutrient sample SITES, and turning scattered sites into a domain-wide field is not a step this template takes on its own |
+| `initial_po4_mgl` | scenario | mg/L | 0.05 | Dissolved orthophosphate entering and filling the domain - with nitrate this is what limits how much grows over the pass. Stated against the observed record from `fetch_usgs_water_quality` (characteristic 'Phosphorus'), never fetched into the deck |
 | `initial_por_mgl` | scenario | mg/L | 0.02 | Non-assimilable organic phosphorus - the phosphorus locked in dead material, released back to phosphate as it breaks down. Stated |
-| `initial_no3_mgl` | scenario | mg/L | 1.0 | Dissolved nitrate entering and filling the reach - the other nutrient the growth is limited by. Stated against the observed record from `fetch_usgs_water_quality` (characteristic 'Nitrate') |
+| `initial_no3_mgl` | scenario | mg/L | 1.0 | Dissolved nitrate entering and filling the domain - the other nutrient the growth is limited by. Stated against the observed record from `fetch_usgs_water_quality` (characteristic 'Nitrate') |
 | `initial_nor_mgl` | scenario | mg/L | 0.5 | Non-assimilable organic nitrogen - the nitrogen locked in dead material, released back to nitrate as it breaks down. Stated |
-| `initial_nh4_mgl` | scenario | mg/L | 0.05 | Ammonium entering and filling the reach; nitrifying it is one of the things that consumes oxygen. Stated |
-| `initial_organic_load_mgl` | scenario | mg/L | 2.0 | Carbonaceous organic load (BOD) entering and filling the reach - the oxygen demand the water arrives with, before any the bloom creates for itself. Stated |
-| `water_temp_c` | scenario | C | 22.0 | Water temperature over the window. It sets the growth, mortality and nitrification rates AND the oxygen saturation the reach is measured against, so it is the single strongest lever here. Stated against the observed record from `fetch_usgs_water_quality` (characteristic 'Temperature, water'), which this run fetches over the reach and publishes beside the answer; a run coupled to the thermal process reads a computed temperature field instead and ignores this number |
+| `initial_nh4_mgl` | scenario | mg/L | 0.05 | Ammonium entering and filling the domain; nitrifying it is one of the things that consumes oxygen. Stated |
+| `initial_organic_load_mgl` | scenario | mg/L | 2.0 | Carbonaceous organic load (BOD) entering and filling the domain - the oxygen demand the water arrives with, before any the bloom creates for itself. Stated |
+| `water_temp_c` | scenario | C | 22.0 | Water temperature over the window. It sets the growth, mortality and nitrification rates AND the oxygen saturation the water is measured against, so it is the single strongest lever here. Stated against the observed record from `fetch_usgs_water_quality` (characteristic 'Temperature, water'), which this run reads over the domain and names on the journal with its site and sample date; a domain with no sampled site near it says so and the stated value stands. A run coupled to the thermal process reads a computed temperature field instead and ignores this number |
 | `sunshine_w_m2` | scenario | W/m^2 | 100.0 | Solar flux at the water surface, averaged over the window. Light is what drives the growth: at zero nothing grows at all. Stated, because the engine reads this from its own keyword and from nowhere else - the atmospheric data file's radiation columns feed the thermal heat budget and never this term |
-| `secchi_depth_m` | user | m | optional | Secchi depth - how far light reaches down the water column. A turbid reach shades its own algae and blooms less |
+| `secchi_depth_m` | user | m | optional | Secchi depth - how far light reaches down the water column. Turbid water shades its own algae and blooms less |
 | `do_saturation_mgl` | derived | mg/L | - | DO saturation Cs at the stated water temperature; the ceiling the oxygen is measured against |
-| `initial_do_mgl` | derived | mg/L | - | Dissolved oxygen in the water entering and filling the reach; derived as saturation unless supplied |
-| `do_standard_mgl` | scenario | mg/L | 5.0 | The DO water-quality standard the reach is judged against; 5 is a common warm-water aquatic-life criterion |
-| `sim_duration_s` | scenario | s | 172800.0 | Simulated time. It has to cover several travel times through the reach before the along-reach answer has settled - the default is two days against a pass measured in hours. A river flushes far too fast to hold a seasonal bloom; ask a lake for that |
-| `mesh_resolution_m` | scenario | m | 25.0 | Target element edge length the reach is triangulated at; it also sets the CFL time step, so it is what decides whether a long window finishes |
+| `initial_do_mgl` | derived | mg/L | - | Dissolved oxygen in the water entering and filling the domain; derived as saturation unless supplied |
+| `do_standard_mgl` | scenario | mg/L | 5.0 | The DO water-quality standard the water is judged against; 5 is a common warm-water aquatic-life criterion |
+| `sim_duration_s` | scenario | s | 172800.0 | Simulated time. It has to cover several travel times through the domain before the longitudinal answer has settled - the default is two days against a pass measured in hours. A river flushes far too fast to hold a seasonal bloom; ask a lake for that |
+| `mesh_resolution_m` | scenario | m | 25.0 | Target element edge length the domain is triangulated at; it also sets the CFL time step, so it is what decides whether a long window finishes |
+| `event_time` | question | - | optional | The moment the scenario is read at - an ISO date or datetime ('2026-08-20' or '2026-08-20T06:00:00Z'), from phrasing like 'during last Tuesday's storm'. Each source keeps its own retention, and a request deeper than one refuses typed |
+| `compute_class` | constant | - | medium | Solve sizing class |
 
 ## What it answers
 
@@ -101,33 +93,33 @@ It publishes these layers onto the canvas:
 
 Run `01M2HSYSR2VP81VWZ2108E64CD`, 2026-09-15T05:52:34.584626+00:00, 39.942 s, at commit `ad80fc708f8e79070559d6e31e57162ed83008e2`.
 
-![Every layer the run published, stacked and framed on the result (run 01M2HSYSR2VP81VWZ2108E64CD)](telemac_eutrophication/telemac_eutrophication.png)
+![The solve, frame by frame - cation_animation_biomass (run 01M2HSYSR2VP81VWZ2108E64CD)](telemac_eutrophication/telemac_river_eutrophication_animation_biomass.gif)
 
-*Every layer the run published, stacked and framed on the result (run 01M2HSYSR2VP81VWZ2108E64CD)*
+*The solve, frame by frame - cation_animation_biomass (run 01M2HSYSR2VP81VWZ2108E64CD)*
 
-![The solve, frame by frame - biomass (run 01M2HSYSR2VP81VWZ2108E64CD)](telemac_eutrophication/telemac_eutrophication_animation_biomass.gif)
+![The solve, frame by frame - cation_animation_oxygen (run 01M2HSYSR2VP81VWZ2108E64CD)](telemac_eutrophication/telemac_river_eutrophication_animation_oxygen.gif)
 
-*The solve, frame by frame - biomass (run 01M2HSYSR2VP81VWZ2108E64CD)*
+*The solve, frame by frame - cation_animation_oxygen (run 01M2HSYSR2VP81VWZ2108E64CD)*
 
-![The solve, frame by frame - oxygen (run 01M2HSYSR2VP81VWZ2108E64CD)](telemac_eutrophication/telemac_eutrophication_animation_oxygen.gif)
+![cation biomass final frame (run 01M2HSYSR2VP81VWZ2108E64CD)](telemac_eutrophication/telemac_river_eutrophication_biomass_final_frame.png)
 
-*The solve, frame by frame - oxygen (run 01M2HSYSR2VP81VWZ2108E64CD)*
+*cation biomass final frame (run 01M2HSYSR2VP81VWZ2108E64CD)*
 
-![biomass final frame (run 01M2HSYSR2VP81VWZ2108E64CD)](telemac_eutrophication/telemac_eutrophication_biomass_final_frame.png)
+![cation oxygen final frame (run 01M2HSYSR2VP81VWZ2108E64CD)](telemac_eutrophication/telemac_river_eutrophication_oxygen_final_frame.png)
 
-*biomass final frame (run 01M2HSYSR2VP81VWZ2108E64CD)*
+*cation oxygen final frame (run 01M2HSYSR2VP81VWZ2108E64CD)*
 
-![oxygen final frame (run 01M2HSYSR2VP81VWZ2108E64CD)](telemac_eutrophication/telemac_eutrophication_oxygen_final_frame.png)
-
-*oxygen final frame (run 01M2HSYSR2VP81VWZ2108E64CD)*
-
-![dissolved o2 - the chart the run persisted (run 01M2HSYSR2VP81VWZ2108E64CD)](telemac_eutrophication/telemac_eutrophication_chart_dissolved_o2.png)
+![dissolved o2 - the chart the run persisted (run 01M2HSYSR2VP81VWZ2108E64CD)](telemac_eutrophication/telemac_river_eutrophication_chart_dissolved_o2.png)
 
 *dissolved o2 - the chart the run persisted (run 01M2HSYSR2VP81VWZ2108E64CD)*
 
-![phyto biomass - the chart the run persisted (run 01M2HSYSR2VP81VWZ2108E64CD)](telemac_eutrophication/telemac_eutrophication_chart_phyto_biomass.png)
+![phyto biomass - the chart the run persisted (run 01M2HSYSR2VP81VWZ2108E64CD)](telemac_eutrophication/telemac_river_eutrophication_chart_phyto_biomass.png)
 
 *phyto biomass - the chart the run persisted (run 01M2HSYSR2VP81VWZ2108E64CD)*
+
+![cation (run 01M2HSYSR2VP81VWZ2108E64CD)](telemac_eutrophication/telemac_river_eutrophication.png)
+
+*cation (run 01M2HSYSR2VP81VWZ2108E64CD)*
 
 ### The sheet it filled
 

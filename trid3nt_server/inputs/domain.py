@@ -55,6 +55,14 @@ class Domain:
         except KeyError:
             raise AttributeError(name) from None
 
+    def __str__(self) -> str:
+        """What a reader CALLS this domain: the name it came with, else the word.
+
+        A layer title, a mesh session and a run's own name are all written from
+        this, so a domain that stringified as its geometry would name every one
+        of them after its coordinates."""
+        return self.name or "domain"
+
     @property
     def centroid(self) -> tuple[float, float]:
         """A lon/lat point INSIDE this polygon - what a nearest-site query ranks
@@ -85,10 +93,7 @@ class Domain:
             {"type": "Feature", "properties": {"role": "domain", "part": "domain",
                                                "name": self.name},
              "geometry": dict(self.geometry)},
-            *({"type": "Feature",
-               "properties": {"part": run.type, "type": run.type,
-                              "name": run.name},
-               "geometry": run.face} for run in self.runs),
+            *(run.feature for run in self.runs),
             *({"type": "Feature", "properties": {"part": name},
                "geometry": dict(geometry)}
               for name, geometry in self.companions.items())]}

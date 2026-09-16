@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from trid3nt_server.inputs import Point
-from trid3nt_server.workflows.runtime import Accepts, Param, doors
+from trid3nt_server.workflows.runtime import Accepts, Param, doors, lever
 
 __all__ = ["ACCEPTS", "DOC", "PARAMS"]
 
@@ -30,15 +30,6 @@ class PARAMS:
              "a point layer, or a place name geocoded first. It seeds the reach "
              "the domain is cut from; supply the domain polygon - a lake, a "
              "pond, a harbour - instead and this is not read")
-    discharge_m3s = Param(
-        door=doors.USER, optional=True, units="m^3/s",
-        bounds=(0.01, 1.0e5), consequence="physics", user_lever=True,
-        derived_when_absent=(
-            "the steady carrier discharge is resolved from the NOAA National "
-            "Water Model over the domain; no NWM coverage refuses typed rather "
-            "than falling back to a constant"),
-        desc="Steady upstream discharge - the flow whose depth and travel time "
-             "set how much heat the water picks up per kilometre")
     # THE WEATHER WINDOW is the question's own scenario: the water warms under a
     # WEEK that happened, so the dates are what make this a record rather than a
     # hypothetical. There is no default - a temperature nobody dated is nobody's -
@@ -66,26 +57,23 @@ class PARAMS:
              "Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, "
              "'lat,lon', a point layer, or a place name")
 
-    sim_duration_s = Param(
-        door=doors.SCENARIO, default=604800.0,
-        bounds=(3600.0, 1209600.0), units="s", consequence="numerical",
-        user_lever=True,
-        desc="Simulated time. A DIURNAL RANGE needs whole days, and this defaults "
-             "to seven; a shorter run answers what the water did over that "
-             "window and no more. The weather record has to span every second of "
-             "it - a run longer than its own forcing refuses rather than "
-             "extrapolating")
+    sim_duration_s = lever(
+        "sim_duration_s", default=604800.0, bounds=(3600.0, 1209600.0),
+        desc="Simulated time. A DIURNAL RANGE needs whole days, and this "
+             "defaults to seven; a shorter run answers what the water did over "
+             "that window and no more. The weather record has to span every "
+             "second of it - a run longer than its own forcing refuses rather "
+             "than extrapolating")
     # The runtime's own granularity lever, restated ONLY for its default: a
     # surface heat budget is a domain-scale answer watched over a week, and the
     # edge also sets the CFL step, so the runtime's 14 m spends the whole compute
     # budget resolving a planform this question does not read. Bounds and meaning
     # are the lever's.
-    mesh_resolution_m = Param(
-        door=doors.SCENARIO, default=20.0, user_lever=True,
-        bounds=(3.0, 5000.0), units="m", consequence="numerical",
-        desc="Target element edge length the domain is triangulated at; a surface "
-             "heat budget is divided by the local DEPTH, so what this has to "
-             "resolve is how deep the water is rather than its planform")
+    mesh_resolution_m = lever(
+        "mesh_resolution_m", default=20.0,
+        desc="Target element edge length the domain is triangulated at; a "
+             "surface heat budget is divided by the local DEPTH, so what this "
+             "has to resolve is how deep the water is rather than its planform")
 
 
 DOC = dict(

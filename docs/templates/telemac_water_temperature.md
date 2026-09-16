@@ -2,7 +2,7 @@
 
 # `telemac_water_temperature`
 
-WATER TEMPERATURE down a river reach under a week of real weather.
+WATER TEMPERATURE over a body of water under a week of real weather.
 
 |  |  |
 |---|---|
@@ -14,18 +14,16 @@ WATER TEMPERATURE down a river reach under a week of real weather.
 
 | row | produced by | what it is | datum |
 |---|---|---|---|
-| `rivers` | `trid3nt_server.workflows.telemac.templates.reach.fetch_reach_flowline` | The reach flowline FlatGeobuf over the CURRENT DOMAIN. Reference data. | - |
-| `centerline` | `fetch_nhdplus_nldi_navigate` | Walk the NHDPlus stream network from a seed in the requested direction. | - |
-| `ends` | `endpoints` | Take the TWO END POINTS of a line layer -> a point layer plus the pair itself. | - |
-| `window` | `compute_layer_bounds` | Get a layer's geographic extent AND fit/zoom/resize the map to it. | - |
-| `water` | `fetch_nhd_area_water` | Fetch NHD water-surface polygons (the two BANKS of a wide river, an estuary, a canal) inside a bounding box. | - |
-| `mapped_water` | `trid3nt_server.workflows.telemac.templates.reach.measure_water_coverage` | MEASURE how much of the reach the fetched water polygons map -> the water. | - |
-| `reach_polygon` | `section` | Cut a POLYGON LAYER down to the part between two points, or inside an extent -> a polygon layer. | - |
-| `dem` | `fetch_copernicus_dem` | Internal seam -- NOT a model-facing tool (tier="internal"). | EGM2008 geoid (metres, positive up) |
-| `weather_box` | `compute_layer_bounds` | Get a layer's geographic extent AND fit/zoom/resize the map to it. | - |
-| `sample_box` | `compute_layer_bounds` | Get a layer's geographic extent AND fit/zoom/resize the map to it. | - |
+| `domain` | `fetch_river_reach` | Build a RIVER REACH DOMAIN from one seed point -> the reach polygon, its inflow and outflow boundary runs, and the centerline. | - |
+| `runs` | supplied by the caller | the stretches of the domain's edge that carry a boundary condition - each two points on the edge and a type (inflow, outflow, open); a closed body states none | - |
+| `survey` | `fetch_ehydro_surveys` | Fetch USACE eHydro CHANNEL SURVEY soundings + the survey footprint for a bbox -> the measured bed. | - |
+| `surveyed_bed` | `derive_survey_surface` | Interpolate a POINT layer of measurements onto a raster surface -> a continuous grid. | - |
+| `terrain` | `fetch_copernicus_dem` | Internal seam -- NOT a model-facing tool (tier="internal"). | EGM2008 geoid (metres, positive up) |
+| `bed` | `derive_merge_rasters` | MERGE two overlapping surfaces into one, the PRIMARY winning where it measured. | - |
+| `carrier` | `fetch_noaa_nwm_streamflow` | Fetch NOAA National Water Model streamflow as a point FlatGeobuf. | - |
+| `stage` | supplied by the caller | a water-surface elevation this run opens on: a layer of sites that report it, or the number itself in m. | - |
 | `weather` | `fetch_raws_weather` | Fetch RAWS fire-weather station observations as a point FlatGeobuf. | - |
-| `water_sample` | `fetch_usgs_water_quality` | Fetch REAL, OBSERVED water-quality sample sites as a point FlatGeobuf. | - |
+| `water_temperature` | `fetch_usgs_water_quality` | Fetch REAL, OBSERVED water-quality sample sites as a point FlatGeobuf. | - |
 
 ## The sheet
 
@@ -33,22 +31,14 @@ The values the template declares. `desc` is what the model reads when it fills o
 
 | param | door | units | default | desc |
 |---|---|---|---|---|
-| `location` | question | - | optional | Place name on the river, geocoded to the reach |
-| `bbox` | user | - | optional | Explicit AOI (min_lon,min_lat,max_lon,max_lat) EPSG:4326, instead of a place |
-| `river_geometry_uri` | user | - | optional | Reuse an already-fetched river flowline for this reach instead of re-fetching it |
-| `discharge_m3s` | user | m^3/s | optional | Steady upstream discharge - the flow whose depth and travel time set how much heat the reach picks up per kilometre |
-| `event_time` | question | - | optional | The moment to read the carrier discharge cycle at - an ISO date or datetime. The NWM PDS bucket retains only the last ~30 days of history; a deeper request refuses typed. |
-| `weather_start` | question | - | - | First day of the observed weather the reach is driven over, 'YYYY-MM-DD' - from phrasing like 'last week' or 'the first week of August'. The station record is hourly and the network holds the last two weeks, so an earlier day refuses typed |
+| `seed` | user | - | optional | Where on the channel the modelled stretch STARTS, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer, or a place name geocoded first. It seeds the reach the domain is cut from; supply the domain polygon - a lake, a pond, a harbour - instead and this is not read |
+| `weather_start` | question | - | - | First day of the observed weather the water is driven over, 'YYYY-MM-DD' - from phrasing like 'last week' or 'the first week of August'. The station record is hourly and the network holds the last two weeks, so an earlier day refuses typed |
 | `weather_end` | question | - | - | Last day of the observed weather, 'YYYY-MM-DD'. The run is sim_duration_s long from the first observation, so this day has to be far enough past weather_start to cover it; at most 14 days after |
 | `station` | user | - | optional | Where the temperature series and its diurnal range are read, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer, or a place name |
-| `initial_water_temp_c` | user | C | optional | Water temperature the whole reach opens at, and the value carried in at the upstream boundary |
-| `friction_coefficient` | user | - | optional | Bed roughness under friction_law |
-| `friction_law` | user | - | optional | Law interpreting friction_coefficient: 2=Chezy, 3=Strickler, 4=Manning |
-| `output_interval_min` | user | min | optional | Result-writing cadence; unset keeps the steering file's own period |
+| `sim_duration_s` | scenario | s | 604800.0 | Simulated time. A DIURNAL RANGE needs whole days, and this defaults to seven; a shorter run answers what the water did over that window and no more. The weather record has to span every second of it - a run longer than its own forcing refuses rather than extrapolating |
+| `mesh_resolution_m` | scenario | m | 20.0 | Target element edge length the domain is triangulated at; a surface heat budget is divided by the local DEPTH, so what this has to resolve is how deep the water is rather than its planform |
+| `event_time` | question | - | optional | The moment the scenario is read at - an ISO date or datetime ('2026-08-20' or '2026-08-20T06:00:00Z'), from phrasing like 'during last Tuesday's storm'. Each source keeps its own retention, and a request deeper than one refuses typed |
 | `compute_class` | constant | - | medium | Solve sizing class |
-| `reach_length_km` | scenario | km | 12.0 | Modelled reach length downstream of the geocoded point; the water warms with the time it spends in the reach, so the length is how much exposure the question asks about |
-| `sim_duration_s` | scenario | s | 604800.0 | Simulated time. A DIURNAL RANGE needs whole days, and this defaults to seven; a shorter run answers what the reach did over that window and no more. The weather record has to span every second of it - a run longer than its own forcing refuses rather than extrapolating |
-| `mesh_resolution_m` | scenario | m | 20.0 | Target element edge length the reach is triangulated at; a surface heat budget is a reach-scale answer, so this is coarser than a plume question asks for |
 
 ## What it answers
 
@@ -58,7 +48,7 @@ The values the template declares. `desc` is what the model reads when it fills o
 | `peak_temperature_time_s` | 3546.72607421875 |
 | `final_temperature_c` | 9.544106483459473 |
 | `diurnal_range_c` | 0.044106483459472656 |
-| `warming_along_reach_c` | 17.078406175261055 |
+| `temperature_spread_c` | - |
 | `mean_velocity_mps` | 0.5902288277725102 |
 | `mesh_size_m` | 9.323 |
 
@@ -87,21 +77,21 @@ It publishes these layers onto the canvas:
 
 Run `01M2HT8T54CAEX53N1VH7S234R`, 2026-09-15T05:58:30.613274+00:00, 100.962 s, at commit `ad80fc708f8e79070559d6e31e57162ed83008e2-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M2HT8T54CAEX53N1VH7S234R)](telemac_water_temperature/telemac_water_temperature.png)
-
-*Every layer the run published, stacked and framed on the result (run 01M2HT8T54CAEX53N1VH7S234R)*
-
-![The solve, frame by frame (run 01M2HT8T54CAEX53N1VH7S234R)](telemac_water_temperature/telemac_water_temperature_animation.gif)
+![The solve, frame by frame (run 01M2HT8T54CAEX53N1VH7S234R)](telemac_water_temperature/telemac_river_temperature_animation.gif)
 
 *The solve, frame by frame (run 01M2HT8T54CAEX53N1VH7S234R)*
 
-![final frame (run 01M2HT8T54CAEX53N1VH7S234R)](telemac_water_temperature/telemac_water_temperature_final_frame.png)
+![final frame (run 01M2HT8T54CAEX53N1VH7S234R)](telemac_water_temperature/telemac_river_temperature_final_frame.png)
 
 *final frame (run 01M2HT8T54CAEX53N1VH7S234R)*
 
-![water temperature - the chart the run persisted (run 01M2HT8T54CAEX53N1VH7S234R)](telemac_water_temperature/telemac_water_temperature_chart_water_temperature.png)
+![water temperature - the chart the run persisted (run 01M2HT8T54CAEX53N1VH7S234R)](telemac_water_temperature/telemac_river_temperature_chart_water_temperature.png)
 
 *water temperature - the chart the run persisted (run 01M2HT8T54CAEX53N1VH7S234R)*
+
+![ (run 01M2HT8T54CAEX53N1VH7S234R)](telemac_water_temperature/telemac_river_temperature.png)
+
+* (run 01M2HT8T54CAEX53N1VH7S234R)*
 
 ### The sheet it filled
 

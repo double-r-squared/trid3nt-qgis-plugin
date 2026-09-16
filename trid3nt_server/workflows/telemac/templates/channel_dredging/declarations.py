@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from trid3nt_server.inputs import Point
-from trid3nt_server.workflows.runtime import Accepts, Param, doors
+from trid3nt_server.workflows.runtime import Accepts, Param, doors, lever
 from trid3nt_server.workflows.telemac.modules.gaia import GRAIN_UM_MAX, GRAIN_UM_MIN
 
 __all__ = ["ACCEPTS", "DOC", "PARAMS"]
@@ -28,18 +28,8 @@ class PARAMS:
              "point layer. Geocode a place name first; the channel is fetched "
              "downstream of it and the levels every dredging action reads are "
              "stationed along the centerline that comes back with it")
-    discharge_m3s = Param(
-        door=doors.USER, optional=True, units="m^3/s",
-        bounds=(0.01, 1.0e5), consequence="physics", user_lever=True,
-        derived_when_absent=(
-            "the steady carrier discharge is the nearest NOAA National Water "
-            "Model reading over this domain; nothing reporting there refuses "
-            "typed rather than falling back to a constant"),
-        desc="Steady upstream discharge the channel is dredged under - the flow "
-             "that shoals it and carries the disturbed material")
-    sim_duration_s = Param(
-        door=doors.SCENARIO, default=3600.0,
-        bounds=(600.0, 604800.0), units="s", consequence="numerical",
+    sim_duration_s = lever(
+        "sim_duration_s", bounds=(600.0, 604800.0),
         desc="Simulated physical time the dredge campaign runs over; the "
              "morphological factor is what makes a short window produce a "
              "readable bed change")

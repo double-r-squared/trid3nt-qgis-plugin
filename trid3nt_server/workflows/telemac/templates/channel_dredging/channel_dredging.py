@@ -86,6 +86,11 @@ class DATA:
                               seed_point=[Ref("seed_point.lon"),
                                           Ref("seed_point.lat")],
                               distance_km=_REACH_LENGTH_KM))
+    # THE STRETCHES OF ITS EDGE the water crosses. The reach producer measured
+    # them where it cut the section, and they ride on the domain it returned; a
+    # domain that arrives with none - a drawn outline, a lake - is asked for
+    # them on the canvas, and an edge that names none is a closed body's.
+    runs = Data.runs()
     #: THE MEASUREMENT, and the whole reason a dredged volume is worth reading: a
     #: surface DEM measures the water top, so a fairway painted from one is
     #: centimetres deep and the cut to grade is summed over nothing. A channel with
@@ -112,9 +117,10 @@ class DATA:
     #: bed a dredged volume is then summed over.
     bed = Data.bed(tool("derive_merge_rasters", primary=surveyed_bed,
                         fallback=terrain))
-    #: The flow that shoals the fairway and carries what the dredger disturbs,
-    #: where the user stated none: ONE reading off the nearest reporting site.
-    #: What the open channel opened on is said once, on its own journal note.
+    #: The flow that shoals the fairway and carries what the dredger disturbs:
+    #: ONE reading off the nearest reporting site, or the number stated on this
+    #: row, which stands over any record. What the open channel opened on is
+    #: said once, on its own journal note.
     carrier = Data.observation(
         tool("fetch_noaa_nwm_streamflow", bbox=Ref("domain.bbox"),
              valid_time=ParamRef("event_time")),
@@ -128,6 +134,15 @@ class DATA:
     #: or handed over as the port's own layers.
     dredge_area = Data.supplied(geometry="polygon")
     dump_area = Data.supplied(geometry="polygon")
+    # THE LEVEL THE OUTFLOW HOLDS where the reach does not FALL. A reach whose
+    # bed is a surface DEM has the water top for a floor and no fall between its
+    # ends, so there is no uniform-flow depth to derive and the outflow holds at
+    # a level somebody measured instead. An ELEVATION on the datum the bed is
+    # painted on - a gauge publishes its height above its own zero, which is a
+    # different surface, so no source is named here and the number is stated.
+    stage = Data.observation(near=Ref("domain.centroid"), units="m",
+                             measures="a water-surface elevation",
+                             opens="the outflow holds at").optional()
 
 
 class STEERING(T2D):
@@ -280,7 +295,7 @@ telemac_channel_dredging = register_workflow(
             Step(runner=f"{_AUTHORING}.assembler.settle_open_channel",
                  stage="author",
                  kwargs={"mesh": Ref("mesh"), "carrier": Ref("carrier"),
-                         "discharge_m3s": P.discharge_m3s,
+                         "stage": Ref("stage"),
                          "friction_law": _FRICTION_LAW,
                          "friction_coefficient": _FRICTION_COEFFICIENT}
                  ).named("channel"),
@@ -304,8 +319,7 @@ telemac_channel_dredging = register_workflow(
     data=DATA,
     accepts=ACCEPTS,
     answer=tuple(ANSWER),
-    provenance=(("discharge_m3s", "discharge_note"),
-                ("mesh_resolution_m", "mesh_resolution_note")),
+    provenance=(("mesh_resolution_m", "mesh_resolution_note"),),
     # The dredged volume is a sum over the nodes inside the field, so a coarse
     # mesh resolves a narrow fairway - and the volume it holds - badly.
     sensitivity=(("dug_volume_m3", "peak"),

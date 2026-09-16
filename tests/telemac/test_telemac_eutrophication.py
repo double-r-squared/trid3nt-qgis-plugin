@@ -405,10 +405,10 @@ def test_the_mesh_is_built_over_the_domain_slot_at_the_runtimes_lever():
     assert recipe.resolution_m.name == "mesh_resolution_m"
     bed = next(op for op in recipe.ops if op.fn == "set_bed")
     assert bed.kwargs == {"source": DataRef("bed")}
-    # no runs row is declared, so the two faces the domain's producer cut the
-    # polygon between are the boundary runs
+    # The runs slot: the two faces the domain's producer cut the polygon
+    # between, the user's own runs, or what they draw on the canvas.
     runs = next(op for op in recipe.ops if op.fn == "set_boundary_roles")
-    assert runs.kwargs == {"runs": DataRef("domain")}
+    assert runs.kwargs == {"runs": DataRef("runs")}
 
 
 def test_the_bed_is_one_row_composed_from_the_survey_over_the_terrain():

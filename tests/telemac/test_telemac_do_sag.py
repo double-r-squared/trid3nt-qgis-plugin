@@ -105,8 +105,15 @@ def test_the_params_are_the_questions_own_plus_the_runtimes_levers():
                            "output_interval_min"}
     assert not declared & {"location", "bbox", "river_geometry_uri",
                            "reach_length_km"}
+    # Every lever is on the sheet; the ones this question does not state for
+    # itself are seated at the end, in the order the runtime declares them.
+    from trid3nt_server.workflows.runtime import param_rows
+
+    own = {p.name for p in param_rows(_template().PARAMS)}
     seated = [p.name for p in _workflow().params]
-    assert seated[-len(LEVER_NAMES):] == list(LEVER_NAMES)
+    assert set(LEVER_NAMES) <= set(seated)
+    appended = [name for name in LEVER_NAMES if name not in own]
+    assert seated[-len(appended):] == appended
     # The roughness the outflow stage is derived at is the roughness the deck is
     # written at - one number, stated once on the body.
     steering = _template().STEERING
@@ -115,14 +122,14 @@ def test_the_params_are_the_questions_own_plus_the_runtimes_levers():
 
 
 def test_the_three_slots_are_the_world_this_run_stands_on():
-    """One domain, one bed composed by the merge derive, and no runs row - so the
-    reach producer's own two faces are what the mesh prescribes on."""
+    """One domain, one bed composed by the merge derive, and the runs slot the
+    reach producer's own two faces reach the mesh through."""
     from trid3nt_server.workflows.runtime import DataRef, data_rows
     from trid3nt_server.workflows.runtime.data import BED, DOMAIN, RUNS
 
     rows = data_rows(_template().DATA)
-    assert [d.name for d in rows] == ["domain", "survey", "surveyed_bed",
-                                      "terrain", "bed", "carrier"]
+    assert [d.name for d in rows] == ["domain", "runs", "survey", "surveyed_bed",
+                                      "terrain", "bed", "carrier", "stage"]
     by_name = {d.name: d for d in rows}
     assert by_name["domain"].role == DOMAIN
     assert by_name["domain"].producer.runner == "fetch_river_reach"
@@ -130,9 +137,11 @@ def test_the_three_slots_are_the_world_this_run_stands_on():
     assert by_name["bed"].producer.runner == "derive_merge_rasters"
     assert by_name["bed"].producer.kwargs["primary"] == DataRef("surveyed_bed")
     assert by_name["bed"].producer.kwargs["fallback"] == DataRef("terrain")
-    assert not [d for d in rows if d.role == RUNS]
+    runs = next(d for d in rows if d.role == RUNS)
+    assert (runs.producer, runs.is_optional) == (None, True)
     # The bed is a MERGE of two available layers, never a fallback chain.
-    assert all(d.producer.ladder_rungs == () for d in rows)
+    assert all(d.producer is None or d.producer.ladder_rungs == ()
+               for d in rows)
     # Both slots reach the wire: what the user supplies supersedes the producer.
     assert by_name["domain"].fills_from_user and by_name["bed"].fills_from_user
 
@@ -215,7 +224,7 @@ def test_the_mesh_is_built_over_the_domain_slot_at_the_runtimes_own_lever():
     bed = next(op for op in recipe.ops if op.fn == "set_bed")
     assert bed.kwargs == {"source": DataRef("bed")}
     runs = next(op for op in recipe.ops if op.fn == "set_boundary_roles")
-    assert runs.kwargs == {"runs": DataRef("domain")}
+    assert runs.kwargs == {"runs": DataRef("runs")}
 
 
 def test_the_settle_step_reads_the_files_the_deck_itself_names():

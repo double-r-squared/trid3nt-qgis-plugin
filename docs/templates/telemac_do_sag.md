@@ -2,7 +2,7 @@
 
 # `telemac_do_sag`
 
-DISSOLVED-OXYGEN SAG below a discharge in a river (US TMDL / permit question).
+DISSOLVED-OXYGEN SAG below a discharge (US TMDL / permit question).
 
 |  |  |
 |---|---|
@@ -14,14 +14,13 @@ DISSOLVED-OXYGEN SAG below a discharge in a river (US TMDL / permit question).
 
 | row | produced by | what it is | datum |
 |---|---|---|---|
-| `rivers` | `trid3nt_server.workflows.telemac.templates.reach.fetch_reach_flowline` | The reach flowline FlatGeobuf over the CURRENT DOMAIN. Reference data. | - |
-| `centerline` | `fetch_nhdplus_nldi_navigate` | Walk the NHDPlus stream network from a seed in the requested direction. | - |
-| `ends` | `endpoints` | Take the TWO END POINTS of a line layer -> a point layer plus the pair itself. | - |
-| `window` | `compute_layer_bounds` | Get a layer's geographic extent AND fit/zoom/resize the map to it. | - |
-| `water` | `fetch_nhd_area_water` | Fetch NHD water-surface polygons (the two BANKS of a wide river, an estuary, a canal) inside a bounding box. | - |
-| `mapped_water` | `trid3nt_server.workflows.telemac.templates.reach.measure_water_coverage` | MEASURE how much of the reach the fetched water polygons map -> the water. | - |
-| `reach_polygon` | `section` | Cut a POLYGON LAYER down to the part between two points, or inside an extent -> a polygon layer. | - |
-| `dem` | `fetch_copernicus_dem` | Internal seam -- NOT a model-facing tool (tier="internal"). | EGM2008 geoid (metres, positive up) |
+| `domain` | `fetch_river_reach` | Build a RIVER REACH DOMAIN from one seed point -> the reach polygon, its inflow and outflow boundary runs, and the centerline. | - |
+| `runs` | supplied by the caller | the stretches of the domain's edge that carry a boundary condition - each two points on the edge and a type (inflow, outflow, open); a closed body states none | - |
+| `survey` | `fetch_ehydro_surveys` | Fetch USACE eHydro CHANNEL SURVEY soundings + the survey footprint for a bbox -> the measured bed. | - |
+| `surveyed_bed` | `derive_survey_surface` | Interpolate a POINT layer of measurements onto a raster surface -> a continuous grid. | - |
+| `terrain` | `fetch_copernicus_dem` | Internal seam -- NOT a model-facing tool (tier="internal"). | EGM2008 geoid (metres, positive up) |
+| `bed` | `derive_merge_rasters` | MERGE two overlapping surfaces into one, the PRIMARY winning where it measured. | - |
+| `carrier` | `fetch_noaa_nwm_streamflow` | Fetch NOAA National Water Model streamflow as a point FlatGeobuf. | - |
 
 ## The sheet
 
@@ -29,28 +28,20 @@ The values the template declares. `desc` is what the model reads when it fills o
 
 | param | door | units | default | desc |
 |---|---|---|---|---|
-| `location` | question | - | optional | Place name on the river, geocoded to the reach |
-| `bbox` | user | - | optional | Explicit AOI (min_lon,min_lat,max_lon,max_lat) EPSG:4326, instead of a place |
-| `river_geometry_uri` | user | - | optional | Reuse an already-fetched river flowline for this reach instead of re-fetching it |
-| `discharge_m3s` | user | m^3/s | optional | Steady upstream CARRIER discharge - the river flow that dilutes and transports the release |
-| `event_time` | question | - | optional | The storm/event moment to read the carrier discharge cycle at - from phrasing like 'during last Tuesday's storm'; an ISO date or datetime (e.g. '2026-08-20' or '2026-08-20T06:00:00Z'). Unset reads the most recent published NWM cycle. The NWM PDS bucket retains only the last ~30 days of history; a deeper request refuses typed rather than silently reading a different cycle. |
-| `friction_coefficient` | user | - | optional | Bed roughness under friction_law |
-| `friction_law` | user | - | optional | Law interpreting friction_coefficient: 2=Chezy, 3=Strickler, 4=Manning |
-| `output_interval_min` | user | min | optional | Result-writing cadence; unset keeps the steering file's own period |
-| `compute_class` | constant | - | medium | Solve sizing class |
-| `outfall_coords` | user | - | optional | Where the discharge enters the water, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer, or a place name; unset seeds the reach at the derived reach point |
-| `effluent_bod_mgl` | scenario | mg/L | 250.0 | Ultimate carbonaceous BOD IN THE DISCHARGE ITSELF - what leaves the outfall pipe, before any dilution; the reach's mixed load is what the solve computes from this and the carrier flow |
-| `effluent_q_m3s` | scenario | m^3/s | 1.0 | Discharge rate at the outfall - with the carrier flow this sets the dilution, and so how much of the effluent load the river carries |
+| `outfall_coords` | user | - | optional | Where the discharge enters the water, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer, or a place name. On a river with no domain supplied it is also the seed the reach is walked downstream from |
+| `effluent_bod_mgl` | scenario | mg/L | 250.0 | Ultimate carbonaceous BOD IN THE DISCHARGE ITSELF - what leaves the outfall pipe, before any dilution; the mixed load the water carries is what the solve computes from this and the carrier flow |
+| `effluent_q_m3s` | scenario | m^3/s | 1.0 | Discharge rate at the outfall - with the carrier flow this sets the dilution, and so how much of the effluent load the water carries |
 | `effluent_do_mgl` | scenario | mg/L | 2.0 | Dissolved oxygen in the discharge itself; a treated effluent arrives oxygen-poor, which is the initial deficit the sag starts from |
 | `water_temp_c` | scenario | C | 20.0 | Water temperature, which sets the DO saturation the deficit is measured against; 20 C is the standard Streeter-Phelps condition |
-| `do_standard_mgl` | scenario | mg/L | 5.0 | The DO water-quality standard the sag is judged against; 5 is a common warm-water aquatic-life criterion |
 | `k1_per_day` | scenario | 1/day | 0.3 | CBOD deoxygenation rate - a documented rate coefficient |
 | `k2_per_day` | scenario | 1/day | 0.9 | Surface reaeration rate - a documented rate coefficient |
-| `reach_length_km` | scenario | km | 12.0 | Modeled reach length downstream of the discharge; the sag critical point is often several km down |
 | `do_saturation_mgl` | derived | mg/L | - | DO saturation Cs; derived from water temperature unless supplied |
-| `upstream_do_mgl` | derived | mg/L | - | DO carried in at the top of the reach; derived as saturation unless supplied |
-| `sim_duration_s` | scenario | s | 172800.0 | Simulated time. A sag is a STEADY-STATE answer, so this has to cover several travel times through the reach AND be long against 1/k1 - a window shorter than that reports a sag that has not developed yet |
-| `mesh_resolution_m` | scenario | m | 14.0 | Target element edge length the reach is triangulated at; where the sag bottoms out is a local feature and moves with the element that resolves it |
+| `upstream_do_mgl` | derived | mg/L | - | DO carried in at the inflow run; derived as saturation unless supplied |
+| `do_standard_mgl` | scenario | mg/L | 5.0 | The DO water-quality standard the sag is judged against; 5 is a common warm-water aquatic-life criterion |
+| `sim_duration_s` | scenario | s | 172800.0 | Simulated time. A sag is a STEADY-STATE answer, so this has to cover several travel times through the domain AND be long against 1/k1 - a window shorter than that reports a sag that has not developed yet |
+| `mesh_resolution_m` | scenario | m | 14.0 | Target element edge or cell length the domain is resolved at. The granularity is the USER's lever: no sizing rung derives an edge from a channel nobody surveyed, so the number the run meshes at is either yours or this labeled default |
+| `event_time` | question | - | optional | The moment the scenario is read at - an ISO date or datetime ('2026-08-20' or '2026-08-20T06:00:00Z'), from phrasing like 'during last Tuesday's storm'. Each source keeps its own retention, and a request deeper than one refuses typed |
+| `compute_class` | constant | - | medium | Solve sizing class |
 
 ## What it answers
 

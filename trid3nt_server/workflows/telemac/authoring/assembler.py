@@ -1028,33 +1028,46 @@ async def settle_open_channel(
     friction_law: int,
     friction_coefficient: float,
     carrier: Any = None,
-    discharge_m3s: float | None = None,
+    stage: Any = None,
 ) -> dict[str, Any]:
     """The OPEN-CHANNEL hydraulics on top of any domain: what the inflow carries,
     what the outflow holds, and the depth the run opens at.
 
-    The flow is the one the user stated, else the one the carrier record reports;
-    the stage is a NORMAL DEPTH over the section the outflow run cuts, derived at
-    the roughness the deck is written at, and the run opens bed-parallel at that
-    same depth - the equilibrium its own downstream boundary holds it to rather
-    than a blanket depth draining into it."""
+    The flow is what the inflow run carries - a reading, or the number stated on
+    the call. The stage is a NORMAL DEPTH over the section the outflow run cuts,
+    derived at the roughness the deck is written at, and the run opens
+    bed-parallel at that same depth - the equilibrium its own downstream boundary
+    holds it to rather than a blanket depth draining into it. A reach whose
+    measured ends do not FALL has no uniform-flow depth at all, and holds at the
+    level ``stage`` measured instead."""
     artifact = mesh.get("artifact")
     utm_epsg = int(getattr(artifact, "utm_epsg", 0) or 0)
     node_xy, node_bed = await asyncio.to_thread(mesh_nodes, mesh)
     topology = await asyncio.to_thread(
         read_topology, _mesh_field(mesh, "topology_uri", missing=_mesh_missing))
     law, coefficient = int(friction_law), float(friction_coefficient)
-    inflow_q, discharge_note = _carried_discharge(carrier, discharge_m3s)
+    inflow_q, discharge_note = _carried_discharge(carrier)
     bed = _measured_channel(topology["roles"], node_xy, node_bed)
-    normal = normal_depth_stage(bed, law=law, coefficient=coefficient,
-                                discharge_q=inflow_q)
-    journal_note(
-        f"open channel: constant depth {normal['depth_m']:.3f} m - the SAME "
-        f"normal depth the outflow stage {normal['stage_m']:.3f} m is derived as "
-        f"({normal['q_m3s']:g} m3/s over the measured outflow section at "
-        f"{normal['law']} {normal['coefficient']:g}). Bed-parallel at the "
-        f"friction slope {normal['slope']:.6f}, which IS the uniform-flow "
-        f"surface. {discharge_note}")
+    held = _held_level(stage)
+    if held is not None and float(bed["bed_drop_m"]) <= 0.0:
+        normal = _level_opening(bed, held, discharge_q=inflow_q)
+        journal_note(
+            f"open channel: the measured ends fall {normal['drop_m']:.3f} m over "
+            f"{normal['length_m']:.1f} m, so there is no uniform-flow depth to "
+            f"derive; the outflow HOLDS at the measured level "
+            f"{normal['stage_m']:.3f} m and the run opens flat at the "
+            f"{normal['depth_m']:.3f} m that leaves over the outflow section. "
+            f"{normal['held']} {discharge_note}")
+    else:
+        normal = normal_depth_stage(bed, law=law, coefficient=coefficient,
+                                    discharge_q=inflow_q)
+        journal_note(
+            f"open channel: constant depth {normal['depth_m']:.3f} m - the SAME "
+            f"normal depth the outflow stage {normal['stage_m']:.3f} m is derived "
+            f"as ({normal['q_m3s']:g} m3/s over the measured outflow section at "
+            f"{normal['law']} {normal['coefficient']:g}). Bed-parallel at the "
+            f"friction slope {normal['slope']:.6f}, which IS the uniform-flow "
+            f"surface. {discharge_note}")
     measured = mesh.get("min_edge_m")
     return {
         "utm_epsg": utm_epsg,
@@ -1075,22 +1088,76 @@ async def settle_open_channel(
     }
 
 
-def _carried_discharge(carrier: Any, stated: float | None) -> tuple[float, str]:
+def _carried_discharge(carrier: Any) -> tuple[float, str]:
     """What the inflow run carries, and where the number came from -> refuses.
 
-    A stated flow stands over any record; with neither there is no flow to
-    impose and the run says which of the two is missing."""
-    if stated is not None and float(stated) > 0.0:
-        return float(stated), f"the discharge {float(stated):g} m3/s was stated."
+    One value, whichever way it arrived: the slot reads a stated number and a
+    record the same, and a stated one stands over any record. Nothing carried is
+    no flow to impose, and the run says so."""
     reported = _reported_discharge(carrier)
     if reported is None:
         raise TelemacError(
-            "the inflow run carries a discharge and this run has neither a "
-            "stated one nor a record reporting one over this domain. State the "
-            "flow, or name a source that reaches this water.",
+            "the inflow run carries a discharge and nothing reported one over "
+            "this domain. State the flow on the carrier slot, or name a source "
+            "that reaches this water.",
             error_code="TELEMAC_INFLOW_DISCHARGE_UNMEASURED")
     value, note = reported
     return value, note
+
+
+def _held_level(stage: Any) -> tuple[float, str] | None:
+    """The water-surface ELEVATION somebody measured at the outflow, or ``None``.
+
+    An elevation on the datum the bed is painted on - never a height above a
+    gauge's own zero, which is a different number about a different surface."""
+    from trid3nt_server.inputs.observation import Observation
+
+    if stage is None:
+        return None
+    if isinstance(stage, (int, float)) and not isinstance(stage, bool):
+        return float(stage), "the outflow level was handed over as a number."
+    if not isinstance(stage, Observation):
+        raise TelemacError(
+            f"the outflow level for this run arrived as {type(stage).__name__}, "
+            "which is a record rather than a reading: which site reports the "
+            "level and how old the sample is are the observation slot's to "
+            "decide. Declare the row as Data.observation(...) so one value "
+            "reaches this step.",
+            error_code="TELEMAC_STAGE_UNINGESTED")
+    return float(stage.value), (
+        f"the outflow holds at {stage.value:g} m, which "
+        f"{stage.site_name or stage.site_id or 'the record'} reported"
+        + (f" on {stage.sampled}" if stage.sampled else "") + ".")
+
+
+def _level_opening(bed: Mapping[str, Any], held: tuple[float, str], *,
+                   discharge_q: float) -> dict[str, Any]:
+    """The opening a reach that does not FALL takes: the level that was measured.
+
+    A uniform-flow depth is a fall over a length, so measured ends that sit level
+    have none; the water still stands where the measurement says it does, and the
+    run opens flat at the depth that leaves over the outflow section."""
+    stage_m, note = held
+    section = [(float(offset), float(z))
+               for offset, z in (bed.get("outflow_section") or ())]
+    if len(section) < 2:
+        raise TelemacError(
+            f"the outflow run's own section carries {len(section)} point(s), so "
+            "there is no bed under the level the outflow is held at.",
+            error_code="TELEMAC_OUTFLOW_SECTION_UNMEASURED")
+    thalweg = min(z for _offset, z in section)
+    depth = stage_m - thalweg
+    if depth <= 0.0:
+        raise TelemacError(
+            f"the outflow is held at {stage_m:.3f} m and the deepest node of the "
+            f"outflow run's own section sits at {thalweg:.3f} m, so the level "
+            "handed over is at or below the bed. A level here is an ELEVATION on "
+            "the datum the bed is painted on, not a height above a gauge's zero.",
+            error_code="TELEMAC_OUTFLOW_STAGE_BELOW_BED")
+    return {"stage_m": stage_m, "depth_m": depth, "slope": 0.0,
+            "drop_m": float(bed["bed_drop_m"]),
+            "length_m": float(bed["reach_length_m"]),
+            "held": note, "q_m3s": float(discharge_q)}
 
 
 def _reported_discharge(carrier: Any) -> tuple[float, str] | None:
@@ -1104,7 +1171,8 @@ def _reported_discharge(carrier: Any) -> tuple[float, str] | None:
     if carrier is None:
         return None
     if isinstance(carrier, (int, float)) and not isinstance(carrier, bool):
-        return float(carrier), "the discharge was handed over as a number."
+        return float(carrier), (
+            f"the discharge {float(carrier):g} m3/s was stated on the call.")
     if not isinstance(carrier, Observation):
         raise TelemacError(
             f"the carrier for this run arrived as {type(carrier).__name__}, which "
@@ -1112,9 +1180,16 @@ def _reported_discharge(carrier: Any) -> tuple[float, str] | None:
             "how old the sample is are the observation slot's to decide. Declare "
             "the row as Data.observation(...) so one value reaches this step.",
             error_code="TELEMAC_CARRIER_UNINGESTED")
+    where = carrier.site_name or carrier.site_id
+    if not where and not carrier.sampled:
+        # A reading with no site and no moment is the value the caller STATED,
+        # which the slot carries in the same shape as a record so this step reads
+        # one thing; saying a record reported it would name a source nobody read.
+        return float(carrier.value), (
+            f"the discharge {carrier.value:g} m3/s was stated on the call.")
     return float(carrier.value), (
         f"the discharge {carrier.value:g} m3/s is what "
-        f"{carrier.site_name or carrier.site_id or 'the carrier record'} reported"
+        f"{where or 'the carrier record'} reported"
         + (f" on {carrier.sampled}" if carrier.sampled else "") + ".")
 
 
@@ -1134,13 +1209,22 @@ def _measured_channel(roles: Mapping[str, Any], node_xy: Any,
     role_nodes: dict[str, list[int]] = {}
     for role in ("inflow", "outflow"):
         nodes = [int(n) for n in ((roles or {}).get(role) or ())]
-        if bed is None or not nodes or max(nodes) >= bed.shape[0]:
+        if not nodes:
+            named = sorted(roles or {})
+            raise TelemacError(
+                f"this domain's edge names no {role!r} run, and an open channel "
+                "is a stretch of the edge the water enters by and a stretch it "
+                f"leaves by; the accepted mesh carries {named or 'no runs'}. "
+                "Draw the two runs on the edge, or name a domain producer that "
+                "measured them - a body whose edge names none is CLOSED, and a "
+                "closed body is asked a still-water question.",
+                error_code="TELEMAC_BOUNDARY_RUN_UNNAMED")
+        if bed is None or max(nodes) >= bed.shape[0]:
             raise TelemacError(
                 f"the outflow stage is derived over the painted bed at the "
                 f"{role!r} run's own nodes, and the accepted mesh carries "
                 f"{0 if bed is None else bed.shape[0]} bed values under roles "
-                f"{sorted(roles or {})}; an open channel names an inflow run and "
-                "an outflow run on its domain's edge.",
+                f"{sorted(roles or {})}.",
                 error_code="TELEMAC_MESH_BED_UNMEASURED")
         median = float(np.nanmedian(bed[nodes]))
         if not np.isfinite(median):
@@ -1367,95 +1451,43 @@ async def settle_harbour(
     }
 
 
-async def settle_basin(
-    *,
-    mesh: dict[str, Any],
-    warm_temp_c: float,
-    cold_temp_c: float,
-    thermocline_depth_m: float,
-    wind_speed_mps: float,
-    wind_direction_deg: float,
-    levels: int,
-    sim_duration_hours: float,
-    time_step_s: float | None,
-    output_interval_min: float | None,
-    surface_m: float,
-    domain_note: str = "",
-    level_note: str = "",
-    result_basename: str,
-) -> dict[str, Any]:
-    """What the accepted basin mesh measures -> what the 3D sheet is filled from.
+async def settle_basin(*, mesh: dict[str, Any],
+                       level: Any = None) -> dict[str, Any]:
+    """What a COLUMN needs on top of any domain: the free surface it opens at,
+    and the deepest column the accepted mesh carries under it.
 
-    A basin naming no liquid boundary is what a lake IS: recorded, not refused."""
+    A body nobody gauges opens at the zero its bed is counted from, which is
+    where a stated depth and every charted bathymetry are measured."""
     import numpy as np
 
     facts = _mesh_facts(mesh, missing=_basin_mesh_missing)
-    topology = read_topology(_mesh_field(mesh, "topology_uri",
-                                         missing=_basin_mesh_missing))
+    topology = await asyncio.to_thread(
+        read_topology, _mesh_field(mesh, "topology_uri",
+                                   missing=_basin_mesh_missing))
     _points, _cells, node_bed, _lonlat = await asyncio.to_thread(
         read_accepted_mesh_nodes,
         _mesh_field(mesh, "display_uri", missing=_basin_mesh_missing))
+    surface_m = float(getattr(level, "value", level) or 0.0)
     # The one measurement a vertical grid cannot be planned without is the DEEPEST
     # column the mesh carries: the near-surface layer a sigma grid achieves is set
     # over that column, so a plan made against a shallower one is a grid that
     # cannot hold the declared thermocline where the thermocline actually is. A
     # column is the free surface minus the bed, both on the one datum the level
-    # producer already refused to mix.
-    max_depth = float(surface_m) - float(np.nanmin(np.asarray(node_bed,
-                                                              dtype=float)))
-    duration_s = float(sim_duration_hours) * 3600.0
-    # The step the basin is solved at is the accepted mesh's, through the one CFL
-    # producer the reach's step comes from; a stated step is the caller's lever
-    # and stands as written.
-    derived_step = suggest_time_step_s(facts["mesh_size_m"],
-                                       mesh=mesh.get("artifact"))
-    step_s = float(time_step_s) if time_step_s is not None else derived_step
-    steps = max(1, int(round(duration_s / step_s)))
+    # row and the bed row state between them.
+    max_depth = surface_m - float(np.nanmin(np.asarray(node_bed, dtype=float)))
+    if max_depth <= 0.0:
+        raise TelemacError(
+            f"the free surface opens at {surface_m:.3f} m and the deepest node "
+            "of the accepted mesh sits at or above it, so this domain holds no "
+            "water for a column to be solved in. State the depth the body holds, "
+            "or name a bed measured on the datum the level is read on.",
+            error_code="TELEMAC3D_COLUMN_EMPTY")
     journal_note(
         f"basin column: {facts['mesh_node_count']} nodes over a {max_depth:.1f} m "
-        f"deepest column below a {float(surface_m):.3f} m free surface, "
-        f"{levels} sigma planes over {sim_duration_hours:g} h at "
-        f"{step_s:g} s "
-        f"({'stated' if time_step_s is not None else 'CFL-derived'} step; the "
-        f"mesh measures {facts['mesh_size_m']:g} m). "
-        f"{topology['states']} - the water in this domain is conserved."
-        + (f" {domain_note}" if domain_note else "")
-        + (f" {level_note}" if level_note else ""))
-    return {
-        **facts,
-        "name": _slug(facts["mesh_name"]),
-        "title": f"TELEMAC3D {facts['mesh_name']}",
-        "boundary_states": topology["states"],
-        "max_depth_m": round(max_depth, 2),
-        "surface_m": round(float(surface_m), 3),
-        "level_note": level_note,
-        "duration_s": duration_s,
-        "time_step_s": step_s,
-        "n_steps": steps,
-        "graphic_period": _graphic_period(output_interval_min, step_s),
-        "listing_period": max(1, steps // 10),
-        "warm_temp_c": float(warm_temp_c),
-        "cold_temp_c": float(cold_temp_c),
-        "thermocline_depth_m": float(thermocline_depth_m),
-        "wind_speed_mps": float(wind_speed_mps),
-        "wind_direction_deg": float(wind_direction_deg),
-        "mesh_inputs": [
-            {"gs_uri": _mesh_field(mesh, "slf_uri", missing=_basin_mesh_missing),
-             "dest": BASIN_GEOMETRY},
-            {"gs_uri": _mesh_field(mesh, "cli_uri", missing=_basin_mesh_missing),
-             "dest": BASIN_BOUNDARY}],
-        "server_facts": {
-            "utm_epsg": int(facts["utm_epsg"]),
-            "bbox": [round(float(v), 6) for v in facts["lonlat_bounds"]],
-            "npoin": facts["mesh_node_count"],
-            "nelem": facts["mesh_element_count"],
-            "mesh_size_m": facts["mesh_size_m"],
-            "name": facts["mesh_name"],
-            "duration_s": duration_s,
-            "time_step_s": step_s,
-            "result_slf": result_basename,
-            "bed_source": facts["bed_source"]},
-    }
+        f"deepest column below a {surface_m:.3f} m free surface. "
+        f"{topology['states']} - the water in this domain is conserved.")
+    return {"max_depth_m": round(max_depth, 2),
+            "surface_m": round(surface_m, 3)}
 
 
 def _segments_utm(polylines: Sequence[Any], utm_epsg: int) -> list[list[float]]:

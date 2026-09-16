@@ -7,7 +7,7 @@ module's dictionary describes. Every number below is this question's own."""
 from __future__ import annotations
 
 from trid3nt_server.inputs import Point
-from trid3nt_server.workflows.runtime import Param, doors
+from trid3nt_server.workflows.runtime import Param, doors, lever
 
 __all__ = [
     "DOC",
@@ -125,12 +125,11 @@ class PARAMS:
     # unlike the coastal window (USER: the gauge record defines it), how long you
     # watch a catchment respond decides whether the hydrograph carries its peak
     # and how much of the recession - which is part of the question being asked.
-    sim_duration_s = Param(
-        door=doors.SCENARIO, default=43200.0, bounds=(360.0, 2.592e6),
-        units="s", consequence="numerical",
+    sim_duration_s = lever(
+        "sim_duration_s", default=43200.0, bounds=(360.0, 2.592e6),
         desc="Total simulated window; longer than the rain, to watch the "
-             "recession. A window that closes while the discharge is still rising "
-             "is reported as such and its peak is a LOWER BOUND")
+             "recession. A window that closes while the discharge is still "
+             "rising is reported as such and its peak is a LOWER BOUND")
 
     # -- infiltration ------------------------------------------------------- #
     antecedent_moisture = Param(
@@ -160,12 +159,12 @@ class PARAMS:
     # triangulates a BAND rather than one edge, so this row states the band's
     # fine end at the default a hillslope basin is screened at and the row below
     # states its coarse end.
-    mesh_resolution_m = Param(
-        door=doors.SCENARIO, default=40.0,
-        bounds=(5.0, 500.0), units="m", user_lever=True, consequence="numerical",
+    mesh_resolution_m = lever(
+        "mesh_resolution_m", default=40.0, bounds=(5.0, 500.0),
         desc="Finest triangle edge, reached where the mesh refines toward the "
              "channel network. THE granularity lever: peak depth and flooded "
-             "extent are resolution-bound classes and a coarse mesh reads both low")
+             "extent are resolution-bound classes and a coarse mesh reads both "
+             "low")
     mesh_max_edge_m = Param(
         door=doors.SCENARIO, default=300.0,
         bounds=(20.0, 5000.0), units="m", consequence="numerical",

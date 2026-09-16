@@ -155,8 +155,10 @@ def test_the_settle_step_reads_the_files_the_deck_itself_names():
 
 def test_the_runtime_levers_are_seated_so_the_template_states_none_of_them():
     workflow = _workflow(Door(steering=STEERING))
+    # The template's own row for a lever keeps its place; every lever it does
+    # not state is seated after it, in the order the runtime declares them.
     assert [prm.name for prm in workflow.params] == [
-        "sim_duration_s", *LEVER_NAMES]
+        "sim_duration_s", *(n for n in LEVER_NAMES if n != "sim_duration_s")]
 
 
 def test_the_domain_and_the_bed_reach_the_wire_as_the_slots_they_are():

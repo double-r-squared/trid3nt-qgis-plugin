@@ -123,6 +123,25 @@ def test_an_extent_slot_reads_a_box_however_the_caller_named_it():
     assert stated.name == "the harbour window"
 
 
+def test_a_domain_says_its_own_name_when_it_is_read_as_text():
+    """A mesh session, a layer title and a run's own name are all written from
+    the domain, so a domain that read as its geometry named every one of them
+    after its coordinates."""
+    from trid3nt_server.workflows.mesh.step import _session_name
+
+    named = domain({"type": "FeatureCollection", "name": "Willamette River",
+                    "features": [{"type": "Feature", "properties": {},
+                                  "geometry": {"type": "Polygon",
+                                               "coordinates": [[*_RING,
+                                                                _RING[0]]]}}]})
+    assert str(named) == "Willamette River"
+    assert _session_name(named, "om2d") == "Willamette River mesh"
+    # A drawn outline has no name and is not its coordinates either.
+    drawn = domain(_RING)
+    assert str(drawn) == "domain"
+    assert _session_name(drawn, "om2d") == "domain mesh"
+
+
 def test_only_the_slots_a_user_can_draw_are_offered_on_the_canvas():
     """A bed is a survey or a number, so there is nothing to draw for it."""
     assert set(DRAW_PURPOSES) == {DOMAIN, RUNS, EXTENT}

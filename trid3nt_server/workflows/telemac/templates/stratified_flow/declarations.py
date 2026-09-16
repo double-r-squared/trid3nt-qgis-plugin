@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from trid3nt_server.inputs import Point
-from trid3nt_server.workflows.runtime import Param, doors
+from trid3nt_server.workflows.runtime import Param, doors, lever
 
 __all__ = ["DOC", "PARAMS"]
 
@@ -69,9 +69,8 @@ class PARAMS:
     # The runtime's own lever, restated ONLY for its default: 14 m over a lake is
     # a mesh nothing this question asks needs, because a vertical-structure
     # question is resolution-bound in the VERTICAL.
-    mesh_resolution_m = Param(
-        door=doors.SCENARIO, default=120.0, bounds=(20.0, 5000.0),
-        units="m", consequence="numerical", user_lever=True,
+    mesh_resolution_m = lever(
+        "mesh_resolution_m", default=120.0, bounds=(20.0, 5000.0),
         desc="Target triangle edge the water body's interior is meshed at. The "
              "horizontal spends its budget on COVERING the body rather than on "
              "detail; the 3D node count is this mesh's nodes times the levels")
@@ -80,9 +79,9 @@ class PARAMS:
     # CONSTANT, not SCENARIO: the window is a settling time, not a scenario. The
     # answer is the column's SETTLED state, so this is "long enough". The user
     # keeps the lever.
-    sim_duration_s = Param(
-        door=doors.CONSTANT, default=18000.0, bounds=(3600.0, 86400.0),
-        units="s", consequence="numerical",
+    sim_duration_s = lever(
+        "sim_duration_s", door=doors.CONSTANT, default=18000.0,
+        bounds=(3600.0, 86400.0),
         desc="Simulated duration - long enough for the column to settle or mix")
 
 

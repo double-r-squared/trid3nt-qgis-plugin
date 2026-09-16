@@ -33,6 +33,7 @@ from .errors import (
 from .interpreter import PlanNode, RunResult, expand_plan, interpret
 from .journal import journal_note
 from .ledger import LedgerRecord, StepLedger, invocation_key
+from .levers import lever
 from .params import (
     Derived,
     Param,
@@ -115,7 +116,7 @@ __all__ = [
     "expand_plan",
     "interpret",
     "invocation_key",
-    "journal_note",
+    "journal_note", "lever",
     "merge_provenance", "param_rows", "provenance_entries",
     "read_snapshot",
     "rederive_revised",

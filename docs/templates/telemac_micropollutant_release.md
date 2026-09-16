@@ -2,7 +2,7 @@
 
 # `telemac_micropollutant_release`
 
-A SORBING substance in a RIVER: how much stays DISSOLVED and how much ends up ON THE BED.
+A SORBING substance released into water: how much stays DISSOLVED and how much ends up ON THE BED.
 
 |  |  |
 |---|---|
@@ -14,14 +14,13 @@ A SORBING substance in a RIVER: how much stays DISSOLVED and how much ends up ON
 
 | row | produced by | what it is | datum |
 |---|---|---|---|
-| `rivers` | `trid3nt_server.workflows.telemac.templates.reach.fetch_reach_flowline` | The reach flowline FlatGeobuf over the CURRENT DOMAIN. Reference data. | - |
-| `centerline` | `fetch_nhdplus_nldi_navigate` | Walk the NHDPlus stream network from a seed in the requested direction. | - |
-| `ends` | `endpoints` | Take the TWO END POINTS of a line layer -> a point layer plus the pair itself. | - |
-| `window` | `compute_layer_bounds` | Get a layer's geographic extent AND fit/zoom/resize the map to it. | - |
-| `water` | `fetch_nhd_area_water` | Fetch NHD water-surface polygons (the two BANKS of a wide river, an estuary, a canal) inside a bounding box. | - |
-| `mapped_water` | `trid3nt_server.workflows.telemac.templates.reach.measure_water_coverage` | MEASURE how much of the reach the fetched water polygons map -> the water. | - |
-| `reach_polygon` | `section` | Cut a POLYGON LAYER down to the part between two points, or inside an extent -> a polygon layer. | - |
-| `dem` | `fetch_copernicus_dem` | Internal seam -- NOT a model-facing tool (tier="internal"). | EGM2008 geoid (metres, positive up) |
+| `domain` | `fetch_river_reach` | Build a RIVER REACH DOMAIN from one seed point -> the reach polygon, its inflow and outflow boundary runs, and the centerline. | - |
+| `runs` | supplied by the caller | the stretches of the domain's edge that carry a boundary condition - each two points on the edge and a type (inflow, outflow, open); a closed body states none | - |
+| `survey` | `fetch_ehydro_surveys` | Fetch USACE eHydro CHANNEL SURVEY soundings + the survey footprint for a bbox -> the measured bed. | - |
+| `surveyed_bed` | `derive_survey_surface` | Interpolate a POINT layer of measurements onto a raster surface -> a continuous grid. | - |
+| `terrain` | `fetch_copernicus_dem` | Internal seam -- NOT a model-facing tool (tier="internal"). | EGM2008 geoid (metres, positive up) |
+| `bed` | `derive_merge_rasters` | MERGE two overlapping surfaces into one, the PRIMARY winning where it measured. | - |
+| `carrier` | `fetch_noaa_nwm_streamflow` | Fetch NOAA National Water Model streamflow as a point FlatGeobuf. | - |
 
 ## The sheet
 
@@ -29,30 +28,22 @@ The values the template declares. `desc` is what the model reads when it fills o
 
 | param | door | units | default | desc |
 |---|---|---|---|---|
-| `location` | question | - | optional | Place name on the river, geocoded to the reach |
-| `bbox` | user | - | optional | Explicit AOI (min_lon,min_lat,max_lon,max_lat) EPSG:4326, instead of a place |
-| `river_geometry_uri` | user | - | optional | Reuse an already-fetched river flowline for this reach instead of re-fetching it |
-| `discharge_m3s` | user | m^3/s | optional | Steady upstream CARRIER discharge - the river flow that dilutes and transports the release |
-| `event_time` | question | - | optional | The storm/event moment to read the carrier discharge cycle at - from phrasing like 'during last Tuesday's storm'; an ISO date or datetime (e.g. '2026-08-20' or '2026-08-20T06:00:00Z'). Unset reads the most recent published NWM cycle. The NWM PDS bucket retains only the last ~30 days of history; a deeper request refuses typed rather than silently reading a different cycle. |
-| `friction_coefficient` | user | - | optional | Bed roughness under friction_law |
-| `friction_law` | user | - | optional | Law interpreting friction_coefficient: 2=Chezy, 3=Strickler, 4=Manning |
-| `output_interval_min` | user | min | optional | Result-writing cadence; unset keeps the steering file's own period |
-| `compute_class` | constant | - | medium | Solve sizing class |
-| `reach_length_km` | scenario | km | 6.0 | Modeled reach length downstream of the release; a longer reach is coarsened under the mesh node budget |
-| `release` | user | - | optional | Where the substance enters the water, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer, or a place name |
-| `release_fraction` | scenario | - | 0.1 | Along-reach release position, 0=upstream..1=downstream; the source must sit strictly INSIDE the reach, never on a boundary. It sits near the top so the substance has reach left to sorb and settle in |
+| `release` | user | - | optional | Where the substance enters the water, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer, or a place name. On a river with no domain supplied it is also the seed the reach is walked downstream from |
+| `release_fraction` | scenario | - | 0.1 | Along-domain release position, 0=inflow..1=outflow; the source must sit strictly INSIDE the domain, never on a boundary. It sits near the top so the substance has water left to sorb and settle in |
 | `release_duration_s` | scenario | s | 3600.0 | Finite injection window; the substance is released over it and the rest of the run is what happens to what was released |
-| `source_q_m3s` | scenario | m^3/s | 1.0 | Discharge of the release itself - with the carrier flow this sets the dilution the reach receives |
+| `source_q_m3s` | scenario | m^3/s | 1.0 | Discharge of the release itself - with the carrier flow this sets the dilution the water receives |
 | `source_concentration_mgl` | scenario | mg/L | 100.0 | DISSOLVED concentration of the substance in the release itself, before any dilution; everything that ends up on sediment gets there by sorption during the run |
-| `ambient_spm_mgl` | scenario | mg/L | 30.0 | Suspended sediment the river already carries, in and at the top of the reach. It is the SORBENT: with none, the substance stays dissolved and nothing reaches the bed. Nothing fetches suspended sediment for a reach, so this is a STATED condition, not a measured one - state the gauged value if the reach has one |
+| `ambient_spm_mgl` | scenario | mg/L | 30.0 | Suspended sediment the water already carries, in and at the top of the domain. It is the SORBENT: with none, the substance stays dissolved and nothing reaches the bed. Nothing fetches suspended sediment, so this is a STATED condition, not a measured one - state the gauged value where there is one |
 | `decay_constant_per_s` | user | 1/s | optional | First-order decay constant of the substance, applied at the same rate to all three of its phases - dissolved, on suspended sediment and on bed sediment. A half-life h in days is ln(2)/(86400 h) |
 | `settling_velocity_mps` | user | m/s | optional | Settling velocity of the suspended sediment - what carries the sorbed substance down onto the bed |
 | `distribution_coefficient_m3kg` | user | m^3/kg | optional | Kd, the sorption equilibrium: how strongly the substance partitions onto sediment rather than staying dissolved. A larger Kd puts more of it on the bed |
 | `desorption_constant_per_s` | user | 1/s | optional | How fast the substance comes back off the sediment - with Kd it sets how quickly the partition reaches equilibrium |
-| `monitoring_point` | user | - | optional | Where downstream the dissolved history is read, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer, or a place name |
-| `monitoring_fraction` | scenario | - | 0.85 | Along-reach position the history is read at when no point was given, 0=upstream..1=downstream |
+| `monitoring_point` | user | - | optional | Where the dissolved history is read, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer, or a place name |
+| `monitoring_fraction` | scenario | - | 0.85 | Along-domain position the history is read at when no point was given, 0=inflow..1=outflow |
 | `sim_duration_s` | scenario | s | 172800.0 | Simulated time. Sorption equilibrates in hours and settling takes longer than that, so a window of a few hours reports a partition that has not happened yet; two days is what the default covers |
-| `mesh_resolution_m` | scenario | m | 14.0 | Target element edge length the reach is triangulated at; peak concentration is a resolution-bound class and a coarse mesh reads it low |
+| `mesh_resolution_m` | scenario | m | 14.0 | Target element edge or cell length the domain is resolved at. The granularity is the USER's lever: no sizing rung derives an edge from a channel nobody surveyed, so the number the run meshes at is either yours or this labeled default |
+| `event_time` | question | - | optional | The moment the scenario is read at - an ISO date or datetime ('2026-08-20' or '2026-08-20T06:00:00Z'), from phrasing like 'during last Tuesday's storm'. Each source keeps its own retention, and a request deeper than one refuses typed |
+| `compute_class` | constant | - | medium | Solve sizing class |
 
 ## What it answers
 
@@ -94,29 +85,29 @@ It publishes these layers onto the canvas:
 
 Run `01M2HG9ASXE40K9MF2GQCZRN9Y`, 2026-09-15T03:04:01.681727+00:00, 96.419 s, at commit `80e141fee6381b28cbe4f48992ba63bf480c0c55-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M2HG9ASXE40K9MF2GQCZRN9Y)](telemac_micropollutant_release/telemac_micropollutant_release.png)
+![The solve, frame by frame - nimation_dissolved (run 01M2HG9ASXE40K9MF2GQCZRN9Y)](telemac_micropollutant_release/telemac_river_micropollutant_animation_dissolved.gif)
 
-*Every layer the run published, stacked and framed on the result (run 01M2HG9ASXE40K9MF2GQCZRN9Y)*
+*The solve, frame by frame - nimation_dissolved (run 01M2HG9ASXE40K9MF2GQCZRN9Y)*
 
-![The solve, frame by frame - dissolved (run 01M2HG9ASXE40K9MF2GQCZRN9Y)](telemac_micropollutant_release/telemac_micropollutant_release_animation_dissolved.gif)
+![The solve, frame by frame - nimation_on_the_bed (run 01M2HG9ASXE40K9MF2GQCZRN9Y)](telemac_micropollutant_release/telemac_river_micropollutant_animation_on_the_bed.gif)
 
-*The solve, frame by frame - dissolved (run 01M2HG9ASXE40K9MF2GQCZRN9Y)*
+*The solve, frame by frame - nimation_on_the_bed (run 01M2HG9ASXE40K9MF2GQCZRN9Y)*
 
-![The solve, frame by frame - on_the_bed (run 01M2HG9ASXE40K9MF2GQCZRN9Y)](telemac_micropollutant_release/telemac_micropollutant_release_animation_on_the_bed.gif)
+![issolved peak frame (run 01M2HG9ASXE40K9MF2GQCZRN9Y)](telemac_micropollutant_release/telemac_river_micropollutant_dissolved_peak_frame.png)
 
-*The solve, frame by frame - on_the_bed (run 01M2HG9ASXE40K9MF2GQCZRN9Y)*
+*issolved peak frame (run 01M2HG9ASXE40K9MF2GQCZRN9Y)*
 
-![dissolved peak frame (run 01M2HG9ASXE40K9MF2GQCZRN9Y)](telemac_micropollutant_release/telemac_micropollutant_release_dissolved_peak_frame.png)
+![n the bed final frame (run 01M2HG9ASXE40K9MF2GQCZRN9Y)](telemac_micropollutant_release/telemac_river_micropollutant_on_the_bed_final_frame.png)
 
-*dissolved peak frame (run 01M2HG9ASXE40K9MF2GQCZRN9Y)*
+*n the bed final frame (run 01M2HG9ASXE40K9MF2GQCZRN9Y)*
 
-![on the bed final frame (run 01M2HG9ASXE40K9MF2GQCZRN9Y)](telemac_micropollutant_release/telemac_micropollutant_release_on_the_bed_final_frame.png)
-
-*on the bed final frame (run 01M2HG9ASXE40K9MF2GQCZRN9Y)*
-
-![dissolved micropollutant - the chart the run persisted (run 01M2HG9ASXE40K9MF2GQCZRN9Y)](telemac_micropollutant_release/telemac_micropollutant_release_chart_dissolved_micropollutant.png)
+![dissolved micropollutant - the chart the run persisted (run 01M2HG9ASXE40K9MF2GQCZRN9Y)](telemac_micropollutant_release/telemac_river_micropollutant_chart_dissolved_micropollutant.png)
 
 *dissolved micropollutant - the chart the run persisted (run 01M2HG9ASXE40K9MF2GQCZRN9Y)*
+
+![ (run 01M2HG9ASXE40K9MF2GQCZRN9Y)](telemac_micropollutant_release/telemac_river_micropollutant.png)
+
+* (run 01M2HG9ASXE40K9MF2GQCZRN9Y)*
 
 ### The sheet it filled
 

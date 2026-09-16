@@ -14,14 +14,13 @@ MAINTENANCE DREDGING of a navigation channel: how much comes out, and what the b
 
 | row | produced by | what it is | datum |
 |---|---|---|---|
-| `rivers` | `trid3nt_server.workflows.telemac.templates.reach.fetch_reach_flowline` | The reach flowline FlatGeobuf over the CURRENT DOMAIN. Reference data. | - |
-| `centerline` | `fetch_nhdplus_nldi_navigate` | Walk the NHDPlus stream network from a seed in the requested direction. | - |
-| `ends` | `endpoints` | Take the TWO END POINTS of a line layer -> a point layer plus the pair itself. | - |
-| `window` | `compute_layer_bounds` | Get a layer's geographic extent AND fit/zoom/resize the map to it. | - |
-| `water` | `fetch_nhd_area_water` | Fetch NHD water-surface polygons (the two BANKS of a wide river, an estuary, a canal) inside a bounding box. | - |
-| `mapped_water` | `trid3nt_server.workflows.telemac.templates.reach.measure_water_coverage` | MEASURE how much of the reach the fetched water polygons map -> the water. | - |
-| `reach_polygon` | `section` | Cut a POLYGON LAYER down to the part between two points, or inside an extent -> a polygon layer. | - |
-| `dem` | `fetch_copernicus_dem` | Internal seam -- NOT a model-facing tool (tier="internal"). | EGM2008 geoid (metres, positive up) |
+| `domain` | `fetch_river_reach` | Build a RIVER REACH DOMAIN from one seed point -> the reach polygon, its inflow and outflow boundary runs, and the centerline. | - |
+| `runs` | supplied by the caller | the stretches of the domain's edge that carry a boundary condition - each two points on the edge and a type (inflow, outflow, open); a closed body states none | - |
+| `survey` | `fetch_ehydro_surveys` | Fetch USACE eHydro CHANNEL SURVEY soundings + the survey footprint for a bbox -> the measured bed. | - |
+| `surveyed_bed` | `derive_survey_surface` | Interpolate a POINT layer of measurements onto a raster surface -> a continuous grid. | - |
+| `terrain` | `fetch_dem` | Fetch a digital elevation model (DEM) / terrain elevation for a bounding box (USGS 3DEP US lidar; on a 3DEP outage the default path STOPS and asks before any Copernicus GLO-30 swap; either source pinnable). | NAVD88 (metres, positive up) |
+| `bed` | `derive_merge_rasters` | MERGE two overlapping surfaces into one, the PRIMARY winning where it measured. | - |
+| `carrier` | `fetch_noaa_nwm_streamflow` | Fetch NOAA National Water Model streamflow as a point FlatGeobuf. | - |
 | `dredge_area` | supplied by the caller | a polygon layer you supply, as a uri or a layer name; required - the template names no source for it. | - |
 | `dump_area` | supplied by the caller | a polygon layer you supply, as a uri or a layer name; required - the template names no source for it. | - |
 
@@ -31,18 +30,8 @@ The values the template declares. `desc` is what the model reads when it fills o
 
 | param | door | units | default | desc |
 |---|---|---|---|---|
-| `location` | question | - | optional | Place name on the river, geocoded to the reach |
-| `bbox` | user | - | optional | Explicit AOI (min_lon,min_lat,max_lon,max_lat) EPSG:4326, instead of a place |
-| `river_geometry_uri` | user | - | optional | Reuse an already-fetched river flowline for this reach instead of re-fetching it |
-| `discharge_m3s` | user | m^3/s | optional | Steady upstream discharge the reach is dredged under - the flow that shoals the channel and carries the disturbed material |
-| `event_time` | question | - | optional | The moment to read the discharge cycle at - from phrasing like 'at last week's flow'; an ISO date or datetime. The NWM PDS bucket retains only the last ~30 days of history; a deeper request refuses typed rather than silently reading a different cycle. |
-| `friction_coefficient` | user | - | optional | Bed roughness under friction_law |
-| `friction_law` | user | - | optional | Law interpreting friction_coefficient: 2=Chezy, 3=Strickler, 4=Manning |
-| `output_interval_min` | user | min | optional | Result-writing cadence; unset keeps the steering file's own period |
-| `compute_class` | constant | - | medium | Solve sizing class |
-| `reach_length_km` | scenario | km | 2.0 | Modeled reach length downstream of the seed; a longer reach is coarsened under the mesh node budget |
+| `seed_point` | question | - | optional | A point ON the channel the dredge works in, as the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon' or a point layer. Geocode a place name first; the channel is fetched downstream of it and the levels every dredging action reads are stationed along the centerline that comes back with it |
 | `sim_duration_s` | scenario | s | 3600.0 | Simulated physical time the dredge campaign runs over; the morphological factor is what makes a short window produce a readable bed change |
-| `mesh_resolution_m` | scenario | m | 14.0 | Target element edge length the reach is triangulated at; the dredged volume is the sum over the nodes inside the field, so a coarse mesh resolves a narrow fairway badly |
 | `time_origin` | scenario | - | [2000, 1, 1, 0, 0, 0] | The calendar instant the run's clock starts at, as [year, month, day, hour, minute, second] - the origin every dredge schedule is dated against and the one the deck states |
 | `design_depth_m` | scenario | m | 3.0 | Depth the fairway is dredged TO, under the reference water surface the run opens at - the design draught plus its overdepth |
 | `trigger_depth_m` | scenario | m | 3.0 | Depth at which a node is dredged: the bed is worked wherever it sits shallower than this under the reference surface. Equal to design_depth_m keeps the channel exactly at grade; SMALLER than it lets the channel shoal before the dredger returns, and a trigger DEEPER than the grade would mark a node for a cut that is above its own bed |
@@ -56,6 +45,9 @@ The values the template declares. `desc` is what the model reads when it fills o
 | `bed_thickness_m` | scenario | m | 5.0 | Depth of the erodible sediment stock the dredger can cut into |
 | `bedload_formula` | scenario | - | 1 | GAIA bed-load law: 1=Meyer-Peter-Mueller, 2=Einstein-Brown, 7=van Rijn |
 | `morphological_factor` | scenario | - | 10.0 | Amplifies bed change per hydraulic step so a short campaign yields a readable depth; a speed-up lever, not a rate |
+| `mesh_resolution_m` | scenario | m | 14.0 | Target element edge or cell length the domain is resolved at. The granularity is the USER's lever: no sizing rung derives an edge from a channel nobody surveyed, so the number the run meshes at is either yours or this labeled default |
+| `event_time` | question | - | optional | The moment the scenario is read at - an ISO date or datetime ('2026-08-20' or '2026-08-20T06:00:00Z'), from phrasing like 'during last Tuesday's storm'. Each source keeps its own retention, and a request deeper than one refuses typed |
+| `compute_class` | constant | - | medium | Solve sizing class |
 
 ## What it answers
 
@@ -102,17 +94,17 @@ It publishes these layers onto the canvas:
 
 Run `01M2GMW1YTJ5MS4MZV5S7Q2WSK`, 2026-09-14T19:04:15.604623+00:00, 27.171 s, at commit `c06075fe30c18c4bf3619f40299b09edffefc4c0-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M2GMW1YTJ5MS4MZV5S7Q2WSK)](telemac_channel_dredging/telemac_channel_dredging.png)
+![The solve, frame by frame - nimation (run 01M2GMW1YTJ5MS4MZV5S7Q2WSK)](telemac_channel_dredging/telemac_river_dredging_animation.gif)
 
-*Every layer the run published, stacked and framed on the result (run 01M2GMW1YTJ5MS4MZV5S7Q2WSK)*
+*The solve, frame by frame - nimation (run 01M2GMW1YTJ5MS4MZV5S7Q2WSK)*
 
-![The solve, frame by frame (run 01M2GMW1YTJ5MS4MZV5S7Q2WSK)](telemac_channel_dredging/telemac_channel_dredging_animation.gif)
+![inal frame (run 01M2GMW1YTJ5MS4MZV5S7Q2WSK)](telemac_channel_dredging/telemac_river_dredging_final_frame.png)
 
-*The solve, frame by frame (run 01M2GMW1YTJ5MS4MZV5S7Q2WSK)*
+*inal frame (run 01M2GMW1YTJ5MS4MZV5S7Q2WSK)*
 
-![final frame (run 01M2GMW1YTJ5MS4MZV5S7Q2WSK)](telemac_channel_dredging/telemac_channel_dredging_final_frame.png)
+![ (run 01M2GMW1YTJ5MS4MZV5S7Q2WSK)](telemac_channel_dredging/telemac_river_dredging.png)
 
-*final frame (run 01M2GMW1YTJ5MS4MZV5S7Q2WSK)*
+* (run 01M2GMW1YTJ5MS4MZV5S7Q2WSK)*
 
 ### The sheet it filled
 

@@ -699,6 +699,17 @@ package SteeringSurface {
         */
     }
 
+    requirement def AStepsKwargsAreItsRunnersCall {
+        doc /*
+        A plan is built once at import and its steps are not called until a run
+        reaches them, so a step whose kwargs the runner cannot take is a
+        declaration that imports, registers and validates - and dies at the
+        stage it was written for, on a live run, after the mesh was built. The
+        kwargs a step declares ARE the call: every parameter the runner requires
+        is among them, and nothing it does not take is.
+        */
+    }
+
     requirement def ReviewIsTheDoorsView {
         doc /*
         The sheet is STATE. The review is how the door renders what fill
@@ -920,6 +931,11 @@ package SteeringSurface {
         "tests/telemac/test_telemac_outputs.py::test_a_primitive_names_the_coupled_module_whose_result_it_reads";
     verify requirement OneTemplatePerQuestion by
         "tests/telemac/test_telemac_outputs.py::test_a_series_at_a_point_is_measured_at_that_point";
+
+    satisfy requirement AStepsKwargsAreItsRunnersCall by door;
+    satisfy requirement AStepsKwargsAreItsRunnersCall by stager;
+    verify requirement AStepsKwargsAreItsRunnersCall by
+        "tests/runtime/test_step_signatures.py::test_every_step_binds_against_its_own_runners_signature";
 
     satisfy requirement ReviewIsTheDoorsView by door;
     verify requirement ReviewIsTheDoorsView by

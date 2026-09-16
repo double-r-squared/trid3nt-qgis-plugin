@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from trid3nt_server.inputs import Point
-from trid3nt_server.workflows.runtime import Accepts, Param, doors
+from trid3nt_server.workflows.runtime import Accepts, Param, doors, lever
 
 __all__ = ["ACCEPTS", "DOC", "PARAMS"]
 
@@ -33,15 +33,6 @@ class PARAMS:
              "a point layer, or a place name geocoded first. The stretch walked "
              "downstream of it is the water one pass is measured over; supply "
              "the domain polygon instead and this is not read")
-    discharge_m3s = Param(
-        door=doors.USER, optional=True, units="m^3/s",
-        bounds=(0.01, 1.0e5), consequence="physics", user_lever=True,
-        derived_when_absent=(
-            "the steady carrier discharge is resolved from the NOAA National "
-            "Water Model at the seed; no NWM coverage refuses typed rather "
-            "than falling back to a constant"),
-        desc="Steady upstream discharge - the flow that carries the nutrients "
-             "through the domain and sets how long the water has to grow algae in")
 
     station = Param(
         door=doors.USER, optional=True, consequence="scenario",
@@ -143,10 +134,8 @@ class PARAMS:
         desc="The DO water-quality standard the water is judged against; 5 is a "
              "common warm-water aquatic-life criterion")
 
-    sim_duration_s = Param(
-        door=doors.SCENARIO, default=172800.0,
-        bounds=(3600.0, 2.592e7), units="s", consequence="numerical",
-        user_lever=True,
+    sim_duration_s = lever(
+        "sim_duration_s", default=172800.0, bounds=(3600.0, 2.592e7),
         desc="Simulated time. It has to cover several travel times through the "
              "domain before the longitudinal answer has settled - the default is "
              "two days against a pass measured in hours. A river flushes far too "
@@ -155,9 +144,8 @@ class PARAMS:
     # question is domain-scale chemistry over a long window rather than a local
     # feature at one instant, and the runtime's 14 m quarters the time step for
     # nothing it can resolve. Bounds and meaning are the lever's.
-    mesh_resolution_m = Param(
-        door=doors.SCENARIO, default=25.0, user_lever=True,
-        bounds=(3.0, 5000.0), units="m", consequence="numerical",
+    mesh_resolution_m = lever(
+        "mesh_resolution_m", default=25.0,
         desc="Target element edge length the domain is triangulated at; it also "
              "sets the CFL time step, so it is what decides whether a long "
              "window finishes")

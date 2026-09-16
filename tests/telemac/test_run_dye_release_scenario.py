@@ -124,14 +124,21 @@ def test_a_non_numeric_bounded_arg_refuses_it_is_never_defaulted():
         _resolve(source_q_m3s="a lot")
 
 
-def test_an_absent_carrier_discharge_leaves_a_derived_provenance_row():
-    """The user has to see that dilution is governed by a fetched value."""
-    from trid3nt_server.workflows.runtime import provenance_entries
+def test_the_carrier_flow_is_the_inflow_runs_value_and_not_a_param():
+    """The flow the inflow run carries is the observation ROW's - a reading, or
+    the number stated on it - so no param of this question declares one and the
+    row itself says where an absent one leaves the run."""
+    from trid3nt_server.workflows.runtime import data_rows, param_rows
+    from trid3nt_server.workflows.telemac.templates.dye_release.dye_release import DATA
+    from trid3nt_server.workflows.telemac.templates.dye_release.declarations import (
+        PARAMS,
+    )
 
-    row = next(r for r in provenance_entries(_resolve(), _workflow().params)
-               if r.param == "discharge_m3s")
-    assert row.basis == "derived"
-    assert "National Water Model" in (row.note or "")
+    assert "discharge_m3s" not in {p.name for p in param_rows(PARAMS)}
+    carrier = next(d for d in data_rows(DATA) if d.name == "carrier")
+    assert carrier.role == "observation"
+    assert carrier.coercion["measures"] == "a streamflow"
+    assert "National Water Model" in carrier.context_sentence
 
 
 def test_the_params_are_the_questions_own_plus_the_runtimes_levers():
@@ -149,9 +156,22 @@ def test_the_params_are_the_questions_own_plus_the_runtimes_levers():
                            "output_interval_min"}
     assert not declared & {"location", "bbox", "river_geometry_uri",
                            "reach_length_km", "mesh_resolution_m"}
-    assert not declared & set(LEVER_NAMES)
+    # A lever this question DIFFERS on is stated as the difference - the lever
+    # with its own bound - never as a second declaration of the same value.
+    from trid3nt_server.workflows.runtime.levers import LEVERS
+
+    for row in param_rows(PARAMS):
+        lever = next((l for l in LEVERS if l.name == row.name), None)
+        if lever is not None:
+            assert (row.units, row.consequence) == (lever.units,
+                                                    lever.consequence)
+            assert (row.default, row.bounds) != (lever.default, lever.bounds)
+    # Every lever is on the sheet; the ones this question does not state for
+    # itself are seated at the end, in the order the runtime declares them.
     seated = [p.name for p in _workflow().params]
-    assert seated[-len(LEVER_NAMES):] == list(LEVER_NAMES)
+    assert set(LEVER_NAMES) <= set(seated)
+    appended = [name for name in LEVER_NAMES if name not in declared]
+    assert seated[-len(appended):] == appended
 
 
 def test_the_data_body_is_the_three_slots_and_what_composes_them():
@@ -161,8 +181,8 @@ def test_the_data_body_is_the_three_slots_and_what_composes_them():
     from trid3nt_server.workflows.telemac.templates.dye_release.dye_release import DATA
 
     rows = data_rows(DATA)
-    assert [d.name for d in rows] == ["domain", "survey", "surveyed_bed",
-                                      "terrain", "bed", "carrier"]
+    assert [d.name for d in rows] == ["domain", "runs", "survey", "surveyed_bed",
+                                      "terrain", "bed", "carrier", "stage"]
     by_name = {d.name: d for d in rows}
     assert by_name["domain"].role == "domain"
     assert by_name["domain"].geometry == "polygon"
@@ -183,8 +203,10 @@ def test_the_data_body_is_the_three_slots_and_what_composes_them():
     assert "terrain surface stands" in by_name["survey"].context_sentence
     # No row here is superseded by a supplied artifact and none declares a
     # ladder: the bed is a MERGE of two available layers, never a fallback chain.
-    assert all(d.producer.supplied_uri is None for d in rows)
-    assert all(d.producer.ladder_rungs == () for d in rows)
+    assert all(d.producer is None or d.producer.supplied_uri is None
+               for d in rows)
+    assert all(d.producer is None or d.producer.ladder_rungs == ()
+               for d in rows)
 
 
 def test_the_release_point_seeds_the_domain_producer():
@@ -255,10 +277,10 @@ def test_the_mesh_is_built_over_the_domain_slot_at_the_runtimes_own_lever():
     assert recipe.resolution_m.name == "mesh_resolution_m"
     bed = next(op for op in recipe.ops if op.fn == "set_bed")
     assert bed.kwargs == {"source": DataRef("bed")}
-    # No runs row: the domain producer cut the polygon between two faces and
-    # hands them over with it.
+    # The RUNS slot: filled by the domain producer that cut the polygon between
+    # two faces, by the user's own runs, or by what they draw on the canvas.
     runs = next(op for op in recipe.ops if op.fn == "set_boundary_roles")
-    assert runs.kwargs == {"runs": DataRef("domain")}
+    assert runs.kwargs == {"runs": DataRef("runs")}
 
 
 def test_the_settle_step_reads_the_files_the_deck_itself_names():

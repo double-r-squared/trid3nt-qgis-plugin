@@ -108,8 +108,8 @@ def test_the_workflow_owns_every_stage_this_template_does_not_differ_on():
 
 
 def test_the_mesh_is_built_over_the_slots_at_the_runtimes_own_lever():
-    """The extent is the domain row, the bed is the merged row, and the runs come
-    off the domain producer that measured the two end transects."""
+    """The extent is the domain row, the bed is the merged row, and the runs
+    come off the runs slot the domain producer's two end transects fill."""
     from trid3nt_server.workflows.runtime.plan import DataRef
 
     recipe = [s for s in _workflow().plan.steps if s.label == "mesh"][0].kwargs["mesh"]
@@ -118,7 +118,7 @@ def test_the_mesh_is_built_over_the_slots_at_the_runtimes_own_lever():
     assert recipe["resolution_m"].name == "mesh_resolution_m"
     ops = {op["op"]: op["kwargs"] for op in recipe["ops"]}
     assert ops["set_bed"] == {"source": DataRef("bed")}
-    assert ops["set_boundary_roles"] == {"runs": DataRef("domain")}
+    assert ops["set_boundary_roles"] == {"runs": DataRef("runs")}
 
 
 def test_the_baseline_params_are_the_runtimes_and_are_not_restated():
@@ -130,16 +130,23 @@ def test_the_baseline_params_are_the_runtimes_and_are_not_restated():
                  "evaporation_mm_per_day", "rainfall_gridmet_window"):
         assert gone not in declared, gone
     assert set(LEVER_NAMES) <= set(declared)
-    assert declared[:len(declared) - len(LEVER_NAMES)] == [
-        prm.name for prm in template.PARAMS.__dict__.values()
-        if getattr(prm, "name", None)]
+    # Every lever is on the sheet; the ones this question does not state for
+    # itself are seated at the end, in the order the runtime declares them, and
+    # one it differs on keeps its own place and its own opinion of the value.
+    own = [prm.name for prm in template.PARAMS.__dict__.values()
+           if getattr(prm, "name", None)]
+    assert declared[:len(own)] == own
+    seated = [name for name in LEVER_NAMES if name not in own]
+    assert declared[len(own):] == seated
 
 
 def test_the_question_keeps_only_its_own_inputs():
     """What an oil question asks: where the oil went in, which oil, how much
-    dissolved, how the slick is drawn, and the flow that carries it."""
+    dissolved and how the slick is drawn. The flow that carries it is the inflow
+    run's value, which is the carrier ROW's, so it is no param of this one."""
     declared = {prm.name for prm in _workflow().params}
-    assert {"release", "discharge_m3s", "spill_fraction", "spill_duration_s",
+    assert "discharge_m3s" not in declared
+    assert {"release", "spill_fraction", "spill_duration_s",
             "source_q_m3s", "oil_concentration_mgl", "oil_type", "n_drogues",
             "drogues_period_s", "oil_release_step", "wind_speed_mps",
             "wind_direction_deg", "rainfall_mm_per_day",

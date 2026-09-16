@@ -2,7 +2,7 @@
 
 # `telemac_bed_scour`
 
-Bed SCOUR and DEPOSITION in a river reach: a mobile bed under a flow.
+Bed SCOUR and DEPOSITION under a body of water: a mobile bed under a flow.
 
 |  |  |
 |---|---|
@@ -14,15 +14,13 @@ Bed SCOUR and DEPOSITION in a river reach: a mobile bed under a flow.
 
 | row | produced by | what it is | datum |
 |---|---|---|---|
-| `rivers` | `trid3nt_server.workflows.telemac.templates.reach.fetch_reach_flowline` | The reach flowline FlatGeobuf over the CURRENT DOMAIN. Reference data. | - |
-| `centerline` | `fetch_nhdplus_nldi_navigate` | Walk the NHDPlus stream network from a seed in the requested direction. | - |
-| `ends` | `endpoints` | Take the TWO END POINTS of a line layer -> a point layer plus the pair itself. | - |
-| `window` | `compute_layer_bounds` | Get a layer's geographic extent AND fit/zoom/resize the map to it. | - |
-| `water` | `fetch_nhd_area_water` | Fetch NHD water-surface polygons (the two BANKS of a wide river, an estuary, a canal) inside a bounding box. | - |
-| `mapped_water` | `trid3nt_server.workflows.telemac.templates.reach.measure_water_coverage` | MEASURE how much of the reach the fetched water polygons map -> the water. | - |
-| `reach_polygon` | `section` | Cut a POLYGON LAYER down to the part between two points, or inside an extent -> a polygon layer. | - |
-| `dem` | `fetch_copernicus_dem` | Internal seam -- NOT a model-facing tool (tier="internal"). | EGM2008 geoid (metres, positive up) |
-| `rain` | `trid3nt_server.workflows.telemac.templates.reach.resolve_rain_forcing` | The SIGNED net rain-or-evaporation rate (mm/day) the sheet carries. | - |
+| `domain` | `fetch_river_reach` | Build a RIVER REACH DOMAIN from one seed point -> the reach polygon, its inflow and outflow boundary runs, and the centerline. | - |
+| `runs` | supplied by the caller | the stretches of the domain's edge that carry a boundary condition - each two points on the edge and a type (inflow, outflow, open); a closed body states none | - |
+| `survey` | `fetch_ehydro_surveys` | Fetch USACE eHydro CHANNEL SURVEY soundings + the survey footprint for a bbox -> the measured bed. | - |
+| `surveyed_bed` | `derive_survey_surface` | Interpolate a POINT layer of measurements onto a raster surface -> a continuous grid. | - |
+| `terrain` | `fetch_copernicus_dem` | Internal seam -- NOT a model-facing tool (tier="internal"). | EGM2008 geoid (metres, positive up) |
+| `bed` | `derive_merge_rasters` | MERGE two overlapping surfaces into one, the PRIMARY winning where it measured. | - |
+| `carrier` | `fetch_noaa_nwm_streamflow` | Fetch NOAA National Water Model streamflow as a point FlatGeobuf. | - |
 
 ## The sheet
 
@@ -30,33 +28,23 @@ The values the template declares. `desc` is what the model reads when it fills o
 
 | param | door | units | default | desc |
 |---|---|---|---|---|
-| `location` | question | - | optional | Place name on the river, geocoded to the reach |
-| `bbox` | user | - | optional | Explicit AOI (min_lon,min_lat,max_lon,max_lat) EPSG:4326, instead of a place |
-| `river_geometry_uri` | user | - | optional | Reuse an already-fetched river flowline for this reach instead of re-fetching it |
-| `discharge_m3s` | user | m^3/s | optional | Steady upstream CARRIER discharge - the river flow that dilutes and transports the release |
-| `event_time` | question | - | optional | The storm/event moment to read the carrier discharge cycle at - from phrasing like 'during last Tuesday's storm'; an ISO date or datetime (e.g. '2026-08-20' or '2026-08-20T06:00:00Z'). Unset reads the most recent published NWM cycle. The NWM PDS bucket retains only the last ~30 days of history; a deeper request refuses typed rather than silently reading a different cycle. |
-| `friction_coefficient` | user | - | optional | Bed roughness under friction_law |
-| `friction_law` | user | - | optional | Law interpreting friction_coefficient: 2=Chezy, 3=Strickler, 4=Manning |
-| `output_interval_min` | user | min | optional | Result-writing cadence; unset keeps the steering file's own period |
-| `compute_class` | constant | - | medium | Solve sizing class |
-| `spill_fraction` | scenario | - | 0.25 | Along-reach release position, 0=upstream..1=downstream; the source must sit strictly INSIDE the reach, never on a boundary |
+| `release` | user | - | optional | Where the marker enters the water, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer, or a place name. Its name becomes the marker's name, and on a river with no domain supplied it is also the seed the reach is walked downstream from |
+| `spill_fraction` | scenario | - | 0.25 | Along-domain release position, 0=inflow..1=outflow; the source must sit strictly INSIDE the domain, never on a boundary |
 | `spill_duration_s` | scenario | s | 300.0 | Finite pulse injection window |
-| `source_q_m3s` | scenario | m^3/s | 8.0 | Point-source discharge of the release itself, small against the river's carrier flow |
+| `source_q_m3s` | scenario | m^3/s | 8.0 | Point-source discharge of the release itself, small against the carrier flow |
+| `tracer_concentration_mgl` | scenario | mg/L | 100.0 | Concentration of the marker tracer released at the source, which is what the deposited fraction is measured against |
 | `wind_speed_mps` | scenario | m/s | 0.0 | Sustained wind driving a surface wind-stress term; 0 = no wind |
 | `wind_direction_deg` | scenario | deg | 0.0 | Compass bearing the wind blows FROM (0=N, 90=E); only read when wind_speed_mps > 0 |
-| `rainfall_mm_per_day` | user | mm/day | optional | Distributed ON-MESH rainfall applied at every wet node, independent of the inflow hydrograph |
-| `evaporation_mm_per_day` | user | mm/day | optional | Distributed evaporation, subtracted from the net rain flux |
-| `rainfall_gridmet_window` | user | - | optional | Real-storm source: an ISO window 'YYYY-MM-DD:YYYY-MM-DD' whose gridMET domain-mean daily precipitation supersedes rainfall_mm_per_day |
-| `release` | user | - | optional | Where the substance enters the water, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer, or a place name |
+| `rainfall_mm_per_day` | user | mm/day | optional | NET distributed rainfall applied at every wet node, independent of the inflow hydrograph; negative is evaporation |
 | `grain_size_um` | scenario | um | 200.0 | Median grain diameter d50 of the bed - ~200 um fine sand, ~20 um silt, ~8 um mud (all modeled non-cohesive); read only when no gradation is given |
 | `bed_thickness_m` | scenario | m | 5.0 | Depth of the erodible sediment stock the bed can scour into |
 | `bedload_formula` | scenario | - | 1 | GAIA bed-load law: 1=Meyer-Peter-Mueller, 2=Einstein-Brown, 7=van Rijn |
 | `morphological_factor` | scenario | - | 10.0 | Amplifies bed change per hydraulic step so a short hydrograph yields a readable depth; a speed-up lever, not a rate |
 | `sediment_gradation` | user | - | optional | Multi-class GRADED sediment: a preset name (graded_sand \| poorly_sorted \| sand_gravel_bimodal \| fine_coarse_sand) or a list of [d50_um, fraction] pairs; a mixture sorts under a hiding factor |
-| `tracer_concentration_mgl` | scenario | mg/L | 100.0 | Concentration of the marker tracer released at the source, which is what the deposited fraction is measured against |
-| `reach_length_km` | scenario | km | 6.0 | Modeled reach length downstream of the release; a longer reach is coarsened under the mesh node budget |
 | `sim_duration_s` | scenario | s | 3600.0 | Simulated physical time; the morphological factor is what makes a short window produce a readable bed change |
-| `mesh_resolution_m` | scenario | m | 14.0 | Target element edge length the reach is triangulated at; scour depth is a resolution-bound class and a coarse mesh reads it low |
+| `mesh_resolution_m` | scenario | m | 14.0 | Target element edge or cell length the domain is resolved at. The granularity is the USER's lever: no sizing rung derives an edge from a channel nobody surveyed, so the number the run meshes at is either yours or this labeled default |
+| `event_time` | question | - | optional | The moment the scenario is read at - an ISO date or datetime ('2026-08-20' or '2026-08-20T06:00:00Z'), from phrasing like 'during last Tuesday's storm'. Each source keeps its own retention, and a request deeper than one refuses typed |
+| `compute_class` | constant | - | medium | Solve sizing class |
 
 ## What it answers
 
@@ -106,21 +94,21 @@ It publishes these layers onto the canvas:
 
 Run `01M2GN2534D6GMNFVJ89C3SGHS`, 2026-09-14T19:07:35.680151+00:00, 26.359 s, at commit `c06075fe30c18c4bf3619f40299b09edffefc4c0-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M2GN2534D6GMNFVJ89C3SGHS)](telemac_bed_scour/telemac_bed_scour.png)
+![The solve, frame by frame - ur_animation (run 01M2GN2534D6GMNFVJ89C3SGHS)](telemac_bed_scour/telemac_river_scour_animation.gif)
 
-*Every layer the run published, stacked and framed on the result (run 01M2GN2534D6GMNFVJ89C3SGHS)*
+*The solve, frame by frame - ur_animation (run 01M2GN2534D6GMNFVJ89C3SGHS)*
 
-![The solve, frame by frame (run 01M2GN2534D6GMNFVJ89C3SGHS)](telemac_bed_scour/telemac_bed_scour_animation.gif)
+![ur final frame (run 01M2GN2534D6GMNFVJ89C3SGHS)](telemac_bed_scour/telemac_river_scour_final_frame.png)
 
-*The solve, frame by frame (run 01M2GN2534D6GMNFVJ89C3SGHS)*
+*ur final frame (run 01M2GN2534D6GMNFVJ89C3SGHS)*
 
-![final frame (run 01M2GN2534D6GMNFVJ89C3SGHS)](telemac_bed_scour/telemac_bed_scour_final_frame.png)
-
-*final frame (run 01M2GN2534D6GMNFVJ89C3SGHS)*
-
-![marker concentration - the chart the run persisted (run 01M2GN2534D6GMNFVJ89C3SGHS)](telemac_bed_scour/telemac_bed_scour_chart_marker_concentration.png)
+![marker concentration - the chart the run persisted (run 01M2GN2534D6GMNFVJ89C3SGHS)](telemac_bed_scour/telemac_river_scour_chart_marker_concentration.png)
 
 *marker concentration - the chart the run persisted (run 01M2GN2534D6GMNFVJ89C3SGHS)*
+
+![ur (run 01M2GN2534D6GMNFVJ89C3SGHS)](telemac_bed_scour/telemac_river_scour.png)
+
+*ur (run 01M2GN2534D6GMNFVJ89C3SGHS)*
 
 ### The sheet it filled
 

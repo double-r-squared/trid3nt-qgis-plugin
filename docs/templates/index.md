@@ -8,7 +8,7 @@
 
 [![artemis_harbor_agitation](artemis_harbor_agitation/artemis_harbor_agitation.png)](artemis_harbor_agitation.md)
 
-The WAVE AGITATION (Kd = Hs/H0) a declared structure leaves inside a harbour.
+The WAVE AGITATION (Kd = Hs/H0) a declared structure leaves inside a harbour, a marina or any sheltered basin.
 
 Module `artemis`, proving run `01M2GPSF8H698ETFJMMRXTNZ8K`.
 
@@ -16,87 +16,71 @@ Module `artemis`, proving run `01M2GPSF8H698ETFJMMRXTNZ8K`.
 
 [![telemac3d_stratified_flow](telemac3d_stratified_flow/telemac3d_stratified_flow.png)](telemac3d_stratified_flow.md)
 
-The 3D VERTICAL STRUCTURE of a water body a 2D depth-averaged model cannot resolve.
+The 3D VERTICAL STRUCTURE of a body of water a 2D depth-averaged model cannot resolve.
 
 Module `telemac3d`, proving run `01M2GPX6APX8R0R0PESGVWQA6J`.
 
-## [`telemac_do_sag`](telemac_do_sag.md)
+## [`telemac_bed_scour`](telemac_bed_scour.md)
 
-[![telemac_do_sag](telemac_do_sag/telemac_do_sag.png)](telemac_do_sag.md)
+Bed SCOUR and DEPOSITION under a body of water: a mobile bed under a flow.
 
-DISSOLVED-OXYGEN SAG below a discharge in a river (US TMDL / permit question).
-
-Module `telemac2d`, proving run `01M2HH0XSVVXHH2NFT4F8ETMAW`.
-
-## [`telemac_rain_on_grid`](telemac_rain_on_grid.md)
-
-[![telemac_rain_on_grid](telemac_rain_on_grid/telemac_rain_on_grid.png)](telemac_rain_on_grid.md)
-
-How much RUNOFF a storm produces from this WATERSHED, as an outlet hydrograph and a flood-depth map.
-
-Module `telemac2d`, proving run `01M2GP3XQJENSXTD763387Z9TN`.
+Module `telemac2d`, proving run `01M2GN2534D6GMNFVJ89C3SGHS`.
 
 ## [`telemac_channel_dredging`](telemac_channel_dredging.md)
-
-[![telemac_channel_dredging](telemac_channel_dredging/telemac_channel_dredging.png)](telemac_channel_dredging.md)
 
 MAINTENANCE DREDGING of a navigation channel: how much comes out, and what the bed does.
 
 Module `telemac2d`, proving run `01M2GMW1YTJ5MS4MZV5S7Q2WSK`.
 
+## [`telemac_do_sag`](telemac_do_sag.md)
+
+[![telemac_do_sag](telemac_do_sag/telemac_do_sag.png)](telemac_do_sag.md)
+
+DISSOLVED-OXYGEN SAG below a discharge (US TMDL / permit question).
+
+Module `telemac2d`, proving run `01M2HH0XSVVXHH2NFT4F8ETMAW`.
+
 ## [`telemac_dye_release`](telemac_dye_release.md)
 
-[![telemac_dye_release](telemac_dye_release/telemac_dye_release.png)](telemac_dye_release.md)
-
-A DYE / TRACER / CONTAMINANT plume that TRAVELS DOWNSTREAM in a RIVER (surface water).
+A DYE / TRACER / CONTAMINANT plume released into a body of surface water and carried by its flow.
 
 Module `telemac2d`, proving run `01M2GNPFQ2077S20779R8FWZNH`.
 
 ## [`telemac_eutrophication`](telemac_eutrophication.md)
 
-[![telemac_eutrophication](telemac_eutrophication/telemac_eutrophication.png)](telemac_eutrophication.md)
-
-NUTRIENT ENRICHMENT down a river reach: algal growth, nutrient drawdown and the oxygen response over one pass.
+NUTRIENT ENRICHMENT in a body of water: algal growth, nutrient drawdown and the oxygen response over one pass through it.
 
 Module `telemac2d`, proving run `01M2HSYSR2VP81VWZ2108E64CD`.
 
 ## [`telemac_micropollutant_release`](telemac_micropollutant_release.md)
 
-[![telemac_micropollutant_release](telemac_micropollutant_release/telemac_micropollutant_release.png)](telemac_micropollutant_release.md)
-
-A SORBING substance in a RIVER: how much stays DISSOLVED and how much ends up ON THE BED.
+A SORBING substance released into water: how much stays DISSOLVED and how much ends up ON THE BED.
 
 Module `telemac2d`, proving run `01M2HG9ASXE40K9MF2GQCZRN9Y`.
 
 ## [`telemac_oil_spill`](telemac_oil_spill.md)
 
-[![telemac_oil_spill](telemac_oil_spill/telemac_oil_spill.png)](telemac_oil_spill.md)
-
-An OIL SLICK released into a RIVER: floating particles plus the dissolved fraction.
+An OIL SLICK released onto a body of surface water: floating particles plus the dissolved fraction.
 
 Module `telemac2d`, proving run `01M2GNW5YZVT75K4S0G5VMAXA0`.
 
-## [`telemac_bed_scour`](telemac_bed_scour.md)
+## [`telemac_rain_on_grid`](telemac_rain_on_grid.md)
 
-[![telemac_bed_scour](telemac_bed_scour/telemac_bed_scour.png)](telemac_bed_scour.md)
+[![telemac_rain_on_grid](telemac_rain_on_grid/telemac_rain_on_grid.png)](telemac_rain_on_grid.md)
 
-Bed SCOUR and DEPOSITION in a river reach: a mobile bed under a flow.
+How much RUNOFF a storm produces from the catchment a point drains, as an outlet hydrograph and a flood-depth map.
 
-Module `telemac2d`, proving run `01M2GN2534D6GMNFVJ89C3SGHS`.
+Module `telemac2d`, proving run `01M2GP3XQJENSXTD763387Z9TN`.
 
 ## [`telemac_sediment_plume`](telemac_sediment_plume.md)
 
-[![telemac_sediment_plume](telemac_sediment_plume/telemac_sediment_plume.png)](telemac_sediment_plume.md)
-
-A SUSPENDED SEDIMENT plume in a RIVER: it settles and deposits on the bed.
+A SUSPENDED SEDIMENT plume in a body of water: it settles and deposits on the bed.
 
 Module `telemac2d`, proving run `01M2GNFGG431SX89YQ0YMD8PPF`.
 
 ## [`telemac_water_temperature`](telemac_water_temperature.md)
 
-[![telemac_water_temperature](telemac_water_temperature/telemac_water_temperature.png)](telemac_water_temperature.md)
-
-WATER TEMPERATURE down a river reach under a week of real weather.
+WATER TEMPERATURE over a body of water under a week of real weather.
 
 Module `telemac2d`, proving run `01M2HT8T54CAEX53N1VH7S234R`.
 

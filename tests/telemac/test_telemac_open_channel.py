@@ -48,7 +48,7 @@ def settled(monkeypatch):
 
 def _run(**over):
     ask = {"mesh": _mesh(), "friction_law": 3, "friction_coefficient": 33.0,
-           "discharge_m3s": 50.0}
+           "carrier": 50.0}
     ask.update(over)
     return asyncio.run(D.settle_open_channel(**ask))
 
@@ -84,16 +84,18 @@ def test_the_step_is_the_accepted_meshs_own_measured_edge(settled):
     assert _run()["time_step_s"] == suggest_time_step_s(20.0)
 
 
-def test_a_stated_discharge_stands_over_any_record(settled):
-    reading = Observation(value=9.0, site_name="a gauge", sampled="2026-01-01")
-    channel = _run(discharge_m3s=50.0, carrier=reading)
+def test_a_stated_discharge_reads_as_the_value_it_is(settled):
+    """The inflow run carries ONE value however it arrived: the slot hands over
+    a number the caller stated the same way it hands over a reading, and the
+    note says which of the two this was."""
+    channel = _run(carrier=Observation(value=50.0))
     assert channel["inflow_q_m3s"] == 50.0
     assert "was stated" in channel["discharge_note"]
 
 
 def test_the_carrier_reading_fills_the_flow_and_says_who_reported_it(settled):
     reading = Observation(value=12.5, site_name="Willamette", sampled="2026-01-01")
-    channel = _run(discharge_m3s=None, carrier=reading)
+    channel = _run(carrier=reading)
     assert channel["inflow_q_m3s"] == pytest.approx(12.5)
     assert "Willamette" in channel["discharge_note"]
     assert "2026-01-01" in channel["discharge_note"]
@@ -103,22 +105,71 @@ def test_a_carrier_that_never_passed_its_slot_refuses_by_name(settled):
     """Which site reports the flow, and how old the sample is, is the observation
     slot's business - this step reads a value, never a record."""
     with pytest.raises(TelemacError) as exc:
-        _run(discharge_m3s=None, carrier={"type": "FeatureCollection"})
+        _run(carrier={"type": "FeatureCollection"})
     assert exc.value.error_code == "TELEMAC_CARRIER_UNINGESTED"
     assert "Data.observation" in str(exc.value)
 
 
 def test_no_flow_anywhere_refuses_rather_than_opening_on_a_guess(settled):
     with pytest.raises(TelemacError) as exc:
-        _run(discharge_m3s=None, carrier=None)
+        _run(carrier=None)
     assert exc.value.error_code == "TELEMAC_INFLOW_DISCHARGE_UNMEASURED"
 
 
 def test_a_domain_with_no_inflow_run_has_no_channel_to_open(settled, monkeypatch):
+    """The refusal names the RUN it lacked, not the bed: a body whose edge names
+    no inflow is closed, and a closed body is asked a still-water question."""
     monkeypatch.setattr(D, "read_topology", lambda uri: {
         "roles": {"outflow": [4, 5, 6, 7]}, "liquid_boundary_order": ["outflow"],
         "liquid_boundary_prescribes": ["elevation"]})
     with pytest.raises(TelemacError) as exc:
         _run()
-    assert exc.value.error_code == "TELEMAC_MESH_BED_UNMEASURED"
+    assert exc.value.error_code == "TELEMAC_BOUNDARY_RUN_UNNAMED"
     assert "'inflow'" in str(exc.value)
+    assert "['outflow']" in str(exc.value)
+
+
+#: The same two faces, LEVEL with each other: a reach cut from a surface DEM,
+#: where the water top is the bed and nothing falls downstream.
+_FLAT_BED = np.array([97.0, 94.0, 94.0, 97.0, 97.0, 94.0, 94.0, 97.0])
+
+
+@pytest.fixture()
+def flat(monkeypatch, settled):
+    monkeypatch.setattr(D, "mesh_nodes", lambda mesh: (_XY, _FLAT_BED))
+    return _mesh
+
+
+def test_a_reach_that_does_not_fall_holds_at_the_level_that_was_measured(flat):
+    """No fall is no uniform-flow depth: the outflow holds at the measured
+    elevation and the run opens flat at the depth that leaves over the section."""
+    channel = _run(stage=Observation(value=96.0, site_name="a gauge"))
+    assert channel["outflow_stage_m"] == pytest.approx(96.0)
+    assert channel["depth_m"] == pytest.approx(2.0)
+    assert channel["normal"]["slope"] == 0.0
+
+
+def test_a_level_at_or_below_the_bed_refuses_rather_than_opening_dry(flat):
+    """A gauge's height above its OWN zero is not an elevation on the datum the
+    bed is painted on, and the refusal says which two numbers disagree."""
+    with pytest.raises(TelemacError) as exc:
+        _run(stage=4.2)
+    assert exc.value.error_code == "TELEMAC_OUTFLOW_STAGE_BELOW_BED"
+    assert "94.000" in str(exc.value)
+
+
+def test_a_reach_that_does_not_fall_and_has_no_level_refuses_by_name(flat):
+    """The uniform-flow refusal stands: a level has to come from somewhere."""
+    from trid3nt_server.workflows.telemac.helpers.uniform_flow import (
+        UniformFlowError,
+    )
+
+    with pytest.raises(UniformFlowError) as exc:
+        _run()
+    assert exc.value.error_code == "TELEMAC_OUTFLOW_SLOPE_UNMEASURED"
+
+
+def test_a_level_that_never_passed_its_slot_refuses_by_name(flat):
+    with pytest.raises(TelemacError) as exc:
+        _run(stage={"type": "FeatureCollection"})
+    assert exc.value.error_code == "TELEMAC_STAGE_UNINGESTED"

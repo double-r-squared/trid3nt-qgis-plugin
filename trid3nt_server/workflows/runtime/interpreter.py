@@ -31,7 +31,7 @@ from trid3nt_server.gates.input_review import (
     resolve_input_gate_mode,
 )
 
-from .data import DOMAIN, CoversAOI, DataDecl, Producer
+from .data import DOMAIN, RUNS, CoversAOI, DataDecl, Producer
 from .domain import Domain, bind_domain, current_domain, domain_from_result, reset_domain
 from .errors import (
     SuppliedCoverageError,
@@ -295,6 +295,15 @@ async def _produce(env: _Env, decl: DataDecl) -> Any:
         _validate_supplied(env, decl, handed_in, decl.supplied_validate)
         return await _ingested(env, decl, handed_in)
     producer = decl.producer
+    if producer is None and decl.role == RUNS:
+        # THE DOMAIN'S PRODUCER measured these where it cut the polygon between
+        # two faces, and they ride on the domain it returned; a template that
+        # declares the slot does not restate them. Nothing measured is not the
+        # answer here - the canvas is asked next, and a closed body ends with
+        # none.
+        measured = await _domain_runs(env)
+        if measured:
+            return measured
     if producer is None and decl.role:
         # A SLOT the caller did not fill and no producer answers is asked for on
         # the canvas, where the user has one. A declined drawing is not a value:
@@ -344,6 +353,19 @@ async def _produce(env: _Env, decl: DataDecl) -> Any:
     return await _ingested(env, decl, value)
 
 
+async def _domain_runs(env: _Env) -> tuple[Any, ...]:
+    """The boundary runs the DOMAIN row carries, or ``()`` where it carries none.
+
+    The domain is produced on demand like any other read, so asking it for its
+    runs is what fills the runs slot on a question whose producer measured the
+    edge it cut the polygon between."""
+    row = next((r for r in env.data.values() if r.role == DOMAIN), None)
+    if row is None:
+        return ()
+    bound = await _deref(Ref(row.name), env)
+    return tuple(getattr(bound, "runs", None) or ())
+
+
 async def _ingested(env: _Env, decl: DataDecl, value: Any) -> Any:
     """A SLOT's value through the one ingestion its role reads; a plain row's
     value as it came.
@@ -386,6 +408,8 @@ async def _context(env: _Env, decl: DataDecl, label: str) -> Any:
     except Exception as exc:  # noqa: BLE001 - any empty source is the absence
         if getattr(exc, "retryable", False):
             raise
+        if _malformed_ask(exc):
+            raise
         env.absences.append(f"{decl.context_sentence} ({exc})")
         logger.info("data %s is CONTEXT and its source held nothing (%s); the run "
                     "continues", decl.name, exc)
@@ -397,6 +421,26 @@ async def _context(env: _Env, decl: DataDecl, label: str) -> Any:
     if env.ledger is not None:
         await env.ledger.record_data(decl.name, record)
     return ingested
+
+
+def _malformed_ask(exc: BaseException) -> bool:
+    """Is this the ASK being wrong rather than the source holding nothing?
+
+    A window, a bbox or a unit the caller stated wrong is a refusal the caller
+    has to see; only an empty source is the absence a context row continues on.
+    A producer's refusal reaches here inside the step that called it, so the
+    whole chain is read and not just the wrapper."""
+    from trid3nt_server.inputs.user_input import UserInputError
+    from trid3nt_server.tools.fetchers._router.errors import RouterInputError
+
+    seen: set[int] = set()
+    found: BaseException | None = exc
+    while found is not None and id(found) not in seen:
+        if isinstance(found, (UserInputError, RouterInputError)):
+            return True
+        seen.add(id(found))
+        found = getattr(found, "cause", None) or found.__cause__
+    return False
 
 
 async def _walk_ladder(env: _Env, producer: Producer,

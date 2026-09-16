@@ -72,6 +72,11 @@ class DATA:
                               seed_point=[Ref("outfall_coords.lon"),
                                           Ref("outfall_coords.lat")],
                               distance_km=_REACH_LENGTH_KM))
+    # THE STRETCHES OF ITS EDGE the water crosses. The reach producer measured
+    # them where it cut the section, and they ride on the domain it returned; a
+    # domain that arrives with none - a drawn outline, a lake - is asked for
+    # them on the canvas, and an edge that names none is a closed body's.
+    runs = Data.runs()
     # THE MEASUREMENT. A domain with no federal navigation project has no
     # published survey, and the sheet says so rather than refusing.
     survey = Data(tool("fetch_ehydro_surveys", bbox=Ref("domain.bbox"),
@@ -95,7 +100,8 @@ class DATA:
     # which side was missing.
     bed = Data.bed(tool("derive_merge_rasters", primary=surveyed_bed,
                         fallback=terrain))
-    # The carrier flow the inflow run prescribes, where the user stated none.
+    # The carrier flow the inflow run prescribes. A number stated on this row
+    # stands over any record, so the flow is the slot's and no param twins it.
     # ONE reading off whatever reports nearest the water, because the dilution
     # the whole sag rests on is a number and not a layer.
     carrier = Data.observation(
@@ -105,6 +111,15 @@ class DATA:
         measures="a streamflow", opens="the carrier flow opens at"
     ).context("the National Water Model published no streamflow over this "
               "domain at that cycle")
+    # THE LEVEL THE OUTFLOW HOLDS where the reach does not FALL. A reach whose
+    # bed is a surface DEM has the water top for a floor and no fall between its
+    # ends, so there is no uniform-flow depth to derive and the outflow holds at
+    # a level somebody measured instead. An ELEVATION on the datum the bed is
+    # painted on - a gauge publishes its height above its own zero, which is a
+    # different surface, so no source is named here and the number is stated.
+    stage = Data.observation(near=Ref("domain.centroid"), units="m",
+                             measures="a water-surface elevation",
+                             opens="the outflow holds at").optional()
 
 
 class STEERING(T2D):
@@ -261,7 +276,7 @@ telemac_do_sag = register_workflow(
             Step(runner=f"{_AUTHORING}.assembler.settle_open_channel",
                  stage="author",
                  kwargs={"mesh": Ref("mesh"), "carrier": Ref("carrier"),
-                         "discharge_m3s": P.discharge_m3s,
+                         "stage": Ref("stage"),
                          "friction_law": _FRICTION_LAW,
                          "friction_coefficient": _FRICTION_COEFFICIENT}
                  ).named("channel"),
@@ -277,8 +292,7 @@ telemac_do_sag = register_workflow(
     data=DATA,
     accepts=ACCEPTS,
     answer=tuple(ANSWER),
-    provenance=(("discharge_m3s", "discharge_note"),
-                ("mesh_resolution_m", "mesh_resolution_note")),
+    provenance=(("mesh_resolution_m", "mesh_resolution_note"),),
     # WHERE the sag sits is a local-feature LOCATION and moves with the element
     # that resolves it. The DO minimum itself is a saturated maximum - a
     # converged class - so it carries no label.

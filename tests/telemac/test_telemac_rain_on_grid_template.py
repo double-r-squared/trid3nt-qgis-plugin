@@ -79,9 +79,9 @@ def test_the_bed_is_one_row_on_the_ground_the_trace_ran_over():
 
 
 def test_the_outlet_is_the_run_the_domain_carries_not_a_point_this_template_places():
-    """The catchment's one liquid boundary comes off the domain slot - the
-    stretch of the divide the producer measured, typed rating_curve - so nothing
-    downstream branches on whether it was traced or drawn."""
+    """The catchment's one liquid boundary comes off the RUNS slot - the stretch
+    of the divide the producer measured, typed rating_curve, or the run the user
+    drew - so nothing downstream branches on which way it arrived."""
     from trid3nt_server.workflows.telemac.templates.rain_on_grid.rain_on_grid import (
         MESH,
     )
@@ -89,7 +89,7 @@ def test_the_outlet_is_the_run_the_domain_carries_not_a_point_this_template_plac
     op = [o for o in MESH.ops if o.fn == "set_boundary_roles"]
     assert len(op) == 1
     assert set(op[0].kwargs) == {"runs"}
-    assert op[0].kwargs["runs"].path == "domain"
+    assert op[0].kwargs["runs"].path == "runs"
 
 
 def test_the_mesh_is_a_band_whose_rim_is_locked_at_the_size_word():
@@ -104,7 +104,7 @@ def test_the_mesh_is_a_band_whose_rim_is_locked_at_the_size_word():
     assert [o.fn for o in MESH.ops] == [
         "distance_sizing_from_line_function", "set_rim_size",
         "enforce_mesh_gradation", "delete_boundary_faces",
-        "delete_faces_connected_to_one_face", "laplacian2",
+        "delete_faces_connected_to_one_face",
         "make_mesh_boundaries_traversable", "fix_mesh", "set_bed",
         "set_boundary_roles"]
     assert MESH.extent.path == "domain"

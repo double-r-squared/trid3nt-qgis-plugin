@@ -2,11 +2,11 @@
 
 # `telemac_rain_on_grid`
 
-How much RUNOFF a storm produces from this WATERSHED, as an outlet hydrograph and a flood-depth map.
+How much RUNOFF a storm produces from the catchment a point drains, as an outlet hydrograph and a flood-depth map.
 
 |  |  |
 |---|---|
-| module | `telemac2d` - 376 keywords in its dictionary, of which this template states 24 |
+| module | `telemac2d` - 376 keywords in its dictionary, of which this template states 23 |
 | solves | `trid3nt_server.workflows.telemac.engine.solve_case` |
 | engine defaults | every keyword this template does not state keeps the engine's own default; `describe_keywords` names it with that default, and `keywords={...}` sets it |
 
@@ -14,11 +14,12 @@ How much RUNOFF a storm produces from this WATERSHED, as an outlet hydrograph an
 
 | row | produced by | what it is | datum |
 |---|---|---|---|
-| `dem` | `fetch_dem` | Fetch a digital elevation model (DEM) / terrain elevation for a bounding box (USGS 3DEP US lidar; on a 3DEP outage the default path STOPS and asks before any Copernicus GLO-30 swap; either source pinnable). | NAVD88 (metres, positive up) |
+| `domain` | `fetch_watershed` | Build a WATERSHED DOMAIN from one pour point -> the basin polygon, its outlet boundary run, and the DEM the trace used. | - |
+| `runs` | supplied by the caller | the stretches of the domain's edge that carry a boundary condition - each two points on the edge and a type (inflow, outflow, open); a closed body states none | - |
+| `bed` | `fetch_dem` | Fetch a digital elevation model (DEM) / terrain elevation for a bounding box (USGS 3DEP US lidar; on a 3DEP outage the default path STOPS and asks before any Copernicus GLO-30 swap; either source pinnable). | NAVD88 (metres, positive up) |
 | `rivers` | `fetch_river_geometry` | Fetch river and stream flowline geometry for a bbox (OSM Overpass waterways). | - |
 | `landcover` | `fetch_landcover` | Fetch landcover classification raster (NLCD or ESA WorldCover) for a bbox. | - |
-| `rain` | `trid3nt_server.workflows.telemac.templates.rain_on_grid.storm.resolve_rain_event` | The storm, as either a real hourly hyetograph or a constant design rate. | - |
-| `basin` | `delineate_watershed` | Delineate the watershed (drainage basin) upstream of a pour point (D8 flow analysis via pysheds). | - |
+| `rain` | `fetch_aorc_precip` | NOAA AORC v1.1 historical hourly precipitation -- the AOI-mean hyetograph forcing series for any CONUS year since 1979. | - |
 
 ## The sheet
 
@@ -26,24 +27,18 @@ The values the template declares. `desc` is what the model reads when it fills o
 
 | param | door | units | default | desc |
 |---|---|---|---|---|
-| `pour_point` | user | - | - | The catchment OUTLET, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer, or a place name - the point the runoff drains to. It decides which basin is modelled at all, so it is asked for (picked on the canvas or passed explicitly) and NEVER invented |
-| `location` | question | - | optional | Place naming the catchment. It names the run and the published layers; the basin's SHAPE is the terrain's answer at the pour point, never the geocoder's bbox |
-| `bbox` | user | - | optional | Explicit analysis AOI (min_lon,min_lat,max_lon,max_lat) EPSG:4326 the catchment is delineated INSIDE; it must contain the whole upstream basin, because delineation truncates at its edge |
-| `rain_window` | question | - | optional | A REAL storm window as 'YYYY-MM-DD/YYYY-MM-DD'. Drives the run with the hourly AORC hyetograph over the catchment - the true intensity structure, which is what resolves the hydrograph SHAPE. AORC rather than MRMS because MRMS only covers ~2020-10 onward |
-| `design_storm_mm_per_hr` | scenario | mm/h | 25.0 | Constant design-storm intensity, used when no rain_window names a real event. A hypothetical storm, labeled as one |
-| `storm_duration_hr` | scenario | h | 6.0 | How long the design storm rains for |
-| `sim_duration_hr` | scenario | h | optional | Total simulated window; longer than the rain to watch the recession |
+| `pour_point` | user | - | - | The catchment OUTLET, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer, or a place name - the point the runoff drains to. It decides which basin is modelled at all, so it is asked for (picked on the canvas or passed explicitly) and NEVER invented. It is snapped onto the traced channel, so a click beside the stream still delineates its basin |
+| `rain_series_mm` | user | mm | optional | A MEASURED storm, as hourly GROSS millimetres in the order the record reported them - what fetch_aorc_precip returns over this catchment under `precip_mm` for any CONUS window since 1979. It is the true intensity structure, which is what resolves the hydrograph SHAPE; a record that stops inside the simulated window stops in the run too, so the recession limb appears |
+| `rain_start_date` | user | - | optional | First day of the MEASURED storm to look for over this catchment, ISO yyyy-mm-dd. With rain_end_date it reads the hourly analysis of record; a catchment with no published hours keeps the design storm and the run says so |
+| `rain_end_date` | user | - | optional | Last day of the measured storm window, ISO yyyy-mm-dd. At most 92 days after rain_start_date, and no later than about ten days ago - the record is an analysis, not a forecast |
+| `design_storm_mm_per_hr` | scenario | mm/h | 25.0 | Constant design-storm intensity, used when no measured series is given. A hypothetical storm, labeled as one |
+| `storm_duration_hr` | scenario | h | 6.0 | How long the design storm rains for; a window shorter than the simulated one is what lets the recession limb appear |
+| `sim_duration_s` | scenario | s | 43200.0 | Total simulated window; longer than the rain, to watch the recession. A window that closes while the discharge is still rising is reported as such and its peak is a LOWER BOUND |
 | `antecedent_moisture` | scenario | - | normal | How wet the catchment already is: dry (SCS AMC I) \| normal (AMC II) \| wet (AMC III). The dominant infiltration lever - a wet basin absorbs far less and the hydrograph peaks higher and sooner |
 | `curve_number` | user | - | optional | A UNIFORM SCS curve number over the whole catchment, overriding the land-cover-distributed field. Roughness stays per-node either way - Manning n is a separate physical property, not the CN knob |
 | `steep_slope_correction` | scenario | - | False | Apply the Huang (2006) steep-slope correction to the curve numbers using the mesh's own bed gradients. The engine's native branch is compiled off in the installed 9.0.0 build, so the correction is applied to the CN field before it is written |
-| `landcover_dataset` | constant | - | nlcd_2021 | Land-cover product the per-node curve numbers and Manning n are keyed to |
-| `mesh_min_edge_m` | scenario | m | 40.0 | Finest triangle edge, used where the mesh refines toward the channel network. THE granularity lever: peak depth and flooded extent are resolution-bound classes and a coarse mesh reads both low |
+| `mesh_resolution_m` | scenario | m | 40.0 | Finest triangle edge, reached where the mesh refines toward the channel network. THE granularity lever: peak depth and flooded extent are resolution-bound classes and a coarse mesh reads both low |
 | `mesh_max_edge_m` | scenario | m | 300.0 | Coarsest triangle edge, reached far from the channels on the hillslopes |
-| `mesh_grade` | constant | - | 0.2 | Mesh gradation: how fast the edge length may grow between the channel band and the hillslopes |
-| `bed_dem_resolution_m` | constant | m | 10 | Ground resolution the BARE-EARTH bed is sampled at the mesh nodes from; a surface model would put the bed on the forest canopy |
-| `river_source` | constant | - | nhdplus_hr | Channel network the mesh refinement is sized by distance to |
-| `time_step_s` | constant | s | 3.0 | Solver time step. Overland sheet flow on a fine catchment mesh is CFL-tight, which is why it is seconds rather than tens of seconds |
-| `output_interval_min` | user | min | optional | Result-writing cadence; a hydrograph resolved in six frames cannot be spot-checked against, so a short window wants a short interval |
 | `compute_class` | constant | - | medium | Solve sizing class |
 
 ## What it answers

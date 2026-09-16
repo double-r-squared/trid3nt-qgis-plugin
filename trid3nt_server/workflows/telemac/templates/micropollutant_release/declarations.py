@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from trid3nt_server.inputs import Point
-from trid3nt_server.workflows.runtime import Accepts, Param, doors
+from trid3nt_server.workflows.runtime import Accepts, Param, doors, lever
 
 __all__ = ["ACCEPTS", "DOC", "PARAMS"]
 
@@ -20,17 +20,6 @@ class PARAMS:
     and where downstream the history is read. The domain, the bed, its boundary
     runs and the granularity are the runtime's own slots and levers, and the
     deck's roughness and cadence are keywords the module's dictionary describes."""
-
-    # -- the water that carries it ------------------------------------------ #
-    discharge_m3s = Param(
-        door=doors.USER, optional=True, units="m^3/s",
-        bounds=(0.01, 1.0e5), consequence="physics", user_lever=True,
-        derived_when_absent=(
-            "the steady carrier discharge is read from the NOAA National Water "
-            "Model over the domain; no NWM coverage refuses typed rather than "
-            "falling back to a constant"),
-        desc="Steady CARRIER discharge across the inflow boundary run - the flow "
-             "that dilutes and transports the release")
 
     # -- the release -------------------------------------------------------- #
     release = Param(
@@ -127,10 +116,8 @@ class PARAMS:
              "given, 0=inflow..1=outflow")
 
     # -- the clock ----------------------------------------------------------- #
-    sim_duration_s = Param(
-        door=doors.SCENARIO, default=172800.0,
-        bounds=(3600.0, 864000.0), units="s", consequence="numerical",
-        user_lever=True,
+    sim_duration_s = lever(
+        "sim_duration_s", default=172800.0, bounds=(3600.0, 864000.0),
         desc="Simulated time. Sorption equilibrates in hours and settling takes "
              "longer than that, so a window of a few hours reports a partition "
              "that has not happened yet; two days is what the default covers")

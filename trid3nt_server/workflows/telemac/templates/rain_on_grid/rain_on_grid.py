@@ -107,6 +107,10 @@ class DATA:
                               buffer_km=_BASIN_WINDOW_KM,
                               resolution_m=_TERRAIN_RESOLUTION_M,
                               dem_source=_TERRAIN_SOURCE))
+    # THE STRETCH OF THE DIVIDE the basin drains through, as the producer
+    # measured it: cut at the snapped pour point, typed as the rating curve the
+    # level is read off. A basin the user draws is asked for it on the canvas.
+    runs = Data.runs()
     #: THE GROUND the water runs over. A bare-earth DEM is the correct class for
     #: an OVERLAND domain - there is no channel bottom under a hillslope - and a
     #: pond or a surveyed basin fills the same slot with its own surface or a
@@ -154,7 +158,6 @@ MESH = tool.build_mesh(
         mesh_op("enforce_mesh_gradation", gradation=_MESH_GRADE),
         mesh_op("delete_boundary_faces"),
         mesh_op("delete_faces_connected_to_one_face"),
-        mesh_op("laplacian2"),
         mesh_op("make_mesh_boundaries_traversable"),
         mesh_op("fix_mesh", delete_unused=True),
         # ONE GROUND, CONDITIONED THE SAME WAY. The basin was traced on the
@@ -171,7 +174,7 @@ MESH = tool.build_mesh(
         # boundary file's zero. The all-KSORT free exit is not the alternative:
         # it is well-posed only while the normal velocity leaves, and
         # propin_telemac2d.f refuses an entering one by name.
-        mesh_op("set_boundary_roles", runs=DATA.domain),
+        mesh_op("set_boundary_roles", runs=DATA.runs),
     ],
 )
 

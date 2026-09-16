@@ -62,13 +62,14 @@ _ALWAYS_READABLE = ("full_listing.log", "telemac_metrics.json")
 #: The mesher's own clean passes, under its own names, that every domain gets
 #: before anything is imposed on it. They change the TOPOLOGY, so they run ahead
 #: of the bed and the roles - a renumbering after a primitive painted node values
-#: is refused by the mesher itself.
+#: is refused by the mesher itself. The smoothing pass is NOT among them: it folds
+#: elements beside a rim locked at one spacing, and the boundary walk that numbers
+#: a TELEMAC geometry meets the folded pair's unpaired edges as a second rim.
 def _clean_ops() -> list[Any]:
     from trid3nt_server.workflows.mesh.tool import mesh_op
 
     return [mesh_op("delete_boundary_faces"),
             mesh_op("delete_faces_connected_to_one_face"),
-            mesh_op("laplacian2"),
             mesh_op("make_mesh_boundaries_traversable"),
             mesh_op("fix_mesh", delete_unused=True)]
 
@@ -257,7 +258,11 @@ class Door:
                 "merge derive into the one row this slot takes.")
         geometry = self._file("GEOMETRY_FILE", "geometry.slf")
         boundary = self._file("BOUNDARY_CONDITIONS_FILE", "boundary.cli")
-        result = self._file("RESULTS_FILE", "results.slf")
+        # The deck's own RESULTS statement, else the first file this template
+        # says the run has to write: a 3D deck names a 3D and a 2D result rather
+        # than one RESULTS FILE, and the run's own facts name what it wrote.
+        result = self._file("RESULTS_FILE",
+                            self.results[0] if self.results else "results.slf")
         declared = {prm.name for prm in ops.params}
         return replace(
             self,

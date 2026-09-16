@@ -130,7 +130,8 @@ def test_the_workflow_owns_the_stages_and_the_template_states_no_recipe():
     assert door.settle is None and door.owns_stages
     assert door.mesh is None and door.domain == ()
     assert not hasattr(module, "MESH")
-    assert door.levers == ("mesh_resolution_m", "event_time", "compute_class")
+    assert door.levers == ("mesh_resolution_m", "sim_duration_s", "event_time",
+                           "compute_class")
 
 
 def test_the_owned_mesh_paints_its_bed_and_takes_its_roles_from_the_domain():

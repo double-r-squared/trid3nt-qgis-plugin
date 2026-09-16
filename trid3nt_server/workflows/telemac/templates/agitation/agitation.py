@@ -124,7 +124,6 @@ MESH = tool.build_mesh(
         mesh_op("enforce_mesh_gradation", gradation=P.mesh_grade),
         mesh_op("delete_boundary_faces"),
         mesh_op("delete_faces_connected_to_one_face"),
-        mesh_op("laplacian2"),
         mesh_op("make_mesh_boundaries_traversable"),
         mesh_op("fix_mesh", delete_unused=True),
         mesh_op("set_bed", source=DATA.bed),

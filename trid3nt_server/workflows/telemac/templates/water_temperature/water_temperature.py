@@ -68,6 +68,11 @@ class DATA:
     domain = Data.domain(tool("fetch_river_reach",
                               seed_point=[Ref("seed.lon"), Ref("seed.lat")],
                               distance_km=_REACH_LENGTH_KM))
+    # THE STRETCHES OF ITS EDGE the water crosses. The reach producer measured
+    # them where it cut the section, and they ride on the domain it returned; a
+    # domain that arrives with none - a drawn outline, a lake - is asked for
+    # them on the canvas, and an edge that names none is a closed body's.
+    runs = Data.runs()
 
     # THE MEASUREMENT. Water with no federal navigation project has no published
     # sounding, and the sheet says so rather than refusing.
@@ -94,7 +99,8 @@ class DATA:
     bed = Data.bed(tool("derive_merge_rasters", primary=surveyed_bed,
                         fallback=terrain))
 
-    # The carrier flow the inflow run prescribes, where the user stated none.
+    # The carrier flow the inflow run prescribes. A number stated on this row
+    # stands over any record, so the flow is the slot's and no param twins it.
     # ONE reading, not the grid the model published: which reach segment reports
     # it is ranked against the domain's own interior point, and the step that
     # opens the channel refuses a record nobody chose from.
@@ -105,6 +111,15 @@ class DATA:
         measures="a streamflow", opens="the carrier flow opens at"
     ).context("the National Water Model published no streamflow over this "
               "domain at that cycle")
+    # THE LEVEL THE OUTFLOW HOLDS where the reach does not FALL. A reach whose
+    # bed is a surface DEM has the water top for a floor and no fall between its
+    # ends, so there is no uniform-flow depth to derive and the outflow holds at
+    # a level somebody measured instead. An ELEVATION on the datum the bed is
+    # painted on - a gauge publishes its height above its own zero, which is a
+    # different surface, so no source is named here and the number is stated.
+    stage = Data.observation(near=Ref("domain.centroid"), units="m",
+                             measures="a water-surface elevation",
+                             opens="the outflow holds at").optional()
 
     # THE WEATHER the budget reads. The RAWS network is the one hourly record the
     # registry reaches without an account that carries SOLAR RADIATION beside the
@@ -280,7 +295,7 @@ telemac_water_temperature = register_workflow(
             Step(runner=f"{_AUTHORING}.assembler.settle_open_channel",
                  stage="author",
                  kwargs={"mesh": Ref("mesh"), "carrier": Ref("carrier"),
-                         "discharge_m3s": P.discharge_m3s,
+                         "stage": Ref("stage"),
                          "friction_law": _FRICTION_LAW,
                          "friction_coefficient": _FRICTION_COEFFICIENT}
                  ).named("channel"),
@@ -300,8 +315,7 @@ telemac_water_temperature = register_workflow(
     data=DATA,
     accepts=ACCEPTS,
     answer=tuple(ANSWER),
-    provenance=(("discharge_m3s", "discharge_note"),
-                ("mesh_resolution_m", "mesh_resolution_note")),
+    provenance=(("mesh_resolution_m", "mesh_resolution_note"),),
     # The peak is a saturated maximum over a domain-scale field, so it is not a
     # resolution class. The SPREAD's warm end sits in the thinnest water there
     # is, and a coarse element averages that extreme away.

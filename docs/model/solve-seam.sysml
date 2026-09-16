@@ -669,6 +669,16 @@ package SolveSeam {
         whose coefficient no conveyance reads, a discharge or roughness that is
         not positive. Defaulting past any of them would put an underived level
         back on that boundary with nothing saying so.
+
+        A reach that does not fall is the one of those with a measurement for an
+        answer. Where the two role faces sit level - a reach cut from a surface
+        DEM, where the water top is the floor - there is no uniform-flow depth
+        to derive at all, and the outflow HOLDS at a level that was measured
+        instead: an ELEVATION on the datum the bed is painted on, which is what
+        a number handed to that slot means. A level at or below the section's
+        own deepest node refuses by naming both numbers, because a height above
+        a gauge's own zero is a different surface and adopting one silently is
+        the second vertical datum this derivation exists without.
         */
     }
 
@@ -901,6 +911,12 @@ package SolveSeam {
         "tests/telemac/test_telemac_module_surface.py::test_the_open_channel_body_is_written_at_the_derivation_it_was_solved_for";
     verify requirement OutflowStageIsNormalDepth by
         "tests/telemac/test_telemac_outflow_stage.py::test_a_flatter_reach_stands_higher_for_the_same_flow";
+    verify requirement OutflowStageIsNormalDepth by
+        "tests/telemac/test_telemac_open_channel.py::test_a_reach_that_does_not_fall_holds_at_the_level_that_was_measured";
+    verify requirement OutflowStageIsNormalDepth by
+        "tests/telemac/test_telemac_open_channel.py::test_a_level_at_or_below_the_bed_refuses_rather_than_opening_dry";
+    verify requirement OutflowStageIsNormalDepth by
+        "tests/telemac/test_telemac_open_channel.py::test_a_reach_that_does_not_fall_and_has_no_level_refuses_by_name";
 
     satisfy requirement MetricsAlways by workerEntrypoint;
     verify requirement MetricsAlways by

@@ -708,6 +708,11 @@ package DataSeam {
         supersedes the source the template preferred, and that is the whole of
         how a body of water no fetcher knows gets modelled. Fetchers are one way
         to fill a slot, never the linchpin.
+
+        A domain read as TEXT is the name it was given, else the word: the mesh
+        session, the layer titles and the run's own name are all written from
+        it, so a domain that read as its geometry named every one of them after
+        its coordinates.
         */
     }
 
@@ -745,6 +750,13 @@ package DataSeam {
         reads that rather than asking a fetcher to speak the slot's. A row
         naming a stretch that prescribes nothing is the wall the edge already
         is, and is not a run.
+
+        A template declares the slot and nothing else about it. What fills it,
+        in order: what the caller supplied, the runs the DOMAIN row carries
+        because its producer measured them, what the user draws under the
+        boundary-run purpose, and then nothing - which is a closed body. A
+        question that needs a run and was given none refuses by naming the run
+        it lacked, never by opening on a condition nobody stated.
         */
     }
 
@@ -755,6 +767,11 @@ package DataSeam {
         producer row still fails typed: the difference is declared, not inferred,
         because a row that is load-bearing and a row that is background look
         identical from inside the fetch.
+
+        ONLY AN EMPTY SOURCE IS AN ABSENCE. A window, a bbox or a unit the
+        caller stated wrong is the ASK being wrong and refuses, because a run
+        that swallowed it would report that nothing was there about a question
+        nobody managed to put.
 
         The refusal for a producer row declared .optional() stands: absence with
         nothing said about it is the failure mode this row was written to end.
@@ -946,6 +963,8 @@ package DataSeam {
         "tests/inputs/test_slot_inputs.py::test_a_shape_that_is_not_closed_refuses_rather_than_being_squared_off";
     verify requirement TheDomainIsOneSlotHoweverItIsFilled by
         "tests/telemac/test_workflow_owns_its_stages.py::test_the_domain_and_the_bed_reach_the_wire_as_the_slots_they_are";
+    verify requirement TheDomainIsOneSlotHoweverItIsFilled by
+        "tests/inputs/test_slot_inputs.py::test_a_domain_says_its_own_name_when_it_is_read_as_text";
 
     satisfy requirement OneBedOverEverySourceAUserCanHave by bedSlot;
     satisfy requirement OneBedOverEverySourceAUserCanHave by bedPainter;
@@ -986,6 +1005,14 @@ package DataSeam {
         "tests/mesh/test_bed_sources_and_runs.py::test_boundary_runs_prescribe_the_roles_their_types_name";
     verify requirement ABoundaryRunIsTwoPointsAndAType by
         "tests/mesh/test_bed_sources_and_runs.py::test_a_closed_body_states_no_run_and_the_mesh_has_only_walls";
+    verify requirement ABoundaryRunIsTwoPointsAndAType by
+        "tests/runtime/test_domain_bed_and_context_slots.py::test_the_runs_slot_is_filled_by_the_domains_own_producer";
+    verify requirement ABoundaryRunIsTwoPointsAndAType by
+        "tests/runtime/test_domain_bed_and_context_slots.py::test_a_domain_that_carries_no_runs_leaves_the_slot_empty";
+    verify requirement ABoundaryRunIsTwoPointsAndAType by
+        "tests/runtime/test_domain_bed_and_context_slots.py::test_a_run_the_user_hands_over_supersedes_the_producers_own";
+    verify requirement ABoundaryRunIsTwoPointsAndAType by
+        "tests/telemac/test_telemac_open_channel.py::test_a_domain_with_no_inflow_run_has_no_channel_to_open";
 
     satisfy requirement ABoxIsNotADomainAndIsItsOwnSlot by extentSlot;
     satisfy requirement ABoxIsNotADomainAndIsItsOwnSlot by slotDoor;
@@ -1003,6 +1030,10 @@ package DataSeam {
         "tests/runtime/test_domain_bed_and_context_slots.py::test_a_context_rows_absence_continues_the_run_and_says_so";
     verify requirement AContextRowsAbsenceContinuesTheRun by
         "tests/runtime/test_domain_bed_and_context_slots.py::test_a_hard_producer_row_still_refuses_when_its_source_is_empty";
+    verify requirement AContextRowsAbsenceContinuesTheRun by
+        "tests/runtime/test_domain_bed_and_context_slots.py::test_a_malformed_ask_on_a_context_row_refuses_rather_than_reading_absent";
+    verify requirement AContextRowsAbsenceContinuesTheRun by
+        "tests/runtime/test_domain_bed_and_context_slots.py::test_a_malformed_value_handed_to_a_context_rows_slot_refuses_too";
     verify requirement AContextRowsAbsenceContinuesTheRun by
         "tests/runtime/test_domain_bed_and_context_slots.py::test_context_needs_a_producer_and_optional_still_refuses_one";
     verify requirement AContextRowsAbsenceContinuesTheRun by

@@ -191,9 +191,17 @@ def test_the_template_declares_none_of_the_runtime_s_own_rows():
     describes. What is left is the question's own."""
     from trid3nt_server.workflows.runtime.levers import LEVER_NAMES
 
+    from trid3nt_server.workflows.runtime import param_rows
+
     workflow = _template().telemac_micropollutant_release.workflow
     declared = [prm.name for prm in workflow.params]
-    assert declared[-len(LEVER_NAMES):] == list(LEVER_NAMES)
+    # Every lever is on the sheet; the ones this question does not state for
+    # itself are seated at the end, in the order the runtime declares them, and
+    # one it differs on keeps its own place and its own opinion of the value.
+    own = {prm.name for prm in param_rows(_template().PARAMS)}
+    assert set(LEVER_NAMES) <= set(declared)
+    seated = [name for name in LEVER_NAMES if name not in own]
+    assert declared[-len(seated):] == seated
     for gone in ("location", "bbox", "river_geometry_uri", "reach_length_km",
                  "friction_law", "friction_coefficient", "output_interval_min"):
         assert gone not in declared
@@ -203,8 +211,8 @@ def test_the_template_declares_none_of_the_runtime_s_own_rows():
 
 
 def test_the_three_slots_are_the_world_this_run_stands_on():
-    """One domain, one bed composed by the merge derive, and no runs row - so the
-    reach producer's own two faces are what the mesh prescribes on."""
+    """One domain, one bed composed by the merge derive, and the runs slot the
+    reach producer's own two faces reach the mesh through."""
     from trid3nt_server.workflows.runtime.data import BED, DOMAIN, RUNS
 
     data = {decl.name: decl for decl in
@@ -213,7 +221,7 @@ def test_the_three_slots_are_the_world_this_run_stands_on():
     assert data["domain"].producer.runner == "fetch_river_reach"
     assert data["bed"].role == BED
     assert data["bed"].producer.runner == "derive_merge_rasters"
-    assert not [d for d in data.values() if d.role == RUNS]
+    assert (data["runs"].role, data["runs"].producer) == (RUNS, None)
     # Both slots reach the wire: what the user supplies supersedes the producer.
     assert data["domain"].fills_from_user and data["bed"].fills_from_user
 
@@ -264,7 +272,7 @@ def test_the_mesh_the_workflow_builds_paints_the_one_bed_row():
     bed = next(op for op in recipe.ops if op.fn == "set_bed")
     assert bed.kwargs == {"source": DataRef("bed")}
     runs = next(op for op in recipe.ops if op.fn == "set_boundary_roles")
-    assert runs.kwargs == {"runs": DataRef("domain")}
+    assert runs.kwargs == {"runs": DataRef("runs")}
 
 
 def test_the_plan_reads_as_the_universal_stage_sequence():

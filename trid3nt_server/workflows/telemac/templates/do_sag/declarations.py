@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from trid3nt_server.inputs import Point
-from trid3nt_server.workflows.runtime import Accepts, Param, doors
+from trid3nt_server.workflows.runtime import Accepts, Param, doors, lever
 
 __all__ = ["ACCEPTS", "DOC", "PARAMS"]
 
@@ -22,17 +22,6 @@ class PARAMS:
     against, and how long the water is watched. The domain, the bed, its boundary
     runs and the granularity are the runtime's own slots and levers, and the
     deck's roughness and cadence are keywords the module's dictionary describes."""
-
-    # -- the water that carries it ------------------------------------------ #
-    discharge_m3s = Param(
-        door=doors.USER, optional=True, units="m^3/s",
-        bounds=(0.01, 1.0e5), consequence="physics", user_lever=True,
-        derived_when_absent=(
-            "the steady carrier discharge is read from the NOAA National Water "
-            "Model over the domain; no NWM coverage refuses typed rather than "
-            "falling back to a constant"),
-        desc="Steady CARRIER discharge across the inflow boundary run - the flow "
-             "that dilutes the effluent and carries its load downstream")
 
     # -- the discharge ------------------------------------------------------- #
     outfall_coords = Param(
@@ -97,13 +86,12 @@ class PARAMS:
              "common warm-water aquatic-life criterion")
 
     # -- the clock ----------------------------------------------------------- #
-    sim_duration_s = Param(
-        door=doors.SCENARIO, default=172800.0,
-        bounds=(60.0, 864000.0), units="s", consequence="numerical",
-        user_lever=True,
-        desc="Simulated time. A sag is a STEADY-STATE answer, so this has to cover "
-             "several travel times through the domain AND be long against 1/k1 - a "
-             "window shorter than that reports a sag that has not developed yet")
+    sim_duration_s = lever(
+        "sim_duration_s", default=172800.0, bounds=(60.0, 864000.0),
+        desc="Simulated time. A sag is a STEADY-STATE answer, so this has to "
+             "cover several travel times through the domain AND be long against "
+             "1/k1 - a window shorter than that reports a sag that has not "
+             "developed yet")
 
 
 DOC = dict(

@@ -88,11 +88,11 @@ def test_the_bed_is_one_row_composed_from_the_survey_over_the_terrain():
 
 
 def test_the_domain_producer_hands_over_the_faces_the_run_is_prescribed_on():
-    """The template declares no runs row, so the two end transects the reach
-    producer cut its polygon between are what the roles are set from."""
+    """The runs slot is what the roles are set from, and the two end transects
+    the reach producer cut its polygon between are what fills it."""
     recipe = _workflow().plan.steps[0].kwargs["mesh"]
     roles = next(op for op in recipe["ops"] if op["op"] == "set_boundary_roles")
-    assert roles["kwargs"]["runs"].path == "domain"
+    assert roles["kwargs"]["runs"].path == "runs"
     bed = next(op for op in recipe["ops"] if op["op"] == "set_bed")
     assert bed["kwargs"]["source"].path == "bed"
 
