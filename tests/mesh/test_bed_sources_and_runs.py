@@ -154,3 +154,21 @@ def test_runs_and_named_faces_are_the_same_statement():
     roled = P.set_boundary_roles(_lattice_mesh(), runs=runs, outflow=east)
     assert set(roled.meta["boundary_roles"]["inflow"]) == {0, 3, 6}
     assert set(roled.meta["boundary_roles"]["outflow"]) == {2, 5, 8}
+
+
+def test_the_nodes_a_source_may_enter_the_water_at_are_the_interior_ones():
+    """The mesh's own edge is where boundary conditions are imposed, and a point
+    source placed there is one the solver reads as outside its own domain."""
+    import numpy as np
+
+    from trid3nt_server.workflows.mesh.shared.nodes import interior_nodes
+
+    # a 3x3 lattice cut into triangles: the middle node is the only inside
+    nodes = [[i, j] for i in range(3) for j in range(3)]
+    cells = []
+    for i in range(2):
+        for j in range(2):
+            a = i * 3 + j
+            cells += [[a, a + 3, a + 1], [a + 1, a + 3, a + 4]]
+    mask = interior_nodes(np.asarray(cells, dtype=np.int64), len(nodes))
+    assert mask.tolist() == [n == 4 for n in range(9)]

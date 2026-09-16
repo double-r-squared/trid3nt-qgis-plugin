@@ -28,9 +28,12 @@ _REACH = {"type": "FeatureCollection", "features": [
      "geometry": {"type": "LineString",
                   "coordinates": [[-122.695, 45.53], [-122.605, 45.53]]}}]}
 
-#: A mesh whose cells cover the whole pond, in its own UTM metres.
-_XY = np.array([[500000.0, 5038000.0], [508000.0, 5038000.0],
-                [508000.0, 5044000.0], [500000.0, 5044000.0]])
+#: A mesh whose cells cover the whole pond, in its own UTM metres, at a hundred
+#: metres: a release lands on the NODE the engine solves it at, so the stand-in
+#: has to carry nodes where a point is placed rather than four far corners.
+_XY = np.array([[x, y]
+                for x in np.arange(523400.0, 531300.0, 100.0)
+                for y in np.arange(5038500.0, 5045300.0, 100.0)])
 
 
 class _Artifact:
@@ -45,9 +48,24 @@ def _mesh(extent):
             "mesh_id": "mesh-1"}
 
 
+#: The cells over those nodes: a release lands on an INTERIOR node, so the
+#: stand-in has to have an inside. One strip of triangles across the grid's
+#: rows leaves the rim as its boundary.
+def _cells() -> np.ndarray:
+    rows = int(round((5045300.0 - 5038500.0) / 100.0))
+    out = []
+    for i in range(len(_XY) // rows - 1):
+        for j in range(rows - 1):
+            a = i * rows + j
+            out += [[a, a + rows, a + 1], [a + 1, a + rows, a + rows + 1]]
+    return np.asarray(out, dtype=np.int64)
+
+
 @pytest.fixture(autouse=True)
 def _offline(monkeypatch):
     monkeypatch.setattr(D, "mesh_nodes", lambda mesh: (_XY, None))
+    monkeypatch.setattr(D, "accepted_mesh_nodes",
+                        lambda mesh: (_XY, _cells(), None, None))
     monkeypatch.setattr(D, "_initial_state", lambda continue_from, count: {
         "wet": np.ones(len(_XY), dtype=bool), "note": "dry start", "start_s": 0.0})
     monkeypatch.setattr(D, "journal_note", lambda note: None)
@@ -69,7 +87,8 @@ def test_a_point_the_user_placed_in_a_pond_is_held_where_they_placed_it():
     domain is the whole of what containment can honestly do."""
     placed = _settle(Point(-122.65, 45.53), ingest(_POND))
     assert placed["user_supplied"] is True
-    assert placed["lon"] == pytest.approx(-122.65, abs=1e-4)
+    # the nearest node of the stand-in mesh, which is within its own spacing
+    assert placed["lon"] == pytest.approx(-122.65, abs=2e-3)
     assert "inside the modeled domain" in placed["note"]
 
 

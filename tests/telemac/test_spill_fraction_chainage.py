@@ -39,6 +39,18 @@ _HOLDS_EVERYTHING = (
     np.array([[0, 1, 2], [0, 2, 3]]), None, None)
 
 
+def _nodes_along(centerline_utm) -> np.ndarray:
+    """Nodes every ten metres down the line: a release lands on the NODE the
+    engine solves it at, so a stand-in mesh whose nodes are elsewhere would move
+    it there and this test would be about the move."""
+    line = np.asarray(centerline_utm, dtype=float)
+    out = [line[0]]
+    for start, end in zip(line[:-1], line[1:]):
+        steps = max(2, int(np.hypot(*(end - start)) / 10.0))
+        out += [start + (end - start) * (i / steps) for i in range(1, steps + 1)]
+    return np.asarray(out, dtype=float)
+
+
 def _walk(fraction: float, centerline_utm, monkeypatch):
     """Where an unplaced release lands -> ``(lon, lat)``."""
     from trid3nt_server.workflows.mesh.shared import nodes as nodes_mod
@@ -50,11 +62,12 @@ def _walk(fraction: float, centerline_utm, monkeypatch):
     placed, note = asyncio.run(_settle_release(
         None, mesh=mesh, centerline=None, centerline_utm=centerline_utm,
         utm_epsg=_UTM_EPSG, fraction=fraction,
-        node_xy=_HOLDS_EVERYTHING[0], label="Release point",
-        initial_state={"wet": [True] * 4, "note": "a wet stand-in state"}))
-    # a derived release inside the mesh, landing on a node that holds water,
-    # relocates nothing
-    assert "nothing was moved" in note
+        node_xy=_nodes_along(centerline_utm), label="Release point",
+        initial_state={"wet": [True] * len(_nodes_along(centerline_utm)),
+                       "note": "a wet stand-in state"}))
+    # a derived release inside the mesh lands on the wet node nearest the
+    # station it was walked to, which is metres away on a mesh this fine
+    assert "holds water at t0" in note
     return placed.lon, placed.lat
 
 

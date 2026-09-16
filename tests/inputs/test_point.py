@@ -230,9 +230,12 @@ def _snap(xy, wet):
     return snap_to_wet(xy, node_xy=_NODES, wet=wet, state="a stand-in initial state")
 
 
-def test_a_point_landing_on_a_wet_node_is_left_exactly_where_it_was():
+def test_a_point_lands_on_the_wet_node_the_engine_will_solve_it_at():
+    """Between two nodes is a position the solve does not have, and a point that
+    drifted off the mesh is a source the engine refuses as outside its domain."""
     where, moved, node = _snap((110.0, 0.0), [True] * 4)
-    assert where == (110.0, 0.0) and moved == 0.0 and node == 1
+    assert where == (100.0, 0.0) and node == 1
+    assert moved == pytest.approx(10.0)
 
 
 def test_a_point_landing_on_a_dry_node_moves_to_the_nearest_wet_one():

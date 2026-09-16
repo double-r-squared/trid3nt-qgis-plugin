@@ -204,6 +204,11 @@ class MeshSession:
                       # only thing that knows.
                       **({"bed_source": str(mesh.meta["bed_source"])}
                          if mesh.meta.get("bed_source") else {}),
+                      # The elevation the bed's own zero names, where it names
+                      # one: a bed stated as a depth is counted from the free
+                      # surface, so the water over it stands at that zero.
+                      **({"free_surface_m": float(mesh.meta["free_surface_m"])}
+                         if mesh.meta.get("free_surface_m") is not None else {}),
                       # The substitution the bed's own fetch narrated, under the
                       # name every consumer of this provenance reads it by.
                       **({"bed_fallback_note":

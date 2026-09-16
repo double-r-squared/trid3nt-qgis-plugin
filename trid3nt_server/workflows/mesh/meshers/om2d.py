@@ -579,7 +579,10 @@ def _clean_once(lonlat: Any, cells: Any) -> tuple[Any, Any, int]:
     if collapsed or merged:
         points, cells, depths = formats._clean_and_orient(points, cells[keep],
                                                           depths)
-    return points, cells, collapsed + merged
+    cells, folded = _unfolded(points, cells)
+    if folded:
+        points, cells, depths = formats._clean_and_orient(points, cells, depths)
+    return points, cells, collapsed + merged + folded
 
 
 def _zeros(points: Any) -> Any:
@@ -605,6 +608,42 @@ def _merge_coincident(points: Any, cells: Any,
         keep_id[high] = keep_id[low]
     merged = int((keep_id != np.arange(xy.shape[0])).sum())
     return points, keep_id[np.asarray(cells, dtype=np.int64)], depths, merged
+
+
+def _unfolded(points: Any, cells: Any) -> tuple[Any, int]:
+    """The elements, less any that COVER GROUND another already covers.
+
+    Two counter-clockwise triangles that traverse one edge in the SAME direction
+    both lie on that edge's left: they overlap. Nothing that reads signed area
+    sees it, and the boundary walk that numbers a TELEMAC geometry meets their
+    unpaired edges as a second rim - the "pinched" domain a solver refuses the
+    whole mesh over. The smaller of an overlapping pair is the fold, because the
+    fold is a sliver laid back over its own neighbours."""
+    import numpy as np
+
+    tri = np.asarray(cells, dtype=np.int64)
+    xy = np.asarray(points, dtype=float)
+    a, b, c = xy[tri[:, 0]], xy[tri[:, 1]], xy[tri[:, 2]]
+    area = np.abs((b[:, 0] - a[:, 0]) * (c[:, 1] - a[:, 1])
+                  - (c[:, 0] - a[:, 0]) * (b[:, 1] - a[:, 1]))
+    owner: dict[tuple[int, int], int] = {}
+    drop: set[int] = set()
+    for index, row in enumerate(tri):
+        for head, tail in ((row[0], row[1]), (row[1], row[2]), (row[2], row[0])):
+            edge = (int(head), int(tail))
+            first = owner.get(edge)
+            if first is None:
+                owner[edge] = index
+                continue
+            loser = first if area[first] < area[index] else index
+            drop.add(loser)
+    if not drop:
+        return cells, 0
+    keep = np.ones(tri.shape[0], dtype=bool)
+    keep[sorted(drop)] = False
+    logger.warning("om2d: %d folded element(s) dropped - each covered ground a "
+                   "neighbour already covered", len(drop))
+    return tri[keep], len(drop)
 
 
 def _has_area(points: Any, cells: Any) -> Any:

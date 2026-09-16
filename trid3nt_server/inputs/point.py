@@ -234,9 +234,12 @@ def snap_to_wet(xy: tuple[float, float], *, node_xy: Any, wet: Any,
                 ) -> tuple[tuple[float, float], float, int]:
     """Put a point where the run holds WATER at t0 -> where it went, how far, which node.
 
-    The engine solves a source at the mesh node nearest it, so the node decides
-    whether the substance enters water or bed; a dry landing moves to the nearest
-    wet node and a state with no wet node anywhere refuses. Mesh metres throughout."""
+    The engine solves a source at the mesh NODE nearest it, so that node is where
+    the point ends up: a coordinate between nodes is a claim about a position the
+    solve does not have, and one that drifted off the mesh - a flowline from
+    another dataset leaving the mapped banks - is a source the engine refuses as
+    outside its domain. A dry landing moves to the nearest wet node, and a state
+    with no wet node anywhere refuses. Mesh metres throughout."""
     import numpy as np
 
     nodes = np.asarray(node_xy, dtype=float)
@@ -245,7 +248,8 @@ def snap_to_wet(xy: tuple[float, float], *, node_xy: Any, wet: Any,
     reach = np.hypot(nodes[:, 0] - here[0], nodes[:, 1] - here[1])
     nearest = int(np.argmin(reach))
     if mask[nearest]:
-        return (float(here[0]), float(here[1])), 0.0, nearest
+        return ((float(nodes[nearest, 0]), float(nodes[nearest, 1])),
+                float(reach[nearest]), nearest)
     if not mask.any():
         raise UserInputError(
             f"the {label} lands at mesh node {nearest}, {reach[nearest]:.0f} m "

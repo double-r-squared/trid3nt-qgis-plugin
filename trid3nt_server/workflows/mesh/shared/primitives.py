@@ -74,12 +74,25 @@ def set_bed(mesh: Mesh, source: Any, interp: str = "nearest",
         bed_source=painted,
         bed_sources=[provenance],
         bed_fallback_note=note,
+        # A bed STATED as a depth is counted from the free surface itself, so
+        # this mesh knows the elevation that surface stands at and a run over it
+        # needs no gauge. A bed measured on a datum states nothing about the
+        # water, and a run over it opens at the level somebody read.
+        **({"free_surface_m": 0.0} if _stated_depth(source) else {}),
         synthetic_inputs=[
             *(mesh.meta.get("synthetic_inputs") or []),
             {"param": "mesh_bed", "value": painted, "basis": "fetched",
              "consequence": "physics", "real_source_if_any": painted,
              "note": "the elevation every node carries; a solver reads it as the "
                      "domain's bathymetry"}])
+
+
+def _stated_depth(source: Any) -> bool:
+    """Was this bed STATED as a depth below the free surface?"""
+    from trid3nt_server.inputs.bed import DEPTH, bed as read_bed
+
+    slot = read_bed(source, label="bed")
+    return slot is not None and slot.kind == DEPTH
 
 
 def _painted(source: Any, lonlat: Any, box: tuple[float, float, float, float],

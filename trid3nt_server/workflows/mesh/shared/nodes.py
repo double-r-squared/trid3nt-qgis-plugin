@@ -12,6 +12,7 @@ from typing import Any
 from trid3nt_server.inputs.geometry import utm_epsg_for
 
 __all__ = [
+    "interior_nodes",
     "MeshNodeError",
     "accepted_mesh_nodes",
     "boundary_contours",
@@ -43,6 +44,19 @@ def boundary_contours(cells: Any) -> list[list[int]]:
     import numpy as np
 
     return tin_formats().extract_boundary_loops(np.asarray(cells, dtype=np.int64))
+
+
+def interior_nodes(cells: Any, count: int) -> Any:
+    """Which of the ``count`` nodes are NOT on a boundary walk -> a bool mask.
+
+    The edge of a mesh is where boundary conditions are imposed; a point source
+    placed on it is a source the solver reads as outside its own domain."""
+    import numpy as np
+
+    mask = np.ones(int(count), dtype=bool)
+    for ring in boundary_contours(cells):
+        mask[np.asarray(ring, dtype=np.int64)] = False
+    return mask
 
 
 class MeshNodeError(RuntimeError):

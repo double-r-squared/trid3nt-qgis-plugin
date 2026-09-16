@@ -583,6 +583,31 @@ def test_the_finest_element_of_a_graded_mesh_is_still_an_element():
     assert OM2D._has_area(points, cells).tolist() == [True, True]
 
 
+def test_a_sliver_folded_back_over_its_neighbours_is_dropped():
+    """A triangle that covers ground a neighbour already covers is a FOLD.
+
+    Both are counter-clockwise, so nothing reading signed area sees it; they
+    traverse the shared edge in the same direction, which is the test. The
+    smaller one is the fold, and the boundary walk closes into one ring again."""
+    points = np.array([[0.0, 0.0], [100.0, 0.0], [50.0, 60.0],
+                       [50.0, 2.0]])
+    # 0-1-2 is the domain; 0-1-3 lies back over it, sharing edge 0->1 in the
+    # SAME direction rather than the opposite one a shared edge is traversed in.
+    cells = np.array([[0, 1, 2], [0, 1, 3]], dtype=np.int64)
+    kept, folded = OM2D._unfolded(points, cells)
+    assert folded == 1
+    assert kept.tolist() == [[0, 1, 2]]
+
+
+def test_a_mesh_whose_elements_only_touch_keeps_every_one_of_them():
+    """Two triangles sharing an edge properly traverse it in OPPOSITE
+    directions, which is every well-formed pair in every mesh."""
+    points = np.array([[0.0, 0.0], [10.0, 0.0], [10.0, 10.0], [0.0, 10.0]])
+    cells = np.array([[0, 1, 2], [0, 2, 3]], dtype=np.int64)
+    kept, folded = OM2D._unfolded(points, cells)
+    assert folded == 0 and kept.shape == (2, 3)
+
+
 def test_a_mesh_carrying_a_collapsed_element_reports_the_repair(
         monkeypatch, tmp_path):
     """The count is a PROBE, not a silence: a repaired mesh says it was repaired."""
