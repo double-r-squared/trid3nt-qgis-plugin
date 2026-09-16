@@ -134,4 +134,4 @@ def test_a_coupled_reach_submits_the_coupled_modules_steering_too(tmp_path,
         morphological_factor=10.0,
         mass_balance=True)])
     assert _submitted(monkeypatch, tmp_path / "sed", bed) == {
-        "t2d_river.cas": "telemac2d", "gaia_river.cas": "gaia"}
+        "t2d_river.cas": "telemac2d", "gaia_domain.cas": "gaia"}

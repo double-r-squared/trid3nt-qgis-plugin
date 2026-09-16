@@ -358,6 +358,10 @@ def _read(ref: Ref, produced: Mapping[str, Any],
         raise SlotRefused(
             f"Ref({ref.path!r}) names neither a producer of this fill "
             f"({sorted(produced)}) nor a slot already on the sheet.")
+    if base is None:
+        # A row that is WHOLLY ABSENT states nothing, exactly as a field that is
+        # present and empty does below.
+        return None
     _missing = object()
     for part in ref.tail:
         found = (base.get(part, _missing) if isinstance(base, Mapping)

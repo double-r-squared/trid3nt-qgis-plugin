@@ -1,8 +1,7 @@
 """Unit tests for the two pure oxygen-sag relations in ``helpers/``.
 
 Covered: the critical point at known values, the profile as a genuine sag, the
-``k1 == k2`` limit, a zero load, byte-identical agreement with the template-local
-form the dissolution supersedes, and the released-mass relation beside it."""
+``k1 == k2`` limit, a zero load, and the released-mass relation beside it."""
 
 from __future__ import annotations
 
@@ -44,18 +43,6 @@ def test_no_load_leaves_the_reach_at_its_opening_deficit() -> None:
     crit = critical_point(0.5, 9.0, 0.0, 1.5, 5.0, 10.0)
     assert crit == {"tc_day": 0.0, "xc_m": 0.0, "min_do_mgl": 7.5,
                     "max_deficit_mgl": 1.5}
-
-
-def test_it_agrees_with_the_form_it_supersedes() -> None:
-    from trid3nt_server.workflows.telemac.templates.do_sag.streeter_phelps import (
-        sp_critical_point,
-        sp_do_profile,
-    )
-
-    distance = list(np.linspace(0.0, 9000.0, 61))
-    args = (0.42, 8.8, 14.0, 1.1, 3.0, 7.0)
-    assert do_profile(distance, *args) == sp_do_profile(distance, *args)
-    assert critical_point(*args) == sp_critical_point(*args)
 
 
 @pytest.mark.parametrize("discharge,concentration,duration,kilograms", [

@@ -81,31 +81,36 @@ def _door(name: str):
 def test_a_plain_tracer_run_must_produce_its_result_and_its_restart():
     """Only an UNCOUPLED run drives the stepped arm, so only one is asked for
     the perfect-restart record a continuation reads."""
-    assert _door("telemac_river_dye").results == ("r2d_river.slf",
-                                                  "restart_river.slf")
+    assert _door("telemac_dye_release").results == ("r2d_domain.slf",
+                                                  "restart_domain.slf")
 
 
 def test_sediment_must_produce_the_gaia_result_and_is_asked_for_no_restart():
     """A coupled class runs the module's own launcher whole."""
-    for name in ("telemac_river_scour", "telemac_river_sediment_plume"):
-        assert _door(name).results == ("r2d_river.slf", "gaia_river.slf"), name
+    for name in ("telemac_bed_scour", "telemac_sediment_plume"):
+        assert _door(name).results == ("r2d_domain.slf", "gaia_domain.slf"), name
 
 
 def test_oil_must_produce_the_track_the_slick_is_read_from():
     """The slick and the particle snapshots are built on the SERVER off this
     track, so neither is a file the worker is asked to write."""
-    assert _door("telemac_river_oil_spill").results == (
-        "r2d_river.slf", "restart_river.slf", "drogues.txt")
+    assert _door("telemac_oil_spill").results == (
+        "r2d_domain.slf", "restart_domain.slf", "drogues.txt")
 
 
 def test_a_waqtel_run_asks_only_for_the_carriers_own_result():
-    assert _door("telemac_do_sag").results == ("r2d_river.slf",)
+    """The Door restates no file the deck already names, so what a coupled run
+    is asked for is the carrier result the steering body itself declares."""
+    from trid3nt_server.workflows.telemac.templates.do_sag.do_sag import STEERING
+
+    assert _door("telemac_do_sag").results == ()
+    assert STEERING.ASSERTED["RESULTS_FILE"] == "r2d_domain.slf"
 
 
 def test_no_reach_run_declares_a_bed_cog_output():
     """The node-lattice bed COG is dead; nothing may name it as a result."""
-    for name in ("telemac_river_dye", "telemac_do_sag", "telemac_river_scour",
-                 "telemac_river_oil_spill", "telemac_river_sediment_plume"):
+    for name in ("telemac_dye_release", "telemac_do_sag", "telemac_bed_scour",
+                 "telemac_oil_spill", "telemac_sediment_plume"):
         assert "bed_bathymetry.tif" not in _door(name).results
 
 
@@ -118,9 +123,9 @@ def test_only_an_uncoupled_question_can_be_continued_at_all():
     def _rows(name):
         return {p.name for p in TOOL_REGISTRY[name].fn.workflow.params}
 
-    assert "continue_from" in _rows("telemac_river_dye")
-    for coupled in ("telemac_do_sag", "telemac_river_scour",
-                    "telemac_river_sediment_plume"):
+    assert "continue_from" in _rows("telemac_dye_release")
+    for coupled in ("telemac_do_sag", "telemac_bed_scour",
+                    "telemac_sediment_plume"):
         assert "continue_from" not in _rows(coupled), coupled
 
 

@@ -28,6 +28,7 @@ from trid3nt_server.workflows.runtime import (
     Step,
     Workflow,
 )
+from trid3nt_server.workflows.runtime.plan import declared_reads
 from trid3nt_server.workflows.mesh.step import MeshStep
 from trid3nt_server.workflows.telemac.errors import TelemacError
 from trid3nt_server.workflows.telemac.modules import wrapper_for
@@ -178,11 +179,15 @@ class Door:
         if self.owns_stages:
             return self._from_slots(ops).__call__(ops)
         params = {prm.name: ParamRef(prm.name) for prm in ops.params}
-        # Every DATA row and every producer the body may READ, under the name
-        # it names it by. A body states what it will hold; this is where the
-        # fill finds it. The accepted mesh is among them: a composite that
-        # samples at its nodes reads the record the mesh step returned.
-        produced = {row.name: Ref(row.name) for row in ops.data}
+        # The rows and producers the body actually READS, under the names it
+        # names them by. A DATA row nothing on the deck reads is NOT here, and
+        # that is what makes a slot demand-pulled: a caller who supplies the bed
+        # never pays for the survey and the terrain its producer would have
+        # fetched. The accepted mesh is among them: a composite that samples at
+        # its nodes reads the record the mesh step returned.
+        read = self._reads()
+        produced = {row.name: Ref(row.name) for row in ops.data
+                    if row.name in read}
         produced |= {step.name: Ref(step.name)
                      for step in (*self.produce, *self.derive)
                      if step.name} | {"settled": Ref("settled"), "mesh": Ref("mesh")}
@@ -211,6 +216,13 @@ class Door:
                          "compute_class": self.compute_class}).named("solve"),
             self._outputs_step(params),
         ]
+
+    def _reads(self) -> set[str]:
+        """Every row name the deck names, off the body's own assertions and the
+        slots this door states for it."""
+        return {ref.root
+                for surface in (self.steering.ASSERTED, self.slots)
+                for ref in declared_reads(surface, Ref)}
 
     def _from_slots(self, ops: Workflow) -> "Door":
         """This door with the stages the WORKFLOW owns filled in from the slots.

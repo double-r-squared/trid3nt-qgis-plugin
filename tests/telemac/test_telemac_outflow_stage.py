@@ -28,28 +28,25 @@ def _stage(**over):
 
 
 def test_the_outflow_face_is_measured_as_a_transect_of_the_painted_bed():
-    """A role is a run of the boundary walk, so the nodes ARE in section order.
-
-    Offsets are the chord distances between them, which is what makes the face a
-    cross-section rather than a scatter needing a re-ordering rule of its own.
-    """
+    """A run is a stretch of the boundary walk, so the nodes ARE in section
+    order. Offsets are the chord distances between them, which is what makes the
+    face a cross-section rather than a scatter needing a re-ordering rule."""
     xy = np.array([[0.0, 0.0], [0.0, 10.0], [0.0, 50.0], [0.0, 60.0]])
     bed = np.array([100.0, 97.0, 97.0, 100.0])
-    measured = D._measured_reach(
-        {"inflow": [0, 1, 2, 3], "outflow": [0, 1, 2, 3]}, xy, bed,
-        [(0.0, 0.0), (1000.0, 0.0)])
+    measured = D._measured_channel(
+        {"inflow": [0, 1, 2, 3], "outflow": [0, 1, 2, 3]}, xy, bed)
     assert measured["outflow_section"] == _SECTION
-    assert measured["reach_length_m"] == 1000.0
 
 
-def test_the_reach_length_is_walked_along_the_line_the_mesh_was_built_over():
-    """A sinuous reach is longer than the straight line between its caps, and the
-    friction slope is the fall over the path the water takes."""
-    xy = np.array([[0.0, 0.0], [0.0, 10.0]])
-    bend = [(0.0, 0.0), (300.0, 400.0), (600.0, 0.0)]
-    measured = D._measured_reach({"inflow": [0, 1], "outflow": [0, 1]},
-                                 xy, np.array([97.0, 96.0]), bend)
+def test_the_channel_length_is_measured_between_the_two_runs_own_centres():
+    """The friction slope is the fall between the runs over the distance between
+    them, measured on the MESH rather than on a line laid beside it - so it is
+    the same number on a domain whose producer drew no centerline."""
+    xy = np.array([[0.0, 0.0], [0.0, 10.0], [1000.0, 0.0], [1000.0, 10.0]])
+    measured = D._measured_channel({"inflow": [0, 1], "outflow": [2, 3]},
+                                   xy, np.array([100.0, 100.0, 97.0, 97.0]))
     assert measured["reach_length_m"] == 1000.0
+    assert measured["bed_drop_m"] == pytest.approx(3.0)
 
 
 def test_a_node_the_bed_left_unpainted_drops_out_without_moving_the_others():
@@ -57,8 +54,8 @@ def test_a_node_the_bed_left_unpainted_drops_out_without_moving_the_others():
     re-measured."""
     xy = np.array([[0.0, 0.0], [0.0, 10.0], [0.0, 50.0], [0.0, 60.0]])
     bed = np.array([100.0, 97.0, np.nan, 100.0])
-    measured = D._measured_reach({"inflow": [0, 1, 3], "outflow": [0, 1, 2, 3]},
-                                 xy, bed, [(0.0, 0.0), (1000.0, 0.0)])
+    measured = D._measured_channel({"inflow": [0, 1, 3], "outflow": [0, 1, 2, 3]},
+                                   xy, bed)
     assert measured["outflow_section"] == [[0.0, 100.0], [10.0, 97.0],
                                            [60.0, 100.0]]
 
@@ -66,8 +63,8 @@ def test_a_node_the_bed_left_unpainted_drops_out_without_moving_the_others():
 def test_an_outflow_face_with_no_section_left_refuses_by_name():
     xy = np.array([[0.0, 0.0], [0.0, 10.0]])
     with pytest.raises(TelemacError) as exc:
-        D._measured_reach({"inflow": [0, 1], "outflow": [0, 1]}, xy,
-                          np.array([97.0, np.nan]), [(0.0, 0.0), (10.0, 0.0)])
+        D._measured_channel({"inflow": [0, 1], "outflow": [0, 1]}, xy,
+                            np.array([97.0, np.nan]))
     assert exc.value.error_code == "TELEMAC_MESH_SECTION_UNMEASURED"
 
 

@@ -16,7 +16,7 @@ from .module import Module, Output
 from .outputs import PRIMITIVES, read_drogues
 
 __all__ = ["T2D", "Atmosphere", "Boundaries", "Continuation", "Friction",
-           "Hyetograph", "Infiltration", "MODULE_OUTPUT", "Oil", "Rain", "Storm",
+           "Infiltration", "MODULE_OUTPUT", "Oil", "Rain", "Storm",
            "Rating", "Release", "Runoff", "TimeOrigin", "TracerNames", "Wind",
            "SOURCES_FILENAME"]
 
@@ -544,16 +544,17 @@ _STORM_INTERVAL_S = 3600.0
 
 
 def Storm(*, mm_per_hr: Any, hours: Any, until_s: Any,  # noqa: N802
-          series: Any = None, tracers: Any = 0, fortran: Any = None
-          ) -> Mapping[str, Any]:
+          series: Any = None, record: Any = None, tracers: Any = 0,
+          fortran: Any = None) -> Mapping[str, Any]:
     """The storm over the domain: a measured record, or a constant design rate.
 
-    ``series`` is hourly gross millimetres as the record reported them; where it
-    is absent the constant rate over ``hours`` is what drives the run. WHICH of
-    the two a run gets is the ask's, stated where the value is."""
+    A stated ``series`` of hourly gross millimetres wins; else ``record``, the
+    same hours as a source published them; with neither, the constant rate over
+    ``hours`` drives the run."""
     return MappingProxyType({"mm_per_hr": mm_per_hr, "hours": hours,
                              "until_s": until_s, "series": series,
-                             "tracers": tracers, "fortran": fortran})
+                             "record": record, "tracers": tracers,
+                             "fortran": fortran})
 
 
 def _storm(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
@@ -564,6 +565,8 @@ def _storm(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
     totals, with a dry tail past the last simulated instant so the recession limb
     has somewhere to fall; a design rate is the engine's own constant branch."""
     series = value.get("series")
+    if series is None:
+        series = value.get("record")
     if series is None:
         rate = value["mm_per_hr"]
         if rate is None:
@@ -628,23 +631,6 @@ def _blocks_file(blocks: Any, until_s: Any,
             {HYETOGRAPH_FILENAME: "\n".join(lines) + "\n"})
 
 
-def Hyetograph(*, blocks: Any, until_s: Any, fortran: Any  # noqa: N802
-               ) -> Mapping[str, Any]:
-    """A real gross storm, read per timestep out of a block file."""
-    return MappingProxyType({"blocks": blocks, "until_s": until_s,
-                             "fortran": fortran})
-
-
-def _hyetograph(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
-                                                   Mapping[str, Any]]:
-    """The storm blocks -> the data file and the user Fortran that reads them."""
-    if not value["blocks"]:
-        # A constant design rate drives this run, so no block file is read and
-        # the engine's own compiled branch stands.
-        return ({}, {})
-    return _blocks_file(value["blocks"], value["until_s"], value["fortran"])
-
-
 def _rain_tracers(tracers: Any) -> Mapping[str, Any]:
     """The rainwater concentrations DAMOCLES demands, one per tracer, or nothing.
 
@@ -665,6 +651,5 @@ T2D.composites(releases=_releases, wind=_wind, continue_from=_continue_from,
                oil=_oil, rain=_rain, coupling=_coupling,
                boundaries=_boundaries, runoff=_runoff, friction=_friction,
                infiltration=_infiltration, rating=_rating, storm=_storm,
-               hyetograph=_hyetograph,
                time_origin=_time_origin, tracer_names=_tracer_names)
 T2D.reads(**PRIMITIVES, drogues=read_drogues)

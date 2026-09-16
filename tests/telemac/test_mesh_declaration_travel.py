@@ -18,17 +18,13 @@ from trid3nt_server.workflows.mesh.tool import (
 )
 
 
-#: Every declared recipe in the tree, at the template that declares it; the
-#: river templates each restate the reach recipe as their own value.
+#: Every declared recipe in the tree, at the template that declares it. A
+#: template states one only where the workflow's own recipe cannot ask its
+#: question: a catchment triangulated as a BAND, a harbour with a structure
+#: punched out of the water.
 _TEMPLATES = (
-    "trid3nt_server.workflows.telemac.templates.river_dye.river_dye",
-    "trid3nt_server.workflows.telemac.templates.river_oil_spill.river_oil_spill",
-    "trid3nt_server.workflows.telemac.templates.river_scour.river_scour",
-    "trid3nt_server.workflows.telemac.templates.river_sediment_plume.river_sediment_plume",
-    "trid3nt_server.workflows.telemac.templates.do_sag.do_sag",
     "trid3nt_server.workflows.telemac.templates.rain_on_grid.rain_on_grid",
     "trid3nt_server.workflows.telemac.templates.agitation.agitation",
-    "trid3nt_server.workflows.telemac.templates.stratified_flow.stratified_flow",
 )
 
 

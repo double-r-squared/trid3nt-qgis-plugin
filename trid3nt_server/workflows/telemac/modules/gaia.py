@@ -48,9 +48,9 @@ _SUSPENDED = Output("NCOH SEDIMENT", "g/L", has_edge=True,
                     style={"kind": "mesh", "ramp": "oranges", "units": "g/L",
                            "floor": 0})
 
-STEERING_FILENAME = "gaia_river.cas"
+STEERING_FILENAME = "gaia_domain.cas"
 #: GAIA's own result SELAFIN, carrying CUMUL BED EVOL.
-RESULT_FILENAME = "gaia_river.slf"
+RESULT_FILENAME = "gaia_domain.slf"
 
 
 #: The grain-size window the transport formulae are authored for, in microns.

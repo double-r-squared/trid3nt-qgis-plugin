@@ -565,10 +565,10 @@ def test_a_wind_from_the_north_drives_the_water_south():
 
 def test_a_continuation_names_the_file_and_leaves_its_format_to_the_template():
     """The file is what the value IS; the FORMAT it is read at is a choice among
-    the three the dictionary offers, and river_dye states the double-precision
+    the three the dictionary offers, and dye_release states the double-precision
     one because a restart file is what it continues from."""
     from trid3nt_server.workflows.telemac.modules.telemac2d import Continuation
-    from trid3nt_server.workflows.telemac.templates.river_dye.river_dye import (
+    from trid3nt_server.workflows.telemac.templates.dye_release.dye_release import (
         STEERING,
     )
 
@@ -849,7 +849,7 @@ def test_every_wrapper_binds_the_primitive_set_and_nothing_question_named():
         assert sorted(wrapper.READS) == sorted(PRIMITIVES), wrapper.MODULE
     assert not WAQTEL.READS and not WAQTEL.MODULE_OUTPUT
     # GAIA writes its own result beside the carrier's, so its primitives read it.
-    assert GAIA.RESULT_FILE == "gaia_river.slf"
+    assert GAIA.RESULT_FILE == "gaia_domain.slf"
     assert T2D.RESULT_FILE == ""
 
 
@@ -857,11 +857,11 @@ def test_every_wrapper_binds_the_primitive_set_and_nothing_question_named():
 
 #: The twelve questions the surface answers. Ten run on the fill/run door; the
 #: two open-water fronts still declare a plan and are Stage 3's.
-_FLIPPED = ("telemac_river_dye", "telemac_river_oil_spill", "telemac_river_scour",
-            "telemac_river_sediment_plume", "telemac_do_sag",
-            "telemac_river_temperature", "telemac_river_micropollutant",
-            "telemac_river_eutrophication",
-            "telemac_rain_on_grid", "telemac_river_dredging")
+_FLIPPED = ("telemac_dye_release", "telemac_oil_spill", "telemac_bed_scour",
+            "telemac_sediment_plume", "telemac_do_sag",
+            "telemac_water_temperature", "telemac_micropollutant_release",
+            "telemac_eutrophication",
+            "telemac_rain_on_grid", "telemac_channel_dredging")
 
 
 def _bodies():
@@ -893,12 +893,12 @@ def test_a_structural_fork_is_a_template_and_never_a_switch():
         slots, _files = T2D.COMPOSITES["boundaries"].expand(
             Boundaries(measured=measured, tracers=[0.0] * len(stated["tracers"])))
         arity[name] = len(slots.get("PRESCRIBED_TRACERS_VALUES", ()))
-    assert arity == {"telemac_river_dye": 2, "telemac_river_oil_spill": 2,
-                     "telemac_river_scour": 2, "telemac_river_dredging": 0,
-                     "telemac_river_sediment_plume": 4, "telemac_do_sag": 8,
-                     "telemac_river_temperature": 2,
-                     "telemac_river_micropollutant": 10,
-                     "telemac_river_eutrophication": 16}
+    assert arity == {"telemac_dye_release": 2, "telemac_oil_spill": 2,
+                     "telemac_bed_scour": 2, "telemac_channel_dredging": 0,
+                     "telemac_sediment_plume": 4, "telemac_do_sag": 8,
+                     "telemac_water_temperature": 2,
+                     "telemac_micropollutant_release": 10,
+                     "telemac_eutrophication": 16}
 
 
 def test_no_flipped_body_branches_on_anything():
@@ -920,51 +920,54 @@ def test_the_review_is_the_doors_view_and_never_a_step_of_its_own():
         assert [s.label for s in plan.declared() if s.self_gating] == ["sheet"], name
 
 
-def test_the_reach_body_is_written_at_the_derivation_it_was_solved_for():
+def test_the_open_channel_body_is_written_at_the_derivation_it_was_solved_for():
     """ONE normal depth: the level the outflow is held to and the depth the run
-    opens at are the same number, read off the same producer, so the initial free
-    surface and the prescribed boundary agree by construction."""
-    for _name, body in _bodies():
+    opens at are the same number, read off the same producer - the open-channel
+    step, never the domain's - so the initial free surface and the prescribed
+    boundary agree by construction."""
+    from trid3nt_server.tools import TOOL_REGISTRY
+
+    for name, body in _bodies():
         stated = body.ASSERTED.get("boundaries")
-        if stated is not None:
-            assert body.ASSERTED["INITIAL_DEPTH"] == Ref("settled.depth_m")
-            assert body.ASSERTED["FRICTION_COEFFICIENT"] == Ref(
-                "settled.friction_coefficient")
-            assert stated["measured"] == Ref("settled")
+        if stated is None:
+            continue
+        assert body.ASSERTED["INITIAL_DEPTH"] == Ref("channel.depth_m")
+        assert stated["measured"]["inflow_q_m3s"] == Ref("channel.inflow_q_m3s")
+        assert stated["measured"]["outflow_stage_m"] == Ref("channel.outflow_stage_m")
+        # ONE ROUGHNESS. The depth was derived at the roughness the deck is
+        # written at, so the two numbers are the same constant: a stage derived
+        # at one and a deck written at another is a level the run never sits at.
+        workflow = TOOL_REGISTRY[name].fn.workflow
+        channel = next(n for n in workflow.plan_decl(workflow)
+                       if getattr(n, "name", "") == "channel")
+        assert channel.runner.endswith("assembler.settle_open_channel")
+        assert body.ASSERTED["FRICTION_COEFFICIENT"] == \
+            channel.kwargs["friction_coefficient"]
+        assert body.ASSERTED["LAW_OF_BOTTOM_FRICTION"] == \
+            channel.kwargs["friction_law"]
 
 
 def test_the_basin_states_how_its_tracer_is_carried_and_under_what_ceiling():
     """The dictionary gives the tracer advection scheme no 3D default, so an unstated
     deck advects temperature by whatever the VELOCITIES use. The template states the
-    scheme, its ceiling and the step, each from a param and so each overridable."""
-    from trid3nt_server.workflows.runtime import param_rows
+    scheme and its ceiling as VALUES - a user sets either keyword by name - and the
+    step it is carried at comes from the settled domain."""
     from trid3nt_server.workflows.telemac.modules import load_module_input
-    from trid3nt_server.workflows.telemac.templates.stratified_flow.declarations import (
-        PARAMS,
-    )
     from trid3nt_server.workflows.telemac.templates.stratified_flow.stratified_flow import (
         STEERING,
     )
 
-    rows = {row.name: row for row in param_rows(PARAMS)}
     slot = load_module_input("telemac3d")["SCHEME_FOR_ADVECTION_OF_TRACERS"]
     assert slot.engine_default is UNSET
-    scheme = rows["tracer_advection_scheme"].default
+    asserted = STEERING.ASSERTED
+    scheme = asserted["SCHEME_FOR_ADVECTION_OF_TRACERS"][0]
     # The NERD family, by the engine's own naming: telemac2d's TREATMENT OF
     # FLUXES AT THE BOUNDARIES help calls 13 and 14 "NERD", and 13 is what the
     # telemac2d dictionary defaults this same keyword to.
     assert str(scheme) in slot.choices
     assert scheme in (13, 14)
-    asserted = STEERING.ASSERTED
-    assert [r.name for r in asserted["SCHEME_FOR_ADVECTION_OF_TRACERS"]] == [
-        "tracer_advection_scheme"]
-    assert asserted[
-        "MAXIMUM_NUMBER_OF_ITERATIONS_FOR_ADVECTION_SCHEMES"].name == \
-        "max_advection_iterations"
+    assert asserted["MAXIMUM_NUMBER_OF_ITERATIONS_FOR_ADVECTION_SCHEMES"] == 50
     assert asserted["TIME_STEP"].path == "settled.time_step_s"
-    for name in ("tracer_advection_scheme", "max_advection_iterations"):
-        assert len(rows[name].desc) > 80, name
-    assert rows["time_step_s"].derived_when_absent
 
 
 def test_every_open_water_recipe_sizes_the_domain_rim_it_meshes():
@@ -975,11 +978,8 @@ def test_every_open_water_recipe_sizes_the_domain_rim_it_meshes():
     from trid3nt_server.workflows.telemac.templates.agitation.agitation import (
         MESH as HARBOUR,
     )
-    from trid3nt_server.workflows.telemac.templates.stratified_flow.stratified_flow import (
-        MESH as BASIN,
-    )
 
-    for recipe in (HARBOUR, BASIN):
+    for recipe in (HARBOUR,):
         ops = [op["op"] for op in recipe_plan_value(recipe)["ops"]]
         assert "set_rim_size" in ops
         sizing = [i for i, op in enumerate(ops)
@@ -989,9 +989,9 @@ def test_every_open_water_recipe_sizes_the_domain_rim_it_meshes():
         rim = ops.index("set_rim_size")
         assert all(i < rim for i in sizing)
         assert all(i > rim for i in gradation)
-    # No edge is stated on either, so both lock the rim at the recipe's own
-    # size word rather than at a metre value one of them invented.
-    for recipe in (HARBOUR, BASIN):
+    # No edge is stated, so the recipe locks the rim at its own size word rather
+    # than at a metre value it invented.
+    for recipe in (HARBOUR,):
         entry = next(op for op in recipe_plan_value(recipe)["ops"]
                      if op["op"] == "set_rim_size")
         assert not entry["kwargs"]
@@ -999,34 +999,43 @@ def test_every_open_water_recipe_sizes_the_domain_rim_it_meshes():
 
 def test_every_open_water_recipe_carries_the_boundary_cleaning_chain():
     """A domain cut from a shoreline can leave scraps that touch at points, and the
-    library's own clean passes remove them before the boundary is walked. All three
-    recipes list the same four, in the same order."""
+    library's own clean passes remove them before the boundary is walked. The two
+    recipes a template states for itself and the one the workflow builds from the
+    slots all list the same four, in the same order."""
     from trid3nt_server.workflows.mesh.tool import recipe_plan_value
     from trid3nt_server.workflows.telemac.templates.agitation.agitation import (
         MESH as HARBOUR,
     )
-    from trid3nt_server.workflows.telemac.templates.river_dye.river_dye import (
-        MESH as REACH,
-    )
-    from trid3nt_server.workflows.telemac.templates.stratified_flow.stratified_flow import (
-        MESH as BASIN,
+    from trid3nt_server.workflows.telemac.templates.rain_on_grid.rain_on_grid import (
+        MESH as CATCHMENT,
     )
 
     cleaning = ("delete_boundary_faces", "delete_faces_connected_to_one_face",
                 "make_mesh_boundaries_traversable", "fix_mesh")
-    for recipe in (REACH, HARBOUR, BASIN):
+    for recipe in (CATCHMENT, HARBOUR, _owned_recipe("telemac_dye_release")):
         ops = [op["op"] for op in recipe_plan_value(recipe)["ops"]]
         assert [op for op in ops if op in cleaning] == list(cleaning)
+
+
+def _owned_recipe(tool_name: str):
+    """The recipe the WORKFLOW built from a template's slots, off its own plan."""
+    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt_server.workflows.mesh.tool import recipe_from_plan_value
+
+    workflow = TOOL_REGISTRY[tool_name].fn.workflow
+    step = next(n for n in workflow.plan_decl(workflow)
+                if getattr(n, "name", "") == "mesh")
+    return recipe_from_plan_value(step.kwargs["mesh"])
 
 
 # -- the LLM surface: the raw floor, the docstring, the card ------------------ #
 
 #: Every question on the surface. All eleven fill and run through the door, so all
 #: eleven carry the floor, the sheet line and the card.
-_TEMPLATES = ("telemac_river_dye", "telemac_river_oil_spill", "telemac_river_scour",
-              "telemac_river_sediment_plume", "telemac_do_sag",
-              "telemac_river_temperature", "telemac_river_micropollutant",
-              "telemac_river_eutrophication",
+_TEMPLATES = ("telemac_dye_release", "telemac_oil_spill", "telemac_bed_scour",
+              "telemac_sediment_plume", "telemac_do_sag",
+              "telemac_water_temperature", "telemac_micropollutant_release",
+              "telemac_eutrophication",
               "telemac_rain_on_grid", "artemis_harbor_agitation",
               "telemac3d_stratified_flow")
 
@@ -1177,7 +1186,7 @@ def test_a_template_reads_its_answer_through_the_primitives_its_module_binds():
                 assert measure.primitive.kind in reader.READS, (name, measure)
             continue
         readers[name] = door.read(None).runner
-    assert "telemac_river_dye" not in readers
+    assert "telemac_dye_release" not in readers
     assert len(set(readers.values())) == len(readers), readers
 
 

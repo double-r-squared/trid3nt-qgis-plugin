@@ -41,9 +41,9 @@ logger = logging.getLogger("trid3nt_server.workflows.telemac.authoring.assembler
 
 __all__ = ["BASIN_BOUNDARY", "BASIN_GEOMETRY", "HARBOUR_GEOMETRY",
            "case_section", "mesh_nodes", "new_rundir", "settle_basin",
-           "settle_catchment", "settle_domain", "settle_dredge",
-           "settle_harbour", "settle_open_channel", "settle_reach",
-           "settle_release", "stage_run", "stage_telemac_manifest", "to_utm"]
+           "settle_domain", "settle_dredge", "settle_harbour",
+           "settle_open_channel", "settle_outlet_rating", "settle_release",
+           "stage_run", "stage_telemac_manifest", "to_utm"]
 
 #: The names the run directory holds an open-water domain's staged geometry
 #: under - the decks' own GEOMETRY / BOUNDARY CONDITIONS statements. A harbour
@@ -57,8 +57,9 @@ BASIN_BOUNDARY = "basin.cli"
 #: directory. The engine reads a file, not a URI, so the previous run's restart
 #: record is staged under one name and the steering file names that.
 _PREVIOUS_DEST = "previous.slf"
-#: The engine's perfect-restart record, under the name the reach body writes it.
-_RESTART = "restart_river.slf"
+#: The engine's perfect-restart record, under the name a body that keeps one
+#: writes it.
+_RESTART = "restart_domain.slf"
 #: How a restart record names its depth, and the depth a node has to hold at
 #: that instant to count as water a source can be released into.
 _DEPTH_VARIABLE = ("WATER DEPTH", "HAUTEUR D'EAU", "HAUTEUR D EAU")
@@ -258,47 +259,6 @@ def _face_section(nodes: Sequence[int], node_xy: Any, bed: Any, *,
         raise missing(f"the face carries {len(section)} painted node(s), which is "
                       "no section to derive a normal depth over.")
     return section
-
-
-def _measured_reach(roles: Mapping[str, Any], node_xy: Any, node_bed: Any,
-                    centerline_utm: Any) -> dict[str, Any]:
-    """What the accepted mesh says about the reach the outflow stage rests on.
-
-    Bed, outflow section and reach length, every one off the artifact itself."""
-    import numpy as np
-
-    # The two bed numbers are medians over the nodes each role names - the reach's
-    # top, and the fall from there to its outflow. That fall over the centerline's
-    # length is the friction slope the normal depth is computed at.
-    bed = None if node_bed is None else np.asarray(node_bed, dtype=float)
-    medians: dict[str, float] = {}
-    role_nodes: dict[str, list[int]] = {}
-    for role in ("inflow", "outflow"):
-        nodes = [int(n) for n in ((roles or {}).get(role) or ())]
-        if bed is None or not nodes or max(nodes) >= bed.shape[0]:
-            raise TelemacError(
-                f"the outflow stage is derived over the painted bed at the "
-                f"{role!r} role's own nodes, and the accepted mesh carries "
-                f"{0 if bed is None else bed.shape[0]} bed values under roles "
-                f"{sorted(roles or {})}; a reach mesh recipe paints its bed with "
-                "set_bed and names its faces with set_boundary_roles.",
-                error_code="TELEMAC_MESH_BED_UNMEASURED")
-        median = float(np.nanmedian(bed[nodes]))
-        if not np.isfinite(median):
-            raise TelemacError(
-                f"every node the {role!r} role names carries an unpainted bed, so "
-                "the outflow stage has no ground to be measured from.",
-                error_code="TELEMAC_MESH_BED_UNMEASURED")
-        medians[role] = median
-        role_nodes[role] = nodes
-    line = np.asarray(centerline_utm, dtype=float)
-    length = (float(np.hypot(*(line[1:] - line[:-1]).T).sum())
-              if line.ndim == 2 and len(line) > 1 else 0.0)
-    return {"bed_top_m": medians["inflow"],
-            "bed_drop_m": medians["inflow"] - medians["outflow"],
-            "reach_length_m": round(length, 3),
-            "outflow_section": _face_section(role_nodes["outflow"], node_xy, bed,
-                                             missing=_reach_section_unmeasured)}
 
 
 def _continuation_state(uri: str) -> dict[str, Any]:
@@ -622,8 +582,8 @@ _PROFILE_SPACING = 2.0
 _PROFILE_MIN, _PROFILE_MAX = 2, 12
 
 
-async def settle_dredge(*, mesh: dict[str, Any], centerline: Any,
-                        seed: dict[str, Any], settled: Mapping[str, Any],
+async def settle_dredge(*, mesh: dict[str, Any], domain: Any,
+                        settled: Mapping[str, Any],
                         areas: Mapping[str, Any]) -> dict[str, Any]:
     """The areas a dredge works on and the surface its levels are read from,
     both measured against the ACCEPTED mesh.
@@ -634,8 +594,8 @@ async def settle_dredge(*, mesh: dict[str, Any], centerline: Any,
     utm_epsg = int(settled["utm_epsg"])
     node_xy, node_bed = await asyncio.to_thread(mesh_nodes, mesh)
     centerline_utm = await asyncio.to_thread(
-        read_centerline_utm, centerline, utm_epsg,
-        start_lonlat=(float(seed["lon"]), float(seed["lat"])))
+        read_centerline_utm, _dredge_centerline(domain), utm_epsg,
+        start_lonlat=_dredge_head(domain))
     fields = {name: await asyncio.to_thread(
                   _dredge_field, source, name, utm_epsg=utm_epsg, node_xy=node_xy)
               for name, source in areas.items() if source is not None}
@@ -649,6 +609,33 @@ async def settle_dredge(*, mesh: dict[str, Any], centerline: Any,
         "outflow stage holds it to; every level a dredging action states is read "
         "from it.")
     return {**fields, "profiles": profiles}
+
+
+def _dredge_centerline(domain: Any) -> Any:
+    """The line the dredge's reference profiles are stationed along.
+
+    A question stationed along a channel needs one; a domain whose producer
+    measured none refuses rather than reading the outline as a channel."""
+    line = getattr(domain, "centerline", None)
+    if line is None:
+        raise TelemacError(
+            "the dredge's reference surface is laid out as cross-sections along "
+            "the domain's own centerline, and this domain carries none - it was "
+            "drawn, or its producer measured no channel. Model the dredge over a "
+            "domain a river producer cut.",
+            error_code="TELEMAC_DOMAIN_HAS_NO_CENTERLINE")
+    return line
+
+
+def _dredge_head(domain: Any) -> tuple[float, float] | None:
+    """Which end of the centerline is upstream, off the domain's own inflow run.
+
+    Without one the merged direction stands, and the stationing is whichever way
+    the line was drawn."""
+    for run in getattr(domain, "runs", ()) or ():
+        if getattr(run, "type", "") == "inflow":
+            return (float(run.start.lon), float(run.start.lat))
+    return None
 
 
 def _dredge_field(source: Any, name: str, *, utm_epsg: int,
@@ -894,131 +881,63 @@ def _rain_ceiling(rain: Mapping[str, Any], cells: Any,
         "only delays it")
 
 
-async def settle_reach(
+async def settle_outlet_rating(
     *,
-    reach: dict[str, Any],
-    seed: dict[str, Any],
     mesh: dict[str, Any],
-    centerline: Any,
-    carrier_discharge: dict[str, Any],
-    sim_duration_s: float,
-    mesh_resolution_m: float | None = None,
-    output_interval_min: float | None = None,
-    friction_law: Any = None,
-    friction_coefficient: float | None = None,
-    continue_from: str | None = None,
+    landcover: Any,
+    roughness: Mapping[Any, Any],
+    unmapped: Any,
+    mm_per_hr: float | None = None,
+    series: Any = None,
+    record: Any = None,
 ) -> dict[str, Any]:
-    """Everything the reach MEASURES, before a single keyword is set.
+    """The stage-discharge curve the catchment's outlet holds, and which boundary
+    reads it.
 
-    The mesh is the ACCEPTED one, never an equivalent rebuild."""
-    seed_lon, seed_lat = float(seed["lon"]), float(seed["lat"])
+    The section, the bed slope and the roughness are measured off the accepted
+    mesh itself; the flow range is the gross rain on the meshed area, which
+    nothing leaving it can exceed, because infiltration only removes water and
+    storage only delays it."""
+    topology, outlet_boundary, outlet_prescribes, n_liquid = _outlet_boundary(mesh)
+    if outlet_prescribes != "elevation":
+        raise TelemacError(
+            f"liquid boundary {outlet_boundary} carries a .cli code quad that "
+            f"prescribes {outlet_prescribes!r}, and a stage-discharge curve is "
+            "read only where the depth is prescribed; the boundary file and the "
+            "steering file would describe different outlets.",
+            error_code="TELEMAC_BOUNDARY_PRESCRIBES_NOTHING")
+    points_utm, cells, node_bed, lonlat = await asyncio.to_thread(
+        accepted_mesh_nodes, mesh)
+    measured = series if series is not None else record
+    storm = ({"kind": "hyetograph", "series": list(measured)} if measured
+             else {"kind": "design_storm", "intensity_mm_per_hr": mm_per_hr})
+    q_ceiling, q_ceiling_basis = _rain_ceiling(storm, cells, points_utm)
+    manning = await asyncio.to_thread(
+        _outlet_manning, landcover, lonlat[_outlet_nodes(topology)], roughness,
+        unmapped)
+    outlet = _measured_outlet(
+        topology, points_utm, node_bed, cells, manning,
+        q_ceiling_m3s=q_ceiling, q_ceiling_basis=q_ceiling_basis)
+    from ..helpers.uniform_flow import derive_rating_curve
 
-    # The granularity the run records is the one the ACCEPTED mesh was built at,
-    # measured on its own cells; the asked edge stands only until a mesh exists
-    # to measure. Nothing here re-derives an edge from a channel nobody surveyed.
-    measured = mesh.get("min_edge_m")
-    mesh_size_m = round(max(float(measured if measured is not None
-                                  else mesh_resolution_m or 0.0),
-                            MESH_H_FLOOR_M), 3)
-    mesh_resolution_label = (
-        f"{mesh_size_m:.3g} m measured minimum edge over "
-        f"{mesh.get('element_count') or 0} elements" if measured is not None
-        else f"{mesh_size_m:.3g} m asked edge (mesh unmeasured)")
-    time_step_s = suggest_time_step_s(mesh_size_m, mesh=mesh.get("artifact"))
-
-    artifact = mesh.get("artifact")
-    utm_epsg = int(getattr(artifact, "utm_epsg", 0) or 0)
-    # The centerline is read head-to-tail from the seed the navigate was walked
-    # downstream FROM, so the bed the mesh carries slopes the same way.
-    centerline_utm = await asyncio.to_thread(
-        read_centerline_utm, centerline, utm_epsg,
-        start_lonlat=(seed_lon, seed_lat))
-    node_xy, node_bed = await asyncio.to_thread(mesh_nodes, mesh)
-    # ``continue_from`` names a previous run's restart record, and the instant it
-    # stands at is read here because every forcing series the sheet writes is the
-    # same declared scenario evaluated over the stretch of one absolute clock.
-    initial_state = await asyncio.to_thread(_initial_state, continue_from, len(node_xy))
-
-    topology = await asyncio.to_thread(
-        read_topology, _mesh_field(mesh, "topology_uri", missing=_mesh_missing))
-    bed = _measured_reach(topology["roles"], node_xy, node_bed, centerline_utm)
-    law = _REACH_FRICTION_LAW if friction_law is None else int(friction_law)
-    coefficient = (_REACH_STRICKLER if friction_coefficient is None
-                   else float(friction_coefficient))
-    inflow_q = float(carrier_discharge["m3s"])
-    normal = normal_depth_stage(bed, law=law, coefficient=coefficient,
-                                discharge_q=inflow_q)
+    rating = derive_rating_curve(
+        outlet["section"], law=int(outlet["law"]),
+        coefficient=float(outlet["coefficient"]), slope=float(outlet["slope"]),
+        q_ceiling_m3s=float(outlet["q_ceiling_m3s"]))
+    note = (f"derived Z(Q) at liquid boundary {outlet_boundary}: normal depth "
+            f"over the measured outlet section at {rating['law']} "
+            f"{rating['coefficient']:g}, bed slope {rating['slope']:.6f}, "
+            f"{outlet['q_ceiling_basis']}")
     journal_note(
-        f"reach initial condition: constant depth {normal['depth_m']:.3f} m - the "
-        f"SAME normal depth the outflow stage {normal['stage_m']:.3f} m is derived "
-        f"as ({normal['q_m3s']:g} m3/s over the measured outflow section at "
-        f"{normal['law']} {normal['coefficient']:g}). Bed-parallel at the friction "
-        f"slope {normal['slope']:.6f}, which IS the uniform-flow surface, so the "
-        "run opens at the equilibrium its own downstream boundary holds it to "
-        "rather than draining a blanket depth into it.")
-
-    start_time_s = float(initial_state["start_s"] or 0.0)
-    duration_s = float(sim_duration_s)
-    # WHICH dataset painted the mesh's nodes. The worker opens a file and cannot
-    # know, so the label travels with the file - otherwise the run's own metrics
-    # could not tell a GLO-30 bed from the 3DEP one a ladder fell to.
-    bed_source = str((mesh.get("provenance") or {}).get("bed_source") or "staged")
-    return {
-        "name": reach["slug"],
-        "title": f"{reach['slug']} REACH",
-        "reach_name": reach["slug"],
-        "location_name": reach["name"],
-        "seed_lon": round(seed_lon, 6), "seed_lat": round(seed_lat, 6),
-        "seed_source": seed.get("source"),
-        "utm_epsg": utm_epsg,
-        "mesh_id": mesh.get("mesh_id"),
-        "mesh_size_m": mesh_size_m,
-        "mesh_resolution_label": mesh_resolution_label,
-        "mesh_resolution_asked_m": mesh_resolution_m,
-        "time_step_s": time_step_s,
-        "graphic_period": _graphic_period(output_interval_min, time_step_s),
-        "duration_s": duration_s,
-        "start_time_s": start_time_s,
-        # The last simulated instant. A series composite writes its own tail
-        # past this, so the tail is stated once - where the series is.
-        "until_s": start_time_s + duration_s,
-        "initial_state": initial_state["note"],
-        "friction_law": law,
-        "friction_coefficient": float(normal["coefficient"]),
-        "depth_m": round(float(normal["depth_m"]), 3),
-        "outflow_stage_m": round(float(normal["stage_m"]), 3),
-        "inflow_q_m3s": inflow_q,
-        "normal": {k: (round(v, 6) if isinstance(v, float) else v)
-                   for k, v in normal.items()},
-        "liquid_boundary_order": list(topology["liquid_boundary_order"]),
-        "liquid_boundary_prescribes": list(topology["liquid_boundary_prescribes"]),
-        "discharge_note": carrier_discharge.get("note"),
-        "bed_source": bed_source,
-        "continue_from": _PREVIOUS_DEST if continue_from else None,
-        "restart": _RESTART,
-        "mesh_inputs": [
-            {"gs_uri": _mesh_field(mesh, "slf_uri", missing=_mesh_missing),
-             "dest": "river.slf"},
-            {"gs_uri": _mesh_field(mesh, "cli_uri", missing=_mesh_missing),
-             "dest": "river.cli"},
-            *([{"gs_uri": str(continue_from), "dest": _PREVIOUS_DEST}]
-              if continue_from else [])],
-        "server_facts": {
-            "utm_epsg": utm_epsg,
-            "bbox": [round(float(v), 6)
-                     for v in (getattr(artifact, "bbox", None) or ())],
-            "npoin": int(mesh.get("node_count") or 0),
-            "nelem": int(mesh.get("element_count") or 0),
-            "mesh_size_m": mesh_size_m,
-            "name": reach["slug"],
-            "duration_s": duration_s,
-            "time_step_s": time_step_s,
-            # WHICH file carries the time series. The deck states the RESULTS
-            # FILE, so the name is the server's; the worker copies it and
-            # measures the file it names.
-            "result_slf": "r2d_river.slf",
-            "bed_source": bed_source},
-    }
+        f"catchment outlet: liquid boundary {outlet_boundary} holds a DERIVED "
+        f"stage-discharge curve - {len(rating['rows'])} points from the dry "
+        f"section at {rating['thalweg_m']:.3f} m to {rating['stage_max_m']:.3f} m "
+        f"at {rating['q_ceiling_m3s']:.3f} m3/s, each a normal depth over the "
+        f"measured outlet section at {rating['law']} {rating['coefficient']:g} on "
+        f"the measured bed slope {rating['slope']:.6f}. The range is "
+        f"{outlet['q_ceiling_basis']}.")
+    return {"at_boundary": outlet_boundary, "of_boundaries": n_liquid,
+            "rows": [[q, z] for q, z in rating["rows"]], "note": note}
 
 
 def _domain_unmeasured(message: str) -> Exception:
@@ -1247,133 +1166,6 @@ def _graphic_period(output_interval_min: float | None, time_step_s: float) -> in
     if output_interval_min is None:
         return _DEFAULT_GRAPHIC_PERIOD
     return max(1, round(float(output_interval_min) * 60.0 / float(time_step_s)))
-
-
-async def settle_catchment(
-    *,
-    catchment: dict[str, Any],
-    rain: dict[str, Any],
-    landcover: Any,
-    roughness: Mapping[Any, Any],
-    unmapped: Any,
-    time_step_s: float,
-    mesh_resolution_m: float | None = None,
-    output_interval_min: float | None = None,
-) -> dict[str, Any]:
-    """Everything the catchment MEASURES at the face the basin drains through.
-
-    ``catchment`` is the ACCEPTED mesh, never an equivalent rebuild; the outlet's
-    roughness is read off ``landcover`` through ``roughness``, the class table
-    the deck's own friction zones are written from."""
-    artifact = catchment.get("artifact")
-    utm_epsg = int(getattr(artifact, "utm_epsg", 0) or 0)
-    probes = dict(getattr(artifact, "probes", None) or {})
-    provenance = dict(catchment.get("provenance") or {})
-    topology, outlet_boundary, outlet_prescribes, n_liquid = _outlet_boundary(
-        catchment)
-    if outlet_prescribes != "elevation":
-        raise TelemacError(
-            f"liquid boundary {outlet_boundary} carries a .cli code quad that "
-            f"prescribes {outlet_prescribes!r}, and a stage-discharge curve is "
-            "read only where the depth is prescribed; the boundary file and the "
-            "steering file would describe different outlets.",
-            error_code="TELEMAC_BOUNDARY_PRESCRIBES_NOTHING")
-    mesh_size_m = float(catchment.get("min_edge_m") or mesh_resolution_m or 0.0)
-    name = str(getattr(artifact, "name", None) or "watershed")
-    bed_source = str(provenance.get("bed_source") or "staged")
-    duration_s = float(rain["duration_s"])
-
-    points_utm, cells, node_bed, lonlat = await asyncio.to_thread(
-        accepted_mesh_nodes, catchment)
-    q_ceiling, q_ceiling_basis = _rain_ceiling(rain, cells, points_utm)
-    manning = await asyncio.to_thread(
-        _outlet_manning, landcover, lonlat[_outlet_nodes(topology)], roughness,
-        unmapped)
-    outlet = _measured_outlet(
-        topology, points_utm, node_bed, cells, manning,
-        q_ceiling_m3s=q_ceiling, q_ceiling_basis=q_ceiling_basis)
-    from ..helpers.uniform_flow import derive_rating_curve
-
-    rating = derive_rating_curve(
-        outlet["section"], law=int(outlet["law"]),
-        coefficient=float(outlet["coefficient"]), slope=float(outlet["slope"]),
-        q_ceiling_m3s=float(outlet["q_ceiling_m3s"]))
-    journal_note(
-        f"catchment outlet: liquid boundary {outlet_boundary} holds a DERIVED "
-        f"stage-discharge curve - {len(rating['rows'])} points from the dry "
-        f"section at {rating['thalweg_m']:.3f} m to {rating['stage_max_m']:.3f} m "
-        f"at {rating['q_ceiling_m3s']:.3f} m3/s, each a normal depth over the "
-        f"measured outlet section at {rating['law']} {rating['coefficient']:g} on "
-        f"the measured bed slope {rating['slope']:.6f}. The range is "
-        f"{outlet['q_ceiling_basis']}.")
-    time_varying = bool(rain.get("time_varying"))
-    return {
-        "name": name,
-        "title": f"{name} RAIN-ON-GRID",
-        "domain_name": name,
-        "utm_epsg": utm_epsg,
-        "duration_s": duration_s,
-        "time_step_s": float(time_step_s),
-        "graphic_period": _graphic_period(output_interval_min, time_step_s),
-        "rain_mm_per_day": float(rain["intensity_mm_per_hr"]) * 24.0,
-        # The rain window is stated only when it CLOSES inside the run: a storm
-        # that outlasts the horizon never stops, and a keyword saying so would
-        # be an end nothing reaches. The recession limb is what the window is
-        # for, so a storm that produces none states nothing.
-        "rain_hours": (float(rain["rain_duration_s"]) / 3600.0
-                       if rain.get("rain_duration_s") is not None
-                       and 0.0 < float(rain["rain_duration_s"]) < duration_s
-                       else None),
-        # The land cover the deck's own surface is sampled from at the fill,
-        # named by its raster, so the roughness the curve above was derived
-        # under and the zones the deck writes come off one layer.
-        "landcover": {"uri": str(layer_field(landcover, "uri") or "")},
-        "hyetograph_blocks": ([[float(t), float(mm)] for t, mm in rain["blocks"]]
-                              if time_varying else None),
-        "outlet_boundary": outlet_boundary,
-        "n_liquid_boundaries": n_liquid,
-        "liquid_boundaries": _liquid_boundaries(topology, points_utm),
-        "rating": {
-            "at_boundary": outlet_boundary, "of_boundaries": n_liquid,
-            "rows": [[q, z] for q, z in rating["rows"]],
-            "note": (f"derived Z(Q) at liquid boundary {outlet_boundary}: normal "
-                     f"depth over the measured outlet section at {rating['law']} "
-                     f"{rating['coefficient']:g}, bed slope "
-                     f"{rating['slope']:.6f}, {outlet['q_ceiling_basis']}")},
-        "rain": dict(rain),
-        "hyetograph_total_mm": (round(sum(float(mm) for _t, mm in rain["blocks"]), 4)
-                                if time_varying else None),
-        "mesh_node_count": int(catchment.get("node_count") or 0),
-        "mesh_element_count": int(catchment.get("element_count") or 0),
-        "mesh_size_m": mesh_size_m,
-        "mesh_max_edge_m": float((probes.get("edge_length_m") or {}).get("max") or 0.0),
-        "area_km2": float(probes.get("area_km2") or 0.0),
-        "lonlat_bounds": [float(v) for v in (getattr(artifact, "bbox", None) or ())],
-        "mesh_resolution_asked_m": mesh_resolution_m,
-        "bed_source": bed_source,
-        "bed_note": str(provenance.get("bed_fallback_note") or ""),
-        "sizing_source": str(provenance.get("sizing_source") or ""),
-        "domain_source": str(provenance.get("domain_source") or ""),
-        "mesh_inputs": [
-            {"gs_uri": _mesh_field(catchment, "slf_uri",
-                                   missing=_mesh_missing),
-             "dest": "rog.slf"},
-            {"gs_uri": _mesh_field(catchment, "cli_uri",
-                                   missing=_mesh_missing),
-             "dest": "rog.cli"}],
-        "server_facts": {
-            "utm_epsg": utm_epsg,
-            "bbox": [round(float(v), 6)
-                     for v in (getattr(artifact, "bbox", None) or ())],
-            "npoin": int(catchment.get("node_count") or 0),
-            "nelem": int(catchment.get("element_count") or 0),
-            "mesh_size_m": mesh_size_m,
-            "name": name,
-            "duration_s": duration_s,
-            "time_step_s": float(time_step_s),
-            "result_slf": "r2d_rog.slf",
-            "bed_source": bed_source},
-    }
 
 
 def _mesh_facts(mesh: Mapping[str, Any], *,
