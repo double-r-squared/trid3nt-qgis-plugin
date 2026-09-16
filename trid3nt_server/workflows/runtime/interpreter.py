@@ -32,7 +32,7 @@ from trid3nt_server.gates.input_review import (
 )
 
 from .data import (
-    BED, COMPOSED_OVER, DOMAIN, LEVEL, LINE, RUNS, CoversAOI, DataDecl, Producer)
+    BED, DOMAIN, LEVEL, LINE, RUNS, CoversAOI, DataDecl, Producer)
 from .domain import Domain, bind_domain, current_domain, domain_from_result, reset_domain
 from .errors import (
     SuppliedCoverageError,
@@ -294,7 +294,7 @@ async def _produce(env: _Env, decl: DataDecl) -> Any:
     handed_in = env.supplied.get(decl.name)
     if handed_in is not None:
         _validate_supplied(env, decl, handed_in, decl.supplied_validate)
-        return await _ingested(env, decl, handed_in, supplied=True)
+        return await _ingested(env, decl, handed_in)
     producer = decl.producer
     if producer is None and decl.role == RUNS:
         # THE DOMAIN'S PRODUCER measured these where it cut the polygon between
@@ -399,24 +399,18 @@ async def _domain_companion(env: _Env, named: str) -> Any:
     return dict(getattr(bound, "companions", None) or {}).get(named)
 
 
-async def _ingested(env: _Env, decl: DataDecl, value: Any, *,
-                    supplied: bool = False) -> Any:
+async def _ingested(env: _Env, decl: DataDecl, value: Any) -> Any:
     """A SLOT's value through the one ingestion its role reads; a plain row's
     value as it came.
 
     The whole point of a slot is that what fills it reads the same afterwards,
-    so the ingestion runs wherever the value entered. What the row told its slot
-    to COMPOSE over is the row's producer's, so an artifact the caller supplied
-    is not composed - and never pays for the wider surface it would have been
-    laid on. Off the loop: reading a layer's geometry is object-store IO, and
-    the plan is walked on it."""
+    so the ingestion runs wherever the value entered. Off the loop: reading a
+    layer's geometry is object-store IO, and the plan is walked on it."""
     if not decl.role:
         return value
     from trid3nt_server.inputs.slots import ingest_slot
 
-    told = {k: v for k, v in decl.coercion.items()
-            if not (supplied and k == COMPOSED_OVER)}
-    coercion = await _bind_value(told, env)
+    coercion = await _bind_value(dict(decl.coercion), env)
     coercion.update(_on_the_run_s_frame(env, decl.role))
     ingested = await asyncio.to_thread(ingest_slot, decl.role, value,
                                        label=decl.name, **coercion)

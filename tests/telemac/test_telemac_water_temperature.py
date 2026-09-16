@@ -78,14 +78,15 @@ def test_the_carrier_is_one_reading_the_channel_step_can_open_on():
     assert row.is_context
 
 
-def test_the_bed_is_one_row_composed_from_the_survey_over_the_terrain():
+def test_the_bed_is_one_row_the_merge_derive_made_of_two_rows():
     rows = {row.name: row for row in _workflow().data}
     assert [name for name, row in rows.items() if row.role == "bed"] == ["bed"]
-    assert rows["bed"].producer.runner == "derive_survey_surface"
-    assert rows["bed"].coercion["over"].path == "terrain"
+    assert rows["bed"].producer.runner == "derive_merge_rasters"
+    assert rows["bed"].producer.kwargs["primary"].path == "surveyed_bed"
+    assert rows["bed"].producer.kwargs["fallback"].path == "terrain"
     # The survey is CONTEXT: water with no federal navigation project has no
     # published sounding, the grid of nothing is nothing, and the terrain the
-    # slot composes over is the whole bed rather than a refusal.
+    # merge passes through is the whole bed rather than a refusal.
     assert rows["survey"].is_context
     assert "terrain surface stands" in rows["survey"].context_sentence
 

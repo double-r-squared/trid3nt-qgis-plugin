@@ -390,6 +390,18 @@ package DataSeam {
         */
     }
 
+    part def BedComposer {
+        doc /*
+        The derive that lays a narrow measurement over the wider surface under
+        it: the primary wins every cell it measured, the fallback paints what is
+        left, and a sidecar records which won where. It is also where two
+        surfaces that did not count the same way are brought onto ONE zero - a
+        primary counting DEPTHS read as elevations up from its own datum,
+        through the shift that survey publishes about itself - because a merge
+        of two conventions is a floor with a step in it.
+        */
+    }
+
     part def BoundaryRunSlot {
         doc /*
         The named stretches of the domain's edge, each two points and a type.
@@ -437,6 +449,12 @@ package DataSeam {
     part bedSlot : BedSlot {
         doc /*
         code: trid3nt_server/inputs/bed.py
+        */
+    }
+
+    part bedComposer : BedComposer {
+        doc /*
+        code: trid3nt_server/tools/derive/derive_merge_rasters/derive_merge_rasters.py
         */
     }
 
@@ -688,6 +706,14 @@ package DataSeam {
         the other, because a shift nobody measured is indistinguishable from a
         measurement to every reader downstream.
 
+        The same order holds wherever two surfaces meet before a slot does: a
+        merge reads its primary on the fallback's zero through the offset the
+        call states, else the one the primary publishes, and refuses naming both
+        when neither exists. A surface counting DEPTHS down from its zero is one
+        axis with a surface counting elevations up only through that shift, so
+        it is read the other way round on the way - on its own grid, before
+        either is read onto the common one.
+
         What a slot does with a source that states NO datum is that slot's own
         statement and not this one's: a surface of depths has to know the zero
         they are counted below and refuses without it, while an elevation
@@ -782,13 +808,16 @@ package DataSeam {
         below the free surface. The slot takes ONE source, and it is one row.
 
         A bed built from a survey over a wider surface is EXISTING COMPOSITION,
-        not new vocabulary: a survey row declared context, a terrain row, and a
-        merged row that is a derive over the two - primary over fallback by
-        coverage, with a sidecar recording which input won at each cell, and the
-        terrain passing through unchanged where no survey was published. The
-        derive is useful outside any slot, which is why it is a tool rather than
-        a second argument on the mesh op, and a fetcher's ladder - which is
-        about a source being unavailable - is never spelled as one.
+        not new vocabulary: a survey row declared context, a row that grids it
+        into a surface, a terrain row, and a merged row that is a derive over
+        the two - primary over fallback by coverage, with a sidecar recording
+        which input won at each cell, and the terrain passing through unchanged
+        where no survey was published. The derive is useful outside any slot,
+        which is why it is a tool rather than a second argument on the mesh op
+        or on the slot, and a fetcher's ladder - which is about a source being
+        unavailable - is never spelled as one. The COMPOSITION IS ROWS: the slot
+        takes the one layer the merge produced and knows nothing of what went
+        into it.
 
         A node the source does not cover REFUSES by name. Filling the hole with
         the mean of what was covered is a bed nobody measured, and it reads as
@@ -976,7 +1005,12 @@ package DataSeam {
     satisfy requirement TheRunHasOneVerticalFrame by verticalFrame;
     satisfy requirement TheRunHasOneVerticalFrame by frameLever;
     satisfy requirement TheRunHasOneVerticalFrame by bedSlot;
+    satisfy requirement TheRunHasOneVerticalFrame by bedComposer;
     satisfy requirement TheRunHasOneVerticalFrame by freeSurfaceReader;
+    verify requirement TheRunHasOneVerticalFrame by
+        "tests/derive/test_derive_merge_rasters.py::test_a_primary_of_depths_is_read_as_elevations_on_the_fallbacks_zero";
+    verify requirement TheRunHasOneVerticalFrame by
+        "tests/derive/test_derive_merge_rasters.py::test_a_depth_surface_whose_zero_nothing_bridges_refuses_by_name";
     verify requirement TheRunHasOneVerticalFrame by
         "tests/runtime/test_domain_bed_and_context_slots.py::test_every_elevation_slot_is_read_on_the_runs_own_vertical_frame";
     verify requirement TheRunHasOneVerticalFrame by
@@ -1042,6 +1076,13 @@ package DataSeam {
 
     satisfy requirement OneBedOverEverySourceAUserCanHave by bedSlot;
     satisfy requirement OneBedOverEverySourceAUserCanHave by bedPainter;
+    satisfy requirement OneBedOverEverySourceAUserCanHave by bedComposer;
+    verify requirement OneBedOverEverySourceAUserCanHave by
+        "tests/inputs/test_slot_inputs.py::test_the_bed_slot_takes_one_source_and_composes_nothing";
+    verify requirement OneBedOverEverySourceAUserCanHave by
+        "tests/telemac/test_workflow_owns_its_stages.py::test_the_bed_op_takes_the_one_row_the_merge_derive_produced";
+    verify requirement OneBedOverEverySourceAUserCanHave by
+        "tests/derive/test_derive_merge_rasters.py::test_an_absent_survey_leaves_the_terrain_as_the_whole_bed";
     verify requirement OneBedOverEverySourceAUserCanHave by
         "tests/inputs/test_slot_inputs.py::test_the_bed_slot_says_which_shape_it_was_handed";
     verify requirement OneBedOverEverySourceAUserCanHave by

@@ -100,6 +100,19 @@ def test_the_bed_slot_says_which_shape_it_was_handed():
     assert bed(None) is None
 
 
+def test_the_bed_slot_takes_one_source_and_composes_nothing():
+    """A measurement over a wider surface is composed in the DATA body - a
+    survey row, a terrain row and a merge row over the two - so neither the slot
+    nor the row that declares it carries the surface underneath."""
+    import inspect
+
+    from trid3nt_server.workflows.runtime import Data
+
+    assert "over" not in inspect.signature(bed).parameters
+    assert "over" not in inspect.signature(Data.bed).parameters
+    assert not Data.bed().coercion
+
+
 def test_a_depth_no_water_body_holds_refuses_rather_than_being_meshed():
     with pytest.raises(UserInputError, match="outside 0.0-12000.0 m"):
         bed(-3.0)

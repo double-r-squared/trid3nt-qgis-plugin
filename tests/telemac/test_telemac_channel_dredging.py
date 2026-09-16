@@ -55,15 +55,18 @@ def test_the_domain_is_one_row_the_reach_fetcher_produces():
     assert domain.producer.kwargs["distance_km"] == channel_dredging._REACH_LENGTH_KM
 
 
-def test_the_bed_is_one_row_the_slot_composed_from_the_survey_and_the_terrain():
-    """set_bed takes ONE source: the soundings are gridded by the derive the row
-    names and the slot lays that measurement over the terrain beside it."""
+def test_the_bed_is_one_row_the_merge_derive_made_of_the_survey_and_the_terrain():
+    """set_bed takes ONE source: the soundings are gridded by the derive one row
+    names, and the merge derive lays that measurement over the terrain beside
+    it. The composition is DATA rows, never an argument on the slot."""
     rows = _rows()
     bed = rows["bed"]
     assert bed.role == "bed"
-    assert bed.producer.runner == "derive_survey_surface"
-    assert bed.producer.kwargs["points"] == DataRef("survey")
-    assert bed.coercion["over"] == DataRef("terrain")
+    assert bed.producer.runner == "derive_merge_rasters"
+    assert bed.producer.kwargs["primary"] == DataRef("surveyed_bed")
+    assert bed.producer.kwargs["fallback"] == DataRef("terrain")
+    assert rows["surveyed_bed"].producer.runner == "derive_survey_surface"
+    assert rows["surveyed_bed"].producer.kwargs["points"] == DataRef("survey")
     assert rows["terrain"].producer.runner == "fetch_dem"
     assert [row.name for row in _WORKFLOW.data if row.role == "bed"] == ["bed"]
 

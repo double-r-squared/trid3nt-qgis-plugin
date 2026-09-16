@@ -224,7 +224,8 @@ def test_the_three_slots_are_the_world_this_run_stands_on():
     assert data["domain"].role == DOMAIN
     assert data["domain"].producer.runner == "fetch_river_reach"
     assert data["bed"].role == BED
-    assert data["bed"].producer.runner == "derive_survey_surface"
+    assert data["bed"].producer.runner == "derive_merge_rasters"
+    assert data["surveyed_bed"].producer.runner == "derive_survey_surface"
     assert (data["runs"].role, data["runs"].producer) == (RUNS, None)
     # Both slots reach the wire: what the user supplies supersedes the producer.
     assert data["domain"].fills_from_user and data["bed"].fills_from_user

@@ -16,7 +16,6 @@ from .temporal import TemporalSpec, spec_from
 
 __all__ = [
     "BED",
-    "COMPOSED_OVER",
     "DISCHARGE",
     "EXTENT",
     "LEVEL",
@@ -42,11 +41,6 @@ __all__ = [
 DOMAIN = "domain"
 BED = "bed"
 RUNS = "runs"
-
-#: What a slot is told to COMPOSE its value over: the wider surface a narrow
-#: measurement is laid on. It belongs to the row's own producer - an artifact the
-#: caller SUPPLIES supersedes that producer, and pays for neither half.
-COMPOSED_OVER = "over"
 
 #: The LINE a placed read is measured along. Not one of the three - a run solves
 #: without it - but a slot for the same reason: a producer's own centerline, a
@@ -506,18 +500,16 @@ class DataDecl(Row):
         row = self if producer is None else self(producer)
         return replace(row, role=EXTENT, geometry="rectangle")
 
-    def bed(self, producer: Producer | None = None, *,
-            over: Any = None) -> "DataDecl":
+    def bed(self, producer: Producer | None = None) -> "DataDecl":
         """THE BED: what every node of the domain carries for elevation.
 
         A DEM, a bathymetry or survey raster, a layer of soundings, or a stated
-        depth below the free surface - one slot, and the mesh records which
-        source actually painted each node. ``over`` is the WIDER surface this
-        one is composed over where it stops measuring, and is the whole bed
-        where the measurement never came."""
+        depth below the free surface - ONE source, and the mesh records which
+        source actually painted each node. A measurement that covers part of the
+        domain is laid over the wider surface under it by the merge derive, in
+        the DATA body, and this slot takes the row that derive produced."""
         row = self if producer is None else self(producer)
-        return replace(row, role=BED,
-                       coercion=MappingProxyType({COMPOSED_OVER: over}))
+        return replace(row, role=BED)
 
     @property
     def context_sentence(self) -> str:

@@ -411,14 +411,15 @@ def test_the_mesh_is_built_over_the_domain_slot_at_the_runtimes_lever():
     assert runs.kwargs == {"runs": DataRef("runs")}
 
 
-def test_the_bed_is_one_row_composed_from_the_survey_over_the_terrain():
+def test_the_bed_is_one_row_the_merge_derive_made_of_two_rows():
     """set_bed takes ONE source. A survey covers the channel and the terrain
-    covers the banks, so the slot lays the one over the other on the way in, and
-    the survey's absence is legal."""
+    covers the banks, so a merge row lays the one over the other in the DATA
+    body, and the survey's absence is legal."""
     rows = {row.name: row for row in _plan().data}
     assert rows["bed"].role == "bed"
-    assert rows["bed"].producer.runner == "derive_survey_surface"
-    assert rows["bed"].coercion["over"].path == "terrain"
+    assert rows["bed"].producer.runner == "derive_merge_rasters"
+    assert rows["bed"].producer.kwargs["primary"].path == "surveyed_bed"
+    assert rows["bed"].producer.kwargs["fallback"].path == "terrain"
     assert [name for name, row in rows.items() if row.role == "bed"] == ["bed"]
     assert rows["survey"].is_context
     assert "terrain surface stands" in rows["survey"].context_sentence
@@ -518,4 +519,5 @@ def test_the_survey_is_gridded_on_the_field_the_soundings_carry():
     """eHydro rows carry several numbers; the one the bed is made of is named
     rather than guessed, and a guess would grid the sounding count."""
     rows = {row.name: row for row in _plan().data}
-    assert rows["bed"].producer.kwargs["value_field"] == "depth_below_datum_m"
+    assert rows["surveyed_bed"].producer.kwargs["value_field"] == \
+        "depth_below_datum_m"

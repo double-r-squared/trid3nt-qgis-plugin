@@ -181,18 +181,21 @@ def test_the_data_body_is_the_three_slots_and_what_composes_them():
     from trid3nt_server.workflows.telemac.templates.dye_release.dye_release import DATA
 
     rows = data_rows(DATA)
-    assert [d.name for d in rows] == ["domain", "runs", "survey", "terrain",
-                                      "bed", "carrier", "stage"]
+    assert [d.name for d in rows] == ["domain", "runs", "survey", "surveyed_bed",
+                                      "terrain", "bed", "carrier", "stage"]
     by_name = {d.name: d for d in rows}
     assert by_name["domain"].role == "domain"
     assert by_name["domain"].geometry == "polygon"
     assert by_name["domain"].producer.runner == "fetch_river_reach"
     assert by_name["bed"].role == "bed"
-    assert by_name["bed"].producer.runner == "derive_survey_surface"
-    # ONE bed: the survey where it measured, the terrain everywhere else.
-    assert by_name["bed"].producer.kwargs["points"] == DataRef("survey")
-    assert by_name["bed"].coercion["over"] == DataRef("terrain")
-    assert [d.name for d in rows if d.is_context] == ["survey", "carrier"]
+    # ONE bed: the survey where it measured, the terrain everywhere else, as a
+    # derive over the two rows.
+    assert by_name["bed"].producer.runner == "derive_merge_rasters"
+    assert by_name["bed"].producer.kwargs["primary"] == DataRef("surveyed_bed")
+    assert by_name["bed"].producer.kwargs["fallback"] == DataRef("terrain")
+    assert by_name["surveyed_bed"].producer.kwargs["points"] == DataRef("survey")
+    assert [d.name for d in rows if d.is_context] == ["survey", "surveyed_bed",
+                                                      "carrier"]
     # ONE READING, not the published grid: the step that opens the channel
     # refuses a record nobody chose a site from, so the flow arrives ingested.
     carrier = by_name["carrier"]

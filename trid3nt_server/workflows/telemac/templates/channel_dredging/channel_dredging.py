@@ -103,17 +103,23 @@ class DATA:
                        purpose="channel survey soundings")
                   ).context("no published channel survey over this domain; "
                             "the terrain surface stands")
+    # THE SOUNDINGS AS A SURFACE, at the scale the mesh resolves. Its values are
+    # DEPTHS below the survey's own project datum, and the merge below reads
+    # them as elevations on the terrain's zero through the shift the survey
+    # publishes about itself.
+    surveyed_bed = Data(tool("derive_survey_surface", points=survey,
+                             value_field="depth_below_datum_m",
+                             resolution_m=ParamRef("mesh_resolution_m"))
+                        ).context("no soundings to grid into a surveyed bed "
+                                  "over this domain")
     terrain = Data(tool("fetch_dem", bbox=Ref("domain.bbox"), source="3dep",
                         resolution_m=_TERRAIN_RESOLUTION_M,
                         purpose="channel bed elevation"))
-    # ONE bed: the survey where it measured, the terrain everywhere else. The
-    # soundings are DEPTHS below the survey's own project datum and the slot
-    # reads them as elevations on the frame that survey publishes itself
-    # against; with the survey absent the terrain is the whole bed.
-    bed = Data.bed(tool("derive_survey_surface", points=survey,
-                        value_field="depth_below_datum_m",
-                        resolution_m=ParamRef("mesh_resolution_m")),
-                   over=terrain)
+    # ONE bed: the survey where it measured, the terrain everywhere else, as a
+    # derive over the two rows. With the survey absent the terrain passes
+    # through the merge unchanged and is the whole bed.
+    bed = Data.bed(tool("derive_merge_rasters", primary=surveyed_bed,
+                        fallback=terrain))
     #: The flow that shoals the fairway and carries what the dredger disturbs:
     #: ONE reading off the nearest reporting site, or the number stated on this
     #: row, which stands over any record. What the open channel opened on is

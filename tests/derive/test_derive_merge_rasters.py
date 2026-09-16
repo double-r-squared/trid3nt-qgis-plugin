@@ -5,8 +5,9 @@ rest, the merged grid taking the finer cell over the union of both, the sidecar
 naming which input painted each cell, an absent row passing the other surface
 through, two different vertical datums refusing by name, an unstated datum
 refusing, a STATED OFFSET bringing two differing datums onto one axis while an
-offset between two other frames still refuses, two disjoint surfaces, and the
-registration."""
+offset between two other frames still refuses, a primary of DEPTHS read as
+elevations on the fallback's zero through the shift the survey publishes about
+itself, two disjoint surfaces, and the registration."""
 
 from __future__ import annotations
 
@@ -23,6 +24,9 @@ from trid3nt_server.tools import TOOL_REGISTRY
 from trid3nt_server.tools.derive.derive_merge_rasters.derive_merge_rasters import (
     MergeRastersError,
     derive_merge_rasters,
+)
+from trid3nt_server.tools.derive.derive_survey_surface.derive_survey_surface import (
+    SurveySurfaceLayerURI,
 )
 
 _NODATA = float("nan")
@@ -55,6 +59,19 @@ def _terrain(datum: str | None = "NAVD88") -> LayerURI:
     """A 4 m surface over 16 m of ground, the survey inside it."""
     return _layer(_write(np.full((4, 4), 10.0), west=500_000.0, north=4_000_000.0,
                          cell=4.0), datum)
+
+
+def _soundings(datum: str = "CRD", offset: float | None = 1.6093,
+               frame: str = "NAVD88") -> SurveySurfaceLayerURI:
+    """The same 1 m measurement, stated as DEPTHS below a project datum - what a
+    channel survey gridded from eHydro rows actually is."""
+    return SurveySurfaceLayerURI(
+        layer_id="s", name="depth_below_datum_m interpolated at 1 m",
+        layer_type="raster",
+        uri=_write(np.full((4, 4), 5.0), west=500_004.0, north=4_000_000.0,
+                   cell=1.0),
+        quantity="depth_below_datum_m", vertical_datum=datum,
+        datum_offset_m=offset, datum_offset_frame=frame)
 
 
 def test_registered() -> None:
@@ -183,3 +200,47 @@ def test_one_datum_needs_no_offset_and_shifts_nothing(tmp_path) -> None:
                                   offset=None, _output_dir=str(tmp_path))
     assert merged.datum_shift_m == 0.0
     assert "Both surfaces count from NAVD88." in merged.notes
+
+
+def test_a_primary_of_depths_is_read_as_elevations_on_the_fallbacks_zero(
+        tmp_path) -> None:
+    """A depth counted DOWN from a project datum and an elevation counted UP from
+    a national one are one surface only through the flip, and the shift the
+    survey publishes about itself is the offset nothing else serves."""
+    terrain = _terrain("NAVD88")
+    terrain.quantity = "elevation"
+    merged = derive_merge_rasters(primary=_soundings(), fallback=terrain,
+                                  _output_dir=str(tmp_path))
+    with rasterio.open(merged.uri) as surface, \
+            rasterio.open(merged.provenance_uri) as source:
+        values, won = surface.read(1), source.read(1)
+    assert merged.vertical_datum == "NAVD88"
+    assert merged.datum_shift_m == pytest.approx(1.6093)
+    # 5 m below a zero that stands 1.6093 m over NAVD88 is -3.3907 m NAVD88.
+    assert float(values[won == 0].max()) == pytest.approx(1.6093 - 5.0)
+    assert float(values[won == 1].min()) == pytest.approx(10.0)
+    # The merged surface no longer counts the way the primary did, so it states
+    # the quantity it was read onto rather than the one the primary named.
+    assert merged.quantity == "elevation"
+    assert "counted DEPTHS below CRD" in merged.notes[-1]
+
+
+def test_a_depth_surface_whose_zero_nothing_bridges_refuses_by_name(
+        tmp_path) -> None:
+    with pytest.raises(MergeRastersError) as excinfo:
+        derive_merge_rasters(primary=_soundings(offset=None),
+                             fallback=_terrain("NAVD88"),
+                             _output_dir=str(tmp_path))
+    assert excinfo.value.error_code == "MERGE_RASTERS_DATUMS_DIFFER"
+    assert "CRD" in str(excinfo.value) and "NAVD88" in str(excinfo.value)
+
+
+def test_an_absent_survey_leaves_the_terrain_as_the_whole_bed(tmp_path) -> None:
+    """The row a domain with no federal navigation project produces is nothing,
+    and the bed is then the wider surface, stated as itself."""
+    terrain = _terrain("NAVD88")
+    merged = derive_merge_rasters(primary=None, fallback=terrain,
+                                  _output_dir=str(tmp_path))
+    assert merged.uri == terrain.uri
+    assert merged.vertical_datum == "NAVD88"
+    assert merged.fallback_fraction == 1.0

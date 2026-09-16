@@ -59,23 +59,24 @@ def test_the_domain_is_one_slot_the_reach_producer_only_prefers():
     assert domain.fills_from_user
 
 
-def test_the_bed_is_one_row_the_slot_composes_over_the_terrain():
+def test_the_bed_is_one_row_the_merge_derive_made_of_two_rows():
     """The survey where it measured, the terrain everywhere else - ONE bed row,
-    composed on the way into the slot, never a second bed row and never a
-    fallback on set_bed."""
+    composed in the DATA body by the merge derive, never a second bed row and
+    never a fallback on set_bed."""
     rows = _rows()
     assert [name for name, row in rows.items() if row.role == BED] == ["bed"]
     bed = rows["bed"]
-    assert bed.producer.runner == "derive_survey_surface"
-    assert bed.producer.kwargs["points"].path == "survey"
-    assert bed.coercion["over"].path == "terrain"
+    assert bed.producer.runner == "derive_merge_rasters"
+    assert bed.producer.kwargs["primary"].path == "surveyed_bed"
+    assert bed.producer.kwargs["fallback"].path == "terrain"
+    assert rows["surveyed_bed"].producer.kwargs["points"].path == "survey"
     assert rows["terrain"].producer.runner == "fetch_dem"
 
 
 def test_the_survey_surface_names_the_depth_it_interpolates():
     """An eHydro row carries more than one number, so the field the surface is
     gridded from is named rather than guessed at."""
-    surveyed = _rows()["bed"]
+    surveyed = _rows()["surveyed_bed"]
     assert surveyed.producer.runner == "derive_survey_surface"
     assert surveyed.producer.kwargs["value_field"] == "depth_below_datum_m"
     assert surveyed.producer.kwargs["resolution_m"].name == "mesh_resolution_m"

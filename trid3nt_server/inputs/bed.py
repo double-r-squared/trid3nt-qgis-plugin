@@ -2,13 +2,12 @@
 
 One slot over every source a user can have: a fetched DEM, a fetched or supplied
 bathymetry raster, a survey raster, a layer of soundings, or a stated depth below
-the free surface. The slot says WHICH of those it was handed; what a mesher does
-with each is the mesher's, and nothing above here branches on where it came from.
-Two things happen on the way in, because only the slot knows the bed is an
-ELEVATION: a survey's depths are turned into elevations and read on the RUN's own
-vertical frame, and a narrow measurement is composed over the wider surface the
-row names beside it - both surfaces on that one frame before either is laid over
-the other.
+the free surface. The slot takes ONE source - a measurement over a wider surface
+is composed by the merge derive in the DATA body, before anything reaches here -
+says WHICH shape it was handed, and nothing above here branches on where it came
+from. One thing happens on the way in, because only the slot knows the bed is an
+ELEVATION: the surface is read on the RUN's own vertical frame, and a surface of
+depths is turned into elevations counted up from the zero it states.
 """
 
 from __future__ import annotations
@@ -18,8 +17,7 @@ from typing import Any, Mapping
 
 from .user_input import UserInputError
 
-__all__ = ["Bed", "DEPTH", "MERGE_DERIVE", "POINTS", "RASTER", "SURVEY_DERIVE",
-           "bed"]
+__all__ = ["Bed", "DEPTH", "POINTS", "RASTER", "SURVEY_DERIVE", "bed"]
 
 _CODE = "BED_INVALID"
 
@@ -32,11 +30,6 @@ DEPTH = "depth"
 #: A slot calls a DERIVE by name; interpolating scattered measurements onto a
 #: surface is useful outside any slot, so it is a tool and not a coercion.
 SURVEY_DERIVE = "derive_survey_surface"
-
-#: The derive that lays a narrow measurement over the wider surface under it.
-#: Called by name for the same reason: composing two surfaces is a question
-#: anyone can ask, and the slot only decides that this bed is composed at all.
-MERGE_DERIVE = "derive_merge_rasters"
 
 #: What a surface of DEPTHS names its quantity as. A depth is counted DOWN from
 #: the survey's own zero, and a bed is an elevation counted UP from the run's,
@@ -64,22 +57,18 @@ class Bed:
         return self.kind == DEPTH
 
 
-def bed(value: Any, *, over: Any = None, frame: Any = None, label: str = "bed",
+def bed(value: Any, *, frame: Any = None, label: str = "bed",
         code: str = _CODE) -> Bed | None:
     """THE ingestion: a raster, a sounding layer, or a depth in metres -> Bed.
 
-    ``None`` only when nothing came and nothing lies under it. A number is a
-    DEPTH below the free surface; a vector artifact is a point survey; everything
-    else is a surface. ``over`` is the wider surface this one is composed over -
-    the terrain a channel survey measures only part of - and it is what the bed
-    is where the measurement stops, or whole where the measurement never came.
-    ``frame`` is the RUN's vertical frame, which the runtime states once and
-    every elevation here is read on."""
+    ``None`` only when nothing came. A number is a DEPTH below the free surface;
+    a vector artifact is a point survey; everything else is a surface. ``frame``
+    is the RUN's vertical frame, which the runtime states once and every
+    elevation here is read on."""
     if isinstance(value, Bed):
         return value
     if value is None:
-        return (bed(over, frame=frame, label=label, code=code)
-                if over is not None else None)
+        return None
     depth = _depth(value)
     if depth is not None:
         lo, hi = _DEPTH_RANGE_M
@@ -98,20 +87,8 @@ def bed(value: Any, *, over: Any = None, frame: Any = None, label: str = "bed",
     points = (isinstance(value, Mapping) and "type" in value) \
         or artifact_class(value) == "vector"
     if points:
-        if over is not None:
-            raise UserInputError(
-                f"the {label} is a layer of SOUNDINGS and this row composes it "
-                f"over a wider surface, which is done between two rasters. Grid "
-                f"the soundings with {SURVEY_DERIVE!r} first, or drop the wider "
-                "surface and let the mesh interpolate the points at its own "
-                "element scale.", code=code)
         return Bed(kind=POINTS, source=value)
-    surface = _elevation(value, label, code, frame)
-    if over is None:
-        return Bed(kind=RASTER, source=surface)
-    return Bed(kind=RASTER,
-               source=_composed(surface, _elevation(over, f"{label} surface",
-                                                    code, frame)))
+    return Bed(kind=RASTER, source=_elevation(value, label, code, frame))
 
 
 def _depth(value: Any) -> float | None:
@@ -223,17 +200,3 @@ def _flipped(layer: Any, offset_m: float, frame: str, label: str,
         quantity="bed_elevation_m", bbox=getattr(layer, "bbox", None),
         crs_authid=getattr(layer, "crs_authid", None), vertical_datum=frame)
 
-
-def _composed(primary: Any, over: Any) -> Any:
-    """This measurement laid over the wider surface, through the merge derive.
-
-    Called by NAME: composing two surfaces is a question anyone can ask outside
-    a slot, and a tree without the derive refuses saying which one."""
-    from trid3nt_server.tools import TOOL_REGISTRY
-
-    if MERGE_DERIVE not in TOOL_REGISTRY:
-        raise UserInputError(
-            f"this bed is composed over a wider surface and {MERGE_DERIVE!r} is "
-            "not registered, so there is nothing to lay one over the other.",
-            code=_CODE)
-    return TOOL_REGISTRY[MERGE_DERIVE].fn(primary=primary, fallback=over)

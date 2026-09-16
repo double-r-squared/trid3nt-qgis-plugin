@@ -760,9 +760,12 @@ package SolveSeam {
         wins every cell it measured, the wider surface fills the rest, and the
         sidecar records which input painted each cell. A ladder would pick one
         source for the whole domain and could not say that; this picks one per
-        cell and writes it down. The merge refuses two different vertical datums
-        by name, and refuses a surface that states none - a floor whose zero
-        nobody carried is a floor nobody can place.
+        cell and writes it down. The merge lands both on the wider surface's
+        zero - through the offset the call states, else the one the survey
+        publishes about itself, reading a surface of DEPTHS the other way round
+        on the way - and refuses naming both frames where neither exists, as it
+        refuses a surface that states no zero at all: a floor whose zero nobody
+        carried is a floor nobody can place.
 
         What survives of the clip is the REFUSAL. The painter names the count of
         nodes the one source did not measure rather than filling them, because a

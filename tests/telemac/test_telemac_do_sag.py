@@ -129,14 +129,16 @@ def test_the_three_slots_are_the_world_this_run_stands_on():
 
     rows = data_rows(_template().DATA)
     assert [d.name for d in rows] == ["domain", "runs", "line", "survey",
-                                      "terrain", "bed", "carrier", "stage"]
+                                      "surveyed_bed", "terrain", "bed",
+                                      "carrier", "stage"]
     by_name = {d.name: d for d in rows}
     assert by_name["domain"].role == DOMAIN
     assert by_name["domain"].producer.runner == "fetch_river_reach"
     assert by_name["bed"].role == BED
-    assert by_name["bed"].producer.runner == "derive_survey_surface"
-    assert by_name["bed"].producer.kwargs["points"] == DataRef("survey")
-    assert by_name["bed"].coercion["over"] == DataRef("terrain")
+    assert by_name["bed"].producer.runner == "derive_merge_rasters"
+    assert by_name["bed"].producer.kwargs["primary"] == DataRef("surveyed_bed")
+    assert by_name["bed"].producer.kwargs["fallback"] == DataRef("terrain")
+    assert by_name["surveyed_bed"].producer.kwargs["points"] == DataRef("survey")
     runs = next(d for d in rows if d.role == RUNS)
     assert (runs.producer, runs.is_optional) == (None, True)
     # The DOMAIN is the one ladder: the reach where a channel cuts, the
