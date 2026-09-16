@@ -50,8 +50,12 @@ LEVERS: tuple[Param, ...] = (
                "retention, and a request deeper than one refuses typed"),
     Param(name="compute_class", door=doors.CONSTANT, default="medium",
           consequence="numerical", desc="Solve sizing class"),
+    # NUMERICAL, not physics: this is the AXIS every elevation is placed on, and
+    # its default is a published national frame rather than a number nobody
+    # measured - what law 9 refuses in auto mode is an invented world, and a
+    # source that cannot reach this frame refuses here by name instead.
     Param(name="vertical_frame", door=doors.CONSTANT, default=VERTICAL_FRAME,
-          consequence="physics",
+          consequence="numerical",
           desc="Vertical datum this run counts every elevation from - the bed "
                "under it and the level over it. A source published on another "
                "frame reaches this one through a measured offset, and a pair "
