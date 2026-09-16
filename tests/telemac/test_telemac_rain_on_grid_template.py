@@ -417,7 +417,12 @@ async def test_a_measured_series_drives_the_run_through_the_block_file(rog_run):
     # the tail past the last simulated instant is DRY, so a storm that stops
     # inside the run stops in the file too.
     assert rows[-1] == [f"{settled['until_s'] + 3600.0:.3f}", "0.00000"]
+    # The engine's rain source term is gated on the keyword: without it prosou.f
+    # calls no runoff routine and the hyetograph is a file nobody reads. The
+    # window keyword is NOT read on this branch, and the rate is the file's.
+    assert deck["RAIN OR EVAPORATION"] is True
     assert "DURATION OF RAIN OR EVAPORATION IN HOURS" not in deck
+    assert "RAIN OR EVAPORATION IN MM PER DAY" not in deck
 
 
 @pytest.mark.asyncio

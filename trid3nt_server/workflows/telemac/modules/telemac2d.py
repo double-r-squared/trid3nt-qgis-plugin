@@ -627,7 +627,14 @@ def _blocks_file(blocks: Any, until_s: Any,
     lines = ["#HYETOGRAPH FILE (block type; mm per interval)",
              "#T (s) RAINFALL (mm)", "0.",
              *(f"{t:.3f} {mm:.5f}" for t, mm in rows)]
-    return ({"FORMATTED_DATA_FILE_1": HYETOGRAPH_FILENAME,
+    return ({# The engine's rain source term is gated on this keyword: prosou.f
+             # calls no runoff routine without it, so a deck naming the block
+             # file and the routine that reads it and leaving this unwritten
+             # states a storm the engine never applies. The rate keyword stays
+             # unstated - the routine reads every interval off the file, and the
+             # window keyword is not read on this branch at all.
+             "RAIN_OR_EVAPORATION": True,
+             "FORMATTED_DATA_FILE_1": HYETOGRAPH_FILENAME,
              # QUOTED by the writer: a value opening on '/' would be a comment to
              # DAMOCLES, which erases the keyword AND swallows the line after it.
              "FORTRAN_FILE": str(fortran)},
