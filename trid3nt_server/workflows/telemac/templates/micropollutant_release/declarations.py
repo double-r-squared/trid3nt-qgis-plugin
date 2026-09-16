@@ -56,14 +56,16 @@ class PARAMS:
              "there by sorption during the run")
 
     # -- the sediment the substance partitions onto -------------------------- #
-    ambient_spm_mgl = Param(
-        door=doors.SCENARIO, default=30.0, bounds=(0.0, 10000.0),
-        units="mg/L", consequence="physics", user_lever=True,
+    ambient_spm_kg_m3 = Param(
+        door=doors.SCENARIO, default=0.03, bounds=(0.0, 10.0),
+        units="kg/m^3", consequence="physics", user_lever=True,
         desc="Suspended sediment the water already carries, in and at the top of "
-             "the domain. It is the SORBENT: with none, the substance stays "
-             "dissolved and nothing reaches the bed. Nothing fetches suspended "
-             "sediment, so this is a STATED condition, not a measured one - "
-             "state the gauged value where there is one")
+             "the domain, in KILOGRAMS PER CUBIC METRE - the class the sorption "
+             "coefficient's own m^3/kg is read against, so 30 mg/L is 0.03. It "
+             "is the SORBENT: with none, the substance stays dissolved and "
+             "nothing reaches the bed. Nothing fetches suspended sediment, so "
+             "this is a STATED condition, not a measured one - state the gauged "
+             "value where there is one")
 
     # -- how the substance behaves ------------------------------------------- #
     decay_constant_per_s = Param(
@@ -165,9 +167,11 @@ DOC = dict(
         "carries `dissolved_cmax_mgl` / `dissolved_peak_time_s` at the "
         "monitoring point, `dissolved_travel_m`, and the partition at the last "
         "instant as `dissolved_final_mean_mgl` / "
-        "`suspended_sorbed_final_mean_mgl` / `bed_sorbed_final_mean_mgl`, with "
-        "`bed_over_dissolved` as how much sits on the bed for every unit still "
-        "dissolved; narrate those typed numbers. On failure a dict with "
+        "`suspended_sorbed_final_mean_mgl` / `bed_sorbed_final_mean_g_m2` - the "
+        "bed phase is what settled onto a square metre, not a concentration in "
+        "the water - and `sorbed_over_dissolved` as how much rides the suspended "
+        "sediment for every unit still dissolved; narrate those typed numbers. "
+        "On failure a dict with "
         "`status=\"error\"` + `error_code`."
     ),
 )

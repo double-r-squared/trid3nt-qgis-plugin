@@ -180,7 +180,7 @@ class STEERING(T2D):
     NAMES_OF_TRACERS = [_DISSOLVED]
     # The water arrives carrying its sediment and nothing else: the bed starts
     # clean, and everything on it at the end got there during the run.
-    INITIAL_VALUES_OF_TRACERS = [0.0, P.ambient_spm_mgl, 0.0, 0.0, 0.0]
+    INITIAL_VALUES_OF_TRACERS = [0.0, P.ambient_spm_kg_m3, 0.0, 0.0, 0.0]
 
     #: The carrier's own boundary values, in the order the engine numbers its
     #: liquid boundaries: the walk the mesh measured, the flow the inflow run
@@ -192,7 +192,7 @@ class STEERING(T2D):
                       Ref("settled.liquid_boundary_prescribes"),
                   "inflow_q_m3s": Ref("settled.inflow_q_m3s"),
                   "outflow_stage_m": Ref("settled.outflow_stage_m")},
-        tracers=[0.0, P.ambient_spm_mgl, 0.0, 0.0, 0.0])
+        tracers=[0.0, P.ambient_spm_kg_m3, 0.0, 0.0, 0.0])
 
     #: A FINITE release at a point source inside the domain, so what happens to
     #: the substance after it is in the water is what the rest of the run shows.
@@ -224,18 +224,19 @@ CAPTIONS = {"T1": "dissolved micropollutant"}
 #: concentrated the dissolved substance got AT THE MONITORING POINT and when,
 #: how far the dissolved body of water travelled, and where the substance stands
 #: at the last instant - dissolved, on the suspended sediment, and on the bed.
-#: The three final means are one partition read three ways, and the last answer
-#: is the question's own comparison over two of them: how much of the substance
-#: sits on the bed for every unit of it still dissolved.
+#: The bed phase is what SETTLED onto a square metre and the other two are
+#: concentrations in the water, so the question's own comparison is over the two
+#: that share a class: how much rides the sediment for every unit still
+#: dissolved, which is the partition this question is about.
 ANSWER = {
     "dissolved_cmax_mgl": series("T1", at=Ref("monitoring")).measure("max"),
     "dissolved_peak_time_s": series("T1", at=Ref("monitoring")).measure("t_max"),
     "dissolved_travel_m": field("T1", t="every").measure("travel_m"),
     "dissolved_final_mean_mgl": field("T1").measure("mean"),
     "suspended_sorbed_final_mean_mgl": field("T4").measure("mean"),
-    "bed_sorbed_final_mean_mgl": field("T5").measure("mean"),
-    "bed_over_dissolved": field("T5").measure("mean")
-                         .over(field("T1").measure("mean")),
+    "bed_sorbed_final_mean_g_m2": field("T5").measure("mean"),
+    "sorbed_over_dissolved": field("T4").measure("mean")
+                             .over(field("T1").measure("mean")),
     "mesh_size_m": mesh().measure("size_m"),
 }
 

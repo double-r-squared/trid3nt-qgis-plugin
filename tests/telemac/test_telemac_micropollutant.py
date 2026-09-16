@@ -31,8 +31,12 @@ _EXAMPLE = {"SEDIMENT_SETTLING_VELOCITY": 4.0e-7,
 
 
 def test_the_rows_are_the_engine_s_own_names_in_the_order_it_appends_them():
+    """The units are the ones MICROPOL's own source terms are written in: the
+    suspended sediment is the concentration the distribution coefficient's m3/kg
+    is read against, and what settled onto the bed is per square metre."""
     assert [row.name for row in ROWS] == _ENGINE_ORDER
-    assert {row.unit for row in ROWS} == {"mg/L"}
+    assert [row.unit for row in ROWS] == ["kg/m3", "kg/m2", "mg/L", "mg/L",
+                                          "g/m2"]
 
 
 def test_every_row_draws_under_a_style_of_its_own_floored_at_nothing():
@@ -136,7 +140,7 @@ def test_the_deck_releases_the_substance_dissolved_and_carries_the_sediment_in()
     assert release["tracers"][0].name == "source_concentration_mgl"
     assert release["tracers"][1:] == [0.0, 0.0, 0.0, 0.0]
     assert steering.INITIAL_VALUES_OF_TRACERS[0] == 0.0
-    assert steering.INITIAL_VALUES_OF_TRACERS[1].name == "ambient_spm_mgl"
+    assert steering.INITIAL_VALUES_OF_TRACERS[1].name == "ambient_spm_kg_m3"
     assert steering.INITIAL_VALUES_OF_TRACERS[2:] == [0.0, 0.0, 0.0]
 
 
@@ -165,10 +169,10 @@ def test_the_answer_reads_all_three_phases_at_the_last_instant():
     answer = _template().ANSWER
     assert [answer[name].primitive.variable for name in (
         "dissolved_final_mean_mgl", "suspended_sorbed_final_mean_mgl",
-        "bed_sorbed_final_mean_mgl")] == ["T1", "T4", "T5"]
+        "bed_sorbed_final_mean_g_m2")] == ["T1", "T4", "T5"]
     assert {answer[name].stat for name in (
         "dissolved_final_mean_mgl", "suspended_sorbed_final_mean_mgl",
-        "bed_sorbed_final_mean_mgl")} == {"mean"}
+        "bed_sorbed_final_mean_g_m2")} == {"mean"}
 
 
 def test_the_declared_params_and_the_plan_validate():
@@ -178,7 +182,7 @@ def test_the_declared_params_and_the_plan_validate():
     resolved = asyncio.run(resolve_params(workflow.params, {}))
     validate_plan(workflow.plan, workflow.params, workflow.data)
     # Nothing fetches suspended sediment, so the sorbent is a STATED condition.
-    assert resolved.value_of("ambient_spm_mgl") == 30.0
+    assert resolved.value_of("ambient_spm_kg_m3") == 0.03
     # Every constant the engine itself defaults is left unstated by the deck.
     for name in ("settling_velocity_mps", "distribution_coefficient_m3kg",
                  "desorption_constant_per_s", "decay_constant_per_s"):

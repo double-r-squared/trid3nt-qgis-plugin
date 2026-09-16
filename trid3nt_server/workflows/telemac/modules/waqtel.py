@@ -41,11 +41,16 @@ _PO4 = {"kind": "mesh", "ramp": "ylorrd", "units": "mg/L"}
 _POR = {"kind": "mesh", "ramp": "plasma", "units": "mg/L"}
 _NO3 = {"kind": "mesh", "ramp": "gnbu", "units": "mg/L"}
 _NOR = {"kind": "mesh", "ramp": "cividis", "units": "mg/L"}
-_SUSPENDED = {"kind": "mesh", "ramp": "oranges", "units": "mg/L", "floor": 0}
-_DEPOSITED = {"kind": "mesh", "ramp": "ylorrd", "units": "mg/L", "floor": 0}
+#: MICROPOL's five, in the units its own source terms are written in: the
+#: sediment in suspension is the concentration COEFFICIENT OF DISTRIBUTION is
+#: read against, which the dictionary states in m3/kg, so it is kg/m3; the bed
+#: sediment and the pollutant on it are what SETTLED onto a square metre, which
+#: is the same terms without the water column divided out.
+_SUSPENDED = {"kind": "mesh", "ramp": "oranges", "units": "kg/m3", "floor": 0}
+_DEPOSITED = {"kind": "mesh", "ramp": "ylorrd", "units": "kg/m2", "floor": 0}
 _DISSOLVED = {"kind": "mesh", "ramp": "reds", "units": "mg/L", "floor": 0}
 _ON_SUSPENDED = {"kind": "mesh", "ramp": "magma", "units": "mg/L", "floor": 0}
-_ON_DEPOSITED = {"kind": "mesh", "ramp": "plasma", "units": "mg/L", "floor": 0}
+_ON_DEPOSITED = {"kind": "mesh", "ramp": "plasma", "units": "g/m2", "floor": 0}
 
 #: What each process puts on the carrier's result, in the order the engine
 #: appends them behind the tracers the carrier declares, under the engine's own
@@ -75,12 +80,12 @@ _APPENDED: Mapping[int, tuple[Output, ...]] = MappingProxyType({
              Output("NH4 LOAD", "mg/L", style=_NH4, has_edge=False),
              Output("ORGANIC LOAD", "mgO2/L", style=_ORGANIC, has_edge=False),
              Output("DISSOLVED O2", "mgO2/L", style=_O2_STYLE, has_edge=False)),
-    _MICROPOL: (Output("SUSPENDED LOAD", "mg/L", style=_SUSPENDED, has_edge=True),
-                Output("BED SEDIMENTS", "mg/L", style=_DEPOSITED, has_edge=True),
+    _MICROPOL: (Output("SUSPENDED LOAD", "kg/m3", style=_SUSPENDED, has_edge=True),
+                Output("BED SEDIMENTS", "kg/m2", style=_DEPOSITED, has_edge=True),
                 Output("MICRO POLLUTANT", "mg/L", style=_DISSOLVED, has_edge=True),
                 Output("ABS. SUSP. LOAD.", "mg/L", style=_ON_SUSPENDED,
                        has_edge=True),
-                Output("ABSORB. BED SED.", "mg/L", style=_ON_DEPOSITED,
+                Output("ABSORB. BED SED.", "g/m2", style=_ON_DEPOSITED,
                        has_edge=True)),
     _THERMAL: (Output("TEMPERATURE", "oC", style=_TEMPERATURE, has_edge=False),),
 })
@@ -162,7 +167,12 @@ class _Waqtel(Module("waqtel")):  # type: ignore[misc]
         dissolved, on the suspended sediment and on the bed sediment.
 
         The settling and the bed exchange, the sorption equilibrium and its
-        kinetics and the substance's own decay are WAQTEL's own keywords."""
+        kinetics and the substance's own decay are WAQTEL's own keywords. The
+        sorption sink on the dissolved phase is the desorption kinetic times the
+        COEFFICIENT OF DISTRIBUTION times the SUSPENDED LOAD, so the sediment a
+        deck states is a concentration in kg/m3 - the class that coefficient's
+        own m3/kg is defined over - and a deck that states it in mg/L sorbs a
+        thousandfold and empties the dissolved phase in minutes."""
         named = sorted(set(keywords) & _TWO_SITE)
         if named:
             raise SlotRefused(
