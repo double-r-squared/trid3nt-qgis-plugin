@@ -130,10 +130,10 @@ def test_the_coercion_asks_the_canvas_only_when_gated_live_and_empty(monkeypatch
 
     monkeypatch.setattr(draw_input, "gate_draw_input", _gate)
     monkeypatch.setattr(pipeline_emitter, "current_emitter", lambda: object())
-    coerce = point_arg("release", tool="telemac_river_dye", prompt="click")
+    coerce = point_arg("release", tool="telemac_dye_release", prompt="click")
     out = asyncio.run(coerce({"input_mode": "user_gated"}))
     assert out == {"release": Point(-114.31, 42.58, "point-1")}
-    assert asked == [("telemac_river_dye", "release")]
+    assert asked == [("telemac_dye_release", "release")]
     # a value on the wire is never second-guessed by a card
     asyncio.run(coerce({"release": [-1.0, 1.0], "input_mode": "user_gated"}))
     assert len(asked) == 1

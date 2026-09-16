@@ -28,6 +28,13 @@ _CODE = "OBSERVATION_INVALID"
 _FAHRENHEIT = ("degf", "f", "deg f", "fahrenheit")
 _CELSIUS = ("degc", "c", "deg c", "celsius", "")
 
+#: What a source calls the MOMENT it reported, and what it calls the thing that
+#: reported. A sample portal names a site; a gridded analysis names the reach it
+#: published for and the cycle it published at, and both are what a reader of
+#: the journal note needs to find the number again.
+_STAMP_FIELDS = ("result_date", "valid_time", "datetime", "date_time")
+_SITE_FIELDS = ("site_id", "station_id", "feature_id")
+
 
 @dataclass(frozen=True, slots=True)
 class Observation:
@@ -102,7 +109,7 @@ def _reading(props: Mapping[str, Any], field: str,
     direct = props.get(field)
     if direct is not None:
         try:
-            return (str(props.get("result_date") or "").strip() or None, float(direct))
+            return (_text(props, *_STAMP_FIELDS), float(direct))
         except (TypeError, ValueError):
             return None
     if series_field and props.get(series_field):
@@ -154,7 +161,7 @@ def observation(source: Any, *, near: Any = None, field: str = "value",
         value=float(value),
         units=str(to_units) if to_units is not None else (
             str(units) if units is not None else None),
-        site_id=_text(props, "site_id", "station_id"),
+        site_id=_text(props, *_SITE_FIELDS),
         site_name=_text(props, "site_name", "station_name"),
         sampled=sampled,
         distance_km=float(reported) if reported is not None else (

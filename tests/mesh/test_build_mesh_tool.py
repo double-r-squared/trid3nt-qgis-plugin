@@ -33,7 +33,7 @@ from trid3nt_server.workflows.mesh.tool import (
     tool,
 )
 from trid3nt_server.workflows.telemac.templates.do_sag.declarations import ACCEPTS as _DO_SAG
-from trid3nt_server.workflows.telemac.templates.river_dye.declarations import (
+from trid3nt_server.workflows.telemac.templates.dye_release.declarations import (
     ACCEPTS as _RIVER_DYE,
 )
 

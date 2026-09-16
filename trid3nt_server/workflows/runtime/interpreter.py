@@ -31,7 +31,7 @@ from trid3nt_server.gates.input_review import (
     resolve_input_gate_mode,
 )
 
-from .data import CoversAOI, DataDecl, Producer
+from .data import DOMAIN, CoversAOI, DataDecl, Producer
 from .domain import Domain, bind_domain, current_domain, domain_from_result, reset_domain
 from .errors import (
     SuppliedCoverageError,
@@ -292,7 +292,7 @@ async def _produce(env: _Env, decl: DataDecl) -> Any:
     A declared artifact nothing reads costs no fetch."""
     handed_in = env.supplied.get(decl.name)
     if handed_in is not None:
-        _validate_supplied(decl, handed_in, decl.supplied_validate)
+        _validate_supplied(env, decl, handed_in, decl.supplied_validate)
         return await _ingested(env, decl, handed_in)
     producer = decl.producer
     if producer is None and decl.role:
@@ -321,7 +321,8 @@ async def _produce(env: _Env, decl: DataDecl) -> Any:
             error_code="DATA_SLOT_UNSATISFIED", step=_data_step_label(decl.name),
         )
     if producer.supplied_uri:
-        _validate_supplied(decl, producer.supplied_uri, producer.supplied_validate)
+        _validate_supplied(env, decl, producer.supplied_uri,
+                           producer.supplied_validate)
         return await _ingested(env, decl, producer.supplied_uri)
     cached = env.ledger.replay_data(decl.name) if (env.ledger and env.resume) else None
     if cached is not None and await _artifacts_live(cached):
@@ -355,8 +356,16 @@ async def _ingested(env: _Env, decl: DataDecl, value: Any) -> Any:
     from trid3nt_server.inputs.slots import ingest_slot
 
     coercion = await _bind_value(dict(decl.coercion), env)
-    return await asyncio.to_thread(ingest_slot, decl.role, value,
-                                   label=decl.name, **coercion)
+    ingested = await asyncio.to_thread(ingest_slot, decl.role, value,
+                                       label=decl.name, **coercion)
+    if decl.role == DOMAIN and ingested is not None:
+        # THE DOMAIN a run solves over IS the run's domain from the moment its
+        # slot is filled: what a supplied artifact is checked against, and what
+        # a later fetch is bounded by. Nothing else has to acquire an AOI first.
+        bind_domain(Domain(bbox=tuple(ingested.bbox),
+                           geometry=dict(ingested.geometry),
+                           label=ingested.name))
+    return ingested
 
 
 async def _context(env: _Env, decl: DataDecl, label: str) -> Any:
@@ -432,7 +441,8 @@ async def _walk_ladder(env: _Env, producer: Producer,
         step=label)
 
 
-def _validate_supplied(decl: DataDecl, supplied: Any, validate: Any) -> None:
+def _validate_supplied(env: _Env, decl: DataDecl, supplied: Any,
+                      validate: Any) -> None:
     """Two checks and no third before a supplied artifact is adopted: the slot's
     declared SHAPE against the artifact's class, and - under ``CoversAOI`` - that a
     domain with an extent is bound. The artifact's own extent is never read."""
@@ -445,11 +455,19 @@ def _validate_supplied(decl: DataDecl, supplied: Any, validate: Any) -> None:
     if validate is not CoversAOI:
         return
     dom = current_domain()
-    if dom is None or dom.bbox is None:
-        raise SuppliedCoverageError(
-            f"the artifact supplied for {decl.name!r} cannot be checked against the "
-            "modelled domain: no domain is bound. Resolve the AOI before supplying one."
-        )
+    if dom is not None and dom.bbox is not None:
+        return
+    if any(row.role == DOMAIN for row in env.data.values()):
+        # A workflow that DECLARES a domain slot carries its own: the slot binds
+        # it the moment it is filled, and a row produced before that one - a
+        # structure the mesh subtracts, the box the water is cut out of - is
+        # adopted for the shape it declares. What must agree with the domain is
+        # checked where the two are used together.
+        return
+    raise SuppliedCoverageError(
+        f"the artifact supplied for {decl.name!r} cannot be checked against the "
+        "modelled domain: no domain is bound. Resolve the AOI before supplying one."
+    )
 
 
 async def _run_node(node: PlanNode, env: _Env, emitter: Any,
@@ -643,6 +661,11 @@ async def _deref(ref: Ref, env: _Env) -> Any:
     else:
         raise StepFailedError(f"Ref({ref.path!r}) resolves to nothing at run time.",
                               error_code="REF_UNRESOLVED")
+    if base is None and ref.root in env.data:
+        # A row that is WHOLLY ABSENT reads like a field that is present and
+        # empty. A context row whose source held nothing states nothing, and
+        # what reads it - a keyword, a composite - expands to nothing in turn.
+        return None
     read = ref.root
     for part in ref.tail:
         found = (base.get(part, _NO_FIELD) if isinstance(base, Mapping)

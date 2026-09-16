@@ -120,10 +120,10 @@ def test_the_generated_signature_is_the_declaration_plus_aliases_and_controls():
 def test_a_declared_param_the_wire_does_not_expose_stays_off_the_real_tool():
     from trid3nt_server.tools import TOOL_REGISTRY
 
-    wf = TOOL_REGISTRY["telemac_river_dye"].fn.workflow
+    wf = TOOL_REGISTRY["telemac_dye_release"].fn.workflow
     declared = {p.name for p in wf.params}
     constants = {p.name for p in wf.params if p.door == doors.CONSTANT}
-    wire = set(inspect.signature(TOOL_REGISTRY["telemac_river_dye"].fn).parameters)
+    wire = set(inspect.signature(TOOL_REGISTRY["telemac_dye_release"].fn).parameters)
     assert declared - constants <= wire
 
 
@@ -134,7 +134,7 @@ def test_constant_door_params_are_off_the_model_facing_wire_and_docstring():
     advertises; it lives its whole life on the ``ParamSheet``."""
     from trid3nt_server.tools import TOOL_REGISTRY
 
-    for name in ("telemac_do_sag", "telemac_river_dye"):
+    for name in ("telemac_do_sag", "telemac_dye_release"):
         fn = TOOL_REGISTRY[name].fn
         constants = {p.name for p in fn.workflow.params if p.door == doors.CONSTANT}
         assert constants, f"{name} declares no constants; the check is vacuous"
@@ -376,27 +376,13 @@ def test_a_mesh_recipe_is_frozen_all_the_way_down():
     assert mesh.ops[0].kwargs["gradation"] == 0.15
 
 
-# --- every TELEMAC template declares its mesh through the one tool ----------- #
-_TEMPLATES = (
-    ("artemis_harbor_agitation",
-     "trid3nt_server.workflows.telemac.templates.agitation.agitation", "om2d"),
-    ("telemac3d_stratified_flow",
-     "trid3nt_server.workflows.telemac.templates.stratified_flow"
-     ".stratified_flow", "om2d"),
-    ("telemac_rain_on_grid",
-     "trid3nt_server.workflows.telemac.templates.rain_on_grid.rain_on_grid", "om2d"),
-)
-
-#: Where a recipe is DECLARED: every template declares its own as a value, the
-#: river templates each restating the reach recipe.
+#: Where a recipe is DECLARED as a template's own value: only where the
+#: workflow's own recipe cannot ask the question - a catchment triangulated as a
+#: BAND, a harbour with a structure punched out of the water. Every other
+#: template takes the recipe the workflow builds from its slots.
 _RECIPES = (
-    *((path, mesher) for _n, path, mesher in _TEMPLATES),
-    ("trid3nt_server.workflows.telemac.templates.river_dye.river_dye", "om2d"),
-    ("trid3nt_server.workflows.telemac.templates.river_oil_spill.river_oil_spill", "om2d"),
-    ("trid3nt_server.workflows.telemac.templates.river_scour.river_scour", "om2d"),
-    ("trid3nt_server.workflows.telemac.templates.river_sediment_plume"
-     ".river_sediment_plume", "om2d"),
-    ("trid3nt_server.workflows.telemac.templates.do_sag.do_sag", "om2d"),
+    ("trid3nt_server.workflows.telemac.templates.agitation.agitation", "om2d"),
+    ("trid3nt_server.workflows.telemac.templates.rain_on_grid.rain_on_grid", "om2d"),
 )
 
 
@@ -416,16 +402,17 @@ def test_a_declared_mesh_is_a_frozen_recipe(module_path, mesher):
     assert mesh.mesher == mesher
 
 
-def test_the_reach_templates_carry_the_reach_shape_into_the_settle():
-    """The stretch reaches the run through the CHAIN that cut it, and the settle
-    reads the accepted mesh: the mesher is handed a polygon the chain measured,
-    while the reach the run was navigated for is the row that named it."""
-    module = _template("trid3nt_server.workflows.telemac.templates.river_dye.river_dye")
-    workflow = module.telemac_river_dye.workflow
+def test_the_owned_settle_reads_the_accepted_mesh_and_the_seated_lever():
+    """A template that lets the workflow own its stages states no settle at all:
+    the one the workflow seats is handed the ACCEPTED mesh and the granularity
+    lever, and knows a river from nothing."""
+    module = _template("trid3nt_server.workflows.telemac.templates.dye_release.dye_release")
+    workflow = module.telemac_dye_release.workflow
     settled = next(n for n in workflow.plan_decl(workflow)
                    if getattr(n, "name", "") == "settled")
+    assert settled.runner.endswith("assembler.settle_domain")
     assert settled.kwargs["mesh"] == Ref("mesh")
-    assert settled.kwargs["reach"] == Ref("reach")
+    assert "reach" not in settled.kwargs
     # A placeholder refuses ``==`` by design, so the read is named by its name.
     assert settled.kwargs["mesh_resolution_m"].name == "mesh_resolution_m"
 
@@ -443,11 +430,12 @@ def test_the_catchment_mesh_step_carries_the_whole_recipe():
     ask = mesh_step.kwargs["mesh"]
     assert ask["mesher"] == "om2d"
     assert set(ask) == {"mesher", "kind", "extent", "resolution_m", "ops"}
-    assert ask["extent"] == Ref("basin")
+    assert ask["extent"].path == "domain"
     names = [entry["op"] for entry in ask["ops"]]
     assert names[0] == "distance_sizing_from_line_function"
     assert "enforce_mesh_gradation" in names
-    # The catchment's one liquid boundary is DECLARED as an op, at the
-    # delineation's snapped outlet, exactly as the reach family declares its two.
+    # The catchment's one liquid boundary comes off the DOMAIN slot: the stretch
+    # of the divide its producer measured, typed rating_curve, or the run the
+    # user drew on a basin they supplied.
     roles = [entry for entry in ask["ops"] if entry["op"] == "set_boundary_roles"]
-    assert len(roles) == 1 and set(roles[0]["kwargs"]) == {"rating_curve"}
+    assert len(roles) == 1 and set(roles[0]["kwargs"]) == {"runs"}

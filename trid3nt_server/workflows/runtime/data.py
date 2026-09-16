@@ -16,6 +16,7 @@ from .temporal import TemporalSpec, spec_from
 
 __all__ = [
     "BED",
+    "EXTENT",
     "OBSERVATION",
     "RUNS",
     "CoversAOI",
@@ -43,6 +44,11 @@ RUNS = "runs"
 #: the three above are - somebody measured something somewhere at some time - and
 #: the value it yields is reachable as ``Ref("<row>.value")``.
 OBSERVATION = "observation"
+
+#: The RECTANGLE a question is asked inside: the window a domain is cut out of,
+#: the grid a raster engine solves on. Not a domain - it has no shoreline - so it
+#: is its own role, and the canvas offers a box for it.
+EXTENT = "extent"
 
 
 # A ROW NAMES ITS PRODUCER; RETRIEVAL NEVER PICKS ONE. What a run stands on is
@@ -430,6 +436,14 @@ class DataDecl(Row):
         return replace(row, role=OBSERVATION, coercion=MappingProxyType(
             {"near": near, "to_units": units, "measures": measures,
              "opens": opens, "field": value_field}))
+
+    def extent(self, producer: Producer | None = None) -> "DataDecl":
+        """THE EXTENT: one lon/lat rectangle, however the caller names it.
+
+        A box picked on the canvas, four numbers, a place or a layer's bounds all
+        read the same afterwards, as ``Ref("<row>.bbox")``."""
+        row = self if producer is None else self(producer)
+        return replace(row, role=EXTENT, geometry="rectangle")
 
     def bed(self, producer: Producer | None = None) -> "DataDecl":
         """THE BED: what every node of the domain carries for elevation.

@@ -75,11 +75,23 @@ class Domain:
         return (min(xs), min(ys), max(xs), max(ys))
 
     def as_feature_collection(self) -> dict[str, Any]:
-        """This domain as the one collection every geometry reader opens."""
+        """This domain as the one collection every geometry reader opens.
+
+        WHOLE: the polygon, the runs its producer measured and the companions it
+        wrote beside them, each under its own ``part``. A reader that keeps only
+        the polygon is what turns a recorded recipe into a domain with no edge
+        conditions, so the round trip back through ``domain`` is lossless."""
         return {"type": "FeatureCollection", "features": [
-            {"type": "Feature", "properties": {"role": "domain",
+            {"type": "Feature", "properties": {"role": "domain", "part": "domain",
                                                "name": self.name},
-             "geometry": dict(self.geometry)}]}
+             "geometry": dict(self.geometry)},
+            *({"type": "Feature",
+               "properties": {"part": run.type, "type": run.type,
+                              "name": run.name},
+               "geometry": run.face} for run in self.runs),
+            *({"type": "Feature", "properties": {"part": name},
+               "geometry": dict(geometry)}
+              for name, geometry in self.companions.items())]}
 
 
 def domain(value: Any, *, label: str = "domain",

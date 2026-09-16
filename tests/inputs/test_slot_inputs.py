@@ -18,7 +18,7 @@ from trid3nt_server.inputs.boundary import (
 from trid3nt_server.inputs.domain import domain, domain_ring
 from trid3nt_server.inputs.slots import DRAW_PURPOSES, ingest_slot
 from trid3nt_server.inputs.user_input import UserInputError
-from trid3nt_server.workflows.runtime.data import BED, DOMAIN, RUNS
+from trid3nt_server.workflows.runtime.data import BED, DOMAIN, EXTENT, RUNS
 
 _RING = [[-123.0, 45.0], [-122.9, 45.0], [-122.9, 45.1], [-123.0, 45.1]]
 
@@ -113,11 +113,23 @@ def test_each_slot_reads_through_the_ingestion_its_role_names():
     assert ingest_slot("", "x") == "x"
 
 
+def test_an_extent_slot_reads_a_box_however_the_caller_named_it():
+    """A rectangle drawn on the canvas arrives as four numbers, and what reads
+    the slot afterwards reads ``.bbox`` - never the form it came in."""
+    drawn = ingest_slot(EXTENT, (-71.55, 41.33, -71.44, 41.40))
+    stated = ingest_slot(EXTENT, {"bbox": [-71.55, 41.33, -71.44, 41.40],
+                                  "name": "the harbour window"})
+    assert drawn.bbox == stated.bbox == (-71.55, 41.33, -71.44, 41.40)
+    assert stated.name == "the harbour window"
+
+
 def test_only_the_slots_a_user_can_draw_are_offered_on_the_canvas():
     """A bed is a survey or a number, so there is nothing to draw for it."""
-    assert set(DRAW_PURPOSES) == {DOMAIN, RUNS}
+    assert set(DRAW_PURPOSES) == {DOMAIN, RUNS, EXTENT}
     assert DRAW_PURPOSES[DOMAIN][:2] == ("polygon", "domain")
     assert DRAW_PURPOSES[RUNS][:2] == ("polyline", "boundary run")
+    # a box rides the pick mode, which offers no vector tool to choose between
+    assert DRAW_PURPOSES[EXTENT][:2] == ("rectangle", "")
 
 
 def test_a_domain_producer_hands_over_the_runs_it_cut_the_polygon_between():

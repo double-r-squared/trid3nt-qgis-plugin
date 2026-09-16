@@ -8,14 +8,23 @@ over it, and nothing downstream branches on whether it was drawn or fetched.
 
 from __future__ import annotations
 
+import asyncio
+import inspect
 import logging
 from typing import Any, Callable, Mapping
 
-from trid3nt_server.workflows.runtime.data import BED, DOMAIN, OBSERVATION, RUNS
+from trid3nt_server.workflows.runtime.data import (
+    BED,
+    DOMAIN,
+    EXTENT,
+    OBSERVATION,
+    RUNS,
+)
 
 from .bed import bed
 from .boundary import boundary_runs
 from .domain import domain
+from .extent import extent
 from .observation import observation
 
 __all__ = ["DRAW_PURPOSES", "ask_on_canvas", "ingest_slot"]
@@ -29,6 +38,7 @@ _INGESTIONS: Mapping[str, Callable[..., Any]] = {
     BED: bed,
     RUNS: boundary_runs,
     OBSERVATION: observation,
+    EXTENT: extent,
 }
 
 #: What the canvas offers for a slot the user fills by hand: the draw kind, and
@@ -39,6 +49,8 @@ DRAW_PURPOSES: Mapping[str, tuple[str, str, str]] = {
              "Draw the outline of the water body this run solves over"),
     RUNS: ("polyline", "boundary run",
            "Draw each stretch of the edge that carries a boundary condition"),
+    EXTENT: ("rectangle", "",
+             "Draw the box this question is asked inside"),
 }
 
 
@@ -53,8 +65,13 @@ def ingest_slot(role: str, value: Any, *, label: str = "",
     read = _INGESTIONS.get(str(role))
     if read is None:
         return value
-    return read(value, label=label or str(role),
-                **{k: v for k, v in coercion.items() if v is not None})
+    found = read(value, label=label or str(role),
+                 **{k: v for k, v in coercion.items() if v is not None})
+    if inspect.isawaitable(found):
+        # This runs OFF the loop, so an ingestion that reaches a service - a
+        # place name to geocode - gets a loop of its own in this thread.
+        return asyncio.run(found)
+    return found
 
 
 async def ask_on_canvas(role: str, *, tool: str, param: str,

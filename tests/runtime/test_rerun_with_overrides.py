@@ -49,16 +49,15 @@ def test_the_cut_is_the_first_node_the_override_reaches():
 
     cut, keep = reuse_plan(wf.plan, wf.data, ("k1_per_day",))
     assert labels[cut] == "sheet"
-    # the mid-reach seed, the National Water Model discharge, the MESH itself
-    # and the settled reach are all upstream of the fill, so a rate override
-    # inherits them
-    assert labels[:cut] == ["reach", "seed", "carrier_discharge", "mesh",
-                            "measure_mesh_coverage", "outfall", "settled"]
-    # the whole domain CHAIN is upstream of the physics too - the navigated
-    # mainstem, its ends, the mapped water, the reach cut between them and the
-    # terrain the mesh's bed is painted from
-    assert keep == frozenset({"rivers", "centerline", "ends", "window", "water",
-                              "mapped_water", "reach_polygon", "dem"})
+    # the MESH itself, the open-channel hydraulics measured on it, the outfall
+    # placed on it and the settled domain are all upstream of the fill, so a
+    # rate override inherits them
+    assert labels[:cut] == ["mesh", "channel", "outfall", "settled"]
+    # so is every DATA row the world is read through - the domain the reach
+    # producer cut, the published survey, the terrain under it, the bed the two
+    # merge into and the carrier flow the inflow prescribes
+    assert keep == frozenset({"domain", "survey", "surveyed_bed", "terrain",
+                              "bed", "carrier"})
 
 
 def test_a_mesh_override_cuts_earlier_than_a_physics_one():

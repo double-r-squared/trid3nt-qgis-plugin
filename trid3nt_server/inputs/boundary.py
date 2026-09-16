@@ -77,8 +77,14 @@ def boundary_runs(value: Any, *, label: str = "boundary runs",
         return boundary_runs(declared, label=label, code=code)
     if isinstance(value, Mapping):
         if value.get("type") == "FeatureCollection":
+            # A run is a stretch of the EDGE. A domain's own collection carries
+            # its polygon and the companions its producer measured beside the
+            # runs, and neither a polygon nor a named centerline is a stretch of
+            # an edge - so a row is a run when it is a line the producer either
+            # named by a run type or did not name at all.
             return tuple(_row(f, label, code)
-                         for f in (value.get("features") or ()))
+                         for f in (value.get("features") or ())
+                         if _is_run(f))
         runs = value.get("runs")
         if runs is not None:
             return boundary_runs(runs, label=label, code=code)
@@ -102,6 +108,19 @@ def roles_from_runs(runs: Iterable[BoundaryRun]) -> dict[str, list[dict[str, Any
             continue
         roles.setdefault(run.type, []).append(run.face)
     return roles
+
+
+def _is_run(feature: Any) -> bool:
+    """Whether a feature is a stretch of the domain's edge rather than a
+    companion its producer wrote beside them."""
+    if not isinstance(feature, Mapping):
+        return True
+    geometry = feature.get("geometry") or {}
+    if str(geometry.get("type") or "") not in ("LineString", "MultiLineString"):
+        return False
+    properties = dict(feature.get("properties") or {})
+    named = str(properties.get("type") or properties.get("part") or "").strip()
+    return named in RUN_TYPES or not named
 
 
 def _row(value: Any, label: str, code: str) -> BoundaryRun:

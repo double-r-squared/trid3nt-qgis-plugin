@@ -117,6 +117,37 @@ def test_a_context_rows_absence_continues_the_run_and_says_so(monkeypatch):
         "no sample near this domain; the stated value stands (WQP_NO_SITES)"]
 
 
+def test_a_tail_read_off_a_wholly_absent_row_is_nothing(monkeypatch):
+    """A row that is absent reads like a field that is present and empty. What
+    a context row EXISTS for is that the run continues, so the keyword reading
+    it states nothing rather than refusing on a field nobody wrote."""
+    from trid3nt_server.workflows.runtime import interpreter
+
+    class DATA:
+        sample = Data(tool("fetch_usgs_water_quality")).context()
+
+    async def _empty(env, producer, label):
+        raise RuntimeError("WQP_NO_SITES")
+
+    monkeypatch.setattr(interpreter, "_walk_ladder", _empty)
+    rows = {row.name: row for row in data_rows(DATA)}
+    env = interpreter._Env(params=None, data=rows, results={})
+    assert asyncio.run(interpreter._deref(Ref("sample.value"), env)) is None
+    # a field the row HAS but does not carry still refuses by name
+    env = interpreter._Env(params=None, data=rows, results={},
+                           artifacts={"sample": {"value": 3.0}})
+    with pytest.raises(Exception, match="REF_FIELD_MISSING|reads 'units'"):
+        asyncio.run(interpreter._deref(Ref("sample.units"), env))
+
+
+def test_the_sheet_reads_a_wholly_absent_row_as_nothing():
+    """Same rule where the keywords are set: an absent row states nothing, and
+    the composite reading it expands to no keyword at all."""
+    from trid3nt_server.workflows.telemac.modules.sheet import _read
+
+    assert _read(Ref("sample.value"), {"sample": None}, {}) is None
+
+
 def test_a_hard_producer_row_still_refuses_when_its_source_is_empty(monkeypatch):
     from trid3nt_server.workflows.runtime import interpreter
 

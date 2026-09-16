@@ -293,7 +293,7 @@ async def test_auto_mode_builds_inline_with_no_gate(tmp_path, monkeypatch):
     monkeypatch.setattr(pe, "current_emitter", lambda: fake)
 
     art = await mesh_gate.gate_mesh_build(
-        _session(tmp_path), tool_name="telemac_river_dye", input_mode="auto")
+        _session(tmp_path), tool_name="telemac_dye_release", input_mode="auto")
 
     assert isinstance(art, MeshArtifact)
     assert fake.sent == []
@@ -306,7 +306,7 @@ async def test_user_gated_with_no_session_builds_inline(tmp_path, monkeypatch):
     monkeypatch.setattr(pe, "current_emitter", lambda: None)
 
     art = await mesh_gate.gate_mesh_build(
-        _session(tmp_path), tool_name="telemac_river_dye",
+        _session(tmp_path), tool_name="telemac_dye_release",
         input_mode="user_gated")
 
     assert isinstance(art, MeshArtifact)
@@ -321,7 +321,7 @@ async def test_session_lever_turns_the_gate_on(tmp_path, monkeypatch):
     driver = asyncio.create_task(_drive([("proceed", None)]))
 
     art = await mesh_gate.gate_mesh_build(
-        _session(tmp_path), tool_name="telemac_river_dye", input_mode=None)
+        _session(tmp_path), tool_name="telemac_dye_release", input_mode=None)
 
     await driver
     assert isinstance(art, MeshArtifact)
@@ -335,7 +335,7 @@ async def test_gate_presents_probes_then_accepts(tmp_path, monkeypatch):
     driver = asyncio.create_task(_drive([("proceed", None)]))
 
     art = await mesh_gate.gate_mesh_build(
-        _session(tmp_path), tool_name="telemac_river_dye",
+        _session(tmp_path), tool_name="telemac_dye_release",
         input_mode="user_gated")
 
     await driver
@@ -358,7 +358,7 @@ async def test_gate_cancel_refuses_the_run(tmp_path, monkeypatch):
 
     with pytest.raises(MeshToolError) as excinfo:
         await mesh_gate.gate_mesh_build(
-            _session(tmp_path), tool_name="telemac_river_dye",
+            _session(tmp_path), tool_name="telemac_dye_release",
             input_mode="user_gated")
 
     await driver
@@ -379,7 +379,7 @@ async def test_gate_reset_puts_the_recipe_back_to_the_declaration(
     ]))
 
     art = await mesh_gate.gate_mesh_build(
-        session, tool_name="telemac_river_dye", input_mode="user_gated")
+        session, tool_name="telemac_dye_release", input_mode="user_gated")
 
     await driver
     assert session.recipe == session.declared
@@ -394,7 +394,7 @@ async def test_gate_refuses_a_revision_it_cannot_read(tmp_path, monkeypatch):
 
     with pytest.raises(MeshToolError) as excinfo:
         await mesh_gate.gate_mesh_build(
-            _session(tmp_path), tool_name="telemac_river_dye",
+            _session(tmp_path), tool_name="telemac_dye_release",
             input_mode="user_gated")
 
     await driver
@@ -410,7 +410,7 @@ async def test_gate_stops_asking_after_its_rounds(tmp_path, monkeypatch):
 
     with pytest.raises(MeshToolError) as excinfo:
         await mesh_gate.gate_mesh_build(
-            _session(tmp_path), tool_name="telemac_river_dye",
+            _session(tmp_path), tool_name="telemac_dye_release",
             input_mode="user_gated", max_rounds=2)
 
     await driver
@@ -493,7 +493,7 @@ async def test_the_one_size_word_is_the_row_a_card_can_move(tmp_path, monkeypatc
     ]))
 
     art = await mesh_gate.gate_mesh_build(
-        session, tool_name="telemac_river_dye", input_mode="user_gated")
+        session, tool_name="telemac_dye_release", input_mode="user_gated")
 
     await driver
     assert session.recipe.resolution_m == 900.0
@@ -522,7 +522,7 @@ async def test_the_revert_row_answers_yes_the_way_the_card_sends_it(
     ]))
 
     await mesh_gate.gate_mesh_build(
-        session, tool_name="telemac_river_dye", input_mode="user_gated")
+        session, tool_name="telemac_dye_release", input_mode="user_gated")
 
     await driver
     assert session.recipe.resolution_m == 400.0
@@ -546,7 +546,7 @@ async def test_the_shipped_client_parses_the_card_and_its_reply_routes_home(
     session = _session(tmp_path)
     driver = asyncio.create_task(_drive([("proceed", None)]))
     await mesh_gate.gate_mesh_build(
-        session, tool_name="telemac_river_dye", input_mode="user_gated")
+        session, tool_name="telemac_dye_release", input_mode="user_gated")
     await driver
 
     _mtype, envelope = fake.sent[0]

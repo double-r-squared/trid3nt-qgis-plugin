@@ -40,6 +40,13 @@ def jsonable(value: Any) -> Any:
         return value
     if isinstance(value, MeshOp):
         return {"op": value.fn, **{k: jsonable(v) for k, v in value.kwargs.items()}}
+    from trid3nt_server.inputs.bed import Bed
+
+    if isinstance(value, Bed):
+        # A BED records as what it IS - the address of the surface it was read
+        # from, or the depth it states. The slot's own wrapper says which shape
+        # the value arrived in, which a replay re-reads for itself.
+        return jsonable(value.source if value.source is not None else value.depth_m)
     collection = getattr(value, "as_feature_collection", None)
     if callable(collection):
         # A typed SLOT value records as the geometry it is: the recipe has to
