@@ -60,6 +60,17 @@ class BoundaryRun:
                 "coordinates": [[self.start.lon, self.start.lat],
                                 [self.end.lon, self.end.lat]]}
 
+    @property
+    def feature(self) -> dict[str, Any]:
+        """This run as the FEATURE it is written down as, which reads back here.
+
+        The recorded shape and the ingested one are the same shape, so a run
+        recorded in a mesh recipe or on a domain's collection replays as itself."""
+        return {"type": "Feature",
+                "properties": {"part": self.type, "type": self.type,
+                               "name": self.name},
+                "geometry": self.face}
+
 
 def boundary_runs(value: Any, *, label: str = "boundary runs",
                   code: str = _CODE) -> tuple[BoundaryRun, ...]:

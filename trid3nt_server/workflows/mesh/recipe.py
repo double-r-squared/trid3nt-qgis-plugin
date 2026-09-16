@@ -47,6 +47,12 @@ def jsonable(value: Any) -> Any:
         # from, or the depth it states. The slot's own wrapper says which shape
         # the value arrived in, which a replay re-reads for itself.
         return jsonable(value.source if value.source is not None else value.depth_m)
+    from trid3nt_server.inputs.boundary import BoundaryRun
+
+    if isinstance(value, BoundaryRun):
+        # A RUN records as the feature it is written down as, which is the shape
+        # the ingestion reads back, so a replay rebuilds the same stretch of edge.
+        return value.feature
     collection = getattr(value, "as_feature_collection", None)
     if callable(collection):
         # A typed SLOT value records as the geometry it is: the recipe has to
