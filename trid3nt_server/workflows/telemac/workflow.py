@@ -282,7 +282,7 @@ class Door:
         level = (slots.get(LEVEL) or [""])[0]
         # THE OPEN-CHANNEL ADDITION, listed only where this question's rows carry
         # what a channel is: a discharge for its inflow run. Everything else is a
-        # hole with water in it, and the base settles that on its own.
+        # body of water the base settles on its own.
         channel = (
             (Step(runner=f"{_TELEMAC}.authoring.assembler.settle_open_channel",
                   stage="author",

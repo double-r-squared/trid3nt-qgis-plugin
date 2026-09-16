@@ -964,7 +964,7 @@ async def settle_domain(
     was handed, the clock the run turns on, the files the box is given, and the
     WATER - the level it stands at and the depth that leaves over every node.
 
-    A hole with water in it: the level is stated or somebody measured it, the
+    Any body of water: the level is stated or somebody measured it, the
     depth is that level minus the bed, the edge is wall all round and the surface
     opens flat. Nothing here knows a reach from a lake. What a question ADDS on
     top - an inflow's normal depth, an outlet rating curve - is its own step,
@@ -1044,7 +1044,7 @@ _NO_WATER: dict[str, Any] = {
 }
 
 #: What the engine is told to lay: a flat surface at the level, or a sheet of one
-#: depth following the bed. Flat is what any hole of water does; bed-parallel is
+#: depth following the bed. Flat is what any body of water does; bed-parallel is
 #: what a reach that FALLS holds, and only its own addition measures that.
 FLAT = "CONSTANT ELEVATION"
 BED_PARALLEL = "CONSTANT DEPTH"
