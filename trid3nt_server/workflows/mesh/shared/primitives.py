@@ -113,8 +113,10 @@ def _node_shares(source: Any, lonlat: Any) -> tuple[float, float] | None:
     uri = str(getattr(getattr(slot, "source", None), "provenance_uri", "") or "")
     if not uri:
         return None
-    won = np.asarray(sample_raster_at_nodes(uri, lonlat, interp="nearest",
-                                            fill_holes=False))
+    # STAGED the way every other raster this op reads is: the sidecar lives in
+    # the object store, and a sampler handed its address reads it as a public URL.
+    won = np.asarray(sample_raster_at_nodes(str(op_raster(uri)), lonlat,
+                                            interp="nearest", fill_holes=False))
     total = float(won.size) or 1.0
     return (float((won == 0).sum()) / total, float((won == 1).sum()) / total)
 
