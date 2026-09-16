@@ -6,7 +6,7 @@ NUTRIENT ENRICHMENT in a body of water: algal growth, nutrient drawdown and the 
 
 |  |  |
 |---|---|
-| module | `telemac2d` - 376 keywords in its dictionary, of which this template states 25 |
+| module | `telemac2d` - 376 keywords in its dictionary, of which this template states 26 |
 | solves | `trid3nt_server.workflows.telemac.engine.solve_case` |
 | engine defaults | every keyword this template does not state keeps the engine's own default; `describe_keywords` names it with that default, and `keywords={...}` sets it |
 
@@ -16,13 +16,13 @@ NUTRIENT ENRICHMENT in a body of water: algal growth, nutrient drawdown and the 
 |---|---|---|---|
 | `domain` | `fetch_river_reach` | Build a RIVER REACH DOMAIN from one seed point -> the reach polygon, its inflow and outflow boundary runs, and the centerline. | - |
 | `runs` | supplied by the caller | the stretches of the domain's edge that carry a boundary condition - each two points on the edge and a type (inflow, outflow, open); a closed body states none | - |
+| `line` | supplied by the caller | a polyline layer you supply, as a uri or a layer name; required - the template names no source for it. | - |
 | `survey` | `fetch_ehydro_surveys` | Fetch USACE eHydro CHANNEL SURVEY soundings + the survey footprint for a bbox -> the measured bed. | - |
-| `surveyed_bed` | `derive_survey_surface` | Interpolate a POINT layer of measurements onto a raster surface -> a continuous grid. | - |
-| `terrain` | `fetch_copernicus_dem` | Internal seam -- NOT a model-facing tool (tier="internal"). | EGM2008 geoid (metres, positive up) |
-| `bed` | `derive_merge_rasters` | MERGE two overlapping surfaces into one, the PRIMARY winning where it measured. | - |
+| `terrain` | `fetch_dem` | Fetch a digital elevation model (DEM) / terrain elevation for a bounding box (USGS 3DEP US lidar; on a 3DEP outage the default path STOPS and asks before any Copernicus GLO-30 swap; either source pinnable). | NAVD88 (metres, positive up) |
+| `bed` | `derive_survey_surface` | Interpolate a POINT layer of measurements onto a raster surface -> a continuous grid. | - |
 | `carrier` | `fetch_noaa_nwm_streamflow` | Fetch NOAA National Water Model streamflow as a point FlatGeobuf. | - |
 | `water_temperature` | `fetch_usgs_water_quality` | Fetch REAL, OBSERVED water-quality sample sites as a point FlatGeobuf. | - |
-| `stage` | supplied by the caller | a water-surface elevation this run opens on: a layer of sites that report it, or the number itself in m. | - |
+| `stage` | supplied by the caller | a layer you supply, as a uri or a layer name; absent is legal and the run reports it. | - |
 
 ## The sheet
 
@@ -54,73 +54,71 @@ The values the template declares. `desc` is what the model reads when it fills o
 
 | field | the proving run's value |
 |---|---|
-| `phyto_max_ug_l` | 2.0218540807656553 |
-| `phyto_max_distance_m` | 844.9147639906623 |
-| `phyto_growth_ratio` | 1.0109270403828277 |
-| `no3_remaining_ratio` | 1.0 |
-| `po4_remaining_ratio` | 0.9987961295423312 |
-| `do_min_mgl` | 8.619856902108166 |
-| `do_min_distance_m` | 828.8211494384593 |
+| `phyto_max_ug_l` | 1.9957708809879515 |
+| `phyto_max_distance_m` | 7490.067773293982 |
+| `phyto_growth_ratio` | 0.9978854404939758 |
+| `no3_remaining_ratio` | 1.0007651560421205 |
+| `po4_remaining_ratio` | 0.9998920767679583 |
+| `do_min_mgl` | 8.56004334142457 |
+| `do_min_distance_m` | 5950.0538385980235 |
 | `do_below_standard` | False |
-| `pass_velocity_mps` | 0.5902704316965222 |
-| `mesh_size_m` | 9.323 |
+| `pass_velocity_mps` | 0.010262294590028993 |
+| `mesh_size_m` | 11.711 |
 
 It publishes these layers onto the canvas:
 
-- Input: OSM waterways (map context; the modeled river is the NLDI centerline) (river_geometry)
-- Input: nhdplus nldi (nhdplus_nldi)
-- Input: nhd area water (nhd_area_water)
-- Input: river bed elevation (copernicus_dem, datum EGM2008 geoid (metres, positive up))
-- Input: observed water temperature (usgs_water_quality)
-- Velocity u over time (scotia_humboldt_county_california_95562_united_s)
-- Velocity v over time (scotia_humboldt_county_california_95562_united_s)
-- Water depth over time (scotia_humboldt_county_california_95562_united_s)
-- Free surface over time (scotia_humboldt_county_california_95562_united_s)
-- Bottom (m) at t = 3586.8 s (scotia_humboldt_county_california_95562_united_s)
-- Froude number over time (scotia_humboldt_county_california_95562_united_s)
-- Scalar flowrate over time (scotia_humboldt_county_california_95562_united_s)
-- Scalar velocity over time (scotia_humboldt_county_california_95562_united_s)
-- Phyto biomass over time (scotia_humboldt_county_california_95562_united_s)
-- Dissolved po4 over time (scotia_humboldt_county_california_95562_united_s)
-- Por non assimil over time (scotia_humboldt_county_california_95562_united_s)
-- Dissolved no3 over time (scotia_humboldt_county_california_95562_united_s)
-- Nor non assim over time (scotia_humboldt_county_california_95562_united_s)
-- Nh4 load over time (scotia_humboldt_county_california_95562_united_s)
-- Organic load over time (scotia_humboldt_county_california_95562_united_s)
-- Dissolved o2 over time (scotia_humboldt_county_california_95562_united_s)
-- scotia_humboldt_county_california_95562_united_s
+- Input: river reach (river_reach)
+- Input: channel survey soundings (ehydro_surveys)
+- Input: bed elevation (dem, 3DEP 1-10 m US lidar (default 10 m); Copernicus GLO-30 30 m global via source=copernicus, datum NAVD88 (metres, positive up))
+- Velocity u over time (river_reach_domain_mesh)
+- Velocity v over time (river_reach_domain_mesh)
+- Water depth over time (river_reach_domain_mesh)
+- Free surface over time (river_reach_domain_mesh)
+- Bottom (m) at t = 7149.2 s (river_reach_domain_mesh)
+- Froude number over time (river_reach_domain_mesh)
+- Scalar flowrate over time (river_reach_domain_mesh)
+- Scalar velocity over time (river_reach_domain_mesh)
+- Phyto biomass over time (river_reach_domain_mesh)
+- Dissolved po4 over time (river_reach_domain_mesh)
+- Por non assimil over time (river_reach_domain_mesh)
+- Dissolved no3 over time (river_reach_domain_mesh)
+- Nor non assim over time (river_reach_domain_mesh)
+- Nh4 load over time (river_reach_domain_mesh)
+- Organic load over time (river_reach_domain_mesh)
+- Dissolved o2 over time (river_reach_domain_mesh)
+- river_reach_domain_mesh
 
 ## The proving run
 
-Run `01M2HSYSR2VP81VWZ2108E64CD`, 2026-09-15T05:52:34.584626+00:00, 39.942 s, at commit `ad80fc708f8e79070559d6e31e57162ed83008e2`.
+Run `01M2MH8TPG9X84GBZD5BKQGKSY`, 2026-09-16T07:18:58.622443+00:00, 71.051 s, at commit `b6f42e9ea904813979399e818be14b8858a511d7-dirty`.
 
-![The solve, frame by frame - cation_animation_biomass (run 01M2HSYSR2VP81VWZ2108E64CD)](telemac_eutrophication/telemac_river_eutrophication_animation_biomass.gif)
+![Every layer the run published, stacked and framed on the result (run 01M2MH8TPG9X84GBZD5BKQGKSY)](telemac_eutrophication/telemac_eutrophication.png)
 
-*The solve, frame by frame - cation_animation_biomass (run 01M2HSYSR2VP81VWZ2108E64CD)*
+*Every layer the run published, stacked and framed on the result (run 01M2MH8TPG9X84GBZD5BKQGKSY)*
 
-![The solve, frame by frame - cation_animation_oxygen (run 01M2HSYSR2VP81VWZ2108E64CD)](telemac_eutrophication/telemac_river_eutrophication_animation_oxygen.gif)
+![The solve, frame by frame - biomass (run 01M2MH8TPG9X84GBZD5BKQGKSY)](telemac_eutrophication/telemac_eutrophication_animation_biomass.gif)
 
-*The solve, frame by frame - cation_animation_oxygen (run 01M2HSYSR2VP81VWZ2108E64CD)*
+*The solve, frame by frame - biomass (run 01M2MH8TPG9X84GBZD5BKQGKSY)*
 
-![cation biomass final frame (run 01M2HSYSR2VP81VWZ2108E64CD)](telemac_eutrophication/telemac_river_eutrophication_biomass_final_frame.png)
+![The solve, frame by frame - oxygen (run 01M2MH8TPG9X84GBZD5BKQGKSY)](telemac_eutrophication/telemac_eutrophication_animation_oxygen.gif)
 
-*cation biomass final frame (run 01M2HSYSR2VP81VWZ2108E64CD)*
+*The solve, frame by frame - oxygen (run 01M2MH8TPG9X84GBZD5BKQGKSY)*
 
-![cation oxygen final frame (run 01M2HSYSR2VP81VWZ2108E64CD)](telemac_eutrophication/telemac_river_eutrophication_oxygen_final_frame.png)
+![biomass final frame (run 01M2MH8TPG9X84GBZD5BKQGKSY)](telemac_eutrophication/telemac_eutrophication_biomass_final_frame.png)
 
-*cation oxygen final frame (run 01M2HSYSR2VP81VWZ2108E64CD)*
+*biomass final frame (run 01M2MH8TPG9X84GBZD5BKQGKSY)*
 
-![dissolved o2 - the chart the run persisted (run 01M2HSYSR2VP81VWZ2108E64CD)](telemac_eutrophication/telemac_river_eutrophication_chart_dissolved_o2.png)
+![oxygen final frame (run 01M2MH8TPG9X84GBZD5BKQGKSY)](telemac_eutrophication/telemac_eutrophication_oxygen_final_frame.png)
 
-*dissolved o2 - the chart the run persisted (run 01M2HSYSR2VP81VWZ2108E64CD)*
+*oxygen final frame (run 01M2MH8TPG9X84GBZD5BKQGKSY)*
 
-![phyto biomass - the chart the run persisted (run 01M2HSYSR2VP81VWZ2108E64CD)](telemac_eutrophication/telemac_river_eutrophication_chart_phyto_biomass.png)
+![dissolved o2 - the chart the run persisted (run 01M2MH8TPG9X84GBZD5BKQGKSY)](telemac_eutrophication/telemac_eutrophication_chart_dissolved_o2.png)
 
-*phyto biomass - the chart the run persisted (run 01M2HSYSR2VP81VWZ2108E64CD)*
+*dissolved o2 - the chart the run persisted (run 01M2MH8TPG9X84GBZD5BKQGKSY)*
 
-![cation (run 01M2HSYSR2VP81VWZ2108E64CD)](telemac_eutrophication/telemac_river_eutrophication.png)
+![phyto biomass - the chart the run persisted (run 01M2MH8TPG9X84GBZD5BKQGKSY)](telemac_eutrophication/telemac_eutrophication_chart_phyto_biomass.png)
 
-*cation (run 01M2HSYSR2VP81VWZ2108E64CD)*
+*phyto biomass - the chart the run persisted (run 01M2MH8TPG9X84GBZD5BKQGKSY)*
 
 ### The sheet it filled
 
@@ -128,14 +126,10 @@ Every slot the run resolved, with where the value came from. The engine's own de
 
 | param | value | units | basis | provenance |
 |---|---|---|---|---|
-| `location` | Eel River near Scotia, California | - | user | supplied on this invocation |
-| `discharge_m3s` | 60.0 | m^3/s | user | supplied on this invocation |
-| `output_interval_min` | 0.333 | min | user | supplied on this invocation |
-| `station` | Point(lon=-124.0983, lat=40.4921, name=None) | - | user | supplied on this invocation |
-| `reach_length_km` | 0.5 | km | user | supplied on this invocation |
-| `sim_duration_s` | 3600.0 | s | user | supplied on this invocation |
-| `mesh_resolution_m` | 12.0 | m | user | supplied on this invocation |
-| `compute_class` | medium | - | default_demo | declared constant default |
+| `seed` | Point(lon=-122.6691667, lat=45.5175, name=None) | - | user | supplied on this invocation |
+| `station` | Point(lon=-122.669784, lat=45.518485, name=None) | - | user | supplied on this invocation |
+| `sim_duration_s` | 7200.0 | s | user | supplied on this invocation |
+| `mesh_resolution_m` | 40.0 | m | user | supplied on this invocation |
 | `initial_phyto_ug_l` | 2.0 | ug/L | default_demo | declared scenario default |
 | `initial_po4_mgl` | 0.05 | mg/L | default_demo | declared scenario default |
 | `initial_por_mgl` | 0.02 | mg/L | default_demo | declared scenario default |
@@ -146,14 +140,11 @@ Every slot the run resolved, with where the value came from. The engine's own de
 | `water_temp_c` | 22.0 | C | default_demo | declared scenario default |
 | `sunshine_w_m2` | 100.0 | W/m^2 | default_demo | declared scenario default |
 | `do_standard_mgl` | 5.0 | mg/L | default_demo | declared scenario default |
+| `compute_class` | medium | - | default_demo | declared constant default |
 | `do_saturation_mgl` | 8.667 | mg/L | derived | derived by trid3nt_server.workflows.telemac.helpers.water_quality.do_saturation_mgl |
 | `initial_do_mgl` | 8.667 | mg/L | derived | derived by trid3nt_server.workflows.telemac.helpers.water_quality.upstream_do_mgl |
-| `bbox` | - | - | user | not supplied (declared optional) |
-| `river_geometry_uri` | - | - | user | not supplied (declared optional) |
-| `event_time` | - | - | prompt_interpreted | not supplied (declared optional) |
-| `friction_coefficient` | - | - | user | not supplied (declared optional) |
-| `friction_law` | - | - | user | not supplied (declared optional) |
 | `secchi_depth_m` | - | m | user | not supplied (declared optional) |
+| `event_time` | - | - | prompt_interpreted | not supplied (declared optional) |
 
 ### Reproduce
 
@@ -161,15 +152,12 @@ Every slot the run resolved, with where the value came from. The engine's own de
 from trid3nt_server.tools import TOOL_REGISTRY
 
 await TOOL_REGISTRY['telemac_eutrophication'].fn(
-    discharge_m3s=60.0,
-    location='Eel River near Scotia, California',
-    mesh_resolution_m=12.0,
-    output_interval_min=0.333,
-    reach_length_km=0.5,
-    sim_duration_s=3600.0,
-    station='Point(lon=-124.0983, lat=40.4921, name=None)',
+    mesh_resolution_m=40.0,
+    seed='Point(lon=-122.6691667, lat=45.5175, name=None)',
+    sim_duration_s=7200.0,
+    station='Point(lon=-122.669784, lat=45.518485, name=None)',
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2HSYSR2VP81VWZ2108E64CD` and commit `ad80fc708f8e79070559d6e31e57162ed83008e2`. The full argument record is [`telemac_eutrophication/run.json`](telemac_eutrophication/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2MH8TPG9X84GBZD5BKQGKSY` and commit `b6f42e9ea904813979399e818be14b8858a511d7-dirty`. The full argument record is [`telemac_eutrophication/run.json`](telemac_eutrophication/run.json).
 

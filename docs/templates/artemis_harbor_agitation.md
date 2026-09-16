@@ -62,19 +62,19 @@ It publishes these layers onto the canvas:
 
 ## The proving run
 
-Run `01M2M9ZPWZGZG1QKDDQ68EFE4S`, 2026-09-16T05:10:58.045813+00:00, 20.869 s, at commit `f261dca1458988817e7433530a9a7e0e755c3960-dirty`.
+Run `01M2MKMSH109K03P0P2M39GTXK`, 2026-09-16T07:59:46.575320+00:00, 21.403 s, at commit `b6f42e9ea904813979399e818be14b8858a511d7-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M2M9ZPWZGZG1QKDDQ68EFE4S)](artemis_harbor_agitation/artemis_harbor_agitation.png)
+![Every layer the run published, stacked and framed on the result (run 01M2MKMSH109K03P0P2M39GTXK)](artemis_harbor_agitation/artemis_harbor_agitation.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M2M9ZPWZGZG1QKDDQ68EFE4S)*
+*Every layer the run published, stacked and framed on the result (run 01M2MKMSH109K03P0P2M39GTXK)*
 
-![peak frame (run 01M2M9ZPWZGZG1QKDDQ68EFE4S)](artemis_harbor_agitation/artemis_harbor_agitation_peak_frame.png)
+![peak frame (run 01M2MKMSH109K03P0P2M39GTXK)](artemis_harbor_agitation/artemis_harbor_agitation_peak_frame.png)
 
-*peak frame (run 01M2M9ZPWZGZG1QKDDQ68EFE4S)*
+*peak frame (run 01M2MKMSH109K03P0P2M39GTXK)*
 
-![agitation coefficient - the chart the run persisted (run 01M2M9ZPWZGZG1QKDDQ68EFE4S)](artemis_harbor_agitation/artemis_harbor_agitation_chart_agitation_coefficient.png)
+![agitation coefficient - the chart the run persisted (run 01M2MKMSH109K03P0P2M39GTXK)](artemis_harbor_agitation/artemis_harbor_agitation_chart_agitation_coefficient.png)
 
-*agitation coefficient - the chart the run persisted (run 01M2M9ZPWZGZG1QKDDQ68EFE4S)*
+*agitation coefficient - the chart the run persisted (run 01M2MKMSH109K03P0P2M39GTXK)*
 
 ### The sheet it filled
 
@@ -108,5 +108,5 @@ await TOOL_REGISTRY['artemis_harbor_agitation'].fn(
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2M9ZPWZGZG1QKDDQ68EFE4S` and commit `f261dca1458988817e7433530a9a7e0e755c3960-dirty`. The full argument record is [`artemis_harbor_agitation/run.json`](artemis_harbor_agitation/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2MKMSH109K03P0P2M39GTXK` and commit `b6f42e9ea904813979399e818be14b8858a511d7-dirty`. The full argument record is [`artemis_harbor_agitation/run.json`](artemis_harbor_agitation/run.json).
 

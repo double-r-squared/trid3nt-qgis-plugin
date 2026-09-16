@@ -6,7 +6,7 @@ DISSOLVED-OXYGEN SAG below a discharge (US TMDL / permit question).
 
 |  |  |
 |---|---|
-| module | `telemac2d` - 376 keywords in its dictionary, of which this template states 28 |
+| module | `telemac2d` - 376 keywords in its dictionary, of which this template states 29 |
 | solves | `trid3nt_server.workflows.telemac.engine.solve_case` |
 | engine defaults | every keyword this template does not state keeps the engine's own default; `describe_keywords` names it with that default, and `keywords={...}` sets it |
 
@@ -16,12 +16,12 @@ DISSOLVED-OXYGEN SAG below a discharge (US TMDL / permit question).
 |---|---|---|---|
 | `domain` | `fetch_river_reach` | Build a RIVER REACH DOMAIN from one seed point -> the reach polygon, its inflow and outflow boundary runs, and the centerline. | - |
 | `runs` | supplied by the caller | the stretches of the domain's edge that carry a boundary condition - each two points on the edge and a type (inflow, outflow, open); a closed body states none | - |
+| `line` | supplied by the caller | a polyline layer you supply, as a uri or a layer name; required - the template names no source for it. | - |
 | `survey` | `fetch_ehydro_surveys` | Fetch USACE eHydro CHANNEL SURVEY soundings + the survey footprint for a bbox -> the measured bed. | - |
-| `surveyed_bed` | `derive_survey_surface` | Interpolate a POINT layer of measurements onto a raster surface -> a continuous grid. | - |
-| `terrain` | `fetch_copernicus_dem` | Internal seam -- NOT a model-facing tool (tier="internal"). | EGM2008 geoid (metres, positive up) |
-| `bed` | `derive_merge_rasters` | MERGE two overlapping surfaces into one, the PRIMARY winning where it measured. | - |
+| `terrain` | `fetch_dem` | Fetch a digital elevation model (DEM) / terrain elevation for a bounding box (USGS 3DEP US lidar; on a 3DEP outage the default path STOPS and asks before any Copernicus GLO-30 swap; either source pinnable). | NAVD88 (metres, positive up) |
+| `bed` | `derive_survey_surface` | Interpolate a POINT layer of measurements onto a raster surface -> a continuous grid. | - |
 | `carrier` | `fetch_noaa_nwm_streamflow` | Fetch NOAA National Water Model streamflow as a point FlatGeobuf. | - |
-| `stage` | supplied by the caller | a water-surface elevation this run opens on: a layer of sites that report it, or the number itself in m. | - |
+| `stage` | supplied by the caller | a layer you supply, as a uri or a layer name; absent is legal and the run reports it. | - |
 
 ## The sheet
 
@@ -48,51 +48,51 @@ The values the template declares. `desc` is what the model reads when it fills o
 
 | field | the proving run's value |
 |---|---|
-| `do_min_mgl` | 8.921165352434825 |
+| `do_min_mgl` | 8.944321621543363 |
 | `do_below_standard` | False |
-| `do_min_distance_m` | 297.73186921575723 |
-| `bod_mixed_mgl` | 3.469098542982656 |
-| `mean_velocity_mps` | 0.6124773205557589 |
-| `mesh_size_m` | 9.323 |
+| `do_min_distance_m` | 69.24522524599003 |
+| `bod_mixed_mgl` | 0.862466945702669 |
+| `mean_velocity_mps` | 0.010015246088846314 |
+| `mesh_size_m` | 14.524 |
 
 It publishes these layers onto the canvas:
 
-- Input: OSM waterways (map context; the modeled river is the NLDI centerline) (river_geometry)
-- Input: nhdplus nldi (nhdplus_nldi)
-- Input: nhd area water (nhd_area_water)
-- Input: river bed elevation (copernicus_dem, datum EGM2008 geoid (metres, positive up))
-- Outfall (user) - scotia_humboldt_county_california_95562_united_s
-- Velocity u over time (scotia_humboldt_county_california_95562_united_s)
-- Velocity v over time (scotia_humboldt_county_california_95562_united_s)
-- Water depth over time (scotia_humboldt_county_california_95562_united_s)
-- Free surface over time (scotia_humboldt_county_california_95562_united_s)
-- Bottom (m) at t = 581.102 s (scotia_humboldt_county_california_95562_united_s)
-- Froude number over time (scotia_humboldt_county_california_95562_united_s)
-- Scalar flowrate over time (scotia_humboldt_county_california_95562_united_s)
-- Scalar velocity over time (scotia_humboldt_county_california_95562_united_s)
-- Dissolved o2 over time (scotia_humboldt_county_california_95562_united_s)
-- Organic load over time (scotia_humboldt_county_california_95562_united_s)
-- scotia_humboldt_county_california_95562_united_s
+- Input: river reach (river_reach)
+- Input: ehydro surveys (ehydro_surveys)
+- Input: bed elevation (dem, 3DEP 1-10 m US lidar (default 10 m); Copernicus GLO-30 30 m global via source=copernicus, datum NAVD88 (metres, positive up))
+- Outfall (user) - river_reach_domain
+- Velocity u over time (river_reach_domain_mesh)
+- Velocity v over time (river_reach_domain_mesh)
+- Water depth over time (river_reach_domain_mesh)
+- Free surface over time (river_reach_domain_mesh)
+- Bottom (m) at t = 7114.8 s (river_reach_domain_mesh)
+- Froude number over time (river_reach_domain_mesh)
+- Scalar flowrate over time (river_reach_domain_mesh)
+- Scalar velocity over time (river_reach_domain_mesh)
+- Dissolved o2 over time (river_reach_domain_mesh)
+- Organic load over time (river_reach_domain_mesh)
+- Nh4 load over time (river_reach_domain_mesh)
+- river_reach_domain_mesh
 
 ## The proving run
 
-Run `01M2HH0XSVVXHH2NFT4F8ETMAW`, 2026-09-15T03:16:14.671274+00:00, 29.61 s, at commit `80e141fee6381b28cbe4f48992ba63bf480c0c55-dirty`.
+Run `01M2MGJYW129PS08ZVJTMHM9YQ`, 2026-09-16T07:06:40.599870+00:00, 50.57 s, at commit `b6f42e9ea904813979399e818be14b8858a511d7-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M2HH0XSVVXHH2NFT4F8ETMAW)](telemac_do_sag/telemac_do_sag.png)
+![Every layer the run published, stacked and framed on the result (run 01M2MGJYW129PS08ZVJTMHM9YQ)](telemac_do_sag/telemac_do_sag.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M2HH0XSVVXHH2NFT4F8ETMAW)*
+*Every layer the run published, stacked and framed on the result (run 01M2MGJYW129PS08ZVJTMHM9YQ)*
 
-![The solve, frame by frame (run 01M2HH0XSVVXHH2NFT4F8ETMAW)](telemac_do_sag/telemac_do_sag_animation.gif)
+![The solve, frame by frame (run 01M2MGJYW129PS08ZVJTMHM9YQ)](telemac_do_sag/telemac_do_sag_animation.gif)
 
-*The solve, frame by frame (run 01M2HH0XSVVXHH2NFT4F8ETMAW)*
+*The solve, frame by frame (run 01M2MGJYW129PS08ZVJTMHM9YQ)*
 
-![final frame (run 01M2HH0XSVVXHH2NFT4F8ETMAW)](telemac_do_sag/telemac_do_sag_final_frame.png)
+![final frame (run 01M2MGJYW129PS08ZVJTMHM9YQ)](telemac_do_sag/telemac_do_sag_final_frame.png)
 
-*final frame (run 01M2HH0XSVVXHH2NFT4F8ETMAW)*
+*final frame (run 01M2MGJYW129PS08ZVJTMHM9YQ)*
 
-![dissolved oxygen - the chart the run persisted (run 01M2HH0XSVVXHH2NFT4F8ETMAW)](telemac_do_sag/telemac_do_sag_chart_dissolved_oxygen.png)
+![dissolved oxygen - the chart the run persisted (run 01M2MGJYW129PS08ZVJTMHM9YQ)](telemac_do_sag/telemac_do_sag_chart_dissolved_oxygen.png)
 
-*dissolved oxygen - the chart the run persisted (run 01M2HH0XSVVXHH2NFT4F8ETMAW)*
+*dissolved oxygen - the chart the run persisted (run 01M2MGJYW129PS08ZVJTMHM9YQ)*
 
 ### The sheet it filled
 
@@ -100,28 +100,20 @@ Every slot the run resolved, with where the value came from. The engine's own de
 
 | param | value | units | basis | provenance |
 |---|---|---|---|---|
-| `location` | Eel River near Scotia, California | - | user | supplied on this invocation |
-| `discharge_m3s` | 60.0 | m^3/s | user | supplied on this invocation |
-| `output_interval_min` | 0.333 | min | user | supplied on this invocation |
-| `outfall_coords` | Point(lon=-124.0983, lat=40.4921, name=None) | - | user | supplied on this invocation |
-| `effluent_bod_mgl` | 250.0 | mg/L | user | supplied on this invocation |
-| `effluent_q_m3s` | 1.0 | m^3/s | user | supplied on this invocation |
+| `outfall_coords` | Point(lon=-122.669784, lat=45.518485, name=None) | - | user | supplied on this invocation |
+| `effluent_bod_mgl` | 300.0 | mg/L | user | supplied on this invocation |
+| `effluent_q_m3s` | 0.5 | m^3/s | user | supplied on this invocation |
+| `effluent_do_mgl` | 1.0 | mg/L | user | supplied on this invocation |
 | `water_temp_c` | 20.0 | C | user | supplied on this invocation |
+| `k1_per_day` | 2.0 | 1/day | user | supplied on this invocation |
+| `k2_per_day` | 6.0 | 1/day | user | supplied on this invocation |
 | `do_standard_mgl` | 5.0 | mg/L | user | supplied on this invocation |
-| `k1_per_day` | 0.3 | 1/day | user | supplied on this invocation |
-| `k2_per_day` | 0.9 | 1/day | user | supplied on this invocation |
-| `reach_length_km` | 0.5 | km | user | supplied on this invocation |
-| `sim_duration_s` | 600.0 | s | user | supplied on this invocation |
-| `mesh_resolution_m` | 12.0 | m | user | supplied on this invocation |
+| `sim_duration_s` | 7200.0 | s | user | supplied on this invocation |
+| `mesh_resolution_m` | 40.0 | m | user | supplied on this invocation |
 | `compute_class` | medium | - | default_demo | declared constant default |
-| `effluent_do_mgl` | 2.0 | mg/L | default_demo | declared scenario default |
 | `do_saturation_mgl` | 9.022 | mg/L | derived | derived by trid3nt_server.workflows.telemac.helpers.water_quality.do_saturation_mgl |
 | `upstream_do_mgl` | 9.022 | mg/L | derived | derived by trid3nt_server.workflows.telemac.helpers.water_quality.upstream_do_mgl |
-| `bbox` | - | - | user | not supplied (declared optional) |
-| `river_geometry_uri` | - | - | user | not supplied (declared optional) |
 | `event_time` | - | - | prompt_interpreted | not supplied (declared optional) |
-| `friction_coefficient` | - | - | user | not supplied (declared optional) |
-| `friction_law` | - | - | user | not supplied (declared optional) |
 
 ### Reproduce
 
@@ -129,21 +121,18 @@ Every slot the run resolved, with where the value came from. The engine's own de
 from trid3nt_server.tools import TOOL_REGISTRY
 
 await TOOL_REGISTRY['telemac_do_sag'].fn(
-    discharge_m3s=60.0,
     do_standard_mgl=5.0,
-    effluent_bod_mgl=250.0,
-    effluent_q_m3s=1.0,
-    k1_per_day=0.3,
-    k2_per_day=0.9,
-    location='Eel River near Scotia, California',
-    mesh_resolution_m=12.0,
-    outfall_coords='Point(lon=-124.0983, lat=40.4921, name=None)',
-    output_interval_min=0.333,
-    reach_length_km=0.5,
-    sim_duration_s=600.0,
+    effluent_bod_mgl=300.0,
+    effluent_do_mgl=1.0,
+    effluent_q_m3s=0.5,
+    k1_per_day=2.0,
+    k2_per_day=6.0,
+    mesh_resolution_m=40.0,
+    outfall_coords='Point(lon=-122.669784, lat=45.518485, name=None)',
+    sim_duration_s=7200.0,
     water_temp_c=20.0,
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2HH0XSVVXHH2NFT4F8ETMAW` and commit `80e141fee6381b28cbe4f48992ba63bf480c0c55-dirty`. The full argument record is [`telemac_do_sag/run.json`](telemac_do_sag/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2MGJYW129PS08ZVJTMHM9YQ` and commit `b6f42e9ea904813979399e818be14b8858a511d7-dirty`. The full argument record is [`telemac_do_sag/run.json`](telemac_do_sag/run.json).
 

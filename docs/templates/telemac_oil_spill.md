@@ -6,7 +6,7 @@ An OIL SLICK released onto a body of surface water: floating particles plus the 
 
 |  |  |
 |---|---|
-| module | `telemac2d` - 376 keywords in its dictionary, of which this template states 32 |
+| module | `telemac2d` - 376 keywords in its dictionary, of which this template states 33 |
 | solves | `trid3nt_server.workflows.telemac.engine.solve_case` |
 | engine defaults | every keyword this template does not state keeps the engine's own default; `describe_keywords` names it with that default, and `keywords={...}` sets it |
 
@@ -17,11 +17,10 @@ An OIL SLICK released onto a body of surface water: floating particles plus the 
 | `domain` | `fetch_river_reach` | Build a RIVER REACH DOMAIN from one seed point -> the reach polygon, its inflow and outflow boundary runs, and the centerline. | - |
 | `runs` | supplied by the caller | the stretches of the domain's edge that carry a boundary condition - each two points on the edge and a type (inflow, outflow, open); a closed body states none | - |
 | `survey` | `fetch_ehydro_surveys` | Fetch USACE eHydro CHANNEL SURVEY soundings + the survey footprint for a bbox -> the measured bed. | - |
-| `surveyed_bed` | `derive_survey_surface` | Interpolate a POINT layer of measurements onto a raster surface -> a continuous grid. | - |
-| `terrain` | `fetch_copernicus_dem` | Internal seam -- NOT a model-facing tool (tier="internal"). | EGM2008 geoid (metres, positive up) |
-| `bed` | `derive_merge_rasters` | MERGE two overlapping surfaces into one, the PRIMARY winning where it measured. | - |
+| `terrain` | `fetch_dem` | Fetch a digital elevation model (DEM) / terrain elevation for a bounding box (USGS 3DEP US lidar; on a 3DEP outage the default path STOPS and asks before any Copernicus GLO-30 swap; either source pinnable). | NAVD88 (metres, positive up) |
+| `bed` | `derive_survey_surface` | Interpolate a POINT layer of measurements onto a raster surface -> a continuous grid. | - |
 | `carrier` | `fetch_noaa_nwm_streamflow` | Fetch NOAA National Water Model streamflow as a point FlatGeobuf. | - |
-| `stage` | supplied by the caller | a water-surface elevation this run opens on: a layer of sites that report it, or the number itself in m. | - |
+| `stage` | supplied by the caller | a layer you supply, as a uri or a layer name; absent is legal and the run reports it. | - |
 
 ## The sheet
 
@@ -50,49 +49,52 @@ The values the template declares. `desc` is what the model reads when it fills o
 
 | field | the proving run's value |
 |---|---|
-| `oil_cmax_mgl` | 11.172884941101074 |
-| `oil_peak_time_s` | 294.0 |
-| `plume_reach_m` | 39.0 |
-| `active_frames` | 12 |
-| `slick_drift_m` | 58.0 |
+| `oil_cmax_mgl` | 3.9393863677978516 |
+| `oil_peak_time_s` | 400.0 |
+| `plume_reach_m` | 21.3 |
+| `active_frames` | 9 |
+| `slick_drift_m` | 40.1 |
 | `floats_released` | 100 |
 | `floats_remaining` | 100 |
-| `mesh_size_m` | 14.704 |
+| `mesh_size_m` | 20.888 |
 
 It publishes these layers onto the canvas:
 
-- Release point (user) - 01m2m9n1fpbt8cyb9mdhzsaxmz
-- Velocity u over time (domain_mesh)
-- Velocity v over time (domain_mesh)
-- Water depth over time (domain_mesh)
-- Free surface over time (domain_mesh)
-- Bottom (m) at t = 1764 s (domain_mesh)
-- Froude number over time (domain_mesh)
-- Scalar flowrate over time (domain_mesh)
-- Scalar velocity over time (domain_mesh)
-- Oil over time (domain_mesh)
-- Oil slick track (domain_mesh)
-- domain_mesh
+- Input: river reach (river_reach)
+- Input: ehydro surveys (ehydro_surveys)
+- Input: bed elevation (dem, 3DEP 1-10 m US lidar (default 10 m); Copernicus GLO-30 30 m global via source=copernicus, datum NAVD88 (metres, positive up))
+- Release point (user) - river_reach_domain
+- Velocity u over time (river_reach_domain_mesh)
+- Velocity v over time (river_reach_domain_mesh)
+- Water depth over time (river_reach_domain_mesh)
+- Free surface over time (river_reach_domain_mesh)
+- Bottom (m) at t = 1800 s (river_reach_domain_mesh)
+- Froude number over time (river_reach_domain_mesh)
+- Scalar flowrate over time (river_reach_domain_mesh)
+- Scalar velocity over time (river_reach_domain_mesh)
+- Oil over time (river_reach_domain_mesh)
+- Oil slick track (river_reach_domain_mesh)
+- river_reach_domain_mesh
 
 ## The proving run
 
-Run `01M2M9N9ZVZVBM90DG0MHCV0ZP`, 2026-09-16T05:05:17.116277+00:00, 22.861 s, at commit `f261dca1458988817e7433530a9a7e0e755c3960-dirty`.
+Run `01M2MGS47126J6GNZR25NP77WM`, 2026-09-16T07:09:42.581783+00:00, 28.285 s, at commit `b6f42e9ea904813979399e818be14b8858a511d7-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M2M9N9ZVZVBM90DG0MHCV0ZP)](telemac_oil_spill/telemac_oil_spill.png)
+![Every layer the run published, stacked and framed on the result (run 01M2MGS47126J6GNZR25NP77WM)](telemac_oil_spill/telemac_oil_spill.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M2M9N9ZVZVBM90DG0MHCV0ZP)*
+*Every layer the run published, stacked and framed on the result (run 01M2MGS47126J6GNZR25NP77WM)*
 
-![The solve, frame by frame (run 01M2M9N9ZVZVBM90DG0MHCV0ZP)](telemac_oil_spill/telemac_oil_spill_animation.gif)
+![The solve, frame by frame (run 01M2MGS47126J6GNZR25NP77WM)](telemac_oil_spill/telemac_oil_spill_animation.gif)
 
-*The solve, frame by frame (run 01M2M9N9ZVZVBM90DG0MHCV0ZP)*
+*The solve, frame by frame (run 01M2MGS47126J6GNZR25NP77WM)*
 
-![peak frame (run 01M2M9N9ZVZVBM90DG0MHCV0ZP)](telemac_oil_spill/telemac_oil_spill_peak_frame.png)
+![peak frame (run 01M2MGS47126J6GNZR25NP77WM)](telemac_oil_spill/telemac_oil_spill_peak_frame.png)
 
-*peak frame (run 01M2M9N9ZVZVBM90DG0MHCV0ZP)*
+*peak frame (run 01M2MGS47126J6GNZR25NP77WM)*
 
-![dissolved oil concentration - the chart the run persisted (run 01M2M9N9ZVZVBM90DG0MHCV0ZP)](telemac_oil_spill/telemac_oil_spill_chart_dissolved_oil_concentration.png)
+![dissolved oil concentration - the chart the run persisted (run 01M2MGS47126J6GNZR25NP77WM)](telemac_oil_spill/telemac_oil_spill_chart_dissolved_oil_concentration.png)
 
-*dissolved oil concentration - the chart the run persisted (run 01M2M9N9ZVZVBM90DG0MHCV0ZP)*
+*dissolved oil concentration - the chart the run persisted (run 01M2MGS47126J6GNZR25NP77WM)*
 
 ### The sheet it filled
 
@@ -100,7 +102,7 @@ Every slot the run resolved, with where the value came from. The engine's own de
 
 | param | value | units | basis | provenance |
 |---|---|---|---|---|
-| `release` | Point(lon=-122.6691667, lat=45.5175, name=None) | - | user | supplied on this invocation |
+| `release` | Point(lon=-122.669784, lat=45.518485, name=None) | - | user | supplied on this invocation |
 | `spill_duration_s` | 300.0 | s | user | supplied on this invocation |
 | `source_q_m3s` | 8.0 | m^3/s | user | supplied on this invocation |
 | `oil_concentration_mgl` | 100.0 | mg/L | user | supplied on this invocation |
@@ -128,12 +130,12 @@ await TOOL_REGISTRY['telemac_oil_spill'].fn(
     oil_concentration_mgl=100.0,
     oil_release_step=60,
     oil_type='light_crude',
-    release='Point(lon=-122.6691667, lat=45.5175, name=None)',
+    release='Point(lon=-122.669784, lat=45.518485, name=None)',
     sim_duration_s=1800.0,
     source_q_m3s=8.0,
     spill_duration_s=300.0,
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2M9N9ZVZVBM90DG0MHCV0ZP` and commit `f261dca1458988817e7433530a9a7e0e755c3960-dirty`. The full argument record is [`telemac_oil_spill/run.json`](telemac_oil_spill/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2MGS47126J6GNZR25NP77WM` and commit `b6f42e9ea904813979399e818be14b8858a511d7-dirty`. The full argument record is [`telemac_oil_spill/run.json`](telemac_oil_spill/run.json).
 

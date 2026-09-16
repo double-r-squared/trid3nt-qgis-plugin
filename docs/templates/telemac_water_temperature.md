@@ -6,7 +6,7 @@ WATER TEMPERATURE over a body of water under a week of real weather.
 
 |  |  |
 |---|---|
-| module | `telemac2d` - 376 keywords in its dictionary, of which this template states 28 |
+| module | `telemac2d` - 376 keywords in its dictionary, of which this template states 29 |
 | solves | `trid3nt_server.workflows.telemac.engine.solve_case` |
 | engine defaults | every keyword this template does not state keeps the engine's own default; `describe_keywords` names it with that default, and `keywords={...}` sets it |
 
@@ -17,11 +17,10 @@ WATER TEMPERATURE over a body of water under a week of real weather.
 | `domain` | `fetch_river_reach` | Build a RIVER REACH DOMAIN from one seed point -> the reach polygon, its inflow and outflow boundary runs, and the centerline. | - |
 | `runs` | supplied by the caller | the stretches of the domain's edge that carry a boundary condition - each two points on the edge and a type (inflow, outflow, open); a closed body states none | - |
 | `survey` | `fetch_ehydro_surveys` | Fetch USACE eHydro CHANNEL SURVEY soundings + the survey footprint for a bbox -> the measured bed. | - |
-| `surveyed_bed` | `derive_survey_surface` | Interpolate a POINT layer of measurements onto a raster surface -> a continuous grid. | - |
-| `terrain` | `fetch_copernicus_dem` | Internal seam -- NOT a model-facing tool (tier="internal"). | EGM2008 geoid (metres, positive up) |
-| `bed` | `derive_merge_rasters` | MERGE two overlapping surfaces into one, the PRIMARY winning where it measured. | - |
+| `terrain` | `fetch_dem` | Fetch a digital elevation model (DEM) / terrain elevation for a bounding box (USGS 3DEP US lidar; on a 3DEP outage the default path STOPS and asks before any Copernicus GLO-30 swap; either source pinnable). | NAVD88 (metres, positive up) |
+| `bed` | `derive_survey_surface` | Interpolate a POINT layer of measurements onto a raster surface -> a continuous grid. | - |
 | `carrier` | `fetch_noaa_nwm_streamflow` | Fetch NOAA National Water Model streamflow as a point FlatGeobuf. | - |
-| `stage` | supplied by the caller | a water-surface elevation this run opens on: a layer of sites that report it, or the number itself in m. | - |
+| `stage` | supplied by the caller | a layer you supply, as a uri or a layer name; absent is legal and the run reports it. | - |
 | `weather` | `fetch_raws_weather` | Fetch RAWS fire-weather station observations as a point FlatGeobuf. | - |
 | `water_temperature` | `fetch_usgs_water_quality` | Fetch REAL, OBSERVED water-quality sample sites as a point FlatGeobuf. | - |
 
@@ -44,49 +43,53 @@ The values the template declares. `desc` is what the model reads when it fills o
 
 | field | the proving run's value |
 |---|---|
-| `peak_temperature_c` | 18.110376358032227 |
-| `peak_temperature_time_s` | 3528.0 |
-| `final_temperature_c` | 18.110376358032227 |
-| `diurnal_range_c` | 0.11037635803222656 |
-| `temperature_spread_c` | 0.11039161682128906 |
-| `mean_velocity_mps` | 0.04373142819945948 |
-| `mesh_size_m` | 14.704 |
+| `peak_temperature_c` | 13.503317832946777 |
+| `peak_temperature_time_s` | 3516.0 |
+| `final_temperature_c` | 13.503317832946777 |
+| `diurnal_range_c` | 0.0033178329467773438 |
+| `temperature_spread_c` | 5.249677658081055 |
+| `mean_velocity_mps` | 0.019017657972490658 |
+| `mesh_size_m` | 11.711 |
 
 It publishes these layers onto the canvas:
 
-- Temperature station (user) - 01m2m9sj1v2tbgyd5mbatyttse
+- Input: river reach (river_reach)
+- Input: ehydro surveys (ehydro_surveys)
+- Input: bed elevation (dem, 3DEP 1-10 m US lidar (default 10 m); Copernicus GLO-30 30 m global via source=copernicus, datum NAVD88 (metres, positive up))
+- Temperature station (user) - river_reach_domain
 - Input: raws weather (raws_weather)
-- Velocity u over time (domain_mesh)
-- Velocity v over time (domain_mesh)
-- Water depth over time (domain_mesh)
-- Free surface over time (domain_mesh)
-- Bottom (m) at t = 3528 s (domain_mesh)
-- Froude number over time (domain_mesh)
-- Scalar flowrate over time (domain_mesh)
-- Scalar velocity over time (domain_mesh)
-- Temperature over time (domain_mesh)
-- Water temperature (domain_mesh)
-- domain_mesh
+- Input: usgs water quality (usgs_water_quality)
+- Velocity u over time (river_reach_domain_mesh)
+- Velocity v over time (river_reach_domain_mesh)
+- Water depth over time (river_reach_domain_mesh)
+- Free surface over time (river_reach_domain_mesh)
+- Bottom (m) at t = 3516 s (river_reach_domain_mesh)
+- Froude number over time (river_reach_domain_mesh)
+- Scalar flowrate over time (river_reach_domain_mesh)
+- Scalar velocity over time (river_reach_domain_mesh)
+- Temperature over time (river_reach_domain_mesh)
+- Water temperature (river_reach_domain_mesh)
+- river_reach_domain_mesh
 
 ## The proving run
 
-Run `01M2M9V2WTSEC2PMX5TCXN36HW`, 2026-09-16T05:08:56.640320+00:00, 94.357 s, at commit `f261dca1458988817e7433530a9a7e0e755c3960-dirty`.
+Run `01M2MJ7589JWDDNZCZ6910C9TY`, 2026-09-16T07:35:31.122829+00:00, 114.597 s, at commit `b6f42e9ea904813979399e818be14b8858a511d7-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M2M9V2WTSEC2PMX5TCXN36HW)](telemac_water_temperature/telemac_water_temperature.png)
+![Every layer the run published, stacked and framed on the result (run 01M2MJ7589JWDDNZCZ6910C9TY)](telemac_water_temperature/telemac_water_temperature.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M2M9V2WTSEC2PMX5TCXN36HW)*
+*Every layer the run published, stacked and framed on the result (run 01M2MJ7589JWDDNZCZ6910C9TY)*
 
-![The solve, frame by frame (run 01M2M9V2WTSEC2PMX5TCXN36HW)](telemac_water_temperature/telemac_water_temperature_animation.gif)
+![The solve, frame by frame (run 01M2MJ7589JWDDNZCZ6910C9TY)](telemac_water_temperature/telemac_water_temperature_animation.gif)
 
-*The solve, frame by frame (run 01M2M9V2WTSEC2PMX5TCXN36HW)*
+*The solve, frame by frame (run 01M2MJ7589JWDDNZCZ6910C9TY)*
 
-![final frame (run 01M2M9V2WTSEC2PMX5TCXN36HW)](telemac_water_temperature/telemac_water_temperature_final_frame.png)
+![final frame (run 01M2MJ7589JWDDNZCZ6910C9TY)](telemac_water_temperature/telemac_water_temperature_final_frame.png)
 
-*final frame (run 01M2M9V2WTSEC2PMX5TCXN36HW)*
+*final frame (run 01M2MJ7589JWDDNZCZ6910C9TY)*
 
-![water temperature - the chart the run persisted (run 01M2M9V2WTSEC2PMX5TCXN36HW)](telemac_water_temperature/telemac_water_temperature_chart_water_temperature.png)
+![water temperature - the chart the run persisted (run 01M2MJ7589JWDDNZCZ6910C9TY)](telemac_water_temperature/telemac_water_temperature_chart_water_temperature.png)
 
-*water temperature - the chart the run persisted (run 01M2M9V2WTSEC2PMX5TCXN36HW)*
+*water temperature - the chart the run persisted (run 01M2MJ7589JWDDNZCZ6910C9TY)*
 
 ### The sheet it filled
 
@@ -94,13 +97,13 @@ Every slot the run resolved, with where the value came from. The engine's own de
 
 | param | value | units | basis | provenance |
 |---|---|---|---|---|
-| `weather_start` | 2026-09-11 | - | user | supplied on this invocation |
-| `weather_end` | 2026-09-14 | - | user | supplied on this invocation |
-| `station` | Point(lon=-122.6666, lat=45.5175, name=None) | - | user | supplied on this invocation |
+| `seed` | Point(lon=-122.6691667, lat=45.5175, name=None) | - | user | supplied on this invocation |
+| `weather_start` | 2026-09-12 | - | user | supplied on this invocation |
+| `weather_end` | 2026-09-15 | - | user | supplied on this invocation |
+| `station` | Point(lon=-122.669784, lat=45.518485, name=None) | - | user | supplied on this invocation |
 | `sim_duration_s` | 3600.0 | s | user | supplied on this invocation |
 | `mesh_resolution_m` | 40.0 | m | user | supplied on this invocation |
 | `compute_class` | medium | - | default_demo | declared constant default |
-| `seed` | - | - | user | not supplied (declared optional) |
 | `event_time` | - | - | prompt_interpreted | not supplied (declared optional) |
 
 ### Reproduce
@@ -110,12 +113,13 @@ from trid3nt_server.tools import TOOL_REGISTRY
 
 await TOOL_REGISTRY['telemac_water_temperature'].fn(
     mesh_resolution_m=40.0,
+    seed='Point(lon=-122.6691667, lat=45.5175, name=None)',
     sim_duration_s=3600.0,
-    station='Point(lon=-122.6666, lat=45.5175, name=None)',
-    weather_end='2026-09-14',
-    weather_start='2026-09-11',
+    station='Point(lon=-122.669784, lat=45.518485, name=None)',
+    weather_end='2026-09-15',
+    weather_start='2026-09-12',
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2M9V2WTSEC2PMX5TCXN36HW` and commit `f261dca1458988817e7433530a9a7e0e755c3960-dirty`. The full argument record is [`telemac_water_temperature/run.json`](telemac_water_temperature/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2MJ7589JWDDNZCZ6910C9TY` and commit `b6f42e9ea904813979399e818be14b8858a511d7-dirty`. The full argument record is [`telemac_water_temperature/run.json`](telemac_water_temperature/run.json).
 

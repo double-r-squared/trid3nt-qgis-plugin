@@ -1,10 +1,10 @@
 {
   "tool": "artemis_harbor_agitation",
-  "run_id": "01M2M9ZPWZGZG1QKDDQ68EFE4S",
-  "commit": "f261dca1458988817e7433530a9a7e0e755c3960-dirty",
-  "recorded_at": "2026-09-16T05:10:58.045813+00:00",
+  "run_id": "01M2MKMSH109K03P0P2M39GTXK",
+  "commit": "b6f42e9ea904813979399e818be14b8858a511d7-dirty",
+  "recorded_at": "2026-09-16T07:59:46.575320+00:00",
   "engine": "telemac",
-  "wall_seconds": 20.869,
+  "wall_seconds": 21.403,
   "args": {
     "wave_period_s": 8.0,
     "wave_height_m": 1.0,
@@ -193,7 +193,7 @@
     "kd_transect_max": 1.461745023727417,
     "hs_max_m": 2.35201358795166,
     "mesh_size_m": 17.686783234540215,
-    "layer_uri": "s3://trid3nt-runs/01M2M9ZPWZGZG1QKDDQ68EFE4S/res_agitation.slf",
+    "layer_uri": "s3://trid3nt-runs/01M2MKMSH109K03P0P2M39GTXK/res_agitation.slf",
     "wave_period_s": 8.0,
     "wave_period_note": "Incident monochromatic wave period - a PRESCRIBED demo forcing, since no wave-forcing fetcher exists yet [supplied on this invocation]",
     "structure": null,
@@ -209,9 +209,9 @@
       "crs_authid": "EPSG:32610",
       "dataset_group": "Wave height at t = 8 s",
       "dataset_uris": [
-        "s3://trid3nt-runs/01M2M9ZPWZGZG1QKDDQ68EFE4S/wave_height-t8.dat"
+        "s3://trid3nt-runs/01M2MKMSH109K03P0P2M39GTXK/wave_height-t8.dat"
       ],
-      "layer_id": "telemac-wave_height-t8-01M2M9ZPWZGZG1QKDDQ68EFE4S",
+      "layer_id": "telemac-wave_height-t8-01M2MKMSH109K03P0P2M39GTXK",
       "layer_type": "mesh",
       "legend": {
         "colormap": "ylgnbu",
@@ -229,7 +229,7 @@
       "reference_time": null,
       "role": "primary",
       "temporal": false,
-      "uri": "s3://trid3nt-runs/01M2M9ZPWZGZG1QKDDQ68EFE4S/res_agitation.slf",
+      "uri": "s3://trid3nt-runs/01M2MKMSH109K03P0P2M39GTXK/res_agitation.slf",
       "valid_from": null,
       "valid_to": null,
       "visible": true,
@@ -239,9 +239,9 @@
       "crs_authid": "EPSG:32610",
       "dataset_group": "Wave phase at t = 8 s",
       "dataset_uris": [
-        "s3://trid3nt-runs/01M2M9ZPWZGZG1QKDDQ68EFE4S/wave_phase-t8.dat"
+        "s3://trid3nt-runs/01M2MKMSH109K03P0P2M39GTXK/wave_phase-t8.dat"
       ],
-      "layer_id": "telemac-wave_phase-t8-01M2M9ZPWZGZG1QKDDQ68EFE4S",
+      "layer_id": "telemac-wave_phase-t8-01M2MKMSH109K03P0P2M39GTXK",
       "layer_type": "mesh",
       "legend": {
         "colormap": "hsv",
@@ -259,7 +259,7 @@
       "reference_time": null,
       "role": "primary",
       "temporal": false,
-      "uri": "s3://trid3nt-runs/01M2M9ZPWZGZG1QKDDQ68EFE4S/res_agitation.slf",
+      "uri": "s3://trid3nt-runs/01M2MKMSH109K03P0P2M39GTXK/res_agitation.slf",
       "valid_from": null,
       "valid_to": null,
       "visible": true,
@@ -269,9 +269,9 @@
       "crs_authid": "EPSG:32610",
       "dataset_group": "Free surface at t = 8 s",
       "dataset_uris": [
-        "s3://trid3nt-runs/01M2M9ZPWZGZG1QKDDQ68EFE4S/free_surface-t8.dat"
+        "s3://trid3nt-runs/01M2MKMSH109K03P0P2M39GTXK/free_surface-t8.dat"
       ],
-      "layer_id": "telemac-free_surface-t8-01M2M9ZPWZGZG1QKDDQ68EFE4S",
+      "layer_id": "telemac-free_surface-t8-01M2MKMSH109K03P0P2M39GTXK",
       "layer_type": "mesh",
       "legend": {
         "colormap": "blues",
@@ -289,7 +289,7 @@
       "reference_time": null,
       "role": "primary",
       "temporal": false,
-      "uri": "s3://trid3nt-runs/01M2M9ZPWZGZG1QKDDQ68EFE4S/res_agitation.slf",
+      "uri": "s3://trid3nt-runs/01M2MKMSH109K03P0P2M39GTXK/res_agitation.slf",
       "valid_from": null,
       "valid_to": null,
       "visible": true,
@@ -299,9 +299,9 @@
       "crs_authid": "EPSG:32610",
       "dataset_group": "Bottom at t = 8 s",
       "dataset_uris": [
-        "s3://trid3nt-runs/01M2M9ZPWZGZG1QKDDQ68EFE4S/bottom-t8.dat"
+        "s3://trid3nt-runs/01M2MKMSH109K03P0P2M39GTXK/bottom-t8.dat"
       ],
-      "layer_id": "telemac-bottom-t8-01M2M9ZPWZGZG1QKDDQ68EFE4S",
+      "layer_id": "telemac-bottom-t8-01M2MKMSH109K03P0P2M39GTXK",
       "layer_type": "mesh",
       "legend": {
         "colormap": "terrain",
@@ -319,7 +319,7 @@
       "reference_time": null,
       "role": "primary",
       "temporal": false,
-      "uri": "s3://trid3nt-runs/01M2M9ZPWZGZG1QKDDQ68EFE4S/res_agitation.slf",
+      "uri": "s3://trid3nt-runs/01M2MKMSH109K03P0P2M39GTXK/res_agitation.slf",
       "valid_from": null,
       "valid_to": null,
       "visible": true,
@@ -329,9 +329,9 @@
       "crs_authid": "EPSG:32610",
       "dataset_group": "Kd at t = 8 s",
       "dataset_uris": [
-        "s3://trid3nt-runs/01M2M9ZPWZGZG1QKDDQ68EFE4S/kd-t8.dat"
+        "s3://trid3nt-runs/01M2MKMSH109K03P0P2M39GTXK/kd-t8.dat"
       ],
-      "layer_id": "telemac-kd-t8-01M2M9ZPWZGZG1QKDDQ68EFE4S",
+      "layer_id": "telemac-kd-t8-01M2MKMSH109K03P0P2M39GTXK",
       "layer_type": "mesh",
       "legend": {
         "colormap": "viridis",
@@ -349,7 +349,7 @@
       "reference_time": null,
       "role": "primary",
       "temporal": false,
-      "uri": "s3://trid3nt-runs/01M2M9ZPWZGZG1QKDDQ68EFE4S/res_agitation.slf",
+      "uri": "s3://trid3nt-runs/01M2MKMSH109K03P0P2M39GTXK/res_agitation.slf",
       "valid_from": null,
       "valid_to": null,
       "visible": true,
@@ -359,7 +359,7 @@
       "crs_authid": "EPSG:32610",
       "dataset_group": null,
       "dataset_uris": [],
-      "layer_id": "01M2MA07H5NFGVG5MXXQZJMGPR",
+      "layer_id": "01M2MKNB1SVGM9TSEZ4W50E4CC",
       "layer_type": "mesh",
       "legend": {
         "colormap": null,
@@ -374,10 +374,10 @@
       "opacity": null,
       "origin": null,
       "quantity": null,
-      "reference_time": "2026-09-16T05:10:43+00:00",
+      "reference_time": "2026-09-16T07:59:31+00:00",
       "role": "primary",
       "temporal": false,
-      "uri": "s3://trid3nt-runs/01M2M9ZPWZGZG1QKDDQ68EFE4S/res_agitation.slf",
+      "uri": "s3://trid3nt-runs/01M2MKMSH109K03P0P2M39GTXK/res_agitation.slf",
       "valid_from": null,
       "valid_to": null,
       "visible": true,

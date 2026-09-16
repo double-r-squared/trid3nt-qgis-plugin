@@ -6,7 +6,7 @@ Bed SCOUR and DEPOSITION under a body of water: a mobile bed under a flow.
 
 |  |  |
 |---|---|
-| module | `telemac2d` - 376 keywords in its dictionary, of which this template states 30 |
+| module | `telemac2d` - 376 keywords in its dictionary, of which this template states 31 |
 | solves | `trid3nt_server.workflows.telemac.engine.solve_case` |
 | engine defaults | every keyword this template does not state keeps the engine's own default; `describe_keywords` names it with that default, and `keywords={...}` sets it |
 
@@ -17,11 +17,10 @@ Bed SCOUR and DEPOSITION under a body of water: a mobile bed under a flow.
 | `domain` | `fetch_river_reach` | Build a RIVER REACH DOMAIN from one seed point -> the reach polygon, its inflow and outflow boundary runs, and the centerline. | - |
 | `runs` | supplied by the caller | the stretches of the domain's edge that carry a boundary condition - each two points on the edge and a type (inflow, outflow, open); a closed body states none | - |
 | `survey` | `fetch_ehydro_surveys` | Fetch USACE eHydro CHANNEL SURVEY soundings + the survey footprint for a bbox -> the measured bed. | - |
-| `surveyed_bed` | `derive_survey_surface` | Interpolate a POINT layer of measurements onto a raster surface -> a continuous grid. | - |
-| `terrain` | `fetch_copernicus_dem` | Internal seam -- NOT a model-facing tool (tier="internal"). | EGM2008 geoid (metres, positive up) |
-| `bed` | `derive_merge_rasters` | MERGE two overlapping surfaces into one, the PRIMARY winning where it measured. | - |
+| `terrain` | `fetch_dem` | Fetch a digital elevation model (DEM) / terrain elevation for a bounding box (USGS 3DEP US lidar; on a 3DEP outage the default path STOPS and asks before any Copernicus GLO-30 swap; either source pinnable). | NAVD88 (metres, positive up) |
+| `bed` | `derive_survey_surface` | Interpolate a POINT layer of measurements onto a raster surface -> a continuous grid. | - |
 | `carrier` | `fetch_noaa_nwm_streamflow` | Fetch NOAA National Water Model streamflow as a point FlatGeobuf. | - |
-| `stage` | supplied by the caller | a water-surface elevation this run opens on: a layer of sites that report it, or the number itself in m. | - |
+| `stage` | supplied by the caller | a layer you supply, as a uri or a layer name; absent is legal and the run reports it. | - |
 
 ## The sheet
 
@@ -55,46 +54,49 @@ The values the template declares. `desc` is what the model reads when it fills o
 | `bed_evolution_min_m` | 0.0 |
 | `net_bed_mass_kg` | 0.0 |
 | `surface_d50_spread_m` | 0.0 |
-| `marker_cmax_mgl` | 11.17357349395752 |
-| `active_frames` | 12 |
-| `mesh_size_m` | 14.704 |
+| `marker_cmax_mgl` | 3.9394562244415283 |
+| `active_frames` | 9 |
+| `mesh_size_m` | 20.888 |
 
 It publishes these layers onto the canvas:
 
-- Release point (user) - 01m2m9q5vkt26f81kymmcjygrc
-- Velocity u over time (domain_mesh)
-- Velocity v over time (domain_mesh)
-- Water depth over time (domain_mesh)
-- Free surface over time (domain_mesh)
-- Bottom (m) at t = 1764 s (domain_mesh)
-- Froude number over time (domain_mesh)
-- Scalar flowrate over time (domain_mesh)
-- Scalar velocity over time (domain_mesh)
-- Marker over time (domain_mesh)
-- Cumul bed evol over time (domain_mesh)
-- Mean diameter m over time (domain_mesh)
-- Bed shear stress over time (domain_mesh)
-- domain_mesh
+- Input: river reach (river_reach)
+- Input: ehydro surveys (ehydro_surveys)
+- Input: bed elevation (dem, 3DEP 1-10 m US lidar (default 10 m); Copernicus GLO-30 30 m global via source=copernicus, datum NAVD88 (metres, positive up))
+- Release point (user) - river_reach_domain
+- Velocity u over time (river_reach_domain_mesh)
+- Velocity v over time (river_reach_domain_mesh)
+- Water depth over time (river_reach_domain_mesh)
+- Free surface over time (river_reach_domain_mesh)
+- Bottom (m) at t = 1800 s (river_reach_domain_mesh)
+- Froude number over time (river_reach_domain_mesh)
+- Scalar flowrate over time (river_reach_domain_mesh)
+- Scalar velocity over time (river_reach_domain_mesh)
+- Marker over time (river_reach_domain_mesh)
+- Cumul bed evol over time (river_reach_domain_mesh)
+- Mean diameter m over time (river_reach_domain_mesh)
+- Bed shear stress over time (river_reach_domain_mesh)
+- river_reach_domain_mesh
 
 ## The proving run
 
-Run `01M2M9QFR8WHK5KQGZQ2JYE1H0`, 2026-09-16T05:06:30.806324+00:00, 26.538 s, at commit `f261dca1458988817e7433530a9a7e0e755c3960-dirty`.
+Run `01M2MGYBT9FH1NKER0ECSAP396`, 2026-09-16T07:12:36.714733+00:00, 29.514 s, at commit `b6f42e9ea904813979399e818be14b8858a511d7-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M2M9QFR8WHK5KQGZQ2JYE1H0)](telemac_bed_scour/telemac_bed_scour.png)
+![Every layer the run published, stacked and framed on the result (run 01M2MGYBT9FH1NKER0ECSAP396)](telemac_bed_scour/telemac_bed_scour.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M2M9QFR8WHK5KQGZQ2JYE1H0)*
+*Every layer the run published, stacked and framed on the result (run 01M2MGYBT9FH1NKER0ECSAP396)*
 
-![The solve, frame by frame (run 01M2M9QFR8WHK5KQGZQ2JYE1H0)](telemac_bed_scour/telemac_bed_scour_animation.gif)
+![The solve, frame by frame (run 01M2MGYBT9FH1NKER0ECSAP396)](telemac_bed_scour/telemac_bed_scour_animation.gif)
 
-*The solve, frame by frame (run 01M2M9QFR8WHK5KQGZQ2JYE1H0)*
+*The solve, frame by frame (run 01M2MGYBT9FH1NKER0ECSAP396)*
 
-![final frame (run 01M2M9QFR8WHK5KQGZQ2JYE1H0)](telemac_bed_scour/telemac_bed_scour_final_frame.png)
+![final frame (run 01M2MGYBT9FH1NKER0ECSAP396)](telemac_bed_scour/telemac_bed_scour_final_frame.png)
 
-*final frame (run 01M2M9QFR8WHK5KQGZQ2JYE1H0)*
+*final frame (run 01M2MGYBT9FH1NKER0ECSAP396)*
 
-![marker concentration - the chart the run persisted (run 01M2M9QFR8WHK5KQGZQ2JYE1H0)](telemac_bed_scour/telemac_bed_scour_chart_marker_concentration.png)
+![marker concentration - the chart the run persisted (run 01M2MGYBT9FH1NKER0ECSAP396)](telemac_bed_scour/telemac_bed_scour_chart_marker_concentration.png)
 
-*marker concentration - the chart the run persisted (run 01M2M9QFR8WHK5KQGZQ2JYE1H0)*
+*marker concentration - the chart the run persisted (run 01M2MGYBT9FH1NKER0ECSAP396)*
 
 ### The sheet it filled
 
@@ -102,7 +104,7 @@ Every slot the run resolved, with where the value came from. The engine's own de
 
 | param | value | units | basis | provenance |
 |---|---|---|---|---|
-| `release` | Point(lon=-122.6691667, lat=45.5175, name=None) | - | user | supplied on this invocation |
+| `release` | Point(lon=-122.669784, lat=45.518485, name=None) | - | user | supplied on this invocation |
 | `spill_duration_s` | 300.0 | s | user | supplied on this invocation |
 | `source_q_m3s` | 8.0 | m^3/s | user | supplied on this invocation |
 | `tracer_concentration_mgl` | 100.0 | mg/L | user | supplied on this invocation |
@@ -128,7 +130,7 @@ from trid3nt_server.tools import TOOL_REGISTRY
 await TOOL_REGISTRY['telemac_bed_scour'].fn(
     grain_size_um=200.0,
     mesh_resolution_m=40.0,
-    release='Point(lon=-122.6691667, lat=45.5175, name=None)',
+    release='Point(lon=-122.669784, lat=45.518485, name=None)',
     sim_duration_s=1800.0,
     source_q_m3s=8.0,
     spill_duration_s=300.0,
@@ -136,5 +138,5 @@ await TOOL_REGISTRY['telemac_bed_scour'].fn(
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2M9QFR8WHK5KQGZQ2JYE1H0` and commit `f261dca1458988817e7433530a9a7e0e755c3960-dirty`. The full argument record is [`telemac_bed_scour/run.json`](telemac_bed_scour/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2MGYBT9FH1NKER0ECSAP396` and commit `b6f42e9ea904813979399e818be14b8858a511d7-dirty`. The full argument record is [`telemac_bed_scour/run.json`](telemac_bed_scour/run.json).
 

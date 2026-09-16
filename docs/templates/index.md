@@ -10,7 +10,7 @@
 
 The WAVE AGITATION (Kd = Hs/H0) a declared structure leaves inside a harbour, a marina or any sheltered basin.
 
-Module `artemis`, proving run `01M2M9ZPWZGZG1QKDDQ68EFE4S`.
+Module `artemis`, proving run `01M2MKMSH109K03P0P2M39GTXK`.
 
 ## [`telemac3d_stratified_flow`](telemac3d_stratified_flow.md)
 
@@ -26,13 +26,15 @@ Module `telemac3d`, proving run `01M2GPX6APX8R0R0PESGVWQA6J`.
 
 Bed SCOUR and DEPOSITION under a body of water: a mobile bed under a flow.
 
-Module `telemac2d`, proving run `01M2M9QFR8WHK5KQGZQ2JYE1H0`.
+Module `telemac2d`, proving run `01M2MGYBT9FH1NKER0ECSAP396`.
 
 ## [`telemac_channel_dredging`](telemac_channel_dredging.md)
 
+[![telemac_channel_dredging](telemac_channel_dredging/telemac_channel_dredging.png)](telemac_channel_dredging.md)
+
 MAINTENANCE DREDGING of a navigation channel: how much comes out, and what the bed does.
 
-Module `telemac2d`, proving run `01M2GMW1YTJ5MS4MZV5S7Q2WSK`.
+Module `telemac2d`, proving run `01M2MM1KESFENHPEBVZ4XQ90RV`.
 
 ## [`telemac_do_sag`](telemac_do_sag.md)
 
@@ -40,7 +42,7 @@ Module `telemac2d`, proving run `01M2GMW1YTJ5MS4MZV5S7Q2WSK`.
 
 DISSOLVED-OXYGEN SAG below a discharge (US TMDL / permit question).
 
-Module `telemac2d`, proving run `01M2HH0XSVVXHH2NFT4F8ETMAW`.
+Module `telemac2d`, proving run `01M2MGJYW129PS08ZVJTMHM9YQ`.
 
 ## [`telemac_dye_release`](telemac_dye_release.md)
 
@@ -48,13 +50,15 @@ Module `telemac2d`, proving run `01M2HH0XSVVXHH2NFT4F8ETMAW`.
 
 A DYE / TRACER / CONTAMINANT plume released into a body of surface water and carried by its flow.
 
-Module `telemac2d`, proving run `01M2M9K6XYYV1JXXWAWV4VH7K8`.
+Module `telemac2d`, proving run `01M2MGDRJSZS1W1CS516FSZM87`.
 
 ## [`telemac_eutrophication`](telemac_eutrophication.md)
 
+[![telemac_eutrophication](telemac_eutrophication/telemac_eutrophication.png)](telemac_eutrophication.md)
+
 NUTRIENT ENRICHMENT in a body of water: algal growth, nutrient drawdown and the oxygen response over one pass through it.
 
-Module `telemac2d`, proving run `01M2HSYSR2VP81VWZ2108E64CD`.
+Module `telemac2d`, proving run `01M2MH8TPG9X84GBZD5BKQGKSY`.
 
 ## [`telemac_micropollutant_release`](telemac_micropollutant_release.md)
 
@@ -68,7 +72,7 @@ Module `telemac2d`, proving run `01M2HG9ASXE40K9MF2GQCZRN9Y`.
 
 An OIL SLICK released onto a body of surface water: floating particles plus the dissolved fraction.
 
-Module `telemac2d`, proving run `01M2M9N9ZVZVBM90DG0MHCV0ZP`.
+Module `telemac2d`, proving run `01M2MGS47126J6GNZR25NP77WM`.
 
 ## [`telemac_rain_on_grid`](telemac_rain_on_grid.md)
 
@@ -80,9 +84,11 @@ Module `telemac2d`, proving run `01M2GP3XQJENSXTD763387Z9TN`.
 
 ## [`telemac_sediment_plume`](telemac_sediment_plume.md)
 
+[![telemac_sediment_plume](telemac_sediment_plume/telemac_sediment_plume.png)](telemac_sediment_plume.md)
+
 A SUSPENDED SEDIMENT plume in a body of water: it settles and deposits on the bed.
 
-Module `telemac2d`, proving run `01M2GNFGG431SX89YQ0YMD8PPF`.
+Module `telemac2d`, proving run `01M2MJEC5N7RMK6ND6Q6GG0BX6`.
 
 ## [`telemac_water_temperature`](telemac_water_temperature.md)
 
@@ -90,5 +96,5 @@ Module `telemac2d`, proving run `01M2GNFGG431SX89YQ0YMD8PPF`.
 
 WATER TEMPERATURE over a body of water under a week of real weather.
 
-Module `telemac2d`, proving run `01M2M9V2WTSEC2PMX5TCXN36HW`.
+Module `telemac2d`, proving run `01M2MJ7589JWDDNZCZ6910C9TY`.
 

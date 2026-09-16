@@ -6,7 +6,7 @@ MAINTENANCE DREDGING of a navigation channel: how much comes out, and what the b
 
 |  |  |
 |---|---|
-| module | `telemac2d` - 376 keywords in its dictionary, of which this template states 25 |
+| module | `telemac2d` - 376 keywords in its dictionary, of which this template states 26 |
 | solves | `trid3nt_server.workflows.telemac.engine.solve_case` |
 | engine defaults | every keyword this template does not state keeps the engine's own default; `describe_keywords` names it with that default, and `keywords={...}` sets it |
 
@@ -16,14 +16,14 @@ MAINTENANCE DREDGING of a navigation channel: how much comes out, and what the b
 |---|---|---|---|
 | `domain` | `fetch_river_reach` | Build a RIVER REACH DOMAIN from one seed point -> the reach polygon, its inflow and outflow boundary runs, and the centerline. | - |
 | `runs` | supplied by the caller | the stretches of the domain's edge that carry a boundary condition - each two points on the edge and a type (inflow, outflow, open); a closed body states none | - |
+| `line` | supplied by the caller | a polyline layer you supply, as a uri or a layer name; required - the template names no source for it. | - |
 | `survey` | `fetch_ehydro_surveys` | Fetch USACE eHydro CHANNEL SURVEY soundings + the survey footprint for a bbox -> the measured bed. | - |
-| `surveyed_bed` | `derive_survey_surface` | Interpolate a POINT layer of measurements onto a raster surface -> a continuous grid. | - |
 | `terrain` | `fetch_dem` | Fetch a digital elevation model (DEM) / terrain elevation for a bounding box (USGS 3DEP US lidar; on a 3DEP outage the default path STOPS and asks before any Copernicus GLO-30 swap; either source pinnable). | NAVD88 (metres, positive up) |
-| `bed` | `derive_merge_rasters` | MERGE two overlapping surfaces into one, the PRIMARY winning where it measured. | - |
+| `bed` | `derive_survey_surface` | Interpolate a POINT layer of measurements onto a raster surface -> a continuous grid. | - |
 | `carrier` | `fetch_noaa_nwm_streamflow` | Fetch NOAA National Water Model streamflow as a point FlatGeobuf. | - |
 | `dredge_area` | supplied by the caller | a polygon layer you supply, as a uri or a layer name; required - the template names no source for it. | - |
 | `dump_area` | supplied by the caller | a polygon layer you supply, as a uri or a layer name; required - the template names no source for it. | - |
-| `stage` | supplied by the caller | a water-surface elevation this run opens on: a layer of sites that report it, or the number itself in m. | - |
+| `stage` | supplied by the caller | a layer you supply, as a uri or a layer name; absent is legal and the run reports it. | - |
 
 ## The sheet
 
@@ -54,58 +54,56 @@ The values the template declares. `desc` is what the model reads when it fills o
 
 | field | the proving run's value |
 |---|---|
-| `dug_volume_m3` | 4709.386117 |
-| `dumped_volume_m3` | 4709.386117 |
+| `dug_volume_m3` | 15771.846558 |
+| `dumped_volume_m3` | 15771.846558 |
 | `dredge_report` | the volumes are the engine's own report lines, summed over the passes that finished inside the run's clock |
-| `dredged_bed_change_m` | -0.9470365047454834 |
-| `dumped_bed_change_m` | 1.034358263015747 |
-| `net_bed_mass_kg` | -728.4404 |
-| `mesh_size_m` | 10.415 |
+| `dredged_bed_change_m` | -0.5 |
+| `dumped_bed_change_m` | 0.4807279109954834 |
+| `net_bed_mass_kg` | -0.714373 |
+| `mesh_size_m` | 11.857 |
 
 It publishes these layers onto the canvas:
 
-- Input: OSM waterways (map context; the modeled river is the NLDI centerline) (river_geometry)
-- Input: nhdplus nldi (nhdplus_nldi)
-- Input: nhd area water (nhd_area_water)
-- Input: river bed elevation (copernicus_dem, datum EGM2008 geoid (metres, positive up))
-- Velocity u (m/s) at t = 593.94 s (scotia_humboldt_county_california_95562_united_s)
-- Velocity u over time (scotia_humboldt_county_california_95562_united_s)
-- Velocity v (m/s) at t = 593.94 s (scotia_humboldt_county_california_95562_united_s)
-- Velocity v over time (scotia_humboldt_county_california_95562_united_s)
-- Water depth (m) at t = 593.94 s (scotia_humboldt_county_california_95562_united_s)
-- Water depth over time (scotia_humboldt_county_california_95562_united_s)
-- Free surface (m) at t = 593.94 s (scotia_humboldt_county_california_95562_united_s)
-- Free surface over time (scotia_humboldt_county_california_95562_united_s)
-- Bottom (m) at t = 593.94 s (scotia_humboldt_county_california_95562_united_s)
-- Froude number at t = 593.94 s (scotia_humboldt_county_california_95562_united_s)
-- Froude number over time (scotia_humboldt_county_california_95562_united_s)
-- Scalar flowrate (m2/s) at t = 593.94 s (scotia_humboldt_county_california_95562_united_s)
-- Scalar flowrate over time (scotia_humboldt_county_california_95562_united_s)
-- Scalar velocity (m/s) at t = 593.94 s (scotia_humboldt_county_california_95562_united_s)
-- Scalar velocity over time (scotia_humboldt_county_california_95562_united_s)
-- Cumul bed evol (m) at t = 593.94 s (scotia_humboldt_county_california_95562_united_s)
-- Cumul bed evol over time (scotia_humboldt_county_california_95562_united_s)
-- Mean diameter m at t = 593.94 s (scotia_humboldt_county_california_95562_united_s)
-- Mean diameter m over time (scotia_humboldt_county_california_95562_united_s)
-- Bed shear stress (n/m2) at t = 593.94 s (scotia_humboldt_county_california_95562_united_s)
-- Bed shear stress over time (scotia_humboldt_county_california_95562_united_s)
-- scotia_humboldt_county_california_95562_united_s
+- Velocity u over time (domain_mesh)
+- Velocity v over time (domain_mesh)
+- Water depth over time (domain_mesh)
+- Free surface over time (domain_mesh)
+- Bottom (m) at t = 593 s (domain_mesh)
+- Froude number over time (domain_mesh)
+- Scalar flowrate over time (domain_mesh)
+- Scalar velocity over time (domain_mesh)
+- Cumul bed evol over time (domain_mesh)
+- Mean diameter m over time (domain_mesh)
+- Bed shear stress over time (domain_mesh)
+- domain_mesh
 
 ## The proving run
 
-Run `01M2GMW1YTJ5MS4MZV5S7Q2WSK`, 2026-09-14T19:04:15.604623+00:00, 27.171 s, at commit `c06075fe30c18c4bf3619f40299b09edffefc4c0-dirty`.
+Run `01M2MM1KESFENHPEBVZ4XQ90RV`, 2026-09-16T08:06:47.816957+00:00, 25.457 s, at commit `b6f42e9ea904813979399e818be14b8858a511d7-dirty`.
 
-![The solve, frame by frame - nimation (run 01M2GMW1YTJ5MS4MZV5S7Q2WSK)](telemac_channel_dredging/telemac_river_dredging_animation.gif)
+![Every layer the run published, stacked and framed on the result (run 01M2MM1KESFENHPEBVZ4XQ90RV)](telemac_channel_dredging/telemac_channel_dredging.png)
 
-*The solve, frame by frame - nimation (run 01M2GMW1YTJ5MS4MZV5S7Q2WSK)*
+*Every layer the run published, stacked and framed on the result (run 01M2MM1KESFENHPEBVZ4XQ90RV)*
 
-![inal frame (run 01M2GMW1YTJ5MS4MZV5S7Q2WSK)](telemac_channel_dredging/telemac_river_dredging_final_frame.png)
+![The solve, frame by frame (run 01M2MM1KESFENHPEBVZ4XQ90RV)](telemac_channel_dredging/telemac_channel_dredging_animation.gif)
 
-*inal frame (run 01M2GMW1YTJ5MS4MZV5S7Q2WSK)*
+*The solve, frame by frame (run 01M2MM1KESFENHPEBVZ4XQ90RV)*
 
-![ (run 01M2GMW1YTJ5MS4MZV5S7Q2WSK)](telemac_channel_dredging/telemac_river_dredging.png)
+![The solve, frame by frame - nimation (run 01M2MM1KESFENHPEBVZ4XQ90RV)](telemac_channel_dredging/telemac_river_dredging_animation.gif)
 
-* (run 01M2GMW1YTJ5MS4MZV5S7Q2WSK)*
+*The solve, frame by frame - nimation (run 01M2MM1KESFENHPEBVZ4XQ90RV)*
+
+![final frame (run 01M2MM1KESFENHPEBVZ4XQ90RV)](telemac_channel_dredging/telemac_channel_dredging_final_frame.png)
+
+*final frame (run 01M2MM1KESFENHPEBVZ4XQ90RV)*
+
+![inal frame (run 01M2MM1KESFENHPEBVZ4XQ90RV)](telemac_channel_dredging/telemac_river_dredging_final_frame.png)
+
+*inal frame (run 01M2MM1KESFENHPEBVZ4XQ90RV)*
+
+![ (run 01M2MM1KESFENHPEBVZ4XQ90RV)](telemac_channel_dredging/telemac_river_dredging.png)
+
+* (run 01M2MM1KESFENHPEBVZ4XQ90RV)*
 
 ### The sheet it filled
 
@@ -113,14 +111,9 @@ Every slot the run resolved, with where the value came from. The engine's own de
 
 | param | value | units | basis | provenance |
 |---|---|---|---|---|
-| `location` | Eel River near Scotia, California | - | user | supplied on this invocation |
-| `discharge_m3s` | 2.2 | m^3/s | user | supplied on this invocation |
-| `output_interval_min` | 0.333 | min | user | supplied on this invocation |
-| `reach_length_km` | 1.0 | km | user | supplied on this invocation |
 | `sim_duration_s` | 600.0 | s | user | supplied on this invocation |
-| `mesh_resolution_m` | 12.0 | m | user | supplied on this invocation |
-| `design_depth_m` | 1.0 | m | user | supplied on this invocation |
-| `trigger_depth_m` | 1.0 | m | user | supplied on this invocation |
+| `design_depth_m` | 4.5 | m | user | supplied on this invocation |
+| `trigger_depth_m` | 4.3 | m | user | supplied on this invocation |
 | `dredge_start_s` | 600.0 | s | user | supplied on this invocation |
 | `dredge_end_s` | 3600.0 | s | user | supplied on this invocation |
 | `dredge_repeat_s` | 1800.0 | s | user | supplied on this invocation |
@@ -128,16 +121,14 @@ Every slot the run resolved, with where the value came from. The engine's own de
 | `dump_rate_m_per_s` | 0.02 | m/s | user | supplied on this invocation |
 | `grain_size_um` | 200.0 | um | user | supplied on this invocation |
 | `bed_thickness_m` | 5.0 | m | user | supplied on this invocation |
-| `compute_class` | medium | - | default_demo | declared constant default |
+| `mesh_resolution_m` | 30.0 | m | user | supplied on this invocation |
 | `time_origin` | [2000, 1, 1, 0, 0, 0] | - | default_demo | declared scenario default |
 | `min_volume_m3` | 0.0 | m^3 | default_demo | declared scenario default |
 | `bedload_formula` | 1 | - | default_demo | declared scenario default |
 | `morphological_factor` | 10.0 | - | default_demo | declared scenario default |
-| `bbox` | - | - | user | not supplied (declared optional) |
-| `river_geometry_uri` | - | - | user | not supplied (declared optional) |
+| `compute_class` | medium | - | default_demo | declared constant default |
+| `seed_point` | - | - | prompt_interpreted | not supplied (declared optional) |
 | `event_time` | - | - | prompt_interpreted | not supplied (declared optional) |
-| `friction_coefficient` | - | - | user | not supplied (declared optional) |
-| `friction_law` | - | - | user | not supplied (declared optional) |
 
 ### Reproduce
 
@@ -146,22 +137,18 @@ from trid3nt_server.tools import TOOL_REGISTRY
 
 await TOOL_REGISTRY['telemac_channel_dredging'].fn(
     bed_thickness_m=5.0,
-    design_depth_m=1.0,
+    design_depth_m=4.5,
     dig_rate_m_per_s=0.02,
-    discharge_m3s=2.2,
     dredge_end_s=3600.0,
     dredge_repeat_s=1800.0,
     dredge_start_s=600.0,
     dump_rate_m_per_s=0.02,
     grain_size_um=200.0,
-    location='Eel River near Scotia, California',
-    mesh_resolution_m=12.0,
-    output_interval_min=0.333,
-    reach_length_km=1.0,
+    mesh_resolution_m=30.0,
     sim_duration_s=600.0,
-    trigger_depth_m=1.0,
+    trigger_depth_m=4.3,
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2GMW1YTJ5MS4MZV5S7Q2WSK` and commit `c06075fe30c18c4bf3619f40299b09edffefc4c0-dirty`. The full argument record is [`telemac_channel_dredging/run.json`](telemac_channel_dredging/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2MM1KESFENHPEBVZ4XQ90RV` and commit `b6f42e9ea904813979399e818be14b8858a511d7-dirty`. The full argument record is [`telemac_channel_dredging/run.json`](telemac_channel_dredging/run.json).
 
