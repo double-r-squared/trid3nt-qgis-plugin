@@ -128,31 +128,33 @@ def test_the_three_slots_are_the_world_this_run_stands_on():
     from trid3nt_server.workflows.runtime.data import BED, DOMAIN, RUNS
 
     rows = data_rows(_template().DATA)
-    assert [d.name for d in rows] == ["domain", "runs", "survey", "surveyed_bed",
+    assert [d.name for d in rows] == ["domain", "runs", "line", "survey",
                                       "terrain", "bed", "carrier", "stage"]
     by_name = {d.name: d for d in rows}
     assert by_name["domain"].role == DOMAIN
     assert by_name["domain"].producer.runner == "fetch_river_reach"
     assert by_name["bed"].role == BED
-    assert by_name["bed"].producer.runner == "derive_merge_rasters"
-    assert by_name["bed"].producer.kwargs["primary"] == DataRef("surveyed_bed")
-    assert by_name["bed"].producer.kwargs["fallback"] == DataRef("terrain")
+    assert by_name["bed"].producer.runner == "derive_survey_surface"
+    assert by_name["bed"].producer.kwargs["points"] == DataRef("survey")
+    assert by_name["bed"].coercion["over"] == DataRef("terrain")
     runs = next(d for d in rows if d.role == RUNS)
     assert (runs.producer, runs.is_optional) == (None, True)
-    # The bed is a MERGE of two available layers, never a fallback chain.
-    assert all(d.producer is None or d.producer.ladder_rungs == ()
-               for d in rows)
+    # The DOMAIN is the one ladder: the reach where a channel cuts, the
+    # waterbody the seed stands in where none does. The bed composes two layers
+    # it has, which is not a fallback chain.
+    assert [d.name for d in rows if d.producer is not None
+            and d.producer.ladder_rungs] == ["domain"]
     # Both slots reach the wire: what the user supplies supersedes the producer.
     assert by_name["domain"].fills_from_user and by_name["bed"].fills_from_user
 
 
 def test_an_unsurveyed_domain_still_runs_on_the_terrain_alone():
-    """The survey and the surface gridded from it are CONTEXT: absent, the run
-    continues and the sheet says which side was missing."""
+    """The survey row is CONTEXT: absent, the grid of nothing is nothing, the
+    terrain the bed slot composes over is the whole bed, and the sheet says so."""
     from trid3nt_server.workflows.runtime import data_rows
 
     by_name = {d.name: d for d in data_rows(_template().DATA)}
-    assert by_name["survey"].is_context and by_name["surveyed_bed"].is_context
+    assert by_name["survey"].is_context
     assert "terrain surface stands" in by_name["survey"].context_sentence
     assert by_name["terrain"].is_context is False
 
@@ -162,10 +164,10 @@ def test_the_carrier_is_one_reading_ranked_against_the_domain():
     observation slot: the nearest reporting site, the field it reports under, and
     a stated number that stands over any record."""
     from trid3nt_server.workflows.runtime import Ref, data_rows
-    from trid3nt_server.workflows.runtime.data import OBSERVATION
+    from trid3nt_server.workflows.runtime.data import DISCHARGE
 
     carrier = {d.name: d for d in data_rows(_template().DATA)}["carrier"]
-    assert carrier.role == OBSERVATION
+    assert carrier.role == DISCHARGE
     assert carrier.producer.runner == "fetch_noaa_nwm_streamflow"
     assert carrier.coercion["near"] == Ref("domain.centroid")
     assert carrier.coercion["field"] == "streamflow_cms"
@@ -314,7 +316,7 @@ def test_the_outputs_list_charts_the_oxygen_along_the_domains_centerline():
     assert [(p.kind, p.variable, p.t, p.publish) for p in do_sag.OUTPUTS] == [
         ("profile", "T2", -1, "chart")]
     assert do_sag.OUTPUTS[0].reference is overlay
-    assert do_sag.OUTPUTS[0].along == Ref("domain.centerline")
+    assert do_sag.OUTPUTS[0].along == Ref("line")
     assert do_sag.CAPTIONS == {"T2": "dissolved oxygen"}
     assert {name: (m.primitive.kind, m.primitive.variable, m.stat)
             for name, m in do_sag.ANSWER.items()} == {
@@ -325,7 +327,7 @@ def test_the_outputs_list_charts_the_oxygen_along_the_domains_centerline():
         "mean_velocity_mps": ("profile", "T2", "velocity_mps"),
         "mesh_size_m": ("mesh", None, "size_m")}
     assert {m.primitive.along for m in do_sag.ANSWER.values()
-            if m.primitive.kind == "profile"} == {Ref("domain.centerline")}
+            if m.primitive.kind == "profile"} == {Ref("line")}
     # the verdict is the minimum held below the standard the sheet declares
     assert do_sag.ANSWER["do_below_standard"].op == "below"
     assert do_sag.ANSWER["do_below_standard"].against.name == "do_standard_mgl"
@@ -335,8 +337,9 @@ def test_the_outputs_list_charts_the_oxygen_along_the_domains_centerline():
 _SETTLED = {"title": "willamette DOMAIN", "time_step_s": 1.0,
             "graphic_period": 200, "until_s": 3700.0,
             "liquid_boundary_order": ["inflow", "outflow"],
-            "liquid_boundary_prescribes": ["flowrate", "elevation"]}
-_CHANNEL = {"depth_m": 1.2, "inflow_q_m3s": 2.0, "outflow_stage_m": 1.0}
+            "liquid_boundary_prescribes": ["flowrate", "elevation"],
+            "opening": "CONSTANT DEPTH", "depth_m": 1.2, "level_m": 1.0,
+            "inflow_q_m3s": 2.0, "outflow_stage_m": 1.0}
 
 
 def _filled(**supplied):
@@ -345,7 +348,7 @@ def _filled(**supplied):
     resolved = _resolve(**supplied)
     return asyncio.run(fill_sheet(
         steering=_template().STEERING,
-        produced={"settled": _SETTLED, "channel": _CHANNEL,
+        produced={"settled": _SETTLED,
                   "outfall": {"at": [0.0, 0.0], "name": None}},
         params={row.name: resolved.value_of(row.name)
                 for row in _workflow().params},

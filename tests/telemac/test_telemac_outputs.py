@@ -694,7 +694,7 @@ def test_the_door_carries_a_primitive_s_point_and_line_beside_the_list(monkeypat
     assert all(p.along is None and p.at is None for p in listed)
     anchors = step.kwargs["anchors"]
     assert len(anchors) == len(listed) + len(step.kwargs["answer"])
-    assert anchors[2]["along"] == Ref("domain.centerline")
+    assert anchors[2]["along"] == Ref("line")
 
 
 def test_publish_outputs_rejoins_the_anchors_and_draws_the_reference_lines(

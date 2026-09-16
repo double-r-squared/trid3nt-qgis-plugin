@@ -69,9 +69,11 @@ def test_the_water_opens_on_one_reading_ranked_from_where_it_is_read():
 
 def test_the_carrier_is_one_reading_the_channel_step_can_open_on():
     """The step that opens the channel refuses a record nobody chose from, so
-    the streamflow row is ranked from inside the domain before it gets there."""
+    the streamflow row is ranked from inside the domain before it gets there.
+    Its ROLE is what the workflow reads: a discharge is what makes this an open
+    channel, and the step that measures one is listed off that."""
     row = {r.name: r for r in _workflow().data}["carrier"]
-    assert row.role == "observation"
+    assert row.role == "discharge"
     assert row.coercion["field"] == "streamflow_cms"
     assert row.is_context
 
@@ -79,11 +81,12 @@ def test_the_carrier_is_one_reading_the_channel_step_can_open_on():
 def test_the_bed_is_one_row_composed_from_the_survey_over_the_terrain():
     rows = {row.name: row for row in _workflow().data}
     assert [name for name, row in rows.items() if row.role == "bed"] == ["bed"]
-    assert rows["bed"].producer.runner == "derive_merge_rasters"
-    # The survey and the surface gridded from it are CONTEXT: water with no
-    # federal navigation project has no published sounding, and the run says so
-    # rather than refusing.
-    assert rows["survey"].is_context and rows["surveyed_bed"].is_context
+    assert rows["bed"].producer.runner == "derive_survey_surface"
+    assert rows["bed"].coercion["over"].path == "terrain"
+    # The survey is CONTEXT: water with no federal navigation project has no
+    # published sounding, the grid of nothing is nothing, and the terrain the
+    # slot composes over is the whole bed rather than a refusal.
+    assert rows["survey"].is_context
     assert "terrain surface stands" in rows["survey"].context_sentence
 
 
@@ -136,8 +139,10 @@ def _sheet(monkeypatch):
     return fill(template.STEERING, produced={
         "settled": {"title": "DOMAIN", "time_step_s": 5.0, "graphic_period": 120,
                     "liquid_boundary_order": ["inflow", "outflow"],
-                    "liquid_boundary_prescribes": ["flowrate", "elevation"]},
-        "channel": {"depth_m": 1.4, "inflow_q_m3s": 22.0, "outflow_stage_m": 3.1},
+                    "liquid_boundary_prescribes": ["flowrate", "elevation"],
+                    "opening": "CONSTANT DEPTH", "depth_m": 1.4,
+                    "level_m": 3.1, "inflow_q_m3s": 22.0,
+                    "outflow_stage_m": 3.1},
         "station": _STATION,
         "water_temperature": Observation(value=16.4, units="degC"),
         "weather": "s3://cache/raws.fgb"},

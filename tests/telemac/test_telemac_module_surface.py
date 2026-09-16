@@ -931,9 +931,9 @@ def test_the_open_channel_body_is_written_at_the_derivation_it_was_solved_for():
         stated = body.ASSERTED.get("boundaries")
         if stated is None:
             continue
-        assert body.ASSERTED["INITIAL_DEPTH"] == Ref("channel.depth_m")
-        assert stated["measured"]["inflow_q_m3s"] == Ref("channel.inflow_q_m3s")
-        assert stated["measured"]["outflow_stage_m"] == Ref("channel.outflow_stage_m")
+        assert body.ASSERTED["INITIAL_DEPTH"] == Ref("settled.depth_m")
+        assert stated["measured"]["inflow_q_m3s"] == Ref("settled.inflow_q_m3s")
+        assert stated["measured"]["outflow_stage_m"] == Ref("settled.outflow_stage_m")
         # ONE ROUGHNESS. The depth was derived at the roughness the deck is
         # written at, so the two numbers are the same constant: a stage derived
         # at one and a deck written at another is a level the run never sits at.

@@ -40,7 +40,7 @@ from ..helpers.uniform_flow import normal_depth_stage
 logger = logging.getLogger("trid3nt_server.workflows.telemac.authoring.assembler")
 
 __all__ = ["BASIN_BOUNDARY", "BASIN_GEOMETRY", "HARBOUR_GEOMETRY",
-           "case_section", "mesh_nodes", "new_rundir", "settle_basin",
+           "case_section", "mesh_nodes", "new_rundir",
            "settle_domain", "settle_dredge", "settle_harbour",
            "settle_open_channel", "settle_outlet_rating", "settle_release",
            "stage_run", "stage_telemac_manifest", "to_utm"]
@@ -463,6 +463,16 @@ def _inside_domain(point: Point, polygon: Any, label: str) -> Point:
     return point
 
 
+def _inside_water(cells: Any, wet: Any) -> Any:
+    """The nodes a SOURCE may enter the water at: wet at t0, and not on the edge."""
+    import numpy as np
+
+    from trid3nt_server.workflows.mesh.shared.nodes import interior_nodes
+
+    held = np.asarray(wet, dtype=bool)
+    return held & interior_nodes(cells, held.shape[0])
+
+
 async def _settle_release(
     point: Point | None, *, mesh: dict[str, Any],
     centerline: Any, centerline_utm: Any, utm_epsg: int, fraction: float,
@@ -500,20 +510,17 @@ async def _settle_release(
                 f"supplied point, inside the modeled domain; moved {moved_m:.0f} m "
                 "onto the flowline")
 
-    # The settled point lands LAST on the nearest node holding water at t0. Both
-    # steps above ask about geometry only; a bankfull domain at low flow has mapped
-    # river that is dry ground when the run opens, and a source released onto it
-    # discharges into the bed.
+    # The settled point lands LAST on the nearest node a source may enter the
+    # water at. Both steps above ask about geometry only; a bankfull domain at
+    # low flow has mapped river that is dry ground when the run opens, and a
+    # source released onto it discharges into the bed.
     wet_utm, moved_m, node = await asyncio.to_thread(
         snap_to_wet, as_utm(placed, utm_epsg),
         node_xy=node_xy, wet=initial_state["wet"], state=initial_state["note"],
         label=label)
-    settled = (f"solved at mesh node {node}, which holds water at t0 "
-               f"({initial_state['note']}), so nothing was moved")
-    if moved_m > 0.0:
-        settled = (f"moved {moved_m:.1f} m onto mesh node {node}, the nearest one "
-                   f"holding water at t0 - the node it landed on was dry "
-                   f"({initial_state['note']})")
+    settled = (f"solved at mesh node {node}, {moved_m:.1f} m from where it was "
+               f"placed - the nearest node, which holds water at t0 "
+               f"({initial_state['note']})")
     logger.info("%s settled: %s", label, settled)
     journal_note(f"{label}: {settled}."
                  + (f" Before that: {note}." if note else ""))
@@ -545,8 +552,14 @@ async def settle_release(
     centerline = getattr(domain, "companions", {}).get("centerline")
     centerline_utm = None if centerline is None else await asyncio.to_thread(
         read_centerline_utm, centerline, utm_epsg)
-    node_xy, _bed = await asyncio.to_thread(mesh_nodes, mesh)
+    node_xy, cells, _bed, _lonlat = await asyncio.to_thread(
+        accepted_mesh_nodes, mesh)
     initial_state = await asyncio.to_thread(_initial_state, continue_from, len(node_xy))
+    # WHERE A SOURCE MAY ENTER: wet at t0, and off the edge - the mesh's own rim
+    # is where boundary conditions are imposed, and a source placed on it is one
+    # the solver reads as outside the domain it solves.
+    initial_state = {**initial_state,
+                     "wet": _inside_water(cells, initial_state["wet"])}
     placed, note = await _settle_release(
         point, mesh=mesh, centerline=centerline, centerline_utm=centerline_utm,
         utm_epsg=utm_epsg, fraction=fraction, node_xy=node_xy,
@@ -582,49 +595,36 @@ _PROFILE_SPACING = 2.0
 _PROFILE_MIN, _PROFILE_MAX = 2, 12
 
 
-async def settle_dredge(*, mesh: dict[str, Any], domain: Any,
+async def settle_dredge(*, mesh: dict[str, Any], line: Any, domain: Any,
                         settled: Mapping[str, Any],
                         areas: Mapping[str, Any]) -> dict[str, Any]:
     """The areas a dredge works on and the surface its levels are read from,
     both measured against the ACCEPTED mesh.
 
     ``areas`` is ``{name: geometry source}``; each comes back as the polygon in
-    the mesh's own metres, and the reference is the run's OWN opening water
-    surface - the bed the mesh carries plus the normal depth it was settled at."""
+    the mesh's own metres; ``line`` is the LINE the profiles are stationed along,
+    and the reference is the run's OWN opening water surface."""
     utm_epsg = int(settled["utm_epsg"])
     node_xy, node_bed = await asyncio.to_thread(mesh_nodes, mesh)
     centerline_utm = await asyncio.to_thread(
-        read_centerline_utm, _dredge_centerline(domain), utm_epsg,
-        start_lonlat=_dredge_head(domain))
+        read_centerline_utm, line, utm_epsg, start_lonlat=_dredge_head(domain))
     fields = {name: await asyncio.to_thread(
                   _dredge_field, source, name, utm_epsg=utm_epsg, node_xy=node_xy)
               for name, source in areas.items() if source is not None}
+    flat = str(settled.get("opening") or "") == FLAT
     profiles = await asyncio.to_thread(
         _reference_profiles, centerline_utm, node_xy=node_xy, node_bed=node_bed,
-        depth_m=float(settled["depth_m"]))
+        depth_m=None if flat else float(settled["depth_m"]),
+        level_m=float(settled["level_m"]))
     journal_note(
         f"dredge reference surface: {len(profiles)} profiles across the reach at "
-        f"the bed the mesh carries plus the {float(settled['depth_m']):.3f} m "
-        "normal depth the run opens at, which is the water surface its own "
-        "outflow stage holds it to; every level a dredging action states is read "
-        "from it.")
+        + (f"the flat {float(settled['level_m']):.3f} m the water stands at"
+           if flat else
+           f"the bed the mesh carries plus the {float(settled['depth_m']):.3f} m "
+           "normal depth the run opens at")
+        + ", which is the water surface the run opens on; every level a dredging "
+        "action states is read from it.")
     return {**fields, "profiles": profiles}
-
-
-def _dredge_centerline(domain: Any) -> Any:
-    """The line the dredge's reference profiles are stationed along.
-
-    A question stationed along a channel needs one; a domain whose producer
-    measured none refuses rather than reading the outline as a channel."""
-    line = getattr(domain, "centerline", None)
-    if line is None:
-        raise TelemacError(
-            "the dredge's reference surface is laid out as cross-sections along "
-            "the domain's own centerline, and this domain carries none - it was "
-            "drawn, or its producer measured no channel. Model the dredge over a "
-            "domain a river producer cut.",
-            error_code="TELEMAC_DOMAIN_HAS_NO_CENTERLINE")
-    return line
 
 
 def _dredge_head(domain: Any) -> tuple[float, float] | None:
@@ -672,11 +672,13 @@ def _dredge_field(source: Any, name: str, *, utm_epsg: int,
 
 
 def _reference_profiles(centerline_utm: Any, *, node_xy: Any, node_bed: Any,
-                        depth_m: float) -> list[list[float]]:
+                        depth_m: float | None, level_m: float | None
+                        ) -> list[list[float]]:
     """The reference surface as the engine reads it: seven reals per profile.
 
-    A band of cross-sections down the reach, each at the local bed plus the
-    normal depth the run opens at, overhanging the mesh at both ends and both
+    A band of cross-sections down the reach at the water surface the run opens
+    at - the stated level where that surface is flat, the local bed plus the
+    depth where it follows the bed - overhanging the mesh at both ends and both
     sides so every node of a field lies inside one pair."""
     import numpy as np
 
@@ -698,7 +700,8 @@ def _reference_profiles(centerline_utm: Any, *, node_xy: Any, node_bed: Any,
         point, axis = _on_line(line, segment, length, cumulative, float(where))
         normal = np.array([-axis[1], axis[0]], dtype=float)
         node = int(np.argmin(np.hypot(xy[:, 0] - point[0], xy[:, 1] - point[1])))
-        level = float(bed[node]) + float(depth_m)
+        level = (float(level_m) if depth_m is None
+                 else float(bed[node]) + float(depth_m))
         left, right = point + normal * half, point - normal * half
         rows.append([round(float(left[0]), 3), round(float(left[1]), 3),
                      round(level, 4),
@@ -948,6 +951,7 @@ async def settle_domain(
     *,
     mesh: dict[str, Any],
     sim_duration_s: float,
+    level: Any = None,
     name: str = "",
     geometry: str = "geometry.slf",
     boundary: str = "boundary.cli",
@@ -956,12 +960,15 @@ async def settle_domain(
     output_interval_min: float | None = None,
     continue_from: str | None = None,
 ) -> dict[str, Any]:
-    """Everything ANY domain measures before a keyword is set: the mesh it was
-    handed, the clock the run turns on, and the files the box is given.
+    """Everything ANY body of water measures before a keyword is set: the mesh it
+    was handed, the clock the run turns on, the files the box is given, and the
+    WATER - the level it stands at and the depth that leaves over every node.
 
-    Engine-neutral about the water: nothing here knows a reach from a lake. What
-    a question derives ON TOP of this - a normal depth, an outlet rating curve -
-    is that question's own settle step, reading this one's numbers."""
+    A hole with water in it: the level is stated or somebody measured it, the
+    depth is that level minus the bed, the edge is wall all round and the surface
+    opens flat. Nothing here knows a reach from a lake. What a question ADDS on
+    top - an inflow's normal depth, an outlet rating curve - is its own step,
+    and what that step measured arrives here as the level this one opens at."""
     facts = _mesh_facts(mesh, missing=_domain_unmeasured)
     measured = mesh.get("min_edge_m")
     mesh_size_m = round(max(float(measured if measured is not None
@@ -980,6 +987,7 @@ async def settle_domain(
     start_time_s = float(initial_state["start_s"] or 0.0)
     duration_s = float(sim_duration_s)
     slug = _slug(name or facts["mesh_name"])
+    water = await asyncio.to_thread(_water, level, mesh)
     return {
         "name": slug,
         "title": f"{slug} DOMAIN",
@@ -995,6 +1003,11 @@ async def settle_domain(
         "start_time_s": start_time_s,
         "until_s": start_time_s + duration_s,
         "initial_state": initial_state["note"],
+        # THE WATER, as every deck reads it: what the surface opens at, the depth
+        # under it and the keyword that says which of the two the engine is to
+        # lay. A run nobody stated a level for carries None for all three and
+        # opens the way its own deck says.
+        **water,
         # WHICH dataset painted the mesh's nodes, and where each one stopped: a
         # two-source bed says how much of the domain the survey covered.
         "bed_source": facts["bed_source"],
@@ -1022,6 +1035,84 @@ async def settle_domain(
     }
 
 
+#: The three keys every deck reads the water off, and the two an addition fills
+#: where the edge carries values. A body nobody stated a level for carries None
+#: in all of them: no water was measured, and nothing is claimed.
+_NO_WATER: dict[str, Any] = {
+    "level_m": None, "depth_m": None, "max_depth_m": None, "opening": None,
+    "inflow_q_m3s": None, "outflow_stage_m": None,
+}
+
+#: What the engine is told to lay: a flat surface at the level, or a sheet of one
+#: depth following the bed. Flat is what any hole of water does; bed-parallel is
+#: what a reach that FALLS holds, and only its own addition measures that.
+FLAT = "CONSTANT ELEVATION"
+BED_PARALLEL = "CONSTANT DEPTH"
+
+
+def _water(level: Any, mesh: Mapping[str, Any]) -> dict[str, Any]:
+    """The level this domain stands at and the depth that leaves over its nodes.
+
+    ``level`` is what somebody measured: a number, an observation, or the record
+    an ADDITION returned after measuring the water over this same mesh - a reach
+    holds its own opening, and the base takes it rather than deriving a second
+    one. Nothing measured and a bed stated as a DEPTH is the bed's own zero;
+    nothing measured over a bed on a datum is no water, which is an answer and
+    not a refusal - a deck that needs none opens the way it says."""
+    import numpy as np
+
+    # A bed STATED as a depth is counted from the free surface itself, so the
+    # mesh knows where that surface stands and nothing has to be read for it.
+    zero = dict(mesh.get("provenance") or {}).get("free_surface_m")
+    if isinstance(level, Mapping):
+        measured = {**_NO_WATER, **{k: v for k, v in level.items() if k in _NO_WATER}}
+    else:
+        measured = dict(_NO_WATER)
+        measured["level_m"] = (None if level is None
+                               else float(getattr(level, "value", level)))
+    if measured["level_m"] is None and zero is None:
+        return dict(_NO_WATER)
+    surface = float(measured["level_m"] if measured["level_m"] is not None
+                    else zero)
+    _points, _cells, node_bed, _lonlat = read_accepted_mesh_nodes(
+        _mesh_field(mesh, "display_uri", missing=_mesh_missing))
+    bed = np.asarray(node_bed, dtype=float)
+    floor, ceiling = float(np.nanmin(bed)), float(np.nanmax(bed))
+    measured["level_m"] = round(surface, 3)
+    measured["opening"] = measured["opening"] or FLAT
+    if measured["opening"] == BED_PARALLEL:
+        # A SHEET OF ONE DEPTH following the bed: every node holds that depth,
+        # and the column is it. The level is where the outflow section stands
+        # under that sheet, which is the only place the two agree.
+        depth = float(measured["depth_m"])
+        measured["max_depth_m"] = round(depth, 2)
+        journal_note(
+            f"water: the run opens bed-parallel at {depth:.3f} m over a bed the "
+            f"accepted mesh carries between {floor:.3f} m and {ceiling:.3f} m, "
+            f"so every node holds that depth and the outflow section stands at "
+            f"{measured['level_m']:.3f} m.")
+        return measured
+    deepest = surface - floor
+    if deepest <= 0.0:
+        raise TelemacError(
+            f"the free surface opens at {surface:.3f} m and the deepest node of "
+            "the accepted mesh sits at or above it, so this domain holds no "
+            "water to solve in. State the depth the body holds, or name a bed "
+            "measured on the datum the level is read on.",
+            error_code="TELEMAC_DOMAIN_HOLDS_NO_WATER")
+    wet = surface - bed
+    measured["max_depth_m"] = round(deepest, 2)
+    if measured["depth_m"] is None:
+        measured["depth_m"] = round(float(np.nanmean(wet[wet > 0.0])), 3)
+    journal_note(
+        f"water: the surface opens FLAT at {measured['level_m']:.3f} m over a "
+        f"bed the accepted mesh carries between {floor:.3f} m and "
+        f"{ceiling:.3f} m, so the deepest column is "
+        f"{measured['max_depth_m']:.2f} m and "
+        f"{float((wet > 0.0).mean()) * 100.0:.1f}% of the nodes hold water.")
+    return measured
+
+
 async def settle_open_channel(
     *,
     mesh: dict[str, Any],
@@ -1034,30 +1125,45 @@ async def settle_open_channel(
     what the outflow holds, and the depth the run opens at.
 
     The flow is what the inflow run carries - a reading, or the number stated on
-    the call. The stage is a NORMAL DEPTH over the section the outflow run cuts,
-    derived at the roughness the deck is written at, and the run opens
+    the call. Where a LEVEL was measured and it stands over the inflow run's own
+    bed, that level is what the outflow holds and what the run opens flat at.
+    Where none was, the stage is a NORMAL DEPTH over the section the outflow run
+    cuts, derived at the roughness the deck is written at, and the run opens
     bed-parallel at that same depth - the equilibrium its own downstream boundary
-    holds it to rather than a blanket depth draining into it. A reach whose
-    measured ends do not FALL has no uniform-flow depth at all, and holds at the
-    level ``stage`` measured instead."""
-    artifact = mesh.get("artifact")
-    utm_epsg = int(getattr(artifact, "utm_epsg", 0) or 0)
+    holds it to rather than a blanket depth draining into it.
+
+    An edge that names NO runs is a closed body: there is no channel here to
+    measure, so this adds nothing and hands back the level it was given, which
+    is what the base opens the water flat at."""
     node_xy, node_bed = await asyncio.to_thread(mesh_nodes, mesh)
     topology = await asyncio.to_thread(
         read_topology, _mesh_field(mesh, "topology_uri", missing=_mesh_missing))
+    roles = topology["roles"] or {}
+    held = _held_level(stage)
+    if not (roles.get("inflow") and roles.get("outflow")):
+        return {"level_m": None if held is None else round(held[0], 3),
+                "depth_m": None, "opening": None,
+                "inflow_q_m3s": None, "outflow_stage_m": None,
+                "discharge_note": "this domain's edge names no runs, so no flow "
+                                  "is imposed and no stage is derived."}
     law, coefficient = int(friction_law), float(friction_coefficient)
     inflow_q, discharge_note = _carried_discharge(carrier)
-    bed = _measured_channel(topology["roles"], node_xy, node_bed)
-    held = _held_level(stage)
-    if held is not None and float(bed["bed_drop_m"]) <= 0.0:
+    bed = _measured_channel(roles, node_xy, node_bed)
+    # A LEVEL SOMEBODY MEASURED is where the water stands, and the run opens flat
+    # at it: a uniform-flow depth is a model of the same surface, and a model
+    # does not stand over a measurement of the thing it models. The derivation is
+    # for the reach that has no measurement - or the one a measurement does not
+    # reach, where a horizontal surface at the outflow's level leaves the inflow
+    # face dry and the engine has no water to impose a discharge on.
+    if held is not None and _stands_over_the_reach(bed, held[0]):
         normal = _level_opening(bed, held, discharge_q=inflow_q)
         journal_note(
-            f"open channel: the measured ends fall {normal['drop_m']:.3f} m over "
-            f"{normal['length_m']:.1f} m, so there is no uniform-flow depth to "
-            f"derive; the outflow HOLDS at the measured level "
-            f"{normal['stage_m']:.3f} m and the run opens flat at the "
-            f"{normal['depth_m']:.3f} m that leaves over the outflow section. "
-            f"{normal['held']} {discharge_note}")
+            f"open channel: the outflow HOLDS at the measured level "
+            f"{normal['stage_m']:.3f} m and the run opens FLAT at it, which "
+            f"stands {normal['stage_m'] - float(bed['bed_top_m']):.3f} m over "
+            f"the inflow run's own bed; the measured ends fall "
+            f"{normal['drop_m']:.3f} m over {normal['length_m']:.1f} m and no "
+            f"uniform-flow depth is derived. {normal['held']} {discharge_note}")
     else:
         normal = normal_depth_stage(bed, law=law, coefficient=coefficient,
                                     discharge_q=inflow_q)
@@ -1068,20 +1174,17 @@ async def settle_open_channel(
             f"{normal['law']} {normal['coefficient']:g}). Bed-parallel at the "
             f"friction slope {normal['slope']:.6f}, which IS the uniform-flow "
             f"surface. {discharge_note}")
-    measured = mesh.get("min_edge_m")
     return {
-        "utm_epsg": utm_epsg,
+        # The level the base opens the water at, and HOW: a reach that falls
+        # holds a sheet of one depth on its own friction slope, and one that
+        # does not holds flat at the level somebody measured.
+        "level_m": round(float(normal["stage_m"]), 3),
         "depth_m": round(float(normal["depth_m"]), 3),
+        "opening": FLAT if float(normal["slope"]) == 0.0 else BED_PARALLEL,
         "outflow_stage_m": round(float(normal["stage_m"]), 3),
         "inflow_q_m3s": inflow_q,
         "friction_law": law,
         "friction_coefficient": coefficient,
-        # The step the channel is stable at is the ACCEPTED mesh's, measured on
-        # its own cells: a question that opens its own hydraulics reads it here
-        # rather than waiting for the domain step it runs ahead of.
-        "time_step_s": suggest_time_step_s(
-            max(float(measured if measured is not None else 0.0), MESH_H_FLOOR_M),
-            mesh=artifact),
         "discharge_note": discharge_note,
         "normal": {k: (round(v, 6) if isinstance(v, float) else v)
                    for k, v in normal.items()},
@@ -1128,6 +1231,19 @@ def _held_level(stage: Any) -> tuple[float, str] | None:
         f"the outflow holds at {stage.value:g} m, which "
         f"{stage.site_name or stage.site_id or 'the record'} reported"
         + (f" on {stage.sampled}" if stage.sampled else "") + ".")
+
+
+def _stands_over_the_reach(bed: Mapping[str, Any], level_m: float) -> bool:
+    """Is this measured level the water over THIS reach, rather than part of it?
+
+    Over the inflow run's own bed, yes: the surface covers the reach end to end.
+    Below the outflow section altogether, also yes - it is not a level on this
+    bed at all and the opening refuses by name rather than quietly deriving one
+    instead. In between is the reach a uniform-flow depth is for: a horizontal
+    surface at the outflow's level would leave the inflow face dry."""
+    section = [float(z) for _offset, z in (bed.get("outflow_section") or ())]
+    return (level_m > float(bed["bed_top_m"])
+            or (bool(section) and level_m <= min(section)))
 
 
 def _level_opening(bed: Mapping[str, Any], held: tuple[float, str], *,
@@ -1209,16 +1325,6 @@ def _measured_channel(roles: Mapping[str, Any], node_xy: Any,
     role_nodes: dict[str, list[int]] = {}
     for role in ("inflow", "outflow"):
         nodes = [int(n) for n in ((roles or {}).get(role) or ())]
-        if not nodes:
-            named = sorted(roles or {})
-            raise TelemacError(
-                f"this domain's edge names no {role!r} run, and an open channel "
-                "is a stretch of the edge the water enters by and a stretch it "
-                f"leaves by; the accepted mesh carries {named or 'no runs'}. "
-                "Draw the two runs on the edge, or name a domain producer that "
-                "measured them - a body whose edge names none is CLOSED, and a "
-                "closed body is asked a still-water question.",
-                error_code="TELEMAC_BOUNDARY_RUN_UNNAMED")
         if bed is None or max(nodes) >= bed.shape[0]:
             raise TelemacError(
                 f"the outflow stage is derived over the painted bed at the "
@@ -1350,10 +1456,6 @@ def _harbour_mesh_missing(message: str) -> Exception:
     return TelemacError(message, error_code="ARTEMIS_MESH_NOT_ACCEPTED")
 
 
-def _basin_mesh_missing(message: str) -> Exception:
-    return TelemacError(message, error_code="TELEMAC3D_MESH_NOT_ACCEPTED")
-
-
 async def settle_harbour(
     *,
     mesh: dict[str, Any],
@@ -1449,45 +1551,6 @@ async def settle_harbour(
             "result_slf": result_basename,
             "bed_source": facts["bed_source"]},
     }
-
-
-async def settle_basin(*, mesh: dict[str, Any],
-                       level: Any = None) -> dict[str, Any]:
-    """What a COLUMN needs on top of any domain: the free surface it opens at,
-    and the deepest column the accepted mesh carries under it.
-
-    A body nobody gauges opens at the zero its bed is counted from, which is
-    where a stated depth and every charted bathymetry are measured."""
-    import numpy as np
-
-    facts = _mesh_facts(mesh, missing=_basin_mesh_missing)
-    topology = await asyncio.to_thread(
-        read_topology, _mesh_field(mesh, "topology_uri",
-                                   missing=_basin_mesh_missing))
-    _points, _cells, node_bed, _lonlat = await asyncio.to_thread(
-        read_accepted_mesh_nodes,
-        _mesh_field(mesh, "display_uri", missing=_basin_mesh_missing))
-    surface_m = float(getattr(level, "value", level) or 0.0)
-    # The one measurement a vertical grid cannot be planned without is the DEEPEST
-    # column the mesh carries: the near-surface layer a sigma grid achieves is set
-    # over that column, so a plan made against a shallower one is a grid that
-    # cannot hold the declared thermocline where the thermocline actually is. A
-    # column is the free surface minus the bed, both on the one datum the level
-    # row and the bed row state between them.
-    max_depth = surface_m - float(np.nanmin(np.asarray(node_bed, dtype=float)))
-    if max_depth <= 0.0:
-        raise TelemacError(
-            f"the free surface opens at {surface_m:.3f} m and the deepest node "
-            "of the accepted mesh sits at or above it, so this domain holds no "
-            "water for a column to be solved in. State the depth the body holds, "
-            "or name a bed measured on the datum the level is read on.",
-            error_code="TELEMAC3D_COLUMN_EMPTY")
-    journal_note(
-        f"basin column: {facts['mesh_node_count']} nodes over a {max_depth:.1f} m "
-        f"deepest column below a {surface_m:.3f} m free surface. "
-        f"{topology['states']} - the water in this domain is conserved.")
-    return {"max_depth_m": round(max_depth, 2),
-            "surface_m": round(surface_m, 3)}
 
 
 def _segments_utm(polylines: Sequence[Any], utm_epsg: int) -> list[list[float]]:

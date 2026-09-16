@@ -220,7 +220,7 @@ def test_the_three_slots_are_the_world_this_run_stands_on():
     assert data["domain"].role == DOMAIN
     assert data["domain"].producer.runner == "fetch_river_reach"
     assert data["bed"].role == BED
-    assert data["bed"].producer.runner == "derive_merge_rasters"
+    assert data["bed"].producer.runner == "derive_survey_surface"
     assert (data["runs"].role, data["runs"].producer) == (RUNS, None)
     # Both slots reach the wire: what the user supplies supersedes the producer.
     assert data["domain"].fills_from_user and data["bed"].fills_from_user
@@ -230,12 +230,12 @@ def test_the_carrier_reaches_the_channel_as_ONE_reading_never_the_record():
     """The step that opens the channel refuses a record nobody chose a site
     from, so the flow is an OBSERVATION ranked against the domain's own point."""
     from trid3nt_server.workflows.runtime import Ref
-    from trid3nt_server.workflows.runtime.data import OBSERVATION
+    from trid3nt_server.workflows.runtime.data import DISCHARGE
 
     data = {decl.name: decl for decl in
             _template().telemac_micropollutant_release.workflow.data}
     carrier = data["carrier"]
-    assert carrier.role == OBSERVATION and carrier.is_context
+    assert carrier.role == DISCHARGE and carrier.is_context
     assert carrier.coercion["near"] == Ref("domain.centroid")
     assert carrier.coercion["field"] == "streamflow_cms"
 
@@ -256,7 +256,7 @@ def test_an_unsurveyed_domain_still_runs_on_the_terrain_alone():
     continues and the sheet says which side was missing."""
     data = {decl.name: decl for decl in
             _template().telemac_micropollutant_release.workflow.data}
-    assert data["survey"].is_context and data["surveyed_bed"].is_context
+    assert data["survey"].is_context
     assert "terrain surface stands" in data["survey"].context_sentence
     assert data["terrain"].is_context is False
 

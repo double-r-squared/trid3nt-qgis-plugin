@@ -12,20 +12,20 @@ join the run as the sixth slice.
 | `fixtures/` | data the tests read; no code | - | - |
 | `adapters/` | provider adapters, the message IR, the turn loop, the stream persistence | 22 | 289 |
 | `credentials/` | credential resolution, the auth handshake, identity | 7 | 95 |
-| `derive/` | the derive tools, the two session tools | 27 | 337 |
+| `derive/` | the derive tools, the two session tools | 27 | 340 |
 | `render/` | the emitter, the uri registry, publication, the format set, charts | 36 | 474 |
-| `fetchers/` | the fetch router, its executors, hooks and fallbacks | 69 | 1565 |
+| `fetchers/` | the fetch router, its executors, hooks and fallbacks | 70 | 1582 |
 | `gates/` | the gates, a declined card at each of them, the code-exec approval gate, the context budget, the circuit breaker | 23 | 336 |
-| `inputs/` | the typed inputs: a Point, an Extent, a Shape, the domain with the companions its producer measured, the bed, the boundary runs and the observation a run opens on, each from every form it arrives in, the user-input normalizers under them, the AOI acquired from any of them, and a user's own file adopted as a layer | 13 | 157 |
-| `mesh/` | the meshers, the mesh gate, topology, the bed over the one source it takes, the runs that prescribe a role and the shoreline the domain's own edge is | 7 | 230 |
+| `inputs/` | the typed inputs: a Point, an Extent, a Shape, the domain with the companions its producer measured, the bed it composes and reads as elevations, the boundary runs, the line a placed read follows and the observation a run opens on, each from every form it arrives in, the user-input normalizers under them, the AOI acquired from any of them, and a user's own file adopted as a layer | 15 | 195 |
+| `mesh/` | the meshers, the mesh gate, topology, the bed over the one source it takes, the runs that prescribe a role and the shoreline the domain's own edge is | 7 | 234 |
 | `model/` | the SysML model conformance check | 1 | 19 |
 | `plugin/` | the plugin seams the server suite reads offline, by `ast` | 1 | 3 |
-| `runtime/` | the declarative runtime, its engine-neutral slots and levers, the run journal | 8 | 278 |
+| `runtime/` | the declarative runtime, its engine-neutral slots and levers, the run journal | 9 | 296 |
 | `scripts/` | the dev instruments, the live-run harness and the proof renderers, skipped when `dev/` is absent | 8 | 57 |
 | `search/` | dataset and tool retrieval, the OGC adapter | 16 | 209 |
-| `server/` | the HTTP and WS routes, the fetch short-circuit and the Case AOI, persistence, telemetry | 28 | 552 |
+| `server/` | the HTTP and WS routes, the fetch short-circuit and the Case AOI, persistence, telemetry | 28 | 559 |
 | `solver/` | the executor, the run reads, the engine-room posture, the import graph that keeps it engine-free | 7 | 53 |
-| `telemac/` | the TELEMAC templates, the module surface, what each module writes and the primitives that read it, the listing reads, authoring | 36 | 672 |
+| `telemac/` | the TELEMAC templates, the module surface, what each module writes and the primitives that read it, the listing reads, authoring | 41 | 729 |
 | `tools/` | the registry, the arg normalizer, the tool cache | 14 | 376 |
 
 | file | what it is |
@@ -41,10 +41,10 @@ else has one.
 
 Six slices by subsystem, each its own foreground invocation, from the repo root:
 
-    make test-fetchers        # tests/fetchers                                                                      1529
-    make test-spatial         # tests/derive tests/render tests/mesh                                                1036
-    make test-engines         # tests/telemac tests/runtime tests/solver tests/search                               1186
-    make test-server          # tests/server tests/inputs tests/gates tests/credentials tests/model tests/scripts   1204
+    make test-fetchers        # tests/fetchers                                                                      1582
+    make test-spatial         # tests/derive tests/render tests/mesh                                                1048
+    make test-engines         # tests/telemac tests/runtime tests/solver tests/search                               1287
+    make test-server          # tests/server tests/inputs tests/gates tests/credentials tests/model tests/scripts   1294
     make test-model-surface   # tests/adapters tests/tools                                                           665
     make test-packages        # contracts/tests plugin/tests tests/plugin                                            811
 

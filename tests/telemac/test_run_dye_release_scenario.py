@@ -136,7 +136,7 @@ def test_the_carrier_flow_is_the_inflow_runs_value_and_not_a_param():
 
     assert "discharge_m3s" not in {p.name for p in param_rows(PARAMS)}
     carrier = next(d for d in data_rows(DATA) if d.name == "carrier")
-    assert carrier.role == "observation"
+    assert carrier.role == "discharge"
     assert carrier.coercion["measures"] == "a streamflow"
     assert "National Water Model" in carrier.context_sentence
 
@@ -181,32 +181,33 @@ def test_the_data_body_is_the_three_slots_and_what_composes_them():
     from trid3nt_server.workflows.telemac.templates.dye_release.dye_release import DATA
 
     rows = data_rows(DATA)
-    assert [d.name for d in rows] == ["domain", "runs", "survey", "surveyed_bed",
-                                      "terrain", "bed", "carrier", "stage"]
+    assert [d.name for d in rows] == ["domain", "runs", "survey", "terrain",
+                                      "bed", "carrier", "stage"]
     by_name = {d.name: d for d in rows}
     assert by_name["domain"].role == "domain"
     assert by_name["domain"].geometry == "polygon"
     assert by_name["domain"].producer.runner == "fetch_river_reach"
     assert by_name["bed"].role == "bed"
-    assert by_name["bed"].producer.runner == "derive_merge_rasters"
+    assert by_name["bed"].producer.runner == "derive_survey_surface"
     # ONE bed: the survey where it measured, the terrain everywhere else.
-    assert by_name["bed"].producer.kwargs["primary"] == DataRef("surveyed_bed")
-    assert by_name["bed"].producer.kwargs["fallback"] == DataRef("terrain")
-    assert [d.name for d in rows if d.is_context] == ["survey", "surveyed_bed",
-                                                      "carrier"]
+    assert by_name["bed"].producer.kwargs["points"] == DataRef("survey")
+    assert by_name["bed"].coercion["over"] == DataRef("terrain")
+    assert [d.name for d in rows if d.is_context] == ["survey", "carrier"]
     # ONE READING, not the published grid: the step that opens the channel
     # refuses a record nobody chose a site from, so the flow arrives ingested.
     carrier = by_name["carrier"]
-    assert carrier.role == "observation"
+    assert carrier.role == "discharge"
     assert carrier.coercion["field"] == "streamflow_cms"
     assert carrier.coercion["near"] == Ref("domain.centroid")
     assert "terrain surface stands" in by_name["survey"].context_sentence
-    # No row here is superseded by a supplied artifact and none declares a
-    # ladder: the bed is a MERGE of two available layers, never a fallback chain.
+    # No row here is superseded by a supplied artifact, and the DOMAIN is the
+    # one ladder: the reach where a channel cuts, the waterbody the seed stands
+    # in where none does. The bed composes two layers it has, which is not a
+    # fallback chain.
     assert all(d.producer is None or d.producer.supplied_uri is None
                for d in rows)
-    assert all(d.producer is None or d.producer.ladder_rungs == ()
-               for d in rows)
+    assert [d.name for d in rows
+            if d.producer is not None and d.producer.ladder_rungs] == ["domain"]
 
 
 def test_the_release_point_seeds_the_domain_producer():

@@ -56,28 +56,26 @@ def test_the_domain_is_one_row_the_reach_fetcher_produces():
         "release.lon", "release.lat"]
 
 
-def test_the_bed_is_one_row_the_merge_composed_from_the_survey_and_the_terrain():
-    """set_bed takes ONE source: the survey where it measured and the terrain
-    everywhere else are composed into that one row by the merge derive."""
+def test_the_bed_is_one_row_the_slot_composed_from_the_survey_and_the_terrain():
+    """set_bed takes ONE source: the soundings are gridded by the derive the row
+    names, and the slot lays that measurement OVER the terrain beside it."""
     rows = _rows()
     bed = rows["bed"]
     assert bed.role == "bed"
-    assert bed.producer.runner == "derive_merge_rasters"
-    assert bed.producer.kwargs == {"primary": DataRef("surveyed_bed"),
-                                   "fallback": DataRef("terrain")}
-    assert rows["surveyed_bed"].producer.runner == "derive_survey_surface"
-    assert rows["terrain"].producer.runner == "fetch_copernicus_dem"
+    assert bed.producer.runner == "derive_survey_surface"
+    assert bed.producer.kwargs["points"] == DataRef("survey")
+    assert bed.coercion["over"] == DataRef("terrain")
+    assert rows["terrain"].producer.runner == "fetch_dem"
     assert [row.name for row in _WORKFLOW.data if row.role == "bed"] == ["bed"]
 
 
 def test_an_unsurveyed_domain_still_runs_and_the_sheet_says_which_bed_it_got():
     """A body of water with no federal navigation project has no published
-    survey. Both survey rows are CONTEXT, so the terrain passes through the
-    merge and the run carries the sentence rather than refusing."""
+    survey. The survey row is CONTEXT, the grid of nothing is nothing, and the
+    terrain the slot composes over is the whole bed."""
     rows = _rows()
-    assert rows["survey"].is_context and rows["surveyed_bed"].is_context
+    assert rows["survey"].is_context
     assert "terrain surface stands" in rows["survey"].context_sentence
-    assert "terrain surface stands" in rows["surveyed_bed"].context_sentence
 
 
 def test_the_carrier_discharge_is_an_observation_row_not_a_step():
@@ -86,7 +84,7 @@ def test_the_carrier_discharge_is_an_observation_row_not_a_step():
     the user's own number wins over any record."""
     carrier = _rows()["carrier"]
     assert carrier.producer.runner == "fetch_noaa_nwm_streamflow"
-    assert carrier.is_context and carrier.role == "observation"
+    assert carrier.is_context and carrier.role == "discharge"
     assert carrier.coercion["field"] == "streamflow_cms"
     assert carrier.coercion["near"] == Ref("domain.centroid")
     assert carrier.producer.kwargs["valid_time"].name == "event_time"
@@ -180,9 +178,10 @@ def test_the_boundary_values_read_the_measured_walk_and_the_open_channel_step():
     faces carry is the flow and the level the open-channel step measured."""
     measured = _MODULE.STEERING.ASSERTED["boundaries"]["measured"]
     assert measured["liquid_boundary_order"].path == "settled.liquid_boundary_order"
-    assert measured["inflow_q_m3s"].path == "channel.inflow_q_m3s"
-    assert measured["outflow_stage_m"].path == "channel.outflow_stage_m"
-    assert _MODULE.STEERING.ASSERTED["INITIAL_DEPTH"].path == "channel.depth_m"
+    assert measured["inflow_q_m3s"].path == "settled.inflow_q_m3s"
+    assert measured["outflow_stage_m"].path == "settled.outflow_stage_m"
+    assert _MODULE.STEERING.ASSERTED["INITIAL_DEPTH"].path == "settled.depth_m"
+    assert _MODULE.STEERING.ASSERTED["INITIAL_ELEVATION"].path == "settled.level_m"
 
 
 def test_every_slot_a_user_can_fill_reaches_the_wire():

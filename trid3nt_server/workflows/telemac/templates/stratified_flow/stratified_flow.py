@@ -42,7 +42,6 @@ from trid3nt_server.workflows.telemac.workflow import Door, TelemacWorkflow
 __all__ = ["ANSWER", "CAPTIONS", "DATA", "OUTPUTS", "PARAMS", "STEERING",
            "telemac3d_stratified_flow"]
 
-_AUTHORING = "trid3nt_server.workflows.telemac.authoring"
 
 #: What the run directory holds the run's files under - the deck's own 3D and 2D
 #: RESULT FILE statements. The 3D file is the answer; the 2D file is the depth
@@ -87,7 +86,7 @@ class DATA:
     # above is counted from. ABSENT is legal - a pond has no gauge, and a bed
     # stated as a depth is counted from the free surface itself, so the column
     # opens at the bed's own zero and the sheet says so.
-    level = Data.observation(
+    level = Data.level(
         tool("fetch_greatlakes_water_level", bbox=Ref("domain.bbox"),
              start_date=Ref("reading_day"), end_date=Ref("reading_day")),
         near=Ref("domain.centroid"), measures="a water level",
@@ -122,7 +121,7 @@ class STEERING(T3D):
     # OBSERVED. The dictionary's own zero is the chart datum, which is where a
     # charted bed is counted from - water left there has none on its rim at all.
     INITIAL_CONDITIONS = "CONSTANT ELEVATION"
-    INITIAL_ELEVATION = Ref("basin.surface_m")
+    INITIAL_ELEVATION = Ref("settled.level_m")
 
     # The ONE pair that cannot be left to the dictionary, measured both ways:
     # LECDON stops on "THE LAW OF BOTTOM FRICTION 5 IS ASKED / GIVE THE
@@ -174,14 +173,14 @@ class STEERING(T3D):
     #: The sigma grid that can HOLD the declared thermocline over this domain's
     #: own deepest column, or the refusal that says how many planes would.
     vertical_grid = VerticalGrid(levels=P.levels,
-                                 max_depth_m=Ref("basin.max_depth_m"),
+                                 max_depth_m=Ref("settled.max_depth_m"),
                                  thermocline_depth_m=P.thermocline_depth_m)
     #: The column the run OPENS with, written into the engine's own initial-
     #: condition hook because no keyword carries a non-uniform tracer field.
-    column = Column(levels=P.levels, max_depth_m=Ref("basin.max_depth_m"),
+    column = Column(levels=P.levels, max_depth_m=Ref("settled.max_depth_m"),
                     thermocline_depth_m=P.thermocline_depth_m,
                     warm_c=P.warm_temp_c, cold_c=P.cold_temp_c,
-                    surface_m=Ref("basin.surface_m"))
+                    surface_m=Ref("settled.level_m"))
     #: The wind that decides whether the difference survives. A calm run states
     #: nothing here at all.
     wind = Wind(speed_mps=P.wind_speed_mps, from_deg=P.wind_direction_deg)
@@ -250,14 +249,6 @@ telemac3d_stratified_flow = register_workflow(
             # the scenario is read at.
             Step(runner="trid3nt_server.inputs.instant.day", stage="prep",
                  kwargs={"value": ParamRef("event_time")}).named("reading_day"),
-            # The COLUMN this question needs on top of the domain: the free
-            # surface the run opens at, and the deepest column the accepted mesh
-            # carries under it. Both on the one datum the level and the bed state
-            # between them, which is what makes their difference a depth; an
-            # ungauged body opens at the zero its bed is counted from.
-            Step(runner=f"{_AUTHORING}.assembler.settle_basin", stage="author",
-                 kwargs={"mesh": Ref("mesh"),
-                         "level": Ref("level")}).named("basin"),
         ),
         # The two files the run has to write. Stated rather than read off the
         # deck because a 3D deck names them 3D RESULT FILE and 2D RESULT FILE,

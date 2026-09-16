@@ -80,10 +80,11 @@ def settle(monkeypatch, tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_the_settle_knows_the_mesh_and_the_clock_and_nothing_about_water(
+async def test_the_settle_knows_the_mesh_the_clock_and_the_water_it_holds(
         settle):
     """Engine-neutral: a name off the artifact, the clock the ask states, the
-    walk the mesh measured. No depth, no stage, no discharge."""
+    walk the mesh measured. Nothing stated the level and the bed is on a datum,
+    so there is no water measured and nothing is claimed about it."""
     out = await settle(mesh=_mesh_record(min_edge_m=14.0))
     assert out["name"] == "coweeta_creek"
     assert out["title"] == "coweeta_creek DOMAIN"
@@ -93,7 +94,8 @@ async def test_the_settle_knows_the_mesh_and_the_clock_and_nothing_about_water(
     assert out["liquid_boundary_order"] == ["outflow", "inflow"]
     assert out["liquid_boundary_prescribes"] == ["elevation", "flowrate"]
     assert out["bed_source"] == "cop-dem-glo-30"
-    assert not {"depth_m", "outflow_stage_m", "inflow_q_m3s"} & set(out)
+    assert {out[key] for key in ("level_m", "depth_m", "max_depth_m", "opening",
+                                 "outflow_stage_m", "inflow_q_m3s")} == {None}
 
 
 @pytest.mark.asyncio

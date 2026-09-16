@@ -68,9 +68,10 @@ _REACH_LENGTH_KM = 6.0
 _FRICTION_LAW = 3
 _FRICTION_COEFFICIENT = 33.0
 
-#: How far back a channel survey still describes the bed the water is moving
-#: over. Older soundings are still the measurement a terrain surface is not.
-_SURVEY_SINCE = "2015-01-01"
+#: The terrain cell the banks are painted from. 3DEP is PINNED, not preferred: a
+#: DSM (Copernicus GLO-30 carries canopy) puts the bank on the tree tops, and its
+#: EGM2008 zero is not the NAVD88 the surveys and the gauges are measured on.
+_TERRAIN_RESOLUTION_M = 10
 
 
 class DATA:
@@ -78,9 +79,14 @@ class DATA:
 
     # A marker named up front also names which stretch to model: the reach is
     # walked downstream from it. A domain the user supplies supersedes this.
-    domain = Data.domain(tool("fetch_river_reach",
-                              seed_point=[Ref("release.lon"), Ref("release.lat")],
-                              distance_km=_REACH_LENGTH_KM))
+    # The seed is on a lake rather than in a channel where no reach cuts,
+    # so the producer is a LADDER: the reach, else the waterbody the seed
+    # stands in, which is a closed body and names no runs.
+    domain = Data.domain(
+        tool("fetch_river_reach", distance_km=_REACH_LENGTH_KM,
+             seed_point=[Ref("release.lon"), Ref("release.lat")])
+        .ladder(tool("fetch_nhd_waterbody_at_point",
+                     seed_point=[Ref("release.lon"), Ref("release.lat")])))
     # THE STRETCHES OF ITS EDGE the water crosses. The reach producer measured
     # them where it cut the section, and they ride on the domain it returned; a
     # domain that arrives with none - a drawn outline, a lake - is asked for
@@ -91,46 +97,40 @@ class DATA:
     # deep at the banks and the shear that moves it is measured over nothing. A
     # domain with no federal navigation project has no published survey, and the
     # sheet says so rather than refusing.
-    survey = Data(tool("fetch_ehydro_surveys", bbox=Ref("domain.bbox"),
-                       since=_SURVEY_SINCE)
+    survey = Data(tool("fetch_ehydro_surveys", bbox=Ref("domain.bbox"))
                   ).context("no published channel survey over this domain; "
                             "the terrain surface stands")
-    # The survey is SOUNDINGS; the surface between them is a derive, and it is
-    # context for the same reason its input is.
-    surveyed_bed = Data(tool("derive_survey_surface", points=survey,
-                             resolution_m=ParamRef("mesh_resolution_m"))
-                        ).context("the survey held no soundings to grid; "
-                                  "the terrain surface stands")
-    # GLO-30 is asked for on its OWN 1-arcsecond lattice, so the raster the nodes
-    # are sampled from carries the source pixels rather than a resample of them.
-    terrain = Data(tool("fetch_copernicus_dem", bbox=Ref("domain.bbox"),
-                        px_per_deg=3600.0, purpose="bed elevation"))
-    # ONE bed: the survey where it measured, the terrain everywhere else. With
-    # the survey absent the terrain passes through unchanged, and the merge
-    # refuses two vertical datums by name rather than writing a step into the
-    # bed an evolution depth is then read off.
-    bed = Data.bed(tool("derive_merge_rasters", primary=surveyed_bed,
-                        fallback=terrain))
+    # A terrain surface measures the water TOP, so where no survey reaches it
+    # the modelled water is shallower than the real water.
+    terrain = Data(tool("fetch_dem", bbox=Ref("domain.bbox"), source="3dep",
+                        resolution_m=_TERRAIN_RESOLUTION_M,
+                        purpose="bed elevation"))
+    # ONE bed: the survey where it measured, the terrain everywhere else. The
+    # soundings are DEPTHS below the survey's own project datum and the slot
+    # reads them as elevations on the frame that survey publishes itself
+    # against; with the survey absent the terrain is the whole bed.
+    bed = Data.bed(tool("derive_survey_surface", points=survey,
+                        value_field="depth_below_datum_m",
+                        resolution_m=ParamRef("mesh_resolution_m")),
+                   over=terrain)
     # The carrier flow the inflow run prescribes. A number stated on this row
     # stands over any record, so the flow is the slot's and no param twins it.
     # ONE reading off whatever reports nearest the water, because the flow the
     # scour is driven by is a number and not a layer.
-    carrier = Data.observation(
+    carrier = Data.discharge(
         tool("fetch_noaa_nwm_streamflow", bbox=Ref("domain.bbox"),
              valid_time=ParamRef("event_time")),
         near=Ref("domain.centroid"), value_field="streamflow_cms",
         measures="a streamflow", opens="the carrier flow opens at"
     ).context("the National Water Model published no streamflow over this "
               "domain at that cycle")
-    # THE LEVEL THE OUTFLOW HOLDS where the reach does not FALL. A reach whose
-    # bed is a surface DEM has the water top for a floor and no fall between its
-    # ends, so there is no uniform-flow depth to derive and the outflow holds at
-    # a level somebody measured instead. An ELEVATION on the datum the bed is
-    # painted on - a gauge publishes its height above its own zero, which is a
+    # THE LEVEL the water stands at, which the run opens flat at and the outflow
+    # holds. A reach whose measured ends do not FALL has no uniform-flow depth to
+    # derive, and a closed body never had one. An ELEVATION on the datum the bed
+    # is painted on - a gauge publishes its height above its own zero, which is a
     # different surface, so no source is named here and the number is stated.
-    stage = Data.observation(near=Ref("domain.centroid"), units="m",
-                             measures="a water-surface elevation",
-                             opens="the outflow holds at").optional()
+    stage = Data.level(near=Ref("domain.centroid"),
+                       opens="the outflow holds at").optional()
 
 
 class STEERING(T2D):
@@ -146,13 +146,14 @@ class STEERING(T2D):
     TIME_STEP = Ref("settled.time_step_s")
     LISTING_PRINTOUT_PERIOD = 500
 
-    # The run OPENS at the derived normal depth, laid bed-parallel. Not a
-    # constant elevation at the outflow stage: the stage is derived only where
-    # the domain FALLS, so a horizontal surface at the outlet's level leaves every
-    # node upstream of it dry - the flowrate face among them - and the engine
-    # refuses a discharge it has no water to impose.
-    INITIAL_CONDITIONS = "CONSTANT DEPTH"
-    INITIAL_DEPTH = Ref("channel.depth_m")
+    # HOW THE WATER OPENS is the settle's, not this deck's: flat at the level
+    # somebody measured, or a sheet of one depth on the bed where a uniform-flow
+    # depth was derived instead. A horizontal surface at a level the reach does
+    # not reach leaves every node upstream of it dry - the flowrate face among
+    # them - which is why the two are not the same statement.
+    INITIAL_CONDITIONS = Ref("settled.opening")
+    INITIAL_DEPTH = Ref("settled.depth_m")
+    INITIAL_ELEVATION = Ref("settled.level_m")
 
     LAW_OF_BOTTOM_FRICTION = _FRICTION_LAW
     FRICTION_COEFFICIENT = _FRICTION_COEFFICIENT
@@ -195,8 +196,8 @@ class STEERING(T2D):
         measured={"liquid_boundary_order": Ref("settled.liquid_boundary_order"),
                   "liquid_boundary_prescribes":
                       Ref("settled.liquid_boundary_prescribes"),
-                  "inflow_q_m3s": Ref("channel.inflow_q_m3s"),
-                  "outflow_stage_m": Ref("channel.outflow_stage_m")},
+                  "inflow_q_m3s": Ref("settled.inflow_q_m3s"),
+                  "outflow_stage_m": Ref("settled.outflow_stage_m")},
         tracers=[0.0])
 
     #: The marker the bed change is watched against, released as a finite pulse
@@ -277,17 +278,6 @@ telemac_bed_scour = register_workflow(
     Door(
         steering=STEERING,
         produce=(
-            # The open-channel hydraulics this question needs on top of the
-            # domain: the carrier flow the inflow prescribes, the level the
-            # outflow holds, and the depth the run opens at, all measured over
-            # the accepted mesh at the roughness the deck is written at.
-            Step(runner=f"{_AUTHORING}.assembler.settle_open_channel",
-                 stage="author",
-                 kwargs={"mesh": Ref("mesh"), "carrier": Ref("carrier"),
-                         "stage": Ref("stage"),
-                         "friction_law": _FRICTION_LAW,
-                         "friction_coefficient": _FRICTION_COEFFICIENT}
-                 ).named("channel"),
             # WHERE the marker enters the water, settled against the accepted
             # mesh before the sheet reads it. The domain rides along because an
             # unplaced marker sits along its centerline companion, and a placed
@@ -296,7 +286,7 @@ telemac_bed_scour = register_workflow(
                  kwargs={"point": P.release, "mesh": Ref("mesh"),
                          "domain": Ref("domain"),
                          "fraction": P.spill_fraction,
-                         "label": "Release point"}).named("source")),
+                         "label": "Release point"}).named("source"),),
         results=(_RESULT, RESULT_FILENAME),
         compute_class=ParamRef("compute_class"),
         outputs=OUTPUTS, captions=CAPTIONS, answer=ANSWER,

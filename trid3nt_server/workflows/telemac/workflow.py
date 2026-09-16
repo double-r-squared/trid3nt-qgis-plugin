@@ -147,6 +147,20 @@ class Door:
 
         return LEVER_NAMES if self.owns_stages else ()
 
+    def _asserted(self, keyword: str) -> Any:
+        """One value the DECK itself states, read off the body that states it.
+
+        A step derived at a roughness the deck was not written at describes a
+        different run, so the number is read from the deck rather than restated
+        beside it."""
+        stated = self.steering.ASSERTED.get(keyword)
+        if stated is None:
+            raise PlanValidationError(
+                f"the workflow settles this question's open channel at the "
+                f"roughness its deck is written at, and the deck states no "
+                f"{keyword}.")
+        return stated
+
     def _file(self, keyword: str, fallback: str) -> str:
         """One file the deck itself names, read off the body that names it.
 
@@ -232,7 +246,8 @@ class Door:
         on the runtime, so the plan that reads them is built once here rather
         than restated by every template."""
         from trid3nt_server.workflows.mesh.tool import mesh_op, tool
-        from trid3nt_server.workflows.runtime.data import BED, DOMAIN, RUNS
+        from trid3nt_server.workflows.runtime.data import (
+            BED, DISCHARGE, DOMAIN, LEVEL, RUNS)
         from trid3nt_server.workflows.runtime.plan import DataRef
 
         slots: dict[str, list[str]] = {}
@@ -264,8 +279,24 @@ class Door:
         result = self._file("RESULTS_FILE",
                             self.results[0] if self.results else "results.slf")
         declared = {prm.name for prm in ops.params}
+        level = (slots.get(LEVEL) or [""])[0]
+        # THE OPEN-CHANNEL ADDITION, listed only where this question's rows carry
+        # what a channel is: a discharge for its inflow run. Everything else is a
+        # hole with water in it, and the base settles that on its own.
+        channel = (
+            (Step(runner=f"{_TELEMAC}.authoring.assembler.settle_open_channel",
+                  stage="author",
+                  kwargs={"mesh": Ref("mesh"),
+                          "carrier": DataRef(slots[DISCHARGE][0]),
+                          "stage": DataRef(level) if level else None,
+                          "friction_law": self._asserted("LAW_OF_BOTTOM_FRICTION"),
+                          "friction_coefficient":
+                              self._asserted("FRICTION_COEFFICIENT")}
+                  ).named("channel"),)
+            if slots.get(DISCHARGE) else ())
         return replace(
             self,
+            produce=channel + tuple(self.produce),
             mesh=self.mesh if self.mesh is not None else tool.build_mesh(
                 mesher=self.mesher, kind=self.kind, extent=DataRef(domain),
                 resolution_m=ParamRef("mesh_resolution_m"),
@@ -290,6 +321,11 @@ class Door:
                 runner=f"{_TELEMAC}.authoring.assembler.settle_domain",
                 stage="author",
                 kwargs={"mesh": Ref("mesh"),
+                        # WHAT THE WATER STANDS AT: the channel's own measurement
+                        # where this question has one, else the level slot, else
+                        # nothing - and a bed stated as a depth needs nothing.
+                        "level": (Ref("channel") if channel
+                                  else DataRef(level) if level else None),
                         "geometry": geometry, "boundary": boundary,
                         "result": result,
                         "mesh_resolution_m": ParamRef("mesh_resolution_m"),

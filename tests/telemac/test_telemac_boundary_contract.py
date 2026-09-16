@@ -108,6 +108,15 @@ def test_the_run_prescribes_at_the_number_whose_quad_reads_it():
     assert slots["PRESCRIBED_TRACERS_VALUES"] == [0.0, 0.0]
 
 
+def test_a_closed_body_writes_no_prescribed_list_at_all():
+    """A body whose edge names no run prescribes nothing anywhere. An EMPTY list
+    is not that statement: it is a keyword with nothing after it, which DAMOCLES
+    reads as the next line's business."""
+    slots = _lists([])
+    assert not {"PRESCRIBED_FLOWRATES", "PRESCRIBED_ELEVATIONS",
+                "PRESCRIBED_TRACERS_VALUES"} & set(slots)
+
+
 def test_flipping_the_strategy_moves_the_quad_and_the_keyword_together():
     """ONE table decides both files. Swap what the two roles prescribe and the
     boundary file's quads and the steering file's lists move as one - there is no

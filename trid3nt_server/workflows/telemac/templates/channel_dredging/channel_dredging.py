@@ -57,14 +57,9 @@ _REACH_LENGTH_KM = 2.0
 _FRICTION_LAW = 3
 _FRICTION_COEFFICIENT = 33.0
 
-#: How far back a published channel survey still describes the fairway the dredger
-#: works in. The newest survey is not necessarily the one over this stretch, so the
-#: window is read and what comes back is unioned.
-_SURVEY_SINCE = "2015-01-01"
-
 #: The terrain cell the banks are painted from. 3DEP is PINNED, not preferred: a
-#: DSM (Copernicus GLO-30 carries canopy) puts the bank on the tree tops, and a
-#: pinned source surfaces its own typed error instead of switching dataset.
+#: DSM (Copernicus GLO-30 carries canopy) puts the bank on the tree tops, and its
+#: EGM2008 zero is not the NAVD88 the surveys and the gauges are measured on.
 _TERRAIN_RESOLUTION_M = 10
 
 #: Which reference surface every action reads its levels from: the profile file
@@ -82,46 +77,48 @@ class DATA:
     #: THE CHANNEL. A seed on the water names a stretch of river and the fetcher
     #: returns the polygon with the two end transects it was cut between and the
     #: centerline beside it; a fairway the port supplies supersedes it.
-    domain = Data.domain(tool("fetch_river_reach",
-                              seed_point=[Ref("seed_point.lon"),
-                                          Ref("seed_point.lat")],
-                              distance_km=_REACH_LENGTH_KM))
+    #: The seed is on a lake rather than in a channel where no reach cuts,
+    #: so the producer is a LADDER: the reach, else the waterbody the seed
+    #: stands in, which is a closed body and names no runs.
+    domain = Data.domain(
+        tool("fetch_river_reach", distance_km=_REACH_LENGTH_KM,
+             seed_point=[Ref("seed_point.lon"), Ref("seed_point.lat")])
+        .ladder(tool("fetch_nhd_waterbody_at_point",
+                     seed_point=[Ref("seed_point.lon"), Ref("seed_point.lat")])))
     # THE STRETCHES OF ITS EDGE the water crosses. The reach producer measured
     # them where it cut the section, and they ride on the domain it returned; a
     # domain that arrives with none - a drawn outline, a lake - is asked for
     # them on the canvas, and an edge that names none is a closed body's.
     runs = Data.runs()
+    #: THE LINE the dredge's reference profiles are stationed along: the
+    #: centerline the reach producer measured, or the one the port draws over a
+    #: fairway nobody mapped a channel through.
+    line = Data.line()
     #: THE MEASUREMENT, and the whole reason a dredged volume is worth reading: a
     #: surface DEM measures the water top, so a fairway painted from one is
     #: centimetres deep and the cut to grade is summed over nothing. A channel with
     #: no federal navigation project has no published survey, and the sheet says so
     #: rather than refusing.
     survey = Data(tool("fetch_ehydro_surveys", bbox=Ref("domain.bbox"),
-                       since=_SURVEY_SINCE,
                        purpose="channel survey soundings")
                   ).context("no published channel survey over this domain; "
                             "the terrain surface stands")
-    #: The soundings are points; the surface between them is a derive, and it is
-    #: context for the same reason its input is.
-    surveyed_bed = Data(tool("derive_survey_surface", points=survey,
-                             value_field="depth_below_datum_m",
-                             resolution_m=ParamRef("mesh_resolution_m"))
-                        ).context("the survey held no soundings to grid; "
-                                  "the terrain surface stands")
     terrain = Data(tool("fetch_dem", bbox=Ref("domain.bbox"), source="3dep",
                         resolution_m=_TERRAIN_RESOLUTION_M,
                         purpose="channel bed elevation"))
-    #: ONE bed: the survey where it measured, the terrain everywhere else. With
-    #: the survey absent the terrain passes through unchanged, and the merge
-    #: refuses two vertical datums by name rather than writing a step into the
-    #: bed a dredged volume is then summed over.
-    bed = Data.bed(tool("derive_merge_rasters", primary=surveyed_bed,
-                        fallback=terrain))
+    # ONE bed: the survey where it measured, the terrain everywhere else. The
+    # soundings are DEPTHS below the survey's own project datum and the slot
+    # reads them as elevations on the frame that survey publishes itself
+    # against; with the survey absent the terrain is the whole bed.
+    bed = Data.bed(tool("derive_survey_surface", points=survey,
+                        value_field="depth_below_datum_m",
+                        resolution_m=ParamRef("mesh_resolution_m")),
+                   over=terrain)
     #: The flow that shoals the fairway and carries what the dredger disturbs:
     #: ONE reading off the nearest reporting site, or the number stated on this
     #: row, which stands over any record. What the open channel opened on is
     #: said once, on its own journal note.
-    carrier = Data.observation(
+    carrier = Data.discharge(
         tool("fetch_noaa_nwm_streamflow", bbox=Ref("domain.bbox"),
              valid_time=ParamRef("event_time")),
         near=Ref("domain.centroid"), value_field="streamflow_cms",
@@ -134,15 +131,13 @@ class DATA:
     #: or handed over as the port's own layers.
     dredge_area = Data.supplied(geometry="polygon")
     dump_area = Data.supplied(geometry="polygon")
-    # THE LEVEL THE OUTFLOW HOLDS where the reach does not FALL. A reach whose
-    # bed is a surface DEM has the water top for a floor and no fall between its
-    # ends, so there is no uniform-flow depth to derive and the outflow holds at
-    # a level somebody measured instead. An ELEVATION on the datum the bed is
-    # painted on - a gauge publishes its height above its own zero, which is a
+    # THE LEVEL the water stands at, which the run opens flat at and the outflow
+    # holds. A reach whose measured ends do not FALL has no uniform-flow depth to
+    # derive, and a closed body never had one. An ELEVATION on the datum the bed
+    # is painted on - a gauge publishes its height above its own zero, which is a
     # different surface, so no source is named here and the number is stated.
-    stage = Data.observation(near=Ref("domain.centroid"), units="m",
-                             measures="a water-surface elevation",
-                             opens="the outflow holds at").optional()
+    stage = Data.level(near=Ref("domain.centroid"),
+                       opens="the outflow holds at").optional()
 
 
 class STEERING(T2D):
@@ -158,14 +153,14 @@ class STEERING(T2D):
     TIME_STEP = Ref("settled.time_step_s")
     LISTING_PRINTOUT_PERIOD = 500
 
-    # The run OPENS at the derived normal depth, laid bed-parallel. Not a
-    # constant elevation at the outflow stage: the stage is derived only where
-    # the channel FALLS, so a horizontal surface at the outlet's level leaves
-    # every node upstream of it dry - the flowrate face among them - and the
-    # engine refuses a discharge it has no water to impose. It is also the
-    # surface the dredge's own reference profiles are laid at.
-    INITIAL_CONDITIONS = "CONSTANT DEPTH"
-    INITIAL_DEPTH = Ref("channel.depth_m")
+    # HOW THE WATER OPENS is the settle's, not this deck's: flat at the level
+    # somebody measured, or a sheet of one depth on the bed where a uniform-flow
+    # depth was derived instead. A horizontal surface at a level the reach does
+    # not reach leaves every node upstream of it dry - the flowrate face among
+    # them - which is why the two are not the same statement.
+    INITIAL_CONDITIONS = Ref("settled.opening")
+    INITIAL_DEPTH = Ref("settled.depth_m")
+    INITIAL_ELEVATION = Ref("settled.level_m")
 
     LAW_OF_BOTTOM_FRICTION = _FRICTION_LAW
     FRICTION_COEFFICIENT = _FRICTION_COEFFICIENT
@@ -202,8 +197,8 @@ class STEERING(T2D):
         measured={"liquid_boundary_order": Ref("settled.liquid_boundary_order"),
                   "liquid_boundary_prescribes":
                       Ref("settled.liquid_boundary_prescribes"),
-                  "inflow_q_m3s": Ref("channel.inflow_q_m3s"),
-                  "outflow_stage_m": Ref("channel.outflow_stage_m")},
+                  "inflow_q_m3s": Ref("settled.inflow_q_m3s"),
+                  "outflow_stage_m": Ref("settled.outflow_stage_m")},
         tracers=[])
 
     #: The bed the dredger cuts into, and the dredger itself. One class, bedload
@@ -287,31 +282,19 @@ telemac_channel_dredging = register_workflow(
     PARAMS,
     Door(
         steering=STEERING,
-        produce=(
-            # The open-channel hydraulics this question needs on top of the
-            # domain: the flow the inflow prescribes, the level the outflow
-            # holds, and the depth the run opens at, all measured over the
-            # accepted mesh at the roughness the deck is written at.
-            Step(runner=f"{_AUTHORING}.assembler.settle_open_channel",
-                 stage="author",
-                 kwargs={"mesh": Ref("mesh"), "carrier": Ref("carrier"),
-                         "stage": Ref("stage"),
-                         "friction_law": _FRICTION_LAW,
-                         "friction_coefficient": _FRICTION_COEFFICIENT}
-                 ).named("channel"),
-            # The two areas and the reference surface, measured against the
-            # accepted mesh: the surface every design depth is read from is the
-            # bed the mesh carries plus the depth the channel opens at, laid out
-            # as cross-sections along the domain's own centerline, stationed
-            # downstream from the end its inflow run names.
-            Step(runner=f"{_AUTHORING}.assembler.settle_dredge",
-                 stage="author",
-                 kwargs={"mesh": Ref("mesh"),
-                         "domain": Ref("domain"),
-                         "settled": Ref("channel"),
-                         "areas": {"dredge_area": DATA.dredge_area,
-                                   "dump_area": DATA.dump_area}}
-                 ).named("dredge")),
+        # The two areas and the reference surface, measured against the SETTLED
+        # run: the surface every design depth is read from is the water surface
+        # the run opens at, laid out as cross-sections along the line the domain
+        # producer measured, stationed downstream from the end its inflow names.
+        derive=(Step(runner=f"{_AUTHORING}.assembler.settle_dredge",
+                     stage="author",
+                     kwargs={"mesh": Ref("mesh"),
+                             "line": Ref("line"),
+                             "domain": Ref("domain"),
+                             "settled": Ref("settled"),
+                             "areas": {"dredge_area": DATA.dredge_area,
+                                       "dump_area": DATA.dump_area}}
+                     ).named("dredge"),),
         results=(_RESULT, RESULT_FILENAME),
         compute_class=ParamRef("compute_class"),
         answer=ANSWER,

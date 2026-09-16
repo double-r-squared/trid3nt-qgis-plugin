@@ -54,10 +54,11 @@ def test_the_cut_is_the_first_node_the_override_reaches():
     # rate override inherits them
     assert labels[:cut] == ["mesh", "channel", "outfall", "settled"]
     # so is every DATA row the world is read through - the domain the reach
-    # producer cut, the runs of its edge, the published survey, the terrain under
-    # it, the bed the two merge into and the carrier flow the inflow prescribes
-    assert keep == frozenset({"domain", "runs", "survey", "surveyed_bed",
-                              "terrain", "bed", "carrier", "stage"})
+    # producer cut, the runs of its edge, the line down it, the published survey,
+    # the terrain under it, the bed the slot composes from the two and the
+    # carrier flow the inflow prescribes
+    assert keep == frozenset({"domain", "runs", "line", "survey", "terrain",
+                              "bed", "carrier", "stage"})
 
 
 def test_a_mesh_override_cuts_earlier_than_a_physics_one():

@@ -82,10 +82,10 @@ def test_the_level_the_free_surface_opens_at_is_one_measured_value():
     a carrier discharge: one reading off the nearest gauge that watched this water,
     ranked against a point inside the polygon rather than the mean of its vertices."""
     from trid3nt_server.workflows.runtime import Ref
-    from trid3nt_server.workflows.runtime.data import OBSERVATION
+    from trid3nt_server.workflows.runtime.data import LEVEL
 
     row = next(d for d in _workflow().data if d.name == "level")
-    assert row.role == OBSERVATION
+    assert row.role == LEVEL
     assert row.producer.runner == "fetch_greatlakes_water_level"
     assert row.coercion["near"] == Ref("domain.centroid")
     assert row.coercion["opens"]
@@ -151,20 +151,20 @@ def test_the_owned_mesh_paints_its_bed_and_takes_its_roles_from_the_domain():
 
 def test_the_column_and_the_free_surface_come_from_one_measurement():
     """The vertical grid and the initial column are planned over the SAME deepest
-    column under the SAME free surface, so a grid that holds the thermocline and a
+    column under the SAME free surface - the BASE settle's, which measures the
+    water any body of water holds, so a grid that holds the thermocline and a
     hook that places it cannot disagree."""
     from trid3nt_server.workflows.runtime import Ref
 
-    module = _module()
-    asserted = module.STEERING.ASSERTED
-    basin = next(step for step in _workflow().plan_decl.produce
-                 if step.name == "basin")
-    assert basin.runner.endswith("assembler.settle_basin")
-    assert set(basin.kwargs) == {"mesh", "level"}
-    assert asserted["INITIAL_ELEVATION"] == Ref("basin.surface_m")
+    asserted = _module().STEERING.ASSERTED
+    settled = next(step for step in _workflow().plan.steps
+                   if step.name == "settled")
+    assert settled.runner.endswith("assembler.settle_domain")
+    assert settled.kwargs["level"].path == "level"
+    assert asserted["INITIAL_ELEVATION"] == Ref("settled.level_m")
     for slot in ("vertical_grid", "column"):
-        assert asserted[slot]["max_depth_m"] == Ref("basin.max_depth_m")
-    assert asserted["column"]["surface_m"] == Ref("basin.surface_m")
+        assert asserted[slot]["max_depth_m"] == Ref("settled.max_depth_m")
+    assert asserted["column"]["surface_m"] == Ref("settled.level_m")
 
 
 def test_the_clock_is_the_settled_domains_and_the_duration_the_decks():

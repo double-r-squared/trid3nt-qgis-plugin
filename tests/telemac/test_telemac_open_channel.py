@@ -74,14 +74,12 @@ def test_the_run_opens_at_the_same_normal_depth_the_outflow_stage_is(settled):
     assert channel["normal"]["slope"] == pytest.approx(0.003)
 
 
-def test_the_step_is_the_accepted_meshs_own_measured_edge(settled):
-    """This step runs AHEAD of the domain step, so it reads the edge itself
-    rather than waiting for a number it cannot see yet."""
-    from trid3nt_server.workflows.telemac.helpers.time_step import (
-        suggest_time_step_s,
-    )
-
-    assert _run()["time_step_s"] == suggest_time_step_s(20.0)
+def test_the_addition_hands_the_base_the_level_and_how_it_is_laid(settled):
+    """What the addition MEASURED is what the base opens the water at: the level
+    and the keyword saying whether that surface follows the bed or lies flat."""
+    channel = _run()
+    assert channel["level_m"] == channel["outflow_stage_m"]
+    assert channel["opening"] == "CONSTANT DEPTH"
 
 
 def test_a_stated_discharge_reads_as_the_value_it_is(settled):
@@ -117,16 +115,17 @@ def test_no_flow_anywhere_refuses_rather_than_opening_on_a_guess(settled):
 
 
 def test_a_domain_with_no_inflow_run_has_no_channel_to_open(settled, monkeypatch):
-    """The refusal names the RUN it lacked, not the bed: a body whose edge names
-    no inflow is closed, and a closed body is asked a still-water question."""
+    """A body whose edge names no inflow is CLOSED: there is no channel here to
+    measure, so the addition adds nothing, imposes no flow and hands back the
+    level it was given for the base to open the water flat at."""
     monkeypatch.setattr(D, "read_topology", lambda uri: {
         "roles": {"outflow": [4, 5, 6, 7]}, "liquid_boundary_order": ["outflow"],
         "liquid_boundary_prescribes": ["elevation"]})
-    with pytest.raises(TelemacError) as exc:
-        _run()
-    assert exc.value.error_code == "TELEMAC_BOUNDARY_RUN_UNNAMED"
-    assert "'inflow'" in str(exc.value)
-    assert "['outflow']" in str(exc.value)
+    closed = _run(stage=98.5)
+    assert closed["level_m"] == 98.5
+    assert (closed["depth_m"], closed["opening"]) == (None, None)
+    assert (closed["inflow_q_m3s"], closed["outflow_stage_m"]) == (None, None)
+    assert "names no runs" in closed["discharge_note"]
 
 
 #: The same two faces, LEVEL with each other: a reach cut from a surface DEM,
@@ -173,3 +172,22 @@ def test_a_level_that_never_passed_its_slot_refuses_by_name(flat):
     with pytest.raises(TelemacError) as exc:
         _run(stage={"type": "FeatureCollection"})
     assert exc.value.error_code == "TELEMAC_STAGE_UNINGESTED"
+
+
+def test_a_measured_level_over_the_reach_stands_over_the_derivation(settled):
+    """A uniform-flow depth is a MODEL of the same surface a gauge measured, and
+    a model does not stand over a measurement of the thing it models. The bed
+    here falls three metres, so the derivation was available and was not taken."""
+    channel = _run(stage=Observation(value=101.0, site_name="a gauge"))
+    assert channel["opening"] == "CONSTANT ELEVATION"
+    assert channel["level_m"] == pytest.approx(101.0)
+    assert channel["normal"]["slope"] == 0.0
+
+
+def test_a_level_that_does_not_reach_the_inflow_face_leaves_the_derivation(settled):
+    """A horizontal surface at the outflow's level would leave the inflow face
+    dry - the flowrate face among them - so the uniform-flow depth is what the
+    run opens at, and it says which of the two it took."""
+    channel = _run(stage=Observation(value=95.0, site_name="a gauge"))
+    assert channel["opening"] == "CONSTANT DEPTH"
+    assert channel["normal"]["slope"] > 0.0

@@ -55,28 +55,26 @@ def test_the_domain_is_one_row_the_reach_fetcher_produces():
     assert domain.producer.kwargs["distance_km"] == channel_dredging._REACH_LENGTH_KM
 
 
-def test_the_bed_is_one_row_the_merge_composed_from_the_survey_and_the_terrain():
-    """set_bed takes ONE source: the survey where it measured and the terrain
-    everywhere else are composed into that one row by the merge derive."""
+def test_the_bed_is_one_row_the_slot_composed_from_the_survey_and_the_terrain():
+    """set_bed takes ONE source: the soundings are gridded by the derive the row
+    names and the slot lays that measurement over the terrain beside it."""
     rows = _rows()
     bed = rows["bed"]
     assert bed.role == "bed"
-    assert bed.producer.runner == "derive_merge_rasters"
-    assert bed.producer.kwargs == {"primary": DataRef("surveyed_bed"),
-                                   "fallback": DataRef("terrain")}
-    assert rows["surveyed_bed"].producer.runner == "derive_survey_surface"
+    assert bed.producer.runner == "derive_survey_surface"
+    assert bed.producer.kwargs["points"] == DataRef("survey")
+    assert bed.coercion["over"] == DataRef("terrain")
     assert rows["terrain"].producer.runner == "fetch_dem"
     assert [row.name for row in _WORKFLOW.data if row.role == "bed"] == ["bed"]
 
 
 def test_an_unsurveyed_channel_still_runs_and_the_sheet_says_which_bed_it_got():
     """A channel with no federal navigation project has no published survey.
-    Both survey rows are CONTEXT, so the terrain passes through the merge and
-    the run carries the sentence rather than refusing."""
+    The survey row is CONTEXT, the grid of nothing is nothing, and the terrain
+    the slot composes over is the whole bed."""
     rows = _rows()
-    assert rows["survey"].is_context and rows["surveyed_bed"].is_context
+    assert rows["survey"].is_context
     assert "terrain surface stands" in rows["survey"].context_sentence
-    assert "terrain surface stands" in rows["surveyed_bed"].context_sentence
 
 
 def test_the_flow_the_channel_is_dredged_under_is_one_reading_not_a_record():
@@ -84,7 +82,7 @@ def test_the_flow_the_channel_is_dredged_under_is_one_reading_not_a_record():
     sample is are the observation slot's to decide, so the row is ingested
     rather than handed to the settle as a fetched layer."""
     carrier = _rows()["carrier"]
-    assert carrier.role == "observation" and carrier.is_context
+    assert carrier.role == "discharge" and carrier.is_context
     assert carrier.producer.runner == "fetch_noaa_nwm_streamflow"
     assert carrier.coercion["field"] == "streamflow_cms"
     assert carrier.coercion["near"] == Ref("domain.centroid")
@@ -92,12 +90,13 @@ def test_the_flow_the_channel_is_dredged_under_is_one_reading_not_a_record():
 
 
 def test_the_workflow_owns_every_stage_but_the_two_this_question_measures():
-    """No domain steps, no mesh recipe, no settle, no file names. The open-
-    channel hydraulics and the dredge's own areas are measured on top of the
-    domain, so those two steps stay the template's."""
+    """No domain steps, no mesh recipe, no settle, no file names, and no open
+    channel: the workflow lists that off this question's own discharge row. The
+    dredge's areas are measured against the SETTLED run, so that step is the
+    template's and it runs after."""
     assert _WORKFLOW.plan_decl.owns_stages
     assert [step.label for step in _WORKFLOW.plan.steps] == [
-        "mesh", "channel", "dredge", "settled", "sheet", "solve", "outputs"]
+        "mesh", "channel", "settled", "dredge", "sheet", "solve", "outputs"]
     settle = _steps()["settled"]
     assert settle.runner.endswith("assembler.settle_domain")
     assert (settle.kwargs["geometry"], settle.kwargs["boundary"],
@@ -114,20 +113,21 @@ def test_the_deck_is_written_at_the_roughness_its_own_stage_is_derived_at():
         "LAW_OF_BOTTOM_FRICTION"]
     assert channel.kwargs["friction_coefficient"] == _STEERING.ASSERTED[
         "FRICTION_COEFFICIENT"]
-    assert _STEERING.ASSERTED["INITIAL_DEPTH"] == Ref("channel.depth_m")
+    assert _STEERING.ASSERTED["INITIAL_DEPTH"] == Ref("settled.depth_m")
 
 
-def test_the_dredge_reads_its_levels_off_the_domains_own_centerline():
-    """The reference surface is cross-sections down the channel at the depth the
-    run opens at, so it reads the centerline the domain's producer wrote beside
-    the polygon - not a line the template chains for itself."""
+def test_the_dredge_reads_its_levels_off_the_line_slot_and_the_settled_run():
+    """The reference surface is cross-sections down the channel at the water
+    surface the run opens at, so it reads the LINE slot - which the domain's
+    producer fills with the centerline it measured, and which a port draws over
+    a fairway nobody mapped a channel through."""
     dredge = _steps()["dredge"]
     assert dredge.runner.endswith("assembler.settle_dredge")
-    # The DOMAIN itself: the step reads the centerline its producer wrote beside
-    # the polygon and the end its inflow run names, so nothing is chained twice.
+    assert dredge.kwargs["line"] == Ref("line")
+    # The DOMAIN itself for the end its inflow run names, and nothing else.
     assert dredge.kwargs["domain"] == Ref("domain")
     assert "centerline" not in dredge.kwargs and "seed" not in dredge.kwargs
-    assert dredge.kwargs["settled"] == Ref("channel")
+    assert dredge.kwargs["settled"] == Ref("settled")
     assert set(dredge.kwargs["areas"]) == {"dredge_area", "dump_area"}
 
 
@@ -165,11 +165,11 @@ def test_the_runtime_levers_are_seated_and_no_baseline_param_is_restated():
 
 def test_every_slot_a_user_can_fill_reaches_the_wire():
     """A fairway the port supplies supersedes the fetched reach, a surveyed
-    raster supersedes the merge and a stated flow supersedes the reading, so
-    all three are arguments though all three name a source; the two areas have
-    no source to supersede."""
+    raster supersedes the composed bed and a stated flow supersedes the reading,
+    so all three are arguments though all three name a source; the two areas and
+    the line have no source to supersede."""
     assert {row.name for row in _WORKFLOW.data if row.fills_from_user} == {
-        "domain", "runs", "bed", "carrier", "stage", "dredge_area",
+        "domain", "runs", "line", "bed", "carrier", "stage", "dredge_area",
         "dump_area"}
 
 

@@ -361,11 +361,14 @@ def _boundaries(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
         elevations.append(float(measured["outflow_stage_m"])
                           if what == "elevation" else 0.0)
         tracers += per_tracer
-    return ({"PRESCRIBED_FLOWRATES": flowrates,
-             "PRESCRIBED_ELEVATIONS": elevations,
-             # A run with no tracers prescribes none. An EMPTY list is not that
-             # statement - it is a keyword with nothing after it, which DAMOCLES
-             # reads as the next line's business.
+    # A CLOSED body has no liquid boundary to prescribe anything at, and a run
+    # with no tracers prescribes none. An EMPTY list is not that statement - it
+    # is a keyword with nothing after it, which DAMOCLES reads as the next
+    # line's business - so a list with nothing in it is not written at all.
+    return ({**({} if not flowrates else
+                {"PRESCRIBED_FLOWRATES": flowrates}),
+             **({} if not elevations else
+                {"PRESCRIBED_ELEVATIONS": elevations}),
              **({} if not tracers else
                 {"PRESCRIBED_TRACERS_VALUES": tracers})}, {})
 

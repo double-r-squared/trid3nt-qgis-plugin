@@ -413,13 +413,14 @@ def test_the_mesh_is_built_over_the_domain_slot_at_the_runtimes_lever():
 
 def test_the_bed_is_one_row_composed_from_the_survey_over_the_terrain():
     """set_bed takes ONE source. A survey covers the channel and the terrain
-    covers the banks, so the two are merged by a derive before the slot sees
-    them, and the survey's absence is legal."""
+    covers the banks, so the slot lays the one over the other on the way in, and
+    the survey's absence is legal."""
     rows = {row.name: row for row in _plan().data}
     assert rows["bed"].role == "bed"
-    assert rows["bed"].producer.runner == "derive_merge_rasters"
+    assert rows["bed"].producer.runner == "derive_survey_surface"
+    assert rows["bed"].coercion["over"].path == "terrain"
     assert [name for name, row in rows.items() if row.role == "bed"] == ["bed"]
-    assert rows["survey"].is_context and rows["surveyed_bed"].is_context
+    assert rows["survey"].is_context
     assert "terrain surface stands" in rows["survey"].context_sentence
 
 
@@ -478,23 +479,24 @@ def test_the_carrier_flow_is_one_reading_the_open_channel_step_can_read():
 
     row = {r.name: r for r in _plan().data}["carrier"]
     assert row.is_context and row.producer.runner == "fetch_noaa_nwm_streamflow"
-    assert row.role == "observation"
+    assert row.role == "discharge"
     assert row.coercion["near"] == Ref("domain.centroid")
     assert row.coercion["field"] == "streamflow_cms"
 
 
-def test_the_longitudinal_reads_are_taken_along_the_domains_own_centerline():
+def test_the_longitudinal_reads_are_taken_along_the_line_slot():
     """The producer measured the line and it rides on the domain artifact, so
-    the template asks the domain for it rather than walking the network twice.
-    A body of water whose producer measured none refuses the read by name."""
+    the LINE slot is filled from it rather than the network being walked twice.
+    A body of water whose producer measured none is asked for the line."""
     from trid3nt_server.workflows.runtime import Ref
 
     template = _template()
     along = {p.along for p in template.OUTPUTS if p.kind == "profile"}
     along |= {m.primitive.along for m in template.ANSWER.values()
               if m.primitive.kind == "profile"}
-    assert along == {Ref("domain.centerline")}
+    assert along == {Ref("line")}
     assert "centerline" not in {row.name for row in _plan().data}
+    assert {row.name for row in _plan().data if row.role == "line"} == {"line"}
 
 
 def test_the_stretch_the_producer_walks_is_the_templates_own_number():
@@ -516,5 +518,4 @@ def test_the_survey_is_gridded_on_the_field_the_soundings_carry():
     """eHydro rows carry several numbers; the one the bed is made of is named
     rather than guessed, and a guess would grid the sounding count."""
     rows = {row.name: row for row in _plan().data}
-    assert rows["surveyed_bed"].producer.kwargs["value_field"] == \
-        "depth_below_datum_m"
+    assert rows["bed"].producer.kwargs["value_field"] == "depth_below_datum_m"

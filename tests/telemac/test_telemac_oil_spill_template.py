@@ -11,7 +11,7 @@ from __future__ import annotations
 import pytest
 
 from trid3nt_server.workflows.runtime import Ref
-from trid3nt_server.workflows.runtime.data import BED, DOMAIN, OBSERVATION
+from trid3nt_server.workflows.runtime.data import BED, DISCHARGE, DOMAIN
 from trid3nt_server.workflows.runtime.levers import LEVER_NAMES
 from trid3nt_server.workflows.telemac.templates.oil_spill import (
     oil_spill as template,
@@ -57,17 +57,17 @@ def test_the_domain_is_one_slot_the_reach_producer_only_prefers():
     assert domain.fills_from_user
 
 
-def test_the_bed_is_one_row_composed_by_the_merge_derive():
-    """The survey where it measured, the terrain everywhere else - ONE bed row
-    over a derive, never a second bed row and never a fallback on set_bed."""
+def test_the_bed_is_one_row_the_slot_composes_over_the_terrain():
+    """The survey where it measured, the terrain everywhere else - ONE bed row,
+    composed on the way into the slot, never a second bed row and never a
+    fallback on set_bed."""
     rows = _rows()
     assert [name for name, row in rows.items() if row.role == BED] == ["bed"]
     bed = rows["bed"]
-    assert bed.producer.runner == "derive_merge_rasters"
-    assert bed.producer.kwargs["primary"].path == "surveyed_bed"
-    assert bed.producer.kwargs["fallback"].path == "terrain"
-    assert rows["surveyed_bed"].producer.runner == "derive_survey_surface"
-    assert rows["terrain"].producer.runner == "fetch_copernicus_dem"
+    assert bed.producer.runner == "derive_survey_surface"
+    assert bed.producer.kwargs["points"].path == "survey"
+    assert bed.coercion["over"].path == "terrain"
+    assert rows["terrain"].producer.runner == "fetch_dem"
 
 
 def test_an_unsurveyed_domain_continues_and_says_so():
@@ -75,7 +75,7 @@ def test_an_unsurveyed_domain_continues_and_says_so():
     which side was missing rather than refusing the run."""
     rows = _rows()
     assert rows["survey"].producer.runner == "fetch_ehydro_surveys"
-    for name in ("survey", "surveyed_bed", "carrier"):
+    for name in ("survey", "carrier"):
         assert rows[name].is_context, name
         assert rows[name].context_sentence
 
@@ -84,7 +84,7 @@ def test_the_carrier_is_one_reading_and_never_the_grid_it_came_from():
     """The step that opens the channel takes an ingested Observation: which site
     reports the flow and how old the sample is are the slot's to decide."""
     carrier = _rows()["carrier"]
-    assert carrier.role == OBSERVATION
+    assert carrier.role == DISCHARGE
     assert carrier.producer.runner == "fetch_noaa_nwm_streamflow"
     assert carrier.coercion["near"] == Ref("domain.centroid")
     assert carrier.coercion["field"] == "streamflow_cms"
