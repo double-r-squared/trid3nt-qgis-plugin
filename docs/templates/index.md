@@ -10,7 +10,7 @@
 
 The WAVE AGITATION (Kd = Hs/H0) a declared structure leaves inside a harbour, a marina or any sheltered basin.
 
-Module `artemis`, proving run `01M2MKMSH109K03P0P2M39GTXK`.
+Module `artemis`, proving run `01M2MVTEWNKWPYX83QSDSWXDNW`.
 
 ## [`telemac3d_stratified_flow`](telemac3d_stratified_flow.md)
 
@@ -18,7 +18,7 @@ Module `artemis`, proving run `01M2MKMSH109K03P0P2M39GTXK`.
 
 The 3D VERTICAL STRUCTURE of a body of water a 2D depth-averaged model cannot resolve.
 
-Module `telemac3d`, proving run `01M2GPX6APX8R0R0PESGVWQA6J`.
+Module `telemac3d`, proving run `01M2MWMKGH0X496AS11GQTH5W8`.
 
 ## [`telemac_bed_scour`](telemac_bed_scour.md)
 
@@ -26,7 +26,7 @@ Module `telemac3d`, proving run `01M2GPX6APX8R0R0PESGVWQA6J`.
 
 Bed SCOUR and DEPOSITION under a body of water: a mobile bed under a flow.
 
-Module `telemac2d`, proving run `01M2MGYBT9FH1NKER0ECSAP396`.
+Module `telemac2d`, proving run `01M2N3648PWA5E44G18SP1ZQ5G`.
 
 ## [`telemac_channel_dredging`](telemac_channel_dredging.md)
 
@@ -34,7 +34,7 @@ Module `telemac2d`, proving run `01M2MGYBT9FH1NKER0ECSAP396`.
 
 MAINTENANCE DREDGING of a navigation channel: how much comes out, and what the bed does.
 
-Module `telemac2d`, proving run `01M2MM1KESFENHPEBVZ4XQ90RV`.
+Module `telemac2d`, proving run `01M2MVEBXHZ5EY65P3J7VZN7G8`.
 
 ## [`telemac_do_sag`](telemac_do_sag.md)
 
@@ -42,7 +42,7 @@ Module `telemac2d`, proving run `01M2MM1KESFENHPEBVZ4XQ90RV`.
 
 DISSOLVED-OXYGEN SAG below a discharge (US TMDL / permit question).
 
-Module `telemac2d`, proving run `01M2MGJYW129PS08ZVJTMHM9YQ`.
+Module `telemac2d`, proving run `01M2N2TW89M5P6EQ4KW2D3AWF7`.
 
 ## [`telemac_dye_release`](telemac_dye_release.md)
 
@@ -50,7 +50,7 @@ Module `telemac2d`, proving run `01M2MGJYW129PS08ZVJTMHM9YQ`.
 
 A DYE / TRACER / CONTAMINANT plume released into a body of surface water and carried by its flow.
 
-Module `telemac2d`, proving run `01M2MGDRJSZS1W1CS516FSZM87`.
+Module `telemac2d`, proving run `01M2MW1QJY19QQYDVQKK3CNRYK`.
 
 ## [`telemac_eutrophication`](telemac_eutrophication.md)
 
@@ -58,13 +58,15 @@ Module `telemac2d`, proving run `01M2MGDRJSZS1W1CS516FSZM87`.
 
 NUTRIENT ENRICHMENT in a body of water: algal growth, nutrient drawdown and the oxygen response over one pass through it.
 
-Module `telemac2d`, proving run `01M2MH8TPG9X84GBZD5BKQGKSY`.
+Module `telemac2d`, proving run `01M2N3J7R7RGH5TETJXWQ9PGDE`.
 
 ## [`telemac_micropollutant_release`](telemac_micropollutant_release.md)
 
+[![telemac_micropollutant_release](telemac_micropollutant_release/telemac_micropollutant_release.png)](telemac_micropollutant_release.md)
+
 A SORBING substance released into water: how much stays DISSOLVED and how much ends up ON THE BED.
 
-Module `telemac2d`, proving run `01M2HG9ASXE40K9MF2GQCZRN9Y`.
+Module `telemac2d`, proving run `01M2N4JY6DWPQT7R3HFQMDFVM2`.
 
 ## [`telemac_oil_spill`](telemac_oil_spill.md)
 
@@ -72,7 +74,7 @@ Module `telemac2d`, proving run `01M2HG9ASXE40K9MF2GQCZRN9Y`.
 
 An OIL SLICK released onto a body of surface water: floating particles plus the dissolved fraction.
 
-Module `telemac2d`, proving run `01M2MGS47126J6GNZR25NP77WM`.
+Module `telemac2d`, proving run `01M2N30WVR6CS915REDWZWR7C7`.
 
 ## [`telemac_rain_on_grid`](telemac_rain_on_grid.md)
 
@@ -80,7 +82,7 @@ Module `telemac2d`, proving run `01M2MGS47126J6GNZR25NP77WM`.
 
 How much RUNOFF a storm produces from the catchment a point drains, as an outlet hydrograph and a flood-depth map.
 
-Module `telemac2d`, proving run `01M2GP3XQJENSXTD763387Z9TN`.
+Module `telemac2d`, proving run `01M2N43WCA6K9VB9ZW26XC8DG7`.
 
 ## [`telemac_sediment_plume`](telemac_sediment_plume.md)
 
@@ -88,7 +90,7 @@ Module `telemac2d`, proving run `01M2GP3XQJENSXTD763387Z9TN`.
 
 A SUSPENDED SEDIMENT plume in a body of water: it settles and deposits on the bed.
 
-Module `telemac2d`, proving run `01M2MJEC5N7RMK6ND6Q6GG0BX6`.
+Module `telemac2d`, proving run `01M2N3BJ0J54PEJQQ2DY1MEQWQ`.
 
 ## [`telemac_water_temperature`](telemac_water_temperature.md)
 
@@ -96,5 +98,5 @@ Module `telemac2d`, proving run `01M2MJEC5N7RMK6ND6Q6GG0BX6`.
 
 WATER TEMPERATURE over a body of water under a week of real weather.
 
-Module `telemac2d`, proving run `01M2MJ7589JWDDNZCZ6910C9TY`.
+Module `telemac2d`, proving run `01M2N3VM3BWEN2K6DPP9ND2QBX`.
 

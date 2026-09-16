@@ -43,6 +43,7 @@ The values the template declares. `desc` is what the model reads when it fills o
 | `mesh_resolution_m` | scenario | m | 14.0 | Target element edge or cell length the domain is resolved at. The granularity is the USER's lever: no sizing rung derives an edge from a channel nobody surveyed, so the number the run meshes at is either yours or this labeled default |
 | `event_time` | question | - | optional | The moment the scenario is read at - an ISO date or datetime ('2026-08-20' or '2026-08-20T06:00:00Z'), from phrasing like 'during last Tuesday's storm'. Each source keeps its own retention, and a request deeper than one refuses typed |
 | `compute_class` | constant | - | medium | Solve sizing class |
+| `vertical_frame` | constant | - | NAVD88 | Vertical datum this run counts every elevation from - the bed under it and the level over it. A source published on another frame reaches this one through a measured offset, and a pair nobody publishes an offset between refuses by name |
 
 ## What it answers
 
@@ -76,23 +77,23 @@ It publishes these layers onto the canvas:
 
 ## The proving run
 
-Run `01M2MGJYW129PS08ZVJTMHM9YQ`, 2026-09-16T07:06:40.599870+00:00, 50.57 s, at commit `b6f42e9ea904813979399e818be14b8858a511d7-dirty`.
+Run `01M2N2TW89M5P6EQ4KW2D3AWF7`, 2026-09-16T12:25:34.707631+00:00, 78.179 s, at commit `6d4a8675695837fac08133baa3c42ed4c30ee559-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M2MGJYW129PS08ZVJTMHM9YQ)](telemac_do_sag/telemac_do_sag.png)
+![Every layer the run published, stacked and framed on the result (run 01M2N2TW89M5P6EQ4KW2D3AWF7)](telemac_do_sag/telemac_do_sag.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M2MGJYW129PS08ZVJTMHM9YQ)*
+*Every layer the run published, stacked and framed on the result (run 01M2N2TW89M5P6EQ4KW2D3AWF7)*
 
-![The solve, frame by frame (run 01M2MGJYW129PS08ZVJTMHM9YQ)](telemac_do_sag/telemac_do_sag_animation.gif)
+![The solve, frame by frame (run 01M2N2TW89M5P6EQ4KW2D3AWF7)](telemac_do_sag/telemac_do_sag_animation.gif)
 
-*The solve, frame by frame (run 01M2MGJYW129PS08ZVJTMHM9YQ)*
+*The solve, frame by frame (run 01M2N2TW89M5P6EQ4KW2D3AWF7)*
 
-![final frame (run 01M2MGJYW129PS08ZVJTMHM9YQ)](telemac_do_sag/telemac_do_sag_final_frame.png)
+![final frame (run 01M2N2TW89M5P6EQ4KW2D3AWF7)](telemac_do_sag/telemac_do_sag_final_frame.png)
 
-*final frame (run 01M2MGJYW129PS08ZVJTMHM9YQ)*
+*final frame (run 01M2N2TW89M5P6EQ4KW2D3AWF7)*
 
-![dissolved oxygen - the chart the run persisted (run 01M2MGJYW129PS08ZVJTMHM9YQ)](telemac_do_sag/telemac_do_sag_chart_dissolved_oxygen.png)
+![dissolved oxygen - the chart the run persisted (run 01M2N2TW89M5P6EQ4KW2D3AWF7)](telemac_do_sag/telemac_do_sag_chart_dissolved_oxygen.png)
 
-*dissolved oxygen - the chart the run persisted (run 01M2MGJYW129PS08ZVJTMHM9YQ)*
+*dissolved oxygen - the chart the run persisted (run 01M2N2TW89M5P6EQ4KW2D3AWF7)*
 
 ### The sheet it filled
 
@@ -111,6 +112,7 @@ Every slot the run resolved, with where the value came from. The engine's own de
 | `sim_duration_s` | 7200.0 | s | user | supplied on this invocation |
 | `mesh_resolution_m` | 40.0 | m | user | supplied on this invocation |
 | `compute_class` | medium | - | default_demo | declared constant default |
+| `vertical_frame` | NAVD88 | - | default_demo | declared constant default |
 | `do_saturation_mgl` | 9.022 | mg/L | derived | derived by trid3nt_server.workflows.telemac.helpers.water_quality.do_saturation_mgl |
 | `upstream_do_mgl` | 9.022 | mg/L | derived | derived by trid3nt_server.workflows.telemac.helpers.water_quality.upstream_do_mgl |
 | `event_time` | - | - | prompt_interpreted | not supplied (declared optional) |
@@ -134,5 +136,5 @@ await TOOL_REGISTRY['telemac_do_sag'].fn(
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2MGJYW129PS08ZVJTMHM9YQ` and commit `b6f42e9ea904813979399e818be14b8858a511d7-dirty`. The full argument record is [`telemac_do_sag/run.json`](telemac_do_sag/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2N2TW89M5P6EQ4KW2D3AWF7` and commit `6d4a8675695837fac08133baa3c42ed4c30ee559-dirty`. The full argument record is [`telemac_do_sag/run.json`](telemac_do_sag/run.json).
 

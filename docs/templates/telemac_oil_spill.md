@@ -44,6 +44,7 @@ The values the template declares. `desc` is what the model reads when it fills o
 | `mesh_resolution_m` | scenario | m | 14.0 | Target element edge or cell length the domain is resolved at. The granularity is the USER's lever: no sizing rung derives an edge from a channel nobody surveyed, so the number the run meshes at is either yours or this labeled default |
 | `event_time` | question | - | optional | The moment the scenario is read at - an ISO date or datetime ('2026-08-20' or '2026-08-20T06:00:00Z'), from phrasing like 'during last Tuesday's storm'. Each source keeps its own retention, and a request deeper than one refuses typed |
 | `compute_class` | constant | - | medium | Solve sizing class |
+| `vertical_frame` | constant | - | NAVD88 | Vertical datum this run counts every elevation from - the bed under it and the level over it. A source published on another frame reaches this one through a measured offset, and a pair nobody publishes an offset between refuses by name |
 
 ## What it answers
 
@@ -78,23 +79,23 @@ It publishes these layers onto the canvas:
 
 ## The proving run
 
-Run `01M2MGS47126J6GNZR25NP77WM`, 2026-09-16T07:09:42.581783+00:00, 28.285 s, at commit `b6f42e9ea904813979399e818be14b8858a511d7-dirty`.
+Run `01M2N30WVR6CS915REDWZWR7C7`, 2026-09-16T12:28:31.950468+00:00, 26.049 s, at commit `6d4a8675695837fac08133baa3c42ed4c30ee559-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M2MGS47126J6GNZR25NP77WM)](telemac_oil_spill/telemac_oil_spill.png)
+![Every layer the run published, stacked and framed on the result (run 01M2N30WVR6CS915REDWZWR7C7)](telemac_oil_spill/telemac_oil_spill.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M2MGS47126J6GNZR25NP77WM)*
+*Every layer the run published, stacked and framed on the result (run 01M2N30WVR6CS915REDWZWR7C7)*
 
-![The solve, frame by frame (run 01M2MGS47126J6GNZR25NP77WM)](telemac_oil_spill/telemac_oil_spill_animation.gif)
+![The solve, frame by frame (run 01M2N30WVR6CS915REDWZWR7C7)](telemac_oil_spill/telemac_oil_spill_animation.gif)
 
-*The solve, frame by frame (run 01M2MGS47126J6GNZR25NP77WM)*
+*The solve, frame by frame (run 01M2N30WVR6CS915REDWZWR7C7)*
 
-![peak frame (run 01M2MGS47126J6GNZR25NP77WM)](telemac_oil_spill/telemac_oil_spill_peak_frame.png)
+![peak frame (run 01M2N30WVR6CS915REDWZWR7C7)](telemac_oil_spill/telemac_oil_spill_peak_frame.png)
 
-*peak frame (run 01M2MGS47126J6GNZR25NP77WM)*
+*peak frame (run 01M2N30WVR6CS915REDWZWR7C7)*
 
-![dissolved oil concentration - the chart the run persisted (run 01M2MGS47126J6GNZR25NP77WM)](telemac_oil_spill/telemac_oil_spill_chart_dissolved_oil_concentration.png)
+![dissolved oil concentration - the chart the run persisted (run 01M2N30WVR6CS915REDWZWR7C7)](telemac_oil_spill/telemac_oil_spill_chart_dissolved_oil_concentration.png)
 
-*dissolved oil concentration - the chart the run persisted (run 01M2MGS47126J6GNZR25NP77WM)*
+*dissolved oil concentration - the chart the run persisted (run 01M2N30WVR6CS915REDWZWR7C7)*
 
 ### The sheet it filled
 
@@ -116,6 +117,7 @@ Every slot the run resolved, with where the value came from. The engine's own de
 | `wind_speed_mps` | 0.0 | m/s | default_demo | declared scenario default |
 | `wind_direction_deg` | 0.0 | deg | default_demo | declared scenario default |
 | `compute_class` | medium | - | default_demo | declared constant default |
+| `vertical_frame` | NAVD88 | - | default_demo | declared constant default |
 | `rainfall_mm_per_day` | - | mm/day | user | not supplied (declared optional) |
 | `event_time` | - | - | prompt_interpreted | not supplied (declared optional) |
 
@@ -137,5 +139,5 @@ await TOOL_REGISTRY['telemac_oil_spill'].fn(
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2MGS47126J6GNZR25NP77WM` and commit `b6f42e9ea904813979399e818be14b8858a511d7-dirty`. The full argument record is [`telemac_oil_spill/run.json`](telemac_oil_spill/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2N30WVR6CS915REDWZWR7C7` and commit `6d4a8675695837fac08133baa3c42ed4c30ee559-dirty`. The full argument record is [`telemac_oil_spill/run.json`](telemac_oil_spill/run.json).
 

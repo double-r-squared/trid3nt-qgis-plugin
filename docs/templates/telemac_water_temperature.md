@@ -38,6 +38,7 @@ The values the template declares. `desc` is what the model reads when it fills o
 | `mesh_resolution_m` | scenario | m | 20.0 | Target element edge length the domain is triangulated at; a surface heat budget is divided by the local DEPTH, so what this has to resolve is how deep the water is rather than its planform |
 | `event_time` | question | - | optional | The moment the scenario is read at - an ISO date or datetime ('2026-08-20' or '2026-08-20T06:00:00Z'), from phrasing like 'during last Tuesday's storm'. Each source keeps its own retention, and a request deeper than one refuses typed |
 | `compute_class` | constant | - | medium | Solve sizing class |
+| `vertical_frame` | constant | - | NAVD88 | Vertical datum this run counts every elevation from - the bed under it and the level over it. A source published on another frame reaches this one through a measured offset, and a pair nobody publishes an offset between refuses by name |
 
 ## What it answers
 
@@ -73,23 +74,23 @@ It publishes these layers onto the canvas:
 
 ## The proving run
 
-Run `01M2MJ7589JWDDNZCZ6910C9TY`, 2026-09-16T07:35:31.122829+00:00, 114.597 s, at commit `b6f42e9ea904813979399e818be14b8858a511d7-dirty`.
+Run `01M2N3VM3BWEN2K6DPP9ND2QBX`, 2026-09-16T12:43:47.685376+00:00, 110.168 s, at commit `6d4a8675695837fac08133baa3c42ed4c30ee559-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M2MJ7589JWDDNZCZ6910C9TY)](telemac_water_temperature/telemac_water_temperature.png)
+![Every layer the run published, stacked and framed on the result (run 01M2N3VM3BWEN2K6DPP9ND2QBX)](telemac_water_temperature/telemac_water_temperature.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M2MJ7589JWDDNZCZ6910C9TY)*
+*Every layer the run published, stacked and framed on the result (run 01M2N3VM3BWEN2K6DPP9ND2QBX)*
 
-![The solve, frame by frame (run 01M2MJ7589JWDDNZCZ6910C9TY)](telemac_water_temperature/telemac_water_temperature_animation.gif)
+![The solve, frame by frame (run 01M2N3VM3BWEN2K6DPP9ND2QBX)](telemac_water_temperature/telemac_water_temperature_animation.gif)
 
-*The solve, frame by frame (run 01M2MJ7589JWDDNZCZ6910C9TY)*
+*The solve, frame by frame (run 01M2N3VM3BWEN2K6DPP9ND2QBX)*
 
-![final frame (run 01M2MJ7589JWDDNZCZ6910C9TY)](telemac_water_temperature/telemac_water_temperature_final_frame.png)
+![final frame (run 01M2N3VM3BWEN2K6DPP9ND2QBX)](telemac_water_temperature/telemac_water_temperature_final_frame.png)
 
-*final frame (run 01M2MJ7589JWDDNZCZ6910C9TY)*
+*final frame (run 01M2N3VM3BWEN2K6DPP9ND2QBX)*
 
-![water temperature - the chart the run persisted (run 01M2MJ7589JWDDNZCZ6910C9TY)](telemac_water_temperature/telemac_water_temperature_chart_water_temperature.png)
+![water temperature - the chart the run persisted (run 01M2N3VM3BWEN2K6DPP9ND2QBX)](telemac_water_temperature/telemac_water_temperature_chart_water_temperature.png)
 
-*water temperature - the chart the run persisted (run 01M2MJ7589JWDDNZCZ6910C9TY)*
+*water temperature - the chart the run persisted (run 01M2N3VM3BWEN2K6DPP9ND2QBX)*
 
 ### The sheet it filled
 
@@ -104,6 +105,7 @@ Every slot the run resolved, with where the value came from. The engine's own de
 | `sim_duration_s` | 3600.0 | s | user | supplied on this invocation |
 | `mesh_resolution_m` | 40.0 | m | user | supplied on this invocation |
 | `compute_class` | medium | - | default_demo | declared constant default |
+| `vertical_frame` | NAVD88 | - | default_demo | declared constant default |
 | `event_time` | - | - | prompt_interpreted | not supplied (declared optional) |
 
 ### Reproduce
@@ -121,5 +123,5 @@ await TOOL_REGISTRY['telemac_water_temperature'].fn(
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2MJ7589JWDDNZCZ6910C9TY` and commit `b6f42e9ea904813979399e818be14b8858a511d7-dirty`. The full argument record is [`telemac_water_temperature/run.json`](telemac_water_temperature/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2N3VM3BWEN2K6DPP9ND2QBX` and commit `6d4a8675695837fac08133baa3c42ed4c30ee559-dirty`. The full argument record is [`telemac_water_temperature/run.json`](telemac_water_temperature/run.json).
 

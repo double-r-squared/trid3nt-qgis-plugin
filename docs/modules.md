@@ -73,7 +73,7 @@ appended by process 3: `PHYTO BIOMASS` (ug/L, ramp `greens`), `DISSOLVED PO4` (m
 
 appended by process 5: `PHYTO BIOMASS` (ug/L, ramp `greens`), `DISSOLVED PO4` (mg/L, ramp `ylorrd`), `POR NON ASSIMIL` (mg/L, ramp `plasma`), `DISSOLVED NO3` (mg/L, ramp `gnbu`), `NOR NON ASSIM` (mg/L, ramp `cividis`), `NH4 LOAD` (mg/L, ramp `magma`), `ORGANIC LOAD` (mgO2/L, ramp `oranges`), `DISSOLVED O2` (mgO2/L, ramp `rdylbu`)
 
-appended by process 7: `SUSPENDED LOAD` (mg/L, ramp `oranges`), `BED SEDIMENTS` (mg/L, ramp `ylorrd`), `MICRO POLLUTANT` (mg/L, ramp `reds`), `ABS. SUSP. LOAD.` (mg/L, ramp `magma`), `ABSORB. BED SED.` (mg/L, ramp `plasma`)
+appended by process 7: `SUSPENDED LOAD` (kg/m3, ramp `oranges`), `BED SEDIMENTS` (kg/m2, ramp `ylorrd`), `MICRO POLLUTANT` (mg/L, ramp `reds`), `ABS. SUSP. LOAD.` (mg/L, ramp `magma`), `ABSORB. BED SED.` (g/m2, ramp `plasma`)
 
 appended by process 11: `TEMPERATURE` (oC, ramp `rdylbu_r`)
 

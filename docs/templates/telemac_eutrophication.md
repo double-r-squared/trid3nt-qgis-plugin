@@ -49,6 +49,7 @@ The values the template declares. `desc` is what the model reads when it fills o
 | `mesh_resolution_m` | scenario | m | 25.0 | Target element edge length the domain is triangulated at; it also sets the CFL time step, so it is what decides whether a long window finishes |
 | `event_time` | question | - | optional | The moment the scenario is read at - an ISO date or datetime ('2026-08-20' or '2026-08-20T06:00:00Z'), from phrasing like 'during last Tuesday's storm'. Each source keeps its own retention, and a request deeper than one refuses typed |
 | `compute_class` | constant | - | medium | Solve sizing class |
+| `vertical_frame` | constant | - | NAVD88 | Vertical datum this run counts every elevation from - the bed under it and the level over it. A source published on another frame reaches this one through a measured offset, and a pair nobody publishes an offset between refuses by name |
 
 ## What it answers
 
@@ -90,35 +91,35 @@ It publishes these layers onto the canvas:
 
 ## The proving run
 
-Run `01M2MH8TPG9X84GBZD5BKQGKSY`, 2026-09-16T07:18:58.622443+00:00, 71.051 s, at commit `b6f42e9ea904813979399e818be14b8858a511d7-dirty`.
+Run `01M2N3J7R7RGH5TETJXWQ9PGDE`, 2026-09-16T12:38:41.712146+00:00, 71.877 s, at commit `6d4a8675695837fac08133baa3c42ed4c30ee559-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M2MH8TPG9X84GBZD5BKQGKSY)](telemac_eutrophication/telemac_eutrophication.png)
+![Every layer the run published, stacked and framed on the result (run 01M2N3J7R7RGH5TETJXWQ9PGDE)](telemac_eutrophication/telemac_eutrophication.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M2MH8TPG9X84GBZD5BKQGKSY)*
+*Every layer the run published, stacked and framed on the result (run 01M2N3J7R7RGH5TETJXWQ9PGDE)*
 
-![The solve, frame by frame - biomass (run 01M2MH8TPG9X84GBZD5BKQGKSY)](telemac_eutrophication/telemac_eutrophication_animation_biomass.gif)
+![The solve, frame by frame - biomass (run 01M2N3J7R7RGH5TETJXWQ9PGDE)](telemac_eutrophication/telemac_eutrophication_animation_biomass.gif)
 
-*The solve, frame by frame - biomass (run 01M2MH8TPG9X84GBZD5BKQGKSY)*
+*The solve, frame by frame - biomass (run 01M2N3J7R7RGH5TETJXWQ9PGDE)*
 
-![The solve, frame by frame - oxygen (run 01M2MH8TPG9X84GBZD5BKQGKSY)](telemac_eutrophication/telemac_eutrophication_animation_oxygen.gif)
+![The solve, frame by frame - oxygen (run 01M2N3J7R7RGH5TETJXWQ9PGDE)](telemac_eutrophication/telemac_eutrophication_animation_oxygen.gif)
 
-*The solve, frame by frame - oxygen (run 01M2MH8TPG9X84GBZD5BKQGKSY)*
+*The solve, frame by frame - oxygen (run 01M2N3J7R7RGH5TETJXWQ9PGDE)*
 
-![biomass final frame (run 01M2MH8TPG9X84GBZD5BKQGKSY)](telemac_eutrophication/telemac_eutrophication_biomass_final_frame.png)
+![biomass final frame (run 01M2N3J7R7RGH5TETJXWQ9PGDE)](telemac_eutrophication/telemac_eutrophication_biomass_final_frame.png)
 
-*biomass final frame (run 01M2MH8TPG9X84GBZD5BKQGKSY)*
+*biomass final frame (run 01M2N3J7R7RGH5TETJXWQ9PGDE)*
 
-![oxygen final frame (run 01M2MH8TPG9X84GBZD5BKQGKSY)](telemac_eutrophication/telemac_eutrophication_oxygen_final_frame.png)
+![oxygen final frame (run 01M2N3J7R7RGH5TETJXWQ9PGDE)](telemac_eutrophication/telemac_eutrophication_oxygen_final_frame.png)
 
-*oxygen final frame (run 01M2MH8TPG9X84GBZD5BKQGKSY)*
+*oxygen final frame (run 01M2N3J7R7RGH5TETJXWQ9PGDE)*
 
-![dissolved o2 - the chart the run persisted (run 01M2MH8TPG9X84GBZD5BKQGKSY)](telemac_eutrophication/telemac_eutrophication_chart_dissolved_o2.png)
+![dissolved o2 - the chart the run persisted (run 01M2N3J7R7RGH5TETJXWQ9PGDE)](telemac_eutrophication/telemac_eutrophication_chart_dissolved_o2.png)
 
-*dissolved o2 - the chart the run persisted (run 01M2MH8TPG9X84GBZD5BKQGKSY)*
+*dissolved o2 - the chart the run persisted (run 01M2N3J7R7RGH5TETJXWQ9PGDE)*
 
-![phyto biomass - the chart the run persisted (run 01M2MH8TPG9X84GBZD5BKQGKSY)](telemac_eutrophication/telemac_eutrophication_chart_phyto_biomass.png)
+![phyto biomass - the chart the run persisted (run 01M2N3J7R7RGH5TETJXWQ9PGDE)](telemac_eutrophication/telemac_eutrophication_chart_phyto_biomass.png)
 
-*phyto biomass - the chart the run persisted (run 01M2MH8TPG9X84GBZD5BKQGKSY)*
+*phyto biomass - the chart the run persisted (run 01M2N3J7R7RGH5TETJXWQ9PGDE)*
 
 ### The sheet it filled
 
@@ -141,6 +142,7 @@ Every slot the run resolved, with where the value came from. The engine's own de
 | `sunshine_w_m2` | 100.0 | W/m^2 | default_demo | declared scenario default |
 | `do_standard_mgl` | 5.0 | mg/L | default_demo | declared scenario default |
 | `compute_class` | medium | - | default_demo | declared constant default |
+| `vertical_frame` | NAVD88 | - | default_demo | declared constant default |
 | `do_saturation_mgl` | 8.667 | mg/L | derived | derived by trid3nt_server.workflows.telemac.helpers.water_quality.do_saturation_mgl |
 | `initial_do_mgl` | 8.667 | mg/L | derived | derived by trid3nt_server.workflows.telemac.helpers.water_quality.upstream_do_mgl |
 | `secchi_depth_m` | - | m | user | not supplied (declared optional) |
@@ -159,5 +161,5 @@ await TOOL_REGISTRY['telemac_eutrophication'].fn(
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2MH8TPG9X84GBZD5BKQGKSY` and commit `b6f42e9ea904813979399e818be14b8858a511d7-dirty`. The full argument record is [`telemac_eutrophication/run.json`](telemac_eutrophication/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2N3J7R7RGH5TETJXWQ9PGDE` and commit `6d4a8675695837fac08133baa3c42ed4c30ee559-dirty`. The full argument record is [`telemac_eutrophication/run.json`](telemac_eutrophication/run.json).
 

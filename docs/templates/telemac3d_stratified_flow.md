@@ -35,58 +35,52 @@ The values the template declares. `desc` is what the model reads when it fills o
 | `sim_duration_s` | constant | s | 18000.0 | Simulated duration - long enough for the column to settle or mix |
 | `event_time` | question | - | optional | The moment the scenario is read at - an ISO date or datetime ('2026-08-20' or '2026-08-20T06:00:00Z'), from phrasing like 'during last Tuesday's storm'. Each source keeps its own retention, and a request deeper than one refuses typed |
 | `compute_class` | constant | - | medium | Solve sizing class |
+| `vertical_frame` | constant | - | NAVD88 | Vertical datum this run counts every elevation from - the bed under it and the level over it. A source published on another frame reaches this one through a measured offset, and a pair nobody publishes an offset between refuses by name |
 
 ## What it answers
 
 | field | the proving run's value |
 |---|---|
-| `stratification_dt` | 2.7462081909179688 |
-| `stratification_dt_init` | 7.670253753662109 |
-| `column_mean_final_c` | 23.9351189729488 |
-| `column_mean_init_c` | 23.7737553488566 |
-| `column_depth_m` | 8.8814956843853 |
-| `u_surface` | -0.008817627094686031 |
-| `u_bottom` | -0.0239544864743948 |
-| `depth_avg_u` | -3.636007518623313e-05 |
+| `stratification_dt` | 1.298919677734375 |
+| `stratification_dt_init` | 9.950547218322754 |
+| `column_mean_final_c` | 20.000362391478557 |
+| `column_mean_init_c` | 19.999999861290423 |
+| `column_depth_m` | 11.999976446708388 |
+| `u_surface` | -0.00014427091809920967 |
+| `u_bottom` | 0.0001381385518470779 |
+| `depth_avg_u` | -0.001081944610102034 |
 | `planes` | 13 |
-| `mesh_size_m` | 32.9447594688078 |
+| `mesh_size_m` | 23.506 |
 
 It publishes these layers onto the canvas:
 
-- Input: nhd waterbodies (nhd_waterbodies)
-- Input: greatlakes bathymetry (greatlakes_bathymetry, NCEI Great Lakes bathymetry is gridded at 3 arc-seconds (~90 m); 1800 px/deg is ~62 m, datum each Great Lake's own Low Water Datum (metres, positive up))
-- Input: greatlakes water level (greatlakes_water_level, datum each Great Lake's own Low Water Datum (metres, positive up))
-- Elevation z (m) at t = 3600 s, surface plane (basin_mesh)
-- Elevation z over time (basin_mesh)
-- Velocity u (m/s) at t = 3600 s, surface plane (basin_mesh)
-- Velocity u over time (basin_mesh)
-- Velocity v (m/s) at t = 3600 s, surface plane (basin_mesh)
-- Velocity v over time (basin_mesh)
-- Velocity w (m/s) at t = 3600 s, surface plane (basin_mesh)
-- Velocity w over time (basin_mesh)
-- Temperature (degC) at t = 3600 s, surface plane (basin_mesh)
-- Temperature over time (basin_mesh)
-- basin_mesh
+- Input: nhd waterbody at point (nhd_waterbody_at_point)
+- Elevation z over time (nhd_waterbody_mesh)
+- Velocity u over time (nhd_waterbody_mesh)
+- Velocity v over time (nhd_waterbody_mesh)
+- Velocity w over time (nhd_waterbody_mesh)
+- Temperature over time (nhd_waterbody_mesh)
+- nhd_waterbody_mesh
 
 ## The proving run
 
-Run `01M2GPX6APX8R0R0PESGVWQA6J`, 2026-09-14T19:40:52.465381+00:00, 91.089 s, at commit `c06075fe30c18c4bf3619f40299b09edffefc4c0-dirty`.
+Run `01M2MWMKGH0X496AS11GQTH5W8`, 2026-09-16T10:42:17.821872+00:00, 343.716 s, at commit `6d4a8675695837fac08133baa3c42ed4c30ee559-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M2GPX6APX8R0R0PESGVWQA6J)](telemac3d_stratified_flow/telemac3d_stratified_flow.png)
+![Every layer the run published, stacked and framed on the result (run 01M2MWMKGH0X496AS11GQTH5W8)](telemac3d_stratified_flow/telemac3d_stratified_flow.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M2GPX6APX8R0R0PESGVWQA6J)*
+*Every layer the run published, stacked and framed on the result (run 01M2MWMKGH0X496AS11GQTH5W8)*
 
-![The solve, frame by frame (run 01M2GPX6APX8R0R0PESGVWQA6J)](telemac3d_stratified_flow/telemac3d_stratified_flow_animation.gif)
+![The solve, frame by frame (run 01M2MWMKGH0X496AS11GQTH5W8)](telemac3d_stratified_flow/telemac3d_stratified_flow_animation.gif)
 
-*The solve, frame by frame (run 01M2GPX6APX8R0R0PESGVWQA6J)*
+*The solve, frame by frame (run 01M2MWMKGH0X496AS11GQTH5W8)*
 
-![final frame (run 01M2GPX6APX8R0R0PESGVWQA6J)](telemac3d_stratified_flow/telemac3d_stratified_flow_final_frame.png)
+![final frame (run 01M2MWMKGH0X496AS11GQTH5W8)](telemac3d_stratified_flow/telemac3d_stratified_flow_final_frame.png)
 
-*final frame (run 01M2GPX6APX8R0R0PESGVWQA6J)*
+*final frame (run 01M2MWMKGH0X496AS11GQTH5W8)*
 
-![water temperature - the chart the run persisted (run 01M2GPX6APX8R0R0PESGVWQA6J)](telemac3d_stratified_flow/telemac3d_stratified_flow_chart_water_temperature.png)
+![water temperature - the chart the run persisted (run 01M2MWMKGH0X496AS11GQTH5W8)](telemac3d_stratified_flow/telemac3d_stratified_flow_chart_water_temperature.png)
 
-*water temperature - the chart the run persisted (run 01M2GPX6APX8R0R0PESGVWQA6J)*
+*water temperature - the chart the run persisted (run 01M2MWMKGH0X496AS11GQTH5W8)*
 
 ### The sheet it filled
 
@@ -94,22 +88,18 @@ Every slot the run resolved, with where the value came from. The engine's own de
 
 | param | value | units | basis | provenance |
 |---|---|---|---|---|
-| `bbox` | [-87.39234, 46.52812, -87.36788, 46.55021] | - | user | supplied on this invocation |
+| `seed` | Point(lon=-123.221649, lat=45.485595, name=None) | - | user | supplied on this invocation |
 | `warm_temp_c` | 25.0 | C | user | supplied on this invocation |
 | `cold_temp_c` | 15.0 | C | user | supplied on this invocation |
-| `thermocline_depth_m` | 8.0 | m | user | supplied on this invocation |
+| `thermocline_depth_m` | 6.0 | m | user | supplied on this invocation |
 | `wind_speed_mps` | 0.0 | m/s | user | supplied on this invocation |
 | `wind_direction_deg` | 270.0 | deg | user | supplied on this invocation |
 | `levels` | 13 | - | user | supplied on this invocation |
-| `mesh_min_edge_m` | 60.0 | m | user | supplied on this invocation |
-| `sim_duration_hours` | 1.0 | h | user | supplied on this invocation |
-| `compute_class` | medium | - | user | supplied on this invocation |
-| `tracer_advection_scheme` | 13 | - | default_demo | declared constant default |
-| `max_advection_iterations` | 50 | - | default_demo | declared constant default |
-| `location` | - | - | prompt_interpreted | not supplied (declared optional) |
+| `mesh_resolution_m` | 60.0 | m | user | supplied on this invocation |
+| `sim_duration_s` | 18000.0 | s | default_demo | declared constant default |
+| `compute_class` | medium | - | default_demo | declared constant default |
+| `vertical_frame` | NAVD88 | - | default_demo | declared constant default |
 | `event_time` | - | - | prompt_interpreted | not supplied (declared optional) |
-| `time_step_s` | - | s | user | not supplied (declared optional) |
-| `output_interval_min` | - | min | user | not supplied (declared optional) |
 
 ### Reproduce
 
@@ -117,18 +107,16 @@ Every slot the run resolved, with where the value came from. The engine's own de
 from trid3nt_server.tools import TOOL_REGISTRY
 
 await TOOL_REGISTRY['telemac3d_stratified_flow'].fn(
-    bbox=[-87.39234, 46.52812, -87.36788, 46.55021],
     cold_temp_c=15.0,
-    compute_class='medium',
     levels=13,
-    mesh_min_edge_m=60.0,
-    sim_duration_hours=1.0,
-    thermocline_depth_m=8.0,
+    mesh_resolution_m=60.0,
+    seed='Point(lon=-123.221649, lat=45.485595, name=None)',
+    thermocline_depth_m=6.0,
     warm_temp_c=25.0,
     wind_direction_deg=270.0,
     wind_speed_mps=0.0,
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2GPX6APX8R0R0PESGVWQA6J` and commit `c06075fe30c18c4bf3619f40299b09edffefc4c0-dirty`. The full argument record is [`telemac3d_stratified_flow/run.json`](telemac3d_stratified_flow/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2MWMKGH0X496AS11GQTH5W8` and commit `6d4a8675695837fac08133baa3c42ed4c30ee559-dirty`. The full argument record is [`telemac3d_stratified_flow/run.json`](telemac3d_stratified_flow/run.json).
 

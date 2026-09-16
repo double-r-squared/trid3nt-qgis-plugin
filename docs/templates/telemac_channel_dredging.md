@@ -49,6 +49,7 @@ The values the template declares. `desc` is what the model reads when it fills o
 | `mesh_resolution_m` | scenario | m | 14.0 | Target element edge or cell length the domain is resolved at. The granularity is the USER's lever: no sizing rung derives an edge from a channel nobody surveyed, so the number the run meshes at is either yours or this labeled default |
 | `event_time` | question | - | optional | The moment the scenario is read at - an ISO date or datetime ('2026-08-20' or '2026-08-20T06:00:00Z'), from phrasing like 'during last Tuesday's storm'. Each source keeps its own retention, and a request deeper than one refuses typed |
 | `compute_class` | constant | - | medium | Solve sizing class |
+| `vertical_frame` | constant | - | NAVD88 | Vertical datum this run counts every elevation from - the bed under it and the level over it. A source published on another frame reaches this one through a measured offset, and a pair nobody publishes an offset between refuses by name |
 
 ## What it answers
 
@@ -79,31 +80,19 @@ It publishes these layers onto the canvas:
 
 ## The proving run
 
-Run `01M2MM1KESFENHPEBVZ4XQ90RV`, 2026-09-16T08:06:47.816957+00:00, 25.457 s, at commit `b6f42e9ea904813979399e818be14b8858a511d7-dirty`.
+Run `01M2MVEBXHZ5EY65P3J7VZN7G8`, 2026-09-16T10:16:06.126197+00:00, 25.585 s, at commit `6d4a8675695837fac08133baa3c42ed4c30ee559-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M2MM1KESFENHPEBVZ4XQ90RV)](telemac_channel_dredging/telemac_channel_dredging.png)
+![Every layer the run published, stacked and framed on the result (run 01M2MVEBXHZ5EY65P3J7VZN7G8)](telemac_channel_dredging/telemac_channel_dredging.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M2MM1KESFENHPEBVZ4XQ90RV)*
+*Every layer the run published, stacked and framed on the result (run 01M2MVEBXHZ5EY65P3J7VZN7G8)*
 
-![The solve, frame by frame (run 01M2MM1KESFENHPEBVZ4XQ90RV)](telemac_channel_dredging/telemac_channel_dredging_animation.gif)
+![The solve, frame by frame (run 01M2MVEBXHZ5EY65P3J7VZN7G8)](telemac_channel_dredging/telemac_channel_dredging_animation.gif)
 
-*The solve, frame by frame (run 01M2MM1KESFENHPEBVZ4XQ90RV)*
+*The solve, frame by frame (run 01M2MVEBXHZ5EY65P3J7VZN7G8)*
 
-![The solve, frame by frame - nimation (run 01M2MM1KESFENHPEBVZ4XQ90RV)](telemac_channel_dredging/telemac_river_dredging_animation.gif)
+![final frame (run 01M2MVEBXHZ5EY65P3J7VZN7G8)](telemac_channel_dredging/telemac_channel_dredging_final_frame.png)
 
-*The solve, frame by frame - nimation (run 01M2MM1KESFENHPEBVZ4XQ90RV)*
-
-![final frame (run 01M2MM1KESFENHPEBVZ4XQ90RV)](telemac_channel_dredging/telemac_channel_dredging_final_frame.png)
-
-*final frame (run 01M2MM1KESFENHPEBVZ4XQ90RV)*
-
-![inal frame (run 01M2MM1KESFENHPEBVZ4XQ90RV)](telemac_channel_dredging/telemac_river_dredging_final_frame.png)
-
-*inal frame (run 01M2MM1KESFENHPEBVZ4XQ90RV)*
-
-![ (run 01M2MM1KESFENHPEBVZ4XQ90RV)](telemac_channel_dredging/telemac_river_dredging.png)
-
-* (run 01M2MM1KESFENHPEBVZ4XQ90RV)*
+*final frame (run 01M2MVEBXHZ5EY65P3J7VZN7G8)*
 
 ### The sheet it filled
 
@@ -127,6 +116,7 @@ Every slot the run resolved, with where the value came from. The engine's own de
 | `bedload_formula` | 1 | - | default_demo | declared scenario default |
 | `morphological_factor` | 10.0 | - | default_demo | declared scenario default |
 | `compute_class` | medium | - | default_demo | declared constant default |
+| `vertical_frame` | NAVD88 | - | default_demo | declared constant default |
 | `seed_point` | - | - | prompt_interpreted | not supplied (declared optional) |
 | `event_time` | - | - | prompt_interpreted | not supplied (declared optional) |
 
@@ -150,5 +140,5 @@ await TOOL_REGISTRY['telemac_channel_dredging'].fn(
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2MM1KESFENHPEBVZ4XQ90RV` and commit `b6f42e9ea904813979399e818be14b8858a511d7-dirty`. The full argument record is [`telemac_channel_dredging/run.json`](telemac_channel_dredging/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2MVEBXHZ5EY65P3J7VZN7G8` and commit `6d4a8675695837fac08133baa3c42ed4c30ee559-dirty`. The full argument record is [`telemac_channel_dredging/run.json`](telemac_channel_dredging/run.json).
 
