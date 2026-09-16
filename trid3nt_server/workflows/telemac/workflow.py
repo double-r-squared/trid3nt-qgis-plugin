@@ -330,8 +330,7 @@ class Door:
                         "result": result,
                         "mesh_resolution_m": ParamRef("mesh_resolution_m"),
                         **{name: ParamRef(name)
-                           for name in ("name", "sim_duration_s",
-                                        "output_interval_min", "continue_from")
+                           for name in ("name", "sim_duration_s", "continue_from")
                            if name in declared}}))
 
     def _outputs_step(self, params: Mapping[str, Any]) -> Step:

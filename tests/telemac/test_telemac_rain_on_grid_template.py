@@ -346,7 +346,10 @@ async def test_a_constant_storm_states_a_deck_and_names_no_fortran(rog_run):
     # The step and the cadence are the SETTLED domain's, off the edge the mesh
     # was built at, rather than numbers this template restates.
     assert deck["TIME STEP"] == settled["time_step_s"]
-    assert deck["GRAPHIC PRINTOUT PERIOD"] == settled["graphic_period"]
+    # The CADENCE is this template's own opinion of the module's keyword, in
+    # steps, and the listing is printed on the same beat as the frames.
+    assert deck["GRAPHIC PRINTOUT PERIOD"] == 900
+    assert deck["LISTING PRINTOUT PERIOD"] == 900
     assert deck["DURATION"] == 43200.0
     # The level the outlet holds comes from the DERIVED curve beside the deck,
     # at the number the mesh's own walk gave that boundary.

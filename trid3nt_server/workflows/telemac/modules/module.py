@@ -46,8 +46,8 @@ UNSET = _Unset()
 #: Class attributes a wrapper carries that are never keyword assertions.
 _RESERVED = frozenset((
     "MODULE", "MODULE_INPUT", "COMPOSITES", "READS", "ASSERTED",
-    "MODULE_OUTPUT", "LISTING", "DERIVED", "PRINTOUTS", "TRACER", "APPENDS",
-    "APPENDABLE",
+    "MODULE_OUTPUT", "LISTING", "DERIVED", "PRINTOUTS", "CADENCE", "TRACER",
+    "APPENDS", "APPENDABLE",
     "RESULT_FILE", "composites", "reads", "appends", "printouts", "slot",
 ))
 
@@ -311,6 +311,11 @@ class Module(metaclass=_Body):
     #: The keyword the table is written into, by identifier; empty on a module
     #: that writes no result of its own.
     PRINTOUTS: str = ""
+    #: The keyword saying HOW OFTEN that table is written, by identifier; empty
+    #: on a module that does not march in time, which writes one record. Where a
+    #: module names one, a deck that states no value for it refuses: the
+    #: dictionary's own default is every step, which is an animation nobody sized.
+    CADENCE: str = ""
     #: The token a tracer takes in that keyword, which is also the row its style
     #: is under; empty on a module with no tracer surface.
     TRACER: str = ""

@@ -187,8 +187,16 @@ class STEERING(T2D):
     RESULTS_FILE = _RESULT
     TITLE = Ref("settled.title")
 
-    GRAPHIC_PRINTOUT_PERIOD = Ref("settled.graphic_period")
-    LISTING_PRINTOUT_PERIOD = Ref("settled.graphic_period")
+    # HOW OFTEN the result is written, in SOLVER STEPS. The engine's own
+    # default is every step, so an unwritten period is a frame per step: at
+    # the 40 m default edge the CFL step is 1 s, and this question's
+    # default 43200 s window is about 43,200 of them - one frame every
+    # 900 steps is 48 frames of the storm. A user who wants another
+    # cadence sets the keyword by its own name.
+    GRAPHIC_PRINTOUT_PERIOD = 900
+    # The mass balance the runoff answer is read off is printed in the listing,
+    # so it is printed on the same beat the frames are written on.
+    LISTING_PRINTOUT_PERIOD = 900
     DURATION = P.sim_duration_s
     # The step the catchment is solved at follows the edge the accepted mesh was
     # BUILT at rather than the edge that was asked for: an overland sheet is

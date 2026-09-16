@@ -196,7 +196,13 @@ class STEERING(T2D):
     # are clamped after the flux was computed.
     MASS_BALANCE = True
 
-    GRAPHIC_PRINTOUT_PERIOD = Ref("settled.graphic_period")
+    # HOW OFTEN the result is written, in SOLVER STEPS. The engine's own
+    # default is every step, so an unwritten period is a frame per step: at
+    # the 25 m default edge the CFL step is 1 s, and this question's
+    # default 172800 s window is about 172,800 of them - one frame every
+    # 3,600 steps is 48 frames of the bloom. A user who wants another
+    # cadence sets the keyword by its own name.
+    GRAPHIC_PRINTOUT_PERIOD = 3600
     DURATION = P.sim_duration_s
 
     #: The carrier declares NO tracer of its own - nothing is released into this

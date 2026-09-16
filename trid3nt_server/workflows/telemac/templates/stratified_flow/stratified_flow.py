@@ -108,7 +108,13 @@ class STEERING(T3D):
     # BUILT at, through the CFL producer every domain's step comes from.
     TIME_STEP = Ref("settled.time_step_s")
     DURATION = P.sim_duration_s
-    GRAPHIC_PRINTOUT_PERIOD = Ref("settled.graphic_period")
+    # HOW OFTEN the result is written, in SOLVER STEPS. The engine's own
+    # default is every step, so an unwritten period is a frame per step: at
+    # the 120 m default edge the CFL step is 1 s, and this question's
+    # default 18000 s window is about 18,000 of them - one frame every
+    # 360 steps is 50 frames of the column. A user who wants another
+    # cadence sets the keyword by its own name.
+    GRAPHIC_PRINTOUT_PERIOD = 360
     LISTING_PRINTOUT_PERIOD = _LISTING_PERIOD
     MASS_BALANCE = True
 

@@ -648,6 +648,7 @@ T2D = Module("telemac2d")
 T2D.MODULE_OUTPUT = MODULE_OUTPUT
 T2D.LISTING = LISTING
 T2D.PRINTOUTS = "VARIABLES_FOR_GRAPHIC_PRINTOUTS"
+T2D.CADENCE = "GRAPHIC_PRINTOUT_PERIOD"
 T2D.TRACER = "T"
 T2D.composites(releases=_releases, wind=_wind, continue_from=_continue_from,
                atmosphere=expand_for_telemac2d,

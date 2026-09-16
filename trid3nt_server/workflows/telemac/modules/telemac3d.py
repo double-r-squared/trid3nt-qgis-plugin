@@ -284,6 +284,7 @@ def _wind(value: Mapping[str, Any]) -> tuple[Mapping[str, Any], Mapping[str, Any
 T3D = Module("telemac3d")
 T3D.MODULE_OUTPUT = MODULE_OUTPUT
 T3D.PRINTOUTS = "VARIABLES_FOR_3D_GRAPHIC_PRINTOUTS"
+T3D.CADENCE = "GRAPHIC_PRINTOUT_PERIOD"
 T3D.TRACER = "TA"
 T3D.composites(vertical_grid=_vertical_grid, column=_column, wind=_wind,
                atmosphere=expand_for_telemac3d)

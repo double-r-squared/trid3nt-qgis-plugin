@@ -174,7 +174,9 @@ def test_the_clock_is_the_settled_domains_and_the_duration_the_decks():
 
     asserted = _module().STEERING.ASSERTED
     assert asserted["TIME_STEP"] == Ref("settled.time_step_s")
-    assert asserted["GRAPHIC_PRINTOUT_PERIOD"] == Ref("settled.graphic_period")
+    # The CADENCE is the template's own opinion of the module's own keyword: in
+    # steps, stated, because the dictionary's default writes every step.
+    assert asserted["GRAPHIC_PRINTOUT_PERIOD"] == 360
     assert asserted["DURATION"].name == "sim_duration_s"
     assert "NUMBER_OF_TIME_STEPS" not in asserted
 

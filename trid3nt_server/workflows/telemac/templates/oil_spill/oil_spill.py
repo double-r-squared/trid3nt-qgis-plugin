@@ -184,7 +184,13 @@ class STEERING(T2D):
     RESTART_FILE = _RESTART
     PREVIOUS_COMPUTATION_FILE_FORMAT = "SERAFIND"
 
-    GRAPHIC_PRINTOUT_PERIOD = Ref("settled.graphic_period")
+    # HOW OFTEN the result is written, in SOLVER STEPS. The engine's own
+    # default is every step, so an unwritten period is a frame per step: at
+    # the 14 m default edge the CFL step is 0.7 s, and this question's
+    # default 3600 s window is about 5,140 of them - one frame every
+    # 100 steps is 51 frames of the slick. A user who wants another
+    # cadence sets the keyword by its own name.
+    GRAPHIC_PRINTOUT_PERIOD = 100
     DURATION = P.sim_duration_s
 
     NUMBER_OF_TRACERS = 1

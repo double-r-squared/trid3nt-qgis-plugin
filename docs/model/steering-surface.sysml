@@ -736,6 +736,13 @@ package SteeringSurface {
         first, because a run started without the files the dictionary marks
         OBLIG fails inside Fortran minutes later, blaming a keyword rather than
         the gap.
+
+        It refuses the same way on the CADENCE: a module that marches in time
+        names the keyword saying how often its output table is written, and the
+        dictionary's own default for that keyword is every step. A deck stating
+        none would inherit an animation nobody sized, so each states its own
+        period in steps as its opinion, and the user overrides it by the
+        keyword's name.
         */
     }
 
@@ -1018,6 +1025,8 @@ package SteeringSurface {
         "tests/telemac/test_telemac_module_surface.py::test_run_refuses_an_incomplete_sheet_naming_the_required_file";
     verify requirement RunIsHeld by
         "tests/telemac/test_telemac_module_surface.py::test_run_serializes_then_stages_then_dispatches";
+    verify requirement RunIsHeld by
+        "tests/telemac/test_telemac_module_surface.py::test_run_refuses_a_deck_that_states_no_cadence";
     verify requirement RunIsHeld by
         "tests/model/test_model_conformance.py::test_the_model_conforms_to_the_tree";
 

@@ -449,6 +449,19 @@ def test_run_refuses_an_incomplete_sheet_naming_the_required_file():
                         results=("r2d.slf",), prefix="telemac", server_facts={}))
 
 
+def test_run_refuses_a_deck_that_states_no_cadence():
+    """The module NAMES the keyword that says how often its table is written, and
+    the dictionary's own default is every step: a deck that leaves it unwritten
+    would write an animation nobody sized."""
+    async def _never(**_kwargs):
+        raise AssertionError("nothing dispatches on a deck with no cadence")
+
+    sheet = fill(T2D, GEOMETRY_FILE="geo.slf", BOUNDARY_CONDITIONS_FILE="geo.cli")
+    with pytest.raises(SheetIncomplete, match="GRAPHIC PRINTOUT PERIOD"):
+        asyncio.run(run(sheet, dispatch=_never, mesh_inputs=(), outputs=(),
+                        results=("r2d.slf",), prefix="telemac", server_facts={}))
+
+
 def test_run_does_not_refuse_an_open_keyword_the_engine_may_yet_default():
     """LAW OF BOTTOM FRICTION has no engine default and is not an OBLIG file, so
     it is OPEN and never REQUIRED: which decks cannot run without it is LECDON's
@@ -481,7 +494,7 @@ def test_run_serializes_then_stages_then_dispatches(monkeypatch, tmp_path):
 
     sheet = fill(T2D, GEOMETRY_FILE="river.slf",
                  BOUNDARY_CONDITIONS_FILE="river.cli",
-                 LAW_OF_BOTTOM_FRICTION=3)
+                 LAW_OF_BOTTOM_FRICTION=3, GRAPHIC_PRINTOUT_PERIOD=100)
     out = asyncio.run(run(sheet, dispatch=_dispatch, mesh_inputs=(),
                           outputs=("r2d.slf",), results=("r2d.slf",),
                           prefix="telemac", server_facts={},

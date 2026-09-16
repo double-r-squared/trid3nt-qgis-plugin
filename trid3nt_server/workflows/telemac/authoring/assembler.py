@@ -84,10 +84,6 @@ _ROG_FRICTION_LAW = 4
 _REACH_FRICTION_LAW = 3
 _REACH_STRICKLER = 33.0
 
-#: How many solver steps between written frames when the sheet states no cadence.
-_DEFAULT_GRAPHIC_PERIOD = 200
-
-
 def case_section(*, module: str, steering: str, results: list[str],
                  server_facts: Mapping[str, Any], user_fortran: str | None = None,
                  coupling: str | None = None,
@@ -956,7 +952,6 @@ async def open_water(
     boundary: str = "boundary.cli",
     result: str = "results.slf",
     mesh_resolution_m: float | None = None,
-    output_interval_min: float | None = None,
     continue_from: str | None = None,
 ) -> dict[str, Any]:
     """A BODY OF WATER OPENS at a level over its bed: the mesh it was handed, the
@@ -997,7 +992,6 @@ async def open_water(
         "mesh_resolution_label": mesh_resolution_label,
         "mesh_resolution_asked_m": mesh_resolution_m,
         "time_step_s": time_step_s,
-        "graphic_period": _graphic_period(output_interval_min, time_step_s),
         "duration_s": duration_s,
         "start_time_s": start_time_s,
         "until_s": start_time_s + duration_s,
@@ -1349,15 +1343,6 @@ def _measured_channel(roles: Mapping[str, Any], node_xy: Any,
             "reach_length_m": round(length, 3),
             "outflow_section": _face_section(role_nodes["outflow"], node_xy, bed,
                                              missing=_reach_section_unmeasured)}
-
-
-def _graphic_period(output_interval_min: float | None, time_step_s: float) -> int:
-    """The GRAPHIC PRINTOUT PERIOD in solver steps, off the run's own timestep.
-
-    The cadence is asked in minutes; only this run's own step converts it."""
-    if output_interval_min is None:
-        return _DEFAULT_GRAPHIC_PERIOD
-    return max(1, round(float(output_interval_min) * 60.0 / float(time_step_s)))
 
 
 def _mesh_facts(mesh: Mapping[str, Any], *,

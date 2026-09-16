@@ -97,11 +97,12 @@ touch, BEFORE writing code. Inherit the structure; do not improvise.
    Inputs surface via the emit-on-fetch seam (`purpose=` on router
    fetches); results reach the map through `render`'s format set, and
    what a run published is written onto its own journal record as it is
-   emitted - one registry, never two. Cadence is the deck-side
-   `output_interval_min` lever and failure retracts nothing. Gates are
-   DECLARED (GateSpec metadata + pure estimate/pin providers owned by
-   the engine). Hand-wired emission or gating in a composer is a
-   defect.
+   emitted - one registry, never two. Cadence is the module's own
+   printout-period KEYWORD, stated by each deck as its opinion and
+   overridden by the user under that name, and failure retracts
+   nothing. Gates are DECLARED (GateSpec metadata + pure estimate/pin
+   providers owned by the engine). Hand-wired emission or gating in a
+   composer is a defect.
 
 9. NEVER INVENT THE WORLD. No demo/synthetic physics baked into
    product code - a physics-consequential value with no real data

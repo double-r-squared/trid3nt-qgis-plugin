@@ -400,6 +400,12 @@ async def run(sheet: Sheet, *, dispatch: Callable[..., Any],
             f"{sheet.module} cannot run: "
             + "; ".join(f"{slot.keyword} ({slot.desc[:60]})"
                         for slot in unanswered))
+    cadence = sheet.body.CADENCE
+    if cadence and cadence not in sheet.filled:
+        raise SheetIncomplete(
+            f"{sheet.module} states no {sheet.body.slot(cadence).keyword}, and "
+            "the dictionary's own default writes a frame every step. State the "
+            "period this question's frames are written at.")
     run_tag, rundir = new_rundir()
     # The serialization is a container round trip, so it runs off the loop.
     written = await asyncio.to_thread(serialize, sheet, rundir, steering=steering)
