@@ -51,6 +51,11 @@ class SurveySurfaceLayerURI(LayerURI):
     #: survey states its own zero - a local project datum on many rivers - so a
     #: consumer reads it here and never from the dataset's spec row.
     vertical_datum: str = ""
+    #: The shift the measurements' own rows publish between that zero and a
+    #: national frame, carried through unapplied: this surface is still counted
+    #: from the survey's datum, and whoever puts it on another frame says so.
+    datum_offset_m: float | None = None
+    datum_offset_frame: str = ""
     method: str = "idw"
     n_points: int = 0
     resolution_m: float = 0.0
@@ -158,6 +163,38 @@ def _datum(features: list[dict[str, Any]]) -> str:
     return stated[0] if stated else ""
 
 
+def _published_shift(features: list[dict[str, Any]]
+                     ) -> tuple[float | None, str, str]:
+    """The offset the measurements' own rows publish, the frame it reaches, and
+    what a reader has to know about it.
+
+    A project datum SLOPES: two surveys of one river publish the shift onto a
+    national frame at their own river miles, and a surface laid across both is
+    read through their mean with the spread between them stated. Two different
+    FRAMES is another matter and refuses - one surface reaches one frame."""
+    published = {(_number((f["properties"]).get("datum_offset_m")),
+                  str((f["properties"]).get("datum_offset_frame") or "").strip())
+                 for f in features}
+    stated = sorted(row for row in published if row[0] is not None and row[1])
+    frames = sorted({frame for _metres, frame in stated})
+    if len(frames) > 1:
+        raise SurveySurfaceError(
+            "SURVEY_SURFACE_DATUMS_DIFFER",
+            f"these points publish shifts onto {frames}, and one surface reaches "
+            "one frame. Interpolate each survey on its own.")
+    if not stated:
+        return None, "", ""
+    metres = [value for value, _frame in stated]
+    mean = round(sum(metres) / len(metres), 4)
+    if len(metres) == 1:
+        return mean, frames[0], ""
+    return mean, frames[0], (
+        f"{len(metres)} published shifts onto {frames[0]} - "
+        f"{', '.join(f'{v:+.4f}' for v in metres)} m, {max(metres) - min(metres):.4f} "
+        f"m apart, which is a project datum sloping along the water - so this "
+        f"surface is read through their mean {mean:+.4f} m.")
+
+
 def _grid(bounds: tuple[float, float, float, float], resolution_m: float) -> tuple[int, int, Any]:
     """The raster grid over the measured bounds, half a cell proud on every side."""
     from rasterio.transform import from_origin
@@ -215,7 +252,7 @@ def derive_survey_surface(
     _output_dir: str | None = None,
     # absorb LLM-invented kwargs.
     **_extra_ignored: Any,
-) -> SurveySurfaceLayerURI:
+) -> SurveySurfaceLayerURI | None:
     """Interpolate a POINT layer of measurements onto a raster surface -> a continuous grid.
 
     ROUTING: "grid these soundings", "turn this point survey into a surface I can
@@ -235,7 +272,9 @@ def derive_survey_surface(
     Params:
         points: the measurements - a point vector layer uri or inline GeoJSON.
             Non-point rows are ignored, so a survey artifact carrying its
-            footprint beside its soundings enters as it is.
+            footprint beside its soundings enters as it is. ABSENT - a survey
+            row whose source held nothing - there is no surface and the answer
+            is nothing, which is what a caller composing over it reads.
         resolution_m: the cell size in metres.
         value_field: the property to interpolate. Optional only when the layer
             carries exactly one numeric field; with several, naming it is
@@ -246,12 +285,17 @@ def derive_survey_surface(
 
     Returns the surface as a single-band float32 raster in the local UTM zone,
     with the field it interpolated, the vertical datum the measurements state on
-    their own rows, the method, the point count, the search radius, the share of
-    cells filled and the value range.
+    their own rows, any shift those rows publish onto a national frame (carried
+    through UNAPPLIED - this surface is still counted from the survey's own
+    zero), the method, the point count, the search radius, the share of cells
+    filled and the value range. ``None`` where no soundings were handed over.
     """
     import numpy as np
     from pyproj import Transformer
 
+    if points is None:
+        logger.info("derive_survey_surface: no soundings were handed over")
+        return None
     if not isinstance(resolution_m, (int, float)) or not math.isfinite(float(resolution_m)) \
             or float(resolution_m) <= 0.0:
         raise SurveySurfaceError(
@@ -267,6 +311,7 @@ def derive_survey_surface(
             "measurements to interpolate between. Supply a point survey.")
     field = _value_field(features, value_field)
     datum = _datum(features)
+    offset_m, offset_frame, offset_note = _published_shift(features)
     measured = [(f["xy"], _number(f["properties"].get(field))) for f in features]
     measured = [(xy, value) for xy, value in measured if value is not None]
     if len(measured) < 2:
@@ -308,6 +353,10 @@ def derive_survey_surface(
         (f"The measurements are counted from {datum}." if datum
          else "The measurements state no vertical datum, so what this surface is "
               "counted from is unknown and it cannot be merged with another."),
+        *([offset_note or f"Their own rows put that zero {offset_m:+.4f} m on "
+           f"{offset_frame}."] if offset_m is not None else []),
+        *(["The shift is carried through UNAPPLIED: these are still depths below "
+           "the survey's own zero."] if offset_m is not None else []),
     ]
     logger.info("derive_survey_surface: %d point(s) -> %dx%d at %.2f m, %.1f%% filled",
                 len(values), width, height, resolution_m, filled * 100.0)
@@ -324,6 +373,8 @@ def derive_survey_surface(
         bbox=(float(west), float(south), float(east), float(north)),
         value_field=field,
         vertical_datum=datum,
+        datum_offset_m=offset_m,
+        datum_offset_frame=offset_frame,
         n_points=len(values),
         resolution_m=resolution_m,
         search_radius_m=round(radius, 3),

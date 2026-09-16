@@ -16,7 +16,11 @@ from .temporal import TemporalSpec, spec_from
 
 __all__ = [
     "BED",
+    "COMPOSED_OVER",
+    "DISCHARGE",
     "EXTENT",
+    "LEVEL",
+    "LINE",
     "OBSERVATION",
     "RUNS",
     "CoversAOI",
@@ -39,11 +43,28 @@ DOMAIN = "domain"
 BED = "bed"
 RUNS = "runs"
 
+#: What a slot is told to COMPOSE its value over: the wider surface a narrow
+#: measurement is laid on. It belongs to the row's own producer - an artifact the
+#: caller SUPPLIES supersedes that producer, and pays for neither half.
+COMPOSED_OVER = "over"
+
+#: The LINE a placed read is measured along. Not one of the three - a run solves
+#: without it - but a slot for the same reason: a producer's own centerline, a
+#: drawn polyline and a line layer all fill it and read the same afterwards.
+LINE = "line"
+
 #: The slot a run OPENS ON: one measured value read off whatever reports it near
 #: this domain, in the unit the keyword reads. Engine-neutral for the same reason
 #: the three above are - somebody measured something somewhere at some time - and
 #: the value it yields is reachable as ``Ref("<row>.value")``.
 OBSERVATION = "observation"
+
+#: The two observations a solve READS BY ROLE rather than by name: the elevation
+#: the water surface stands at, and the flow an inflow run carries. Both are
+#: observations and ingest as one; they are their own roles because the workflow
+#: has to know which row is which to build the stages a body of water needs.
+LEVEL = "level"
+DISCHARGE = "discharge"
 
 #: The RECTANGLE a question is asked inside: the window a domain is cut out of,
 #: the grid a raster engine solves on. Not a domain - it has no shoreline - so it
@@ -286,7 +307,7 @@ class DataDecl(Row):
         """This slot's declared type on the generated tool's signature.
         Always a string: the declared shape rides along as :class:`SuppliedGeometry`
         metadata rather than narrowing the type."""
-        if self.role == OBSERVATION:
+        if self.role in (OBSERVATION, LEVEL, DISCHARGE):
             # A reading is a record to read it off, or the number itself: a user
             # who knows what the water opens at states it and it stands.
             return str | float | None
@@ -423,6 +444,15 @@ class DataDecl(Row):
         row = self if producer is None else self(producer)
         return replace(row, role=RUNS, geometry="polyline", is_optional=True)
 
+    def line(self, producer: Producer | None = None) -> "DataDecl":
+        """THE LINE a placed read is measured along.
+
+        Unfilled, the domain's own producer answers with the centerline it
+        measured beside the polygon; a body that has none is asked for a line on
+        the canvas, which is what a profile across a lake is."""
+        row = self if producer is None else self(producer)
+        return replace(row, role=LINE, geometry="polyline")
+
     def observation(self, producer: Producer | None = None, *, near: Any = None,
                     units: Any = None, measures: str = "this value",
                     opens: str = "", value_field: str = "value") -> "DataDecl":
@@ -432,8 +462,39 @@ class DataDecl(Row):
         ``value_field`` the property the source reports it under, ``measures``
         what the row is looking for and ``opens`` what the run journal says it
         opened on; a number supplied here stands over any record."""
+        return self._observed(OBSERVATION, producer, near, units, measures,
+                              opens, value_field)
+
+    def level(self, producer: Producer | None = None, *, near: Any = None,
+              units: Any = "m", measures: str = "a water-surface elevation",
+              opens: str = "the water opens at",
+              value_field: str = "value") -> "DataDecl":
+        """THE LEVEL the water surface stands at: an observation, read by ROLE.
+
+        An ELEVATION on the datum the bed is painted on - never a height above a
+        gauge's own zero, which is a different number about a different surface.
+        The run opens flat at it, and a body whose bed is stated as a depth needs
+        none: that bed is counted from the free surface itself."""
+        return self._observed(LEVEL, producer, near, units, measures, opens,
+                              value_field)
+
+    def discharge(self, producer: Producer | None = None, *, near: Any = None,
+                  units: Any = None, measures: str = "a streamflow",
+                  opens: str = "the inflow run carries",
+                  value_field: str = "value") -> "DataDecl":
+        """THE FLOW an inflow run carries: an observation, read by ROLE.
+
+        A domain whose edge names runs and whose rows carry a discharge is an
+        OPEN CHANNEL, and the workflow adds the step that measures one."""
+        return self._observed(DISCHARGE, producer, near, units, measures, opens,
+                              value_field)
+
+    def _observed(self, role: str, producer: Producer | None, near: Any,
+                  units: Any, measures: str, opens: str,
+                  value_field: str) -> "DataDecl":
+        """One measured value, under the role its consumer reads it by."""
         row = self if producer is None else self(producer)
-        return replace(row, role=OBSERVATION, coercion=MappingProxyType(
+        return replace(row, role=role, coercion=MappingProxyType(
             {"near": near, "to_units": units, "measures": measures,
              "opens": opens, "field": value_field}))
 
@@ -445,14 +506,18 @@ class DataDecl(Row):
         row = self if producer is None else self(producer)
         return replace(row, role=EXTENT, geometry="rectangle")
 
-    def bed(self, producer: Producer | None = None) -> "DataDecl":
+    def bed(self, producer: Producer | None = None, *,
+            over: Any = None) -> "DataDecl":
         """THE BED: what every node of the domain carries for elevation.
 
         A DEM, a bathymetry or survey raster, a layer of soundings, or a stated
         depth below the free surface - one slot, and the mesh records which
-        source actually painted each node."""
+        source actually painted each node. ``over`` is the WIDER surface this
+        one is composed over where it stops measuring, and is the whole bed
+        where the measurement never came."""
         row = self if producer is None else self(producer)
-        return replace(row, role=BED)
+        return replace(row, role=BED,
+                       coercion=MappingProxyType({COMPOSED_OVER: over}))
 
     @property
     def context_sentence(self) -> str:
@@ -477,13 +542,16 @@ def data_rows(body: Any) -> tuple[DataDecl, ...]:
     for value in body_rows(body, (Producer, DataDecl)):
         if isinstance(value, Producer):
             rows.append(DataDecl(name=value.row, producer=_bound_producer(value)))
-        elif value.producer is not None:
-            # A row written as ``Data(tool(...))`` carries its producer on the
-            # DECLARATION, and its reads of sibling rows are bound here for the
-            # same reason a bare producer row's are.
-            rows.append(replace(value, producer=_bound_producer(value.producer)))
         else:
-            rows.append(value)
+            # A row written as ``Data(tool(...))`` carries its producer on the
+            # DECLARATION, and its reads of sibling rows - on the producer and on
+            # what its slot is TOLD, which names a sibling the same way - are
+            # bound here for the same reason a bare producer row's are.
+            rows.append(replace(
+                value,
+                producer=(None if value.producer is None
+                          else _bound_producer(value.producer)),
+                coercion=MappingProxyType(_row_refs(dict(value.coercion)))))
     return tuple(rows)
 
 

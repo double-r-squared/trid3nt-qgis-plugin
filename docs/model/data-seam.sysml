@@ -397,6 +397,15 @@ package DataSeam {
         */
     }
 
+    part def LineSlot {
+        doc /*
+        The polyline a placed read is measured ALONG: the centerline a domain's
+        producer measured beside its polygon, or the line a user draws over a
+        body whose producer measured none. Optional by construction - a run
+        solves without one - and read by purpose on the canvas when it is not.
+        */
+    }
+
     part def ExtentSlot {
         doc /*
         The RECTANGLE a question is asked inside - the window a domain is cut
@@ -433,6 +442,12 @@ package DataSeam {
     part slotDoor : DomainSlot {
         doc /*
         code: trid3nt_server/inputs/slots.py
+        */
+    }
+
+    part lineSlot : LineSlot {
+        doc /*
+        code: trid3nt_server/inputs/line.py
         */
     }
 

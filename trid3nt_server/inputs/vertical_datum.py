@@ -13,10 +13,10 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
 
 __all__ = ["Alignment", "DatumError", "Offset", "align", "datum_of", "names_frame",
-           "offset_row", "one_datum"]
+           "offset_row", "one_datum", "one_frame"]
 
 
 class DatumError(RuntimeError):
@@ -56,7 +56,8 @@ def one_datum(*sources: Any, code_prefix: str = "") -> str:
             "and a bed elevation cannot be placed on one axis. State the datum "
             "on the source row from the dataset's own documentation.")
     distinct = sorted(set(stated.values()))
-    if len(distinct) > 1:
+    common = one_frame(distinct)
+    if common is None:
         spelled = "; ".join(f"{name} reads on {datum!r}"
                             for name, datum in sorted(stated.items()))
         raise DatumError(
@@ -64,7 +65,22 @@ def one_datum(*sources: Any, code_prefix: str = "") -> str:
             f"{spelled}, and no offset between them is stated anywhere, so one "
             "cannot be placed over the other. Name sources on one datum, or "
             "state the offset on the rows.")
-    return distinct[0]
+    return common
+
+
+def one_frame(datums: Sequence[str]) -> str | None:
+    """The frame every one of these spellings NAMES, or ``None`` for two frames.
+
+    A source states its datum in its own words - "NAVD88 (metres, positive up)"
+    beside a bare "NAVD88" - and two spellings of one zero are one zero. The
+    fullest spelling is what comes back, because it is what a reader learns from."""
+    stated = [d for d in datums if d]
+    if not stated:
+        return None
+    for candidate in sorted(stated, key=len):
+        if all(names_frame(other, candidate) for other in stated):
+            return max(stated, key=len)
+    return None
 
 
 def _stated(name: str) -> str:
@@ -192,7 +208,7 @@ def align(source: Any, onto: Any, *, offset: Any = None,
     the ``offset`` row bridges them - checked against both frames where it names
     them - and an absent offset refuses rather than laying one over the other."""
     here, there = datum_of(source), datum_of(onto)
-    if here == there or not (here and there):
+    if one_frame([here, there]) or not (here and there):
         return Alignment(datum=one_datum(source, onto, code_prefix=code_prefix),
                          shift_m=0.0, note="")
     bridge = offset_row(offset)

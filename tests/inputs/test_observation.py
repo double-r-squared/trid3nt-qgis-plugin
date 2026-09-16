@@ -101,6 +101,10 @@ def test_the_note_names_the_site_the_distance_and_the_moment() -> None:
     (100.0, "deg C", "deg F", 212.0),
     (7.5, "mg/L", "mg/L", 7.5),
     (7.5, "mg/L", None, 7.5),
+    # one unit, as each source spells it: the Water Quality Portal writes
+    # "deg C" where a keyword reads "degC"
+    (8.0, "deg C", "degC", 8.0),
+    (8.0, "\u00b0C", "degC", 8.0),
 ])
 def test_convert_only_where_a_conversion_is_stated(
         value: float, have: object, want: object, expected: float) -> None:

@@ -27,9 +27,10 @@ _CODE = "OBSERVATION_INVALID"
 
 #: The unit names a reading arrives under, by the quantity they measure. A
 #: portal federates state and federal programs, so the unit travels with the ROW
-#: rather than being the portal's, and a Fahrenheit row is converted by name.
+#: rather than being the portal's: a Fahrenheit row is converted by name, and two
+#: spellings of one unit - "deg C" beside "degC" - are one unit.
 _FAHRENHEIT = ("degf", "f", "deg f", "fahrenheit")
-_CELSIUS = ("degc", "c", "deg c", "celsius", "")
+_CELSIUS = ("degc", "c", "deg c", "celsius")
 
 #: What a source calls the MOMENT it reported, and what it calls the thing that
 #: reported. A sample portal names a site; a gridded analysis names the reach it
@@ -73,7 +74,8 @@ class ObservationError(RuntimeError):
 
 
 def _normal(unit: Any) -> str:
-    return str(unit or "").strip().lower().replace("°", "").replace(".", "")
+    """One unit's spelling, as every source spells it: "deg C", "degC", "°C"."""
+    return "".join(str(unit or "").lower().replace("°", "").replace(".", "").split())
 
 
 def convert(value: float, units: Any, to_units: Any) -> float:
@@ -82,7 +84,8 @@ def convert(value: float, units: Any, to_units: Any) -> float:
     Only pairs something actually asks for are convertible; anything else
     refuses rather than passing a number through under the wrong name."""
     have, want = _normal(units), _normal(to_units)
-    if not want or have == want:
+    if not want or have == want or any(have in family and want in family
+                                       for family in (_CELSIUS, _FAHRENHEIT)):
         return float(value)
     if have in _FAHRENHEIT and want in _CELSIUS:
         return (float(value) - 32.0) / 1.8

@@ -131,10 +131,12 @@ _REACH = {"type": "FeatureCollection", "features": [
 
 
 class _RIVER:
-    """A question whose domain producer measures the edge it cuts between."""
+    """A question whose domain producer measures the edge it cuts between and
+    the line down the middle of what it cut."""
 
     domain = Data.domain(tool("fetch_river_reach", seed_point=[0.5, 0.5]))
     runs = Data.runs()
+    line = Data.line()
 
 
 def _env_over(value, monkeypatch, body=_RIVER):
@@ -165,6 +167,36 @@ def test_a_domain_that_carries_no_runs_leaves_the_slot_empty(monkeypatch):
     interpreter, env = _env_over(drawn, monkeypatch)
     assert asyncio.run(interpreter._produce(env, env.data["runs"])) is None
     assert env.absences and "runs" in env.absences[0]
+
+
+def test_the_line_slot_is_filled_by_the_domains_own_centerline(monkeypatch):
+    """A placed profile reads a LINE, and the reach producer measured one beside
+    its polygon: the template restates nothing to be given it."""
+    reach = {"type": "FeatureCollection", "features": [
+        *_REACH["features"],
+        {"type": "Feature", "properties": {"part": "centerline"},
+         "geometry": {"type": "LineString",
+                      "coordinates": [[0.1, 0.5], [0.9, 0.5]]}}]}
+    interpreter, env = _env_over(reach, monkeypatch)
+    line = asyncio.run(interpreter._produce(env, env.data["line"]))
+    assert line == {"type": "LineString", "coordinates": [[0.1, 0.5], [0.9, 0.5]]}
+
+
+def test_a_domain_with_no_centerline_leaves_the_line_to_be_drawn(monkeypatch):
+    """A lake has no companion line down it. With no canvas to ask, the slot is
+    unsatisfied and says so - which is a user drawing the line they mean."""
+    interpreter, env = _env_over(_REACH, monkeypatch)
+    with pytest.raises(Exception, match="DATA_SLOT_UNSATISFIED|producer-less"):
+        asyncio.run(interpreter._produce(env, env.data["line"]))
+
+
+def test_a_line_the_user_draws_is_read_as_one_geometry(monkeypatch):
+    """Every shape a line arrives in reads the same after the slot: a drawn
+    collection, a geometry, or the vertices themselves."""
+    interpreter, env = _env_over(_REACH, monkeypatch)
+    env.supplied["line"] = [[0.2, 0.2], [0.8, 0.8]]
+    assert asyncio.run(interpreter._produce(env, env.data["line"])) == {
+        "type": "LineString", "coordinates": [[0.2, 0.2], [0.8, 0.8]]}
 
 
 def test_a_run_the_user_hands_over_supersedes_the_producers_own(monkeypatch):
@@ -371,3 +403,43 @@ def test_a_supplied_number_supersedes_the_record_through_the_same_slot(monkeypat
                            supplied={"opening": 11.5})
     found = asyncio.run(interpreter._produce(env, data_rows(_OBSERVED)[0]))
     assert found.value == pytest.approx(11.5) and found.units == "degC"
+
+
+def test_a_context_row_over_a_window_nobody_stated_is_not_asked(monkeypatch):
+    """A row whose producer reads a param the caller left unset has no question
+    to put: asking anyway is a refusal about a window nobody chose."""
+    import asyncio
+
+    from trid3nt_server.workflows.runtime import ParamRef, interpreter
+
+    class DATA:
+        rain = Data(tool("fetch_aorc_precip", bbox=[0.0, 0.0, 1.0, 1.0],
+                         start_date=ParamRef("rain_start_date"))
+                    ).context("no hourly rainfall record over this catchment "
+                              "for that window")
+
+    asked: list[str] = []
+
+    async def _never(env, producer, label):
+        asked.append(label)
+        raise AssertionError("the source must not be asked")
+
+    monkeypatch.setattr(interpreter, "_walk_ladder", _never)
+    env = interpreter._Env(params=_Params({"rain_start_date": None}), data={},
+                           results={})
+    row = data_rows(DATA)[0]
+    assert asyncio.run(interpreter._produce(env, row)) is None
+    assert asked == []
+    assert env.absences == [
+        "no hourly rainfall record over this catchment for that window "
+        "(rain_start_date (the start_date this row reads) was not stated)"]
+
+
+class _Params:
+    """The param state a run is walked against: what the caller filled."""
+
+    def __init__(self, filled: dict) -> None:
+        self._filled = filled
+
+    def value_of(self, name: str):
+        return self._filled.get(name)

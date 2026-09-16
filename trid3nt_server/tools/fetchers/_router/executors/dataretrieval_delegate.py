@@ -120,8 +120,10 @@ def _latest_results_by_site(res_df: Any) -> dict[str, dict[str, Any]]:
     cols = set(res_df.columns)
     if "MonitoringLocationIdentifier" not in cols:
         return latest
-    for row in res_df.itertuples(index=False):
-        rd = row._asdict()
+    # Read as RECORDS, not tuples: a WQP column whose name carries a slash -
+    # ``ResultMeasure/MeasureUnitCode``, the unit every reading is in - is not an
+    # identifier, and a named tuple renames it to its position.
+    for rd in res_df.to_dict(orient="records"):
         site_id = (_str_or_none(rd.get("MonitoringLocationIdentifier")) or "")
         if not site_id:
             continue

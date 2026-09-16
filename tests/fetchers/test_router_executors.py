@@ -921,3 +921,26 @@ def test_gzip_object_404_is_not_available(monkeypatch):
     with pytest.raises(RouterNotAvailableError) as ei:
         raster_cog._gzip_object_to_array(_gz_spec(), {"date": "2023-07", "period": "monthly"})
     assert ei.value.error_code == "DEMO_GZ_NOT_AVAILABLE"
+
+
+def test_a_wqp_result_keeps_the_unit_its_own_column_names():
+    """The Water Quality Portal names the unit column ``ResultMeasure/
+    MeasureUnitCode``, which is not an identifier: read as named tuples that
+    column is renamed to its position and every reading comes back unitless -
+    and a reading with no unit is one no slot can convert."""
+    import pandas as pd
+
+    from trid3nt_server.tools.fetchers._router.executors.dataretrieval_delegate import (
+        _latest_results_by_site,
+    )
+
+    frame = pd.DataFrame([
+        {"MonitoringLocationIdentifier": "USGS-14211720",
+         "ResultMeasureValue": "8.0",
+         "ResultMeasure/MeasureUnitCode": "deg C",
+         "ActivityStartDate": "2026-09-01",
+         "ResultSampleFractionText": "",
+         "CharacteristicName": "Temperature, water"}])
+    latest = _latest_results_by_site(frame)
+    assert latest["USGS-14211720"]["unit"] == "deg C"
+    assert latest["USGS-14211720"]["value"] == 8.0

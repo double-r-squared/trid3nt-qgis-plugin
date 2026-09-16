@@ -15,8 +15,11 @@ from typing import Any, Callable, Mapping
 
 from trid3nt_server.workflows.runtime.data import (
     BED,
+    DISCHARGE,
     DOMAIN,
     EXTENT,
+    LEVEL,
+    LINE,
     OBSERVATION,
     RUNS,
 )
@@ -25,6 +28,7 @@ from .bed import bed
 from .boundary import boundary_runs
 from .domain import domain
 from .extent import extent
+from .line import line
 from .observation import observation
 
 __all__ = ["DRAW_PURPOSES", "ask_on_canvas", "ingest_slot"]
@@ -37,7 +41,12 @@ _INGESTIONS: Mapping[str, Callable[..., Any]] = {
     DOMAIN: domain,
     BED: bed,
     RUNS: boundary_runs,
+    LINE: line,
     OBSERVATION: observation,
+    # The level and the discharge ARE observations: they are their own roles so
+    # a workflow can tell which row is which, and they read the same afterwards.
+    LEVEL: observation,
+    DISCHARGE: observation,
     EXTENT: extent,
 }
 
@@ -49,6 +58,8 @@ DRAW_PURPOSES: Mapping[str, tuple[str, str, str]] = {
              "Draw the outline of the water body this run solves over"),
     RUNS: ("polyline", "boundary run",
            "Draw each stretch of the edge that carries a boundary condition"),
+    LINE: ("polyline", "line",
+           "Draw the line this reading is measured along"),
     EXTENT: ("rectangle", "",
              "Draw the box this question is asked inside"),
 }

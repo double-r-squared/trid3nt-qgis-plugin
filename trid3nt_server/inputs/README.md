@@ -8,8 +8,9 @@ to be, what a shape's lines are, how an AOI becomes the bound domain.
 
 The engine-neutral SLOTS a solved run stands on live here too - the domain it is
 solved over, the bed its nodes carry, the runs of its edge that carry a boundary
-condition. A raster engine fills the same three with a grid, so none of them
-belongs to an engine package.
+condition, the level it stands at, the flow an inflow carries and the line a
+placed read follows. A raster engine fills the first three with a grid, so none
+of them belongs to an engine package.
 
 Nothing here knows a template, a question or an engine. A slot names the kind it
 takes and the role it plays; the ingestion is the same for every slot of that
@@ -22,10 +23,11 @@ same standing, and it enters here too.
 | --- | --- |
 | `__init__.py` | The door: the kinds and their ingestions. |
 | `domain.py` | `Domain` - the closed polygon a run is solved over - and `domain`, its ingestion from a drawing, the user's layer, a fetched waterbody or a typed ring; the runs a producer cut its polygon between and the COMPANION geometries it measured beside the polygon (a centerline, an outlet), each addressable as `Ref("<row>.<name>")`; the outer ring a mesher's extent reads, and the point inside it a nearest-site query ranks against. |
-| `bed.py` | `Bed` - what the domain's nodes carry for elevation - and `bed`, its ingestion from a surface, a layer of soundings, or a depth in metres below the free surface; the derive a point survey is interpolated by, named. ONE source: a survey over a wider surface is merged into one row by `derive_merge_rasters` before it gets here. |
+| `bed.py` | `Bed` - what the domain's nodes carry for elevation - and `bed`, its ingestion from a surface, a layer of soundings, or a depth in metres below the free surface; the derives a point survey is interpolated by and a narrow measurement is composed over a wider surface with, both named. A bed is an ELEVATION, which is what makes the flip its own: a survey's DEPTHS below its project datum are read here as elevations on the frame that survey publishes itself against. |
 | `boundary.py` | `BoundaryRun` - two Points on the domain's edge and a type (`wall`, `inflow`, `outflow`, `open`, `rating_curve`) - and `boundary_runs`, its ingestion from drawn lines, typed rows or a producer's own runs; the faces each run prescribes, walls excluded; and which types the water CROSSES, which is the edge that is not shoreline. |
 | `observation.py` | `Observation` - one measured value with where, when and how far away it was measured - and `observation`, its ingestion from a fetched or supplied point layer (the nearest reporting site, the unit the slot reads) or from the number the caller stated; the sentence the run journal carries about the sample's age. |
-| `slots.py` | The door onto the four: which ingestion each ROLE reads through, what the row told its slot about the value, and what the canvas offers for a slot a user fills by hand. |
+| `line.py` | The LINE a placed read is measured along - a producer's own centerline, a drawn polyline, a line layer or typed vertices - read as ONE geometry, so a profile down a reach and a profile across a lake are the same read. |
+| `slots.py` | The door onto the roles: which ingestion each ROLE reads through, what the row told its slot about the value, and what the canvas offers for a slot a user fills by hand. |
 | `instant.py` | An INSTANT - the moment a run is about - and `instant`, its ingestion from a date, a datetime or a trailing-Z timestamp; `day`, the calendar day a daily record is asked over; and the `event_time` coercion the wire route passes through. A value that does not parse refuses rather than reading the latest. |
 | `structure.py` | A STRUCTURE - a built thing in the water - ingested as the FOOTPRINT it occupies: a surveyed centreline given its declared width, or a polygon used verbatim. A centreline bounds no area, so subtracting one removes nothing. |
 | `point.py` | `Point` - one location with an optional name - and `point`, its ingestion from a pick, a pair, a `"lat,lon"` string, a point layer or a geocoded place; the pick-or-wire coercion; containment in a domain, the move onto a wet node, the UTM projection and the context layer. |

@@ -27,6 +27,7 @@ flowchart LR
     ladderWalker["LadderWalker<br/>trid3nt_server/fallbacks/walker.py"]
     lakeDeclaration["BedSourceDeclaration<br/>trid3nt_server/tools/fetchers/ocean/fetch_greatlakes_bathymetry/source.yaml"]
     lakeLevelDeclaration["BedSourceDeclaration<br/>trid3nt_server/tools/fetchers/ocean/fetch_greatlakes_water_level/source.yaml"]
+    lineSlot["LineSlot<br/>trid3nt_server/inputs/line.py"]
     slotDoor["DomainSlot<br/>trid3nt_server/inputs/slots.py"]
     stacRasterReader["CatalogRasterReader<br/>trid3nt_server/tools/fetchers/_router/executors/stac_raster.py"]
     waterBodyClassifier["WaterBodyClassifier<br/>trid3nt_server/tools/fetchers/_router/hooks/topobathy_class.py"]

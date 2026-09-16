@@ -18,7 +18,7 @@ from trid3nt_server.inputs.boundary import (
 from trid3nt_server.inputs.domain import domain, domain_ring
 from trid3nt_server.inputs.slots import DRAW_PURPOSES, ingest_slot
 from trid3nt_server.inputs.user_input import UserInputError
-from trid3nt_server.workflows.runtime.data import BED, DOMAIN, EXTENT, RUNS
+from trid3nt_server.workflows.runtime.data import BED, DOMAIN, EXTENT, LINE, RUNS
 
 _RING = [[-123.0, 45.0], [-122.9, 45.0], [-122.9, 45.1], [-123.0, 45.1]]
 
@@ -144,9 +144,10 @@ def test_a_domain_says_its_own_name_when_it_is_read_as_text():
 
 def test_only_the_slots_a_user_can_draw_are_offered_on_the_canvas():
     """A bed is a survey or a number, so there is nothing to draw for it."""
-    assert set(DRAW_PURPOSES) == {DOMAIN, RUNS, EXTENT}
+    assert set(DRAW_PURPOSES) == {DOMAIN, RUNS, EXTENT, LINE}
     assert DRAW_PURPOSES[DOMAIN][:2] == ("polygon", "domain")
     assert DRAW_PURPOSES[RUNS][:2] == ("polyline", "boundary run")
+    assert DRAW_PURPOSES[LINE][:2] == ("polyline", "line")
     # a box rides the pick mode, which offers no vector tool to choose between
     assert DRAW_PURPOSES[EXTENT][:2] == ("rectangle", "")
 
@@ -174,3 +175,45 @@ def test_a_domain_producer_hands_over_the_runs_it_cut_the_polygon_between():
     assert [run.type for run in cut.runs] == ["inflow", "outflow"]
     assert (cut.runs[0].start.lon, cut.runs[0].end.lat) == (0.0, 1.0)
     assert domain([[0, 0], [1, 0], [1, 1]]).runs == ()
+
+
+def test_a_line_reads_the_same_from_every_shape_it_arrives_in():
+    """A drawn collection, a bare geometry and a typed vertex list are one line
+    after the slot, so a profile down a reach and a profile across a lake are
+    the same read."""
+    from trid3nt_server.inputs.line import line
+
+    drawn = {"type": "FeatureCollection", "features": [
+        {"type": "Feature", "properties": {"role": "line"},
+         "geometry": {"type": "LineString", "coordinates": [[0.0, 0.0],
+                                                            [1.0, 1.0]]}}]}
+    one = {"type": "LineString", "coordinates": [[0.0, 0.0], [1.0, 1.0]]}
+    assert line(drawn) == one
+    assert line(one) == one
+    assert line([[0.0, 0.0], [1.0, 1.0]]) == one
+    assert line(None) is None
+
+
+def test_a_reach_mapped_in_two_pieces_stays_two_pieces():
+    """Merging them would decide where the gap closes, which is a measurement
+    nobody made."""
+    from trid3nt_server.inputs.line import line
+
+    two = {"type": "MultiLineString",
+           "coordinates": [[[0.0, 0.0], [1.0, 0.0]], [[2.0, 0.0], [3.0, 0.0]]]}
+    assert line(two) == two
+
+
+def test_a_shape_that_carries_no_polyline_refuses_rather_than_reading_one():
+    """An outline is not a line down it, and squaring one into the other would
+    measure a profile along a shoreline."""
+    from trid3nt_server.inputs.line import line
+    from trid3nt_server.inputs.user_input import UserInputError
+
+    for carries_none in ({"type": "Polygon",
+                          "coordinates": [[[0.0, 0.0], [1.0, 0.0],
+                                           [1.0, 1.0], [0.0, 0.0]]]},
+                         {"type": "FeatureCollection", "features": []}):
+        with pytest.raises(UserInputError) as excinfo:
+            line(carries_none)
+        assert excinfo.value.error_code == "LINE_INVALID"

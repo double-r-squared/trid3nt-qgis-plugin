@@ -31,7 +31,8 @@ from trid3nt_server.gates.input_review import (
     resolve_input_gate_mode,
 )
 
-from .data import DOMAIN, RUNS, CoversAOI, DataDecl, Producer
+from .data import (
+    COMPOSED_OVER, DOMAIN, LINE, RUNS, CoversAOI, DataDecl, Producer)
 from .domain import Domain, bind_domain, current_domain, domain_from_result, reset_domain
 from .errors import (
     SuppliedCoverageError,
@@ -293,7 +294,7 @@ async def _produce(env: _Env, decl: DataDecl) -> Any:
     handed_in = env.supplied.get(decl.name)
     if handed_in is not None:
         _validate_supplied(env, decl, handed_in, decl.supplied_validate)
-        return await _ingested(env, decl, handed_in)
+        return await _ingested(env, decl, handed_in, supplied=True)
     producer = decl.producer
     if producer is None and decl.role == RUNS:
         # THE DOMAIN'S PRODUCER measured these where it cut the polygon between
@@ -303,6 +304,14 @@ async def _produce(env: _Env, decl: DataDecl) -> Any:
         # none.
         measured = await _domain_runs(env)
         if measured:
+            return measured
+    if producer is None and decl.role == LINE:
+        # THE DOMAIN'S PRODUCER measured this beside the polygon it cut - a
+        # reach's centerline rides on the artifact it returned. A body whose
+        # producer measured none is asked on the canvas next, which is what a
+        # profile across a lake is.
+        measured = await _domain_companion(env, "centerline")
+        if measured is not None:
             return measured
     if producer is None and decl.role:
         # A SLOT the caller did not fill and no producer answers is asked for on
@@ -366,18 +375,48 @@ async def _domain_runs(env: _Env) -> tuple[Any, ...]:
     return tuple(getattr(bound, "runs", None) or ())
 
 
-async def _ingested(env: _Env, decl: DataDecl, value: Any) -> Any:
+async def _unstated_ask(env: _Env, decl: DataDecl) -> str:
+    """The PARAM this row's producer reads that the caller left unset, or "".
+
+    A row asked over a window nobody stated has no question to put: the param
+    that decides it says so on its own declaration, which is where the run's
+    honesty about it belongs."""
+    for name, value in decl.producer_kwargs.items():
+        if isinstance(value, ParamRef) and await _bind_value(value, env) is None:
+            return f"{value.name} (the {name} this row reads)"
+    return ""
+
+
+async def _domain_companion(env: _Env, named: str) -> Any:
+    """One geometry the DOMAIN's producer measured beside its polygon, or ``None``.
+
+    Read off the domain on demand like any other slot, so a question that needs
+    the companion pays for the domain and a question that does not never asks."""
+    row = next((r for r in env.data.values() if r.role == DOMAIN), None)
+    if row is None:
+        return None
+    bound = await _deref(Ref(row.name), env)
+    return dict(getattr(bound, "companions", None) or {}).get(named)
+
+
+async def _ingested(env: _Env, decl: DataDecl, value: Any, *,
+                    supplied: bool = False) -> Any:
     """A SLOT's value through the one ingestion its role reads; a plain row's
     value as it came.
 
     The whole point of a slot is that what fills it reads the same afterwards,
-    so the ingestion runs wherever the value entered. Off the loop: reading a
-    layer's geometry is object-store IO, and the plan is walked on it."""
+    so the ingestion runs wherever the value entered. What the row told its slot
+    to COMPOSE over is the row's producer's, so an artifact the caller supplied
+    is not composed - and never pays for the wider surface it would have been
+    laid on. Off the loop: reading a layer's geometry is object-store IO, and
+    the plan is walked on it."""
     if not decl.role:
         return value
     from trid3nt_server.inputs.slots import ingest_slot
 
-    coercion = await _bind_value(dict(decl.coercion), env)
+    told = {k: v for k, v in decl.coercion.items()
+            if not (supplied and k == COMPOSED_OVER)}
+    coercion = await _bind_value(told, env)
     ingested = await asyncio.to_thread(ingest_slot, decl.role, value,
                                        label=decl.name, **coercion)
     if decl.role == DOMAIN and ingested is not None:
@@ -395,7 +434,15 @@ async def _context(env: _Env, decl: DataDecl, label: str) -> Any:
     does not, and the run continues either way under its own stated sentence.
 
     Only an empty SOURCE is an absence - a cancelled run is not, and a retryable
-    gate error is a channel the caller still has to see."""
+    gate error is a channel the caller still has to see. A window the caller left
+    UNSTATED is not asked at all: the row's producer reads a param that is not
+    there, so there is no question to put to the source."""
+    unasked = await _unstated_ask(env, decl)
+    if unasked:
+        env.absences.append(f"{decl.context_sentence} ({unasked} was not stated)")
+        logger.info("data %s is CONTEXT and %s was not stated, so no source was "
+                    "asked; the run continues", decl.name, unasked)
+        return None
     try:
         answered, value = await _walk_ladder(env, decl.producer, label)
         # The ingestion is INSIDE the absence: a source that answered with rows
