@@ -154,7 +154,7 @@ def _painted(source: Any, lonlat: Any, box: tuple[float, float, float, float],
         return (np.full(np.asarray(lonlat).shape[0], -depth, dtype=float),
                 f"stated depth {depth:g} m below the free surface", None)
     if slot.kind == POINTS:
-        raster, provenance = _interpolated_survey(slot.source, cell_m)
+        raster, provenance = _interpolated_survey(slot.source, cell_m, slot)
         note = None
     else:
         raster, provenance, note = _bed_raster(slot.source, box)
@@ -181,12 +181,15 @@ def _node_spacing_m(mesh: Mesh) -> float:
     return float(np.median(np.concatenate(lengths)))
 
 
-def _interpolated_survey(layer: Any, cell_m: float) -> tuple[Any, str]:
+def _interpolated_survey(layer: Any, cell_m: float, slot: Any) -> tuple[Any, str]:
     """A layer of SOUNDINGS through the derive that turns it into a surface.
 
     Called by NAME: interpolating scattered measurements is useful outside any
-    slot, so it is a tool, and a tree without it refuses saying which one."""
-    from trid3nt_server.inputs.bed import SURVEY_DERIVE
+    slot, so it is a tool, and a tree without it refuses saying which one. The
+    surface it makes carries the survey's own zero, so it is read onto the run's
+    frame here - the one hop a raster bed takes on the way into its slot, taken
+    at the moment the surface exists."""
+    from trid3nt_server.inputs.bed import SURVEY_DERIVE, elevations
     from trid3nt_server.tools import TOOL_REGISTRY
     from trid3nt_server.inputs.geometry import source_uri
 
@@ -204,6 +207,7 @@ def _interpolated_survey(layer: Any, cell_m: float) -> tuple[Any, str]:
             "to interpolate the soundings at; supply a survey raster instead.")
     surface = TOOL_REGISTRY[SURVEY_DERIVE].fn(points=layer,
                                               resolution_m=float(cell_m))
+    surface = elevations(surface, frame=slot.frame, offset=slot.offset)
     return op_raster(surface), (f"{SURVEY_DERIVE} at {cell_m:.3g} m over the "
                                 f"supplied soundings ({source_uri(layer)})")
 

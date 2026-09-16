@@ -15,13 +15,21 @@ import re
 from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
 
-__all__ = ["Alignment", "DatumError", "Offset", "align", "datum_of", "names_frame",
-           "offset_row", "one_datum", "one_frame", "onto_frame", "published_offset"]
+__all__ = ["Alignment", "DatumError", "OFFSET_FETCH", "Offset", "align",
+           "datum_of", "names_frame", "offset_ask", "offset_row", "one_datum",
+           "one_frame", "onto_frame", "published_offset"]
 
 #: The fetch that measures one frame's zero against another's at a point. The
 #: RUNTIME declares this row where a source reaches the run on another frame and
-#: publishes no shift of its own; no question writes it.
+#: publishes no shift of its own; no question writes it, and nothing here calls
+#: it - a coercion reads the row's value.
 OFFSET_FETCH = "fetch_vertical_datum_offset"
+
+#: The VDatum grid the row is asked under. The service serves no lookup from a
+#: point to the region that covers it, so inland CONUS is what a run states and
+#: a point another region owns refuses by name rather than answering from the
+#: wrong grid.
+OFFSET_REGION = "contiguous"
 
 
 class DatumError(RuntimeError):
@@ -252,15 +260,15 @@ def published_offset(source: Any) -> Offset | None:
                   source=f"{_label(source)}'s own metadata")
 
 
-def onto_frame(source: Any, frame: Any, *, at: Any = None,
+def onto_frame(source: Any, frame: Any, *, offset: Any = None,
                code_prefix: str = "") -> Alignment:
     """Read ``source``'s elevations on the RUN's vertical frame, or refuse by name.
 
     One frame per run, so every elevation a run ingests is brought onto it here:
     a source already on it is not shifted, one that publishes its own shift is
-    moved by that measurement, and one that publishes none has the offset fetched
-    between the two frames at the point the run stands on. A pair nothing
-    measures refuses naming both frames rather than laying one over the other.
+    moved by that measurement, and one that publishes none is moved by ``offset``
+    - the row the runtime declared for this pair. A pair nothing measures refuses
+    naming both frames rather than laying one over the other.
 
     A run that names no frame asks nothing, and an unstated zero refuses the way
     it does anywhere else - what a slot does with a source that states none is
@@ -272,27 +280,32 @@ def onto_frame(source: Any, frame: Any, *, at: Any = None,
     onto = {"vertical_datum": wanted, "name": "the run's vertical frame"}
     if not here or one_frame([here, wanted]):
         return align(source, onto, code_prefix=code_prefix)
-    bridge = published_offset(source) or _fetched_offset(here, wanted, at)
+    bridge = published_offset(source) or offset_row(offset)
     return align(source, onto, offset=bridge, code_prefix=code_prefix)
 
 
-def _fetched_offset(here: str, wanted: str, at: Any) -> Offset | None:
-    """The offset between two frames at a point, as the fetch measures it.
+def offset_ask(source: Any, frame: Any, *, at: Any = None
+               ) -> dict[str, Any] | None:
+    """What a DATA row on :data:`OFFSET_FETCH` ASKS for this source, or ``None``.
 
-    ``None`` where the fetch is not registered, serves neither frame, or has no
-    point to ask at - the alignment then refuses naming the pair, which is the
-    honest answer. A district's project datum lands here, and the offset it needs
-    is published on the survey that uses it rather than by any service."""
-    from trid3nt_server.tools import TOOL_REGISTRY
-
+    ``None`` says no row is owed: the run names no frame, the source states none
+    or already stands on it, the source publishes its own shift, there is no
+    point to ask at, or the service transforms neither frame - and that last one
+    leaves the alignment to refuse naming both, which is the honest answer for a
+    district's project datum no service knows."""
+    wanted = str(frame or "").strip()
+    here = datum_of(source)
+    if not wanted or not here or one_frame([here, wanted]):
+        return None
+    if published_offset(source) is not None:
+        return None
     point = _point_of(at)
     served = _served_frames()
-    source, target = _as_served(here, served), _as_served(wanted, served)
-    if point is None or not (source and target) or OFFSET_FETCH not in TOOL_REGISTRY:
+    from_frame, to_frame = _as_served(here, served), _as_served(wanted, served)
+    if point is None or not (from_frame and to_frame):
         return None
-    record = TOOL_REGISTRY[OFFSET_FETCH].fn(point=list(point), from_frame=source,
-                                            to_frame=target)
-    return offset_row(record)
+    return {"point": list(point), "from_frame": from_frame,
+            "to_frame": to_frame, "region": OFFSET_REGION}
 
 
 def _served_frames() -> tuple[str, ...]:

@@ -109,34 +109,60 @@ def test_a_frame_the_run_does_not_state_asks_nothing() -> None:
     assert onto_frame(_Survey(), None).shift_m == 0.0
 
 
-def test_a_source_publishing_no_shift_has_the_offset_fetched(
+def test_a_source_publishing_no_shift_owes_an_offset_row() -> None:
+    """The RUNTIME declares the row; the coercion reads it and fetches nothing."""
+    from trid3nt_server.inputs.vertical_datum import offset_ask
+
+    ask = offset_ask({"vertical_datum": "NGVD29", "name": "the gauge"},
+                     "NAVD88", at=[-122.669, 45.518])
+    assert ask == {"point": [-122.669, 45.518], "from_frame": "ngvd29",
+                   "to_frame": "navd88", "region": "contiguous"}
+
+
+def test_the_coercion_reads_the_rows_value_and_fetches_nothing(
         monkeypatch: pytest.MonkeyPatch) -> None:
-    """The RUNTIME declares the offset row: no question writes one."""
-    from trid3nt_server.inputs.vertical_datum import onto_frame
+    from trid3nt_server.inputs import vertical_datum as vd
     from trid3nt_server.tools import TOOL_REGISTRY
 
-    asked: dict[str, object] = {}
-
-    def _offset(**kwargs: object) -> dict[str, object]:
-        asked.update(kwargs)
-        return {"offset_m": 1.057, "from_frame": "NGVD29", "to_frame": "NAVD88",
-                "source": "NOAA VDatum", "uncertainty_m": 0.053}
+    def _never(**_kwargs: object) -> object:
+        raise AssertionError("the coercion called the fetch")
 
     monkeypatch.setitem(TOOL_REGISTRY, "fetch_vertical_datum_offset",
-                        type("_Row", (), {"fn": staticmethod(_offset)})())
-    aligned = onto_frame({"vertical_datum": "NGVD29", "name": "the gauge"},
-                         "NAVD88", at=[-122.669, 45.518])
+                        type("_Row", (), {"fn": staticmethod(_never)})())
+    aligned = vd.onto_frame(
+        {"vertical_datum": "NGVD29", "name": "the gauge"}, "NAVD88",
+        offset={"offset_m": 1.057, "from_frame": "NGVD29", "to_frame": "NAVD88",
+                "source": "NOAA VDatum", "uncertainty_m": 0.053})
     assert aligned.shift_m == pytest.approx(1.057)
-    assert asked["from_frame"] == "ngvd29" and asked["to_frame"] == "navd88"
+    assert "NOAA VDatum" in aligned.note
 
 
-def test_a_pair_nothing_measures_refuses_naming_both_frames(
-        monkeypatch: pytest.MonkeyPatch) -> None:
+def test_a_source_that_publishes_its_own_shift_owes_no_row() -> None:
+    from trid3nt_server.inputs.vertical_datum import offset_ask
+
+    assert offset_ask(_Survey(), "NAVD88", at=[-122.669, 45.518]) is None
+
+
+def test_a_source_already_on_the_runs_frame_owes_no_row() -> None:
+    from trid3nt_server.inputs.vertical_datum import offset_ask
+
+    assert offset_ask({"vertical_datum": "NAVD88 (metres, positive up)",
+                       "name": "3dep"}, "NAVD88", at=[-122.669, 45.518]) is None
+
+
+def test_a_frame_the_fetch_does_not_serve_owes_no_row() -> None:
+    """A district's project datum is not a VDatum frame: no row, and the
+    alignment below refuses naming both."""
+    from trid3nt_server.inputs.vertical_datum import offset_ask
+
+    assert offset_ask({"vertical_datum": "SD (Columbia River Datum: CRD)",
+                       "name": "the survey"}, "NAVD88",
+                      at=[-122.669, 45.518]) is None
+
+
+def test_a_pair_nothing_measures_refuses_naming_both_frames() -> None:
     from trid3nt_server.inputs.vertical_datum import onto_frame
-    from trid3nt_server.tools import TOOL_REGISTRY
 
-    monkeypatch.delitem(TOOL_REGISTRY, "fetch_vertical_datum_offset",
-                        raising=False)
     with pytest.raises(DatumError) as caught:
         onto_frame({"vertical_datum": "CRD", "name": "the survey"}, "NAVD88")
     assert caught.value.error_code == "DATUMS_DIFFER"

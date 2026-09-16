@@ -518,6 +518,18 @@ package DataSeam {
         */
     }
 
+    part offsetRowDeclaration : VerticalFrame {
+        doc /*
+        code: trid3nt_server/workflows/runtime/interpreter.py
+        */
+    }
+
+    part rowLadderWalker : LadderWalker {
+        doc /*
+        code: trid3nt_server/workflows/runtime/interpreter.py
+        */
+    }
+
     part bedResultModel : BedResultModel {
         doc /*
         code: contracts/trid3nt_contracts/execution.py
@@ -625,6 +637,13 @@ package DataSeam {
         the measured share, which is what lets the next rung fill the rest under
         the gate instead of the first rung returning a half-painted bed as a
         whole one.
+
+        The same loudness holds one level up, on a DATA row's own declared
+        ladder: when a rung other than the primary answers, the interpreter
+        writes a note ON THE RUN naming the row, what each earlier rung refused
+        with, and which runner answered. The packet carries that note, so a
+        reader of the answer sees that a different dataset produced the
+        artifact; a log line would die with the process.
         */
     }
 
@@ -700,8 +719,11 @@ package DataSeam {
         somebody MEASURED, in one order: the shift the source publishes about
         itself - a district's project datum states in the survey's own metadata
         how far it sits above a national frame, and no service serves that -
-        else the offset the runtime declares and fetch_vertical_datum_offset
-        produces between the two frames at the point the run stands on. A pair
+        else the offset a DATA ROW produces between the two frames at the point
+        the run stands on. That row is the RUNTIME's: it is declared where an
+        elevation slot is handed a source on another frame, walked and journaled
+        like any other producer, and the slot's coercion reads its value and
+        fetches nothing - a coercion may call a derive, never a fetch. A pair
         nothing measures refuses naming BOTH frames rather than laying one over
         the other, because a shift nobody measured is indistinguishable from a
         measurement to every reader downstream.
@@ -950,12 +972,15 @@ package DataSeam {
     satisfy requirement SubstitutionIsDeclared by waterBodyClassifier;
     satisfy requirement SubstitutionIsDeclared by ladderWalker;
     satisfy requirement SubstitutionIsDeclared by coastalComposite;
+    satisfy requirement SubstitutionIsDeclared by rowLadderWalker;
     verify requirement SubstitutionIsDeclared by
         "tests/fetchers/test_bathymetry_data_seam.py::test_falling_from_bluetopo_to_the_cudem_composite_is_a_declared_cross_dataset_rung";
     verify requirement SubstitutionIsDeclared by
         "tests/fetchers/test_bathymetry_data_seam.py::test_a_partial_bluetopo_cover_is_reported_as_a_gap_not_a_whole_bed";
     verify requirement SubstitutionIsDeclared by
         "tests/fetchers/test_fallback_ladder.py::test_declared_rung_fills_the_gap_and_splits_coverage";
+    verify requirement SubstitutionIsDeclared by
+        "tests/runtime/test_declarative_library.py::test_a_declared_ladder_walks_its_rungs_and_records_which_answered";
 
     satisfy requirement AFreeSurfaceAndABedShareOneStatedDatum by lakeLevelDeclaration;
     satisfy requirement AFreeSurfaceAndABedShareOneStatedDatum by lakeDeclaration;
@@ -1007,6 +1032,7 @@ package DataSeam {
     satisfy requirement TheRunHasOneVerticalFrame by bedSlot;
     satisfy requirement TheRunHasOneVerticalFrame by bedComposer;
     satisfy requirement TheRunHasOneVerticalFrame by freeSurfaceReader;
+    satisfy requirement TheRunHasOneVerticalFrame by offsetRowDeclaration;
     verify requirement TheRunHasOneVerticalFrame by
         "tests/derive/test_derive_merge_rasters.py::test_a_primary_of_depths_is_read_as_elevations_on_the_fallbacks_zero";
     verify requirement TheRunHasOneVerticalFrame by
@@ -1016,7 +1042,11 @@ package DataSeam {
     verify requirement TheRunHasOneVerticalFrame by
         "tests/inputs/test_vertical_datum.py::test_a_survey_reaches_the_runs_frame_through_the_shift_it_publishes";
     verify requirement TheRunHasOneVerticalFrame by
-        "tests/inputs/test_vertical_datum.py::test_a_source_publishing_no_shift_has_the_offset_fetched";
+        "tests/inputs/test_vertical_datum.py::test_a_source_publishing_no_shift_owes_an_offset_row";
+    verify requirement TheRunHasOneVerticalFrame by
+        "tests/inputs/test_vertical_datum.py::test_the_coercion_reads_the_rows_value_and_fetches_nothing";
+    verify requirement TheRunHasOneVerticalFrame by
+        "tests/runtime/test_domain_bed_and_context_slots.py::test_the_runtime_declares_the_offset_row_a_differing_source_owes";
     verify requirement TheRunHasOneVerticalFrame by
         "tests/inputs/test_vertical_datum.py::test_a_pair_nothing_measures_refuses_naming_both_frames";
     verify requirement TheRunHasOneVerticalFrame by

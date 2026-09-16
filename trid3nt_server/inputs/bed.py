@@ -17,7 +17,8 @@ from typing import Any, Mapping
 
 from .user_input import UserInputError
 
-__all__ = ["Bed", "DEPTH", "POINTS", "RASTER", "SURVEY_DERIVE", "bed"]
+__all__ = ["Bed", "DEPTH", "POINTS", "RASTER", "SURVEY_DERIVE", "bed",
+           "elevations"]
 
 _CODE = "BED_INVALID"
 
@@ -51,20 +52,25 @@ class Bed:
     kind: str
     source: Any = None
     depth_m: float | None = None
+    #: The RUN's vertical frame, and the measured shift onto it - carried only on
+    #: a POINTS bed, whose surface does not exist until the mesh scale is known.
+    frame: Any = None
+    offset: Any = None
 
     @property
     def is_depth(self) -> bool:
         return self.kind == DEPTH
 
 
-def bed(value: Any, *, frame: Any = None, label: str = "bed",
-        code: str = _CODE) -> Bed | None:
+def bed(value: Any, *, frame: Any = None, offset: Any = None,
+        label: str = "bed", code: str = _CODE) -> Bed | None:
     """THE ingestion: a raster, a sounding layer, or a depth in metres -> Bed.
 
     ``None`` only when nothing came. A number is a DEPTH below the free surface;
     a vector artifact is a point survey; everything else is a surface. ``frame``
     is the RUN's vertical frame, which the runtime states once and every
-    elevation here is read on."""
+    elevation here is read on, and ``offset`` is the measured shift onto it the
+    runtime's own DATA row produced where the source states another frame."""
     if isinstance(value, Bed):
         return value
     if value is None:
@@ -87,8 +93,13 @@ def bed(value: Any, *, frame: Any = None, label: str = "bed",
     points = (isinstance(value, Mapping) and "type" in value) \
         or artifact_class(value) == "vector"
     if points:
-        return Bed(kind=POINTS, source=value)
-    return Bed(kind=RASTER, source=_elevation(value, label, code, frame))
+        # A layer of soundings is not a surface yet, so the read onto the run's
+        # frame waits for the derive that makes one: the frame and the shift
+        # ride here until the mesh interpolates at its own scale.
+        return Bed(kind=POINTS, source=value, frame=frame, offset=offset)
+    return Bed(kind=RASTER,
+               source=elevations(value, frame=frame, offset=offset, label=label,
+                                 code=code))
 
 
 def _depth(value: Any) -> float | None:
@@ -108,7 +119,8 @@ def _depth(value: Any) -> float | None:
     return None
 
 
-def _elevation(layer: Any, label: str, code: str, frame: Any) -> Any:
+def elevations(layer: Any, *, frame: Any, offset: Any = None,
+               label: str = "bed", code: str = _CODE) -> Any:
     """One surface on the RUN's vertical frame, counted UP.
 
     The flip is the bed slot's, because only the slot knows a bed is an
@@ -132,7 +144,7 @@ def _elevation(layer: Any, label: str, code: str, frame: Any) -> Any:
         # refuse every bed a user surveyed for this question.
         return layer
     try:
-        aligned = onto_frame(layer, frame, code_prefix="BED_")
+        aligned = onto_frame(layer, frame, offset=offset, code_prefix="BED_")
     except DatumError as exc:
         raise UserInputError(
             f"the {label} counts from {zero} and this run counts from "

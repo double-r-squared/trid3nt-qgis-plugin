@@ -128,6 +128,13 @@ def _number(value: Any) -> float | None:
     return number if math.isfinite(number) else None
 
 
+#: Numeric properties this derive reads as METADATA about the zero rather than as
+#: measurements. A survey that publishes its own shift carries it on every row,
+#: and offering it as a candidate measurement would make an unnamed call
+#: undecidable on exactly the layers the shift exists for.
+_ABOUT_THE_DATUM = frozenset({"datum_offset_m"})
+
+
 def _value_field(features: list[dict[str, Any]], stated: str | None) -> str:
     """The property the surface is built from: the stated one, or the only numeric one."""
     if stated:
@@ -138,7 +145,7 @@ def _value_field(features: list[dict[str, Any]], stated: str | None) -> str:
                 f"fields are {sorted({k for f in features for k in f['properties']})}.")
         return stated
     numeric = sorted({key for f in features for key, value in f["properties"].items()
-                      if _number(value) is not None})
+                      if _number(value) is not None} - _ABOUT_THE_DATUM)
     if len(numeric) == 1:
         return numeric[0]
     raise SurveySurfaceError(

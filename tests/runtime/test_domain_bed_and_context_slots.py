@@ -436,20 +436,88 @@ def test_a_context_row_over_a_window_nobody_stated_is_not_asked(monkeypatch):
         "(rain_start_date (the start_date this row reads) was not stated)"]
 
 
-def test_every_elevation_slot_is_read_on_the_runs_own_vertical_frame(
-        monkeypatch: pytest.MonkeyPatch):
+def _standing_on(bbox=(-123.22, 45.48, -123.19, 45.50)):
+    """The domain the run is standing on - the point an offset row is asked at."""
+    from trid3nt_server.workflows.runtime.domain import Domain, bind_domain
+
+    return bind_domain(Domain(bbox=tuple(bbox), geometry={}, label="the lake"))
+
+
+def _elevation_slot(role: str):
+    from trid3nt_server.workflows.runtime.data import BED, DataDecl, LEVEL
+
+    named = {BED: "bed", LEVEL: "stage"}.get(role, "row")
+    return DataDecl(name=named, role=role)
+
+
+def test_every_elevation_slot_is_read_on_the_runs_own_vertical_frame():
     """One frame per run, stated once as a runtime lever: the bed is read on it
     and the level is read on it, and nothing else a run ingests is an elevation."""
     from trid3nt_server.workflows.runtime import interpreter
     from trid3nt_server.workflows.runtime.data import BED, DISCHARGE, LEVEL
 
+    def _told(env, role, source=None):
+        return asyncio.run(interpreter._on_the_run_s_frame(
+            env, _elevation_slot(role), source))
+
     env = interpreter._Env(params=_Params({}), data={}, results={})
-    assert interpreter._on_the_run_s_frame(env, BED) == {"frame": "NAVD88"}
-    assert interpreter._on_the_run_s_frame(env, LEVEL) == {"to_datum": "NAVD88"}
-    assert interpreter._on_the_run_s_frame(env, DISCHARGE) == {}
+    assert _told(env, BED) == {"frame": "NAVD88"}
+    assert _told(env, LEVEL) == {"to_datum": "NAVD88"}
+    assert _told(env, DISCHARGE) == {}
     stated = interpreter._Env(params=_Params({"vertical_frame": "IGLD85"}),
                               data={}, results={})
-    assert interpreter._on_the_run_s_frame(stated, BED) == {"frame": "IGLD85"}
+    assert _told(stated, BED) == {"frame": "IGLD85"}
+
+
+def test_the_runtime_declares_the_offset_row_a_differing_source_owes(monkeypatch):
+    """A source on another frame that publishes no shift of its own: the RUNTIME
+    declares the DATA row, the row is journaled like any producer, and what the
+    slot is told is the value it produced."""
+    from trid3nt_server.workflows.runtime import interpreter
+    from trid3nt_server.workflows.runtime.data import BED
+
+    record = {"offset_m": -1.054, "from_frame": "NAVD88", "to_frame": "EGM2008",
+              "source": "NOAA VDatum", "uncertainty_m": 0.165}
+    asked: list[dict] = []
+
+    async def _call(runner, kwargs, label):
+        asked.append({"runner": runner, **kwargs})
+        return record
+
+    monkeypatch.setattr(interpreter, "_call_runner", _call)
+    _standing_on()
+    env = interpreter._Env(params=_Params({"vertical_frame": "EGM2008"}),
+                           data={}, results={})
+    told = asyncio.run(interpreter._on_the_run_s_frame(
+        env, _elevation_slot(BED),
+        {"uri": "s3://b/k/dem.tif", "vertical_datum": "NAVD88",
+         "bbox": (-123.22, 45.48, -123.19, 45.50)}))
+    assert told == {"frame": "EGM2008", "offset": record}
+    (one,) = asked
+    assert one["runner"] == "fetch_vertical_datum_offset"
+    assert one["from_frame"] == "navd88" and one["to_frame"] == "egm2008"
+    assert one["region"] == "contiguous"
+    assert one["point"] == pytest.approx([-123.205, 45.49])
+    # the row is ON the run: a declared row with a record, not a hidden call
+    assert "bed_datum_offset" in env.data
+    assert [r.node for r in env.data_records] == ["data:bed_datum_offset"]
+
+
+def test_a_source_on_the_runs_own_frame_declares_no_offset_row(monkeypatch):
+    from trid3nt_server.workflows.runtime import interpreter
+    from trid3nt_server.workflows.runtime.data import BED
+
+    async def _never(runner, kwargs, label):
+        raise AssertionError("an offset row was declared for one frame")
+
+    monkeypatch.setattr(interpreter, "_call_runner", _never)
+    _standing_on()
+    env = interpreter._Env(params=_Params({}), data={}, results={})
+    told = asyncio.run(interpreter._on_the_run_s_frame(
+        env, _elevation_slot(BED),
+        {"uri": "s3://b/k/dem.tif", "vertical_datum": "NAVD88 (metres, positive up)",
+         "bbox": (-123.22, 45.48, -123.19, 45.50)}))
+    assert told == {"frame": "NAVD88"} and not env.data
 
 
 class _Params:

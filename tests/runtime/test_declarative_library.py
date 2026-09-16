@@ -682,6 +682,11 @@ async def test_a_declared_ladder_walks_its_rungs_and_records_which_answered():
     assert out.value["seen"]["m"] == "s3://b/rung.tif"
     answered = [r for r in out.data_records if r.node == "data:bed"]
     assert answered and answered[0].runner.endswith("stub_rung")
+    # LOUD: a cross-dataset substitution is a note on the run, which the packet
+    # carries, and not a log line a reader of the answer never sees.
+    said = [n for n in out.notes if n.startswith("a DIFFERENT dataset answered")]
+    assert said and "stub_producer refused" in said[0] \
+        and "stub_rung answered" in said[0]
 
 
 @pytest.mark.asyncio

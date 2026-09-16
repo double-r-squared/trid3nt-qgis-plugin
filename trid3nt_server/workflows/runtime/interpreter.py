@@ -42,7 +42,8 @@ from .errors import (
     ParamRefLeakedError,
     StepFailedError,
 )
-from .journal import bind_notes, bind_outputs, drain_notes, drain_outputs
+from .journal import (bind_notes, bind_outputs, drain_notes, drain_outputs,
+                      journal_note)
 from .ledger import LedgerRecord, StepLedger, inputs_digest, invocation_key
 from .params import Param, ResolvedParams
 from .plan import (
@@ -411,7 +412,7 @@ async def _ingested(env: _Env, decl: DataDecl, value: Any) -> Any:
     from trid3nt_server.inputs.slots import ingest_slot
 
     coercion = await _bind_value(dict(decl.coercion), env)
-    coercion.update(_on_the_run_s_frame(env, decl.role))
+    coercion.update(await _on_the_run_s_frame(env, decl, value))
     ingested = await asyncio.to_thread(ingest_slot, decl.role, value,
                                        label=decl.name, **coercion)
     if decl.role == DOMAIN and ingested is not None:
@@ -424,20 +425,52 @@ async def _ingested(env: _Env, decl: DataDecl, value: Any) -> Any:
     return ingested
 
 
-def _on_the_run_s_frame(env: _Env, role: str) -> dict[str, Any]:
+async def _on_the_run_s_frame(env: _Env, decl: DataDecl,
+                              value: Any) -> dict[str, Any]:
     """What an ELEVATION slot is told about the run's own vertical frame.
 
     One frame per run, stated once as a runtime lever: a bed is read on it and a
     level is read on it, so neither is a row a question writes. Nothing else a
     run ingests is an elevation, and a slot that is handed a frame it does not
-    need would demand a datum of a temperature."""
+    need would demand a datum of a temperature. A source counting from ANOTHER
+    frame is bridged by the offset row below, which the slot then reads."""
     from .levers import run_frame
 
-    if role == BED:
-        return {"frame": run_frame(env.params)}
-    if role == LEVEL:
-        return {"to_datum": run_frame(env.params)}
-    return {}
+    if decl.role not in (BED, LEVEL):
+        return {}
+    frame = run_frame(env.params)
+    told = {"frame": frame} if decl.role == BED else {"to_datum": frame}
+    measured = await _offset_row(env, decl, value, frame)
+    return told if measured is None else {**told, "offset": measured}
+
+
+async def _datum_offset_ask(value: Any, frame: str) -> Mapping[str, Any] | None:
+    """What the offset row asks for this source, off the loop: a spec read."""
+    from trid3nt_server.inputs.vertical_datum import offset_ask
+
+    return await asyncio.to_thread(offset_ask, value, frame)
+
+
+async def _offset_row(env: _Env, decl: DataDecl, value: Any,
+                      frame: str) -> Any:
+    """The measured shift onto the run's frame, as a DATA row the RUNTIME declares.
+
+    The frame is the runtime's, so the question a differing source raises is the
+    runtime's too - and it is asked the way every other fact about the world is,
+    as a producer row with a ledger record and a line on the journal naming the
+    service that answered. ``None`` where the pair owes no row: the source stands
+    on the frame already, publishes its own shift, or names a datum no service
+    transforms - and that last one leaves the slot to refuse naming both."""
+    from trid3nt_server.inputs.vertical_datum import OFFSET_FETCH
+
+    ask = await _datum_offset_ask(value, frame)
+    if ask is None:
+        return None
+    name = f"{decl.name}_datum_offset"
+    row = DataDecl(name=name, producer=Producer(runner=OFFSET_FETCH,
+                                                kwargs=ask, row=name))
+    env.data[name] = row
+    return await _produce(env, row)
 
 
 async def _context(env: _Env, decl: DataDecl, label: str) -> Any:
@@ -525,18 +558,18 @@ async def _walk_ladder(env: _Env, producer: Producer,
         except Exception as exc:  # noqa: BLE001 - the next rung is the response
             if index == len(rungs) - 1:
                 raise
-            failures.append(f"{rung.runner}: {exc}")
+            failures.append(f"{rung.runner} refused "
+                            f"{getattr(exc, 'error_code', None) or type(exc).__name__}")
             logger.warning("%s rung %s failed (%s); falling to %s",
                            label, rung.runner, exc, rungs[index + 1].runner)
             continue
         if index:
-            # This is the one place that knows a rung fired, so the cross-dataset
-            # substitution is announced here rather than left to each producer.
-            logger.warning(
-                "LABELED SUBSTITUTION: %s was produced by the fallback rung %s "
-                "rather than %s - a DIFFERENT dataset answered this artifact. "
-                "Rungs that failed: %s", label, rung.runner, producer.runner,
-                "; ".join(failures))
+            # This is the one place that knows a rung fired, and a substitution
+            # between DATASETS is a fact about the answer: it goes on the run's
+            # own journal, where the packet carries it, rather than into a log
+            # line that dies with the process.
+            journal_note(f"a DIFFERENT dataset answered {label}: "
+                         + "; ".join(failures) + f"; {rung.runner} answered.")
         return rung, value
     raise StepFailedError(  # unreachable: the last rung re-raises above
         f"{label}: no rung answered.", error_code="DATA_LADDER_EXHAUSTED",
