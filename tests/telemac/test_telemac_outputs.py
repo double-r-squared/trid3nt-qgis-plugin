@@ -677,7 +677,38 @@ def test_a_primitive_names_the_coupled_module_whose_result_it_reads():
     bed = field("E", t=-1, module="gaia")
     assert bed.module == "gaia" and bed.key.module == "gaia"
     assert field("E", t=-1).key != bed.key and hash(bed.key) != hash(field("E").key)
-    assert GAIA.READS["field"] is T2D.READS["field"]
+    # GAIA reads its own bed through the shared primitive and says something the
+    # carrier cannot: a bed evolution of exactly nothing is an answer.
+    assert GAIA.READS["series"] is T2D.READS["series"]
+    assert GAIA.READS["field"] is not T2D.READS["field"]
+
+
+def test_a_bed_that_did_not_move_states_what_it_was_measured_against():
+    """An answer of exactly 0.0 bed change carries its reason on the run journal:
+    the engine's own shear stress, which the threshold of motion is a value of."""
+    import numpy as np
+
+    from trid3nt_server.workflows.runtime.journal import bind_notes, drain_notes
+    from trid3nt_server.workflows.telemac.modules import gaia
+
+    class _Solved:
+        def frames(self, name, plane):
+            if name != "TOB":
+                raise AssertionError(f"read {name}")
+            return ("BED SHEAR STRESS", "N/m2", np.array([[0.004, 0.011]]))
+
+    still = type("_Read", (), {"name": "CUMUL BED EVOL ",
+                               "values": np.zeros(4)})()
+    token = bind_notes()
+    gaia._state_the_zero(still, _Solved())
+    said = drain_notes(token)
+    assert said and "did not move" in said[0]
+    assert "BED SHEAR STRESS peaked at 0.011 N/m2" in said[0]
+    moved = type("_Read", (), {"name": "CUMUL BED EVOL ",
+                               "values": np.array([0.0, -0.02])})()
+    token = bind_notes()
+    gaia._state_the_zero(moved, _Solved())
+    assert drain_notes(token) == []
 
 
 def test_the_door_carries_a_primitive_s_point_and_line_beside_the_list(monkeypatch):

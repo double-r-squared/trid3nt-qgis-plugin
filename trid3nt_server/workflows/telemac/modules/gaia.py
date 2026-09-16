@@ -268,6 +268,54 @@ def _appended(body: Mapping[str, Any]) -> tuple[Output, ...]:
     return (_SUSPENDED,) if "suspension" in dict(body.get("slots") or {}) else ()
 
 
+#: The row whose ZERO is itself an answer, and the row the engine writes the
+#: stress that would have moved it into. A cumulative bed evolution of exactly
+#: nothing everywhere says the bed did not move; what it has to be read against
+#: is the shear that was on it.
+_BED_EVOLUTION = "E"
+_BED_SHEAR = "TOB"
+
+
+def _bed_field(primitive: Any, solved: Any) -> Any:
+    """GAIA's field read, with the bed's ZERO stated where it did not move."""
+    read = PRIMITIVES["field"](primitive, solved)
+    if primitive.variable == _BED_EVOLUTION:
+        _state_the_zero(read, solved)
+    return read
+
+
+def _state_the_zero(read: Any, solved: Any) -> None:
+    """What the run SAYS when its bed did not move at all.
+
+    An answer of exactly nothing is only readable beside what drove it, so the
+    engine's OWN bed shear stress is quoted with it: the threshold of motion for
+    the grain this deck states is a value of that quantity, and a reader holding
+    both can see that nothing reached it."""
+    import numpy as np
+
+    from trid3nt_server.workflows.runtime import journal_note
+
+    values = np.asarray(getattr(read, "values", ()), dtype=float)
+    if not values.size or bool(np.any(values != 0.0)):
+        return
+    journal_note(
+        f"the bed did not move: {read.name.strip()} reads exactly 0 m at every "
+        f"node this run solved on, {_against(solved)} - nothing this flow put on "
+        "the bed reached the threshold of motion for the grain the deck states.")
+
+
+def _against(solved: Any) -> str:
+    """The engine's own driving stress, as far as this result carries one."""
+    import numpy as np
+
+    try:
+        name, units, stress = solved.frames(_BED_SHEAR, None)
+    except Exception:  # noqa: BLE001 - a deck that rows no stress states so
+        return f"and the deck wrote no {_BED_SHEAR} to read that against"
+    peak = float(np.nanmax(np.asarray(stress, dtype=float)))
+    return f"and the engine's own {name.strip()} peaked at {peak:.4g} {units}"
+
+
 GAIA = _Gaia
 GAIA.APPENDABLE = (("each suspended class", (_SUSPENDED,)),)
 GAIA.MODULE_OUTPUT = MODULE_OUTPUT
@@ -276,4 +324,4 @@ GAIA.PRINTOUTS = "VARIABLES_FOR_GRAPHIC_PRINTOUTS"
 GAIA.RESULT_FILE = RESULT_FILENAME
 GAIA.composites(bed=_bed, suspension=_suspension, dredging=_dredging)
 GAIA.appends(_appended)
-GAIA.reads(**PRIMITIVES)
+GAIA.reads(**{**PRIMITIVES, "field": _bed_field})
