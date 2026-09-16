@@ -144,7 +144,7 @@ def test_a_template_with_no_runs_row_takes_the_domain_producers_own():
 def test_the_settle_step_reads_the_files_the_deck_itself_names():
     workflow = _workflow(Door(steering=STEERING))
     settle = workflow.plan.steps[1]
-    assert settle.runner.endswith("assembler.settle_domain")
+    assert settle.runner.endswith("assembler.open_water")
     assert settle.kwargs["geometry"] == "domain.slf"
     assert settle.kwargs["boundary"] == "domain.cli"
     assert settle.kwargs["result"] == "r2d_domain.slf"

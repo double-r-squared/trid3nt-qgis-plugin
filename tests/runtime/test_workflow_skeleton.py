@@ -410,7 +410,7 @@ def test_the_owned_settle_reads_the_accepted_mesh_and_the_seated_lever():
     workflow = module.telemac_dye_release.workflow
     settled = next(n for n in workflow.plan_decl(workflow)
                    if getattr(n, "name", "") == "settled")
-    assert settled.runner.endswith("assembler.settle_domain")
+    assert settled.runner.endswith("assembler.open_water")
     assert settled.kwargs["mesh"] == Ref("mesh")
     assert "reach" not in settled.kwargs
     # A placeholder refuses ``==`` by design, so the read is named by its name.

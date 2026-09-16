@@ -284,7 +284,7 @@ class Door:
         # what a channel is: a discharge for its inflow run. Everything else is a
         # body of water the base settles on its own.
         channel = (
-            (Step(runner=f"{_TELEMAC}.authoring.assembler.settle_open_channel",
+            (Step(runner=f"{_TELEMAC}.authoring.assembler.open_channel",
                   stage="author",
                   kwargs={"mesh": Ref("mesh"),
                           "carrier": DataRef(slots[DISCHARGE][0]),
@@ -318,7 +318,7 @@ class Door:
             steering_file=self.steering_file
             or f"{self.steering.MODULE}_{ops.name}.cas",
             settle=Step(
-                runner=f"{_TELEMAC}.authoring.assembler.settle_domain",
+                runner=f"{_TELEMAC}.authoring.assembler.open_water",
                 stage="author",
                 kwargs={"mesh": Ref("mesh"),
                         # WHAT THE WATER STANDS AT: the channel's own measurement

@@ -940,7 +940,7 @@ def test_the_open_channel_body_is_written_at_the_derivation_it_was_solved_for():
         workflow = TOOL_REGISTRY[name].fn.workflow
         channel = next(n for n in workflow.plan_decl(workflow)
                        if getattr(n, "name", "") == "channel")
-        assert channel.runner.endswith("assembler.settle_open_channel")
+        assert channel.runner.endswith("assembler.open_channel")
         assert body.ASSERTED["FRICTION_COEFFICIENT"] == \
             channel.kwargs["friction_coefficient"]
         assert body.ASSERTED["LAW_OF_BOTTOM_FRICTION"] == \

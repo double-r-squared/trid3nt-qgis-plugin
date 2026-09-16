@@ -52,7 +52,7 @@ def _mesh_record(*, min_edge_m: float | None = None,
 
 @pytest.fixture()
 def settle(monkeypatch, tmp_path):
-    """``settle_domain`` with its world-reads stood in for."""
+    """``open_water`` with its world-reads stood in for."""
     import numpy as np
 
     monkeypatch.setenv("TRID3NT_RUNS_DIR", str(tmp_path))
@@ -72,7 +72,7 @@ def settle(monkeypatch, tmp_path):
     monkeypatch.setattr(asm_mod, "read_accepted_mesh_nodes", _accepted_nodes)
 
     async def _settle(**kwargs):
-        return await asm_mod.settle_domain(sim_duration_s=3600.0,
+        return await asm_mod.open_water(sim_duration_s=3600.0,
                                            mesh_resolution_m=14.0,
                                            **_FILES, **kwargs)
 

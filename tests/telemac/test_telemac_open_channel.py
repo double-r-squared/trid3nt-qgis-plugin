@@ -1,6 +1,6 @@
 """The OPEN-CHANNEL hydraulics on top of any domain.
 
-``settle_domain`` is engine-neutral about the water; a question that needs a
+``open_water`` is engine-neutral about the water; a question that needs a
 channel opened - an inflow carrying a flow, an outflow holding a level, a depth
 to start at - settles that ON TOP of it, measured over the accepted mesh at the
 roughness the deck is written at. Offline: no solve, no container.
@@ -50,7 +50,7 @@ def _run(**over):
     ask = {"mesh": _mesh(), "friction_law": 3, "friction_coefficient": 33.0,
            "carrier": 50.0}
     ask.update(over)
-    return asyncio.run(D.settle_open_channel(**ask))
+    return asyncio.run(D.open_channel(**ask))
 
 
 def test_the_channel_measures_its_slope_between_the_two_runs_own_nodes(settled):

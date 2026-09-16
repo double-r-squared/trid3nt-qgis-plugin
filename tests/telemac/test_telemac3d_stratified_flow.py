@@ -131,7 +131,7 @@ def test_the_workflow_owns_the_stages_and_the_template_states_no_recipe():
     assert door.mesh is None and door.domain == ()
     assert not hasattr(module, "MESH")
     assert door.levers == ("mesh_resolution_m", "sim_duration_s", "event_time",
-                           "compute_class")
+                           "compute_class", "vertical_frame")
 
 
 def test_the_owned_mesh_paints_its_bed_and_takes_its_roles_from_the_domain():
@@ -159,7 +159,7 @@ def test_the_column_and_the_free_surface_come_from_one_measurement():
     asserted = _module().STEERING.ASSERTED
     settled = next(step for step in _workflow().plan.steps
                    if step.name == "settled")
-    assert settled.runner.endswith("assembler.settle_domain")
+    assert settled.runner.endswith("assembler.open_water")
     assert settled.kwargs["level"].path == "level"
     assert asserted["INITIAL_ELEVATION"] == Ref("settled.level_m")
     for slot in ("vertical_grid", "column"):

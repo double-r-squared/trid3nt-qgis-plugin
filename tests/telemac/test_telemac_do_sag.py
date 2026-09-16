@@ -203,7 +203,7 @@ def test_the_workflow_owns_the_stages_and_the_template_states_what_differs():
     assert [s.label for s in steps if s.self_gating] == ["sheet"]
     assert steps[-2].consequential
     channel = steps[1]
-    assert channel.runner.endswith("assembler.settle_open_channel")
+    assert channel.runner.endswith("assembler.open_channel")
     assert channel.kwargs["friction_law"] == 3
     assert channel.kwargs["friction_coefficient"] == 33.0
     # An unplaced outfall sits along the domain's OWN centerline companion, so
@@ -231,7 +231,7 @@ def test_the_mesh_is_built_over_the_domain_slot_at_the_runtimes_own_lever():
 
 def test_the_settle_step_reads_the_files_the_deck_itself_names():
     settle = _steps()[3]
-    assert settle.runner.endswith("assembler.settle_domain")
+    assert settle.runner.endswith("assembler.open_water")
     assert settle.kwargs["geometry"] == "domain.slf"
     assert settle.kwargs["boundary"] == "domain.cli"
     assert settle.kwargs["result"] == "r2d_domain.slf"

@@ -98,7 +98,7 @@ def test_the_workflow_owns_every_stage_but_the_two_this_question_measures():
     assert [step.label for step in _WORKFLOW.plan.steps] == [
         "mesh", "channel", "settled", "dredge", "sheet", "solve", "outputs"]
     settle = _steps()["settled"]
-    assert settle.runner.endswith("assembler.settle_domain")
+    assert settle.runner.endswith("assembler.open_water")
     assert (settle.kwargs["geometry"], settle.kwargs["boundary"],
             settle.kwargs["result"]) == ("channel.slf", "channel.cli",
                                          "r2d_channel.slf")
@@ -108,7 +108,7 @@ def test_the_deck_is_written_at_the_roughness_its_own_stage_is_derived_at():
     """A stage derived at one number under a deck written at another is a level
     the run never sits at, so the two read the same module constant."""
     channel = _steps()["channel"]
-    assert channel.runner.endswith("assembler.settle_open_channel")
+    assert channel.runner.endswith("assembler.open_channel")
     assert channel.kwargs["friction_law"] == _STEERING.ASSERTED[
         "LAW_OF_BOTTOM_FRICTION"]
     assert channel.kwargs["friction_coefficient"] == _STEERING.ASSERTED[

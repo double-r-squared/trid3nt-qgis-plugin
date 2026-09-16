@@ -286,7 +286,7 @@ def test_the_mesh_is_built_over_the_domain_slot_at_the_runtimes_own_lever():
 
 def test_the_settle_step_reads_the_files_the_deck_itself_names():
     settle = _steps()[3]
-    assert settle.runner.endswith("assembler.settle_domain")
+    assert settle.runner.endswith("assembler.open_water")
     assert settle.kwargs["geometry"] == "domain.slf"
     assert settle.kwargs["boundary"] == "domain.cli"
     assert settle.kwargs["result"] == "r2d_domain.slf"

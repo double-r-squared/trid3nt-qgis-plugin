@@ -98,7 +98,7 @@ def test_the_workflow_owns_every_stage_but_the_two_measured_on_the_mesh():
     assert [step.label for step in _WORKFLOW.plan.steps] == [
         "mesh", "channel", "source", "settled", "sheet", "solve", "outputs"]
     settle = next(step for step in _WORKFLOW.plan.steps if step.label == "settled")
-    assert settle.runner.endswith("assembler.settle_domain")
+    assert settle.runner.endswith("assembler.open_water")
     assert (settle.kwargs["geometry"], settle.kwargs["boundary"],
             settle.kwargs["result"]) == ("domain.slf", "domain.cli",
                                          "r2d_domain.slf")

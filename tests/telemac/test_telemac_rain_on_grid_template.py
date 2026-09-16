@@ -266,7 +266,7 @@ def _accepted_catchment_mesh():
 
 @pytest.fixture()
 def rog_run(monkeypatch, tmp_path):
-    """The seated ``settle_domain`` and the fill over it, with the accepted
+    """The seated ``open_water`` and the fill over it, with the accepted
     mesh's reads and the land-cover raster stood in for.
 
     The DECK is real: every keyword and every file the template states is resolved
@@ -302,7 +302,7 @@ def rog_run(monkeypatch, tmp_path):
                  "antecedent_moisture": "normal", "design_storm_mm_per_hr": 25.0,
                  "storm_duration_hr": 6.0, "rain_series_mm": None,
                  "sim_duration_s": 43200.0, **params}
-        settled = await asm_mod.settle_domain(
+        settled = await asm_mod.open_water(
             mesh=mesh, sim_duration_s=asked["sim_duration_s"],
             geometry=STEERING.ASSERTED["GEOMETRY_FILE"],
             boundary=STEERING.ASSERTED["BOUNDARY_CONDITIONS_FILE"],
