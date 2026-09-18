@@ -1,9 +1,10 @@
 """A POINT: one location with an optional name, from every way a user names one.
 
-A canvas pick, a (lon, lat) pair, a "lat,lon" string, a selected point layer and a
-geocoded place all enter through ``point``. What reads a Point after that reads
-``.lon``, ``.lat`` and ``.name`` and never parses again; where a point is allowed
-to be - inside a domain, on a river, in water - is answered here for any slot.
+A canvas pick, a (lon, lat) pair, a "lat,lon" string and a selected point layer all
+enter through ``point``. What reads a Point after that reads ``.lon``, ``.lat`` and
+``.name`` and never parses again; where a point is allowed to be - inside a domain,
+on a river, in water - is answered here for any slot. A bare place NAME refuses: an
+ingestion resolves what it was handed and never fetches.
 """
 
 from __future__ import annotations
@@ -15,7 +16,7 @@ import re
 from dataclasses import dataclass
 from typing import Any, Awaitable, Callable, Mapping
 
-from .user_input import UserInputError, lonlat_point
+from .user_input import PlaceNameError, UserInputError, lonlat_point
 
 from .geometry import flatten_geometries, read_geometry_doc, utm_epsg_for
 
@@ -79,9 +80,10 @@ class PointOutsideDomainError(UserInputError):
 
 async def point(value: Any, *, label: str = "point",
                 code: str = _CODE) -> Point | None:
-    """THE ingestion: a pick, a pair, "lat,lon", a point layer or a place -> Point.
+    """THE ingestion: a pick, a pair, "lat,lon" or a point layer -> Point.
 
-    ``None`` only when nothing came; a value of no readable shape refuses typed."""
+    ``None`` only when nothing came; a value of no readable shape refuses typed,
+    and a place name refuses naming ``geocode_location``."""
     if value is None or isinstance(value, Point):
         return value
     if isinstance(value, Mapping):
@@ -135,7 +137,8 @@ async def _from_text(text: str, label: str, code: str) -> Point:
         lon, lat = lonlat_point((two.group(2), two.group(1)), label=label,
                                 code=code)
         return Point(lon, lat)
-    return await _from_place(text, label, code)
+    raise PlaceNameError(text, label=label, code=code,
+                         wants="a (lon, lat) pair", retry_as="[lon, lat]")
 
 
 def _from_layer(uri: str, label: str, code: str) -> Point:
@@ -151,20 +154,8 @@ def _from_layer(uri: str, label: str, code: str) -> Point:
             return Point(lon, lat, _named(feature))
     raise UserInputError(
         f"the layer supplied as {label} ({uri}) carries no point feature; a "
-        "point slot takes a point layer, a pick, a pair, or a place name.",
+        "point slot takes a point layer, a pick, or a (lon, lat) pair.",
         code=code)
-
-
-async def _from_place(name: str, label: str, code: str) -> Point:
-    from .aoi import geocode_place
-
-    found = await geocode_place(name)
-    if found is None:
-        raise UserInputError(
-            f"{label} {name!r} could not be geocoded to a point. Give a place the "
-            "geocoder knows, a (lon, lat) pair, or pick it on the canvas.",
-            code=code)
-    return Point(found[0], found[1], name)
 
 
 def as_utm(pt: Point, utm_epsg: int) -> tuple[float, float]:

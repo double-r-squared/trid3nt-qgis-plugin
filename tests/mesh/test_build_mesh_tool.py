@@ -655,22 +655,3 @@ def test_a_lattice_refuses_a_polygon_domain_and_names_the_mesher_that_takes_one(
     assert excinfo.value.escalation["overrides"]["mesher"] == "om2d"
 
 
-@pytest.mark.asyncio
-async def test_the_escalated_bbox_is_the_box_the_rerun_actually_models(monkeypatch):
-    """A named override reaches the domain verbatim, place name notwithstanding.
-
-    A rerun seats overrides on the parent's own sheet, so the box arrives at the
-    acquisition step beside the place name the parent ran with."""
-    from trid3nt_server.inputs.aoi import acquire_aoi
-
-    def _never(*_a, **_kw):  # a geocode here would mean the box was dropped
-        raise AssertionError("the supplied extent is the domain; nothing to geocode")
-
-    monkeypatch.setitem(
-        TOOL_REGISTRY, "geocode_location",
-        dataclasses.replace(TOOL_REGISTRY["geocode_location"], fn=_never))
-    moved = (-84.00, 35.00, -83.90, 35.09)
-
-    resolved = await acquire_aoi(location="Cataloochee, North Carolina", bbox=moved)
-
-    assert tuple(resolved["bbox"]) == moved

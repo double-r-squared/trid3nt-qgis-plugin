@@ -1,5 +1,5 @@
-"""An Extent is ingested once, from a bbox pick, the canvas AOI, a place or a
-layer's bounds, and read as one ordered box."""
+"""An Extent is ingested once, from a bbox pick, the canvas AOI, four numbers or a
+layer's bounds, and read as one ordered box; a place name refuses."""
 
 from __future__ import annotations
 
@@ -39,15 +39,12 @@ def test_a_layer_gives_the_bounds_of_everything_it_holds(tmp_path):
     assert _ingest(str(path)).bbox == (-114.33, 42.57, -114.20, 42.60)
 
 
-def test_a_place_becomes_the_box_around_its_geocoded_centre(monkeypatch):
-    from trid3nt_server.inputs import aoi
-
-    async def _geo(name):
-        return (-114.46, 42.56)
-
-    monkeypatch.setattr(aoi, "geocode_place", _geo)
-    got = _ingest("Twin Falls, Idaho", half_deg=0.1)
-    assert got == Extent((-114.56, 42.46, -114.36, 42.66), "Twin Falls, Idaho")
+def test_a_place_name_refuses_and_names_the_geocoder():
+    with pytest.raises(UserInputError) as ei:
+        _ingest("Twin Falls, Idaho", label="aoi")
+    assert ei.value.retryable is True
+    assert "geocode_location(query='Twin Falls, Idaho')" in str(ei.value)
+    assert "west, south, east, north" in str(ei.value)
 
 
 def test_geojson_inline_takes_bounds_and_nothing_passes_through():

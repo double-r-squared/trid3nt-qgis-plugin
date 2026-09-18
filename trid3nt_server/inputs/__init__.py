@@ -2,10 +2,11 @@
 
 A Point, an Extent and a Shape each have ONE ingestion function, named for the
 kind in its own module, that takes every form the value arrives in - a canvas
-pick, a typed value, a selected layer, a place name - and one home for what is
-done with them afterwards. The AOI
-acquisition, the geometry-source reader and the layer-field reader live beside
-them because a template reads the world through the same door.
+pick, a typed value, a selected layer - and one home for what is done with them
+afterwards. An ingestion resolves what it was handed and never fetches, so a
+place name refuses and names the geocoder. The geometry-source reader and the
+layer-field reader live beside them because a template reads the world through
+the same door.
 """
 
 from . import user_input

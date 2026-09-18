@@ -1,9 +1,10 @@
 """An EXTENT: one lon/lat bounding box with an optional name, from every way a user
 names one.
 
-A bbox pick, the canvas AOI, a place name and a layer's bounds all enter through
+A bbox pick, the canvas AOI, four numbers and a layer's bounds all enter through
 ``extent``; what reads an Extent after that reads ``.bbox`` ordered west, south,
-east, north and never parses again.
+east, north and never parses again. A bare place NAME refuses: an ingestion
+resolves what it was handed and never fetches.
 """
 
 from __future__ import annotations
@@ -13,7 +14,7 @@ import json
 from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
 
-from .user_input import UserInputError, lonlat_bbox
+from .user_input import PlaceNameError, UserInputError, lonlat_bbox
 
 from .geometry import flatten_geometries, read_geometry_doc
 
@@ -72,18 +73,18 @@ def _as_bbox(value: Any) -> tuple[float, float, float, float] | None:
         return None
 
 
-async def extent(value: Any, *, label: str = "extent", code: str = _CODE,
-                 half_deg: float = 0.06) -> Extent | None:
-    """THE ingestion: a pick, four numbers, a place or a layer -> Extent.
+async def extent(value: Any, *, label: str = "extent",
+                 code: str = _CODE) -> Extent | None:
+    """THE ingestion: a pick, four numbers or a layer -> Extent.
 
-    A place becomes the box ``half_deg`` either side of its geocoded centre;
-    ``None`` only when nothing came, and an unreadable value refuses typed."""
+    ``None`` only when nothing came; an unreadable value refuses typed, and a
+    place name refuses naming ``geocode_location``."""
     if value is None or isinstance(value, Extent):
         return value
     if isinstance(value, Mapping):
         return _from_mapping(value, label, code)
     if isinstance(value, str):
-        return await _from_text(value.strip(), label, code, half_deg)
+        return await _from_text(value.strip(), label, code)
     return Extent(lonlat_bbox(value, label=label, code=code))
 
 
@@ -105,7 +106,7 @@ def _from_mapping(value: Mapping[str, Any], label: str, code: str) -> Extent:
         "GeoJSON.", code=code)
 
 
-async def _from_text(text: str, label: str, code: str, half_deg: float) -> Extent:
+async def _from_text(text: str, label: str, code: str) -> Extent:
     if not text:
         raise UserInputError(f"{label} is an empty string.", code=code)
     if text.startswith("{"):
@@ -115,17 +116,9 @@ async def _from_text(text: str, label: str, code: str, half_deg: float) -> Exten
         return Extent(_bounds(doc, label, code))
     if not any(c.isalpha() for c in text):
         return Extent(lonlat_bbox(text, label=label, code=code))
-    from .aoi import geocode_place
-
-    found = await geocode_place(text)
-    if found is None:
-        raise UserInputError(
-            f"{label} {text!r} could not be geocoded. Give a place the geocoder "
-            "knows, four numbers, or pick the box on the canvas.", code=code)
-    lon, lat = found
-    d = float(half_deg)
-    return Extent((round(lon - d, 4), round(lat - d, 4),
-                   round(lon + d, 4), round(lat + d, 4)), text)
+    raise PlaceNameError(text, label=label, code=code,
+                         wants="four numbers - west, south, east, north",
+                         retry_as="[west, south, east, north]")
 
 
 def _bounds(doc: Any, label: str, code: str) -> tuple[float, float, float, float]:

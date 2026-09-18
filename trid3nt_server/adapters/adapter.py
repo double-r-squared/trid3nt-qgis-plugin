@@ -589,6 +589,11 @@ card complete and then nothing, which is a broken interaction.
   SELF-CORRECT the argument and call the tool AGAIN — do not tell the user to
   wait or try later. For state-keyed tools, a full US state name is accepted
   ("Oklahoma" as well as "OK"). Fix the bad arg and retry immediately.
+- A PLACE NAME where a point or a box was wanted (the message says the value
+  "is a place NAME", retryable=true): a slot RESOLVES what it was handed and
+  never geocodes for you. Call geocode_location(query=<that name>) FIRST, then
+  call the tool again with the (lon, lat) pair - or the four-number bbox - it
+  answered with. Do not retry the same call with the name.
 - GEOCODE / NO-MATCH errors (error_code GEOCODE_NO_MATCH, retryable=false - a
   place name could not be located): do NOT retry the SAME query, it will not
   resolve on a re-run. Tell the user plainly that you could not find that place

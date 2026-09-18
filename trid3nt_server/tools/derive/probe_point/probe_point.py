@@ -155,8 +155,9 @@ async def probe_point(
     ROUTING: "what do the layers say here", "read everything at the point I
     clicked", "probe this spot", "what is the value at this point over the
     animation". `point` takes any form a point arrives in - a canvas pick, a
-    (lon, lat) pair, a "lat,lon" string, a selected point layer or a place name.
-    A stack of animation frames comes back as ONE series, not N rows.
+    (lon, lat) pair, a "lat,lon" string or a selected point layer; geocode a
+    place name first. A stack of animation frames comes back as ONE series, not
+    N rows.
 
     Do NOT use for: one layer's time series (`extract_timeseries_at_point`);
     vector layers, which a point read skips.
@@ -171,8 +172,8 @@ async def probe_point(
                                 code=ProbePointInputError.error_code)
     if picked is None:
         raise ProbePointInputError(
-            "probe_point needs a point - a pick, a (lon, lat) pair, a point "
-            "layer or a place name")
+            "probe_point needs a point - a pick, a (lon, lat) pair or a point "
+            "layer; geocode a place name first")
     q_lon, q_lat = picked.lon, picked.lat
     resolved_case = resolve_case_id(case_id, ProbePointCaseNotFoundError)
 

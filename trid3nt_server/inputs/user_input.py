@@ -11,6 +11,7 @@ from typing import Any, Callable, Iterable, Mapping, Sequence
 from trid3nt_server.errors import DeclarativeError
 
 __all__ = [
+    "PlaceNameError",
     "UserInputError",
     "bearing",
     "bearing_deg",
@@ -34,6 +35,28 @@ class UserInputError(DeclarativeError):
     def __init__(self, message: str, *, code: str = _DEFAULT_CODE) -> None:
         super().__init__(message)
         self.error_code = code
+
+
+class PlaceNameError(UserInputError):
+    """A place NAME where a location was wanted. Retryable: the model geocodes first.
+
+    An ingestion resolves the value it was handed and never fetches, so a name
+    reaches a slot as the pair or the box ``geocode_location`` answered with."""
+
+    retryable = True
+
+    def __init__(self, name: str, *, label: str, code: str, wants: str,
+                 retry_as: str) -> None:
+        super().__init__(
+            f"{label} {name!r} is a place NAME, and this slot takes {wants}. Call "
+            f"geocode_location(query={name!r}) and pass what it answers with, or "
+            "pick it on the canvas.", code=code)
+        self.suggestions = [
+            f"Call geocode_location(query={name!r}) first, then retry with "
+            f"{label}={retry_as}.",
+            f"Or pass {label} as {wants} in EPSG:4326.",
+            f"Or pick {label} on the canvas.",
+        ]
 
 
 def _refuse(message: str, code: str) -> UserInputError:

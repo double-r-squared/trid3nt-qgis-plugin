@@ -1,7 +1,7 @@
 """A Point is ingested once, from every form a user names one in, and read typed.
 
-The pick, the pair, the "lat,lon" string, the point layer and the geocoded place
-all land on the same value; where a point is allowed to be - inside the domain,
+The pick, the pair, the "lat,lon" string and the point layer all land on the same
+value and a place name refuses; where a point is allowed to be - inside the domain,
 on the river, in water - is answered here for any slot that holds one."""
 
 from __future__ import annotations
@@ -69,27 +69,13 @@ def test_a_layer_with_no_point_feature_refuses_by_name(tmp_path):
     assert "no point feature" in str(ei.value)
 
 
-def test_a_place_name_is_geocoded_and_keeps_the_name(monkeypatch):
-    from trid3nt_server.inputs import aoi
-
-    async def _geo(name):
-        assert name == "Twin Falls, Idaho"
-        return (-114.4609, 42.5629)
-
-    monkeypatch.setattr(aoi, "geocode_place", _geo)
-    assert _ingest("Twin Falls, Idaho") == Point(-114.4609, 42.5629, "Twin Falls, Idaho")
-
-
-def test_a_place_the_geocoder_does_not_know_refuses(monkeypatch):
-    from trid3nt_server.inputs import aoi
-
-    async def _geo(_name):
-        return None
-
-    monkeypatch.setattr(aoi, "geocode_place", _geo)
+def test_a_place_name_refuses_and_names_the_geocoder():
     with pytest.raises(UserInputError) as ei:
-        _ingest("Nowhere In Particular", label="release")
-    assert "could not be geocoded" in str(ei.value)
+        _ingest("Twin Falls, Idaho", label="release",
+                code="TELEMAC_PARAMS_INVALID")
+    assert ei.value.error_code == "TELEMAC_PARAMS_INVALID"
+    assert ei.value.retryable is True
+    assert "geocode_location(query='Twin Falls, Idaho')" in str(ei.value)
 
 
 def test_nothing_and_a_point_pass_through():

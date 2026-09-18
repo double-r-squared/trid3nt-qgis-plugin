@@ -79,8 +79,8 @@ def ingest_slot(role: str, value: Any, *, label: str = "",
     found = read(value, label=label or str(role),
                  **{k: v for k, v in coercion.items() if v is not None})
     if inspect.isawaitable(found):
-        # This runs OFF the loop, so an ingestion that reaches a service - a
-        # place name to geocode - gets a loop of its own in this thread.
+        # This runs OFF the loop, so an ingestion that reads a stored layer
+        # gets a loop of its own in this thread.
         return asyncio.run(found)
     return found
 
