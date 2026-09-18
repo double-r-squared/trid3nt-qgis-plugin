@@ -14,7 +14,7 @@ from trid3nt_server.workflows.telemac.modules import telemac2d as T
 
 
 def _storm(**over):
-    ask = {"mm_per_hr": 12.0, "hours": 2.0, "until_s": 36000.0,
+    ask = {"mm_per_day": 288.0, "hours": 2.0, "until_s": 36000.0,
            "tracers": 0, "fortran": "/opt/trid3nt/user_fortran/raindef3"}
     ask.update(over)
     return T._storm(T.Storm(**ask))
@@ -74,7 +74,7 @@ def test_a_measured_storm_with_no_routine_to_read_it_refuses_by_name():
 
 
 def test_a_run_that_states_no_rain_at_all_writes_no_keyword():
-    assert _storm(mm_per_hr=None, hours=None) == ({}, {})
+    assert _storm(mm_per_day=None, hours=None) == ({}, {})
 
 
 def test_the_storm_is_a_composite_the_wrapper_expands():

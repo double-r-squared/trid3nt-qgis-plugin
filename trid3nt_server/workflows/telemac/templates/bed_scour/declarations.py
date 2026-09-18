@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 from trid3nt_server.inputs import Point
-from trid3nt_server.workflows.runtime import Accepts, Param, doors, lever
-from trid3nt_server.workflows.telemac.modules.gaia import GRAIN_UM_MAX, GRAIN_UM_MIN
+from trid3nt_server.workflows.runtime import Accepts, Param, doors
 
 __all__ = ["ACCEPTS", "DOC", "GRADATION_PRESETS", "PARAMS"]
 
@@ -24,12 +23,12 @@ ACCEPTS = Accepts(mesh=("unstructured_tri",), release=("point",))
 
 
 class PARAMS:
-    """What only a scouring-bed question asks: the sediment the bed is made of,
-    the marker the bed change is watched against, and the flow that moves both.
+    """What only a scouring-bed question asks: where the marker enters the water,
+    the pulse it is released as, and the GRADATION a mixed bed sorts under.
 
     The domain, the bed elevation, the boundary runs and the granularity are the
-    runtime's own slots and levers; the deck's roughness and its output cadence
-    are keywords the module's dictionary describes."""
+    runtime's own slots and levers; the clock, the roughness, the cadence and the
+    bed's own sediment constants are keywords the module's dictionary describes."""
 
     release = Param(
         door=doors.USER, optional=True, user_lever=True,
@@ -39,7 +38,8 @@ class PARAMS:
             "built over"),
         desc="Where the marker enters the water, as a Point: the pick's "
              "{coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a "
-             "point layer, or a place name. Its name becomes the marker's name, "
+             "point layer. Geocode a place name first. Its name becomes the "
+             "marker's name, "
              "and on a river with no domain supplied it is also the seed the "
              "reach is walked downstream from")
 
@@ -64,81 +64,42 @@ class PARAMS:
         desc="Concentration of the marker tracer released at the source, which "
              "is what the deposited fraction is measured against")
 
-    # -- the forcings this question adds ------------------------------------ #
-    wind_speed_mps = Param(
-        door=doors.SCENARIO, default=0.0, bounds=(0.0, 60.0),
-        units="m/s", consequence="scenario",
-        desc="Sustained wind driving a surface wind-stress term; 0 = no wind")
-    wind_direction_deg = Param(
-        door=doors.SCENARIO, default=0.0, bounds=(0.0, 360.0),
-        units="deg", consequence="scenario",
-        desc="Compass bearing the wind blows FROM (0=N, 90=E); only read when "
-             "wind_speed_mps > 0")
-    # ONE signed rate, because the keyword it writes is signed: a net loss is a
-    # negative rain rather than a second value subtracted from this one.
-    rainfall_mm_per_day = Param(
-        door=doors.USER, optional=True, bounds=(-50.0, 2000.0),
-        units="mm/day", consequence="scenario",
-        desc="NET distributed rainfall applied at every wet node, independent of "
-             "the inflow hydrograph; negative is evaporation")
-
     # -- the bed ------------------------------------------------------------ #
-    grain_size_um = Param(
-        door=doors.SCENARIO, default=200.0,
-        bounds=(GRAIN_UM_MIN, GRAIN_UM_MAX), units="um", user_lever=True,
-        consequence="scenario",
-        desc="Median grain diameter d50 of the bed - ~200 um fine sand, ~20 um "
-             "silt, ~8 um mud (all modeled non-cohesive); read only when no "
-             "gradation is given")
-    bed_thickness_m = Param(
-        door=doors.SCENARIO, default=5.0, bounds=(0.05, 50.0),
-        units="m", consequence="scenario",
-        desc="Depth of the erodible sediment stock the bed can scour into")
-    bedload_formula = Param(
-        door=doors.SCENARIO, default=1, type=int, consequence="numerical",
-        desc="GAIA bed-load law: 1=Meyer-Peter-Mueller, 2=Einstein-Brown, "
-             "7=van Rijn")
-    morphological_factor = Param(
-        door=doors.SCENARIO, default=10.0, bounds=(1.0, 100.0),
-        user_lever=True, consequence="numerical",
-        desc="Amplifies bed change per hydraulic step so a short hydrograph "
-             "yields a readable depth; a speed-up lever, not a rate")
+    # The class diameter, the erodible stock, the transport law and the
+    # morphological factor are keywords GAIA's dictionary carries and the deck
+    # states by name. What is left here is the GRADATION the dictionary has no
+    # keyword for: a named mixture, or the pairs one is written as.
     sediment_gradation = Param(
         door=doors.USER, optional=True, consequence="scenario",
         type=list | str,
         derived_when_absent=(
-            "the bed is ONE class at grain_size_um, which is uniform by "
-            "construction and cannot sort"),
+            "the bed is ONE class at the CLASSES SEDIMENT DIAMETERS the deck "
+            "states, which is uniform by construction and cannot sort"),
         desc="Multi-class GRADED sediment: a preset name (graded_sand | "
              "poorly_sorted | sand_gravel_bimodal | fine_coarse_sand) or a list "
              "of [d50_um, fraction] pairs; a mixture sorts under a hiding factor")
 
-    # -- the clock ---------------------------------------------------------- #
-    sim_duration_s = lever(
-        "sim_duration_s", bounds=(600.0, 14400.0),
-        desc="Simulated physical time; the morphological factor is what makes a "
-             "short window produce a readable bed change")
-
 
 DOC = dict(
-    summary="Bed SCOUR and DEPOSITION under a body of water: a mobile bed under a flow.",
+    summary="Bed SCOUR and DEPOSITION: a mobile bed under moving water.",
     routing=(
         "THE tool for \"where does the bed scour and where does it re-deposit\" - "
-        "erodible-bed morphodynamics below a dam, weir or bridge contraction, "
-        "bedload transport and bed evolution under a flood, and how a GRADED grain "
-        "mixture sorts and armors. TELEMAC-2D coupled with GAIA over the domain "
-        "the run solves on - a reach walked from the release point, an estuary "
-        "drawn on the canvas, or a supplied polygon - its bed painted from a "
-        "published channel survey where one covers it. Give `release` as a place, "
-        "a pick or a pair, or supply `domain`."
+        "erodible-bed morphodynamics below a dam, weir or bridge, bedload "
+        "under a flood, and how a GRADED mixture sorts and armors. "
+        "TELEMAC-2D + GAIA over a reach walked from the release point, an "
+        "estuary you draw, or a polygon you supply, its bed painted from a "
+        "published channel survey where one covers it. Deck opinions, by "
+        "keyword: DURATION 3600 s, MORPHOLOGICAL FACTOR 10, CLASSES SEDIMENT "
+        "DIAMETERS 2e-4 m, LAYERS INITIAL THICKNESS 5 m, BED-LOAD TRANSPORT "
+        "FORMULA FOR ALL SANDS 1. Give `release`, or supply `domain`."
     ),
     not_for=(
-        "a SUSPENDED sediment plume settling onto an inert bed "
-        "(`telemac_sediment_plume`); a conservative dye or contaminant "
-        "plume (`telemac_dye_release`); an OIL slick "
-        "(`telemac_oil_spill`); a maintenance DREDGE of a fairway "
-        "(`telemac_channel_dredging`); dissolved-oxygen sag (`telemac_do_sag`); "
-        "rainfall-runoff flood depth (`telemac_rain_on_grid`)"
+        "a SUSPENDED plume settling onto an inert bed "
+        "(`telemac_sediment_plume`); a conservative dye or contaminant plume "
+        "(`telemac_dye_release`); an OIL slick (`telemac_oil_spill`); a "
+        "maintenance DREDGE (`telemac_channel_dredging`); dissolved-oxygen sag "
+        "(`telemac_do_sag`); rainfall-runoff flood depth "
+        "(`telemac_rain_on_grid`)"
     ),
     params=PARAMS,
     controls=(

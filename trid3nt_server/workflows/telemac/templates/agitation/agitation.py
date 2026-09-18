@@ -47,6 +47,39 @@ _RESULT = "res_agitation.slf"
 _STEERING_FILE = "art_agitation.cas"
 
 
+class STEERING(ART):
+    """The deck: a monochromatic wave in through the open edge, and what it leaves."""
+
+    TITLE = Ref("settled.title")
+    GEOMETRY_FILE = HARBOUR_GEOMETRY
+    BOUNDARY_CONDITIONS_FILE = BOUNDARY_FILENAME
+    RESULTS_FILE = _RESULT
+
+    # The still water level the harbour is solved at is the dictionary's own zero,
+    # so what this states is that the level is CONSTANT rather than what it is.
+    INITIAL_CONDITIONS = "CONSTANT ELEVATION"
+    # An elliptic solve over tens of thousands of nodes does not converge inside
+    # the dictionary's own iteration ceiling for a domain this size.
+    MAXIMUM_NUMBER_OF_ITERATIONS_FOR_SOLVER = 4000
+
+    # The swell a harbour of refuge is asked about: an eight-second period, long
+    # enough to diffract around the structure and short enough that the basin is
+    # many wavelengths across.
+    WAVE_PERIOD = 8.0
+    # Where it runs TO, counted in the trigonometric sense from +x, so 90 is a
+    # wave travelling north; the transect is read along the same bearing.
+    DIRECTION_OF_WAVE_PROPAGATION = 90.0
+
+    #: The forcing, which ARTEMIS reads out of the BOUNDARY CONDITIONS FILE and
+    #: not out of the deck: the designated liquid stretch carries the incident
+    #: height, the structure's own faces reflect, and every other face absorbs.
+    incident_wave = IncidentWave(cli_text=Ref("settled.cli_text"),
+                                 open_nodes=Ref("settled.open_nodes"),
+                                 structure_nodes=Ref("settled.structure_nodes"),
+                                 height_m=P.wave_height_m,
+                                 reflection_coef=P.reflection_coef)
+
+
 class DATA:
     """What the run consumes from the world: the water, its bed, the structure.
 
@@ -87,10 +120,11 @@ class DATA:
                         fallback=terrain))
     structure = Data.supplied(geometry="polyline")
     #: The line the agitation is read along: through the structure's centroid,
-    #: along the incident wave (a propagation direction, so the trig convention
-    #: the wave param is stated in), from the exposed side into the lee.
-    transect = tool("derive_transect", shape=structure,
-                    bearing_deg=P.wave_direction_deg, convention="trig",
+    #: along the wave the deck states it is travelling, from the exposed side
+    #: into the lee. A propagation direction is what the keyword carries, so the
+    #: transect is read in the same trigonometric convention.
+    transect = tool("derive_transect", shape=structure, convention="trig",
+                    bearing_deg=STEERING.ASSERTED["DIRECTION_OF_WAVE_PROPAGATION"],
                     length_m=P.transect_length_m)
     #: The domain as a MESH, when the caller has one already. Unfilled, MESH
     #: below is what the wave is solved on.
@@ -109,7 +143,7 @@ MESH = tool.build_mesh(
     mesher="om2d",
     kind="unstructured_tri",
     extent=DATA.domain,
-    resolution_m=P.mesh_min_edge_m,
+    resolution_m=P.mesh_resolution_m,
     ops=[
         mesh_op("set_obstacle", geometry=Ref("footprint")),
         mesh_op("feature_sizing_function"),
@@ -136,40 +170,12 @@ MESH = tool.build_mesh(
 )
 
 
-class STEERING(ART):
-    """The deck: a monochromatic wave in through the open edge, and what it leaves."""
-
-    TITLE = Ref("settled.title")
-    GEOMETRY_FILE = HARBOUR_GEOMETRY
-    BOUNDARY_CONDITIONS_FILE = BOUNDARY_FILENAME
-    RESULTS_FILE = _RESULT
-
-    # The still water level the harbour is solved at is the dictionary's own zero,
-    # so what this states is that the level is CONSTANT rather than what it is.
-    INITIAL_CONDITIONS = "CONSTANT ELEVATION"
-    # An elliptic solve over tens of thousands of nodes does not converge inside
-    # the dictionary's own iteration ceiling for a domain this size.
-    MAXIMUM_NUMBER_OF_ITERATIONS_FOR_SOLVER = 4000
-
-    WAVE_PERIOD = P.wave_period_s
-    DIRECTION_OF_WAVE_PROPAGATION = P.wave_direction_deg
-
-    #: The forcing, which ARTEMIS reads out of the BOUNDARY CONDITIONS FILE and
-    #: not out of the deck: the designated liquid stretch carries the incident
-    #: height, the structure's own faces reflect, and every other face absorbs.
-    incident_wave = IncidentWave(cli_text=Ref("settled.cli_text"),
-                                 open_nodes=Ref("settled.open_nodes"),
-                                 structure_nodes=Ref("settled.structure_nodes"),
-                                 height_m=P.wave_height_m,
-                                 reflection_coef=P.reflection_coef)
-
-
 #: What this question PLACES: the agitation coefficient along the transect the
 #: user drew through the structure. The profile keeps the nodes within one
 #: finest mesh edge of the line - the band the structure's own nodes were laid
 #: at - so the read is the line's and not a mean over the whole basin's width.
 OUTPUTS = [
-    profile("KD", along=DATA.transect, within_m=P.mesh_min_edge_m).chart(),
+    profile("KD", along=DATA.transect, within_m=P.mesh_resolution_m).chart(),
 ]
 CAPTIONS = {"KD": "agitation coefficient"}
 
@@ -178,16 +184,16 @@ CAPTIONS = {"KD": "agitation coefficient"}
 ANSWER = {
     "kd_max": field("KD", t=-1).measure("max"),
     "kd_transect_min": profile("KD", along=DATA.transect,
-                               within_m=P.mesh_min_edge_m).measure("min"),
+                               within_m=P.mesh_resolution_m).measure("min"),
     "kd_transect_max": profile("KD", along=DATA.transect,
-                               within_m=P.mesh_min_edge_m).measure("max"),
+                               within_m=P.mesh_resolution_m).measure("max"),
     "hs_max_m": field("HS", t=-1).measure("max"),
     "mesh_size_m": mesh().measure("size_m"),
 }
 
 
 _ARTEMIS_RES_SPEC = ResolutionSpec(
-    param="mesh_min_edge_m",
+    param="mesh_resolution_m",
     unit="m",
     min_value=2.0,
     native_hint="NOAA CUDEM 1/9 arc-second nearshore topobathy (~3 m)",
@@ -224,15 +230,18 @@ artemis_harbor_agitation = register_workflow(
                              "code": "ARTEMIS_STRUCTURE_INVALID"}
                      ).named("footprint"),),
         mesh=MESH, mesh_on="domain", supplied_mesh=DATA.mesh,
+        # The wave the settle stamps onto the boundary file is the wave the deck
+        # is solved at, so its period and its direction are read off the deck.
         settle=Step(runner=f"{_AUTHORING}.assembler.settle_harbour",
                     stage="author",
                     kwargs={"mesh": Ref("mesh"), "structure": DATA.structure,
                             # The width the footprint above was cut at: what the
                             # mesher removed is what the deck calls solid.
                             "structure_width_m": ParamRef("barrier_width_m"),
-                            "wave_period_s": ParamRef("wave_period_s"),
+                            "wave_period_s": STEERING.ASSERTED["WAVE_PERIOD"],
                             "wave_height_m": ParamRef("wave_height_m"),
-                            "wave_direction_deg": ParamRef("wave_direction_deg"),
+                            "wave_direction_deg":
+                                STEERING.ASSERTED["DIRECTION_OF_WAVE_PROPAGATION"],
                             "reflection_coef": ParamRef("reflection_coef"),
                             "result_basename": _RESULT}),
         results=(_RESULT,),
@@ -243,9 +252,8 @@ artemis_harbor_agitation = register_workflow(
     data=DATA,
     accepts=ACCEPTS,
     answer=tuple(ANSWER),
-    provenance=(("wave_period_s", "wave_period_note"),
-                ("structure", "structure_note"),
-                ("mesh_min_edge_m", "mesh_edge_note")),
+    provenance=(("structure", "structure_note"),
+                ("mesh_resolution_m", "mesh_edge_note")),
     # A phase-RESOLVING solve is the most mesh-dependent of the family: Kd peaks
     # inside a diffraction fringe the coarse mesh averages away.
     sensitivity=(("kd_max", "peak"),),

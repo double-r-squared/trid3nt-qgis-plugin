@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from trid3nt_server.inputs import Point
-from trid3nt_server.workflows.runtime import Accepts, Param, doors, lever
+from trid3nt_server.workflows.runtime import Accepts, Param, doors
 
 __all__ = ["ACCEPTS", "DECAY_PRESETS", "DOC", "PARAMS"]
 
@@ -39,10 +39,10 @@ ACCEPTS = Accepts(mesh=("unstructured_tri",), release=("point",))
 
 class PARAMS:
     """What only a conservative-plume question asks: where the release is, what
-    is released and how much of it, whether it decays, and the flow that carries
-    it. The domain, the bed, its boundary runs and the granularity are the
-    runtime's own slots and levers, and the deck's roughness and cadence are
-    keywords the module's dictionary describes."""
+    is released and how much of it, and whether it decays. The domain, the bed,
+    its boundary runs and the granularity are the runtime's own slots and
+    levers, and the deck's clock, roughness, cadence, wind and rain are keywords
+    the module's dictionary describes."""
 
     release = Param(
         door=doors.USER, optional=True, user_lever=True,
@@ -52,7 +52,8 @@ class PARAMS:
             "built over; the travelled distance is measured from there"),
         desc="Where the substance enters the water, as a Point: the pick's "
              "{coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a "
-             "point layer, or a place name. Its name becomes the tracer's name, "
+             "point layer. Geocode a place name first. Its name becomes the "
+             "tracer's name, "
              "and on a river with no domain supplied it is also the seed the "
              "reach is walked downstream from")
 
@@ -76,24 +77,6 @@ class PARAMS:
         bounds=(0.0, 1.0e6), units="mg/L", consequence="scenario",
         desc="Source concentration of the released substance")
 
-    # -- the forcings this question adds ------------------------------------ #
-    wind_speed_mps = Param(
-        door=doors.SCENARIO, default=0.0, bounds=(0.0, 60.0),
-        units="m/s", consequence="scenario",
-        desc="Sustained wind driving a surface wind-stress term; 0 = no wind")
-    wind_direction_deg = Param(
-        door=doors.SCENARIO, default=0.0, bounds=(0.0, 360.0),
-        units="deg", consequence="scenario",
-        desc="Compass bearing the wind blows FROM (0=N, 90=E); only read when "
-             "wind_speed_mps > 0")
-    # ONE signed rate, because the keyword it writes is signed: a net loss is a
-    # negative rain rather than a second value subtracted from this one.
-    rainfall_mm_per_day = Param(
-        door=doors.USER, optional=True, bounds=(-50.0, 2000.0),
-        units="mm/day", consequence="scenario",
-        desc="NET distributed rainfall applied at every wet node, independent of "
-             "the inflow hydrograph; negative is evaporation")
-
     # -- decay, the one optional coupling this question carries -------------- #
     decaying_substance = Param(
         door=doors.QUESTION, optional=True, consequence="scenario",
@@ -103,19 +86,8 @@ class PARAMS:
         desc="Name a substance whose tracer DECAYS - sewage | E. coli | coliform "
              "| bacteria | effluent | wastewater - and its narrated literature "
              "die-off is applied as a first-order sink on the plume")
-    decay_half_life_hours = Param(
-        door=doors.USER, optional=True, bounds=(0.1, 720.0),
-        units="h", user_lever=True, consequence="scenario",
-        desc="First-order half-life of the released substance; unset uses the "
-             "narrated literature default for decaying_substance, and neither "
-             "leaves the tracer conservative")
-    decay_rate_per_day = Param(
-        door=doors.USER, optional=True, bounds=(0.01, 100.0),
-        units="1/day", user_lever=True, consequence="scenario",
-        desc="Decay rate per day, as an alternative to the half-life")
 
-    # -- the clock ---------------------------------------------------------- #
-    sim_duration_s = lever("sim_duration_s", bounds=(600.0, 14400.0))
+    # -- the state this run opens at ----------------------------------------- #
     continue_from = Param(
         door=doors.USER, optional=True, type=str,
         consequence="numerical",
@@ -124,7 +96,7 @@ class PARAMS:
             "at rest - rather than from another run's state"),
         desc="Continue a previous run: the URI of its restart_domain.slf, the "
              "state at its last instant, which becomes this run's initial "
-             "state - so sim_duration_s is the time added ON TOP of it and the "
+             "state - so DURATION is the time added ON TOP of it and the "
              "same declared scenario carries on over the longer horizon (a "
              "release whose spill_duration_s has elapsed stays finished). The "
              "mesh must be the same one, and a run that couples WAQTEL refuses")
@@ -136,11 +108,11 @@ DOC = dict(
         "THE tool for \"a spill in the water - how far does it travel, how "
         "concentrated\": a dye / contaminant / pollutant / chemical plume carried "
         "by the current, sewage or E.coli effluent DECAYING as it goes (name it "
-        "in `decaying_substance`), wind setup on open water. TELEMAC-2D "
-        "over the domain the run solves on - a reach walked from the release "
-        "point, a lake drawn on the canvas, or a supplied polygon. A finite "
-        "pulse is carried by the flow and dilutes. Give `release` as a place, a "
-        "pick or a pair, or supply `domain`."
+        "in `decaying_substance`). TELEMAC-2D over a reach walked from the "
+        "release, a lake drawn on the canvas, or a supplied polygon: a finite "
+        "pulse is carried by the flow and dilutes. Give `release` as a pick, a "
+        "pick or a pair, or supply `domain`. Deck: DURATION 3600 s, no WIND and "
+        "no RAIN OR EVAPORATION - set each by its keyword name."
     ),
     not_for=(
         "an OIL slick (`telemac_oil_spill`); bed SCOUR, deposition, grain "

@@ -18,7 +18,7 @@ from trid3nt_server.workflows.runtime import (
     register_workflow,
     tool,
 )
-from trid3nt_server.inputs import point_arg, user_input
+from trid3nt_server.inputs import point_arg
 from trid3nt_server.inputs.instant import event_time
 from trid3nt_server.workflows.telemac.authoring.assembler import (
     BASIN_BOUNDARY,
@@ -96,7 +96,7 @@ class DATA:
 
 
 class STEERING(T3D):
-    """The deck: a prescribed column, a steady wind, and the planes to hold them."""
+    """The deck: a prescribed column, the planes that hold it, and no wind."""
 
     TITLE = Ref("settled.title")
     GEOMETRY_FILE = BASIN_GEOMETRY
@@ -107,18 +107,30 @@ class STEERING(T3D):
     # The step the water is solved at follows the edge the accepted mesh was
     # BUILT at, through the CFL producer every domain's step comes from.
     TIME_STEP = Ref("settled.time_step_s")
-    DURATION = P.sim_duration_s
+    # HOW LONG the column is watched, in SECONDS. The answer is the column's
+    # SETTLED state rather than an event, so the window is "long enough": five
+    # hours is what a basin-scale column takes to either hold its difference or
+    # mix it away. A user who wants another horizon sets the keyword by its own
+    # name.
+    DURATION = 18000.0
     # HOW OFTEN the result is written, in SOLVER STEPS. The engine's own
     # default is every step, so an unwritten period is a frame per step: at
-    # the 120 m default edge the CFL step is 1 s, and this question's
-    # default 18000 s window is about 18,000 of them - one frame every
-    # 360 steps is 50 frames of the column. A user who wants another
-    # cadence sets the keyword by its own name.
+    # the 120 m default edge the CFL step is 1 s, and the 18000 s DURATION
+    # above is about 18,000 of them - one frame every 360 steps is 50 frames
+    # of the column. A user who wants another cadence sets the keyword by its
+    # own name.
     GRAPHIC_PRINTOUT_PERIOD = 360
     LISTING_PRINTOUT_PERIOD = _LISTING_PERIOD
     MASS_BALANCE = True
 
-    NUMBER_OF_HORIZONTAL_LEVELS = P.levels
+    # HOW MANY SIGMA PLANES the column is carried on - the VERTICAL degree of
+    # freedom a 2D model has none of, and so what resolves this answer. Thirteen
+    # holds a metres-thick thermocline over a lake-deep column under the surface
+    # zooming the grid plans, at this mesh's nodes times thirteen; too few for
+    # the declared thermocline is a refusal naming the count that would work,
+    # never a coarser answer. A user who wants a finer column sets the keyword
+    # by its own name.
+    NUMBER_OF_HORIZONTAL_LEVELS = 13
     # The dictionary's own default here is YES, and a non-hydrostatic solve of a
     # basin-scale column buys nothing the hydrostatic one does not already show.
     NON_HYDROSTATIC_VERSION = False
@@ -177,19 +189,24 @@ class STEERING(T3D):
     SCHEME_OPTION_FOR_ADVECTION_OF_TRACERS = [2]
 
     #: The sigma grid that can HOLD the declared thermocline over this domain's
-    #: own deepest column, or the refusal that says how many planes would.
-    vertical_grid = VerticalGrid(levels=P.levels,
+    #: own deepest column, or the refusal that says how many planes would. The
+    #: plane count is READ off the keyword above, so a run the user states
+    #: another one on is planned on the column it is actually solved over.
+    vertical_grid = VerticalGrid(levels=Ref("NUMBER_OF_HORIZONTAL_LEVELS"),
                                  max_depth_m=Ref("settled.max_depth_m"),
                                  thermocline_depth_m=P.thermocline_depth_m)
     #: The column the run OPENS with, written into the engine's own initial-
     #: condition hook because no keyword carries a non-uniform tracer field.
-    column = Column(levels=P.levels, max_depth_m=Ref("settled.max_depth_m"),
+    column = Column(levels=Ref("NUMBER_OF_HORIZONTAL_LEVELS"),
+                    max_depth_m=Ref("settled.max_depth_m"),
                     thermocline_depth_m=P.thermocline_depth_m,
                     warm_c=P.warm_temp_c, cold_c=P.cold_temp_c,
                     surface_m=Ref("settled.level_m"))
-    #: The wind that decides whether the difference survives. A calm run states
-    #: nothing here at all.
-    wind = Wind(speed_mps=P.wind_speed_mps, from_deg=P.wind_direction_deg)
+    #: CALM: the half of the pair in which the thermocline persists, and what
+    #: this question is asked from. A zero speed writes no wind keyword at all,
+    #: so the deck states none; the wind that mixes the column is TELEMAC-3D's
+    #: own WIND plus WIND VELOCITY ALONG X / Y, set by those names.
+    wind = Wind(speed_mps=0.0, from_deg=270.0)
 
 
 #: What this question PLACES: the column at the deepest node as the chart, the
@@ -205,7 +222,7 @@ CAPTIONS = {"T1": "water temperature"}
 #: measure of one of the reads above or of the velocity column beside them: the
 #: top-to-bottom difference that survived against the one prescribed, the
 #: depth-weighted column means whose drift is the numerical error bar on the
-#: mixing, and the surface-downwind / return-flow-at-depth pair the same wind
+#: mixing, and the surface-downwind / return-flow-at-depth pair a stated wind
 #: drove, whose depth average a 2D model reports as nothing.
 ANSWER = {
     "stratification_dt": column("T1").measure("top_minus_bottom"),
@@ -222,16 +239,16 @@ ANSWER = {
 
 
 _TELEMAC3D_RES_SPEC = ResolutionSpec(
-    param="levels",
+    param="NUMBER_OF_HORIZONTAL_LEVELS",
     unit="planes",
     min_value=5.0,
     native_hint="the thermocline the run declares, which the grid plan must hold",
     constraint_source="solver",
     rationale=(
-        "the VERTICAL degree of freedom, which is the one a 2D model has none of. "
-        "Too few planes for the declared thermocline over this domain's deepest "
-        "column is a refusal naming the count that would work, not a coarser "
-        "answer"
+        "the VERTICAL degree of freedom, which is the one a 2D model has none of, "
+        "and the module's own keyword rather than a lever beside it. Too few "
+        "planes for the declared thermocline over this domain's deepest column is "
+        "a refusal naming the count that would work, not a coarser answer"
     ),
 )
 
@@ -267,12 +284,10 @@ telemac3d_stratified_flow = register_workflow(
         prefix="telemac3d",
         compute_class=ParamRef("compute_class"),
         outputs=OUTPUTS, captions=CAPTIONS, answer=ANSWER,
-        review_title="Review the prescribed column, the wind and the mesh"),
+        review_title="Review the prescribed column, the deck and the mesh"),
     data=DATA,
     answer=tuple(ANSWER),
-    provenance=(("wind_speed_mps", "wind_note"),
-                ("thermocline_depth_m", "thermocline_note"),
-                ("levels", "levels_note"),
+    provenance=(("thermocline_depth_m", "thermocline_note"),
                 ("mesh_resolution_m", "mesh_resolution_note")),
     # The surface-to-bottom temperature difference is read ACROSS the thermocline,
     # the steepest gradient in the domain, and the planes are what resolve it.
@@ -285,8 +300,6 @@ telemac3d_stratified_flow = register_workflow(
                   code="TELEMAC3D_PARAMS_INVALID"),
         event_time(),
         compute_class(),
-        user_input.bearing("wind_direction_deg", label="wind_direction_deg",
-                           code="TELEMAC3D_PARAMS_INVALID"),
     ),
     doc=DOC,
 )

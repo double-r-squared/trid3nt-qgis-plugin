@@ -24,8 +24,7 @@ def _workflow():
 
 def _norm(**kw):
     base: dict[str, Any] = {
-        "release": None, "compute_class": None, "wind_direction_deg": None,
-        "input_mode": "auto",
+        "release": None, "compute_class": None, "input_mode": "auto",
     }
     base.update(kw)
     return asyncio.run(_workflow()._normalize(base))
@@ -100,18 +99,13 @@ def test_an_invented_compute_class_refuses_at_the_ladder():
     assert "dye_spill" in err["error_message"]
 
 
-def test_a_wind_bearing_wraps_rather_than_clamping():
-    supplied, _ = _norm(wind_direction_deg=370.0)
-    assert supplied["wind_direction_deg"] == pytest.approx(10.0)
-
-
 def test_declared_bounds_keep_the_source_inside_the_domain():
     """spill_fraction=1.0 planted the source ON the outflow boundary and aborted
     the solve; the declared bound refuses it rather than moving it."""
     from trid3nt_server.workflows.runtime import GateRefusedError
 
     for outside in ({"spill_fraction": 1.0}, {"spill_fraction": 0.0},
-                    {"sim_duration_s": 999999.0}, {"source_q_m3s": 100.0}):
+                    {"source_q_m3s": 100.0}):
         with pytest.raises(GateRefusedError, match="outside the declared range"):
             _resolve(**outside)
     assert _resolve(spill_fraction=0.9).value_of("spill_fraction") == 0.9
@@ -141,37 +135,35 @@ def test_the_carrier_flow_is_the_inflow_runs_value_and_not_a_param():
     assert "National Water Model" in carrier.context_sentence
 
 
-def test_the_params_are_the_questions_own_plus_the_runtimes_levers():
+def test_the_params_are_the_questions_own_and_the_deck_states_the_keywords():
     """No keyword twin, no domain twin, no lever restated: the dictionary
-    describes the roughness and the cadence, the slots describe the water, and
-    the runtime declares the granularity, the moment and the box."""
+    describes the clock, the roughness, the cadence, the wind and the rain, the
+    slots describe the water, and the runtime declares the granularity, the
+    moment and the box."""
     from trid3nt_server.workflows.runtime.levers import LEVER_NAMES
     from trid3nt_server.workflows.telemac.templates.dye_release.declarations import (
         PARAMS,
+    )
+    from trid3nt_server.workflows.telemac.templates.dye_release.dye_release import (
+        STEERING,
     )
     from trid3nt_server.workflows.runtime import param_rows
 
     declared = {p.name for p in param_rows(PARAMS)}
     assert not declared & {"friction_law", "friction_coefficient",
-                           "output_interval_min"}
+                           "output_interval_min", "sim_duration_s",
+                           "wind_speed_mps", "wind_direction_deg",
+                           "rainfall_mm_per_day", "decay_half_life_hours",
+                           "decay_rate_per_day"}
     assert not declared & {"location", "bbox", "river_geometry_uri",
                            "reach_length_km", "mesh_resolution_m"}
-    # A lever this question DIFFERS on is stated as the difference - the lever
-    # with its own bound - never as a second declaration of the same value.
-    from trid3nt_server.workflows.runtime.levers import LEVERS
-
-    for row in param_rows(PARAMS):
-        lever = next((l for l in LEVERS if l.name == row.name), None)
-        if lever is not None:
-            assert (row.units, row.consequence) == (lever.units,
-                                                    lever.consequence)
-            assert (row.default, row.bounds) != (lever.default, lever.bounds)
-    # Every lever is on the sheet; the ones this question does not state for
-    # itself are seated at the end, in the order the runtime declares them.
+    # The window this question is asked over is the module's own keyword, in the
+    # seconds it reads, and the settle is built off the same statement.
+    assert STEERING.ASSERTED["DURATION"] == 3600.0
+    # No lever is restated here, so all four are seated at the end, in the order
+    # the runtime declares them.
     seated = [p.name for p in _workflow().params]
-    assert set(LEVER_NAMES) <= set(seated)
-    appended = [name for name in LEVER_NAMES if name not in declared]
-    assert seated[-len(appended):] == appended
+    assert seated[-len(LEVER_NAMES):] == list(LEVER_NAMES)
 
 
 def test_the_data_body_is_the_three_slots_and_what_composes_them():
@@ -293,7 +285,7 @@ def test_the_settle_step_reads_the_files_the_deck_itself_names():
     assert settle.kwargs["geometry"] == "domain.slf"
     assert settle.kwargs["boundary"] == "domain.cli"
     assert settle.kwargs["result"] == "r2d_domain.slf"
-    assert settle.kwargs["sim_duration_s"].name == "sim_duration_s"
+    assert settle.kwargs["duration_s"] == 3600.0
     # The restart travels beside the result: a continuation reads it, and the
     # deck's own RESULTS statement cannot name it.
     assert list(_steps()[5].kwargs["results"]) == ["r2d_domain.slf",

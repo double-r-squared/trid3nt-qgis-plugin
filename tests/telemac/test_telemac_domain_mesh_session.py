@@ -72,9 +72,9 @@ def settle(monkeypatch, tmp_path):
     monkeypatch.setattr(asm_mod, "read_accepted_mesh_nodes", _accepted_nodes)
 
     async def _settle(**kwargs):
-        return await asm_mod.open_water(sim_duration_s=3600.0,
-                                           mesh_resolution_m=14.0,
-                                           **_FILES, **kwargs)
+        return await asm_mod.open_water(duration_s=3600.0,
+                                        mesh_resolution_m=14.0,
+                                        **_FILES, **kwargs)
 
     return _settle
 

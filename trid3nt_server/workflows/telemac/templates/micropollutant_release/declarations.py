@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from trid3nt_server.inputs import Point
-from trid3nt_server.workflows.runtime import Accepts, Param, doors, lever
+from trid3nt_server.workflows.runtime import Accepts, Param, doors
 
 __all__ = ["ACCEPTS", "DOC", "PARAMS"]
 
@@ -16,10 +16,10 @@ ACCEPTS = Accepts(mesh=("unstructured_tri",), release=("point",))
 
 class PARAMS:
     """What only a sorbing-substance question asks: where it enters and how much,
-    the sediment it partitions onto, how hard it holds on and how long it lasts,
-    and where downstream the history is read. The domain, the bed, its boundary
-    runs and the granularity are the runtime's own slots and levers, and the
-    deck's roughness and cadence are keywords the module's dictionary describes."""
+    the sediment it partitions onto, and where downstream the history is read.
+    The domain, the bed, its boundary runs and the granularity are the runtime's
+    own slots and levers, and the clock, the roughness, the cadence and the
+    sorption constants are keywords the module's dictionary describes."""
 
     # -- the release -------------------------------------------------------- #
     release = Param(
@@ -30,7 +30,7 @@ class PARAMS:
             "built over; the travelled distance is measured from there"),
         desc="Where the substance enters the water, as a Point: the pick's "
              "{coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a "
-             "point layer, or a place name. On a river with no domain supplied "
+             "point layer. Geocode a place name first. On a river with no domain "
              "it is also the seed the reach is walked downstream from")
     release_fraction = Param(
         door=doors.SCENARIO, default=0.1, bounds=(0.05, 0.9),
@@ -67,40 +67,6 @@ class PARAMS:
              "this is a STATED condition, not a measured one - state the gauged "
              "value where there is one")
 
-    # -- how the substance behaves ------------------------------------------- #
-    decay_constant_per_s = Param(
-        door=doors.USER, optional=True, bounds=(0.0, 1.0),
-        units="1/s", user_lever=True, consequence="physics",
-        derived_when_absent=(
-            "the engine's own exponential desintegration constant, 1.13e-7 1/s "
-            "- a 71-day half-life - stands; state 0 for a substance that does "
-            "not break down at all"),
-        desc="First-order decay constant of the substance, applied at the same "
-             "rate to all three of its phases - dissolved, on suspended sediment "
-             "and on bed sediment. A half-life h in days is ln(2)/(86400 h)")
-    settling_velocity_mps = Param(
-        door=doors.USER, optional=True, bounds=(0.0, 0.1),
-        units="m/s", user_lever=True, consequence="physics",
-        derived_when_absent=(
-            "the engine's own sediment settling velocity, 6e-6 m/s, stands"),
-        desc="Settling velocity of the suspended sediment - what carries the "
-             "sorbed substance down onto the bed")
-    distribution_coefficient_m3kg = Param(
-        door=doors.USER, optional=True, bounds=(0.0, 1.0e6),
-        units="m^3/kg", user_lever=True, consequence="physics",
-        derived_when_absent=(
-            "the engine's own coefficient of distribution, 1775 m3/kg, stands"),
-        desc="Kd, the sorption equilibrium: how strongly the substance partitions "
-             "onto sediment rather than staying dissolved. A larger Kd puts more "
-             "of it on the bed")
-    desorption_constant_per_s = Param(
-        door=doors.USER, optional=True, bounds=(0.0, 1.0),
-        units="1/s", user_lever=True, consequence="physics",
-        derived_when_absent=(
-            "the engine's own constant of desorption kinetic, 2.5e-7 1/s, stands"),
-        desc="How fast the substance comes back off the sediment - with Kd it "
-             "sets how quickly the partition reaches equilibrium")
-
     # -- where the history is read ------------------------------------------- #
     monitoring_point = Param(
         door=doors.USER, optional=True, user_lever=True,
@@ -110,40 +76,33 @@ class PARAMS:
             "mesh was built over"),
         desc="Where the dissolved history is read, as a Point: the pick's "
              "{coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a "
-             "point layer, or a place name")
+             "point layer. Geocode a place name first")
     monitoring_fraction = Param(
         door=doors.SCENARIO, default=0.85, bounds=(0.1, 0.95),
         consequence="scenario",
         desc="Along-domain position the history is read at when no point was "
              "given, 0=inflow..1=outflow")
 
-    # -- the clock ----------------------------------------------------------- #
-    sim_duration_s = lever(
-        "sim_duration_s", default=172800.0, bounds=(3600.0, 864000.0),
-        desc="Simulated time. Sorption equilibrates in hours and settling takes "
-             "longer than that, so a window of a few hours reports a partition "
-             "that has not happened yet; two days is what the default covers")
-
 
 DOC = dict(
     summary="A SORBING substance released into water: how much stays DISSOLVED and how much ends up ON THE BED.",
     routing=(
         "THE tool for \"where does this pollutant END UP\" - a metal, a PCB, a "
-        "pesticide, any substance that ATTACHES TO SEDIMENT: how much travels "
-        "dissolved and how much rides the suspended sediment onto the bed. "
-        "TELEMAC-2D + WAQTEL micropol over the domain the run solves on - a "
-        "reach walked from the release point, a basin or harbour drawn on the "
-        "canvas, or a supplied polygon. A finite point release, the water's own "
-        "suspended sediment as the sorbent, settling onto the bed, an optional "
-        "half-life. Give `release` as a place, a pick or a pair, or supply "
-        "`domain`."
+        "pesticide, anything that ATTACHES TO SEDIMENT: how much travels "
+        "dissolved and how much rides the sediment onto the bed. "
+        "TELEMAC-2D + WAQTEL micropol over a reach walked from the release "
+        "point, a basin or harbour on the canvas, or a supplied polygon: "
+        "a finite point release, the water's own suspended sediment as the "
+        "sorbent. Deck opinion: DURATION 172800 s, two "
+        "days against a partition that equilibrates in hours; WAQTEL's own "
+        "sorption and decay constants stand. Give `release` as a pick "
+        "or a pair, or supply `domain`."
     ),
     not_for=(
         "a CONSERVATIVE tracer that only dilutes (`telemac_dye_release`); an OIL "
-        "slick (`telemac_oil_spill`); bed SCOUR and grain sorting "
-        "(`telemac_bed_scour`); a suspended SEDIMENT plume carrying nothing "
-        "(`telemac_sediment_plume`); dissolved-oxygen sag "
-        "(`telemac_do_sag`). Groundwater contamination is not modeled here"
+        "slick (`telemac_oil_spill`); bed SCOUR (`telemac_bed_scour`); a "
+        "suspended SEDIMENT plume carrying nothing (`telemac_sediment_plume`); "
+        "a dissolved-oxygen sag (`telemac_do_sag`); groundwater contamination"
     ),
     params=PARAMS,
     controls=(

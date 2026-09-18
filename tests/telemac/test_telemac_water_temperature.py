@@ -9,6 +9,7 @@ temperature runs this question with no fetch at all."""
 
 from __future__ import annotations
 
+import datetime as _dt
 import inspect
 
 from trid3nt_server.inputs import geometry as geometry_reader
@@ -20,7 +21,10 @@ from trid3nt_server.workflows.telemac.templates.water_temperature import (
     water_temperature as template,
 )
 
-_HOUR = 3600.0
+#: The week the deck states as DURATION, as the hourly record that has to span
+#: it: the engine stops at an instant outside the table, so a week-long run is
+#: only authorable against a week of observations.
+_WEEK_HOURS = 7 * 24 + 1
 _STATION = {"lon": -122.72, "lat": 45.57, "name": "Temperature station"}
 
 #: The baseline Params the domain slot, the module dictionary and the runtime
@@ -29,7 +33,8 @@ _STATION = {"lon": -122.72, "lat": 45.57, "name": "Temperature station"}
 #: is here too: it is the observation ROW's own supplied number, not a Param.
 _NOT_DECLARED = {"location", "bbox", "river_geometry_uri", "reach_length_km",
                  "friction_coefficient", "friction_law", "output_interval_min",
-                 "event_time", "compute_class", "initial_water_temp_c"}
+                 "event_time", "compute_class", "initial_water_temp_c",
+                 "sim_duration_s"}
 
 
 def _workflow():
@@ -123,9 +128,10 @@ def test_the_granularity_row_is_restated_only_for_its_own_default():
 # -- the deck the template states ---------------------------------------------- #
 
 def _observation(hour: int):
+    stamp = _dt.datetime(2026, 9, 1, tzinfo=_dt.timezone.utc) + _dt.timedelta(hours=hour)
     return {"type": "Feature",
             "properties": {"station": "SCOC1",
-                           "utc_valid": f"2026-09-01T{hour:02d}:00:00Z",
+                           "utc_valid": stamp.strftime("%Y-%m-%dT%H:%M:%SZ"),
                            "tmpf": 68.0, "dwpf": 50.0, "relh": 51.0,
                            "sknt": 5.0, "drct": 270.0, "solar_rad": 400.0,
                            "precip_in": 0.0},
@@ -136,7 +142,8 @@ def _sheet(monkeypatch):
     """The template's own steering body, filled with what its refs resolve to."""
     monkeypatch.setattr(
         geometry_reader, "read_geometry_doc",
-        lambda layer: {"features": [_observation(hour) for hour in range(24)]})
+        lambda layer: {"features": [_observation(hour)
+                                    for hour in range(_WEEK_HOURS)]})
     return fill(template.STEERING, produced={
         "settled": {"title": "DOMAIN", "time_step_s": 5.0, "graphic_period": 120,
                     "liquid_boundary_order": ["inflow", "outflow"],
@@ -146,8 +153,7 @@ def _sheet(monkeypatch):
                     "outflow_stage_m": 3.1},
         "station": _STATION,
         "water_temperature": Observation(value=16.4, units="degC"),
-        "weather": "s3://cache/raws.fgb"},
-        params={"sim_duration_s": 20.0 * _HOUR})
+        "weather": "s3://cache/raws.fgb"})
 
 
 def test_the_carrier_declares_the_temperature_tracer_and_the_process_adopts_it(
@@ -173,6 +179,17 @@ def test_the_deck_is_solved_at_the_roughness_its_outflow_stage_is_derived_at(
     assert resolved["LAW OF BOTTOM FRICTION"] == template._FRICTION_LAW
     assert resolved["FRICTION COEFFICIENT"] == template._FRICTION_COEFFICIENT
     assert resolved["INITIAL DEPTH"] == 1.4
+
+
+def test_the_clock_is_the_decks_own_keyword_and_the_weather_table_spans_it(
+        monkeypatch):
+    """DURATION is a keyword the module carries, so the week is stated on the
+    deck rather than restated as a Param, and the atmospheric table is written
+    for that same number - the engine stops at an instant outside it."""
+    sheet = _sheet(monkeypatch)
+    assert dict(sheet.resolved())["DURATION"] == 604800.0
+    last = sheet.files[ATMOSPHERE_FILENAME].splitlines()[-1]
+    assert float(last.split()[0]) >= 604800.0
 
 
 def test_the_deck_names_the_atmospheric_file_and_the_run_directory_holds_it(

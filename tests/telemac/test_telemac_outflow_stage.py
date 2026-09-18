@@ -246,7 +246,7 @@ def test_the_flow_range_is_the_gross_rain_rate_on_the_meshed_area():
     xy = np.array([[0.0, 0.0], [1000.0, 0.0], [0.0, 1000.0], [1000.0, 1000.0]])
     cells = np.array([[0, 1, 2], [1, 3, 2]])  # 1 km2
     ceiling, basis = D._rain_ceiling(
-        {"kind": "design_storm", "intensity_mm_per_hr": 36.0}, cells, xy)
+        {"kind": "design_storm", "mm_per_day": 864.0}, cells, xy)
     assert ceiling == pytest.approx(0.036 / 3600.0 * 1.0e6)
     assert "1.000 km2" in basis and "36 mm/h" in basis
 

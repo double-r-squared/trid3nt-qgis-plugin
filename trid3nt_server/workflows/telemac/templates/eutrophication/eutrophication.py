@@ -56,6 +56,21 @@ _CENTERLINE = Ref("line")
 #: against the ceiling it actually has.
 _SATURATION_FROM_TEMPERATURE = 1
 
+#: WHAT THE WATER ARRIVES CARRYING, one value per tracer in the order the
+#: eutrophication source term appends them: PHY (ug/L), then PO4, POR, NO3, NOR,
+#: NH4, organic load and O2 (mg/L). Enrichment the observed record is read
+#: AGAINST rather than filled from - `fetch_usgs_water_quality` returns sample
+#: SITES, and turning scattered sites into a domain-wide field is not a step this
+#: question takes on its own - so a user who knows the water sets INITIAL VALUES
+#: OF TRACERS by name. The oxygen is the water at saturation: 8.667 mg/L, the
+#: Elmore-Hayes freshwater relation at the stated 22 C (14.652 - 0.41022 T +
+#: 0.0079910 T^2 - 0.000077774 T^3, 1 atm). The CEILING the run measures against
+#: is WAQTEL's own, computed from the same temperature.
+_ENTERING = [2.0, 0.05, 0.02, 1.0, 0.5, 0.05, 2.0, 8.667]
+#: The three the ANSWER's ratios are held to: the water entered carrying these,
+#: and the far end of the profile is what one pass made of them.
+_PHYTO_IN, _PO4_IN, _NO3_IN = _ENTERING[0], _ENTERING[1], _ENTERING[3]
+
 #: The terrain cell the banks are painted from. 3DEP is PINNED, not preferred: a
 #: DSM (Copernicus GLO-30 carries canopy) puts the bank on the tree tops, and its
 #: EGM2008 zero is not the NAVD88 the surveys and the gauges are measured on.
@@ -199,19 +214,20 @@ class STEERING(T2D):
     # HOW OFTEN the result is written, in SOLVER STEPS. The engine's own
     # default is every step, so an unwritten period is a frame per step: at
     # the 25 m default edge the CFL step is 1 s, and this question's
-    # default 172800 s window is about 172,800 of them - one frame every
+    # 172800 s window is about 172,800 of them - one frame every
     # 3,600 steps is 48 frames of the bloom. A user who wants another
     # cadence sets the keyword by its own name.
     GRAPHIC_PRINTOUT_PERIOD = 3600
-    DURATION = P.sim_duration_s
+    # THE WINDOW one pass is measured over. The longitudinal answer has to have
+    # settled before it is read, so the window covers several travel times: two
+    # days against a pass measured in hours. A river flushes far too fast to hold
+    # a seasonal bloom, which is a different question and a different window.
+    DURATION = 172800.0
 
     #: The carrier declares NO tracer of its own - nothing is released into this
     #: water - so all eight belong to the coupled process and arrive in the order
-    #: the engine appends them: PHY, PO4, POR, NO3, NOR, NH4, organic load, O2.
-    INITIAL_VALUES_OF_TRACERS = [
-        P.initial_phyto_ug_l, P.initial_po4_mgl, P.initial_por_mgl,
-        P.initial_no3_mgl, P.initial_nor_mgl, P.initial_nh4_mgl,
-        P.initial_organic_load_mgl, P.initial_do_mgl]
+    #: the engine appends them.
+    INITIAL_VALUES_OF_TRACERS = _ENTERING
 
     #: The SAME water at every liquid boundary as the domain opens holding: the
     #: question is what one pass does to water of this composition, so water that
@@ -222,21 +238,25 @@ class STEERING(T2D):
                       Ref("settled.liquid_boundary_prescribes"),
                   "inflow_q_m3s": Ref("settled.inflow_q_m3s"),
                   "outflow_stage_m": Ref("settled.outflow_stage_m")},
-        tracers=[P.initial_phyto_ug_l, P.initial_po4_mgl, P.initial_por_mgl,
-                 P.initial_no3_mgl, P.initial_nor_mgl, P.initial_nh4_mgl,
-                 P.initial_organic_load_mgl, P.initial_do_mgl])
+        tracers=_ENTERING)
 
     #: Growth on the stated nutrients under the stated light, and the oxygen the
-    #: growth and its decay drive. The light is stated because the engine reads
-    #: none from a forcing file - the atmospheric file's radiation columns feed
-    #: the thermal budget and nothing else - and water in the dark cannot bloom;
-    #: the temperature because the engine's own is a cold-water number.
-    #: Every rate and half-saturation constant is the engine's own.
+    #: growth and its decay drive. SECCHI DEPTH is unwritten, so the engine's own
+    #: clarity stands, and every rate and half-saturation constant is the
+    #: engine's too.
     coupling = [WAQTEL.eutrophication(
         oxygen=True,
-        WATER_TEMPERATURE=P.water_temp_c,
-        SUNSHINE_FLUX_DENSITY_ON_WATER_SURFACE=P.sunshine_w_m2,
-        SECCHI_DEPTH=P.secchi_depth_m,
+        # Summer water, and the strongest lever on this deck: it sets the growth,
+        # the mortality and the nitrification rates AND the oxygen ceiling below.
+        # The engine's own is a cold-water number. The observation row says what
+        # the water is actually this warm at, and where nothing was sampled near
+        # the domain the sheet says so and this stands.
+        WATER_TEMPERATURE=22.0,
+        # W/m2 at the water surface, averaged over the window: light is what
+        # drives the growth and water in the dark cannot bloom. The engine reads
+        # it from this keyword and nowhere else - an atmospheric file's radiation
+        # columns feed the thermal budget and never this term.
+        SUNSHINE_FLUX_DENSITY_ON_WATER_SURFACE=100.0,
         FORMULA_FOR_COMPUTING_CS=_SATURATION_FROM_TEMPERATURE)]
 
 
@@ -259,11 +279,11 @@ ANSWER = {
     "phyto_max_ug_l": profile("T1", along=_CENTERLINE).measure("max"),
     "phyto_max_distance_m": profile("T1", along=_CENTERLINE).measure("x_max_m"),
     "phyto_growth_ratio": profile("T1", along=_CENTERLINE).measure("max")
-                          .over(P.initial_phyto_ug_l),
+                          .over(_PHYTO_IN),
     "no3_remaining_ratio": profile("T4", along=_CENTERLINE).measure("min")
-                           .over(P.initial_no3_mgl),
+                           .over(_NO3_IN),
     "po4_remaining_ratio": profile("T2", along=_CENTERLINE).measure("min")
-                           .over(P.initial_po4_mgl),
+                           .over(_PO4_IN),
     "do_min_mgl": profile("T8", along=_CENTERLINE).measure("min"),
     "do_min_distance_m": profile("T8", along=_CENTERLINE).measure("x_min_m"),
     "do_below_standard": profile("T8", along=_CENTERLINE).measure("min")

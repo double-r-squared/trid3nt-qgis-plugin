@@ -16,6 +16,7 @@ import yaml
 
 from trid3nt_server.workflows.runtime import DataRef, Ref
 from trid3nt_server.workflows.runtime.levers import LEVER_NAMES
+from trid3nt_server.workflows.telemac.modules import T2D
 from trid3nt_server.workflows.telemac.templates.bed_scour import bed_scour
 
 _MODULE = bed_scour
@@ -27,12 +28,15 @@ _ANSWER = _MODULE.ANSWER
 #: The package the corpus sits in, read off the module so a rename moves both.
 _PACKAGE = Path(_MODULE.__file__).parent
 
-#: What the domain wave took off every template: the keyword twins the module's
-#: dictionary already describes, the domain twins the slots replaced, and the
-#: levers the runtime declares once.
+#: What the domain and twins waves took off this template: the keyword twins the
+#: module's dictionary already describes, the domain twins the slots replaced,
+#: and the levers the runtime declares once.
 _DISSOLVED = {"location", "bbox", "river_geometry_uri", "reach_length_km",
               "friction_coefficient", "friction_law", "output_interval_min",
-              "evaporation_mm_per_day", "rainfall_gridmet_window"}
+              "evaporation_mm_per_day", "rainfall_gridmet_window",
+              "sim_duration_s", "wind_speed_mps", "wind_direction_deg",
+              "rainfall_mm_per_day", "grain_size_um", "bed_thickness_m",
+              "bedload_formula", "morphological_factor"}
 
 
 def _rows() -> dict:
@@ -176,6 +180,39 @@ def test_the_friction_this_deck_is_solved_at_is_a_keyword_not_a_param():
     assert channel.kwargs["friction_coefficient"] == asserted["FRICTION_COEFFICIENT"]
 
 
+def test_the_clock_is_the_decks_own_keyword_and_the_settle_reads_it_there():
+    """DURATION is a keyword telemac2d carries, so the window this question is
+    asked over is stated once on the deck and the water is opened on that same
+    number rather than on a lever restating it."""
+    asserted = _MODULE.STEERING.ASSERTED
+    assert asserted["DURATION"] == 3600.0
+    settle = next(step for step in _WORKFLOW.plan.steps if step.label == "settled")
+    assert settle.kwargs["duration_s"] == asserted["DURATION"]
+
+
+def test_the_bed_the_deck_states_is_gaias_own_keywords_on_the_coupled_body():
+    """The class diameter, the erodible stock, the transport law, the hiding
+    factor and the morphological factor are GAIA's keywords, stated by name on
+    the body; only the GRADATION the dictionary lacks arrives as a value."""
+    slots = _MODULE.STEERING.ASSERTED["coupling"][0]["slots"]
+    assert slots["CLASSES_SEDIMENT_DIAMETERS"] == [2.0e-4]
+    assert slots["LAYERS_INITIAL_THICKNESS"] == [5.0]
+    assert slots["BED_LOAD_TRANSPORT_FORMULA_FOR_ALL_SANDS"] == 1
+    assert slots["HIDING_FACTOR_FORMULA"] == 1
+    assert slots["MORPHOLOGICAL_FACTOR"] == 10.0
+    assert slots["bed"]["gradation"].name == "sediment_gradation"
+
+
+def test_a_calm_dry_deck_writes_no_wind_and_no_rain_keyword():
+    """This question asks what the carrier flow does to the bed. A zero speed and
+    an absent rate each expand to nothing, so neither block reaches the deck and
+    a user who wants one sets the keyword by its own name."""
+    for name in ("wind", "rain"):
+        slots, _files = T2D.COMPOSITES[name].expand(
+            _MODULE.STEERING.ASSERTED[name])
+        assert not slots, name
+
+
 def test_the_boundary_values_read_the_measured_walk_and_the_open_channel_step():
     """WHICH list carries a value is the mesh's own walk; what the two liquid
     faces carry is the flow and the level the open-channel step measured."""
@@ -221,3 +258,12 @@ def test_the_routing_text_names_the_question_class_not_one_body_of_water():
     routing = _MODULE.DOC["routing"]
     assert "reach" not in routing.split(".")[0]
     assert "supply `domain`" in routing
+
+
+def test_the_routing_text_names_the_keywords_this_deck_has_opinions_about():
+    """A user overrides an opinion by the keyword's own name, so the names have
+    to be in the text the model routes on."""
+    routing = _MODULE.DOC["routing"]
+    for keyword in ("DURATION", "MORPHOLOGICAL FACTOR", "CLASSES SEDIMENT",
+                    "LAYERS INITIAL THICKNESS", "BED-LOAD TRANSPORT FORMULA"):
+        assert keyword in routing, keyword

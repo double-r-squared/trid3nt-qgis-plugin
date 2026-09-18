@@ -8,7 +8,6 @@ the deck those stages fill."""
 import asyncio
 import json
 from pathlib import Path
-from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -17,6 +16,7 @@ from trid3nt_server.workflows.telemac.helpers.oxygen_sag import (
     critical_point,
     do_profile,
 )
+from trid3nt_server.workflows.runtime.levers import LEVER_NAMES
 from trid3nt_server.workflows.telemac.modules.outputs import Line, Profile
 from trid3nt_server.workflows.telemac.templates.do_sag.streeter_phelps import overlay
 
@@ -73,38 +73,31 @@ def _resolve(**supplied):
     return asyncio.run(resolve_params(_workflow().params, dict(supplied)))
 
 
-def test_do_saturation_temperature_relation():
-    from trid3nt_server.workflows.telemac.helpers.water_quality import do_saturation_mgl
-
-    def sat(t):
-        return do_saturation_mgl(SimpleNamespace(water_temp_c=t))
-
-    assert sat(20.0) == pytest.approx(9.0, abs=0.2)   # ~9 mg/L at 20C
-    assert sat(5.0) > sat(25.0)                       # colder holds more
-
-
 def test_declared_params_and_plan_validate():
     from trid3nt_server.workflows.runtime import validate_plan
 
     wf = _workflow()
-    resolved = _resolve()
     validate_plan(wf.plan, wf.params, wf.data)
-    assert resolved.value_of("do_saturation_mgl") == pytest.approx(9.022, abs=1e-3)
-    assert resolved.value_of("upstream_do_mgl") == resolved.value_of("do_saturation_mgl")
-    assert resolved.row("k1_per_day").consequence == "numerical"  # never refuses in auto
+    assert [p.name for p in wf.params if p.name not in LEVER_NAMES] == [
+        "outfall_coords", "effluent_bod_mgl", "effluent_q_m3s", "effluent_do_mgl",
+        "do_standard_mgl"]
+    assert _resolve().value_of("do_standard_mgl") == 5.0
 
 
 def test_the_params_are_the_questions_own_plus_the_runtimes_levers():
     """No keyword twin, no domain twin, no lever restated: the dictionary
-    describes the roughness and the cadence, the slots describe the water, and
-    the runtime declares the granularity, the moment and the sizing class."""
-    from trid3nt_server.workflows.runtime.levers import LEVER_NAMES
-
+    describes the clock, the roughness, the cadence and the O2 kinetics, the
+    slots describe the water, and the runtime declares the granularity, the
+    moment and the sizing class."""
     declared = {p.name for p in _workflow().params}
     assert not declared & {"friction_law", "friction_coefficient",
                            "output_interval_min"}
     assert not declared & {"location", "bbox", "river_geometry_uri",
                            "reach_length_km"}
+    # The keywords this deck has an opinion about: stated in STEERING, set by
+    # the user under the dictionary's own name, and never a second time here.
+    assert not declared & {"sim_duration_s", "water_temp_c", "k1_per_day",
+                           "k2_per_day", "do_saturation_mgl", "upstream_do_mgl"}
     # Every lever is on the sheet; the ones this question does not state for
     # itself are seated at the end, in the order the runtime declares them.
     from trid3nt_server.workflows.runtime import param_rows
@@ -115,10 +108,13 @@ def test_the_params_are_the_questions_own_plus_the_runtimes_levers():
     appended = [name for name in LEVER_NAMES if name not in own]
     assert seated[-len(appended):] == appended
     # The roughness the outflow stage is derived at is the roughness the deck is
-    # written at - one number, stated once on the body.
+    # written at - one number, stated once on the body. The clock is the deck's
+    # too: the settle reads the DURATION it states.
     steering = _template().STEERING
     assert steering.LAW_OF_BOTTOM_FRICTION == 3
     assert steering.FRICTION_COEFFICIENT == 33.0
+    assert steering.ASSERTED["DURATION"] == 172800.0
+    assert _steps()[3].kwargs["duration_s"] == 172800.0
 
 
 def test_the_three_slots_are_the_world_this_run_stands_on():
@@ -251,13 +247,22 @@ def test_no_step_names_a_template_module_as_a_tool():
 def test_a_wq_knob_outside_its_declared_bounds_refuses():
     from trid3nt_server.workflows.runtime import GateRefusedError
 
-    for outside in ({"k1_per_day": 0.0}, {"effluent_bod_mgl": 0.0},
-                    {"sim_duration_s": 1.0}):
+    for outside in ({"effluent_bod_mgl": 0.0}, {"effluent_q_m3s": 0.0}):
         with pytest.raises(GateRefusedError, match="outside the declared range"):
             _resolve(**outside)
-    resolved = _resolve(k1_per_day=0.01, effluent_bod_mgl=0.1)
-    assert resolved.value_of("k1_per_day") == 0.01
-    assert resolved.value_of("effluent_bod_mgl") == 0.1
+    assert _resolve(effluent_bod_mgl=0.1).value_of("effluent_bod_mgl") == 0.1
+
+
+def test_a_keyword_outside_the_modules_own_bounds_refuses_by_its_name():
+    """The clock left the Params and its plausibility range went WITH it, onto
+    the module's keyword table: a user setting DURATION by name is bounded
+    there, and the refusal names the keyword rather than a param."""
+    from trid3nt_server.workflows.telemac.modules.sheet import SlotRefused
+
+    with pytest.raises(SlotRefused, match="DURATION is taken between"):
+        _filled(keywords={"DURATION": 1.0})
+    assert dict(_filled(keywords={"DURATION": 600.0}).resolved())["DURATION"] \
+        == pytest.approx(600.0)
 
 
 # --- the outfall: absent DERIVES, malformed REFUSES -------------------------- #
@@ -317,7 +322,7 @@ def test_the_outputs_list_charts_the_oxygen_along_the_domains_centerline():
     do_sag = _template()
     assert [(p.kind, p.variable, p.t, p.publish) for p in do_sag.OUTPUTS] == [
         ("profile", "T2", -1, "chart")]
-    assert do_sag.OUTPUTS[0].reference is overlay
+    assert callable(do_sag.OUTPUTS[0].reference)
     assert do_sag.OUTPUTS[0].along == Ref("line")
     assert do_sag.CAPTIONS == {"T2": "dissolved oxygen"}
     assert {name: (m.primitive.kind, m.primitive.variable, m.stat)
@@ -344,7 +349,7 @@ _SETTLED = {"title": "willamette DOMAIN", "time_step_s": 1.0,
             "inflow_q_m3s": 2.0, "outflow_stage_m": 1.0}
 
 
-def _filled(**supplied):
+def _filled(*, keywords=None, **supplied):
     from trid3nt_server.workflows.telemac.workflow import fill_sheet
 
     resolved = _resolve(**supplied)
@@ -354,19 +359,19 @@ def _filled(**supplied):
                   "outfall": {"at": [0.0, 0.0], "name": None}},
         params={row.name: resolved.value_of(row.name)
                 for row in _workflow().params},
-        slots={}, workflow="telemac_do_sag", title="", keywords={},
-        input_mode="auto"))
+        slots={}, workflow="telemac_do_sag", title="",
+        keywords=dict(keywords or {}), input_mode="auto"))
 
 
 def test_the_deck_opens_at_the_derived_depth_and_the_declared_oxygen():
-    """The run opens at the normal depth the OPEN CHANNEL derived, and the
-    oxygen the reach carries in is the user's number reaching both the initial
-    state and every liquid boundary."""
-    sheet = _filled(upstream_do_mgl=7.5)
+    """The run opens at the normal depth the OPEN CHANNEL derived, and the water
+    the reach carries in is CLEAN and saturated - one number reaching both the
+    initial state and every liquid boundary."""
+    sheet = _filled()
     filled = dict(sheet.resolved())
     assert filled["INITIAL DEPTH"] == pytest.approx(1.2)
-    assert filled["INITIAL VALUES OF TRACERS"] == [0.0, 7.5, 0.0, 0.0]
-    assert filled["PRESCRIBED TRACERS VALUES"][1] == pytest.approx(7.5)
+    assert filled["INITIAL VALUES OF TRACERS"] == [0.0, 9.022, 0.0, 0.0]
+    assert filled["PRESCRIBED TRACERS VALUES"][1] == pytest.approx(9.022)
     assert filled["PRESCRIBED FLOWRATES"] == [pytest.approx(2.0), 0.0]
     assert filled["PRESCRIBED ELEVATIONS"] == [0.0, pytest.approx(1.0)]
     assert filled["LAW OF BOTTOM FRICTION"] == 3
@@ -403,8 +408,10 @@ def _load(x, values) -> dict:
             field("T2"): None}
 
 
-_PARAMS = {"do_standard_mgl": 5.0, "do_saturation_mgl": 9.0,
-           "k1_per_day": 2.0, "k2_per_day": 6.0}
+_PARAMS = {"do_standard_mgl": 5.0}
+#: The reference is closed over the kinetics the DECK states; these are a
+#: reading's worth, not the deck's.
+_REFERENCE = overlay(saturation_mgl=9.0, k1_per_day=2.0, k2_per_day=6.0)
 
 
 def test_the_overlay_is_anchored_at_the_modeled_mix_point():
@@ -414,7 +421,7 @@ def test_the_overlay_is_anchored_at_the_modeled_mix_point():
     xs = [0.0, 100.0, 200.0, 300.0, 400.0, 500.0]
     bod = [0.0, 0.0, 20.0, 18.0, 16.0, 14.0]
     do = [9.0, 9.0, 8.5, 8.2, 8.0, 7.9]
-    lines = overlay(_profile(xs, do), _load(xs, bod), _PARAMS)
+    lines = _REFERENCE(_profile(xs, do), _load(xs, bod), _PARAMS)
     assert [line.label for line in lines] == [
         "5 mg/L standard", "organic load", "Streeter-Phelps closed form"]
     closed = lines[2]
@@ -430,8 +437,8 @@ def test_the_overlay_is_anchored_at_the_modeled_mix_point():
 ])
 def test_the_overlay_draws_no_closed_form_it_cannot_anchor(velocity, bod):
     xs = [0.0, 1.0, 2.0, 3.0, 4.0, 5.0]
-    lines = overlay(_profile(xs, [9.0] * 6, velocity=velocity), _load(xs, bod),
-                    _PARAMS)
+    lines = _REFERENCE(_profile(xs, [9.0] * 6, velocity=velocity),
+                       _load(xs, bod), _PARAMS)
     assert "Streeter-Phelps closed form" not in [line.label for line in lines]
 
 
@@ -442,5 +449,23 @@ def test_the_overlay_reproduces_the_closed_form_it_is_graded_against():
     xs = [0.0, 500.0, 1000.0, 1500.0, 2000.0, 2500.0]
     do_exact, _ = do_profile(xs, 0.4, 9.0, 20.0, 0.5, 2.0, 6.0)
     bod = [20.0] + [0.0] * 5          # the mix point is bin 0
-    lines = overlay(_profile(xs, do_exact, velocity=0.4), _load(xs, bod), _PARAMS)
+    lines = _REFERENCE(_profile(xs, do_exact, velocity=0.4), _load(xs, bod),
+                       _PARAMS)
     assert lines[-1].values == pytest.approx(do_exact, abs=1e-9)
+
+
+def test_the_reference_is_drawn_at_the_kinetics_the_deck_states():
+    """A closed form computed at rates the run was not solved at grades nothing,
+    so the chart's reference reads the deck's own O2 keywords."""
+    from trid3nt_server.workflows.telemac.templates.do_sag import do_sag
+
+    xs = [0.0, 500.0, 1000.0, 1500.0, 2000.0, 2500.0]
+    o2 = dict(_filled().files["t2d_river.waqtel"]["slots"])
+    exact, _ = do_profile(
+        xs, 0.4, o2["O2_SATURATION_DENSITY_OF_WATER__CS_"], 20.0, 0.5,
+        o2["CONSTANT_OF_DEGRADATION_OF_ORGANIC_LOAD_K1"],
+        o2["K2_REAERATION_COEFFICIENT"])
+    lines = do_sag.OUTPUTS[0].reference(
+        _profile(xs, exact, velocity=0.4), _load(xs, [20.0] + [0.0] * 5),
+        _PARAMS)
+    assert lines[-1].values == pytest.approx(exact, abs=1e-9)

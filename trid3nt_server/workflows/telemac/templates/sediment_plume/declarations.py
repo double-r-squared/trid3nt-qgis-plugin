@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 from trid3nt_server.inputs import Point
-from trid3nt_server.workflows.runtime import Accepts, Param, doors, lever
-from trid3nt_server.workflows.telemac.modules.gaia import GRAIN_UM_MAX, GRAIN_UM_MIN
+from trid3nt_server.workflows.runtime import Accepts, Param, doors
 
 __all__ = ["ACCEPTS", "DOC", "PARAMS"]
 
@@ -17,10 +16,10 @@ ACCEPTS = Accepts(mesh=("unstructured_tri",), release=("point",))
 
 class PARAMS:
     """What only a settling-plume question asks: where the sediment enters the
-    water, which class it is, how concentrated, and the flow that carries it.
-    The domain, the bed, its boundary runs and the granularity are the runtime's
-    own slots and levers, and the deck's roughness and cadence are keywords the
-    module's dictionary describes."""
+    water and how concentrated the release is. The domain, the bed, its boundary
+    runs and the granularity are the runtime's own slots and levers, and the
+    deck's clock, roughness, cadence, sediment class, transport and advection,
+    wind and rain are keywords the module's dictionary describes."""
 
     release = Param(
         door=doors.USER, optional=True, user_lever=True,
@@ -30,7 +29,8 @@ class PARAMS:
             "built over; the plume's travel is measured from there"),
         desc="Where the sediment enters the water, as a Point: the pick's "
              "{coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a "
-             "point layer, or a place name. Its name becomes the marker's name, "
+             "point layer. Geocode a place name first. Its name becomes the "
+             "marker's name, "
              "and on a river with no domain supplied it is also the seed the "
              "reach is walked downstream from")
 
@@ -51,13 +51,6 @@ class PARAMS:
              "carrier flow")
 
     # -- the released class -------------------------------------------------- #
-    grain_size_um = Param(
-        door=doors.SCENARIO, default=200.0,
-        bounds=(GRAIN_UM_MIN, GRAIN_UM_MAX), units="um", user_lever=True,
-        consequence="scenario",
-        desc="Median grain diameter d50 of the RELEASED class - ~200 um fine "
-             "sand settles within a few km, ~20 um silt mostly stays suspended "
-             "(all modeled non-cohesive)")
     sediment_concentration_mgl = Param(
         door=doors.SCENARIO, default=100.0,
         bounds=(0.0, 1.0e6), units="mg/L", consequence="scenario",
@@ -71,47 +64,26 @@ class PARAMS:
              "sediment_concentration_mgl x spill_duration_s - which the deposited "
              "fraction is measured against")
 
-    # -- the forcings this question adds ------------------------------------ #
-    wind_speed_mps = Param(
-        door=doors.SCENARIO, default=0.0, bounds=(0.0, 60.0),
-        units="m/s", consequence="scenario",
-        desc="Sustained wind driving a surface wind-stress term; 0 = no wind")
-    wind_direction_deg = Param(
-        door=doors.SCENARIO, default=0.0, bounds=(0.0, 360.0),
-        units="deg", consequence="scenario",
-        desc="Compass bearing the wind blows FROM (0=N, 90=E); only read when "
-             "wind_speed_mps > 0")
-    # ONE signed rate, because the keyword it writes is signed: a net loss is a
-    # negative rain rather than a second value subtracted from this one.
-    rainfall_mm_per_day = Param(
-        door=doors.USER, optional=True, bounds=(-50.0, 2000.0),
-        units="mm/day", consequence="scenario",
-        desc="NET distributed rainfall applied at every wet node, independent "
-             "of the inflow hydrograph; negative is evaporation")
-
-    # -- the clock ---------------------------------------------------------- #
-    sim_duration_s = lever("sim_duration_s", bounds=(600.0, 14400.0))
-
 
 DOC = dict(
     summary="A SUSPENDED SEDIMENT plume in a body of water: it settles and deposits on the bed.",
     routing=(
         "THE tool for \"sediment / silt / a turbidity plume released into the "
         "water, where does it settle out\" - a slurry spill, a construction or "
-        "dredging discharge, a prescribed upstream sediment supply depositing "
-        "downstream. TELEMAC-2D coupled with GAIA over the domain the run solves "
-        "on - a river reach walked from the release point, a lake or harbour "
-        "drawn on the canvas, or a supplied polygon - with ONE settling class "
-        "over a bed with NO stock, so nothing erodes and only what was injected "
-        "can deposit. Returns the suspended-concentration history, the "
-        "deposition pattern and the time-stepped mesh. Give `release` as a "
-        "place, a pick or a pair, or supply `domain`."
+        "dredging discharge, an upstream sediment supply. TELEMAC-2D + GAIA "
+        "over a reach walked from the release, a lake or harbour drawn on the "
+        "canvas, or a supplied polygon: ONE settling class over a bed with NO "
+        "stock, so nothing erodes and only what was injected deposits. Give "
+        "`release` as a pick or a pair, or supply `domain`. Deck: "
+        "DURATION 3600 s, CLASSES SEDIMENT DIAMETERS 2.0e-4 m, SUSPENSION "
+        "TRANSPORT FORMULA FOR ALL SANDS 3, SCHEME FOR ADVECTION OF SUSPENDED "
+        "SEDIMENTS 1, no WIND and no RAIN OR EVAPORATION - set each by its "
+        "keyword name."
     ),
     not_for=(
-        "bed SCOUR, an erodible bed or grain sorting "
-        "(`telemac_bed_scour`); a conservative dye or contaminant plume "
-        "(`telemac_dye_release`); an OIL slick (`telemac_oil_spill`); "
-        "dissolved-oxygen sag (`telemac_do_sag`)"
+        "bed SCOUR or an erodible bed (`telemac_bed_scour`); a conservative dye "
+        "or contaminant plume (`telemac_dye_release`); an OIL slick "
+        "(`telemac_oil_spill`); dissolved-oxygen sag (`telemac_do_sag`)"
     ),
     params=PARAMS,
     controls=(

@@ -128,7 +128,9 @@ def test_the_baseline_params_are_the_runtimes_and_are_not_restated():
     declared = [prm.name for prm in _workflow().params]
     for gone in ("location", "bbox", "river_geometry_uri", "reach_length_km",
                  "friction_law", "friction_coefficient", "output_interval_min",
-                 "evaporation_mm_per_day", "rainfall_gridmet_window"):
+                 "evaporation_mm_per_day", "rainfall_gridmet_window",
+                 "sim_duration_s", "n_drogues", "drogues_period_s",
+                 "wind_speed_mps", "wind_direction_deg", "rainfall_mm_per_day"):
         assert gone not in declared, gone
     assert set(LEVER_NAMES) <= set(declared)
     # Every lever is on the sheet; the ones this question does not state for
@@ -147,11 +149,9 @@ def test_the_question_keeps_only_its_own_inputs():
     run's value, which is the carrier ROW's, so it is no param of this one."""
     declared = {prm.name for prm in _workflow().params}
     assert "discharge_m3s" not in declared
-    assert {"release", "spill_fraction", "spill_duration_s",
-            "source_q_m3s", "oil_concentration_mgl", "oil_type", "n_drogues",
-            "drogues_period_s", "oil_release_step", "wind_speed_mps",
-            "wind_direction_deg", "rainfall_mm_per_day",
-            "sim_duration_s"} <= declared
+    assert {"release", "spill_fraction", "spill_duration_s", "source_q_m3s",
+            "oil_concentration_mgl", "oil_type",
+            "oil_release_step"} <= declared
 
 
 def test_the_roughness_is_the_decks_own_opinion_stated_as_keywords():
@@ -162,6 +162,32 @@ def test_the_roughness_is_the_decks_own_opinion_stated_as_keywords():
     assert asserted["FRICTION_COEFFICIENT"] == 33.0
     assert [step.name for step in _workflow().plan.steps
             if step.name == "channel"] == ["channel"]
+
+
+def test_the_clock_and_the_track_are_the_modules_own_keywords():
+    """The window, the float count and how often their positions are written
+    are keywords telemac2d carries, so the deck states them by their own names
+    and the settle is built off the same statement."""
+    asserted = template.STEERING.ASSERTED
+    assert asserted["DURATION"] == 3600.0
+    assert asserted["MAXIMUM_NUMBER_OF_DROGUES"] == 100
+    # In SOLVER STEPS, like GRAPHIC PRINTOUT PERIOD beside it - no seconds and
+    # no division by the settled step.
+    assert asserted["PRINTOUT_PERIOD_FOR_DROGUES"] == 60
+    settled = [s for s in _workflow().plan.steps if s.label == "settled"][0]
+    assert settled.kwargs["duration_s"] == 3600.0
+
+
+def test_a_calm_dry_deck_writes_no_wind_and_no_rain_at_all():
+    """This question asks what the CURRENT does with the slick: a zero speed and
+    an absent rate state nothing, so the keywords are the user's to set by
+    name rather than a zero the deck put in front of them."""
+    slots, _ = template.STEERING.COMPOSITES["wind"].expand(
+        template.STEERING.wind)
+    assert slots == {}
+    slots, _ = template.STEERING.COMPOSITES["rain"].expand(
+        template.STEERING.rain)
+    assert slots == {}
 
 
 def test_the_slots_reach_the_wire_as_arguments():

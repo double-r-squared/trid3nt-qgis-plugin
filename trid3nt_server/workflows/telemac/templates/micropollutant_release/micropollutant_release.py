@@ -177,12 +177,16 @@ class STEERING(T2D):
 
     # HOW OFTEN the result is written, in SOLVER STEPS. The engine's own
     # default is every step, so an unwritten period is a frame per step: at
-    # the 14 m default edge the CFL step is 0.7 s, and this question's
-    # default 172800 s window is about 246,900 of them - one frame every
-    # 5,000 steps is 49 frames of the partition. A user who wants another
-    # cadence sets the keyword by its own name.
+    # the 14 m default edge the CFL step is 0.7 s, and the window stated
+    # below is about 246,900 of them - one frame every 5,000 steps is 49
+    # frames of the partition. A user who wants another cadence sets the
+    # keyword by its own name.
     GRAPHIC_PRINTOUT_PERIOD = 5000
-    DURATION = P.sim_duration_s
+
+    # TWO DAYS. Sorption equilibrates in hours and the settling that carries
+    # the substance onto the bed takes longer than that, so a window of a few
+    # hours reports a partition that has not happened yet.
+    DURATION = 172800.0
 
     # The carrier declares the DISSOLVED substance; the micropol process adopts
     # it and appends the suspended sediment, the bed sediment and the two sorbed
@@ -214,14 +218,12 @@ class STEERING(T2D):
                         window_s=P.release_duration_s,
                         until_s=Ref("settled.until_s"))]
 
-    #: The partition, as WAQTEL's own keywords: how fast the sediment settles,
-    #: how hard the substance holds onto it, how fast it comes back off, and how
-    #: fast it decays. Each is the engine's own where the ask states none.
-    coupling = [WAQTEL.micropollutant(
-        SEDIMENT_SETTLING_VELOCITY=P.settling_velocity_mps,
-        COEFFICIENT_OF_DISTRIBUTION=P.distribution_coefficient_m3kg,
-        CONSTANT_OF_DESORPTION_KINETIC=P.desorption_constant_per_s,
-        EXPONENTIAL_DESINTEGRATION_CONSTANT=P.decay_constant_per_s)]
+    #: The partition: how fast the sediment settles, how hard the substance holds
+    #: onto it, how fast it comes back off and how fast it decays are WAQTEL's
+    #: own keywords. This question is asked of a substance it is never told the
+    #: name of, so it has an opinion about none of them and the body carries the
+    #: process alone.
+    coupling = [WAQTEL.micropollutant()]
 
 
 #: What this question PLACES: the dissolved history where the user asks for it.

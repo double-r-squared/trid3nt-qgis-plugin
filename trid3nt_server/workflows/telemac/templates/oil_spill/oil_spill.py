@@ -17,7 +17,7 @@ from trid3nt_server.workflows.runtime import (
     register_workflow,
     tool,
 )
-from trid3nt_server.inputs import point_arg, user_input
+from trid3nt_server.inputs import point_arg
 from trid3nt_server.inputs.instant import event_time
 from trid3nt_server.workflows.telemac.modules import (
     T2D,
@@ -184,14 +184,20 @@ class STEERING(T2D):
     RESTART_FILE = _RESTART
     PREVIOUS_COMPUTATION_FILE_FORMAT = "SERAFIND"
 
+    # HOW LONG the question is asked over, in SECONDS. One hour is the window a
+    # slick needs to leave the release point and spread far enough for its drift
+    # to be measured against the flow; shorter and the floats are still bunched
+    # at the source. A user who wants a longer horizon sets the keyword by its
+    # own name.
+    DURATION = 3600.0
+
     # HOW OFTEN the result is written, in SOLVER STEPS. The engine's own
     # default is every step, so an unwritten period is a frame per step: at
-    # the 14 m default edge the CFL step is 0.7 s, and this question's
-    # default 3600 s window is about 5,140 of them - one frame every
-    # 100 steps is 51 frames of the slick. A user who wants another
-    # cadence sets the keyword by its own name.
+    # the 14 m default edge the CFL step is 0.7 s, and the 3600 s DURATION
+    # above is about 5,140 of them - one frame every 100 steps is 51 frames
+    # of the slick. A user who wants another cadence sets the keyword by its
+    # own name.
     GRAPHIC_PRINTOUT_PERIOD = 100
-    DURATION = P.sim_duration_s
 
     NUMBER_OF_TRACERS = 1
     #: The tracer is called what the user called the release point, when a
@@ -220,15 +226,28 @@ class STEERING(T2D):
                         until_s=Ref("settled.until_s"))]
 
     #: The module itself: the preset the deck carries under the name the ask
-    #: chose, the per-run source the settled point is compiled into, and the
-    #: floats the slick is drawn from.
+    #: chose, and the per-run source the settled point is compiled into.
     oil = Oil(presets=OIL_PRESETS, named=P.oil_type, at=Ref("source.at"),
-              release_step=P.oil_release_step, drogues=P.n_drogues,
-              drogues_period_s=P.drogues_period_s,
-              time_step_s=Ref("settled.time_step_s"))
+              release_step=P.oil_release_step)
 
-    wind = Wind(speed_mps=P.wind_speed_mps, from_deg=P.wind_direction_deg)
-    rain = Rain(mm_per_day=P.rainfall_mm_per_day, tracers=1)
+    # HOW MANY floats the module tracks. The slick is drawn from their
+    # positions alone, so the count is the resolution of the picture: a hundred
+    # over a domain this question walks is a readable drift cloud, and a coarser
+    # count draws a coarser slick.
+    MAXIMUM_NUMBER_OF_DROGUES = 100
+
+    # HOW OFTEN their positions are written, in SOLVER STEPS like the graphic
+    # period above and sized the same way: 5,140 steps of the stated DURATION at
+    # one write every 60 is about 86 positions along each track, which draws the
+    # drift without writing a file the reader cannot scrub.
+    PRINTOUT_PERIOD_FOR_DROGUES = 60
+
+    #: CALM AND DRY: this question asks what the CURRENT does with the slick, so
+    #: this deck states no surface stress and no distributed rain and the drift
+    #: is the flow's alone - a zero speed and an absent rate each write nothing
+    #: at all. A user who wants a wind sets SPEED AND DIRECTION OF WIND by name.
+    wind = Wind(speed_mps=0.0, from_deg=0.0)
+    rain = Rain(mm_per_day=None, tracers=1)
 
 
 #: What this question PLACES: the dissolved fraction's domain-wide history as
@@ -315,8 +334,6 @@ telemac_oil_spill = register_workflow(
                   code="TELEMAC_PARAMS_INVALID"),
         event_time(),
         compute_class(),
-        user_input.bearing("wind_direction_deg", label="wind_direction_deg",
-                           code="TELEMAC_PARAMS_INVALID"),
     ),
     doc=DOC,
 )

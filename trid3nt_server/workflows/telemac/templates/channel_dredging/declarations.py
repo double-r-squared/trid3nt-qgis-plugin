@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 from trid3nt_server.inputs import Point
-from trid3nt_server.workflows.runtime import Accepts, Param, doors, lever
-from trid3nt_server.workflows.telemac.modules.gaia import GRAIN_UM_MAX, GRAIN_UM_MIN
+from trid3nt_server.workflows.runtime import Accepts, Param, doors
 
 __all__ = ["ACCEPTS", "DOC", "PARAMS"]
 
@@ -28,19 +27,6 @@ class PARAMS:
              "point layer. Geocode a place name first; the channel is fetched "
              "downstream of it and the levels every dredging action reads are "
              "stationed along the centerline that comes back with it")
-    sim_duration_s = lever(
-        "sim_duration_s", bounds=(600.0, 604800.0),
-        desc="Simulated physical time the dredge campaign runs over; the "
-             "morphological factor is what makes a short window produce a "
-             "readable bed change")
-
-    # -- the fields --------------------------------------------------------- #
-    time_origin = Param(
-        door=doors.SCENARIO, default=[2000, 1, 1, 0, 0, 0], type=list,
-        consequence="scenario",
-        desc="The calendar instant the run's clock starts at, as [year, month, "
-             "day, hour, minute, second] - the origin every dredge schedule is "
-             "dated against and the one the deck states")
 
     # -- the grade ---------------------------------------------------------- #
     design_depth_m = Param(
@@ -60,9 +46,9 @@ class PARAMS:
 
     # -- the schedule ------------------------------------------------------- #
     # THE CAMPAIGN'S CLOCK IS THE BED'S, not the solver's. The engine divides
-    # every stated time by the deck's morphological factor and multiplies the
+    # every stated time by the deck's MORPHOLOGICAL FACTOR and multiplies the
     # rates by it, so a schedule fits a run when it lands inside
-    # sim_duration_s * morphological_factor. A pass also runs until it has cut
+    # DURATION x MORPHOLOGICAL FACTOR. A pass also runs until it has cut
     # to grade rather than until dredge_end_s: the end only stops the NEXT pass
     # from starting, which is the engine's own behaviour and the reason a pass
     # that cannot finish inside the run reports no volume at all.
@@ -70,8 +56,8 @@ class PARAMS:
         door=doors.SCENARIO, default=0.0, bounds=(0.0, 6048000.0), units="s",
         consequence="scenario",
         desc="When the first dredging pass begins, in seconds of the BED's own "
-             "clock - the run's morphological time, sim_duration_s x "
-             "morphological_factor")
+             "clock - the run's morphological time, DURATION x MORPHOLOGICAL "
+             "FACTOR")
     dredge_end_s = Param(
         door=doors.SCENARIO, default=3000.0, bounds=(1.0, 6048000.0), units="s",
         consequence="scenario",
@@ -106,27 +92,6 @@ class PARAMS:
         desc="Least volume worth moving around a node before it is dredged at "
              "all; 0 works every node past the trigger")
 
-    # -- the bed ------------------------------------------------------------ #
-    grain_size_um = Param(
-        door=doors.SCENARIO, default=200.0,
-        bounds=(GRAIN_UM_MIN, GRAIN_UM_MAX), units="um", user_lever=True,
-        consequence="scenario",
-        desc="Median grain diameter d50 of the bed the channel shoals with - "
-             "~200 um fine sand, ~20 um silt (all modeled non-cohesive)")
-    bed_thickness_m = Param(
-        door=doors.SCENARIO, default=5.0, bounds=(0.05, 50.0),
-        units="m", consequence="scenario",
-        desc="Depth of the erodible sediment stock the dredger can cut into")
-    bedload_formula = Param(
-        door=doors.SCENARIO, default=1, type=int, consequence="numerical",
-        desc="GAIA bed-load law: 1=Meyer-Peter-Mueller, 2=Einstein-Brown, "
-             "7=van Rijn")
-    morphological_factor = Param(
-        door=doors.SCENARIO, default=10.0, bounds=(1.0, 100.0),
-        user_lever=True, consequence="numerical",
-        desc="Amplifies bed change per hydraulic step so a short campaign "
-             "yields a readable depth; a speed-up lever, not a rate")
-
 
 DOC = dict(
     summary="MAINTENANCE DREDGING of a navigation channel: how much comes out, "
@@ -134,18 +99,19 @@ DOC = dict(
     routing=(
         "THE tool for \"dredge this channel and tell me the volume\" - a "
         "maintenance dredge of a fairway or berth pocket held at a design "
-        "depth, the spoil placed in a disposal area, and the bed's response "
-        "to both. TELEMAC-2D coupled with GAIA, the dredger driven by "
-        "NESTOR so what it moves is in the bed's own mass balance. The channel "
-        "is fetched downstream of a point on it; the bed is the published USACE "
-        "survey where one covers it and the terrain elsewhere. Returns the "
-        "bed-evolution map and animation plus the dredged and dumped volumes. "
-        "Supply `seed_point` and the two areas as polygons."
+        "depth, the spoil placed in a disposal area. TELEMAC-2D coupled with "
+        "GAIA, the dredger driven by NESTOR so what it moves is in the bed's "
+        "mass balance. The channel is fetched downstream of a point on it; "
+        "its bed is the published USACE survey where one covers it, terrain "
+        "elsewhere. DURATION, MORPHOLOGICAL FACTOR, CLASSES SEDIMENT "
+        "DIAMETERS and LAYERS INITIAL THICKNESS are the deck's own, set by "
+        "name. Returns the bed evolution and the dredged and dumped volumes; "
+        "supply `seed_point` and the two areas as polygons."
     ),
     not_for=(
         "a bed that scours and re-deposits on its own, with no dredger "
-        "(`telemac_bed_scour`); a SUSPENDED plume settling onto an inert "
-        "bed (`telemac_sediment_plume`); a dye or contaminant plume "
+        "(`telemac_bed_scour`); a SUSPENDED plume settling onto an inert bed "
+        "(`telemac_sediment_plume`); a dye or contaminant plume "
         "(`telemac_dye_release`); an OIL slick (`telemac_oil_spill`)"
     ),
     params=PARAMS,

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from trid3nt_server.inputs import Point
-from trid3nt_server.workflows.runtime import Accepts, Param, doors, lever
+from trid3nt_server.workflows.runtime import Accepts, Param, doors
 
 __all__ = ["ACCEPTS", "DOC", "PARAMS"]
 
@@ -13,15 +13,13 @@ __all__ = ["ACCEPTS", "DOC", "PARAMS"]
 #: sag pipeline has been run against.
 ACCEPTS = Accepts(mesh=("unstructured_tri",), release=("point",))
 
-_HELPERS = "trid3nt_server.workflows.telemac.helpers"
-
 
 class PARAMS:
-    """What only an oxygen-sag question asks: where the discharge enters and what
-    it carries, the kinetics the sag develops under, the standard it is judged
-    against, and how long the water is watched. The domain, the bed, its boundary
-    runs and the granularity are the runtime's own slots and levers, and the
-    deck's roughness and cadence are keywords the module's dictionary describes."""
+    """What only an oxygen-sag question asks: where the discharge enters, what it
+    carries, and the standard the sag is judged against. The domain, the bed, its
+    boundary runs and the granularity are the runtime's own slots and levers, and
+    the clock, the roughness, the cadence and the O2 kinetics are keywords the
+    module's dictionary describes and the deck states by their own names."""
 
     # -- the discharge ------------------------------------------------------- #
     outfall_coords = Param(
@@ -34,8 +32,8 @@ class PARAMS:
             "a permitted discharge is"),
         desc="Where the discharge enters the water, as a Point: the pick's "
              "{coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a "
-             "point layer, or a place name. On a river with no domain supplied "
-             "it is also the seed the reach is walked downstream from")
+             "point layer. Geocode a place name first. On a river with no domain "
+             "supplied it is also the seed the reach is walked downstream from")
     effluent_bod_mgl = Param(
         door=doors.SCENARIO, default=250.0,
         bounds=(0.1, 5000.0), units="mg/L", consequence="scenario",
@@ -53,31 +51,6 @@ class PARAMS:
         desc="Dissolved oxygen in the discharge itself; a treated effluent arrives "
              "oxygen-poor, which is the initial deficit the sag starts from")
 
-    # -- the kinetics the sag develops under --------------------------------- #
-    water_temp_c = Param(
-        door=doors.SCENARIO, default=20.0, bounds=(0.0, 40.0),
-        units="C", consequence="scenario",
-        desc="Water temperature, which sets the DO saturation the deficit is "
-             "measured against; 20 C is the standard Streeter-Phelps condition")
-    k1_per_day = Param(
-        door=doors.SCENARIO, default=0.3, bounds=(0.01, 20.0),
-        units="1/day", consequence="numerical",
-        desc="CBOD deoxygenation rate - a documented rate coefficient")
-    k2_per_day = Param(
-        door=doors.SCENARIO, default=0.9, bounds=(0.01, 50.0),
-        units="1/day", consequence="numerical",
-        desc="Surface reaeration rate - a documented rate coefficient")
-    do_saturation_mgl = Param(
-        door=doors.DERIVED,
-        resolve=f"{_HELPERS}.water_quality.do_saturation_mgl",
-        user_lever=True, bounds=(0.0, 20.0), units="mg/L", consequence="scenario",
-        desc="DO saturation Cs; derived from water temperature unless supplied")
-    upstream_do_mgl = Param(
-        door=doors.DERIVED,
-        resolve=f"{_HELPERS}.water_quality.upstream_do_mgl",
-        user_lever=True, bounds=(0.0, 20.0), units="mg/L", consequence="scenario",
-        desc="DO carried in at the inflow run; derived as saturation unless supplied")
-
     # -- what the sag is judged against -------------------------------------- #
     do_standard_mgl = Param(
         door=doors.SCENARIO, default=5.0, bounds=(0.0, 15.0),
@@ -85,34 +58,26 @@ class PARAMS:
         desc="The DO water-quality standard the sag is judged against; 5 is a "
              "common warm-water aquatic-life criterion")
 
-    # -- the clock ----------------------------------------------------------- #
-    sim_duration_s = lever(
-        "sim_duration_s", default=172800.0, bounds=(60.0, 864000.0),
-        desc="Simulated time. A sag is a STEADY-STATE answer, so this has to "
-             "cover several travel times through the domain AND be long against "
-             "1/k1 - a window shorter than that reports a sag that has not "
-             "developed yet")
-
 
 DOC = dict(
     summary="DISSOLVED-OXYGEN SAG below a discharge (US TMDL / permit question).",
     routing=(
         "THE tool for \"where does dissolved oxygen bottom out below this discharge\", "
         "\"will the DO sag violate the standard\", \"Streeter-Phelps oxygen sag\", \"BOD "
-        "loading downstream of a WWTP / outfall\", \"DO TMDL for this water\". "
-        "TELEMAC-2D + WAQTEL O2 over the domain the run stands on - a river reach "
-        "walked downstream from the outfall, or a channel polygon you supply: clean "
-        "water in at the inflow run, the DISCHARGE ITSELF a continuous point source "
-        "of organic load and low oxygen, CBOD decaying downstream (k1) and "
-        "reaeration (k2) recovering it. Produces the along-channel oxygen profile "
-        "against the closed form and the standard, and the minimum. Give "
-        "`outfall_coords`, or supply `domain`."
+        "loading downstream of a WWTP / outfall\". TELEMAC-2D + WAQTEL O2 over a reach "
+        "walked downstream from the outfall, or a polygon you supply: clean "
+        "water in at the inflow, the DISCHARGE a continuous source of organic load "
+        "and low oxygen, CBOD decaying and reaeration recovering downstream. Produces "
+        "the along-channel oxygen profile against the closed form. Deck opinions, by "
+        "keyword: CONSTANT OF DEGRADATION OF ORGANIC LOAD K1, K2 REAERATION "
+        "COEFFICIENT, O2 SATURATION DENSITY OF WATER (CS), WATER TEMPERATURE, DURATION. "
+        "Give `outfall_coords` or `domain`."
     ),
     not_for=(
         "a conservative dye/tracer plume that only dilutes "
         "(`telemac_dye_release`); rainfall-runoff flood depth "
-        "(`telemac_rain_on_grid`); a closed body with no through-flow, which has "
-        "no sag to develop along"
+        "(`telemac_rain_on_grid`); a closed body with no through-flow, which "
+        "has no sag"
     ),
     params=PARAMS,
     controls=(

@@ -57,6 +57,19 @@ _OUTFALL_FRAC = 0.02
 _FRICTION_LAW = 3
 _FRICTION_COEFFICIENT = 33.0
 
+#: THE KINETICS the sag develops under, and the saturation the deficit is
+#: measured against. ONE set of numbers, because the closed form drawn beside
+#: the solved profile grades nothing unless it is computed at the rates the run
+#: was solved at. The deoxygenation rate a documented shallow stream carries, a
+#: reaeration rate three times it, and the freshwater saturation the
+#: Elmore-Hayes relation gives at 20 C - the standard Streeter-Phelps condition
+#: this question is asked under. A user who knows the water sets any of them by
+#: the keyword's own name.
+_WATER_TEMPERATURE_C = 20.0
+_K1_PER_DAY = 0.3
+_K2_PER_DAY = 0.9
+_SATURATION_MGL = 9.022
+
 #: The terrain cell the banks are painted from. 3DEP is PINNED, not preferred: a
 #: DSM (Copernicus GLO-30 carries canopy) puts the bank on the tree tops, and its
 #: EGM2008 zero is not the NAVD88 the surveys and the gauges are measured on.
@@ -175,19 +188,25 @@ class STEERING(T2D):
 
     # HOW OFTEN the result is written, in SOLVER STEPS. The engine's own
     # default is every step, so an unwritten period is a frame per step: at
-    # the 14 m default edge the CFL step is 0.7 s, and this question's
-    # default 172800 s window is about 246,900 of them - one frame every
-    # 5,000 steps is 49 frames of the sag. A user who wants another
-    # cadence sets the keyword by its own name.
+    # the 14 m default edge the CFL step is 0.7 s, and the window stated
+    # below is about 246,900 of them - one frame every 5,000 steps is 49
+    # frames of the sag. A user who wants another cadence sets the keyword
+    # by its own name.
     GRAPHIC_PRINTOUT_PERIOD = 5000
-    DURATION = P.sim_duration_s
+
+    # TWO DAYS. A sag is a STEADY-STATE answer, so the window has to cover
+    # several travel times through the reach and stand against 1/k1; a
+    # shorter one reports a sag that has not developed yet.
+    DURATION = 172800.0
 
     # The carrier declares ONE tracer; WAQTEL's O2 process appends DISSOLVED O2,
     # ORGANIC LOAD and NH4 LOAD behind it, which is why every array sized to the
-    # tracer count below carries four values.
+    # tracer count below carries four values. The reach OPENS clean: no organic
+    # load, and oxygen at saturation, so the deficit the answer reads is the
+    # outfall's own and not a state the run was started in.
     NUMBER_OF_TRACERS = 1
     NAMES_OF_TRACERS = ["DYE             MG/L"]
-    INITIAL_VALUES_OF_TRACERS = [0.0, P.upstream_do_mgl, 0.0, 0.0]
+    INITIAL_VALUES_OF_TRACERS = [0.0, _SATURATION_MGL, 0.0, 0.0]
 
     #: CLEAN WATER at every liquid boundary: no organic load, its own oxygen. The
     #: load enters at the source, so which boundary the engine numbers first
@@ -199,7 +218,7 @@ class STEERING(T2D):
                       Ref("settled.liquid_boundary_prescribes"),
                   "inflow_q_m3s": Ref("settled.inflow_q_m3s"),
                   "outflow_stage_m": Ref("settled.outflow_stage_m")},
-        tracers=[0.0, P.upstream_do_mgl, 0.0, 0.0])
+        tracers=[0.0, _SATURATION_MGL, 0.0, 0.0])
 
     #: The OUTFALL: a permitted discharge does not pulse, so the flow and its
     #: concentrations hold flat across the whole run and the water reaches the
@@ -215,11 +234,11 @@ class STEERING(T2D):
     #: no term for - nitrification, benthic demand, and photosynthesis less
     #: respiration.
     coupling = [WAQTEL.o2(
-        WATER_TEMPERATURE=P.water_temp_c, WATER_SALINITY=0.0,
-        CONSTANT_OF_DEGRADATION_OF_ORGANIC_LOAD_K1=P.k1_per_day,
+        WATER_TEMPERATURE=_WATER_TEMPERATURE_C, WATER_SALINITY=0.0,
+        CONSTANT_OF_DEGRADATION_OF_ORGANIC_LOAD_K1=_K1_PER_DAY,
         CONSTANT_OF_NITRIFICATION_KINETIC_K4=0.0,
-        FORMULA_FOR_COMPUTING_K2=0, K2_REAERATION_COEFFICIENT=P.k2_per_day,
-        O2_SATURATION_DENSITY_OF_WATER__CS_=P.do_saturation_mgl,
+        FORMULA_FOR_COMPUTING_K2=0, K2_REAERATION_COEFFICIENT=_K2_PER_DAY,
+        O2_SATURATION_DENSITY_OF_WATER__CS_=_SATURATION_MGL,
         BENTHIC_DEMAND=0.0, PHOTOSYNTHESIS_P=0.0, VEGETAL_RESPIRATION_R=0.0)]
 
 
@@ -227,10 +246,10 @@ class STEERING(T2D):
 #: closed form and the standard drawn beside it. The line is the LINE SLOT's:
 #: the centerline the domain's producer measured, or the one a user draws when
 #: the body it is asked of has none.
-OUTPUTS = [
-    profile("T2", along=Ref("line")
-            ).chart(reference=streeter_phelps.overlay),
-]
+OUTPUTS = [profile("T2", along=Ref("line")).chart(
+    reference=streeter_phelps.overlay(saturation_mgl=_SATURATION_MGL,
+                                      k1_per_day=_K1_PER_DAY,
+                                      k2_per_day=_K2_PER_DAY))]
 CAPTIONS = {"T2": "dissolved oxygen"}
 
 #: The run's ANSWER, as the numbers a reader has to be able to check, each a

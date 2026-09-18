@@ -13,15 +13,13 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata
 from trid3nt_server.workflows.runtime import (
     Data,
     DataRef,
-    Param,
     ParamRef,
     PlanValidationError,
     Ref,
     Step,
-    doors,
     tool,
 )
-from trid3nt_server.workflows.runtime.levers import LEVER_NAMES
+from trid3nt_server.workflows.runtime.levers import LEVER_NAMES, lever
 from trid3nt_server.workflows.telemac.modules import T2D
 from trid3nt_server.workflows.telemac.workflow import Door, TelemacWorkflow
 
@@ -38,13 +36,13 @@ class STEERING(T2D):
     BOUNDARY_CONDITIONS_FILE = "domain.cli"
     RESULTS_FILE = "r2d_domain.slf"
     TITLE = Ref("settled.title")
-    DURATION = ParamRef("sim_duration_s")
+    # The clock is a KEYWORD the module carries, so the deck states it and the
+    # settle reads it off the deck rather than off a param beside it.
+    DURATION = 604800.0
 
 
 class PARAMS:
-    sim_duration_s = Param(
-        door=doors.SCENARIO, default=604800.0, bounds=(3600.0, 1209600.0),
-        units="s", desc="Simulated time")
+    mesh_resolution_m = lever("mesh_resolution_m", default=25.0)
 
 
 class DATA:
@@ -148,7 +146,7 @@ def test_the_settle_step_reads_the_files_the_deck_itself_names():
     assert settle.kwargs["geometry"] == "domain.slf"
     assert settle.kwargs["boundary"] == "domain.cli"
     assert settle.kwargs["result"] == "r2d_domain.slf"
-    assert settle.kwargs["sim_duration_s"].name == "sim_duration_s"
+    assert settle.kwargs["duration_s"] == 604800.0
     # a param this template does not declare is not read on its behalf
     assert "continue_from" not in settle.kwargs
 
@@ -158,7 +156,7 @@ def test_the_runtime_levers_are_seated_so_the_template_states_none_of_them():
     # The template's own row for a lever keeps its place; every lever it does
     # not state is seated after it, in the order the runtime declares them.
     assert [prm.name for prm in workflow.params] == [
-        "sim_duration_s", *(n for n in LEVER_NAMES if n != "sim_duration_s")]
+        "mesh_resolution_m", *(n for n in LEVER_NAMES if n != "mesh_resolution_m")]
 
 
 def test_the_domain_and_the_bed_reach_the_wire_as_the_slots_they_are():
@@ -225,4 +223,4 @@ def test_a_template_that_still_hands_over_its_own_stages_runs_as_it_did():
     workflow = _workflow(own, data=OWN_DATA)
     assert _steps(workflow) == ["reach", "mesh", "settled", "sheet", "solve",
                                "outputs"]
-    assert [prm.name for prm in workflow.params] == ["sim_duration_s"]
+    assert [prm.name for prm in workflow.params] == ["mesh_resolution_m"]

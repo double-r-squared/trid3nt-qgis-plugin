@@ -17,8 +17,9 @@ class PARAMS:
     """What only a water-temperature question asks: where to cut a stretch of
     channel when no domain is handed in, the week of weather the water is driven
     over, and where the series is read. The domain, the bed, what the water opens
-    at and the granularity are the runtime's own slots and levers, and the deck's
-    roughness and cadence are keywords the module's dictionary describes."""
+    at and the granularity are the runtime's own slots and levers, and the clock,
+    the roughness and the cadence are keywords the module's dictionary describes
+    and the deck states by their own names."""
 
     seed = Param(
         door=doors.USER, optional=True, consequence="aoi", type=Point,
@@ -27,7 +28,7 @@ class PARAMS:
             "supplied or drew"),
         desc="Where on the channel the modelled stretch STARTS, as a Point: the "
              "pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', "
-             "a point layer, or a place name geocoded first. It seeds the reach "
+             "a point layer. Geocode a place name first. It seeds the reach "
              "the domain is cut from; supply the domain polygon - a lake, a "
              "pond, a harbour - instead and this is not read")
     # THE WEATHER WINDOW is the question's own scenario: the water warms under a
@@ -43,9 +44,10 @@ class PARAMS:
              "last two weeks, so an earlier day refuses typed")
     weather_end = Param(
         door=doors.QUESTION, consequence="scenario", user_lever=True,
-        desc="Last day of the observed weather, 'YYYY-MM-DD'. The run is "
-             "sim_duration_s long from the first observation, so this day has to "
-             "be far enough past weather_start to cover it; at most 14 days after")
+        desc="Last day of the observed weather, 'YYYY-MM-DD'. The run is DURATION "
+             "long from the first observation - a week unless you set that "
+             "keyword - so this day has to be far enough past weather_start to "
+             "cover it; at most 14 days after")
     station = Param(
         door=doors.USER, optional=True, consequence="scenario",
         user_lever=True, type=Point,
@@ -55,15 +57,8 @@ class PARAMS:
             "longest"),
         desc="Where the temperature series and its diurnal range are read, as a "
              "Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, "
-             "'lat,lon', a point layer, or a place name")
+             "'lat,lon' or a point layer. Geocode a place name first")
 
-    sim_duration_s = lever(
-        "sim_duration_s", default=604800.0, bounds=(3600.0, 1209600.0),
-        desc="Simulated time. A DIURNAL RANGE needs whole days, and this "
-             "defaults to seven; a shorter run answers what the water did over "
-             "that window and no more. The weather record has to span every "
-             "second of it - a run longer than its own forcing refuses rather "
-             "than extrapolating")
     # The runtime's own granularity lever, restated ONLY for its default: a
     # surface heat budget is a domain-scale answer watched over a week, and the
     # edge also sets the CFL step, so the runtime's 14 m spends the whole compute
@@ -83,13 +78,12 @@ DOC = dict(
         "temperature under the heat wave\", \"too warm for salmon / trout\", "
         "\"diurnal temperature swing in the water\". WAQTEL THERMIC on "
         "TELEMAC-2D over the domain it is given - a drawn pond, a picked lake, "
-        "or the reach the seed stands on: the full surface heat budget, "
-        "shortwave in, longwave out, evaporation and sensible heat, under the "
-        "hourly RAWS record over the days you name. "
-        "Produces the TEMPERATURE field, animated, and the series at a point. "
-        "Supply the domain or `seed` a point, and `weather_start` / "
-        "`weather_end`; the water opens at the nearest sample unless "
-        "`water_temperature` states the number."
+        "or the reach the seed stands on: the surface heat budget under the "
+        "hourly RAWS record over the days you name. Produces the TEMPERATURE "
+        "field, animated, and the series at a point. Deck opinions, by "
+        "keyword: DURATION (seven days), GRAPHIC PRINTOUT PERIOD, LAW OF "
+        "BOTTOM FRICTION, FRICTION COEFFICIENT. Supply the domain or `seed` a "
+        "point, and `weather_start` / `weather_end`."
     ),
     not_for=(
         "dissolved oxygen below a discharge (`telemac_do_sag`); a dye or "

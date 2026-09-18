@@ -334,8 +334,10 @@ def test_a_hard_producer_row_still_refuses_when_its_source_is_empty(monkeypatch)
 
 
 def test_the_runtime_declares_the_levers_a_template_no_longer_restates():
-    assert LEVER_NAMES == ("mesh_resolution_m", "sim_duration_s", "event_time",
-                           "compute_class", "vertical_frame")
+    # The CLOCK is not among them: DURATION is a keyword telemac2d and telemac3d
+    # both carry, so the deck states it and the user overrides it by that name.
+    assert LEVER_NAMES == ("mesh_resolution_m", "event_time", "compute_class",
+                           "vertical_frame")
     seated = with_levers((), LEVER_NAMES)
     assert [p.name for p in seated] == list(LEVER_NAMES)
     # a lever nothing takes is never seated: a param with no reader is not one
@@ -346,9 +348,8 @@ def test_a_templates_own_row_wins_over_the_lever_of_that_name():
     own = Param(name="mesh_resolution_m", door=doors.SCENARIO, default=25.0,
                 bounds=(3.0, 500.0), desc="coarser: this answer is reach-scale")
     seated = with_levers((own,), LEVER_NAMES)
-    assert [p.name for p in seated] == ["mesh_resolution_m", "sim_duration_s",
-                                        "event_time", "compute_class",
-                                        "vertical_frame"]
+    assert [p.name for p in seated] == ["mesh_resolution_m", "event_time",
+                                        "compute_class", "vertical_frame"]
     assert seated[0].default == 25.0
 
 
@@ -357,14 +358,18 @@ def test_a_lever_states_only_this_questions_opinion_of_it():
     the type, the unit and the help are the runtime's and are not restated."""
     from trid3nt_server.workflows.runtime import lever
 
-    own = lever("sim_duration_s", default=604800.0, bounds=(3600.0, 1209600.0))
-    assert (own.name, own.units, own.consequence) == ("sim_duration_s", "s",
+    own = lever("mesh_resolution_m", default=25.0, bounds=(3.0, 500.0))
+    assert (own.name, own.units, own.consequence) == ("mesh_resolution_m", "m",
                                                       "numerical")
-    assert (own.default, own.bounds) == (604800.0, (3600.0, 1209600.0))
+    assert (own.default, own.bounds) == (25.0, (3.0, 500.0))
     assert own.desc == next(row.desc for row in LEVERS
-                            if row.name == "sim_duration_s")
+                            if row.name == "mesh_resolution_m")
     with pytest.raises(PlanValidationError, match="is not a runtime lever"):
         lever("friction_law", default=3)
+    # The clock was a lever until the module's own DURATION was read as what it
+    # is; asking for it by the old name says so rather than answering.
+    with pytest.raises(PlanValidationError, match="is not a runtime lever"):
+        lever("sim_duration_s", default=600.0)
 
 
 def test_a_lever_the_runtime_does_not_declare_refuses_by_name():

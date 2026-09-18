@@ -1,8 +1,9 @@
 """The CONTRACT of ``telemac_rain_on_grid``: what only a runoff question asks.
 
 The domain, its bed, its boundary runs and the granularity are the runtime's own
-slots and levers; the deck's friction, its clock and its cadence are keywords the
-module's dictionary describes. Every number below is this question's own."""
+slots and levers; the friction law, the clock, the cadence, the storm's own
+window and how wet the ground already is are keywords the module's dictionary
+describes, stated on the deck. Every number below is this question's own."""
 
 from __future__ import annotations
 
@@ -72,8 +73,9 @@ class PARAMS:
     pour_point = Param(
         door=doors.USER, consequence="scenario", type=Point,
         desc="The catchment OUTLET, as a Point: the pick's {coordinates, name} "
-             "verbatim, a (lon, lat) pair, 'lat,lon', a point layer, or a place "
-             "name - the point the runoff drains to. It decides which basin is "
+             "verbatim, a (lon, lat) pair, 'lat,lon' or a point layer (geocode "
+             "a place name first) - the point the runoff drains to. It decides "
+             "which basin is "
              "modelled at all, so it is asked for (picked on the canvas or passed "
              "explicitly) and NEVER invented. It is snapped onto the traced "
              "channel, so a click beside the stream still delineates its basin")
@@ -110,34 +112,16 @@ class PARAMS:
         desc="Last day of the measured storm window, ISO yyyy-mm-dd. At most 92 "
              "days after rain_start_date, and no later than about ten days ago - "
              "the record is an analysis, not a forecast")
-    design_storm_mm_per_hr = Param(
-        door=doors.SCENARIO, default=25.0,
-        bounds=(0.1, 500.0), units="mm/h", consequence="physics",
+    design_storm_mm_per_day = Param(
+        door=doors.SCENARIO, default=600.0,
+        bounds=(2.4, 12000.0), units="mm/day", consequence="physics",
         desc="Constant design-storm intensity, used when no measured series is "
-             "given. A hypothetical storm, labeled as one")
-    storm_duration_hr = Param(
-        door=doors.SCENARIO, default=6.0, bounds=(0.1, 240.0),
-        units="h", consequence="scenario",
-        desc="How long the design storm rains for; a window shorter than the "
-             "simulated one is what lets the recession limb appear")
-    # The simulated window is a SCENARIO choice, not a numerics fact. Unlike the
-    # wave and 3D windows (CONSTANT: "long enough to reach steady state") and
-    # unlike the coastal window (USER: the gauge record defines it), how long you
-    # watch a catchment respond decides whether the hydrograph carries its peak
-    # and how much of the recession - which is part of the question being asked.
-    sim_duration_s = lever(
-        "sim_duration_s", default=43200.0, bounds=(360.0, 2.592e6),
-        desc="Total simulated window; longer than the rain, to watch the "
-             "recession. A window that closes while the discharge is still "
-             "rising is reported as such and its peak is a LOWER BOUND")
+             "given, in the engine's own unit - millimetres per DAY, so a "
+             "24 mm/h cloudburst is 576. A hypothetical storm, labeled as one. "
+             "How long it rains for, and how wet the ground already is, are the "
+             "deck's own keywords")
 
     # -- infiltration ------------------------------------------------------- #
-    antecedent_moisture = Param(
-        door=doors.SCENARIO, default="normal",
-        consequence="physics",
-        desc="How wet the catchment already is: dry (SCS AMC I) | normal (AMC II) | "
-             "wet (AMC III). The dominant infiltration lever - a wet basin absorbs "
-             "far less and the hydrograph peaks higher and sooner")
     curve_number = Param(
         door=doors.USER, optional=True, bounds=(30.0, 100.0),
         consequence="physics",

@@ -28,7 +28,9 @@ _PACKAGE = Path(channel_dredging.__file__).parent
 #: dictionary already describes, the domain twins the slots replaced, and the
 #: two levers the runtime declares once.
 _DISSOLVED = {"location", "bbox", "river_geometry_uri", "reach_length_km",
-              "friction_coefficient", "friction_law", "output_interval_min"}
+              "friction_coefficient", "friction_law", "output_interval_min",
+              "sim_duration_s", "time_origin", "grain_size_um",
+              "bed_thickness_m", "bedload_formula", "morphological_factor"}
 
 
 def _rows() -> dict:
@@ -132,12 +134,35 @@ def test_the_dredge_reads_its_levels_off_the_line_slot_and_the_settled_run():
     assert "centerline" not in dredge.kwargs and "seed" not in dredge.kwargs
     assert dredge.kwargs["settled"] == Ref("settled")
     assert set(dredge.kwargs["areas"]) == {"dredge_area", "dump_area"}
-    # The grade and the stock the cut is measured between, read off the sheet
-    # where the deck states them rather than restated for the measurement.
+    # The grade the question asks for, and the stock the deck lays into the bed:
+    # the cut is measured between the two, so the refusal and the deck read one
+    # number rather than two that can drift.
     assert dredge.kwargs["dug_area"] == "dredge_area"
-    assert (dredge.kwargs["grade_depth_m"].name,
-            dredge.kwargs["stock_m"].name) == ("design_depth_m",
-                                               "bed_thickness_m")
+    assert dredge.kwargs["grade_depth_m"].name == "design_depth_m"
+    assert dredge.kwargs["stock_m"] == channel_dredging._BED_STOCK_M
+
+
+def test_the_bed_the_dredger_cuts_is_stated_as_the_module_s_own_keywords():
+    """The class, the stock, the transport law and the morphological factor are
+    keywords GAIA carries, so the deck states them and a user overrides each by
+    its own name; the composite carries only the gradation and the dredge."""
+    slots = _STEERING.ASSERTED["coupling"][0]["slots"]
+    assert slots["CLASSES_SEDIMENT_DIAMETERS"] == [2.0e-4]
+    assert slots["LAYERS_INITIAL_THICKNESS"] == [channel_dredging._BED_STOCK_M]
+    assert slots["BED_LOAD_TRANSPORT_FORMULA_FOR_ALL_SANDS"] == 1
+    assert slots["MORPHOLOGICAL_FACTOR"] == 10.0
+    assert slots["MASS_BALANCE"] is True
+    assert slots["bed"] == {"gradation": None, "presets": None}
+
+
+def test_the_clock_is_the_deck_s_own_duration_and_the_dredge_reads_its_origin():
+    """DURATION is a keyword the module carries, so the settle is handed the
+    seconds the deck was written for; NESTOR dates its actions against the same
+    origin the deck states."""
+    assert _STEERING.ASSERTED["DURATION"] == 3600.0
+    assert _steps()["settled"].kwargs["duration_s"] == 3600.0
+    dredging = _STEERING.ASSERTED["coupling"][0]["slots"]["dredging"]
+    assert dredging["origin"] == _STEERING.ASSERTED["time_origin"]["at"]
 
 
 def test_the_mesh_is_built_over_the_domain_slot_at_the_runtime_lever():

@@ -284,22 +284,28 @@ def test_the_template_captions_exactly_what_it_placed():
 
 
 def test_the_window_is_one_pass_rather_than_a_season():
-    """A reach flushes in hours; the default window is two days of passes."""
-    from trid3nt_server.workflows.runtime import param_rows
+    """A reach flushes in hours; the deck's own DURATION is two days of passes,
+    and a user who wants another window sets that keyword by its name."""
+    assert _template().STEERING.ASSERTED["DURATION"] == 172800.0
 
-    from trid3nt_server.workflows.telemac.templates.eutrophication import (
-        declarations,
-    )
 
-    rows = {row.name: row for row in param_rows(declarations.PARAMS)}
-    assert rows["sim_duration_s"].default == 172800.0
+def test_a_clarity_the_deck_has_no_opinion_about_is_left_unwritten():
+    """An unstated keyword is the engine's own default, which is what the sheet
+    reports; a param that carried only optionality stated nothing at all."""
+    slots = _template().STEERING.ASSERTED["coupling"][0]["slots"]
+    assert "SECCHI_DEPTH" not in slots
 
 
 def test_the_answer_is_the_change_between_the_water_in_and_the_water_out():
-    answer = _template().ANSWER
-    assert answer["phyto_growth_ratio"].held_to == "initial_phyto_ug_l"
-    assert answer["no3_remaining_ratio"].held_to == "initial_no3_mgl"
-    assert answer["po4_remaining_ratio"].held_to == "initial_po4_mgl"
+    """Each ratio's denominator is the concentration the water ARRIVED at, read
+    off the value the deck states for that tracer - one number, not a second
+    surface in front of it."""
+    template = _template()
+    entering = template.STEERING.ASSERTED["INITIAL_VALUES_OF_TRACERS"]
+    answer = template.ANSWER
+    assert answer["phyto_growth_ratio"].against == entering[0]
+    assert answer["po4_remaining_ratio"].against == entering[1]
+    assert answer["no3_remaining_ratio"].against == entering[3]
     assert answer["do_below_standard"].held_to == "do_standard_mgl"
 
 
@@ -448,12 +454,12 @@ def test_water_nobody_sampled_is_a_sentence_rather_than_a_refusal():
     assert "the stated value stands" in row.context_sentence
 
 
-def test_the_stated_temperature_is_what_the_deck_reads():
+def test_the_stated_temperature_is_the_decks_own_keyword():
     """The row is what the stated number is READ AGAINST; it never fills the
     keyword. A domain with no sample would otherwise leave the growth, the
     mortality and the oxygen ceiling with no temperature at all."""
     assert _template().STEERING.ASSERTED["coupling"][0]["slots"][
-        "WATER_TEMPERATURE"].name == "water_temp_c"
+        "WATER_TEMPERATURE"] == 22.0
 
 
 def test_the_three_slots_reach_the_wire_so_a_drawn_body_supersedes_the_fetch():
@@ -469,7 +475,10 @@ def test_the_runtime_levers_are_seated_and_no_keyword_twin_is_declared():
     assert {"event_time", "compute_class", "mesh_resolution_m"} <= declared
     assert not declared & {"location", "bbox", "river_geometry_uri",
                            "reach_length_km", "friction_coefficient",
-                           "friction_law", "output_interval_min"}
+                           "friction_law", "output_interval_min",
+                           "sim_duration_s", "water_temp_c", "sunshine_w_m2",
+                           "secchi_depth_m", "do_saturation_mgl",
+                           "initial_phyto_ug_l", "initial_do_mgl"}
 
 
 def test_the_carrier_flow_is_one_reading_the_open_channel_step_can_read():

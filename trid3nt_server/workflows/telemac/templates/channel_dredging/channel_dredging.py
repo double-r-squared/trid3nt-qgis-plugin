@@ -57,6 +57,17 @@ _REACH_LENGTH_KM = 2.0
 _FRICTION_LAW = 3
 _FRICTION_COEFFICIENT = 33.0
 
+#: The erodible sediment stock under the fairway, in metres. ONE number, stated
+#: once: the deck lays it into the bed as the layer the dredger cuts from, and
+#: the authoring step measures the cut the grade asks for against the same stock
+#: and refuses by name before the run dispatches.
+_BED_STOCK_M = 5.0
+
+#: The calendar instant this run's clock starts at. NESTOR dates every action
+#: absolutely and differences it against this origin, so the deck states it and
+#: the dredge is written against the same six numbers.
+_TIME_ORIGIN = [2000, 1, 1, 0, 0, 0]
+
 #: The terrain cell the banks are painted from. 3DEP is PINNED, not preferred: a
 #: DSM (Copernicus GLO-30 carries canopy) puts the bank on the tree tops, and its
 #: EGM2008 zero is not the NAVD88 the surveys and the gauges are measured on.
@@ -189,18 +200,21 @@ class STEERING(T2D):
     MASS_BALANCE = True
 
     # HOW OFTEN the result is written, in SOLVER STEPS. The engine's own
-    # default is every step, so an unwritten period is a frame per step: at
-    # the 14 m default edge the CFL step is 0.7 s, and this question's
-    # default 3600 s window is about 5,140 of them - one frame every
-    # 100 steps is 51 frames of the campaign. A user who wants another
-    # cadence sets the keyword by its own name.
+    # default is every step, so an unwritten period is a frame per step: at the
+    # 14 m default edge the CFL step is 0.7 s, and the window stated below is
+    # about 5,140 of them - one frame every 100 steps is 51 frames of the
+    # campaign. A user who wants another cadence sets the keyword by its own name.
     GRAPHIC_PRINTOUT_PERIOD = 100
-    DURATION = P.sim_duration_s
+
+    # THE HYDRAULIC WINDOW, in seconds. The campaign is read on the BED's own
+    # clock - this duration times the morphological factor below - so an hour of
+    # hydraulics is ten hours of bed, which is a readable maintenance interval.
+    DURATION = 3600.0
 
     #: The clock every dredging action is dated against. NESTOR reads absolute
     #: dates and differences them against THIS origin, so the deck states it
     #: rather than inheriting the dictionary's own.
-    time_origin = TimeOrigin(at=P.time_origin)
+    time_origin = TimeOrigin(at=_TIME_ORIGIN)
 
     #: No tracer: a dredge is a question about the bed, so every liquid boundary
     #: carries the measured flowrate and stage and nothing else. The walk is the
@@ -219,10 +233,21 @@ class STEERING(T2D):
     #: per-class mass evolution, which is what its bed evolution and its sediment
     #: balance are computed from.
     coupling = [GAIA.bed(
-        geometry=_GEOMETRY, boundary=_BOUNDARY, mass_balance=True,
-        gradation=None, presets={}, d50_um=P.grain_size_um,
-        thickness_m=P.bed_thickness_m, formula=P.bedload_formula,
-        hiding_factor_formula=1, morphological_factor=P.morphological_factor,
+        geometry=_GEOMETRY, boundary=_BOUNDARY,
+        # GAIA's own sediment closure, beside the water volume the carrier
+        # accounts for: what the dredger moves is printed in it.
+        MASS_BALANCE=True,
+        # ONE class, 200 um medium sand in the keyword's own metres: the size a
+        # maintained fairway shoals with, and the size the bedload formula below
+        # is calibrated over.
+        CLASSES_SEDIMENT_DIAMETERS=[2.0e-4],
+        # The erodible stock, deeper than any cut this question makes, so the
+        # dredged volume is never limited by the material under the fairway.
+        LAYERS_INITIAL_THICKNESS=[_BED_STOCK_M],
+        # Meyer-Peter-Mueller: the bedload law this shoaling is read under.
+        BED_LOAD_TRANSPORT_FORMULA_FOR_ALL_SANDS=1,
+        # What makes a short hydraulic window produce a readable bed change.
+        MORPHOLOGICAL_FACTOR=10.0,
         dredging=Dredging(
             actions=[Dig(field=Ref("dredge.dredge_area"),
                          level=_REFERENCE_LEVEL,
@@ -239,7 +264,7 @@ class STEERING(T2D):
                          dump=Ref("dredge.dump_area"),
                          dump_rate=P.dump_rate_m_per_s)],
             reference=Ref("dredge.profiles"),
-            origin=P.time_origin))]
+            origin=_TIME_ORIGIN))]
 
 
 #: The run's ANSWER. The two volumes are the engine's OWN report lines, summed
@@ -312,7 +337,7 @@ telemac_channel_dredging = register_workflow(
                              # part-way through its first pass.
                              "dug_area": "dredge_area",
                              "grade_depth_m": ParamRef("design_depth_m"),
-                             "stock_m": ParamRef("bed_thickness_m")}
+                             "stock_m": _BED_STOCK_M}
                      ).named("dredge"),),
         results=(_RESULT, RESULT_FILENAME),
         compute_class=ParamRef("compute_class"),

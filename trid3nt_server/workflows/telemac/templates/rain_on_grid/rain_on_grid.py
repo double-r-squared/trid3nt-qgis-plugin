@@ -189,15 +189,18 @@ class STEERING(T2D):
 
     # HOW OFTEN the result is written, in SOLVER STEPS. The engine's own
     # default is every step, so an unwritten period is a frame per step: at
-    # the 40 m default edge the CFL step is 1 s, and this question's
-    # default 43200 s window is about 43,200 of them - one frame every
-    # 900 steps is 48 frames of the storm. A user who wants another
-    # cadence sets the keyword by its own name.
+    # the 40 m default edge the CFL step is 1 s, and the DURATION below is
+    # about 43,200 of them - one frame every 900 steps is 48 frames of the
+    # storm. A user who wants another cadence sets the keyword by its own name.
     GRAPHIC_PRINTOUT_PERIOD = 900
     # The mass balance the runoff answer is read off is printed in the listing,
     # so it is printed on the same beat the frames are written on.
     LISTING_PRINTOUT_PERIOD = 900
-    DURATION = P.sim_duration_s
+    # TWELVE HOURS, in seconds: longer than the storm below, so the catchment
+    # drains inside the window and the recession limb is watched rather than
+    # inferred. A window that closes while the discharge is still rising is
+    # reported as such and its peak is a LOWER BOUND.
+    DURATION = 43200.0
     # The step the catchment is solved at follows the edge the accepted mesh was
     # BUILT at rather than the edge that was asked for: an overland sheet is
     # CFL-tight, and the channel band is the finest ground in the domain.
@@ -219,6 +222,13 @@ class STEERING(T2D):
     FREE_SURFACE_GRADIENT_COMPATIBILITY = 0.9
     MASS_BALANCE = True
 
+    #: MANNING. The infiltration surface below writes ONE table for both of its
+    #: columns, and its roughness column is Manning n, so the law the zones it
+    #: writes are read under is the Manning one. The engine's own dictionary
+    #: gives this keyword no default, so a deck leaving it unwritten reads a
+    #: Manning roughness table under whatever law the build starts at.
+    LAW_OF_BOTTOM_FRICTION = 4
+
     #: The SCS Curve Number method, out of the four rainfall-runoff models the
     #: engine offers, is what the curve-number field below is a field FOR.
     RAINFALL_RUNOFF_MODEL = 1
@@ -229,7 +239,13 @@ class STEERING(T2D):
     #: past the last simulated instant; with neither, the constant design rate
     #: stops when its own window closes, so the catchment drains and the
     #: recession limb appears.
-    storm = Storm(mm_per_hr=P.design_storm_mm_per_hr, hours=P.storm_duration_hr,
+    storm = Storm(mm_per_day=P.design_storm_mm_per_day,
+                  # DURATION OF RAIN OR EVAPORATION IN HOURS: six hours, half
+                  # the window above, so the design storm CLOSES inside the run
+                  # and the catchment has as long again to drain. The composite
+                  # states the keyword only where the window closes, because a
+                  # storm outlasting the horizon has no end to write down.
+                  hours=6.0,
                   until_s=Ref("settled.until_s"), series=P.rain_series_mm,
                   record=Ref("rain.precip_mm"),
                   tracers=0, fortran=RAINDEF3_USER_FORTRAN)
@@ -241,7 +257,10 @@ class STEERING(T2D):
         table=LANDCOVER_CN_MANNING, unmapped=LANDCOVER_UNMAPPED,
         uniform_cn=P.curve_number,
         steep_slope_correction=P.steep_slope_correction,
-        antecedent_moisture=P.antecedent_moisture,
+        # ANTECEDENT MOISTURE CONDITIONS: AMC II, the mid condition the curve
+        # numbers in the table are published against, so the field and the
+        # condition it is read under come off the same publication.
+        antecedent_moisture=2,
         # The standard initial abstraction, Ia/S = 0.2, the ratio the curve
         # numbers in the table were published against.
         initial_abstraction=1)
@@ -331,7 +350,12 @@ telemac_rain_on_grid = register_workflow(
                  kwargs={"mesh": Ref("mesh"), "landcover": DATA.landcover,
                          "roughness": LANDCOVER_CN_MANNING,
                          "unmapped": LANDCOVER_UNMAPPED,
-                         "mm_per_hr": P.design_storm_mm_per_hr,
+                         # The curve is derived at the roughness the deck is
+                         # solved at: a level read off another law is a level
+                         # this run never sits at.
+                         "friction_law":
+                             STEERING.ASSERTED["LAW_OF_BOTTOM_FRICTION"],
+                         "mm_per_day": P.design_storm_mm_per_day,
                          "series": P.rain_series_mm,
                          "record": Ref("rain.precip_mm")}).named("outlet"),),
         compute_class=ParamRef("compute_class"),

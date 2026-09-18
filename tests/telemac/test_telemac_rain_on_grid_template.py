@@ -205,8 +205,8 @@ def test_constant_door_params_off_wire_and_the_two_slots_on_it():
     scenario_or_user = {p.name for p in fn.workflow.params
                         if p.door in (doors.SCENARIO, doors.USER)}
     assert scenario_or_user <= wire
-    assert {"pour_point", "mesh_resolution_m", "antecedent_moisture",
-            "design_storm_mm_per_hr", "rain_series_mm", "domain", "bed"} <= wire
+    assert {"pour_point", "mesh_resolution_m", "design_storm_mm_per_day",
+            "rain_series_mm", "domain", "bed"} <= wire
     # No "mesh" slot: a supplied mesh reaches a run through the mesh ROUTER at
     # the build door, not through a template's own context slot - a second
     # resolver inside a model template is the silent-adoption defect D-9 forbids.
@@ -215,8 +215,9 @@ def test_constant_door_params_off_wire_and_the_two_slots_on_it():
 
 def test_no_domain_twin_or_keyword_twin_is_declared():
     """A template declares no param the module's dictionary or the runtime
-    already describes: the AOI it used to carry is the domain slot, the cadence
-    and the step are the deck's keywords, the granularity is the runtime's."""
+    already describes: the AOI it used to carry is the domain slot, the clock,
+    the cadence, the step, the storm's window and the ground's wetness are the
+    deck's keywords, the granularity is the runtime's."""
     from trid3nt_server.workflows.telemac.templates.rain_on_grid.rain_on_grid import (
         telemac_rain_on_grid as fn,
     )
@@ -226,7 +227,9 @@ def test_no_domain_twin_or_keyword_twin_is_declared():
                             "time_step_s", "mesh_min_edge_m", "mesh_grade",
                             "bed_dem_resolution_m", "river_source",
                             "landcover_dataset", "rain_window",
-                            "sim_duration_hr"})
+                            "sim_duration_hr", "sim_duration_s",
+                            "storm_duration_hr", "antecedent_moisture",
+                            "design_storm_mm_per_hr"})
 
 
 _NODES = (np.array([[0.0, 0.0], [20.0, 0.0], [0.0, 10.0], [20.0, 10.0]]),
@@ -291,7 +294,7 @@ def rog_run(monkeypatch, tmp_path):
     monkeypatch.setattr("trid3nt_server.tools.cache.read_object_bytes_s3",
                         lambda _uri: b"")
 
-    async def _fill(rain_record=None, **params):
+    async def _fill(rain_record=None, duration_s=None, keywords=None, **params):
         from trid3nt_server.workflows.telemac.modules import fill
         from trid3nt_server.workflows.telemac.templates.rain_on_grid.rain_on_grid import (
             STEERING,
@@ -299,15 +302,18 @@ def rog_run(monkeypatch, tmp_path):
 
         mesh = _accepted_catchment_mesh()
         asked = {"curve_number": None, "steep_slope_correction": False,
-                 "antecedent_moisture": "normal", "design_storm_mm_per_hr": 25.0,
-                 "storm_duration_hr": 6.0, "rain_series_mm": None,
-                 "sim_duration_s": 43200.0, **params}
+                 "design_storm_mm_per_day": 600.0, "rain_series_mm": None,
+                 **params}
+        # THE CLOCK IS THE DECK'S: the settle is handed the seconds the deck
+        # states, the way the workflow's own stage reads them off it.
         settled = await asm_mod.open_water(
-            mesh=mesh, sim_duration_s=asked["sim_duration_s"],
+            mesh=mesh,
+            duration_s=(STEERING.ASSERTED["DURATION"] if duration_s is None
+                        else duration_s),
             geometry=STEERING.ASSERTED["GEOMETRY_FILE"],
             boundary=STEERING.ASSERTED["BOUNDARY_CONDITIONS_FILE"],
             result=STEERING.ASSERTED["RESULTS_FILE"], mesh_resolution_m=40.0)
-        sheet = fill(STEERING,
+        sheet = fill(STEERING, **(keywords or {}),
                      produced={"settled": settled, "mesh": mesh, "outlet": _OUTLET,
                                "landcover": {"uri": "s3://cache/lc.tif"},
                                # The record row is CONTEXT: where the analysis
@@ -380,7 +386,12 @@ async def test_the_infiltration_surface_is_read_off_the_land_cover_at_the_fill(r
     assert [laws[zones[str(i)]] for i in range(1, 5)] == ["0.200", "0.100", "0.040",
                                                           "0.050"]
     deck = dict(sheet.resolved())
+    # The LAW the zones are read under is the DECK's own statement - the
+    # composite writes the roughness column and the zones that index it, and a
+    # Manning table read under another law is a different run.
     assert deck["LAW OF BOTTOM FRICTION"] == 4
+    assert sheet.filled["LAW_OF_BOTTOM_FRICTION"].provenance.origin.value == \
+        "template"
     assert str(sheet.filled["FORMATTED_DATA_FILE_2"].provenance) == \
         "producer: infiltration"
     assert str(sheet.filled["ZONES_FILE"].provenance) == "producer: infiltration"
@@ -389,11 +400,11 @@ async def test_the_infiltration_surface_is_read_off_the_land_cover_at_the_fill(r
 @pytest.mark.asyncio
 async def test_a_uniform_curve_number_overrides_the_field_and_keeps_the_roughness(
         rog_run):
-    _settled, sheet = await rog_run(curve_number=70.0, antecedent_moisture="wet")
+    _settled, sheet = await rog_run(curve_number=70.0)
     cn_rows = sheet.files["rog_cn_map.dat"].splitlines()[1:]
     assert {row.split()[2] for row in cn_rows} == {"70.000"}
     assert "0.200" in sheet.files["rog_friction.tbl"]
-    assert dict(sheet.resolved())["ANTECEDENT MOISTURE CONDITIONS"] == 3
+    assert dict(sheet.resolved())["ANTECEDENT MOISTURE CONDITIONS"] == 2
 
 
 @pytest.mark.asyncio
@@ -406,7 +417,7 @@ async def test_a_measured_series_drives_the_run_through_the_block_file(rog_run):
     )
 
     settled, sheet = await rog_run(rain_series_mm=[3.0, 12.5, 0.0],
-                                   sim_duration_s=10800.0)
+                                   duration_s=10800.0)
     deck = dict(sheet.resolved())
     assert deck["FORTRAN FILE"] == RAINDEF3_USER_FORTRAN
     assert deck["FORMATTED DATA FILE 1"] == "rog_hyeto.txt"
@@ -430,7 +441,7 @@ async def test_the_published_record_drives_the_run_where_the_ask_states_none(rog
     """Two ways to state one storm: a series the caller states WINS, and where
     they state none the hours the record published drive the run."""
     _settled, sheet = await rog_run(rain_record={"precip_mm": [1.0, 4.0, 2.0]},
-                                    sim_duration_s=10800.0)
+                                    duration_s=10800.0)
     rows = [line.split() for line in sheet.files["rog_hyeto.txt"].splitlines()
             if line[:1].isdigit() and " " in line]
     assert rows[:3] == [["3600.000", "1.00000"], ["7200.000", "4.00000"],
@@ -438,10 +449,27 @@ async def test_the_published_record_drives_the_run_where_the_ask_states_none(rog
 
     _settled, stated = await rog_run(rain_record={"precip_mm": [1.0, 4.0, 2.0]},
                                      rain_series_mm=[9.0, 9.0],
-                                     sim_duration_s=10800.0)
+                                     duration_s=10800.0)
     rows = [line.split() for line in stated.files["rog_hyeto.txt"].splitlines()
             if line[:1].isdigit() and " " in line]
     assert rows[:2] == [["3600.000", "9.00000"], ["7200.000", "9.00000"]]
+
+
+@pytest.mark.asyncio
+async def test_the_deck_keywords_are_set_by_their_own_names(rog_run):
+    """What used to be a friendly-named Param in front of a keyword is now the
+    keyword: the user states ANTECEDENT MOISTURE CONDITIONS, DURATION and the
+    storm's window by the names the dictionary publishes, and the floor beats
+    the template's own opinion."""
+    _settled, sheet = await rog_run(keywords={
+        "ANTECEDENT_MOISTURE_CONDITIONS": 3,
+        "DURATION_OF_RAIN_OR_EVAPORATION_IN_HOURS": 2.0,
+        "DURATION": 7200.0})
+    deck = dict(sheet.resolved())
+    assert deck["ANTECEDENT MOISTURE CONDITIONS"] == 3
+    assert deck["DURATION OF RAIN OR EVAPORATION IN HOURS"] == 2.0
+    assert deck["DURATION"] == 7200.0
+    assert str(sheet.filled["DURATION"].provenance) == "user"
 
 
 @pytest.mark.asyncio

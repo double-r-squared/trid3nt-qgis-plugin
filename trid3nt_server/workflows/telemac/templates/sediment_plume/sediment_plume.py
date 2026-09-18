@@ -17,7 +17,7 @@ from trid3nt_server.workflows.runtime import (
     register_workflow,
     tool,
 )
-from trid3nt_server.inputs import point_arg, user_input
+from trid3nt_server.inputs import point_arg
 from trid3nt_server.inputs.instant import event_time
 from trid3nt_server.workflows.telemac.modules import (
     GAIA,
@@ -183,14 +183,18 @@ class STEERING(T2D):
     # are clamped after the flux was computed.
     MASS_BALANCE = True
 
-    # HOW OFTEN the result is written, in SOLVER STEPS. The engine's own
-    # default is every step, so an unwritten period is a frame per step: at
-    # the 14 m default edge the CFL step is 0.7 s, and this question's
-    # default 3600 s window is about 5,140 of them - one frame every
-    # 100 steps is 51 frames of the plume. A user who wants another
-    # cadence sets the keyword by its own name.
+    # HOW LONG the question is asked over, in SECONDS. One hour is what a finite
+    # pulse of a settling class needs to advect clear of the source, spread and
+    # drop the coarse end of itself onto the bed; shorter and nothing has landed
+    # yet. A user who wants a longer horizon sets the keyword by its own name.
+    DURATION = 3600.0
+
+    # HOW OFTEN the result is written, in SOLVER STEPS. The engine's own default
+    # is every step, so an unwritten period is a frame per step: at the 14 m
+    # default edge the CFL step is 0.7 s, and the 3600 s DURATION above is about
+    # 5,140 of them - one frame every 100 steps is 51 frames of the plume. A user
+    # who wants another cadence sets the keyword by its own name.
     GRAPHIC_PRINTOUT_PERIOD = 100
-    DURATION = P.sim_duration_s
 
     NUMBER_OF_TRACERS = 1
     #: The marker is called what the user called the release point, when a
@@ -216,21 +220,33 @@ class STEERING(T2D):
                         window_s=P.spill_duration_s,
                         until_s=Ref("settled.until_s"))]
 
-    #: The settling class itself: zero initial thickness, so nothing erodes and
-    #: only the injected pulse deposits. Zyserman-Fredsoe, out of the suspension
-    #: formulas GAIA offers, is the one written for the fine non-cohesive class
-    #: this plume carries; scheme 1 is the character-of-the-flow scheme a pulse
-    #: advected over a bed with no stock needs, where the dictionary's own
-    #: upwind pair is for a resident concentration field. The listing's own
-    #: sediment balance is what the net bed mass is read off.
-    coupling = [GAIA.suspended(geometry=_GEOMETRY, boundary=_BOUNDARY,
-                               d50_um=P.grain_size_um,
-                               concentration_mgl=P.sediment_concentration_mgl,
-                               transport_formula=3, advection_scheme=[1],
-                               mass_balance=True)]
+    #: The settling class itself, over a bed the composite lays at zero initial
+    #: thickness: nothing erodes and only the injected pulse can deposit.
+    coupling = [GAIA.suspended(
+        geometry=_GEOMETRY, boundary=_BOUNDARY,
+        concentration_mgl=P.sediment_concentration_mgl,
+        # ONE class, 200 um fine sand in the keyword's own metres: it settles
+        # within a few kilometres of the source, so the deposit lands inside the
+        # domain this question walks and the answer is a pattern rather than an
+        # export. A finer class sets this keyword by its own name.
+        CLASSES_SEDIMENT_DIAMETERS=[2.0e-4],
+        # Zyserman-Fredsoe: of the suspension formulae GAIA offers, the one
+        # written for the fine non-cohesive class this plume carries.
+        SUSPENSION_TRANSPORT_FORMULA_FOR_ALL_SANDS=3,
+        # The character-of-the-flow scheme a PULSE advected over a bed with no
+        # stock needs; the dictionary's own upwind pair is for a resident
+        # concentration field.
+        SCHEME_FOR_ADVECTION_OF_SUSPENDED_SEDIMENTS=[1],
+        # GAIA's own sediment closure, beside the water volume the carrier
+        # accounts for: the net bed mass this answer reads is a line of it.
+        MASS_BALANCE=True)]
 
-    wind = Wind(speed_mps=P.wind_speed_mps, from_deg=P.wind_direction_deg)
-    rain = Rain(mm_per_day=P.rainfall_mm_per_day, tracers=2)
+    #: CALM AND DRY: this question asks what the CURRENT does with the injected
+    #: class, so this deck states no surface stress and no distributed rain and
+    #: the settling is the flow's alone - a zero speed and an absent rate each
+    #: write nothing at all.
+    wind = Wind(speed_mps=0.0, from_deg=0.0)
+    rain = Rain(mm_per_day=None, tracers=2)
 
 
 #: What this question PLACES: the suspended class's domain-wide history as the
@@ -319,8 +335,6 @@ telemac_sediment_plume = register_workflow(
                   code="TELEMAC_PARAMS_INVALID"),
         event_time(),
         compute_class(),
-        user_input.bearing("wind_direction_deg", label="wind_direction_deg",
-                           code="TELEMAC_PARAMS_INVALID"),
     ),
     doc=DOC,
 )

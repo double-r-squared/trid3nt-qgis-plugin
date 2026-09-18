@@ -108,7 +108,9 @@ def test_the_surface_is_distributed_from_the_land_cover_and_the_unmapped_row(sur
     slots, files = surface()
     assert _cn_column(files) == [80.0, 89.0, 75.0]
     assert _manning_per_node(files) == [0.20, 0.10, 0.05]
-    assert slots["LAW_OF_BOTTOM_FRICTION"] == 4
+    # The LAW the zones are read under is the DECK's own statement, not this
+    # composite's: it writes the roughness file and the zones that index it.
+    assert "LAW_OF_BOTTOM_FRICTION" not in slots
     assert slots["ANTECEDENT_MOISTURE_CONDITIONS"] == 2
     assert slots["OPTION_FOR_INITIAL_ABSTRACTION_RATIO"] == 1
     assert slots["FORMATTED_DATA_FILE_2"] == "rog_cn_map.dat"

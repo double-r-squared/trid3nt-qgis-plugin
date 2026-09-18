@@ -194,12 +194,17 @@ class STEERING(T2D):
 
     # HOW OFTEN the result is written, in SOLVER STEPS. The engine's own
     # default is every step, so an unwritten period is a frame per step: at
-    # the 20 m default edge the CFL step is 1 s, and this question's
-    # default 604800 s window is about 604,800 of them - one frame every
-    # 12,000 steps is 50 frames of the week. A user who wants another
-    # cadence sets the keyword by its own name.
+    # the 20 m default edge the CFL step is 1 s, and the week stated below
+    # is about 604,800 of them - one frame every 12,000 steps is 50 frames
+    # of the week. A user who wants another cadence sets the keyword by its
+    # own name.
     GRAPHIC_PRINTOUT_PERIOD = 12000
-    DURATION = P.sim_duration_s
+
+    # SEVEN DAYS. A DIURNAL RANGE is a difference between a day and its own
+    # night, so the window has to hold whole days and enough of them that the
+    # warmest is not the first; the RAWS network keeps a fortnight, which is
+    # the ceiling the weather window can drive.
+    DURATION = 604800.0
 
     #: The carrier declares the temperature tracer ITSELF, so the water opens at
     #: a measured temperature and carries it in at every face that feeds it. The
@@ -226,9 +231,11 @@ class STEERING(T2D):
     #: station whose record can drive the run end to end is the one taken. Cloud
     #: cover and atmospheric pressure are not in what that network reports, so
     #: neither column is written and the engine reads its own CLOUD COVER and
-    #: VALUE OF ATMOSPHERIC PRESSURE, both of which the card shows.
+    #: VALUE OF ATMOSPHERIC PRESSURE, both of which the card shows. The engine
+    #: stops at an instant outside the table, so the file is written for the
+    #: DURATION this deck states rather than for a second number beside it.
     atmosphere = Atmosphere(observed=DATA.weather, at=Ref("station"),
-                            duration_s=P.sim_duration_s)
+                            duration_s=DURATION)
 
     #: The heat budget, on the engine's own calibration constants: this question
     #: asks what the published exchange gives under real weather, so the run

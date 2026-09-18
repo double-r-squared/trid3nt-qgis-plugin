@@ -2,20 +2,19 @@
 
 from __future__ import annotations
 
-from trid3nt_server.workflows.runtime import Accepts, Param, doors
+from trid3nt_server.workflows.runtime import Accepts, Param, doors, lever
 
 __all__ = ["ACCEPTS", "DEFAULT_BARRIER_WIDTH_M", "DEFAULT_GRADE",
-           "DEFAULT_MIN_EDGE_M", "DEFAULT_OPEN_DEPTH_M", "DOC", "PARAMS"]
+           "DEFAULT_OPEN_DEPTH_M", "DOC", "PARAMS"]
 
 #: What may be SUPPLIED to this template instead of built. A triangulation is
 #: the only mesh an elliptic mild-slope solve reads, and the boundary numbering
 #: the incident wave is stamped onto is the pair writer's own.
 ACCEPTS = Accepts(mesh=("unstructured_tri",))
 
-#: The finest triangle edge, where the shoreline and the structure are. The
-#: coarsest defaults to ten times it inside the mesher and the gradation op limits
-#: how fast one becomes the other.
-DEFAULT_MIN_EDGE_M: float = 8.0
+#: How fast the edge may grow out of the structure band. The coarsest edge
+#: defaults to ten times the finest inside the mesher, and this limits how fast
+#: one becomes the other.
 DEFAULT_GRADE: float = 0.2
 
 #: The WIDTH the mapped structure centreline is given, in metres. A survey maps a
@@ -42,21 +41,14 @@ class PARAMS:
     # breakwater is an opinion the question does not carry.
 
     # -- the incident wave -------------------------------------------------- #
-    wave_period_s = Param(
-        door=doors.SCENARIO, default=8.0, bounds=(1.0, 300.0),
-        units="s", consequence="physics",
-        desc="Incident monochromatic wave period - a PRESCRIBED demo forcing, "
-             "since no wave-forcing fetcher exists yet")
+    # Its PERIOD and its DIRECTION are keywords the deck states. What is left
+    # here is the pair ARTEMIS reads out of the BOUNDARY CONDITIONS FILE per
+    # node, which the dictionary carries no keyword for.
     wave_height_m = Param(
         door=doors.SCENARIO, default=1.0, bounds=(0.01, 10.0),
         units="m", consequence="physics",
         desc="Incident wave height H0 on the designated liquid boundary; Kd is "
              "measured against it, so it sets the scale of every narrated height")
-    wave_direction_deg = Param(
-        door=doors.SCENARIO, default=90.0,
-        bounds=(0.0, 360.0), units="deg", consequence="scenario",
-        desc="Incident wave direction in the TRIG convention (0 = +X east, "
-             "90 = +Y north) - not the compass bearing")
     reflection_coef = Param(
         door=doors.SCENARIO, default=0.5, bounds=(0.0, 1.0),
         consequence="physics",
@@ -65,9 +57,11 @@ class PARAMS:
              "solid face is the absorbing shore")
 
     # -- the domain (the granularity lever) --------------------------------- #
-    mesh_min_edge_m = Param(
-        door=doors.SCENARIO, default=DEFAULT_MIN_EDGE_M,
-        bounds=(2.0, 500.0), units="m", user_lever=True, consequence="numerical",
+    # The runtime's own granularity lever, restated for the default and the floor
+    # a phase-resolving solve needs: a harbour is read at the shoreline and
+    # around the structure, an order finer than an open-water domain.
+    mesh_resolution_m = lever(
+        "mesh_resolution_m", default=8.0, bounds=(2.0, 500.0),
         desc="Finest triangle edge, used at the shoreline and around the "
              "structure. THE granularity lever: a phase-resolving solve needs "
              "several nodes per WAVELENGTH and Kd peaks inside a diffraction "
@@ -94,29 +88,28 @@ class PARAMS:
         desc="How deep a boundary stretch must reach for it to be designated the "
              "OPEN edge the incident wave enters through; every stretch that "
              "reaches it opens")
-    compute_class = Param(
-        door=doors.CONSTANT, default="medium",
-        consequence="numerical", desc="Solve sizing class")
+    compute_class = lever("compute_class")
 
 
 DOC = dict(
     summary="The WAVE AGITATION (Kd = Hs/H0) a declared structure leaves inside a "
-            "harbour, a marina or any sheltered basin.",
+            "harbour, marina or sheltered basin.",
     routing=(
         "THE tool for \"does this breakwater shelter the berths\", \"how much does "
         "swell amplify inside this harbour\", \"wave agitation / tranquility in the "
-        "basin\", \"diffraction behind a breakwater\". ARTEMIS phase-RESOLVING "
-        "elliptic mild-slope (Berkhoff) over a mesh cut from the real shoreline, "
-        "the structure punched out conformally and the seaward stretches open: "
-        "diffraction fringes and standing waves are the answer, not an average. "
-        "THE STRUCTURE IS THE QUESTION and is REQUIRED: pass `structure=` a "
-        "breakwater layer (`fetch_osm_breakwaters`) or a drawn line. Give "
-        "`domain=` the water as an outline or a polygon layer, or `box=` a "
-        "rectangle the mapped coastline is cut into water for you."
+        "basin\". ARTEMIS phase-RESOLVING elliptic mild-slope (Berkhoff) over a "
+        "mesh cut from the real shoreline, the structure punched out and the "
+        "seaward stretches open: fringes and standing waves are the answer, not "
+        "an average. Wave: `WAVE PERIOD` 8 s, `DIRECTION OF WAVE PROPAGATION` 90 "
+        "deg (trig from +x) - set either by name. THE STRUCTURE IS THE "
+        "QUESTION and is REQUIRED: `structure=` a breakwater layer "
+        "(`fetch_osm_breakwaters`) or a drawn line. Give `domain=` the water as "
+        "an outline or a polygon layer, or `box=` a rectangle the "
+        "coastline cuts into water."
     ),
     not_for=(
         "the offshore SEA STATE or fetch-limited wind-wave growth; free-field "
-        "agitation with no structure in it; coastal storm-tide flooding; a "
+        "agitation with no structure; coastal storm-tide flooding; a "
         "tracer released into a river channel"
     ),
     params=PARAMS,

@@ -561,7 +561,10 @@ def test_a_permitted_discharge_holds_flat_for_the_whole_run():
     assert rows[3:] == ["0.000 8 0 2 250 0", "700.000 8 0 2 250 0"]
 
 
-def test_a_wind_from_the_north_drives_the_water_south():
+def test_a_wind_from_the_north_reaches_the_engines_own_speed_and_direction_pair():
+    """telemac2d carries SPEED AND DIRECTION OF WIND, so the composite hands it
+    the pair it was given; only the FROM-bearing rotation onto the keyword's own
+    trigonometric convention is ours, and it is this keyword's ingestion."""
     from trid3nt_server.workflows.telemac.modules.telemac2d import Wind
 
     slots, _ = T2D.COMPOSITES["wind"].expand(Wind(speed_mps=4.0, from_deg=0.0))
@@ -569,11 +572,12 @@ def test_a_wind_from_the_north_drives_the_water_south():
     # wind options reads it is not this composite's to say, and the one a
     # constant speed and direction are read under is the dictionary's own.
     assert slots["WIND"] is True and "OPTION_FOR_WIND" not in slots
-    assert round(slots["WIND_VELOCITY_ALONG_X"], 9) == 0.0
-    assert round(slots["WIND_VELOCITY_ALONG_Y"], 9) == -4.0
+    speed, direction = slots["SPEED_AND_DIRECTION_OF_WIND"]
+    # A wind FROM the north blows TOWARD 270 deg in the keyword's own reckoning.
+    assert speed == 4.0 and round(direction, 9) == 270.0
     assert "COEFFICIENT_OF_WIND_INFLUENCE" not in slots
     east, _ = T2D.COMPOSITES["wind"].expand(Wind(speed_mps=4.0, from_deg=270.0))
-    assert round(east["WIND_VELOCITY_ALONG_X"], 9) == 4.0
+    assert round(east["SPEED_AND_DIRECTION_OF_WIND"][1], 9) == 0.0
 
 
 def test_a_continuation_names_the_file_and_leaves_its_format_to_the_template():
@@ -717,22 +721,32 @@ _COUPLED_CALLS = {
          "PHOTOSYNTHESIS_P": 1.0, "VEGETAL_RESPIRATION_R": 0.06}),
     ("gaia", "bed"): (
         {"geometry": "a.slf", "boundary": "a.cli",
-         "gradation": [(63.0, 0.4), (200.0, 0.6)], "presets": {}, "d50_um": 120.0,
-         "thickness_m": 5.0, "formula": 1, "hiding_factor_formula": 1,
-         "morphological_factor": 10.0, "mass_balance": True},
+         "gradation": [(63.0, 0.4), (200.0, 0.6)], "presets": {},
+         "CLASSES_SEDIMENT_DIAMETERS": [120.0e-6],
+         "LAYERS_INITIAL_THICKNESS": [5.0],
+         "BED_LOAD_TRANSPORT_FORMULA_FOR_ALL_SANDS": 1,
+         "HIDING_FACTOR_FORMULA": 1,
+         "MORPHOLOGICAL_FACTOR": 10.0, "MASS_BALANCE": True},
         {"geometry": "b.slf", "boundary": "b.cli",
-         "gradation": None, "presets": {"x": [[1.0, 1.0]]}, "d50_um": 90.0,
-         "thickness_m": 1.5, "formula": 3,
-         "hiding_factor_formula": 0, "morphological_factor": 4.0,
-         "mass_balance": False}),
+         "gradation": None, "presets": {"x": [[1.0, 1.0]]},
+         "CLASSES_SEDIMENT_DIAMETERS": [90.0e-6],
+         "LAYERS_INITIAL_THICKNESS": [1.5],
+         "BED_LOAD_TRANSPORT_FORMULA_FOR_ALL_SANDS": 3,
+         "HIDING_FACTOR_FORMULA": 0, "MORPHOLOGICAL_FACTOR": 4.0,
+         "MASS_BALANCE": False}),
     ("gaia", "suspended"): (
-        {"geometry": "a.slf", "boundary": "a.cli", "d50_um": 30.0,
-         "concentration_mgl": 250.0, "transport_formula": 3,
-         "advection_scheme": [1], "mass_balance": True},
-        {"geometry": "b.slf", "boundary": "b.cli", "d50_um": 12.0,
-         "concentration_mgl": 750.0, "transport_formula": 2,
-         "advection_scheme": [5],
-         "mass_balance": False}),
+        {"geometry": "a.slf", "boundary": "a.cli",
+         "CLASSES_SEDIMENT_DIAMETERS": [30.0e-6],
+         "concentration_mgl": 250.0,
+         "SUSPENSION_TRANSPORT_FORMULA_FOR_ALL_SANDS": 3,
+         "SCHEME_FOR_ADVECTION_OF_SUSPENDED_SEDIMENTS": [1],
+         "MASS_BALANCE": True},
+        {"geometry": "b.slf", "boundary": "b.cli",
+         "CLASSES_SEDIMENT_DIAMETERS": [12.0e-6],
+         "concentration_mgl": 750.0,
+         "SUSPENSION_TRANSPORT_FORMULA_FOR_ALL_SANDS": 2,
+         "SCHEME_FOR_ADVECTION_OF_SUSPENDED_SEDIMENTS": [5],
+         "MASS_BALANCE": False}),
 }
 
 #: The two keywords a sediment body ARMS by being the body it is: a shape named
@@ -804,8 +818,11 @@ def _bed(**over):
     asked = dict(geometry="river.slf", boundary="river.cli", gradation=None,
                  presets={"graded_sand": [[100.0, 0.34], [400.0, 0.33],
                                           [1000.0, 0.33]]},
-                 d50_um=200.0, thickness_m=5.0, formula=1, hiding_factor_formula=1,
-                 morphological_factor=10.0, mass_balance=True)
+                 CLASSES_SEDIMENT_DIAMETERS=[200.0e-6],
+                 LAYERS_INITIAL_THICKNESS=[5.0],
+                 BED_LOAD_TRANSPORT_FORMULA_FOR_ALL_SANDS=1,
+                 HIDING_FACTOR_FORMULA=1,
+                 MORPHOLOGICAL_FACTOR=10.0, MASS_BALANCE=True)
     return fill(GAIA, **dict(GAIA.bed(**{**asked, **over})["slots"]))
 
 
@@ -833,7 +850,10 @@ def test_a_gradation_by_preset_name_or_too_few_classes_resolves_the_bed_shape():
     assert sum(by_name["CLASSES INITIAL FRACTION"]) == pytest.approx(1.0)
     single = dict(_bed(gradation=[[300.0, 1.0]]).resolved())
     assert single["CLASSES SEDIMENT DIAMETERS"] == pytest.approx([200.0e-6])
-    assert "HIDING FACTOR FORMULA" not in single
+    # The hiding factor is the DECK's statement now, not the composite's, so it
+    # stands whatever the gradation resolves to - a one-class bed hides nothing
+    # from itself and the formula is inert over it.
+    assert single["HIDING FACTOR FORMULA"] == 1
 
 
 def test_a_class_outside_the_formulae_s_window_refuses_by_size():
@@ -1369,9 +1389,10 @@ def test_the_serializer_is_the_only_module_that_writes_a_keyword_into_a_deck():
 
 
 def test_the_oil_module_is_one_value_the_deck_s_own_preset_and_point_expand():
-    """The preset named is one row of the table the deck carries; the settled
-    point and the release step are compiled into the routine; the write cadence
-    asked in seconds becomes steps at the run's own step."""
+    """The preset named is one row of the table the deck carries, and the settled
+    point and the release step are compiled into the routine. The float count and
+    their write cadence are the module's own keywords - the cadence in TIME
+    STEPS, as the dictionary states it - so the deck writes both by name."""
     from trid3nt_server.workflows.telemac.modules.telemac2d import Oil
 
     presets = {"diesel": dict(compo=[(0.6, 560.0), (0.4, 700.0)],
@@ -1380,11 +1401,11 @@ def test_the_oil_module_is_one_value_the_deck_s_own_preset_and_point_expand():
                               etal=1)}
     slots, files = T2D.COMPOSITES["oil"].expand(Oil(
         presets=presets, named="diesel", at=[512345.6, 4401234.4],
-        release_step=90, drogues=50, drogues_period_s=60.0, time_step_s=0.5))
+        release_step=90))
+    # The float COUNT and the period they are written on are the module's own
+    # keywords, stated by the deck; what the composite owns is the three files.
     assert slots == {"FORTRAN_FILE": "user_fortran",
                      "OIL_SPILL_STEERING_FILE": "oil_spill.txt",
-                     "MAXIMUM_NUMBER_OF_DROGUES": 50,
-                     "PRINTOUT_PERIOD_FOR_DROGUES": 120,
                      "ASCII_DROGUES_FILE": "drogues.txt"}
     assert files["oil_spill.txt"].splitlines()[:4] == [
         "DIESEL - trid3nt oil preset", "2", "FM_COMPO TB_COMPO", "0.6 560.0"]
@@ -1393,5 +1414,4 @@ def test_the_oil_module_is_one_value_the_deck_s_own_preset_and_point_expand():
     assert "COORD_X=512346.D0" in routine and "COORD_Y=4401234.D0" in routine
     with pytest.raises(ValueError, match="crude"):
         T2D.COMPOSITES["oil"].expand(Oil(
-            presets=presets, named="crude", at=[0.0, 0.0], release_step=1,
-            drogues=1, drogues_period_s=1.0, time_step_s=1.0))
+            presets=presets, named="crude", at=[0.0, 0.0], release_step=1))

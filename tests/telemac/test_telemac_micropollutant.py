@@ -144,14 +144,14 @@ def test_the_deck_releases_the_substance_dissolved_and_carries_the_sediment_in()
     assert steering.INITIAL_VALUES_OF_TRACERS[2:] == [0.0, 0.0, 0.0]
 
 
-def test_the_deck_states_the_partition_as_waqtel_s_own_keyword_names():
+def test_the_deck_states_the_process_and_leaves_its_constants_to_the_engine():
+    """The settling, the sorption equilibrium, the desorption kinetic and the
+    decay are WAQTEL's own keywords. This question is asked of a substance it is
+    never told the name of, so it states none of them and each engine default
+    stands."""
     (body,) = _template().STEERING.coupling
     assert body["process"] == PROCESS
-    assert {name: value.name for name, value in body["slots"].items()} == {
-        "SEDIMENT_SETTLING_VELOCITY": "settling_velocity_mps",
-        "COEFFICIENT_OF_DISTRIBUTION": "distribution_coefficient_m3kg",
-        "CONSTANT_OF_DESORPTION_KINETIC": "desorption_constant_per_s",
-        "EXPONENTIAL_DESINTEGRATION_CONSTANT": "decay_constant_per_s"}
+    assert dict(body["slots"]) == {}
 
 
 def test_the_question_is_read_where_the_user_put_the_monitoring_point():
@@ -183,16 +183,12 @@ def test_the_declared_params_and_the_plan_validate():
     validate_plan(workflow.plan, workflow.params, workflow.data)
     # Nothing fetches suspended sediment, so the sorbent is a STATED condition.
     assert resolved.value_of("ambient_spm_kg_m3") == 0.03
-    # Every constant the engine itself defaults is left unstated by the deck.
-    for name in ("settling_velocity_mps", "distribution_coefficient_m3kg",
-                 "desorption_constant_per_s", "decay_constant_per_s"):
-        assert resolved.value_of(name) is None
 
 
 def test_the_template_declares_none_of_the_runtime_s_own_rows():
     """The domain, the bed, the granularity, the moment and the sizing class are
-    the runtime's; the deck's roughness and cadence are keywords the dictionary
-    describes. What is left is the question's own."""
+    the runtime's; the deck's clock, roughness and cadence are keywords the
+    dictionary describes. What is left is the question's own."""
     from trid3nt_server.workflows.runtime.levers import LEVER_NAMES
 
     from trid3nt_server.workflows.runtime import param_rows
@@ -207,11 +203,13 @@ def test_the_template_declares_none_of_the_runtime_s_own_rows():
     seated = [name for name in LEVER_NAMES if name not in own]
     assert declared[-len(seated):] == seated
     for gone in ("location", "bbox", "river_geometry_uri", "reach_length_km",
-                 "friction_law", "friction_coefficient", "output_interval_min"):
+                 "friction_law", "friction_coefficient", "output_interval_min",
+                 "sim_duration_s"):
         assert gone not in declared
     steering = _template().STEERING
     assert steering.LAW_OF_BOTTOM_FRICTION == 3
     assert steering.FRICTION_COEFFICIENT == 33.0
+    assert steering.DURATION == 172800.0
 
 
 def test_the_three_slots_are_the_world_this_run_stands_on():

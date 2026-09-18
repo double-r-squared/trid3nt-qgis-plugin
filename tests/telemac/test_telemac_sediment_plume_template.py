@@ -156,15 +156,54 @@ def test_the_baseline_params_are_the_runtimes_and_are_not_restated():
 
 
 def test_the_question_keeps_only_its_own_inputs():
-    """What a settling-plume question asks: where the sediment went in, which
-    class it is and how concentrated. The flow that carries it is the inflow
-    run's value, which is the carrier ROW's, so it is no param of this one."""
+    """What a settling-plume question asks: where the sediment went in and how
+    concentrated. The flow that carries it is the inflow run's value, which is
+    the carrier ROW's, so it is no param of this one."""
     declared = {prm.name for prm in _workflow().params}
     assert "discharge_m3s" not in declared
-    assert {"release", "spill_fraction", "spill_duration_s",
-            "source_q_m3s", "grain_size_um", "sediment_concentration_mgl",
-            "injected_mass_kg", "wind_speed_mps", "wind_direction_deg",
-            "rainfall_mm_per_day", "sim_duration_s"} <= declared
+    assert {"release", "spill_fraction", "spill_duration_s", "source_q_m3s",
+            "sediment_concentration_mgl", "injected_mass_kg"} <= declared
+
+
+def test_no_param_restates_a_keyword_the_module_already_carries():
+    """The clock, the class, the transport and the two forcings are keywords the
+    dictionary describes, so the deck states each with its reason and the user
+    overrides it by the keyword's own name."""
+    declared = {prm.name for prm in _workflow().params}
+    assert not declared & {"sim_duration_s", "grain_size_um", "wind_speed_mps",
+                           "wind_direction_deg", "rainfall_mm_per_day"}
+
+
+def test_the_deck_states_the_window_the_settle_is_built_off():
+    """A stage settled at one clock under a deck written at another describes a
+    different run, so the seconds are the deck's ONE statement."""
+    assert template.STEERING.ASSERTED["DURATION"] == 3600.0
+    settled = [s for s in _workflow().plan.declared() if s.label == "settled"][0]
+    assert settled.kwargs["duration_s"] == 3600.0
+
+
+def test_the_settling_class_is_keywords_on_gaias_own_body():
+    """ONE class, the suspension formula and the advection scheme are GAIA's own
+    keywords; what the composite carries is the source concentration the
+    dictionary reads in kg/m3 and the question is asked in mg/L."""
+    body = template.STEERING.ASSERTED["coupling"][0]["slots"]
+    assert body["CLASSES_SEDIMENT_DIAMETERS"] == [2.0e-4]
+    assert body["SUSPENSION_TRANSPORT_FORMULA_FOR_ALL_SANDS"] == 3
+    assert body["SCHEME_FOR_ADVECTION_OF_SUSPENDED_SEDIMENTS"] == [1]
+    assert body["MASS_BALANCE"] is True
+    assert (body["suspension"]["concentration_mgl"].name
+            == "sediment_concentration_mgl")
+
+
+def test_a_calm_dry_deck_states_no_wind_and_no_rain_at_all():
+    """A zero speed and an absent rate write NOTHING: the settling this question
+    reads is the current's, and a caller who wants either sets the keyword."""
+    from trid3nt_server.workflows.telemac.modules import T2D
+
+    for name in ("wind", "rain"):
+        slots, _files = T2D.COMPOSITES[name].expand(
+            template.STEERING.ASSERTED[name])
+        assert slots == {}, name
 
 
 def test_the_injected_mass_is_derived_from_the_pulse_the_sheet_states():

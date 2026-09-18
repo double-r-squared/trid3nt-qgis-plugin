@@ -41,17 +41,17 @@ def _tmp_persistence(tmp_path, monkeypatch):
 
 # --- (1) the reach of an override, read off the plan ------------------------ #
 def test_the_cut_is_the_first_node_the_override_reaches():
-    """A rate the sheet reads leaves everything before the fill inheritable."""
+    """A load the sheet reads leaves everything before the fill inheritable."""
     from trid3nt_server.tools import TOOL_REGISTRY
 
     wf = TOOL_REGISTRY["telemac_do_sag"].fn.workflow
     labels = [n.label for n in _nodes(wf)]
 
-    cut, keep = reuse_plan(wf.plan, wf.data, ("k1_per_day",))
+    cut, keep = reuse_plan(wf.plan, wf.data, ("effluent_bod_mgl",))
     assert labels[cut] == "sheet"
     # the MESH itself, the open-channel hydraulics measured on it, the outfall
     # placed on it and the settled domain are all upstream of the fill, so a
-    # rate override inherits them
+    # load override inherits them
     assert labels[:cut] == ["mesh", "channel", "outfall", "settled"]
     # so is every DATA row the world is read through - the domain the reach
     # producer cut, the runs of its edge, the line down it, the published survey,
@@ -64,11 +64,11 @@ def test_the_cut_is_the_first_node_the_override_reaches():
 def test_a_mesh_override_cuts_earlier_than_a_physics_one():
     """The mesh is built BEFORE the sheet is filled - that is what lets the
     canvas show it while the run is still held - so re-asking the edge length
-    cuts further back than re-asking a rate the process block reads."""
+    cuts further back than re-asking a load the source block reads."""
     from trid3nt_server.tools import TOOL_REGISTRY
 
     wf = TOOL_REGISTRY["telemac_do_sag"].fn.workflow
-    physics, _ = reuse_plan(wf.plan, wf.data, ("k1_per_day",))
+    physics, _ = reuse_plan(wf.plan, wf.data, ("effluent_bod_mgl",))
     mesh, _ = reuse_plan(wf.plan, wf.data, ("mesh_resolution_m",))
     assert mesh < physics
     # the edge length is the MESH's ask, so the cut lands on the mesh step: the

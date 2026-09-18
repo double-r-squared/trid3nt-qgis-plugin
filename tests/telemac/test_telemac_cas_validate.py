@@ -130,8 +130,8 @@ def test_a_coupled_reach_submits_the_coupled_modules_steering_too(tmp_path,
 
     bed = fill(T2D, coupling=[GAIA.bed(
         geometry="river.slf", boundary="river.cli", gradation=None, presets={},
-        d50_um=200.0, thickness_m=5.0, formula=1, hiding_factor_formula=1,
-        morphological_factor=10.0,
-        mass_balance=True)])
+        CLASSES_SEDIMENT_DIAMETERS=[0.0002], LAYERS_INITIAL_THICKNESS=[5.0], BED_LOAD_TRANSPORT_FORMULA_FOR_ALL_SANDS=1, HIDING_FACTOR_FORMULA=1,
+        MORPHOLOGICAL_FACTOR=10.0,
+        MASS_BALANCE=True)])
     assert _submitted(monkeypatch, tmp_path / "sed", bed) == {
         "t2d_river.cas": "telemac2d", "gaia_domain.cas": "gaia"}

@@ -17,7 +17,7 @@ from trid3nt_server.workflows.runtime import (
     register_workflow,
     tool,
 )
-from trid3nt_server.inputs import point_arg, user_input
+from trid3nt_server.inputs import point_arg
 from trid3nt_server.inputs.instant import event_time
 from trid3nt_server.workflows.telemac.modules import (
     GAIA,
@@ -183,14 +183,20 @@ class STEERING(T2D):
     # are clamped after the flux was computed.
     MASS_BALANCE = True
 
+    # HOW LONG the question is asked over, in SECONDS. A mobile bed reads
+    # through the MORPHOLOGICAL FACTOR stated below, so this hour of hydraulics
+    # is ten hours of bed - long enough for a scour hole to cut and its material
+    # to re-deposit downstream. A user who wants another window sets the keyword
+    # by its own name.
+    DURATION = 3600.0
+
     # HOW OFTEN the result is written, in SOLVER STEPS. The engine's own
     # default is every step, so an unwritten period is a frame per step: at
-    # the 14 m default edge the CFL step is 0.7 s, and this question's
-    # default 3600 s window is about 5,140 of them - one frame every
-    # 100 steps is 51 frames of bed change. A user who wants another
-    # cadence sets the keyword by its own name.
+    # the 14 m default edge the CFL step is 0.7 s, and the 3600 s DURATION
+    # above is about 5,140 of them - one frame every 100 steps is 51 frames
+    # of bed change. A user who wants another cadence sets the keyword by its
+    # own name.
     GRAPHIC_PRINTOUT_PERIOD = 100
-    DURATION = P.sim_duration_s
 
     NUMBER_OF_TRACERS = 1
     #: The marker is called what the user called the release point, when a
@@ -219,19 +225,42 @@ class STEERING(T2D):
                         window_s=P.spill_duration_s,
                         until_s=Ref("settled.until_s"))]
 
-    #: The bed itself: one class or a mixture, bedload on, a real stock to scour
-    #: into. The classes of a MIXTURE shelter each other, and formula 1 is the engine's own Egiazaroff
-    #: hiding factor; a single class hides behind nothing and never reads it.
-    #: The listing's own sediment balance is what the net bed mass is read off.
+    #: The bed itself: bedload on, one class or a mixture, a real stock to scour
+    #: into. What the dictionary has no keyword for is the GRADATION - a named
+    #: mixture or the pairs one is written as - and its class table is expanded
+    #: LAST, so a mixture wins over the single class stated beside it.
     coupling = [GAIA.bed(geometry=_GEOMETRY, boundary=_BOUNDARY,
                          gradation=P.sediment_gradation, presets=GRADATION_PRESETS,
-                         d50_um=P.grain_size_um, thickness_m=P.bed_thickness_m,
-                         formula=P.bedload_formula, hiding_factor_formula=1,
-                         morphological_factor=P.morphological_factor,
-                         mass_balance=True)]
+                         # 200 um medium sand, in the metres the keyword reads:
+                         # the class the bed-load formulae are calibrated over,
+                         # and the whole bed where no gradation is given.
+                         CLASSES_SEDIMENT_DIAMETERS=[2.0e-4],
+                         # Five metres of erodible stock, deeper than any cut
+                         # this question makes, so the answer is never
+                         # stock-limited.
+                         LAYERS_INITIAL_THICKNESS=[5.0],
+                         # Meyer-Peter-Mueller, the bed-load law a sand bed under
+                         # a channel flow is screened with; the dictionary
+                         # publishes all ten choices.
+                         BED_LOAD_TRANSPORT_FORMULA_FOR_ALL_SANDS=1,
+                         # The classes of a MIXTURE shelter each other, and 1 is
+                         # the engine's own Egiazaroff hiding factor; a single
+                         # class hides behind nothing and never reads it.
+                         HIDING_FACTOR_FORMULA=1,
+                         # What makes a short window produce a readable bed
+                         # change: bed evolution is amplified ten times against
+                         # the hydraulic clock.
+                         MORPHOLOGICAL_FACTOR=10.0,
+                         # The listing's own sediment balance is what the net bed
+                         # mass is read off.
+                         MASS_BALANCE=True)]
 
-    wind = Wind(speed_mps=P.wind_speed_mps, from_deg=P.wind_direction_deg)
-    rain = Rain(mm_per_day=P.rainfall_mm_per_day, tracers=1)
+    #: CALM AND DRY: this question asks what the CARRIER FLOW does to the bed, so
+    #: this deck states no surface stress and no distributed rain - a zero speed
+    #: and an absent rate each write nothing at all. A user who wants either sets
+    #: SPEED AND DIRECTION OF WIND or RAIN OR EVAPORATION IN MM PER DAY by name.
+    wind = Wind(speed_mps=0.0, from_deg=0.0)
+    rain = Rain(mm_per_day=None, tracers=1)
 
 
 #: What this question PLACES: the marker's domain-wide history as the chart.
@@ -317,8 +346,6 @@ telemac_bed_scour = register_workflow(
                   code="TELEMAC_PARAMS_INVALID"),
         event_time(),
         compute_class(),
-        user_input.bearing("wind_direction_deg", label="wind_direction_deg",
-                           code="TELEMAC_PARAMS_INVALID"),
     ),
     doc=DOC,
 )

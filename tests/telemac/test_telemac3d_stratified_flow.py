@@ -130,8 +130,8 @@ def test_the_workflow_owns_the_stages_and_the_template_states_no_recipe():
     assert door.settle is None and door.owns_stages
     assert door.mesh is None and door.domain == ()
     assert not hasattr(module, "MESH")
-    assert door.levers == ("mesh_resolution_m", "sim_duration_s", "event_time",
-                           "compute_class", "vertical_frame")
+    assert door.levers == ("mesh_resolution_m", "event_time", "compute_class",
+                           "vertical_frame")
 
 
 def test_the_owned_mesh_paints_its_bed_and_takes_its_roles_from_the_domain():
@@ -169,16 +169,69 @@ def test_the_column_and_the_free_surface_come_from_one_measurement():
 
 def test_the_clock_is_the_settled_domains_and_the_duration_the_decks():
     """The step follows the edge the accepted mesh was BUILT at; the window is the
-    deck's own DURATION, so the engine counts the steps."""
+    deck's own DURATION in seconds, so the engine counts the steps and the settle
+    reads the same number the deck was written for."""
     from trid3nt_server.workflows.runtime import Ref
 
-    asserted = _module().STEERING.ASSERTED
+    module = _module()
+    asserted = module.STEERING.ASSERTED
     assert asserted["TIME_STEP"] == Ref("settled.time_step_s")
     # The CADENCE is the template's own opinion of the module's own keyword: in
     # steps, stated, because the dictionary's default writes every step.
     assert asserted["GRAPHIC_PRINTOUT_PERIOD"] == 360
-    assert asserted["DURATION"].name == "sim_duration_s"
+    assert asserted["DURATION"] == 18000.0
     assert "NUMBER_OF_TIME_STEPS" not in asserted
+    settled = next(step for step in _workflow().plan.steps
+                   if step.name == "settled")
+    assert settled.kwargs["duration_s"] == 18000.0
+
+
+def test_the_plane_count_is_the_modules_keyword_and_the_planner_reads_it():
+    """The plane count is NUMBER OF HORIZONTAL LEVELS, and the grid plan and the
+    initial column READ that keyword rather than a second number beside it - so a
+    user who states another count is planned on the column they are solved over."""
+    from trid3nt_server.workflows.runtime import Ref
+
+    asserted = _module().STEERING.ASSERTED
+    assert asserted["NUMBER_OF_HORIZONTAL_LEVELS"] == 13
+    for slot in ("vertical_grid", "column"):
+        assert asserted[slot]["levels"] == Ref("NUMBER_OF_HORIZONTAL_LEVELS")
+
+
+def test_a_stated_plane_count_replans_the_grid_and_the_initial_column():
+    """The fill binds the composites' read to whatever the sheet holds, so the
+    stretch the grid achieves follows the keyword whether the deck stated the
+    count or the user did."""
+    from trid3nt_server.workflows.telemac.modules.sheet import fill
+
+    produced = {"settled": {"title": "basin", "time_step_s": 1.0,
+                            "level_m": 100.0, "max_depth_m": 120.0}}
+    params = {"thermocline_depth_m": 8.0, "warm_temp_c": 25.0,
+              "cold_temp_c": 15.0}
+    body = _module().STEERING
+    stated = fill(body, produced=produced, params=params)
+    finer = fill(body, produced=produced, params=params,
+                 NUMBER_OF_HORIZONTAL_LEVELS=25)
+    assert dict(stated.resolved())["NUMBER OF HORIZONTAL LEVELS"] == 13
+    assert dict(finer.resolved())["NUMBER OF HORIZONTAL LEVELS"] == 25
+    assert (dict(stated.resolved())["MESH STRETCHING COEFFICIENTS"]
+            != dict(finer.resolved())["MESH STRETCHING COEFFICIENTS"])
+
+
+def test_the_deck_is_calm_and_states_no_wind_keyword_at_all():
+    """CALM is the half of the pair the thermocline survives in, and a zero speed
+    writes nothing: TELEMAC-3D has no combined speed-and-direction keyword, so the
+    wind a user asks for is the engine's own components, set by their names."""
+    from trid3nt_server.workflows.telemac.modules.sheet import fill
+
+    asserted = _module().STEERING.ASSERTED
+    assert asserted["wind"]["speed_mps"] == 0.0
+    produced = {"settled": {"title": "basin", "time_step_s": 1.0,
+                            "level_m": 100.0, "max_depth_m": 40.0}}
+    sheet = fill(_module().STEERING, produced=produced,
+                 params={"thermocline_depth_m": 8.0, "warm_temp_c": 25.0,
+                         "cold_temp_c": 15.0})
+    assert [name for name in dict(sheet.resolved()) if "WIND" in name] == []
 
 
 # -- what the template no longer declares -------------------------------------- #
@@ -186,8 +239,7 @@ def test_the_clock_is_the_settled_domains_and_the_duration_the_decks():
 #: What this question asks that nothing else answers for it. Everything else is
 #: the dictionary's keyword or the runtime's lever.
 _OWN_PARAMS = {"seed", "warm_temp_c", "cold_temp_c", "thermocline_depth_m",
-               "wind_speed_mps", "wind_direction_deg", "levels",
-               "mesh_resolution_m", "sim_duration_s"}
+               "mesh_resolution_m"}
 
 
 def test_the_template_declares_only_its_own_question_and_one_redefaulted_lever():
@@ -206,7 +258,9 @@ def test_the_template_declares_only_its_own_question_and_one_redefaulted_lever()
 
 @pytest.mark.parametrize("gone", ["location", "bbox", "mesh_min_edge_m",
                                   "time_step_s", "output_interval_min",
-                                  "sim_duration_hours",
+                                  "sim_duration_hours", "sim_duration_s",
+                                  "levels", "wind_speed_mps",
+                                  "wind_direction_deg",
                                   "tracer_advection_scheme",
                                   "max_advection_iterations"])
 def test_the_dissolved_params_are_gone(gone):

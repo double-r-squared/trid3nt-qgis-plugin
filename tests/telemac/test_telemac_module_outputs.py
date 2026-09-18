@@ -231,9 +231,9 @@ def test_a_coupled_module_states_the_tracers_it_appends_and_its_own_table():
                      "liquid_boundary_order": [], "liquid_boundary_prescribes": [],
                      "inflow_q_m3s": 1.0, "outflow_stage_m": 0.0}, tracers=[]),
                  coupling=[GAIA.suspended(
-                     geometry="a.slf", boundary="a.cli", mass_balance=True,
-                     d50_um=30.0, concentration_mgl=250.0, transport_formula=3,
-                     advection_scheme=[1])])
+                     geometry="a.slf", boundary="a.cli", MASS_BALANCE=True,
+                     CLASSES_SEDIMENT_DIAMETERS=[3e-05], concentration_mgl=250.0, SUSPENSION_TRANSPORT_FORMULA_FOR_ALL_SANDS=3,
+                     SCHEME_FOR_ADVECTION_OF_SUSPENDED_SEDIMENTS=[1])])
     assert [row.name for row in sheet.tracers] == ["MARKER", "NCOH SEDIMENT"]
     rows = sheet.published()
     # The bed itself is the carrier's row; GAIA rows what the sediment adds.
@@ -255,10 +255,10 @@ def test_the_card_carries_every_variable_each_deck_writes():
     sheet = fill(T2D, NUMBER_OF_TRACERS=1,
                  NAMES_OF_TRACERS=["MARKER          MG/L"],
                  coupling=[GAIA.bed(
-                     geometry="a.slf", boundary="a.cli", mass_balance=True,
-                     gradation=None, presets={}, d50_um=200.0, thickness_m=5.0,
-                     formula=1, hiding_factor_formula=1,
-                     morphological_factor=10.0)])
+                     geometry="a.slf", boundary="a.cli", MASS_BALANCE=True,
+                     gradation=None, presets={}, CLASSES_SEDIMENT_DIAMETERS=[0.0002], LAYERS_INITIAL_THICKNESS=[5.0],
+                     BED_LOAD_TRANSPORT_FORMULA_FOR_ALL_SANDS=1, HIDING_FACTOR_FORMULA=1,
+                     MORPHOLOGICAL_FACTOR=10.0)])
     rows = {row.name: row for row in card_rows(sheet)}
     assert rows["telemac2d.VARIABLES_FOR_GRAPHIC_PRINTOUTS"].value == [
         "VELOCITY U", "VELOCITY V", "WATER DEPTH", "FREE SURFACE", "BOTTOM",
@@ -293,9 +293,9 @@ def test_the_published_order_is_the_table_order_across_host_and_coupled(
                          "CUMUL BED EVOL": [[0.0] * 5,
                                             [0.1, 0.2, 0.0, -0.1, 0.05]]})
     sheet = fill(T2D, coupling=[GAIA.bed(
-        geometry="a.slf", boundary="a.cli", mass_balance=True, gradation=None,
-        presets={}, d50_um=200.0, thickness_m=5.0, formula=1,
-        hiding_factor_formula=1, morphological_factor=10.0)])
+        geometry="a.slf", boundary="a.cli", MASS_BALANCE=True, gradation=None,
+        presets={}, CLASSES_SEDIMENT_DIAMETERS=[0.0002], LAYERS_INITIAL_THICKNESS=[5.0], BED_LOAD_TRANSPORT_FORMULA_FOR_ALL_SANDS=1,
+        HIDING_FACTOR_FORMULA=1, MORPHOLOGICAL_FACTOR=10.0)])
     run = {"run_id": "RID", "utm_epsg": 32610, "result_basename": "r2d.slf",
            "module": "telemac2d", "name": "reach",
            "started_at": "2026-01-01T00:00:00+00:00",
@@ -323,9 +323,9 @@ def test_the_card_carries_a_generated_keyword_once_per_deck():
     from trid3nt_server.workflows.telemac.workflow import card_rows
 
     sheet = fill(T2D, coupling=[GAIA.bed(
-        geometry="a.slf", boundary="a.cli", mass_balance=True, gradation=None,
-        presets={}, d50_um=200.0, thickness_m=5.0, formula=1,
-        hiding_factor_formula=1, morphological_factor=10.0)])
+        geometry="a.slf", boundary="a.cli", MASS_BALANCE=True, gradation=None,
+        presets={}, CLASSES_SEDIMENT_DIAMETERS=[0.0002], LAYERS_INITIAL_THICKNESS=[5.0], BED_LOAD_TRANSPORT_FORMULA_FOR_ALL_SANDS=1,
+        HIDING_FACTOR_FORMULA=1, MORPHOLOGICAL_FACTOR=10.0)])
     printouts = [row for row in card_rows(sheet)
                  if row.name.endswith(".VARIABLES_FOR_GRAPHIC_PRINTOUTS")
                  or row.name == "VARIABLES_FOR_GRAPHIC_PRINTOUTS"]

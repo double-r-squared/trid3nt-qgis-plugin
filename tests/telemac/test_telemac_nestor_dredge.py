@@ -36,9 +36,9 @@ def _area(label: str) -> dict[str, Any]:
 
 def _sheet(*actions: Any, reference: Any = None):
     return fill(GAIA, **dict(GAIA.bed(
-        geometry="a.slf", boundary="a.cli", mass_balance=True,
-        gradation=None, presets={}, d50_um=200.0, thickness_m=5.0, formula=1,
-        hiding_factor_formula=1, morphological_factor=10.0,
+        geometry="a.slf", boundary="a.cli", MASS_BALANCE=True,
+        gradation=None, presets={}, CLASSES_SEDIMENT_DIAMETERS=[0.0002], LAYERS_INITIAL_THICKNESS=[5.0], BED_LOAD_TRANSPORT_FORMULA_FOR_ALL_SANDS=1,
+        HIDING_FACTOR_FORMULA=1, MORPHOLOGICAL_FACTOR=10.0,
         dredging=Dredging(actions=list(actions),
                           reference=_PROFILES if reference is None else reference,
                           origin=_ORIGIN))["slots"]))
@@ -165,9 +165,9 @@ def test_a_dredge_over_a_bed_with_no_stock_refuses_by_name():
     """A suspension is one settling class over a bed of zero thickness: there is
     nothing in it to dig and nowhere the dumped material would be accounted."""
     with pytest.raises(SlotRefused, match="nothing to dig"):
-        GAIA.suspended(geometry="a.slf", boundary="a.cli", mass_balance=True,
-                       d50_um=30.0, concentration_mgl=250.0,
-                       transport_formula=3, advection_scheme=[1],
+        GAIA.suspended(geometry="a.slf", boundary="a.cli", MASS_BALANCE=True,
+                       CLASSES_SEDIMENT_DIAMETERS=[3e-05], concentration_mgl=250.0,
+                       SUSPENSION_TRANSPORT_FORMULA_FOR_ALL_SANDS=3, SCHEME_FOR_ADVECTION_OF_SUSPENDED_SEDIMENTS=[1],
                        dredging=Dredging(
                            actions=[], reference=_PROFILES, origin=_ORIGIN))
 

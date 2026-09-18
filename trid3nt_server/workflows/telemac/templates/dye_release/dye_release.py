@@ -16,7 +16,7 @@ from trid3nt_server.workflows.runtime import (
     register_workflow,
     tool,
 )
-from trid3nt_server.inputs import point_arg, user_input
+from trid3nt_server.inputs import point_arg
 from trid3nt_server.inputs.instant import event_time
 from trid3nt_server.workflows.telemac.modules import (
     T2D,
@@ -182,14 +182,18 @@ class STEERING(T2D):
     #: the only one asked to write this.
     RESTART_FILE = _RESTART
 
-    # HOW OFTEN the result is written, in SOLVER STEPS. The engine's own
-    # default is every step, so an unwritten period is a frame per step: at
-    # the 14 m default edge the CFL step is 0.7 s, and this question's
-    # default 3600 s window is about 5,140 of them - one frame every
-    # 100 steps is 51 frames of plume. A user who wants another
-    # cadence sets the keyword by its own name.
+    # HOW LONG the question is asked over, in SECONDS. One hour is the window a
+    # finite pulse needs to advect clear of the source and dilute into a plume
+    # whose reach can be measured; shorter and the slug is still at the outfall.
+    # A user who wants a longer horizon sets the keyword by its own name.
+    DURATION = 3600.0
+
+    # HOW OFTEN the result is written, in SOLVER STEPS. The engine's own default
+    # is every step, so an unwritten period is a frame per step: at the 14 m
+    # default edge the CFL step is 0.7 s, and the 3600 s DURATION above is about
+    # 5,140 of them - one frame every 100 steps is 51 frames of plume. A user
+    # who wants another cadence sets the keyword by its own name.
     GRAPHIC_PRINTOUT_PERIOD = 100
-    DURATION = P.sim_duration_s
 
     NUMBER_OF_TRACERS = 1
     #: The tracer is called what the user called the release point, when a
@@ -223,17 +227,18 @@ class STEERING(T2D):
     #: single-precision default would read a double file as a single one.
     PREVIOUS_COMPUTATION_FILE_FORMAT = "SERAFIND"
 
-    #: The three optional forcings. Each states NOTHING when it was given
-    #: nothing: no wind speed is no wind, no stated rate is no rain, and a run
-    #: that continues nothing states its own initial conditions.
-    wind = Wind(speed_mps=P.wind_speed_mps, from_deg=P.wind_direction_deg)
-    rain = Rain(mm_per_day=P.rainfall_mm_per_day, tracers=1)
+    #: CALM AND DRY: this question asks what the CURRENT does with the slug, so
+    #: this deck states no surface stress and no distributed rain and the answer
+    #: is the flow's alone - a zero speed and an absent rate each write nothing
+    #: at all. A run that continues nothing states its own initial conditions.
+    wind = Wind(speed_mps=0.0, from_deg=0.0)
+    rain = Rain(mm_per_day=None, tracers=1)
     continue_from = Continuation(previous=Ref("settled.continue_from"))
     #: First-order degradation on the same tracer - no new tracer - when a
-    #: decaying substance was named or a half-life stated; nothing otherwise.
+    #: decaying substance was named; nothing otherwise. This deck states no
+    #: die-off of its own: the substance word picks its narrated preset.
     coupling = [WAQTEL.degradation(substance=P.decaying_substance,
-                                   half_life_hours=P.decay_half_life_hours,
-                                   rate_per_day=P.decay_rate_per_day,
+                                   half_life_hours=None, rate_per_day=None,
                                    presets=DECAY_PRESETS)]
 
 
@@ -321,8 +326,6 @@ telemac_dye_release = register_workflow(
                   code="TELEMAC_PARAMS_INVALID"),
         event_time(),
         compute_class(),
-        user_input.bearing("wind_direction_deg", label="wind_direction_deg",
-                           code="TELEMAC_PARAMS_INVALID"),
     ),
     doc=DOC,
 )

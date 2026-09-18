@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from trid3nt_server.inputs import Point
-from trid3nt_server.workflows.runtime import Accepts, Param, doors, lever
+from trid3nt_server.workflows.runtime import Accepts, Param, doors
 
 __all__ = ["ACCEPTS", "DOC", "OIL_PRESETS", "PARAMS"]
 
@@ -39,10 +39,11 @@ ACCEPTS = Accepts(mesh=("unstructured_tri",), release=("point",))
 
 class PARAMS:
     """What only an oil-slick question asks: where the oil enters the water,
-    which oil it is, how much of it dissolves, how the slick is drawn, and the
-    flow that carries it. The domain, the bed, its boundary runs and the
-    granularity are the runtime's own slots and levers, and the deck's
-    roughness and cadence are keywords the module's dictionary describes."""
+    which oil it is, and how much of it dissolves. The domain, the bed, its
+    boundary runs and the granularity are the runtime's own slots and levers,
+    and the deck's clock, roughness, cadence, float count, track cadence, wind
+    and rain are keywords the module's dictionary describes and the deck states
+    by their own names."""
 
     release = Param(
         door=doors.USER, optional=True, user_lever=True,
@@ -52,7 +53,8 @@ class PARAMS:
             "built over; the slick's drift is measured from there"),
         desc="Where the oil enters the water, as a Point: the pick's "
              "{coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a "
-             "point layer, or a place name. Its name becomes the tracer's name, "
+             "point layer. Geocode a place name first. Its name becomes the "
+             "tracer's name, "
              "and on a river with no domain supplied it is also the seed the "
              "reach is walked downstream from")
 
@@ -85,16 +87,6 @@ class PARAMS:
              "light_crude, gasoline and petrol as diesel, bunker as heavy_fuel")
 
     # -- the slick ---------------------------------------------------------- #
-    n_drogues = Param(
-        door=doors.SCENARIO, default=100, bounds=(1.0, 20000.0), type=int,
-        user_lever=True, consequence="scenario",
-        desc="How many floating particles the module tracks; the slick is drawn "
-             "from their positions, so a coarse count draws a coarse slick")
-    drogues_period_s = Param(
-        door=doors.SCENARIO, default=60.0, bounds=(1.0, 3600.0), units="s",
-        consequence="numerical",
-        desc="How often the particle positions are written; it converts to a "
-             "count of solver steps at the run's own timestep")
     oil_release_step = Param(
         door=doors.SCENARIO, default=600, bounds=(1.0, 1.0e6), type=int,
         consequence="scenario",
@@ -102,46 +94,26 @@ class PARAMS:
              "module's own release routine; it lets the flow field establish "
              "before the slick is put on it")
 
-    # -- the forcings this question adds ------------------------------------ #
-    wind_speed_mps = Param(
-        door=doors.SCENARIO, default=0.0, bounds=(0.0, 60.0),
-        units="m/s", consequence="scenario",
-        desc="Sustained wind driving a surface wind-stress term; 0 = no wind")
-    wind_direction_deg = Param(
-        door=doors.SCENARIO, default=0.0, bounds=(0.0, 360.0),
-        units="deg", consequence="scenario",
-        desc="Compass bearing the wind blows FROM (0=N, 90=E); only read when "
-             "wind_speed_mps > 0")
-    # ONE signed rate, because the keyword it writes is signed: a net loss is a
-    # negative rain rather than a second value subtracted from this one.
-    rainfall_mm_per_day = Param(
-        door=doors.USER, optional=True, bounds=(-50.0, 2000.0),
-        units="mm/day", consequence="scenario",
-        desc="NET distributed rainfall applied at every wet node, independent "
-             "of the inflow hydrograph; negative is evaporation")
-
-    # -- the clock ---------------------------------------------------------- #
-    sim_duration_s = lever("sim_duration_s", bounds=(600.0, 14400.0))
-
 
 DOC = dict(
     summary="An OIL SLICK released onto a body of surface water: floating particles plus the dissolved fraction.",
     routing=(
         "THE tool for \"an oil spill - where does the slick go\": a barge, "
         "pipeline, terminal or vessel release of crude, diesel, gasoline or "
-        "heavy fuel onto water. TELEMAC-2D over the domain the run solves on - "
-        "a reach walked from the release point, a harbour or lake drawn on the "
-        "canvas, or a supplied polygon - with the engine's own oil-spill module "
-        "riding on the solve: floating particles are tracked and drawn as the "
-        "slick, and the dissolved fraction is advected as the water's tracer. "
-        "Give `release` as a place, a pick or a pair, or supply `domain`."
+        "heavy fuel onto water. TELEMAC-2D over a reach walked from the "
+        "release, a harbour or lake you draw, or a polygon you supply, with the "
+        "engine's oil-spill module on the solve: the floats draw the slick and "
+        "the dissolved fraction advects as a tracer. Give "
+        "`release` as a pick or a pair, or supply `domain`. "
+        "Deck: DURATION 3600 s, MAXIMUM NUMBER OF DROGUES 100, "
+        "PRINTOUT PERIOD FOR DROGUES 60, no WIND and no RAIN OR EVAPORATION."
     ),
     not_for=(
         "a conservative dye or contaminant plume with no slick "
         "(`telemac_dye_release`); bed SCOUR (`telemac_bed_scour`); a "
         "SUSPENDED sediment plume (`telemac_sediment_plume`); "
         "dissolved-oxygen sag (`telemac_do_sag`). Weathering, evaporation and "
-        "beaching are the module's own and are not calibrated here"
+        "beaching are the module's own, uncalibrated here"
     ),
     params=PARAMS,
     controls=(
