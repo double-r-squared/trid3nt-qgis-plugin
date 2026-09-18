@@ -530,6 +530,12 @@ package DataSeam {
         */
     }
 
+    part unreadContextAsk : ContextRow {
+        doc /*
+        code: trid3nt_server/workflows/runtime/interpreter.py
+        */
+    }
+
     part bedResultModel : BedResultModel {
         doc /*
         code: contracts/trid3nt_contracts/execution.py
@@ -889,6 +895,11 @@ package DataSeam {
         A tail read off a row that is WHOLLY ABSENT reads as nothing, exactly as
         a field that is present and empty does - otherwise the keyword reading a
         context row refuses the very run the row was declared to let continue.
+
+        THE SENTENCE IS THE PRODUCT, so a context row no step and no sibling row
+        dereferences is asked all the same, before the run works: a row declared
+        to say what the run stood beside and then never asked says nothing at
+        all. Every other declared artifact nothing reads still costs no fetch.
         */
     }
 
@@ -1171,6 +1182,9 @@ package DataSeam {
         "tests/telemac/test_agitation_template.py::test_the_mesh_is_cut_from_the_domain_polygon_and_not_from_a_box";
 
     satisfy requirement AContextRowsAbsenceContinuesTheRun by contextRow;
+    satisfy requirement AContextRowsAbsenceContinuesTheRun by unreadContextAsk;
+    verify requirement AContextRowsAbsenceContinuesTheRun by
+        "tests/runtime/test_domain_bed_and_context_slots.py::test_a_context_row_no_step_reads_is_asked_all_the_same";
     verify requirement AContextRowsAbsenceContinuesTheRun by
         "tests/runtime/test_domain_bed_and_context_slots.py::test_a_context_rows_absence_continues_the_run_and_says_so";
     verify requirement AContextRowsAbsenceContinuesTheRun by

@@ -117,6 +117,36 @@ def test_a_context_rows_absence_continues_the_run_and_says_so(monkeypatch):
         "no sample near this domain; the stated value stands (WQP_NO_SITES)"]
 
 
+def test_a_context_row_no_step_reads_is_asked_all_the_same(monkeypatch):
+    """The sentence IS the product: a context row no step and no sibling row
+    dereferences is still asked, while a plain row nothing reads costs no fetch."""
+    from trid3nt_server.workflows.runtime import interpreter
+
+    class DATA:
+        read = Data(tool("fetch_ehydro_surveys")).context("no survey here")
+        unread = Data(tool("fetch_usgs_water_quality")).context(
+            "no water-quality site near this domain; the stated value stands")
+        plain = Data(tool("fetch_dem"))
+
+    asked: list[str] = []
+
+    async def _asked(env, producer, label):
+        asked.append(producer.runner)
+        raise RuntimeError("WQP_NO_SITES")
+
+    monkeypatch.setattr(interpreter, "_walk_ladder", _asked)
+    rows = {row.name: row for row in data_rows(DATA)}
+    env = interpreter._Env(params=None, data=rows, results={})
+    node = interpreter.PlanNode(index=0, label="step", runner="r", kind="step",
+                                step=Step(runner="r",
+                                          kwargs={"survey": Ref("read")}))
+    asyncio.run(interpreter._ask_unread_context(env, (node,)))
+    assert asked == ["fetch_usgs_water_quality"]
+    assert env.absences == [
+        "no water-quality site near this domain; the stated value stands "
+        "(WQP_NO_SITES)"]
+
+
 #: What a reach producer returns: the section it cut, and the two faces it was
 #: cut between, each row naming which stretch it is.
 _REACH = {"type": "FeatureCollection", "features": [

@@ -146,6 +146,7 @@ async def interpret(
     first_step = next((n.index for n in nodes if n.kind == "step"), None)
     self_reviewed = any(n.step.self_gating for n in nodes)
     try:
+        await _ask_unread_context(env, nodes)
         for node in nodes:
             if node.index == first_step:
                 # The invented-physics floor fires before the FIRST step, not the
@@ -288,10 +289,28 @@ def _data_step_label(name: str) -> str:
     return f"data:{name}"
 
 
+async def _ask_unread_context(env: _Env, nodes: Sequence[PlanNode]) -> None:
+    """Ask every CONTEXT row nothing in this plan reads, before the work starts.
+
+    A context row's product is the SENTENCE - the reading the run opened beside,
+    or the absence of one - so a row no step and no other row dereferences is
+    still asked, and says what it found either way."""
+    reads = {ref.root for node in nodes
+             for value in (node.step.kwargs, node.spec)
+             for ref in declared_reads(value, Ref)}
+    for row in env.data.values():
+        reads.update(ref.root
+                     for ref in declared_reads(dict(row.producer_kwargs), Ref))
+    for name, row in env.data.items():
+        if row.is_context and name not in reads:
+            env.artifacts[name] = await _produce(env, row)
+
+
 async def _produce(env: _Env, decl: DataDecl) -> Any:
     """Satisfy one declared artifact, ON DEMAND - when a step that reads it runs.
 
-    A declared artifact nothing reads costs no fetch."""
+    A declared artifact nothing reads costs no fetch; a CONTEXT row is asked
+    all the same, because the sentence it states IS its product."""
     handed_in = env.supplied.get(decl.name)
     if handed_in is not None:
         _validate_supplied(env, decl, handed_in, decl.supplied_validate)
