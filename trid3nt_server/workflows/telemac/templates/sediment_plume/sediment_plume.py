@@ -228,7 +228,10 @@ class STEERING(T2D):
         # ONE class, 200 um fine sand in the keyword's own metres: it settles
         # within a few kilometres of the source, so the deposit lands inside the
         # domain this question walks and the answer is a pattern rather than an
-        # export. A finer class sets this keyword by its own name.
+        # export. GAIA is a COUPLED body and the keywords floor reaches only
+        # the carrier's own dictionary, so nothing on the call can state a
+        # finer class: this diameter is the deck's fixed opinion until a
+        # coupled module's keywords have a surface of their own.
         CLASSES_SEDIMENT_DIAMETERS=[2.0e-4],
         # Zyserman-Fredsoe: of the suspension formulae GAIA offers, the one
         # written for the fine non-cohesive class this plume carries.

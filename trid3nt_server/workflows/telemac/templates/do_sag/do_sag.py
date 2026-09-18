@@ -63,8 +63,9 @@ _FRICTION_COEFFICIENT = 33.0
 #: was solved at. The deoxygenation rate a documented shallow stream carries, a
 #: reaeration rate three times it, and the freshwater saturation the
 #: Elmore-Hayes relation gives at 20 C - the standard Streeter-Phelps condition
-#: this question is asked under. A user who knows the water sets any of them by
-#: the keyword's own name.
+#: this question is asked under. WAQTEL is a COUPLED body and the keywords floor
+#: reaches only the carrier's own dictionary, so these are the deck's fixed
+#: opinion until a coupled module's keywords have a surface of their own.
 _WATER_TEMPERATURE_C = 20.0
 _K1_PER_DAY = 0.3
 _K2_PER_DAY = 0.9
