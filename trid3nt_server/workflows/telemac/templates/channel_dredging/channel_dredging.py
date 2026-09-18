@@ -305,7 +305,14 @@ telemac_channel_dredging = register_workflow(
                              "domain": Ref("domain"),
                              "settled": Ref("settled"),
                              "areas": {"dredge_area": DATA.dredge_area,
-                                       "dump_area": DATA.dump_area}}
+                                       "dump_area": DATA.dump_area},
+                             # The cut the grade asks for is measured against
+                             # the stock before the run dispatches: the engine
+                             # only refuses a dredger with nothing left to cut
+                             # part-way through its first pass.
+                             "dug_area": "dredge_area",
+                             "grade_depth_m": ParamRef("design_depth_m"),
+                             "stock_m": ParamRef("bed_thickness_m")}
                      ).named("dredge"),),
         results=(_RESULT, RESULT_FILENAME),
         compute_class=ParamRef("compute_class"),

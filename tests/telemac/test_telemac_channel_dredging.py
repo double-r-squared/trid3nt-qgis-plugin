@@ -132,6 +132,12 @@ def test_the_dredge_reads_its_levels_off_the_line_slot_and_the_settled_run():
     assert "centerline" not in dredge.kwargs and "seed" not in dredge.kwargs
     assert dredge.kwargs["settled"] == Ref("settled")
     assert set(dredge.kwargs["areas"]) == {"dredge_area", "dump_area"}
+    # The grade and the stock the cut is measured between, read off the sheet
+    # where the deck states them rather than restated for the measurement.
+    assert dredge.kwargs["dug_area"] == "dredge_area"
+    assert (dredge.kwargs["grade_depth_m"].name,
+            dredge.kwargs["stock_m"].name) == ("design_depth_m",
+                                               "bed_thickness_m")
 
 
 def test_the_mesh_is_built_over_the_domain_slot_at_the_runtime_lever():

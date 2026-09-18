@@ -774,6 +774,24 @@ package SolveSeam {
         */
     }
 
+    requirement def ADredgeCutsOnlyWhatTheStockHolds {
+        doc /*
+        A dredge states a GRADE as a depth under the surface the run opens on,
+        and a STOCK as the thickness of erodible bed under the fairway. The two
+        are one statement: the cut the grade asks for at the shallowest node it
+        works is material that has to come out of that stock.
+
+        A grade the stock cannot reach is not caught by the engine at authoring.
+        NESTOR digs at the stated rate until the bed under the dredger stops
+        being one it may cut, and then abandons the solve part-way through the
+        first pass, reporting a node number and an active layer thickness about
+        a channel nobody meant to ask for. A stated grade and a stated stock are
+        both known before the case is written, so the deepest cut over the dug
+        area is measured there, against the bed the ACCEPTED mesh carries, and a
+        conflict refuses naming the node, its bed, the grade and the stock.
+        */
+    }
+
     requirement def BoundaryCodesMatchTheSteering {
         doc /*
         A TELEMAC boundary states itself TWICE - as a (LIHBOR, LIUBOR, LIVBOR,
@@ -857,6 +875,10 @@ package SolveSeam {
         "tests/derive/test_derive_merge_rasters.py::test_the_sidecar_says_which_input_painted_each_cell";
     verify requirement EveryNodeCarriesAMeasuredBed by
         "tests/derive/test_derive_merge_rasters.py::test_two_datums_refuse_by_name";
+
+    satisfy requirement ADredgeCutsOnlyWhatTheStockHolds by assembler;
+    verify requirement ADredgeCutsOnlyWhatTheStockHolds by
+        "tests/telemac/test_telemac_nestor_dredge.py::test_a_grade_the_bed_has_no_stock_to_reach_refuses_at_authoring";
 
     satisfy requirement BoundaryCodesMatchTheSteering by topologyWriter;
     satisfy requirement BoundaryCodesMatchTheSteering by assembler;

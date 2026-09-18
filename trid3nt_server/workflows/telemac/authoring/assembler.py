@@ -591,14 +591,17 @@ _PROFILE_MIN, _PROFILE_MAX = 2, 12
 
 
 async def settle_dredge(*, mesh: dict[str, Any], line: Any, domain: Any,
-                        settled: Mapping[str, Any],
-                        areas: Mapping[str, Any]) -> dict[str, Any]:
+                        settled: Mapping[str, Any], areas: Mapping[str, Any],
+                        dug_area: str, grade_depth_m: float,
+                        stock_m: float) -> dict[str, Any]:
     """The areas a dredge works on and the surface its levels are read from,
     both measured against the ACCEPTED mesh.
 
     ``areas`` is ``{name: geometry source}``; each comes back as the polygon in
     the mesh's own metres; ``line`` is the LINE the profiles are stationed along,
-    and the reference is the run's OWN opening water surface."""
+    and the reference is the run's OWN opening water surface. ``dug_area`` names
+    the one the dig works in, and the cut it asks for is measured here against
+    the stock the deck states."""
     utm_epsg = int(settled["utm_epsg"])
     node_xy, node_bed = await asyncio.to_thread(mesh_nodes, mesh)
     centerline_utm = await asyncio.to_thread(
@@ -607,6 +610,12 @@ async def settle_dredge(*, mesh: dict[str, Any], line: Any, domain: Any,
                   _dredge_field, source, name, utm_epsg=utm_epsg, node_xy=node_xy)
               for name, source in areas.items() if source is not None}
     flat = str(settled.get("opening") or "") == FLAT
+    await asyncio.to_thread(
+        _refuse_a_cut_past_the_stock, fields[dug_area]["vertices"],
+        node_xy=node_xy, node_bed=node_bed, name=dug_area,
+        level_m=float(settled["level_m"]),
+        depth_m=None if flat else float(settled["depth_m"]),
+        grade_depth_m=float(grade_depth_m), stock_m=float(stock_m))
     profiles = await asyncio.to_thread(
         _reference_profiles, centerline_utm, node_xy=node_xy, node_bed=node_bed,
         depth_m=None if flat else float(settled["depth_m"]),
@@ -664,6 +673,43 @@ def _dredge_field(source: Any, name: str, *, utm_epsg: int,
             "the engine would find nothing in it to move. Draw it over the "
             "modelled reach.", error_code="TELEMAC_DREDGE_AREA_OFF_MESH")
     return {"label": name, "vertices": ring}
+
+
+def _refuse_a_cut_past_the_stock(ring: Sequence[Sequence[float]], *,
+                                 node_xy: Any, node_bed: Any, name: str,
+                                 level_m: float, depth_m: float | None,
+                                 grade_depth_m: float, stock_m: float) -> None:
+    """The deepest cut the stated grade asks for, against the erodible stock.
+
+    A dredger cannot cut below the layer the deck gives it, and the engine says
+    so only once it has solved far enough to try, so the arithmetic is done here
+    with the node, its bed, the grade and the stock all named."""
+    import numpy as np
+    from shapely import contains_xy
+    from shapely.geometry import Polygon
+
+    xy = np.asarray(node_xy, dtype=float)
+    bed = np.asarray(node_bed, dtype=float)
+    inside = np.flatnonzero(
+        np.asarray(contains_xy(Polygon(ring), xy[:, 0], xy[:, 1])))
+    # The reference is the surface the run opens on, read the same way the
+    # profiles below read it: the stated level where it is flat, the local bed
+    # plus the normal depth where it follows the bed.
+    reference = (np.full(inside.size, level_m) if depth_m is None
+                 else bed[inside] + depth_m)
+    cut = bed[inside] - (reference - grade_depth_m)
+    at = int(np.argmax(cut))
+    if float(cut[at]) <= stock_m:
+        return
+    node = int(inside[at])
+    raise TelemacError(
+        f"the dredge holds the {name} at {float(reference[at]) - grade_depth_m:.3f} "
+        f"m - {grade_depth_m:.3f} m under the surface the run opens on - and node "
+        f"{node + 1} of the mesh sits at {float(bed[node]):.3f} m, so the pass "
+        f"asks a cut of {float(cut[at]):.3f} m out of the {stock_m:.3f} m of "
+        "erodible bed the deck states. Raise the grade to one this channel has "
+        "the material to reach, or state a stock the cut fits inside.",
+        error_code="TELEMAC_DREDGE_CUT_PAST_STOCK")
 
 
 def _reference_profiles(centerline_utm: Any, *, node_xy: Any, node_bed: Any,

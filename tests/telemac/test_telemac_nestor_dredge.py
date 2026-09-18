@@ -256,6 +256,41 @@ def _nodes_at(*lonlat: tuple[float, float]):
             for lon, lat in lonlat]
 
 
+#: The fairway the Willamette canary draws, as the accepted mesh reads it: a bed
+#: between -12.2 and -9.3 m against a surface standing at 2.776 m.
+_FAIRWAY_RING = [[0.0, 0.0], [80.0, 0.0], [80.0, 90.0], [0.0, 90.0], [0.0, 0.0]]
+_FAIRWAY_XY = [(20.0, 20.0), (40.0, 45.0), (60.0, 70.0)]
+_FAIRWAY_BED = [-9.309, -11.0, -12.179]
+_OPENS_AT = 2.776
+
+
+def test_a_grade_the_bed_has_no_stock_to_reach_refuses_at_authoring():
+    """A grade deeper than the erodible bed is a pass the engine abandons part
+    way through its first cut, so the cut the declaration asks for is measured
+    against the stated stock before the run dispatches."""
+    from trid3nt_server.workflows.telemac.authoring.assembler import (
+        _refuse_a_cut_past_the_stock,
+    )
+    from trid3nt_server.workflows.telemac.errors import TelemacError
+
+    def _measure(grade_depth_m: float) -> None:
+        _refuse_a_cut_past_the_stock(
+            _FAIRWAY_RING, node_xy=_FAIRWAY_XY, node_bed=_FAIRWAY_BED,
+            name="dredge_area", level_m=_OPENS_AT, depth_m=None,
+            grade_depth_m=grade_depth_m, stock_m=5.0)
+
+    with pytest.raises(TelemacError, match="cut of 11.515 m") as refused:
+        _measure(23.6)
+    assert refused.value.error_code == "TELEMAC_DREDGE_CUT_PAST_STOCK"
+    said = str(refused.value)
+    assert "node 1 of the mesh sits at -9.309 m" in said
+    assert "holds the dredge_area at -20.824 m" in said
+    assert "5.000 m of erodible bed" in said
+    # The maintenance grade the same channel has the material to reach: 0.915 m
+    # out of the shallow end and nothing where the bed is already under it.
+    _measure(13.0)
+
+
 def test_a_dredge_area_is_guarded_by_its_polygon_not_its_bounding_box():
     """The engine works the ring, so an area whose box holds nodes its interior
     does not has nothing in it to move and refuses before the solve."""
