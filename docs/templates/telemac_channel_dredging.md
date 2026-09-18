@@ -81,19 +81,19 @@ It publishes these layers onto the canvas:
 
 ## The proving run
 
-Run `01M2NZS8DX43SG2V9D2FBXGMR7`, 2026-09-16T20:51:14.036909+00:00, 28.37 s, at commit `1883ff4c1867377c3bb4efdec4e2a87450e5fefa-dirty`.
+Run `01M2V69BYF5ZYFRHQXJYV3HT63`, 2026-09-18T21:21:03.623357+00:00, 26.723 s, at commit `8eba94106846834e5607d1d9d24089509dbfda25`.
 
-![Every layer the run published, stacked and framed on the result (run 01M2NZS8DX43SG2V9D2FBXGMR7)](telemac_channel_dredging/telemac_channel_dredging.png)
+![Every layer the run published, stacked and framed on the result (run 01M2V69BYF5ZYFRHQXJYV3HT63)](telemac_channel_dredging/telemac_channel_dredging.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M2NZS8DX43SG2V9D2FBXGMR7)*
+*Every layer the run published, stacked and framed on the result (run 01M2V69BYF5ZYFRHQXJYV3HT63)*
 
-![The solve, frame by frame (run 01M2NZS8DX43SG2V9D2FBXGMR7)](telemac_channel_dredging/telemac_channel_dredging_animation.gif)
+![The solve, frame by frame (run 01M2V69BYF5ZYFRHQXJYV3HT63)](telemac_channel_dredging/telemac_channel_dredging_animation.gif)
 
-*The solve, frame by frame (run 01M2NZS8DX43SG2V9D2FBXGMR7)*
+*The solve, frame by frame (run 01M2V69BYF5ZYFRHQXJYV3HT63)*
 
-![final frame (run 01M2NZS8DX43SG2V9D2FBXGMR7)](telemac_channel_dredging/telemac_channel_dredging_final_frame.png)
+![final frame (run 01M2V69BYF5ZYFRHQXJYV3HT63)](telemac_channel_dredging/telemac_channel_dredging_final_frame.png)
 
-*final frame (run 01M2NZS8DX43SG2V9D2FBXGMR7)*
+*final frame (run 01M2V69BYF5ZYFRHQXJYV3HT63)*
 
 ### The sheet it filled
 
@@ -141,5 +141,5 @@ await TOOL_REGISTRY['telemac_channel_dredging'].fn(
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2NZS8DX43SG2V9D2FBXGMR7` and commit `1883ff4c1867377c3bb4efdec4e2a87450e5fefa-dirty`. The full argument record is [`telemac_channel_dredging/run.json`](telemac_channel_dredging/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2V69BYF5ZYFRHQXJYV3HT63` and commit `8eba94106846834e5607d1d9d24089509dbfda25`. The full argument record is [`telemac_channel_dredging/run.json`](telemac_channel_dredging/run.json).
 
