@@ -401,14 +401,8 @@
     },
     "TimeScaleSuggestion": {
       "additionalProperties": false,
-      "description": "A pre-run TIME-SCALE suggestion, optional on a payload warning.\nCadence and window together fix the FRAME COUNT: too many balloon the\npayload, too few hide the motion. Absent when the cadence is fixed.",
+      "description": "A pre-run TIME-SCALE suggestion, optional on a payload warning.\nCadence and window together fix the FRAME COUNT: too many balloon the\npayload, too few hide the motion. Absent when the cadence is fixed.\n\nThe cadence itself is READ-ONLY here: a run writes its frames on its own\nmodule's printout-period keyword, which a caller overrides by that keyword's\nname, so this block carries no args key for it.",
       "properties": {
-        "cadence_param": {
-          "const": "output_interval_min",
-          "default": "output_interval_min",
-          "title": "Cadence Param",
-          "type": "string"
-        },
         "duration_param": {
           "const": "duration_hr",
           "default": "duration_hr",

@@ -335,7 +335,6 @@ def resolve_gate_decision(
     warning: PayloadWarning,
     cancel: bool = False,
     chosen_resolution_m: Optional[float] = None,
-    interval_min: Optional[float] = None,
     duration_hr: Optional[float] = None,
 ) -> GateDecision:
     """Map the card's UI state to the confirmation envelope. Any override
@@ -361,17 +360,11 @@ def resolve_gate_decision(
             revised[param] = chosen_resolution_m
     ts = warning.time_scale
     if ts:
-        cadence_param = ts.get("cadence_param") or "output_interval_min"
+        # The CADENCE is not among the overrides: a run writes its frames on its
+        # own module's printout-period keyword, which a caller sets by that
+        # keyword's name rather than through an args key this card knows.
         duration_param = ts.get("duration_param") or "duration_hr"
-        suggested_interval = ts.get("suggested_interval_min")
         suggested_duration = ts.get("suggested_duration_hr")
-        if (
-            interval_min is not None
-            and interval_min > 0
-            and interval_min != suggested_interval
-        ):
-            floor_min = ts.get("min_interval_min") or 1.0
-            revised[cadence_param] = max(float(floor_min), interval_min)
         if (
             duration_hr is not None
             and duration_hr > 0

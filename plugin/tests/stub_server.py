@@ -149,7 +149,6 @@ PAYLOAD_WARNING_ROW: dict[str, Any] = {
         "spot_label": None,
     },
     "time_scale": {
-        "cadence_param": "output_interval_min",
         "suggested_interval_min": 5.0,
         "interval_choices": [5.0, 10.0, 15.0],
         "duration_param": "duration_hr",

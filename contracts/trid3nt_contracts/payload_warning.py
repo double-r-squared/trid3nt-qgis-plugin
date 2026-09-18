@@ -146,13 +146,15 @@ class GranularitySuggestion(GraceModel):
 class TimeScaleSuggestion(GraceModel):
     """A pre-run TIME-SCALE suggestion, optional on a payload warning.
     Cadence and window together fix the FRAME COUNT: too many balloon the
-    payload, too few hide the motion. Absent when the cadence is fixed."""
+    payload, too few hide the motion. Absent when the cadence is fixed.
+
+    The cadence itself is READ-ONLY here: a run writes its frames on its own
+    module's printout-period keyword, which a caller overrides by that keyword's
+    name, so this block carries no args key for it."""
 
     # A card carrying BOTH rows sends both overrides in ONE ``revised_args``,
     # so reviewing space and time is a single interaction.
 
-    #: The args key a cadence edit is written back under, VERBATIM.
-    cadence_param: Literal["output_interval_min"] = "output_interval_min"
     #: The recommended minutes per frame, and the default-prefilled value.
     suggested_interval_min: float = Field(gt=0.0)
     #: An OPTIONAL quick-pick ladder. The card also offers a free numeric edit,

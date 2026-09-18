@@ -71,18 +71,6 @@ _WET_DEPTH_M = 0.01
 #: took the role.
 _OUTLET_ROLE = RATING_CURVE_ROLE
 
-#: The bottom-friction law a catchment is solved under, which is also the law its
-#: outlet's rating curve is derived at. It is the deck's own LAW OF BOTTOM
-#: FRICTION: a curve derived under a roughness the run is not solved at is a
-#: level the run never sits at.
-_ROG_FRICTION_LAW = 4
-
-#: The friction the reach is solved at when the sheet states none, as the law and
-#: the Strickler coefficient the deck writes. Named once because the outflow
-#: stage is a normal depth AT this roughness: a stage derived at one number and a
-#: file written at another is a level the run never sits at.
-_REACH_FRICTION_LAW = 3
-_REACH_STRICKLER = 33.0
 
 def case_section(*, module: str, steering: str, results: list[str],
                  server_facts: Mapping[str, Any], user_fortran: str | None = None,
@@ -871,7 +859,7 @@ def _liquid_boundaries(topology: Mapping[str, Any], node_xy: Any
 
 
 def _measured_outlet(topology: Mapping[str, Any], node_xy: Any, node_bed: Any,
-                     cells: Any, manning: Any, *,
+                     cells: Any, manning: Any, *, law: int,
                      q_ceiling_m3s: float, q_ceiling_basis: str) -> dict[str, Any]:
     """What the accepted mesh says about the face the basin drains through.
 
@@ -890,7 +878,7 @@ def _measured_outlet(topology: Mapping[str, Any], node_xy: Any, node_bed: Any,
         "section": _face_section(nodes, node_xy, node_bed,
                                  missing=_outlet_section_unmeasured),
         "slope": _bed_slope(nodes, node_xy, node_bed, cells),
-        "law": _ROG_FRICTION_LAW, "coefficient": coefficient,
+        "law": law, "coefficient": coefficient,
         "q_ceiling_m3s": float(q_ceiling_m3s),
         "q_ceiling_basis": q_ceiling_basis,
     }
@@ -908,16 +896,20 @@ def _rain_ceiling(rain: Mapping[str, Any], cells: Any,
     a, b, c = xy[tri[:, 0]], xy[tri[:, 1]], xy[tri[:, 2]]
     area_m2 = float(0.5 * np.abs((b[:, 0] - a[:, 0]) * (c[:, 1] - a[:, 1])
                                  - (b[:, 1] - a[:, 1]) * (c[:, 0] - a[:, 0])).sum())
-    peak_mm_hr = (max(float(v) for v in rain["series"])
-                  if rain.get("kind") == "hyetograph"
-                  else float(rain["intensity_mm_per_hr"]))
-    if not (peak_mm_hr > 0.0 and area_m2 > 0.0):
+    # A measured record is gross millimetres over each of its own hourly blocks;
+    # a design storm is the engine's own keyword, in millimetres per day. Both
+    # reach the ceiling as a depth per second over the meshed area.
+    peak_m_per_s = (max(float(v) for v in rain["series"]) / 1000.0 / 3600.0
+                    if rain.get("kind") == "hyetograph"
+                    else float(rain["mm_per_day"] or 0.0) / 1000.0 / 86400.0)
+    peak_mm_hr = peak_m_per_s * 1000.0 * 3600.0
+    if not (peak_m_per_s > 0.0 and area_m2 > 0.0):
         raise TelemacError(
             f"a storm of {peak_mm_hr:g} mm/h over {area_m2:g} m2 puts no water on "
             "the catchment, so there is no flow range for the outlet's rating "
             "curve to span.",
             error_code="TELEMAC_STORM_EMPTY")
-    ceiling = peak_mm_hr / 1000.0 / 3600.0 * area_m2
+    ceiling = peak_m_per_s * area_m2
     return ceiling, (
         f"the gross rain rate on the meshed catchment - peak {peak_mm_hr:g} mm/h "
         f"over {area_m2 / 1.0e6:.3f} km2 is {ceiling:.3f} m3/s, which no outlet "
@@ -931,7 +923,8 @@ async def settle_outlet_rating(
     landcover: Any,
     roughness: Mapping[Any, Any],
     unmapped: Any,
-    mm_per_hr: float | None = None,
+    friction_law: int,
+    mm_per_day: float | None = None,
     series: Any = None,
     record: Any = None,
 ) -> dict[str, Any]:
@@ -941,7 +934,9 @@ async def settle_outlet_rating(
     The section, the bed slope and the roughness are measured off the accepted
     mesh itself; the flow range is the gross rain on the meshed area, which
     nothing leaving it can exceed, because infiltration only removes water and
-    storage only delays it."""
+    storage only delays it. ``friction_law`` is the deck's own LAW OF BOTTOM
+    FRICTION: a curve derived under a roughness the run is not solved at is a
+    level the run never sits at."""
     topology, outlet_boundary, outlet_prescribes, n_liquid = _outlet_boundary(mesh)
     if outlet_prescribes != "elevation":
         raise TelemacError(
@@ -954,13 +949,13 @@ async def settle_outlet_rating(
         accepted_mesh_nodes, mesh)
     measured = series if series is not None else record
     storm = ({"kind": "hyetograph", "series": list(measured)} if measured
-             else {"kind": "design_storm", "intensity_mm_per_hr": mm_per_hr})
+             else {"kind": "design_storm", "mm_per_day": mm_per_day})
     q_ceiling, q_ceiling_basis = _rain_ceiling(storm, cells, points_utm)
     manning = await asyncio.to_thread(
         _outlet_manning, landcover, lonlat[_outlet_nodes(topology)], roughness,
         unmapped)
     outlet = _measured_outlet(
-        topology, points_utm, node_bed, cells, manning,
+        topology, points_utm, node_bed, cells, manning, law=int(friction_law),
         q_ceiling_m3s=q_ceiling, q_ceiling_basis=q_ceiling_basis)
     from ..helpers.uniform_flow import derive_rating_curve
 
@@ -991,7 +986,7 @@ def _domain_unmeasured(message: str) -> Exception:
 async def open_water(
     *,
     mesh: dict[str, Any],
-    sim_duration_s: float,
+    duration_s: float,
     level: Any = None,
     name: str = "",
     geometry: str = "geometry.slf",
@@ -1025,7 +1020,7 @@ async def open_water(
     topology = await asyncio.to_thread(
         read_topology, _mesh_field(mesh, "topology_uri", missing=_mesh_missing))
     start_time_s = float(initial_state["start_s"] or 0.0)
-    duration_s = float(sim_duration_s)
+    duration_s = float(duration_s)
     slug = _slug(name or facts["mesh_name"])
     opening = await asyncio.to_thread(_opening, level, mesh)
     return {

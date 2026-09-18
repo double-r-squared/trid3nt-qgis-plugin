@@ -66,49 +66,56 @@ class _Gaia(Module("gaia")):  # type: ignore[misc]
     """The module input and the two sediment bodies."""
 
     @classmethod
-    def bed(cls, *, geometry: Any, boundary: Any, mass_balance: Any,
-            dredging: Any = None, **bed: Any) -> Mapping[str, Any]:
+    def bed(cls, *, geometry: Any, boundary: Any, gradation: Any = None,
+            presets: Any = None, dredging: Any = None,
+            **keywords: Any) -> Mapping[str, Any]:
         """A non-cohesive bed with a real stock, one class or a mixture that SORTS.
 
-        ``bed`` is the ``Bed`` value; ``dredging`` the ``Dredging`` moved out of it."""
+        The diameters, the stock, the transport formula and the morphological
+        factor are keywords the dictionary carries and the deck states by name;
+        what arrives here is the GRADATION the dictionary has no keyword for - a
+        preset name or fine-to-coarse pairs - and the dredge moved out of it. The
+        expansion is stated LAST, so a mixture's own class table wins over the
+        single class a deck states beside it."""
+        for name in keywords:
+            cls.slot(name)
         return _body({"GEOMETRY_FILE": geometry, "BOUNDARY_CONDITIONS_FILE": boundary,
-                      "RESULTS_FILE": RESULT_FILENAME, "MASS_BALANCE": mass_balance,
-                      "bed": Bed(**bed), "dredging": dredging})
+                      "RESULTS_FILE": RESULT_FILENAME,
+                      "BED_LOAD_FOR_ALL_SANDS": True, **keywords,
+                      "bed": Bed(gradation=gradation, presets=presets),
+                      "dredging": dredging})
 
     @classmethod
-    def suspended(cls, *, geometry: Any, boundary: Any, mass_balance: Any,
-                  dredging: Any = None, **suspension: Any) -> Mapping[str, Any]:
+    def suspended(cls, *, geometry: Any, boundary: Any, concentration_mgl: Any,
+                  dredging: Any = None, **keywords: Any) -> Mapping[str, Any]:
         """ONE settling class over a bed with NO stock: supply-limited.
 
-        Zero thickness, so only the pulse deposits; a SECOND carrier tracer."""
+        Zero thickness, so only the pulse deposits; a SECOND carrier tracer. The
+        class diameter, the transport formula and the advection scheme are the
+        deck's own keywords; the source concentration arrives in the mg/L the
+        question is asked in and is ingested as the keyword's kg/m3."""
         if dredging is not None:
             raise SlotRefused(
                 "a dredge moves material out of a bed and into another, and this "
                 "body is a suspension over a bed with NO stock - there is nothing "
                 "to dig and nowhere the dumped material would be accounted. State "
                 "the dredge on a bed().")
+        for name in keywords:
+            cls.slot(name)
         return _body({"GEOMETRY_FILE": geometry, "BOUNDARY_CONDITIONS_FILE": boundary,
-                      "RESULTS_FILE": RESULT_FILENAME, "MASS_BALANCE": mass_balance,
-                      "suspension": Suspension(**suspension)})
+                      "RESULTS_FILE": RESULT_FILENAME, **keywords,
+                      "suspension": Suspension(concentration_mgl=concentration_mgl)})
 
 
-def Bed(*, gradation: Any, presets: Any, d50_um: Any,  # noqa: N802
-        thickness_m: Any, formula: Any, hiding_factor_formula: Any,
-        morphological_factor: Any) -> Mapping[str, Any]:
-    """The erodible bed as one value: a gradation (a preset name in ``presets``
-    or fine-to-coarse ``[d50_um, fraction]`` pairs) or the single ``d50_um``."""
-    return {"gradation": gradation, "presets": presets, "d50_um": d50_um,
-            "thickness_m": thickness_m, "formula": formula,
-            "hiding_factor_formula": hiding_factor_formula,
-            "morphological_factor": morphological_factor}
+def Bed(*, gradation: Any, presets: Any) -> Mapping[str, Any]:  # noqa: N802
+    """The bed's GRADATION: a preset name in ``presets``, or fine-to-coarse
+    ``[d50_um, fraction]`` pairs. Nothing at all leaves the deck's own class."""
+    return {"gradation": gradation, "presets": presets}
 
 
-def Suspension(*, d50_um: Any, concentration_mgl: Any,  # noqa: N802
-               transport_formula: Any, advection_scheme: Any) -> Mapping[str, Any]:
-    """The one settling class as one value, its source concentration in mg/L."""
-    return {"d50_um": d50_um, "concentration_mgl": concentration_mgl,
-            "transport_formula": transport_formula,
-            "advection_scheme": advection_scheme}
+def Suspension(*, concentration_mgl: Any) -> Mapping[str, Any]:  # noqa: N802
+    """The settling class's source concentration, in the mg/L it is asked in."""
+    return {"concentration_mgl": concentration_mgl}
 
 
 def Dredging(*, actions: Any, reference: Any,  # noqa: N802
@@ -219,40 +226,36 @@ def _windowed(micron: float) -> float:
 
 
 def _bed(value: Mapping[str, Any]) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
-    """The bed value -> the CLASSES lists, the stock and the bedload."""
+    """The gradation -> the CLASSES lists a mixture IS, or no keyword at all.
+
+    A gradation that resolves to fewer than two classes is not a mixture, and the
+    single class the deck states stands."""
     classes = _classes(value["gradation"], value["presets"])
-    if classes:
-        shape = {"CLASSES_TYPE_OF_SEDIMENT": ["NCO" for _ in classes],
-                 "CLASSES_SEDIMENT_DIAMETERS": [_metres(um) for um, _ in classes],
-                 "CLASSES_INITIAL_FRACTION": [fraction for _, fraction in classes],
-                 "HIDING_FACTOR_FORMULA": int(value["hiding_factor_formula"])}
-    else:
-        shape = {"CLASSES_TYPE_OF_SEDIMENT": ["NCO"],
-                 "CLASSES_SEDIMENT_DIAMETERS": [
-                     _metres(_windowed(float(value["d50_um"])))]}
-    return ({**shape, "BED_LOAD_FOR_ALL_SANDS": True,
-             "BED_LOAD_TRANSPORT_FORMULA_FOR_ALL_SANDS": int(value["formula"]),
-             "LAYERS_INITIAL_THICKNESS": [max(float(value["thickness_m"]), 0.01)],
-             "MORPHOLOGICAL_FACTOR": max(float(value["morphological_factor"]), 1.0)},
+    if not classes:
+        return ({"CLASSES_TYPE_OF_SEDIMENT": ["NCO"]}, {})
+    return ({"CLASSES_TYPE_OF_SEDIMENT": ["NCO" for _ in classes],
+             # The preset vocabulary is in the microns a grading is published in,
+             # which is where the conversion to the keyword's metres belongs.
+             "CLASSES_SEDIMENT_DIAMETERS": [_metres(um) for um, _ in classes],
+             "CLASSES_INITIAL_FRACTION": [fraction for _, fraction in classes]},
             {})
 
 
 def _suspension(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
                                                    Mapping[str, Any]]:
-    """The suspension value -> one class, suspension armed, no stock to erode."""
+    """One class, suspension armed, no stock to erode, the source loaded.
+
+    The sorption terms downstream are defined over kg/m3, which is what the
+    keyword reads; the question is asked in mg/L, so it converts here."""
     return ({"CLASSES_TYPE_OF_SEDIMENT": ["NCO"],
-             "CLASSES_SEDIMENT_DIAMETERS": [_metres(_windowed(float(value["d50_um"])))],
              "SUSPENSION_FOR_ALL_SANDS": True,
-             "SUSPENSION_TRANSPORT_FORMULA_FOR_ALL_SANDS": int(value["transport_formula"]),
              "LAYERS_INITIAL_THICKNESS": [0.0],
-             "SCHEME_FOR_ADVECTION_OF_SUSPENDED_SEDIMENTS": [
-                 int(v) for v in value["advection_scheme"]],
              "SUSPENDED_SEDIMENTS_CONCENTRATION_VALUES_AT_THE_SOURCES": [
                  max(float(value["concentration_mgl"]) * _MGL_TO_KGM3, 0.0)]}, {})
 
 
 def _metres(micron: Any) -> float:
-    """A diameter stated in the micron the question is asked in, as GAIA's metres."""
+    """A diameter stated in the micron a grading is published in, as GAIA's metres."""
     return float(micron) * 1.0e-6
 
 

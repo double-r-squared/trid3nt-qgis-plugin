@@ -60,6 +60,14 @@ package SteeringSurface {
         One keyword as the dictionary describes it - raw name, identifier, type,
         list-ness, help, choices, engine default, level, rubrique, file role -
         and the check that says whether a value is one it takes.
+
+        Beside the dictionary's own row it carries the PLAUSIBILITY BOUNDS a
+        value of the keyword is taken inside, read from a sidecar because the
+        dictionary itself is the image's and is compared to it byte for byte.
+        Those bounds are where a deleted Param's own range went: one range for
+        every value the keyword holds, or one per element in the keyword's order,
+        and a value outside refuses by the keyword's name at fill. It is the one
+        table a calibration reads its priors and its ranges from.
         */
     }
 
@@ -74,9 +82,9 @@ package SteeringSurface {
     part def Composite {
         doc /*
         One value standing for several slots and the file they name - a release
-        becoming the sources keywords plus the series file, wind becoming the
-        five wind keywords. It lives on the wrapper because the keyword group is
-        the module's, not a template's private code.
+        becoming the sources keywords plus the series file, a gradation becoming
+        the class table a mixture IS. It lives on the wrapper because the keyword
+        group is the module's, not a template's private code.
         */
     }
 
@@ -621,6 +629,32 @@ package SteeringSurface {
 
         Such a choice is the TEMPLATE's assertion where the template needs a
         non-default, and the engine's own default by omission where it does not.
+
+        Nor may an ARGUMENT re-name a keyword the dictionary already carries: a
+        composite takes what the dictionary LACKS - a file, a placement, a
+        gradation, a series - and every keyword beside it is stated on the body
+        under its own name, so a reader of the deck sees the value and a caller
+        overrides it by the name the engine itself publishes. What survives as an
+        argument is a COERCION the keyword's ingestion owes its reader: a common
+        alternate unit the question is asked in - microns for a diameter,
+        milligrams per litre for a source load, a compass bearing for a wind -
+        converted at the line that states the engine's own.
+        */
+    }
+
+    requirement def BoundsRideBesideTheDictionaryRow {
+        doc /*
+        A keyword's PLAUSIBILITY BOUNDS live beside its dictionary row, in a
+        sidecar the module reads at import and the slot carries: the dictionary
+        itself is the engine image's and is compared to it byte for byte, so
+        nothing of ours may be written into it.
+
+        The bounds are where a deleted Param's own range went - one range for
+        the value the keyword holds, or one per element in the keyword's own
+        order - and a value outside them REFUSES at fill by the KEYWORD's name,
+        because that is the name the user set it under. It is the one table a
+        calibration reads its priors and its ranges from, and a keyword with no
+        row in it is taken at whatever the dictionary's own check allows.
         */
     }
 
@@ -790,10 +824,14 @@ package SteeringSurface {
     requirement def InputsAreTypedPrimitives {
         doc /*
         Every point in the system is a Point. A slot that asks for one fills
-        from each of its sources - the pick, a pair, a point layer, a geocoded
-        name - under the same ingestion, keeps the name the source carried,
-        refuses by name a point outside the domain, and moves a dry landing to
-        the nearest wet node. Neither the user nor the model names it twice.
+        from each of its sources - the pick, a pair, a point layer - under the
+        same ingestion, keeps the name the source carried, refuses by name a
+        point outside the domain, and moves a dry landing to the nearest wet
+        node. Neither the user nor the model names it twice.
+
+        An ingestion RESOLVES what it was handed and never fetches: a bare place
+        NAME is refused, retryably, naming the geocoder the model calls first,
+        so no network call hides under a slot nobody asked to wait on.
         */
     }
 
@@ -813,6 +851,11 @@ package SteeringSurface {
     // ----------------------------------------------------------------- //
     // Allocations
     // ----------------------------------------------------------------- //
+
+    satisfy requirement BoundsRideBesideTheDictionaryRow by dictionaryExtractor;
+    satisfy requirement BoundsRideBesideTheDictionaryRow by slot;
+    verify requirement BoundsRideBesideTheDictionaryRow by
+        "tests/telemac/test_telemac_do_sag.py::test_a_keyword_outside_the_modules_own_bounds_refuses_by_its_name";
 
     satisfy requirement KeywordNamesAreRaw by dictionaryExtractor;
     satisfy requirement KeywordNamesAreRaw by slot;
@@ -959,7 +1002,7 @@ package SteeringSurface {
     verify requirement CompositesSetOnlyPresence by
         "tests/telemac/test_telemac_module_surface.py::test_a_composite_sets_only_what_its_value_s_presence_defines";
     verify requirement CompositesSetOnlyPresence by
-        "tests/telemac/test_telemac_module_surface.py::test_a_wind_from_the_north_drives_the_water_south";
+        "tests/telemac/test_telemac_module_surface.py::test_a_wind_from_the_north_reaches_the_engines_own_speed_and_direction_pair";
     verify requirement CompositesSetOnlyPresence by
         "tests/telemac/test_telemac_module_surface.py::test_a_continuation_names_the_file_and_leaves_its_format_to_the_template";
     verify requirement CompositesSetOnlyPresence by
@@ -1106,7 +1149,7 @@ package SteeringSurface {
     verify requirement InputsAreTypedPrimitives by
         "tests/inputs/test_point.py::test_a_selected_point_layer_gives_its_first_point_and_its_name";
     verify requirement InputsAreTypedPrimitives by
-        "tests/inputs/test_point.py::test_a_place_name_is_geocoded_and_keeps_the_name";
+        "tests/inputs/test_point.py::test_a_place_name_refuses_and_names_the_geocoder";
     verify requirement InputsAreTypedPrimitives by
         "tests/inputs/test_point.py::test_a_point_outside_the_domain_is_refused_by_name_and_names_the_fix";
     verify requirement InputsAreTypedPrimitives by

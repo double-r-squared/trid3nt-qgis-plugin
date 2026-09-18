@@ -57,6 +57,25 @@ def module_input_dir() -> Path:
     return Path(__file__).resolve().parent / "module_input"
 
 
+#: PLAUSIBILITY BOUNDS beside the dictionary row, by module and identifier: the
+#: range a value of that keyword is taken inside, and refused by name outside.
+#: A sidecar rather than a column in the dictionary itself, because the
+#: dictionary is the image's own and is compared to it byte for byte. One
+#: ``[lo, hi]`` bounds every value the keyword holds; a list of them is one per
+#: element, in the keyword's own order. This is the table calibration reads.
+_BOUNDS_FILE = Path(__file__).resolve().parent / "module_bounds.json"
+
+
+@lru_cache(maxsize=None)
+def _bounds(module: str) -> Mapping[str, Any]:
+    """The bounds sidecar's rows for one module, empty where it names none."""
+    rows = json.loads(_BOUNDS_FILE.read_text()).get(module) or {}
+    return MappingProxyType({name: tuple(tuple(float(v) for v in pair)
+                                         for pair in (row if isinstance(row[0], list)
+                                                      else [row]))
+                             for name, row in rows.items()})
+
+
 @dataclass(frozen=True, slots=True)
 class Slot:
     """One keyword, as the dictionary describes it."""
@@ -75,6 +94,9 @@ class Slot:
     mnemo: str = ""
     file_role: str = ""
     file_mandatory: bool = False
+    #: The plausibility range each of this keyword's values is taken inside: one
+    #: pair for every value, or one pair per element in the keyword's own order.
+    bounds: tuple[tuple[float, float], ...] = ()
     #: This keyword's ONE value is a separator-joined selection from its
     #: choices, so the choices do not name whole values.
     multi_select: bool = False
@@ -127,13 +149,29 @@ class Slot:
             # A late-bound read INSIDE the list passes through for the same
             # reason it does outside one: a body states what it will hold, and
             # the fill that substitutes the value is what the value is checked at.
-            return [item if isinstance(item, (Ref, ParamRef)) else self._typed(item)
-                    for item in value]
-        value = self._typed(value)
+            return [item if isinstance(item, (Ref, ParamRef))
+                    else self._bounded(self._typed(item), position)
+                    for position, item in enumerate(value)]
+        value = self._bounded(self._typed(value), 0)
         if self.choices and not self.multi_select and str(value) not in self.choices:
             raise SlotRefused(
                 f"{self.keyword} does not take {value!r}. The dictionary's "
                 f"choices are {self._named_choices()}.")
+        return value
+
+    def _bounded(self, value: Any, position: int) -> Any:
+        """``value`` if the bounds row takes it, or the refusal that names both.
+
+        A keyword the sidecar rows no bounds for is bounded by the engine alone."""
+        if not self.bounds or self.type == "STRING":
+            return value
+        low, high = self.bounds[position if len(self.bounds) > 1 else 0]
+        if not (low <= float(value) <= high):
+            raise SlotRefused(
+                f"{self.keyword} is taken between {low:g} and {high:g}"
+                + (f" at position {position + 1}" if len(self.bounds) > 1 else "")
+                + f"; got {value!r}. A value outside that is either a unit this "
+                "keyword is not read in or a run nobody would believe.")
         return value
 
     def _typed(self, value: Any) -> Any:
@@ -198,6 +236,7 @@ def load_module_input(module: str) -> Mapping[str, Slot]:
             f"no module input for {module!r}; the exposed modules are "
             f"{sorted(p.stem for p in module_input_dir().glob('*.json'))}.")
     rows = json.loads(path.read_text())["keywords"]
+    bounded = _bounds(module)
     return MappingProxyType({row["identifier"]: Slot(
         keyword=row["keyword"], identifier=row["identifier"], type=row["type"],
         size=row["size"], unbounded=row["unbounded"], desc=row["help"],
@@ -208,6 +247,7 @@ def load_module_input(module: str) -> Mapping[str, Slot]:
         multi_select=row.get("multi_select", False),
         file_role=row.get("file_role", ""),
         file_mandatory=row.get("file_mandatory", False),
+        bounds=bounded.get(row["identifier"], ()),
     ) for row in rows})
 
 

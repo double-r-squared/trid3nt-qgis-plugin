@@ -7,7 +7,6 @@ module's fact."""
 
 from __future__ import annotations
 
-import math
 from types import MappingProxyType
 from typing import Any, Mapping, Sequence
 
@@ -122,7 +121,8 @@ def _tracer_names(value: Mapping[str, Any]
 
 def Wind(*, speed_mps: Any, from_deg: Any,  # noqa: N802 - a value constructor
          drag: Any = None) -> Mapping[str, Any]:
-    """A steady wind, stated the way weather states one: where it blows FROM."""
+    """SPEED AND DIRECTION OF WIND's own pair, the direction as weather states
+    one: the COMPASS bearing the wind blows FROM."""
     return MappingProxyType({"speed_mps": speed_mps, "from_deg": from_deg,
                              "drag": drag})
 
@@ -132,16 +132,16 @@ def Continuation(*, previous: Any) -> Mapping[str, Any]:  # noqa: N802
     return MappingProxyType({"previous": previous})
 
 
-def Oil(*, presets: Any, named: Any, at: Any, release_step: Any,  # noqa: N802
-        drogues: Any, drogues_period_s: Any, time_step_s: Any) -> Mapping[str, Any]:
+def Oil(*, presets: Any, named: Any, at: Any,  # noqa: N802
+        release_step: Any) -> Mapping[str, Any]:
     """The oil module riding on top of the tracer solve: which preset, released
-    where and at which step, and how many floats are written how often.
+    where and at which step.
 
-    ``presets`` is the table the deck carries; ``named`` picks one row of it."""
+    ``presets`` is the table the deck carries; ``named`` picks one row of it. How
+    many floats are written how often is MAXIMUM NUMBER OF DROGUES and PRINTOUT
+    PERIOD FOR DROGUES, which the deck states by their own names."""
     return MappingProxyType({"presets": presets, "named": named, "at": at,
-                             "release_step": release_step, "drogues": drogues,
-                             "drogues_period_s": drogues_period_s,
-                             "time_step_s": time_step_s})
+                             "release_step": release_step})
 
 
 def _releases(value: Any) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
@@ -203,21 +203,26 @@ def _on(release: Mapping[str, Any], t: float) -> float:
 
 
 def _wind(value: Mapping[str, Any]) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
-    """A from-direction -> the velocity components the engine reads.
-
-    Meteorological FROM, engine TOWARD, in the mesh's own frame."""
+    """The wind -> the pair the module already carries, and the term it arms."""
     if not value["speed_mps"]:
         # A wind of no speed is not a wind. Stating one would put the whole wind
         # block in the deck for a run nobody asked a wind about.
         return ({}, {})
-    speed = float(value["speed_mps"])
-    theta = math.radians(float(value["from_deg"]))
-    drag = value.get("drag")
     return ({"WIND": True,
-             "WIND_VELOCITY_ALONG_X": -speed * math.sin(theta),
-             "WIND_VELOCITY_ALONG_Y": -speed * math.cos(theta),
-             **({} if drag is None else
-                {"COEFFICIENT_OF_WIND_INFLUENCE": float(drag)})}, {})
+             "SPEED_AND_DIRECTION_OF_WIND": [float(value["speed_mps"]),
+                                             _engine_bearing(value["from_deg"])],
+             **({} if value.get("drag") is None else
+                {"COEFFICIENT_OF_WIND_INFLUENCE": float(value["drag"])})}, {})
+
+
+def _engine_bearing(from_deg: Any) -> float:
+    """A compass bearing the wind blows FROM -> the direction the keyword takes.
+
+    The dictionary states its own convention at the keyword: degrees 0 to 360
+    with 0 at y = 0, x = +infinity, counted the way an angle is - so it is the
+    direction the wind blows TOWARD, from +x, while weather names the quarter it
+    comes from, from north, the other way round."""
+    return float(270.0 - float(from_deg)) % 360.0
 
 
 def _continue_from(value: Mapping[str, Any]
@@ -236,9 +241,8 @@ def _continue_from(value: Mapping[str, Any]
 
 
 def _oil(value: Mapping[str, Any]) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
-    """The oil module: its steering file, its per-run Fortran, and the drogues.
-
-    The write cadence is asked in seconds; the run's own step turns it into steps."""
+    """The oil module: its steering file, its per-run Fortran, and the files the
+    floats are written to and from."""
     from ..authoring.oil import release_routine, steering_text
 
     presets = value["presets"]
@@ -247,12 +251,8 @@ def _oil(value: Mapping[str, Any]) -> tuple[Mapping[str, Any], Mapping[str, Any]
         raise ValueError(f"{value['named']!r} is not an oil preset this deck "
                          f"carries; the presets are {sorted(presets)}.")
     x, y = value["at"]
-    period = max(int(float(value["drogues_period_s"])
-                     / max(float(value["time_step_s"]), 1e-6)), 1)
     return ({"FORTRAN_FILE": USER_FORTRAN_DIR,
              "OIL_SPILL_STEERING_FILE": OIL_STEERING_FILENAME,
-             "MAXIMUM_NUMBER_OF_DROGUES": int(value["drogues"]),
-             "PRINTOUT_PERIOD_FOR_DROGUES": period,
              "ASCII_DROGUES_FILE": DROGUES_FILENAME},
             {OIL_STEERING_FILENAME: steering_text(name, presets[name]),
              f"{USER_FORTRAN_DIR}/oil_flot.f": release_routine(
@@ -415,9 +415,6 @@ _AMC_CONDITIONS: Mapping[str, int] = MappingProxyType({
     "normal": 2, "ii": 2, "2": 2,
     "wet": 3, "iii": 3, "3": 3,
 })
-#: The friction law the infiltration surface is written under: its roughness
-#: column is Manning n, so the law is the Manning one and not a choice.
-_MANNING_LAW = 4
 
 
 def Infiltration(*, mesh: Any, landcover: Any, table: Any, unmapped: Any,  # noqa: N802
@@ -478,13 +475,16 @@ def _infiltration(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
         "antecedent_moisture": _AMC_CONDITIONS[word],
         "initial_abstraction": value["initial_abstraction"]})
     friction, friction_files = _friction({
-        "law": _MANNING_LAW, "manning_per_node": [float(row[1]) for row in rows]})
+        "manning_per_node": [float(row[1]) for row in rows]})
     return ({**runoff, **friction}, {**runoff_files, **friction_files})
 
 
-def Friction(*, law: Any, manning_per_node: Any) -> Mapping[str, Any]:  # noqa: N802
-    """Distributed bottom friction: a law per zone, and each node's zone."""
-    return MappingProxyType({"law": law, "manning_per_node": manning_per_node})
+def Friction(*, manning_per_node: Any) -> Mapping[str, Any]:  # noqa: N802
+    """Distributed bottom friction: the roughness at each node, as its zone.
+
+    The LAW the zones are read under is the deck's own LAW OF BOTTOM FRICTION;
+    this file's roughness column is Manning n, so a deck naming it states 4."""
+    return MappingProxyType({"manning_per_node": manning_per_node})
 
 
 def _friction(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
@@ -502,8 +502,7 @@ def _friction(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
             "* zone  law      coef    vegetation",
             *(f"{zone_of[v]} MANNING {v:.3f} NULL" for v in unique), "END"]
     zones = [f"{i} {zone_of[float(v)]}" for i, v in enumerate(values, start=1)]
-    return ({"LAW_OF_BOTTOM_FRICTION": int(value["law"]),
-             "FRICTION_DATA": True,
+    return ({"FRICTION_DATA": True,
              "FRICTION_DATA_FILE": FRICTION_LAWS_FILENAME,
              "ZONES_FILE": ZONES_FILENAME},
             {FRICTION_LAWS_FILENAME: "\n".join(laws) + "\n",
@@ -546,15 +545,15 @@ def _rating(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
 _STORM_INTERVAL_S = 3600.0
 
 
-def Storm(*, mm_per_hr: Any, hours: Any, until_s: Any,  # noqa: N802
+def Storm(*, mm_per_day: Any, hours: Any, until_s: Any,  # noqa: N802
           series: Any = None, record: Any = None, tracers: Any = 0,
           fortran: Any = None) -> Mapping[str, Any]:
     """The storm over the domain: a measured record, or a constant design rate.
 
     A stated ``series`` of hourly gross millimetres wins; else ``record``, the
     same hours as a source published them; with neither, the constant rate over
-    ``hours`` drives the run."""
-    return MappingProxyType({"mm_per_hr": mm_per_hr, "hours": hours,
+    ``hours`` drives the run, in RAIN OR EVAPORATION IN MM PER DAY's own unit."""
+    return MappingProxyType({"mm_per_day": mm_per_day, "hours": hours,
                              "until_s": until_s, "series": series,
                              "record": record, "tracers": tracers,
                              "fortran": fortran})
@@ -571,11 +570,11 @@ def _storm(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
     if series is None:
         series = value.get("record")
     if series is None:
-        rate = value["mm_per_hr"]
+        rate = value["mm_per_day"]
         if rate is None:
             return ({}, {})
         return ({"RAIN_OR_EVAPORATION": True,
-                 "RAIN_OR_EVAPORATION_IN_MM_PER_DAY": float(rate) * 24.0,
+                 "RAIN_OR_EVAPORATION_IN_MM_PER_DAY": float(rate),
                  **_rain_tracers(value["tracers"]),
                  # A window is stated only when it CLOSES inside the run: a storm
                  # that outlasts the horizon never stops, and a keyword saying so

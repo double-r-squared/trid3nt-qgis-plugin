@@ -1,9 +1,12 @@
 """The levers the RUNTIME declares once, for every template that runs on it.
 
-A template declares no Param that is not its own question's input. What sizes
-the solve, what moment the scenario is read at, and how finely the domain is
-resolved are the runtime's, so twelve templates state them once here; a template
-that needs a different DEFAULT declares its own row and that row wins.
+A template declares no Param that is not its own question's input. What moment
+the scenario is read at, how finely the domain is resolved, what the run is sized
+on and the axis its elevations are counted from are the runtime's, so twelve
+templates state them once here; a template that needs a different DEFAULT
+declares its own row and that row wins. A value the engine's own dictionary
+carries is NOT a lever: the deck states that keyword and the user overrides it by
+the keyword's name.
 """
 
 from __future__ import annotations
@@ -32,13 +35,6 @@ LEVERS: tuple[Param, ...] = (
                "The granularity is the USER's lever: no sizing rung derives an "
                "edge from a channel nobody surveyed, so the number the run "
                "meshes at is either yours or this labeled default"),
-    Param(name="sim_duration_s", door=doors.SCENARIO, default=3600.0,
-          bounds=(60.0, 2.592e7), units="s", consequence="numerical",
-          user_lever=True,
-          desc="Simulated physical time the run covers. The clock the run is "
-               "settled on, so the deck's DURATION and every window read off it "
-               "are this one number; what is long enough is the question's, and "
-               "a question that knows states its own"),
     Param(name="event_time", door=doors.QUESTION, optional=True,
           consequence="scenario",
           derived_when_absent=(

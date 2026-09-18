@@ -680,7 +680,7 @@ signature and the rendered docstring read it, so the schema and the prose
 cannot drift. The door stops being documentation and becomes a BINDING
 AUTHORITY contract: a constant is non-question physics, so the model is
 not offered it, and a template that decides one deserves model access
-re-doors it in a one-line edit (`sim_duration_s` per template, where
+re-doors it in a one-line edit (`mesh_resolution_m` per template, where
 warranted).
 
 What the exclusion is NOT: a deletion. The row keeps its full life on the

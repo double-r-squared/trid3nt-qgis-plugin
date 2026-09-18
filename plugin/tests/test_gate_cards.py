@@ -81,20 +81,19 @@ class TestGateParsing(unittest.TestCase):
         d = gate.resolve_gate_decision(w, chosen_resolution_m=60.0)
         self.assertEqual(d.decision, "narrow_scope")
         self.assertEqual(d.revised_args, {"grid_resolution_m": 60.0})
-        # changed cadence + duration merge into the SAME revised dict
+        # changed resolution + window merge into the SAME revised dict; the
+        # cadence carries no args key - a run writes its frames on its module's
+        # own printout-period keyword.
         d = gate.resolve_gate_decision(
-            w, chosen_resolution_m=60.0, interval_min=10.0, duration_hr=12.0
+            w, chosen_resolution_m=60.0, duration_hr=12.0
         )
         self.assertEqual(
             d.revised_args,
-            {"grid_resolution_m": 60.0, "output_interval_min": 10.0, "duration_hr": 12.0},
+            {"grid_resolution_m": 60.0, "duration_hr": 12.0},
         )
         # cancel wins
         d = gate.resolve_gate_decision(w, cancel=True, chosen_resolution_m=60.0)
         self.assertEqual((d.decision, d.revised_args), ("cancel", None))
-        # interval below the deck floor is re-floored (min_interval_min=1.0)
-        d = gate.resolve_gate_decision(w, interval_min=0.5)
-        self.assertEqual(d.revised_args, {"output_interval_min": 1.0})
 
     def test_resolve_gate_decision_hardcap(self):
         w = gate.parse_payload_warning(PAYLOAD_WARNING_HARDCAP_ROW)

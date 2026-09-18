@@ -266,7 +266,6 @@ def test_time_scale_round_trips_through_json() -> None:
     rt = TimeScaleSuggestion.model_validate(json.loads(json.dumps(wire)))
     assert rt.model_dump(mode="json") == wire
     # Defaults
-    assert rt.cadence_param == "output_interval_min"
     assert rt.duration_param == "duration_hr"
     assert rt.min_interval_min == 1.0
     assert rt.is_coastal is True
@@ -337,6 +336,12 @@ def test_time_scale_rejects_zero_frame_count() -> None:
 def test_time_scale_rejects_nonpositive_choice() -> None:
     with pytest.raises(ValidationError):
         _time_scale(interval_choices=[1.0, -5.0])
+
+
+def test_time_scale_carries_no_cadence_args_key() -> None:
+    """The frame cadence is the module's own keyword, not an args key a card
+    writes back: the block suggests a cadence and overrides only the window."""
+    assert "cadence_param" not in TimeScaleSuggestion.model_fields
 
 
 def test_time_scale_carries_no_cost_field() -> None:

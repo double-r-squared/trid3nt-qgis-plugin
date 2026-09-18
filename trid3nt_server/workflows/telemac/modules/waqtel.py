@@ -225,8 +225,10 @@ def _degradation(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
         if preset is None:
             raise ValueError(
                 f"{value.get('substance')!r} names no degradation preset this deck "
-                f"carries ({sorted(value['presets'])}); state decay_half_life_hours "
-                "or decay_rate_per_day for it.")
+                f"carries ({sorted(value['presets'])}); state the law and its "
+                "coefficient by name instead - LAW OF TRACERS DEGRADATION = 2 "
+                "(per hour) or 3 (per day) with COEFFICIENT 1 FOR LAW OF TRACERS "
+                "DEGRADATION at that law's rate.")
         law, coefficient = int(preset["law"]), float(preset["coef"])
     return ({"LAW_OF_TRACERS_DEGRADATION": [law],
              "COEFFICIENT_1_FOR_LAW_OF_TRACERS_DEGRADATION": [coefficient]}, {})

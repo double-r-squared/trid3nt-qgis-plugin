@@ -1199,7 +1199,6 @@ class GateCard(QFrame):
             self._warning,
             cancel=False,
             chosen_resolution_m=self._chosen_resolution(),
-            interval_min=self._edited_float(self.interval_edit),
             duration_hr=self._edited_float(self.duration_edit),
         )
 

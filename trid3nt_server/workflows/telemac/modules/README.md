@@ -22,7 +22,21 @@ keyword its input implies, the slots its value literally fills, the file it
 writes. It states nothing else. A choice among the alternatives the dictionary
 offers - which wind option, which restart format, which runoff model - is the
 TEMPLATE's assertion where the template needs a non-default, and the engine's own
-default by omission where it does not.
+default by omission where it does not. Nor does an ARGUMENT re-name a keyword the
+dictionary carries: what the composite takes is what the dictionary LACKS - a
+file, a placement, a gradation, a series - and every keyword beside it stands on
+the body under its own name. The one argument that survives a keyword is a
+COERCION the ingestion owes its reader: a common alternate unit the question is
+asked in - microns for a diameter, milligrams per litre for a source load, a
+compass bearing for a wind - converted at the line that writes the engine's own.
+
+Beside the dictionary's own rows sits `module_bounds.json`, the PLAUSIBILITY
+bounds each keyword's values are taken inside: one `[lo, hi]` for every value a
+keyword holds, or one pair per element in the keyword's own order. It is a
+sidecar rather than a column, because the dictionary itself is re-extracted from
+the image and compared to it byte for byte. A value outside refuses by the
+keyword's name at fill, and a keyword the file rows nothing for is bounded by the
+engine alone. This is the one table a calibration reads its ranges from.
 
 A body extends its module's wrapper and nothing else: a value two templates
 share is restated in each, under the template that states it, so a keyword that

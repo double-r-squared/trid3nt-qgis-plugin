@@ -150,15 +150,14 @@ class Door:
     def _asserted(self, keyword: str) -> Any:
         """One value the DECK itself states, read off the body that states it.
 
-        A step derived at a roughness the deck was not written at describes a
+        A stage settled at a number the deck was not written at describes a
         different run, so the number is read from the deck rather than restated
         beside it."""
         stated = self.steering.ASSERTED.get(keyword)
         if stated is None:
             raise PlanValidationError(
-                f"the workflow settles this question's open channel at the "
-                f"roughness its deck is written at, and the deck states no "
-                f"{keyword}.")
+                f"the workflow settles this question's run on the {keyword} its "
+                f"deck states, and this deck states none.")
         return stated
 
     def _file(self, keyword: str, fallback: str) -> str:
@@ -187,7 +186,24 @@ class Door:
             f"other keyword is the engine's own default and is set on the call - "
             f"keywords={{\"LAW OF BOTTOM FRICTION\": 4}} - after "
             f"describe_keywords(module=\"{body.MODULE}\", query=...) names it "
-            f"with its help, its choices and that default.")
+            f"with its help, its choices and that default.\n"
+            f"Stated by this deck (override any of them by name): "
+            f"{self._stated_keywords()}.")
+
+    def _stated_keywords(self) -> str:
+        """The deck's own opinions, keyword by keyword, in dictionary order.
+
+        Generated off ASSERTED so the doc cannot claim an opinion the deck does
+        not hold; a value the run MEASURES is named as measured rather than
+        printed, because it has no number until the run has one."""
+        body = self.steering
+        rows = []
+        for name, slot in body.MODULE_INPUT.items():
+            if name not in body.ASSERTED:
+                continue
+            value = body.ASSERTED[name]
+            rows.append(f"{slot.keyword} = {_stated_value(value)}")
+        return "; ".join(rows) if rows else "nothing"
 
     def __call__(self, ops: Workflow) -> list[Any]:
         """The step sequence: the world, then fill, then run, then the outputs."""
@@ -329,8 +345,12 @@ class Door:
                         "geometry": geometry, "boundary": boundary,
                         "result": result,
                         "mesh_resolution_m": ParamRef("mesh_resolution_m"),
+                        # THE CLOCK IS THE DECK'S: DURATION is a keyword the
+                        # module carries, so the settle reads the seconds the
+                        # deck was written for rather than a lever restating it.
+                        "duration_s": self._asserted("DURATION"),
                         **{name: ParamRef(name)
-                           for name in ("name", "sim_duration_s", "continue_from")
+                           for name in ("name", "continue_from")
                            if name in declared}}))
 
     def _outputs_step(self, params: Mapping[str, Any]) -> Step:
@@ -380,6 +400,25 @@ def _painted(row: Mapping[str, Any]) -> list[Primitive]:
     if row.get("varies"):
         return [field(token, t="every", module=module).animate(style=style)]
     return [field(token, t=-1, module=module).layer(style=style)]
+
+
+#: How long a stated value is printed before the doc names its shape instead: a
+#: whole tracer array spelled out crowds the keywords around it off the page.
+_VALUE_CHARS = 48
+
+
+def _stated_value(value: Any) -> str:
+    """One asserted value, as the docstring prints it."""
+    from trid3nt_server.workflows.runtime.plan import _Placeholder
+
+    if value is None:
+        return "nothing (the engine's default stands)"
+    if isinstance(value, (Ref, _Placeholder)):
+        return "measured"
+    if isinstance(value, (list, tuple)):
+        text = ", ".join(_stated_value(item) for item in value)
+        return f"[{text}]" if len(text) <= _VALUE_CHARS else f"{len(value)} values"
+    return f"{value:g}" if isinstance(value, float) else str(value)
 
 
 def _unanchored(primitive: Primitive) -> Primitive:
