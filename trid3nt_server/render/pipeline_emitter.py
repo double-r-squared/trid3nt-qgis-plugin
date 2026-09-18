@@ -628,6 +628,9 @@ def summary_of(layer: LayerURI) -> ProjectLayerSummary:
         # rewrite, and matching one field's still to its animation by prose is
         # how two scales for one quantity get shipped.
         quantity=getattr(layer, "quantity", None),
+        # And WHICH tracer it is: a named release renames the tracer, so the
+        # quantity moves with the name and the position is what stays askable.
+        tracer=getattr(layer, "tracer", None),
         # Mesh CRS: an MDAL mesh reports an empty native crs(), so the plugin's
         # _add_mesh needs the run to state it. None for raster/vector.
         crs_authid=getattr(layer, "crs_authid", None),

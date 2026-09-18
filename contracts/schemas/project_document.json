@@ -234,6 +234,18 @@
           "title": "Temporal",
           "type": "boolean"
         },
+        "tracer": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tracer"
+        },
         "uri": {
           "title": "Uri",
           "type": "string"

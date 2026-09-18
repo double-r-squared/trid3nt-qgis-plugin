@@ -134,6 +134,12 @@ class ProjectLayerSummary(GraceModel):
     # they are held to a single scale. ``None`` when none was declared.
     quantity: str | None = None
 
+    # WHICH tracer of the run this row carries, counted from 1 in the order the
+    # deck declares them. A tracer's NAME is the run's - a named release renames
+    # it - so its position is the only stable way to ask for one. ``None`` on
+    # every row that is not a tracer.
+    tracer: int | None = None
+
 
 class ProjectDocument(DocModel):
     """``projects``: the metadata index over published project files."""

@@ -81,6 +81,9 @@ class Deliverable:
     product: Raster | Vector | Mesh | Chart
     caption: str
     style: Mapping[str, Any] | None = None
+    #: WHICH tracer of the run this is, counted from 1 in the deck's own order.
+    #: A tracer's name is the run's, so its position is what a reader asks by.
+    tracer: int | None = None
 
 
 @dataclass(frozen=True)
@@ -249,8 +252,8 @@ def _mesh_layer(item: Deliverable, *, run_id: str, engine: str, name: str,
                       for basename in mesh.datasets],
         style=_style_row(item, kind="mesh", value_range=value_range,
                          dataset_group=mesh.group, floor=mesh.floor),
-        quantity=quantity, role="primary", units=mesh.units, bbox=mesh.bbox,
-        crs_authid=f"EPSG:{int(mesh.epsg)}",
+        quantity=quantity, tracer=item.tracer, role="primary", units=mesh.units,
+        bbox=mesh.bbox, crs_authid=f"EPSG:{int(mesh.epsg)}",
         reference_time=mesh.reference_time)
 
 

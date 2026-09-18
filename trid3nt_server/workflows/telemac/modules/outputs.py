@@ -1331,6 +1331,16 @@ PRIMITIVES: Mapping[str, Any] = {
 _DATASET_SUFFIX = ".dat"
 
 
+def tracer_position(token: Any) -> int | None:
+    """``T<n>`` -> ``n``, the tracer's place in the deck's own order; else ``None``.
+
+    The token is what a module's table publishes a tracer under, and the position
+    is what survives a run renaming the tracer after the release it was given."""
+    upper = str(token or "").strip().upper()
+    return (int(upper[1:]) if upper.startswith("T") and upper[1:].isdigit()
+            else None)
+
+
 def deliver(primitive: Primitive, read: Read, solved: Solved, *, caption: str,
             name: str, where: str) -> Deliverable:
     """One read, in the format QGIS opens it in.
@@ -1343,6 +1353,7 @@ def deliver(primitive: Primitive, read: Read, solved: Solved, *, caption: str,
     from trid3nt_server.render.formats import quantity_of
 
     quantity = quantity_of(caption)
+    tracer = tracer_position(primitive.variable)
     if isinstance(read, Frames):
         return Deliverable(
             product=Mesh(file=read.file, group=read.group, epsg=read.epsg,
@@ -1350,12 +1361,12 @@ def deliver(primitive: Primitive, read: Read, solved: Solved, *, caption: str,
                          units=read.units, bbox=solved.bbox, floor=read.floor,
                          value_range=presets.measured_range(
                              read.values, primitive.style, floor=read.floor)),
-            caption=caption, style=primitive.style)
+            caption=caption, style=primitive.style, tracer=tracer)
     if isinstance(read, Field):
         return Deliverable(product=_derived_group(read, solved, caption=caption,
                                                   quantity=quantity,
                                                   style=primitive.style),
-                           caption=caption, style=primitive.style)
+                           caption=caption, style=primitive.style, tracer=tracer)
     if isinstance(read, Track):
         return Deliverable(product=Vector(features=read.features),
                            caption=caption, style=primitive.style)

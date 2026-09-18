@@ -427,6 +427,18 @@
       "title": "Synthetic Inputs",
       "type": "array"
     },
+    "tracer": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Tracer"
+    },
     "units": {
       "anyOf": [
         {

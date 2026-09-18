@@ -162,6 +162,11 @@ class LayerURI(GraceModel):
     #: identity, and it is what a still, a frame and an animation of one field
     #: are held to a single scale by.
     quantity: str | None = None
+    #: WHICH tracer of the run this layer carries, counted from 1 in the order
+    #: the deck declares them. A tracer's NAME is the run's own - a named
+    #: release renames it, and the quantity moves with it - so the position is
+    #: the only stable way to ask for one. ``None`` on a row that is not a tracer.
+    tracer: int | None = None
     role: Literal["primary", "context", "input"] = "primary"
     #: WHERE the layer came from, read by a person. ``user`` is a file the user
     #: pushed in themselves; ``None`` is the system saying nothing. Nothing
