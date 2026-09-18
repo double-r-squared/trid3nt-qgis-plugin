@@ -7,7 +7,9 @@ through, two different vertical datums refusing by name, an unstated datum
 refusing, a STATED OFFSET bringing two differing datums onto one axis while an
 offset between two other frames still refuses, a primary of DEPTHS read as
 elevations on the fallback's zero through the shift the survey publishes about
-itself, two disjoint surfaces, and the registration."""
+itself, two disjoint surfaces, a measurement over half a domain landing survey and
+terrain in the right halves even though it is read onto a finer grid, a corner no
+sounding stood in coming back terrain, and the registration."""
 
 from __future__ import annotations
 
@@ -27,6 +29,7 @@ from trid3nt_server.tools.derive.derive_merge_rasters.derive_merge_rasters impor
 )
 from trid3nt_server.tools.derive.derive_survey_surface.derive_survey_surface import (
     SurveySurfaceLayerURI,
+    derive_survey_surface,
 )
 
 _NODATA = float("nan")
@@ -104,6 +107,67 @@ def test_the_sidecar_says_which_input_painted_each_cell(tmp_path) -> None:
     assert set(np.unique(won).tolist()) == {0, 1}
     assert float(values[won == 0].max()) == pytest.approx(-5.0)
     assert float(values[won == 1].min()) == pytest.approx(10.0)
+
+
+def test_a_measurement_over_half_a_domain_lands_in_the_right_halves(tmp_path) -> None:
+    """The primary is read onto a FINER grid than its own, and the cells it wins
+    are exactly the ones it measured: a warp that grew the measurement by a cell
+    would hand the merge survey provenance over ground nobody surveyed."""
+    half = np.full((8, 8), -3.0)
+    half[:, 4:] = _NODATA
+    primary = _layer(_write(half, west=500_000.0, north=4_000_000.0, cell=8.0),
+                     "NAVD88")
+    fallback = _layer(_write(np.full((32, 32), 12.0), west=500_000.0,
+                             north=4_000_000.0, cell=2.0), "NAVD88")
+    merged = derive_merge_rasters(primary=primary, fallback=fallback,
+                                  _output_dir=str(tmp_path))
+    with rasterio.open(merged.provenance_uri) as source:
+        won = source.read(1)
+    assert won.shape == (32, 32)
+    assert (won[:, :16] == 0).all(), "the surveyed half must read survey whole"
+    assert (won[:, 16:] == 1).all(), "the unsurveyed half must read terrain whole"
+    assert merged.primary_fraction == pytest.approx(0.5)
+
+
+def _quarter_left_unsounded(step_deg: float = 0.0001, n: int = 20) -> dict:
+    """Soundings over three quadrants of a patch, the north-east one left alone."""
+    lon, lat = -122.673, 45.517
+    features = []
+    for row in range(n):
+        for col in range(n):
+            if row >= n // 2 and col >= n // 2:
+                continue
+            features.append({"type": "Feature",
+                             "properties": {"depth_m": 4.0,
+                                            "vertical_datum": "NAVD88"},
+                             "geometry": {"type": "Point", "coordinates": [
+                                 lon + col * step_deg, lat + row * step_deg]}})
+    return {"type": "FeatureCollection", "features": features}
+
+
+def test_a_corner_no_sounding_stood_in_comes_back_terrain(tmp_path) -> None:
+    """End to end: the derive bounds its surface to the footprint, and the merge
+    reads the corner outside it off the wider surface."""
+    from rasterio.warp import transform as warp
+
+    doc = _quarter_left_unsounded()
+    surface = derive_survey_surface(points=doc, resolution_m=5.0,
+                                    _output_dir=str(tmp_path))
+    west, south, east, north = surface.bbox
+    fallback = _layer(_write(np.full((40, 40), 12.0), west=west - 0.0002,
+                             north=north + 0.0002, cell=0.0001), "NAVD88")
+    with rasterio.open(fallback.uri, "r+") as handle:
+        handle.crs = rasterio.crs.CRS.from_epsg(4326)
+    merged = derive_merge_rasters(primary=surface, fallback=fallback,
+                                  _output_dir=str(tmp_path))
+    corner = (east - 0.00005, north - 0.00005)
+    sounded = (west + 0.00005, south + 0.00005)
+    with rasterio.open(merged.provenance_uri) as source:
+        xs, ys = warp("EPSG:4326", source.crs,
+                      [corner[0], sounded[0]], [corner[1], sounded[1]])
+        read = [value[0] for value in source.sample(list(zip(xs, ys)))]
+    assert read[0] == 1, "a corner no sounding stood in is terrain"
+    assert read[1] == 0, "the sounded corner is survey"
 
 
 def test_an_absent_primary_passes_the_other_surface_through(tmp_path) -> None:

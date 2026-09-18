@@ -1,9 +1,11 @@
 """``derive_survey_surface``: scattered measurements -> the surface between them.
 
 Inverse-distance weighting over the nearest measurements, computed in the points'
-own UTM zone so the resolution asked for is the resolution on the ground. A cell
-with no measurement within the search radius is left as nodata rather than filled
-from far away: an unsurveyed bank is unsurveyed, and the raster says so.
+own UTM zone so the resolution asked for is the resolution on the ground. The
+surface is valid only over the FOOTPRINT the soundings measured - what lies
+within the survey's own reach of one of them - and is nodata outside it, so a
+consumer reading the mask sees where the measurement stopped: an unsurveyed bank
+is unsurveyed, and the raster says so.
 """
 
 from __future__ import annotations
@@ -30,7 +32,9 @@ class SurveySurfaceError(RuntimeError):
     """A typed refusal: ``SURVEY_SURFACE_NO_POINTS``,
     ``SURVEY_SURFACE_NO_VALUE_FIELD`` (none, or several and no choice made),
     ``SURVEY_SURFACE_RESOLUTION_INVALID`` (a cell size that is not positive, or a
-    grid past the cell ceiling), ``SURVEY_SURFACE_UNREADABLE``,
+    grid past the cell ceiling), ``SURVEY_SURFACE_FOOTPRINT_EMPTY`` (a cell so
+    coarse that no cell centre falls inside the footprint),
+    ``SURVEY_SURFACE_UNREADABLE``,
     ``SURVEY_SURFACE_DATUMS_DIFFER``, ``SURVEY_SURFACE_WRITE_FAILED``.
     """
 
@@ -60,6 +64,8 @@ class SurveySurfaceLayerURI(LayerURI):
     n_points: int = 0
     resolution_m: float = 0.0
     search_radius_m: float = 0.0
+    #: The share of the grid inside the FOOTPRINT: what this survey measured,
+    #: and what the merge below it may call measured. The rest is nodata.
     filled_fraction: float = 0.0
     value_min: float | None = None
     value_max: float | None = None
@@ -75,9 +81,11 @@ _STYLE = {"kind": "continuous", "ramp": "ylgnbu"}
 _NEAREST = 12
 _POWER = 2.0
 
-#: How far the interpolation reaches when the caller states no radius: a multiple of
-#: the survey's own median nearest-neighbour spacing. Beyond that a cell is between
-#: no measurements at all and is left nodata.
+#: THE FOOTPRINT RULE, as a multiple of the survey's own median nearest-neighbour
+#: spacing: the surface is valid inside the union of discs of that reach around the
+#: soundings and nodata outside. The reach belongs to the MEASUREMENTS - a coarser
+#: output grid never widens it, because how far a sounding speaks for the ground
+#: around it is not a property of the raster it is drawn on.
 _RADIUS_SPACINGS = 3.0
 
 #: The most cells one call will build. A ceiling refuses by name rather than
@@ -223,7 +231,7 @@ def _grid(bounds: tuple[float, float, float, float], resolution_m: float) -> tup
 
 def _idw(xy: Any, values: Any, width: int, height: int, transform: Any,
          radius_m: float) -> Any:
-    """The IDW surface over the grid, nodata beyond ``radius_m`` of any measurement."""
+    """The IDW surface over the grid, nodata outside the soundings' footprint."""
     import numpy as np
     from scipy.spatial import cKDTree
 
@@ -240,6 +248,8 @@ def _idw(xy: Any, values: Any, width: int, height: int, transform: Any,
     weight = 1.0 / np.maximum(distance, 1.0e-9) ** _POWER
     surface = (weight * values[index]).sum(axis=1) / weight.sum(axis=1)
     surface[exact] = values[index[exact, 0]]
+    # THE FOOTPRINT: a cell whose centre is farther than the reach from every
+    # sounding is outside what this survey measured, and nothing is invented there.
     surface[distance[:, 0] > radius_m] = _NODATA
     return surface.reshape(height, width).astype("float32")
 
@@ -270,9 +280,11 @@ def derive_survey_surface(
 
     The surface is inverse-distance weighted over the twelve nearest
     measurements with weights ``1/d^2``, computed in the points' own UTM zone so
-    the cell size asked for is metres on the ground. A cell with no measurement
-    within the search radius is left as NODATA: the gap between two survey lines
-    is interpolated, the bank a survey never crossed is not.
+    the cell size asked for is metres on the ground. It is valid only over the
+    FOOTPRINT the soundings measured - what lies within the survey's own reach of
+    one of them - and NODATA outside: the gap between two survey lines is
+    interpolated, the bank a survey never crossed is not. That mask is what a
+    merge below reads to say which cells a measurement painted.
 
     Do NOT use for: resampling a raster (that is a warp), or contouring.
 
@@ -286,9 +298,11 @@ def derive_survey_surface(
         value_field: the property to interpolate. Optional only when the layer
             carries exactly one numeric field; with several, naming it is
             required rather than guessed.
-        max_distance_m: how far a cell may be from the nearest measurement and
-            still be filled. Default is three times the survey's own median
-            point spacing, which is stated on the result.
+        max_distance_m: THE REACH - how far a cell may be from the nearest
+            measurement and still be inside the footprint. Default is three
+            times the survey's own median point spacing, which is stated on the
+            result; a coarse ``resolution_m`` never widens it, and a cell so
+            coarse that no cell centre falls inside the footprint refuses.
 
     Returns the surface as a single-band float32 raster in the local UTM zone,
     with the field it interpolated, the vertical datum the measurements state on
@@ -338,12 +352,21 @@ def derive_survey_surface(
     from scipy.spatial import cKDTree
 
     spacing = float(np.median(cKDTree(xy).query(xy, k=2)[0][:, 1]))
-    radius = float(max_distance_m) if max_distance_m else max(
-        spacing * _RADIUS_SPACINGS, resolution_m)
+    radius = float(max_distance_m) if max_distance_m else spacing * _RADIUS_SPACINGS
     width, height, transform = _grid(
         (xy[:, 0].min(), xy[:, 1].min(), xy[:, 0].max(), xy[:, 1].max()), resolution_m)
     surface = _idw(xy, values, width, height, transform, radius)
-    filled = float(np.isfinite(surface).mean())
+    inside = int(np.isfinite(surface).sum())
+    if not inside:
+        raise SurveySurfaceError(
+            "SURVEY_SURFACE_FOOTPRINT_EMPTY",
+            f"no cell centre of a {resolution_m:g} m grid falls within {radius:.2f} m "
+            f"of a sounding, so this survey measures none of it and a surface here "
+            "would be interpolation over ground nobody sounded. Ask for a cell at or "
+            "below the survey's own reach, or state max_distance_m if these "
+            "measurements speak for the ground farther than their spacing suggests.")
+    filled = float(inside) / float(width * height)
+    footprint_km2 = inside * resolution_m * resolution_m / 1.0e6
 
     seed = uuid.uuid4().hex[:8]
     uri = write_cog(surface, crs=f"EPSG:{epsg}", transform=transform,
@@ -355,8 +378,10 @@ def derive_survey_surface(
     notes = [
         f"Inverse-distance weighted over the {min(_NEAREST, len(values))} nearest of "
         f"{len(values)} measurements, weights 1/d^{_POWER:g}, in EPSG:{epsg}.",
-        f"Median point spacing {spacing:.2f} m; cells farther than {radius:.2f} m "
-        f"from any measurement are nodata ({filled * 100.0:.1f}% of cells filled).",
+        f"Median point spacing {spacing:.2f} m. The FOOTPRINT is what lies within "
+        f"{radius:.2f} m of a sounding - {footprint_km2:.4f} km2, "
+        f"{filled * 100.0:.1f}% of the grid this surface spans - and every cell "
+        f"outside it is nodata, measured by nothing.",
         (f"The measurements are counted from {datum}." if datum
          else "The measurements state no vertical datum, so what this surface is "
               "counted from is unknown and it cannot be merged with another."),

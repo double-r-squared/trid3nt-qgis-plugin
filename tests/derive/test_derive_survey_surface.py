@@ -1,12 +1,14 @@
 """``derive_survey_surface``: the surface between scattered measurements.
 
 IDW in the points' own UTM zone, holding each measurement at its own position and
-leaving a cell with nothing near it as nodata. Covered with that, the refusals: no
-points, no decidable value field, a cell size that is not one, and a grid past the
-cell ceiling."""
+leaving every cell outside the soundings' FOOTPRINT as nodata - a footprint the
+output grid never widens. Covered with that, the refusals: no points, no decidable
+value field, a cell size that is not one, a grid past the cell ceiling, and a cell
+so coarse that the footprint holds no cell centre."""
 
 from __future__ import annotations
 
+import math
 
 import numpy as np
 import pytest
@@ -76,6 +78,48 @@ def test_the_search_radius_defaults_to_the_survey_own_spacing(tmp_path):
     # neighbour on a square degree grid; the default reach is three of those.
     assert layer.search_radius_m == pytest.approx(3.0 * 31.2, rel=0.1)
     assert "Median point spacing" in " ".join(layer.notes)
+
+
+def test_a_coarse_output_grid_never_widens_the_measurements_reach(tmp_path):
+    """The reach is the survey's own: asking for a coarser cell must not let the
+    surface claim ground farther from a sounding than a fine cell would."""
+    fine = derive_survey_surface(points=_plane(), resolution_m=5.0,
+                                 _output_dir=str(tmp_path))
+    coarse = derive_survey_surface(points=_plane(), resolution_m=150.0,
+                                   _output_dir=str(tmp_path))
+    assert coarse.search_radius_m == fine.search_radius_m
+
+
+def test_the_note_states_the_footprint_the_soundings_measured(tmp_path):
+    layer = derive_survey_surface(points=_plane(), resolution_m=10.0,
+                                  _output_dir=str(tmp_path))
+    note = " ".join(layer.notes)
+    assert "FOOTPRINT" in note and "km2" in note
+    band, _transform, _crs = _read(layer.uri)
+    assert layer.filled_fraction == pytest.approx(
+        float(np.isfinite(band).mean()), abs=1e-4)
+
+
+def _ring(count: int = 72, radius_m: float = 50.0) -> dict:
+    """Soundings around a circle, so the grid's own corners stand off the survey."""
+    dlon = radius_m / (111_320.0 * math.cos(math.radians(_LAT)))
+    dlat = radius_m / 111_132.0
+    features = []
+    for step in range(count):
+        angle = 2.0 * math.pi * step / count
+        features.append({"type": "Feature", "properties": {"depth_m": 4.0},
+                         "geometry": {"type": "Point", "coordinates": [
+                             _LON + dlon * math.cos(angle),
+                             _LAT + dlat * math.sin(angle)]}})
+    return {"type": "FeatureCollection", "features": features}
+
+
+def test_a_cell_coarser_than_the_surveys_reach_refuses_rather_than_reaching(tmp_path):
+    with pytest.raises(SurveySurfaceError) as excinfo:
+        derive_survey_surface(points=_ring(), resolution_m=200.0,
+                              _output_dir=str(tmp_path))
+    assert excinfo.value.error_code == "SURVEY_SURFACE_FOOTPRINT_EMPTY"
+    assert "max_distance_m" in str(excinfo.value)
 
 
 def test_several_numeric_fields_are_refused_rather_than_guessed_between(tmp_path):
