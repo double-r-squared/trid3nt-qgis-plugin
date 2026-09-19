@@ -2638,9 +2638,34 @@ class FormCard(QFrame):
                 _FORM_ORIGIN_CHIP_STYLE if row.origin else _FORM_BADGE_STYLE)
             badge.setToolTip(row.source_badge if row.origin else (row.note or ""))
             grid.addWidget(badge, i, 2)
+            if row.choices is not None:
+                i += 1
+                grid.addWidget(self._ranked(row.choices), i, 0, 1, 3)
         grid.setColumnStretch(1, 1)
         grid.setColumnStretch(2, 1)
         return holder
+
+    @staticmethod
+    def _ranked(choice: gate.SourceChoiceRow) -> QLabel:
+        """The ranked list under a matched slot, the pick marked.
+
+        Every source that was weighed and why it was or was not taken, so a
+        reader can see the run was not handed its bed by a name somebody typed."""
+        lines = [choice.sentence] if choice.sentence else []
+        for row in choice.rows:
+            mark = "*" if row.fetcher == choice.picked else " "
+            facts = ", ".join(f for f in (row.resolution, row.recency, row.datum,
+                                          row.extent) if f)
+            tail = f" - {row.excluded}" if row.excluded else ""
+            lines.append(f"  {mark} {row.fetcher}: {facts}{tail}")
+        if choice.loosened:
+            lines.append(f"  the run states {choice.loosened} loosened, which "
+                         "is the user's choice")
+        label = QLabel("\n".join(lines))
+        label.setWordWrap(True)
+        label.setTextFormat(Qt.TextFormat.PlainText)
+        label.setStyleSheet(_GATE_NOTE_STYLE)
+        return label
 
     @staticmethod
     def _editor_tooltip(row: gate.ParamRow) -> str:

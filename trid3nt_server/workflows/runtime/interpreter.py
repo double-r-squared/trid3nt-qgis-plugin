@@ -47,8 +47,8 @@ from .errors import (
     ParamRefLeakedError,
     StepFailedError,
 )
-from .journal import (bind_notes, bind_outputs, drain_notes, drain_outputs,
-                      journal_note)
+from .journal import (bind_choices, bind_notes, bind_outputs, drain_choices,
+                      drain_notes, drain_outputs, journal_note, slot_choice)
 from .ledger import LedgerRecord, StepLedger, inputs_digest, invocation_key
 from .params import Param, ResolvedParams
 from .plan import (
@@ -161,6 +161,7 @@ async def interpret(
     token = bind_domain(domain)
     notes_token = bind_notes()
     outputs_token = bind_outputs()
+    choices_token = bind_choices()
     final_index = _final_recordable_index(nodes)
     first_step = next((n.index for n in nodes if n.kind == "step"), None)
     self_reviewed = any(n.step.self_gating for n in nodes)
@@ -210,7 +211,6 @@ async def interpret(
         out.domain = current_domain()
         out.charts = dict(env.charts)
         out.data_records = list(env.data_records)
-        out.choices = list(env.choices)
         # An unfilled context slot is LABELLED, never silent: the run answered a
         # slightly different question than one that had the layer, and the reader
         # is the only one who can decide whether that matters.
@@ -225,7 +225,6 @@ async def interpret(
         # run's answer. Only a run that REACHED its end leaves work a later
         # invocation may inherit, through the snapshot a derived run seeds from.
         out.data_records = list(env.data_records)
-        out.choices = list(env.choices)
         if isinstance(exc, DeclarativeError):
             exc.partial_run = out
         await env.ledger.complete()
@@ -236,6 +235,7 @@ async def interpret(
         # note a step wrote on its way to the failure is often the reason for it.
         out.notes.extend(drain_notes(notes_token))
         out.outputs.extend(drain_outputs(outputs_token))
+        out.choices.extend(drain_choices(choices_token))
     # The terminal leak guard: a ParamRef in what the caller receives is a
     # declaration that escaped binding, never data. Three surfaces, three budgets,
     # one shared cycle guard - so the value that is also a step result is walked
@@ -311,8 +311,6 @@ class _Env:
     #: the WINDOW a matched series source has to cover, so a run longer than the
     #: record refuses rather than opening on a record that stops early.
     window_s: float | None = None
-    #: The ranked list behind every slot the match filled.
-    choices: list[SourceChoice] = field(default_factory=list)
 
 
 def _data_step_label(name: str) -> str:
@@ -472,7 +470,8 @@ async def _probe(env: _Env, decl: DataDecl, data_class: str,
     A source that held nothing over this domain is dropped and the next takes
     its turn, which is how the list a reader sees says what the world answered
     rather than what the sort preferred. ``None`` where none of them answered."""
-    choice = match(await _need(env, decl, data_class), sources_with_coverage())
+    choice = match(await _need(env, decl, data_class, label),
+                   sources_with_coverage())
     while choice.picked:
         row = _runtime_row(env, f"{label.replace(' ', '_')}_{choice.picked}",
                            choice.picked,
@@ -489,10 +488,10 @@ async def _probe(env: _Env, decl: DataDecl, data_class: str,
             choice = dropped_from(choice, choice.picked,
                                   f"held nothing here ({exc})")
             continue
-        env.choices.append(choice)
+        slot_choice(choice)
         journal_note(choice.sentence)
         return choice, value
-    env.choices.append(choice)
+    slot_choice(choice)
     journal_note(choice.sentence)
     return choice, None
 
@@ -526,7 +525,8 @@ def _mesh_m(env: _Env) -> float | None:
     return env.params.value_of("mesh_resolution_m") if env.params else None
 
 
-async def _need(env: _Env, decl: DataDecl, data_class: str) -> Need:
+async def _need(env: _Env, decl: DataDecl, data_class: str,
+                label: str) -> Need:
     """What this slot asks the world for, assembled off the RUN.
 
     The class is the slot's; the place is the domain's or the point the row was
@@ -535,7 +535,7 @@ async def _need(env: _Env, decl: DataDecl, data_class: str) -> Need:
 
     lon, lat = await _place(env, decl)
     opens = env.params.value_of("event_time") if env.params else None
-    return Need(slot=decl.name, data_class=data_class, lon=lon, lat=lat,
+    return Need(slot=label, data_class=data_class, lon=lon, lat=lat,
                 opens=str(opens) if opens else None,
                 until=_closes(opens, env.window_s), frame=run_frame(env.params),
                 mesh_m=_mesh_m(env))

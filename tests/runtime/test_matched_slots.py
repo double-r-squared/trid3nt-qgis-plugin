@@ -17,6 +17,8 @@ from trid3nt_contracts.coverage import Coverage, CoverageExtent, CoverageWindow
 from trid3nt_server.workflows.runtime import Data, data_rows
 from trid3nt_server.workflows.runtime import interpreter
 from trid3nt_server.workflows.runtime.domain import Domain, bind_domain, reset_domain
+from trid3nt_server.workflows.runtime.journal import (
+    bind_choices, drain_choices, run_choices)
 
 WILLAMETTE = (-122.72, 45.50, -122.62, 45.56)
 CONUS = [[(-125.0, 24.0), (-66.0, 24.0), (-66.0, 50.0), (-125.0, 50.0)]]
@@ -82,9 +84,11 @@ def world(monkeypatch):
                         lambda: [(n, s.coverage) for n, s in SPECS.items()])
     monkeypatch.setattr(interpreter, "_spec_of", lambda name: SPECS[name])
     token = bind_domain(Domain(bbox=WILLAMETTE, geometry={}, label="reach"))
+    chosen = bind_choices()
     try:
         yield called
     finally:
+        drain_choices(chosen)
         reset_domain(token)
 
 
@@ -141,7 +145,7 @@ def test_no_measurement_over_this_domain_leaves_the_terrain_as_the_whole_bed(
     assert out == "s3://b/fetch_terrain.tif"
     assert "derive_merge_rasters" not in [runner for runner, _kw in world]
     # BOTH measurements were tried, in rank order, and the sheet says so.
-    sentence = env.choices[-1].sentence
+    sentence = run_choices()[-1].sentence
     assert "fetch_soundings" in sentence and "fetch_bed_raster" in sentence
 
 
@@ -185,3 +189,36 @@ def test_a_need_and_a_producer_on_one_row_is_refused_at_declaration():
             bed = Data.bed(tool("fetch_dem"), need="bathymetry")
 
         data_rows(DATA)
+
+
+def test_the_ranked_list_is_one_object_the_card_and_the_sheet_both_read(world):
+    """Three views, one text: the card's row, the tool result on a tie and the
+    record's own line all carry the sentence the model was given."""
+    from trid3nt_contracts.payload_warning import ParamSheetRow
+    from trid3nt_server.workflows.runtime.journal import build_record
+    from trid3nt_server.workflows.runtime.workflow import _ranked_rows
+    from trid3nt_server.workflows.telemac.workflow import _source_rows
+
+    env = _env()
+    asyncio.run(interpreter._matched_bed(env, _row(Data.bed(need="bathymetry"),
+                                                   "bed")))
+    rows = _source_rows()
+    assert [row.name for row in rows] == ["bed terrain source",
+                                          "bed bathymetry source"]
+    card = rows[-1]
+    assert isinstance(card, ParamSheetRow)
+    assert card.value == "fetch_soundings"
+    assert card.choices.picked == "fetch_soundings"
+    # the sentence the card shows IS the sentence the model was given
+    assert card.note == card.choices.sentence
+    # the sheet stores the pick and its reason under the slot's own name
+    record = build_record(
+        run_id="r", engine="telemac", module="t2d", sheet=(), answer={},
+        provenance=(), result=None, wall_seconds=1.0, origin="test",
+        executed=(), replayed=(), notes=(), sources=run_choices())
+    assert record["sources"]["bed bathymetry"]["picked"] == "fetch_soundings"
+    assert record["sources"]["bed bathymetry"]["reason"] == card.choices.sentence
+    # the tool result's TIE view names every row so a model can pick one
+    tied = card.choices.model_copy(update={"tie": True})
+    assert "fetch_soundings" in _ranked_rows(tied)
+    assert "1)" in _ranked_rows(tied)

@@ -713,7 +713,8 @@ def card_rows(sheet: Sheet) -> list[ParamSheetRow]:
     is OPEN, then the rest.
 
     The rest is the whole module, folded under advanced with its engine default."""
-    rows = [_slot_row(name, row) for name, row in sheet.filled.items()]
+    rows = _source_rows() + [_slot_row(name, row)
+                             for name, row in sheet.filled.items()]
     rows += _coupled_rows(sheet)
     rows += _written_rows(sheet)
     rows += _serial_rows(sheet)
@@ -729,6 +730,25 @@ def card_rows(sheet: Sheet) -> list[ParamSheetRow]:
             and not slot.is_required]
     return rows + [_default_row(slot) for slot in
                    sorted(rest, key=lambda slot: _group(slot))]
+
+
+def _source_rows() -> list[ParamSheetRow]:
+    """One row per DATA slot the match filled: the ranked list, pick highlighted.
+
+    The card renders the list the model was given, so the two cannot describe
+    one run differently. Not editable here - a source is superseded by supplying
+    the slot, which is a different door."""
+    from trid3nt_server.workflows.runtime.journal import run_choices
+
+    return [ParamSheetRow(
+        name=f"{choice.slot} source", value=choice.picked or "nothing matched",
+        desc=f"Which source filled the {choice.slot} slot, matched on "
+             f"{choice.need}.",
+        door="scenario", basis="derived", origin="producer", editable=False,
+        source_badge=(f"{len(choice.rows)} sources weighed"
+                      if choice.tie else "matched on the coverage rows"),
+        note=choice.sentence, choices=choice, group="Sources")
+        for choice in run_choices()]
 
 
 def _decks(sheet: Sheet) -> list[tuple[Any, list[str], Mapping[str, Any]]]:

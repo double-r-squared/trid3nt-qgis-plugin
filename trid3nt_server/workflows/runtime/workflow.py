@@ -282,6 +282,11 @@ class Workflow:
                        derived_from: Derivation | None = None) -> Any:
         result = run.value
         notes = list(run.notes) + [n for n in self.checks(result, run) if n]
+        # THE TIE VIEW: several sources ranked equal on every fact the sort
+        # reads, so the rows travel on the result and the model or the user
+        # picks one. A list with a clear winner carries no table - the sentence
+        # already said which source filled the slot and why.
+        notes += [_ranked_rows(choice) for choice in run.choices if choice.tie]
         if derived_from is not None:
             notes.append(_derivation_note(derived_from))
         update: dict[str, Any] = {
@@ -381,7 +386,7 @@ class Workflow:
             origin=journal.run_origin(live_session=current_emitter() is not None),
             executed=run.executed, replayed=run.replayed, notes=list(notes),
             outputs=run.outputs, keywords=run.keywords,
-            supplied=dict(supplied or {}),
+            supplied=dict(supplied or {}), sources=run.choices,
             parent_run_id=derived_from.parent_run_id if derived_from else None,
             overrides=derived_from.overrides if derived_from else (),
             continued_from=derived_from.continued_from if derived_from else None,
@@ -565,6 +570,19 @@ def _wire_signature(params: Sequence[Param], extra: Sequence[tuple[str, Any]],
     annotations["_extra_ignored"] = Any
     annotations["return"] = Any
     return inspect.Signature(sig_params, return_annotation=Any), annotations
+
+
+def _ranked_rows(choice: Any) -> str:
+    """The ranked list as the TOOL RESULT carries it: the rows and their facts.
+
+    One line per source so a model can answer with a row rather than a name."""
+    rows = "; ".join(
+        f"{index + 1}) {row.fetcher} - {row.resolution}, {row.recency}, "
+        f"{row.datum}, {row.extent}"
+        for index, row in enumerate(choice.rows))
+    return (f"{choice.slot}: several sources rank equal for {choice.need}, and "
+            f"{choice.picked} was taken. {rows}. Name another by its row to "
+            "re-run on it.")
 
 
 def _derivation_note(derived_from: Derivation) -> str:

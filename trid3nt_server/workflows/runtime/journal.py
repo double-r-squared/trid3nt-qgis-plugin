@@ -17,9 +17,10 @@ from typing import Any, Mapping, Sequence
 
 logger = logging.getLogger("trid3nt_server.workflows.runtime.journal")
 
-__all__ = ["append_record", "bind_notes", "bind_outputs", "drain_notes",
-           "drain_outputs", "journal_note", "journal_outputs", "journal_path",
-           "read_records", "run_origin", "run_outputs"]
+__all__ = ["append_record", "bind_choices", "bind_notes", "bind_outputs",
+           "drain_choices", "drain_notes", "drain_outputs", "journal_note",
+           "journal_outputs", "journal_path", "read_records", "run_choices",
+           "run_origin", "run_outputs", "slot_choice"]
 
 #: The notes the step now running has written for THIS run's record. Bound by the
 #: interpreter for the length of a plan, the way the domain is: a producer deep in
@@ -75,6 +76,37 @@ def drain_notes(token: contextvars.Token) -> list[str]:
     notes = _NOTES.get() or []
     _NOTES.reset(token)
     return list(notes)
+
+#: The RANKED LIST each matched slot was filled from. Bound beside the notes for
+#: the same reason: the card is built inside the run, the record is written after
+#: it, and both read ONE object rather than two renderings of the same facts.
+_CHOICES: contextvars.ContextVar[list[Any] | None] = contextvars.ContextVar(
+    "trid3nt_run_choices", default=None)
+
+
+def slot_choice(choice: Any) -> None:
+    """Record the list one slot was filled from. Outside a plan, a no-op."""
+    chosen = _CHOICES.get()
+    if chosen is not None:
+        chosen.append(choice)
+
+
+def run_choices() -> list[Any]:
+    """Every list the run in progress has filled a slot from, in slot order."""
+    return list(_CHOICES.get() or ())
+
+
+def bind_choices() -> contextvars.Token:
+    """Open a choices channel for one plan run -> the token that closes it."""
+    return _CHOICES.set([])
+
+
+def drain_choices(token: contextvars.Token) -> list[Any]:
+    """Close the channel and return the lists written into it."""
+    chosen = _CHOICES.get() or []
+    _CHOICES.reset(token)
+    return list(chosen)
+
 
 #: The env var a DRIVER sets to label its runs. A canary and a person asking a
 #: question produce the same shaped record, and telemetry that learns a default
@@ -145,6 +177,7 @@ def build_record(*, run_id: str | None, engine: str | None,
                  continued_from: str | None = None,
                  keywords: Mapping[str, Any] | None = None,
                  supplied: Mapping[str, Any] | None = None,
+                 sources: Sequence[Any] = (),
                  outputs: Sequence[Mapping[str, Any]] = ()) -> dict[str, Any]:
     """One run record, from what the publish stage already holds.
     ``parent_run_id`` + ``overrides`` make the journal a CHAIN rather than a pile:
@@ -168,6 +201,12 @@ def build_record(*, run_id: str | None, engine: str | None,
         # it is part of the INVOCATION and on no param sheet, so a reproduction
         # driven from the arguments alone would run over a different world.
         "supplied": {k: _small(v) for k, v in (supplied or {}).items()},
+        # WHICH SOURCE FILLED EACH MATCHED SLOT, and why it was the one. The
+        # sheet's own view of the ranked list: the pick and its reason, in the
+        # same sentence the card showed and the model was given.
+        "sources": {choice.slot: {"picked": choice.picked,
+                                  "reason": choice.sentence}
+                    for choice in sources},
         "answer": {k: _small(v) for k, v in answer.items()},
         "provenance": [_provenance(row) for row in provenance],
         # WHERE each slot of the solved deck came from, in the closed vocabulary

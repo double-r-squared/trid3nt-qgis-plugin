@@ -135,6 +135,34 @@ def parse_payload_warning(payload: dict) -> Optional[PayloadWarning]:
 
 
 @dataclass
+class SourceOptionRow:
+    """One weighed source and the four facts it was ranked on."""
+
+    fetcher: str
+    resolution: str = ""
+    recency: str = ""
+    datum: str = ""
+    extent: str = ""
+    excluded: str = ""
+
+
+@dataclass
+class SourceChoiceRow:
+    """The ranked list a matched DATA slot was filled from.
+
+    The same object the server gave the model, so the card and the chat cannot
+    describe one run differently."""
+
+    slot: str
+    need: str = ""
+    rows: list = field(default_factory=list)
+    picked: str = ""
+    sentence: str = ""
+    tie: bool = False
+    loosened: str = ""
+
+
+@dataclass
 class ParamRow:
     """One editable row of a resolved param sheet."""
 
@@ -154,6 +182,9 @@ class ParamRow:
     advanced: bool = False
     group: str = ""
     note: Optional[str] = None
+    # The ranked list behind a matched DATA slot. ``None`` on every row that is
+    # not one, which is every keyword row.
+    choices: Optional[SourceChoiceRow] = None
 
     @property
     def is_numeric(self) -> bool:
@@ -245,7 +276,28 @@ def _parse_param_row(raw: dict) -> Optional[ParamRow]:
         advanced=bool(raw.get("advanced")),
         group=str(raw.get("group") or ""),
         note=raw.get("note") if isinstance(raw.get("note"), str) else None,
+        choices=_parse_source_choice(raw.get("choices")),
     )
+
+
+def _parse_source_choice(raw: object) -> Optional[SourceChoiceRow]:
+    """The ranked list off the wire, or ``None`` where the row carries none."""
+    if not isinstance(raw, dict) or not raw.get("slot"):
+        return None
+    options = [
+        SourceOptionRow(
+            fetcher=str(row.get("fetcher") or ""),
+            resolution=str(row.get("resolution") or ""),
+            recency=str(row.get("recency") or ""),
+            datum=str(row.get("datum") or ""),
+            extent=str(row.get("extent") or ""),
+            excluded=str(row.get("excluded") or ""))
+        for row in (raw.get("rows") or []) if isinstance(row, dict)]
+    return SourceChoiceRow(
+        slot=str(raw.get("slot")), need=str(raw.get("need") or ""),
+        rows=options, picked=str(raw.get("picked") or ""),
+        sentence=str(raw.get("sentence") or ""), tie=bool(raw.get("tie")),
+        loosened=str(raw.get("loosened") or ""))
 
 
 def resolve_param_sheet_edits(rows: list, edited: dict) -> dict:
