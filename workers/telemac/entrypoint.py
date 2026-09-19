@@ -70,10 +70,12 @@ _CASE_FIELDS = frozenset((
 #: allocates its arrays, so a coupled case reaches iteration 0 and stops inside
 #: BIEF with OS OBJECT TYPE NOT IMPLEMENTED. GAIA: the time loop runs to the end
 #: and the FINALIZE fails, closing a boundary file the API arm never opened
-#: (HERMES_FILE_NOT_OPENED_ERR), so the results never land. A SCOPED DEVIATION
-#: that dies the day telapy drives them; every other class stays on the API arm.
+#: (HERMES_FILE_NOT_OPENED_ERR), so the results never land. KHIONE: telapy ships
+#: no API class for it at all, so the arm has nothing to allocate its steering
+#: file against. A SCOPED DEVIATION that dies the day telapy drives them; every
+#: other class stays on the API arm.
 #: Neither the per-step point nor a continuation is available behind it.
-_LAUNCHER_COUPLINGS = frozenset(("waqtel", "gaia"))
+_LAUNCHER_COUPLINGS = frozenset(("waqtel", "gaia", "khione"))
 
 
 class UnknownManifestFieldError(ValueError):

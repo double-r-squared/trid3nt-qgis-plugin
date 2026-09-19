@@ -64,13 +64,13 @@ def test_an_uncoupled_case_runs_on_the_telapy_arm():
     assert argv[-4:] == ["--solve", "telemac2d", "--steering", "t2d.cas"]
 
 
-def test_only_the_two_measured_couplings_leave_the_telapy_arm():
+def test_only_the_measured_couplings_leave_the_telapy_arm():
     """The deviation is SCOPED: a coupling nobody measured stays on the API arm."""
-    assert E._LAUNCHER_COUPLINGS == frozenset({"waqtel", "gaia"})
+    assert E._LAUNCHER_COUPLINGS == frozenset({"waqtel", "gaia", "khione"})
     assert E._solve_argv("telemac2d", "t2d.cas", None, "nestor")[0] != "telemac2d.py"
 
 
-@pytest.mark.parametrize("coupling", ["waqtel", "gaia"])
+@pytest.mark.parametrize("coupling", ["waqtel", "gaia", "khione"])
 def test_a_coupled_case_runs_the_modules_own_launcher(coupling):
     assert E._solve_argv("telemac2d", "t2d.cas", None, coupling) == [
         "telemac2d.py", "t2d.cas"]
@@ -211,7 +211,7 @@ def test_a_continuation_whose_previous_run_was_never_staged_refuses(tmp_path):
     assert "previous.slf" in metrics["error"]
 
 
-@pytest.mark.parametrize("coupling", ["waqtel", "gaia"])
+@pytest.mark.parametrize("coupling", ["waqtel", "gaia", "khione"])
 def test_a_launcher_deviation_case_refuses_to_be_continued(tmp_path, coupling):
     """It runs whole-process behind the deviation; continuing it is unrun."""
     (tmp_path / "previous.slf").write_bytes(b"SELAFIN")
