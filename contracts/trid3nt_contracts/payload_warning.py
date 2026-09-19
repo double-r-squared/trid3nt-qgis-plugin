@@ -13,6 +13,7 @@ from typing import Any, ClassVar, Literal
 from pydantic import Field, field_validator, model_validator
 
 from .common import GraceModel, InputBasis, SyntheticInput, ULIDStr
+from .coverage import SourceChoice
 
 __all__ = [
     "PayloadWarningOption",
@@ -272,6 +273,10 @@ class ParamSheetRow(GraceModel):
     group: str = Field(default="", max_length=120)
     #: The resolution note - a clamp, a derivation, a conflict.
     note: str | None = None
+    #: THE RANKED LIST behind a DATA slot the match filled: the sources it
+    #: weighed, the one it picked and why. A card renders it with the pick
+    #: highlighted; ``None`` on every row that is not a matched slot.
+    choices: SourceChoice | None = None
 
     @model_validator(mode="after")
     def _validate_bounds(self) -> "ParamSheetRow":

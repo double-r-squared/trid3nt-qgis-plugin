@@ -13,6 +13,7 @@ from typing import Any, Literal
 from pydantic import Field, model_validator
 
 from .common import GraceModel
+from .coverage import Coverage
 from .tool_registry import ResolutionSpec, TTLClass
 
 __all__ = [
@@ -573,6 +574,13 @@ class SourceSpec(GraceModel):
     #: path can keep. A CROSS-DATASET alternative is not this mechanism - it is a
     #: declared rung on a fallback ladder, gated and stamped.
     endpoint_fallback: list[str] = Field(default_factory=list)
+
+    # WHAT THIS SOURCE COVERS, as the match reads it: the class of thing it
+    # measures, where, over what time, at what cell, on what zero, and the unit
+    # of each value column. THE ONLY statement of coverage - prose in the
+    # caveats or the docstring is for a reader, and no filter can read it. A
+    # source with no row here is never matched; it stays model-callable.
+    coverage: Coverage | None = None
 
     # A source's NATIVE cell and tier facts live here, beside the source, so a
     # gate card can quote them next to a solver's declared range. Default () is a

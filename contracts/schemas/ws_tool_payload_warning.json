@@ -175,6 +175,17 @@
           "default": null,
           "title": "Bounds"
         },
+        "choices": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SourceChoice"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "desc": {
           "default": "",
           "maxLength": 512,
@@ -296,6 +307,105 @@
         "basis"
       ],
       "title": "ParamSheetRow",
+      "type": "object"
+    },
+    "SourceChoice": {
+      "additionalProperties": false,
+      "description": "THE RANKED LIST, one object in three views.\n\nThe card renders it with the pick highlighted, the tool result carries it\nonly on a tie, and the sheet stores the pick and its reason. ``sentence`` is\nauthored once: the sentence the model is given IS the sentence the card\nshows.",
+      "properties": {
+        "loosened": {
+          "default": "",
+          "maxLength": 300,
+          "title": "Loosened",
+          "type": "string"
+        },
+        "need": {
+          "minLength": 1,
+          "title": "Need",
+          "type": "string"
+        },
+        "picked": {
+          "default": "",
+          "maxLength": 120,
+          "title": "Picked",
+          "type": "string"
+        },
+        "rows": {
+          "items": {
+            "$ref": "#/$defs/SourceOption"
+          },
+          "maxItems": 5,
+          "title": "Rows",
+          "type": "array"
+        },
+        "sentence": {
+          "default": "",
+          "maxLength": 600,
+          "title": "Sentence",
+          "type": "string"
+        },
+        "slot": {
+          "minLength": 1,
+          "title": "Slot",
+          "type": "string"
+        },
+        "tie": {
+          "default": false,
+          "title": "Tie",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "slot",
+        "need"
+      ],
+      "title": "SourceChoice",
+      "type": "object"
+    },
+    "SourceOption": {
+      "additionalProperties": false,
+      "description": "One row of the ranked list: a source and the four facts it is picked on.",
+      "properties": {
+        "datum": {
+          "default": "",
+          "maxLength": 120,
+          "title": "Datum",
+          "type": "string"
+        },
+        "excluded": {
+          "default": "",
+          "maxLength": 300,
+          "title": "Excluded",
+          "type": "string"
+        },
+        "extent": {
+          "default": "",
+          "maxLength": 300,
+          "title": "Extent",
+          "type": "string"
+        },
+        "fetcher": {
+          "minLength": 1,
+          "title": "Fetcher",
+          "type": "string"
+        },
+        "recency": {
+          "default": "",
+          "maxLength": 120,
+          "title": "Recency",
+          "type": "string"
+        },
+        "resolution": {
+          "default": "",
+          "maxLength": 120,
+          "title": "Resolution",
+          "type": "string"
+        }
+      },
+      "required": [
+        "fetcher"
+      ],
+      "title": "SourceOption",
       "type": "object"
     },
     "SyntheticInput": {
