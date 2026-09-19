@@ -199,7 +199,23 @@ ladders + coverage validation; emitted to the canvas as it arrives).
 Producers are DEMAND-PULLED: one runs when a step that `Ref`s it executes, which
 is what makes a `When`-guarded consumer whose branch does not fire cost no fetch.
 
-A row may declare NO producer at all - a CONTEXT SLOT, written
+A SLOT may state a NEED instead of naming a producer, written
+`bed = Data.bed(need="bathymetry")`. The need is one class of a coarse
+vocabulary (`trid3nt_contracts.coverage.DATA_CLASSES`); every fetcher states what
+it covers on its own `source.yaml`, and the match
+(`workflows/runtime/match.py`) filters those rows on class and place, holds a
+SERIES source to the run's window, sorts on the cell against the mesh, on
+recency and on the native datum, then calls the survivors in rank order and
+drops one that held nothing over this domain. A row that NAMES a fetcher is a
+PIN and is honoured as it is; a row that states both is refused at declaration.
+What the match produces is ONE ranked list in three views: the card renders it
+with the pick highlighted, the tool result carries the rows only on a tie, and
+the run record stores the pick and its reason - all reading the one sentence the
+model was given. The place comes off the domain, the window off the deck's own
+duration from `event_time`, and the frame off the vertical lever, so a question
+states none of them.
+
+A row may declare NO producer and no need at all - a CONTEXT SLOT, written
 `structure = Data.supplied(geometry="polyline")`. The template names the SHAPE it
 accepts and says nothing about where the thing comes from, because naming a
 default fetcher for a breakwater or a clip zone is an opinion the question does
