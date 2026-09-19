@@ -57,6 +57,7 @@ payload_estimate:
   kb_per_feature: 0.18
   floor_mb: 0.001
 caveats:
+- "model-callable, not matched: snow water equivalent is not a precipitation series, so it carries no coverage row"
 - NRCS SNOTEL/SCAN observed snow stations (AWDB REST); single catalog GET bbox-filtered client-side then
   ONE batched multi-station data GET for latest SWE (WTEQ) + snow depth (SNWD). Western-US mountains +
   Alaska + scattered eastern SCAN. Off-season 0.0 is honest, not a gap; DATA-unreachable degrades to station

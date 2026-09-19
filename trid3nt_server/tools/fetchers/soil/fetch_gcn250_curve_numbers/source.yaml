@@ -58,6 +58,23 @@ payload_estimate:
   mb_per_sq_deg: 2.0
   floor_mb: 0.01
 
+coverage:
+-   data_class: soil
+    kind: modelled
+    extent:
+      kind: surface
+      rings:
+      - [[-180.0, -57.0], [180.0, -57.0], [180.0, 84.0], [-180.0, 84.0]]
+      note: GCN250 global SCS curve numbers (Jaafar 2019), 84 N to 57 S, no
+        Antarctica/far-Arctic
+    window:
+      series: false
+      latest: '2019-01-01'
+    resolution_m: 250.0
+    units:
+      curve_number: dimensionless
+    value_column: curve_number
+
 caveats:
   - "global ~250 m SCS curve numbers (Jaafar 2019, 84 N to 57 S; no Antarctica/far-Arctic); an all-nodata window (over open water / off coverage) -> GCN250_EMPTY (never a fabricated layer)"
   - "CONUS work prefers NLCD-derived CNs (~30 m) from an NLCD land-cover raster reclassified in the session; CN is an SCS depth-loss method, NOT a rational-method runoff coefficient"
