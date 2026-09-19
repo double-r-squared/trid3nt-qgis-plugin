@@ -358,14 +358,14 @@ class DataDecl(Row):
                     "depth in metres below the free surface"
                     + ("; unfilled, the template's own producer supplies it."
                        if self.producer is not None else self._unfilled))
-        if self.role == OBSERVATION:
+        if self.role in (OBSERVATION, LEVEL, DISCHARGE):
             return (f"{self.coercion.get('measures') or 'the value'} this run "
                     "opens on: a layer of sites that report it, or the number "
                     "itself"
                     + (f" in {self.coercion['to_units']}"
                        if self.coercion.get("to_units") else "")
                     + ("; unfilled, the template's own producer looks for one."
-                       if self.producer is not None else "."))
+                       if self.producer is not None else self._unfilled))
         shape = f"a {self.geometry} layer" if self.geometry else "a layer"
         if self.producer is not None:
             tail = "unfilled, the template's own producer fetches one"

@@ -59,28 +59,23 @@ def test_the_domain_is_one_slot_the_reach_producer_only_prefers():
     assert domain.fills_from_user
 
 
-def test_the_bed_is_one_row_the_merge_derive_made_of_two_rows():
-    """The survey where it measured, the terrain everywhere else - ONE bed row,
-    composed in the DATA body by the merge derive, never a second bed row and
-    never a fallback on set_bed."""
+def test_the_bed_is_one_row_stating_the_class_it_needs():
+    """ONE bed row, stating bathymetry - the measurement where it measured, the
+    terrain under the rest, which is the RUNTIME's rule and not a question's."""
     rows = _rows()
     assert [name for name, row in rows.items() if row.role == BED] == ["bed"]
     bed = rows["bed"]
-    assert bed.producer.runner == "derive_merge_rasters"
-    assert bed.producer.kwargs["primary"].path == "surveyed_bed"
-    assert bed.producer.kwargs["fallback"].path == "terrain"
-    assert rows["surveyed_bed"].producer.kwargs["points"].path == "survey"
-    assert rows["terrain"].producer.runner == "fetch_dem"
+    assert bed.producer is None
+    assert bed.data_class == "bathymetry"
 
 
-def test_an_unsurveyed_domain_continues_and_says_so():
-    """No federal navigation project is no published survey, and the sheet says
-    which side was missing rather than refusing the run."""
-    rows = _rows()
-    assert rows["survey"].producer.runner == "fetch_ehydro_surveys"
-    for name in ("survey", "carrier"):
-        assert rows[name].is_context, name
-        assert rows[name].context_sentence
+def test_the_level_is_matched_and_its_absence_is_legal():
+    """A reach with no reported water level has no uniform-flow depth to derive,
+    so the slot states its class and stays optional."""
+    stage = _rows()["stage"]
+    assert stage.producer is None
+    assert stage.data_class == "water level series"
+    assert stage.is_optional
 
 
 def test_the_carrier_is_one_reading_and_never_the_grid_it_came_from():
@@ -88,9 +83,10 @@ def test_the_carrier_is_one_reading_and_never_the_grid_it_came_from():
     reports the flow and how old the sample is are the slot's to decide."""
     carrier = _rows()["carrier"]
     assert carrier.role == DISCHARGE
-    assert carrier.producer.runner == "fetch_noaa_nwm_streamflow"
+    assert carrier.producer is None
+    assert carrier.data_class == "discharge series"
     assert carrier.coercion["near"] == Ref("domain.centroid")
-    assert carrier.coercion["field"] == "streamflow_cms"
+    assert carrier.coercion["to_units"] == "m3/s"
 
 
 def test_the_release_is_settled_against_the_domain_it_may_be_unplaced_in():

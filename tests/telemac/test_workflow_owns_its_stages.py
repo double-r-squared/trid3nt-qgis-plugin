@@ -201,12 +201,12 @@ def test_a_row_the_deck_never_reads_is_demand_pulled_not_fetched():
 
     workflow = TOOL_REGISTRY["telemac_dye_release"].fn.workflow
     rows = {row.name for row in workflow.data}
-    assert {"survey", "terrain", "bed", "domain"} <= rows
+    assert {"bed", "carrier", "domain"} <= rows
     sheet = next(step for step in workflow.plan.declared()
                  if step.label == "sheet")
     named = set(sheet.kwargs["produced"])
-    # the bed chain is read by the MESH's own set_bed op, never by the deck
-    assert not named & {"survey", "terrain", "bed", "domain"}
+    # the bed is read by the MESH's own set_bed op, never by the deck
+    assert not named & {"bed", "carrier", "domain"}
     assert "channel" in named and "settled" in named
 
 

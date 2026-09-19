@@ -66,11 +66,6 @@ _REACH_LENGTH_KM = 6.0
 _FRICTION_LAW = 3
 _FRICTION_COEFFICIENT = 33.0
 
-#: The terrain cell the banks are painted from. 3DEP is PINNED, not preferred: a
-#: DSM (Copernicus GLO-30 carries canopy) puts the bank on the tree tops, and its
-#: EGM2008 zero is not the NAVD88 the surveys and the gauges are measured on.
-_TERRAIN_RESOLUTION_M = 10
-
 
 class DATA:
     """The three slots this run stands on, and the flow that fills its inflow."""
@@ -90,49 +85,29 @@ class DATA:
     # domain that arrives with none - a drawn outline, a lake - is asked for
     # them on the canvas, and an edge that names none is a closed body's.
     runs = Data.runs()
-    # THE MEASUREMENT. A domain with no federal navigation project has no
-    # published survey, and the sheet says so rather than refusing.
-    survey = Data(tool("fetch_ehydro_surveys", bbox=Ref("domain.bbox"))
-                  ).context("no published channel survey over this domain; "
-                            "the terrain surface stands")
-    # THE SOUNDINGS AS A SURFACE, at the scale the mesh resolves. Its values are
-    # DEPTHS below the survey's own project datum, and the merge below reads
-    # them as elevations on the terrain's zero through the shift the survey
-    # publishes about itself.
-    surveyed_bed = Data(tool("derive_survey_surface", points=survey,
-                             value_field="depth_below_datum_m",
-                             resolution_m=ParamRef("mesh_resolution_m"))
-                        ).context("no soundings to grid into a surveyed bed "
-                                  "over this domain")
-    # A terrain surface measures the water TOP, so where no survey reaches it
-    # the modelled water is shallower than the real water.
-    terrain = Data(tool("fetch_dem", bbox=Ref("domain.bbox"), source="3dep",
-                        resolution_m=_TERRAIN_RESOLUTION_M,
-                        purpose="bed elevation"))
-    # ONE bed: the survey where it measured, the terrain everywhere else, as a
-    # derive over the two rows. With the survey absent the terrain passes
-    # through the merge unchanged and is the whole bed.
-    bed = Data.bed(tool("derive_merge_rasters", primary=surveyed_bed,
-                        fallback=terrain))
-    # The carrier flow the inflow run prescribes. A number stated on this row
-    # stands over any record, so the flow is the slot's and no param twins it.
-    # ONE reading, not the grid the model published: which reach segment reports
-    # it is ranked against the domain's own interior point, and the step that
-    # opens the channel refuses a record nobody chose from.
+    # THE BED, as the CLASS it is rather than the source it comes from: the
+    # measurement where something measured it, the terrain under the rest. Which
+    # survey or which DEM reaches this domain is the match's to answer off their
+    # coverage rows, and the merge between the two classes is the runtime's one
+    # rule.
+    bed = Data.bed(need="bathymetry")
+    # THE FLOW the inflow run prescribes, as a CLASS: which record reports a
+    # discharge over this domain is the match's, and the window it reports is
+    # opened at the moment the run opens at. A number stated on this row stands
+    # over any record. The deck writes m3/s, so a record measured in another
+    # unit is converted or refused - never read as though it were this one.
     carrier = Data.discharge(
-        tool("fetch_noaa_nwm_streamflow", bbox=Ref("domain.bbox"),
-             valid_time=ParamRef("event_time")),
-        near=Ref("domain.centroid"), value_field="streamflow_cms",
-        measures="a streamflow", opens="the carrier flow opens at"
-    ).context("the National Water Model published no streamflow over this "
-              "domain at that cycle")
+        near=Ref("domain.centroid"), units="m3/s", measures="a streamflow",
+        opens="the carrier flow opens at", need="discharge series")
     # THE LEVEL the water stands at, which the run opens flat at and the outflow
     # holds. A reach whose measured ends do not FALL has no uniform-flow depth to
     # derive, and a closed body never had one. An ELEVATION on the datum the bed
-    # is painted on - a gauge publishes its height above its own zero, which is a
-    # different surface, so no source is named here and the number is stated.
+    # is painted on: a gauge reports a height above its OWN zero, so the record
+    # carries that zero's elevation and the offset row puts it on the run's
+    # frame.
     stage = Data.level(near=Ref("domain.centroid"),
-                       opens="the outflow holds at").optional()
+                       opens="the outflow holds at",
+                       need="water level series").optional()
 
 
 class STEERING(T2D):

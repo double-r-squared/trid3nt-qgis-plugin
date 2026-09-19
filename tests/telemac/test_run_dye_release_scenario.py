@@ -130,8 +130,8 @@ def test_a_non_numeric_bounded_arg_refuses_it_is_never_defaulted():
 
 def test_the_carrier_flow_is_the_inflow_runs_value_and_not_a_param():
     """The flow the inflow run carries is the observation ROW's - a reading, or
-    the number stated on it - so no param of this question declares one and the
-    row itself says where an absent one leaves the run."""
+    the number stated on it - so no param of this question declares one, and the
+    row states the CLASS it needs rather than the source that reports it."""
     from trid3nt_server.workflows.runtime import data_rows, param_rows
     from trid3nt_server.workflows.telemac.templates.dye_release.dye_release import DATA
     from trid3nt_server.workflows.telemac.templates.dye_release.declarations import (
@@ -142,7 +142,9 @@ def test_the_carrier_flow_is_the_inflow_runs_value_and_not_a_param():
     carrier = next(d for d in data_rows(DATA) if d.name == "carrier")
     assert carrier.role == "discharge"
     assert carrier.coercion["measures"] == "a streamflow"
-    assert "National Water Model" in carrier.context_sentence
+    assert carrier.producer is None
+    assert carrier.data_class == "discharge series"
+    assert carrier.coercion["to_units"] == "m3/s"
 
 
 def test_the_params_are_the_questions_own_and_the_deck_states_the_keywords():
@@ -176,39 +178,35 @@ def test_the_params_are_the_questions_own_and_the_deck_states_the_keywords():
     assert seated[-len(LEVER_NAMES):] == list(LEVER_NAMES)
 
 
-def test_the_data_body_is_the_three_slots_and_what_composes_them():
-    """The domain, the one bed the merge derive composed, and the rows that feed
-    it - each context row an absence the run continues under."""
-    from trid3nt_server.workflows.runtime import DataRef, Ref, data_rows
+def test_the_data_body_is_the_slots_and_the_classes_they_need():
+    """The domain the question prefers a producer for, and the bed, the carrier
+    and the level as the CLASSES they need - no fetcher named on any of them."""
+    from trid3nt_server.workflows.runtime import Ref, data_rows
     from trid3nt_server.workflows.telemac.templates.dye_release.dye_release import DATA
 
     rows = data_rows(DATA)
-    assert [d.name for d in rows] == ["domain", "runs", "survey", "surveyed_bed",
-                                      "terrain", "bed", "carrier", "stage"]
+    assert [d.name for d in rows] == ["domain", "runs", "bed", "carrier",
+                                      "stage"]
     by_name = {d.name: d for d in rows}
     assert by_name["domain"].role == "domain"
     assert by_name["domain"].geometry == "polygon"
     assert by_name["domain"].producer.runner == "fetch_river_reach"
+    # THE BED is one class and the runtime owns the merge between the two.
     assert by_name["bed"].role == "bed"
-    # ONE bed: the survey where it measured, the terrain everywhere else, as a
-    # derive over the two rows.
-    assert by_name["bed"].producer.runner == "derive_merge_rasters"
-    assert by_name["bed"].producer.kwargs["primary"] == DataRef("surveyed_bed")
-    assert by_name["bed"].producer.kwargs["fallback"] == DataRef("terrain")
-    assert by_name["surveyed_bed"].producer.kwargs["points"] == DataRef("survey")
-    assert [d.name for d in rows if d.is_context] == ["survey", "surveyed_bed",
-                                                      "carrier"]
+    assert by_name["bed"].producer is None
+    assert by_name["bed"].data_class == "bathymetry"
     # ONE READING, not the published grid: the step that opens the channel
     # refuses a record nobody chose a site from, so the flow arrives ingested.
     carrier = by_name["carrier"]
     assert carrier.role == "discharge"
-    assert carrier.coercion["field"] == "streamflow_cms"
+    assert carrier.data_class == "discharge series"
     assert carrier.coercion["near"] == Ref("domain.centroid")
-    assert "terrain surface stands" in by_name["survey"].context_sentence
+    # The level is matched too, and its absence is legal.
+    assert by_name["stage"].data_class == "water level series"
+    assert by_name["stage"].is_optional
     # No row here is superseded by a supplied artifact, and the DOMAIN is the
     # one ladder: the reach where a channel cuts, the waterbody the seed stands
-    # in where none does. The bed composes two layers it has, which is not a
-    # fallback chain.
+    # in where none does.
     assert all(d.producer is None or d.producer.supplied_uri is None
                for d in rows)
     assert [d.name for d in rows
