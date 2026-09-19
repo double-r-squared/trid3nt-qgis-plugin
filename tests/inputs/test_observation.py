@@ -244,3 +244,39 @@ def test_the_coverage_row_s_column_unit_is_what_a_bare_record_is_read_in() -> No
     assert found.value == pytest.approx(56.633693184)
     assert found.series.units == "m3/s"
     assert found.series.values[-1] == pytest.approx(56.633693184)
+
+
+def _gauge(**over):
+    props = {"site_id": "14211720", "gage_height_ft": 3.4,
+             "gauge_datum_ft": 37.2, "vertical_datum": "NAVD88",
+             "reading_dt": "2026-09-13T22:00Z",
+             "stage_series_csv": "2026-09-13T21:00Z,3.1\n"
+                                 "2026-09-13T22:00Z,3.4\n"}
+    props.update(over)
+    return {"type": "Feature",
+            "geometry": {"type": "Point", "coordinates": [-122.68, 45.51]},
+            "properties": props}
+
+
+def test_a_gage_height_reaches_the_run_s_frame_over_the_gauge_s_own_zero() -> None:
+    """3.4 ft above a zero that stands 37.2 ft up is 40.6 ft, not 3.4."""
+    found = observation(_fc(_gauge()), field="gage_height_ft",
+                        series_field="stage_series_csv", above_field="gauge_datum_ft",
+                        column_units={"gage_height_ft": "ft",
+                                      "stage_series_csv": "ft",
+                                      "gauge_datum_ft": "ft"},
+                        to_units="m", to_datum="NAVD88",
+                        measures="a water-surface elevation")
+    assert found.value == pytest.approx(40.6 * 0.3048)
+    assert found.datum == "NAVD88"
+    assert found.series.values[0] == pytest.approx((3.1 + 37.2) * 0.3048)
+
+
+def test_a_gauge_that_publishes_no_zero_refuses_rather_than_reading_a_height() -> None:
+    with pytest.raises(ObservationError) as caught:
+        observation(_fc(_gauge(gauge_datum_ft=None)), field="gage_height_ft",
+                    above_field="gauge_datum_ft",
+                    column_units={"gage_height_ft": "ft"},
+                    to_units="m", to_datum="NAVD88",
+                    measures="a water-surface elevation")
+    assert caught.value.error_code == "OBSERVATION_GAUGE_ZERO_UNSTATED"

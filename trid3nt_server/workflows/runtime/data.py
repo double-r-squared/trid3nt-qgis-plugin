@@ -487,7 +487,8 @@ class DataDecl(Row):
                     units: Any = None, measures: str = "this value",
                     opens: str = "", value_field: str = "value",
                     at: Any = None, record_units: Any = None,
-                    need: str = "", series_field: Any = None) -> "DataDecl":
+                    need: str = "", series_field: Any = None,
+                    above: Any = None) -> "DataDecl":
         """ONE MEASURED VALUE this run opens on, in the unit the keyword reads.
 
         ``near`` is the point the nearest reporting site is chosen against,
@@ -496,53 +497,60 @@ class DataDecl(Row):
         source reports it under, ``measures`` what the row is looking for and
         ``opens`` what the run journal says it opened on, ``record_units`` the
         unit the record's own window is reported in where it names none per
-        site; a number supplied here stands over any record."""
+        site, ``series_field`` the column that window is reported under,
+        ``above`` the column carrying the elevation of the zero the reading is
+        counted from and ``need`` the class the match fills the slot from; a
+        number supplied here stands over any record."""
         return self._observed(OBSERVATION, producer, near, units, measures,
                               opens, value_field, at,
-                              record_units=record_units)
+                              record_units=record_units, need=need,
+                              series_field=series_field, above=above)
 
     def level(self, producer: Producer | None = None, *, near: Any = None,
               units: Any = "m", measures: str = "a water-surface elevation",
               opens: str = "the water opens at",
               value_field: str = "value", at: Any = None,
               record_units: Any = None, need: str = "",
-              series_field: Any = None) -> "DataDecl":
+              series_field: Any = None, above: Any = None) -> "DataDecl":
         """THE LEVEL the water surface stands at: an observation, read by ROLE.
 
         An ELEVATION on the datum the bed is painted on - never a height above a
         gauge's own zero, which is a different number about a different surface.
         The run opens flat at it, and a body whose bed is stated as a depth needs
-        none: that bed is counted from the free surface itself."""
+        none: that bed is counted from the free surface itself. ``above`` names
+        the column carrying the elevation of the zero a gauge reports its height
+        above, without which that height is not an elevation."""
         return self._observed(LEVEL, producer, near, units, measures, opens,
                               value_field, at, record_units=record_units,
-                              need=need, series_field=series_field)
+                              need=need, series_field=series_field, above=above)
 
     def discharge(self, producer: Producer | None = None, *, near: Any = None,
                   units: Any = None, measures: str = "a streamflow",
                   opens: str = "the inflow run carries",
                   value_field: str = "value", at: Any = None,
                   record_units: Any = None, need: str = "",
-                  series_field: Any = None) -> "DataDecl":
+                  series_field: Any = None, above: Any = None) -> "DataDecl":
         """THE FLOW an inflow run carries: an observation, read by ROLE.
 
         A domain whose edge names runs and whose rows carry a discharge is an
         OPEN CHANNEL, and the workflow adds the step that measures one."""
         return self._observed(DISCHARGE, producer, near, units, measures, opens,
                               value_field, at, record_units=record_units,
-                              need=need, series_field=series_field)
+                              need=need, series_field=series_field, above=above)
 
     def _observed(self, role: str, producer: Producer | None, near: Any,
                   units: Any, measures: str, opens: str,
                   value_field: str, at: Any = None,
                   record_units: Any = None, need: str = "",
-                  series_field: Any = None) -> "DataDecl":
+                  series_field: Any = None, above: Any = None) -> "DataDecl":
         """One measured value, under the role its consumer reads it by."""
         row = self if producer is None else self(producer)
         return replace(row, role=role, data_class=need,
                        coercion=MappingProxyType(
             {"near": near, "to_units": units, "measures": measures,
              "opens": opens, "field": value_field, "at": at,
-             "record_units": record_units, "series_field": series_field}))
+             "record_units": record_units, "series_field": series_field,
+             "above_field": above}))
 
     def extent(self, producer: Producer | None = None) -> "DataDecl":
         """THE EXTENT: one lon/lat rectangle, however the caller names it.

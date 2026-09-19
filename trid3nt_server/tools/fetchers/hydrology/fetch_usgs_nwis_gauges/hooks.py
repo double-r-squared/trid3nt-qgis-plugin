@@ -13,7 +13,8 @@ from typing import Any
 
 from trid3nt_contracts.source_spec import SourceSpec
 
-from ..._router.errors import router_input_error, router_upstream_error
+from ..._router.errors import (
+    router_empty_error, router_input_error, router_upstream_error)
 from ..._router.hooks import RequestPlan, register_hook
 
 _IV_URL = "https://waterservices.usgs.gov/nwis/iv/"
@@ -137,7 +138,9 @@ def _selector_params(state_code: str | None, bbox: list[float] | None) -> dict[s
 
 @register_hook("usgs_nwis.build_request")
 def build_request(spec: SourceSpec, params: dict[str, Any]) -> list[RequestPlan]:
-    """Ordered request plans. Instantaneous: [IV, Site]. Hydrograph: [IV-window]."""
+    """[IV, Site] in both modes. The Site service is asked with the EXPANDED
+    output because that is the only place the gauge's own datum is published,
+    and a stage read without the zero it is counted from is not an elevation."""
     state_code = params.get("state_code")
     bbox = params.get("bbox")
     window = params.get("window")
@@ -152,12 +155,8 @@ def build_request(spec: SourceSpec, params: dict[str, Any]) -> list[RequestPlan]
         iv_params["endDT"] = str(window[1])
     iv_plan = RequestPlan(url=_IV_URL, params=iv_params, headers=headers)
 
-    if window is not None:
-        # Hydrograph mode: the Site service has no readings, so a miss is an honest
-        # no-stations error (no fallback plan).
-        return [iv_plan]
-
-    site_params = {"format": "rdb", "siteStatus": "active", "hasDataTypeCd": "iv", "parameterCd": _PARAMETER_CD, **sel}
+    site_params = {"format": "rdb", "siteStatus": "active", "hasDataTypeCd": "iv",
+                   "siteOutput": "expanded", "parameterCd": _PARAMETER_CD, **sel}
     site_plan = RequestPlan(url=_SITE_URL, params=site_params, headers=headers)
     return [iv_plan, site_plan]
 
@@ -272,7 +271,8 @@ def _parse_iv_json_window(sc: str, raw: bytes) -> list[dict[str, Any]]:
                 samples.append((dt_s, fv))
         rec = by_site.setdefault(site_no, {"site_no": site_no, "site_name": site_name, "lon": lon, "lat": lat,
                                            "discharge_cfs": None, "gage_height_ft": None, "reading_dt": None,
-                                           "time_series_csv": "", "time_start": None, "time_end": None, "n_timesteps": 0,
+                                           "time_series_csv": "", "stage_series_csv": "",
+                                           "time_start": None, "time_end": None, "n_timesteps": 0,
                                            "discharge_min_cfs": None, "discharge_max_cfs": None, "discharge_mean_cfs": None})
         if site_name and not rec.get("site_name"):
             rec["site_name"] = site_name
@@ -290,16 +290,25 @@ def _parse_iv_json_window(sc: str, raw: bytes) -> list[dict[str, Any]]:
             rec["discharge_cfs"] = samples[-1][1]
             rec["reading_dt"] = samples[-1][0]
         elif param == _PARAM_GAGE_HEIGHT:
+            # The stage window is its own column beside the discharge one: one
+            # gauge reports two quantities and a slot reads the one it opens on.
+            rec["stage_series_csv"] = "\n".join(f"{dt_s},{v:.6f}" for dt_s, v in samples) + "\n"
             rec["gage_height_ft"] = samples[-1][1]
             if rec["reading_dt"] is None:
                 rec["reading_dt"] = samples[-1][0]
     cols = ("site_no", "site_name", "discharge_cfs", "gage_height_ft", "reading_dt", "time_series_csv",
+            "stage_series_csv",
             "time_start", "time_end", "n_timesteps", "discharge_min_cfs", "discharge_max_cfs", "discharge_mean_cfs")
     return [_feature(r["lon"], r["lat"], {k: r[k] for k in cols}) for r in by_site.values()]
 
 
 def _parse_site_rdb(sc: str, raw: bytes) -> list[dict[str, Any]]:
-    """Site-service RDB (tab-delimited) -> station-location Point features (5-field)."""
+    """Site-service RDB (tab-delimited) -> station-location Point features.
+
+    The EXPANDED output carries ``alt_va``, the elevation of the gauge's own
+    zero, and ``alt_datum_cd``, the frame that elevation is counted from. Both
+    ride every feature: a gage height is a height ABOVE that zero, and without
+    the two it cannot be placed on the frame a bed is painted on."""
     if not raw:
         return []
     text = raw.decode("utf-8", errors="replace")
@@ -314,6 +323,8 @@ def _parse_site_rdb(sc: str, raw: bytes) -> list[dict[str, Any]]:
     except ValueError:
         raise router_upstream_error(sc, f"USGS Site RDB missing required columns; got header {header[:12]}")
     i_name = header.index("station_nm") if "station_nm" in header else None
+    i_alt = header.index("alt_va") if "alt_va" in header else None
+    i_datum = header.index("alt_datum_cd") if "alt_datum_cd" in header else None
     features: list[dict[str, Any]] = []
     for row in data_lines[2:]:
         cols = row.split("\t")
@@ -330,23 +341,60 @@ def _parse_site_rdb(sc: str, raw: bytes) -> list[dict[str, Any]]:
         if not (math.isfinite(lat) and math.isfinite(lon)):
             continue
         site_name = cols[i_name].strip() if (i_name is not None and len(cols) > i_name) else ""
-        features.append(_feature(lon, lat, {"site_no": site_no, "site_name": site_name,
-                                            "discharge_cfs": None, "gage_height_ft": None, "reading_dt": None}))
+        features.append(_feature(lon, lat, {
+            "site_no": site_no, "site_name": site_name,
+            "discharge_cfs": None, "gage_height_ft": None, "reading_dt": None,
+            "gauge_datum_ft": _number(cols, i_alt),
+            "vertical_datum": _word(cols, i_datum)}))
     return features
+
+
+def _number(cols: list[str], index: int | None) -> float | None:
+    """One RDB column as a number, or ``None`` where the site states none."""
+    if index is None or len(cols) <= index:
+        return None
+    try:
+        return float(cols[index].strip())
+    except ValueError:
+        return None
+
+
+def _word(cols: list[str], index: int | None) -> str | None:
+    if index is None or len(cols) <= index:
+        return None
+    return cols[index].strip() or None
 
 
 @register_hook("usgs_nwis.parse")
 def parse_response(spec: SourceSpec, params: dict[str, Any], bodies: list[bytes]) -> list[dict[str, Any]]:
-    """Self-detecting decode of ONE body, called per plan: a JSON body is an IV
-    WaterML-JSON payload and anything else is a Site-service RDB body. An empty body
-    returns ``[]``, which advances the executor to the next plan."""
+    """Both bodies at once: the readings, each carrying its own gauge datum.
+
+    A JSON body is the IV WaterML-JSON payload and anything else is the Site
+    RDB. The readings win and the site record DECORATES them with the zero the
+    stage is counted from; an empty IV degrades to the station locations, and
+    both empty is the source's honest no-stations refusal."""
     sc = spec.error_code_prefix
-    body = bodies[0] if bodies else b""
-    stripped = body.lstrip()
-    if not stripped:
-        return []
-    if stripped[:1] == b"{":
-        if params.get("_mode") == "hydrograph":
-            return _parse_iv_json_window(sc, body)
-        return _parse_iv_json(sc, body)
-    return _parse_site_rdb(sc, body)
+    readings: list[dict[str, Any]] = []
+    sites: list[dict[str, Any]] = []
+    for body in bodies:
+        stripped = (body or b"").lstrip()
+        if not stripped:
+            continue
+        if stripped[:1] == b"{":
+            readings += (_parse_iv_json_window(sc, body)
+                         if params.get("_mode") == "hydrograph"
+                         else _parse_iv_json(sc, body))
+        else:
+            sites += _parse_site_rdb(sc, body)
+    if not readings:
+        if sites:
+            return sites
+        raise router_empty_error(
+            sc, "no active gauges in scope from the readings service or the "
+                "site service", spec.empty_error_suffix)
+    zeros = {row["properties"]["site_no"]: row["properties"] for row in sites}
+    for row in readings:
+        site = zeros.get(row["properties"]["site_no"], {})
+        row["properties"]["gauge_datum_ft"] = site.get("gauge_datum_ft")
+        row["properties"]["vertical_datum"] = site.get("vertical_datum")
+    return readings

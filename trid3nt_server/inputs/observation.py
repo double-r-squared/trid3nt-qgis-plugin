@@ -223,7 +223,7 @@ def observation(source: Any, *, near: Any = None, field: str = "value",
                 units_field: str = "unit", to_units: Any = None,
                 series_field: str = "time_series_csv",
                 record_units: Any = None, column_units: Any = None,
-                at: Any = None, window_s: Any = None,
+                above_field: str = "", at: Any = None, window_s: Any = None,
                 to_datum: Any = None, offset: Any = None,
                 measures: str = "this value", opens: str = "",
                 label: str = "observation",
@@ -277,7 +277,9 @@ def observation(source: Any, *, near: Any = None, field: str = "value",
     props = feature.get("properties") or {}
     columns = dict(column_units or {})
     units = props.get(units_field) or columns.get(field) or record_units
-    value = convert(raw, units, to_units) if to_units is not None else float(raw)
+    zero = _gauge_zero(props, above_field, units, columns, label, measures)
+    value = (convert(raw + zero, units, to_units) if to_units is not None
+             else float(raw) + zero)
     datum, shift, datum_note = _onto_datum(source, props, to_datum, offset, label)
     reported = props.get("distance_km")
     found = Observation(
@@ -291,7 +293,9 @@ def observation(source: Any, *, near: Any = None, field: str = "value",
             distance_km if distance_km != float("inf") else None),
         datum=datum, datum_note=datum_note,
         series=_series(props, series_field, columns.get(series_field) or units,
-                       to_units, shift, label, at, window_s))
+                       to_units, shift + convert(zero, units, to_units)
+                       if to_units is not None else shift + zero,
+                       label, at, window_s))
     _journal(found, opens=opens, stated=False)
     return found
 
@@ -332,6 +336,28 @@ def _series(props: Mapping[str, Any], series_field: str, units: Any,
                 f"{label} reports its window in {found.units!r} and this slot "
                 f"reads {to_units!r}: {exc}") from exc
     return found.shifted(shift)
+
+
+def _gauge_zero(props: Mapping[str, Any], above_field: str, units: Any,
+                columns: Mapping[str, str], label: str, measures: str) -> float:
+    """The elevation of the zero this reading is counted from, in the reading's
+    own unit.
+
+    A gauge publishes a HEIGHT above its own datum, which is a different surface
+    from the one a bed is painted on; the run reaches that surface by adding the
+    zero's own elevation, and a record that states none refuses rather than
+    reading the height as an elevation."""
+    if not above_field:
+        return 0.0
+    stated = props.get(above_field)
+    if stated is None:
+        raise ObservationError(
+            "OBSERVATION_GAUGE_ZERO_UNSTATED",
+            f"{label} reports {measures} as a height above its own zero and "
+            f"publishes no {above_field!r}, so there is nothing to place it on "
+            "the frame this run is solved on. State the elevation on the call, "
+            "or ask about a site whose datum is published.")
+    return convert(float(stated), columns.get(above_field) or units, units)
 
 
 def _covers_the_run(rows: list[tuple[str, float]], at: Any,

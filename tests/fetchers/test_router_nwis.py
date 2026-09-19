@@ -1,9 +1,11 @@
 """The gauge fold: spec-driven, with the two blockers it resolved.
 
-The instantaneous-values parse falls back to the site table and answers an honest
-no-stations on an all-empty result, and the window mode switches the output schema
-between the instantaneous and hydrograph shapes. Plus the spatial-selector and
-temporal-window edge matrix, all offline over synthetic payloads."""
+The readings and the expanded site record are parsed together - the readings
+win and the site record decorates them with the zero a gage height is counted
+from - an all-empty result answers an honest no-stations, and the window mode
+switches the output schema between the instantaneous and hydrograph shapes.
+Plus the spatial-selector and temporal-window edge matrix, offline over
+synthetic payloads."""
 
 from __future__ import annotations
 
@@ -37,21 +39,26 @@ def _iv_body():
     ]}}).encode()
 
 
+def _window_series(param, samples):
+    return {"sourceInfo": {"siteCode": [{"value": "01646500"}], "siteName": "POTOMAC",
+                           "geoLocation": {"geogLocation": {"latitude": 38.95, "longitude": -77.12}}},
+            "variable": {"variableCode": [{"value": param}]},
+            "values": [{"value": [{"value": str(v), "dateTime": d} for d, v in samples]}]}
+
+
 def _iv_window_body():
-    samples = [("2024-01-01T00:00:00Z", 1000.0), ("2024-01-01T01:00:00Z", 1100.0), ("2024-01-01T02:00:00Z", 1200.0)]
-    return json.dumps({"value": {"timeSeries": [{
-        "sourceInfo": {"siteCode": [{"value": "01646500"}], "siteName": "POTOMAC",
-                       "geoLocation": {"geogLocation": {"latitude": 38.95, "longitude": -77.12}}},
-        "variable": {"variableCode": [{"value": "00060"}]},
-        "values": [{"value": [{"value": str(v), "dateTime": d} for d, v in samples]}]}]}}).encode()
+    flow = [("2024-01-01T00:00:00Z", 1000.0), ("2024-01-01T01:00:00Z", 1100.0), ("2024-01-01T02:00:00Z", 1200.0)]
+    stage = [("2024-01-01T00:00:00Z", 3.1), ("2024-01-01T01:00:00Z", 3.4), ("2024-01-01T02:00:00Z", 3.9)]
+    return json.dumps({"value": {"timeSeries": [
+        _window_series("00060", flow), _window_series("00065", stage)]}}).encode()
 
 
 _SITE_RDB = (
     "# comment\n"
-    "agency_cd\tsite_no\tstation_nm\tdec_lat_va\tdec_long_va\n"
-    "5s\t15s\t50s\t16s\t16s\n"
-    "USGS\t01646500\tPOTOMAC RIVER\t38.95\t-77.12\n"
-    "USGS\t01638500\tSHENANDOAH\t39.02\t-77.80\n"
+    "agency_cd\tsite_no\tstation_nm\tdec_lat_va\tdec_long_va\talt_va\talt_datum_cd\n"
+    "5s\t15s\t50s\t16s\t16s\t16s\t10s\n"
+    "USGS\t01646500\tPOTOMAC RIVER\t38.95\t-77.12\t37.20\tNAVD88\n"
+    "USGS\t01638500\tSHENANDOAH\t39.02\t-77.80\t\t\n"
 ).encode()
 
 
@@ -73,21 +80,34 @@ def test_nwis_hooks_registered():
 
 
 
-def test_parse_iv_instantaneous_5col(spec):
-    feats = hooks.HOOK_REGISTRY["usgs_nwis.parse"](spec, {"_mode": "instantaneous"}, [_iv_body()])
+def test_parse_iv_instantaneous_carries_the_gauge_s_own_zero(spec):
+    feats = hooks.HOOK_REGISTRY["usgs_nwis.parse"](
+        spec, {"_mode": "instantaneous"}, [_iv_body(), _SITE_RDB])
     assert len(feats) == 2  # two distinct sites merged over discharge + gage
-    assert set(feats[0]["properties"]) == {"site_no", "site_name", "discharge_cfs", "gage_height_ft", "reading_dt"}
+    assert set(feats[0]["properties"]) == {
+        "site_no", "site_name", "discharge_cfs", "gage_height_ft", "reading_dt",
+        "gauge_datum_ft", "vertical_datum"}
     by = {f["properties"]["site_no"]: f["properties"] for f in feats}
     assert by["01646500"]["discharge_cfs"] == 1200.0 and by["01646500"]["gage_height_ft"] == 3.4
+    assert by["01646500"]["gauge_datum_ft"] == 37.20
+    assert by["01646500"]["vertical_datum"] == "NAVD88"
+    # a site that publishes no zero states none rather than a guessed one
+    assert by["01638500"]["gauge_datum_ft"] is None
 
 
-def test_parse_iv_window_12col(spec):
-    feats = hooks.HOOK_REGISTRY["usgs_nwis.parse"](spec, {"_mode": "hydrograph"}, [_iv_window_body()])
+def test_parse_iv_window_publishes_the_stage_series_beside_the_discharge(spec):
+    feats = hooks.HOOK_REGISTRY["usgs_nwis.parse"](
+        spec, {"_mode": "hydrograph"}, [_iv_window_body(), _SITE_RDB])
     p = feats[0]["properties"]
-    assert set(p) == {"site_no", "site_name", "discharge_cfs", "gage_height_ft", "reading_dt", "time_series_csv",
-                      "time_start", "time_end", "n_timesteps", "discharge_min_cfs", "discharge_max_cfs", "discharge_mean_cfs"}
+    assert set(p) == {"site_no", "site_name", "discharge_cfs", "gage_height_ft", "reading_dt",
+                      "time_series_csv", "stage_series_csv",
+                      "time_start", "time_end", "n_timesteps", "discharge_min_cfs",
+                      "discharge_max_cfs", "discharge_mean_cfs",
+                      "gauge_datum_ft", "vertical_datum"}
     assert p["n_timesteps"] == 3 and p["discharge_min_cfs"] == 1000.0 and p["discharge_max_cfs"] == 1200.0
     assert p["time_series_csv"].startswith("2024-01-01T00:00:00Z,1000.000000")
+    assert p["stage_series_csv"].startswith("2024-01-01T00:00:00Z,3.100000")
+    assert p["gauge_datum_ft"] == 37.20 and p["vertical_datum"] == "NAVD88"
 
 
 def test_parse_site_rdb(spec):
@@ -96,8 +116,10 @@ def test_parse_site_rdb(spec):
     assert all(f["properties"]["discharge_cfs"] is None for f in feats)  # locations only
 
 
-def test_parse_empty_body_returns_empty(spec):
-    assert hooks.HOOK_REGISTRY["usgs_nwis.parse"](spec, {"_mode": "instantaneous"}, [b""]) == []
+def test_parse_with_no_body_at_all_refuses_rather_than_returning_nothing(spec):
+    with pytest.raises(Exception) as caught:
+        hooks.HOOK_REGISTRY["usgs_nwis.parse"](spec, {"_mode": "instantaneous"}, [b"", b""])
+    assert caught.value.error_code == "NWIS_GAUGES_NO_STATIONS"
 
 
 
@@ -161,10 +183,11 @@ def test_build_instantaneous_iv_then_site(spec):
     assert plans[0].params["bBox"] == "-82.4,26.3,-81.6,26.9"
 
 
-def test_build_hydrograph_iv_only(spec):
+def test_build_hydrograph_asks_the_site_service_for_the_expanded_record(spec):
     p = hooks.HOOK_REGISTRY["usgs_nwis.resolve"](spec, {"bbox": [-82.4, 26.3, -81.6, 26.9], "period": "P7D"})
     plans = hooks.HOOK_REGISTRY["usgs_nwis.build_request"](spec, {"bbox": [-82.4, 26.3, -81.6, 26.9], **p})
-    assert len(plans) == 1 and plans[0].params.get("period") == "P7D"
+    assert len(plans) == 2 and plans[0].params.get("period") == "P7D"
+    assert plans[1].params.get("siteOutput") == "expanded"
 
 
 def test_build_state_selector(spec):
@@ -175,7 +198,7 @@ def test_build_state_selector(spec):
 
 
 
-def test_parse_fallback_iv_empty_uses_site(spec, monkeypatch):
+def test_iv_empty_degrades_to_the_station_locations(spec, monkeypatch):
     params = {"bbox": [-77.9, 38.9, -77.0, 39.1]}
     params.update(hooks.HOOK_REGISTRY["usgs_nwis.resolve"](spec, dict(params)))
     calls = {"n": 0}
@@ -199,7 +222,7 @@ def test_parse_fallback_iv_empty_uses_site(spec, monkeypatch):
     assert set(gdf["site_no"]) == {"01646500", "01638500"}
 
 
-def test_parse_fallback_all_empty_raises_no_stations(spec, monkeypatch):
+def test_both_services_empty_raises_no_stations(spec, monkeypatch):
     params = {"bbox": [-77.9, 38.9, -77.0, 39.1]}
     params.update(hooks.HOOK_REGISTRY["usgs_nwis.resolve"](spec, dict(params)))
     monkeypatch.setattr(http_json, "_get", lambda _s, _p: b"")

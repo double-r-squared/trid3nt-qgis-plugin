@@ -29,16 +29,14 @@ params:
   period:     {type: str, schema_optional: true}
 
 ingest:
-  http_source:
-    parse_fallback: true
-  # Per-mode FGB column schema (pinned by the derived _mode): 5-field latest
-  # instantaneous vs 12-field discharge hydrograph -- the
-  # vs _build_window_flatgeobuf output-schema switch.
+  # Both plans are fetched and the parse hook joins them: the readings carry the
+  # gauge's own zero, which only the expanded Site record publishes.
+  # Per-mode FGB column schema, pinned by the derived _mode.
   properties_by_param:
     param: _mode
     map:
-      instantaneous: [site_no, site_name, discharge_cfs, gage_height_ft, reading_dt]
-      hydrograph: [site_no, site_name, discharge_cfs, gage_height_ft, reading_dt, time_series_csv, time_start, time_end, n_timesteps, discharge_min_cfs, discharge_max_cfs, discharge_mean_cfs]
+      instantaneous: [site_no, site_name, discharge_cfs, gage_height_ft, reading_dt, gauge_datum_ft, vertical_datum]
+      hydrograph: [site_no, site_name, discharge_cfs, gage_height_ft, reading_dt, time_series_csv, stage_series_csv, time_start, time_end, n_timesteps, discharge_min_cfs, discharge_max_cfs, discharge_mean_cfs, gauge_datum_ft, vertical_datum]
 
 hooks:
   pre_resolve: usgs_nwis.resolve
@@ -97,11 +95,13 @@ coverage:
     time_series_csv: ft3/s
     gage_height_ft: ft
     stage_series_csv: ft
+    gauge_datum_ft: ft
 
 caveats:
   - "pass EXACTLY ONE of state_code (no area limit) or bbox (<= ~25 deg^2)"
   - "OBSERVED gauge network; for MODELED reach flow use fetch_noaa_nwm_streamflow (US + territories only)"
   - "primary IV real-time -> Site-service location fallback -> honest NWIS_GAUGES_NO_STATIONS (never an empty-success layer)"
+  - "a gage height is a height ABOVE the gauge's own zero, not an elevation: ``gauge_datum_ft`` is that zero's elevation and ``vertical_datum`` the frame it is counted from, both off the site record, and a consumer that wants a water-surface elevation adds them"
 
 # corpus lifted from sibling corpus.yaml.
 
