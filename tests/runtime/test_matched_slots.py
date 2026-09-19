@@ -182,7 +182,11 @@ def test_a_run_series_is_asked_for_the_window_the_deck_will_solve(world):
     _runner, ask = world[-1]
     assert ask["start_date"] == "2026-09-13"
     assert ask["end_date"] == "2026-09-15"
-    assert ask["bbox"] == list(WILLAMETTE)
+    # The ask reaches PAST the domain: a surface that stopped at its edge
+    # would leave the nodes on that edge standing on nothing.
+    west, south, east, north = ask["bbox"]
+    assert west < WILLAMETTE[0] and south < WILLAMETTE[1]
+    assert east > WILLAMETTE[2] and north > WILLAMETTE[3]
     assert value == "s3://b/fetch_gauges.out"
 
 

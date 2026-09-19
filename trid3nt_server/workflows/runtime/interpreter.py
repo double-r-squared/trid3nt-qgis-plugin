@@ -11,6 +11,7 @@ import dataclasses
 import importlib
 import inspect
 import logging
+import math
 import os
 import warnings
 from dataclasses import dataclass, field
@@ -617,7 +618,7 @@ async def _ask_for(env: _Env, fetcher: str, decl: DataDecl) -> dict[str, Any]:
     ask: dict[str, Any] = {"purpose": decl.name.replace("_", " ")}
     dom = current_domain()
     if "bbox" in spec.params and dom is not None and dom.bbox:
-        ask["bbox"] = list(dom.bbox)
+        ask["bbox"] = _around(dom.bbox, _mesh_m(env))
     if "seed_point" in spec.params:
         lon, lat = await _place(env, decl)
         if lon is not None:
@@ -629,6 +630,17 @@ async def _ask_for(env: _Env, fetcher: str, decl: DataDecl) -> dict[str, Any]:
     elif opens and "valid_time" in spec.params:
         ask["valid_time"] = str(opens)
     return ask
+
+
+def _around(bbox: Sequence[float], mesh_m: float | None) -> list[float]:
+    """The domain's box with a MARGIN, which is what a slot asks a source for.
+
+    A surface that stops exactly at the domain's edge leaves the nodes on that
+    edge standing on nothing, so the ask reaches a few cells past it."""
+    west, south, east, north = (float(v) for v in bbox)
+    pad = max(3.0 * float(mesh_m or 0.0), 100.0) / 111_320.0
+    lon_pad = pad / max(math.cos(math.radians((south + north) / 2.0)), 0.1)
+    return [west - lon_pad, south - pad, east + lon_pad, north + pad]
 
 
 async def _domain_runs(env: _Env) -> tuple[Any, ...]:

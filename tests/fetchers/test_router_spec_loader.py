@@ -316,3 +316,15 @@ def test_a_surface_stating_a_reach_is_refused():
 
 def test_a_spec_states_no_coverage_by_default():
     assert load_spec(raster_spec()).coverage == []
+
+
+def test_a_source_takes_its_layer_s_datum_from_the_coverage_row_that_states_one():
+    spec = load_spec({**raster_spec(),
+                      "coverage": [_coverage(datum="NAVD88 (metres, positive up)")]})
+    assert spec.vertical_datum == "NAVD88 (metres, positive up)"
+
+
+def test_a_datum_stated_on_the_source_row_is_never_overwritten():
+    spec = load_spec({**raster_spec(), "vertical_datum": "EGM2008",
+                      "coverage": [_coverage(datum="NAVD88")]})
+    assert spec.vertical_datum == "EGM2008"

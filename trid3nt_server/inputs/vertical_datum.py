@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
 
 __all__ = ["Alignment", "DatumError", "OFFSET_FETCH", "Offset", "align",
+           "record_datum",
            "datum_of", "names_frame", "offset_ask", "offset_row", "one_datum",
            "one_frame", "onto_frame", "published_offset"]
 
@@ -54,6 +55,29 @@ def datum_of(source: Any) -> str:
     if stated:
         return str(stated).strip()
     return _stated(source) if isinstance(source, str) else ""
+
+
+def record_datum(source: Any) -> str:
+    """The zero a fetched RECORD is counted from, or "".
+
+    A layer states its own where the source row states one; a record whose
+    readings each carry their site's zero states it per feature instead, and it
+    is the record's only where every feature that names one names the SAME one -
+    two zeros in one record is two records and no single shift reads them."""
+    stated = datum_of(source)
+    if stated or source is None:
+        return stated
+    from .geometry import GeometryReadError, read_geometry_doc
+
+    try:
+        doc = read_geometry_doc(source)
+    except (GeometryReadError, OSError, ValueError):
+        return ""
+    features = (doc.get("features") or ()) if isinstance(doc, Mapping) else ()
+    named = {str((f.get("properties") or {}).get("vertical_datum") or "").strip()
+             for f in features if isinstance(f, Mapping)}
+    named.discard("")
+    return named.pop() if len(named) == 1 else ""
 
 
 def one_datum(*sources: Any, code_prefix: str = "") -> str:
@@ -274,7 +298,7 @@ def onto_frame(source: Any, frame: Any, *, offset: Any = None,
     it does anywhere else - what a slot does with a source that states none is
     that slot's own statement."""
     wanted = str(frame or "").strip()
-    here = datum_of(source)
+    here = record_datum(source)
     if not wanted:
         return Alignment(datum=here, shift_m=0.0, note="")
     onto = {"vertical_datum": wanted, "name": "the run's vertical frame"}
@@ -294,7 +318,7 @@ def offset_ask(source: Any, frame: Any, *, at: Any = None
     leaves the alignment to refuse naming both, which is the honest answer for a
     district's project datum no service knows."""
     wanted = str(frame or "").strip()
-    here = datum_of(source)
+    here = record_datum(source)
     if not wanted or not here or one_frame([here, wanted]):
         return None
     if published_offset(source) is not None:

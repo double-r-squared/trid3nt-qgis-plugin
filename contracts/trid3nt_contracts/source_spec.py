@@ -593,7 +593,8 @@ class SourceSpec(GraceModel):
     # from the dataset's own documentation, never inferred from the bytes: a
     # guess would be indistinguishable from a fact to every reader downstream.
     # A source that cannot state ONE datum carries none, and a consumer refuses
-    # on that rather than assuming zero.
+    # on that rather than assuming zero. A source whose COVERAGE rows already
+    # state one zero takes it from there rather than restating it.
     vertical_datum: str | None = None
 
     # A HEAVY raster fetcher declares its resolution confirm gate here and the
@@ -622,6 +623,18 @@ class SourceSpec(GraceModel):
             raise ValueError(
                 f"{self.name} carries more than one coverage row of "
                 f"{', '.join(twice)}: one row per data class")
+        return self
+
+    @model_validator(mode="after")
+    def _adopt_the_coverage_datum(self) -> "SourceSpec":
+        """The zero a layer carries is the one its coverage row states.
+
+        One fact, one statement: a source that says NAVD88 on its coverage row
+        says it to the match and to every consumer of the layer it publishes."""
+        if self.vertical_datum is None:
+            stated = {row.datum for row in self.coverage if row.datum}
+            if len(stated) == 1:
+                self.vertical_datum = stated.pop()
         return self
 
     @model_validator(mode="after")
