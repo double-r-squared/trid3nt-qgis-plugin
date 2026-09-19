@@ -3,7 +3,9 @@
 A gauge layer, a sample-site layer and a user's own point layer all carry the
 same thing - somebody measured something somewhere at some time - and a slot
 that opens on it needs the number in ITS unit, on ITS datum, with the site, the
-distance and the date travelling beside it. A reading counted from a zero the
+distance and the date travelling beside it. A record that reported a WINDOW
+carries its whole series beside the reading, because a value the engine takes
+as a file of instants is lumped only where nothing measured one. A reading counted from a zero the
 slot does not read on moves onto it through an offset row the template names,
 never silently. A sample is a moment, never a climatology, so what is read is
 said on the run journal rather than folded into the answer.
@@ -15,6 +17,13 @@ import datetime as dt
 import logging
 from dataclasses import dataclass
 from typing import Any, Mapping
+
+from trid3nt_server.workflows.runtime.temporal import (
+    Series,
+    convert_units,
+    TemporalShapeError,
+    TemporalUnitsError,
+)
 
 from .geometry import read_geometry_doc, source_uri
 from .vertical_datum import DatumError, datum_of, onto_frame
@@ -68,6 +77,10 @@ class Observation:
     #: that is not an elevation.
     datum: str | None = None
     datum_note: str = ""
+    #: Every instant the record reported over its window, on the slot's own unit
+    #: and datum - the same conversion and the same shift the value above rode.
+    #: ``None`` where the source reported one moment and nothing more.
+    series: Series | None = None
 
 
 class ObservationError(RuntimeError):
@@ -89,8 +102,10 @@ def _normal(unit: Any) -> str:
 def convert(value: float, units: Any, to_units: Any) -> float:
     """One reading moved onto the unit a slot reads, or a refusal naming both.
 
-    Only pairs something actually asks for are convertible; anything else
-    refuses rather than passing a number through under the wrong name."""
+    ONE table for a reading and for the window it came out of: the runtime's,
+    which is where a conversion is declared and a reader can check it. The
+    spellings a portal federates - "deg C" beside "degC" - are one unit here
+    before the table is asked."""
     have, want = _normal(units), _normal(to_units)
     if not want or have == want or any(have in family and want in family
                                        for family in (_CELSIUS, _FAHRENHEIT)):
@@ -99,11 +114,13 @@ def convert(value: float, units: Any, to_units: Any) -> float:
         return (float(value) - 32.0) / 1.8
     if have in _CELSIUS and want in _FAHRENHEIT:
         return float(value) * 1.8 + 32.0
-    raise ObservationError(
-        "OBSERVATION_UNIT_UNCONVERTIBLE",
-        f"a reading in {units!r} cannot be read as {to_units!r}: no conversion "
-        "between the two is stated anywhere. Ask the source for the unit the "
-        "slot reads, or state the value on the call.")
+    try:
+        return convert_units(float(value), str(units), str(to_units))
+    except TemporalUnitsError as exc:
+        raise ObservationError(
+            "OBSERVATION_UNIT_UNCONVERTIBLE",
+            f"a reading in {units!r} cannot be read as {to_units!r}: {exc}"
+        ) from exc
 
 
 def _features(source: Any) -> list[dict[str, Any]]:
@@ -116,15 +133,25 @@ def _features(source: Any) -> list[dict[str, Any]]:
     return [doc] if doc.get("properties") is not None else []
 
 
-def _last_sample(csv_text: str) -> tuple[str | None, float] | None:
-    """The LAST readable ``stamp,value`` row of a station's series."""
-    for line in reversed(str(csv_text or "").splitlines()):
+def _samples(csv_text: str) -> list[tuple[str, float]]:
+    """Every readable ``stamp,value`` row of a station's series, in file order.
+
+    A header row and a gap the source writes as an empty value both fail the
+    float read and are skipped: the row is not a reading."""
+    rows: list[tuple[str, float]] = []
+    for line in str(csv_text or "").splitlines():
         stamp, _sep, value = line.strip().partition(",")
         try:
-            return (stamp or None, float(value))
+            rows.append((stamp, float(value)))
         except ValueError:
             continue
-    return None
+    return rows
+
+
+def _last_sample(csv_text: str) -> tuple[str | None, float] | None:
+    """The LAST readable ``stamp,value`` row of a station's series."""
+    rows = _samples(csv_text)
+    return (rows[-1][0] or None, rows[-1][1]) if rows else None
 
 
 def _reading(props: Mapping[str, Any], field: str,
@@ -170,6 +197,7 @@ def _in_window(sampled: Any, at: Any) -> bool:
 def observation(source: Any, *, near: Any = None, field: str = "value",
                 units_field: str = "unit", to_units: Any = None,
                 series_field: str = "time_series_csv",
+                record_units: Any = None,
                 at: Any = None, to_datum: Any = None, offset: Any = None,
                 measures: str = "this value", opens: str = "",
                 label: str = "observation",
@@ -181,7 +209,8 @@ def observation(source: Any, *, near: Any = None, field: str = "value",
     sample outside the window that closes at ``at`` is not a sample for this run
     and is never ranked at all; ``to_units`` is the unit the slot reads and
     ``to_datum`` the zero it counts from, which a reading on another zero
-    reaches only through the ``offset`` row. A number is the value the caller
+    reaches only through the ``offset`` row; ``record_units`` is the unit a
+    source that names none per site reports in. A number is the value the caller
     stated, which stands over any record and is already on the slot's own datum;
     ``opens`` says on the run journal what this run opened on, because a sample
     is a moment and its age is the reader's business. Nothing that reports
@@ -220,7 +249,7 @@ def observation(source: Any, *, near: Any = None, field: str = "value",
             "call, or name a source that reaches this place.")
     distance_km, feature, (sampled, raw) = min(candidates, key=lambda row: row[0])
     props = feature.get("properties") or {}
-    units = props.get(units_field)
+    units = props.get(units_field) or record_units
     value = convert(raw, units, to_units) if to_units is not None else float(raw)
     datum, shift, datum_note = _onto_datum(source, props, to_datum, offset, label)
     reported = props.get("distance_km")
@@ -233,9 +262,38 @@ def observation(source: Any, *, near: Any = None, field: str = "value",
         sampled=sampled,
         distance_km=float(reported) if reported is not None else (
             distance_km if distance_km != float("inf") else None),
-        datum=datum, datum_note=datum_note)
+        datum=datum, datum_note=datum_note,
+        series=_series(props, series_field, units, to_units,
+                       shift, label))
     _journal(found, opens=opens, stated=False)
     return found
+
+
+def _series(props: Mapping[str, Any], series_field: str, units: Any,
+            to_units: Any, shift: float, label: str) -> Series | None:
+    """THE WINDOW this station reported, on the slot's own unit and datum.
+
+    The series rides the SAME shift the value did rather than a second one
+    derived off the same row, and ``None`` where the record reported one moment
+    - a single reading has no interval a reader could read between."""
+    rows = _samples(str(props.get(series_field) or "")) if series_field else []
+    if len(rows) < 2:
+        return None
+    try:
+        found = Series.from_samples(rows, units=str(units or to_units or ""))
+    except TemporalShapeError:
+        # A record whose stamps repeat or run backwards states no window; the
+        # reading above stands and the run is lumped, which the row says.
+        return None
+    if to_units is not None and found.units and str(to_units) != found.units:
+        try:
+            found = found.in_units(str(to_units))
+        except TemporalUnitsError as exc:
+            raise ObservationError(
+                "OBSERVATION_UNIT_UNCONVERTIBLE",
+                f"{label} reports its window in {found.units!r} and this slot "
+                f"reads {to_units!r}: {exc}") from exc
+    return found.shifted(shift)
 
 
 def _onto_datum(source: Any, props: Mapping[str, Any], to_datum: Any,

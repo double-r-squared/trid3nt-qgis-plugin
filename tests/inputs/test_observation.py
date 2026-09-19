@@ -6,7 +6,9 @@ row converted by name, an unconvertible pair refusing, a station series read at
 its LAST sample, a distance the fetch already measured preferred over one
 re-derived here, nothing that reports refusing, the note a run says, and the
 WINDOW a run's own moment closes: a sample from another decade is not ranked,
-a sample inside the window is, and nothing inside it refuses."""
+a sample inside the window is, and nothing inside it refuses - and the WINDOW
+itself: the whole series kept beside the reading, in the slot's unit, on the
+slot's datum, and absent where the record reported one moment."""
 
 from __future__ import annotations
 
@@ -142,3 +144,38 @@ def test_the_note_names_the_site_the_distance_and_the_moment() -> None:
 def test_convert_only_where_a_conversion_is_stated(
         value: float, have: object, want: object, expected: float) -> None:
     assert convert(value, have, want) == pytest.approx(expected)
+
+
+def test_the_whole_window_is_kept_beside_the_reading() -> None:
+    station = {"type": "Feature",
+               "geometry": {"type": "Point", "coordinates": [-122.68, 45.51]},
+               "properties": {"site_id": "14211720", "discharge_cfs": 300.0,
+                              "unit": "ft3/s",
+                              "time_series_csv":
+                                  "2026-09-05T00:00Z,100\n"
+                                  "2026-09-05T01:00Z,200\n"
+                                  "2026-09-05T02:00Z,300\n"}}
+    found = observation(_fc(station), field="discharge_cfs", to_units="m3/s",
+                        measures="a streamflow")
+    assert str(found.series) == "series, 3 points over the window"
+    assert found.series.units == "m3/s"
+    assert found.series.times_s == (0.0, 3600.0, 7200.0)
+    assert found.series.values[0] == pytest.approx(2.8316846592)
+    assert found.value == pytest.approx(found.series.values[-1])
+
+
+def test_the_window_is_read_in_the_unit_the_row_states_for_it() -> None:
+    station = {"type": "Feature",
+               "geometry": {"type": "Point", "coordinates": [-122.68, 45.51]},
+               "properties": {"site_id": "14211720", "discharge_cfs": 300.0,
+                              "time_series_csv":
+                                  "2026-09-05T00:00Z,100\n"
+                                  "2026-09-05T01:00Z,200\n"}}
+    found = observation(_fc(station), field="discharge_cfs", to_units="m3/s",
+                        record_units="ft3/s", measures="a streamflow")
+    assert found.series.units == "m3/s"
+    assert found.series.values[0] == pytest.approx(2.8316846592)
+
+
+def test_a_record_that_reported_one_moment_carries_no_window() -> None:
+    assert observation(_fc(_site("A", -122.68, 45.51, 9.5))).series is None

@@ -461,22 +461,25 @@ class DataDecl(Row):
     def observation(self, producer: Producer | None = None, *, near: Any = None,
                     units: Any = None, measures: str = "this value",
                     opens: str = "", value_field: str = "value",
-                    at: Any = None) -> "DataDecl":
+                    at: Any = None, record_units: Any = None) -> "DataDecl":
         """ONE MEASURED VALUE this run opens on, in the unit the keyword reads.
 
         ``near`` is the point the nearest reporting site is chosen against,
         ``at`` the moment the run asks at - the window a sample has to fall in
         to be this run's water closes there - ``value_field`` the property the
         source reports it under, ``measures`` what the row is looking for and
-        ``opens`` what the run journal says it opened on; a number supplied here
-        stands over any record."""
+        ``opens`` what the run journal says it opened on, ``record_units`` the
+        unit the record's own window is reported in where it names none per
+        site; a number supplied here stands over any record."""
         return self._observed(OBSERVATION, producer, near, units, measures,
-                              opens, value_field, at)
+                              opens, value_field, at,
+                              record_units=record_units)
 
     def level(self, producer: Producer | None = None, *, near: Any = None,
               units: Any = "m", measures: str = "a water-surface elevation",
               opens: str = "the water opens at",
-              value_field: str = "value") -> "DataDecl":
+              value_field: str = "value",
+              record_units: Any = None) -> "DataDecl":
         """THE LEVEL the water surface stands at: an observation, read by ROLE.
 
         An ELEVATION on the datum the bed is painted on - never a height above a
@@ -484,27 +487,30 @@ class DataDecl(Row):
         The run opens flat at it, and a body whose bed is stated as a depth needs
         none: that bed is counted from the free surface itself."""
         return self._observed(LEVEL, producer, near, units, measures, opens,
-                              value_field)
+                              value_field, record_units=record_units)
 
     def discharge(self, producer: Producer | None = None, *, near: Any = None,
                   units: Any = None, measures: str = "a streamflow",
                   opens: str = "the inflow run carries",
-                  value_field: str = "value") -> "DataDecl":
+                  value_field: str = "value",
+                  record_units: Any = None) -> "DataDecl":
         """THE FLOW an inflow run carries: an observation, read by ROLE.
 
         A domain whose edge names runs and whose rows carry a discharge is an
         OPEN CHANNEL, and the workflow adds the step that measures one."""
         return self._observed(DISCHARGE, producer, near, units, measures, opens,
-                              value_field)
+                              value_field, record_units=record_units)
 
     def _observed(self, role: str, producer: Producer | None, near: Any,
                   units: Any, measures: str, opens: str,
-                  value_field: str, at: Any = None) -> "DataDecl":
+                  value_field: str, at: Any = None,
+                  record_units: Any = None) -> "DataDecl":
         """One measured value, under the role its consumer reads it by."""
         row = self if producer is None else self(producer)
         return replace(row, role=role, coercion=MappingProxyType(
             {"near": near, "to_units": units, "measures": measures,
-             "opens": opens, "field": value_field, "at": at}))
+             "opens": opens, "field": value_field, "at": at,
+             "record_units": record_units}))
 
     def extent(self, producer: Producer | None = None) -> "DataDecl":
         """THE EXTENT: one lon/lat rectangle, however the caller names it.

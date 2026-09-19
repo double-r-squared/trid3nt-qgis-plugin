@@ -2,10 +2,13 @@
 
 pandas does the arithmetic; a transform that ran leaves a provenance stamp, and a
 payload with no ``.resample()`` is never realigned behind the consumer's back.
+:class:`Series` is the value a slot holds where the engine takes a file of
+instants rather than one number.
 """
 
 from __future__ import annotations
 
+from bisect import bisect_right
 from dataclasses import dataclass
 from typing import Any, Sequence
 
@@ -14,6 +17,7 @@ from .errors import DeclarativeError, ModifierIllegalError, PlanValidationError
 __all__ = [
     "CATEGORICAL",
     "RATE",
+    "Series",
     "STATE",
     "ResampleSpec",
     "TemporalGapError",
@@ -128,6 +132,128 @@ def _unit(name: str) -> tuple[str, float, float]:
 
 
 # --- the declaration ------------------------------------------------------- #
+
+
+class Series:
+    """A measured quantity over time, on the RUN's own clock: seconds and values.
+
+    What a slot holds where a number would be a lumped stand-in for a record
+    somebody measured. Not a dataclass: a card row and a run record both print
+    it, and what a reader needs there is the shape, not a second copy of the
+    points."""
+
+    __slots__ = ("times_s", "values", "units")
+
+    def __init__(self, times_s: Sequence[float], values: Sequence[float], *,
+                 units: str) -> None:
+        times = tuple(float(t) for t in times_s)
+        found = tuple(float(v) for v in values)
+        if len(times) != len(found):
+            raise TemporalShapeError(
+                f"a series carries {len(times)} instants against {len(found)} "
+                "values; one instant holds one value.")
+        if len(times) < 2:
+            raise TemporalShapeError(
+                f"a series of {len(times)} point(s) has no interval to read "
+                "between two rows.")
+        if any(b <= a for a, b in zip(times, times[1:])):
+            raise TemporalShapeError(
+                "a series' instants must strictly increase on the run's own "
+                "clock; an engine that reads a table between two rows stops on "
+                "a pair that does not.")
+        object.__setattr__(self, "times_s", times)
+        object.__setattr__(self, "values", found)
+        object.__setattr__(self, "units", str(units))
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        raise AttributeError(
+            f"a Series is frozen: {name!r} cannot be moved once the record it "
+            "was read off said what it measured.")
+
+    def __len__(self) -> int:
+        return len(self.times_s)
+
+    def __str__(self) -> str:
+        return f"series, {len(self.times_s)} points over the window"
+
+    def __repr__(self) -> str:
+        return (f"Series({len(self.times_s)} points, {self.times_s[0]:g}"
+                f"..{self.times_s[-1]:g} s, {self.units})")
+
+    def __eq__(self, other: Any) -> bool:
+        return (isinstance(other, Series) and other.times_s == self.times_s
+                and other.values == self.values and other.units == self.units)
+
+    def __hash__(self) -> int:
+        return hash((self.times_s, self.values, self.units))
+
+    @classmethod
+    def from_samples(cls, samples: Sequence[tuple[Any, float]], *, units: str,
+                     start_s: float = 0.0) -> "Series":
+        """Stamped readings -> this series on a clock that opens at ``start_s``.
+
+        t = ``start_s`` is the FIRST sample, so the run opens on an instant
+        somebody measured rather than on a midnight nobody did."""
+        import pandas as pd
+
+        stamps = pd.to_datetime([stamp for stamp, _v in samples], utc=True)
+        order = sorted(range(len(stamps)), key=lambda i: stamps[i])
+        first = stamps[order[0]]
+        return cls([float(start_s) + (stamps[i] - first).total_seconds()
+                    for i in order],
+                   [float(samples[i][1]) for i in order], units=units)
+
+    def in_units(self, units: str) -> "Series":
+        """This series read in ``units``, or a refusal naming both."""
+        if str(units) == self.units:
+            return self
+        return Series([*self.times_s],
+                      [convert_units(v, self.units, units) for v in self.values],
+                      units=str(units))
+
+    def shifted(self, offset_m: float) -> "Series":
+        """Every reading moved by the SAME offset the scalar rode onto its datum.
+
+        Re-deriving the shift per point would put two readings of one gauge on
+        two zeros."""
+        if not offset_m:
+            return self
+        return Series([*self.times_s], [v + float(offset_m) for v in self.values],
+                      units=self.units)
+
+    def at_step(self, step_s: float) -> "Series":
+        """This series at the engine's own time step.
+
+        The engine reads the table between the two rows that bracket an instant,
+        so a record COARSER than the step is already everything the engine
+        reads and stays as it was measured; a record finer than the step carries
+        rows between two instants the engine never asks at, and those resample
+        onto the step."""
+        step = float(step_s)
+        native = min(b - a for a, b in zip(self.times_s, self.times_s[1:]))
+        if step <= 0.0 or step <= native:
+            return self
+        edge = self.times_s[0]
+        instants: list[float] = []
+        while edge < self.times_s[-1]:
+            instants.append(edge)
+            edge += step
+        instants.append(self.times_s[-1])
+        return Series(instants, [self.at(t) for t in instants], units=self.units)
+
+    def at(self, time_s: float) -> float:
+        """The value at one instant, read between the two rows bracketing it -
+        the engine's own reading of its own table."""
+        t = float(time_s)
+        if t <= self.times_s[0]:
+            return self.values[0]
+        if t >= self.times_s[-1]:
+            return self.values[-1]
+        index = bisect_right(self.times_s, t)
+        left, right = self.times_s[index - 1], self.times_s[index]
+        span = right - left
+        low, high = self.values[index - 1], self.values[index]
+        return low + (high - low) * (t - left) / span
 
 
 @dataclass(frozen=True, slots=True)
