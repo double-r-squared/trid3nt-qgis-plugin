@@ -1,0 +1,9 @@
+fetch_nwis_bed_material:
+- what is the bed material grain size at this gauge
+- get me the streambed particle-size distribution for this reach
+- how coarse is the riverbed here, USGS sediment samples
+- USGS bed material sample sites in this bbox
+- pull the percent finer grain-size curve for the streambed at this river
+- observed bed sediment particle size samples near this gauge
+- sediment sample grain size for sizing a scour model here
+- what grade is the channel bed made of at this station

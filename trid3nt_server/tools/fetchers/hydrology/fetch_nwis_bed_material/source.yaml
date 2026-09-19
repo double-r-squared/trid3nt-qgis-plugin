@@ -1,0 +1,227 @@
+# USGS NWIS bed-material particle-size samples, served through the Water Quality
+# Portal (the retired qwdata service's live successor) and DELEGATED to the same
+# dataretrieval.wqp client fetch_usgs_water_quality stands on, rather than a second
+# raw-HTTP CSV reader for the same two endpoints.
+schema_version: v1
+
+name: fetch_nwis_bed_material
+source_class: nwis_bed_material
+error_prefix: NWIS_BED_MATERIAL
+input_error_suffix: INPUT_ERROR
+empty_error_suffix: NO_SAMPLES
+shape: vector-fgb
+supports_global_query: false
+
+endpoints:
+  # Documentary for the delegate's own socket; the delegate hook builds its own
+  # calls into dataretrieval.wqp.
+  result:
+    url: https://www.waterqualitydata.us/data/Result/search
+  station:
+    url: https://www.waterqualitydata.us/data/Station/search
+auth:
+  mode: none
+  user_agent: trid3nt_default
+
+params:
+  bbox: {type: bbox, required: true, quantize: round_6dp, error_suffix: BBOX_INVALID}
+  characteristic:
+    type: str
+    default: Bed sediment particle size
+    aliases:
+      bed material: Bed sediment particle size
+      bed sediment: Bed sediment particle size
+      bedload: Bedload sediment particle size
+  start_date: {type: iso_date, schema_optional: true}
+  end_date: {type: iso_date, schema_optional: true}
+
+gates:
+  max_bbox_deg2: 100.0
+
+ingest:
+  access: library_delegate
+  delegate:
+    library: dataretrieval
+    timeout_s: 60.0
+  properties:
+    - site_id
+    - site_name
+    - site_type
+    - huc8
+    - activity_id
+    - sample_date
+    - characteristic
+    - collection_equipment
+    - horizontal_datum
+    - vertical_datum
+    - vertical_elevation
+    - vertical_elevation_unit
+    - n_size_classes
+    - pct_finer_0p004mm
+    - pct_finer_0p008mm
+    - pct_finer_0p016mm
+    - pct_finer_0p031mm
+    - pct_finer_0p0625mm
+    - pct_finer_0p125mm
+    - pct_finer_0p25mm
+    - pct_finer_0p5mm
+    - pct_finer_1mm
+    - pct_finer_2mm
+    - pct_finer_2p8mm
+    - pct_finer_4mm
+    - pct_finer_4p75mm
+    - pct_finer_5p6mm
+    - pct_finer_8mm
+    - pct_finer_9p5mm
+    - pct_finer_11p2mm
+    - pct_finer_16mm
+    - pct_finer_19mm
+    - pct_finer_22p4mm
+    - pct_finer_32mm
+
+hooks:
+  delegate: nwis_bed_material.read
+  delegate_validate: nwis_bed_material.validate
+
+normalize:
+  crs: "EPSG:4326"
+  units: "% finer by weight"
+  quantity: grain_size_distribution
+  # A sample's HORIZONTAL datum (NAD83) and VERTICAL datum (NGVD29 / NAVD88 / local)
+  # are the WQP Station record's own, and differ station to station - so this source
+  # states none for all of them; every row carries its own.
+  datum: null
+
+output:
+  layer_type: vector
+  ext: fgb
+  role: primary
+  display_name: "USGS bed-material particle size"
+  bbox_from_features:
+    pad: 0.02
+  style:
+    kind: reference
+    geometry: point
+
+cache:
+  ttl_class: semi-static-7d
+payload_estimate:
+  model: per_feature
+  features_per_sq_deg: 5.0
+  kb_per_feature: 0.5
+  floor_mb: 0.001
+
+coverage:
+- data_class: bed material
+  kind: measured
+  reach_km: 1.0
+  extent:
+    kind: stations
+    rings:
+      - [[-125.0, 24.0], [-66.0, 24.0], [-66.0, 50.0], [-125.0, 50.0]]
+      - [[-172.0, 51.0], [-129.0, 51.0], [-129.0, 72.0], [-172.0, 72.0]]
+      - [[-161.0, 18.0], [-154.0, 18.0], [-154.0, 23.0], [-161.0, 23.0]]
+      - [[-68.5, 17.0], [-64.0, 17.0], [-64.0, 19.0], [-68.5, 19.0]]
+      - [[144.0, 13.0], [146.5, 13.0], [146.5, 21.0], [144.0, 21.0]]
+      - [[-171.5, -15.0], [-169.0, -15.0], [-169.0, -13.0], [-171.5, -13.0]]
+    note: USGS river/stream sites the Water Quality Portal indexes a bed-material
+      particle-size sample against; sparse, decades between samples at many sites
+  window:
+    series: false
+    cadence: irregular field campaigns, years to decades apart
+  datum: null
+  units:
+    pct_finer_0p004mm: "%"
+    pct_finer_0p008mm: "%"
+    pct_finer_0p016mm: "%"
+    pct_finer_0p031mm: "%"
+    pct_finer_0p0625mm: "%"
+    pct_finer_0p125mm: "%"
+    pct_finer_0p25mm: "%"
+    pct_finer_0p5mm: "%"
+    pct_finer_1mm: "%"
+    pct_finer_2mm: "%"
+    pct_finer_2p8mm: "%"
+    pct_finer_4mm: "%"
+    pct_finer_4p75mm: "%"
+    pct_finer_5p6mm: "%"
+    pct_finer_8mm: "%"
+    pct_finer_9p5mm: "%"
+    pct_finer_11p2mm: "%"
+    pct_finer_16mm: "%"
+    pct_finer_19mm: "%"
+    pct_finer_22p4mm: "%"
+    pct_finer_32mm: "%"
+    vertical_elevation: "ft (station-stated; null where the station states none)"
+
+caveats:
+  - "one feature per SAMPLE (a site + an activity), never per size class; the size classes are columns, at the standard half-phi grain-size thresholds the USGS Sediment Laboratory reports bed-material analyses in (0.004 mm to 32 mm) - a sample missing a class states null there, never zero"
+  - "only ActivityMediaSubdivisionName=='Bottom material' rows count as bed material (Surface Water rows are a different medium) and only ResultMeasure/MeasureUnitCode=='%' rows are percent-finer (a handful of WQP rows carry a mass in grams instead); both are dropped and the drop counts are logged, never silently folded in"
+  - "a sample whose site has no matching WQP Station record carries no geometry and is dropped (counted, logged) rather than placed by guess"
+  - "ResultParticleSizeBasisText outside the standard less-than-X-mm phrasing (a range, or a size this fetch does not recognize) is skipped for that one result and logged; the rest of the sample's classes still carry"
+  - "vertical_elevation is the WQP Station's own VerticalMeasure, in whatever unit and vertical_datum the station states (NGVD29 or NAVD88 per station, never assumed); null where the station states none"
+  - "bbox area capped at 100 deg^2"
+
+docstring: |-
+  Fetch OBSERVED USGS bed-material grain-size samples as a point FlatGeobuf.
+
+  Retrieves USGS river and stream bed-material particle-size samples from the
+  Water Quality Portal (the live successor to the retired NWIS qwdata service,
+  reached through the ``dataretrieval`` client the water-quality fetch also
+  delegates to). Each sample is a field/lab sieve-and-pipet analysis of the bed
+  material at a site on one date, reported as percent finer by weight at a
+  series of grain-size thresholds -- this is the measured particle-size
+  distribution of the streambed, not a modeled or inferred texture.
+
+  When to use:
+      - "bed material grain size at this gauge", "how coarse is the streambed
+        here", "sediment sample particle-size distribution for this reach".
+      - Sizing a sediment-transport or scour model's bed material at a station
+        where a real sample exists, rather than an assumed uniform grade.
+      - Cross-checking usSEABED / eHydro coverage inland, where this is the
+        river-network complement (usSEABED is coastal/shelf; eHydro is
+        dredged navigation channels).
+
+  When NOT to use:
+      - Coastal or continental-shelf sediment texture -- use
+        ``fetch_usseabed``.
+      - Surveyed channel bathymetry -- use ``fetch_ehydro_surveys``.
+      - This source is SPARSE: most river reaches carry zero samples: a
+        ``NWIS_BED_MATERIAL_NO_SAMPLES`` refusal over a bbox means exactly
+        that, never a hint to loosen the query silently.
+
+  Parameters:
+      bbox: ``(west, south, east, north)`` in EPSG:4326, capped at 100 deg^2.
+      characteristic: ``"Bed sediment particle size"`` (default) or
+          ``"Bedload sediment particle size"``; common aliases (``"bed
+          material"``, ``"bedload"``) map to the canonical WQP name.
+      start_date / end_date: optional ISO dates bounding the sample window;
+          omitted, every sample on record in the bbox is returned.
+
+  Returns:
+      ``LayerURI`` for a point FlatGeobuf in EPSG:4326, one feature per
+      sample, carrying ``site_id``, ``site_name``, ``site_type``, ``huc8``,
+      ``activity_id``, ``sample_date``, ``collection_equipment``,
+      ``horizontal_datum``, ``vertical_datum``, ``vertical_elevation`` (+
+      unit), ``n_size_classes``, and one ``pct_finer_<x>mm`` column per
+      standard grain-size threshold from 0.004 mm to 32 mm (null where the
+      sample states none). ``layer_type="vector"``.
+
+  Cross-tool dependencies:
+      - Composes WITH: ``fetch_river_reach`` (the reach the sample sits on),
+        ``fetch_usgs_nwis_gauges`` (the same site's discharge record).
+      - Cross-checks: ``fetch_usseabed`` (coastal), ``fetch_ehydro_surveys``
+        (dredged channels).
+      - Upstream data source: USGS / EPA Water Quality Portal
+        (waterqualitydata.us), via the ``dataretrieval`` client -- ONE HOME
+        with ``fetch_usgs_water_quality`` for the WQP round trip.
+
+  Errors:
+      - ``NWIS_BED_MATERIAL_INPUT_ERROR``: missing/bad bbox, bbox over the
+        area gate, or an empty characteristic.
+      - ``NWIS_BED_MATERIAL_NO_SAMPLES``: zero Bottom-material, percent-unit
+        samples with a matching Station record in the bbox.
+      - ``NWIS_BED_MATERIAL_UPSTREAM_ERROR``: the WQP Result or Station call
+        failed.
+
+  Tier-1 free. No API key.
