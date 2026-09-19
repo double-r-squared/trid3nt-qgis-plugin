@@ -88,7 +88,10 @@ def identifiers(module: str) -> dict:
 
     The image's map, never a spelling rule guessed at from the keywords."""
     eficas = importlib.import_module(module + "_dicoCasEnToCata")
-    return {engine: cata
+    # KHIONE's map spells one keyword with a double space the dictionary itself
+    # writes single, so both sides of the lookup are read on collapsed runs of
+    # whitespace rather than on the literal spelling.
+    return {" ".join(engine.split()): cata
             for cata, engine in eficas.dicoCataToEngTelemac.items()}
 
 
@@ -132,7 +135,7 @@ def extract(module: str) -> dict:
     dico = TelemacDico(get_dico(module))
     named = identifiers(module)
     return {"module": module,
-            "keywords": [_slot(k, named[k.strip()], v)
+            "keywords": [_slot(k, named[" ".join(k.split())], v)
                          for k, v in dico.data.items()]}
 
 

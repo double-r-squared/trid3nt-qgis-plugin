@@ -1,0 +1,2484 @@
+{
+  "module": "khione",
+  "keywords": [
+    {
+      "keyword": "STEERING FILE",
+      "identifier": "STEERING_FILE",
+      "type": "STRING",
+      "size": null,
+      "unbounded": false,
+      "help": "Name of the file containing parameters of the ice computation. Provided by the user.",
+      "rubrique": [
+        "COMPUTATION ENVIRONMENT",
+        "INPUT",
+        "DATA"
+      ],
+      "is_file": true,
+      "default": "",
+      "level": 1,
+      "file_role": "input",
+      "file_mandatory": true
+    },
+    {
+      "keyword": "FORTRAN FILE",
+      "identifier": "FORTRAN_FILE",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "Name of the FORTRAN file or directory to be submitted, including specific subroutines of the model.",
+      "rubrique": [
+        "COMPUTATION ENVIRONMENT",
+        "INPUT",
+        "DATA"
+      ],
+      "is_file": true,
+      "default": "",
+      "level": 1,
+      "mnemo": "NOMFOR",
+      "file_role": "input",
+      "file_mandatory": false
+    },
+    {
+      "keyword": "TITLE",
+      "identifier": "TITLE",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "Title of the case being considered.",
+      "rubrique": [
+        "COMPUTATION ENVIRONMENT",
+        "GLOBAL",
+        ""
+      ],
+      "is_file": false,
+      "default": " ",
+      "level": 1,
+      "mnemo": "TITCAS"
+    },
+    {
+      "keyword": "BOUNDARY CONDITIONS FILE",
+      "identifier": "BOUNDARY_CONDITIONS_FILE",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "Name of the file containing the types of boundary conditions. This file is filled automatically by the mesh generator through colours that are assigned to the boundary nodes.",
+      "rubrique": [
+        "COMPUTATION ENVIRONMENT",
+        "INPUT",
+        "DATA"
+      ],
+      "is_file": true,
+      "level": 1,
+      "mnemo": "ICE_FILES(ICECLI)%NAME",
+      "file_role": "input",
+      "file_mandatory": true
+    },
+    {
+      "keyword": "GEOMETRY FILE",
+      "identifier": "GEOMETRY_FILE",
+      "type": "STRING",
+      "size": 0,
+      "unbounded": false,
+      "help": "Geometry file identical to the TELEMAC-2D one.",
+      "rubrique": [
+        "COMPUTATION ENVIRONMENT",
+        "INPUT",
+        "DATA"
+      ],
+      "is_file": true,
+      "default": "",
+      "level": 2,
+      "mnemo": "ICE_FILES(ICEGEO)%NAME",
+      "file_role": "input",
+      "file_mandatory": false
+    },
+    {
+      "keyword": "GEOMETRY FILE FORMAT",
+      "identifier": "GEOMETRY_FILE_FORMAT",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "Format of the GEOMETRY FILE. Possible choices are: SERAFIN : classical single precision format in TELEMAC, SERAFIND: classical double precision format in TELEMAC, MED : MED double precision format based on HDF5.",
+      "rubrique": [
+        "COMPUTATION ENVIRONMENT",
+        "INPUT",
+        "DATA"
+      ],
+      "is_file": false,
+      "default": "SERAFIN ",
+      "level": 2,
+      "choices": [
+        "SERAFIN",
+        "SERAFIND",
+        "MED"
+      ],
+      "mnemo": "ICE_FILES(ICEGEO)%FMT"
+    },
+    {
+      "keyword": "REFERENCE FILE",
+      "identifier": "REFERENCE_FILE",
+      "type": "STRING",
+      "size": 0,
+      "unbounded": false,
+      "help": "Name of the binary-coded result file used to validate the computation. The results of the computation will be compared with the values of this file. The comparison is done by the subroutine BIEF_VALIDA, (not implemented yet).",
+      "rubrique": [
+        "COMPUTATION ENVIRONMENT",
+        "INPUT",
+        "DATA"
+      ],
+      "is_file": true,
+      "default": "",
+      "level": 2,
+      "mnemo": "ICE_FILES(ICEREF)%NAME",
+      "file_role": "input",
+      "file_mandatory": false
+    },
+    {
+      "keyword": "REFERENCE FILE FORMAT",
+      "identifier": "REFERENCE_FILE_FORMAT",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "Format of the REFERENCE FILE. Possible choices are: SERAFIN : classical single precision format in TELEMAC, SERAFIND: classical double precision format in TELEMAC, MED : MED double precision format based on HDF5.",
+      "rubrique": [
+        "COMPUTATION ENVIRONMENT",
+        "INPUT",
+        "DATA"
+      ],
+      "is_file": false,
+      "default": "SERAFIN ",
+      "level": 0,
+      "choices": [
+        "SERAFIN",
+        "SERAFIND",
+        "MED"
+      ],
+      "mnemo": "ICE_FILES(ICEREF)%FMT"
+    },
+    {
+      "keyword": "RESULTS FILE",
+      "identifier": "RESULTS_FILE",
+      "type": "STRING",
+      "size": 0,
+      "unbounded": false,
+      "help": "Name of the file into which the computation results are written with a periodicity given by TELEMAC",
+      "rubrique": [
+        "COMPUTATION ENVIRONMENT",
+        "OUTPUT",
+        "RESULTS"
+      ],
+      "is_file": true,
+      "level": 1,
+      "mnemo": "ICE_FILES(ICERES)%NAME",
+      "file_role": "output",
+      "file_mandatory": false
+    },
+    {
+      "keyword": "RESULTS FILE FORMAT",
+      "identifier": "RESULTS_FILE_FORMAT",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "Format of the RESULTS FILE. Possible choices are: SERAFIN : classical single precision format in TELEMAC, SERAFIND: classical double precision format in TELEMAC, MED : MED double precision format based on HDF5.",
+      "rubrique": [
+        "COMPUTATION ENVIRONMENT",
+        "OUTPUT",
+        "RESULTS"
+      ],
+      "is_file": false,
+      "default": "SERAFIN ",
+      "level": 1,
+      "choices": [
+        "SERAFIN",
+        "SERAFIND",
+        "MED"
+      ],
+      "mnemo": "ICE_FILES(ICERES)%FMT"
+    },
+    {
+      "keyword": "3D RESULTS FILE",
+      "identifier": "RD_RESULTS_FILE",
+      "type": "STRING",
+      "size": 0,
+      "unbounded": false,
+      "help": "Name of the file into which the computation results are written with a periodicity given by the keyword ICE PRINTOUT PERIOD.",
+      "rubrique": [
+        "COMPUTATION ENVIRONMENT",
+        "OUTPUT",
+        "RESULTS"
+      ],
+      "is_file": true,
+      "level": 1,
+      "mnemo": "ICE_FILES(ICER3D)%NAME",
+      "file_role": "output",
+      "file_mandatory": false
+    },
+    {
+      "keyword": "3D RESULTS FILE FORMAT",
+      "identifier": "RD_RESULTS_FILE_FORMAT",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "Format of the RESULTS FILE. Possible choices are: SERAFIN : classical single precision format in TELEMAC, SERAFIND: classical double precision format in TELEMAC, MED : MED double precision format based on HDF5.",
+      "rubrique": [
+        "COMPUTATION ENVIRONMENT",
+        "OUTPUT",
+        "RESULTS"
+      ],
+      "is_file": false,
+      "default": "SERAFIN ",
+      "level": 1,
+      "choices": [
+        "SERAFIN",
+        "SERAFIND",
+        "MED"
+      ],
+      "mnemo": "ICE_FILES(ICER3D)%FMT"
+    },
+    {
+      "keyword": "PREVIOUS ICE COVER COMPUTATION FILE",
+      "identifier": "PREVIOUS_ICE_COVER_COMPUTATION_FILE",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "Name of a file containing the results of an earlier ice cover computation which was made on the same mesh. The last recorded time step will provide the initial conditions for the new computation.",
+      "rubrique": [
+        "COMPUTATION ENVIRONMENT",
+        "RESTART",
+        ""
+      ],
+      "is_file": true,
+      "default": "",
+      "level": 1,
+      "mnemo": "ICE_FILES(ICECOV)%NAME",
+      "file_role": "input",
+      "file_mandatory": false
+    },
+    {
+      "keyword": "PREVIOUS ICE COVER COMPUTATION FILE FORMAT",
+      "identifier": "PREVIOUS_ICE_COVER_COMPUTATION_FILE_FORMAT",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "Previous ice cover computation results file format. Possible values are: SERAFIN : classical single precision format in TELEMAC, SERAFIND: classical double precision format in TELEMAC.",
+      "rubrique": [
+        "COMPUTATION ENVIRONMENT",
+        "RESTART",
+        ""
+      ],
+      "is_file": false,
+      "default": "SERAFIN ",
+      "level": 1,
+      "choices": [
+        "SERAFIN",
+        "SERAFIND"
+      ],
+      "mnemo": "ICE_FILES(ICECOV)%FMT"
+    },
+    {
+      "keyword": "PREVIOUS ICE BLOCKS COMPUTATION FILE",
+      "identifier": "PREVIOUS_ICE_BLOCKS_COMPUTATION_FILE",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "Name of a file containing the results of ice blocks from an earlier Lagrangian computation. The last recorded time step will provide the initial conditions for the new computation.",
+      "rubrique": [
+        "COMPUTATION ENVIRONMENT",
+        "RESTART",
+        ""
+      ],
+      "is_file": true,
+      "default": "",
+      "level": 1,
+      "mnemo": "ICE_FILES(ICEBLK)%NAME",
+      "file_role": "input",
+      "file_mandatory": false
+    },
+    {
+      "keyword": "PREVIOUS ICE BLOCKS COMPUTATION FILE FORMAT",
+      "identifier": "PREVIOUS_ICE_BLOCKS_COMPUTATION_FILE_FORMAT",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "Previous ice cover blocks computation results file format. Possible values are: UNKNOWN : not-yet-defined single precision format in TELEMAC, UNKNOWND: not-yet-defined double precision format in TELEMAC.",
+      "rubrique": [
+        "COMPUTATION ENVIRONMENT",
+        "RESTART",
+        ""
+      ],
+      "is_file": false,
+      "default": "SERAFIN ",
+      "level": 1,
+      "choices": [
+        "SERAFIN",
+        "SERAFIND"
+      ],
+      "mnemo": "ICE_FILES(ICEBLK)%FMT"
+    },
+    {
+      "keyword": "DICTIONARY",
+      "identifier": "DICTIONARY",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "Key word dictionary.",
+      "rubrique": [
+        "INTERNAL",
+        "",
+        ""
+      ],
+      "is_file": true,
+      "default": "KHIONE.DICO",
+      "level": 100,
+      "mnemo": "",
+      "file_role": "input",
+      "file_mandatory": true
+    },
+    {
+      "keyword": "INITIAL CONDITIONS",
+      "identifier": "INITIAL_CONDITIONS",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "Makes it possible to define the initial conditions with ice cover. The possible values are as follows: WITHOUT ICE COVER, CONSTANT ICE COVER, SPECIAL. The initial conditions with the water depth should be stated in the CONDICE subroutine.",
+      "rubrique": [
+        "COMPUTATION ENVIRONMENT",
+        "INITIALIZATION",
+        ""
+      ],
+      "is_file": false,
+      "default": "WITHOUT ICE COVER",
+      "level": 1,
+      "choices": [
+        "WITHOUT ICE COVER",
+        "CONSTANT ICE COVER",
+        "SPECIAL",
+        "PARTICULIERES",
+        "PARTICULAR"
+      ],
+      "mnemo": "CDTINI"
+    },
+    {
+      "keyword": "VARIABLES FOR GRAPHIC PRINTOUTS",
+      "identifier": "VARIABLES_FOR_GRAPHIC_PRINTOUTS",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "Names of variables that may be written in the ICE RESULTS FILE. Every variable is represented by a group of letters with any separator between them , ; or blank.",
+      "rubrique": [
+        "COMPUTATION ENVIRONMENT",
+        "OUTPUT",
+        "RESULTS"
+      ],
+      "is_file": false,
+      "multi_select": true,
+      "default": "",
+      "level": 1,
+      "choices": {
+        "PHCL": "SOLRAD CLEAR SKY",
+        "PHRI": "SOLRAD CLOUDY",
+        "PHPS": "NET SOLRAD",
+        "PHIB": "EFFECTIVE SOLRAD",
+        "PHIE": "EVAPO HEAT FLUX",
+        "PHIH": "CONDUC HEAT FLUX",
+        "PHIP": "PRECIP HEAT FLUX",
+        "COV_TH0": "FRAZIL THETA0",
+        "COV_TH1": "FRAZIL THETA1",
+        "COV_BT1": "REENTRAINMENT",
+        "COV_VBB": "SETTLING VEL.",
+        "COV_FC": "SOLID ICE CONC.",
+        "COV_THS": "SOLID ICE THICK.",
+        "COV_THF": "FRAZIL THICKNESS",
+        "COV_THUN": "UNDER ICE THICK.",
+        "COV_EQ": "EQUIV. SURFACE",
+        "COV_ET": "TOP ICE COVER",
+        "COV_EB": "BOTTOM ICE COVERM",
+        "COV_THT": "TOTAL ICE THICK.M",
+        "ICETYPE": "CARACTERISTIQUES",
+        "NTOT": "TOTAL NUMBER OF PARTICLES",
+        "CTOT": "TOTAL CONCENTRATION OF FRAZIL",
+        "Fi": "CONCENTRATION OF FRAZIL FOR CLASS i",
+        "Ni": "PARTICLE NUMBER OF FRAZIL FOR CLASS i",
+        "TEMP": "WATER TEMPERATURE",
+        "SAL": "SALINITY OF WATER",
+        "DYNCOVC": "DYNAMIC ICE COVER CONCENTRATION",
+        "DYNCOVT": "DYNAMIC ICE COVER THICKNESS",
+        "NTOTS": "TOTAL NUMBER OF PARTICLES AT SURFACE",
+        "CTOTS": "TOTAL CONCENTRATION OF FRAZIL AT SURFACE",
+        "SFi": "CONCENTRATION OF FRAZIL FOR CLASS i AT SURFACE",
+        "SNi": "PARTICLE NUMBER OF FRAZIL FOR CLASS i AT SURFACE",
+        "TEMPS": "WATER TEMPERATURE AT SURFACE",
+        "SALS": "SALINITY OF WATER AT SURFACE"
+      },
+      "mnemo": "VARDES"
+    },
+    {
+      "keyword": "VARIABLES FOR 3D GRAPHIC PRINTOUTS",
+      "identifier": "VARIABLES_FOR_3D_GRAPHIC_PRINTOUTS",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "Names of variables that may be written in the RESULTS FILE. Every variable is represented by a group of letters with any separator between them , ; or blank.",
+      "rubrique": [
+        "COMPUTATION ENVIRONMENT",
+        "OUTPUT",
+        "RESULTS"
+      ],
+      "is_file": false,
+      "multi_select": true,
+      "default": "",
+      "level": 1,
+      "choices": {
+        "NTOT": "TOTAL NUMBER OF PARTICLES",
+        "CTOT": "TOTAL CONCENTRATION OF FRAZIL",
+        "Z": "ELEVATION Z",
+        "Fi": "CONCENTRATION OF FRAZIL FOR CLASS i",
+        "Ni": "PARTICLE NUMBER OF FRAZIL FOR CLASS i",
+        "TEMP": "WATER TEMPERATURE",
+        "SAL": "SALINITY OF WATER"
+      },
+      "mnemo": "VARD3D"
+    },
+    {
+      "keyword": "VARIABLES TO BE PRINTED",
+      "identifier": "VARIABLES_TO_BE_PRINTED",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "Necessary keyword but does not do much.",
+      "rubrique": [
+        "COMPUTATION ENVIRONMENT",
+        "OUTPUT",
+        "LISTING"
+      ],
+      "is_file": false,
+      "multi_select": true,
+      "default": "",
+      "level": 1,
+      "choices": [
+        "TO BE EDITED"
+      ],
+      "mnemo": "VARIMP"
+    },
+    {
+      "keyword": "GRAPHIC PRINTOUT PERIOD",
+      "identifier": "GRAPHIC_PRINTOUT_PERIOD",
+      "type": "INTEGER",
+      "size": 0,
+      "unbounded": false,
+      "help": "Determines, in number of time steps, the printout period for the VARIABLES FOR GRAPHIC PRINTOUTS in the RESULTS FILE.",
+      "rubrique": [
+        "COMPUTATION ENVIRONMENT",
+        "OUTPUT",
+        "RESULTS"
+      ],
+      "is_file": false,
+      "default": 1,
+      "level": 1,
+      "mnemo": "LEOPRD"
+    },
+    {
+      "keyword": "LISTING PRINTOUT PERIOD",
+      "identifier": "LISTING_PRINTOUT_PERIOD",
+      "type": "INTEGER",
+      "size": 0,
+      "unbounded": false,
+      "help": "Determines, in number of time steps, the printout period of the VARIABLES TO BE PRINTED. The results are systematically printed out on the listing file (file CAS.SORTIE at the workstation).",
+      "rubrique": [
+        "COMPUTATION ENVIRONMENT",
+        "OUTPUT",
+        "LISTING"
+      ],
+      "is_file": false,
+      "default": 1,
+      "level": 1,
+      "mnemo": "LISPRD"
+    },
+    {
+      "keyword": "MASS-BALANCE",
+      "identifier": "MASS_BALANCE",
+      "type": "LOGICAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "Determines whether a check of the mass-balance over the domain is done or not.",
+      "rubrique": [
+        "COMPUTATION ENVIRONMENT",
+        "OUTPUT",
+        "LISTING"
+      ],
+      "is_file": false,
+      "default": false,
+      "level": 1,
+      "mnemo": "WQBILMAS"
+    },
+    {
+      "keyword": "MAXIMUM NUMBER OF BOUNDARIES",
+      "identifier": "MAXIMUM_NUMBER_OF_BOUNDARIES",
+      "type": "INTEGER",
+      "size": 1,
+      "unbounded": false,
+      "help": "maximal number of boundaries in the mesh. Used for dimensioning arrays. Can be increased if needed",
+      "rubrique": [
+        "COMPUTATION ENVIRONMENT",
+        "GLOBAL",
+        ""
+      ],
+      "is_file": false,
+      "default": 30,
+      "level": 1,
+      "mnemo": "MAXFRO"
+    },
+    {
+      "keyword": "SCHEME FOR ADVECTION OF TRACERS",
+      "identifier": "SCHEME_FOR_ADVECTION_OF_TRACERS",
+      "type": "INTEGER",
+      "size": 1,
+      "unbounded": true,
+      "help": "Choice of the advection scheme for the frazil and the cover, ERIA works only in 2D.",
+      "rubrique": [
+        "FRAZIL",
+        "NUMERICAL PARAMETERS",
+        ""
+      ],
+      "is_file": false,
+      "default": 5,
+      "level": 0,
+      "choices": {
+        "0": "NO ADVECTION",
+        "1": "CHARACTERISTICS",
+        "2": "EXPLICIT + SUPG",
+        "3": "EXPLICIT LEO POSTMA",
+        "4": "EXPLICIT + MURD SCHEME N",
+        "5": "EXPLICIT + MURD SCHEME PSI",
+        "13": "N-SCHEME FOR TIDAL FLATS LP",
+        "14": "N-SCHEME FOR TIDAL FLATS",
+        "15": "ERIA SCHEME - ONLY IN 2D"
+      },
+      "mnemo": "SCHADVFRZL"
+    },
+    {
+      "keyword": "SCHEME OPTION FOR ADVECTION OF TRACERS",
+      "identifier": "SCHEME_OPTION_FOR_ADVECTION_OF_TRACERS",
+      "type": "INTEGER",
+      "size": 1,
+      "unbounded": true,
+      "help": "If N or PSI SCHEME: 1=explicit 2=predictor-corrector 3= predictor-corrector second-order in time 4= implicit",
+      "rubrique": [
+        "FRAZIL",
+        "NUMERICAL PARAMETERS",
+        ""
+      ],
+      "is_file": false,
+      "default": 4,
+      "level": 1,
+      "mnemo": "OPTADV_FRZL"
+    },
+    {
+      "keyword": "FINITE VOLUME SCHEME FOR FRAZIL DIFFUSION",
+      "identifier": "FINITE_VOLUME_SCHEME_FOR_FRAZIL_DIFFUSION",
+      "type": "INTEGER",
+      "size": 2,
+      "unbounded": false,
+      "help": "Choice of the finite volume diffusion model: 1: explicit P1 finite element, 2: two points flux, 3: reconstructed two points flux.",
+      "rubrique": [
+        "NUMERICAL PARAMETERS",
+        "DIFFUSION",
+        ""
+      ],
+      "is_file": false,
+      "default": [
+        1,
+        1
+      ],
+      "level": 0,
+      "choices": {
+        "1": "explicit P1 finite element",
+        "2": "two points flux",
+        "3": "reconstructed two points flux"
+      },
+      "mnemo": "MVIST_FRZL"
+    },
+    {
+      "keyword": "SCHEME FOR DIFFUSION OF FRAZIL IN 3D",
+      "identifier": "SCHEME_FOR_DIFFUSION_OF_FRAZIL_IN_3D",
+      "type": "INTEGER",
+      "size": 1,
+      "unbounded": false,
+      "help": "Monitors the choice of the diffusion scheme for frazil in 3D simulations. Possible choices are: 0: no diffusion, 1: implicit, 2: vertical diffusion only.",
+      "rubrique": [
+        "FRAZIL",
+        "NUMERICAL PARAMETERS",
+        ""
+      ],
+      "is_file": false,
+      "default": 1,
+      "level": 1,
+      "choices": {
+        "0": "NO DIFFUSION",
+        "1": "IMPLICIT",
+        "2": "VERTICAL DIFFUSION ONLY"
+      },
+      "mnemo": "SCHDFRZL"
+    },
+    {
+      "keyword": "SOLVER FOR DIFFUSION OF TRACERS",
+      "identifier": "SOLVER_FOR_DIFFUSION_OF_TRACERS",
+      "type": "INTEGER",
+      "size": 1,
+      "unbounded": true,
+      "help": "Choice of the solver for suspension resolution. Possible choices are: 1: conjugate gradient, 2: conjugate residual, 3: conjugate gradient on a normal equation, 4: minimum error, 5: squared conjugate gradient, 6: CGSTAB, 7: GMRES, 8: direct solver.",
+      "rubrique": [
+        "FRAZIL",
+        "NUMERICAL PARAMETERS",
+        ""
+      ],
+      "is_file": false,
+      "default": 1,
+      "level": 1,
+      "choices": {
+        "1": "conjugate gradient",
+        "2": "conjugate residual",
+        "3": "conjugate gradient on a normal equation",
+        "4": "minimum error",
+        "5": "squared conjugate gradient",
+        "6": "cgstab",
+        "7": "gmres",
+        "8": "direct solver"
+      },
+      "mnemo": "SLVFRZL(I)%SLV"
+    },
+    {
+      "keyword": "SOLVER OPTION FOR DIFFUSION OF TRACERS",
+      "identifier": "SOLVER_OPTION_FOR_DIFFUSION_OF_TRACERS",
+      "type": "INTEGER",
+      "size": 1,
+      "unbounded": false,
+      "help": "Dimension of Krylov space for the GMRES method (7).",
+      "rubrique": [
+        "FRAZIL",
+        "NUMERICAL PARAMETERS",
+        ""
+      ],
+      "is_file": false,
+      "default": 5,
+      "level": 2,
+      "mnemo": "SLVFRZL(I)%KRYLOV"
+    },
+    {
+      "keyword": "MAXIMUM NUMBER OF ITERATIONS FOR SOLVER FOR TRACERS",
+      "identifier": "MAXIMUM_NUMBER_OF_ITERATIONS_FOR_SOLVER_FOR_TRACERS",
+      "type": "INTEGER",
+      "size": 1,
+      "unbounded": false,
+      "help": "Limits the number of solver iterations for the diffusion of frazil.",
+      "rubrique": [
+        "FRAZIL",
+        "NUMERICAL PARAMETERS",
+        ""
+      ],
+      "is_file": false,
+      "default": 60,
+      "level": 2,
+      "mnemo": "SLVFRZL(I)%NITMAX"
+    },
+    {
+      "keyword": "ACCURACY FOR DIFFUSION OF TRACERS",
+      "identifier": "ACCURACY_FOR_DIFFUSION_OF_TRACERS",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Sets the accuracy needed for the computation of the diffusion of frazil. It is not possible to set different values for different solvers, only one is accepted.",
+      "rubrique": [
+        "FRAZIL",
+        "NUMERICAL PARAMETERS",
+        ""
+      ],
+      "is_file": false,
+      "default": 1e-08,
+      "level": 1,
+      "mnemo": "SLVFRZL%EPS"
+    },
+    {
+      "keyword": "PRECONDITIONING FOR DIFFUSION OF TRACERS",
+      "identifier": "PRECONDITIONING_FOR_DIFFUSION_OF_TRACERS",
+      "type": "INTEGER",
+      "size": 1,
+      "unbounded": false,
+      "help": "Choice of preconditioning for the diffusion of frazil. Possible choices are: 0: no preconditioning, 2: diagonal, 3: diagonal with the condensed matrix in 3D, 5: diagonal with absolute values in 3D, 7: Crout, 11: Gauss-Seidel EBE in 3D, 13: matrix defined by the user in 3D, 14: diagonal and Crout, 17: direct solver on the vertical in 3D, 21: diagonal condensed and Crout in 3D, 34: diagonal and direct solver on the vertical in 3D.",
+      "rubrique": [
+        "FRAZIL",
+        "NUMERICAL PARAMETERS",
+        ""
+      ],
+      "is_file": false,
+      "default": 2,
+      "level": 2,
+      "choices": {
+        "0": "no preconditioning",
+        "2": "diagonal",
+        "3": "diagonal condensed",
+        "5": "diagonal with absolute values",
+        "7": "Crout",
+        "11": "Gauss-Seidel EBE",
+        "13": "Matrix defined by the user",
+        "14": "diagonal and Crout",
+        "17": "direct solver on the vertical",
+        "21": "diagonal condensed and Crout",
+        "34": "diagonal and direct solver on the vertical"
+      },
+      "mnemo": "SLVFRZL(I)%PRECON"
+    },
+    {
+      "keyword": "LAW OF ICE COVER FRICTION",
+      "identifier": "LAW_OF_ICE_COVER_FRICTION",
+      "type": "INTEGER",
+      "size": 1,
+      "unbounded": false,
+      "help": "Selects the type of formulation used for the under ice cover friction. The possible laws are as follows (refer to the Principle note): 0: no friction against bottom, 1: Haaland formula, 2: Chezy formula, 3: Strickler formula, 4: Manning formula, 5: Nikuradse formula.",
+      "rubrique": [
+        "ICE COVER",
+        "PHYSICAL PARAMETERS",
+        "FRICTION"
+      ],
+      "is_file": false,
+      "default": 4,
+      "level": 0,
+      "choices": {
+        "0": "NO FRICTION",
+        "1": "HAALAND",
+        "2": "CHEZY",
+        "3": "STRICKLER",
+        "4": "MANNING",
+        "5": "NIKURADSE"
+      },
+      "mnemo": "IFROT"
+    },
+    {
+      "keyword": "ICE FRICTION COEFFICIENT",
+      "identifier": "ICE_FRICTION_COEFFICIENT",
+      "type": "REAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "Sets the value of the friction coefficient for the selected formulation. It is noteworthy that the meaning of this figure changes according to the selected formula (Chezy, Strickler, etc.): 1: linear coefficient, 2: Chezy coefficient, 3: Strickler coefficient, 4: Manning coefficient, 5: Nikuradse grain size.",
+      "rubrique": [
+        "ICE COVER",
+        "PHYSICAL PARAMETERS",
+        "FRICTION"
+      ],
+      "is_file": false,
+      "default": 0.04,
+      "level": 0,
+      "mnemo": "FICE"
+    },
+    {
+      "keyword": "MAXIMAL FRICTION COEFFICIENT",
+      "identifier": "MAXIMAL_FRICTION_COEFFICIENT",
+      "type": "REAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "Sets the maximal friction coefficient when it depends linearly on the ice cover thickness.",
+      "rubrique": [
+        "ICE COVER",
+        "PHYSICAL PARAMETERS",
+        "FRICTION"
+      ],
+      "is_file": false,
+      "default": 0.04,
+      "level": 0,
+      "mnemo": "FICE_MAX"
+    },
+    {
+      "keyword": "LAW FOR FRICTION COEFFICIENT",
+      "identifier": "LAW_FOR_FRICTION_COEFFICIENT",
+      "type": "INTEGER",
+      "size": 1,
+      "unbounded": false,
+      "help": "Selection between constant friction coefficient of linearly dependant on ice cover thickness.",
+      "rubrique": [
+        "ICE COVER",
+        "PHYSICAL PARAMETERS",
+        "FRICTION"
+      ],
+      "is_file": false,
+      "default": 0,
+      "level": 0,
+      "choices": {
+        "0": "CONSTANT FRICTION COEF",
+        "1": "LINEAR FRICTION COEF"
+      },
+      "mnemo": "IFICE"
+    },
+    {
+      "keyword": "MODEL FOR UNDER COVER FRICTION",
+      "identifier": "MODEL_FOR_UNDER_COVER_FRICTION",
+      "type": "INTEGER",
+      "size": 1,
+      "unbounded": false,
+      "help": "Selection of a friction model for under cover",
+      "rubrique": [
+        "ICE COVER",
+        "PHYSICAL PARAMETERS",
+        "FRICTION"
+      ],
+      "is_file": false,
+      "default": 2,
+      "level": 0,
+      "choices": {
+        "1": "UNDER COVER TOTAL FRICTION",
+        "2": "FRICTION WITH RATIO ON WATER DEPTHS"
+      },
+      "mnemo": "IFRIC"
+    },
+    {
+      "keyword": "MODEL FOR THE ICE COVER PRESSURE GRADIENT",
+      "identifier": "MODEL_FOR_THE_ICE_COVER_PRESSURE_GRADIENT",
+      "type": "INTEGER",
+      "size": 1,
+      "unbounded": false,
+      "help": "Selection of the model for ice cover pressure gradient",
+      "rubrique": [
+        "ICE COVER",
+        "PHYSICAL PARAMETERS",
+        ""
+      ],
+      "is_file": false,
+      "default": 2,
+      "level": 0,
+      "choices": {
+        "0": "NO MODEL",
+        "1": "EXPLICIT MODEL",
+        "2": "IMPLICIT MODEL"
+      },
+      "mnemo": "IPRES"
+    },
+    {
+      "keyword": "EQUIVALENT SURFACE ICE THICKNESS",
+      "identifier": "EQUIVALENT_SURFACE_ICE_THICKNESS",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "ICE COVER",
+        "PHYSICAL PARAMETERS",
+        "FRICTION"
+      ],
+      "is_file": false,
+      "default": 0.001,
+      "level": 2,
+      "mnemo": "THIE"
+    },
+    {
+      "keyword": "AIR DENSITY",
+      "identifier": "AIR_DENSITY",
+      "type": "REAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "Sets the value of air density.",
+      "rubrique": [
+        "GENERAL",
+        "PHYSICAL PARAMETERS",
+        ""
+      ],
+      "is_file": false,
+      "default": 1.225,
+      "level": 2,
+      "mnemo": "RHO_AIR"
+    },
+    {
+      "keyword": "ICE DENSITY",
+      "identifier": "ICE_DENSITY",
+      "type": "REAL",
+      "size": null,
+      "unbounded": false,
+      "help": "Sets the value of ice density, in kg/m^3.",
+      "rubrique": [
+        "GENERAL",
+        "PHYSICAL PARAMETERS",
+        ""
+      ],
+      "is_file": false,
+      "default": 916.8,
+      "level": 2,
+      "mnemo": "RHO_ICE"
+    },
+    {
+      "keyword": "WATER SPECIFIC HEAT",
+      "identifier": "WATER_SPECIFIC_HEAT",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Sets the value of the specific heat of water, in J/kg/K.",
+      "rubrique": [
+        "THERMAL BUDGET",
+        "PHYSICAL PARAMETERS",
+        ""
+      ],
+      "is_file": false,
+      "default": 4185.5,
+      "level": 1,
+      "mnemo": "CP_EAU"
+    },
+    {
+      "keyword": "SPECIFIC HEAT OF ICE",
+      "identifier": "SPECIFIC_HEAT_OF_ICE",
+      "type": "REAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "Sets the value of the specific heat of ice, in J/kg/K.",
+      "rubrique": [
+        "THERMAL BUDGET",
+        "PHYSICAL PARAMETERS",
+        ""
+      ],
+      "is_file": false,
+      "default": 2040.0,
+      "level": 2,
+      "mnemo": "CP_ICE"
+    },
+    {
+      "keyword": "LATENT HEAT OF ICE",
+      "identifier": "LATENT_HEAT_OF_ICE",
+      "type": "REAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "Sets the value of the latent heat of ice.",
+      "rubrique": [
+        "THERMAL BUDGET",
+        "PHYSICAL PARAMETERS",
+        ""
+      ],
+      "is_file": false,
+      "default": 334000.0,
+      "level": 2,
+      "mnemo": "LH_ICE"
+    },
+    {
+      "keyword": "WATER-AIR HEAT EXCHANGE COEFFICIENT",
+      "identifier": "WATER_AIR_HEAT_EXCHANGE_COEFFICIENT",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Sets the heat exchange coefficient between water and air.",
+      "rubrique": [
+        "THERMAL BUDGET",
+        "PHYSICAL PARAMETERS",
+        ""
+      ],
+      "is_file": false,
+      "default": 20.0,
+      "level": 2,
+      "mnemo": "LIN_WATAIR"
+    },
+    {
+      "keyword": "WATER-AIR HEAT EXCHANGE CONSTANT",
+      "identifier": "WATER_AIR_HEAT_EXCHANGE_CONSTANT",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Sets the heat exchange constant between water and air.",
+      "rubrique": [
+        "THERMAL BUDGET",
+        "CONSTANT",
+        ""
+      ],
+      "is_file": false,
+      "default": -50.0,
+      "level": 2,
+      "mnemo": "CST_WATAIR"
+    },
+    {
+      "keyword": "ICE-AIR HEAT EXCHANGE COEFFICIENT",
+      "identifier": "ICE_AIR_HEAT_EXCHANGE_COEFFICIENT",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Sets the linearised heat flux exchange coefficient between ice and air.",
+      "rubrique": [
+        "THERMAL BUDGET",
+        "CONSTANT",
+        ""
+      ],
+      "is_file": false,
+      "default": 12.189,
+      "level": 2,
+      "mnemo": "LIN_ICEAIR"
+    },
+    {
+      "keyword": "ICE-AIR HEAT EXCHANGE CONSTANT",
+      "identifier": "ICE_AIR_HEAT_EXCHANGE_CONSTANT",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Sets the linearised heat flux exchange constant between ice and air.",
+      "rubrique": [
+        "THERMAL BUDGET",
+        "CONSTANT",
+        ""
+      ],
+      "is_file": false,
+      "default": -32.547,
+      "level": 2,
+      "mnemo": "CST_ICEAIR"
+    },
+    {
+      "keyword": "COEFFICIENT FOR CALIBRATION OF BACK RADIATION",
+      "identifier": "COEFFICIENT_FOR_CALIBRATION_OF_BACK_RADIATION",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Sets heat flux calibration coefficient for effective back radiation on the free surface.",
+      "rubrique": [
+        "THERMAL BUDGET",
+        "CALIBRATION COEFFICIENT",
+        ""
+      ],
+      "is_file": false,
+      "default": 1.0,
+      "level": 2,
+      "mnemo": "COEF_PHIB"
+    },
+    {
+      "keyword": "COEFFICIENT FOR CALIBRATION OF EVAPORATIVE HEAT TRANSFERT",
+      "identifier": "COEFFICIENT_FOR_CALIBRATION_OF_EVAPORATIVE_HEAT_TRANSFERT",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Sets heat flux calibration coefficient for evaporative heat transfert between air and atmosphere.",
+      "rubrique": [
+        "THERMAL BUDGET",
+        "CALIBRATION COEFFICIENT",
+        ""
+      ],
+      "is_file": false,
+      "default": 1.0,
+      "level": 2,
+      "mnemo": "COEF_PHIE"
+    },
+    {
+      "keyword": "COEFFICIENT FOR CALIBRATION OF CONDUCTIVE HEAT TRANSFERT",
+      "identifier": "COEFFICIENT_FOR_CALIBRATION_OF_CONDUCTIVE_HEAT_TRANSFERT",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Sets heat flux calibration coefficient for conductive heat transfert between air and atmosphere.",
+      "rubrique": [
+        "THERMAL BUDGET",
+        "CALIBRATION COEFFICIENT",
+        ""
+      ],
+      "is_file": false,
+      "default": 1.0,
+      "level": 2,
+      "mnemo": "COEF_PHIH"
+    },
+    {
+      "keyword": "COEFFICIENT FOR CALIBRATION OF PRECIPITATION HEAT TRANSFERT",
+      "identifier": "COEFFICIENT_FOR_CALIBRATION_OF_PRECIPITATION_HEAT_TRANSFERT",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Sets heat flux calibration coefficient for precipitation heat transfert between air and atmosphere.",
+      "rubrique": [
+        "THERMAL BUDGET",
+        "CALIBRATION COEFFICIENT",
+        ""
+      ],
+      "is_file": false,
+      "default": 1.0,
+      "level": 2,
+      "mnemo": "COEF_PHIP"
+    },
+    {
+      "keyword": "THERMAL CONDUCTIVITY BETWEEN WATER AND FRAZIL ",
+      "identifier": "THERMAL_CONDUCTIVITY_BETWEEN_WATER_AND_FRAZIL",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "THERMAL BUDGET",
+        "THERMAL CONDUCTIVITY",
+        ""
+      ],
+      "is_file": false,
+      "default": 0.56594,
+      "level": 2,
+      "mnemo": "TC_WT"
+    },
+    {
+      "keyword": "THERMAL CONDUCTIVITY OF BLACK ICE",
+      "identifier": "THERMAL_CONDUCTIVITY_OF_BLACK_ICE",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "THERMAL BUDGET",
+        "THERMAL CONDUCTIVITY",
+        ""
+      ],
+      "is_file": false,
+      "default": 2.24,
+      "level": 2,
+      "mnemo": "TC_BI"
+    },
+    {
+      "keyword": "THERMAL CONDUCTIVITY OF SNOW",
+      "identifier": "THERMAL_CONDUCTIVITY_OF_SNOW",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "THERMAL BUDGET",
+        "THERMAL CONDUCTIVITY",
+        ""
+      ],
+      "is_file": false,
+      "default": 0.3,
+      "level": 2,
+      "mnemo": "TC_S"
+    },
+    {
+      "keyword": "POROSITY OF SURFACE ICE",
+      "identifier": "POROSITY_OF_SURFACE_ICE",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "GENERAL",
+        "PHYSICAL PARAMETERS",
+        ""
+      ],
+      "is_file": false,
+      "default": 0.4,
+      "level": 2,
+      "mnemo": "SURF_EF"
+    },
+    {
+      "keyword": "HEIGHT OF MEASURED WIND",
+      "identifier": "HEIGHT_OF_MEASURED_WIND",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Sets the height at which the wind is measured, in meters.",
+      "rubrique": [
+        "THERMAL BUDGET",
+        "METEOROLOGICAL PROCESSES",
+        "WIND"
+      ],
+      "is_file": false,
+      "default": 4.5,
+      "level": 2,
+      "mnemo": "WINDZ"
+    },
+    {
+      "keyword": "RELATIVE MODEL ELEVATION FROM MEAN SEA LEVEL",
+      "identifier": "RELATIVE_MODEL_ELEVATION_FROM_MEAN_SEA_LEVEL",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Sets the relative model elevation from mean sea level.",
+      "rubrique": [
+        "THERMAL BUDGET",
+        "METEOROLOGICAL PROCESSES",
+        "SUN"
+      ],
+      "is_file": false,
+      "default": 0.0,
+      "level": 2,
+      "mnemo": "MODELZ"
+    },
+    {
+      "keyword": "SUN SET ANGLE",
+      "identifier": "SUN_SET_ANGLE",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Sets the sun set angle, 180 degrees for the horizontal.",
+      "rubrique": [
+        "THERMAL BUDGET",
+        "METEOROLOGICAL PROCESSES",
+        "SUN"
+      ],
+      "is_file": false,
+      "default": 180.0,
+      "level": 2,
+      "mnemo": "ALPHSD"
+    },
+    {
+      "keyword": "SUN RISE ANGLE",
+      "identifier": "SUN_RISE_ANGLE",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Sets the sun rise angle, 0 degrees for the horizontal.",
+      "rubrique": [
+        "THERMAL BUDGET",
+        "METEOROLOGICAL PROCESSES",
+        "SUN"
+      ],
+      "is_file": false,
+      "default": 0.0,
+      "level": 2,
+      "mnemo": "ALPHRD"
+    },
+    {
+      "keyword": "SOLAR CONSTANT",
+      "identifier": "SOLAR_CONSTANT",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Sets the solar constant. The solar constant, a measure of flux density, is the mean solar electromagnetic radiation (the solar irradiance) per unit area that would be incident on a plane perpendicular to the rays, at a distance of one astronomical unit (AU) from the Sun (roughly the mean distance from the Sun to the Earth). The solar constant includes all types of solar radiation, not just the visible light. It is measured by satellite as being 1.361 kilowatts per square meter (kW/m^2) at solar minimum and approximately 0.1~% greater (roughly 1.362 kW/m^2) at solar maximum. The solar 'constant' is not a physical constant in scientific sense; that is, it is not like the Planck constant or the speed of light, which are absolutely constant in physics. The solar constant is merely an average of the actually varying value. It has been shown to vary in the past 400 years over a range of less than 0.2~%.",
+      "rubrique": [
+        "THERMAL BUDGET",
+        "METEOROLOGICAL PROCESSES",
+        "SUN"
+      ],
+      "is_file": false,
+      "default": 1380.0,
+      "level": 2,
+      "mnemo": "SIO"
+    },
+    {
+      "keyword": "ALBEDO OF ICE",
+      "identifier": "ALBEDO_OF_ICE",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Sets the albedo of ice.",
+      "rubrique": [
+        "THERMAL BUDGET",
+        "METEOROLOGICAL PROCESSES",
+        ""
+      ],
+      "is_file": false,
+      "default": 0.2,
+      "level": 2,
+      "mnemo": "ALBE"
+    },
+    {
+      "keyword": "DEWPOINT TEMPERATURE",
+      "identifier": "DEWPOINT_TEMPERATURE",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "In degC, dewpoint temperature used when it is not already provided within one of the meteo files.",
+      "rubrique": [
+        "THERMAL BUDGET",
+        "METEOROLOGICAL PROCESSES",
+        "AIR"
+      ],
+      "is_file": false,
+      "default": 0.0,
+      "level": 1,
+      "mnemo": "CST_TDEW"
+    },
+    {
+      "keyword": "VISIBILITY",
+      "identifier": "VISIBILITY",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "In km, visibility used when it is not already provided within one of the meteo files.",
+      "rubrique": [
+        "THERMAL BUDGET",
+        "METEOROLOGICAL PROCESSES",
+        "AIR"
+      ],
+      "is_file": false,
+      "default": 10000000000000.0,
+      "level": 1,
+      "mnemo": "CST_VISBI"
+    },
+    {
+      "keyword": "NUMBER OF CLASSES FOR SUSPENDED FRAZIL ICE",
+      "identifier": "NUMBER_OF_CLASSES_FOR_SUSPENDED_FRAZIL_ICE",
+      "type": "INTEGER",
+      "size": 0,
+      "unbounded": false,
+      "help": "Sets the number of classes of suspended frazil ice granules.",
+      "rubrique": [
+        "FRAZIL",
+        "PHYSICAL PARAMETERS",
+        ""
+      ],
+      "is_file": false,
+      "default": 1,
+      "level": 2,
+      "mnemo": "NC_FRA"
+    },
+    {
+      "keyword": "NUSSELT NUMBER",
+      "identifier": "NUSSELT_NUMBER",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "FRAZIL",
+        "TURBULENCE",
+        ""
+      ],
+      "is_file": false,
+      "default": 4.0,
+      "level": 2,
+      "mnemo": "NUSS"
+    },
+    {
+      "keyword": "MODEL FOR THE NUSSELT NUMBER",
+      "identifier": "MODEL_FOR_THE_NUSSELT_NUMBER",
+      "type": "INTEGER",
+      "size": 0,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "FRAZIL",
+        "TURBULENCE",
+        ""
+      ],
+      "is_file": false,
+      "default": 1,
+      "level": 2,
+      "choices": {
+        "1": "CONSTANT NUSSELT NUMBER",
+        "2": "WADIA (1974) AND BATCHELOR (1980)"
+      },
+      "mnemo": "NUSSI"
+    },
+    {
+      "keyword": "FRAZIL CRYSTALS RADIUS",
+      "identifier": "FRAZIL_CRYSTALS_RADIUS",
+      "type": "REAL",
+      "size": 1,
+      "unbounded": true,
+      "help": "",
+      "rubrique": [
+        "FRAZIL",
+        "PHYSICAL PARAMETERS",
+        ""
+      ],
+      "is_file": false,
+      "default": 0.00041,
+      "level": 2,
+      "mnemo": "RK_FRZL"
+    },
+    {
+      "keyword": "FRAZIL CRYSTALS DIAMETER THICKNESS RATIO",
+      "identifier": "FRAZIL_CRYSTALS_DIAMETER_THICKNESS_RATIO",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "FRAZIL",
+        "PHYSICAL PARAMETERS",
+        ""
+      ],
+      "is_file": false,
+      "default": 10.0,
+      "level": 2,
+      "mnemo": "DE"
+    },
+    {
+      "keyword": "MODEL FOR THE BUOYANCY VELOCITY",
+      "identifier": "MODEL_FOR_THE_BUOYANCY_VELOCITY",
+      "type": "INTEGER",
+      "size": 0,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "FRAZIL",
+        "PHYSICAL PARAMETERS",
+        ""
+      ],
+      "is_file": false,
+      "default": 2,
+      "level": 2,
+      "choices": {
+        "1": "DALY (1984)",
+        "2": "SVENSSON & OMSTEDT (1994)",
+        "3": "MATOUSEK (1992)",
+        "4": "GOSIK & OSTERKAMP (1983)",
+        "5": "MORSE & RICHARD (2009)"
+      },
+      "mnemo": "IBUOY"
+    },
+    {
+      "keyword": "SETTLING COEFFICIENT OF FRAZIL ON BARS",
+      "identifier": "SETTLING_COEFFICIENT_OF_FRAZIL_ON_BARS",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "FRAZIL",
+        "CALIBRATION COEFFICIENT",
+        ""
+      ],
+      "is_file": false,
+      "default": 1.0,
+      "level": 2,
+      "mnemo": "AF"
+    },
+    {
+      "keyword": "INITIAL FRAZIL CONCENTRATION VALUES",
+      "identifier": "INITIAL_FRAZIL_CONCENTRATION_VALUES",
+      "type": "REAL",
+      "size": 2,
+      "unbounded": true,
+      "help": "Sets the initial values of frazil concentration.",
+      "rubrique": [
+        "FRAZIL",
+        "INITIAL CONDITION",
+        ""
+      ],
+      "is_file": false,
+      "default": [
+        0.0,
+        0.0
+      ],
+      "level": 0,
+      "mnemo": "FRZL0"
+    },
+    {
+      "keyword": "PRESCRIBED FRAZIL CONCENTRATION VALUES",
+      "identifier": "PRESCRIBED_FRAZIL_CONCENTRATION_VALUES",
+      "type": "REAL",
+      "size": 2,
+      "unbounded": true,
+      "help": "Frazil concentration values prescribed at the inflow boundaries. Determines the imposed value of frazil classes at the first boundary, then at the second and so on, with the same logic as tracers.",
+      "rubrique": [
+        "FRAZIL",
+        "BOUNDARY CONDITIONS",
+        ""
+      ],
+      "is_file": false,
+      "level": 2,
+      "mnemo": "PREFRZL"
+    },
+    {
+      "keyword": "COEFFICIENT FOR DIFFUSION OF FRAZIL",
+      "identifier": "COEFFICIENT_FOR_DIFFUSION_OF_FRAZIL",
+      "type": "REAL",
+      "size": 2,
+      "unbounded": true,
+      "help": "Sets the value of the frazil diffusivity in 2D.",
+      "rubrique": [
+        "FRAZIL",
+        "DIFFUSION",
+        ""
+      ],
+      "is_file": false,
+      "default": [
+        1e-06,
+        1e-06
+      ],
+      "level": 0,
+      "mnemo": "DIFFRZLNU"
+    },
+    {
+      "keyword": "COEFFICIENT FOR HORIZONTAL DIFFUSION OF FRAZIL",
+      "identifier": "COEFFICIENT_FOR_HORIZONTAL_DIFFUSION_OF_FRAZIL",
+      "type": "REAL",
+      "size": 2,
+      "unbounded": true,
+      "help": "Sets the values of the horizontal diffusion of frazil in 3D. It is an array, with one value per class, separated by semicolons.",
+      "rubrique": [
+        "FRAZIL",
+        "DIFFUSION",
+        ""
+      ],
+      "is_file": false,
+      "level": 1,
+      "mnemo": "DNUFRZLH"
+    },
+    {
+      "keyword": "COEFFICIENT FOR VERTICAL DIFFUSION OF FRAZIL",
+      "identifier": "COEFFICIENT_FOR_VERTICAL_DIFFUSION_OF_FRAZIL",
+      "type": "REAL",
+      "size": 2,
+      "unbounded": true,
+      "help": "Sets the values of the vertical diffusion of frazil in 3D. It is an array, with one value per class, separated by semicolons.",
+      "rubrique": [
+        "FRAZIL",
+        "DIFFUSION",
+        ""
+      ],
+      "is_file": false,
+      "level": 1,
+      "mnemo": "DNUFRZLV"
+    },
+    {
+      "keyword": "FORMULA FOR OCEAN HEAT EXCHANGES",
+      "identifier": "FORMULA_FOR_OCEAN_HEAT_EXCHANGES",
+      "type": "LOGICAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "If the keyword is YES, the evaporative and conductive fluxes are computed with the Bulk formula.",
+      "rubrique": [
+        "THERMAL BUDGET",
+        "METEOROLOGICAL PROCESSES",
+        ""
+      ],
+      "is_file": false,
+      "default": false,
+      "level": 1,
+      "mnemo": "BULKF"
+    },
+    {
+      "keyword": "CLOGGING ON BARS",
+      "identifier": "CLOGGING_ON_BARS",
+      "type": "LOGICAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Computation of clogging on grid.",
+      "rubrique": [
+        "CLOGGING",
+        "",
+        ""
+      ],
+      "is_file": false,
+      "default": false,
+      "level": 1,
+      "mnemo": "CLOGGING"
+    },
+    {
+      "keyword": "CLOGGING RESULTS FILE",
+      "identifier": "CLOGGING_RESULTS_FILE",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "ASCII file of results for clogged ice parameters at water intakes.",
+      "rubrique": [
+        "CLOGGING",
+        "",
+        ""
+      ],
+      "is_file": true,
+      "default": "",
+      "level": 1,
+      "mnemo": "ICE_FILES(CLGRFO)%NAME",
+      "file_role": "output",
+      "file_mandatory": false
+    },
+    {
+      "keyword": "POROSITY OF ACCUMULATED ICE",
+      "identifier": "POROSITY_OF_ACCUMULATED_ICE",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "CLOGGING",
+        "PHYSICAL PARAMETERS",
+        "GLACE"
+      ],
+      "is_file": false,
+      "default": 0.67,
+      "level": 2,
+      "mnemo": "CLOG_EFC"
+    },
+    {
+      "keyword": "ANGLE OF ACCUMULATED ICE",
+      "identifier": "ANGLE_OF_ACCUMULATED_ICE",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "CLOGGING",
+        "PHYSICAL PARAMETERS",
+        "GLACE"
+      ],
+      "is_file": false,
+      "default": 35.0,
+      "level": 2,
+      "mnemo": "CLOG_TETHA"
+    },
+    {
+      "keyword": "PHYSICAL CHARACTERISTICS OF THE INTAKE RACK",
+      "identifier": "PHYSICAL_CHARACTERISTICS_OF_THE_INTAKE_RACK",
+      "type": "REAL",
+      "size": 4,
+      "unbounded": false,
+      "help": "Characteristics of vertical and transverse bars, in order of appearance: 1: distance between the centre of the transverse bars, 2: diameter of the transverse bars, 3: distance between the centre of the vertical bars, 4: diameter of the vertical bars. A zero diameter for one particular set of bars will result in not having those bars on the rack.",
+      "rubrique": [
+        "CLOGGING",
+        "PHYSICAL PARAMETERS",
+        "GRID"
+      ],
+      "is_file": false,
+      "default": [
+        0.06,
+        0.01,
+        0.06,
+        0.01
+      ],
+      "level": 0,
+      "mnemo": "CLOG_RACK"
+    },
+    {
+      "keyword": "CLOGGED BOUNDARY NUMBERS",
+      "identifier": "CLOGGED_BOUNDARY_NUMBERS",
+      "type": "INTEGER",
+      "size": 1,
+      "unbounded": true,
+      "help": "List of liquid boundary numbers where intake racks are present.",
+      "rubrique": [
+        "CLOGGING",
+        "BOUNDARY CONDITIONS",
+        ""
+      ],
+      "is_file": false,
+      "default": 0,
+      "level": 1,
+      "mnemo": "NUMCLOG"
+    },
+    {
+      "keyword": "CLOGGED SECTIONS",
+      "identifier": "CLOGGED_SECTIONS",
+      "type": "INTEGER",
+      "size": 1,
+      "unbounded": true,
+      "help": "List of nodes on which the sections represent a clogged rack, goes by couple: sec1_start;sec1_end;sec2_start;sec2_end;...",
+      "rubrique": [
+        "CLOGGING",
+        "BOUNDARY CONDITIONS",
+        ""
+      ],
+      "is_file": false,
+      "default": 0,
+      "level": 1,
+      "mnemo": "SECLOG"
+    },
+    {
+      "keyword": "CRITICAL VELOCITY FOR STATIC BORDER ICE",
+      "identifier": "CRITICAL_VELOCITY_FOR_STATIC_BORDER_ICE",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "ICE COVER",
+        "",
+        ""
+      ],
+      "is_file": false,
+      "default": 0.07,
+      "level": 2,
+      "mnemo": "VCRBOR"
+    },
+    {
+      "keyword": "CRITICAL VELOCITY FOR DYNAMIC BORDER ICE",
+      "identifier": "CRITICAL_VELOCITY_FOR_DYNAMIC_BORDER_ICE",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "ICE COVER",
+        "",
+        ""
+      ],
+      "is_file": false,
+      "default": 0.4,
+      "level": 2,
+      "mnemo": "VCRBOM"
+    },
+    {
+      "keyword": "GLOBAL LONGITUDE, IN DEGREES",
+      "identifier": "GLOBAL_LONGITUDE__IN_DEGREES",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Sets the global longitude, in degrees.",
+      "rubrique": [
+        "THERMAL BUDGET",
+        "METEOROLOGICAL PROCESSES",
+        "POSITION"
+      ],
+      "is_file": false,
+      "default": 75.0,
+      "level": 2,
+      "mnemo": "ALSM"
+    },
+    {
+      "keyword": "LOCAL LONGITUDE, IN DEGREES",
+      "identifier": "LOCAL_LONGITUDE__IN__DEGREES",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Sets the local longitude, in degrees.",
+      "rubrique": [
+        "THERMAL BUDGET",
+        "METEOROLOGICAL PROCESSES",
+        "POSITION"
+      ],
+      "is_file": false,
+      "default": 75.43,
+      "level": 2,
+      "mnemo": "ALLM"
+    },
+    {
+      "keyword": "EAST OR WEST LONGITUDE",
+      "identifier": "EAST_OR_WEST_LONGITUDE",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "-1., for west longitudes; +1. for east longitudes",
+      "rubrique": [
+        "THERMAL BUDGET",
+        "METEOROLOGICAL PROCESSES",
+        "POSITION"
+      ],
+      "is_file": false,
+      "default": -1.0,
+      "level": 2,
+      "mnemo": "ETADIR"
+    },
+    {
+      "keyword": "INCLUDE ICE DYNAMICS",
+      "identifier": "INCLUDE_ICE_DYNAMICS",
+      "type": "LOGICAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Switch the surface ice dynamics processes.",
+      "rubrique": [
+        "ICE COVER",
+        "ICE DYNAMICS",
+        ""
+      ],
+      "is_file": false,
+      "default": false,
+      "level": 1,
+      "mnemo": "ICEDYNAMICS"
+    },
+    {
+      "keyword": "AD NUMBER OF DERIVATIVES",
+      "identifier": "AD_NUMBER_OF_DERIVATIVES",
+      "type": "INTEGER",
+      "size": 1,
+      "unbounded": false,
+      "help": "Defines the number of user derivatives, within the framework of the algorithmic differentiation.",
+      "rubrique": [
+        "NUMERICAL PARAMETERS",
+        "AUTOMATIC DIFFERENTIATION",
+        ""
+      ],
+      "is_file": false,
+      "default": 0,
+      "level": 0,
+      "mnemo": "NADVAR"
+    },
+    {
+      "keyword": "AD NAMES OF DERIVATIVES",
+      "identifier": "AD_NAMES_OF_DERIVATIVES",
+      "type": "STRING",
+      "size": 2,
+      "unbounded": false,
+      "help": "Name of user derivatives in 32 characters, 16 for the name, 16 for the unit.",
+      "rubrique": [
+        "NUMERICAL PARAMETERS",
+        "AUTOMATIC DIFFERENTIATION",
+        ""
+      ],
+      "is_file": false,
+      "level": 0,
+      "mnemo": "NAME_ADVAR"
+    },
+    {
+      "keyword": "WATER DENSITY",
+      "identifier": "WATER_DENSITY",
+      "type": "REAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "Sets the value of water density, in kg/m^3.",
+      "rubrique": [
+        "GENERAL",
+        "PHYSICAL PARAMETERS",
+        ""
+      ],
+      "is_file": false,
+      "default": 999.82,
+      "level": 2,
+      "mnemo": "RO0"
+    },
+    {
+      "keyword": "KINEMATIC WATER VISCOSITY",
+      "identifier": "KINEMATIC_WATER_VISCOSITY",
+      "type": "REAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "Specifies the water kinematic viscosity. In m/s^2.",
+      "rubrique": [
+        "GENERAL",
+        "PHYSICAL PARAMETERS",
+        ""
+      ],
+      "is_file": false,
+      "default": 1.792e-06,
+      "level": 2,
+      "mnemo": "XNU"
+    },
+    {
+      "keyword": "WATER-ICE HEAT TRANSFER COEF. FOR TURBULENT FLOW",
+      "identifier": "WATER_ICE_HEAT_TRANSFER_COEF__FOR_TURBULENT_FLOW",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "THERMAL BUDGET",
+        "CONSTANT",
+        ""
+      ],
+      "is_file": false,
+      "default": 1448.0,
+      "level": 2,
+      "mnemo": "CWI1"
+    },
+    {
+      "keyword": "WATER-ICE HEAT TRANSFER COEF. FOR SUPERCOOLED TURBULENT FLOW",
+      "identifier": "WATER_ICE_HEAT_TRANSFER_COEF__FOR_SUPERCOOLED_TURBULENT_FLOW",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "THERMAL BUDGET",
+        "CONSTANT",
+        ""
+      ],
+      "is_file": false,
+      "default": 1118.0,
+      "level": 2,
+      "mnemo": "CIW1"
+    },
+    {
+      "keyword": "NUSSELT NUMBER FOR HEAT TRANSFER BETWEEN WATER AND ICE",
+      "identifier": "NUSSELT_NUMBER_FOR_HEAT_TRANSFER_BETWEEN_WATER_AND_ICE",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "THERMAL BUDGET",
+        "TURBULENCE",
+        ""
+      ],
+      "is_file": false,
+      "default": 7.541,
+      "level": 2,
+      "mnemo": "ATA"
+    },
+    {
+      "keyword": "BOLTZMANN CONSTANT (WM-2K-4)",
+      "identifier": "BOLTZMANN_CONSTANT__WM_2K_4_",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "THERMAL BUDGET",
+        "CONSTANT",
+        ""
+      ],
+      "is_file": false,
+      "default": 5.67e-08,
+      "level": 2,
+      "mnemo": "SGMA"
+    },
+    {
+      "keyword": "FREEZING POINT OF WATER",
+      "identifier": "FREEZING_POINT_OF_WATER",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "FRAZIL",
+        "PHYSICAL PARAMETERS",
+        ""
+      ],
+      "is_file": false,
+      "default": 0.0,
+      "level": 2,
+      "mnemo": "CST_TMELT"
+    },
+    {
+      "keyword": "CRITICAL WATER TEMPERATURE FOR STATIC BORDER ICE",
+      "identifier": "CRITICAL_WATER_TEMPERATURE_FOR_STATIC_BORDER_ICE",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "ICE COVER",
+        "PHYSICAL PARAMETERS",
+        ""
+      ],
+      "is_file": false,
+      "default": -1.1,
+      "level": 2,
+      "mnemo": "TC"
+    },
+    {
+      "keyword": "CHANNEL WIDTH FOR THE COMPUTATION OF SURFACE TEMPERATURE",
+      "identifier": "CHANNEL_WIDTH_FOR_THE_COMPUTATION_OF_SURFACE_TEMPERATURE",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "FRAZIL",
+        "PHYSICAL PARAMETERS",
+        ""
+      ],
+      "is_file": false,
+      "default": 15.0,
+      "level": 2,
+      "mnemo": "BCH"
+    },
+    {
+      "keyword": "CONCENTRATION OF SURFACE ICE WHEN FORMATION",
+      "identifier": "CONCENTRATION_OF_SURFACE_ICE_WHEN_FORMATION",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "ICE COVER",
+        "PHYSICAL PARAMETERS",
+        ""
+      ],
+      "is_file": false,
+      "default": 1.0,
+      "level": 2,
+      "mnemo": "ANFEM0"
+    },
+    {
+      "keyword": "PARALLEL PROCESSORS",
+      "identifier": "PARALLEL_PROCESSORS",
+      "type": "INTEGER",
+      "size": 1,
+      "unbounded": false,
+      "help": "Number of processors for domain partition. 0: 1 machine, compiling without parallel library, 1: 1 machine, compiling with a parallel library, 2: 2 processors or machines in parallel etc...",
+      "rubrique": [
+        "COMPUTATION ENVIRONMENT",
+        "GLOBAL",
+        ""
+      ],
+      "is_file": false,
+      "default": 0,
+      "level": 1,
+      "mnemo": "NCSIZE"
+    },
+    {
+      "keyword": "HEAT BUDGET",
+      "identifier": "HEAT_BUDGET",
+      "type": "LOGICAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Computation of the thermal exchanges in KHIONE.",
+      "rubrique": [
+        "THERMAL BUDGET",
+        "",
+        ""
+      ],
+      "is_file": false,
+      "default": true,
+      "level": 1,
+      "mnemo": "THERMAL_BUDGET"
+    },
+    {
+      "keyword": "ICE COVER IMPACT ON HYDRODYNAMIC",
+      "identifier": "ICE_COVER_IMPACT_ON_HYDRODYNAMIC",
+      "type": "LOGICAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Computation of ice cover impact on the hydrodynamic.",
+      "rubrique": [
+        "ICE COVER",
+        "",
+        ""
+      ],
+      "is_file": false,
+      "default": false,
+      "level": 1,
+      "mnemo": "ICOVER_IMPACT"
+    },
+    {
+      "keyword": "BORDER ICE COVER",
+      "identifier": "BORDER_ICE_COVER",
+      "type": "LOGICAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Computation of border ice cover.",
+      "rubrique": [
+        "ICE COVER",
+        "",
+        ""
+      ],
+      "is_file": false,
+      "default": false,
+      "level": 1,
+      "mnemo": "BD_ICE"
+    },
+    {
+      "keyword": "SALINITY",
+      "identifier": "SALINITY",
+      "type": "LOGICAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Add salinity tracer and modify freezing point of water accordingly.",
+      "rubrique": [
+        "GENERAL",
+        "",
+        ""
+      ],
+      "is_file": false,
+      "default": false,
+      "mnemo": "SALINITY"
+    },
+    {
+      "keyword": "ENERGY BALANCE VERSION",
+      "identifier": "ENERGY_BALANCE_VERSION",
+      "type": "INTEGER",
+      "size": 0,
+      "unbounded": false,
+      "help": "Choice of the energy balance version.",
+      "rubrique": [
+        "GENERAL",
+        "",
+        ""
+      ],
+      "is_file": false,
+      "default": 1,
+      "choices": {
+        "1": "SIMPLIFIED ENERGY BALANCE",
+        "2": "FULL ENERGY BALANCE"
+      },
+      "mnemo": "INRJB"
+    },
+    {
+      "keyword": "SCHEME OPTION FOR THERMAL GROWTH",
+      "identifier": "SCHEME_OPTION_FOR_THERMAL_GROWTH",
+      "type": "INTEGER",
+      "size": 0,
+      "unbounded": false,
+      "help": "Time integration option for the frazil thermal growth source term.",
+      "rubrique": [
+        "FRAZIL",
+        "",
+        ""
+      ],
+      "is_file": false,
+      "default": 1,
+      "choices": {
+        "1": "EXPLICIT TIME SCHEME",
+        "2": "SEMI-IMPLICIT TIME SCHEME"
+      },
+      "mnemo": "ITGM"
+    },
+    {
+      "keyword": "MODEL FOR THE SECONDARY NUCLEATION",
+      "identifier": "MODEL_FOR_THE_SECONDARY_NUCLEATION",
+      "type": "INTEGER",
+      "size": 0,
+      "unbounded": false,
+      "help": "Choice of the model for secondary nucleation, only for multi-class model.",
+      "rubrique": [
+        "FRAZIL",
+        "",
+        ""
+      ],
+      "is_file": false,
+      "default": 2,
+      "choices": {
+        "0": "NO SECONDARY NUCLEATION",
+        "1": "SVENSSON AND OMSTEDT 1994",
+        "2": "WANG AND DOERING 2005"
+      },
+      "mnemo": "ISNUC"
+    },
+    {
+      "keyword": "SECONDARY NUCLEATION NMAX PARAMETER",
+      "identifier": "SECONDARY_NUCLEATION_NMAX_PARAMETER",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Choice of secondary nucleation NMAX parameter.",
+      "rubrique": [
+        "FRAZIL",
+        "",
+        ""
+      ],
+      "is_file": false,
+      "default": 6000000.0,
+      "mnemo": "SNNMAX"
+    },
+    {
+      "keyword": "MODEL FOR THE FLOCCULATION AND BREAKUP",
+      "identifier": "MODEL_FOR_THE_FLOCCULATION_AND_BREAKUP",
+      "type": "INTEGER",
+      "size": 0,
+      "unbounded": false,
+      "help": "Choice of the model for flocculation and breakup, only for multi-class model.",
+      "rubrique": [
+        "FRAZIL",
+        "",
+        ""
+      ],
+      "is_file": false,
+      "default": 1,
+      "choices": {
+        "0": "NO FLOCCULATION",
+        "1": "SVENSSON AND OMSTEDT 1994"
+      },
+      "mnemo": "IFLOC"
+    },
+    {
+      "keyword": "FLOCCULATION AFLOC PARAMETER",
+      "identifier": "FLOCCULATION_AFLOC_PARAMETER",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Choice of flocculation AFLOC parameter.",
+      "rubrique": [
+        "FRAZIL",
+        "",
+        ""
+      ],
+      "is_file": false,
+      "default": 1000.0,
+      "mnemo": "AFLOC"
+    },
+    {
+      "keyword": "MODEL FOR FRAZIL SEEDING",
+      "identifier": "MODEL_FOR_FRAZIL_SEEDING",
+      "type": "INTEGER",
+      "size": 0,
+      "unbounded": false,
+      "help": "Choice of the model for frazil seeding.",
+      "rubrique": [
+        "FRAZIL",
+        "",
+        ""
+      ],
+      "is_file": false,
+      "default": 1,
+      "choices": {
+        "0": "NO SEEDING",
+        "1": "MINIMUM CONC. THRESHOLD",
+        "2": "CONSTANT SURFACIC SEEDING RATE",
+        "3": "BOTH OPTIONS 1 AND 2"
+      },
+      "mnemo": "ISEED"
+    },
+    {
+      "keyword": "FRAZIL SEEDING RATE",
+      "identifier": "FRAZIL_SEEDING_RATE",
+      "type": "REAL",
+      "size": 1,
+      "unbounded": true,
+      "help": "Number of crystals per unit surface added per second.",
+      "rubrique": [
+        "FRAZIL",
+        "PHYSICAL PARAMETERS",
+        ""
+      ],
+      "is_file": false,
+      "default": 100.0,
+      "level": 2,
+      "mnemo": "SEEDR"
+    },
+    {
+      "keyword": "MINIMUM NUMBER OF FRAZIL CRYSTALS",
+      "identifier": "MINIMUM_NUMBER_OF_FRAZIL_CRYSTALS",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Minimum number of crystals per unit volume.",
+      "rubrique": [
+        "FRAZIL",
+        "PHYSICAL PARAMETERS",
+        ""
+      ],
+      "is_file": false,
+      "default": 71586.0,
+      "level": 2,
+      "mnemo": "MINNK"
+    },
+    {
+      "keyword": "ATMOSPHERE-WATER EXCHANGE MODEL",
+      "identifier": "ATMOSPHERE_WATER_EXCHANGE_MODEL",
+      "type": "INTEGER",
+      "size": 0,
+      "unbounded": false,
+      "help": "Choice of the atmosphere-water exchange model. 0: linearised formula without ice, 1: model with complete balance with ice.",
+      "rubrique": [
+        "THERMAL BUDGET",
+        "METEOROLOGICAL PROCESSES",
+        ""
+      ],
+      "is_file": false,
+      "default": 0,
+      "level": 2,
+      "choices": {
+        "0": "LINEARISED FORMULA",
+        "1": "MODEL WITH COMPLETE BALANCE WITH ICE"
+      },
+      "mnemo": "ATMOEXCH"
+    },
+    {
+      "keyword": "MODEL FOR ESTIMATION OF TURBULENCE PARAMETERS",
+      "identifier": "MODEL_FOR_ESTIMATION_OF_TURBULENCE_PARAMETERS",
+      "type": "INTEGER",
+      "size": 0,
+      "unbounded": false,
+      "help": "0: constant values set in the code, 1: values estimated from vertical integration of a mixed length model, 2: values computed and given by TELEMAC-2D.",
+      "rubrique": [
+        "FRAZIL",
+        "TURBULENCE",
+        ""
+      ],
+      "is_file": false,
+      "default": 1,
+      "choices": {
+        "0": "CONSTANT VALUES",
+        "1": "MIXING LENGTH MODEL",
+        "2": "K-EPS MODEL OF TELEMAC-2D"
+      },
+      "mnemo": "ITURB"
+    },
+    {
+      "keyword": "CONSTANT TURBULENCE PARAMETERS",
+      "identifier": "CONSTANT_TURBULENCE_PARAMETERS",
+      "type": "REAL",
+      "size": 3,
+      "unbounded": false,
+      "help": "Constant turbulence parameters used to compute nusselt when no turbulence model is used i.e. k, eps, alpha",
+      "rubrique": [
+        "FRAZIL",
+        "TURBULENCE",
+        ""
+      ],
+      "is_file": false,
+      "default": [
+        0.00096,
+        0.0012,
+        0.087
+      ],
+      "level": 0,
+      "mnemo": "KTURB"
+    },
+    {
+      "keyword": "DYNAMIC ICE COVER",
+      "identifier": "DYNAMIC_ICE_COVER",
+      "type": "LOGICAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Computation of dynamic ice cover.",
+      "rubrique": [
+        "ICE COVER",
+        "",
+        ""
+      ],
+      "is_file": false,
+      "default": false,
+      "level": 1,
+      "mnemo": "DYN_ICOVER"
+    },
+    {
+      "keyword": "MINIMAL THICKNESS OF ICE COVER",
+      "identifier": "MINIMAL_THICKNESS_OF_ICE_COVER",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Minimal thickness of the ice cover",
+      "rubrique": [
+        "FRAZIL",
+        "PRECIPITATION",
+        ""
+      ],
+      "is_file": false,
+      "default": 0.001,
+      "mnemo": "PRE_MIN"
+    },
+    {
+      "keyword": "INITIAL COVER CONCENTRATION VALUE",
+      "identifier": "INITIAL_COVER_CONCENTRATION_VALUE",
+      "type": "REAL",
+      "size": 1,
+      "unbounded": true,
+      "help": "Sets the initial values of cover concentration.",
+      "rubrique": [
+        "FRAZIL",
+        "PRECIPITATION",
+        ""
+      ],
+      "is_file": false,
+      "default": 0.0,
+      "level": 0,
+      "mnemo": "CONC0"
+    },
+    {
+      "keyword": "PRESCRIBED COVER CONCENTRATION VALUES",
+      "identifier": "PRESCRIBED_COVER_CONCENTRATION_VALUES",
+      "type": "REAL",
+      "size": 2,
+      "unbounded": true,
+      "help": "Cover concentration values prescribed at the inflow boundaries. Determines the imposed value of cover concentration at the first boundary, then at the second and so on, with the same logic as tracers.",
+      "rubrique": [
+        "FRAZIL",
+        "PRECIPITATION",
+        ""
+      ],
+      "is_file": false,
+      "level": 1,
+      "mnemo": "PRECONC"
+    },
+    {
+      "keyword": "COEFFICIENT FOR DIFFUSION OF COVER CONCENTRATION",
+      "identifier": "COEFFICIENT_FOR_DIFFUSION_OF_COVER_CONCENTRATION",
+      "type": "REAL",
+      "size": 1,
+      "unbounded": true,
+      "help": "Sets the value of the cover concentration diffusivity in 2D. It is a scalar.",
+      "rubrique": [
+        "FRAZIL",
+        "PRECIPITATION",
+        ""
+      ],
+      "is_file": false,
+      "default": 0.0,
+      "level": 0,
+      "mnemo": "DIFCONCNU"
+    },
+    {
+      "keyword": "INITIAL COVER THICKNESS VALUE",
+      "identifier": "INITIAL_COVER_THICKNESS_VALUE",
+      "type": "REAL",
+      "size": 1,
+      "unbounded": true,
+      "help": "Sets the initial values of cover thickness.",
+      "rubrique": [
+        "FRAZIL",
+        "PRECIPITATION",
+        ""
+      ],
+      "is_file": false,
+      "default": 0.0,
+      "level": 0,
+      "mnemo": "THI0"
+    },
+    {
+      "keyword": "PRESCRIBED COVER THICKNESS VALUES",
+      "identifier": "PRESCRIBED_COVER_THICKNESS_VALUES",
+      "type": "REAL",
+      "size": 2,
+      "unbounded": true,
+      "help": "Cover thickness values prescribed at the inflow boundaries. Determines the imposed value of cover concentration at the first boundary, then at the second and so on, with the same logic as tracers.",
+      "rubrique": [
+        "FRAZIL",
+        "PRECIPITATION",
+        ""
+      ],
+      "is_file": false,
+      "level": 1,
+      "mnemo": "PRETHI"
+    },
+    {
+      "keyword": "COEFFICIENT FOR DIFFUSION OF COVER THICKNESS",
+      "identifier": "COEFFICIENT_FOR_DIFFUSION_OF_COVER_THICKNESS",
+      "type": "REAL",
+      "size": 1,
+      "unbounded": true,
+      "help": "Sets the value of the cover thickness diffusivity in 2D. It is a scalar.",
+      "rubrique": [
+        "FRAZIL",
+        "PRECIPITATION",
+        ""
+      ],
+      "is_file": false,
+      "default": 0.0,
+      "level": 0,
+      "mnemo": "DIFTHINU"
+    },
+    {
+      "keyword": "MODEL FOR MASS EXCHANGE BETWEEN FRAZIL AND ICE COVER",
+      "identifier": "MODEL_FOR_MASS_EXCHANGE_BETWEEN_FRAZIL_AND_ICE_COVER",
+      "type": "INTEGER",
+      "size": 0,
+      "unbounded": false,
+      "help": "Choice for mass exchange model between frazil and ice cover. 0 : no mass exchange, 1 : simple model with net deposition flux. 2 : simple model with erosion and deposition flux.",
+      "rubrique": [
+        "FRAZIL",
+        "PRECIPITATION",
+        ""
+      ],
+      "is_file": false,
+      "default": 0,
+      "choices": {
+        "0": "NO MASS EXCHANGE",
+        "1": "SIMPLE DEPOSITION",
+        "2": "DEPOSITION AND EROSION"
+      },
+      "mnemo": "IPREC"
+    },
+    {
+      "keyword": "FRAZIL UNDER COVER DEPOSITION PROBABILITY",
+      "identifier": "FRAZIL_UNDER_COVER_DEPOSITION_PROBABILITY",
+      "type": "REAL",
+      "size": 1,
+      "unbounded": true,
+      "help": "",
+      "rubrique": [
+        "FRAZIL",
+        "PHYSICAL PARAMETERS",
+        ""
+      ],
+      "is_file": false,
+      "default": 1.0,
+      "level": 0,
+      "mnemo": "DEPK"
+    },
+    {
+      "keyword": "FRAZIL UNDER COVER REENTRAINMENT COEFFICIENT",
+      "identifier": "FRAZIL_UNDER_COVER_REENTRAINMENT_COEFFICIENT",
+      "type": "REAL",
+      "size": 1,
+      "unbounded": true,
+      "help": "",
+      "rubrique": [
+        "FRAZIL",
+        "PHYSICAL PARAMETERS",
+        ""
+      ],
+      "is_file": false,
+      "default": 0.0001,
+      "level": 0,
+      "mnemo": "EROK"
+    },
+    {
+      "keyword": "LIGHT EXTINCTION COEFFICIENT",
+      "identifier": "LIGHT_EXTINCTION_COEFFICIENT",
+      "type": "REAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "In m^-1 for solar radiation penetration in 3D.",
+      "rubrique": [
+        "THERMAL BUDGET",
+        "PHYSICAL PARAMETERS",
+        ""
+      ],
+      "is_file": false,
+      "default": 0.2,
+      "level": 1,
+      "mnemo": "EXTINC"
+    }
+  ]
+}

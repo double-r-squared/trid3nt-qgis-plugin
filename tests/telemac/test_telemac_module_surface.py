@@ -108,6 +108,16 @@ def test_an_unexposed_module_refuses_naming_the_ones_there_are():
         Module("nosuchmodule")
 
 
+def test_a_keyword_spelled_with_a_double_space_still_resolves_to_its_identifier():
+    """KHIONE's identifier map spells one keyword with two spaces the dictionary
+    itself writes single, so both sides of the extractor's lookup collapse runs
+    of whitespace; a lookup on the literal spelling loses the whole module."""
+    dictionary = load_module_input("khione")
+    assert len(dictionary) == 133
+    doubled = dictionary["LOCAL_LONGITUDE__IN__DEGREES"]
+    assert doubled.keyword == "LOCAL LONGITUDE, IN DEGREES"
+
+
 # -- refusals at declaration -------------------------------------------------- #
 
 def _body(**namespace):
@@ -1453,7 +1463,7 @@ def test_the_serializer_is_the_only_module_that_writes_a_keyword_into_a_deck():
 
     A keyword formatted into a string anywhere else is a second author of the format,
     caught here by the dictionary's own names rather than by a maintained list."""
-    keywords = {slot.keyword for module in _EXPOSED + ("tomawac",)
+    keywords = {slot.keyword for module in _EXPOSED + ("tomawac", "khione")
                 for slot in load_module_input(module).values()}
     offenders = {}
     for tree_root in (Path("trid3nt_server"), Path("workers")):
