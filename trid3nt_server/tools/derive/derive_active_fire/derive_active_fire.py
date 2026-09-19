@@ -18,6 +18,7 @@ from trid3nt_contracts.execution import LayerURI
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.tools import register_tool
+from trid3nt_server.tools.derive import DeriveError
 from trid3nt_server.tools.derive._abi_layer import read_bands
 from trid3nt_server.tools.derive._hydrology_common import (
     HydrologyUpstreamError,
@@ -30,20 +31,13 @@ logger = logging.getLogger(
     "trid3nt_server.tools.derive.derive_active_fire.derive_active_fire")
 
 
-class ActiveFireError(RuntimeError):
+class ActiveFireError(DeriveError):
     """A typed refusal: ``ACTIVE_FIRE_LAYER_UNREADABLE`` (no layer, no uri, or a band
     the tests need is absent), ``ACTIVE_FIRE_INPUT_INVALID`` (a non-finite threshold
     or a negative contrast), ``ACTIVE_FIRE_NO_DETECTIONS`` (no candidate, or no
     candidate that stands out from its background), ``ACTIVE_FIRE_UNCLASSIFIABLE``
     (candidates, but not one of them has a background to be measured against),
     ``ACTIVE_FIRE_WRITE_FAILED``."""
-
-    error_code: str
-    retryable: bool = False
-
-    def __init__(self, error_code: str, message: str) -> None:
-        super().__init__(message)
-        self.error_code = error_code
 
 
 class ActiveFireLayerURI(LayerURI):

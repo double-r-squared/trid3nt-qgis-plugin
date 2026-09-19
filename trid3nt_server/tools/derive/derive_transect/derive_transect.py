@@ -15,6 +15,7 @@ from trid3nt_contracts.execution import LayerURI
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.tools import register_tool
+from trid3nt_server.tools.derive import DeriveError
 from trid3nt_server.tools.derive._hydrology_common import _write_geojson
 from trid3nt_server.inputs.geometry import flatten_geometries, utm_epsg_for
 from trid3nt_server.inputs.shape import shape as _ingest
@@ -25,17 +26,10 @@ __all__ = ["TransectError", "TransectLayerURI", "derive_transect"]
 logger = logging.getLogger("trid3nt_server.tools.derive.derive_transect.derive_transect")
 
 
-class TransectError(RuntimeError):
+class TransectError(DeriveError):
     """A typed refusal: ``TRANSECT_INPUT_INVALID`` (the length, the bearing or
     the convention), ``TRANSECT_NO_SHAPE`` (nothing to centre on),
     ``TRANSECT_SOURCE_UNREADABLE``."""
-
-    error_code: str
-    retryable: bool = False
-
-    def __init__(self, error_code: str, message: str) -> None:
-        super().__init__(message)
-        self.error_code = error_code
 
 
 class TransectLayerURI(LayerURI):

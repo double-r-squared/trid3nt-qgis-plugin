@@ -14,6 +14,7 @@ from trid3nt_contracts.execution import LayerURI
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.tools import register_tool
+from trid3nt_server.tools.derive import DeriveError
 from trid3nt_server.inputs.geometry import (
     GeometryReadError,
     flatten_geometries,
@@ -29,17 +30,8 @@ logger = logging.getLogger("trid3nt_server.tools.derive.section.section")
 # ``error_code`` is one of SECTION_INPUT_INVALID, SECTION_NO_POLYGON,
 # SECTION_CUT_EMPTY, SECTION_END_FACE_UNMEASURED (one end cut left no transect
 # on the polygon, so the section ends along its own bank), SECTION_SOURCE_UNREADABLE.
-class SectionError(RuntimeError):
+class SectionError(DeriveError):
     """A typed section refusal: a code plus what to supply instead."""
-
-    error_code: str
-    retryable: bool = False
-
-    def __init__(self, error_code: str, message: str, *,
-                 retryable: bool = False) -> None:
-        super().__init__(message)
-        self.error_code = error_code
-        self.retryable = retryable
 
 
 class SectionLayerURI(LayerURI):

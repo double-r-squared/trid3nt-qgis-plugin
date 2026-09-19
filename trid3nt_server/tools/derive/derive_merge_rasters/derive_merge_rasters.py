@@ -26,6 +26,7 @@ from trid3nt_server.inputs.geometry import source_uri
 from trid3nt_server.inputs.vertical_datum import (
     Alignment, DatumError, align, datum_of, published_offset)
 from trid3nt_server.tools import register_tool
+from trid3nt_server.tools.derive import DeriveError
 from trid3nt_server.tools.derive._hydrology_common import _stage_uri_local, write_cog
 
 __all__ = ["MergeRastersError", "MergedRasterLayerURI", "derive_merge_rasters"]
@@ -34,7 +35,7 @@ logger = logging.getLogger(
     "trid3nt_server.tools.derive.derive_merge_rasters.derive_merge_rasters")
 
 
-class MergeRastersError(RuntimeError):
+class MergeRastersError(DeriveError):
     """A typed refusal: ``MERGE_RASTERS_NO_SOURCE``, ``MERGE_RASTERS_UNREADABLE``,
     ``MERGE_RASTERS_DISJOINT`` (the two cover no common ground),
     ``MERGE_RASTERS_RESOLUTION_INVALID`` (a grid past the cell ceiling),
@@ -42,13 +43,6 @@ class MergeRastersError(RuntimeError):
     ``MERGE_RASTERS_DATUMS_DIFFER`` and ``MERGE_RASTERS_DATUM_OFFSET_MISMATCH``
     come from the datum check itself.
     """
-
-    error_code: str
-    retryable: bool = False
-
-    def __init__(self, error_code: str, message: str) -> None:
-        super().__init__(message)
-        self.error_code = error_code
 
 
 class MergedRasterLayerURI(LayerURI):

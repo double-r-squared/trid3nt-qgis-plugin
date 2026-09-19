@@ -18,6 +18,7 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.inputs.geometry import read_geometry_doc
 from trid3nt_server.tools import register_tool
+from trid3nt_server.tools.derive import DeriveError
 from trid3nt_server.tools.derive._hydrology_common import _write_geojson
 
 __all__ = ["WaterPolygonError", "WaterPolygonLayerURI", "derive_water_polygon"]
@@ -42,19 +43,12 @@ _METADATA = AtomicToolMetadata(
 _STYLE = {"kind": "categorical", "fill": "#3f7fbf", "opacity": 0.45}
 
 
-class WaterPolygonError(RuntimeError):
+class WaterPolygonError(DeriveError):
     """A typed refusal: ``WATER_POLYGON_NO_COASTLINE`` (the layer maps no line),
     ``WATER_POLYGON_NO_BOX`` (the extent is not a box or a shape with bounds),
     ``WATER_POLYGON_DOES_NOT_CLOSE`` (a way ends inside the box, so it divides
     nothing), ``WATER_POLYGON_ALL_LAND`` (the coastline leaves no water).
     """
-
-    error_code: str
-    retryable: bool = False
-
-    def __init__(self, error_code: str, message: str) -> None:
-        super().__init__(message)
-        self.error_code = error_code
 
 
 class WaterPolygonLayerURI(LayerURI):

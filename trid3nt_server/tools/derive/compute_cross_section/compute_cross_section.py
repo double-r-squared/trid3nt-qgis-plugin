@@ -11,6 +11,7 @@ from typing import Any
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.tools import register_tool
+from trid3nt_server.tools.derive import DeriveError
 from trid3nt_server.render.charts import build_chart_payload
 
 __all__ = [
@@ -43,13 +44,8 @@ _VEGA_LITE_V5_SCHEMA = "https://vega.github.io/schema/vega-lite/v5.json"
 
 # ``error_code`` is one of LINE_INVALID, NO_LAYERS, TOO_MANY_LAYERS,
 # LAYER_OPEN_FAILED, DOWNLOAD_FAILED, LINE_REPROJECT_FAILED, LINE_OUTSIDE_RASTER.
-class CrossSectionError(RuntimeError):
+class CrossSectionError(DeriveError):
     """No profile could be produced."""
-
-    def __init__(self, error_code: str, message: str, *, retryable: bool = False) -> None:
-        super().__init__(message)
-        self.error_code = error_code
-        self.retryable = retryable
 
 
 

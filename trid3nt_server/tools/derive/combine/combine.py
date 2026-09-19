@@ -13,6 +13,7 @@ from trid3nt_contracts.execution import LayerURI
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.tools import register_tool
+from trid3nt_server.tools.derive import DeriveError
 from trid3nt_server.inputs.geometry import (
     GeometryReadError,
     flatten_geometries,
@@ -25,17 +26,10 @@ __all__ = ["CombinedGeometryLayerURI", "CombineError", "combine"]
 logger = logging.getLogger("trid3nt_server.tools.derive.combine.combine")
 
 
-class CombineError(RuntimeError):
+class CombineError(DeriveError):
     """A typed combine refusal: ``COMBINE_NO_GEOMETRY`` (a named source carries no
     geometry) or ``COMBINE_SOURCE_UNREADABLE`` (not GeoJSON, not a readable layer).
     """
-
-    error_code: str
-    retryable: bool = False
-
-    def __init__(self, error_code: str, message: str) -> None:
-        super().__init__(message)
-        self.error_code = error_code
 
 
 class CombinedGeometryLayerURI(LayerURI):

@@ -20,6 +20,7 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.inputs.geometry import GeometryReadError, read_geometry_doc, utm_epsg_for
 from trid3nt_server.tools import register_tool
+from trid3nt_server.tools.derive import DeriveError
 from trid3nt_server.tools.derive._hydrology_common import write_cog
 
 __all__ = ["SurveySurfaceError", "SurveySurfaceLayerURI", "derive_survey_surface"]
@@ -28,7 +29,7 @@ logger = logging.getLogger(
     "trid3nt_server.tools.derive.derive_survey_surface.derive_survey_surface")
 
 
-class SurveySurfaceError(RuntimeError):
+class SurveySurfaceError(DeriveError):
     """A typed refusal: ``SURVEY_SURFACE_NO_POINTS``,
     ``SURVEY_SURFACE_NO_VALUE_FIELD`` (none, or several and no choice made),
     ``SURVEY_SURFACE_RESOLUTION_INVALID`` (a cell size that is not positive, or a
@@ -37,13 +38,6 @@ class SurveySurfaceError(RuntimeError):
     ``SURVEY_SURFACE_UNREADABLE``,
     ``SURVEY_SURFACE_DATUMS_DIFFER``, ``SURVEY_SURFACE_WRITE_FAILED``.
     """
-
-    error_code: str
-    retryable: bool = False
-
-    def __init__(self, error_code: str, message: str) -> None:
-        super().__init__(message)
-        self.error_code = error_code
 
 
 class SurveySurfaceLayerURI(LayerURI):

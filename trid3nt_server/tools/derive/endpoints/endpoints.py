@@ -13,6 +13,7 @@ from trid3nt_contracts.execution import LayerURI
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.tools import register_tool
+from trid3nt_server.tools.derive import DeriveError
 from trid3nt_server.inputs.geometry import (
     GeometryReadError,
     flatten_geometries,
@@ -25,17 +26,10 @@ __all__ = ["EndpointsError", "EndpointsLayerURI", "endpoints"]
 logger = logging.getLogger("trid3nt_server.tools.derive.endpoints.endpoints")
 
 
-class EndpointsError(RuntimeError):
+class EndpointsError(DeriveError):
     """A typed refusal: ``ENDPOINTS_NO_LINE``, ``ENDPOINTS_NOT_CONTINUOUS`` (the
     parts stay separate, so the ends are not measurable), or _SOURCE_UNREADABLE.
     """
-
-    error_code: str
-    retryable: bool = False
-
-    def __init__(self, error_code: str, message: str) -> None:
-        super().__init__(message)
-        self.error_code = error_code
 
 
 class EndpointsLayerURI(LayerURI):

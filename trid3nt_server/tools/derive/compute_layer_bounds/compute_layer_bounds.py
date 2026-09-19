@@ -15,6 +15,7 @@ from typing import Any
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.tools import register_tool
+from trid3nt_server.tools.derive import DeriveError
 from trid3nt_server.inputs.geometry import source_uri
 
 __all__ = [
@@ -30,12 +31,8 @@ logger = logging.getLogger("trid3nt_server.tools.derive.compute_layer_bounds.com
 # ``error_code`` is one of UNKNOWN_LAYER_URI, DOWNLOAD_FAILED,
 # RASTER_OPEN_FAILED, VECTOR_OPEN_FAILED, GEOPANDAS_UNAVAILABLE, EMPTY_LAYER,
 # DEGENERATE_BOUNDS.
-class ComputeLayerBoundsError(RuntimeError):
+class ComputeLayerBoundsError(DeriveError):
     """Layer-bounds computation failed."""
-
-    def __init__(self, error_code: str, message: str) -> None:
-        super().__init__(message)
-        self.error_code = error_code
 
 
 # Metadata. Never cached: the tool drives the map view and is sub-second.

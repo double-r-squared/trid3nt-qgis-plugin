@@ -18,6 +18,7 @@ from trid3nt_contracts.execution import LayerURI
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.tools import register_tool
+from trid3nt_server.tools.derive import DeriveError
 from trid3nt_server.tools.derive._abi_layer import read_bands
 from trid3nt_server.tools.derive._hydrology_common import write_cog
 
@@ -27,19 +28,12 @@ logger = logging.getLogger(
     "trid3nt_server.tools.derive.derive_true_color.derive_true_color")
 
 
-class TrueColorError(RuntimeError):
+class TrueColorError(DeriveError):
     """A typed refusal: ``TRUE_COLOR_LAYER_UNREADABLE`` (no layer, no uri, or the
     visible bands are absent), ``TRUE_COLOR_GEOMETRY_MISSING`` (the layer does not
     state when and from where it was scanned, so the air between cannot be taken
     off), ``TRUE_COLOR_NO_DAYLIGHT`` (the crop carries no visible reflectance),
     ``TRUE_COLOR_WRITE_FAILED``."""
-
-    error_code: str
-    retryable: bool = False
-
-    def __init__(self, error_code: str, message: str) -> None:
-        super().__init__(message)
-        self.error_code = error_code
 
 
 class TrueColorLayerURI(LayerURI):

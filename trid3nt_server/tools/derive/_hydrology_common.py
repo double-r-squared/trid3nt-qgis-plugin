@@ -21,6 +21,7 @@ from trid3nt_contracts.execution import LayerURI
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.tools import register_tool
+from trid3nt_server.tools.derive import DeriveError
 
 __all__ = [
     "HydrologyPrimitivesError",
@@ -34,8 +35,6 @@ __all__ = [
 ]
 
 logger = logging.getLogger("trid3nt_server.tools.derive._hydrology_common")
-
-
 
 
 class HydrologyPrimitivesError(RuntimeError):
@@ -376,15 +375,8 @@ def _write_geojson(
         ) from exc
 
 
-class RasterWriteError(RuntimeError):
+class RasterWriteError(DeriveError):
     """A raster artifact that could not be written, under the caller's own code."""
-
-    error_code: str
-    retryable: bool = False
-
-    def __init__(self, error_code: str, message: str) -> None:
-        super().__init__(message)
-        self.error_code = error_code
 
 
 def write_cog(band: Any, *, crs: Any, transform: Any, prefix: str, seed: str,
