@@ -65,12 +65,13 @@ _CONTAINER_TIMEOUT_S = 1800
 _FIELDS_NAME = "telemac_result_fields.npz"
 _META_NAME = "telemac_result_meta.json"
 
-#: A declared EDGE is a fraction of the variable's own peak, above a small
-#: absolute floor: a dilute release still draws whole, a run that injected
-#: nothing refuses, and the frames counted as active are the ones it is visible
-#: in. WHICH rows have an edge is the module's table, never a spelling.
+#: A declared EDGE is a fraction of the variable's OWN range - the magnitude the
+#: row reads over the record - and never an absolute concentration: a trace
+#: substance at half a microgram per litre has a shape, and an absolute floor
+#: would refuse it as an empty field. The frames counted as active are the ones
+#: it is visible in. WHICH rows have an edge is the module's table, never a
+#: spelling.
 EDGE_FRACTION = 0.05
-EDGE_FLOOR = 1e-3
 #: The engine spells a variable's unit in capitals after the name; these are
 #: the SI spellings a reader expects for the ones that are not plain lower-case.
 _UNITS = {"MG/L": "mg/L", "G/L": "g/L", "MGO2/L": "mgO2/L", "DEGC": "degC"}
@@ -716,7 +717,7 @@ class Solved:
 def _edge(has_edge: bool, peak: float) -> float | None:
     """The visible edge of a variable whose ROW declares it has one: a fraction
     of the magnitude that row reads. Nothing for a variable that has none."""
-    return max(EDGE_FLOOR, EDGE_FRACTION * peak) if has_edge else None
+    return EDGE_FRACTION * peak if has_edge else None
 
 
 def _drawn(values: Any, wet: Any = None) -> Any:
@@ -799,9 +800,14 @@ def _envelope(token: str, times: Any, values: Any, row: Any = None,
     # statistic the legend's top reads: taking it off a record maximum a drying
     # node carries would mask the whole field the run produced.
     edge = _edge(has_edge, presets.declared_peak(_drawn(values, wet), row))
-    if edge is not None and peak < edge:
+    # THE HONESTY FLOOR is now about SHAPE, not magnitude: an edge relative to
+    # the row's own range is always under its peak, so what a run has to refuse
+    # is a field that is nothing everywhere - there is no region to draw and no
+    # reach to measure.
+    if has_edge and not peak > 0.0:
         raise OutputEmpty(
-            f"{token} never exceeded its floor {edge:.4g} anywhere (peak {peak:.4g}).")
+            f"{token} is zero at every node this run held water on, so the run "
+            "injected nothing there is a shape of.")
     if edge is not None:
         measures["active_frames"] = int((highs[live] > edge).sum())
     return measures

@@ -257,18 +257,36 @@ def test_a_field_at_an_instant_is_that_frame(solved):
     assert nearest.t == 120.0
 
 
-def test_a_tracer_that_never_rose_above_its_floor_refuses(monkeypatch,
-                                                            telemac_result):
+def test_a_tracer_that_is_zero_everywhere_refuses(monkeypatch, telemac_result):
+    """The honesty floor is about SHAPE: a field that is nothing at every wet
+    node has no region to draw and no reach to measure, and that refuses."""
     telemac_result(varnames=["DYE"], x=[0.0, 1.0, 0.0], y=[0.0, 0.0, 1.0],
                    ikle=[[0, 1, 2]], times=[0.0, 1.0],
-                   data={"DYE": [[0.0, 0.0, 0.0], [1e-5, 0.0, 0.0]]})
+                   data={"DYE": [[0.0, 0.0, 0.0], [0.0, 0.0, 0.0]]})
     monkeypatch.setattr(
         "trid3nt_server.workflows.solver.solver.download_result",
         lambda run_id, basename, error_code=None: "/tmp/does-not-matter.slf")
-    with pytest.raises(OutputEmpty, match="never exceeded its floor"):
+    with pytest.raises(OutputEmpty, match="zero at every node"):
         T2D.READS["max_over_time"](
             max_over_time("T1"),
             _solved({"module": "telemac2d", "module_output": _table()}))
+
+
+def test_a_trace_substance_is_drawn_against_its_own_range(monkeypatch,
+                                                          telemac_result):
+    """The edge is a fraction of what the row itself reads, never an absolute
+    concentration: half a microgram per litre is a real answer and is drawn."""
+    telemac_result(varnames=["DYE"], x=[0.0, 1.0, 0.0], y=[0.0, 0.0, 1.0],
+                   ikle=[[0, 1, 2]], times=[0.0, 1.0],
+                   data={"DYE": [[0.0, 0.0, 0.0], [5e-4, 1e-5, 0.0]]})
+    monkeypatch.setattr(
+        "trid3nt_server.workflows.solver.solver.download_result",
+        lambda run_id, basename, error_code=None: "/tmp/does-not-matter.slf")
+    read = T2D.READS["max_over_time"](
+        max_over_time("T1"),
+        _solved({"module": "telemac2d", "module_output": _table()}))
+    assert read.measures["max"] == pytest.approx(5e-4)
+    assert read.measures["active_frames"] == 1
 
 
 def test_the_extent_and_the_mesh_are_measures_off_the_result_and_the_run(solved):
