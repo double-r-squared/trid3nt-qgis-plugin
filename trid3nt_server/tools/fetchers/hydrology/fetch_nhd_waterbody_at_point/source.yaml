@@ -97,6 +97,7 @@ payload_estimate:
 
 coverage:
 -   data_class: hydrography
+    kind: measured
     extent:
       kind: surface
       rings:

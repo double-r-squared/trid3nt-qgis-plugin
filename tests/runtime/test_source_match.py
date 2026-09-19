@@ -1,8 +1,9 @@
 """The match, offline and pure over declarations.
 
 One survivor, a tie, none with the exclusions named, a loosened window, rung
-zero, a static survey older than the run, a series outside the window, and the
-two unit cases a slot lives or dies on."""
+zero, a static survey older than the run, a series outside the window, the kind
+and the distance the sort leads on, a station beyond its reach, and the pick a
+run states."""
 
 from __future__ import annotations
 
@@ -25,20 +26,20 @@ WILLAMETTE = (-122.67, 45.52)
 
 
 def surface(data_class="bathymetry", rings=None, res=1.0, datum="NAVD88",
-            latest="2024-01-01", note="a stated extent"):
+            latest="2024-01-01", note="a stated extent", kind="measured"):
     return Coverage(
-        data_class=data_class,
+        data_class=data_class, kind=kind,
         extent=CoverageExtent(kind="surface", rings=rings or CONUS, note=note),
         window=CoverageWindow(series=False, latest=latest),
         resolution_m=res, datum=datum, units={"elevation": "m"})
 
 
 def gauges(data_class="discharge series", rings=None, earliest=None,
-           latest=None, units=None):
+           latest=None, units=None, kind="measured", reach_km=25.0,
+           note="a gauge network"):
     return Coverage(
-        data_class=data_class,
-        extent=CoverageExtent(kind="stations", rings=rings or CONUS,
-                              note="a gauge network"),
+        data_class=data_class, kind=kind, reach_km=reach_km,
+        extent=CoverageExtent(kind="stations", rings=rings or CONUS, note=note),
         window=CoverageWindow(series=True, earliest=earliest, latest=latest,
                               cadence="hourly"),
         units=units or {"time_series_csv": "ft3/s"})
@@ -158,3 +159,84 @@ def test_a_probe_that_exhausts_every_survivor_says_so():
 def test_a_need_with_no_data_class_is_refused_at_declaration():
     with pytest.raises(PlanValidationError):
         Need(slot="bed", data_class="")
+
+
+#: A gauge a tenth of a kilometre off the place, and the coast a hundred
+#: kilometres from the nearest tide station - the two distances the sort reads.
+AT_THE_PLACE = [[(-122.671, 45.519), (-122.669, 45.519), (-122.669, 45.521),
+                 (-122.671, 45.521)]]
+DOWN_THE_ESTUARY = [[(-124.5, 45.0), (-124.0, 45.0), (-124.0, 46.0),
+                     (-124.5, 46.0)]]
+
+
+def level_need(**over):
+    kwargs = dict(slot="stage", data_class="water level series",
+                  lon=WILLAMETTE[0], lat=WILLAMETTE[1])
+    kwargs.update(over)
+    return Need(**kwargs)
+
+
+def test_a_measured_gauge_at_the_place_outranks_a_modelled_grid_over_it():
+    choice = match(Need(slot="carrier", data_class="discharge series",
+                        lon=WILLAMETTE[0], lat=WILLAMETTE[1]), [
+        ("fetch_model_grid", Coverage(
+            data_class="discharge series", kind="modelled",
+            extent=CoverageExtent(kind="surface", rings=CONUS,
+                                  note="a modelled channel network"),
+            window=CoverageWindow(series=True, cadence="hourly"),
+            units={"streamflow_cms": "m3/s"})),
+        ("fetch_gauges", gauges(rings=AT_THE_PLACE)),
+    ])
+    assert choice.picked == "fetch_gauges"
+    assert not choice.tie
+    assert choice.rows[0].kind == "measured"
+
+
+def test_a_measured_gauge_outranks_a_prediction_a_hundred_kilometres_away():
+    choice = match(level_need(), [
+        ("fetch_tides", gauges(data_class="water level series",
+                               rings=DOWN_THE_ESTUARY, kind="predicted",
+                               reach_km=200.0, units={"water_level": "m"})),
+        ("fetch_gauges", gauges(data_class="water level series",
+                                rings=AT_THE_PLACE, units={"water_level": "m"})),
+    ])
+    assert choice.picked == "fetch_gauges"
+    assert not choice.tie
+    assert choice.rows[1].distance == "about 104 km away"
+
+
+def test_a_station_beyond_its_reach_is_not_a_survivor_at_all():
+    coast = level_need(lon=-124.4, lat=45.5)
+    choice = match(coast, [
+        ("fetch_gauges", gauges(data_class="water level series",
+                                rings=AT_THE_PLACE, units={"water_level": "m"})),
+        ("fetch_tides", gauges(data_class="water level series",
+                               rings=DOWN_THE_ESTUARY, kind="predicted",
+                               units={"water_level": "m"})),
+    ])
+    assert choice.picked == "fetch_tides"
+    excluded = next(row for row in choice.rows if row.fetcher == "fetch_gauges")
+    assert "km away" in excluded.excluded and "serves 25 km" in excluded.excluded
+
+
+def test_a_run_that_picks_a_survivor_takes_it_as_the_user_s_choice():
+    choice = match(level_need(pick="fetch_tides"), [
+        ("fetch_gauges", gauges(data_class="water level series",
+                                rings=AT_THE_PLACE, units={"water_level": "m"})),
+        ("fetch_tides", gauges(data_class="water level series", kind="predicted",
+                               units={"water_level": "m"})),
+    ])
+    assert choice.picked == "fetch_tides"
+    assert choice.picked_by_user and not choice.tie
+    assert "the user's choice" in choice.sentence
+    assert [row.fetcher for row in choice.rows] == ["fetch_tides", "fetch_gauges"]
+
+
+def test_a_run_that_picks_a_source_the_filters_excluded_is_refused():
+    with pytest.raises(PlanValidationError) as caught:
+        match(level_need(pick="fetch_europe"), [
+            ("fetch_europe", gauges(data_class="water level series",
+                                    rings=EUROPE, note="Europe only",
+                                    units={"water_level": "m"}))])
+    assert "fetch_europe" in str(caught.value)
+    assert "not a survivor" in str(caught.value)

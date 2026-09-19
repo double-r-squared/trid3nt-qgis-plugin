@@ -26,9 +26,10 @@ CONUS = [[(-125.0, 24.0), (-66.0, 24.0), (-66.0, 50.0), (-125.0, 50.0)]]
 
 def coverage(data_class, *, res=None, datum="NAVD88", series=False,
              latest="2024-01-01", units=None, kind="surface", value="",
-             window_column="", above=""):
+             window_column="", above="", provenance="measured"):
     return Coverage(
-        data_class=data_class,
+        data_class=data_class, kind=provenance,
+        reach_km=25.0 if kind == "stations" else None,
         extent=CoverageExtent(kind=kind, rings=CONUS, note="CONUS"),
         window=CoverageWindow(series=series, latest=latest, cadence="hourly"),
         resolution_m=res, datum=datum, units=units or {},

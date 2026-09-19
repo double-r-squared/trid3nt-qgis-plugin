@@ -330,6 +330,11 @@
           "title": "Picked",
           "type": "string"
         },
+        "picked_by_user": {
+          "default": false,
+          "title": "Picked By User",
+          "type": "boolean"
+        },
         "rows": {
           "items": {
             "$ref": "#/$defs/SourceOption"
@@ -372,6 +377,12 @@
           "title": "Datum",
           "type": "string"
         },
+        "distance": {
+          "default": "",
+          "maxLength": 120,
+          "title": "Distance",
+          "type": "string"
+        },
         "excluded": {
           "default": "",
           "maxLength": 300,
@@ -387,6 +398,12 @@
         "fetcher": {
           "minLength": 1,
           "title": "Fetcher",
+          "type": "string"
+        },
+        "kind": {
+          "default": "",
+          "maxLength": 40,
+          "title": "Kind",
           "type": "string"
         },
         "recency": {

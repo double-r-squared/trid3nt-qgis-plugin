@@ -147,12 +147,13 @@ class Workflow:
             return err
         return await self.execute(
             self._resolve(supplied), input_mode=wire.get("input_mode"),
-            keywords=wire.get("keywords"),
+            keywords=wire.get("keywords"), picks=wire.get("picks"),
             resume=not bool(wire.get("restart_clean")),
             supplied=self._supplied_artifacts(wire))
 
     async def execute(self, resolving: Any, *, input_mode: str | None = None,
                       keywords: Mapping[str, Any] | None = None,
+                      picks: Mapping[str, str] | None = None,
                       resume: bool = True,
                       supplied: Mapping[str, Any] | None = None,
                       derived_from: Derivation | None = None,
@@ -167,7 +168,8 @@ class Workflow:
             check_validity(self.validity, p, workflow=self.name)
             run = await interpret(
                 self.plan, p, self.params, self.data,
-                input_mode=input_mode, keywords=keywords, resume=resume,
+                input_mode=input_mode, keywords=keywords, picks=picks,
+                resume=resume,
                 supplied=supplied_artifacts, continued=continued,
                 window_s=self.run_window_s(dict(keywords or {})),
             )
@@ -403,12 +405,14 @@ class Workflow:
 # -- the registration factory --------------------------------------------- #
 
 #: Controls every workflow carries: whether the run PAUSES, whether it resumes,
-#: and the RAW KEYWORD floor a caller states the engine's own keywords through.
-#: None of the three is a physical value, so none of them is a Param.
+#: the RAW KEYWORD floor a caller states the engine's own keywords through, and
+#: the source a caller NAMES for a matched slot. None of the four is a physical
+#: value, so none of them is a Param.
 _CONTROLS: tuple[tuple[str, Any, Any], ...] = (
     ("input_mode", str | None, None),
     ("restart_clean", bool, False),
     ("keywords", dict | None, None),
+    ("picks", dict | None, None),
 )
 
 

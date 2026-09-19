@@ -80,6 +80,7 @@ payload_estimate:
   floor_mb: 0.01
 coverage:
 -   data_class: discharge series
+    kind: modelled
     extent:
       kind: surface
       rings:

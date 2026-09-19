@@ -436,8 +436,9 @@ package DataSeam {
     part def SourceCoverage {
         doc /*
         A source's ONLY statement of what it covers: the class of thing it
-        measures, where, over what time, at what cell, on what zero, and the
-        unit of each value column. Stated from the dataset's own documentation.
+        measures, how it came by its numbers, where and how far one station
+        serves, over what time, at what cell, on what zero, and the unit of each
+        value column. Stated from the dataset's own documentation.
         */
     }
 
@@ -871,15 +872,21 @@ package DataSeam {
         for a SERIES source and never for a static surface - a 2014 survey
         answers a 2026 question and recency ranks it - and a differing datum is
         FLAGGED rather than filtered, because the offset row is what refuses at.
-        The sort is on facts: the cell against the mesh, how current the record
-        is, and whether the source is already on the run's frame. The top
+        A station set states the REACH one station serves, and a place further
+        from it than that is not a survivor at all. The sort is on facts, in the
+        order they decide: how the numbers were come by - measured, then
+        predicted, then modelled - how far the place is from them, the cell
+        against the mesh, how current the record is, and whether the source is
+        already on the run's frame. The top
         survivor is CALLED and dropped on an empty source, so the list a reader
         sees says what the world answered rather than what the sort preferred,
         and a refusal NAMES every source and what each one had to say.
 
         One run-level statement loosens one filter - a stand-in window, a datum
-        taken unconverted - and shows as the user's choice, never as the match's
-        own judgement.
+        taken unconverted - and one names the PICK for a slot among the
+        survivors; both show as the user's choice, never as the match's own
+        judgement, and a named source the filters excluded is a refusal rather
+        than a way past them.
 
         The bed is the one slot whose physics rule the runtime owns, stated
         ONCE: the measurement where it measured, the terrain under the rest, the
@@ -1244,6 +1251,16 @@ package DataSeam {
         "tests/runtime/test_source_match.py::test_a_series_outside_the_window_refuses_with_the_nearest_record_named";
     verify requirement ASlotStatesANeedAndTheMatchFillsIt by
         "tests/runtime/test_source_match.py::test_one_run_level_statement_loosens_the_window_as_the_user_s_choice";
+    verify requirement ASlotStatesANeedAndTheMatchFillsIt by
+        "tests/runtime/test_source_match.py::test_a_measured_gauge_at_the_place_outranks_a_modelled_grid_over_it";
+    verify requirement ASlotStatesANeedAndTheMatchFillsIt by
+        "tests/runtime/test_source_match.py::test_a_measured_gauge_outranks_a_prediction_a_hundred_kilometres_away";
+    verify requirement ASlotStatesANeedAndTheMatchFillsIt by
+        "tests/runtime/test_source_match.py::test_a_station_beyond_its_reach_is_not_a_survivor_at_all";
+    verify requirement ASlotStatesANeedAndTheMatchFillsIt by
+        "tests/runtime/test_source_match.py::test_a_run_that_picks_a_survivor_takes_it_as_the_user_s_choice";
+    verify requirement ASlotStatesANeedAndTheMatchFillsIt by
+        "tests/runtime/test_source_match.py::test_a_run_that_picks_a_source_the_filters_excluded_is_refused";
     verify requirement ASlotStatesANeedAndTheMatchFillsIt by
         "tests/runtime/test_matched_slots.py::test_the_bed_is_the_measurement_gridded_over_the_terrain_under_it";
     verify requirement ASlotStatesANeedAndTheMatchFillsIt by

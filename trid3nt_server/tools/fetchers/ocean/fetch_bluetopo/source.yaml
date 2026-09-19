@@ -74,6 +74,7 @@ resolution_declarations:
   rationale: the published tile scheme's own Resolution tiers; min_pixel_m only COARSENS the merge, it never invents a finer cell than the tile it read
 coverage:
 -   data_class: bathymetry
+    kind: measured
     extent:
       kind: surface
       rings:

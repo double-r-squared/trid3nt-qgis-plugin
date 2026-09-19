@@ -238,6 +238,7 @@ def test_compose_specs_from_tree_skips_malformed(tmp_path):
 def _coverage(**over) -> dict:
     row = {
         "data_class": "terrain",
+        "kind": "measured",
         "extent": {"kind": "surface",
                    "rings": [[[-125.0, 24.0], [-66.0, 24.0], [-66.0, 50.0],
                               [-125.0, 50.0]]]},
@@ -297,6 +298,20 @@ def test_a_service_extent_carrying_rings_is_refused():
                        "kind": "service",
                        "rings": [[[0.0, 0.0], [1.0, 0.0], [1.0, 1.0],
                                   [0.0, 1.0]]]})]})
+
+
+def test_a_station_set_with_no_reach_is_refused():
+    with pytest.raises(SpecLoadError):
+        load_spec({**raster_spec(),
+                   "coverage": [_coverage(extent={
+                       "kind": "stations",
+                       "rings": [[[0.0, 0.0], [1.0, 0.0], [1.0, 1.0],
+                                  [0.0, 1.0]]]})]})
+
+
+def test_a_surface_stating_a_reach_is_refused():
+    with pytest.raises(SpecLoadError):
+        load_spec({**raster_spec(), "coverage": [_coverage(reach_km=25.0)]})
 
 
 def test_a_spec_states_no_coverage_by_default():

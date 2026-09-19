@@ -65,6 +65,7 @@ payload_estimate:
     default: 50.0
 coverage:
 -   data_class: terrain
+    kind: measured
     extent:
       kind: surface
       rings:

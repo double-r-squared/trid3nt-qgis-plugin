@@ -78,6 +78,7 @@ resolution_declarations:
   rationale: 3DEP US lidar is native 1-10 m (10/30 m fastest on the tile tree); large bboxes auto-coarsen; no fine floor below the 1 m lidar native
 coverage:
 -   data_class: terrain
+    kind: measured
     extent:
       kind: surface
       rings:

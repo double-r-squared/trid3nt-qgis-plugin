@@ -2654,10 +2654,14 @@ class FormCard(QFrame):
         lines = [choice.sentence] if choice.sentence else []
         for row in choice.rows:
             mark = "*" if row.fetcher == choice.picked else " "
-            facts = ", ".join(f for f in (row.resolution, row.recency, row.datum,
-                                          row.extent) if f)
+            facts = ", ".join(f for f in (row.kind, row.distance,
+                                          row.resolution, row.recency,
+                                          row.datum, row.extent) if f)
             tail = f" - {row.excluded}" if row.excluded else ""
             lines.append(f"  {mark} {row.fetcher}: {facts}{tail}")
+        if choice.picked_by_user:
+            lines.append(f"  the run picks {choice.picked}, which is the "
+                         "user's choice")
         if choice.loosened:
             lines.append(f"  the run states {choice.loosened} loosened, which "
                          "is the user's choice")

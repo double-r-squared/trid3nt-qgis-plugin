@@ -40,6 +40,7 @@ from .match import (
     Need, dropped_from, instant, match, sources_with_coverage)
 from .domain import Domain, bind_domain, current_domain, domain_from_result, reset_domain
 from .errors import (
+    PlanValidationError,
     SuppliedCoverageError,
     DeclarativeError,
     GateRefusedError,
@@ -132,6 +133,7 @@ async def interpret(
     *,
     input_mode: str | None = None,
     keywords: Mapping[str, Any] | None = None,
+    picks: Mapping[str, str] | None = None,
     domain: Domain | None = None,
     resume: bool = True,
     supplied: Mapping[str, Any] | None = None,
@@ -153,7 +155,9 @@ async def interpret(
     begin_substeps(emitter, len(nodes))
 
     env = _Env(params=params, data={d.name: d for d in data}, results={},
-               input_mode=input_mode, keywords=dict(keywords or {}), ledger=ledger,
+               input_mode=input_mode, keywords=dict(keywords or {}),
+               picks={str(k): str(v) for k, v in dict(picks or {}).items()},
+               ledger=ledger,
                resume=resume, supplied=dict(supplied or {}), workflow=plan.name,
                continued=continued, window_s=window_s)
     out = RunResult(value=None, entries=entries, params=params,
@@ -291,6 +295,9 @@ class _Env:
     workflow: str = ""
     #: The raw keyword floor this invocation carried, by the name the caller used.
     keywords: dict[str, Any] = field(default_factory=dict)
+    #: The source the run NAMES for a slot, by slot name. It picks among the
+    #: survivors of that slot's match and never past its filters.
+    picks: dict[str, str] = field(default_factory=dict)
     #: The run this one CONTINUES, as the artifact its state is read out of.
     #: Empty for a run that starts from its own initial conditions.
     continued: str | None = None
@@ -554,7 +561,24 @@ async def _need(env: _Env, decl: DataDecl, data_class: str,
     return Need(slot=label, data_class=data_class, lon=lon, lat=lat,
                 opens=str(opens) if opens else None,
                 until=_closes(opens, env.window_s), frame=run_frame(env.params),
-                mesh_m=_mesh_m(env))
+                mesh_m=_mesh_m(env), pick=_pick(env, decl, data_class))
+
+
+def _pick(env: _Env, decl: DataDecl, data_class: str) -> str:
+    """The source this RUN names for this slot, "" where it names none.
+
+    A slot that reads two classes - the bed reads a measurement and a terrain -
+    takes the name on the class the named source actually serves, so one
+    statement never answers for the other."""
+    named = str(env.picks.get(decl.name) or "")
+    if not named:
+        return ""
+    if not any(getattr(_spec_of(named), "coverage", ())):
+        raise PlanValidationError(
+            f"the run picks {named!r} for the {decl.name!r} slot and it states "
+            "no coverage at all: a source the match never weighs cannot be "
+            "picked out of its list.")
+    return named if _coverage_row(named, data_class) is not None else ""
 
 
 def _closes(opens: Any, window_s: float | None) -> str | None:

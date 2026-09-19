@@ -80,6 +80,7 @@ resolution_declarations:
     3 arc-second grid under the AOI rather than by the service
 coverage:
 -   data_class: bathymetry
+    kind: measured
     extent:
       kind: surface
       rings:

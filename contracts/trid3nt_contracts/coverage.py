@@ -8,6 +8,7 @@ vocabulary and the match reads the two; nothing here knows about a template.
 
 from __future__ import annotations
 
+import math
 from typing import Literal
 
 from pydantic import Field, model_validator
@@ -16,6 +17,7 @@ from .common import GraceModel
 
 __all__ = [
     "DATA_CLASSES",
+    "PROVENANCE_KINDS",
     "DataClass",
     "Coverage",
     "CoverageExtent",
@@ -70,6 +72,10 @@ DataClass = Literal[
 ]
 
 
+#: One degree of latitude, in kilometres - what a ring distance is read in.
+_KM_PER_DEGREE = 111.32
+
+
 class CoverageExtent(GraceModel):
     """WHERE a source holds anything, as coarsely as the source itself states it.
 
@@ -111,6 +117,39 @@ class CoverageExtent(GraceModel):
             return True
         return any(_in_ring(ring, float(lon), float(lat)) for ring in self.rings)
 
+    def distance_km(self, lon: float, lat: float) -> float:
+        """How far this point lies from what the source holds, in kilometres.
+
+        Zero inside the rings and off a ``service``, which answers for itself;
+        outside, the distance to the nearest ring, which for a station set is
+        how far the nearest station can be."""
+        if self.covers(lon, lat):
+            return 0.0
+        return min(_ring_distance_km(ring, float(lon), float(lat))
+                   for ring in self.rings)
+
+
+def _ring_distance_km(ring: list[tuple[float, float]], lon: float,
+                      lat: float) -> float:
+    """The distance from a point to one closed ring, on a local flat earth.
+
+    Coarse on purpose: a coverage ring is a coarse outline, and a distance read
+    off it is a fact about the outline rather than a measured range."""
+    scale = math.cos(math.radians(lat))
+    best = float("inf")
+    for (x0, y0), (x1, y1) in zip(ring, list(ring[1:]) + [ring[0]]):
+        best = min(best, _segment_distance(
+            (lon - x0) * scale, lat - y0, (x1 - x0) * scale, y1 - y0))
+    return best * _KM_PER_DEGREE
+
+
+def _segment_distance(px: float, py: float, sx: float, sy: float) -> float:
+    """The distance from the origin to the segment reaching ``(sx, sy)`` from
+    ``(-px, -py)``, in degrees of latitude."""
+    span = sx * sx + sy * sy
+    along = 0.0 if span == 0.0 else max(0.0, min(1.0, (px * sx + py * sy) / span))
+    return math.hypot(px - along * sx, py - along * sy)
+
 
 def _in_ring(ring: list[tuple[float, float]], lon: float, lat: float) -> bool:
     """Ray cast against one closed lon/lat ring."""
@@ -120,6 +159,15 @@ def _in_ring(ring: list[tuple[float, float]], lon: float, lat: float) -> bool:
                 lon < x0 + (lat - y0) * (x1 - x0) / (y1 - y0):
             inside = not inside
     return inside
+
+
+#: HOW a source came by its numbers, ranked: an instrument record beats a
+#: prediction and a prediction beats a model grid. It is the first fact the
+#: match sorts on, because a gauge at the place answers a question a modelled
+#: cell over it only estimates.
+PROVENANCE_KINDS = ("measured", "predicted", "modelled")
+
+ProvenanceKind = Literal["measured", "predicted", "modelled"]
 
 
 class CoverageWindow(GraceModel):
@@ -150,8 +198,15 @@ class Coverage(GraceModel):
     reader downstream, and this row is what decides which source fills a slot."""
 
     data_class: DataClass
+    #: Whether these numbers were measured, predicted or modelled.
+    kind: ProvenanceKind
     extent: CoverageExtent
     window: CoverageWindow
+    #: How far one STATION serves, in kilometres - the distance at which its
+    #: record still speaks for the place. Only a station set states one: a
+    #: surface answers everywhere inside its rings and a service answers for
+    #: itself.
+    reach_km: float | None = Field(default=None, gt=0.0)
     #: The finest cell the source publishes, in metres. ``None`` where the
     #: source is not a grid - a station set, a point sample, a polygon.
     resolution_m: float | None = Field(default=None, gt=0.0)
@@ -173,6 +228,20 @@ class Coverage(GraceModel):
     above_column: str = ""
 
     @model_validator(mode="after")
+    def _validate_reach(self) -> "Coverage":
+        """A reach is a station's, and every station set states one."""
+        if self.extent.kind == "stations" and self.reach_km is None:
+            raise ValueError(
+                "a station set states reach_km, the distance one station "
+                "serves; without it the place filter cannot say whether the "
+                "nearest station speaks for this place")
+        if self.extent.kind != "stations" and self.reach_km is not None:
+            raise ValueError(
+                f"extent.kind={self.extent.kind} states a reach; a reach is the "
+                "distance a STATION serves and nothing else has stations")
+        return self
+
+    @model_validator(mode="after")
     def _validate_columns(self) -> "Coverage":
         """A named column is one this row states a unit for."""
         for role, column in (("value_column", self.value_column),
@@ -190,8 +259,11 @@ class SourceOption(GraceModel):
     """One row of the ranked list: a source and the four facts it is picked on."""
 
     fetcher: str = Field(min_length=1)
-    #: Rendered facts, not numbers to re-derive: the cell, how current the
-    #: record is, the zero it counts from, and where it reaches.
+    #: Rendered facts, not numbers to re-derive: how the numbers were come by,
+    #: how far the place is from what the source holds, the cell, how current
+    #: the record is, the zero it counts from, and where it reaches.
+    kind: str = Field(default="", max_length=40)
+    distance: str = Field(default="", max_length=120)
     resolution: str = Field(default="", max_length=120)
     recency: str = Field(default="", max_length=120)
     datum: str = Field(default="", max_length=120)
@@ -224,3 +296,7 @@ class SourceChoice(GraceModel):
     #: The run-level statement that loosened a filter, "" where none did. It
     #: shows as the user's choice, never as the match's own judgement.
     loosened: str = Field(default="", max_length=300)
+    #: The run NAMED this source for this slot. The list is still the list -
+    #: what the sort would have taken stays on it - and the pick reads as the
+    #: user's choice rather than the match's.
+    picked_by_user: bool = False

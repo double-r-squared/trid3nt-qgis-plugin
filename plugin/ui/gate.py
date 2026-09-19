@@ -136,9 +136,11 @@ def parse_payload_warning(payload: dict) -> Optional[PayloadWarning]:
 
 @dataclass
 class SourceOptionRow:
-    """One weighed source and the four facts it was ranked on."""
+    """One weighed source and the facts it was ranked on."""
 
     fetcher: str
+    kind: str = ""
+    distance: str = ""
     resolution: str = ""
     recency: str = ""
     datum: str = ""
@@ -160,6 +162,7 @@ class SourceChoiceRow:
     sentence: str = ""
     tie: bool = False
     loosened: str = ""
+    picked_by_user: bool = False
 
 
 @dataclass
@@ -287,6 +290,8 @@ def _parse_source_choice(raw: object) -> Optional[SourceChoiceRow]:
     options = [
         SourceOptionRow(
             fetcher=str(row.get("fetcher") or ""),
+            kind=str(row.get("kind") or ""),
+            distance=str(row.get("distance") or ""),
             resolution=str(row.get("resolution") or ""),
             recency=str(row.get("recency") or ""),
             datum=str(row.get("datum") or ""),
@@ -297,7 +302,8 @@ def _parse_source_choice(raw: object) -> Optional[SourceChoiceRow]:
         slot=str(raw.get("slot")), need=str(raw.get("need") or ""),
         rows=options, picked=str(raw.get("picked") or ""),
         sentence=str(raw.get("sentence") or ""), tie=bool(raw.get("tie")),
-        loosened=str(raw.get("loosened") or ""))
+        loosened=str(raw.get("loosened") or ""),
+        picked_by_user=bool(raw.get("picked_by_user")))
 
 
 def resolve_param_sheet_edits(rows: list, edited: dict) -> dict:

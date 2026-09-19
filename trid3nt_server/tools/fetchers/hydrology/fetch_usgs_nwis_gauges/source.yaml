@@ -74,6 +74,8 @@ payload_estimate:
 
 coverage:
 - data_class: discharge series
+  kind: measured
+  reach_km: 25
   extent:
     kind: stations
     rings:
@@ -96,6 +98,8 @@ coverage:
   value_column: discharge_cfs
   series_column: time_series_csv
 - data_class: water level series
+  kind: measured
+  reach_km: 25
   extent:
     kind: stations
     rings:

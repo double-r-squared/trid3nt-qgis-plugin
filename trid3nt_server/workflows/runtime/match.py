@@ -4,8 +4,11 @@ A slot states a NEED - a data class, the place off the domain, the window off
 the run, the frame off the lever - and every fetcher states its COVERAGE. The
 filter is mechanical and hard on class and place; the window is hard for a
 series and a sort key for a surface; a differing datum is FLAGGED here and
-refused at the offset row. What comes back is one ranked list: the card renders
-it, the tool result carries it on a tie, the sheet stores the pick.
+refused at the offset row. The sort reads facts in one order: how the numbers
+were come by, how far the place is from them, the cell against the mesh, how
+current the record is, the zero it counts from. What comes back is one ranked
+list: the card renders it, the tool result carries it on a tie, the sheet
+stores the pick.
 """
 
 from __future__ import annotations
@@ -14,7 +17,8 @@ import datetime as dt
 from dataclasses import dataclass
 from typing import Sequence
 
-from trid3nt_contracts.coverage import Coverage, SourceChoice, SourceOption
+from trid3nt_contracts.coverage import (
+    PROVENANCE_KINDS, Coverage, SourceChoice, SourceOption)
 
 from .errors import PlanValidationError
 
@@ -51,6 +55,9 @@ class Need:
     #: The run-level statement that loosens ONE filter. It shows as the user's
     #: choice and never as the match's own judgement.
     loosen: str = ""
+    #: The source the run NAMES for this slot, "" where it names none. A named
+    #: source the filters excluded is a refusal, not a pick.
+    pick: str = ""
 
     def __post_init__(self) -> None:
         if not self.data_class:
@@ -100,12 +107,34 @@ def match(need: Need,
     kept.sort(key=lambda row: (row[0], row[1]))
     survivors = [_option(name, coverage, need) for _key, name, coverage in kept]
     tie = len(kept) > 1 and kept[0][0] == kept[1][0]
+    if need.pick:
+        survivors = _named_first(need, survivors, dropped)
+        tie = False
     rows = (survivors + dropped)[:RANKED_ROWS]
     picked = survivors[0].fetcher if survivors else ""
     return SourceChoice(
         slot=need.slot, need=need.data_class, rows=rows, picked=picked,
         sentence=_sentence(need, survivors, dropped), tie=tie,
-        loosened=need.loosen)
+        loosened=need.loosen, picked_by_user=bool(need.pick))
+
+
+def _named_first(need: Need, survivors: Sequence[SourceOption],
+                 dropped: Sequence[SourceOption]) -> list[SourceOption]:
+    """The list with the source the RUN named at its head.
+
+    The ranked list stays whole - what the sort would have taken is still on it
+    - and only the pick moves, because a user's choice is a choice among the
+    survivors and not a way past the filters."""
+    named = next((row for row in survivors if row.fetcher == need.pick), None)
+    if named is None:
+        excluded = next((row.excluded for row in dropped
+                         if row.fetcher == need.pick), "")
+        raise PlanValidationError(
+            f"the run picks {need.pick!r} for the {need.slot!r} slot and it is "
+            "not a survivor of the match: "
+            + (excluded or f"no coverage row on it serves {need.data_class}")
+            + ". Pick a source the list carries, or state the value.")
+    return [named] + [row for row in survivors if row.fetcher != need.pick]
 
 
 def dropped_from(choice: SourceChoice, fetcher: str, why: str) -> SourceChoice:
@@ -128,9 +157,15 @@ def _excluded(need: Need, coverage: Coverage) -> str:
     Class is already answered. Place is hard; the window is hard for a SERIES
     and never for a surface, which a run outside simply ranks lower. The datum
     is not a filter - it is flagged on the row and refused at the offset row."""
-    if need.lon is not None and need.lat is not None \
-            and not coverage.extent.covers(need.lon, need.lat):
-        return f"does not reach this place: {coverage.extent.note or 'stated extent'}"
+    if need.lon is not None and need.lat is not None:
+        away = coverage.extent.distance_km(need.lon, need.lat)
+        reach = coverage.reach_km or 0.0
+        if away > reach:
+            where = coverage.extent.note or "stated extent"
+            if coverage.extent.kind == "stations":
+                return (f"its nearest station is about {away:.0f} km away and "
+                        f"one serves {reach:g} km: {where}")
+            return f"does not reach this place: {where}"
     if coverage.window.series and need.loosen != LOOSEN_WINDOW:
         outside = _outside_window(need, coverage)
         if outside:
@@ -168,14 +203,26 @@ def instant(value: str | None) -> dt.datetime | None:
 
 
 def _rank(need: Need, coverage: Coverage) -> tuple[float, ...]:
-    """The sort key, on FACTS: the cell against the mesh, recency, native datum.
+    """The sort key, on FACTS, in the order they decide: how the numbers were
+    come by, how far away they are, the cell against the mesh, recency, datum.
 
-    A source coarser than the mesh cannot answer what the mesh resolves, so it
-    ranks below every source that can, and the least coarse of those comes
-    first. Among the sources that resolve the mesh the FINER one measured the
-    ground more closely, so it ranks first. Lower sorts earlier throughout."""
-    return (_cell_rank(need, coverage), -_recency(coverage),
-            0.0 if _on_frame(need, coverage) else 1.0)
+    An instrument record at the place answers what a prediction estimates and a
+    model grid computes, so the kind leads; among records of one kind the
+    nearest speaks for the place. A source coarser than the mesh cannot answer
+    what the mesh resolves, so it ranks below every source that can, and the
+    least coarse of those comes first. Among the sources that resolve the mesh
+    the FINER one measured the ground more closely, so it ranks first. Lower
+    sorts earlier throughout."""
+    return (float(PROVENANCE_KINDS.index(coverage.kind)),
+            _distance_km(need, coverage), _cell_rank(need, coverage),
+            -_recency(coverage), 0.0 if _on_frame(need, coverage) else 1.0)
+
+
+def _distance_km(need: Need, coverage: Coverage) -> float:
+    """How far the place is from what this source holds, zero where it is inside."""
+    if need.lon is None or need.lat is None:
+        return 0.0
+    return coverage.extent.distance_km(need.lon, need.lat)
 
 
 def _cell_rank(need: Need, coverage: Coverage) -> float:
@@ -213,10 +260,21 @@ def _option(name: str, coverage: Coverage, need: Need, *,
             excluded: str = "") -> SourceOption:
     """One ranked row: the source and the four facts it is picked on."""
     return SourceOption(
-        fetcher=name, resolution=_cell(coverage), recency=_currency(coverage),
+        fetcher=name, kind=coverage.kind, distance=_range(need, coverage),
+        resolution=_cell(coverage), recency=_currency(coverage),
         datum=coverage.datum or "no datum stated",
         extent=coverage.extent.note or coverage.extent.kind,
         excluded=excluded)
+
+
+def _range(need: Need, coverage: Coverage) -> str:
+    """How far the place is from this source, in the words the card shows."""
+    if need.lon is None or need.lat is None:
+        return ""
+    away = _distance_km(need, coverage)
+    if away <= 0.0:
+        return "over this place"
+    return f"about {away:.0f} km away"
 
 
 def _cell(coverage: Coverage) -> str:
@@ -245,12 +303,14 @@ def _sentence(need: Need, survivors: Sequence[SourceOption],
                 + ". State the value on the call, or ask about a place or a "
                   "moment a source reaches.")
     top = survivors[0]
-    facts = f"{top.resolution}, {top.recency}, {top.datum}"
+    facts = ", ".join(fact for fact in (top.kind, top.distance, top.resolution,
+                                        top.recency, top.datum) if fact)
     over = ", ".join(f"{row.fetcher} {row.resolution}" for row in survivors[1:4])
     tail = f", over {over}" if over else ""
     loosened = (f" The run states {need.loosen} loosened, which is the user's "
                 "choice." if need.loosen else "")
-    return f"{need.slot}: {top.fetcher} ({facts}){tail}.{loosened}"
+    named = " The run picks it, which is the user's choice." if need.pick else ""
+    return f"{need.slot}: {top.fetcher} ({facts}){tail}.{named}{loosened}"
 
 
 def _probe_sentence(choice: SourceChoice, rows: Sequence[SourceOption],
