@@ -818,6 +818,22 @@ def test_supplied_on_a_slot_and_supplied_on_a_producer_are_different_asks():
 
 
 @pytest.mark.asyncio
+async def test_a_supplied_producer_row_is_on_the_wire_and_the_caller_fills_it():
+    """A FETCH row with no role, marked .supplied(), takes the caller's artifact:
+    the mark says the caller's own thing stands in place of the build, so the row
+    has to be askable, and what the caller hands in is what the run reads."""
+    decl = DataDecl("weather", tool(f"{_HERE}.stub_producer").supplied(validate=None))
+    assert decl.role == "" and decl.fills_from_user is True
+    plan = Plan("w", None, (Step(runner=f"{_HERE}.stub_second",
+                                 kwargs={"m": Ref("weather")}),))
+    p = await resolve_params(_params(), {})
+    out = await interpret(plan, p, _params(), [decl], resume=False,
+                          supplied={"weather": "file:///mine/weather.csv"})
+    assert _CALLS == ["stub_second"]
+    assert out.value["seen"]["m"] == "file:///mine/weather.csv"
+
+
+@pytest.mark.asyncio
 async def test_a_resumed_run_does_not_refetch_produced_data():
     decl = _params()
     data = [DataDecl("mesh", tool(f"{_HERE}.stub_producer"))]

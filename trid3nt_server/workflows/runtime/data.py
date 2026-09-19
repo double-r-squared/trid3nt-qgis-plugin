@@ -147,6 +147,9 @@ class Producer(Row):
     temporal: TemporalSpec | None = None
     supplied_uri: str | None = None
     supplied_validate: Any = None
+    #: Marked ``.supplied()``: the caller's own artifact stands in place of the
+    #: build, whether or not the mark baked a uri in with it.
+    is_supplied: bool = False
     #: The DATA-body attribute name this producer was declared under.
     row: str = ""
 
@@ -162,7 +165,8 @@ class Producer(Row):
         """Take the artifact the caller supplied instead of building one.
 
         ``CoversAOI`` checks only that a domain is bound, never the extent."""
-        return replace(self, supplied_uri=uri, supplied_validate=validate)
+        return replace(self, supplied_uri=uri, supplied_validate=validate,
+                       is_supplied=True)
 
     def ladder(self, *rungs: "Producer") -> "Producer":
         """Declare the fallback rungs this producer degrades through, in order.
@@ -273,7 +277,7 @@ class DataDecl(Row):
 
     @property
     def is_supplied(self) -> bool:
-        return getattr(self.producer, "supplied_uri", None) is not None
+        return bool(getattr(self.producer, "is_supplied", False))
 
     @property
     def fills_from_user(self) -> bool:
@@ -281,8 +285,11 @@ class DataDecl(Row):
 
         Every producer-less row is, and so is a SLOT that names a producer: a
         drawn domain or a surveyed bed supersedes the fetcher the template
-        preferred, and the run reads one value either way."""
-        return self.producer is None or bool(self.role)
+        preferred, and the run reads one value either way. A producer marked
+        ``.supplied()`` is on the wire too - the mark says the caller's own
+        artifact stands in place of the build, and only the caller can hand
+        that in."""
+        return self.producer is None or bool(self.role) or self.is_supplied
 
     @property
     def producer_kwargs(self) -> Mapping[str, Any]:
@@ -343,8 +350,12 @@ class DataDecl(Row):
                     + ("; unfilled, the template's own producer looks for one."
                        if self.producer is not None else "."))
         shape = f"a {self.geometry} layer" if self.geometry else "a layer"
-        tail = ("absent is legal and the run reports it" if self.is_optional
-                else "required - the template names no source for it")
+        if self.producer is not None:
+            tail = "unfilled, the template's own producer fetches one"
+        elif self.is_optional:
+            tail = "absent is legal and the run reports it"
+        else:
+            tail = "required - the template names no source for it"
         return f"{shape} you supply, as a uri or a layer name; {tail}."
 
     def refuse_wrong_shape(self, value: Any) -> None:

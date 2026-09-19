@@ -318,7 +318,12 @@ async def _produce(env: _Env, decl: DataDecl) -> Any:
     all the same, because the sentence it states IS its product."""
     handed_in = env.supplied.get(decl.name)
     if handed_in is not None:
-        _validate_supplied(env, decl, handed_in, decl.supplied_validate)
+        # A MARKED producer states the check the value handed to its row is held
+        # to: a table of weather has no extent, so it is not a coverage question,
+        # and the row that carries the mark is what knows that.
+        _validate_supplied(env, decl, handed_in,
+                           decl.producer.supplied_validate if decl.is_supplied
+                           else decl.supplied_validate)
         return await _ingested(env, decl, handed_in)
     producer = decl.producer
     if producer is None and decl.role == RUNS:

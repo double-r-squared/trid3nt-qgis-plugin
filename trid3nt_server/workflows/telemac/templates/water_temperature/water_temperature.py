@@ -132,8 +132,13 @@ class DATA:
     # clearings tens of kilometres from the water, and how far out a station may
     # stand is the fetcher's own declared radius; which one is taken, the unit
     # carriage and the run's own clock are the Atmosphere slot's ingestion.
+    # A record a user already holds STANDS OVER the network: the mark puts this
+    # row on the wire, and what is handed in is read the same way the fetched
+    # record is. A table of weather has no extent, so it is not checked against
+    # the domain.
     weather = Data(tool("fetch_raws_weather", bbox=Ref("domain.bbox"),
-                        start_time=P.weather_start, end_time=P.weather_end))
+                        start_time=P.weather_start,
+                        end_time=P.weather_end).supplied(validate=None))
     # WHAT THE WATER OPENS AT, measured. ONE reading off the sample site nearest
     # the point the series is read at, in the unit the keyword carries, with that
     # site, its distance and the sample date on the run journal. The run spends

@@ -45,13 +45,14 @@ def _workflow():
 
 def test_every_slot_this_run_stands_on_reaches_the_wire_as_the_slot_it_is():
     """What the user hands in supersedes the producer the template preferred, so
-    a pond outline, a stated depth and a stated opening temperature run this
-    question with no fetch at all. The rows that are nobody's slot stay off it."""
+    a pond outline, a stated depth, a stated opening temperature and a weather
+    record the user already holds run this question with no fetch at all. The
+    rows that are neither a slot nor a mark stay off it."""
     from trid3nt_server.tools import TOOL_REGISTRY
 
     wire = set(inspect.signature(TOOL_REGISTRY["telemac_ice_cover"].fn).parameters)
-    assert {"domain", "bed", "carrier", "water_temperature"} <= wire
-    assert {"survey", "terrain", "surveyed_bed", "weather"}.isdisjoint(wire)
+    assert {"domain", "bed", "carrier", "water_temperature", "weather"} <= wire
+    assert {"survey", "terrain", "surveyed_bed"}.isdisjoint(wire)
 
 
 def test_the_weather_is_the_record_that_measures_what_the_ice_module_reads():
