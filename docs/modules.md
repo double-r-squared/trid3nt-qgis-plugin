@@ -13,6 +13,7 @@ One wrapper per TELEMAC module. A wrapper is the module's own dictionary, read a
 | `khione` | 133 | - | `extent`, `field`, `mass_balance`, `max_over_time`, `mesh`, `profile`, `series` |
 | `telemac2d` | 376 | `atmosphere`, `boundaries`, `continue_from`, `coupling`, `friction`, `infiltration`, `oil`, `rain`, `rating`, `runoff`, `sources`, `storm`, `time_origin`, `tracer_names`, `wind` | `drogues`, `extent`, `field`, `mass_balance`, `max_over_time`, `mesh`, `profile`, `series` |
 | `telemac3d` | 355 | `atmosphere`, `column`, `coupling`, `vertical_grid`, `wind` | `column`, `extent`, `field`, `mass_balance`, `max_over_time`, `mesh`, `profile`, `series` |
+| `tomawac` | 223 | - | `extent`, `field`, `mass_balance`, `max_over_time`, `mesh`, `profile`, `series` |
 | `waqtel` | 91 | `degradation` | - |
 
 A COMPOSITE is one value standing for a keyword group, so the group cannot half-arrive. A READ is a primitive over what the module wrote.
@@ -104,6 +105,50 @@ appended by DYNAMIC_ICE_COVER: `ICE COVER FRAC.` (SURFAC FRACTION, ramp `blues`)
 | `V` | VELOCITY V | m/s | `rdbu` | yes | yes |
 | `W` | VELOCITY W | m/s | `rdbu` | yes | yes |
 | `TA` | TRACER | - | `viridis` | yes | no - one row per declared tracer |
+
+### `tomawac`
+
+| mnemonic | the result file calls it | unit | ramp | varies in time | asked of the engine |
+|---|---|---|---|---|---|
+| `M0` | VARIANCE M0 | m2 | `ylgnbu` | yes | yes |
+| `HM0` | WAVE HEIGHT HM0 | m | `ylgnbu` | yes | yes |
+| `DMOY` | MEAN DIRECTION | deg | `hsv` | yes | yes |
+| `SPD` | WAVE SPREAD | deg | `viridis` | yes | yes |
+| `ZF` | BOTTOM | m | `terrain` | no | yes |
+| `WD` | WATER DEPTH | m | `ylgnbu` | yes | yes |
+| `UX` | VELOCITY U | m/s | `rdbu` | yes | yes |
+| `UY` | VELOCITY V | m/s | `rdbu` | yes | yes |
+| `VX` | WIND ALONG X | m/s | `rdbu` | yes | yes |
+| `VY` | WIND ALONG Y | m/s | `rdbu` | yes | yes |
+| `FX` | FORCE FX | m/s2 | `rdbu` | yes | yes |
+| `FY` | FORCE FY | m/s2 | `rdbu` | yes | yes |
+| `SXX` | STRESS SXX | m3/s2 | `rdbu` | yes | yes |
+| `SXY` | STRESS SXY | m3/s2 | `rdbu` | yes | yes |
+| `SYY` | STRESS SYY | m3/s2 | `rdbu` | yes | yes |
+| `UWB` | BOTTOM VELOCITY | m/s | `plasma` | yes | yes |
+| `FMOY` | MEAN FREQ FMOY | Hz | `cividis` | yes | yes |
+| `FM01` | MEAN FREQ FM01 | Hz | `cividis` | yes | yes |
+| `FM02` | MEAN FREQ FM02 | Hz | `cividis` | yes | yes |
+| `FPD` | PEAK FREQ FPD | Hz | `cividis` | yes | yes |
+| `FPR5` | PEAK FREQ FPR5 | Hz | `cividis` | yes | yes |
+| `FPR8` | PEAK FREQ FPR8 | Hz | `cividis` | yes | yes |
+| `US` | USTAR | m/s | `plasma` | yes | yes |
+| `CD` | CD | - | `viridis` | yes | yes |
+| `Z0` | Z0 | m | `viridis` | yes | yes |
+| `WS` | WAVE STRESS | kg/(m.s2) | `plasma` | yes | yes |
+| `TMOY` | MEAN PERIOD TMOY | s | `viridis` | yes | yes |
+| `TM01` | MEAN PERIOD TM01 | s | `viridis` | yes | yes |
+| `TM02` | MEAN PERIOD TM02 | s | `viridis` | yes | yes |
+| `TPD` | PEAK PERIOD TPD | s | `viridis` | yes | yes |
+| `TPR5` | PEAK PERIOD TPR5 | s | `viridis` | yes | yes |
+| `TPR8` | PEAK PERIOD TPR8 | s | `viridis` | yes | yes |
+| `POW` | WAVE POWER | kW/m | `inferno` | yes | yes |
+| `BETA` | BREAKING RAT | 1/s | `reds` | yes | yes |
+| `BETAWC` | WHITE CAPING | 1/s | `reds` | yes | yes |
+| `SRE` | SURFACE ROLLER E | m3/s2 | `oranges` | yes | yes |
+| `DBR` | BREAKER DISSIP | m2/s | `reds` | yes | yes |
+| `DSR` | ROLLER DISSIP | m3/s3 | `oranges` | yes | yes |
+| `DPIC` | PEAK DIRECTION | deg | `hsv` | yes | yes |
 
 ### `waqtel`
 

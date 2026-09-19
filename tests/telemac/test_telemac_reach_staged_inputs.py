@@ -148,9 +148,12 @@ def test_the_case_section_names_the_engine_the_file_and_the_results():
     # no user fortran was asked for, so the key is ABSENT rather than null: the
     # worker's strict gate reads a present key as a file it must compile.
     assert "user_fortran" not in case
-    assert "user_fortran" in case_section(
+    # EVERY deck of the run names its own: the host's and, on a coupled run,
+    # the coupled module's, handed over as they stand.
+    assert case_section(
         module="telemac2d", steering="t2d_river.cas", results=[],
-        server_facts={}, user_fortran="user_fortran")
+        server_facts={}, user_fortran=["T2D_user_fortran", "Tom_user_fortran"]
+    )["user_fortran"] == ["T2D_user_fortran", "Tom_user_fortran"]
     # the coupling reads the same way: an uncoupled case names none, and the
     # worker's runner choice turns on the word being there.
     assert "coupling" not in case

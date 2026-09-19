@@ -73,14 +73,15 @@ _OUTLET_ROLE = RATING_CURVE_ROLE
 
 
 def case_section(*, module: str, steering: str, results: list[str],
-                 server_facts: Mapping[str, Any], user_fortran: str | None = None,
+                 server_facts: Mapping[str, Any],
+                 user_fortran: Sequence[str] = (),
                  coupling: str | None = None,
                  continue_from: str | None = None) -> dict[str, Any]:
     """The CASE a worker runs: which engine, which file, what it must produce.
 
     ``server_facts`` is copied into the worker's metrics verbatim, never re-derived."""
     return {"module": module, "steering": steering,
-            **({"user_fortran": user_fortran} if user_fortran else {}),
+            **({"user_fortran": list(user_fortran)} if user_fortran else {}),
             **({"coupling": coupling} if coupling else {}),
             **({"continue_from": continue_from} if continue_from else {}),
             "results": list(results), "server_facts": dict(server_facts)}
@@ -164,7 +165,7 @@ async def stage_run(rundir: Path, run_tag: str, *, module: str, steering: str,
                     results: list[str], outputs: list[str],
                     mesh_inputs: list[dict[str, str]], prefix: str,
                     sheet: Mapping[str, Any], server_facts: Mapping[str, Any],
-                    result_basename: str, user_fortran: str | None = None,
+                    result_basename: str, user_fortran: Sequence[str] = (),
                     coupling: str | None = None,
                     continue_from: str | None = None) -> dict[str, Any]:
     """An authored run directory -> the staged run the box receives.

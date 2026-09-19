@@ -47,9 +47,10 @@ UNSET = _Unset()
 #: Class attributes a wrapper carries that are never keyword assertions.
 _RESERVED = frozenset((
     "MODULE", "MODULE_INPUT", "COMPOSITES", "READS", "ASSERTED", "ARMS",
-    "MODULE_OUTPUT", "LISTING", "DERIVED", "PRINTOUTS", "CADENCE", "TRACER",
-    "APPENDS", "APPENDABLE", "ONLY_3D",
-    "RESULT_FILE", "composites", "reads", "appends", "printouts", "slot",
+    "ARMS_ON_HOST", "MODULE_OUTPUT", "LISTING", "DERIVED", "PRINTOUTS",
+    "CADENCE", "TRACER", "APPENDS", "APPENDABLE", "ONLY_3D", "UNWRITTEN",
+    "RESULT_FILE", "RESULT_FILES", "composites", "reads", "appends",
+    "printouts", "slot",
 ))
 
 
@@ -398,6 +399,12 @@ class Module(metaclass=_Body):
     UNWRITTEN: frozenset[str] = frozenset()
     #: The result file the primitives read; empty reads the run's own.
     RESULT_FILE: str = ""
+    #: The OTHER result files a deck of this module may name, by identifier: a
+    #: file the module writes that no primitive of the geographic mesh reads -
+    #: TOMAWAC's spectra over the frequency-direction grid. A deck that names
+    #: one wrote it, so the run declares it, checks it landed and keeps it for
+    #: download; one the deck does not name is not a file of this run.
+    RESULT_FILES: tuple[str, ...] = ()
     #: The keywords a COUPLED body of this module has only under a
     #: three-dimensional host, by identifier. The host's own coupling composite
     #: refuses them by name, because a two-dimensional host never builds the
@@ -409,6 +416,11 @@ class Module(metaclass=_Body):
     #: engine reads the value only with the switch true, so a rate stated by
     #: name and left disarmed is a number nothing reads.
     ARMS: Mapping[str, str] = MappingProxyType({})
+    #: The HOST switches a COUPLED body of this module arms, by identifier. The
+    #: engine reads what the module hands back only with the switch true, so a
+    #: coupling nobody armed is a module the host never feels. The host deck
+    #: keeps whatever it states itself, off included.
+    ARMS_ON_HOST: tuple[str, ...] = ()
 
     @classmethod
     def composites(cls, **expanders: Callable[[Any], Any]) -> None:
