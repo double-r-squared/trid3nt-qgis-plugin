@@ -26,6 +26,11 @@ params:
     type: str
     required: false
     schema_optional: true
+  search_radius_km:
+    type: float
+    default: 60.0
+    min: 0.0
+    max: 200.0
 hooks:
   resolve_build: asos_metar.resolve_build
   resolve_parse: asos_metar.resolve_parse
@@ -116,6 +121,11 @@ docstring: |-
           Defaults to 24 hours before ``end_time`` (or 24 hours before now
           when both are omitted). IEM archive extends back to the 1920s for
           many CONUS stations; typical recent data available with ~1-hour lag.
+      search_radius_km: how far OUTSIDE the bbox stations are looked for,
+          in kilometres (default 60). An airport stands where a runway fits
+          rather than on the water a question is about, so a box the size of
+          that water usually holds no station; the discovery box is the request
+          bbox grown by this radius.
       end_time: End of observation window as ISO-8601 date or datetime
           (e.g. ``"2024-09-28"``). Defaults to current UTC time when omitted.
           Wide windows (> 30 days x many stations) may produce large payloads

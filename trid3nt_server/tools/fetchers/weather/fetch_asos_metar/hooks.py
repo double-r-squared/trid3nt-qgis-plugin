@@ -120,6 +120,18 @@ def _overlaps(bbox: tuple[float, ...], sb: tuple[float, float, float, float]) ->
     return not (e1 < w2 or w1 > e2 or n1 < s2 or s1 > n2)
 
 
+def _discovery_bbox(params: dict[str, Any]) -> tuple[float, float, float, float]:
+    """The request bbox grown by search_radius_km, in degrees.
+
+    An airport stands where the runway would fit rather than on the water or in
+    the town a question is about, so a box the size of the area asked about
+    routinely holds no station at all."""
+    west, south, east, north = (float(v) for v in params["bbox"])
+    pad = float(params.get("search_radius_km") or 0.0) / 111.0
+    pad_lon = pad / max(0.2, math.cos(math.radians(0.5 * (south + north))))
+    return (west - pad_lon, south - pad, east + pad_lon, north + pad)
+
+
 
 
 @_hooks.register_hook("asos_metar.resolve_build")
@@ -128,7 +140,7 @@ def resolve_build(spec: SourceSpec, params: dict[str, Any]) -> list["_hooks.Requ
     state overlapping the bbox."""
     sc = spec.error_code_prefix
     _resolve_window(sc, params)  # validate window pre-network (future / inverted gates)
-    bbox = tuple(float(v) for v in params["bbox"])
+    bbox = _discovery_bbox(params)
     plans: list[_hooks.RequestPlan] = []
     for state in _IEM_ASOS_STATES:
         sb = _STATE_BBOX.get(state)
@@ -150,7 +162,7 @@ def resolve_parse(spec: SourceSpec, params: dict[str, Any], bodies: list[bytes])
     import json
 
     sc = spec.error_code_prefix
-    west, south, east, north = (float(v) for v in params["bbox"])
+    west, south, east, north = _discovery_bbox(params)
     station_ids: list[str] = []
     seen: set[str] = set()
     for raw in bodies:
