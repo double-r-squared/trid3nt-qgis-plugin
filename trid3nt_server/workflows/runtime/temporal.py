@@ -173,6 +173,15 @@ class Series:
     def __len__(self) -> int:
         return len(self.times_s)
 
+    def to_doc(self) -> dict[str, Any]:
+        """The series as plain data, which is what a run RECORD carries.
+
+        A record is read back off a JSON store, so what it holds is rows and not
+        this object; the points are written whole because a summary in their
+        place would be a measurement nobody could replay."""
+        return {"times_s": list(self.times_s), "values": list(self.values),
+                "units": self.units}
+
     def __str__(self) -> str:
         return f"series, {len(self.times_s)} points over the window"
 

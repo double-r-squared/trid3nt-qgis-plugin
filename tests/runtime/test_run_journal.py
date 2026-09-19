@@ -230,3 +230,22 @@ def test_a_step_result_holding_a_read_only_mapping_is_persisted_as_plain_data():
     doc = record.to_doc()
     assert doc["result"] == {"WIND": {"speed": [1.0, 2.0]}}
     assert type(doc["result"]["WIND"]) is dict
+
+
+def test_a_step_result_holding_a_measured_series_is_persisted_as_its_points():
+    # A Series refuses to be moved, so a record that carried one could not be
+    # copied into a document at all and the whole run snapshot failed.
+    import json
+
+    from trid3nt_server.workflows.runtime.ledger import LedgerRecord
+    from trid3nt_server.workflows.runtime.temporal import Series
+
+    record = LedgerRecord(
+        index=0, node="data:carrier", runner="fetch_usgs_nwis_gauges",
+        completed_at="t1", result_kind="value",
+        result={"discharge": Series([0.0, 900.0], [260.8, 261.4],
+                                    units="m3/s")})
+    doc = record.to_doc()
+    assert doc["result"]["discharge"] == {
+        "times_s": [0.0, 900.0], "values": [260.8, 261.4], "units": "m3/s"}
+    assert json.loads(json.dumps(doc))["result"]["discharge"]["units"] == "m3/s"

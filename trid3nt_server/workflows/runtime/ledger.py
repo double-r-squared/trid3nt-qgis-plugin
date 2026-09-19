@@ -107,12 +107,17 @@ class LedgerRecord:
 
 
 def _plain(value: Any) -> Any:
-    """``value`` with every mapping a dict and every tuple a list, recursively."""
+    """``value`` with every mapping a dict and every tuple a list, recursively.
+
+    A value that states its own document - a series of measured points - is
+    taken as that document, because the record is read back off a JSON store and
+    an object that refuses to be copied would fail the whole write."""
     if isinstance(value, Mapping):
         return {str(k): _plain(v) for k, v in value.items()}
     if isinstance(value, (list, tuple)):
         return [_plain(v) for v in value]
-    return value
+    doc = getattr(value, "to_doc", None)
+    return _plain(doc()) if callable(doc) else value
 
 
 @dataclass
