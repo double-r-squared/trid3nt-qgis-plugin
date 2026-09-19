@@ -79,6 +79,15 @@ RUN gate='      INTEGER, PARAMETER ::RAINDEF=1'; \
         /opt/trid3nt/user_fortran/raindef3/runoff_scs_cn.f; \
     echo "raindef3 user fortran baked from $src"
 
+# --- the launcher's dictionary gate, taught the engine's own wildcard --------
+# A variable table longer than the 72 columns DAMOCLES reads a line to has one
+# spelling left: the wildcard bief/sortie.f matches. The launcher's own gate
+# refuses a token that is not a literal choice, so it is taught the wildcard its
+# solver answers to. The patch states the text it replaces verbatim, and drives
+# the patched gate both ways before the build goes on.
+COPY --chown=root:root engine_patch.py /opt/trid3nt/engine_patch.py
+RUN python /opt/trid3nt/engine_patch.py
+
 # --- the worker package ------------------------------------------------------
 # The entrypoint imports its siblings off the script dir, so they all land in the
 # same directory.
