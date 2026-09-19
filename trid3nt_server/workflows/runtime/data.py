@@ -460,15 +460,18 @@ class DataDecl(Row):
 
     def observation(self, producer: Producer | None = None, *, near: Any = None,
                     units: Any = None, measures: str = "this value",
-                    opens: str = "", value_field: str = "value") -> "DataDecl":
+                    opens: str = "", value_field: str = "value",
+                    at: Any = None) -> "DataDecl":
         """ONE MEASURED VALUE this run opens on, in the unit the keyword reads.
 
         ``near`` is the point the nearest reporting site is chosen against,
-        ``value_field`` the property the source reports it under, ``measures``
-        what the row is looking for and ``opens`` what the run journal says it
-        opened on; a number supplied here stands over any record."""
+        ``at`` the moment the run asks at - the window a sample has to fall in
+        to be this run's water closes there - ``value_field`` the property the
+        source reports it under, ``measures`` what the row is looking for and
+        ``opens`` what the run journal says it opened on; a number supplied here
+        stands over any record."""
         return self._observed(OBSERVATION, producer, near, units, measures,
-                              opens, value_field)
+                              opens, value_field, at)
 
     def level(self, producer: Producer | None = None, *, near: Any = None,
               units: Any = "m", measures: str = "a water-surface elevation",
@@ -496,12 +499,12 @@ class DataDecl(Row):
 
     def _observed(self, role: str, producer: Producer | None, near: Any,
                   units: Any, measures: str, opens: str,
-                  value_field: str) -> "DataDecl":
+                  value_field: str, at: Any = None) -> "DataDecl":
         """One measured value, under the role its consumer reads it by."""
         row = self if producer is None else self(producer)
         return replace(row, role=role, coercion=MappingProxyType(
             {"near": near, "to_units": units, "measures": measures,
-             "opens": opens, "field": value_field}))
+             "opens": opens, "field": value_field, "at": at}))
 
     def extent(self, producer: Producer | None = None) -> "DataDecl":
         """THE EXTENT: one lon/lat rectangle, however the caller names it.

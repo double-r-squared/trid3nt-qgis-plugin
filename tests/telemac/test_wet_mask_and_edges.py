@@ -2,7 +2,8 @@
 
 Offline: the result a read opens is stated through the ``telemac_result``
 fixture. What is proved is that a film on a drying bar moves neither a number nor
-a legend, and that whether a variable is masked at an edge is its row's word.
+a legend, that a value the engine wrote as non-finite is neither painted nor
+summed, and that whether a variable is masked at an edge is its row's word.
 """
 
 from __future__ import annotations
@@ -146,6 +147,63 @@ def test_a_variable_the_run_never_wet_answers_with_why_rather_than_a_number(
                      "module_output": _table(), "name": "dry"}, T2D)
     with pytest.raises(OutputEmpty, match="never read on a node"):
         T2D.READS["series"](series("T1"), solved)
+
+
+@pytest.fixture()
+def infinite(monkeypatch, telemac_result):
+    """A reach a coupled module initialises at infinity: node 5 carries inf at
+    t0, where the module has computed nothing yet, and a value afterwards."""
+    x = [500000.0, 500120.0, 500000.0, 500120.0, 500060.0]
+    y = [4400000.0, 4400000.0, 4400110.0, 4400110.0, 4400055.0]
+    depth = [[2.0] * 5] * 2
+    temperature = [[10.0, 10.5, 11.0, 11.5, float("inf")],
+                   [10.0, 10.5, 11.0, 11.5, 12.0]]
+    telemac_result(varnames=["WATER DEPTH", "TEMPERATURE"], x=x, y=y,
+                   ikle=[[0, 1, 4], [1, 3, 4], [2, 3, 4], [0, 2, 4]],
+                   times=[0.0, 60.0],
+                   data={"WATER DEPTH": depth, "TEMPERATURE": temperature})
+    monkeypatch.setattr(
+        "trid3nt_server.workflows.solver.solver.download_result",
+        lambda run_id, basename, error_code=None: "/tmp/does-not-matter.slf")
+    return Solved({"run_id": "RID", "utm_epsg": 32610, "result_basename": "r2d.slf",
+                   "module": "telemac2d", "name": "reach", "mesh_size_m": 7.5,
+                   "tracer_names": ["TEMPERATURE     DEG"],
+                   "module_output": _table(),
+                   "started_at": "2026-01-01T00:00:00+00:00"}, T2D)
+
+
+def test_a_non_finite_value_is_neither_summed_nor_painted(infinite):
+    """The inf the module wrote at t0 is outside the mask, so the peak is the
+    water's own and the frames the picture carries read nothing there."""
+    read = T2D.READS["field"](field("T1", t="every"), infinite)
+    assert read.measures["max"] == 12.0
+    assert bool(np.isnan(np.asarray(read.values)[0][-1]))
+    assert np.asarray(read.values)[0][0] == 10.0
+
+
+def test_a_non_finite_value_is_not_written_onto_the_mesh(monkeypatch, infinite):
+    """The dataset the render seam writes beside the result carries nothing
+    where the engine wrote infinity."""
+    from trid3nt_server.workflows.telemac.modules import outputs
+
+    written: dict[str, Any] = {}
+
+    def _capture(values, *, name, nodes, cells, t):
+        written["values"] = np.asarray(values, dtype="float64")
+        return "dataset"
+
+    monkeypatch.setattr(outputs, "write_ascii_dataset", _capture, raising=False)
+    monkeypatch.setattr(
+        "trid3nt_server.render.mesh_display.write_ascii_dataset", _capture)
+    monkeypatch.setattr("trid3nt_server.storage.client",
+                        lambda: type("C", (), {"put_object": lambda *a, **k: None})())
+    monkeypatch.setattr("trid3nt_server.storage.runs_bucket", lambda: "runs")
+    primitive = field("T1", t=0)
+    read = T2D.READS["field"](primitive, infinite)
+    outputs.deliver(primitive, read, infinite, caption="water temperature",
+                    name="reach", where="the river")
+    assert bool(np.isnan(written["values"][-1]))
+    assert written["values"][0] == 10.0
 
 
 def test_the_domains_own_rows_are_not_masked_by_the_water(filmed):

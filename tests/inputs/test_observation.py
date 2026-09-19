@@ -4,7 +4,9 @@ Covered: one value read off a sample layer, the nearest of several when the
 source was not already narrowed, a row reporting nothing skipped, a Fahrenheit
 row converted by name, an unconvertible pair refusing, a station series read at
 its LAST sample, a distance the fetch already measured preferred over one
-re-derived here, nothing that reports refusing, and the note a run says."""
+re-derived here, nothing that reports refusing, the note a run says, and the
+WINDOW a run's own moment closes: a sample from another decade is not ranked,
+a sample inside the window is, and nothing inside it refuses."""
 
 from __future__ import annotations
 
@@ -88,6 +90,37 @@ def test_nothing_that_reports_refuses_typed() -> None:
                     code="TELEMAC_WATER_TEMPERATURE_UNMEASURED")
     assert caught.value.error_code == "TELEMAC_WATER_TEMPERATURE_UNMEASURED"
     assert "a water temperature" in str(caught.value)
+
+
+def test_a_sample_from_another_decade_is_not_this_runs_water() -> None:
+    """The nearest site is the one that stopped reporting in 1974: it is nearer
+    than the station that sampled this winter, and it is not the reading."""
+    layer = _fc(_site("retired", -122.6698, 45.5185, 13.5,
+                      result_date="1974-05-10"),
+                _site("gauge", -122.6692, 45.5175, 7.2,
+                      result_date="2023-12-18"))
+    found = observation(layer, near=[-122.6698, 45.5185],
+                        at="2024-01-14T12:00:00Z")
+    assert found.site_id == "gauge"
+    assert found.value == pytest.approx(7.2)
+    assert found.sampled == "2023-12-18"
+
+
+def test_nothing_sampled_in_the_window_refuses_rather_than_reaching_back() -> None:
+    layer = _fc(_site("retired", -122.6698, 45.5185, 13.5,
+                      result_date="1974-05-10"))
+    with pytest.raises(ObservationError) as caught:
+        observation(layer, near=[-122.6698, 45.5185], at="2024-01-14T12:00:00Z",
+                    measures="a water temperature", label="the sample layer",
+                    code="TELEMAC_WATER_TEMPERATURE_UNMEASURED")
+    assert caught.value.error_code == "TELEMAC_WATER_TEMPERATURE_UNMEASURED"
+    assert "within 30 days" in str(caught.value)
+
+
+def test_a_row_that_states_no_moment_ranks_every_sample_it_fetched() -> None:
+    layer = _fc(_site("retired", -122.6698, 45.5185, 13.5,
+                      result_date="1974-05-10"))
+    assert observation(layer, near=[-122.6698, 45.5185]).site_id == "retired"
 
 
 def test_the_note_names_the_site_the_distance_and_the_moment() -> None:

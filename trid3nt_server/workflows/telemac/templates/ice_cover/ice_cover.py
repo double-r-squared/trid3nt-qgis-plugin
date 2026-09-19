@@ -153,16 +153,20 @@ class DATA:
     # the point the series is read at, in the unit the keyword carries, with that
     # site, its distance and the sample date on the run journal. How much heat
     # the water has to lose before it makes any ice at all is this number, so it
-    # is load-bearing: nothing sampled near this domain REFUSES rather than
-    # opening at a guessed temperature, and a number supplied here stands over
-    # the record. The window closes at the run's own moment, so a run dated last
-    # winter opens at what the water carried then.
+    # is load-bearing, and it is the water THIS run is about: the row states the
+    # run's own moment, and a sample from outside the window that closes there
+    # is another river's reading rather than this one's. A number supplied here
+    # stands over the record, and where the portal sampled nothing in the window
+    # the sheet says so and the value is the caller's.
     water_temperature = Data.observation(
         tool("fetch_usgs_water_quality", bbox=Ref("domain.bbox"),
              characteristic="temperature",
              valid_time=ParamRef("event_time")),
         near=[Ref("station.lon"), Ref("station.lat")], units="degC",
-        measures="a water temperature", opens="the water opens at")
+        at=ParamRef("event_time"),
+        measures="a water temperature", opens="the water opens at"
+    ).context("no sample near this domain in this window; the stated value "
+              "stands")
 
 
 class STEERING(T2D):

@@ -11,6 +11,7 @@ said on the run journal rather than folded into the answer.
 
 from __future__ import annotations
 
+import datetime as dt
 import logging
 from dataclasses import dataclass
 from typing import Any, Mapping
@@ -38,6 +39,13 @@ _CELSIUS = ("degc", "c", "deg c", "celsius")
 #: the journal note needs to find the number again.
 _STAMP_FIELDS = ("result_date", "valid_time", "datetime", "date_time")
 _SITE_FIELDS = ("site_id", "station_id", "feature_id")
+
+#: How far back of the moment a run asks at a SAMPLE still speaks for the water
+#: it was taken from. A month: what a body carries drifts with the season, so a
+#: reading from the same month of the same winter is the water this run opens
+#: on and one from another decade is a different river. A row that states no
+#: moment is asking about none, and every sample it fetched is a candidate.
+_WINDOW_DAYS = 30.0
 
 #: What a ROW calls the zero its elevation is counted from. A portal that
 #: federates programs publishes readings on several, so the datum rides on the
@@ -133,23 +141,51 @@ def _reading(props: Mapping[str, Any], field: str,
     return None
 
 
+def _moment(value: Any) -> dt.datetime | None:
+    """One stamp as a UTC instant, or ``None`` where it is absent or unreadable."""
+    text = str(value or "").strip()
+    if not text:
+        return None
+    iso = text[:-1] + "+00:00" if text.endswith("Z") else text
+    try:
+        read = dt.datetime.fromisoformat(iso)
+    except ValueError:
+        return None
+    return read if read.tzinfo is not None else read.replace(tzinfo=dt.timezone.utc)
+
+
+def _in_window(sampled: Any, at: Any) -> bool:
+    """Whether a sample speaks for a run asking at ``at``: taken on or before
+    that moment and no older than the window.
+
+    An undated sample is never shown to be inside it, so it is outside."""
+    taken, asked = _moment(sampled), _moment(at)
+    if asked is None:
+        return True
+    if taken is None:
+        return False
+    return dt.timedelta(0) <= asked - taken <= dt.timedelta(days=_WINDOW_DAYS)
+
+
 def observation(source: Any, *, near: Any = None, field: str = "value",
                 units_field: str = "unit", to_units: Any = None,
                 series_field: str = "time_series_csv",
-                to_datum: Any = None, offset: Any = None,
+                at: Any = None, to_datum: Any = None, offset: Any = None,
                 measures: str = "this value", opens: str = "",
                 label: str = "observation",
                 code: str = _CODE) -> Observation | None:
     """THE ingestion: a fetched point layer, or a STATED value -> one reading.
 
     ``near`` ranks the candidates when the source carries several - a fetch that
-    already asked for the nearest station returns one and nothing is ranked;
-    ``to_units`` is the unit the slot reads and ``to_datum`` the zero it counts
-    from, which a reading on another zero reaches only through the ``offset``
-    row. A number is the value the caller stated, which stands over any record
-    and is already on the slot's own datum; ``opens`` says on the run journal
-    what this run opened on, because a sample is a moment and its age is the
-    reader's business. Nothing that reports refuses typed."""
+    already asked for the nearest station returns one and nothing is ranked; a
+    sample outside the window that closes at ``at`` is not a sample for this run
+    and is never ranked at all; ``to_units`` is the unit the slot reads and
+    ``to_datum`` the zero it counts from, which a reading on another zero
+    reaches only through the ``offset`` row. A number is the value the caller
+    stated, which stands over any record and is already on the slot's own datum;
+    ``opens`` says on the run journal what this run opened on, because a sample
+    is a moment and its age is the reader's business. Nothing that reports
+    refuses typed."""
     if source is None:
         return None
     stated = _stated(source)
@@ -166,6 +202,16 @@ def observation(source: Any, *, near: Any = None, field: str = "value",
         if reading is None:
             continue
         candidates.append((_distance_km(feature, near), feature, reading))
+    within = [row for row in candidates if _in_window(row[2][0], at)]
+    if candidates and not within:
+        raise ObservationError(
+            code,
+            f"{label} reports {measures} near this domain, but nothing sampled "
+            f"within {_WINDOW_DAYS:g} days of {at}: the nearest reading is from "
+            "another moment, and a sample outside the window this run is about "
+            "is not this run's water. State the value on the call, or ask about "
+            "a moment a sample was taken near.")
+    candidates = within
     if not candidates:
         raise ObservationError(
             code,

@@ -658,11 +658,21 @@ class Solved:
         return bool(row.get("varies", True)) if row else True
 
     def mask_for(self, token: str, values: Any) -> Any:
-        """The wet mask a token's measures and legend are read under, or ``None``.
+        """The mask a token's measures and legend are read under, or ``None``.
 
-        ``None`` where the run carries no depth to mask by, or where the row is
-        the domain's own rather than a quantity the water carries."""
-        return None if not self.varies(token) else self.wet_like(values)
+        The nodes the run held water on, less every node the engine wrote a
+        NON-FINITE value on: a module that initialises a row at infinity has not
+        measured anything there, and neither the number nor the picture is about
+        it. ``None`` where nothing is masked at all - the run carries no depth
+        to mask by, or the row is the domain's own rather than a quantity the
+        water carries, and every value is finite."""
+        import numpy as np
+
+        finite = np.isfinite(values)
+        wet = None if not self.varies(token) else self.wet_like(values)
+        if wet is None:
+            return None if bool(finite.all()) else finite
+        return wet & finite
 
     def wet_like(self, values: Any) -> Any:
         """The wet mask shaped to ``values`` - one flag per value - or ``None``.
@@ -990,15 +1000,17 @@ def read_series(primitive: Primitive, solved: Solved) -> Series:
     node = solved.node_at(point)
     lon, lat = solved.lonlat
     # The measures are the SERIES' own: a question asked at a point is answered
-    # at that point, and the domain's extremes answer a different question.
-    return Series(name=name, units=units, times=times, values=values[:, node],
+    # at that point, and the domain's extremes answer a different question. The
+    # line and the numbers are read under the same mask, so an instant the node
+    # carries no reading at is a gap in both.
+    column = values[:, node:node + 1]
+    held = None if wet is None else np.asarray(wet)[:, node:node + 1]
+    return Series(name=name, units=units, times=times,
+                  values=_drawn(column, held)[:, 0],
                   at=f"at {point.name or 'the point'}",
                   lon=float(lon[node]), lat=float(lat[node]),
-                  measures=_envelope(primitive.variable, times,
-                                     values[:, node:node + 1], row, edge,
-                                     None if wet is None
-                                     else np.asarray(wet)[:, node:node + 1],
-                                     primitive.above,
+                  measures=_envelope(primitive.variable, times, column, row,
+                                     edge, held, primitive.above,
                                      injected=solved.injected(primitive.variable)))
 
 
@@ -1459,6 +1471,10 @@ def _derived_group(read: Field, solved: Solved, *, caption: str, quantity: str,
     from trid3nt_server.render.mesh_display import write_ascii_dataset
 
     values = np.asarray(read.values, dtype="float64").copy()
+    # A node the engine wrote as non-finite is not a measurement: it is written
+    # as nothing so the basemap shows through rather than a node at infinity
+    # owning the ramp.
+    values[~np.isfinite(values)] = np.nan
     if read.floor is not None:
         values[values < float(read.floor)] = np.nan
     label = f"{caption[:1].upper()}{caption[1:]}"
