@@ -16,9 +16,10 @@ from typing import Any, Mapping, Sequence
 
 from ..errors import TelemacError
 
-__all__ = ["ATMOSPHERE_FILENAME", "COLUMNS", "TELEMAC2D_COLUMNS",
+__all__ = ["ATMOSPHERE_FILENAME", "COLUMNS", "DISPUTED", "TELEMAC2D_COLUMNS",
            "TELEMAC3D_COLUMNS", "Atmosphere", "atmospheric_data_file",
-           "expand_for_telemac2d", "expand_for_telemac3d"]
+           "expand_for_telemac2d", "expand_for_telemac3d",
+           "refuse_disputed_columns"]
 
 #: The file a host's ASCII ATMOSPHERIC DATA FILE statement names.
 ATMOSPHERE_FILENAME = "river_atmosphere.txt"
@@ -34,6 +35,11 @@ ATMOSPHERE_FILENAME = "river_atmosphere.txt"
 #: absent column; Pa leaves that keyword on its engine default.
 COLUMNS: Mapping[str, tuple[str, str]] = MappingProxyType({
     "air_temp_c": ("TAIR", "degC"),
+    # The DEW POINT itself, in the degrees Celsius KHIONE's own thermal budget
+    # adds its 273.16 to (``khione/thermal_khione.f`` TDK). Neither host's heat
+    # budget reads it - each takes the humidity in its own form - so it rides
+    # the file for the coupled module that does.
+    "dew_point_c": ("TDEW", "degC"),
     "vapour_pressure_pa": ("PVAP", "Pa"),
     "relative_humidity_pct": ("HREL", "%"),
     "wind_speed_mps": ("WINDS", "m/s"),
@@ -46,7 +52,8 @@ COLUMNS: Mapping[str, tuple[str, str]] = MappingProxyType({
 
 #: What each host's own heat budget reads. TELEMAC-2D's source term takes the
 #: VAPOUR PRESSURE and TELEMAC-3D's takes the RELATIVE HUMIDITY; neither reads
-#: the other's, so neither host writes a column it would only scan past.
+#: the other's, so neither host writes a column it would only scan past. The
+#: DEW POINT is in both because a coupled module reads it out of the same file.
 TELEMAC2D_COLUMNS = tuple(n for n in COLUMNS if n != "relative_humidity_pct")
 TELEMAC3D_COLUMNS = tuple(n for n in COLUMNS if n != "vapour_pressure_pa")
 
@@ -83,6 +90,7 @@ _REPORTED: Mapping[str, tuple[str, float]] = MappingProxyType({
 
 
 def Atmosphere(*, times_s: Any = None, air_temp_c: Any = None,  # noqa: N802
+               dew_point_c: Any = None,
                vapour_pressure_pa: Any = None, relative_humidity_pct: Any = None,
                wind_speed_mps: Any = None, wind_from_deg: Any = None,
                cloud_octas: Any = None, solar_radiation_wm2: Any = None,
@@ -100,12 +108,54 @@ def Atmosphere(*, times_s: Any = None, air_temp_c: Any = None,  # noqa: N802
     # interpolates every column between the same two rows.
     return MappingProxyType({
         "times_s": times_s, "air_temp_c": air_temp_c,
+        "dew_point_c": dew_point_c,
         "vapour_pressure_pa": vapour_pressure_pa,
         "relative_humidity_pct": relative_humidity_pct,
         "wind_speed_mps": wind_speed_mps, "wind_from_deg": wind_from_deg,
         "cloud_octas": cloud_octas, "solar_radiation_wm2": solar_radiation_wm2,
         "pressure_pa": pressure_pa, "rain_mm": rain_mm,
         "observed": observed, "at": at, "duration_s": duration_s})
+
+
+#: The columns whose UNIT two readers of this one file disagree on, by the
+#: mnemonic and the module that reads it in the unit written here. The reader
+#: skips the unit line, so a number is in whatever unit the writer meant, and a
+#: run that couples a module on the other side of one of these rows would feed
+#: it a value off by the conversion nobody applied: KHIONE reads the cloud cover
+#: in TENTHS (``khione/thermal_khione.f``) where WAQTEL's budget divides it by
+#: eight, and reads the rain as a RATE in mm/h where METEO_TELEMAC reads the
+#: metres accumulated over the step.
+DISPUTED: Mapping[str, tuple[str, ...]] = MappingProxyType({
+    "cloud_octas": ("khione",),
+    "rain_mm": ("khione",),
+})
+
+
+def refuse_disputed_columns(files: Mapping[str, Any]) -> None:
+    """A weather column no deck of this run can write, refused by name.
+
+    Read off the table as it stands rather than off the value, because the
+    atmosphere and the coupling reach a sheet in whatever order it was filled
+    in. Nothing converts: one file carries ONE number per instant, and the two
+    readers would each take it as their own unit."""
+    table = files.get(ATMOSPHERE_FILENAME)
+    coupled = {str(content.get("module")) for content in files.values()
+               if isinstance(content, Mapping) and "slots" in content}
+    if not isinstance(table, str) or not coupled:
+        return
+    header = table.splitlines()[1].split()
+    named = sorted(name for name, modules in DISPUTED.items()
+                   if COLUMNS[name][0] in header and set(modules) & coupled)
+    if not named:
+        return
+    reading = sorted({module for name in named for module in DISPUTED[name]}
+                     & coupled)
+    raise TelemacError(
+        f"{', '.join(COLUMNS[name][0] for name in named)} is read in one unit by "
+        f"this run's carrier and in another by {', '.join(reading)}, and one "
+        "atmospheric data file carries one number per instant; drop "
+        f"{', '.join(named)} from the atmosphere, or run the two apart.",
+        error_code="TELEMAC_WEATHER_DISPUTED")
 
 
 def atmospheric_data_file(value: Mapping[str, Any],
@@ -346,9 +396,19 @@ def _humidity(air_c: float, dew_f: Any, relative_pct: Any
     else:
         return None
     return {"vapour_pressure_pa": round(100.0 * vapour, 1),
-            "relative_humidity_pct": round(100.0 * vapour / saturation, 2)}
+            "relative_humidity_pct": round(100.0 * vapour / saturation, 2),
+            "dew_point_c": round(_dew_point_c(vapour), 3)}
 
 
 def _saturation_hpa(temp_c: float) -> float:
     """Magnus over water at ``temp_c``, in hectopascals."""
     return _MAGNUS_A * math.exp(_MAGNUS_B * temp_c / (_MAGNUS_C + temp_c))
+
+
+def _dew_point_c(vapour_hpa: float) -> float:
+    """The temperature this vapour pressure saturates at: Magnus, inverted.
+
+    Taken off the vapour pressure rather than off the reported dew point, so a
+    network that reported the relative humidity instead states this column too."""
+    ratio = math.log(max(vapour_hpa, 1.0e-6) / _MAGNUS_A)
+    return _MAGNUS_C * ratio / (_MAGNUS_B - ratio)

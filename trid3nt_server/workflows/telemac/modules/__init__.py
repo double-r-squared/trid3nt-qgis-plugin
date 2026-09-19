@@ -24,12 +24,13 @@ from .outputs import (
 from .sheet import Filled, Sheet, SheetIncomplete, draw, fill, run
 from .artemis import ART
 from .gaia import GAIA
+from .khione import KHIONE
 from .telemac2d import T2D
 from .telemac3d import T3D
 from .waqtel import WAQTEL
 
 __all__ = [
-    "ART", "Composite", "Filled", "GAIA", "Measure", "Module", "Output",
+    "ART", "Composite", "Filled", "GAIA", "KHIONE", "Measure", "Module", "Output",
     "Primitive", "Sheet", "SheetIncomplete", "Slot", "SlotRefused", "T2D", "T3D",
     "WAQTEL", "WRAPPERS", "column", "draw", "extent", "field", "fill",
     "load_module_input", "mass_balance", "max_over_time", "mesh", "run", "series",
@@ -42,7 +43,7 @@ __all__ = [
 #: against.
 WRAPPERS: Mapping[str, type] = MappingProxyType({
     "artemis": ART, "telemac2d": T2D, "telemac3d": T3D, "waqtel": WAQTEL,
-    "gaia": GAIA})
+    "gaia": GAIA, "khione": KHIONE})
 
 
 def wrapper_for(module: str) -> type:
