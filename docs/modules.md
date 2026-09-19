@@ -12,14 +12,14 @@ One wrapper per TELEMAC module. A wrapper is the module's own dictionary, read a
 | `gaia` | 148 | `bed`, `dredging`, `suspension` | `extent`, `field`, `mass_balance`, `max_over_time`, `mesh`, `profile`, `series` |
 | `khione` | 133 | - | `extent`, `field`, `mass_balance`, `max_over_time`, `mesh`, `profile`, `series` |
 | `telemac2d` | 376 | `atmosphere`, `boundaries`, `continue_from`, `coupling`, `friction`, `infiltration`, `oil`, `rain`, `rating`, `runoff`, `sources`, `storm`, `time_origin`, `tracer_names`, `wind` | `drogues`, `extent`, `field`, `mass_balance`, `max_over_time`, `mesh`, `profile`, `series` |
-| `telemac3d` | 355 | `atmosphere`, `column`, `vertical_grid`, `wind` | `column`, `extent`, `field`, `mass_balance`, `max_over_time`, `mesh`, `profile`, `series` |
+| `telemac3d` | 355 | `atmosphere`, `column`, `coupling`, `vertical_grid`, `wind` | `column`, `extent`, `field`, `mass_balance`, `max_over_time`, `mesh`, `profile`, `series` |
 | `waqtel` | 91 | `degradation` | - |
 
 A COMPOSITE is one value standing for a keyword group, so the group cannot half-arrive. A READ is a primitive over what the module wrote.
 
 ## What each module writes
 
-The module's own output table. Every row a run's result carries is published - the final frame as a layer on the mesh the run solved on, styled from the row, and an animation beside it where the row varies in time. The printouts keyword the engine reads is generated from this table; no template states one. A module that runs under a carrier writes no table of its own and APPENDS its rows to the carrier's result instead; those are listed under the module that states them.
+The module's own output table. Every row a run's result carries is published - the final frame as a layer on the mesh the run solved on, styled from the row, and an animation beside it where the row varies in time. The printouts keyword the engine reads is generated from this table; no template states one. A module that runs under a carrier writes no table of its own and APPENDS its rows to the carrier's result instead; those are listed under the module that states them. A row the engine NUMBERS - one per class a deck counts - is shown at the count a deck that states nothing carries, and a row under a keyword is shown whether or not that deck switches it on.
 
 ### `artemis`
 
@@ -69,6 +69,20 @@ appended by each suspended class: `NCOH SEDIMENT` (g/L, ramp `oranges`)
 | `CTOT` | TOTAL CONCENTRAT | - | `magma` | yes | only under HEAT BUDGET |
 | `NTOTS` | PARTICLES NUMBER | 1/m3 | `magma` | yes | only under HEAT BUDGET |
 | `CTOTS` | TOTAL CONCENTRAT | - | `magma` | yes | only under HEAT BUDGET |
+| `F1` | FRAZIL | - | `magma` | yes | only under HEAT BUDGET |
+| `N1` | NB PARTICLE | - | `magma` | yes | only under HEAT BUDGET |
+| `SF1` | FRAZIL S | - | `magma` | yes | only under HEAT BUDGET |
+| `SN1` | NB PARTICLE S | - | `magma` | yes | only under HEAT BUDGET |
+| `TEMP` | TEMPERATURE | - | `rdylbu_r` | yes | only under HEAT BUDGET |
+| `TEMPS` | TEMPERATURE S | - | `rdylbu_r` | yes | only under HEAT BUDGET |
+
+appended by every coupled run: `TEMPERATURE` (oC, ramp `rdylbu_r`)
+
+appended by SALINITY: `SALINITY` (ppt, ramp `ylgnbu`)
+
+appended by HEAT_BUDGET or CLOGGING_ON_BARS, one per frazil class: `FRAZIL` (VOLUME FRACTION, ramp `magma`)
+
+appended by DYNAMIC_ICE_COVER: `ICE COVER FRAC.` (SURFAC FRACTION, ramp `blues`), `ICE COVER THICK.` (M, ramp `blues`)
 
 ### `telemac2d`
 

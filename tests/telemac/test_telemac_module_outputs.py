@@ -345,7 +345,7 @@ def test_every_module_that_appends_rows_is_on_the_modules_page():
             / "docs" / "modules.md").read_text(encoding="utf-8")
     appending = {module: wrapper for module, wrapper in WRAPPERS.items()
                  if wrapper.APPENDABLE}
-    assert set(appending) == {"gaia", "waqtel"}
+    assert set(appending) == {"gaia", "khione", "waqtel"}
     for module, wrapper in sorted(appending.items()):
         assert f"### `{module}`" in page
         for condition, rows in wrapper.APPENDABLE:

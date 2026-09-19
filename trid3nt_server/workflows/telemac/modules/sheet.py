@@ -161,9 +161,8 @@ class Sheet:
         body = self.body
         stated = self.stated()
         rows = [(token, self.module, row)
-                for token, row in body.MODULE_OUTPUT.items()
-                if token not in body.LISTING and token != body.TRACER
-                and row.carried(stated)]
+                for token, row in body.table(stated).items()
+                if token not in body.LISTING and token != body.TRACER]
         # A tracer is read by its POSITION among the carrier's own, which is the
         # token the primitives spell whatever the keyword calls it.
         rows += [(f"T{n}", self.module, row)
@@ -172,9 +171,8 @@ class Sheet:
             wrapper = wrapper_for(coupled["module"])
             under = dict(coupled.get("slots") or {})
             rows += [(token, coupled["module"], row)
-                     for token, row in wrapper.MODULE_OUTPUT.items()
-                     if token not in wrapper.LISTING and token != wrapper.TRACER
-                     and row.carried(under)]
+                     for token, row in wrapper.table(under).items()
+                     if token not in wrapper.LISTING and token != wrapper.TRACER]
         return tuple(rows)
 
     def stated(self) -> Mapping[str, Any]:

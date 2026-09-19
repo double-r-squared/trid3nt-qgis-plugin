@@ -53,8 +53,12 @@ engine variable, keyed by the mnemonic the module's own printouts keyword
 spells (ARTEMIS `ZS`, not `S`), carrying the name the result file gives it, its
 unit, the style row it draws under and whether it varies in time. The table is
 the whole statement - a variable the dictionary offers and the table does not
-row is not written - and the printouts keyword is GENERATED from it as the deck
-is serialized, for the host and for every coupled module, with every token
+row is not written - and `table(stated)` is that statement AS ONE DECK CARRIES
+IT: the rows whose switch the deck leaves on, and, where the engine numbers a
+row per class (KHIONE's frazil), one row per class the deck itself counts. A
+switch the deck does not state is read at the dictionary's own default, because
+that is the value the engine then reads. The printouts keyword is GENERATED
+from that table as the deck is serialized, for the host and for every coupled module, with every token
 checked against the keyword's own choices. A run publishes every row its result
 carries as ONE layer, styled from the row: the temporal layer where the row
 varies in time - ranged over every frame of the record - and the final frame
@@ -63,7 +67,8 @@ DERIVES over the variables its result carries (ARTEMIS's `KD`) is published or
 read but never asked of the engine. The `TRACER` row is the run's tracers - one
 per NAMES OF TRACERS entry, read by position as `T<n>` - and a module that
 appends tracers to its carrier states those rows and their styles itself
-through one hook (WAQTEL by process, GAIA per suspended class), over rows it
+through one hook (WAQTEL by process, GAIA per suspended class, KHIONE by the
+branch its own Fortran adds each tracer in), over rows it
 declares in APPENDABLE so what it may append is readable without a body to run
 the hook against; the carrier never counts them. A row whose name a carrier
 tracer already carries is ADOPTED rather than appended, which is the match the
@@ -108,6 +113,7 @@ reader that knows a question.
 | `sheet.py` | The sheet - filled slots with their provenance, the files a composite named, the slots still open, the coupled bodies it couples, the tracers its result carries and every variable it publishes - and `fill` / `run`. |
 | `outputs.py` | The primitive set - `field`, `series`, `max_over_time`, `profile`, `extent`, `mesh`, `mass_balance` - and `drogues` and `column`, with the read of each off a solved run through `read_selafin`, the engine's own reader inside the image, and the `Measure` a template names an answer by, with the two sentences a measure answers with when it cannot be read or was never asked. |
 | `listing.py` | What a solved run's own listing says, read on the server: the engine's demand, GAIA's closure, the water-volume closure per period and whole, and the flux across a liquid boundary. |
+| `coupling.py` | The `coupling` composite both hydrodynamic carriers register: the three keywords a carrier states about a coupled body, that body's own slots handed to its steering file, and the refusal a carrier that solves no water column gives the keywords a module has only under a three-dimensional host. |
 | `describe.py` | `describe_keywords` - the read over a module's dictionary, which is how the whole keyword surface is reached rather than carried in a docstring. |
 | `corpus.yaml` | The routing phrasings that reach `describe_keywords`. |
 | `telemac2d.py` | The TELEMAC-2D wrapper: the releases, wind, rain, atmosphere, oil, friction, runoff, infiltration (the curve-number and roughness surface read off the land cover at the fill), rating, hyetograph, time-origin and coupling groups, the module's output table with the tracer row and the flux it prints rather than writes, and the drogues track it writes. |
@@ -115,7 +121,7 @@ reader that knows a question.
 | `artemis.py` | The ARTEMIS wrapper: the incident wave, which the module reads out of the boundary file rather than the deck, so the composite restamps the pair the mesh recipe wrote; the wave output table; and the KD coefficient it derives over that table. |
 | `waqtel.py` | The WAQTEL wrapper: the thermal, O2, micropollutant, eutrophication and degradation processes a carrier names as coupled bodies, each carrying its process number and the keywords stated under their own names, whose slots serialize into WAQTEL's own steering file while the coupling keywords land on the carrier's sheet; a degradation given nothing couples nothing; and the tracers each process appends to its carrier's result. |
 | `gaia.py` | The GAIA wrapper: the bed and the suspension a carrier names as coupled bodies, expanded from a gradation or a class and its concentration, the DREDGE the engine offers as keywords on this deck rather than as a module of its own - its action values, and the three files it names - its output table and the class a suspension appends to its carrier's tracers, and its primitives over the module's own result file. |
-| `khione.py` | The KHIONE wrapper: the ice a host couples - the body carrying the host's own mesh and boundary file and a result file of its own, the twenty-four variables the engine indexes with the four the thermal budget allocates marked by the keyword they exist under, the keywords only a three-dimensional carrier states, and the variables keyword written in the engine's own wildcard where the literal table would run past the line DAMOCLES reads. |
+| `khione.py` | The KHIONE wrapper: the ice a host couples - the body carrying the host's own mesh and boundary file and a result file of its own, the twenty-four variables the engine indexes plus everything the thermal budget allocates past them (four rows per frazil class the deck counts, the temperature, the salinity and the dynamic cover), the tracers it appends to its host under the branch its own Fortran adds each in, the keywords only a three-dimensional carrier states, and the variables keyword written in the engine's own wildcard where the literal table would run past the line DAMOCLES reads. |
 
 ## Subfolders
 

@@ -775,10 +775,10 @@ def _written_rows(sheet: Sheet) -> list[ParamSheetRow]:
         if not body.PRINTOUTS:
             continue
         slot = body.slot(body.PRINTOUTS)
+        table = body.table(stated)
         rows.append(ParamSheetRow(
             name=f"{body.MODULE}.{slot.identifier}",
-            value=[body.MODULE_OUTPUT[token].name
-                   for token in body.written(stated)] + tracers,
+            value=[table[token].name for token in body.written(stated)] + tracers,
             desc=slot.desc[:512], door="scenario", basis="derived",
             editable=False, group=_group(slot),
             source_badge=f"the {body.MODULE} module's own variable table"))

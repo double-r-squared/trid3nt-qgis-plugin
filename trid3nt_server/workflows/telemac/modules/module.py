@@ -236,13 +236,10 @@ class Output:
     #: The keyword this row EXISTS UNDER, by identifier: the engine allocates
     #: the variable only with it true, and asking for a variable it did not
     #: allocate stops the solve rather than dropping the row. Empty on a row
-    #: the module always carries. Nothing arms it - a deck that does not state
-    #: the keyword is a deck this row is not written for.
+    #: the module always carries. The DECK decides it, and a deck that leaves it
+    #: unstated decides it at the dictionary's own default, because that is the
+    #: value the engine then reads.
     under: str = ""
-
-    def carried(self, stated: Mapping[str, Any]) -> bool:
-        """Does the deck as it stands - ``stated``, by identifier - carry this row?"""
-        return not self.under or stated.get(self.under) is True
 
 
 @lru_cache(maxsize=None)
@@ -420,17 +417,34 @@ class Module(metaclass=_Body):
         cls.APPENDS = staticmethod(expand)
 
     @classmethod
+    def switched(cls, identifier: str, stated: Mapping[str, Any]) -> bool:
+        """Is this keyword TRUE on the deck as it stands?
+
+        A deck that states nothing is a deck the engine reads the dictionary's
+        own default for, so an unstated switch is that default and not a no."""
+        return stated.get(identifier, cls.slot(identifier).engine_default) is True
+
+    @classmethod
+    def table(cls, stated: Mapping[str, Any] = MappingProxyType({}),
+              ) -> Mapping[str, Output]:
+        """The module's output table as THIS deck carries it, by token.
+
+        A row that exists only UNDER a keyword is here where the deck switches
+        that keyword on; a wrapper whose engine numbers rows per class writes
+        those numbered rows here, off the count the deck itself states."""
+        return MappingProxyType({
+            token: row for token, row in cls.MODULE_OUTPUT.items()
+            if not row.under or cls.switched(row.under, stated)})
+
+    @classmethod
     def written(cls, stated: Mapping[str, Any] = MappingProxyType({}),
                 ) -> tuple[str, ...]:
         """The tokens the printouts keyword carries, past the run's tracers.
 
-        A row the module prints or derives is published or read, never asked for.
-        A row that exists only UNDER a keyword is carried where ``stated`` - the
-        deck as it stands - states that keyword true, and is otherwise absent."""
-        return tuple(token for token, row in cls.MODULE_OUTPUT.items()
+        A row the module prints or derives is published or read, never asked for."""
+        return tuple(token for token in cls.table(stated)
                      if token not in cls.LISTING and token not in cls.DERIVED
-                     and token != cls.TRACER
-                     and row.carried(stated))
+                     and token != cls.TRACER)
 
     @classmethod
     def printouts(cls, *, tracers: int = 0,

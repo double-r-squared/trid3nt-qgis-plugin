@@ -1175,7 +1175,13 @@ package SteeringSurface {
     verify requirement OutputsAreTheModules by
         "tests/telemac/test_telemac_khione.py::test_the_table_is_written_in_the_engine_s_own_wildcard_and_fits_its_line";
     verify requirement OutputsAreTheModules by
-        "tests/telemac/test_telemac_khione.py::test_a_row_under_a_keyword_is_written_only_where_the_deck_states_it";
+        "tests/telemac/test_telemac_khione.py::test_a_row_under_a_keyword_is_written_unless_the_deck_switches_it_off";
+    verify requirement OutputsAreTheModules by
+        "tests/telemac/test_telemac_khione.py::test_one_frazil_row_per_class_the_deck_counts_on_the_host_and_the_ice_file";
+    verify requirement OutputsAreTheModules by
+        "tests/telemac/test_telemac_khione.py::test_the_ice_file_rows_nothing_the_budget_did_not_allocate";
+    verify requirement OutputsAreTheModules by
+        "tests/telemac/test_telemac_khione.py::test_the_temperature_is_appended_to_every_host_and_the_rest_ride_a_switch";
     verify requirement OutputsAreTheModules by
         "tests/telemac/test_telemac_khione.py::test_every_row_the_table_carries_is_a_mnemonic_the_dictionary_spells";
     verify requirement OutputsAreTheModules by
