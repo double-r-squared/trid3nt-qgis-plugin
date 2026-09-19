@@ -18,7 +18,7 @@ from .outputs import PRIMITIVES, read_drogues
 
 __all__ = ["T2D", "Atmosphere", "Boundaries", "Continuation", "Friction",
            "Infiltration", "MODULE_OUTPUT", "Oil", "Rain", "Storm",
-           "Rating", "Release", "Runoff", "Sources", "TimeOrigin",
+           "Rating", "Runoff", "Sources", "TimeOrigin",
            "TracerNames", "Wind", "SOURCES_FILENAME"]
 
 #: A signed component reads about zero, so its ramp diverges there and the
@@ -85,21 +85,6 @@ _SERIES_TAIL_S = 100.0
 _STEP_GAP_S = 0.1
 
 
-def Release(*, at: Any, q: Any, tracers: Any,  # noqa: N802 - a value constructor
-            until_s: Any, window_s: Any = None) -> Mapping[str, Any]:
-    """ONE point source: where it discharges, how much, of what, and for how long.
-
-    A MAPPING, not an object: the sheet's one ref walk descends mappings."""
-    # ``at`` is the settled release point in the mesh's own metres. ``tracers`` is
-    # the value this source carries for EVERY tracer the run declares, in the
-    # order the names are declared, because the engine reads the array by
-    # position. ``window_s`` is a finite release - held, then stepped to nothing,
-    # so the slug advects and passes - while ``None`` is a permitted discharge
-    # held flat for the whole run; ``until_s`` is the horizon it is written over.
-    return MappingProxyType({"at": at, "q": q, "tracers": tracers,
-                             "window_s": window_s, "until_s": until_s})
-
-
 def Sources(*, until_s: Any, window_s: Any = None  # noqa: N802
             ) -> Mapping[str, Any]:
     """The SOURCES FILE for the point sources the deck states BY NAME: how long
@@ -130,12 +115,9 @@ def _sources(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
             f"{len(tracers)} tracer values do not divide across "
             f"{len(discharges)} sources; VALUES OF THE TRACERS AT THE SOURCES "
             "carries every tracer of the first source, then of the second.")
-    per_source = len(tracers) // len(discharges)
-    releases = [{"q": q, "tracers": tracers[n * per_source:(n + 1) * per_source],
-                 "window_s": value["window_s"], "until_s": value["until_s"]}
-                for n, q in enumerate(discharges)]
     return ({"SOURCES_FILE": SOURCES_FILENAME},
-            {SOURCES_FILENAME: _series(releases)})
+            {SOURCES_FILENAME: _series(discharges, tracers, value["window_s"],
+                                       value["until_s"])})
 
 
 def TracerNames(*, names: Any, named_by: Any = None  # noqa: N802
@@ -188,62 +170,29 @@ def Oil(*, presets: Any, named: Any, at: Any,  # noqa: N802
                              "release_step": release_step})
 
 
-def _releases(value: Any) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
-    """N releases -> the source keywords they mean, and the series they name.
-
-    Every array is written in the declared order and flattened by position."""
-    releases = list(value)
-    if not releases:
-        raise ValueError("a releases composite with no release in it states "
-                         "nothing; omit it instead.")
-    tracers: list[Any] = []
-    for release in releases:
-        tracers += list(release["tracers"])
-    # The allocation bound is stated only when the run needs MORE sources than
-    # the dictionary already allows for. Restating a number the engine already
-    # holds would put an opinion in the deck; exceeding it silently would drop
-    # every source past the bound.
-    allowed = int(T2D.slot("MAXIMUM_NUMBER_OF_SOURCES").engine_default)
-    return ({**({} if len(releases) <= allowed
-                else {"MAXIMUM_NUMBER_OF_SOURCES": len(releases)}),
-             "ABSCISSAE_OF_SOURCES": [float(r["at"][0]) for r in releases],
-             "ORDINATES_OF_SOURCES": [float(r["at"][1]) for r in releases],
-             "WATER_DISCHARGE_OF_SOURCES": [float(r["q"]) for r in releases],
-             "VALUES_OF_THE_TRACERS_AT_THE_SOURCES": tracers,
-             "SOURCES_FILE": SOURCES_FILENAME},
-            {SOURCES_FILENAME: _series(releases)})
-
-
-def _series(releases: Sequence[Mapping[str, Any]]) -> str:
+def _series(discharges: Sequence[float], tracers: Sequence[float],
+            window_s: Any, until_s: Any) -> str:
     """The sources time series, on the scenario's own absolute clock.
 
     A continued run carries the SAME scenario forward, never a re-release."""
-    horizon = max(float(r["until_s"]) for r in releases) + _SERIES_TAIL_S
+    per_source = len(tracers) // len(discharges)
+    horizon = float(until_s) + _SERIES_TAIL_S
     breaks = {0.0, horizon}
-    for release in releases:
-        window = release["window_s"]
-        if window is not None:
-            breaks |= {float(window), float(window) + _STEP_GAP_S}
+    if window_s is not None:
+        breaks |= {float(window_s), float(window_s) + _STEP_GAP_S}
     times = sorted(t for t in breaks if t <= horizon)
-    columns = ["T"] + [f"Q({i})" for i in range(1, len(releases) + 1)] + [
-        f"TR({i},{j})" for i, release in enumerate(releases, start=1)
-        for j in range(1, len(release["tracers"]) + 1)]
-    units = ["s"] + ["m3/s"] * len(releases) + [
-        "mg/l" for release in releases for _ in release["tracers"]]
+    columns = ["T"] + [f"Q({i})" for i in range(1, len(discharges) + 1)] + [
+        f"TR({i},{j})" for i in range(1, len(discharges) + 1)
+        for j in range(1, per_source + 1)]
+    units = ["s"] + ["m3/s"] * len(discharges) + ["mg/l"] * len(tracers)
     rows = ["#", " ".join(columns), " ".join(units)]
     for t in times:
-        discharges = [_on(r, t) * float(r["q"]) for r in releases]
-        concentrations = [_on(r, t) * float(v)
-                          for r in releases for v in r["tracers"]]
-        rows.append(" ".join([f"{t:.3f}"]
-                             + [f"{v:.6g}" for v in discharges + concentrations]))
+        # A finite release is held, then stepped to nothing so the slug advects
+        # and passes; no window at all is a permitted discharge held flat.
+        on = 1.0 if window_s is None or t <= float(window_s) else 0.0
+        values = [on * v for v in list(discharges) + list(tracers)]
+        rows.append(" ".join([f"{t:.3f}"] + [f"{v:.6g}" for v in values]))
     return "\n".join(rows) + "\n"
-
-
-def _on(release: Mapping[str, Any], t: float) -> float:
-    """Is this release discharging at ``t``? 1 while its window is open, else 0."""
-    window = release["window_s"]
-    return 1.0 if window is None or t <= float(window) else 0.0
 
 
 def _wind(value: Mapping[str, Any]) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
@@ -700,7 +649,7 @@ T2D.LISTING = LISTING
 T2D.PRINTOUTS = "VARIABLES_FOR_GRAPHIC_PRINTOUTS"
 T2D.CADENCE = "GRAPHIC_PRINTOUT_PERIOD"
 T2D.TRACER = "T"
-T2D.composites(releases=_releases, sources=_sources, wind=_wind,
+T2D.composites(sources=_sources, wind=_wind,
                continue_from=_continue_from,
                atmosphere=expand_for_telemac2d,
                oil=_oil, rain=_rain, coupling=_coupling,

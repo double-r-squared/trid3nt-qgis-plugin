@@ -326,15 +326,15 @@ def _sources(value):
 
 def test_a_composite_becomes_several_slots_and_the_file_they_name():
     module = Module("telemac2d")
-    module.composites(releases=_sources)
+    module.composites(sources=_sources)
 
     class DYE(module):
-        releases = [{"x": 1.0, "y": 2.0}, {"x": 3.0, "y": 4.0}]
+        sources = [{"x": 1.0, "y": 2.0}, {"x": 3.0, "y": 4.0}]
 
     state = fill(DYE).state()
     assert state["filled"]["ABSCISSAE_OF_SOURCES"] == {
         "keyword": "ABSCISSAE OF SOURCES", "value": [1.0, 3.0],
-        "provenance": "producer: releases"}
+        "provenance": "producer: sources"}
     assert state["files"] == ["river_sources.txt"]
 
 
@@ -506,57 +506,12 @@ def test_run_serializes_then_stages_then_dispatches(monkeypatch, tmp_path):
 
 # -- the wrappers' own composites --------------------------------------------- #
 
-def _one_release(**over):
-    from trid3nt_server.workflows.telemac.modules.telemac2d import Release
-
-    return Release(**{"at": (407561.831, 4483518.635), "q": 8.0,
-                      "tracers": [100.0], "window_s": 120.0,
-                      "until_s": 600.0, **over})
-
-
-def test_a_release_becomes_the_source_keywords_and_the_series_they_name():
-    slots, files = T2D.COMPOSITES["releases"].expand([_one_release()])
-    assert dict(slots) == {
-        "ABSCISSAE_OF_SOURCES": [407561.831],
-        "ORDINATES_OF_SOURCES": [4483518.635],
-        "WATER_DISCHARGE_OF_SOURCES": [8.0],
-        "VALUES_OF_THE_TRACERS_AT_THE_SOURCES": [100.0],
-        "SOURCES_FILE": "river_sources.txt"}
-    assert files["river_sources.txt"].splitlines() == [
-        "#", "T Q(1) TR(1,1)", "s m3/s mg/l",
-        "0.000 8 100", "120.000 8 100", "120.100 0 0", "700.000 0 0"]
-
-
-def test_the_source_allocation_is_the_engine_s_until_a_run_needs_more():
-    """The dictionary already allows for twenty sources. Restating that number
-    would put an opinion in the deck; exceeding it in silence would drop every
-    source past it."""
-    allowed = int(T2D.slot("MAXIMUM_NUMBER_OF_SOURCES").engine_default)
-    few, _ = T2D.COMPOSITES["releases"].expand([_one_release()] * allowed)
-    many, _ = T2D.COMPOSITES["releases"].expand([_one_release()] * (allowed + 1))
-    assert "MAXIMUM_NUMBER_OF_SOURCES" not in few
-    assert many["MAXIMUM_NUMBER_OF_SOURCES"] == allowed + 1
-
-
-def test_two_releases_are_one_longer_list_in_one_order():
-    slots, files = T2D.COMPOSITES["releases"].expand([
-        _one_release(at=(1.0, 2.0), q=3.0, tracers=[10.0]),
-        _one_release(at=(4.0, 5.0), q=6.0, tracers=[20.0], window_s=None)])
-    assert slots["ABSCISSAE_OF_SOURCES"] == [1.0, 4.0]
-    assert slots["ORDINATES_OF_SOURCES"] == [2.0, 5.0]
-    assert slots["WATER_DISCHARGE_OF_SOURCES"] == [3.0, 6.0]
-    assert slots["VALUES_OF_THE_TRACERS_AT_THE_SOURCES"] == [10.0, 20.0]
-    rows = files["river_sources.txt"].splitlines()
-    assert rows[1] == "T Q(1) Q(2) TR(1,1) TR(2,1)"
-    # The second release never closes, so its columns hold past the first's step.
-    assert rows[-1].split()[1:] == ["0", "6", "0", "20"]
-
-
 def test_a_permitted_discharge_holds_flat_for_the_whole_run():
     """A permitted discharge does not pulse: two rows, the second past the last
     simulated instant, so the time interpolation never reads off the end."""
-    _, files = T2D.COMPOSITES["releases"].expand(
-        [_one_release(window_s=None, tracers=[0.0, 2.0, 250.0, 0.0])])
+    _, files = T2D.COMPOSITES["sources"].expand(
+        {"q": [8.0], "tracers": [0.0, 2.0, 250.0, 0.0],
+         "window_s": None, "until_s": 600.0})
     rows = files["river_sources.txt"].splitlines()
     assert rows[1] == "T Q(1) TR(1,1) TR(1,2) TR(1,3) TR(1,4)"
     assert rows[3:] == ["0.000 8 0 2 250 0", "700.000 8 0 2 250 0"]
@@ -1176,15 +1131,19 @@ def test_the_identifier_and_the_composite_name_reach_the_same_floor():
     image spells it by, and a composite the wrapper registers."""
     assert T2D.identify("LAW OF BOTTOM FRICTION") == "LAW_OF_BOTTOM_FRICTION"
     assert T2D.identify("LAW_OF_BOTTOM_FRICTION") == "LAW_OF_BOTTOM_FRICTION"
-    assert T2D.identify("releases") == "releases"
+    assert T2D.identify("sources") == "sources"
 
 
-def test_two_releases_on_the_floor_are_two_sources_in_the_deck():
-    """A longer list IS the second release: one order, four arrays, two columns
+def test_two_sources_on_the_floor_are_two_sources_in_the_deck():
+    """A longer array IS the second source: one order, four arrays, two columns
     of series - and nothing in the body changed to allow it."""
-    release = {"q": 8.0, "tracers": [100.0], "window_s": 120.0, "until_s": 600.0}
-    sheet = _filled(releases=[{**release, "at": [500.0, 1000.0]},
-                              {**release, "at": [900.0, 1100.0]}])
+    from trid3nt_server.workflows.telemac.modules.telemac2d import Sources
+
+    sheet = _filled(**{"ABSCISSAE OF SOURCES": [500.0, 900.0],
+                       "ORDINATES OF SOURCES": [1000.0, 1100.0],
+                       "WATER DISCHARGE OF SOURCES": [8.0, 8.0],
+                       "VALUES OF THE TRACERS AT THE SOURCES": [100.0, 100.0],
+                       "sources": Sources(window_s=120.0, until_s=600.0)})
     deck = dict(sheet.resolved())
     assert deck["ABSCISSAE OF SOURCES"] == [500.0, 900.0]
     assert deck["ORDINATES OF SOURCES"] == [1000.0, 1100.0]
@@ -1198,22 +1157,23 @@ def test_a_fill_with_two_tracers_is_a_two_tracer_deck():
     """Nothing is frozen: a body that states one tracer is overridden to two on
     the fill, and every tracer-arity keyword and the sources series follow the
     fill rather than the body."""
-    from trid3nt_server.workflows.telemac.modules.telemac2d import Release, TracerNames
+    from trid3nt_server.workflows.telemac.modules.telemac2d import Sources, TracerNames
 
     class ONE(T2D):
         NUMBER_OF_TRACERS = 1
         tracer_names = TracerNames(names=["DYE             MG/L"])
         INITIAL_VALUES_OF_TRACERS = [0.0]
-        releases = [Release(at=[500.0, 1000.0], q=8.0, tracers=[100.0],
-                            window_s=120.0, until_s=600.0)]
+        ABSCISSAE_OF_SOURCES = [500.0]
+        ORDINATES_OF_SOURCES = [1000.0]
+        WATER_DISCHARGE_OF_SOURCES = [8.0]
+        VALUES_OF_THE_TRACERS_AT_THE_SOURCES = [100.0]
+        sources = Sources(window_s=120.0, until_s=600.0)
 
     sheet = fill(ONE, NUMBER_OF_TRACERS=2,
                  tracer_names={"names": ["DYE             MG/L",
                                          "SALT            MG/L"]},
                  INITIAL_VALUES_OF_TRACERS=[0.0, 0.0],
-                 releases=[{"at": [500.0, 1000.0], "q": 8.0,
-                            "tracers": [100.0, 50.0],
-                            "window_s": 120.0, "until_s": 600.0}])
+                 VALUES_OF_THE_TRACERS_AT_THE_SOURCES=[100.0, 50.0])
     deck = dict(sheet.resolved())
     assert deck["NUMBER OF TRACERS"] == 2
     assert len(deck["NAMES OF TRACERS"]) == 2

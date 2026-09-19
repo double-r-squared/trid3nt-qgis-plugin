@@ -935,7 +935,7 @@ package SteeringSurface {
     verify requirement EverythingOverridable by
         "tests/telemac/test_telemac_module_surface.py::test_a_raw_keyword_value_outside_the_choices_refuses_naming_the_choices";
     verify requirement EverythingOverridable by
-        "tests/telemac/test_telemac_module_surface.py::test_two_releases_on_the_floor_are_two_sources_in_the_deck";
+        "tests/telemac/test_telemac_module_surface.py::test_two_sources_on_the_floor_are_two_sources_in_the_deck";
     verify requirement EverythingOverridable by
         "tests/telemac/test_telemac_module_surface.py::test_every_template_wire_carries_the_raw_keyword_floor";
     verify requirement EverythingOverridable by
@@ -968,7 +968,7 @@ package SteeringSurface {
     verify requirement CompositesLiveInWrappers by
         "tests/telemac/test_telemac_module_surface.py::test_a_composite_the_wrapper_never_registered_refuses_by_name";
     verify requirement CompositesLiveInWrappers by
-        "tests/telemac/test_telemac_module_surface.py::test_a_release_becomes_the_source_keywords_and_the_series_they_name";
+        "tests/telemac/test_telemac_module_surface.py::test_the_sources_file_is_written_from_the_keywords_the_deck_states_by_name";
     verify requirement CompositesLiveInWrappers by
         "tests/telemac/test_telemac_module_surface.py::test_a_coupling_states_only_what_the_carrier_names_it_by";
     verify requirement CompositesLiveInWrappers by
