@@ -5,7 +5,9 @@ and answers a mismatched pairing with a plausible wrong number, so the pairing i
 pinned rather than searched. Covered with that: the offset read off a real answer,
 the declared frame set matching the pinned table, the sentinel an uncovered point
 comes back as, VDatum's own error envelope arriving under HTTP 200, an
-unreportable uncertainty, and a frame the table does not serve."""
+unreportable uncertainty, a frame the table does not serve, and the region the
+point itself chooses - which the service will not look up and answers wrongly
+under the wrong grid."""
 
 from __future__ import annotations
 
@@ -33,8 +35,7 @@ def _answered(**fields) -> list[bytes]:
 
 
 def _params(**over) -> dict:
-    asked = {"point": _GAUGE, "from_frame": "ngvd29", "to_frame": "navd88",
-             "region": "westcoast"}
+    asked = {"point": _GAUGE, "from_frame": "ngvd29", "to_frame": "navd88"}
     asked.update(over)
     return asked
 
@@ -57,6 +58,25 @@ def test_the_request_sends_each_frame_under_its_own_pairing(spec):
     assert plan.params["s_z"] == "0.0"
     assert plan.params["s_v_unit"] == plan.params["t_v_unit"] == "m"
     assert plan.params["region"] == "westcoast"
+
+
+def test_a_tidal_river_stands_under_its_coastal_region_and_not_the_inland_grid(spec):
+    # The contiguous grids carry no tidal surface, and VDatum refuses the
+    # conversion there rather than answering short.
+    plan, = vd.build_request(spec, _params())
+    assert plan.params["region"] == "westcoast"
+
+
+def test_an_inland_point_stands_under_the_contiguous_grid(spec):
+    plan, = vd.build_request(spec, _params(point=[-104.9903, 39.7392]))
+    assert plan.params["region"] == "contiguous"
+
+
+def test_a_point_no_region_stands_over_refuses_by_name(spec):
+    with pytest.raises(RouterInputError) as caught:
+        vd.build_request(spec, _params(point=[-150.0, 30.0]))
+    assert caught.value.error_code == "VDATUM_INPUT_INVALID"
+    assert "no NOAA VDatum region stands over" in str(caught.value)
 
 
 def test_egm2008_is_sent_under_the_ellipsoid_and_its_own_geoid(spec):

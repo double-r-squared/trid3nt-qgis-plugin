@@ -26,12 +26,6 @@ __all__ = ["Alignment", "DatumError", "OFFSET_FETCH", "Offset", "align",
 #: it - a coercion reads the row's value.
 OFFSET_FETCH = "fetch_vertical_datum_offset"
 
-#: The VDatum grid the row is asked under. The service serves no lookup from a
-#: point to the region that covers it, so inland CONUS is what a run states and
-#: a point another region owns refuses by name rather than answering from the
-#: wrong grid.
-OFFSET_REGION = "contiguous"
-
 
 class DatumError(RuntimeError):
     """A typed refusal: ``DATUM_UNSTATED`` or ``DATUMS_DIFFER``."""
@@ -329,7 +323,7 @@ def offset_ask(source: Any, frame: Any, *, at: Any = None
     if point is None or not (from_frame and to_frame):
         return None
     return {"point": list(point), "from_frame": from_frame,
-            "to_frame": to_frame, "region": OFFSET_REGION}
+            "to_frame": to_frame}
 
 
 def _served_frames() -> tuple[str, ...]:

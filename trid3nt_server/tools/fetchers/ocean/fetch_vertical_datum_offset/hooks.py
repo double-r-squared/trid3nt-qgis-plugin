@@ -4,6 +4,8 @@ The service couples each vertical frame to the horizontal frame and the geoid
 model it is served under, and answers a mismatched pairing with a number that
 reads plausible and is not the offset, so the pairing is PINNED here rather than
 searched. The height sent is zero, so the height that comes back is the offset.
+Which of the service's regional grids answers is a fact of the POINT and is
+chosen here, because the service serves no lookup from one to the other.
 """
 
 from __future__ import annotations
@@ -45,12 +47,48 @@ _SERVED_AS: dict[str, tuple[str, str]] = {
 #: miss as a 999 km offset.
 _NO_COVERAGE = -999999.0
 
-#: What a refusal offers a caller who named the wrong region. The service has no
-#: point-to-region lookup and its regions OVERLAP with different grids under
-#: them - the coastal ones carry the tidal surfaces the inland one does not - so
-#: which region answers is the caller's statement and never a guess made here.
-_REGIONS = ("contiguous (inland CONUS), westcoast, chesapeak_delaware, wgom, "
-            "ak, seak, as, hi, prvi, gcnmi, sgi, spi, sli")
+#: The ground each VDatum region's grids are published over, as coarse boxes,
+#: MOST SPECIFIC FIRST: a tidal coast and an island each stand ahead of the
+#: inland grid that spans them, because the region that owns a point's water
+#: carries surfaces the wider one does not. A box is a region's coarse reach and
+#: not its grid - which point inside one is covered is the service's own answer,
+#: which it gives as its sentinel.
+_REGION_BOXES: tuple[tuple[str, tuple[tuple[float, float, float, float], ...]], ...] = (
+    ("as", ((-171.5, -15.2, -168.0, -13.8),)),
+    ("gcnmi", ((144.0, 13.0, 146.5, 21.0),)),
+    ("hi", ((-161.0, 18.0, -154.0, 23.0),)),
+    ("prvi", ((-68.5, 17.0, -64.0, 19.0),)),
+    ("sgi", ((-170.0, 56.4, -169.3, 56.7),)),
+    ("spi", ((-170.6, 57.0, -170.0, 57.4),)),
+    ("sli", ((-172.0, 62.8, -167.8, 64.0),)),
+    ("seak", ((-141.0, 54.0, -130.0, 60.5),)),
+    ("ak", ((-180.0, 51.0, -129.0, 72.0),)),
+    ("westcoast", ((-130.0, 36.0, -121.0, 49.5),
+                   (-123.0, 32.3, -117.0, 36.5))),
+    ("chesapeak_delaware", ((-77.5, 36.5, -74.5, 40.3),)),
+    ("wgom", ((-97.8, 25.8, -88.0, 30.7),)),
+    ("contiguous", ((-125.0, 24.0, -66.5, 49.5),)),
+)
+
+
+def _region(spec: SourceSpec, lon: float, lat: float) -> str:
+    """The VDatum region whose grids stand over this point, or a typed refusal.
+
+    The service serves no lookup from a point to its region and answers the
+    wrong one with a refusal or a sentinel, so the point chooses: the first
+    region whose published ground covers it, coastal and island grids ahead of
+    the inland one they stand inside of."""
+    for name, boxes in _REGION_BOXES:
+        if any(west <= lon <= east and south <= lat <= north
+               for west, south, east, north in boxes):
+            return name
+    raise router_input_error(
+        spec.error_code_prefix,
+        f"no NOAA VDatum region stands over ({lon}, {lat}): the service covers "
+        f"the US and its territories only ({', '.join(n for n, _ in _REGION_BOXES)}), "
+        "and an offset between two vertical frames outside them is not published.",
+        spec.input_error_suffix,
+    )
 
 
 def _frame(spec: SourceSpec, params: dict[str, Any], key: str) -> str:
@@ -78,7 +116,7 @@ def build_request(spec: SourceSpec, params: dict[str, Any]) -> list[RequestPlan]
     t_h, t_geoid = _SERVED_AS[target]
     return [RequestPlan(url=str(spec.endpoints["convert"].url), params={
         "s_x": f"{lon:.7f}", "s_y": f"{lat:.7f}", "s_z": "0.0",
-        "region": str(params.get("region") or "contiguous"),
+        "region": _region(spec, lon, lat),
         "s_coor": "geo", "s_h_frame": s_h, "s_v_frame": source,
         "s_v_geoid": s_geoid, "s_v_unit": "m",
         "t_coor": "geo", "t_h_frame": t_h, "t_v_frame": target,
@@ -103,18 +141,16 @@ def record(spec: SourceSpec, params: dict[str, Any],
             sc, f"NOAA VDatum's answer is not a record: {type(answer).__name__}")
     source = _frame(spec, params, "from_frame")
     target = _frame(spec, params, "to_frame")
-    region = str(params.get("region") or "contiguous")
+    lon, lat = (float(v) for v in params["point"])
+    region = _region(spec, lon, lat)
     if "errorCode" in answer:
         raise router_input_error(
             sc,
-            f"NOAA VDatum refused {source} -> {target} in region {region!r}: "
-            f"{answer.get('message')!r}. Name the region whose grids cover this "
-            f"point ({_REGIONS}), or two frames the service transforms between "
-            "there. Tidal water on a coast and the tidal reach of its rivers is "
-            "the coastal region, not contiguous.",
+            f"NOAA VDatum refused {source} -> {target} in region {region!r}, "
+            f"the grid that stands over ({lon}, {lat}): {answer.get('message')!r}. "
+            "Name two frames the service transforms between there.",
             spec.input_error_suffix,
         )
-    lon, lat = (float(v) for v in params["point"])
     try:
         offset = float(answer["t_z"])
     except (KeyError, TypeError, ValueError):
@@ -124,9 +160,9 @@ def record(spec: SourceSpec, params: dict[str, Any],
         raise router_empty_error(
             sc,
             f"NOAA VDatum's {region} grids do not reach ({lon}, {lat}), so the "
-            f"offset between {source} and {target} there is not published. Name "
-            f"the region that covers this point ({_REGIONS}), or ask inside the "
-            "one named; VDatum serves the US and its territories only.",
+            f"offset between {source} and {target} there is not published. "
+            f"{region} is the region that stands over the point, and its grids "
+            "leave gaps; ask at the water the question is about.",
             spec.empty_error_suffix,
         )
     uncertainty = _metres(answer.get("uncertainty"))

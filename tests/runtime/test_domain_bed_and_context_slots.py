@@ -531,7 +531,6 @@ def test_the_runtime_declares_the_offset_row_a_differing_source_owes(monkeypatch
     (one,) = asked
     assert one["runner"] == "fetch_vertical_datum_offset"
     assert one["from_frame"] == "navd88" and one["to_frame"] == "egm2008"
-    assert one["region"] == "contiguous"
     assert one["point"] == pytest.approx([-123.205, 45.49])
     # the row is ON the run: a declared row with a record, not a hidden call
     assert "bed_datum_offset" in env.data

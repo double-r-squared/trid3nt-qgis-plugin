@@ -116,7 +116,7 @@ def test_a_source_publishing_no_shift_owes_an_offset_row() -> None:
     ask = offset_ask({"vertical_datum": "NGVD29", "name": "the gauge"},
                      "NAVD88", at=[-122.669, 45.518])
     assert ask == {"point": [-122.669, 45.518], "from_frame": "ngvd29",
-                   "to_frame": "navd88", "region": "contiguous"}
+                   "to_frame": "navd88"}
 
 
 def test_the_coercion_reads_the_rows_value_and_fetches_nothing(
