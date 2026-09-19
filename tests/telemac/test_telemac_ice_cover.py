@@ -19,7 +19,10 @@ from trid3nt_server.inputs.observation import Observation
 from trid3nt_server.workflows.runtime import validate_plan
 from trid3nt_server.workflows.telemac.authoring.atmosphere import ATMOSPHERE_FILENAME
 from trid3nt_server.workflows.telemac.modules import fill
-from trid3nt_server.workflows.telemac.modules.khione import STEERING_FILENAME
+from trid3nt_server.workflows.telemac.modules.khione import (
+    RESULT_FILENAME,
+    STEERING_FILENAME,
+)
 from trid3nt_server.workflows.telemac.templates.ice_cover import ice_cover as template
 
 #: The week the deck states as DURATION, as the hourly record that has to span
@@ -53,6 +56,15 @@ def test_every_slot_this_run_stands_on_reaches_the_wire_as_the_slot_it_is():
     wire = set(inspect.signature(TOOL_REGISTRY["telemac_ice_cover"].fn).parameters)
     assert {"domain", "bed", "carrier", "water_temperature", "weather"} <= wire
     assert {"survey", "terrain", "surveyed_bed"}.isdisjoint(wire)
+
+
+def test_the_run_writes_the_ice_modules_own_result_beside_the_hosts():
+    """Every measure this question answers is read off KHIONE's own file, so the
+    run has to publish it: a run that wrote only the host's would come back with
+    the ice it made still in the box."""
+    solve = next(step for step in _workflow().plan.steps if step.name == "solve")
+    assert solve.kwargs["results"] == [template.STEERING.RESULTS_FILE,
+                                       RESULT_FILENAME]
 
 
 def test_the_weather_is_the_record_that_measures_what_the_ice_module_reads():

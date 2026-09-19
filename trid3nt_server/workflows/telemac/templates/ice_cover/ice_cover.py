@@ -22,6 +22,7 @@ from trid3nt_server.workflows.runtime import (
 )
 from trid3nt_server.workflows.solver.compute_class import compute_class
 from trid3nt_server.workflows.telemac.modules import KHIONE, T2D, mesh, series
+from trid3nt_server.workflows.telemac.modules.khione import RESULT_FILENAME
 from trid3nt_server.workflows.telemac.modules.telemac2d import Atmosphere, Boundaries
 from trid3nt_server.workflows.telemac.templates.ice_cover.declarations import (
     ACCEPTS, DOC, PARAMS, PARAMS as P,
@@ -354,6 +355,11 @@ telemac_ice_cover = register_workflow(
                          "domain": Ref("domain"),
                          "fraction": _STATION_FRAC,
                          "label": "Ice station"}).named("station"),),
+        # WHAT THE RUN HAS TO WRITE: the host's file and the ice module's own
+        # beside it. Every measure this question answers is read off the second
+        # one, so a run that published only the host's would come back with the
+        # ice it made left in the box.
+        results=(STEERING.RESULTS_FILE, RESULT_FILENAME),
         compute_class=ParamRef("compute_class"),
         outputs=OUTPUTS, captions=CAPTIONS, answer=ANSWER,
         review_title="Review the water, the cold snap, and what it opens at"),
