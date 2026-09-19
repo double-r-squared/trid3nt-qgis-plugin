@@ -30,17 +30,11 @@ The values the template declares. `desc` is what the model reads when it fills o
 
 | param | door | units | default | desc |
 |---|---|---|---|---|
-| `outfall_coords` | user | - | optional | Where the discharge enters the water, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer, or a place name. On a river with no domain supplied it is also the seed the reach is walked downstream from |
+| `outfall_coords` | user | - | optional | Where the discharge enters the water, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer. Geocode a place name first. On a river with no domain supplied it is also the seed the reach is walked downstream from |
 | `effluent_bod_mgl` | scenario | mg/L | 250.0 | Ultimate carbonaceous BOD IN THE DISCHARGE ITSELF - what leaves the outfall pipe, before any dilution; the mixed load the water carries is what the solve computes from this and the carrier flow |
 | `effluent_q_m3s` | scenario | m^3/s | 1.0 | Discharge rate at the outfall - with the carrier flow this sets the dilution, and so how much of the effluent load the water carries |
 | `effluent_do_mgl` | scenario | mg/L | 2.0 | Dissolved oxygen in the discharge itself; a treated effluent arrives oxygen-poor, which is the initial deficit the sag starts from |
-| `water_temp_c` | scenario | C | 20.0 | Water temperature, which sets the DO saturation the deficit is measured against; 20 C is the standard Streeter-Phelps condition |
-| `k1_per_day` | scenario | 1/day | 0.3 | CBOD deoxygenation rate - a documented rate coefficient |
-| `k2_per_day` | scenario | 1/day | 0.9 | Surface reaeration rate - a documented rate coefficient |
-| `do_saturation_mgl` | derived | mg/L | - | DO saturation Cs; derived from water temperature unless supplied |
-| `upstream_do_mgl` | derived | mg/L | - | DO carried in at the inflow run; derived as saturation unless supplied |
 | `do_standard_mgl` | scenario | mg/L | 5.0 | The DO water-quality standard the sag is judged against; 5 is a common warm-water aquatic-life criterion |
-| `sim_duration_s` | scenario | s | 172800.0 | Simulated time. A sag is a STEADY-STATE answer, so this has to cover several travel times through the domain AND be long against 1/k1 - a window shorter than that reports a sag that has not developed yet |
 | `mesh_resolution_m` | scenario | m | 14.0 | Target element edge or cell length the domain is resolved at. The granularity is the USER's lever: no sizing rung derives an edge from a channel nobody surveyed, so the number the run meshes at is either yours or this labeled default |
 | `event_time` | question | - | optional | The moment the scenario is read at - an ISO date or datetime ('2026-08-20' or '2026-08-20T06:00:00Z'), from phrasing like 'during last Tuesday's storm'. Each source keeps its own retention, and a request deeper than one refuses typed |
 | `compute_class` | constant | - | medium | Solve sizing class |
@@ -50,48 +44,51 @@ The values the template declares. `desc` is what the model reads when it fills o
 
 | field | the proving run's value |
 |---|---|
-| `do_min_mgl` | 8.823598924737228 |
+| `do_min_mgl` | 8.915916690408183 |
 | `do_below_standard` | False |
-| `do_min_distance_m` | 631.4641000287232 |
-| `bod_mixed_mgl` | 2.3361525026584142 |
-| `mean_velocity_mps` | 0.03412298823772628 |
-| `mesh_size_m` | 14.704 |
+| `do_min_distance_m` | 761.6974777058904 |
+| `bod_mixed_mgl` | 0.7991388488076618 |
+| `mean_velocity_mps` | 0.010624636506362424 |
+| `mesh_size_m` | 14.524 |
 
 It publishes these layers onto the canvas:
 
-- Outfall (user) - 01m2p0bdcb1mkd4yx4yp06dmpy
-- Velocity u over time (domain_mesh)
-- Velocity v over time (domain_mesh)
-- Water depth over time (domain_mesh)
-- Free surface over time (domain_mesh)
-- Bottom (m) at t = 7166.25 s (domain_mesh)
-- Froude number over time (domain_mesh)
-- Scalar flowrate over time (domain_mesh)
-- Scalar velocity over time (domain_mesh)
-- Dissolved o2 over time (domain_mesh)
-- Organic load over time (domain_mesh)
-- Nh4 load over time (domain_mesh)
-- domain_mesh
+- Input: river reach (river_reach)
+- Input: ehydro surveys (ehydro_surveys)
+- Input: bed elevation (dem, 3DEP 1-10 m US lidar (default 10 m); Copernicus GLO-30 30 m global via source=copernicus, datum NAVD88 (metres, positive up))
+- Outfall (user) - river_reach_domain
+- Velocity u over time (river_reach_domain_mesh)
+- Velocity v over time (river_reach_domain_mesh)
+- Water depth over time (river_reach_domain_mesh)
+- Free surface over time (river_reach_domain_mesh)
+- Bottom (m) at t = 170610 s (river_reach_domain_mesh)
+- Froude number over time (river_reach_domain_mesh)
+- Scalar flowrate over time (river_reach_domain_mesh)
+- Scalar velocity over time (river_reach_domain_mesh)
+- Dissolved o2 over time (river_reach_domain_mesh)
+- Organic load over time (river_reach_domain_mesh)
+- Nh4 load over time (river_reach_domain_mesh)
+- river_reach_domain_mesh
 
 ## The proving run
 
-Run `01M2P0BPV8747AX79QCCW25TS5`, 2026-09-16T21:01:15.109184+00:00, 24.493 s, at commit `1883ff4c1867377c3bb4efdec4e2a87450e5fefa-dirty`.
+Run `01M2VDS08YYATFFB27E62C7PYY`, 2026-09-18T23:41:25.064705+00:00, 600.798 s, at commit `8397312dd28e2ade6266f5eef50ce148c6c060c5-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M2P0BPV8747AX79QCCW25TS5)](telemac_do_sag/telemac_do_sag.png)
+![Every layer the run published, stacked and framed on the result (run 01M2VDS08YYATFFB27E62C7PYY)](telemac_do_sag/telemac_do_sag.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M2P0BPV8747AX79QCCW25TS5)*
+*Every layer the run published, stacked and framed on the result (run 01M2VDS08YYATFFB27E62C7PYY)*
 
-![The solve, frame by frame (run 01M2P0BPV8747AX79QCCW25TS5)](telemac_do_sag/telemac_do_sag_animation.gif)
+![The solve, frame by frame (run 01M2VDS08YYATFFB27E62C7PYY)](telemac_do_sag/telemac_do_sag_animation.gif)
 
-*The solve, frame by frame (run 01M2P0BPV8747AX79QCCW25TS5)*
+*The solve, frame by frame (run 01M2VDS08YYATFFB27E62C7PYY)*
 
-![final frame (run 01M2P0BPV8747AX79QCCW25TS5)](telemac_do_sag/telemac_do_sag_final_frame.png)
+![final frame (run 01M2VDS08YYATFFB27E62C7PYY)](telemac_do_sag/telemac_do_sag_final_frame.png)
 
-*final frame (run 01M2P0BPV8747AX79QCCW25TS5)*
+*final frame (run 01M2VDS08YYATFFB27E62C7PYY)*
 
-![dissolved oxygen - the chart the run persisted (run 01M2P0BPV8747AX79QCCW25TS5)](telemac_do_sag/telemac_do_sag_chart_dissolved_oxygen.png)
+![dissolved oxygen - the chart the run persisted (run 01M2VDS08YYATFFB27E62C7PYY)](telemac_do_sag/telemac_do_sag_chart_dissolved_oxygen.png)
 
-*dissolved oxygen - the chart the run persisted (run 01M2P0BPV8747AX79QCCW25TS5)*
+*dissolved oxygen - the chart the run persisted (run 01M2VDS08YYATFFB27E62C7PYY)*
 
 ### The sheet it filled
 
@@ -103,16 +100,10 @@ Every slot the run resolved, with where the value came from. The engine's own de
 | `effluent_bod_mgl` | 300.0 | mg/L | user | supplied on this invocation |
 | `effluent_q_m3s` | 0.5 | m^3/s | user | supplied on this invocation |
 | `effluent_do_mgl` | 1.0 | mg/L | user | supplied on this invocation |
-| `water_temp_c` | 20.0 | C | user | supplied on this invocation |
-| `k1_per_day` | 2.0 | 1/day | user | supplied on this invocation |
-| `k2_per_day` | 6.0 | 1/day | user | supplied on this invocation |
 | `do_standard_mgl` | 5.0 | mg/L | user | supplied on this invocation |
-| `sim_duration_s` | 7200.0 | s | user | supplied on this invocation |
 | `mesh_resolution_m` | 40.0 | m | user | supplied on this invocation |
 | `compute_class` | medium | - | default_demo | declared constant default |
 | `vertical_frame` | NAVD88 | - | default_demo | declared constant default |
-| `do_saturation_mgl` | 9.022 | mg/L | derived | derived by trid3nt_server.workflows.telemac.helpers.water_quality.do_saturation_mgl |
-| `upstream_do_mgl` | 9.022 | mg/L | derived | derived by trid3nt_server.workflows.telemac.helpers.water_quality.upstream_do_mgl |
 | `event_time` | - | - | prompt_interpreted | not supplied (declared optional) |
 
 ### Reproduce
@@ -125,14 +116,10 @@ await TOOL_REGISTRY['telemac_do_sag'].fn(
     effluent_bod_mgl=300.0,
     effluent_do_mgl=1.0,
     effluent_q_m3s=0.5,
-    k1_per_day=2.0,
-    k2_per_day=6.0,
     mesh_resolution_m=40.0,
     outfall_coords='Point(lon=-122.669784, lat=45.518485, name=None)',
-    sim_duration_s=7200.0,
-    water_temp_c=20.0,
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2P0BPV8747AX79QCCW25TS5` and commit `1883ff4c1867377c3bb4efdec4e2a87450e5fefa-dirty`. The full argument record is [`telemac_do_sag/run.json`](telemac_do_sag/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2VDS08YYATFFB27E62C7PYY` and commit `8397312dd28e2ade6266f5eef50ce148c6c060c5-dirty`. The full argument record is [`telemac_do_sag/run.json`](telemac_do_sag/run.json).
 

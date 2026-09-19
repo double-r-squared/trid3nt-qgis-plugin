@@ -29,17 +29,12 @@ The values the template declares. `desc` is what the model reads when it fills o
 
 | param | door | units | default | desc |
 |---|---|---|---|---|
-| `release` | user | - | optional | Where the sediment enters the water, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer, or a place name. Its name becomes the marker's name, and on a river with no domain supplied it is also the seed the reach is walked downstream from |
+| `release` | user | - | optional | Where the sediment enters the water, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer. Geocode a place name first. Its name becomes the marker's name, and on a river with no domain supplied it is also the seed the reach is walked downstream from |
 | `spill_fraction` | scenario | - | 0.25 | Along-domain release position, 0=inflow..1=outflow; the source must sit strictly INSIDE the domain, never on a boundary |
 | `spill_duration_s` | scenario | s | 300.0 | Finite pulse injection window |
 | `source_q_m3s` | scenario | m^3/s | 8.0 | Point-source discharge of the release itself, small against the carrier flow |
-| `grain_size_um` | scenario | um | 200.0 | Median grain diameter d50 of the RELEASED class - ~200 um fine sand settles within a few km, ~20 um silt mostly stays suspended (all modeled non-cohesive) |
 | `sediment_concentration_mgl` | scenario | mg/L | 100.0 | Concentration of the released suspended sediment; what deposits is measured against what this put in |
 | `injected_mass_kg` | derived | kg | - | The mass the pulse released - source_q_m3s x sediment_concentration_mgl x spill_duration_s - which the deposited fraction is measured against |
-| `wind_speed_mps` | scenario | m/s | 0.0 | Sustained wind driving a surface wind-stress term; 0 = no wind |
-| `wind_direction_deg` | scenario | deg | 0.0 | Compass bearing the wind blows FROM (0=N, 90=E); only read when wind_speed_mps > 0 |
-| `rainfall_mm_per_day` | user | mm/day | optional | NET distributed rainfall applied at every wet node, independent of the inflow hydrograph; negative is evaporation |
-| `sim_duration_s` | scenario | s | 3600.0 | Simulated physical time the run covers. The clock the run is settled on, so the deck's DURATION and every window read off it are this one number; what is long enough is the question's, and a question that knows states its own |
 | `mesh_resolution_m` | scenario | m | 14.0 | Target element edge or cell length the domain is resolved at. The granularity is the USER's lever: no sizing rung derives an edge from a channel nobody surveyed, so the number the run meshes at is either yours or this labeled default |
 | `event_time` | question | - | optional | The moment the scenario is read at - an ISO date or datetime ('2026-08-20' or '2026-08-20T06:00:00Z'), from phrasing like 'during last Tuesday's storm'. Each source keeps its own retention, and a request deeper than one refuses typed |
 | `compute_class` | constant | - | medium | Solve sizing class |

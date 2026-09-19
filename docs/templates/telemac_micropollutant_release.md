@@ -29,19 +29,14 @@ The values the template declares. `desc` is what the model reads when it fills o
 
 | param | door | units | default | desc |
 |---|---|---|---|---|
-| `release` | user | - | optional | Where the substance enters the water, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer, or a place name. On a river with no domain supplied it is also the seed the reach is walked downstream from |
+| `release` | user | - | optional | Where the substance enters the water, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer. Geocode a place name first. On a river with no domain it is also the seed the reach is walked downstream from |
 | `release_fraction` | scenario | - | 0.1 | Along-domain release position, 0=inflow..1=outflow; the source must sit strictly INSIDE the domain, never on a boundary. It sits near the top so the substance has water left to sorb and settle in |
 | `release_duration_s` | scenario | s | 3600.0 | Finite injection window; the substance is released over it and the rest of the run is what happens to what was released |
 | `source_q_m3s` | scenario | m^3/s | 1.0 | Discharge of the release itself - with the carrier flow this sets the dilution the water receives |
 | `source_concentration_mgl` | scenario | mg/L | 100.0 | DISSOLVED concentration of the substance in the release itself, before any dilution; everything that ends up on sediment gets there by sorption during the run |
 | `ambient_spm_kg_m3` | scenario | kg/m^3 | 0.03 | Suspended sediment the water already carries, in and at the top of the domain, in KILOGRAMS PER CUBIC METRE - the class the sorption coefficient's own m^3/kg is read against, so 30 mg/L is 0.03. It is the SORBENT: with none, the substance stays dissolved and nothing reaches the bed. Nothing fetches suspended sediment, so this is a STATED condition, not a measured one - state the gauged value where there is one |
-| `decay_constant_per_s` | user | 1/s | optional | First-order decay constant of the substance, applied at the same rate to all three of its phases - dissolved, on suspended sediment and on bed sediment. A half-life h in days is ln(2)/(86400 h) |
-| `settling_velocity_mps` | user | m/s | optional | Settling velocity of the suspended sediment - what carries the sorbed substance down onto the bed |
-| `distribution_coefficient_m3kg` | user | m^3/kg | optional | Kd, the sorption equilibrium: how strongly the substance partitions onto sediment rather than staying dissolved. A larger Kd puts more of it on the bed |
-| `desorption_constant_per_s` | user | 1/s | optional | How fast the substance comes back off the sediment - with Kd it sets how quickly the partition reaches equilibrium |
-| `monitoring_point` | user | - | optional | Where the dissolved history is read, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer, or a place name |
+| `monitoring_point` | user | - | optional | Where the dissolved history is read, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer. Geocode a place name first |
 | `monitoring_fraction` | scenario | - | 0.85 | Along-domain position the history is read at when no point was given, 0=inflow..1=outflow |
-| `sim_duration_s` | scenario | s | 172800.0 | Simulated time. Sorption equilibrates in hours and settling takes longer than that, so a window of a few hours reports a partition that has not happened yet; two days is what the default covers |
 | `mesh_resolution_m` | scenario | m | 14.0 | Target element edge or cell length the domain is resolved at. The granularity is the USER's lever: no sizing rung derives an edge from a channel nobody surveyed, so the number the run meshes at is either yours or this labeled default |
 | `event_time` | question | - | optional | The moment the scenario is read at - an ISO date or datetime ('2026-08-20' or '2026-08-20T06:00:00Z'), from phrasing like 'during last Tuesday's storm'. Each source keeps its own retention, and a request deeper than one refuses typed |
 | `compute_class` | constant | - | medium | Solve sizing class |
@@ -51,61 +46,64 @@ The values the template declares. `desc` is what the model reads when it fills o
 
 | field | the proving run's value |
 |---|---|
-| `dissolved_cmax_mgl` | 0.008522331714630127 |
-| `dissolved_peak_time_s` | 8379.0 |
-| `dissolved_travel_m` | 385.2 |
-| `dissolved_final_mean_mgl` | 0.04434293578260371 |
-| `suspended_sorbed_final_mean_mgl` | 0.008962943360531751 |
-| `bed_sorbed_final_mean_g_m2` | 0.0004003808007397141 |
-| `sorbed_over_dissolved` | 0.20212787453842931 |
-| `mesh_size_m` | 14.704 |
+| `dissolved_cmax_mgl` | 0.002726218430325389 |
+| `dissolved_peak_time_s` | 14400.0 |
+| `dissolved_travel_m` | 146.4 |
+| `dissolved_final_mean_mgl` | 0.004351620992220561 |
+| `suspended_sorbed_final_mean_mgl` | 0.0008982747679195556 |
+| `bed_sorbed_final_mean_g_m2` | 3.761992697592254e-05 |
+| `sorbed_over_dissolved` | 0.20642302478212393 |
+| `mesh_size_m` | 20.888 |
 
 It publishes these layers onto the canvas:
 
-- Release point (user) - 01m2p1nwf6dfj8fpk1v7ggsbc5
-- Monitoring point (user) - 01m2p1nwf6dfj8fpk1v7ggsbc5
-- Velocity u over time (domain_mesh)
-- Velocity v over time (domain_mesh)
-- Water depth over time (domain_mesh)
-- Free surface over time (domain_mesh)
-- Bottom (m) at t = 14332.5 s (domain_mesh)
-- Froude number over time (domain_mesh)
-- Scalar flowrate over time (domain_mesh)
-- Scalar velocity over time (domain_mesh)
-- Micro pollutant over time (domain_mesh)
-- Suspended load over time (domain_mesh)
-- Bed sediments over time (domain_mesh)
-- Abs. susp. load. over time (domain_mesh)
-- Absorb. bed sed. over time (domain_mesh)
-- domain_mesh
+- Input: river reach (river_reach)
+- Input: channel survey soundings (ehydro_surveys)
+- Input: bed elevation (dem, 3DEP 1-10 m US lidar (default 10 m); Copernicus GLO-30 30 m global via source=copernicus, datum NAVD88 (metres, positive up))
+- Release point (user) - river_reach_domain
+- Monitoring point (derived) - river_reach_domain
+- Velocity u over time (river_reach_domain_mesh)
+- Velocity v over time (river_reach_domain_mesh)
+- Water depth over time (river_reach_domain_mesh)
+- Free surface over time (river_reach_domain_mesh)
+- Bottom (m) at t = 14400 s (river_reach_domain_mesh)
+- Froude number over time (river_reach_domain_mesh)
+- Scalar flowrate over time (river_reach_domain_mesh)
+- Scalar velocity over time (river_reach_domain_mesh)
+- Micro pollutant over time (river_reach_domain_mesh)
+- Suspended load over time (river_reach_domain_mesh)
+- Bed sediments over time (river_reach_domain_mesh)
+- Abs. susp. load. over time (river_reach_domain_mesh)
+- Absorb. bed sed. over time (river_reach_domain_mesh)
+- river_reach_domain_mesh
 
 ## The proving run
 
-Run `01M2P1Q33PQQ0GYMY1R4NG10ZN`, 2026-09-16T21:25:36.407059+00:00, 94.253 s, at commit `1883ff4c1867377c3bb4efdec4e2a87450e5fefa-dirty`.
+Run `01M2VD3S6J2NNH22HW6E42NC0A`, 2026-09-18T23:21:09.311145+00:00, 110.38 s, at commit `8397312dd28e2ade6266f5eef50ce148c6c060c5-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M2P1Q33PQQ0GYMY1R4NG10ZN)](telemac_micropollutant_release/telemac_micropollutant_release.png)
+![Every layer the run published, stacked and framed on the result (run 01M2VD3S6J2NNH22HW6E42NC0A)](telemac_micropollutant_release/telemac_micropollutant_release.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M2P1Q33PQQ0GYMY1R4NG10ZN)*
+*Every layer the run published, stacked and framed on the result (run 01M2VD3S6J2NNH22HW6E42NC0A)*
 
-![The solve, frame by frame - dissolved (run 01M2P1Q33PQQ0GYMY1R4NG10ZN)](telemac_micropollutant_release/telemac_micropollutant_release_animation_dissolved.gif)
+![The solve, frame by frame - dissolved (run 01M2VD3S6J2NNH22HW6E42NC0A)](telemac_micropollutant_release/telemac_micropollutant_release_animation_dissolved.gif)
 
-*The solve, frame by frame - dissolved (run 01M2P1Q33PQQ0GYMY1R4NG10ZN)*
+*The solve, frame by frame - dissolved (run 01M2VD3S6J2NNH22HW6E42NC0A)*
 
-![The solve, frame by frame - on_the_bed (run 01M2P1Q33PQQ0GYMY1R4NG10ZN)](telemac_micropollutant_release/telemac_micropollutant_release_animation_on_the_bed.gif)
+![The solve, frame by frame - on_the_bed (run 01M2VD3S6J2NNH22HW6E42NC0A)](telemac_micropollutant_release/telemac_micropollutant_release_animation_on_the_bed.gif)
 
-*The solve, frame by frame - on_the_bed (run 01M2P1Q33PQQ0GYMY1R4NG10ZN)*
+*The solve, frame by frame - on_the_bed (run 01M2VD3S6J2NNH22HW6E42NC0A)*
 
-![dissolved peak frame (run 01M2P1Q33PQQ0GYMY1R4NG10ZN)](telemac_micropollutant_release/telemac_micropollutant_release_dissolved_peak_frame.png)
+![dissolved peak frame (run 01M2VD3S6J2NNH22HW6E42NC0A)](telemac_micropollutant_release/telemac_micropollutant_release_dissolved_peak_frame.png)
 
-*dissolved peak frame (run 01M2P1Q33PQQ0GYMY1R4NG10ZN)*
+*dissolved peak frame (run 01M2VD3S6J2NNH22HW6E42NC0A)*
 
-![on the bed final frame (run 01M2P1Q33PQQ0GYMY1R4NG10ZN)](telemac_micropollutant_release/telemac_micropollutant_release_on_the_bed_final_frame.png)
+![on the bed final frame (run 01M2VD3S6J2NNH22HW6E42NC0A)](telemac_micropollutant_release/telemac_micropollutant_release_on_the_bed_final_frame.png)
 
-*on the bed final frame (run 01M2P1Q33PQQ0GYMY1R4NG10ZN)*
+*on the bed final frame (run 01M2VD3S6J2NNH22HW6E42NC0A)*
 
-![dissolved micropollutant - the chart the run persisted (run 01M2P1Q33PQQ0GYMY1R4NG10ZN)](telemac_micropollutant_release/telemac_micropollutant_release_chart_dissolved_micropollutant.png)
+![dissolved micropollutant - the chart the run persisted (run 01M2VD3S6J2NNH22HW6E42NC0A)](telemac_micropollutant_release/telemac_micropollutant_release_chart_dissolved_micropollutant.png)
 
-*dissolved micropollutant - the chart the run persisted (run 01M2P1Q33PQQ0GYMY1R4NG10ZN)*
+*dissolved micropollutant - the chart the run persisted (run 01M2VD3S6J2NNH22HW6E42NC0A)*
 
 ### The sheet it filled
 
@@ -118,17 +116,12 @@ Every slot the run resolved, with where the value came from. The engine's own de
 | `source_q_m3s` | 1.0 | m^3/s | user | supplied on this invocation |
 | `source_concentration_mgl` | 500.0 | mg/L | user | supplied on this invocation |
 | `ambient_spm_kg_m3` | 0.03 | kg/m^3 | user | supplied on this invocation |
-| `monitoring_point` | Point(lon=-122.6666, lat=45.5175, name=None) | - | user | supplied on this invocation |
 | `monitoring_fraction` | 0.1 | - | user | supplied on this invocation |
-| `sim_duration_s` | 14400.0 | s | user | supplied on this invocation |
 | `mesh_resolution_m` | 40.0 | m | user | supplied on this invocation |
 | `release_fraction` | 0.1 | - | default_demo | declared scenario default |
 | `compute_class` | medium | - | default_demo | declared constant default |
 | `vertical_frame` | NAVD88 | - | default_demo | declared constant default |
-| `decay_constant_per_s` | - | 1/s | user | not supplied (declared optional) |
-| `settling_velocity_mps` | - | m/s | user | not supplied (declared optional) |
-| `distribution_coefficient_m3kg` | - | m^3/kg | user | not supplied (declared optional) |
-| `desorption_constant_per_s` | - | 1/s | user | not supplied (declared optional) |
+| `monitoring_point` | - | - | user | not supplied (declared optional) |
 | `event_time` | - | - | prompt_interpreted | not supplied (declared optional) |
 
 ### Reproduce
@@ -140,14 +133,12 @@ await TOOL_REGISTRY['telemac_micropollutant_release'].fn(
     ambient_spm_kg_m3=0.03,
     mesh_resolution_m=40.0,
     monitoring_fraction=0.1,
-    monitoring_point='Point(lon=-122.6666, lat=45.5175, name=None)',
     release='Point(lon=-122.669784, lat=45.518485, name=None)',
     release_duration_s=300.0,
-    sim_duration_s=14400.0,
     source_concentration_mgl=500.0,
     source_q_m3s=1.0,
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2P1Q33PQQ0GYMY1R4NG10ZN` and commit `1883ff4c1867377c3bb4efdec4e2a87450e5fefa-dirty`. The full argument record is [`telemac_micropollutant_release/run.json`](telemac_micropollutant_release/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2VD3S6J2NNH22HW6E42NC0A` and commit `8397312dd28e2ade6266f5eef50ce148c6c060c5-dirty`. The full argument record is [`telemac_micropollutant_release/run.json`](telemac_micropollutant_release/run.json).
 

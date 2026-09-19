@@ -2,7 +2,7 @@
 
 # `artemis_harbor_agitation`
 
-The WAVE AGITATION (Kd = Hs/H0) a declared structure leaves inside a harbour, a marina or any sheltered basin.
+The WAVE AGITATION (Kd = Hs/H0) a declared structure leaves inside a harbour, marina or sheltered basin.
 
 |  |  |
 |---|---|
@@ -30,11 +30,9 @@ The values the template declares. `desc` is what the model reads when it fills o
 
 | param | door | units | default | desc |
 |---|---|---|---|---|
-| `wave_period_s` | scenario | s | 8.0 | Incident monochromatic wave period - a PRESCRIBED demo forcing, since no wave-forcing fetcher exists yet |
 | `wave_height_m` | scenario | m | 1.0 | Incident wave height H0 on the designated liquid boundary; Kd is measured against it, so it sets the scale of every narrated height |
-| `wave_direction_deg` | scenario | deg | 90.0 | Incident wave direction in the TRIG convention (0 = +X east, 90 = +Y north) - not the compass bearing |
 | `reflection_coef` | scenario | - | 0.5 | The declared structure's reflection coefficient: 1 fully reflecting (a vertical quay), 0 fully absorbing (a rubble slope). Every other solid face is the absorbing shore |
-| `mesh_min_edge_m` | scenario | m | 8.0 | Finest triangle edge, used at the shoreline and around the structure. THE granularity lever: a phase-resolving solve needs several nodes per WAVELENGTH and Kd peaks inside a diffraction fringe, so a coarse mesh reads the peaks low |
+| `mesh_resolution_m` | scenario | m | 8.0 | Finest triangle edge, used at the shoreline and around the structure. THE granularity lever: a phase-resolving solve needs several nodes per WAVELENGTH and Kd peaks inside a diffraction fringe, so a coarse mesh reads the peaks low |
 | `mesh_grade` | constant | - | 0.2 | Mesh gradation: how fast the edge may grow from the structure band out to the open approach |
 | `barrier_width_m` | scenario | m | 20.0 | The width the mapped structure centreline is cut at; a survey maps a mound as a line and a line removes no water from the domain |
 | `transect_length_m` | scenario | m | 1500.0 | The whole length of the transect the agitation is read along: a straight line through the structure's centroid along the incident wave direction, half of it on the exposed side and half in the lee |
@@ -45,36 +43,39 @@ The values the template declares. `desc` is what the model reads when it fills o
 
 | field | the proving run's value |
 |---|---|
-| `kd_max` | 2.35201358795166 |
-| `kd_transect_min` | 0.007066548801958561 |
-| `kd_transect_max` | 1.461745023727417 |
-| `hs_max_m` | 2.35201358795166 |
-| `mesh_size_m` | 17.686783234540215 |
+| `kd_max` | 0.6939641833305359 |
+| `kd_transect_min` | 8.024323393251986e-13 |
+| `kd_transect_max` | 1.2782068736783003e-08 |
+| `hs_max_m` | 0.6939641833305359 |
+| `mesh_size_m` | 6.593208586451455 |
 
 It publishes these layers onto the canvas:
 
-- Wave height (m) at t = 8 s (domain_mesh)
-- Wave phase (rad) at t = 8 s (domain_mesh)
-- Free surface (m) at t = 8 s (domain_mesh)
-- Bottom (m) at t = 8 s (domain_mesh)
-- Kd (Hs/H0) at t = 8 s (domain_mesh)
-- domain_mesh
+- Input: osm coastline (osm_coastline)
+- Input: bed elevation (dem, 3DEP 1-10 m US lidar (default 10 m); Copernicus GLO-30 30 m global via source=copernicus, datum NAVD88 (metres, positive up))
+- Input: topobathy (topobathy, CUDEM 1/9" ~3 m nearshore; ETOPO 2022 15" ~450 m offshore fallback; 3DEP 10 m land, datum NAVD88 (metres, positive up))
+- Wave height (m) at t = 8 s (water_inside_the_box_mesh)
+- Wave phase (rad) at t = 8 s (water_inside_the_box_mesh)
+- Free surface (m) at t = 8 s (water_inside_the_box_mesh)
+- Bottom (m) at t = 8 s (water_inside_the_box_mesh)
+- Kd (Hs/H0) at t = 8 s (water_inside_the_box_mesh)
+- water_inside_the_box_mesh
 
 ## The proving run
 
-Run `01M2NXAG18WBM6TA1AEN3NHBQX`, 2026-09-16T20:08:09.438440+00:00, 21.949 s, at commit `1883ff4c1867377c3bb4efdec4e2a87450e5fefa`.
+Run `01M2VEXMESNJ4MSWZWCJR3V6NS`, 2026-09-18T23:51:55.559767+00:00, 27.117 s, at commit `8397312dd28e2ade6266f5eef50ce148c6c060c5-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M2NXAG18WBM6TA1AEN3NHBQX)](artemis_harbor_agitation/artemis_harbor_agitation.png)
+![Every layer the run published, stacked and framed on the result (run 01M2VEXMESNJ4MSWZWCJR3V6NS)](artemis_harbor_agitation/artemis_harbor_agitation.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M2NXAG18WBM6TA1AEN3NHBQX)*
+*Every layer the run published, stacked and framed on the result (run 01M2VEXMESNJ4MSWZWCJR3V6NS)*
 
-![peak frame (run 01M2NXAG18WBM6TA1AEN3NHBQX)](artemis_harbor_agitation/artemis_harbor_agitation_peak_frame.png)
+![peak frame (run 01M2VEXMESNJ4MSWZWCJR3V6NS)](artemis_harbor_agitation/artemis_harbor_agitation_peak_frame.png)
 
-*peak frame (run 01M2NXAG18WBM6TA1AEN3NHBQX)*
+*peak frame (run 01M2VEXMESNJ4MSWZWCJR3V6NS)*
 
-![agitation coefficient - the chart the run persisted (run 01M2NXAG18WBM6TA1AEN3NHBQX)](artemis_harbor_agitation/artemis_harbor_agitation_chart_agitation_coefficient.png)
+![agitation coefficient - the chart the run persisted (run 01M2VEXMESNJ4MSWZWCJR3V6NS)](artemis_harbor_agitation/artemis_harbor_agitation_chart_agitation_coefficient.png)
 
-*agitation coefficient - the chart the run persisted (run 01M2NXAG18WBM6TA1AEN3NHBQX)*
+*agitation coefficient - the chart the run persisted (run 01M2VEXMESNJ4MSWZWCJR3V6NS)*
 
 ### The sheet it filled
 
@@ -82,15 +83,13 @@ Every slot the run resolved, with where the value came from. The engine's own de
 
 | param | value | units | basis | provenance |
 |---|---|---|---|---|
-| `wave_period_s` | 8.0 | s | user | supplied on this invocation |
 | `wave_height_m` | 1.0 | m | user | supplied on this invocation |
-| `wave_direction_deg` | 160.0 | deg | user | supplied on this invocation |
 | `reflection_coef` | 0.3 | - | user | supplied on this invocation |
-| `mesh_min_edge_m` | 35.0 | m | user | supplied on this invocation |
-| `open_depth_threshold_m` | -3.0 | m | user | supplied on this invocation |
+| `mesh_resolution_m` | 25.0 | m | user | supplied on this invocation |
 | `mesh_grade` | 0.2 | - | default_demo | declared constant default |
 | `barrier_width_m` | 20.0 | m | default_demo | declared scenario default |
 | `transect_length_m` | 1500.0 | m | default_demo | declared scenario default |
+| `open_depth_threshold_m` | -12.0 | m | default_demo | declared scenario default |
 | `compute_class` | medium | - | default_demo | declared constant default |
 
 ### Reproduce
@@ -99,14 +98,11 @@ Every slot the run resolved, with where the value came from. The engine's own de
 from trid3nt_server.tools import TOOL_REGISTRY
 
 await TOOL_REGISTRY['artemis_harbor_agitation'].fn(
-    mesh_min_edge_m=35.0,
-    open_depth_threshold_m=-3.0,
+    mesh_resolution_m=25.0,
     reflection_coef=0.3,
-    wave_direction_deg=160.0,
     wave_height_m=1.0,
-    wave_period_s=8.0,
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2NXAG18WBM6TA1AEN3NHBQX` and commit `1883ff4c1867377c3bb4efdec4e2a87450e5fefa`. The full argument record is [`artemis_harbor_agitation/run.json`](artemis_harbor_agitation/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2VEXMESNJ4MSWZWCJR3V6NS` and commit `8397312dd28e2ade6266f5eef50ce148c6c060c5-dirty`. The full argument record is [`artemis_harbor_agitation/run.json`](artemis_harbor_agitation/run.json).
 

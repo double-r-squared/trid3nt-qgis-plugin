@@ -31,22 +31,9 @@ The values the template declares. `desc` is what the model reads when it fills o
 
 | param | door | units | default | desc |
 |---|---|---|---|---|
-| `seed` | user | - | optional | Where on the channel the modelled stretch STARTS, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer, or a place name geocoded first. The stretch walked downstream of it is the water one pass is measured over; supply the domain polygon instead and this is not read |
-| `station` | user | - | optional | Where to watch the biomass and the oxygen over time, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer, or a place name. The answers are all longitudinal and do not move with it |
-| `initial_phyto_ug_l` | scenario | ug/L | 2.0 | Phytoplankton biomass in the water entering and filling the domain - the standing crop the pass grows FROM, and what the growth ratio in the answer is held to. Stated, not fetched: `fetch_usgs_water_quality` returns chlorophyll and nutrient sample SITES, and turning scattered sites into a domain-wide field is not a step this template takes on its own |
-| `initial_po4_mgl` | scenario | mg/L | 0.05 | Dissolved orthophosphate entering and filling the domain - with nitrate this is what limits how much grows over the pass. Stated against the observed record from `fetch_usgs_water_quality` (characteristic 'Phosphorus'), never fetched into the deck |
-| `initial_por_mgl` | scenario | mg/L | 0.02 | Non-assimilable organic phosphorus - the phosphorus locked in dead material, released back to phosphate as it breaks down. Stated |
-| `initial_no3_mgl` | scenario | mg/L | 1.0 | Dissolved nitrate entering and filling the domain - the other nutrient the growth is limited by. Stated against the observed record from `fetch_usgs_water_quality` (characteristic 'Nitrate') |
-| `initial_nor_mgl` | scenario | mg/L | 0.5 | Non-assimilable organic nitrogen - the nitrogen locked in dead material, released back to nitrate as it breaks down. Stated |
-| `initial_nh4_mgl` | scenario | mg/L | 0.05 | Ammonium entering and filling the domain; nitrifying it is one of the things that consumes oxygen. Stated |
-| `initial_organic_load_mgl` | scenario | mg/L | 2.0 | Carbonaceous organic load (BOD) entering and filling the domain - the oxygen demand the water arrives with, before any the bloom creates for itself. Stated |
-| `water_temp_c` | scenario | C | 22.0 | Water temperature over the window. It sets the growth, mortality and nitrification rates AND the oxygen saturation the water is measured against, so it is the single strongest lever here. Stated against the observed record from `fetch_usgs_water_quality` (characteristic 'Temperature, water'), which this run reads over the domain and names on the journal with its site and sample date; a domain with no sampled site near it says so and the stated value stands. A run coupled to the thermal process reads a computed temperature field instead and ignores this number |
-| `sunshine_w_m2` | scenario | W/m^2 | 100.0 | Solar flux at the water surface, averaged over the window. Light is what drives the growth: at zero nothing grows at all. Stated, because the engine reads this from its own keyword and from nowhere else - the atmospheric data file's radiation columns feed the thermal heat budget and never this term |
-| `secchi_depth_m` | user | m | optional | Secchi depth - how far light reaches down the water column. Turbid water shades its own algae and blooms less |
-| `do_saturation_mgl` | derived | mg/L | - | DO saturation Cs at the stated water temperature; the ceiling the oxygen is measured against |
-| `initial_do_mgl` | derived | mg/L | - | Dissolved oxygen in the water entering and filling the domain; derived as saturation unless supplied |
-| `do_standard_mgl` | scenario | mg/L | 5.0 | The DO water-quality standard the water is judged against; 5 is a common warm-water aquatic-life criterion |
-| `sim_duration_s` | scenario | s | 172800.0 | Simulated time. It has to cover several travel times through the domain before the longitudinal answer has settled - the default is two days against a pass measured in hours. A river flushes far too fast to hold a seasonal bloom; ask a lake for that |
+| `seed` | user | - | optional | Where on the channel the modelled stretch STARTS, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer. Geocode a place name first. The stretch walked downstream of it is the water one pass is measured over; supply the domain polygon instead and this is not read |
+| `station` | user | - | optional | Where to watch the biomass and the oxygen over time, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon' or a point layer (geocode a place name first). The answers are all longitudinal and do not move with it |
+| `do_standard_mgl` | scenario | mg/L | 5.0 | The DO water-quality standard the water is judged against; 5 is a common warm-water aquatic-life criterion. It never reaches the deck: no keyword names a standard, and the answer carries the verdict |
 | `mesh_resolution_m` | scenario | m | 25.0 | Target element edge length the domain is triangulated at; it also sets the CFL time step, so it is what decides whether a long window finishes |
 | `event_time` | question | - | optional | The moment the scenario is read at - an ISO date or datetime ('2026-08-20' or '2026-08-20T06:00:00Z'), from phrasing like 'during last Tuesday's storm'. Each source keeps its own retention, and a request deeper than one refuses typed |
 | `compute_class` | constant | - | medium | Solve sizing class |
@@ -56,68 +43,72 @@ The values the template declares. `desc` is what the model reads when it fills o
 
 | field | the proving run's value |
 |---|---|
-| `phyto_max_ug_l` | 2.0047595500946045 |
-| `phyto_max_distance_m` | 1132.6260841785036 |
-| `phyto_growth_ratio` | 1.0023797750473022 |
-| `no3_remaining_ratio` | 1.0 |
-| `po4_remaining_ratio` | 0.9994436055421829 |
-| `do_min_mgl` | 8.598508834838867 |
-| `do_min_distance_m` | 791.835934956653 |
+| `phyto_max_ug_l` | 1.9964211306928628 |
+| `phyto_max_distance_m` | 7490.067773293982 |
+| `phyto_growth_ratio` | 0.9982105653464314 |
+| `no3_remaining_ratio` | 1.00073695413956 |
+| `po4_remaining_ratio` | 0.9998645827742088 |
+| `do_min_mgl` | 8.567709966373306 |
+| `do_min_distance_m` | 5950.0538385980235 |
 | `do_below_standard` | False |
-| `pass_velocity_mps` | 0.02354461915948074 |
-| `mesh_size_m` | 14.704 |
+| `pass_velocity_mps` | 0.013866292765619848 |
+| `mesh_size_m` | 11.711 |
 
 It publishes these layers onto the canvas:
 
-- Velocity u over time (domain_mesh)
-- Velocity v over time (domain_mesh)
-- Water depth over time (domain_mesh)
-- Free surface over time (domain_mesh)
-- Bottom (m) at t = 7056 s (domain_mesh)
-- Froude number over time (domain_mesh)
-- Scalar flowrate over time (domain_mesh)
-- Scalar velocity over time (domain_mesh)
-- Phyto biomass over time (domain_mesh)
-- Dissolved po4 over time (domain_mesh)
-- Por non assimil over time (domain_mesh)
-- Dissolved no3 over time (domain_mesh)
-- Nor non assim over time (domain_mesh)
-- Nh4 load over time (domain_mesh)
-- Organic load over time (domain_mesh)
-- Dissolved o2 over time (domain_mesh)
-- domain_mesh
+- Input: river reach (river_reach)
+- Input: observed water temperature (usgs_water_quality)
+- Input: channel survey soundings (ehydro_surveys)
+- Input: bed elevation (dem, 3DEP 1-10 m US lidar (default 10 m); Copernicus GLO-30 30 m global via source=copernicus, datum NAVD88 (metres, positive up))
+- Velocity u over time (river_reach_domain_mesh)
+- Velocity v over time (river_reach_domain_mesh)
+- Water depth over time (river_reach_domain_mesh)
+- Free surface over time (river_reach_domain_mesh)
+- Bottom (m) at t = 7032 s (river_reach_domain_mesh)
+- Froude number over time (river_reach_domain_mesh)
+- Scalar flowrate over time (river_reach_domain_mesh)
+- Scalar velocity over time (river_reach_domain_mesh)
+- Phyto biomass over time (river_reach_domain_mesh)
+- Dissolved po4 over time (river_reach_domain_mesh)
+- Por non assimil over time (river_reach_domain_mesh)
+- Dissolved no3 over time (river_reach_domain_mesh)
+- Nor non assim over time (river_reach_domain_mesh)
+- Nh4 load over time (river_reach_domain_mesh)
+- Organic load over time (river_reach_domain_mesh)
+- Dissolved o2 over time (river_reach_domain_mesh)
+- river_reach_domain_mesh
 
 ## The proving run
 
-Run `01M2P18V99422ANEV22NH7F547`, 2026-09-16T21:17:11.586602+00:00, 25.882 s, at commit `1883ff4c1867377c3bb4efdec4e2a87450e5fefa-dirty`.
+Run `01M2VDCVVHYA2PSTPY4HC01SZ7`, 2026-09-18T23:26:00.603204+00:00, 75.116 s, at commit `8397312dd28e2ade6266f5eef50ce148c6c060c5-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M2P18V99422ANEV22NH7F547)](telemac_eutrophication/telemac_eutrophication.png)
+![Every layer the run published, stacked and framed on the result (run 01M2VDCVVHYA2PSTPY4HC01SZ7)](telemac_eutrophication/telemac_eutrophication.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M2P18V99422ANEV22NH7F547)*
+*Every layer the run published, stacked and framed on the result (run 01M2VDCVVHYA2PSTPY4HC01SZ7)*
 
-![The solve, frame by frame - biomass (run 01M2P18V99422ANEV22NH7F547)](telemac_eutrophication/telemac_eutrophication_animation_biomass.gif)
+![The solve, frame by frame - biomass (run 01M2VDCVVHYA2PSTPY4HC01SZ7)](telemac_eutrophication/telemac_eutrophication_animation_biomass.gif)
 
-*The solve, frame by frame - biomass (run 01M2P18V99422ANEV22NH7F547)*
+*The solve, frame by frame - biomass (run 01M2VDCVVHYA2PSTPY4HC01SZ7)*
 
-![The solve, frame by frame - oxygen (run 01M2P18V99422ANEV22NH7F547)](telemac_eutrophication/telemac_eutrophication_animation_oxygen.gif)
+![The solve, frame by frame - oxygen (run 01M2VDCVVHYA2PSTPY4HC01SZ7)](telemac_eutrophication/telemac_eutrophication_animation_oxygen.gif)
 
-*The solve, frame by frame - oxygen (run 01M2P18V99422ANEV22NH7F547)*
+*The solve, frame by frame - oxygen (run 01M2VDCVVHYA2PSTPY4HC01SZ7)*
 
-![biomass final frame (run 01M2P18V99422ANEV22NH7F547)](telemac_eutrophication/telemac_eutrophication_biomass_final_frame.png)
+![biomass final frame (run 01M2VDCVVHYA2PSTPY4HC01SZ7)](telemac_eutrophication/telemac_eutrophication_biomass_final_frame.png)
 
-*biomass final frame (run 01M2P18V99422ANEV22NH7F547)*
+*biomass final frame (run 01M2VDCVVHYA2PSTPY4HC01SZ7)*
 
-![oxygen final frame (run 01M2P18V99422ANEV22NH7F547)](telemac_eutrophication/telemac_eutrophication_oxygen_final_frame.png)
+![oxygen final frame (run 01M2VDCVVHYA2PSTPY4HC01SZ7)](telemac_eutrophication/telemac_eutrophication_oxygen_final_frame.png)
 
-*oxygen final frame (run 01M2P18V99422ANEV22NH7F547)*
+*oxygen final frame (run 01M2VDCVVHYA2PSTPY4HC01SZ7)*
 
-![dissolved o2 - the chart the run persisted (run 01M2P18V99422ANEV22NH7F547)](telemac_eutrophication/telemac_eutrophication_chart_dissolved_o2.png)
+![dissolved o2 - the chart the run persisted (run 01M2VDCVVHYA2PSTPY4HC01SZ7)](telemac_eutrophication/telemac_eutrophication_chart_dissolved_o2.png)
 
-*dissolved o2 - the chart the run persisted (run 01M2P18V99422ANEV22NH7F547)*
+*dissolved o2 - the chart the run persisted (run 01M2VDCVVHYA2PSTPY4HC01SZ7)*
 
-![phyto biomass - the chart the run persisted (run 01M2P18V99422ANEV22NH7F547)](telemac_eutrophication/telemac_eutrophication_chart_phyto_biomass.png)
+![phyto biomass - the chart the run persisted (run 01M2VDCVVHYA2PSTPY4HC01SZ7)](telemac_eutrophication/telemac_eutrophication_chart_phyto_biomass.png)
 
-*phyto biomass - the chart the run persisted (run 01M2P18V99422ANEV22NH7F547)*
+*phyto biomass - the chart the run persisted (run 01M2VDCVVHYA2PSTPY4HC01SZ7)*
 
 ### The sheet it filled
 
@@ -125,25 +116,12 @@ Every slot the run resolved, with where the value came from. The engine's own de
 
 | param | value | units | basis | provenance |
 |---|---|---|---|---|
-| `sim_duration_s` | 7200.0 | s | user | supplied on this invocation |
+| `seed` | Point(lon=-122.6691667, lat=45.5175, name=None) | - | user | supplied on this invocation |
+| `station` | Point(lon=-122.669784, lat=45.518485, name=None) | - | user | supplied on this invocation |
 | `mesh_resolution_m` | 40.0 | m | user | supplied on this invocation |
-| `initial_phyto_ug_l` | 2.0 | ug/L | default_demo | declared scenario default |
-| `initial_po4_mgl` | 0.05 | mg/L | default_demo | declared scenario default |
-| `initial_por_mgl` | 0.02 | mg/L | default_demo | declared scenario default |
-| `initial_no3_mgl` | 1.0 | mg/L | default_demo | declared scenario default |
-| `initial_nor_mgl` | 0.5 | mg/L | default_demo | declared scenario default |
-| `initial_nh4_mgl` | 0.05 | mg/L | default_demo | declared scenario default |
-| `initial_organic_load_mgl` | 2.0 | mg/L | default_demo | declared scenario default |
-| `water_temp_c` | 22.0 | C | default_demo | declared scenario default |
-| `sunshine_w_m2` | 100.0 | W/m^2 | default_demo | declared scenario default |
 | `do_standard_mgl` | 5.0 | mg/L | default_demo | declared scenario default |
 | `compute_class` | medium | - | default_demo | declared constant default |
 | `vertical_frame` | NAVD88 | - | default_demo | declared constant default |
-| `do_saturation_mgl` | 8.667 | mg/L | derived | derived by trid3nt_server.workflows.telemac.helpers.water_quality.do_saturation_mgl |
-| `initial_do_mgl` | 8.667 | mg/L | derived | derived by trid3nt_server.workflows.telemac.helpers.water_quality.upstream_do_mgl |
-| `seed` | - | - | user | not supplied (declared optional) |
-| `station` | - | - | user | not supplied (declared optional) |
-| `secchi_depth_m` | - | m | user | not supplied (declared optional) |
 | `event_time` | - | - | prompt_interpreted | not supplied (declared optional) |
 
 ### Reproduce
@@ -153,9 +131,10 @@ from trid3nt_server.tools import TOOL_REGISTRY
 
 await TOOL_REGISTRY['telemac_eutrophication'].fn(
     mesh_resolution_m=40.0,
-    sim_duration_s=7200.0,
+    seed='Point(lon=-122.6691667, lat=45.5175, name=None)',
+    station='Point(lon=-122.669784, lat=45.518485, name=None)',
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2P18V99422ANEV22NH7F547` and commit `1883ff4c1867377c3bb4efdec4e2a87450e5fefa-dirty`. The full argument record is [`telemac_eutrophication/run.json`](telemac_eutrophication/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2VDCVVHYA2PSTPY4HC01SZ7` and commit `8397312dd28e2ade6266f5eef50ce148c6c060c5-dirty`. The full argument record is [`telemac_eutrophication/run.json`](telemac_eutrophication/run.json).
 

@@ -6,7 +6,7 @@ An OIL SLICK released onto a body of surface water: floating particles plus the 
 
 |  |  |
 |---|---|
-| module | `telemac2d` - 376 keywords in its dictionary, of which this template states 33 |
+| module | `telemac2d` - 376 keywords in its dictionary, of which this template states 35 |
 | solves | `trid3nt_server.workflows.telemac.engine.solve_case` |
 | engine defaults | every keyword this template does not state keeps the engine's own default; `describe_keywords` names it with that default, and `keywords={...}` sets it |
 
@@ -29,19 +29,13 @@ The values the template declares. `desc` is what the model reads when it fills o
 
 | param | door | units | default | desc |
 |---|---|---|---|---|
-| `release` | user | - | optional | Where the oil enters the water, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer, or a place name. Its name becomes the tracer's name, and on a river with no domain supplied it is also the seed the reach is walked downstream from |
+| `release` | user | - | optional | Where the oil enters the water, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer. Geocode a place name first. Its name becomes the tracer's name, and on a river with no domain supplied it is also the seed the reach is walked downstream from |
 | `spill_fraction` | scenario | - | 0.25 | Along-domain release position, 0=inflow..1=outflow; the source must sit strictly INSIDE the domain, never on a boundary |
 | `spill_duration_s` | scenario | s | 300.0 | Finite pulse injection window |
 | `source_q_m3s` | scenario | m^3/s | 8.0 | Point-source discharge of the release itself, small against the carrier flow |
 | `oil_concentration_mgl` | scenario | mg/L | 100.0 | Concentration of the DISSOLVED fraction released with the slick, carried as the water's tracer |
 | `oil_type` | question | - | light_crude | Which preset was spilled: light_crude \| diesel \| heavy_fuel - the module's own composition, density and viscosity. Crude runs as light_crude, gasoline and petrol as diesel, bunker as heavy_fuel |
-| `n_drogues` | scenario | - | 100 | How many floating particles the module tracks; the slick is drawn from their positions, so a coarse count draws a coarse slick |
-| `drogues_period_s` | scenario | s | 60.0 | How often the particle positions are written; it converts to a count of solver steps at the run's own timestep |
 | `oil_release_step` | scenario | - | 600 | The solver step the floats are released at, compiled into the module's own release routine; it lets the flow field establish before the slick is put on it |
-| `wind_speed_mps` | scenario | m/s | 0.0 | Sustained wind driving a surface wind-stress term; 0 = no wind |
-| `wind_direction_deg` | scenario | deg | 0.0 | Compass bearing the wind blows FROM (0=N, 90=E); only read when wind_speed_mps > 0 |
-| `rainfall_mm_per_day` | user | mm/day | optional | NET distributed rainfall applied at every wet node, independent of the inflow hydrograph; negative is evaporation |
-| `sim_duration_s` | scenario | s | 3600.0 | Simulated physical time the run covers. The clock the run is settled on, so the deck's DURATION and every window read off it are this one number; what is long enough is the question's, and a question that knows states its own |
 | `mesh_resolution_m` | scenario | m | 14.0 | Target element edge or cell length the domain is resolved at. The granularity is the USER's lever: no sizing rung derives an edge from a channel nobody surveyed, so the number the run meshes at is either yours or this labeled default |
 | `event_time` | question | - | optional | The moment the scenario is read at - an ISO date or datetime ('2026-08-20' or '2026-08-20T06:00:00Z'), from phrasing like 'during last Tuesday's storm'. Each source keeps its own retention, and a request deeper than one refuses typed |
 | `compute_class` | constant | - | medium | Solve sizing class |
@@ -51,49 +45,52 @@ The values the template declares. `desc` is what the model reads when it fills o
 
 | field | the proving run's value |
 |---|---|
-| `oil_cmax_mgl` | 11.496940612792969 |
-| `oil_peak_time_s` | 294.0 |
-| `plume_reach_m` | 38.0 |
-| `active_frames` | 24 |
-| `slick_drift_m` | 56.5 |
+| `oil_cmax_mgl` | 4.12391996383667 |
+| `oil_peak_time_s` | 300.0 |
+| `plume_reach_m` | 16.4 |
+| `active_frames` | 18 |
+| `slick_drift_m` | 38.0 |
 | `floats_released` | 100 |
 | `floats_remaining` | 100 |
-| `mesh_size_m` | 14.704 |
+| `mesh_size_m` | 20.888 |
 
 It publishes these layers onto the canvas:
 
-- Release point (user) - 01m2p216myypfprfkawhgctfbx
-- Velocity u over time (domain_mesh)
-- Velocity v over time (domain_mesh)
-- Water depth over time (domain_mesh)
-- Free surface over time (domain_mesh)
-- Bottom (m) at t = 1764 s (domain_mesh)
-- Froude number over time (domain_mesh)
-- Scalar flowrate over time (domain_mesh)
-- Scalar velocity over time (domain_mesh)
-- Oil over time (domain_mesh)
-- Oil slick track (domain_mesh)
-- domain_mesh
+- Input: river reach (river_reach)
+- Input: ehydro surveys (ehydro_surveys)
+- Input: bed elevation (dem, 3DEP 1-10 m US lidar (default 10 m); Copernicus GLO-30 30 m global via source=copernicus, datum NAVD88 (metres, positive up))
+- Release point (user) - river_reach_domain
+- Velocity u over time (river_reach_domain_mesh)
+- Velocity v over time (river_reach_domain_mesh)
+- Water depth over time (river_reach_domain_mesh)
+- Free surface over time (river_reach_domain_mesh)
+- Bottom (m) at t = 1800 s (river_reach_domain_mesh)
+- Froude number over time (river_reach_domain_mesh)
+- Scalar flowrate over time (river_reach_domain_mesh)
+- Scalar velocity over time (river_reach_domain_mesh)
+- Oil over time (river_reach_domain_mesh)
+- Oil slick track (river_reach_domain_mesh)
+- river_reach_domain_mesh
 
 ## The proving run
 
-Run `01M2P21FM16GG9KPEA3WC5QV20`, 2026-09-16T21:30:38.550487+00:00, 25.538 s, at commit `1883ff4c1867377c3bb4efdec4e2a87450e5fefa-dirty`.
+Run `01M2VCG0R2ADV2FYR8WDJ3GQN5`, 2026-09-18T23:09:31.315439+00:00, 29.381 s, at commit `8397312dd28e2ade6266f5eef50ce148c6c060c5-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M2P21FM16GG9KPEA3WC5QV20)](telemac_oil_spill/telemac_oil_spill.png)
+![Every layer the run published, stacked and framed on the result (run 01M2VCG0R2ADV2FYR8WDJ3GQN5)](telemac_oil_spill/telemac_oil_spill.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M2P21FM16GG9KPEA3WC5QV20)*
+*Every layer the run published, stacked and framed on the result (run 01M2VCG0R2ADV2FYR8WDJ3GQN5)*
 
-![The solve, frame by frame (run 01M2P21FM16GG9KPEA3WC5QV20)](telemac_oil_spill/telemac_oil_spill_animation.gif)
+![The solve, frame by frame (run 01M2VCG0R2ADV2FYR8WDJ3GQN5)](telemac_oil_spill/telemac_oil_spill_animation.gif)
 
-*The solve, frame by frame (run 01M2P21FM16GG9KPEA3WC5QV20)*
+*The solve, frame by frame (run 01M2VCG0R2ADV2FYR8WDJ3GQN5)*
 
-![peak frame (run 01M2P21FM16GG9KPEA3WC5QV20)](telemac_oil_spill/telemac_oil_spill_peak_frame.png)
+![peak frame (run 01M2VCG0R2ADV2FYR8WDJ3GQN5)](telemac_oil_spill/telemac_oil_spill_peak_frame.png)
 
-*peak frame (run 01M2P21FM16GG9KPEA3WC5QV20)*
+*peak frame (run 01M2VCG0R2ADV2FYR8WDJ3GQN5)*
 
-![dissolved oil concentration - the chart the run persisted (run 01M2P21FM16GG9KPEA3WC5QV20)](telemac_oil_spill/telemac_oil_spill_chart_dissolved_oil_concentration.png)
+![dissolved oil concentration - the chart the run persisted (run 01M2VCG0R2ADV2FYR8WDJ3GQN5)](telemac_oil_spill/telemac_oil_spill_chart_dissolved_oil_concentration.png)
 
-*dissolved oil concentration - the chart the run persisted (run 01M2P21FM16GG9KPEA3WC5QV20)*
+*dissolved oil concentration - the chart the run persisted (run 01M2VCG0R2ADV2FYR8WDJ3GQN5)*
 
 ### The sheet it filled
 
@@ -106,17 +103,11 @@ Every slot the run resolved, with where the value came from. The engine's own de
 | `source_q_m3s` | 8.0 | m^3/s | user | supplied on this invocation |
 | `oil_concentration_mgl` | 100.0 | mg/L | user | supplied on this invocation |
 | `oil_type` | light_crude | - | user | supplied on this invocation |
-| `n_drogues` | 100 | - | user | supplied on this invocation |
 | `oil_release_step` | 60 | - | user | supplied on this invocation |
-| `sim_duration_s` | 1800.0 | s | user | supplied on this invocation |
 | `mesh_resolution_m` | 40.0 | m | user | supplied on this invocation |
 | `spill_fraction` | 0.25 | - | default_demo | declared scenario default |
-| `drogues_period_s` | 60.0 | s | default_demo | declared scenario default |
-| `wind_speed_mps` | 0.0 | m/s | default_demo | declared scenario default |
-| `wind_direction_deg` | 0.0 | deg | default_demo | declared scenario default |
 | `compute_class` | medium | - | default_demo | declared constant default |
 | `vertical_frame` | NAVD88 | - | default_demo | declared constant default |
-| `rainfall_mm_per_day` | - | mm/day | user | not supplied (declared optional) |
 | `event_time` | - | - | prompt_interpreted | not supplied (declared optional) |
 
 ### Reproduce
@@ -126,16 +117,14 @@ from trid3nt_server.tools import TOOL_REGISTRY
 
 await TOOL_REGISTRY['telemac_oil_spill'].fn(
     mesh_resolution_m=40.0,
-    n_drogues=100,
     oil_concentration_mgl=100.0,
     oil_release_step=60,
     oil_type='light_crude',
     release='Point(lon=-122.669784, lat=45.518485, name=None)',
-    sim_duration_s=1800.0,
     source_q_m3s=8.0,
     spill_duration_s=300.0,
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2P21FM16GG9KPEA3WC5QV20` and commit `1883ff4c1867377c3bb4efdec4e2a87450e5fefa-dirty`. The full argument record is [`telemac_oil_spill/run.json`](telemac_oil_spill/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2VCG0R2ADV2FYR8WDJ3GQN5` and commit `8397312dd28e2ade6266f5eef50ce148c6c060c5-dirty`. The full argument record is [`telemac_oil_spill/run.json`](telemac_oil_spill/run.json).
 

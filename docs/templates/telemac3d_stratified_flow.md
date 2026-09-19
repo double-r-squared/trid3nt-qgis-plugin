@@ -24,15 +24,11 @@ The values the template declares. `desc` is what the model reads when it fills o
 
 | param | door | units | default | desc |
 |---|---|---|---|---|
-| `seed` | user | - | optional | A point ON or beside the body of water this question is about, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer, or a place name. The mapped outline that point names becomes the domain; a domain supplied directly supersedes it, and a body nobody mapped is drawn |
+| `seed` | user | - | optional | A point ON or beside the body of water this question is about, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon' or a point layer (geocode a place name first). The mapped outline that point names becomes the domain; a domain supplied directly supersedes it, and a body nobody mapped is drawn |
 | `warm_temp_c` | scenario | C | 25.0 | Epilimnion (warm surface layer) temperature the column OPENS at. The run exchanges no heat with the atmosphere, so what happens to this difference is the whole answer |
 | `cold_temp_c` | scenario | C | 15.0 | Hypolimnion (cold bottom layer) temperature; the initial top-to-bottom difference is what the run either keeps or mixes away |
 | `thermocline_depth_m` | scenario | m | 8.0 | Depth of the thermocline below the free surface. The vertical grid is planned to HOLD it and REFUSES when no admissible sigma stretch over the domain's deepest column can |
-| `wind_speed_mps` | scenario | m/s | 0.0 | Sustained wind speed; 0 is CALM - the half of the pair in which the thermocline persists - and a nonzero value both mixes the column and drives the surface-downwind / return-flow-at-depth circulation reported beside the temperature |
-| `wind_direction_deg` | scenario | deg | 270.0 | Compass bearing the wind blows FROM (0=N, 90=E, 270=W) |
-| `levels` | scenario | - | 13 | Number of vertical sigma levels - the degree of freedom a 2D model does not have, so it is THE resolution lever here; too few for the declared thermocline is a refusal, not a coarser answer |
-| `mesh_resolution_m` | scenario | m | 120.0 | Target triangle edge the water body's interior is meshed at. The horizontal spends its budget on COVERING the body rather than on detail; the 3D node count is this mesh's nodes times the levels |
-| `sim_duration_s` | constant | s | 18000.0 | Simulated duration - long enough for the column to settle or mix |
+| `mesh_resolution_m` | scenario | m | 120.0 | Target triangle edge the water body's interior is meshed at. The horizontal spends its budget on COVERING the body rather than on detail; the 3D node count is this mesh's nodes times the planes the deck states |
 | `event_time` | question | - | optional | The moment the scenario is read at - an ISO date or datetime ('2026-08-20' or '2026-08-20T06:00:00Z'), from phrasing like 'during last Tuesday's storm'. Each source keeps its own retention, and a request deeper than one refuses typed |
 | `compute_class` | constant | - | medium | Solve sizing class |
 | `vertical_frame` | constant | - | NAVD88 | Vertical datum this run counts every elevation from - the bed under it and the level over it. A source published on another frame reaches this one through a measured offset, and a pair nobody publishes an offset between refuses by name |
@@ -41,16 +37,16 @@ The values the template declares. `desc` is what the model reads when it fills o
 
 | field | the proving run's value |
 |---|---|
-| `stratification_dt` | 1.030191421508789 |
+| `stratification_dt` | 1.298919677734375 |
 | `stratification_dt_init` | 9.950547218322754 |
-| `column_mean_final_c` | 19.99154828593307 |
+| `column_mean_final_c` | 20.000362391478557 |
 | `column_mean_init_c` | 19.999999861290423 |
-| `column_depth_m` | 11.999975841452397 |
-| `u_surface` | 0.0023559783585369587 |
-| `u_bottom` | 0.004593565594404936 |
-| `depth_avg_u` | -0.0003244846148492133 |
+| `column_depth_m` | 11.999976446708388 |
+| `u_surface` | -0.00014427091809920967 |
+| `u_bottom` | 0.0001381385518470779 |
+| `depth_avg_u` | -0.001081944610102034 |
 | `planes` | 13 |
-| `mesh_size_m` | 10.479 |
+| `mesh_size_m` | 23.506 |
 
 It publishes these layers onto the canvas:
 
@@ -64,23 +60,23 @@ It publishes these layers onto the canvas:
 
 ## The proving run
 
-Run `01M2NXSXZX2WKD5W80TG4RZ1AX`, 2026-09-16T21:03:02.016301+00:00, 2811.534 s, at commit `1883ff4c1867377c3bb4efdec4e2a87450e5fefa-dirty`.
+Run `01M2VEFS379PMNKD6H0MFJSYBD`, 2026-09-18T23:49:51.213554+00:00, 355.06 s, at commit `8397312dd28e2ade6266f5eef50ce148c6c060c5-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M2NXSXZX2WKD5W80TG4RZ1AX)](telemac3d_stratified_flow/telemac3d_stratified_flow.png)
+![Every layer the run published, stacked and framed on the result (run 01M2VEFS379PMNKD6H0MFJSYBD)](telemac3d_stratified_flow/telemac3d_stratified_flow.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M2NXSXZX2WKD5W80TG4RZ1AX)*
+*Every layer the run published, stacked and framed on the result (run 01M2VEFS379PMNKD6H0MFJSYBD)*
 
-![The solve, frame by frame (run 01M2NXSXZX2WKD5W80TG4RZ1AX)](telemac3d_stratified_flow/telemac3d_stratified_flow_animation.gif)
+![The solve, frame by frame (run 01M2VEFS379PMNKD6H0MFJSYBD)](telemac3d_stratified_flow/telemac3d_stratified_flow_animation.gif)
 
-*The solve, frame by frame (run 01M2NXSXZX2WKD5W80TG4RZ1AX)*
+*The solve, frame by frame (run 01M2VEFS379PMNKD6H0MFJSYBD)*
 
-![final frame (run 01M2NXSXZX2WKD5W80TG4RZ1AX)](telemac3d_stratified_flow/telemac3d_stratified_flow_final_frame.png)
+![final frame (run 01M2VEFS379PMNKD6H0MFJSYBD)](telemac3d_stratified_flow/telemac3d_stratified_flow_final_frame.png)
 
-*final frame (run 01M2NXSXZX2WKD5W80TG4RZ1AX)*
+*final frame (run 01M2VEFS379PMNKD6H0MFJSYBD)*
 
-![water temperature - the chart the run persisted (run 01M2NXSXZX2WKD5W80TG4RZ1AX)](telemac3d_stratified_flow/telemac3d_stratified_flow_chart_water_temperature.png)
+![water temperature - the chart the run persisted (run 01M2VEFS379PMNKD6H0MFJSYBD)](telemac3d_stratified_flow/telemac3d_stratified_flow_chart_water_temperature.png)
 
-*water temperature - the chart the run persisted (run 01M2NXSXZX2WKD5W80TG4RZ1AX)*
+*water temperature - the chart the run persisted (run 01M2VEFS379PMNKD6H0MFJSYBD)*
 
 ### The sheet it filled
 
@@ -92,11 +88,7 @@ Every slot the run resolved, with where the value came from. The engine's own de
 | `warm_temp_c` | 25.0 | C | user | supplied on this invocation |
 | `cold_temp_c` | 15.0 | C | user | supplied on this invocation |
 | `thermocline_depth_m` | 6.0 | m | user | supplied on this invocation |
-| `wind_speed_mps` | 0.0 | m/s | user | supplied on this invocation |
-| `wind_direction_deg` | 270.0 | deg | user | supplied on this invocation |
-| `levels` | 13 | - | user | supplied on this invocation |
-| `mesh_resolution_m` | 30.0 | m | user | supplied on this invocation |
-| `sim_duration_s` | 18000.0 | s | default_demo | declared constant default |
+| `mesh_resolution_m` | 60.0 | m | user | supplied on this invocation |
 | `compute_class` | medium | - | default_demo | declared constant default |
 | `vertical_frame` | NAVD88 | - | default_demo | declared constant default |
 | `event_time` | - | - | prompt_interpreted | not supplied (declared optional) |
@@ -108,15 +100,12 @@ from trid3nt_server.tools import TOOL_REGISTRY
 
 await TOOL_REGISTRY['telemac3d_stratified_flow'].fn(
     cold_temp_c=15.0,
-    levels=13,
-    mesh_resolution_m=30.0,
+    mesh_resolution_m=60.0,
     seed='Point(lon=-123.221649, lat=45.485595, name=None)',
     thermocline_depth_m=6.0,
     warm_temp_c=25.0,
-    wind_direction_deg=270.0,
-    wind_speed_mps=0.0,
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2NXSXZX2WKD5W80TG4RZ1AX` and commit `1883ff4c1867377c3bb4efdec4e2a87450e5fefa-dirty`. The full argument record is [`telemac3d_stratified_flow/run.json`](telemac3d_stratified_flow/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2VEFS379PMNKD6H0MFJSYBD` and commit `8397312dd28e2ade6266f5eef50ce148c6c060c5-dirty`. The full argument record is [`telemac3d_stratified_flow/run.json`](telemac3d_stratified_flow/run.json).
 

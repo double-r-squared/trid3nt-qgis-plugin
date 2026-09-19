@@ -31,11 +31,10 @@ The values the template declares. `desc` is what the model reads when it fills o
 
 | param | door | units | default | desc |
 |---|---|---|---|---|
-| `seed` | user | - | optional | Where on the channel the modelled stretch STARTS, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer, or a place name geocoded first. It seeds the reach the domain is cut from; supply the domain polygon - a lake, a pond, a harbour - instead and this is not read |
+| `seed` | user | - | optional | Where on the channel the modelled stretch STARTS, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer. Geocode a place name first. It seeds the reach the domain is cut from; supply the domain polygon - a lake, a pond, a harbour - instead and this is not read |
 | `weather_start` | question | - | - | First day of the observed weather the water is driven over, 'YYYY-MM-DD' - from phrasing like 'last week' or 'the first week of August'. The station record is hourly and the network holds the last two weeks, so an earlier day refuses typed |
-| `weather_end` | question | - | - | Last day of the observed weather, 'YYYY-MM-DD'. The run is sim_duration_s long from the first observation, so this day has to be far enough past weather_start to cover it; at most 14 days after |
-| `station` | user | - | optional | Where the temperature series and its diurnal range are read, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer, or a place name |
-| `sim_duration_s` | scenario | s | 604800.0 | Simulated time. A DIURNAL RANGE needs whole days, and this defaults to seven; a shorter run answers what the water did over that window and no more. The weather record has to span every second of it - a run longer than its own forcing refuses rather than extrapolating |
+| `weather_end` | question | - | - | Last day of the observed weather, 'YYYY-MM-DD'. The run is DURATION long from the first observation - a week unless you set that keyword - so this day has to be far enough past weather_start to cover it; at most 14 days after |
+| `station` | user | - | optional | Where the temperature series and its diurnal range are read, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon' or a point layer. Geocode a place name first |
 | `mesh_resolution_m` | scenario | m | 20.0 | Target element edge length the domain is triangulated at; a surface heat budget is divided by the local DEPTH, so what this has to resolve is how deep the water is rather than its planform |
 | `event_time` | question | - | optional | The moment the scenario is read at - an ISO date or datetime ('2026-08-20' or '2026-08-20T06:00:00Z'), from phrasing like 'during last Tuesday's storm'. Each source keeps its own retention, and a request deeper than one refuses typed |
 | `compute_class` | constant | - | medium | Solve sizing class |
@@ -45,25 +44,27 @@ The values the template declares. `desc` is what the model reads when it fills o
 
 | field | the proving run's value |
 |---|---|
-| `peak_temperature_c` | 18.0 |
-| `peak_temperature_time_s` | 0.0 |
-| `final_temperature_c` | 14.703310012817383 |
-| `diurnal_range_c` | 3.296689987182617 |
-| `temperature_spread_c` | 3.7622804641723633 |
-| `mean_velocity_mps` | 0.2002688355034483 |
-| `mesh_size_m` | 3.0 |
+| `peak_temperature_c` | 13.728681564331055 |
+| `peak_temperature_time_s` | 63288.0 |
+| `final_temperature_c` | 13.512860298156738 |
+| `diurnal_range_c` | 0.2286815643310547 |
+| `temperature_spread_c` | 13.110429763793945 |
+| `mean_velocity_mps` | 0.033270507625214364 |
+| `mesh_size_m` | 11.711 |
 
 It publishes these layers onto the canvas:
 
 - Input: river reach (river_reach)
+- Input: ehydro surveys (ehydro_surveys)
 - Input: bed elevation (dem, 3DEP 1-10 m US lidar (default 10 m); Copernicus GLO-30 30 m global via source=copernicus, datum NAVD88 (metres, positive up))
-- Temperature station (derived) - river_reach_domain
+- Temperature station (user) - river_reach_domain
 - Input: raws weather (raws_weather)
+- Input: usgs water quality (usgs_water_quality)
 - Velocity u over time (river_reach_domain_mesh)
 - Velocity v over time (river_reach_domain_mesh)
 - Water depth over time (river_reach_domain_mesh)
 - Free surface over time (river_reach_domain_mesh)
-- Bottom (m) at t = 3600 s (river_reach_domain_mesh)
+- Bottom (m) at t = 604752 s (river_reach_domain_mesh)
 - Froude number over time (river_reach_domain_mesh)
 - Scalar flowrate over time (river_reach_domain_mesh)
 - Scalar velocity over time (river_reach_domain_mesh)
@@ -73,23 +74,23 @@ It publishes these layers onto the canvas:
 
 ## The proving run
 
-Run `01M2P6F7TFWPPD24ZRXP4VPRG1`, 2026-09-16T22:49:32.626699+00:00, 152.185 s, at commit `1883ff4c1867377c3bb4efdec4e2a87450e5fefa-dirty`.
+Run `01M2VF7G5ZJV2B9AZNY0FCYSVW`, 2026-09-19T00:26:09.755443+00:00, 1817.424 s, at commit `8397312dd28e2ade6266f5eef50ce148c6c060c5-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M2P6F7TFWPPD24ZRXP4VPRG1)](telemac_water_temperature/telemac_water_temperature.png)
+![Every layer the run published, stacked and framed on the result (run 01M2VF7G5ZJV2B9AZNY0FCYSVW)](telemac_water_temperature/telemac_water_temperature.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M2P6F7TFWPPD24ZRXP4VPRG1)*
+*Every layer the run published, stacked and framed on the result (run 01M2VF7G5ZJV2B9AZNY0FCYSVW)*
 
-![The solve, frame by frame (run 01M2P6F7TFWPPD24ZRXP4VPRG1)](telemac_water_temperature/telemac_water_temperature_animation.gif)
+![The solve, frame by frame (run 01M2VF7G5ZJV2B9AZNY0FCYSVW)](telemac_water_temperature/telemac_water_temperature_animation.gif)
 
-*The solve, frame by frame (run 01M2P6F7TFWPPD24ZRXP4VPRG1)*
+*The solve, frame by frame (run 01M2VF7G5ZJV2B9AZNY0FCYSVW)*
 
-![final frame (run 01M2P6F7TFWPPD24ZRXP4VPRG1)](telemac_water_temperature/telemac_water_temperature_final_frame.png)
+![final frame (run 01M2VF7G5ZJV2B9AZNY0FCYSVW)](telemac_water_temperature/telemac_water_temperature_final_frame.png)
 
-*final frame (run 01M2P6F7TFWPPD24ZRXP4VPRG1)*
+*final frame (run 01M2VF7G5ZJV2B9AZNY0FCYSVW)*
 
-![water temperature - the chart the run persisted (run 01M2P6F7TFWPPD24ZRXP4VPRG1)](telemac_water_temperature/telemac_water_temperature_chart_water_temperature.png)
+![water temperature - the chart the run persisted (run 01M2VF7G5ZJV2B9AZNY0FCYSVW)](telemac_water_temperature/telemac_water_temperature_chart_water_temperature.png)
 
-*water temperature - the chart the run persisted (run 01M2P6F7TFWPPD24ZRXP4VPRG1)*
+*water temperature - the chart the run persisted (run 01M2VF7G5ZJV2B9AZNY0FCYSVW)*
 
 ### The sheet it filled
 
@@ -97,14 +98,13 @@ Every slot the run resolved, with where the value came from. The engine's own de
 
 | param | value | units | basis | provenance |
 |---|---|---|---|---|
-| `seed` | Point(lon=-120.009, lat=44.793, name=None) | - | user | supplied on this invocation |
-| `weather_start` | 2026-09-12 | - | user | supplied on this invocation |
-| `weather_end` | 2026-09-15 | - | user | supplied on this invocation |
-| `sim_duration_s` | 3600.0 | s | user | supplied on this invocation |
-| `mesh_resolution_m` | 12.0 | m | user | supplied on this invocation |
-| `vertical_frame` | EGM2008 | - | user | supplied on this invocation |
+| `seed` | Point(lon=-122.6691667, lat=45.5175, name=None) | - | user | supplied on this invocation |
+| `weather_start` | 2026-09-09 | - | user | supplied on this invocation |
+| `weather_end` | 2026-09-17 | - | user | supplied on this invocation |
+| `station` | Point(lon=-122.669784, lat=45.518485, name=None) | - | user | supplied on this invocation |
+| `mesh_resolution_m` | 40.0 | m | user | supplied on this invocation |
 | `compute_class` | medium | - | default_demo | declared constant default |
-| `station` | - | - | user | not supplied (declared optional) |
+| `vertical_frame` | NAVD88 | - | default_demo | declared constant default |
 | `event_time` | - | - | prompt_interpreted | not supplied (declared optional) |
 
 ### Reproduce
@@ -113,14 +113,13 @@ Every slot the run resolved, with where the value came from. The engine's own de
 from trid3nt_server.tools import TOOL_REGISTRY
 
 await TOOL_REGISTRY['telemac_water_temperature'].fn(
-    mesh_resolution_m=12.0,
-    seed='Point(lon=-120.009, lat=44.793, name=None)',
-    sim_duration_s=3600.0,
-    vertical_frame='EGM2008',
-    weather_end='2026-09-15',
-    weather_start='2026-09-12',
+    mesh_resolution_m=40.0,
+    seed='Point(lon=-122.6691667, lat=45.5175, name=None)',
+    station='Point(lon=-122.669784, lat=45.518485, name=None)',
+    weather_end='2026-09-17',
+    weather_start='2026-09-09',
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2P6F7TFWPPD24ZRXP4VPRG1` and commit `1883ff4c1867377c3bb4efdec4e2a87450e5fefa-dirty`. The full argument record is [`telemac_water_temperature/run.json`](telemac_water_temperature/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2VF7G5ZJV2B9AZNY0FCYSVW` and commit `8397312dd28e2ade6266f5eef50ce148c6c060c5-dirty`. The full argument record is [`telemac_water_temperature/run.json`](telemac_water_temperature/run.json).
 
