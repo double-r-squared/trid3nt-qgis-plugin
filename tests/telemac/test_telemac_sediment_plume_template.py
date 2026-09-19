@@ -258,17 +258,15 @@ def test_the_injected_mass_is_derived_from_the_pulse_the_sheet_states():
 
 def test_the_derived_mass_resolves_to_the_shared_release_relation():
     """A DERIVED param is a declaration until the path it names is a callable the
-    resolver can hand a sheet to: the pulse's three values reach the shared
-    relation through the params-shaped entry beside it, the way the oxygen
-    saturation reaches its own."""
+    resolver can hand a sheet to: the window reaches the shared relation
+    through the params-shaped entry beside it, at the deck's own two fixed
+    numbers, the way the oxygen saturation reaches its own."""
     import importlib
     from types import SimpleNamespace
 
     module_path, _, attr = _MASS_RESOLVE.rpartition(".")
     relation = getattr(importlib.import_module(module_path), attr)
-    assert relation(SimpleNamespace(source_q_m3s=8.0,
-                                    sediment_concentration_mgl=100.0,
-                                    spill_duration_s=300.0)) == 240.0
+    assert relation(SimpleNamespace(spill_duration_s=300.0)) == 240.0
 
 
 def test_the_roughness_is_the_decks_own_opinion_stated_as_keywords():
