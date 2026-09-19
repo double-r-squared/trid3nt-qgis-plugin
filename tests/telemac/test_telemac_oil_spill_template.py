@@ -13,6 +13,7 @@ import pytest
 from trid3nt_server.workflows.runtime import Ref
 from trid3nt_server.workflows.runtime.data import BED, DISCHARGE, DOMAIN
 from trid3nt_server.workflows.runtime.levers import LEVER_NAMES
+from trid3nt_server.workflows.telemac.modules import T2D
 from trid3nt_server.workflows.telemac.templates.oil_spill import (
     oil_spill as template,
 )
@@ -149,9 +150,55 @@ def test_the_question_keeps_only_its_own_inputs():
     run's value, which is the carrier ROW's, so it is no param of this one."""
     declared = {prm.name for prm in _workflow().params}
     assert "discharge_m3s" not in declared
-    assert {"release", "spill_fraction", "spill_duration_s", "source_q_m3s",
-            "oil_concentration_mgl", "oil_type",
+    assert {"release", "spill_fraction", "spill_duration_s", "oil_type",
             "oil_release_step"} <= declared
+    # the source strength and its dissolved concentration are the deck's own
+    # fixed keyword values now, not a lever this question states.
+    assert not declared & {"source_q_m3s", "oil_concentration_mgl"}
+
+
+def test_the_source_is_stated_as_the_four_source_keywords_by_name():
+    """No ``releases`` composite: the deck states WHERE, HOW MUCH and AT WHAT
+    CONCENTRATION as the engine's own keywords, one element per source."""
+    asserted = template.STEERING.ASSERTED
+    assert asserted["ABSCISSAE_OF_SOURCES"] == [Ref("source.at.0")]
+    assert asserted["ORDINATES_OF_SOURCES"] == [Ref("source.at.1")]
+    assert asserted["WATER_DISCHARGE_OF_SOURCES"] == [8.0]
+    assert asserted["VALUES_OF_THE_TRACERS_AT_THE_SOURCES"] == [100.0]
+    assert "releases" not in asserted
+
+
+def test_the_sources_composite_writes_only_the_sources_file():
+    """``Sources(window_s=, until_s=)`` reads the discharge and the tracer value
+    off the sheet by the keywords stated above, and writes the SOURCES FILE."""
+    from trid3nt_server.workflows.telemac.modules.telemac2d import SOURCES_FILENAME
+
+    slots, files = T2D.COMPOSITES["sources"].expand(
+        {"window_s": 300.0, "until_s": 3600.0,
+         "q": [8.0], "tracers": [100.0]})
+    assert slots == {"SOURCES_FILE": SOURCES_FILENAME}
+    assert list(files) == [SOURCES_FILENAME]
+
+
+def test_the_spill_window_is_the_questions_own_input_and_stays_a_param():
+    asserted = template.STEERING.ASSERTED
+    assert asserted["sources"]["window_s"].name == "spill_duration_s"
+    assert asserted["sources"]["until_s"].path == "settled.until_s"
+
+
+def test_the_ex_release_params_are_gone_from_the_declared_wire():
+    """The discharge and its dissolved concentration were only ever a twin
+    inside the release composite; they leave with it, off both the declared
+    params and the wire the model is offered - a caller naming the old name
+    gets no such slot."""
+    import inspect
+
+    from trid3nt_server.tools import TOOL_REGISTRY
+
+    declared = {p.name for p in _workflow().params}
+    wire = set(inspect.signature(TOOL_REGISTRY[_TOOL].fn).parameters)
+    gone = {"source_q_m3s", "oil_concentration_mgl"}
+    assert not (declared & gone) and not (wire & gone)
 
 
 def test_the_roughness_is_the_decks_own_opinion_stated_as_keywords():

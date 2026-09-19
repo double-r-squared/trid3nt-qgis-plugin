@@ -38,11 +38,11 @@ ACCEPTS = Accepts(mesh=("unstructured_tri",), release=("point",))
 
 
 class PARAMS:
-    """What only a conservative-plume question asks: where the release is, what
-    is released and how much of it, and whether it decays. The domain, the bed,
-    its boundary runs and the granularity are the runtime's own slots and
-    levers, and the deck's clock, roughness, cadence, wind and rain are keywords
-    the module's dictionary describes."""
+    """What only a conservative-plume question asks: where the release is, how
+    long it runs, and whether it decays. The domain, the bed, its boundary runs
+    and the granularity are the runtime's own slots and levers, and the deck's
+    clock, roughness, cadence, source strength and concentration, wind and rain
+    are keywords the module's dictionary describes."""
 
     release = Param(
         door=doors.USER, optional=True, user_lever=True,
@@ -67,15 +67,6 @@ class PARAMS:
         door=doors.SCENARIO, default=300.0,
         bounds=(1.0, 86400.0), units="s", consequence="scenario",
         desc="Finite pulse injection window")
-    source_q_m3s = Param(
-        door=doors.SCENARIO, default=8.0, bounds=(0.5, 30.0),
-        units="m^3/s", consequence="scenario",
-        desc="Point-source discharge of the release itself, small against the "
-             "carrier flow")
-    dye_concentration_mgl = Param(
-        door=doors.SCENARIO, default=100.0,
-        bounds=(0.0, 1.0e6), units="mg/L", consequence="scenario",
-        desc="Source concentration of the released substance")
 
     # -- decay, the one optional coupling this question carries -------------- #
     decaying_substance = Param(
@@ -110,9 +101,9 @@ DOC = dict(
         "by the current, sewage or E.coli effluent DECAYING as it goes (name it "
         "in `decaying_substance`). TELEMAC-2D over a reach walked from the "
         "release, a lake drawn on the canvas, or a supplied polygon: a finite "
-        "pulse is carried by the flow and dilutes. Give `release` as a pick, a "
-        "pick or a pair, or supply `domain`. Deck: DURATION 3600 s, no WIND and "
-        "no RAIN OR EVAPORATION - set each by its keyword name."
+        "pulse is carried by the flow and dilutes. Give `release` as a pick or a "
+        "pair, or supply `domain`. Source: ABSCISSAE/ORDINATES/DISCHARGE/TRACER "
+        "keywords. Deck: DURATION 3600 s, no WIND, no RAIN."
     ),
     not_for=(
         "an OIL slick (`telemac_oil_spill`); bed SCOUR, deposition, grain "

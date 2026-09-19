@@ -12,6 +12,7 @@ import asyncio
 
 import pytest
 
+from trid3nt_server.workflows.runtime import Ref
 from trid3nt_server.workflows.telemac.modules import T2D, WAQTEL, fill, waqtel
 from trid3nt_server.workflows.telemac.modules.module import SlotRefused
 
@@ -128,19 +129,37 @@ def test_every_tracer_sized_array_on_the_deck_carries_one_value_per_row():
     assert len(steering.NAMES_OF_TRACERS) == 1
     assert len(steering.INITIAL_VALUES_OF_TRACERS) == len(ROWS)
     assert len(steering.boundaries["tracers"]) == len(ROWS)
-    (release,) = steering.releases
-    assert len(release["tracers"]) == len(ROWS)
+    assert len(steering.VALUES_OF_THE_TRACERS_AT_THE_SOURCES) == len(ROWS)
+
+
+def test_the_marker_is_stated_as_the_four_source_keywords_by_name():
+    """No ``releases`` composite: the deck states WHERE, HOW MUCH and AT WHAT
+    CONCENTRATION as the engine's own keywords, one element per source."""
+    asserted = _template().STEERING.ASSERTED
+    assert asserted["ABSCISSAE_OF_SOURCES"] == [Ref("source.at.0")]
+    assert asserted["ORDINATES_OF_SOURCES"] == [Ref("source.at.1")]
+    assert asserted["WATER_DISCHARGE_OF_SOURCES"] == [1.0]
+    assert asserted["VALUES_OF_THE_TRACERS_AT_THE_SOURCES"] == [
+        100.0, 0.0, 0.0, 0.0, 0.0]
+    assert "releases" not in asserted
+
+
+def test_the_spill_window_is_the_questions_own_input_and_stays_a_param():
+    asserted = _template().STEERING.ASSERTED
+    assert asserted["sources"]["window_s"].name == "release_duration_s"
+    assert asserted["sources"]["until_s"].path == "settled.until_s"
 
 
 def test_the_deck_releases_the_substance_dissolved_and_carries_the_sediment_in():
     steering = _template().STEERING
     # The declared row is the dissolved substance, so it is position one and the
-    # sediment the process appends is position two.
-    (release,) = steering.releases
-    assert release["tracers"][0].name == "source_concentration_mgl"
-    assert release["tracers"][1:] == [0.0, 0.0, 0.0, 0.0]
+    # sediment the process appends is position two. Nothing fetches suspended
+    # sediment, so the ambient class is a STATED condition, not a Param -
+    # 30 mg/L as kg/m3, the water's own typical suspended load.
+    assert steering.VALUES_OF_THE_TRACERS_AT_THE_SOURCES[0] == 100.0
+    assert steering.VALUES_OF_THE_TRACERS_AT_THE_SOURCES[1:] == [0.0, 0.0, 0.0, 0.0]
     assert steering.INITIAL_VALUES_OF_TRACERS[0] == 0.0
-    assert steering.INITIAL_VALUES_OF_TRACERS[1].name == "ambient_spm_kg_m3"
+    assert steering.INITIAL_VALUES_OF_TRACERS[1] == 0.03
     assert steering.INITIAL_VALUES_OF_TRACERS[2:] == [0.0, 0.0, 0.0]
 
 
@@ -179,10 +198,8 @@ def test_the_declared_params_and_the_plan_validate():
     from trid3nt_server.workflows.runtime import resolve_params, validate_plan
 
     workflow = _template().telemac_micropollutant_release.workflow
-    resolved = asyncio.run(resolve_params(workflow.params, {}))
+    asyncio.run(resolve_params(workflow.params, {}))
     validate_plan(workflow.plan, workflow.params, workflow.data)
-    # Nothing fetches suspended sediment, so the sorbent is a STATED condition.
-    assert resolved.value_of("ambient_spm_kg_m3") == 0.03
 
 
 def test_the_template_declares_none_of_the_runtime_s_own_rows():
@@ -288,10 +305,13 @@ def test_the_plan_reads_as_the_universal_stage_sequence():
         "publish"]
 
 
-@pytest.mark.asyncio
-async def test_auto_mode_refuses_the_sorbent_nobody_measured():
-    """Nothing fetches suspended sediment, so the labeled default is an invented
-    physics value and an auto run refuses it instead of solving on it."""
-    out = await _template().telemac_micropollutant_release()
-    assert isinstance(out, dict) and out["status"] == "error"
-    assert out["error_code"] == "PHYSICS_INPUT_REQUIRED"
+def test_the_ambient_sediment_is_a_stated_deck_opinion_not_a_param():
+    """Nothing fetches suspended sediment; ambient_spm_kg_m3 was a straight twin
+    of INITIAL VALUES OF TRACERS position 2, so it is the keyword's own stated
+    value now, like FRICTION_COEFFICIENT above it, and carries no Param."""
+    from trid3nt_server.workflows.runtime import param_rows
+
+    declared = {prm.name for prm in param_rows(_template().PARAMS)}
+    assert "ambient_spm_kg_m3" not in declared
+    assert "source_q_m3s" not in declared
+    assert "source_concentration_mgl" not in declared

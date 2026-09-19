@@ -53,16 +53,6 @@ class PARAMS:
         door=doors.SCENARIO, default=300.0,
         bounds=(1.0, 86400.0), units="s", consequence="scenario",
         desc="Finite pulse injection window")
-    source_q_m3s = Param(
-        door=doors.SCENARIO, default=8.0, bounds=(0.5, 30.0),
-        units="m^3/s", consequence="scenario",
-        desc="Point-source discharge of the release itself, small against the "
-             "carrier flow")
-    tracer_concentration_mgl = Param(
-        door=doors.SCENARIO, default=100.0,
-        bounds=(0.0, 1.0e6), units="mg/L", consequence="scenario",
-        desc="Concentration of the marker tracer released at the source, which "
-             "is what the deposited fraction is measured against")
 
     # -- the bed ------------------------------------------------------------ #
     # The class diameter, the erodible stock, the transport law and the

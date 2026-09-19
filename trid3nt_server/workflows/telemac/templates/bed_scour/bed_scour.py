@@ -32,7 +32,7 @@ from trid3nt_server.workflows.telemac.modules.gaia import RESULT_FILENAME
 from trid3nt_server.workflows.telemac.modules.telemac2d import (
     Boundaries,
     Rain,
-    Release,
+    Sources,
     TracerNames,
     Wind,
 )
@@ -218,12 +218,20 @@ class STEERING(T2D):
                   "outflow_stage_m": Ref("settled.outflow_stage_m")},
         tracers=[0.0])
 
-    #: The marker the bed change is watched against, released as a finite pulse
-    #: at a point source inside the domain.
-    releases = [Release(at=Ref("source.at"), q=P.source_q_m3s,
-                        tracers=[P.tracer_concentration_mgl],
-                        window_s=P.spill_duration_s,
-                        until_s=Ref("settled.until_s"))]
+    #: WHERE the marker enters the water, in the mesh's own metres: the settled
+    #: release point, read by position because a point is one value with an
+    #: order. One element per source, in the engine's own positional order.
+    ABSCISSAE_OF_SOURCES = [Ref("source.at.0")]
+    ORDINATES_OF_SOURCES = [Ref("source.at.1")]
+    #: HOW MUCH enters, small against the carrier flow this deck opens on.
+    WATER_DISCHARGE_OF_SOURCES = [8.0]
+    #: The concentration the deposited fraction downstream is measured against;
+    #: the bed change itself does not scale with this number.
+    VALUES_OF_THE_TRACERS_AT_THE_SOURCES = [100.0]
+    #: A FINITE pulse, so the marker advects and passes instead of holding the
+    #: whole domain at a steady concentration.
+    sources = Sources(window_s=P.spill_duration_s,
+                      until_s=Ref("settled.until_s"))
 
     #: The bed itself: bedload on, one class or a mixture, a real stock to scour
     #: into. What the dictionary has no keyword for is the GRADATION - a named

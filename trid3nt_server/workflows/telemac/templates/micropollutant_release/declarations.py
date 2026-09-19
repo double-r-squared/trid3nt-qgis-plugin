@@ -15,10 +15,10 @@ ACCEPTS = Accepts(mesh=("unstructured_tri",), release=("point",))
 
 
 class PARAMS:
-    """What only a sorbing-substance question asks: where it enters and how much,
-    the sediment it partitions onto, and where downstream the history is read.
-    The domain, the bed, its boundary runs and the granularity are the runtime's
-    own slots and levers, and the clock, the roughness, the cadence and the
+    """What only a sorbing-substance question asks: where and for how long it
+    enters, and where downstream the history is read. The domain, the bed, its
+    boundary runs and the granularity are the runtime's own slots and levers,
+    and the clock, the roughness, the cadence, the source keywords and the
     sorption constants are keywords the module's dictionary describes."""
 
     # -- the release -------------------------------------------------------- #
@@ -43,29 +43,6 @@ class PARAMS:
         bounds=(1.0, 86400.0), units="s", consequence="scenario",
         desc="Finite injection window; the substance is released over it and the "
              "rest of the run is what happens to what was released")
-    source_q_m3s = Param(
-        door=doors.SCENARIO, default=1.0, bounds=(0.0001, 1000.0),
-        units="m^3/s", consequence="scenario",
-        desc="Discharge of the release itself - with the carrier flow this sets "
-             "the dilution the water receives")
-    source_concentration_mgl = Param(
-        door=doors.SCENARIO, default=100.0,
-        bounds=(0.0, 1.0e6), units="mg/L", consequence="scenario",
-        desc="DISSOLVED concentration of the substance in the release itself, "
-             "before any dilution; everything that ends up on sediment gets "
-             "there by sorption during the run")
-
-    # -- the sediment the substance partitions onto -------------------------- #
-    ambient_spm_kg_m3 = Param(
-        door=doors.SCENARIO, default=0.03, bounds=(0.0, 10.0),
-        units="kg/m^3", consequence="physics", user_lever=True,
-        desc="Suspended sediment the water already carries, in and at the top of "
-             "the domain, in KILOGRAMS PER CUBIC METRE - the class the sorption "
-             "coefficient's own m^3/kg is read against, so 30 mg/L is 0.03. It "
-             "is the SORBENT: with none, the substance stays dissolved and "
-             "nothing reaches the bed. Nothing fetches suspended sediment, so "
-             "this is a STATED condition, not a measured one - state the gauged "
-             "value where there is one")
 
     # -- where the history is read ------------------------------------------- #
     monitoring_point = Param(

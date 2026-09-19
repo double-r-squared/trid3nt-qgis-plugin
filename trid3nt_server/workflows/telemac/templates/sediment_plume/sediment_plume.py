@@ -32,13 +32,14 @@ from trid3nt_server.workflows.telemac.modules.gaia import RESULT_FILENAME
 from trid3nt_server.workflows.telemac.modules.telemac2d import (
     Boundaries,
     Rain,
-    Release,
+    Sources,
     TracerNames,
     Wind,
 )
 from trid3nt_server.workflows.solver.compute_class import compute_class
 from trid3nt_server.workflows.telemac.templates.sediment_plume.declarations import (
     ACCEPTS, DOC, PARAMS, PARAMS as P,
+    SEDIMENT_CONCENTRATION_MGL, SOURCE_Q_M3S,
 )
 from trid3nt_server.workflows.telemac.workflow import Door, TelemacWorkflow
 
@@ -213,26 +214,36 @@ class STEERING(T2D):
                   "outflow_stage_m": Ref("settled.outflow_stage_m")},
         tracers=[0.0, 0.0])
 
-    #: The marker the settling is watched against, released as a finite pulse at
-    #: the same source the class is injected at.
-    releases = [Release(at=Ref("source.at"), q=P.source_q_m3s,
-                        tracers=[P.sediment_concentration_mgl],
-                        window_s=P.spill_duration_s,
-                        until_s=Ref("settled.until_s"))]
+    #: WHERE the marker enters the water, in the mesh's own metres: the settled
+    #: release point, read by position because a point is one value with an
+    #: order. One element per source, in the engine's own positional order.
+    ABSCISSAE_OF_SOURCES = [Ref("source.at.0")]
+    ORDINATES_OF_SOURCES = [Ref("source.at.1")]
+    #: HOW MUCH enters, and at what concentration: the deck's own fixed source
+    #: strength, small against the carrier flow so the pulse is a marker and
+    #: not a flood - the question's own input is the spill WINDOW below.
+    WATER_DISCHARGE_OF_SOURCES = [SOURCE_Q_M3S]
+    VALUES_OF_THE_TRACERS_AT_THE_SOURCES = [SEDIMENT_CONCENTRATION_MGL]
+    #: A FINITE pulse, so the slug advects away and dilutes instead of
+    #: saturating the water.
+    sources = Sources(window_s=P.spill_duration_s,
+                      until_s=Ref("settled.until_s"))
 
     #: The settling class itself, over a bed the composite lays at zero initial
-    #: thickness: nothing erodes and only the injected pulse can deposit.
+    #: thickness: nothing erodes and only the injected pulse can deposit. The
+    #: source concentration is the same fixed number VALUES OF THE TRACERS AT
+    #: THE SOURCES states above, restated here because GAIA reads its own
+    #: keyword for it.
     coupling = [GAIA.suspended(
         geometry=_GEOMETRY, boundary=_BOUNDARY,
-        concentration_mgl=P.sediment_concentration_mgl,
-        # ONE class, 200 um fine sand in the keyword's own metres: it settles
-        # within a few kilometres of the source, so the deposit lands inside the
-        # domain this question walks and the answer is a pattern rather than an
-        # export. GAIA is a COUPLED body and the keywords floor reaches only
-        # the carrier's own dictionary, so nothing on the call can state a
-        # finer class: this diameter is the deck's fixed opinion until a
-        # coupled module's keywords have a surface of their own.
-        CLASSES_SEDIMENT_DIAMETERS=[2.0e-4],
+        concentration_mgl=SEDIMENT_CONCENTRATION_MGL,
+        # ONE class, 30 um silt in the keyword's own metres - the class a
+        # dredge-or-slurry plume question is about. GAIA is a COUPLED body and
+        # the keywords floor reaches only the carrier's own dictionary, so
+        # nothing on the call can state a finer class: this diameter is the
+        # deck's fixed opinion until a coupled module's keywords have a
+        # surface of their own.
+        CLASSES_SEDIMENT_DIAMETERS=[3.0e-5],
         # Zyserman-Fredsoe: of the suspension formulae GAIA offers, the one
         # written for the fine non-cohesive class this plume carries.
         SUSPENSION_TRANSPORT_FORMULA_FOR_ALL_SANDS=3,

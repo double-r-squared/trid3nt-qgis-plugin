@@ -2,12 +2,30 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from trid3nt_server.inputs import Point
 from trid3nt_server.workflows.runtime import Accepts, Param, doors
+from trid3nt_server.workflows.telemac.helpers.released_mass import released_mass_kg
 
-__all__ = ["ACCEPTS", "DOC", "PARAMS"]
+__all__ = ["ACCEPTS", "DOC", "PARAMS", "SEDIMENT_CONCENTRATION_MGL",
+           "SOURCE_Q_M3S"]
 
-_HELPERS = "trid3nt_server.workflows.telemac.helpers"
+#: The deck's own fixed source strength and concentration: small against the
+#: carrier flow, so the pulse is a marker and not a flood. Neither is a
+#: question the user asks by name - the spill WINDOW below is the question's
+#: own input, so it alone stays a Param.
+SOURCE_Q_M3S = 8.0
+SEDIMENT_CONCENTRATION_MGL = 100.0
+
+
+def _injected_mass_kg(params: Any) -> float:
+    """The mass the deck's own fixed discharge and concentration put in over
+    the scenario's own spill window - the shared release-mass relation, at
+    this template's two fixed numbers."""
+    return released_mass_kg(SOURCE_Q_M3S, SEDIMENT_CONCENTRATION_MGL,
+                            params.spill_duration_s)
+
 
 #: What a suspended-plume run can be HANDED. The settling class rides the same
 #: triangulation the hydrodynamics runs on, so a lattice is refused at the door.
@@ -16,10 +34,11 @@ ACCEPTS = Accepts(mesh=("unstructured_tri",), release=("point",))
 
 class PARAMS:
     """What only a settling-plume question asks: where the sediment enters the
-    water and how concentrated the release is. The domain, the bed, its boundary
-    runs and the granularity are the runtime's own slots and levers, and the
-    deck's clock, roughness, cadence, sediment class, transport and advection,
-    wind and rain are keywords the module's dictionary describes."""
+    water and the finite pulse's window. The domain, the bed, its boundary runs
+    and the granularity are the runtime's own slots and levers, and the deck's
+    clock, roughness, cadence, source strength and concentration, sediment
+    class, transport and advection, wind and rain are keywords the module's
+    dictionary describes."""
 
     release = Param(
         door=doors.USER, optional=True, user_lever=True,
@@ -44,25 +63,18 @@ class PARAMS:
         door=doors.SCENARIO, default=300.0,
         bounds=(1.0, 86400.0), units="s", consequence="scenario",
         desc="Finite pulse injection window")
-    source_q_m3s = Param(
-        door=doors.SCENARIO, default=8.0, bounds=(0.5, 30.0),
-        units="m^3/s", consequence="scenario",
-        desc="Point-source discharge of the release itself, small against the "
-             "carrier flow")
 
     # -- the released class -------------------------------------------------- #
-    sediment_concentration_mgl = Param(
-        door=doors.SCENARIO, default=100.0,
-        bounds=(0.0, 1.0e6), units="mg/L", consequence="scenario",
-        desc="Concentration of the released suspended sediment; what deposits is "
-             "measured against what this put in")
+    # WATER DISCHARGE OF SOURCES and VALUES OF THE TRACERS AT THE SOURCES are
+    # the deck's own fixed keyword values (SOURCE_Q_M3S, SEDIMENT_CONCENTRATION_MGL
+    # in declarations.py); the question does not ask for either by name.
     injected_mass_kg = Param(
         door=doors.DERIVED,
-        resolve=f"{_HELPERS}.released_mass.injected_mass_kg",
+        resolve=f"{__name__}._injected_mass_kg",
         bounds=(0.0, 1.0e9), units="kg", consequence="scenario",
-        desc="The mass the pulse released - source_q_m3s x "
-             "sediment_concentration_mgl x spill_duration_s - which the deposited "
-             "fraction is measured against")
+        desc="The mass the pulse released - the deck's own fixed discharge and "
+             "concentration x spill_duration_s - which the deposited fraction "
+             "is measured against")
 
 
 DOC = dict(
@@ -75,7 +87,7 @@ DOC = dict(
         "canvas, or a supplied polygon: ONE settling class over a bed with NO "
         "stock, so nothing erodes and only what was injected deposits. Give "
         "`release` as a pick or a pair, or supply `domain`. Deck: "
-        "DURATION 3600 s, CLASSES SEDIMENT DIAMETERS 2.0e-4 m, SUSPENSION "
+        "DURATION 3600 s, CLASSES SEDIMENT DIAMETERS 3.0e-5 m, SUSPENSION "
         "TRANSPORT FORMULA FOR ALL SANDS 3, SCHEME FOR ADVECTION OF SUSPENDED "
         "SEDIMENTS 1, no WIND and no RAIN OR EVAPORATION - set each by its "
         "keyword name."

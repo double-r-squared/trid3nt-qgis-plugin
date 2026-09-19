@@ -22,7 +22,7 @@ from trid3nt_server.inputs.instant import event_time
 from trid3nt_server.workflows.solver.compute_class import compute_class
 from trid3nt_server.workflows.telemac.modules import T2D, WAQTEL, mesh
 from trid3nt_server.workflows.telemac.modules.outputs import profile
-from trid3nt_server.workflows.telemac.modules.telemac2d import Boundaries, Release
+from trid3nt_server.workflows.telemac.modules.telemac2d import Boundaries, Sources
 from trid3nt_server.workflows.telemac.templates.do_sag import streeter_phelps
 from trid3nt_server.workflows.telemac.templates.do_sag.declarations import (
     ACCEPTS, DOC, PARAMS, PARAMS as P,
@@ -221,12 +221,22 @@ class STEERING(T2D):
                   "outflow_stage_m": Ref("settled.outflow_stage_m")},
         tracers=[0.0, _SATURATION_MGL, 0.0, 0.0])
 
-    #: The OUTFALL: a permitted discharge does not pulse, so the flow and its
-    #: concentrations hold flat across the whole run and the water reaches the
-    #: steady-state sag the question is asked about.
-    releases = [Release(at=Ref("outfall.at"), q=P.effluent_q_m3s,
-                        tracers=[0.0, P.effluent_do_mgl, P.effluent_bod_mgl, 0.0],
-                        window_s=None, until_s=Ref("settled.until_s"))]
+    #: WHERE the outfall enters the water, in the mesh's own metres: the settled
+    #: discharge point, read by position because a point is one value with an
+    #: order. One element per source, in the engine's own positional order.
+    ABSCISSAE_OF_SOURCES = [Ref("outfall.at.0")]
+    ORDINATES_OF_SOURCES = [Ref("outfall.at.1")]
+    #: HOW MUCH the outfall discharges, and at what concentration: the
+    #: discharge, then every tracer of the one source in the order NAMES OF
+    #: TRACERS declares them - DYE, then the three WAQTEL O2 tracers behind it.
+    #: A secondary-treated municipal effluent arrives oxygen-poor and heavily
+    #: loaded, which is the initial deficit the sag starts from; it is what the
+    #: deck is read against, not a number this question asks for.
+    WATER_DISCHARGE_OF_SOURCES = [1.0]
+    VALUES_OF_THE_TRACERS_AT_THE_SOURCES = [0.0, 2.0, 250.0, 0.0]
+    #: A PERMITTED discharge does not pulse: held flat across the whole run so
+    #: the water reaches the steady-state sag the question is asked about.
+    sources = Sources(window_s=None, until_s=Ref("settled.until_s"))
 
     #: Deoxygenation balanced by surface reaeration, and nothing else: the
     #: modelled curve is the closed form the question is asked against, so this

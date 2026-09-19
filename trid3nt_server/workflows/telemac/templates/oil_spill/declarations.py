@@ -68,16 +68,6 @@ class PARAMS:
         door=doors.SCENARIO, default=300.0,
         bounds=(1.0, 86400.0), units="s", consequence="scenario",
         desc="Finite pulse injection window")
-    source_q_m3s = Param(
-        door=doors.SCENARIO, default=8.0, bounds=(0.5, 30.0),
-        units="m^3/s", consequence="scenario",
-        desc="Point-source discharge of the release itself, small against the "
-             "carrier flow")
-    oil_concentration_mgl = Param(
-        door=doors.SCENARIO, default=100.0,
-        bounds=(0.0, 1.0e6), units="mg/L", consequence="scenario",
-        desc="Concentration of the DISSOLVED fraction released with the slick, "
-             "carried as the water's tracer")
 
     # -- which oil ---------------------------------------------------------- #
     oil_type = Param(
@@ -104,9 +94,10 @@ DOC = dict(
         "release, a harbour or lake you draw, or a polygon you supply, with the "
         "engine's oil-spill module on the solve: the floats draw the slick and "
         "the dissolved fraction advects as a tracer. Give "
-        "`release` as a pick or a pair, or supply `domain`. "
-        "Deck: DURATION 3600 s, MAXIMUM NUMBER OF DROGUES 100, "
-        "PRINTOUT PERIOD FOR DROGUES 60, no WIND and no RAIN OR EVAPORATION."
+        "`release` as a pick or a pair, or supply `domain`. Source: "
+        "ABSCISSAE/ORDINATES/DISCHARGE/TRACER. Deck: DURATION 3600 s, "
+        "MAXIMUM NUMBER OF DROGUES 100, PRINTOUT PERIOD FOR DROGUES 60, "
+        "no WIND, no RAIN."
     ),
     not_for=(
         "a conservative dye or contaminant plume with no slick "

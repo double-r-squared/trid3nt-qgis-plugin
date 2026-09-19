@@ -26,7 +26,7 @@ from trid3nt_server.workflows.telemac.modules import (
     mesh,
     series,
 )
-from trid3nt_server.workflows.telemac.modules.telemac2d import Boundaries, Release
+from trid3nt_server.workflows.telemac.modules.telemac2d import Boundaries, Sources
 from trid3nt_server.workflows.solver.compute_class import compute_class
 from trid3nt_server.workflows.telemac.templates.micropollutant_release.declarations import (
     ACCEPTS, DOC, PARAMS, PARAMS as P,
@@ -195,28 +195,40 @@ class STEERING(T2D):
     NUMBER_OF_TRACERS = 1
     NAMES_OF_TRACERS = [_DISSOLVED]
     # The water arrives carrying its sediment and nothing else: the bed starts
-    # clean, and everything on it at the end got there during the run.
-    INITIAL_VALUES_OF_TRACERS = [0.0, P.ambient_spm_kg_m3, 0.0, 0.0, 0.0]
+    # clean, and everything on it at the end got there during the run. Nothing
+    # fetches suspended sediment, so the ambient class the sorption
+    # coefficient's own m3/kg is read against is a STATED condition: 30 mg/L
+    # as kg/m3, the water's own typical suspended load.
+    INITIAL_VALUES_OF_TRACERS = [0.0, 0.03, 0.0, 0.0, 0.0]
 
     #: The carrier's own boundary values, in the order the engine numbers its
     #: liquid boundaries: the walk the mesh measured, the flow the inflow run
     #: carries and the level the outflow run holds. The same clean water, with
-    #: the same suspended sediment, at every one of them.
+    #: the same ambient sediment stated above, at every one of them.
     boundaries = Boundaries(
         measured={"liquid_boundary_order": Ref("settled.liquid_boundary_order"),
                   "liquid_boundary_prescribes":
                       Ref("settled.liquid_boundary_prescribes"),
                   "inflow_q_m3s": Ref("settled.inflow_q_m3s"),
                   "outflow_stage_m": Ref("settled.outflow_stage_m")},
-        tracers=[0.0, P.ambient_spm_kg_m3, 0.0, 0.0, 0.0])
+        tracers=[0.0, 0.03, 0.0, 0.0, 0.0])
 
-    #: A FINITE release at a point source inside the domain, so what happens to
-    #: the substance after it is in the water is what the rest of the run shows.
-    #: It enters DISSOLVED and carries no sediment of its own.
-    releases = [Release(at=Ref("source.at"), q=P.source_q_m3s,
-                        tracers=[P.source_concentration_mgl, 0.0, 0.0, 0.0, 0.0],
-                        window_s=P.release_duration_s,
-                        until_s=Ref("settled.until_s"))]
+    #: WHERE the substance enters the water, in the mesh's own metres: the
+    #: settled release point, read by position because a point is one value
+    #: with an order. One element per source, in the engine's own positional
+    #: order.
+    ABSCISSAE_OF_SOURCES = [Ref("source.at.0")]
+    ORDINATES_OF_SOURCES = [Ref("source.at.1")]
+    #: HOW MUCH enters, and at what dissolved concentration before any
+    #: dilution - small against the carrier flow this deck opens on; the
+    #: dilution the carrier delivers is what the partition is read against,
+    #: not this starting number. It carries no sediment of its own.
+    WATER_DISCHARGE_OF_SOURCES = [1.0]
+    VALUES_OF_THE_TRACERS_AT_THE_SOURCES = [100.0, 0.0, 0.0, 0.0, 0.0]
+    #: A FINITE pulse, so the slug advects away and dilutes instead of
+    #: saturating the water. The spill window is the question's own input.
+    sources = Sources(window_s=P.release_duration_s,
+                      until_s=Ref("settled.until_s"))
 
     #: The partition: how fast the sediment settles, how hard the substance holds
     #: onto it, how fast it comes back off and how fast it decays are WAQTEL's

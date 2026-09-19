@@ -14,12 +14,13 @@ from trid3nt_server.workflows.runtime import Ref
 from trid3nt_server.workflows.runtime.data import BED, DISCHARGE, DOMAIN
 from trid3nt_server.workflows.runtime.levers import LEVER_NAMES
 from trid3nt_server.workflows.telemac.templates.sediment_plume import (
-    sediment_plume as template,
+    declarations, sediment_plume as template,
 )
 
 _TOOL = "telemac_sediment_plume"
 _MASS_RESOLVE = (
-    "trid3nt_server.workflows.telemac.helpers.released_mass.injected_mass_kg")
+    "trid3nt_server.workflows.telemac.templates.sediment_plume."
+    "declarations._injected_mass_kg")
 
 
 def _workflow():
@@ -161,8 +162,11 @@ def test_the_question_keeps_only_its_own_inputs():
     the carrier ROW's, so it is no param of this one."""
     declared = {prm.name for prm in _workflow().params}
     assert "discharge_m3s" not in declared
-    assert {"release", "spill_fraction", "spill_duration_s", "source_q_m3s",
-            "sediment_concentration_mgl", "injected_mass_kg"} <= declared
+    assert {"release", "spill_fraction", "spill_duration_s",
+            "injected_mass_kg"} <= declared
+    # source strength and concentration are the deck's own fixed keyword
+    # values now, not a lever this question states.
+    assert not declared & {"source_q_m3s", "sediment_concentration_mgl"}
 
 
 def test_no_param_restates_a_keyword_the_module_already_carries():
@@ -187,12 +191,49 @@ def test_the_settling_class_is_keywords_on_gaias_own_body():
     keywords; what the composite carries is the source concentration the
     dictionary reads in kg/m3 and the question is asked in mg/L."""
     body = template.STEERING.ASSERTED["coupling"][0]["slots"]
-    assert body["CLASSES_SEDIMENT_DIAMETERS"] == [2.0e-4]
+    assert body["CLASSES_SEDIMENT_DIAMETERS"] == [3.0e-5]
     assert body["SUSPENSION_TRANSPORT_FORMULA_FOR_ALL_SANDS"] == 3
     assert body["SCHEME_FOR_ADVECTION_OF_SUSPENDED_SEDIMENTS"] == [1]
     assert body["MASS_BALANCE"] is True
-    assert (body["suspension"]["concentration_mgl"].name
-            == "sediment_concentration_mgl")
+    assert (body["suspension"]["concentration_mgl"]
+            == declarations.SEDIMENT_CONCENTRATION_MGL)
+
+
+def test_the_deck_states_the_four_source_keywords_by_name():
+    """One element per source, in the engine's own positional order: where it
+    enters, and how much of the fixed strength/concentration discharges."""
+    asserted = template.STEERING.ASSERTED
+    assert asserted["ABSCISSAE_OF_SOURCES"] == [Ref("source.at.0")]
+    assert asserted["ORDINATES_OF_SOURCES"] == [Ref("source.at.1")]
+    assert asserted["WATER_DISCHARGE_OF_SOURCES"] == [declarations.SOURCE_Q_M3S]
+    assert asserted["VALUES_OF_THE_TRACERS_AT_THE_SOURCES"] == [
+        declarations.SEDIMENT_CONCENTRATION_MGL]
+
+
+def test_the_sources_composite_writes_the_sources_file():
+    """``sources`` carries the window and horizon, and reads the discharge and
+    tracer values off the sheet by the keywords stated above - it writes no
+    number of its own."""
+    asserted = template.STEERING.ASSERTED["sources"]
+    assert asserted["window_s"].name == "spill_duration_s"
+    assert asserted["until_s"] == Ref("settled.until_s")
+    assert asserted["q"] == Ref("WATER_DISCHARGE_OF_SOURCES")
+    assert asserted["tracers"] == Ref("VALUES_OF_THE_TRACERS_AT_THE_SOURCES")
+
+
+def test_the_deleted_release_params_are_refused():
+    """``source_q_m3s`` and ``sediment_concentration_mgl`` fed Release and
+    nothing else; neither is declared, so neither is on the generated
+    signature, on the sheet, or resolvable by name any more."""
+    import inspect
+
+    signature = inspect.signature(getattr(template, _TOOL))
+    declared = {prm.name for prm in _workflow().params}
+    for gone in ("source_q_m3s", "sediment_concentration_mgl"):
+        assert gone not in signature.parameters, gone
+        assert gone not in declared, gone
+        with pytest.raises(AttributeError):
+            getattr(template.PARAMS, gone)
 
 
 def test_a_calm_dry_deck_states_no_wind_and_no_rain_at_all():

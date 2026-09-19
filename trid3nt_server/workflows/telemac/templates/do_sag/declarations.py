@@ -34,22 +34,6 @@ class PARAMS:
              "{coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a "
              "point layer. Geocode a place name first. On a river with no domain "
              "supplied it is also the seed the reach is walked downstream from")
-    effluent_bod_mgl = Param(
-        door=doors.SCENARIO, default=250.0,
-        bounds=(0.1, 5000.0), units="mg/L", consequence="scenario",
-        desc="Ultimate carbonaceous BOD IN THE DISCHARGE ITSELF - what leaves the "
-             "outfall pipe, before any dilution; the mixed load the water carries "
-             "is what the solve computes from this and the carrier flow")
-    effluent_q_m3s = Param(
-        door=doors.SCENARIO, default=1.0,
-        bounds=(0.0001, 1000.0), units="m^3/s", consequence="scenario",
-        desc="Discharge rate at the outfall - with the carrier flow this sets the "
-             "dilution, and so how much of the effluent load the water carries")
-    effluent_do_mgl = Param(
-        door=doors.SCENARIO, default=2.0,
-        bounds=(0.0, 20.0), units="mg/L", consequence="scenario",
-        desc="Dissolved oxygen in the discharge itself; a treated effluent arrives "
-             "oxygen-poor, which is the initial deficit the sag starts from")
 
     # -- what the sag is judged against -------------------------------------- #
     do_standard_mgl = Param(
@@ -65,13 +49,13 @@ DOC = dict(
         "THE tool for \"where does dissolved oxygen bottom out below this discharge\", "
         "\"will the DO sag violate the standard\", \"Streeter-Phelps oxygen sag\", \"BOD "
         "loading downstream of a WWTP / outfall\". TELEMAC-2D + WAQTEL O2 over a reach "
-        "walked downstream from the outfall, or a polygon you supply: clean "
-        "water in at the inflow, the DISCHARGE a continuous source of organic load "
-        "and low oxygen, CBOD decaying and reaeration recovering downstream. Produces "
-        "the along-channel oxygen profile against the closed form. Deck opinions, by "
-        "keyword: CONSTANT OF DEGRADATION OF ORGANIC LOAD K1, K2 REAERATION "
-        "COEFFICIENT, O2 SATURATION DENSITY OF WATER (CS), WATER TEMPERATURE, DURATION. "
-        "Give `outfall_coords` or `domain`."
+        "walked downstream from the outfall, or a polygon you supply: clean water in "
+        "at the inflow, CBOD decaying and reaeration recovering downstream of the "
+        "DISCHARGE. Produces the along-channel oxygen profile against the closed "
+        "form. Deck opinions, by keyword: CONSTANT OF DEGRADATION OF ORGANIC LOAD K1, "
+        "K2 REAERATION COEFFICIENT, O2 SATURATION DENSITY OF WATER (CS), WATER "
+        "TEMPERATURE, DURATION, and the outfall's own discharge and load. Give "
+        "`outfall_coords` or `domain`."
     ),
     not_for=(
         "a conservative dye/tracer plume that only dilutes "

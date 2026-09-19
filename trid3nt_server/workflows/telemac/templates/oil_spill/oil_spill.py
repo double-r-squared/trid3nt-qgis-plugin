@@ -32,7 +32,7 @@ from trid3nt_server.workflows.telemac.modules.telemac2d import (
     Boundaries,
     Oil,
     Rain,
-    Release,
+    Sources,
     TracerNames,
     Wind,
 )
@@ -218,12 +218,21 @@ class STEERING(T2D):
                   "outflow_stage_m": Ref("settled.outflow_stage_m")},
         tracers=[0.0])
 
+    #: WHERE the slick enters the water, in the mesh's own metres: the settled
+    #: release point, read by position because a point is one value with an
+    #: order. One element per source, in the engine's own positional order.
+    ABSCISSAE_OF_SOURCES = [Ref("source.at.0")]
+    ORDINATES_OF_SOURCES = [Ref("source.at.1")]
+    #: HOW MUCH enters, and at what concentration: a point discharge small
+    #: against the carrier flow, at the concentration the dissolved-oil answer
+    #: is measured against. What an oil question states is where the slick goes
+    #: and which oil it is, so neither number is asked for.
+    WATER_DISCHARGE_OF_SOURCES = [8.0]
+    VALUES_OF_THE_TRACERS_AT_THE_SOURCES = [100.0]
     #: The dissolved fraction, released as a FINITE pulse at the same point the
     #: floats are compiled to enter at.
-    releases = [Release(at=Ref("source.at"), q=P.source_q_m3s,
-                        tracers=[P.oil_concentration_mgl],
-                        window_s=P.spill_duration_s,
-                        until_s=Ref("settled.until_s"))]
+    sources = Sources(window_s=P.spill_duration_s,
+                      until_s=Ref("settled.until_s"))
 
     #: The module itself: the preset the deck carries under the name the ask
     #: chose, and the per-run source the settled point is compiled into.

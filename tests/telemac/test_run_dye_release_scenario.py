@@ -105,7 +105,7 @@ def test_declared_bounds_keep_the_source_inside_the_domain():
     from trid3nt_server.workflows.runtime import GateRefusedError
 
     for outside in ({"spill_fraction": 1.0}, {"spill_fraction": 0.0},
-                    {"source_q_m3s": 100.0}):
+                    {"spill_duration_s": 0.0}):
         with pytest.raises(GateRefusedError, match="outside the declared range"):
             _resolve(**outside)
     assert _resolve(spill_fraction=0.9).value_of("spill_fraction") == 0.9
@@ -115,7 +115,7 @@ def test_a_non_numeric_bounded_arg_refuses_it_is_never_defaulted():
     from trid3nt_server.workflows.runtime import GateRefusedError
 
     with pytest.raises(GateRefusedError):
-        _resolve(source_q_m3s="a lot")
+        _resolve(spill_duration_s="a while")
 
 
 def test_the_carrier_flow_is_the_inflow_runs_value_and_not_a_param():
@@ -304,3 +304,46 @@ def test_an_unknown_data_row_is_an_attribute_error_at_the_line_that_wrote_it():
 
     with pytest.raises(AttributeError):
         DATA.centreline
+
+
+def test_the_deck_states_the_four_source_keywords_and_a_sources_composite():
+    """The release enters through the engine's own keywords, one element per
+    source, and the composite shrinks to the sources file plus the window."""
+    from trid3nt_server.workflows.runtime import ParamRef, Ref
+    from trid3nt_server.workflows.telemac.modules.telemac2d import T2D as _T2D
+    from trid3nt_server.workflows.telemac.templates.dye_release.dye_release import (
+        STEERING,
+    )
+
+    assert STEERING.ASSERTED["ABSCISSAE_OF_SOURCES"] == [Ref("source.at.0")]
+    assert STEERING.ASSERTED["ORDINATES_OF_SOURCES"] == [Ref("source.at.1")]
+    assert STEERING.ASSERTED["WATER_DISCHARGE_OF_SOURCES"] == [8.0]
+    assert STEERING.ASSERTED["VALUES_OF_THE_TRACERS_AT_THE_SOURCES"] == [100.0]
+    for name in ("ABSCISSAE OF SOURCES", "ORDINATES OF SOURCES",
+                 "WATER DISCHARGE OF SOURCES",
+                 "VALUES OF THE TRACERS AT THE SOURCES"):
+        assert _T2D.identify(name) is not None
+    sources = STEERING.ASSERTED["sources"]
+    window, until = sources["window_s"], sources["until_s"]
+    assert isinstance(window, ParamRef) and window.name == "spill_duration_s"
+    assert until == Ref("settled.until_s")
+    assert sources["q"] == Ref("WATER_DISCHARGE_OF_SOURCES")
+    assert sources["tracers"] == Ref("VALUES_OF_THE_TRACERS_AT_THE_SOURCES")
+
+
+def test_the_sources_file_the_deck_writes_is_the_series_the_engine_reads():
+    """The four keywords plus ``sources`` write the finite pulse: held at the
+    stated discharge and concentration, then stepped to nothing so the slug
+    advects and passes, with a tail past the last simulated instant."""
+    from trid3nt_server.workflows.telemac.modules.telemac2d import (
+        Sources,
+        T2D as _T2D,
+    )
+
+    stated = Sources(window_s=300.0, until_s=600.0)
+    slots, files = _T2D.COMPOSITES["sources"].expand(
+        {**stated, "q": [8.0], "tracers": [100.0]})
+    assert dict(slots) == {"SOURCES_FILE": "river_sources.txt"}
+    assert files["river_sources.txt"].splitlines() == [
+        "#", "T Q(1) TR(1,1)", "s m3/s mg/l",
+        "0.000 8 100", "300.000 8 100", "300.100 0 0", "700.000 0 0"]

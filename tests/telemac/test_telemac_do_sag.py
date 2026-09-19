@@ -79,8 +79,7 @@ def test_declared_params_and_plan_validate():
     wf = _workflow()
     validate_plan(wf.plan, wf.params, wf.data)
     assert [p.name for p in wf.params if p.name not in LEVER_NAMES] == [
-        "outfall_coords", "effluent_bod_mgl", "effluent_q_m3s", "effluent_do_mgl",
-        "do_standard_mgl"]
+        "outfall_coords", "do_standard_mgl"]
     assert _resolve().value_of("do_standard_mgl") == 5.0
 
 
@@ -244,13 +243,18 @@ def test_no_step_names_a_template_module_as_a_tool():
     assert not [s.runner for s in _steps() if ".templates." in s.runner]
 
 
-def test_a_wq_knob_outside_its_declared_bounds_refuses():
-    from trid3nt_server.workflows.runtime import GateRefusedError
+def test_the_ex_release_params_are_gone_from_the_declared_wire():
+    """The discharge and its concentrations were only ever a twin inside the
+    release composite; they leave with it, off both the declared params and the
+    wire the model is offered - a caller naming the old name gets no such slot."""
+    import inspect
 
-    for outside in ({"effluent_bod_mgl": 0.0}, {"effluent_q_m3s": 0.0}):
-        with pytest.raises(GateRefusedError, match="outside the declared range"):
-            _resolve(**outside)
-    assert _resolve(effluent_bod_mgl=0.1).value_of("effluent_bod_mgl") == 0.1
+    from trid3nt_server.tools import TOOL_REGISTRY
+
+    declared = {p.name for p in _workflow().params}
+    wire = set(inspect.signature(TOOL_REGISTRY["telemac_do_sag"].fn).parameters)
+    gone = {"effluent_q_m3s", "effluent_do_mgl", "effluent_bod_mgl"}
+    assert not (declared & gone) and not (wire & gone)
 
 
 def test_a_keyword_outside_the_modules_own_bounds_refuses_by_its_name():
@@ -376,6 +380,26 @@ def test_the_deck_opens_at_the_derived_depth_and_the_declared_oxygen():
     assert filled["PRESCRIBED ELEVATIONS"] == [0.0, pytest.approx(1.0)]
     assert filled["LAW OF BOTTOM FRICTION"] == 3
     assert filled["FRICTION COEFFICIENT"] == pytest.approx(33.0)
+
+
+def test_the_outfall_writes_the_four_source_arrays_and_the_sources_file():
+    """The settled point reaches the sheet by position, the deck's own fixed
+    discharge and tracer values reach it by name, and the SOURCES FILE holds the
+    series - the same numbers the ``releases`` composite wrote for one source."""
+    sheet = _filled()
+    filled = dict(sheet.resolved())
+    assert filled["ABSCISSAE OF SOURCES"] == [0.0]
+    assert filled["ORDINATES OF SOURCES"] == [0.0]
+    assert filled["WATER DISCHARGE OF SOURCES"] == [pytest.approx(1.0)]
+    assert filled["VALUES OF THE TRACERS AT THE SOURCES"] == [
+        0.0, pytest.approx(2.0), pytest.approx(250.0), 0.0]
+    name = filled["SOURCES FILE"]
+    assert name in sheet.files
+    series = sheet.files[name]
+    assert series.splitlines()[0] == "#"
+    assert "TR(1,4)" in series.splitlines()[1]
+    row = series.splitlines()[3].split()
+    assert row == ["0.000", "1", "0", "2", "250", "0"]
 
 
 def test_the_o2_process_is_the_coupled_bodys_own_sheet():

@@ -36,7 +36,8 @@ _DISSOLVED = {"location", "bbox", "river_geometry_uri", "reach_length_km",
               "evaporation_mm_per_day", "rainfall_gridmet_window",
               "sim_duration_s", "wind_speed_mps", "wind_direction_deg",
               "rainfall_mm_per_day", "grain_size_um", "bed_thickness_m",
-              "bedload_formula", "morphological_factor"}
+              "bedload_formula", "morphological_factor",
+              "source_q_m3s", "tracer_concentration_mgl"}
 
 
 def _rows() -> dict:
@@ -201,6 +202,35 @@ def test_the_bed_the_deck_states_is_gaias_own_keywords_on_the_coupled_body():
     assert slots["HIDING_FACTOR_FORMULA"] == 1
     assert slots["MORPHOLOGICAL_FACTOR"] == 10.0
     assert slots["bed"]["gradation"].name == "sediment_gradation"
+
+
+def test_the_marker_is_stated_as_the_four_source_keywords_by_name():
+    """No ``releases`` composite: the deck states WHERE, HOW MUCH and AT WHAT
+    CONCENTRATION as the engine's own keywords, one element per source."""
+    asserted = _MODULE.STEERING.ASSERTED
+    assert asserted["ABSCISSAE_OF_SOURCES"] == [Ref("source.at.0")]
+    assert asserted["ORDINATES_OF_SOURCES"] == [Ref("source.at.1")]
+    assert asserted["WATER_DISCHARGE_OF_SOURCES"] == [8.0]
+    assert asserted["VALUES_OF_THE_TRACERS_AT_THE_SOURCES"] == [100.0]
+    assert "releases" not in asserted
+
+
+def test_the_sources_composite_writes_only_the_sources_file():
+    """``Sources(window_s=, until_s=)`` reads the discharge and the tracer value
+    off the sheet by the keywords stated above, and writes the SOURCES FILE."""
+    from trid3nt_server.workflows.telemac.modules.telemac2d import SOURCES_FILENAME
+
+    slots, files = T2D.COMPOSITES["sources"].expand(
+        {"window_s": 300.0, "until_s": 3600.0,
+         "q": [8.0], "tracers": [100.0]})
+    assert slots == {"SOURCES_FILE": SOURCES_FILENAME}
+    assert list(files) == [SOURCES_FILENAME]
+
+
+def test_the_spill_window_is_the_questions_own_input_and_stays_a_param():
+    asserted = _MODULE.STEERING.ASSERTED
+    assert asserted["sources"]["window_s"].name == "spill_duration_s"
+    assert asserted["sources"]["until_s"].path == "settled.until_s"
 
 
 def test_a_calm_dry_deck_writes_no_wind_and_no_rain_keyword():

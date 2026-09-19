@@ -30,7 +30,7 @@ from trid3nt_server.workflows.telemac.modules.telemac2d import (
     Boundaries,
     Continuation,
     Rain,
-    Release,
+    Sources,
     TracerNames,
     Wind,
 )
@@ -215,12 +215,21 @@ class STEERING(T2D):
                   "outflow_stage_m": Ref("settled.outflow_stage_m")},
         tracers=[0.0])
 
-    #: A FINITE pulse at a point source inside the domain, so the slug advects
-    #: away and dilutes instead of saturating the water.
-    releases = [Release(at=Ref("source.at"), q=P.source_q_m3s,
-                        tracers=[P.dye_concentration_mgl],
-                        window_s=P.spill_duration_s,
-                        until_s=Ref("settled.until_s"))]
+    #: WHERE the slug enters the water, in the mesh's own metres: the settled
+    #: release point, read by position because a point is one value with an
+    #: order. One element per source, in the engine's own positional order.
+    ABSCISSAE_OF_SOURCES = [Ref("source.at.0")]
+    ORDINATES_OF_SOURCES = [Ref("source.at.1")]
+    #: HOW MUCH enters, and at what concentration: a point discharge small
+    #: against the carrier flow, carrying a marker the dilution downstream is
+    #: read as a fraction of. A dye question asks WHERE the slug goes and for
+    #: how long it is released, never for either of these numbers.
+    WATER_DISCHARGE_OF_SOURCES = [8.0]
+    VALUES_OF_THE_TRACERS_AT_THE_SOURCES = [100.0]
+    #: A FINITE pulse, so the slug advects away and dilutes instead of
+    #: saturating the water.
+    sources = Sources(window_s=P.spill_duration_s,
+                      until_s=Ref("settled.until_s"))
 
     #: The restart this deck is read at. A continuation reads the last record of
     #: a RESTART FILE, which the engine writes in double precision, so the
