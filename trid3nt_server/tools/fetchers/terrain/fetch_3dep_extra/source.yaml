@@ -63,10 +63,30 @@ payload_estimate:
       2 arc-second: 1.0
       5 meter: 200.0
     default: 50.0
+coverage:
+  data_class: terrain
+  extent:
+    kind: surface
+    rings:
+    - [[-125.0, 24.0], [-66.0, 24.0], [-66.0, 50.0], [-125.0, 50.0]]
+    - [[-172.0, 51.0], [-129.0, 51.0], [-129.0, 72.0], [-172.0, 72.0]]
+    - [[-161.0, 18.0], [-154.0, 18.0], [-154.0, 23.0], [-161.0, 23.0]]
+    - [[-68.5, 17.0], [-64.0, 17.0], [-64.0, 19.0], [-68.5, 19.0]]
+    - [[144.0, 13.0], [146.5, 13.0], [146.5, 21.0], [144.0, 21.0]]
+    - [[-171.5, -15.0], [-169.0, -15.0], [-169.0, -13.0], [-171.5, -13.0]]
+    note: USGS 3DEP non-default tiers over the US and its territories
+  window:
+    series: false
+    latest: '2024-01-01'
+  resolution_m: 1.0
+  datum: NAVD88 (metres, positive up)
+  units:
+    elevation: m
+
 caveats:
-- USGS 3DEP non-default DEM resolutions (1 arc-second, 1/9 arc-second, 1 m, 2 arc-second AK, 5 m AK) via
-  pfdf.data.usgs.tnm.dem (library-delegate; the library owns TNM discovery + the socket). US-only. A resolution
-  with no TNM products covering the bbox returns a typed empty error, never an empty raster.
+- USGS 3DEP non-default DEM resolutions via pfdf.data.usgs.tnm.dem (library-delegate; the library owns
+  TNM discovery + the socket). A resolution with no TNM products covering the bbox returns a typed empty
+  error, never an empty raster.
 docstring: |-
   Fetch a non-default 3DEP DEM resolution for a US bbox.
 

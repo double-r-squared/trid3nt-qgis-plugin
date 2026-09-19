@@ -233,3 +233,48 @@ def test_compose_specs_from_tree_skips_malformed(tmp_path):
     # The malformed spec is skipped; the good one survives.
     assert "fetch_demo_vector" in composed
     assert "broken" not in composed
+
+
+def _coverage(**over) -> dict:
+    row = {
+        "data_class": "terrain",
+        "extent": {"kind": "surface",
+                   "rings": [[[-125.0, 24.0], [-66.0, 24.0], [-66.0, 50.0],
+                              [-125.0, 50.0]]]},
+        "window": {"series": False},
+        "resolution_m": 10.0,
+        "units": {"elevation": "m"},
+    }
+    row.update(over)
+    return row
+
+
+def test_a_coverage_row_loads_onto_the_spec():
+    spec = load_spec({**raster_spec(), "coverage": _coverage()})
+    assert spec.coverage is not None
+    assert spec.coverage.data_class == "terrain"
+    assert spec.coverage.extent.covers(-122.6, 45.5)
+    assert not spec.coverage.extent.covers(2.3, 48.9)
+
+
+def test_a_coverage_row_naming_a_class_outside_the_vocabulary_is_refused():
+    with pytest.raises(SpecLoadError):
+        load_spec({**raster_spec(), "coverage": _coverage(data_class="lidar")})
+
+
+def test_a_coverage_extent_with_no_ring_is_refused():
+    with pytest.raises(SpecLoadError):
+        load_spec({**raster_spec(),
+                   "coverage": _coverage(extent={"kind": "surface", "rings": []})})
+
+
+def test_a_service_extent_carrying_rings_is_refused():
+    with pytest.raises(SpecLoadError):
+        load_spec({**raster_spec(),
+                   "coverage": _coverage(extent={
+                       "kind": "service",
+                       "rings": [[[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]]]})})
+
+
+def test_a_spec_states_no_coverage_by_default():
+    assert load_spec(raster_spec()).coverage is None

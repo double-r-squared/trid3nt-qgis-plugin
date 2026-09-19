@@ -70,18 +70,36 @@ payload_estimate:
   overhead_kb: 0.5
   stations_per_sq_deg: 2.0
   floor_mb: 0.01
+coverage:
+  data_class: water level series
+  extent:
+    kind: stations
+    rings:
+    - [[-92.2, 46.4], [-84.3, 46.4], [-84.3, 49.1], [-92.2, 49.1]]
+    - [[-88.1, 41.5], [-84.7, 41.5], [-84.7, 46.2], [-88.1, 46.2]]
+    - [[-84.8, 43.0], [-79.7, 43.0], [-79.7, 46.4], [-84.8, 46.4]]
+    - [[-83.6, 41.3], [-78.8, 41.3], [-78.8, 43.0], [-83.6, 43.0]]
+    - [[-79.9, 43.1], [-76.0, 43.1], [-76.0, 44.4], [-79.9, 44.4]]
+    note: about fifty water-level gauges across the five lakes and their
+      connecting channels; an ocean coast station has no LWD and is not here
+  window:
+    series: true
+    max_span_days: 31.0
+    cadence: 6-min samples
+  datum: each Great Lake's own Low Water Datum (metres, positive up)
+  units:
+    water_level: m
+    time_series_csv: m
+
 caveats:
-- The Great Lakes water-level gauges only - about 50 stations across the five lakes and their
-  connecting channels. A bbox holding none returns GREATLAKES_WATER_LEVEL_EMPTY (retryable=false)
-  rather than a level from another basin.
+- A bbox holding no Great Lakes gauge returns GREATLAKES_WATER_LEVEL_EMPTY (retryable=false) rather
+  than a level from another basin.
 - The datum is each lake's own LOW WATER DATUM, which is the same zero the NCEI Great Lakes
   bathymetric grids are charted on, so a level from here and a bed from fetch_greatlakes_bathymetry
   are counted from one statement and need no offset between them.
 - An OCEAN coast station has no LWD at all; this tool asks for that datum by name, so a coastal
   bbox comes back empty rather than on a different reference. For US ocean tide levels use
   fetch_noaa_coops_tides (MLLW).
-- The service publishes six-minute samples for these gauges whatever interval is asked for, so a
-  one-day window carries a few hundred rows per station.
 docstring: |-
   Fetch the OBSERVED Great Lakes water level at NOAA CO-OPS gauges as a FlatGeobuf.
 

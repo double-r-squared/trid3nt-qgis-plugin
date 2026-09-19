@@ -80,8 +80,30 @@ payload_estimate:              # ~2 KB/station/day + 0.5 KB/station overhead; ~2
   floor_mb: 0.01
 
 # --- honesty: caveats + fallback -----------------------------------------
+coverage:
+  data_class: water level series
+  extent:
+    kind: stations
+    rings:
+    - [[-125.0, 24.0], [-66.0, 24.0], [-66.0, 50.0], [-125.0, 50.0]]
+    - [[-172.0, 51.0], [-129.0, 51.0], [-129.0, 72.0], [-172.0, 72.0]]
+    - [[-161.0, 18.0], [-154.0, 18.0], [-154.0, 23.0], [-161.0, 23.0]]
+    - [[-68.5, 17.0], [-64.0, 17.0], [-64.0, 19.0], [-68.5, 19.0]]
+    - [[144.0, 13.0], [146.5, 13.0], [146.5, 21.0], [144.0, 21.0]]
+    - [[-171.5, -15.0], [-169.0, -15.0], [-169.0, -13.0], [-171.5, -13.0]]
+    note: about three hundred NOAA CO-OPS stations on the US coastline, the Great
+      Lakes and the territories
+  window:
+    series: true
+    max_span_days: 366.0
+    cadence: 6-min samples
+  datum: MLLW
+  units:
+    water_level: m
+    time_series_csv: m
+
 caveats:
-  - "~300 US stations globally (US coastline + Great Lakes + territories); empty bbox -> COOPS_TIDES_EMPTY (retryable=false)"
+  - "an empty bbox -> COOPS_TIDES_EMPTY (retryable=false), never a fabricated station"
   - "one bad station never aborts the bbox (swallowed to null); all-empty -> typed EMPTY, never fabricated"
   - "non-US coastal water level -> fetch_gtsm_tide_surge (GTSM v3.0 global reanalysis)"
 

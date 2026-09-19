@@ -88,13 +88,32 @@ payload_estimate:
   floor_mb: 0.2
   ceil_mb: 50.0
 
+coverage:
+  data_class: bathymetry
+  extent:
+    kind: surface
+    rings:
+    - [[-125.0, 24.0], [-66.0, 24.0], [-66.0, 50.0], [-125.0, 50.0]]
+    - [[-172.0, 51.0], [-129.0, 51.0], [-129.0, 72.0], [-172.0, 72.0]]
+    - [[-161.0, 18.0], [-154.0, 18.0], [-154.0, 23.0], [-161.0, 23.0]]
+    - [[-68.5, 17.0], [-64.0, 17.0], [-64.0, 19.0], [-68.5, 19.0]]
+    - [[144.0, 13.0], [146.5, 13.0], [146.5, 21.0], [144.0, 21.0]]
+    - [[-171.5, -15.0], [-169.0, -15.0], [-169.0, -13.0], [-171.5, -13.0]]
+    note: USACE navigation channels only - the dredged prism, not the whole water
+      surface, so a domain is always partly covered and a reach with no federal
+      navigation project has none at all
+  window:
+    series: false
+  resolution_m: 1.0
+  datum: null
+  units:
+    depth_below_datum_m: m
+
 caveats:
   - "the soundings are DEPTHS BELOW the survey's own stated datum, positive down, in metres - not elevations; the datum is on every row and is a local project datum on many rivers (Columbia River Datum on the Willamette), so a bed built from these needs a deliberate datum shift"
   - "a survey whose points state no vertical datum or no unit of measure refuses by name rather than guessing one"
-  - "coverage is the NAVIGATION CHANNEL, not the whole water surface: a survey covers the dredged prism and leaves the banks unmeasured, so the share of a domain it covers is always partial"
   - "without ``since`` the window is the last YEAR, which is the order a dredged channel is resurveyed on; ``since`` returns every survey ending on or after that date, up to twelve, and refuses over that rather than truncating silently"
   - "``datum_offset_m`` is the shift the survey's OWN package metadata publishes between its project datum and a national frame (``datum_offset_frame``), read off the sentence the district wrote it in; it is null where the package states none, and applying it is the consumer's"
-  - "USACE districts publish on their own schedules; a reach with no navigation project has no survey at all"
 
 docstring: |-
   Fetch USACE eHydro CHANNEL SURVEY soundings + the survey footprint for a bbox -> the measured bed.
