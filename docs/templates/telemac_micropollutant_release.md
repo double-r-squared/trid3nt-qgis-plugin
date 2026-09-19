@@ -6,7 +6,7 @@ A SORBING substance released into water: how much stays DISSOLVED and how much e
 
 |  |  |
 |---|---|
-| module | `telemac2d` - 376 keywords in its dictionary, of which this template states 29 |
+| module | `telemac2d` - 376 keywords in its dictionary, of which this template states 33 |
 | solves | `trid3nt_server.workflows.telemac.engine.solve_case` |
 | engine defaults | every keyword this template does not state keeps the engine's own default; `describe_keywords` names it with that default, and `keywords={...}` sets it |
 
@@ -32,9 +32,6 @@ The values the template declares. `desc` is what the model reads when it fills o
 | `release` | user | - | optional | Where the substance enters the water, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer. Geocode a place name first. On a river with no domain it is also the seed the reach is walked downstream from |
 | `release_fraction` | scenario | - | 0.1 | Along-domain release position, 0=inflow..1=outflow; the source must sit strictly INSIDE the domain, never on a boundary. It sits near the top so the substance has water left to sorb and settle in |
 | `release_duration_s` | scenario | s | 3600.0 | Finite injection window; the substance is released over it and the rest of the run is what happens to what was released |
-| `source_q_m3s` | scenario | m^3/s | 1.0 | Discharge of the release itself - with the carrier flow this sets the dilution the water receives |
-| `source_concentration_mgl` | scenario | mg/L | 100.0 | DISSOLVED concentration of the substance in the release itself, before any dilution; everything that ends up on sediment gets there by sorption during the run |
-| `ambient_spm_kg_m3` | scenario | kg/m^3 | 0.03 | Suspended sediment the water already carries, in and at the top of the domain, in KILOGRAMS PER CUBIC METRE - the class the sorption coefficient's own m^3/kg is read against, so 30 mg/L is 0.03. It is the SORBENT: with none, the substance stays dissolved and nothing reaches the bed. Nothing fetches suspended sediment, so this is a STATED condition, not a measured one - state the gauged value where there is one |
 | `monitoring_point` | user | - | optional | Where the dissolved history is read, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer. Geocode a place name first |
 | `monitoring_fraction` | scenario | - | 0.85 | Along-domain position the history is read at when no point was given, 0=inflow..1=outflow |
 | `mesh_resolution_m` | scenario | m | 14.0 | Target element edge or cell length the domain is resolved at. The granularity is the USER's lever: no sizing rung derives an edge from a channel nobody surveyed, so the number the run meshes at is either yours or this labeled default |
@@ -79,31 +76,31 @@ It publishes these layers onto the canvas:
 
 ## The proving run
 
-Run `01M2VD3S6J2NNH22HW6E42NC0A`, 2026-09-18T23:21:09.311145+00:00, 110.38 s, at commit `8397312dd28e2ade6266f5eef50ce148c6c060c5-dirty`.
+Run `01M2VZA5Z27XKPJZA99ZC6QGAC`, 2026-09-19T04:39:13.179545+00:00, 108.549 s, at commit `ba274ced59bf841b133f19832d2113cd6525829e-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M2VD3S6J2NNH22HW6E42NC0A)](telemac_micropollutant_release/telemac_micropollutant_release.png)
+![Every layer the run published, stacked and framed on the result (run 01M2VZA5Z27XKPJZA99ZC6QGAC)](telemac_micropollutant_release/telemac_micropollutant_release.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M2VD3S6J2NNH22HW6E42NC0A)*
+*Every layer the run published, stacked and framed on the result (run 01M2VZA5Z27XKPJZA99ZC6QGAC)*
 
-![The solve, frame by frame - dissolved (run 01M2VD3S6J2NNH22HW6E42NC0A)](telemac_micropollutant_release/telemac_micropollutant_release_animation_dissolved.gif)
+![The solve, frame by frame - dissolved (run 01M2VZA5Z27XKPJZA99ZC6QGAC)](telemac_micropollutant_release/telemac_micropollutant_release_animation_dissolved.gif)
 
-*The solve, frame by frame - dissolved (run 01M2VD3S6J2NNH22HW6E42NC0A)*
+*The solve, frame by frame - dissolved (run 01M2VZA5Z27XKPJZA99ZC6QGAC)*
 
-![The solve, frame by frame - on_the_bed (run 01M2VD3S6J2NNH22HW6E42NC0A)](telemac_micropollutant_release/telemac_micropollutant_release_animation_on_the_bed.gif)
+![The solve, frame by frame - on_the_bed (run 01M2VZA5Z27XKPJZA99ZC6QGAC)](telemac_micropollutant_release/telemac_micropollutant_release_animation_on_the_bed.gif)
 
-*The solve, frame by frame - on_the_bed (run 01M2VD3S6J2NNH22HW6E42NC0A)*
+*The solve, frame by frame - on_the_bed (run 01M2VZA5Z27XKPJZA99ZC6QGAC)*
 
-![dissolved peak frame (run 01M2VD3S6J2NNH22HW6E42NC0A)](telemac_micropollutant_release/telemac_micropollutant_release_dissolved_peak_frame.png)
+![dissolved peak frame (run 01M2VZA5Z27XKPJZA99ZC6QGAC)](telemac_micropollutant_release/telemac_micropollutant_release_dissolved_peak_frame.png)
 
-*dissolved peak frame (run 01M2VD3S6J2NNH22HW6E42NC0A)*
+*dissolved peak frame (run 01M2VZA5Z27XKPJZA99ZC6QGAC)*
 
-![on the bed final frame (run 01M2VD3S6J2NNH22HW6E42NC0A)](telemac_micropollutant_release/telemac_micropollutant_release_on_the_bed_final_frame.png)
+![on the bed final frame (run 01M2VZA5Z27XKPJZA99ZC6QGAC)](telemac_micropollutant_release/telemac_micropollutant_release_on_the_bed_final_frame.png)
 
-*on the bed final frame (run 01M2VD3S6J2NNH22HW6E42NC0A)*
+*on the bed final frame (run 01M2VZA5Z27XKPJZA99ZC6QGAC)*
 
-![dissolved micropollutant - the chart the run persisted (run 01M2VD3S6J2NNH22HW6E42NC0A)](telemac_micropollutant_release/telemac_micropollutant_release_chart_dissolved_micropollutant.png)
+![dissolved micropollutant - the chart the run persisted (run 01M2VZA5Z27XKPJZA99ZC6QGAC)](telemac_micropollutant_release/telemac_micropollutant_release_chart_dissolved_micropollutant.png)
 
-*dissolved micropollutant - the chart the run persisted (run 01M2VD3S6J2NNH22HW6E42NC0A)*
+*dissolved micropollutant - the chart the run persisted (run 01M2VZA5Z27XKPJZA99ZC6QGAC)*
 
 ### The sheet it filled
 
@@ -111,11 +108,8 @@ Every slot the run resolved, with where the value came from. The engine's own de
 
 | param | value | units | basis | provenance |
 |---|---|---|---|---|
-| `release` | Point(lon=-122.669784, lat=45.518485, name=None) | - | user | supplied on this invocation |
+| `release` | {'lon': -122.669784, 'lat': 45.518485, 'name': None} | - | user | supplied on this invocation |
 | `release_duration_s` | 300.0 | s | user | supplied on this invocation |
-| `source_q_m3s` | 1.0 | m^3/s | user | supplied on this invocation |
-| `source_concentration_mgl` | 500.0 | mg/L | user | supplied on this invocation |
-| `ambient_spm_kg_m3` | 0.03 | kg/m^3 | user | supplied on this invocation |
 | `monitoring_fraction` | 0.1 | - | user | supplied on this invocation |
 | `mesh_resolution_m` | 40.0 | m | user | supplied on this invocation |
 | `release_fraction` | 0.1 | - | default_demo | declared scenario default |
@@ -130,15 +124,13 @@ Every slot the run resolved, with where the value came from. The engine's own de
 from trid3nt_server.tools import TOOL_REGISTRY
 
 await TOOL_REGISTRY['telemac_micropollutant_release'].fn(
-    ambient_spm_kg_m3=0.03,
     mesh_resolution_m=40.0,
     monitoring_fraction=0.1,
-    release='Point(lon=-122.669784, lat=45.518485, name=None)',
+    release={'lon': -122.669784, 'lat': 45.518485, 'name': None},
     release_duration_s=300.0,
-    source_concentration_mgl=500.0,
-    source_q_m3s=1.0,
+    keywords={'DURATION': 14400.0, 'GRAPHIC PRINTOUT PERIOD': 300, 'VALUES OF THE TRACERS AT THE SOURCES': [500.0, 0.0, 0.0, 0.0, 0.0]},
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2VD3S6J2NNH22HW6E42NC0A` and commit `8397312dd28e2ade6266f5eef50ce148c6c060c5-dirty`. The full argument record is [`telemac_micropollutant_release/run.json`](telemac_micropollutant_release/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2VZA5Z27XKPJZA99ZC6QGAC` and commit `ba274ced59bf841b133f19832d2113cd6525829e-dirty`. The full argument record is [`telemac_micropollutant_release/run.json`](telemac_micropollutant_release/run.json).
 

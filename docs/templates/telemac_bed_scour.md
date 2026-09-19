@@ -6,7 +6,7 @@ Bed SCOUR and DEPOSITION: a mobile bed under moving water.
 
 |  |  |
 |---|---|
-| module | `telemac2d` - 376 keywords in its dictionary, of which this template states 31 |
+| module | `telemac2d` - 376 keywords in its dictionary, of which this template states 35 |
 | solves | `trid3nt_server.workflows.telemac.engine.solve_case` |
 | engine defaults | every keyword this template does not state keeps the engine's own default; `describe_keywords` names it with that default, and `keywords={...}` sets it |
 
@@ -32,8 +32,6 @@ The values the template declares. `desc` is what the model reads when it fills o
 | `release` | user | - | optional | Where the marker enters the water, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer. Geocode a place name first. Its name becomes the marker's name, and on a river with no domain supplied it is also the seed the reach is walked downstream from |
 | `spill_fraction` | scenario | - | 0.25 | Along-domain release position, 0=inflow..1=outflow; the source must sit strictly INSIDE the domain, never on a boundary |
 | `spill_duration_s` | scenario | s | 300.0 | Finite pulse injection window |
-| `source_q_m3s` | scenario | m^3/s | 8.0 | Point-source discharge of the release itself, small against the carrier flow |
-| `tracer_concentration_mgl` | scenario | mg/L | 100.0 | Concentration of the marker tracer released at the source, which is what the deposited fraction is measured against |
 | `sediment_gradation` | user | - | optional | Multi-class GRADED sediment: a preset name (graded_sand \| poorly_sorted \| sand_gravel_bimodal \| fine_coarse_sand) or a list of [d50_um, fraction] pairs; a mixture sorts under a hiding factor |
 | `mesh_resolution_m` | scenario | m | 14.0 | Target element edge or cell length the domain is resolved at. The granularity is the USER's lever: no sizing rung derives an edge from a channel nobody surveyed, so the number the run meshes at is either yours or this labeled default |
 | `event_time` | question | - | optional | The moment the scenario is read at - an ISO date or datetime ('2026-08-20' or '2026-08-20T06:00:00Z'), from phrasing like 'during last Tuesday's storm'. Each source keeps its own retention, and a request deeper than one refuses typed |
@@ -44,11 +42,11 @@ The values the template declares. `desc` is what the model reads when it fills o
 
 | field | the proving run's value |
 |---|---|
-| `bed_evolution_max_m` | 0.0 |
-| `bed_evolution_min_m` | 0.0 |
-| `net_bed_mass_kg` | 0.0 |
+| `bed_evolution_max_m` | 0.002447641221806407 |
+| `bed_evolution_min_m` | -0.004868039861321449 |
+| `net_bed_mass_kg` | 410.5706 |
 | `surface_d50_spread_m` | 0.0 |
-| `marker_cmax_mgl` | 4.1239914894104 |
+| `marker_cmax_mgl` | 1.5659947395324707 |
 | `active_frames` | 18 |
 | `mesh_size_m` | 20.888 |
 
@@ -74,23 +72,23 @@ It publishes these layers onto the canvas:
 
 ## The proving run
 
-Run `01M2VCNPMWVY4WWTY8HXA2S7XP`, 2026-09-18T23:12:39.980979+00:00, 31.366 s, at commit `99080be6acd76b597d9ef51124f317f4b136acee-dirty`.
+Run `01M2VYWGZYYSDZPJVA070VQ0XK`, 2026-09-19T04:30:57.898610+00:00, 29.701 s, at commit `ba274ced59bf841b133f19832d2113cd6525829e-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M2VCNPMWVY4WWTY8HXA2S7XP)](telemac_bed_scour/telemac_bed_scour.png)
+![Every layer the run published, stacked and framed on the result (run 01M2VYWGZYYSDZPJVA070VQ0XK)](telemac_bed_scour/telemac_bed_scour.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M2VCNPMWVY4WWTY8HXA2S7XP)*
+*Every layer the run published, stacked and framed on the result (run 01M2VYWGZYYSDZPJVA070VQ0XK)*
 
-![The solve, frame by frame (run 01M2VCNPMWVY4WWTY8HXA2S7XP)](telemac_bed_scour/telemac_bed_scour_animation.gif)
+![The solve, frame by frame (run 01M2VYWGZYYSDZPJVA070VQ0XK)](telemac_bed_scour/telemac_bed_scour_animation.gif)
 
-*The solve, frame by frame (run 01M2VCNPMWVY4WWTY8HXA2S7XP)*
+*The solve, frame by frame (run 01M2VYWGZYYSDZPJVA070VQ0XK)*
 
-![final frame (run 01M2VCNPMWVY4WWTY8HXA2S7XP)](telemac_bed_scour/telemac_bed_scour_final_frame.png)
+![final frame (run 01M2VYWGZYYSDZPJVA070VQ0XK)](telemac_bed_scour/telemac_bed_scour_final_frame.png)
 
-*final frame (run 01M2VCNPMWVY4WWTY8HXA2S7XP)*
+*final frame (run 01M2VYWGZYYSDZPJVA070VQ0XK)*
 
-![marker concentration - the chart the run persisted (run 01M2VCNPMWVY4WWTY8HXA2S7XP)](telemac_bed_scour/telemac_bed_scour_chart_marker_concentration.png)
+![marker concentration - the chart the run persisted (run 01M2VYWGZYYSDZPJVA070VQ0XK)](telemac_bed_scour/telemac_bed_scour_chart_marker_concentration.png)
 
-*marker concentration - the chart the run persisted (run 01M2VCNPMWVY4WWTY8HXA2S7XP)*
+*marker concentration - the chart the run persisted (run 01M2VYWGZYYSDZPJVA070VQ0XK)*
 
 ### The sheet it filled
 
@@ -98,16 +96,14 @@ Every slot the run resolved, with where the value came from. The engine's own de
 
 | param | value | units | basis | provenance |
 |---|---|---|---|---|
-| `release` | Point(lon=-122.669784, lat=45.518485, name=None) | - | user | supplied on this invocation |
+| `release` | {'lon': -122.669784, 'lat': 45.518485, 'name': None} | - | user | supplied on this invocation |
 | `spill_duration_s` | 300.0 | s | user | supplied on this invocation |
-| `source_q_m3s` | 8.0 | m^3/s | user | supplied on this invocation |
-| `tracer_concentration_mgl` | 100.0 | mg/L | user | supplied on this invocation |
 | `mesh_resolution_m` | 40.0 | m | user | supplied on this invocation |
+| `event_time` | 2026-09-14T05:00:00+00:00 | - | user | supplied on this invocation |
 | `spill_fraction` | 0.25 | - | default_demo | declared scenario default |
 | `compute_class` | medium | - | default_demo | declared constant default |
 | `vertical_frame` | NAVD88 | - | default_demo | declared constant default |
 | `sediment_gradation` | - | - | user | not supplied (declared optional) |
-| `event_time` | - | - | prompt_interpreted | not supplied (declared optional) |
 
 ### Reproduce
 
@@ -115,13 +111,13 @@ Every slot the run resolved, with where the value came from. The engine's own de
 from trid3nt_server.tools import TOOL_REGISTRY
 
 await TOOL_REGISTRY['telemac_bed_scour'].fn(
+    event_time='2026-09-14T05:00:00+00:00',
     mesh_resolution_m=40.0,
-    release='Point(lon=-122.669784, lat=45.518485, name=None)',
-    source_q_m3s=8.0,
+    release={'lon': -122.669784, 'lat': 45.518485, 'name': None},
     spill_duration_s=300.0,
-    tracer_concentration_mgl=100.0,
+    keywords={'DURATION': 1800.0},
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2VCNPMWVY4WWTY8HXA2S7XP` and commit `99080be6acd76b597d9ef51124f317f4b136acee-dirty`. The full argument record is [`telemac_bed_scour/run.json`](telemac_bed_scour/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2VYWGZYYSDZPJVA070VQ0XK` and commit `ba274ced59bf841b133f19832d2113cd6525829e-dirty`. The full argument record is [`telemac_bed_scour/run.json`](telemac_bed_scour/run.json).
 

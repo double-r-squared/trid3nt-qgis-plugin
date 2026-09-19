@@ -6,7 +6,7 @@ A DYE / TRACER / CONTAMINANT plume released into a body of surface water and car
 
 |  |  |
 |---|---|
-| module | `telemac2d` - 376 keywords in its dictionary, of which this template states 34 |
+| module | `telemac2d` - 376 keywords in its dictionary, of which this template states 38 |
 | solves | `trid3nt_server.workflows.telemac.engine.solve_case` |
 | engine defaults | every keyword this template does not state keeps the engine's own default; `describe_keywords` names it with that default, and `keywords={...}` sets it |
 
@@ -32,8 +32,6 @@ The values the template declares. `desc` is what the model reads when it fills o
 | `release` | user | - | optional | Where the substance enters the water, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer. Geocode a place name first. Its name becomes the tracer's name, and on a river with no domain supplied it is also the seed the reach is walked downstream from |
 | `spill_fraction` | scenario | - | 0.25 | Along-domain release position, 0=inflow..1=outflow; the source must sit strictly INSIDE the domain, never on a boundary |
 | `spill_duration_s` | scenario | s | 300.0 | Finite pulse injection window |
-| `source_q_m3s` | scenario | m^3/s | 8.0 | Point-source discharge of the release itself, small against the carrier flow |
-| `dye_concentration_mgl` | scenario | mg/L | 100.0 | Source concentration of the released substance |
 | `decaying_substance` | question | - | optional | Name a substance whose tracer DECAYS - sewage \| E. coli \| coliform \| bacteria \| effluent \| wastewater - and its narrated literature die-off is applied as a first-order sink on the plume |
 | `continue_from` | user | - | optional | Continue a previous run: the URI of its restart_domain.slf, the state at its last instant, which becomes this run's initial state - so DURATION is the time added ON TOP of it and the same declared scenario carries on over the longer horizon (a release whose spill_duration_s has elapsed stays finished). The mesh must be the same one, and a run that couples WAQTEL refuses |
 | `mesh_resolution_m` | scenario | m | 14.0 | Target element edge or cell length the domain is resolved at. The granularity is the USER's lever: no sizing rung derives an edge from a channel nobody surveyed, so the number the run meshes at is either yours or this labeled default |
@@ -70,23 +68,23 @@ It publishes these layers onto the canvas:
 
 ## The proving run
 
-Run `01M2VC86H0ZCN95BFEWQHBVJGX`, 2026-09-18T23:05:15.183341+00:00, 31.736 s, at commit `8397312dd28e2ade6266f5eef50ce148c6c060c5-dirty`.
+Run `01M2VYGS4FYGA4VSMXB3S64X1F`, 2026-09-19T04:24:30.633679+00:00, 28.663 s, at commit `ba274ced59bf841b133f19832d2113cd6525829e-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M2VC86H0ZCN95BFEWQHBVJGX)](telemac_dye_release/telemac_dye_release.png)
+![Every layer the run published, stacked and framed on the result (run 01M2VYGS4FYGA4VSMXB3S64X1F)](telemac_dye_release/telemac_dye_release.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M2VC86H0ZCN95BFEWQHBVJGX)*
+*Every layer the run published, stacked and framed on the result (run 01M2VYGS4FYGA4VSMXB3S64X1F)*
 
-![The solve, frame by frame (run 01M2VC86H0ZCN95BFEWQHBVJGX)](telemac_dye_release/telemac_dye_release_animation.gif)
+![The solve, frame by frame (run 01M2VYGS4FYGA4VSMXB3S64X1F)](telemac_dye_release/telemac_dye_release_animation.gif)
 
-*The solve, frame by frame (run 01M2VC86H0ZCN95BFEWQHBVJGX)*
+*The solve, frame by frame (run 01M2VYGS4FYGA4VSMXB3S64X1F)*
 
-![peak frame (run 01M2VC86H0ZCN95BFEWQHBVJGX)](telemac_dye_release/telemac_dye_release_peak_frame.png)
+![peak frame (run 01M2VYGS4FYGA4VSMXB3S64X1F)](telemac_dye_release/telemac_dye_release_peak_frame.png)
 
-*peak frame (run 01M2VC86H0ZCN95BFEWQHBVJGX)*
+*peak frame (run 01M2VYGS4FYGA4VSMXB3S64X1F)*
 
-![dye concentration - the chart the run persisted (run 01M2VC86H0ZCN95BFEWQHBVJGX)](telemac_dye_release/telemac_dye_release_chart_dye_concentration.png)
+![dye concentration - the chart the run persisted (run 01M2VYGS4FYGA4VSMXB3S64X1F)](telemac_dye_release/telemac_dye_release_chart_dye_concentration.png)
 
-*dye concentration - the chart the run persisted (run 01M2VC86H0ZCN95BFEWQHBVJGX)*
+*dye concentration - the chart the run persisted (run 01M2VYGS4FYGA4VSMXB3S64X1F)*
 
 ### The sheet it filled
 
@@ -94,11 +92,9 @@ Every slot the run resolved, with where the value came from. The engine's own de
 
 | param | value | units | basis | provenance |
 |---|---|---|---|---|
-| `release` | Point(lon=-122.669784, lat=45.518485, name=None) | - | user | supplied on this invocation |
+| `release` | {'lon': -122.669784, 'lat': 45.518485, 'name': None} | - | user | supplied on this invocation |
 | `spill_fraction` | 0.25 | - | user | supplied on this invocation |
 | `spill_duration_s` | 300.0 | s | user | supplied on this invocation |
-| `source_q_m3s` | 8.0 | m^3/s | user | supplied on this invocation |
-| `dye_concentration_mgl` | 100.0 | mg/L | user | supplied on this invocation |
 | `mesh_resolution_m` | 40.0 | m | user | supplied on this invocation |
 | `compute_class` | medium | - | default_demo | declared constant default |
 | `vertical_frame` | NAVD88 | - | default_demo | declared constant default |
@@ -112,14 +108,13 @@ Every slot the run resolved, with where the value came from. The engine's own de
 from trid3nt_server.tools import TOOL_REGISTRY
 
 await TOOL_REGISTRY['telemac_dye_release'].fn(
-    dye_concentration_mgl=100.0,
     mesh_resolution_m=40.0,
-    release='Point(lon=-122.669784, lat=45.518485, name=None)',
-    source_q_m3s=8.0,
+    release={'lon': -122.669784, 'lat': 45.518485, 'name': None},
     spill_duration_s=300.0,
     spill_fraction=0.25,
+    keywords={'DURATION': 1800.0},
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2VC86H0ZCN95BFEWQHBVJGX` and commit `8397312dd28e2ade6266f5eef50ce148c6c060c5-dirty`. The full argument record is [`telemac_dye_release/run.json`](telemac_dye_release/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2VYGS4FYGA4VSMXB3S64X1F` and commit `ba274ced59bf841b133f19832d2113cd6525829e-dirty`. The full argument record is [`telemac_dye_release/run.json`](telemac_dye_release/run.json).
 

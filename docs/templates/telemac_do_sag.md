@@ -6,7 +6,7 @@ DISSOLVED-OXYGEN SAG below a discharge (US TMDL / permit question).
 
 |  |  |
 |---|---|
-| module | `telemac2d` - 376 keywords in its dictionary, of which this template states 29 |
+| module | `telemac2d` - 376 keywords in its dictionary, of which this template states 33 |
 | solves | `trid3nt_server.workflows.telemac.engine.solve_case` |
 | engine defaults | every keyword this template does not state keeps the engine's own default; `describe_keywords` names it with that default, and `keywords={...}` sets it |
 
@@ -31,9 +31,6 @@ The values the template declares. `desc` is what the model reads when it fills o
 | param | door | units | default | desc |
 |---|---|---|---|---|
 | `outfall_coords` | user | - | optional | Where the discharge enters the water, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer. Geocode a place name first. On a river with no domain supplied it is also the seed the reach is walked downstream from |
-| `effluent_bod_mgl` | scenario | mg/L | 250.0 | Ultimate carbonaceous BOD IN THE DISCHARGE ITSELF - what leaves the outfall pipe, before any dilution; the mixed load the water carries is what the solve computes from this and the carrier flow |
-| `effluent_q_m3s` | scenario | m^3/s | 1.0 | Discharge rate at the outfall - with the carrier flow this sets the dilution, and so how much of the effluent load the water carries |
-| `effluent_do_mgl` | scenario | mg/L | 2.0 | Dissolved oxygen in the discharge itself; a treated effluent arrives oxygen-poor, which is the initial deficit the sag starts from |
 | `do_standard_mgl` | scenario | mg/L | 5.0 | The DO water-quality standard the sag is judged against; 5 is a common warm-water aquatic-life criterion |
 | `mesh_resolution_m` | scenario | m | 14.0 | Target element edge or cell length the domain is resolved at. The granularity is the USER's lever: no sizing rung derives an edge from a channel nobody surveyed, so the number the run meshes at is either yours or this labeled default |
 | `event_time` | question | - | optional | The moment the scenario is read at - an ISO date or datetime ('2026-08-20' or '2026-08-20T06:00:00Z'), from phrasing like 'during last Tuesday's storm'. Each source keeps its own retention, and a request deeper than one refuses typed |
@@ -44,11 +41,11 @@ The values the template declares. `desc` is what the model reads when it fills o
 
 | field | the proving run's value |
 |---|---|
-| `do_min_mgl` | 8.915916690408183 |
+| `do_min_mgl` | 8.846679603526946 |
 | `do_below_standard` | False |
 | `do_min_distance_m` | 761.6974777058904 |
-| `bod_mixed_mgl` | 0.7991388488076618 |
-| `mean_velocity_mps` | 0.010624636506362424 |
+| `bod_mixed_mgl` | 1.3160736969539177 |
+| `mean_velocity_mps` | 0.010861147692447998 |
 | `mesh_size_m` | 14.524 |
 
 It publishes these layers onto the canvas:
@@ -72,23 +69,23 @@ It publishes these layers onto the canvas:
 
 ## The proving run
 
-Run `01M2VDS08YYATFFB27E62C7PYY`, 2026-09-18T23:41:25.064705+00:00, 600.798 s, at commit `8397312dd28e2ade6266f5eef50ce148c6c060c5-dirty`.
+Run `01M2VZKJPM488W90418PEWG4XD`, 2026-09-19T04:53:01.566710+00:00, 600.768 s, at commit `ba274ced59bf841b133f19832d2113cd6525829e-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M2VDS08YYATFFB27E62C7PYY)](telemac_do_sag/telemac_do_sag.png)
+![Every layer the run published, stacked and framed on the result (run 01M2VZKJPM488W90418PEWG4XD)](telemac_do_sag/telemac_do_sag.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M2VDS08YYATFFB27E62C7PYY)*
+*Every layer the run published, stacked and framed on the result (run 01M2VZKJPM488W90418PEWG4XD)*
 
-![The solve, frame by frame (run 01M2VDS08YYATFFB27E62C7PYY)](telemac_do_sag/telemac_do_sag_animation.gif)
+![The solve, frame by frame (run 01M2VZKJPM488W90418PEWG4XD)](telemac_do_sag/telemac_do_sag_animation.gif)
 
-*The solve, frame by frame (run 01M2VDS08YYATFFB27E62C7PYY)*
+*The solve, frame by frame (run 01M2VZKJPM488W90418PEWG4XD)*
 
-![final frame (run 01M2VDS08YYATFFB27E62C7PYY)](telemac_do_sag/telemac_do_sag_final_frame.png)
+![final frame (run 01M2VZKJPM488W90418PEWG4XD)](telemac_do_sag/telemac_do_sag_final_frame.png)
 
-*final frame (run 01M2VDS08YYATFFB27E62C7PYY)*
+*final frame (run 01M2VZKJPM488W90418PEWG4XD)*
 
-![dissolved oxygen - the chart the run persisted (run 01M2VDS08YYATFFB27E62C7PYY)](telemac_do_sag/telemac_do_sag_chart_dissolved_oxygen.png)
+![dissolved oxygen - the chart the run persisted (run 01M2VZKJPM488W90418PEWG4XD)](telemac_do_sag/telemac_do_sag_chart_dissolved_oxygen.png)
 
-*dissolved oxygen - the chart the run persisted (run 01M2VDS08YYATFFB27E62C7PYY)*
+*dissolved oxygen - the chart the run persisted (run 01M2VZKJPM488W90418PEWG4XD)*
 
 ### The sheet it filled
 
@@ -96,10 +93,7 @@ Every slot the run resolved, with where the value came from. The engine's own de
 
 | param | value | units | basis | provenance |
 |---|---|---|---|---|
-| `outfall_coords` | Point(lon=-122.669784, lat=45.518485, name=None) | - | user | supplied on this invocation |
-| `effluent_bod_mgl` | 300.0 | mg/L | user | supplied on this invocation |
-| `effluent_q_m3s` | 0.5 | m^3/s | user | supplied on this invocation |
-| `effluent_do_mgl` | 1.0 | mg/L | user | supplied on this invocation |
+| `outfall_coords` | {'lon': -122.669784, 'lat': 45.518485, 'name': None} | - | user | supplied on this invocation |
 | `do_standard_mgl` | 5.0 | mg/L | user | supplied on this invocation |
 | `mesh_resolution_m` | 40.0 | m | user | supplied on this invocation |
 | `compute_class` | medium | - | default_demo | declared constant default |
@@ -113,13 +107,10 @@ from trid3nt_server.tools import TOOL_REGISTRY
 
 await TOOL_REGISTRY['telemac_do_sag'].fn(
     do_standard_mgl=5.0,
-    effluent_bod_mgl=300.0,
-    effluent_do_mgl=1.0,
-    effluent_q_m3s=0.5,
     mesh_resolution_m=40.0,
-    outfall_coords='Point(lon=-122.669784, lat=45.518485, name=None)',
+    outfall_coords={'lon': -122.669784, 'lat': 45.518485, 'name': None},
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2VDS08YYATFFB27E62C7PYY` and commit `8397312dd28e2ade6266f5eef50ce148c6c060c5-dirty`. The full argument record is [`telemac_do_sag/run.json`](telemac_do_sag/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2VZKJPM488W90418PEWG4XD` and commit `ba274ced59bf841b133f19832d2113cd6525829e-dirty`. The full argument record is [`telemac_do_sag/run.json`](telemac_do_sag/run.json).
 

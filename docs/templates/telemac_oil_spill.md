@@ -6,7 +6,7 @@ An OIL SLICK released onto a body of surface water: floating particles plus the 
 
 |  |  |
 |---|---|
-| module | `telemac2d` - 376 keywords in its dictionary, of which this template states 35 |
+| module | `telemac2d` - 376 keywords in its dictionary, of which this template states 39 |
 | solves | `trid3nt_server.workflows.telemac.engine.solve_case` |
 | engine defaults | every keyword this template does not state keeps the engine's own default; `describe_keywords` names it with that default, and `keywords={...}` sets it |
 
@@ -32,8 +32,6 @@ The values the template declares. `desc` is what the model reads when it fills o
 | `release` | user | - | optional | Where the oil enters the water, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer. Geocode a place name first. Its name becomes the tracer's name, and on a river with no domain supplied it is also the seed the reach is walked downstream from |
 | `spill_fraction` | scenario | - | 0.25 | Along-domain release position, 0=inflow..1=outflow; the source must sit strictly INSIDE the domain, never on a boundary |
 | `spill_duration_s` | scenario | s | 300.0 | Finite pulse injection window |
-| `source_q_m3s` | scenario | m^3/s | 8.0 | Point-source discharge of the release itself, small against the carrier flow |
-| `oil_concentration_mgl` | scenario | mg/L | 100.0 | Concentration of the DISSOLVED fraction released with the slick, carried as the water's tracer |
 | `oil_type` | question | - | light_crude | Which preset was spilled: light_crude \| diesel \| heavy_fuel - the module's own composition, density and viscosity. Crude runs as light_crude, gasoline and petrol as diesel, bunker as heavy_fuel |
 | `oil_release_step` | scenario | - | 600 | The solver step the floats are released at, compiled into the module's own release routine; it lets the flow field establish before the slick is put on it |
 | `mesh_resolution_m` | scenario | m | 14.0 | Target element edge or cell length the domain is resolved at. The granularity is the USER's lever: no sizing rung derives an edge from a channel nobody surveyed, so the number the run meshes at is either yours or this labeled default |
@@ -49,7 +47,7 @@ The values the template declares. `desc` is what the model reads when it fills o
 | `oil_peak_time_s` | 300.0 |
 | `plume_reach_m` | 16.4 |
 | `active_frames` | 18 |
-| `slick_drift_m` | 38.0 |
+| `slick_drift_m` | 38.1 |
 | `floats_released` | 100 |
 | `floats_remaining` | 100 |
 | `mesh_size_m` | 20.888 |
@@ -74,23 +72,23 @@ It publishes these layers onto the canvas:
 
 ## The proving run
 
-Run `01M2VCG0R2ADV2FYR8WDJ3GQN5`, 2026-09-18T23:09:31.315439+00:00, 29.381 s, at commit `99080be6acd76b597d9ef51124f317f4b136acee-dirty`.
+Run `01M2VYPC6NCHYWHQQH2J66MBJW`, 2026-09-19T04:27:36.827083+00:00, 29.443 s, at commit `ba274ced59bf841b133f19832d2113cd6525829e-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M2VCG0R2ADV2FYR8WDJ3GQN5)](telemac_oil_spill/telemac_oil_spill.png)
+![Every layer the run published, stacked and framed on the result (run 01M2VYPC6NCHYWHQQH2J66MBJW)](telemac_oil_spill/telemac_oil_spill.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M2VCG0R2ADV2FYR8WDJ3GQN5)*
+*Every layer the run published, stacked and framed on the result (run 01M2VYPC6NCHYWHQQH2J66MBJW)*
 
-![The solve, frame by frame (run 01M2VCG0R2ADV2FYR8WDJ3GQN5)](telemac_oil_spill/telemac_oil_spill_animation.gif)
+![The solve, frame by frame (run 01M2VYPC6NCHYWHQQH2J66MBJW)](telemac_oil_spill/telemac_oil_spill_animation.gif)
 
-*The solve, frame by frame (run 01M2VCG0R2ADV2FYR8WDJ3GQN5)*
+*The solve, frame by frame (run 01M2VYPC6NCHYWHQQH2J66MBJW)*
 
-![peak frame (run 01M2VCG0R2ADV2FYR8WDJ3GQN5)](telemac_oil_spill/telemac_oil_spill_peak_frame.png)
+![peak frame (run 01M2VYPC6NCHYWHQQH2J66MBJW)](telemac_oil_spill/telemac_oil_spill_peak_frame.png)
 
-*peak frame (run 01M2VCG0R2ADV2FYR8WDJ3GQN5)*
+*peak frame (run 01M2VYPC6NCHYWHQQH2J66MBJW)*
 
-![dissolved oil concentration - the chart the run persisted (run 01M2VCG0R2ADV2FYR8WDJ3GQN5)](telemac_oil_spill/telemac_oil_spill_chart_dissolved_oil_concentration.png)
+![dissolved oil concentration - the chart the run persisted (run 01M2VYPC6NCHYWHQQH2J66MBJW)](telemac_oil_spill/telemac_oil_spill_chart_dissolved_oil_concentration.png)
 
-*dissolved oil concentration - the chart the run persisted (run 01M2VCG0R2ADV2FYR8WDJ3GQN5)*
+*dissolved oil concentration - the chart the run persisted (run 01M2VYPC6NCHYWHQQH2J66MBJW)*
 
 ### The sheet it filled
 
@@ -98,10 +96,8 @@ Every slot the run resolved, with where the value came from. The engine's own de
 
 | param | value | units | basis | provenance |
 |---|---|---|---|---|
-| `release` | Point(lon=-122.669784, lat=45.518485, name=None) | - | user | supplied on this invocation |
+| `release` | {'lon': -122.669784, 'lat': 45.518485, 'name': None} | - | user | supplied on this invocation |
 | `spill_duration_s` | 300.0 | s | user | supplied on this invocation |
-| `source_q_m3s` | 8.0 | m^3/s | user | supplied on this invocation |
-| `oil_concentration_mgl` | 100.0 | mg/L | user | supplied on this invocation |
 | `oil_type` | light_crude | - | user | supplied on this invocation |
 | `oil_release_step` | 60 | - | user | supplied on this invocation |
 | `mesh_resolution_m` | 40.0 | m | user | supplied on this invocation |
@@ -117,14 +113,13 @@ from trid3nt_server.tools import TOOL_REGISTRY
 
 await TOOL_REGISTRY['telemac_oil_spill'].fn(
     mesh_resolution_m=40.0,
-    oil_concentration_mgl=100.0,
     oil_release_step=60,
     oil_type='light_crude',
-    release='Point(lon=-122.669784, lat=45.518485, name=None)',
-    source_q_m3s=8.0,
+    release={'lon': -122.669784, 'lat': 45.518485, 'name': None},
     spill_duration_s=300.0,
+    keywords={'DURATION': 1800.0},
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2VCG0R2ADV2FYR8WDJ3GQN5` and commit `99080be6acd76b597d9ef51124f317f4b136acee-dirty`. The full argument record is [`telemac_oil_spill/run.json`](telemac_oil_spill/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2VYPC6NCHYWHQQH2J66MBJW` and commit `ba274ced59bf841b133f19832d2113cd6525829e-dirty`. The full argument record is [`telemac_oil_spill/run.json`](telemac_oil_spill/run.json).
 
