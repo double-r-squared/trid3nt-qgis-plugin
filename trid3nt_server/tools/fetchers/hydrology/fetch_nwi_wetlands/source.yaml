@@ -53,6 +53,8 @@ payload_estimate:
   floor_mb: 0.05
   ceil_mb: 50.0
 caveats:
+- "model-callable, not matched: a wetland inventory is not land cover a slot matches on, so it carries no coverage row"
+- "model-callable, not matched: a many-feature network layer, not a single-domain hydrography row - a run names this tool directly, never through the class match"
 - USFWS National Wetlands Inventory polygons via the public MapServer (layer 0), geojson with WAF headers,
   prefix-strip normalizer. US + territories; bbox required. Vegetated/classified wetlands, NOT open water
   (use fetch_nhd_waterbodies).

@@ -96,6 +96,7 @@ payload_estimate:
   floor_mb: 0.2
 
 caveats:
+  - "model-callable, not matched: an observed water extent is not hydrography a domain is read from, so it carries no coverage row"
   - "OPERA DSWx V1 assets are behind Earthdata Login: without a ~/.netrc machine entry for urs.earthdata.nasa.gov this refuses by name (OPERA_DSWX_UPSTREAM_ERROR) rather than returning a fabricated layer; the cookie jar the EDL redirect chain needs is configured by the executor's read path"
   - "the returned raster is the SCENE's classification, stamped with that scene's acquisition datetime -- an observation at one instant, not a period composite; a window with no overpass -> OPERA_DSWX_NO_OBSERVATION"
   - "WTR class codes: 0 not-water, 1 open water, 2 partial surface water, 252 snow/ice, 253 cloud/cloud-shadow, 255 fill; the source's own palette is baked into band 1"

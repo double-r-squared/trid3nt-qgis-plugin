@@ -65,6 +65,24 @@ payload_estimate:
   mb_per_sq_deg: 0.81
   floor_mb: 0.01
 
+coverage:
+- data_class: aquifer property
+  kind: modelled
+  extent:
+    kind: surface
+    rings:
+      - [[-127.873333, 23.235556], [-65.362222, 23.235556], [-65.362222, 51.546667], [-127.873333, 51.546667]]
+    note: the staged Zell & Sanford (2020) CONUS transmissivity grid; the same
+      envelope as gates.conus_bbox
+  window:
+    series: false
+    latest: '2020-01-01'
+  resolution_m: 247.0
+  datum: null
+  units:
+    transmissivity: m2/day
+  value_column: transmissivity
+
 caveats:
   - "CONUS ONLY -- the model stops at the conterminous US border; an AOI outside the staged envelope raises AQUIFER_TRANSMISSIVITY_INPUT_INVALID naming it. Alaska, Hawaii, Puerto Rico and all territories are off the grid."
   - "This is the release's HEADLINE PEST-calibrated field: the 75 subdomain groundwater-flow models were calibrated against long-term average water levels, and the published transmissivity is the converged solution's post-processed output, not an input the models were handed. It is not an independent measurement of any single well or borehole."

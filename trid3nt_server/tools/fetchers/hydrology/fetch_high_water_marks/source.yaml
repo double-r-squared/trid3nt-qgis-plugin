@@ -69,6 +69,8 @@ payload_estimate:
   kb_per_feature: 0.25
   floor_mb: 0.001
 caveats:
+- "model-callable, not matched: a peak mark is one instant's height and not a water level series, so it carries no coverage row"
+- "model-callable, not matched: a peak mark is a single high-water elevation, not a series - a run names this tool directly, never through the class match"
 - HWM elevation accuracy varies by surveyor QUALITY rating (Excellent +/-0.05 ft, Good +/-0.10 ft, Fair
   +/-0.20 ft, Poor +/-0.40 ft, VP > 0.40 ft). Filter by quality before treating a mark as calibration
   truth.

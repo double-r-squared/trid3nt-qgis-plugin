@@ -92,11 +92,12 @@ coverage:
       note: USBR Bureau of Reclamation reservoirs and dams across the 17 western
         states its regions operate in; a river reach with no Reclamation project
         has no station on it at all
+      read_from: usbr_hydromet.stations
     window:
       series: true
       max_span_days: 1830.0
       cadence: daily samples
-    datum: null
+    datum: record
     units:
       forebay_elevation_ft: ft
       time_series_csv: ft

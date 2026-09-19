@@ -57,6 +57,8 @@ payload_estimate:
   kb_per_feature: 1.0
   floor_mb: 0.01
 caveats:
+- "model-callable, not matched: a many-feature network layer is not the one domain a hydrography row returns, so it carries no coverage row"
+- "model-callable, not matched: a many-feature network layer, not a single-domain hydrography row - a run names this tool directly, never through the class match"
 - OpenStreetMap waterway ways (river/stream/canal by default) via the Overpass API (3-mirror fallback),
   clipped to the exact bbox. Global, keyless. An area with no OSM waterways returns a valid 0-feature layer,
   not an error.

@@ -57,6 +57,8 @@ payload_estimate:
   mb_per_sq_deg: 0.0004
   floor_mb: 0.05
 caveats:
+- "model-callable, not matched: a navigation result is a traversal of the network, not a domain a slot reads, so it carries no coverage row"
+- "model-callable, not matched: a many-feature network layer, not a single-domain hydrography row - a run names this tool directly, never through the class match"
 - CONUS only (NHDPlus v2.1); a seed outside (-130,20,-60,55) -> NHDPLUS_NLDI_INPUT_INVALID
 - exactly one of seed_point / comid (mutual exclusion) -> NHDPLUS_NLDI_INPUT_INVALID
 - a seed at a network terminus / stub reach -> zero flowlines -> NHDPLUS_NLDI_EMPTY (retryable=false)

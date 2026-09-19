@@ -71,6 +71,24 @@ payload_estimate:
   mb_per_sq_deg: 0.06
   floor_mb: 0.01
 
+coverage:
+- data_class: aquifer property
+  kind: modelled
+  extent:
+    kind: surface
+    rings:
+      - [[-127.887748, 22.858133], [-65.346082, 22.858133], [-65.346082, 51.608133], [-127.887748, 51.608133]]
+    note: the union of the two staged recharge grids' envelopes (reitz2017,
+      wolock2003); the same envelope as gates.conus_bbox
+  window:
+    series: false
+    latest: '2017-01-01'
+  resolution_m: 800.0
+  datum: null
+  units:
+    recharge: mm/yr
+  value_column: recharge
+
 caveats:
   - "CONUS ONLY -- both grids stop at the conterminous US border; an AOI outside it raises RECHARGE_INPUT_INVALID naming the CONUS envelope"
   - "the two sources encode inland water DIFFERENTLY: reitz_2017 (the default) stamps it 0.0 mm/yr (a FINITE value, not a nodata sentinel), so an AOI entirely over the Great Lakes or a large reservoir serves a plausible-looking all-zero raster rather than an error; wolock_2003 stamps inland water as NaN, so the same AOI raises RECHARGE_EMPTY on that source. An all-ocean AOI (outside both grids' land extent) raises RECHARGE_EMPTY on either source."

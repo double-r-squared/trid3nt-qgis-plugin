@@ -67,6 +67,7 @@ payload_estimate:
   mb_per_sq_deg: 0.01
 
 caveats:
+  - "model-callable, not matched: a research-station record set is not one of the classes a slot asks for, so it carries no coverage row"
   - "US-LTER / EDI records via the public DataONE mirror (native PASTA API is 403 anonymously; identical bytes)."
   - "Generic package + entity reader: pass an EDI package_id (e.g. 'knb-lter-cwt.3037/19'); returns one data entity's parsed time series with per-column units."
   - "Coverage is whatever the package published; many LTER series predate the MRMS precip archive (align the forcing window before grading a replication)."

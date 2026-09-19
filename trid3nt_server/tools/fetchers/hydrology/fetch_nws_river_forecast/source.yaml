@@ -82,6 +82,54 @@ payload_estimate:
   features_per_sq_deg: 15.0
   kb_per_feature: 0.4096
   floor_mb: 0.001
+coverage:
+- data_class: water level series
+  kind: predicted
+  reach_km: 25
+  extent:
+    kind: stations
+    rings:
+      - [[-125.0, 24.0], [-66.0, 24.0], [-66.0, 50.0], [-125.0, 50.0]]
+      - [[-172.0, 51.0], [-129.0, 51.0], [-129.0, 72.0], [-172.0, 72.0]]
+      - [[-161.0, 18.0], [-154.0, 18.0], [-154.0, 23.0], [-161.0, 23.0]]
+      - [[-68.5, 17.0], [-64.0, 17.0], [-64.0, 19.0], [-68.5, 19.0]]
+      - [[144.0, 13.0], [146.5, 13.0], [146.5, 21.0], [144.0, 21.0]]
+      - [[-171.5, -15.0], [-169.0, -15.0], [-169.0, -13.0], [-171.5, -13.0]]
+    note: NWS/NWPS (AHPS) river-forecast gauges over the US and its territories
+    discover: bbox
+  window:
+    series: true
+    cadence: 15-min observed samples, 6-hour forecast cycles
+  datum: null
+  units:
+    fcst_stage_ft: ft
+    fcst_series_json: record
+  value_column: fcst_stage_ft
+  series_column: fcst_series_json
+- data_class: discharge series
+  kind: predicted
+  reach_km: 25
+  extent:
+    kind: stations
+    rings:
+      - [[-125.0, 24.0], [-66.0, 24.0], [-66.0, 50.0], [-125.0, 50.0]]
+      - [[-172.0, 51.0], [-129.0, 51.0], [-129.0, 72.0], [-172.0, 72.0]]
+      - [[-161.0, 18.0], [-154.0, 18.0], [-154.0, 23.0], [-161.0, 23.0]]
+      - [[-68.5, 17.0], [-64.0, 17.0], [-64.0, 19.0], [-68.5, 19.0]]
+      - [[144.0, 13.0], [146.5, 13.0], [146.5, 21.0], [144.0, 21.0]]
+      - [[-171.5, -15.0], [-169.0, -15.0], [-169.0, -13.0], [-171.5, -13.0]]
+    note: NWS/NWPS (AHPS) river-forecast gauges over the US and its territories
+    discover: bbox
+  window:
+    series: true
+    cadence: 15-min observed samples, 6-hour forecast cycles
+  datum: null
+  units:
+    fcst_flow_kcfs: kcfs
+    fcst_series_json: record
+  value_column: fcst_flow_kcfs
+  series_column: fcst_series_json
+
 caveats:
 - NWS/NWPS (AHPS) river-forecast gauges with observed + forecast stage and flood category; US + territories
   only. Optional per-gauge threshold + stageflow-series enrichment (bounded, best-effort). A bbox with

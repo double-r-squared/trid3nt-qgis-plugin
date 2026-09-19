@@ -68,6 +68,24 @@ payload_estimate:
   mb_per_sq_deg: 0.81
   floor_mb: 0.01
 
+coverage:
+- data_class: groundwater level
+  kind: modelled
+  extent:
+    kind: surface
+    rings:
+      - [[-127.873333, 23.235556], [-65.362222, 23.235556], [-65.362222, 51.546667], [-127.873333, 51.546667]]
+    note: the staged Zell & Sanford (2020) CONUS depth-to-water grid; the same
+      envelope as gates.conus_bbox
+  window:
+    series: false
+    latest: '2020-01-01'
+  resolution_m: 247.0
+  datum: land surface
+  units:
+    water_table_depth: m
+  value_column: water_table_depth
+
 caveats:
   - "CONUS ONLY -- the model stops at the conterminous US border; an AOI outside the staged envelope raises WATER_TABLE_INPUT_INVALID naming it. Alaska, Hawaii, Puerto Rico and all territories are off the grid."
   - "SIMULATED, not measured: these are simulated steady-state groundwater heads from 75 calibrated subdomain models, not well readings. Verified against the release's own 38,316 NWIS observation wells the model was calibrated to: Pearson r=0.63, median absolute error 3.1 m, RMSE 19.4 m. Treat a single pixel as a regional estimate with metres of uncertainty, never as a water level for a specific well."

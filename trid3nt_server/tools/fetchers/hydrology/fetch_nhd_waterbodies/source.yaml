@@ -64,6 +64,7 @@ payload_estimate:                            # area*0.4 clamp[0.05,50]
   floor_mb: 0.05
 
 caveats:
+  - "model-callable, not matched: a many-feature network layer is not the one domain a hydrography row returns, so it carries no coverage row"
   - "USGS NHD open-water polygons (lakes/ponds/reservoirs); vegetated wetlands -> fetch_nwi_wetlands"
   - "PRIMARY NHDPlus_HR -> FALLBACK medium-resolution; empty bbox over dry upland -> header-only FGB (honest-empty)"
 

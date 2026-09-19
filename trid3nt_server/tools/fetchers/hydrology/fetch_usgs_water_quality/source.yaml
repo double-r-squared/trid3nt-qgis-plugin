@@ -97,6 +97,30 @@ payload_estimate:
   features_per_sq_deg: 200.0
   kb_per_feature: 0.2
   floor_mb: 0.001
+coverage:
+- data_class: water quality sample
+  kind: measured
+  reach_km: 25
+  extent:
+    kind: stations
+    rings:
+      - [[-125.0, 24.0], [-66.0, 24.0], [-66.0, 50.0], [-125.0, 50.0]]
+      - [[-172.0, 51.0], [-129.0, 51.0], [-129.0, 72.0], [-172.0, 72.0]]
+      - [[-161.0, 18.0], [-154.0, 18.0], [-154.0, 23.0], [-161.0, 23.0]]
+      - [[-68.5, 17.0], [-64.0, 17.0], [-64.0, 19.0], [-68.5, 19.0]]
+      - [[144.0, 13.0], [146.5, 13.0], [146.5, 21.0], [144.0, 21.0]]
+      - [[-171.5, -15.0], [-169.0, -15.0], [-169.0, -13.0], [-171.5, -13.0]]
+    note: USGS/EPA Water Quality Portal monitoring sites over the US and its
+      territories, discovered by bbox
+    discover: bbox
+  window:
+    series: true
+    cadence: irregular field/lab samples
+  datum: null
+  units:
+    value: record
+  value_column: value
+
 caveats:
 - US + territories only (supports_global_query=false)
 - zero WQP monitoring sites for the characteristic in the bbox -> WQP_NO_SITES (retryable=false); never an empty success layer

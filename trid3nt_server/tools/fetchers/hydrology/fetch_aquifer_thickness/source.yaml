@@ -63,6 +63,24 @@ payload_estimate:
   mb_per_sq_deg: 0.81
   floor_mb: 0.01
 
+coverage:
+- data_class: aquifer property
+  kind: modelled
+  extent:
+    kind: surface
+    rings:
+      - [[-127.873333, 23.235556], [-65.362222, 23.235556], [-65.362222, 51.546667], [-127.873333, 51.546667]]
+    note: the staged Zell & Sanford (2020) CONUS saturated-thickness grid; the
+      same envelope as gates.conus_bbox
+  window:
+    series: false
+    latest: '2020-01-01'
+  resolution_m: 247.0
+  datum: null
+  units:
+    saturated_thickness: m
+  value_column: saturated_thickness
+
 caveats:
   - "CONUS ONLY -- an AOI outside the staged envelope raises AQUIFER_THICKNESS_INPUT_INVALID naming it. Alaska, Hawaii, Puerto Rico and all territories are off the grid."
   - "THIS IS NOT A MAPPED AQUIFER THICKNESS. It is the saturated thickness of the MODELLED SURFICIAL system: the base is the Zell-Sanford model bottom, a value PRESCRIBED per surficial-geology x HUC4 calibration zone (96 distinct round constants CONUS-wide, from 5 m -- a real coastal zone in LA/ME/NY/FL -- to 150 m below land surface), not a surveyed or interpreted hydrogeologic contact. Where the real aquifer is thicker than the modelled zone, this number is bounded by the modelling choice rather than by geology."

@@ -63,6 +63,7 @@ payload_estimate:
   floor_mb: 0.02
 
 caveats:
+  - "model-callable, not matched: a many-feature network layer is not the one domain a hydrography row returns, so it carries no coverage row"
   - "NHDArea maps water surfaces WIDE enough to have two banks - a big river, an estuary, a canal. A narrow creek is a flowline only and returns nothing here, which is a real answer about the channel and not a fetch failure"
   - "US only (NHDPlus HR); an envelope with no mapped water surface returns a header-only FGB"
   - "max_records is a hard server-side cap in the service's own row order, not a ranked top-N"

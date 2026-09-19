@@ -63,6 +63,30 @@ payload_estimate:
   kb_per_feature: 0.18
   floor_mb: 0.001
 
+coverage:
+- data_class: groundwater level
+  kind: measured
+  reach_km: 25
+  extent:
+    kind: stations
+    rings:
+      - [[-125.0, 24.0], [-66.0, 24.0], [-66.0, 50.0], [-125.0, 50.0]]
+      - [[-172.0, 51.0], [-129.0, 51.0], [-129.0, 72.0], [-172.0, 72.0]]
+      - [[-161.0, 18.0], [-154.0, 18.0], [-154.0, 23.0], [-161.0, 23.0]]
+      - [[-68.5, 17.0], [-64.0, 17.0], [-64.0, 19.0], [-68.5, 19.0]]
+      - [[144.0, 13.0], [146.5, 13.0], [146.5, 21.0], [144.0, 21.0]]
+      - [[-171.5, -15.0], [-169.0, -15.0], [-169.0, -13.0], [-171.5, -13.0]]
+    note: USGS groundwater monitoring wells over the US and its territories,
+      discovered by bbox or by state
+    discover: bbox
+  window:
+    series: true
+    cadence: irregular field measurements
+  datum: record
+  units:
+    water_level: ft
+  value_column: water_level
+
 caveats:
   - "USGS Water Data OGC API observed groundwater monitoring wells + their latest water-level reading (depth-to-water / groundwater elevation) as points; U.S. + territories. Pass EXACTLY ONE of state_code (USPS) or bbox (state wins). No wells with a reading in scope -> a typed USGS_GROUNDWATER_NO_WELLS error, never a fabricated layer."
 
