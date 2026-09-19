@@ -64,6 +64,10 @@ class Need:
     #: The source the run NAMES for this slot, "" where it names none. A named
     #: source the filters excluded is a refusal, not a pick.
     pick: str = ""
+    #: THE DOMAIN'S OWN WATER: the outline a gauge has to stand on for its flow
+    #: to be this run's flow, with the note saying whether the run drew the
+    #: polygon or only its box. ``None`` where the run states no domain.
+    water: CoverageExtent | None = None
 
     def __post_init__(self) -> None:
         if not self.data_class:
@@ -163,6 +167,12 @@ def dropped_from(choice: SourceChoice, fetcher: str, why: str) -> SourceChoice:
 #: station a source is called by name, the stations the row lists.
 _ASKABLE = frozenset({"bbox", "seed_point", "start_date", "end_date",
                       "valid_time"})
+
+#: THE CLASS WHOSE PLACE FILTER IS THE DOMAIN ITSELF. A level propagates up a
+#: reach, so a gauge within reach of this water speaks for it; a discharge is the
+#: water passing ONE section, so a gauge that does not stand on this domain's
+#: water measures another river's flow however near it is.
+_ON_THE_WATER = "discharge series"
 
 #: The param a station-addressed source is called by. A row whose extent lists
 #: its stations answers it with the nearest one; a discovered network is called
@@ -266,19 +276,49 @@ def _excluded(need: Need, coverage: Coverage) -> str:
     and never for a surface, which a run outside simply ranks lower. The datum
     is not a filter - it is flagged on the row and refused at the offset row."""
     if need.lon is not None and need.lat is not None:
-        away = _station_set(coverage).distance_km(need.lon, need.lat)
-        reach = coverage.reach_km or 0.0
-        if away > reach:
-            where = coverage.extent.note or "stated extent"
-            if coverage.extent.kind == "stations":
-                return (f"its nearest station is about {away:.0f} km away and "
-                        f"one serves {reach:g} km: {where}")
-            return f"does not reach this place: {where}"
+        extent = _station_set(coverage)
+        if need.data_class == _ON_THE_WATER and need.water is not None:
+            off = _off_the_water(need, extent)
+            if off:
+                return off
+        else:
+            away = extent.distance_km(need.lon, need.lat)
+            reach = coverage.reach_km or 0.0
+            if away > reach:
+                where = coverage.extent.note or "stated extent"
+                if coverage.extent.kind == "stations":
+                    return (f"its nearest station is about {away:.0f} km away "
+                            f"and one serves {reach:g} km: {where}")
+                return f"does not reach this place: {where}"
     if coverage.window.series and need.loosen != LOOSEN_WINDOW:
         outside = _outside_window(need, coverage)
         if outside:
             return outside
     return ""
+
+
+def _off_the_water(need: Need, extent: CoverageExtent) -> str:
+    """Why this source's stations do not stand on the domain's own water, or "".
+
+    A LISTED set is answered station by station: one station inside the outline,
+    or within the cell the mesh resolves of it, is this domain's flow. A network
+    with no listing states no station here, so the probe searches the domain's
+    own box and the world answers for it."""
+    water = need.water
+    if water is None:
+        return ""
+    stations = extent.listed()
+    if not stations:
+        return ""
+    cell_km = float(need.mesh_m or 0.0) / 1000.0
+    nearest = min(stations,
+                  key=lambda p: water.distance_km(p.lon, p.lat))
+    away = water.distance_km(nearest.lon, nearest.lat)
+    if away <= cell_km:
+        return ""
+    return (f"its nearest station {nearest.id} stands about {away:.0f} km off "
+            f"{water.note}: a discharge is the water passing one section, so a "
+            "gauge off this domain's water reports another flow")
 
 
 def _outside_window(need: Need, coverage: Coverage) -> str:

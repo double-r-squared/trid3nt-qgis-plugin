@@ -302,3 +302,53 @@ def test_a_measured_series_holds_no_record_after_now():
     assert choice.picked == "fetch_forecast"
     assert any("reports to now" in row.excluded for row in choice.rows
                if row.fetcher == "fetch_record")
+
+
+#: A short reach of one river, as the domain the run drew it: about 6 km of
+#: water, with a gauge on it and another river's gauge 20 km off.
+REACH = CoverageExtent(
+    kind="surface", note="the domain's own polygon",
+    rings=[[(-122.70, 45.50), (-122.64, 45.50), (-122.64, 45.54),
+            (-122.70, 45.54), (-122.70, 45.50)]])
+
+
+def listed(*points, data_class="discharge series"):
+    row = gauges(data_class=data_class)
+    row.extent = row.extent.model_copy(
+        update={"discover": "", "points": list(points)})
+    return row
+
+
+def flow_need(**over):
+    kwargs = dict(slot="carrier", data_class="discharge series",
+                  lon=WILLAMETTE[0], lat=WILLAMETTE[1], mesh_m=50.0,
+                  water=REACH)
+    kwargs.update(over)
+    return Need(**kwargs)
+
+
+def test_a_gauge_on_another_river_is_not_this_domain_s_discharge():
+    """A discharge is the water passing one section: a gauge 20 km off this
+    domain's water reports another flow, however near the reach it stands."""
+    other = CoveragePoint(id="14211720", lon=-122.384, lat=45.52)
+    choice = match(flow_need(), [("fetch_gauges", listed(other))])
+    assert choice.picked == ""
+    excluded = choice.rows[0].excluded
+    assert "14211720" in excluded and "20 km off" in excluded
+    assert "the domain's own polygon" in excluded
+
+
+def test_a_gauge_on_the_reach_survives_the_place_filter():
+    on_it = CoveragePoint(id="14211720", lon=-122.67, lat=45.52)
+    choice = match(flow_need(), [("fetch_gauges", listed(on_it))])
+    assert choice.picked == "fetch_gauges"
+
+
+def test_the_reach_still_answers_for_a_water_level_gauge():
+    """A level propagates, so the reach rule stands for it: the same gauge off
+    the domain's water is within reach and survives."""
+    other = CoveragePoint(id="14211720", lon=-122.384, lat=45.52)
+    choice = match(flow_need(data_class="water level series"),
+                   [("fetch_gauges", listed(other,
+                                            data_class="water level series"))])
+    assert choice.picked == "fetch_gauges"

@@ -32,7 +32,7 @@ from trid3nt_server.gates.input_review import (
     resolve_input_gate_mode,
 )
 
-from trid3nt_contracts.coverage import SourceChoice
+from trid3nt_contracts.coverage import CoverageExtent, SourceChoice
 
 from .data import (
     BED, DISCHARGE, DOMAIN, LEVEL, LINE, OBSERVATION, RUNS, CoversAOI, DataDecl,
@@ -563,7 +563,33 @@ async def _need(env: _Env, decl: DataDecl, data_class: str,
     return Need(slot=label, data_class=data_class, lon=lon, lat=lat,
                 opens=str(opens) if opens else None,
                 until=_closes(opens, env.window_s), frame=run_frame(env.params),
-                mesh_m=_mesh_m(env), pick=_pick(env, decl, data_class))
+                mesh_m=_mesh_m(env), pick=_pick(env, decl, data_class),
+                water=_water())
+
+
+def _water() -> CoverageExtent | None:
+    """The domain's own outline, which is the water a gauge has to stand on.
+
+    The polygon the run drew where the domain carries one, else its box, and the
+    note says WHICH - a box is a coarser statement of the same water, and a
+    reader of the refusal has to know which one answered."""
+    from trid3nt_server.inputs.domain import domain_ring
+
+    dom = current_domain()
+    if dom is None:
+        return None
+    if dom.geometry:
+        ring = [(float(x), float(y)) for x, y in domain_ring(dom)]
+        note = "the domain's own polygon"
+    elif dom.bbox:
+        west, south, east, north = (float(v) for v in dom.bbox)
+        ring = [(west, south), (east, south), (east, north), (west, north)]
+        note = "the domain's own box"
+    else:
+        return None
+    if len(ring) < 3:
+        return None
+    return CoverageExtent(kind="surface", rings=[ring + [ring[0]]], note=note)
 
 
 def _pick(env: _Env, decl: DataDecl, data_class: str) -> str:

@@ -889,7 +889,12 @@ package DataSeam {
         FLAGGED rather than filtered, because the offset row is what refuses at.
         A station set states the REACH one station serves, read against the
         nearest station the row lists, and a place further from it than that is
-        not a survivor at all. What the top survivor is CALLED with closes
+        not a survivor at all. A DISCHARGE is the water passing one section, so
+        its place filter is the domain itself: the gauge has to stand on this
+        domain's own water - inside the polygon the run drew, or its box, within
+        the cell the mesh resolves - and a gauge on another river is dropped by
+        name however near it stands. A level propagates up a reach, so the reach
+        stays its rule. What the top survivor is CALLED with closes
         through the match: the run's box and window, the matched row's own
         request values, and the nearest listed station where the source is
         called by a station name. A source whose required params the row can
@@ -1267,6 +1272,12 @@ package DataSeam {
     satisfy requirement ASlotStatesANeedAndTheMatchFillsIt by matchedSlot;
     verify requirement ASlotStatesANeedAndTheMatchFillsIt by
         "tests/runtime/test_source_match.py::test_one_survivor_fills_the_slot_and_the_sentence_names_the_facts";
+    verify requirement ASlotStatesANeedAndTheMatchFillsIt by
+        "tests/runtime/test_source_match.py::test_a_gauge_on_another_river_is_not_this_domain_s_discharge";
+    verify requirement ASlotStatesANeedAndTheMatchFillsIt by
+        "tests/runtime/test_source_match.py::test_a_gauge_on_the_reach_survives_the_place_filter";
+    verify requirement ASlotStatesANeedAndTheMatchFillsIt by
+        "tests/runtime/test_source_match.py::test_the_reach_still_answers_for_a_water_level_gauge";
     verify requirement ASlotStatesANeedAndTheMatchFillsIt by
         "tests/runtime/test_source_match.py::test_a_source_too_coarse_for_the_mesh_ranks_below_every_source_that_resolves_it";
     verify requirement ASlotStatesANeedAndTheMatchFillsIt by
