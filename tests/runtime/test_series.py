@@ -83,3 +83,13 @@ def test_a_record_is_read_on_the_clock_the_run_opens_on():
     found = Series([0.0, 60.0], [1.0, 2.0], units="m").opening_at(3600.0)
     assert found.times_s == (3600.0, 3660.0)
     assert found.values == (1.0, 2.0)
+
+
+def test_the_readings_before_the_run_s_moment_stay_ahead_of_it():
+    record = Series.from_samples(
+        [("2026-09-17T07:00:00Z", 24200.0), ("2026-09-17T18:00:00Z", 9210.0),
+         ("2026-09-17T18:05:00Z", 10100.0)],
+        units="ft3/s", at="2026-09-17T18:00:00Z")
+    assert record.opening_at(0.0).times_s == (-39600.0, 0.0, 300.0)
+    assert record.opening_at(0.0).at(0.0) == 9210.0
+    assert record.opening_at(3600.0).times_s == (-36000.0, 3600.0, 3900.0)

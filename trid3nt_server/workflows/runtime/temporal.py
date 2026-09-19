@@ -234,11 +234,14 @@ class Series:
                       units=self.units)
 
     def opening_at(self, start_s: float) -> "Series":
-        """The same readings on a clock that OPENS at ``start_s``.
+        """The same readings on a clock that reads ``start_s`` where this one
+        reads zero.
 
-        A record opens at its own first sample; the run opens where its own
-        clock does, which is not zero for a run continuing another."""
-        offset = float(start_s) - self.times_s[0]
+        A record is opened at the run's own moment, at t = 0, and the readings
+        before that moment keep their negative times; a run continuing another
+        reads that same moment past zero on its own clock. Re-anchoring the
+        FIRST sample here would open the run at the record's beginning."""
+        offset = float(start_s)
         if not offset:
             return self
         return Series([t + offset for t in self.times_s], [*self.values],
