@@ -58,22 +58,27 @@ def module_input_dir() -> Path:
 
 
 #: PLAUSIBILITY BOUNDS beside the dictionary row, by module and identifier: the
-#: range a value of that keyword is taken inside, and refused by name outside.
-#: A sidecar rather than a column in the dictionary itself, because the
-#: dictionary is the image's own and is compared to it byte for byte. One
-#: ``[lo, hi]`` bounds every value the keyword holds; a list of them is one per
-#: element, in the keyword's own order. This is the table calibration reads.
+#: UNIT the keyword is read in and the range a value of it is taken inside, and
+#: refused by name outside. A sidecar rather than a column in the dictionary
+#: itself, because the dictionary is the image's own and is compared to it byte
+#: for byte - and the dictionary carries the unit only in the prose of its help,
+#: which is not a fact a card row can render. One ``[lo, hi]`` bounds every
+#: value the keyword holds; a list of them is one per element, in the keyword's
+#: own order. This is the table calibration reads.
 _BOUNDS_FILE = Path(__file__).resolve().parent / "module_bounds.json"
 
 
 @lru_cache(maxsize=None)
-def _bounds(module: str) -> Mapping[str, Any]:
-    """The bounds sidecar's rows for one module, empty where it names none."""
+def _bounds(module: str) -> Mapping[str, tuple[str, tuple]]:
+    """The sidecar's ``(unit, bounds)`` rows for one module, by identifier."""
     rows = json.loads(_BOUNDS_FILE.read_text()).get(module) or {}
-    return MappingProxyType({name: tuple(tuple(float(v) for v in pair)
-                                         for pair in (row if isinstance(row[0], list)
-                                                      else [row]))
-                             for name, row in rows.items()})
+    return MappingProxyType({
+        name: (str(row["unit"]),
+               tuple(tuple(float(v) for v in pair)
+                     for pair in (row["bounds"]
+                                  if isinstance(row["bounds"][0], list)
+                                  else [row["bounds"]])))
+        for name, row in rows.items()})
 
 
 @dataclass(frozen=True, slots=True)
@@ -94,6 +99,9 @@ class Slot:
     mnemo: str = ""
     file_role: str = ""
     file_mandatory: bool = False
+    #: The unit this keyword's value is read in, as the bounds sidecar states
+    #: it; empty on a keyword nothing bounds and on a dimensionless one.
+    unit: str = ""
     #: The plausibility range each of this keyword's values is taken inside: one
     #: pair for every value, or one pair per element in the keyword's own order.
     bounds: tuple[tuple[float, float], ...] = ()
@@ -237,6 +245,7 @@ def load_module_input(module: str) -> Mapping[str, Slot]:
             f"{sorted(p.stem for p in module_input_dir().glob('*.json'))}.")
     rows = json.loads(path.read_text())["keywords"]
     bounded = _bounds(module)
+    unbounded_row: tuple[str, tuple] = ("", ())
     return MappingProxyType({row["identifier"]: Slot(
         keyword=row["keyword"], identifier=row["identifier"], type=row["type"],
         size=row["size"], unbounded=row["unbounded"], desc=row["help"],
@@ -247,7 +256,8 @@ def load_module_input(module: str) -> Mapping[str, Slot]:
         multi_select=row.get("multi_select", False),
         file_role=row.get("file_role", ""),
         file_mandatory=row.get("file_mandatory", False),
-        bounds=bounded.get(row["identifier"], ()),
+        unit=bounded.get(row["identifier"], unbounded_row)[0],
+        bounds=bounded.get(row["identifier"], unbounded_row)[1],
     ) for row in rows})
 
 

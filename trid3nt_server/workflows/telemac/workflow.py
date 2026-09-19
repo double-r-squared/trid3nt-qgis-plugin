@@ -728,14 +728,25 @@ async def _review(sheet: Sheet, *, workflow: str, title: str,
 
 
 def _slot_row(name: str, row: Any) -> ParamSheetRow:
-    """One SET slot, as the card renders it: the value and where it came from."""
+    """One SET slot, as the card renders it: the value, the unit it is read in,
+    the range it is taken inside, and where it came from."""
     door, basis = _ORIGIN_DOORS[row.provenance.origin]
     value = row.value if isinstance(row.value, (int, float, str, bool, list)) \
         else str(row.value)
     return ParamSheetRow(
         name=name, value=value, desc=row.slot.desc[:512], door=door, basis=basis,
+        units=row.slot.unit or None, bounds=_editor_bounds(row.slot),
         origin=row.provenance.origin.value, source_badge=str(row.provenance),
         group=_group(row.slot))
+
+
+def _editor_bounds(slot: Any) -> tuple[float, float] | None:
+    """The range a card clamps this keyword's editor to, or nothing at all.
+
+    ONE pair bounds the whole value; a keyword the sidecar rows a pair per
+    element for - a speed beside a bearing - has no single range an editor
+    could clamp to, and the refusal at the fill names the element that missed."""
+    return slot.bounds[0] if len(slot.bounds) == 1 else None
 
 
 def _open_row(slot: Any) -> ParamSheetRow:
