@@ -232,13 +232,7 @@ class STEERING(T2D):
     #: The SAME water at every liquid boundary as the domain opens holding: the
     #: question is what one pass does to water of this composition, so water that
     #: arrives different from the water already in it would answer a step change.
-    boundaries = Boundaries(
-        measured={"liquid_boundary_order": Ref("settled.liquid_boundary_order"),
-                  "liquid_boundary_prescribes":
-                      Ref("settled.liquid_boundary_prescribes"),
-                  "inflow_q_m3s": Ref("settled.inflow_q_m3s"),
-                  "outflow_stage_m": Ref("settled.outflow_stage_m")},
-        tracers=_ENTERING)
+    boundaries = Boundaries(measured=Ref("settled"), tracers=_ENTERING)
 
     #: Growth on the stated nutrients under the stated light, and the oxygen the
     #: growth and its decay drive. SECCHI DEPTH is unwritten, so the engine's own

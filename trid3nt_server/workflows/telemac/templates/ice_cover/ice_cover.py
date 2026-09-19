@@ -238,13 +238,7 @@ class STEERING(T2D):
     #: it carries the temperature the sample site measured and no ice at all -
     #: no frazil in suspension, no cover on it. One value per appended tracer,
     #: in the order the ice deck below appends them.
-    boundaries = Boundaries(
-        measured={"liquid_boundary_order": Ref("settled.liquid_boundary_order"),
-                  "liquid_boundary_prescribes":
-                      Ref("settled.liquid_boundary_prescribes"),
-                  "inflow_q_m3s": Ref("settled.inflow_q_m3s"),
-                  "outflow_stage_m": Ref("settled.outflow_stage_m")},
-        tracers=[Ref("water_temperature.value"), *_INFLOW_ICE])
+    boundaries = Boundaries(measured=Ref("settled"), tracers=[Ref("water_temperature.value"), *_INFLOW_ICE])
 
     #: The weather over the whole domain, as the one table the engine
     #: interpolates every column of between the same two rows. The nearest

@@ -1079,6 +1079,9 @@ async def open_water(
 _NO_WATER: dict[str, Any] = {
     "level_m": None, "depth_m": None, "max_depth_m": None, "opening": None,
     "inflow_q_m3s": None, "outflow_stage_m": None,
+    # THE WINDOW behind each of the two numbers above, where the record that
+    # reported them reported one: what the boundary's own file is written from.
+    "inflow_q_series": None, "outflow_stage_series": None,
 }
 
 #: What the engine is told to lay: a flat surface at the level, or a sheet of one
@@ -1182,6 +1185,7 @@ async def open_channel(
         return {"level_m": None if held is None else round(held[0], 3),
                 "depth_m": None, "opening": None,
                 "inflow_q_m3s": None, "outflow_stage_m": None,
+                "inflow_q_series": None, "outflow_stage_series": None,
                 "discharge_note": "this domain's edge names no runs, so no flow "
                                   "is imposed and no stage is derived."}
     law, coefficient = int(friction_law), float(friction_coefficient)
@@ -1221,12 +1225,26 @@ async def open_channel(
         "opening": FLAT if float(normal["slope"]) == 0.0 else BED_PARALLEL,
         "outflow_stage_m": round(float(normal["stage_m"]), 3),
         "inflow_q_m3s": inflow_q,
+        # The window each number came out of, where the record carried one. The
+        # boundary writes the series and the number stands for the boundaries
+        # nothing measured a window at.
+        "inflow_q_series": _window(carrier),
+        "outflow_stage_series": _window(stage),
         "friction_law": law,
         "friction_coefficient": coefficient,
         "discharge_note": discharge_note,
         "normal": {k: (round(v, 6) if isinstance(v, float) else v)
                    for k, v in normal.items()},
     }
+
+
+def _window(reading: Any) -> Any:
+    """The series an ingested reading carried, or ``None``.
+
+    A number stated on the call carries none: one number is the whole of what
+    the caller said, and the boundary states it as the constant the engine
+    reads."""
+    return getattr(reading, "series", None)
 
 
 def _carried_discharge(carrier: Any) -> tuple[float, str]:

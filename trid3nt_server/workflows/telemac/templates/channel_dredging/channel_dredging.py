@@ -219,13 +219,7 @@ class STEERING(T2D):
     #: No tracer: a dredge is a question about the bed, so every liquid boundary
     #: carries the measured flowrate and stage and nothing else. The walk is the
     #: mesh's own; the two values are the open channel's.
-    boundaries = Boundaries(
-        measured={"liquid_boundary_order": Ref("settled.liquid_boundary_order"),
-                  "liquid_boundary_prescribes":
-                      Ref("settled.liquid_boundary_prescribes"),
-                  "inflow_q_m3s": Ref("settled.inflow_q_m3s"),
-                  "outflow_stage_m": Ref("settled.outflow_stage_m")},
-        tracers=[])
+    boundaries = Boundaries(measured=Ref("settled"), tracers=[])
 
     #: The bed the dredger cuts into, and the dredger itself. One class, bedload
     #: on, a real stock: the material the criterion dig takes out of the fairway

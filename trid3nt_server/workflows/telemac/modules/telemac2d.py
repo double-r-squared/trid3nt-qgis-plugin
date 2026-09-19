@@ -303,26 +303,44 @@ def Rain(*, mm_per_day: Any, tracers: Any, hours: Any = None  # noqa: N802
 
 
 def Boundaries(*, measured: Any, tracers: Any) -> Mapping[str, Any]:  # noqa: N802
-    """The three PRESCRIBED lists, in the order the engine numbers its boundaries.
+    """The three PRESCRIBED lists, in the order the engine numbers its boundaries,
+    and the LIQUID BOUNDARIES FILE for every one a record measured over time.
 
-    Written from ``measured``, the mesh's own walk; ``tracers`` is one each."""
+    ``measured`` is the settle's own record - the mesh's walk, the flow the
+    inflow run carries, the level the outflow holds and the run's clock;
+    ``tracers`` is one value each."""
     return MappingProxyType({"measured": measured, "tracers": tracers})
 
 
 def _boundaries(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
                                                    Mapping[str, Any]]:
-    """The measured boundary walk -> the three lists the engine reads down.
+    """The measured boundary walk -> the three lists the engine reads down, and
+    the file it reads a measured boundary's own column out of instead.
 
-    WHICH list carries a value comes from the ``.cli`` quad, not the role."""
+    WHICH list carries a value comes from the ``.cli`` quad, not the role. A
+    boundary whose record reported a WINDOW writes its column; the engine reads
+    the steering list for every column the file does not carry, so a run states
+    both and each boundary is read off whichever one measured it."""
     from trid3nt_server.workflows.mesh.topology import FREE_EXIT_ROLE
+
+    from ..authoring.boundaries import (
+        LIQUID_BOUNDARIES_FILENAME,
+        column_name,
+        liquid_boundaries_file,
+    )
 
     measured = value["measured"]
     order = list(measured["liquid_boundary_order"])
     prescribes = list(measured["liquid_boundary_prescribes"])
     per_tracer = [float(v) for v in value["tracers"]]
+    windows = {"flowrate": measured.get("inflow_q_series"),
+               "elevation": measured.get("outflow_stage_series")}
+    step_s = float(measured.get("time_step_s") or 0.0)
+    start_s = float(measured.get("start_time_s") or 0.0)
     flowrates: list[float] = []
     elevations: list[float] = []
     tracers: list[float] = []
+    columns: list[tuple[str, str, Any]] = []
     for number, (role, what) in enumerate(zip(order, prescribes), start=1):
         if what not in ("flowrate", "elevation") and not (
                 what == "nothing" and role == FREE_EXIT_ROLE):
@@ -339,16 +357,26 @@ def _boundaries(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
         elevations.append(float(measured["outflow_stage_m"])
                           if what == "elevation" else 0.0)
         tracers += per_tracer
+        window = windows.get(what)
+        if window is not None:
+            unit = "m3/s" if what == "flowrate" else "m"
+            columns.append((column_name(what, number), unit,
+                            window.at_step(step_s).opening_at(start_s)))
     # A CLOSED body has no liquid boundary to prescribe anything at, and a run
     # with no tracers prescribes none. An EMPTY list is not that statement - it
     # is a keyword with nothing after it, which DAMOCLES reads as the next
     # line's business - so a list with nothing in it is not written at all.
-    return ({**({} if not flowrates else
-                {"PRESCRIBED_FLOWRATES": flowrates}),
-             **({} if not elevations else
-                {"PRESCRIBED_ELEVATIONS": elevations}),
-             **({} if not tracers else
-                {"PRESCRIBED_TRACERS_VALUES": tracers})}, {})
+    keywords: dict[str, Any] = {
+        **({} if not flowrates else {"PRESCRIBED_FLOWRATES": flowrates}),
+        **({} if not elevations else {"PRESCRIBED_ELEVATIONS": elevations}),
+        **({} if not tracers else {"PRESCRIBED_TRACERS_VALUES": tracers})}
+    if not columns:
+        return (keywords, {})
+    return ({**keywords, "LIQUID_BOUNDARIES_FILE": LIQUID_BOUNDARIES_FILENAME},
+            {LIQUID_BOUNDARIES_FILENAME: liquid_boundaries_file(
+                columns, start_s=start_s,
+                until_s=float(measured["until_s"]), tail_s=_SERIES_TAIL_S,
+                note=str(measured.get("discharge_note") or ""))})
 
 
 def Runoff(*, node_xy: Any, cn2: Any, antecedent_moisture: Any,  # noqa: N802

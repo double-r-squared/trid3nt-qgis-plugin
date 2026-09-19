@@ -213,13 +213,7 @@ class STEERING(T2D):
     #: load enters at the source, so which boundary the engine numbers first
     #: cannot decide the answer. The walk is the mesh's own; the flow the inflow
     #: carries and the level the outflow holds are the open channel's.
-    boundaries = Boundaries(
-        measured={"liquid_boundary_order": Ref("settled.liquid_boundary_order"),
-                  "liquid_boundary_prescribes":
-                      Ref("settled.liquid_boundary_prescribes"),
-                  "inflow_q_m3s": Ref("settled.inflow_q_m3s"),
-                  "outflow_stage_m": Ref("settled.outflow_stage_m")},
-        tracers=[0.0, _SATURATION_MGL, 0.0, 0.0])
+    boundaries = Boundaries(measured=Ref("settled"), tracers=[0.0, _SATURATION_MGL, 0.0, 0.0])
 
     #: WHERE the outfall enters the water, in the mesh's own metres: the settled
     #: discharge point, read by position because a point is one value with an

@@ -260,11 +260,11 @@ def test_a_calm_dry_deck_writes_no_wind_and_no_rain_keyword():
 
 def test_the_boundary_values_read_the_measured_walk_and_the_open_channel_step():
     """WHICH list carries a value is the mesh's own walk; what the two liquid
-    faces carry is the flow and the level the open-channel step measured."""
+    faces carry is the flow and the level the open-channel step measured - one
+    read of the settle's own record, which carries the walk, the two numbers,
+    the windows behind them and the clock the file is written on."""
     measured = _MODULE.STEERING.ASSERTED["boundaries"]["measured"]
-    assert measured["liquid_boundary_order"].path == "settled.liquid_boundary_order"
-    assert measured["inflow_q_m3s"].path == "settled.inflow_q_m3s"
-    assert measured["outflow_stage_m"].path == "settled.outflow_stage_m"
+    assert measured.path == "settled"
     assert _MODULE.STEERING.ASSERTED["INITIAL_DEPTH"].path == "settled.depth_m"
     assert _MODULE.STEERING.ASSERTED["INITIAL_ELEVATION"].path == "settled.level_m"
 

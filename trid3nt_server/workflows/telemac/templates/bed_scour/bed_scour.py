@@ -210,13 +210,7 @@ class STEERING(T2D):
     #: carries and the level the outflow run holds. The bed is GAIA's; the
     #: carrier still runs ONE tracer, so every liquid boundary carries one
     #: clean-water value.
-    boundaries = Boundaries(
-        measured={"liquid_boundary_order": Ref("settled.liquid_boundary_order"),
-                  "liquid_boundary_prescribes":
-                      Ref("settled.liquid_boundary_prescribes"),
-                  "inflow_q_m3s": Ref("settled.inflow_q_m3s"),
-                  "outflow_stage_m": Ref("settled.outflow_stage_m")},
-        tracers=[0.0])
+    boundaries = Boundaries(measured=Ref("settled"), tracers=[0.0])
 
     #: WHERE the marker enters the water, in the mesh's own metres: the settled
     #: release point, read by position because a point is one value with an

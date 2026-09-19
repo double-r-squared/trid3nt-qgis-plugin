@@ -221,6 +221,17 @@ class Series:
         return Series([*self.times_s], [v + float(offset_m) for v in self.values],
                       units=self.units)
 
+    def opening_at(self, start_s: float) -> "Series":
+        """The same readings on a clock that OPENS at ``start_s``.
+
+        A record opens at its own first sample; the run opens where its own
+        clock does, which is not zero for a run continuing another."""
+        offset = float(start_s) - self.times_s[0]
+        if not offset:
+            return self
+        return Series([t + offset for t in self.times_s], [*self.values],
+                      units=self.units)
+
     def at_step(self, step_s: float) -> "Series":
         """This series at the engine's own time step.
 

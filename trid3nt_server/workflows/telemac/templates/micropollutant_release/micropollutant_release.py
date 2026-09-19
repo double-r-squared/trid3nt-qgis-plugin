@@ -205,13 +205,7 @@ class STEERING(T2D):
     #: liquid boundaries: the walk the mesh measured, the flow the inflow run
     #: carries and the level the outflow run holds. The same clean water, with
     #: the same ambient sediment stated above, at every one of them.
-    boundaries = Boundaries(
-        measured={"liquid_boundary_order": Ref("settled.liquid_boundary_order"),
-                  "liquid_boundary_prescribes":
-                      Ref("settled.liquid_boundary_prescribes"),
-                  "inflow_q_m3s": Ref("settled.inflow_q_m3s"),
-                  "outflow_stage_m": Ref("settled.outflow_stage_m")},
-        tracers=[0.0, 0.03, 0.0, 0.0, 0.0])
+    boundaries = Boundaries(measured=Ref("settled"), tracers=[0.0, 0.03, 0.0, 0.0, 0.0])
 
     #: WHERE the substance enters the water, in the mesh's own metres: the
     #: settled release point, read by position because a point is one value

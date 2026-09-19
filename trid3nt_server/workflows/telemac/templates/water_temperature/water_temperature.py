@@ -226,13 +226,7 @@ class STEERING(T2D):
     #: The water arriving at a feeding face is the same water the sample site
     #: measured: the domain warms because of what happens OVER it, so the inflow
     #: carries the opening temperature rather than a second number.
-    boundaries = Boundaries(
-        measured={"liquid_boundary_order": Ref("settled.liquid_boundary_order"),
-                  "liquid_boundary_prescribes":
-                      Ref("settled.liquid_boundary_prescribes"),
-                  "inflow_q_m3s": Ref("settled.inflow_q_m3s"),
-                  "outflow_stage_m": Ref("settled.outflow_stage_m")},
-        tracers=[Ref("water_temperature.value")])
+    boundaries = Boundaries(measured=Ref("settled"), tracers=[Ref("water_temperature.value")])
 
     #: The weather over the whole domain, as the one table the engine
     #: interpolates every column of between the same two rows. The nearest RAWS

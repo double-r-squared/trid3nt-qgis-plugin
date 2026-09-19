@@ -77,3 +77,9 @@ def test_a_series_that_does_not_move_forward_refuses():
 def test_a_series_is_frozen_once_the_record_said_what_it_measured():
     with pytest.raises(AttributeError):
         Series([0.0, 60.0], [1.0, 2.0], units="m").units = "ft"
+
+
+def test_a_record_is_read_on_the_clock_the_run_opens_on():
+    found = Series([0.0, 60.0], [1.0, 2.0], units="m").opening_at(3600.0)
+    assert found.times_s == (3600.0, 3660.0)
+    assert found.values == (1.0, 2.0)
