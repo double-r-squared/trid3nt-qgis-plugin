@@ -51,6 +51,7 @@ payload_estimate:
   kb_per_feature: 2.0
   floor_mb: 0.01
 caveats:
+- "model-callable, not matched: a drawn structure line is not one of the classes a slot asks for, so it carries no coverage row"
 - OpenStreetMap man_made=breakwater / groyne ways via the Overpass API (3-mirror fallback). Global, keyless.
   Ways are returned WHOLE, not clipped to the bbox - a barrier clipped at the AOI edge would open a gap
   the real structure does not have. An area with no surveyed structure returns a valid 0-feature layer,

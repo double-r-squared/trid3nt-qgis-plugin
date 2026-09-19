@@ -136,8 +136,8 @@ docstring: |-
       - A seamless land-plus-sea surface in one raster - use
         ``fetch_topobathy``, which merges a coastal topo-bathy composite with
         the 3DEP land DEM.
-      - Outside US waters, or over a small inland stream: BlueTopo covers
-        navigationally significant US water and refuses elsewhere.
+      - Outside navigationally significant US water: this tool refuses
+        (see the coverage row).
 
   **Parameters:**
       bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326, inside the

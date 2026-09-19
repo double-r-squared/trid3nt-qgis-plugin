@@ -60,6 +60,7 @@ payload_estimate:
   ceil_mb: 0.01
 
 caveats:
+  - "model-callable, not matched: the offset between two zeros reconciles a matched source and is never one a slot matches, so it carries no coverage row"
   - "the offset is the height a ZERO on the source frame reads at on the target frame: add it to a source-frame elevation to read that elevation on the target frame"
   - "VDatum serves the US and its territories only, and each region is its own grid: the region that stands over the point is chosen for you and named on the record, and a point no region stands over refuses by name"
   - "a local PROJECT datum - the Columbia River Datum, a district's own station datum - is NOT a VDatum frame and refuses here; its offset is published on the survey that uses it"

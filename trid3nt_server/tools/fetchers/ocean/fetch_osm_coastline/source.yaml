@@ -45,6 +45,7 @@ payload_estimate:
   kb_per_feature: 8.0
   floor_mb: 0.02
 caveats:
+- "model-callable, not matched: a coastline is not hydrography a domain is read from, so it carries no coverage row"
 - OpenStreetMap natural=coastline ways via the Overpass API (3-mirror fallback). Global, keyless. The
   land is on the LEFT of a coastline way's direction, which is what makes an open line a land/water
   edge; the ways are returned WHOLE rather than clipped, because a coastline cut at the AOI edge would

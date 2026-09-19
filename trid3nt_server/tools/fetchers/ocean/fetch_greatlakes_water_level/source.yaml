@@ -84,6 +84,7 @@ coverage:
       - [[-79.9, 43.1], [-76.0, 43.1], [-76.0, 44.4], [-79.9, 44.4]]
       note: about fifty water-level gauges across the five lakes and their
         connecting channels; an ocean coast station has no LWD and is not here
+      read_from: noaa_coops.stations
     window:
       series: true
       max_span_days: 31.0

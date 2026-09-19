@@ -105,16 +105,56 @@ coverage:
         coastline, its tidal entrances and bays, the Great Lakes shore and the
         territories; a station stands at the water and not tens of kilometres
         inland of it
+      read_from: noaa_coops.stations
     window:
       series: true
       max_span_days: 366.0
-      cadence: 6-min samples
+      cadence: 6-min samples, requested hourly
     datum: MLLW
     units:
       water_level: m
       time_series_csv: m
     value_column: water_level
     series_column: time_series_csv
+    ask:
+      product: water_level
+-   data_class: water level series
+    kind: predicted
+    reach_km: 25
+    extent:
+      kind: stations
+      rings:
+      - [[-125.5, 40.0], [-123.6, 40.0], [-123.6, 49.0], [-125.5, 49.0]]
+      - [[-123.4, 47.0], [-122.0, 47.0], [-122.0, 49.1], [-123.4, 49.1]]
+      - [[-123.4, 36.0], [-121.3, 36.0], [-121.3, 40.2], [-123.4, 40.2]]
+      - [[-121.5, 32.4], [-117.0, 32.4], [-117.0, 36.2], [-121.5, 36.2]]
+      - [[-97.6, 25.8], [-81.0, 25.8], [-81.0, 31.0], [-97.6, 31.0]]
+      - [[-82.0, 24.4], [-75.3, 24.4], [-75.3, 36.6], [-82.0, 36.6]]
+      - [[-76.5, 36.5], [-73.0, 36.5], [-73.0, 41.2], [-76.5, 41.2]]
+      - [[-71.6, 40.3], [-66.9, 40.3], [-66.9, 45.2], [-71.6, 45.2]]
+      - [[-92.3, 41.3], [-76.0, 41.3], [-76.0, 49.1], [-92.3, 49.1]]
+      - [[-172.0, 51.0], [-129.0, 51.0], [-129.0, 72.0], [-172.0, 72.0]]
+      - [[-161.0, 18.0], [-154.0, 18.0], [-154.0, 23.0], [-161.0, 23.0]]
+      - [[-68.5, 17.0], [-64.0, 17.0], [-64.0, 19.0], [-68.5, 19.0]]
+      - [[144.0, 13.0], [146.5, 13.0], [146.5, 21.0], [144.0, 21.0]]
+      - [[-171.5, -15.0], [-169.0, -15.0], [-169.0, -13.0], [-171.5, -13.0]]
+      note: about three hundred NOAA CO-OPS stations on the US ocean
+        coastline, its tidal entrances and bays, the Great Lakes shore and the
+        territories; a station stands at the water and not tens of kilometres
+        inland of it
+      read_from: noaa_coops.stations
+    window:
+      series: true
+      max_span_days: 366.0
+      cadence: hourly astronomical predictions
+    datum: MLLW
+    units:
+      water_level: m
+      time_series_csv: m
+    value_column: water_level
+    series_column: time_series_csv
+    ask:
+      product: predictions
 
 caveats:
   - "an empty bbox -> COOPS_TIDES_EMPTY (retryable=false), never a fabricated station"

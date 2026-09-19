@@ -83,6 +83,7 @@ payload_estimate:                            # n_scenarios * area * 0.3 clamp[0.
   floor_mb: 0.02
 
 caveats:
+  - "model-callable, not matched: a sea-level-rise scenario surface answers no run window, so it carries no coverage row"
   - "NOAA OCM SLR Viewer dissolved bathtub-inundation polygons above MHHW; 0-10 ft in 0.5-ft steps, CONUS-only"
   - "one query per scenario level, merged; interior non-coastal bbox -> header-only FGB (honest-empty), never NOAA_SLR_SCENARIOS_EMPTY by default"
 

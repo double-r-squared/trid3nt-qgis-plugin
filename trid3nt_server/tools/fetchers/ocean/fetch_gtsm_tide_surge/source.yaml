@@ -56,6 +56,28 @@ payload_estimate:
   mb_per_sq_deg: 0.001
   floor_mb: 0.01
 
+coverage:
+- data_class: water level series
+  kind: modelled
+  extent:
+    kind: surface
+    rings:
+      - [[-180.0, -90.0], [180.0, -90.0], [180.0, 90.0], [-180.0, 90.0]]
+    note: the GTSM v3.0 global coastal gauge network its CDS dataset publishes -
+      sparse points along every coastline, never a filled ocean grid
+  window:
+    series: true
+    earliest: '1950-01-01'
+    latest: '2024-12-31'
+    max_span_days: 366.0
+    cadence: hourly samples
+  datum: MSL
+  units:
+    water_level: m
+    time_series_csv: m
+  value_column: water_level
+  series_column: time_series_csv
+
 caveats:
   - "GTSM v3.0 reanalysis is HISTORICAL only (1950 -> ~2024); a MODEL, not a gauge -- for CONUS use fetch_noaa_coops_tides"
   - "keyed: free Copernicus CDS key auto-requested via credential card on GTSM_MISSING_KEY; empty bbox -> GTSM_EMPTY (no gauges)"

@@ -87,6 +87,7 @@ payload_estimate:              # snapshot: ~0.4 KB/station, ~1 station/deg^2 (sp
 
 # --- honesty: caveats + fallback -----------------------------------------
 caveats:
+  - "model-callable, not matched: a current is not a water level series, so it carries no coverage row"
   - "~88 US tidal-current stations globally (inlets/harbors/channels); empty bbox -> COOPS_CURRENTS_EMPTY (retryable=false)"
   - "one bad station never aborts the bbox (swallowed to null); all-empty -> typed EMPTY, never fabricated"
   - "snapshot semantics: latest observed sample / prediction nearest now, not a full time series"
