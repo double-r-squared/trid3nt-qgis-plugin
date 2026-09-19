@@ -127,7 +127,8 @@ class Workflow:
         check reports - it never retracts a solved run."""
         params = getattr(run, "params", None)
         sheet = params.rows() if params is not None else ()
-        return sensitivity_notes(self.sensitivity, self.metadata, result, sheet)
+        return sensitivity_notes(self.sensitivity, self.metadata, result, sheet,
+                                 fill=self._fill(run))
 
     # -- the spine --------------------------------------------------------- #
 
@@ -283,7 +284,8 @@ class Workflow:
         # the moment the layer was, and the journal is the record that outlives
         # the artifacts.
         await asyncio.to_thread(self._journal, run_id, run, result, metrics,
-                                wall_seconds, notes, derived_from)
+                                wall_seconds, notes, derived_from,
+                                dict(supplied or {}))
         # The snapshot rides the same moment for the same reason: this is where a
         # run holds its own past whole - the sheet it ran on, the records it left,
         # the artifacts it was handed - and any later point would be reassembling
@@ -343,7 +345,8 @@ class Workflow:
     def _journal(self, run_id: str | None, run: RunResult, result: Any,
                  metrics: Mapping[str, Any], wall_seconds: float,
                  notes: Sequence[str] = (),
-                 derived_from: Derivation | None = None) -> None:
+                 derived_from: Derivation | None = None,
+                 supplied: Mapping[str, Any] | None = None) -> None:
         """Append this run to the run journal - one seam, every engine.
         Called from publish, the one point where the sheet, the answer, the
         provenance rows and the wall time are all in hand at once."""
@@ -359,6 +362,7 @@ class Workflow:
             origin=journal.run_origin(live_session=current_emitter() is not None),
             executed=run.executed, replayed=run.replayed, notes=list(notes),
             outputs=run.outputs, keywords=run.keywords,
+            supplied=dict(supplied or {}),
             parent_run_id=derived_from.parent_run_id if derived_from else None,
             overrides=derived_from.overrides if derived_from else (),
         ))

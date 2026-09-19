@@ -75,10 +75,13 @@ def answered(result: Any, name: str) -> Any:
 
 
 def sensitivity_notes(decl: SensitivityDecl, metadata: Any, result: Any,
-                      sheet: Sequence[Any]) -> tuple[str, ...]:
+                      sheet: Sequence[Any],
+                      fill: Mapping[str, str] | None = None) -> tuple[str, ...]:
     """The honesty note(s) this run's answer carries, or ``()``.
     ONE note per run, not one per field, and fields the run did not produce are
-    dropped - a note about a number that is not there points at nothing."""
+    dropped - a note about a number that is not there points at nothing.
+    ``fill`` is the solved deck's slots by origin, so a lever that is a KEYWORD
+    rather than a param is read where the run actually states it."""
     if not decl:
         return ()
     present = [(field, cls) for field, cls in decl.rows
@@ -94,6 +97,11 @@ def sensitivity_notes(decl: SensitivityDecl, metadata: Any, result: Any,
     # basis alone labels a default-spacing run as refined and swallows the bound.
     refined = (getattr(row, "basis", None) == "user"
                and getattr(row, "value", None) is not None)
+    # A LEVER THAT IS A KEYWORD has no param row at all: the run states it on
+    # the deck, and the fill records who put it there. A user or a model set it
+    # for the same reason - somebody chose this granularity.
+    stated = str((fill or {}).get(lever, ""))
+    refined = refined or stated.startswith(("user", "model"))
     mesh_m = answered(result, "mesh_size_m")
     at = f" at {float(mesh_m):g} m" if mesh_m is not None else ""
 

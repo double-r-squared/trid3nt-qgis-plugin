@@ -101,6 +101,25 @@ def test_a_refined_run_says_refined_is_not_converged() -> None:
     assert "25 m" in notes[0]
 
 
+def test_a_granularity_stated_as_a_keyword_is_read_off_the_fill() -> None:
+    """A lever the module carries as a KEYWORD has no param row, so the note
+    reads the solved deck's own slots: a run whose plane count the user stated
+    is refined, and one left at the deck's own is a bound."""
+    from trid3nt_server.tools import TOOL_REGISTRY
+
+    workflow = TOOL_REGISTRY["telemac3d_stratified_flow"].fn.workflow
+    lever = workflow.metadata.resolution_specs[0].param
+    result = _Result(stratification_dt=3.2, mesh_size_m=40.0)
+    sheet = asyncio.run(resolve_params(workflow.params, {})).rows()
+
+    bound = sensitivity_notes(workflow.sensitivity, workflow.metadata, result,
+                              sheet, fill={lever: "template: STEERING"})
+    assert bound[0].startswith("RESOLUTION-LIMITED, TREAT AS A BOUND:")
+    refined = sensitivity_notes(workflow.sensitivity, workflow.metadata, result,
+                                sheet, fill={lever: "user"})
+    assert refined[0].startswith("RESOLUTION-SENSITIVE:")
+
+
 def test_a_field_the_run_did_not_produce_is_not_labeled() -> None:
     """A note about a number that is not there points at nothing."""
     notes = sensitivity_notes(
