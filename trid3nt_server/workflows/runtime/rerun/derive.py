@@ -10,7 +10,8 @@ same scenario on from there.
 from __future__ import annotations
 
 import logging
-from typing import Any, Mapping
+from dataclasses import replace
+from typing import Any, Mapping, Sequence
 
 from ..errors import DeclarativeError
 from ..ledger import StepLedger, invocation_key
@@ -73,7 +74,8 @@ async def rerun(parent_run_id: str, overrides: Mapping[str, Any],
 
     continued = await _continued_state(continue_from, workflow) \
         if continue_from else None
-    parent = ResolvedParams({row.name: row for row in snap.sheet})
+    parent = ResolvedParams({row.name: row for row in
+                             await _typed(workflow, snap.sheet)})
     note = f"override of run {parent_run_id}"
     # A CONSTANT-door param IS overridable here: the constant door governs what the
     # model's schema offers, and this is not that surface - recalibration is how a
@@ -124,6 +126,17 @@ async def rerun(parent_run_id: str, overrides: Mapping[str, Any],
         derived_from=Derivation(parent_run_id=parent_run_id,
                                 overrides=tuple(changed),
                                 continued_from=continue_from))
+
+
+async def _typed(workflow: Any, sheet: Sequence[Any]) -> list[Any]:
+    """The parent's sheet with every value back in the type its template reads.
+
+    A record stores a sheet STRUCTURALLY, so a value that was a Point when the
+    parent ran comes back as the mapping it was written as, and a step that
+    reads it by attribute would fail on the mapping. The template's own
+    coercions are what type it, and a row none of them names stands as written."""
+    typed = await workflow.coerced({row.name: row.value for row in sheet})
+    return [replace(row, value=typed.get(row.name, row.value)) for row in sheet]
 
 
 async def _continued_state(run_id: str, workflow: Any) -> str:

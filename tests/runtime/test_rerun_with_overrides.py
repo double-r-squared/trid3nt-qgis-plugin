@@ -644,3 +644,26 @@ def test_the_record_of_a_continued_run_says_which_run_it_continued():
         "derived from run RUN1, continuing run RUN1 from the state it ended at")
     assert _derivation_note(Derivation("RUN1", ("rate",))) == (
         "derived from run RUN1 by overriding rate")
+
+
+@pytest.mark.asyncio
+async def test_a_typed_value_on_the_parents_sheet_is_typed_again_for_the_child():
+    """A record stores a sheet structurally, so a Point comes back as a mapping;
+    the template's own coercions are what put it back in the type its steps read."""
+    from trid3nt_server.inputs import Point, point_arg
+    from trid3nt_server.workflows.runtime.params import ResolvedParam
+    from trid3nt_server.workflows.runtime.rerun.derive import _typed
+
+    wf = _probe_workflow()
+    object.__setattr__(wf, "coercions",
+                       (point_arg("where", tool=wf.name, prompt="pick"),))
+    written = ResolvedParam(name="where", value={"lon": 1.0, "lat": 2.0,
+                                                 "name": None},
+                            door=doors.USER, basis="user")
+    stands = ResolvedParam(name="rate", value=2.0, door=doors.USER, basis="user")
+
+    rows = await _typed(wf, (written, stands))
+
+    assert isinstance(rows[0].value, Point)
+    assert (rows[0].value.lon, rows[0].value.lat) == (1.0, 2.0)
+    assert rows[1].value == 2.0

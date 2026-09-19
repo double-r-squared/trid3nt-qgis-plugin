@@ -221,11 +221,7 @@ class Workflow:
         # A retryable error must not be flattened into an envelope: that destroys
         # the ``.suggestions`` channel the adapter harvests off the raised exception.
         try:
-            for coercion in self.coercions:
-                coerced = coercion(args)
-                if inspect.isawaitable(coerced):
-                    coerced = await coerced
-                args.update(coerced or {})
+            args = await self.coerced(args)
         except asyncio.CancelledError:
             raise
         except Exception as exc:  # noqa: BLE001
@@ -239,6 +235,21 @@ class Workflow:
         declared = {prm.name for prm in self.params}
         return {k: v for k, v in args.items()
                 if k in declared and v is not None}, None
+
+    async def coerced(self, args: Mapping[str, Any]) -> dict[str, Any]:
+        """``args`` with every declared coercion applied, in declaration order.
+
+        The one place a value reaches the type its template reads, so a sheet
+        read back off a record and a sheet built off the wire are typed by the
+        same statement. A coercion that ingests from the world is awaited where
+        it stands."""
+        found = dict(args)
+        for coercion in self.coercions:
+            coerced = coercion(found)
+            if inspect.isawaitable(coerced):
+                coerced = await coerced
+            found.update(coerced or {})
+        return found
 
     def _supplied_artifacts(self, wire: Mapping[str, Any]) -> dict[str, Any]:
         """Artifacts handed in for producer-less ``Data`` slots, by slot name.
