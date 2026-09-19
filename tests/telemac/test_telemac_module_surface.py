@@ -27,6 +27,7 @@ from trid3nt_server.workflows.telemac.modules import (
     run,
 )
 from trid3nt_server.workflows.telemac.modules.module import UNSET, Module
+from trid3nt_server.workflows.telemac.modules.telemac2d import Sources
 
 _EXPOSED = ("telemac2d", "telemac3d", "artemis", "waqtel", "gaia")
 
@@ -561,6 +562,59 @@ def test_a_permitted_discharge_holds_flat_for_the_whole_run():
     assert rows[3:] == ["0.000 8 0 2 250 0", "700.000 8 0 2 250 0"]
 
 
+def test_the_sources_file_is_written_from_the_keywords_the_deck_states_by_name():
+    """The four source keywords are the engine's own, so a deck states them by
+    name and the composite shrinks to the one thing the dictionary lacks: the
+    series file. It states the file's name and no other keyword at all."""
+    sheet = fill(T2D,
+                 ABSCISSAE_OF_SOURCES=[407561.831],
+                 ORDINATES_OF_SOURCES=[4483518.635],
+                 WATER_DISCHARGE_OF_SOURCES=[8.0],
+                 VALUES_OF_THE_TRACERS_AT_THE_SOURCES=[100.0],
+                 sources=Sources(window_s=120.0, until_s=600.0))
+    stated = {row.slot.keyword for row in sheet.filled.values()}
+    assert stated == {"ABSCISSAE OF SOURCES", "ORDINATES OF SOURCES",
+                      "WATER DISCHARGE OF SOURCES",
+                      "VALUES OF THE TRACERS AT THE SOURCES", "SOURCES FILE"}
+    assert sheet.files["river_sources.txt"].splitlines() == [
+        "#", "T Q(1) TR(1,1)", "s m3/s mg/l",
+        "0.000 8 100", "120.000 8 100", "120.100 0 0", "700.000 0 0"]
+
+
+def test_the_sources_file_reads_the_tracer_array_by_the_engines_own_position():
+    """Two sources carrying two tracers each is one flat array the engine reads
+    by position, and the file splits it back the same way."""
+    _, files = T2D.COMPOSITES["sources"].expand(
+        {"q": [3.0, 6.0], "tracers": [10.0, 11.0, 20.0, 21.0],
+         "window_s": None, "until_s": 600.0})
+    rows = files["river_sources.txt"].splitlines()
+    assert rows[1] == "T Q(1) Q(2) TR(1,1) TR(1,2) TR(2,1) TR(2,2)"
+    assert rows[3:] == ["0.000 3 6 10 11 20 21", "700.000 3 6 10 11 20 21"]
+
+
+def test_a_tracer_array_that_does_not_divide_across_the_sources_refuses():
+    with pytest.raises(ValueError, match="VALUES OF THE TRACERS AT THE SOURCES"):
+        T2D.COMPOSITES["sources"].expand(
+            {"q": [3.0, 6.0], "tracers": [10.0, 11.0, 20.0],
+             "window_s": None, "until_s": 600.0})
+
+
+def test_a_settled_point_reaches_the_abscissae_and_the_ordinates_by_position():
+    """A settled point is ONE value with an order - [x, y] in the mesh's own
+    metres - and the two keywords that take it apart read it by position."""
+    sheet = fill(T2D, produced={"source": {"at": [407561.831, 4483518.635]}},
+                 ABSCISSAE_OF_SOURCES=[Ref("source.at.0")],
+                 ORDINATES_OF_SOURCES=[Ref("source.at.1")])
+    assert sheet.filled["ABSCISSAE_OF_SOURCES"].value == [407561.831]
+    assert sheet.filled["ORDINATES_OF_SOURCES"].value == [4483518.635]
+
+
+def test_a_position_past_the_end_of_a_pair_refuses_by_the_ref_that_read_it():
+    with pytest.raises(SlotRefused, match="source.at.2"):
+        fill(T2D, produced={"source": {"at": [1.0, 2.0]}},
+             ABSCISSAE_OF_SOURCES=[Ref("source.at.2")])
+
+
 def test_a_wind_from_the_north_reaches_the_engines_own_speed_and_direction_pair():
     """telemac2d carries SPEED AND DIRECTION OF WIND, so the composite hands it
     the pair it was given; only the FROM-bearing rotation onto the keyword's own
@@ -644,9 +698,8 @@ def test_a_value_of_none_states_nothing_and_the_engine_default_stands():
 def test_a_coupling_states_only_what_the_carrier_names_it_by():
     from trid3nt_server.workflows.telemac.modules import WAQTEL
 
-    body = WAQTEL.degradation(substance="sewage", half_life_hours=None,
-                              rate_per_day=None, presets={"sewage": {"law": 1,
-                                                                     "coef": 2.0}})
+    body = WAQTEL.degradation(substance="sewage",
+                              presets={"sewage": {"law": 1, "coef": 2.0}})
     slots, files = T2D.COMPOSITES["coupling"].expand([body])
     assert slots == {"COUPLING_WITH": "WAQTEL",
                      "WAQTEL_STEERING_FILE": "t2d_river.waqtel",
@@ -664,35 +717,41 @@ def test_a_degradation_given_nothing_couples_nothing():
     states no coupling at all rather than a process with nothing to run."""
     from trid3nt_server.workflows.telemac.modules import WAQTEL
 
-    body = WAQTEL.degradation(substance=None, half_life_hours=None,
-                              rate_per_day=None, presets={})
+    body = WAQTEL.degradation(substance=None, presets={})
     assert T2D.COMPOSITES["coupling"].expand([body]) == ({}, {})
 
 
-@pytest.mark.parametrize("given,expected", [
-    (dict(substance=None, half_life_hours=4.0, rate_per_day=None),
-     {"LAW OF TRACERS DEGRADATION": [2],
-      "COEFFICIENT 1 FOR LAW OF TRACERS DEGRADATION": [pytest.approx(0.173287)]}),
-    (dict(substance=None, half_life_hours=None, rate_per_day=0.5),
-     {"LAW OF TRACERS DEGRADATION": [3],
-      "COEFFICIENT 1 FOR LAW OF TRACERS DEGRADATION": [0.5]}),
-    (dict(substance="E. coli effluent", half_life_hours=None, rate_per_day=None),
-     {"LAW OF TRACERS DEGRADATION": [1],
-      "COEFFICIENT 1 FOR LAW OF TRACERS DEGRADATION": [2.0]}),
-])
-def test_a_half_life_a_rate_or_a_named_substance_reach_the_law(given, expected):
+def test_a_named_substance_reaches_the_law_its_preset_row_carries():
+    """The substance word is the WHOLE of what this body takes: a caller with a
+    rate of its own states the keyword pair, which is what the refusal names."""
     from trid3nt_server.workflows.telemac.modules import WAQTEL
 
-    body = WAQTEL.degradation(**given, presets={"coli": {"law": 1, "coef": 2.0}})
-    assert dict(fill(WAQTEL, **dict(body["slots"])).resolved()) == expected
+    body = WAQTEL.degradation(substance="E. coli effluent",
+                              presets={"coli": {"law": 1, "coef": 2.0}})
+    assert dict(fill(WAQTEL, **dict(body["slots"])).resolved()) == {
+        "LAW OF TRACERS DEGRADATION": [1],
+        "COEFFICIENT 1 FOR LAW OF TRACERS DEGRADATION": [2.0]}
+
+
+def test_a_rate_is_stated_by_the_keyword_pair_and_bounded_by_the_sidecar():
+    """The capability the deleted arguments carried lives on the keywords: a law
+    and its coefficient, taken inside the sidecar's own range."""
+    from trid3nt_server.workflows.telemac.modules import WAQTEL
+
+    written = dict(fill(WAQTEL, LAW_OF_TRACERS_DEGRADATION=[3],
+                        COEFFICIENT_1_FOR_LAW_OF_TRACERS_DEGRADATION=[0.5]
+                        ).resolved())
+    assert written == {"LAW OF TRACERS DEGRADATION": [3],
+                       "COEFFICIENT 1 FOR LAW OF TRACERS DEGRADATION": [0.5]}
+    with pytest.raises(SlotRefused, match="COEFFICIENT 1 FOR LAW"):
+        fill(WAQTEL, COEFFICIENT_1_FOR_LAW_OF_TRACERS_DEGRADATION=[1e-9])
 
 
 def test_a_substance_no_preset_names_refuses_rather_than_running_conservative():
     from trid3nt_server.workflows.telemac.modules import WAQTEL
 
-    body = WAQTEL.degradation(substance="arsenic", half_life_hours=None,
-                              rate_per_day=None, presets={"coli": {"law": 1,
-                                                                   "coef": 2.0}})
+    body = WAQTEL.degradation(substance="arsenic",
+                              presets={"coli": {"law": 1, "coef": 2.0}})
     with pytest.raises(ValueError, match="arsenic"):
         fill(WAQTEL, **dict(body["slots"]))
 
@@ -702,10 +761,8 @@ def test_a_substance_no_preset_names_refuses_rather_than_running_conservative():
 #: in, which is the wrapper speaking for itself.
 _COUPLED_CALLS = {
     ("waqtel", "degradation"): (
-        {"substance": "x", "half_life_hours": 4.0, "rate_per_day": 0.2,
-         "presets": {}},
-        {"substance": "y", "half_life_hours": 0.0, "rate_per_day": 0.7,
-         "presets": {"y": {"law": 1, "coef": 2.0}}}),
+        {"substance": "x", "presets": {"x": {"law": 2, "coef": 0.35}}},
+        {"substance": "y", "presets": {"y": {"law": 1, "coef": 2.0}}}),
     ("waqtel", "o2"): (
         {"WATER_TEMPERATURE": 20.0, "WATER_SALINITY": 0.0,
          "CONSTANT_OF_DEGRADATION_OF_ORGANIC_LOAD_K1": 0.3,
@@ -1309,6 +1366,31 @@ def test_the_card_shows_what_is_set_and_open_and_folds_the_rest_by_rubrique():
     groups = [row.group for row in card_rows(sheet) if row.advanced]
     assert len(set(groups)) == len([g for i, g in enumerate(groups)
                                     if i == 0 or g != groups[i - 1]])
+
+
+def test_a_set_keyword_row_shows_the_unit_it_is_read_in_and_the_range_it_is_taken_in():
+    """The dictionary carries the unit only in the prose of its help, so the
+    bounds sidecar states it as data and the card row renders both."""
+    from trid3nt_server.workflows.telemac.workflow import card_rows
+
+    rows = {row.name: row for row in card_rows(_filled(DURATION=600.0))}
+    assert rows["DURATION"].units == "s"
+    assert rows["DURATION"].bounds == (60.0, 25920000.0)
+    # A keyword nothing bounds renders neither, rather than an invented range.
+    assert rows["LAW_OF_BOTTOM_FRICTION"].units is None
+    assert rows["LAW_OF_BOTTOM_FRICTION"].bounds is None
+
+
+def test_a_keyword_bounded_per_element_offers_the_card_no_single_range():
+    """A speed beside a bearing has no one range an editor could clamp to; the
+    refusal at the fill is what names the element that missed."""
+    from trid3nt_server.workflows.telemac.workflow import card_rows
+
+    sheet = _filled(**{"SPEED AND DIRECTION OF WIND": [4.0, 90.0]})
+    row = {r.name: r for r in card_rows(sheet)}["SPEED_AND_DIRECTION_OF_WIND"]
+    assert row.units == "m/s, deg" and row.bounds is None
+    with pytest.raises(SlotRefused, match="at position 2"):
+        _filled(**{"SPEED AND DIRECTION OF WIND": [4.0, 400.0]})
 
 
 def test_an_open_slot_under_the_fold_says_the_dictionary_answers_it_for_nobody():

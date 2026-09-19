@@ -364,8 +364,14 @@ def _read(ref: Ref, produced: Mapping[str, Any],
         return None
     _missing = object()
     for part in ref.tail:
-        found = (base.get(part, _missing) if isinstance(base, Mapping)
-                 else getattr(base, part, _missing))
+        if isinstance(base, (list, tuple)) and part.isdigit():
+            # A PAIR is one value with an order, not two fields: a settled point
+            # is [x, y] in the mesh's own metres, and a keyword that takes the
+            # abscissae apart from the ordinates reads it by position.
+            found = base[int(part)] if int(part) < len(base) else _missing
+        else:
+            found = (base.get(part, _missing) if isinstance(base, Mapping)
+                     else getattr(base, part, _missing))
         if found is _missing:
             raise SlotRefused(
                 f"Ref({ref.path!r}) reads {part!r} off {ref.root}, which names "

@@ -10,14 +10,16 @@ from __future__ import annotations
 from types import MappingProxyType
 from typing import Any, Mapping, Sequence
 
+from trid3nt_server.workflows.runtime import Ref
+
 from ..authoring.atmosphere import Atmosphere, expand_for_telemac2d
 from .module import Module, Output
 from .outputs import PRIMITIVES, read_drogues
 
 __all__ = ["T2D", "Atmosphere", "Boundaries", "Continuation", "Friction",
            "Infiltration", "MODULE_OUTPUT", "Oil", "Rain", "Storm",
-           "Rating", "Release", "Runoff", "TimeOrigin", "TracerNames", "Wind",
-           "SOURCES_FILENAME"]
+           "Rating", "Release", "Runoff", "Sources", "TimeOrigin",
+           "TracerNames", "Wind", "SOURCES_FILENAME"]
 
 #: A signed component reads about zero, so its ramp diverges there and the
 #: legend is ranged symmetrically; a depth-like field is floored where it stops
@@ -98,6 +100,44 @@ def Release(*, at: Any, q: Any, tracers: Any,  # noqa: N802 - a value constructo
                              "window_s": window_s, "until_s": until_s})
 
 
+def Sources(*, until_s: Any, window_s: Any = None  # noqa: N802
+            ) -> Mapping[str, Any]:
+    """The SOURCES FILE for the point sources the deck states BY NAME: how long
+    each one discharges, and the horizon its series is written over.
+
+    A MAPPING, not an object: the sheet's one ref walk descends mappings."""
+    # WHERE and HOW MUCH are the engine's own keywords - one element per source,
+    # in its own positional order - so they are read off the sheet rather than
+    # restated here. ``window_s`` is a finite release, held and then stepped to
+    # nothing so the slug advects and passes, while ``None`` is a permitted
+    # discharge held flat for the whole run.
+    return MappingProxyType({
+        "window_s": window_s, "until_s": until_s,
+        "q": Ref("WATER_DISCHARGE_OF_SOURCES"),
+        "tracers": Ref("VALUES_OF_THE_TRACERS_AT_THE_SOURCES")})
+
+
+def _sources(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
+                                                Mapping[str, Any]]:
+    """The stated source keywords -> the series file the engine reads them over.
+
+    The tracer array is flattened by position: every tracer of the first source,
+    then every tracer of the second, which is how the engine reads it back."""
+    discharges = [float(q) for q in value["q"]]
+    tracers = [float(v) for v in value["tracers"]]
+    if not discharges or len(tracers) % len(discharges):
+        raise ValueError(
+            f"{len(tracers)} tracer values do not divide across "
+            f"{len(discharges)} sources; VALUES OF THE TRACERS AT THE SOURCES "
+            "carries every tracer of the first source, then of the second.")
+    per_source = len(tracers) // len(discharges)
+    releases = [{"q": q, "tracers": tracers[n * per_source:(n + 1) * per_source],
+                 "window_s": value["window_s"], "until_s": value["until_s"]}
+                for n, q in enumerate(discharges)]
+    return ({"SOURCES_FILE": SOURCES_FILENAME},
+            {SOURCES_FILENAME: _series(releases)})
+
+
 def TracerNames(*, names: Any, named_by: Any = None  # noqa: N802
                 ) -> Mapping[str, Any]:
     """The tracer names, the first of them called what ``named_by`` is called.
@@ -140,6 +180,10 @@ def Oil(*, presets: Any, named: Any, at: Any,  # noqa: N802
     ``presets`` is the table the deck carries; ``named`` picks one row of it. How
     many floats are written how often is MAXIMUM NUMBER OF DROGUES and PRINTOUT
     PERIOD FOR DROGUES, which the deck states by their own names."""
+    # PRINTOUT PERIOD FOR DROGUES counts TIME STEPS, not seconds, so the bounds
+    # sidecar restates no range for it: a period is plausible against a run's own
+    # step count, which is not a number the table can hold, and the dictionary's
+    # own integer type is the whole of what bounds it.
     return MappingProxyType({"presets": presets, "named": named, "at": at,
                              "release_step": release_step})
 
@@ -656,7 +700,8 @@ T2D.LISTING = LISTING
 T2D.PRINTOUTS = "VARIABLES_FOR_GRAPHIC_PRINTOUTS"
 T2D.CADENCE = "GRAPHIC_PRINTOUT_PERIOD"
 T2D.TRACER = "T"
-T2D.composites(releases=_releases, wind=_wind, continue_from=_continue_from,
+T2D.composites(releases=_releases, sources=_sources, wind=_wind,
+               continue_from=_continue_from,
                atmosphere=expand_for_telemac2d,
                oil=_oil, rain=_rain, coupling=_coupling,
                boundaries=_boundaries, runoff=_runoff, friction=_friction,

@@ -6,7 +6,6 @@ produce are TRACERS APPENDED to the carrier's own, which it states by process.""
 
 from __future__ import annotations
 
-import math
 from types import MappingProxyType
 from typing import Any, Mapping
 
@@ -113,12 +112,6 @@ _OXYGEN_ONLY = frozenset((
 _TWO_SITE = frozenset(("KINETIC_EXCHANGE_MODEL", "COEFFICIENT_OF_DISTRIBUTION_2",
                        "CONSTANT_OF_DESORPTION_KINETIC_2"))
 
-#: Hours to the per-hour law and days to the per-day law, as the dictionary's
-#: LAW OF TRACERS DEGRADATION numbers them; a named substance reads its preset,
-#: which carries a law and a coefficient of its own.
-_LAW_PER_HOUR = 2
-_LAW_PER_DAY = 3
-
 #: The WAQTEL steering file a carrier names. DAMOCLES parses it against WAQTEL's
 #: own dictionary, so it is a sheet of its own rather than a block in the
 #: carrier's deck.
@@ -129,18 +122,18 @@ class _Waqtel(Module("waqtel")):  # type: ignore[misc]
     """The dictionary, plus the coupled bodies the carrier's ``coupling`` expands."""
 
     @classmethod
-    def degradation(cls, *, substance: Any, half_life_hours: Any,
-                    rate_per_day: Any, presets: Any) -> Mapping[str, Any]:
+    def degradation(cls, *, substance: Any, presets: Any) -> Mapping[str, Any]:
         """First-order tracer DEGRADATION (process 17) over the carrier's tracers,
-        from a half-life, a per-day rate, or a named substance's preset row.
+        from a named substance's preset row.
 
-        Given nothing, the body states nothing and the carrier couples nothing."""
+        A caller with a rate of its own states LAW OF TRACERS DEGRADATION and
+        COEFFICIENT 1 FOR LAW OF TRACERS DEGRADATION by name, which is what the
+        refusal below names. Given nothing, the body states nothing and the
+        carrier couples nothing."""
         return {**_body(_DEGRADATION,
                         degradation={"substance": substance,
-                                     "half_life_hours": half_life_hours,
-                                     "rate_per_day": rate_per_day,
                                      "presets": presets}),
-                "given": [substance, half_life_hours, rate_per_day]}
+                "given": [substance]}
 
     @classmethod
     def thermal(cls, **keywords: Any) -> Mapping[str, Any]:
@@ -210,28 +203,23 @@ class _Waqtel(Module("waqtel")):  # type: ignore[misc]
 
 def _degradation(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
                                                     Mapping[str, Any]]:
-    """The degradation value -> the law and its coefficient, sized to one tracer.
+    """The named substance -> the law and its coefficient, sized to one tracer.
 
-    A stated half-life or rate beats the preset a substance word names."""
-    half_life, rate = value.get("half_life_hours"), value.get("rate_per_day")
-    if half_life is not None and float(half_life) > 0.0:
-        law, coefficient = _LAW_PER_HOUR, round(math.log(2.0) / float(half_life), 6)
-    elif rate is not None and float(rate) > 0.0:
-        law, coefficient = _LAW_PER_DAY, round(float(rate), 6)
-    else:
-        word = str(value.get("substance") or "").strip().lower()
-        preset = next((row for key, row in dict(value["presets"]).items()
-                       if key in word), None)
-        if preset is None:
-            raise ValueError(
-                f"{value.get('substance')!r} names no degradation preset this deck "
-                f"carries ({sorted(value['presets'])}); state the law and its "
-                "coefficient by name instead - LAW OF TRACERS DEGRADATION = 2 "
-                "(per hour) or 3 (per day) with COEFFICIENT 1 FOR LAW OF TRACERS "
-                "DEGRADATION at that law's rate.")
-        law, coefficient = int(preset["law"]), float(preset["coef"])
-    return ({"LAW_OF_TRACERS_DEGRADATION": [law],
-             "COEFFICIENT_1_FOR_LAW_OF_TRACERS_DEGRADATION": [coefficient]}, {})
+    A word the deck's own preset table does not carry is refused by the keyword
+    pair that states a rate directly: this composite invents no die-off."""
+    word = str(value.get("substance") or "").strip().lower()
+    preset = next((row for key, row in dict(value["presets"]).items()
+                   if key in word), None)
+    if preset is None:
+        raise ValueError(
+            f"{value.get('substance')!r} names no degradation preset this deck "
+            f"carries ({sorted(value['presets'])}); state the law and its "
+            "coefficient by name instead - LAW OF TRACERS DEGRADATION = 2 "
+            "(per hour) or 3 (per day) with COEFFICIENT 1 FOR LAW OF TRACERS "
+            "DEGRADATION at that law's rate.")
+    return ({"LAW_OF_TRACERS_DEGRADATION": [int(preset["law"])],
+             "COEFFICIENT_1_FOR_LAW_OF_TRACERS_DEGRADATION":
+                 [float(preset["coef"])]}, {})
 
 
 def _body(process: int, **slots: Any) -> Mapping[str, Any]:

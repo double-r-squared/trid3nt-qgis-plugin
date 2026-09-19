@@ -238,7 +238,6 @@ class STEERING(T2D):
     #: decaying substance was named; nothing otherwise. This deck states no
     #: die-off of its own: the substance word picks its narrated preset.
     coupling = [WAQTEL.degradation(substance=P.decaying_substance,
-                                   half_life_hours=None, rate_per_day=None,
                                    presets=DECAY_PRESETS)]
 
 
