@@ -141,6 +141,7 @@ def build_record(*, run_id: str | None, engine: str | None,
                  notes: Sequence[str], fill: Mapping[str, str] | None = None,
                  parent_run_id: str | None = None,
                  overrides: Sequence[str] = (),
+                 keywords: Mapping[str, Any] | None = None,
                  outputs: Sequence[Mapping[str, Any]] = ()) -> dict[str, Any]:
     """One run record, from what the publish stage already holds.
     ``parent_run_id`` + ``overrides`` make the journal a CHAIN rather than a pile:
@@ -154,6 +155,10 @@ def build_record(*, run_id: str | None, engine: str | None,
         "parent_run_id": parent_run_id,
         "overrides": list(overrides),
         "sheet": [_row(row) for row in sheet],
+        # THE RAW KEYWORD FLOOR this run was pinned by. It is not a Param, so it
+        # is on no sheet row - and a reproduction driven from the arguments alone
+        # would run a different deck.
+        "keywords": {k: _small(v) for k, v in (keywords or {}).items()},
         "answer": {k: _small(v) for k, v in answer.items()},
         "provenance": [_provenance(row) for row in provenance],
         # WHERE each slot of the solved deck came from, in the closed vocabulary

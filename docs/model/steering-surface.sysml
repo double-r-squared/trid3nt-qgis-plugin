@@ -154,8 +154,9 @@ package SteeringSurface {
     part def RunRecord {
         doc /*
         One line per completed run: the engine and the module it ran under, the
-        sheet with its provenance, the answer. The template is not a field of
-        the line; it survives as the provenance of the slots it filled.
+        sheet with its provenance, the raw keyword floor it was pinned by, the
+        answer. The template is not a field of the line; it survives as the
+        provenance of the slots it filled.
         */
     }
 
@@ -922,6 +923,7 @@ package SteeringSurface {
     verify requirement WrapperHasNoOpinion by
         "tests/telemac/test_telemac_module_surface.py::test_a_coupled_body_states_only_what_its_caller_handed_it";
 
+    satisfy requirement EverythingOverridable by runRecord;
     satisfy requirement EverythingOverridable by wrapper;
     satisfy requirement EverythingOverridable by sheet;
     satisfy requirement EverythingOverridable by canvasGate;
@@ -938,6 +940,10 @@ package SteeringSurface {
         "tests/telemac/test_telemac_module_surface.py::test_every_template_wire_carries_the_raw_keyword_floor";
     verify requirement EverythingOverridable by
         "tests/telemac/test_telemac_module_surface.py::test_a_floor_that_is_not_a_mapping_refuses_by_name";
+    verify requirement EverythingOverridable by
+        "tests/runtime/test_run_journal.py::test_the_record_carries_the_raw_keyword_floor_the_run_was_pinned_by";
+    verify requirement EverythingOverridable by
+        "tests/runtime/test_declarative_library.py::test_the_raw_keyword_floor_rides_out_on_the_runs_own_result";
     verify requirement EverythingOverridable by
         "tests/telemac/test_telemac_module_surface.py::test_resolution_order_is_engine_then_template_then_fill";
     verify requirement EverythingOverridable by

@@ -96,6 +96,10 @@ class RunResult:
     #: which is what lets a grandchild inherit work its parent never re-executed.
     records: list[LedgerRecord] = field(default_factory=list)
     data_records: list[LedgerRecord] = field(default_factory=list)
+    #: The RAW KEYWORD floor this invocation carried. Not a Param, so it is on no
+    #: param sheet - and a run that was pinned by one is not reproducible from
+    #: its arguments alone unless the record carries it too.
+    keywords: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -138,7 +142,8 @@ async def interpret(
     env = _Env(params=params, data={d.name: d for d in data}, results={},
                input_mode=input_mode, keywords=dict(keywords or {}), ledger=ledger,
                resume=resume, supplied=dict(supplied or {}), workflow=plan.name)
-    out = RunResult(value=None, entries=entries, params=params)
+    out = RunResult(value=None, entries=entries, params=params,
+                    keywords=dict(env.keywords))
     token = bind_domain(domain)
     notes_token = bind_notes()
     outputs_token = bind_outputs()

@@ -358,7 +358,7 @@ class Workflow:
             result=result, wall_seconds=round(wall_seconds, 3),
             origin=journal.run_origin(live_session=current_emitter() is not None),
             executed=run.executed, replayed=run.replayed, notes=list(notes),
-            outputs=run.outputs,
+            outputs=run.outputs, keywords=run.keywords,
             parent_run_id=derived_from.parent_run_id if derived_from else None,
             overrides=derived_from.overrides if derived_from else (),
         ))

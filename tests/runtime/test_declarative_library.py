@@ -1145,6 +1145,17 @@ async def test_late_binding_reaches_the_runner_with_the_resolved_value():
     assert out.value["seen"]["x"] == 4.0
 
 
+@pytest.mark.asyncio
+async def test_the_raw_keyword_floor_rides_out_on_the_runs_own_result():
+    """The floor is a CONTROL and no Param, so it is on no param sheet; the run
+    carries it out so its record can say which deck was actually solved."""
+    p = await resolve_params(_params(), {})
+    plan = Plan("floor_w", None, (Step(runner=f"{_HERE}.stub_step").named("a"),))
+    out = await interpret(plan, p, _params(), resume=False,
+                          keywords={"LAW OF BOTTOM FRICTION": 4})
+    assert out.keywords == {"LAW OF BOTTOM FRICTION": 4}
+
+
 # --- the form gate's revision REACHES the run -------------------------------- #
 def _review(revised, monkeypatch):
     """Patch the review spine so it approves, carrying ``revised`` back."""

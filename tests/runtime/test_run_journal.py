@@ -68,6 +68,14 @@ def test_a_run_record_carries_the_run_its_engine_and_where_it_came_from():
     assert rec["executed"] == ["aoi", "run", "solve"] and rec["replayed"] == []
 
 
+def test_the_record_carries_the_raw_keyword_floor_the_run_was_pinned_by():
+    """The floor is not a Param, so it is on no sheet row - and a reproduction
+    driven from the arguments alone would solve a different deck."""
+    rec = _record(keywords={"LAW OF BOTTOM FRICTION": 4, "DURATION": 7200.0})
+    assert rec["keywords"] == {"LAW OF BOTTOM FRICTION": 4, "DURATION": 7200.0}
+    assert _record()["keywords"] == {}
+
+
 def test_a_sheet_row_carries_its_door_and_its_basis_not_just_the_number():
     """Which door a value came through is the whole point: a discharge the user
     pinned and one the National Water Model answered are the same number and
