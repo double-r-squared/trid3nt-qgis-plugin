@@ -36,7 +36,7 @@ The values the template declares. `desc` is what the model reads when it fills o
 | `steep_slope_correction` | scenario | - | False | Apply the Huang (2006) steep-slope correction to the curve numbers using the mesh's own bed gradients. The engine's native branch is compiled off in the installed 9.0.0 build, so the correction is applied to the CN field before it is written |
 | `mesh_resolution_m` | scenario | m | 40.0 | Finest triangle edge, reached where the mesh refines toward the channel network. THE granularity lever: peak depth and flooded extent are resolution-bound classes and a coarse mesh reads both low |
 | `mesh_max_edge_m` | scenario | m | 300.0 | Coarsest triangle edge, reached far from the channels on the hillslopes |
-| `compute_class` | constant | - | medium | Solve sizing class |
+| `compute_class` | constant | - | medium | Solve sizing class - how many cores the solve is partitioned across. An engine that runs on one core says so on the card |
 
 ## What it answers
 
