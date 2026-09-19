@@ -276,6 +276,11 @@ class Primitive:
     #: ``None`` measures the whole domain. What is PUBLISHED is the whole field
     #: either way - an area narrows the answer, never the picture.
     over: Any = None
+    #: The THRESHOLD a series is asked when it first exceeds, as a number or a
+    #: declared param. A crossing is a function of the whole series rather than
+    #: of any one of its statistics, so it is read here and answered as
+    #: ``t_above``; ``None`` asks no crossing and emits no measure.
+    above: Any = None
     #: The plane of a 3D variable, bottom first; ``None`` on a 2D module.
     plane: int | None = None
     #: The coupled module whose result this reads; ``None`` reads the run's own.
@@ -288,7 +293,7 @@ class Primitive:
     def __hash__(self) -> int:
         return hash((self.kind, self.variable, repr(self.t), repr(self.at),
                      repr(self.along), repr(self.within), repr(self.over),
-                     self.plane, self.module))
+                     repr(self.above), self.plane, self.module))
 
     def layer(self, *, style: Mapping[str, Any] | None = None) -> "Primitive":
         """Publish this field as a layer on the map, styled by ``style``."""
@@ -403,9 +408,13 @@ def field(name: str, t: Any = -1, *, plane: int | None = None,
 
 
 def series(name: str, at: Any = None, *, plane: int | None = None,
-           module: str | None = None) -> Primitive:
-    """A variable over time: at a Point, or the domain maximum at each instant."""
-    return Primitive("series", variable=name, at=at, plane=plane, module=module)
+           module: str | None = None, above: Any = None) -> Primitive:
+    """A variable over time: at a Point, or the domain maximum at each instant.
+
+    ``above`` is a threshold the series is asked when it first exceeds, which
+    the read answers as ``t_above``."""
+    return Primitive("series", variable=name, at=at, plane=plane, module=module,
+                     above=above)
 
 
 def max_over_time(name: str, *, plane: int | None = None,
@@ -768,10 +777,12 @@ def _per_frame(values: Any, wet: Any) -> tuple[Any, Any, Any]:
 
 
 def _envelope(token: str, times: Any, values: Any, row: Any = None,
-              has_edge: bool = False, wet: Any = None) -> dict[str, Any]:
+              has_edge: bool = False, wet: Any = None,
+              above: Any = None) -> dict[str, Any]:
     """The measures a series over time carries: its peak and its trough with the
     instants they fall on, where it stands at the end, how far it swings between
-    the two, and how many frames it was read over - all over the WET nodes."""
+    the two, how many frames it was read over, and - where a threshold was asked
+    - the first instant it stands above one, all over the WET nodes."""
     import numpy as np
 
     from trid3nt_server.render import presets
@@ -810,6 +821,13 @@ def _envelope(token: str, times: Any, values: Any, row: Any = None,
             "injected nothing there is a shape of.")
     if edge is not None:
         measures["active_frames"] = int((highs[live] > edge).sum())
+    if above is not None:
+        # The FIRST frame the series stands above the threshold, on the run's
+        # own clock. A threshold nothing ever crossed has no instant, and the
+        # answer is the absence rather than a number nobody measured.
+        crossed = index[highs[live] > float(above)]
+        measures["t_above"] = (float(times[int(crossed[0])]) if crossed.size
+                               else None)
     return measures
 
 
@@ -934,7 +952,7 @@ def read_series(primitive: Primitive, solved: Solved) -> Series:
         return Series(name=name, units=units, times=times, values=highs,
                       at="the domain maximum",
                       measures=_envelope(primitive.variable, times, values, row,
-                                         edge, wet))
+                                         edge, wet, primitive.above))
     point = _point(primitive.at)
     node = solved.node_at(point)
     lon, lat = solved.lonlat
@@ -946,7 +964,8 @@ def read_series(primitive: Primitive, solved: Solved) -> Series:
                   measures=_envelope(primitive.variable, times,
                                      values[:, node:node + 1], row, edge,
                                      None if wet is None
-                                     else np.asarray(wet)[:, node:node + 1]))
+                                     else np.asarray(wet)[:, node:node + 1],
+                                     primitive.above))
 
 
 def _boundary_series(primitive: Primitive, solved: Solved) -> Series:

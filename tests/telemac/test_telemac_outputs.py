@@ -212,6 +212,45 @@ def test_a_series_at_a_point_is_measured_at_that_point(solved):
     assert [here[stat] for stat in ("min", "last", "range")] == [0.0, 0.0, 80.0]
 
 
+def test_a_threshold_is_answered_by_the_first_instant_the_series_stands_above_it(
+        solved):
+    """WHEN a variable crosses is a function of the whole series, so the read
+    answers it rather than any statistic of the read answering it."""
+    from trid3nt_server.inputs import Point
+
+    lon, lat = solved.lonlat
+    at = Point(float(lon[1]), float(lat[1]), "outfall-a")
+    here = T2D.READS["series"](series("T1", at=at, above=25.0), solved).measures
+    assert here["t_above"] == 60.0
+
+
+def test_a_threshold_crossed_by_no_frame_answers_with_no_instant(solved):
+    from trid3nt_server.inputs import Point
+
+    lon, lat = solved.lonlat
+    at = Point(float(lon[1]), float(lat[1]), "outfall-a")
+    here = T2D.READS["series"](series("T1", at=at, above=90.0), solved).measures
+    assert here["t_above"] is None
+
+
+def test_an_unplaced_threshold_is_crossed_where_the_domain_first_stands_above_it(
+        solved):
+    """The domain's own series is its maximum per instant, so a crossing over the
+    domain is the first instant ANY node stands above the threshold."""
+    from trid3nt_server.inputs import Point
+
+    lon, lat = solved.lonlat
+    at = Point(float(lon[2]), float(lat[2]), "off the plume")
+    over_domain = T2D.READS["series"](series("T1", above=45.0), solved).measures
+    at_point = T2D.READS["series"](series("T1", at=at, above=45.0), solved).measures
+    assert over_domain["t_above"] == 60.0
+    assert at_point["t_above"] is None
+
+
+def test_a_series_asked_no_threshold_carries_no_crossing(solved):
+    assert "t_above" not in T2D.READS["series"](series("T1"), solved).measures
+
+
 def test_the_field_over_every_instant_is_the_frames_an_animation_plays(tabled):
     read = T2D.READS["field"](field("T1", t="every"), tabled)
     assert isinstance(read, Frames)
