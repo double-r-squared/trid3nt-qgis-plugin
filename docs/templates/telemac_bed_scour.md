@@ -21,7 +21,7 @@ Bed SCOUR and DEPOSITION: a mobile bed under moving water.
 | `terrain` | `fetch_dem` | Fetch a digital elevation model (DEM) / terrain elevation for a bounding box (USGS 3DEP US lidar; on a 3DEP outage the default path STOPS and asks before any Copernicus GLO-30 swap; either source pinnable). | NAVD88 (metres, positive up) |
 | `bed` | `derive_merge_rasters` | MERGE two overlapping surfaces into one, the PRIMARY winning where it measured. | - |
 | `carrier` | `fetch_noaa_nwm_streamflow` | Fetch NOAA National Water Model streamflow as a point FlatGeobuf. | - |
-| `stage` | supplied by the caller | a layer you supply, as a uri or a layer name; absent is legal and the run reports it. | - |
+| `stage` | supplied by the caller | a water-surface elevation this run opens on: a layer of sites that report it, or the number itself in m. | - |
 
 ## The sheet
 

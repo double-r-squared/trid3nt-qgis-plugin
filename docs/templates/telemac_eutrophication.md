@@ -23,7 +23,7 @@ NUTRIENT ENRICHMENT in a body of water: algal growth, nutrient drawdown and the 
 | `bed` | `derive_merge_rasters` | MERGE two overlapping surfaces into one, the PRIMARY winning where it measured. | - |
 | `carrier` | `fetch_noaa_nwm_streamflow` | Fetch NOAA National Water Model streamflow as a point FlatGeobuf. | - |
 | `water_temperature` | `fetch_usgs_water_quality` | Fetch REAL, OBSERVED water-quality sample sites as a point FlatGeobuf. | - |
-| `stage` | supplied by the caller | a layer you supply, as a uri or a layer name; absent is legal and the run reports it. | - |
+| `stage` | supplied by the caller | a water-surface elevation this run opens on: a layer of sites that report it, or the number itself in m. | - |
 
 ## The sheet
 

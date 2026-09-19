@@ -24,7 +24,7 @@ MAINTENANCE DREDGING of a navigation channel: how much comes out, and what the b
 | `carrier` | `fetch_noaa_nwm_streamflow` | Fetch NOAA National Water Model streamflow as a point FlatGeobuf. | - |
 | `dredge_area` | supplied by the caller | a polygon layer you supply, as a uri or a layer name; required - the template names no source for it. | - |
 | `dump_area` | supplied by the caller | a polygon layer you supply, as a uri or a layer name; required - the template names no source for it. | - |
-| `stage` | supplied by the caller | a layer you supply, as a uri or a layer name; absent is legal and the run reports it. | - |
+| `stage` | supplied by the caller | a water-surface elevation this run opens on: a layer of sites that report it, or the number itself in m. | - |
 
 ## The sheet
 
