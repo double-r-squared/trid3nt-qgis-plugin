@@ -361,7 +361,7 @@ def test_emit_and_wait_timeout_returns_none(monkeypatch):
 
 
 def test_request_spatial_input_tool_returns_sentinel():
-    from trid3nt_server.tools.meta.spatial_input_tool.spatial_input_tool import (
+    from trid3nt_server.gates.spatial_input_tool import (
         SPATIAL_INPUT_SENTINEL_KEY,
         request_spatial_input,
     )
@@ -378,7 +378,7 @@ def test_request_spatial_input_tool_returns_sentinel():
 
 
 def test_request_spatial_input_tool_rejects_bad_mode():
-    from trid3nt_server.tools.meta.spatial_input_tool.spatial_input_tool import (
+    from trid3nt_server.gates.spatial_input_tool import (
         SPATIAL_INPUT_SENTINEL_KEY,
         request_spatial_input,
     )

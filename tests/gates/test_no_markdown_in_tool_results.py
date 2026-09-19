@@ -16,9 +16,7 @@ SCAN_DIRS = ("tools", "data", "workflows")
 
 #: Repo-relative (to SRC_ROOT) files allowed to build markdown strings.
 #: Every entry MUST document why in the module docstring above.
-ALLOWLIST = {
-    "tools/meta/compose_case_report/compose_case_report.py",  # user-facing .md artifact on disk
-}
+ALLOWLIST: set[str] = set()
 
 _MARKERS: list[tuple[str, re.Pattern[str]]] = [
     ("header", re.compile(r"(^|\n)#{1,4} ")),
@@ -99,32 +97,3 @@ def test_allowlist_entries_exist() -> None:
     """A stale allowlist entry (file moved/deleted) must fail loudly."""
     for rel in ALLOWLIST:
         assert (SRC_ROOT / rel).is_file(), f"stale ALLOWLIST entry: {rel}"
-
-
-def test_compose_case_report_llm_result_is_markdown_free() -> None:
-    """The allowlisted file's LLM-bound RETURN dict stays markdown-free.
-
-    It may build markdown for its on-disk report file, but the registered coroutine's
-    returned dict literal must carry no markdown in its string values."""
-    path = SRC_ROOT / "tools" / "meta" / "compose_case_report" / "compose_case_report.py"
-    tree = ast.parse(path.read_text(encoding="utf-8"))
-    fn = next(
-        node
-        for node in ast.walk(tree)
-        if isinstance(node, (ast.AsyncFunctionDef, ast.FunctionDef))
-        and node.name == "compose_case_report"
-    )
-    returns = [n for n in ast.walk(fn) if isinstance(n, ast.Return)]
-    assert returns, "compose_case_report has no return statement"
-    for ret in returns:
-        assert isinstance(ret.value, ast.Dict), (
-            "compose_case_report must return a dict literal (LLM-bound JSON), "
-            f"got {ast.dump(ret.value)[:80]} at line {ret.lineno}"
-        )
-        for value in ret.value.values:
-            if isinstance(value, ast.Constant) and isinstance(value.value, str):
-                for name, rx in _MARKERS:
-                    assert not rx.search(value.value), (
-                        f"markdown [{name}] in compose_case_report return "
-                        f"value at line {value.lineno}: {value.value!r}"
-                    )

@@ -85,13 +85,13 @@ class TestKwargsForm(unittest.TestCase):
         self.assertEqual(inv.args, {"opts": {"a": [1, 2], "b": "x"}})
 
     def test_bare_name_no_parens(self):
-        inv = parse_run_invocation("!run list_run_frames")
-        self.assertEqual(inv.name, "list_run_frames")
+        inv = parse_run_invocation("!run compute_layer_bounds")
+        self.assertEqual(inv.name, "compute_layer_bounds")
         self.assertEqual(inv.args, {})
 
     def test_empty_parens(self):
-        inv = parse_run_invocation("!run list_run_frames()")
-        self.assertEqual(inv.name, "list_run_frames")
+        inv = parse_run_invocation("!run compute_layer_bounds()")
+        self.assertEqual(inv.name, "compute_layer_bounds")
         self.assertEqual(inv.args, {})
 
 

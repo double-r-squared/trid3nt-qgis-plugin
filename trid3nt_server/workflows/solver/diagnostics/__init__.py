@@ -207,7 +207,8 @@ def read_run_diagnostics(
     before trusting a result downstream or in calibration.
 
     **When NOT to use:** comparing against observations
-    (``compute_skill_metrics``); fetching layers or frames (``list_run_frames``).
+    (``compute_skill_metrics``); reading a run's published layers (the run
+    record's ``outputs`` field, via ``render.outputs_seam.run_outputs``).
 
     **Parameters:** ``run_handle`` - a run id ULID or any ``s3://`` uri beneath it.
 

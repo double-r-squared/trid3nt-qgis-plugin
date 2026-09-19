@@ -13,7 +13,7 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.tools import register_tool
 
-logger = logging.getLogger("trid3nt_server.tools.meta.spatial_input_tool.spatial_input_tool")
+logger = logging.getLogger("trid3nt_server.gates.spatial_input_tool")
 
 __all__ = ["request_spatial_input", "SPATIAL_INPUT_SENTINEL_KEY"]
 

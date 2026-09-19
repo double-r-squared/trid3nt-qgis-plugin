@@ -1,8 +1,0 @@
-list_run_frames:
-- what are the object-store uris of the layers that run put on the map
-- give me the path to the results mesh from that solve so a script can open it
-- list every output of this run with its quantity and units
-- I have the run id - where are its products stored
-- pull the uri of the water depth layer this run published
-- enumerate what that simulation published so I can process the files
-- which files did this run leave behind for the dye concentration layer
