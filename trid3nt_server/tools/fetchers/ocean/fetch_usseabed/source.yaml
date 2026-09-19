@@ -142,7 +142,8 @@ docstring: |-
   Returns:
       ``LayerURI`` for a FlatGeobuf in EPSG:4326, one Point per sample:
       ``key`` (the record's own id), ``locnname``, ``obsvndate`` (collection
-      date, ``YYYYMMDD``), ``waterdepth_m``, ``gravel_pct`` / ``sand_pct`` /
+      date as published: ``YYYYMMDD``, or ``YYYYMM`` / ``YYYY`` where the
+      survey stated no finer), ``waterdepth_m``, ``gravel_pct`` / ``sand_pct`` /
       ``mud_pct`` / ``clay_pct`` (weight percent, 0-100), ``grainsize_phi``
       (characteristic grain size, phi scale) and ``sorting_phi``.
       ``layer_type="vector"``, ``units="mixed (pct / phi / m)"``.

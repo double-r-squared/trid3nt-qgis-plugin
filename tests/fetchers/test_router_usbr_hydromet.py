@@ -169,7 +169,7 @@ def test_build_request_asks_the_resolved_item_over_the_window(spec):
     assert len(plans) == 1
     assert plans[0].params["itemId"] == "132998"
     assert plans[0].params["dateTime[after]"] == "2024-06-01"
-    assert plans[0].params["dateTime[before]"] == "2024-06-05"
+    assert plans[0].params["dateTime[before]"] == "2024-06-05T23:59:59"
 
 
 def test_parse_response_builds_one_point_feature_with_the_window_inline(spec):

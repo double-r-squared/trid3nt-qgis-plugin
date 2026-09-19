@@ -180,7 +180,9 @@ def build_request(spec: SourceSpec, params: dict[str, Any]) -> list[RequestPlan]
     query = {
         "itemId": params["_item_id"],
         "dateTime[after]": str(params["start_date"]),
-        "dateTime[before]": str(params["end_date"]),
+        # RISE reads a bare date as its midnight, which drops the end day's own
+        # reading; the day's last second keeps end_date inclusive.
+        "dateTime[before]": f"{params['end_date']}T23:59:59",
         "itemsPerPage": str(_MAX_RESULTS),
     }
     return [RequestPlan(url=str(spec.endpoints["result"].url), params=query, headers=_headers(spec))]
