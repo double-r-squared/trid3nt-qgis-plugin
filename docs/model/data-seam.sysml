@@ -851,10 +851,25 @@ package DataSeam {
         quantity: a gauge reports a discharge in cubic feet per second beside a
         stage in feet, and a slot that read either in the unit it wanted would
         be reading a different river. A source that serves two classes carries
-        ONE ROW PER CLASS rather than a hybrid word, and each row names the
-        columns its value, its window and the zero it is counted from arrive
+        ONE ROW PER CLASS AND KIND rather than a hybrid word, and each row names
+        the columns its value, its window and the zero it is counted from arrive
         under - a slot that states a need cannot name a column of a source it
-        did not choose.
+        did not choose. A gauge that reports a measured series and a predicted
+        one of the same class carries a row for each, and each row carries the
+        request values it is fetched under, because the row is what the match
+        weighed and a spec default answers for whichever row it was written
+        around. A unit or a zero the RECORD carries per feature is stated as
+        "record" and read off the feature.
+
+        A STATION SET LISTS ITS STATIONS - inline where the set is small, read
+        from a bounded listing that is cached once, or discovered by box inside
+        the region where the network has no listing at all - because a ring
+        alone says a place is inside the region and nothing about whether a
+        station stands anywhere near it, which is the distance the reach is
+        measured against. A set that lists them is measured from the nearest
+        listed station; a discovered network is measured from the region and
+        the probe drops it on an empty answer. Rings alone under a station set
+        are refused.
         */
     }
 
@@ -872,8 +887,13 @@ package DataSeam {
         for a SERIES source and never for a static surface - a 2014 survey
         answers a 2026 question and recency ranks it - and a differing datum is
         FLAGGED rather than filtered, because the offset row is what refuses at.
-        A station set states the REACH one station serves, and a place further
-        from it than that is not a survivor at all. The sort is on facts, in the
+        A station set states the REACH one station serves, read against the
+        nearest station the row lists, and a place further from it than that is
+        not a survivor at all. What the top survivor is CALLED with closes
+        through the match: the run's box and window, the matched row's own
+        request values, and the nearest listed station where the source is
+        called by a station name. A source whose required params the row can
+        answer for is a survivor; one whose it cannot is dropped by name. The sort is on facts, in the
         order they decide: how the numbers were come by - measured, then
         predicted, then modelled - how far the place is from them, the cell
         against the mesh, how current the record is, and whether the source is
@@ -1222,7 +1242,15 @@ package DataSeam {
     satisfy requirement ASourceStatesWhatItCovers by gaugeDeclaration;
     satisfy requirement ASourceStatesWhatItCovers by lakeDeclaration;
     verify requirement ASourceStatesWhatItCovers by
-        "tests/fetchers/test_coverage_rows.py::test_each_source_declares_one_row_per_class_it_serves";
+        "tests/fetchers/test_coverage_rows.py::test_every_spec_loads_and_its_rows_validate";
+    verify requirement ASourceStatesWhatItCovers by
+        "tests/fetchers/test_coverage_rows.py::test_a_source_with_no_row_says_it_is_model_callable";
+    verify requirement ASourceStatesWhatItCovers by
+        "tests/fetchers/test_coverage_rows.py::test_a_station_row_lists_its_stations";
+    verify requirement ASourceStatesWhatItCovers by
+        "tests/fetchers/test_coverage_rows.py::test_the_tide_gauge_states_the_record_and_the_prediction_apart";
+    verify requirement ASourceStatesWhatItCovers by
+        "tests/fetchers/test_coverage_rows.py::test_the_nearest_station_is_what_a_listed_set_is_measured_from";
     verify requirement ASourceStatesWhatItCovers by
         "tests/fetchers/test_coverage_rows.py::test_every_series_source_states_the_unit_of_its_value_columns";
     verify requirement ASourceStatesWhatItCovers by
