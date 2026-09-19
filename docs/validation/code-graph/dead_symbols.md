@@ -13,8 +13,7 @@ separately below. An unused parameter is reclassified from `variable` to
 | `token_envelope` | parameter | trid3nt_server/credentials/auth_handshake.py:127 | 100 | 1 |
 | `default_seconds` | parameter | trid3nt_server/gates/confirm.py:90 | 100 | 1 |
 | `unquote` | import | trid3nt_server/render/uri_registry.py:18 | 90 | 1 |
-| `raw_user_text` | parameter | trid3nt_server/server/dispatch/emitter.py:872 | 100 | 1 |
-| `entry_id` | parameter | trid3nt_server/tools/search/fetch_living_atlas_layer/fetch_living_atlas_layer.py:128 | 100 | 1 |
+| `raw_user_text` | parameter | trid3nt_server/server/dispatch/emitter.py:878 | 100 | 1 |
 
 ## Callable tier (confidence 60): unused functions, methods, classes
 
@@ -25,7 +24,9 @@ one reached dynamically. Treat as candidates, not verdicts.
 |---|---|---|---|
 | `write_fort14` | function | trid3nt_server/workflows/mesh/shared/formats/mesh_formats.py:93 | 83 |
 | `mesh_quality_report` | function | trid3nt_server/workflows/mesh/shared/formats/mesh_formats.py:203 | 59 |
+| `_summarize_raster` | function | trid3nt_server/render/charts.py:132 | 57 |
 | `serve_user_supplied_bed` | function | trid3nt_server/tools/fetchers/_router/hooks/topobathy.py:1693 | 34 |
+| `_summarize_vector` | function | trid3nt_server/render/charts.py:190 | 33 |
 | `run_gdal` | function | trid3nt_server/tools/derive/_gdal_runner.py:75 | 31 |
 | `scan_third_party_imports` | function | plugin/install_dependencies.py:249 | 28 |
 | `get_session_record` | method | trid3nt_server/persistence.py:572 | 27 |
@@ -34,11 +35,11 @@ one reached dynamically. Treat as candidates, not verdicts.
 | `_selection_bbox4326` | method | plugin/ui/dock.py:719 | 17 |
 | `pin_fetch_resolution` | function | trid3nt_server/gates/cards/solver_confirm.py:251 | 17 |
 | `upsert_session_record` | method | trid3nt_server/persistence.py:438 | 16 |
-| `update_compute_status` | method | trid3nt_server/render/pipeline_emitter.py:1278 | 14 |
-| `update_current_progress` | method | trid3nt_server/render/pipeline_emitter.py:1149 | 13 |
+| `update_compute_status` | method | trid3nt_server/render/pipeline_emitter.py:1281 | 14 |
+| `update_current_progress` | method | trid3nt_server/render/pipeline_emitter.py:1152 | 13 |
 | `run_forever` | method | plugin/net/trid3nt_client.py:1600 | 12 |
 | `format_number` | function | plugin/render/formatting.py:83 | 12 |
-| `describe` | method | trid3nt_server/workflows/runtime/plan.py:284 | 12 |
+| `describe` | method | trid3nt_server/workflows/runtime/plan.py:297 | 12 |
 | `decimals_for_range` | function | plugin/render/formatting.py:70 | 11 |
 | `count_outputs` | method | trid3nt_server/workflows/solver/diagnostics/_common.py:195 | 11 |
 | `read_output_required` | method | trid3nt_server/workflows/solver/diagnostics/_common.py:207 | 11 |
@@ -52,25 +53,26 @@ one reached dynamically. Treat as candidates, not verdicts.
 | `_toggle_connection` | method | plugin/ui/dock.py:1271 | 5 |
 | `tripped` | method | trid3nt_server/gates/runaway_guard.py:190 | 5 |
 | `_ctg_tile_bounds` | function | trid3nt_server/tools/fetchers/_router/executors/raster_cog.py:1307 | 5 |
-| `with_value` | method | trid3nt_server/workflows/runtime/params.py:205 | 5 |
+| `with_value` | method | trid3nt_server/workflows/runtime/params.py:216 | 5 |
 | `current_chart_id` | method | plugin/ui/charts_window.py:322 | 4 |
 | `storage_scheme` | function | trid3nt_server/tools/cache.py:255 | 4 |
 | `_round_bbox_to_6dp` | function | trid3nt_server/tools/fetchers/_router/hooks/topobathy.py:369 | 4 |
 | `current_turn_drawn_geometry` | function | trid3nt_server/render/pipeline_emitter.py:105 | 3 |
 | `known_handles` | method | trid3nt_server/render/uri_registry.py:728 | 3 |
+| `overrides_domain` | method | trid3nt_server/workflows/runtime/plan.py:265 | 3 |
 | `_toggle_thinking` | method | plugin/ui/cards.py:886 | 2 |
 | `_obj_uri` | function | trid3nt_server/tools/cache.py:261 | 2 |
 | `mtime` | method | trid3nt_server/tools/fetchers/_router/transport/range_file.py:163 | 2 |
-| `_refs` | function | trid3nt_server/workflows/runtime/interpreter.py:597 | 2 |
-| `_param_refs` | function | trid3nt_server/workflows/runtime/interpreter.py:601 | 2 |
+| `_refs` | function | trid3nt_server/workflows/runtime/interpreter.py:1133 | 2 |
+| `_param_refs` | function | trid3nt_server/workflows/runtime/interpreter.py:1137 | 2 |
 
 ## Whitelisted false-positive classes
 
 | rule | muted |
 |---|---|
-| declarative row/field DSL: read off the class by the framework | 19 |
-| descriptor/typing decorator | 6 |
+| declarative row/field DSL: read off the class by the framework | 5 |
+| descriptor/typing decorator | 5 |
 | dunder: interpreter-called | 4 |
-| protocol/framework-called name | 14 |
+| protocol/framework-called name | 13 |
 | registry decorator: no static caller by construction | 4 |
 | test-support hook (tests are excluded from the scavenge) | 1 |

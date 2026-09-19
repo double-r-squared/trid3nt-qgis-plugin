@@ -150,9 +150,6 @@ _SYNC_OFFLOAD_SUBSET_PREFIXES = ("compute_",)
 #: tool, stay on the loop.
 _ALWAYS_OFFLOAD_SYNC_TOOLS = frozenset(
     {
-        # dense-index build on first call (sentence-transformers encode)
-        "search_living_atlas",
-        "fetch_living_atlas_layer",
         # tile mosaic / windowed warp-read plus COG materialize
         "fetch_topobathy",
         "fetch_dem",
@@ -181,8 +178,6 @@ _ALWAYS_OFFLOAD_SYNC_TOOLS = frozenset(
         # record fetchers: a windowed Zarr stream, and a multi-MB entity download
         "fetch_aorc_precip",
         "fetch_lter_records",
-        # reads the run's outputs listing over the network
-        "list_run_frames",
         # STAC sign plus windowed warp-read and COG / FlatGeobuf write
         "fetch_sentinel2_truecolor",
         "fetch_sentinel1_sar",
