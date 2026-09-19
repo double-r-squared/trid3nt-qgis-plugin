@@ -399,14 +399,16 @@ def test_the_workflow_owns_the_stages_and_the_template_adds_its_own_two():
     add is the one thing a question with a CURRENT derives on top of an
     engine-neutral domain: the uniform-flow opening the deck is written at."""
     assert [step.label for step in _plan().plan.steps] == [
-        "mesh", "channel", "settled", "sheet", "solve", "outputs"]
+        "stated", "mesh", "channel", "settled", "sheet", "solve", "outputs"]
 
 
 def test_the_mesh_is_built_over_the_domain_slot_at_the_runtimes_lever():
     from trid3nt_server.workflows.mesh.tool import recipe_from_plan_value
     from trid3nt_server.workflows.runtime import DataRef
 
-    recipe = recipe_from_plan_value(_plan().plan.steps[0].kwargs["mesh"])
+    recipe = recipe_from_plan_value(
+        next(s for s in _plan().plan.steps
+             if s.name == "mesh").kwargs["mesh"])
     assert recipe.extent == DataRef("domain")
     assert recipe.resolution_m.name == "mesh_resolution_m"
     bed = next(op for op in recipe.ops if op.fn == "set_bed")

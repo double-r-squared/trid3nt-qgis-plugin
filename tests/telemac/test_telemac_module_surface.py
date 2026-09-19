@@ -28,6 +28,7 @@ from trid3nt_server.workflows.telemac.modules import (
 )
 from trid3nt_server.workflows.telemac.modules.module import UNSET, Module
 from trid3nt_server.workflows.telemac.modules.telemac2d import Sources
+from trid3nt_server.workflows.telemac import workflow as telemac_workflow
 
 _EXPOSED = ("telemac2d", "telemac3d", "artemis", "waqtel", "gaia")
 
@@ -986,10 +987,17 @@ def test_the_open_channel_body_is_written_at_the_derivation_it_was_solved_for():
         channel = next(n for n in workflow.plan_decl(workflow)
                        if getattr(n, "name", "") == "channel")
         assert channel.runner.endswith("assembler.open_channel")
-        assert body.ASSERTED["FRICTION_COEFFICIENT"] == \
-            channel.kwargs["friction_coefficient"]
-        assert body.ASSERTED["LAW_OF_BOTTOM_FRICTION"] == \
-            channel.kwargs["friction_law"]
+        # The step READS the resolved floor, which is the deck's own number
+        # until the run states another.
+        floor = telemac_workflow.stated(steering=body, keywords={})
+        assert channel.kwargs["friction_coefficient"] == Ref(
+            "stated.FRICTION_COEFFICIENT")
+        assert channel.kwargs["friction_law"] == Ref(
+            "stated.LAW_OF_BOTTOM_FRICTION")
+        assert floor["FRICTION_COEFFICIENT"] == \
+            body.ASSERTED["FRICTION_COEFFICIENT"]
+        assert floor["LAW_OF_BOTTOM_FRICTION"] == \
+            body.ASSERTED["LAW_OF_BOTTOM_FRICTION"]
 
 
 def test_the_basin_states_how_its_tracer_is_carried_and_under_what_ceiling():
@@ -1210,6 +1218,11 @@ def test_every_template_wire_carries_the_raw_keyword_floor():
         plan = entry.fn.workflow.plan
         fill_step = next(s for s in plan.declared() if s.label == "sheet")
         assert fill_step.kwargs["keywords"] is RawKeywords, name
+        # THE SAME FLOOR, resolved BEFORE any stage: the first step of every
+        # plan, so a stage that runs before the sheet exists reads it too.
+        first = plan.declared()[0]
+        assert (first.label, first.kwargs["keywords"]) == ("stated", RawKeywords), \
+            name
 
 
 def test_a_template_reads_its_answer_through_the_primitives_its_module_binds():

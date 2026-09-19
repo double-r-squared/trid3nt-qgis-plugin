@@ -52,7 +52,7 @@ def test_the_cut_is_the_first_node_the_override_reaches():
     # the MESH itself, the open-channel hydraulics measured on it, the outfall
     # placed on it and the settled domain are all upstream of the fill, so a
     # threshold override inherits them
-    assert labels[:cut] == ["mesh", "channel", "outfall", "settled"]
+    assert labels[:cut] == ["stated", "mesh", "channel", "outfall", "settled"]
     # so is every DATA row the world is read through - the domain the reach
     # producer cut, the runs of its edge, the line down it, the published survey,
     # the surface gridded from it, the terrain under that, the bed the merge

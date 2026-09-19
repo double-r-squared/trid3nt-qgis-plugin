@@ -15,6 +15,7 @@ from pathlib import Path
 import yaml
 
 from trid3nt_server.workflows.runtime import DataRef, Ref
+from trid3nt_server.workflows.telemac.workflow import stated
 from trid3nt_server.workflows.runtime.levers import LEVER_NAMES
 from trid3nt_server.workflows.telemac.modules import T2D
 from trid3nt_server.workflows.telemac.templates.bed_scour import bed_scour
@@ -44,10 +45,14 @@ def _rows() -> dict:
     return {row.name: row for row in _WORKFLOW.data}
 
 
+def _step(name: str):
+    return next(s for s in _WORKFLOW.plan.steps if s.name == name)
+
+
 def _recipe():
     from trid3nt_server.workflows.mesh.tool import recipe_from_plan_value
 
-    return recipe_from_plan_value(_WORKFLOW.plan.steps[0].kwargs["mesh"])
+    return recipe_from_plan_value(_step("mesh").kwargs["mesh"])
 
 
 def test_the_domain_is_one_row_the_reach_fetcher_produces():
@@ -104,7 +109,8 @@ def test_the_workflow_owns_every_stage_but_the_two_measured_on_the_mesh():
     ACCEPTED mesh, so those two stay the template's."""
     assert _WORKFLOW.plan_decl.owns_stages
     assert [step.label for step in _WORKFLOW.plan.steps] == [
-        "mesh", "channel", "source", "settled", "sheet", "solve", "outputs"]
+        "stated", "mesh", "channel", "source", "settled", "sheet", "solve",
+        "outputs"]
     settle = next(step for step in _WORKFLOW.plan.steps if step.label == "settled")
     assert settle.runner.endswith("assembler.open_water")
     assert (settle.kwargs["geometry"], settle.kwargs["boundary"],
@@ -176,9 +182,15 @@ def test_the_friction_this_deck_is_solved_at_is_a_keyword_not_a_param():
     asserted = _MODULE.STEERING.ASSERTED
     assert asserted["LAW_OF_BOTTOM_FRICTION"] == 3
     assert asserted["FRICTION_COEFFICIENT"] == 33.0
-    channel = next(step for step in _WORKFLOW.plan.steps if step.label == "channel")
-    assert channel.kwargs["friction_law"] == asserted["LAW_OF_BOTTOM_FRICTION"]
-    assert channel.kwargs["friction_coefficient"] == asserted["FRICTION_COEFFICIENT"]
+    channel = _step("channel")
+    # READ at run time off the resolved floor, so a stated law derives the
+    # rating curve the deck is then written at.
+    assert channel.kwargs["friction_law"] == Ref("stated.LAW_OF_BOTTOM_FRICTION")
+    assert channel.kwargs["friction_coefficient"] == Ref(
+        "stated.FRICTION_COEFFICIENT")
+    floor = stated(steering=_MODULE.STEERING, keywords={})
+    assert (floor["LAW_OF_BOTTOM_FRICTION"], floor["FRICTION_COEFFICIENT"]) == (
+        3, 33.0)
 
 
 def test_the_clock_is_the_decks_own_keyword_and_the_settle_reads_it_there():
@@ -187,8 +199,11 @@ def test_the_clock_is_the_decks_own_keyword_and_the_settle_reads_it_there():
     number rather than on a lever restating it."""
     asserted = _MODULE.STEERING.ASSERTED
     assert asserted["DURATION"] == 3600.0
-    settle = next(step for step in _WORKFLOW.plan.steps if step.label == "settled")
-    assert settle.kwargs["duration_s"] == asserted["DURATION"]
+    settle = _step("settled")
+    assert settle.kwargs["duration_s"] == Ref("stated.DURATION")
+    assert stated(steering=_MODULE.STEERING, keywords={})["DURATION"] == 3600.0
+    assert stated(steering=_MODULE.STEERING,
+                  keywords={"DURATION": 60.0})["DURATION"] == 60.0
 
 
 def test_the_bed_the_deck_states_is_gaias_own_keywords_on_the_coupled_body():

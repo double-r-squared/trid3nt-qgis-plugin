@@ -353,8 +353,7 @@ telemac_rain_on_grid = register_workflow(
                          # The curve is derived at the roughness the deck is
                          # solved at: a level read off another law is a level
                          # this run never sits at.
-                         "friction_law":
-                             STEERING.ASSERTED["LAW_OF_BOTTOM_FRICTION"],
+                         "friction_law": Ref("stated.LAW_OF_BOTTOM_FRICTION"),
                          "mm_per_day": P.design_storm_mm_per_day,
                          "series": P.rain_series_mm,
                          "record": Ref("rain.precip_mm")}).named("outlet"),),

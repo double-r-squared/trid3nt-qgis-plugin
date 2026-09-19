@@ -46,7 +46,7 @@ from trid3nt_server.workflows.telemac.modules.outputs import (
 )
 from trid3nt_server.workflows.telemac.modules.sheet import Origin, Sheet
 from trid3nt_server.workflows.telemac.modules.sheet import fill as fill_slots
-from trid3nt_server.workflows.telemac.modules.sheet import fill_coupled
+from trid3nt_server.workflows.telemac.modules.sheet import fill_coupled, late_bound
 from trid3nt_server.workflows.telemac.modules.sheet import run as run_sheet_
 
 logger = logging.getLogger("trid3nt_server.workflows.telemac.workflow")
@@ -149,17 +149,17 @@ class Door:
         return LEVER_NAMES if self.owns_stages else ()
 
     def _asserted(self, keyword: str) -> Any:
-        """One value the DECK itself states, read off the body that states it.
+        """One value the DECK itself states, read at RUN time off the floor.
 
         A stage settled at a number the deck was not written at describes a
-        different run, so the number is read from the deck rather than restated
-        beside it."""
-        stated = self.steering.ASSERTED.get(keyword)
-        if stated is None:
+        different run, and the floor may have moved that number before the deck
+        writes it, so the stage reads it rather than being built from it. The
+        deck still has to state it, and that refusal stands at import."""
+        if self.steering.ASSERTED.get(keyword) is None:
             raise PlanValidationError(
                 f"the workflow settles this question's run on the {keyword} its "
                 f"deck states, and this deck states none.")
-        return stated
+        return Ref(f"stated.{keyword}")
 
     def _file(self, keyword: str, fallback: str) -> str:
         """One file the deck itself names, read off the body that names it.
@@ -224,6 +224,13 @@ class Door:
                      for step in (*self.produce, *self.derive)
                      if step.name} | {"settled": Ref("settled"), "mesh": Ref("mesh")}
         return [
+            # THE FLOOR FIRST, before any stage: the six early readers settle a
+            # clock, a rating curve and a weather record off keywords the run
+            # may have overridden, and a stage built from the deck's own number
+            # would describe a different run than the deck writes.
+            Step(runner=f"{_TELEMAC}.workflow.stated", stage="prep",
+                 kwargs={"steering": self.steering,
+                         "keywords": RawKeywords}).named("stated"),
             *self.domain,
             MeshStep.build(mesh=self.mesh, name=Ref(self.mesh_on),
                            supplied=self.supplied_mesh,
@@ -565,6 +572,24 @@ def _record(solved: Solved, *, name: str,
         style={"kind": "reference"}, bbox=solved.bbox,
         crs_authid=f"EPSG:{solved.utm_epsg}",
         reference_time=solved.run.get("started_at"), answer=dict(answer))
+
+
+def stated(*, steering: type, keywords: Mapping[str, Any]) -> dict[str, Any]:
+    """The run's own keyword values by identifier, resolved ONCE before any stage.
+
+    The deck's assertions under the floor that overrides them, so a stage that
+    runs before the sheet exists reads the value the deck will write. An
+    assertion still holding a late-bound read has no number yet and is absent.
+    This is the floor BEFORE the fill; ``Ref("sheet.<KEYWORD>")`` is the filled
+    sheet after it, and only that one follows an edit made at the gate."""
+    bodies = run_bodies(steering)
+    out = {name: value for name, value in steering.ASSERTED.items()
+           if value is not None and not late_bound(value)}
+    for name, value in (keywords or {}).items():
+        body, identifier = identify_on(bodies, name)
+        if body is steering:
+            out[identifier] = value
+    return out
 
 
 def run_bodies(steering: type) -> list[type]:

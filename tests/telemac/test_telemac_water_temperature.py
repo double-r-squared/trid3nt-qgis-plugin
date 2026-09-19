@@ -12,6 +12,8 @@ from __future__ import annotations
 import datetime as _dt
 import inspect
 
+import pytest
+
 from trid3nt_server.inputs import geometry as geometry_reader
 from trid3nt_server.inputs.observation import Observation
 from trid3nt_server.workflows.runtime import validate_plan
@@ -99,7 +101,8 @@ def test_the_bed_is_one_row_the_merge_derive_made_of_two_rows():
 def test_the_domain_producer_hands_over_the_faces_the_run_is_prescribed_on():
     """The runs slot is what the roles are set from, and the two end transects
     the reach producer cut its polygon between are what fills it."""
-    recipe = _workflow().plan.steps[0].kwargs["mesh"]
+    recipe = next(s for s in _workflow().plan.steps
+                  if s.name == "mesh").kwargs["mesh"]
     roles = next(op for op in recipe["ops"] if op["op"] == "set_boundary_roles")
     assert roles["kwargs"]["runs"].path == "runs"
     bed = next(op for op in recipe["ops"] if op["op"] == "set_bed")
@@ -138,13 +141,13 @@ def _observation(hour: int):
             "geometry": {"type": "Point", "coordinates": [-122.9, 45.6]}}
 
 
-def _sheet(monkeypatch):
+def _sheet(monkeypatch, **floor):
     """The template's own steering body, filled with what its refs resolve to."""
     monkeypatch.setattr(
         geometry_reader, "read_geometry_doc",
         lambda layer: {"features": [_observation(hour)
                                     for hour in range(_WEEK_HOURS)]})
-    return fill(template.STEERING, produced={
+    return fill(template.STEERING, **floor, produced={
         "settled": {"title": "DOMAIN", "time_step_s": 5.0,
                     "liquid_boundary_order": ["inflow", "outflow"],
                     "liquid_boundary_prescribes": ["flowrate", "elevation"],
@@ -192,6 +195,17 @@ def test_the_clock_is_the_decks_own_keyword_and_the_weather_table_spans_it(
     assert float(last.split()[0]) >= 604800.0
 
 
+def test_a_stated_duration_sizes_the_weather_record(monkeypatch):
+    """The weather table is placed on the DURATION keyword, so a run that states
+    a longer window is measured against THAT window: the engine stops at an
+    instant outside the table, and the refusal names both numbers."""
+    from trid3nt_server.workflows.telemac.errors import TelemacError
+
+    with pytest.raises(TelemacError) as caught:
+        _sheet(monkeypatch, DURATION=1209600.0)
+    assert "168 h" in str(caught.value) and "336 h" in str(caught.value)
+
+
 def test_the_deck_names_the_atmospheric_file_and_the_run_directory_holds_it(
         monkeypatch):
     sheet = _sheet(monkeypatch)
@@ -237,8 +251,8 @@ def test_the_workflow_owns_the_stages_and_the_template_states_what_differs():
     wf = _workflow()
     validate_plan(wf.plan, wf.params, wf.data)
     steps = list(wf.plan.declared())
-    assert [s.label for s in steps] == ["mesh", "channel", "station", "settled",
-                                        "sheet", "solve", "outputs"]
+    assert [s.label for s in steps] == ["stated", "mesh", "channel", "station",
+                                        "settled", "sheet", "solve", "outputs"]
     # The point the chart is anchored at is placed BEFORE the sheet is filled, so
     # the series reads a node of the mesh the run actually solved on - and the
     # observation row that ranks its sites against that point is produced when

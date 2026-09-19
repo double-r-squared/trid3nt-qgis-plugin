@@ -16,7 +16,9 @@ from trid3nt_server.workflows.telemac.helpers.oxygen_sag import (
     critical_point,
     do_profile,
 )
+from trid3nt_server.workflows.runtime import Ref
 from trid3nt_server.workflows.runtime.levers import LEVER_NAMES
+from trid3nt_server.workflows.telemac.workflow import stated
 from trid3nt_server.workflows.telemac.modules.outputs import Line, Profile
 from trid3nt_server.workflows.telemac.templates.do_sag.streeter_phelps import overlay
 
@@ -113,7 +115,9 @@ def test_the_params_are_the_questions_own_plus_the_runtimes_levers():
     assert steering.LAW_OF_BOTTOM_FRICTION == 3
     assert steering.FRICTION_COEFFICIENT == 33.0
     assert steering.ASSERTED["DURATION"] == 172800.0
-    assert _steps()[3].kwargs["duration_s"] == 172800.0
+    settled = next(s for s in _steps() if s.name == "settled")
+    assert settled.kwargs["duration_s"] == Ref("stated.DURATION")
+    assert stated(steering=steering, keywords={})["DURATION"] == 172800.0
 
 
 def test_the_three_slots_are_the_world_this_run_stands_on():
@@ -193,19 +197,20 @@ def test_the_outfall_seeds_the_domain_producer():
 
 def test_the_workflow_owns_the_stages_and_the_template_states_what_differs():
     steps = _steps()
-    assert [s.label for s in steps] == ["mesh", "channel", "outfall", "settled",
-                                        "sheet", "solve", "outputs"]
+    assert [s.label for s in steps] == ["stated", "mesh", "channel", "outfall",
+                                        "settled", "sheet", "solve", "outputs"]
     # The review is the door's VIEW of the sheet it just filled, so the run is
     # held on the fill itself rather than in front of a step that has not run.
     assert [s.label for s in steps if s.self_gating] == ["sheet"]
     assert steps[-2].consequential
-    channel = steps[1]
+    channel = steps[2]
     assert channel.runner.endswith("assembler.open_channel")
-    assert channel.kwargs["friction_law"] == 3
-    assert channel.kwargs["friction_coefficient"] == 33.0
+    assert channel.kwargs["friction_law"] == Ref("stated.LAW_OF_BOTTOM_FRICTION")
+    assert channel.kwargs["friction_coefficient"] == Ref(
+        "stated.FRICTION_COEFFICIENT")
     # An unplaced outfall sits along the domain's OWN centerline companion, so
     # the step is handed the domain rather than a line of its own.
-    outfall = steps[2]
+    outfall = steps[3]
     assert outfall.runner.endswith("assembler.settle_release")
     assert set(outfall.kwargs) == {"point", "mesh", "domain", "fraction", "label"}
 
@@ -214,7 +219,8 @@ def test_the_mesh_is_built_over_the_domain_slot_at_the_runtimes_own_lever():
     from trid3nt_server.workflows.mesh.tool import recipe_from_plan_value
     from trid3nt_server.workflows.runtime import DataRef
 
-    recipe = recipe_from_plan_value(_steps()[0].kwargs["mesh"])
+    recipe = recipe_from_plan_value(
+        next(s for s in _steps() if s.name == "mesh").kwargs["mesh"])
     assert recipe.mesher == "om2d" and recipe.kind == "unstructured_tri"
     assert recipe.extent == DataRef("domain")
     assert recipe.resolution_m.name == "mesh_resolution_m"
@@ -227,14 +233,15 @@ def test_the_mesh_is_built_over_the_domain_slot_at_the_runtimes_own_lever():
 
 
 def test_the_settle_step_reads_the_files_the_deck_itself_names():
-    settle = _steps()[3]
+    settle = next(s for s in _steps() if s.name == "settled")
     assert settle.runner.endswith("assembler.open_water")
     assert settle.kwargs["geometry"] == "domain.slf"
     assert settle.kwargs["boundary"] == "domain.cli"
     assert settle.kwargs["result"] == "r2d_domain.slf"
     # A coupled run drives the module's own launcher whole, so it is asked for
     # the carrier's result and nothing else.
-    assert list(_steps()[5].kwargs["results"]) == ["r2d_domain.slf"]
+    assert list(next(s for s in _steps() if s.name == "solve").kwargs[
+        "results"]) == ["r2d_domain.slf"]
 
 
 def test_no_step_names_a_template_module_as_a_tool():

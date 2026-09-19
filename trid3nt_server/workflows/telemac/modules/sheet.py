@@ -18,7 +18,7 @@ from trid3nt_server.workflows.runtime.plan import declared_reads
 from .module import Output, Slot, SlotRefused
 
 __all__ = ["Filled", "Origin", "Provenance", "Sheet", "SheetIncomplete", "draw",
-           "fill", "fill_coupled", "run"]
+           "fill", "fill_coupled", "late_bound", "run"]
 
 
 class Origin(str, Enum):
@@ -309,7 +309,7 @@ def _standing(source: type | Sheet, template: str = "",
     provenance = Provenance(Origin.TEMPLATE, template or source.__name__)
     for name, value in source.ASSERTED.items():
         slot = source.MODULE_INPUT.get(name)
-        if slot is None or value is None or _late(value):
+        if slot is None or value is None or late_bound(value):
             pending[name] = (value, provenance)
         else:
             standing[name] = Filled(slot=slot, value=value, provenance=provenance)
@@ -326,7 +326,7 @@ def _measured(value: Any) -> str | None:
     return None
 
 
-def _late(value: Any) -> bool:
+def late_bound(value: Any) -> bool:
     """Does ``value`` still hold a read? Then it is not a value until fill binds it.
 
     Walked rather than tested: a placeholder refuses its own truth value."""
@@ -334,6 +334,16 @@ def _late(value: Any) -> bool:
         for _found in declared_reads(value, kind):
             return True
     return False
+
+
+#: The root a read of THIS SHEET's own filled slots is written under, so a value
+#: placed on a keyword follows whatever the run stated that keyword at.
+_SHEET = "sheet"
+
+
+def _named(ref: Ref) -> str:
+    """WHAT this read waits on: the slot a sheet read names, else the producer."""
+    return ref.tail[0] if ref.root == _SHEET and ref.tail else ref.root
 
 
 def _in_ref_order(pending: Mapping[str, tuple[Any, str]],
@@ -345,7 +355,7 @@ def _in_ref_order(pending: Mapping[str, tuple[Any, str]],
     ordered: list[tuple[str, tuple[Any, str]]] = []
     while waiting:
         ready = [name for name, (value, _) in waiting.items()
-                 if not ({ref.root for ref in declared_reads(value, Ref)}
+                 if not ({_named(ref) for ref in declared_reads(value, Ref)}
                          & (set(waiting) - {name}))]
         if not ready:
             raise SlotRefused(
@@ -379,6 +389,8 @@ def _bind(value: Any, produced: Mapping[str, Any], params: Mapping[str, Any],
 def _read(ref: Ref, produced: Mapping[str, Any],
           filled: Mapping[str, Filled]) -> Any:
     """One late-bound read: a producer's result, or a slot already on the sheet."""
+    if ref.root == _SHEET:
+        return _off_sheet(ref, filled)
     if ref.root in produced:
         base = produced[ref.root]
     elif ref.root in filled:
@@ -411,6 +423,26 @@ def _read(ref: Ref, produced: Mapping[str, Any],
         if found is None:
             return None
         base = found
+    return base
+
+
+def _off_sheet(ref: Ref, filled: Mapping[str, Filled]) -> Any:
+    """A read placed on a KEYWORD, resolved through the sheet as it now stands.
+
+    The value the deck will write, whatever set it - so a placement follows an
+    override instead of the number the body was authored at."""
+    if not ref.tail:
+        raise SlotRefused(
+            f"Ref({ref.path!r}) reads the sheet and names no keyword on it.")
+    row = filled.get(ref.tail[0])
+    if row is None:
+        raise SlotRefused(
+            f"Ref({ref.path!r}) names {ref.tail[0]!r}, which this sheet does not "
+            "state; a read placed on a keyword follows a keyword the deck sets.")
+    base = row.value
+    for part in ref.tail[1:]:
+        base = base[int(part)] if isinstance(base, (list, tuple)) \
+            else base[part] if isinstance(base, Mapping) else getattr(base, part)
     return base
 
 

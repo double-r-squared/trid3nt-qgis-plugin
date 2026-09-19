@@ -41,6 +41,16 @@ def _steps():
     return list(_workflow().plan.declared())
 
 
+def _step(name: str):
+    return next(s for s in _workflow().plan.steps if s.name == name)
+
+
+def _template():
+    from trid3nt_server.workflows.telemac.templates.dye_release import dye_release
+
+    return dye_release
+
+
 def test_registered_as_an_engine_template():
     from trid3nt_server.tools import TOOL_REGISTRY
 
@@ -243,8 +253,8 @@ def test_the_workflow_owns_the_stages_and_the_template_states_what_differs():
     wf = _workflow()
     validate_plan(wf.plan, wf.params, wf.data)
     steps = _steps()
-    assert [s.label for s in steps] == ["mesh", "channel", "source", "settled",
-                                        "sheet", "solve", "outputs"]
+    assert [s.label for s in steps] == ["stated", "mesh", "channel", "source",
+                                        "settled", "sheet", "solve", "outputs"]
     # The review is the door's VIEW of the sheet it just filled, so the run is
     # held on the fill itself rather than in front of a step that has not run.
     assert [s.label for s in steps if s.self_gating] == ["sheet"]
@@ -267,7 +277,7 @@ def test_the_mesh_is_built_over_the_domain_slot_at_the_runtimes_own_lever():
     from trid3nt_server.workflows.mesh.tool import recipe_from_plan_value
     from trid3nt_server.workflows.runtime import DataRef
 
-    recipe = recipe_from_plan_value(_steps()[0].kwargs["mesh"])
+    recipe = recipe_from_plan_value(_step("mesh").kwargs["mesh"])
     assert recipe.mesher == "om2d" and recipe.kind == "unstructured_tri"
     assert recipe.extent == DataRef("domain")
     assert recipe.resolution_m.name == "mesh_resolution_m"
@@ -280,16 +290,23 @@ def test_the_mesh_is_built_over_the_domain_slot_at_the_runtimes_own_lever():
 
 
 def test_the_settle_step_reads_the_files_the_deck_itself_names():
-    settle = _steps()[3]
+    from trid3nt_server.workflows.runtime import Ref
+    from trid3nt_server.workflows.telemac.workflow import stated
+
+    settle = _step("settled")
     assert settle.runner.endswith("assembler.open_water")
     assert settle.kwargs["geometry"] == "domain.slf"
     assert settle.kwargs["boundary"] == "domain.cli"
     assert settle.kwargs["result"] == "r2d_domain.slf"
-    assert settle.kwargs["duration_s"] == 3600.0
+    # THE CLOCK IS THE RESOLVED FLOOR'S: the settle runs before the sheet
+    # exists, so it reads the DURATION the deck will write.
+    assert settle.kwargs["duration_s"] == Ref("stated.DURATION")
+    assert stated(steering=_template().STEERING,
+                  keywords={})["DURATION"] == 3600.0
     # The restart travels beside the result: a continuation reads it, and the
     # deck's own RESULTS statement cannot name it.
-    assert list(_steps()[5].kwargs["results"]) == ["r2d_domain.slf",
-                                                   "restart_domain.slf"]
+    assert list(_step("solve").kwargs["results"]) == ["r2d_domain.slf",
+                                                      "restart_domain.slf"]
 
 
 def test_no_step_names_a_template_module_as_a_tool():

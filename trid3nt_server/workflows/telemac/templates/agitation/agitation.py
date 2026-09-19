@@ -238,10 +238,10 @@ artemis_harbor_agitation = register_workflow(
                             # The width the footprint above was cut at: what the
                             # mesher removed is what the deck calls solid.
                             "structure_width_m": ParamRef("barrier_width_m"),
-                            "wave_period_s": STEERING.ASSERTED["WAVE_PERIOD"],
+                            "wave_period_s": Ref("stated.WAVE_PERIOD"),
                             "wave_height_m": ParamRef("wave_height_m"),
                             "wave_direction_deg":
-                                STEERING.ASSERTED["DIRECTION_OF_WAVE_PROPAGATION"],
+                                Ref("stated.DIRECTION_OF_WAVE_PROPAGATION"),
                             "reflection_coef": ParamRef("reflection_coef"),
                             "result_basename": _RESULT}),
         results=(_RESULT,),

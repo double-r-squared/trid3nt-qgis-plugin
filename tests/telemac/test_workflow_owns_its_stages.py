@@ -66,20 +66,29 @@ def _steps(workflow: TelemacWorkflow) -> list[str]:
     return [step.label for step in workflow.plan.steps]
 
 
+def _step(workflow: TelemacWorkflow, name: str):
+    return next(s for s in workflow.plan.steps if s.name == name)
+
+
+def _mesh(workflow: TelemacWorkflow):
+    return _step(workflow, "mesh")
+
+
 def test_a_template_that_states_only_what_differs_gets_the_whole_plan():
     """No domain steps, no mesh recipe, no settle, no file names: the workflow
     builds its stages from the slots and the deck's own statements."""
     workflow = _workflow(Door(steering=STEERING))
-    assert _steps(workflow) == ["mesh", "settled", "sheet", "solve", "outputs"]
+    assert _steps(workflow) == ["stated", "mesh", "settled", "sheet", "solve",
+                                "outputs"]
     assert [step.stage for step in workflow.plan.steps] == [
-        "mesh", "author", "author", "solve", "publish"]
+        "prep", "mesh", "author", "author", "solve", "publish"]
 
 
 def test_the_mesh_is_built_over_the_domain_slot_at_the_runtimes_own_lever():
     from trid3nt_server.workflows.mesh.tool import recipe_from_plan_value
 
     workflow = _workflow(Door(steering=STEERING))
-    recipe = recipe_from_plan_value(workflow.plan.steps[0].kwargs["mesh"])
+    recipe = recipe_from_plan_value(_mesh(workflow).kwargs["mesh"])
     assert recipe.mesher == "om2d" and recipe.kind == "unstructured_tri"
     assert recipe.extent == DataRef("domain")
     assert recipe.resolution_m.name == "mesh_resolution_m"
@@ -93,7 +102,7 @@ def test_the_rim_is_sized_because_nothing_else_in_the_library_sizes_it():
     from trid3nt_server.workflows.mesh.tool import recipe_from_plan_value
 
     workflow = _workflow(Door(steering=STEERING))
-    recipe = recipe_from_plan_value(workflow.plan.steps[0].kwargs["mesh"])
+    recipe = recipe_from_plan_value(_mesh(workflow).kwargs["mesh"])
     rim = recipe.ops[0]
     assert (rim.fn, dict(rim.kwargs)) == ("set_rim_size", {})
 
@@ -104,7 +113,7 @@ def test_the_bed_op_takes_the_one_row_the_merge_derive_produced():
     from trid3nt_server.workflows.mesh.tool import recipe_from_plan_value
 
     workflow = _workflow(Door(steering=STEERING))
-    recipe = recipe_from_plan_value(workflow.plan.steps[0].kwargs["mesh"])
+    recipe = recipe_from_plan_value(_mesh(workflow).kwargs["mesh"])
     bed = next(op for op in recipe.ops if op.fn == "set_bed")
     assert bed.kwargs == {"source": DataRef("bed")}
     runs = next(op for op in recipe.ops if op.fn == "set_boundary_roles")
@@ -134,21 +143,36 @@ def test_a_template_with_no_runs_row_takes_the_domain_producers_own():
         terrain = Data.bed()
 
     workflow = _workflow(Door(steering=STEERING), data=NO_RUNS)
-    recipe = recipe_from_plan_value(workflow.plan.steps[0].kwargs["mesh"])
+    recipe = recipe_from_plan_value(_mesh(workflow).kwargs["mesh"])
     runs = next(op for op in recipe.ops if op.fn == "set_boundary_roles")
     assert runs.kwargs == {"runs": DataRef("domain")}
 
 
 def test_the_settle_step_reads_the_files_the_deck_itself_names():
     workflow = _workflow(Door(steering=STEERING))
-    settle = workflow.plan.steps[1]
+    settle = _step(workflow, "settled")
     assert settle.runner.endswith("assembler.open_water")
     assert settle.kwargs["geometry"] == "domain.slf"
     assert settle.kwargs["boundary"] == "domain.cli"
     assert settle.kwargs["result"] == "r2d_domain.slf"
-    assert settle.kwargs["duration_s"] == 604800.0
+    # THE CLOCK IS THE RESOLVED FLOOR'S, not the class attribute's: the settle
+    # runs before the sheet exists, so it reads what the deck will write.
+    assert settle.kwargs["duration_s"] == Ref("stated.DURATION")
     # a param this template does not declare is not read on its behalf
     assert "continue_from" not in settle.kwargs
+
+
+def test_the_floor_is_resolved_once_before_any_stage_runs():
+    """The first step of every plan resolves the deck's assertions under the
+    run's own keywords, so a stated DURATION is the one the settle reads."""
+    from trid3nt_server.workflows.telemac.workflow import stated
+
+    workflow = _workflow(Door(steering=STEERING))
+    first = workflow.plan.steps[0]
+    assert first.name == "stated" and first.stage == "prep"
+    assert stated(steering=STEERING, keywords={})["DURATION"] == 604800.0
+    assert stated(steering=STEERING,
+                  keywords={"DURATION": 3600.0})["DURATION"] == 3600.0
 
 
 def test_the_runtime_levers_are_seated_so_the_template_states_none_of_them():
@@ -221,6 +245,6 @@ def test_a_template_that_still_hands_over_its_own_stages_runs_as_it_did():
         bed = Data.bed()
 
     workflow = _workflow(own, data=OWN_DATA)
-    assert _steps(workflow) == ["reach", "mesh", "settled", "sheet", "solve",
-                               "outputs"]
+    assert _steps(workflow) == ["stated", "reach", "mesh", "settled", "sheet",
+                               "solve", "outputs"]
     assert [prm.name for prm in workflow.params] == ["mesh_resolution_m"]

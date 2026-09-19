@@ -14,6 +14,7 @@ from trid3nt_server.workflows.runtime import Ref
 from trid3nt_server.workflows.runtime.data import BED, DISCHARGE, DOMAIN
 from trid3nt_server.workflows.runtime.levers import LEVER_NAMES
 from trid3nt_server.workflows.telemac.modules import T2D
+from trid3nt_server.workflows.telemac.workflow import stated
 from trid3nt_server.workflows.telemac.templates.oil_spill import (
     oil_spill as template,
 )
@@ -105,7 +106,8 @@ def test_the_workflow_owns_every_stage_this_template_does_not_differ_on():
     template states is the open-channel hydraulics and where the oil enters."""
     workflow = _workflow()
     assert [step.label for step in workflow.plan.steps] == [
-        "mesh", "channel", "source", "settled", "sheet", "solve", "outputs"]
+        "stated", "mesh", "channel", "source", "settled", "sheet", "solve",
+        "outputs"]
     assert not hasattr(template, "MESH")
 
 
@@ -222,7 +224,8 @@ def test_the_clock_and_the_track_are_the_modules_own_keywords():
     # no division by the settled step.
     assert asserted["PRINTOUT_PERIOD_FOR_DROGUES"] == 60
     settled = [s for s in _workflow().plan.steps if s.label == "settled"][0]
-    assert settled.kwargs["duration_s"] == 3600.0
+    assert settled.kwargs["duration_s"] == Ref("stated.DURATION")
+    assert stated(steering=template.STEERING, keywords={})["DURATION"] == 3600.0
 
 
 def test_a_calm_dry_deck_writes_no_wind_and_no_rain_at_all():

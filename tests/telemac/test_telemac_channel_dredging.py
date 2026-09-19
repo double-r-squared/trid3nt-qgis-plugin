@@ -15,6 +15,7 @@ from pathlib import Path
 import yaml
 
 from trid3nt_server.workflows.runtime import DataRef, Ref
+from trid3nt_server.workflows.telemac.workflow import stated
 from trid3nt_server.workflows.runtime.levers import LEVER_NAMES
 from trid3nt_server.workflows.telemac.templates.channel_dredging import channel_dredging
 
@@ -44,7 +45,7 @@ def _steps() -> dict:
 def _recipe():
     from trid3nt_server.workflows.mesh.tool import recipe_from_plan_value
 
-    return recipe_from_plan_value(_WORKFLOW.plan.steps[0].kwargs["mesh"])
+    return recipe_from_plan_value(_steps()["mesh"].kwargs["mesh"])
 
 
 def test_the_domain_is_one_row_the_reach_fetcher_produces():
@@ -101,7 +102,8 @@ def test_the_workflow_owns_every_stage_but_the_two_this_question_measures():
     template's and it runs after."""
     assert _WORKFLOW.plan_decl.owns_stages
     assert [step.label for step in _WORKFLOW.plan.steps] == [
-        "mesh", "channel", "settled", "dredge", "sheet", "solve", "outputs"]
+        "stated", "mesh", "channel", "settled", "dredge", "sheet", "solve",
+        "outputs"]
     settle = _steps()["settled"]
     assert settle.runner.endswith("assembler.open_water")
     assert (settle.kwargs["geometry"], settle.kwargs["boundary"],
@@ -114,10 +116,14 @@ def test_the_deck_is_written_at_the_roughness_its_own_stage_is_derived_at():
     the run never sits at, so the two read the same module constant."""
     channel = _steps()["channel"]
     assert channel.runner.endswith("assembler.open_channel")
-    assert channel.kwargs["friction_law"] == _STEERING.ASSERTED[
-        "LAW_OF_BOTTOM_FRICTION"]
-    assert channel.kwargs["friction_coefficient"] == _STEERING.ASSERTED[
-        "FRICTION_COEFFICIENT"]
+    assert channel.kwargs["friction_law"] == Ref("stated.LAW_OF_BOTTOM_FRICTION")
+    assert channel.kwargs["friction_coefficient"] == Ref(
+        "stated.FRICTION_COEFFICIENT")
+    floor = stated(steering=_STEERING, keywords={})
+    assert (floor["LAW_OF_BOTTOM_FRICTION"],
+            floor["FRICTION_COEFFICIENT"]) == (
+        _STEERING.ASSERTED["LAW_OF_BOTTOM_FRICTION"],
+        _STEERING.ASSERTED["FRICTION_COEFFICIENT"])
     assert _STEERING.ASSERTED["INITIAL_DEPTH"] == Ref("settled.depth_m")
 
 
@@ -160,7 +166,8 @@ def test_the_clock_is_the_deck_s_own_duration_and_the_dredge_reads_its_origin():
     seconds the deck was written for; NESTOR dates its actions against the same
     origin the deck states."""
     assert _STEERING.ASSERTED["DURATION"] == 3600.0
-    assert _steps()["settled"].kwargs["duration_s"] == 3600.0
+    assert _steps()["settled"].kwargs["duration_s"] == Ref("stated.DURATION")
+    assert stated(steering=_STEERING, keywords={})["DURATION"] == 3600.0
     dredging = _STEERING.ASSERTED["coupling"][0]["slots"]["dredging"]
     assert dredging["origin"] == _STEERING.ASSERTED["time_origin"]["at"]
 

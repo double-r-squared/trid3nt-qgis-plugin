@@ -235,7 +235,7 @@ class STEERING(T2D):
     #: stops at an instant outside the table, so the file is written for the
     #: DURATION this deck states rather than for a second number beside it.
     atmosphere = Atmosphere(observed=DATA.weather, at=Ref("station"),
-                            duration_s=DURATION)
+                            duration_s=Ref("sheet.DURATION"))
 
     #: The heat budget, on the engine's own calibration constants: this question
     #: asks what the published exchange gives under real weather, so the run

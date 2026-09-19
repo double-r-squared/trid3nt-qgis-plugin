@@ -286,7 +286,8 @@ def test_the_mesh_the_workflow_builds_paints_the_one_bed_row():
     from trid3nt_server.workflows.runtime import DataRef
 
     plan = _template().telemac_micropollutant_release.workflow.plan
-    recipe = recipe_from_plan_value(plan.steps[0].kwargs["mesh"])
+    recipe = recipe_from_plan_value(
+        next(s for s in plan.steps if s.name == "mesh").kwargs["mesh"])
     assert recipe.extent == DataRef("domain")
     assert recipe.resolution_m.name == "mesh_resolution_m"
     bed = next(op for op in recipe.ops if op.fn == "set_bed")
@@ -298,11 +299,11 @@ def test_the_mesh_the_workflow_builds_paints_the_one_bed_row():
 def test_the_plan_reads_as_the_universal_stage_sequence():
     plan = _template().telemac_micropollutant_release.workflow.plan
     assert [step.name for step in plan.declared()] == [
-        "mesh", "channel", "source", "monitoring", "settled", "sheet", "solve",
-        "outputs"]
+        "stated", "mesh", "channel", "source", "monitoring", "settled", "sheet",
+        "solve", "outputs"]
     assert [step.stage for step in plan.declared() if step.stage] == [
-        "mesh", "author", "author", "author", "author", "author", "solve",
-        "publish"]
+        "prep", "mesh", "author", "author", "author", "author", "author",
+        "solve", "publish"]
 
 
 def test_the_ambient_sediment_is_a_stated_deck_opinion_not_a_param():

@@ -183,7 +183,7 @@ def test_the_clock_is_the_settled_domains_and_the_duration_the_decks():
     assert "NUMBER_OF_TIME_STEPS" not in asserted
     settled = next(step for step in _workflow().plan.steps
                    if step.name == "settled")
-    assert settled.kwargs["duration_s"] == 18000.0
+    assert settled.kwargs["duration_s"] == Ref("stated.DURATION")
 
 
 def test_the_plane_count_is_the_modules_keyword_and_the_planner_reads_it():
