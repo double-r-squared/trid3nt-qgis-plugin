@@ -98,7 +98,7 @@ def test_one_frazil_row_per_class_the_deck_counts_on_the_host_and_the_ice_file()
 
 
 def test_the_ice_file_rows_nothing_the_budget_did_not_allocate():
-    """Every row past the twenty-four indexed ones is allocated inside the
+    """Every row past the twenty-two rowed above is allocated inside the
     thermal budget, so a deck that turns it off rows none of them."""
     off = KHIONE.table(dict(_ice(HEAT_BUDGET=False)["slots"]))
     assert len(off) == 20
@@ -164,7 +164,7 @@ def test_a_row_under_a_keyword_is_written_unless_the_deck_switches_it_off():
     unstated = fill(KHIONE, **_ice()["slots"]).printouts()[_PRINTOUTS]
     stated = fill(KHIONE, **_ice(HEAT_BUDGET=True)["slots"]).printouts()[_PRINTOUTS]
     assert unstated == stated
-    assert {"NTOT", "CTOT", "NTOTS", "CTOTS", "TEMP", "TEMPS"} <= reached(stated)
+    assert {"NTOT", "CTOT", "TEMP", "TEMPS"} <= reached(stated)
     # The engine numbers its per-class mnemonics at run time, so the deck names
     # them literally; the dictionary spells that index ``i``.
     assert {"F1", "N1", "SF1", "SN1"} <= set(stated.split(","))
@@ -222,11 +222,11 @@ def test_every_row_the_table_carries_is_a_mnemonic_the_dictionary_spells():
     from trid3nt_server.workflows.telemac.modules.module import _spelled
 
     slot = KHIONE.slot(KHIONE.PRINTOUTS)
-    assert len(KHIONE.MODULE_OUTPUT) == 24
+    assert len(KHIONE.MODULE_OUTPUT) == 22
     table = KHIONE.table(dict(_ice(SALINITY=True, DYNAMIC_ICE_COVER=True,
                                    NUMBER_OF_CLASSES_FOR_SUSPENDED_FRAZIL_ICE=2
                                    )["slots"]))
-    assert len(table) == 24 + 8 + 2 + 2 + 2
+    assert len(table) == 22 + 8 + 2 + 2 + 2
     assert all(_spelled(token, slot) for token in table)
     assert all(row.name == row.name.strip() and len(row.name) <= 16
                for row in table.values())

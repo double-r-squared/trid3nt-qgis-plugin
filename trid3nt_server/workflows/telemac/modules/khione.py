@@ -72,10 +72,10 @@ _SALT = {"kind": "mesh", "ramp": "ylgnbu", "units": "ppt"}
 #: so a name longer than sixteen characters spills its remaining words into the
 #: field the unit would have been in - which is what the record then carries.
 #: The first fifteen rows are written in SI and the record says so literally.
-#: The last four are the thermal budget's; under a two-dimensional host the
-#: engine ADDs its NTOT and CTOT arrays a second time to reach its own fixed
-#: count and assigns those two positions no name of their own, so what a result
-#: calls them is the name of the two rows above.
+#: The last two are the thermal budget's. The engine indexes two more past them,
+#: the surface particle number and concentration, and its English branch assigns
+#: neither a result-file name; a result written with a nameless record is one its
+#: own reader cannot open, so they are not rowed and not asked for.
 MODULE_OUTPUT: Mapping[str, Output] = MappingProxyType({
     "PHCL": Output("SOLRAD CLEAR SKY", "W/m2", style=_SOLAR, has_edge=False),
     "PHRI": Output("SOLRAD CLOUDY", "W/m2", style=_SOLAR, has_edge=False),
@@ -101,10 +101,6 @@ MODULE_OUTPUT: Mapping[str, Output] = MappingProxyType({
                    under=_HEAT_BUDGET),
     "CTOT": Output("TOTAL CONCENTRAT", "", style=_FRAZIL, has_edge=True,
                    under=_HEAT_BUDGET),
-    "NTOTS": Output("PARTICLES NUMBER", "1/m3", style=_PARTICLES, has_edge=True,
-                    under=_HEAT_BUDGET),
-    "CTOTS": Output("TOTAL CONCENTRAT", "", style=_FRAZIL, has_edge=True,
-                    under=_HEAT_BUDGET),
 })
 
 #: What the module ADDTRACERs to its HOST's tracers, in the order it adds them,
@@ -179,7 +175,7 @@ _ONLY_3D = frozenset((
 ))
 
 
-#: What the engine writes into its OWN result past the twenty-four it indexes,
+#: What the engine writes into its OWN result past the rows it indexes,
 #: all of it allocated inside the thermal budget. The frazil concentration and
 #: the particle number are written once PER CLASS, at the surface as well as in
 #: the column, and the engine numbers those mnemonics from one - which is what
@@ -220,7 +216,7 @@ class _Khione(Module("khione")):  # type: ignore[misc]
     @classmethod
     def table(cls, stated: Mapping[str, Any] = MappingProxyType({}),
               ) -> Mapping[str, Output]:
-        """The twenty-four indexed rows, then everything the thermal budget adds.
+        """The rows above, then everything the thermal budget adds past them.
 
         The class count is the deck's own, so a deck that suspends frazil in
         several classes rows every one of them and leaves no written variable

@@ -67,8 +67,6 @@ appended by each suspended class: `NCOH SEDIMENT` (g/L, ramp `oranges`)
 | `ICETYPE` | CHARACTERISTICS | - | `set1` | yes | yes |
 | `NTOT` | PARTICLES NUMBER | 1/m3 | `magma` | yes | only under HEAT BUDGET |
 | `CTOT` | TOTAL CONCENTRAT | - | `magma` | yes | only under HEAT BUDGET |
-| `NTOTS` | PARTICLES NUMBER | 1/m3 | `magma` | yes | only under HEAT BUDGET |
-| `CTOTS` | TOTAL CONCENTRAT | - | `magma` | yes | only under HEAT BUDGET |
 | `F1` | FRAZIL | - | `magma` | yes | only under HEAT BUDGET |
 | `N1` | NB PARTICLE | - | `magma` | yes | only under HEAT BUDGET |
 | `SF1` | FRAZIL S | - | `magma` | yes | only under HEAT BUDGET |
