@@ -38,7 +38,7 @@ from .data import (
     BED, DISCHARGE, DOMAIN, LEVEL, LINE, OBSERVATION, RUNS, CoversAOI, DataDecl,
     Producer)
 from .match import (
-    Need, dropped_from, instant, match, sources_with_coverage)
+    Need, ask_for, dropped_from, instant, match, sources_with_coverage)
 from .domain import Domain, bind_domain, current_domain, domain_from_result, reset_domain
 from .errors import (
     PlanValidationError,
@@ -491,7 +491,7 @@ async def _probe(env: _Env, decl: DataDecl, data_class: str,
     while choice.picked:
         row = _runtime_row(env, f"{label.replace(' ', '_')}_{choice.picked}",
                            choice.picked,
-                           await _ask_for(env, choice.picked, decl))
+                           await _ask_for(env, choice, decl))
         try:
             value = await _produce(env, row)
         except asyncio.CancelledError:
@@ -609,28 +609,28 @@ async def _place(env: _Env, decl: DataDecl) -> tuple[float | None, float | None]
     return ((west + east) / 2.0, (south + north) / 2.0)
 
 
-async def _ask_for(env: _Env, fetcher: str, decl: DataDecl) -> dict[str, Any]:
+async def _ask_for(env: _Env, choice: SourceChoice,
+                   decl: DataDecl) -> dict[str, Any]:
     """What a matched source is CALLED with, read off its own declared params.
 
     Every source states where it wants the place - a box or a seed - and a
-    series source states the window as two dates; nothing else is passed, so a
-    source's own defaults stand."""
-    spec = _spec_of(fetcher)
+    series source states the window as two dates; what the matched ROW adds to
+    that is the match's to say, so the ask closes through it."""
+    spec = _spec_of(choice.picked)
     ask: dict[str, Any] = {"purpose": decl.name.replace("_", " ")}
     dom = current_domain()
     if "bbox" in spec.params and dom is not None and dom.bbox:
         ask["bbox"] = _around(dom.bbox, _mesh_m(env))
-    if "seed_point" in spec.params:
-        lon, lat = await _place(env, decl)
-        if lon is not None:
-            ask["seed_point"] = [lon, lat]
+    lon, lat = await _place(env, decl)
+    if "seed_point" in spec.params and lon is not None:
+        ask["seed_point"] = [lon, lat]
     opens = env.params.value_of("event_time") if env.params else None
     if opens and "start_date" in spec.params and "end_date" in spec.params:
         ask["start_date"] = str(opens)[:10]
         ask["end_date"] = (_closes(opens, env.window_s) or str(opens))[:10]
     elif opens and "valid_time" in spec.params:
         ask["valid_time"] = str(opens)
-    return ask
+    return ask_for(choice, ask, lon, lat)
 
 
 def _around(bbox: Sequence[float], mesh_m: float | None) -> list[float]:
