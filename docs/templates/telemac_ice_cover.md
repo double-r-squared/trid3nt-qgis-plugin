@@ -47,7 +47,7 @@ The values the template declares. `desc` is what the model reads when it fills o
 |---|---|
 | `freeze_time_s` | not asked: the cover at the point did not freeze within the window |
 | `domain_freeze_time_s` | 5274.0 |
-| `peak_ice_thickness_m` | 0.0010725059546530247 |
+| `peak_ice_thickness_m` | 0.28161486983299255 |
 | `final_cover_fraction` | 0.0 |
 | `mesh_size_m` | 11.711 |
 
@@ -84,7 +84,6 @@ It publishes these layers onto the canvas:
 - Settling vel. over time (river_reach_domain_mesh)
 - Solid ice conc. over time (river_reach_domain_mesh)
 - Solid ice thick. over time (river_reach_domain_mesh)
-- Frazil thickness over time (river_reach_domain_mesh)
 - Equiv. surface over time (river_reach_domain_mesh)
 - Top ice cover over time (river_reach_domain_mesh)
 - Bottom ice cover over time (river_reach_domain_mesh)
@@ -100,27 +99,27 @@ It publishes these layers onto the canvas:
 
 ## The proving run
 
-Run `01M2WVHQTT3CZG7FF4VFJY3P40`, 2026-09-19T12:55:26.067676+00:00, 253.691 s, at commit `9cb721bbb6045c7159b9a9ec899b82ef953c207c-dirty`.
+Run `01M2WXJS87WECYEZ42A3G3FPFW`, 2026-09-19T13:30:07.017730+00:00, 206.341 s, at commit `1f7f6b6b3ad1d5a8aa95b26cb99b5179d40b64d3`.
 
-![Every layer the run published, stacked and framed on the result (run 01M2WVHQTT3CZG7FF4VFJY3P40)](telemac_ice_cover/telemac_ice_cover.png)
+![Every layer the run published, stacked and framed on the result (run 01M2WXJS87WECYEZ42A3G3FPFW)](telemac_ice_cover/telemac_ice_cover.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M2WVHQTT3CZG7FF4VFJY3P40)*
+*Every layer the run published, stacked and framed on the result (run 01M2WXJS87WECYEZ42A3G3FPFW)*
 
-![The solve, frame by frame (run 01M2WVHQTT3CZG7FF4VFJY3P40)](telemac_ice_cover/telemac_ice_cover_animation.gif)
+![The solve, frame by frame (run 01M2WXJS87WECYEZ42A3G3FPFW)](telemac_ice_cover/telemac_ice_cover_animation.gif)
 
-*The solve, frame by frame (run 01M2WVHQTT3CZG7FF4VFJY3P40)*
+*The solve, frame by frame (run 01M2WXJS87WECYEZ42A3G3FPFW)*
 
-![peak frame (run 01M2WVHQTT3CZG7FF4VFJY3P40)](telemac_ice_cover/telemac_ice_cover_peak_frame.png)
+![peak frame (run 01M2WXJS87WECYEZ42A3G3FPFW)](telemac_ice_cover/telemac_ice_cover_peak_frame.png)
 
-*peak frame (run 01M2WVHQTT3CZG7FF4VFJY3P40)*
+*peak frame (run 01M2WXJS87WECYEZ42A3G3FPFW)*
 
-![ice cover fraction - the chart the run persisted (run 01M2WVHQTT3CZG7FF4VFJY3P40)](telemac_ice_cover/telemac_ice_cover_chart_ice_cover_fraction.png)
+![ice cover fraction - the chart the run persisted (run 01M2WXJS87WECYEZ42A3G3FPFW)](telemac_ice_cover/telemac_ice_cover_chart_ice_cover_fraction.png)
 
-*ice cover fraction - the chart the run persisted (run 01M2WVHQTT3CZG7FF4VFJY3P40)*
+*ice cover fraction - the chart the run persisted (run 01M2WXJS87WECYEZ42A3G3FPFW)*
 
-![ice cover thickness - the chart the run persisted (run 01M2WVHQTT3CZG7FF4VFJY3P40)](telemac_ice_cover/telemac_ice_cover_chart_ice_cover_thickness.png)
+![ice cover thickness - the chart the run persisted (run 01M2WXJS87WECYEZ42A3G3FPFW)](telemac_ice_cover/telemac_ice_cover_chart_ice_cover_thickness.png)
 
-*ice cover thickness - the chart the run persisted (run 01M2WVHQTT3CZG7FF4VFJY3P40)*
+*ice cover thickness - the chart the run persisted (run 01M2WXJS87WECYEZ42A3G3FPFW)*
 
 ### The sheet it filled
 
@@ -157,5 +156,5 @@ await TOOL_REGISTRY['telemac_ice_cover'].fn(
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2WVHQTT3CZG7FF4VFJY3P40` and commit `9cb721bbb6045c7159b9a9ec899b82ef953c207c-dirty`. The full argument record is [`telemac_ice_cover/run.json`](telemac_ice_cover/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2WXJS87WECYEZ42A3G3FPFW` and commit `1f7f6b6b3ad1d5a8aa95b26cb99b5179d40b64d3`. The full argument record is [`telemac_ice_cover/run.json`](telemac_ice_cover/run.json).
 
