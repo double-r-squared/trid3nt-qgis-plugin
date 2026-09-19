@@ -12,6 +12,7 @@ from typing import Any, Mapping
 from trid3nt_server.workflows.runtime import DeclarativeError
 
 from ..authoring.atmosphere import Atmosphere, expand_for_telemac3d
+from .coupling import couples
 from .module import Module, Output
 from .outputs import PRIMITIVES, read_column
 
@@ -289,5 +290,6 @@ T3D.TRACER = "TA"
 T3D.ARMS = MappingProxyType({
     "RAIN_OR_EVAPORATION_IN_MM_PER_DAY": "RAIN_OR_EVAPORATION"})
 T3D.composites(vertical_grid=_vertical_grid, column=_column, wind=_wind,
-               atmosphere=expand_for_telemac3d)
+               atmosphere=expand_for_telemac3d,
+               coupling=couples(water_column=True))
 T3D.reads(**PRIMITIVES, column=read_column)

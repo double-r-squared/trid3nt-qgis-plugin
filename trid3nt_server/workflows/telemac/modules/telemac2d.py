@@ -13,7 +13,8 @@ from typing import Any, Mapping, Sequence
 from trid3nt_server.workflows.runtime import Ref
 
 from ..authoring.atmosphere import Atmosphere, expand_for_telemac2d
-from .module import Module, Output, SlotRefused
+from .coupling import couples
+from .module import Module, Output
 from .outputs import PRIMITIVES, read_drogues
 
 __all__ = ["T2D", "Atmosphere", "Boundaries", "Continuation", "Friction",
@@ -294,44 +295,6 @@ def Rain(*, mm_per_day: Any, tracers: Any, hours: Any = None  # noqa: N802
     """Rain or evaporation at every wet node, independent of any hydrograph."""
     return MappingProxyType({"mm_per_day": mm_per_day, "tracers": tracers,
                              "hours": hours})
-
-
-def _coupling(value: Any) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
-    """The coupled bodies a template named -> what the CARRIER states about them.
-
-    A coupled body's own slots go to that module's steering file, never here. A
-    body whose ``given`` values all resolved to nothing was asked for nothing,
-    and states nothing."""
-    from . import wrapper_for
-
-    bodies = [body for body in value
-              if any(v is not None for v in body.get("given", (True,)))]
-    if not bodies:
-        return ({}, {})
-    slots: dict[str, Any] = {
-        "COUPLING_WITH": ";".join(body["module"].upper() for body in bodies)}
-    files: dict[str, Any] = {}
-    for body in bodies:
-        _refuse_3d_only(body, wrapper_for(body["module"]))
-        slots[f"{body['module'].upper()}_STEERING_FILE"] = body["steering"]
-        if "process" in body:
-            slots["WATER_QUALITY_PROCESS"] = body["process"]
-        files[body["steering"]] = body
-    return slots, files
-
-
-def _refuse_3d_only(body: Mapping[str, Any], wrapper: Any) -> None:
-    """A coupled body states nothing this two-dimensional carrier cannot build.
-
-    The keywords a module has only under a three-dimensional host describe a
-    water column; read off a deck this carrier couples, they would be parsed and
-    then ignored, and the run would report a field nobody solved."""
-    named = sorted(set(dict(body.get("slots") or {})) & set(wrapper.ONLY_3D))
-    if named:
-        raise SlotRefused(
-            f"{', '.join(wrapper.slot(name).keyword for name in named)} is a "
-            f"{wrapper.MODULE} keyword a THREE-dimensional carrier states; this "
-            "run is TELEMAC-2D, which solves no water column for it to describe.")
 
 
 def Boundaries(*, measured: Any, tracers: Any) -> Mapping[str, Any]:  # noqa: N802
@@ -672,7 +635,7 @@ T2D.ARMS = MappingProxyType({
 T2D.composites(sources=_sources, wind=_wind,
                continue_from=_continue_from,
                atmosphere=expand_for_telemac2d,
-               oil=_oil, rain=_rain, coupling=_coupling,
+               oil=_oil, rain=_rain, coupling=couples(water_column=False),
                boundaries=_boundaries, runoff=_runoff, friction=_friction,
                infiltration=_infiltration, rating=_rating, storm=_storm,
                time_origin=_time_origin, tracer_names=_tracer_names)
