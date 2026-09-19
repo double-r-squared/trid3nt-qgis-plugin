@@ -257,20 +257,11 @@ from trid3nt_server.workflows.solver import solver  # noqa: E402,F401
 
 # -- discovery (dataset/tool retrieval) --
 from .search.search_tools import search_tools  # noqa: E402,F401
-# ESRI Living Atlas: a scoped search over the harvested catalog plus a generic
-# fetch bridge. Registered here, in-process, so both surface in the tool-retrieval
-# index for their corpus queries. The two harvested YAML catalogs are DATA.
-from .search.search_living_atlas import search_living_atlas  # noqa: E402,F401
-from .search.fetch_living_atlas_layer import fetch_living_atlas_layer  # noqa: E402,F401
-
-# -- meta (web fetch, case utilities) --
-from .meta.compose_case_report import compose_case_report  # noqa: E402,F401
-from .meta.list_run_frames import list_run_frames  # noqa: E402,F401
 # describe_keywords: the READ over the TELEMAC module catalogs - the only way the
 # keyword surface is reached, since no docstring budget carries it.
 from trid3nt_server.workflows.telemac.modules.describe import describe_keywords  # noqa: E402,F401
-from .meta.spatial_input_tool import spatial_input_tool  # noqa: E402,F401
-from .search.web_fetch import web_fetch  # noqa: E402,F401
+# The draw gate's tool face lives beside the gate; importing it registers the tool.
+from trid3nt_server.gates import spatial_input_tool  # noqa: E402,F401
 
 # Workflow-composer registrations; each module carries its OWN @register_tool.
 # The REACH templates (engine="telemac", tier="template"). ONE TEMPLATE PER
