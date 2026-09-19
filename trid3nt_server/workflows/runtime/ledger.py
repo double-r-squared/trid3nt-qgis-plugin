@@ -95,9 +95,21 @@ class LedgerRecord:
     domain: dict[str, Any] | None = None
 
     def to_doc(self) -> dict[str, Any]:
-        doc = asdict(self)
+        # A step's result may hold a composite's own read-only mapping, which
+        # asdict cannot copy; the document carries plain data, whatever the
+        # step returned it as.
+        doc = asdict(replace(self, result=_plain(self.result)))
         doc["artifact_uris"] = list(self.artifact_uris)
         return doc
+
+
+def _plain(value: Any) -> Any:
+    """``value`` with every mapping a dict and every tuple a list, recursively."""
+    if isinstance(value, Mapping):
+        return {str(k): _plain(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_plain(v) for v in value]
+    return value
 
 
 @dataclass

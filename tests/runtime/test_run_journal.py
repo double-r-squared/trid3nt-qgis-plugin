@@ -216,3 +216,17 @@ def test_draining_closes_the_channel_so_the_next_run_starts_empty():
     journal.drain_notes(token)
     token = journal.bind_notes()
     assert journal.drain_notes(token) == []
+
+
+def test_a_step_result_holding_a_read_only_mapping_is_persisted_as_plain_data():
+    from types import MappingProxyType
+
+    from trid3nt_server.workflows.runtime.ledger import LedgerRecord
+
+    record = LedgerRecord(
+        index=0, node="stated", runner="stated", completed_at="t1",
+        result_kind="value",
+        result={"WIND": MappingProxyType({"speed": (1.0, 2.0)})})
+    doc = record.to_doc()
+    assert doc["result"] == {"WIND": {"speed": [1.0, 2.0]}}
+    assert type(doc["result"]["WIND"]) is dict
