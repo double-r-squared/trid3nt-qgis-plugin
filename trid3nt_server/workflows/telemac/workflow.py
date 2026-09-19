@@ -711,7 +711,7 @@ def card_rows(sheet: Sheet) -> list[ParamSheetRow]:
     # is written in, rather than a flat thousand-row list. A keyword the sheet
     # GENERATES is already a written row above; the fold is engine DEFAULTS, and
     # a generated value is not one.
-    generated = {body.PRINTOUTS for body, _ in _decks(sheet)}
+    generated = {body.PRINTOUTS for body, _, _ in _decks(sheet)}
     rest = [slot for name, slot in sheet.body.MODULE_INPUT.items()
             if name not in sheet.filled and name not in generated
             and not slot.is_required]
@@ -719,12 +719,14 @@ def card_rows(sheet: Sheet) -> list[ParamSheetRow]:
                    sorted(rest, key=lambda slot: _group(slot))]
 
 
-def _decks(sheet: Sheet) -> list[tuple[Any, list[str]]]:
-    """Every body this run writes a deck for, and the tracers each carries."""
+def _decks(sheet: Sheet) -> list[tuple[Any, list[str], Mapping[str, Any]]]:
+    """Every body this run writes a deck for, the tracers each carries, and what
+    that deck states - the row a variable's own condition is read against."""
     from trid3nt_server.workflows.telemac.modules import wrapper_for
 
-    return ([(sheet.body, [row.name for row in sheet.tracers])]
-            + [(wrapper_for(body["module"]), []) for body in sheet.coupled])
+    return ([(sheet.body, [row.name for row in sheet.tracers], sheet.stated())]
+            + [(wrapper_for(body["module"]), [], dict(body.get("slots") or {}))
+               for body in sheet.coupled])
 
 
 def _coupled_rows(sheet: Sheet) -> list[ParamSheetRow]:
@@ -769,14 +771,14 @@ def _written_rows(sheet: Sheet) -> list[ParamSheetRow]:
     The keyword is generated from the module's table, so the card states it here
     rather than reading it off a slot nobody filled."""
     rows = []
-    for body, tracers in _decks(sheet):
+    for body, tracers, stated in _decks(sheet):
         if not body.PRINTOUTS:
             continue
         slot = body.slot(body.PRINTOUTS)
         rows.append(ParamSheetRow(
             name=f"{body.MODULE}.{slot.identifier}",
-            value=[body.MODULE_OUTPUT[token].name for token in body.written()]
-            + tracers,
+            value=[body.MODULE_OUTPUT[token].name
+                   for token in body.written(stated)] + tracers,
             desc=slot.desc[:512], door="scenario", basis="derived",
             editable=False, group=_group(slot),
             source_badge=f"the {body.MODULE} module's own variable table"))

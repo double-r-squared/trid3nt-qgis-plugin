@@ -144,8 +144,12 @@ class Sheet:
         return tuple(rows)
 
     def printouts(self) -> Mapping[str, str]:
-        """THIS deck's variables keyword, generated from its module's table."""
-        return self.body.printouts(tracers=len(self.tracers))
+        """THIS deck's variables keyword, generated from its module's table.
+
+        The deck as it stands is handed to the generator, because a row that
+        exists only under a keyword is written for a deck that states it."""
+        return self.body.printouts(tracers=len(self.tracers),
+                                   stated=self.stated())
 
     def published(self) -> tuple[tuple[str, str, Output], ...]:
         """Every variable this run's results carry, as ``(token, module, row)``.
@@ -155,19 +159,29 @@ class Sheet:
         from . import wrapper_for
 
         body = self.body
+        stated = self.stated()
         rows = [(token, self.module, row)
                 for token, row in body.MODULE_OUTPUT.items()
-                if token not in body.LISTING and token != body.TRACER]
+                if token not in body.LISTING and token != body.TRACER
+                and row.carried(stated)]
         # A tracer is read by its POSITION among the carrier's own, which is the
         # token the primitives spell whatever the keyword calls it.
         rows += [(f"T{n}", self.module, row)
                  for n, row in enumerate(self.tracers, start=1)]
         for coupled in self.coupled:
             wrapper = wrapper_for(coupled["module"])
+            under = dict(coupled.get("slots") or {})
             rows += [(token, coupled["module"], row)
                      for token, row in wrapper.MODULE_OUTPUT.items()
-                     if token not in wrapper.LISTING and token != wrapper.TRACER]
+                     if token not in wrapper.LISTING and token != wrapper.TRACER
+                     and row.carried(under)]
         return tuple(rows)
+
+    def stated(self) -> Mapping[str, Any]:
+        """What this deck states, by IDENTIFIER - the name a row's condition and
+        a keyword read are both written under."""
+        return MappingProxyType({name: row.value
+                                 for name, row in self.filled.items()})
 
     def resolved(self) -> tuple[tuple[str, Any], ...]:
         """``(keyword, value)`` for everything the deck states, in dictionary order.
@@ -215,6 +229,8 @@ def fill(source: type | Sheet, *, template: str = "",
     """Set slots on a body or on a sheet already filled -> the sheet that results.
 
     Repeatable; an unknown keyword refuses BY NAME and None states nothing."""
+    from ..authoring.atmosphere import refuse_disputed_columns
+
     body, standing, pending = _standing(source, template)
     dictionary = body.MODULE_INPUT
     composites = body.COMPOSITES
@@ -255,6 +271,7 @@ def fill(source: type | Sheet, *, template: str = "",
         filled[name] = Filled(slot=slot, value=slot.check(value),
                               provenance=provenance)
     _arm(body, filled)
+    refuse_disputed_columns(files)
     return Sheet(body=body, filled=MappingProxyType(filled),
                  files=MappingProxyType(files))
 

@@ -48,7 +48,7 @@ UNSET = _Unset()
 _RESERVED = frozenset((
     "MODULE", "MODULE_INPUT", "COMPOSITES", "READS", "ASSERTED", "ARMS",
     "MODULE_OUTPUT", "LISTING", "DERIVED", "PRINTOUTS", "CADENCE", "TRACER",
-    "APPENDS", "APPENDABLE",
+    "APPENDS", "APPENDABLE", "ONLY_3D",
     "RESULT_FILE", "composites", "reads", "appends", "printouts", "slot",
 ))
 
@@ -233,6 +233,16 @@ class Output:
     style: Mapping[str, Any] | None = None
     varies: bool = True
     has_edge: bool | None = None
+    #: The keyword this row EXISTS UNDER, by identifier: the engine allocates
+    #: the variable only with it true, and asking for a variable it did not
+    #: allocate stops the solve rather than dropping the row. Empty on a row
+    #: the module always carries. Nothing arms it - a deck that does not state
+    #: the keyword is a deck this row is not written for.
+    under: str = ""
+
+    def carried(self, stated: Mapping[str, Any]) -> bool:
+        """Does the deck as it stands - ``stated``, by identifier - carry this row?"""
+        return not self.under or stated.get(self.under) is True
 
 
 @lru_cache(maxsize=None)
@@ -379,6 +389,11 @@ class Module(metaclass=_Body):
     APPENDABLE: tuple[tuple[str, tuple[Output, ...]], ...] = ()
     #: The result file the primitives read; empty reads the run's own.
     RESULT_FILE: str = ""
+    #: The keywords a COUPLED body of this module has only under a
+    #: three-dimensional host, by identifier. The host's own coupling composite
+    #: refuses them by name, because a two-dimensional host never builds the
+    #: field they describe and the engine reads them off a deck it then ignores.
+    ONLY_3D: frozenset[str] = frozenset()
     #: What THIS body asserts - empty on a wrapper, by law.
     ASSERTED: Mapping[str, Any] = MappingProxyType({})
     #: The keyword whose value ARMS a term, by the switch it turns on. The
@@ -405,24 +420,31 @@ class Module(metaclass=_Body):
         cls.APPENDS = staticmethod(expand)
 
     @classmethod
-    def written(cls) -> tuple[str, ...]:
+    def written(cls, stated: Mapping[str, Any] = MappingProxyType({}),
+                ) -> tuple[str, ...]:
         """The tokens the printouts keyword carries, past the run's tracers.
 
-        A row the module prints or derives is published or read, never asked for."""
-        return tuple(token for token in cls.MODULE_OUTPUT
+        A row the module prints or derives is published or read, never asked for.
+        A row that exists only UNDER a keyword is carried where ``stated`` - the
+        deck as it stands - states that keyword true, and is otherwise absent."""
+        return tuple(token for token, row in cls.MODULE_OUTPUT.items()
                      if token not in cls.LISTING and token not in cls.DERIVED
-                     and token != cls.TRACER)
+                     and token != cls.TRACER
+                     and row.carried(stated))
 
     @classmethod
-    def printouts(cls, *, tracers: int = 0) -> Mapping[str, str]:
+    def printouts(cls, *, tracers: int = 0,
+                  stated: Mapping[str, Any] = MappingProxyType({}),
+                  ) -> Mapping[str, str]:
         """The table as the keyword the engine reads it from, or nothing at all.
 
         Every token is checked against the dictionary's own choices, so a table
-        the engine would not spell refuses here rather than in the Fortran."""
+        the engine would not spell refuses here rather than in the Fortran; a
+        table longer than the engine's own line is spelled in its own wildcard."""
         if not cls.PRINTOUTS:
             return {}
         slot = cls.slot(cls.PRINTOUTS)
-        tokens = list(cls.written())
+        tokens = list(cls.written(stated))
         if cls.TRACER:
             tokens += [f"{cls.TRACER}{n}" for n in range(1, int(tracers) + 1)]
         for token in tokens:
@@ -430,7 +452,17 @@ class Module(metaclass=_Body):
                 raise SlotRefused(
                     f"{cls.MODULE} rows {token!r}, which {slot.keyword} does not "
                     f"spell; its choices are {sorted(slot.choices or ())}.")
-        return {slot.keyword: ",".join(tokens)}
+        value = ",".join(tokens)
+        if len(value) > _PRINTOUTS_COLUMNS:
+            value = ",".join(_wildcarded(tokens, slot))
+        if len(value) > _PRINTOUTS_COLUMNS:
+            raise SlotRefused(
+                f"{cls.MODULE} rows {len(tokens)} variables, which {slot.keyword} "
+                f"cannot carry: the engine reads this value to column "
+                f"{_PRINTOUTS_COLUMNS} and truncates the rest, and no wildcard "
+                f"over this table's own mnemonics is shorter than {len(value)} "
+                "characters.")
+        return {slot.keyword: value}
 
     @classmethod
     def slot(cls, identifier: str) -> Slot:
@@ -517,6 +549,49 @@ def _spells(body: type, name: str) -> bool:
 #: How the dictionary spells a NUMBERED token: the index is written ``i``, so
 #: ``T1`` is the choice ``Ti`` and ``TA1`` the choice ``TAi``.
 _INDEXED = re.compile(r"\d+$")
+
+
+#: The column a DAMOCLES line is read to, which is also the width the engine
+#: declares the printouts value at: a longer value is TRUNCATED, and a table cut
+#: mid-mnemonic stops the run on a word it cannot spell.
+_PRINTOUTS_COLUMNS = 72
+
+#: The engine's own wildcard in that keyword: ``~`` stands for the rest of a
+#: mnemonic wherever the character under it is a LETTER, so ``COV_~`` asks for
+#: every mnemonic spelled ``COV_`` and a letter after it.
+_WILDCARD = "~"
+
+
+def _wildcarded(tokens: Sequence[str], slot: Slot) -> list[str]:
+    """The same table written in the engine's wildcard, where one is safe.
+
+    A prefix is taken only where every mnemonic the keyword spells under it is
+    already a token of this table, so the shorter spelling asks the engine for
+    exactly what the table rows and never for a variable it did not row."""
+    choices = list(slot.choices or ())
+    wanted = set(tokens)
+    spelled: list[str] = []
+    covered: set[str] = set()
+    for token in tokens:
+        if token in covered:
+            continue
+        reached = [(token[:n], _matched(token[:n], choices))
+                   for n in range(1, len(token))]
+        group = next(((prefix, under) for prefix, under in reached
+                      if len(under) > 1 and under <= wanted), None)
+        if group is None:
+            spelled.append(token)
+            continue
+        spelled.append(group[0] + _WILDCARD)
+        covered |= group[1]
+    return spelled
+
+
+def _matched(prefix: str, choices: Sequence[str]) -> set[str]:
+    """Every choice ``prefix~`` reaches, by the engine's own matching rule."""
+    return {choice for choice in choices
+            if choice.startswith(prefix) and len(choice) > len(prefix)
+            and choice[len(prefix)].isalpha()}
 
 
 def _spelled(token: str, slot: Slot) -> bool:
