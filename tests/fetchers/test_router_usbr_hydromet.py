@@ -87,9 +87,11 @@ def spec():
 
 def test_the_source_states_no_datum_of_its_own_because_each_station_states_one(spec):
     assert spec.normalize.datum is None
+    assert spec.vertical_datum is None
     row = spec.coverage[0]
-    assert row.datum is None
+    assert row.datum == "record"
     assert row.extent.kind == "stations"
+    assert row.extent.read_from == "usbr_hydromet.stations"
     assert row.reach_km == 20.0
 
 
