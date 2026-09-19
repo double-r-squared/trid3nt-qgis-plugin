@@ -70,7 +70,28 @@ async def build_declared_mesh(*, mesh: dict[str, Any], name: Any = None,
     logger.info("mesh accepted: %s -> %d nodes / %d elements, min edge %s m",
                 art.mesh_id, art.node_count, art.element_count,
                 measured_min_edge_m(art))
+    await asyncio.to_thread(_mesh_coverage, recipe.extent, art)
     return mesh_record(art)
+
+
+def _mesh_coverage(extent: Any, art: Any) -> None:
+    """Say how much of the domain's own centerline the built cells actually hold.
+
+    Only a domain whose producer MEASURED a centerline has one to measure
+    against; a drawn outline carries none and nothing is said."""
+    from trid3nt_server.inputs.geometry import covered_fraction
+    from trid3nt_server.workflows.runtime import journal_note
+
+    line = (getattr(extent, "companions", None) or {}).get("centerline")
+    if not line or not art.display_uri:
+        return
+    try:
+        measured = covered_fraction(line, art.display_uri,
+                                    within_epsg=art.utm_epsg)
+    except Exception as exc:  # noqa: BLE001 - an unmeasurable overlap is not a build fault
+        logger.info("mesh coverage not measured (%s)", exc)
+        return
+    journal_note(measured["note"])
 
 
 def mesh_record(art: Any) -> dict[str, Any]:

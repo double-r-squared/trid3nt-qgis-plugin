@@ -206,17 +206,9 @@ from .derive.compute_sediment_yield import compute_sediment_yield  # noqa: E402,
 from .derive.compute_skill_metrics import compute_skill_metrics  # noqa: E402,F401
 from .derive.delineate_watershed import delineate_watershed  # noqa: E402,F401
 from .derive.derive_active_fire import derive_active_fire  # noqa: E402,F401
-# How much of a line lies inside polygons or inside a built mesh: the measure a
-# domain producer's coverage is judged by.
-from .derive.derive_coverage import derive_coverage  # noqa: E402,F401
-# Where a raster actually measured anything, as a polygon, and what of a shape
-# lies inside it.
-from .derive.derive_measured_extent import derive_measured_extent  # noqa: E402,F401
 # THE BED composition: a measurement over a wider surface, the finer one winning
 # where it measured, with a sidecar saying which painted each cell.
 from .derive.derive_merge_rasters import derive_merge_rasters  # noqa: E402,F401
-# One number for a gridded field over the ground a run is solved over.
-from .derive.derive_raster_mean import derive_raster_mean  # noqa: E402,F401
 # Scattered measurements -> the continuous surface between them: a point survey
 # becomes the bed a mesh is draped on.
 from .derive.derive_survey_surface import derive_survey_surface  # noqa: E402,F401

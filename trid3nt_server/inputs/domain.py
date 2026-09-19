@@ -13,15 +13,19 @@ from dataclasses import dataclass, field
 from typing import Any, Mapping
 
 from .boundary import RUN_TYPES, WALL, BoundaryRun, boundary_runs
-from .geometry import flatten_geometries, read_geometry_doc
+from .geometry import flatten_geometries, read_geometry_doc, source_uri
 from .user_input import UserInputError, polygon_ring
 
-__all__ = ["Domain", "domain", "domain_ring"]
+__all__ = ["Domain", "domain", "domain_ring", "measured_footprint"]
 
 logger = logging.getLogger("trid3nt_server.inputs.domain")
 
 _CODE = "DOMAIN_INVALID"
 _LAYER_SCHEMES = ("s3://", "gs://", "file://", "/", "./")
+
+#: The raster suffixes this slot reads a MEASURED FOOTPRINT off instead of a
+#: polygon. Anything else handed in is read as a vector document.
+_RASTER_SUFFIXES = (".tif", ".tiff", ".vrt", ".img", ".asc", ".jp2")
 
 
 @dataclass(frozen=True, slots=True)
@@ -108,6 +112,11 @@ def domain(value: Any, *, label: str = "domain",
     if value is None or isinstance(value, Domain):
         return value
     uri = getattr(value, "uri", None) or (value if isinstance(value, str) else None)
+    if isinstance(uri, str) and uri.strip().lower().endswith(_RASTER_SUFFIXES):
+        # A SURVEY handed in as the domain: the ground it sounded is the ground
+        # that can be solved over, and the file still spans a whole rectangle.
+        return Domain(measured_footprint(uri.strip(), label=label, code=code),
+                      _named(value), uri.strip())
     if isinstance(uri, str) and uri.strip().startswith(_LAYER_SCHEMES):
         doc = read_geometry_doc(uri.strip())
         logger.info("%s: read from %s", label, uri)
@@ -120,6 +129,33 @@ def domain(value: Any, *, label: str = "domain",
                       or _prescribed(value, label, code), _companions(value))
     ring = polygon_ring(value, label=label, code=code)
     return Domain(_closed(ring or []))
+
+
+def measured_footprint(raster: Any, *, label: str = "domain",
+                       code: str = _CODE) -> dict[str, Any]:
+    """Where a raster ACTUALLY measured anything, as one polygon in EPSG:4326.
+
+    Read off the raster's own MASK, never off a threshold on values, so a real
+    zero is inside the footprint and an untouched cell is not."""
+    import geopandas as gpd
+    import rasterio
+    from rasterio.features import shapes as raster_shapes
+    from shapely.geometry import mapping, shape as _shape
+    from shapely.ops import unary_union
+
+    uri = str(source_uri(raster) or "").strip()
+    with rasterio.open(uri) as src:
+        mask = src.dataset_mask()
+        parts = [_shape(geom) for geom, value in
+                 raster_shapes(mask, mask=mask.astype(bool), transform=src.transform)
+                 if value]
+        crs = src.crs
+    if not parts:
+        raise UserInputError(
+            f"every cell of the {label} raster {uri!r} is nodata, so it measured "
+            "nothing anywhere and there is no footprint to solve over.", code=code)
+    merged = gpd.GeoSeries([unary_union(parts)], crs=crs).to_crs(4326).union_all()
+    return dict(mapping(merged))
 
 
 def domain_ring(dom: Domain) -> list[list[float]]:

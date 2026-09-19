@@ -191,6 +191,24 @@ def _cut_reach(spec: SourceSpec, banks: dict[str, Any],
             return cut, json.load(handle)["features"][0]["geometry"]
 
 
+def _water_coverage(center: Any, polygon: dict) -> None:
+    """Say how much of the walked centerline the mapped water actually covers.
+
+    A partly mapped reach proceeds: what is outside the banks carries nothing
+    this source measured, and the run is about the covered stretch."""
+    from shapely.geometry import mapping
+
+    from trid3nt_server.inputs.geometry import covered_fraction
+    from trid3nt_server.workflows.runtime import journal_note
+
+    try:
+        measured = covered_fraction(mapping(center), polygon)
+    except Exception as exc:  # noqa: BLE001 - an unmeasurable overlap is not a fetch fault
+        logger.info("river_reach: water coverage not measured (%s)", exc)
+        return
+    journal_note(measured["note"])
+
+
 @register_hook("river_reach.parse_response")
 def parse_response(spec: SourceSpec, params: dict[str, Any], bodies: list[bytes]) -> list[dict]:
     """The reach polygon, its two boundary runs and the centerline, as four rows."""
@@ -218,6 +236,7 @@ def parse_response(spec: SourceSpec, params: dict[str, Any], bodies: list[bytes]
     ends = [[float(center.coords[0][0]), float(center.coords[0][1])],
             [float(center.coords[-1][0]), float(center.coords[-1][1])]]
     cut, polygon = _cut_reach(spec, banks, ends)
+    _water_coverage(center, polygon)
 
     common = {
         "comid": int(params["comid"]),
