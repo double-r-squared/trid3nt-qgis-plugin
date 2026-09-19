@@ -116,7 +116,7 @@ docstring: |-
       - DO NOT use for the default 10 m / 30 m DEM -- use ``fetch_dem``
         (the canonical ``fetch_dem`` covers 1/3 arc-second and an
         aliased 30 m via ``py3dep`` and is the right default).
-      - DO NOT use outside the US -- 3DEP coverage is US-only; the
+      - DO NOT use outside the US -- the
         input validator raises ``ThreeDEPExtraInputError`` for
         out-of-US bboxes. Use ``fetch_dem`` with ``source="copernicus"``
         (or ``fetch_copernicus_dem`` directly) for global coverage.

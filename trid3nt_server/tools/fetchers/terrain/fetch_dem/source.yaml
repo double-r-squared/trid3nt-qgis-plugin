@@ -144,8 +144,8 @@ docstring: |-
     over a polygon).
 
   **When NOT to use:**
-  - Coverage outside the continental US with the DEFAULT source -- 3DEP is
-    CONUS-only; pass ``source="copernicus"`` for a global GLO-30 30 m DEM.
+  - Coverage outside the continental US with the DEFAULT source -- pass
+    ``source="copernicus"`` for a global GLO-30 30 m DEM.
   - Bathymetry (below-water elevation) -- 3DEP/GLO-30 are land/surface models;
     use ``fetch_topobathy`` for coastal seafloor depth.
   - Single-point elevation lookups -- the tool fetches a raster window;

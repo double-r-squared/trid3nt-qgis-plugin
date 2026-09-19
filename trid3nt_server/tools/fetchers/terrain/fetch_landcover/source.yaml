@@ -69,6 +69,22 @@ payload_estimate:
   model: bbox_area
   mb_per_sq_deg: 2.0
   floor_mb: 0.1
+coverage:
+-   data_class: land cover
+    kind: modelled
+    extent:
+      kind: surface
+      rings:
+      - [[-125.0, 24.0], [-66.0, 24.0], [-66.0, 50.0], [-125.0, 50.0]]
+      note: NLCD, CONUS L48 only
+    window:
+      series: false
+      latest: '2021-01-01'
+      cadence: ~2-3 yr epochs
+    resolution_m: 30.0
+    units:
+      nlcd_class_code: class
+    value_column: nlcd_class_code
 corpus:
 - show me land use data for South Florida
 - I need NLCD landcover for the Houston area

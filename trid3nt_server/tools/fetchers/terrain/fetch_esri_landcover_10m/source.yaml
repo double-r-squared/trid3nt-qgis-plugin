@@ -85,6 +85,23 @@ payload_estimate:                    # max(0.2, sq_deg * 5.0)
   mb_per_sq_deg: 5.0
   floor_mb: 0.2
 
+coverage:
+-   data_class: land cover
+    kind: modelled
+    extent:
+      kind: surface
+      rings:
+      - [[-180.0, -90.0], [180.0, -90.0], [180.0, 90.0], [-180.0, 90.0]]
+      note: Esri / Impact Observatory 10 m annual LULC, global
+    window:
+      series: false
+      latest: '2023-01-01'
+      cadence: annual
+    resolution_m: 10.0
+    units:
+      esri_io_lulc_class_code: class
+    value_column: esri_io_lulc_class_code
+
 # --- honesty: caveats + fallback -----------------------------------------
 caveats:
   - "global 10m (worldwide complement to US-only NLCD); no covering item or all-nodata mosaic -> ESRI_LANDCOVER_NO_COVERAGE (never a fabricated layer)"
