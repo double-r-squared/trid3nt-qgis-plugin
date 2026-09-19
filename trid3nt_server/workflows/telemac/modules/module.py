@@ -392,6 +392,10 @@ class Module(metaclass=_Body):
     #: itself reads - so what a module may put on its carrier is enumerable
     #: without a body to run it against.
     APPENDABLE: tuple[tuple[str, tuple[Output, ...]], ...] = ()
+    #: Choices the printouts keyword spells that the engine never writes (slots
+    #: its own allocation marks deprecated): never a row, but a wildcard may
+    #: reach them, since what the engine puts there is never read.
+    UNWRITTEN: frozenset[str] = frozenset()
     #: The result file the primitives read; empty reads the run's own.
     RESULT_FILE: str = ""
     #: The keywords a COUPLED body of this module has only under a
@@ -476,7 +480,7 @@ class Module(metaclass=_Body):
                     f"spell; its choices are {sorted(slot.choices or ())}.")
         value = ",".join(tokens)
         if len(value) > _PRINTOUTS_COLUMNS:
-            value = ",".join(_wildcarded(tokens, slot))
+            value = ",".join(_wildcarded(tokens, slot, cls.UNWRITTEN))
         if len(value) > _PRINTOUTS_COLUMNS:
             raise SlotRefused(
                 f"{cls.MODULE} rows {len(tokens)} variables, which {slot.keyword} "
@@ -584,14 +588,16 @@ _PRINTOUTS_COLUMNS = 72
 _WILDCARD = "~"
 
 
-def _wildcarded(tokens: Sequence[str], slot: Slot) -> list[str]:
+def _wildcarded(tokens: Sequence[str], slot: Slot,
+                unwritten: frozenset[str] = frozenset()) -> list[str]:
     """The same table written in the engine's wildcard, where one is safe.
 
     A prefix is taken only where every mnemonic the keyword spells under it is
-    already a token of this table, so the shorter spelling asks the engine for
-    exactly what the table rows and never for a variable it did not row."""
+    a token of this table or a slot the engine never writes, so the shorter
+    spelling asks the engine for what the table rows and for nothing else it
+    would read back."""
     choices = list(slot.choices or ())
-    wanted = set(tokens)
+    wanted = set(tokens) | set(unwritten)
     spelled: list[str] = []
     covered: set[str] = set()
     for token in tokens:

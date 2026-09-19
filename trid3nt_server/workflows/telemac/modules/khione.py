@@ -90,8 +90,9 @@ MODULE_OUTPUT: Mapping[str, Output] = MappingProxyType({
     "COV_VBB": Output("SETTLING VEL.", "m/s", style=_VELOCITY, has_edge=False),
     "COV_FC": Output("SOLID ICE CONC.", "", style=_COVER, has_edge=True),
     "COV_THS": Output("SOLID ICE THICK.", "m", style=_THICKNESS, has_edge=True),
-    "COV_THF": Output("FRAZIL THICKNESS", "m", style=_THICKNESS, has_edge=True),
-    "COV_THUN": Output("UNDER ICE THICK.", "m", style=_THICKNESS, has_edge=True),
+    # The engine's own allocation marks FRAZIL THICKNESS and UNDER ICE THICK.
+    # deprecated and binds them to work arrays it never writes, so the file
+    # carries whatever memory held there; neither is a row.
     "COV_EQ": Output("EQUIV. SURFACE", "m", style=_ELEVATION, has_edge=False),
     "COV_ET": Output("TOP ICE COVER", "m", style=_ELEVATION, has_edge=False),
     "COV_EB": Output("BOTTOM ICE COVER", "m", style=_ELEVATION, has_edge=False),
@@ -269,6 +270,7 @@ KHIONE.PRINTOUTS = PRINTOUTS
 #: file is the tracer set above, counted among the host's own tracers.
 KHIONE.RESULT_FILE = RESULT_FILENAME
 KHIONE.ONLY_3D = _ONLY_3D
+KHIONE.UNWRITTEN = frozenset(("COV_THF", "COV_THUN"))
 KHIONE.APPENDABLE = (
     ("every coupled run", (_TEMPERATURE_ROW,)),
     (_SALINITY, (_SALINITY_ROW,)),

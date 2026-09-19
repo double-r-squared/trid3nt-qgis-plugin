@@ -305,7 +305,9 @@ ANSWER = {
                                    above=ParamRef("cover_threshold")
                                    ).measure("t_above")
     .otherwise("no node in the domain froze within the window"),
-    "peak_ice_thickness_m": series("DYNCOVT", module="khione").measure("max"),
+    # The thickest ice anywhere is the engine's TOTAL: the solid border ice
+    # and the dynamic cover together, not the cover alone.
+    "peak_ice_thickness_m": series("COV_THT", module="khione").measure("max"),
     "final_cover_fraction": series("DYNCOVC", at=Ref("station"), module="khione"
                                    ).measure("last"),
     "mesh_size_m": mesh().measure("size_m"),

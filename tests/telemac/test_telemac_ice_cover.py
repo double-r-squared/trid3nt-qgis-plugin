@@ -284,7 +284,7 @@ def test_every_answer_is_read_off_the_ice_modules_own_result():
     assert {(p.variable, m.stat) for p, m in
             zip(reads, [m for m in template.ANSWER.values()
                         if m.primitive.kind == "series"])} == {
-        ("DYNCOVC", "t_above"), ("DYNCOVT", "max"), ("DYNCOVC", "last")}
+        ("DYNCOVC", "t_above"), ("COV_THT", "max"), ("DYNCOVC", "last")}
 
 
 def test_the_workflow_owns_the_stages_and_the_template_states_what_differs():

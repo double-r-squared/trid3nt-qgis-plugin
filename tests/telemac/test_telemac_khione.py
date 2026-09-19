@@ -98,10 +98,10 @@ def test_one_frazil_row_per_class_the_deck_counts_on_the_host_and_the_ice_file()
 
 
 def test_the_ice_file_rows_nothing_the_budget_did_not_allocate():
-    """Every row past the twenty-two rowed above is allocated inside the
+    """Every row past the twenty rowed above is allocated inside the
     thermal budget, so a deck that turns it off rows none of them."""
     off = KHIONE.table(dict(_ice(HEAT_BUDGET=False)["slots"]))
-    assert len(off) == 20
+    assert len(off) == 18
     assert not {"F1", "TEMP", "NTOT"} & set(off)
     on = KHIONE.table(dict(_ice(SALINITY=True, DYNAMIC_ICE_COVER=True)["slots"]))
     assert {"SAL", "SALS", "DYNCOVC", "DYNCOVT"} <= set(on)
@@ -146,9 +146,9 @@ def test_the_table_is_written_in_the_engine_s_own_wildcard_and_fits_its_line():
     choices = dict(KHIONE.slot(KHIONE.PRINTOUTS).choices)
     reached = {mnemonic for mnemonic in choices
                for token in tokens if _matches(token, mnemonic)}
-    # The wildcard asks for exactly the rows the table carries and for nothing
-    # else the keyword spells.
-    assert reached == set(KHIONE.written(stated))
+    # The wildcard asks for the rows the table carries and, beyond them, only
+    # for the slots the engine never writes.
+    assert reached == set(KHIONE.written(stated)) | set(KHIONE.UNWRITTEN)
 
 
 def test_a_row_under_a_keyword_is_written_unless_the_deck_switches_it_off():
@@ -255,11 +255,22 @@ def test_every_row_the_table_carries_is_a_mnemonic_the_dictionary_spells():
     from trid3nt_server.workflows.telemac.modules.module import _spelled
 
     slot = KHIONE.slot(KHIONE.PRINTOUTS)
-    assert len(KHIONE.MODULE_OUTPUT) == 22
+    assert len(KHIONE.MODULE_OUTPUT) == 20
     table = KHIONE.table(dict(_ice(SALINITY=True, DYNAMIC_ICE_COVER=True,
                                    NUMBER_OF_CLASSES_FOR_SUSPENDED_FRAZIL_ICE=2
                                    )["slots"]))
-    assert len(table) == 22 + 8 + 2 + 2 + 2
+    assert len(table) == 20 + 8 + 2 + 2 + 2
     assert all(_spelled(token, slot) for token in table)
     assert all(row.name == row.name.strip() and len(row.name) <= 16
                for row in table.values())
+
+
+def test_the_two_slots_the_engine_marks_deprecated_are_not_rows():
+    """A wildcard may still reach them: the engine writes work memory there
+    and nothing reads it back, so the table publishes neither."""
+    assert not {"COV_THF", "COV_THUN"} & set(KHIONE.MODULE_OUTPUT)
+    assert KHIONE.UNWRITTEN == {"COV_THF", "COV_THUN"}
+    stated = dict(_ice(HEAT_BUDGET=False)["slots"])
+    value = fill(KHIONE, **stated).printouts()[_PRINTOUTS]
+    assert any(token.endswith("~") and "CO".startswith(token[:2])
+               for token in value.split(","))
