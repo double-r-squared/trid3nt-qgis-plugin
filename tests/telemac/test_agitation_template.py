@@ -110,3 +110,31 @@ def test_every_slot_reaches_the_wire(name: str):
     fn = TOOL_REGISTRY["artemis_harbor_agitation"].fn
     assert name in inspect.signature(fn).parameters
     assert f"{name}: " in (fn.__doc__ or "")
+
+
+def test_the_transect_follows_the_direction_the_run_states():
+    """The transect is read along the wave, so it is placed on the KEYWORD and
+    not on the number the deck was authored at: the read resolves through the
+    filled sheet, which is where a stated direction lands."""
+    from trid3nt_server.workflows.runtime import Ref
+
+    row = _rows()["transect"]
+    assert row.producer.kwargs["bearing_deg"] == Ref(
+        "sheet.DIRECTION_OF_WAVE_PROPAGATION")
+
+
+def test_the_settle_reads_the_wave_the_run_is_solved_at():
+    """The boundary file is stamped at the run's own period and direction, so
+    the step reads the resolved floor rather than the body's own numbers."""
+    from trid3nt_server.workflows.runtime import Ref
+    from trid3nt_server.workflows.telemac.templates.agitation import agitation
+    from trid3nt_server.workflows.telemac.workflow import stated
+
+    settle = _door().settle
+    assert settle.kwargs["wave_period_s"] == Ref("stated.WAVE_PERIOD")
+    assert settle.kwargs["wave_direction_deg"] == Ref(
+        "stated.DIRECTION_OF_WAVE_PROPAGATION")
+    floor = stated(steering=agitation.STEERING,
+                   keywords={"DIRECTION OF WAVE PROPAGATION": 160.0})
+    assert floor["DIRECTION_OF_WAVE_PROPAGATION"] == 160.0
+    assert floor["WAVE_PERIOD"] == agitation.STEERING.ASSERTED["WAVE_PERIOD"]

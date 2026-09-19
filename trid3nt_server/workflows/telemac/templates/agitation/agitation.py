@@ -124,7 +124,7 @@ class DATA:
     #: into the lee. A propagation direction is what the keyword carries, so the
     #: transect is read in the same trigonometric convention.
     transect = tool("derive_transect", shape=structure, convention="trig",
-                    bearing_deg=STEERING.ASSERTED["DIRECTION_OF_WAVE_PROPAGATION"],
+                    bearing_deg=Ref("sheet.DIRECTION_OF_WAVE_PROPAGATION"),
                     length_m=P.transect_length_m)
     #: The domain as a MESH, when the caller has one already. Unfilled, MESH
     #: below is what the wave is solved on.

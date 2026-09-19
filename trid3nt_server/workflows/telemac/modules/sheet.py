@@ -176,6 +176,17 @@ class Sheet:
         return tuple((row.slot.keyword, row.value)
                      for name, row in _in_dictionary_order(self.body, self.filled))
 
+    def __getattr__(self, name: str) -> Any:
+        """One FILLED keyword by identifier, so ``Ref("sheet.<KEYWORD>")`` reads
+        the value this run states wherever the sheet is a step's result.
+
+        Only what is filled: a keyword standing at the engine's own default is
+        not on the sheet, and the reader's refusal names it."""
+        row = object.__getattribute__(self, "filled").get(name)
+        if row is None:
+            raise AttributeError(name)
+        return row.value
+
     def state(self) -> dict[str, Any]:
         """What fill hands back: the sheet, said plainly."""
         return {

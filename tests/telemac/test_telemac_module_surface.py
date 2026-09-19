@@ -1119,6 +1119,16 @@ def test_a_raw_keyword_on_the_wire_fills_the_slot_it_names():
     assert ("LAW OF BOTTOM FRICTION", 4) in sheet.resolved()
 
 
+def test_a_read_placed_on_a_keyword_resolves_through_the_filled_sheet():
+    """Ref("sheet.<KEYWORD>") is the sheet as the fill leaves it, so a row placed
+    on a keyword follows whatever the run stated it at - and a keyword standing
+    at the engine's own default is named in the refusal rather than guessed."""
+    sheet = _filled(**{"LAW OF BOTTOM FRICTION": 4})
+    assert sheet.LAW_OF_BOTTOM_FRICTION == 4
+    with pytest.raises(AttributeError):
+        sheet.TIDAL_FLATS
+
+
 def test_a_raw_keyword_the_module_does_not_have_refuses_naming_the_nearest():
     """Named back in the dictionary's own spelling, because that is the name the
     caller was reaching for."""
