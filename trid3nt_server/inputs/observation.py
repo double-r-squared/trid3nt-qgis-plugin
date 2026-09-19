@@ -110,6 +110,13 @@ def convert(value: float, units: Any, to_units: Any) -> float:
     if not want or have == want or any(have in family and want in family
                                        for family in (_CELSIUS, _FAHRENHEIT)):
         return float(value)
+    if not have:
+        raise ObservationError(
+            "OBSERVATION_UNIT_UNSTATED",
+            f"a reading in no stated unit cannot be read as {to_units!r}. The "
+            "unit of a record's value column is stated on the source's coverage "
+            "row; a number read in the unit the slot wanted is a different "
+            "measurement.")
     if have in _FAHRENHEIT and want in _CELSIUS:
         return (float(value) - 32.0) / 1.8
     if have in _CELSIUS and want in _FAHRENHEIT:
@@ -148,23 +155,41 @@ def _samples(csv_text: str) -> list[tuple[str, float]]:
     return rows
 
 
-def _last_sample(csv_text: str) -> tuple[str | None, float] | None:
-    """The LAST readable ``stamp,value`` row of a station's series."""
+def _opening_sample(csv_text: str, at: Any) -> tuple[str | None, float] | None:
+    """The row of a station's series the run OPENS on: the last sample at or
+    before the moment asked about, else the last row the record holds.
+
+    A record that spans the run is reported over a window, so the reading this
+    run opens on is the one measured at its own instant rather than whichever
+    sample the record happened to end at."""
     rows = _samples(csv_text)
-    return (rows[-1][0] or None, rows[-1][1]) if rows else None
+    if not rows:
+        return None
+    asked = _moment(at)
+    if asked is not None:
+        inside = [row for row in rows if (_moment(row[0]) or asked) <= asked]
+        if inside:
+            return (inside[-1][0] or None, inside[-1][1])
+    return (rows[-1][0] or None, rows[-1][1])
 
 
-def _reading(props: Mapping[str, Any], field: str,
-             series_field: str) -> tuple[str | None, float] | None:
-    """One feature's value and the stamp it carries, from a column or a series."""
+def _reading(props: Mapping[str, Any], field: str, series_field: str,
+             at: Any = None) -> tuple[str | None, float] | None:
+    """One feature's value and the stamp it carries, from a column or a series.
+
+    A record that carries a window is read AT the moment the run asks about, so
+    the stamp beside the value is the run's own instant inside the record and
+    the window check below is about that sample."""
+    if series_field and props.get(series_field):
+        found = _opening_sample(str(props[series_field]), at)
+        if found is not None:
+            return found
     direct = props.get(field)
     if direct is not None:
         try:
             return (_text(props, *_STAMP_FIELDS), float(direct))
         except (TypeError, ValueError):
             return None
-    if series_field and props.get(series_field):
-        return _last_sample(str(props[series_field]))
     return None
 
 
@@ -197,8 +222,9 @@ def _in_window(sampled: Any, at: Any) -> bool:
 def observation(source: Any, *, near: Any = None, field: str = "value",
                 units_field: str = "unit", to_units: Any = None,
                 series_field: str = "time_series_csv",
-                record_units: Any = None,
-                at: Any = None, to_datum: Any = None, offset: Any = None,
+                record_units: Any = None, column_units: Any = None,
+                at: Any = None, window_s: Any = None,
+                to_datum: Any = None, offset: Any = None,
                 measures: str = "this value", opens: str = "",
                 label: str = "observation",
                 code: str = _CODE) -> Observation | None:
@@ -227,7 +253,7 @@ def observation(source: Any, *, near: Any = None, field: str = "value",
     candidates: list[tuple[float, dict[str, Any], tuple[str | None, float]]] = []
     for feature in _features(source):
         props = feature.get("properties") or {}
-        reading = _reading(props, field, series_field)
+        reading = _reading(props, field, series_field, at)
         if reading is None:
             continue
         candidates.append((_distance_km(feature, near), feature, reading))
@@ -249,7 +275,8 @@ def observation(source: Any, *, near: Any = None, field: str = "value",
             "call, or name a source that reaches this place.")
     distance_km, feature, (sampled, raw) = min(candidates, key=lambda row: row[0])
     props = feature.get("properties") or {}
-    units = props.get(units_field) or record_units
+    columns = dict(column_units or {})
+    units = props.get(units_field) or columns.get(field) or record_units
     value = convert(raw, units, to_units) if to_units is not None else float(raw)
     datum, shift, datum_note = _onto_datum(source, props, to_datum, offset, label)
     reported = props.get("distance_km")
@@ -263,24 +290,35 @@ def observation(source: Any, *, near: Any = None, field: str = "value",
         distance_km=float(reported) if reported is not None else (
             distance_km if distance_km != float("inf") else None),
         datum=datum, datum_note=datum_note,
-        series=_series(props, series_field, units, to_units,
-                       shift, label))
+        series=_series(props, series_field, columns.get(series_field) or units,
+                       to_units, shift, label, at, window_s))
     _journal(found, opens=opens, stated=False)
     return found
 
 
 def _series(props: Mapping[str, Any], series_field: str, units: Any,
-            to_units: Any, shift: float, label: str) -> Series | None:
-    """THE WINDOW this station reported, on the slot's own unit and datum.
+            to_units: Any, shift: float, label: str, at: Any = None,
+            window_s: Any = None) -> Series | None:
+    """THE WINDOW this station reported, on the slot's own unit and datum,
+    OPENED at the moment the run opens at.
 
     The series rides the SAME shift the value did rather than a second one
     derived off the same row, and ``None`` where the record reported one moment
-    - a single reading has no interval a reader could read between."""
+    - a single reading has no interval a reader could read between. A record
+    that carries no unit is not read in the slot's own: 2000 ft3/s read as
+    2000 m3/s is a different river."""
     rows = _samples(str(props.get(series_field) or "")) if series_field else []
     if len(rows) < 2:
         return None
+    if to_units is not None and not units:
+        raise ObservationError(
+            "OBSERVATION_UNIT_UNSTATED",
+            f"{label} reports a window in no stated unit and this slot reads "
+            f"{to_units!r}. The unit of a record's value column is stated on "
+            "the source's coverage row.")
+    _covers_the_run(rows, at, window_s, label)
     try:
-        found = Series.from_samples(rows, units=str(units or to_units or ""))
+        found = Series.from_samples(rows, units=str(units), at=at)
     except TemporalShapeError:
         # A record whose stamps repeat or run backwards states no window; the
         # reading above stands and the run is lumped, which the row says.
@@ -294,6 +332,34 @@ def _series(props: Mapping[str, Any], series_field: str, units: Any,
                 f"{label} reports its window in {found.units!r} and this slot "
                 f"reads {to_units!r}: {exc}") from exc
     return found.shifted(shift)
+
+
+def _covers_the_run(rows: list[tuple[str, float]], at: Any,
+                    window_s: Any, label: str) -> None:
+    """Refuse a record that does not span the window this run solves over.
+
+    The run opens at ``at`` INSIDE the record; a record that stops before the
+    run does would be read flat past its last sample, which is a forcing nobody
+    measured. The refusal names the nearest sample and the statement that would
+    take the record as it is."""
+    opens = _moment(at)
+    if opens is None or window_s is None:
+        return
+    first, last = _moment(rows[0][0]), _moment(rows[-1][0])
+    if first is None or last is None:
+        return
+    closes = opens + dt.timedelta(seconds=float(window_s))
+    if first <= opens and closes <= last:
+        return
+    nearest = first if abs((first - opens).total_seconds()) < \
+        abs((last - opens).total_seconds()) else last
+    raise ObservationError(
+        "OBSERVATION_WINDOW_UNCOVERED",
+        f"{label} reports from {rows[0][0]} to {rows[-1][0]}, and this run "
+        f"opens at {opens.isoformat()} and closes at {closes.isoformat()}: "
+        f"the nearest sample it holds is {nearest.isoformat()}. Ask about a "
+        "moment the record spans, state the value on the call, or state the "
+        "window loosened, which takes the record as a stand-in and says so.")
 
 
 def _onto_datum(source: Any, props: Mapping[str, Any], to_datum: Any,

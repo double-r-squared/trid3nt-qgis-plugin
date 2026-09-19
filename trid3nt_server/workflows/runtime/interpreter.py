@@ -34,7 +34,8 @@ from trid3nt_server.gates.input_review import (
 from trid3nt_contracts.coverage import SourceChoice
 
 from .data import (
-    BED, DOMAIN, LEVEL, LINE, RUNS, CoversAOI, DataDecl, Producer)
+    BED, DISCHARGE, DOMAIN, LEVEL, LINE, OBSERVATION, RUNS, CoversAOI, DataDecl,
+    Producer)
 from .match import (
     Need, dropped_from, instant, match, sources_with_coverage)
 from .domain import Domain, bind_domain, current_domain, domain_from_result, reset_domain
@@ -407,7 +408,7 @@ async def _produce(env: _Env, decl: DataDecl) -> Any:
         if value is not _UNREPLAYABLE:
             env.data_records.append(cached)
             logger.info("data %s REPLAYED from ledger", decl.name)
-            return await _ingested(env, decl, value)
+            return await _ingested(env, decl, value, cached.runner)
     label = _data_step_label(decl.name)
     if decl.is_context:
         return await _context(env, decl, label)
@@ -418,7 +419,7 @@ async def _produce(env: _Env, decl: DataDecl) -> Any:
         record, index=-1, node=_data_step_label(decl.name)))
     if env.ledger is not None:
         await env.ledger.record_data(decl.name, record)
-    return await _ingested(env, decl, value)
+    return await _ingested(env, decl, value, answered.runner)
 
 
 async def _matched(env: _Env, decl: DataDecl) -> Any:
@@ -433,7 +434,7 @@ async def _matched(env: _Env, decl: DataDecl) -> Any:
     if value is None:
         raise StepFailedError(choice.sentence, error_code="DATA_NEED_UNMATCHED",
                               step=_data_step_label(decl.name))
-    return await _ingested(env, decl, value)
+    return await _ingested(env, decl, value, choice.picked)
 
 
 async def _matched_bed(env: _Env, decl: DataDecl) -> Any:
@@ -627,7 +628,8 @@ async def _domain_companion(env: _Env, named: str) -> Any:
     return dict(getattr(bound, "companions", None) or {}).get(named)
 
 
-async def _ingested(env: _Env, decl: DataDecl, value: Any) -> Any:
+async def _ingested(env: _Env, decl: DataDecl, value: Any,
+                    runner: str = "") -> Any:
     """A SLOT's value through the one ingestion its role reads; a plain row's
     value as it came.
 
@@ -640,6 +642,7 @@ async def _ingested(env: _Env, decl: DataDecl, value: Any) -> Any:
 
     coercion = await _bind_value(dict(decl.coercion), env)
     coercion.update(await _on_the_run_s_frame(env, decl, value))
+    coercion.update(_what_the_record_reports(env, decl, runner))
     ingested = await asyncio.to_thread(ingest_slot, decl.role, value,
                                        label=decl.name, **coercion)
     if decl.role == DOMAIN and ingested is not None:
@@ -650,6 +653,27 @@ async def _ingested(env: _Env, decl: DataDecl, value: Any) -> Any:
                            geometry=dict(ingested.geometry),
                            label=ingested.name))
     return ingested
+
+
+def _what_the_record_reports(env: _Env, decl: DataDecl,
+                             runner: str) -> dict[str, Any]:
+    """What an OBSERVATION slot is told about the record it was handed.
+
+    The unit of each value column is the SOURCE's own statement, read off the
+    coverage row of whichever fetcher answered - a record that carries no unit
+    column is still read in the unit it was measured in, never in the unit the
+    slot wanted. The moment the run opens at and how long it covers are the
+    run's, so the series is placed on the run's clock and a record that stops
+    early refuses."""
+    if decl.role not in (OBSERVATION, LEVEL, DISCHARGE):
+        return {}
+    told: dict[str, Any] = {"window_s": env.window_s}
+    coverage = getattr(_spec_of(runner), "coverage", None) if runner else None
+    if coverage is not None:
+        told["column_units"] = dict(coverage.units)
+    if decl.coercion.get("at") is None and env.params is not None:
+        told["at"] = env.params.value_of("event_time")
+    return told
 
 
 async def _on_the_run_s_frame(env: _Env, decl: DataDecl,
@@ -720,7 +744,7 @@ async def _context(env: _Env, decl: DataDecl, label: str) -> Any:
         # its slot finds nothing usable in - sites that report another
         # characteristic, a survey with no soundings - held nothing for this run
         # either, and a context row says so rather than refusing.
-        ingested = await _ingested(env, decl, value)
+        ingested = await _ingested(env, decl, value, answered.runner)
     except asyncio.CancelledError:
         raise
     except Exception as exc:  # noqa: BLE001 - any empty source is the absence

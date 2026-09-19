@@ -179,3 +179,68 @@ def test_the_window_is_read_in_the_unit_the_row_states_for_it() -> None:
 
 def test_a_record_that_reported_one_moment_carries_no_window() -> None:
     assert observation(_fc(_site("A", -122.68, 45.51, 9.5))).series is None
+
+
+def test_the_run_opens_at_its_own_moment_inside_the_record() -> None:
+    """t=0 is the instant the run asks at, not the record's first sample."""
+    station = {"type": "Feature",
+               "geometry": {"type": "Point", "coordinates": [-122.68, 45.51]},
+               "properties": {"site_id": "14211720", "discharge_cfs": 300.0,
+                              "unit": "ft3/s",
+                              "reading_dt": "2026-09-13T23:00Z",
+                              "time_series_csv":
+                                  "2026-09-13T21:00Z,100\n"
+                                  "2026-09-13T22:00Z,200\n"
+                                  "2026-09-13T23:00Z,300\n"}}
+    found = observation(_fc(station), field="discharge_cfs", to_units="m3/s",
+                        at="2026-09-13T22:00:00Z", window_s=3600.0,
+                        measures="a streamflow")
+    assert found.series.times_s == (-3600.0, 0.0, 3600.0)
+
+
+def test_a_record_that_stops_before_the_run_does_refuses_naming_the_nearest() -> None:
+    station = {"type": "Feature",
+               "geometry": {"type": "Point", "coordinates": [-122.68, 45.51]},
+               "properties": {"site_id": "14211720", "discharge_cfs": 300.0,
+                              "unit": "ft3/s",
+                              "reading_dt": "2026-09-13T22:00Z",
+                              "time_series_csv":
+                                  "2026-09-13T21:00Z,100\n"
+                                  "2026-09-13T22:00Z,200\n"}}
+    with pytest.raises(ObservationError) as caught:
+        observation(_fc(station), field="discharge_cfs", to_units="m3/s",
+                    at="2026-09-13T21:30:00Z", window_s=172800.0,
+                    measures="a streamflow", label="the gauge")
+    assert caught.value.error_code == "OBSERVATION_WINDOW_UNCOVERED"
+    assert "2026-09-13T22:00" in str(caught.value)
+    assert "window loosened" in str(caught.value)
+
+
+def test_a_window_in_no_stated_unit_refuses_rather_than_reading_the_slot_s() -> None:
+    """The cfs defect: 2000 ft3/s read as 2000 m3/s is a different river."""
+    station = {"type": "Feature",
+               "geometry": {"type": "Point", "coordinates": [-122.68, 45.51]},
+               "properties": {"site_id": "14211720", "discharge_cfs": 2000.0,
+                              "time_series_csv":
+                                  "2026-09-05T00:00Z,1000\n"
+                                  "2026-09-05T01:00Z,2000\n"}}
+    with pytest.raises(ObservationError) as caught:
+        observation(_fc(station), field="discharge_cfs", to_units="m3/s",
+                    measures="a streamflow")
+    assert caught.value.error_code == "OBSERVATION_UNIT_UNSTATED"
+
+
+def test_the_coverage_row_s_column_unit_is_what_a_bare_record_is_read_in() -> None:
+    station = {"type": "Feature",
+               "geometry": {"type": "Point", "coordinates": [-122.68, 45.51]},
+               "properties": {"site_id": "14211720", "discharge_cfs": 2000.0,
+                              "time_series_csv":
+                                  "2026-09-05T00:00Z,1000\n"
+                                  "2026-09-05T01:00Z,2000\n"}}
+    found = observation(_fc(station), field="discharge_cfs", to_units="m3/s",
+                        column_units={"discharge_cfs": "ft3/s",
+                                      "time_series_csv": "ft3/s"},
+                        measures="a streamflow")
+    assert found.value == pytest.approx(56.633693184)
+    assert found.series.units == "m3/s"
+    assert found.series.values[-1] == pytest.approx(56.633693184)

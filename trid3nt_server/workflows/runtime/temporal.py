@@ -189,17 +189,20 @@ class Series:
 
     @classmethod
     def from_samples(cls, samples: Sequence[tuple[Any, float]], *, units: str,
-                     start_s: float = 0.0) -> "Series":
+                     start_s: float = 0.0, at: Any = None) -> "Series":
         """Stamped readings -> this series on a clock that opens at ``start_s``.
 
-        t = ``start_s`` is the FIRST sample, so the run opens on an instant
-        somebody measured rather than on a midnight nobody did."""
+        ``at`` is the instant the RUN opens at, so t = ``start_s`` is that
+        moment INSIDE the record and the readings before it carry negative
+        times. Unstated, t = ``start_s`` is the record's first sample, which is
+        the only honest origin when the run names no moment."""
         import pandas as pd
 
         stamps = pd.to_datetime([stamp for stamp, _v in samples], utc=True)
         order = sorted(range(len(stamps)), key=lambda i: stamps[i])
-        first = stamps[order[0]]
-        return cls([float(start_s) + (stamps[i] - first).total_seconds()
+        origin = (pd.Timestamp(at, tz="UTC") if at is not None
+                  else stamps[order[0]])
+        return cls([float(start_s) + (stamps[i] - origin).total_seconds()
                     for i in order],
                    [float(samples[i][1]) for i in order], units=units)
 
