@@ -597,6 +597,28 @@ package SteeringSurface {
         the module has no keyword for refuses naming the nearest one it does,
         and a value outside the dictionary's choices refuses naming them - both
         while a person can still read what they asked for.
+
+        A floor name is resolved across the RUN'S BODIES in deck order, not the
+        carrier's dictionary alone: a qualified "waqtel: K2 REAERATION
+        COEFFICIENT" against that body, a bare name where exactly one body
+        spells it, and a collision refuses naming both qualified spellings. A
+        coupled value is stored on that body's own slots and checked against its
+        own dictionary, and the card shows it under its body with its unit and
+        its bounds - so a keyword on a coupled deck has the same user surface
+        the carrier's own has.
+
+        The floor is resolved ONCE, BEFORE any stage runs. A stage settled from
+        the deck's class attribute would describe a different run than the deck
+        writes, so the early readers - the settle's clock, the open channel's
+        friction law and coefficient, the wave the boundary file is stamped at,
+        the outlet's rating curve - read the resolved floor at run time. A read
+        placed on a keyword INSIDE a body reads the FILLED SHEET instead, which
+        is the same value after a revision at the gate.
+
+        A value whose term the engine gates on ARMS that term where nothing has
+        stated it: a rate reaching the engine with its switch off is a number
+        nothing reads, and arming is the value's own ingestion rather than a
+        second thing the caller has to know.
         */
     }
 
@@ -952,6 +974,32 @@ package SteeringSurface {
         "tests/telemac/test_telemac_module_surface.py::test_a_drawn_point_is_a_fill";
     verify requirement EverythingOverridable by
         "tests/telemac/test_telemac_module_surface.py::test_a_canvas_that_answers_nothing_refuses_and_invents_nothing";
+    verify requirement EverythingOverridable by
+        "tests/telemac/test_telemac_do_sag.py::test_a_coupled_keyword_is_stated_by_its_own_body_name";
+    verify requirement EverythingOverridable by
+        "tests/telemac/test_telemac_do_sag.py::test_a_bare_coupled_keyword_only_one_body_spells_resolves_there";
+    verify requirement EverythingOverridable by
+        "tests/telemac/test_telemac_do_sag.py::test_a_name_two_bodies_spell_refuses_naming_both_qualified_spellings";
+    verify requirement EverythingOverridable by
+        "tests/telemac/test_telemac_do_sag.py::test_a_value_the_coupled_dictionary_refuses_refuses_at_the_fill";
+    verify requirement EverythingOverridable by
+        "tests/telemac/test_telemac_do_sag.py::test_the_card_groups_the_coupled_deck_under_its_own_body";
+    verify requirement EverythingOverridable by
+        "tests/telemac/test_workflow_owns_its_stages.py::test_the_floor_is_resolved_once_before_any_stage_runs";
+    verify requirement EverythingOverridable by
+        "tests/telemac/test_workflow_owns_its_stages.py::test_the_settle_step_reads_the_files_the_deck_itself_names";
+    verify requirement EverythingOverridable by
+        "tests/telemac/test_telemac_water_temperature.py::test_a_stated_duration_sizes_the_weather_record";
+    verify requirement EverythingOverridable by
+        "tests/telemac/test_telemac_rain_on_grid_template.py::test_a_stated_friction_law_derives_the_rating_curve";
+    verify requirement EverythingOverridable by
+        "tests/telemac/test_telemac_module_surface.py::test_a_read_placed_on_a_keyword_resolves_through_the_filled_sheet";
+    verify requirement EverythingOverridable by
+        "tests/telemac/test_agitation_template.py::test_the_transect_follows_the_direction_the_run_states";
+    verify requirement EverythingOverridable by
+        "tests/telemac/test_telemac_module_surface.py::test_a_rate_stated_by_name_arms_the_term_that_reads_it";
+    verify requirement EverythingOverridable by
+        "tests/runtime/test_run_journal.py::test_the_record_carries_the_slots_the_run_was_supplied";
 
     satisfy requirement DictionaryMatchesImage by dictionaryExtractor;
     verify requirement DictionaryMatchesImage by
