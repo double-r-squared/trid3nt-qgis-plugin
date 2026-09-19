@@ -649,6 +649,9 @@ T2D.LISTING = LISTING
 T2D.PRINTOUTS = "VARIABLES_FOR_GRAPHIC_PRINTOUTS"
 T2D.CADENCE = "GRAPHIC_PRINTOUT_PERIOD"
 T2D.TRACER = "T"
+T2D.ARMS = MappingProxyType({
+    "SPEED_AND_DIRECTION_OF_WIND": "WIND",
+    "RAIN_OR_EVAPORATION_IN_MM_PER_DAY": "RAIN_OR_EVAPORATION"})
 T2D.composites(sources=_sources, wind=_wind,
                continue_from=_continue_from,
                atmosphere=expand_for_telemac2d,

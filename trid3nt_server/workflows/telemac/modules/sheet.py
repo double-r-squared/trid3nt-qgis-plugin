@@ -254,8 +254,23 @@ def fill(source: type | Sheet, *, template: str = "",
         slot = dictionary[name]
         filled[name] = Filled(slot=slot, value=slot.check(value),
                               provenance=provenance)
+    _arm(body, filled)
     return Sheet(body=body, filled=MappingProxyType(filled),
                  files=MappingProxyType(files))
+
+
+def _arm(body: type, filled: dict[str, Filled]) -> None:
+    """Turn on the term a stated value implies, where nothing has stated it.
+
+    The engine reads the value only with its switch true, so a rate stated by
+    its own name and left disarmed is a number nothing reads. A deck that
+    states the switch itself keeps whatever it said, off included."""
+    for name, switch in body.ARMS.items():
+        if name not in filled or switch in filled:
+            continue
+        slot = body.slot(switch)
+        filled[switch] = Filled(slot=slot, value=slot.check(True),
+                                provenance=Provenance(Origin.PRODUCER, name))
 
 
 def fill_coupled(sheet: Sheet, stated: Mapping[str, Mapping[str, Any]]) -> Sheet:

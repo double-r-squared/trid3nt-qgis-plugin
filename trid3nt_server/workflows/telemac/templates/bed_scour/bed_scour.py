@@ -270,9 +270,8 @@ class STEERING(T2D):
     #: CALM AND DRY: this question asks what the CARRIER FLOW does to the bed, so
     #: this deck states no surface stress and no distributed rain - a zero speed
     #: and an absent rate each write nothing at all. A user who wants either
-    #: states the keyword PAIR by name - WIND with SPEED AND DIRECTION OF WIND,
-    #: RAIN OR EVAPORATION with RAIN OR EVAPORATION IN MM PER DAY - because the
-    #: term is armed by the switch and the rate alone is read by nothing.
+    #: states SPEED AND DIRECTION OF WIND or RAIN OR EVAPORATION IN MM PER DAY
+    #: by name; the term each value needs is armed by the ingestion.
     wind = Wind(speed_mps=0.0, from_deg=0.0)
     rain = Rain(mm_per_day=None, tracers=1)
 

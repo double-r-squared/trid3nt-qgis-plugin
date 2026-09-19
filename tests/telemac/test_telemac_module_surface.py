@@ -590,6 +590,21 @@ def test_a_wind_from_the_north_reaches_the_engines_own_speed_and_direction_pair(
     assert round(east["SPEED_AND_DIRECTION_OF_WIND"][1], 9) == 0.0
 
 
+def test_a_rate_stated_by_name_arms_the_term_that_reads_it():
+    """The engine reads the rate only with the term switched on, so the switch
+    is the value's own ingestion rather than a second thing a caller has to
+    know; a deck that states the switch itself keeps what it said."""
+    sheet = _filled(**{"RAIN OR EVAPORATION IN MM PER DAY": 12.0})
+    assert sheet.filled["RAIN_OR_EVAPORATION"].value is True
+    assert sheet.filled["RAIN_OR_EVAPORATION"].provenance.detail == \
+        "RAIN_OR_EVAPORATION_IN_MM_PER_DAY"
+    wind = fill(T2D, SPEED_AND_DIRECTION_OF_WIND=[4.0, 270.0])
+    assert wind.filled["WIND"].value is True
+    off = fill(T2D, SPEED_AND_DIRECTION_OF_WIND=[4.0, 270.0], WIND=False)
+    assert off.filled["WIND"].value is False
+    assert "WIND" not in fill(T2D).filled
+
+
 def test_a_continuation_names_the_file_and_leaves_its_format_to_the_template():
     """The file is what the value IS; the FORMAT it is read at is a choice among
     the three the dictionary offers, and dye_release states the double-precision

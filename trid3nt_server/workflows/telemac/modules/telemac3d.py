@@ -286,6 +286,8 @@ T3D.MODULE_OUTPUT = MODULE_OUTPUT
 T3D.PRINTOUTS = "VARIABLES_FOR_3D_GRAPHIC_PRINTOUTS"
 T3D.CADENCE = "GRAPHIC_PRINTOUT_PERIOD"
 T3D.TRACER = "TA"
+T3D.ARMS = MappingProxyType({
+    "RAIN_OR_EVAPORATION_IN_MM_PER_DAY": "RAIN_OR_EVAPORATION"})
 T3D.composites(vertical_grid=_vertical_grid, column=_column, wind=_wind,
                atmosphere=expand_for_telemac3d)
 T3D.reads(**PRIMITIVES, column=read_column)

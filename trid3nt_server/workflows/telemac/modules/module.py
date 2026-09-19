@@ -46,7 +46,7 @@ UNSET = _Unset()
 
 #: Class attributes a wrapper carries that are never keyword assertions.
 _RESERVED = frozenset((
-    "MODULE", "MODULE_INPUT", "COMPOSITES", "READS", "ASSERTED",
+    "MODULE", "MODULE_INPUT", "COMPOSITES", "READS", "ASSERTED", "ARMS",
     "MODULE_OUTPUT", "LISTING", "DERIVED", "PRINTOUTS", "CADENCE", "TRACER",
     "APPENDS", "APPENDABLE",
     "RESULT_FILE", "composites", "reads", "appends", "printouts", "slot",
@@ -381,6 +381,10 @@ class Module(metaclass=_Body):
     RESULT_FILE: str = ""
     #: What THIS body asserts - empty on a wrapper, by law.
     ASSERTED: Mapping[str, Any] = MappingProxyType({})
+    #: The keyword whose value ARMS a term, by the switch it turns on. The
+    #: engine reads the value only with the switch true, so a rate stated by
+    #: name and left disarmed is a number nothing reads.
+    ARMS: Mapping[str, str] = MappingProxyType({})
 
     @classmethod
     def composites(cls, **expanders: Callable[[Any], Any]) -> None:

@@ -254,9 +254,8 @@ class STEERING(T2D):
     #: CALM AND DRY: this question asks what the CURRENT does with the slick, so
     #: this deck states no surface stress and no distributed rain and the drift
     #: is the flow's alone - a zero speed and an absent rate each write nothing
-    #: at all. A user who wants a wind states the keyword PAIR by name - WIND
-    #: with SPEED AND DIRECTION OF WIND - because the term is armed by the
-    #: switch and the speed alone is read by nothing.
+    #: at all. A user who wants a wind states SPEED AND DIRECTION OF WIND by
+    #: name; the term it needs is armed by the ingestion.
     wind = Wind(speed_mps=0.0, from_deg=0.0)
     rain = Rain(mm_per_day=None, tracers=1)
 
