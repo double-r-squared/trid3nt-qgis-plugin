@@ -16,6 +16,7 @@ consumer branches on its discriminator rather than on a string it recognised.
 | `chart_contracts.py` | The chart-emission envelope and its Vega-Lite wire format. |
 | `collections.py` | The document-store collection schemas. |
 | `common.py` | The primitives every other contract builds on: ids, timestamps, the base model. |
+| `coverage.py` | What a source covers and the ranked list a slot's match makes of it: `Coverage`, `SourceChoice`, `SourceOption`. |
 | `envelope.py` | `AssessmentEnvelope` - one output shape across memory, wire and storage. |
 | `errors.py` | Typed errors as a closed code discriminator. |
 | `execution.py` | The solver-execution shapes: setup, handle, result, and `LayerURI`. |
