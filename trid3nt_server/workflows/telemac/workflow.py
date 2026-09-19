@@ -899,3 +899,13 @@ class TelemacWorkflow(Workflow):
 
     engine = "telemac"
     solve_step = "solve"
+
+    def run_window_s(self, keywords: Mapping[str, Any]) -> float | None:
+        """How long this run's solve covers: the deck's own DURATION, under the
+        floor that may have moved it.
+
+        A matched series source has to hold a record over it, so the number the
+        deck will write is the number the match filters on."""
+        window = stated(steering=self.plan_decl.steering,
+                        keywords=keywords).get("DURATION")
+        return float(window) if isinstance(window, (int, float)) else None

@@ -121,6 +121,14 @@ class Workflow:
 
     # -- hooks: silent defaults ------------------------------------------- #
 
+    def run_window_s(self, keywords: Mapping[str, Any]) -> float | None:
+        """How long this run's solve covers, in seconds - the window a matched
+        SERIES source has to hold a record over.
+
+        The engine's own deck states it, so a runtime that knows no engine
+        states none and a series match then holds only the opening instant."""
+        return None
+
     def checks(self, result: Any, run: RunResult) -> tuple[str, ...]:
         """Validation checks over the finished result, as NOTES the caller narrates.
         A template that declares no sensitivity classes produces no note, and a
@@ -161,6 +169,7 @@ class Workflow:
                 self.plan, p, self.params, self.data,
                 input_mode=input_mode, keywords=keywords, resume=resume,
                 supplied=supplied_artifacts, continued=continued,
+                window_s=self.run_window_s(dict(keywords or {})),
             )
         except asyncio.CancelledError:
             raise

@@ -151,7 +151,8 @@ def test_a_probe_that_exhausts_every_survivor_says_so():
     choice = match(bed_need(), [("fetch_survey", surface())])
     after = dropped_from(choice, "fetch_survey", "held nothing over this domain")
     assert after.picked == ""
-    assert "no other source states coverage" in after.sentence
+    assert "nothing measures bathymetry here" in after.sentence
+    assert "fetch_survey held nothing over this domain" in after.sentence
 
 
 def test_a_need_with_no_data_class_is_refused_at_declaration():

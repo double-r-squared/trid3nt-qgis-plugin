@@ -14,7 +14,7 @@ import logging
 import os
 import warnings
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from functools import lru_cache
 from typing import Any, Iterable, Mapping, Sequence
 
@@ -31,8 +31,12 @@ from trid3nt_server.gates.input_review import (
     resolve_input_gate_mode,
 )
 
+from trid3nt_contracts.coverage import SourceChoice
+
 from .data import (
     BED, DOMAIN, LEVEL, LINE, RUNS, CoversAOI, DataDecl, Producer)
+from .match import (
+    Need, dropped_from, instant, match, sources_with_coverage)
 from .domain import Domain, bind_domain, current_domain, domain_from_result, reset_domain
 from .errors import (
     SuppliedCoverageError,
@@ -97,6 +101,10 @@ class RunResult:
     #: which is what lets a grandchild inherit work its parent never re-executed.
     records: list[LedgerRecord] = field(default_factory=list)
     data_records: list[LedgerRecord] = field(default_factory=list)
+    #: The RANKED LIST each matched slot was filled from, in the order the slots
+    #: were produced. One object in three views: the card renders it, the tool
+    #: result carries it on a tie, and the sheet stores the pick and its reason.
+    choices: list[SourceChoice] = field(default_factory=list)
     #: The RAW KEYWORD floor this invocation carried. Not a Param, so it is on no
     #: param sheet - and a run that was pinned by one is not reproducible from
     #: its arguments alone unless the record carries it too.
@@ -127,6 +135,7 @@ async def interpret(
     resume: bool = True,
     supplied: Mapping[str, Any] | None = None,
     continued: str | None = None,
+    window_s: float | None = None,
 ) -> RunResult:
     """Validate, then walk the plan. The only place a declared workflow executes."""
     validate_plan(plan, declared_params, data)
@@ -145,7 +154,7 @@ async def interpret(
     env = _Env(params=params, data={d.name: d for d in data}, results={},
                input_mode=input_mode, keywords=dict(keywords or {}), ledger=ledger,
                resume=resume, supplied=dict(supplied or {}), workflow=plan.name,
-               continued=continued)
+               continued=continued, window_s=window_s)
     out = RunResult(value=None, entries=entries, params=params,
                     keywords=dict(env.keywords))
     token = bind_domain(domain)
@@ -200,6 +209,7 @@ async def interpret(
         out.domain = current_domain()
         out.charts = dict(env.charts)
         out.data_records = list(env.data_records)
+        out.choices = list(env.choices)
         # An unfilled context slot is LABELLED, never silent: the run answered a
         # slightly different question than one that had the layer, and the reader
         # is the only one who can decide whether that matters.
@@ -214,6 +224,7 @@ async def interpret(
         # run's answer. Only a run that REACHED its end leaves work a later
         # invocation may inherit, through the snapshot a derived run seeds from.
         out.data_records = list(env.data_records)
+        out.choices = list(env.choices)
         if isinstance(exc, DeclarativeError):
             exc.partial_run = out
         await env.ledger.complete()
@@ -295,6 +306,12 @@ class _Env:
     #: One record per produced Data, replayed ones included - the Data half of what
     #: a derivation of this run inherits.
     data_records: list[LedgerRecord] = field(default_factory=list)
+    #: How long the solve runs, in seconds, off the deck this run writes. It is
+    #: the WINDOW a matched series source has to cover, so a run longer than the
+    #: record refuses rather than opening on a record that stops early.
+    window_s: float | None = None
+    #: The ranked list behind every slot the match filled.
+    choices: list[SourceChoice] = field(default_factory=list)
 
 
 def _data_step_label(name: str) -> str:
@@ -350,6 +367,11 @@ async def _produce(env: _Env, decl: DataDecl) -> Any:
         measured = await _domain_companion(env, "centerline")
         if measured is not None:
             return measured
+    if producer is None and decl.data_class:
+        # A SLOT THAT STATES A NEED: the match reads every fetcher's coverage row
+        # and the runtime declares the row it picked, so the pick earns a ledger
+        # record and a journal line like any other producer.
+        return await _matched(env, decl)
     if producer is None and decl.role:
         # A SLOT the caller did not fill and no producer answers is asked for on
         # the canvas, where the user has one. A declined drawing is not a value:
@@ -397,6 +419,175 @@ async def _produce(env: _Env, decl: DataDecl) -> Any:
     if env.ledger is not None:
         await env.ledger.record_data(decl.name, record)
     return await _ingested(env, decl, value)
+
+
+async def _matched(env: _Env, decl: DataDecl) -> Any:
+    """Fill a slot that states a NEED, through the match.
+
+    The bed is the one slot whose physics rule the runtime owns: the measurement
+    where it measured, the terrain everywhere else. Every other slot takes the
+    one source its own class matched."""
+    if decl.role == BED:
+        return await _ingested(env, decl, await _matched_bed(env, decl))
+    choice, value = await _probe(env, decl, decl.data_class, decl.name)
+    if value is None:
+        raise StepFailedError(choice.sentence, error_code="DATA_NEED_UNMATCHED",
+                              step=_data_step_label(decl.name))
+    return await _ingested(env, decl, value)
+
+
+async def _matched_bed(env: _Env, decl: DataDecl) -> Any:
+    """THE BED, stated once here: the measurement where it measured, the terrain
+    under the rest.
+
+    A measurement that arrives as soundings is gridded at the mesh's own cell
+    before the merge reads it; with no measurement over this domain the terrain
+    is the whole bed, which is what the sheet then says."""
+    _choice, terrain = await _probe(env, decl, "terrain", f"{decl.name} terrain")
+    choice, measured = await _probe(env, decl, "bathymetry",
+                                    f"{decl.name} bathymetry")
+    if measured is None:
+        if terrain is None:
+            raise StepFailedError(
+                _choice.sentence, error_code="DATA_NEED_UNMATCHED",
+                step=_data_step_label(decl.name))
+        return terrain
+    if _spec_of(choice.picked).output.layer_type == "vector":
+        measured = await _produce(env, _runtime_row(
+            env, f"{decl.name}_surveyed", "derive_survey_surface",
+            {"points": measured, "value_field": _value_column(choice.picked),
+             "resolution_m": _mesh_m(env)}))
+    if terrain is None:
+        return measured
+    return await _produce(env, _runtime_row(
+        env, f"{decl.name}_merged", "derive_merge_rasters",
+        {"primary": measured, "fallback": terrain}))
+
+
+async def _probe(env: _Env, decl: DataDecl, data_class: str,
+                 label: str) -> tuple[SourceChoice, Any]:
+    """Match a class, then CALL the survivors in rank order -> the first answer.
+
+    A source that held nothing over this domain is dropped and the next takes
+    its turn, which is how the list a reader sees says what the world answered
+    rather than what the sort preferred. ``None`` where none of them answered."""
+    choice = match(await _need(env, decl, data_class), sources_with_coverage())
+    while choice.picked:
+        row = _runtime_row(env, f"{label.replace(' ', '_')}_{choice.picked}",
+                           choice.picked,
+                           await _ask_for(env, choice.picked, decl))
+        try:
+            value = await _produce(env, row)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:  # noqa: BLE001 - an empty source drops a rung
+            if getattr(exc, "retryable", False) or _malformed_ask(exc):
+                raise
+            logger.info("%s: %s held nothing (%s); the next survivor takes its "
+                        "turn", label, choice.picked, exc)
+            choice = dropped_from(choice, choice.picked,
+                                  f"held nothing here ({exc})")
+            continue
+        env.choices.append(choice)
+        journal_note(choice.sentence)
+        return choice, value
+    env.choices.append(choice)
+    journal_note(choice.sentence)
+    return choice, None
+
+
+def _runtime_row(env: _Env, name: str, runner: str,
+                 ask: Mapping[str, Any]) -> DataDecl:
+    """One producer row the RUNTIME declares, registered so it is produced like
+    a question's own."""
+    row = DataDecl(name=name, producer=Producer(runner=runner, kwargs=dict(ask),
+                                                row=name))
+    env.data[name] = row
+    return row
+
+
+def _spec_of(fetcher: str) -> Any:
+    from trid3nt_server.tools.fetchers._router.registration import get_spec
+
+    return get_spec(fetcher)
+
+
+def _value_column(fetcher: str) -> str:
+    """The column a matched source publishes its measurement under.
+
+    Off the coverage row, which states the unit of each value column; a source
+    that publishes one column names it there and nothing guesses."""
+    units = _spec_of(fetcher).coverage.units
+    return next(iter(units), "")
+
+
+def _mesh_m(env: _Env) -> float | None:
+    return env.params.value_of("mesh_resolution_m") if env.params else None
+
+
+async def _need(env: _Env, decl: DataDecl, data_class: str) -> Need:
+    """What this slot asks the world for, assembled off the RUN.
+
+    The class is the slot's; the place is the domain's or the point the row was
+    told to rank against, the window is the run's and the frame is the lever's."""
+    from .levers import run_frame
+
+    lon, lat = await _place(env, decl)
+    opens = env.params.value_of("event_time") if env.params else None
+    return Need(slot=decl.name, data_class=data_class, lon=lon, lat=lat,
+                opens=str(opens) if opens else None,
+                until=_closes(opens, env.window_s), frame=run_frame(env.params),
+                mesh_m=_mesh_m(env))
+
+
+def _closes(opens: Any, window_s: float | None) -> str | None:
+    """When the run's window closes, off the deck's own length."""
+    if not opens or window_s is None:
+        return None
+    started = instant(opens)
+    if started is None:
+        return None
+    return (started + timedelta(seconds=float(window_s))).isoformat()
+
+
+async def _place(env: _Env, decl: DataDecl) -> tuple[float | None, float | None]:
+    """The point a slot's coverage is tested at: what the row ranks against, else
+    the domain's own centre."""
+    near = await _bind_value(decl.coercion.get("near"), env)
+    if near is not None:
+        lon, lat = ((getattr(near, "lon", None), getattr(near, "lat", None))
+                    if hasattr(near, "lon") else (near[0], near[1]))
+        if lon is not None and lat is not None:
+            return (float(lon), float(lat))
+    dom = current_domain()
+    if dom is None or not dom.bbox:
+        return (None, None)
+    west, south, east, north = dom.bbox
+    return ((west + east) / 2.0, (south + north) / 2.0)
+
+
+async def _ask_for(env: _Env, fetcher: str, decl: DataDecl) -> dict[str, Any]:
+    """What a matched source is CALLED with, read off its own declared params.
+
+    Every source states where it wants the place - a box or a seed - and a
+    series source states the window as two dates; nothing else is passed, so a
+    source's own defaults stand."""
+    spec = _spec_of(fetcher)
+    ask: dict[str, Any] = {"purpose": decl.name.replace("_", " ")}
+    dom = current_domain()
+    if "bbox" in spec.params and dom is not None and dom.bbox:
+        ask["bbox"] = list(dom.bbox)
+    if "seed_point" in spec.params:
+        lon, lat = await _place(env, decl)
+        if lon is not None:
+            ask["seed_point"] = [lon, lat]
+    opens = env.params.value_of("event_time") if env.params else None
+    if opens and "start_date" in spec.params and "end_date" in spec.params:
+        ask["start_date"] = str(opens)[:10]
+        ask["end_date"] = (_closes(opens, env.window_s) or str(opens))[:10]
+    elif opens and "valid_time" in spec.params:
+        ask["valid_time"] = str(opens)
+    return ask
 
 
 async def _domain_runs(env: _Env) -> tuple[Any, ...]:

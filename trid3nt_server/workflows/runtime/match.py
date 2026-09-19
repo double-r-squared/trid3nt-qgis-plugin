@@ -19,7 +19,7 @@ from trid3nt_contracts.coverage import Coverage, SourceChoice, SourceOption
 from .errors import PlanValidationError
 
 __all__ = ["LOOSEN_DATUM", "LOOSEN_WINDOW", "Need", "RANKED_ROWS",
-           "dropped_from", "match", "sources_with_coverage"]
+           "dropped_from", "instant", "match", "sources_with_coverage"]
 
 #: How many rows the ranked list carries. Five: enough for the facts to be
 #: comparable in one read, few enough that a model answering with a row number
@@ -116,7 +116,7 @@ def dropped_from(choice: SourceChoice, fetcher: str, why: str) -> SourceChoice:
                 if row.fetcher != fetcher and not row.excluded), "")
     return choice.model_copy(update={
         "rows": rows, "picked": nxt, "tie": False,
-        "sentence": _probe_sentence(choice, fetcher, why, nxt)})
+        "sentence": _probe_sentence(choice, rows, fetcher, nxt)})
 
 
 def _excluded(need: Need, coverage: Coverage) -> str:
@@ -137,11 +137,11 @@ def _excluded(need: Need, coverage: Coverage) -> str:
 
 def _outside_window(need: Need, coverage: Coverage) -> str:
     """Whether the run's window falls outside what a series source holds."""
-    opens, until = _instant(need.opens), _instant(need.until or need.opens)
+    opens, until = instant(need.opens), instant(need.until or need.opens)
     if opens is None:
         return ""
-    earliest, latest = (_instant(coverage.window.earliest),
-                        _instant(coverage.window.latest))
+    earliest, latest = (instant(coverage.window.earliest),
+                        instant(coverage.window.latest))
     if earliest is not None and opens < earliest:
         return (f"reports from {coverage.window.earliest} and this run opens at "
                 f"{need.opens}")
@@ -151,7 +151,7 @@ def _outside_window(need: Need, coverage: Coverage) -> str:
     return ""
 
 
-def _instant(value: str | None) -> dt.datetime | None:
+def instant(value: str | None) -> dt.datetime | None:
     """One ISO stamp as a UTC instant, or ``None`` where it is unreadable."""
     text = str(value or "").strip()
     if not text:
@@ -190,7 +190,7 @@ def _recency(coverage: Coverage) -> float:
 
     A source that reports TO NOW states no ``latest`` and is the most current
     thing there is."""
-    latest = _instant(coverage.window.latest)
+    latest = instant(coverage.window.latest)
     return latest.timestamp() if latest is not None else float("inf")
 
 
@@ -250,10 +250,17 @@ def _sentence(need: Need, survivors: Sequence[SourceOption],
     return f"{need.slot}: {top.fetcher} ({facts}){tail}.{loosened}"
 
 
-def _probe_sentence(choice: SourceChoice, fetcher: str, why: str,
-                    nxt: str) -> str:
-    """What the run says when the top survivor held nothing over this domain."""
-    if not nxt:
-        return (f"{choice.slot}: {fetcher} {why}, and no other source states "
-                f"coverage of {choice.need} here.")
-    return (f"{choice.slot}: {fetcher} {why}, so {nxt} fills the slot.")
+def _probe_sentence(choice: SourceChoice, rows: Sequence[SourceOption],
+                    fetcher: str, nxt: str) -> str:
+    """What the run says once the world has answered.
+
+    With a survivor left the line names the drop and who took its turn; with
+    none left it names EVERY source and what each one had to say, which is the
+    refusal a reader can act on."""
+    if nxt:
+        return f"{choice.slot}: {fetcher} held nothing, so {nxt} fills the slot."
+    named = "; ".join(f"{row.fetcher} {row.excluded}" for row in rows
+                      if row.excluded)
+    return (f"{choice.slot}: nothing measures {choice.need} here - {named}. "
+            "State the value on the call, or ask about a place or a moment a "
+            "source reaches.")
