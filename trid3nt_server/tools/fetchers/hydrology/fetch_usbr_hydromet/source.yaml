@@ -1,0 +1,171 @@
+# USBR RISE: a named station resolves through its own catalog (location ->
+# catalog-record -> catalog-item) to the Lake/Reservoir Elevation item id, one hop
+# a declarative station_catalog cannot express because the filter that finds it
+# (parameterName == "Lake/Reservoir Elevation") sits two hops past the location.
+# The legacy PN CGI (usbr.gov/pn-bin/daily.pl) answers HTTP 200 with an HTML error
+# body and states no coordinates or datum, so it is not used - RISE serves the
+# identical record for every Reclamation region through one endpoint form.
+schema_version: v1
+
+name: fetch_usbr_hydromet
+source_class: usbr_hydromet
+error_prefix: USBR_HYDROMET
+input_error_suffix: INPUT_INVALID
+empty_error_suffix: NO_RECORD
+shape: vector-fgb
+supports_global_query: false
+
+endpoints:
+  location:
+    url: "https://data.usbr.gov/rise/api/location"
+  # Documentary: relationships.catalogRecords / catalogItems carry full paths
+  # off this same host, which the resolve hop joins them onto directly.
+  host:
+    url: "https://data.usbr.gov"
+  result:
+    url: "https://data.usbr.gov/rise/api/result"
+auth:
+  mode: none
+  user_agent: trid3nt_default
+
+params:
+  station: {type: str, required: true}
+  start_date: {type: iso_date, required: true}
+  end_date: {type: iso_date, required: true, max_range_days: 1830}
+
+hooks:
+  resolve_build: usbr_hydromet.resolve_build
+  resolve_parse: usbr_hydromet.resolve_parse
+  build_request: usbr_hydromet.build_request
+  parse_response: usbr_hydromet.parse_response
+
+ingest:
+  properties:
+    - station_id
+    - station_name
+    - region
+    - parameter_name
+    - vertical_datum
+    - horizontal_datum
+    - timezone
+    - forebay_elevation_ft
+    - forebay_elevation_min_ft
+    - forebay_elevation_max_ft
+    - forebay_elevation_mean_ft
+    - n_timesteps
+    - time_start
+    - time_end
+    - time_series_csv
+
+normalize:
+  crs: "EPSG:4326"
+  units: ft
+  quantity: forebay_elevation
+  # RISE states the vertical datum PER LOCATION (NGVD29 at SCO, NAVD88 elsewhere),
+  # so this cannot state one for every station: it rides on the feature instead.
+  datum: null
+
+output:
+  layer_type: vector
+  ext: fgb
+  role: primary
+  display_name: "USBR reservoir forebay elevation"
+  style:
+    kind: reference
+    geometry: point
+
+cache:
+  ttl_class: dynamic-1h
+payload_estimate:
+  model: per_station
+  overhead_kb: 30.0
+  floor_mb: 0.03
+
+coverage:
+-   data_class: water level series
+    kind: measured
+    reach_km: 20
+    extent:
+      kind: stations
+      rings:
+      - [[-125.0, 26.0], [-94.0, 26.0], [-94.0, 49.0], [-125.0, 49.0]]
+      note: USBR Bureau of Reclamation reservoirs and dams across the 17 western
+        states its regions operate in; a river reach with no Reclamation project
+        has no station on it at all
+    window:
+      series: true
+      max_span_days: 1830.0
+      cadence: daily samples
+    datum: null
+    units:
+      forebay_elevation_ft: ft
+      time_series_csv: ft
+    value_column: forebay_elevation_ft
+    series_column: time_series_csv
+
+caveats:
+  - "the PN CGI (usbr.gov/pn-bin/daily.pl) answers an upstream failure with HTTP 200 and an HTML body and states no coordinates or datum; this fetch uses RISE (data.usbr.gov/rise/api) instead, which serves the byte-identical record with a location, a per-station vertical datum and every Reclamation region through one endpoint form"
+  - "a station name matching more than one RISE location, or a location with no Lake/Reservoir Elevation catalog item, refuses by name rather than guessing between them"
+  - "the vertical datum is read off the station's own RISE record and travels on every feature; a bed or model input built from this needs the datum this fetch states, never an assumed one"
+
+docstring: |-
+  Fetch USBR reservoir FOREBAY ELEVATION from USBR RISE as a point FlatGeobuf.
+
+  What it does:
+      Resolves a named USBR Reclamation reservoir or dam to its RISE location
+      (searching by station code or name, e.g. "SCO" or "Scoggins"), walks that
+      location's own catalog (catalog-record -> catalog-item) to find its
+      Lake/Reservoir Elevation series, and fetches the daily forebay elevation
+      over the requested window. One Point feature at the station comes back,
+      carrying the window's values inline as ``time_series_csv`` and the
+      station's own vertical datum (NGVD29 or NAVD88, read from the station's
+      metadata, never assumed).
+
+  When to use:
+      - A reservoir operations question: "what was the pool elevation at
+        Scoggins/Hagg Lake in June 2024", "the forebay level for this dam".
+      - A hydraulic or reservoir-operations model needs an observed pool
+        elevation boundary or calibration series at a named USBR reservoir.
+
+  When NOT to use:
+      - DO NOT use for a bbox-area query -- this fetch resolves ONE named
+        station; use ``fetch_usgs_nwis_gauges`` for a bbox of river gauges.
+      - DO NOT use for a non-Reclamation reservoir (USACE, TVA, state-owned) --
+        RISE covers Bureau of Reclamation projects only.
+      - DO NOT use for reservoir storage/volume or inflow/outflow -- RISE
+        publishes those as separate catalog items this fetch does not walk to.
+
+  Parameters:
+      station: the RISE station's code or name (e.g. "SCO", "Scoggins"). Matched
+          against every RISE location's name; a match on the parenthetical
+          station code wins over a partial name match.
+      start_date: ISO date, inclusive start of the window.
+      end_date: ISO date, inclusive end of the window. Capped at 1830 days
+          (5 years) from ``start_date``.
+
+  Returns:
+      ``LayerURI`` for a FlatGeobuf in EPSG:4326 carrying one Point feature:
+      ``station_id``, ``station_name``, ``region``, ``parameter_name``,
+      ``vertical_datum``, ``horizontal_datum``, ``timezone``,
+      ``forebay_elevation_ft`` (the window's latest value),
+      ``forebay_elevation_min_ft`` / ``_max_ft`` / ``_mean_ft``, ``n_timesteps``,
+      ``time_start`` / ``time_end`` (ISO-8601 UTC), and ``time_series_csv``
+      ("iso,value_ft" rows). ``layer_type="vector"``, ``units="ft"``.
+
+  Rendering: a VECTOR layer renders INLINE on the map automatically.
+
+  Cross-tool dependencies:
+      - Composes WITH: ``fetch_river_reach`` (the reach the dam sits on).
+      - Upstream data source: USBR RISE (data.usbr.gov/rise/api).
+
+  Cache: ``ttl_class="dynamic-1h"``; RISE values are provisional and can revise.
+
+  Errors:
+      - ``USBR_HYDROMET_INPUT_INVALID``: a malformed date range, a station name
+        matching more than one RISE location, or a location with no
+        Lake/Reservoir Elevation catalog item.
+      - ``USBR_HYDROMET_NO_RECORD``: no RISE location matches ``station``, or no
+        results fall in the requested window.
+      - ``USBR_HYDROMET_UPSTREAM_ERROR``: RISE failed or returned non-JSON.
+
+  Tier-1 free. No API key.
