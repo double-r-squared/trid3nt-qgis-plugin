@@ -542,12 +542,20 @@ class Solved:
             padded = str(names[index]).ljust(32)
             wanted, unit = padded[:16].strip(), padded[16:].strip()
         else:
+            # WHAT THIS RUN WROTE is the run's own published table: a row a
+            # module allocates under a switch - a dynamic ice cover, a salinity,
+            # a frazil class - is written only where the deck opened it, and the
+            # static vocabulary alone cannot say which.
+            published = self.output_row(upper)
             table = getattr(self.body, "MODULE_OUTPUT", {})
-            if upper not in table:
+            if published.get("name"):
+                wanted, unit = str(published["name"]), str(published.get("unit") or "")
+            elif upper in table:
+                wanted, unit = table[upper].name, table[upper].unit
+            else:
                 raise OutputEmpty(
                     f"{token!r} is not a variable {self.body.MODULE} writes "
                     f"({', '.join(table)}).")
-            wanted, unit = table[upper].name, table[upper].unit
         for name in self.result["varnames"]:
             if name.strip().upper() == wanted.upper():
                 return name, _UNITS.get(unit.upper(), unit.lower())

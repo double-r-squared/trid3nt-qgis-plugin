@@ -104,6 +104,19 @@ def test_a_tracer_token_resolves_to_the_declared_tracer_name_and_its_unit(solved
     assert solved.variable("H") == ("WATER DEPTH", "m")
 
 
+def test_a_row_a_switch_allocates_resolves_off_the_runs_own_table(solved):
+    """A module allocates some of its rows only where the deck opened the switch
+    that builds them - a dynamic ice cover, a salinity, a frazil class - so the
+    static vocabulary cannot name them. What the run PUBLISHED is what it wrote,
+    and a read resolves through that row; a token no table carries still refuses."""
+    switched = _solved({"module_output": [
+        {"token": "COVC", "module": "telemac2d", "name": "DYE", "unit": "MG/L",
+         "style": {}, "varies": True, "has_edge": True}]})
+    assert switched.variable("COVC") == ("DYE", "mg/L")
+    with pytest.raises(OutputEmpty, match="is not a variable"):
+        switched.variable("NOSUCH")
+
+
 def test_a_named_release_renames_the_tracer_the_reads_find(solved, telemac_result):
     _reach(telemac_result, tracer_name="OUTFALL-A")
     renamed = _solved({"tracer_names": ["outfall-a       MG/L"]})

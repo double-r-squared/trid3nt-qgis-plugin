@@ -680,6 +680,7 @@ async def run_sheet(*, sheet: Sheet, settled: Mapping[str, Any],
     return {**settled, **handle, "module": sheet.module,
             "display_basename": display or None,
             "module_output": [{"token": token, "module": module,
+                               "name": row.name, "unit": row.unit,
                                "style": row.style, "varies": row.varies,
                                "has_edge": bool(row.has_edge)}
                               for token, module, row in sheet.published()],
