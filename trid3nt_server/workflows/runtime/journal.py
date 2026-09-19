@@ -143,6 +143,7 @@ def build_record(*, run_id: str | None, engine: str | None,
                  parent_run_id: str | None = None,
                  overrides: Sequence[str] = (),
                  keywords: Mapping[str, Any] | None = None,
+                 supplied: Mapping[str, Any] | None = None,
                  outputs: Sequence[Mapping[str, Any]] = ()) -> dict[str, Any]:
     """One run record, from what the publish stage already holds.
     ``parent_run_id`` + ``overrides`` make the journal a CHAIN rather than a pile:
@@ -160,6 +161,10 @@ def build_record(*, run_id: str | None, engine: str | None,
         # is on no sheet row - and a reproduction driven from the arguments alone
         # would run a different deck.
         "keywords": {k: _small(v) for k, v in (keywords or {}).items()},
+        # THE SLOTS THIS RUN WAS HANDED, by the slot's own name. Like the floor
+        # it is part of the INVOCATION and on no param sheet, so a reproduction
+        # driven from the arguments alone would run over a different world.
+        "supplied": {k: _small(v) for k, v in (supplied or {}).items()},
         "answer": {k: _small(v) for k, v in answer.items()},
         "provenance": [_provenance(row) for row in provenance],
         # WHERE each slot of the solved deck came from, in the closed vocabulary

@@ -76,6 +76,14 @@ def test_the_record_carries_the_raw_keyword_floor_the_run_was_pinned_by():
     assert _record()["keywords"] == {}
 
 
+def test_the_record_carries_the_slots_the_run_was_supplied():
+    """A supplied slot is on no param sheet either, so a Reproduce block driven
+    from the arguments alone would run over a different world."""
+    rec = _record(supplied={"domain": "s3://cache/basin.fgb"})
+    assert rec["supplied"] == {"domain": "s3://cache/basin.fgb"}
+    assert _record()["supplied"] == {}
+
+
 def test_a_sheet_row_carries_its_door_and_its_basis_not_just_the_number():
     """Which door a value came through is the whole point: a discharge the user
     pinned and one the National Water Model answered are the same number and
