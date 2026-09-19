@@ -24,13 +24,13 @@ _IEM_NETWORK_GEOJSON = "https://mesonet.agron.iastate.edu/geojson/network/{state
 _MAX_STATIONS = 100
 
 _DEFAULT_DATA_FIELDS = (
-    "tmpf", "dwpf", "sknt", "drct", "gust", "alti", "mslp",
+    "tmpf", "dwpf", "sknt", "drct", "gust", "alti", "mslp", "p01i",
     "vsby", "wxcodes", "skyc1", "skyl1",
 )
 
 _FGB_COLUMNS = (
     "station", "valid", "lon", "lat", "elevation",
-    "tmpf", "dwpf", "sknt", "drct", "gust", "alti", "mslp",
+    "tmpf", "dwpf", "sknt", "drct", "gust", "alti", "mslp", "p01i",
     "vsby", "wxcodes", "skyc1", "skyl1",
 )
 
@@ -245,7 +245,7 @@ def parse_response(spec: SourceSpec, params: dict[str, Any], bodies: list[bytes]
     df = df[df["lon"].between(-180.0, 180.0) & df["lat"].between(-90.0, 90.0)].copy()
     if df.empty:
         raise router_empty_error(sc, "All ASOS observation rows have out-of-range coordinates", spec.empty_error_suffix)
-    for col in ("elevation", "tmpf", "dwpf", "sknt", "drct", "gust", "alti", "mslp", "vsby", "skyl1"):
+    for col in ("elevation", "tmpf", "dwpf", "sknt", "drct", "gust", "alti", "mslp", "p01i", "vsby", "skyl1"):
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce")
     keep = [c for c in _FGB_COLUMNS if c in df.columns]

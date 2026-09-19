@@ -45,6 +45,7 @@ ingest:
   - gust
   - alti
   - mslp
+  - p01i
   - vsby
   - wxcodes
   - skyc1
@@ -132,7 +133,8 @@ docstring: |-
         ``valid`` (UTC observation time ISO-8601), ``lon``, ``lat``,
         ``elevation`` (ft), ``tmpf`` ( degF), ``dwpf`` ( degF), ``sknt``
         (wind kt), ``drct`` (wind dir  deg), ``gust`` (gust kt), ``alti``
-        (altimeter inHg), ``mslp`` (MSLP hPa), ``vsby`` (visibility mi),
+        (altimeter inHg), ``mslp`` (MSLP hPa), ``p01i`` (precipitation
+        in the past hour, inches), ``vsby`` (visibility mi),
         ``wxcodes`` (present weather), ``skyc1`` (sky cover), ``skyl1``
         (sky layer height ft). Missing values are ``null``.
 

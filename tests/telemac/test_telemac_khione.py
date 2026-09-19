@@ -208,14 +208,47 @@ def test_the_dew_point_rides_the_host_s_own_atmospheric_file():
     assert COLUMNS["dew_point_c"][0] in header
 
 
-@pytest.mark.parametrize("column", ["cloud_octas", "rain_mm"])
-def test_a_column_the_two_readers_disagree_on_refuses_by_name(column: str):
+@pytest.mark.parametrize("column,beside", [
+    ("cloud_octas", {"coupling": "waqtel"}), ("rain_mm", {"RAIN_OR_EVAPORATION": True})])
+def test_a_column_two_readers_of_this_run_disagree_on_refuses_by_name(
+        column: str, beside: dict):
+    """One file carries one number per instant, so a column the host reads in
+    one unit and the ice in another has no value both can be driven by."""
+    from trid3nt_server.workflows.telemac.modules import WAQTEL
+
+    coupling = [_ice()] + ([WAQTEL.thermal()] if beside.pop("coupling", None)
+                           else [])
     with pytest.raises(TelemacError) as refused:
-        fill(T2D, coupling=[_ice()], atmosphere=Atmosphere(
+        fill(T2D, coupling=coupling, **beside, atmosphere=Atmosphere(
             times_s=[0.0, 3600.0], air_temp_c=[-5.0, -6.0],
             **{column: [1.0, 2.0]}))
     assert COLUMNS[column][0] in str(refused.value)
     assert "khione" in str(refused.value)
+
+
+@pytest.mark.parametrize("column,unit,written", [
+    ("cloud_octas", "tenth", [5.0, 10.0]), ("rain_mm", "mm/h", [1.0, 2.0])])
+def test_a_column_only_the_ice_reads_is_written_in_the_unit_the_ice_reads_it_in(
+        column: str, unit: str, written: list):
+    """KHIONE takes the cloud in tenths where the file's own row is octas, so a
+    run it is the only reader of writes the tenths it reads."""
+    stated = {"cloud_octas": [4.0, 8.0], "rain_mm": [1.0, 2.0]}[column]
+    sheet = fill(T2D, coupling=[_ice()], atmosphere=Atmosphere(
+        times_s=[0.0, 3600.0], air_temp_c=[-5.0, -6.0], **{column: stated}))
+    lines = sheet.files["river_atmosphere.txt"].splitlines()
+    index = lines[1].split().index(COLUMNS[column][0])
+    assert lines[2].split()[index] == unit
+    assert [float(row.split()[index]) for row in lines[3:]] == written
+
+
+def test_an_ice_run_writes_no_solar_column_because_it_computes_its_own():
+    """``khione/thermal_khione.f`` takes the shortwave off the cloud and the
+    local longitude, so the column is one nothing on this run reads."""
+    sheet = fill(T2D, coupling=[_ice()], atmosphere=Atmosphere(
+        times_s=[0.0, 3600.0], air_temp_c=[-5.0, -6.0],
+        solar_radiation_wm2=[0.0, 120.0], dew_point_c=[-8.0, -9.0]))
+    header = sheet.files["river_atmosphere.txt"].splitlines()[1].split()
+    assert header == ["T", "TAIR", "TDEW"]
 
 
 def test_every_row_the_table_carries_is_a_mnemonic_the_dictionary_spells():

@@ -23,6 +23,10 @@ params:
     type: bbox
     quantize: round_6dp
     schema_optional: true
+  valid_time:
+    type: str
+    required: false
+    schema_optional: true
   characteristic:
     type: str
     default: Nitrate
@@ -139,6 +143,11 @@ docstring: |-
           area of interest (a watershed, county, or sub-basin). The bbox area
           is capped at ~100 deg^2; above that ``WqpInputError`` is raised so
           you narrow the scope (a contamination question is always local).
+      valid_time: ISO-8601 instant the reading is asked AT
+          (e.g. ``"2024-01-14T12:00:00Z"``). The window closes there and each
+          site carries its latest sample on or before it, so a run at a past
+          moment never opens at today's sample. Omitted, the whole archive is
+          searched and the latest sample of all is carried.
       characteristic: the water-quality characteristic to fetch. Friendly
           aliases are accepted and mapped to the canonical WQP name -- ``"nitrate"`` -> ``"Nitrate"``, ``"lead"`` -> ``"Lead"``,
           ``"arsenic"`` -> ``"Arsenic"``, ``"ph"`` -> ``"pH"``,

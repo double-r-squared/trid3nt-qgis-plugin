@@ -227,7 +227,7 @@ def fill(source: type | Sheet, *, template: str = "",
     """Set slots on a body or on a sheet already filled -> the sheet that results.
 
     Repeatable; an unknown keyword refuses BY NAME and None states nothing."""
-    from ..authoring.atmosphere import refuse_disputed_columns
+    from ..authoring.atmosphere import write_atmosphere
 
     body, standing, pending = _standing(source, template)
     dictionary = body.MODULE_INPUT
@@ -269,7 +269,8 @@ def fill(source: type | Sheet, *, template: str = "",
         filled[name] = Filled(slot=slot, value=slot.check(value),
                               provenance=provenance)
     _arm(body, filled)
-    refuse_disputed_columns(files)
+    write_atmosphere(body, {name: row.value for name, row in filled.items()},
+                     files)
     return Sheet(body=body, filled=MappingProxyType(filled),
                  files=MappingProxyType(files))
 

@@ -140,9 +140,12 @@ class DATA:
     # days on water that entered at a face carrying this value, so it is
     # load-bearing: nothing sampled near this domain REFUSES rather than opening
     # at a guessed temperature, and a number supplied here stands over the record.
+    # The window CLOSES at the run's own moment, the way the carrier's does: a
+    # run dated last winter opens at what the water carried then.
     water_temperature = Data.observation(
         tool("fetch_usgs_water_quality", bbox=Ref("domain.bbox"),
-             characteristic="temperature"),
+             characteristic="temperature",
+             valid_time=ParamRef("event_time")),
         near=[Ref("station.lon"), Ref("station.lat")], units="degC",
         measures="a water temperature", opens="the water opens at")
 

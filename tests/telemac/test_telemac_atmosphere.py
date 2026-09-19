@@ -16,6 +16,7 @@ import pytest
 from trid3nt_server.inputs import geometry as geometry_reader
 from trid3nt_server.workflows.telemac.authoring.atmosphere import (
     ATMOSPHERE_FILENAME,
+    TELEMAC2D_COLUMNS as _T2D_COLUMNS,
     Atmosphere,
     atmospheric_data_file,
 )
@@ -58,10 +59,27 @@ def test_each_host_writes_the_columns_its_own_source_term_reads():
     """TELEMAC-2D's budget takes the vapour pressure and TELEMAC-3D's the
     relative humidity, and neither reads the other's."""
     for wrapper, humidity in ((T2D, "PVAP"), (T3D, "HREL")):
-        header = fill(wrapper, atmosphere=_weather()
+        header = fill(wrapper, coupling=[WAQTEL.thermal()],
+                      atmosphere=_weather()
                       ).files[ATMOSPHERE_FILENAME].splitlines()[1].split()
-        assert header == ["T", "TAIR", humidity, "WINDS", "WINDD", "CLDC",
-                          "RAY3", "PATM", "RAINI"]
+        assert header == ["T", "TAIR", humidity, "WINDS", "CLDC", "RAY3", "PATM"]
+
+
+@pytest.mark.parametrize("wrapper", [T2D, T3D])
+def test_a_run_whose_own_terms_read_the_weather_writes_those_columns_alone(
+        wrapper):
+    """A host opens this file for its own terms - the wind that pushes the
+    surface, the pressure that tilts it - and reads nothing else out of it."""
+    header = fill(wrapper, WIND=True, atmosphere=_weather()
+                  ).files[ATMOSPHERE_FILENAME].splitlines()[1].split()
+    assert header == ["T", "WINDS", "WINDD"]
+
+
+@pytest.mark.parametrize("wrapper", [T2D, T3D])
+def test_weather_no_reader_of_this_run_reads_refuses_rather_than_riding_along(
+        wrapper):
+    with pytest.raises(TelemacError, match="read by nothing on it"):
+        fill(wrapper, atmosphere=_weather())
 
 
 def test_a_series_left_out_writes_no_column_and_shifts_none_of_the_others():
@@ -100,9 +118,9 @@ def test_an_atmosphere_with_no_series_in_it_refuses_rather_than_writing_a_clock(
 
 @pytest.mark.parametrize("wrapper", [T2D, T3D])
 def test_both_hosts_name_the_same_file_and_state_no_unit_of_their_own(wrapper):
-    sheet = fill(wrapper, atmosphere=_weather())
-    assert dict(sheet.resolved()) == {
-        "ASCII ATMOSPHERIC DATA FILE": ATMOSPHERE_FILENAME}
+    sheet = fill(wrapper, coupling=[WAQTEL.thermal()], atmosphere=_weather())
+    assert dict(sheet.resolved())["ASCII ATMOSPHERIC DATA FILE"] == (
+        ATMOSPHERE_FILENAME)
     assert ATMOSPHERE_FILENAME in sheet.files
 
 
@@ -163,7 +181,13 @@ def test_every_reported_unit_is_carried_into_the_unit_its_slot_names(monkeypatch
     assert _column(text, "WINDS")[0] == pytest.approx(5.0 * 0.514444, abs=1e-3)
     assert _column(text, "WINDD")[0] == 270.0
     assert _column(text, "RAY3")[0] == 400.0
-    assert _column(text, "RAINI")[0] == 0.0
+
+
+def test_the_fire_network_fills_no_rain_column_because_its_own_is_a_total(
+        monkeypatch):
+    """Its precipitation column accumulates over the season rather than
+    reporting the depth that fell in the interval, so no rain rides from it."""
+    assert "RAINI" not in _observed(monkeypatch, _rows()).splitlines()[1]
 
 
 def test_the_vapour_pressure_is_magnus_over_the_reported_dew_point(monkeypatch):
@@ -223,6 +247,50 @@ def test_a_series_stated_beside_a_record_stands_over_what_the_record_reports(
     # The network reports no cloud at all, so the stated column is the only one
     # there is - and the run reads a cloud rather than the engine's constant.
     assert _column(text, "CLDC") == [2.0] * 24
+
+
+def _airport(hour: int, **overrides):
+    """One ASOS row as the airport network reports it, in its own units."""
+    return {"station": "PDX", "valid": f"2024-01-14T{hour:02d}:53:00Z",
+            "tmpf": 21.0, "dwpf": 12.0, "sknt": 9.0, "drct": 80.0,
+            "mslp": 1024.3, "skyc1": "OVC", "p01i": 0.01, **overrides}
+
+
+def _ice_columns():
+    """The columns a run coupling KHIONE alone under TELEMAC-2D reads."""
+    from trid3nt_server.workflows.telemac.authoring.atmosphere import READS
+
+    return tuple(name for name in _T2D_COLUMNS if name in READS["khione"])
+
+
+def test_the_airport_record_carries_every_column_an_ice_run_reads(monkeypatch):
+    """The dew point is measured rather than inverted out of a humidity, the sky
+    cover is an observer's code, and neither is a column the fire network has."""
+    rows = [_feature(_airport(hour)) for hour in range(0, 24)]
+    monkeypatch.setattr(geometry_reader, "read_geometry_doc",
+                        lambda layer: {"features": rows})
+    text = atmospheric_data_file(
+        Atmosphere(observed="s3://cache/asos.fgb", at=_SEED,
+                   duration_s=20.0 * _HOUR), _ice_columns())
+    assert text.splitlines()[1].split() == ["T", "TAIR", "TDEW", "WINDS",
+                                            "CLDC", "RAINI"]
+    assert _column(text, "TAIR")[0] == pytest.approx(-6.111, abs=1e-3)
+    assert _column(text, "TDEW")[0] == pytest.approx(-11.111, abs=0.05)
+    assert _column(text, "CLDC")[0] == 8.0
+    assert _column(text, "RAINI")[0] == pytest.approx(0.254, abs=1e-3)
+
+
+def test_an_airport_row_short_of_a_column_the_run_does_not_read_is_an_instant(
+        monkeypatch):
+    """A column no reader of this run takes is not asked of an observation, so
+    a record with no radiation in it still drives a module computing its own."""
+    rows = [_feature(_airport(hour, mslp=None)) for hour in range(0, 24)]
+    monkeypatch.setattr(geometry_reader, "read_geometry_doc",
+                        lambda layer: {"features": rows})
+    text = atmospheric_data_file(
+        Atmosphere(observed="s3://cache/asos.fgb", at=_SEED,
+                   duration_s=20.0 * _HOUR), _ice_columns())
+    assert len(text.splitlines()) == 3 + 24
 
 
 def test_a_record_holding_no_station_refuses_by_name(monkeypatch):

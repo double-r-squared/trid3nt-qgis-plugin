@@ -150,6 +150,22 @@ def _latest_results_by_site(res_df: Any) -> dict[str, dict[str, Any]]:
     return latest
 
 
+def _wqp_date(valid_time: Any) -> dict[str, str]:
+    """The instant a run asks about, as the WQP's own upper date bound.
+
+    The portal reads MM-DD-YYYY; anything unparseable states no bound at all,
+    which is the whole archive and the same answer this fetch gave before."""
+    import datetime as _dt
+
+    if not valid_time:
+        return {}
+    try:
+        read = _dt.datetime.fromisoformat(str(valid_time).replace("Z", "+00:00"))
+    except ValueError:
+        return {}
+    return {"startDateHi": read.strftime("%m-%d-%Y")}
+
+
 def wqp_features(spec: SourceSpec, params: dict[str, Any]) -> list[dict[str, Any]]:
     """Build the WQP point features (Station left-join latest Result)."""
     import dataretrieval.wqp as wqp
@@ -173,10 +189,16 @@ def wqp_features(spec: SourceSpec, params: dict[str, Any]) -> list[dict[str, Any
             spec.input_error_suffix,
         )
     bbstr = _bbox_str(bbox)
+    # The run asks what the water carried at ITS OWN moment, so the window CLOSES
+    # at that instant and the latest sample on or before it is the reading. No
+    # lower bound is stated: a measurement stands until the next one replaces it,
+    # and a window nobody measured would be a number this code invented.
+    window = _wqp_date(params.get("valid_time"))
 
     # 1. Station service -- the authoritative monitoring-location locations.
     try:
-        sites_df, _ = wqp.what_sites(bBox=bbstr, characteristicName=characteristic)
+        sites_df, _ = wqp.what_sites(bBox=bbstr, characteristicName=characteristic,
+                                     **window)
     except DataRetrievalError as exc:
         _map_http_error(spec, exc)
 
@@ -217,7 +239,8 @@ def wqp_features(spec: SourceSpec, params: dict[str, Any]) -> list[dict[str, Any
     # 3. Result service -- latest numeric sample per site (best-effort decoration).
     try:
         res_df, _ = wqp.get_results(
-            bBox=bbstr, characteristicName=characteristic, dataProfile="resultPhysChem"
+            bBox=bbstr, characteristicName=characteristic,
+            dataProfile="resultPhysChem", **window
         )
     except DataRetrievalError as exc:
         _map_http_error(spec, exc)

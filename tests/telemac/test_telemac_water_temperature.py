@@ -211,12 +211,13 @@ def test_the_deck_names_the_atmospheric_file_and_the_run_directory_holds_it(
     sheet = _sheet(monkeypatch)
     assert dict(sheet.resolved())["ASCII ATMOSPHERIC DATA FILE"] == ATMOSPHERE_FILENAME
     header = sheet.files[ATMOSPHERE_FILENAME].splitlines()[1].split()
-    # No cloud and no pressure column: the network this run is driven by does not
-    # report them, and the engine reads its own constant for each. The dew point
-    # is beside the vapour pressure because one reported humidity states both,
-    # and a coupled module reads the file's dew point where this budget does not.
-    assert header == ["T", "TAIR", "TDEW", "PVAP", "WINDS", "WINDD", "RAY3",
-                      "RAINI"]
+    # WHAT THIS RUN'S READERS READ and nothing beside it: the thermal budget's
+    # air, vapour, wind and shortwave. No cloud and no pressure column - the
+    # network this run is driven by reports neither, and the engine reads its
+    # own constant for each; no dew point, which only a coupled ice module
+    # reads; no wind direction and no rain, which only the host's own terms
+    # read and this deck arms neither of.
+    assert header == ["T", "TAIR", "PVAP", "WINDS", "RAY3"]
 
 
 def test_the_heat_budget_states_none_of_the_engines_own_constants(monkeypatch):

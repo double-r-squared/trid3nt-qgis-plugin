@@ -12,7 +12,7 @@ from typing import Any, Mapping, Sequence
 
 from trid3nt_server.workflows.runtime import Ref
 
-from ..authoring.atmosphere import Atmosphere, expand_for_telemac2d
+from ..authoring.atmosphere import Atmosphere, expand_atmosphere
 from .coupling import couples
 from .module import Module, Output
 from .outputs import PRIMITIVES, read_drogues
@@ -634,7 +634,7 @@ T2D.ARMS = MappingProxyType({
     "RAIN_OR_EVAPORATION_IN_MM_PER_DAY": "RAIN_OR_EVAPORATION"})
 T2D.composites(sources=_sources, wind=_wind,
                continue_from=_continue_from,
-               atmosphere=expand_for_telemac2d,
+               atmosphere=expand_atmosphere,
                oil=_oil, rain=_rain, coupling=couples(water_column=False),
                boundaries=_boundaries, runoff=_runoff, friction=_friction,
                infiltration=_infiltration, rating=_rating, storm=_storm,

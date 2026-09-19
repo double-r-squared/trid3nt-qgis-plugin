@@ -76,7 +76,7 @@ PROMOTED = {
         # characteristic="Nitrate") -> both optional-in-schema (required=[]);
         # the delegating executor's pre_validate raises WQP_INPUT_ERROR when
         # bbox is missing.
-        "properties": ["bbox", "characteristic"],
+        "properties": ["bbox", "characteristic", "valid_time"],
         "required": [],
     },
     "fetch_nhdplus_nldi_navigate": {

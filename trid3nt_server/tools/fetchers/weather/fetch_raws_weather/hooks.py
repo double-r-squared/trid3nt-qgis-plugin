@@ -276,6 +276,7 @@ def enrich_merge(spec: SourceSpec, params: dict[str, Any], features: list[dict[s
     sc = spec.error_code_prefix
     dates = _all_dates(str(params["start_date"]), str(params["end_date"]))
     out: list[dict[str, Any]] = []
+    faults = 0
     for feat in features:
         props = feat.get("properties") or {}
         sid = props.get("sid")
@@ -300,14 +301,42 @@ def enrich_merge(spec: SourceSpec, params: dict[str, Any], features: list[dict[s
                     "relh": _num(obs.get("URHRGZZ")), "sknt": _num(obs.get("sknt")), "drct": _num(obs.get("drct")),
                     "gust": _num(obs.get("VBIRGZZ")), "solar_rad": _num(obs.get("XRIRGZZ")), "precip_in": _num(obs.get("PCIRGZZ")),
                 }
+                if _faulty(row):
+                    faults += 1
+                    continue
                 out.append({
                     "type": "Feature",
                     "geometry": {"type": "Point", "coordinates": [float(lon), float(lat)]},
                     "properties": {c: row.get(c) for c in _FGB_COLUMNS},
                 })
+    if faults:
+        _note_faults(faults, len(out))
     if not out:
         raise router_empty_error(sc, "No RAWS observations collected for any station in the bbox/window", spec.empty_error_suffix)
     return out
+
+
+def _faulty(row: dict[str, Any]) -> bool:
+    """Is this reading outside what the atmosphere can do?
+
+    A relative humidity over saturation and a dew point above the air it was
+    measured in are both instrument faults rather than weather, and a reading
+    that reports one is not a measurement of anything."""
+    relh, dwpf, tmpf = row.get("relh"), row.get("dwpf"), row.get("tmpf")
+    if relh is not None and relh > 100.0:
+        return True
+    return dwpf is not None and tmpf is not None and dwpf > tmpf
+
+
+def _note_faults(faults: int, kept: int) -> None:
+    """What the record lost to sensor faults, onto the run journal."""
+    from trid3nt_server.workflows.runtime.journal import journal_note
+
+    text = (f"RAWS: {faults} readings were dropped as sensor faults - a relative "
+            f"humidity over saturation or a dew point above the air it was "
+            f"measured in - and {kept} were kept")
+    logger.warning("%s", text)
+    journal_note(text)
 
 
 def _num(v: Any) -> Any:
