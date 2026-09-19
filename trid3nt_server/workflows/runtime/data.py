@@ -10,6 +10,8 @@ from dataclasses import dataclass, field, replace
 from types import MappingProxyType
 from typing import Annotated, Any, Mapping
 
+from trid3nt_contracts.coverage import DATA_CLASSES
+
 from .errors import PlanValidationError, SuppliedGeometryError
 from .plan import DataRef, Row, body_rows
 from .temporal import TemporalSpec, spec_from
@@ -66,15 +68,14 @@ DISCHARGE = "discharge"
 EXTENT = "extent"
 
 
-# A ROW NAMES ITS PRODUCER; RETRIEVAL NEVER PICKS ONE. What a run stands on is
-# DECLARED here, by name, with its ladder and its transforms - it is never
-# resolved by ranking a phrase against a catalog. Text relevance cannot judge the
-# facts that decide whether a source can carry a solve: its resolution, its CRS,
-# its coverage over this domain, its datum. A retrieved source that reads
-# plausibly and resolves wrong produces a run that completes and answers a
-# different question, which is the failure a declaration exists to make
-# impossible. Search is how a MODEL finds a tool to call; a template's inputs are
-# the template's own statement.
+# A ROW STATES A NEED OR NAMES A PRODUCER; RETRIEVAL NEVER PICKS ONE. Text
+# relevance cannot judge the facts that decide whether a source can carry a
+# solve: its cell, its coverage over this domain, its window, its datum. A
+# retrieved source that reads plausibly and resolves wrong produces a run that
+# completes and answers a different question. So a row either NAMES its
+# producer, with its ladder and its transforms, or states the CLASS it needs and
+# the match reads those facts off every fetcher's own coverage row. Search is
+# how a MODEL finds a tool to call; a slot is filled from declarations.
 
 class _CoversAOI:
     """Validator sentinel: a domain must be BOUND and have an extent before a
@@ -248,6 +249,11 @@ class DataDecl(Row):
     #: What the sheet says when a context row came back empty. Stated by the
     #: template in its own words about what is not there.
     absent_note: str = ""
+    #: THE NEED this slot states instead of naming a producer: one class of the
+    #: coarse vocabulary, which the match filters every fetcher's coverage row
+    #: against. The place, the window and the frame are the RUN's and are read
+    #: off it, so a question states none of them.
+    data_class: str = ""
     #: What this slot's ingestion is told about the value it is handed - the
     #: point a nearest-site query ranks against, the unit the keyword reads.
     #: Declared on the row because only the row knows them; a late-bound read
@@ -268,6 +274,17 @@ class DataDecl(Row):
                 "slot, or declare it .context(), which states what the run says "
                 "when the source is empty."
             )
+        if self.data_class and self.producer is not None:
+            raise PlanValidationError(
+                f"Data {self.name!r} names a producer AND states "
+                f"need={self.data_class!r}: a row that names a fetcher is a PIN "
+                "and is honoured as it is, so there is nothing for the match to "
+                "decide. Drop the producer to state a need.")
+        if self.data_class and self.data_class not in DATA_CLASSES:
+            raise PlanValidationError(
+                f"Data {self.name!r} states need={self.data_class!r}, which is "
+                f"not one of the classes a coverage row is written in "
+                f"({', '.join(DATA_CLASSES)}).")
         if self.is_context and self.producer is None:
             raise PlanValidationError(
                 f"Data {self.name!r} declares .context() with no producer: a context "
@@ -330,7 +347,7 @@ class DataDecl(Row):
             return ("the closed polygon this run solves over, as a uri, a layer "
                     "name or a drawn shape"
                     + ("; unfilled, the template's own producer finds one."
-                       if self.producer is not None else "."))
+                       if self.producer is not None else self._unfilled))
         if self.role == RUNS:
             return ("the stretches of the domain's edge that carry a boundary "
                     "condition - each two points on the edge and a type "
@@ -340,7 +357,7 @@ class DataDecl(Row):
                     "bathymetry or survey raster, a layer of soundings, or a "
                     "depth in metres below the free surface"
                     + ("; unfilled, the template's own producer supplies it."
-                       if self.producer is not None else "."))
+                       if self.producer is not None else self._unfilled))
         if self.role == OBSERVATION:
             return (f"{self.coercion.get('measures') or 'the value'} this run "
                     "opens on: a layer of sites that report it, or the number "
@@ -357,6 +374,12 @@ class DataDecl(Row):
         else:
             tail = "required - the template names no source for it"
         return f"{shape} you supply, as a uri or a layer name; {tail}."
+
+    @property
+    def _unfilled(self) -> str:
+        """What a slot with no producer says about how it fills itself."""
+        return (f"; unfilled, the run matches a source of {self.data_class}."
+                if self.data_class else ".")
 
     def refuse_wrong_shape(self, value: Any) -> None:
         """Refuse a supplied artifact whose CLASS is not the shape this slot declared.
@@ -432,13 +455,15 @@ class DataDecl(Row):
         nothing near this domain; unstated, the row's own name says it."""
         return replace(self, is_context=True, absent_note=str(absent or ""))
 
-    def domain(self, producer: Producer | None = None) -> "DataDecl":
+    def domain(self, producer: Producer | None = None, *,
+               need: str = "") -> "DataDecl":
         """THE DOMAIN: the closed polygon the equations are solved over.
 
         Geometry only, and one slot however it is filled - drawn on the canvas,
-        the user's own layer, or the ``producer`` this question prefers."""
+        the user's own layer, the ``producer`` this question prefers, or the
+        ``need`` the match fills from whatever maps water here."""
         row = self if producer is None else self(producer)
-        return replace(row, role=DOMAIN, geometry="polygon")
+        return replace(row, role=DOMAIN, geometry="polygon", data_class=need)
 
     def runs(self, producer: Producer | None = None) -> "DataDecl":
         """THE BOUNDARY RUNS: named stretches of the domain's edge.
@@ -461,7 +486,8 @@ class DataDecl(Row):
     def observation(self, producer: Producer | None = None, *, near: Any = None,
                     units: Any = None, measures: str = "this value",
                     opens: str = "", value_field: str = "value",
-                    at: Any = None, record_units: Any = None) -> "DataDecl":
+                    at: Any = None, record_units: Any = None,
+                    need: str = "", series_field: Any = None) -> "DataDecl":
         """ONE MEASURED VALUE this run opens on, in the unit the keyword reads.
 
         ``near`` is the point the nearest reporting site is chosen against,
@@ -478,8 +504,9 @@ class DataDecl(Row):
     def level(self, producer: Producer | None = None, *, near: Any = None,
               units: Any = "m", measures: str = "a water-surface elevation",
               opens: str = "the water opens at",
-              value_field: str = "value",
-              record_units: Any = None) -> "DataDecl":
+              value_field: str = "value", at: Any = None,
+              record_units: Any = None, need: str = "",
+              series_field: Any = None) -> "DataDecl":
         """THE LEVEL the water surface stands at: an observation, read by ROLE.
 
         An ELEVATION on the datum the bed is painted on - never a height above a
@@ -487,30 +514,35 @@ class DataDecl(Row):
         The run opens flat at it, and a body whose bed is stated as a depth needs
         none: that bed is counted from the free surface itself."""
         return self._observed(LEVEL, producer, near, units, measures, opens,
-                              value_field, record_units=record_units)
+                              value_field, at, record_units=record_units,
+                              need=need, series_field=series_field)
 
     def discharge(self, producer: Producer | None = None, *, near: Any = None,
                   units: Any = None, measures: str = "a streamflow",
                   opens: str = "the inflow run carries",
-                  value_field: str = "value",
-                  record_units: Any = None) -> "DataDecl":
+                  value_field: str = "value", at: Any = None,
+                  record_units: Any = None, need: str = "",
+                  series_field: Any = None) -> "DataDecl":
         """THE FLOW an inflow run carries: an observation, read by ROLE.
 
         A domain whose edge names runs and whose rows carry a discharge is an
         OPEN CHANNEL, and the workflow adds the step that measures one."""
         return self._observed(DISCHARGE, producer, near, units, measures, opens,
-                              value_field, record_units=record_units)
+                              value_field, at, record_units=record_units,
+                              need=need, series_field=series_field)
 
     def _observed(self, role: str, producer: Producer | None, near: Any,
                   units: Any, measures: str, opens: str,
                   value_field: str, at: Any = None,
-                  record_units: Any = None) -> "DataDecl":
+                  record_units: Any = None, need: str = "",
+                  series_field: Any = None) -> "DataDecl":
         """One measured value, under the role its consumer reads it by."""
         row = self if producer is None else self(producer)
-        return replace(row, role=role, coercion=MappingProxyType(
+        return replace(row, role=role, data_class=need,
+                       coercion=MappingProxyType(
             {"near": near, "to_units": units, "measures": measures,
              "opens": opens, "field": value_field, "at": at,
-             "record_units": record_units}))
+             "record_units": record_units, "series_field": series_field}))
 
     def extent(self, producer: Producer | None = None) -> "DataDecl":
         """THE EXTENT: one lon/lat rectangle, however the caller names it.
@@ -520,16 +552,18 @@ class DataDecl(Row):
         row = self if producer is None else self(producer)
         return replace(row, role=EXTENT, geometry="rectangle")
 
-    def bed(self, producer: Producer | None = None) -> "DataDecl":
+    def bed(self, producer: Producer | None = None, *,
+            need: str = "") -> "DataDecl":
         """THE BED: what every node of the domain carries for elevation.
 
         A DEM, a bathymetry or survey raster, a layer of soundings, or a stated
         depth below the free surface - ONE source, and the mesh records which
         source actually painted each node. A measurement that covers part of the
         domain is laid over the wider surface under it by the merge derive, in
-        the DATA body, and this slot takes the row that derive produced."""
+        the DATA body, and this slot takes the row that derive produced. A slot
+        that states a ``need`` instead leaves both to the runtime."""
         row = self if producer is None else self(producer)
-        return replace(row, role=BED)
+        return replace(row, role=BED, data_class=need)
 
     @property
     def context_sentence(self) -> str:
