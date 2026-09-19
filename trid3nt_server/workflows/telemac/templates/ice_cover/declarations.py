@@ -123,8 +123,8 @@ DOC = dict(
         "in the domain does) / `peak_ice_thickness_m` / `final_cover_fraction`; "
         "narrate those typed numbers. A water that never reaches the threshold "
         "answers with no crossing time, and water that makes no ice at all "
-        "refuses the read and says so - both are honest answers about that "
-        "place in that week. On failure a dict with `status=\"error\"` + "
-        "`error_code`."
+        "answers zero thickness and zero cover - both are honest answers "
+        "about that place in that week. On failure a dict with "
+        "`status=\"error\"` + `error_code`."
     ),
 )
