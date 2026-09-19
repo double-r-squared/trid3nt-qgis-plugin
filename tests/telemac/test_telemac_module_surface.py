@@ -1416,10 +1416,10 @@ def test_an_open_slot_under_the_fold_says_the_dictionary_answers_it_for_nobody()
 
 
 #: The two modules that write the steering format: the serializer resolves the
-#: sheet into decks, and the in-image driver hands each keyword to telapy.
+#: sheet into decks, and the in-image script hands each keyword to telapy.
 _STEERING_WRITERS = (
     "trid3nt_server/workflows/telemac/authoring/serializer.py",
-    "trid3nt_server/workflows/mesh/meshers/drivers/telemac_cas_driver.py",
+    "workers/telemac/scripts/cas.py",
 )
 
 

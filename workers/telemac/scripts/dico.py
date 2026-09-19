@@ -141,7 +141,7 @@ def extract(module: str) -> dict:
 
 def main() -> int:
     # Contract (host <-> container over the mounted output dir):
-    #   python telemac_dico_driver.py /data/config.json /data
+    #   python dico.py /data/config.json /data
     #
     #   modules  the module names whose dictionary is read. Emits one
     #            <module>.json per module, keywords ORDERED AS THE DICTIONARY,

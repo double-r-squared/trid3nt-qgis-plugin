@@ -85,7 +85,7 @@ def parse_steering(cfg: dict) -> dict:
 
 def main() -> int:
     # Contract (host <-> container over the mounted authoring dir):
-    #   python telemac_cas_driver.py /data/config.json /data
+    #   python cas.py /data/config.json /data
     #
     #   write     {basename: {"module": ..., "values": {KEYWORD: value}}} -
     #             telapy writes each file from the values given. Emits

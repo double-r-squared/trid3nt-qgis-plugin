@@ -55,7 +55,7 @@ def read_result(slf: str, out: str) -> dict:
 
 def main() -> int:
     # Contract (host <-> container over the mounted result and output dirs):
-    #   python telemac_result_driver.py /data/config.json /data
+    #   python result.py /data/config.json /data
     #
     #   slf  the result file's in-container path. Writes
     #        telemac_result_meta.json (what the engine reports about the header)

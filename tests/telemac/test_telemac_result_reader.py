@@ -16,6 +16,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from trid3nt_server.workflows.solver import image_script
 from trid3nt_server.workflows.telemac.modules import outputs as R
 
 #: Every module on this side that reads a solved result. None may parse the
@@ -58,7 +59,7 @@ def test_the_read_runs_in_the_telemac_box_with_no_network(tmp_path, monkeypatch)
         seen["argv"] = argv
         return leave(argv, **kw)
 
-    monkeypatch.setattr(R.subprocess, "run", run)
+    monkeypatch.setattr(image_script.subprocess, "run", run)
     R.read_selafin(slf)
 
     argv = seen["argv"]
@@ -66,15 +67,15 @@ def test_the_read_runs_in_the_telemac_box_with_no_network(tmp_path, monkeypatch)
     assert argv[:5] == ["docker", "run", "--rm", "--network", "none"]
     # the result's directory goes in READ-ONLY; only the scratch dir is writable.
     assert f"{slf.resolve().parent}:/in:ro" in argv
-    assert f"{R.drivers_dir()}:/drivers:ro" in argv
-    assert "/drivers/telemac_result_driver.py" in argv
+    assert f"{image_script.scripts_dir('telemac')}:/drivers:ro" in argv
+    assert "/drivers/result.py" in argv
 
 
 def test_the_fields_the_driver_left_become_the_reader_s_answer(tmp_path,
                                                                monkeypatch):
     slf = tmp_path / "res_coastal.slf"
     slf.write_bytes(b"result")
-    monkeypatch.setattr(R.subprocess, "run", _driver_leaves(
+    monkeypatch.setattr(image_script.subprocess, "run", _driver_leaves(
         {"x": np.array([0.0, 1.0, 0.0]), "y": np.array([0.0, 0.0, 1.0]),
          "ikle": np.array([[0, 1, 2]]), "times": np.array([0.0, 60.0]),
          "v0": np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]),
@@ -112,7 +113,7 @@ def test_the_scratch_directory_does_not_outlive_the_read(tmp_path, monkeypatch):
         scratch.append(_scratch_of(argv))
         return leave(argv, **kw)
 
-    monkeypatch.setattr(R.subprocess, "run", run)
+    monkeypatch.setattr(image_script.subprocess, "run", run)
     R.read_selafin(slf)
     assert scratch and not scratch[0].exists()
 
@@ -120,7 +121,7 @@ def test_the_scratch_directory_does_not_outlive_the_read(tmp_path, monkeypatch):
 def test_a_refusal_names_the_file_and_what_the_engine_said(tmp_path, monkeypatch):
     slf = tmp_path / "truncated.slf"
     slf.write_bytes(b"")
-    monkeypatch.setattr(R.subprocess, "run", lambda argv, **kw:
+    monkeypatch.setattr(image_script.subprocess, "run", lambda argv, **kw:
                         subprocess.CompletedProcess(argv, 1, "", "not a result"))
     with pytest.raises(R.SelafinReadError) as ei:
         R.read_selafin(slf)

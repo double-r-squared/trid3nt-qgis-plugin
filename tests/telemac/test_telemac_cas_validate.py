@@ -11,6 +11,7 @@ import json
 
 import pytest
 
+from trid3nt_server.workflows.solver import image_script
 from trid3nt_server.workflows.telemac.authoring import cas_validate as V
 
 class _Completed:
@@ -33,13 +34,13 @@ def _driver(monkeypatch, rows, *, returncode=0):
         (Path(rundir) / "telemac_cas_stats.json").write_text(json.dumps(rows))
         return _Completed(returncode)
 
-    monkeypatch.setattr(V.subprocess, "run", _run)
+    monkeypatch.setattr(image_script.subprocess, "run", _run)
     return seen
 
 
 def test_nothing_written_means_nothing_to_parse(tmp_path, monkeypatch):
     """The container is not started for a file that was never authored."""
-    monkeypatch.setattr(V.subprocess, "run",
+    monkeypatch.setattr(image_script.subprocess, "run",
                         lambda *_a, **_k: pytest.fail("launched with nothing"))
     assert V.validate_authored_steering(tmp_path, {"absent.cas": "telemac2d"}) == {}
 

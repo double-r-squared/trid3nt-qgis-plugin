@@ -469,7 +469,7 @@ package MeshSeam {
 
     part om2dBox : MesherBox {
         doc /*
-        code: trid3nt_server/workflows/mesh/meshers/drivers/om2d_driver.py
+        code: workers/mesh/scripts/om2d.py
         */
         port configIn : ConfigIn;
         port arraysOut : ArraysOut;
@@ -484,7 +484,7 @@ package MeshSeam {
         boundary is number 1 follows from where FRONT2 starts its walk, not from
         the order the rows were written.
 
-        code: trid3nt_server/workflows/mesh/meshers/drivers/selafin_cli_driver.py
+        code: workers/mesh/scripts/selafin_cli.py
         */
     }
 
@@ -493,7 +493,7 @@ package MeshSeam {
         The steering file read and written by the library's own TelemacCas
         against the module dictionary, inside the engine image.
 
-        code: trid3nt_server/workflows/mesh/meshers/drivers/telemac_cas_driver.py
+        code: workers/telemac/scripts/cas.py
         */
     }
 
@@ -502,7 +502,7 @@ package MeshSeam {
         The solved result read through the engine's own TelemacFile, inside the
         engine image, over a result directory mounted read-only.
 
-        code: trid3nt_server/workflows/mesh/meshers/drivers/telemac_result_driver.py
+        code: workers/telemac/scripts/result.py
         */
     }
 
@@ -738,8 +738,10 @@ package MeshSeam {
         each one is executed inside an image where nothing of this server exists
         to import.
 
-        forbid: trid3nt_server.workflows.mesh.meshers.drivers -> trid3nt_server
-        forbid: trid3nt_server.workflows.mesh.meshers.drivers -> trid3nt_contracts
+        forbid: workers.mesh.scripts -> trid3nt_server
+        forbid: workers.mesh.scripts -> trid3nt_contracts
+        forbid: workers.telemac.scripts -> trid3nt_server
+        forbid: workers.telemac.scripts -> trid3nt_contracts
         */
     }
 
@@ -868,7 +870,7 @@ package MeshSeam {
     verify requirement TheBoxNeverImportsTheServer by
         "tests/model/test_model_conformance.py::test_the_model_conforms_to_the_tree";
     verify requirement TheBoxNeverImportsTheServer by
-        "tests/mesh/test_mesh_om2d.py::test_the_drivers_live_in_the_product_tree_beside_their_callers";
+        "tests/mesh/test_mesh_om2d.py::test_the_scripts_live_in_the_worker_tree_beside_their_dockerfiles";
 
     satisfy requirement TheMeshFrontIsEngineAgnostic by meshRouter;
     satisfy requirement TheMeshFrontIsEngineAgnostic by meshGate;

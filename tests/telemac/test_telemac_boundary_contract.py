@@ -12,12 +12,12 @@ import sys
 import pytest
 
 from trid3nt_server.workflows.mesh import topology as T
-from trid3nt_server.workflows.mesh.meshers.drivers import drivers_dir
 from trid3nt_server.workflows.telemac.modules import T2D
 from trid3nt_server.workflows.telemac.modules.telemac2d import Boundaries
+from trid3nt_server.workflows.solver.image_script import scripts_dir
 
-sys.path.insert(0, str(drivers_dir()))
-import selafin_cli_driver as D  # noqa: E402
+sys.path.insert(0, str(scripts_dir("mesh")))
+import selafin_cli as D  # noqa: E402
 
 
 # One contour whose SOUTH-WEST corner lies on a liquid face, which is the
@@ -179,6 +179,7 @@ def test_the_host_re_raises_the_walks_own_refusal_typed(tmp_path, monkeypatch):
 
     from trid3nt_server.workflows.mesh.meshers import MeshToolError
     from trid3nt_server.workflows.mesh.shared import selafin_cli as SC
+    from trid3nt_server.workflows.solver import image_script
 
     document = {"code": "MESH_BOUNDARY_PINCHED",
                 "message": "the boundary walk returned 5 rings over 226 rows ..."}
@@ -187,7 +188,7 @@ def test_the_host_re_raises_the_walks_own_refusal_typed(tmp_path, monkeypatch):
         (tmp_path / SC._REFUSAL_FILE).write_text(json.dumps(document))
         return subprocess.CompletedProcess(argv, 3, "SELAFIN_CLI_REFUSED", "")
 
-    monkeypatch.setattr(SC.subprocess, "run", fake_run)
+    monkeypatch.setattr(image_script.subprocess, "run", fake_run)
     with pytest.raises(MeshToolError) as excinfo:
         SC.write_telemac_pair(tmp_path, x=np.zeros(3), y=np.zeros(3),
                               cells=np.array([[0, 1, 2]]), bed=np.zeros(3))

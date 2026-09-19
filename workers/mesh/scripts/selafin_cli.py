@@ -379,7 +379,7 @@ def write_pair(cfg: dict) -> dict:
 
 def main() -> int:
     # Contract (host <-> container over the mounted /data dir):
-    #   python selafin_cli_driver.py /data/config.json /data
+    #   python selafin_cli.py /data/config.json /data
     #
     #   config: mesh_npz (x, y npoin; ikle (nelem,3) 0-based; bottom npoin
     #           positive up, empty for a bed-less mesh), geo_slf, cli, title,

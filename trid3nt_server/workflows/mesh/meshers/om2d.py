@@ -9,7 +9,6 @@ from __future__ import annotations
 import json
 import logging
 import os
-import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping
@@ -28,15 +27,15 @@ from trid3nt_server.workflows.mesh.meshers import (
     mesh_op,
     register_mesher,
 )
-from trid3nt_server.workflows.mesh.meshers.drivers import drivers_dir
+from trid3nt_server.workflows.solver.image_script import run_image_script
 
 logger = logging.getLogger("trid3nt_server.workflows.mesh.meshers.om2d")
 
 __all__ = ["OM2D", "build"]
 
-#: The GPL-isolated OceanMesh2D image and the driver mounted into it.
+#: The GPL-isolated OceanMesh2D image and the script mounted into it.
 _MESH_IMAGE_DEFAULT = "trid3nt-local/mesh:latest"
-_INCONTAINER_SCRIPT = "om2d_driver.py"
+_INCONTAINER_SCRIPT = "om2d.py"
 #: What the driver writes when it refuses in its own words: code, reason, and the
 #: call that DOES what the refused ask could not.
 _REFUSAL_FILE = "om2d_refusal.json"
@@ -519,16 +518,12 @@ def _rundir() -> Path:
 
 
 def _run_op(rundir: Path, op: str, config_name: str, produces: str) -> None:
-    """One driver op in the OceanMesh2D box, or a typed refusal carrying its output."""
+    """One script op in the OceanMesh2D box, or a typed refusal carrying its output."""
     image = os.environ.get("TRID3NT_MESH_IMAGE") or _MESH_IMAGE_DEFAULT
-    argv = [
-        "docker", "run", "--rm", "--network", "none",
-        "-v", f"{drivers_dir()}:/drivers:ro", "-v", f"{rundir}:/data",
-        "--entrypoint", "python", image,
-        f"/drivers/{_INCONTAINER_SCRIPT}", op, f"/data/{config_name}", "/data"]
-    logger.info("om2d mesher %s: %s", op, " ".join(argv))
-    cp = subprocess.run(argv, capture_output=True, text=True,
-                        timeout=_CONTAINER_TIMEOUT_S)
+    cp = run_image_script(
+        image=image, engine="mesh", script=_INCONTAINER_SCRIPT,
+        rundir=rundir, argv=[op, f"/data/{config_name}", "/data"],
+        timeout_s=_CONTAINER_TIMEOUT_S, entrypoint_override=True)
     if cp.returncode != 0 or not (rundir / produces).exists():
         _refusal(rundir)
         raise MeshToolError(

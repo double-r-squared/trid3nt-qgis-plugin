@@ -9,23 +9,22 @@ from __future__ import annotations
 import json
 import logging
 import os
-import subprocess
 from pathlib import Path
 from typing import Any, Mapping
 
 from trid3nt_server.workflows.mesh.meshers import MeshToolError
-from trid3nt_server.workflows.mesh.meshers.drivers import drivers_dir
+from trid3nt_server.workflows.solver.image_script import run_image_script
 
 logger = logging.getLogger("trid3nt_server.workflows.mesh.shared.selafin_cli")
 
 __all__ = ["write_telemac_pair"]
 
-#: What the driver writes when it refuses in its own words: the code and the
+#: What the script writes when it refuses in its own words: the code and the
 #: reason, from the one walk that decides the boundary numbering.
 _REFUSAL_FILE = "selafin_cli_refusal.json"
 
 _TELEMAC_IMAGE_DEFAULT = "trid3nt-local/telemac:latest"
-_INCONTAINER_SCRIPT = "selafin_cli_driver.py"
+_INCONTAINER_SCRIPT = "selafin_cli.py"
 _CONTAINER_TIMEOUT_S = 1800
 
 
@@ -53,18 +52,14 @@ def write_telemac_pair(rundir: Path | str, *, x: Any, y: Any, cells: Any,
 
 
 def _run_driver(rundir: Path, config: Mapping[str, Any]) -> dict[str, Any]:
-    """One driver run in the TELEMAC box -> the stats it reported."""
+    """One script run in the TELEMAC box -> the stats it reported."""
     image = os.environ.get("TRID3NT_TELEMAC_IMAGE") or _TELEMAC_IMAGE_DEFAULT
     name = "selafin_cli_config.json"
     (rundir / name).write_text(json.dumps(dict(config)))
-    argv = [
-        "docker", "run", "--rm", "--network", "none",
-        "-v", f"{drivers_dir()}:/drivers:ro", "-v", f"{rundir}:/data",
-        image, "python",
-        f"/drivers/{_INCONTAINER_SCRIPT}", f"/data/{name}", "/data"]
-    logger.info("selafin_cli write: %s", " ".join(argv))
-    cp = subprocess.run(argv, capture_output=True, text=True,
-                        timeout=_CONTAINER_TIMEOUT_S)
+    cp = run_image_script(
+        image=image, engine="mesh", script=_INCONTAINER_SCRIPT,
+        rundir=rundir, argv=[f"/data/{name}", "/data"],
+        timeout_s=_CONTAINER_TIMEOUT_S)
     document = rundir / _REFUSAL_FILE
     if document.exists():
         # The refusal the WALK wrote: only the process that ran it knows which

@@ -75,18 +75,18 @@ def test_the_mesher_owns_the_domain_primitives_the_library_has_no_word_for():
 
 def test_the_rim_primitive_is_the_driver_def_under_its_own_name():
     """No alias: the op name IS the ``def`` the box calls, and the box knows it."""
-    from trid3nt_server.workflows.mesh.meshers.drivers import drivers_dir
+    from trid3nt_server.workflows.solver.image_script import scripts_dir
 
-    source = (drivers_dir() / "om2d_driver.py").read_text()
+    source = (scripts_dir("mesh") / "om2d.py").read_text()
     assert "def set_rim_size(build: _Build, edge_length_m" in source
     assert '"set_rim_size": set_rim_size' in source
 
 
 def test_the_rim_band_is_a_visible_kwarg_with_a_labeled_default():
     """The tolerance the rim is held to is the ask's word, not a hidden constant."""
-    from trid3nt_server.workflows.mesh.meshers.drivers import drivers_dir
+    from trid3nt_server.workflows.solver.image_script import scripts_dir
 
-    source = (drivers_dir() / "om2d_driver.py").read_text()
+    source = (scripts_dir("mesh") / "om2d.py").read_text()
     assert "tolerance: float = 2.0" in source
     assert "_RIM_TOLERANCE" not in source
 
@@ -108,7 +108,8 @@ def test_the_boxs_own_typed_refusal_reaches_the_caller_with_its_escalation(
         (tmp_path / "om2d_refusal.json").write_text(json.dumps(document))
         return subprocess.CompletedProcess(argv, 3, "OM2D_REFUSED", "")
 
-    monkeypatch.setattr(OM2D.subprocess, "run", fake_run)
+    from trid3nt_server.workflows.solver import image_script
+    monkeypatch.setattr(image_script.subprocess, "run", fake_run)
     with pytest.raises(MeshToolError) as excinfo:
         OM2D._run_op(tmp_path, "build", "om2d_config.json", "om2d_mesh.npz")
     assert excinfo.value.error_code == "MESH_DOMAIN_HAS_NO_SHORELINE"
@@ -191,10 +192,10 @@ def test_the_driver_binds_the_seed_onto_the_librarys_own_tie_break():
 
     ``feature_sizing_function`` skeletonizes through skimage's ``medial_axis``, whose
     tie-break generator is fresh per process unless it is handed one."""
-    from trid3nt_server.workflows.mesh.meshers.drivers import drivers_dir
+    from trid3nt_server.workflows.solver.image_script import scripts_dir
 
     # Read rather than imported: the driver's own imports live only in the image.
-    source = (drivers_dir() / "om2d_driver.py").read_text()
+    source = (scripts_dir("mesh") / "om2d.py").read_text()
     assert "om.edgefx.medial_axis = functools.partial(medial_axis, rng=" in source
     assert "_seed_library_randomness(int(cfg.get(\"seed\", 0)))" in source
 
@@ -503,25 +504,28 @@ def test_a_library_op_records_the_note_that_its_kwargs_bound_elsewhere(
     assert any("laplacian2" in note and "cannot import" in note for note in notes)
 
 
-def test_the_drivers_live_in_the_product_tree_beside_their_callers():
-    from trid3nt_server.workflows.mesh.meshers.drivers import drivers_dir
+def test_the_scripts_live_in_the_worker_tree_beside_their_dockerfiles():
+    from trid3nt_server.workflows.solver.image_script import scripts_dir
 
-    names = {p.name for p in drivers_dir().glob("*_driver.py")}
-    assert names == {"om2d_driver.py", "selafin_cli_driver.py",
-                     "telemac_cas_driver.py", "telemac_dico_driver.py",
-                     "telemac_result_driver.py"}
-    assert "sandbox" not in str(drivers_dir())
+    mesh_names = {p.name for p in scripts_dir("mesh").glob("*.py")
+                  if p.name != "__init__.py"}
+    telemac_names = {p.name for p in scripts_dir("telemac").glob("*.py")
+                      if p.name != "__init__.py"}
+    assert mesh_names == {"om2d.py", "selafin_cli.py"}
+    assert telemac_names == {"cas.py", "dico.py", "result.py"}
+    assert "sandbox" not in str(scripts_dir("mesh"))
+    assert "sandbox" not in str(scripts_dir("telemac"))
 
 
-def test_the_box_mounts_the_product_drivers_dir():
-    from trid3nt_server.workflows.mesh.meshers.drivers import drivers_dir
+def test_the_box_mounts_the_product_scripts_dir():
+    from trid3nt_server.workflows.solver.image_script import scripts_dir
 
-    assert OM2D._INCONTAINER_SCRIPT == "om2d_driver.py"
-    assert (drivers_dir() / "om2d_driver.py").exists()
+    assert OM2D._INCONTAINER_SCRIPT == "om2d.py"
+    assert (scripts_dir("mesh") / "om2d.py").exists()
 
 
 def test_the_om2d_box_is_shelled_with_a_named_op(monkeypatch, tmp_path):
-    from trid3nt_server.workflows.mesh.meshers.drivers import drivers_dir
+    from trid3nt_server.workflows.solver.image_script import scripts_dir
 
     seen: dict[str, object] = {}
 
@@ -535,12 +539,13 @@ def test_the_om2d_box_is_shelled_with_a_named_op(monkeypatch, tmp_path):
         Path(tmp_path, "made.json").write_text("{}")
         return _Done()
 
-    monkeypatch.setattr(OM2D.subprocess, "run", fake_run)
+    from trid3nt_server.workflows.solver import image_script
+    monkeypatch.setattr(image_script.subprocess, "run", fake_run)
     OM2D._run_op(tmp_path, "post", "cfg.json", "made.json")
     argv = seen["argv"]
-    assert argv[-4:] == ["/drivers/om2d_driver.py", "post",
+    assert argv[-4:] == ["/drivers/om2d.py", "post",
                          "/data/cfg.json", "/data"]
-    assert f"{drivers_dir()}:/drivers:ro" in argv
+    assert f"{scripts_dir('mesh')}:/drivers:ro" in argv
     assert "--network" in argv and argv[argv.index("--network") + 1] == "none"
 
 
@@ -699,7 +704,7 @@ def _driver():
     import sys
     import types
 
-    from trid3nt_server.workflows.mesh.meshers.drivers import drivers_dir
+    from trid3nt_server.workflows.solver.image_script import scripts_dir
 
     stub = types.ModuleType("oceanmesh")
     stub.Domain = type("Domain", (), {"__init__": lambda self, bbox, func: None})
@@ -707,7 +712,7 @@ def _driver():
     sys.modules["oceanmesh"] = stub
     try:
         spec = importlib.util.spec_from_file_location(
-            "_om2d_driver_under_test", drivers_dir() / "om2d_driver.py")
+            "_om2d_driver_under_test", scripts_dir("mesh") / "om2d.py")
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
     finally:

@@ -278,12 +278,13 @@ def driver(monkeypatch):
 
     stub.Domain = Domain
     monkeypatch.setitem(sys.modules, "oceanmesh", stub)
-    monkeypatch.syspath_prepend(str(Path(OM2D.__file__).parent / "drivers"))
-    sys.modules.pop("om2d_driver", None)
-    import om2d_driver
+    from trid3nt_server.workflows.solver.image_script import scripts_dir
+    monkeypatch.syspath_prepend(str(scripts_dir("mesh")))
+    sys.modules.pop("om2d", None)
+    import om2d
 
-    yield om2d_driver
-    sys.modules.pop("om2d_driver", None)
+    yield om2d
+    sys.modules.pop("om2d", None)
 
 
 def test_the_polygon_signed_distance_is_negative_inside_and_positive_outside(driver):

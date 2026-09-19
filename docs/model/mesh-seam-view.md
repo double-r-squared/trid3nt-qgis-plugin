@@ -14,14 +14,14 @@ flowchart LR
     meshSession["MeshSession<br/>trid3nt_server/workflows/mesh/session.py"]
     mesherRegistry["MesherRegistry<br/>trid3nt_server/workflows/mesh/meshers/__init__.py"]
     om2dAdapter["MesherAdapter<br/>trid3nt_server/workflows/mesh/meshers/om2d.py"]
-    om2dBox["MesherBox<br/>trid3nt_server/workflows/mesh/meshers/drivers/om2d_driver.py"]
+    om2dBox["MesherBox<br/>workers/mesh/scripts/om2d.py"]
     opTool["OpTool<br/>trid3nt_server/workflows/mesh/op_tool.py"]
     recipeObject["RecipeObject<br/>trid3nt_server/workflows/mesh/recipe.py"]
     regGridAdapter["MesherAdapter<br/>trid3nt_server/workflows/mesh/meshers/reg_grid.py"]
-    selafinCliDriver["ShippedDriver<br/>trid3nt_server/workflows/mesh/meshers/drivers/selafin_cli_driver.py"]
+    selafinCliDriver["ShippedDriver<br/>workers/mesh/scripts/selafin_cli.py"]
     sharedPrimitives["SharedPrimitives<br/>trid3nt_server/workflows/mesh/shared/primitives.py"]
-    telemacCasDriver["ShippedDriver<br/>trid3nt_server/workflows/mesh/meshers/drivers/telemac_cas_driver.py"]
-    telemacResultDriver["ShippedDriver<br/>trid3nt_server/workflows/mesh/meshers/drivers/telemac_result_driver.py"]
+    telemacCasDriver["ShippedDriver<br/>workers/telemac/scripts/cas.py"]
+    telemacResultDriver["ShippedDriver<br/>workers/telemac/scripts/result.py"]
     topologyWriter["TopologyWriter<br/>trid3nt_server/workflows/mesh/topology.py"]
     meshSession -- "MeshArtifactRecord" --> meshArtifactStore
     sharedPrimitives -- "BedProvenance" --> meshSession
@@ -224,7 +224,7 @@ The mesher's answers a SELAFIN cannot hold, written for EVERY mesh. A bundle nam
 | **RecipeIsTheOneMeshDefiningObject** | `recipeObject`, `meshRouter`, `meshSession` | `tests/mesh/test_build_mesh_tool.py::test_a_recipe_builds_nothing`<br/>`tests/mesh/test_build_mesh_tool.py::test_editing_a_recipe_returns_a_new_frozen_one`<br/>`tests/mesh/test_build_mesh_tool.py::test_engine_vocabulary_is_not_a_param_of_the_generalization`<br/>`tests/mesh/test_build_mesh_tool.py::test_accept_freezes_the_recipe_as_the_artifacts_provenance`<br/>`tests/telemac/test_mesh_declaration_travel.py::test_the_mesh_step_carries_the_recipe_whole` |
 | **RegenerationIsWholesale** | `meshSession`, `opTool` | `tests/mesh/test_build_mesh_tool.py::test_the_same_recipe_builds_the_same_mesh_twice`<br/>`tests/mesh/test_build_mesh_tool.py::test_reset_puts_the_recipe_back_to_the_declaration`<br/>`tests/mesh/test_build_mesh_tool.py::test_the_journal_replays_to_an_identical_mesh`<br/>`tests/mesh/test_build_mesh_tool.py::test_a_recipe_edit_after_a_hand_edit_refuses_rather_than_discarding_it`<br/>`tests/mesh/test_mesh_gate_loop.py::test_mesh_op_appends_regenerates_and_re_presents` |
 | **SignatureIsTheSchema** | `mesherRegistry`, `om2dAdapter` | `tests/mesh/test_mesh_meshers.py::test_an_op_a_mesher_never_registered_is_refused_by_name`<br/>`tests/mesh/test_mesh_om2d.py::test_an_unknown_op_refuses_with_the_nearest_names`<br/>`tests/mesh/test_mesh_om2d.py::test_the_wrapper_registers_the_librarys_own_names_tagged_by_phase`<br/>`tests/mesh/test_mesh_om2d.py::test_a_library_op_records_the_note_that_its_kwargs_bound_elsewhere`<br/>`tests/mesh/test_mesh_om2d.py::test_a_required_parameter_the_domain_cannot_supply_refuses_by_name` |
-| **TheBoxNeverImportsTheServer** | `om2dBox`, `selafinCliDriver`, `telemacCasDriver`, `telemacResultDriver` | `tests/model/test_model_conformance.py::test_the_model_conforms_to_the_tree`<br/>`tests/mesh/test_mesh_om2d.py::test_the_drivers_live_in_the_product_tree_beside_their_callers` |
+| **TheBoxNeverImportsTheServer** | `om2dBox`, `selafinCliDriver`, `telemacCasDriver`, `telemacResultDriver` | `tests/model/test_model_conformance.py::test_the_model_conforms_to_the_tree`<br/>`tests/mesh/test_mesh_om2d.py::test_the_scripts_live_in_the_worker_tree_beside_their_dockerfiles` |
 | **TheMeshFrontIsEngineAgnostic** | `meshRouter`, `meshGate`, `mesherRegistry` | `tests/model/test_model_conformance.py::test_the_model_conforms_to_the_tree`<br/>`tests/mesh/test_mesh_gate_loop.py::test_no_mesher_has_card_code_of_its_own`<br/>`tests/mesh/test_build_mesh_tool.py::test_reg_grid_conforms_with_a_near_empty_default_recipe` |
 | **TopologyIsWrittenForEveryMesh** | `om2dAdapter`, `topologyWriter` | `tests/mesh/test_mesh_topology_and_bed.py::test_a_bundle_naming_no_liquid_boundary_states_the_closed_basin`<br/>`tests/mesh/test_mesh_topology_and_bed.py::test_the_bundle_states_the_numbering_a_steering_author_reads`<br/>`tests/mesh/test_mesh_topology_and_bed.py::test_an_empty_role_is_not_a_role` |
 

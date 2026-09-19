@@ -9,18 +9,17 @@ from __future__ import annotations
 import json
 import logging
 import os
-import subprocess
 from pathlib import Path
 from typing import Any, Mapping
 
-from trid3nt_server.workflows.mesh.meshers.drivers import drivers_dir
+from trid3nt_server.workflows.solver.image_script import run_image_script
 
 logger = logging.getLogger("trid3nt_server.workflows.telemac.authoring.cas_validate")
 
 __all__ = ["CasParseError", "run_cas_driver", "validate_authored_steering"]
 
 _TELEMAC_IMAGE_DEFAULT = "trid3nt-local/telemac:latest"
-_INCONTAINER_SCRIPT = "telemac_cas_driver.py"
+_INCONTAINER_SCRIPT = "cas.py"
 _CONTAINER_TIMEOUT_S = 300
 
 
@@ -38,14 +37,10 @@ def run_cas_driver(rundir: Path | str, config: Mapping[str, Any], *,
     image = os.environ.get("TRID3NT_TELEMAC_IMAGE") or _TELEMAC_IMAGE_DEFAULT
     name = "telemac_cas_config.json"
     (Path(rundir) / name).write_text(json.dumps(dict(config)))
-    argv = [
-        "docker", "run", "--rm", "--network", "none",
-        "-v", f"{drivers_dir()}:/drivers:ro", "-v", f"{rundir}:/data",
-        image, "python",
-        f"/drivers/{_INCONTAINER_SCRIPT}", f"/data/{name}", "/data"]
-    logger.info("telemac cas driver: %s", " ".join(argv))
-    cp = subprocess.run(argv, capture_output=True, text=True,
-                        timeout=_CONTAINER_TIMEOUT_S)
+    cp = run_image_script(
+        image=image, engine="telemac", script=_INCONTAINER_SCRIPT,
+        rundir=Path(rundir), argv=[f"/data/{name}", "/data"],
+        timeout_s=_CONTAINER_TIMEOUT_S)
     if cp.returncode != 0:
         raise CasParseError(
             f"could not {what} (rc={cp.returncode}):\n"

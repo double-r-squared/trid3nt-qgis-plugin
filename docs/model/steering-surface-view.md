@@ -10,7 +10,7 @@ Plane: **workflow**. System: **runtime -> assembler**. One seam of the system of
 flowchart LR
     canvasGate["CanvasGate<br/>trid3nt_server/gates/draw_input.py"]
     composite["Composite<br/>trid3nt_server/workflows/telemac/modules/telemac2d.py"]
-    dictionaryExtractor["Dictionary<br/>trid3nt_server/workflows/mesh/meshers/drivers/telemac_dico_driver.py"]
+    dictionaryExtractor["Dictionary<br/>workers/telemac/scripts/dico.py"]
     door["Door<br/>trid3nt_server/workflows/telemac/workflow.py"]
     messageIR["MessageIR<br/>contracts/trid3nt_contracts/message.py"]
     observationSlot["ObservationSlot<br/>trid3nt_server/inputs/observation.py"]
@@ -21,7 +21,7 @@ flowchart LR
     sheet["Sheet<br/>trid3nt_server/workflows/telemac/modules/sheet.py"]
     slot["Slot<br/>trid3nt_server/workflows/telemac/modules/module.py"]
     stager["Stager<br/>trid3nt_server/workflows/telemac/authoring/assembler.py"]
-    steeringDriver["SteeringDriver<br/>trid3nt_server/workflows/mesh/meshers/drivers/telemac_cas_driver.py"]
+    steeringDriver["SteeringDriver<br/>workers/telemac/scripts/cas.py"]
     steeringGate["SteeringGate<br/>trid3nt_server/workflows/telemac/authoring/cas_validate.py"]
     temporalValue["TemporalValue<br/>trid3nt_server/workflows/runtime/temporal.py"]
     wrapper["Module<br/>trid3nt_server/workflows/telemac/modules/module.py"]

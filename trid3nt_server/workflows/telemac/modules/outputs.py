@@ -14,7 +14,6 @@ import json
 import logging
 import os
 import shutil
-import subprocess
 import tempfile
 from dataclasses import dataclass, replace
 from dataclasses import field as dataclass_field
@@ -23,8 +22,8 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from trid3nt_server.render.formats import Chart, Deliverable, Mesh, Vector
-from trid3nt_server.workflows.mesh.meshers.drivers import drivers_dir
 from trid3nt_server.workflows.runtime import DeclarativeError
+from trid3nt_server.workflows.solver.image_script import run_image_script
 
 logger = logging.getLogger("trid3nt_server.workflows.telemac.modules.outputs")
 
@@ -60,7 +59,7 @@ __all__ = [
 ]
 
 _TELEMAC_IMAGE_DEFAULT = "trid3nt-local/telemac:latest"
-_INCONTAINER_SCRIPT = "telemac_result_driver.py"
+_INCONTAINER_SCRIPT = "result.py"
 _CONTAINER_TIMEOUT_S = 1800
 _FIELDS_NAME = "telemac_result_fields.npz"
 _META_NAME = "telemac_result_meta.json"
@@ -237,14 +236,10 @@ def _run_driver(slf: Path, scratch: Path) -> dict[str, Any]:
     image = os.environ.get("TRID3NT_TELEMAC_IMAGE") or _TELEMAC_IMAGE_DEFAULT
     config = scratch / "telemac_result_config.json"
     config.write_text(json.dumps({"slf": f"/in/{slf.name}"}))
-    argv = [
-        "docker", "run", "--rm", "--network", "none",
-        "-v", f"{drivers_dir()}:/drivers:ro", "-v", f"{slf.parent}:/in:ro",
-        "-v", f"{scratch}:/data", image, "python",
-        f"/drivers/{_INCONTAINER_SCRIPT}", f"/data/{config.name}", "/data"]
-    logger.info("telemac result read: %s", " ".join(argv))
-    cp = subprocess.run(argv, capture_output=True, text=True,
-                        timeout=_CONTAINER_TIMEOUT_S)
+    cp = run_image_script(
+        image=image, engine="telemac", script=_INCONTAINER_SCRIPT,
+        rundir=scratch, argv=[f"/data/{config.name}", "/data"],
+        extra_mounts=[(slf.parent, "/in:ro")], timeout_s=_CONTAINER_TIMEOUT_S)
     if cp.returncode != 0:
         raise SelafinReadError(
             f"the engine's own reader could not open {slf.name} "
