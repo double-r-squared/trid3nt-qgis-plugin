@@ -254,8 +254,8 @@ async def _stream_model_reply(
     # TOP-K TOOL GATING: the openai adapter path was sending ALL ~190 tool
     # schemas every round. Gate the per-turn tool list to the retrieval
     # top-k (TRID3NT_TOOL_GATING_TOPK, default 24; 0 disables) PLUS the
-    # always-include floors -- the META set (hot set + catalog pair +
-    # web_fetch), every tool already used this case-session, and any tool
+    # always-include floors -- the core floor, every tool already used
+    # this case-session, and any tool
     # the user NAMED in the message. Scoped to MODEL_PROVIDER=openai:
     # bedrock/scripted/vertex tool lists are byte-unchanged. FAIL-OPEN on a
     # cold index / empty ranking / any fault.

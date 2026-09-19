@@ -1,3 +1,2 @@
-"""Dataset and tool discovery: the Living Atlas pair (``search_living_atlas``,
-``fetch_living_atlas_layer``), ``search_tools`` retrieval, ``web_fetch`` and the
-shared OGC adapter."""
+"""Tool discovery: ``search_tools`` retrieval and the ranking the gate reads
+(``tool_retrieval``)."""

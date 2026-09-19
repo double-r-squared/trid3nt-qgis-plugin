@@ -1,7 +1,7 @@
 """Per-turn TOP-K tool gating on the openai path.
 
 ``tool_gating.gate_tool_registry`` trims the per-turn registry to the retrieval
-top-k plus the always-include floors: the META floor, every tool already used in
+top-k plus the always-include floors: the core floor, every tool already used in
 this case-session, and any tool the user NAMED. Other providers' tool lists are
 byte-unchanged; ``TOPK=0`` disables, and a cold or empty ranking FAILS OPEN."""
 
@@ -19,7 +19,6 @@ from trid3nt_server import server as agent_server
 from trid3nt_server.adapters.adapter import ModelSettings, TextDeltaEvent
 from trid3nt_server.tools.search.tool_retrieval import CORE_FLOOR
 from trid3nt_server.gates.tool_gating import (
-    META_TOOL_FLOOR,
     TOOL_GATING_TOPK_DEFAULT,
     gate_tool_registry,
     gating_topk,
@@ -98,18 +97,16 @@ def _ranked(n: int = 30) -> list[tuple[str, float]]:
     return [(name, 0.05 - i * 0.001) for i, name in enumerate(names)]
 
 
-def test_gate_keeps_topk_plus_meta_floor():
+def test_gate_keeps_topk_plus_core_floor():
     ranked = _ranked(30)
     gated = gate_tool_registry("some request", dict(TOOL_REGISTRY), ranked, 24)
     assert gated is not None
     # top-24 of the ranking present
     for name, _ in ranked[:24]:
         assert name in gated
-    # meta floor always present (registered members)
-    for name in META_TOOL_FLOOR & set(TOOL_REGISTRY):
-        assert name in gated, f"meta-floor tool {name} was gated out"
-    # CORE_FLOOR is a subset of the meta floor
-    assert CORE_FLOOR <= META_TOOL_FLOOR
+    # core floor always present (registered members)
+    for name in CORE_FLOOR & set(TOOL_REGISTRY):
+        assert name in gated, f"core-floor tool {name} was gated out"
     # and it actually shrank
     assert len(gated) < len(TOOL_REGISTRY)
 
@@ -222,7 +219,7 @@ async def test_openai_provider_turn_is_gated(monkeypatch):
         f"openai turn was NOT gated: {len(registry)} == full registry"
     )
     # floors survive the gate
-    for name in META_TOOL_FLOOR & set(TOOL_REGISTRY):
+    for name in CORE_FLOOR & set(TOOL_REGISTRY):
         assert name in registry
 
 

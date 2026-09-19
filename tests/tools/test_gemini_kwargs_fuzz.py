@@ -132,7 +132,6 @@ _MINIMAL_VALID_PARAMS: dict[str, dict[str, Any]] = {
             "status": "running",
         }
     },
-    "web_fetch": {"url": "https://example.com"},
 }
 
 

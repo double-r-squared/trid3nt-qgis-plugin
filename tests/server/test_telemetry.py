@@ -120,7 +120,7 @@ async def test_error_path_does_not_raise() -> None:
         await emit_tool_call_event(
             session_id="S1",
             ts="2026-06-09T00:00:00Z",
-            tool_name="web_fetch",
+            tool_name="search_tools",
             source="manual",
             args_hash=compute_args_hash({}),
             success=False,

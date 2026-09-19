@@ -21,7 +21,7 @@ __all__ = [
     "DEFAULT_USER_AGENT",
 ]
 
-logger = logging.getLogger("trid3nt_server.tools.search.ogc_adapter")
+logger = logging.getLogger("trid3nt_server.tools.fetchers._router.transport.ogc_adapter")
 
 #: Cell size in metres for the grid a raster request derives from its bbox when it
 #: gives no explicit width/height. Targeting a ground resolution rather than a fixed

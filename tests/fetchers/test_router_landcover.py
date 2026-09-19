@@ -17,7 +17,7 @@ from trid3nt_server.tools.fetchers._fetch_common import round_bbox_to_resolution
 from trid3nt_server.tools.fetchers._router import router as _router
 from trid3nt_server.tools.fetchers.terrain.fetch_landcover import hooks as lch
 from trid3nt_server.tools.fetchers._router.spec import compose_specs_from_tree
-from trid3nt_server.tools.search import ogc_adapter
+from trid3nt_server.tools.fetchers._router.transport import ogc_adapter
 
 _FORT_MYERS = [-81.95, 26.55, -81.80, 26.70]
 

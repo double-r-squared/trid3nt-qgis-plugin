@@ -15,7 +15,6 @@ from trid3nt_server.tools.search.tool_retrieval import CORE_FLOOR
 
 __all__ = [
     "TOOL_GATING_TOPK_DEFAULT",
-    "META_TOOL_FLOOR",
     "gating_topk",
     "named_tools_in_text",
     "gate_tool_registry",
@@ -37,11 +36,6 @@ logger = logging.getLogger("trid3nt_server.gates.tool_gating")
 
 #: Default top-k for the openai-provider tool gate.
 TOOL_GATING_TOPK_DEFAULT = 24
-
-#: The always-include META floor: the core floor plus web_fetch, the open-web
-#: escape hatch a gated model must always hold. It registers at daemon startup,
-#: outside the tools package.
-META_TOOL_FLOOR: frozenset[str] = frozenset(CORE_FLOOR) | frozenset({"web_fetch"})
 
 
 def gating_topk() -> int:
@@ -101,11 +95,11 @@ def gate_tool_registry(
             return None
         from trid3nt_server.tools import mounted_tool_names
 
-        # The gated set is the top-k ranking UNION the META floor UNION every
+        # The gated set is the top-k ranking UNION the core floor UNION every
         # tool already visible this case-session (never hide a tool mid-task)
         # UNION any tool the user NAMED (an explicit ask is always honored).
         keep: set[str] = {name for name, _score in ranked[:k]}
-        keep |= META_TOOL_FLOOR
+        keep |= CORE_FLOOR
         # A session-mounted tool is unrankable (the index predates it), so it
         # rides the floor for as long as it is mounted.
         keep |= set(mounted_tool_names())

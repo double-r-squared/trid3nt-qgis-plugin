@@ -9,8 +9,8 @@ from __future__ import annotations
 
 import pytest
 
-from trid3nt_server.tools.search import ogc_adapter as ogc_mod
-from trid3nt_server.tools.search.ogc_adapter import (
+from trid3nt_server.tools.fetchers._router.transport import ogc_adapter as ogc_mod
+from trid3nt_server.tools.fetchers._router.transport.ogc_adapter import (
     OGCAdapterError,
     OGCResponse,
     fetch_ogc_layer,

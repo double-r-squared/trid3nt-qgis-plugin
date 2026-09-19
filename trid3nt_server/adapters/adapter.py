@@ -421,9 +421,8 @@ had already produced). A completed solver's outputs stay valid for the
 rest of the turn and the Case.
 
 Spill forcing from a NEWS ARTICLE (compose it):
-When the user pastes or links a NEWS ARTICLE about a spill, COMPOSE the chain
-yourself: read the article (web_fetch on a source_url, or the pasted text),
-EXTRACT the location, the substance, the released amount (gallons / liters /
+When the user pastes a NEWS ARTICLE about a spill, COMPOSE the chain
+yourself: read the pasted text, EXTRACT the location, the substance, the released amount (gallons / liters /
 barrels / tons / kg) and the duration, DERIVE the forcing (convert the amount to
 mass via the substance density, then a release rate = mass / duration, and the
 source concentration that implies against the carrier discharge), and call

@@ -1223,7 +1223,7 @@ def _wcs_getcoverage_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple
     import rasterio
     from rasterio.io import MemoryFile
 
-    from trid3nt_server.tools.search.ogc_adapter import OGCAdapterError, fetch_ogc_layer
+    from trid3nt_server.tools.fetchers._router.transport.ogc_adapter import OGCAdapterError, fetch_ogc_layer
 
     ingest = spec.ingest or {}
     w = ingest.get("wcs", {})

@@ -30,7 +30,6 @@ def _import_tools_registry() -> int:
     from .tools.fetchers.climate.lookup_precip_return_period import lookup_precip_return_period  # noqa: F401
     from .tools.fetchers.socioeconomic.geocode_location import geocode_location  # noqa: F401
     from .workflows.solver import solver  # noqa: F401
-    from .tools.search.web_fetch import web_fetch  # noqa: F401
 
     return len(tools.TOOL_REGISTRY)
 

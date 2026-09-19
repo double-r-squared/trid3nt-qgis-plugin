@@ -1,9 +1,9 @@
 """MCP annotation hints on every registered atomic tool.
 
 All four annotation fields are set on every tool; a write tool is not also
-flagged read-only; an open-world tool is a fetch, ``web_fetch`` or catalog tool
-rather than a local ``compute_*`` or ``clip_*`` transform; the high-stakes tools
-are spot-checked; the four fields carry their declared defaults."""
+flagged read-only; an open-world tool is a fetch or catalog tool rather than a
+local ``compute_*`` or ``clip_*`` transform; the high-stakes tools are
+spot-checked; the four fields carry their declared defaults."""
 
 from __future__ import annotations
 
@@ -168,13 +168,13 @@ def test_session_tool_annotations():
         assert meta.idempotent_hint is False
 
 
-def test_web_fetch_annotations():
-    """web_fetch: read-only + open-world + idempotent (cached)."""
+def test_fetch_tool_annotations():
+    """A spec-driven fetch tool: read-only + open-world + idempotent (cached)."""
     snapshot = _registry_snapshot()
-    assert "web_fetch" in snapshot, "web_fetch not registered"
-    meta = snapshot["web_fetch"]
+    assert "fetch_buildings" in snapshot, "fetch_buildings not registered"
+    meta = snapshot["fetch_buildings"]
     assert meta.read_only_hint is True
-    assert meta.open_world_hint is True, "web_fetch hits arbitrary public URLs"
+    assert meta.open_world_hint is True, "fetch_buildings hits an external endpoint"
     assert meta.destructive_hint is False
     assert meta.idempotent_hint is True
 

@@ -308,10 +308,9 @@ def test_system_prompt_never_invents_contamination_forcing() -> None:
 
 
 def test_system_prompt_routes_the_news_article_spill_to_the_river_plume() -> None:
-    """The news-article path is a model-composed chain (web_fetch -> extract ->
-    derive the forcing -> the registered river-plume template)."""
+    """The pasted-article path is a model-composed chain (extract -> derive the
+    forcing -> the registered river-plume template)."""
     assert "telemac_dye_release" in SYSTEM_PROMPT
-    assert "web_fetch" in SYSTEM_PROMPT
     assert "NEWS ARTICLE" in SYSTEM_PROMPT
 
 

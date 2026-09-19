@@ -248,7 +248,7 @@ class AtomicToolMetadata(GraceModel):
             "MCP annotation: openWorldHint. True when the tool reaches beyond "
             "the local deployment — external APIs or public data endpoints. "
             "Defaults to False — compute, clip, and local-substrate-only tools "
-            "opt out. All fetch_* tools and web_fetch are True; "
+            "opt out. All fetch_* tools are True; "
             "catalog_search/catalog_fetch are True because they ultimately hit "
             "Tier-2/3 external endpoints."
         ),

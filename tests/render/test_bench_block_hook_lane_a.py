@@ -50,14 +50,14 @@ def test_parse_dict_builds_config():
         {
             "bench_tool_block": {
                 "allow": ["fetch_a", "fetch_b"],
-                "always_allowed": ["search_tools", "web_fetch"],
+                "always_allowed": ["search_tools", "geocode_location"],
                 "block_at_invocation": ["run_expensive"],
             }
         }
     )
     assert isinstance(cfg, BenchBlockConfig)
     assert cfg.allow == frozenset({"fetch_a", "fetch_b"})
-    assert cfg.always_allowed == frozenset({"search_tools", "web_fetch"})
+    assert cfg.always_allowed == frozenset({"search_tools", "geocode_location"})
     assert cfg.block_at_invocation == frozenset({"run_expensive"})
 
 

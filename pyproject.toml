@@ -42,12 +42,6 @@ dependencies = [
     # resolver that drops it fails only at the fetch. v3 reads the v2 stores
     # those buckets publish.
     "zarr>=2.18,<4",
-    # BeautifulSoup4 drives web_fetch's main_text and Open Graph extraction. No
-    # import statement names lxml: it is reached through the parser STRING
-    # BeautifulSoup(html, "lxml"), so a resolver that drops it fails only at the
-    # parse call.
-    "beautifulsoup4>=4.12,<5",
-    "lxml>=5.0,<7",
     "websockets>=13,<16",
     "pydantic>=2,<3",
     "python-ulid>=2,<4",
