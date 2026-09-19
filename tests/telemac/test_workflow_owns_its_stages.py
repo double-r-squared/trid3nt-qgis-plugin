@@ -207,7 +207,7 @@ def test_a_row_the_deck_never_reads_is_demand_pulled_not_fetched():
     named = set(sheet.kwargs["produced"])
     # the bed is read by the MESH's own set_bed op, never by the deck
     assert not named & {"bed", "carrier", "domain"}
-    assert "channel" in named and "settled" in named
+    assert "settled" in named
 
 
 def workflow_wire(workflow: TelemacWorkflow) -> set[str]:

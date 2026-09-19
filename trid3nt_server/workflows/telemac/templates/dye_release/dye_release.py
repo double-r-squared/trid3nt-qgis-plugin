@@ -98,7 +98,7 @@ class DATA:
     # unit is converted or refused - never read as though it were this one.
     carrier = Data.discharge(
         near=Ref("domain.centroid"), units="m3/s", measures="a streamflow",
-        opens="the carrier flow opens at", need="discharge series")
+        opens="the carrier flow opens at", need="discharge series").optional()
     # THE LEVEL the water stands at, which the run opens flat at and the outflow
     # holds. A reach whose measured ends do not FALL has no uniform-flow depth to
     # derive, and a closed body never had one. An ELEVATION on the datum the bed

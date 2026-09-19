@@ -1007,8 +1007,12 @@ def test_the_open_channel_body_is_written_at_the_derivation_it_was_solved_for():
         # written at, so the two numbers are the same constant: a stage derived
         # at one and a deck written at another is a level the run never sits at.
         workflow = TOOL_REGISTRY[name].fn.workflow
-        channel = next(n for n in workflow.plan_decl(workflow)
-                       if getattr(n, "name", "") == "channel")
+        # A question whose runs may carry no discharge authors no channel at
+        # all: it opens on its level boundaries.
+        channel = next((n for n in workflow.plan_decl(workflow)
+                        if getattr(n, "name", "") == "channel"), None)
+        if channel is None:
+            continue
         assert channel.runner.endswith("assembler.open_channel")
         # The step READS the resolved floor, which is the deck's own number
         # until the run states another.

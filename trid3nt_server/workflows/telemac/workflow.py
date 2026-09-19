@@ -442,9 +442,15 @@ class Door:
         from trid3nt_server.workflows.runtime.plan import DataRef
 
         slots: dict[str, list[str]] = {}
+        # The rows a run of this question ALWAYS carries. An .optional() row may
+        # be absent, and a stage that only some runs can feed is not a stage of
+        # this plan.
+        carried: set[str] = set()
         for row in ops.data:
             if row.role:
                 slots.setdefault(row.role, []).append(row.name)
+                if not row.is_optional:
+                    carried.add(row.name)
         domain = (slots.get(DOMAIN) or [""])[0]
         if not domain:
             raise PlanValidationError(
@@ -472,19 +478,22 @@ class Door:
         declared = {prm.name for prm in ops.params}
         level = (slots.get(LEVEL) or [""])[0]
         # THE OPEN-CHANNEL ADDITION, listed only where this question's rows carry
-        # what a channel is: a discharge for its inflow run. Everything else is a
-        # body of water the base settles on its own.
+        # what a channel is: a discharge its inflow run always carries. A body
+        # whose runs carry no discharge - a tidal mouth is one - opens on its
+        # level boundaries, which is what the base settles on its own.
+        inflow = next((name for name in slots.get(DISCHARGE, ())
+                       if name in carried), "")
         channel = (
             (Step(runner=f"{_TELEMAC}.authoring.assembler.open_channel",
                   stage="author",
                   kwargs={"mesh": Ref("mesh"),
-                          "carrier": DataRef(slots[DISCHARGE][0]),
+                          "carrier": DataRef(inflow),
                           "stage": DataRef(level) if level else None,
                           "friction_law": self._asserted("LAW_OF_BOTTOM_FRICTION"),
                           "friction_coefficient":
                               self._asserted("FRICTION_COEFFICIENT")}
                   ).named("channel"),)
-            if slots.get(DISCHARGE) else ())
+            if inflow else ())
         return replace(
             self,
             domain=self._measurements(domain, when="world") + tuple(self.domain),
