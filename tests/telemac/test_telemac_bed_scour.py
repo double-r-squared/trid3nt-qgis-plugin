@@ -196,7 +196,7 @@ def test_the_bed_the_deck_states_is_gaias_own_keywords_on_the_coupled_body():
     factor and the morphological factor are GAIA's keywords, stated by name on
     the body; only the GRADATION the dictionary lacks arrives as a value."""
     slots = _MODULE.STEERING.ASSERTED["coupling"][0]["slots"]
-    assert slots["CLASSES_SEDIMENT_DIAMETERS"] == [2.0e-4]
+    assert slots["CLASSES_SEDIMENT_DIAMETERS"] == [1.0e-4]
     assert slots["LAYERS_INITIAL_THICKNESS"] == [5.0]
     assert slots["BED_LOAD_TRANSPORT_FORMULA_FOR_ALL_SANDS"] == 1
     assert slots["HIDING_FACTOR_FORMULA"] == 1

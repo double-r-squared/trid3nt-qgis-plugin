@@ -42,11 +42,11 @@ The values the template declares. `desc` is what the model reads when it fills o
 
 | field | the proving run's value |
 |---|---|
-| `bed_evolution_max_m` | 0.002447641221806407 |
-| `bed_evolution_min_m` | -0.004868039861321449 |
-| `net_bed_mass_kg` | 410.5706 |
+| `bed_evolution_max_m` | 0.002018596511334181 |
+| `bed_evolution_min_m` | -0.0039045989979058504 |
+| `net_bed_mass_kg` | 804.7181 |
 | `surface_d50_spread_m` | 0.0 |
-| `marker_cmax_mgl` | 1.5659947395324707 |
+| `marker_cmax_mgl` | 1.5659886598587036 |
 | `active_frames` | 18 |
 | `mesh_size_m` | 20.888 |
 
@@ -72,23 +72,23 @@ It publishes these layers onto the canvas:
 
 ## The proving run
 
-Run `01M2VYWGZYYSDZPJVA070VQ0XK`, 2026-09-19T04:30:57.898610+00:00, 29.701 s, at commit `ba274ced59bf841b133f19832d2113cd6525829e-dirty`.
+Run `01M2W2S7DH1F60VN3S5M4H8HYV`, 2026-09-19T05:39:04.282848+00:00, 33.247 s, at commit `1374c6818502a65f0dd7a751e0acc9569ea938bc-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M2VYWGZYYSDZPJVA070VQ0XK)](telemac_bed_scour/telemac_bed_scour.png)
+![Every layer the run published, stacked and framed on the result (run 01M2W2S7DH1F60VN3S5M4H8HYV)](telemac_bed_scour/telemac_bed_scour.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M2VYWGZYYSDZPJVA070VQ0XK)*
+*Every layer the run published, stacked and framed on the result (run 01M2W2S7DH1F60VN3S5M4H8HYV)*
 
-![The solve, frame by frame (run 01M2VYWGZYYSDZPJVA070VQ0XK)](telemac_bed_scour/telemac_bed_scour_animation.gif)
+![The solve, frame by frame (run 01M2W2S7DH1F60VN3S5M4H8HYV)](telemac_bed_scour/telemac_bed_scour_animation.gif)
 
-*The solve, frame by frame (run 01M2VYWGZYYSDZPJVA070VQ0XK)*
+*The solve, frame by frame (run 01M2W2S7DH1F60VN3S5M4H8HYV)*
 
-![final frame (run 01M2VYWGZYYSDZPJVA070VQ0XK)](telemac_bed_scour/telemac_bed_scour_final_frame.png)
+![final frame (run 01M2W2S7DH1F60VN3S5M4H8HYV)](telemac_bed_scour/telemac_bed_scour_final_frame.png)
 
-*final frame (run 01M2VYWGZYYSDZPJVA070VQ0XK)*
+*final frame (run 01M2W2S7DH1F60VN3S5M4H8HYV)*
 
-![marker concentration - the chart the run persisted (run 01M2VYWGZYYSDZPJVA070VQ0XK)](telemac_bed_scour/telemac_bed_scour_chart_marker_concentration.png)
+![marker concentration - the chart the run persisted (run 01M2W2S7DH1F60VN3S5M4H8HYV)](telemac_bed_scour/telemac_bed_scour_chart_marker_concentration.png)
 
-*marker concentration - the chart the run persisted (run 01M2VYWGZYYSDZPJVA070VQ0XK)*
+*marker concentration - the chart the run persisted (run 01M2W2S7DH1F60VN3S5M4H8HYV)*
 
 ### The sheet it filled
 
@@ -119,5 +119,5 @@ await TOOL_REGISTRY['telemac_bed_scour'].fn(
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2VYWGZYYSDZPJVA070VQ0XK` and commit `ba274ced59bf841b133f19832d2113cd6525829e-dirty`. The full argument record is [`telemac_bed_scour/run.json`](telemac_bed_scour/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2W2S7DH1F60VN3S5M4H8HYV` and commit `1374c6818502a65f0dd7a751e0acc9569ea938bc-dirty`. The full argument record is [`telemac_bed_scour/run.json`](telemac_bed_scour/run.json).
 

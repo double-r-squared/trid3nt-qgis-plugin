@@ -239,10 +239,14 @@ class STEERING(T2D):
     #: LAST, so a mixture wins over the single class stated beside it.
     coupling = [GAIA.bed(geometry=_GEOMETRY, boundary=_BOUNDARY,
                          gradation=P.sediment_gradation, presets=GRADATION_PRESETS,
-                         # 200 um medium sand, in the metres the keyword reads:
-                         # the class the bed-load formulae are calibrated over,
-                         # and the whole bed where no gradation is given.
-                         CLASSES_SEDIMENT_DIAMETERS=[2.0e-4],
+                         # 100 um very fine sand, in the metres the keyword
+                         # reads: the finest class the bed-load formulae treat
+                         # as sand (silt below about 63 um is cohesive and they
+                         # are not written for it), so a scour answer stands on
+                         # a bed that moves; the whole bed where no gradation
+                         # is given, and one number across the mesh until a
+                         # bed-material field fills the class fractions.
+                         CLASSES_SEDIMENT_DIAMETERS=[1.0e-4],
                          # Five metres of erodible stock, deeper than any cut
                          # this question makes, so the answer is never
                          # stock-limited.
