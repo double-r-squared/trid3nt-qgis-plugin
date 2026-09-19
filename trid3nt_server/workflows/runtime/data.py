@@ -14,7 +14,6 @@ from trid3nt_contracts.coverage import DATA_CLASSES
 
 from .errors import PlanValidationError, SuppliedGeometryError
 from .plan import DataRef, Row, body_rows
-from .temporal import TemporalSpec, spec_from
 
 __all__ = [
     "BED",
@@ -145,7 +144,6 @@ class Producer(Row):
     runner: str
     kwargs: Mapping[str, Any] = field(default_factory=lambda: MappingProxyType({}))
     ladder_rungs: tuple["Producer", ...] = ()
-    temporal: TemporalSpec | None = None
     supplied_uri: str | None = None
     supplied_validate: Any = None
     #: Marked ``.supplied()``: the caller's own artifact stands in place of the
@@ -183,19 +181,6 @@ class Producer(Row):
                 f"{type(wrong[0]).__name__} ({wrong[0]!r}). A rung the interpreter "
                 "cannot call is a fallback that never fires.")
         return replace(self, ladder_rungs=self.ladder_rungs + tuple(rungs))
-
-    def resample(self, *, to: str, method: str | None = None,
-                 max_gap: str = "native*3") -> "Producer":
-        """Declare the cadence this artifact is delivered at, and how it gets there.
-        ``method`` unset takes the quantity-class default; a hole wider than
-        ``max_gap`` refuses rather than being bridged."""
-        return replace(self, temporal=spec_from(to, method, max_gap, None,
-                                                self.temporal))
-
-    def normalize(self, *, units: str) -> "Producer":
-        """Declare the units this artifact is delivered in (explicit table, no guessing)."""
-        return replace(self, temporal=spec_from(None, None, "native*3", units,
-                                                self.temporal))
 
 
 class ToolWord:

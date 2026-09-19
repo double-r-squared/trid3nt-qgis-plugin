@@ -21,9 +21,12 @@ from typing import Any, Mapping
 from trid3nt_server.workflows.runtime.temporal import (
     Series,
     convert_units,
+    TemporalGapError,
     TemporalShapeError,
     TemporalUnitsError,
 )
+
+from .series import align
 
 from .geometry import read_geometry_doc, source_uri
 from .vertical_datum import DatumError, datum_of, onto_frame
@@ -226,7 +229,7 @@ def observation(source: Any, *, near: Any = None, field: str = "value",
                 above_field: str = "", at: Any = None, window_s: Any = None,
                 to_datum: Any = None, offset: Any = None,
                 measures: str = "this value", opens: str = "",
-                label: str = "observation",
+                quantity: str = "state", label: str = "observation",
                 code: str = _CODE) -> Observation | None:
     """THE ingestion: a fetched point layer, or a STATED value -> one reading.
 
@@ -295,14 +298,14 @@ def observation(source: Any, *, near: Any = None, field: str = "value",
         series=_series(props, series_field, columns.get(series_field) or units,
                        to_units, shift + convert(zero, units, to_units)
                        if to_units is not None else shift + zero,
-                       label, at, window_s))
+                       label, at, window_s, quantity))
     _journal(found, opens=opens, stated=False)
     return found
 
 
 def _series(props: Mapping[str, Any], series_field: str, units: Any,
             to_units: Any, shift: float, label: str, at: Any = None,
-            window_s: Any = None) -> Series | None:
+            window_s: Any = None, quantity: str = "state") -> Series | None:
     """THE WINDOW this station reported, on the slot's own unit and datum,
     OPENED at the moment the run opens at.
 
@@ -327,14 +330,19 @@ def _series(props: Mapping[str, Any], series_field: str, units: Any,
         # A record whose stamps repeat or run backwards states no window; the
         # reading above stands and the run is lumped, which the row says.
         return None
-    if to_units is not None and found.units and str(to_units) != found.units:
-        try:
-            found = found.in_units(str(to_units))
-        except TemporalUnitsError as exc:
-            raise ObservationError(
-                "OBSERVATION_UNIT_UNCONVERTIBLE",
-                f"{label} reports its window in {found.units!r} and this slot "
-                f"reads {to_units!r}: {exc}") from exc
+    want = str(to_units) if to_units is not None and found.units else None
+    try:
+        # The record is written at the cadence it was MEASURED at - the engine
+        # reads between two rows - so nothing is moved here but the unit; the
+        # hole bound is what this alignment is asked to judge.
+        found = align(found, units=want, quantity=quantity).series
+    except TemporalUnitsError as exc:
+        raise ObservationError(
+            "OBSERVATION_UNIT_UNCONVERTIBLE",
+            f"{label} reports its window in {found.units!r} and this slot "
+            f"reads {to_units!r}: {exc}") from exc
+    except TemporalGapError as exc:
+        raise ObservationError("OBSERVATION_WINDOW_UNCOVERED", str(exc)) from exc
     return found.shifted(shift)
 
 

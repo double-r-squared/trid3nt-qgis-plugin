@@ -65,6 +65,7 @@ from .plan import (
     declared_reads,
 )
 from .resolver import provenance_entries
+from .temporal import RATE, STATE
 from .validate import validate_plan
 
 __all__ = ["PlanNode", "RunResult", "expand_plan", "interpret"]
@@ -730,6 +731,13 @@ def _what_the_record_reports(env: _Env, decl: DataDecl,
         # reading, the window and the zero is the source's own statement.
         told.update(field=row.value_column, series_field=row.series_column,
                     above_field=row.above_column)
+    # HOW THE RECORD MOVES IN TIME is the source's own class where the row that
+    # answered states one, else the slot's role: a flow is a per-time total and a
+    # level is read at an instant. No author states it.
+    from trid3nt_server.inputs.series import quantity_class
+
+    told["quantity"] = (quantity_class(row.data_class) if row is not None
+                        else RATE if decl.role == DISCHARGE else STATE)
     if decl.coercion.get("at") is None and env.params is not None:
         told["at"] = env.params.value_of("event_time")
     return told
@@ -853,13 +861,6 @@ async def _walk_ladder(env: _Env, producer: Producer,
     failures: list[str] = []
     for index, rung in enumerate(rungs):
         kwargs = await _bind(dict(rung.kwargs), env, label)
-        if rung.temporal is None and producer.temporal is not None:
-            # The declared transform is the ARTIFACT's, not the rung's: whichever
-            # rung answers delivers the cadence and units the consumer was
-            # promised, or refuses.
-            kwargs.setdefault("temporal", producer.temporal)
-        elif rung.temporal is not None:
-            kwargs.setdefault("temporal", rung.temporal)
         try:
             async with substep(current_emitter(), rung.runner.rsplit(".", 1)[-1]):
                 value = await _call_runner(rung.runner, kwargs, label)

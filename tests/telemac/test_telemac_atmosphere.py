@@ -228,7 +228,7 @@ def test_a_record_shorter_than_the_run_refuses_rather_than_extrapolating(monkeyp
 
 
 def test_a_gap_too_long_to_describe_a_day_refuses(monkeypatch):
-    with pytest.raises(TelemacError, match="gap in the record"):
+    with pytest.raises(TelemacError, match="hole ending at"):
         _observed(monkeypatch, _rows([0, 1, 2, 20, 21, 22, 23]),
                   duration_s=22.0 * _HOUR)
 

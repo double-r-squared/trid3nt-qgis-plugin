@@ -86,6 +86,14 @@ package SteeringSurface {
         */
     }
 
+    part def Alignment {
+        doc /*
+        The ONE move a measured record may make onto the clock a reader reads it
+        on: its quantity class picks the method, its unit is converted, and a
+        hole wider than the bound refuses.
+        */
+    }
+
     part def ObservationSlot {
         doc /*
         The ingestion behind the measured-value slots: one reading, and the
@@ -368,6 +376,12 @@ package SteeringSurface {
     part temporalValue : TemporalValue {
         doc /*
         code: trid3nt_server/workflows/runtime/temporal.py
+        */
+    }
+
+    part alignment : Alignment {
+        doc /*
+        code: trid3nt_server/inputs/series.py
         */
     }
 
@@ -1176,10 +1190,13 @@ package SteeringSurface {
     satisfy requirement AStatedValueIsANumberOrASeries by observationSlot;
     verify requirement AStatedValueIsANumberOrASeries by
         "tests/runtime/test_series.py::test_a_series_prints_as_its_shape_rather_than_its_points";
+    satisfy requirement AStatedValueIsANumberOrASeries by alignment;
     verify requirement AStatedValueIsANumberOrASeries by
-        "tests/runtime/test_series.py::test_a_record_finer_than_the_step_resamples_onto_it";
+        "tests/inputs/test_series_align.py::test_a_rate_keeps_its_total_across_a_coarser_clock";
     verify requirement AStatedValueIsANumberOrASeries by
-        "tests/runtime/test_series.py::test_a_record_coarser_than_the_step_is_everything_the_engine_reads";
+        "tests/inputs/test_series_align.py::test_a_clock_no_coarser_than_the_record_leaves_it_as_measured";
+    verify requirement AStatedValueIsANumberOrASeries by
+        "tests/inputs/test_series_align.py::test_a_hole_wider_than_the_bound_refuses_rather_than_being_bridged";
     verify requirement AStatedValueIsANumberOrASeries by
         "tests/inputs/test_observation.py::test_the_whole_window_is_kept_beside_the_reading";
     verify requirement AStatedValueIsANumberOrASeries by

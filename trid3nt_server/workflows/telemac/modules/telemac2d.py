@@ -10,7 +10,9 @@ from __future__ import annotations
 from types import MappingProxyType
 from typing import Any, Mapping, Sequence
 
+from trid3nt_server.inputs.series import align
 from trid3nt_server.workflows.runtime import Ref
+from trid3nt_server.workflows.runtime.temporal import RATE, STATE
 
 from ..authoring.atmosphere import Atmosphere, expand_atmosphere
 from .coupling import couples
@@ -340,8 +342,12 @@ def _boundaries(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
         window = windows.get(what)
         if window is not None:
             unit = "m3/s" if what == "flowrate" else "m"
+            # A FLOW is a rate and a STAGE is a level, so the two move onto the
+            # engine's own step by different rules; both open where this run does.
             columns.append((column_name(what, number), unit,
-                            window.at_step(step_s).opening_at(start_s)))
+                            align(window, onto=step_s, opening_at=start_s,
+                                  quantity=RATE if what == "flowrate" else STATE,
+                                  units=unit).series))
     # A CLOSED body has no liquid boundary to prescribe anything at, and a run
     # with no tracers prescribes none. An EMPTY list is not that statement - it
     # is a keyword with nothing after it, which DAMOCLES reads as the next

@@ -2,9 +2,8 @@
 
 Covered: the sentence a card row and a record both print, stamps read onto the
 run's own clock, the unit a slot reads, the datum shift every reading rides,
-the engine's own reading between two rows, the resample to a step coarser than
-the record and the record left alone under a finer one, and the shapes that
-refuse.
+the engine's own reading between two rows, and the shapes that refuse. Moving a
+record onto a reader's clock is the alignment's, and is covered beside it.
 """
 
 from __future__ import annotations
@@ -52,17 +51,6 @@ def test_a_value_between_two_rows_is_read_the_way_the_engine_reads_its_table():
     assert found.at(50.0) == pytest.approx(15.0)
     assert found.at(-10.0) == 10.0
     assert found.at(500.0) == 20.0
-
-
-def test_a_record_finer_than_the_step_resamples_onto_it():
-    found = Series([0.0, 300.0, 600.0, 900.0], [1.0, 2.0, 3.0, 4.0],
-                   units="m3/s").at_step(600.0)
-    assert found.times_s == (0.0, 600.0, 900.0)
-
-
-def test_a_record_coarser_than_the_step_is_everything_the_engine_reads():
-    record = Series([0.0, 3600.0, 7200.0], [1.0, 2.0, 3.0], units="m3/s")
-    assert record.at_step(60.0) is record
 
 
 def test_a_series_that_does_not_move_forward_refuses():

@@ -14,6 +14,12 @@ import math
 from types import MappingProxyType
 from typing import Any, Mapping, Sequence
 
+from trid3nt_server.inputs.series import align
+from trid3nt_server.workflows.runtime.temporal import (
+    Series,
+    TemporalGapError,
+)
+
 from ..errors import TelemacError
 
 __all__ = ["ATMOSPHERE_FILENAME", "COLUMNS", "DISPUTED", "READS",
@@ -491,18 +497,22 @@ def _series(observations: Sequence[Mapping[str, Any]], duration_s: Any,
     stamps = sorted(kept)
     if len(stamps) < _MIN_INSTANTS:
         raise ValueError(f"{len(stamps)} complete observations in the window")
-    times = [(stamp - stamps[0]).total_seconds() for stamp in stamps]
-    gaps = [b - a for a, b in zip(times, times[1:])]
-    if max(gaps) > _MAX_GAP_S:
-        raise ValueError(f"a {max(gaps) / 3600.0:.0f} h gap in the record")
+    # Each slot is a measured record on this station's clock, and it is judged
+    # where every record is: the hole bound is the alignment's, not this file's.
+    try:
+        series = {slot: align(Series.from_samples(
+                      [(stamp, kept[stamp][slot]) for stamp in stamps],
+                      units=COLUMNS[slot][1]), max_gap_s=_MAX_GAP_S).series
+                  for slot in kept[stamps[0]]}
+    except TemporalGapError as why:
+        raise ValueError(str(why)) from why
+    times = list(next(iter(series.values())).times_s)
     # The engine STOPS when a requested instant falls outside the table at either
     # end, so a run longer than the record it is driven by cannot be authored.
     if duration_s is not None and times[-1] < float(duration_s):
         raise ValueError(f"the record runs {times[-1] / 3600.0:.0f} h and the "
                          f"run is {float(duration_s) / 3600.0:.0f} h long")
-    return (times,
-            {slot: [kept[stamp][slot] for stamp in stamps]
-             for slot in kept[stamps[0]]},
+    return (times, {slot: list(found.values) for slot, found in series.items()},
             stamps[0])
 
 

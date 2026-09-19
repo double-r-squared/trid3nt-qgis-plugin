@@ -10,14 +10,20 @@ import math
 import os
 import tempfile
 import uuid
-from typing import Any
+from typing import Any, Sequence
 
 import numpy as np
 
 from trid3nt_contracts.execution import LayerURI
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
+from trid3nt_server.inputs.series import align
 from trid3nt_server.tools import register_tool
+from trid3nt_server.workflows.runtime.temporal import (
+    STATE,
+    Series,
+    TemporalShapeError,
+)
 
 __all__ = [
     "extract_model_at_observations",
@@ -956,6 +962,22 @@ def _parse_time_series_csv(raw: Any) -> list[tuple[str, float]]:
     return out
 
 
+def _within_reach(target: Sequence[float], source: Sequence[float],
+                  tolerance_s: float) -> tuple[tuple[float, ...], set[int]]:
+    """Which target instants have a source row within reach, and which do not.
+
+    An instant farther from every row than the tolerance sits in a hole the
+    record does not answer over, and reading the model there would be reading a
+    line drawn across missing output."""
+    kept, skipped = [], set()
+    for index, instant in enumerate(target):
+        if min(abs(instant - t) for t in source) <= float(tolerance_s):
+            kept.append(instant)
+        else:
+            skipped.add(index)
+    return tuple(kept), skipped
+
+
 def _pair_timeseries(
     model_local: str,
     obs_uri: str,
@@ -973,7 +995,6 @@ def _pair_timeseries(
     nearest coordinate, timestamps exactly or within ``time_tolerance_s``.
     """
     import geopandas as gpd  # noqa: F401
-    import datetime as _dt
 
     model_gdf = _load_points(model_local, tmpdir, "model")
     obs_gdf = _load_points(obs_uri, tmpdir, "observations")
@@ -1001,15 +1022,6 @@ def _pair_timeseries(
         for j in range(len(model_gdf))
     ]
 
-    def _parse_iso(s: str) -> float | None:
-        try:
-            t = _dt.datetime.fromisoformat(s.replace("Z", "+00:00"))
-            if t.tzinfo is None:
-                t = t.replace(tzinfo=_dt.timezone.utc)
-            return t.timestamp()
-        except ValueError:
-            return None
-
     # Degrees of latitude the tolerance buys at the observations' own latitude.
     # The comparison below is a planar degree distance, so the longitude axis
     # is under-scaled by 1/cos(lat) - the pairing loop's own approximation.
@@ -1033,36 +1045,49 @@ def _pair_timeseries(
         if not msamples:
             dropped.append({"obs_id": oid, "reason": "nodata_sample"})
             continue
-        m_epochs = [(_parse_iso(t), v, t) for t, v in msamples]
-        m_epochs = [(e, v, t) for (e, v, t) in m_epochs if e is not None]
         osamples = _parse_time_series_csv(obs_gdf["time_series_csv"].iloc[i])
         if not osamples:
             dropped.append({"obs_id": oid, "reason": "unparseable_value"})
             continue
-        matched_here = 0
-        for otime, oval in osamples:
-            oe = _parse_iso(otime)
-            if oe is None:
-                dropped.append({"obs_id": f"{oid}@{otime}", "reason": "no_time_match"})
-                continue
-            best = min(m_epochs, key=lambda t: abs(t[0] - oe))
-            dt_s = abs(best[0] - oe)
-            if dt_s > time_tolerance_s:
-                dropped.append({"obs_id": f"{oid}@{otime}", "reason": "no_time_match"})
-                continue
-            if dt_s > 0:
-                any_nearest = True
+        # BOTH RECORDS ON ONE CLOCK, opened at the observation's first sample,
+        # so the model is read AT the moment the gauge reported rather than at
+        # whichever of its own rows happened to sit closest.
+        origin = osamples[0][0]
+        try:
+            modelled = Series.from_samples(msamples, units="", at=origin)
+            observed = Series.from_samples(osamples, units="", at=origin)
+        except TemporalShapeError:
+            dropped.append({"obs_id": oid, "reason": "no_time_match"})
+            continue
+        wanted, skipped = _within_reach(observed.times_s, modelled.times_s,
+                                        time_tolerance_s)
+        for index in skipped:
+            dropped.append({"obs_id": f"{oid}@{osamples[index][0]}",
+                            "reason": "no_time_match"})
+        if not wanted:
+            continue
+        # The holes in the model record are judged by the tolerance above - an
+        # instant inside one has no row within reach and was dropped - so the
+        # alignment is not asked to judge a cadence bound a second time.
+        span = modelled.times_s[-1] - modelled.times_s[0]
+        # One instant is not a clock; a STATE read between the two rows that
+        # bracket it is the same rule the alignment applies to many.
+        read = (align(modelled, onto=wanted, quantity=STATE, max_gap_s=span
+                      ).series.values
+                if len(wanted) > 1 else (modelled.at(wanted[0]),))
+        any_nearest = any_nearest or bool(set(wanted) - set(modelled.times_s))
+        for index, value in zip([i for i in range(len(observed)) if i not in skipped],
+                                read):
             rows.append(
                 {
                     "obs_id": oid,
-                    "observed": float(oval) + shift_m,
-                    "simulated": float(best[1]),
-                    "time": otime,
+                    "observed": float(observed.values[index]) + shift_m,
+                    "simulated": float(value),
+                    "time": osamples[index][0],
                     "lon": olon,
                     "lat": olat,
                 }
             )
-            matched_here += 1
 
     if not rows:
         raise PairingNoPairsError(
@@ -1082,7 +1107,8 @@ def _pair_timeseries(
         geometry=[Point(r["lon"], r["lat"]) for r in rows],
         crs="EPSG:4326",
     )
-    temporal = f"nearest_within_tolerance:{int(time_tolerance_s)}" if any_nearest else "exact"
+    temporal = (f"interpolated_within_tolerance:{int(time_tolerance_s)}"
+                if any_nearest else "exact")
     alignment = {
         "spatial": f"nearest_station_coordinate (within {station_tolerance_m:g} m)",
         "temporal": temporal,
