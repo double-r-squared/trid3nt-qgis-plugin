@@ -7,6 +7,7 @@ directory nothing sweeps, and outlives every artifact it describes.
 from __future__ import annotations
 
 import contextvars
+import dataclasses
 import json
 import logging
 import os
@@ -219,6 +220,13 @@ def _small(value: Any) -> Any:
         return [_small(v) for v in value]
     if isinstance(value, (str, int, float, bool)) or value is None:
         return value
+    # A row the record carries is a row a reader can HAND BACK, so a slot's own
+    # value is written as the shape that slot ingests rather than as a repr
+    # nothing takes - at full precision, because the record is what a rerun is
+    # read from and a rounded coordinate is a different place.
+    if dataclasses.is_dataclass(value) and not isinstance(value, type):
+        return {key: _small(field) for key, field
+                in dataclasses.asdict(value).items()}
     return str(value)
 
 
