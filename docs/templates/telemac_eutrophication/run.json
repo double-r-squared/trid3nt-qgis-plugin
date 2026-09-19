@@ -1,7 +1,7 @@
 {
   "tool": "telemac_eutrophication",
   "run_id": "01M2VDCVVHYA2PSTPY4HC01SZ7",
-  "commit": "8397312dd28e2ade6266f5eef50ce148c6c060c5-dirty",
+  "commit": "9159953f15209df6f74626b87c0a98cbb92e4d98-dirty",
   "recorded_at": "2026-09-18T23:26:00.603204+00:00",
   "engine": "telemac",
   "wall_seconds": 75.116,
@@ -10,6 +10,8 @@
     "station": "Point(lon=-122.669784, lat=45.518485, name=None)",
     "mesh_resolution_m": 40.0
   },
+  "keywords": {},
+  "supplied": {},
   "sheet": [
     {
       "name": "seed",

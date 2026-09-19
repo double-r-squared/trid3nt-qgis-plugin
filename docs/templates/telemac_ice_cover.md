@@ -99,7 +99,7 @@ It publishes these layers onto the canvas:
 
 ## The proving run
 
-Run `01M2WXJS87WECYEZ42A3G3FPFW`, 2026-09-19T13:30:07.017730+00:00, 206.341 s, at commit `1f7f6b6b3ad1d5a8aa95b26cb99b5179d40b64d3`.
+Run `01M2WXJS87WECYEZ42A3G3FPFW`, 2026-09-19T13:30:07.017730+00:00, 206.341 s, at commit `9159953f15209df6f74626b87c0a98cbb92e4d98-dirty`.
 
 ![Every layer the run published, stacked and framed on the result (run 01M2WXJS87WECYEZ42A3G3FPFW)](telemac_ice_cover/telemac_ice_cover.png)
 
@@ -156,5 +156,5 @@ await TOOL_REGISTRY['telemac_ice_cover'].fn(
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2WXJS87WECYEZ42A3G3FPFW` and commit `1f7f6b6b3ad1d5a8aa95b26cb99b5179d40b64d3`. The full argument record is [`telemac_ice_cover/run.json`](telemac_ice_cover/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2WXJS87WECYEZ42A3G3FPFW` and commit `9159953f15209df6f74626b87c0a98cbb92e4d98-dirty`. The full argument record is [`telemac_ice_cover/run.json`](telemac_ice_cover/run.json).
 

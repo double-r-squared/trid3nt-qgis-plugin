@@ -1,7 +1,7 @@
 {
   "tool": "telemac_water_temperature",
   "run_id": "01M2W7TB7KN9P8FGV16ZN85PMJ",
-  "commit": "b9b61d10dd7241679ed8a1d29cdb2ae1de50b5ae-dirty",
+  "commit": "9159953f15209df6f74626b87c0a98cbb92e4d98-dirty",
   "recorded_at": "2026-09-19T07:07:45.365530+00:00",
   "engine": "telemac",
   "wall_seconds": 113.11,

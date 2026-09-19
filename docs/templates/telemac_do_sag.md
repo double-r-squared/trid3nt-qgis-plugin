@@ -69,7 +69,7 @@ It publishes these layers onto the canvas:
 
 ## The proving run
 
-Run `01M2W7MXRNMJDQ2FAPSVNPDHSM`, 2026-09-19T07:04:25.319103+00:00, 55.658 s, at commit `8bcc5407309e3f52868fe2532f555f6228dc8262`.
+Run `01M2W7MXRNMJDQ2FAPSVNPDHSM`, 2026-09-19T07:04:25.319103+00:00, 55.658 s, at commit `9159953f15209df6f74626b87c0a98cbb92e4d98-dirty`.
 
 ![Every layer the run published, stacked and framed on the result (run 01M2W7MXRNMJDQ2FAPSVNPDHSM)](telemac_do_sag/telemac_do_sag.png)
 
@@ -115,5 +115,5 @@ await TOOL_REGISTRY['telemac_do_sag'].fn(
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2W7MXRNMJDQ2FAPSVNPDHSM` and commit `8bcc5407309e3f52868fe2532f555f6228dc8262`. The full argument record is [`telemac_do_sag/run.json`](telemac_do_sag/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2W7MXRNMJDQ2FAPSVNPDHSM` and commit `9159953f15209df6f74626b87c0a98cbb92e4d98-dirty`. The full argument record is [`telemac_do_sag/run.json`](telemac_do_sag/run.json).
 

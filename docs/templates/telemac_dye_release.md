@@ -67,23 +67,23 @@ It publishes these layers onto the canvas:
 
 ## The proving run
 
-Run `01M2VYGS4FYGA4VSMXB3S64X1F`, 2026-09-19T04:24:30.633679+00:00, 28.663 s, at commit `ba274ced59bf841b133f19832d2113cd6525829e-dirty`.
+Run `01M2X63C3GZKQET1G5GGHZVFR8`, 2026-09-19T15:56:14.536025+00:00, 28.293 s, at commit `9159953f15209df6f74626b87c0a98cbb92e4d98-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M2VYGS4FYGA4VSMXB3S64X1F)](telemac_dye_release/telemac_dye_release.png)
+![Every layer the run published, stacked and framed on the result (run 01M2X63C3GZKQET1G5GGHZVFR8)](telemac_dye_release/telemac_dye_release.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M2VYGS4FYGA4VSMXB3S64X1F)*
+*Every layer the run published, stacked and framed on the result (run 01M2X63C3GZKQET1G5GGHZVFR8)*
 
-![The solve, frame by frame (run 01M2VYGS4FYGA4VSMXB3S64X1F)](telemac_dye_release/telemac_dye_release_animation.gif)
+![The solve, frame by frame (run 01M2X63C3GZKQET1G5GGHZVFR8)](telemac_dye_release/telemac_dye_release_animation.gif)
 
-*The solve, frame by frame (run 01M2VYGS4FYGA4VSMXB3S64X1F)*
+*The solve, frame by frame (run 01M2X63C3GZKQET1G5GGHZVFR8)*
 
-![peak frame (run 01M2VYGS4FYGA4VSMXB3S64X1F)](telemac_dye_release/telemac_dye_release_peak_frame.png)
+![peak frame (run 01M2X63C3GZKQET1G5GGHZVFR8)](telemac_dye_release/telemac_dye_release_peak_frame.png)
 
-*peak frame (run 01M2VYGS4FYGA4VSMXB3S64X1F)*
+*peak frame (run 01M2X63C3GZKQET1G5GGHZVFR8)*
 
-![dye concentration - the chart the run persisted (run 01M2VYGS4FYGA4VSMXB3S64X1F)](telemac_dye_release/telemac_dye_release_chart_dye_concentration.png)
+![dye concentration - the chart the run persisted (run 01M2X63C3GZKQET1G5GGHZVFR8)](telemac_dye_release/telemac_dye_release_chart_dye_concentration.png)
 
-*dye concentration - the chart the run persisted (run 01M2VYGS4FYGA4VSMXB3S64X1F)*
+*dye concentration - the chart the run persisted (run 01M2X63C3GZKQET1G5GGHZVFR8)*
 
 ### The sheet it filled
 
@@ -98,7 +98,6 @@ Every slot the run resolved, with where the value came from. The engine's own de
 | `compute_class` | medium | - | default_demo | declared constant default |
 | `vertical_frame` | NAVD88 | - | default_demo | declared constant default |
 | `decaying_substance` | - | - | prompt_interpreted | not supplied (declared optional) |
-| `continue_from` | - | - | user | not supplied (declared optional) |
 | `event_time` | - | - | prompt_interpreted | not supplied (declared optional) |
 
 ### Reproduce
@@ -111,9 +110,11 @@ await TOOL_REGISTRY['telemac_dye_release'].fn(
     release={'lon': -122.669784, 'lat': 45.518485, 'name': None},
     spill_duration_s=300.0,
     spill_fraction=0.25,
+    carrier=56.6,
+    stage=2.776,
     keywords={'DURATION': 1800.0},
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2VYGS4FYGA4VSMXB3S64X1F` and commit `ba274ced59bf841b133f19832d2113cd6525829e-dirty`. The full argument record is [`telemac_dye_release/run.json`](telemac_dye_release/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2X63C3GZKQET1G5GGHZVFR8` and commit `9159953f15209df6f74626b87c0a98cbb92e4d98-dirty`. The full argument record is [`telemac_dye_release/run.json`](telemac_dye_release/run.json).
 

@@ -1,7 +1,7 @@
 {
   "tool": "telemac_ice_cover",
   "run_id": "01M2WXJS87WECYEZ42A3G3FPFW",
-  "commit": "1f7f6b6b3ad1d5a8aa95b26cb99b5179d40b64d3",
+  "commit": "9159953f15209df6f74626b87c0a98cbb92e4d98-dirty",
   "recorded_at": "2026-09-19T13:30:07.017730+00:00",
   "engine": "telemac",
   "wall_seconds": 206.341,
