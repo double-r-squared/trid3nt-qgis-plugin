@@ -80,7 +80,7 @@ def test_the_publish_stage_writes_the_field() -> None:
     written = journal.drain_outputs(token)
     assert written == [{"layer_id": "a", "name": "Peak depth", "layer_type": "mesh",
                         "uri": "s3://runs/R/m.slf", "quantity": "water_depth",
-                        "units": "m"}]
+                        "tracer": None, "units": "m"}]
 
 
 def test_quantity_label_says_the_quantity_out_loud() -> None:
