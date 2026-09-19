@@ -120,6 +120,29 @@ payload_estimate:
   mb_per_sq_deg: 0.0021114864864864866
   floor_mb: 0.05
   ceil_mb: 5.0
+
+coverage:
+- data_class: weather forcing
+  kind: predicted
+  extent:
+    kind: surface
+    rings:
+      - [[-134.0, 21.0], [-60.0, 21.0], [-60.0, 53.0], [-134.0, 53.0]]
+    note: NOAA HRRR-Zarr CONUS 3 km operational forecast domain
+  window:
+    series: true
+    cadence: hourly cycles, forecast lead hours 0-48 (00/06/12/18z extended
+      cycles; 1-18 h on the others)
+  resolution_m: 3000.0
+  datum: null
+  units:
+    2m_temperature: K
+    10m_u_wind: m s-1
+    10m_v_wind: m s-1
+    surface_precip_1hr: kg m-2
+    10m_wind_speed: m s-1
+  value_column: ""
+
 docstring: |-
   NOAA HRRR 3 km short-term weather forecast -- Tier-1 CONUS fetcher.
 

@@ -86,6 +86,7 @@ caveats:
   the common out-of-season state).'
 - A bbox spanning more than 2 tropical-cyclone basins is rejected with guidance rather
   than pulling the 330 MB global IBTrACS file (STORM_TRACKS_INPUT_ERROR).
+- "model-callable, not matched: a tropical-cyclone track is not one of the seventeen data classes, so it carries no coverage row"
 corpus:
 - show me the track of Hurricane Michael
 - where did Hurricane Katrina travel

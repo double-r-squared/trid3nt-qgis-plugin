@@ -83,6 +83,7 @@ caveats:
 - LIVE NWS active-alerts snapshot (current-only, 0-7 days); nationwide by default or ?area=<state>. Alerts
   carrying only zone/county references have their affected zones resolved to polygons (deduped, capped,
   best-effort); an unresolvable alert keeps its row with NULL geometry. No API key.
+- "model-callable, not matched: an active alert is not one of the seventeen data classes, so it carries no coverage row"
 docstring: |-
   Fetch active National Weather Service alerts -- nationwide, or precisely scoped to one US state.
 

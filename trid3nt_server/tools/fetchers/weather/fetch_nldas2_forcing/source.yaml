@@ -77,10 +77,38 @@ payload_estimate:
   floor_mb: 0.02
   ceil_mb: 4.0
 
+coverage:
+- data_class: weather forcing
+  kind: modelled
+  extent:
+    kind: surface
+    rings:
+      - [[-124.77, 25.05], [-67.06, 25.05], [-67.06, 49.40], [-124.77, 49.40]]
+    note: NLDAS-2 CONUS land-surface forcing grid (extends into southern Canada
+      / northern Mexico past this stated box, which the conus_only gate does
+      not ask beyond)
+  window:
+    series: true
+    earliest: "1979-01-02"
+    max_span_days: 92.0
+    cadence: hourly; NOT real-time, ends yesterday
+  resolution_m: 13915.0
+  datum: null
+  units:
+    prcp: kg/m^2
+    rlds: W/m^2
+    rsds: W/m^2
+    pet: kg/m^2
+    psurf: Pa
+    humidity: kg/kg
+    temp: K
+    wind_u: m/s
+    wind_v: m/s
+  value_column: ""
+
 caveats:
 - "NLDAS-2 is served from NASA GES DISC behind Earthdata Login: without a ~/.netrc machine entry for urs.earthdata.nasa.gov this refuses by name (NLDAS2_UPSTREAM_ERROR) rather than parsing the sign-in page as data."
-- "1/8 degree (~12 km) hourly CONUS + southern Canada / northern Mexico, 1979-01-02 to yesterday; NOT real-time and NOT a forecast."
-- "Returns AOI-MEAN hourly series per variable (a forcing record), not a spatial raster; each series carries the dataset's own unit string (precipitation kg/m^2 per hour, which is mm; temperature K; wind m/s)."
+- "Returns AOI-MEAN hourly series per variable (a forcing record), not a spatial raster."
 - "Coarser than fetch_aorc_precip (~800 m) for precipitation alone; NLDAS-2 is the source when the run needs the FULL forcing set (radiation, humidity, wind, pressure) that AORC's precipitation record does not carry."
 
 docstring: |-

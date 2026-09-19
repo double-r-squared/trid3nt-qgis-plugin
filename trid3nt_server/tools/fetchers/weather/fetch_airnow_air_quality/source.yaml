@@ -80,6 +80,7 @@ caveats:
 - 'EPA AirNow current-hour AQI monitor observations (keyed: api_key -> secret_ref -> TRID3NT_AIRNOW_API_KEY
   env). One point per monitor-parameter (latest in a 3h window). US/Canada/Mexico. No key -> credential-shaped
   AIRNOW_MISSING_KEY (NAME-only card); empty bbox -> honest header-only FGB.'
+- "model-callable, not matched: air quality is not one of the seventeen data classes, so it carries no coverage row"
 docstring: |-
   EPA AirNow current-hour air-quality / AQI / PM2.5 monitor observations as points.
 

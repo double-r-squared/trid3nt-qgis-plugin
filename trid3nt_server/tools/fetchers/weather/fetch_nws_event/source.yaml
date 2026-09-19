@@ -84,6 +84,7 @@ payload_estimate:
 caveats:
 - LIVE NWS active-alerts snapshot (current-only, 0-7 days); geometry-less zone-only alerts are dropped
   (no map footprint). An area with no active alerts -> a header-only FlatGeobuf, never an error.
+- "model-callable, not matched: an active alert is not one of the seventeen data classes, so it carries no coverage row"
 docstring: |-
   Fetch active National Weather Service alerts scoped to a US state, county, or bbox.
 

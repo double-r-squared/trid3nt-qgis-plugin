@@ -73,10 +73,41 @@ payload_estimate:
   features_per_sq_deg: 36.0
   kb_per_feature: 0.2
   floor_mb: 0.001
+coverage:
+- data_class: weather forcing
+  kind: measured
+  reach_km: 60.0
+  extent:
+    kind: stations
+    rings:
+      - [[-125.0, 24.0], [-66.0, 24.0], [-66.0, 50.0], [-125.0, 50.0]]
+      - [[-172.0, 51.0], [-129.0, 51.0], [-129.0, 72.0], [-172.0, 72.0]]
+      - [[-161.0, 18.0], [-154.0, 18.0], [-154.0, 23.0], [-161.0, 23.0]]
+      - [[-68.5, 17.0], [-64.0, 17.0], [-64.0, 19.0], [-68.5, 19.0]]
+      - [[144.0, 13.0], [146.5, 13.0], [146.5, 21.0], [144.0, 21.0]]
+      - [[-171.5, -15.0], [-169.0, -15.0], [-169.0, -13.0], [-171.5, -13.0]]
+    note: IEM ASOS/METAR network, US + territories airports
+    discover: bbox
+  window:
+    series: true
+    cadence: hourly (plus SPECI); IEM archive reaches the 1920s at some sites
+  datum: null
+  units:
+    tmpf: F
+    dwpf: F
+    sknt: kt
+    drct: deg
+    gust: kt
+    alti: inHg
+    mslp: hPa
+    p01i: in
+    vsby: mi
+  value_column: ""
+
 caveats:
 - Iowa State IEM ASOS/METAR hourly surface observations; multi-state per-state-GeoJSON discovery (states
-  overlapping the bbox) then ONE bulk IEM CGI CSV request; one point per observation row. US + territories
-  only. No stations in bbox / no rows -> ASOS_METAR_EMPTY.
+  overlapping the bbox) then ONE bulk IEM CGI CSV request; one point per observation row.
+  No stations in bbox / no rows -> ASOS_METAR_EMPTY.
 docstring: |-
   Fetch ASOS/METAR surface weather observations as a point FlatGeobuf.
 

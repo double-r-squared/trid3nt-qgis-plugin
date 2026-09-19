@@ -77,6 +77,7 @@ caveats:
   env). Paginated /v3/locations sweep + per-location /latest fan-out + sensor->parameter join; one point
   per (station, parameter). Worldwide. No key -> credential-shaped OPENAQ_KEY_REQUIRED (NAME-only card);
   empty bbox -> honest header-only FGB.'
+- "model-callable, not matched: air quality is not one of the seventeen data classes, so it carries no coverage row"
 docstring: "OpenAQ global air-quality latest measurements as a FlatGeobuf point layer.\n\nWhat it does:\n\
   \    Fetches the most recent ground-station air-quality measurements\n    (PM2.5, PM10, NO2, O3, SO2,\
   \ CO, and other pollutants) from the OpenAQ\n    v3 API for every monitoring station inside ``bbox``,\

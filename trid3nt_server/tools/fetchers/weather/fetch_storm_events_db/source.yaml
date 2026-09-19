@@ -79,6 +79,7 @@ caveats:
 - NOAA Storm Events DB annual bulk gzip CSV from NCEI, resolved via the directory-index newest-processed-date
   scrape; one point per event at BEGIN_LAT/BEGIN_LON, filtered by state/event_types/bbox/date-window client-side.
   US + territories, 1950-present (sparse pre-1996). No match after filtering -> STORM_EVENTS_EMPTY.
+- "model-callable, not matched: a logged storm event is not one of the seventeen data classes, so it carries no coverage row"
 docstring: |-
   Fetch historical NOAA Storm Events Database records as a FlatGeobuf point layer.
 

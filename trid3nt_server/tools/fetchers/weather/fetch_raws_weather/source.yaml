@@ -75,6 +75,36 @@ payload_estimate:
   features_per_sq_deg: 24.0
   kb_per_feature: 0.175
   floor_mb: 0.001
+coverage:
+- data_class: weather forcing
+  kind: measured
+  reach_km: 60.0
+  extent:
+    kind: stations
+    rings:
+      - [[-125.0, 24.0], [-66.0, 24.0], [-66.0, 50.0], [-125.0, 50.0]]
+      - [[-172.0, 51.0], [-129.0, 51.0], [-129.0, 72.0], [-172.0, 72.0]]
+      - [[-161.0, 18.0], [-154.0, 18.0], [-154.0, 23.0], [-161.0, 23.0]]
+      - [[-68.5, 17.0], [-64.0, 17.0], [-64.0, 19.0], [-68.5, 19.0]]
+      - [[144.0, 13.0], [146.5, 13.0], [146.5, 21.0], [144.0, 21.0]]
+      - [[-171.5, -15.0], [-169.0, -15.0], [-169.0, -13.0], [-171.5, -13.0]]
+    note: Iowa Mesonet RAWS fire-weather network, US fire belt
+    discover: bbox
+  window:
+    series: true
+    cadence: hourly observations, per-station-per-day enrich, best-effort
+  datum: null
+  units:
+    tmpf: F
+    dwpf: F
+    relh: "%"
+    sknt: kt
+    drct: deg
+    gust: kt
+    solar_rad: W/m2
+    precip_in: in
+  value_column: ""
+
 caveats:
 - 'The station-discovery box is the request bbox GROWN by search_radius_km (default 60 km):
   RAWS are sited on ridges and in clearings for fire weather, routinely tens of kilometres
@@ -83,7 +113,7 @@ caveats:
   before the 50-station cap, so the nearest ones are always the ones fetched. The box is a
   BOX, so a station off one of its corners can stand up to 1.4 x the radius from the bbox.'
 - Iowa Mesonet RAWS fire-weather stations; multi-state per-state DCP-GeoJSON RAWS discovery (states overlapping
-  the bbox) then per-station-per-day obhistory (best-effort); one point per observation row. US fire belt.
+  the bbox) then per-station-per-day obhistory (best-effort); one point per observation row.
   No RAWS in bbox / no obs -> RAWS_WEATHER_EMPTY.
 docstring: |-
   Fetch RAWS fire-weather station observations as a point FlatGeobuf.

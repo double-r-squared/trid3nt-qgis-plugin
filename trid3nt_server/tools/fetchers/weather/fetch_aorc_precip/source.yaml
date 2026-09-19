@@ -65,8 +65,28 @@ payload_estimate:
   floor_mb: 0.02
   ceil_mb: 2.0
 
+coverage:
+- data_class: precipitation series
+  kind: modelled
+  extent:
+    kind: surface
+    rings:
+      - [[-124.77, 25.05], [-67.06, 25.05], [-67.06, 49.40], [-124.77, 49.40]]
+    note: NOAA AORC v1.1 CONUS gauge-and-analysis-blended hourly precipitation
+  window:
+    series: true
+    earliest: "1979-02-01"
+    max_span_days: 92.0
+    cadence: hourly, ~10-day publication lag; NOT real-time
+  resolution_m: 800.0
+  datum: null
+  units:
+    precip_mm: mm
+    total_mm: mm
+  value_column: total_mm
+  series_column: precip_mm
+
 caveats:
-  - "AORC v1.1: ~800 m (30 arc-second) hourly CONUS precip (APCP_surface, mm), 1979-02 to ~10 days ago; NOT real-time."
   - "Complements fetch_mrms_qpe (MRMS QPE Pass2 starts ~2020-10): AORC is the pre-2020 / any-historical-year forcing."
   - "Returns an AOI-MEAN hyetograph (a rain-on-grid forcing series), not a spatial raster; a large bbox x long window is a slow streamed read."
 

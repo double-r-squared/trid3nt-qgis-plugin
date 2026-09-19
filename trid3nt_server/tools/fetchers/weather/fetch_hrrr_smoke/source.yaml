@@ -73,6 +73,8 @@ payload_estimate:
   mb_per_sq_deg: 0.0021114864864864866
   floor_mb: 0.05
   ceil_mb: 5.0
+caveats:
+- "model-callable, not matched: smoke / aerosol forecast is not one of the seventeen data classes, so it carries no coverage row"
 docstring: |-
   NOAA HRRR-Smoke 3 km smoke / aerosol forecast -- Tier-1 CONUS fetcher.
 
