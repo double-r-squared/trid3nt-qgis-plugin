@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass, field, replace
+from types import MappingProxyType
 from importlib import import_module
 from typing import Any, Mapping, Sequence
 
@@ -56,8 +57,8 @@ from trid3nt_server.workflows.telemac.modules.sheet import run as run_sheet_
 
 logger = logging.getLogger("trid3nt_server.workflows.telemac.workflow")
 
-__all__ = ["Door", "Placed", "TelemacWorkflow", "card_rows", "fill_sheet",
-           "publish_outputs", "run_bodies", "run_sheet", "stated"]
+__all__ = ["Door", "Measured", "Placed", "TelemacWorkflow", "card_rows",
+           "fill_sheet", "publish_outputs", "run_bodies", "run_sheet", "stated"]
 
 _TELEMAC = "trid3nt_server.workflows.telemac"
 
@@ -102,6 +103,36 @@ class Placed(Ref):
     #: Read the initial wet state off the run this one carries on from: a source
     #: has to enter water, and a continued run opens at another run's surface.
     continues: bool = False
+
+
+#: The measurements the workflow takes against the world it settled, by the
+#: KIND a composite asks for: the runner that takes it, and whether it is taken
+#: before the run is settled or against the settled run.
+_MEASURES: Mapping[str, tuple[str, bool]] = MappingProxyType({
+    "rating": (f"{_TELEMAC}.authoring.assembler.settle_outlet_rating", False),
+    "dredge": (f"{_TELEMAC}.authoring.assembler.settle_dredge", True)})
+
+
+@dataclass(frozen=True, slots=True)
+class Measured(Ref):
+    """A measurement the run takes against its own world, read as the ref it is.
+
+    A reference first, like a placement: whoever asks for the measurement - a
+    dredger, an outlet's rating curve - writes this where it would write
+    ``Ref(name)``. ``kind`` says which measurement, and ``asked`` is what only
+    this question can state; the mesh, the line, the domain and the settled run
+    are the workflow's and are never restated here."""
+
+    kind: str = ""
+    asked: Mapping[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        Ref.__post_init__(self)
+        if self.kind not in _MEASURES:
+            raise PlanValidationError(
+                f"{self.path}: there is no {self.kind!r} measurement; the "
+                f"workflow takes {tuple(_MEASURES)}.")
+        object.__setattr__(self, "asked", MappingProxyType(dict(self.asked)))
 
 
 @dataclass(frozen=True, slots=True)
@@ -324,6 +355,40 @@ class Door:
                      kwargs={"value": ParamRef("event_time")}
                      ).named(_READING_DAY),)
 
+    def _measurements(self, domain: str, against: bool) -> tuple[Step, ...]:
+        """The stages that MEASURE this question's world, before or after settling.
+
+        A composite that asks for a measurement is what says there is one; the
+        world it is measured against is the workflow's, so the mesh, the line,
+        the domain and the settled run are handed over here rather than by a
+        template."""
+        from trid3nt_server.workflows.runtime.plan import DataRef
+
+        world = {"mesh": Ref("mesh"), "line": Ref("line"),
+                 "domain": DataRef(domain), "settled": Ref("settled"),
+                 "friction_law": None}
+        steps = []
+        for ask in self._asked():
+            runner, after = _MEASURES[ask.kind]
+            if after is not against:
+                continue
+            signature = _signature(runner)
+            kwargs = {name: (self._asserted("LAW_OF_BOTTOM_FRICTION")
+                             if name == "friction_law" else value)
+                      for name, value in world.items() if name in signature}
+            steps.append(Step(runner=runner, stage="author",
+                              kwargs={**kwargs, **dict(ask.asked)}
+                              ).named(ask.root))
+        return tuple(steps)
+
+    def _asked(self) -> tuple["Measured", ...]:
+        """Every measurement this question asks for, in the order it is named."""
+        found: dict[str, Measured] = {}
+        for ref in declared_reads(self.steering.ASSERTED, Ref):
+            if isinstance(ref, Measured):
+                found.setdefault(ref.root, ref)
+        return tuple(found.values())
+
     def _placements(self, domain: str) -> tuple[Step, ...]:
         """The stage that settles each placed point onto a node of the mesh.
 
@@ -400,7 +465,9 @@ class Door:
         return replace(
             self,
             produce=(self._reading_day(ops) + channel + self._placements(domain)
+                     + self._measurements(domain, against=False)
                      + tuple(self.produce)),
+            derive=self._measurements(domain, against=True) + tuple(self.derive),
             mesh=self.mesh if self.mesh is not None else tool.build_mesh(
                 mesher=self.mesher, kind=self.kind, extent=DataRef(domain),
                 resolution_m=ParamRef("mesh_resolution_m"),
@@ -1004,3 +1071,11 @@ class TelemacWorkflow(Workflow):
         window = stated(steering=self.plan_decl.steering,
                         keywords=keywords).get("DURATION")
         return float(window) if isinstance(window, (int, float)) else None
+
+
+def _signature(runner: str) -> frozenset[str]:
+    """The keyword names one assembler runner takes."""
+    from inspect import signature
+
+    module, _, name = runner.rpartition(".")
+    return frozenset(signature(getattr(import_module(module), name)).parameters)

@@ -506,12 +506,17 @@ def _friction(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
              ZONES_FILENAME: "\n".join(zones) + "\n"})
 
 
-def Rating(*, at_boundary: Any, of_boundaries: Any,  # noqa: N802
-           rows: Any, note: Any) -> Mapping[str, Any]:
-    """One boundary's stage-discharge curve, and which boundary reads it."""
-    return MappingProxyType({"at_boundary": at_boundary,
-                             "of_boundaries": of_boundaries,
-                             "rows": rows, "note": note})
+def Rating(*, measured: Any) -> Mapping[str, Any]:  # noqa: N802
+    """One boundary's stage-discharge curve, and which boundary reads it.
+
+    ``measured`` is the curve the workflow derives against the mesh, so the
+    stage that derives it is the workflow's to build off this statement; what
+    the engine reads is that measurement's own four rows."""
+    return MappingProxyType({"at_boundary": Ref(f"{measured.path}.at_boundary"),
+                             "of_boundaries": Ref(f"{measured.path}.of_boundaries"),
+                             "rows": Ref(f"{measured.path}.rows"),
+                             "note": Ref(f"{measured.path}.note"),
+                             "measured": measured})
 
 
 def _rating(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],

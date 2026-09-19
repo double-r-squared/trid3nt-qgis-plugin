@@ -209,11 +209,10 @@ def test_the_curve_file_is_written_in_the_engines_own_block_format():
     then two columns until a blank; under Q(n) the first column is the discharge. The
     file is the RATING composite's, beside the two keywords that name it."""
     from trid3nt_server.workflows.telemac.modules import T2D
-    from trid3nt_server.workflows.telemac.modules.telemac2d import Rating
 
     slots, files = T2D.COMPOSITES["rating"].expand(
-        Rating(at_boundary=2, of_boundaries=3,
-               rows=[(0.0, 10.0), (51.0, 11.3)], note="derived Z(Q)"))
+        {"at_boundary": 2, "of_boundaries": 3,
+         "rows": [(0.0, 10.0), (51.0, 11.3)], "note": "derived Z(Q)"})
     assert slots["STAGE_DISCHARGE_CURVES"] == [0, 1, 0]
     lines = files["rog_rating.txt"].splitlines()
     assert lines[0].startswith("#")

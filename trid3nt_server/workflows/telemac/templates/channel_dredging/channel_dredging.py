@@ -12,7 +12,6 @@ from trid3nt_server.workflows.runtime import (
     Data,
     ParamRef,
     Ref,
-    Step,
     register_workflow,
     tool,
 )
@@ -31,11 +30,12 @@ from trid3nt_server.workflows.solver.compute_class import compute_class
 from trid3nt_server.workflows.telemac.templates.channel_dredging.declarations import (
     ACCEPTS, DOC, PARAMS, PARAMS as P,
 )
-from trid3nt_server.workflows.telemac.workflow import Door, TelemacWorkflow
+from trid3nt_server.workflows.telemac.workflow import (
+    Door, Measured, TelemacWorkflow,
+)
 
 __all__ = ["ANSWER", "DATA", "PARAMS", "STEERING", "telemac_channel_dredging"]
 
-_AUTHORING = "trid3nt_server.workflows.telemac.authoring"
 
 #: The names the run directory holds this run's files under - the deck's own
 #: GEOMETRY / BOUNDARY CONDITIONS / RESULTS statements, which the workflow reads
@@ -157,6 +157,22 @@ class DATA:
                        opens="the outflow holds at").optional()
 
 
+#: The two areas and the reference surface, measured against the SETTLED run:
+#: the surface every design depth is read from is the water surface the run
+#: opens at, laid out as cross-sections along the line the domain producer
+#: measured, stationed downstream from the end its inflow names. The cut the
+#: grade asks for is measured against the stock before the run dispatches: the
+#: engine only refuses a dredger with nothing left to cut part-way through its
+#: first pass.
+_DREDGE = Measured(
+    "dredge", kind="dredge",
+    asked={"areas": {"dredge_area": DATA.dredge_area,
+                     "dump_area": DATA.dump_area},
+           "dug_area": "dredge_area",
+           "grade_depth_m": ParamRef("design_depth_m"),
+           "stock_m": _BED_STOCK_M})
+
+
 class STEERING(T2D):
     """The deck: a channel over a mobile bed, with a dredger working in it."""
 
@@ -243,6 +259,7 @@ class STEERING(T2D):
         # What makes a short hydraulic window produce a readable bed change.
         MORPHOLOGICAL_FACTOR=10.0,
         dredging=Dredging(
+            measured=_DREDGE,
             actions=[Dig(field=Ref("dredge.dredge_area"),
                          level=_REFERENCE_LEVEL,
                          start=P.dredge_start_s, end=P.dredge_end_s,
@@ -317,22 +334,6 @@ telemac_channel_dredging = register_workflow(
         # run: the surface every design depth is read from is the water surface
         # the run opens at, laid out as cross-sections along the line the domain
         # producer measured, stationed downstream from the end its inflow names.
-        derive=(Step(runner=f"{_AUTHORING}.assembler.settle_dredge",
-                     stage="author",
-                     kwargs={"mesh": Ref("mesh"),
-                             "line": Ref("line"),
-                             "domain": Ref("domain"),
-                             "settled": Ref("settled"),
-                             "areas": {"dredge_area": DATA.dredge_area,
-                                       "dump_area": DATA.dump_area},
-                             # The cut the grade asks for is measured against
-                             # the stock before the run dispatches: the engine
-                             # only refuses a dredger with nothing left to cut
-                             # part-way through its first pass.
-                             "dug_area": "dredge_area",
-                             "grade_depth_m": ParamRef("design_depth_m"),
-                             "stock_m": _BED_STOCK_M}
-                     ).named("dredge"),),
         results=(_RESULT, RESULT_FILENAME),
         compute_class=ParamRef("compute_class"),
         answer=ANSWER,

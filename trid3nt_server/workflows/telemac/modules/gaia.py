@@ -118,11 +118,16 @@ def Suspension(*, concentration_mgl: Any) -> Mapping[str, Any]:  # noqa: N802
     return {"concentration_mgl": concentration_mgl}
 
 
-def Dredging(*, actions: Any, reference: Any,  # noqa: N802
+def Dredging(*, actions: Any, measured: Any, reference: Any,  # noqa: N802
              origin: Any) -> Mapping[str, Any]:
-    """The dredge as one value: what is done, the surface its levels are read
-    from, and the run's own time origin every action is dated against."""
-    return {"actions": list(actions), "reference": reference, "origin": origin}
+    """The dredge as one value: what is done, the MEASUREMENT of the areas and
+    the reference surface it is done against, the surface its levels are read
+    from, and the run's own time origin every action is dated against.
+
+    ``measured`` is what the workflow takes against the settled run, so the
+    stage that takes it is the workflow's to build off this statement."""
+    return {"actions": list(actions), "measured": measured,
+            "reference": reference, "origin": origin}
 
 
 def Dig(*, field: Any, start: Any, end: Any, volume: Any = None,  # noqa: N802

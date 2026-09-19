@@ -16,7 +16,6 @@ from trid3nt_server.workflows.runtime import (
     Data,
     ParamRef,
     Ref,
-    Step,
     register_workflow,
     tool,
 )
@@ -45,12 +44,13 @@ from trid3nt_server.workflows.telemac.templates.rain_on_grid.declarations import
     PARAMS,
     PARAMS as P,
 )
-from trid3nt_server.workflows.telemac.workflow import Door, TelemacWorkflow
+from trid3nt_server.workflows.telemac.workflow import (
+    Door, Measured, TelemacWorkflow,
+)
 
 __all__ = ["ANSWER", "CAPTIONS", "DATA", "MESH", "OUTPUTS", "PARAMS", "STEERING",
            "telemac_rain_on_grid"]
 
-_AUTHORING = "trid3nt_server.workflows.telemac.authoring"
 
 #: The names the run directory holds this run's files under - the deck's own
 #: GEOMETRY / BOUNDARY CONDITIONS / RESULTS statements, which the workflow reads
@@ -179,6 +179,20 @@ MESH = tool.build_mesh(
 )
 
 
+#: The stage-discharge curve the outlet holds: a normal depth over the section
+#: that face cuts, swept over the flow range this storm can produce, at the
+#: roughness the deck writes at those same nodes - a level read off another law
+#: is a level this run never sits at.
+_OUTLET = Measured(
+    "outlet", kind="rating",
+    asked={"landcover": DATA.landcover,
+           "roughness": LANDCOVER_CN_MANNING,
+           "unmapped": LANDCOVER_UNMAPPED,
+           "mm_per_day": PARAMS.design_storm_mm_per_day,
+           "series": PARAMS.rain_series_mm,
+           "record": Ref("rain.precip_mm")})
+
+
 class STEERING(T2D):
     """The deck: rain at every node, infiltration under it, one outlet below."""
 
@@ -270,10 +284,7 @@ class STEERING(T2D):
     #: elevation against that boundary's own measured flux and relaxes the depth
     #: toward it, so the outlet level rises and falls with the storm instead of
     #: standing at the boundary file's zero.
-    rating = Rating(at_boundary=Ref("outlet.at_boundary"),
-                    of_boundaries=Ref("outlet.of_boundaries"),
-                    rows=Ref("outlet.rows"),
-                    note=Ref("outlet.note"))
+    rating = Rating(measured=_OUTLET)
 
 
 #: What this question PLACES: the flux the engine printed across the outlet the
@@ -341,22 +352,6 @@ telemac_rain_on_grid = register_workflow(
     Door(
         steering=STEERING,
         mesh=MESH,
-        produce=(
-            # The stage-discharge curve the outlet holds: a normal depth over
-            # the section that face cuts, swept over the flow range this storm
-            # can produce, at the roughness the deck writes at those same nodes.
-            Step(runner=f"{_AUTHORING}.assembler.settle_outlet_rating",
-                 stage="author",
-                 kwargs={"mesh": Ref("mesh"), "landcover": DATA.landcover,
-                         "roughness": LANDCOVER_CN_MANNING,
-                         "unmapped": LANDCOVER_UNMAPPED,
-                         # The curve is derived at the roughness the deck is
-                         # solved at: a level read off another law is a level
-                         # this run never sits at.
-                         "friction_law": Ref("stated.LAW_OF_BOTTOM_FRICTION"),
-                         "mm_per_day": P.design_storm_mm_per_day,
-                         "series": P.rain_series_mm,
-                         "record": Ref("rain.precip_mm")}).named("outlet"),),
         compute_class=ParamRef("compute_class"),
         outputs=OUTPUTS, captions=CAPTIONS, answer=ANSWER,
         review_title="Review the storm, the catchment and the mesh band"),

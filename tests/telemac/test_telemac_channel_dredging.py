@@ -136,7 +136,7 @@ def test_the_dredge_reads_its_levels_off_the_line_slot_and_the_settled_run():
     assert dredge.runner.endswith("assembler.settle_dredge")
     assert dredge.kwargs["line"] == Ref("line")
     # The DOMAIN itself for the end its inflow run names, and nothing else.
-    assert dredge.kwargs["domain"] == Ref("domain")
+    assert dredge.kwargs["domain"] == DataRef("domain")
     assert "centerline" not in dredge.kwargs and "seed" not in dredge.kwargs
     assert dredge.kwargs["settled"] == Ref("settled")
     assert set(dredge.kwargs["areas"]) == {"dredge_area", "dump_area"}
