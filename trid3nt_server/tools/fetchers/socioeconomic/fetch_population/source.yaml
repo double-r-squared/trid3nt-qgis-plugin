@@ -67,8 +67,24 @@ payload_estimate:
   floor_mb: 0.05
   mb_per_sq_deg: 4.0
 
+coverage:
+- data_class: exposure
+  kind: modelled
+  extent:
+    kind: surface
+    rings:
+      - [[-180.0, -56.0], [180.0, -56.0], [180.0, 84.0], [-180.0, 84.0]]
+    note: the WorldPop Global_2000_2020 country mosaics, every inhabited
+      landmass; Antarctica and the far Arctic are outside them
+  window:
+    series: false
+    latest: '2020-01-01'
+  resolution_m: 1000.0
+  units:
+    persons_per_cell: persons
+  value_column: persons_per_cell
+
 caveats:
-  - "model-callable, not matched: the exposure rows are the population surfaces named for them and WorldPop is not among them, so it carries no coverage row"
   - "WorldPop gridded population persons/cell (Global_2000_2020 tree; vintage year MUST be in 2000..2020, e.g. 'worldpop_2020'). Default 1km-aggregated product (~50 MB/country download per cache miss); target_resolution_m<=100 opts into the native 100m UN-adjusted product (~4 GB/country, opt-in cost). WorldPop does not support HTTP range requests, so the whole country GeoTIFF is downloaded once then windowed."
   - "gridded residential estimate, NOT per-building occupancy or real-time/daytime population; combine fetch_buildings footprints for building-level counts."
 
