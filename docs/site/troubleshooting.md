@@ -39,7 +39,7 @@ for models that ignore it.
 
 ## Cold discover index: bad routing right after startup
 
-**Symptom**: the first prompts after an agent (re)start route badly -- generic `web_fetch`
+**Symptom**: the first prompts after an agent (re)start route badly -- a generic tool
 instead of purpose-built fetchers, prose answers with no tool call -- then routing improves on
 its own. The log shows
 `tool_retrieval: discover index COLD; FAIL-OPEN to full registry`.

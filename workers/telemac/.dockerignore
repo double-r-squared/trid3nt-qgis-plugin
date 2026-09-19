@@ -7,3 +7,4 @@ test_*.py
 *_test.py
 Dockerfile
 .dockerignore
+scripts/
