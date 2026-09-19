@@ -13,7 +13,7 @@ from typing import Any, Literal
 from pydantic import Field, model_validator
 
 from .common import GraceModel
-from .coverage import Coverage
+from .coverage import PER_RECORD, Coverage
 from .tool_registry import ResolutionSpec, TTLClass
 
 __all__ = [
@@ -614,15 +614,18 @@ class SourceSpec(GraceModel):
 
     @model_validator(mode="after")
     def _validate_one_row_per_class(self) -> "SourceSpec":
-        """A source states each class ONCE: two rows of one class are two
-        answers to the question the match asks, and nothing chooses between
-        them."""
-        seen = [row.data_class for row in self.coverage]
-        twice = sorted({name for name in seen if seen.count(name) > 1})
+        """A source states each class ONCE PER KIND: a gauge that reports a
+        measured series and a predicted one of the same class is answering two
+        different questions, and the sort ranks a record over a prediction; two
+        rows of one class AND one kind are two answers to one question, and
+        nothing chooses between them."""
+        seen = [(row.data_class, row.kind) for row in self.coverage]
+        twice = sorted({f"{name} ({kind})" for name, kind in seen
+                        if seen.count((name, kind)) > 1})
         if twice:
             raise ValueError(
                 f"{self.name} carries more than one coverage row of "
-                f"{', '.join(twice)}: one row per data class")
+                f"{', '.join(twice)}: one row per data class and kind")
         return self
 
     @model_validator(mode="after")
@@ -632,7 +635,10 @@ class SourceSpec(GraceModel):
         One fact, one statement: a source that says NAVD88 on its coverage row
         says it to the match and to every consumer of the layer it publishes."""
         if self.vertical_datum is None:
-            stated = {row.datum for row in self.coverage if row.datum}
+            # A zero the RECORD carries per feature is not one word for the
+            # source, so it is read off the feature and never adopted here.
+            stated = {row.datum for row in self.coverage
+                      if row.datum and row.datum != PER_RECORD}
             if len(stated) == 1:
                 self.vertical_datum = stated.pop()
         return self

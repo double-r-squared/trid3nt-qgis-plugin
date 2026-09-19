@@ -19,8 +19,10 @@ __all__ = [
     "DATA_CLASSES",
     "PROVENANCE_KINDS",
     "DataClass",
+    "PER_RECORD",
     "Coverage",
     "CoverageExtent",
+    "CoveragePoint",
     "CoverageWindow",
     "SourceChoice",
     "SourceOption",
@@ -75,16 +77,35 @@ DataClass = Literal[
 #: One degree of latitude, in kilometres - what a ring distance is read in.
 _KM_PER_DEGREE = 111.32
 
+#: A unit or a zero the RECORD carries per feature, which no one word states for
+#: the whole source. The slot reads it off the feature and refuses a feature that
+#: carries none - a stated word here would answer for features it never measured.
+PER_RECORD = "record"
+
+
+class CoveragePoint(GraceModel):
+    """One STATION a source holds a record at, in the source's own words.
+
+    The id is what the source is called by to reach this station, so a probe can
+    name it; the datum is this station's own zero where the service states one
+    per station rather than one for the network."""
+
+    id: str = Field(min_length=1, max_length=120)
+    lon: float
+    lat: float
+    datum: str | None = None
+
 
 class CoverageExtent(GraceModel):
     """WHERE a source holds anything, as coarsely as the source itself states it.
 
     ``rings`` are closed lon/lat outlines the place filter tests a point against;
-    ``service`` means the catalogue answers coverage and only the probe can, so
-    the filter passes the source through to it."""
+    a station set states its stations instead - listed, read from a hook, or
+    discovered by box - and ``service`` means the catalogue answers coverage and
+    only the probe can, so the filter passes the source through to it."""
 
     #: ``surface`` covers every point inside the rings; ``stations`` holds
-    #: discrete sites inside them, so a point near one is a candidate and the
+    #: discrete sites, so a point within reach of one is a candidate and the
     #: probe decides; ``service`` states no geometry at all.
     kind: Literal["surface", "stations", "service"]
     #: Closed lon/lat rings, coarse. Empty ONLY on ``service``.
@@ -92,10 +113,25 @@ class CoverageExtent(GraceModel):
     #: What the rings are, in the source's own words - the reader's check that
     #: the outline is the dataset's and not a guess.
     note: str = Field(default="", max_length=300)
+    #: The stations themselves, where the set is small enough to state.
+    points: list[CoveragePoint] = Field(default_factory=list)
+    #: A ``<source>.<point>`` hook naming the listing that reads the stations in,
+    #: for a set too large to state and bounded enough to read once and cache.
+    read_from: str = Field(default="", max_length=120)
+    #: A network with no bounded listing, found by box inside the rings: the
+    #: reach applies to the station the PROBE discovers, and an empty probe
+    #: drops the source the way any other empty answer does.
+    discover: Literal["", "bbox"] = ""
 
     @model_validator(mode="after")
-    def _validate_rings(self) -> "CoverageExtent":
-        """A geometry-bearing extent needs a ring; ``service`` must carry none."""
+    def _validate_extent(self) -> "CoverageExtent":
+        """A geometry-bearing extent needs a ring; ``service`` must carry none;
+        and a station set names its stations one of the three ways."""
+        if self.kind != "stations" and (self.points or self.read_from
+                                        or self.discover):
+            raise ValueError(
+                f"extent.kind={self.kind} names stations; only a station set has "
+                "them")
         if self.kind == "service":
             if self.rings:
                 raise ValueError(
@@ -108,6 +144,12 @@ class CoverageExtent(GraceModel):
             if len(ring) < 4:
                 raise ValueError(
                     f"a coverage ring needs at least four points; got {len(ring)}")
+        if self.kind == "stations" and not (self.points or self.read_from
+                                            or self.discover):
+            raise ValueError(
+                "a station set lists its stations - points, read_from or "
+                "discover - because a ring alone says a place is in the region "
+                "and nothing about whether a station stands anywhere near it")
         return self
 
     def covers(self, lon: float, lat: float) -> bool:
@@ -117,12 +159,38 @@ class CoverageExtent(GraceModel):
             return True
         return any(_in_ring(ring, float(lon), float(lat)) for ring in self.rings)
 
+    def listed(self) -> list[CoveragePoint]:
+        """The stations this extent actually holds: the listing clipped to the
+        rings, which is how one network's listing serves a row drawn over part
+        of it."""
+        if not self.rings:
+            return list(self.points)
+        return [p for p in self.points if self.covers(p.lon, p.lat)]
+
+    def nearest(self, lon: float, lat: float) -> CoveragePoint | None:
+        """The listed station closest to this point, or ``None`` where the set
+        states no stations to name."""
+        listed = self.listed()
+        if not listed:
+            return None
+        scale = math.cos(math.radians(float(lat)))
+        return min(listed, key=lambda p: math.hypot(
+            (p.lon - float(lon)) * scale, p.lat - float(lat)))
+
     def distance_km(self, lon: float, lat: float) -> float:
         """How far this point lies from what the source holds, in kilometres.
 
-        Zero inside the rings and off a ``service``, which answers for itself;
-        outside, the distance to the nearest ring, which for a station set is
-        how far the nearest station can be."""
+        Zero off a ``service``, which answers for itself. A LISTED station set is
+        read at its nearest station; everything else is read against the rings,
+        zero inside them, which for a discovered network is how far the place is
+        from the region the probe would search."""
+        if self.kind == "service":
+            return 0.0
+        station = self.nearest(float(lon), float(lat))
+        if station is not None:
+            scale = math.cos(math.radians(float(lat)))
+            return math.hypot((station.lon - float(lon)) * scale,
+                              station.lat - float(lat)) * _KM_PER_DEGREE
         if self.covers(lon, lat):
             return 0.0
         return min(_ring_distance_km(ring, float(lon), float(lat))
@@ -212,12 +280,20 @@ class Coverage(GraceModel):
     resolution_m: float | None = Field(default=None, gt=0.0)
     #: The zero this source's elevations are counted from, in its own words.
     #: ``None`` where it publishes none, which the match flags and the offset
-    #: row refuses at.
+    #: row refuses at. :data:`PER_RECORD` where the record carries a zero per
+    #: feature and the row can state no one word for the network.
     datum: str | None = None
     #: The unit of EACH value column the record carries, by column name. A slot
     #: reads the column it needs and converts to the keyword's unit or refuses;
     #: an absent column here is a unit nobody stated, which also refuses.
+    #: :data:`PER_RECORD` where the record carries the unit beside the value, and
+    #: the slot reads it per feature and refuses a feature carrying none.
     units: dict[str, str] = Field(default_factory=dict)
+    #: The request values this ROW is fetched under, by param name - what makes
+    #: the source answer with THIS row rather than another it also serves. The
+    #: probe passes them, because the row is what was matched and a spec default
+    #: answers for whichever row the spec was written around.
+    ask: dict[str, str] = Field(default_factory=dict)
     #: WHICH column carries what, in the record's own column names: the value a
     #: reading is taken from, the window it reported over, and the elevation of
     #: the zero that value is counted from. Named here because a slot that
