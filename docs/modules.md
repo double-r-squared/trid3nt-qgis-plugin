@@ -58,8 +58,6 @@ appended by each suspended class: `NCOH SEDIMENT` (g/L, ramp `oranges`)
 | `COV_VBB` | SETTLING VEL. | m/s | `plasma` | yes | yes |
 | `COV_FC` | SOLID ICE CONC. | - | `blues` | yes | yes |
 | `COV_THS` | SOLID ICE THICK. | m | `blues` | yes | yes |
-| `COV_THF` | FRAZIL THICKNESS | m | `blues` | yes | yes |
-| `COV_THUN` | UNDER ICE THICK. | m | `blues` | yes | yes |
 | `COV_EQ` | EQUIV. SURFACE | m | `viridis` | yes | yes |
 | `COV_ET` | TOP ICE COVER | m | `viridis` | yes | yes |
 | `COV_EB` | BOTTOM ICE COVER | m | `viridis` | yes | yes |
