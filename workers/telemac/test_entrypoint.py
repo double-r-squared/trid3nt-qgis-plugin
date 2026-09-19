@@ -41,7 +41,7 @@ def test_the_parser_stamp_is_the_unified_one():
     """The stamp travels with the case contract, so an image built against an
     older one reads as a drifted version rather than as a manifest whose keys
     silently did nothing."""
-    assert E._PARSER_VERSION == "telemac-case-3"
+    assert E._PARSER_VERSION == "telemac-case-4"
 
 
 def test_the_four_engines_a_case_may_name_come_from_telapy():
@@ -59,27 +59,29 @@ def test_the_dispatch_is_the_one_section_a_manifest_may_name():
 
 
 def test_an_uncoupled_case_runs_on_the_telapy_arm():
-    argv = E._solve_argv("telemac2d", "t2d.cas", None, "")
+    argv = E._solve_argv("telemac2d", "t2d.cas", (), "")
     assert argv[:1] == [__import__("sys").executable]
     assert argv[-4:] == ["--solve", "telemac2d", "--steering", "t2d.cas"]
 
 
 def test_only_the_measured_couplings_leave_the_telapy_arm():
     """The deviation is SCOPED: a coupling nobody measured stays on the API arm."""
-    assert E._LAUNCHER_COUPLINGS == frozenset({"waqtel", "gaia", "khione"})
-    assert E._solve_argv("telemac2d", "t2d.cas", None, "nestor")[0] != "telemac2d.py"
+    assert E._LAUNCHER_COUPLINGS == frozenset(
+        {"waqtel", "gaia", "khione", "tomawac"})
+    assert E._solve_argv("telemac2d", "t2d.cas", (), "nestor")[0] != "telemac2d.py"
 
 
-@pytest.mark.parametrize("coupling", ["waqtel", "gaia", "khione"])
+@pytest.mark.parametrize("coupling", ["waqtel", "gaia", "khione", "tomawac"])
 def test_a_coupled_case_runs_the_modules_own_launcher(coupling):
-    assert E._solve_argv("telemac2d", "t2d.cas", None, coupling) == [
+    assert E._solve_argv("telemac2d", "t2d.cas", (), coupling) == [
         "telemac2d.py", "t2d.cas"]
 
 
 def test_the_launcher_reads_the_user_fortran_off_the_case_not_the_argv():
     """The steering file names it; a second channel could name a second thing."""
-    assert E._solve_argv("telemac2d", "t2d.cas", "user_fortran", "waqtel") == [
-        "telemac2d.py", "t2d.cas"]
+    assert E._solve_argv("telemac2d", "t2d.cas",
+                         ["T2D_user_fortran", "Tom_user_fortran"],
+                         "tomawac") == ["telemac2d.py", "t2d.cas"]
 
 
 def test_a_waqtel_case_is_dispatched_through_the_launcher(tmp_path, monkeypatch):
@@ -413,8 +415,17 @@ def test_a_user_fortran_case_hands_the_child_its_fortran(tmp_path, monkeypatch):
 
     monkeypatch.setattr(E, "_run_child", _child)
     E.main(_write_manifest(tmp_path,
-                           _case(tmp_path, user_fortran="user_fortran")))
+                           _case(tmp_path, user_fortran=["user_fortran"])))
     assert seen["argv"][-2:] == ["--user-fortran", "user_fortran"]
+
+
+def test_two_user_fortran_directories_refuse_on_the_stepped_arm(tmp_path):
+    """telapy compiles ONE directory, so a second would be silently dropped."""
+    E.main(_write_manifest(tmp_path, _case(
+        tmp_path, user_fortran=["T2D_user_fortran", "Tom_user_fortran"])))
+    metrics = json.loads((tmp_path / E.METRICS_FILENAME).read_text())
+    assert metrics["error_code"] == "TELEMAC_CASE_TWO_USER_FORTRAN"
+    assert "Tom_user_fortran" in metrics["error"]
 
 
 

@@ -17,7 +17,7 @@ import sys
 import threading
 import time
 from pathlib import Path
-from typing import Any, Collection
+from typing import Any, Collection, Sequence
 
 LOG = logging.getLogger("trid3nt.worker.telemac")
 logging.basicConfig(
@@ -41,7 +41,7 @@ _LISTING_TAIL_CHARS = 4000
 #: Bump on a manifest-contract change. The stamp is named in the strict-gate
 #: refusal, so a stale image surfaces as a drifted version rather than as a knob
 #: that silently did nothing.
-_PARSER_VERSION = "telemac-case-3"
+_PARSER_VERSION = "telemac-case-4"
 
 #: Wall-clock bound on ONE solve, and the environment knob that states it. A
 #: wedged Fortran process holds the run directory forever and the supervisor sees
@@ -72,10 +72,13 @@ _CASE_FIELDS = frozenset((
 #: and the FINALIZE fails, closing a boundary file the API arm never opened
 #: (HERMES_FILE_NOT_OPENED_ERR), so the results never land. KHIONE: telapy ships
 #: no API class for it at all, so the arm has nothing to allocate its steering
-#: file against. A SCOPED DEVIATION that dies the day telapy drives them; every
-#: other class stays on the API arm.
+#: file against. TOMAWAC: telapy's t2d arm declares the coupled code but never
+#: calls LECDON_TOMAWAC or POINT_TOMAWAC - only the module's own homere does -
+#: so a coupled case would reach the wave step with nothing allocated. A SCOPED
+#: DEVIATION that dies the day telapy drives them; every other class stays on
+#: the API arm.
 #: Neither the per-step point nor a continuation is available behind it.
-_LAUNCHER_COUPLINGS = frozenset(("waqtel", "gaia", "khione"))
+_LAUNCHER_COUPLINGS = frozenset(("waqtel", "gaia", "khione", "tomawac"))
 
 
 class UnknownManifestFieldError(ValueError):
@@ -216,16 +219,18 @@ def _solve_timeout_s() -> float:
         return _SOLVE_TIMEOUT_DEFAULT_S
 
 
-def _solve_argv(module: str, steering: str, user_fortran: str | None,
+def _solve_argv(module: str, steering: str, user_fortran: Sequence[str],
                 coupling: str) -> list[str]:
     """The command ONE case solves under: the telapy arm, or the module's own CLI
     launcher, which the image puts on PATH under the module's name and which
-    reads the steering file for everything else, user Fortran included."""
+    reads the steering file for everything else, the user Fortran every deck of
+    the run names included."""
     if coupling in _LAUNCHER_COUPLINGS:
         return [f"{module}.py", steering]
     argv = [sys.executable, os.path.abspath(__file__),
             "--solve", module, "--steering", steering]
-    return argv + (["--user-fortran", str(user_fortran)] if user_fortran else [])
+    return argv + (["--user-fortran", str(user_fortran[0])]
+                   if user_fortran else [])
 
 
 def _run_child(data_dir: Path, argv: list[str]) -> int:
@@ -310,7 +315,14 @@ def _solve_case(data_dir: Path, body: Any, run_id: str | None) -> dict[str, Any]
                 f"case.continue_from {previous!r} is not in the run directory; "
                 "the steering file continues from a file that was never "
                 "staged.")
-    argv = _solve_argv(module, steering, case.get("user_fortran"), coupling)
+    fortran = [str(named) for named in (case.get("user_fortran") or ())]
+    if len(fortran) > 1 and coupling not in _LAUNCHER_COUPLINGS:
+        raise CaseError(
+            "TELEMAC_CASE_TWO_USER_FORTRAN",
+            f"case.user_fortran names {fortran}, and this case runs on the "
+            "stepped telapy arm, which compiles ONE directory; the second would "
+            "be dropped and the run would report code it never built.")
+    argv = _solve_argv(module, steering, fortran, coupling)
     LOG.info("telemac case module=%s steering=%s coupling=%s continue_from=%s "
              "results=%s via %s", module, steering, coupling or "none",
              previous or "none", results, argv[0])
