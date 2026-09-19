@@ -14,7 +14,6 @@ from trid3nt_server.workflows.runtime import (
     Data,
     ParamRef,
     Ref,
-    Step,
     register_workflow,
     tool,
 )
@@ -267,12 +266,6 @@ telemac3d_stratified_flow = register_workflow(
     TelemacWorkflow, _TELEMAC3D_METADATA, PARAMS,
     Door(
         steering=STEERING,
-        produce=(
-            # The calendar day the gauge record is asked over, from the moment
-            # the scenario is read at.
-            Step(runner="trid3nt_server.inputs.instant.day", stage="prep",
-                 kwargs={"value": ParamRef("event_time")}).named("reading_day"),
-        ),
         # The two files the run has to write. Stated rather than read off the
         # deck because a 3D deck names them 3D RESULT FILE and 2D RESULT FILE,
         # and what the workflow reads back is the single RESULTS FILE a 2D deck

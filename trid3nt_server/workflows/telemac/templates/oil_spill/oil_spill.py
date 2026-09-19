@@ -13,7 +13,6 @@ from trid3nt_server.workflows.runtime import (
     Data,
     ParamRef,
     Ref,
-    Step,
     register_workflow,
     tool,
 )
@@ -40,12 +39,16 @@ from trid3nt_server.workflows.solver.compute_class import compute_class
 from trid3nt_server.workflows.telemac.templates.oil_spill.declarations import (
     ACCEPTS, DOC, OIL_PRESETS, PARAMS, PARAMS as P,
 )
-from trid3nt_server.workflows.telemac.workflow import Door, TelemacWorkflow
+from trid3nt_server.workflows.telemac.workflow import Door, Placed, TelemacWorkflow
 
 __all__ = ["ANSWER", "CAPTIONS", "DATA", "OUTPUTS", "PARAMS", "STEERING",
            "telemac_oil_spill"]
 
-_AUTHORING = "trid3nt_server.workflows.telemac.authoring"
+#: WHERE the substance enters the water: the point the user clicked, else that
+#: fraction along the domain's own centerline. The workflow settles it onto a
+#: node of the accepted mesh before the sheet reads it back.
+_RELEASE = Placed("source", point=PARAMS.release, fraction=PARAMS.spill_fraction,
+                  label="Release point")
 
 #: The files the run directory holds beside the deck's own statements. The
 #: restart is the engine's full state at its last instant in double precision,
@@ -200,7 +203,7 @@ class STEERING(T2D):
     VALUES_OF_THE_TRACERS_AT_THE_SOURCES = [100.0]
     #: The dissolved fraction, released as a FINITE pulse at the same point the
     #: floats are compiled to enter at.
-    sources = Sources(window_s=P.spill_duration_s,
+    sources = Sources(at=_RELEASE, window_s=P.spill_duration_s,
                       until_s=Ref("settled.until_s"))
 
     #: The module itself: the preset the deck carries under the name the ask
@@ -284,16 +287,6 @@ telemac_oil_spill = register_workflow(
     PARAMS,
     Door(
         steering=STEERING,
-        produce=(
-            # WHERE the source enters the water, settled against the accepted
-            # mesh before the sheet reads it. The domain rides along because an
-            # unplaced release sits its fraction along that domain's centerline
-            # companion, and a supplied point is snapped onto the same line.
-            Step(runner=f"{_AUTHORING}.assembler.settle_release", stage="author",
-                 kwargs={"point": P.release, "mesh": Ref("mesh"),
-                         "domain": Ref("domain"),
-                         "fraction": P.spill_fraction,
-                         "label": "Release point"}).named("source"),),
         results=(_RESULT, _RESTART, DROGUES_FILENAME),
         compute_class=ParamRef("compute_class"),
         outputs=OUTPUTS, captions=CAPTIONS, answer=ANSWER,

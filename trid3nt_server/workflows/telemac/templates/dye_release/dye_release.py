@@ -9,11 +9,9 @@ from __future__ import annotations
 from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
 
 from trid3nt_server.workflows.runtime import (
-    Continued,
     Data,
     ParamRef,
     Ref,
-    Step,
     register_workflow,
     tool,
 )
@@ -38,12 +36,16 @@ from trid3nt_server.workflows.solver.compute_class import compute_class
 from trid3nt_server.workflows.telemac.templates.dye_release.declarations import (
     ACCEPTS, DECAY_PRESETS, DOC, PARAMS, PARAMS as P,
 )
-from trid3nt_server.workflows.telemac.workflow import Door, TelemacWorkflow
+from trid3nt_server.workflows.telemac.workflow import Door, Placed, TelemacWorkflow
 
 __all__ = ["ANSWER", "CAPTIONS", "DATA", "OUTPUTS", "PARAMS", "STEERING",
            "telemac_dye_release"]
 
-_AUTHORING = "trid3nt_server.workflows.telemac.authoring"
+#: WHERE the substance enters the water: the point the user clicked, else that
+#: fraction along the domain's own centerline. The workflow settles it onto a
+#: node of the accepted mesh before the sheet reads it back.
+_RELEASE = Placed("source", point=PARAMS.release, fraction=PARAMS.spill_fraction,
+                  label="Release point", continues=True)
 
 #: The files the run directory holds beside the deck's own statements. The
 #: restart is the engine's full state at its last instant in double precision,
@@ -197,7 +199,7 @@ class STEERING(T2D):
     VALUES_OF_THE_TRACERS_AT_THE_SOURCES = [100.0]
     #: A FINITE pulse, so the slug advects away and dilutes instead of
     #: saturating the water.
-    sources = Sources(window_s=P.spill_duration_s,
+    sources = Sources(at=_RELEASE, window_s=P.spill_duration_s,
                       until_s=Ref("settled.until_s"))
 
     #: CALM AND DRY: this question asks what the CURRENT does with the slug, so
@@ -267,17 +269,6 @@ telemac_dye_release = register_workflow(
     PARAMS,
     Door(
         steering=STEERING,
-        produce=(
-            # WHERE the source enters the water, settled against the accepted
-            # mesh before the sheet reads it. The domain rides along because an
-            # unplaced release sits its fraction along that domain's centerline
-            # companion, and a supplied point is snapped onto the same line.
-            Step(runner=f"{_AUTHORING}.assembler.settle_release", stage="author",
-                 kwargs={"point": P.release, "mesh": Ref("mesh"),
-                         "domain": Ref("domain"),
-                         "fraction": P.spill_fraction,
-                         "label": "Release point",
-                         "continue_from": Continued}).named("source"),),
         results=(_RESULT, _RESTART),
         compute_class=ParamRef("compute_class"),
         outputs=OUTPUTS, captions=CAPTIONS, answer=ANSWER,

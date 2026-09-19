@@ -56,14 +56,17 @@ from trid3nt_server.workflows.telemac.modules.sheet import run as run_sheet_
 
 logger = logging.getLogger("trid3nt_server.workflows.telemac.workflow")
 
-__all__ = ["Door", "TelemacWorkflow", "card_rows", "fill_sheet", "publish_outputs",
-           "run_bodies", "run_sheet", "stated"]
+__all__ = ["Door", "Placed", "TelemacWorkflow", "card_rows", "fill_sheet",
+           "publish_outputs", "run_bodies", "run_sheet", "stated"]
 
 _TELEMAC = "trid3nt_server.workflows.telemac"
 
 #: What a reader may open on any run, past the files the engine is required to
 #: write: the mesh it solved on, the deck it read, the listing and the metrics.
 _ALWAYS_READABLE = ("full_listing.log", "telemac_metrics.json")
+
+#: What a row calls the calendar day it asks a dated source over.
+_READING_DAY = "reading_day"
 
 #: The mesher's own clean passes, under its own names, that every domain gets
 #: before anything is imposed on it. They change the TOPOLOGY, so they run ahead
@@ -78,6 +81,27 @@ def _clean_ops() -> list[Any]:
             mesh_op("delete_faces_connected_to_one_face"),
             mesh_op("make_mesh_boundaries_traversable"),
             mesh_op("fix_mesh", delete_unused=True)]
+
+
+@dataclass(frozen=True, slots=True)
+class Placed(Ref):
+    """A point the run SETTLES onto a node of the accepted mesh, read as a ref.
+
+    A reference first: whoever reads the placement - a source composite, a
+    weather record, a chart's anchor - writes this where it would write
+    ``Ref(name)``, and reads ``name.at``/``name.lon`` off it afterwards. What
+    rides beside the name is what settling it takes, so the stage that settles
+    it is the workflow's to build and no template names a runner."""
+
+    #: The point the user gave, or nothing - in which case the point sits
+    #: ``fraction`` along the domain's own centerline.
+    point: Any = None
+    fraction: Any = 0.5
+    #: What the marker published before the solve is called on the map.
+    label: str = "Release point"
+    #: Read the initial wet state off the run this one carries on from: a source
+    #: has to enter water, and a continued run opens at another run's surface.
+    continues: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -268,6 +292,56 @@ class Door:
                 for surface in (self.steering.ASSERTED, self.slots)
                 for ref in declared_reads(surface, Ref)}
 
+    def _placed(self) -> tuple[Placed, ...]:
+        """Every point this question PLACES, in the order it is first named.
+
+        Read off whatever names it - the deck's own composites, the slots, the
+        reads the outputs and the answer are anchored on - because the thing
+        that reads a placement is what knows there is one, and nothing else has
+        to be told twice."""
+        anchors = [p.at for p in (*self.outputs,
+                                  *(m.primitive for m in self.answer.values()))]
+        found: dict[str, Placed] = {}
+        for surface in (self.steering.ASSERTED, self.slots, anchors):
+            for ref in declared_reads(surface, Ref):
+                if isinstance(ref, Placed):
+                    found.setdefault(ref.root, ref)
+        return tuple(found.values())
+
+    def _reading_day(self, ops: Workflow) -> tuple[Step, ...]:
+        """The calendar DAY a dated source is asked over, where a row asks for one.
+
+        It is the event_time lever read as a date, so it is the lever's own
+        coercion rather than a stage a question writes: a row that names it gets
+        it, and a run that reads no dated source never pays for it."""
+        wanted = any(ref.root == _READING_DAY
+                     for row in ops.data if row.producer is not None
+                     for rung in (row.producer, *row.producer.ladder_rungs)
+                     for ref in declared_reads(dict(rung.kwargs), Ref))
+        if not wanted:
+            return ()
+        return (Step(runner="trid3nt_server.inputs.instant.day", stage="prep",
+                     kwargs={"value": ParamRef("event_time")}
+                     ).named(_READING_DAY),)
+
+    def _placements(self, domain: str) -> tuple[Step, ...]:
+        """The stage that settles each placed point onto a node of the mesh.
+
+        The domain rides along because an unplaced point sits its fraction along
+        that domain's centerline companion, and a supplied one is held inside
+        the water the same way."""
+        from trid3nt_server.workflows.runtime.plan import DataRef
+
+        return tuple(
+            Step(runner=f"{_TELEMAC}.authoring.assembler.settle_release",
+                 stage="author",
+                 kwargs={"point": mark.point, "mesh": Ref("mesh"),
+                         "domain": DataRef(domain), "fraction": mark.fraction,
+                         "label": mark.label,
+                         **({"continue_from": Continued} if mark.continues
+                            else {})}).named(mark.root)
+            for mark in self._placed())
+
     def _from_slots(self, ops: Workflow) -> "Door":
         """This door with the stages the WORKFLOW owns filled in from the slots.
 
@@ -325,7 +399,8 @@ class Door:
             if slots.get(DISCHARGE) else ())
         return replace(
             self,
-            produce=channel + tuple(self.produce),
+            produce=(self._reading_day(ops) + channel + self._placements(domain)
+                     + tuple(self.produce)),
             mesh=self.mesh if self.mesh is not None else tool.build_mesh(
                 mesher=self.mesher, kind=self.kind, extent=DataRef(domain),
                 resolution_m=ParamRef("mesh_resolution_m"),

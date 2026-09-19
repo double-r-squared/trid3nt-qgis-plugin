@@ -12,7 +12,7 @@ import asyncio
 
 import pytest
 
-from trid3nt_server.workflows.runtime import Ref
+from trid3nt_server.workflows.runtime import DataRef, Ref
 from trid3nt_server.workflows.telemac.modules import T2D, WAQTEL, fill, waqtel
 from trid3nt_server.workflows.telemac.modules.module import SlotRefused
 
@@ -249,7 +249,7 @@ def test_the_three_slots_are_the_world_this_run_stands_on():
 def test_the_carrier_reaches_the_channel_as_ONE_reading_never_the_record():
     """The step that opens the channel refuses a record nobody chose a site
     from, so the flow is an OBSERVATION ranked against the domain's own point."""
-    from trid3nt_server.workflows.runtime import Ref
+    from trid3nt_server.workflows.runtime import DataRef, Ref
     from trid3nt_server.workflows.runtime.data import DISCHARGE
 
     data = {decl.name: decl for decl in
@@ -263,12 +263,12 @@ def test_the_carrier_reaches_the_channel_as_ONE_reading_never_the_record():
 def test_both_placed_points_carry_the_domain_they_are_placed_along():
     """Neither point is required, and an unplaced one sits its fraction along
     the domain's centerline companion - which only the domain carries."""
-    from trid3nt_server.workflows.runtime import Ref
+    from trid3nt_server.workflows.runtime import DataRef, Ref
 
     plan = _template().telemac_micropollutant_release.workflow.plan
     placed = [step for step in plan.declared()
               if step.name in ("source", "monitoring")]
-    assert [step.kwargs["domain"] for step in placed] == [Ref("domain")] * 2
+    assert [step.kwargs["domain"] for step in placed] == [DataRef("domain")] * 2
 
 
 def test_an_unsurveyed_domain_still_runs_on_the_terrain_alone():
@@ -283,7 +283,7 @@ def test_an_unsurveyed_domain_still_runs_on_the_terrain_alone():
 
 def test_the_mesh_the_workflow_builds_paints_the_one_bed_row():
     from trid3nt_server.workflows.mesh.tool import recipe_from_plan_value
-    from trid3nt_server.workflows.runtime import DataRef
+    from trid3nt_server.workflows.runtime import DataRef, Ref
 
     plan = _template().telemac_micropollutant_release.workflow.plan
     recipe = recipe_from_plan_value(

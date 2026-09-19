@@ -93,19 +93,24 @@ _SERIES_TAIL_S = 100.0
 _STEP_GAP_S = 0.1
 
 
-def Sources(*, until_s: Any, window_s: Any = None  # noqa: N802
+def Sources(*, at: Any, until_s: Any, window_s: Any = None  # noqa: N802
             ) -> Mapping[str, Any]:
-    """The SOURCES FILE for the point sources the deck states BY NAME: how long
-    each one discharges, and the horizon its series is written over.
+    """The SOURCES FILE for the point sources the deck states BY NAME: WHERE the
+    water enters, how long each one discharges, and the horizon its series is
+    written over.
 
-    A MAPPING, not an object: the sheet's one ref walk descends mappings."""
-    # WHERE and HOW MUCH are the engine's own keywords - one element per source,
-    # in its own positional order - so they are read off the sheet rather than
-    # restated here. ``window_s`` is a finite release, held and then stepped to
-    # nothing so the slug advects and passes, while ``None`` is a permitted
-    # discharge held flat for the whole run.
+    ``at`` is the PLACEMENT this composite discharges at, so the stage that
+    settles it onto a node is the workflow's to build off this statement; the
+    deck reads the settled point back by name for the engine's own coordinate
+    keywords. A MAPPING, not an object: the sheet's one ref walk descends
+    mappings."""
+    # HOW MUCH is the engine's own keyword - one element per source, in its own
+    # positional order - so it is read off the sheet rather than restated here.
+    # ``window_s`` is a finite release, held and then stepped to nothing so the
+    # slug advects and passes, while ``None`` is a permitted discharge held flat
+    # for the whole run.
     return MappingProxyType({
-        "window_s": window_s, "until_s": until_s,
+        "at": at, "window_s": window_s, "until_s": until_s,
         "q": Ref("WATER_DISCHARGE_OF_SOURCES"),
         "tracers": Ref("VALUES_OF_THE_TRACERS_AT_THE_SOURCES")})
 

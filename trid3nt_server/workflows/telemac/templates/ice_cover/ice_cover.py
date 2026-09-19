@@ -16,7 +16,6 @@ from trid3nt_server.workflows.runtime import (
     Data,
     ParamRef,
     Ref,
-    Step,
     register_workflow,
     tool,
 )
@@ -27,12 +26,13 @@ from trid3nt_server.workflows.telemac.modules.telemac2d import Atmosphere, Bound
 from trid3nt_server.workflows.telemac.templates.ice_cover.declarations import (
     ACCEPTS, DOC, PARAMS, PARAMS as P,
 )
-from trid3nt_server.workflows.telemac.workflow import Door, TelemacWorkflow
+from trid3nt_server.workflows.telemac.workflow import (
+    Door, Placed, TelemacWorkflow,
+)
 
 __all__ = ["ANSWER", "CAPTIONS", "DATA", "OUTPUTS", "PARAMS", "STEERING",
            "telemac_ice_cover"]
 
-_AUTHORING = "trid3nt_server.workflows.telemac.authoring"
 
 #: The roughness this deck is solved at, and the law it is read under: Strickler,
 #: the coefficient an unsurveyed channel is screened at. ONE number, stated once,
@@ -52,6 +52,12 @@ _REACH_LENGTH_KM = 12.0
 #: air longest, which is the water that freezes first; the fraction holds the
 #: node off the outflow face, where the boundary condition is what it carries.
 _STATION_FRAC = 0.98
+
+#: WHERE the series is read: the point the user clicked, else that fraction
+#: along the domain's own centerline. The workflow settles it onto a node of the
+#: accepted mesh, so the chart is a node the run solved on.
+_STATION = Placed("station", point=PARAMS.station, fraction=_STATION_FRAC,
+                  label="Ice station")
 
 #: The terrain cell the banks are painted from. 3DEP is PINNED, not preferred: a
 #: DSM (Copernicus GLO-30 carries canopy) puts the bank on the tree tops, and its
@@ -246,7 +252,7 @@ class STEERING(T2D):
     #: what is written into it is what the readers of this run read. The engine
     #: stops at an instant outside the table, so the file is written for the
     #: DURATION this deck states rather than for a second number beside it.
-    atmosphere = Atmosphere(observed=DATA.weather, at=Ref("station"),
+    atmosphere = Atmosphere(observed=DATA.weather, at=_STATION,
                             duration_s=Ref("sheet.DURATION"))
 
     #: The ice. Five statements, and every other constant the module carries -
@@ -282,8 +288,8 @@ class STEERING(T2D):
 #: modules wrote - the heat fluxes, the frazil, the ice type - is published
 #: because their tables row it, not because this template asked.
 OUTPUTS = [
-    series("DYNCOVC", at=Ref("station"), module="khione").chart(),
-    series("DYNCOVT", at=Ref("station"), module="khione").chart(),
+    series("DYNCOVC", at=_STATION, module="khione").chart(),
+    series("DYNCOVT", at=_STATION, module="khione").chart(),
 ]
 CAPTIONS = {"DYNCOVC": "ice cover fraction", "DYNCOVT": "ice cover thickness"}
 
@@ -292,7 +298,7 @@ CAPTIONS = {"DYNCOVC": "ice cover fraction", "DYNCOVT": "ice cover thickness"}
 #: anywhere in the domain first did, the thickest ice the run made anywhere, and
 #: how much of the surface the point was under when the window closed.
 ANSWER = {
-    "freeze_time_s": series("DYNCOVC", at=Ref("station"), module="khione",
+    "freeze_time_s": series("DYNCOVC", at=_STATION, module="khione",
                             above=ParamRef("cover_threshold")).measure("t_above")
     .otherwise("the cover at the point did not freeze within the window"),
     "domain_freeze_time_s": series("DYNCOVC", module="khione",
@@ -302,7 +308,7 @@ ANSWER = {
     # The thickest ice anywhere is the engine's TOTAL: the solid border ice
     # and the dynamic cover together, not the cover alone.
     "peak_ice_thickness_m": series("COV_THT", module="khione").measure("max"),
-    "final_cover_fraction": series("DYNCOVC", at=Ref("station"), module="khione"
+    "final_cover_fraction": series("DYNCOVC", at=_STATION, module="khione"
                                    ).measure("last"),
     "mesh_size_m": mesh().measure("size_m"),
 }
@@ -346,17 +352,6 @@ telemac_ice_cover = register_workflow(
     PARAMS,
     Door(
         steering=STEERING,
-        produce=(
-            # WHERE the series is read, settled against the accepted mesh before
-            # the outputs are anchored: the chart is a node the run solved on.
-            # The domain rides along because an unplaced station sits its
-            # fraction along that domain's centerline companion, and a supplied
-            # point is held inside the water the same way.
-            Step(runner=f"{_AUTHORING}.assembler.settle_release", stage="author",
-                 kwargs={"point": P.station, "mesh": Ref("mesh"),
-                         "domain": Ref("domain"),
-                         "fraction": _STATION_FRAC,
-                         "label": "Ice station"}).named("station"),),
         # WHAT THE RUN HAS TO WRITE: the host's file and the ice module's own
         # beside it. Every measure this question answers is read off the second
         # one, so a run that published only the host's would come back with the

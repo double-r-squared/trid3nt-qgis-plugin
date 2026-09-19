@@ -537,7 +537,7 @@ def test_the_sources_file_is_written_from_the_keywords_the_deck_states_by_name()
                  ORDINATES_OF_SOURCES=[4483518.635],
                  WATER_DISCHARGE_OF_SOURCES=[8.0],
                  VALUES_OF_THE_TRACERS_AT_THE_SOURCES=[100.0],
-                 sources=Sources(window_s=120.0, until_s=600.0))
+                 sources=Sources(at={"at": [0.0, 0.0]}, window_s=120.0, until_s=600.0))
     stated = {row.slot.keyword for row in sheet.filled.values()}
     assert stated == {"ABSCISSAE OF SOURCES", "ORDINATES OF SOURCES",
                       "WATER DISCHARGE OF SOURCES",
@@ -1184,7 +1184,7 @@ def test_two_sources_on_the_floor_are_two_sources_in_the_deck():
                        "ORDINATES OF SOURCES": [1000.0, 1100.0],
                        "WATER DISCHARGE OF SOURCES": [8.0, 8.0],
                        "VALUES OF THE TRACERS AT THE SOURCES": [100.0, 100.0],
-                       "sources": Sources(window_s=120.0, until_s=600.0)})
+                       "sources": Sources(at={"at": [0.0, 0.0]}, window_s=120.0, until_s=600.0)})
     deck = dict(sheet.resolved())
     assert deck["ABSCISSAE OF SOURCES"] == [500.0, 900.0]
     assert deck["ORDINATES OF SOURCES"] == [1000.0, 1100.0]
@@ -1208,7 +1208,7 @@ def test_a_fill_with_two_tracers_is_a_two_tracer_deck():
         ORDINATES_OF_SOURCES = [1000.0]
         WATER_DISCHARGE_OF_SOURCES = [8.0]
         VALUES_OF_THE_TRACERS_AT_THE_SOURCES = [100.0]
-        sources = Sources(window_s=120.0, until_s=600.0)
+        sources = Sources(at={"at": [0.0, 0.0]}, window_s=120.0, until_s=600.0)
 
     sheet = fill(ONE, NUMBER_OF_TRACERS=2,
                  tracer_names={"names": ["DYE             MG/L",

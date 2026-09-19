@@ -13,7 +13,6 @@ from trid3nt_server.workflows.runtime import (
     Data,
     ParamRef,
     Ref,
-    Step,
     register_workflow,
     tool,
 )
@@ -27,12 +26,12 @@ from trid3nt_server.workflows.telemac.templates.do_sag import streeter_phelps
 from trid3nt_server.workflows.telemac.templates.do_sag.declarations import (
     ACCEPTS, DOC, PARAMS, PARAMS as P,
 )
-from trid3nt_server.workflows.telemac.workflow import Door, TelemacWorkflow
+from trid3nt_server.workflows.telemac.workflow import (
+    Door, Placed, TelemacWorkflow,
+)
 
 __all__ = ["ANSWER", "CAPTIONS", "DATA", "OUTPUTS", "PARAMS", "STEERING",
            "telemac_do_sag"]
-
-_AUTHORING = "trid3nt_server.workflows.telemac.authoring"
 
 #: The file the run directory holds this run's picture under. The deck's own
 #: RESULTS statement names it, so the Door restates nothing.
@@ -48,6 +47,12 @@ _REACH_LENGTH_KM = 12.0
 #: placed. It is what holds the source node off the inflow face rather than on
 #: it, where it would compete with the boundary condition for the same node.
 _OUTFALL_FRAC = 0.02
+
+#: WHERE the outfall enters the water: the point the user clicked, else that
+#: fraction along the domain's own centerline. The workflow settles it onto a
+#: node of the accepted mesh before the sheet reads it back.
+_OUTFALL = Placed("outfall", point=PARAMS.outfall_coords, fraction=_OUTFALL_FRAC,
+                  label="Outfall")
 
 #: The roughness this deck is solved at, and the law it is read under: Strickler,
 #: the coefficient an unsurveyed channel is screened at. ONE number, stated once,
@@ -230,7 +235,7 @@ class STEERING(T2D):
     VALUES_OF_THE_TRACERS_AT_THE_SOURCES = [0.0, 2.0, 250.0, 0.0]
     #: A PERMITTED discharge does not pulse: held flat across the whole run so
     #: the water reaches the steady-state sag the question is asked about.
-    sources = Sources(window_s=None, until_s=Ref("settled.until_s"))
+    sources = Sources(at=_OUTFALL, window_s=None, until_s=Ref("settled.until_s"))
 
     #: Deoxygenation balanced by surface reaeration, and nothing else: the
     #: modelled curve is the closed form the question is asked against, so this
@@ -307,13 +312,6 @@ telemac_do_sag = register_workflow(
     PARAMS,
     Door(
         steering=STEERING,
-        produce=(
-            # WHERE the discharge enters the water, settled against the accepted
-            # mesh before the sheet reads it.
-            Step(runner=f"{_AUTHORING}.assembler.settle_release", stage="author",
-                 kwargs={"point": P.outfall_coords, "mesh": Ref("mesh"),
-                         "domain": Ref("domain"), "fraction": _OUTFALL_FRAC,
-                         "label": "Outfall"}).named("outfall"),),
         compute_class=ParamRef("compute_class"),
         outputs=OUTPUTS, captions=CAPTIONS, answer=ANSWER,
         review_title="Review the outfall and the water it discharges to"),

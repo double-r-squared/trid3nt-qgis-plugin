@@ -13,7 +13,6 @@ from trid3nt_server.workflows.runtime import (
     Data,
     ParamRef,
     Ref,
-    Step,
     register_workflow,
     tool,
 )
@@ -31,12 +30,24 @@ from trid3nt_server.workflows.solver.compute_class import compute_class
 from trid3nt_server.workflows.telemac.templates.micropollutant_release.declarations import (
     ACCEPTS, DOC, PARAMS, PARAMS as P,
 )
-from trid3nt_server.workflows.telemac.workflow import Door, TelemacWorkflow
+from trid3nt_server.workflows.telemac.workflow import (
+    Door, Placed, TelemacWorkflow,
+)
 
 __all__ = ["ANSWER", "CAPTIONS", "DATA", "OUTPUTS", "PARAMS", "STEERING",
            "telemac_micropollutant_release"]
 
-_AUTHORING = "trid3nt_server.workflows.telemac.authoring"
+#: WHERE the substance enters the water: the point the user clicked, else that
+#: fraction along the domain's own centerline. The workflow settles it onto a
+#: node of the accepted mesh before the sheet reads it back.
+_RELEASE = Placed("source", point=PARAMS.release, fraction=PARAMS.release_fraction,
+                  label="Release point")
+
+#: WHERE the dissolved history is read: the same placement, so the chart is
+#: anchored on a node the run actually solved on.
+_MONITORING = Placed("monitoring", point=PARAMS.monitoring_point,
+                     fraction=PARAMS.monitoring_fraction,
+                     label="Monitoring point")
 
 #: How far the reach producer walks downstream from the release point when this
 #: question has to find its own domain. A user who wants another stretch supplies
@@ -221,7 +232,7 @@ class STEERING(T2D):
     VALUES_OF_THE_TRACERS_AT_THE_SOURCES = [100.0, 0.0, 0.0, 0.0, 0.0]
     #: A FINITE pulse, so the slug advects away and dilutes instead of
     #: saturating the water. The spill window is the question's own input.
-    sources = Sources(window_s=P.release_duration_s,
+    sources = Sources(at=_RELEASE, window_s=P.release_duration_s,
                       until_s=Ref("settled.until_s"))
 
     #: The partition: how fast the sediment settles, how hard the substance holds
@@ -236,7 +247,7 @@ class STEERING(T2D):
 #: The settled point is read as the WHOLE step, whose lon/lat is where the node
 #: is looked up.
 OUTPUTS = [
-    series("T1", at=Ref("monitoring")).chart(),
+    series("T1", at=_MONITORING).chart(),
 ]
 CAPTIONS = {"T1": "dissolved micropollutant"}
 
@@ -249,8 +260,8 @@ CAPTIONS = {"T1": "dissolved micropollutant"}
 #: that share a class: how much rides the sediment for every unit still
 #: dissolved, which is the partition this question is about.
 ANSWER = {
-    "dissolved_cmax_mgl": series("T1", at=Ref("monitoring")).measure("max"),
-    "dissolved_peak_time_s": series("T1", at=Ref("monitoring")).measure("t_max"),
+    "dissolved_cmax_mgl": series("T1", at=_MONITORING).measure("max"),
+    "dissolved_peak_time_s": series("T1", at=_MONITORING).measure("t_max"),
     "dissolved_travel_m": field("T1", t="every").measure("travel_m"),
     "dissolved_final_mean_mgl": field("T1").measure("mean"),
     "suspended_sorbed_final_mean_mgl": field("T4").measure("mean"),
@@ -299,23 +310,6 @@ telemac_micropollutant_release = register_workflow(
     PARAMS,
     Door(
         steering=STEERING,
-        produce=(
-            # WHERE the substance enters the water, settled against the accepted
-            # mesh before the sheet reads it. The domain rides along because an
-            # unplaced release sits its fraction along that domain's centerline
-            # companion, and a supplied point is snapped onto the same line.
-            Step(runner=f"{_AUTHORING}.assembler.settle_release", stage="author",
-                 kwargs={"point": P.release, "mesh": Ref("mesh"),
-                         "domain": Ref("domain"),
-                         "fraction": P.release_fraction,
-                         "label": "Release point"}).named("source"),
-            # WHERE the dissolved history is read, settled the same way, so the
-            # chart is anchored on a node the run actually solved on.
-            Step(runner=f"{_AUTHORING}.assembler.settle_release", stage="author",
-                 kwargs={"point": P.monitoring_point, "mesh": Ref("mesh"),
-                         "domain": Ref("domain"),
-                         "fraction": P.monitoring_fraction,
-                         "label": "Monitoring point"}).named("monitoring"),),
         compute_class=ParamRef("compute_class"),
         outputs=OUTPUTS, captions=CAPTIONS, answer=ANSWER,
         review_title="Review the release and the sediment it partitions onto"),

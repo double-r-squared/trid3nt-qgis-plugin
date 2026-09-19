@@ -15,7 +15,6 @@ from trid3nt_server.workflows.runtime import (
     Data,
     ParamRef,
     Ref,
-    Step,
     register_workflow,
     tool,
 )
@@ -25,12 +24,13 @@ from trid3nt_server.workflows.telemac.modules.telemac2d import Atmosphere, Bound
 from trid3nt_server.workflows.telemac.templates.water_temperature.declarations import (
     ACCEPTS, DOC, PARAMS, PARAMS as P,
 )
-from trid3nt_server.workflows.telemac.workflow import Door, TelemacWorkflow
+from trid3nt_server.workflows.telemac.workflow import (
+    Door, Placed, TelemacWorkflow,
+)
 
 __all__ = ["ANSWER", "CAPTIONS", "DATA", "OUTPUTS", "PARAMS", "STEERING",
            "telemac_water_temperature"]
 
-_AUTHORING = "trid3nt_server.workflows.telemac.authoring"
 
 #: The roughness this deck is solved at, and the law it is read under: Strickler,
 #: the coefficient an unsurveyed channel is screened at. ONE number, stated once,
@@ -50,6 +50,12 @@ _REACH_LENGTH_KM = 12.0
 #: longest, which is the water the question is about; the fraction holds the node
 #: off the outflow face, where the boundary condition is what it carries.
 _STATION_FRAC = 0.98
+
+#: WHERE the series is read: the point the user clicked, else that fraction
+#: along the domain's own centerline. The workflow settles it onto a node of the
+#: accepted mesh, so the chart is a node the run solved on.
+_STATION = Placed("station", point=PARAMS.station, fraction=_STATION_FRAC,
+                  label="Temperature station")
 
 #: The terrain cell the banks are painted from. 3DEP is PINNED, not preferred: a
 #: DSM (Copernicus GLO-30 carries canopy) puts the bank on the tree tops, and its
@@ -236,7 +242,7 @@ class STEERING(T2D):
     #: VALUE OF ATMOSPHERIC PRESSURE, both of which the card shows. The engine
     #: stops at an instant outside the table, so the file is written for the
     #: DURATION this deck states rather than for a second number beside it.
-    atmosphere = Atmosphere(observed=DATA.weather, at=Ref("station"),
+    atmosphere = Atmosphere(observed=DATA.weather, at=_STATION,
                             duration_s=Ref("sheet.DURATION"))
 
     #: The heat budget, on the engine's own calibration constants: this question
@@ -249,8 +255,8 @@ class STEERING(T2D):
 #: What this question PLACES: the temperature over time at the point the ask
 #: gave, as the chart, and on the map as the station that carries it.
 OUTPUTS = [
-    series("T1", at=Ref("station")).chart(),
-    series("T1", at=Ref("station")).station(),
+    series("T1", at=_STATION).chart(),
+    series("T1", at=_STATION).station(),
 ]
 CAPTIONS = {"T1": "water temperature"}
 
@@ -260,10 +266,10 @@ CAPTIONS = {"T1": "water temperature"}
 #: the coolest water in the domain ended up - which is what the picture shows -
 #: and the speed the water carried that heat at.
 ANSWER = {
-    "peak_temperature_c": series("T1", at=Ref("station")).measure("max"),
-    "peak_temperature_time_s": series("T1", at=Ref("station")).measure("t_max"),
-    "final_temperature_c": series("T1", at=Ref("station")).measure("last"),
-    "diurnal_range_c": series("T1", at=Ref("station")).measure("range"),
+    "peak_temperature_c": series("T1", at=_STATION).measure("max"),
+    "peak_temperature_time_s": series("T1", at=_STATION).measure("t_max"),
+    "final_temperature_c": series("T1", at=_STATION).measure("last"),
+    "diurnal_range_c": series("T1", at=_STATION).measure("range"),
     "temperature_spread_c": field("T1").measure("spread"),
     "mean_velocity_mps": field("M").measure("mean"),
     "mesh_size_m": mesh().measure("size_m"),
@@ -307,17 +313,6 @@ telemac_water_temperature = register_workflow(
     PARAMS,
     Door(
         steering=STEERING,
-        produce=(
-            # WHERE the series is read, settled against the accepted mesh before
-            # the outputs are anchored: the chart is a node the run solved on.
-            # The domain rides along because an unplaced station sits its
-            # fraction along that domain's centerline companion, and a supplied
-            # point is held inside the water the same way.
-            Step(runner=f"{_AUTHORING}.assembler.settle_release", stage="author",
-                 kwargs={"point": P.station, "mesh": Ref("mesh"),
-                         "domain": Ref("domain"),
-                         "fraction": _STATION_FRAC,
-                         "label": "Temperature station"}).named("station"),),
         compute_class=ParamRef("compute_class"),
         outputs=OUTPUTS, captions=CAPTIONS, answer=ANSWER,
         review_title="Review the water, the week of weather, and what it opens at"),

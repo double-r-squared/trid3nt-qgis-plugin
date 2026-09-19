@@ -103,12 +103,13 @@ def test_an_ungauged_body_of_water_continues_the_run():
 
 def test_the_gauge_window_is_the_day_the_scenario_is_read_at():
     """A daily gauge record is asked over a calendar day, and the moment the run is
-    about is the runtime's own lever - not a second date the template declares."""
+    about is the runtime's own lever - the WORKFLOW reads it as a date because a
+    row asked for one, and the template declares no stage for it."""
     from trid3nt_server.workflows.runtime import ParamRef, Ref
 
     module = _module()
     workflow = _workflow()
-    day = next(step for step in workflow.plan_decl.produce
+    day = next(step for step in workflow.plan.declared()
                if step.name == "reading_day")
     assert day.runner == "trid3nt_server.inputs.instant.day"
     assert isinstance(day.kwargs["value"], ParamRef)

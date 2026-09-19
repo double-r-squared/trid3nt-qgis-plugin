@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import pytest
 
+from trid3nt_server.workflows.runtime.plan import DataRef
 from trid3nt_server.workflows.runtime import Ref
 from trid3nt_server.workflows.runtime.data import BED, DISCHARGE, DOMAIN
 from trid3nt_server.workflows.runtime.levers import LEVER_NAMES
@@ -93,7 +94,7 @@ def test_the_release_is_settled_against_the_domain_it_may_be_unplaced_in():
     """An unplaced release sits its fraction along the domain's own centerline
     companion, and a supplied point is snapped onto that same line."""
     kwargs = [s for s in _workflow().plan.steps if s.label == "source"][0].kwargs
-    assert kwargs["domain"] == Ref("domain")
+    assert kwargs["domain"] == DataRef("domain")
     assert kwargs["fraction"].name == "spill_fraction"
 
 

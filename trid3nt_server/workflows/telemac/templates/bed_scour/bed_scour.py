@@ -13,7 +13,6 @@ from trid3nt_server.workflows.runtime import (
     Data,
     ParamRef,
     Ref,
-    Step,
     register_workflow,
     tool,
 )
@@ -40,12 +39,16 @@ from trid3nt_server.workflows.solver.compute_class import compute_class
 from trid3nt_server.workflows.telemac.templates.bed_scour.declarations import (
     ACCEPTS, DOC, GRADATION_PRESETS, PARAMS, PARAMS as P,
 )
-from trid3nt_server.workflows.telemac.workflow import Door, TelemacWorkflow
+from trid3nt_server.workflows.telemac.workflow import Door, Placed, TelemacWorkflow
 
 __all__ = ["ANSWER", "CAPTIONS", "DATA", "OUTPUTS", "PARAMS", "STEERING",
            "telemac_bed_scour"]
 
-_AUTHORING = "trid3nt_server.workflows.telemac.authoring"
+#: WHERE the substance enters the water: the point the user clicked, else that
+#: fraction along the domain's own centerline. The workflow settles it onto a
+#: node of the accepted mesh before the sheet reads it back.
+_RELEASE = Placed("source", point=PARAMS.release, fraction=PARAMS.spill_fraction,
+                  label="Release point")
 
 #: The names the run directory holds this run's files under - the deck's own
 #: GEOMETRY / BOUNDARY CONDITIONS / RESULTS statements, which the workflow reads
@@ -224,7 +227,7 @@ class STEERING(T2D):
     VALUES_OF_THE_TRACERS_AT_THE_SOURCES = [100.0]
     #: A FINITE pulse, so the marker advects and passes instead of holding the
     #: whole domain at a steady concentration.
-    sources = Sources(window_s=P.spill_duration_s,
+    sources = Sources(at=_RELEASE, window_s=P.spill_duration_s,
                       until_s=Ref("settled.until_s"))
 
     #: The bed itself: bedload on, one class or a mixture, a real stock to scour
@@ -325,16 +328,6 @@ telemac_bed_scour = register_workflow(
     PARAMS,
     Door(
         steering=STEERING,
-        produce=(
-            # WHERE the marker enters the water, settled against the accepted
-            # mesh before the sheet reads it. The domain rides along because an
-            # unplaced marker sits along its centerline companion, and a placed
-            # one is held on that same line.
-            Step(runner=f"{_AUTHORING}.assembler.settle_release", stage="author",
-                 kwargs={"point": P.release, "mesh": Ref("mesh"),
-                         "domain": Ref("domain"),
-                         "fraction": P.spill_fraction,
-                         "label": "Release point"}).named("source"),),
         results=(_RESULT, RESULT_FILENAME),
         compute_class=ParamRef("compute_class"),
         outputs=OUTPUTS, captions=CAPTIONS, answer=ANSWER,

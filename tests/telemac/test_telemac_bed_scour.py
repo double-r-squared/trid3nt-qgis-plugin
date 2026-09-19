@@ -132,7 +132,7 @@ def test_the_release_step_is_handed_the_domain_the_centerline_rides_on():
     companion, and a placed one is held on that same line - both of which need
     the domain artifact, not just the mesh cut from it."""
     source = next(step for step in _WORKFLOW.plan.steps if step.label == "source")
-    assert source.kwargs["domain"] == Ref("domain")
+    assert source.kwargs["domain"] == DataRef("domain")
     assert source.kwargs["fraction"].name == "spill_fraction"
 
 

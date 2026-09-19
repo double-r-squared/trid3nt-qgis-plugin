@@ -246,7 +246,7 @@ def test_the_domain_and_the_bed_reach_the_wire_as_the_slots_they_are():
 
 
 def test_the_workflow_owns_the_stages_and_the_template_states_what_differs():
-    from trid3nt_server.workflows.runtime import Ref, validate_plan
+    from trid3nt_server.workflows.runtime import DataRef, validate_plan
 
     wf = _workflow()
     validate_plan(wf.plan, wf.params, wf.data)
@@ -261,7 +261,7 @@ def test_the_workflow_owns_the_stages_and_the_template_states_what_differs():
     # point sits its fraction along the companion the producer wrote beside the
     # polygon, and a supplied one is snapped onto the same line.
     source = next(s for s in steps if s.label == "source")
-    assert source.kwargs["domain"] == Ref("domain")
+    assert source.kwargs["domain"] == DataRef("domain")
     listed = steps[-1].kwargs["outputs"]
     assert [(p.kind, p.variable, p.publish) for p in listed] == [
         ("series", "T1", "chart")]
@@ -355,7 +355,7 @@ def test_the_sources_file_the_deck_writes_is_the_series_the_engine_reads():
         T2D as _T2D,
     )
 
-    stated = Sources(window_s=300.0, until_s=600.0)
+    stated = Sources(at={"at": [0.0, 0.0]}, window_s=300.0, until_s=600.0)
     slots, files = _T2D.COMPOSITES["sources"].expand(
         {**stated, "q": [8.0], "tracers": [100.0]})
     assert dict(slots) == {"SOURCES_FILE": "river_sources.txt"}
