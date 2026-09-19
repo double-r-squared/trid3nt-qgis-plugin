@@ -2,11 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Any
-
 from trid3nt_server.inputs import Point
-from trid3nt_server.workflows.runtime import Accepts, Param, doors
-from trid3nt_server.workflows.telemac.helpers.released_mass import released_mass_kg
+from trid3nt_server.workflows.runtime import Accepts, Param, ParamRef, doors
 
 __all__ = ["ACCEPTS", "DOC", "PARAMS", "SEDIMENT_CONCENTRATION_MGL",
            "SOURCE_Q_M3S"]
@@ -18,13 +15,8 @@ __all__ = ["ACCEPTS", "DOC", "PARAMS", "SEDIMENT_CONCENTRATION_MGL",
 SOURCE_Q_M3S = 8.0
 SEDIMENT_CONCENTRATION_MGL = 100.0
 
-
-def _injected_mass_kg(params: Any) -> float:
-    """The mass the deck's own fixed discharge and concentration put in over
-    the scenario's own spill window - the shared release-mass relation, at
-    this template's two fixed numbers."""
-    return released_mass_kg(SOURCE_Q_M3S, SEDIMENT_CONCENTRATION_MGL,
-                            params.spill_duration_s)
+_RELEASED_MASS = ("trid3nt_server.workflows.telemac.helpers.released_mass."
+                  "released_mass_kg")
 
 
 #: What a suspended-plume run can be HANDED. The settling class rides the same
@@ -70,7 +62,10 @@ class PARAMS:
     # in declarations.py); the question does not ask for either by name.
     injected_mass_kg = Param(
         door=doors.DERIVED,
-        resolve=f"{__name__}._injected_mass_kg",
+        resolve=_RELEASED_MASS,
+        resolve_kwargs={"discharge_m3s": SOURCE_Q_M3S,
+                        "concentration_mgl": SEDIMENT_CONCENTRATION_MGL,
+                        "duration_s": ParamRef("spill_duration_s")},
         bounds=(0.0, 1.0e9), units="kg", consequence="scenario",
         desc="The mass the pulse released - the deck's own fixed discharge and "
              "concentration x spill_duration_s - which the deposited fraction "

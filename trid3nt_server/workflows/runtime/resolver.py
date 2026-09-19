@@ -18,6 +18,7 @@ from .params import (
     Derived,
     Param,
     ParamNotResolved,
+    ParamRef,
     ParamValues,
     ResolvedParam,
     ResolvedParams,
@@ -119,7 +120,13 @@ def _door_1_2(param: Param, supplied: Mapping[str, Any],
 
 async def _derive(param: Param, rows: Mapping[str, ResolvedParam]) -> Any:
     fn = _load(param.resolve or "")
-    out = fn(ParamValues(dict(rows)))
+    values = ParamValues(dict(rows))
+    # A DECLARED binding is the same shape a step's kwargs are: a ParamRef reads
+    # the sheet, anything else is the value itself. Reading a row that is not
+    # seated yet raises ParamNotResolved, which is this pass saying "wait".
+    out = fn(values) if param.resolve_kwargs is None else fn(**{
+        name: getattr(values, read.name) if isinstance(read, ParamRef) else read
+        for name, read in param.resolve_kwargs.items()})
     if inspect.isawaitable(out):
         out = await out
     return out

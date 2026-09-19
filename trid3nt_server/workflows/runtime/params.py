@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import dataclasses
 from dataclasses import dataclass, replace
-from typing import Any, Literal, Sequence
+from typing import Any, Literal, Mapping, Sequence
 
 from .errors import PlanValidationError
 from .plan import ParamRef, Row, body_rows
@@ -83,6 +83,12 @@ class Param(Row):
     bounds: tuple[float, float] | None = None
     units: str | None = None
     resolve: str | None = None
+    #: What the resolver HANDS that function, by its argument name: a plain
+    #: value, or a ``ParamRef`` read off the sheet as it stands. Absent, the
+    #: function is handed the whole sheet as its one argument - so a derivation
+    #: over named inputs is stated as values here instead of as a function of
+    #: its own beside the declaration.
+    resolve_kwargs: Mapping[str, Any] | None = None
     user_lever: bool = False
     optional: bool = False
     consequence: Literal["physics", "scenario", "numerical", "aoi"] = "scenario"
@@ -111,6 +117,11 @@ class Param(Row):
         if self.door == doors.DERIVED and not self.resolve:
             raise PlanValidationError(
                 f"Param {self.name!r} is door=derived but names no resolve path."
+            )
+        if self.resolve_kwargs is not None and not self.resolve:
+            raise PlanValidationError(
+                f"Param {self.name!r} declares resolve_kwargs and names no "
+                "resolve path for them to be handed to."
             )
         if self.door in (doors.SCENARIO, doors.CONSTANT) and self.default is None \
                 and not self.optional:
