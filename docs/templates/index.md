@@ -2,7 +2,7 @@
 
 # Templates
 
-12 registered templates, one per question. A template declares raw engine keywords over a module wrapper; `fill` sets the sheet and `run` solves it. The wrappers are in [`../modules.md`](../modules.md).
+13 registered templates, one per question. A template declares raw engine keywords over a module wrapper; `fill` sets the sheet and `run` solves it. The wrappers are in [`../modules.md`](../modules.md).
 
 ## [`artemis_harbor_agitation`](artemis_harbor_agitation.md)
 
@@ -59,6 +59,12 @@ Module `telemac2d`, proving run `01M2VYGS4FYGA4VSMXB3S64X1F`.
 NUTRIENT ENRICHMENT in a body of water: algal growth, nutrient drawdown and the oxygen response over one pass through it.
 
 Module `telemac2d`, proving run `01M2VDCVVHYA2PSTPY4HC01SZ7`.
+
+## [`telemac_ice_cover`](telemac_ice_cover.md)
+
+ICE COVER under a cold snap: when water freezes over, and how thick.
+
+Module `telemac2d`.
 
 ## [`telemac_micropollutant_release`](telemac_micropollutant_release.md)
 

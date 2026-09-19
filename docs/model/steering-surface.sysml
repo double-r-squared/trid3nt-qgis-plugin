@@ -1044,6 +1044,8 @@ package SteeringSurface {
         "tests/telemac/test_telemac_module_surface.py::test_a_coupled_body_is_checked_against_its_own_module_s_dictionary";
     verify requirement CompositesLiveInWrappers by
         "tests/telemac/test_telemac_khione.py::test_a_three_dimensional_host_couples_khione_and_states_its_column";
+    verify requirement CompositesLiveInWrappers by
+        "tests/telemac/test_telemac_ice_cover.py::test_the_ice_deck_states_the_five_keywords_this_question_has_an_opinion_on";
 
     satisfy requirement OneTemplatePerQuestion by door;
     verify requirement OneTemplatePerQuestion by
@@ -1107,6 +1109,10 @@ package SteeringSurface {
         "tests/telemac/test_telemac_atmosphere.py::test_both_hosts_name_the_same_file_and_state_no_unit_of_their_own";
     verify requirement ACapabilityOnAHostDeckIsAComposite by
         "tests/telemac/test_telemac_atmosphere.py::test_each_host_writes_the_columns_its_own_source_term_reads";
+    verify requirement ACapabilityOnAHostDeckIsAComposite by
+        "tests/telemac/test_telemac_atmosphere.py::test_a_run_whose_own_terms_read_the_weather_writes_those_columns_alone";
+    verify requirement ACapabilityOnAHostDeckIsAComposite by
+        "tests/telemac/test_telemac_ice_cover.py::test_the_weather_file_carries_what_the_ice_reads_and_no_solar_column";
     verify requirement ACapabilityOnAHostDeckIsAComposite by
         "tests/telemac/test_telemac_micropollutant.py::test_the_body_names_the_process_and_the_carrier_states_it";
     verify requirement ACapabilityOnAHostDeckIsAComposite by
@@ -1192,6 +1198,10 @@ package SteeringSurface {
         "tests/telemac/test_telemac_khione.py::test_every_row_the_table_carries_is_a_mnemonic_the_dictionary_spells";
     verify requirement OutputsAreTheModules by
         "tests/telemac/test_telemac_khione.py::test_the_wrapper_writes_its_own_result_beside_the_host_s";
+    verify requirement OutputsAreTheModules by
+        "tests/telemac/test_telemac_ice_cover.py::test_every_answer_is_read_off_the_ice_modules_own_result";
+    verify requirement OutputsAreTheModules by
+        "tests/telemac/test_telemac_ice_cover.py::test_the_module_declares_the_tracers_and_the_deck_declares_none";
     satisfy requirement OutputsAreTheModules by wrapper;
     satisfy requirement OutputsAreTheModules by output;
     satisfy requirement OutputsAreTheModules by sheet;

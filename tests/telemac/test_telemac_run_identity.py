@@ -21,6 +21,7 @@ TEMPLATE_MODULES: tuple[tuple[str, str], ...] = (
     ("telemac_water_temperature", "telemac2d"),
     ("telemac_micropollutant_release", "telemac2d"),
     ("telemac_eutrophication", "telemac2d"),
+    ("telemac_ice_cover", "telemac2d"),
     ("telemac_rain_on_grid", "telemac2d"),
     ("telemac3d_stratified_flow", "telemac3d"),
     ("artemis_harbor_agitation", "artemis"),

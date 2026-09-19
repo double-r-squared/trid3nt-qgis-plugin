@@ -290,6 +290,9 @@ from trid3nt_server.workflows.telemac.templates.sediment_plume.sediment_plume im
 from trid3nt_server.workflows.telemac.templates.water_temperature.water_temperature import telemac_water_temperature as _telemac_water_temperature  # noqa: E402,F401 - reach water-temperature front (engine=telemac, tier=template)
 from trid3nt_server.workflows.telemac.templates.micropollutant_release.micropollutant_release import telemac_micropollutant_release as _telemac_micropollutant_release  # noqa: E402,F401 - reach sorbing-pollutant front (engine=telemac, tier=template)
 from trid3nt_server.workflows.telemac.templates.eutrophication.eutrophication import telemac_eutrophication as _telemac_eutrophication  # noqa: E402,F401 - reach nutrient-enrichment front (engine=telemac, tier=template)
+# The KHIONE question over that same reach: what the heat budget does when the
+# water reaches freezing - the frazil it makes and the cover that grows on it.
+from trid3nt_server.workflows.telemac.templates.ice_cover.ice_cover import telemac_ice_cover as _telemac_ice_cover  # noqa: E402,F401 - reach ice-cover front (engine=telemac, tier=template)
 # The reach's one WORKED question: a dredger driven by NESTOR on the sediment
 # deck, so the material it moves rides the same per-class mass evolution the bed
 # evolution and the sediment balance are computed from.

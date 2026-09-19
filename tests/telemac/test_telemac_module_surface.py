@@ -926,12 +926,12 @@ def test_every_wrapper_binds_the_primitive_set_and_nothing_question_named():
 
 # -- the flip: one template per question, and the door's own review ----------- #
 
-#: The twelve questions the surface answers. Ten run on the fill/run door; the
-#: two open-water fronts still declare a plan and are Stage 3's.
+#: The thirteen questions the surface answers. Eleven run on the fill/run door;
+#: the two open-water fronts still declare a plan and are Stage 3's.
 _FLIPPED = ("telemac_dye_release", "telemac_oil_spill", "telemac_bed_scour",
             "telemac_sediment_plume", "telemac_do_sag",
             "telemac_water_temperature", "telemac_micropollutant_release",
-            "telemac_eutrophication",
+            "telemac_eutrophication", "telemac_ice_cover",
             "telemac_rain_on_grid", "telemac_channel_dredging")
 
 
@@ -969,7 +969,8 @@ def test_a_structural_fork_is_a_template_and_never_a_switch():
                      "telemac_sediment_plume": 4, "telemac_do_sag": 8,
                      "telemac_water_temperature": 2,
                      "telemac_micropollutant_release": 10,
-                     "telemac_eutrophication": 16}
+                     "telemac_eutrophication": 16,
+                     "telemac_ice_cover": 8}
 
 
 def test_no_flipped_body_branches_on_anything():
@@ -1108,12 +1109,12 @@ def _owned_recipe(tool_name: str):
 
 # -- the LLM surface: the raw floor, the docstring, the card ------------------ #
 
-#: Every question on the surface. All eleven fill and run through the door, so all
-#: eleven carry the floor, the sheet line and the card.
+#: Every question on the surface. All twelve fill and run through the door, so
+#: all twelve carry the floor, the sheet line and the card.
 _TEMPLATES = ("telemac_dye_release", "telemac_oil_spill", "telemac_bed_scour",
               "telemac_sediment_plume", "telemac_do_sag",
               "telemac_water_temperature", "telemac_micropollutant_release",
-              "telemac_eutrophication",
+              "telemac_eutrophication", "telemac_ice_cover",
               "telemac_rain_on_grid", "artemis_harbor_agitation",
               "telemac3d_stratified_flow")
 
