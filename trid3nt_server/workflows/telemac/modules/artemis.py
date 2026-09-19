@@ -11,6 +11,8 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Mapping, Sequence
 
+from trid3nt_server.workflows.runtime import Ref
+
 from .module import Module, Output
 from .outputs import PRIMITIVES
 
@@ -61,16 +63,21 @@ _TRACER_CODE = 2
 # ``cli_text`` is the boundary file the mesh recipe wrote from this geometry's own
 # IPOBO; ``open_nodes`` and ``structure_nodes`` are measured against the accepted
 # mesh, because which node is which is a fact about the domain, not the wave.
-def IncidentWave(*, cli_text: Any, open_nodes: Any,  # noqa: N802 - a value constructor
-                 structure_nodes: Any, height_m: Any,
+def IncidentWave(*, measured: Any, height_m: Any,  # noqa: N802 - a value constructor
                  reflection_coef: Any) -> Mapping[str, Any]:
     """The wave the domain is forced with, and which faces it enters through.
 
-    A MAPPING, not an object: the sheet's one ref walk descends mappings."""
-    return MappingProxyType({"cli_text": cli_text, "open_nodes": open_nodes,
-                             "structure_nodes": structure_nodes,
+    ``measured`` is what the workflow measures off the accepted harbour mesh -
+    the boundary file, the open faces and the structure's own - so the stage
+    that settles this run is the workflow's to build off this statement. A
+    MAPPING, not an object: the sheet's one ref walk descends mappings."""
+    return MappingProxyType({"cli_text": Ref(f"{measured.path}.cli_text"),
+                             "open_nodes": Ref(f"{measured.path}.open_nodes"),
+                             "structure_nodes":
+                                 Ref(f"{measured.path}.structure_nodes"),
                              "height_m": height_m,
-                             "reflection_coef": reflection_coef})
+                             "reflection_coef": reflection_coef,
+                             "measured": measured})
 
 
 def _incident_wave(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],

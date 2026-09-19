@@ -1327,15 +1327,16 @@ def test_the_artemis_forcing_composite_carries_the_file_and_not_its_name():
     stands for that file's ROWS; the keyword that names the file is stated beside
     the geometry it is the boundary of."""
     from trid3nt_server.workflows.telemac.modules.artemis import (
-        ART, BOUNDARY_FILENAME, IncidentWave,
+        ART, BOUNDARY_FILENAME,
     )
     from trid3nt_server.workflows.telemac.templates.agitation.agitation import (
         STEERING as AGITATION,
     )
 
-    slots, files = ART.COMPOSITES["incident_wave"].expand(IncidentWave(
-        cli_text="1 1 1 0.0 0.0 0.0 0.0 lit 2 0.0 0.0 0.0 1 1\n",
-        open_nodes=[1], structure_nodes=[], height_m=1.0, reflection_coef=0.3))
+    slots, files = ART.COMPOSITES["incident_wave"].expand({
+        "cli_text": "1 1 1 0.0 0.0 0.0 0.0 lit 2 0.0 0.0 0.0 1 1\n",
+        "open_nodes": [1], "structure_nodes": [], "height_m": 1.0,
+        "reflection_coef": 0.3})
     assert slots == {}
     assert list(files) == [BOUNDARY_FILENAME]
     assert AGITATION.ASSERTED["BOUNDARY_CONDITIONS_FILE"] == BOUNDARY_FILENAME

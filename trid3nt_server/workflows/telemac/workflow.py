@@ -105,12 +105,18 @@ class Placed(Ref):
     continues: bool = False
 
 
-#: The measurements the workflow takes against the world it settled, by the
-#: KIND a composite asks for: the runner that takes it, and whether it is taken
-#: before the run is settled or against the settled run.
-_MEASURES: Mapping[str, tuple[str, bool]] = MappingProxyType({
-    "rating": (f"{_TELEMAC}.authoring.assembler.settle_outlet_rating", False),
-    "dredge": (f"{_TELEMAC}.authoring.assembler.settle_dredge", True)})
+#: The measurements the workflow takes of this question's world, by the KIND a
+#: composite asks for: the runner that takes it, the stage it is taken at and
+#: WHEN - before the world is meshed, before the run is settled, as the settle
+#: itself, or against the settled run.
+_MEASURES: Mapping[str, tuple[str, str, str]] = MappingProxyType({
+    "footprint": ("trid3nt_server.inputs.structure.structure", "prep", "world"),
+    "rating": (f"{_TELEMAC}.authoring.assembler.settle_outlet_rating",
+               "author", "produce"),
+    "harbour": (f"{_TELEMAC}.authoring.assembler.settle_harbour",
+                "author", "settle"),
+    "dredge": (f"{_TELEMAC}.authoring.assembler.settle_dredge",
+               "author", "derive")})
 
 
 @dataclass(frozen=True, slots=True)
@@ -355,8 +361,8 @@ class Door:
                      kwargs={"value": ParamRef("event_time")}
                      ).named(_READING_DAY),)
 
-    def _measurements(self, domain: str, against: bool) -> tuple[Step, ...]:
-        """The stages that MEASURE this question's world, before or after settling.
+    def _measurements(self, domain: str, when: str) -> tuple[Step, ...]:
+        """The stages that MEASURE this question's world, at the point they are taken.
 
         A composite that asks for a measurement is what says there is one; the
         world it is measured against is the workflow's, so the mesh, the line,
@@ -369,24 +375,41 @@ class Door:
                  "friction_law": None}
         steps = []
         for ask in self._asked():
-            runner, after = _MEASURES[ask.kind]
-            if after is not against:
+            runner, stage, taken = _MEASURES[ask.kind]
+            if taken != when:
                 continue
             signature = _signature(runner)
             kwargs = {name: (self._asserted("LAW_OF_BOTTOM_FRICTION")
                              if name == "friction_law" else value)
                       for name, value in world.items() if name in signature}
-            steps.append(Step(runner=runner, stage="author",
-                              kwargs={**kwargs, **dict(ask.asked)}
-                              ).named(ask.root))
+            step = Step(runner=runner, stage=stage,
+                        kwargs={**kwargs, **dict(ask.asked)})
+            # The SETTLE is named by the plan that places it, which names every
+            # settle the same thing; anything else is named for what it measured.
+            steps.append(step if taken == "settle" else step.named(ask.root))
         return tuple(steps)
 
+    def _settle(self, domain: str) -> Step | None:
+        """The stage this question is SETTLED by, where it is not open water.
+
+        A harbour is settled by the wave that enters it rather than by a level
+        the water stands at, so the composite that forces the domain is what
+        says which settle this run takes."""
+        taken = self._measurements(domain, when="settle")
+        return taken[0] if taken else None
+
     def _asked(self) -> tuple["Measured", ...]:
-        """Every measurement this question asks for, in the order it is named."""
+        """Every measurement this question asks for, in the order it is named.
+
+        Read off the deck's own assertions and off the mesh recipe, because a
+        measurement the MESHER consumes - the footprint a structure is cut out
+        of - is asked for there and nowhere else."""
         found: dict[str, Measured] = {}
-        for ref in declared_reads(self.steering.ASSERTED, Ref):
-            if isinstance(ref, Measured):
-                found.setdefault(ref.root, ref)
+        recipe = [dict(op.kwargs) for op in getattr(self.mesh, "ops", ())]
+        for surface in (self.steering.ASSERTED, recipe):
+            for ref in declared_reads(surface, Ref):
+                if isinstance(ref, Measured):
+                    found.setdefault(ref.root, ref)
         return tuple(found.values())
 
     def _placements(self, domain: str) -> tuple[Step, ...]:
@@ -464,10 +487,11 @@ class Door:
             if slots.get(DISCHARGE) else ())
         return replace(
             self,
+            domain=self._measurements(domain, when="world") + tuple(self.domain),
             produce=(self._reading_day(ops) + channel + self._placements(domain)
-                     + self._measurements(domain, against=False)
+                     + self._measurements(domain, when="produce")
                      + tuple(self.produce)),
-            derive=self._measurements(domain, against=True) + tuple(self.derive),
+            derive=self._measurements(domain, when="derive") + tuple(self.derive),
             mesh=self.mesh if self.mesh is not None else tool.build_mesh(
                 mesher=self.mesher, kind=self.kind, extent=DataRef(domain),
                 resolution_m=ParamRef("mesh_resolution_m"),
@@ -488,7 +512,7 @@ class Door:
             results=self.results or (result,),
             steering_file=self.steering_file
             or f"{self.steering.MODULE}_{ops.name}.cas",
-            settle=Step(
+            settle=self._settle(domain) or Step(
                 runner=f"{_TELEMAC}.authoring.assembler.open_water",
                 stage="author",
                 kwargs={"mesh": Ref("mesh"),

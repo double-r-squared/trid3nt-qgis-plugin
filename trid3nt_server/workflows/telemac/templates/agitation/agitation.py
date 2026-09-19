@@ -12,7 +12,6 @@ from trid3nt_server.workflows.runtime import (
     Data,
     ParamRef,
     Ref,
-    Step,
     register_workflow,
 )
 from trid3nt_server.workflows.mesh.tool import mesh_op, tool
@@ -31,53 +30,19 @@ from trid3nt_server.workflows.telemac.templates.agitation.declarations import (
     PARAMS,
     PARAMS as P,
 )
-from trid3nt_server.workflows.telemac.workflow import Door, TelemacWorkflow
+from trid3nt_server.workflows.telemac.workflow import (
+    Door, Measured, TelemacWorkflow,
+)
 
 __all__ = ["ANSWER", "CAPTIONS", "DATA", "MESH", "OUTPUTS", "PARAMS", "STEERING",
            "artemis_harbor_agitation"]
 
-_AUTHORING = "trid3nt_server.workflows.telemac.authoring"
-_ENGINE = "trid3nt_server.workflows.telemac.engine"
-_INPUTS = "trid3nt_server.inputs"
 
 #: What the run directory holds the run's files under - the deck's own GEOMETRY /
 #: RESULTS statements. The boundary file is the incident wave's and is named by
 #: the composite that writes it.
 _RESULT = "res_agitation.slf"
 _STEERING_FILE = "art_agitation.cas"
-
-
-class STEERING(ART):
-    """The deck: a monochromatic wave in through the open edge, and what it leaves."""
-
-    TITLE = Ref("settled.title")
-    GEOMETRY_FILE = HARBOUR_GEOMETRY
-    BOUNDARY_CONDITIONS_FILE = BOUNDARY_FILENAME
-    RESULTS_FILE = _RESULT
-
-    # The still water level the harbour is solved at is the dictionary's own zero,
-    # so what this states is that the level is CONSTANT rather than what it is.
-    INITIAL_CONDITIONS = "CONSTANT ELEVATION"
-    # An elliptic solve over tens of thousands of nodes does not converge inside
-    # the dictionary's own iteration ceiling for a domain this size.
-    MAXIMUM_NUMBER_OF_ITERATIONS_FOR_SOLVER = 4000
-
-    # The swell a harbour of refuge is asked about: an eight-second period, long
-    # enough to diffract around the structure and short enough that the basin is
-    # many wavelengths across.
-    WAVE_PERIOD = 8.0
-    # Where it runs TO, counted in the trigonometric sense from +x, so 90 is a
-    # wave travelling north; the transect is read along the same bearing.
-    DIRECTION_OF_WAVE_PROPAGATION = 90.0
-
-    #: The forcing, which ARTEMIS reads out of the BOUNDARY CONDITIONS FILE and
-    #: not out of the deck: the designated liquid stretch carries the incident
-    #: height, the structure's own faces reflect, and every other face absorbs.
-    incident_wave = IncidentWave(cli_text=Ref("settled.cli_text"),
-                                 open_nodes=Ref("settled.open_nodes"),
-                                 structure_nodes=Ref("settled.structure_nodes"),
-                                 height_m=P.wave_height_m,
-                                 reflection_coef=P.reflection_coef)
 
 
 class DATA:
@@ -131,6 +96,60 @@ class DATA:
     mesh = Data.supplied(geometry="mesh").optional()
 
 
+#: The structure as a water-removing FOOTPRINT, before the mesh: the domain is
+#: the water the structure is subtracted FROM and a centreline bounds no area to
+#: subtract.
+_FOOTPRINT = Measured(
+    "footprint", kind="footprint",
+    asked={"value": DATA.structure, "width_m": ParamRef("barrier_width_m"),
+           "asked": "the structure this question asks about",
+           "code": "ARTEMIS_STRUCTURE_INVALID"})
+
+#: What the accepted harbour mesh measures. The wave the settle stamps onto the
+#: boundary file is the wave the deck is solved at, so its period and its
+#: direction are read off the deck; the width is the one the footprint above was
+#: cut at, because what the mesher removed is what the deck calls solid.
+_HARBOUR = Measured(
+    "settled", kind="harbour",
+    asked={"structure": DATA.structure,
+           "structure_width_m": ParamRef("barrier_width_m"),
+           "wave_period_s": Ref("stated.WAVE_PERIOD"),
+           "wave_height_m": ParamRef("wave_height_m"),
+           "wave_direction_deg": Ref("stated.DIRECTION_OF_WAVE_PROPAGATION"),
+           "reflection_coef": ParamRef("reflection_coef"),
+           "result_basename": _RESULT})
+
+
+class STEERING(ART):
+    """The deck: a monochromatic wave in through the open edge, and what it leaves."""
+
+    TITLE = Ref("settled.title")
+    GEOMETRY_FILE = HARBOUR_GEOMETRY
+    BOUNDARY_CONDITIONS_FILE = BOUNDARY_FILENAME
+    RESULTS_FILE = _RESULT
+
+    # The still water level the harbour is solved at is the dictionary's own zero,
+    # so what this states is that the level is CONSTANT rather than what it is.
+    INITIAL_CONDITIONS = "CONSTANT ELEVATION"
+    # An elliptic solve over tens of thousands of nodes does not converge inside
+    # the dictionary's own iteration ceiling for a domain this size.
+    MAXIMUM_NUMBER_OF_ITERATIONS_FOR_SOLVER = 4000
+
+    # The swell a harbour of refuge is asked about: an eight-second period, long
+    # enough to diffract around the structure and short enough that the basin is
+    # many wavelengths across.
+    WAVE_PERIOD = 8.0
+    # Where it runs TO, counted in the trigonometric sense from +x, so 90 is a
+    # wave travelling north; the transect is read along the same bearing.
+    DIRECTION_OF_WAVE_PROPAGATION = 90.0
+
+    #: The forcing, which ARTEMIS reads out of the BOUNDARY CONDITIONS FILE and
+    #: not out of the deck: the designated liquid stretch carries the incident
+    #: height, the structure's own faces reflect, and every other face absorbs.
+    incident_wave = IncidentWave(measured=_HARBOUR, height_m=P.wave_height_m,
+                                 reflection_coef=P.reflection_coef)
+
+
 #: The MESH RECIPE, frozen at declaration and building nothing at import. The
 #: domain polygon's own edge IS the shoreline the sizing function measures, so
 #: the recipe hands the mesher that polygon and nothing restates where the water
@@ -145,7 +164,7 @@ MESH = tool.build_mesh(
     extent=DATA.domain,
     resolution_m=P.mesh_resolution_m,
     ops=[
-        mesh_op("set_obstacle", geometry=Ref("footprint")),
+        mesh_op("set_obstacle", geometry=_FOOTPRINT),
         mesh_op("feature_sizing_function"),
         # THE RIM IS THE ASK'S TO SIZE. Nothing else sizes it: a sizing function
         # measures the water's own shape - the feature width, the distance to a
@@ -220,36 +239,17 @@ artemis_harbor_agitation = register_workflow(
     TelemacWorkflow, _ARTEMIS_METADATA, PARAMS,
     Door(
         steering=STEERING,
-        # The structure as a water-removing FOOTPRINT, before the mesh: the
-        # domain is the water the structure is subtracted FROM and a centreline
-        # bounds no area to subtract.
-        domain=(Step(runner=f"{_INPUTS}.structure.structure", stage="prep",
-                     kwargs={"value": DATA.structure,
-                             "width_m": ParamRef("barrier_width_m"),
-                             "asked": "the structure this question asks about",
-                             "code": "ARTEMIS_STRUCTURE_INVALID"}
-                     ).named("footprint"),),
         mesh=MESH, mesh_on="domain", supplied_mesh=DATA.mesh,
-        # The wave the settle stamps onto the boundary file is the wave the deck
-        # is solved at, so its period and its direction are read off the deck.
-        settle=Step(runner=f"{_AUTHORING}.assembler.settle_harbour",
-                    stage="author",
-                    kwargs={"mesh": Ref("mesh"), "structure": DATA.structure,
-                            # The width the footprint above was cut at: what the
-                            # mesher removed is what the deck calls solid.
-                            "structure_width_m": ParamRef("barrier_width_m"),
-                            "wave_period_s": Ref("stated.WAVE_PERIOD"),
-                            "wave_height_m": ParamRef("wave_height_m"),
-                            "wave_direction_deg":
-                                Ref("stated.DIRECTION_OF_WAVE_PROPAGATION"),
-                            "reflection_coef": ParamRef("reflection_coef"),
-                            "result_basename": _RESULT}),
         results=(_RESULT,),
         steering_file=_STEERING_FILE, prefix="artemis",
-        dispatch=f"{_ENGINE}.solve_case", compute_class=P.compute_class,
+        compute_class=P.compute_class,
         outputs=OUTPUTS, captions=CAPTIONS, answer=ANSWER,
         review_title="Review the incident wave, the structure and the mesh"),
     data=DATA,
+    # A harbour is settled by the wave that enters it, and the stages that do it
+    # read no runtime lever: no dated source, no frame a level is counted from,
+    # and the mesh size is this question's own param.
+    levers=(),
     accepts=ACCEPTS,
     answer=tuple(ANSWER),
     provenance=(("structure", "structure_note"),

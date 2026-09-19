@@ -17,12 +17,13 @@ def test_the_footprint_and_the_solid_faces_are_cut_at_the_same_width():
     here would let the deck stamp a face on water the cut left behind."""
     from trid3nt_server.tools import TOOL_REGISTRY
 
-    door = TOOL_REGISTRY["artemis_harbor_agitation"].fn.workflow.plan_decl
-    footprint = next(step for step in door.domain if step.label == "footprint")
+    plan = TOOL_REGISTRY["artemis_harbor_agitation"].fn.workflow.plan
+    steps = {step.label: step for step in plan.declared()}
+    footprint = steps["footprint"]
     # A ref refuses to compare itself at plan-construction time, which is what
     # keeps a description from being read as a value; the NAME is the statement.
     assert footprint.kwargs["width_m"].name == "barrier_width_m"
-    assert door.settle.kwargs["structure_width_m"].name == "barrier_width_m"
+    assert steps["settled"].kwargs["structure_width_m"].name == "barrier_width_m"
 
 
 def test_a_boundary_node_is_on_the_structure_when_it_stands_on_the_punched_outline():

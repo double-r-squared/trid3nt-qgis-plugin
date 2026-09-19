@@ -19,6 +19,14 @@ def _door():
     return TOOL_REGISTRY["artemis_harbor_agitation"].fn.workflow.plan_decl
 
 
+def _step(label):
+    """One step of the plan the WORKFLOW built, by the name it was given."""
+    from trid3nt_server.tools import TOOL_REGISTRY
+
+    plan = TOOL_REGISTRY["artemis_harbor_agitation"].fn.workflow.plan
+    return next(step for step in plan.declared() if step.label == label)
+
+
 def _rows():
     from trid3nt_server.tools import TOOL_REGISTRY
 
@@ -84,7 +92,7 @@ def test_the_mesh_is_cut_from_the_domain_polygon_and_not_from_a_box():
 def test_the_footprint_is_the_shared_structure_ingestion():
     """A centreline bounds no area, and widening one is not this template's
     work: the ingestion every structure passes through is what the step names."""
-    footprint = next(step for step in _door().domain if step.label == "footprint")
+    footprint = _step("footprint")
     assert footprint.runner == "trid3nt_server.inputs.structure.structure"
     assert repr(footprint.kwargs["value"]) == "DataRef('structure')"
 
@@ -130,7 +138,7 @@ def test_the_settle_reads_the_wave_the_run_is_solved_at():
     from trid3nt_server.workflows.telemac.templates.agitation import agitation
     from trid3nt_server.workflows.telemac.workflow import stated
 
-    settle = _door().settle
+    settle = _step("settled")
     assert settle.kwargs["wave_period_s"] == Ref("stated.WAVE_PERIOD")
     assert settle.kwargs["wave_direction_deg"] == Ref(
         "stated.DIRECTION_OF_WAVE_PROPAGATION")
