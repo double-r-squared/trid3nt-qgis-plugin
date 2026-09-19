@@ -301,6 +301,7 @@ def fill(source: type | Sheet, *, template: str = "",
                               provenance=provenance)
     _arm(body, filled, files)
     _continued(body, filled, produced or {})
+    _partitioned(body, filled, params or {})
     write_atmosphere(body, {name: row.value for name, row in filled.items()},
                      files)
     return Sheet(body=body, filled=MappingProxyType(filled),
@@ -332,6 +333,34 @@ def _continued(body: type, filled: dict[str, Filled],
     filled[_CONTINUATION] = Filled(
         slot=slot, value=slot.check(str(staged)),
         provenance=Provenance(Origin.PRODUCER, "the run this one continues"))
+
+
+#: The keyword every TELEMAC module spells for the number of processors its
+#: domain is partitioned across. Its own default is one machine with no parallel
+#: library, so a serial run states nothing.
+PROCESSORS = "PARALLEL_PROCESSORS"
+
+
+def _partitioned(body: type, filled: dict[str, Filled],
+                 params: Mapping[str, Any]) -> None:
+    """State how many cores this run is solved on, where the body spells it.
+
+    The sizing class is the runtime's lever and the core count is its one
+    consequence; the worker's launcher is handed the SAME number, so the
+    partition the engine is told about is the partition it gets. A sheet filled
+    off a run states no class, so nothing is partitioned on its behalf."""
+    from trid3nt_server.workflows.runtime.levers import cores_for
+
+    stated = params.get("compute_class")
+    if not stated or PROCESSORS in filled or PROCESSORS not in body.MODULE_INPUT:
+        return
+    cores = cores_for(stated)
+    if cores < 2:
+        return
+    slot = body.slot(PROCESSORS)
+    filled[PROCESSORS] = Filled(slot=slot, value=slot.check(cores),
+                                 provenance=Provenance(Origin.PRODUCER,
+                                                       "the run's sizing class"))
 
 
 def _arm(body: type, filled: dict[str, Filled],
@@ -569,6 +598,8 @@ async def run(sheet: Sheet, *, dispatch: Callable[..., Any],
     Checked against the REQUIRED slots only; the box entry is the caller's."""
     # Everything past the OBLIG files the engine asks for by name in its own
     # listing, so a required set invented here would refuse runs it would take.
+    from trid3nt_server.workflows.runtime.levers import cores_for
+
     from ..authoring.assembler import new_rundir, stage_run
     from ..authoring.serializer import serialize
 
@@ -599,7 +630,11 @@ async def run(sheet: Sheet, *, dispatch: Callable[..., Any],
         # the manifest channel carries the same word the decks do rather than a
         # second derivation of it.
         user_fortran=sheet.user_code(),
-        coupling=coupling, continue_from=continue_from)
+        coupling=coupling, continue_from=continue_from,
+        # THE SAME NUMBER the steering file states: the launcher partitions the
+        # mesh across it, and a count the engine was not told about would run
+        # the solve on a partition the deck does not describe.
+        cores=cores_for(compute_class))
     # The staged run and the box's answer are ONE handle: the reader needs both
     # what was staged and what came back, and two results would make the caller
     # carry the join.

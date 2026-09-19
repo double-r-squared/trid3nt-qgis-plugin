@@ -8,6 +8,7 @@ the network. One test spawns a real child, to prove the crash isolation.
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 
 import pytest
@@ -41,7 +42,7 @@ def test_the_parser_stamp_is_the_unified_one():
     """The stamp travels with the case contract, so an image built against an
     older one reads as a drifted version rather than as a manifest whose keys
     silently did nothing."""
-    assert E._PARSER_VERSION == "telemac-case-4"
+    assert E._PARSER_VERSION == "telemac-case-5"
 
 
 def test_the_four_engines_a_case_may_name_come_from_telapy():
@@ -441,3 +442,22 @@ def test_a_child_that_dies_still_leaves_the_metrics_written(tmp_path):
     assert metrics["error_code"] == "TELEMAC_SOLVE_FAILED"
     assert "telapy" in (tmp_path / E.LISTING_FILENAME).read_text()
     assert "telapy" in metrics["listing_tail"]
+
+
+def test_a_partitioned_solve_takes_the_launcher_arm_with_the_same_count():
+    """The telapy arm drives ONE process with no partitioner behind it, so a
+    core count on it would be a number the steering file states and the run
+    never gets; the launcher is handed the count the deck wrote."""
+    assert "cores" in E._CASE_FIELDS
+    argv = E._solve_argv("telemac2d", "t2d.cas", (), "", cores=4)
+    assert argv == ["telemac2d.py", "t2d.cas", "--ncsize", "4"]
+
+
+def test_a_serial_solve_still_runs_in_process_and_states_no_count():
+    argv = E._solve_argv("telemac2d", "t2d.cas", (), "", cores=1)
+    assert argv[0] == sys.executable and "--ncsize" not in argv
+
+
+def test_a_coupled_case_keeps_its_own_launcher_arm_at_one_core():
+    assert E._solve_argv("telemac2d", "t2d.cas", (), "gaia", cores=1) == [
+        "telemac2d.py", "t2d.cas"]

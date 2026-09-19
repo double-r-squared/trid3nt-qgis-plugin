@@ -41,7 +41,7 @@ _LISTING_TAIL_CHARS = 4000
 #: Bump on a manifest-contract change. The stamp is named in the strict-gate
 #: refusal, so a stale image surfaces as a drifted version rather than as a knob
 #: that silently did nothing.
-_PARSER_VERSION = "telemac-case-4"
+_PARSER_VERSION = "telemac-case-5"
 
 #: Wall-clock bound on ONE solve, and the environment knob that states it. A
 #: wedged Fortran process holds the run directory forever and the supervisor sees
@@ -62,7 +62,7 @@ _MODULES: dict[str, tuple[str, str]] = {
 #: The keys a ``case`` section carries.
 _CASE_FIELDS = frozenset((
     "module", "steering", "user_fortran", "results", "server_facts",
-    "coupling", "continue_from"))
+    "coupling", "continue_from", "cores"))
 
 #: The couplings telapy's API arm cannot drive, so their cases go through the
 #: engine's OWN CLI launcher instead - the same runner seam, the same manifest,
@@ -77,7 +77,7 @@ _CASE_FIELDS = frozenset((
 #: so a coupled case would reach the wave step with nothing allocated. A SCOPED
 #: DEVIATION that dies the day telapy drives them; every other class stays on
 #: the API arm.
-#: Neither the per-step point nor a continuation is available behind it.
+#: The per-step point is not available behind it.
 _LAUNCHER_COUPLINGS = frozenset(("waqtel", "gaia", "khione", "tomawac"))
 
 
@@ -220,11 +220,17 @@ def _solve_timeout_s() -> float:
 
 
 def _solve_argv(module: str, steering: str, user_fortran: Sequence[str],
-                coupling: str) -> list[str]:
+                coupling: str, cores: int = 1) -> list[str]:
     """The command ONE case solves under: the telapy arm, or the module's own CLI
     launcher, which the image puts on PATH under the module's name and which
     reads the steering file for everything else, the user Fortran every deck of
-    the run names included."""
+    the run names included.
+
+    A PARTITIONED solve takes the launcher arm whatever it couples: the telapy
+    arm drives one process with no partitioner behind it, so a core count on it
+    would be a number the steering file states and the run never gets."""
+    if cores > 1:
+        return [f"{module}.py", steering, "--ncsize", str(int(cores))]
     if coupling in _LAUNCHER_COUPLINGS:
         return [f"{module}.py", steering]
     argv = [sys.executable, os.path.abspath(__file__),
@@ -297,6 +303,7 @@ def _solve_case(data_dir: Path, body: Any, run_id: str | None) -> dict[str, Any]
             "which is the convention this worker retired. Declare what the run "
             "must produce.")
     coupling = str(case.get("coupling") or "").lower()
+    cores = int(case.get("cores") or 1)
     previous = str(case.get("continue_from") or "")
     if previous:
         # A continuation is the ENGINE'S restart: the steering file names this
@@ -306,9 +313,9 @@ def _solve_case(data_dir: Path, body: Any, run_id: str | None) -> dict[str, Any]
             raise CaseError(
                 "TELEMAC_CASE_NOT_CONTINUABLE",
                 f"case.continue_from is set on a case coupled with {coupling!r}, "
-                "which runs the module's own launcher rather than the stepped "
-                "arm; a continued run of it has never been run and would be "
-                "reported as one that had.")
+                "which reads its OWN previous-computation file for its own "
+                "state; this case stages the host's alone, so the coupling "
+                "would cold-start inside a run reported as continued.")
         if not (data_dir / previous).exists():
             raise CaseError(
                 "TELEMAC_CASE_PREVIOUS_MISSING",
@@ -316,16 +323,16 @@ def _solve_case(data_dir: Path, body: Any, run_id: str | None) -> dict[str, Any]
                 "the steering file continues from a file that was never "
                 "staged.")
     fortran = [str(named) for named in (case.get("user_fortran") or ())]
-    if len(fortran) > 1 and coupling not in _LAUNCHER_COUPLINGS:
+    if len(fortran) > 1 and cores < 2 and coupling not in _LAUNCHER_COUPLINGS:
         raise CaseError(
             "TELEMAC_CASE_TWO_USER_FORTRAN",
             f"case.user_fortran names {fortran}, and this case runs on the "
             "stepped telapy arm, which compiles ONE directory; the second would "
             "be dropped and the run would report code it never built.")
-    argv = _solve_argv(module, steering, fortran, coupling)
-    LOG.info("telemac case module=%s steering=%s coupling=%s continue_from=%s "
-             "results=%s via %s", module, steering, coupling or "none",
-             previous or "none", results, argv[0])
+    argv = _solve_argv(module, steering, fortran, coupling, cores)
+    LOG.info("telemac case module=%s steering=%s coupling=%s cores=%d "
+             "continue_from=%s results=%s via %s", module, steering,
+             coupling or "none", cores, previous or "none", results, argv[0])
 
     code = _run_child(data_dir, argv)
     missing = [r for r in results if not (data_dir / r).exists()]

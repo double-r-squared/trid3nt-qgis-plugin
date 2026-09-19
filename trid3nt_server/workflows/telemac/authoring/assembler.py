@@ -76,14 +76,19 @@ def case_section(*, module: str, steering: str, results: list[str],
                  server_facts: Mapping[str, Any],
                  user_fortran: Sequence[str] = (),
                  coupling: str | None = None,
-                 continue_from: str | None = None) -> dict[str, Any]:
+                 continue_from: str | None = None,
+                 cores: int = 1) -> dict[str, Any]:
     """The CASE a worker runs: which engine, which file, what it must produce.
 
-    ``server_facts`` is copied into the worker's metrics verbatim, never re-derived."""
+    ``cores`` is the partition the steering file's own PARALLEL PROCESSORS
+    states, carried so the launcher and the engine are told the same number; a
+    serial run states neither. ``server_facts`` is copied into the worker's
+    metrics verbatim, never re-derived."""
     return {"module": module, "steering": steering,
             **({"user_fortran": list(user_fortran)} if user_fortran else {}),
             **({"coupling": coupling} if coupling else {}),
             **({"continue_from": continue_from} if continue_from else {}),
+            **({"cores": int(cores)} if int(cores) > 1 else {}),
             "results": list(results), "server_facts": dict(server_facts)}
 
 
@@ -167,7 +172,8 @@ async def stage_run(rundir: Path, run_tag: str, *, module: str, steering: str,
                     sheet: Mapping[str, Any], server_facts: Mapping[str, Any],
                     result_basename: str, user_fortran: Sequence[str] = (),
                     coupling: str | None = None,
-                    continue_from: str | None = None) -> dict[str, Any]:
+                    continue_from: str | None = None,
+                    cores: int = 1) -> dict[str, Any]:
     """An authored run directory -> the staged run the box receives.
 
     The manifest is written LAST, so it exists only for a fully staged run."""
@@ -182,7 +188,7 @@ async def stage_run(rundir: Path, run_tag: str, *, module: str, steering: str,
     case = case_section(
         module=module, steering=steering, results=results,
         user_fortran=user_fortran, coupling=coupling,
-        continue_from=continue_from, server_facts=server_facts)
+        continue_from=continue_from, cores=cores, server_facts=server_facts)
     manifest_uri = await asyncio.to_thread(
         _write_manifest, case, run_tag, outputs=outputs, inputs=inputs,
         prefix=prefix)

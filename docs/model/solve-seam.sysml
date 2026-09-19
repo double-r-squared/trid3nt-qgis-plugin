@@ -205,6 +205,7 @@ package SolveSeam {
         item user_fortran : DirName [0..1];
         item coupling : String [0..1];
         item continue_from : FileName [0..1];
+        item cores : Integer [0..1];
     }
 
     interface def ServerFacts {
@@ -568,6 +569,43 @@ package SolveSeam {
         */
     }
 
+    requirement def OnePartitionStatedTwice {
+        doc /*
+        A solve is sized in CORES and nothing else, and the number is stated
+        once in the runtime beside the sizing class it is the consequence of.
+        The engine is told it by its own PARALLEL PROCESSORS keyword and the
+        worker's launcher is handed the same number, because a count the
+        launcher partitions on that the steering file does not state is a run
+        whose deck describes a partition it never had.
+
+        A partitioned case therefore takes the module's own CLI launcher, which
+        runs the partitioner and mpirun: the stepped telapy arm drives one
+        process with no partitioner behind it, so a core count on that arm
+        would be a number the deck states and the run never gets. One core is
+        the keyword's own default and states nothing at all, and a module whose
+        dictionary spells no processor keyword says on the card that it runs
+        serial rather than leaving the lever looking like it did something.
+        */
+    }
+
+    requirement def AContinuationIsARerunLedgerRow {
+        doc /*
+        A run that carries another on is a DERIVATION of it, not a value some
+        question declares: rerun_workflow names the run whose ending state this
+        one opens at, the ledger stages that run's own result as the previous
+        computation, and the record says which run was continued. The cut is
+        the step that reads the run's continuation, so a hot start re-solves
+        while inheriting the world the parent measured.
+
+        Naming the file IS the continuation: the engine reads its last record
+        as the initial state and the deck's own initial-condition statements go
+        unread. The staged file is the parent's result, whose format is the
+        keyword's own default, so nothing states that. Every forcing file the
+        child writes is read on the clock the parent ended at, because a table
+        that does not span the run's own instants stops the reader.
+        */
+    }
+
     requirement def ExecutorKnowsNoEngine {
         doc /*
         One executor over one file per engine: the executor stages, launches,
@@ -879,6 +917,39 @@ package SolveSeam {
     satisfy requirement ADredgeCutsOnlyWhatTheStockHolds by assembler;
     verify requirement ADredgeCutsOnlyWhatTheStockHolds by
         "tests/telemac/test_telemac_nestor_dredge.py::test_a_grade_the_bed_has_no_stock_to_reach_refuses_at_authoring";
+
+    satisfy requirement OnePartitionStatedTwice by assembler;
+    satisfy requirement OnePartitionStatedTwice by steeringStatements;
+    satisfy requirement OnePartitionStatedTwice by workerEntrypoint;
+    verify requirement OnePartitionStatedTwice by
+        "tests/telemac/test_telemac_compute_cores.py::test_every_rung_the_dispatcher_serves_is_sized_in_cores";
+    verify requirement OnePartitionStatedTwice by
+        "tests/telemac/test_telemac_compute_cores.py::test_the_sizing_class_states_the_keyword_the_engine_reads_it_under";
+    verify requirement OnePartitionStatedTwice by
+        "tests/telemac/test_telemac_compute_cores.py::test_a_serial_class_leaves_the_engine_on_its_own_default";
+    verify requirement OnePartitionStatedTwice by
+        "tests/telemac/test_telemac_compute_cores.py::test_the_case_carries_the_same_count_the_steering_file_states";
+    verify requirement OnePartitionStatedTwice by
+        "tests/telemac/test_telemac_compute_cores.py::test_a_module_that_spells_no_processor_keyword_says_so_on_the_card";
+    verify requirement OnePartitionStatedTwice by
+        "workers/telemac/test_entrypoint.py::test_a_partitioned_solve_takes_the_launcher_arm_with_the_same_count";
+    verify requirement OnePartitionStatedTwice by
+        "workers/telemac/test_entrypoint.py::test_a_serial_solve_still_runs_in_process_and_states_no_count";
+
+    satisfy requirement AContinuationIsARerunLedgerRow by assembler;
+    satisfy requirement AContinuationIsARerunLedgerRow by workerEntrypoint;
+    verify requirement AContinuationIsARerunLedgerRow by
+        "tests/runtime/test_rerun_with_overrides.py::test_the_cut_of_a_hot_start_is_the_step_that_opens_on_the_other_run";
+    verify requirement AContinuationIsARerunLedgerRow by
+        "tests/runtime/test_rerun_with_overrides.py::test_a_continuation_is_a_different_invocation_than_the_run_it_continues";
+    verify requirement AContinuationIsARerunLedgerRow by
+        "tests/runtime/test_rerun_with_overrides.py::test_a_run_with_no_solved_state_cannot_be_continued";
+    verify requirement AContinuationIsARerunLedgerRow by
+        "tests/runtime/test_rerun_with_overrides.py::test_the_record_of_a_continued_run_says_which_run_it_continued";
+    verify requirement AContinuationIsARerunLedgerRow by
+        "tests/telemac/test_telemac_reach_staged_inputs.py::test_a_continuation_is_a_rerun_row_and_no_template_declares_it";
+    verify requirement AContinuationIsARerunLedgerRow by
+        "tests/telemac/test_telemac_module_surface.py::test_a_continuation_names_the_file_and_nothing_else";
 
     satisfy requirement BoundaryCodesMatchTheSteering by topologyWriter;
     satisfy requirement BoundaryCodesMatchTheSteering by assembler;

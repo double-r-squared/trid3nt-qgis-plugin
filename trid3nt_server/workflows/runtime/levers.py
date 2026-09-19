@@ -17,8 +17,8 @@ from typing import Any, Sequence
 from .errors import PlanValidationError
 from .params import Param, doors
 
-__all__ = ["LEVERS", "LEVER_NAMES", "VERTICAL_FRAME", "lever", "run_frame",
-           "with_levers"]
+__all__ = ["COMPUTE_CORES", "LEVERS", "LEVER_NAMES", "VERTICAL_FRAME",
+           "cores_for", "lever", "run_frame", "with_levers"]
 
 #: The vertical frame a run counts elevations from where nothing states another.
 #: NAVD88 is what the national terrain, the bathymetry and the gauges this
@@ -45,7 +45,9 @@ LEVERS: tuple[Param, ...] = (
                "'during last Tuesday's storm'. Each source keeps its own "
                "retention, and a request deeper than one refuses typed"),
     Param(name="compute_class", door=doors.CONSTANT, default="medium",
-          consequence="numerical", desc="Solve sizing class"),
+          consequence="numerical",
+          desc="Solve sizing class - how many cores the solve is partitioned "
+               "across. An engine that runs on one core says so on the card"),
     # NUMERICAL, not physics: this is the AXIS every elevation is placed on, and
     # its default is a published national frame rather than a number nobody
     # measured - what law 9 refuses in auto mode is an invented world, and a
@@ -57,6 +59,32 @@ LEVERS: tuple[Param, ...] = (
                "frame reaches this one through a measured offset, and a pair "
                "nobody publishes an offset between refuses by name"),
 )
+
+
+#: What a sizing class MEANS, in the one thing a solve can be sized by: the
+#: number of cores the mesh is partitioned across. Stated once here because the
+#: engine writes its own switch for it and the worker's launcher passes the same
+#: number to mpirun, and two tables are how those two drift apart. The box this
+#: runs on has eight cores; ``gpu`` names hardware that is not here, so it is a
+#: class this fleet honours on one core.
+COMPUTE_CORES: dict[str, int] = {
+    "small": 1, "standard": 2, "large": 4, "xlarge": 8, "gpu": 1}
+
+
+def cores_for(compute_class: Any) -> int:
+    """How many cores THIS class is solved on, or a refusal naming the ladder."""
+    from ..solver.compute_class import COMPUTE_CLASS_ALIAS, ComputeClassUnknown
+
+    named = str(compute_class or "").strip().lower()
+    if not named:
+        named = str(next(row.default for row in LEVERS
+                         if row.name == "compute_class"))
+    rung = COMPUTE_CLASS_ALIAS.get(named)
+    if rung is None or rung not in COMPUTE_CORES:
+        raise ComputeClassUnknown(
+            f"compute_class {compute_class!r} is not a rung this fleet sizes a "
+            f"solve on; the ladder is {sorted(COMPUTE_CLASS_ALIAS)}.")
+    return COMPUTE_CORES[rung]
 
 
 #: Every lever by name - what a declaration that takes all of them states.

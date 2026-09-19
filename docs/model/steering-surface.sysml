@@ -79,6 +79,20 @@ package SteeringSurface {
         */
     }
 
+    part def TemporalValue {
+        doc /*
+        The runtime's stated value that is not one number: instants on the run's
+        own clock, in one unit.
+        */
+    }
+
+    part def ObservationSlot {
+        doc /*
+        The ingestion behind the measured-value slots: one reading, and the
+        window the record reported it inside.
+        */
+    }
+
     part def Composite {
         doc /*
         One value standing for several slots and the file they name - a release
@@ -349,6 +363,18 @@ package SteeringSurface {
         code: trid3nt_server/workflows/telemac/modules/coupling.py
         */
         port surfaceOut : SurfaceOut;
+    }
+
+    part temporalValue : TemporalValue {
+        doc /*
+        code: trid3nt_server/workflows/runtime/temporal.py
+        */
+    }
+
+    part observationSlot : ObservationSlot {
+        doc /*
+        code: trid3nt_server/inputs/observation.py
+        */
     }
 
     part output : Output {
@@ -666,6 +692,29 @@ package SteeringSurface {
         alternate unit the question is asked in - microns for a diameter,
         milligrams per litre for a source load, a compass bearing for a wind -
         converted at the line that states the engine's own.
+        */
+    }
+
+    requirement def AStatedValueIsANumberOrASeries {
+        doc /*
+        A value the engine takes BOTH as a constant keyword and as a file of
+        instants is stated as whichever the record measured. The transform says
+        which keyword has the twin - PRESCRIBED FLOWRATES and PRESCRIBED
+        ELEVATIONS to the LIQUID BOUNDARIES FILE, the source rates to the
+        SOURCES FILE, the weather to the ASCII ATMOSPHERIC DATA FILE - and a
+        number is what a run states where nothing measured a window.
+
+        The Series is the RUNTIME's: instants on the run's own clock in one
+        unit, frozen, arriving through a slot's own ingestion off a fetched
+        record and never through a fetch of its own. It rides the unit
+        conversion and the datum shift the reading rode, is read on the clock
+        the run opens at rather than the record's, and is thinned to the
+        engine's own step only where the record is finer than one.
+
+        The twin is written per BOUNDARY, not per run: the engine looks for one
+        column named from each boundary's own number and reads the steering
+        list for every column the file does not carry, so one deck states a
+        measured series where it has one and a constant where it does not.
         */
     }
 
@@ -1121,6 +1170,26 @@ package SteeringSurface {
         "tests/telemac/test_telemac_micropollutant.py::test_a_constant_nobody_states_is_left_to_the_engine";
     verify requirement CompositesSetOnlyPresence by
         "tests/telemac/test_telemac_eutrophication.py::test_a_body_states_only_what_it_was_handed";
+
+    satisfy requirement AStatedValueIsANumberOrASeries by composite;
+    satisfy requirement AStatedValueIsANumberOrASeries by temporalValue;
+    satisfy requirement AStatedValueIsANumberOrASeries by observationSlot;
+    verify requirement AStatedValueIsANumberOrASeries by
+        "tests/runtime/test_series.py::test_a_series_prints_as_its_shape_rather_than_its_points";
+    verify requirement AStatedValueIsANumberOrASeries by
+        "tests/runtime/test_series.py::test_a_record_finer_than_the_step_resamples_onto_it";
+    verify requirement AStatedValueIsANumberOrASeries by
+        "tests/runtime/test_series.py::test_a_record_coarser_than_the_step_is_everything_the_engine_reads";
+    verify requirement AStatedValueIsANumberOrASeries by
+        "tests/inputs/test_observation.py::test_the_whole_window_is_kept_beside_the_reading";
+    verify requirement AStatedValueIsANumberOrASeries by
+        "tests/inputs/test_observation.py::test_a_record_that_reported_one_moment_carries_no_window";
+    verify requirement AStatedValueIsANumberOrASeries by
+        "tests/telemac/test_telemac_liquid_boundaries.py::test_a_measured_window_writes_its_column_and_the_list_still_stands";
+    verify requirement AStatedValueIsANumberOrASeries by
+        "tests/telemac/test_telemac_liquid_boundaries.py::test_a_run_nothing_measured_a_window_at_writes_no_file";
+    verify requirement AStatedValueIsANumberOrASeries by
+        "tests/telemac/test_telemac_liquid_boundaries.py::test_the_file_opens_where_a_continued_run_s_clock_opens";
 
     satisfy requirement ACapabilityOnAHostDeckIsAComposite by composite;
     satisfy requirement ACapabilityOnAHostDeckIsAComposite by wrapper;

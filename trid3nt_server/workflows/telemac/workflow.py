@@ -45,7 +45,11 @@ from trid3nt_server.workflows.telemac.modules.outputs import (
     Solved,
     deliver,
 )
-from trid3nt_server.workflows.telemac.modules.sheet import Origin, Sheet
+from trid3nt_server.workflows.telemac.modules.sheet import (
+    PROCESSORS,
+    Origin,
+    Sheet,
+)
 from trid3nt_server.workflows.telemac.modules.sheet import fill as fill_slots
 from trid3nt_server.workflows.telemac.modules.sheet import fill_coupled, late_bound
 from trid3nt_server.workflows.telemac.modules.sheet import run as run_sheet_
@@ -712,6 +716,7 @@ def card_rows(sheet: Sheet) -> list[ParamSheetRow]:
     rows = [_slot_row(name, row) for name, row in sheet.filled.items()]
     rows += _coupled_rows(sheet)
     rows += _written_rows(sheet)
+    rows += _serial_rows(sheet)
     rows += [_open_row(slot) for slot in sheet.required()]
     # The advanced fold reads down the dictionary's own RUBRIQUES, and inside one
     # down the dictionary's own order - the sections the engine's documentation
@@ -790,6 +795,21 @@ def _written_rows(sheet: Sheet) -> list[ParamSheetRow]:
             editable=False, group=_group(slot),
             source_badge=f"the {body.MODULE} module's own variable table"))
     return rows
+
+
+def _serial_rows(sheet: Sheet) -> list[ParamSheetRow]:
+    """What a deck the engine cannot partition says about the run's sizing class.
+
+    A body that spells no processor keyword runs on one core whatever class was
+    asked for, and the card says so rather than leaving the lever looking like
+    it did something."""
+    return [ParamSheetRow(
+        name=f"{body.MODULE}.cores", value="serial: this engine runs on one core",
+        desc="How many cores this module's solve is partitioned across.",
+        door="scenario", basis="derived", editable=False,
+        source_badge="the module's own dictionary")
+        for body, _tracers, _stated in _decks(sheet)
+        if PROCESSORS not in body.MODULE_INPUT]
 
 
 async def _review(sheet: Sheet, *, workflow: str, title: str,
