@@ -55,6 +55,11 @@ MODULE_OUTPUT: Mapping[str, Output] = MappingProxyType({
     "M": Output("SCALAR VELOCITY", "m/s",
                 style={"kind": "mesh", "ramp": "viridis", "units": "m/s",
                        "floor": 0}),
+    # The wind the run was driven by, as the engine wrote it onto the mesh.
+    # LECDON clears both rows where the deck states no wind, so a run without
+    # one simply does not carry them.
+    "X": Output("WIND ALONG X", "m/s", style=_SIGNED),
+    "Y": Output("WIND ALONG Y", "m/s", style=_SIGNED),
     "T": Output("TRACER", "",
                 style={"kind": "mesh", "ramp": "reds", "floor": 0}),
     "FLUX": Output("FLUX BOUNDARY", "m3/s"),

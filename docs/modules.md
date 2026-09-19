@@ -93,6 +93,8 @@ appended by DYNAMIC_ICE_COVER: `ICE COVER FRAC.` (SURFAC FRACTION, ramp `blues`)
 | `F` | FROUDE NUMBER | - | `magma` | yes | yes |
 | `Q` | SCALAR FLOWRATE | m2/s | `viridis` | yes | yes |
 | `M` | SCALAR VELOCITY | m/s | `viridis` | yes | yes |
+| `X` | WIND ALONG X | m/s | `rdbu` | yes | yes |
+| `Y` | WIND ALONG Y | m/s | `rdbu` | yes | yes |
 | `T` | TRACER | - | `reds` | yes | no - one row per declared tracer |
 | `FLUX` | FLUX BOUNDARY | m3/s | - | yes | no - printed in the listing |
 

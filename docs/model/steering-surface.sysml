@@ -816,6 +816,16 @@ package SteeringSurface {
         under its engine and its module, with no template field; every filled
         slot carries one of the six origins the card renders. The adapters
         build a turn from the contracts IR and import no provider SDK for it.
+
+        ONE wrapper serves every role its module has: a template's own steering
+        base where the engine gives the module a deck of its own, and a coupled
+        body where a host names it, off the same dictionary and the same output
+        table. What a coupled module hands its host in memory rather than on the
+        host's result is felt only under a host switch, so stating the coupling
+        ARMS that switch the way a stated rate arms the term that reads it, and
+        a host deck that states the switch itself keeps what it said. The user
+        code each deck of a run names is staged off that deck, never off the
+        host's alone.
         */
     }
 
@@ -855,6 +865,13 @@ package SteeringSurface {
         matching answers to, over prefixes that reach exactly the rows the table
         carries and no other variable the keyword spells; a table no wildcard
         can shorten enough refuses by name.
+
+        A module may write a result NO primitive reads: one over a grid that is
+        not the domain, such as a spectrum over frequency and direction. It is
+        not a row and nothing paints it, and it is not thrown away either - a
+        deck that names one has the run declare it, check it landed and keep it
+        for download, which is the whole of what the module states about it
+        until a question asks for a read over its own grid.
 
         What a template keeps is the QUESTION: the keywords, the reads that need
         a place the user gives, the answer, and the captions for those.
@@ -1022,6 +1039,12 @@ package SteeringSurface {
     verify requirement EverythingOverridable by
         "tests/telemac/test_telemac_khione.py::test_a_keyword_two_bodies_spell_names_the_body_it_belongs_to";
 
+    verify requirement EverythingOverridable by
+        "tests/telemac/test_telemac_tomawac.py::test_the_qualified_floor_reaches_the_coupled_body";
+    verify requirement EverythingOverridable by
+        "tests/telemac/test_telemac_tomawac.py::test_a_keyword_both_bodies_spell_names_the_body_it_belongs_to";
+    verify requirement EverythingOverridable by
+        "tests/telemac/test_telemac_tomawac.py::test_a_deck_that_states_the_switch_off_keeps_it_off";
     satisfy requirement DictionaryMatchesImage by dictionaryExtractor;
     verify requirement DictionaryMatchesImage by
         "tests/scripts/test_telemac_dictionary_drift.py::test_the_committed_dictionary_is_what_the_image_says_today";
@@ -1047,6 +1070,8 @@ package SteeringSurface {
     verify requirement CompositesLiveInWrappers by
         "tests/telemac/test_telemac_ice_cover.py::test_the_ice_deck_states_the_five_keywords_this_question_has_an_opinion_on";
 
+    verify requirement CompositesLiveInWrappers by
+        "tests/telemac/test_telemac_tomawac.py::test_both_hosts_couple_the_waves_through_the_seam_they_share";
     satisfy requirement OneTemplatePerQuestion by door;
     verify requirement OneTemplatePerQuestion by
         "tests/telemac/test_telemac_module_surface.py::test_a_structural_fork_is_a_template_and_never_a_switch";
@@ -1184,6 +1209,12 @@ package SteeringSurface {
     verify requirement ModuleIsTheUnit by
         "tests/adapters/test_message_ir.py::test_no_provider_sdk_is_imported_for_the_ir";
 
+    verify requirement ModuleIsTheUnit by
+        "tests/telemac/test_telemac_tomawac.py::test_a_standalone_deck_stands_on_the_wrapper_and_names_its_own_files";
+    verify requirement ModuleIsTheUnit by
+        "tests/telemac/test_telemac_tomawac.py::test_the_wrapper_writes_its_own_wave_field_beside_the_host_s";
+    verify requirement ModuleIsTheUnit by
+        "tests/telemac/test_telemac_tomawac.py::test_the_user_fortran_of_every_deck_of_the_run_is_staged";
     verify requirement OutputsAreTheModules by
         "tests/telemac/test_telemac_khione.py::test_the_table_is_written_in_the_engine_s_own_wildcard_and_fits_its_line";
     verify requirement OutputsAreTheModules by
@@ -1202,6 +1233,16 @@ package SteeringSurface {
         "tests/telemac/test_telemac_ice_cover.py::test_every_answer_is_read_off_the_ice_modules_own_result";
     verify requirement OutputsAreTheModules by
         "tests/telemac/test_telemac_ice_cover.py::test_the_module_declares_the_tracers_and_the_deck_declares_none";
+    verify requirement OutputsAreTheModules by
+        "tests/telemac/test_telemac_tomawac.py::test_the_table_is_the_engine_s_forty_less_the_slot_it_never_writes";
+    verify requirement OutputsAreTheModules by
+        "tests/telemac/test_telemac_tomawac.py::test_the_table_is_written_in_the_engine_s_own_wildcard_and_fits_its_line";
+    verify requirement OutputsAreTheModules by
+        "tests/telemac/test_telemac_tomawac.py::test_a_deep_deck_does_not_ask_for_the_bottom_velocity_the_engine_leaves";
+    verify requirement OutputsAreTheModules by
+        "tests/telemac/test_telemac_tomawac.py::test_the_spectra_are_kept_as_result_files_and_never_rowed_as_a_mesh";
+    verify requirement OutputsAreTheModules by
+        "tests/telemac/test_telemac_tomawac.py::test_the_module_appends_no_tracer_and_arms_the_switch_it_is_felt_through";
     satisfy requirement OutputsAreTheModules by wrapper;
     satisfy requirement OutputsAreTheModules by output;
     satisfy requirement OutputsAreTheModules by sheet;

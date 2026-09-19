@@ -71,7 +71,7 @@ def test_the_printouts_keyword_is_the_table_and_the_run_s_own_tracers():
     assert [row.name for row in sheet.tracers] == [
         "DYE", "DISSOLVED O2", "ORGANIC LOAD", "NH4 LOAD"]
     assert sheet.printouts() == {
-        "VARIABLES FOR GRAPHIC PRINTOUTS": "U,V,H,S,B,F,Q,M,T1,T2,T3,T4"}
+        "VARIABLES FOR GRAPHIC PRINTOUTS": "U,V,H,S,B,F,Q,M,X,Y,T1,T2,T3,T4"}
     # A 3D module spells its tracer token its own way, and writes into its own
     # keyword; a module that writes no result of its own writes no keyword.
     assert T3D.printouts(tracers=1) == {
@@ -262,7 +262,8 @@ def test_the_card_carries_every_variable_each_deck_writes():
     rows = {row.name: row for row in card_rows(sheet)}
     assert rows["telemac2d.VARIABLES_FOR_GRAPHIC_PRINTOUTS"].value == [
         "VELOCITY U", "VELOCITY V", "WATER DEPTH", "FREE SURFACE", "BOTTOM",
-        "FROUDE NUMBER", "SCALAR FLOWRATE", "SCALAR VELOCITY", "MARKER"]
+        "FROUDE NUMBER", "SCALAR FLOWRATE", "SCALAR VELOCITY", "WIND ALONG X",
+        "WIND ALONG Y", "MARKER"]
     assert rows["gaia.VARIABLES_FOR_GRAPHIC_PRINTOUTS"].value == [
         "CUMUL BED EVOL", "MEAN DIAMETER M", "BED SHEAR STRESS"]
 

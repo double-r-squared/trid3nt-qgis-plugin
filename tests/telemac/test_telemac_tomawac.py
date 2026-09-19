@@ -18,7 +18,6 @@ from trid3nt_server.workflows.telemac.modules import (
     fill,
 )
 from trid3nt_server.workflows.telemac.modules.module import identify_on
-from trid3nt_server.workflows.telemac.modules.sheet import _kept, _user_code
 from trid3nt_server.workflows.telemac.modules.tomawac import (
     RESULT_FILENAME,
     STEERING_FILENAME,
@@ -186,13 +185,13 @@ def test_the_spectra_are_kept_as_result_files_and_never_rowed_as_a_mesh():
     assert not {"PUNCTUAL_RESULTS_FILE", "ZD_SPECTRA_RESULTS_FILE"} & set(
         WAC.MODULE_OUTPUT)
     bare = fill(WAC, **_wave()["slots"])
-    assert _kept(bare) == []
+    assert bare.kept() == ()
     named = fill(bare, PUNCTUAL_RESULTS_FILE="resWac.spe",
                  ZD_SPECTRA_RESULTS_FILE="resWac.1d")
-    assert _kept(named) == ["resWac.spe", "resWac.1d"]
+    assert named.kept() == ("resWac.spe", "resWac.1d")
     # A coupled deck's own spectra are the run's too.
-    assert _kept(fill(T2D, coupling=[_wave(PUNCTUAL_RESULTS_FILE="resWac.spe")])) \
-        == ["resWac.spe"]
+    assert fill(T2D, coupling=[_wave(PUNCTUAL_RESULTS_FILE="resWac.spe")]).kept() \
+        == ("resWac.spe",)
 
 
 def test_the_user_fortran_of_every_deck_of_the_run_is_staged():
@@ -200,5 +199,5 @@ def test_the_user_fortran_of_every_deck_of_the_run_is_staged():
     own patch is staged off its own deck rather than off the host's."""
     host = fill(T2D, coupling=[_wave(FORTRAN_FILE="Tom_user_fortran")],
                 FORTRAN_FILE="T2D_user_fortran")
-    assert _user_code(host) == ["T2D_user_fortran", "Tom_user_fortran"]
-    assert _user_code(fill(T2D, coupling=[_wave()])) == []
+    assert host.user_code() == ("T2D_user_fortran", "Tom_user_fortran")
+    assert fill(T2D, coupling=[_wave()]).user_code() == ()

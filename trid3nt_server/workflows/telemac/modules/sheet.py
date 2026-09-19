@@ -149,6 +149,31 @@ class Sheet:
                                   else rows[held].injected))
         return tuple(rows)
 
+    def kept(self) -> tuple[str, ...]:
+        """The result files this run's decks NAME beside the one it is read from.
+
+        A module writes more than one - TOMAWAC's spectra over the polar
+        frequency-direction grid beside its 2D field - and a file a deck named
+        and the run threw away is a result nobody can open afterwards."""
+        from . import wrapper_for
+
+        decks = [(self.body, dict(self.stated()))]
+        decks += [(wrapper_for(body["module"]), dict(body.get("slots") or {}))
+                  for body in self.coupled]
+        return tuple(str(stated[name]) for body, stated in decks
+                     for name in body.RESULT_FILES if stated.get(name))
+
+    def user_code(self) -> tuple[str, ...]:
+        """The directories this run's decks name their own user Fortran by.
+
+        The engine compiles the directory EACH deck states, so a coupled
+        module's own patch stands on its own deck and is staged off it rather
+        than off the host's, and the run hands both over as they are."""
+        named = [dict(self.resolved()).get("FORTRAN FILE")]
+        named += [dict(body.get("slots") or {}).get("FORTRAN_FILE")
+                  for body in self.coupled]
+        return tuple(str(one) for one in named if one)
+
     def printouts(self) -> Mapping[str, str]:
         """THIS deck's variables keyword, generated from its module's table.
 
@@ -504,33 +529,6 @@ def _off_sheet(ref: Ref, filled: Mapping[str, Filled]) -> Any:
     return base
 
 
-def _kept(sheet: Sheet) -> list[str]:
-    """The result files this run's decks NAME beside the one it is read from.
-
-    A module writes more than one - TOMAWAC's spectra over the polar
-    frequency-direction grid beside its 2D field - and a file a deck named and
-    the run threw away is a result nobody can open afterwards."""
-    from . import wrapper_for
-
-    decks = [(sheet.body, dict(sheet.stated()))]
-    decks += [(wrapper_for(body["module"]), dict(body.get("slots") or {}))
-              for body in sheet.coupled]
-    return [str(stated[name]) for body, stated in decks
-            for name in body.RESULT_FILES if stated.get(name)]
-
-
-def _user_code(sheet: Sheet) -> list[str]:
-    """The directories this run's decks name their own user Fortran by.
-
-    The engine compiles the directory EACH deck states, so a coupled module's
-    own patch stands on its own deck and is staged off it rather than off the
-    host's, and the run hands both over as they are."""
-    stated = [dict(sheet.resolved()).get("FORTRAN FILE")]
-    stated += [dict(body.get("slots") or {}).get("FORTRAN_FILE")
-               for body in sheet.coupled]
-    return [str(named) for named in stated if named]
-
-
 async def run(sheet: Sheet, *, dispatch: Callable[..., Any],
               mesh_inputs: Sequence[Mapping[str, str]],
               outputs: Sequence[str], results: Sequence[str], prefix: str,
@@ -560,7 +558,7 @@ async def run(sheet: Sheet, *, dispatch: Callable[..., Any],
             "period this question's frames are written at.")
     # The files the decks name past the one the run is read from: declared, so
     # the worker's success convention checks each landed, and readable.
-    kept = [name for name in _kept(sheet) if name not in results]
+    kept = [name for name in sheet.kept() if name not in results]
     run_tag, rundir = new_rundir()
     # The serialization is a container round trip, so it runs off the loop.
     written = await asyncio.to_thread(serialize, sheet, rundir, steering=steering)
@@ -572,7 +570,7 @@ async def run(sheet: Sheet, *, dispatch: Callable[..., Any],
         # The engine compiles the DIRECTORY its FORTRAN FILE statement names, so
         # the manifest channel carries the same word the decks do rather than a
         # second derivation of it.
-        user_fortran=_user_code(sheet),
+        user_fortran=sheet.user_code(),
         coupling=coupling, continue_from=continue_from)
     # The staged run and the box's answer are ONE handle: the reader needs both
     # what was staged and what came back, and two results would make the caller
