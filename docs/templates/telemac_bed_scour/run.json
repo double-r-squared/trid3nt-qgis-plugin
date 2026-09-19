@@ -1,7 +1,7 @@
 {
   "tool": "telemac_bed_scour",
   "run_id": "01M2VCNPMWVY4WWTY8HXA2S7XP",
-  "commit": "8397312dd28e2ade6266f5eef50ce148c6c060c5-dirty",
+  "commit": "99080be6acd76b597d9ef51124f317f4b136acee-dirty",
   "recorded_at": "2026-09-18T23:12:39.980979+00:00",
   "engine": "telemac",
   "wall_seconds": 31.366,
