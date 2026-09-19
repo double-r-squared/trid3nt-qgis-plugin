@@ -44,8 +44,8 @@ The values the template declares. `desc` is what the model reads when it fills o
 |---|---|
 | `suspended_cmax` | 0.002200139919295907 |
 | `suspended_peak_time_s` | 300.0 |
-| `plume_reach_m` | 0.0 |
-| `active_frames` | 4 |
+| `plume_reach_m` | 55.0 |
+| `active_frames` | 11 |
 | `bed_evolution_max_m` | 4.017263563582674e-05 |
 | `net_bed_mass_kg` | 197.3373 |
 | `deposit_fraction` | 0.82223875 |
@@ -74,23 +74,23 @@ It publishes these layers onto the canvas:
 
 ## The proving run
 
-Run `01M2VZ2SMVPX6D3RAXWQPFQHCR`, 2026-09-19T04:34:23.564223+00:00, 30.043 s, at commit `ba274ced59bf841b133f19832d2113cd6525829e-dirty`.
+Run `01M2W9JK101VD4R4W06YVARKKA`, 2026-09-19T07:37:50.097612+00:00, 34.503 s, at commit `18a51447da6de03c30d14f6fce6df01200ab74ab-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M2VZ2SMVPX6D3RAXWQPFQHCR)](telemac_sediment_plume/telemac_sediment_plume.png)
+![Every layer the run published, stacked and framed on the result (run 01M2W9JK101VD4R4W06YVARKKA)](telemac_sediment_plume/telemac_sediment_plume.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M2VZ2SMVPX6D3RAXWQPFQHCR)*
+*Every layer the run published, stacked and framed on the result (run 01M2W9JK101VD4R4W06YVARKKA)*
 
-![The solve, frame by frame (run 01M2VZ2SMVPX6D3RAXWQPFQHCR)](telemac_sediment_plume/telemac_sediment_plume_animation.gif)
+![The solve, frame by frame (run 01M2W9JK101VD4R4W06YVARKKA)](telemac_sediment_plume/telemac_sediment_plume_animation.gif)
 
-*The solve, frame by frame (run 01M2VZ2SMVPX6D3RAXWQPFQHCR)*
+*The solve, frame by frame (run 01M2W9JK101VD4R4W06YVARKKA)*
 
-![peak frame (run 01M2VZ2SMVPX6D3RAXWQPFQHCR)](telemac_sediment_plume/telemac_sediment_plume_peak_frame.png)
+![peak frame (run 01M2W9JK101VD4R4W06YVARKKA)](telemac_sediment_plume/telemac_sediment_plume_peak_frame.png)
 
-*peak frame (run 01M2VZ2SMVPX6D3RAXWQPFQHCR)*
+*peak frame (run 01M2W9JK101VD4R4W06YVARKKA)*
 
-![suspended sediment concentration - the chart the run persisted (run 01M2VZ2SMVPX6D3RAXWQPFQHCR)](telemac_sediment_plume/telemac_sediment_plume_chart_suspended_sediment_concentration.png)
+![suspended sediment concentration - the chart the run persisted (run 01M2W9JK101VD4R4W06YVARKKA)](telemac_sediment_plume/telemac_sediment_plume_chart_suspended_sediment_concentration.png)
 
-*suspended sediment concentration - the chart the run persisted (run 01M2VZ2SMVPX6D3RAXWQPFQHCR)*
+*suspended sediment concentration - the chart the run persisted (run 01M2W9JK101VD4R4W06YVARKKA)*
 
 ### The sheet it filled
 
@@ -104,7 +104,7 @@ Every slot the run resolved, with where the value came from. The engine's own de
 | `spill_fraction` | 0.25 | - | default_demo | declared scenario default |
 | `compute_class` | medium | - | default_demo | declared constant default |
 | `vertical_frame` | NAVD88 | - | default_demo | declared constant default |
-| `injected_mass_kg` | 240.0 | kg | derived | derived by trid3nt_server.workflows.telemac.templates.sediment_plume.declarations._injected_mass_kg |
+| `injected_mass_kg` | 240.0 | kg | derived | derived by trid3nt_server.workflows.telemac.helpers.released_mass.released_mass_kg |
 | `event_time` | - | - | prompt_interpreted | not supplied (declared optional) |
 
 ### Reproduce
@@ -116,9 +116,11 @@ await TOOL_REGISTRY['telemac_sediment_plume'].fn(
     mesh_resolution_m=40.0,
     release={'lon': -122.669784, 'lat': 45.518485, 'name': None},
     spill_duration_s=300.0,
+    carrier=56.6,
+    stage=2.776,
     keywords={'DURATION': 1800.0},
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2VZ2SMVPX6D3RAXWQPFQHCR` and commit `ba274ced59bf841b133f19832d2113cd6525829e-dirty`. The full argument record is [`telemac_sediment_plume/run.json`](telemac_sediment_plume/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2W9JK101VD4R4W06YVARKKA` and commit `18a51447da6de03c30d14f6fce6df01200ab74ab-dirty`. The full argument record is [`telemac_sediment_plume/run.json`](telemac_sediment_plume/run.json).
 
