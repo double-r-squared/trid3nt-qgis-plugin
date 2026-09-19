@@ -1,0 +1,168 @@
+# USGS usSEABED sediment texture: the bbox packager is the only path to values (the
+# index query answers a picture-only WMS layer and the documented download is a
+# whole-EEZ bulk file); the build hook forms the packager's one JSON metadata field
+# and the parse hook reads the returned ZIP's lab-analysed (ext) table, nulling the
+# service's own sentinels rather than letting -99 read as a measurement.
+schema_version: v1
+
+name: fetch_usseabed
+source_class: usseabed
+error_prefix: USSEABED
+input_error_suffix: INPUT_INVALID
+empty_error_suffix: NO_SAMPLES
+shape: vector-fgb
+supports_global_query: false
+
+endpoints:
+  package:
+    url: "https://cmgds.marine.usgs.gov/usseabed/package.php"
+auth:
+  mode: none
+  user_agent: trid3nt_default
+
+params:
+  bbox: {type: bbox, required: true, quantize: round_6dp, error_suffix: BBOX_INVALID}
+
+gates:
+  max_bbox_deg2: 2.0
+
+hooks:
+  build_request: usseabed.build_request
+  parse_response: usseabed.parse_response
+
+ingest:
+  properties:
+    - key
+    - locnname
+    - obsvndate
+    - waterdepth_m
+    - gravel_pct
+    - sand_pct
+    - mud_pct
+    - clay_pct
+    - grainsize_phi
+    - sorting_phi
+
+normalize:
+  crs: "EPSG:4326"
+  units: "mixed (pct / phi / m)"
+  quantity: bed_material
+  # Horizontal is WGS84 (the service states it); no vertical datum is published
+  # for ``waterdepth_m``, so this cannot state one.
+  datum: null
+
+output:
+  layer_type: vector
+  ext: fgb
+  role: primary
+  display_name: "USGS usSEABED sediment texture samples"
+  style:
+    kind: reference
+    geometry: point
+
+cache:
+  ttl_class: static-30d
+payload_estimate:
+  model: bbox_area
+  mb_per_sq_deg: 4.0
+  floor_mb: 0.02
+  ceil_mb: 50.0
+
+coverage:
+  - data_class: bed material
+    kind: measured
+    extent:
+      kind: surface
+      rings:
+        - [[-180.0, 24.0], [-66.0, 24.0], [-66.0, 74.709763], [-180.0, 74.709763]]
+        - [[-161.0, 18.0], [-154.0, 18.0], [-154.0, 23.0], [-161.0, 23.0]]
+        - [[-68.5, 17.0], [-64.0, 17.0], [-64.0, 19.0], [-68.5, 19.0]]
+        - [[144.0, 13.0], [146.5, 13.0], [146.5, 21.0], [144.0, 21.0]]
+      note: the usSEABED EEZ envelope its own metadata states (W -180/E -66 CONUS
+        band, plus the Puerto Rico, Hawaii and Guam boxes the coarse mainland ring
+        excludes) - a ring, never a promise every cell inside it holds a sample
+    window:
+      series: false
+    resolution_m: null
+    datum: null
+    units:
+      waterdepth_m: m
+      gravel_pct: percent
+      sand_pct: percent
+      mud_pct: percent
+      clay_pct: percent
+      grainsize_phi: phi
+      sorting_phi: phi
+    value_column: grainsize_phi
+
+caveats:
+  - "the ``ext`` (lab-analysed) table only; ``prs`` (values mined from written
+    descriptions) is a different provenance and is not carried"
+  - "SILT is not published (only ``mud_pct`` = silt+clay, and ``clay_pct``) and
+    D50 is not published (``grainsize_phi`` is phi, D50_mm = 2**-grainsize_phi);
+    both are derivations a question asks for, never fetched rows"
+  - "the service's own sentinels (-99, -99.00, -99.0, the literal string -) are
+    read as no value, never as a measurement of -99"
+  - "static historical survey data (collection dates back to the 1950s); no
+    vertical datum is published for ``waterdepth_m``"
+  - "the bbox packager (``package.php``) is the undocumented path the map UI
+    itself uses; if it goes stale the whole-EEZ bulk download at DOI
+    10.5066/P9H3LGWM is the documented alternative, not built here"
+
+docstring: |-
+  Fetch USGS usSEABED sediment texture samples for a bbox -> the measured bed
+  material.
+
+  What it does:
+      POSTs the bbox to the usSEABED bbox packager (the same call the map UI
+      makes; the service's WFS is disabled and its WMS serves pictures only),
+      reads the returned ZIP's ``ext`` (lab-analysed) table, and returns one
+      Point feature per sample carrying the record's own texture columns.
+
+  When to use:
+      - A sediment-transport, dredging or benthic-habitat question over a US
+        coast, estuary or continental shelf needs MEASURED grain size / texture,
+        not a modelled or interpolated surface.
+      - "grain size here", "is this seabed sand or mud", "sediment texture
+        samples for this reach".
+
+  When NOT to use:
+      - DO NOT use for depth/bathymetry - use ``fetch_bluetopo`` or
+        ``fetch_topobathy``; this is texture, not elevation.
+      - DO NOT use for river bed material inland - use
+        ``fetch_nwis_bed_material``.
+      - DO NOT expect uniform coverage: usSEABED is compiled from wherever a
+        cruise or survey took a sample, so a bbox inside the EEZ ring can still
+        return zero.
+
+  Parameters:
+      bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326, capped at
+          2 deg^2 (the packager's own response grows with the area asked for).
+
+  Returns:
+      ``LayerURI`` for a FlatGeobuf in EPSG:4326, one Point per sample:
+      ``key`` (the record's own id), ``locnname``, ``obsvndate`` (collection
+      date, ``YYYYMMDD``), ``waterdepth_m``, ``gravel_pct`` / ``sand_pct`` /
+      ``mud_pct`` / ``clay_pct`` (weight percent, 0-100), ``grainsize_phi``
+      (characteristic grain size, phi scale) and ``sorting_phi``.
+      ``layer_type="vector"``, ``units="mixed (pct / phi / m)"``.
+
+  Rendering: a VECTOR layer renders INLINE on the map automatically.
+
+  Cross-tool dependencies:
+      - Composes WITH: ``fetch_ehydro_surveys`` / ``fetch_bluetopo`` (the bed
+        elevation these texture samples sit on).
+      - Upstream data source: USGS usSEABED
+        (https://www.usgs.gov/programs/cmhrp/science/accessing-usseabed).
+
+  Cache: ``ttl_class="static-30d"``; the underlying survey compilation changes
+  on a multi-year cadence.
+
+  Errors:
+      - ``USSEABED_BBOX_INVALID`` / ``USSEABED_INPUT_INVALID``: a malformed
+        bbox or one over the area gate.
+      - ``USSEABED_NO_SAMPLES``: no ``ext`` record intersects the bbox.
+      - ``USSEABED_UPSTREAM_ERROR``: the packager failed or returned an
+        unreadable ZIP.
+
+  Tier-1 free. No API key.
