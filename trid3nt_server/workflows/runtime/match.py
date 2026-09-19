@@ -99,7 +99,7 @@ def match(need: Need,
     for name, coverage in candidates:
         if coverage.data_class != need.data_class:
             continue
-        reason = _excluded(need, coverage)
+        reason = _unaskable(name) or _excluded(need, coverage)
         if reason:
             dropped.append(_option(name, coverage, need, excluded=reason))
             continue
@@ -149,6 +149,30 @@ def dropped_from(choice: SourceChoice, fetcher: str, why: str) -> SourceChoice:
     return choice.model_copy(update={
         "rows": rows, "picked": nxt, "tie": False,
         "sentence": _probe_sentence(choice, rows, fetcher, nxt)})
+
+
+#: What the probe can supply a source off the run itself: the domain's box, its
+#: seed, and the window. A source that must be called by anything else (a
+#: station id) is askable only once its row lists the stations to name.
+_ASKABLE = frozenset({"bbox", "seed_point", "start_date", "end_date",
+                      "valid_time"})
+
+
+def _unaskable(name: str) -> str:
+    """Why the probe could not call this source at all, or "" where it can."""
+    from trid3nt_server.tools.fetchers._router.registration import _SPEC_REGISTRY
+
+    spec = _SPEC_REGISTRY.get(name)
+    if spec is None:
+        return ""
+    needs = [param for param, decl in spec.params.items()
+             if bool(getattr(decl, "required", None)
+                     or (isinstance(decl, dict) and decl.get("required")))
+             and param not in _ASKABLE]
+    if not needs:
+        return ""
+    return (f"asks to be called by {', '.join(needs)} and its coverage row "
+            "lists no station to name")
 
 
 def _excluded(need: Need, coverage: Coverage) -> str:

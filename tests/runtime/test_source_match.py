@@ -240,3 +240,16 @@ def test_a_run_that_picks_a_source_the_filters_excluded_is_refused():
                                     units={"water_level": "m"}))])
     assert "fetch_europe" in str(caught.value)
     assert "not a survivor" in str(caught.value)
+
+
+def test_a_source_called_by_station_with_no_stations_listed_is_not_a_survivor(monkeypatch):
+    from types import SimpleNamespace
+
+    from trid3nt_server.tools.fetchers._router import registration
+    from trid3nt_server.workflows.runtime import match as m
+
+    spec = SimpleNamespace(params={"station": {"required": True},
+                                   "start_date": {"required": True}})
+    monkeypatch.setitem(registration._SPEC_REGISTRY, "fetch_by_station", spec)
+    assert "called by station" in m._unaskable("fetch_by_station")
+    assert m._unaskable("fetch_nobody_registered") == ""
