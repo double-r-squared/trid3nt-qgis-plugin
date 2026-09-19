@@ -179,6 +179,19 @@ class _RawKeywords:
         return "RawKeywords"
 
 
+class _Continued:
+    def __repr__(self) -> str:
+        return "Continued"
+
+
+#: Declared read of the run's CONTINUATION - the file staged from the run this
+#: one picks up from. A step that opens the water takes
+#: ``continue_from=Continued`` so the continuation reaches it without becoming a
+#: Param: it is not a value the question asks about, it is which run this one
+#: carries on from, and the rerun ledger is where that is said.
+Continued = _Continued()
+
+
 #: Declared read of the run's RAW KEYWORD floor - the ``keywords={NAME: value}``
 #: argument every wire carries. A step that fills a sheet takes
 #: ``keywords=RawKeywords`` so the floor reaches it without becoming a Param:

@@ -17,7 +17,7 @@ from .coupling import couples
 from .module import Module, Output
 from .outputs import PRIMITIVES, read_drogues
 
-__all__ = ["T2D", "Atmosphere", "Boundaries", "Continuation", "Friction",
+__all__ = ["T2D", "Atmosphere", "Boundaries", "Friction",
            "Infiltration", "MODULE_OUTPUT", "Oil", "Rain", "Storm",
            "Rating", "Runoff", "Sources", "TimeOrigin",
            "TracerNames", "Wind", "SOURCES_FILENAME"]
@@ -155,11 +155,6 @@ def Wind(*, speed_mps: Any, from_deg: Any,  # noqa: N802 - a value constructor
                              "drag": drag})
 
 
-def Continuation(*, previous: Any) -> Mapping[str, Any]:  # noqa: N802
-    """The run this one picks up from, by the staged name the engine reads."""
-    return MappingProxyType({"previous": previous})
-
-
 def Oil(*, presets: Any, named: Any, at: Any,  # noqa: N802
         release_step: Any) -> Mapping[str, Any]:
     """The oil module riding on top of the tracer solve: which preset, released
@@ -222,21 +217,6 @@ def _engine_bearing(from_deg: Any) -> float:
     direction the wind blows TOWARD, from +x, while weather names the quarter it
     comes from, from north, the other way round."""
     return float(270.0 - float(from_deg)) % 360.0
-
-
-def _continue_from(value: Mapping[str, Any]
-                   ) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
-    """The previous computation this run starts from.
-
-    Naming the file IS the continuation; its last record is the initial state."""
-    if not value["previous"]:
-        # This run continues nothing, so it states its own initial conditions.
-        return ({}, {})
-    # The engine reads that file's last record as the initial state, so the deck's
-    # own initial-condition statements go unread. The FORMAT it is read at is a
-    # choice among three the dictionary offers, so a template wanting a
-    # non-default one states it beside the file it writes.
-    return ({"PREVIOUS_COMPUTATION_FILE": str(value["previous"])}, {})
 
 
 def _oil(value: Mapping[str, Any]) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
@@ -666,7 +646,6 @@ T2D.ARMS = MappingProxyType({
     "SPEED_AND_DIRECTION_OF_WIND": "WIND",
     "RAIN_OR_EVAPORATION_IN_MM_PER_DAY": "RAIN_OR_EVAPORATION"})
 T2D.composites(sources=_sources, wind=_wind,
-               continue_from=_continue_from,
                atmosphere=expand_atmosphere,
                oil=_oil, rain=_rain, coupling=couples(water_column=False),
                boundaries=_boundaries, runoff=_runoff, friction=_friction,

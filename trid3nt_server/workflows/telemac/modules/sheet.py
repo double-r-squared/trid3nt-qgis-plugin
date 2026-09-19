@@ -300,10 +300,38 @@ def fill(source: type | Sheet, *, template: str = "",
         filled[name] = Filled(slot=slot, value=slot.check(value),
                               provenance=provenance)
     _arm(body, filled, files)
+    _continued(body, filled, produced or {})
     write_atmosphere(body, {name: row.value for name, row in filled.items()},
                      files)
     return Sheet(body=body, filled=MappingProxyType(filled),
                  files=MappingProxyType(files))
+
+
+#: What a run that continues another states, by the keyword the engine reads
+#: its initial state out of. Naming the file IS the continuation: the engine
+#: reads that file's LAST RECORD as the state this run opens at, and the deck's
+#: own initial-condition statements go unread. The FORMAT it is read at and the
+#: record number are choices among what the dictionary offers, so a deck wanting
+#: a non-default one states it by name.
+_CONTINUATION = "PREVIOUS_COMPUTATION_FILE"
+
+
+def _continued(body: type, filled: dict[str, Filled],
+               produced: Mapping[str, Any]) -> None:
+    """State the file this run picks its initial state up from, where the run
+    is a continuation and the body reads one.
+
+    Which run that is came off the rerun ledger, so no deck declares it and no
+    template restates it."""
+    staged = (produced.get("settled") or {}).get("continue_from") \
+        if isinstance(produced.get("settled"), Mapping) else None
+    if not staged or _CONTINUATION in filled or \
+            _CONTINUATION not in body.MODULE_INPUT:
+        return
+    slot = body.slot(_CONTINUATION)
+    filled[_CONTINUATION] = Filled(
+        slot=slot, value=slot.check(str(staged)),
+        provenance=Provenance(Origin.PRODUCER, "the run this one continues"))
 
 
 def _arm(body: type, filled: dict[str, Filled],

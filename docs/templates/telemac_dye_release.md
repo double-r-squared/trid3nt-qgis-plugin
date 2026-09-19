@@ -6,7 +6,7 @@ A DYE / TRACER / CONTAMINANT plume released into a body of surface water and car
 
 |  |  |
 |---|---|
-| module | `telemac2d` - 376 keywords in its dictionary, of which this template states 38 |
+| module | `telemac2d` - 376 keywords in its dictionary, of which this template states 36 |
 | solves | `trid3nt_server.workflows.telemac.engine.solve_case` |
 | engine defaults | every keyword this template does not state keeps the engine's own default; `describe_keywords` names it with that default, and `keywords={...}` sets it |
 
@@ -33,7 +33,6 @@ The values the template declares. `desc` is what the model reads when it fills o
 | `spill_fraction` | scenario | - | 0.25 | Along-domain release position, 0=inflow..1=outflow; the source must sit strictly INSIDE the domain, never on a boundary |
 | `spill_duration_s` | scenario | s | 300.0 | Finite pulse injection window |
 | `decaying_substance` | question | - | optional | Name a substance whose tracer DECAYS - sewage \| E. coli \| coliform \| bacteria \| effluent \| wastewater - and its narrated literature die-off is applied as a first-order sink on the plume |
-| `continue_from` | user | - | optional | Continue a previous run: the URI of its restart_domain.slf, the state at its last instant, which becomes this run's initial state - so DURATION is the time added ON TOP of it and the same declared scenario carries on over the longer horizon (a release whose spill_duration_s has elapsed stays finished). The mesh must be the same one, and a run that couples WAQTEL refuses |
 | `mesh_resolution_m` | scenario | m | 14.0 | Target element edge or cell length the domain is resolved at. The granularity is the USER's lever: no sizing rung derives an edge from a channel nobody surveyed, so the number the run meshes at is either yours or this labeled default |
 | `event_time` | question | - | optional | The moment the scenario is read at - an ISO date or datetime ('2026-08-20' or '2026-08-20T06:00:00Z'), from phrasing like 'during last Tuesday's storm'. Each source keeps its own retention, and a request deeper than one refuses typed |
 | `compute_class` | constant | - | medium | Solve sizing class |

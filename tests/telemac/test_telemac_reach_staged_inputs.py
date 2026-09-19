@@ -114,19 +114,19 @@ def test_no_reach_run_declares_a_bed_cog_output():
         assert "bed_bathymetry.tif" not in _door(name).results
 
 
-def test_only_an_uncoupled_question_can_be_continued_at_all():
-    """The couplings run the engine's own launcher, whole-process, unstepped, so
-    a continuation of one is a fresh run wearing a continuation's name. The
-    refusal is STRUCTURAL now: a coupled template declares no such row."""
+def test_a_continuation_is_a_rerun_row_and_no_template_declares_it():
+    """Which run this one carries on from is the rerun ledger's, so no question
+    twins it as a param of its own and every settle reads the run's."""
+    from trid3nt_server.workflows.runtime import Continued
     from trid3nt_server.tools import TOOL_REGISTRY
 
-    def _rows(name):
-        return {p.name for p in TOOL_REGISTRY[name].fn.workflow.params}
-
-    assert "continue_from" in _rows("telemac_dye_release")
-    for coupled in ("telemac_do_sag", "telemac_bed_scour",
-                    "telemac_sediment_plume"):
-        assert "continue_from" not in _rows(coupled), coupled
+    for name in ("telemac_dye_release", "telemac_do_sag", "telemac_bed_scour",
+                 "telemac_sediment_plume", "telemac_oil_spill"):
+        workflow = TOOL_REGISTRY[name].fn.workflow
+        assert "continue_from" not in {p.name for p in workflow.params}, name
+        settle = next(n for n in workflow.plan_decl(workflow)
+                      if getattr(n, "name", "") == "settled")
+        assert settle.kwargs["continue_from"] is Continued, name
 
 
 def test_the_case_section_names_the_engine_the_file_and_the_results():

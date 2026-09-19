@@ -78,20 +78,6 @@ class PARAMS:
              "| bacteria | effluent | wastewater - and its narrated literature "
              "die-off is applied as a first-order sink on the plume")
 
-    # -- the state this run opens at ----------------------------------------- #
-    continue_from = Param(
-        door=doors.USER, optional=True, type=str,
-        consequence="numerical",
-        derived_when_absent=(
-            "the run starts from its own initial conditions - a constant depth "
-            "at rest - rather than from another run's state"),
-        desc="Continue a previous run: the URI of its restart_domain.slf, the "
-             "state at its last instant, which becomes this run's initial "
-             "state - so DURATION is the time added ON TOP of it and the "
-             "same declared scenario carries on over the longer horizon (a "
-             "release whose spill_duration_s has elapsed stays finished). The "
-             "mesh must be the same one, and a run that couples WAQTEL refuses")
-
 
 DOC = dict(
     summary="A DYE / TRACER / CONTAMINANT plume released into a body of surface water and carried by its flow.",

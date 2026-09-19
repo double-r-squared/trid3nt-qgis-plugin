@@ -9,6 +9,7 @@ from __future__ import annotations
 from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
 
 from trid3nt_server.workflows.runtime import (
+    Continued,
     Data,
     ParamRef,
     Ref,
@@ -28,7 +29,6 @@ from trid3nt_server.workflows.telemac.modules import (
 )
 from trid3nt_server.workflows.telemac.modules.telemac2d import (
     Boundaries,
-    Continuation,
     Rain,
     Sources,
     TracerNames,
@@ -225,18 +225,12 @@ class STEERING(T2D):
     sources = Sources(window_s=P.spill_duration_s,
                       until_s=Ref("settled.until_s"))
 
-    #: The restart this deck is read at. A continuation reads the last record of
-    #: a RESTART FILE, which the engine writes in double precision, so the
-    #: single-precision default would read a double file as a single one.
-    PREVIOUS_COMPUTATION_FILE_FORMAT = "SERAFIND"
-
     #: CALM AND DRY: this question asks what the CURRENT does with the slug, so
     #: this deck states no surface stress and no distributed rain and the answer
     #: is the flow's alone - a zero speed and an absent rate each write nothing
     #: at all. A run that continues nothing states its own initial conditions.
     wind = Wind(speed_mps=0.0, from_deg=0.0)
     rain = Rain(mm_per_day=None, tracers=1)
-    continue_from = Continuation(previous=Ref("settled.continue_from"))
     #: First-order degradation on the same tracer - no new tracer - when a
     #: decaying substance was named; nothing otherwise. This deck states no
     #: die-off of its own: the substance word picks its narrated preset.
@@ -308,7 +302,7 @@ telemac_dye_release = register_workflow(
                          "domain": Ref("domain"),
                          "fraction": P.spill_fraction,
                          "label": "Release point",
-                         "continue_from": P.continue_from}).named("source"),),
+                         "continue_from": Continued}).named("source"),),
         results=(_RESULT, _RESTART),
         compute_class=ParamRef("compute_class"),
         outputs=OUTPUTS, captions=CAPTIONS, answer=ANSWER,

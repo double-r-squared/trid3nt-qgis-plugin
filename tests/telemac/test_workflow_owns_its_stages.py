@@ -11,6 +11,7 @@ import pytest
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.workflows.runtime import (
+    Continued,
     Data,
     DataRef,
     ParamRef,
@@ -158,8 +159,9 @@ def test_the_settle_step_reads_the_files_the_deck_itself_names():
     # THE CLOCK IS THE RESOLVED FLOOR'S, not the class attribute's: the settle
     # runs before the sheet exists, so it reads what the deck will write.
     assert settle.kwargs["duration_s"] == Ref("stated.DURATION")
-    # a param this template does not declare is not read on its behalf
-    assert "continue_from" not in settle.kwargs
+    # WHICH RUN THIS ONE CONTINUES is the rerun ledger's, so every settle reads
+    # it and no template declares a param that twins it.
+    assert settle.kwargs["continue_from"] is Continued
 
 
 def test_the_floor_is_resolved_once_before_any_stage_runs():

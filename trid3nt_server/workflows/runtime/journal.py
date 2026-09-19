@@ -142,12 +142,14 @@ def build_record(*, run_id: str | None, engine: str | None,
                  notes: Sequence[str], fill: Mapping[str, str] | None = None,
                  parent_run_id: str | None = None,
                  overrides: Sequence[str] = (),
+                 continued_from: str | None = None,
                  keywords: Mapping[str, Any] | None = None,
                  supplied: Mapping[str, Any] | None = None,
                  outputs: Sequence[Mapping[str, Any]] = ()) -> dict[str, Any]:
     """One run record, from what the publish stage already holds.
     ``parent_run_id`` + ``overrides`` make the journal a CHAIN rather than a pile:
-    the line says which parent it came from and which values moved."""
+    the line says which parent it came from and which values moved;
+    ``continued_from`` says which run's state it carried on from."""
     return {
         "run_id": run_id,
         "recorded_at": datetime.now(timezone.utc).isoformat(),
@@ -156,6 +158,7 @@ def build_record(*, run_id: str | None, engine: str | None,
         "origin": origin,
         "parent_run_id": parent_run_id,
         "overrides": list(overrides),
+        "continued_from": continued_from,
         "sheet": [_row(row) for row in sheet],
         # THE RAW KEYWORD FLOOR this run was pinned by. It is not a Param, so it
         # is on no sheet row - and a reproduction driven from the arguments alone

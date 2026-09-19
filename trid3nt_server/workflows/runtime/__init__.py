@@ -46,12 +46,13 @@ from .params import (
 )
 from .plan import (
     ChartSpec,
+    Continued,
     DataRef,
     ParamRef,
     Plan,
     Ref,
-    Row,
     RawKeywords,
+    Row,
     RunMode,
     Step,
     body_rows,
@@ -92,7 +93,7 @@ __all__ = [
     "Accepts", "AcceptsDeclarationError",
     "CATEGORICAL", "ChartSpec",
     "CoupledValidityError", "CoversAOI",
-    "Data", "DataDecl", "DataRef", "DeclarativeError", "Derivation",
+    "Continued", "Data", "DataDecl", "DataRef", "DeclarativeError", "Derivation",
     "Derived", "Domain",
     "GateRefusedError",
     "LeakScanTruncated", "LedgerRecord", "ModifierIllegalError",

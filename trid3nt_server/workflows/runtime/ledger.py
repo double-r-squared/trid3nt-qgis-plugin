@@ -34,14 +34,17 @@ _DATA_INDEX = -1
 
 
 def invocation_key(workflow: str, values: dict[str, Any],
-                   *, input_mode: str | None = None) -> str:
+                   *, input_mode: str | None = None,
+                   continued: str | None = None) -> str:
     """Identity of THIS invocation - the same question with the same params rehashes.
     ``input_mode`` is part of it: an auto attempt and a user_gated one are different
-    runs, so one must never seed the other's replay."""
+    runs, so one must never seed the other's replay. So is the run a continuation
+    picks up from: the same sheet carried on from another state is another run."""
     from trid3nt_server.gates.input_review import resolve_input_gate_mode
 
     blob = json.dumps({"w": workflow, "v": values,
-                       "m": resolve_input_gate_mode(input_mode)},
+                       "m": resolve_input_gate_mode(input_mode),
+                       **({"c": continued} if continued else {})},
                       sort_keys=True, default=str)
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()[:32]
 

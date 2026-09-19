@@ -3,7 +3,10 @@
 The REACH of an override is read off the plan; the derivation refuses an unknown
 parent, an undeclared name, an inert override and a changed declaration; a child
 reuses the parent's OWN artifacts up to the cut and records parent and overrides;
-a coupled rule refuses in both lanes, and at REGISTRATION on an undeclared param."""
+a coupled rule refuses in both lanes, and at REGISTRATION on an undeclared param.
+A HOT START is the same row with nothing moved: the cut is the step that opens
+on the other run's state, the invocation is its own, and the record says which
+run it continued."""
 
 from __future__ import annotations
 
@@ -14,6 +17,7 @@ import pytest
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 from trid3nt_server.workflows.runtime import (
+    Continued,
     CoupledValidityError,
     DataDecl,
     tool,
@@ -569,3 +573,74 @@ def test_rerun_workflow_is_retrievable_for_its_own_phrasings():
                    "the run failed on that parameter, run it again with a "
                    "corrected value"):
         assert "rerun_workflow" in retrieve_visible_tools(prompt, None, 8), prompt
+
+
+# --- (5) the HOT START: a rerun row that moves no value --------------------- #
+def _continued_probe() -> Workflow:
+    """A probe whose LOCATE step reads the run's continuation, so a hot start
+    has a node to cut at and a solved state to be handed."""
+    wf = _probe_workflow()
+
+    def plan(ops):
+        return [
+            Step(runner=f"{_PROBE}.locate",
+                 kwargs={"where": ParamRef("where"),
+                         "continue_from": Continued}).named("locate"),
+            Step(runner=f"{_PROBE}.measure",
+                 kwargs={"source": Ref("locate.where"),
+                         "rate": ParamRef("rate")}).named("measure"),
+            Step(runner=f"{_PROBE}.publish",
+                 kwargs={"measured": Ref("measure")}).named("publish"),
+        ]
+
+    return type(wf)(metadata=wf.metadata, params=wf.params, data=wf.data,
+                    plan=plan, answer=("value",))
+
+
+def test_the_cut_of_a_hot_start_is_the_step_that_opens_on_the_other_run():
+    """A continuation moves NO value, so the cut is not read off an override:
+    the node that reads the run's own continuation is the one that re-runs."""
+    wf = _continued_probe()
+    cut, _keep = reuse_plan(wf.plan, wf.data, (), continued=True)
+    assert [n.label for n in _nodes(wf)][cut] == "locate"
+    assert reuse_plan(wf.plan, wf.data, ()) == (None, frozenset({"world"}))
+
+
+def test_a_continuation_is_a_different_invocation_than_the_run_it_continues():
+    """The same sheet carried on from another state is another run, so the
+    ledger must not replay the parent's own records into it."""
+    from trid3nt_server.workflows.runtime.ledger import invocation_key
+
+    plain = invocation_key("w", {"rate": 1.0}, input_mode="auto")
+    assert invocation_key("w", {"rate": 1.0}, input_mode="auto",
+                          continued=None) == plain
+    assert invocation_key("w", {"rate": 1.0}, input_mode="auto",
+                          continued="s3://runs/A/r.slf") != plain
+
+
+@pytest.mark.asyncio
+async def test_a_run_with_no_solved_state_cannot_be_continued(monkeypatch):
+    wf = _continued_probe()
+    await _seed_parent(monkeypatch, wf, "RUN1")
+    with pytest.raises(RerunRefused) as ei:
+        await rerun("RUN1", {}, "RUN1")
+    assert ei.value.error_code == "RERUN_CONTINUATION_UNSOLVED"
+
+
+@pytest.mark.asyncio
+async def test_a_continuation_of_a_run_nothing_recorded_refuses(monkeypatch):
+    wf = _continued_probe()
+    await _seed_parent(monkeypatch, wf, "RUN1")
+    with pytest.raises(RerunRefused) as ei:
+        await rerun("RUN1", {}, "NOSUCH")
+    assert ei.value.error_code == "RERUN_CONTINUATION_UNKNOWN"
+
+
+def test_the_record_of_a_continued_run_says_which_run_it_continued():
+    from trid3nt_server.workflows.runtime.snapshot import Derivation
+    from trid3nt_server.workflows.runtime.workflow import _derivation_note
+
+    assert _derivation_note(Derivation("RUN1", (), "RUN1")) == (
+        "derived from run RUN1, continuing run RUN1 from the state it ended at")
+    assert _derivation_note(Derivation("RUN1", ("rate",))) == (
+        "derived from run RUN1 by overriding rate")

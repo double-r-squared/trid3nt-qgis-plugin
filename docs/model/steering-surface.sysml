@@ -1108,7 +1108,7 @@ package SteeringSurface {
     verify requirement CompositesSetOnlyPresence by
         "tests/telemac/test_telemac_module_surface.py::test_a_wind_from_the_north_reaches_the_engines_own_speed_and_direction_pair";
     verify requirement CompositesSetOnlyPresence by
-        "tests/telemac/test_telemac_module_surface.py::test_a_continuation_names_the_file_and_leaves_its_format_to_the_template";
+        "tests/telemac/test_telemac_module_surface.py::test_a_continuation_names_the_file_and_nothing_else";
     verify requirement CompositesSetOnlyPresence by
         "tests/telemac/test_telemac_module_surface.py::test_a_curve_number_field_names_no_model_and_the_template_does";
     verify requirement CompositesSetOnlyPresence by

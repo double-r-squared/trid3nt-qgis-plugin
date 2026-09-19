@@ -42,6 +42,10 @@ class Derivation:
 
     parent_run_id: str
     overrides: tuple[str, ...]
+    #: The run this one picks up the engine's state from. A HOT START moves no
+    #: value, so a derivation that names one and overrides nothing is still a
+    #: different run than its parent.
+    continued_from: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

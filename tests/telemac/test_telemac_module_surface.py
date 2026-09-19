@@ -615,19 +615,17 @@ def test_a_rate_stated_by_name_arms_the_term_that_reads_it():
     assert "WIND" not in fill(T2D).filled
 
 
-def test_a_continuation_names_the_file_and_leaves_its_format_to_the_template():
-    """The file is what the value IS; the FORMAT it is read at is a choice among
-    the three the dictionary offers, and dye_release states the double-precision
-    one because a restart file is what it continues from."""
-    from trid3nt_server.workflows.telemac.modules.telemac2d import Continuation
-    from trid3nt_server.workflows.telemac.templates.dye_release.dye_release import (
-        STEERING,
-    )
+def test_a_continuation_names_the_file_and_nothing_else():
+    """Naming the file IS the continuation, and which run it came from is the
+    rerun ledger's - no deck states it. The staged file is the parent's own
+    result, whose format is the keyword's own default, so nothing states that
+    either."""
+    from trid3nt_server.workflows.telemac.modules.sheet import fill
 
-    slots, _ = T2D.COMPOSITES["continue_from"].expand(
-        Continuation(previous="previous.slf"))
-    assert slots == {"PREVIOUS_COMPUTATION_FILE": "previous.slf"}
-    assert STEERING.ASSERTED["PREVIOUS_COMPUTATION_FILE_FORMAT"] == "SERAFIND"
+    sheet = fill(T2D, produced={"settled": {"continue_from": "previous.slf"}})
+    assert sheet.filled["PREVIOUS_COMPUTATION_FILE"].value == "previous.slf"
+    assert "PREVIOUS_COMPUTATION_FILE_FORMAT" not in sheet.filled
+    assert "PREVIOUS_COMPUTATION_FILE" not in fill(T2D).filled
 
 
 def test_a_curve_number_field_names_no_model_and_the_template_does():

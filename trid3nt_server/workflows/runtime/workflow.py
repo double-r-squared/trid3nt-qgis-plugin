@@ -147,7 +147,8 @@ class Workflow:
                       keywords: Mapping[str, Any] | None = None,
                       resume: bool = True,
                       supplied: Mapping[str, Any] | None = None,
-                      derived_from: Derivation | None = None) -> Any:
+                      derived_from: Derivation | None = None,
+                      continued: str | None = None) -> Any:
         """Run the plan on a resolved sheet: interpret, post, publish - the spine a
         fresh invocation and a rerun-with-overrides both take. ``resolving`` may be
         an awaitable, so a resolve refusal lands inside this method's envelope."""
@@ -159,7 +160,7 @@ class Workflow:
             run = await interpret(
                 self.plan, p, self.params, self.data,
                 input_mode=input_mode, keywords=keywords, resume=resume,
-                supplied=supplied_artifacts,
+                supplied=supplied_artifacts, continued=continued,
             )
         except asyncio.CancelledError:
             raise
@@ -262,9 +263,7 @@ class Workflow:
         result = run.value
         notes = list(run.notes) + [n for n in self.checks(result, run) if n]
         if derived_from is not None:
-            notes.append(
-                f"derived from run {derived_from.parent_run_id} by overriding "
-                + ", ".join(derived_from.overrides))
+            notes.append(_derivation_note(derived_from))
         update: dict[str, Any] = {
             "synthetic_inputs": merge_provenance(
                 getattr(result, "synthetic_inputs", None) or [], run.entries),
@@ -365,6 +364,7 @@ class Workflow:
             supplied=dict(supplied or {}),
             parent_run_id=derived_from.parent_run_id if derived_from else None,
             overrides=derived_from.overrides if derived_from else (),
+            continued_from=derived_from.continued_from if derived_from else None,
         ))
 
     @staticmethod
@@ -545,3 +545,12 @@ def _wire_signature(params: Sequence[Param], extra: Sequence[tuple[str, Any]],
     annotations["_extra_ignored"] = Any
     annotations["return"] = Any
     return inspect.Signature(sig_params, return_annotation=Any), annotations
+
+
+def _derivation_note(derived_from: Derivation) -> str:
+    """What a derived run says about the run it came from, on its own journal."""
+    moved = (" by overriding " + ", ".join(derived_from.overrides)
+             if derived_from.overrides else "")
+    carried = (f", continuing run {derived_from.continued_from} from the state "
+               "it ended at" if derived_from.continued_from else "")
+    return f"derived from run {derived_from.parent_run_id}{moved}{carried}"

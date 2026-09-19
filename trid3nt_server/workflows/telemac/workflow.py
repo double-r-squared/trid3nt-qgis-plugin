@@ -22,6 +22,7 @@ from trid3nt_server.render.formats import publish
 from trid3nt_server.workflows.runtime import (
     ParamRef,
     PlanValidationError,
+    Continued,
     RawKeywords,
     Ref,
     RunMode,
@@ -357,9 +358,11 @@ class Door:
                         # module carries, so the settle reads the seconds the
                         # deck was written for rather than a lever restating it.
                         "duration_s": self._asserted("DURATION"),
-                        **{name: ParamRef(name)
-                           for name in ("name", "continue_from")
-                           if name in declared}}))
+                        # WHICH RUN THIS ONE CARRIES ON FROM: a rerun ledger
+                        # row, not a value the question asks about.
+                        "continue_from": Continued,
+                        **({"name": ParamRef("name")}
+                           if "name" in declared else {})}))
 
     def _outputs_step(self, params: Mapping[str, Any]) -> Step:
         """The publish step, checked: every PLACED read has its caption.

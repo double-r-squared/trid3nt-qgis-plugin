@@ -48,6 +48,7 @@ from .ledger import LedgerRecord, StepLedger, inputs_digest, invocation_key
 from .params import Param, ResolvedParams
 from .plan import (
     ChartSpec,
+    Continued,
     ParamRef,
     Plan,
     Ref,
@@ -125,12 +126,14 @@ async def interpret(
     domain: Domain | None = None,
     resume: bool = True,
     supplied: Mapping[str, Any] | None = None,
+    continued: str | None = None,
 ) -> RunResult:
     """Validate, then walk the plan. The only place a declared workflow executes."""
     validate_plan(plan, declared_params, data)
 
     entries = provenance_entries(params, declared_params)
-    key = invocation_key(plan.name, params.values_dict(), input_mode=input_mode)
+    key = invocation_key(plan.name, params.values_dict(), input_mode=input_mode,
+                         continued=continued)
     ledger = await StepLedger.load(key, plan.name)
     if not resume:
         await ledger.clear()
@@ -141,7 +144,8 @@ async def interpret(
 
     env = _Env(params=params, data={d.name: d for d in data}, results={},
                input_mode=input_mode, keywords=dict(keywords or {}), ledger=ledger,
-               resume=resume, supplied=dict(supplied or {}), workflow=plan.name)
+               resume=resume, supplied=dict(supplied or {}), workflow=plan.name,
+               continued=continued)
     out = RunResult(value=None, entries=entries, params=params,
                     keywords=dict(env.keywords))
     token = bind_domain(domain)
@@ -275,6 +279,9 @@ class _Env:
     workflow: str = ""
     #: The raw keyword floor this invocation carried, by the name the caller used.
     keywords: dict[str, Any] = field(default_factory=dict)
+    #: The run this one CONTINUES, as the artifact its state is read out of.
+    #: Empty for a run that starts from its own initial conditions.
+    continued: str | None = None
     ledger: StepLedger | None = None
     resume: bool = True
     artifacts: dict[str, Any] = field(default_factory=dict)
@@ -776,6 +783,8 @@ async def _bind_value(value: Any, env: _Env) -> Any:
         return env.input_mode
     if value is RawKeywords:
         return dict(env.keywords)
+    if value is Continued:
+        return env.continued
     if isinstance(value, ParamRef):
         # LATE binding: the sheet a gate may have revised, not the one the plan
         # value was built from.
