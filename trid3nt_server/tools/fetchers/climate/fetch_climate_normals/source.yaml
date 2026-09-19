@@ -57,6 +57,7 @@ payload_estimate:
 
 caveats:
   - "NOAA NCEI 1991-2020 U.S. Climate Normals (annual avg temperature deg F + total precipitation inches) as station points; U.S. + territories only. No station in the bbox / none with a usable annual normal -> a typed CLIMATE_NORMALS_EMPTY error, never a fabricated layer."
+  - "model-callable, not matched: a 1991-2020 normal answers no run window, so it carries no coverage row"
 
 docstring: |-
   Fetch NOAA NCEI 1991-2020 U.S. Climate Normals as a point FlatGeobuf.

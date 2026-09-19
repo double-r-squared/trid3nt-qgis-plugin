@@ -65,6 +65,7 @@ payload_estimate:                            # area*0.6 clamp[0.05,60]
 caveats:
   - "USDM weekly drought-category (D0-D4) polygons; current week by default or a past release via date"
   - "US-only; out-of-coverage or off-cadence date -> header-only FGB (honest-empty, never a fabricated error)"
+  - "model-callable, not matched: a categorical drought class is not a slot's data class, so it carries no coverage row"
 
 docstring: |-
   US Drought Monitor weekly drought-category polygons as a FlatGeobuf layer.

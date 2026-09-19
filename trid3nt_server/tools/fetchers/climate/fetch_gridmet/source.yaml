@@ -91,10 +91,39 @@ payload_estimate:              # max(0.01, 0.01 * sq_deg)
   mb_per_sq_deg: 0.01
   floor_mb: 0.01
 
+coverage:
+- data_class: weather forcing
+  kind: modelled
+  extent:
+    kind: surface
+    rings:
+    - [[-124.77, 25.05], [-67.06, 25.05], [-67.06, 49.40], [-124.77, 49.40]]
+    note: gridMET CONUS domain (the conus_only gate's own bounds)
+  window:
+    series: true
+    earliest: '1979-01-01'
+    max_span_days: 366.0
+    cadence: daily (lags ~3 days from real time)
+  resolution_m: 4000.0
+  datum: null
+  units:
+    fm100: Percent
+    fm1000: Percent
+    pet: mm
+    pdsi: unitless
+    tmmn: K
+    tmmx: K
+    vpd: kPa
+    vs: "m s-1"
+    rmin: Percent
+    rmax: Percent
+    pr: mm
+    srad: "W m-2"
+  value_column: ""
+
 # --- honesty: caveats + fallback -----------------------------------------
 caveats:
-  - "CONUS-only (bbox must intersect ~-124.77,25.05,-67.06,49.40); non-CONUS -> fetch_era5_reanalysis"
-  - "daily cadence; gridMET lags ~3 days from real time; 366-day hard cap per call"
+  - "non-CONUS -> fetch_era5_reanalysis"
   - "empty/out-of-coverage window -> GRIDMET_EMPTY (retryable=false); no fabricated pixels"
 
 # corpus omitted here -> loader lifts it verbatim from the sibling corpus.yaml.
@@ -102,7 +131,7 @@ caveats:
 # --- LLM docstring: the sole source of the promoted tool description and the
 # retrieval-index document text. ---
 docstring: |-
-  gridMET CONUS daily gridded meteorology (4 km, 1979 -> present).
+  gridMET CONUS daily gridded meteorology.
 
   Fetches a daily gridded meteorological variable from the University of
   Idaho gridMET dataset (Abatzoglou 2013) over the requested bbox + date

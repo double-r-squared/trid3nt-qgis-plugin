@@ -98,10 +98,34 @@ payload_estimate:
   overhead_kb: 0.0
   floor_mb: 0.5
 
+coverage:
+- data_class: weather forcing
+  kind: modelled
+  extent:
+    kind: surface
+    rings:
+    - [[-180.0, -90.0], [180.0, -90.0], [180.0, 90.0], [-180.0, 90.0]]
+    note: ERA5 global reanalysis grid
+  window:
+    series: true
+    earliest: '1940-01-01'
+    cadence: hourly (lags ~5 days preliminary / ~3 months finalised)
+  resolution_m: 27750.0
+  datum: null
+  units:
+    10m_wind_speed: "m s-1"
+    10m_u_component_of_wind: "m s-1"
+    10m_v_component_of_wind: "m s-1"
+    2m_temperature: "K"
+    total_precipitation: "m"
+    runoff: "m"
+    significant_height_of_combined_wind_waves_and_swell: "m"
+  value_column: ""
+
 caveats:
   - "ERA5 lags: ~5 days (ERA5T preliminary) / ~3 months (finalised); NOT real-time -- use fetch_hrrr_forecast"
   - "keyed: free Copernicus CDS key auto-requested via credential card on ERA5_MISSING_KEY; missing key is NOT a reason to route elsewhere"
-  - "0.25 deg native (~27 km); for CONUS precip prefer fetch_mrms_qpe (1 km gauge-corrected)"
+  - "for CONUS precip prefer fetch_mrms_qpe (1 km gauge-corrected)"
 
 # corpus lifted from sibling corpus.yaml.
 
@@ -176,4 +200,4 @@ docstring: |-
   carrying the time-mean of the requested variable, clipped to bbox.
   ``layer_type="raster"``, ``role="primary"``. Units: ``"m s-1"`` for
   wind, ``"K"`` for temperature, ``"m"`` for precipitation / runoff /
-  wave height. EPSG:4326, 0.25 deg native (~27 km).
+  wave height. EPSG:4326.
