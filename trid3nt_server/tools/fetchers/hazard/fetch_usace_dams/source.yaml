@@ -113,6 +113,7 @@ caveats:
   token (env/kwarg) queries geospatial.sec.usace.army.mil first. hazard_potential/state/min_height_ft
   applied server-side (IN / DAM_HEIGHT>=). US-only; bbox optional (CONUS+AK+HI sweep). Static inventory,
   not live reservoir ops.
+- "model-callable, not matched: infrastructure points, not one of the seventeen matched data classes"
 docstring: |-
   USACE National Inventory of Dams (NID) as a FlatGeobuf point layer.
 

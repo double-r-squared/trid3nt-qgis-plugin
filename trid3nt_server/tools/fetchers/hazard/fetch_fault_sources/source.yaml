@@ -61,6 +61,23 @@ payload_estimate:
   model: bbox_area
   floor_mb: 0.2
   ceil_mb: 0.2
+coverage:
+- data_class: seismic source
+  kind: measured
+  extent:
+    kind: surface
+    rings:
+      - [[-180.0, -90.0], [180.0, -90.0], [180.0, 90.0], [-180.0, 90.0]]
+    note: GEM Global Active Faults Database, worldwide harmonized fault traces
+  window:
+    series: false
+  datum: null
+  units:
+    net_slip_rate_mm_yr: mm/yr
+    dip_deg: deg
+    rake_deg: deg
+    upper_seis_depth_km: km
+    lower_seis_depth_km: km
 docstring: "Fetch REAL active-fault seismic sources (traces + slip rates) for an AOI.\n\nRetrieves harmonized\
   \ active-fault traces from the GEM Global Active Faults\nDatabase and returns the kinematic source records used to build
 physics-based ``simpleFaultSource`` seismic sources (each with\

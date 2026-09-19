@@ -79,6 +79,7 @@ payload_estimate:
 caveats:
 - OBSERVED NCEI/WDS Global Historical Tsunami Database (not a probabilistic inundation-hazard model);
   a scope with no recorded tsunami -> honest TSUNAMI_EVENTS_NO_EVENTS, never an empty layer.
+- "model-callable, not matched: historical event records, not one of the seventeen matched data classes"
 docstring: "Fetch REAL historical tsunamis as a point FlatGeobuf.\n\nRetrieves recorded tsunami SOURCE\
   \ EVENTS (or coastal RUNUP observations)\nfrom the NOAA NCEI / World Data Service **Global Historical\
   \ Tsunami\nDatabase** (the authoritative catalog from 2100 BC to the present, the same\nrecord behind\

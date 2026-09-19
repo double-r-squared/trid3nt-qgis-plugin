@@ -76,6 +76,7 @@ caveats:
   to Census TIGERweb county polygons; DR/EM/FM declarations 1953-present. Statewide (fipsCountyCode 000)
   declarations are excluded from the county overlay. No county-level match -> OPENFEMA_NO_DECLARATIONS,
   never an empty success layer. US states + territories only.
+- "model-callable, not matched: disaster-declaration records, not one of the seventeen matched data classes"
 docstring: |-
   Fetch FEMA disaster declarations as a county-polygon FlatGeobuf overlay.
 

@@ -60,6 +60,7 @@ payload_estimate:                            # est_features(=area*1200)*700/(102
 caveats:
   - "US-only HIFLD bulk transmission; empty bbox -> header-only FGB (honest-empty, never a fabricated error)"
   - "min_voltage_kv is an optional nominal-voltage floor (kV); negative HIFLD sentinels are excluded by the >= filter"
+  - "model-callable, not matched: infrastructure lines, not one of the seventeen matched data classes"
 
 docstring: |-
   HIFLD electric power transmission lines within a bbox as a FlatGeobuf layer.

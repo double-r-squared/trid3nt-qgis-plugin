@@ -62,6 +62,7 @@ payload_estimate:
 caveats:
 - OBSERVED current USGS HANS volcano alert levels (not a probabilistic eruption-hazard model); a bbox
   with no monitored volcano -> honest USGS_VOLCANO_ALERTS_NO_VOLCANOES, never an empty layer.
+- "model-callable, not matched: current alert-level points, not one of the seventeen matched data classes"
 docstring: |-
   Fetch the CURRENT USGS volcano alert levels as a point FlatGeobuf.
 

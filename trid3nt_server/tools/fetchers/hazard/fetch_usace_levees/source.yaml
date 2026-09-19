@@ -78,6 +78,7 @@ payload_estimate:                             # per-layer national-count * per-f
 caveats:
   - "USACE National Levee Database (federally inspected levees); layer=leveed_areas|system_routes|embankments"
   - "None bbox -> CONUS+AK+HI sweep; empty bbox (no NLD levees) -> header-only FGB (honest-empty), never USACE_LEVEES_EMPTY by default"
+  - "model-callable, not matched: infrastructure lines/areas, not one of the seventeen matched data classes"
 
 docstring: |-
   USACE National Levee Database (NLD) features as a FlatGeobuf layer.

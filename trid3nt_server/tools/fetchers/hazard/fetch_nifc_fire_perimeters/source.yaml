@@ -52,6 +52,7 @@ payload_estimate:                           # a bbox-area heuristic
 caveats:
   - "current active NIFC WFIGS perimeters only (historic fires -> fetch_mtbs_burn_severity)"
   - "US-only; empty bbox (e.g. no active fires) -> header-only FGB (honest-empty, never a fabricated error)"
+  - "model-callable, not matched: active-fire perimeter polygons, not one of the seventeen matched data classes"
 
 docstring: |-
   Fetch current NIFC WFIGS wildland fire perimeter polygons for the US.

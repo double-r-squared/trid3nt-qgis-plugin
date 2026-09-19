@@ -62,6 +62,7 @@ caveats:
 - EPA Facility Registry Service program-interest points via the public NEPAssist MapServer. facility_program='frs'
   unions 5 point layers (TRI/water/hazwaste/air/brownfields); 'superfund' synthesizes points from LAT/LON.
   US-only; bbox required. Single-page per layer (2000-feature cap/layer).
+- "model-callable, not matched: exposure-facility points, not one of the seventeen matched data classes"
 docstring: |-
   EPA regulated-facility points by program as a FlatGeobuf layer.
 

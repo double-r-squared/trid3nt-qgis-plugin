@@ -70,6 +70,22 @@ payload_estimate:
   mb_per_sq_deg: 0.002
   floor_mb: 0.001
   ceil_mb: 5.0
+coverage:
+- data_class: seismic source
+  kind: measured
+  extent:
+    kind: surface
+    rings:
+      - [[-180.0, -90.0], [180.0, -90.0], [180.0, 90.0], [-180.0, 90.0]]
+    note: USGS FDSN global earthquake event catalog
+  window:
+    series: true
+    earliest: '1900-01-01'
+    max_span_days: 366.0
+  datum: null
+  units:
+    mag: magnitude
+    depth_km: km
 caveats:
 - OBSERVED USGS FDSN event catalog (not a probabilistic seismic-hazard model); a seismically quiet scope
   -> honest USGS_EARTHQUAKES_NO_EVENTS, never an empty layer.

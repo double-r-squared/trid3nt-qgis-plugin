@@ -77,6 +77,22 @@ payload_estimate:
   features_per_sq_deg: 50.0
   kb_per_feature: 0.3
   floor_mb: 0.001
+coverage:
+- data_class: ignition
+  kind: measured
+  extent:
+    kind: surface
+    rings:
+      - [[-180.0, -90.0], [180.0, -90.0], [180.0, 90.0], [-180.0, 90.0]]
+    note: global VIIRS/MODIS overpass coverage, per NASA FIRMS
+  window:
+    series: true
+    max_span_days: 10.0
+  resolution_m: 375.0
+  datum: null
+  units:
+    brightness: K
+    frp: MW
 caveats:
 - NASA FIRMS Tier-2 satellite active-fire / thermal-anomaly detections as points, keyed
   (map_key -> secret_ref -> TRID3NT_FIRMS_MAP_KEY env, key carried IN the URL path). No key

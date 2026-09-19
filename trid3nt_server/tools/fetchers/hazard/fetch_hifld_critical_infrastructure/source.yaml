@@ -78,6 +78,7 @@ payload_estimate:              # est_features(=area*density)*1200/(1024^2); hosp
 caveats:
   - "US-only HIFLD; empty bbox (e.g. open water) -> header-only FGB (honest-empty, never a fabricated error)"
   - "facility_type in {hospitals,schools,fire_stations,police,power_plants} (aliases accepted upstream)"
+  - "model-callable, not matched: critical-infrastructure points, not one of the seventeen matched data classes"
 
 # corpus lifted from sibling corpus.yaml.
 

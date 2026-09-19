@@ -73,9 +73,29 @@ payload_estimate:
   mb_per_sq_deg: 0.5
   floor_mb: 0.05
 
+coverage:
+- data_class: fuels
+  kind: modelled
+  extent:
+    kind: surface
+    rings:
+      - [[-125.0, 24.0], [-66.0, 24.0], [-66.0, 50.0], [-125.0, 50.0]]
+    note: LANDFIRE LF2022, the CONUS mosaic this fetcher's service_by_param
+      map names; the wider LF2022 program also ships AK/HI/PRVI mosaics this
+      fetcher does not yet dispatch to
+  window:
+    series: false
+    latest: '2022-01-01'
+  resolution_m: 30.0
+  datum: null
+  units:
+    cbh: m * 10
+    cbd: kg/m^3 * 100
+    cc: percent
+    ch: m * 10
+
 caveats:
   - "30 m LANDFIRE LF2022 CONUS fuels/vegetation via ImageServer exportImage; all-nodata raster (bbox outside CONUS) -> LANDFIRE_FUELS_EMPTY (never a fabricated layer)"
-  - "CONUS-only at v0.1 (AK/HI/PRVI mosaics exist, regional dispatch deferred)"
 
 # corpus lifted from sibling corpus.yaml.
 
@@ -111,9 +131,6 @@ docstring: |-
   - DO NOT use for weather / climate forcing -- LANDFIRE is fuels-only;
     use ``fetch_mrms_qpe``, ``fetch_hrrr_forecast``, or
     ``fetch_raws_weather`` for meteorological inputs.
-  - DO NOT use outside CONUS at v0.1 -- AK/HI/PRVI LANDFIRE mosaics exist
-    but regional dispatch is deferred.
-
   **Parameters:**
   - ``bbox`` (tuple[float, float, float, float]): ``(min_lon, min_lat,
     max_lon, max_lat)`` in EPSG:4326. Required; CONUS-only.

@@ -56,6 +56,7 @@ payload_estimate:                            # bbox-area heuristic
 caveats:
   - "MTBS covers CONUS+AK+HI+PR, 1984-present, fires >=500-1000 acres; empty bbox/window -> header-only FGB (honest-empty)"
   - "year_range is an inclusive [start_year, end_year] server-side filter (start >= 1984); None returns all years"
+  - "model-callable, not matched: historic burn-severity polygons, not one of the seventeen matched data classes"
 
 docstring: |-
   Fetch MTBS historic burn-severity boundary polygons clipped to a bbox.
