@@ -40,11 +40,11 @@ The values the template declares. `desc` is what the model reads when it fills o
 
 | field | the proving run's value |
 |---|---|
-| `oil_cmax_mgl` | 4.12391996383667 |
+| `oil_cmax_mgl` | 1.9183844327926636 |
 | `oil_peak_time_s` | 300.0 |
-| `plume_reach_m` | 16.4 |
+| `plume_reach_m` | 197.8 |
 | `active_frames` | 18 |
-| `slick_drift_m` | 38.1 |
+| `slick_drift_m` | 401.8 |
 | `floats_released` | 100 |
 | `floats_remaining` | 100 |
 | `mesh_size_m` | 20.888 |
@@ -52,8 +52,9 @@ The values the template declares. `desc` is what the model reads when it fills o
 It publishes these layers onto the canvas:
 
 - Input: river reach (river_reach)
-- Input: ehydro surveys (ehydro_surveys)
-- Input: bed elevation (dem, 3DEP 1-10 m US lidar (default 10 m); Copernicus GLO-30 30 m global via source=copernicus, datum NAVD88 (metres, positive up))
+- Input: bed (ehydro_surveys)
+- Input: bed (3dep_extra, datum NAVD88 (metres, positive up))
+- Input: carrier (usgs_nwis_gauges)
 - Release point (user) - river_reach_domain
 - Velocity u over time (river_reach_domain_mesh)
 - Velocity v over time (river_reach_domain_mesh)
@@ -69,23 +70,23 @@ It publishes these layers onto the canvas:
 
 ## The proving run
 
-Run `01M2W9C74TS7WFJQK5E4C8M0VF`, 2026-09-19T07:34:17.648855+00:00, 30.52 s, at commit `9159953f15209df6f74626b87c0a98cbb92e4d98-dirty`.
+Run `01M2XK3QE4V5WC8SK0GNYN9ZAA`, 2026-09-19T19:43:38.676624+00:00, 31.796 s, at commit `f2db6c00d8dc324e9a70960b3ebd1cc7655c3fb7-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M2W9C74TS7WFJQK5E4C8M0VF)](telemac_oil_spill/telemac_oil_spill.png)
+![Every layer the run published, stacked and framed on the result (run 01M2XK3QE4V5WC8SK0GNYN9ZAA)](telemac_oil_spill/telemac_oil_spill.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M2W9C74TS7WFJQK5E4C8M0VF)*
+*Every layer the run published, stacked and framed on the result (run 01M2XK3QE4V5WC8SK0GNYN9ZAA)*
 
-![The solve, frame by frame (run 01M2W9C74TS7WFJQK5E4C8M0VF)](telemac_oil_spill/telemac_oil_spill_animation.gif)
+![The solve, frame by frame (run 01M2XK3QE4V5WC8SK0GNYN9ZAA)](telemac_oil_spill/telemac_oil_spill_animation.gif)
 
-*The solve, frame by frame (run 01M2W9C74TS7WFJQK5E4C8M0VF)*
+*The solve, frame by frame (run 01M2XK3QE4V5WC8SK0GNYN9ZAA)*
 
-![peak frame (run 01M2W9C74TS7WFJQK5E4C8M0VF)](telemac_oil_spill/telemac_oil_spill_peak_frame.png)
+![peak frame (run 01M2XK3QE4V5WC8SK0GNYN9ZAA)](telemac_oil_spill/telemac_oil_spill_peak_frame.png)
 
-*peak frame (run 01M2W9C74TS7WFJQK5E4C8M0VF)*
+*peak frame (run 01M2XK3QE4V5WC8SK0GNYN9ZAA)*
 
-![dissolved oil concentration - the chart the run persisted (run 01M2W9C74TS7WFJQK5E4C8M0VF)](telemac_oil_spill/telemac_oil_spill_chart_dissolved_oil_concentration.png)
+![dissolved oil concentration - the chart the run persisted (run 01M2XK3QE4V5WC8SK0GNYN9ZAA)](telemac_oil_spill/telemac_oil_spill_chart_dissolved_oil_concentration.png)
 
-*dissolved oil concentration - the chart the run persisted (run 01M2W9C74TS7WFJQK5E4C8M0VF)*
+*dissolved oil concentration - the chart the run persisted (run 01M2XK3QE4V5WC8SK0GNYN9ZAA)*
 
 ### The sheet it filled
 
@@ -98,10 +99,10 @@ Every slot the run resolved, with where the value came from. The engine's own de
 | `oil_type` | light_crude | - | user | supplied on this invocation |
 | `oil_release_step` | 60 | - | user | supplied on this invocation |
 | `mesh_resolution_m` | 40.0 | m | user | supplied on this invocation |
+| `event_time` | 2026-09-17T18:00:00+00:00 | - | user | supplied on this invocation |
 | `spill_fraction` | 0.25 | - | default_demo | declared scenario default |
 | `compute_class` | medium | - | default_demo | declared constant default |
 | `vertical_frame` | NAVD88 | - | default_demo | declared constant default |
-| `event_time` | - | - | prompt_interpreted | not supplied (declared optional) |
 
 ### Reproduce
 
@@ -109,16 +110,15 @@ Every slot the run resolved, with where the value came from. The engine's own de
 from trid3nt_server.tools import TOOL_REGISTRY
 
 await TOOL_REGISTRY['telemac_oil_spill'].fn(
+    event_time='2026-09-17T18:00:00+00:00',
     mesh_resolution_m=40.0,
     oil_release_step=60,
     oil_type='light_crude',
     release={'lon': -122.669784, 'lat': 45.518485, 'name': None},
     spill_duration_s=300.0,
-    carrier=56.6,
-    stage=2.776,
     keywords={'DURATION': 1800.0},
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2W9C74TS7WFJQK5E4C8M0VF` and commit `9159953f15209df6f74626b87c0a98cbb92e4d98-dirty`. The full argument record is [`telemac_oil_spill/run.json`](telemac_oil_spill/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2XK3QE4V5WC8SK0GNYN9ZAA` and commit `f2db6c00d8dc324e9a70960b3ebd1cc7655c3fb7-dirty`. The full argument record is [`telemac_oil_spill/run.json`](telemac_oil_spill/run.json).
 

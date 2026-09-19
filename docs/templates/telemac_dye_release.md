@@ -39,17 +39,18 @@ The values the template declares. `desc` is what the model reads when it fills o
 
 | field | the proving run's value |
 |---|---|
-| `dye_cmax_mgl` | 4.1239914894104 |
+| `dye_cmax_mgl` | 1.9185205698013306 |
 | `dye_peak_time_s` | 300.0 |
-| `plume_reach_m` | 16.4 |
+| `plume_reach_m` | 197.7 |
 | `active_frames` | 18 |
 | `mesh_size_m` | 20.888 |
 
 It publishes these layers onto the canvas:
 
 - Input: river reach (river_reach)
-- Input: ehydro surveys (ehydro_surveys)
-- Input: bed elevation (dem, 3DEP 1-10 m US lidar (default 10 m); Copernicus GLO-30 30 m global via source=copernicus, datum NAVD88 (metres, positive up))
+- Input: bed (ehydro_surveys)
+- Input: bed (3dep_extra, datum NAVD88 (metres, positive up))
+- Input: carrier (usgs_nwis_gauges)
 - Release point (user) - river_reach_domain
 - Velocity u over time (river_reach_domain_mesh)
 - Velocity v over time (river_reach_domain_mesh)
@@ -64,23 +65,23 @@ It publishes these layers onto the canvas:
 
 ## The proving run
 
-Run `01M2X63C3GZKQET1G5GGHZVFR8`, 2026-09-19T15:56:14.536025+00:00, 28.293 s, at commit `9159953f15209df6f74626b87c0a98cbb92e4d98-dirty`.
+Run `01M2XKHQEGQ3K0ETKHPKX4DQG3`, 2026-09-19T19:51:16.447962+00:00, 26.89 s, at commit `f2db6c00d8dc324e9a70960b3ebd1cc7655c3fb7`.
 
-![Every layer the run published, stacked and framed on the result (run 01M2X63C3GZKQET1G5GGHZVFR8)](telemac_dye_release/telemac_dye_release.png)
+![Every layer the run published, stacked and framed on the result (run 01M2XKHQEGQ3K0ETKHPKX4DQG3)](telemac_dye_release/telemac_dye_release.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M2X63C3GZKQET1G5GGHZVFR8)*
+*Every layer the run published, stacked and framed on the result (run 01M2XKHQEGQ3K0ETKHPKX4DQG3)*
 
-![The solve, frame by frame (run 01M2X63C3GZKQET1G5GGHZVFR8)](telemac_dye_release/telemac_dye_release_animation.gif)
+![The solve, frame by frame (run 01M2XKHQEGQ3K0ETKHPKX4DQG3)](telemac_dye_release/telemac_dye_release_animation.gif)
 
-*The solve, frame by frame (run 01M2X63C3GZKQET1G5GGHZVFR8)*
+*The solve, frame by frame (run 01M2XKHQEGQ3K0ETKHPKX4DQG3)*
 
-![peak frame (run 01M2X63C3GZKQET1G5GGHZVFR8)](telemac_dye_release/telemac_dye_release_peak_frame.png)
+![peak frame (run 01M2XKHQEGQ3K0ETKHPKX4DQG3)](telemac_dye_release/telemac_dye_release_peak_frame.png)
 
-*peak frame (run 01M2X63C3GZKQET1G5GGHZVFR8)*
+*peak frame (run 01M2XKHQEGQ3K0ETKHPKX4DQG3)*
 
-![dye concentration - the chart the run persisted (run 01M2X63C3GZKQET1G5GGHZVFR8)](telemac_dye_release/telemac_dye_release_chart_dye_concentration.png)
+![dye concentration - the chart the run persisted (run 01M2XKHQEGQ3K0ETKHPKX4DQG3)](telemac_dye_release/telemac_dye_release_chart_dye_concentration.png)
 
-*dye concentration - the chart the run persisted (run 01M2X63C3GZKQET1G5GGHZVFR8)*
+*dye concentration - the chart the run persisted (run 01M2XKHQEGQ3K0ETKHPKX4DQG3)*
 
 ### The sheet it filled
 
@@ -92,10 +93,10 @@ Every slot the run resolved, with where the value came from. The engine's own de
 | `spill_fraction` | 0.25 | - | user | supplied on this invocation |
 | `spill_duration_s` | 300.0 | s | user | supplied on this invocation |
 | `mesh_resolution_m` | 40.0 | m | user | supplied on this invocation |
+| `event_time` | 2026-09-17T18:00:00+00:00 | - | user | supplied on this invocation |
 | `compute_class` | medium | - | default_demo | declared constant default |
 | `vertical_frame` | NAVD88 | - | default_demo | declared constant default |
 | `decaying_substance` | - | - | prompt_interpreted | not supplied (declared optional) |
-| `event_time` | - | - | prompt_interpreted | not supplied (declared optional) |
 
 ### Reproduce
 
@@ -103,15 +104,14 @@ Every slot the run resolved, with where the value came from. The engine's own de
 from trid3nt_server.tools import TOOL_REGISTRY
 
 await TOOL_REGISTRY['telemac_dye_release'].fn(
+    event_time='2026-09-17T18:00:00+00:00',
     mesh_resolution_m=40.0,
     release={'lon': -122.669784, 'lat': 45.518485, 'name': None},
     spill_duration_s=300.0,
     spill_fraction=0.25,
-    carrier=56.6,
-    stage=2.776,
     keywords={'DURATION': 1800.0},
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2X63C3GZKQET1G5GGHZVFR8` and commit `9159953f15209df6f74626b87c0a98cbb92e4d98-dirty`. The full argument record is [`telemac_dye_release/run.json`](telemac_dye_release/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2XKHQEGQ3K0ETKHPKX4DQG3` and commit `f2db6c00d8dc324e9a70960b3ebd1cc7655c3fb7`. The full argument record is [`telemac_dye_release/run.json`](telemac_dye_release/run.json).
 
