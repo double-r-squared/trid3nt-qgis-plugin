@@ -1,14 +1,200 @@
 {
   "tool": "artemis_harbor_agitation",
-  "run_id": "01M2VEXMESNJ4MSWZWCJR3V6NS",
-  "commit": "8397312dd28e2ade6266f5eef50ce148c6c060c5-dirty",
-  "recorded_at": "2026-09-18T23:51:55.559767+00:00",
+  "run_id": "01M2W7N0ZEFH0TTC4C6DYX6PH7",
+  "commit": "8bcc5407309e3f52868fe2532f555f6228dc8262-dirty",
+  "recorded_at": "2026-09-19T07:04:07.578407+00:00",
   "engine": "telemac",
-  "wall_seconds": 27.117,
+  "wall_seconds": 28.63,
   "args": {
     "wave_height_m": 1.0,
     "reflection_coef": 0.3,
     "mesh_resolution_m": 25.0
+  },
+  "keywords": {
+    "DIRECTION OF WAVE PROPAGATION": 160.0
+  },
+  "supplied": {
+    "box": "{'bbox': [-71.525, 41.338, -71.492, 41.368], 'name': 'Point Judith Harbor'}",
+    "structure": [
+      {
+        "length": 42,
+        "head": [
+          [
+            -71.48868,
+            41.36073
+          ],
+          [
+            -71.4885,
+            41.36065
+          ],
+          [
+            -71.4888,
+            41.36034
+          ],
+          [
+            -71.48908,
+            41.36007
+          ],
+          [
+            -71.48934,
+            41.35984
+          ],
+          [
+            -71.48958,
+            41.35967
+          ],
+          [
+            -71.48995,
+            41.35947
+          ],
+          [
+            -71.49028,
+            41.35936
+          ]
+        ],
+        "truncated": true
+      },
+      [
+        [
+          -71.51466,
+          41.37429
+        ],
+        [
+          -71.51471,
+          41.37424
+        ],
+        [
+          -71.51627,
+          41.37261
+        ],
+        [
+          -71.51623,
+          41.3707
+        ],
+        [
+          -71.51618,
+          41.36983
+        ],
+        [
+          -71.51467,
+          41.3656
+        ],
+        [
+          -71.51471,
+          41.36549
+        ],
+        [
+          -71.51484,
+          41.36556
+        ],
+        [
+          -71.51639,
+          41.3696
+        ],
+        [
+          -71.51649,
+          41.37019
+        ],
+        [
+          -71.51652,
+          41.37268
+        ],
+        [
+          -71.51486,
+          41.37432
+        ],
+        [
+          -71.51466,
+          41.37429
+        ]
+      ],
+      [
+        [
+          -71.50831,
+          41.35412
+        ],
+        [
+          -71.50726,
+          41.35414
+        ],
+        [
+          -71.49785,
+          41.35975
+        ],
+        [
+          -71.49801,
+          41.35998
+        ],
+        [
+          -71.50387,
+          41.3566
+        ],
+        [
+          -71.50434,
+          41.35618
+        ],
+        [
+          -71.50668,
+          41.35494
+        ],
+        [
+          -71.50741,
+          41.35436
+        ],
+        [
+          -71.50833,
+          41.35445
+        ],
+        [
+          -71.50942,
+          41.35457
+        ],
+        [
+          -71.5098,
+          41.35467
+        ],
+        [
+          -71.51022,
+          41.35484
+        ],
+        [
+          -71.51073,
+          41.35535
+        ],
+        [
+          -71.51145,
+          41.35717
+        ],
+        [
+          -71.51312,
+          41.36141
+        ],
+        [
+          -71.51325,
+          41.36145
+        ],
+        [
+          -71.51329,
+          41.36135
+        ],
+        [
+          -71.51109,
+          41.35532
+        ],
+        [
+          -71.51038,
+          41.35462
+        ],
+        [
+          -71.50948,
+          41.3543
+        ],
+        [
+          -71.50831,
+          41.35412
+        ]
+      ]
+    ]
   },
   "sheet": [
     {
@@ -151,12 +337,12 @@
     }
   ],
   "answer": {
-    "kd_max": 0.6939641833305359,
-    "kd_transect_min": 8.024323393251986e-13,
-    "kd_transect_max": 1.2782068736783003e-08,
-    "hs_max_m": 0.6939641833305359,
+    "kd_max": 0.09084709733724594,
+    "kd_transect_min": 8.637458559805286e-14,
+    "kd_transect_max": 9.001717415912935e-08,
+    "hs_max_m": 0.09084709733724594,
     "mesh_size_m": 6.593208586451455,
-    "layer_uri": "s3://trid3nt-runs/01M2VEXMESNJ4MSWZWCJR3V6NS/res_agitation.slf",
+    "layer_uri": "s3://trid3nt-runs/01M2W7N0ZEFH0TTC4C6DYX6PH7/res_agitation.slf",
     "structure": null,
     "structure_note": null,
     "mesh_resolution_m": 25.0,
@@ -199,35 +385,6 @@
       "crs_authid": null,
       "dataset_group": null,
       "dataset_uris": [],
-      "layer_id": "input-dem-0838de960b4c",
-      "layer_type": "raster",
-      "legend": {
-        "colormap": "gray",
-        "floor": null,
-        "kind": "continuous",
-        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <pipe>\n    <rasterrenderer type=\"singlebandpseudocolor\" band=\"1\" opacity=\"1\" alphaBand=\"-1\" classificationMin=\"-2.099999905\" classificationMax=\"3.653625498\" nodataColor=\"\">\n      <rastershader>\n        <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"-2.099999905\" maximumValue=\"3.653625498\" labelPrecision=\"4\">\n          <item value=\"-2.099999905\" color=\"#000000\" alpha=\"255\" label=\"-2.1 m\"/>\n          <item value=\"-0.661593554\" color=\"#404040\" alpha=\"255\" label=\"-0.661594 m\"/>\n          <item value=\"0.7768127966\" color=\"#808080\" alpha=\"255\" label=\"0.776813 m\"/>\n          <item value=\"2.215219147\" color=\"#c0c0c0\" alpha=\"255\" label=\"2.21522 m\"/>\n          <item value=\"3.653625498\" color=\"#ffffff\" alpha=\"255\" label=\"3.65363 m\"/>\n        </colorrampshader>\n      </rastershader>\n    </rasterrenderer>\n  </pipe>\n</qgis>\n",
-        "units": "m",
-        "vmax": 3.653625497817982,
-        "vmin": -2.0999999046325684
-      },
-      "name": "Input: bed elevation (dem, 3DEP 1-10 m US lidar (default 10 m); Copernicus GLO-30 30 m global via source=copernicus, datum NAVD88 (metres, positive up))",
-      "opacity": null,
-      "origin": null,
-      "quantity": null,
-      "reference_time": null,
-      "role": "context",
-      "temporal": false,
-      "tracer": null,
-      "uri": "s3://trid3nt-cache/cache/static-30d/dem/ca673566004bda67add8ba8d7c826bd3.tif",
-      "valid_from": null,
-      "valid_to": null,
-      "visible": true,
-      "z_index": 1
-    },
-    {
-      "crs_authid": null,
-      "dataset_group": null,
-      "dataset_uris": [],
       "layer_id": "input-topobathy-4d644cc85357",
       "layer_type": "raster",
       "legend": {
@@ -251,23 +408,52 @@
       "valid_from": null,
       "valid_to": null,
       "visible": true,
+      "z_index": 1
+    },
+    {
+      "crs_authid": null,
+      "dataset_group": null,
+      "dataset_uris": [],
+      "layer_id": "input-dem-0838de960b4c",
+      "layer_type": "raster",
+      "legend": {
+        "colormap": "gray",
+        "floor": null,
+        "kind": "continuous",
+        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <pipe>\n    <rasterrenderer type=\"singlebandpseudocolor\" band=\"1\" opacity=\"1\" alphaBand=\"-1\" classificationMin=\"-2.099999905\" classificationMax=\"3.653625498\" nodataColor=\"\">\n      <rastershader>\n        <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"-2.099999905\" maximumValue=\"3.653625498\" labelPrecision=\"4\">\n          <item value=\"-2.099999905\" color=\"#000000\" alpha=\"255\" label=\"-2.1 m\"/>\n          <item value=\"-0.661593554\" color=\"#404040\" alpha=\"255\" label=\"-0.661594 m\"/>\n          <item value=\"0.7768127966\" color=\"#808080\" alpha=\"255\" label=\"0.776813 m\"/>\n          <item value=\"2.215219147\" color=\"#c0c0c0\" alpha=\"255\" label=\"2.21522 m\"/>\n          <item value=\"3.653625498\" color=\"#ffffff\" alpha=\"255\" label=\"3.65363 m\"/>\n        </colorrampshader>\n      </rastershader>\n    </rasterrenderer>\n  </pipe>\n</qgis>\n",
+        "units": "m",
+        "vmax": 3.653625497817982,
+        "vmin": -2.0999999046325684
+      },
+      "name": "Input: bed elevation (dem, 3DEP 1-10 m US lidar (default 10 m); Copernicus GLO-30 30 m global via source=copernicus, datum NAVD88 (metres, positive up))",
+      "opacity": null,
+      "origin": null,
+      "quantity": null,
+      "reference_time": null,
+      "role": "context",
+      "temporal": false,
+      "tracer": null,
+      "uri": "s3://trid3nt-cache/cache/static-30d/dem/ca673566004bda67add8ba8d7c826bd3.tif",
+      "valid_from": null,
+      "valid_to": null,
+      "visible": true,
       "z_index": 2
     },
     {
       "crs_authid": "EPSG:32619",
       "dataset_group": "Wave height at t = 8 s",
       "dataset_uris": [
-        "s3://trid3nt-runs/01M2VEXMESNJ4MSWZWCJR3V6NS/wave_height-t8.dat"
+        "s3://trid3nt-runs/01M2W7N0ZEFH0TTC4C6DYX6PH7/wave_height-t8.dat"
       ],
-      "layer_id": "telemac-wave_height-t8-01M2VEXMESNJ4MSWZWCJR3V6NS",
+      "layer_id": "telemac-wave_height-t8-01M2W7N0ZEFH0TTC4C6DYX6PH7",
       "layer_type": "mesh",
       "legend": {
         "colormap": "ylgnbu",
         "floor": null,
         "kind": "mesh",
-        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <mesh-renderer-settings>\n    <active-dataset-group scalar=\"0\" vector=\"-1\"/>\n    <scalar-settings group=\"0\" min-val=\"0\" max-val=\"0.693965\" opacity=\"1\" interpolation-method=\"no-resampling\">\n      <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"0\" maximumValue=\"0.693965\" labelPrecision=\"4\">\n        <item value=\"0\" color=\"#ffffd9\" alpha=\"255\" label=\"0 m\"/>\n        <item value=\"0.17349125\" color=\"#c6e9b4\" alpha=\"255\" label=\"0.173491 m\"/>\n        <item value=\"0.3469825\" color=\"#40b5c4\" alpha=\"255\" label=\"0.346983 m\"/>\n        <item value=\"0.52047375\" color=\"#225da8\" alpha=\"255\" label=\"0.520474 m\"/>\n        <item value=\"0.693965\" color=\"#081d58\" alpha=\"255\" label=\"0.693965 m\"/>\n      </colorrampshader>\n    </scalar-settings>\n  </mesh-renderer-settings>\n  <name-to-global-index global-index=\"0\" name=\"Wave height at t = 8 s\"/>\n</qgis>\n",
+        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <mesh-renderer-settings>\n    <active-dataset-group scalar=\"0\" vector=\"-1\"/>\n    <scalar-settings group=\"0\" min-val=\"0\" max-val=\"0.090848\" opacity=\"1\" interpolation-method=\"no-resampling\">\n      <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"0\" maximumValue=\"0.090848\" labelPrecision=\"4\">\n        <item value=\"0\" color=\"#ffffd9\" alpha=\"255\" label=\"0 m\"/>\n        <item value=\"0.022712\" color=\"#c6e9b4\" alpha=\"255\" label=\"0.022712 m\"/>\n        <item value=\"0.045424\" color=\"#40b5c4\" alpha=\"255\" label=\"0.045424 m\"/>\n        <item value=\"0.068136\" color=\"#225da8\" alpha=\"255\" label=\"0.068136 m\"/>\n        <item value=\"0.090848\" color=\"#081d58\" alpha=\"255\" label=\"0.090848 m\"/>\n      </colorrampshader>\n    </scalar-settings>\n  </mesh-renderer-settings>\n  <name-to-global-index global-index=\"0\" name=\"Wave height at t = 8 s\"/>\n</qgis>\n",
         "units": "m",
-        "vmax": 0.693965,
+        "vmax": 0.090848,
         "vmin": 0.0
       },
       "name": "Wave height (m) at t = 8 s (water_inside_the_box_mesh)",
@@ -278,7 +464,7 @@
       "role": "primary",
       "temporal": false,
       "tracer": null,
-      "uri": "s3://trid3nt-runs/01M2VEXMESNJ4MSWZWCJR3V6NS/res_agitation.slf",
+      "uri": "s3://trid3nt-runs/01M2W7N0ZEFH0TTC4C6DYX6PH7/res_agitation.slf",
       "valid_from": null,
       "valid_to": null,
       "visible": true,
@@ -288,18 +474,18 @@
       "crs_authid": "EPSG:32619",
       "dataset_group": "Wave phase at t = 8 s",
       "dataset_uris": [
-        "s3://trid3nt-runs/01M2VEXMESNJ4MSWZWCJR3V6NS/wave_phase-t8.dat"
+        "s3://trid3nt-runs/01M2W7N0ZEFH0TTC4C6DYX6PH7/wave_phase-t8.dat"
       ],
-      "layer_id": "telemac-wave_phase-t8-01M2VEXMESNJ4MSWZWCJR3V6NS",
+      "layer_id": "telemac-wave_phase-t8-01M2W7N0ZEFH0TTC4C6DYX6PH7",
       "layer_type": "mesh",
       "legend": {
         "colormap": "hsv",
         "floor": null,
         "kind": "mesh",
-        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <mesh-renderer-settings>\n    <active-dataset-group scalar=\"0\" vector=\"-1\"/>\n    <scalar-settings group=\"0\" min-val=\"-3.140882\" max-val=\"3.140914\" opacity=\"1\" interpolation-method=\"no-resampling\">\n      <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"-3.140882\" maximumValue=\"3.140914\" labelPrecision=\"4\">\n        <item value=\"-3.140882\" color=\"#ff0000\" alpha=\"255\" label=\"-3.14088 rad\"/>\n        <item value=\"-1.570433\" color=\"#b3ff00\" alpha=\"255\" label=\"-1.57043 rad\"/>\n        <item value=\"1.6e-05\" color=\"#00ffff\" alpha=\"255\" label=\"1.6e-05 rad\"/>\n        <item value=\"1.570465\" color=\"#4d00ff\" alpha=\"255\" label=\"1.57046 rad\"/>\n        <item value=\"3.140914\" color=\"#ff0000\" alpha=\"255\" label=\"3.14091 rad\"/>\n      </colorrampshader>\n    </scalar-settings>\n  </mesh-renderer-settings>\n  <name-to-global-index global-index=\"0\" name=\"Wave phase at t = 8 s\"/>\n</qgis>\n",
+        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <mesh-renderer-settings>\n    <active-dataset-group scalar=\"0\" vector=\"-1\"/>\n    <scalar-settings group=\"0\" min-val=\"-3.140202\" max-val=\"3.141455\" opacity=\"1\" interpolation-method=\"no-resampling\">\n      <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"-3.140202\" maximumValue=\"3.141455\" labelPrecision=\"4\">\n        <item value=\"-3.140202\" color=\"#ff0000\" alpha=\"255\" label=\"-3.1402 rad\"/>\n        <item value=\"-1.56978775\" color=\"#b3ff00\" alpha=\"255\" label=\"-1.56979 rad\"/>\n        <item value=\"0.0006265\" color=\"#00ffff\" alpha=\"255\" label=\"0.0006265 rad\"/>\n        <item value=\"1.57104075\" color=\"#4d00ff\" alpha=\"255\" label=\"1.57104 rad\"/>\n        <item value=\"3.141455\" color=\"#ff0000\" alpha=\"255\" label=\"3.14146 rad\"/>\n      </colorrampshader>\n    </scalar-settings>\n  </mesh-renderer-settings>\n  <name-to-global-index global-index=\"0\" name=\"Wave phase at t = 8 s\"/>\n</qgis>\n",
         "units": "rad",
-        "vmax": 3.140914,
-        "vmin": -3.140882
+        "vmax": 3.141455,
+        "vmin": -3.140202
       },
       "name": "Wave phase (rad) at t = 8 s (water_inside_the_box_mesh)",
       "opacity": null,
@@ -309,7 +495,7 @@
       "role": "primary",
       "temporal": false,
       "tracer": null,
-      "uri": "s3://trid3nt-runs/01M2VEXMESNJ4MSWZWCJR3V6NS/res_agitation.slf",
+      "uri": "s3://trid3nt-runs/01M2W7N0ZEFH0TTC4C6DYX6PH7/res_agitation.slf",
       "valid_from": null,
       "valid_to": null,
       "visible": true,
@@ -319,18 +505,18 @@
       "crs_authid": "EPSG:32619",
       "dataset_group": "Free surface at t = 8 s",
       "dataset_uris": [
-        "s3://trid3nt-runs/01M2VEXMESNJ4MSWZWCJR3V6NS/free_surface-t8.dat"
+        "s3://trid3nt-runs/01M2W7N0ZEFH0TTC4C6DYX6PH7/free_surface-t8.dat"
       ],
-      "layer_id": "telemac-free_surface-t8-01M2VEXMESNJ4MSWZWCJR3V6NS",
+      "layer_id": "telemac-free_surface-t8-01M2W7N0ZEFH0TTC4C6DYX6PH7",
       "layer_type": "mesh",
       "legend": {
         "colormap": "blues",
         "floor": null,
         "kind": "mesh",
-        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <mesh-renderer-settings>\n    <active-dataset-group scalar=\"0\" vector=\"-1\"/>\n    <scalar-settings group=\"0\" min-val=\"-0.336339\" max-val=\"1.153102\" opacity=\"1\" interpolation-method=\"no-resampling\">\n      <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"-0.336339\" maximumValue=\"1.153102\" labelPrecision=\"4\">\n        <item value=\"-0.336339\" color=\"#f7fbff\" alpha=\"255\" label=\"-0.336339 m\"/>\n        <item value=\"0.03602125\" color=\"#c6dbef\" alpha=\"255\" label=\"0.0360213 m\"/>\n        <item value=\"0.4083815\" color=\"#6aaed6\" alpha=\"255\" label=\"0.408382 m\"/>\n        <item value=\"0.78074175\" color=\"#2070b4\" alpha=\"255\" label=\"0.780742 m\"/>\n        <item value=\"1.153102\" color=\"#08306b\" alpha=\"255\" label=\"1.1531 m\"/>\n      </colorrampshader>\n    </scalar-settings>\n  </mesh-renderer-settings>\n  <name-to-global-index global-index=\"0\" name=\"Free surface at t = 8 s\"/>\n</qgis>\n",
+        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <mesh-renderer-settings>\n    <active-dataset-group scalar=\"0\" vector=\"-1\"/>\n    <scalar-settings group=\"0\" min-val=\"-0.038199\" max-val=\"1.153102\" opacity=\"1\" interpolation-method=\"no-resampling\">\n      <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"-0.038199\" maximumValue=\"1.153102\" labelPrecision=\"4\">\n        <item value=\"-0.038199\" color=\"#f7fbff\" alpha=\"255\" label=\"-0.038199 m\"/>\n        <item value=\"0.25962625\" color=\"#c6dbef\" alpha=\"255\" label=\"0.259626 m\"/>\n        <item value=\"0.5574515\" color=\"#6aaed6\" alpha=\"255\" label=\"0.557452 m\"/>\n        <item value=\"0.85527675\" color=\"#2070b4\" alpha=\"255\" label=\"0.855277 m\"/>\n        <item value=\"1.153102\" color=\"#08306b\" alpha=\"255\" label=\"1.1531 m\"/>\n      </colorrampshader>\n    </scalar-settings>\n  </mesh-renderer-settings>\n  <name-to-global-index global-index=\"0\" name=\"Free surface at t = 8 s\"/>\n</qgis>\n",
         "units": "m",
         "vmax": 1.153102,
-        "vmin": -0.336339
+        "vmin": -0.038199
       },
       "name": "Free surface (m) at t = 8 s (water_inside_the_box_mesh)",
       "opacity": null,
@@ -340,7 +526,7 @@
       "role": "primary",
       "temporal": false,
       "tracer": null,
-      "uri": "s3://trid3nt-runs/01M2VEXMESNJ4MSWZWCJR3V6NS/res_agitation.slf",
+      "uri": "s3://trid3nt-runs/01M2W7N0ZEFH0TTC4C6DYX6PH7/res_agitation.slf",
       "valid_from": null,
       "valid_to": null,
       "visible": true,
@@ -350,9 +536,9 @@
       "crs_authid": "EPSG:32619",
       "dataset_group": "Bottom at t = 8 s",
       "dataset_uris": [
-        "s3://trid3nt-runs/01M2VEXMESNJ4MSWZWCJR3V6NS/bottom-t8.dat"
+        "s3://trid3nt-runs/01M2W7N0ZEFH0TTC4C6DYX6PH7/bottom-t8.dat"
       ],
-      "layer_id": "telemac-bottom-t8-01M2VEXMESNJ4MSWZWCJR3V6NS",
+      "layer_id": "telemac-bottom-t8-01M2W7N0ZEFH0TTC4C6DYX6PH7",
       "layer_type": "mesh",
       "legend": {
         "colormap": "terrain",
@@ -371,7 +557,7 @@
       "role": "primary",
       "temporal": false,
       "tracer": null,
-      "uri": "s3://trid3nt-runs/01M2VEXMESNJ4MSWZWCJR3V6NS/res_agitation.slf",
+      "uri": "s3://trid3nt-runs/01M2W7N0ZEFH0TTC4C6DYX6PH7/res_agitation.slf",
       "valid_from": null,
       "valid_to": null,
       "visible": true,
@@ -381,17 +567,17 @@
       "crs_authid": "EPSG:32619",
       "dataset_group": "Kd at t = 8 s",
       "dataset_uris": [
-        "s3://trid3nt-runs/01M2VEXMESNJ4MSWZWCJR3V6NS/kd-t8.dat"
+        "s3://trid3nt-runs/01M2W7N0ZEFH0TTC4C6DYX6PH7/kd-t8.dat"
       ],
-      "layer_id": "telemac-kd-t8-01M2VEXMESNJ4MSWZWCJR3V6NS",
+      "layer_id": "telemac-kd-t8-01M2W7N0ZEFH0TTC4C6DYX6PH7",
       "layer_type": "mesh",
       "legend": {
         "colormap": "viridis",
         "floor": null,
         "kind": "mesh",
-        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <mesh-renderer-settings>\n    <active-dataset-group scalar=\"0\" vector=\"-1\"/>\n    <scalar-settings group=\"0\" min-val=\"0\" max-val=\"0.621283\" opacity=\"1\" interpolation-method=\"no-resampling\">\n      <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"0\" maximumValue=\"0.621283\" labelPrecision=\"4\">\n        <item value=\"0\" color=\"#440154\" alpha=\"255\" label=\"0\"/>\n        <item value=\"0.15532075\" color=\"#3b528b\" alpha=\"255\" label=\"0.155321\"/>\n        <item value=\"0.3106415\" color=\"#21918c\" alpha=\"255\" label=\"0.310642\"/>\n        <item value=\"0.46596225\" color=\"#5ec962\" alpha=\"255\" label=\"0.465962\"/>\n        <item value=\"0.621283\" color=\"#fde725\" alpha=\"255\" label=\"0.621283\"/>\n      </colorrampshader>\n    </scalar-settings>\n  </mesh-renderer-settings>\n  <name-to-global-index global-index=\"0\" name=\"Kd at t = 8 s\"/>\n</qgis>\n",
+        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <mesh-renderer-settings>\n    <active-dataset-group scalar=\"0\" vector=\"-1\"/>\n    <scalar-settings group=\"0\" min-val=\"0\" max-val=\"0.072939\" opacity=\"1\" interpolation-method=\"no-resampling\">\n      <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"0\" maximumValue=\"0.072939\" labelPrecision=\"4\">\n        <item value=\"0\" color=\"#440154\" alpha=\"255\" label=\"0\"/>\n        <item value=\"0.01823475\" color=\"#3b528b\" alpha=\"255\" label=\"0.0182348\"/>\n        <item value=\"0.0364695\" color=\"#21918c\" alpha=\"255\" label=\"0.0364695\"/>\n        <item value=\"0.05470425\" color=\"#5ec962\" alpha=\"255\" label=\"0.0547043\"/>\n        <item value=\"0.072939\" color=\"#fde725\" alpha=\"255\" label=\"0.072939\"/>\n      </colorrampshader>\n    </scalar-settings>\n  </mesh-renderer-settings>\n  <name-to-global-index global-index=\"0\" name=\"Kd at t = 8 s\"/>\n</qgis>\n",
         "units": "Hs/H0",
-        "vmax": 0.621283,
+        "vmax": 0.072939,
         "vmin": 0.0
       },
       "name": "Kd (Hs/H0) at t = 8 s (water_inside_the_box_mesh)",
@@ -402,7 +588,7 @@
       "role": "primary",
       "temporal": false,
       "tracer": null,
-      "uri": "s3://trid3nt-runs/01M2VEXMESNJ4MSWZWCJR3V6NS/res_agitation.slf",
+      "uri": "s3://trid3nt-runs/01M2W7N0ZEFH0TTC4C6DYX6PH7/res_agitation.slf",
       "valid_from": null,
       "valid_to": null,
       "visible": true,
@@ -412,7 +598,7 @@
       "crs_authid": "EPSG:32619",
       "dataset_group": null,
       "dataset_uris": [],
-      "layer_id": "01M2VEY8J9W7KSX673CPZBB1X7",
+      "layer_id": "01M2W7NNBSK7YSFHQG8B9PH7RD",
       "layer_type": "mesh",
       "legend": {
         "colormap": null,
@@ -427,11 +613,11 @@
       "opacity": null,
       "origin": null,
       "quantity": null,
-      "reference_time": "2026-09-18T23:51:39+00:00",
+      "reference_time": "2026-09-19T07:03:52+00:00",
       "role": "primary",
       "temporal": false,
       "tracer": null,
-      "uri": "s3://trid3nt-runs/01M2VEXMESNJ4MSWZWCJR3V6NS/res_agitation.slf",
+      "uri": "s3://trid3nt-runs/01M2W7N0ZEFH0TTC4C6DYX6PH7/res_agitation.slf",
       "valid_from": null,
       "valid_to": null,
       "visible": true,

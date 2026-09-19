@@ -41,11 +41,11 @@ The values the template declares. `desc` is what the model reads when it fills o
 
 | field | the proving run's value |
 |---|---|
-| `do_min_mgl` | 8.846679603526946 |
+| `do_min_mgl` | 8.96890545403967 |
 | `do_below_standard` | False |
-| `do_min_distance_m` | 761.6974777058904 |
-| `bod_mixed_mgl` | 1.3160736969539177 |
-| `mean_velocity_mps` | 0.010861147692447998 |
+| `do_min_distance_m` | 69.24522524599003 |
+| `bod_mixed_mgl` | 0.8260952257298289 |
+| `mean_velocity_mps` | 0.016844866028475004 |
 | `mesh_size_m` | 14.524 |
 
 It publishes these layers onto the canvas:
@@ -58,7 +58,7 @@ It publishes these layers onto the canvas:
 - Velocity v over time (river_reach_domain_mesh)
 - Water depth over time (river_reach_domain_mesh)
 - Free surface over time (river_reach_domain_mesh)
-- Bottom (m) at t = 170610 s (river_reach_domain_mesh)
+- Bottom (m) at t = 3630 s (river_reach_domain_mesh)
 - Froude number over time (river_reach_domain_mesh)
 - Scalar flowrate over time (river_reach_domain_mesh)
 - Scalar velocity over time (river_reach_domain_mesh)
@@ -69,23 +69,23 @@ It publishes these layers onto the canvas:
 
 ## The proving run
 
-Run `01M2VZKJPM488W90418PEWG4XD`, 2026-09-19T04:53:01.566710+00:00, 600.768 s, at commit `ba274ced59bf841b133f19832d2113cd6525829e-dirty`.
+Run `01M2W7MXRNMJDQ2FAPSVNPDHSM`, 2026-09-19T07:04:25.319103+00:00, 55.658 s, at commit `8bcc5407309e3f52868fe2532f555f6228dc8262`.
 
-![Every layer the run published, stacked and framed on the result (run 01M2VZKJPM488W90418PEWG4XD)](telemac_do_sag/telemac_do_sag.png)
+![Every layer the run published, stacked and framed on the result (run 01M2W7MXRNMJDQ2FAPSVNPDHSM)](telemac_do_sag/telemac_do_sag.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M2VZKJPM488W90418PEWG4XD)*
+*Every layer the run published, stacked and framed on the result (run 01M2W7MXRNMJDQ2FAPSVNPDHSM)*
 
-![The solve, frame by frame (run 01M2VZKJPM488W90418PEWG4XD)](telemac_do_sag/telemac_do_sag_animation.gif)
+![The solve, frame by frame (run 01M2W7MXRNMJDQ2FAPSVNPDHSM)](telemac_do_sag/telemac_do_sag_animation.gif)
 
-*The solve, frame by frame (run 01M2VZKJPM488W90418PEWG4XD)*
+*The solve, frame by frame (run 01M2W7MXRNMJDQ2FAPSVNPDHSM)*
 
-![final frame (run 01M2VZKJPM488W90418PEWG4XD)](telemac_do_sag/telemac_do_sag_final_frame.png)
+![final frame (run 01M2W7MXRNMJDQ2FAPSVNPDHSM)](telemac_do_sag/telemac_do_sag_final_frame.png)
 
-*final frame (run 01M2VZKJPM488W90418PEWG4XD)*
+*final frame (run 01M2W7MXRNMJDQ2FAPSVNPDHSM)*
 
-![dissolved oxygen - the chart the run persisted (run 01M2VZKJPM488W90418PEWG4XD)](telemac_do_sag/telemac_do_sag_chart_dissolved_oxygen.png)
+![dissolved oxygen - the chart the run persisted (run 01M2W7MXRNMJDQ2FAPSVNPDHSM)](telemac_do_sag/telemac_do_sag_chart_dissolved_oxygen.png)
 
-*dissolved oxygen - the chart the run persisted (run 01M2VZKJPM488W90418PEWG4XD)*
+*dissolved oxygen - the chart the run persisted (run 01M2W7MXRNMJDQ2FAPSVNPDHSM)*
 
 ### The sheet it filled
 
@@ -109,8 +109,11 @@ await TOOL_REGISTRY['telemac_do_sag'].fn(
     do_standard_mgl=5.0,
     mesh_resolution_m=40.0,
     outfall_coords={'lon': -122.669784, 'lat': 45.518485, 'name': None},
+    carrier=56.6,
+    stage=2.776,
+    keywords={'DURATION': 7200.0, 'waqtel: CONSTANT OF DEGRADATION OF ORGANIC LOAD K1': 2.0, 'waqtel: K2 REAERATION COEFFICIENT': 6.0},
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2VZKJPM488W90418PEWG4XD` and commit `ba274ced59bf841b133f19832d2113cd6525829e-dirty`. The full argument record is [`telemac_do_sag/run.json`](telemac_do_sag/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2W7MXRNMJDQ2FAPSVNPDHSM` and commit `8bcc5407309e3f52868fe2532f555f6228dc8262`. The full argument record is [`telemac_do_sag/run.json`](telemac_do_sag/run.json).
 

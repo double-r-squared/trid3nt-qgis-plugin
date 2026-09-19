@@ -43,17 +43,17 @@ The values the template declares. `desc` is what the model reads when it fills o
 
 | field | the proving run's value |
 |---|---|
-| `kd_max` | 0.6939641833305359 |
-| `kd_transect_min` | 8.024323393251986e-13 |
-| `kd_transect_max` | 1.2782068736783003e-08 |
-| `hs_max_m` | 0.6939641833305359 |
+| `kd_max` | 0.09084709733724594 |
+| `kd_transect_min` | 8.637458559805286e-14 |
+| `kd_transect_max` | 9.001717415912935e-08 |
+| `hs_max_m` | 0.09084709733724594 |
 | `mesh_size_m` | 6.593208586451455 |
 
 It publishes these layers onto the canvas:
 
 - Input: osm coastline (osm_coastline)
-- Input: bed elevation (dem, 3DEP 1-10 m US lidar (default 10 m); Copernicus GLO-30 30 m global via source=copernicus, datum NAVD88 (metres, positive up))
 - Input: topobathy (topobathy, CUDEM 1/9" ~3 m nearshore; ETOPO 2022 15" ~450 m offshore fallback; 3DEP 10 m land, datum NAVD88 (metres, positive up))
+- Input: bed elevation (dem, 3DEP 1-10 m US lidar (default 10 m); Copernicus GLO-30 30 m global via source=copernicus, datum NAVD88 (metres, positive up))
 - Wave height (m) at t = 8 s (water_inside_the_box_mesh)
 - Wave phase (rad) at t = 8 s (water_inside_the_box_mesh)
 - Free surface (m) at t = 8 s (water_inside_the_box_mesh)
@@ -63,19 +63,19 @@ It publishes these layers onto the canvas:
 
 ## The proving run
 
-Run `01M2VEXMESNJ4MSWZWCJR3V6NS`, 2026-09-18T23:51:55.559767+00:00, 27.117 s, at commit `8397312dd28e2ade6266f5eef50ce148c6c060c5-dirty`.
+Run `01M2W7N0ZEFH0TTC4C6DYX6PH7`, 2026-09-19T07:04:07.578407+00:00, 28.63 s, at commit `8bcc5407309e3f52868fe2532f555f6228dc8262-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M2VEXMESNJ4MSWZWCJR3V6NS)](artemis_harbor_agitation/artemis_harbor_agitation.png)
+![Every layer the run published, stacked and framed on the result (run 01M2W7N0ZEFH0TTC4C6DYX6PH7)](artemis_harbor_agitation/artemis_harbor_agitation.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M2VEXMESNJ4MSWZWCJR3V6NS)*
+*Every layer the run published, stacked and framed on the result (run 01M2W7N0ZEFH0TTC4C6DYX6PH7)*
 
-![peak frame (run 01M2VEXMESNJ4MSWZWCJR3V6NS)](artemis_harbor_agitation/artemis_harbor_agitation_peak_frame.png)
+![peak frame (run 01M2W7N0ZEFH0TTC4C6DYX6PH7)](artemis_harbor_agitation/artemis_harbor_agitation_peak_frame.png)
 
-*peak frame (run 01M2VEXMESNJ4MSWZWCJR3V6NS)*
+*peak frame (run 01M2W7N0ZEFH0TTC4C6DYX6PH7)*
 
-![agitation coefficient - the chart the run persisted (run 01M2VEXMESNJ4MSWZWCJR3V6NS)](artemis_harbor_agitation/artemis_harbor_agitation_chart_agitation_coefficient.png)
+![agitation coefficient - the chart the run persisted (run 01M2W7N0ZEFH0TTC4C6DYX6PH7)](artemis_harbor_agitation/artemis_harbor_agitation_chart_agitation_coefficient.png)
 
-*agitation coefficient - the chart the run persisted (run 01M2VEXMESNJ4MSWZWCJR3V6NS)*
+*agitation coefficient - the chart the run persisted (run 01M2W7N0ZEFH0TTC4C6DYX6PH7)*
 
 ### The sheet it filled
 
@@ -101,8 +101,11 @@ await TOOL_REGISTRY['artemis_harbor_agitation'].fn(
     mesh_resolution_m=25.0,
     reflection_coef=0.3,
     wave_height_m=1.0,
+    box="{'bbox': [-71.525, 41.338, -71.492, 41.368], 'name': 'Point Judith Harbor'}",
+    structure=[{'length': 42, 'head': [[-71.48868, 41.36073], [-71.4885, 41.36065], [-71.4888, 41.36034], [-71.48908, 41.36007], [-71.48934, 41.35984], [-71.48958, 41.35967], [-71.48995, 41.35947], [-71.49028, 41.35936]], 'truncated': True}, [[-71.51466, 41.37429], [-71.51471, 41.37424], [-71.51627, 41.37261], [-71.51623, 41.3707], [-71.51618, 41.36983], [-71.51467, 41.3656], [-71.51471, 41.36549], [-71.51484, 41.36556], [-71.51639, 41.3696], [-71.51649, 41.37019], [-71.51652, 41.37268], [-71.51486, 41.37432], [-71.51466, 41.37429]], [[-71.50831, 41.35412], [-71.50726, 41.35414], [-71.49785, 41.35975], [-71.49801, 41.35998], [-71.50387, 41.3566], [-71.50434, 41.35618], [-71.50668, 41.35494], [-71.50741, 41.35436], [-71.50833, 41.35445], [-71.50942, 41.35457], [-71.5098, 41.35467], [-71.51022, 41.35484], [-71.51073, 41.35535], [-71.51145, 41.35717], [-71.51312, 41.36141], [-71.51325, 41.36145], [-71.51329, 41.36135], [-71.51109, 41.35532], [-71.51038, 41.35462], [-71.50948, 41.3543], [-71.50831, 41.35412]]],
+    keywords={'DIRECTION OF WAVE PROPAGATION': 160.0},
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2VEXMESNJ4MSWZWCJR3V6NS` and commit `8397312dd28e2ade6266f5eef50ce148c6c060c5-dirty`. The full argument record is [`artemis_harbor_agitation/run.json`](artemis_harbor_agitation/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2W7N0ZEFH0TTC4C6DYX6PH7` and commit `8bcc5407309e3f52868fe2532f555f6228dc8262-dirty`. The full argument record is [`artemis_harbor_agitation/run.json`](artemis_harbor_agitation/run.json).
 
