@@ -341,8 +341,12 @@ package SteeringSurface {
         one value standing for the keyword group the module reads it as. The
         coupled modules carry their own beside them (waqtel.py, gaia.py), and a
         capability the engine offers only as keywords on one of those decks is
-        a composite there rather than a surface of its own.
+        a composite there rather than a surface of its own. The one composite
+        two wrappers register is coupling, which both hydrodynamic carriers take
+        from coupling.py; the water column is all that separates their reading
+        of it.
         code: trid3nt_server/workflows/telemac/modules/telemac2d.py
+        code: trid3nt_server/workflows/telemac/modules/coupling.py
         */
         port surfaceOut : SurfaceOut;
     }
@@ -1038,6 +1042,8 @@ package SteeringSurface {
         "tests/telemac/test_telemac_module_surface.py::test_a_coupling_states_only_what_the_carrier_names_it_by";
     verify requirement CompositesLiveInWrappers by
         "tests/telemac/test_telemac_module_surface.py::test_a_coupled_body_is_checked_against_its_own_module_s_dictionary";
+    verify requirement CompositesLiveInWrappers by
+        "tests/telemac/test_telemac_khione.py::test_a_three_dimensional_host_couples_khione_and_states_its_column";
 
     satisfy requirement OneTemplatePerQuestion by door;
     verify requirement OneTemplatePerQuestion by
