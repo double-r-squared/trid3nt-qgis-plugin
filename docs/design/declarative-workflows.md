@@ -1,28 +1,9 @@
 # Declarative workflows - the plan-value architecture
 
-NATE-shaped design (2026-08-21/23 discussion). V1 LANDED -
-do_sag MIGRATED. WAVE 2 LANDED - the FORM and DRAW cards, on
-the existing spines, plugin 0.3.17. WAVE 3 LANDED -
-telemac_dye_release MIGRATED (3,469 -> 671 lines over a shared
-`workflows/telemac/` family), the form card's first live proof,
-and the live-run harness (`dev/testing/`). WAVE 4 LANDED
-- the GENERALIZATION CHECKPOINT PASSED:
-`modflow_regional_water_budget` and `swmm_aquifer_baseflow_to_node`
-migrated onto shared `workflows/<engine>/steps/` families, both
-bit-identical, on four small library additions and no redesign. WAVE 5
-LANDED - SWMM ENGINE CAMPAIGN WAVE A: the two standalone
-solve templates (`swmm_rdii_rtk_unit_hydrograph`,
-`swmm_snowmelt_degree_day`) declared, both bit-identical INCLUDING their
-deck text, on NO library change at all; the shared SWMM family grew
-multi-attribute sampling, the one line-chart spec and the deck
-time-series helpers, and paid back its first 18 lines into the
-checkpoint's own template. SWMM is 3 of 15; the remaining twelve are two
-composer families (published-deck, mechanism-comparison) and three AOI
-giants, and the wave boundaries follow the shared machinery rather than
-the file sizes (wave 5's tranche plan). Focus engines: SWMM + MODFLOW
-(top priority, EPA/USGS), TELEMAC, HEC-RAS (tail, skippable).
-One principle everywhere: DECLARE THE WHAT, CENTRALIZE THE HOW - and
-the what is a VALUE.
+One principle everywhere: DECLARE THE WHAT, CENTRALIZE THE HOW - and the what is
+a VALUE. A template is inputs and declarations, both frozen at import; the plan a
+run executes is assembled by the WORKFLOW CLASS out of them, and nothing in a
+template names a function to call.
 
 ## The form: workflow = inputs + plan, both values
 
@@ -147,7 +128,7 @@ runtime `REF_UNRESOLVED` waiting to happen. That decides plan shapes: an OPTIONA
 VARIANT whose result the answer step must read cannot be `When`-guarded - either
 the variant is declared unconditionally, or the branch and everything that reads
 it move inside one composite, and hiding a solve inside a composite is what this
-library exists to undo. Both SWMM wave-A templates chose to declare.
+library exists to undo. A template declares the variant.
 
 Guarded steps still carry stable ledger indices (every declared node is numbered,
 fired or not), so an attempt that took a different branch than the one before it
@@ -258,58 +239,52 @@ but the SWMM and MODFLOW engine campaigns are the place to decide
 whether a derivation's world-reads become first-class `Data` or stay a
 documented exception.
 
-## Temporal transforms (the row modifiers)
+## The alignment - one record onto a reader's clock
 
-A row states the cadence and the units its artifact ARRIVES in, because
-both are part of what the artifact IS:
+A measured record reaches the runtime as a `Series`: instants on the run's own
+clock, values, and the unit they were measured in, frozen. Moving one onto the
+clock a reader reads it on is `inputs/series.py::align`, and it is the only
+place a record moves:
 
 ```python
-rain = (tool("...resolve_rain_forcing", ...)
-        .ladder(tool("fetch_gridmet_domain_mean"), tool("user_rate"))
-        .resample(to="1D", max_gap="native*3")
-        .normalize(units="mm/day"))
+found = align(record, onto=step_s, quantity=RATE, units="m3/s",
+              max_gap_s=21_600.0, opening_at=start_s)
 ```
 
-pandas does the arithmetic (`workflows/runtime/temporal.py`); the library is
-the doctrine around it, and three rules decide every call:
+Four rules decide every call:
 
-- THE QUANTITY CLASS PICKS THE METHOD. A RATE resamples conservatively
-  (mass-preserving: the interval mean going down, hold-the-interval going
-  up), a STATE interpolates linearly, a CATEGORICAL value moves by
-  nearest and by nothing else. The first two are overridable per
-  declaration; averaging class labels is refused.
-- INTERPOLATION IS DECLARED. A transform that ran leaves a provenance
-  stamp ("resampled 6h->1h linear", "converted in/day->mm/day"), so a
-  manufactured value is distinguishable from an observed one - and a
-  payload with NO `.resample()` is never realigned behind the consumer's
-  back. That is the wave-A clocks-align bug class, closed by declaration.
-- A HOLE WIDER THAN `max_gap` REFUSES, typed. Within-cadence
-  interpolation is refinement; bridging a hole in the record is
-  invention. Default bound: three native intervals (`"native*3"`), where
-  native is the record's own lower-median sample spacing.
+- THE QUANTITY CLASS PICKS THE METHOD, and the class rides on the row rather
+  than being stated by an author: `quantity_class(coverage.data_class)` reads it
+  off the source that answered, and a slot's role is the fallback where no row
+  states one. A RATE moves conservatively (the time-weighted interval mean, so
+  the total it reports is the total it keeps), a STATE interpolates between the
+  two rows bracketing the instant - the engine's own reading of its own table -
+  and a CATEGORICAL value moves to its nearest neighbour and nowhere else,
+  class labels having no average and no slope.
+- A CLOCK NO COARSER THAN THE RECORD ASKS FOR NOTHING THE RECORD DOES NOT
+  ALREADY ANSWER, so the record stands exactly as measured.
+- A HOLE WIDER THAN THE BOUND REFUSES, typed. Within-cadence interpolation is
+  refinement; bridging a hole in the record is invention. The bound defaults to
+  three native intervals, and a caller who means to admit a hole states one.
+- WHAT WAS DONE COMES BACK AS A STAMP ("1h->90min conservative", "converted
+  mm/h->mm/day", "native 1h kept"), so a manufactured value is distinguishable
+  from an observed one.
 
-Unit conversion rides an EXPLICIT table in `temporal.py`, not a units
-engine: a conversion nobody declared is one nobody can check, and a
+Unit conversion rides an EXPLICIT table in `workflows/runtime/temporal.py`, not
+a units engine: a conversion nobody declared is one nobody can check, and a
 cross-dimension request refuses rather than guessing.
 
-The declaration travels TO the producer (the same channel `.ladder()`
-uses), because the producer is the only party that knows the payload's
-quantity class and native cadence - the interpreter never reshapes a
-payload it cannot read (the no-double-middleware law). A single-value
-payload accepts `.normalize()` and a `.resample()` at its own cadence; a
-`.resample()` to any OTHER cadence refuses, since one number carries no
-time axis to redistribute.
-
-Surfaces: the provenance stamp rides the run's `SyntheticInput` row (the
-`event_time` pinning style), and the gap/shape/units refusals are typed.
-The FORM BADGE is not wired: the form card is a param sheet, and a `Data`
-row on it needs a `ParamSheet` contract plus a plugin change.
+Four callers, and no fifth: the Atmosphere ingestion putting a station's report
+on the run's clock, the observation coercion reading a gauge in the unit its
+slot reads, the model-vs-observation pairing reading the model AT the moment the
+gauge reported, and the liquid-boundaries author writing a window at the
+engine's own time step.
 
 ## The doors (Param resolution order)
 
 1. SUPPLIED/USER - explicitly passed this invocation. NEVER ambient: no
-   case-store lookup, ever (NATE ruling - kills the stale-DEM
-   collision class at the root).
+   case-store lookup, ever - that is the stale-DEM collision class at
+   the root.
 2. QUESTION - agent-filled from the ask (the user's words beat data).
 3. FETCHED/DERIVED - real data or derivation seams; ladders apply.
 4. SCENARIO - labeled default with declared bounds, surfaced at the gate.
@@ -323,30 +298,6 @@ rasters) is not - fetch-fresh for the domain - except the explicit
 survey-grade user_supplied ladder rung. EVERY byo input is
 coverage-validated against the domain at resolution (typed refusal on
 mismatch).
-
-## Rulings in force (NATE, 2026-08-21/23)
-
-- GATE WAITS - HYBRID: v1 waits in-turn with TTL (timeout = typed
-  refusal naming the unmet gate); the step ledger is resumable-shaped
-  from day one.
-- IMMUTABLE RECIPES: the agent fills params and answers gates, never
-  alters the plan - structurally enforced (it only supplies `p`).
-- FORM EDITS: every row editable; editing a derived value warns via
-  its source badge and stamps basis=user. No locks.
-- FAILURE/RERUN: RESUME FROM THE FAILED STEP - the ledger replays
-  completed steps from cached artifacts and re-executes from the
-  failure. Restart-clean is a flag, not the default.
-- MIGRATION ACCEPTANCE: (a) every incident-hardening behavior in the
-  old composer inventoried and consciously re-homed (bound, tool
-  check, or documented deletion); (b) reference run old-vs-new, same
-  question -> same physical answer within tolerance, QGIS-true renders
-  side by side.
-- NET-LOC LAW: rolling net LOC per landing; an engine family finishes
-  NET-NEGATIVE (TELEMAC baseline: 12,139 lines / 8 templates).
-- PURITY RULE (charter-grade): zero demo constants, zero baked decks
-  in tool/workflow code; demos live in banner-labeled demo scripts.
-  Mechanism-compare templates: per-engine fork at migration
-  (deck-as-input vs demoted to demo script).
 
 ## Gates
 
@@ -439,7 +390,7 @@ plan stepped line by line, or the same over MCP). The plan validator
 (Ref integrity, modifier legality, gate placement) runs before any
 execution. Offline pytest remains for CI.
 
-THREE PATHS, and the split is itself diagnostic (NATE, 2026-08-24):
+THREE PATHS, and the split is itself diagnostic:
 
 - **A - the all-params-upfront `!run`.** Every unfilled param supplied
   on the call, so the gates are SATISFIED rather than skipped: each row
@@ -448,93 +399,59 @@ THREE PATHS, and the split is itself diagnostic (NATE, 2026-08-24):
   VALUES live in the declaration - a demo script IS a saved,
   banner-labeled path-A invocation, never a constant in workflow code.
 - **B - the gate-by-gate walkthrough**, over the real socket
-  (`dev/testing`, wave 3): the tool, its args, the answers
+  (`dev/testing`): the tool, its args, the answers
   its gates get, and the assertions - `LiveRun(tool, args, answers=
   GateAnswers(draw=..., form_edits=..., require_draw=True))`. The full
-  product-path audit, run at wave acceptance. Three rules make it
+  product-path audit, run when a landing is accepted. Three rules make it
   evidence rather than a script: a declared answer is also an
   EXPECTATION (a card that never fired is a failure, not a silent
   pass); the assertions read the run's OWN persisted products off its
   prefix rather than recomputing the answer; and the harness is product
   code beside the server, because drivers are.
-- **C - NATE in QGIS.** Plugin-UI coverage only; A and B own the logic.
+- **C - the dock itself.** Plugin-UI coverage only; A and B own the logic.
 
 A-green with B-red isolates a fault to the interaction machinery.
 
-## Migration order
+## The workflow skeleton (Template Method)
 
-1. Library v1: Param/Data/plan value types, the interpreter with
-   ledger + resume, plan validator, form + draw cards (plugin), the
-   Domain environment.
-2. do_sag migration (314 lines - fast ergonomic feedback).
-3. dye_release migration (the full-contact proof; R3 acceptance;
-   net-LOC meter on).
-4. GENERALIZATION CHECKPOINT: one SWMM and one MODFLOW template
-   before any mass conversion. DONE (wave 4) - PASSED.
-5. SWMM + MODFLOW engine-complete campaigns (purity + meshing + byo
-   mesh adoption; row-19 river_dem_uri wiring lands here), TELEMAC
-   family completion, HEC-RAS tail (skippable). Two items queued out
-   of the checkpoint: the SWMM Green-Ampt trio derived from the same
-   texture fit as the aquifer column (a physics change, NATE's), and
-   dye_release's carrier discharge adopting the DERIVED door, which
-   closes wave 3's delta 1 with no library change.
-   SWMM waves, per wave 5's tranche plan: **A - the standalone solve
-   templates (LANDED)**; B - the published-deck trio, where a fetched
-   deck becomes the family's first `Data` (authored, therefore
-   `.supplied()`-able); C - the mechanism-comparison five, where the purity
-   fork gets its per-engine answer over the SHARED deck-authoring core,
-   all five at once; D - the AOI giants (`urban_flood`,
-   `network_import`, `dual_drainage`), where the `Data` producers, the
-   byo-mesh adoption and the declared render steps land and where the
-   family's net-LOC return is realised.
+The base class lives at `workflows/runtime/workflow.py`. An ENGINE's own class -
+`TelemacWorkflow` and the door value beside it - is what turns a template's
+declarations into the plan a run executes, so the plan is assembled once, at
+registration, from what the template states and from nothing else.
 
-## Deliberately not in v1
+The mesh ask stands OUTSIDE any one engine's facade: the op router validates
+every op against the chosen mesher's own namespaces and the author reads the one
+agnostic size word off it, because one mesher's build feeds several engines.
 
-- Full pause/walk-away/resume persistence (the ledger enables it).
-- Streaming emission over MCP; chart rendering beyond specs.
-- The mechanism-template purity fork (per-engine call at migration).
-- Calibration capability (separate design; consumes the form
-  snapshot + basis machinery this campaign builds).
+### The stages are the workflow's
 
-## The Workflow Skeleton (Template Method) - BUILT ON A COHORT, FOR NATE REDLINE
+A template declares WHAT its question is about; every stage that answers it is
+built by the workflow class off those declarations, and a template names no
+runner. The class reads:
 
-Agreed in the 2026-08-24 architecture discussion (rulings recorded in
-docs/IDEAS.md, 2026-08-24/25 entries); this section is the contract the
-family campaign builds. Status: BUILT and hardened on the two-template cohort
-(`telemac_do_sag` + `telemac_dye_release`, the workflow skeleton) - PROPOSED for the FLEET
-until NATE redlines the cohort result. What the cohort taught, recorded here so
-the contract and the code do not drift:
+- THE SLOT ROLES on the DATA rows - the domain, the bed, the runs, the level,
+  the discharge - and builds the mesh, the open-channel inflow where a discharge
+  carries one, and the settle the water stands on;
+- THE PLACEMENTS a declaration names. A `Placed` reads as the `Ref` it is and
+  carries what settling a point takes: the point the user gave, the fraction
+  along the domain's own centerline where none was, the label its marker is
+  published under. Whoever READS a placement states it - a source composite its
+  own discharge point, a weather record its station, a chart's anchor its
+  monitoring point - and the class settles each onto a node of the accepted
+  mesh;
+- THE MEASUREMENTS a composite asks for. A `Measured` reads as the `Ref` it is
+  and says which measurement it wants; the mesh, the line, the domain and the
+  settled run are handed over by the class, and only what the question alone can
+  state rides on the value. A dredger asks for its areas and its reference
+  surface, an outlet for its rating curve, an incident wave for what the
+  accepted harbour mesh measures - and that last one IS the settle, because a
+  harbour is settled by the wave that enters it rather than by a level;
+- THE LEVERS a row reads. A row asking a dated source for a calendar day gets
+  one, read off the `event_time` lever; a run that reads no dated source never
+  pays for it.
 
-* the base class lives at `workflows/runtime/workflow.py`; the plan-value
-  constructor that used to be called `Workflow` is DELETED and `plan(p, d, ops)`
-  returns the step sequence, which the skeleton names and engines;
-* slots are unpacked by the facade at PLAN-CONSTRUCTION time, so `Step.kwargs`
-  stays the plain mapping the interpreter already binds, and the declaration is
-  checked against the deck writer's real signature there and then - in BOTH
-  directions: an unknown member is refused, and so is a required author field no
-  slot covers (the second is the expensive one, because without it the plan
-  builds and the failure lands after the fetches);
-* a step carries the `stage` its STEP-FAMILY CONSTRUCTOR stamps (`Geocode.reach`,
-  `Assemble.reach`, `Solve.telemac`, `Products.*` each name their own), so
-  `plan.describe()` reads as the universal sequence. The facade ASSEMBLES the
-  sequence; it does not label it. The ORDER is not enforced yet, because the mesh
-  gate that sits mid-sequence does not exist and both cohort templates gate at
-  the front;
-* the mesh is no longer a facade operation at all. A template declares
-  `MESH = tool.build_mesh(...)` beside DATA and PARAMS - three mesher-agnostic
-  params plus the ordered `ops` program that produces the mesh, each op named
-  verbatim after the library function or the shared primitive it calls - the
-  router validates every op against the chosen mesher's own namespaces, and
-  `author` reads the one agnostic size word off it. One mesher's build feeds several engines, so the ask stands
-  outside any one engine's facade; the corridor mesher still runs inside the
-  TELEMAC deck writer and the worker, and the deck ask is unchanged by the move;
-* the placement rule settled where the corridor fields live twice. Wave 2b moved
-  `extent_km` / `width_m` / `boundary_source` off the universal `MeshPolicy` onto
-  a facade-owned `CorridorPolicy`; the mesh wave moved them once more, onto the
-  `corridor_tin` mesher that actually reads them, and both policy classes went
-  with the move. `shared/aoi.location_or_bbox` lost its `code_prefix="TELEMAC"`
-  default in the same spirit: a shared file that defaults to one engine is a
-  placement leak wearing a convenience's clothes.
+The template-grammar lint refuses a module path inside a recipe file, so a
+template cannot quietly take a stage back.
 
 ### The placement rule
 
@@ -571,12 +488,10 @@ Two slot kinds, distinguished per slot:
 - **hooks** - SILENT defaults: charts and validation checks. Unfilled =
   nothing happens; no engine subtype ever restates them. A sensor/context-
   LAYER hook was drafted here and deliberately NOT built (removed in
-  `efcca38b`): the steps that fetch inputs already emit through the one
-  emission seam, so a skeleton-level hook would be a SECOND input-emission
-  site - exactly the double emission the single-seam guard exists
-  to catch. It belongs to the emission-unification wave, where the seam is
-  the single home; a test pins that the skeleton emits no input layer of
-  its own.
+  the steps that fetch inputs already emit through the one emission seam, so a
+  skeleton-level hook would be a SECOND input-emission site - exactly the double
+  emission the single-seam guard exists to catch. A test pins that the skeleton
+  emits no input layer of its own.
 - **abstract slots** - must-fill: the physics and the four operations the
   engine facade realizes. The library refuses to register a template that
   leaves one empty.
@@ -675,9 +590,9 @@ There is no Builder DSL (rejected twice); optional plain helpers only.
 
 ### The registration factory
 
-The ~70-line `_normalize` / `_with_notes` / `_physical_answer` +
-try/except tool-body tails repeated in do_sag.py and dye_release.py are
-absorbed into library-generated registration. The LANDED signature:
+Every template registers through one factory, which synthesizes the
+model-facing signature from the declared params so the schema and the run read
+the same declaration:
 
     register_workflow(facade, metadata, PARAMS, plan,
                       data=(...), answer=(...), provenance=(...),
@@ -689,8 +604,8 @@ must-fill holes before anything is registered. Template file end state:
 PARAMS + DATA + plan + ANSWER + the chart. The old tool bodies are
 deleted, not wrapped.
 
-CONSTANT-DOOR WIRE ENFORCEMENT (NATE ruling, landed with the family
-wave): a CONSTANT-door param is NOT on the model-facing wire. The factory
+CONSTANT-DOOR WIRE ENFORCEMENT: a CONSTANT-door param is NOT on the
+model-facing wire. The factory
 computes the wire set ONCE (`_wire_params`) and both the synthesized
 signature and the rendered docstring read it, so the schema and the prose
 cannot drift. The door stops being documentation and becomes a BINDING
@@ -707,27 +622,6 @@ with `basis=user`. That is what keeps the Tier-A `!run` all-params
 invocation working, and a canary that has to pin a 600 s window instead of
 three hours is exactly the case that needs it. The exclusion is about who
 the SCHEMA invites, and it invites the user, never the model.
-
-### Acceptance criterion (falsifiable)
-
-The skeleton ADR must enumerate the workflow-only change list: every
-meaning-level edit - values, bounds, doors, composition, gates, charts,
-answer - achievable in the template file with ZERO other touches. A
-meaning-level change that turns out to require touching steps/ is a
-defect BY DEFINITION. Mechanism changes touch exactly one runner. The
-skeleton wave demonstrates at least two workflow-only changes live.
-
-### The demolition clause
-
-This is a GENERALIZATION refactor: absorbed functionality is DELETED
-outright - no backward compatibility, no dual paths, no deprecation
-shims, no transition aliases. The composite dies; pass-through
-signatures are deleted; old tool bodies are replaced by the factory and
-removed; dotted-string chart builders become function refs with no
-string fallback. DISTINCTION: interfaces and wiring owe nothing to the
-past - PHYSICS ANSWERS still owe parity (R3 stands: same question ->
-same answer; "no back compat" is about API shape, never about results
-drifting). Every removal gets a DELETION_LEDGER row.
 
 ### Rerun-with-overrides - the recalibration interface
 
@@ -848,20 +742,6 @@ same quantity agree within a stated tolerance, and the resolved range CONTAINS t
 headline - otherwise the caption states the gap. A number in prose that the
 picture cannot show is the dishonest case this pins.
 
-### Emission unification (publish_layer dies)
-
-Emission becomes automatic on ALL three paths: fetchers (already),
-declarative workflows (the skeleton's publish stage), and
-derive-primitive rasters (NEW - hillshade/NDVI/slope and playground
-outputs auto-emit, intermediates included: they are useful input
-checks, and the user hides what they don't want). The mechanism -
-the style resolution (`resolve_layer_style`), overview enforcement,
-layer registration - moves OUT of the publish_layer tool file into
-`render/` as its single home. The registered `publish_layer` tool is
-then DELETED (DELETION_LEDGER entry QUEUED 2026-08-24; condition: a
-live case shows a derive raster on the map with zero publish call,
-plus flood canary green).
-
 ### Mesh
 
 Mesh is SUPPLIED-optional `Data`: AUTHORED (user-supplied - e.g. the 2dm
@@ -882,27 +762,3 @@ generation strategies and writers evolve behind it. The TELEMAC private
 corridor mesher folds into the shared front as a generation strategy;
 the private ladder dies (ledger row).
 
-### Layout map and campaign sequencing
-
-Destinations (extends the Migration order section above; where they
-conflict, this table governs):
-
-| today | destiny |
-|---|---|
-| `data/fetchers/` | `tools/fetchers/` (pure rename - the substrate) |
-| `data/processing/` | `tools/derive/` + misdirection audit (workflow verbs -> `workflows/shared/`; dead web-era code -> delete) |
-| `data/search/` | `tools/search/` |
-| `data/publish_layer/` | `tools/publish_layer/` interim; dissolved by emission unification |
-| `data/simulation/` engine shims | STAY PUT; die engine-by-engine as the factory absorbs them (moving a thing scheduled to die is double work) |
-| `data/simulation/solver/` | `workflows/solver/` |
-| `data/simulation/diagnostics/`, `_setter_envelope.py` | `workflows/solver/diagnostics/` (server runtime imports it - registered tool read_run_diagnostics; scripts/ routing was wrong); envelope helper -> `workflows/lib/` |
-| `data/meta/`, `data/display/` | `tools/meta/` dissolved at the META + SEARCH CLEANUP WAVE: `spatial_input_tool` -> `gates/` beside the draw gate it serves, `compose_case_report` -> the attic, `list_run_frames` dissolved (the run record's `outputs` field already carries every frame); `display/` was an interim home and its two tools have since gone their own ways |
-| `declarative/` | `workflows/lib/` |
-| per-template `steps.py` | dissolves during skeleton migration |
-
-Sequence: (1) the mechanical move wave - git mv + import rewrites, zero
-behavior change, offline suite + flood canary green as the gate, so the
-skeleton is born at its permanent address; (2) skeleton +
-`TelemacWorkflow` on the new homes; (3) engine migration and shim
-deaths, one ledger row each; (4) `rmdir data/`. Milestone, falsifiable:
-**the campaign is done when `data/` does not exist.**
