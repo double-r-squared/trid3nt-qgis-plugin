@@ -18,7 +18,7 @@ from trid3nt_server.workflows.runtime.plan import declared_reads
 from .module import Output, Slot, SlotRefused
 
 __all__ = ["Filled", "Origin", "Provenance", "Sheet", "SheetIncomplete", "draw",
-           "fill", "run"]
+           "fill", "fill_coupled", "run"]
 
 
 class Origin(str, Enum):
@@ -245,6 +245,35 @@ def fill(source: type | Sheet, *, template: str = "",
                               provenance=provenance)
     return Sheet(body=body, filled=MappingProxyType(filled),
                  files=MappingProxyType(files))
+
+
+def fill_coupled(sheet: Sheet, stated: Mapping[str, Mapping[str, Any]]) -> Sheet:
+    """Set slots on the run's COUPLED bodies -> the sheet that results.
+
+    Keyed by module, then by identifier. The value is checked against that
+    module's own dictionary, so a wrong one refuses here rather than in the
+    Fortran, and the body records which identifiers the run stated so the card
+    names the user rather than the deck."""
+    from . import wrapper_for
+
+    files = dict(sheet.files)
+    for module, slots in stated.items():
+        basename = next(
+            (name for name, content in files.items()
+             if isinstance(content, Mapping) and "slots" in content
+             and content.get("module") == module), None)
+        if basename is None:
+            raise SlotRefused(
+                f"this run couples no {module} body, so there is no deck for "
+                f"{', '.join(sorted(slots))} to be written into.")
+        wrapper = wrapper_for(module)
+        body = dict(files[basename])
+        body["slots"] = {**body["slots"],
+                         **{name: wrapper.slot(name).check(value)
+                            for name, value in slots.items()}}
+        body["stated"] = sorted(set(body.get("stated", ())) | set(slots))
+        files[basename] = body
+    return replace(sheet, files=MappingProxyType(files))
 
 
 async def draw(source: type | Sheet, name: str, *, geometry: str = "point",

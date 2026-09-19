@@ -32,7 +32,7 @@ from trid3nt_server.workflows.runtime.plan import declared_reads
 from trid3nt_server.workflows.mesh.step import MeshStep
 from trid3nt_server.workflows.telemac.errors import TelemacError
 from trid3nt_server.workflows.telemac.modules import wrapper_for
-from trid3nt_server.workflows.telemac.modules.module import SlotRefused
+from trid3nt_server.workflows.telemac.modules.module import SlotRefused, identify_on
 from trid3nt_server.workflows.telemac.modules.outputs import (
     NOT_ASKED,
     NOT_READ,
@@ -46,12 +46,13 @@ from trid3nt_server.workflows.telemac.modules.outputs import (
 )
 from trid3nt_server.workflows.telemac.modules.sheet import Origin, Sheet
 from trid3nt_server.workflows.telemac.modules.sheet import fill as fill_slots
+from trid3nt_server.workflows.telemac.modules.sheet import fill_coupled
 from trid3nt_server.workflows.telemac.modules.sheet import run as run_sheet_
 
 logger = logging.getLogger("trid3nt_server.workflows.telemac.workflow")
 
 __all__ = ["Door", "TelemacWorkflow", "card_rows", "fill_sheet", "publish_outputs",
-           "run_sheet"]
+           "run_bodies", "run_sheet", "stated"]
 
 _TELEMAC = "trid3nt_server.workflows.telemac"
 
@@ -566,6 +567,19 @@ def _record(solved: Solved, *, name: str,
         reference_time=solved.run.get("started_at"), answer=dict(answer))
 
 
+def run_bodies(steering: type) -> list[type]:
+    """This run's bodies in DECK ORDER: the carrier, then each module its own
+    coupling statement names.
+
+    Read off the declaration, so the names a floor may qualify are known before
+    any fill has run."""
+    from trid3nt_server.workflows.telemac.modules import wrapper_for
+
+    coupled = steering.ASSERTED.get("coupling") or ()
+    return [steering] + [wrapper_for(body["module"]) for body in coupled
+                         if isinstance(body, Mapping) and body.get("module")]
+
+
 async def fill_sheet(*, steering: type, produced: Mapping[str, Any],
                      params: Mapping[str, Any], slots: Mapping[str, Any],
                      workflow: str, title: str, keywords: Mapping[str, Any],
@@ -585,13 +599,23 @@ async def fill_sheet(*, steering: type, produced: Mapping[str, Any],
             f"keywords takes a mapping of the engine's own keyword names to "
             f"values, e.g. {{\"LAW OF BOTTOM FRICTION\": 4}}; got "
             f"{type(keywords).__name__}.")
-    stated.update({steering.identify(name): value
-                   for name, value in (keywords or {}).items()})
+    bodies = run_bodies(steering)
+    coupled: dict[str, dict[str, Any]] = {}
+    for name, value in (keywords or {}).items():
+        body, identifier = identify_on(bodies, name)
+        if body is steering:
+            stated[identifier] = value
+        else:
+            coupled.setdefault(body.MODULE, {})[identifier] = value
     # A composite may read fetched data at the fill - a raster sampled at the
     # mesh's nodes - so the fill runs off the loop.
     sheet = await asyncio.to_thread(
         fill_slots, steering, template=workflow, produced=dict(produced),
         params=dict(params), **stated)
+    if coupled:
+        # After the fill, because the coupled decks are what the carrier's own
+        # coupling composite wrote into the sheet's files.
+        sheet = fill_coupled(sheet, coupled)
     revised = await _review(sheet, workflow=workflow, title=title,
                             input_mode=input_mode)
     if revised:
@@ -654,6 +678,7 @@ def card_rows(sheet: Sheet) -> list[ParamSheetRow]:
 
     The rest is the whole module, folded under advanced with its engine default."""
     rows = [_slot_row(name, row) for name, row in sheet.filled.items()]
+    rows += _coupled_rows(sheet)
     rows += _written_rows(sheet)
     rows += [_open_row(slot) for slot in sheet.required()]
     # The advanced fold reads down the dictionary's own RUBRIQUES, and inside one
@@ -675,6 +700,42 @@ def _decks(sheet: Sheet) -> list[tuple[Any, list[str]]]:
 
     return ([(sheet.body, [row.name for row in sheet.tracers])]
             + [(wrapper_for(body["module"]), []) for body in sheet.coupled])
+
+
+def _coupled_rows(sheet: Sheet) -> list[ParamSheetRow]:
+    """What each COUPLED deck of this run states, one group per deck in deck order.
+
+    The value is read against that module's own dictionary, so the row carries
+    the unit and the bounds the coupled keyword is taken in, and the group names
+    the body - two modules may spell one keyword and mean different numbers.
+    Not editable: the review's own filter answers for the carrier's sheet."""
+    from trid3nt_server.workflows.telemac.modules import wrapper_for
+
+    rows = []
+    for body in sheet.coupled:
+        module = body["module"]
+        wrapper = wrapper_for(module)
+        user = set(body.get("stated", ()))
+        for identifier, value in body["slots"].items():
+            # KEYWORDS ONLY: a coupled body holds its composites unexpanded
+            # until the serializer fills it, and a composite has neither the
+            # unit nor the range a card row is rendered with.
+            slot = wrapper.MODULE_INPUT.get(identifier)
+            if slot is None or value is None:
+                continue
+            rows.append(ParamSheetRow(
+                name=f"{module}.{identifier}",
+                value=value if isinstance(value, (int, float, str, bool, list))
+                else str(value),
+                desc=slot.desc[:512],
+                door="user" if identifier in user else "scenario",
+                basis="user" if identifier in user else "derived",
+                units=slot.unit or None, bounds=_editor_bounds(slot),
+                editable=False, group=f"{module}: {_group(slot)}",
+                source_badge=(f"stated on this run as {module}: {slot.keyword}"
+                              if identifier in user
+                              else f"the {module} deck this run couples")))
+    return rows
 
 
 def _written_rows(sheet: Sheet) -> list[ParamSheetRow]:

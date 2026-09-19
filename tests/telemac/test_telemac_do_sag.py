@@ -493,3 +493,56 @@ def test_the_reference_is_drawn_at_the_kinetics_the_deck_states():
         _profile(xs, exact, velocity=0.4), _load(xs, [20.0] + [0.0] * 5),
         _PARAMS)
     assert lines[-1].values == pytest.approx(exact, abs=1e-9)
+
+
+def test_a_coupled_keyword_is_stated_by_its_own_body_name():
+    """A WAQTEL constant has no user surface through the carrier's dictionary, so
+    the floor names the body it belongs to and the value lands on that deck."""
+    sheet = _filled(keywords={"waqtel: K2 REAERATION COEFFICIENT": 6.0})
+    o2 = sheet.files["t2d_river.waqtel"]["slots"]
+    assert o2["K2_REAERATION_COEFFICIENT"] == pytest.approx(6.0)
+    assert dict(sheet.resolved()).get("K2 REAERATION COEFFICIENT") is None
+
+
+def test_a_bare_coupled_keyword_only_one_body_spells_resolves_there():
+    """Nothing on TELEMAC-2D spells the reaeration coefficient, so the bare name
+    is unambiguous and reaches WAQTEL's deck."""
+    sheet = _filled(keywords={"K2 REAERATION COEFFICIENT": 6.0})
+    assert sheet.files["t2d_river.waqtel"]["slots"][
+        "K2_REAERATION_COEFFICIENT"] == pytest.approx(6.0)
+
+
+def test_a_name_two_bodies_spell_refuses_naming_both_qualified_spellings():
+    """MASS-BALANCE is a keyword of the carrier AND of the coupled deck, and the
+    two are read apart, so a bare name is not an answer."""
+    from trid3nt_server.workflows.telemac.modules.module import SlotRefused
+
+    with pytest.raises(SlotRefused) as caught:
+        _filled(keywords={"MASS-BALANCE": True})
+    said = str(caught.value)
+    assert "telemac2d: MASS-BALANCE" in said
+    assert "waqtel: MASS-BALANCE" in said
+
+
+def test_a_value_the_coupled_dictionary_refuses_refuses_at_the_fill():
+    """The coupled slot is checked against WAQTEL's own dictionary, so a wrong
+    type is named here rather than by the Fortran."""
+    from trid3nt_server.workflows.telemac.modules.module import SlotRefused
+
+    with pytest.raises(SlotRefused) as caught:
+        _filled(keywords={"waqtel: K2 REAERATION COEFFICIENT": "fast"})
+    assert "K2 REAERATION COEFFICIENT" in str(caught.value)
+
+
+def test_the_card_groups_the_coupled_deck_under_its_own_body():
+    """One group per coupled deck, every row showing its body, its unit and the
+    range it is taken inside."""
+    from trid3nt_server.workflows.telemac.workflow import card_rows
+
+    sheet = _filled(keywords={"waqtel: K2 REAERATION COEFFICIENT": 6.0})
+    rows = {row.name: row for row in card_rows(sheet)}
+    row = rows["waqtel.K2_REAERATION_COEFFICIENT"]
+    assert row.value == pytest.approx(6.0)
+    assert row.group.startswith("waqtel:")
+    assert row.basis == "user"
+    assert rows["waqtel.WATER_SALINITY"].basis == "derived"

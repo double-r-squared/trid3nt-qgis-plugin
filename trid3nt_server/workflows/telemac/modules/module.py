@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 from types import FunctionType, MappingProxyType
-from typing import Any, Callable, Mapping
+from typing import Any, Callable, Mapping, Sequence
 
 from trid3nt_server.workflows.runtime import DeclarativeError, ParamRef, Ref
 
@@ -23,6 +23,7 @@ __all__ = [
     "Output",
     "Slot",
     "SlotRefused",
+    "identify_on",
     "load_module_input",
     "module_input_dir",
 ]
@@ -454,6 +455,59 @@ class Module(metaclass=_Body):
         raise SlotRefused(
             f"{cls.MODULE} has no keyword {wanted!r}."
             + (f" Did you mean {', '.join(repr(c) for c in close)}?" if close else ""))
+
+
+#: How a floor name NAMES THE BODY it is resolved against: the module's own
+#: name, then the keyword. Split on the FIRST separator, because a keyword may
+#: carry one and a module name may not.
+_QUALIFIER = ":"
+
+
+def identify_on(bodies: Sequence[type], name: str) -> tuple[type, str]:
+    """The ``(body, identifier)`` a name is written under, across a run's bodies.
+
+    A qualified ``"waqtel: K2 REAERATION COEFFICIENT"`` resolves against that
+    body alone. A bare name resolves where exactly ONE body spells it; two
+    refuses, naming both qualified spellings, because the carrier and its
+    coupled deck read their same-named keywords apart."""
+    wanted = str(name).strip()
+    if _QUALIFIER in wanted:
+        module, _, keyword = wanted.partition(_QUALIFIER)
+        module = module.strip().lower()
+        body = next((b for b in bodies if b.MODULE == module), None)
+        if body is None:
+            raise SlotRefused(
+                f"{module!r} names no body of this run; it runs "
+                f"{', '.join(b.MODULE for b in bodies)}.")
+        return body, body.identify(keyword)
+    spelled = [body for body in bodies if _spells(body, wanted)]
+    if len(spelled) > 1:
+        raise SlotRefused(
+            f"{wanted!r} is a keyword of "
+            + " and of ".join(body.MODULE for body in spelled)
+            + ", and the two are read apart; name the body it belongs to - "
+            + " or ".join(f"{body.MODULE}{_QUALIFIER} {wanted}"
+                          for body in spelled) + ".")
+    if not spelled:
+        # Resolved against the HOST so the refusal names the nearest keyword it
+        # spells, then says what else this run could have been reaching for.
+        try:
+            return bodies[0], bodies[0].identify(wanted)
+        except SlotRefused as refused:
+            raise SlotRefused(
+                f"{refused} This run also couples "
+                f"{', '.join(b.MODULE for b in bodies[1:])}."
+                if len(bodies) > 1 else str(refused)) from refused
+    return spelled[0], spelled[0].identify(wanted)
+
+
+def _spells(body: type, name: str) -> bool:
+    """Does this body have a keyword, an identifier or a composite by this name?"""
+    try:
+        body.identify(name)
+    except SlotRefused:
+        return False
+    return True
 
 
 #: How the dictionary spells a NUMBERED token: the index is written ``i``, so
