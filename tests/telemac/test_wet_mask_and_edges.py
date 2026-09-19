@@ -31,7 +31,8 @@ def _table(tracers: int = 1) -> list[dict[str, Any]]:
     sheet = fill(T2D, NUMBER_OF_TRACERS=tracers,
                  NAMES_OF_TRACERS=["TEMPERATURE     DEG"][:tracers])
     return [{"token": token, "module": module, "style": row.style,
-             "varies": row.varies, "has_edge": bool(row.has_edge)}
+             "varies": row.varies, "has_edge": bool(row.has_edge),
+             "injected": bool(row.injected)}
             for token, module, row in sheet.published()]
 
 

@@ -349,6 +349,10 @@ class Measure:
     #: What the sheet states INSTEAD when the value above was never supplied and
     #: the read came back empty: the question was not asked, not missed.
     unasked: str | None = None
+    #: What the run states INSTEAD when the read came back WHOLE and the stat
+    #: this measure names has no value in it - an instant nothing reached. The
+    #: run measured the question and the answer is the absence.
+    absent: str | None = None
 
     def over(self, value: Any) -> "Measure":
         """This measure divided by ``value``: a number, a declared param, or
@@ -370,6 +374,14 @@ class Measure:
         """Whether this measure lies below ``value``, a number or a declared param."""
         return replace(self, op="below", against=value, held_to=_named(value))
 
+    def otherwise(self, sentence: str) -> "Measure":
+        """What this measure reads when the stat it names carries no value: the
+        series was read whole and the instant is not in it.
+
+        An instant nothing reached is not a gap in the delivery, so the sentence
+        rides the answer and the delivery PASSES on it."""
+        return replace(self, absent=str(sentence))
+
     def needs(self, value: Any, *, without: str) -> "Measure":
         """Asked only where ``value`` was supplied; ``without`` says what the run
         is instead, and a delivery PASSES on that sentence rather than refusing.
@@ -380,6 +392,8 @@ class Measure:
 
     def answer(self, measured: Any, against: Any) -> Any:
         """The answer this measure names, off what was read and what it is held to."""
+        if measured is None and self.absent:
+            return f"{NOT_ASKED}{self.absent}"
         if measured is None or self.op is None:
             return measured
         if against is None:
@@ -584,9 +598,16 @@ class Solved:
     def has_edge(self, token: str) -> bool:
         """Does this token's row declare a visible EDGE? -> nothing more.
 
-        Declared on the module's own table: a quantity injected into the domain
-        has one, a variable the water already carries does not."""
+        Declared on the module's own table: a quantity concentrated somewhere in
+        the domain has one, a variable the water already carries does not."""
         return bool(self.output_row(token).get("has_edge"))
+
+    def injected(self, token: str) -> bool:
+        """Did the DECK put this token's quantity into the domain? -> nothing more.
+
+        What the deck put in and the run lost is a broken run; a variable the
+        engine grows from the physics is honestly zero where nothing happened."""
+        return bool(self.output_row(token).get("injected"))
 
     @cached_property
     def host_result(self) -> dict[str, Any]:
@@ -786,7 +807,7 @@ def _per_frame(values: Any, wet: Any) -> tuple[Any, Any, Any]:
 
 def _envelope(token: str, times: Any, values: Any, row: Any = None,
               has_edge: bool = False, wet: Any = None,
-              above: Any = None) -> dict[str, Any]:
+              above: Any = None, injected: bool = False) -> dict[str, Any]:
     """The measures a series over time carries: its peak and its trough with the
     instants they fall on, where it stands at the end, how far it swings between
     the two, how many frames it was read over, and - where a threshold was asked
@@ -819,11 +840,12 @@ def _envelope(token: str, times: Any, values: Any, row: Any = None,
     # statistic the legend's top reads: taking it off a record maximum a drying
     # node carries would mask the whole field the run produced.
     edge = _edge(has_edge, presets.declared_peak(_drawn(values, wet), row))
-    # THE HONESTY FLOOR is now about SHAPE, not magnitude: an edge relative to
-    # the row's own range is always under its peak, so what a run has to refuse
-    # is a field that is nothing everywhere - there is no region to draw and no
-    # reach to measure.
-    if has_edge and not peak > 0.0:
+    # THE HONESTY FLOOR is about SHAPE, not magnitude, and it is about what the
+    # DECK PUT IN: a quantity the deck injected and the run lost has no region
+    # to draw and no reach to measure, and the run is broken. A variable the
+    # engine grows where the physics makes it - an ice cover, a bed evolution -
+    # is zero because nothing happened, which is the answer rather than a gap.
+    if injected and not peak > 0.0:
         raise OutputEmpty(
             f"{token} is zero at every node this run held water on, so the run "
             "injected nothing there is a shape of.")
@@ -867,7 +889,8 @@ def read_field(primitive: Primitive, solved: Solved) -> Read:
     times = np.asarray(solved.result["times"], dtype="float64")
     row, edge = solved.style(primitive.variable), solved.has_edge(primitive.variable)
     wet = solved.mask_for(primitive.variable, values)
-    measures = _envelope(primitive.variable, times, values, row, edge, wet)
+    measures = _envelope(primitive.variable, times, values, row, edge, wet,
+                         injected=solved.injected(primitive.variable))
     if primitive.t == "every":
         floor = _floor(edge, values, row, wet)
         x, y = solved.xy
@@ -959,8 +982,10 @@ def read_series(primitive: Primitive, solved: Solved) -> Series:
         highs, _lows, _live = _per_frame(values, wet)
         return Series(name=name, units=units, times=times, values=highs,
                       at="the domain maximum",
-                      measures=_envelope(primitive.variable, times, values, row,
-                                         edge, wet, primitive.above))
+                      measures=_envelope(
+                          primitive.variable, times, values, row, edge, wet,
+                          primitive.above,
+                          injected=solved.injected(primitive.variable)))
     point = _point(primitive.at)
     node = solved.node_at(point)
     lon, lat = solved.lonlat
@@ -973,7 +998,8 @@ def read_series(primitive: Primitive, solved: Solved) -> Series:
                                      values[:, node:node + 1], row, edge,
                                      None if wet is None
                                      else np.asarray(wet)[:, node:node + 1],
-                                     primitive.above))
+                                     primitive.above,
+                                     injected=solved.injected(primitive.variable)))
 
 
 def _boundary_series(primitive: Primitive, solved: Solved) -> Series:
@@ -1028,7 +1054,8 @@ def read_max_over_time(primitive: Primitive, solved: Solved) -> Field:
     times = np.asarray(solved.result["times"], dtype="float64")
     row, edge = solved.style(primitive.variable), solved.has_edge(primitive.variable)
     wet = solved.mask_for(primitive.variable, values)
-    measures = _envelope(primitive.variable, times, values, row, edge, wet)
+    measures = _envelope(primitive.variable, times, values, row, edge, wet,
+                         injected=solved.injected(primitive.variable))
     # The envelope is over the instants each node HELD WATER: a node's peak taken
     # from the frames it was dry in is a reading of nothing.
     drawn = _drawn(values, wet)

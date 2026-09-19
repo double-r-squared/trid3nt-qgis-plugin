@@ -682,7 +682,8 @@ async def run_sheet(*, sheet: Sheet, settled: Mapping[str, Any],
             "module_output": [{"token": token, "module": module,
                                "name": row.name, "unit": row.unit,
                                "style": row.style, "varies": row.varies,
-                               "has_edge": bool(row.has_edge)}
+                               "has_edge": bool(row.has_edge),
+                               "injected": bool(row.injected)}
                               for token, module, row in sheet.published()],
             "tracer_names": dict(sheet.resolved()).get("NAMES OF TRACERS")}
 

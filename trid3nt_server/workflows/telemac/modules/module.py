@@ -222,17 +222,25 @@ class Output:
     whether it has a visible EDGE.
 
     A row that does not vary is painted and never animated. A row with an edge
-    is a quantity INJECTED into the domain, masked below a fraction of its own
-    magnitude so what is visible reads as the shape it has; a variable the water
-    already carries is everywhere and is drawn whole. ``None`` leaves it to the
-    table the row is read off: a tracer row has an edge, a written variable
-    does not."""
+    is masked below a fraction of its own magnitude so what is visible reads as
+    the shape it has; a variable the water already carries is everywhere and is
+    drawn whole. ``None`` leaves it to the table the row is read off: a tracer
+    row has an edge, a written variable does not. The edge is about DRAWING and
+    says nothing about whether the deck put the quantity there, which is the
+    row below."""
 
     name: str
     unit: str = ""
     style: Mapping[str, Any] | None = None
     varies: bool = True
     has_edge: bool | None = None
+    #: Did the DECK put this quantity into the domain - a tracer it declared, a
+    #: release, a stated initial value? Only such a row is refused when it is
+    #: nothing everywhere: what the deck put in and the run lost is a broken
+    #: run, while a variable the engine grows - an ice cover, a bed evolution -
+    #: is honestly zero where nothing happened. ``None`` leaves it to the table
+    #: the row is read off, the same way the edge is read.
+    injected: bool | None = None
     #: The keyword this row EXISTS UNDER, by identifier: the engine allocates
     #: the variable only with it true, and asking for a variable it did not
     #: allocate stops the solve rather than dropping the row. Empty on a row

@@ -109,13 +109,16 @@ class Sheet:
         rows = []
         for declared in dict(self.resolved()).get("NAMES OF TRACERS") or ():
             padded = str(declared).ljust(32)
-            # A TRACER is an injected quantity unless the module that put it
-            # there says otherwise, so a carrier's own row states the edge for
-            # the ones it declares and an appending module states its own below.
+            # A TRACER THE DECK NAMES is a quantity the deck put into the
+            # domain unless the module that put it there says otherwise, so a
+            # carrier's own row states the edge and the injection for the ones
+            # it declares and an appending module states its own below.
             rows.append(Output(name=padded[:16].strip(), unit=padded[16:].strip(),
                                style=row.style if row is not None else None,
                                has_edge=True if row is None or row.has_edge is None
-                               else row.has_edge))
+                               else row.has_edge,
+                               injected=True if row is None or row.injected is None
+                               else row.injected))
         for body in self.coupled:
             appends = wrapper_for(body["module"]).APPENDS
             for appended in (list(appends(body)) if appends is not None else []):
@@ -140,7 +143,10 @@ class Sheet:
                                else rows[held].style),
                         has_edge=(appended.has_edge
                                   if appended.has_edge is not None
-                                  else rows[held].has_edge))
+                                  else rows[held].has_edge),
+                        injected=(appended.injected
+                                  if appended.injected is not None
+                                  else rows[held].injected))
         return tuple(rows)
 
     def printouts(self) -> Mapping[str, str]:

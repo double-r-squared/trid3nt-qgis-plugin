@@ -59,7 +59,8 @@ def _table(body: Any = T2D, tracers: int = 1) -> list[dict[str, Any]]:
     sheet = fill(body, NUMBER_OF_TRACERS=tracers,
                  NAMES_OF_TRACERS=["DYE             MG/L"][:tracers])
     return [{"token": token, "module": module, "style": row.style,
-             "varies": row.varies, "has_edge": bool(row.has_edge)}
+             "varies": row.varies, "has_edge": bool(row.has_edge),
+             "injected": bool(row.injected)}
             for token, module, row in sheet.published()]
 
 
@@ -310,8 +311,9 @@ def test_a_field_at_an_instant_is_that_frame(solved):
 
 
 def test_a_tracer_that_is_zero_everywhere_refuses(monkeypatch, telemac_result):
-    """The honesty floor is about SHAPE: a field that is nothing at every wet
-    node has no region to draw and no reach to measure, and that refuses."""
+    """The honesty floor is about SHAPE and about what the DECK PUT IN: a tracer
+    the deck declared that is nothing at every wet node was injected and lost,
+    so there is no region to draw and no reach to measure, and that refuses."""
     telemac_result(varnames=["DYE"], x=[0.0, 1.0, 0.0], y=[0.0, 0.0, 1.0],
                    ikle=[[0, 1, 2]], times=[0.0, 1.0],
                    data={"DYE": [[0.0, 0.0, 0.0], [0.0, 0.0, 0.0]]})
@@ -322,6 +324,38 @@ def test_a_tracer_that_is_zero_everywhere_refuses(monkeypatch, telemac_result):
         T2D.READS["max_over_time"](
             max_over_time("T1"),
             _solved({"module": "telemac2d", "module_output": _table()}))
+
+
+def test_a_variable_the_engine_grows_reads_zero_rather_than_refusing(
+        monkeypatch, telemac_result):
+    """The other branch of the floor: a cover the engine grows where the physics
+    makes it is not something the deck put in, so a run that made none of it
+    answers zero. The water did not freeze, and that is the answer."""
+    telemac_result(varnames=["ICE COVER FRAC."], x=[0.0, 1.0, 0.0],
+                   y=[0.0, 0.0, 1.0], ikle=[[0, 1, 2]], times=[0.0, 1.0],
+                   data={"ICE COVER FRAC.": [[0.0] * 3, [0.0] * 3]})
+    monkeypatch.setattr(
+        "trid3nt_server.workflows.solver.solver.download_result",
+        lambda run_id, basename, error_code=None: "/tmp/does-not-matter.slf")
+    grown = _solved({"module": "telemac2d", "module_output": [
+        {"token": "DYNCOVC", "module": "telemac2d", "name": "ICE COVER FRAC.",
+         "unit": "", "style": {"kind": "mesh"}, "varies": True,
+         "has_edge": True, "injected": False}]})
+    read = T2D.READS["series"](series("DYNCOVC", above=0.1), grown)
+    assert read.measures["max"] == 0.0 and read.measures["last"] == 0.0
+    assert read.measures["t_above"] is None
+
+
+def test_a_stat_with_no_instant_answers_the_sentence_the_measure_states():
+    """A threshold nothing crossed has no instant, and the measure says what the
+    run is instead: a delivery PASSES on that sentence rather than a null."""
+    from trid3nt_server.workflows.telemac.modules.outputs import NOT_ASKED
+
+    measure = series("DYNCOVC", above=0.1).measure("t_above").otherwise(
+        "the cover did not freeze within the window")
+    assert measure.answer(None, None) == (
+        f"{NOT_ASKED}the cover did not freeze within the window")
+    assert measure.answer(3600.0, None) == 3600.0
 
 
 def test_a_trace_substance_is_drawn_against_its_own_range(monkeypatch,

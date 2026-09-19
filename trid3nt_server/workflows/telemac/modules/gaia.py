@@ -44,7 +44,7 @@ MODULE_OUTPUT: Mapping[str, Output] = MappingProxyType({
 #: suspension: one tracer per suspended class, which the carrier never counts.
 #: A suspended class is PUT into the water, so what it reaches has a visible
 #: edge and the water beyond it is not a faint wash of the same colour.
-_SUSPENDED = Output("NCOH SEDIMENT", "g/L", has_edge=True,
+_SUSPENDED = Output("NCOH SEDIMENT", "g/L", has_edge=True, injected=True,
                     style={"kind": "mesh", "ramp": "oranges", "units": "g/L",
                            "floor": 0})
 

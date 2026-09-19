@@ -295,10 +295,12 @@ CAPTIONS = {"DYNCOVC": "ice cover fraction", "DYNCOVT": "ice cover thickness"}
 #: how much of the surface the point was under when the window closed.
 ANSWER = {
     "freeze_time_s": series("DYNCOVC", at=Ref("station"), module="khione",
-                            above=ParamRef("cover_threshold")).measure("t_above"),
+                            above=ParamRef("cover_threshold")).measure("t_above")
+    .otherwise("the cover at the point did not freeze within the window"),
     "domain_freeze_time_s": series("DYNCOVC", module="khione",
                                    above=ParamRef("cover_threshold")
-                                   ).measure("t_above"),
+                                   ).measure("t_above")
+    .otherwise("no node in the domain froze within the window"),
     "peak_ice_thickness_m": series("DYNCOVT", module="khione").measure("max"),
     "final_cover_fraction": series("DYNCOVC", at=Ref("station"), module="khione"
                                    ).measure("last"),
