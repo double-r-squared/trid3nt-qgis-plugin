@@ -46,8 +46,8 @@ The values the template declares. `desc` is what the model reads when it fills o
 | field | the proving run's value |
 |---|---|
 | `freeze_time_s` | not asked: the cover at the point did not freeze within the window |
-| `domain_freeze_time_s` | not asked: no node in the domain froze within the window |
-| `peak_ice_thickness_m` | 0.0 |
+| `domain_freeze_time_s` | 5274.0 |
+| `peak_ice_thickness_m` | 0.0010725059546530247 |
 | `final_cover_fraction` | 0.0 |
 | `mesh_size_m` | 11.711 |
 
@@ -85,7 +85,6 @@ It publishes these layers onto the canvas:
 - Solid ice conc. over time (river_reach_domain_mesh)
 - Solid ice thick. over time (river_reach_domain_mesh)
 - Frazil thickness over time (river_reach_domain_mesh)
-- Under ice thick. over time (river_reach_domain_mesh)
 - Equiv. surface over time (river_reach_domain_mesh)
 - Top ice cover over time (river_reach_domain_mesh)
 - Bottom ice cover over time (river_reach_domain_mesh)
@@ -101,27 +100,27 @@ It publishes these layers onto the canvas:
 
 ## The proving run
 
-Run `01M2WN9JJQ217HB5DA9EM1PFSF`, 2026-09-19T11:05:58.354381+00:00, 269.3 s, at commit `b9b61d10dd7241679ed8a1d29cdb2ae1de50b5ae`.
+Run `01M2WVHQTT3CZG7FF4VFJY3P40`, 2026-09-19T12:55:26.067676+00:00, 253.691 s, at commit `9cb721bbb6045c7159b9a9ec899b82ef953c207c-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M2WN9JJQ217HB5DA9EM1PFSF)](telemac_ice_cover/telemac_ice_cover.png)
+![Every layer the run published, stacked and framed on the result (run 01M2WVHQTT3CZG7FF4VFJY3P40)](telemac_ice_cover/telemac_ice_cover.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M2WN9JJQ217HB5DA9EM1PFSF)*
+*Every layer the run published, stacked and framed on the result (run 01M2WVHQTT3CZG7FF4VFJY3P40)*
 
-![The solve, frame by frame (run 01M2WN9JJQ217HB5DA9EM1PFSF)](telemac_ice_cover/telemac_ice_cover_animation.gif)
+![The solve, frame by frame (run 01M2WVHQTT3CZG7FF4VFJY3P40)](telemac_ice_cover/telemac_ice_cover_animation.gif)
 
-*The solve, frame by frame (run 01M2WN9JJQ217HB5DA9EM1PFSF)*
+*The solve, frame by frame (run 01M2WVHQTT3CZG7FF4VFJY3P40)*
 
-![peak frame (run 01M2WN9JJQ217HB5DA9EM1PFSF)](telemac_ice_cover/telemac_ice_cover_peak_frame.png)
+![peak frame (run 01M2WVHQTT3CZG7FF4VFJY3P40)](telemac_ice_cover/telemac_ice_cover_peak_frame.png)
 
-*peak frame (run 01M2WN9JJQ217HB5DA9EM1PFSF)*
+*peak frame (run 01M2WVHQTT3CZG7FF4VFJY3P40)*
 
-![ice cover fraction - the chart the run persisted (run 01M2WN9JJQ217HB5DA9EM1PFSF)](telemac_ice_cover/telemac_ice_cover_chart_ice_cover_fraction.png)
+![ice cover fraction - the chart the run persisted (run 01M2WVHQTT3CZG7FF4VFJY3P40)](telemac_ice_cover/telemac_ice_cover_chart_ice_cover_fraction.png)
 
-*ice cover fraction - the chart the run persisted (run 01M2WN9JJQ217HB5DA9EM1PFSF)*
+*ice cover fraction - the chart the run persisted (run 01M2WVHQTT3CZG7FF4VFJY3P40)*
 
-![ice cover thickness - the chart the run persisted (run 01M2WN9JJQ217HB5DA9EM1PFSF)](telemac_ice_cover/telemac_ice_cover_chart_ice_cover_thickness.png)
+![ice cover thickness - the chart the run persisted (run 01M2WVHQTT3CZG7FF4VFJY3P40)](telemac_ice_cover/telemac_ice_cover_chart_ice_cover_thickness.png)
 
-*ice cover thickness - the chart the run persisted (run 01M2WN9JJQ217HB5DA9EM1PFSF)*
+*ice cover thickness - the chart the run persisted (run 01M2WVHQTT3CZG7FF4VFJY3P40)*
 
 ### The sheet it filled
 
@@ -130,7 +129,7 @@ Every slot the run resolved, with where the value came from. The engine's own de
 | param | value | units | basis | provenance |
 |---|---|---|---|---|
 | `seed` | {'lon': -122.6691667, 'lat': 45.5175, 'name': None} | - | user | supplied on this invocation |
-| `weather_start` | 2024-01-11 | - | user | supplied on this invocation |
+| `weather_start` | 2024-01-14 | - | user | supplied on this invocation |
 | `weather_end` | 2024-01-18 | - | user | supplied on this invocation |
 | `station` | {'lon': -122.669784, 'lat': 45.518485, 'name': None} | - | user | supplied on this invocation |
 | `cover_threshold` | 0.5 | - | user | supplied on this invocation |
@@ -151,12 +150,12 @@ await TOOL_REGISTRY['telemac_ice_cover'].fn(
     seed={'lon': -122.6691667, 'lat': 45.5175, 'name': None},
     station={'lon': -122.669784, 'lat': 45.518485, 'name': None},
     weather_end='2024-01-18',
-    weather_start='2024-01-11',
+    weather_start='2024-01-14',
     carrier=56.6,
     stage=2.776,
     keywords={'DURATION': 21600.0, 'khione: GRAPHIC PRINTOUT PERIOD': 300, 'telemac2d: GRAPHIC PRINTOUT PERIOD': 300},
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2WN9JJQ217HB5DA9EM1PFSF` and commit `b9b61d10dd7241679ed8a1d29cdb2ae1de50b5ae`. The full argument record is [`telemac_ice_cover/run.json`](telemac_ice_cover/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2WVHQTT3CZG7FF4VFJY3P40` and commit `9cb721bbb6045c7159b9a9ec899b82ef953c207c-dirty`. The full argument record is [`telemac_ice_cover/run.json`](telemac_ice_cover/run.json).
 
