@@ -91,6 +91,7 @@ payload_estimate:
   mb_per_sq_deg: 120.0
   floor_mb: 0.5
 caveats:
+- "model-callable, not matched: an imagery scene is not one of the classes a slot asks for, so it carries no coverage row"
 - Sentinel-2 Level-2A true-color RGB via the Microsoft Planetary Computer STAC
   (sentinel-2-l2a; B04/B03/B02 + SCL). The least-cloudy intersecting scene is chosen;
   cloud/shadow/nodata is masked via the SCL scene-classification band; a 3-band RGB COG

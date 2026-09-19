@@ -99,6 +99,7 @@ payload_estimate:
   mb_per_sq_deg: 40.0
   floor_mb: 0.25
 caveats:
+- "model-callable, not matched: a SAR scene is not one of the classes a slot asks for, so it carries no coverage row"
 - Sentinel-1 C-band SAR backscatter (dB) via the Microsoft Planetary Computer STAC
   (sentinel-1-rtc default / sentinel-1-grd fallback; vv / vh gamma0). Sees THROUGH clouds,
   smoke and darkness; the canonical keyless flood layer (calm water = specular = dark, low

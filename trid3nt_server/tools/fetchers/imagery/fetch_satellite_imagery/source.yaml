@@ -122,6 +122,7 @@ payload_estimate:
   mb_per_sq_deg: 2.0
 
 caveats:
+  - "model-callable, not matched: an imagery scene is not one of the classes a slot asks for, so it carries no coverage row"
   - The satellite, sector and product vocabularies are read from the server's own index at call time; an unserved name is refused with the list the server publishes, never silently substituted.
   - A sector is registered through the projection its pixels are linear in - the satellite's own geostationary projection from the index's published parameters, or a sub-window measured against that disk - and reprojected out of it onto the AOI; a sector neither reaches is refused rather than approximated.
   - The imagery is a RENDERED RGB picture, not radiances; anything computed from pixel values belongs on the raw archive instead.

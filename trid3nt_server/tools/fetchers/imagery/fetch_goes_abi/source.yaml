@@ -125,6 +125,7 @@ payload_estimate:
   mb_per_sq_deg: 2.0
 
 caveats:
+  - "model-callable, not matched: a satellite radiance scene is not one of the classes a slot asks for, so it carries no coverage row"
   - Raw ABI-L2-MCMIPC bands from the anonymous public noaa-goes S3 archive in physical units - reflectance factor for bands 1-6, kelvin for bands 7-16 - at the product's common 2 km grid; each band's number, wavelength and unit are in its band description.
   - The MCMIPC product covers the CONUS sector only, so an AOI outside the scanned sector of that bird raises a typed GOES_ABI_EMPTY error rather than an empty frame.
   - Nothing is computed from the radiances here; a composite or a detection is a derive over the returned layer.

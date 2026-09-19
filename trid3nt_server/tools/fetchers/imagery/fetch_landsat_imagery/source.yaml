@@ -187,6 +187,7 @@ payload_estimate:
   mb_per_sq_deg: 14.0
   floor_mb: 0.25
 caveats:
+- "model-callable, not matched: an imagery scene is not one of the classes a slot asks for, so it carries no coverage row"
 - Landsat Collection-2 Level-2 imagery via the Microsoft Planetary Computer STAC
   (landsat-c2-l2; red/green/blue/nir08/lwir11 + qa_pixel). The scene best COVERING the
   bbox (then least-cloudy) is chosen; cloud/shadow/fill is masked via the qa_pixel CFMask

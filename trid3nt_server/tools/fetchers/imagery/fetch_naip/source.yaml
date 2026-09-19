@@ -63,6 +63,7 @@ payload_estimate:
   mb_per_sq_deg: 250.0
   floor_mb: 1.0
 caveats:
+- "model-callable, not matched: an imagery scene is not one of the classes a slot asks for, so it carries no coverage row"
 - USDA NAIP high-resolution aerial imagery (RGB) via the Microsoft Planetary Computer STAC
   (naip; the `image` asset). Leaf-on, ~0.6-1 m, the canonical free US aerial basemap. Reads
   bands R/G/B straight to a 3-band uint8 COG (multiband passthrough, no rescale). US-only
