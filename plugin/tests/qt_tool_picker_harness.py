@@ -212,7 +212,7 @@ class FakeBridge:
     running = True
 
     def send_chat(self, text, show_thinking=False, model_id="",
-                  aoi_bbox=None, tool_choice_mode=""):
+                  aoi_bbox=None, tool_choice_mode="", drawn_geometry=None):
         chat_sends.append((text, tool_choice_mode))
 
 

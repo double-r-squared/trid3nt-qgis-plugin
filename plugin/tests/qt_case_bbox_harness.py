@@ -48,7 +48,7 @@ class RecBridge:
 
     def send_chat(
         self, text, show_thinking=False, model_id="", aoi_bbox=None,
-        tool_choice_mode="",
+        tool_choice_mode="", drawn_geometry=None,
     ) -> None:
         # record the STRUCTURED per-message AOI exactly as sent.
         # (grew the bridge surface with tool_choice_mode -- accepted
