@@ -148,7 +148,8 @@ def record_run_outputs(layers: Sequence[LayerURI]) -> None:
 
     journal_outputs([layer.model_dump(mode="json",
                                       include={"layer_id", "name", "layer_type",
-                                               "uri", "quantity", "units"})
+                                               "uri", "quantity", "tracer",
+                                               "units"})
                      for layer in layers])
 
 
