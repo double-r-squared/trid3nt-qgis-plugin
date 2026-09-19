@@ -61,6 +61,23 @@ payload_estimate:
   model: bbox_area
   mb_per_sq_deg: 4.0
   floor_mb: 0.2
+coverage:
+- data_class: exposure
+  kind: modelled
+  extent:
+    kind: surface
+    rings:
+      - [[-180.0, -60.0], [180.0, -60.0], [180.0, 84.0], [-180.0, 84.0]]
+    note: the JRC GHS-POP R2023A global grid, the same envelope its own tile
+      grid states
+  window:
+    series: false
+    latest: '2020-01-01'
+  resolution_m: 100.0
+  units:
+    persons_per_cell: persons
+  value_column: persons_per_cell
+
 caveats:
 - JRC GHS-POP R2023A epoch 2020, ~100 m EPSG:4326; modeled gridded residential population (persons/cell),
   not a live count. Global 10-deg ZIP tiles; whole-object per intersecting tile. bbox required

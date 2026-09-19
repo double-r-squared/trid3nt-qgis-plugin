@@ -55,6 +55,23 @@ payload_estimate:
   mb_per_sq_deg: 12.0
   floor_mb: 0.05
 
+coverage:
+- data_class: exposure
+  kind: modelled
+  extent:
+    kind: surface
+    rings:
+      - [[-180.0, -56.0], [180.0, -56.0], [180.0, 72.0], [-180.0, 72.0]]
+    note: Meta HRSL, global between about 56 S and 72 N; Antarctica and the far
+      Arctic are outside it
+  window:
+    series: false
+    latest: '2020-01-01'
+  resolution_m: 30.0
+  units:
+    persons_per_cell: persons
+  value_column: persons_per_cell
+
 caveats:
   - "global ~30 m (1 arcsec) Meta HRSL persons/cell (about -56 to +72 latitude; excludes Antarctica + far Arctic); an all-nodata window (open water / off coverage) -> HRSL_EMPTY (never a fabricated layer)"
   - "gridded population, NOT per-building occupancy; combine fetch_buildings footprints with HRSL for building-level counts"

@@ -53,6 +53,7 @@ payload_estimate:
   floor_mb: 0.05
   ceil_mb: 20.0
 caveats:
+- "model-callable, not matched: an administrative boundary is not one of the classes a slot asks for, so it carries no coverage row"
 - US Census TIGER/Line 2024 administrative polygons (state/county/place/zcta), clipped to bbox. The
   shapefile is read inside the remote ZIP by range request; place fans out per intersecting state FIPS.
   US + territories only. No feature in bbox -> ADMIN_BOUNDARY_EMPTY.

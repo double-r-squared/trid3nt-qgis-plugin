@@ -77,6 +77,9 @@ payload_estimate:
   floor_mb: 0.01
   kb_per_feature: 0.5
   features_per_sq_deg: 20000.0
+caveats:
+  - "model-callable, not matched: a field boundary is not one of the classes a slot asks for, so it carries no coverage row"
+
 docstring: |-
   Agricultural FIELD BOUNDARIES (Fields of The World / fiboa) for an AOI.
 

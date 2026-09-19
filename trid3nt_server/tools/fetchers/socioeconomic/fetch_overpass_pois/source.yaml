@@ -64,6 +64,7 @@ payload_estimate:
   kb_per_feature: 0.3
   floor_mb: 0.001
 caveats:
+- "model-callable, not matched: a point of interest is not one of the classes a slot asks for, so it carries no coverage row"
 - Generic OpenStreetMap key=value POIs (node/way/relation centroid) via the Overpass API (3-mirror fallback).
   Global, keyless. Zero matches -> a typed OVERPASS_POIS_NO_FEATURES error, never an empty-success layer.
 docstring: |-

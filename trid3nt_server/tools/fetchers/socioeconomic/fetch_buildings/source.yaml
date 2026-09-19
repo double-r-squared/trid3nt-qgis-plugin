@@ -55,6 +55,20 @@ payload_estimate:
   model: bbox_area
   mb_per_sq_deg: 30.0
   floor_mb: 0.01
+coverage:
+- data_class: exposure
+  kind: modelled
+  extent:
+    kind: surface
+    rings:
+      - [[-180.0, -90.0], [180.0, -90.0], [180.0, 90.0], [-180.0, 90.0]]
+    note: OpenStreetMap building footprints, global wherever the map has been
+      drawn; a bbox over unmapped ground answers with nothing
+  window:
+    series: false
+  units:
+    osm_id: identifier
+
 caveats:
 - OSM Overpass building footprints (ways + multipolygon relations) intersecting the bbox, kept whole (never
   clipped)

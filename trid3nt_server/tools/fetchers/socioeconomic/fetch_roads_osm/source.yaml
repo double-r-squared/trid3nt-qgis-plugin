@@ -59,6 +59,7 @@ payload_estimate:
   kb_per_feature: 1.0
   floor_mb: 0.01
 caveats:
+- "model-callable, not matched: a road network is not one of the classes a slot asks for, so it carries no coverage row"
 - OpenStreetMap highway ways via the Overpass API (3-mirror fallback), clipped to the exact bbox. Global,
   keyless. An area with no OSM roads returns a valid 0-feature layer, not an error.
 docstring: |-
