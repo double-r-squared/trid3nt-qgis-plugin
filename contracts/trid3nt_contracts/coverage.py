@@ -163,6 +163,27 @@ class Coverage(GraceModel):
     #: reads the column it needs and converts to the keyword's unit or refuses;
     #: an absent column here is a unit nobody stated, which also refuses.
     units: dict[str, str] = Field(default_factory=dict)
+    #: WHICH column carries what, in the record's own column names: the value a
+    #: reading is taken from, the window it reported over, and the elevation of
+    #: the zero that value is counted from. Named here because a slot that
+    #: states a need cannot name a column of a source it did not choose; every
+    #: name must be one the units above state a unit for.
+    value_column: str = ""
+    series_column: str = ""
+    above_column: str = ""
+
+    @model_validator(mode="after")
+    def _validate_columns(self) -> "Coverage":
+        """A named column is one this row states a unit for."""
+        for role, column in (("value_column", self.value_column),
+                             ("series_column", self.series_column),
+                             ("above_column", self.above_column)):
+            if column and column not in self.units:
+                raise ValueError(
+                    f"{role}={column!r} names a column this row states no unit "
+                    "for; a column read in no stated unit is a number nobody "
+                    "measured")
+        return self
 
 
 class SourceOption(GraceModel):

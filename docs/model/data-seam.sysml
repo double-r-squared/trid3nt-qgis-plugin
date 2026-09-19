@@ -849,7 +849,11 @@ package DataSeam {
         The UNIT is per value column, because one record carries more than one
         quantity: a gauge reports a discharge in cubic feet per second beside a
         stage in feet, and a slot that read either in the unit it wanted would
-        be reading a different river.
+        be reading a different river. A source that serves two classes carries
+        ONE ROW PER CLASS rather than a hybrid word, and each row names the
+        columns its value, its window and the zero it is counted from arrive
+        under - a slot that states a need cannot name a column of a source it
+        did not choose.
         */
     }
 
@@ -1211,11 +1215,11 @@ package DataSeam {
     satisfy requirement ASourceStatesWhatItCovers by gaugeDeclaration;
     satisfy requirement ASourceStatesWhatItCovers by lakeDeclaration;
     verify requirement ASourceStatesWhatItCovers by
-        "tests/fetchers/test_coverage_rows.py::test_each_row_declares_its_class";
+        "tests/fetchers/test_coverage_rows.py::test_each_source_declares_one_row_per_class_it_serves";
     verify requirement ASourceStatesWhatItCovers by
         "tests/fetchers/test_coverage_rows.py::test_every_series_source_states_the_unit_of_its_value_columns";
     verify requirement ASourceStatesWhatItCovers by
-        "tests/fetchers/test_coverage_rows.py::test_the_gauge_network_states_both_its_columns_in_their_own_units";
+        "tests/fetchers/test_coverage_rows.py::test_the_gauge_network_states_each_column_on_its_own_row";
     verify requirement ASourceStatesWhatItCovers by
         "tests/fetchers/test_coverage_rows.py::test_a_lake_row_covers_its_lake_and_not_the_open_coast";
     verify requirement ASourceStatesWhatItCovers by

@@ -25,17 +25,20 @@ CONUS = [[(-125.0, 24.0), (-66.0, 24.0), (-66.0, 50.0), (-125.0, 50.0)]]
 
 
 def coverage(data_class, *, res=None, datum="NAVD88", series=False,
-             latest="2024-01-01", units=None, kind="surface"):
+             latest="2024-01-01", units=None, kind="surface", value="",
+             window_column="", above=""):
     return Coverage(
         data_class=data_class,
         extent=CoverageExtent(kind=kind, rings=CONUS, note="CONUS"),
         window=CoverageWindow(series=series, latest=latest, cadence="hourly"),
-        resolution_m=res, datum=datum, units=units or {})
+        resolution_m=res, datum=datum, units=units or {},
+        value_column=value or next(iter(units or {}), ""),
+        series_column=window_column, above_column=above)
 
 
 class _Spec:
     def __init__(self, cov, layer_type, params):
-        self.coverage = cov
+        self.coverage = [cov] if not isinstance(cov, list) else cov
         self.output = type("O", (), {"layer_type": layer_type})()
         self.params = params
 
@@ -81,7 +84,8 @@ def world(monkeypatch):
 
     monkeypatch.setattr(interpreter, "_call_runner", _runner)
     monkeypatch.setattr(interpreter, "sources_with_coverage",
-                        lambda: [(n, s.coverage) for n, s in SPECS.items()])
+                        lambda: [(n, row) for n, s in SPECS.items()
+                                 for row in s.coverage])
     monkeypatch.setattr(interpreter, "_spec_of", lambda name: SPECS[name])
     token = bind_domain(Domain(bbox=WILLAMETTE, geometry={}, label="reach"))
     chosen = bind_choices()
@@ -222,3 +226,39 @@ def test_the_ranked_list_is_one_object_the_card_and_the_sheet_both_read(world):
     tied = card.choices.model_copy(update={"tie": True})
     assert "fetch_soundings" in _ranked_rows(tied)
     assert "1)" in _ranked_rows(tied)
+
+
+def test_a_gauge_serving_two_classes_fills_each_slot_from_its_own_row(world,
+                                                                     monkeypatch):
+    """One source, two coverage rows: the discharge slot reads the flow columns
+    and the level slot reads the stage columns, off the row of the class each
+    one asked for."""
+    gauge = _Spec([coverage("discharge series", series=True, latest=None,
+                            datum=None, kind="stations",
+                            units={"discharge_cfs": "ft3/s",
+                                   "time_series_csv": "ft3/s"},
+                            value="discharge_cfs",
+                            window_column="time_series_csv"),
+                   coverage("water level series", series=True, latest=None,
+                            datum=None, kind="stations",
+                            units={"gage_height_ft": "ft",
+                                   "stage_series_csv": "ft",
+                                   "gauge_datum_ft": "ft"},
+                            value="gage_height_ft",
+                            window_column="stage_series_csv",
+                            above="gauge_datum_ft")],
+                  "vector", {"bbox": None, "start_date": None, "end_date": None})
+    monkeypatch.setitem(SPECS, "fetch_gauges", gauge)
+    env = _env()
+    level = _row(Data.level(need="water level series"), "stage")
+    told = interpreter._what_the_record_reports(env, level, "fetch_gauges")
+    assert told["field"] == "gage_height_ft"
+    assert told["series_field"] == "stage_series_csv"
+    assert told["above_field"] == "gauge_datum_ft"
+    # every column the source states a unit for is readable, whichever row
+    # stated it.
+    assert told["column_units"]["discharge_cfs"] == "ft3/s"
+    carrier = _row(Data.discharge(need="discharge series"), "carrier")
+    flow = interpreter._what_the_record_reports(env, carrier, "fetch_gauges")
+    assert flow["field"] == "discharge_cfs"
+    assert flow["series_field"] == "time_series_csv"

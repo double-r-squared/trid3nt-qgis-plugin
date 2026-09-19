@@ -89,19 +89,19 @@ payload_estimate:
   ceil_mb: 0.5
 
 coverage:
-  data_class: hydrography
-  extent:
-    kind: surface
-    rings:
-    - [[-125.0, 24.0], [-66.0, 24.0], [-66.0, 50.0], [-125.0, 50.0]]
-    note: NHDPlus v2.1 and NHDPlus HR over CONUS; a creek too narrow for NHD to
-      map a water surface has no polygon here
-  window:
-    series: false
-    latest: '2023-01-01'
-  resolution_m: 5.0
-  datum: null
-  units: {}
+-   data_class: hydrography
+    extent:
+      kind: surface
+      rings:
+      - [[-125.0, 24.0], [-66.0, 24.0], [-66.0, 50.0], [-125.0, 50.0]]
+      note: NHDPlus v2.1 and NHDPlus HR over CONUS; a creek too narrow for NHD to
+        map a water surface has no polygon here
+    window:
+      series: false
+      latest: '2023-01-01'
+    resolution_m: 5.0
+    datum: null
+    units: {}
 
 caveats:
   - "the reach runs FROM the seed: DM walks downstream from it, UM walks upstream to it, and distance_km is measured along the channel"

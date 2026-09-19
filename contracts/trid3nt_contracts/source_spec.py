@@ -577,10 +577,12 @@ class SourceSpec(GraceModel):
 
     # WHAT THIS SOURCE COVERS, as the match reads it: the class of thing it
     # measures, where, over what time, at what cell, on what zero, and the unit
-    # of each value column. THE ONLY statement of coverage - prose in the
-    # caveats or the docstring is for a reader, and no filter can read it. A
+    # of each value column. ONE ROW PER DATA CLASS the source serves - a gauge
+    # that reports a discharge and a stage carries two - because a hybrid class
+    # is a word no filter can answer. THE ONLY statement of coverage; prose in
+    # the caveats or the docstring is for a reader, and no filter can read it. A
     # source with no row here is never matched; it stays model-callable.
-    coverage: Coverage | None = None
+    coverage: list[Coverage] = Field(default_factory=list)
 
     # A source's NATIVE cell and tier facts live here, beside the source, so a
     # gate card can quote them next to a solver's declared range. Default () is a
@@ -608,6 +610,19 @@ class SourceSpec(GraceModel):
         """The token ``error_code`` is stamped from: ``error_prefix`` when the
         spec pins one, else ``source_class`` upper-cased."""
         return self.error_prefix or self.source_class.upper()
+
+    @model_validator(mode="after")
+    def _validate_one_row_per_class(self) -> "SourceSpec":
+        """A source states each class ONCE: two rows of one class are two
+        answers to the question the match asks, and nothing chooses between
+        them."""
+        seen = [row.data_class for row in self.coverage]
+        twice = sorted({name for name in seen if seen.count(name) > 1})
+        if twice:
+            raise ValueError(
+                f"{self.name} carries more than one coverage row of "
+                f"{', '.join(twice)}: one row per data class")
+        return self
 
     @model_validator(mode="after")
     def _validate_shape_consistency(self) -> "SourceSpec":

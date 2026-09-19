@@ -77,24 +77,25 @@ resolution_declarations:
   constraint_source: data
   rationale: 3DEP US lidar is native 1-10 m (10/30 m fastest on the tile tree); large bboxes auto-coarsen; no fine floor below the 1 m lidar native
 coverage:
-  data_class: terrain
-  extent:
-    kind: surface
-    rings:
-    - [[-125.0, 24.0], [-66.0, 24.0], [-66.0, 50.0], [-125.0, 50.0]]
-    - [[-172.0, 51.0], [-129.0, 51.0], [-129.0, 72.0], [-172.0, 72.0]]
-    - [[-161.0, 18.0], [-154.0, 18.0], [-154.0, 23.0], [-161.0, 23.0]]
-    - [[-68.5, 17.0], [-64.0, 17.0], [-64.0, 19.0], [-68.5, 19.0]]
-    - [[144.0, 13.0], [146.5, 13.0], [146.5, 21.0], [144.0, 21.0]]
-    - [[-171.5, -15.0], [-169.0, -15.0], [-169.0, -13.0], [-171.5, -13.0]]
-    note: USGS 3DEP lidar over the US and its territories
-  window:
-    series: false
-    latest: '2024-01-01'
-  resolution_m: 10.0
-  datum: NAVD88 (metres, positive up)
-  units:
-    elevation: m
+-   data_class: terrain
+    extent:
+      kind: surface
+      rings:
+      - [[-125.0, 24.0], [-66.0, 24.0], [-66.0, 50.0], [-125.0, 50.0]]
+      - [[-172.0, 51.0], [-129.0, 51.0], [-129.0, 72.0], [-172.0, 72.0]]
+      - [[-161.0, 18.0], [-154.0, 18.0], [-154.0, 23.0], [-161.0, 23.0]]
+      - [[-68.5, 17.0], [-64.0, 17.0], [-64.0, 19.0], [-68.5, 19.0]]
+      - [[144.0, 13.0], [146.5, 13.0], [146.5, 21.0], [144.0, 21.0]]
+      - [[-171.5, -15.0], [-169.0, -15.0], [-169.0, -13.0], [-171.5, -13.0]]
+      note: USGS 3DEP lidar over the US and its territories
+    window:
+      series: false
+      latest: '2024-01-01'
+    resolution_m: 10.0
+    datum: NAVD88 (metres, positive up)
+    units:
+      elevation: m
+    value_column: elevation
 
 caveats:
 - 'USGS 3DEP US lidar (1-10 m) via the py3dep library-delegate (the library owns discovery + the socket).

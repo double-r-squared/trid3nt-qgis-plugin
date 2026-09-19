@@ -79,24 +79,25 @@ resolution_declarations:
   rationale: the service resamples to whatever lattice is requested, so the density is bounded by the
     3 arc-second grid under the AOI rather than by the service
 coverage:
-  data_class: bathymetry
-  extent:
-    kind: surface
-    rings:
-    - [[-92.2, 46.4], [-84.3, 46.4], [-84.3, 49.1], [-92.2, 49.1]]
-    - [[-88.1, 41.5], [-84.7, 41.5], [-84.7, 46.2], [-88.1, 46.2]]
-    - [[-84.8, 43.0], [-79.7, 43.0], [-79.7, 46.4], [-84.8, 46.4]]
-    - [[-83.6, 41.3], [-78.8, 41.3], [-78.8, 43.0], [-83.6, 43.0]]
-    - [[-79.9, 43.1], [-76.0, 43.1], [-76.0, 44.4], [-79.9, 44.4]]
-    note: the five Great Lakes only; land inside a bbox comes back as the mosaic's
-      own zero fill, which is the lake surface at LWD
-  window:
-    series: false
-    latest: '2019-01-01'
-  resolution_m: 90.0
-  datum: each Great Lake's own Low Water Datum (metres, positive up)
-  units:
-    elevation: m
+-   data_class: bathymetry
+    extent:
+      kind: surface
+      rings:
+      - [[-92.2, 46.4], [-84.3, 46.4], [-84.3, 49.1], [-92.2, 49.1]]
+      - [[-88.1, 41.5], [-84.7, 41.5], [-84.7, 46.2], [-88.1, 46.2]]
+      - [[-84.8, 43.0], [-79.7, 43.0], [-79.7, 46.4], [-84.8, 46.4]]
+      - [[-83.6, 41.3], [-78.8, 41.3], [-78.8, 43.0], [-83.6, 43.0]]
+      - [[-79.9, 43.1], [-76.0, 43.1], [-76.0, 44.4], [-79.9, 44.4]]
+      note: the five Great Lakes only; land inside a bbox comes back as the mosaic's
+        own zero fill, which is the lake surface at LWD
+    window:
+      series: false
+      latest: '2019-01-01'
+    resolution_m: 90.0
+    datum: each Great Lake's own Low Water Datum (metres, positive up)
+    units:
+      elevation: m
+    value_column: elevation
 
 caveats:
 - The NCEI Great Lakes bathymetric grids, referenced to each lake's own LOW WATER DATUM (LWD) - the

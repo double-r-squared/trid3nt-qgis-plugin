@@ -68,14 +68,17 @@ LOOSEN_DATUM = "datum"
 
 
 def sources_with_coverage() -> list[tuple[str, Coverage]]:
-    """Every registered fetcher that STATES what it covers, by name.
+    """Every coverage row every registered fetcher states, by source name.
 
-    A source with no coverage row is never matched - it stays model-callable and
-    nothing here can say whether it reaches this place."""
+    ONE PAIR PER ROW: a source serving two classes is two candidates, and each
+    is filtered on the class it actually serves. A source with no row is never
+    matched - it stays model-callable and nothing here can say whether it
+    reaches this place."""
     from trid3nt_server.tools.fetchers._router.registration import _SPEC_REGISTRY
 
-    return sorted(((name, spec.coverage) for name, spec in _SPEC_REGISTRY.items()
-                   if spec.coverage is not None), key=lambda row: row[0])
+    return sorted(((name, row) for name, spec in _SPEC_REGISTRY.items()
+                   for row in spec.coverage),
+                  key=lambda pair: (pair[0], pair[1].data_class))
 
 
 def match(need: Need,

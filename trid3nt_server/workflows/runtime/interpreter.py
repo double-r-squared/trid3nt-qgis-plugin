@@ -430,6 +430,12 @@ async def _matched(env: _Env, decl: DataDecl) -> Any:
         return await _ingested(env, decl, await _matched_bed(env, decl))
     choice, value = await _probe(env, decl, decl.data_class, decl.name)
     if value is None:
+        if decl.is_optional:
+            # An OPTIONAL slot nothing measured is an absence the run states,
+            # the same absence a slot nobody filled is: the refusal below is for
+            # a slot the run cannot stand without.
+            env.absences.append(choice.sentence)
+            return None
         raise StepFailedError(choice.sentence, error_code="DATA_NEED_UNMATCHED",
                               step=_data_step_label(decl.name))
     return await _ingested(env, decl, value, choice.picked)
@@ -454,7 +460,8 @@ async def _matched_bed(env: _Env, decl: DataDecl) -> Any:
     if _spec_of(choice.picked).output.layer_type == "vector":
         measured = await _produce(env, _runtime_row(
             env, f"{decl.name}_surveyed", "derive_survey_surface",
-            {"points": measured, "value_field": _value_column(choice.picked),
+            {"points": measured, "value_field": _value_column(choice.picked,
+                                                              "bathymetry"),
              "resolution_m": _mesh_m(env)}))
     if terrain is None:
         return measured
@@ -512,13 +519,22 @@ def _spec_of(fetcher: str) -> Any:
     return get_spec(fetcher)
 
 
-def _value_column(fetcher: str) -> str:
+def _coverage_row(fetcher: str, data_class: str) -> Any:
+    """The row THIS source states about THIS class, or ``None``.
+
+    A source serving two classes states one row each, and the row a slot reads
+    is the row of the class it asked for."""
+    return next((row for row in getattr(_spec_of(fetcher), "coverage", ())
+                 if row.data_class == data_class), None)
+
+
+def _value_column(fetcher: str, data_class: str) -> str:
     """The column a matched source publishes its measurement under.
 
-    Off the coverage row, which states the unit of each value column; a source
-    that publishes one column names it there and nothing guesses."""
-    units = _spec_of(fetcher).coverage.units
-    return next(iter(units), "")
+    Off the coverage row, which names it; a slot that states a need never names
+    a column of a source it did not choose."""
+    row = _coverage_row(fetcher, data_class)
+    return row.value_column if row is not None else ""
 
 
 def _mesh_m(env: _Env) -> float | None:
@@ -668,9 +684,16 @@ def _what_the_record_reports(env: _Env, decl: DataDecl,
     if decl.role not in (OBSERVATION, LEVEL, DISCHARGE):
         return {}
     told: dict[str, Any] = {"window_s": env.window_s}
-    coverage = getattr(_spec_of(runner), "coverage", None) if runner else None
-    if coverage is not None:
-        told["column_units"] = dict(coverage.units)
+    rows = list(getattr(_spec_of(runner), "coverage", ())) if runner else []
+    told["column_units"] = {column: unit for row in rows
+                            for column, unit in row.units.items()}
+    row = next((r for r in rows if r.data_class == decl.data_class), None) \
+        if decl.data_class else None
+    if row is not None:
+        # A SLOT THAT STATED A NEED names no column: which column carries the
+        # reading, the window and the zero is the source's own statement.
+        told.update(field=row.value_column, series_field=row.series_column,
+                    above_field=row.above_column)
     if decl.coercion.get("at") is None and env.params is not None:
         told["at"] = env.params.value_of("event_time")
     return told

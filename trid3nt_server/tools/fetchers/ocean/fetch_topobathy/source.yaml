@@ -105,20 +105,21 @@ resolution_declarations:
   constraint_source: data
   rationale: coastal composite native cells (CUDEM 1/9 arc-second ~3 m nearshore, ETOPO 2022 ~450 m offshore, 3DEP land via resolution_m); no fine floor below CUDEM native
 coverage:
-  data_class: bathymetry
-  extent:
-    kind: surface
-    rings:
-    - [[-126.0, 22.0], [-64.0, 22.0], [-64.0, 49.5], [-126.0, 49.5]]
-    note: NOAA NCEI CUDEM where its 1/9 arcsecond collection ships, which omits
-      parts of the US coast and the Great Lakes entirely
-  window:
-    series: false
-    latest: '2023-01-01'
-  resolution_m: 3.0
-  datum: NAVD88 (metres, positive up)
-  units:
-    elevation: m
+-   data_class: bathymetry
+    extent:
+      kind: surface
+      rings:
+      - [[-126.0, 22.0], [-64.0, 22.0], [-64.0, 49.5], [-126.0, 49.5]]
+      note: NOAA NCEI CUDEM where its 1/9 arcsecond collection ships, which omits
+        parts of the US coast and the Great Lakes entirely
+    window:
+      series: false
+      latest: '2023-01-01'
+    resolution_m: 3.0
+    datum: NAVD88 (metres, positive up)
+    units:
+      elevation: m
+    value_column: elevation
 
 caveats:
 - Coastal merged topo-bathymetry (NOAA NCEI CUDEM 1/9" + USGS 3DEP land via the sibling fetch_dem, NAVD88 m, positive-up)

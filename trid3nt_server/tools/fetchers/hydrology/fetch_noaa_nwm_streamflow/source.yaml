@@ -79,20 +79,21 @@ payload_estimate:
   kb_per_feature: 0.1
   floor_mb: 0.01
 coverage:
-  data_class: discharge series
-  extent:
-    kind: surface
-    rings:
-    - [[-130.0, 20.0], [-60.0, 20.0], [-60.0, 55.0], [-130.0, 55.0]]
-    note: the National Water Model's CONUS channel network, about 2.7 million
-      NHDPlus reaches; a MODELLED flow, not an instrument record
-  window:
-    series: true
-    max_span_days: 30.0
-    cadence: hourly cycles, retained about thirty days
-  datum: null
-  units:
-    streamflow_cms: m3/s
+-   data_class: discharge series
+    extent:
+      kind: surface
+      rings:
+      - [[-130.0, 20.0], [-60.0, 20.0], [-60.0, 55.0], [-130.0, 55.0]]
+      note: the National Water Model's CONUS channel network, about 2.7 million
+        NHDPlus reaches; a MODELLED flow, not an instrument record
+    window:
+      series: true
+      max_span_days: 30.0
+      cadence: hourly cycles, retained about thirty days
+    datum: null
+    units:
+      streamflow_cms: m3/s
+    value_column: streamflow_cms
 
 caveats:
 - NOAA National Water Model channel_rt streamflow (the operational CONUS hydrologic forecast,

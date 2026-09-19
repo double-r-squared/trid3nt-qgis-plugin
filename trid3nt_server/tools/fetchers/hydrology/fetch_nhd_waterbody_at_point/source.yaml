@@ -96,24 +96,24 @@ payload_estimate:
   ceil_mb: 5.0
 
 coverage:
-  data_class: hydrography
-  extent:
-    kind: surface
-    rings:
-    - [[-125.0, 24.0], [-66.0, 24.0], [-66.0, 50.0], [-125.0, 50.0]]
-    - [[-172.0, 51.0], [-129.0, 51.0], [-129.0, 72.0], [-172.0, 72.0]]
-    - [[-161.0, 18.0], [-154.0, 18.0], [-154.0, 23.0], [-161.0, 23.0]]
-    - [[-68.5, 17.0], [-64.0, 17.0], [-64.0, 19.0], [-68.5, 19.0]]
-    - [[144.0, 13.0], [146.5, 13.0], [146.5, 21.0], [144.0, 21.0]]
-    - [[-171.5, -15.0], [-169.0, -15.0], [-169.0, -13.0], [-171.5, -13.0]]
-    note: USGS NHD open water - lakes, ponds, reservoirs, playas, estuaries - over
-      the US and its territories; a vegetated wetland is not in it
-  window:
-    series: false
-    latest: '2023-01-01'
-  resolution_m: 5.0
-  datum: null
-  units: {}
+-   data_class: hydrography
+    extent:
+      kind: surface
+      rings:
+      - [[-125.0, 24.0], [-66.0, 24.0], [-66.0, 50.0], [-125.0, 50.0]]
+      - [[-172.0, 51.0], [-129.0, 51.0], [-129.0, 72.0], [-172.0, 72.0]]
+      - [[-161.0, 18.0], [-154.0, 18.0], [-154.0, 23.0], [-161.0, 23.0]]
+      - [[-68.5, 17.0], [-64.0, 17.0], [-64.0, 19.0], [-68.5, 19.0]]
+      - [[144.0, 13.0], [146.5, 13.0], [146.5, 21.0], [144.0, 21.0]]
+      - [[-171.5, -15.0], [-169.0, -15.0], [-169.0, -13.0], [-171.5, -13.0]]
+      note: USGS NHD open water - lakes, ponds, reservoirs, playas, estuaries - over
+        the US and its territories; a vegetated wetland is not in it
+    window:
+      series: false
+      latest: '2023-01-01'
+    resolution_m: 5.0
+    datum: null
+    units: {}
 
 caveats:
   - "ONE waterbody comes back, never a set: the body the seed stands IN, else the nearest one whose edge is within search_distance_km, else a refusal naming the nearest body and how far away it is - the query looks three times search_distance_km so that refusal can say what was there"

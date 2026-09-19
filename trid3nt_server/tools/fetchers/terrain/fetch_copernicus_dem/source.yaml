@@ -73,20 +73,21 @@ payload_estimate:
   floor_mb: 0.1
 
 coverage:
-  data_class: terrain
-  extent:
-    kind: surface
-    rings:
-    - [[-180.0, -90.0], [180.0, -90.0], [180.0, 90.0], [-180.0, 90.0]]
-    note: Copernicus GLO-30, global land; a SURFACE model, so canopy and roofs
-      are in it and the ocean reads about zero
-  window:
-    series: false
-    latest: '2021-01-01'
-  resolution_m: 30.0
-  datum: EGM2008 geoid (metres, positive up)
-  units:
-    elevation: m
+-   data_class: terrain
+    extent:
+      kind: surface
+      rings:
+      - [[-180.0, -90.0], [180.0, -90.0], [180.0, 90.0], [-180.0, 90.0]]
+      note: Copernicus GLO-30, global land; a SURFACE model, so canopy and roofs
+        are in it and the ocean reads about zero
+    window:
+      series: false
+      latest: '2021-01-01'
+    resolution_m: 30.0
+    datum: EGM2008 geoid (metres, positive up)
+    units:
+      elevation: m
+    value_column: elevation
 
 caveats:
   - "GLO-30 is a SURFACE model (ocean reads ~0 m; no bathymetry); an off-globe / all-nodata window -> COPERNICUS_DEM_NO_COVERAGE (never a fabricated layer)"

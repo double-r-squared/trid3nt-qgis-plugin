@@ -73,16 +73,16 @@ payload_estimate:
   floor_mb: 0.001
 
 coverage:
-  data_class: discharge series
+- data_class: discharge series
   extent:
     kind: stations
     rings:
-    - [[-125.0, 24.0], [-66.0, 24.0], [-66.0, 50.0], [-125.0, 50.0]]
-    - [[-172.0, 51.0], [-129.0, 51.0], [-129.0, 72.0], [-172.0, 72.0]]
-    - [[-161.0, 18.0], [-154.0, 18.0], [-154.0, 23.0], [-161.0, 23.0]]
-    - [[-68.5, 17.0], [-64.0, 17.0], [-64.0, 19.0], [-68.5, 19.0]]
-    - [[144.0, 13.0], [146.5, 13.0], [146.5, 21.0], [144.0, 21.0]]
-    - [[-171.5, -15.0], [-169.0, -15.0], [-169.0, -13.0], [-171.5, -13.0]]
+      - [[-125.0, 24.0], [-66.0, 24.0], [-66.0, 50.0], [-125.0, 50.0]]
+      - [[-172.0, 51.0], [-129.0, 51.0], [-129.0, 72.0], [-172.0, 72.0]]
+      - [[-161.0, 18.0], [-154.0, 18.0], [-154.0, 23.0], [-161.0, 23.0]]
+      - [[-68.5, 17.0], [-64.0, 17.0], [-64.0, 19.0], [-68.5, 19.0]]
+      - [[144.0, 13.0], [146.5, 13.0], [146.5, 21.0], [144.0, 21.0]]
+      - [[-171.5, -15.0], [-169.0, -15.0], [-169.0, -13.0], [-171.5, -13.0]]
     note: the USGS instantaneous-values gauge network over the US and its
       territories, discovered by bbox or by state
   window:
@@ -93,9 +93,32 @@ coverage:
   units:
     discharge_cfs: ft3/s
     time_series_csv: ft3/s
+  value_column: discharge_cfs
+  series_column: time_series_csv
+- data_class: water level series
+  extent:
+    kind: stations
+    rings:
+      - [[-125.0, 24.0], [-66.0, 24.0], [-66.0, 50.0], [-125.0, 50.0]]
+      - [[-172.0, 51.0], [-129.0, 51.0], [-129.0, 72.0], [-172.0, 72.0]]
+      - [[-161.0, 18.0], [-154.0, 18.0], [-154.0, 23.0], [-161.0, 23.0]]
+      - [[-68.5, 17.0], [-64.0, 17.0], [-64.0, 19.0], [-68.5, 19.0]]
+      - [[144.0, 13.0], [146.5, 13.0], [146.5, 21.0], [144.0, 21.0]]
+      - [[-171.5, -15.0], [-169.0, -15.0], [-169.0, -13.0], [-171.5, -13.0]]
+    note: the 00065 gage-height record at the same gauges, which not every site
+      reports
+  window:
+    series: true
+    max_span_days: 120.0
+    cadence: 15-min to hourly instantaneous samples
+  datum: null
+  units:
     gage_height_ft: ft
     stage_series_csv: ft
     gauge_datum_ft: ft
+  value_column: gage_height_ft
+  series_column: stage_series_csv
+  above_column: gauge_datum_ft
 
 caveats:
   - "pass EXACTLY ONE of state_code (no area limit) or bbox (<= ~25 deg^2)"

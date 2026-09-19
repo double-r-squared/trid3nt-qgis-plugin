@@ -244,37 +244,60 @@ def _coverage(**over) -> dict:
         "window": {"series": False},
         "resolution_m": 10.0,
         "units": {"elevation": "m"},
+        "value_column": "elevation",
     }
     row.update(over)
     return row
 
 
 def test_a_coverage_row_loads_onto_the_spec():
-    spec = load_spec({**raster_spec(), "coverage": _coverage()})
-    assert spec.coverage is not None
-    assert spec.coverage.data_class == "terrain"
-    assert spec.coverage.extent.covers(-122.6, 45.5)
-    assert not spec.coverage.extent.covers(2.3, 48.9)
+    spec = load_spec({**raster_spec(), "coverage": [_coverage()]})
+    assert len(spec.coverage) == 1
+    row = spec.coverage[0]
+    assert row.data_class == "terrain"
+    assert row.value_column == "elevation"
+    assert row.extent.covers(-122.6, 45.5)
+    assert not row.extent.covers(2.3, 48.9)
+
+
+def test_a_source_serving_two_classes_carries_one_row_each():
+    spec = load_spec({**raster_spec(),
+                      "coverage": [_coverage(),
+                                   _coverage(data_class="bathymetry")]})
+    assert [row.data_class for row in spec.coverage] == ["terrain", "bathymetry"]
+
+
+def test_two_rows_of_one_class_are_refused():
+    with pytest.raises(SpecLoadError):
+        load_spec({**raster_spec(), "coverage": [_coverage(), _coverage()]})
+
+
+def test_a_column_the_row_states_no_unit_for_is_refused():
+    with pytest.raises(SpecLoadError):
+        load_spec({**raster_spec(),
+                   "coverage": [_coverage(value_column="depth")]})
 
 
 def test_a_coverage_row_naming_a_class_outside_the_vocabulary_is_refused():
     with pytest.raises(SpecLoadError):
-        load_spec({**raster_spec(), "coverage": _coverage(data_class="lidar")})
+        load_spec({**raster_spec(), "coverage": [_coverage(data_class="lidar")]})
 
 
 def test_a_coverage_extent_with_no_ring_is_refused():
     with pytest.raises(SpecLoadError):
         load_spec({**raster_spec(),
-                   "coverage": _coverage(extent={"kind": "surface", "rings": []})})
+                   "coverage": [_coverage(extent={"kind": "surface",
+                                                  "rings": []})]})
 
 
 def test_a_service_extent_carrying_rings_is_refused():
     with pytest.raises(SpecLoadError):
         load_spec({**raster_spec(),
-                   "coverage": _coverage(extent={
+                   "coverage": [_coverage(extent={
                        "kind": "service",
-                       "rings": [[[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]]]})})
+                       "rings": [[[0.0, 0.0], [1.0, 0.0], [1.0, 1.0],
+                                  [0.0, 1.0]]]})]})
 
 
 def test_a_spec_states_no_coverage_by_default():
-    assert load_spec(raster_spec()).coverage is None
+    assert load_spec(raster_spec()).coverage == []
