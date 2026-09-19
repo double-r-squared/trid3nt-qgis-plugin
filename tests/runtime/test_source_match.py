@@ -9,7 +9,8 @@ from __future__ import annotations
 
 import pytest
 
-from trid3nt_contracts.coverage import Coverage, CoverageExtent, CoverageWindow
+from trid3nt_contracts.coverage import (
+    Coverage, CoverageExtent, CoveragePoint, CoverageWindow)
 
 from trid3nt_server.workflows.runtime.errors import PlanValidationError
 from trid3nt_server.workflows.runtime.match import (
@@ -39,7 +40,8 @@ def gauges(data_class="discharge series", rings=None, earliest=None,
            note="a gauge network"):
     return Coverage(
         data_class=data_class, kind=kind, reach_km=reach_km,
-        extent=CoverageExtent(kind="stations", rings=rings or CONUS, note=note),
+        extent=CoverageExtent(kind="stations", rings=rings or CONUS, note=note,
+                              discover="bbox"),
         window=CoverageWindow(series=True, earliest=earliest, latest=latest,
                               cadence="hourly"),
         units=units or {"time_series_csv": "ft3/s"})
@@ -251,5 +253,52 @@ def test_a_source_called_by_station_with_no_stations_listed_is_not_a_survivor(mo
     spec = SimpleNamespace(params={"station": {"required": True},
                                    "start_date": {"required": True}})
     monkeypatch.setitem(registration._SPEC_REGISTRY, "fetch_by_station", spec)
-    assert "called by station" in m._unaskable("fetch_by_station")
-    assert m._unaskable("fetch_nobody_registered") == ""
+    discovered = gauges(data_class="water level series")
+    assert "called by station" in m._unaskable("fetch_by_station", discovered)
+    listed = gauges(data_class="water level series")
+    listed.extent.points = [CoveragePoint(id="ARROWROCK", lon=-115.92,
+                                          lat=43.59)]
+    assert m._unaskable("fetch_by_station", listed) == ""
+    assert m._unaskable("fetch_nobody_registered", discovered) == ""
+
+
+def test_the_probe_names_the_nearest_listed_station_and_the_rows_own_ask(
+        monkeypatch):
+    """A row that lists its stations answers the station the source is called by,
+    and the values that make the source answer with THAT row travel with it."""
+    from types import SimpleNamespace
+
+    from trid3nt_server.tools.fetchers._router import registration
+    from trid3nt_server.workflows.runtime import match as m
+
+    row = gauges(data_class="water level series", kind="predicted")
+    row.ask = {"product": "predictions"}
+    row.extent.points = [CoveragePoint(id="far", lon=-120.0, lat=44.0),
+                         CoveragePoint(id="near", lon=-122.66, lat=45.50)]
+    spec = SimpleNamespace(params={"station": {"required": True}},
+                           coverage=[row])
+    monkeypatch.setitem(registration._SPEC_REGISTRY, "fetch_by_station", spec)
+    choice = match(Need(slot="level", data_class="water level series",
+                        lon=WILLAMETTE[0], lat=WILLAMETTE[1]),
+                   [("fetch_by_station", row)])
+    assert choice.picked == "fetch_by_station"
+    ask = m.ask_for(choice, {"bbox": [0, 0, 1, 1]}, *WILLAMETTE)
+    assert ask == {"bbox": [0, 0, 1, 1], "product": "predictions",
+                   "station": "near"}
+
+
+def test_a_measured_series_holds_no_record_after_now():
+    """An instrument has not recorded tomorrow, so a run opening past now takes
+    the prediction and not the record."""
+    from datetime import datetime, timedelta, timezone
+
+    ahead = (datetime.now(timezone.utc) + timedelta(days=5)).isoformat()
+    need = Need(slot="level", data_class="water level series",
+                lon=WILLAMETTE[0], lat=WILLAMETTE[1], opens=ahead, until=ahead)
+    choice = match(need, [
+        ("fetch_record", gauges(data_class="water level series")),
+        ("fetch_forecast", gauges(data_class="water level series",
+                                  kind="predicted"))])
+    assert choice.picked == "fetch_forecast"
+    assert any("reports to now" in row.excluded for row in choice.rows
+               if row.fetcher == "fetch_record")

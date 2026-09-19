@@ -14,15 +14,21 @@ stores the pick.
 from __future__ import annotations
 
 import datetime as dt
+import logging
 from dataclasses import dataclass
 from typing import Sequence
 
+from typing import Any, Mapping
+
 from trid3nt_contracts.coverage import (
-    PROVENANCE_KINDS, Coverage, SourceChoice, SourceOption)
+    PROVENANCE_KINDS, Coverage, CoverageExtent, CoveragePoint, SourceChoice,
+    SourceOption)
 
 from .errors import PlanValidationError
 
-__all__ = ["LOOSEN_DATUM", "LOOSEN_WINDOW", "Need", "RANKED_ROWS",
+logger = logging.getLogger(__name__)
+
+__all__ = ["LOOSEN_DATUM", "LOOSEN_WINDOW", "Need", "RANKED_ROWS", "ask_for",
            "dropped_from", "instant", "match", "sources_with_coverage"]
 
 #: How many rows the ranked list carries. Five: enough for the facts to be
@@ -99,7 +105,7 @@ def match(need: Need,
     for name, coverage in candidates:
         if coverage.data_class != need.data_class:
             continue
-        reason = _unaskable(name) or _excluded(need, coverage)
+        reason = _unaskable(name, coverage) or _excluded(need, coverage)
         if reason:
             dropped.append(_option(name, coverage, need, excluded=reason))
             continue
@@ -152,27 +158,105 @@ def dropped_from(choice: SourceChoice, fetcher: str, why: str) -> SourceChoice:
 
 
 #: What the probe can supply a source off the run itself: the domain's box, its
-#: seed, and the window. A source that must be called by anything else (a
-#: station id) is askable only once its row lists the stations to name.
+#: seed, and the window. Anything else a source requires is askable only where
+#: its own coverage row says what to pass - the row's ask block, or, for the
+#: station a source is called by name, the stations the row lists.
 _ASKABLE = frozenset({"bbox", "seed_point", "start_date", "end_date",
                       "valid_time"})
 
+#: The param a station-addressed source is called by. A row whose extent lists
+#: its stations answers it with the nearest one; a discovered network is called
+#: by box and never states one.
+_STATION = "station"
 
-def _unaskable(name: str) -> str:
-    """Why the probe could not call this source at all, or "" where it can."""
+
+def _required(name: str) -> list[str]:
+    """The params this source refuses to be called without."""
     from trid3nt_server.tools.fetchers._router.registration import _SPEC_REGISTRY
 
     spec = _SPEC_REGISTRY.get(name)
     if spec is None:
-        return ""
-    needs = [param for param, decl in spec.params.items()
-             if bool(getattr(decl, "required", None)
-                     or (isinstance(decl, dict) and decl.get("required")))
-             and param not in _ASKABLE]
+        return []
+    return [param for param, decl in spec.params.items()
+            if bool(getattr(decl, "required", None)
+                    or (isinstance(decl, dict) and decl.get("required")))]
+
+
+def _unaskable(name: str, coverage: Coverage) -> str:
+    """Why the probe could not call this source at all, or "" where it can."""
+    asked = set(_ASKABLE) | set(coverage.ask)
+    if coverage.extent.points or coverage.extent.read_from:
+        asked.add(_STATION)
+    needs = [param for param in _required(name) if param not in asked]
     if not needs:
         return ""
     return (f"asks to be called by {', '.join(needs)} and its coverage row "
-            "lists no station to name")
+            "says nothing to pass for it")
+
+
+#: Stations read in from a listing, by the hook that read them. A listing is a
+#: bounded static fact about a network, so it is read once per process.
+_LISTED: dict[str, list[CoveragePoint]] = {}
+
+
+def _station_set(coverage: Coverage) -> CoverageExtent:
+    """This row's extent with its listed stations read in.
+
+    A row that names a listing carries the stations themselves once the listing
+    has answered; a listing that cannot be read leaves the extent as declared,
+    so the region's rings still say where the source is and the probe answers
+    for the rest."""
+    hook = coverage.extent.read_from
+    if not hook or coverage.extent.points:
+        return coverage.extent
+    if hook not in _LISTED:
+        from trid3nt_server.tools.fetchers._router.hooks import resolve_hook
+
+        try:
+            _LISTED[hook] = list(resolve_hook(hook)())
+        except Exception as exc:  # noqa: BLE001 - an unread listing is not a match failure
+            logger.warning("the %s station listing did not answer (%s); the "
+                           "region's own outline stands for it", hook, exc)
+            _LISTED[hook] = []
+    listed = _LISTED[hook]
+    return coverage.extent.model_copy(update={"points": listed}) if listed \
+        else coverage.extent
+
+
+def ask_for(choice: SourceChoice, base: Mapping[str, Any], lon: float | None,
+            lat: float | None) -> dict[str, Any]:
+    """What the PICKED source is called with: the run's own facts, plus what the
+    matched ROW says it takes.
+
+    The row, not the spec's default, is what the match weighed, so the values
+    that make the source answer with that row travel with it; a source called by
+    a station name is given the nearest station the row lists."""
+    ask = dict(base)
+    row = _picked_row(choice)
+    if row is None:
+        return ask
+    ask.update(row.ask)
+    if _STATION in _required(choice.picked) and lon is not None and lat is not None:
+        station = _station_set(row).nearest(lon, lat)
+        if station is not None:
+            ask[_STATION] = station.id
+    return ask
+
+
+def _picked_row(choice: SourceChoice) -> Coverage | None:
+    """The row the pick was ranked on: this source's row of the class asked for
+    AND of the kind the ranked list shows, since a source serving a measured and
+    a predicted series of one class is two candidates and only one was picked."""
+    from trid3nt_server.tools.fetchers._router.registration import _SPEC_REGISTRY
+
+    spec = _SPEC_REGISTRY.get(choice.picked)
+    if spec is None:
+        return None
+    kind = next((row.kind for row in choice.rows
+                 if row.fetcher == choice.picked and not row.excluded), "")
+    return next((row for row in spec.coverage
+                 if row.data_class == choice.need
+                 and (not kind or row.kind == kind)), None)
 
 
 def _excluded(need: Need, coverage: Coverage) -> str:
@@ -182,7 +266,7 @@ def _excluded(need: Need, coverage: Coverage) -> str:
     and never for a surface, which a run outside simply ranks lower. The datum
     is not a filter - it is flagged on the row and refused at the offset row."""
     if need.lon is not None and need.lat is not None:
-        away = coverage.extent.distance_km(need.lon, need.lat)
+        away = _station_set(coverage).distance_km(need.lon, need.lat)
         reach = coverage.reach_km or 0.0
         if away > reach:
             where = coverage.extent.note or "stated extent"
@@ -204,6 +288,14 @@ def _outside_window(need: Need, coverage: Coverage) -> str:
         return ""
     earliest, latest = (instant(coverage.window.earliest),
                         instant(coverage.window.latest))
+    if latest is None and coverage.kind == "measured":
+        # An instrument has not recorded tomorrow: a measured series that states
+        # no close reports TO NOW, and a run opening past now has no record from
+        # it however far forward the source keeps answering.
+        latest = dt.datetime.now(dt.timezone.utc)
+        if until is not None and until > latest:
+            return (f"reports to now and this run closes at "
+                    f"{need.until or need.opens}")
     if earliest is not None and opens < earliest:
         return (f"reports from {coverage.window.earliest} and this run opens at "
                 f"{need.opens}")
@@ -246,7 +338,7 @@ def _distance_km(need: Need, coverage: Coverage) -> float:
     """How far the place is from what this source holds, zero where it is inside."""
     if need.lon is None or need.lat is None:
         return 0.0
-    return coverage.extent.distance_km(need.lon, need.lat)
+    return _station_set(coverage).distance_km(need.lon, need.lat)
 
 
 def _cell_rank(need: Need, coverage: Coverage) -> float:
