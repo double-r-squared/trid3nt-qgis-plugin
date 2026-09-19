@@ -342,7 +342,7 @@ def test_the_outputs_list_charts_the_oxygen_along_the_domains_centerline():
 
 # --- the deck those stages fill ---------------------------------------------- #
 _SETTLED = {"title": "willamette DOMAIN", "time_step_s": 1.0,
-            "graphic_period": 200, "until_s": 3700.0,
+            "until_s": 3700.0,
             "liquid_boundary_order": ["inflow", "outflow"],
             "liquid_boundary_prescribes": ["flowrate", "elevation"],
             "opening": "CONSTANT DEPTH", "depth_m": 1.2, "level_m": 1.0,
