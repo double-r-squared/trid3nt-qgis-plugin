@@ -244,8 +244,10 @@ class STEERING(T2D):
         # deck's fixed opinion until a coupled module's keywords have a
         # surface of their own.
         CLASSES_SEDIMENT_DIAMETERS=[3.0e-5],
-        # Zyserman-Fredsoe: of the suspension formulae GAIA offers, the one
-        # written for the fine non-cohesive class this plume carries.
+        # Zyserman-Fredsoe, of the suspension formulae GAIA offers. It is a
+        # reference concentration for SAND, and the class above is below the
+        # sand boundary, so the deck is running a silt through a sand law and
+        # states no CLASSES TYPE OF SEDIMENT to say otherwise.
         SUSPENSION_TRANSPORT_FORMULA_FOR_ALL_SANDS=3,
         # The character-of-the-flow scheme a PULSE advected over a bed with no
         # stock needs; the dictionary's own upwind pair is for a resident
