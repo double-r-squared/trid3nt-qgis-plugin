@@ -433,6 +433,38 @@ package DataSeam {
         */
     }
 
+    part def SourceCoverage {
+        doc /*
+        A source's ONLY statement of what it covers: the class of thing it
+        measures, where, over what time, at what cell, on what zero, and the
+        unit of each value column. Stated from the dataset's own documentation.
+        */
+    }
+
+    part def SlotNeed {
+        doc /*
+        What a slot asks the world for: one class of the coarse vocabulary. The
+        place, the window and the frame are the RUN's and are read off it, so a
+        question states none of them.
+        */
+    }
+
+    part def SourceMatch {
+        doc /*
+        The one function that reads a need against every coverage row: class and
+        place hard, the window hard for a series and a sort key for a surface,
+        the datum flagged. Pure over declarations; the caller probes.
+        */
+    }
+
+    part def RankedSourceList {
+        doc /*
+        ONE object in three views: the card renders it with the pick
+        highlighted, the tool result carries the rows on a tie, and the sheet
+        stores the pick and its reason.
+        */
+    }
+
     part def ContextRow {
         doc /*
         A producer row whose absence is legal, and SAID: the run continues and
@@ -485,6 +517,54 @@ package DataSeam {
     part contextRow : ContextRow {
         doc /*
         code: trid3nt_server/workflows/runtime/data.py
+        */
+    }
+
+    part coverageContract : SourceCoverage {
+        doc /*
+        code: contracts/trid3nt_contracts/coverage.py
+        */
+    }
+
+    part gaugeDeclaration : SourceCoverage {
+        doc /*
+        code: trid3nt_server/tools/fetchers/hydrology/fetch_usgs_nwis_gauges/source.yaml
+        */
+    }
+
+    part needDeclaration : SlotNeed {
+        doc /*
+        code: trid3nt_server/workflows/runtime/data.py
+        */
+    }
+
+    part sourceMatch : SourceMatch {
+        doc /*
+        code: trid3nt_server/workflows/runtime/match.py
+        */
+    }
+
+    part matchedSlot : SourceMatch {
+        doc /*
+        code: trid3nt_server/workflows/runtime/interpreter.py
+        */
+    }
+
+    part rankedListCard : RankedSourceList {
+        doc /*
+        code: trid3nt_server/workflows/telemac/workflow.py
+        */
+    }
+
+    part rankedListRecord : RankedSourceList {
+        doc /*
+        code: trid3nt_server/workflows/runtime/journal.py
+        */
+    }
+
+    part seriesOnTheRunsClock : FreeSurfaceReader {
+        doc /*
+        code: trid3nt_server/workflows/runtime/temporal.py
         */
     }
 
@@ -746,6 +826,95 @@ package DataSeam {
         statement and not this one's: a surface of depths has to know the zero
         they are counted below and refuses without it, while an elevation
         surface somebody handed this run stands on the run's frame.
+        */
+    }
+
+    requirement def ASourceStatesWhatItCovers {
+        doc /*
+        A fetcher's coverage row is its ONLY statement of coverage: the class of
+        thing it measures, the place it reaches as a coarse polygon or a station
+        set or "read from the service", the time its records span, the cell it
+        publishes at, the zero its elevations are counted from, and the unit of
+        each value column the record carries. The prose that used to say these
+        things in the caveats goes, because two statements of one fact are how
+        the two drift apart and no filter can read a sentence.
+
+        The row is stated from the dataset's own documentation, never inferred
+        from a fetched body: a guessed extent is indistinguishable from a
+        measured one to every reader downstream, and this row is what decides
+        which source fills a slot. A source that states none is never matched -
+        it stays model-callable, and nothing here can say whether it reaches
+        this place.
+
+        The UNIT is per value column, because one record carries more than one
+        quantity: a gauge reports a discharge in cubic feet per second beside a
+        stage in feet, and a slot that read either in the unit it wanted would
+        be reading a different river.
+        */
+    }
+
+    requirement def ASlotStatesANeedAndTheMatchFillsIt {
+        doc /*
+        A slot either NAMES its producer, with its ladder and its transforms, or
+        states the CLASS it needs; a row that names a fetcher is a PIN and is
+        honoured as it is. A need is one class of a coarse vocabulary of about
+        seventeen, and the place, the window and the frame it is matched under
+        are the RUN's - the domain's centre, the deck's own duration from the
+        moment the run asks at, the vertical lever - so a question states none
+        of them.
+
+        The filter is mechanical: class and place are hard, the window is hard
+        for a SERIES source and never for a static surface - a 2014 survey
+        answers a 2026 question and recency ranks it - and a differing datum is
+        FLAGGED rather than filtered, because the offset row is what refuses at.
+        The sort is on facts: the cell against the mesh, how current the record
+        is, and whether the source is already on the run's frame. The top
+        survivor is CALLED and dropped on an empty source, so the list a reader
+        sees says what the world answered rather than what the sort preferred,
+        and a refusal NAMES every source and what each one had to say.
+
+        One run-level statement loosens one filter - a stand-in window, a datum
+        taken unconverted - and shows as the user's choice, never as the match's
+        own judgement.
+
+        The bed is the one slot whose physics rule the runtime owns, stated
+        ONCE: the measurement where it measured, the terrain under the rest, the
+        soundings gridded at the run's own edge before the merge reads them, and
+        the terrain alone where nothing measured this domain.
+        */
+    }
+
+    requirement def TheRankedListIsOneObjectInThreeViews {
+        doc /*
+        The list a slot was filled from is ONE object. The card renders it with
+        the pick highlighted; the tool result carries the rows only on a TIE,
+        where several sources rank equal on every fact the sort reads and the
+        model or the user picks by row; the sheet stores the pick and its
+        reason.
+
+        The sentence the model is given IS the sentence the card shows. It is
+        authored once, in the match, because a second rendering of the same
+        facts is a second chance to say something the run did not do.
+        */
+    }
+
+    requirement def ASeriesIsAlignedToTheRunsEventTime {
+        doc /*
+        A run opens at the moment it asks about, INSIDE the record: t=0 is that
+        instant and the readings before it carry negative times, rather than the
+        record's first sample standing in for a moment nobody asked about. A
+        record that does not span the window the run solves over refuses, naming
+        the nearest sample it holds and the statement that would take it as a
+        stand-in - reading a record flat past its last sample is a forcing
+        nobody measured.
+
+        A record is read in the unit it was MEASURED in, off its source's
+        coverage row where the record carries no unit column of its own; a
+        record that states none refuses rather than being read in the unit the
+        slot wanted. And a gauge publishes a HEIGHT above its own zero, which is
+        a different surface from the one a bed is painted on: the run reaches
+        that surface by adding the zero's own elevation, which the site record
+        publishes, and a gauge that publishes none refuses.
         */
     }
 
@@ -1037,6 +1206,81 @@ package DataSeam {
         "tests/mesh/test_mesh_topology_and_bed.py::test_the_bed_card_states_the_datum_and_the_native_cell_of_its_source";
     verify requirement OneSourceReadsOnOneStatedDatum by
         "tests/fetchers/test_emit_on_fetch_seam.py::test_input_layer_name_shape_and_purpose";
+
+    satisfy requirement ASourceStatesWhatItCovers by coverageContract;
+    satisfy requirement ASourceStatesWhatItCovers by gaugeDeclaration;
+    satisfy requirement ASourceStatesWhatItCovers by lakeDeclaration;
+    verify requirement ASourceStatesWhatItCovers by
+        "tests/fetchers/test_coverage_rows.py::test_each_row_declares_its_class";
+    verify requirement ASourceStatesWhatItCovers by
+        "tests/fetchers/test_coverage_rows.py::test_every_series_source_states_the_unit_of_its_value_columns";
+    verify requirement ASourceStatesWhatItCovers by
+        "tests/fetchers/test_coverage_rows.py::test_the_gauge_network_states_both_its_columns_in_their_own_units";
+    verify requirement ASourceStatesWhatItCovers by
+        "tests/fetchers/test_coverage_rows.py::test_a_lake_row_covers_its_lake_and_not_the_open_coast";
+    verify requirement ASourceStatesWhatItCovers by
+        "tests/fetchers/test_router_spec_loader.py::test_a_coverage_row_naming_a_class_outside_the_vocabulary_is_refused";
+    verify requirement ASourceStatesWhatItCovers by
+        "tests/fetchers/test_router_spec_loader.py::test_a_spec_states_no_coverage_by_default";
+
+    satisfy requirement ASlotStatesANeedAndTheMatchFillsIt by needDeclaration;
+    satisfy requirement ASlotStatesANeedAndTheMatchFillsIt by sourceMatch;
+    satisfy requirement ASlotStatesANeedAndTheMatchFillsIt by matchedSlot;
+    verify requirement ASlotStatesANeedAndTheMatchFillsIt by
+        "tests/runtime/test_source_match.py::test_one_survivor_fills_the_slot_and_the_sentence_names_the_facts";
+    verify requirement ASlotStatesANeedAndTheMatchFillsIt by
+        "tests/runtime/test_source_match.py::test_a_source_too_coarse_for_the_mesh_ranks_below_every_source_that_resolves_it";
+    verify requirement ASlotStatesANeedAndTheMatchFillsIt by
+        "tests/runtime/test_source_match.py::test_a_source_already_on_the_run_s_frame_outranks_one_that_needs_a_shift";
+    verify requirement ASlotStatesANeedAndTheMatchFillsIt by
+        "tests/runtime/test_source_match.py::test_a_place_no_source_reaches_refuses_naming_what_each_filter_excluded";
+    verify requirement ASlotStatesANeedAndTheMatchFillsIt by
+        "tests/runtime/test_source_match.py::test_a_static_survey_older_than_the_run_is_never_dropped_by_the_window";
+    verify requirement ASlotStatesANeedAndTheMatchFillsIt by
+        "tests/runtime/test_source_match.py::test_a_series_outside_the_window_refuses_with_the_nearest_record_named";
+    verify requirement ASlotStatesANeedAndTheMatchFillsIt by
+        "tests/runtime/test_source_match.py::test_one_run_level_statement_loosens_the_window_as_the_user_s_choice";
+    verify requirement ASlotStatesANeedAndTheMatchFillsIt by
+        "tests/runtime/test_matched_slots.py::test_the_bed_is_the_measurement_gridded_over_the_terrain_under_it";
+    verify requirement ASlotStatesANeedAndTheMatchFillsIt by
+        "tests/runtime/test_matched_slots.py::test_no_measurement_over_this_domain_leaves_the_terrain_as_the_whole_bed";
+    verify requirement ASlotStatesANeedAndTheMatchFillsIt by
+        "tests/runtime/test_matched_slots.py::test_the_next_survivor_takes_its_turn_when_the_top_one_held_nothing";
+    verify requirement ASlotStatesANeedAndTheMatchFillsIt by
+        "tests/runtime/test_matched_slots.py::test_a_need_and_a_producer_on_one_row_is_refused_at_declaration";
+
+    satisfy requirement TheRankedListIsOneObjectInThreeViews by rankedListCard;
+    satisfy requirement TheRankedListIsOneObjectInThreeViews by rankedListRecord;
+    satisfy requirement TheRankedListIsOneObjectInThreeViews by coverageContract;
+    verify requirement TheRankedListIsOneObjectInThreeViews by
+        "tests/runtime/test_matched_slots.py::test_the_ranked_list_is_one_object_the_card_and_the_sheet_both_read";
+    verify requirement TheRankedListIsOneObjectInThreeViews by
+        "tests/runtime/test_source_match.py::test_several_equal_on_every_fact_present_as_a_tie";
+    verify requirement TheRankedListIsOneObjectInThreeViews by
+        "tests/runtime/test_source_match.py::test_the_ranked_list_carries_at_most_five_rows";
+
+    satisfy requirement ASeriesIsAlignedToTheRunsEventTime by seriesOnTheRunsClock;
+    satisfy requirement ASeriesIsAlignedToTheRunsEventTime by freeSurfaceReader;
+    satisfy requirement ASeriesIsAlignedToTheRunsEventTime by gaugeDeclaration;
+    satisfy requirement ASeriesIsAlignedToTheRunsEventTime by matchedSlot;
+    verify requirement ASeriesIsAlignedToTheRunsEventTime by
+        "tests/inputs/test_observation.py::test_the_run_opens_at_its_own_moment_inside_the_record";
+    verify requirement ASeriesIsAlignedToTheRunsEventTime by
+        "tests/inputs/test_observation.py::test_a_record_that_stops_before_the_run_does_refuses_naming_the_nearest";
+    verify requirement ASeriesIsAlignedToTheRunsEventTime by
+        "tests/inputs/test_observation.py::test_a_window_in_no_stated_unit_refuses_rather_than_reading_the_slot_s";
+    verify requirement ASeriesIsAlignedToTheRunsEventTime by
+        "tests/inputs/test_observation.py::test_the_coverage_row_s_column_unit_is_what_a_bare_record_is_read_in";
+    verify requirement ASeriesIsAlignedToTheRunsEventTime by
+        "tests/inputs/test_observation.py::test_a_gage_height_reaches_the_run_s_frame_over_the_gauge_s_own_zero";
+    verify requirement ASeriesIsAlignedToTheRunsEventTime by
+        "tests/inputs/test_observation.py::test_a_gauge_that_publishes_no_zero_refuses_rather_than_reading_a_height";
+    verify requirement ASeriesIsAlignedToTheRunsEventTime by
+        "tests/fetchers/test_router_nwis.py::test_parse_iv_window_publishes_the_stage_series_beside_the_discharge";
+    verify requirement ASeriesIsAlignedToTheRunsEventTime by
+        "tests/fetchers/test_router_nwis.py::test_parse_iv_instantaneous_carries_the_gauge_s_own_zero";
+    verify requirement ASeriesIsAlignedToTheRunsEventTime by
+        "tests/runtime/test_matched_slots.py::test_a_run_series_is_asked_for_the_window_the_deck_will_solve";
 
     satisfy requirement TheRunHasOneVerticalFrame by verticalFrame;
     satisfy requirement TheRunHasOneVerticalFrame by frameLever;
