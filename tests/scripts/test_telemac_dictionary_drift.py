@@ -20,8 +20,12 @@ if not DEV.is_dir():
     pytest.skip("dev/ is absent: the dev tools are not on the remote",
                 allow_module_level=True)
 
-#: What the six exposed dictionaries hold together.
-_TOTAL_KEYWORDS = 1311
+#: What the seven exposed dictionaries hold together.
+_TOTAL_KEYWORDS = 1444
+
+#: How many of those the engine's own dictionaries give no help text for, all of
+#: them KHIONE physical constants.
+_UNDESCRIBED = 25
 
 
 def _extractor():
@@ -38,14 +42,21 @@ def test_every_exposed_module_has_a_committed_dictionary():
                  for path in extractor.module_input_dir().glob("*.json")}
     assert set(committed) == set(extractor.MODULES)
     assert sum(len(c["keywords"]) for c in committed.values()) == _TOTAL_KEYWORDS
+    undescribed = 0
     for module, dictionary in committed.items():
         assert dictionary["module"] == module
         for slot in dictionary["keywords"]:
             assert slot["type"] in ("INTEGER", "REAL", "LOGICAL", "STRING")
-            assert slot["help"] and slot["keyword"]
+            assert slot["keyword"]
+            # The help is the DICTIONARY's own, and KHIONE's carries none for a
+            # block of its physical constants. Inventing prose for those would
+            # be this suite writing the engine's documentation, so what is
+            # pinned is how many rows the engine leaves undescribed.
+            undescribed += not slot["help"]
             assert slot["identifier"].isidentifier()
             assert len(slot["rubrique"]) == 3
             assert slot["is_file"] == ("file_role" in slot)
+    assert undescribed == _UNDESCRIBED
 
 
 def test_the_help_carries_no_markup_into_the_surface():

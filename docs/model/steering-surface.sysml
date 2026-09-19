@@ -839,6 +839,19 @@ package SteeringSurface {
         refused, and a row a module prints in its listing or derives over its
         own variables is read or published but never asked of the engine.
 
+        A row may exist only UNDER a keyword: the engine allocates the variable
+        with that keyword true and stops the solve on a request for one it did
+        not allocate, so the generated table carries the row where the deck
+        states its keyword and nowhere else. Nothing arms it - a deck that says
+        nothing about the keyword is a deck the row is not written for.
+
+        The SPELLING of the generated value is the engine's own. A table longer
+        than the line the engine's parser reads is truncated by the engine, so
+        past that column it is written in the wildcard the engine's own variable
+        matching answers to, over prefixes that reach exactly the rows the table
+        carries and no other variable the keyword spells; a table no wildcard
+        can shorten enough refuses by name.
+
         What a template keeps is the QUESTION: the keywords, the reads that need
         a place the user gives, the answer, and the captions for those.
         */
@@ -1000,6 +1013,10 @@ package SteeringSurface {
         "tests/telemac/test_telemac_module_surface.py::test_a_rate_stated_by_name_arms_the_term_that_reads_it";
     verify requirement EverythingOverridable by
         "tests/runtime/test_run_journal.py::test_the_record_carries_the_slots_the_run_was_supplied";
+    verify requirement EverythingOverridable by
+        "tests/telemac/test_telemac_khione.py::test_the_qualified_floor_reaches_the_coupled_body";
+    verify requirement EverythingOverridable by
+        "tests/telemac/test_telemac_khione.py::test_a_keyword_two_bodies_spell_names_the_body_it_belongs_to";
 
     satisfy requirement DictionaryMatchesImage by dictionaryExtractor;
     verify requirement DictionaryMatchesImage by
@@ -1155,6 +1172,14 @@ package SteeringSurface {
     verify requirement ModuleIsTheUnit by
         "tests/adapters/test_message_ir.py::test_no_provider_sdk_is_imported_for_the_ir";
 
+    verify requirement OutputsAreTheModules by
+        "tests/telemac/test_telemac_khione.py::test_the_table_is_written_in_the_engine_s_own_wildcard_and_fits_its_line";
+    verify requirement OutputsAreTheModules by
+        "tests/telemac/test_telemac_khione.py::test_a_row_under_a_keyword_is_written_only_where_the_deck_states_it";
+    verify requirement OutputsAreTheModules by
+        "tests/telemac/test_telemac_khione.py::test_every_row_the_table_carries_is_a_mnemonic_the_dictionary_spells";
+    verify requirement OutputsAreTheModules by
+        "tests/telemac/test_telemac_khione.py::test_the_wrapper_writes_its_own_result_beside_the_host_s";
     satisfy requirement OutputsAreTheModules by wrapper;
     satisfy requirement OutputsAreTheModules by output;
     satisfy requirement OutputsAreTheModules by sheet;

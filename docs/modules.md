@@ -10,6 +10,7 @@ One wrapper per TELEMAC module. A wrapper is the module's own dictionary, read a
 |---|---|---|---|
 | `artemis` | 118 | `incident_wave` | `extent`, `field`, `mass_balance`, `max_over_time`, `mesh`, `profile`, `series` |
 | `gaia` | 148 | `bed`, `dredging`, `suspension` | `extent`, `field`, `mass_balance`, `max_over_time`, `mesh`, `profile`, `series` |
+| `khione` | 133 | - | `extent`, `field`, `mass_balance`, `max_over_time`, `mesh`, `profile`, `series` |
 | `telemac2d` | 376 | `atmosphere`, `boundaries`, `continue_from`, `coupling`, `friction`, `infiltration`, `oil`, `rain`, `rating`, `runoff`, `sources`, `storm`, `time_origin`, `tracer_names`, `wind` | `drogues`, `extent`, `field`, `mass_balance`, `max_over_time`, `mesh`, `profile`, `series` |
 | `telemac3d` | 355 | `atmosphere`, `column`, `vertical_grid`, `wind` | `column`, `extent`, `field`, `mass_balance`, `max_over_time`, `mesh`, `profile`, `series` |
 | `waqtel` | 91 | `degradation` | - |
@@ -39,6 +40,35 @@ The module's own output table. Every row a run's result carries is published - t
 | `TOB` | BED SHEAR STRESS | N/m2 | `inferno` | yes | yes |
 
 appended by each suspended class: `NCOH SEDIMENT` (g/L, ramp `oranges`)
+
+### `khione`
+
+| mnemonic | the result file calls it | unit | ramp | varies in time | asked of the engine |
+|---|---|---|---|---|---|
+| `PHCL` | SOLRAD CLEAR SKY | W/m2 | `inferno` | yes | yes |
+| `PHRI` | SOLRAD CLOUDY | W/m2 | `inferno` | yes | yes |
+| `PHPS` | NET SOLRAD | W/m2 | `rdbu_r` | yes | yes |
+| `PHIB` | EFFECTIVE SOLRAD | W/m2 | `rdbu_r` | yes | yes |
+| `PHIE` | EVAPO HEAT FLUX | W/m2 | `rdbu_r` | yes | yes |
+| `PHIH` | CONDUC HEAT FLUX | W/m2 | `rdbu_r` | yes | yes |
+| `PHIP` | PRECIP HEAT FLUX | W/m2 | `rdbu_r` | yes | yes |
+| `COV_TH0` | FRAZIL THETA0 | - | `purples` | yes | yes |
+| `COV_TH1` | FRAZIL THETA1 | - | `purples` | yes | yes |
+| `COV_BT1` | REENTRAINMENT | - | `purples` | yes | yes |
+| `COV_VBB` | SETTLING VEL. | m/s | `plasma` | yes | yes |
+| `COV_FC` | SOLID ICE CONC. | - | `blues` | yes | yes |
+| `COV_THS` | SOLID ICE THICK. | m | `blues` | yes | yes |
+| `COV_THF` | FRAZIL THICKNESS | m | `blues` | yes | yes |
+| `COV_THUN` | UNDER ICE THICK. | m | `blues` | yes | yes |
+| `COV_EQ` | EQUIV. SURFACE | m | `viridis` | yes | yes |
+| `COV_ET` | TOP ICE COVER | m | `viridis` | yes | yes |
+| `COV_EB` | BOTTOM ICE COVER | m | `viridis` | yes | yes |
+| `COV_THT` | TOTAL ICE THICK. | m | `blues` | yes | yes |
+| `ICETYPE` | CHARACTERISTICS | - | `set1` | yes | yes |
+| `NTOT` | PARTICLES NUMBER | 1/m3 | `magma` | yes | only under HEAT BUDGET |
+| `CTOT` | TOTAL CONCENTRAT | - | `magma` | yes | only under HEAT BUDGET |
+| `NTOTS` | PARTICLES NUMBER | 1/m3 | `magma` | yes | only under HEAT BUDGET |
+| `CTOTS` | TOTAL CONCENTRAT | - | `magma` | yes | only under HEAT BUDGET |
 
 ### `telemac2d`
 
