@@ -1,7 +1,7 @@
 {
   "tool": "telemac_dye_release",
   "run_id": "01M2XKHQEGQ3K0ETKHPKX4DQG3",
-  "commit": "f2db6c00d8dc324e9a70960b3ebd1cc7655c3fb7",
+  "commit": "966392d7b95ac996d00a5df14f667096b64a3e2a-dirty",
   "recorded_at": "2026-09-19T19:51:16.447962+00:00",
   "engine": "telemac",
   "wall_seconds": 26.89,

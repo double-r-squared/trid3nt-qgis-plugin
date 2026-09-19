@@ -1,7 +1,7 @@
 {
   "tool": "telemac3d_stratified_flow",
   "run_id": "01M2VEFS379PMNKD6H0MFJSYBD",
-  "commit": "8397312dd28e2ade6266f5eef50ce148c6c060c5-dirty",
+  "commit": "966392d7b95ac996d00a5df14f667096b64a3e2a-dirty",
   "recorded_at": "2026-09-18T23:49:51.213554+00:00",
   "engine": "telemac",
   "wall_seconds": 355.06,
@@ -12,6 +12,8 @@
     "thermocline_depth_m": 6.0,
     "mesh_resolution_m": 60.0
   },
+  "keywords": {},
+  "supplied": {},
   "sheet": [
     {
       "name": "seed",

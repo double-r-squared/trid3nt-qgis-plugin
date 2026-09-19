@@ -74,7 +74,7 @@ It publishes these layers onto the canvas:
 
 ## The proving run
 
-Run `01M2W7TB7KN9P8FGV16ZN85PMJ`, 2026-09-19T07:07:45.365530+00:00, 113.11 s, at commit `9159953f15209df6f74626b87c0a98cbb92e4d98-dirty`.
+Run `01M2W7TB7KN9P8FGV16ZN85PMJ`, 2026-09-19T07:07:45.365530+00:00, 113.11 s, at commit `1765ab2d553075f80de48f0660702bac00647c1d-dirty`.
 
 ![Every layer the run published, stacked and framed on the result (run 01M2W7TB7KN9P8FGV16ZN85PMJ)](telemac_water_temperature/telemac_water_temperature.png)
 
@@ -124,5 +124,5 @@ await TOOL_REGISTRY['telemac_water_temperature'].fn(
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2W7TB7KN9P8FGV16ZN85PMJ` and commit `9159953f15209df6f74626b87c0a98cbb92e4d98-dirty`. The full argument record is [`telemac_water_temperature/run.json`](telemac_water_temperature/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2W7TB7KN9P8FGV16ZN85PMJ` and commit `1765ab2d553075f80de48f0660702bac00647c1d-dirty`. The full argument record is [`telemac_water_temperature/run.json`](telemac_water_temperature/run.json).
 

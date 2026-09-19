@@ -1,7 +1,7 @@
 {
   "tool": "telemac_channel_dredging",
   "run_id": "01M2VCY6437D0FNFK9HY6MKR3F",
-  "commit": "9159953f15209df6f74626b87c0a98cbb92e4d98-dirty",
+  "commit": "966392d7b95ac996d00a5df14f667096b64a3e2a-dirty",
   "recorded_at": "2026-09-18T23:17:17.492237+00:00",
   "engine": "telemac",
   "wall_seconds": 29.715,

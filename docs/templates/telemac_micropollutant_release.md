@@ -76,7 +76,7 @@ It publishes these layers onto the canvas:
 
 ## The proving run
 
-Run `01M2VZA5Z27XKPJZA99ZC6QGAC`, 2026-09-19T04:39:13.179545+00:00, 108.549 s, at commit `9159953f15209df6f74626b87c0a98cbb92e4d98-dirty`.
+Run `01M2VZA5Z27XKPJZA99ZC6QGAC`, 2026-09-19T04:39:13.179545+00:00, 108.549 s, at commit `966392d7b95ac996d00a5df14f667096b64a3e2a-dirty`.
 
 ![Every layer the run published, stacked and framed on the result (run 01M2VZA5Z27XKPJZA99ZC6QGAC)](telemac_micropollutant_release/telemac_micropollutant_release.png)
 
@@ -132,5 +132,5 @@ await TOOL_REGISTRY['telemac_micropollutant_release'].fn(
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2VZA5Z27XKPJZA99ZC6QGAC` and commit `9159953f15209df6f74626b87c0a98cbb92e4d98-dirty`. The full argument record is [`telemac_micropollutant_release/run.json`](telemac_micropollutant_release/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2VZA5Z27XKPJZA99ZC6QGAC` and commit `966392d7b95ac996d00a5df14f667096b64a3e2a-dirty`. The full argument record is [`telemac_micropollutant_release/run.json`](telemac_micropollutant_release/run.json).
 

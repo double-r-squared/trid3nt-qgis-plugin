@@ -60,7 +60,7 @@ It publishes these layers onto the canvas:
 
 ## The proving run
 
-Run `01M2VEFS379PMNKD6H0MFJSYBD`, 2026-09-18T23:49:51.213554+00:00, 355.06 s, at commit `8397312dd28e2ade6266f5eef50ce148c6c060c5-dirty`.
+Run `01M2VEFS379PMNKD6H0MFJSYBD`, 2026-09-18T23:49:51.213554+00:00, 355.06 s, at commit `966392d7b95ac996d00a5df14f667096b64a3e2a-dirty`.
 
 ![Every layer the run published, stacked and framed on the result (run 01M2VEFS379PMNKD6H0MFJSYBD)](telemac3d_stratified_flow/telemac3d_stratified_flow.png)
 
@@ -107,5 +107,5 @@ await TOOL_REGISTRY['telemac3d_stratified_flow'].fn(
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2VEFS379PMNKD6H0MFJSYBD` and commit `8397312dd28e2ade6266f5eef50ce148c6c060c5-dirty`. The full argument record is [`telemac3d_stratified_flow/run.json`](telemac3d_stratified_flow/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2VEFS379PMNKD6H0MFJSYBD` and commit `966392d7b95ac996d00a5df14f667096b64a3e2a-dirty`. The full argument record is [`telemac3d_stratified_flow/run.json`](telemac3d_stratified_flow/run.json).
 
