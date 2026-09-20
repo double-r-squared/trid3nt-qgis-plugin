@@ -265,6 +265,11 @@ from trid3nt_server.workflows.telemac.templates.agitation.agitation import artem
 # water a coastline leaves inside the window, its open edge is forced at a sea
 # state a buoy measured, and the bed under it is surveyed topobathy.
 from trid3nt_server.workflows.telemac.templates.nearshore_waves.nearshore_waves import tomawac_nearshore_waves as _tomawac_nearshore_waves  # noqa: E402,F401 - TOMAWAC nearshore-wave front (engine=telemac, tier=template)
+# TELEMAC-2D coupled to TOMAWAC on one mesh, asked ONE question: the current the
+# breaking waves drive along the shore. The wave field is solved beside the water
+# and handed back as a momentum source, which is what the host's WAVE DRIVEN
+# CURRENTS switch reads.
+from trid3nt_server.workflows.telemac.templates.wave_driven_currents.wave_driven_currents import tomawac_wave_driven_currents as _tomawac_wave_driven_currents  # noqa: E402,F401 - TOMAWAC/T2D wave-driven-current front (engine=telemac, tier=template)
 # The TELEMAC-3D baroclinic engine, asked ONE question: what the column does over
 # the depth a 2D model averages away. Its domain is the water body's own mapped
 # polygon cut to the AOI, a CLOSED basin.

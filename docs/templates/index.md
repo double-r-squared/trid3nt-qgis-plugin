@@ -2,7 +2,7 @@
 
 # Templates
 
-14 registered templates, one per question. A template declares raw engine keywords over a module wrapper; `fill` sets the sheet and `run` solves it. The wrappers are in [`../modules.md`](../modules.md).
+15 registered templates, one per question. A template declares raw engine keywords over a module wrapper; `fill` sets the sheet and `run` solves it. The wrappers are in [`../modules.md`](../modules.md).
 
 ## [`artemis_harbor_agitation`](artemis_harbor_agitation.md)
 
@@ -113,4 +113,10 @@ Module `telemac2d`, proving run `01M2ZCK2Z4BK96T1CN2AA7W5GH`.
 NEARSHORE WAVES: what the offshore swell becomes at the shore - how high, how long, which way, and where it breaks.
 
 Module `tomawac`.
+
+## [`tomawac_wave_driven_currents`](tomawac_wave_driven_currents.md)
+
+WAVE-DRIVEN CURRENTS: the current breaking waves drive along the shore - how fast and which way.
+
+Module `telemac2d`.
 
