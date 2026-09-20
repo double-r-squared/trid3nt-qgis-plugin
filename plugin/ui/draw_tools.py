@@ -1,8 +1,9 @@
-"""Multi-vertex canvas capture: the polygon / polyline half of the draw gate.
+"""Canvas drawing: the multi-vertex capture tool, the map-tool borrow, and the
+bbox overlay every drawn or remembered extent is painted with.
 
 Left click adds a vertex, right or double click finishes, Backspace removes one,
-Escape abandons. The CALLER saves and restores the previous canvas tool; nothing
-here touches the project, and coordinates leave in the CANVAS CRS."""
+Escape abandons. Nothing here touches the project, and coordinates leave in the
+CANVAS CRS."""
 
 from __future__ import annotations
 
@@ -11,7 +12,73 @@ from qgis.gui import QgsMapTool, QgsRubberBand
 from qgis.PyQt.QtCore import Qt, pyqtSignal
 from qgis.PyQt.QtGui import QColor
 
-__all__ = ["VertexCaptureTool"]
+__all__ = ["VertexCaptureTool", "borrow_map_tool", "paint_bbox_overlay",
+           "clear_bbox_overlay"]
+
+
+def borrow_map_tool(canvas, tool, checked: bool, previous):
+    """Install ``tool`` while ``checked`` and hand back the tool it displaced,
+    which the caller keeps and passes here again to restore. OFF restores only
+    while the borrowed tool is still active, so a tool the user picked by hand
+    on the canvas is never yanked out from under them."""
+    if checked:
+        previous = canvas.mapTool()
+        canvas.setMapTool(tool)
+        return previous
+    if canvas.mapTool() is tool:
+        canvas.setMapTool(previous)
+    return None
+
+
+def paint_bbox_overlay(canvas, band, bbox4326, color: str, *,
+                       dotted: bool = False):
+    """Paint one EPSG:4326 box as an OUTLINE-ONLY rubber band in the canvas CRS,
+    building the band on first use and returning it. Cosmetic: any failure
+    leaves the canvas as it was and hands the band back unchanged."""
+    try:
+        from qgis.core import (
+            QgsCoordinateReferenceSystem,
+            QgsCoordinateTransform,
+            QgsGeometry,
+            QgsProject,
+            QgsRectangle,
+        )
+
+        lon_min, lat_min, lon_max, lat_max = bbox4326
+        rect = QgsRectangle(lon_min, lat_min, lon_max, lat_max)
+        dst_crs = canvas.mapSettings().destinationCrs()
+        src_crs = QgsCoordinateReferenceSystem("EPSG:4326")
+        if src_crs != dst_crs:
+            rect = QgsCoordinateTransform(
+                src_crs, dst_crs, QgsProject.instance().transformContext()
+            ).transformBoundingBox(rect)
+        if band is None:
+            band = QgsRubberBand(canvas, QgsWkbTypes.PolygonGeometry)
+            band.setColor(QColor(color))
+            band.setWidth(2)
+            # Outline-only: a fully transparent fill leaves just the ring.
+            band.setFillColor(QColor(0, 0, 0, 0))
+            if dotted:
+                try:
+                    band.setLineStyle(Qt.PenStyle.DotLine)
+                except Exception:  # noqa: BLE001 -- older builds lack it
+                    pass
+        band.setToGeometry(QgsGeometry.fromRect(rect), None)
+        band.show()
+    except Exception:  # noqa: BLE001 -- overlay is cosmetic; never crash
+        pass
+    return band
+
+
+def clear_bbox_overlay(band) -> None:
+    """Empty and hide an overlay band. A no-op on None and on a dead canvas."""
+    if band is None:
+        return
+    try:
+        band.reset(QgsWkbTypes.PolygonGeometry)
+        band.hide()
+    except Exception:  # noqa: BLE001 -- best-effort teardown
+        pass
 
 _RUBBER_COLOR = QColor(220, 120, 30)
 _RUBBER_FILL = QColor(220, 120, 30, 45)

@@ -26,7 +26,7 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
-from . import gate
+from . import draw_tools, gate
 from ._style import (
     _PROBE_ERROR_BLOCK_STYLE,
     _STATUS_LINE_STYLE,
@@ -2194,15 +2194,10 @@ class SpatialInputCard(QFrame):
             canvas = self._iface.mapCanvas()
         except Exception:  # noqa: BLE001 -- headless / no iface
             return
-        if checked:
-            if self._tool is None:
-                self._tool = self._build_tool(canvas)
-            self._prev_tool = canvas.mapTool()
-            canvas.setMapTool(self._tool)
-        else:
-            if canvas.mapTool() is self._tool:
-                canvas.setMapTool(self._prev_tool)
-            self._prev_tool = None
+        if checked and self._tool is None:
+            self._tool = self._build_tool(canvas)
+        self._prev_tool = draw_tools.borrow_map_tool(
+            canvas, self._tool, checked, self._prev_tool)
 
     def _build_tool(self, canvas):
         if self._request.mode == "point":
@@ -2217,9 +2212,7 @@ class SpatialInputCard(QFrame):
             tool = QgsMapToolExtent(canvas)
             tool.extentChanged.connect(self._on_extent_chosen)
             return tool
-        from .draw_tools import VertexCaptureTool
-
-        tool = VertexCaptureTool(canvas, self._request.draw_kind)
+        tool = draw_tools.VertexCaptureTool(canvas, self._request.draw_kind)
         tool.captured.connect(self._on_shape_captured)
         tool.changed.connect(self._on_vertex_added)
         tool.cancelled.connect(self._on_shape_abandoned)

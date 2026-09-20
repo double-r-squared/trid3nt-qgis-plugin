@@ -31,7 +31,7 @@ from qgis.PyQt.QtWidgets import (
 # registered against.
 from qgis.core import QgsMapLayer
 
-from . import gate
+from . import draw_tools, gate
 from .charts_window import ChartsWindow
 from .cards import (
     CodeExecCard,
@@ -800,12 +800,8 @@ class Trid3ntDock(QDockWidget):
                 self._probe_map_tool.canvasClicked.connect(
                     self._on_probe_canvas_clicked
                 )
-            self._prev_map_tool = canvas.mapTool()
-            canvas.setMapTool(self._probe_map_tool)
-        else:
-            if canvas.mapTool() is self._probe_map_tool:
-                canvas.setMapTool(self._prev_map_tool)
-            self._prev_map_tool = None
+        self._prev_map_tool = draw_tools.borrow_map_tool(
+            canvas, self._probe_map_tool, checked, self._prev_map_tool)
 
     def _toggle_probe_results(self) -> None:
         self.probe_result_label.setVisible(
@@ -879,59 +875,15 @@ class Trid3ntDock(QDockWidget):
             canvas = self.iface.mapCanvas()
         except Exception:  # noqa: BLE001 -- headless / no iface -- no overlay
             return
-        try:
-            from qgis.core import (
-                QgsCoordinateReferenceSystem,
-                QgsCoordinateTransform,
-                QgsGeometry,
-                QgsProject,
-                QgsRectangle,
-                QgsWkbTypes,
-            )
-            from qgis.gui import QgsRubberBand
-            from qgis.PyQt.QtGui import QColor
-
-            lon_min, lat_min, lon_max, lat_max = bbox4326
-            rect = QgsRectangle(lon_min, lat_min, lon_max, lat_max)
-            dst_crs = canvas.mapSettings().destinationCrs()
-            src_crs = QgsCoordinateReferenceSystem("EPSG:4326")
-            if src_crs != dst_crs:
-                transform = QgsCoordinateTransform(
-                    src_crs, dst_crs, QgsProject.instance().transformContext()
-                )
-                rect = transform.transformBoundingBox(rect)
-            if self._aoi_rubber is None:
-                self._aoi_rubber = QgsRubberBand(
-                    canvas, QgsWkbTypes.PolygonGeometry
-                )
-                accent = QColor("#58a6ff")
-                self._aoi_rubber.setColor(accent)
-                self._aoi_rubber.setWidth(2)
-                # Outline-only: a fully transparent fill leaves just the ring.
-                self._aoi_rubber.setFillColor(QColor(0, 0, 0, 0))
-                try:
-                    self._aoi_rubber.setLineStyle(Qt.PenStyle.DotLine)
-                except Exception:  # noqa: BLE001 -- older builds lack it
-                    pass
-            self._aoi_rubber.setToGeometry(QgsGeometry.fromRect(rect), None)
-            self._aoi_rubber.show()
-        except Exception:  # noqa: BLE001 -- overlay is cosmetic; never crash
-            return
+        self._aoi_rubber = draw_tools.paint_bbox_overlay(
+            canvas, self._aoi_rubber, bbox4326, "#58a6ff", dotted=True)
 
     def _clear_aoi_overlay(self) -> None:
         """Drop the case AOI state + hide the overlay -- called on every case
         switch (``_clear_messages``) and disconnect (``disconnect_agent``) so a
         stale box from the previous case never lingers on the canvas."""
         self._case_bbox = None
-        if self._aoi_rubber is None:
-            return
-        try:
-            from qgis.core import QgsWkbTypes
-
-            self._aoi_rubber.reset(QgsWkbTypes.PolygonGeometry)
-            self._aoi_rubber.hide()
-        except Exception:  # noqa: BLE001 -- best-effort teardown
-            pass
+        draw_tools.clear_bbox_overlay(self._aoi_rubber)
 
     def _toggle_aoi_draw(self, checked: bool) -> None:
         """Install or restore the canvas map tool for the Set-AOI button, ON
@@ -972,8 +924,8 @@ class Trid3ntDock(QDockWidget):
                     self.aoi_btn.setChecked(False)
                     self.aoi_btn.blockSignals(False)
                     return
-            self._prev_aoi_tool = canvas.mapTool()
-            canvas.setMapTool(self._aoi_map_tool)
+            self._prev_aoi_tool = draw_tools.borrow_map_tool(
+                canvas, self._aoi_map_tool, True, self._prev_aoi_tool)
             # While Set-AOI is ON, BACKSPACE/DELETE clears
             # the current AOI. A canvas eventFilter (installed here, removed in
             # the OFF branch) catches those keys and routes to _clear_aoi -- the
@@ -981,9 +933,8 @@ class Trid3ntDock(QDockWidget):
             canvas.installEventFilter(self)
             self._aoi_key_filter_on = True
         else:
-            if canvas.mapTool() is self._aoi_map_tool:
-                canvas.setMapTool(self._prev_aoi_tool)
-            self._prev_aoi_tool = None
+            self._prev_aoi_tool = draw_tools.borrow_map_tool(
+                canvas, self._aoi_map_tool, False, self._prev_aoi_tool)
             if getattr(self, "_aoi_key_filter_on", False):
                 canvas.removeEventFilter(self)
                 self._aoi_key_filter_on = False
@@ -1079,12 +1030,8 @@ class Trid3ntDock(QDockWidget):
                     self.region_btn.setChecked(False)
                     self.region_btn.blockSignals(False)
                     return
-            self._prev_region_tool = canvas.mapTool()
-            canvas.setMapTool(self._region_map_tool)
-        else:
-            if canvas.mapTool() is self._region_map_tool:
-                canvas.setMapTool(self._prev_region_tool)
-            self._prev_region_tool = None
+        self._prev_region_tool = draw_tools.borrow_map_tool(
+            canvas, self._region_map_tool, checked, self._prev_region_tool)
 
     def _on_region_extent_chosen(self, rect) -> None:
         """A rectangle was dragged with Draw-region: stash it as the pending
@@ -1127,53 +1074,15 @@ class Trid3ntDock(QDockWidget):
             canvas = self.iface.mapCanvas()
         except Exception:  # noqa: BLE001 -- headless / no iface -- no overlay
             return
-        try:
-            from qgis.core import (
-                QgsCoordinateReferenceSystem,
-                QgsCoordinateTransform,
-                QgsGeometry,
-                QgsProject,
-                QgsRectangle,
-                QgsWkbTypes,
-            )
-            from qgis.gui import QgsRubberBand
-            from qgis.PyQt.QtGui import QColor
-
-            lon_min, lat_min, lon_max, lat_max = bbox4326
-            rect = QgsRectangle(lon_min, lat_min, lon_max, lat_max)
-            dst_crs = canvas.mapSettings().destinationCrs()
-            src_crs = QgsCoordinateReferenceSystem("EPSG:4326")
-            if src_crs != dst_crs:
-                transform = QgsCoordinateTransform(
-                    src_crs, dst_crs, QgsProject.instance().transformContext()
-                )
-                rect = transform.transformBoundingBox(rect)
-            if self._region_rubber is None:
-                self._region_rubber = QgsRubberBand(
-                    canvas, QgsWkbTypes.PolygonGeometry
-                )
-                self._region_rubber.setColor(QColor("#e3b341"))  # amber
-                self._region_rubber.setWidth(2)
-                self._region_rubber.setFillColor(QColor(0, 0, 0, 0))
-            self._region_rubber.setToGeometry(QgsGeometry.fromRect(rect), None)
-            self._region_rubber.show()
-        except Exception:  # noqa: BLE001 -- overlay is cosmetic; never crash
-            return
+        self._region_rubber = draw_tools.paint_bbox_overlay(
+            canvas, self._region_rubber, bbox4326, "#e3b341")
 
     def _clear_region_overlay(self) -> None:
         """Drop the pending drawn region + hide its overlay. Called on send
         (clear-on-send) and on case switch / disconnect so a stale region never
         rides a later turn or lingers on the canvas."""
         self._drawn_region = None
-        if self._region_rubber is None:
-            return
-        try:
-            from qgis.core import QgsWkbTypes
-
-            self._region_rubber.reset(QgsWkbTypes.PolygonGeometry)
-            self._region_rubber.hide()
-        except Exception:  # noqa: BLE001 -- best-effort teardown
-            pass
+        draw_tools.clear_bbox_overlay(self._region_rubber)
 
     # -- connection ----------------------------------------------------------- #
 
