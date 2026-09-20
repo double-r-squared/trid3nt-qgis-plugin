@@ -1456,9 +1456,7 @@ package DataSeam {
     verify requirement OneBedOverEverySourceAUserCanHave by
         "tests/mesh/test_bed_sources_and_runs.py::test_a_domain_no_source_covers_refuses_by_name";
     verify requirement OneBedOverEverySourceAUserCanHave by
-        "tests/mesh/test_bed_sources_and_runs.py::test_a_layer_of_soundings_goes_through_the_derive_at_the_meshs_own_scale";
-    verify requirement OneBedOverEverySourceAUserCanHave by
-        "tests/mesh/test_bed_sources_and_runs.py::test_a_tree_without_the_soundings_derive_says_which_one_is_missing";
+        "tests/mesh/test_bed_sources_and_runs.py::test_a_layer_of_soundings_goes_through_the_grid_at_the_meshs_own_scale";
     verify requirement OneBedOverEverySourceAUserCanHave by
         "tests/telemac/test_workflow_owns_its_stages.py::test_the_bed_op_takes_the_one_row_the_merge_derive_produced";
 

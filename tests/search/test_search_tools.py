@@ -335,7 +335,6 @@ def test_typo_wetlnds_routes_without_exact_corpus_queries(
         # the top-5 entirely; with expansion the correction "wetlands" carries
         # BM25 + name-substring.
         ("wetlnds along this shoreline", "fetch_nwi_wetlands"),
-        ("floof depth for this neighborhood", "compute_flood_depth_damage"),
     ],
 )
 def test_typo_queries_route_to_target_tools(query: str, expected_tool: str):

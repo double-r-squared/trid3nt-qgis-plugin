@@ -728,52 +728,6 @@ class TestReplaceFromLayers:
         assert out["dem_uri"] == "case-a-dem"
         assert out["dem_uri"] != DEM_COG
 
-class TestDemHintInventoryText:
-    """``_inventory_text`` (F32): tool-aware empty-registry suggestion + a
-    wider (10, was 5) handle-listing cap."""
-
-    def test_dem_consuming_tool_gets_fetch_dem_hint(self) -> None:
-        # The hint fires on the remaining branch-4 raise (a display-face URL
-        # whose LAYERS= handle was never produced; storage URIs fail open).
-        reg = make_registry("sess-dem-hint")
-        for tool in ("compute_cross_section",):
-            with pytest.raises(UriResolutionError) as exc_info:
-                reg.resolve_params(
-                    tool,
-                    {"dem_uri": "s3://trid3nt-runs/never/produced.tif"},
-                )
-            msg = str(exc_info.value)
-            assert "fetch_dem" in msg
-            assert "sfincs_flood" not in msg
-
-    def test_non_dem_tool_keeps_generic_hint(self) -> None:
-        reg = make_registry("sess-generic-hint")
-        with pytest.raises(UriResolutionError) as exc_info:
-            reg.resolve_params(
-                "pelicun_damage_assessment",
-                {"hazard_raster_uri": "s3://trid3nt-runs/never/produced.tif"},
-            )
-        msg = str(exc_info.value)
-        assert "sfincs_flood" in msg
-
-    def test_non_empty_registry_lists_up_to_ten_handles(self) -> None:
-        reg = make_registry("sess-ten-handles")
-        for i in range(12):
-            reg.record(
-                f"layer-{i:02d}",
-                uri=f"s3://trid3nt-cache/layer-{i:02d}.tif",
-                tool_name="t",
-            )
-        with pytest.raises(UriResolutionError) as exc_info:
-            reg.resolve_params(
-                "t",
-                {"assets_uri": "s3://trid3nt-runs/does/not/exist.tif"},
-            )
-        msg = str(exc_info.value)
-        listed = sum(1 for i in range(12) if f"layer-{i:02d}" in msg)
-        assert listed == 10
-
-
 class TestReconnectSeedsRegistryFromCase:
     """Server-integration: the actual case-open path (``case-command(select)``
     -> ``_emit_case_open``) seeds the registry so a fresh connection resolves

@@ -40,7 +40,7 @@ class TestToolCandidatesParsing(unittest.TestCase):
         # never re-sorts).
         self.assertEqual(
             [c.tool_name for c in req.candidates],
-            ["compute_layer_bounds", "assess_building_damage", "fetch_landcover"],
+            ["probe_point", "assess_building_damage", "fetch_landcover"],
         )
         self.assertEqual(
             req.candidates[0].summary,
@@ -95,8 +95,8 @@ class TestToolCandidatesParsing(unittest.TestCase):
         """The contract's three reply shapes, normalized: pick wins outright
         (both never sent), else stripped guidance, else both-None."""
         self.assertEqual(
-            gate.resolve_tool_choice("compute_layer_bounds", "stray text"),
-            ("compute_layer_bounds", None),
+            gate.resolve_tool_choice("probe_point", "stray text"),
+            ("probe_point", None),
         )
         self.assertEqual(
             gate.resolve_tool_choice(None, "  use landcover  "),
@@ -108,8 +108,8 @@ class TestToolCandidatesParsing(unittest.TestCase):
 
     def test_chip_summaries(self):
         self.assertEqual(
-            gate.tool_choice_summary("compute_layer_bounds", None),
-            "picked compute_layer_bounds",
+            gate.tool_choice_summary("probe_point", None),
+            "picked probe_point",
         )
         self.assertEqual(
             gate.tool_choice_summary(None, "guidance"),
@@ -149,7 +149,7 @@ class TestToolChoiceRoundTrip(unittest.TestCase):
         self.assertEqual(ev.data["stage_label"], "Data step")
         self.assertEqual(
             [c["tool_name"] for c in ev.data["candidates"]],
-            ["compute_layer_bounds", "assess_building_damage", "fetch_landcover"],
+            ["probe_point", "assess_building_damage", "fetch_landcover"],
         )
 
     def test_pick_round_trip(self):
@@ -159,7 +159,7 @@ class TestToolChoiceRoundTrip(unittest.TestCase):
         tool, text = gate.resolve_tool_choice(req.candidates[0].tool_name, None)
         self.client.send_tool_choice(req.request_id, tool_name=tool, free_text=text)
         chunk = self._await_kind("chunk")
-        self.assertIn("Running compute_layer_bounds", chunk.data["delta"])
+        self.assertIn("Running probe_point", chunk.data["delta"])
         done = self._await_kind("turn-complete")
         self.assertFalse(done.data.get("cancelled"))
         # The EXACT ToolChoicePayload wire shape (the live server validates
@@ -170,7 +170,7 @@ class TestToolChoiceRoundTrip(unittest.TestCase):
             [
                 {
                     "request_id": STUB_TOOL_CANDIDATES_REQUEST_ID,
-                    "tool_name": "compute_layer_bounds",
+                    "tool_name": "probe_point",
                     "free_text": None,
                 }
             ],
@@ -224,7 +224,7 @@ class TestToolChoiceRoundTrip(unittest.TestCase):
         self.client.send_chat("which-tool-timeout please")
         self._await_kind("tool-candidates")
         chunk = self._await_kind("chunk")
-        self.assertIn("proceeding with compute_layer_bounds", chunk.data["delta"])
+        self.assertIn("proceeding with probe_point", chunk.data["delta"])
         self._await_kind("turn-complete")
         self.assertEqual(self.server.tool_choices, [])
 

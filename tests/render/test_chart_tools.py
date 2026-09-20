@@ -285,7 +285,7 @@ class TestSummarizeChartEmission:
         from trid3nt_server.adapters.adapter import summarize_tool_result
 
         ordinary = {"columns": ["count"], "rows": [[9]], "row_count": 1, "count": 9}
-        summary = summarize_tool_result("compute_layer_bounds", ordinary)
+        summary = summarize_tool_result("probe_point", ordinary)
         assert summary["status"] == "ok"
         assert summary["result"]["count"] == 9
 
@@ -388,19 +388,15 @@ class TestEmitChart:
 
 
 def test_dispatch_detection_signal(tmp_path):
-    from trid3nt_server.tools.derive.compute_layer_bounds.compute_layer_bounds import (
-        compute_layer_bounds,
-    )
-
-    records = [{"x": 0.1 * i, "y": 0.1 * i, "v": float(i)} for i in range(4)]
-    vec_path = _make_geojson_points(tmp_path, records)
+    from trid3nt_contracts.execution import LayerURI
 
     chart = generate_chart(vega_lite_spec=_bar_spec(), title="t",
                            records=[{"label": "a", "count": 1}])
-    bounds = asyncio.run(compute_layer_bounds(layer_uri=vec_path, fit_map=False))
+    layer = LayerURI(layer_id="L1", name="a layer", layer_type="vector",
+                     uri="s3://b/k.geojson")
 
     assert is_chart_emission_result(chart) is True
-    assert is_chart_emission_result(bounds) is False
+    assert is_chart_emission_result(layer) is False
 
 
 

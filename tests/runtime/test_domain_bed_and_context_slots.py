@@ -72,7 +72,7 @@ def test_a_row_declared_with_a_producer_binds_its_reads_like_a_bare_one():
     """``Data(tool(...))`` is a producer row with a modifier written on it, so
     its reads of sibling rows resolve the same way a bare row's do."""
     class DATA:
-        box = tool("compute_layer_bounds", layer_uri="x")
+        box = tool("probe_point", layer_uri="x")
         sample = Data(tool("fetch_usgs_water_quality",
                            bbox=Ref("box.bbox"))).context()
 

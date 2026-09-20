@@ -409,19 +409,7 @@ package ToolPlane {
     satisfy requirement ADeriveToolNeverFetches by runPyqgis;
     satisfy requirement ADeriveToolNeverFetches by runQgisAlgorithm;
     verify requirement ADeriveToolNeverFetches by
-        "tests/derive/test_hydrology_primitives.py::test_bad_inputs_raise";
-    verify requirement ADeriveToolNeverFetches by
-        "tests/derive/test_compute_flood_depth_damage.py::test_missing_assets_is_a_refusal_never_a_fetch";
-    verify requirement ADeriveToolNeverFetches by
-        "tests/derive/test_compute_sediment_yield.py::test_missing_layers_refuse_never_fetch";
-    verify requirement ADeriveToolNeverFetches by
-        "tests/derive/test_model_debris_flow.py::test_missing_layers_refuse_never_fetch";
-    verify requirement ADeriveToolNeverFetches by
-        "tests/derive/test_compute_model_residuals.py::test_missing_observations_refuse_never_fetch";
-    verify requirement ADeriveToolNeverFetches by
-        "tests/derive/test_compute_exposure_summary.py::test_absent_layers_are_named_never_fetched";
-    verify requirement ADeriveToolNeverFetches by
-        "tests/derive/test_query_point_hazard.py::test_place_name_is_not_geocoded_here";
+        "tests/derive/test_probe_point.py::test_outside_bounds_is_honest_null";
     verify requirement ADeriveToolNeverFetches by
         "tests/model/test_model_conformance.py::test_the_model_conforms_to_the_tree";
 

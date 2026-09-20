@@ -75,7 +75,7 @@ class TestHandleMint:
         so the emit rewrite can hide them from the LLM."""
         reg = make_registry()
         reg.register_tool_result(
-            "compute_layer_bounds", {"frames": [{"uri": FRAME_COG, "t": 7}]}
+            "probe_point", {"frames": [{"uri": FRAME_COG, "t": 7}]}
         )
         short = reg.short_for_uri(FRAME_COG)
         assert short is not None and SHORT_HANDLE_RE.match(short)

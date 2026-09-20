@@ -94,52 +94,52 @@ def _write_telemetry_jsonl(path, pairs: list[tuple[str, str]]) -> None:
 def test_co_occurrence_boost_when_jsonl_populated(tmp_path, monkeypatch) -> None:
     """A tool that frequently co-occurs with a query-named tool is boosted.
 
-    With a sink where ``fetch_dem`` co-occurs with ``compute_cross_section``, the query
-    "fetch_dem terrain" ranks ``compute_cross_section`` no worse than the empty baseline."""
+    With a sink where ``fetch_dem`` co-occurs with ``fetch_nws_event``, the query
+    "fetch_dem terrain" ranks ``fetch_nws_event`` no worse than the empty baseline."""
     # Baseline: empty telemetry sink -> co-occurrence channel drops out.
     empty = tmp_path / "empty.jsonl"
     empty.write_text("", encoding="utf-8")
     monkeypatch.setenv("TRID3NT_TELEMETRY_PATH", str(empty))
     _reset_cooccurrence_cache_for_tests()
     baseline_result = asyncio.run(
-        search_tools("fetch_dem terrain analysis", top_k=15)
+        search_tools("sentinel1 sar radar backscatter", top_k=15)
     )
     baseline_order = [r["tool_name"] for r in baseline_result["results"]]
-    baseline_hillshade_rank = (
-        baseline_order.index("compute_cross_section")
-        if "compute_cross_section" in baseline_order
+    baseline_naip_rank = (
+        baseline_order.index("fetch_nws_event")
+        if "fetch_nws_event" in baseline_order
         else None
     )
 
-    # Boosted: populate the sink so compute_cross_section co-occurs with fetch_dem in
-    # 5 sessions and compute_sediment_yield in only 1.
+    # Boosted: populate the sink so fetch_nws_event co-occurs with fetch_dem in
+    # 5 sessions and fetch_idf_curve in only 1.
     pairs: list[tuple[str, str]] = []
     for i in range(5):
         sid = f"01SESS{i:020d}"
-        pairs.append((sid, "fetch_dem"))
-        pairs.append((sid, "compute_cross_section"))
-    pairs.append(("01SESS9999999999999999999", "fetch_dem"))
-    pairs.append(("01SESS9999999999999999999", "compute_sediment_yield"))
+        pairs.append((sid, "fetch_sentinel1_sar"))
+        pairs.append((sid, "fetch_nws_event"))
+    pairs.append(("01SESS9999999999999999999", "fetch_sentinel1_sar"))
+    pairs.append(("01SESS9999999999999999999", "fetch_idf_curve"))
     populated = tmp_path / "populated.jsonl"
     _write_telemetry_jsonl(populated, pairs)
     monkeypatch.setenv("TRID3NT_TELEMETRY_PATH", str(populated))
     _reset_cooccurrence_cache_for_tests()
 
     boosted_result = asyncio.run(
-        search_tools("fetch_dem terrain analysis", top_k=15)
+        search_tools("sentinel1 sar radar backscatter", top_k=15)
     )
     boosted_order = [r["tool_name"] for r in boosted_result["results"]]
     assert (
-        "compute_cross_section" in boosted_order
-    ), f"compute_cross_section missing from boosted top-15: {boosted_order!r}"
-    boosted_hillshade_rank = boosted_order.index("compute_cross_section")
+        "fetch_nws_event" in boosted_order
+    ), f"fetch_nws_event missing from boosted top-15: {boosted_order!r}"
+    boosted_naip_rank = boosted_order.index("fetch_nws_event")
 
-    # The boosted run must rank compute_cross_section no WORSE than the baseline;
+    # The boosted run must rank fetch_nws_event no WORSE than the baseline;
     # in practice the co-occurrence boost moves it up.
-    if baseline_hillshade_rank is not None:
-        assert boosted_hillshade_rank <= baseline_hillshade_rank, (
-            f"co-occurrence boost expected to improve compute_cross_section rank; "
-            f"baseline={baseline_hillshade_rank} boosted={boosted_hillshade_rank}"
+    if baseline_naip_rank is not None:
+        assert boosted_naip_rank <= baseline_naip_rank, (
+            f"co-occurrence boost expected to improve fetch_nws_event rank; "
+            f"baseline={baseline_naip_rank} boosted={boosted_naip_rank}"
         )
 
 
@@ -174,8 +174,8 @@ def test_malformed_jsonl_does_not_crash(tmp_path, monkeypatch) -> None:
 def test_cooccurrence_index_cached_within_5min_window(tmp_path, monkeypatch) -> None:
     """Two search_tools calls within 5 min reuse the cached cooc index (one read)."""
     pairs = [
-        ("01SESS00000000000000000001", "fetch_dem"),
-        ("01SESS00000000000000000001", "compute_cross_section"),
+        ("01SESS00000000000000000001", "fetch_sentinel1_sar"),
+        ("01SESS00000000000000000001", "fetch_nws_event"),
     ]
     populated = tmp_path / "populated.jsonl"
     _write_telemetry_jsonl(populated, pairs)
@@ -253,20 +253,20 @@ def test_build_cooccurrence_from_docs_pair_count_per_session() -> None:
     """Two tools called multiple times in one session count as one pair."""
     docs = _make_telemetry_docs(
         [
-            ("01SESS01", "fetch_dem"),
-            ("01SESS01", "fetch_dem"),  # duplicate within session
-            ("01SESS01", "compute_cross_section"),
-            ("01SESS02", "fetch_dem"),
-            ("01SESS02", "compute_cross_section"),
+            ("01SESS01", "fetch_sentinel1_sar"),
+            ("01SESS01", "fetch_sentinel1_sar"),  # duplicate within session
+            ("01SESS01", "fetch_nws_event"),
+            ("01SESS02", "fetch_sentinel1_sar"),
+            ("01SESS02", "fetch_nws_event"),
         ]
     )
     idx = _build_cooccurrence_from_docs(docs)
-    # 2 sessions; each contributes 1 pair (fetch_dem, compute_cross_section).
-    assert idx.cooccurrence["fetch_dem"]["compute_cross_section"] == 2
-    assert idx.cooccurrence["compute_cross_section"]["fetch_dem"] == 2
+    # 2 sessions; each contributes 1 pair (fetch_dem, fetch_nws_event).
+    assert idx.cooccurrence["fetch_sentinel1_sar"]["fetch_nws_event"] == 2
+    assert idx.cooccurrence["fetch_nws_event"]["fetch_sentinel1_sar"] == 2
     # Call counts ARE per-call though.
-    assert idx.call_counts["fetch_dem"] == 3
-    assert idx.call_counts["compute_cross_section"] == 2
+    assert idx.call_counts["fetch_sentinel1_sar"] == 3
+    assert idx.call_counts["fetch_nws_event"] == 2
     assert idx.session_count == 2
 
 
@@ -274,8 +274,8 @@ def test_build_cooccurrence_from_docs_respects_session_cap() -> None:
     """When more than ``session_cap`` sessions appear, only the newest count."""
     pairs: list[tuple[str, str]] = []
     for i in range(50):
-        pairs.append((f"01SES{i:021d}", "fetch_dem"))
-        pairs.append((f"01SES{i:021d}", "compute_cross_section"))
+        pairs.append((f"01SES{i:021d}", "fetch_sentinel1_sar"))
+        pairs.append((f"01SES{i:021d}", "fetch_nws_event"))
     docs = _make_telemetry_docs(pairs)
     idx = _build_cooccurrence_from_docs(docs, session_cap=10)
     assert idx.session_count == 10

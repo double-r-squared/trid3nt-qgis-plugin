@@ -28,7 +28,7 @@ def warm_index():
 
 
 def test_core_floor_covers_render_and_analysis_slots():
-    for name in ("generate_chart", "compute_layer_bounds"):
+    for name in ("generate_chart", "run_qgis_algorithm"):
         assert name in CORE_FLOOR, f"{name} must be in CORE_FLOOR"
     # There is no publish_layer in the floor and no publish_layer tool:
     # emission is automatic, so there is no "display this" intent to keep
@@ -156,7 +156,6 @@ def test_empty_query_returns_floor_only(warm_index):
 
 _RECALL_FIXTURE = [
     ("show me the lightning over this storm from GOES", "fetch_glm_lightning"),
-    ("detect the active fire hot pixels from GOES", "derive_active_fire"),
     ("get the elevation DEM for this area", "find_sources"),
     ("geocode this city to a bounding box", "geocode_location"),
     ("fetch high resolution aerial imagery for this area", "fetch_naip"),

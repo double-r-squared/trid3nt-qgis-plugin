@@ -129,7 +129,7 @@ def test_gate_always_includes_used_tools():
 
 def test_gate_always_includes_named_tool():
     ranked = _ranked(24)
-    target = "query_point_hazard"
+    target = "fetch_ghsl_population"
     assert target in TOOL_REGISTRY
     assert target not in {n for n, _ in ranked[:24]}
     gated = gate_tool_registry(

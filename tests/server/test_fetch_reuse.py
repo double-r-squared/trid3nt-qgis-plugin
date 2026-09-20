@@ -129,7 +129,7 @@ def test_a_tool_that_is_not_a_declared_source_never_reuses() -> None:
     layer = _landed("fetch_buildings", {"bbox": AOI})
     _register("s5", layer, "fetch_buildings")
     state = _state("s5", [layer])
-    assert _reusable_fetch_layer(state, "compute_layer_bounds", {"bbox": AOI}) is None
+    assert _reusable_fetch_layer(state, "probe_point", {"bbox": AOI}) is None
 
 
 def test_a_layer_no_longer_on_the_case_does_not_answer_a_fetch() -> None:
@@ -154,7 +154,7 @@ def test_the_case_state_note_tags_a_fetched_layer_with_its_dataset() -> None:
     assert note is not None
     assert "INPUT[buildings]" in note
     assert "handle=L-buildings" in note
-    assert "compute_layer_bounds" in note
+    assert "bbox=" in note
     assert "FETCHED LAYER REUSE" in note
 
 

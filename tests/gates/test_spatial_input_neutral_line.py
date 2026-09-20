@@ -140,13 +140,12 @@ def test_response_aoi_flow_has_no_line_keys():
     assert "line" not in result and "linestring" not in result
 
 
-# 3. The surfaced line geometry resolves in compute_cross_section.
-# There is no compute_terrain_profile; compute_cross_section is the
-#  surviving generic sample-along-line tool and carries _resolve_line_coords.
+# 3. The surfaced line geometry resolves in the LINE slot's own ingestion,
+# which is what every question that follows a line reads it through.
 
 
-def test_surfaced_line_feeds_compute_cross_section():
-    from trid3nt_server.tools.derive.compute_cross_section.compute_cross_section import _resolve_line_coords
+def test_surfaced_line_feeds_the_line_slot():
+    from trid3nt_server.inputs.line import line as _resolve_line_coords
 
     resp = SpatialInputResponsePayload(
         request_id=new_ulid(),
@@ -155,16 +154,9 @@ def test_surfaced_line_feeds_compute_cross_section():
     )
     result = _spatial_response_to_result(resp)
     # both the bare list and the GeoJSON LineString resolve in the tool.
-    assert _resolve_line_coords(result["line"]) == [
-        [-85.31, 35.04],
-        [-85.30, 35.05],
-        [-85.29, 35.06],
-    ]
-    assert _resolve_line_coords(result["linestring"]) == [
-        [-85.31, 35.04],
-        [-85.30, 35.05],
-        [-85.29, 35.06],
-    ]
+    coords = [[-85.31, 35.04], [-85.30, 35.05], [-85.29, 35.06]]
+    assert _resolve_line_coords(result["line"])["coordinates"] == coords
+    assert _resolve_line_coords(result["linestring"])["coordinates"] == coords
 
 
 
