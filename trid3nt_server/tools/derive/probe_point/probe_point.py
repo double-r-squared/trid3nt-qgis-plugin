@@ -9,6 +9,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
+import os
+import re
 import tempfile
 from datetime import datetime, timezone
 from typing import Any
@@ -17,13 +20,6 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.inputs.point import point as ingest_point
 from trid3nt_server.tools import register_tool
-from trid3nt_server.tools.derive.extract_timeseries_at_point.extract_timeseries_at_point import detect_frame_sequences
-from trid3nt_server.tools.derive.query_point_hazard.query_point_hazard import (
-    layers_from_case,
-    resolve_case_id,
-    sample_raster_at_point,
-    stage_layer_local,
-)
 
 __all__ = [
     "probe_point",
@@ -31,9 +27,15 @@ __all__ = [
     "ProbePointInputError",
     "ProbePointCaseNotFoundError",
     "MAX_PROBE_LAYERS",
+    "detect_frame_sequences",
+    "layers_from_case",
+    "parse_frame_token",
+    "resolve_case_id",
+    "sample_raster_at_point",
+    "stage_layer_local",
 ]
 
-logger = logging.getLogger("trid3nt_server.tools.derive.probe_point.probe_point")
+logger = logging.getLogger(__name__)
 
 #: Max raster layers opened per probe click. A case accumulates loaded layers
 #: over a long session and a probe is a synchronous point-and-wait UI action,
@@ -63,6 +65,200 @@ class ProbePointCaseNotFoundError(ProbePointError):
 
     error_code = "PROBE_POINT_CASE_NOT_FOUND"
     retryable = False
+
+
+# The case-layer read seam: which case, what layers it holds, how one is
+# materialized and sampled. Every point read over a case goes through here.
+
+
+def resolve_case_id(case_id: Any,
+                    error_cls: type[Exception] = ProbePointCaseNotFoundError) -> str:
+    """``case_id`` param wins; else the turn's bound Case; else typed error."""
+    if case_id is not None and str(case_id).strip():
+        return str(case_id).strip()
+    try:
+        from trid3nt_server.render.pipeline_emitter import current_turn_case
+
+        bound = current_turn_case()
+    except Exception:  # noqa: BLE001
+        bound = None
+    if bound:
+        return str(bound)
+    raise error_cls(
+        "no case_id was supplied and no Case is bound to the current turn; "
+        "pass case_id explicitly.")
+
+
+async def layers_from_case(
+    case_id: str,
+    not_found_cls: type[Exception] = ProbePointCaseNotFoundError,
+) -> tuple[list[dict[str, Any]], list[float] | None, str, Any]:
+    """``(layer dicts, case bbox, case title, case doc)`` for ``case_id``, read
+    from the Case doc's persisted ``loaded_layer_summaries``."""
+    from trid3nt_server.telemetry import get_persistence
+
+    try:
+        persistence = get_persistence()
+    except Exception:  # noqa: BLE001
+        persistence = None
+    if persistence is None:
+        raise not_found_cls(
+            f"cannot look up case {case_id!r}: the persistence backend is not "
+            "available from this process.")
+    case = await persistence.get_case(case_id)
+    if case is None:
+        raise not_found_cls(f"case {case_id!r} not found.")
+    layers = [dict(entry) for entry in (case.loaded_layer_summaries or [])]
+    bbox = list(case.bbox) if getattr(case, "bbox", None) else None
+    return layers, bbox, getattr(case, "title", None) or case_id, case
+
+
+def stage_layer_local(uri: str, tmpdir: str, label: str) -> str:
+    """Materialize an ``s3://`` or local layer uri to a local path; a failure
+    raises, for the caller to record as a per-layer entry."""
+    from trid3nt_server.tools._uri_util import _strip_query
+
+    resolved = uri
+    if resolved.startswith("s3://"):
+        from trid3nt_server.tools.cache import read_object_bytes_s3
+
+        name = resolved.rstrip("/").rsplit("/", 1)[-1] or f"{label}.bin"
+        local = os.path.join(tmpdir, f"{label}_{name}")
+        with open(local, "wb") as f:
+            f.write(read_object_bytes_s3(resolved))
+        return local
+    if resolved.startswith(("gs://", "http://", "https://")):
+        raise ValueError(
+            f"layer uri scheme not supported for point sampling: {resolved!r}")
+    probe = _strip_query(resolved)
+    if not os.path.exists(probe):
+        raise FileNotFoundError(f"layer uri is not a readable local file: {uri!r}")
+    return probe
+
+
+def sample_raster_at_point(
+    local_path: str, lon: float, lat: float
+) -> tuple[float | None, str | None, str | None]:
+    """``(value, note, units)`` for band 1 at an EPSG:4326 point; a point off the
+    extent or on nodata is None with a note, and a read failure raises."""
+    import rasterio
+    from rasterio.warp import transform as warp_transform
+    from rasterio.windows import Window
+
+    with rasterio.open(local_path) as src:
+        units = (
+            src.tags().get("units")
+            or (src.units[0] if src.units and src.units[0] else None)
+        )
+        x, y = lon, lat
+        if src.crs is not None and str(src.crs).upper() != "EPSG:4326":
+            xs, ys = warp_transform("EPSG:4326", src.crs, [lon], [lat])
+            x, y = float(xs[0]), float(ys[0])
+        row, col = src.index(x, y)
+        if not (0 <= row < src.height and 0 <= col < src.width):
+            return None, "point outside the layer extent", units
+        value = float(
+            src.read(1, window=Window(col, row, 1, 1)).astype("float64")[0, 0]
+        )
+        nodata = src.nodata
+    if not math.isfinite(value) or (
+        nodata is not None
+        and math.isfinite(float(nodata))
+        and value == float(nodata)
+    ):
+        return None, "nodata at this point", units
+    return value, None, units
+
+
+# Frame-token parsing.
+#
+# The token read here is an ANALYSIS over the layers a case already holds, not
+# the map's clock: presentation reads the valid_from / valid_to window a frame
+# declares. A case persisted before that window existed carries only the name,
+# which is why the token read stays.
+
+_FRAME_PATTERNS: tuple[tuple[re.Pattern[str], Any], ...] = (
+    # Forecast lead hour: "F+01h", "f+12h", "F+1 h", "+06h"
+    (
+        re.compile(r"\bf?\+?\s*(\d{1,3})\s*h\b", re.IGNORECASE),
+        lambda m: f"F+{int(m.group(1)):02d}h",
+    ),
+    # Hour token: "hour 3", "hr 06", "h12"
+    (
+        re.compile(r"\bh(?:ou)?r?\s*\+?(\d{1,3})\b", re.IGNORECASE),
+        lambda m: f"hr {int(m.group(1))}",
+    ),
+    # Step/frame/index: "step 4", "frame 02", "idx 3", "index 12"
+    (
+        re.compile(r"\b(?:step|frame|idx|index)\s*\+?(\d{1,4})\b", re.IGNORECASE),
+        lambda m: f"step {int(m.group(1))}",
+    ),
+    (
+        re.compile(r"\bt\s*\+\s*(\d{1,4})\b", re.IGNORECASE),
+        lambda m: f"t+{int(m.group(1))}",
+    ),
+    (re.compile(r"#\s*(\d{1,4})\b"), lambda m: f"#{int(m.group(1))}"),
+    # Day token: "day 1", "d+3"
+    (
+        re.compile(r"\bd(?:ay)?\s*\+?(\d{1,3})\b", re.IGNORECASE),
+        lambda m: f"day {int(m.group(1))}",
+    ),
+)
+
+#: ISO-8601 UTC valid-time substring, e.g. "2026-06-22T18:05:00Z". When a frame
+#: name carries BOTH a step token and an ISO valid-time (the satellite
+#: fire-animation convention), the ISO becomes the per-frame LABEL and is
+#: stripped from the grouping stem.
+_ISO_TIME_RX = re.compile(r"\b(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})(?::\d{2})?Z?\b")
+
+_STEM_EDGE_PUNCT = re.compile(r"^[\s,(\-]+|[\s,(\-]+$")
+
+
+def parse_frame_token(name: str) -> dict[str, Any] | None:
+    """``{"value": int, "label": str, "stem": str}`` for a lead-time, step or
+    index token in a layer name, else None."""
+    if not name:
+        return None
+    for rx, label_fn in _FRAME_PATTERNS:
+        m = rx.search(name)
+        if m is None:
+            continue
+        value = int(m.group(1))
+        body = name[: m.start()] + name[m.end():]
+        iso = _ISO_TIME_RX.search(body)
+        if iso:
+            body = body.replace(iso.group(0), " ")
+        stem = _STEM_EDGE_PUNCT.sub("", re.sub(r"\s+", " ", body)).strip().lower()
+        frame_label = f"{iso.group(1)} {iso.group(2)}Z" if iso else label_fn(m)
+        return {"value": value, "label": frame_label, "stem": stem}
+    return None
+
+
+def detect_frame_sequences(
+    layers: list[dict[str, Any]],
+) -> dict[str, list[dict[str, Any]]]:
+    """``{stem: [{layer, value, label}, ...]}`` ordered by token value; only a stem
+    with two or more strictly-increasing members forms a sequence."""
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for layer in layers:
+        if layer.get("layer_type") != "raster":
+            continue
+        token = parse_frame_token(str(layer.get("name") or ""))
+        if token is None:
+            continue
+        grouped.setdefault(token["stem"], []).append(
+            {"layer": layer, "value": token["value"], "label": token["label"]}
+        )
+
+    sequences: dict[str, list[dict[str, Any]]] = {}
+    for stem, members in grouped.items():
+        if len(members) < 2:
+            continue
+        members.sort(key=lambda m: m["value"])
+        values = [m["value"] for m in members]
+        if all(b > a for a, b in zip(values, values[1:])):
+            sequences[stem] = members
+    return sequences
 
 
 # Sync per-layer/per-frame sampling (wrapped in asyncio.to_thread by callers).
@@ -159,8 +355,7 @@ async def probe_point(
     place name first. A stack of animation frames comes back as ONE series, not
     N rows.
 
-    Do NOT use for: one layer's time series (`extract_timeseries_at_point`);
-    vector layers, which a point read skips.
+    Do NOT use for: vector layers, which a point read skips.
 
     Returns the point, the case, and one result per raster: its value, units and
     any note. A layer outside its extent, on nodata or unreadable is a null with
