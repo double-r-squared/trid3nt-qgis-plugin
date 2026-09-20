@@ -46,6 +46,7 @@ from .cards import (
     _ChatInput,
     _ToolCard,
     _WrapLabel,
+    run_identity,
     tool_row,
 )
 from .cases_dialog import CasesDialog
@@ -121,15 +122,6 @@ _DOT_COLORS = {
 _USER_BUBBLE_STYLE = (
     "background-color: #1f6feb; color: white; border-radius: 8px; padding: 6px 9px;"
 )
-
-
-def _run_identity(engine: str, module: str) -> str:
-    """A run's identity for a sim card title: the ENGINE and the MODULE of it
-    that ran. A run that states no engine is titled by neither - the full run
-    identity stays in the card's metadata table either way."""
-    if not engine:
-        return "SOLVER"
-    return f"{engine.upper()} / {module}" if module else engine.upper()
 
 
 def _short_args_summary(raw_args: str, max_len: int = 64) -> str:
@@ -340,10 +332,19 @@ class Trid3ntDock(QDockWidget):
         # Settings, not here: the dock auto-connects, so a greyed header button
         # would be noise.
         button_row = QHBoxLayout()
-        self.cases_btn = QToolButton()
-        self.cases_btn.setText("Cases")
-        self.cases_btn.clicked.connect(self._open_cases)
-        button_row.addWidget(self.cases_btn)
+
+        def _tool_button(text, signal_owner, tip="", checkable=False):
+            btn = QToolButton()
+            btn.setText(text)
+            if tip:
+                btn.setToolTip(tip)
+            btn.setCheckable(checkable)
+            # A checkable button reports its STATE; a plain one reports a press.
+            (btn.toggled if checkable else btn.clicked).connect(signal_owner)
+            button_row.addWidget(btn)
+            return btn
+
+        self.cases_btn = _tool_button("Cases", self._open_cases)
 
         # Case creation lives in the Cases dialog, and pushing a layer lives
         # in the QGIS layer-tree context menu; neither has a header button.
@@ -353,14 +354,10 @@ class Trid3ntDock(QDockWidget):
         # at that point. Checkable -- ON installs a QgsMapToolEmitPoint on
         # the canvas (saving whatever tool was active so toggling off
         # restores it); OFF restores the saved tool.
-        self.probe_btn = QToolButton()
-        self.probe_btn.setText("Probe")
-        self.probe_btn.setCheckable(True)
-        self.probe_btn.setToolTip(
-            "Click the map to sample the case's layers at a point"
-        )
-        self.probe_btn.toggled.connect(self._toggle_probe_tool)
-        button_row.addWidget(self.probe_btn)
+        self.probe_btn = _tool_button(
+            "Probe", self._toggle_probe_tool,
+            "Click the map to sample the case's layers at a point",
+            checkable=True)
 
         # The persistent per-case bbox: drag a rectangle
         # on the map to set THIS case's area of interest -- the extent the
@@ -369,38 +366,28 @@ class Trid3ntDock(QDockWidget):
         # QgsMapToolExtent; the chosen extent persists via case-command
         # set-bbox and restores the prior tool. Only usable with a live case +
         # connection (guarded in _toggle_aoi_draw).
-        self.aoi_btn = QToolButton()
-        self.aoi_btn.setText("Set AOI")
-        self.aoi_btn.setCheckable(True)
-        self.aoi_btn.setToolTip(
-            "Drag a rectangle on the map to set this case's area of interest"
-        )
-        self.aoi_btn.toggled.connect(self._toggle_aoi_draw)
-        button_row.addWidget(self.aoi_btn)
+        self.aoi_btn = _tool_button(
+            "Set AOI", self._toggle_aoi_draw,
+            "Drag a rectangle on the map to set this case's area of interest",
+            checkable=True)
 
         # 'Draw region' -- drag ONE rectangle that rides the NEXT chat
         # turn as ``drawn_geometry`` (a basis="user" spatial knob for composer
         # gates, e.g. geoclaw amr_regions). Distinct from Set AOI (the analysis
         # extent): a drawn region is a sub-region knob, cleared on send.
-        self.region_btn = QToolButton()
-        self.region_btn.setText("Draw region")
-        self.region_btn.setCheckable(True)
-        self.region_btn.setToolTip(
+        self.region_btn = _tool_button(
+            "Draw region", self._toggle_draw_region,
             "Drag a rectangle to attach to your next message as a refinement "
-            "region (e.g. where GeoClaw refines its mesh). Cleared on send."
-        )
-        self.region_btn.toggled.connect(self._toggle_draw_region)
-        button_row.addWidget(self.region_btn)
+            "region (e.g. where GeoClaw refines its mesh). Cleared on send.",
+            checkable=True)
 
         # The count button that SHOWS the
         # bottom charts window. It stays in the chat dock; charts themselves
         # never render inline here. Click raises (creates lazily) the window;
         # a new chart increments the count + subtly flags the button.
-        self.charts_btn = QToolButton()
-        self.charts_btn.setText("Charts (0)")
-        self.charts_btn.setToolTip("Show the charts window (bottom of the app)")
-        self.charts_btn.clicked.connect(self._show_charts_window)
-        button_row.addWidget(self.charts_btn)
+        self.charts_btn = _tool_button(
+            "Charts (0)", self._show_charts_window,
+            "Show the charts window (bottom of the app)")
 
         # Clearing the AOI is MULTIPLEXED into the Set-AOI tool: while it is
         # active, BACKSPACE or DELETE clears the current AOI through a canvas
@@ -409,11 +396,10 @@ class Trid3ntDock(QDockWidget):
         # Settings is a COG GLYPH, so no word label competes with the
         # connection signifier; the tooltip names it.
         button_row.addStretch(1)  # push Settings to the right end of the row
-        self.settings_btn = QToolButton()
-        self.settings_btn.setText("\u2699")  # gear glyph (cog); icon-only look
-        self.settings_btn.setToolTip("Settings (connect / disconnect live here)")
-        self.settings_btn.clicked.connect(self._open_settings)
-        button_row.addWidget(self.settings_btn)
+        self.settings_btn = _tool_button(
+            "\u2699",  # gear glyph (cog); icon-only look
+            self._open_settings,
+            "Settings (connect / disconnect live here)")
         outer.addLayout(button_row)
 
         line = QFrame()
@@ -698,16 +684,14 @@ class Trid3ntDock(QDockWidget):
             return None
         return self._rect_to_bbox4326(rect, authid)
 
-    def _aoi_for_send(
-        self,
-    ) -> Tuple[Optional[Tuple[float, float, float, float]], Optional[str]]:
-        """The ``(bbox, source)`` to attach right now, or ``(None, None)``.
-        The AOI model is EXPLICIT-only: either the user DREW one, or none is
-        set and the agent geocodes the location out of the message itself."""
+    def _aoi_for_send(self) -> Optional[Tuple[float, float, float, float]]:
+        """The bbox to attach right now, or None. The AOI model is
+        EXPLICIT-only: either the user DREW one, or none is set and the agent
+        geocodes the location out of the message itself."""
         bbox = self._case_bbox
         if bbox is not None and aoi.bbox_within_guard(bbox):
-            return bbox, "drawn"
-        return None, None
+            return bbox
+        return None
 
     # -- probe (map-click point sample) --------------------------------------- #
 
@@ -1191,9 +1175,13 @@ class Trid3ntDock(QDockWidget):
             self._cases_dialog.set_cases(self._cases)
 
     def _on_cold_case_list_errored(self, message: str) -> None:
+        """The cold case-list read failed. The upstream message rides VERBATIM:
+        an unreachable listener and a 503 from unbound persistence want
+        different answers from the user."""
         if self._cases_dialog is not None and not self._cases:
             self._cases_dialog.info_lbl.setText(
-                "Agent HTTP API unreachable - is the local stack running?"
+                f"Could not read the case list ({message}) - is the local "
+                "stack running?"
             )
 
     # -- case switching / new / delete ----------------------------------------- #
@@ -1363,7 +1351,7 @@ class Trid3ntDock(QDockWidget):
             # it (chronological turn flow; the card never strands at the
             # bottom while text piles above it).
             self._close_pending_for_card()
-            card = SimCard(_run_identity(step.engine, step.module))
+            card = SimCard(run_identity(step.engine, step.module))
             self._sim_cards[step.step_id] = card
             self.messages_layout.insertWidget(
                 self.messages_layout.count() - 1, card
@@ -1400,11 +1388,12 @@ class Trid3ntDock(QDockWidget):
         )
 
     def _on_provider_config_errored(self, message: str) -> None:
-        """The agent HTTP listener was unreachable/errored on Save -- the
-        settings persisted, but the live push did not land, so keep the honest
-        restart-to-apply guidance (the dialog's static note said the same)."""
+        """The agent HTTP listener was unreachable or errored on Save: the
+        settings persisted but the live push did not land. The upstream message
+        rides VERBATIM, because "could not reach" and a 400 from the coherence
+        gate are different problems and only the sender can tell them apart."""
         self._note(
-            "Could not reach the agent to apply the provider config live -- "
+            f"Could not apply the provider config live ({message}) -- "
             "restart the agent to apply the new provider/key.",
             error=True,
         )
@@ -2276,7 +2265,7 @@ class Trid3ntDock(QDockWidget):
         self.input_edit.clear()
         self._add_user_bubble(text)
         self._begin_turn()
-        bbox, _source = self._aoi_for_send()
+        bbox = self._aoi_for_send()
         # The AOI rides the
         # ``aoi_bbox`` payload field now -- the bracketed in-text prose line
         # ("[QGIS map canvas AOI ...]") is GONE; the chat text goes out CLEAN.

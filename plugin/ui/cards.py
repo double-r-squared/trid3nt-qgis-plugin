@@ -6,6 +6,7 @@ plain QPushButtons, so a composer ENTER can never fire one as a dialog default."
 from __future__ import annotations
 
 import html
+import math
 import re
 from typing import Dict, List, Optional, Tuple
 
@@ -364,8 +365,6 @@ class _ChatInput(QPlainTextEdit):
         # clamped between one line and _MAX_LINES lines. A single Shift+Enter
         # bumps the line count by one -> +one lineSpacing -> exactly one new row
         # (grow, do not scroll, until the cap -- the vertical scrollbar is OFF).
-        import math
-
         doc = self.document()
         line_h = self.fontMetrics().lineSpacing()
         margin = int(doc.documentMargin()) * 2
@@ -1747,6 +1746,15 @@ class ToolCandidatesCard(QFrame):
         self.details_toggle.setText("show details")
 
 
+def run_identity(engine: str, module: str) -> str:
+    """A run's identity for a sim card title: the ENGINE and the MODULE of it
+    that ran. A run that states no engine is titled by neither - the full run
+    identity stays in the card's metadata table either way."""
+    if not engine:
+        return "SOLVER"
+    return f"{engine.upper()} / {module}" if module else engine.upper()
+
+
 class SimCard(QFrame):
     """ONE collapsible card per off-box solver run, EXPANDED while running.
     A field neither wire shape carries honestly reads "-": nothing on this
@@ -1891,26 +1899,32 @@ class SimCard(QFrame):
         """Fold a ``solve-progress`` tick into the table. Defensive reads --
         every field is optional on the wire; a terminal card ignores the
         live-only fields (a straggler tick must not repaint 'running')."""
+        def _num(key: str) -> float | None:
+            value = data.get(key)
+            if isinstance(value, (int, float)) and not isinstance(value, bool):
+                return float(value)
+            return None
+
         run_id = data.get("run_id")
         if isinstance(run_id, str) and run_id:
             self._set("run_id", run_id)
-        nodes = data.get("active_cell_count")
-        if isinstance(nodes, (int, float)) and not isinstance(nodes, bool):
+        nodes = _num("active_cell_count")
+        if nodes is not None:
             self._set("nodes", f"{int(nodes):,}")
-        grid_res = data.get("grid_resolution_m")
-        if isinstance(grid_res, (int, float)) and not isinstance(grid_res, bool):
+        grid_res = _num("grid_resolution_m")
+        if grid_res is not None:
             self._set("grid", f"{grid_res:g} m")
-        vcpus = data.get("vcpus")
-        if isinstance(vcpus, (int, float)) and not isinstance(vcpus, bool):
+        vcpus = _num("vcpus")
+        if vcpus is not None:
             self._set("vcpus", f"{int(vcpus)}")
         if not self._terminal:
-            elapsed = data.get("elapsed_seconds")
-            if isinstance(elapsed, (int, float)) and not isinstance(elapsed, bool):
-                self._elapsed_str = self._fmt_seconds(float(elapsed))
+            elapsed = _num("elapsed_seconds")
+            if elapsed is not None:
+                self._elapsed_str = self._fmt_seconds(elapsed)
                 self._set("elapsed", self._elapsed_str)
-            eta = data.get("eta_seconds")
-            if isinstance(eta, (int, float)) and not isinstance(eta, bool):
-                self._set("eta", self._fmt_seconds(float(eta)))
+            eta = _num("eta_seconds")
+            if eta is not None:
+                self._set("eta", self._fmt_seconds(eta))
             phase = data.get("phase")
             if isinstance(phase, str) and phase:
                 self._phase = phase
@@ -2282,6 +2296,15 @@ class SpatialInputCard(QFrame):
         self._captured = gate.resolve_spatial_input_point(
             self._request.request_id, lon, lat, self._point_name()
         )
+        self._place_marker(point)
+        self.status_lbl.setText(
+            f"point: ({lat:.5f}, {lon:.5f}) - click again to move, then Submit"
+        )
+        self.submit_btn.setEnabled(True)
+
+    def _place_marker(self, point) -> None:
+        """Put the red cross on the clicked point, minting it on first use.
+        Cosmetic: a failure leaves the pick itself intact."""
         try:
             from qgis.gui import QgsVertexMarker
 
@@ -2294,10 +2317,6 @@ class SpatialInputCard(QFrame):
             self._marker.setCenter(point)
         except Exception:  # noqa: BLE001 -- marker is cosmetic
             pass
-        self.status_lbl.setText(
-            f"point: ({lat:.5f}, {lon:.5f}) - click again to move, then Submit"
-        )
-        self.submit_btn.setEnabled(True)
 
     def _on_extent_chosen(self, *_args) -> None:
         try:
