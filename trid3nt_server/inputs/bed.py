@@ -618,7 +618,9 @@ def survey_surface(
 class MergeRastersError(UserInputError):
     """The merge's typed refusal: ``MERGE_RASTERS_NO_SOURCE``,
     ``MERGE_RASTERS_UNREADABLE``, ``MERGE_RASTERS_DISJOINT`` (the two cover no
-    common ground), ``MERGE_RASTERS_RESOLUTION_INVALID`` (a grid past the cell
+    common ground), ``MERGE_BED_CLIFF`` (the painted values split into two
+    populations farther apart than the domain's own relief),
+    ``MERGE_RASTERS_RESOLUTION_INVALID`` (a grid past the cell
     ceiling), ``MERGE_RASTERS_WRITE_FAILED``. ``MERGE_RASTERS_DATUM_UNSTATED``,
     ``MERGE_RASTERS_DATUMS_DIFFER`` and ``MERGE_RASTERS_DATUM_OFFSET_MISMATCH``
     come from the datum check itself.
@@ -923,6 +925,49 @@ def _passed_through(only: Any, absent: str) -> MergedRasterLayerURI:
         notes=[note])
 
 
+def _band(spans: list[tuple[float, float, str]]) -> str:
+    """One population of painted values: what it spans, and which rungs painted it."""
+    return (f"{min(low for low, _high, _label in spans):.2f} to "
+            f"{max(high for _low, high, _label in spans):.2f} m from "
+            f"{', '.join(label for _low, _high, label in spans)}")
+
+
+def _no_cliff(grids: list[Any], won: Any, labels: list[str]) -> None:
+    """REFUSE a merged bed whose painted values split into two populations.
+
+    The rungs paint ONE landscape, so what they paint sits within that
+    landscape's own relief - the range of the surface under all of them. A step
+    wider than the whole of it, a hundred metres on a reach that falls ten, is
+    two zeros that never met rather than a bed, and every node is painted, so
+    nothing below catches it: a mesh takes the cliff and the run opens a river in
+    a column of air."""
+    import numpy as np
+
+    under = grids[-1][np.isfinite(grids[-1])]
+    relief = float(under.max() - under.min()) if under.size else 0.0
+    spans = []
+    for rank, grid in enumerate(grids):
+        values = grid[won == rank]
+        values = values[np.isfinite(values)]
+        if values.size:
+            spans.append((float(values.min()), float(values.max()), labels[rank]))
+    if relief <= 0.0 or len(spans) < 2:
+        return
+    spans.sort()
+    for split in range(1, len(spans)):
+        gap = spans[split][0] - max(high for _low, high, _label in spans[:split])
+        if gap <= relief:
+            continue
+        raise MergeRastersError(
+            "MERGE_BED_CLIFF",
+            f"the merged bed splits into two populations {gap:.1f} m apart, more "
+            f"than the {relief:.1f} m of relief {labels[-1]} measures over this "
+            f"domain: {_band(spans[:split])}, and {_band(spans[split:])}. No "
+            "ground holds that step - the rungs were read onto zeros that never "
+            "met. Name the offset row each rung is read through, or name a rung "
+            "measured on the frame this bed lands on.")
+
+
 def merged_surface(
     primary: Any = None,
     fallback: Any = None,
@@ -1009,6 +1054,7 @@ def merged_surface(
                 f"none of the {len(ladder)} surfaces tried ({', '.join(labels)}) "
                 "measured a single cell of the grid they span together, so there "
                 "is nothing to merge. Name surfaces over the same ground.")
+        _no_cliff(grids, won, labels)
         west, north = transform.c, transform.f
         stack, _ = merge(paths, method="first",
                          bounds=(west, north + height * transform.e,
@@ -1031,17 +1077,21 @@ def merged_surface(
               for rank, (layer, _row) in enumerate(ladder)) if line]
     painted = "; ".join(f"{label} {share * 100.0:.1f}%"
                         for label, share in zip(labels, shares))
+    # ONE NUMBER PER RUNG, in rank order: a reader asking what measured this bed
+    # is asking about each rung, and a pair of fractions over a ladder of three
+    # is an answer to a question nobody asked.
+    covered = (f"The ladder painted the merged grid in rank order - {painted} - "
+               f"and {(1.0 - sum(shares)) * 100.0:.1f}% is measured by none of "
+               "them and left as nodata.")
     notes = [
-        f"The ladder painted the merged grid in rank order - {painted} - and "
-        f"{(1.0 - sum(shares)) * 100.0:.1f}% is measured by none of them and left "
-        "as nodata.",
+        covered,
         f"Merged at {metres:.3g} m in {crs}, the finest of the rungs unless a "
         "resolution was stated.",
         *(moved or [f"Every surface counts from {zero}."]),
     ]
     logger.info("bed merge: %dx%d at %.3g m over %d rungs - %s",
                 width, height, metres, len(ladder), painted)
-    for line in moved:
+    for line in (covered, *moved):
         journal_note(line)
     return MergedRasterLayerURI.published(
         "merged-bed", seed=seed,

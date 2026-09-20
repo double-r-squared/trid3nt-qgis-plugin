@@ -14,7 +14,10 @@ through the shift the survey publishes about itself, two disjoint surfaces, a me
 terrain in the right halves even though it is read onto a finer grid, a corner
 no sounding stood in coming back terrain, a rung the offset service cannot place
 dropping off while the rungs under it paint, the TOP rung being unplaceable
-refusing the whole merge, and a ladder left with one rung passing it through."""
+refusing the whole merge, a ladder left with one rung passing it through, and a
+merged bed splitting into two populations farther apart than the domain's own
+relief refusing as a cliff while an ordinary channel cut into the terrain around
+it merges."""
 
 from __future__ import annotations
 
@@ -447,3 +450,32 @@ def test_a_ladder_left_with_one_rung_passes_that_surface_through(
         frame="NAVD88", _output_dir=str(tmp_path))
     assert merged.primary_fraction == 1.0 and merged.fallback_fraction == 0.0
     assert "passed through unchanged" in merged.notes[0]
+
+
+def _relief(low: float, high: float, *, west: float, cell: float) -> LayerURI:
+    """A surface with REAL relief, so the domain states a step size of its own."""
+    return _layer(_write(np.linspace(low, high, 16).reshape(4, 4),
+                         west=west, north=4_000_000.0, cell=cell), "NAVD88")
+
+
+def test_two_populations_farther_apart_than_the_relief_refuse_as_a_cliff(
+        tmp_path) -> None:
+    """A measurement 170 m under a terrain that falls 5 m is two zeros that never
+    met: every node is painted, so only this floor catches it."""
+    survey = _relief(0.0, 2.0, west=500_004.0, cell=1.0)
+    terrain = _relief(170.0, 175.0, west=500_000.0, cell=4.0)
+    with pytest.raises(MergeRastersError) as raised:
+        merged_surface(primary=survey, fallback=terrain, _output_dir=str(tmp_path))
+    assert raised.value.error_code == "MERGE_BED_CLIFF"
+    said = str(raised.value)
+    assert survey.name in said and terrain.name in said
+    assert "populations" in said and "relief" in said
+
+
+def test_a_bed_within_the_domain_relief_merges(tmp_path) -> None:
+    """The floor refuses a step no ground holds, never an ordinary channel cut
+    into the terrain around it."""
+    merged = merged_surface(primary=_relief(168.0, 171.0, west=500_004.0, cell=1.0),
+                            fallback=_relief(170.0, 175.0, west=500_000.0, cell=4.0),
+                            _output_dir=str(tmp_path))
+    assert merged.primary_fraction > 0.0 and merged.fallback_fraction > 0.0

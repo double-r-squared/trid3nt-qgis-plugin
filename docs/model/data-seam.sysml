@@ -874,6 +874,15 @@ package DataSeam {
         zeros; a slot re-raises it under its own code rather than restating the
         surface and the two frames in its own words, since two statements of
         one fact are two chances to disagree.
+
+        A BED THAT SPLIT IN TWO IS REFUSED BY NAME. A shift nobody caught still
+        shows in what the rungs painted: values in two populations farther apart
+        than the relief of the surface under them is a step no ground holds, and
+        every node is painted, so nothing below catches it. The merge refuses,
+        naming both ranges and the rung each came from, rather than handing a
+        mesh a cliff for a river to stand in. The domain's OWN relief is the
+        yardstick, because the only number that says how far this landscape
+        falls is this landscape.
         */
     }
 
@@ -1421,6 +1430,8 @@ package DataSeam {
     satisfy requirement TheRunHasOneVerticalFrame by bedComposer;
     satisfy requirement TheRunHasOneVerticalFrame by freeSurfaceReader;
     satisfy requirement TheRunHasOneVerticalFrame by offsetRowDeclaration;
+    verify requirement TheRunHasOneVerticalFrame by
+        "tests/inputs/test_bed_merge.py::test_two_populations_farther_apart_than_the_relief_refuse_as_a_cliff";
     verify requirement TheRunHasOneVerticalFrame by
         "tests/inputs/test_bed_merge.py::test_a_primary_of_depths_is_read_as_elevations_on_the_fallbacks_zero";
     verify requirement TheRunHasOneVerticalFrame by
