@@ -47,8 +47,22 @@ class _Layer:
         return self
 
 
-def _workflow(cls=Workflow, **kw):
-    return cls(metadata=_metadata("skeleton_probe"), params=(), plan=lambda o: (),
+class _Stub(Workflow):
+    """A workflow whose template states its steps under STEPS."""
+
+    def steps(self):
+        return self.template.STEPS(self)
+
+
+def _module(plan, **names):
+    from types import SimpleNamespace
+
+    return SimpleNamespace(STEPS=plan, **names)
+
+
+def _workflow(cls=_Stub, **kw):
+    return cls(metadata=_metadata("skeleton_probe"), params=(),
+               template=_module(lambda o: ()),
                answer=("depth_max_m",), **kw)
 
 
@@ -74,7 +88,7 @@ async def test_a_filled_check_hook_reaches_the_result_as_a_note(monkeypatch):
     from trid3nt_server.workflows.runtime import RunResult
     from trid3nt_server.workflows.runtime import run_products
 
-    class Checked(Workflow):
+    class Checked(_Stub):
         def checks(self, result, run):
             return (f"depth {result.depth_max_m} m is a screening figure",)
 
@@ -186,10 +200,14 @@ def test_a_chart_records_where_its_builder_lives():
 
 # --- (5) an unknown slot member is refused at plan construction ------------- #
 def _telemac():
-    from trid3nt_server.workflows.telemac.workflow import TelemacWorkflow
+    """A telemac-engined workflow whose template states its steps outright: what
+    the NAME and the ENGINE on the plan come from is what is under test, not the
+    stages a real TELEMAC template's slots build."""
+    class Probe(_Stub):
+        engine = "telemac"
 
-    return TelemacWorkflow(metadata=_metadata("telemac_probe"), params=(),
-                           plan=lambda o: ())
+    return Probe(metadata=_metadata("telemac_probe"), params=(),
+                 template=_module(lambda o: (Step(runner="pkg.mod.fn"),)))
 
 
 def _reach_mesh(**params):
@@ -215,9 +233,7 @@ def test_the_plan_reads_a_data_name_off_the_templates_own_body():
 
 
 def test_the_skeleton_names_and_engines_the_plan_the_template_does_not():
-    ops = _telemac()
-    ops.plan_decl = lambda o: (Step(runner="pkg.mod.fn"),)
-    plan = ops.build_plan()
+    plan = _telemac().build_plan()
     assert plan.name == "telemac_probe"      # from the metadata
     assert plan.engine == "telemac"          # from the facade
 
@@ -231,8 +247,9 @@ def test_an_undeclared_data_name_refuses_at_registration_saying_it_is_a_data_nam
         return (Step(runner="pkg.mod.fn", kwargs={"r": DataRef("terain")}).named("s"),)
 
     with pytest.raises(PlanValidationError) as ei:
-        Workflow(metadata=_metadata("data_probe"), params=(), plan=_plan,
-                 data=(DataDecl("terrain", tool("pkg.mod.fetch")),))
+        _Stub(metadata=_metadata("data_probe"), params=(),
+              template=_module(_plan),
+              data=(DataDecl("terrain", tool("pkg.mod.fetch")),))
     message = str(ei.value)
     assert "DataRef('terain') names no declared Data" in message
     assert "Declared Data: ['terrain']" in message
@@ -311,7 +328,7 @@ def test_the_run_prefix_comes_from_the_step_the_facade_NAMES():
     its solve step anything else - and the chart spec would persist nowhere."""
     from trid3nt_server.workflows.runtime import RunResult
 
-    class Renamed(Workflow):
+    class Renamed(_Stub):
         solve_step = "telemac_solve"
 
     run = RunResult(value=_Layer())
@@ -408,7 +425,7 @@ def test_the_owned_settle_reads_the_accepted_mesh_and_the_seated_lever():
     lever, and knows a river from nothing."""
     module = _template("trid3nt_server.workflows.telemac.templates.dye_release.dye_release")
     workflow = module.telemac_dye_release.workflow
-    settled = next(n for n in workflow.plan_decl(workflow)
+    settled = next(n for n in workflow.plan.steps
                    if getattr(n, "name", "") == "settled")
     assert settled.runner.endswith("assembler.open_water")
     assert settled.kwargs["mesh"] == Ref("mesh")
@@ -424,7 +441,7 @@ def test_the_catchment_mesh_step_carries_the_whole_recipe():
     declared order - and the ONE mesh step carries nothing else."""
     module = _template("trid3nt_server.workflows.telemac.templates.rain_on_grid.rain_on_grid")
     workflow = module.telemac_rain_on_grid.workflow
-    mesh_step = [n for n in workflow.plan_decl(workflow)
+    mesh_step = [n for n in workflow.plan.steps
                  if getattr(n, "stage", "") == "mesh"][0]
     assert set(mesh_step.kwargs) == {"mesh", "name", "supplied", "tool"}
     ask = mesh_step.kwargs["mesh"]

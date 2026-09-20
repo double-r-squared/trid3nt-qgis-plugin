@@ -24,7 +24,7 @@ from trid3nt_contracts.coverage import (
     PROVENANCE_KINDS, Coverage, CoverageExtent, CoveragePoint, SourceChoice,
     SourceOption)
 
-from .errors import PlanValidationError
+from trid3nt_server.workflows.runtime.errors import PlanValidationError
 
 logger = logging.getLogger(__name__)
 

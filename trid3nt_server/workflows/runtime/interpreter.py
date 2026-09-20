@@ -37,7 +37,7 @@ from trid3nt_contracts.coverage import CoverageExtent, SourceChoice
 from .data import (
     BED, DISCHARGE, DOMAIN, LEVEL, LINE, OBSERVATION, RUNS, CoversAOI, DataDecl,
     Producer)
-from .match import (
+from trid3nt_server.tools.search.match import (
     Need, ask_for, dropped_from, instant, match, sources_with_coverage)
 from .domain import Domain, bind_domain, current_domain, domain_from_result, reset_domain
 from .errors import (

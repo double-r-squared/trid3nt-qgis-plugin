@@ -13,7 +13,7 @@ from trid3nt_contracts.coverage import (
     Coverage, CoverageExtent, CoveragePoint, CoverageWindow)
 
 from trid3nt_server.workflows.runtime.errors import PlanValidationError
-from trid3nt_server.workflows.runtime.match import (
+from trid3nt_server.tools.search.match import (
     LOOSEN_WINDOW,
     Need,
     dropped_from,
@@ -248,7 +248,7 @@ def test_a_source_called_by_station_with_no_stations_listed_is_not_a_survivor(mo
     from types import SimpleNamespace
 
     from trid3nt_server.tools.fetchers._router import registration
-    from trid3nt_server.workflows.runtime import match as m
+    from trid3nt_server.tools.search import match as m
 
     spec = SimpleNamespace(params={"station": {"required": True},
                                    "start_date": {"required": True}})
@@ -269,7 +269,7 @@ def test_the_probe_names_the_nearest_listed_station_and_the_rows_own_ask(
     from types import SimpleNamespace
 
     from trid3nt_server.tools.fetchers._router import registration
-    from trid3nt_server.workflows.runtime import match as m
+    from trid3nt_server.tools.search import match as m
 
     row = gauges(data_class="water level series", kind="predicted")
     row.ask = {"product": "predictions"}
@@ -362,7 +362,7 @@ def test_a_box_called_source_is_asked_over_a_box_that_reaches_its_station(
     from types import SimpleNamespace
 
     from trid3nt_server.tools.fetchers._router import registration
-    from trid3nt_server.workflows.runtime import match as m
+    from trid3nt_server.tools.search import match as m
 
     row = gauges(data_class="water level series", kind="predicted")
     row.extent = row.extent.model_copy(update={

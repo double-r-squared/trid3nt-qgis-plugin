@@ -40,7 +40,7 @@ flowchart LR
     rowLadderWalker["LadderWalker<br/>trid3nt_server/workflows/runtime/interpreter.py"]
     seriesOnTheRunsClock["FreeSurfaceReader<br/>trid3nt_server/workflows/runtime/temporal.py"]
     slotDoor["DomainSlot<br/>trid3nt_server/inputs/slots.py"]
-    sourceMatch["SourceMatch<br/>trid3nt_server/workflows/runtime/match.py"]
+    sourceMatch["SourceMatch<br/>trid3nt_server/tools/search/match.py"]
     stacRasterReader["CatalogRasterReader<br/>trid3nt_server/tools/fetchers/_router/executors/stac_raster.py"]
     unreadContextAsk["ContextRow<br/>trid3nt_server/workflows/runtime/interpreter.py"]
     verticalFrame["VerticalFrame<br/>trid3nt_server/inputs/vertical_datum.py"]
