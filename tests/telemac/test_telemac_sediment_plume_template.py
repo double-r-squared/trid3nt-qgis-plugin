@@ -167,11 +167,10 @@ def test_the_settling_class_is_keywords_on_gaias_own_body():
     """ONE class, the suspension formula and the advection scheme are GAIA's own
     keywords; what the composite carries is the source concentration the
     dictionary reads in kg/m3 and the question is asked in mg/L. The class is
-    100 um very fine sand, the finest class the Zyserman-Fredsoe suspension
-    law is written for - a 30 um silt run under that same law settled a
-    point, not a plume."""
+    30 um fine silt, the fraction this question is asked of - the one that
+    travels as a plume at the currents a release reach carries."""
     body = template.STEERING.ASSERTED["coupling"][0]["slots"]
-    assert body["CLASSES_SEDIMENT_DIAMETERS"] == [1.0e-4]
+    assert body["CLASSES_SEDIMENT_DIAMETERS"] == [3.0e-5]
     assert body["SUSPENSION_TRANSPORT_FORMULA_FOR_ALL_SANDS"] == 3
     assert body["SCHEME_FOR_ADVECTION_OF_SUSPENDED_SEDIMENTS"] == [1]
     assert body["MASS_BALANCE"] is True
