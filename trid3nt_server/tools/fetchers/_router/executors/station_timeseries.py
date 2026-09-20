@@ -211,10 +211,19 @@ def _fetch_station_series(spec: SourceSpec, station: dict[str, Any], params: dic
     endpoint = spec.endpoints.get("data") or next(iter(spec.endpoints.values()))
     url = endpoint.url_template or endpoint.url or ""
     _guard_not_staged(spec, url)
-    req_tmpl = dict(per.get("request", {}))
+    product = params.get("product", "water_level")
+    # A product measuring something else asks the same API differently - its own
+    # cadence, and none of the stamps that belong to a water level - so its
+    # overrides sit on the row that asks for it and replace the shared request's.
+    # A null override DROPS the shared request's key: a stamp that means nothing
+    # for this product is absent rather than empty.
+    req_tmpl = {k: v for k, v in
+                {**per.get("request", {}),
+                 **(per.get("request_by_product", {}).get(product) or {})}.items()
+                if v is not None}
     # start/end are date objects so a "{start:%Y%m%d}" template strftimes to the
     # CO-OPS datagetter's required YYYYMMDD (a raw str would raise on %Y).
-    fmt = {"id": station["station_id"], "product": params.get("product", "water_level"),
+    fmt = {"id": station["station_id"], "product": product,
            "start": _as_date(params.get("start_date")), "end": _as_date(params.get("end_date"))}
     req = {}
     for k, v in req_tmpl.items():

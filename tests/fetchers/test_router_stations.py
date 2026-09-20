@@ -262,3 +262,63 @@ def test_keyed_bad_bbox_input_error(name, code):
     with pytest.raises(Exception) as exc:
         router.route(spec, {"bbox": [-81.0, 26.0, -81.0, 27.0]})  # degenerate
     assert exc.value.error_code == code
+
+
+def _coops_spec():
+    return load_spec_from_path(
+        _FETCHERS / "ocean/fetch_noaa_coops_tides/source.yaml")
+
+
+def test_the_water_temperature_row_is_counted_from_nothing_and_asks_its_own_product():
+    """A temperature is a water QUALITY sample, not a water level: it states no
+    datum, it names the CO-OPS product that serves it, and the slot's own word
+    for the measurement reaches that product through the row's vocabulary."""
+    row, = [c for c in _coops_spec().coverage
+            if c.data_class == "water quality sample"]
+    assert row.kind == "measured" and row.datum is None
+    assert row.window.series is True
+    assert dict(row.ask) == {"product": "water_temperature"}
+    assert dict(row.vocabulary) == {"TEMPERATURE": "water_temperature"}
+    assert row.units["water_temperature"] == "degC"
+    assert row.series_column == "time_series_csv"
+
+
+def test_the_temperature_product_asks_at_its_own_cadence_and_on_no_datum(monkeypatch):
+    """The hourly interval and the MLLW stamp belong to the water level. The
+    temperature row's own request block drops both, so the sensor's 6-minute
+    record comes back whole."""
+    from trid3nt_server.tools.fetchers._router.executors import station_timeseries as st
+
+    asked = {}
+
+    class _Resp:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"data": [{"t": "2024-01-15 00:00", "v": "3.2"}]}
+
+    class _Client:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def get(self, url, params=None, headers=None):
+            asked.update(params or {})
+            return _Resp()
+
+    monkeypatch.setattr("httpx.Client", lambda **kw: _Client())
+    spec = _coops_spec()
+    station = {"station_id": "9014070", "station_name": "ALGONAC",
+               "lon": -82.5267, "lat": 42.6211}
+    params = {"start_date": "2024-01-15", "end_date": "2024-01-22"}
+
+    st._fetch_station_series(spec, station, {**params, "product": "water_temperature"})
+    assert asked["product"] == "water_temperature"
+    assert "interval" not in asked and "datum" not in asked
+
+    asked.clear()
+    st._fetch_station_series(spec, station, {**params, "product": "water_level"})
+    assert asked["interval"] == "h" and asked["datum"] == "MLLW"
