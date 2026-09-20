@@ -119,6 +119,21 @@ def test_a_survey_that_states_no_datum_refuses_by_name(spec):
     assert "WR_03" in str(excinfo.value)
 
 
+def test_a_depth_on_igld85_is_counted_from_the_low_water_datum(spec):
+    """A DEPTH is counted from a water surface and never from a reference system:
+    a Great Lakes survey writes IGLD85 on every point and its plot sheet says the
+    soundings are referenced to IGLD85 L.W.D., so the zero is the low water datum
+    expressed on that system - the surface an offset service serves by its own
+    name, 176 m above IGLD85's zero on Lake Huron."""
+    assert spec.normalize.quantity == "depth_below_datum"
+    assert eh._stated(spec, _points(datum="IGLD85"), "CR_01")[0] == "LWD_IGLD85"
+    # A coastal survey already names the surface its soundings hang below.
+    assert eh._stated(spec, _points(datum="MLLW"), "NY_02")[0] == "MLLW"
+    # The same word over ELEVATIONS names the system they stand on, not a
+    # surface hanging under them, and nothing re-reads it.
+    assert eh._counted_from("IGLD85", "bed_elevation_m") == "IGLD85"
+
+
 def test_a_unit_nothing_here_converts_refuses_by_name(spec):
     with pytest.raises(RouterEmptyError) as excinfo:
         eh._stated(spec, _points(uom="fathom"), "WR_03")

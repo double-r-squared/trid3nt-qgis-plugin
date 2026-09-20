@@ -63,6 +63,15 @@ _DEPTH_FIELD = "Z_depth"
 _DATUM_FIELD = "elevationDatum"
 _UOM_FIELD = "elevationUOM"
 
+#: WHAT A DEPTH IS COUNTED FROM, by the word the survey's own points state it in.
+#: A depth is counted from a WATER SURFACE and never from a reference system: a
+#: Great Lakes survey writes IGLD85 on every point and its plot sheet says "ALL
+#: SOUNDINGS ARE REFERENCED TO INTERNATIONAL GREAT LAKES DATUM OF 1985 (IGLD85)
+#: L.W.D.", so the zero is the Low Water Datum expressed on that system - the
+#: surface NOAA VDatum serves as LWD_IGLD85, 176 m above the system's own zero on
+#: Lake Huron. A word not listed here is the zero the records already state.
+_DEPTH_ZERO = {"igld85": "LWD_IGLD85"}
+
 #: Metres per stated unit. An unlisted unit refuses: a survey measured in a unit
 #: nobody here can name is not a survey anyone can build a bed from.
 _METRES_PER_UNIT = {
@@ -269,6 +278,16 @@ def _published_offset(archive: Any, survey_id: str) -> tuple[float | None, str]:
     return None, ""
 
 
+def _counted_from(datum: str, quantity: str) -> str:
+    """The zero a survey's numbers are counted from, off the word its points state.
+
+    A DEPTH names the water surface it hangs below; an elevation names the system
+    it stands on, and one word spells both surfaces."""
+    if not str(quantity or "").startswith("depth"):
+        return datum
+    return _DEPTH_ZERO.get(re.sub(r"[^a-z0-9]", "", datum.lower()), datum)
+
+
 def _stated(spec: SourceSpec, points: Any, survey_id: str) -> tuple[str, str, float]:
     """The datum, the unit and the metres per unit the survey itself states."""
     sc = spec.error_code_prefix
@@ -295,7 +314,7 @@ def _stated(spec: SourceSpec, points: Any, survey_id: str) -> tuple[str, str, fl
             f"unit this fetch can convert (known: {sorted(_METRES_PER_UNIT)}).",
             "UNCONVERTIBLE_UNIT",
         )
-    return datums[0], units[0], scale
+    return _counted_from(datums[0], spec.normalize.quantity), units[0], scale
 
 
 @register_hook("ehydro.read")

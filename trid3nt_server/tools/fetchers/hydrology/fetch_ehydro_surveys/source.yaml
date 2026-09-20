@@ -105,7 +105,13 @@ coverage:
     # Each survey states its OWN zero (CRD on the Willamette, LWD on the lakes,
     # MLLW on a coast, NAVD88 elsewhere), so no one word answers for the source:
     # the datum rides on every row from the survey's own points, and a survey
-    # whose points state none refuses.
+    # whose points state none refuses. A DEPTH is counted from a water surface
+    # and never from a reference system, so the word a record states is read as
+    # the surface it names: points on IGLD85 are soundings below the Low Water
+    # Datum expressed on IGLD85 - "ALL SOUNDINGS ARE REFERENCED TO INTERNATIONAL
+    # GREAT LAKES DATUM OF 1985 (IGLD85) L.W.D." on the plot sheet - which is
+    # LWD_IGLD85, the surface an offset service serves and 176 m above IGLD85's
+    # own zero on Lake Huron.
     datum: record
     units:
       depth_below_datum_m: m
@@ -129,13 +135,15 @@ coverage:
     window:
       series: false
     resolution_m: 1.0
+    # The zero rides on the record and names the surface a depth hangs below,
+    # the way the bathymetry row above states it.
     datum: record
     units:
       depth_below_datum_m: m
     value_column: depth_below_datum_m
 
 caveats:
-  - "the soundings are DEPTHS BELOW the survey's own stated datum, positive down, in metres - not elevations; the datum is on every row and is a local project datum on many rivers (Columbia River Datum on the Willamette), so a bed built from these needs a deliberate datum shift"
+  - "the soundings are DEPTHS BELOW the survey's own stated datum, positive down, in metres - not elevations; the datum is on every row and is a local project datum on many rivers (Columbia River Datum on the Willamette) or a chart datum on the lakes (the Low Water Datum on IGLD85, published as LWD_IGLD85), so a bed built from these needs a deliberate datum shift"
   - "a survey whose points state no vertical datum or no unit of measure refuses by name rather than guessing one"
   - "without ``since`` the window is the last YEAR, which is the order a dredged channel is resurveyed on; ``since`` returns every survey ending on or after that date, up to twelve, and refuses over that rather than truncating silently"
   - "``datum_offset_m`` is the shift the survey's OWN package metadata publishes between its project datum and a national frame (``datum_offset_frame``), read off the sentence the district wrote it in; it is null where the package states none, and applying it is the consumer's"
@@ -152,6 +160,9 @@ docstring: |-
       footprint polygon) and ``sounding`` (the measured points). Every row carries
       the survey's id and date and - read from the survey's own data, never
       assumed - its ``vertical_datum`` and the unit its depths were measured in.
+      The datum is the SURFACE the depths hang below, which on the Great Lakes is
+      the Low Water Datum expressed on IGLD85 (``LWD_IGLD85``) and not IGLD85
+      itself.
 
   When to use:
       - A river, harbour or navigation-channel model needs a REAL surveyed bed:
