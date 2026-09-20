@@ -159,20 +159,17 @@ class Trid3ntDock(QDockWidget):
         self.iface = iface
         self.settings = PluginSettings()
         self.bridge = AgentBridge(self)
-        # Remote-streaming session TTL: sweep crash-leftover staging
-        # dirs from prior sessions before this session opens its own. Only DEAD
-        # owners are swept -- a concurrent live QGIS instance keeps its dir.
+        # Only DEAD owners are swept -- a concurrent live QGIS instance
+        # keeps its staging dir.
         sweep_stale_session_dirs()
         self.materializer = LayerMaterializer(self.settings)
         self._pending: Optional[_AssistantEntry] = None
         self._connected = False
-        # Remote-daemon (tailnet) endpoint derivation: server-advertised
-        # ``http_base`` / ``data_base`` from the last connect handshake (None
-        # until a daemon that advertises them acks). See
-        # ``_effective_http_base`` / ``_effective_data_base`` -- every
-        # :8766 caller and the store's GDAL configuration resolve through
-        # those two so a fresh daemon's advertisement always wins and an old
-        # daemon still falls back honestly.
+        # Advertised by the last connect handshake, None until a daemon that
+        # advertises them acks. Every :8766 caller and the store's GDAL
+        # configuration resolve through ``_effective_http_base`` /
+        # ``_effective_data_base``, so a fresh advertisement always wins and an
+        # old daemon still falls back honestly.
         self._advertised_http_base: Optional[str] = None
         self._advertised_data_base: Optional[str] = None
         self._case_id: Optional[str] = None
@@ -183,99 +180,64 @@ class Trid3ntDock(QDockWidget):
         self._case_list_tasks: List[_CaseListTask] = []  # keep-alive refs
         self._push_tasks: List[_PushLayerTask] = []  # keep-alive refs
         self._probe_tasks: List[_ProbePointTask] = []  # keep-alive refs
-        # The Settings Save
-        # provider-config POST tasks -- owned here (not the closing dialog).
+        # Owned here, not by the Settings dialog that closes over them.
         self._provider_config_tasks: List[_ProviderConfigTask] = []
-        # The Probe map tool (design point 2): built lazily on first toggle-on
-        # (QgsMapToolEmitPoint needs a live canvas). ``_prev_map_tool`` is the
-        # canvas' tool saved right before the Probe tool is installed, so
-        # toggling off restores it (never steals the tool permanently).
+        # Built lazily on first toggle-on: QgsMapToolEmitPoint needs a live
+        # canvas. ``_prev_map_tool`` is the canvas' tool saved right before the
+        # Probe tool is installed, so toggling off restores it.
         self._probe_map_tool = None
         self._prev_map_tool = None
-        # The persistent per-case bbox:
-        # the case AOI the agent references every turn + the user can re-draw.
-        # ``_case_bbox`` is the current EPSG:4326 ``(w, s, e, n)`` (None until a
-        # case-open carries one / the user draws one); ``_aoi_rubber`` is the
-        # dashed outline-only overlay that shows it on the canvas. Both are
-        # CLEARED on every case switch (``_clear_messages``) + disconnect
-        # (``disconnect_agent``) so a stale box never lingers across a switch.
-        # The "Set AOI" tool reuses the release-point pick discipline: ON saves
-        # the canvas' current tool + installs ``QgsMapToolExtent``, OFF restores
-        # it (``_aoi_map_tool`` / ``_prev_aoi_tool``, mirroring the probe pair).
+        # The persistent per-case AOI: ``_case_bbox`` in EPSG:4326
+        # ``(w, s, e, n)``, ``_aoi_rubber`` its canvas overlay. Both are CLEARED
+        # on case switch and on disconnect, or a stale box lingers across a
+        # switch. The Set-AOI tool saves and restores the canvas' tool the same
+        # way the probe pair does.
         self._case_bbox: Optional[Tuple[float, float, float, float]] = None
         self._aoi_rubber = None
         self._aoi_map_tool = None
         self._prev_aoi_tool = None
-        # the 'Draw region' supply path -- ONE rubber-band rectangle
-        # attached to the NEXT chat turn as ``drawn_geometry`` (a basis="user"
-        # spatial knob the composer gates consume, e.g. geoclaw amr_regions).
-        # ``_drawn_region`` is the pending ``{"geometry_type": "rectangle",
-        # "bbox": [w,s,e,n]}`` payload (None until drawn), CLEARED on send (one
-        # rectangle, one turn). Its map tool + overlay mirror the Set-AOI pair.
+        # ONE rubber-band rectangle rides the NEXT chat turn as
+        # ``drawn_geometry`` -- a basis="user" spatial knob. CLEARED on send:
+        # one rectangle, one turn.
         self._drawn_region: Optional[dict] = None
         self._region_rubber = None
         self._region_map_tool = None
         self._prev_region_tool = None
-        # True while the Set-AOI canvas key-filter (BACKSPACE
-        # /DELETE -> _clear_aoi) is installed -- see ``_toggle_aoi_draw``.
+        # True while the Set-AOI canvas key-filter (BACKSPACE/DELETE ->
+        # _clear_aoi) is installed.
         self._aoi_key_filter_on = False
         self._refresh_debounce = Debouncer()
-        # A case picked from the Cases
-        # dialog before/while connecting -- opened via ``_on_case_ready``
-        # once the (auto-)connect actually completes, so a cold-list click
-        # is never silently dropped.
+        # A case picked before/while connecting, opened once the connect
+        # completes, so a cold-list click is never silently dropped.
         self._pending_open_case: Optional[Tuple[str, str]] = None
-        # AUTO-CONNECT fires once per dock SHOW,
-        # reset on hide -- see ``showEvent``/``hideEvent``/``_auto_connect_local_once``.
+        # Auto-connect fires once per dock SHOW, reset on hide.
         self._auto_connect_done_this_show = False
-        # Live SimCards keyed by the
-        # compute step's step_id; reset on case switch (_clear_messages).
+        # Keyed by the compute step's step_id; reset on case switch.
         self._sim_cards: Dict[str, SimCard] = {}
-        # Short arg summaries from the
-        # tool-io sidecar, keyed by step_id, for the tool chip rows.
         self._tool_args_by_step: Dict[str, str] = {}
-        # The OPEN (not yet answered/
-        # superseded) tool-picker cards, in arrival order. A subsequent turn
-        # event folds them to "agent proceeded" (_supersede_open_tool_pickers);
-        # reset on case switch (_clear_messages -- the widgets die with the
-        # message list).
+        # The still-open picker cards in arrival order: a later turn event
+        # folds them to "agent proceeded". Reset on case switch.
         self._open_tool_pickers: List[ToolCandidatesCard] = []
-        # Approved code-exec cards keyed by code_exec_id so the
-        # processing-request that follows an approval can fold its outcome
-        # into the right card's chip; reset on case switch
-        # (_clear_messages -- the widgets die with the message list).
+        # Keyed by code_exec_id so the processing-request that follows an
+        # approval folds its outcome into the right card. Reset on case switch.
         self._code_exec_cards: Dict[str, CodeExecCard] = {}
-        # The latest ``secrets-list`` roster (parsed
-        # SecretRow list) for the settings/secrets surface. Minimal honest
-        # handling -- stored + a one-line status note; raw keys never ride
-        # here. Reset on case switch.
+        # The latest secrets roster for the settings surface; raw keys never
+        # ride here. Reset on case switch.
         self._secrets: list = []
-        # 1-based counter of picker
-        # cards shown THIS turn -- the "Step N" affordance is trivially
-        # derived from card arrival order, never a server field. Reset on
-        # every new user turn (_send) and on a case switch (_clear_messages).
+        # 1-based picker-card counter behind the "Step N" affordance: arrival
+        # order, never a server field. Reset on every user turn and case switch.
         self._tool_picker_turn_step = 0
-        # The standing "AOI: drawn X x Y deg" readout is
-        # GONE (clutter). The ONLY AOI note is the one-time inline transcript
-        # note ``_on_aoi_extent_chosen`` emits WHEN the user actually sets the
-        # AOI ("Case AOI set to ..."). Nothing is restated per-send anymore, so
-        # the old ``_aoi_status_line`` / ``_last_aoi_note`` dedupe pair is
-        # removed with it.
-
-        # The charts window: a bottom-docked
-        # directive -- charts get their OWN bottom-docked window, never an
-        # in-chat panel. Built LAZILY (first chart or first "Charts (N)" button
-        # click) so a chart-less session never spawns a bottom dock. The chat
-        # keeps only the count button; ``_charts_count`` drives its label.
+        # Charts get their OWN bottom-docked window, never an in-chat panel,
+        # built LAZILY so a chart-less session never spawns a bottom dock. The
+        # chat keeps only the count button ``_charts_count`` labels.
         self._charts_window: Optional[ChartsWindow] = None
         self._charts_count = 0
 
         self._build_ui()
         self._wire_bridge()
         self._configure_store_access()
-        # The persistent "Push layer"
-        # header row stays clean -- the push action lives
-        # in the QGIS layer-tree context menu ("Push layer to case").
+        # The push action lives in the QGIS layer-tree context menu, not on a
+        # header row.
         self._push_tree_actions: List = []
         self._register_layer_tree_push_action()
 
@@ -511,36 +473,24 @@ class Trid3ntDock(QDockWidget):
         stretch item, which every other insertion goes before. Drops the
         pending streaming entry: a stale target must never take new deltas."""
         self._pending = None
-        # Per-case transcript state: the sim-card registry, whose widgets die
-        # in the loop below, and the tool arg summaries.
+        # Every registry below tracks widgets the loop at the bottom deletes;
+        # the refs go with them, or the next case inherits dead cards.
         self._sim_cards.clear()
         self._tool_args_by_step.clear()
-        # open picker cards are per-case transcript state -- the
-        # widgets die in the loop below; drop the tracking refs with them.
         self._open_tool_pickers = []
         self._tool_picker_turn_step = 0
-        # Approved code-exec cards are per-case transcript
-        # state -- the widgets die in the loop below; drop the tracking refs.
-        # (self._secrets is user/Case-level roster state, refreshed by the next
-        # secrets-list; a switch clears it so a stale roster never lingers.)
         self._code_exec_cards.clear()
         self._secrets = []
-        # The previous case's AOI overlay must not
-        # linger across a switch -- _on_case_open_event repaints it below from
-        # the newly-opened case's own bbox (or leaves it cleared when absent).
+        # The AOI and region overlays live on the canvas, not in the message
+        # list, so they need their own clear; a case-open repaints the AOI from
+        # the newly-opened case's own bbox.
         self._clear_aoi_overlay()
-        # a pending drawn region is per-turn/per-case -- drop it on a
-        # case switch so it never rides a turn in the wrong case.
         self._clear_region_overlay()
-        # The probe panel shows CASE
-        # data -- a table from the previous case must not linger across a
-        # switch. Hide it (its next click repopulates it).
+        # The probe panel repopulates on its next click.
         self._probe_panel.setVisible(False)
         self.probe_result_label.setText("")
-        # Charts are per-Case state: the case-open
-        # replay below repopulates the charts window for the new case. The
-        # window survives the switch (bottom dock stays put); only its list is
-        # cleared + the count button reset.
+        # The charts window SURVIVES the switch -- the bottom dock stays put;
+        # only its list and the count button reset.
         if self._charts_window is not None:
             self._charts_window.clear()
         self._charts_count = 0
@@ -1531,84 +1481,16 @@ class Trid3ntDock(QDockWidget):
             entry.append_delta(str(data.get("delta") or ""))
             self._scroll_to_bottom()
         elif kind == "pipeline":
-            # Assemble the parent tool card's inner
-            # rows + the ONE bottom metadata block. Each inner row is just a
-            # tool label + its state (the card renders ">" + label + a status
-            # glyph); the per-row arg and state detail is folded into the
-            # muted metadata block at the bottom of the card instead.
-            steps = data.get("steps") or []
-            inner_rows: List[dict] = []
-            meta_lines: List[str] = []
-            for step in steps:
-                if not isinstance(step, PipelineStep):
-                    continue
-                if step.tool_name.lower() in _LLM_STEP_NAMES:
-                    continue
-                if step.role == "compute":
-                    # The off-box solver
-                    # step renders as ONE persistent collapsible SimCard, not
-                    # an inner tool row -- see _route_compute_step.
-                    self._route_compute_step(step)
-                    continue
-                if step.tool_name == "context:compact":
-                    # Compaction narration is not a tool call -- keep it as a
-                    # muted metadata line, not a ">" tool row.
-                    suffix = (
-                        f" ({step.substep_label})" if step.substep_label else ""
-                    )
-                    meta_lines.append(f"{step.name} - {step.state}{suffix}")
-                    continue
-                inner_rows.append(tool_row(
-                    step.tool_name or step.name, step.state,
-                    nested=bool(step.parent_step_id),
-                ))
-                # The arg summary
-                # + any substep label + error text join the bottom metadata.
-                bits: List[str] = []
-                if step.substep_label:
-                    bits.append(step.substep_label)
-                args = self._tool_args_by_step.get(step.step_id)
-                if args:
-                    bits.append(args)
-                if bits:
-                    meta_lines.append(
-                        f"{step.tool_name or step.name}: " + "  ".join(bits)
-                    )
-                if step.error_message:
-                    meta_lines.append(
-                        f"{step.tool_name or step.name}: {step.error_message}"
-                    )
-            self._ensure_pending().render_tool_card(inner_rows, meta_lines)
-            self._scroll_to_bottom()
+            self._on_pipeline(data)
         elif kind == "session-state":
-            layers = data.get("layers") or []
-            if layers and self._case_id:
-                notes = self.materializer.materialize(layers)
-                if notes:
-                    # One collapsed
-                    # "Layers (N)" toggle per batch, not N chat lines
-                    # (errors stay visible outside the collapse).
-                    self._ensure_pending().add_layer_notes(notes)
-                    self._scroll_to_bottom()
+            self._on_session_state(data)
         elif kind == "error":
             code = data.get("error_code") or "ERROR"
             message = data.get("message") or data.get("detail") or ""
             self._ensure_pending().add_note(f"{code}: {message}", error=True)
             self._scroll_to_bottom()
         elif kind == "chart":
-            # A live mid-turn chart lands in the
-            # bottom-docked ChartsWindow (never a chat widget). The chat gets
-            # only the incremented "Charts (N)" button + one pointer note so
-            # the turn's narrative says where the chart went.
-            window = self._ensure_charts_window()
-            if window.add_chart(data):
-                self._charts_count = window.count
-                self._set_charts_button(flag=True)
-                title = data.get("title") or "chart"
-                self._ensure_pending().add_note(
-                    f"Chart added to the charts window: {title}"
-                )
-                self._scroll_to_bottom()
+            self._on_chart(data)
         elif kind == "solve-progress":
             # The ~10 s big-sim telemetry
             # tick. It carries run_id, not step_id; the local seam runs one
@@ -1670,22 +1552,7 @@ class Trid3ntDock(QDockWidget):
                 if self._cases_dialog is not None:
                     self._cases_dialog.set_cases(self._cases)
         elif kind == "map-command":
-            # Honor ONLY the explicit zoom-to. A preview layer is published
-            # role=input with bbox=None so it does NOT self-zoom -- the camera
-            # must not be yanked for every silent input layer -- and the agent
-            # frames it with a "zoom-to" instead.
-            if data.get("command") == "zoom-to":
-                bbox = (data.get("args") or {}).get("bbox")
-                try:
-                    canvas = self.iface.mapCanvas()
-                except Exception:  # noqa: BLE001 -- headless: nothing to zoom
-                    canvas = None
-                if (
-                    canvas is not None
-                    and isinstance(bbox, (list, tuple))
-                    and len(bbox) == 4
-                ):
-                    zoom_to_bbox4326(canvas, tuple(bbox))
+            self._on_map_command(data)
         elif kind == "turn-complete":
             if self._pending is not None:
                 # The answer text is final -- convert
@@ -1707,6 +1574,94 @@ class Trid3ntDock(QDockWidget):
                 )
             except Exception:  # noqa: BLE001 -- headless/test: no QGIS
                 pass
+
+
+    def _on_pipeline(self, data: dict) -> None:
+        """Assemble the parent tool card's inner rows + the ONE bottom metadata
+        block. An inner row is a tool label + its state; the per-row arg and
+        state detail folds into the muted metadata block at the card's bottom."""
+        steps = data.get("steps") or []
+        inner_rows: List[dict] = []
+        meta_lines: List[str] = []
+        for step in steps:
+            if not isinstance(step, PipelineStep):
+                continue
+            if step.tool_name.lower() in _LLM_STEP_NAMES:
+                continue
+            if step.role == "compute":
+                # A compute step renders as ONE persistent collapsible
+                # SimCard, not an inner tool row.
+                self._route_compute_step(step)
+                continue
+            if step.tool_name == "context:compact":
+                # Compaction narration is not a tool call -- keep it as a
+                # muted metadata line, not a ">" tool row.
+                suffix = (
+                    f" ({step.substep_label})" if step.substep_label else ""
+                )
+                meta_lines.append(f"{step.name} - {step.state}{suffix}")
+                continue
+            inner_rows.append(tool_row(
+                step.tool_name or step.name, step.state,
+                nested=bool(step.parent_step_id),
+            ))
+            bits: List[str] = []
+            if step.substep_label:
+                bits.append(step.substep_label)
+            args = self._tool_args_by_step.get(step.step_id)
+            if args:
+                bits.append(args)
+            if bits:
+                meta_lines.append(
+                    f"{step.tool_name or step.name}: " + "  ".join(bits)
+                )
+            if step.error_message:
+                meta_lines.append(
+                    f"{step.tool_name or step.name}: {step.error_message}"
+                )
+        self._ensure_pending().render_tool_card(inner_rows, meta_lines)
+        self._scroll_to_bottom()
+
+    def _on_session_state(self, data: dict) -> None:
+        """Materialize this frame's published layers into the case's group."""
+        layers = data.get("layers") or []
+        if layers and self._case_id:
+            notes = self.materializer.materialize(layers)
+            if notes:
+                # Errors stay visible outside the collapse.
+                self._ensure_pending().add_layer_notes(notes)
+                self._scroll_to_bottom()
+
+    def _on_chart(self, data: dict) -> None:
+        """A live mid-turn chart lands in the bottom-docked ChartsWindow, never
+        a chat widget. The chat gets the incremented "Charts (N)" button and one
+        pointer note, so the turn's narrative says where the chart went."""
+        window = self._ensure_charts_window()
+        if window.add_chart(data):
+            self._charts_count = window.count
+            self._set_charts_button(flag=True)
+            title = data.get("title") or "chart"
+            self._ensure_pending().add_note(
+                f"Chart added to the charts window: {title}"
+            )
+            self._scroll_to_bottom()
+
+    def _on_map_command(self, data: dict) -> None:
+        """Honor ONLY the explicit zoom-to. A preview layer is published
+        role=input with bbox=None so it does NOT self-zoom -- the camera must
+        not be yanked for every silent input layer."""
+        if data.get("command") == "zoom-to":
+            bbox = (data.get("args") or {}).get("bbox")
+            try:
+                canvas = self.iface.mapCanvas()
+            except Exception:  # noqa: BLE001 -- headless: nothing to zoom
+                canvas = None
+            if (
+                canvas is not None
+                and isinstance(bbox, (list, tuple))
+                and len(bbox) == 4
+            ):
+                zoom_to_bbox4326(canvas, tuple(bbox))
 
     def _on_case_open_event(self, payload: dict) -> None:
         """A ``case-open`` rehydration arrived: rebind the dock to that case
