@@ -109,3 +109,39 @@ def test_the_nearest_station_is_what_a_listed_set_is_measured_from():
     # the reach is read against is the station's, not the coastal ring's.
     assert listed.nearest(-71.505, 41.353).id == "8452660"
     assert 20.0 < listed.distance_km(-71.505, 41.353) < 25.0
+
+
+#: The features a hydrography source publishes, by the fetcher that publishes
+#: them. Written here as the pin because the class alone says a source maps
+#: water and nothing about WHICH water: the row's vocabulary is what a need
+#: selects on, and a source that stops publishing a feature has to say so.
+_HYDROGRAPHY_FEATURES = {
+    "fetch_osm_coastline": {"coastline"},
+    "fetch_river_geometry": {"channel network", "drainage network"},
+    "fetch_river_reach": {"reach"},
+    "fetch_watershed": {"basin"},
+    "fetch_nhd_waterbody_at_point": {"waterbody"},
+}
+
+
+@pytest.mark.parametrize("path", SPECS, ids=lambda p: p.parent.name)
+def test_every_hydrography_row_names_the_features_it_publishes(path):
+    """One class, many things: a coastline, a waterbody, a channel network, a
+    reach and a traced basin are all hydrography, and a row that named none of
+    them would answer a question asking for any of them."""
+    spec = load_spec_from_path(path)
+    rows = [row for row in spec.coverage if row.data_class == "hydrography"]
+    if not rows:
+        return
+    for row in rows:
+        assert set(row.vocabulary) == _HYDROGRAPHY_FEATURES[path.parent.name]
+
+
+def test_the_channel_network_is_asked_for_in_the_sources_own_word():
+    """The feature travels onto the param this source states it in, so a
+    question names the network once and the tag set follows."""
+    spec = load_spec_from_path(_ROOT / "hydrology" / "fetch_river_geometry"
+                               / "source.yaml")
+    row, = spec.coverage
+    assert row.ask["waterway_type"] == "need:of"
+    assert row.word_for("channel network") == "default"

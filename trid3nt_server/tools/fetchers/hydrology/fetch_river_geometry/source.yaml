@@ -71,6 +71,14 @@ coverage:
     # no cell.
     datum: null
     units: {}
+    # WHAT THIS ROW PUBLISHES of its class, and the word the tag set is asked
+    # for under: the mapped CHANNEL NETWORK is the waterway classes this source
+    # returns unasked, and the artificial drainage that would swamp a farmed
+    # basin is a feature of its own that a slot has to name.
+    ask: {waterway_type: "need:of"}
+    vocabulary:
+      channel network: default
+      drainage network: drainage
 
 caveats:
 - OpenStreetMap waterway ways (river/stream/canal by default) via the Overpass API (3-mirror fallback),

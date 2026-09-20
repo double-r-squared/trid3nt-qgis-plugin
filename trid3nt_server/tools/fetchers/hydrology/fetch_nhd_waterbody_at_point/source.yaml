@@ -115,6 +115,11 @@ coverage:
     resolution_m: 5.0
     datum: null
     units: {}
+    # WHAT THIS ROW PUBLISHES of its class: one WATERBODY - the open water NHD
+    # maps as a closed outline. Not the channel network feeding it and not a
+    # cut stretch of river.
+    vocabulary:
+      waterbody: waterbody
 
 caveats:
   - "ONE waterbody comes back, never a set: the body the seed stands IN, else the nearest one whose edge is within search_distance_km, else a refusal naming the nearest body and how far away it is - the query looks three times search_distance_km so that refusal can say what was there"

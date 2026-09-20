@@ -96,10 +96,10 @@ class DATA:
     #: under a hillslope, so nothing is laid over this row.
     bed = Data.need("terrain")
     #: THE MAPPED CHANNEL NETWORK the mesh refines toward - a river's own
-    #: geometry is a hydrography row too, ranked by the match against the same
-    #: class as the domain. A sizing function measures DISTANCE FROM A LINE, so
-    #: the shape is stated: a waterbody polygon is the same class and not this.
-    rivers = Data.need("hydrography", geometry="polyline")
+    #: geometry is a hydrography row too, so the FEATURE is named: a coastline
+    #: and a basin divide are the same class and neither is a channel. A sizing
+    #: function measures DISTANCE FROM A LINE, so the shape is stated too.
+    rivers = Data.need("hydrography", of="channel network", geometry="polyline")
     landcover = Data.need("land cover")
     #: THE MEASURED STORM, as the hourly analysis of record published it over
     #: this catchment. CONTEXT: a window nobody stated, a basin outside CONUS or

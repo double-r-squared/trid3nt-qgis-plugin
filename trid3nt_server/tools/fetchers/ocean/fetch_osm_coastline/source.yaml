@@ -57,6 +57,11 @@ coverage:
       series: false
     datum: null
     units: {}
+    # WHAT THIS ROW PUBLISHES of its class: the land-water edge itself, as the
+    # ways OSM tags natural=coastline. A lake shore is natural=water and is not
+    # here, so a slot asking for any other hydrography feature reads elsewhere.
+    vocabulary:
+      coastline: coastline
 
 caveats:
 - OpenStreetMap natural=coastline ways via the Overpass API (3-mirror fallback). Global, keyless. The

@@ -109,6 +109,11 @@ coverage:
     # A catchment is asked at its POUR POINT, and how far it may reach is the
     # question's own span - the half-width of the window the trace runs inside.
     ask: {pour_point: "need:seed_point", buffer_km: "need:span_km"}
+    # WHAT THIS ROW PUBLISHES of its class: the BASIN that drains through a
+    # point, traced in a DEM. Land, not water - the divide is where the ground
+    # turns away - so a slot asking for a mapped water feature reads elsewhere.
+    vocabulary:
+      basin: basin
 
 caveats:
   - "the basin is traced in the DEM over a square window of side 2 x buffer_km centred on the pour point; a basin that reaches the edge of that window is REFUSED by name rather than returned clipped, and the refusal states the buffer_km that would hold it"

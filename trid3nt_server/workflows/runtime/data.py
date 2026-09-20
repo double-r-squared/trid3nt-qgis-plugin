@@ -243,11 +243,12 @@ class DataDecl(Row):
     #: against. The place, the window and the frame are the RUN's and are read
     #: off it, so a question states none of them.
     data_class: str = ""
-    #: THE PUBLISHED VARIABLE this row observes, by the name the run's own
-    #: result carries it under. An observation is a measurement OF something the
-    #: run publishes, and the two are comparable only in one unit, so the unit
-    #: this row's record is read in is that variable's - off the run's published
-    #: table, never off the row. Empty where the row observes nothing published.
+    #: WHAT OF ITS CLASS this row asks for, by the name the source publishes it
+    #: under. On a slot that reads a RECORD it is the variable the run itself
+    #: publishes - a measurement and the thing it measures are comparable in one
+    #: unit, so the record is read in that variable's, off the run's published
+    #: table and never off the row. On every other slot it is the FEATURE asked
+    #: for. Empty where any of the class will do.
     observes: str = ""
     #: HOW FAR this question's domain reaches, in kilometres: the one opinion a
     #: question has about its own extent. Generic, because every source calls it
@@ -298,9 +299,8 @@ class DataDecl(Row):
         if self.observes and not self.data_class:
             raise PlanValidationError(
                 f"Data {self.name!r} states of={self.observes!r} and needs no "
-                "class: what a row observes is the published variable its own "
-                "MEASUREMENT is compared against, so a row that goes out for "
-                "nothing observes nothing.")
+                "class: of= names what OF a class this row asks the world for, "
+                "so a row that goes out for nothing asks for nothing.")
         if self.span_km is not None and not self.data_class:
             raise PlanValidationError(
                 f"Data {self.name!r} states span_km and needs no class: how far "
@@ -473,8 +473,10 @@ class DataDecl(Row):
         are read off it, so a question states neither; ``at`` is the POINT this
         row is asked at where the domain's own centre is not it - the seed a
         reach is cut from, the place the nearest reporting site is ranked
-        against. ``of`` names the published variable this row OBSERVES, whose
-        unit the record is read in; ``span_km`` is how far the question reaches,
+        against. ``of`` names WHAT OF THE CLASS is asked for - the variable a
+        record is read for, the feature a map is read for - and a source
+        publishing none of it leaves the match's list;
+        ``span_km`` is how far the question reaches,
         which the answering source's coverage row maps to its own param.
         ``geometry`` is the SHAPE this row is read as - a class measured in more
         than one shape has sources publishing each, and a step that cuts a box

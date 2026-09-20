@@ -56,9 +56,11 @@ class Need:
     until: str | None = None
     #: The vertical frame the run is solved on, off the lever.
     frame: str | None = None
-    #: THE PUBLISHED VARIABLE the slot observes, "" where it observes none. A
-    #: source states its own word for it on its coverage row, so a source that
-    #: has no word for this variable does not measure it and is excluded.
+    #: WHAT OF THE CLASS the slot asks for, "" where any of it will do: the
+    #: published variable an observation is a measurement of, the feature a map
+    #: is read for. A source states its own word for it on its coverage row, so
+    #: a source with no word for this one publishes something else and is
+    #: excluded.
     of: str = ""
     #: The cell the mesh resolves, which is what a source's own cell is ranked
     #: against - finer than the mesh is detail the mesh cannot carry.
@@ -309,11 +311,6 @@ def base_ask(fetcher: str, purpose: str, bbox: Sequence[float] | None,
 #: row that knows both names maps it onto the param this source states it in.
 _FROM_NEED = "need:"
 
-#: The one need attribute a row hears in its OWN vocabulary rather than as the
-#: number it is: what the slot observes, which every source names differently.
-_OF_THE_NEED = f"{_FROM_NEED}of"
-
-
 def _asked(value: str, needs: Mapping[str, Any]) -> Any:
     """One ask value: the need attribute it names, or the literal it is.
 
@@ -342,7 +339,7 @@ def ask_for(choice: SourceChoice, base: Mapping[str, Any], lon: float | None,
         return ask
     stated = dict(needs or {})
     if stated.get("of"):
-        # The one attribute a source hears in its own word: the row that knows
+        # The one attribute a source hears in its OWN word: the row that knows
         # both names is the row that was matched.
         stated["of"] = row.word_for(str(stated["of"])) or None
     ask.update({param: _asked(value, stated)
@@ -400,9 +397,9 @@ def _excluded(need: Need, coverage: Coverage) -> str:
     Class is already answered. Place is hard; the window is hard for a SERIES
     and never for a surface, which a run outside simply ranks lower. The datum
     is not a filter - it is flagged on the row and refused at the offset row."""
-    unmeasured = _unmeasured(need, coverage)
-    if unmeasured:
-        return unmeasured
+    unpublished = _unpublished(need, coverage)
+    if unpublished:
+        return unpublished
     if need.lon is not None and need.lat is not None:
         extent = _station_set(coverage)
         if need.data_class == _ON_THE_WATER and need.water is not None:
@@ -425,20 +422,19 @@ def _excluded(need: Need, coverage: Coverage) -> str:
     return ""
 
 
-def _unmeasured(need: Need, coverage: Coverage) -> str:
-    """Why a source that is asked BY MEASUREMENT cannot take this one, or "".
+def _unpublished(need: Need, coverage: Coverage) -> str:
+    """Why a source publishing none of what the slot asked for leaves the list, or "".
 
-    A row that maps ``need:of`` onto one of its params is called with the word
-    it has for the variable; with no word for it the source measures something
-    else, and calling it anyway would fill the slot with a different quantity
-    under the right name."""
-    if not need.of or not any(str(value) == _OF_THE_NEED
-                              for value in coverage.ask.values()):
-        return ""
-    if coverage.word_for(need.of):
+    A row's vocabulary is WHAT IT PUBLISHES, under the name a question asks for
+    it by: the characteristic a gauge measures, the feature a map draws. A row
+    with no word for what was asked publishes something else, and taking it
+    would fill the slot with another thing under the right name. Where the row
+    also maps ``need:of`` onto one of its params, the word here is what the
+    source is called by."""
+    if not need.of or coverage.word_for(need.of):
         return ""
     known = ", ".join(sorted(coverage.vocabulary)) or "nothing"
-    return (f"measures nothing it calls {need.of}; its row states a word for "
+    return (f"publishes nothing it calls {need.of}; its row states a word for "
             f"{known}")
 
 

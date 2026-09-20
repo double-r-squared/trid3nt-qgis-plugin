@@ -403,3 +403,62 @@ def test_a_box_called_source_is_asked_over_a_box_that_reaches_its_station(
     west, south, east, north = ask["bbox"]
     assert west <= -122.68 and south <= 45.49 and east >= -122.60
     assert north >= 45.53
+
+
+def hydrography(vocabulary=None, ask=None, rings=None):
+    """One hydrography row, which is the class a FEATURE is asked out of: the
+    class says a source maps water, the vocabulary says what of it."""
+    return Coverage(
+        data_class="hydrography", kind="measured",
+        extent=CoverageExtent(kind="surface", rings=rings or CONUS,
+                              note="a stated extent"),
+        window=CoverageWindow(series=False), units={},
+        ask=dict(ask or {}), vocabulary=dict(vocabulary or {}))
+
+
+def feature_need(**over):
+    return Need(slot="domain", data_class="hydrography",
+                lon=WILLAMETTE[0], lat=WILLAMETTE[1], **over)
+
+
+def test_a_row_publishing_none_of_the_asked_feature_leaves_the_list():
+    """A coastline and a waterbody are one class and two things: the row's own
+    vocabulary is what it publishes, and a row with no word for what was asked
+    would fill the slot with something else under the right name."""
+    choice = match(feature_need(of="coastline"), [
+        ("fetch_coastline", hydrography({"coastline": "coastline"})),
+        ("fetch_waterbody", hydrography({"waterbody": "waterbody"}))])
+    assert choice.picked == "fetch_coastline"
+    dropped, = [row for row in choice.rows if row.excluded]
+    assert dropped.fetcher == "fetch_waterbody"
+    assert "publishes nothing it calls coastline" in dropped.excluded
+    assert "waterbody" in dropped.excluded
+
+
+def test_a_row_that_states_no_vocabulary_answers_for_no_named_feature():
+    """A row saying nothing about what it publishes cannot answer a question
+    that names a feature; it is still a survivor of a question that names none."""
+    rows = [("fetch_anything", hydrography())]
+    assert not match(feature_need(of="coastline"), rows).picked
+    assert match(feature_need(), rows).picked == "fetch_anything"
+
+
+def test_the_source_is_called_by_its_own_word_for_the_feature(monkeypatch):
+    """The same mechanism the observe row selects a characteristic through: the
+    row that knows both names maps the need onto the param this source states
+    it in."""
+    from types import SimpleNamespace
+
+    from trid3nt_server.tools.fetchers._router import registration
+    from trid3nt_server.tools.search import match as m
+
+    row = hydrography(
+        {"channel network": "default", "drainage network": "drainage"},
+        ask={"waterway_type": "need:of"})
+    monkeypatch.setitem(registration._SPEC_REGISTRY, "fetch_ways",
+                        SimpleNamespace(params={"bbox": {"required": True}},
+                                        coverage=[row]))
+    choice = match(feature_need(of="drainage network"), [("fetch_ways", row)])
+    ask = m.ask_for(choice, {"bbox": [-122.68, 45.51, -122.66, 45.53]},
+                    *WILLAMETTE, {"of": "drainage network"})
+    assert ask["waterway_type"] == "drainage"
