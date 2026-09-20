@@ -1,9 +1,9 @@
-# INTERNAL SEAM: the Copernicus GLO-30 global 30 m DEM over the Planetary Computer
-# STAC catalog (first-valid mosaic, metres, -9999 nodata). tier="internal" --
-# registry-resolvable but off the model-facing surface: the public
-# fetch_dem source="copernicus" mode (plus _hydrology_common, model_debris_flow,
-# compute_sediment_yield) resolves it in-process via TOOL_REGISTRY, and the corpus
-# phrasings live on fetch_dem so copernicus-intent asks route there.
+# The Copernicus GLO-30 global 30 m DEM over the Planetary Computer STAC catalog
+# (first-valid mosaic, metres, -9999 nodata). A SOURCE: it states a terrain
+# coverage row, so the match may pick it and the gate hands the model its schema
+# on that pick - which is why it carries no corpus and is never ranked by phrase.
+# fetch_dem(source="copernicus"), _hydrology_common, model_debris_flow and
+# compute_sediment_yield also resolve it in-process via TOOL_REGISTRY.
 schema_version: v1
 
 name: fetch_copernicus_dem
@@ -13,7 +13,6 @@ input_error_suffix: BBOX_INVALID
 empty_error_suffix: NO_COVERAGE
 shape: raster-cog
 supports_global_query: false
-internal_only: true
 
 endpoints:
   data:
@@ -94,18 +93,14 @@ caveats:
   - "GLO-30 is a SURFACE model (ocean reads ~0 m; no bathymetry); an off-globe / all-nodata window -> COPERNICUS_DEM_NO_COVERAGE (never a fabricated layer)"
   - "AOI-scoped (<= 4 deg^2); a US AOI prefers the finer 3DEP via fetch_dem"
 
-# The retrieval corpus lives on fetch_dem: this internal seam carries none.
+# A covered source carries no corpus: its class phrasings route to find_sources.
 
 docstring: |-
-  Internal seam -- NOT a model-facing tool (tier="internal").
+  Copernicus GLO-30: a 30 m SURFACE elevation model (canopy and roofs are in it;
+  water reads about zero and it carries no bathymetry), read from the Microsoft
+  Planetary Computer STAC as a first-valid mosaic over ``bbox`` and returned as a
+  single-band float32 Cloud-Optimized GeoTIFF in metres on the EGM2008 geoid.
 
-  The Copernicus GLO-30 global 30 m DEM implementation, resolved in-process by
-  ``fetch_dem`` (its ``source="copernicus"`` mode + the automatic 3DEP-outage
-  fallback) and by ``_hydrology_common`` / ``model_debris_flow`` /
-  ``compute_sediment_yield`` via ``TOOL_REGISTRY["fetch_copernicus_dem"].fn``.
-  It is registry-resolvable but excluded from the declarable pool and the search
-  index; callers reach global terrain through ``fetch_dem(source="copernicus")``.
-
-  Fetches a GLOBAL 30 m elevation model (Copernicus GLO-30) for ``bbox`` via the
-  Microsoft Planetary Computer STAC and returns a single-band float32 (meters)
-  Cloud-Optimized GeoTIFF ().
+  ``px_per_deg=3600`` returns the SOURCE pixels rather than a resample of them.
+  Its coverage row says where it reaches and how it compares with the finer
+  alternatives; ``fetch_dem(source="copernicus")`` resolves this same reader.

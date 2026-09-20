@@ -57,13 +57,23 @@ def _read_sibling_corpus(source_yaml: Path, name: str) -> list[str]:
 def load_spec(data: dict, *, source_hint: str = "<dict>") -> SourceSpec:
     """Validate an already-parsed spec mapping into a :class:`SourceSpec`.
     Raises :class:`SpecLoadError` wrapping the pydantic ``ValidationError``, so one
-    exception type covers both parse and validation failures."""
+    exception type covers both parse and validation failures - and on the one
+    invariant pydantic cannot state alone: a source carrying a coverage row is
+    never ``internal_only``."""
     if not isinstance(data, dict):
         raise SpecLoadError(f"{source_hint}: spec must be a mapping, got {type(data).__name__}")
     try:
-        return SourceSpec.model_validate(data)
+        spec = SourceSpec.model_validate(data)
     except ValidationError as exc:
         raise SpecLoadError(f"{source_hint}: invalid SourceSpec: {exc}") from exc
+    if spec.coverage and spec.internal_only:
+        raise SpecLoadError(
+            f"{source_hint}: {spec.name} states {len(spec.coverage)} coverage row(s) "
+            "AND internal_only: a ROWED source is one the match may pick and the "
+            "gate hands the model on that pick, so it can never be tier=internal. "
+            "The internal tier is for an absorbed in-process seam that states NO "
+            "row: drop the rows or drop internal_only.")
+    return spec
 
 
 def load_spec_from_path(path: Path) -> SourceSpec:

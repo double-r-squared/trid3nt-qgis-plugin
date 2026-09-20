@@ -328,3 +328,16 @@ def test_a_datum_stated_on_the_source_row_is_never_overwritten():
     spec = load_spec({**raster_spec(), "vertical_datum": "EGM2008",
                       "coverage": [_coverage(datum="NAVD88")]})
     assert spec.vertical_datum == "EGM2008"
+
+
+def test_a_rowed_source_is_never_the_internal_tier():
+    """A coverage row makes a source pickable by the match, and a picked source
+    is handed to the model - which the internal tier exists to prevent."""
+    with pytest.raises(SpecLoadError, match="internal"):
+        load_spec({**raster_spec(), "internal_only": True,
+                   "coverage": [_coverage()]})
+
+
+def test_an_absorbed_seam_stating_no_row_still_loads_internal():
+    spec = load_spec({**raster_spec(), "internal_only": True})
+    assert spec.internal_only and spec.coverage == []

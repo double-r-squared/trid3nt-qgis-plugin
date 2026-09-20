@@ -71,8 +71,6 @@ def test_the_tool_list_is_generated_from_the_registry() -> None:
         "artemis_harbor_agitation",
     ):
         assert f"- {name}: " in section, f"live template {name!r} is not listed"
-    # An internal seam is registry-resolvable and never offered to the model.
-    assert "fetch_copernicus_dem" not in named
 
 
 def test_a_tool_line_is_its_routing_docstrings_first_line() -> None:
