@@ -43,7 +43,7 @@ def _stub_archive(monkeypatch):
             self.uri = uri
             self.data = b"COG"
 
-    def fake_read_through(metadata, params, ext, fetch_fn):
+    def fake_read_through(metadata, params, ext, fetch_fn, **keyed):
         return _Result(
             f"s3://trid3nt-cache/cache/dynamic-1h/{metadata.source_class}/"
             f"{params['ts_start']}.tif")

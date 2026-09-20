@@ -6,6 +6,8 @@ loader lifts them verbatim from the sibling ``corpus.yaml`` under the spec name.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
 from functools import lru_cache
 from pathlib import Path
@@ -25,6 +27,7 @@ __all__ = [
     "load_spec",
     "load_spec_from_path",
     "compose_specs_from_tree",
+    "record_shape",
     "served_frames",
 ]
 
@@ -73,6 +76,46 @@ def served_frames() -> frozenset[str]:
             stated = ((raw.get("params") or {}).get("from_frame") or {})
             return frozenset(str(v).lower() for v in (stated.get("values") or ()))
     return frozenset()
+
+
+@lru_cache(maxsize=None)
+def _module_bytes(path: str) -> bytes:
+    """One hook module's source, or empty for a module with no readable file."""
+    try:
+        return Path(path).read_bytes()
+    except OSError:
+        return b""
+
+
+def _hook_sources(spec: SourceSpec) -> list[str]:
+    """The source files of the hooks this spec names, deduped and in one order."""
+    from .hooks import HOOK_REGISTRY
+
+    named = spec.hooks.model_dump(exclude_none=True).values() if spec.hooks else ()
+    code = (getattr(HOOK_REGISTRY.get(str(name)), "__code__", None) for name in named)
+    return sorted({c.co_filename for c in code if c is not None})
+
+
+def record_shape(spec: SourceSpec) -> str:
+    """The digest of what shapes a record this source lands: its coverage rows -
+    the columns, the vocabulary they are asked by, their units and the zero they
+    are counted from - its normalization, and the bytes of every hook that
+    decodes the body.
+
+    It salts the cache key, because the cached artifact was shaped by the
+    statements standing at the fetch: a correction landed here would otherwise be
+    invisible to every AOI already cached until the TTL bucket turned over, which
+    is a fixed source still answering with the wrong record."""
+    stated = {
+        "coverage": [row.model_dump(mode="json") for row in spec.coverage],
+        "normalize": spec.normalize.model_dump(mode="json"),
+        "vertical_datum": spec.vertical_datum,
+    }
+    digest = hashlib.sha256(json.dumps(
+        stated, sort_keys=True, separators=(",", ":"), default=str).encode("utf-8"))
+    for path in _hook_sources(spec):
+        digest.update(_module_bytes(path))
+    return digest.hexdigest()[:16]
 
 
 def _validate_row_datums(spec: SourceSpec, source_hint: str) -> None:

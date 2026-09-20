@@ -146,8 +146,10 @@ def test_empty_features_raise_buildings_empty(monkeypatch):
 
 def test_sidecar_uri_is_sibling_of_fgb():
     from trid3nt_server.tools.cache import cache_path, compute_cache_key
+    from trid3nt_server.tools.fetchers._router.spec import record_shape
     params = _vp(bbox=list(_AOI), source="osm")
-    key = compute_cache_key(SPEC.source_class, params, SPEC.cache.ttl_class)
+    key = compute_cache_key(SPEC.source_class, params, SPEC.cache.ttl_class,
+                            record_shape=record_shape(SPEC))
     fgb = cache_path(SPEC.source_class, SPEC.cache.ttl_class, key, "fgb")
     side = overpass_sidecar.sidecar_uri(SPEC, params, "tags.json")
     assert side.endswith(fgb.replace(".fgb", ".tags.json"))

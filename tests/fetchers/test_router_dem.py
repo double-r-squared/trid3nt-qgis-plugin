@@ -159,7 +159,9 @@ def test_fetch_dem_cache_key_is_the_asked_bbox_and_resolution():
     from trid3nt_server.tools.fetchers._router.router import (
         prospective_cache_key, synthesize_metadata,
     )
-    from trid3nt_server.tools.fetchers._router.spec import compose_specs_from_tree
+    from trid3nt_server.tools.fetchers._router.spec import (
+        compose_specs_from_tree, record_shape,
+    )
 
     spec = compose_specs_from_tree()["fetch_dem"]
     plain = {
@@ -168,7 +170,8 @@ def test_fetch_dem_cache_key_is_the_asked_bbox_and_resolution():
         "source": "auto",
     }
     key = prospective_cache_key(spec, {"bbox": FORT_MYERS_BBOX, "resolution_m": 10})
-    assert key == cache_key_for(synthesize_metadata(spec), plain)
+    assert key == cache_key_for(synthesize_metadata(spec), plain,
+                                record_shape=record_shape(spec))
     other = prospective_cache_key(spec, {"bbox": FORT_MYERS_BBOX, "resolution_m": 30})
     assert other != key
 

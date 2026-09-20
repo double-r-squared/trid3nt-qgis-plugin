@@ -29,11 +29,13 @@ def sidecar_uri(spec: SourceSpec, params: dict[str, Any], ext: str) -> str:
     Recomputes the EXACT key ``read_through`` derives, so the sidecar shares the
     ``.fgb``'s key and only the extension differs."""
     from ....cache import CACHE_BUCKET, cache_path, compute_cache_key
+    from ..spec import record_shape
 
     source_class = spec.source_class
     ttl = spec.cache.ttl_class
     source_id = source_class or spec.name
-    key = compute_cache_key(source_id, params, ttl)
+    key = compute_cache_key(source_id, params, ttl,
+                            record_shape=record_shape(spec))
     path = cache_path(source_class, ttl, key, ext)
     bucket = os.environ.get("TRID3NT_CACHE_BUCKET") or CACHE_BUCKET
     return f"s3://{bucket}/{path}"

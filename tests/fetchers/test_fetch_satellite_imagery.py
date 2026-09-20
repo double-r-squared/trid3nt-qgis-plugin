@@ -124,7 +124,8 @@ def stub(monkeypatch):
     monkeypatch.setattr(SI, "usable_zoom", lambda *a, **k: a[4])
     monkeypatch.setattr(
         EX, "read_through",
-        lambda metadata, params, ext, fetch_fn: _R(uri=f"s3://fake/{params['ts_int']}.tif"),
+        lambda metadata, params, ext, fetch_fn, **keyed: _R(
+            uri=f"s3://fake/{params['ts_int']}.tif"),
     )
 
     def _stamps(ts):
@@ -303,7 +304,7 @@ def test_honesty_floor_every_frame_degraded(stub, monkeypatch):
         lambda *a, **k: (_ for _ in ()).throw(SliderEmptyError("off grid")),
     )
 
-    def _rt(metadata, params, ext, fetch_fn):
+    def _rt(metadata, params, ext, fetch_fn, **keyed):
         fetch_fn()
         return _R("s3://never")
 

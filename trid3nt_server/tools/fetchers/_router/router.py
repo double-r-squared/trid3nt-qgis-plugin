@@ -50,6 +50,7 @@ from .errors import (
     router_upstream_error,
 )
 from .executors import raster_cog, station_timeseries
+from .spec import record_shape
 from .transforms import tiled_mosaic
 
 logger = logging.getLogger("trid3nt_server.tools.fetchers._router.router")
@@ -630,7 +631,7 @@ def prospective_cache_key(spec: SourceSpec, raw_params: dict[str, Any]) -> str |
             params = {**params, **resolve_hook(hooks.pre_resolve)(spec, params)}
     except Exception:  # noqa: BLE001 -- a request that cannot resolve has no key
         return None
-    return cache_key_for(metadata, params)
+    return cache_key_for(metadata, params, record_shape=record_shape(spec))
 
 
 def build_layer_uri(spec: SourceSpec, params: dict[str, Any], uri: str) -> LayerURI:
@@ -903,6 +904,7 @@ def _route_once(
             params=params,
             ext=spec.output.ext,
             fetch_fn=lambda: executor(spec, params),
+            record_shape=record_shape(spec),
         )
         assert result.data is not None, "record source is cacheable; data must be set"
         return json.loads(result.data.decode("utf-8"))
@@ -919,6 +921,7 @@ def _route_once(
         ext=spec.output.ext,
         fetch_fn=lambda: executor(spec, params),
         provenance=recorder,
+        record_shape=record_shape(spec),
     )
     assert result.uri is not None, "router source is cacheable; uri must be set"
     # variant_by_emptiness: a source whose non-empty path is a

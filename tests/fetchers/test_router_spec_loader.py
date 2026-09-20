@@ -3,7 +3,9 @@
 A well-formed spec loads for each pilot shape, and a malformed one - a missing
 required key, a shape and output mismatch, a join over a non-vector shape -
 raises the typed load error. A spec that omits its phrasings picks them up from
-the sibling corpus, and a tree compose keys by name and SKIPS a malformed member."""
+the sibling corpus, and a tree compose keys by name and SKIPS a malformed member. The
+statements that shape a record are in its cache key, so a changed vocabulary
+misses the artifact cached under the old one."""
 
 from __future__ import annotations
 
@@ -357,3 +359,34 @@ def test_a_rowed_source_is_never_the_internal_tier():
 def test_an_absorbed_seam_stating_no_row_still_loads_internal():
     spec = load_spec({**raster_spec(), "internal_only": True})
     assert spec.internal_only and spec.coverage == []
+
+
+def test_a_changed_vocabulary_misses_the_artifact_cached_under_the_old_one(fake_s3):
+    """The statements that shape a record are IN its cache key, so a landed
+    change to them invalidates the bytes fetched under the old ones by itself -
+    without it a corrected source keeps serving the record it was corrected of
+    for the rest of the TTL bucket."""
+    from trid3nt_server.tools.cache import read_through
+    from trid3nt_server.tools.fetchers._router.router import synthesize_metadata
+    from trid3nt_server.tools.fetchers._router.spec import record_shape
+
+    spec = load_spec({**raster_spec(), "coverage": [_coverage()]})
+    metadata = synthesize_metadata(spec)
+    params = {"bbox": [-122.5, 37.7, -122.4, 37.8], "variable": "pr"}
+
+    landed = read_through(metadata=metadata, params=params, ext="tif",
+                          fetch_fn=lambda: b"shaped by the old statements",
+                          record_shape=record_shape(spec))
+    again = read_through(metadata=metadata, params=params, ext="tif",
+                         fetch_fn=lambda: b"never fetched",
+                         record_shape=record_shape(spec))
+    assert landed.hit is False
+    assert again.hit is True and again.data == b"shaped by the old statements"
+
+    changed = load_spec({**raster_spec(),
+                         "coverage": [_coverage(vocabulary={"ELEVATION": "elevation"})]})
+    after = read_through(metadata=metadata, params=params, ext="tif",
+                         fetch_fn=lambda: b"shaped by the new statements",
+                         record_shape=record_shape(changed))
+    assert after.hit is False
+    assert after.data == b"shaped by the new statements"

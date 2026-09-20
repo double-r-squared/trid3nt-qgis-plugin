@@ -80,13 +80,24 @@ def compute_cache_key(
     ttl_class: TTLClass,
     *,
     now: datetime | None = None,
+    record_shape: str = "",
 ) -> str:
-    """A 32-hex-char SHA-256 prefix over source id, canonical params and the TTL
-    vintage. ``params`` must already be domain-quantized by the CALLER (bbox to
-    source-native resolution, dates to the TTL boundary) - the shim never does."""
+    """A 32-hex-char SHA-256 prefix over source id, canonical params, the TTL
+    vintage and the shape of the record. ``params`` must already be domain-quantized
+    by the CALLER (bbox to source-native resolution, dates to the TTL boundary) -
+    the shim never does.
+
+    ``record_shape`` is the digest of the statements that decide what a fetched
+    record HOLDS - its columns, their units, the zero they are counted from, the
+    code that decodes the body. It is in the key because the cached bytes were
+    shaped by the statements standing when they were fetched, so without it a
+    landed correction never reaches an AOI already cached. An empty string is a
+    caller stating none, which keys exactly as it did before."""
     vintage = ttl_bucket_vintage(ttl_class, now=now)
     canonical = _canonicalize_params(params)
     raw = f"{source_id}||{canonical}||{vintage}"
+    if record_shape:
+        raw = f"{raw}||{record_shape}"
     digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()
     return digest[:CACHE_KEY_HEX_LEN]
 
@@ -97,6 +108,7 @@ def cache_key_for(
     *,
     source_id: str | None = None,
     now: datetime | None = None,
+    record_shape: str = "",
 ) -> str:
     """The key this tool reads and writes ``params`` under. ``read_through`` calls
     it for the object it stores, so a caller asking the key a fetch WOULD land on
@@ -106,6 +118,7 @@ def cache_key_for(
         params,
         metadata.ttl_class,
         now=now,
+        record_shape=record_shape,
     )
 
 
@@ -384,6 +397,7 @@ def read_through(
     storage_client: Any | None = None,
     now: datetime | None = None,
     provenance: "ProvenanceRecorder | None" = None,
+    record_shape: str = "",
 ) -> ReadThroughResult:
     """Read-through / write-on-miss for one atomic-tool fetch. An uncacheable tool
     always misses and returns ``uri=None``; a ``fetch_fn`` failure is RE-RAISED,
@@ -416,7 +430,8 @@ def read_through(
             "should have caught this; refusing to write under cache/<None>/."
         )
 
-    key = cache_key_for(metadata, params, source_id=source_id, now=now)
+    key = cache_key_for(metadata, params, source_id=source_id, now=now,
+                        record_shape=record_shape)
     path = cache_path(metadata.source_class, metadata.ttl_class, key, ext)
 
     uri = f"s3://{bucket}/{path}"

@@ -134,6 +134,7 @@ def _fetch_constant_cache(spec: SourceSpec, plans: list[RequestPlan], cc: dict[s
     AOI-independent key while the outer read_through still caches per AOI."""
     from ....cache import read_through
     from ..router import synthesize_metadata
+    from ..spec import record_shape
 
     metadata = synthesize_metadata(spec)
     ext = str(cc.get("ext", "bin"))
@@ -145,6 +146,7 @@ def _fetch_constant_cache(spec: SourceSpec, plans: list[RequestPlan], cc: dict[s
             params={"file": file_id},
             ext=ext,
             fetch_fn=lambda p=plan: _get(spec, p),
+            record_shape=record_shape(spec),
         )
         assert res.data is not None, "constant_cache source is cacheable; data must be set"
         bodies.append(res.data)

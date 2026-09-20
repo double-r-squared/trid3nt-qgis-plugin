@@ -16,6 +16,7 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata
 from ....cache import read_through
 from ..errors import router_empty_error
 from ..hooks import FrameDegraded, FramePlan, resolve_hook
+from ..spec import record_shape
 
 logger = logging.getLogger(
     "trid3nt_server.tools.fetchers._router.executors.animation_frames"
@@ -51,6 +52,7 @@ def execute(
                 params=frame.cache_params,
                 ext=spec.output.ext,
                 fetch_fn=lambda f=frame: frame_bytes(spec, params, f),
+                record_shape=record_shape(spec),
             )
         except FrameDegraded as exc:
             # A single degraded frame (transparent / off-swath / upstream-failed) is

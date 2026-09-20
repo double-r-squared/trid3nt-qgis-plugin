@@ -72,7 +72,7 @@ def _wire_synthetic_glm(monkeypatch, n_keys=3):
 
     captured = {"calls": []}
 
-    def _fake_rt(metadata, params, ext, fetch_fn):
+    def _fake_rt(metadata, params, ext, fetch_fn, **keyed):
         data = fetch_fn()  # exercises frame_bytes -> _fetch_glm_ged_cog_bytes
         captured["calls"].append({"params": params, "data": data})
         return _R(uri=f"s3://fake-cache/{params['start_utc']}.tif", data=data)
