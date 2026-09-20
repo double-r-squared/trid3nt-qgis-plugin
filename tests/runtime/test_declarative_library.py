@@ -1865,14 +1865,9 @@ def test_a_declaration_carries_no_presentation_vocabulary():
 
 class _StubFacade(Workflow):
     """A workflow the plan can be declared against, so registration reaches the
-    thing under test: the plan built and validated in ``__init__``. Its template
-    states the steps under STEPS, the way a real one states them under the names
-    its own engine reads."""
+    thing under test: the plan built and validated in ``__init__``."""
 
     engine = "stub"
-
-    def steps(self):
-        return self.template.STEPS(self)
 
 
 async def _noop():
@@ -1883,9 +1878,7 @@ def _declare(params, plan_decl, data=(), name="declared_w"):
     """Declare a workflow the way ``register_workflow`` does: the plan is built and
     validated inside ``__init__``, so an authoring defect raises HERE."""
     return _StubFacade(metadata=SimpleNamespace(name=name, engine="stub"),
-                       params=params, data=data,
-                       template=SimpleNamespace(PARAMS=params, DATA=data,
-                                                STEPS=plan_decl))
+                       params=params, plan=plan_decl, data=data)
 
 
 def test_a_mistyped_param_read_is_refused_with_the_nearest_declared_spelling():
@@ -1928,8 +1921,7 @@ def test_a_bad_plan_is_refused_at_register_workflow_not_at_run_time():
                                   source_class="workflow_dispatch", cacheable=False,
                                   engine="stub", tier="template")
     with pytest.raises(PlanValidationError, match=r"ParamRef\(\'ghost\'\) names no declared param"):
-        register_workflow(_StubFacade, metadata,
-                          SimpleNamespace(PARAMS=_params(), STEPS=_plan))
+        register_workflow(_StubFacade, metadata, _params(), _plan)
 
     from trid3nt_server.tools import TOOL_REGISTRY
     assert "never_registered_w" not in TOOL_REGISTRY

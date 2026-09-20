@@ -274,7 +274,7 @@ class Step:
 @dataclass(frozen=True, slots=True)
 class Plan:
     """A workflow's step sequence - a pure value the interpreter walks.
-    Built once, off the names the template module declares; the name and the engine are
+    Built once, from the Door the template hands over; the name and the engine are
     the workflow's, not something a template restates."""
 
     name: str

@@ -11,7 +11,6 @@ run it continued."""
 from __future__ import annotations
 
 import sys
-from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -361,9 +360,6 @@ def _probe_workflow(*, extra: tuple = (), validity: tuple = ()) -> Workflow:
         engine = "probe"
         solve_step = ""
 
-        def steps(self):
-            return self.template.STEPS(self)
-
         def acquire_domain(self, **slots):
             return ()
 
@@ -392,8 +388,7 @@ def _probe_workflow(*, extra: tuple = (), validity: tuple = ()) -> Workflow:
                                     tier="template"),
         params=params,
         data=(DataDecl("world", tool(f"{_PROBE}.world", where=ParamRef("where"))),),
-        template=SimpleNamespace(STEPS=plan), answer=("value",),
-        validity=validity)
+        plan=plan, answer=("value",), validity=validity)
 
 
 #: Laws this rule speaks about, and the Strickler/Manning crossover that tells
@@ -436,9 +431,6 @@ def _coastal_probe() -> Workflow:
     class Probe(Workflow):
         engine = "probe"
 
-        def steps(self):
-            return self.template.STEPS(self)
-
         def acquire_domain(self, **slots):
             return ()
 
@@ -459,8 +451,7 @@ def _coastal_probe() -> Workflow:
     return Probe(metadata=AtomicToolMetadata(
         name="probe_friction", ttl_class="live-no-cache",
         source_class="workflow_dispatch", cacheable=False, engine="probe",
-        tier="template"), params=params, template=SimpleNamespace(STEPS=plan),
-        validity=_FRICTION_VALIDITY)
+        tier="template"), params=params, plan=plan, validity=_FRICTION_VALIDITY)
 
 
 def friction_ok(*, law: float, coefficient: float) -> "_Result":
@@ -603,7 +594,7 @@ def _continued_probe() -> Workflow:
         ]
 
     return type(wf)(metadata=wf.metadata, params=wf.params, data=wf.data,
-                    template=SimpleNamespace(STEPS=plan), answer=("value",))
+                    plan=plan, answer=("value",))
 
 
 def test_the_cut_of_a_hot_start_is_the_step_that_opens_on_the_other_run():

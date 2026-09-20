@@ -66,15 +66,8 @@ class Workflow:
     #: would otherwise lose the run id to a literal guess. Declared, never assumed.
     solve_step: str = ""
 
-    @classmethod
-    def levers(cls) -> tuple[str, ...]:
-        """WHICH runtime levers a declaration of this workflow takes without
-        restating them: the stages that READ a lever are this class's, so a
-        workflow that builds none seats none."""
-        return ()
-
     def __init__(self, *, metadata: Any, params: Any,
-                 template: Any, data: Any = (),
+                 plan: Callable[..., Any], data: Any = (),
                  answer: Sequence[str] = (),
                  provenance: Sequence[str | tuple[str, str]] = (),
                  sensitivity: Sequence[tuple[str, str]] = (),
@@ -95,10 +88,7 @@ class Workflow:
         #: input contract, and read back off the registry by every supply door;
         #: absence is a refusal, per role and overall.
         self.accepts = accepts
-        #: The template MODULE this workflow is declared by. Every stage is read
-        #: off its own names - STEERING, OUTPUTS, CAPTIONS, ANSWER and the files
-        #: beside them - so no object stands between the declaration and the plan.
-        self.template = template
+        self.plan_decl = plan
         self.answer_fields = tuple(answer)
         #: Each declared provenance name lifts its resolved VALUE and its NOTE onto
         #: the answer. A pair names the note's key where the value's name plus
@@ -122,25 +112,14 @@ class Workflow:
         validate_plan(self.plan, self.params, self.data)
 
     def build_plan(self) -> Plan:
-        """The declared steps, named and engined by the WORKFLOW, not restated."""
+        """The declared plan value, named and engined by the WORKFLOW, not restated."""
+        nodes = self.plan_decl(self)
+        if isinstance(nodes, Plan):
+            return nodes
         return Plan(name=self.name, engine=self.engine or None,
-                    steps=tuple(self.steps()))
+                    steps=tuple(nodes) if isinstance(nodes, (list, tuple)) else (nodes,))
 
     # -- hooks: silent defaults ------------------------------------------- #
-
-    def steps(self) -> Sequence[Any]:
-        """The step sequence this template declares, read off its module.
-
-        The skeleton knows no engine's names, so a workflow that reads none has
-        no steps and the plan's own refusal below says so."""
-        return ()
-
-    def sheet_doc(self) -> str | None:
-        """The ENGINE SURFACE line of this template's docstring, or nothing.
-
-        Only the workflow knows which engine surface its steps fill, so a
-        skeleton that fills none claims none."""
-        return None
 
     def run_window_s(self, keywords: Mapping[str, Any]) -> float | None:
         """How long this run's solve covers, in seconds - the window a matched
@@ -452,40 +431,40 @@ _CONTROLS: tuple[tuple[str, Any, Any], ...] = (
 def register_workflow(
     facade: type[Workflow],
     metadata: Any,
-    template: Any,
+    params: Any,
+    plan: Callable[..., Any],
     *,
+    data: Any = (),
     parked: str | None = None,
+    answer: Sequence[str] = (),
     provenance: Sequence[str | tuple[str, str]] = (),
     sensitivity: Sequence[tuple[str, str]] = (),
     validity: Sequence[Validity] = (),
     coerce: Sequence[Callable[[dict], Mapping[str, Any]]] = (),
+    accepts: Accepts | None = None,
     levers: Sequence[str] | None = None,
+    doc: Mapping[str, Any] | None = None,
     extra_args: Sequence[tuple[str, Any]] = (),
     **register_kwargs: Any,
 ) -> Callable[..., Any]:
     """Generate and register the tool for a declared workflow.
-    The TEMPLATE MODULE is the declaration: PARAMS, DATA, ACCEPTS, ANSWER and DOC
-    are read off its own names, and the workflow class reads the rest. The
-    signature is synthesized from the declared params, so the model-facing schema
-    comes from the same declaration the run resolves."""
+    The signature is synthesized from the declared params, so the model-facing
+    schema comes from the same declaration the run resolves."""
     # ``parked="<reason>"`` builds and validates the declaration as always, then
     # leaves the MODEL SURFACE: the tool is never registered and the generated
     # function refuses typed, so membership never depends on import order.
     from trid3nt_server.tools import register_tool
 
-    params = param_rows(getattr(template, "PARAMS"))
-    data = getattr(template, "DATA", ())
-    doc = getattr(template, "DOC", None)
-    answer = tuple(getattr(template, "ANSWER", ()))
-    # WHICH runtime levers this declaration takes without restating them: the
-    # stages that read a lever are the workflow class's, so the class answers,
-    # and a template that seats none of them states so here.
+    params = param_rows(params)
+    # WHICH runtime levers this declaration takes without restating them. The
+    # PLAN is what reads them - the stages the workflow class owns - so a plan
+    # that states its own set answers for one the caller did not.
     if levers is None:
-        levers = facade.levers()
-    workflow = facade(metadata=metadata, params=params, template=template,
-                      data=data, answer=answer, provenance=provenance,
+        levers = tuple(getattr(plan, "levers", ()) or ())
+    workflow = facade(metadata=metadata, params=params, plan=plan, data=data,
+                      answer=answer, provenance=provenance,
                       sensitivity=sensitivity, validity=validity, coerce=coerce,
-                      accepts=getattr(template, "ACCEPTS", None), levers=levers)
+                      accepts=accepts, levers=levers)
     params = workflow.params
 
     async def _run(**wire: Any) -> Any:
@@ -496,7 +475,7 @@ def register_workflow(
 
     _run.__name__ = workflow.name
     _run.__qualname__ = workflow.name
-    _run.__module__ = getattr(template, "__name__", __name__)
+    _run.__module__ = getattr(plan, "__module__", __name__)
     #: The reason this template is off the model surface, or ``None``. Read by the
     #: roster checks, which ask the declaration rather than the import order.
     _run.parked = parked  # type: ignore[attr-defined]
@@ -511,12 +490,12 @@ def register_workflow(
         # the signature actually carries. A template declares `params=PARAMS` and
         # the factory narrows it; documenting a constant the schema does not offer
         # would be the docstring inviting a call the tool cannot take.
-        # The SHEET line is the WORKFLOW's own: only it knows which engine
-        # surface its steps fill, so a template never restates it and cannot
-        # drift from what it actually declares.
-        sheet = workflow.sheet_doc()
+        # The SHEET line is the plan's own: only the plan knows which engine
+        # surface it fills, so a template never restates it and cannot drift
+        # from what it actually declares.
+        sheet_doc = getattr(plan, "sheet_doc", None)
         doc = {**doc, "params": _wire_params(params),
-               **({} if sheet is None else {"sheet": sheet}),
+               **({} if sheet_doc is None else {"sheet": sheet_doc()}),
                **_context_doc(workflow.data, doc.get("controls", ()))}
         _run.__doc__ = render_docstring(**doc)
         _run.routing_doc = render_docstring(**doc, view="routing")  # type: ignore[attr-defined]

@@ -41,7 +41,7 @@ async def resolve_params(
     """Walk the doors for every declared param and return the resolved sheet.
     ``supplied`` is door 1 and NEVER ambient - no case-store lookup; ``question``
     is door 2, the agent-filled values from the ask."""
-    # The door ORDER is precedence, not evaluation order: a derivation may read any
+    # Door ORDER is precedence, not evaluation order: a derivation may read any
     # other param, so labeled defaults are seated before derivations run and a
     # derived param competes only with its own fallbacks, never another param's.
     declared = param_rows(declared)
@@ -94,7 +94,7 @@ async def resolve_params(
                 basis=_BASIS_DEFAULT,
             )
             continue
-        # The sixth door: a value with no door left is ASKED FOR (a gate) or REFUSED typed -
+        # Door 6: a value with no door left is ASKED FOR (a gate) or REFUSED typed -
         # never invented. The refusal is the interpreter's, once the plan's gates
         # have had their turn.
         rows[param.name] = ResolvedParam(
