@@ -90,6 +90,23 @@ package ToolPlane {
         */
     }
 
+    part def BorrowedProvider {
+        doc /*
+        The daemon end of the borrowed data provider: it builds the row's
+        datasource string, asks the session for the layer and waits, and turns
+        the answer into the record an overlay is or the bytes the read-through
+        stores.
+        */
+    }
+
+    part def ProviderOpener {
+        doc /*
+        The plugin end: opens the uri through the named QGIS provider, adds the
+        overlay to the map, or windows, exports and uploads a materialised row,
+        and answers with the provider's own text when it will not open.
+        */
+    }
+
     part def ApprovalCard {
         doc /*
         The plugin's parse of the code approval card: the id the decision is
@@ -190,6 +207,29 @@ package ToolPlane {
         item stdout : String [0..1];
     }
 
+    interface def LayerRequest {
+        doc /*
+        The envelope on the wire: one provider layer for the session to open,
+        keyed by the row's own cache key, which the answer echoes.
+        */
+        item key : String;
+        item provider : String;
+        item uri : String;
+        item name : String;
+        item bbox : Sequence;
+        item mode : String;
+    }
+
+    interface def LayerResponse {
+        doc /*
+        What the session did with it: the staged object a materialised row was
+        uploaded to, unset for an overlay, or the provider's own error text.
+        */
+        item key : String;
+        item uri : String [0..1];
+        item error : String [0..1];
+    }
+
     // Parts - bound to the modules they ARE
 
     part runPyqgis : SessionCodeTool {
@@ -248,6 +288,22 @@ package ToolPlane {
         port responseOut : ResponseOut;
     }
 
+    part borrowedProvider : BorrowedProvider {
+        doc /*
+        code: trid3nt_server/tools/fetchers/_router/executors/qgis_provider.py
+        */
+        port requestOut : RequestOut;
+        port responseIn : ResponseIn;
+    }
+
+    part providerOpener : ProviderOpener {
+        doc /*
+        code: plugin/render/layer_request.py
+        */
+        port requestIn : RequestIn;
+        port responseOut : ResponseOut;
+    }
+
     part approvalCard : ApprovalCard {
         doc /*
         code: plugin/ui/gate.py
@@ -286,6 +342,15 @@ package ToolPlane {
 
     interface responseResolved : ProcessingResponse
         connect connectionLoop.responseOut to sessionRequest.responseIn;
+
+    interface layerRequested : LayerRequest
+        connect borrowedProvider.requestOut to providerOpener.requestIn;
+
+    interface layerAnswered : LayerResponse
+        connect providerOpener.responseOut to connectionLoop.responseIn;
+
+    interface layerResolved : LayerResponse
+        connect connectionLoop.responseOut to borrowedProvider.responseIn;
 
     // The laws this seam is governed by
 
@@ -329,6 +394,17 @@ package ToolPlane {
         is sent; no answer within the window, a typed refusal with the pending
         entry dropped; an error answer, the session's own message raised as the
         tool's error. A reply from a session that is not the owner is refused.
+        */
+    }
+
+    requirement def AnOverlayIsNeverAnInput {
+        doc /*
+        A borrowed provider layer opened in mode open is context on the user's
+        map: it writes one journal line, enters no store and publishes no
+        packet row, because nothing downstream can read features QGIS draws
+        from a service. A row that wants to be an input is materialised - the
+        session exports it and the read-through lands it under the row-shaped
+        cache key, so the next call is a hit that never asks the session again.
         */
     }
 
@@ -405,6 +481,17 @@ package ToolPlane {
         "tests/derive/test_session_tools.py::test_an_error_reply_is_the_sessions_own_message";
     verify requirement ASessionAnswersOrRefuses by
         "tests/derive/test_session_tools.py::test_a_cross_session_reply_is_refused";
+
+    satisfy requirement AnOverlayIsNeverAnInput by borrowedProvider;
+    satisfy requirement AnOverlayIsNeverAnInput by providerOpener;
+    verify requirement AnOverlayIsNeverAnInput by
+        "tests/fetchers/test_router_qgis_provider.py::test_mode_open_returns_the_record_and_never_the_store";
+    verify requirement AnOverlayIsNeverAnInput by
+        "tests/fetchers/test_router_qgis_provider.py::test_mode_open_on_a_layer_row_refuses_rather_than_publish_a_packet_row";
+    verify requirement AnOverlayIsNeverAnInput by
+        "tests/fetchers/test_router_qgis_provider.py::test_mode_materialise_lands_the_export_under_the_row_key";
+    verify requirement AnOverlayIsNeverAnInput by
+        "tests/server/test_layer_request_seam.py::test_a_foreign_session_cannot_answer_it";
 
     satisfy requirement ADeriveToolNeverFetches by runPyqgis;
     satisfy requirement ADeriveToolNeverFetches by runQgisAlgorithm;
