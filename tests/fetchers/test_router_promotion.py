@@ -68,6 +68,9 @@ PROMOTED = {
         "source_class": "us_drought_monitor",
         "properties": ["bbox", "date"],
         "required": ["bbox", "date"],
+        # An overlay QGIS draws from its own service: nothing is stored, so the
+        # row declares live-no-cache and the tool is not cacheable.
+        "cacheable": False,
     },
     # --- USGS water-data family (dataretrieval-delegated) ---
     "fetch_usgs_water_quality": {
@@ -107,7 +110,7 @@ def test_pilot_registered_as_general_tool(name: str) -> None:
     # tier=general -> in every default-pool producer (none filter it out).
     assert getattr(entry.metadata, "tier", "general") == "general"
     assert entry.metadata.source_class == PROMOTED[name]["source_class"]
-    assert entry.metadata.cacheable is True
+    assert entry.metadata.cacheable is PROMOTED[name].get("cacheable", True)
     # The callable resolves through the router engine's synthetic module (so the
     # payload-warning seam finds the synthesized estimate_payload_mb).
     assert entry.module.endswith(f"_router._promoted.{name}")
