@@ -253,13 +253,38 @@ def test_a_source_called_by_station_with_no_stations_listed_is_not_a_survivor(mo
     spec = SimpleNamespace(params={"station": {"required": True},
                                    "start_date": {"required": True}})
     monkeypatch.setitem(registration._SPEC_REGISTRY, "fetch_by_station", spec)
+    seeded = m.Need(slot="level", data_class="water level series",
+                    lon=-115.92, lat=43.59)
     discovered = gauges(data_class="water level series")
-    assert "called by station" in m._unaskable("fetch_by_station", discovered)
+    assert "called by station" in m._unaskable("fetch_by_station", discovered,
+                                               seeded)
     listed = gauges(data_class="water level series")
     listed.extent.points = [CoveragePoint(id="ARROWROCK", lon=-115.92,
                                           lat=43.59)]
-    assert m._unaskable("fetch_by_station", listed) == ""
-    assert m._unaskable("fetch_nobody_registered", discovered) == ""
+    assert m._unaskable("fetch_by_station", listed, seeded) == ""
+    assert m._unaskable("fetch_nobody_registered", discovered, seeded) == ""
+
+
+def test_a_source_addressed_by_a_seed_is_no_survivor_of_a_question_with_no_point():
+    """A question that states a box and no point cannot name a seed, so a source
+    that asks to be called by one is dropped in the match rather than refusing
+    inside the run."""
+    from types import SimpleNamespace
+
+    from trid3nt_server.tools.fetchers._router import registration
+    from trid3nt_server.tools.search import match as m
+
+    spec = SimpleNamespace(params={"seed_point": {"required": True}})
+    registration._SPEC_REGISTRY["fetch_by_seed"] = spec
+    try:
+        row = gauges(data_class="water level series")
+        boxed = m.Need(slot="domain", data_class="water level series")
+        assert "called by seed_point" in m._unaskable("fetch_by_seed", row, boxed)
+        seeded = m.Need(slot="domain", data_class="water level series",
+                        lon=-71.5, lat=41.36)
+        assert m._unaskable("fetch_by_seed", row, seeded) == ""
+    finally:
+        registration._SPEC_REGISTRY.pop("fetch_by_seed", None)
 
 
 def test_the_probe_names_the_nearest_listed_station_and_the_rows_own_ask(

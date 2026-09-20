@@ -69,6 +69,11 @@ class Need:
     #: The source the run NAMES for this slot, "" where it names none. A named
     #: source the filters excluded is a refusal, not a pick.
     pick: str = ""
+    #: THE SHAPE the slot reads this class as, "" where any shape it is measured
+    #: in will do. A class measured in more than one - hydrography as a coastline
+    #: LINE and as a waterbody POLYGON - has sources publishing each, and a step
+    #: that cuts a box with a line cannot be handed a polygon.
+    geometry: str = ""
     #: THE DOMAIN'S OWN WATER: the outline a gauge has to stand on for its flow
     #: to be this run's flow, with the note saying whether the run drew the
     #: polygon or only its box. ``None`` where the run states no domain.
@@ -123,7 +128,8 @@ def match(need: Need,
     for name, coverage in candidates:
         if coverage.data_class != need.data_class:
             continue
-        reason = _unaskable(name, coverage) or _excluded(need, coverage)
+        reason = (_unaskable(name, coverage, need) or _wrong_shape(name, need)
+                  or _excluded(need, coverage))
         if reason:
             dropped.append(_option(name, coverage, need, excluded=reason))
             continue
@@ -206,9 +212,34 @@ def _required(name: str) -> list[str]:
                     or (isinstance(decl, dict) and decl.get("required")))]
 
 
-def _unaskable(name: str, coverage: Coverage) -> str:
-    """Why the probe could not call this source at all, or "" where it can."""
+def _wrong_shape(name: str, need: Need) -> str:
+    """Why this source's own output cannot be read as the shape the slot needs."""
+    if not need.geometry:
+        return ""
+    from trid3nt_server.tools.fetchers._router.registration import _SPEC_REGISTRY
+
+    spec = _SPEC_REGISTRY.get(name)
+    output = getattr(spec, "output", None)
+    published = str((getattr(output, "style", None) or {}).get("geometry") or "")
+    if not published or published == _SHAPE_WORD.get(need.geometry, need.geometry):
+        return ""
+    return (f"publishes a {published} layer and this slot reads its class as a "
+            f"{need.geometry}")
+
+
+#: The slot's shape word in the vocabulary a source's own style row is written in.
+_SHAPE_WORD: Mapping[str, str] = {"polyline": "line"}
+
+
+def _unaskable(name: str, coverage: Coverage, need: Need) -> str:
+    """Why the probe could not call this source at all, or "" where it can.
+
+    A param is askable only where this NEED actually holds the value: a source
+    addressed by a seed point cannot serve a question that states a box and no
+    point, and dropping it here is what keeps the refusal off the run."""
     asked = set(_ASKABLE) | set(coverage.ask)
+    if need.lon is None or need.lat is None:
+        asked.discard("seed_point")
     if coverage.extent.points or coverage.extent.read_from:
         asked.add(_STATION)
     needs = [param for param in _required(name) if param not in asked]

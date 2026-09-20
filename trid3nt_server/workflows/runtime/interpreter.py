@@ -35,7 +35,7 @@ from trid3nt_server.gates.input_review import (
 from trid3nt_contracts.coverage import CoverageExtent, SourceChoice
 
 from .data import (
-    BED, DISCHARGE, DOMAIN, LEVEL, LINE, OBSERVE, CoversAOI, DataDecl,
+    BED, DISCHARGE, DOMAIN, EXTENT, LEVEL, LINE, OBSERVE, CoversAOI, DataDecl,
     Producer)
 from trid3nt_server.tools.search.match import (
     Need, ask_for, base_ask, dropped_from, instant, match, sources_with_coverage)
@@ -443,6 +443,7 @@ async def _matched(env: _Env, decl: DataDecl) -> Any:
     The bed is the one slot whose physics rule the runtime owns: the measurement
     where it measured, the terrain everywhere else. Every other slot takes the
     one source its own class matched."""
+    await _somewhere_to_ask(env)
     if decl.role == BED:
         return await _ingested(env, decl, await _matched_bed(env, decl))
     # The INGESTION rides INSIDE the probe: a source that answered with rows this
@@ -590,10 +591,24 @@ async def _need(env: _Env, decl: DataDecl, data_class: str,
     lon, lat = await _place(env, decl)
     opens = env.params.value_of("event_time") if env.params else None
     return Need(slot=label, data_class=data_class, lon=lon, lat=lat,
+                geometry=decl.geometry or "",
                 opens=str(opens) if opens else None,
                 until=_closes(opens, env.window_s), frame=run_frame(env.params),
                 mesh_m=_mesh_m(env), pick=_pick(env, decl, data_class),
                 of=decl.observes, water=_water())
+
+
+async def _somewhere_to_ask(env: _Env) -> None:
+    """Make sure the run has a PLACE before a source is asked for one.
+
+    A question whose domain is CUT out of a box has no polygon until the cut
+    runs, and the cut's own sources are asked over ground: the window the
+    question was asked in is that ground, so its slot is filled first."""
+    if current_domain() is not None:
+        return
+    row = next((r for r in env.data.values() if r.role == EXTENT), None)
+    if row is not None:
+        await _produce(env, row)
 
 
 def _water() -> CoverageExtent | None:
@@ -748,6 +763,13 @@ async def _ingested(env: _Env, decl: DataDecl, value: Any,
         # a later fetch is bounded by. Nothing else has to acquire an AOI first.
         bind_domain(Domain(bbox=tuple(ingested.bbox),
                            geometry=dict(ingested.geometry),
+                           label=ingested.name))
+    elif decl.role == EXTENT and ingested is not None and current_domain() is None:
+        # A QUESTION WHOSE DOMAIN IS CUT OUT OF A BOX has no polygon until the
+        # cut runs, and the cut's own sources have to be asked somewhere: the
+        # window the question was asked in is that place until the domain slot
+        # supersedes it.
+        bind_domain(Domain(bbox=tuple(ingested.bbox), geometry={},
                            label=ingested.name))
     return ingested
 

@@ -464,7 +464,8 @@ class DataDecl(Row):
         return replace(self, producer=producer)
 
     def need(self, data_class: str, *, at: Any = None, of: str = "",
-             span_km: float | None = None) -> "DataDecl":
+             span_km: float | None = None, geometry: str | None = None,
+             ) -> "DataDecl":
         """THE CLASS this row needs, which the match fills from whatever measures
         it here.
 
@@ -474,8 +475,16 @@ class DataDecl(Row):
         reach is cut from, the place the nearest reporting site is ranked
         against. ``of`` names the published variable this row OBSERVES, whose
         unit the record is read in; ``span_km`` is how far the question reaches,
-        which the answering source's coverage row maps to its own param."""
+        which the answering source's coverage row maps to its own param.
+        ``geometry`` is the SHAPE this row is read as - a class measured in more
+        than one shape has sources publishing each, and a step that cuts a box
+        with a line cannot be handed a polygon."""
+        if geometry is not None and geometry not in _GEOMETRIES:
+            raise PlanValidationError(
+                f"Data {self.name!r}: .need(geometry={geometry!r}) is not a "
+                f"declared shape; the shapes are {sorted(_GEOMETRIES)}.")
         return replace(self, data_class=str(data_class), observes=str(of),
+                       geometry=geometry,
                        span_km=None if span_km is None else float(span_km),
                        coercion=MappingProxyType({"near": at}))
 
