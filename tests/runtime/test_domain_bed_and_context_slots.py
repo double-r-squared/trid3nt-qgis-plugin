@@ -636,6 +636,23 @@ def test_a_source_on_the_runs_own_frame_declares_no_offset_row(monkeypatch):
     assert told == {"frame": "NAVD88"} and not env.data
 
 
+def test_a_beds_ladder_sentence_states_its_rungs_in_rank_order():
+    """The bed lays a whole ladder rather than standing on the first answer, so
+    what a reader is told names every source it asked, in rank order, and what
+    each one held - never one drop and its successor."""
+    from trid3nt_contracts.coverage import SourceChoice, SourceOption
+    from trid3nt_server.workflows.runtime import interpreter
+
+    asked = ["fetch_bluetopo", "fetch_topobathy", "fetch_ehydro_surveys"]
+    choice = SourceChoice(slot="bed", need="bathymetry",
+                          rows=[SourceOption(fetcher=name) for name in asked])
+    said = interpreter._ladder_sentence(choice, asked,
+                                        [("fetch_topobathy", object())])
+    assert said == ("bed: the ladder in rank order - fetch_bluetopo held "
+                    "nothing; fetch_topobathy laid a rung; "
+                    "fetch_ehydro_surveys held nothing.")
+
+
 class _Params:
     """The param state a run is walked against: what the caller filled."""
 

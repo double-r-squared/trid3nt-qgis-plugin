@@ -11,8 +11,10 @@ offset between two other frames still refuses, EACH input read onto the run's
 own frame through the offset row declared for it, a region no service serves
 still refusing by name, a primary of DEPTHS read as elevations on the frame
 through the shift the survey publishes about itself, two disjoint surfaces, a measurement over half a domain landing survey and
-terrain in the right halves even though it is read onto a finer grid, and a corner
-no sounding stood in coming back terrain."""
+terrain in the right halves even though it is read onto a finer grid, a corner
+no sounding stood in coming back terrain, a rung the offset service cannot place
+dropping off while the rungs under it paint, the TOP rung being unplaceable
+refusing the whole merge, and a ladder left with one rung passing it through."""
 
 from __future__ import annotations
 
@@ -393,3 +395,55 @@ def test_a_grid_the_whole_ladder_leaves_unpainted_refuses_naming_the_rungs(
     assert excinfo.value.error_code == "MERGE_RASTERS_DISJOINT"
     assert "none of the 3 surfaces tried" in str(excinfo.value)
     assert all(os.path.basename(rung.uri) in str(excinfo.value) for rung in tried)
+
+
+def test_a_rung_the_service_cannot_place_drops_off_and_the_rest_paint(
+        tmp_path) -> None:
+    """A rung whose zero nothing measures against the run's frame is not a rung
+    of this bed: it drops off as an empty one does, the journal says which and
+    why, and the rungs under it paint the cells it would have."""
+    from trid3nt_server.workflows.runtime.journal import bind_notes, drain_notes
+
+    token = bind_notes()
+    try:
+        merged = merged_surface(
+            primary=[_partial([-5.0, -5.0, None, None], "NAVD88"),
+                     _partial([None, -7.0, -7.0, None], "LWD_IGLD85")],
+            fallback=_partial([10.0, 10.0, 10.0, 10.0], "NAVD88"),
+            frame="NAVD88", _output_dir=str(tmp_path))
+        said = drain_notes(token)
+    finally:
+        pass
+    with rasterio.open(merged.uri) as surface:
+        values = surface.read(1)
+    assert [float(v) for v in values[0]] == pytest.approx([-5.0, -5.0, 10.0, 10.0])
+    assert len(merged.rungs) == 2
+    assert merged.primary_fraction == pytest.approx(0.5)
+    assert merged.fallback_fraction == pytest.approx(0.5)
+    dropped = [line for line in said if "drops off the ladder" in line]
+    assert len(dropped) == 1
+    assert "LWD_IGLD85" in dropped[0] and "NAVD88" in dropped[0]
+
+
+def test_the_top_rung_the_service_cannot_place_refuses_the_whole_merge(
+        tmp_path) -> None:
+    """A bed whose best source cannot be placed is not that bed."""
+    with pytest.raises(MergeRastersError) as excinfo:
+        merged_surface(
+            primary=[_partial([-5.0, -5.0, None, None], "LWD_IGLD85"),
+                     _partial([None, -7.0, -7.0, None], "NAVD88")],
+            fallback=_partial([10.0, 10.0, 10.0, 10.0], "NAVD88"),
+            frame="NAVD88", _output_dir=str(tmp_path))
+    assert excinfo.value.error_code == "MERGE_RASTERS_DATUMS_DIFFER"
+
+
+def test_a_ladder_left_with_one_rung_passes_that_surface_through(
+        tmp_path) -> None:
+    """Every rung under the top one dropping leaves one surface, which is that
+    surface and not a merge of two."""
+    merged = merged_surface(
+        primary=_partial([-5.0, -5.0, None, None], "NAVD88"),
+        fallback=_partial([10.0, 10.0, 10.0, 10.0], "LWD_IGLD85"),
+        frame="NAVD88", _output_dir=str(tmp_path))
+    assert merged.primary_fraction == 1.0 and merged.fallback_fraction == 0.0
+    assert "passed through unchanged" in merged.notes[0]

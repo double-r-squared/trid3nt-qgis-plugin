@@ -521,8 +521,9 @@ async def _every_rung(env: _Env, decl: DataDecl, label: str
     so."""
     choice = match(await _need(env, decl, decl.data_class, label),
                    sources_with_coverage())
+    asked = [row.fetcher for row in choice.rows if not row.excluded]
     laid: list[tuple[str, Any]] = []
-    for picked in [row.fetcher for row in choice.rows if not row.excluded]:
+    for picked in asked:
         asking = choice.model_copy(update={"picked": picked})
         row = _runtime_row(env, f"{label.replace(' ', '_')}_{picked}", picked,
                            await _ask_for(env, asking, decl))
@@ -536,9 +537,26 @@ async def _every_rung(env: _Env, decl: DataDecl, label: str
             logger.info("%s: %s held nothing (%s); the rung drops off the ladder",
                         label, picked, exc)
             choice = dropped_from(choice, picked, f"held nothing here ({exc})")
+    if laid:
+        choice = choice.model_copy(
+            update={"sentence": _ladder_sentence(choice, asked, laid)})
     slot_choice(choice)
     journal_note(choice.sentence)
     return laid
+
+
+def _ladder_sentence(choice: SourceChoice, asked: Sequence[str],
+                     laid: Sequence[tuple[str, Any]]) -> str:
+    """What the run SAYS about a bed's whole LADDER: every source it asked, in
+    rank order, and what each one held.
+
+    The probe's line names one drop and its successor, which is the wrong shape
+    here: a ladder has no successor, it has rungs, and each of them paints."""
+    held = {picked for picked, _value in laid}
+    rungs = "; ".join(
+        f"{name} laid a rung" if name in held else f"{name} held nothing"
+        for name in asked)
+    return f"{choice.slot}: the ladder in rank order - {rungs}."
 
 
 async def _surfaced(env: _Env, decl: DataDecl, picked: str, held: Any) -> Any:

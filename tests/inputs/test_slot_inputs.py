@@ -249,3 +249,19 @@ def test_a_shape_that_carries_no_polyline_refuses_rather_than_reading_one():
         with pytest.raises(UserInputError) as excinfo:
             line(carries_none)
         assert excinfo.value.error_code == "LINE_INVALID"
+
+
+def test_a_bed_the_runs_frame_cannot_reach_names_its_zero_once():
+    """The datum check builds the refusal and names the surface, its zero and
+    the run's; the slot re-raises that under its own code rather than saying the
+    same three facts again in its own words."""
+    from trid3nt_contracts.execution import LayerURI
+    from trid3nt_server.inputs.bed import elevations
+
+    charted = LayerURI(layer_id="x", name="a charted survey", layer_type="raster",
+                       uri="s3://b/k/survey.tif", vertical_datum="CRD")
+    with pytest.raises(UserInputError) as excinfo:
+        elevations(charted, frame="NAVD88")
+    said = str(excinfo.value)
+    assert said.count("CRD") == 1 and said.count("NAVD88") == 1
+    assert "a charted survey" in said

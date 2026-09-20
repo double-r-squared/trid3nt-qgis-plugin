@@ -159,9 +159,9 @@ def elevations(layer: Any, *, frame: Any, offset: Any = None,
     try:
         aligned = onto_frame(layer, frame, offset=offset, code_prefix="BED_")
     except DatumError as exc:
-        raise UserInputError(
-            f"the {label} counts from {zero} and this run counts from "
-            f"{frame}: {exc}", code=code) from exc
+        # The refusal already NAMES this surface, its zero and the run's; saying
+        # it again here is one fact stated twice, and the two can disagree.
+        raise UserInputError(str(exc), code=code) from exc
     if not (depths or aligned.shift_m):
         return layer
     _journal(label, layer, aligned, depths)
@@ -795,6 +795,36 @@ def _merge_frame(under: Any, frame: Any) -> str:
     return str(frame or "").strip() or datum_of(under)
 
 
+def _placed(ladder: list[tuple[Any, Any]], labels: list[str], zero: str
+            ) -> list[tuple[int, Any]]:
+    """Every rung that can be READ on the frame this merge lands on, by rank,
+    each with what it costs to read there.
+
+    A rung whose zero nothing measures against that frame is not a rung of this
+    bed: it drops off the way an empty one does, the journal says which and why,
+    and the rungs under it paint the cells it would have. The TOP rung is the
+    exception - a bed whose best source cannot be placed is not that bed - and
+    what is left still has to paint the grid, which the overlay below refuses on."""
+    from trid3nt_server.workflows.runtime import journal_note
+
+    from .vertical_datum import datum_of
+
+    standing: list[tuple[int, Any]] = []
+    for rank, (layer, row) in enumerate(ladder):
+        try:
+            standing.append((rank, _merge_aligned(layer, zero, row)))
+        except MergeRastersError:
+            if rank == 0:
+                raise
+            line = (f"{labels[rank]} counts from "
+                    f"{datum_of(layer) or 'no stated zero'} and nothing measures "
+                    f"that against {zero}, so it drops off the ladder and the "
+                    "rungs under it paint what it would have.")
+            logger.info("bed merge: %s", line)
+            journal_note(line)
+    return standing
+
+
 def _merge_aligned(source: Any, frame: str, offset: Any) -> Any:
     """What it costs to read ONE rung of the ladder on the frame it lands on.
 
@@ -912,7 +942,9 @@ def merged_surface(
     pick is what the next rung is for. Every rung is re-zeroed onto the run's
     vertical frame by the flip above - through its own offset row, else the shift
     it publishes about itself - before any of them is read onto the common grid,
-    so the overlay is over one axis. They then land on one grid at the finest of
+    so the overlay is over one axis; one whose zero nothing measures against that
+    frame drops off the ladder as an empty rung does, and only the TOP rung being
+    unplaceable refuses. They then land on one grid at the finest of
     their cell sizes over the union of what they cover, and the OVERLAY is the
     substrate's own merge over those single-source warps with priority by order -
     nothing here re-implements it. Which rung won at each cell is rebuilt from the
@@ -929,18 +961,25 @@ def merged_surface(
     from trid3nt_server.tools.derive._hydrology_common import write_cog
     from trid3nt_server.workflows.runtime import journal_note
 
-    measured = _rungs(primary, primary_offset)
-    ladder = measured + _rungs(fallback, fallback_offset)
+    offered = _rungs(primary, primary_offset)
+    ladder = offered + _rungs(fallback, fallback_offset)
     if not ladder:
         raise MergeRastersError(
             "MERGE_RASTERS_NO_SOURCE",
             "a bed merge was given neither surface, so there is nothing to merge.")
     if len(ladder) == 1:
         return _passed_through(ladder[0][0],
-                               absent="fallback" if measured else "primary")
+                               absent="fallback" if offered else "primary")
     zero = _merge_frame(ladder[-1][0], frame)
     labels = [_rung_label(layer, rank) for rank, (layer, _row) in enumerate(ladder)]
-    aligned = [_merge_aligned(layer, zero, row) for layer, row in ladder]
+    standing = _placed(ladder, labels, zero)
+    measured = sum(1 for rank, _cost in standing if rank < len(offered))
+    aligned = [cost for _rank, cost in standing]
+    labels = [labels[rank] for rank, _cost in standing]
+    ladder = [ladder[rank] for rank, _cost in standing]
+    if len(ladder) == 1:
+        return _passed_through(ladder[0][0],
+                               absent="fallback" if measured else "primary")
     counts_down = [_counts_down(layer) for layer, _row in ladder]
 
     seed = layer_seed()
@@ -1023,9 +1062,9 @@ def merged_surface(
         vertical_datum=zero or None,
         datum_shift_m=round(float(aligned[0].shift_m), 4),
         fallback_shift_m=(round(float(aligned[-1].shift_m), 4)
-                          if len(ladder) > len(measured) else 0.0),
-        primary_fraction=round(sum(shares[:len(measured)]), 4),
-        fallback_fraction=round(sum(shares[len(measured):]), 4),
+                          if len(ladder) > measured else 0.0),
+        primary_fraction=round(sum(shares[:measured]), 4),
+        fallback_fraction=round(sum(shares[measured:]), 4),
         rungs=[(label, round(share, 4)) for label, share in zip(labels, shares)],
         provenance_uri=provenance,
         resolution_m=round(metres, 4),

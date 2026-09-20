@@ -769,6 +769,17 @@ package DataSeam {
         instant and the native cell, since a bed the user is shown to refine is
         a bed they may stitch another source onto, and that is the metadata the
         two have to be compared on.
+
+        THE ROW STATES A FRAME NAME. The zero on a coverage row is one of the
+        names the offset service converts between, the per-record word where
+        each feature carries its own, or nothing at all. It is what an offset
+        is asked in, so prose - "each Great Lake's own Low Water Datum" - names
+        a surface nothing can bring another onto and the spec loader refuses it
+        naming the row. The vocabulary is read off the offset fetch's own
+        params, because a second list of frame names would drift from the one
+        service that has to answer for them. What a SUPPLIED layer says is not
+        governed here: a document states its zero in its own words, and the
+        fullest frame those words name is what is asked for.
         */
     }
 
@@ -851,6 +862,18 @@ package DataSeam {
         statement and not this one's: a surface of depths has to know the zero
         they are counted below and refuses without it, while an elevation
         surface somebody handed this run stands on the run's frame.
+
+        AN UNPLACEABLE RUNG DROPS OFF. A rung of the bed's ladder whose zero
+        nothing measures against the frame the merge lands on is not a rung of
+        this bed: it drops off the way an empty one does, the run says which
+        rung and why - its own zero and the frame nothing reached it from - and
+        the rungs under it paint the cells it would have. The merge refuses only
+        where what is left paints nothing, or where the TOP rung itself cannot
+        be placed, because a bed whose best source is unplaceable is not that
+        bed. The refusal is built ONCE, by the datum check that knows both
+        zeros; a slot re-raises it under its own code rather than restating the
+        surface and the two frames in its own words, since two statements of
+        one fact are two chances to disagree.
         */
     }
 
@@ -1288,6 +1311,10 @@ package DataSeam {
         "tests/mesh/test_mesh_topology_and_bed.py::test_the_bed_card_states_the_datum_and_the_native_cell_of_its_source";
     verify requirement OneSourceReadsOnOneStatedDatum by
         "tests/fetchers/test_emit_on_fetch_seam.py::test_input_layer_name_shape_and_purpose";
+    verify requirement OneSourceReadsOnOneStatedDatum by
+        "tests/fetchers/test_router_spec_loader.py::test_a_row_stating_its_datum_as_prose_is_refused";
+    verify requirement OneSourceReadsOnOneStatedDatum by
+        "tests/fetchers/test_router_spec_loader.py::test_a_row_stating_a_served_frame_or_the_record_loads";
 
     satisfy requirement ASourceStatesWhatItCovers by coverageContract;
     satisfy requirement ASourceStatesWhatItCovers by gaugeDeclaration;
@@ -1436,6 +1463,12 @@ package DataSeam {
         "tests/inputs/test_vertical_datum.py::test_a_point_the_service_does_not_reach_refuses_naming_it";
     verify requirement TheRunHasOneVerticalFrame by
         "tests/runtime/test_domain_bed_and_context_slots.py::test_an_offset_row_is_asked_where_the_source_measured_not_at_the_seed";
+    verify requirement TheRunHasOneVerticalFrame by
+        "tests/inputs/test_bed_merge.py::test_a_rung_the_service_cannot_place_drops_off_and_the_rest_paint";
+    verify requirement TheRunHasOneVerticalFrame by
+        "tests/inputs/test_bed_merge.py::test_the_top_rung_the_service_cannot_place_refuses_the_whole_merge";
+    verify requirement TheRunHasOneVerticalFrame by
+        "tests/inputs/test_slot_inputs.py::test_a_bed_the_runs_frame_cannot_reach_names_its_zero_once";
 
     satisfy requirement AStoppedRungNeverShips by waterBodyClassifier;
     satisfy requirement AStoppedRungNeverShips by coastalComposite;
