@@ -1,0 +1,182 @@
+# NDBC stdmet: one named buoy, read out of the file the window names - realtime2
+# for the last 45 days, the yearly archive for a completed year. The station is
+# resolved through NDBC's own listing first, which is where a buoy's position,
+# its name and its wave payload are stated; the months of the current year the
+# realtime file no longer reaches are published in neither file and refuse.
+schema_version: v1
+
+name: fetch_ndbc_buoys
+source_class: ndbc_buoys
+error_prefix: NDBC_BUOYS
+input_error_suffix: INPUT_INVALID
+empty_error_suffix: NO_RECORD
+shape: vector-fgb
+supports_global_query: false
+
+endpoints:
+  stations:
+    url: "https://www.ndbc.noaa.gov/activestations.xml"
+  realtime:
+    url_template: "https://www.ndbc.noaa.gov/data/realtime2/{station}.txt"
+  archive:
+    url_template: "https://www.ndbc.noaa.gov/data/historical/stdmet/{station}h{year}.txt.gz"
+auth:
+  mode: none
+  user_agent: trid3nt_default
+
+params:
+  station: {type: str, required: true}
+  start_date: {type: iso_date, required: true, min_date: "1972-01-01"}
+  end_date: {type: iso_date, required: true, max_range_days: 366}
+
+hooks:
+  resolve_build: ndbc_buoys.resolve_build
+  resolve_parse: ndbc_buoys.resolve_parse
+  build_request: ndbc_buoys.build_request
+  parse_response: ndbc_buoys.parse_response
+  classify_status: ndbc_buoys.classify_status
+
+ingest:
+  properties:
+    - station_id
+    - station_name
+    - owner
+    - wave_height_m
+    - peak_period_s
+    - wave_direction_deg_true
+    - n_timesteps
+    - time_start
+    - time_end
+    - wave_height_series_csv
+    - peak_period_series_csv
+    - wave_direction_series_csv
+
+normalize:
+  crs: "EPSG:4326"
+  units: m
+  quantity: wave_height
+  # A wave height is a height OF the water, measured by the buoy riding it, and
+  # not an elevation counted from a zero: there is no datum to state.
+  datum: null
+
+output:
+  layer_type: vector
+  ext: fgb
+  role: primary
+  display_name: "NDBC buoy sea state"
+  style:
+    kind: reference
+    geometry: point
+
+cache:
+  ttl_class: dynamic-1h
+payload_estimate:
+  model: per_station
+  kb_per_station_per_day: 4.0
+  overhead_kb: 30.0
+  floor_mb: 0.03
+
+coverage:
+-   data_class: wave series
+    kind: measured
+    # How far a moored buoy's sea state speaks for: an open-water swell field is
+    # coherent over tens of kilometres, and 60 km is what reaches the offshore
+    # buoy from a harbour rather than only the sheltered one inside the bay.
+    reach_km: 60
+    extent:
+      kind: stations
+      rings:
+      - [[-180.0, -90.0], [180.0, -90.0], [180.0, 90.0], [-180.0, 90.0]]
+      note: every moored buoy NDBC's own listing states a met payload for - the
+        US coasts, the Great Lakes, the tropical arrays and the partner buoys
+        other national networks report to NDBC; a fixed coastal platform states
+        the same payload and measures no waves, so it is not listed here
+      read_from: ndbc_buoys.stations
+    window:
+      series: true
+      earliest: "1972-01-01"
+      max_span_days: 366.0
+      cadence: 30-min samples in the realtime file, hourly in the older archive years
+    datum: null
+    units:
+      wave_height_m: m
+      wave_height_series_csv: m
+      peak_period_s: s
+      peak_period_series_csv: s
+      wave_direction_deg_true: degT
+      wave_direction_series_csv: degT
+    value_column: wave_height_m
+    series_column: wave_height_series_csv
+    # THE SEA STATE THIS BUOY MEASURES, under the name a run publishes it by.
+    # NDBC's MWD is the direction at the DOMINANT period, so it answers a peak
+    # direction and not a mean one; a mean period and a spread are spectral
+    # variables stdmet does not carry, and a slot asking for one is excluded.
+    vocabulary:
+      WAVE HEIGHT HM0: WVHT
+      PEAK PERIOD TPD: DPD
+      PEAK DIRECTION: MWD
+
+caveats:
+  - "the last 45 days come from the realtime file and a completed year from the yearly archive; a window in the months between the two is published in neither and refuses by name rather than answering from another moment"
+  - "the match passes the NEAREST listed buoy: an open-water swell field is coherent over tens of kilometres, but a buoy moored inside a bay or behind an island does not speak for the open coast at the same distance - call this by station to read the buoy the question is about"
+  - "the wave height, the peak period and the peak direction are what this carries; the wind, pressure and air/water temperature columns stdmet publishes beside them are a meteorological record this source states no coverage row for"
+  - "a direction is degT - the compass bearing the waves come FROM - and a deck stating a direction of propagation converts it rather than reading it as it stands"
+
+docstring: |-
+  Fetch a NOAA NDBC buoy's measured SEA STATE - wave height, peak period and
+  peak direction - as a point FlatGeobuf.
+
+  What it does:
+      Reads the standard meteorological record of ONE named NDBC buoy over a
+      window and returns a single Point feature at the buoy, carrying the
+      window's significant wave height (m), peak wave period (s) and peak wave
+      direction (degrees true, the bearing waves come FROM), each inline as its
+      own "iso,value" series. The last 45 days come from NDBC's realtime file
+      and a completed year from its yearly archive.
+
+  When to use:
+      - "how big were the waves at this buoy", "the swell period offshore",
+        "what sea state was measured here during the storm".
+      - A wave or coastal model needs a MEASURED incident wave height, period
+        and direction to force a boundary or to check a run against.
+
+  When NOT to use:
+      - DO NOT use for water level, tide or storm surge -- use
+        ``fetch_noaa_coops_tides``.
+      - DO NOT use for wind, pressure or air temperature -- this carries the
+        wave columns only.
+      - DO NOT use for a bbox of stations -- this reads ONE buoy by name.
+
+  Parameters:
+      station: the buoy's own NDBC id (e.g. "44097" for Block Island, RI). A
+          fixed coastal platform, or a buoy the listing reports no met payload
+          for, measures no sea state and refuses.
+      start_date: ISO date, inclusive start of the window.
+      end_date: ISO date, inclusive end. Capped at 366 days from start_date.
+
+  Returns:
+      ``LayerURI`` for a FlatGeobuf in EPSG:4326 with one Point feature:
+      ``station_id``, ``station_name``, ``owner``, ``wave_height_m``,
+      ``peak_period_s``, ``wave_direction_deg_true`` (each the window's latest
+      reading), ``n_timesteps``, ``time_start`` / ``time_end`` (ISO-8601 UTC),
+      and ``wave_height_series_csv`` / ``peak_period_series_csv`` /
+      ``wave_direction_series_csv``. ``layer_type="vector"``, ``units="m"``.
+
+  Rendering: a VECTOR layer renders INLINE on the map automatically.
+
+  Cross-tool dependencies:
+      - Composes WITH: ``fetch_noaa_coops_tides`` (the level at the same coast).
+      - Upstream data source: NOAA NDBC (www.ndbc.noaa.gov).
+
+  Cache: ``ttl_class="dynamic-1h"``; the realtime file revises as it is quality
+  controlled and the archive supersedes it.
+
+  Errors:
+      - ``NDBC_BUOYS_INPUT_INVALID``: a station that is not a wave-reporting
+        buoy, or a window between the realtime file and the archive.
+      - ``NDBC_BUOYS_NO_RECORD``: the buoy published no wave height over the
+        window, or NDBC holds no file for it there.
+      - ``NDBC_BUOYS_UPSTREAM_ERROR``: NDBC failed or answered an unreadable
+        file.
+
+  Tier-1 free. No API key.
