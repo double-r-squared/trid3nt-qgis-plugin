@@ -230,6 +230,24 @@ _FORM_ORIGIN_CHIP_STYLE = (
 )
 
 
+def _label(text: str, style: str, *, wrap: bool = False, rich: bool = False,
+           select: bool = False, tip: str = "") -> QLabel:
+    """One label. PlainText unless ``rich`` is asked for, so no text a card is
+    handed can ever render as markup."""
+    lbl = QLabel(text)
+    lbl.setTextFormat(Qt.TextFormat.RichText if rich else Qt.TextFormat.PlainText)
+    lbl.setStyleSheet(style)
+    if wrap:
+        lbl.setWordWrap(True)
+    if rich:
+        lbl.setOpenExternalLinks(True)
+    if select:
+        lbl.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+    if tip:
+        lbl.setToolTip(tip)
+    return lbl
+
+
 class _WrapLabel(QLabel):
     """Word-wrapping QLabel whose WRAPPED height the layouts actually honor,
     plain text and rich text alike."""
@@ -586,9 +604,7 @@ class _ToolCard(QFrame):
         self._chevron.setStyleSheet("QToolButton { border: none; }")
         self._chevron.clicked.connect(self._toggle)
         hl.addWidget(self._chevron)
-        self._title = QLabel("Tools")
-        self._title.setTextFormat(Qt.TextFormat.PlainText)
-        self._title.setStyleSheet(_TOOLCARD_HEADER_STYLE)
+        self._title = _label("Tools", _TOOLCARD_HEADER_STYLE)
         hl.addWidget(self._title)
         hl.addStretch(1)
         outer.addWidget(header)
@@ -679,22 +695,16 @@ class _ToolCard(QFrame):
             # inset for a sub-step child so hierarchy still reads.
             rl.setContentsMargins(4 + (12 if nested else 0), 0, 0, 0)
             rl.setSpacing(6)
-            prefix = QLabel(">")
-            prefix.setTextFormat(Qt.TextFormat.PlainText)
-            prefix.setStyleSheet(_TOOLCARD_PREFIX_STYLE)
+            prefix = _label(">", _TOOLCARD_PREFIX_STYLE)
             rl.addWidget(prefix)
             # A plain, non-wrapping label in the state-driven text colour.
-            name_lbl = QLabel(label)
-            name_lbl.setTextFormat(Qt.TextFormat.PlainText)
-            name_lbl.setStyleSheet(_tool_row_text_style(state))
+            name_lbl = _label(label, _tool_row_text_style(state))
             rl.addWidget(name_lbl)
             rl.addStretch(1)
             # The ONLY right-edge element is the status glyph; the arg and
             # metadata summary rides the bottom block instead. Running is an
             # animated spinner, complete a check, terminal-failed an x.
-            status = QLabel()
-            status.setTextFormat(Qt.TextFormat.PlainText)
-            status.setStyleSheet(_tool_status_style(state))
+            status = _label("", _tool_status_style(state))
             if running:
                 status.setText(_SPINNER_FRAMES[self._spinner_frame])
                 self._spinner_labels.append(status)
@@ -1038,10 +1048,7 @@ class GateCard(QFrame):
         # details" re-expands ``self._body`` read-only (its buttons stay
         # disabled -- see ``_commit``).
         summary_row = QHBoxLayout()
-        self.summary_lbl = QLabel("")
-        self.summary_lbl.setWordWrap(True)
-        self.summary_lbl.setTextFormat(Qt.TextFormat.PlainText)
-        self.summary_lbl.setStyleSheet(_GATE_TITLE_STYLE)
+        self.summary_lbl = _label("", _GATE_TITLE_STYLE, wrap=True)
         summary_row.addWidget(self.summary_lbl, 1)
         self.details_toggle = QPushButton("show details")
         self.details_toggle.setFlat(True)
@@ -1063,15 +1070,11 @@ class GateCard(QFrame):
         outer.addWidget(self._body)
 
         title = "Confirm run settings" if warning.granularity else "Large response expected"
-        title_lbl = QLabel(title)
-        title_lbl.setStyleSheet(_GATE_TITLE_STYLE)
+        title_lbl = _label(title, _GATE_TITLE_STYLE)
         lay.addWidget(title_lbl)
 
         for line in gate.summary_lines(warning):
-            lbl = QLabel(line)
-            lbl.setWordWrap(True)
-            lbl.setTextFormat(Qt.TextFormat.PlainText)
-            lbl.setStyleSheet(_GATE_BODY_STYLE)
+            lbl = _label(line, _GATE_BODY_STYLE, wrap=True)
             lay.addWidget(lbl)
 
         # -- resolution ladder ------------------------------------------------ #
@@ -1083,7 +1086,7 @@ class GateCard(QFrame):
             if suggested not in rungs:
                 rungs = sorted(set(rungs) | {suggested})
             row = QHBoxLayout()
-            row.addWidget(self._plain_label("Resolution:"))
+            row.addWidget(_label("Resolution:", _GATE_BODY_STYLE))
             self.res_combo = QComboBox()
             for rung in rungs:
                 label = f"{rung:g} m" + (" (suggested)" if rung == suggested else "")
@@ -1091,8 +1094,7 @@ class GateCard(QFrame):
             self.res_combo.setCurrentIndex(rungs.index(suggested))
             self.res_combo.currentIndexChanged.connect(self._refresh_estimates)
             row.addWidget(self.res_combo)
-            self.res_estimate_lbl = QLabel("")
-            self.res_estimate_lbl.setStyleSheet(_GATE_NOTE_STYLE)
+            self.res_estimate_lbl = _label("", _GATE_NOTE_STYLE)
             row.addWidget(self.res_estimate_lbl, 1)
             lay.addLayout(row)
 
@@ -1103,19 +1105,18 @@ class GateCard(QFrame):
         ts = warning.time_scale
         if ts:
             row = QHBoxLayout()
-            row.addWidget(self._plain_label("Frame every"))
+            row.addWidget(_label("Frame every", _GATE_BODY_STYLE))
             self.interval_edit = QLineEdit(f"{ts.get('suggested_interval_min') or 0:g}")
             self.interval_edit.setMaximumWidth(56)
             self.interval_edit.textChanged.connect(self._refresh_estimates)
             row.addWidget(self.interval_edit)
-            row.addWidget(self._plain_label("min over"))
+            row.addWidget(_label("min over", _GATE_BODY_STYLE))
             self.duration_edit = QLineEdit(f"{ts.get('suggested_duration_hr') or 0:g}")
             self.duration_edit.setMaximumWidth(56)
             self.duration_edit.textChanged.connect(self._refresh_estimates)
             row.addWidget(self.duration_edit)
-            row.addWidget(self._plain_label("h"))
-            self.frames_lbl = QLabel("")
-            self.frames_lbl.setStyleSheet(_GATE_NOTE_STYLE)
+            row.addWidget(_label("h", _GATE_BODY_STYLE))
+            self.frames_lbl = _label("", _GATE_NOTE_STYLE)
             row.addWidget(self.frames_lbl, 1)
             lay.addLayout(row)
 
@@ -1130,18 +1131,11 @@ class GateCard(QFrame):
         btn_row.addWidget(self.cancel_btn)
         lay.addLayout(btn_row)
 
-        self.result_lbl = QLabel("")
-        self.result_lbl.setStyleSheet(_GATE_NOTE_STYLE)
+        self.result_lbl = _label("", _GATE_NOTE_STYLE)
         self.result_lbl.setVisible(False)
         lay.addWidget(self.result_lbl)
 
         self._refresh_estimates()
-
-    @staticmethod
-    def _plain_label(text: str) -> QLabel:
-        lbl = QLabel(text)
-        lbl.setStyleSheet(_GATE_BODY_STYLE)
-        return lbl
 
     # -- UI state ------------------------------------------------------------- #
 
@@ -1267,10 +1261,7 @@ class CodeExecCard(QFrame):
         # Collapsed one-line summary (hidden until answered) + "show details"
         # re-expand -- the GateCard affordance verbatim.
         summary_row = QHBoxLayout()
-        self.summary_lbl = QLabel("")
-        self.summary_lbl.setWordWrap(True)
-        self.summary_lbl.setTextFormat(Qt.TextFormat.PlainText)
-        self.summary_lbl.setStyleSheet(_CODE_TITLE_STYLE)
+        self.summary_lbl = _label("", _CODE_TITLE_STYLE, wrap=True)
         summary_row.addWidget(self.summary_lbl, 1)
         self.details_toggle = QPushButton("show details")
         self.details_toggle.setFlat(True)
@@ -1291,15 +1282,11 @@ class CodeExecCard(QFrame):
         lay.setSpacing(3)
         outer.addWidget(self._body)
 
-        title_lbl = QLabel("Run Python code?")
-        title_lbl.setStyleSheet(_CODE_TITLE_STYLE)
+        title_lbl = _label("Run Python code?", _CODE_TITLE_STYLE)
         lay.addWidget(title_lbl)
 
         if request.rationale:
-            rationale_lbl = QLabel(request.rationale)
-            rationale_lbl.setWordWrap(True)
-            rationale_lbl.setTextFormat(Qt.TextFormat.PlainText)
-            rationale_lbl.setStyleSheet(_GATE_BODY_STYLE)
+            rationale_lbl = _label(request.rationale, _GATE_BODY_STYLE, wrap=True)
             lay.addWidget(rationale_lbl)
 
         # Collapsed monospace preview of the EXACT code -- expandable,
@@ -1334,8 +1321,7 @@ class CodeExecCard(QFrame):
         btn_row.addWidget(self.deny_btn)
         lay.addLayout(btn_row)
 
-        self.result_lbl = QLabel("")
-        self.result_lbl.setStyleSheet(_GATE_NOTE_STYLE)
+        self.result_lbl = _label("", _GATE_NOTE_STYLE)
         self.result_lbl.setVisible(False)
         lay.addWidget(self.result_lbl)
 
@@ -1399,12 +1385,11 @@ class CodeExecCard(QFrame):
             return
         self.summary_lbl.setText(gate.code_exec_result_chip(result))
         for line in gate.code_exec_result_lines(result):
-            lbl = QLabel(line)
-            lbl.setWordWrap(True)
-            lbl.setTextFormat(Qt.TextFormat.PlainText)
-            lbl.setStyleSheet(
+            lbl = _label(
+                line,
                 _ERROR_LINE_STYLE if not result.ok and "stderr" in line
-                else _GATE_NOTE_STYLE
+                else _GATE_NOTE_STYLE,
+                wrap=True,
             )
             self._body.layout().addWidget(lbl)
 
@@ -1430,10 +1415,7 @@ class CredentialCard(QFrame):
         # Collapsed one-line summary (hidden until answered) + "show details"
         # re-expand -- the GateCard affordance verbatim.
         summary_row = QHBoxLayout()
-        self.summary_lbl = QLabel("")
-        self.summary_lbl.setWordWrap(True)
-        self.summary_lbl.setTextFormat(Qt.TextFormat.PlainText)
-        self.summary_lbl.setStyleSheet(_CRED_TITLE_STYLE)
+        self.summary_lbl = _label("", _CRED_TITLE_STYLE, wrap=True)
         summary_row.addWidget(self.summary_lbl, 1)
         self.details_toggle = QPushButton("show details")
         self.details_toggle.setFlat(True)
@@ -1454,26 +1436,18 @@ class CredentialCard(QFrame):
         lay.setSpacing(3)
         outer.addWidget(self._body)
 
-        title_lbl = QLabel(f"API key needed: {request.display_label}")
-        title_lbl.setWordWrap(True)
-        title_lbl.setTextFormat(Qt.TextFormat.PlainText)
-        title_lbl.setStyleSheet(_CRED_TITLE_STYLE)
+        title_lbl = _label(f"API key needed: {request.display_label}",
+                           _CRED_TITLE_STYLE, wrap=True)
         lay.addWidget(title_lbl)
 
         if request.message:
             # The agent's user-facing explanation, VERBATIM: never
             # paraphrased client-side.
-            message_lbl = QLabel(request.message)
-            message_lbl.setWordWrap(True)
-            message_lbl.setTextFormat(Qt.TextFormat.PlainText)
-            message_lbl.setStyleSheet(_GATE_BODY_STYLE)
+            message_lbl = _label(request.message, _GATE_BODY_STYLE, wrap=True)
             lay.addWidget(message_lbl)
 
         for line in gate.credential_note_lines(request):
-            note_lbl = QLabel(line)
-            note_lbl.setWordWrap(True)
-            note_lbl.setTextFormat(Qt.TextFormat.PlainText)
-            note_lbl.setStyleSheet(_GATE_NOTE_STYLE)
+            note_lbl = _label(line, _GATE_NOTE_STYLE, wrap=True)
             lay.addWidget(note_lbl)
 
         if request.signup_url:
@@ -1481,11 +1455,8 @@ class CredentialCard(QFrame):
             # generic card sends None and this label is simply absent --
             # the client never fabricates a URL).
             href = _html_escape(request.signup_url)
-            link_lbl = QLabel(f'<a href="{href}">Get a key: {href}</a>')
-            link_lbl.setTextFormat(Qt.TextFormat.RichText)
-            link_lbl.setOpenExternalLinks(True)
-            link_lbl.setWordWrap(True)
-            link_lbl.setStyleSheet(_GATE_NOTE_STYLE)
+            link_lbl = _label(f'<a href="{href}">Get a key: {href}</a>',
+                              _GATE_NOTE_STYLE, wrap=True, rich=True)
             lay.addWidget(link_lbl)
 
         # The masked key field: password echo -- the value is never rendered
@@ -1508,10 +1479,7 @@ class CredentialCard(QFrame):
         btn_row.addWidget(self.skip_btn)
         lay.addLayout(btn_row)
 
-        self.result_lbl = QLabel("")
-        self.result_lbl.setWordWrap(True)
-        self.result_lbl.setTextFormat(Qt.TextFormat.PlainText)
-        self.result_lbl.setStyleSheet(_GATE_NOTE_STYLE)
+        self.result_lbl = _label("", _GATE_NOTE_STYLE, wrap=True)
         self.result_lbl.setVisible(False)
         lay.addWidget(self.result_lbl)
 
@@ -1615,10 +1583,7 @@ class ToolCandidatesCard(QFrame):
         # Collapsed one-line chip (hidden until answered/superseded) + "show
         # details" re-expand -- the GateCard affordance verbatim.
         summary_row = QHBoxLayout()
-        self.summary_lbl = QLabel("")
-        self.summary_lbl.setWordWrap(True)
-        self.summary_lbl.setTextFormat(Qt.TextFormat.PlainText)
-        self.summary_lbl.setStyleSheet(_PICKER_TITLE_STYLE)
+        self.summary_lbl = _label("", _PICKER_TITLE_STYLE, wrap=True)
         summary_row.addWidget(self.summary_lbl, 1)
         self.details_toggle = QPushButton("show details")
         self.details_toggle.setFlat(True)
@@ -1645,18 +1610,13 @@ class ToolCandidatesCard(QFrame):
         # prefix reads as a stepped wizard when a turn emits several waves.
         title = request.stage_label or "Tool choice"
         prefix = f"Step {self._step_index} - " if self._step_index else ""
-        title_lbl = QLabel(f"{prefix}{title}: pick a tool")
-        title_lbl.setWordWrap(True)
-        title_lbl.setTextFormat(Qt.TextFormat.PlainText)
-        title_lbl.setStyleSheet(_PICKER_TITLE_STYLE)
+        title_lbl = _label(f"{prefix}{title}: pick a tool",
+                           _PICKER_TITLE_STYLE, wrap=True)
         lay.addWidget(title_lbl)
 
         note = request.reason_note
         if note:
-            note_lbl = QLabel(note)
-            note_lbl.setWordWrap(True)
-            note_lbl.setTextFormat(Qt.TextFormat.PlainText)
-            note_lbl.setStyleSheet(_GATE_NOTE_STYLE)
+            note_lbl = _label(note, _GATE_NOTE_STYLE, wrap=True)
             lay.addWidget(note_lbl)
 
         # Ranked candidates as radio choices: monospace tool name on the
@@ -1670,10 +1630,7 @@ class ToolCandidatesCard(QFrame):
             lay.addWidget(radio)
             self._candidate_radios.append((radio, cand.tool_name))
             if cand.summary:
-                summary_lbl = QLabel(cand.summary)
-                summary_lbl.setWordWrap(True)
-                summary_lbl.setTextFormat(Qt.TextFormat.PlainText)
-                summary_lbl.setStyleSheet(_PICKER_SUMMARY_STYLE)
+                summary_lbl = _label(cand.summary, _PICKER_SUMMARY_STYLE, wrap=True)
                 lay.addWidget(summary_lbl)
 
         # The free-text escape hatch, always the LAST option: "none of these
@@ -1699,10 +1656,7 @@ class ToolCandidatesCard(QFrame):
         btn_row.addWidget(self.decide_btn)
         lay.addLayout(btn_row)
 
-        self.result_lbl = QLabel("")
-        self.result_lbl.setWordWrap(True)
-        self.result_lbl.setTextFormat(Qt.TextFormat.PlainText)
-        self.result_lbl.setStyleSheet(_GATE_NOTE_STYLE)
+        self.result_lbl = _label("", _GATE_NOTE_STYLE, wrap=True)
         self.result_lbl.setVisible(False)
         lay.addWidget(self.result_lbl)
 
@@ -1859,14 +1813,10 @@ class SimCard(QFrame):
         # the RIGHT of this row, next to the toggle, so a COLLAPSED card still
         # shows progress at a glance without expanding.
         summary_row = QHBoxLayout()
-        self.summary_lbl = QLabel(f"Simulation running - {engine_label}")
-        self.summary_lbl.setWordWrap(True)
-        self.summary_lbl.setTextFormat(Qt.TextFormat.PlainText)
-        self.summary_lbl.setStyleSheet(_SIM_TITLE_STYLE)
+        self.summary_lbl = _label(f"Simulation running - {engine_label}",
+                                  _SIM_TITLE_STYLE, wrap=True)
         summary_row.addWidget(self.summary_lbl, 1)
-        self.progress_lbl = QLabel("")
-        self.progress_lbl.setTextFormat(Qt.TextFormat.PlainText)
-        self.progress_lbl.setStyleSheet(_GATE_NOTE_STYLE)
+        self.progress_lbl = _label("", _GATE_NOTE_STYLE)
         summary_row.addWidget(self.progress_lbl)
         self.details_toggle = QPushButton("hide details")
         self.details_toggle.setFlat(True)
@@ -1889,12 +1839,8 @@ class SimCard(QFrame):
         grid.setVerticalSpacing(1)
         self._values: Dict[str, QLabel] = {}
         for i, (key, label) in enumerate(self._FIELDS):
-            key_lbl = QLabel(label)
-            key_lbl.setStyleSheet(_GATE_NOTE_STYLE)
-            val_lbl = QLabel("-")
-            val_lbl.setTextFormat(Qt.TextFormat.PlainText)
-            val_lbl.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-            val_lbl.setStyleSheet(_GATE_BODY_STYLE)
+            key_lbl = _label(label, _GATE_NOTE_STYLE)
+            val_lbl = _label("-", _GATE_BODY_STYLE, select=True)
             grid.addWidget(key_lbl, i, 0)
             grid.addWidget(val_lbl, i, 1)
             self._values[key] = val_lbl
@@ -1902,10 +1848,7 @@ class SimCard(QFrame):
         body_lay.addLayout(grid)
         self._set("engine", engine_label)
 
-        self.error_lbl = QLabel("")
-        self.error_lbl.setWordWrap(True)
-        self.error_lbl.setTextFormat(Qt.TextFormat.PlainText)
-        self.error_lbl.setStyleSheet(_ERROR_LINE_STYLE)
+        self.error_lbl = _label("", _ERROR_LINE_STYLE, wrap=True)
         self.error_lbl.setVisible(False)
         body_lay.addWidget(self.error_lbl)
 
@@ -2056,10 +1999,7 @@ class RegionChoiceCard(QFrame):
 
         # Collapsed one-line summary (hidden until answered) + "show details".
         summary_row = QHBoxLayout()
-        self.summary_lbl = QLabel("")
-        self.summary_lbl.setWordWrap(True)
-        self.summary_lbl.setTextFormat(Qt.TextFormat.PlainText)
-        self.summary_lbl.setStyleSheet(_REGION_TITLE_STYLE)
+        self.summary_lbl = _label("", _REGION_TITLE_STYLE, wrap=True)
         summary_row.addWidget(self.summary_lbl, 1)
         self.details_toggle = QPushButton("show details")
         self.details_toggle.setFlat(True)
@@ -2078,16 +2018,12 @@ class RegionChoiceCard(QFrame):
         lay.setSpacing(3)
         outer.addWidget(self._body)
 
-        title_lbl = QLabel("Narrow the region?")
-        title_lbl.setStyleSheet(_REGION_TITLE_STYLE)
+        title_lbl = _label("Narrow the region?", _REGION_TITLE_STYLE)
         lay.addWidget(title_lbl)
 
         if request.message:
             # The agent's own prompt, VERBATIM.
-            msg_lbl = QLabel(request.message)
-            msg_lbl.setWordWrap(True)
-            msg_lbl.setTextFormat(Qt.TextFormat.PlainText)
-            msg_lbl.setStyleSheet(_GATE_BODY_STYLE)
+            msg_lbl = _label(request.message, _GATE_BODY_STYLE, wrap=True)
             lay.addWidget(msg_lbl)
 
         # The whole-state option (CHECKED by default -- the honest already-
@@ -2114,9 +2050,7 @@ class RegionChoiceCard(QFrame):
         btn_row.addWidget(self.whole_btn)
         lay.addLayout(btn_row)
 
-        self.result_lbl = QLabel("")
-        self.result_lbl.setWordWrap(True)
-        self.result_lbl.setStyleSheet(_GATE_NOTE_STYLE)
+        self.result_lbl = _label("", _GATE_NOTE_STYLE, wrap=True)
         self.result_lbl.setVisible(False)
         lay.addWidget(self.result_lbl)
 
@@ -2204,10 +2138,7 @@ class SpatialInputCard(QFrame):
 
         # Collapsed one-line summary (hidden until answered) + "show details".
         summary_row = QHBoxLayout()
-        self.summary_lbl = QLabel("")
-        self.summary_lbl.setWordWrap(True)
-        self.summary_lbl.setTextFormat(Qt.TextFormat.PlainText)
-        self.summary_lbl.setStyleSheet(_SPATIAL_TITLE_STYLE)
+        self.summary_lbl = _label("", _SPATIAL_TITLE_STYLE, wrap=True)
         summary_row.addWidget(self.summary_lbl, 1)
         self.details_toggle = QPushButton("show details")
         self.details_toggle.setFlat(True)
@@ -2226,23 +2157,16 @@ class SpatialInputCard(QFrame):
         lay.setSpacing(3)
         outer.addWidget(self._body)
 
-        title_lbl = QLabel(request.title or "Pick a location on the map")
-        title_lbl.setWordWrap(True)
-        title_lbl.setTextFormat(Qt.TextFormat.PlainText)
-        title_lbl.setStyleSheet(_SPATIAL_TITLE_STYLE)
+        title_lbl = _label(request.title or "Pick a location on the map",
+                           _SPATIAL_TITLE_STYLE, wrap=True)
         lay.addWidget(title_lbl)
 
         if request.description:
-            desc_lbl = QLabel(request.description)
-            desc_lbl.setWordWrap(True)
-            desc_lbl.setTextFormat(Qt.TextFormat.PlainText)
-            desc_lbl.setStyleSheet(_GATE_BODY_STYLE)
+            desc_lbl = _label(request.description, _GATE_BODY_STYLE, wrap=True)
             lay.addWidget(desc_lbl)
 
         self.pick_btn: Optional[QPushButton] = None
-        self.status_lbl = QLabel("")
-        self.status_lbl.setWordWrap(True)
-        self.status_lbl.setStyleSheet(_GATE_NOTE_STYLE)
+        self.status_lbl = _label("", _GATE_NOTE_STYLE, wrap=True)
 
         pick_row = QHBoxLayout()
         self.pick_btn = QPushButton(_SPATIAL_PICK_LABEL[
@@ -2259,8 +2183,7 @@ class SpatialInputCard(QFrame):
         self.name_edit: Optional[QLineEdit] = None
         if request.mode == "point":
             name_row = QHBoxLayout()
-            name_lbl = QLabel("name")
-            name_lbl.setStyleSheet(_GATE_NOTE_STYLE)
+            name_lbl = _label("name", _GATE_NOTE_STYLE)
             name_row.addWidget(name_lbl)
             self.name_edit = QLineEdit(default_name)
             self.name_edit.setPlaceholderText("what to call this point")
@@ -2278,9 +2201,7 @@ class SpatialInputCard(QFrame):
         btn_row.addWidget(self.cancel_btn)
         lay.addLayout(btn_row)
 
-        self.result_lbl = QLabel("")
-        self.result_lbl.setWordWrap(True)
-        self.result_lbl.setStyleSheet(_GATE_NOTE_STYLE)
+        self.result_lbl = _label("", _GATE_NOTE_STYLE, wrap=True)
         self.result_lbl.setVisible(False)
         lay.addWidget(self.result_lbl)
 
@@ -2522,10 +2443,7 @@ class FormCard(QFrame):
         # Collapsed one-line summary (hidden until answered) + "show details" --
         # the GateCard affordance verbatim.
         summary_row = QHBoxLayout()
-        self.summary_lbl = QLabel("")
-        self.summary_lbl.setWordWrap(True)
-        self.summary_lbl.setTextFormat(Qt.TextFormat.PlainText)
-        self.summary_lbl.setStyleSheet(_FORM_TITLE_STYLE)
+        self.summary_lbl = _label("", _FORM_TITLE_STYLE, wrap=True)
         summary_row.addWidget(self.summary_lbl, 1)
         self.details_toggle = QPushButton("show details")
         self.details_toggle.setFlat(True)
@@ -2544,10 +2462,8 @@ class FormCard(QFrame):
         lay.setSpacing(3)
         outer.addWidget(self._body)
 
-        title_lbl = QLabel(sheet.title or f"Review the inputs for {sheet.workflow}")
-        title_lbl.setWordWrap(True)
-        title_lbl.setTextFormat(Qt.TextFormat.PlainText)
-        title_lbl.setStyleSheet(_FORM_TITLE_STYLE)
+        title_lbl = _label(sheet.title or f"Review the inputs for {sheet.workflow}",
+                           _FORM_TITLE_STYLE, wrap=True)
         lay.addWidget(title_lbl)
 
         lay.addWidget(self._grid(sheet.basic))
@@ -2575,10 +2491,7 @@ class FormCard(QFrame):
         btn_row.addWidget(self.cancel_btn)
         lay.addLayout(btn_row)
 
-        self.result_lbl = QLabel("")
-        self.result_lbl.setWordWrap(True)
-        self.result_lbl.setTextFormat(Qt.TextFormat.PlainText)
-        self.result_lbl.setStyleSheet(_GATE_NOTE_STYLE)
+        self.result_lbl = _label("", _GATE_NOTE_STYLE, wrap=True)
         self.result_lbl.setVisible(False)
         lay.addWidget(self.result_lbl)
 
@@ -2599,13 +2512,10 @@ class FormCard(QFrame):
             i += 1
             if row.group and row.group != heading:
                 heading = row.group
-                group_lbl = QLabel(heading)
-                group_lbl.setStyleSheet(_FORM_TITLE_STYLE)
+                group_lbl = _label(heading, _FORM_TITLE_STYLE)
                 grid.addWidget(group_lbl, i, 0, 1, 3)
                 i += 1
-            name_lbl = QLabel(row.label)
-            name_lbl.setStyleSheet(_GATE_BODY_STYLE)
-            name_lbl.setToolTip(row.desc)
+            name_lbl = _label(row.label, _GATE_BODY_STYLE, tip=row.desc)
             grid.addWidget(name_lbl, i, 0)
 
             editor = QLineEdit(row.display())
@@ -2617,11 +2527,12 @@ class FormCard(QFrame):
             grid.addWidget(editor, i, 1)
             self._editors[row.name] = editor
 
-            badge = QLabel(row.origin or row.source_badge)
-            badge.setWordWrap(not row.origin)
-            badge.setStyleSheet(
-                _FORM_ORIGIN_CHIP_STYLE if row.origin else _FORM_BADGE_STYLE)
-            badge.setToolTip(row.source_badge if row.origin else (row.note or ""))
+            badge = _label(
+                row.origin or row.source_badge,
+                _FORM_ORIGIN_CHIP_STYLE if row.origin else _FORM_BADGE_STYLE,
+                wrap=not row.origin,
+                tip=row.source_badge if row.origin else (row.note or ""),
+            )
             grid.addWidget(badge, i, 2)
             if row.choices is not None:
                 i += 1
@@ -2650,11 +2561,7 @@ class FormCard(QFrame):
         if choice.loosened:
             lines.append(f"  the run states {choice.loosened} loosened, which "
                          "is the user's choice")
-        label = QLabel("\n".join(lines))
-        label.setWordWrap(True)
-        label.setTextFormat(Qt.TextFormat.PlainText)
-        label.setStyleSheet(_GATE_NOTE_STYLE)
-        return label
+        return _label("\n".join(lines), _GATE_NOTE_STYLE, wrap=True)
 
     @staticmethod
     def _editor_tooltip(row: gate.ParamRow) -> str:
