@@ -266,3 +266,63 @@ def test_a_point_the_service_does_not_reach_refuses_naming_it(
                [json.dumps({"t_z": -999999.0}).encode("utf-8")])
     lon, lat = ask["point"]
     assert f"({lon}, {lat})" in str(caught.value)
+
+
+#: The Great Lakes low water datum as a survey's own points spell it, and as
+#: VDatum serves it. A record counted from a chart datum names the reference
+#: SYSTEM the plane is expressed on as well as the plane.
+_LWD = "LWD_IGLD85"
+
+
+def _soundings(tmp_path, datum: str) -> str:
+    """A sounding layer whose every row states the survey's own zero."""
+    import json
+
+    path = tmp_path / "soundings.geojson"
+    path.write_text(json.dumps({
+        "type": "FeatureCollection",
+        "features": [
+            {"type": "Feature",
+             "geometry": {"type": "Point", "coordinates": [lon, 42.99]},
+             "properties": {"vertical_datum": datum, "depth_below_datum_m": 12.0}}
+            for lon in (-82.43, -82.42, -82.41)],
+    }))
+    return str(path)
+
+
+def test_a_record_stating_a_chart_datum_asks_for_the_chart_datum(tmp_path) -> None:
+    """The zero is the one the RECORD states, and a plane named on a system is
+    asked for as the plane: a low water datum and the geodetic zero it is
+    expressed on are metres apart, and the longer name is the measured one."""
+    from trid3nt_server.inputs.vertical_datum import offset_ask, record_datum
+
+    layer = _soundings(tmp_path, _LWD)
+    assert record_datum(layer) == _LWD
+    ask = offset_ask(layer, "NAVD88", at=[-82.424158, 42.986770])
+    assert ask["from_frame"] == "lwd_igld85"
+    assert ask["to_frame"] == "navd88"
+
+
+def test_a_record_stating_a_datum_no_service_serves_refuses_by_name(
+        tmp_path) -> None:
+    """A district's project datum is no VDatum frame: no offset row is owed, and
+    the alignment refuses naming the datum rather than laying one over the other."""
+    from trid3nt_server.inputs.vertical_datum import offset_ask, onto_frame
+
+    layer = _soundings(tmp_path, "SD (Columbia River Datum: CRD)")
+    assert offset_ask(layer, "NAVD88", at=[-122.669, 45.518]) is None
+    with pytest.raises(DatumError) as caught:
+        onto_frame(layer, "NAVD88")
+    assert caught.value.error_code == "DATUMS_DIFFER"
+    assert "Columbia River Datum" in str(caught.value)
+
+
+def test_a_record_on_the_runs_frame_is_read_on_it_and_not_shifted(
+        tmp_path) -> None:
+    """The alignment reads the zero the ROWS state, so a survey standing on the
+    run's own frame is aligned rather than refused as stating none."""
+    from trid3nt_server.inputs.vertical_datum import onto_frame
+
+    aligned = onto_frame(_soundings(tmp_path, "NAVD88"), "NAVD88")
+    assert (aligned.shift_m, aligned.note) == (0.0, "")
+    assert aligned.datum == "NAVD88"

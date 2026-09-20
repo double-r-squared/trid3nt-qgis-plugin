@@ -310,10 +310,14 @@ def onto_frame(source: Any, frame: Any, *, offset: Any = None,
     if not wanted:
         return Alignment(datum=here, shift_m=0.0, note="")
     onto = {"vertical_datum": wanted, "name": "the run's vertical frame"}
+    # A zero the RECORD carries is stated by its features and not by the thing
+    # holding them, so what is aligned says it out loud: a refusal that read the
+    # holder would say a survey states no datum while its every row states one.
+    stating = {"vertical_datum": here, "name": _label(source)} if here else source
     if not here or one_frame([here, wanted]):
-        return align(source, onto, code_prefix=code_prefix)
+        return align(stating, onto, code_prefix=code_prefix)
     bridge = published_offset(source) or offset_row(offset)
-    return align(source, onto, offset=bridge, code_prefix=code_prefix)
+    return align(stating, onto, offset=bridge, code_prefix=code_prefix)
 
 
 def offset_ask(source: Any, frame: Any, *, at: Any = None
@@ -355,8 +359,12 @@ def _served_frames() -> tuple[str, ...]:
 def _as_served(datum: str, served: Sequence[str]) -> str:
     """This stated datum as the frame name the fetch knows, or "".
 
-    A source states its zero in its own words, and a service takes one word."""
-    return next((name for name in served if names_frame(datum, name)), "")
+    A source states its zero in its own words, and a service takes one word: the
+    LONGEST frame the words name, because a chart datum names the system it is
+    expressed on - LWD_IGLD85 names IGLD85 - and the two are different surfaces,
+    a low water plane and a geodetic zero, metres apart on the lakes."""
+    naming = [name for name in served if names_frame(datum, name)]
+    return max(naming, key=len) if naming else ""
 
 
 def _point_of(source: Any, at: Any) -> tuple[float, float] | None:

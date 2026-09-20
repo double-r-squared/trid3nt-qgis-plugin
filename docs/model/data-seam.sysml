@@ -821,6 +821,16 @@ package DataSeam {
         the other, because a shift nobody measured is indistinguishable from a
         measurement to every reader downstream.
 
+        The zero is the one the RECORD states. A source whose every feature
+        carries its own says so on its coverage row in the per-record form
+        rather than stating nothing, and what is aligned states the zero the
+        rows state - a refusal that read the holder instead would say a survey
+        states no datum while its every row states one. A stated zero is asked
+        for by the FULLEST frame its words name: a chart datum names the
+        reference system it is expressed on, and a low water plane is not the
+        geodetic zero it is expressed on but a surface metres above it, so the
+        shorter name inside the longer is never what is measured.
+
         The same order holds wherever two surfaces meet before a slot does:
         the bed merge reads BOTH of its inputs onto the run's frame, each
         through the row the runtime declared for it - the same declaration a
@@ -1398,6 +1408,12 @@ package DataSeam {
         "tests/inputs/test_bed_merge.py::test_a_frame_no_offset_reaches_refuses_naming_both";
     verify requirement TheRunHasOneVerticalFrame by
         "tests/runtime/test_matched_slots.py::test_the_runtime_declares_the_offset_row_a_merge_source_owes";
+    verify requirement TheRunHasOneVerticalFrame by
+        "tests/inputs/test_vertical_datum.py::test_a_record_stating_a_chart_datum_asks_for_the_chart_datum";
+    verify requirement TheRunHasOneVerticalFrame by
+        "tests/inputs/test_vertical_datum.py::test_a_record_stating_a_datum_no_service_serves_refuses_by_name";
+    verify requirement TheRunHasOneVerticalFrame by
+        "tests/inputs/test_vertical_datum.py::test_a_record_on_the_runs_frame_is_read_on_it_and_not_shifted";
     verify requirement TheRunHasOneVerticalFrame by
         "tests/inputs/test_vertical_datum.py::test_a_footprint_missing_the_box_centre_is_asked_at_the_seed";
     verify requirement TheRunHasOneVerticalFrame by
