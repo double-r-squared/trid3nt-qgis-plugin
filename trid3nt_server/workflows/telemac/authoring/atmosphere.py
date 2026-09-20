@@ -125,7 +125,10 @@ _MAGNUS_A, _MAGNUS_B, _MAGNUS_C = 6.112, 17.62, 243.12
 
 #: The shortest record a table the engine interpolates between two rows can be,
 #: and the longest gap between two instants that still describes a diurnal cycle.
-_MIN_INSTANTS = 4
+#: What makes a record drivable is that it BRACKETS the run, which the read
+#: below judges; a floor above the two rows the engine reads between would
+#: refuse an hour-long run its own bracketing observations answer.
+_MIN_INSTANTS = 2
 _MAX_GAP_S = 6.0 * 3600.0
 
 #: The three slots one reported humidity column states, read together below
