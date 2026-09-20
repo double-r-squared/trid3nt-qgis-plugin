@@ -1,0 +1,68 @@
+{
+  "additionalProperties": false,
+  "description": "``layer-request``: one provider layer for the session to open, agent ->\nclient. The uri is the provider's OWN datasource string, already templated\nover the bbox and the row's ask; the session passes it through verbatim.",
+  "properties": {
+    "bbox": {
+      "maxItems": 4,
+      "minItems": 4,
+      "prefixItems": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "number"
+        }
+      ],
+      "title": "Bbox",
+      "type": "array"
+    },
+    "key": {
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Key",
+      "type": "string"
+    },
+    "mode": {
+      "enum": [
+        "open",
+        "materialise"
+      ],
+      "title": "Mode",
+      "type": "string"
+    },
+    "name": {
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Name",
+      "type": "string"
+    },
+    "provider": {
+      "maxLength": 64,
+      "minLength": 1,
+      "title": "Provider",
+      "type": "string"
+    },
+    "uri": {
+      "maxLength": 8192,
+      "minLength": 1,
+      "title": "Uri",
+      "type": "string"
+    }
+  },
+  "required": [
+    "key",
+    "provider",
+    "uri",
+    "name",
+    "bbox",
+    "mode"
+  ],
+  "title": "LayerRequestPayload",
+  "type": "object"
+}

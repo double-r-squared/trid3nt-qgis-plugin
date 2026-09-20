@@ -963,6 +963,20 @@ def test_every_a3_a4_a4b_payload_round_trips(session_id: str) -> None:
         "tool-choice": lambda: ws.ToolChoicePayload(
             request_id=new_ulid(), tool_name="probe_point"
         ),
+        # the borrowed-provider pair - the daemon asks the session to open one
+        # provider layer, the session answers with the store object or the
+        # provider's own text.
+        "layer-request": lambda: ws.LayerRequestPayload(
+            key="4f1c2a9b",
+            provider="arcgisfeatureserver",
+            uri="crs='EPSG:4326' url='https://example.org/FeatureServer/0'",
+            name="drought",
+            bbox=(-114.0, 31.3, -109.0, 37.0),
+            mode="open",
+        ),
+        "layer-response": lambda: ws.LayerResponsePayload(
+            key="4f1c2a9b", uri="s3://bucket/user-uploads/01J/4f1c2a9b.gpkg"
+        ),
         # tool-io — raw args + function_response sidecar for the tool-card
         # expander (tool-card-expand-output spec).
         "tool-io": lambda: ws.ToolIoPayload(

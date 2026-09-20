@@ -1,0 +1,43 @@
+{
+  "additionalProperties": false,
+  "description": "``layer-response``: what the session did with it, client -> agent.\n``uri`` is the staged store object a materialised row was uploaded to, and is\nunset for an opened overlay; ``error`` is the provider's own text.",
+  "properties": {
+    "error": {
+      "anyOf": [
+        {
+          "maxLength": 16384,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Error"
+    },
+    "key": {
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Key",
+      "type": "string"
+    },
+    "uri": {
+      "anyOf": [
+        {
+          "maxLength": 2048,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Uri"
+    }
+  },
+  "required": [
+    "key"
+  ],
+  "title": "LayerResponsePayload",
+  "type": "object"
+}

@@ -57,6 +57,10 @@ from .message import (
     ToolDeclaration,
     ToolResponse,
 )
+from .ws import (
+    LayerRequestPayload,
+    LayerResponsePayload,
+)
 from .processing_contracts import (
     CodeExecRequestPayload,
     ProcessingRequestPayload,
@@ -98,6 +102,9 @@ __all__ = [
     # chart emission
     "ChartEmissionPayload",
     "SessionChartRecord",
+    # the borrowed-provider pair
+    "LayerRequestPayload",
+    "LayerResponsePayload",
     # the session processing pair and the code approval card
     "CodeExecRequestPayload",
     "ProcessingRequestPayload",

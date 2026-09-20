@@ -56,6 +56,10 @@ __all__ = [
     "ToolCandidate",
     "ToolCandidatesPayload",
     "ToolChoicePayload",
+    # the borrowed-provider pair
+    "LayerMode",
+    "LayerRequestPayload",
+    "LayerResponsePayload",
     # map-command args
     "LoadLayerArgs",
     "ZoomToArgs",
@@ -707,12 +711,61 @@ class ToolChoicePayload(GraceModel):
 
 
 
+# layer-request / layer-response --------------------------------------------- #
+
+# The twin of the processing pair: the daemon borrows the session's QGIS data
+# providers for a source QGIS can open, exactly as it borrows Processing. The
+# daemon keeps the journal, the store and the packet; the session only opens the
+# provider layer and, for a materialised row, exports and uploads it.
+
+#: What the session does with the opened layer. ``open`` leaves it on the map as
+#: context and answers at once; ``materialise`` exports it and uploads it, so the
+#: daemon can land it in the store as any fetch does.
+LayerMode = Literal["open", "materialise"]
+
+
+class LayerRequestPayload(GraceModel):
+    """``layer-request``: one provider layer for the session to open, agent ->
+    client. The uri is the provider's OWN datasource string, already templated
+    over the bbox and the row's ask; the session passes it through verbatim."""
+
+    MESSAGE_TYPE: ClassVar[str] = "layer-request"
+
+    #: The row-shaped cache key. It names the uploaded object and correlates the
+    #: pair, so a response can only answer the request that asked.
+    key: str = Field(min_length=1, max_length=200)
+    #: The QGIS data provider by its registry name (arcgisfeatureserver, wms,
+    #: wcs, gdal, ...).
+    provider: str = Field(min_length=1, max_length=64)
+    #: The datasource string that provider takes, verbatim.
+    uri: str = Field(min_length=1, max_length=8192)
+    #: What the layer is called on the map.
+    name: str = Field(min_length=1, max_length=200)
+    #: What was asked about: the camera on an opened overlay, the export window
+    #: on a materialised row.
+    bbox: BBox
+    mode: LayerMode
+
+
+class LayerResponsePayload(GraceModel):
+    """``layer-response``: what the session did with it, client -> agent.
+    ``uri`` is the staged store object a materialised row was uploaded to, and is
+    unset for an opened overlay; ``error`` is the provider's own text."""
+
+    MESSAGE_TYPE: ClassVar[str] = "layer-response"
+
+    key: str = Field(min_length=1, max_length=200)
+    uri: str | None = Field(default=None, max_length=2048)
+    error: str | None = Field(default=None, max_length=16 * 1024)
+
+
 CLIENT_TO_AGENT_PAYLOADS: dict[str, type[GraceModel]] = {
     UserMessagePayload.MESSAGE_TYPE: UserMessagePayload,
     CancelPayload.MESSAGE_TYPE: CancelPayload,
     SessionResumePayload.MESSAGE_TYPE: SessionResumePayload,
     SpatialInputResponsePayload.MESSAGE_TYPE: SpatialInputResponsePayload,
     ToolChoicePayload.MESSAGE_TYPE: ToolChoicePayload,
+    LayerResponsePayload.MESSAGE_TYPE: LayerResponsePayload,
 }
 
 # The per-module payload fragments are splatted into the routing dicts HERE:
@@ -748,6 +801,7 @@ AGENT_TO_CLIENT_PAYLOADS: dict[str, type[GraceModel]] = {
     ErrorPayload.MESSAGE_TYPE: ErrorPayload,
     SpatialInputRequestPayload.MESSAGE_TYPE: SpatialInputRequestPayload,
     ToolCandidatesPayload.MESSAGE_TYPE: ToolCandidatesPayload,
+    LayerRequestPayload.MESSAGE_TYPE: LayerRequestPayload,
 }
 AGENT_TO_CLIENT_PAYLOADS.update(SECRET_AGENT_TO_CLIENT_PAYLOADS)
 AGENT_TO_CLIENT_PAYLOADS[
