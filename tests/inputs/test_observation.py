@@ -74,7 +74,7 @@ def test_a_station_series_is_read_at_its_last_sample() -> None:
                               "time_series_csv":
                                   "2026-09-05T00:00Z,175.10\n"
                                   "2026-09-05T01:00Z,175.14\nbad row\n"}}
-    found = observation(_fc(station), measures="a water level")
+    found = observation(_fc(station), caption="a water level")
     assert found.value == pytest.approx(175.14)
     assert found.sampled == "2026-09-05T01:00Z"
     assert found.site_id == "9014"
@@ -88,7 +88,7 @@ def test_a_distance_the_fetch_measured_is_preferred() -> None:
 def test_nothing_that_reports_refuses_typed() -> None:
     with pytest.raises(ObservationError) as caught:
         observation(_fc(_site("A", -122.68, 45.51, None)),
-                    measures="a water temperature", label="the sample layer",
+                    caption="a water temperature", label="the sample layer",
                     code="TELEMAC_WATER_TEMPERATURE_UNMEASURED")
     assert caught.value.error_code == "TELEMAC_WATER_TEMPERATURE_UNMEASURED"
     assert "a water temperature" in str(caught.value)
@@ -113,7 +113,7 @@ def test_nothing_sampled_in_the_window_refuses_rather_than_reaching_back() -> No
                       result_date="1974-05-10"))
     with pytest.raises(ObservationError) as caught:
         observation(layer, near=[-122.6698, 45.5185], at="2024-01-14T12:00:00Z",
-                    measures="a water temperature", label="the sample layer",
+                    caption="a water temperature", label="the sample layer",
                     code="TELEMAC_WATER_TEMPERATURE_UNMEASURED")
     assert caught.value.error_code == "TELEMAC_WATER_TEMPERATURE_UNMEASURED"
     assert "within 30 days" in str(caught.value)
@@ -156,7 +156,7 @@ def test_the_whole_window_is_kept_beside_the_reading() -> None:
                                   "2026-09-05T01:00Z,200\n"
                                   "2026-09-05T02:00Z,300\n"}}
     found = observation(_fc(station), field="discharge_cfs", to_units="m3/s",
-                        measures="a streamflow")
+                        caption="a streamflow")
     assert str(found.series) == "series, 3 points over the window"
     assert found.series.units == "m3/s"
     assert found.series.times_s == (0.0, 3600.0, 7200.0)
@@ -172,7 +172,7 @@ def test_the_window_is_read_in_the_unit_the_row_states_for_it() -> None:
                                   "2026-09-05T00:00Z,100\n"
                                   "2026-09-05T01:00Z,200\n"}}
     found = observation(_fc(station), field="discharge_cfs", to_units="m3/s",
-                        record_units="ft3/s", measures="a streamflow")
+                        record_units="ft3/s", caption="a streamflow")
     assert found.series.units == "m3/s"
     assert found.series.values[0] == pytest.approx(2.8316846592)
 
@@ -194,7 +194,7 @@ def test_the_run_opens_at_its_own_moment_inside_the_record() -> None:
                                   "2026-09-13T23:00Z,300\n"}}
     found = observation(_fc(station), field="discharge_cfs", to_units="m3/s",
                         at="2026-09-13T22:00:00Z", window_s=3600.0,
-                        measures="a streamflow")
+                        caption="a streamflow")
     assert found.series.times_s == (-3600.0, 0.0, 3600.0)
 
 
@@ -210,7 +210,7 @@ def test_a_record_that_stops_before_the_run_does_refuses_naming_the_nearest() ->
     with pytest.raises(ObservationError) as caught:
         observation(_fc(station), field="discharge_cfs", to_units="m3/s",
                     at="2026-09-13T21:30:00Z", window_s=172800.0,
-                    measures="a streamflow", label="the gauge")
+                    caption="a streamflow", label="the gauge")
     assert caught.value.error_code == "OBSERVATION_WINDOW_UNCOVERED"
     assert "2026-09-13T22:00" in str(caught.value)
     assert "window loosened" in str(caught.value)
@@ -226,7 +226,7 @@ def test_a_window_in_no_stated_unit_refuses_rather_than_reading_the_slot_s() -> 
                                   "2026-09-05T01:00Z,2000\n"}}
     with pytest.raises(ObservationError) as caught:
         observation(_fc(station), field="discharge_cfs", to_units="m3/s",
-                    measures="a streamflow")
+                    caption="a streamflow")
     assert caught.value.error_code == "OBSERVATION_UNIT_UNSTATED"
 
 
@@ -240,7 +240,7 @@ def test_the_coverage_row_s_column_unit_is_what_a_bare_record_is_read_in() -> No
     found = observation(_fc(station), field="discharge_cfs", to_units="m3/s",
                         column_units={"discharge_cfs": "ft3/s",
                                       "time_series_csv": "ft3/s"},
-                        measures="a streamflow")
+                        caption="a streamflow")
     assert found.value == pytest.approx(56.633693184)
     assert found.series.units == "m3/s"
     assert found.series.values[-1] == pytest.approx(56.633693184)
@@ -266,7 +266,7 @@ def test_a_gage_height_reaches_the_run_s_frame_over_the_gauge_s_own_zero() -> No
                                       "stage_series_csv": "ft",
                                       "gauge_datum_ft": "ft"},
                         to_units="m", to_datum="NAVD88",
-                        measures="a water-surface elevation")
+                        caption="a water-surface elevation")
     assert found.value == pytest.approx(40.6 * 0.3048)
     assert found.datum == "NAVD88"
     assert found.series.values[0] == pytest.approx((3.1 + 37.2) * 0.3048)
@@ -278,5 +278,5 @@ def test_a_gauge_that_publishes_no_zero_refuses_rather_than_reading_a_height() -
                     above_field="gauge_datum_ft",
                     column_units={"gage_height_ft": "ft"},
                     to_units="m", to_datum="NAVD88",
-                    measures="a water-surface elevation")
+                    caption="a water-surface elevation")
     assert caught.value.error_code == "OBSERVATION_GAUGE_ZERO_UNSTATED"

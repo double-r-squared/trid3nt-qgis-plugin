@@ -35,6 +35,7 @@ __all__ = [
 #: source that measures two things carries two rows rather than a hybrid word.
 DATA_CLASSES = (
     "bathymetry",
+    "channel survey",
     "terrain",
     "hydrography",
     "bed material",
@@ -55,6 +56,7 @@ DATA_CLASSES = (
 
 DataClass = Literal[
     "bathymetry",
+    "channel survey",
     "terrain",
     "hydrography",
     "bed material",

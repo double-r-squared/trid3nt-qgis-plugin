@@ -35,10 +35,10 @@ from trid3nt_server.gates.input_review import (
 from trid3nt_contracts.coverage import CoverageExtent, SourceChoice
 
 from .data import (
-    BED, DISCHARGE, DOMAIN, LEVEL, LINE, OBSERVATION, RUNS, CoversAOI, DataDecl,
+    BED, DISCHARGE, DOMAIN, LEVEL, LINE, OBSERVE, RUNS, CoversAOI, DataDecl,
     Producer)
 from trid3nt_server.tools.search.match import (
-    Need, ask_for, dropped_from, instant, match, sources_with_coverage)
+    Need, ask_for, base_ask, dropped_from, instant, match, sources_with_coverage)
 from .domain import Domain, bind_domain, current_domain, domain_from_result, reset_domain
 from .errors import (
     PlanValidationError,
@@ -141,6 +141,8 @@ async def interpret(
     supplied: Mapping[str, Any] | None = None,
     continued: str | None = None,
     window_s: float | None = None,
+    slot_units: Mapping[str, str] | None = None,
+    captions: Mapping[str, str] | None = None,
 ) -> RunResult:
     """Validate, then walk the plan. The only place a declared workflow executes."""
     validate_plan(plan, declared_params, data)
@@ -161,7 +163,9 @@ async def interpret(
                picks={str(k): str(v) for k, v in dict(picks or {}).items()},
                ledger=ledger,
                resume=resume, supplied=dict(supplied or {}), workflow=plan.name,
-               continued=continued, window_s=window_s)
+               continued=continued, window_s=window_s,
+               slot_units=dict(slot_units or {}),
+               captions=dict(captions or {}))
     out = RunResult(value=None, entries=entries, params=params,
                     keywords=dict(env.keywords))
     token = bind_domain(domain)
@@ -320,6 +324,13 @@ class _Env:
     #: the WINDOW a matched series source has to cover, so a run longer than the
     #: record refuses rather than opening on a record that stops early.
     window_s: float | None = None
+    #: The UNIT each slot's value is converted to, by role - the unit of the
+    #: keyword that role fills, which the transform fixes. No row states one.
+    slot_units: Mapping[str, str] = field(default_factory=dict)
+    #: What the template CALLS each thing it publishes or measures, by published
+    #: variable and by DATA row name. A measured row's caption is the noun the
+    #: run's refusals and its journal line are written about.
+    captions: Mapping[str, str] = field(default_factory=dict)
 
 
 def _data_step_label(name: str) -> str:
@@ -419,14 +430,14 @@ async def _produce(env: _Env, decl: DataDecl) -> Any:
     label = _data_step_label(decl.name)
     if decl.is_context:
         return await _context(env, decl, label)
-    answered, value = await _walk_ladder(env, producer, label)
-    record = _record_for(decl.name, answered.runner, value,
-                         inputs_key=inputs_digest(answered.kwargs))
+    kwargs, value = await _produced(env, producer, label)
+    record = _record_for(decl.name, producer.runner, value,
+                         inputs_key=inputs_digest(kwargs))
     env.data_records.append(dataclasses.replace(
         record, index=-1, node=_data_step_label(decl.name)))
     if env.ledger is not None:
         await env.ledger.record_data(decl.name, record)
-    return await _ingested(env, decl, value, answered.runner)
+    return await _ingested(env, decl, value, producer.runner)
 
 
 async def _matched(env: _Env, decl: DataDecl) -> Any:
@@ -439,11 +450,12 @@ async def _matched(env: _Env, decl: DataDecl) -> Any:
         return await _ingested(env, decl, await _matched_bed(env, decl))
     choice, value = await _probe(env, decl, decl.data_class, decl.name)
     if value is None:
-        if decl.is_optional:
-            # An OPTIONAL slot nothing measured is an absence the run states,
-            # the same absence a slot nobody filled is: the refusal below is for
-            # a slot the run cannot stand without.
-            env.absences.append(choice.sentence)
+        if decl.is_optional or decl.is_context:
+            # A slot nothing measured is an absence the run STATES - the run's
+            # own sentence, and the row's beside it where the row wrote one. The
+            # refusal below is for a slot the run cannot stand without.
+            env.absences.append(choice.sentence if decl.is_optional else
+                                f"{decl.context_sentence} ({choice.sentence})")
             return None
         raise StepFailedError(choice.sentence, error_code="DATA_NEED_UNMATCHED",
                               step=_data_step_label(decl.name))
@@ -458,8 +470,16 @@ async def _matched_bed(env: _Env, decl: DataDecl) -> Any:
     before the merge reads it; with no measurement over this domain the terrain
     is the whole bed, which is what the sheet then says."""
     _choice, terrain = await _probe(env, decl, "terrain", f"{decl.name} terrain")
-    choice, measured = await _probe(env, decl, "bathymetry",
-                                    f"{decl.name} bathymetry")
+    if decl.data_class == "terrain":
+        # A CATCHMENT is dry ground: the terrain is the whole bed and there is
+        # no measurement under the water to lay over it.
+        if terrain is None:
+            raise StepFailedError(
+                _choice.sentence, error_code="DATA_NEED_UNMATCHED",
+                step=_data_step_label(decl.name))
+        return terrain
+    choice, measured = await _probe(env, decl, decl.data_class,
+                                    f"{decl.name} {decl.data_class}")
     if measured is None:
         if terrain is None:
             raise StepFailedError(
@@ -470,7 +490,7 @@ async def _matched_bed(env: _Env, decl: DataDecl) -> Any:
         measured = await _produce(env, _runtime_row(
             env, f"{decl.name}_surveyed", "derive_survey_surface",
             {"points": measured, "value_field": _value_column(choice.picked,
-                                                              "bathymetry"),
+                                                              decl.data_class),
              "resolution_m": _mesh_m(env)}))
     if terrain is None:
         return measured
@@ -642,21 +662,14 @@ async def _ask_for(env: _Env, choice: SourceChoice,
     Every source states where it wants the place - a box or a seed - and a
     series source states the window as two dates; what the matched ROW adds to
     that is the match's to say, so the ask closes through it."""
-    spec = _spec_of(choice.picked)
-    ask: dict[str, Any] = {"purpose": decl.name.replace("_", " ")}
     dom = current_domain()
-    if "bbox" in spec.params and dom is not None and dom.bbox:
-        ask["bbox"] = _around(dom.bbox, _mesh_m(env))
     lon, lat = await _place(env, decl)
-    if "seed_point" in spec.params and lon is not None:
-        ask["seed_point"] = [lon, lat]
     opens = env.params.value_of("event_time") if env.params else None
-    if opens and "start_date" in spec.params and "end_date" in spec.params:
-        ask["start_date"] = str(opens)[:10]
-        ask["end_date"] = (_closes(opens, env.window_s) or str(opens))[:10]
-    elif opens and "valid_time" in spec.params:
-        ask["valid_time"] = str(opens)
-    return ask_for(choice, ask, lon, lat)
+    return ask_for(choice, base_ask(
+        choice.picked, decl.name.replace("_", " "),
+        _around(dom.bbox, _mesh_m(env)) if dom is not None and dom.bbox else None,
+        lon, lat, str(opens) if opens else None,
+        _closes(opens, env.window_s)), lon, lat)
 
 
 def _around(bbox: Sequence[float], mesh_m: float | None) -> list[float]:
@@ -720,6 +733,9 @@ async def _ingested(env: _Env, decl: DataDecl, value: Any,
     from trid3nt_server.inputs.slots import ingest_slot
 
     coercion = await _bind_value(dict(decl.coercion), env)
+    stated = str(coercion.pop("measures", "") or "")
+    coercion.pop("opens", None)
+    coercion.update(_what_the_run_calls_it(env, decl, stated))
     coercion.update(await _on_the_run_s_frame(env, decl, value))
     coercion.update(_what_the_record_reports(env, decl, runner))
     ingested = await asyncio.to_thread(ingest_slot, decl.role, value,
@@ -734,6 +750,25 @@ async def _ingested(env: _Env, decl: DataDecl, value: Any,
     return ingested
 
 
+def _what_the_run_calls_it(env: _Env, decl: DataDecl,
+                           stated: str) -> dict[str, Any]:
+    """The UNIT this slot converts to and the NOUN the run says it in.
+
+    Neither is a row's to state: the unit is the one the keyword this role fills
+    is read in, fixed by the transform that writes it, and the noun is the
+    template's caption for the row - the same word the sheet and the published
+    variable are captioned with. A role the workflow states no unit for is read
+    in the unit the record was measured in."""
+    told: dict[str, Any] = {}
+    unit = env.slot_units.get(decl.role)
+    if unit and not decl.coercion.get("to_units"):
+        told["to_units"] = unit
+    caption = env.captions.get(decl.name) or stated
+    if caption:
+        told["caption"] = str(caption)
+    return told
+
+
 def _what_the_record_reports(env: _Env, decl: DataDecl,
                              runner: str) -> dict[str, Any]:
     """What an OBSERVATION slot is told about the record it was handed.
@@ -744,7 +779,7 @@ def _what_the_record_reports(env: _Env, decl: DataDecl,
     slot wanted. The moment the run opens at and how long it covers are the
     run's, so the series is placed on the run's clock and a record that stops
     early refuses."""
-    if decl.role not in (OBSERVATION, LEVEL, DISCHARGE):
+    if decl.role not in (OBSERVE, LEVEL, DISCHARGE):
         return {}
     told: dict[str, Any] = {"window_s": env.window_s}
     rows = list(getattr(_spec_of(runner), "coverage", ())) if runner else []
@@ -832,12 +867,12 @@ async def _context(env: _Env, decl: DataDecl, label: str) -> Any:
                     "asked; the run continues", decl.name, unasked)
         return None
     try:
-        answered, value = await _walk_ladder(env, decl.producer, label)
+        kwargs, value = await _produced(env, decl.producer, label)
         # The ingestion is INSIDE the absence: a source that answered with rows
         # its slot finds nothing usable in - sites that report another
         # characteristic, a survey with no soundings - held nothing for this run
         # either, and a context row says so rather than refusing.
-        ingested = await _ingested(env, decl, value, answered.runner)
+        ingested = await _ingested(env, decl, value, decl.producer.runner)
     except asyncio.CancelledError:
         raise
     except Exception as exc:  # noqa: BLE001 - any empty source is the absence
@@ -849,8 +884,8 @@ async def _context(env: _Env, decl: DataDecl, label: str) -> Any:
         logger.info("data %s is CONTEXT and its source held nothing (%s); the run "
                     "continues", decl.name, exc)
         return None
-    record = _record_for(decl.name, answered.runner, value,
-                         inputs_key=inputs_digest(answered.kwargs))
+    record = _record_for(decl.name, decl.producer.runner, value,
+                         inputs_key=inputs_digest(kwargs))
     env.data_records.append(dataclasses.replace(
         record, index=-1, node=label))
     if env.ledger is not None:
@@ -878,39 +913,15 @@ def _malformed_ask(exc: BaseException) -> bool:
     return False
 
 
-async def _walk_ladder(env: _Env, producer: Producer,
-                       label: str) -> tuple[Producer, Any]:
-    """Call the producer, then its declared rungs in order -> the one that ANSWERED.
-    Primary first, each declared rung after it; the last rung's failure is what the
-    run reports, and the answering rung is what the ledger record's ``runner`` names."""
-    rungs = (producer, *producer.ladder_rungs)
-    failures: list[str] = []
-    for index, rung in enumerate(rungs):
-        kwargs = await _bind(dict(rung.kwargs), env, label)
-        try:
-            async with substep(current_emitter(), rung.runner.rsplit(".", 1)[-1]):
-                value = await _call_runner(rung.runner, kwargs, label)
-        except asyncio.CancelledError:
-            raise
-        except Exception as exc:  # noqa: BLE001 - the next rung is the response
-            if index == len(rungs) - 1:
-                raise
-            failures.append(f"{rung.runner} refused "
-                            f"{getattr(exc, 'error_code', None) or type(exc).__name__}")
-            logger.warning("%s rung %s failed (%s); falling to %s",
-                           label, rung.runner, exc, rungs[index + 1].runner)
-            continue
-        if index:
-            # This is the one place that knows a rung fired, and a substitution
-            # between DATASETS is a fact about the answer: it goes on the run's
-            # own journal, where the packet carries it, rather than into a log
-            # line that dies with the process.
-            journal_note(f"a DIFFERENT dataset answered {label}: "
-                         + "; ".join(failures) + f"; {rung.runner} answered.")
-        return rung, value
-    raise StepFailedError(  # unreachable: the last rung re-raises above
-        f"{label}: no rung answered.", error_code="DATA_LADDER_EXHAUSTED",
-        step=label)
+async def _produced(env: _Env, producer: Producer,
+                    label: str) -> tuple[dict[str, Any], Any]:
+    """Call one producer -> the reads it was called with, and what it answered.
+
+    The reads come back because they are what the ledger record is keyed on, and
+    binding them twice would ask the plan for the same values twice."""
+    kwargs = await _bind(dict(producer.kwargs), env, label)
+    async with substep(current_emitter(), producer.runner.rsplit(".", 1)[-1]):
+        return kwargs, await _call_runner(producer.runner, kwargs, label)
 
 
 def _validate_supplied(env: _Env, decl: DataDecl, supplied: Any,

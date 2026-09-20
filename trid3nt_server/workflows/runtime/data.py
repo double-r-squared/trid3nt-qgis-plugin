@@ -21,8 +21,9 @@ __all__ = [
     "EXTENT",
     "LEVEL",
     "LINE",
-    "OBSERVATION",
+    "OBSERVE",
     "RUNS",
+    "WEATHER",
     "CoversAOI",
     "DOMAIN",
     "Data",
@@ -35,10 +36,13 @@ __all__ = [
     "tool",
 ]
 
-#: The three ENGINE-NEUTRAL slots a solved run stands on, named as ROLES rather
-#: than as rows: the closed polygon the equations are solved over, the elevation
-#: every node of it carries, and the named stretches of its edge. A raster engine
-#: fills the same three with a grid, so no word here belongs to an engine.
+#: THE RESERVED ROW NAMES. A row's NAME is its slot: these are the names
+#: :data:`trid3nt_server.inputs.slots.SLOTS` keys the role behaviour off, spelled
+#: here so the runtime can compare against them without importing the ingestions.
+#: The three a solved run stands on are engine-neutral - the closed polygon the
+#: equations are solved over, the elevation every node of it carries, and the
+#: named stretches of its edge - and a raster engine fills the same three with a
+#: grid, so no word here belongs to an engine.
 DOMAIN = "domain"
 BED = "bed"
 RUNS = "runs"
@@ -49,32 +53,36 @@ RUNS = "runs"
 LINE = "line"
 
 #: The slot a run OPENS ON: one measured value read off whatever reports it near
-#: this domain, in the unit the keyword reads. Engine-neutral for the same reason
-#: the three above are - somebody measured something somewhere at some time - and
-#: the value it yields is reachable as ``Ref("<row>.value")``.
-OBSERVATION = "observation"
+#: this domain, in the unit the keyword the role fills reads. Engine-neutral for
+#: the same reason the three above are - somebody measured something somewhere at
+#: some time - and the value it yields is reachable as ``Ref("observe.value")``.
+OBSERVE = "observe"
 
 #: The two observations a solve READS BY ROLE rather than by name: the elevation
 #: the water surface stands at, and the flow an inflow run carries. Both are
-#: observations and ingest as one; they are their own roles because the workflow
+#: observations and ingest as one; they are their own names because the workflow
 #: has to know which row is which to build the stages a body of water needs.
 LEVEL = "level"
 DISCHARGE = "discharge"
 
 #: The RECTANGLE a question is asked inside: the window a domain is cut out of,
 #: the grid a raster engine solves on. Not a domain - it has no shoreline - so it
-#: is its own role, and the canvas offers a box for it.
+#: is its own name, and the canvas offers a box for it.
 EXTENT = "extent"
 
+#: The record of the air over the domain, read by the composite that puts it on
+#: the run's own clock. Nothing ingests it on the way in; the name is reserved so
+#: a row that carries weather is the row that composite reads.
+WEATHER = "weather"
 
-# A ROW STATES A NEED OR NAMES A PRODUCER; RETRIEVAL NEVER PICKS ONE. Text
-# relevance cannot judge the facts that decide whether a source can carry a
-# solve: its cell, its coverage over this domain, its window, its datum. A
-# retrieved source that reads plausibly and resolves wrong produces a run that
-# completes and answers a different question. So a row either NAMES its
-# producer, with its ladder and its transforms, or states the CLASS it needs and
-# the match reads those facts off every fetcher's own coverage row. Search is
-# how a MODEL finds a tool to call; a slot is filled from declarations.
+
+# A ROW STATES THE CLASS IT NEEDS; IT NEVER NAMES A FETCHER. Text relevance
+# cannot judge the facts that decide whether a source can carry a solve - its
+# cell, its coverage over this domain, its window, its datum - and a NAMED
+# fetcher is a question frozen against one source that may hold nothing here. So
+# a runtime row states a need and the match reads those facts off every
+# fetcher's own coverage row. Search is how a MODEL finds a tool to call; a slot
+# is filled from declarations.
 
 class _CoversAOI:
     """Validator sentinel: a domain must be BOUND and have an extent before a
@@ -143,7 +151,6 @@ class Producer(Row):
 
     runner: str
     kwargs: Mapping[str, Any] = field(default_factory=lambda: MappingProxyType({}))
-    ladder_rungs: tuple["Producer", ...] = ()
     supplied_uri: str | None = None
     supplied_validate: Any = None
     #: Marked ``.supplied()``: the caller's own artifact stands in place of the
@@ -166,21 +173,6 @@ class Producer(Row):
         ``CoversAOI`` checks only that a domain is bound, never the extent."""
         return replace(self, supplied_uri=uri, supplied_validate=validate,
                        is_supplied=True)
-
-    def ladder(self, *rungs: "Producer") -> "Producer":
-        """Declare the fallback rungs this producer degrades through, in order.
-        A RUNG IS A PRODUCER, not a label: the machinery walks them, records which
-        one answered, and says so when the answering rung changed dataset."""
-        if not rungs:
-            raise PlanValidationError(f"{self.runner}: .ladder() declares no rungs.")
-        wrong = [r for r in rungs if not isinstance(r, Producer)]
-        if wrong:
-            raise PlanValidationError(
-                f"{self.runner}: .ladder() takes PRODUCERS - tool(...) the "
-                f"machinery can call - and was given "
-                f"{type(wrong[0]).__name__} ({wrong[0]!r}). A rung the interpreter "
-                "cannot call is a fallback that never fires.")
-        return replace(self, ladder_rungs=self.ladder_rungs + tuple(rungs))
 
 
 class ToolWord:
@@ -224,10 +216,10 @@ class DataDecl(Row):
     #: How a supplied artifact is checked against the domain - BOUND-DOMAIN-ONLY
     #: under ``CoversAOI`` (see :class:`_CoversAOI`), which is not a coverage test.
     supplied_validate: Any = CoversAOI
-    #: Which engine-neutral SLOT this row is, or ``""`` for a plain row. A slot
-    #: is filled the same way whatever fills it - a drawing, the user's layer, or
-    #: a producer - and nothing downstream branches on which.
-    role: str = ""
+    #: The SLOT a row states rather than taking from its name. The five
+    #: constructors below are the only writers, and they retire with the last
+    #: template that calls one.
+    stated_role: str = ""
     #: This row is CONTEXT: it names a producer, and its absence continues the
     #: run under the sentence below rather than refusing.
     is_context: bool = False
@@ -248,6 +240,17 @@ class DataDecl(Row):
     _row_attr = "name"
     _ref_type = DataRef
 
+    @property
+    def role(self) -> str:
+        """The engine-neutral SLOT this row is, or ``""`` for a plain row.
+
+        THE ROW'S NAME IS ITS SLOT: a reserved name plays its role however it is
+        filled - a drawing, the user's layer, or the match - and nothing
+        downstream branches on which."""
+        from trid3nt_server.inputs.slots import role_of
+
+        return self.stated_role or role_of(self.name)
+
     def __post_init__(self) -> None:
         if self.name and not self.name.isidentifier():
             raise PlanValidationError(f"Data name {self.name!r} is not an identifier.")
@@ -262,19 +265,19 @@ class DataDecl(Row):
         if self.data_class and self.producer is not None:
             raise PlanValidationError(
                 f"Data {self.name!r} names a producer AND states "
-                f"need={self.data_class!r}: a row that names a fetcher is a PIN "
-                "and is honoured as it is, so there is nothing for the match to "
-                "decide. Drop the producer to state a need.")
+                f"need={self.data_class!r}: a row is satisfied one way. Drop the "
+                "producer to state a need.")
         if self.data_class and self.data_class not in DATA_CLASSES:
             raise PlanValidationError(
                 f"Data {self.name!r} states need={self.data_class!r}, which is "
                 f"not one of the classes a coverage row is written in "
                 f"({', '.join(DATA_CLASSES)}).")
-        if self.is_context and self.producer is None:
+        if self.is_context and not (self.producer is not None or self.data_class):
             raise PlanValidationError(
-                f"Data {self.name!r} declares .context() with no producer: a context "
-                "row is a PRODUCER whose absence is legal, and a row with no "
-                "producer already says absence with .optional()."
+                f"Data {self.name!r} declares .context() and states neither a need "
+                "nor a producer: a context row is a row that goes out and looks, "
+                "whose absence is legal. A row nothing goes out for already says "
+                "absence with .optional()."
             )
 
     @property
@@ -295,22 +298,16 @@ class DataDecl(Row):
 
     @property
     def producer_kwargs(self) -> Mapping[str, Any]:
-        """Every read this slot's producer declares, RUNGS INCLUDED.
-
-        Empty for a producer-less slot."""
-        if self.producer is None:
-            return {}
-        reads = dict(self.producer.kwargs)
-        for rung in self.producer.ladder_rungs:
-            reads.update(rung.kwargs)
-        return reads
+        """Every read this slot's producer declares; empty for a producer-less
+        slot."""
+        return {} if self.producer is None else dict(self.producer.kwargs)
 
     @property
     def wire_annotation(self) -> Any:
         """This slot's declared type on the generated tool's signature.
         Always a string: the declared shape rides along as :class:`SuppliedGeometry`
         metadata rather than narrowing the type."""
-        if self.role in (OBSERVATION, LEVEL, DISCHARGE):
+        if self.role in (OBSERVE, LEVEL, DISCHARGE):
             # A reading is a record to read it off, or the number itself: a user
             # who knows what the water opens at states it and it stands.
             return str | float | None
@@ -343,12 +340,9 @@ class DataDecl(Row):
                     "depth in metres below the free surface"
                     + ("; unfilled, the template's own producer supplies it."
                        if self.producer is not None else self._unfilled))
-        if self.role in (OBSERVATION, LEVEL, DISCHARGE):
-            return (f"{self.coercion.get('measures') or 'the value'} this run "
-                    "opens on: a layer of sites that report it, or the number "
-                    "itself"
-                    + (f" in {self.coercion['to_units']}"
-                       if self.coercion.get("to_units") else "")
+        if self.role in (OBSERVE, LEVEL, DISCHARGE):
+            return (f"the {self.data_class or 'value'} this run opens on: a "
+                    "layer of sites that report it, or the number itself"
                     + ("; unfilled, the template's own producer looks for one."
                        if self.producer is not None else self._unfilled))
         shape = f"a {self.geometry} layer" if self.geometry else "a layer"
@@ -370,7 +364,7 @@ class DataDecl(Row):
         """Refuse a supplied artifact whose CLASS is not the shape this slot declared.
 
         Suffix-deep and no deeper; an unclassifiable artifact passes."""
-        if self.role == OBSERVATION:
+        if self.role == OBSERVE:
             # A reading arrives as a record OR as the number itself, and a
             # number has no artifact class to judge.
             return
@@ -433,40 +427,43 @@ class DataDecl(Row):
                 "one way.")
         return replace(self, producer=producer)
 
-    def context(self, absent: str = "") -> "DataDecl":
-        """This producer row is CONTEXT: its absence continues the run.
+    def need(self, data_class: str, *, at: Any = None) -> "DataDecl":
+        """THE CLASS this row needs, which the match fills from whatever measures
+        it here.
 
-        ``absent`` is the sentence the sheet carries when the source held
-        nothing near this domain; unstated, the row's own name says it."""
+        The slot is the row's NAME. The window and the frame are the RUN's and
+        are read off it, so a question states neither; ``at`` is the POINT this
+        row is asked at where the domain's own centre is not it - the seed a
+        reach is cut from, the place the nearest reporting site is ranked
+        against - and is the only fact about the world a row still states."""
+        return replace(self, data_class=str(data_class),
+                       coercion=MappingProxyType({"near": at}))
+
+    def context(self, absent: str = "") -> "DataDecl":
+        """This row is CONTEXT: its absence continues the run.
+
+        ``absent`` is the sentence the sheet carries when nothing measured this
+        near this domain; unstated, the row's own name says it."""
         return replace(self, is_context=True, absent_note=str(absent or ""))
 
     def domain(self, producer: Producer | None = None, *,
                need: str = "") -> "DataDecl":
-        """THE DOMAIN: the closed polygon the equations are solved over.
-
-        Geometry only, and one slot however it is filled - drawn on the canvas,
-        the user's own layer, the ``producer`` this question prefers, or the
-        ``need`` the match fills from whatever maps water here."""
+        """THE DOMAIN, under the name a converted question writes as ``domain``."""
         row = self if producer is None else self(producer)
-        return replace(row, role=DOMAIN, geometry="polygon", data_class=need)
+        return replace(row, stated_role=DOMAIN, geometry="polygon",
+                       data_class=need)
 
     def runs(self, producer: Producer | None = None) -> "DataDecl":
-        """THE BOUNDARY RUNS: named stretches of the domain's edge.
-
-        Zero or more, each two points on the edge and a type; a closed body
-        states none and its mesh has only walls. Filled by the user's drawing,
-        the user's layer, or the domain producer that measured the edge."""
+        """THE BOUNDARY RUNS, which a converted question does not row at all: they
+        ride on the domain's own producer."""
         row = self if producer is None else self(producer)
-        return replace(row, role=RUNS, geometry="polyline", is_optional=True)
+        return replace(row, stated_role=RUNS, geometry="polyline",
+                       is_optional=True)
 
     def line(self, producer: Producer | None = None) -> "DataDecl":
-        """THE LINE a placed read is measured along.
-
-        Unfilled, the domain's own producer answers with the centerline it
-        measured beside the polygon; a body that has none is asked for a line on
-        the canvas, which is what a profile across a lake is."""
+        """THE LINE, under the name a converted question writes as ``line``."""
         row = self if producer is None else self(producer)
-        return replace(row, role=LINE, geometry="polyline")
+        return replace(row, stated_role=LINE, geometry="polyline")
 
     def observation(self, producer: Producer | None = None, *, near: Any = None,
                     units: Any = None, measures: str = "this value",
@@ -474,19 +471,9 @@ class DataDecl(Row):
                     at: Any = None, record_units: Any = None,
                     need: str = "", series_field: Any = None,
                     above: Any = None) -> "DataDecl":
-        """ONE MEASURED VALUE this run opens on, in the unit the keyword reads.
-
-        ``near`` is the point the nearest reporting site is chosen against,
-        ``at`` the moment the run asks at - the window a sample has to fall in
-        to be this run's water closes there - ``value_field`` the property the
-        source reports it under, ``measures`` what the row is looking for and
-        ``opens`` what the run journal says it opened on, ``record_units`` the
-        unit the record's own window is reported in where it names none per
-        site, ``series_field`` the column that window is reported under,
-        ``above`` the column carrying the elevation of the zero the reading is
-        counted from and ``need`` the class the match fills the slot from; a
-        number supplied here stands over any record."""
-        return self._observed(OBSERVATION, producer, near, units, measures,
+        """ONE MEASURED VALUE, under the name a converted question writes as
+        ``observe`` with its two sentences in CAPTIONS."""
+        return self._observed(OBSERVE, producer, near, units, measures,
                               opens, value_field, at,
                               record_units=record_units, need=need,
                               series_field=series_field, above=above)
@@ -497,14 +484,7 @@ class DataDecl(Row):
               value_field: str = "value", at: Any = None,
               record_units: Any = None, need: str = "",
               series_field: Any = None, above: Any = None) -> "DataDecl":
-        """THE LEVEL the water surface stands at: an observation, read by ROLE.
-
-        An ELEVATION on the datum the bed is painted on - never a height above a
-        gauge's own zero, which is a different number about a different surface.
-        The run opens flat at it, and a body whose bed is stated as a depth needs
-        none: that bed is counted from the free surface itself. ``above`` names
-        the column carrying the elevation of the zero a gauge reports its height
-        above, without which that height is not an elevation."""
+        """THE LEVEL, under the name a converted question writes as ``level``."""
         return self._observed(LEVEL, producer, near, units, measures, opens,
                               value_field, at, record_units=record_units,
                               need=need, series_field=series_field, above=above)
@@ -515,10 +495,8 @@ class DataDecl(Row):
                   value_field: str = "value", at: Any = None,
                   record_units: Any = None, need: str = "",
                   series_field: Any = None, above: Any = None) -> "DataDecl":
-        """THE FLOW an inflow run carries: an observation, read by ROLE.
-
-        A domain whose edge names runs and whose rows carry a discharge is an
-        OPEN CHANNEL, and the workflow adds the step that measures one."""
+        """THE FLOW an inflow run carries, under the name a converted question
+        writes as ``discharge``."""
         return self._observed(DISCHARGE, producer, near, units, measures, opens,
                               value_field, at, record_units=record_units,
                               need=need, series_field=series_field, above=above)
@@ -530,7 +508,7 @@ class DataDecl(Row):
                   series_field: Any = None, above: Any = None) -> "DataDecl":
         """One measured value, under the role its consumer reads it by."""
         row = self if producer is None else self(producer)
-        return replace(row, role=role, data_class=need,
+        return replace(row, stated_role=role, data_class=need,
                        coercion=MappingProxyType(
             {"near": near, "to_units": units, "measures": measures,
              "opens": opens, "field": value_field, "at": at,
@@ -538,25 +516,15 @@ class DataDecl(Row):
              "above_field": above}))
 
     def extent(self, producer: Producer | None = None) -> "DataDecl":
-        """THE EXTENT: one lon/lat rectangle, however the caller names it.
-
-        A box picked on the canvas, four numbers, a place or a layer's bounds all
-        read the same afterwards, as ``Ref("<row>.bbox")``."""
+        """THE EXTENT, under the name a converted question writes as ``extent``."""
         row = self if producer is None else self(producer)
-        return replace(row, role=EXTENT, geometry="rectangle")
+        return replace(row, stated_role=EXTENT, geometry="rectangle")
 
     def bed(self, producer: Producer | None = None, *,
             need: str = "") -> "DataDecl":
-        """THE BED: what every node of the domain carries for elevation.
-
-        A DEM, a bathymetry or survey raster, a layer of soundings, or a stated
-        depth below the free surface - ONE source, and the mesh records which
-        source actually painted each node. A measurement that covers part of the
-        domain is laid over the wider surface under it by the merge derive, in
-        the DATA body, and this slot takes the row that derive produced. A slot
-        that states a ``need`` instead leaves both to the runtime."""
+        """THE BED, under the name a converted question writes as ``bed``."""
         row = self if producer is None else self(producer)
-        return replace(row, role=BED, data_class=need)
+        return replace(row, stated_role=BED, data_class=need)
 
     @property
     def context_sentence(self) -> str:
@@ -595,10 +563,8 @@ def data_rows(body: Any) -> tuple[DataDecl, ...]:
 
 
 def _bound_producer(producer: Producer) -> Producer:
-    """``producer`` with its own reads - and every rung's - resolved to row refs."""
-    return replace(producer, kwargs=_row_refs(producer.kwargs),
-                   ladder_rungs=tuple(_bound_producer(r)
-                                      for r in producer.ladder_rungs))
+    """``producer`` with its own reads resolved to row refs."""
+    return replace(producer, kwargs=_row_refs(producer.kwargs))
 
 
 def _row_refs(value: Any) -> Any:

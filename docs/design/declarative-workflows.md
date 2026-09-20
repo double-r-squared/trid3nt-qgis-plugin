@@ -42,11 +42,12 @@ class PARAMS:
 
 # the template file: `from .declarations import PARAMS as P`
 class DATA:
-    terrain = tool("fetch_dem", source="3dep")
-    rivers = tool("fetch_river_geometry")
-    rain = tool("fetch_rain").ladder(tool("fetch_era5_domain_mean"))
+    domain = Data.need("hydrography", at=P.release)
+    bed = Data.need("terrain")
+    rain = Data.need("precipitation series").context(
+        "no hourly rainfall record over this catchment for that window")
     # row-to-row dataflow inside the body is the plain identifier
-    basin = tool("delineate_watershed", dem_uri=terrain)
+    basin = tool("delineate_watershed", dem_uri=bed)
     breakwaters = Data.supplied(geometry="polyline").optional()   # a context SLOT
 
 
@@ -174,27 +175,29 @@ a byo mesh's footprint). The Case camera follows the final domain.
 ## Param vs Data
 
 Param = a VALUE (fits in a form cell; doors; bounds; form-editable).
-Data = an ARTIFACT (object store; produced, supplied, or absent;
-ladders + coverage validation; emitted to the canvas as it arrives).
+Data = an ARTIFACT (object store; matched, supplied, or absent;
+coverage validation; emitted to the canvas as it arrives).
 
 Producers are DEMAND-PULLED: one runs when a step that `Ref`s it executes, which
 is what makes a `When`-guarded consumer whose branch does not fire cost no fetch.
 
-A SLOT may state a NEED instead of naming a producer, written
-`bed = Data.bed(need="bathymetry")`. The need is one class of a coarse
+A RUNTIME ROW STATES THE NEED IT HAS, written
+`bed = Data.need("bathymetry")`. The need is one class of a coarse
 vocabulary (`trid3nt_contracts.coverage.DATA_CLASSES`); every fetcher states what
 it covers on its own `source.yaml`, and the match
 (`tools/search/match.py`) filters those rows on class and place, holds a
 SERIES source to the run's window, sorts on the cell against the mesh, on
 recency and on the native datum, then calls the survivors in rank order and
-drops one that held nothing over this domain. A row that NAMES a fetcher is a
-PIN and is honoured as it is; a row that states both is refused at declaration.
+drops one that held nothing over this domain. A row NEVER names a fetcher: the
+facts that decide whether a source can carry this solve are read at run time off
+coverage rows, and a row that states both a need and a producer is refused at
+declaration.
 What the match produces is ONE ranked list in three views: the card renders it
 with the pick highlighted, the tool result carries the rows only on a tie, and
 the run record stores the pick and its reason - all reading the one sentence the
-model was given. The place comes off the domain, the window off the deck's own
-duration from `event_time`, and the frame off the vertical lever, so a question
-states none of them.
+model was given. The window comes off the deck's own duration from `event_time` and the frame off
+the vertical lever, so a question states neither; the place is the domain's
+centre unless the row states the point it is asked at, `Data.need("...", at=...)`.
 
 A row may declare NO producer and no need at all - a CONTEXT SLOT, written
 `structure = Data.supplied(geometry="polyline")`. The template names the SHAPE it
@@ -370,9 +373,9 @@ waits per the hybrid rule).
   (e.g. CoastalBed: fetch -> validate -> clip) is a value reusable
   across workflows.
 - INTERPRETER: the runner walks the plan; plans never run themselves.
-- BUILDER/FLUENT: modifiers (.supplied(), .ladder(), .style(),
-  .overrides_domain()), each returning a new value; modifier LEGALITY
-  is the rule surface (reference fetchers simply lack .supplied()).
+- BUILDER/FLUENT: modifiers (.supplied(), .optional(), .context(),
+  .style(), .overrides_domain()), each returning a new value; modifier
+  LEGALITY is the rule surface (reference fetchers lack .supplied()).
 - STRATEGY: doors and fallback ladders - interchangeable resolution
   policies.
 - TEMPLATE METHOD: per-engine step families (Assemble.reach /
@@ -497,23 +500,23 @@ Two slot kinds, distinguished per slot:
 
 ### The slots a run stands on
 
-A solved run stands on three ENGINE-NEUTRAL slots, declared in the DATA
-body and filled the same way whatever fills them - a drawing on the
-canvas, the user's own layer or file, or the producer the question
-prefers. Nothing downstream branches on which:
+THE ROW'S NAME IS ITS SLOT. The reserved names are the runtime slot
+registry's keys (`trid3nt_server/inputs/slots.py`) - one list - and a row
+under one of them plays that role however it is filled: a drawing on the
+canvas, the user's own layer or file, or the source the match picked.
+Nothing downstream branches on which:
 
-    domain = Data.domain(tool("fetch_river_reach", ...))   the closed polygon
-    runs   = Data.runs()                                   the edge's named stretches
-    bed    = Data.bed(tool("derive_merge_rasters", ...))   what every node carries
+    domain = Data.need("hydrography", at=P.release)   the closed polygon
+    bed    = Data.need("bathymetry")                  what every node carries
 
-`domain` is geometry only. `runs` are zero or more stretches of its edge,
-each two points and a type (wall by default, inflow, outflow, open,
-rating_curve); a closed body states none, and a domain whose producer
-measured the edge it cut carries them without the template restating
-them. `bed` takes ONE source - a DEM, a bathymetry or survey raster, a
-layer of soundings, or a depth in metres below the free surface - and a
-measurement covering part of the domain is laid over the wider surface
-under it by the merge derive, in the DATA body, before the slot sees it.
+`domain` is geometry only. The boundary RUNS are no row: zero or more
+stretches of the domain's edge, each two points and a type (wall by
+default, inflow, outflow, open, rating_curve), they ride on the polygon
+the domain's producer cut and the mesh reads them off it. `bed` resolves
+to ONE surface - a DEM, a bathymetry or survey raster, a layer of
+soundings, or a depth in metres below the free surface - and its own
+ingestion grids soundings and lays a measurement covering part of the
+domain over the wider surface under it.
 
 Three more slots are declared the same way where a question needs them:
 `line`, the polyline a placed read is measured along (unfilled, the
@@ -549,13 +552,13 @@ the sentence the template stated about what is not there. A load-bearing
 row stays hard and refuses. A producer-less slot says absence with
 `.optional()` instead, because there is no source to have been empty.
 
-### The producer ladder
+### Degrading between sources
 
-A row's producer may declare the rungs it degrades through -
-`.ladder(tool(...))` - and the interpreter walks them in order, records
-which one answered, and writes a note on the RUN saying so when a
-different DATASET answered the artifact. An exhausted ladder reports the
-last rung's own typed failure; it never degrades to a silent absence.
+A row declares no fallback of its own. The MATCH ranks every source that
+states coverage for the class here and the probe calls them in that order,
+dropping one that held nothing and writing the substitution on the run's
+own journal; when none of them answered, an optional row states its
+absence and a load-bearing one refuses typed.
 
 ### The engine facade
 

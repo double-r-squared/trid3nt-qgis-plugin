@@ -289,6 +289,13 @@ def Rain(*, mm_per_day: Any, tracers: Any, hours: Any = None  # noqa: N802
                              "hours": hours})
 
 
+#: WHAT A PRESCRIBED LIST IS READ IN, by the thing the .cli quad prescribes. The
+#: engine fixes it per list, so it is the unit a slot that fills one converts its
+#: record to as well - stated here once, where the list is written.
+PRESCRIBED_UNITS: Mapping[str, str] = MappingProxyType(
+    {"flowrate": "m3/s", "elevation": "m"})
+
+
 def Boundaries(*, measured: Any, tracers: Any) -> Mapping[str, Any]:  # noqa: N802
     """The three PRESCRIBED lists, in the order the engine numbers its boundaries,
     and the LIQUID BOUNDARIES FILE for every one a record measured over time.
@@ -352,7 +359,7 @@ def _boundaries(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
         tracers += per_tracer
         window = windows.get(what)
         if window is not None:
-            unit = "m3/s" if what == "flowrate" else "m"
+            unit = PRESCRIBED_UNITS[what]
             # A FLOW is a rate and a STAGE is a level, so the two move onto the
             # engine's own step by different rules; both open where this run does.
             columns.append((column_name(what, number), unit,

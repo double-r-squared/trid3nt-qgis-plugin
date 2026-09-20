@@ -90,14 +90,9 @@ class DATA:
     #: THE CHANNEL. A seed on the water names a stretch of river and the fetcher
     #: returns the polygon with the two end transects it was cut between and the
     #: centerline beside it; a fairway the port supplies supersedes it.
-    #: The seed is on a lake rather than in a channel where no reach cuts,
-    #: so the producer is a LADDER: the reach, else the waterbody the seed
-    #: stands in, which is a closed body and names no runs.
     domain = Data.domain(
         tool("fetch_river_reach", distance_km=_REACH_LENGTH_KM,
-             seed_point=[Ref("seed_point.lon"), Ref("seed_point.lat")])
-        .ladder(tool("fetch_nhd_waterbody_at_point",
-                     seed_point=[Ref("seed_point.lon"), Ref("seed_point.lat")])))
+             seed_point=[Ref("seed_point.lon"), Ref("seed_point.lat")]))
     # THE STRETCHES OF ITS EDGE the water crosses. The reach producer measured
     # them where it cut the section, and they ride on the domain it returned; a
     # domain that arrives with none - a drawn outline, a lake - is asked for

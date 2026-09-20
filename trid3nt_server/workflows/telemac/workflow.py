@@ -686,6 +686,16 @@ class TelemacWorkflow(Workflow):
         """One declaration read off the template module, or the default beside it."""
         return getattr(self.template, name, default)
 
+    def slot_units(self) -> Mapping[str, str]:
+        """What the two series slots convert to: the unit of the PRESCRIBED list
+        each one's value is written into, which the transform fixes."""
+        from trid3nt_server.workflows.runtime.data import DISCHARGE, LEVEL
+
+        from .modules.telemac2d import PRESCRIBED_UNITS
+
+        return {DISCHARGE: PRESCRIBED_UNITS["flowrate"],
+                LEVEL: PRESCRIBED_UNITS["elevation"]}
+
     def run_window_s(self, keywords: Mapping[str, Any]) -> float | None:
         """How long this run's solve covers: the deck's own DURATION, under the
         floor that may have moved it.
@@ -933,10 +943,8 @@ class TelemacWorkflow(Workflow):
         It is the event_time lever read as a date, so it is the lever's own
         coercion rather than a stage a question writes: a row that names it gets
         it, and a run that reads no dated source never pays for it."""
-        wanted = any(ref.root == _READING_DAY
-                     for row in self.data if row.producer is not None
-                     for rung in (row.producer, *row.producer.ladder_rungs)
-                     for ref in declared_reads(dict(rung.kwargs), Ref))
+        wanted = any(ref.root == _READING_DAY for row in self.data
+                     for ref in declared_reads(dict(row.producer_kwargs), Ref))
         if not wanted:
             return ()
         return (Step(runner="trid3nt_server.inputs.instant.day", stage="prep",

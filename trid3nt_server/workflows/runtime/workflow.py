@@ -100,6 +100,10 @@ class Workflow:
         #: beside them - so no object stands between the declaration and the plan.
         self.template = template
         self.answer_fields = tuple(answer)
+        #: What this template CALLS each thing it names: every published variable,
+        #: and every DATA row it reads a measurement into. One dict, because a
+        #: caption is one kind of statement whatever it is about.
+        self.captions = dict(getattr(template, "CAPTIONS", {}) or {})
         #: Each declared provenance name lifts its resolved VALUE and its NOTE onto
         #: the answer. A pair names the note's key where the value's name plus
         #: "_note" is not what the answer has always called it.
@@ -141,6 +145,14 @@ class Workflow:
         Only the workflow knows which engine surface its steps fill, so a
         skeleton that fills none claims none."""
         return None
+
+    def slot_units(self) -> Mapping[str, str]:
+        """The UNIT each slot's value is converted to, by role.
+
+        The unit is the one the KEYWORD that role fills is read in, which the
+        engine's transform fixes - so a runtime that writes no keywords states
+        none and a matched record is then read in the unit it was measured in."""
+        return {}
 
     def run_window_s(self, keywords: Mapping[str, Any]) -> float | None:
         """How long this run's solve covers, in seconds - the window a matched
@@ -193,6 +205,7 @@ class Workflow:
                 resume=resume,
                 supplied=supplied_artifacts, continued=continued,
                 window_s=self.run_window_s(dict(keywords or {})),
+                slot_units=self.slot_units(), captions=self.captions,
             )
         except asyncio.CancelledError:
             raise

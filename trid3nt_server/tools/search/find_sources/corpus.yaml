@@ -12,6 +12,13 @@ bathymetry:
 - how deep is the water in this bay
 - what is the bed elevation under the water here
 - depths across this navigation channel
+channel survey:
+- the latest dredging survey for this channel
+- surveyed soundings of the navigation channel here
+- how deep is the maintained channel through this reach
+- the corps survey of this federal channel
+- has this channel been resurveyed since the dredging
+- measured soundings across the dredged prism here
 terrain:
 - ground elevation over this area
 - elevation data for this place

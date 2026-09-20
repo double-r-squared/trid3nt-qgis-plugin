@@ -204,13 +204,10 @@ def test_the_data_body_is_the_slots_and_the_classes_they_need():
     # The level is matched too, and its absence is legal.
     assert by_name["stage"].data_class == "water level series"
     assert by_name["stage"].is_optional
-    # No row here is superseded by a supplied artifact, and the DOMAIN is the
-    # one ladder: the reach where a channel cuts, the waterbody the seed stands
-    # in where none does.
+    # No row here is superseded by a supplied artifact, and no row falls to a
+    # second source of its own: degrading between sources is the MATCH's.
     assert all(d.producer is None or d.producer.supplied_uri is None
                for d in rows)
-    assert [d.name for d in rows
-            if d.producer is not None and d.producer.ladder_rungs] == ["domain"]
 
 
 def test_the_release_point_seeds_the_domain_producer():

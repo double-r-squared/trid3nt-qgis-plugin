@@ -16,9 +16,10 @@ from trid3nt_server.inputs.boundary import (
     roles_from_runs,
 )
 from trid3nt_server.inputs.domain import domain, domain_ring
-from trid3nt_server.inputs.slots import DRAW_PURPOSES, ingest_slot
+from trid3nt_server.inputs.slots import SLOTS, ingest_slot, role_of
 from trid3nt_server.inputs.user_input import UserInputError
-from trid3nt_server.workflows.runtime.data import BED, DOMAIN, EXTENT, LINE, RUNS
+from trid3nt_server.workflows.runtime.data import (
+    BED, DOMAIN, EXTENT, LEVEL, LINE, RUNS)
 
 _RING = [[-123.0, 45.0], [-122.9, 45.0], [-122.9, 45.1], [-123.0, 45.1]]
 
@@ -101,16 +102,15 @@ def test_the_bed_slot_says_which_shape_it_was_handed():
 
 
 def test_the_bed_slot_takes_one_source_and_composes_nothing():
-    """A measurement over a wider surface is composed in the DATA body - a
-    survey row, a terrain row and a merge row over the two - so neither the slot
-    nor the row that declares it carries the surface underneath."""
+    """The measurement and the surface under it are composed by the slot's own
+    ingestion, so neither the slot nor the row that declares it carries the
+    surface underneath: the row states one class."""
     import inspect
 
     from trid3nt_server.workflows.runtime import Data
 
     assert "over" not in inspect.signature(bed).parameters
-    assert "over" not in inspect.signature(Data.bed).parameters
-    assert not Data.bed().coercion
+    assert not Data.need("bathymetry").coercion.get("near")
 
 
 def test_a_depth_no_water_body_holds_refuses_rather_than_being_meshed():
@@ -157,12 +157,33 @@ def test_a_domain_says_its_own_name_when_it_is_read_as_text():
 
 def test_only_the_slots_a_user_can_draw_are_offered_on_the_canvas():
     """A bed is a survey or a number, so there is nothing to draw for it."""
-    assert set(DRAW_PURPOSES) == {DOMAIN, RUNS, EXTENT, LINE}
-    assert DRAW_PURPOSES[DOMAIN][:2] == ("polygon", "domain")
-    assert DRAW_PURPOSES[RUNS][:2] == ("polyline", "boundary run")
-    assert DRAW_PURPOSES[LINE][:2] == ("polyline", "line")
+    assert {name for name, slot in SLOTS.items() if slot.draw} == {
+        DOMAIN, RUNS, EXTENT, LINE}
+    assert SLOTS[DOMAIN].draw[:2] == ("polygon", "domain")
+    assert SLOTS[RUNS].draw[:2] == ("polyline", "boundary run")
+    assert SLOTS[LINE].draw[:2] == ("polyline", "line")
     # a box rides the pick mode, which offers no vector tool to choose between
-    assert DRAW_PURPOSES[EXTENT][:2] == ("rectangle", "")
+    assert SLOTS[EXTENT].draw[:2] == ("rectangle", "")
+
+
+def test_a_rows_name_is_its_slot_and_every_other_name_is_a_plain_row():
+    """The reserved names ARE this registry's keys: one list, so a row called
+    ``bed`` is the bed slot however it was declared, and a row called anything
+    else is read by whatever declared it."""
+    assert role_of("bed") == "bed"
+    assert role_of("discharge") == "discharge"
+    assert role_of("observe") == "observe"
+    assert role_of("carrier") == ""
+    assert role_of("surveyed_bed") == ""
+
+
+def test_a_reserved_name_states_which_classes_its_role_serves():
+    """The bed reads a measurement or the ground; a level reads a level. The
+    lint refuses a reserved name under a class its slot does not serve."""
+    assert SLOTS[BED].classes == frozenset(
+        {"bathymetry", "terrain", "channel survey"})
+    assert SLOTS[LEVEL].classes == frozenset({"water level series"})
+    assert "discharge series" not in SLOTS[BED].classes
 
 
 def test_a_domain_producer_hands_over_the_runs_it_cut_the_polygon_between():

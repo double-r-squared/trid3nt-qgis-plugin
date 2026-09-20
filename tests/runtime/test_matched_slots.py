@@ -89,6 +89,11 @@ def world(monkeypatch):
                         lambda: [(n, row) for n, s in SPECS.items()
                                  for row in s.coverage])
     monkeypatch.setattr(interpreter, "_spec_of", lambda name: SPECS[name])
+    # The ask closes through the match, which reads the source's own params off
+    # the router's registry: the stubs stand in there too.
+    from trid3nt_server.tools.fetchers._router import registration
+
+    monkeypatch.setattr(registration, "_SPEC_REGISTRY", dict(SPECS))
     token = bind_domain(Domain(bbox=WILLAMETTE, geometry={}, label="reach"))
     chosen = bind_choices()
     try:
@@ -194,7 +199,7 @@ def test_a_run_series_is_asked_for_the_window_the_deck_will_solve(world):
 def test_a_need_and_a_producer_on_one_row_is_refused_at_declaration():
     from trid3nt_server.workflows.runtime import PlanValidationError, tool
 
-    with pytest.raises(PlanValidationError, match="is a PIN"):
+    with pytest.raises(PlanValidationError, match="a row is satisfied one way"):
         class DATA:
             bed = Data.bed(tool("fetch_dem"), need="bathymetry")
 

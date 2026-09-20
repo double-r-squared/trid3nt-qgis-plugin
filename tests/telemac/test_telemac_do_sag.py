@@ -140,11 +140,6 @@ def test_the_three_slots_are_the_world_this_run_stands_on():
     assert by_name["surveyed_bed"].producer.kwargs["points"] == DataRef("survey")
     runs = next(d for d in rows if d.role == RUNS)
     assert (runs.producer, runs.is_optional) == (None, True)
-    # The DOMAIN is the one ladder: the reach where a channel cuts, the
-    # waterbody the seed stands in where none does. The bed composes two layers
-    # it has, which is not a fallback chain.
-    assert [d.name for d in rows if d.producer is not None
-            and d.producer.ladder_rungs] == ["domain"]
     # Both slots reach the wire: what the user supplies supersedes the producer.
     assert by_name["domain"].fills_from_user and by_name["bed"].fills_from_user
 

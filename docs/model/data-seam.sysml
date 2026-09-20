@@ -611,12 +611,6 @@ package DataSeam {
         */
     }
 
-    part rowLadderWalker : LadderWalker {
-        doc /*
-        code: trid3nt_server/workflows/runtime/interpreter.py
-        */
-    }
-
     part unreadContextAsk : ContextRow {
         doc /*
         code: trid3nt_server/workflows/runtime/interpreter.py
@@ -881,13 +875,13 @@ package DataSeam {
 
     requirement def ASlotStatesANeedAndTheMatchFillsIt {
         doc /*
-        A slot either NAMES its producer, with its ladder and its transforms, or
-        states the CLASS it needs; a row that names a fetcher is a PIN and is
-        honoured as it is. A need is one class of a coarse vocabulary of about
-        seventeen, and the place, the window and the frame it is matched under
-        are the RUN's - the domain's centre, the deck's own duration from the
-        moment the run asks at, the vertical lever - so a question states none
-        of them.
+        A RUNTIME SLOT STATES THE CLASS IT NEEDS AND NAMES NO FETCHER. The slot
+        is the ROW'S NAME - one reserved list, the runtime slot registry's keys -
+        and the modifiers are absence and the sentence an absence carries. A need
+        is one class of a coarse vocabulary of about eighteen; the window and the
+        frame it is matched under are the RUN's - the deck's own duration from
+        the moment the run asks at, the vertical lever - and the place is the
+        domain's centre unless the row states the point it is asked at.
 
         The filter is mechanical: class and place are hard, the window is hard
         for a SERIES source and never for a static surface - a 2014 survey
@@ -1194,15 +1188,12 @@ package DataSeam {
     satisfy requirement SubstitutionIsDeclared by waterBodyClassifier;
     satisfy requirement SubstitutionIsDeclared by ladderWalker;
     satisfy requirement SubstitutionIsDeclared by coastalComposite;
-    satisfy requirement SubstitutionIsDeclared by rowLadderWalker;
     verify requirement SubstitutionIsDeclared by
         "tests/fetchers/test_bathymetry_data_seam.py::test_falling_from_bluetopo_to_the_cudem_composite_is_a_declared_cross_dataset_rung";
     verify requirement SubstitutionIsDeclared by
         "tests/fetchers/test_bathymetry_data_seam.py::test_a_partial_bluetopo_cover_is_reported_as_a_gap_not_a_whole_bed";
     verify requirement SubstitutionIsDeclared by
         "tests/fetchers/test_fallback_ladder.py::test_declared_rung_fills_the_gap_and_splits_coverage";
-    verify requirement SubstitutionIsDeclared by
-        "tests/runtime/test_declarative_library.py::test_a_declared_ladder_walks_its_rungs_and_records_which_answered";
 
     satisfy requirement AFreeSurfaceAndABedShareOneStatedDatum by lakeLevelDeclaration;
     satisfy requirement AFreeSurfaceAndABedShareOneStatedDatum by lakeDeclaration;
@@ -1504,7 +1495,7 @@ package DataSeam {
     verify requirement AContextRowsAbsenceContinuesTheRun by
         "tests/runtime/test_domain_bed_and_context_slots.py::test_a_malformed_value_handed_to_a_context_rows_slot_refuses_too";
     verify requirement AContextRowsAbsenceContinuesTheRun by
-        "tests/runtime/test_domain_bed_and_context_slots.py::test_context_needs_a_producer_and_optional_still_refuses_one";
+        "tests/runtime/test_domain_bed_and_context_slots.py::test_context_needs_something_to_ask_and_optional_still_refuses_a_producer";
     verify requirement AContextRowsAbsenceContinuesTheRun by
         "tests/runtime/test_domain_bed_and_context_slots.py::test_a_context_row_states_what_the_sheet_says_when_its_source_is_empty";
     verify requirement AContextRowsAbsenceContinuesTheRun by

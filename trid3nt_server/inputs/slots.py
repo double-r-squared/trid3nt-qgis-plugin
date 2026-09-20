@@ -1,9 +1,10 @@
 """The engine-neutral SLOTS, ingested once: what fills each, and what it becomes.
 
-A slot names the kind it takes and the role it plays. This is the one place that
-says which ingestion a role reads through and what the canvas offers for it, so
-a workflow that needs a domain asks for one the same way whichever engine solves
-over it, and nothing downstream branches on whether it was drawn or fetched.
+A ROW'S NAME is its slot. This is the one list of the reserved names, and it says
+for each what ingestion reads it, which data classes its role serves and what the
+canvas offers for it - so a workflow that needs a domain asks for one the same way
+whichever engine solves over it, and nothing downstream branches on whether it was
+drawn, supplied or matched.
 """
 
 from __future__ import annotations
@@ -11,6 +12,8 @@ from __future__ import annotations
 import asyncio
 import inspect
 import logging
+from dataclasses import dataclass
+from types import MappingProxyType
 from typing import Any, Callable, Mapping
 
 from trid3nt_server.workflows.runtime.data import (
@@ -20,8 +23,9 @@ from trid3nt_server.workflows.runtime.data import (
     EXTENT,
     LEVEL,
     LINE,
-    OBSERVATION,
+    OBSERVE,
     RUNS,
+    WEATHER,
 )
 
 from .bed import bed
@@ -31,53 +35,77 @@ from .extent import extent
 from .line import line
 from .observation import observation
 
-__all__ = ["DRAW_PURPOSES", "ask_on_canvas", "ingest_slot"]
+__all__ = ["SLOTS", "Slot", "ask_on_canvas", "ingest_slot", "role_of"]
 
 logger = logging.getLogger("trid3nt_server.inputs.slots")
 
-#: Each slot's ingestion - the one function that takes every form its value
-#: arrives in. A role with no entry is a slot nothing here knows how to read.
-_INGESTIONS: Mapping[str, Callable[..., Any]] = {
-    DOMAIN: domain,
-    BED: bed,
-    RUNS: boundary_runs,
-    LINE: line,
-    OBSERVATION: observation,
-    # The level and the discharge ARE observations: they are their own roles so
-    # a workflow can tell which row is which, and they read the same afterwards.
-    LEVEL: observation,
-    DISCHARGE: observation,
-    EXTENT: extent,
-}
 
-#: What the canvas offers for a slot the user fills by hand: the draw kind, and
-#: the PURPOSE that shows only the tool this slot needs. A role absent here is
-#: never asked for - a bed is a survey or a number, not a shape to draw.
-DRAW_PURPOSES: Mapping[str, tuple[str, str, str]] = {
-    DOMAIN: ("polygon", "domain",
-             "Draw the outline of the water body this run solves over"),
-    RUNS: ("polyline", "boundary run",
-           "Draw each stretch of the edge that carries a boundary condition"),
-    LINE: ("polyline", "line",
-           "Draw the line this reading is measured along"),
-    EXTENT: ("rectangle", "",
-             "Draw the box this question is asked inside"),
-}
+@dataclass(frozen=True, slots=True)
+class Slot:
+    """One reserved row name: what reads its value, what it may ask the world
+    for, and what the canvas offers when the user fills it by hand."""
+
+    #: The one function that takes every form this slot's value arrives in.
+    #: ``None`` where the value is read by whatever consumes it, not on the way in.
+    ingest: Callable[..., Any] | None = None
+    #: The classes a row under this name may state a need of. Empty means the
+    #: name states no need at all - a geometry is drawn, supplied or measured.
+    classes: frozenset[str] = frozenset()
+    #: The draw kind, the PURPOSE that shows only the tool this slot needs, and
+    #: the prompt. ``None`` is never asked for - a bed is a survey or a number,
+    #: not a shape to draw.
+    draw: tuple[str, str, str] | None = None
+
+
+#: THE RESERVED NAMES. A row named one of these plays that role; every other row
+#: is a plain one, read by whatever declared it.
+SLOTS: Mapping[str, Slot] = MappingProxyType({
+    DOMAIN: Slot(ingest=domain, classes=frozenset({"hydrography"}),
+                 draw=("polygon", "domain",
+                       "Draw the outline of the water body this run solves over")),
+    BED: Slot(ingest=bed,
+              classes=frozenset({"bathymetry", "terrain", "channel survey"})),
+    # The level and the discharge ARE observations: they are their own names so
+    # a workflow can tell which row is which, and they read the same afterwards.
+    LEVEL: Slot(ingest=observation, classes=frozenset({"water level series"})),
+    DISCHARGE: Slot(ingest=observation, classes=frozenset({"discharge series"})),
+    OBSERVE: Slot(ingest=observation,
+                  classes=frozenset({"water quality sample", "bed material",
+                                     "groundwater level"})),
+    LINE: Slot(ingest=line,
+               draw=("polyline", "line",
+                     "Draw the line this reading is measured along")),
+    EXTENT: Slot(ingest=extent,
+                 draw=("rectangle", "",
+                       "Draw the box this question is asked inside")),
+    # A table of weather is read by the composite that expands it onto the run's
+    # own clock, so nothing reads it on the way in.
+    WEATHER: Slot(classes=frozenset({"weather forcing"})),
+    RUNS: Slot(ingest=boundary_runs,
+               draw=("polyline", "boundary run",
+                     "Draw each stretch of the edge that carries a boundary "
+                     "condition")),
+})
+
+
+def role_of(name: str) -> str:
+    """The role a row called ``name`` plays, or "" for a plain row."""
+    return str(name) if str(name) in SLOTS else ""
 
 
 def ingest_slot(role: str, value: Any, *, label: str = "",
                 **coercion: Any) -> Any:
     """One slot's value, through the ingestion its ROLE reads.
 
-    ``coercion`` is what the ROW told its slot about the value - the point a
-    nearest site is ranked against, the unit a keyword reads. A role nothing here
-    knows returns the value as it came: the slot is then whatever its own
-    consumer makes of it."""
-    read = _INGESTIONS.get(str(role))
-    if read is None:
+    ``coercion`` is what the RUN told this slot about the value - the point a
+    nearest site is ranked against, the unit the keyword it fills reads. A role
+    nothing here reads returns the value as it came: the slot is then whatever
+    its own consumer makes of it."""
+    slot = SLOTS.get(str(role))
+    if slot is None or slot.ingest is None:
         return value
-    found = read(value, label=label or str(role),
-                 **{k: v for k, v in coercion.items() if v is not None})
+    found = slot.ingest(value, label=label or str(role),
+                        **{k: v for k, v in coercion.items() if v is not None})
     if inspect.isawaitable(found):
         # This runs OFF the loop, so an ingestion that reads a stored layer
         # gets a loop of its own in this thread.
@@ -92,8 +120,8 @@ async def ask_on_canvas(role: str, *, tool: str, param: str,
     ``None`` whenever there is nothing to ask - no live session, a role the
     canvas offers nothing for, or a declined drawing - so the caller's own
     refusal is what a reader sees, never a geometry nobody drew."""
-    offered = DRAW_PURPOSES.get(str(role))
-    if offered is None:
+    slot = SLOTS.get(str(role))
+    if slot is None or slot.draw is None:
         return None
     from trid3nt_server.gates.input_review import resolve_input_gate_mode
     from trid3nt_server.render.pipeline_emitter import current_emitter
@@ -103,7 +131,7 @@ async def ask_on_canvas(role: str, *, tool: str, param: str,
         return None
     from trid3nt_server.gates.draw_input import gate_draw_input
 
-    geometry, purpose, prompt = offered
+    geometry, purpose, prompt = slot.draw
     outcome = await gate_draw_input(tool_name=tool, param=param,
                                     geometry=geometry, purpose=purpose,
                                     prompt=prompt)

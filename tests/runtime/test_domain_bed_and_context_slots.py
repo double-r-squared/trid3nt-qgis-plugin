@@ -87,8 +87,9 @@ def test_a_context_row_states_what_the_sheet_says_when_its_source_is_empty():
         "no unstated near this domain; the stated value stands")
 
 
-def test_context_needs_a_producer_and_optional_still_refuses_one():
-    with pytest.raises(PlanValidationError, match=r"declares \.context\(\) with no producer"):
+def test_context_needs_something_to_ask_and_optional_still_refuses_a_producer():
+    with pytest.raises(PlanValidationError,
+                       match=r"states neither a need nor a producer"):
         Data.context()
     with pytest.raises(PlanValidationError, match=r"declares a producer AND \.optional"):
         class DATA:
@@ -109,7 +110,7 @@ def test_a_context_rows_absence_continues_the_run_and_says_so(monkeypatch):
     async def _empty(env, producer, label):
         raise RuntimeError("WQP_NO_SITES")
 
-    monkeypatch.setattr(interpreter, "_walk_ladder", _empty)
+    monkeypatch.setattr(interpreter, "_produced", _empty)
     env = interpreter._Env(params=None, data={}, results={})
     row = data_rows(DATA)[0]
     assert asyncio.run(interpreter._produce(env, row)) is None
@@ -134,7 +135,7 @@ def test_a_context_row_no_step_reads_is_asked_all_the_same(monkeypatch):
         asked.append(producer.runner)
         raise RuntimeError("WQP_NO_SITES")
 
-    monkeypatch.setattr(interpreter, "_walk_ladder", _asked)
+    monkeypatch.setattr(interpreter, "_produced", _asked)
     rows = {row.name: row for row in data_rows(DATA)}
     env = interpreter._Env(params=None, data=rows, results={})
     node = interpreter.PlanNode(index=0, label="step", runner="r", kind="step",
@@ -173,9 +174,9 @@ def _env_over(value, monkeypatch, body=_RIVER):
     from trid3nt_server.workflows.runtime import interpreter
 
     async def _answered(env, producer, label):
-        return producer, value
+        return {}, value
 
-    monkeypatch.setattr(interpreter, "_walk_ladder", _answered)
+    monkeypatch.setattr(interpreter, "_produced", _answered)
     rows = {row.name: row for row in data_rows(body)}
     return interpreter, interpreter._Env(params=None, data=rows, results={})
 
@@ -256,7 +257,7 @@ def test_a_malformed_ask_on_a_context_row_refuses_rather_than_reading_absent(
                                  "2015-01-01 over this extent; the window is "
                                  "the ask's", "INPUT_INVALID")
 
-    monkeypatch.setattr(interpreter, "_walk_ladder", _refused)
+    monkeypatch.setattr(interpreter, "_produced", _refused)
     env = interpreter._Env(params=None, data={}, results={})
     with pytest.raises(Exception) as exc:
         asyncio.run(interpreter._produce(env, data_rows(DATA)[0]))
@@ -278,7 +279,7 @@ def test_a_malformed_value_handed_to_a_context_rows_slot_refuses_too(monkeypatch
         raise UserInputError("a reading is a number or a layer of sites",
                              code="OBSERVATION_INVALID")
 
-    monkeypatch.setattr(interpreter, "_walk_ladder", _answered)
+    monkeypatch.setattr(interpreter, "_produced", _answered)
     env = interpreter._Env(params=None, data={}, results={})
     row = data_rows(DATA)[0]
     with pytest.raises(UserInputError) as exc:
@@ -299,7 +300,7 @@ def test_a_tail_read_off_a_wholly_absent_row_is_nothing(monkeypatch):
     async def _empty(env, producer, label):
         raise RuntimeError("WQP_NO_SITES")
 
-    monkeypatch.setattr(interpreter, "_walk_ladder", _empty)
+    monkeypatch.setattr(interpreter, "_produced", _empty)
     rows = {row.name: row for row in data_rows(DATA)}
     env = interpreter._Env(params=None, data=rows, results={})
     assert asyncio.run(interpreter._deref(Ref("sample.value"), env)) is None
@@ -327,7 +328,7 @@ def test_a_hard_producer_row_still_refuses_when_its_source_is_empty(monkeypatch)
     async def _empty(env, producer, label):
         raise RuntimeError("WQP_NO_SITES")
 
-    monkeypatch.setattr(interpreter, "_walk_ladder", _empty)
+    monkeypatch.setattr(interpreter, "_produced", _empty)
     env = interpreter._Env(params=None, data={}, results={})
     with pytest.raises(RuntimeError, match="WQP_NO_SITES"):
         asyncio.run(interpreter._produce(env, data_rows(DATA)[0]))
@@ -396,9 +397,9 @@ def _answered(monkeypatch, value: Any):
     from trid3nt_server.workflows.runtime import interpreter
 
     async def _found(env, producer, label):
-        return producer, value
+        return {}, value
 
-    monkeypatch.setattr(interpreter, "_walk_ladder", _found)
+    monkeypatch.setattr(interpreter, "_produced", _found)
     monkeypatch.setattr(interpreter, "_record_for",
                         lambda *a, **k: _Record())
     return interpreter
@@ -460,7 +461,7 @@ def test_a_context_row_over_a_window_nobody_stated_is_not_asked(monkeypatch):
         asked.append(label)
         raise AssertionError("the source must not be asked")
 
-    monkeypatch.setattr(interpreter, "_walk_ladder", _never)
+    monkeypatch.setattr(interpreter, "_produced", _never)
     env = interpreter._Env(params=_Params({"rain_start_date": None}), data={},
                            results={})
     row = data_rows(DATA)[0]
@@ -479,10 +480,10 @@ def _standing_on(bbox=(-123.22, 45.48, -123.19, 45.50)):
 
 
 def _elevation_slot(role: str):
-    from trid3nt_server.workflows.runtime.data import BED, DataDecl, LEVEL
+    """A row whose NAME is the slot it plays - which is the only way to be one."""
+    from trid3nt_server.workflows.runtime.data import DataDecl
 
-    named = {BED: "bed", LEVEL: "stage"}.get(role, "row")
-    return DataDecl(name=named, role=role)
+    return DataDecl(name=role)
 
 
 def test_every_elevation_slot_is_read_on_the_runs_own_vertical_frame():

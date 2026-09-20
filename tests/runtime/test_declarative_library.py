@@ -668,49 +668,17 @@ async def test_data_producer_runs_lazily_on_first_ref():
 
 
 @pytest.mark.asyncio
-async def test_a_declared_ladder_walks_its_rungs_and_records_which_answered():
-    """The declaration IS the mechanism: the primary fails, the rung answers, and
-    the record names the rung - so a producer that degraded is distinguishable
-    from one that never had a ladder."""
-    data = [DataDecl("bed", tool(f"{_HERE}.stub_producer")
-                 .ladder(tool(f"{_HERE}.stub_rung")))]
+async def test_a_producer_row_calls_its_one_producer_and_reports_its_refusal():
+    """A ROW NAMES ONE PRODUCER. Degrading between sources is the MATCH's - it
+    ranks every source that states coverage here and drops the ones that held
+    nothing - so a row has no second rung to fall to and a refusal is the run's."""
+    data = [DataDecl("bed", tool(f"{_HERE}.stub_producer"))]
     plan = Plan("w", None, (Step(runner=f"{_HERE}.stub_second",
                                  kwargs={"m": Ref("bed")}),))
     _FAIL_AT.add("stub_producer")
-    out = await _run(plan, _params(), {}, data, resume=False)
-    assert _CALLS == ["stub_producer", "stub_rung", "stub_second"]
-    assert out.value["seen"]["m"] == "s3://b/rung.tif"
-    answered = [r for r in out.data_records if r.node == "data:bed"]
-    assert answered and answered[0].runner.endswith("stub_rung")
-    # LOUD: a cross-dataset substitution is a note on the run, which the packet
-    # carries, and not a log line a reader of the answer never sees.
-    said = [n for n in out.notes if n.startswith("a DIFFERENT dataset answered")]
-    assert said and "stub_producer refused" in said[0] \
-        and "stub_rung answered" in said[0]
-
-
-@pytest.mark.asyncio
-async def test_a_producer_that_answers_never_reaches_its_rungs():
-    data = [DataDecl("bed", tool(f"{_HERE}.stub_producer")
-                 .ladder(tool(f"{_HERE}.stub_rung")))]
-    plan = Plan("w", None, (Step(runner=f"{_HERE}.stub_second",
-                                 kwargs={"m": Ref("bed")}),))
-    out = await _run(plan, _params(), {}, data, resume=False)
-    assert _CALLS == ["stub_producer", "stub_second"]
-    assert out.value["seen"]["m"] == "s3://b/produced.tif"
-
-
-@pytest.mark.asyncio
-async def test_the_last_rungs_failure_is_what_the_run_reports():
-    """Primary -> fallback -> TYPED ERROR: an exhausted ladder never degrades to
-    a silent None."""
-    data = [DataDecl("bed", tool(f"{_HERE}.stub_producer")
-                 .ladder(tool(f"{_HERE}.stub_rung")))]
-    plan = Plan("w", None, (Step(runner=f"{_HERE}.stub_second",
-                                 kwargs={"m": Ref("bed")}),))
-    _FAIL_AT.update({"stub_producer", "stub_rung"})
-    with pytest.raises(StepFailedError, match="rung down"):
+    with pytest.raises(StepFailedError):
         await _run(plan, _params(), {}, data, resume=False)
+    assert _CALLS == ["stub_producer"]
 
 
 @pytest.mark.asyncio
@@ -819,16 +787,16 @@ def test_supplied_on_a_slot_and_supplied_on_a_producer_are_different_asks():
 
 @pytest.mark.asyncio
 async def test_a_supplied_producer_row_is_on_the_wire_and_the_caller_fills_it():
-    """A FETCH row with no role, marked .supplied(), takes the caller's artifact:
-    the mark says the caller's own thing stands in place of the build, so the row
-    has to be askable, and what the caller hands in is what the run reads."""
-    decl = DataDecl("weather", tool(f"{_HERE}.stub_producer").supplied(validate=None))
+    """A row marked .supplied() takes the caller's artifact: the mark says the
+    caller's own thing stands in place of the build, so the row has to be
+    askable, and what the caller hands in is what the run reads."""
+    decl = DataDecl("held", tool(f"{_HERE}.stub_producer").supplied(validate=None))
     assert decl.role == "" and decl.fills_from_user is True
     plan = Plan("w", None, (Step(runner=f"{_HERE}.stub_second",
-                                 kwargs={"m": Ref("weather")}),))
+                                 kwargs={"m": Ref("held")}),))
     p = await resolve_params(_params(), {})
     out = await interpret(plan, p, _params(), [decl], resume=False,
-                          supplied={"weather": "file:///mine/weather.csv"})
+                          supplied={"held": "file:///mine/weather.csv"})
     assert _CALLS == ["stub_second"]
     assert out.value["seen"]["m"] == "file:///mine/weather.csv"
 

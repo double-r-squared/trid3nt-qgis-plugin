@@ -3,7 +3,7 @@
 A producer that walks a reach measures a centerline on the way; one that
 delineates a catchment measures a snapped outlet. Those ride ON the domain
 artifact under the producer's own names, so a question that needs one asks for
-that one. The OBSERVATION slot is the same idea for a number: the record goes in,
+that one. The OBSERVE slot is the same idea for a number: the record goes in,
 one reading comes out, in the unit the keyword reads, with its age stated.
 """
 
@@ -21,7 +21,7 @@ from trid3nt_server.inputs.observation import (
 )
 from trid3nt_server.inputs.slots import ingest_slot
 from trid3nt_server.inputs.user_input import UserInputError
-from trid3nt_server.workflows.runtime.data import Data, OBSERVATION, tool
+from trid3nt_server.workflows.runtime.data import Data, OBSERVE, tool
 
 _POLYGON = {"type": "Polygon", "coordinates": [[
     [-122.70, 45.50], [-122.60, 45.50], [-122.60, 45.56], [-122.70, 45.56],
@@ -103,7 +103,7 @@ _SITES = {"type": "FeatureCollection", "features": [
 
 def test_the_nearest_site_the_unit_and_the_age_are_the_slots_own_ingestion():
     found = observation(_SITES, near=(-122.65, 45.53), to_units="degC",
-                        measures="a water temperature")
+                        caption="a water temperature")
     assert found.site_id == "NEAR"
     assert found.value == pytest.approx(10.0)
     assert found.units == "degC"
@@ -119,26 +119,31 @@ def test_a_number_stated_on_the_call_stands_over_any_record():
 def test_nothing_reporting_it_near_this_place_refuses_typed():
     with pytest.raises(ObservationError):
         observation({"type": "FeatureCollection", "features": []},
-                    measures="a water temperature", label="the sample record")
+                    caption="a water temperature", label="the sample record")
 
 
 def test_the_observation_slot_reads_through_its_rows_own_coercion():
     """A row tells its slot where to rank from and which unit the keyword reads;
     the ingestion does the rest and nothing downstream branches on the source."""
-    assert ingest_slot(OBSERVATION, _SITES, label="water_temperature",
+    assert ingest_slot(OBSERVE, _SITES, label="water_temperature",
                        near=(-122.65, 45.53), to_units="degC").value == \
         pytest.approx(10.0)
 
 
 def test_the_row_declares_the_slot_and_what_the_model_reads_off_it():
-    row = Data.observation(
-        tool("fetch_usgs_water_quality", characteristic="temperature"),
-        near=(-122.65, 45.53), units="degC",
-        measures="the water temperature", opens="the water opens at")
-    assert row.role == OBSERVATION
-    assert row.coercion["to_units"] == "degC"
-    assert row.coercion["field"] == "value"
+    """The row states the CLASS and the point it is asked at, and nothing else:
+    the slot is its name, the unit is the keyword's and the two sentences are
+    the template's captions."""
+    from trid3nt_server.workflows.runtime.data import data_rows
+
+    class DATA:
+        observe = Data.need("water quality sample", at=(-122.65, 45.53))
+
+    (row,) = data_rows(DATA)
+    assert row.role == OBSERVE
+    assert row.data_class == "water quality sample"
+    assert row.coercion == {"near": (-122.65, 45.53)}
     # A reading is a record to read it off, OR the number itself.
     assert row.wire_annotation == (str | float | None)
     assert "the number itself" in row.doc_line
-    assert "degC" in row.doc_line
+    assert "water quality sample" in row.doc_line

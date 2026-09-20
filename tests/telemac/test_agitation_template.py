@@ -53,12 +53,12 @@ def test_the_box_is_an_extent_slot_the_canvas_offers_a_rectangle_for():
     """Giving the domain a producer takes away its own draw gate, so the window
     the cut is made in is the slot with the canvas ask: one EXTENT row, read as
     four numbers by whatever takes a box."""
-    from trid3nt_server.inputs.slots import DRAW_PURPOSES
+    from trid3nt_server.inputs.slots import SLOTS
 
     rows = _rows()
     box = rows["box"]
     assert (box.role, box.geometry, box.producer) == (EXTENT, "rectangle", None)
-    assert DRAW_PURPOSES[EXTENT][0] == "rectangle"
+    assert SLOTS[EXTENT].draw[0] == "rectangle"
     assert rows["coast"].producer.kwargs["bbox"].path == "box.bbox"
 
 

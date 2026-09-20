@@ -82,7 +82,7 @@ def test_the_water_opens_on_one_reading_taken_at_the_runs_own_moment():
 
     rows = {r.name: r for r in _workflow().data}
     opening = rows["water_temperature"]
-    assert opening.role == "observation"
+    assert opening.role == "observe"
     assert opening.producer.runner == "fetch_usgs_water_quality"
     assert opening.producer.kwargs["valid_time"].name == "event_time"
     assert opening.coercion["near"] == [Ref("station.lon"), Ref("station.lat")]
@@ -100,12 +100,10 @@ def test_the_bed_is_one_row_the_merge_derive_made_of_two_rows():
 
 
 def test_the_domain_producer_hands_over_the_faces_the_run_is_prescribed_on():
-    """A river reach cuts with its two end transects; a lake is the rung below
-    it on the same ladder and names no runs at all."""
+    """A river reach cuts with its two end transects, and they ride on the
+    polygon it returned: the runs slot reads them off the domain."""
     rows = {row.name: row for row in _workflow().data}
     assert rows["domain"].producer.runner == "fetch_river_reach"
-    assert [rung.runner for rung in rows["domain"].producer.ladder_rungs] == [
-        "fetch_nhd_waterbody_at_point"]
     recipe = next(s for s in _workflow().plan.steps
                   if s.name == "mesh").kwargs["mesh"]
     roles = next(op for op in recipe["ops"] if op["op"] == "set_boundary_roles")

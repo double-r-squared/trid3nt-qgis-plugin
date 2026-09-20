@@ -441,11 +441,10 @@ def test_the_water_temperature_record_is_one_reading_off_the_nearest_site():
     from trid3nt_server.workflows.runtime import Ref
 
     row = {r.name: r for r in _plan().data}["water_temperature"]
-    assert row.role == "observation"
+    assert row.role == "observe"
     assert row.producer.runner == "fetch_usgs_water_quality"
     assert row.coercion["near"] == Ref("domain.centroid")
     assert row.coercion["to_units"] == "degC"
-    assert row.coercion["opens"]
 
 
 def test_water_nobody_sampled_is_a_sentence_rather_than_a_refusal():

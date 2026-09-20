@@ -67,7 +67,7 @@ def test_the_water_opens_on_one_reading_ranked_from_where_it_is_read():
     from trid3nt_server.workflows.runtime import Ref
 
     row = {r.name: r for r in _workflow().data}["water_temperature"]
-    assert row.role == "observation"
+    assert row.role == "observe"
     assert row.producer.runner == "fetch_usgs_water_quality"
     assert row.coercion["near"] == [Ref("station.lon"), Ref("station.lat")]
     assert row.coercion["to_units"] == "degC"

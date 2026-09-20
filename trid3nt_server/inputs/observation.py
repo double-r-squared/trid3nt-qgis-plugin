@@ -227,8 +227,7 @@ def observation(source: Any, *, near: Any = None, field: str = "value",
                 series_field: str = "time_series_csv",
                 record_units: Any = None, column_units: Any = None,
                 above_field: str = "", at: Any = None, window_s: Any = None,
-                to_datum: Any = None, offset: Any = None,
-                measures: str = "this value", opens: str = "",
+                to_datum: Any = None, offset: Any = None, caption: str = "",
                 quantity: str = "state", label: str = "observation",
                 code: str = _CODE) -> Observation | None:
     """THE ingestion: a fetched point layer, or a STATED value -> one reading.
@@ -241,11 +240,13 @@ def observation(source: Any, *, near: Any = None, field: str = "value",
     reaches only through the ``offset`` row; ``record_units`` is the unit a
     source that names none per site reports in. A number is the value the caller
     stated, which stands over any record and is already on the slot's own datum;
-    ``opens`` says on the run journal what this run opened on, because a sample
-    is a moment and its age is the reader's business. Nothing that reports
-    refuses typed."""
+    ``caption`` is what the template CALLS this quantity - the noun every refusal
+    here is written about and the one the run journal opens its sentence with,
+    because a sample is a moment and its age is the reader's business. Nothing
+    that reports refuses typed."""
     if source is None:
         return None
+    measures, opens = caption or "this value", _opening(caption)
     stated = _stated(source)
     if stated is not None:
         found = Observation(value=stated,
@@ -412,6 +413,20 @@ def _onto_datum(source: Any, props: Mapping[str, Any], to_datum: Any,
     except DatumError as exc:
         raise ObservationError(exc.error_code, str(exc)) from exc
     return (aligned.datum, aligned.shift_m, aligned.note)
+
+
+def _opening(caption: str) -> str:
+    """What the run journal opens its sentence with, off the row's own caption.
+
+    The caption names the quantity as a thing - "a streamflow" - and the journal
+    says what THAT one did, so the article becomes the definite one. A row the
+    template captions nothing says nothing on the journal."""
+    words = str(caption or "").split()
+    if not words:
+        return ""
+    if words[0].lower() in ("a", "an", "the"):
+        words = words[1:]
+    return f"the {' '.join(words)} opens at"
 
 
 def _stated(source: Any) -> float | None:

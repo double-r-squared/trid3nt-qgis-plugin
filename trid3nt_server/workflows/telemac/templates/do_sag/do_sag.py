@@ -90,14 +90,9 @@ class DATA:
     # The outfall names which stretch to model: the reach is walked DOWNSTREAM
     # from it, so the sag develops inside the domain rather than past its end. A
     # domain the user supplies supersedes this.
-    # The seed is on a lake rather than in a channel where no reach cuts,
-    # so the producer is a LADDER: the reach, else the waterbody the seed
-    # stands in, which is a closed body and names no runs.
     domain = Data.domain(
         tool("fetch_river_reach", distance_km=_REACH_LENGTH_KM,
-             seed_point=[Ref("outfall_coords.lon"), Ref("outfall_coords.lat")])
-        .ladder(tool("fetch_nhd_waterbody_at_point",
-                     seed_point=[Ref("outfall_coords.lon"), Ref("outfall_coords.lat")])))
+             seed_point=[Ref("outfall_coords.lon"), Ref("outfall_coords.lat")]))
     # THE STRETCHES OF ITS EDGE the water crosses. The reach producer measured
     # them where it cut the section, and they ride on the domain it returned; a
     # domain that arrives with none - a drawn outline, a lake - is asked for
