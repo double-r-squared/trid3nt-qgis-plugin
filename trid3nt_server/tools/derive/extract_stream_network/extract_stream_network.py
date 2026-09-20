@@ -143,11 +143,11 @@ def extract_stream_network(
 
     Use this when: "where are the streams/drainage lines here", "trace
     the channels on this DEM", terrain-derived drainage where NHD mapping
-    is missing/coarse, or upstream of ``delineate_watershed`` (streams
-    show where to put the pour point). Do NOT use for: mapped/named
-    rivers (``fetch_river_geometry``/``fetch_nhdplus_nldi_navigate`` --
+    is missing/coarse, or upstream of ``fetch_watershed`` (streams show
+    where to put the pour point). Do NOT use for: mapped/named rivers
+    (``fetch_river_geometry``/``fetch_nhdplus_nldi_navigate`` --
     surveyed, not DEM-derived); the basin boundary
-    (``delineate_watershed``). Fetch the DEM first and pass its uri.
+    (``fetch_watershed``). Fetch the DEM first and pass its uri.
 
     Params:
         dem_uri: the DEM layer, at most 16 million cells.

@@ -8,8 +8,6 @@ a catchment that ran off the edge of its window."""
 
 from __future__ import annotations
 
-import inspect
-import json
 from types import SimpleNamespace
 
 import pytest
@@ -22,8 +20,6 @@ from trid3nt_server.tools.fetchers.hydrology.fetch_watershed import hooks as ws
 #: The gauged Coweeta Creek headwater near Otto, NC - the rain-on-grid canary's own
 #: pour point, so the offline shapes here stand where the live proof stands.
 _POUR = [-83.40402, 35.05746]
-
-_DELINEATE = "trid3nt_server.tools.derive.delineate_watershed.delineate_watershed"
 
 
 @pytest.fixture(scope="module")
@@ -43,24 +39,12 @@ def _square(lon: float, lat: float, half: float = 0.01) -> dict:
         [lon - half, lat - half]]]}
 
 
-class _Watershed:
-    """What the delineation hands back: the artifact path plus its measures."""
-
-    def __init__(self, path: str, notes: list[str], area_km2: float = 30.4788):
-        self.uri = path
-        self.notes = notes
-        self.area_km2 = area_km2
-
-
-def _stub_delineation(tmp_path, notes, *, snapped=(-83.40125, 35.059044)):
-    """A delineation that wrote its FeatureCollection and states these notes."""
-    path = tmp_path / "watershed.geojson"
-    path.write_text(json.dumps({"type": "FeatureCollection", "features": [
-        {"type": "Feature", "geometry": _square(*_POUR),
-         "properties": {"area_km2": 30.4788, "cell_count": 39835,
-                        "pour_point_lon": _POUR[0], "pour_point_lat": _POUR[1],
-                        "snapped_lon": snapped[0], "snapped_lat": snapped[1]}}]}))
-    return _Watershed(str(path), notes)
+def _stub_basin(notes, *, truncated=False, snapped=(-83.40125, 35.059044)):
+    """What the delineation hands back: the geometry, its measures and its notes."""
+    return lambda *a, **kw: (_square(*_POUR), {
+        "area_km2": 30.4788, "cell_count": 39835, "truncated": truncated,
+        "pour_point_lon": _POUR[0], "pour_point_lat": _POUR[1],
+        "snapped_lon": snapped[0], "snapped_lat": snapped[1]}, notes)
 
 
 def test_the_spec_delegates_the_grid_and_declares_the_two_rows(spec):
@@ -118,24 +102,15 @@ def test_the_outlet_run_is_two_points_a_few_cells_apart():
     assert length == pytest.approx(2.0 * ws._OUTLET_HALF_CELLS * 30.0, rel=0.02)
 
 
-def test_the_delineations_truncation_note_still_says_what_this_matches_on():
-    """The refusal below reads the derive's own note; a reworded note must break here
-    rather than silently switch the refusal off."""
-    from trid3nt_server.tools.derive.delineate_watershed import delineate_watershed as dw
-
-    assert ws._TRUNCATION_MARKER in inspect.getsource(dw)
-
-
 def test_a_basin_that_ran_off_the_window_refuses_rather_than_returning_a_cut(
-        spec, tmp_path, monkeypatch):
-    import importlib
+        spec, monkeypatch):
+    from trid3nt_server.tools import TOOL_REGISTRY
 
-    module = importlib.import_module(_DELINEATE)
-    monkeypatch.setattr(module, "delineate_watershed",
-                        lambda **kw: _stub_delineation(
-                            tmp_path, ["Catchment touches the DEM edge -- more"]))
+    monkeypatch.setattr(ws, "_basin", _stub_basin(["traced it"], truncated=True))
+    monkeypatch.setitem(TOOL_REGISTRY, "fetch_dem", SimpleNamespace(
+        fn=lambda **kw: SimpleNamespace(uri="s3://bucket/dem.tif")))
     with pytest.raises(RouterInputError) as excinfo:
-        ws._basin(spec, tuple(_POUR), "s3://bucket/dem.tif", str(tmp_path))
+        ws.read(spec, _params(), timeout_s=300.0)
     assert excinfo.value.error_code == "WATERSHED_TRUNCATED"
     assert "buffer_km" in str(excinfo.value)
 
@@ -175,14 +150,10 @@ def test_a_dem_refusal_that_is_not_retryable_stays_an_input_refusal(spec, monkey
 
 
 def test_the_two_rows_are_the_basin_and_the_outlet_it_drains_through(
-        spec, tmp_path, monkeypatch):
-    import importlib
-
+        spec, monkeypatch):
     from trid3nt_server.tools import TOOL_REGISTRY
 
-    module = importlib.import_module(_DELINEATE)
-    monkeypatch.setattr(module, "delineate_watershed",
-                        lambda **kw: _stub_delineation(tmp_path, ["traced it"]))
+    monkeypatch.setattr(ws, "_basin", _stub_basin(["traced it"]))
     monkeypatch.setitem(TOOL_REGISTRY, "fetch_dem", SimpleNamespace(
         fn=lambda **kw: SimpleNamespace(uri="s3://bucket/dem.tif")))
 

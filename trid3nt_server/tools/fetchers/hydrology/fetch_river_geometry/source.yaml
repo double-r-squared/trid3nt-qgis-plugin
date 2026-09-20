@@ -90,7 +90,7 @@ docstring: |-
   - Fluvial flood workflow requires channel network for boundary-condition
     placement (upstream inflow nodes, downstream outlets).
   - User asks to visualize stream networks or watershed drainage patterns.
-  - Watershed delineation: ``delineate_watershed`` tool consumes the flowline
+  - Watershed delineation: ``fetch_watershed`` consumes the flowline
     outlet point to route upstream.
 
   **When NOT to use:**

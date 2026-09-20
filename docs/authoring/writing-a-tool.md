@@ -117,8 +117,8 @@ RASTER, the emission seam publishes it on the way out (`publish_for_emission` in
 event loop). There is no per-tool opt-out flag: a raster that should not be seen
 is one the tool does not return. A failed publish degrades to the unstyled
 `s3://` COG rather than dropping the layer. Vectors render inline as GeoJSON.
-See `delineate_watershed`'s `WatershedLayerURI(...)` return for the
-construction, style row included.
+See `probe_point`'s `LayerURI(...)` consumers for the construction, style
+row included.
 
 ### Caching
 

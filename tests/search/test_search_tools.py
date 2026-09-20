@@ -292,7 +292,7 @@ def test_extra_kwargs_ignored():
 def test_typo_watershd_routes_without_exact_corpus_queries(
     tmp_path, monkeypatch
 ):
-    """A typo'd ask still surfaces ``delineate_watershed`` in the top 5.
+    """A typo'd ask still surfaces ``fetch_watershed`` in the top 5.
 
     Its exact corpus queries are stripped, so the correct token has to survive in the
     vocabulary through other tools for the fuzzy correction to fire."""
@@ -301,13 +301,13 @@ def test_typo_watershd_routes_without_exact_corpus_queries(
     corpus = _load_corpus()
     stripped = [
         q
-        for q in corpus.get("delineate_watershed", [])
+        for q in corpus.get("fetch_watershed", [])
         if "watershed" not in q.lower()
     ]
-    assert stripped != corpus.get("delineate_watershed", []), (
+    assert stripped != corpus.get("fetch_watershed", []), (
         "expected to strip at least one 'watershed' corpus query"
     )
-    corpus["delineate_watershed"] = stripped
+    corpus["fetch_watershed"] = stripped
     corpus_file = tmp_path / "corpus_stripped.yaml"
     corpus_file.write_text(_yaml.safe_dump(corpus))
     monkeypatch.setenv("TRID3NT_TOOL_CORPUS_YAML", str(corpus_file))
@@ -321,8 +321,8 @@ def test_typo_watershd_routes_without_exact_corpus_queries(
 
     # Ranking: the raw typo phrase lands the target in the top-5.
     top = _run_top_k("delineate the watershd that drains to this point", k=5)
-    assert "delineate_watershed" in top, (
-        f"expected delineate_watershed in top-5 for typo query; got {top}"
+    assert "fetch_watershed" in top, (
+        f"expected fetch_watershed in top-5 for typo query; got {top}"
     )
 
 
@@ -332,7 +332,7 @@ def test_typo_watershd_routes_without_exact_corpus_queries(
         # "watershd" is the discriminating case: WITHOUT expansion it misses
         # the top-5 entirely; with expansion the correction "watershed" carries
         # BM25 + name-substring.
-        ("watershd above this gauge", "delineate_watershed"),
+        ("watershd above this gauge", "fetch_watershed"),
         ("floof depth for this neighborhood", "compute_flood_depth_damage"),
     ],
 )

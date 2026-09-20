@@ -204,7 +204,6 @@ from .derive.compute_model_residuals import compute_model_residuals  # noqa: E40
 from .derive.compute_sediment_yield import compute_sediment_yield  # noqa: E402,F401
 # model-fit skill metrics (spotpy).
 from .derive.compute_skill_metrics import compute_skill_metrics  # noqa: E402,F401
-from .derive.delineate_watershed import delineate_watershed  # noqa: E402,F401
 from .derive.derive_active_fire import derive_active_fire  # noqa: E402,F401
 # THE BED composition: a measurement over a wider surface, the finer one winning
 # where it measured, with a sidecar saying which painted each cell.

@@ -16,10 +16,6 @@ come back as the two rows of one domain artifact carrying the DEM's own uri.
 # here: a producer states runs in the vocabulary the slot matches on, and a copy of that
 # word would drop the run silently the day the slot renamed it.
 #
-# A basin that reaches the window edge is a LOWER BOUND on the true catchment, so it
-# refuses by name: the derive states that truncation in its own notes, and matching
-# that marker is what couples this refusal to it.
-
 from __future__ import annotations
 
 import json
@@ -50,9 +46,8 @@ _MAX_PX_PER_AXIS = 4000
 #: as a cell, so the face the rating is imposed over is stated in cells.
 _OUTLET_HALF_CELLS = 1.5
 
-#: The delineation's own word for a catchment that ran out of DEM. It is the only
-#: channel that fact travels on, and a basin clipped by the window is not a domain.
-_TRUNCATION_MARKER = "touches the DEM edge"
+#: Upslope-cell count defining a flow line for the pour-point snap.
+_SNAP_THRESHOLD_CELLS = 100
 
 
 def _pour_point(spec: SourceSpec, params: dict[str, Any]) -> tuple[float, float]:
@@ -141,41 +136,152 @@ def _dem(spec: SourceSpec, bbox: tuple[float, float, float, float],
             spec.error_code_prefix, message, spec.input_error_suffix)
 
 
+def _snap_to_stream(acc: Any, affine: Any, lon: float, lat: float,
+                    threshold: int) -> tuple[float, float] | None:
+    """Nearest cell CENTRE with accumulation at or above ``threshold``, measured
+    in cell-index space; None when no cell reaches it."""
+    # Pure numpy because pysheds 0.4's snap_to_mask is NEP-50-broken.
+    import numpy as np
+
+    mask = acc >= threshold
+    if not bool(mask.any()):
+        return None
+    col_f, row_f = ~affine * (lon, lat)
+    rows, cols = np.nonzero(mask)
+    d2 = (rows + 0.5 - row_f) ** 2 + (cols + 0.5 - col_f) ** 2
+    i = int(np.argmin(d2))
+    x, y = affine * (cols[i] + 0.5, rows[i] + 0.5)
+    return (float(x), float(y))
+
+
+def _grid_epsg(grid: Any) -> int | None:
+    """The EPSG the conditioned grid is in, or ``None`` when it does not state one."""
+    from pyproj import CRS
+
+    try:
+        return CRS.from_user_input(getattr(grid.crs, "crs", grid.crs)).to_epsg()
+    except Exception:  # noqa: BLE001 - a grid with no readable CRS is lon/lat
+        return None
+
+
+def _cell_area_km2(grid: Any) -> float:
+    """Approximate cell area in km^2, degrees converted at the centre latitude on
+    a geographic grid, which is adequate over one catchment's span."""
+    affine = grid.affine
+    res_x, res_y = abs(affine.a), abs(affine.e)
+    try:
+        geographic = bool(getattr(grid.crs, "is_geographic", False))
+    except Exception:  # noqa: BLE001
+        geographic = False
+    if not geographic:
+        # A projected grid's cell size is already in metres.
+        return (res_x * res_y) / 1.0e6
+    from pyproj import Geod
+
+    x0, y0 = grid.affine * (0, 0)
+    x1, y1 = grid.affine * (grid.shape[1], grid.shape[0])
+    lat_c, lon_c = 0.5 * (y0 + y1), 0.5 * (x0 + x1)
+    geod = Geod(ellps="WGS84")
+    dx_m = geod.inv(lon_c, lat_c, lon_c + res_x, lat_c)[2]
+    dy_m = geod.inv(lon_c, lat_c - 0.5 * res_y, lon_c, lat_c + 0.5 * res_y)[2]
+    return (dx_m * dy_m) / 1.0e6
+
+
 def _basin(spec: SourceSpec, pour_point: tuple[float, float], dem_uri: str,
            scratch: str) -> tuple[dict[str, Any], dict[str, Any], list[str]]:
-    """The D8 catchment over that grid: its geometry, its measures and its notes."""
+    """The D8 catchment upstream of the snapped pour point over that grid: its
+    geometry, its measures and its notes.
+
+    The trace runs in the DEM's OWN grid - a supplied DEM is under no obligation
+    to be lon/lat, and 3DEP arrives in Albers metres - so the pour point goes into
+    that grid and the catchment comes back out of it in EPSG:4326."""
+    import numpy as np
+    from shapely.geometry import mapping
+    from shapely.ops import transform as _transform
+
     from trid3nt_server.tools.derive._hydrology_common import (
         HydrologyInputError,
         HydrologyPrimitivesError,
-    )
-    from trid3nt_server.tools.derive.delineate_watershed.delineate_watershed import (
-        EmptyWatershedError,
-        delineate_watershed,
+        _ENGINE_NOTE,
+        _condition_dem,
+        _dem_bbox_4326,
+        _stage_dem,
     )
 
     sc = spec.error_code_prefix
+    lon, lat = float(pour_point[0]), float(pour_point[1])
+    notes: list[str] = [_ENGINE_NOTE]
     try:
-        result = delineate_watershed(
-            pour_point=pour_point, dem_uri=dem_uri, _output_dir=scratch)
-    except EmptyWatershedError as exc:
-        raise router_empty_error(sc, str(exc), spec.empty_error_suffix)
+        dem_path = _stage_dem(dem_uri, scratch, notes)
+        q_bbox = _dem_bbox_4326(dem_path)
+        if not (q_bbox[0] <= lon <= q_bbox[2] and q_bbox[1] <= lat <= q_bbox[3]):
+            raise router_input_error(
+                sc, f"pour_point {(lon, lat)} is outside the elevation grid "
+                f"fetched for it {q_bbox!r}.", spec.input_error_suffix)
+        grid, fdir, acc = _condition_dem(dem_path)
     except HydrologyInputError as exc:
         raise router_input_error(sc, str(exc), spec.input_error_suffix)
     except HydrologyPrimitivesError as exc:
         raise router_upstream_error(sc, f"the delineation failed: {exc}")
-    notes = list(result.notes or ())
-    if any(_TRUNCATION_MARKER in note for note in notes):
-        raise router_input_error(
-            sc,
-            "the basin above this pour point runs off the edge of the window, so "
-            f"its area ({result.area_km2:.3f} km^2) is a LOWER BOUND and its "
-            "outline is a cut, not a divide. Raise buffer_km until the whole "
-            "catchment fits and ask again.",
-            "TRUNCATED",
-        )
-    with open(result.uri, "rb") as handle:
-        feature = json.load(handle)["features"][0]
-    return feature["geometry"], dict(feature["properties"]), notes
+
+    epsg = _grid_epsg(grid)
+    if epsg not in (None, 4326):
+        from pyproj import Transformer
+
+        into = Transformer.from_crs(4326, epsg, always_xy=True).transform
+        out_of = Transformer.from_crs(epsg, 4326, always_xy=True).transform
+        notes.append(f"DEM grid is EPSG:{epsg}; the pour point was traced in it "
+                     "and the catchment reprojected back to EPSG:4326.")
+    else:
+        into = out_of = lambda x, y: (x, y)  # noqa: E731 - the identity pair
+    grid_x, grid_y = into(lon, lat)
+
+    # The coarse snap moves a pour point clicked well off any channel onto the
+    # nearest flow line; the window refine and index-space trace below are what
+    # make the delineation alignment-invariant.
+    snapped = _snap_to_stream(np.asarray(acc), grid.affine, grid_x, grid_y,
+                              _SNAP_THRESHOLD_CELLS)
+    if snapped is not None:
+        seed_x, seed_y = snapped
+        notes.append(
+            f"Pour point snapped to the nearest cell with >= "
+            f"{_SNAP_THRESHOLD_CELLS} upslope cells: "
+            "({:.6f}, {:.6f}).".format(*out_of(seed_x, seed_y)))
+    else:
+        seed_x, seed_y = grid_x, grid_y
+        notes.append(
+            f"No cell reaches the {_SNAP_THRESHOLD_CELLS}-cell snap threshold; "
+            "using the raw pour point (the window may be too small or too flat).")
+
+    from trid3nt_server.tools.derive._hydrology_common import (
+        snap_and_delineate_index_space)
+
+    mask, polygon, (x_snap, y_snap), cells = snap_and_delineate_index_space(
+        grid, fdir, acc, seed_x, seed_y)
+    if cells == 0:
+        raise router_empty_error(
+            sc, f"the pour point {(lon, lat)} produced an EMPTY catchment - it "
+            "likely sits on the window edge or off the flow grid. Move the pour "
+            "point onto the channel or raise buffer_km.", spec.empty_error_suffix)
+    if epsg not in (None, 4326):
+        polygon = _transform(out_of, polygon)
+    x_snap, y_snap = out_of(x_snap, y_snap)
+    area_km2 = cells * _cell_area_km2(grid)
+
+    logger.info("watershed: pour=(%.5f,%.5f) snapped=(%.5f,%.5f) -> %d cells, "
+                "%.3f km^2", lon, lat, x_snap, y_snap, cells, area_km2)
+    return mapping(polygon), {
+        "area_km2": round(area_km2, 4),
+        "cell_count": cells,
+        # A basin reaching the window edge is a LOWER BOUND on the true
+        # catchment: its outline there is a cut, not a divide.
+        "truncated": bool(mask[0, :].any() or mask[-1, :].any()
+                          or mask[:, 0].any() or mask[:, -1].any()),
+        "pour_point_lon": lon,
+        "pour_point_lat": lat,
+        "snapped_lon": x_snap,
+        "snapped_lat": y_snap,
+    }, notes
 
 
 def _outlet_run(geometry: dict[str, Any], snapped: tuple[float, float],
@@ -218,6 +324,14 @@ def read(spec: SourceSpec, params: dict[str, Any], *,
 
     with tempfile.TemporaryDirectory(prefix="trid3nt_watershed_") as scratch:
         geometry, measures, notes = _basin(spec, (lon, lat), str(dem.uri), scratch)
+    if measures["truncated"]:
+        raise router_input_error(
+            spec.error_code_prefix,
+            "the basin above this pour point runs off the edge of the window, so "
+            f"its area ({float(measures['area_km2']):.3f} km^2) is a LOWER BOUND "
+            "and its outline is a cut, not a divide. Raise buffer_km until the "
+            "whole catchment fits and ask again.",
+            "TRUNCATED")
     snapped = (float(measures["snapped_lon"]), float(measures["snapped_lat"]))
 
     common = {

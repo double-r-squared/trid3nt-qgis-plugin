@@ -554,7 +554,7 @@ def test_the_class_body_names_its_rows_and_keeps_their_order():
 
     class DATA:
         dem = tool("fetch_dem", source="3dep")
-        basin = tool("delineate_watershed", dem_uri=dem)
+        basin = tool("fetch_watershed", dem_uri=dem)
         walls = Data.supplied(geometry="polyline").optional()
         transect = tool("derive_transect", shape=walls)
 
