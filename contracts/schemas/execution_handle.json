@@ -7,6 +7,7 @@
         "small",
         "standard",
         "large",
+        "xlarge",
         "gpu"
       ],
       "title": "Compute Class",
