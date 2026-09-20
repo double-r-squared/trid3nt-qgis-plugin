@@ -165,7 +165,7 @@ _TOOL = "telemac_eutrophication"
 def test_a_driven_run_passes_restart_clean_by_default():
     """A driver run after a code change exists to exercise the code that changed,
     so any ledger under the same invocation key belongs to an older build."""
-    ev = _drive(LiveRun(tool=_TOOL, args={"carrier": 2.0}, case_title="c"))
+    ev = _drive(LiveRun(tool=_TOOL, args={"discharge": 2.0}, case_title="c"))
     assert ev.args["restart_clean"] is True
 
 
