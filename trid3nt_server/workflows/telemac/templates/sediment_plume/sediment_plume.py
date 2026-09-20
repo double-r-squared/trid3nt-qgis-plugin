@@ -194,19 +194,17 @@ class STEERING(T2D):
     coupling = [GAIA.suspended(
         geometry=_GEOMETRY, boundary=_BOUNDARY,
         concentration_mgl=SEDIMENT_CONCENTRATION_MGL,
-        # ONE class, 100 um very fine sand in the keyword's own metres - the
-        # FINEST class the Zyserman-Fredsoe suspension law below is written
-        # for. A 30 um silt run under that same law settled a point, not a
-        # plume: the law is a sand law, and a class under the sand boundary
-        # reads it past where it is written. GAIA is a COUPLED body and the
-        # keywords floor reaches only the carrier's own dictionary, so nothing
-        # on the call can state a finer class than this until a coupled
-        # module's keywords have a surface of their own.
-        CLASSES_SEDIMENT_DIAMETERS=[1.0e-4],
+        # ONE class, 30 um fine silt in the keyword's own metres - the class
+        # this question is asked of, a fraction that travels as a plume at the
+        # currents a release reach carries rather than settling where it
+        # enters. GAIA is a COUPLED body and the keywords floor reaches only
+        # the carrier's own dictionary, so nothing on the call can state a
+        # class the composite does not.
+        CLASSES_SEDIMENT_DIAMETERS=[3.0e-5],
         # Zyserman-Fredsoe, of the suspension formulae GAIA offers. It is a
-        # reference concentration for SAND, and the class above sits at the
-        # sand boundary the law is written for, so the deck states no
-        # CLASSES TYPE OF SEDIMENT to say otherwise.
+        # reference concentration the deck reads for its settling class, which
+        # is non-cohesive at this diameter, so the deck states no CLASSES TYPE
+        # OF SEDIMENT to say otherwise.
         SUSPENSION_TRANSPORT_FORMULA_FOR_ALL_SANDS=3,
         # The character-of-the-flow scheme a PULSE advected over a bed with no
         # stock needs; the dictionary's own upwind pair is for a resident
