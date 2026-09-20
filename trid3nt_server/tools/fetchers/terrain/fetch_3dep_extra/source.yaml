@@ -79,7 +79,10 @@ coverage:
     window:
       series: false
       latest: '2024-01-01'
-    resolution_m: 1.0
+    # The row is fetched under the resolution it names here, and
+    # resolution_m is that cell: 1 arc-second is about 30 m.
+    ask: {resolution: 1 arc-second}
+    resolution_m: 30.0
     datum: NAVD88 (metres, positive up)
     units:
       elevation: m

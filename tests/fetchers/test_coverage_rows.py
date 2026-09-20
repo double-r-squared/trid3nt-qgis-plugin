@@ -5,6 +5,7 @@ declares rather than what its prose says."""
 
 from __future__ import annotations
 
+from fractions import Fraction
 from pathlib import Path
 
 import pytest
@@ -46,6 +47,44 @@ def test_a_station_row_lists_its_stations(path):
         if row.extent.kind == "stations":
             assert (row.extent.points or row.extent.read_from
                     or row.extent.discover), path.parent.name
+
+
+#: A degree, in metres, so an arc-second is 1/3600 of one. The published names
+#: round that to whole metres - an arc-second is "about 30 m", a third of one
+#: "about 10 m" - which is the rounding a row's own number is read against.
+_DEGREE_M = 111_320.0
+
+#: The params a terrain source states the cell it fetches under, by the spelling
+#: it uses. A source that states none serves one grid and the row is its own.
+_RESOLUTION_PARAMS = ("resolution", "resolution_m")
+
+
+def _cell_m(stated: object) -> float:
+    """The cell one stated resolution is, in metres."""
+    text = str(stated).strip()
+    if "arc-second" in text:
+        return float(Fraction(text.split()[0])) * _DEGREE_M / 3600.0
+    if text.split()[-1].startswith("meter"):
+        return float(Fraction(text.split()[0]))
+    return float(text)
+
+
+@pytest.mark.parametrize("path", SPECS, ids=lambda p: p.parent.name)
+def test_a_terrain_row_states_the_cell_its_ask_fetches(path):
+    """A row claiming a finer cell than the one it is fetched under outranks the
+    sources that state theirs honestly, and every bed matched on it gets coarser
+    than the declaration asked for. The number is the cell the ask states, else
+    the cell the source defaults to."""
+    spec = load_spec_from_path(path)
+    params = dict(spec.params or {})
+    name = next((p for p in _RESOLUTION_PARAMS if p in params), "")
+    for row in spec.coverage:
+        if row.data_class != "terrain" or not name:
+            continue
+        stated = row.ask.get(name, params[name].default)
+        assert row.resolution_m == pytest.approx(_cell_m(stated), rel=0.05), (
+            f"{path.parent.name} is fetched at {stated} and its row claims "
+            f"{row.resolution_m} m")
 
 
 def test_the_contract_refuses_a_station_set_drawn_as_rings_alone():
