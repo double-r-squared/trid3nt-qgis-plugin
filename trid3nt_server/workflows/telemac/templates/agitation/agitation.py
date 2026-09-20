@@ -58,16 +58,13 @@ class DATA:
     #: The window the sheltering question is asked in. Drawn on the canvas, so a
     #: caller who supplies the basin outline below is never asked to draw one.
     extent = Data.supplied(geometry="rectangle")
-    #: THE LAND-WATER EDGE, as the CLASS it is rather than the source it comes
-    #: from: OpenStreetMap's coastline is the one source that reaches it today,
-    #: and the match is what says so. Land is on its LEFT, and that direction is
-    #: the whole of the classification the cut below makes.
-    coast = Data.need("hydrography")
-    #: THE DOMAIN: the water the coastline leaves inside the box. A polygon is
-    #: what a mesh is cut from and a coastline is a line, so this row is the step
-    #: between the two; a basin the user outlines supersedes it.
-    domain = Data(tool("derive_water_polygon", coastline=coast,
-                       extent=Ref("extent.bbox")))
+    #: THE DOMAIN, asked for as the LAND-WATER EDGE: the class it is rather than
+    #: the source it comes from, and the feature of that class this question
+    #: reads - a coastline, whose land is on the LEFT of the way's direction.
+    #: A line is not a domain, so the slot cuts the window above with it and the
+    #: water that leaves is what the mesh is built over; a basin the user
+    #: outlines supersedes the cut.
+    domain = Data.need("hydrography", of="coastline", geometry="polyline")
     #: ONE bed: the class it is defined over rather than the source it comes
     #: from - the measurement where something sounded it, the terrain everywhere
     #: else. Supply a survey raster, a layer of soundings or a depth in metres

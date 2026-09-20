@@ -52,7 +52,7 @@ def test_several_polygons_are_one_domain_with_parts():
 
 def test_a_shape_that_is_not_closed_refuses_rather_than_being_squared_off():
     with pytest.raises(UserInputError, match="no polygon geometry"):
-        domain({"type": "LineString", "coordinates": [[0.0, 0.0], [1.0, 1.0]]})
+        domain({"type": "Point", "coordinates": [0.0, 0.0]})
     with pytest.raises(UserInputError, match="at least three vertices"):
         domain([[0.0, 0.0], [1.0, 1.0]])
 

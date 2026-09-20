@@ -312,3 +312,60 @@ def test_a_question_with_no_opinion_about_its_reach_asks_for_none(world,
                                    "hydrography", "domain"))
     _runner, called = world[-1]
     assert "distance_km" not in called
+
+
+#: The land-water edge a stub coastline source publishes over the bound box,
+#: drawn SOUTH to NORTH so the land is on its LEFT - the west half.
+_COASTLINE = {"type": "LineString",
+              "coordinates": [[-122.67, 45.49], [-122.67, 45.57]]}
+
+
+@pytest.fixture
+def coastline(world, monkeypatch):
+    """One hydrography source that publishes the edge, and nothing else."""
+    async def _runner(runner, kwargs, label):
+        world.append((runner, dict(kwargs)))
+        return dict(_COASTLINE)
+
+    monkeypatch.setattr(interpreter, "_call_runner", _runner)
+    row = coverage("hydrography", datum=None).model_copy(
+        update={"vocabulary": {"coastline": "coastline"}})
+    monkeypatch.setitem(SPECS, "fetch_coastline",
+                        _Spec(row, "vector", {"bbox": None}))
+    yield world
+    SPECS.pop("fetch_coastline", None)
+
+
+def test_the_domain_slot_cuts_the_window_with_the_edge_it_was_matched(coastline):
+    """The cut is the slot's INGESTION: a row that asks for the land-water edge
+    is filled with a line, and what the slot yields is the closed polygon the
+    equations are solved over."""
+    env = _env()
+    row = _row(Data.need("hydrography", of="coastline", geometry="polyline"),
+               "domain")
+    out = asyncio.run(interpreter._matched(env, row))
+    assert out.geometry["type"] in ("Polygon", "MultiPolygon")
+    # The water is the half the way does not have its land on, cut at the box
+    # the question was asked in rather than at the line's own span.
+    from shapely.geometry import shape
+
+    minx, miny, maxx, maxy = shape(out.geometry).bounds
+    assert (minx, maxx) == pytest.approx((-122.67, WILLAMETTE[2]))
+    assert (miny, maxy) == pytest.approx((WILLAMETTE[1], WILLAMETTE[3]))
+
+
+def test_the_cut_domain_is_what_the_rest_of_the_run_is_bound_to(coastline):
+    """A domain slot binds the run's domain the moment it is filled, so the box
+    the cut was made in is superseded by the water that left it and every later
+    row is asked over the water rather than over the window."""
+    env = _env()
+    row = _row(Data.need("hydrography", of="coastline", geometry="polyline"),
+               "domain")
+
+    async def _fill_then_read():
+        await interpreter._matched(env, row)
+        return interpreter.current_domain()
+
+    bound = asyncio.run(_fill_then_read())
+    assert bound.geometry["type"] in ("Polygon", "MultiPolygon")
+    assert bound.bbox[0] == pytest.approx(-122.67)

@@ -35,24 +35,39 @@ def _rows():
             for row in TOOL_REGISTRY["artemis_harbor_agitation"].fn.workflow.data}
 
 
-def test_the_water_is_cut_out_of_a_box_with_the_mapped_coastline():
-    """Nothing fetches a harbour basin as a polygon, so the one producer this
-    question prefers is the CUT: a coastline over the box the user drew, and the
-    water it leaves. A basin the user outlines supersedes it."""
+def test_the_domain_is_asked_for_as_the_land_water_edge():
+    """Nothing fetches a harbour basin as a polygon, so this question asks for
+    the EDGE - the hydrography feature a coastline is, read as a line - and the
+    slot cuts the window with it. The row names no producer and no module path:
+    a template states a need, and the cut is the slot's ingestion."""
     rows = _rows()
     domain = rows["domain"]
     assert domain.role == DOMAIN
     assert domain.fills_from_user
-    assert domain.producer.runner == "derive_water_polygon"
-    assert repr(domain.producer.kwargs["coastline"]) == "DataRef('coast')"
-    assert domain.producer.kwargs["extent"].path == "extent.bbox"
-    assert rows["coast"].data_class == "hydrography"
+    assert domain.producer is None
+    assert (domain.data_class, domain.observes, domain.geometry) == (
+        "hydrography", "coastline", "polyline")
+
+
+def test_the_coastline_is_the_only_hydrography_source_this_row_can_take():
+    """The feature the row asks for is what selects: a waterbody, a reach and a
+    traced basin are the same class and none of them is a land-water edge."""
+    from trid3nt_server.tools.search.match import (
+        Need, match, sources_with_coverage)
+
+    domain = _rows()["domain"]
+    choice = match(Need(slot="domain", data_class=domain.data_class,
+                        lon=-71.36, lat=41.36, of=domain.observes,
+                        geometry=domain.geometry), sources_with_coverage())
+    assert choice.picked == "fetch_osm_coastline"
+    assert [row.fetcher for row in choice.rows if not row.excluded] == [
+        "fetch_osm_coastline"]
 
 
 def test_the_extent_is_a_slot_the_canvas_offers_a_rectangle_for():
-    """Giving the domain a producer takes away its own draw gate, so the window
-    the cut is made in is the slot with the canvas ask: one EXTENT row, read as
-    four numbers by whatever takes a box."""
+    """The window the cut is made in is the slot with the canvas ask: one EXTENT
+    row, read as four numbers by whatever takes a box, and the domain slot is
+    told it rather than the deck stating a box twice."""
     from trid3nt_server.inputs.slots import SLOTS
 
     rows = _rows()

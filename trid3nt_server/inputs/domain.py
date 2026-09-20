@@ -103,12 +103,14 @@ class Domain:
               for name, geometry in self.companions.items())]}
 
 
-def domain(value: Any, *, label: str = "domain",
-           code: str = _CODE) -> Domain | None:
+def domain(value: Any, *, label: str = "domain", code: str = _CODE,
+           extent: Any = None) -> Domain | None:
     """THE ingestion: a drawing, a layer, a fetched polygon, a ring -> Domain.
 
     ``None`` only when nothing came; anything that is not a closed polygon
-    refuses typed rather than being squared off into one."""
+    refuses typed rather than being squared off into one. ``extent`` is the
+    window the question was asked in, which a LAND-WATER EDGE is cut against:
+    a coastline is a line and a domain is the polygon it leaves inside a box."""
     if value is None or isinstance(value, Domain):
         return value
     uri = getattr(value, "uri", None) or (value if isinstance(value, str) else None)
@@ -120,11 +122,12 @@ def domain(value: Any, *, label: str = "domain",
     if isinstance(uri, str) and uri.strip().startswith(_LAYER_SCHEMES):
         doc = read_geometry_doc(uri.strip())
         logger.info("%s: read from %s", label, uri)
-        return Domain(_one_polygon(doc, label, code), _named(value), uri.strip(),
+        return Domain(_one_polygon(doc, label, code, extent), _named(value),
+                      uri.strip(),
                       _runs_of(value, label, code) or _prescribed(doc, label, code),
                       _companions(doc))
     if isinstance(value, Mapping):
-        return Domain(_one_polygon(value, label, code), _named(value),
+        return Domain(_one_polygon(value, label, code, extent), _named(value),
                       _uri_of(value), _runs_of(value, label, code)
                       or _prescribed(value, label, code), _companions(value))
     ring = polygon_ring(value, label=label, code=code)
@@ -174,11 +177,19 @@ def _rings(geometry: Mapping[str, Any]) -> list[list[Any]]:
     return []
 
 
-def _one_polygon(doc: Any, label: str, code: str) -> dict[str, Any]:
-    """The polygon a document carries; several are the one they cover together."""
-    polygons = [g for g in flatten_geometries(read_geometry_doc(doc))
+def _one_polygon(doc: Any, label: str, code: str,
+                 extent: Any = None) -> dict[str, Any]:
+    """The polygon a document carries; several are the one they cover together.
+
+    A document of LINES carries none and is the land-water edge: the water it
+    leaves inside the window is this slot's polygon, cut below."""
+    geometries = list(flatten_geometries(read_geometry_doc(doc)))
+    polygons = [g for g in geometries
                 if str(g.get("type")) in ("Polygon", "MultiPolygon")]
     if not polygons:
+        if any(str(g.get("type")) in ("LineString", "MultiLineString")
+               for g in geometries):
+            return _water_left_by(doc, extent, label, code)
         raise UserInputError(
             f"the {label} carries no polygon geometry. A domain is the CLOSED "
             "outline the equations are solved over: draw it, name a polygon "
@@ -195,6 +206,29 @@ def _one_polygon(doc: Any, label: str, code: str) -> dict[str, Any]:
                             for part in ([g["coordinates"]]
                                          if str(g["type"]) == "Polygon"
                                          else g["coordinates"])]}
+
+
+def _water_left_by(doc: Any, extent: Any, label: str,
+                   code: str) -> dict[str, Any]:
+    """The water a LAND-WATER EDGE leaves inside the window this question was asked in.
+
+    A coastline is a line, a domain is a polygon, and the step between the two
+    is this slot's ingestion: the mesh seam's own cut, run where the line
+    arrived. Without a window there is nothing to cut against, and a cut that
+    does not close refuses in the cut's own words."""
+    from trid3nt_server.workflows.mesh.meshers import MeshToolError
+    from trid3nt_server.workflows.mesh.water import water_polygon
+
+    if extent is None:
+        raise UserInputError(
+            f"the {label} carries lines and no polygon, and this run states no "
+            "window to cut them against. A land-water edge divides a box into "
+            "land and water: draw the box this question is asked inside, or "
+            "supply the outline itself.", code=code)
+    try:
+        return dict(water_polygon(doc, extent))
+    except MeshToolError as exc:
+        raise UserInputError(str(exc), code=exc.error_code) from exc
 
 
 def _closed(ring: list[list[float]]) -> dict[str, Any]:

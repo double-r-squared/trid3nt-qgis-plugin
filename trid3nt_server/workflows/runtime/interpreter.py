@@ -753,6 +753,7 @@ async def _ingested(env: _Env, decl: DataDecl, value: Any,
     stated = str(coercion.pop("measures", "") or "")
     coercion.pop("opens", None)
     coercion.update(_what_the_run_calls_it(env, decl, stated))
+    coercion.update(_the_window_it_is_cut_from(decl))
     coercion.update(await _on_the_run_s_frame(env, decl, value))
     coercion.update(_what_the_record_reports(env, decl, runner))
     ingested = await asyncio.to_thread(ingest_slot, decl.role, value,
@@ -774,6 +775,28 @@ async def _ingested(env: _Env, decl: DataDecl, value: Any,
     return ingested
 
 
+#: The slots filled from a RECORD somebody measured - the three whose value is a
+#: reading rather than a geometry or a surface. What a row of one OBSERVES is a
+#: published variable and is read in that variable's unit; on any other slot
+#: ``of`` names the FEATURE the source publishes and no unit is owed.
+_READS_A_RECORD = (OBSERVE, LEVEL, DISCHARGE)
+
+
+def _the_window_it_is_cut_from(decl: DataDecl) -> dict[str, Any]:
+    """The BOX a domain slot cuts a land-water edge against, where the run has one.
+
+    The window a question is asked in is the RUN's - its own slot bound it
+    before any source was asked - so a deck states it once and the ingestion
+    that cuts with it reads it here. Empty once a polygon is bound: a domain
+    that arrived closed is cut against nothing."""
+    if decl.role != DOMAIN:
+        return {}
+    dom = current_domain()
+    if dom is None or dom.geometry or not dom.bbox:
+        return {}
+    return {"extent": tuple(float(v) for v in dom.bbox)}
+
+
 def _what_the_run_calls_it(env: _Env, decl: DataDecl,
                            stated: str) -> dict[str, Any]:
     """The UNIT this slot converts to and the NOUN the run says it in.
@@ -787,7 +810,8 @@ def _what_the_run_calls_it(env: _Env, decl: DataDecl,
     the workflow states no unit for is read in the unit the record was measured
     in."""
     told: dict[str, Any] = {}
-    unit = (_observed_unit(env, decl) if decl.observes
+    unit = (_observed_unit(env, decl)
+            if decl.observes and decl.role in _READS_A_RECORD
             else env.slot_units.get(decl.role))
     if unit:
         told["to_units"] = unit
@@ -826,7 +850,7 @@ def _what_the_record_reports(env: _Env, decl: DataDecl,
     slot wanted. The moment the run opens at and how long it covers are the
     run's, so the series is placed on the run's clock and a record that stops
     early refuses."""
-    if decl.role not in (OBSERVE, LEVEL, DISCHARGE):
+    if decl.role not in _READS_A_RECORD:
         return {}
     told: dict[str, Any] = {"window_s": env.window_s}
     rows = list(getattr(_spec_of(runner), "coverage", ())) if runner else []
