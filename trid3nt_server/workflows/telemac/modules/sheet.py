@@ -18,7 +18,8 @@ from trid3nt_server.workflows.runtime.plan import declared_reads
 from .module import Output, Slot, SlotRefused
 
 __all__ = ["Filled", "Origin", "Provenance", "Sheet", "SheetIncomplete", "draw",
-           "fill", "fill_coupled", "late_bound", "run", "tracer_text"]
+           "fill", "fill_coupled", "late_bound", "run", "solve_cores",
+           "tracer_text"]
 
 
 class Origin(str, Enum):
@@ -348,6 +349,37 @@ def _continued(body: type, filled: dict[str, Filled],
 PROCESSORS = "PARALLEL_PROCESSORS"
 
 
+#: The keyword a module spells for the algorithm its matrix system is solved
+#: with, and the one value of it that is not partitioned: a DIRECT factorisation
+#: is solved whole rather than domain by domain, so the engine runs it on a
+#: single core whatever it was asked for. The parallel direct solver is a value
+#: of its own and keeps the partition.
+SOLVER = "SOLVER"
+_DIRECT_SOLVER = 8
+
+
+def solve_cores(body: type, filled: Mapping[str, Filled],
+                compute_class: Any) -> int:
+    """How many cores THIS deck's solve runs on.
+
+    The sizing class asks for a partition and the deck's own numerics answer:
+    a deck resolving to the direct solver - stated, or the dictionary's own
+    default, which is the whole of what the engine will do - runs serial."""
+    from trid3nt_server.workflows.runtime.levers import cores_for
+
+    cores = cores_for(compute_class)
+    return 1 if cores > 1 and _solver(body, filled) == _DIRECT_SOLVER else cores
+
+
+def _solver(body: type, filled: Mapping[str, Filled]) -> Any:
+    """The solver this deck RESOLVES to: what it states, else the dictionary's
+    own default. ``None`` on a module whose dictionary spells no solver."""
+    slot = body.MODULE_INPUT.get(SOLVER)
+    if slot is None:
+        return None
+    return filled[SOLVER].value if SOLVER in filled else slot.engine_default
+
+
 def _partitioned(body: type, filled: dict[str, Filled],
                  params: Mapping[str, Any]) -> None:
     """State how many cores this run is solved on, where the body spells it.
@@ -356,12 +388,20 @@ def _partitioned(body: type, filled: dict[str, Filled],
     consequence; the worker's launcher is handed the SAME number, so the
     partition the engine is told about is the partition it gets. A sheet filled
     off a run states no class, so nothing is partitioned on its behalf."""
+    from trid3nt_server.workflows.runtime import journal_note
     from trid3nt_server.workflows.runtime.levers import cores_for
 
     stated = params.get("compute_class")
     if not stated or PROCESSORS in filled or PROCESSORS not in body.MODULE_INPUT:
         return
-    cores = cores_for(stated)
+    asked = cores_for(stated)
+    cores = solve_cores(body, filled, stated)
+    if cores < asked:
+        journal_note(
+            f"{body.MODULE} solves this deck with the direct solver "
+            f"({SOLVER} {_DIRECT_SOLVER}), which factorises the whole system "
+            f"rather than partitioning it, so the run is serial and the {asked} "
+            f"cores the {stated} sizing class asks for are not used.")
     if cores < 2:
         return
     slot = body.slot(PROCESSORS)
@@ -605,8 +645,6 @@ async def run(sheet: Sheet, *, dispatch: Callable[..., Any],
     Checked against the REQUIRED slots only; the box entry is the caller's."""
     # Everything past the OBLIG files the engine asks for by name in its own
     # listing, so a required set invented here would refuse runs it would take.
-    from trid3nt_server.workflows.runtime.levers import cores_for
-
     from ..authoring.assembler import new_rundir, stage_run
     from ..authoring.serializer import serialize
 
@@ -641,7 +679,7 @@ async def run(sheet: Sheet, *, dispatch: Callable[..., Any],
         # THE SAME NUMBER the steering file states: the launcher partitions the
         # mesh across it, and a count the engine was not told about would run
         # the solve on a partition the deck does not describe.
-        cores=cores_for(compute_class))
+        cores=solve_cores(sheet.body, sheet.filled, compute_class))
     # The staged run and the box's answer are ONE handle: the reader needs both
     # what was staged and what came back, and two results would make the caller
     # carry the join.
