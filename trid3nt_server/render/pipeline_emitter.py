@@ -361,30 +361,6 @@ def _elapsed_ms(started_at: datetime | None, completed_at: datetime | None) -> i
 
 
 
-def _json_for_tool_io(value: Any) -> tuple[str, bool, int]:
-    """Serialize a tool-io field to ``(json_string, truncated, orig_bytes)``.
-    Never raises: an unserializable value degrades to ``str()``. ``orig_bytes``
-    is the ORIGINAL UTF-8 length, so a truncation can be reported honestly.
-    """
-    import json
-
-    try:
-        text = json.dumps(value, indent=2, sort_keys=True, default=str)
-    except Exception:  # noqa: BLE001 -- last-resort: never raise on serialization
-        text = str(value)
-    orig_bytes = len(text.encode("utf-8"))
-    cap = ToolIoPayload.MAX_FIELD_BYTES
-    if orig_bytes <= cap:
-        return text, False, orig_bytes
-    # Truncate on the UTF-8 byte boundary, then decode back ignoring a split
-    # multibyte tail so the JSON-ish prefix stays valid text (the UI shows it
-    # as raw text + a truncation note, so it need not remain valid JSON).
-    truncated = text.encode("utf-8")[:cap].decode("utf-8", errors="ignore")
-    return truncated, True, orig_bytes
-
-
-
-
 def _fgb_bytes_to_geojson(fgb_bytes: bytes) -> dict[str, Any] | None:
     """Convert FlatGeobuf bytes to a GeoJSON FeatureCollection dict.
 
@@ -1537,8 +1513,8 @@ class PipelineEmitter:
         along. Best-effort: a failure is logged and dropped.
         """
         try:
-            args_str, args_trunc, args_bytes = _json_for_tool_io(raw_args)
-            resp_str, resp_trunc, resp_bytes = _json_for_tool_io(function_response)
+            args_str, args_trunc, args_bytes = ToolIoPayload.json_field(raw_args)
+            resp_str, resp_trunc, resp_bytes = ToolIoPayload.json_field(function_response)
             payload = ToolIoPayload(
                 step_id=step_id,
                 tool_name=tool_name,

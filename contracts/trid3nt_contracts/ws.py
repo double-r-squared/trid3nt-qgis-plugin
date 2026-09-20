@@ -488,6 +488,26 @@ class ToolIoPayload(GraceModel):
     #: can say honestly how much is missing.
     args_truncated: bool = False
     response_truncated: bool = False
+
+    @classmethod
+    def json_field(cls, value: Any) -> tuple[str, bool, int]:
+        """One field serialized to ``(json_string, truncated, orig_bytes)``.
+        Never raises: an unserializable value degrades to ``str()``.
+        ``orig_bytes`` is the ORIGINAL UTF-8 length, so a truncation is reported
+        honestly. The cut is on the UTF-8 byte boundary and a split multibyte
+        tail is dropped, so the prefix stays valid TEXT - it need not remain
+        valid JSON, because a reader shows it raw beside the truncation note."""
+        import json
+
+        try:
+            text = json.dumps(value, indent=2, sort_keys=True, default=str)
+        except Exception:  # noqa: BLE001 -- never raise on serialization
+            text = str(value)
+        orig_bytes = len(text.encode("utf-8"))
+        if orig_bytes <= cls.MAX_FIELD_BYTES:
+            return text, False, orig_bytes
+        cut = text.encode("utf-8")[: cls.MAX_FIELD_BYTES]
+        return cut.decode("utf-8", errors="ignore"), True, orig_bytes
     args_bytes: int = Field(default=0, ge=0)
     response_bytes: int = Field(default=0, ge=0)
 
