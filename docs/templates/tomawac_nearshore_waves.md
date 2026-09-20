@@ -43,8 +43,8 @@ The values the template declares. `desc` is what the model reads when it fills o
 | `hs_at_station_m` | 0.7841470837593079 |
 | `peak_period_at_station_s` | 7.965770244598389 |
 | `direction_at_station_deg` | 263.4527893066406 |
-| `breaking_rate_peak_per_s` | - |
-| `breaker_dissipation_peak_m2s` | - |
+| `breaking_rate_peak_per_s` | 0.20506112277507782 |
+| `breaker_dissipation_peak_m2s` | 0.01272374577820301 |
 | `mesh_size_m` | 17.077 |
 
 It publishes these layers onto the canvas:
@@ -90,51 +90,51 @@ It publishes these layers onto the canvas:
 
 ## The proving run
 
-Run `01M307TT340WGGQT0KMHWBWNM4`, 2026-09-20T20:24:18.113282+00:00, 41.492 s, at commit `cba4ee002e732c91c4a87abaad51f2399f0352c4-dirty`.
+Run `01M30CN9C961P33795TX9JVHJX`, 2026-09-20T21:48:42.764973+00:00, 48.587 s, at commit `1e55e74029af76d4dd55ed86aa8d21b9c4136b2c-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M307TT340WGGQT0KMHWBWNM4)](tomawac_nearshore_waves/tomawac_nearshore_waves.png)
+![Every layer the run published, stacked and framed on the result (run 01M30CN9C961P33795TX9JVHJX)](tomawac_nearshore_waves/tomawac_nearshore_waves.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M307TT340WGGQT0KMHWBWNM4)*
+*Every layer the run published, stacked and framed on the result (run 01M30CN9C961P33795TX9JVHJX)*
 
-![The solve, frame by frame - breaking (run 01M307TT340WGGQT0KMHWBWNM4)](tomawac_nearshore_waves/tomawac_nearshore_waves_animation_breaking.gif)
+![The solve, frame by frame - breaking (run 01M30CN9C961P33795TX9JVHJX)](tomawac_nearshore_waves/tomawac_nearshore_waves_animation_breaking.gif)
 
-*The solve, frame by frame - breaking (run 01M307TT340WGGQT0KMHWBWNM4)*
+*The solve, frame by frame - breaking (run 01M30CN9C961P33795TX9JVHJX)*
 
-![The solve, frame by frame - direction (run 01M307TT340WGGQT0KMHWBWNM4)](tomawac_nearshore_waves/tomawac_nearshore_waves_animation_direction.gif)
+![The solve, frame by frame - direction (run 01M30CN9C961P33795TX9JVHJX)](tomawac_nearshore_waves/tomawac_nearshore_waves_animation_direction.gif)
 
-*The solve, frame by frame - direction (run 01M307TT340WGGQT0KMHWBWNM4)*
+*The solve, frame by frame - direction (run 01M30CN9C961P33795TX9JVHJX)*
 
-![The solve, frame by frame - wave_height (run 01M307TT340WGGQT0KMHWBWNM4)](tomawac_nearshore_waves/tomawac_nearshore_waves_animation_wave_height.gif)
+![The solve, frame by frame - wave_height (run 01M30CN9C961P33795TX9JVHJX)](tomawac_nearshore_waves/tomawac_nearshore_waves_animation_wave_height.gif)
 
-*The solve, frame by frame - wave_height (run 01M307TT340WGGQT0KMHWBWNM4)*
+*The solve, frame by frame - wave_height (run 01M30CN9C961P33795TX9JVHJX)*
 
-![breaking peak frame (run 01M307TT340WGGQT0KMHWBWNM4)](tomawac_nearshore_waves/tomawac_nearshore_waves_breaking_peak_frame.png)
+![breaking final frame (run 01M30CN9C961P33795TX9JVHJX)](tomawac_nearshore_waves/tomawac_nearshore_waves_breaking_final_frame.png)
 
-*breaking peak frame (run 01M307TT340WGGQT0KMHWBWNM4)*
+*breaking final frame (run 01M30CN9C961P33795TX9JVHJX)*
 
-![direction final frame (run 01M307TT340WGGQT0KMHWBWNM4)](tomawac_nearshore_waves/tomawac_nearshore_waves_direction_final_frame.png)
+![direction final frame (run 01M30CN9C961P33795TX9JVHJX)](tomawac_nearshore_waves/tomawac_nearshore_waves_direction_final_frame.png)
 
-*direction final frame (run 01M307TT340WGGQT0KMHWBWNM4)*
+*direction final frame (run 01M30CN9C961P33795TX9JVHJX)*
 
-![wave height peak frame (run 01M307TT340WGGQT0KMHWBWNM4)](tomawac_nearshore_waves/tomawac_nearshore_waves_wave_height_peak_frame.png)
+![wave height peak frame (run 01M30CN9C961P33795TX9JVHJX)](tomawac_nearshore_waves/tomawac_nearshore_waves_wave_height_peak_frame.png)
 
-*wave height peak frame (run 01M307TT340WGGQT0KMHWBWNM4)*
+*wave height peak frame (run 01M30CN9C961P33795TX9JVHJX)*
 
-![mean wave direction - the chart the run persisted (run 01M307TT340WGGQT0KMHWBWNM4)](tomawac_nearshore_waves/tomawac_nearshore_waves_chart_mean_wave_direction.png)
+![mean wave direction - the chart the run persisted (run 01M30CN9C961P33795TX9JVHJX)](tomawac_nearshore_waves/tomawac_nearshore_waves_chart_mean_wave_direction.png)
 
-*mean wave direction - the chart the run persisted (run 01M307TT340WGGQT0KMHWBWNM4)*
+*mean wave direction - the chart the run persisted (run 01M30CN9C961P33795TX9JVHJX)*
 
-![peak wave period - the chart the run persisted (run 01M307TT340WGGQT0KMHWBWNM4)](tomawac_nearshore_waves/tomawac_nearshore_waves_chart_peak_wave_period.png)
+![peak wave period - the chart the run persisted (run 01M30CN9C961P33795TX9JVHJX)](tomawac_nearshore_waves/tomawac_nearshore_waves_chart_peak_wave_period.png)
 
-*peak wave period - the chart the run persisted (run 01M307TT340WGGQT0KMHWBWNM4)*
+*peak wave period - the chart the run persisted (run 01M30CN9C961P33795TX9JVHJX)*
 
-![significant wave height - the chart the run persisted (run 01M307TT340WGGQT0KMHWBWNM4)](tomawac_nearshore_waves/tomawac_nearshore_waves_chart_significant_wave_height.png)
+![significant wave height - the chart the run persisted (run 01M30CN9C961P33795TX9JVHJX)](tomawac_nearshore_waves/tomawac_nearshore_waves_chart_significant_wave_height.png)
 
-*significant wave height - the chart the run persisted (run 01M307TT340WGGQT0KMHWBWNM4)*
+*significant wave height - the chart the run persisted (run 01M30CN9C961P33795TX9JVHJX)*
 
-![wave energy by frequency at the station - the chart the run persisted (run 01M307TT340WGGQT0KMHWBWNM4)](tomawac_nearshore_waves/tomawac_nearshore_waves_chart_wave_energy_by_frequency_at_the_station.png)
+![wave energy by frequency at the station - the chart the run persisted (run 01M30CN9C961P33795TX9JVHJX)](tomawac_nearshore_waves/tomawac_nearshore_waves_chart_wave_energy_by_frequency_at_the_station.png)
 
-*wave energy by frequency at the station - the chart the run persisted (run 01M307TT340WGGQT0KMHWBWNM4)*
+*wave energy by frequency at the station - the chart the run persisted (run 01M30CN9C961P33795TX9JVHJX)*
 
 ### The sheet it filled
 
@@ -164,5 +164,5 @@ await TOOL_REGISTRY['tomawac_nearshore_waves'].fn(
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M307TT340WGGQT0KMHWBWNM4` and commit `cba4ee002e732c91c4a87abaad51f2399f0352c4-dirty`. The full argument record is [`tomawac_nearshore_waves/run.json`](tomawac_nearshore_waves/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M30CN9C961P33795TX9JVHJX` and commit `1e55e74029af76d4dd55ed86aa8d21b9c4136b2c-dirty`. The full argument record is [`tomawac_nearshore_waves/run.json`](tomawac_nearshore_waves/run.json).
 
