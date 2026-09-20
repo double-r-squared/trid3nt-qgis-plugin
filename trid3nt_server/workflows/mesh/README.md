@@ -25,6 +25,7 @@ carrying that recipe as its provenance - is what the solve reads.
 | `step.py` | The declared MESH step: the template's frozen recipe, built under the gate, as the one step every plan puts before its author stage. |
 | `tool.py` | `build_mesh` - the router. Builds a validated recipe, and is the author word `tool.build_mesh` reaches; also the supplied-mesh resolution order. |
 | `topology.py` | The accepted topology a geometry file cannot state: which contiguous run of boundary nodes carries which declared role, written and read back. |
+| `water.py` | `water_polygon` - the water a mapped coastline leaves inside a box, which is the polygon a mesh is cut from: OSM draws land on the LEFT of a way, so the ways split the box into faces and what no way calls land is what is meshed. |
 
 ## Subfolders
 

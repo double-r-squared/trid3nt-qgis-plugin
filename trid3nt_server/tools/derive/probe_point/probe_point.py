@@ -329,7 +329,6 @@ _METADATA = AtomicToolMetadata(
     name="probe_point",
     ttl_class="live-no-cache",
     source_class=None,
-    cacheable=False,
 )
 
 

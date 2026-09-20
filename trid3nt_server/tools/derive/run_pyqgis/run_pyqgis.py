@@ -22,7 +22,6 @@ _METADATA = AtomicToolMetadata(
     name="run_pyqgis",
     ttl_class="live-no-cache",
     source_class="workflow_dispatch",
-    cacheable=False,
 )
 
 

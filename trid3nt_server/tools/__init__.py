@@ -191,38 +191,12 @@ from .fetchers._router.registration import register_specs_from_tree as _register
 _register_router_specs()
 
 # -- derive (compute / clip / extract / vector-edit / charts) --
-# The two generic geometry composition links: one document out of several layers
-# (``combine``), and the two ends of a line (``endpoints``).
-from .derive.combine import combine  # noqa: E402,F401
-from .derive.compute_cross_section import compute_cross_section  # noqa: E402,F401
-from .derive.compute_exposure_summary import compute_exposure_summary  # noqa: E402,F401
-from .derive.compute_flood_depth_damage import compute_flood_depth_damage  # noqa: E402,F401
-# flood-extent skill (raster/vector confusion).
-from .derive.compute_flood_extent_skill import compute_flood_extent_skill  # noqa: E402,F401
-from .derive.compute_layer_bounds import compute_layer_bounds  # noqa: E402,F401
-from .derive.compute_model_residuals import compute_model_residuals  # noqa: E402,F401
-from .derive.compute_sediment_yield import compute_sediment_yield  # noqa: E402,F401
-# model-fit skill metrics (spotpy).
-from .derive.derive_active_fire import derive_active_fire  # noqa: E402,F401
 # THE BED composition: a measurement over a wider surface, the finer one winning
 # where it measured, with a sidecar saying which painted each cell.
-from .derive.derive_merge_rasters import derive_merge_rasters  # noqa: E402,F401
 # Scattered measurements -> the continuous surface between them: a point survey
 # becomes the bed a mesh is draped on.
-from .derive.derive_survey_surface import derive_survey_surface  # noqa: E402,F401
-# A line through a shape's centroid along a bearing: what a profile is read along
-# when the read runs ACROSS a feature rather than down the domain's own axis.
-from .derive.derive_transect import derive_transect  # noqa: E402,F401
-from .derive.derive_true_color import derive_true_color  # noqa: E402,F401
-# A box and a mapped coastline -> the water the coastline leaves inside it: the
-# step between a line and the closed polygon a mesh is cut from.
-from .derive.endpoints import endpoints  # noqa: E402,F401
-# model-vs-observation pairing primitive.
-from .derive.extract_stream_network import extract_stream_network  # noqa: E402,F401
-from .derive.extract_timeseries_at_point import extract_timeseries_at_point  # noqa: E402,F401
 from .derive.charts.generate_chart import generate_chart  # noqa: E402,F401
 from .derive.probe_point import probe_point  # noqa: E402,F401
-from .derive.query_point_hazard import query_point_hazard  # noqa: E402,F401
 from .derive.restyle_layer import restyle_layer  # noqa: E402,F401 - DISPLAY-state re-emission of an already-published layer
 # The two session tools: each is a request on the plugin wire, run in the
 # user's own QGIS session; the code one never runs without the approval card.
@@ -233,7 +207,6 @@ from .derive.run_qgis_algorithm import run_qgis_algorithm  # noqa: E402,F401
 # Run-diagnostics dispatcher: one registered tool over the per-engine parser
 # modules under workflows/solver/diagnostics/, which are NOT themselves registered.
 from trid3nt_server.workflows.solver.diagnostics import read_run_diagnostics  # noqa: E402,F401
-from trid3nt_server.tools.derive.model_debris_flow import model_debris_flow  # noqa: E402,F401
 # Derive a run from a run, with named values moved: the recalibration interface.
 from trid3nt_server.workflows.runtime.rerun import rerun_workflow  # noqa: E402,F401
 from trid3nt_server.workflows.solver import solver  # noqa: E402,F401

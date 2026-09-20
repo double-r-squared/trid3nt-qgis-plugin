@@ -31,7 +31,6 @@ _METADATA = AtomicToolMetadata(
     name="restyle_layer",
     ttl_class="live-no-cache",
     source_class=None,
-    cacheable=False,
 )
 
 

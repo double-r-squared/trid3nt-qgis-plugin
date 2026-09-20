@@ -164,8 +164,8 @@ a misconfiguration fails fast at IMPORT time). Every field, from
 | --- | --- | --- |
 | `name` | REQUIRED (`min_length=1`) | The function name = registry key (e.g. `"fetch_dem"`). |
 | `ttl_class` | REQUIRED | One of `static-30d`, `semi-static-7d`, `dynamic-1h`, `live-no-cache`. The cache TTL bucket. |
-| `source_class` | Required iff `cacheable=True` | Cache-bucket prefix (e.g. `"dem"`). `None` allowed when not cacheable. |
-| `cacheable` | default `True` | `False` for interactive / emitter / writer / dispatcher tools. |
+| `source_class` | Required iff cached | Cache-bucket prefix (e.g. `"dem"`). `None` allowed under `live-no-cache`. |
+| `cacheable` | DERIVED from `ttl_class` | Never stated: `live-no-cache` is uncacheable, every other class is cached. Stating it is allowed only where it agrees. |
 | `supports_global_query` | default `False` | Tool accepts `bbox=None` = global. If `False`, `bbox=None` must raise `ToolInputError(code='BBOX_REQUIRED')` before any network call. |
 | `payload_mb_estimator_name` | default `None` | Name of a module-level `estimate_payload_mb(**args) -> float` used by the >25 MB chat-warning gate. |
 | `read_only_hint` | default `True` | MCP annotation; `False` for writers (`publish_layer`, `run_solver`, ...). |
@@ -178,8 +178,8 @@ a misconfiguration fails fast at IMPORT time). Every field, from
 **Cross-field validator** (`_validate_cacheable_consistency`, runs at
 construction):
 
-- `cacheable=True` => `ttl_class != "live-no-cache"` AND `source_class` non-empty.
-- `cacheable=False` => `ttl_class == "live-no-cache"`.
+- a cached class (`ttl_class != "live-no-cache"`) => `source_class` non-empty.
+- a stated `cacheable` must agree with the class; unstated, it resolves from it.
 
 A bad combination raises `ValidationError` at import, before the tool is on the
 wire.
@@ -191,7 +191,6 @@ _METADATA = AtomicToolMetadata(
     name="compute_cross_section",
     ttl_class="live-no-cache",
     source_class="workflow_dispatch",
-    cacheable=False,
 )
 ```
 
@@ -370,7 +369,7 @@ does not belong in the docstring at all.
 
 `trid3nt_server/tools/_example_tool_template.py` is a full,
 working, copy-me tool: `example_bbox_area`, a geodesic (pyproj.Geod) area compute
-that returns a dict. It shows metadata (a `cacheable=False` / `live-no-cache`
+that returns a dict. It shows metadata (a `live-no-cache`
 compute), the `**_extra_ignored` signature, a front-loaded routing docstring, the
 typed error convention, and `@register_tool`. It ships gated behind
 `TRID3NT_ENABLE_EXAMPLE_TOOL` so it stays out of the production catalog; a real
@@ -385,7 +384,7 @@ To copy it into your own tool:
 2. Replace the body with your fetch/compute; return a `LayerURI` (map layer) or a
    dict (scalar/tabular).
 3. Set the metadata correctly for your case (a derive tool over a handed-in
-   layer: `cacheable=False` + `ttl_class="live-no-cache"` + `open_world_hint=False`).
+   layer: `ttl_class="live-no-cache"` + `open_world_hint=False`).
 4. Delete the `TRID3NT_ENABLE_EXAMPLE_TOOL` gate; decorate the function directly
    with `@register_tool(_METADATA, ...)`.
 5. Add the eager import (step 3), the corpus (step 4), and the test (step 5).

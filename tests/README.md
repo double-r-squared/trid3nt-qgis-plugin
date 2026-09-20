@@ -10,6 +10,7 @@ join the run as the sixth slice.
 |---|---|---:|---:|
 | `_fakes/` | shared doubles: the MCP client, the websocket, the case summary, the reach chain, the read-through injector | - | - |
 | `fixtures/` | data the tests read; no code | - | - |
+| `calibration/` | the observe slot's pairing and the skill metrics over those pairs | 2 | 23 |
 | `adapters/` | provider adapters, the message IR, the turn loop, the stream persistence | 22 | 289 |
 | `credentials/` | credential resolution, the auth handshake, identity | 7 | 95 |
 | `derive/` | the derive tools, the two session tools | 27 | 343 |

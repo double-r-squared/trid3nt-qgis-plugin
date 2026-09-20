@@ -30,7 +30,6 @@ _GENERATE_CHART_META = AtomicToolMetadata(
     name="generate_chart",
     ttl_class="dynamic-1h",
     source_class="chart_tools",
-    cacheable=True,
     supports_global_query=False,
 )
 

@@ -20,7 +20,6 @@ _METADATA = AtomicToolMetadata(
     name="run_qgis_algorithm",
     ttl_class="live-no-cache",
     source_class="workflow_dispatch",
-    cacheable=False,
 )
 
 
