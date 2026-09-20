@@ -43,6 +43,7 @@ __all__ = [
     "OutputEmpty",
     "Primitive",
     "SelafinReadError",
+    "SolveNonFinite",
     "Solved",
     "mesh_area_m2",
     "wetted_fraction",
@@ -183,6 +184,15 @@ class OutputEmpty(DeclarativeError):
     its floor: the run computed nothing the primitive can read."""
 
     error_code = "TELEMAC_OUTPUT_EMPTY"
+
+
+class SolveNonFinite(DeclarativeError):
+    """A variable the run wrote stopped being a number: the SOLVE failed, and a
+    read that finds nothing to weigh there is reporting that failure rather than
+    a dry line. It is not an empty output - nothing downstream may treat it as
+    one - so the run fails by the variable's name."""
+
+    error_code = "TELEMAC_SOLVE_NON_FINITE"
 
 
 def read_selafin(path: str | Path) -> dict[str, Any]:
@@ -1210,6 +1220,25 @@ def _chainage(x: Any, y: Any, line: Any) -> tuple[Any, Any, Any]:
     return s, unit, np.sqrt(d2[np.arange(x.size), k])
 
 
+def _stopped_being_a_number(name: str, values: Any, times: Any, index: int,
+                            band: Any) -> None:
+    """Refuse a read whose field carries no number where the line runs.
+
+    The frames are read back to the first one that went non-finite, because that
+    is the instant the solve failed at - every frame after it is downstream of a
+    number the engine had already lost."""
+    import numpy as np
+
+    finite = np.isfinite(np.asarray(values, dtype="float64"))
+    if not np.asarray(band).any() or finite[index][band].any():
+        return
+    first = int(np.argmax(~finite.all(axis=1)))
+    raise SolveNonFinite(
+        f"{name} is not a number along the line at t = {times[index]:g} s; it "
+        f"first went non-finite at t = {times[first]:g} s. The solve failed "
+        "there, so there is no reading to take.")
+
+
 def read_profile(primitive: Primitive, solved: Solved) -> Profile:
     """``profile(name, along, t, within_m)``: the depth-weighted mean of a
     variable per station down a line, at one instant, over the nodes within the
@@ -1232,6 +1261,10 @@ def read_profile(primitive: Primitive, solved: Solved) -> Profile:
     weight, along = np.ones(x.size), None
     if primitive.within is not None:
         weight = np.where(off <= float(primitive.within), weight, 0.0)
+    # THE NODES THE LINE READS, before anything about the water is applied: a
+    # line with no wet node and a field that is not a number both leave nothing
+    # weighted, and only these nodes say which of the two happened.
+    band = weight > 0.0
     # The SAME wet mask every other measure is read under, off the host's own
     # depth: a film on a drying bar is not the water the profile is about, and a
     # coupled module with no depth of its own borrows the host's by node.
@@ -1247,6 +1280,7 @@ def read_profile(primitive: Primitive, solved: Solved) -> Profile:
         if float((along * weight).sum()) < 0.0:
             s, along = s.max() - s, -along
     if not (weight > 0.0).any():
+        _stopped_being_a_number(name, values, times, index, band)
         raise OutputEmpty(f"no wet node at t = {times[index]:g} s to read "
                           f"{primitive.variable} along the line.")
     edges = np.linspace(0.0, float(s.max()) or 1.0, _PROFILE_STATIONS + 1)

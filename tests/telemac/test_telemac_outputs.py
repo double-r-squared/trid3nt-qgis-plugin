@@ -736,6 +736,63 @@ def test_an_answer_over_a_variable_the_run_never_wrote_states_its_reason(
             captions={"Q": "flowrate"}, answer={}, params={}))
 
 
+def _five_nodes(telemac_result, *, oxygen, depth):
+    """The straight channel of the profile tests, with the oxygen and the depth
+    stated frame by frame."""
+    x = [500000.0, 500100.0, 500200.0, 500300.0, 500400.0]
+    y = [4400000.0, 4400010.0, 4400000.0, 4400010.0, 4400000.0]
+    frames = len(oxygen)
+    return telemac_result(
+        varnames=["VELOCITY U", "VELOCITY V", "WATER DEPTH", "DYE",
+                  "DISSOLVED O2"],
+        varunits=["M/S", "M/S", "M", "MG/L", "MGO2/L"],
+        x=x, y=y, ikle=[[0, 1, 2], [1, 2, 3], [2, 3, 4]],
+        times=[300.0 * i for i in range(frames)],
+        data={"VELOCITY U": [[0.5] * 5] * frames,
+              "VELOCITY V": [[0.0] * 5] * frames,
+              "WATER DEPTH": depth, "DYE": [[0.0] * 5] * frames,
+              "DISSOLVED O2": oxygen})
+
+
+def test_a_tracer_that_stopped_being_a_number_fails_the_solve_by_its_name(
+        monkeypatch, telemac_result):
+    """A tracer the engine drove non-finite leaves nothing weighted, exactly as
+    a dry line does, and the two are not the same answer: the read names the
+    variable and the instant it stopped being a number, and the run fails by
+    that name rather than reporting an empty output."""
+    from trid3nt_server.workflows.telemac.modules.outputs import (
+        SolveNonFinite, profile)
+
+    nan = [float("nan")] * 5
+    _five_nodes(telemac_result, oxygen=[[9.0] * 5, nan, nan],
+                depth=[[2.0] * 5] * 3)
+    monkeypatch.setattr(
+        "trid3nt_server.workflows.solver.solver.download_result",
+        lambda run_id, basename, error_code=None: "/tmp/does-not-matter.slf")
+    solved = _solved()
+    with pytest.raises(SolveNonFinite) as caught:
+        T2D.READS["profile"](profile("T2", along=_line(solved)), solved)
+    assert "DISSOLVED O2" in str(caught.value)
+    assert "t = 300 s" in str(caught.value)
+    assert caught.value.error_code == "TELEMAC_SOLVE_NON_FINITE"
+
+
+def test_a_line_with_no_water_on_it_is_still_a_dry_line(
+        monkeypatch, telemac_result):
+    """The discrimination, the other way: every value is a number and the water
+    is gone, which is an empty output and not a failed solve."""
+    from trid3nt_server.workflows.telemac.modules.outputs import profile
+
+    _five_nodes(telemac_result, oxygen=[[9.0] * 5] * 2,
+                depth=[[2.0] * 5, [0.0] * 5])
+    monkeypatch.setattr(
+        "trid3nt_server.workflows.solver.solver.download_result",
+        lambda run_id, basename, error_code=None: "/tmp/does-not-matter.slf")
+    solved = _solved()
+    with pytest.raises(OutputEmpty, match="no wet node"):
+        T2D.READS["profile"](profile("T2", along=_line(solved)), solved)
+
+
 def test_a_profile_runs_the_way_the_solved_flow_goes(coupled):
     """A line drawn against the flow is read downstream regardless: the flow
     orients the chainage, so the mix point stays where the water carries it."""
