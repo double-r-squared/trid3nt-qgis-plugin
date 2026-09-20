@@ -12,6 +12,7 @@ depths is turned into elevations counted up from the zero it states.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import math
 from dataclasses import dataclass
@@ -659,6 +660,14 @@ class MergedRasterLayerURI(LayerURI):
 #: The merged surface is an elevation, so it draws as one.
 _BED_STYLE = {"kind": "continuous", "ramp": "terrain"}
 
+#: What every published bed row is read in: the merge lands each rung on the
+#: run's own frame in metres, whatever unit the rung arrived carrying.
+_BED_UNITS = "m"
+
+#: The surfacing tasks in flight, held because a bare ``create_task`` reference
+#: is the loop's only claim on the coroutine and a dropped one is collectable.
+_publishing: set[Any] = set()
+
 #: The most cells one merge will build. A ceiling refuses by name rather than
 #: quietly coarsening the measurement the merge was called to keep.
 _MERGE_MAX_CELLS = 60_000_000
@@ -925,6 +934,37 @@ def _passed_through(only: Any, absent: str) -> MergedRasterLayerURI:
         notes=[note])
 
 
+def _surfaced(merged: MergedRasterLayerURI) -> None:
+    """Put the merged bed on the map as an input row, so the surface the mesh is
+    painted from is SEEN rather than inferred from a survey's outline.
+
+    Best-effort on the emitter the run is bracketed by: a bed nobody can see is a
+    poorer run, never a failed one."""
+    try:
+        from trid3nt_server.render.layer_uri_emit import publish_raster_input_cog
+        from trid3nt_server.render.pipeline_emitter import current_emitter
+
+        emitter = current_emitter()
+        if emitter is None:
+            return
+        painted = ", ".join(f"{label} {share * 100.0:.1f}%"
+                            for label, share in merged.rungs)
+        coro = publish_raster_input_cog(
+            emitter, cog_uri=merged.uri, layer_id=f"input-{merged.layer_id}",
+            name=f"Input: bed (merged: {painted})", style=merged.style,
+            units=_BED_UNITS, vertical_datum=merged.vertical_datum)
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            asyncio.run(coro)
+            return
+        task = loop.create_task(coro)
+        _publishing.add(task)
+        task.add_done_callback(_publishing.discard)
+    except Exception as exc:  # noqa: BLE001 - surfacing never voids a merge
+        logger.warning("merged bed not surfaced as an input layer: %s", exc)
+
+
 def _band(spans: list[tuple[float, float, str]]) -> str:
     """One population of painted values: what it spans, and which rungs painted it."""
     return (f"{min(low for low, _high, _label in spans):.2f} to "
@@ -1093,7 +1133,7 @@ def merged_surface(
                 width, height, metres, len(ladder), painted)
     for line in (covered, *moved):
         journal_note(line)
-    return MergedRasterLayerURI.published(
+    merged = MergedRasterLayerURI.published(
         "merged-bed", seed=seed,
         name="merged bed surface",
         layer_type="raster",
@@ -1119,3 +1159,5 @@ def merged_surface(
         provenance_uri=provenance,
         resolution_m=round(metres, 4),
         notes=notes)
+    _surfaced(merged)
+    return merged

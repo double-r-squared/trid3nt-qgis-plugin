@@ -244,12 +244,16 @@ async def publish_raster_input_cog(
     name: str,
     style: dict[str, Any] | None = None,
     role: str = "context",
+    units: str | None = None,
+    vertical_datum: str | None = None,
     fallback_note: str | None = None,
     fallbacks: Sequence[Any] | None = None,
 ) -> bool:
     """BEST-EFFORT: surface an EXISTING ``s3://`` raster COG as an input/context row.
     Rides the object already in the store - no re-upload - and never raises,
     returning ``False`` for every failure rather than failing the solve.
+    ``units`` and ``vertical_datum`` are what the row is READ IN: an elevation
+    surface says both or a reader cannot place it.
     """
     if emitter is None or not cog_uri:
         return False
@@ -310,6 +314,8 @@ async def publish_raster_input_cog(
         uri=renderable,
         style=style,
         role=role,
+        units=units,
+        vertical_datum=vertical_datum,
         bbox=None,
         fallback_note=fallback_note,
     )

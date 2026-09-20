@@ -479,3 +479,29 @@ def test_a_bed_within_the_domain_relief_merges(tmp_path) -> None:
                             fallback=_relief(170.0, 175.0, west=500_000.0, cell=4.0),
                             _output_dir=str(tmp_path))
     assert merged.primary_fraction > 0.0 and merged.fallback_fraction > 0.0
+
+
+def test_the_merge_publishes_the_bed_as_an_input_layer(tmp_path, monkeypatch) -> None:
+    """The surface the mesh is painted from reaches the map itself: one input row
+    naming every rung and its share, read in metres on the run's own frame."""
+    from trid3nt_server.render import layer_uri_emit, pipeline_emitter
+
+    published: list[dict] = []
+
+    async def _publish(emitter, **fields) -> bool:
+        published.append(fields)
+        return True
+
+    monkeypatch.setattr(pipeline_emitter, "current_emitter", lambda: object())
+    monkeypatch.setattr(layer_uri_emit, "publish_raster_input_cog", _publish)
+    merged = merged_surface(primary=_survey(), fallback=_terrain(),
+                            frame="NAVD88", _output_dir=str(tmp_path))
+
+    assert len(published) == 1
+    row = published[0]
+    assert row["name"] == "Input: bed (merged: {} 6.2%, {} 93.8%)".format(
+        *(label for label, _share in merged.rungs))
+    assert row["cog_uri"] == merged.uri
+    assert row["layer_id"] == f"input-{merged.layer_id}"
+    assert row["units"] == "m" and row["vertical_datum"] == "NAVD88"
+    assert row["style"] == merged.style
