@@ -29,7 +29,7 @@ from typing import Any, Sequence
 from trid3nt_server.tools.cache import record_provenance
 from trid3nt_server.fallbacks import Ladder, LadderGap, Rung, register_ladder
 
-from ..._fetch_common import FetchError
+from ..._fetch_common import FetchError, enforce_pixel_budget
 from . import register_hook
 
 logger = logging.getLogger(
@@ -304,7 +304,7 @@ def estimate_payload_mb(
 ) -> float:
     """Estimate the emitted COG size in MB: a sampled window's real emit density scaled
     by the AOI area, falling back to the analytic model when sampling is unavailable.
-    ``resolution_m=None`` estimates the NATIVE composite, a value that coarsened grid."""
+    ``resolution_m=None`` estimates the NATIVE composite; a value estimates that grid."""
     if bbox is None:
         return _analytic_payload_mb(bbox)
     from trid3nt_server.tools.payload_sampling import estimate_mb
@@ -802,6 +802,11 @@ def _mask_land_leg_ocean_fill(land_local_path: str) -> str:
     return out
 
 
+#: Pixel budget per axis for the composite grid: past it the request refuses rather
+#: than coarsening, and the caller re-asks with min_pixel_m or a smaller AOI.
+_MAX_COMPOSITE_PX = 12000
+
+
 def _compute_target_grid(
     sources_in_precedence: list[str],
     target_crs: str,
@@ -852,18 +857,14 @@ def _compute_target_grid(
     if min_pixel_m is not None and finest_res < float(min_pixel_m):
         finest_res = float(min_pixel_m)
 
+    # The composite is built at the spacing asked for -- the finest source cell, or
+    # the min_pixel_m floor over it. A grid past the budget REFUSES naming the
+    # spacing that fits; nothing here coarsens on its own behalf.
+    enforce_pixel_budget(
+        bbox, finest_res, budget_px=_MAX_COMPOSITE_PX, source="fetch_topobathy",
+    )
     width = max(1, int(_math.ceil((t_east - t_west) / finest_res)))
     height = max(1, int(_math.ceil((t_north - t_south) / finest_res)))
-    _MAX_DIM = 12000
-    if width > _MAX_DIM or height > _MAX_DIM:
-        scale = max(width / _MAX_DIM, height / _MAX_DIM)
-        finest_res *= scale
-        width = max(1, int(_math.ceil((t_east - t_west) / finest_res)))
-        height = max(1, int(_math.ceil((t_north - t_south) / finest_res)))
-        logger.info(
-            "fetch_topobathy: AOI grid exceeded %d px at native res; coarsened "
-            "to %.2f m (%d x %d)", _MAX_DIM, finest_res, width, height,
-        )
 
     from rasterio.transform import from_origin
 

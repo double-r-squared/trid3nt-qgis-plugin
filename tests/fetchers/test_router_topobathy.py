@@ -18,7 +18,10 @@ from rasterio.transform import from_origin
 
 from trid3nt_contracts.execution import TopobathyResult
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.fetchers._fetch_common import FetchError
+from trid3nt_server.tools.fetchers._fetch_common import (
+    FetchError,
+    PixelBudgetExceededError,
+)
 from trid3nt_server.tools.fetchers._router.hooks import topobathy as tb
 from trid3nt_server.tools.fetchers._router.hooks.topobathy import (
     ETOPO_GLOBAL_ROOT,
@@ -100,6 +103,25 @@ def test_estimate_payload_mb_scales_with_bbox() -> None:
     assert estimate_payload_mb(bbox=None) > 0.0
 
 
+
+
+def test_a_composite_past_the_pixel_budget_refuses_instead_of_coarsening() -> None:
+    """The composite grid is built at the spacing asked for. An AOI whose native grid
+    runs past the budget REFUSES naming the budget, the asked spacing and the spacing
+    that fits; the same AOI floored to that spacing builds."""
+    wide = (-85.9, 29.55, -85.0, 30.20)
+    with pytest.raises(PixelBudgetExceededError) as ei:
+        tb._compute_target_grid([], TARGET_CRS, wide)
+    msg = str(ei.value)
+    assert "12000 px/axis" in msg
+    assert "resolution_m=3 " in msg
+    assert "Nothing was coarsened" in msg
+    assert "the finest spacing that fits this bbox" in msg
+
+    _tf, width, height = tb._compute_target_grid(
+        [], TARGET_CRS, wide, min_pixel_m=30.0,
+    )
+    assert max(width, height) <= 12000
 
 
 def _assert_input_invalid(**kw: Any) -> None:
