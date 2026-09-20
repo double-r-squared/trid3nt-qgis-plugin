@@ -437,6 +437,42 @@ def test_the_box_a_cut_leaves_behind_is_open_edge_rather_than_shoreline(
         assert x0 in _CUT_BOX[::2] or y0 in _CUT_BOX[1::2]
 
 
+#: An island standing well inside the box, as a hole ring in the water polygon.
+_ISLAND = [[-75.75, 36.14], [-75.74, 36.14], [-75.74, 36.15], [-75.75, 36.14]]
+
+
+def _with_island(polygon):
+    """``polygon`` with the island punched out of it as a second ring."""
+    return {"type": "Polygon",
+            "coordinates": [[list(xy) for xy in polygon["coordinates"][0]],
+                            _ISLAND]}
+
+
+def test_an_island_hole_does_not_make_the_cut_boxs_edges_shore(
+        monkeypatch, tmp_path):
+    """The all-shore guard reads the OUTER ring: a coast still cuts the box open
+    however many islands stand inside it."""
+    from trid3nt_server.workflows.mesh.water import water_polygon
+
+    sent = _stub_om2d(monkeypatch, tmp_path)
+    path = tmp_path / "island_water.geojson"
+    path.write_text(json.dumps(_with_island(water_polygon(_COAST, _CUT_BOX))))
+    OM2D.build(_recipe(extent=str(path)))
+    staged = json.loads(Path(sent["rundir"], "open_runs.geojson").read_text())
+    assert len(staged["features"]) == 3, "the south, east and north edges"
+
+
+def test_an_island_hole_does_not_open_a_box_that_was_drawn_as_the_box(
+        monkeypatch, tmp_path):
+    """A drawn box is all shore however many islands stand inside it: the guard
+    never counts a hole's segments against the outer ring's."""
+    from trid3nt_server.inputs.domain import domain as ingest
+
+    sent = _stub_om2d(monkeypatch, tmp_path)
+    OM2D.build(_recipe(extent=ingest(_with_island(_BASIN))))
+    assert sent["config"]["open_runs_geojson"] is None
+
+
 def test_the_shoreline_sizing_is_coarse_on_the_box_and_fine_on_the_coast(
         monkeypatch, tmp_path, driver):
     """The one classification the mesher stages is the one the sizing reads: the
