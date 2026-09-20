@@ -37,20 +37,20 @@ The values the template declares. `desc` is what the model reads when it fills o
 
 | field | the proving run's value |
 |---|---|
-| `stratification_dt` | 1.298919677734375 |
+| `stratification_dt` | 1.2987174987792969 |
 | `stratification_dt_init` | 9.950547218322754 |
-| `column_mean_final_c` | 20.000362391478557 |
+| `column_mean_final_c` | 20.000179918381715 |
 | `column_mean_init_c` | 19.999999861290423 |
-| `column_depth_m` | 11.999976446708388 |
-| `u_surface` | -0.00014427091809920967 |
-| `u_bottom` | 0.0001381385518470779 |
-| `depth_avg_u` | -0.001081944610102034 |
+| `column_depth_m` | 11.999975631768393 |
+| `u_surface` | -0.0001201474224217236 |
+| `u_bottom` | 0.00017139654664788395 |
+| `depth_avg_u` | -0.0010810580498722634 |
 | `planes` | 13 |
 | `mesh_size_m` | 23.506 |
 
 It publishes these layers onto the canvas:
 
-- Input: nhd waterbody at point (nhd_waterbody_at_point)
+- Input: domain (nhd_waterbody_at_point)
 - Elevation z over time (nhd_waterbody_mesh)
 - Velocity u over time (nhd_waterbody_mesh)
 - Velocity v over time (nhd_waterbody_mesh)
@@ -60,23 +60,23 @@ It publishes these layers onto the canvas:
 
 ## The proving run
 
-Run `01M2VEFS379PMNKD6H0MFJSYBD`, 2026-09-18T23:49:51.213554+00:00, 355.06 s, at commit `966392d7b95ac996d00a5df14f667096b64a3e2a-dirty`.
+Run `01M2Z58EWXKBFQ7ZE2FZGF1VVT`, 2026-09-20T10:23:02.165913+00:00, 219.479 s, at commit `231a10e6ef167c99765f9ab6ae23f1ec658c4fb6`.
 
-![Every layer the run published, stacked and framed on the result (run 01M2VEFS379PMNKD6H0MFJSYBD)](telemac3d_stratified_flow/telemac3d_stratified_flow.png)
+![Every layer the run published, stacked and framed on the result (run 01M2Z58EWXKBFQ7ZE2FZGF1VVT)](telemac3d_stratified_flow/telemac3d_stratified_flow.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M2VEFS379PMNKD6H0MFJSYBD)*
+*Every layer the run published, stacked and framed on the result (run 01M2Z58EWXKBFQ7ZE2FZGF1VVT)*
 
-![The solve, frame by frame (run 01M2VEFS379PMNKD6H0MFJSYBD)](telemac3d_stratified_flow/telemac3d_stratified_flow_animation.gif)
+![The solve, frame by frame (run 01M2Z58EWXKBFQ7ZE2FZGF1VVT)](telemac3d_stratified_flow/telemac3d_stratified_flow_animation.gif)
 
-*The solve, frame by frame (run 01M2VEFS379PMNKD6H0MFJSYBD)*
+*The solve, frame by frame (run 01M2Z58EWXKBFQ7ZE2FZGF1VVT)*
 
-![final frame (run 01M2VEFS379PMNKD6H0MFJSYBD)](telemac3d_stratified_flow/telemac3d_stratified_flow_final_frame.png)
+![final frame (run 01M2Z58EWXKBFQ7ZE2FZGF1VVT)](telemac3d_stratified_flow/telemac3d_stratified_flow_final_frame.png)
 
-*final frame (run 01M2VEFS379PMNKD6H0MFJSYBD)*
+*final frame (run 01M2Z58EWXKBFQ7ZE2FZGF1VVT)*
 
-![water temperature - the chart the run persisted (run 01M2VEFS379PMNKD6H0MFJSYBD)](telemac3d_stratified_flow/telemac3d_stratified_flow_chart_water_temperature.png)
+![water temperature - the chart the run persisted (run 01M2Z58EWXKBFQ7ZE2FZGF1VVT)](telemac3d_stratified_flow/telemac3d_stratified_flow_chart_water_temperature.png)
 
-*water temperature - the chart the run persisted (run 01M2VEFS379PMNKD6H0MFJSYBD)*
+*water temperature - the chart the run persisted (run 01M2Z58EWXKBFQ7ZE2FZGF1VVT)*
 
 ### The sheet it filled
 
@@ -84,7 +84,7 @@ Every slot the run resolved, with where the value came from. The engine's own de
 
 | param | value | units | basis | provenance |
 |---|---|---|---|---|
-| `seed` | Point(lon=-123.221649, lat=45.485595, name=None) | - | user | supplied on this invocation |
+| `seed` | {'lon': -123.221649, 'lat': 45.485595, 'name': None} | - | user | supplied on this invocation |
 | `warm_temp_c` | 25.0 | C | user | supplied on this invocation |
 | `cold_temp_c` | 15.0 | C | user | supplied on this invocation |
 | `thermocline_depth_m` | 6.0 | m | user | supplied on this invocation |
@@ -101,11 +101,12 @@ from trid3nt_server.tools import TOOL_REGISTRY
 await TOOL_REGISTRY['telemac3d_stratified_flow'].fn(
     cold_temp_c=15.0,
     mesh_resolution_m=60.0,
-    seed='Point(lon=-123.221649, lat=45.485595, name=None)',
+    seed={'lon': -123.221649, 'lat': 45.485595, 'name': None},
     thermocline_depth_m=6.0,
     warm_temp_c=25.0,
+    bed=12.0,
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2VEFS379PMNKD6H0MFJSYBD` and commit `966392d7b95ac996d00a5df14f667096b64a3e2a-dirty`. The full argument record is [`telemac3d_stratified_flow/run.json`](telemac3d_stratified_flow/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2Z58EWXKBFQ7ZE2FZGF1VVT` and commit `231a10e6ef167c99765f9ab6ae23f1ec658c4fb6`. The full argument record is [`telemac3d_stratified_flow/run.json`](telemac3d_stratified_flow/run.json).
 
