@@ -38,13 +38,13 @@ The values the template declares. `desc` is what the model reads when it fills o
 
 | field | the proving run's value |
 |---|---|
-| `suspended_cmax` | 6.942128675291315e-05 |
+| `suspended_cmax` | 0.002337946090847254 |
 | `suspended_peak_time_s` | 300.0 |
-| `plume_reach_m` | 0.1 |
-| `active_frames` | 3 |
-| `bed_evolution_max_m` | 4.488018385018222e-05 |
-| `net_bed_mass_kg` | 200.511 |
-| `deposit_fraction` | 0.8354625 |
+| `plume_reach_m` | 55.0 |
+| `active_frames` | 12 |
+| `bed_evolution_max_m` | 3.944495983887464e-05 |
+| `net_bed_mass_kg` | 195.0524 |
+| `deposit_fraction` | 0.8127183333333333 |
 | `mesh_size_m` | 20.888 |
 
 It publishes these layers onto the canvas:
@@ -70,23 +70,23 @@ It publishes these layers onto the canvas:
 
 ## The proving run
 
-Run `01M2YPBVHNRKA9RP3TZNJ9203V`, 2026-09-20T05:59:47.331401+00:00, 37.434 s, at commit `d38a12f07cc0ea4db86ce0fe8dec728e9f74b2c4-dirty`.
+Run `01M2Z58GD0T0D3YQ91WKPRRCCS`, 2026-09-20T10:20:07.007461+00:00, 42.745 s, at commit `8f01ea9ee67355d6489119bdc5c0ebc21e240205`.
 
-![Every layer the run published, stacked and framed on the result (run 01M2YPBVHNRKA9RP3TZNJ9203V)](telemac_sediment_plume/telemac_sediment_plume.png)
+![Every layer the run published, stacked and framed on the result (run 01M2Z58GD0T0D3YQ91WKPRRCCS)](telemac_sediment_plume/telemac_sediment_plume.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M2YPBVHNRKA9RP3TZNJ9203V)*
+*Every layer the run published, stacked and framed on the result (run 01M2Z58GD0T0D3YQ91WKPRRCCS)*
 
-![The solve, frame by frame (run 01M2YPBVHNRKA9RP3TZNJ9203V)](telemac_sediment_plume/telemac_sediment_plume_animation.gif)
+![The solve, frame by frame (run 01M2Z58GD0T0D3YQ91WKPRRCCS)](telemac_sediment_plume/telemac_sediment_plume_animation.gif)
 
-*The solve, frame by frame (run 01M2YPBVHNRKA9RP3TZNJ9203V)*
+*The solve, frame by frame (run 01M2Z58GD0T0D3YQ91WKPRRCCS)*
 
-![peak frame (run 01M2YPBVHNRKA9RP3TZNJ9203V)](telemac_sediment_plume/telemac_sediment_plume_peak_frame.png)
+![peak frame (run 01M2Z58GD0T0D3YQ91WKPRRCCS)](telemac_sediment_plume/telemac_sediment_plume_peak_frame.png)
 
-*peak frame (run 01M2YPBVHNRKA9RP3TZNJ9203V)*
+*peak frame (run 01M2Z58GD0T0D3YQ91WKPRRCCS)*
 
-![suspended sediment concentration - the chart the run persisted (run 01M2YPBVHNRKA9RP3TZNJ9203V)](telemac_sediment_plume/telemac_sediment_plume_chart_suspended_sediment_concentration.png)
+![suspended sediment concentration - the chart the run persisted (run 01M2Z58GD0T0D3YQ91WKPRRCCS)](telemac_sediment_plume/telemac_sediment_plume_chart_suspended_sediment_concentration.png)
 
-*suspended sediment concentration - the chart the run persisted (run 01M2YPBVHNRKA9RP3TZNJ9203V)*
+*suspended sediment concentration - the chart the run persisted (run 01M2Z58GD0T0D3YQ91WKPRRCCS)*
 
 ### The sheet it filled
 
@@ -118,5 +118,5 @@ await TOOL_REGISTRY['telemac_sediment_plume'].fn(
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2YPBVHNRKA9RP3TZNJ9203V` and commit `d38a12f07cc0ea4db86ce0fe8dec728e9f74b2c4-dirty`. The full argument record is [`telemac_sediment_plume/run.json`](telemac_sediment_plume/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2Z58GD0T0D3YQ91WKPRRCCS` and commit `8f01ea9ee67355d6489119bdc5c0ebc21e240205`. The full argument record is [`telemac_sediment_plume/run.json`](telemac_sediment_plume/run.json).
 
