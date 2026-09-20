@@ -14,6 +14,7 @@ import pytest
 
 from trid3nt_contracts.coverage import Coverage, CoverageExtent, CoverageWindow
 
+from trid3nt_server.tools.fetchers._router.errors import router_upstream_error
 from trid3nt_server.workflows.runtime import Data, data_rows
 from trid3nt_server.workflows.runtime import interpreter
 from trid3nt_server.workflows.runtime.domain import Domain, bind_domain, reset_domain
@@ -253,6 +254,21 @@ def test_the_next_survivor_takes_its_turn_when_the_top_one_held_nothing(
     assert choice.picked == "fetch_bed_raster"
     assert value == "s3://b/fetch_bed_raster.tif"
     assert choice.rows[0].excluded.startswith("held nothing here")
+
+
+def test_a_non_retryable_upstream_error_drops_the_rung(world, monkeypatch):
+    async def _runner(runner, kwargs, label):
+        world.append((runner, dict(kwargs)))
+        if runner == "fetch_soundings":
+            raise router_upstream_error("EHYDRO", "TransportNotFound: HTTP 404",
+                                        False)
+        return f"s3://b/{runner}.tif"
+
+    monkeypatch.setattr(interpreter, "_call_runner", _runner)
+    choice, value = asyncio.run(interpreter._probe(
+        _env(), _row(Data.need("bathymetry"), "bed"), "bathymetry", "bed"))
+    assert choice.picked == "fetch_bed_raster"
+    assert value == "s3://b/fetch_bed_raster.tif"
 
 
 def test_a_run_series_is_asked_for_the_window_the_deck_will_solve(world):

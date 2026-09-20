@@ -84,8 +84,15 @@ def router_input_error(
     return _stamp(RouterInputError, code_prefix, suffix, message)  # type: ignore[return-value]
 
 
-def router_upstream_error(code_prefix: str, message: str) -> RouterUpstreamError:
-    return _stamp(RouterUpstreamError, code_prefix, "UPSTREAM_ERROR", message)  # type: ignore[return-value]
+def router_upstream_error(
+    code_prefix: str, message: str, retryable: bool = True
+) -> RouterUpstreamError:
+    """Typed upstream failure. ``retryable`` carries the TRANSPORT's own verdict
+    where the failure came from one: a 404 is not worth a second call, a 429 /
+    5xx / timeout is. A failure with no transport behind it stays retryable."""
+    exc = _stamp(RouterUpstreamError, code_prefix, "UPSTREAM_ERROR", message)
+    exc.retryable = retryable
+    return exc  # type: ignore[return-value]
 
 
 def router_empty_error(

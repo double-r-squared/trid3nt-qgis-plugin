@@ -41,7 +41,8 @@ def _get_raw(plan: RequestPlan) -> bytes:
 def _get(spec: SourceSpec, plan: RequestPlan) -> bytes:
     """Execute one plan, mapping a ``TransportError`` to the source-stamped router
     error. A declared ``hooks.classify_status`` is consulted FIRST and returns either
-    a typed error to raise or None, which keeps the retryable upstream default."""
+    a typed error to raise or None, which falls through to an upstream error
+    carrying the transport's own retryable verdict."""
     try:
         return _get_raw(plan)
     except TransportError as exc:
@@ -50,7 +51,8 @@ def _get(spec: SourceSpec, plan: RequestPlan) -> bytes:
             typed = classify(spec, exc.status, exc.body)
             if typed is not None:
                 raise typed
-        raise router_upstream_error(spec.error_code_prefix, f"{type(exc).__name__}: {exc}")
+        raise router_upstream_error(
+            spec.error_code_prefix, f"{type(exc).__name__}: {exc}", exc.retryable)
 
 
 def _fetch_endpoint_fallback(spec: SourceSpec, plans: list[RequestPlan]) -> list[bytes]:
@@ -67,7 +69,8 @@ def _fetch_endpoint_fallback(spec: SourceSpec, plans: list[RequestPlan]) -> list
             # A non-429 4xx (bad query) will not succeed on another mirror -- fail
             # fast rather than hammer every sibling.
             if status is not None and 400 <= status < 500 and status != 429:
-                raise router_upstream_error(sc, f"{type(exc).__name__}: {exc}")
+                raise router_upstream_error(
+                    sc, f"{type(exc).__name__}: {exc}", exc.retryable)
             last_exc = exc
             if i < len(plans) - 1:
                 logger.warning(
