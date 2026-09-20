@@ -1964,6 +1964,36 @@ class Trid3ntDock(QDockWidget):
 
     # -- gate card -------------------------------------------------------------- #
 
+    def _present_card(self, card) -> None:
+        """Insert one gate card above the terminal stretch and close out the
+        pending assistant entry. Without that close the card strands at the
+        bottom while response text piles above it: the streaming entry was
+        minted BEFORE the card, so everything after the user's answer streams
+        into the entry above. The next event mints a fresh entry below it."""
+        self.messages_layout.insertWidget(self.messages_layout.count() - 1, card)
+        self._close_pending_for_card()
+        self._scroll_to_bottom()
+
+    def _reply(self, label: str, send, *args, **kwargs) -> None:
+        """One gate answer out through the bridge, a send failure noted by the
+        name of what failed. ``exc`` carries transport state and never the
+        arguments, so a credential reply is safe to route through here."""
+        try:
+            send(*args, **kwargs)
+        except Exception as exc:  # noqa: BLE001
+            self._note(f"{label} send failed: {exc}", error=True)
+
+    def _begin_turn(self) -> None:
+        """Pre-send bookkeeping: a fresh turn starts a fresh "Step N" count and
+        a fresh streaming entry. A WS drop can strand an entry that never saw
+        turn-complete, so the prior one is final-rendered before the new one is
+        minted."""
+        self._tool_picker_turn_step = 0
+        if self._pending is not None:
+            self._pending.finalize_markdown()
+        self._pending = _AssistantEntry(self.messages_layout)
+        self._scroll_to_bottom()
+
     def _show_gate_card(self, payload: dict) -> None:
         warning = gate.parse_payload_warning(payload)
         if warning is None:
@@ -1981,25 +2011,13 @@ class Trid3ntDock(QDockWidget):
             card = FormCard(warning, sheet, self._on_gate_decision)
         else:
             card = GateCard(warning, self._on_gate_decision)
-        self.messages_layout.insertWidget(self.messages_layout.count() - 1, card)
-        # Without this a card strands at the bottom while the response text
-        # piles above it: the
-        # streaming _AssistantEntry was created BEFORE the card, so everything
-        # after the user's confirm streamed into the entry ABOVE it. Close out
-        # the pending entry here (shared _close_pending_for_card discipline) --
-        # the next event (thinking/chunk/pipeline/note) mints a FRESH entry
-        # via _ensure_pending, which inserts before the terminal stretch, i.e.
-        # BELOW the card -- the cloud web's chronological turn flow.
-        self._close_pending_for_card()
-        self._scroll_to_bottom()
+        self._present_card(card)
 
     def _on_gate_decision(
         self, warning_id: str, decision: str, revised_args: Optional[dict]
     ) -> None:
-        try:
-            self.bridge.confirm_payload(warning_id, decision, revised_args)
-        except Exception as exc:  # noqa: BLE001
-            self._note(f"confirmation send failed: {exc}", error=True)
+        self._reply("confirmation", self.bridge.confirm_payload,
+                    warning_id, decision, revised_args)
 
     # -- code-exec approval card ----------------------------------------------- #
 
@@ -2020,28 +2038,22 @@ class Trid3ntDock(QDockWidget):
         # Track the card by code_exec_id so the processing-request that follows
         # the approval folds its outcome into THIS card's chip.
         self._code_exec_cards[request.code_exec_id] = card
-        self.messages_layout.insertWidget(self.messages_layout.count() - 1, card)
-        self._close_pending_for_card()
-        self._scroll_to_bottom()
+        self._present_card(card)
 
     def _on_code_exec_decision(self, code_exec_id: str, decision: str) -> None:
         """Send the code-exec confirmation. The reply REUSES the payload
         confirmation envelope rather than adding an outbound verb, and
         ``revised_args`` is always None."""
-        try:
-            self.bridge.confirm_payload(code_exec_id, decision, None)
-        except Exception as exc:  # noqa: BLE001
-            self._note(f"code-exec confirmation send failed: {exc}", error=True)
+        self._reply("code-exec confirmation", self.bridge.confirm_payload,
+                    code_exec_id, decision, None)
 
     def _on_processing_request(self, payload: dict) -> None:
         """Run the request in this session and answer it; a code request also
         folds its outcome into the card that approved it. The agent is paused
         on the reply, so an exception here still answers with its message."""
         response = run_processing_request(payload, iface=self.iface)
-        try:
-            self.bridge.send_processing_response(**response)
-        except Exception as exc:  # noqa: BLE001
-            self._note(f"processing response send failed: {exc}", error=True)
+        self._reply("processing response", self.bridge.send_processing_response,
+                    **response)
         code_exec_id = payload.get("code_exec_id")
         card = self._code_exec_cards.get(code_exec_id) if isinstance(code_exec_id, str) else None
         if card is None:
@@ -2090,10 +2102,8 @@ class Trid3ntDock(QDockWidget):
                 error=True,
             )
             return
-        card = RegionChoiceCard(request, self._on_region_choice_decision)
-        self.messages_layout.insertWidget(self.messages_layout.count() - 1, card)
-        self._close_pending_for_card()
-        self._scroll_to_bottom()
+        self._present_card(RegionChoiceCard(request,
+                                           self._on_region_choice_decision))
 
     def _on_region_choice_decision(
         self,
@@ -2104,15 +2114,10 @@ class Trid3ntDock(QDockWidget):
     ) -> None:
         """Send the region-choice reply. A whole-state answer keeps the honest
         already-resolved bbox: the decline path that still CLOSES the gate."""
-        try:
-            self.bridge.send_region_choice(
-                request_id,
-                choice,
-                selected_region_id=selected_region_id,
-                selected_bbox=selected_bbox,
-            )
-        except Exception as exc:  # noqa: BLE001
-            self._note(f"region choice send failed: {exc}", error=True)
+        self._reply("region choice", self.bridge.send_region_choice,
+                    request_id, choice,
+                    selected_region_id=selected_region_id,
+                    selected_bbox=selected_bbox)
 
     # -- spatial-input pick card (a gate WAIT) ---------------------------------- #
 
@@ -2143,24 +2148,18 @@ class Trid3ntDock(QDockWidget):
             to_bbox=self._rect_to_bbox4326,
             default_name=default_name,
         )
-        self.messages_layout.insertWidget(self.messages_layout.count() - 1, card)
-        self._close_pending_for_card()
-        self._scroll_to_bottom()
+        self._present_card(card)
 
     def _on_spatial_input_decision(self, wire: dict) -> None:
         """Send the spatial-input reply: coordinates, features, or a cancel.
         A CANCEL still closes the server's paused gate."""
-        try:
-            self.bridge.send_spatial_input(
-                wire["request_id"],
-                geometry_type=wire.get("geometry_type"),
-                coordinates=wire.get("coordinates"),
-                features=wire.get("features"),
-                name=wire.get("name"),
-                cancelled=bool(wire.get("cancelled")),
-            )
-        except Exception as exc:  # noqa: BLE001
-            self._note(f"spatial input send failed: {exc}", error=True)
+        self._reply("spatial input", self.bridge.send_spatial_input,
+                    wire["request_id"],
+                    geometry_type=wire.get("geometry_type"),
+                    coordinates=wire.get("coordinates"),
+                    features=wire.get("features"),
+                    name=wire.get("name"),
+                    cancelled=bool(wire.get("cancelled")))
 
     # -- credential-request key-entry card -------------------------------------- #
 
@@ -2177,10 +2176,8 @@ class Trid3ntDock(QDockWidget):
                 error=True,
             )
             return
-        card = CredentialCard(request, self._on_credential_decision)
-        self.messages_layout.insertWidget(self.messages_layout.count() - 1, card)
-        self._close_pending_for_card()
-        self._scroll_to_bottom()
+        self._present_card(CredentialCard(request,
+                                          self._on_credential_decision))
 
     def _on_credential_decision(
         self, request_id: str, provider_id: str, key_value: Optional[str]
@@ -2188,15 +2185,12 @@ class Trid3ntDock(QDockWidget):
         """Send the credential reply: a key submits, ``None`` skips. The raw
         key rides ``secret-add`` ALONE and is never logged or echoed in an
         error note; a skip saves nothing and lets the tool's error stand."""
-        try:
-            if key_value is None:
-                self.bridge.decline_credential(request_id)
-            else:
-                self.bridge.submit_credential(request_id, provider_id, key_value)
-        except Exception as exc:  # noqa: BLE001
-            # exc carries transport state, never the key (the send serializes
-            # before any failure surface we format here).
-            self._note(f"credential reply send failed: {exc}", error=True)
+        if key_value is None:
+            self._reply("credential reply", self.bridge.decline_credential,
+                        request_id)
+        else:
+            self._reply("credential reply", self.bridge.submit_credential,
+                        request_id, provider_id, key_value)
 
     # -- tool-selection picker card
 
@@ -2220,10 +2214,8 @@ class Trid3ntDock(QDockWidget):
         card = ToolCandidatesCard(
             request, self._on_tool_choice, step_index=self._tool_picker_turn_step
         )
-        self.messages_layout.insertWidget(self.messages_layout.count() - 1, card)
+        self._present_card(card)
         self._open_tool_pickers.append(card)
-        self._close_pending_for_card()
-        self._scroll_to_bottom()
 
     def _on_tool_choice(
         self, request_id: str, tool_name: Optional[str], free_text: Optional[str]
@@ -2231,12 +2223,8 @@ class Trid3ntDock(QDockWidget):
         """Send the picker reply: ONE ``tool-choice`` envelope carrying the
         verbatim pick, the typed guidance, or both-None (let the agent
         decide)."""
-        try:
-            self.bridge.send_tool_choice(
-                request_id, tool_name=tool_name, free_text=free_text
-            )
-        except Exception as exc:  # noqa: BLE001
-            self._note(f"tool choice send failed: {exc}", error=True)
+        self._reply("tool choice", self.bridge.send_tool_choice, request_id,
+                    tool_name=tool_name, free_text=free_text)
 
     def _supersede_open_tool_pickers(self) -> None:
         """Fold every still-open picker to its "agent proceeded" chip, the
@@ -2284,13 +2272,7 @@ class Trid3ntDock(QDockWidget):
             self._scroll_to_bottom()
             self._pending = None
             return
-        # Mirror the chat path's pre-send turn bookkeeping so the tool card +
-        # turn-complete land on a fresh streaming entry.
-        self._tool_picker_turn_step = 0
-        if self._pending is not None:
-            self._pending.finalize_markdown()
-        self._pending = _AssistantEntry(self.messages_layout)
-        self._scroll_to_bottom()
+        self._begin_turn()
         try:
             self.bridge.send_dev_tool_invoke(
                 run_inv.name, run_inv.args, raw_text=text
@@ -2318,18 +2300,7 @@ class Trid3ntDock(QDockWidget):
             return
         self.input_edit.clear()
         self._add_user_bubble(text)
-        # A fresh turn starts a fresh "Step N" count
-        # -- any still-open pickers from the PRIOR turn are already folded by
-        # _supersede_open_tool_pickers (a picker never survives a
-        # turn-complete), so this is safe to reset unconditionally.
-        self._tool_picker_turn_step = 0
-        if self._pending is not None:
-            # Defensive: a WS drop can strand a
-            # streaming entry that never saw turn-complete -- final-render
-            # it before minting the new turn's entry.
-            self._pending.finalize_markdown()
-        self._pending = _AssistantEntry(self.messages_layout)
-        self._scroll_to_bottom()
+        self._begin_turn()
         bbox, _source = self._aoi_for_send()
         # The AOI rides the
         # ``aoi_bbox`` payload field now -- the bracketed in-text prose line
