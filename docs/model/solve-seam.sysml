@@ -908,11 +908,11 @@ package SolveSeam {
     verify requirement EveryNodeCarriesAMeasuredBed by
         "tests/mesh/test_bed_sources_and_runs.py::test_the_bed_is_one_source_and_two_are_merged_before_the_op";
     verify requirement EveryNodeCarriesAMeasuredBed by
-        "tests/derive/test_derive_merge_rasters.py::test_the_primary_wins_where_it_measured_and_the_fallback_fills_the_rest";
+        "tests/inputs/test_bed_merge.py::test_the_primary_wins_where_it_measured_and_the_fallback_fills_the_rest";
     verify requirement EveryNodeCarriesAMeasuredBed by
-        "tests/derive/test_derive_merge_rasters.py::test_the_sidecar_says_which_input_painted_each_cell";
+        "tests/inputs/test_bed_merge.py::test_the_sidecar_says_which_input_painted_each_cell";
     verify requirement EveryNodeCarriesAMeasuredBed by
-        "tests/derive/test_derive_merge_rasters.py::test_two_datums_refuse_by_name";
+        "tests/inputs/test_bed_merge.py::test_two_datums_refuse_by_name";
 
     satisfy requirement ADredgeCutsOnlyWhatTheStockHolds by assembler;
     verify requirement ADredgeCutsOnlyWhatTheStockHolds by

@@ -1,4 +1,5 @@
-"""Unit tests for ``derive_merge_rasters``.
+"""The bed slot's MERGE: a measurement over part of the ground, a wider surface
+under the rest.
 
 Covered: the primary winning every cell it measured and the fallback filling the
 rest, the merged grid taking the finer cell over the union of both, the sidecar
@@ -8,8 +9,8 @@ refusing, a STATED OFFSET bringing two differing datums onto one axis while an
 offset between two other frames still refuses, a primary of DEPTHS read as
 elevations on the fallback's zero through the shift the survey publishes about
 itself, two disjoint surfaces, a measurement over half a domain landing survey and
-terrain in the right halves even though it is read onto a finer grid, a corner no
-sounding stood in coming back terrain, and the registration."""
+terrain in the right halves even though it is read onto a finer grid, and a corner
+no sounding stood in coming back terrain."""
 
 from __future__ import annotations
 
@@ -22,14 +23,11 @@ import rasterio
 from rasterio.transform import from_origin
 
 from trid3nt_contracts.execution import LayerURI
-from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.derive.derive_merge_rasters.derive_merge_rasters import (
+from trid3nt_server.inputs.bed import (
     MergeRastersError,
-    derive_merge_rasters,
-)
-from trid3nt_server.tools.derive.derive_survey_surface.derive_survey_surface import (
     SurveySurfaceLayerURI,
-    derive_survey_surface,
+    merged_surface,
+    survey_surface,
 )
 
 _NODATA = float("nan")
@@ -77,13 +75,9 @@ def _soundings(datum: str = "CRD", offset: float | None = 1.6093,
         datum_offset_m=offset, datum_offset_frame=frame)
 
 
-def test_registered() -> None:
-    assert "derive_merge_rasters" in TOOL_REGISTRY
-
-
 def test_the_primary_wins_where_it_measured_and_the_fallback_fills_the_rest(
         tmp_path) -> None:
-    merged = derive_merge_rasters(primary=_survey(), fallback=_terrain(),
+    merged = merged_surface(primary=_survey(), fallback=_terrain(),
                                   _output_dir=str(tmp_path))
     with rasterio.open(merged.uri) as src:
         values = src.read(1)
@@ -98,7 +92,7 @@ def test_the_primary_wins_where_it_measured_and_the_fallback_fills_the_rest(
 
 
 def test_the_sidecar_says_which_input_painted_each_cell(tmp_path) -> None:
-    merged = derive_merge_rasters(primary=_survey(), fallback=_terrain(),
+    merged = merged_surface(primary=_survey(), fallback=_terrain(),
                                   _output_dir=str(tmp_path))
     with rasterio.open(merged.uri) as surface, \
             rasterio.open(merged.provenance_uri) as source:
@@ -119,7 +113,7 @@ def test_a_measurement_over_half_a_domain_lands_in_the_right_halves(tmp_path) ->
                      "NAVD88")
     fallback = _layer(_write(np.full((32, 32), 12.0), west=500_000.0,
                              north=4_000_000.0, cell=2.0), "NAVD88")
-    merged = derive_merge_rasters(primary=primary, fallback=fallback,
+    merged = merged_surface(primary=primary, fallback=fallback,
                                   _output_dir=str(tmp_path))
     with rasterio.open(merged.provenance_uri) as source:
         won = source.read(1)
@@ -151,14 +145,14 @@ def test_a_corner_no_sounding_stood_in_comes_back_terrain(tmp_path) -> None:
     from rasterio.warp import transform as warp
 
     doc = _quarter_left_unsounded()
-    surface = derive_survey_surface(points=doc, resolution_m=5.0,
+    surface = survey_surface(doc, resolution_m=5.0,
                                     _output_dir=str(tmp_path))
     west, south, east, north = surface.bbox
     fallback = _layer(_write(np.full((40, 40), 12.0), west=west - 0.0002,
                              north=north + 0.0002, cell=0.0001), "NAVD88")
     with rasterio.open(fallback.uri, "r+") as handle:
         handle.crs = rasterio.crs.CRS.from_epsg(4326)
-    merged = derive_merge_rasters(primary=surface, fallback=fallback,
+    merged = merged_surface(primary=surface, fallback=fallback,
                                   _output_dir=str(tmp_path))
     corner = (east - 0.00005, north - 0.00005)
     sounded = (west + 0.00005, south + 0.00005)
@@ -172,7 +166,7 @@ def test_a_corner_no_sounding_stood_in_comes_back_terrain(tmp_path) -> None:
 
 def test_an_absent_primary_passes_the_other_surface_through(tmp_path) -> None:
     terrain = _terrain()
-    merged = derive_merge_rasters(primary=None, fallback=terrain,
+    merged = merged_surface(primary=None, fallback=terrain,
                                   _output_dir=str(tmp_path))
     assert merged.uri == terrain.uri
     assert merged.primary_fraction == 0.0 and merged.fallback_fraction == 1.0
@@ -181,7 +175,7 @@ def test_an_absent_primary_passes_the_other_surface_through(tmp_path) -> None:
 
 def test_two_datums_refuse_by_name(tmp_path) -> None:
     with pytest.raises(MergeRastersError) as excinfo:
-        derive_merge_rasters(primary=_survey("CRD"), fallback=_terrain("NAVD88"),
+        merged_surface(primary=_survey("CRD"), fallback=_terrain("NAVD88"),
                              _output_dir=str(tmp_path))
     assert excinfo.value.error_code == "MERGE_RASTERS_DATUMS_DIFFER"
     assert "CRD" in str(excinfo.value) and "NAVD88" in str(excinfo.value)
@@ -189,13 +183,13 @@ def test_two_datums_refuse_by_name(tmp_path) -> None:
 
 def test_an_unstated_datum_refuses(tmp_path) -> None:
     with pytest.raises(MergeRastersError) as excinfo:
-        derive_merge_rasters(primary=_survey(None), fallback=_terrain("NAVD88"),
+        merged_surface(primary=_survey(None), fallback=_terrain("NAVD88"),
                              _output_dir=str(tmp_path))
     assert excinfo.value.error_code == "MERGE_RASTERS_DATUM_UNSTATED"
 
 
 def test_a_stated_resolution_is_the_merged_cell(tmp_path) -> None:
-    merged = derive_merge_rasters(primary=_survey(), fallback=_terrain(),
+    merged = merged_surface(primary=_survey(), fallback=_terrain(),
                                   resolution_m=2.0, _output_dir=str(tmp_path))
     with rasterio.open(merged.uri) as src:
         assert src.res == pytest.approx((2.0, 2.0))
@@ -203,7 +197,7 @@ def test_a_stated_resolution_is_the_merged_cell(tmp_path) -> None:
 
 def test_neither_surface_refuses() -> None:
     with pytest.raises(MergeRastersError) as excinfo:
-        derive_merge_rasters()
+        merged_surface()
     assert excinfo.value.error_code == "MERGE_RASTERS_NO_SOURCE"
 
 
@@ -211,28 +205,32 @@ def test_a_grid_past_the_cell_ceiling_refuses(tmp_path) -> None:
     far = _layer(_write(np.full((4, 4), 1.0), west=900_000.0, north=4_400_000.0,
                         cell=4.0), "NAVD88")
     with pytest.raises(MergeRastersError) as excinfo:
-        derive_merge_rasters(primary=_survey(), fallback=far,
+        merged_surface(primary=_survey(), fallback=far,
                              _output_dir=str(tmp_path))
     assert excinfo.value.error_code == "MERGE_RASTERS_RESOLUTION_INVALID"
 
 
-def test_the_corpus_is_retrievable() -> None:
-    import pathlib
+def test_the_derive_surfaces_from_its_own_corpus_phrasings() -> None:
+    from pathlib import Path
 
     import yaml
 
+    import trid3nt_server.tools.derive.derive_merge_rasters as package
+    from trid3nt_server.tools.search.search_tools import search_tools as dd
     from trid3nt_server.tools.search.tool_retrieval import retrieve_visible_tools
 
-    package = pathlib.Path(__file__).resolve().parents[2] / "trid3nt_server" \
-        / "tools" / "derive" / "derive_merge_rasters" / "corpus.yaml"
-    queries = yaml.safe_load(package.read_text(encoding="utf-8"))["derive_merge_rasters"]
+    dd._get_index()
+    here = Path(package.__file__).resolve().parent
+    queries = (yaml.safe_load((here / "corpus.yaml").read_text())
+               or {})["derive_merge_rasters"]
+    assert queries
     assert any("derive_merge_rasters" in retrieve_visible_tools(q, None, 8)
-               for q in queries), \
-        "derive_merge_rasters surfaces in NO top-8 for any of its corpus queries"
+               for q in queries), (
+        "derive_merge_rasters surfaces in NO top-8 for any of its corpus queries")
 
 
 def test_a_stated_offset_reads_the_primary_on_the_fallback_s_datum(tmp_path) -> None:
-    merged = derive_merge_rasters(
+    merged = merged_surface(
         primary=_survey("CRD"), fallback=_terrain("NAVD88"),
         offset={"offset_m": 1.6093, "from_frame": "CRD", "to_frame": "NAVD88",
                 "source": "the survey's own metadata"},
@@ -251,7 +249,7 @@ def test_a_stated_offset_reads_the_primary_on_the_fallback_s_datum(tmp_path) -> 
 
 def test_an_offset_between_two_other_frames_refuses(tmp_path) -> None:
     with pytest.raises(MergeRastersError) as excinfo:
-        derive_merge_rasters(
+        merged_surface(
             primary=_survey("CRD"), fallback=_terrain("NAVD88"),
             offset={"offset_m": -1.131, "from_frame": "NAVD88",
                     "to_frame": "EGM2008", "source": "NOAA VDatum"},
@@ -260,7 +258,7 @@ def test_an_offset_between_two_other_frames_refuses(tmp_path) -> None:
 
 
 def test_one_datum_needs_no_offset_and_shifts_nothing(tmp_path) -> None:
-    merged = derive_merge_rasters(primary=_survey(), fallback=_terrain(),
+    merged = merged_surface(primary=_survey(), fallback=_terrain(),
                                   offset=None, _output_dir=str(tmp_path))
     assert merged.datum_shift_m == 0.0
     assert "Both surfaces count from NAVD88." in merged.notes
@@ -273,7 +271,7 @@ def test_a_primary_of_depths_is_read_as_elevations_on_the_fallbacks_zero(
     survey publishes about itself is the offset nothing else serves."""
     terrain = _terrain("NAVD88")
     terrain.quantity = "elevation"
-    merged = derive_merge_rasters(primary=_soundings(), fallback=terrain,
+    merged = merged_surface(primary=_soundings(), fallback=terrain,
                                   _output_dir=str(tmp_path))
     with rasterio.open(merged.uri) as surface, \
             rasterio.open(merged.provenance_uri) as source:
@@ -292,7 +290,7 @@ def test_a_primary_of_depths_is_read_as_elevations_on_the_fallbacks_zero(
 def test_a_depth_surface_whose_zero_nothing_bridges_refuses_by_name(
         tmp_path) -> None:
     with pytest.raises(MergeRastersError) as excinfo:
-        derive_merge_rasters(primary=_soundings(offset=None),
+        merged_surface(primary=_soundings(offset=None),
                              fallback=_terrain("NAVD88"),
                              _output_dir=str(tmp_path))
     assert excinfo.value.error_code == "MERGE_RASTERS_DATUMS_DIFFER"
@@ -303,7 +301,7 @@ def test_an_absent_survey_leaves_the_terrain_as_the_whole_bed(tmp_path) -> None:
     """The row a domain with no federal navigation project produces is nothing,
     and the bed is then the wider surface, stated as itself."""
     terrain = _terrain("NAVD88")
-    merged = derive_merge_rasters(primary=None, fallback=terrain,
+    merged = merged_surface(primary=None, fallback=terrain,
                                   _output_dir=str(tmp_path))
     assert merged.uri == terrain.uri
     assert merged.vertical_datum == "NAVD88"

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import inspect
 
-from trid3nt_server.inputs.bed import SURVEY_DERIVE
+from trid3nt_server.inputs.bed import MERGE_DERIVE, SURVEY_DERIVE
 from trid3nt_server.tools import TOOL_REGISTRY
 
 
@@ -17,3 +17,10 @@ def test_the_survey_grid_is_registered_and_calls_the_bed_seam():
     assert entry.fn.__name__ == "derive_survey_surface"
     assert entry.metadata.cacheable is False
     assert "survey_surface(" in inspect.getsource(entry.fn)
+
+
+def test_the_merge_is_registered_and_calls_the_bed_seam():
+    entry = TOOL_REGISTRY[MERGE_DERIVE]
+    assert entry.fn.__name__ == "derive_merge_rasters"
+    assert entry.metadata.cacheable is False
+    assert "merged_surface(" in inspect.getsource(entry.fn)

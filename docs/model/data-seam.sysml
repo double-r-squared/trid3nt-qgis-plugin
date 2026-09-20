@@ -487,7 +487,7 @@ package DataSeam {
 
     part bedComposer : BedComposer {
         doc /*
-        code: trid3nt_server/tools/derive/derive_merge_rasters/derive_merge_rasters.py
+        code: trid3nt_server/inputs/bed.py
         */
     }
 
@@ -1216,9 +1216,9 @@ package DataSeam {
     verify requirement AFreeSurfaceAndABedShareOneStatedDatum by
         "tests/telemac/test_open_water_domains.py::test_the_thermocline_is_stated_below_the_water_top_not_the_datum";
     verify requirement AFreeSurfaceAndABedShareOneStatedDatum by
-        "tests/derive/test_derive_merge_rasters.py::test_two_datums_refuse_by_name";
+        "tests/inputs/test_bed_merge.py::test_two_datums_refuse_by_name";
     verify requirement AFreeSurfaceAndABedShareOneStatedDatum by
-        "tests/derive/test_derive_merge_rasters.py::test_an_unstated_datum_refuses";
+        "tests/inputs/test_bed_merge.py::test_an_unstated_datum_refuses";
     verify requirement AFreeSurfaceAndABedShareOneStatedDatum by
         "tests/inputs/test_vertical_datum.py::test_a_layer_states_its_own_datum_and_a_name_reads_its_source_row";
 
@@ -1355,9 +1355,9 @@ package DataSeam {
     satisfy requirement TheRunHasOneVerticalFrame by freeSurfaceReader;
     satisfy requirement TheRunHasOneVerticalFrame by offsetRowDeclaration;
     verify requirement TheRunHasOneVerticalFrame by
-        "tests/derive/test_derive_merge_rasters.py::test_a_primary_of_depths_is_read_as_elevations_on_the_fallbacks_zero";
+        "tests/inputs/test_bed_merge.py::test_a_primary_of_depths_is_read_as_elevations_on_the_fallbacks_zero";
     verify requirement TheRunHasOneVerticalFrame by
-        "tests/derive/test_derive_merge_rasters.py::test_a_depth_surface_whose_zero_nothing_bridges_refuses_by_name";
+        "tests/inputs/test_bed_merge.py::test_a_depth_surface_whose_zero_nothing_bridges_refuses_by_name";
     verify requirement TheRunHasOneVerticalFrame by
         "tests/runtime/test_domain_bed_and_context_slots.py::test_every_elevation_slot_is_read_on_the_runs_own_vertical_frame";
     verify requirement TheRunHasOneVerticalFrame by
@@ -1433,7 +1433,7 @@ package DataSeam {
     verify requirement OneBedOverEverySourceAUserCanHave by
         "tests/telemac/test_workflow_owns_its_stages.py::test_the_bed_op_takes_the_one_row_the_merge_derive_produced";
     verify requirement OneBedOverEverySourceAUserCanHave by
-        "tests/derive/test_derive_merge_rasters.py::test_an_absent_survey_leaves_the_terrain_as_the_whole_bed";
+        "tests/inputs/test_bed_merge.py::test_an_absent_survey_leaves_the_terrain_as_the_whole_bed";
     verify requirement OneBedOverEverySourceAUserCanHave by
         "tests/inputs/test_slot_inputs.py::test_the_bed_slot_says_which_shape_it_was_handed";
     verify requirement OneBedOverEverySourceAUserCanHave by
@@ -1441,11 +1441,11 @@ package DataSeam {
     verify requirement OneBedOverEverySourceAUserCanHave by
         "tests/mesh/test_bed_sources_and_runs.py::test_the_bed_is_one_source_and_two_are_merged_before_the_op";
     verify requirement OneBedOverEverySourceAUserCanHave by
-        "tests/derive/test_derive_merge_rasters.py::test_the_primary_wins_where_it_measured_and_the_fallback_fills_the_rest";
+        "tests/inputs/test_bed_merge.py::test_the_primary_wins_where_it_measured_and_the_fallback_fills_the_rest";
     verify requirement OneBedOverEverySourceAUserCanHave by
-        "tests/derive/test_derive_merge_rasters.py::test_the_sidecar_says_which_input_painted_each_cell";
+        "tests/inputs/test_bed_merge.py::test_the_sidecar_says_which_input_painted_each_cell";
     verify requirement OneBedOverEverySourceAUserCanHave by
-        "tests/derive/test_derive_merge_rasters.py::test_an_absent_primary_passes_the_other_surface_through";
+        "tests/inputs/test_bed_merge.py::test_an_absent_primary_passes_the_other_surface_through";
     verify requirement OneBedOverEverySourceAUserCanHave by
         "tests/mesh/test_bed_sources_and_runs.py::test_a_domain_no_source_covers_refuses_by_name";
     verify requirement OneBedOverEverySourceAUserCanHave by
