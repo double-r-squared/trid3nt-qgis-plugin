@@ -187,22 +187,12 @@ def test_a_spec_without_a_display_name_keeps_the_router_default():
     assert layer.name == f"{dem.source_class} {dem.source_class}"
 
 
-def test_corpus_carries_the_natural_question(spec):
-    assert len(spec.corpus) >= 6
-    joined = " ".join(spec.corpus).lower()
-    if spec.name == "fetch_water_table_depth":
-        assert "how deep is the water table here" in joined
-        assert "depth to groundwater" in joined
-    elif spec.name == "fetch_aquifer_thickness":
-        assert "how thick is the aquifer here" in joined
-        assert "saturated thickness" in joined
-    else:
-        assert "how transmissive is the shallow aquifer here" in joined
-        assert "transmissivity" in joined
-
-
-
-
+def test_each_grid_is_found_through_its_class(spec, class_routes_to_the_match):
+    """A covered fetcher carries no corpus: its class is the door."""
+    covered = {"fetch_water_table_depth": "groundwater level",
+               "fetch_aquifer_thickness": "aquifer property",
+               "fetch_aquifer_transmissivity": "aquifer property"}
+    class_routes_to_the_match(covered[spec.name], spec.name)
 def test_endpoint_is_a_staged_object(spec):
     url = spec.endpoints["data"].url
     assert url.startswith(_STAGED_PREFIX)

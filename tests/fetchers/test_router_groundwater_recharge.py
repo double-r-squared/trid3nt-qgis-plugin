@@ -120,17 +120,9 @@ def test_the_spec_declares_how_its_raster_is_drawn(spec):
     assert row["units"]
 
 
-def test_corpus_carries_natural_recharge_phrasings(spec):
-    assert len(spec.corpus) >= 6
-    joined = " ".join(spec.corpus).lower()
-    assert "recharge" in joined
-    # The consumer phrasing stays, engine-name-free: someone asking for a
-    # boundary condition must still land here.
-    assert any("groundwater flow model" in q.lower() for q in spec.corpus)
-
-
-
-
+def test_the_recharge_grid_is_found_through_its_class(class_routes_to_the_match):
+    """A covered fetcher carries no corpus: its class is the door."""
+    class_routes_to_the_match("aquifer property", "fetch_groundwater_recharge")
 def test_both_sources_point_at_staged_objects(spec):
     urls = spec.ingest["url_by_param"]["map"]
     assert set(urls) == {"reitz_2017", "wolock_2003"}

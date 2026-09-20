@@ -126,17 +126,6 @@ def test_read_with_no_surviving_sample_refuses_by_name(spec, monkeypatch):
     assert excinfo.value.error_code == "NWIS_BED_MATERIAL_NO_SAMPLES"
 
 
-def test_the_source_surfaces_from_its_own_corpus_phrasings():
-    from pathlib import Path
-
-    import yaml
-
-    from trid3nt_server.tools.search.search_tools import search_tools as dd
-    from trid3nt_server.tools.search.tool_retrieval import retrieve_visible_tools
-
-    dd._get_index()
-    here = Path(nb.__file__).resolve().parent
-    queries = (yaml.safe_load((here / "corpus.yaml").read_text()) or {})["fetch_nwis_bed_material"]
-    assert queries
-    assert any("fetch_nwis_bed_material" in retrieve_visible_tools(q, None, 8) for q in queries), (
-        "fetch_nwis_bed_material surfaces in NO top-8 for any of its corpus queries")
+def test_the_source_is_found_through_its_class(class_routes_to_the_match):
+    """A covered fetcher carries no corpus: its class is the door."""
+    class_routes_to_the_match("bed material", "fetch_nwis_bed_material")

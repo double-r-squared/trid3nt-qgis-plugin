@@ -65,7 +65,9 @@ def test_monotonic_growth_only_adds(warm_index):
     r2 = retrieve_visible_tools("fetch the elevation DEM", accrued, DEFAULT_K)
     # everything the Case accrued is visible; nothing accrued left the set.
     assert accrued <= r2
-    assert "fetch_dem" in r1 and "fetch_dem" in r2
+    # A covered fetcher is never ranked in: it enters the set by being FOUND,
+    # and once accrued it stays.
+    assert "fetch_dem" not in r1 and "fetch_dem" in r2
 
 
 def test_deterministic(warm_index):
@@ -155,7 +157,7 @@ def test_empty_query_returns_floor_only(warm_index):
 _RECALL_FIXTURE = [
     ("show me the lightning over this storm from GOES", "fetch_glm_lightning"),
     ("detect the active fire hot pixels from GOES", "derive_active_fire"),
-    ("get the elevation DEM for this area", "fetch_dem"),
+    ("get the elevation DEM for this area", "find_sources"),
     ("geocode this city to a bounding box", "geocode_location"),
     ("fetch high resolution aerial imagery for this area", "fetch_naip"),
     ("how much does incoming swell amplify inside this harbour basin",

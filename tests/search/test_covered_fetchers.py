@@ -133,3 +133,13 @@ def test_the_model_is_given_the_match_with_the_vocabulary_on_it(registry):
         DATA_CLASSES)
     assert "fetch_ehydro_surveys" in decls, (
         "a covered fetcher is still DECLARABLE once the gate expands on it")
+
+
+def test_no_covered_fetcher_stands_on_the_always_visible_floor(registry):
+    """The floor is for tools needed on MOST turns whatever the place. A source
+    with a coverage row is found where its row reaches the ground, so declaring
+    it every turn is the very claim the match exists to stop making."""
+    from trid3nt_server.tools.search.tool_retrieval import CORE_FLOOR
+
+    assert not CORE_FLOOR & covered_sources()
+    assert "fetch_dem" not in CORE_FLOOR

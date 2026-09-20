@@ -55,10 +55,13 @@ MAX_K = 25
 #:
 #: No publish tool belongs here: emission is automatic, so there is no "display
 #: this" intent for the model to route to.
+#:
+#: No COVERED fetcher belongs here: a source that states a coverage row is FOUND
+#: through the match at a place, never declared every turn regardless of whether
+#: it reaches the ground under the question.
 CORE_FLOOR: frozenset[str] = frozenset(
     {
         "geocode_location",
-        "fetch_dem",
         "fetch_nws_alerts_conus",
         "fetch_nws_event",
         "search_tools",

@@ -109,17 +109,6 @@ def test_a_body_that_is_not_a_zip_is_an_upstream_error(spec):
         us.parse_response(spec, {}, [b"<h1>error</h1>"])
 
 
-def test_usseabed_surfaces_from_its_own_corpus_phrasings():
-    from pathlib import Path
-
-    import yaml
-
-    from trid3nt_server.tools.search.search_tools import search_tools as dd
-    from trid3nt_server.tools.search.tool_retrieval import retrieve_visible_tools
-
-    dd._get_index()
-    here = Path(us.__file__).resolve().parent
-    queries = (yaml.safe_load((here / "corpus.yaml").read_text()) or {})["fetch_usseabed"]
-    assert queries
-    assert any("fetch_usseabed" in retrieve_visible_tools(q, None, 8) for q in queries), (
-        "fetch_usseabed surfaces in NO top-8 for any of its corpus queries")
+def test_usseabed_is_found_through_its_class(class_routes_to_the_match):
+    """A covered fetcher carries no corpus: its class is the door."""
+    class_routes_to_the_match("bed material", "fetch_usseabed")

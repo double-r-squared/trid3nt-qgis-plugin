@@ -132,20 +132,9 @@ def test_two_datums_over_one_survey_are_refused_rather_than_chosen_between(spec)
         eh._stated(spec, points, "WR_03")
 
 
-def test_the_survey_surfaces_from_its_own_corpus_phrasings():
-    from pathlib import Path
-
-    import yaml
-
-    from trid3nt_server.tools.search.search_tools import search_tools as dd
-    from trid3nt_server.tools.search.tool_retrieval import retrieve_visible_tools
-
-    dd._get_index()
-    here = Path(eh.__file__).resolve().parent
-    queries = (yaml.safe_load((here / "corpus.yaml").read_text()) or {})["fetch_ehydro_surveys"]
-    assert queries
-    assert any("fetch_ehydro_surveys" in retrieve_visible_tools(q, None, 8) for q in queries), (
-        "fetch_ehydro_surveys surfaces in NO top-8 for any of its corpus queries")
+def test_the_survey_is_found_through_its_class(class_routes_to_the_match):
+    """A covered fetcher carries no corpus: its class is the door."""
+    class_routes_to_the_match("bathymetry", "fetch_ehydro_surveys")
 
 
 def test_the_published_offset_is_read_off_the_package_metadata(spec):

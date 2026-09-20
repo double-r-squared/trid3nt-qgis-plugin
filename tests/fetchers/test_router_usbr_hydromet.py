@@ -211,17 +211,6 @@ def test_an_empty_window_refuses_as_empty(spec):
     assert excinfo.value.error_code == "USBR_HYDROMET_NO_RECORD"
 
 
-def test_the_source_surfaces_from_its_own_corpus_phrasings():
-    from pathlib import Path
-
-    import yaml
-
-    from trid3nt_server.tools.search.search_tools import search_tools as dd
-    from trid3nt_server.tools.search.tool_retrieval import retrieve_visible_tools
-
-    dd._get_index()
-    here = Path(uh.__file__).resolve().parent
-    queries = (yaml.safe_load((here / "corpus.yaml").read_text()) or {})["fetch_usbr_hydromet"]
-    assert queries
-    assert any("fetch_usbr_hydromet" in retrieve_visible_tools(q, None, 8) for q in queries), (
-        "fetch_usbr_hydromet surfaces in NO top-8 for any of its corpus queries")
+def test_the_source_is_found_through_its_class(class_routes_to_the_match):
+    """A covered fetcher carries no corpus: its class is the door."""
+    class_routes_to_the_match("water level series", "fetch_usbr_hydromet")

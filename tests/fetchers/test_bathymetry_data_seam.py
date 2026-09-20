@@ -331,7 +331,6 @@ def test_the_bluetopo_spec_declares_the_delegate_hooks_and_the_result_model() ->
     assert spec.hooks.envelope == "bluetopo.envelope"
     assert spec.output.result_model in LAYER_RESULT_MODELS
     assert spec.normalize.datum == "NAVD88"
-    assert spec.corpus, "a new source needs its retrieval phrasings"
 
 
 def test_the_topobathy_row_declares_the_water_body_class_it_ladders_on() -> None:
@@ -374,4 +373,11 @@ def test_the_lake_row_pins_one_product_of_the_mixed_mosaic() -> None:
     rule = spec.ingest["imageserver"]["export_query"]["mosaicRule"]
     assert "Name='greatlakes_lakedatum'" in rule
     assert "Low Water Datum" in (spec.vertical_datum or "")
-    assert spec.corpus, "a new source needs its retrieval phrasings"
+
+
+def test_the_bathymetry_sources_are_found_through_their_class(
+        class_routes_to_the_match) -> None:
+    """A covered fetcher carries no corpus: its class is the door."""
+    for fetcher in ("fetch_bluetopo", "fetch_greatlakes_bathymetry",
+                    "fetch_topobathy"):
+        class_routes_to_the_match("bathymetry", fetcher)

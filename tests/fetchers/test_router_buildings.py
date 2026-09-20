@@ -90,7 +90,6 @@ def test_spec_identity():
     assert SPEC.ingest["sidecar_write"] == {"ext": "tags.json"}
     assert SPEC.cache.ttl_class == "static-30d"
     assert SPEC.docstring and "footprint" in SPEC.docstring.lower()
-    assert SPEC.corpus
 
 
 def test_executor_is_overpass_sidecar():
@@ -171,3 +170,8 @@ def test_bbox_res10_quantized():
     vp = _vp(bbox=list(_AOI))
     # res_10 snaps to ~10 m; the AOI is preserved (envelope), 6 dp stable.
     assert len(vp["bbox"]) == 4 and vp["source"] == "osm"
+
+
+def test_the_footprints_are_found_through_their_class(class_routes_to_the_match):
+    """A covered fetcher carries no corpus: its class is the door."""
+    class_routes_to_the_match("exposure", "fetch_buildings")
