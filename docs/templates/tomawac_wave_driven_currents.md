@@ -39,13 +39,13 @@ The values the template declares. `desc` is what the model reads when it fills o
 
 | field | the proving run's value |
 |---|---|
-| `longshore_current_speed_mps` | 0.006056792102754116 |
-| `current_along_x_mps` | 0.0015229926211759448 |
-| `current_along_y_mps` | 0.005862186197191477 |
-| `hs_at_station_m` | 0.03550698608160019 |
-| `peak_current_speed_mps` | 0.15607312321662903 |
-| `breaking_rate_peak_per_s` | - |
-| `mesh_size_m` | 16.223 |
+| `longshore_current_speed_mps` | 0.20862162113189697 |
+| `current_along_x_mps` | -0.10791587829589844 |
+| `current_along_y_mps` | -0.17854170501232147 |
+| `hs_at_station_m` | 0.5218358039855957 |
+| `peak_current_speed_mps` | 0.3357093334197998 |
+| `breaking_rate_peak_per_s` | 0.21519945561885834 |
+| `mesh_size_m` | 16.726 |
 
 It publishes these layers onto the canvas:
 
@@ -96,35 +96,35 @@ It publishes these layers onto the canvas:
 
 ## The proving run
 
-Run `01M309C1PF88CVH2VAX22A8SPX`, 2026-09-20T20:51:41.458905+00:00, 75.35 s, at commit `3958f955f53df329330b74046bf0e40dd00e86b1-dirty`.
+Run `01M30H98JHY3J9P4PEN0PQ4WRT`, 2026-09-20T23:09:58.792581+00:00, 91.272 s, at commit `4a83b7f8a8b980525179f711b64a7b252c3137cc-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M309C1PF88CVH2VAX22A8SPX)](tomawac_wave_driven_currents/tomawac_wave_driven_currents.png)
+![Every layer the run published, stacked and framed on the result (run 01M30H98JHY3J9P4PEN0PQ4WRT)](tomawac_wave_driven_currents/tomawac_wave_driven_currents.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M309C1PF88CVH2VAX22A8SPX)*
+*Every layer the run published, stacked and framed on the result (run 01M30H98JHY3J9P4PEN0PQ4WRT)*
 
-![The solve, frame by frame - current (run 01M309C1PF88CVH2VAX22A8SPX)](tomawac_wave_driven_currents/tomawac_wave_driven_currents_animation_current.gif)
+![The solve, frame by frame - current (run 01M30H98JHY3J9P4PEN0PQ4WRT)](tomawac_wave_driven_currents/tomawac_wave_driven_currents_animation_current.gif)
 
-*The solve, frame by frame - current (run 01M309C1PF88CVH2VAX22A8SPX)*
+*The solve, frame by frame - current (run 01M30H98JHY3J9P4PEN0PQ4WRT)*
 
-![The solve, frame by frame - wave_height (run 01M309C1PF88CVH2VAX22A8SPX)](tomawac_wave_driven_currents/tomawac_wave_driven_currents_animation_wave_height.gif)
+![The solve, frame by frame - wave_height (run 01M30H98JHY3J9P4PEN0PQ4WRT)](tomawac_wave_driven_currents/tomawac_wave_driven_currents_animation_wave_height.gif)
 
-*The solve, frame by frame - wave_height (run 01M309C1PF88CVH2VAX22A8SPX)*
+*The solve, frame by frame - wave_height (run 01M30H98JHY3J9P4PEN0PQ4WRT)*
 
-![current peak frame (run 01M309C1PF88CVH2VAX22A8SPX)](tomawac_wave_driven_currents/tomawac_wave_driven_currents_current_peak_frame.png)
+![current peak frame (run 01M30H98JHY3J9P4PEN0PQ4WRT)](tomawac_wave_driven_currents/tomawac_wave_driven_currents_current_peak_frame.png)
 
-*current peak frame (run 01M309C1PF88CVH2VAX22A8SPX)*
+*current peak frame (run 01M30H98JHY3J9P4PEN0PQ4WRT)*
 
-![wave height peak frame (run 01M309C1PF88CVH2VAX22A8SPX)](tomawac_wave_driven_currents/tomawac_wave_driven_currents_wave_height_peak_frame.png)
+![wave height peak frame (run 01M30H98JHY3J9P4PEN0PQ4WRT)](tomawac_wave_driven_currents/tomawac_wave_driven_currents_wave_height_peak_frame.png)
 
-*wave height peak frame (run 01M309C1PF88CVH2VAX22A8SPX)*
+*wave height peak frame (run 01M30H98JHY3J9P4PEN0PQ4WRT)*
 
-![current speed - the chart the run persisted (run 01M309C1PF88CVH2VAX22A8SPX)](tomawac_wave_driven_currents/tomawac_wave_driven_currents_chart_current_speed.png)
+![current speed - the chart the run persisted (run 01M30H98JHY3J9P4PEN0PQ4WRT)](tomawac_wave_driven_currents/tomawac_wave_driven_currents_chart_current_speed.png)
 
-*current speed - the chart the run persisted (run 01M309C1PF88CVH2VAX22A8SPX)*
+*current speed - the chart the run persisted (run 01M30H98JHY3J9P4PEN0PQ4WRT)*
 
-![significant wave height - the chart the run persisted (run 01M309C1PF88CVH2VAX22A8SPX)](tomawac_wave_driven_currents/tomawac_wave_driven_currents_chart_significant_wave_height.png)
+![significant wave height - the chart the run persisted (run 01M30H98JHY3J9P4PEN0PQ4WRT)](tomawac_wave_driven_currents/tomawac_wave_driven_currents_chart_significant_wave_height.png)
 
-*significant wave height - the chart the run persisted (run 01M309C1PF88CVH2VAX22A8SPX)*
+*significant wave height - the chart the run persisted (run 01M30H98JHY3J9P4PEN0PQ4WRT)*
 
 ### The sheet it filled
 
@@ -132,8 +132,8 @@ Every slot the run resolved, with where the value came from. The engine's own de
 
 | param | value | units | basis | provenance |
 |---|---|---|---|---|
-| `seed` | {'lon': -71.51, 'lat': 41.31, 'name': None} | - | user | supplied on this invocation |
-| `station` | {'lon': -71.509, 'lat': 41.356, 'name': None} | - | user | supplied on this invocation |
+| `seed` | {'lon': -71.123, 'lat': 40.966, 'name': None} | - | user | supplied on this invocation |
+| `station` | {'lon': -71.4713, 'lat': 41.3884, 'name': None} | - | user | supplied on this invocation |
 | `mesh_resolution_m` | 40.0 | m | user | supplied on this invocation |
 | `event_time` | 2026-09-17T12:00:00+00:00 | - | user | supplied on this invocation |
 | `open_depth_threshold_m` | -12.0 | m | default_demo | declared scenario default |
@@ -148,11 +148,11 @@ from trid3nt_server.tools import TOOL_REGISTRY
 await TOOL_REGISTRY['tomawac_wave_driven_currents'].fn(
     event_time='2026-09-17T12:00:00+00:00',
     mesh_resolution_m=40.0,
-    seed={'lon': -71.51, 'lat': 41.31, 'name': None},
-    station={'lon': -71.509, 'lat': 41.356, 'name': None},
-    extent="{'bbox': [-71.525, 41.338, -71.492, 41.368], 'name': 'Point Judith, RI'}",
+    seed={'lon': -71.123, 'lat': 40.966, 'name': None},
+    station={'lon': -71.4713, 'lat': 41.3884, 'name': None},
+    extent="{'bbox': [-71.474, 41.356, -71.446, 41.396], 'name': 'Scarborough, RI'}",
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M309C1PF88CVH2VAX22A8SPX` and commit `3958f955f53df329330b74046bf0e40dd00e86b1-dirty`. The full argument record is [`tomawac_wave_driven_currents/run.json`](tomawac_wave_driven_currents/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M30H98JHY3J9P4PEN0PQ4WRT` and commit `4a83b7f8a8b980525179f711b64a7b252c3137cc-dirty`. The full argument record is [`tomawac_wave_driven_currents/run.json`](tomawac_wave_driven_currents/run.json).
 
