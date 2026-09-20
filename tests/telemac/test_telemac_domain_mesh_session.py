@@ -170,3 +170,46 @@ async def test_the_stood_in_mesh_record_is_shaped_like_a_real_builds(monkeypatch
               "resolution_m": 100.0, "ops": []})
     assert set(record) == set(real)
     assert record["provenance"] == dict(real["artifact"].provenance)
+
+
+@pytest.mark.asyncio
+async def test_a_closed_body_whose_level_slot_came_back_empty_refuses_by_name(
+        settle, monkeypatch):
+    """No edge water enters by, a bed on a datum, and the level the question
+    asked for unfilled: the surface is unknown, so the run refuses naming that
+    slot and what was asked rather than solving a dry basin."""
+    from trid3nt_contracts.coverage import SourceChoice, SourceOption
+
+    from trid3nt_server.workflows.runtime import journal
+
+    monkeypatch.setattr(asm_mod, "read_topology",
+                        lambda _uri: {"roles": {},
+                                      "liquid_boundary_order": [],
+                                      "liquid_boundary_prescribes": []})
+    token = journal.bind_choices()
+    try:
+        journal.slot_choice(SourceChoice(
+            slot="level", need="water level series", picked="",
+            rows=[SourceOption(fetcher="fetch_usbr_hydromet", kind="measured",
+                               excluded="no station within reach")],
+            sentence="nothing measured this water's level here."))
+        with pytest.raises(TelemacError) as excinfo:
+            await settle(mesh=_mesh_record(min_edge_m=14.0))
+    finally:
+        journal.drain_choices(token)
+    assert excinfo.value.error_code == "TELEMAC_LEVEL_UNMEASURED"
+    assert "'level'" in str(excinfo.value)
+    assert "fetch_usbr_hydromet" in str(excinfo.value)
+
+
+@pytest.mark.asyncio
+async def test_a_closed_body_that_asked_for_no_level_opens_the_way_its_deck_says(
+        settle, monkeypatch):
+    """A question declaring no level slot - rain falling on dry ground - states
+    no water and is not refused for stating none."""
+    monkeypatch.setattr(asm_mod, "read_topology",
+                        lambda _uri: {"roles": {},
+                                      "liquid_boundary_order": [],
+                                      "liquid_boundary_prescribes": []})
+    out = await settle(mesh=_mesh_record(min_edge_m=14.0))
+    assert out["level_m"] is None and out["opening"] is None

@@ -1,4 +1,4 @@
-"""usbr_hydromet hooks: a named RISE location, walked to its own elevation item.
+"""usbr_hydromet hooks: a CODED RISE location, walked to its own elevation item.
 
 RISE answers no query over location or parameter directly (locationId= and search=
 on /catalog-item are both ignored server-side), so the id is found by following the
@@ -48,15 +48,17 @@ _MAX_RESULTS = 2000
 _LOCATIONS_PER_PAGE = 100
 _MAX_LOCATION_PAGES = 12
 
-#: The listing's URL and the station a call names: RISE answers the location
-#: search by NAME, so the name is the id a coverage row carries, not the _id the
-#: catalog walk resolves to.
+#: The listing's URL, and the CODE a call names: RISE spells a location's own
+#: station code in the trailing parenthetical of its name, and that code is the
+#: id a coverage row carries - a location stating none cannot be addressed by
+#: code and is not on the list.
 _LOCATION_LISTING = "https://data.usbr.gov/rise/api/location"
+_CODE = re.compile(r"\(([^()]+)\)\s*$")
 
 
 @register_hook("usbr_hydromet.stations")
 def stations() -> list[CoveragePoint]:
-    """Every RISE location, by the name a fetch is called with and its own zero."""
+    """Every coded RISE location, by its station CODE, its place and its zero."""
     listed: list[CoveragePoint] = []
     for page in range(1, _MAX_LOCATION_PAGES + 1):
         url = (f"{_LOCATION_LISTING}?itemsPerPage={_LOCATIONS_PER_PAGE}"
@@ -66,12 +68,12 @@ def stations() -> list[CoveragePoint]:
         rows = (json.loads(body.decode("utf-8")).get("data") or [])
         for row in rows:
             attrs = row.get("attributes") or {}
-            name = str(attrs.get("locationName") or "").strip()
+            stated = _CODE.search(str(attrs.get("locationName") or "").strip())
             here = _where(attrs.get("locationCoordinates") or {})
-            if not name or here is None:
+            if stated is None or here is None:
                 continue
             listed.append(CoveragePoint(
-                id=name[:120], lon=here[0], lat=here[1],
+                id=stated.group(1).strip().upper(), lon=here[0], lat=here[1],
                 datum=str((attrs.get("verticalDatum") or {}).get("_id") or "")
                 or None))
         if len(rows) < _LOCATIONS_PER_PAGE:
@@ -116,26 +118,28 @@ def _get_json(spec: SourceSpec, url: str, what: str) -> dict[str, Any]:
 
 
 def _pick_location(spec: SourceSpec, station: str, candidates: list[dict[str, Any]]) -> dict[str, Any]:
-    """The one RISE location this station means. A parenthetical code match
-    (station's own ``(SCO)`` in its ``locationName``) wins over a bare name hit;
-    more than one survivor refuses rather than choosing between reservoirs."""
+    """The one RISE location this station CODE means.
+
+    The code is what identifies a station - RISE spells it in the trailing
+    parenthetical of the location's own name - so a candidate is taken only
+    where its name carries that code. A name that resembles the ask is not a
+    match: no reservoir is picked by how it reads."""
     sc = spec.error_code_prefix
-    # A station that NAMES its own code carries it in a trailing parenthetical,
-    # which is the same spelling RISE's locationName carries.
-    stated = re.search(r"\(([^()]+)\)\s*$", station.strip())
+    # A station stated in full carries the code in its own trailing
+    # parenthetical, the same spelling RISE's locationName carries.
+    stated = _CODE.search(station.strip())
     code = (stated.group(1) if stated else station).strip().upper()
     coded = [c for c in candidates
              if f"({code})" in str((c.get("attributes") or {}).get("locationName") or "").upper()]
     if len(coded) == 1:
         return coded[0]
-    if len(candidates) == 1:
-        return candidates[0]
     names = [str((c.get("attributes") or {}).get("locationName") or "?") for c in candidates[:5]]
     raise router_input_error(
         sc,
-        f"station={station!r} matches {len(candidates)} RISE locations "
-        f"({'; '.join(names)}); use the station's own parenthetical code "
-        "(e.g. \"SCO\") to disambiguate",
+        f"station={station!r} is not one RISE station code: it matches "
+        f"{len(coded)} of the {len(candidates)} locations RISE answered "
+        f"({'; '.join(names)}); call this by the station's own code "
+        "(e.g. \"SCO\")",
         spec.input_error_suffix,
     )
 
@@ -171,7 +175,7 @@ def _find_elevation_item(spec: SourceSpec, host: str, catalog_record_paths: list
 
 @register_hook("usbr_hydromet.resolve_build")
 def resolve_build(spec: SourceSpec, params: dict[str, Any]) -> list[RequestPlan]:
-    """GET the RISE location search for the station name or code."""
+    """GET the RISE location search for the station code."""
     station = str(params.get("station") or "").strip()
     if not station:
         raise router_input_error(spec.error_code_prefix, "station is required and empty",

@@ -106,15 +106,15 @@ coverage:
 
 caveats:
   - "the PN CGI (usbr.gov/pn-bin/daily.pl) answers an upstream failure with HTTP 200 and an HTML body and states no coordinates or datum; this fetch uses RISE (data.usbr.gov/rise/api) instead, which serves the byte-identical record with a location, a per-station vertical datum and every Reclamation region through one endpoint form"
-  - "a station name matching more than one RISE location, or a location with no Lake/Reservoir Elevation catalog item, refuses by name rather than guessing between them"
+  - "this fetch is addressed by the station's own RISE code (the trailing parenthetical of the location name, e.g. SCO); a code matching no location or more than one, and a location with no Lake/Reservoir Elevation catalog item, refuse by name rather than guessing between reservoirs"
   - "the vertical datum is read off the station's own RISE record and travels on every feature; a bed or model input built from this needs the datum this fetch states, never an assumed one"
 
 docstring: |-
   Fetch USBR reservoir FOREBAY ELEVATION from USBR RISE as a point FlatGeobuf.
 
   What it does:
-      Resolves a named USBR Reclamation reservoir or dam to its RISE location
-      (searching by station code or name, e.g. "SCO" or "Scoggins"), walks that
+      Resolves a USBR Reclamation reservoir or dam STATION CODE to its RISE
+      location (e.g. "SCO" for Henry Hagg Lake and Scoggins Dam), walks that
       location's own catalog (catalog-record -> catalog-item) to find its
       Lake/Reservoir Elevation series, and fetches the daily forebay elevation
       over the requested window. One Point feature at the station comes back,
@@ -137,9 +137,10 @@ docstring: |-
         publishes those as separate catalog items this fetch does not walk to.
 
   Parameters:
-      station: the RISE station's code or name (e.g. "SCO", "Scoggins"). Matched
-          against every RISE location's name; a match on the parenthetical
-          station code wins over a partial name match.
+      station: the RISE station's own CODE (e.g. "SCO"), which RISE spells in
+          the trailing parenthetical of the location's name. A code matching no
+          location, or more than one, refuses; no location is picked by how its
+          name reads.
       start_date: ISO date, inclusive start of the window.
       end_date: ISO date, inclusive end of the window. Capped at 1830 days
           (5 years) from ``start_date``.
@@ -162,8 +163,8 @@ docstring: |-
   Cache: ``ttl_class="dynamic-1h"``; RISE values are provisional and can revise.
 
   Errors:
-      - ``USBR_HYDROMET_INPUT_INVALID``: a malformed date range, a station name
-        matching more than one RISE location, or a location with no
+      - ``USBR_HYDROMET_INPUT_INVALID``: a malformed date range, a station code
+        matching no RISE location or more than one, or a location with no
         Lake/Reservoir Elevation catalog item.
       - ``USBR_HYDROMET_NO_RECORD``: no RISE location matches ``station``, or no
         results fall in the requested window.

@@ -1,7 +1,8 @@
-"""``fetch_usbr_hydromet``: a station name resolved through RISE's own catalog.
+"""``fetch_usbr_hydromet``: a station CODE resolved through RISE's own catalog.
 
-The location search decides the station and refuses an ambiguous or datum-less
-one; the catalog-record -> catalog-item walk finds the Lake/Reservoir Elevation
+The listing carries every coded location, so the slot's ask names the nearest
+station by its code; the location search decides the station on that code and
+refuses an ambiguous or datum-less one; the catalog-record -> catalog-item walk finds the Lake/Reservoir Elevation
 item over recorded RISE bodies; the result page becomes one Point feature, and a
 truncated or empty page is refused rather than silently short."""
 
@@ -14,6 +15,23 @@ import pytest
 from trid3nt_server.tools.fetchers._router.errors import RouterEmptyError, RouterInputError
 from trid3nt_server.tools.fetchers._router.spec import compose_specs_from_tree
 from trid3nt_server.tools.fetchers.hydrology.fetch_usbr_hydromet import hooks as uh
+
+#: Recorded from ``GET /rise/api/location?itemsPerPage=100&page=1`` (trimmed to
+#: three locations: two coded, one stating no code at all).
+_LISTING_BODY = json.dumps({"data": [
+    {"attributes": {
+        "locationName": "Henry Hagg Lake and Scoggins Dam (SCO)",
+        "locationCoordinates": {"type": "Point", "coordinates": [-123.19965, 45.4724]},
+        "verticalDatum": {"_id": "NGVD29"}}},
+    {"attributes": {
+        "locationName": "Hungry Horse Reservoir, Dam, and Powerplant (HGH)",
+        "locationCoordinates": {"type": "Point", "coordinates": [-113.9989, 48.343]},
+        "verticalDatum": {"_id": "NAVD88"}}},
+    {"attributes": {
+        "locationName": "Nebraska Inland Lakes",
+        "locationCoordinates": {"type": "Point", "coordinates": [-100.0, 41.5]},
+        "verticalDatum": {"_id": "NAVD88"}}},
+]}).encode()
 
 #: Recorded from ``GET /rise/api/location?search=Scoggins`` (trimmed to the
 #: fields the hook reads).
@@ -95,6 +113,26 @@ def test_the_source_states_no_datum_of_its_own_because_each_station_states_one(s
     assert row.reach_km == 20.0
 
 
+def test_the_listing_names_every_coded_location_by_its_own_code(monkeypatch):
+    """The id a row carries is the CODE the ask is made by; a location stating
+    none cannot be addressed by code and is not listed."""
+    monkeypatch.setattr(uh, "get_client", lambda: object())
+    monkeypatch.setattr(uh, "get_bytes",
+                        lambda client, url, headers=None: (_LISTING_BODY, "", url))
+    listed = uh.stations()
+    assert [(p.id, p.datum) for p in listed] == [("SCO", "NGVD29"), ("HGH", "NAVD88")]
+
+
+def test_hagg_lakes_point_resolves_to_sco_by_distance(spec, monkeypatch):
+    """The level slot at Hagg Lake asks USBR for SCO: the nearest station of
+    the row's own listing, named by its code and not by a name search."""
+    monkeypatch.setattr(uh, "get_client", lambda: object())
+    monkeypatch.setattr(uh, "get_bytes",
+                        lambda client, url, headers=None: (_LISTING_BODY, "", url))
+    listing = spec.coverage[0].extent.model_copy(update={"points": uh.stations()})
+    assert listing.nearest(-123.2065, 45.4869).id == "SCO"
+
+
 def test_a_code_match_wins_over_an_ambiguous_name(spec):
     coded = {"attributes": {"locationName": "Henry Hagg Lake and Scoggins Dam (SCO)"}}
     other = {"attributes": {"locationName": "Some Other Scoggins Creek Gauge"}}
@@ -110,7 +148,8 @@ def test_a_station_that_names_its_own_code_matches_on_it(spec):
         spec, "Henry Hagg Lake and Scoggins Dam (SCO)", [other, coded]) is coded
 
 
-def test_more_than_one_uncoded_match_refuses_by_name(spec):
+def test_a_name_that_matches_no_code_refuses_rather_than_reading_names(spec):
+    """No name search path: a single uncoded candidate is not the station."""
     a = {"attributes": {"locationName": "Alpha Reservoir"}}
     b = {"attributes": {"locationName": "Beta Reservoir"}}
     with pytest.raises(RouterInputError) as excinfo:

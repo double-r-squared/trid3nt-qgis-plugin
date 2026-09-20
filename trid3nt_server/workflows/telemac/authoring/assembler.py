@@ -16,6 +16,7 @@ from typing import Any, Callable, Mapping, Sequence
 from trid3nt_contracts import new_ulid
 
 from trid3nt_server.workflows.runtime import journal_note
+from trid3nt_server.workflows.runtime.journal import run_choices
 from trid3nt_server.workflows.mesh.shared.nodes import (
     accepted_mesh_nodes,
     read_accepted_mesh_nodes,
@@ -1030,6 +1031,8 @@ async def open_water(
     duration_s = float(duration_s)
     slug = _slug(name or facts["mesh_name"])
     opening = await asyncio.to_thread(_opening, level, mesh)
+    if opening["level_m"] is None and not topology["liquid_boundary_order"]:
+        _refuse_dry(facts["mesh_name"])
     return {
         "name": slug,
         "title": f"{slug} DOMAIN",
@@ -1089,6 +1092,33 @@ _NO_WATER: dict[str, Any] = {
     # reported them reported one: what the boundary's own file is written from.
     "inflow_q_series": None, "outflow_stage_series": None,
 }
+
+#: The class a level slot asks for. A run that asked for one and got nothing is
+#: the only run this refuses on: a question declaring no level slot opens the way
+#: its own deck says.
+_LEVEL_CLASS = "water level series"
+
+
+def _refuse_dry(where: str) -> None:
+    """A CLOSED BODY THAT OPENED AT NOTHING: no edge feeds it, its bed is on a
+    datum, and the level slot the question asked for came back empty, so the
+    surface it stands at is unknown and a solve would run a dry basin and
+    report it as an answer. The refusal names that slot and lists what was
+    asked for it."""
+    asked = [choice for choice in run_choices()
+             if choice.need == _LEVEL_CLASS and not choice.picked]
+    if not asked:
+        return
+    slot, rows = asked[0].slot, asked[0].rows
+    listed = ", ".join(row.fetcher for row in rows) or "no source at all"
+    raise TelemacError(
+        f"{where} has no edge water enters by and a bed on a datum, and its "
+        f"{slot!r} slot came back empty: {listed} answered nothing for a water "
+        "level series over this domain, so the surface this body stands at is "
+        f"unknown. State the level on {slot!r}, or supply a bed measured as a "
+        "depth below the free surface.",
+        error_code="TELEMAC_LEVEL_UNMEASURED")
+
 
 #: What the engine is told to lay: a flat surface at the level, or a sheet of one
 #: depth following the bed. Flat is what any body of water does; bed-parallel is
