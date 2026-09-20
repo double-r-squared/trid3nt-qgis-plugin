@@ -14,7 +14,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-import yaml
 
 from trid3nt_server.adapters import model_discovery
 
@@ -39,98 +38,19 @@ _CORPUS_CACHE: dict[str, list[str]] | None = None
 _PAYLOAD_CACHE: dict[str, Any] | None = None
 
 
-def _default_corpus_path() -> Path:
-    """Resolve the residual corpus file under the package: the
-    ``TRID3NT_TOOL_CORPUS_YAML`` override when set, else the packaged path."""
-    env_path = os.environ.get("TRID3NT_TOOL_CORPUS_YAML")
-    if env_path:
-        return Path(env_path).expanduser().resolve()
-    return _package_tools_dir() / "tool_query_corpus.yaml"
-
-
-def _package_tools_dir() -> Path:
-    """The ``trid3nt_server/tools`` directory, anchored on the package root so the
-    corpus resolves regardless of this module's depth in the package tree."""
-    import trid3nt_server
-
-    return Path(trid3nt_server.__file__).resolve().parent / "tools"
-
-
-def _package_workflows_dir() -> Path:
-    """The ``trid3nt_server/workflows`` directory - engine templates and their
-    co-located corpus files. Every per-engine simulation shim lives under
-    ``tools/`` or ``workflows/``; there is no third location to search."""
-    import trid3nt_server
-
-    return Path(trid3nt_server.__file__).resolve().parent / "workflows"
-
-
-class _CorpusFormatError(Exception):
-    """Non-string entry in a corpus YAML list: an unquoted phrasing containing a
-    colon parses as a one-key dict, and a dropped phrasing would vanish from
-    retrieval with no signal, so it is refused instead."""
-
-
-def _read_corpus_yaml(p: Path) -> dict[str, list[str]]:
-    """Load a single corpus YAML into ``{tool: [queries]}``; a missing file
-    yields ``{}``, and a non-string entry raises rather than being dropped."""
-    if not p.exists():
-        return {}
-    try:
-        with p.open() as fh:
-            data = yaml.safe_load(fh) or {}
-    except Exception:  # noqa: BLE001 -- best-effort
-        logger.exception("catalog_http: failed to parse corpus YAML at %s", p)
-        return {}
-    if not isinstance(data, dict):
-        return {}
-    parsed: dict[str, list[str]] = {}
-    for k, v in data.items():
-        if not (isinstance(k, str) and isinstance(v, list)):
-            continue
-        queries: list[str] = []
-        for q in v:
-            if not isinstance(q, str):
-                raise _CorpusFormatError(
-                    f"non-string corpus entry in {p}: tool {k!r} has entry "
-                    f"{q!r} ({type(q).__name__}) -- likely an unquoted "
-                    "phrasing containing a colon; quote it as a YAML string"
-                )
-            queries.append(q)
-        parsed[k] = queries
-    return parsed
-
-
-def _compose_corpus_from_tree() -> dict[str, list[str]]:
-    """Compose the flat corpus: every co-located ``corpus.yaml`` under the tools
-    and workflows trees, merged with the residual monolith."""
-    tools_dir = _package_tools_dir()
-    composed: dict[str, list[str]] = {}
-    for base in (tools_dir, _package_workflows_dir()):
-        for cpath in sorted(base.rglob("corpus.yaml")):
-            composed.update(_read_corpus_yaml(cpath))
-    composed.update(_read_corpus_yaml(tools_dir / "tool_query_corpus.yaml"))
-    return composed
-
-
 def load_query_corpus(path: Path | None = None) -> dict[str, list[str]]:
-    """Load and cache the example-query corpus as ``tool_name -> [query]``,
-    composing the co-located files with the residual monolith unless a single
-    file is pinned. A missing or malformed file degrades to fewer queries."""
+    """The example-query corpus as ``tool_name -> [query]``, read through the
+    search tools that own it and cached for the life of the process: a discovery
+    endpoint needs no hot-reload semantics."""
     global _CORPUS_CACHE
-    if _CORPUS_CACHE is not None:
-        return _CORPUS_CACHE
-    if path is not None:
-        _CORPUS_CACHE = _read_corpus_yaml(path)
-    else:
-        env_path = os.environ.get("TRID3NT_TOOL_CORPUS_YAML")
-        if env_path:
-            _CORPUS_CACHE = _read_corpus_yaml(Path(env_path).expanduser().resolve())
-        else:
-            _CORPUS_CACHE = _compose_corpus_from_tree()
-    logger.info(
-        "catalog_http: loaded %d tool query entries", len(_CORPUS_CACHE)
-    )
+    if _CORPUS_CACHE is None:
+        from trid3nt_server.tools.search.search_tools.search_tools import (
+            _load_corpus,
+        )
+
+        _CORPUS_CACHE = _load_corpus(path)
+        logger.info("catalog_http: loaded %d tool query entries",
+                    len(_CORPUS_CACHE))
     return _CORPUS_CACHE
 
 
