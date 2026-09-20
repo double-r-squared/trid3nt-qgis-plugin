@@ -49,7 +49,7 @@ from .errors import (
     router_not_available_error,
     router_upstream_error,
 )
-from .executors import raster_cog, station_timeseries
+from .executors import qgis_provider, raster_cog, station_timeseries
 from .spec import record_shape
 from .transforms import tiled_mosaic
 
@@ -501,6 +501,12 @@ def _apply_gates(spec: SourceSpec, params: dict[str, Any]) -> None:
 
 def select_executor(spec: SourceSpec) -> Callable[[SourceSpec, dict[str, Any]], bytes]:
     """Return the ``(spec, params) -> bytes`` closure for the spec's shape/transform."""
+    # Borrowed-provider path: a row the session's QGIS opens through its own data
+    # provider dispatches by ACCESS, ahead of the shape ladder, because the two
+    # modes land on different shapes - an opened overlay is a record, a
+    # materialised row is a layer - and one executor answers both.
+    if (spec.ingest or {}).get("access") == qgis_provider.ACCESS:
+        return qgis_provider.execute
     # A spec-declared library delegation wins over the shape dispatch. Two forms:
     #  - GENERIC library_delegate: a spec names ``hooks.delegate`` (a
     #    registered hook that calls a maintained library owning discovery+socket and
