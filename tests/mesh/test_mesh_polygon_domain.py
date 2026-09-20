@@ -401,3 +401,62 @@ def test_a_domain_whose_whole_edge_is_crossed_refuses_by_name(driver):
     with pytest.raises(driver._Refusal) as excinfo:
         driver._EdgeShoreline(ring, whole_edge, 0.005, (0.0, 0.01, 0.0, 0.01))
     assert excinfo.value.document["code"] == "MESH_DOMAIN_HAS_NO_SHORELINE"
+
+
+#: A box with a coast cut through it: the water east of a line that enters at the
+#: south edge and leaves at the north. OSM draws land on the LEFT of the way, so a
+#: northward walk leaves the water on its east.
+_CUT_BOX = (-75.80, 36.10, -75.70, 36.20)
+_COAST = {"type": "LineString",
+          "coordinates": [[-75.78, 36.10], [-75.77, 36.20]]}
+
+
+def _cut_water(tmp_path):
+    """The water polygon a coastline leaves in ``_CUT_BOX``, staged as a file."""
+    from trid3nt_server.workflows.mesh.water import water_polygon
+
+    path = tmp_path / "water.geojson"
+    path.write_text(json.dumps(water_polygon(_COAST, _CUT_BOX)))
+    return path
+
+
+def test_the_box_a_cut_leaves_behind_is_open_edge_rather_than_shoreline(
+        monkeypatch, tmp_path):
+    """A bbox edge stands in open water: the sizing measures the land-water
+    segments only, so every stretch of the boundary on the box travels as the
+    edge that is not shoreline."""
+    sent = _stub_om2d(monkeypatch, tmp_path)
+    OM2D.build(_recipe(extent=str(_cut_water(tmp_path))))
+    assert sent["config"]["open_runs_geojson"] == "/data/open_runs.geojson"
+    staged = json.loads(Path(sent["rundir"], "open_runs.geojson").read_text())
+    faces = [f["geometry"]["coordinates"] for f in staged["features"]]
+    assert {f["properties"]["type"] for f in staged["features"]} == {"open"}
+    assert len(faces) == 3, "the south, east and north edges of the box"
+    for (x0, y0), (x1, y1) in faces:
+        assert min(abs(x0 - x1), abs(y0 - y1)) < 1.0e-9
+        assert x0 in _CUT_BOX[::2] or y0 in _CUT_BOX[1::2]
+
+
+def test_the_shoreline_sizing_is_coarse_on_the_box_and_fine_on_the_coast(
+        monkeypatch, tmp_path, driver):
+    """The one classification the mesher stages is the one the sizing reads: the
+    distance-from-shoreline field that sizes the mesh is a box-width out along the
+    open edges and a stone's throw along the coast."""
+    sent = _stub_om2d(monkeypatch, tmp_path)
+    OM2D.build(_recipe(extent=str(_cut_water(tmp_path))))
+    staged = json.loads(Path(sent["rundir"], "open_runs.geojson").read_text())
+    faces = [f["geometry"]["coordinates"] for f in staged["features"]]
+    rings = json.loads(Path(sent["rundir"], "domain.geojson").read_text())
+    ring = rings["geometries"][0]["coordinates"]
+
+    bbox = (_CUT_BOX[0], _CUT_BOX[2], _CUT_BOX[1], _CUT_BOX[3])
+    whole = driver._EdgeShoreline(ring, [], 0.0005, bbox)
+    shore = driver._EdgeShoreline(ring, faces, 0.0005, bbox)
+    assert 0 < shore.points.shape[0] < whole.points.shape[0]
+
+    def nearest(x, y):
+        return float(np.hypot(*(shore.points - np.array([x, y])).T).min())
+
+    assert nearest(-75.774, 36.15) < 0.002, "just off the coast: fine"
+    assert nearest(-75.700, 36.15) > 0.05, "the box's east edge: coarse"
+    assert nearest(-75.740, 36.10) > 0.02, "the box's south edge: coarse"

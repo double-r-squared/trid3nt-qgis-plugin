@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import os
 from dataclasses import dataclass
 from pathlib import Path
@@ -68,6 +69,11 @@ _COLLAPSED_HEIGHT_FRAC = 1e-3
 #: as one point, in metres. A UTM northing spends its mantissa on seven digits,
 #: which leaves a fraction of a metre.
 _COINCIDENT_TOLERANCE_M = 1.0
+
+#: How far a boundary vertex may sit off the box the domain was cut from and still
+#: count as ON it, in metres. The cut draws that edge exactly, so this covers only
+#: what the coordinates themselves round away.
+_ON_BOX_TOLERANCE_M = 1.0
 
 #: The oceanmesh functions an op may name, by the phase each runs in. Declared as
 #: a ROSTER rather than read off the module: the library is installed only inside
@@ -433,29 +439,78 @@ def _domain(extent: Any, rundir: Path) -> _Domain:
     (rundir / name).write_text(json.dumps(
         {"type": "GeometryCollection", "geometries": polygons}))
     source = f"domain polygon ({len(polygons)} part(s))"
-    return _Domain(bbox=_lonlat_bounds(_geometry_bounds(polygons), source),
-                   source=source, polygon_name=name,
-                   open_runs_name=_open_runs(extent, rundir))
+    bbox = _lonlat_bounds(_geometry_bounds(polygons), source)
+    return _Domain(bbox=bbox, source=source, polygon_name=name,
+                   open_runs_name=_open_runs(extent, polygons, bbox, rundir))
 
 
-def _open_runs(extent: Any, rundir: Path) -> str | None:
-    """The faces of this domain's edge the water CROSSES, staged, or ``None``.
-
-    The shoreline is where the water meets land, so an inflow, an outflow or an
-    open run is the edge that is not shoreline and every sizing function measures
-    what is left. A domain that states no run is shore the whole way round."""
-    from trid3nt_server.inputs.boundary import OPEN_TYPES
-
-    crossed = [run for run in (getattr(extent, "runs", None) or ())
-               if run.type in OPEN_TYPES]
-    if not crossed:
+def _open_runs(extent: Any, polygons: list[dict[str, Any]],
+               bbox: tuple[float, ...], rundir: Path) -> str | None:
+    """The faces of this domain's edge the water CROSSES, staged, or ``None``."""
+    faces = _open_faces(extent, polygons, bbox)
+    if not faces:
         return None
     name = "open_runs.geojson"
     (rundir / name).write_text(json.dumps({
-        "type": "FeatureCollection",
-        "features": [{"type": "Feature", "properties": {"type": run.type},
-                      "geometry": run.face} for run in crossed]}))
+        "type": "FeatureCollection", "features": faces}))
     return name
+
+
+def _open_faces(extent: Any, polygons: list[dict[str, Any]],
+                bbox: tuple[float, ...]) -> list[dict[str, Any]]:
+    """Every stretch of this domain's edge that is NOT shoreline, as GeoJSON faces.
+
+    ONE classification, read by the open boundaries and by every sizing function
+    that measures a shoreline: what the water crosses is not where it meets land.
+    Two kinds go in the one list - the runs an extent declares as inflow, outflow
+    or open, and each boundary segment lying on the box the domain was cut out
+    of, which stands in open water and draws no detail."""
+    from trid3nt_server.inputs.boundary import OPEN_TYPES
+
+    declared = [{"type": "Feature", "properties": {"type": run.type},
+                 "geometry": run.face}
+                for run in (getattr(extent, "runs", None) or ())
+                if run.type in OPEN_TYPES]
+    return declared + _box_faces(polygons, bbox)
+
+
+def _box_faces(polygons: list[dict[str, Any]],
+               bbox: tuple[float, ...]) -> list[dict[str, Any]]:
+    """The boundary segments that lie ON ``bbox``, one face each.
+
+    A face names its stretch by the shorter way round the ring between its two
+    ends, and a straight segment is never the longer way - so the segment is the
+    unit here, never the run it belongs to. A boundary that lies on the box the
+    whole way round was DRAWN as that box rather than cut out of one: it is all
+    shore, and nothing is taken from it."""
+    west, south, east, north = (float(v) for v in bbox)
+    lat_tol = _ON_BOX_TOLERANCE_M / 111_320.0
+    lon_tol = lat_tol / max(0.15, math.cos(math.radians(0.5 * (south + north))))
+    sides = ((west, lon_tol, 0), (east, lon_tol, 0),
+             (south, lat_tol, 1), (north, lat_tol, 1))
+    faces: list[dict[str, Any]] = []
+    walked = 0
+    for ring in _rings(polygons):
+        for start, end in zip(ring[:-1], ring[1:]):
+            walked += 1
+            if any(abs(start[axis] - at) <= tol and abs(end[axis] - at) <= tol
+                   for at, tol, axis in sides):
+                faces.append({
+                    "type": "Feature", "properties": {"type": "open"},
+                    "geometry": {"type": "LineString",
+                                 "coordinates": [list(start), list(end)]}})
+    return [] if len(faces) == walked else faces
+
+
+def _rings(polygons: list[dict[str, Any]]) -> list[list[tuple[float, float]]]:
+    """Every closed coordinate ring the domain's polygons carry, outer and inner."""
+    out: list[list[tuple[float, float]]] = []
+    for geometry in polygons:
+        coordinates = geometry.get("coordinates") or ()
+        parts = (coordinates if str(geometry.get("type")) == "Polygon"
+                 else [ring for part in coordinates for ring in part])
+        out.extend([(float(x), float(y)) for x, y in ring] for ring in parts)
+    return out
 
 
 def _lonlat_bounds(bbox: tuple[float, ...], source: str) -> tuple[float, ...]:
