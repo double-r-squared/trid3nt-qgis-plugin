@@ -13,7 +13,7 @@ One wrapper per TELEMAC module. A wrapper is the module's own dictionary, read a
 | `khione` | 133 | - | `extent`, `field`, `mass_balance`, `max_over_time`, `mesh`, `profile`, `series` |
 | `telemac2d` | 376 | `atmosphere`, `boundaries`, `coupling`, `friction`, `infiltration`, `oil`, `rain`, `rating`, `runoff`, `sources`, `storm`, `time_origin`, `tracer_names`, `wind` | `drogues`, `extent`, `field`, `mass_balance`, `max_over_time`, `mesh`, `profile`, `series` |
 | `telemac3d` | 355 | `atmosphere`, `column`, `coupling`, `vertical_grid`, `wind` | `column`, `extent`, `field`, `mass_balance`, `max_over_time`, `mesh`, `profile`, `series` |
-| `tomawac` | 223 | - | `extent`, `field`, `mass_balance`, `max_over_time`, `mesh`, `profile`, `series` |
+| `tomawac` | 223 | - | `extent`, `field`, `mass_balance`, `max_over_time`, `mesh`, `profile`, `series`, `spectrum` |
 | `waqtel` | 91 | `degradation` | - |
 
 A COMPOSITE is one value standing for a keyword group, so the group cannot half-arrive. A READ is a primitive over what the module wrote.

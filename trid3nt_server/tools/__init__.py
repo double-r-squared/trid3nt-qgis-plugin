@@ -260,6 +260,11 @@ from trid3nt_server.workflows.telemac.templates.rain_on_grid.rain_on_grid import
 # real shoreline with the structure punched out conformally and every deep boundary
 # stretch designated open; the bed is surveyed topobathy.
 from trid3nt_server.workflows.telemac.templates.agitation.agitation import artemis_harbor_agitation as _artemis_harbor_agitation  # noqa: E402,F401 - ARTEMIS agitation front (engine=telemac, tier=template)
+# The TOMAWAC phase-averaging spectral engine, asked ONE question: what the
+# offshore swell becomes by the time it reaches the shore. Its domain is the
+# water a coastline leaves inside the window, its open edge is forced at a sea
+# state a buoy measured, and the bed under it is surveyed topobathy.
+from trid3nt_server.workflows.telemac.templates.nearshore_waves.nearshore_waves import tomawac_nearshore_waves as _tomawac_nearshore_waves  # noqa: E402,F401 - TOMAWAC nearshore-wave front (engine=telemac, tier=template)
 # The TELEMAC-3D baroclinic engine, asked ONE question: what the column does over
 # the depth a 2D model averages away. Its domain is the water body's own mapped
 # polygon cut to the AOI, a CLOSED basin.

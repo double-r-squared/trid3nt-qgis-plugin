@@ -33,6 +33,7 @@ EXPECTED_TEMPLATES = {
     "telemac_rain_on_grid",
     "telemac3d_stratified_flow",
     "artemis_harbor_agitation",
+    "tomawac_nearshore_waves",
 }
 
 #: Templates that are DECLARED but off the model surface, name -> the module
