@@ -29,7 +29,7 @@ from typing import Any, Sequence
 from trid3nt_server.tools.cache import record_provenance
 from trid3nt_server.fallbacks import Ladder, LadderGap, Rung, register_ladder
 
-from ..._fetch_common import FetchError, enforce_pixel_budget
+from ..._fetch_common import FetchError, PixelBudgetExceededError
 from . import register_hook
 
 logger = logging.getLogger(
@@ -803,7 +803,7 @@ def _mask_land_leg_ocean_fill(land_local_path: str) -> str:
 
 
 #: Pixel budget per axis for the composite grid: past it the request refuses rather
-#: than coarsening, and the caller re-asks with min_pixel_m or a smaller AOI.
+#: than coarsening, and the caller re-asks with a coarser resolution_m or a smaller AOI.
 _MAX_COMPOSITE_PX = 12000
 
 
@@ -811,11 +811,9 @@ def _compute_target_grid(
     sources_in_precedence: list[str],
     target_crs: str,
     bbox: tuple[float, float, float, float],
-    min_pixel_m: float | None = None,
+    resolution_m: float | None = None,
 ):
     """Build the common bbox-aligned target grid (transform, width, height)."""
-    import math as _math
-
     import rasterio
     from rasterio.warp import transform_bounds
 
@@ -854,17 +852,26 @@ def _compute_target_grid(
 
     if finest_res is None or finest_res <= 0:
         finest_res = 3.0
-    if min_pixel_m is not None and finest_res < float(min_pixel_m):
-        finest_res = float(min_pixel_m)
+    if resolution_m is not None and finest_res < float(resolution_m):
+        finest_res = float(resolution_m)
 
-    # The composite is built at the spacing asked for -- the finest source cell, or
-    # the min_pixel_m floor over it. A grid past the budget REFUSES naming the
-    # spacing that fits; nothing here coarsens on its own behalf.
-    enforce_pixel_budget(
-        bbox, finest_res, budget_px=_MAX_COMPOSITE_PX, source="fetch_topobathy",
-    )
-    width = max(1, int(_math.ceil((t_east - t_west) / finest_res)))
-    height = max(1, int(_math.ceil((t_north - t_south) / finest_res)))
+    # The composite is built at the spacing asked for -- the finest source cell, or the
+    # resolution_m floor over it -- and the budget is measured on THAT grid, the
+    # projected extent's pixel count, so the ceiling holds where the projected extent
+    # runs past the geodesic bbox (a UTM zone edge). A grid past it REFUSES naming the
+    # spacing asked and the finest that fits; nothing here coarsens on its own behalf.
+    long_axis_m = max(t_east - t_west, t_north - t_south)
+    fits_res = int(math.ceil(long_axis_m / _MAX_COMPOSITE_PX))
+    if finest_res < fits_res:
+        raise PixelBudgetExceededError(
+            f"fetch_topobathy: bbox={tuple(bbox)} at resolution_m={finest_res:g} needs "
+            f"{int(math.ceil(long_axis_m / finest_res))} px on its long axis in "
+            f"{target_crs}, past the {_MAX_COMPOSITE_PX} px/axis budget this source "
+            f"serves. Nothing was coarsened: re-ask at resolution_m={fits_res} m (the "
+            "finest spacing that fits this bbox) or coarser, or ask for a smaller bbox."
+        )
+    width = max(1, int(math.ceil((t_east - t_west) / finest_res)))
+    height = max(1, int(math.ceil((t_north - t_south) / finest_res)))
 
     from rasterio.transform import from_origin
 
@@ -929,7 +936,7 @@ def _composite_sources_to_array(
     sources_in_precedence: list[str],
     target_crs: str,
     bbox: tuple[float, float, float, float],
-    min_pixel_m: float | None = None,
+    resolution_m: float | None = None,
 ) -> tuple[Any, Any, str, list[bool], list[tuple[float, float, float, float] | None]]:
     """Per-source warp and precedence composite to ``(array, transform, target_crs,
     painted, footprints)``."""
@@ -955,7 +962,7 @@ def _composite_sources_to_array(
         raise TopobathyEmptyError("no sources to merge")
 
     dst_transform, width, height = _compute_target_grid(
-        sources_in_precedence, target_crs, bbox, min_pixel_m=min_pixel_m
+        sources_in_precedence, target_crs, bbox, resolution_m=resolution_m
     )
 
     composite = np.full((height, width), np.nan, dtype="float32")
@@ -1185,7 +1192,6 @@ def _select_and_merge(
     timeout_s: float,
     force_bathy_base: bool,
     include_regional_fine: bool,
-    min_pixel_m: float | None,
     skip_cudem: bool = False,
     skip_land: bool = False,
 ) -> tuple[Any, Any, str, dict[str, Any]]:
@@ -1320,7 +1326,7 @@ def _select_and_merge(
             + regional_vsicurl
         )
         array, transform, crs, painted, footprints = _composite_sources_to_array(
-            sources_in_precedence, target_crs, bbox, min_pixel_m=min_pixel_m
+            sources_in_precedence, target_crs, bbox, resolution_m=resolution_m
         )
         # Every leg's paint is consumed, not just CUDEM's: a leg that was SELECTED
         # but painted nothing must not appear in the provenance as if it had (the
@@ -1509,10 +1515,6 @@ def validate_topobathy(spec: Any, params: dict[str, Any]) -> None:
     t_s = params.get("timeout_s")
     if t_s is not None and (not math.isfinite(float(t_s)) or float(t_s) <= 0):
         raise TopobathyInputError(f"timeout_s must be > 0 and finite; got {t_s!r}")
-    mpx = params.get("min_pixel_m")
-    if mpx is not None and (not math.isfinite(float(mpx)) or float(mpx) <= 0):
-        raise TopobathyInputError(f"min_pixel_m must be > 0 and finite; got {mpx!r}")
-
     _assert_nearshore_coverage(bbox, params)
 
 
@@ -1642,12 +1644,9 @@ def read_topobathy(
     include_regional_fine = bool(params.get("include_regional_fine", False))
     skip_cudem = bool(params.get("skip_cudem", False))
     skip_land = bool(params.get("skip_land", False))
-    mpx = params.get("min_pixel_m")
-    min_pixel_m = float(mpx) if mpx is not None else None
-
     array, transform, crs, provenance = _select_and_merge(
         bbox, resolution_m, target_crs, navd88_offset_m, fetch_timeout,
-        force_bathy_base, include_regional_fine, min_pixel_m, skip_cudem, skip_land,
+        force_bathy_base, include_regional_fine, skip_cudem, skip_land,
     )
     record_provenance(provenance)
     return array, transform, crs

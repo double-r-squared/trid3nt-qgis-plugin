@@ -8,6 +8,7 @@ a cache hit REPLAYING the four provenance fields, which the coded twin lost."""
 from __future__ import annotations
 
 import os
+import re
 import tempfile
 from typing import Any
 
@@ -21,6 +22,7 @@ from trid3nt_server.tools import TOOL_REGISTRY
 from trid3nt_server.tools.fetchers._fetch_common import (
     FetchError,
     PixelBudgetExceededError,
+    _bbox_axes_m,
 )
 from trid3nt_server.tools.fetchers._router.hooks import topobathy as tb
 from trid3nt_server.tools.fetchers._router.hooks.topobathy import (
@@ -105,22 +107,56 @@ def test_estimate_payload_mb_scales_with_bbox() -> None:
 
 
 
-def test_a_composite_past_the_pixel_budget_refuses_instead_of_coarsening() -> None:
-    """The composite grid is built at the spacing asked for. An AOI whose native grid
-    runs past the budget REFUSES naming the budget, the asked spacing and the spacing
-    that fits; the same AOI floored to that spacing builds."""
+def _reask_resolution_m(message: str) -> float:
+    """The spacing the refusal told the caller to re-ask at."""
+    return float(re.search(r"re-ask at resolution_m=(\d+(?:\.\d+)?) m", message).group(1))
+
+
+def test_a_composite_past_the_pixel_budget_refuses_and_the_named_re_ask_builds(
+    tmp_path: Any,
+) -> None:
+    """The refusal names the spacing the CALLER asked and the finest that fits, and
+    re-asking at that spacing builds a grid inside the budget -- the named lever is
+    the one that clears the refusal."""
     wide = (-85.9, 29.55, -85.0, 30.20)
+    # A CUDEM-grade scene (1/9 arcsecond, ~3 m) inside the AOI: the composite's
+    # native spacing is the finest source cell, and the ask floors it from there.
+    cell = 1.0 / (9.0 * 3600.0)
+    scene = str(tmp_path / "cudem_3m.tif")
+    _write_ll_raster(
+        scene, (-85.5, 29.9, -85.5 + 8 * cell, 29.9 + 8 * cell), 8, 8,
+        np.full((8, 8), -5.0, "float32"),
+    )
+
     with pytest.raises(PixelBudgetExceededError) as ei:
-        tb._compute_target_grid([], TARGET_CRS, wide)
+        tb._compute_target_grid([scene], TARGET_CRS, wide, resolution_m=5.0)
     msg = str(ei.value)
     assert "12000 px/axis" in msg
-    assert "resolution_m=3 " in msg
+    assert "at resolution_m=5 " in msg          # the value asked, not a probed native
     assert "Nothing was coarsened" in msg
     assert "the finest spacing that fits this bbox" in msg
 
     _tf, width, height = tb._compute_target_grid(
-        [], TARGET_CRS, wide, min_pixel_m=30.0,
+        [scene], TARGET_CRS, wide, resolution_m=_reask_resolution_m(msg),
     )
+    assert max(width, height) <= 12000
+
+
+def test_the_pixel_budget_is_measured_on_the_projected_grid_at_a_zone_edge() -> None:
+    """The budget is the returned grid's own pixel count. Far from the target CRS's
+    central meridian the projected extent runs well past the geodesic bbox, and the
+    12000 px/axis ceiling still holds on the grid that gets built."""
+    # UTM 16N (central meridian -87) over a south Florida AOI, five zones east.
+    edge = (-80.6, 25.0, -80.0, 25.6)
+    asked = 5.6
+    # The same ask measured on the geodesic bbox alone would have passed.
+    assert max(_bbox_axes_m(edge)) / asked < 12000
+
+    with pytest.raises(PixelBudgetExceededError) as ei:
+        tb._compute_target_grid([], TARGET_CRS, edge, resolution_m=asked)
+    fits = _reask_resolution_m(str(ei.value))
+
+    _tf, width, height = tb._compute_target_grid([], TARGET_CRS, edge, resolution_m=fits)
     assert max(width, height) <= 12000
 
 
@@ -419,7 +455,7 @@ def test_deep_rung_restores_deep_column_under_land_fill(monkeypatch, tmp_path: A
                             etopo_tiles=[etopo_path])
     arr, _tf, _crs, prov = tb._select_and_merge(
         _SMOKE_BBOX, 10, TARGET_CRS, None, 30.0,
-        force_bathy_base=True, include_regional_fine=False, min_pixel_m=None,
+        force_bathy_base=True, include_regional_fine=False,
         skip_cudem=False, skip_land=False,
     )
     a = arr[np.isfinite(arr)]
@@ -441,7 +477,7 @@ def test_the_permitted_etopo_base_is_masked_from_the_land_fill_over_no_cudem(
                             etopo_tiles=[etopo_path])
     arr, _tf, _crs, prov = tb._select_and_merge(
         _SMOKE_BBOX, 10, TARGET_CRS, None, 30.0,
-        force_bathy_base=True, include_regional_fine=False, min_pixel_m=None,
+        force_bathy_base=True, include_regional_fine=False,
         skip_cudem=False, skip_land=False,
     )
     a = arr[np.isfinite(arr)]

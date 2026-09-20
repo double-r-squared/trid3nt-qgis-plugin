@@ -1111,7 +1111,7 @@ def test_the_regional_share_is_measured_not_credited_to_etopo(
     _patch_partial_cudem_plus_regional_fine(monkeypatch, tmp_path)
     _arr, _t, _c, prov = tb._select_and_merge(
         _EXHIBIT_BBOX, 10, tb.TARGET_CRS, None, 30.0,
-        False, True, None, False, False,
+        False, True, False, False,
     )
     coverage = prov["rung_coverage"]
     assert coverage["cudem_nearshore"] == pytest.approx(8.0 / 9.0, abs=1e-6)

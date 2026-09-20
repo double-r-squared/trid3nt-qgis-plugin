@@ -117,8 +117,8 @@ async def test_gate_emits_fetch_granularity_block(tool_name: str, engine: str) -
     assert g["vcpus"] == 1
     assert g["coarsened"] is False
     assert g["spot_label"] is None
-    # fetch_dem carries its own 4000 px/axis budget (2026-07-10, matching the
-    # tool's own auto-coarsen); other fetchers fall back to the generic bound.
+    # fetch_dem carries its own 4000 px/axis budget, the budget the tool itself
+    # refuses past; other fetchers fall back to the generic bound.
     expected_max_px = solver_confirm._FETCH_MAX_PX_BY_TOOL.get(
         tool_name, solver_confirm.MAX_FETCH_PX
     )
@@ -298,10 +298,9 @@ async def test_dem_state_scale_gate_suggests_honest_coarsened_rung() -> None:
     _env, sugg = await server._build_fetch_resolution_envelope(  # type: ignore[attr-defined]
         "fetch_dem", _fetch_params(bbox=_WA_STATE_BBOX_DEM)
     )
-    # ~150 m for this AOI at the tool's 4000 px/axis budget -- if the gate
-    # were still using the generic 8192 px bound this would be ~73 m instead
-    # (the live-bug symptom: the gate offering a rung the tool cannot honor
-    # without further silently coarsening).
+    # ~150 m for this AOI at the tool's 4000 px/axis budget -- under the generic
+    # 8192 px bound this would be ~73 m instead, a rung the tool refuses rather
+    # than serves, which is the card offering what cannot be fetched.
     assert 100.0 < sugg.finest_allowed_m < 250.0
 
     ws, state = _FakeWS(), _FakeState()

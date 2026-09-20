@@ -137,7 +137,7 @@ _COVERAGE_COMPLETE = 0.999
 def serve_bluetopo_bed(
     bbox: Any = None,
     target_crs: Any = None,
-    min_pixel_m: Any = None,
+    resolution_m: Any = None,
     timeout_s: Any = None,
     **_ignored: Any,
 ) -> Any:
@@ -155,8 +155,10 @@ def serve_bluetopo_bed(
     kwargs: dict[str, Any] = {"bbox": bbox}
     if target_crs is not None:
         kwargs["target_crs"] = target_crs
-    if min_pixel_m is not None:
-        kwargs["min_pixel_m"] = min_pixel_m
+    # The composite's one resolution lever is resolution_m; BlueTopo's own request
+    # names the same floor min_pixel_m, and this rung edge is where they meet.
+    if resolution_m is not None:
+        kwargs["min_pixel_m"] = resolution_m
     if timeout_s is not None:
         kwargs["timeout_s"] = timeout_s
 
