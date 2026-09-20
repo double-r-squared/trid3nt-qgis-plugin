@@ -41,33 +41,33 @@ The values the template declares. `desc` is what the model reads when it fills o
 
 | field | the proving run's value |
 |---|---|
-| `catchment_area_km2` | 30.376 |
-| `peak_discharge_m3s` | 47.83716 |
-| `peak_discharge_time_s` | 86370.0 |
+| `catchment_area_km2` | 30.472 |
+| `peak_discharge_m3s` | 85.11542 |
+| `peak_discharge_time_s` | 97450.0 |
 | `peak_is_window_truncated` | False |
-| `rainfall_volume_m3` | 4759909.765 |
-| `runoff_volume_m3` | 1686965.0 |
-| `runoff_coefficient` | 0.354411 |
-| `max_depth_peak_m` | 7.825075626373291 |
-| `max_depth_p99_m` | 1.1134308338165282 |
-| `continuity_rel_error` | 7.631665e-16 |
-| `n_frames` | 56 |
-| `mesh_size_m` | 9.146 |
-| `mesh_node_count` | 7466 |
-| `mesh_element_count` | 14395 |
-| `domain_bbox` | [-83.47843232789906, 35.02016767033078, -83.39802266940212, 35.07382342758733] |
+| `rainfall_volume_m3` | 4774943.958 |
+| `runoff_volume_m3` | 1793684.0 |
+| `runoff_coefficient` | 0.375645 |
+| `max_depth_peak_m` | 11.866291046142578 |
+| `max_depth_p99_m` | 0.9218650174140735 |
+| `continuity_rel_error` | 1.042104e-15 |
+| `n_frames` | 81 |
+| `mesh_size_m` | 6.098 |
+| `mesh_node_count` | 7544 |
+| `mesh_element_count` | 14430 |
+| `domain_bbox` | [-83.47843790614064, 35.02046992041452, -83.39788075588956, 35.073695219187876] |
 
 It publishes these layers onto the canvas:
 
-- Input: watershed (watershed, the DEM's own native grid - 3DEP 1-10 m US lidar, Copernicus GLO-30 30 m global)
-- Input: river geometry (river_geometry)
-- Input: mesh bed (dem, 3DEP 1-10 m US lidar (default 10 m); Copernicus GLO-30 30 m global via source=copernicus, datum NAVD88 (metres, positive up))
-- Input: land cover (landcover)
+- Input: domain (watershed, the DEM's own native grid - 3DEP 1-10 m US lidar, Copernicus GLO-30 30 m global)
+- Input: rivers (river_geometry)
+- Input: bed (3dep_extra, datum NAVD88 (metres, positive up))
+- Input: landcover (esri_landcover_10m)
 - Velocity u over time (watershed_domain_mesh)
 - Velocity v over time (watershed_domain_mesh)
 - Water depth over time (watershed_domain_mesh)
 - Free surface over time (watershed_domain_mesh)
-- Bottom (m) at t = 107852 s (watershed_domain_mesh)
+- Bottom (m) at t = 107360 s (watershed_domain_mesh)
 - Froude number over time (watershed_domain_mesh)
 - Scalar flowrate over time (watershed_domain_mesh)
 - Scalar velocity over time (watershed_domain_mesh)
@@ -76,31 +76,31 @@ It publishes these layers onto the canvas:
 
 ## The proving run
 
-Run `01M2W9JRHETDTX2MSSS0QVJ99Q`, 2026-09-19T07:58:01.845780+00:00, 1248.383 s, at commit `966392d7b95ac996d00a5df14f667096b64a3e2a-dirty`.
+Run `01M2Z28K3DVHSQ1AXENC4F3SAG`, 2026-09-20T09:41:52.526336+00:00, 884.481 s, at commit `170dd83dd6665b897ac9d29102dca18509935c4c`.
 
-![Every layer the run published, stacked and framed on the result (run 01M2W9JRHETDTX2MSSS0QVJ99Q)](telemac_rain_on_grid/telemac_rain_on_grid.png)
+![Every layer the run published, stacked and framed on the result (run 01M2Z28K3DVHSQ1AXENC4F3SAG)](telemac_rain_on_grid/telemac_rain_on_grid.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M2W9JRHETDTX2MSSS0QVJ99Q)*
+*Every layer the run published, stacked and framed on the result (run 01M2Z28K3DVHSQ1AXENC4F3SAG)*
 
-![The solve, frame by frame - flow_dynamics (run 01M2W9JRHETDTX2MSSS0QVJ99Q)](telemac_rain_on_grid/telemac_rain_on_grid_animation_flow_dynamics.gif)
+![The solve, frame by frame - flow_dynamics (run 01M2Z28K3DVHSQ1AXENC4F3SAG)](telemac_rain_on_grid/telemac_rain_on_grid_animation_flow_dynamics.gif)
 
-*The solve, frame by frame - flow_dynamics (run 01M2W9JRHETDTX2MSSS0QVJ99Q)*
+*The solve, frame by frame - flow_dynamics (run 01M2Z28K3DVHSQ1AXENC4F3SAG)*
 
-![The solve, frame by frame - inundation_depth (run 01M2W9JRHETDTX2MSSS0QVJ99Q)](telemac_rain_on_grid/telemac_rain_on_grid_animation_inundation_depth.gif)
+![The solve, frame by frame - inundation_depth (run 01M2Z28K3DVHSQ1AXENC4F3SAG)](telemac_rain_on_grid/telemac_rain_on_grid_animation_inundation_depth.gif)
 
-*The solve, frame by frame - inundation_depth (run 01M2W9JRHETDTX2MSSS0QVJ99Q)*
+*The solve, frame by frame - inundation_depth (run 01M2Z28K3DVHSQ1AXENC4F3SAG)*
 
-![flow dynamics peak frame (run 01M2W9JRHETDTX2MSSS0QVJ99Q)](telemac_rain_on_grid/telemac_rain_on_grid_flow_dynamics_peak_frame.png)
+![flow dynamics peak frame (run 01M2Z28K3DVHSQ1AXENC4F3SAG)](telemac_rain_on_grid/telemac_rain_on_grid_flow_dynamics_peak_frame.png)
 
-*flow dynamics peak frame (run 01M2W9JRHETDTX2MSSS0QVJ99Q)*
+*flow dynamics peak frame (run 01M2Z28K3DVHSQ1AXENC4F3SAG)*
 
-![inundation depth peak frame (run 01M2W9JRHETDTX2MSSS0QVJ99Q)](telemac_rain_on_grid/telemac_rain_on_grid_inundation_depth_peak_frame.png)
+![inundation depth peak frame (run 01M2Z28K3DVHSQ1AXENC4F3SAG)](telemac_rain_on_grid/telemac_rain_on_grid_inundation_depth_peak_frame.png)
 
-*inundation depth peak frame (run 01M2W9JRHETDTX2MSSS0QVJ99Q)*
+*inundation depth peak frame (run 01M2Z28K3DVHSQ1AXENC4F3SAG)*
 
-![outlet hydrograph - the chart the run persisted (run 01M2W9JRHETDTX2MSSS0QVJ99Q)](telemac_rain_on_grid/telemac_rain_on_grid_chart_outlet_hydrograph.png)
+![outlet hydrograph - the chart the run persisted (run 01M2Z28K3DVHSQ1AXENC4F3SAG)](telemac_rain_on_grid/telemac_rain_on_grid_chart_outlet_hydrograph.png)
 
-*outlet hydrograph - the chart the run persisted (run 01M2W9JRHETDTX2MSSS0QVJ99Q)*
+*outlet hydrograph - the chart the run persisted (run 01M2Z28K3DVHSQ1AXENC4F3SAG)*
 
 ### The sheet it filled
 
@@ -114,10 +114,10 @@ Every slot the run resolved, with where the value came from. The engine's own de
 | `steep_slope_correction` | False | - | default_demo | declared scenario default |
 | `mesh_max_edge_m` | 300.0 | m | default_demo | declared scenario default |
 | `compute_class` | medium | - | default_demo | declared constant default |
+| `vertical_frame` | NAVD88 | - | default_demo | declared constant default |
 | `rain_series_mm` | - | mm | user | not supplied (declared optional) |
-| `rain_start_date` | - | - | user | not supplied (declared optional) |
-| `rain_end_date` | - | - | user | not supplied (declared optional) |
 | `curve_number` | - | - | user | not supplied (declared optional) |
+| `event_time` | - | - | prompt_interpreted | not supplied (declared optional) |
 
 ### Reproduce
 
@@ -132,5 +132,5 @@ await TOOL_REGISTRY['telemac_rain_on_grid'].fn(
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2W9JRHETDTX2MSSS0QVJ99Q` and commit `966392d7b95ac996d00a5df14f667096b64a3e2a-dirty`. The full argument record is [`telemac_rain_on_grid/run.json`](telemac_rain_on_grid/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2Z28K3DVHSQ1AXENC4F3SAG` and commit `170dd83dd6665b897ac9d29102dca18509935c4c`. The full argument record is [`telemac_rain_on_grid/run.json`](telemac_rain_on_grid/run.json).
 
