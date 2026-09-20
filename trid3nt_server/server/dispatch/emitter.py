@@ -190,14 +190,6 @@ _ALWAYS_OFFLOAD_SYNC_TOOLS = frozenset(
         "fetch_soilgrids",
         "fetch_esri_landcover_10m",
         "fetch_noaa_sst",
-        # stages an s3 COG and an inventory, samples, writes an FGB
-        "compute_flood_depth_damage",
-        "compute_model_residuals",
-        # a KD-tree over every sounding, then an IDW pass per cell of a metre-
-        # scale grid, then a COG write
-        "derive_survey_surface",
-        # two windowed warp-reads onto one union grid plus two COG writes
-        "derive_merge_rasters",
         # the sibling DEM fetch over the whole window, then a D8 condition and
         # trace over up to 16 million cells, in one sync call
         "fetch_watershed",
@@ -573,8 +565,8 @@ async def _invoke_tool_via_emitter(
             _reuse_note = (
                 f"Reusing the layer already on the map for this request "
                 f"(layer '{_existing.name}', handle={_existing.layer_id}) - the "
-                "data was NOT re-fetched. For a fit / zoom / resize, call "
-                "compute_layer_bounds on this handle; re-fetch only for a "
+                "data was NOT re-fetched. A fit / zoom / resize reads this "
+                "layer's own bbox off the case note; re-fetch only for a "
                 "different area or an explicit refresh."
             )
             entry = _ReuseEntry(entry.metadata, _existing)

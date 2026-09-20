@@ -54,11 +54,9 @@ def test_a_stated_depth_is_a_flat_bed_below_the_free_surface():
 
 def test_the_bed_is_one_source_and_two_are_merged_before_the_op(tmp_path):
     """A channel survey where it was flown and the surface elsewhere is ONE bed,
-    composed by the merge derive; the op takes the layer that came out of it."""
+    composed by the slot's own merge; the op takes the layer that came out of it."""
     from trid3nt_contracts.execution import LayerURI
-    from trid3nt_server.tools.derive.derive_merge_rasters.derive_merge_rasters import (
-        derive_merge_rasters,
-    )
+    from trid3nt_server.inputs.bed import merged_surface
 
     survey = np.full((5, 5), np.nan, dtype="float32")
     survey[:, :2] = -9.0
@@ -67,7 +65,7 @@ def test_the_bed_is_one_source_and_two_are_merged_before_the_op(tmp_path):
         return LayerURI(layer_id="x", name=path, layer_type="raster", uri=path,
                         vertical_datum="NAVD88")
 
-    merged = derive_merge_rasters(
+    merged = merged_surface(
         primary=_layer(_raster(tmp_path / "survey.tif", survey, nodata=np.nan)),
         fallback=_layer(_raster(tmp_path / "dem.tif",
                                 np.full((5, 5), 3.0), nodata=-9999.0)),
@@ -91,43 +89,30 @@ def test_a_domain_no_source_covers_refuses_by_name(tmp_path):
     assert "9 of 9 nodes" in str(excinfo.value)
 
 
-def test_a_layer_of_soundings_goes_through_the_derive_at_the_meshs_own_scale(
+def test_a_layer_of_soundings_goes_through_the_grid_at_the_meshs_own_scale(
         monkeypatch, tmp_path):
-    """A slot calls a derive BY NAME, and asks it for the scale the ELEMENTS
-    were sized for: a surface finer than them buys nothing."""
-    from trid3nt_server.inputs.bed import SURVEY_DERIVE
-    from trid3nt_server.tools import TOOL_REGISTRY
+    """The slot grids soundings at the scale the ELEMENTS were sized for: a
+    surface finer than them buys nothing."""
+    import sys
+
+    bed = sys.modules["trid3nt_server.inputs.bed"]
 
     asked: dict = {}
     surface = _raster(tmp_path / "surface.tif", np.full((5, 5), -4.0))
 
-    class _Entry:
-        @staticmethod
-        def fn(**kwargs):
-            asked.update(kwargs)
-            return surface
+    def _surface(**kwargs):
+        asked.update(kwargs)
+        return surface
 
-    monkeypatch.setitem(TOOL_REGISTRY, SURVEY_DERIVE, _Entry)
+    monkeypatch.setattr(bed, "survey_surface", _surface)
+    monkeypatch.setattr(bed, "elevations", lambda surface, **_kw: surface)
     soundings = {"type": "FeatureCollection", "features": []}
     bedded = P.set_bed(_lattice_mesh(), soundings)
     assert asked["points"] is soundings
     # the lattice's own edges are about 900 m on the ground
     assert 500.0 < asked["resolution_m"] < 1500.0
     assert list(np.unique(bedded.bed)) == [-4.0]
-    assert SURVEY_DERIVE in bedded.meta["bed_source"]
-
-
-def test_a_tree_without_the_soundings_derive_says_which_one_is_missing(
-        monkeypatch):
-    from trid3nt_server.inputs.bed import SURVEY_DERIVE
-    from trid3nt_server.tools import TOOL_REGISTRY
-
-    monkeypatch.delitem(TOOL_REGISTRY, SURVEY_DERIVE, raising=False)
-    with pytest.raises(MeshToolError) as excinfo:
-        P.set_bed(_lattice_mesh(),
-                  {"type": "FeatureCollection", "features": []})
-    assert excinfo.value.error_code == "MESH_BED_SURVEY_UNINTERPOLATED"
-    assert SURVEY_DERIVE in str(excinfo.value)
+    assert "survey surface" in bedded.meta["bed_source"]
 
 
 def test_boundary_runs_prescribe_the_roles_their_types_name():

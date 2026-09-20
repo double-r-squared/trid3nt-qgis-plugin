@@ -14,11 +14,10 @@ from __future__ import annotations
 
 import logging
 import math
-import uuid
 from dataclasses import dataclass
 from typing import Any, Mapping
 
-from trid3nt_contracts.execution import LayerURI
+from trid3nt_contracts.execution import LayerURI, layer_seed
 
 from .user_input import UserInputError
 
@@ -36,15 +35,15 @@ RASTER = "raster"
 POINTS = "points"
 DEPTH = "depth"
 
-#: The registered name the runtime calls the grid below by. The rule is the
-#: bed's own - only this slot needs a surface between soundings - and the tool is
-#: a thin shim over it while declared plan steps still name it.
-SURVEY_DERIVE = "derive_survey_surface"
+#: The runner the runtime calls the grid below by. The rule is the bed's own -
+#: only this slot needs a surface between soundings - so it is reached at its
+#: own address here rather than through a registered name a model could pick.
+SURVEY_DERIVE = "trid3nt_server.inputs.bed.survey_surface"
 
-#: The registered name the runtime calls the merge below by, a thin shim the
-#: same way: composing one bed out of a measurement and a wider surface is what
-#: this slot is for, and no other slot takes two rasters.
-MERGE_DERIVE = "derive_merge_rasters"
+#: The runner the runtime calls the merge below by, at its own address the same
+#: way: composing one bed out of a measurement and a wider surface is what this
+#: slot is for, and no other slot takes two rasters.
+MERGE_DERIVE = "trid3nt_server.inputs.bed.merged_surface"
 
 #: What a surface of DEPTHS names its quantity as. A depth is counted DOWN from
 #: the survey's own zero, and a bed is an elevation counted UP from the run's,
@@ -205,12 +204,9 @@ def _flipped(layer: Any, offset_m: float, frame: str, label: str,
     """The same grid on the run's frame: ``offset - depth``, or ``value +
     offset``. One raster, written once."""
     import tempfile
-    import uuid
 
     import numpy as np
     import rasterio
-    from trid3nt_contracts.execution import LayerURI
-
     from trid3nt_server.inputs.geometry import source_uri
     from trid3nt_server.tools.derive._hydrology_common import (
         _stage_uri_local, write_cog)
@@ -219,7 +215,7 @@ def _flipped(layer: Any, offset_m: float, frame: str, label: str,
     if not uri:
         raise UserInputError(
             f"the {label} names no raster file to read ({layer!r}).", code=code)
-    seed = uuid.uuid4().hex[:8]
+    seed = layer_seed()
     with tempfile.TemporaryDirectory(prefix="bed-elevation-") as scratch:
         with rasterio.open(_stage_uri_local(uri, scratch, "bed")) as src:
             read = src.read(1, masked=True).filled(np.nan).astype("float32")
@@ -230,8 +226,8 @@ def _flipped(layer: Any, offset_m: float, frame: str, label: str,
                             seed=seed, output_dir=None,
                             code="BED_ELEVATION_WRITE_FAILED",
                             nodata=float("nan"))
-    return LayerURI(
-        layer_id=f"bed-elevation-{seed}",
+    return LayerURI.published(
+        "bed-elevation", seed=seed,
         name=f"{getattr(layer, 'name', None) or 'survey'} as elevations",
         layer_type="raster", uri=written,
         style=getattr(layer, "style", None), role="primary", units="m",
@@ -568,7 +564,7 @@ def survey_surface(
     filled = float(inside) / float(width * height)
     footprint_km2 = inside * resolution_m * resolution_m / 1.0e6
 
-    seed = uuid.uuid4().hex[:8]
+    seed = layer_seed()
     uri = write_cog(surface, crs=f"EPSG:{epsg}", transform=transform,
                     prefix="survey_surface", seed=seed, output_dir=_output_dir,
                     code="SURVEY_SURFACE_WRITE_FAILED", nodata=_NODATA)
@@ -592,8 +588,8 @@ def survey_surface(
     ]
     logger.info("survey surface: %d point(s) -> %dx%d at %.2f m, %.1f%% filled",
                 len(values), width, height, resolution_m, filled * 100.0)
-    return SurveySurfaceLayerURI(
-        layer_id=f"soundings-{seed}",
+    return SurveySurfaceLayerURI.published(
+        "soundings", seed=seed,
         name=f"{field} interpolated at {resolution_m:g} m",
         layer_type="raster",
         uri=uri,
@@ -811,12 +807,12 @@ def _passed_through(only: Any, absent: str) -> MergedRasterLayerURI:
             "MERGE_RASTERS_NO_SOURCE",
             f"only the {'fallback' if absent == 'primary' else 'primary'} "
             f"surface was given and it names no raster file to read ({only!r}).")
-    seed = uuid.uuid4().hex[:8]
+    seed = layer_seed()
     note = (f"The {absent} surface was absent, so the other one passed through "
             "unchanged: this is that surface, not a merge of two.")
     logger.info("bed merge: %s absent, %s passed through", absent, uri)
-    return MergedRasterLayerURI(
-        layer_id=f"merged-bed-{seed}",
+    return MergedRasterLayerURI.published(
+        "merged-bed", seed=seed,
         name=getattr(only, "name", None) or "merged bed surface",
         layer_type="raster",
         uri=uri,
@@ -869,7 +865,7 @@ def merged_surface(
     aligned = _merge_aligned(primary, fallback, offset)
     depths = _counts_down(primary)
 
-    seed = uuid.uuid4().hex[:8]
+    seed = layer_seed()
     with tempfile.TemporaryDirectory(prefix="bed-merge-") as scratch:
         top = _staged(primary, "primary", scratch)
         under = _staged(fallback, "fallback", scratch)
@@ -925,8 +921,8 @@ def merged_surface(
                 width, height, metres, top_share * 100.0, under_share * 100.0)
     if depths or aligned.shift_m:
         _merge_journal(primary, aligned, depths=depths)
-    return MergedRasterLayerURI(
-        layer_id=f"merged-bed-{seed}",
+    return MergedRasterLayerURI.published(
+        "merged-bed", seed=seed,
         name="merged bed surface",
         layer_type="raster",
         uri=uri,

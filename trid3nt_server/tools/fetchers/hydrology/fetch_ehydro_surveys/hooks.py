@@ -8,7 +8,7 @@ trips and the geodatabase read, and states the datum the survey states.
 # WHAT THE SURVEY PUBLISHES. Beside the thinned XYZ, an eHydro package carries the
 # surface as an Esri TIN and a geodatabase of derived features - there is no raster
 # in it. The measured thing is the SurveyPoint feature class, and a raster bed is
-# ``derive_survey_surface`` over these points, not something to invent here.
+# the bed slot's own survey grid over these points, not something to invent here.
 #
 # The values are DEPTHS BELOW the survey's own datum, positive down, in the unit the
 # points state. Nothing here converts between datums: the package's own metadata

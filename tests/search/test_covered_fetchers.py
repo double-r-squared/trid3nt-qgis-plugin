@@ -85,14 +85,16 @@ def test_a_covered_fetcher_leaves_the_index_and_an_overlay_one_stays(index):
     assert FIND_SOURCES in indexed
 
 
-def test_the_bed_producers_are_internal_seams_off_the_index(registry, index):
-    """A row runs them by registry name, so they are resolvable and unsearchable:
-    tier=internal, no coverage row, no index entry."""
-    for producer in ("derive_survey_surface", "derive_merge_rasters"):
-        assert producer in registry
-        assert registry[producer].metadata.tier == "internal"
-        assert producer not in set(index.tool_names)
-        assert producer not in covered_sources()
+def test_the_bed_producers_are_not_tools_at_all(registry, index):
+    """The bed's grid and its merge are the slot's own rule, reached at their own
+    address by the row that runs them: no registry name, so nothing can pick them."""
+    from trid3nt_server.inputs.bed import MERGE_DERIVE, SURVEY_DERIVE
+
+    for runner in (SURVEY_DERIVE, MERGE_DERIVE):
+        assert runner.startswith("trid3nt_server.inputs.bed.")
+        assert runner not in registry
+        assert runner not in set(index.tool_names)
+        assert runner not in covered_sources()
 
 
 def test_each_class_is_its_own_document_under_the_match(index):

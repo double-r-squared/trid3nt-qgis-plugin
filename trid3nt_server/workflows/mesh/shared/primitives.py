@@ -182,33 +182,24 @@ def _node_spacing_m(mesh: Mesh) -> float:
 
 
 def _interpolated_survey(layer: Any, cell_m: float, slot: Any) -> tuple[Any, str]:
-    """A layer of SOUNDINGS through the derive that turns it into a surface.
+    """A layer of SOUNDINGS through the grid that turns it into a surface.
 
-    Called by NAME: interpolating scattered measurements is useful outside any
-    slot, so it is a tool, and a tree without it refuses saying which one. The
-    surface it makes carries the survey's own zero, so it is read onto the run's
-    frame here - the one hop a raster bed takes on the way into its slot, taken
-    at the moment the surface exists."""
-    from trid3nt_server.inputs.bed import SURVEY_DERIVE, elevations
-    from trid3nt_server.tools import TOOL_REGISTRY
+    Interpolating scattered measurements between soundings is the BED slot's own
+    rule, so it is reached at its own address in that slot rather than through a
+    registered name. The surface it makes carries the survey's own zero, so it is
+    read onto the run's frame here - the one hop a raster bed takes on the way
+    into its slot, taken at the moment the surface exists."""
+    from trid3nt_server.inputs.bed import elevations, survey_surface
     from trid3nt_server.inputs.geometry import source_uri
 
-    if SURVEY_DERIVE not in TOOL_REGISTRY:
-        raise MeshToolError(
-            "MESH_BED_SURVEY_UNINTERPOLATED",
-            f"the bed was handed a layer of soundings and {SURVEY_DERIVE!r} is "
-            "not registered, so there is nothing to turn the points into the "
-            "surface the nodes are sampled from. Supply a survey RASTER, or "
-            "register the derive.")
     if not cell_m:
         raise MeshToolError(
             "MESH_BED_SURVEY_UNSCALED",
             "this mesh states no cells of its own, so there is no element scale "
             "to interpolate the soundings at; supply a survey raster instead.")
-    surface = TOOL_REGISTRY[SURVEY_DERIVE].fn(points=layer,
-                                              resolution_m=float(cell_m))
+    surface = survey_surface(points=layer, resolution_m=float(cell_m))
     surface = elevations(surface, frame=slot.frame, offset=slot.offset)
-    return op_raster(surface), (f"{SURVEY_DERIVE} at {cell_m:.3g} m over the "
+    return op_raster(surface), (f"a survey surface at {cell_m:.3g} m over the "
                                 f"supplied soundings ({source_uri(layer)})")
 
 

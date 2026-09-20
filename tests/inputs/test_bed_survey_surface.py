@@ -1,4 +1,4 @@
-"""``derive_survey_surface``: the surface between scattered measurements.
+"""``survey_surface``: the surface between scattered measurements.
 
 IDW in the points' own UTM zone, holding each measurement at its own position and
 leaving every cell outside the soundings' FOOTPRINT as nodata - a footprint the

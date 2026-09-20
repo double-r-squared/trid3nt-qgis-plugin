@@ -117,9 +117,10 @@ def test_the_bed_is_the_measurement_gridded_over_the_terrain_under_it(world):
     bed = _row(Data.need("bathymetry"), "bed")
     out = asyncio.run(interpreter._matched_bed(env, bed))
     ran = [runner for runner, _kw in world]
-    assert ran == ["fetch_terrain", "fetch_soundings", "derive_survey_surface",
-                   "derive_merge_rasters"]
-    assert out.endswith("derive_merge_rasters.tif")
+    assert ran == ["fetch_terrain", "fetch_soundings",
+                   "trid3nt_server.inputs.bed.survey_surface",
+                   "trid3nt_server.inputs.bed.merged_surface"]
+    assert out.endswith("merged_surface.tif")
     # the soundings are gridded at the run's own edge, on the column the
     # coverage row names.
     _runner, grid = world[2]
@@ -136,9 +137,9 @@ def test_a_raster_measurement_reaches_the_merge_without_being_gridded(world,
     out = asyncio.run(interpreter._matched_bed(
         env, _row(Data.need("bathymetry"), "bed")))
     ran = [runner for runner, _kw in world]
-    assert "derive_survey_surface" not in ran
-    assert ran[-1] == "derive_merge_rasters"
-    assert out.endswith("derive_merge_rasters.tif")
+    assert "trid3nt_server.inputs.bed.survey_surface" not in ran
+    assert ran[-1] == "trid3nt_server.inputs.bed.merged_surface"
+    assert out.endswith("merged_surface.tif")
 
 
 def test_no_measurement_over_this_domain_leaves_the_terrain_as_the_whole_bed(
@@ -154,7 +155,8 @@ def test_no_measurement_over_this_domain_leaves_the_terrain_as_the_whole_bed(
     out = asyncio.run(interpreter._matched_bed(
         env, _row(Data.need("bathymetry"), "bed")))
     assert out == "s3://b/fetch_terrain.tif"
-    assert "derive_merge_rasters" not in [runner for runner, _kw in world]
+    assert "trid3nt_server.inputs.bed.merged_surface" not in [
+        runner for runner, _kw in world]
     # BOTH measurements were tried, in rank order, and the sheet says so.
     sentence = run_choices()[-1].sentence
     assert "fetch_soundings" in sentence and "fetch_bed_raster" in sentence

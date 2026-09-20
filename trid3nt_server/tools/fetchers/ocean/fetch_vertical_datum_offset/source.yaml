@@ -86,7 +86,7 @@ docstring: |-
       - "how far above NAVD88 is the NGVD29 zero here", "what do I add to read
         this level on the DEM's datum", "the Great Lakes low water datum as an
         elevation".
-      - Pair with ``derive_merge_rasters`` (two surfaces on different frames
+      - Pair with the bed slot's own merge (two surfaces on different frames
         merge only through a stated offset) and with a water-level reading whose
         datum is not the bed's.
 
@@ -114,7 +114,7 @@ docstring: |-
       answered) and ``source``.
 
   Cross-tool dependencies:
-      - Composes WITH: ``derive_merge_rasters``, ``fetch_ehydro_surveys``,
+      - Composes WITH: ``fetch_ehydro_surveys``,
         ``fetch_dem``, ``fetch_copernicus_dem``, ``fetch_usgs_nwis_gauges``,
         ``fetch_noaa_coops_tides``.
       - Upstream data source: NOAA VDatum (https://vdatum.noaa.gov/).

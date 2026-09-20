@@ -472,6 +472,8 @@ async def _matched_bed(env: _Env, decl: DataDecl) -> Any:
     A measurement that arrives as soundings is gridded at the mesh's own cell
     before the merge reads it; with no measurement over this domain the terrain
     is the whole bed, which is what the sheet then says."""
+    from trid3nt_server.inputs.bed import MERGE_DERIVE, SURVEY_DERIVE
+
     _choice, terrain = await _probe(env, decl, "terrain", f"{decl.name} terrain")
     if decl.data_class == "terrain":
         # A CATCHMENT is dry ground: the terrain is the whole bed and there is
@@ -491,14 +493,14 @@ async def _matched_bed(env: _Env, decl: DataDecl) -> Any:
         return terrain
     if _spec_of(choice.picked).output.layer_type == "vector":
         measured = await _produce(env, _runtime_row(
-            env, f"{decl.name}_surveyed", "derive_survey_surface",
+            env, f"{decl.name}_surveyed", SURVEY_DERIVE,
             {"points": measured, "value_field": _value_column(choice.picked,
                                                               decl.data_class),
              "resolution_m": _mesh_m(env)}))
     if terrain is None:
         return measured
     return await _produce(env, _runtime_row(
-        env, f"{decl.name}_merged", "derive_merge_rasters",
+        env, f"{decl.name}_merged", MERGE_DERIVE,
         {"primary": measured, "fallback": terrain}))
 
 

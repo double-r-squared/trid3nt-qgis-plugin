@@ -159,7 +159,7 @@ docstring: |-
         channel a puddle.
       - "how deep is the channel here", "the latest dredging survey", "the
         surveyed bathymetry for this reach".
-      - Pair with ``derive_survey_surface`` to turn the points into the
+      - Handed to the BED slot, which turns the points into the
         bed raster a mesh is draped on.
 
   When NOT to use:
@@ -190,7 +190,7 @@ docstring: |-
 
   Cross-tool dependencies:
       - Composes WITH: ``fetch_river_reach`` (the domain the survey is read
-        over), ``derive_survey_surface`` (points -> a bed raster),
+        over),
         ``fetch_dem`` (the banks the survey does not measure).
       - Upstream data source: USACE eHydro
         (https://navigation.usace.army.mil/Survey/Hydro).
