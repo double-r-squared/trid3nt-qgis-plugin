@@ -57,7 +57,11 @@ class TemporalShapeError(DeclarativeError):
 #
 # Small and explicit on purpose. An entry is a conversion someone declared and
 # a reader can check; anything absent refuses by name rather than being guessed
-# at. Base units are the first row of each block.
+# at. Base units are the first row of each block. A row is matched on the
+# SPELLING the table is indexed under - case, spaces, degree signs and full
+# stops are how a source writes a unit, not which unit it is - so "deg C",
+# "degC" and "DEGC" are one entry and a spelling a source federates is declared
+# here beside the scale it names rather than normalized somewhere else.
 _UNITS: dict[str, tuple[str, float, float]] = {
     "m": ("length", 1.0, 0.0),
     "cm": ("length", 0.01, 0.0),
@@ -84,8 +88,12 @@ _UNITS: dict[str, tuple[str, float, float]] = {
 
     "degC": ("temperature", 1.0, 0.0),
     "C": ("temperature", 1.0, 0.0),
+    "oC": ("temperature", 1.0, 0.0),
+    "Celsius": ("temperature", 1.0, 0.0),
     "K": ("temperature", 1.0, -273.15),
     "degF": ("temperature", 5.0 / 9.0, -32.0 * 5.0 / 9.0),
+    "F": ("temperature", 5.0 / 9.0, -32.0 * 5.0 / 9.0),
+    "Fahrenheit": ("temperature", 5.0 / 9.0, -32.0 * 5.0 / 9.0),
 
     "mg/L": ("concentration", 1.0, 0.0),
     "g/m3": ("concentration", 1.0, 0.0),
@@ -93,9 +101,21 @@ _UNITS: dict[str, tuple[str, float, float]] = {
 }
 
 
+_BY_SPELLING: dict[str, tuple[str, float, float]] = {}
+
+
+def spelling(unit: Any) -> str:
+    """One unit's spelling as the table is indexed: "deg C", "degC", "DEGC" and
+    "\u00b0C" are one key."""
+    return "".join(str(unit or "").lower().replace("\u00b0", "").replace(".", "").split())
+
+
+_BY_SPELLING.update({spelling(name): row for name, row in _UNITS.items()})
+
+
 def convert_units(value: float, source: str, target: str) -> float:
     """``value`` expressed in ``target`` units. Same unit in and out is exact."""
-    if source == target:
+    if spelling(source) == spelling(target):
         return float(value)
     src, dst = _unit(source), _unit(target)
     if src[0] != dst[0]:
@@ -110,7 +130,7 @@ def convert_units(value: float, source: str, target: str) -> float:
 
 def _unit(name: str) -> tuple[str, float, float]:
     try:
-        return _UNITS[str(name).strip()]
+        return _BY_SPELLING[spelling(name)]
     except KeyError:
         raise TemporalUnitsError(
             f"unit {name!r} is not in the declared unit table "

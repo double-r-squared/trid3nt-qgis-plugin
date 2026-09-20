@@ -21,6 +21,7 @@ from typing import Any, Mapping
 from trid3nt_server.workflows.runtime.temporal import (
     Series,
     convert_units,
+    spelling,
     TemporalGapError,
     TemporalShapeError,
     TemporalUnitsError,
@@ -37,13 +38,6 @@ __all__ = ["Observation", "ObservationError", "convert", "note",
 logger = logging.getLogger("trid3nt_server.inputs.observation")
 
 _CODE = "OBSERVATION_INVALID"
-
-#: The unit names a reading arrives under, by the quantity they measure. A
-#: portal federates state and federal programs, so the unit travels with the ROW
-#: rather than being the portal's: a Fahrenheit row is converted by name, and two
-#: spellings of one unit - "deg C" beside "degC" - are one unit.
-_FAHRENHEIT = ("degf", "f", "deg f", "fahrenheit")
-_CELSIUS = ("degc", "c", "oc", "deg c", "celsius")
 
 #: What a source calls the MOMENT it reported, and what it calls the thing that
 #: reported. A sample portal names a site; a gridded analysis names the reach it
@@ -104,21 +98,15 @@ class ObservationError(RuntimeError):
         self.error_code = error_code
 
 
-def _normal(unit: Any) -> str:
-    """One unit's spelling, as every source spells it: "deg C", "degC", "°C"."""
-    return "".join(str(unit or "").lower().replace("°", "").replace(".", "").split())
-
-
 def convert(value: float, units: Any, to_units: Any) -> float:
     """One reading moved onto the unit a slot reads, or a refusal naming both.
 
     ONE table for a reading and for the window it came out of: the runtime's,
-    which is where a conversion is declared and a reader can check it. The
-    spellings a portal federates - "deg C" beside "degC" - are one unit here
-    before the table is asked."""
-    have, want = _normal(units), _normal(to_units)
-    if not want or have == want or any(have in family and want in family
-                                       for family in (_CELSIUS, _FAHRENHEIT)):
+    which is where a conversion is declared and a reader can check it - the
+    spellings a portal federates, "deg C" beside "degC" beside the engine's own
+    "DEGC", are one row of that table."""
+    have, want = spelling(units), spelling(to_units)
+    if not want or have == want:
         return float(value)
     if not have:
         raise ObservationError(
@@ -127,10 +115,6 @@ def convert(value: float, units: Any, to_units: Any) -> float:
             "unit of a record's value column is stated on the source's coverage "
             "row; a number read in the unit the slot wanted is a different "
             "measurement.")
-    if have in _FAHRENHEIT and want in _CELSIUS:
-        return (float(value) - 32.0) / 1.8
-    if have in _CELSIUS and want in _FAHRENHEIT:
-        return float(value) * 1.8 + 32.0
     try:
         return convert_units(float(value), str(units), str(to_units))
     except TemporalUnitsError as exc:
