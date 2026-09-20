@@ -15,11 +15,11 @@ ACCEPTS = Accepts(mesh=("unstructured_tri",))
 
 class PARAMS:
     """What only a water-temperature question asks: which kind of water the
-    seed is on and where to cut it when no domain is handed in, the week of
-    weather the water is driven over, and where the series is read. The domain, the bed, what the water opens
-    at and the granularity are the runtime's own slots and levers, and the clock,
-    the roughness and the cadence are keywords the module's dictionary describes
-    and the deck states by their own names."""
+    seed is on and where to cut it when no domain is handed in, and where the
+    series is read. The domain, the bed, what the water opens at, the moment the
+    week of weather is read at and the granularity are the runtime's own slots
+    and levers, and the clock, the roughness and the cadence are keywords the
+    module's dictionary describes and the deck states by their own names."""
 
     seed = Param(
         door=doors.USER, optional=True, consequence="aoi", type=Point,
@@ -44,23 +44,6 @@ class PARAMS:
              "stretch of river from the mapped channel; 'waterbody' takes the "
              "lake, pond or reservoir the seed stands in. Read only when no "
              "domain polygon is supplied")
-    # THE WEATHER WINDOW is the question's own scenario: the water warms under a
-    # WEEK that happened, so the dates are what make this a record rather than a
-    # hypothetical. There is no default - a temperature nobody dated is nobody's -
-    # and the window is TWO dates rather than one string because it is two dates
-    # the observation fetch is asked for.
-    weather_start = Param(
-        door=doors.QUESTION, consequence="scenario", user_lever=True,
-        desc="First day of the observed weather the water is driven over, "
-             "'YYYY-MM-DD' - from phrasing like 'last week' or 'the first week "
-             "of August'. The station record is hourly and the network holds the "
-             "last two weeks, so an earlier day refuses typed")
-    weather_end = Param(
-        door=doors.QUESTION, consequence="scenario", user_lever=True,
-        desc="Last day of the observed weather, 'YYYY-MM-DD'. The run is DURATION "
-             "long from the first observation - a week unless you set that "
-             "keyword - so this day has to be far enough past weather_start to "
-             "cover it; at most 14 days after")
     station = Param(
         door=doors.USER, optional=True, consequence="scenario",
         user_lever=True, type=Point,
@@ -92,12 +75,12 @@ DOC = dict(
         "\"diurnal temperature swing in the water\". WAQTEL THERMIC on "
         "TELEMAC-2D over the domain it is given - a drawn pond, a picked lake, "
         "or the reach the seed stands on: the surface heat budget under the "
-        "hourly RAWS record over the days you name. Produces the TEMPERATURE "
+        "hourly RAWS record over the run's window. Produces the TEMPERATURE "
         "field, animated, and the series at a point. Deck opinions, by "
         "keyword: DURATION (seven days), GRAPHIC PRINTOUT PERIOD, LAW OF "
         "BOTTOM FRICTION, FRICTION COEFFICIENT. Supply the domain or `seed` a "
-        "point, and `weather_start` / `weather_end`; a lake, pond or "
-        "reservoir is `body='waterbody'`."
+        "point, and `event_time` - the moment the week opens at; a lake or "
+        "pond is `body='waterbody'`."
     ),
     not_for=(
         "dissolved oxygen below a discharge (`telemac_do_sag`); a dye or "

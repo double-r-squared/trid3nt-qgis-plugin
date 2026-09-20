@@ -15,13 +15,12 @@ ACCEPTS = Accepts(mesh=("unstructured_tri",))
 
 class PARAMS:
     """What only a freeze-up question asks: which kind of water the seed is
-    on and where to cut it when no domain is handed in, the days of weather the
-    water is driven over,
-    where the cover series is read, and how much cover counts as frozen. The
-    domain, the bed, what the water opens at and the granularity are the
-    runtime's own slots and levers, and the clock, the cadence, the friction and
-    every ice process are keywords the dictionaries describe and the decks state
-    by their own names."""
+    on and where to cut it when no domain is handed in, where the cover series
+    is read, and how much cover counts as frozen. The domain, the bed, what the
+    water opens at, the moment the cold snap is read at and the granularity are
+    the runtime's own slots and levers, and the clock, the cadence, the friction
+    and every ice process are keywords the dictionaries describe and the decks
+    state by their own names."""
 
     seed = Param(
         door=doors.USER, optional=True, consequence="aoi", type=Point,
@@ -46,20 +45,6 @@ class PARAMS:
              "stretch of river from the mapped channel; 'waterbody' takes the "
              "lake, pond or reservoir the seed stands in. Read only when no "
              "domain polygon is supplied")
-    # THE COLD SNAP is the question's own scenario: water freezes under a week
-    # that happened, so the dates are what make this a record rather than a
-    # hypothetical. There is no default - a freeze-up nobody dated is nobody's.
-    weather_start = Param(
-        door=doors.QUESTION, consequence="scenario", user_lever=True,
-        desc="First day of the observed weather the water is driven over, "
-             "'YYYY-MM-DD' - the day the cold snap starts. The airport record is "
-             "hourly and reaches back decades, so a past winter is askable")
-    weather_end = Param(
-        door=doors.QUESTION, consequence="scenario", user_lever=True,
-        desc="Last day of the observed weather, 'YYYY-MM-DD'. The run is "
-             "DURATION long from the first observation - a week unless you set "
-             "that keyword - so this day has to be far enough past "
-             "weather_start to cover it")
     station = Param(
         door=doors.USER, optional=True, consequence="scenario",
         user_lever=True, type=Point,
@@ -101,15 +86,15 @@ DOC = dict(
         "THE tool for \"when does this water freeze over\", \"how thick does "
         "the ice get\", \"frazil and border ice\". KHIONE on "
         "TELEMAC-2D over the domain it is given, drawn or matched at `seed`: "
-        "the heat budget under the hourly airport record, the frazil it makes, "
-        "and the cover that grows from it. Produces cover fraction and "
-        "thickness, animated and charted at a point. "
-        "Deck opinions, by keyword: DURATION (seven days), GRAPHIC PRINTOUT "
-        "PERIOD, LAW OF BOTTOM FRICTION, FRICTION COEFFICIENT; on the ice "
-        "deck ATMOSPHERE-WATER EXCHANGE MODEL, DYNAMIC ICE COVER, MODEL FOR "
+        "the heat budget under the hourly airport record over the run's "
+        "window, the frazil it makes, and the cover that grows from it. "
+        "Produces cover fraction and thickness, animated and charted. "
+        "Deck opinions, by keyword: DURATION (seven days), GRAPHIC "
+        "PRINTOUT PERIOD, LAW OF BOTTOM FRICTION, FRICTION COEFFICIENT; on the "
+        "ice deck ATMOSPHERE-WATER EXCHANGE MODEL, DYNAMIC ICE COVER, MODEL FOR "
         "MASS EXCHANGE BETWEEN FRAZIL AND ICE COVER, BORDER ICE COVER. Supply "
-        "the domain or `seed` - `body='waterbody'` for a lake or reservoir - "
-        "and `weather_start` / `weather_end`."
+        "the domain or `seed` - `body='waterbody'` for a lake - and "
+        "`event_time`, the moment the snap opens at."
     ),
     not_for=(
         "how warm the water gets with no ice in the question "

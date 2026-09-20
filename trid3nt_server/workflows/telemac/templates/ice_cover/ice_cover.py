@@ -110,10 +110,12 @@ class DATA:
     # shortwave from the cloud and the local longitude, so the airport network -
     # which measures a dew point and codes a sky cover, and which sits where
     # people and water are rather than on a ridge - is the record that fits it.
-    # Which station is taken, the unit carriage and the run's own clock are the
-    # Atmosphere slot's ingestion. A table of weather has no extent, so it is
-    # not checked against the domain and is read by the composite rather than
-    # on the way in.
+    # The record is asked for over the window the run opens at and its own
+    # DURATION closes, so the hours the budget reads are the hours it is solved
+    # over. Which station is taken, the unit carriage and the run's own clock
+    # are the Atmosphere slot's ingestion. A table of weather has no extent, so
+    # it is not checked against the domain and is read by the composite rather
+    # than on the way in.
     weather = Data.need("weather forcing")
     # WHAT THE WATER OPENS AT, measured. ONE reading off the sample site nearest
     # the point the series is read at, in the unit KHIONE's own temperature

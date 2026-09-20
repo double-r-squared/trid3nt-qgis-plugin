@@ -2,7 +2,7 @@
 
 TELEMAC-2D coupled with WAQTEL THERMIC over the domain the run is given: the full
 surface heat budget - shortwave in, longwave out, evaporation and sensible heat -
-driven by the hourly weather record over the days the ask names. The water opens
+driven by the hourly weather record over the run's own window. The water opens
 at a MEASURED temperature and carries that value in at every face that feeds it."""
 
 from __future__ import annotations
@@ -99,9 +99,11 @@ class DATA:
     # air temperature, the humidity and the wind, and the shortwave term is what
     # drives a diurnal water temperature. The network sits on ridges and in
     # clearings tens of kilometres from the water, and how far out a station may
-    # stand is the fetcher's own declared radius; which one is taken, the unit
-    # carriage and the run's own clock are the Atmosphere slot's ingestion. A
-    # table of weather has no extent, so it is not checked against the domain
+    # stand is the fetcher's own declared radius. The record is asked for over
+    # the window the run opens at and its own DURATION closes, so the hours the
+    # budget reads are the hours it is solved over; which station is taken, the
+    # unit carriage and the run's own clock are the Atmosphere slot's ingestion.
+    # A table of weather has no extent, so it is not checked against the domain
     # and is read by the composite rather than on the way in.
     weather = Data.need("weather forcing")
     # WHAT THE WATER OPENS AT, measured. ONE reading off the sample site nearest

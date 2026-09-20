@@ -281,6 +281,12 @@ def _station_set(coverage: Coverage) -> CoverageExtent:
         else coverage.extent
 
 
+#: The two params a source states its window in, by the spelling it uses. The
+#: window is the same two days either way, and a source that spells neither is
+#: asked over none.
+_WINDOW_PARAMS = (("start_date", "end_date"), ("start_time", "end_time"))
+
+
 def base_ask(fetcher: str, purpose: str, bbox: Sequence[float] | None,
              lon: float | None, lat: float | None, opens: str | None,
              until: str | None) -> dict[str, Any]:
@@ -299,9 +305,11 @@ def base_ask(fetcher: str, purpose: str, bbox: Sequence[float] | None,
         ask["bbox"] = [float(v) for v in bbox]
     if "seed_point" in params and lon is not None and lat is not None:
         ask["seed_point"] = [lon, lat]
-    if opens and "start_date" in params and "end_date" in params:
-        ask["start_date"] = str(opens)[:10]
-        ask["end_date"] = str(until or opens)[:10]
+    window = next((pair for pair in _WINDOW_PARAMS
+                   if pair[0] in params and pair[1] in params), None)
+    if opens and window is not None:
+        ask[window[0]] = str(opens)[:10]
+        ask[window[1]] = str(until or opens)[:10]
     elif opens and "valid_time" in params:
         ask["valid_time"] = str(opens)
     return ask

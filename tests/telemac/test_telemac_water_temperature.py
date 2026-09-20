@@ -32,11 +32,13 @@ _STATION = {"lon": -122.72, "lat": 45.57, "name": "Temperature station"}
 #: The baseline Params the domain slot, the module dictionary and the runtime
 #: levers now carry. A template that declared one of them would be a second
 #: statement of a value somebody else already describes. The opening temperature
-#: is here too: it is the observation ROW's own supplied number, not a Param.
+#: is here too: it is the observation ROW's own supplied number, not a Param;
+#: and the two weather dates are twins of the run's own window, which opens at
+#: event_time and closes on the deck's DURATION.
 _NOT_DECLARED = {"location", "bbox", "river_geometry_uri", "reach_length_km",
                  "friction_coefficient", "friction_law", "output_interval_min",
                  "event_time", "compute_class", "initial_water_temp_c",
-                 "sim_duration_s"}
+                 "sim_duration_s", "weather_start", "weather_end"}
 
 
 def _workflow():
@@ -199,6 +201,25 @@ def test_the_clock_is_the_decks_own_keyword_and_the_weather_table_spans_it(
     assert dict(sheet.resolved())["DURATION"] == 604800.0
     last = sheet.files[ATMOSPHERE_FILENAME].splitlines()[-1]
     assert float(last.split()[0]) >= 604800.0
+
+
+def test_the_weather_is_asked_over_the_window_the_deck_closes():
+    """No date Param twins the run's window: the record is asked for from the
+    moment the run opens at to the instant the deck's own DURATION closes it,
+    in the two params the matched source spells that window under."""
+    from trid3nt_server.tools.search.match import (
+        Need, base_ask, match, sources_with_coverage)
+    from trid3nt_server.workflows.runtime.interpreter import _closes
+
+    window_s = _workflow().run_window_s({})
+    assert window_s == 604800.0
+    opens = "2026-09-10T00:00:00Z"
+    need = Need(slot="weather", data_class="weather forcing", lon=-122.72,
+                lat=45.57, opens=opens, until=_closes(opens, window_s))
+    picked = match(need, sources_with_coverage())
+    ask = base_ask(picked.picked, "weather", None, need.lon, need.lat,
+                   need.opens, need.until)
+    assert (ask["start_time"], ask["end_time"]) == ("2026-09-10", "2026-09-17")
 
 
 def test_a_stated_duration_sizes_the_weather_record(monkeypatch):
