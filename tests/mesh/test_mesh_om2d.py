@@ -299,7 +299,7 @@ def test_a_box_extent_refuses_and_names_the_cut_that_makes_it_a_domain(
     with pytest.raises(MeshToolError) as excinfo:
         OM2D.build(_recipe(extent=_AOI))
     assert excinfo.value.error_code == "MESH_DOMAIN_NOT_A_POLYGON"
-    assert "derive_water_polygon" in str(excinfo.value)
+    assert "the water is cut out of one" in str(excinfo.value)
 
 
 def test_a_projected_extent_is_named_for_what_it_is(monkeypatch, tmp_path):

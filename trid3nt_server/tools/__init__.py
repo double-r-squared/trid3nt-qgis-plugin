@@ -217,7 +217,6 @@ from .derive.derive_transect import derive_transect  # noqa: E402,F401
 from .derive.derive_true_color import derive_true_color  # noqa: E402,F401
 # A box and a mapped coastline -> the water the coastline leaves inside it: the
 # step between a line and the closed polygon a mesh is cut from.
-from .derive.derive_water_polygon import derive_water_polygon  # noqa: E402,F401
 from .derive.endpoints import endpoints  # noqa: E402,F401
 # model-vs-observation pairing primitive.
 from .derive.extract_model_at_observations import extract_model_at_observations  # noqa: E402,F401

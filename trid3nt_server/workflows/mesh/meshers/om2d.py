@@ -427,8 +427,8 @@ def _domain(extent: Any, rundir: Path) -> _Domain:
             "MESH_DOMAIN_NOT_A_POLYGON",
             f"the extent {extent!r} carries no polygon, so there is no interior "
             "to mesh. A BOX IS NOT A DOMAIN: the water is cut out of one before "
-            "a mesh is built - derive_water_polygon over the box and a fetched "
-            "coastline - and the polygon that leaves is what is meshed.")
+            "a mesh is built - a fetched coastline over the box - and the "
+            "polygon that leaves is what is meshed.")
     name = "domain.geojson"
     (rundir / name).write_text(json.dumps(
         {"type": "GeometryCollection", "geometries": polygons}))

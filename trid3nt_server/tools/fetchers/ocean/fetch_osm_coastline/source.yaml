@@ -63,9 +63,9 @@ docstring: |-
 
   **When to use:**
   - The user asks where the shore runs, or wants the coastline drawn.
-  - A domain has to be cut from the real land-water edge: hand this layer
-    and the box to ``derive_water_polygon``, which returns the water inside
-    the box as the closed polygon ``build_mesh`` is cut from.
+  - A domain has to be cut from the real land-water edge: the mesh seam cuts
+    the water out of the box with this layer, and the closed polygon that
+    leaves is what ``build_mesh`` is cut from.
 
   **When NOT to use:**
   - DO NOT use for a LAKE, reservoir or inland water body -- OSM maps those

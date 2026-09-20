@@ -1,9 +1,0 @@
-derive_water_polygon:
-- cut the water out of this box with the coastline
-- give me the wet side of the shoreline inside this area
-- turn this coastline into a water polygon I can mesh
-- what part of this bay is water and what part is land
-- clip the sea out of this bounding box using the mapped coastline
-- I have a coastline layer and a box, I want the water polygon
-- make the harbour basin polygon from the shoreline
-- split this extent into land and water along the coastline
