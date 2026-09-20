@@ -47,16 +47,34 @@ def _rows():
 
 
 def test_the_catchment_is_one_need_row_asked_at_the_pour_point():
-    """The catchment names the CLASS it needs and the pour point it is asked
-    at; which fetcher answers - a traced watershed, a drawn basin - is the
-    match's. A drawn basin fills the same slot."""
+    """The catchment names the CLASS it needs, the FEATURE of it this question
+    is about and the pour point it is asked at; which fetcher answers - a traced
+    watershed, a drawn basin - is the match's. A drawn basin fills the same
+    slot."""
     rows = _rows()
     domain = rows["domain"]
     assert domain.role == "domain" and domain.data_class == "hydrography"
+    assert domain.observes == "basin"
     assert domain.coercion["near"].path == "pour_point"
     assert domain.span_km == 15.0
     assert domain.producer is None
     assert domain.fills_from_user
+
+
+def test_a_pond_beside_the_pour_point_is_not_this_question_s_catchment():
+    """Hydrography is one class and many things: a 50 m NHD waterbody within
+    the seed's own search distance is mapped water and no catchment, and the
+    feature the row asks for is what keeps it off the slot."""
+    from trid3nt_server.tools.search.match import (
+        Need, match, sources_with_coverage)
+
+    domain = _rows()["domain"]
+    choice = match(Need(slot="domain", data_class=domain.data_class,
+                        lon=-83.40402, lat=35.05746, of=domain.observes),
+                   sources_with_coverage())
+    assert choice.picked == "fetch_watershed"
+    assert [row.fetcher for row in choice.rows if not row.excluded] == [
+        "fetch_watershed"]
 
 
 def test_the_bed_is_one_need_row_the_whole_surface_over_a_catchment():

@@ -83,13 +83,13 @@ class DATA:
     its mesh refines toward, the surface its infiltration is read off, and the
     storm that measured over it, if one did."""
 
-    #: THE CATCHMENT, as a CLASS: a pour point names which basin is modelled at
-    #: all, and a watershed IS a water-body extent like any other hydrography
-    #: row. The match snaps it onto the traced channel, walks the D8 grid
-    #: upslope and returns the divide with the outlet run it drains through - a
-    #: basin the user draws or owns supersedes it and carries its own runs, or
-    #: none.
-    domain = Data.need("hydrography", at=Ref("pour_point"),
+    #: THE CATCHMENT, as a CLASS and the FEATURE of it this question is about:
+    #: a pour point names which basin is modelled at all, and a pond beside that
+    #: point is the same class and not a catchment. The match snaps the point
+    #: onto the traced channel, walks the D8 grid upslope and returns the divide
+    #: with the outlet run it drains through - a basin the user draws or owns
+    #: supersedes it and carries its own runs, or none.
+    domain = Data.need("hydrography", of="basin", at=Ref("pour_point"),
                        span_km=_BASIN_WINDOW_KM)
     #: THE GROUND the water runs over, as the whole surface rather than a bed
     #: measured over something else: an OVERLAND domain has no channel bottom
