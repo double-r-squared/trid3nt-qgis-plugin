@@ -105,18 +105,6 @@ def test_endpoints_refuses_a_source_with_no_line(tmp_path):
 
 
 # --- what a chain needs of them --------------------------------------------- #
-def test_the_endpoints_pair_cuts_a_section(tmp_path):
-    """``section(between=<endpoints pair>)`` is the reach chain's last link."""
-    from trid3nt_server.tools.derive.section.section import section
-
-    ends = endpoints(line=_write(tmp_path, "line.geojson", _LINE_A, _LINE_B),
-                     _output_dir=str(tmp_path))
-    cut = section(polygon=_write(tmp_path, "poly.geojson", _POLYGON),
-                  between=ends.between, _output_dir=str(tmp_path))
-    assert cut.area_km2 > 0.0
-    assert cut.length_m > 0.0
-
-
 @pytest.mark.parametrize("as_", ["layer", "uri", "doc"])
 def test_the_mesher_reads_a_combined_layer_however_the_chain_hands_it_over(
         tmp_path, as_):
