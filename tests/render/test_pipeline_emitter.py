@@ -1338,37 +1338,6 @@ async def test_add_compute_step_yields_role_compute_bound_to_jobid(
 
 
 @pytest.mark.asyncio
-async def test_update_compute_status_patches_batch_status(
-    emitter: PipelineEmitter, sink: _CapturingSink
-) -> None:
-    """``update_compute_status`` patches ``batch_status`` + re-emits; an
-    identical status is a no-op (no duplicate frame), and the ``state`` is
-    untouched (terminal transitions own that)."""
-    step_id = await emitter.add_compute_step(
-        name="sfincs solve",
-        tool_name="sfincs:solve",
-        batch_job_id="batch-job-xyz",
-        batch_status="SUBMITTED",
-    )
-    n_before = len(_pipeline_frames(sink))
-
-    await emitter.update_compute_status(step_id, "RUNNING")
-    frames = _pipeline_frames(sink)
-    assert len(frames) == n_before + 1  # one new frame
-    step = frames[-1]["payload"]["steps"][-1]
-    assert step["batch_status"] == "RUNNING"
-    assert step["state"] == "running"  # unchanged
-
-    # Identical status -> no-op (no new frame).
-    await emitter.update_compute_status(step_id, "RUNNING")
-    assert len(_pipeline_frames(sink)) == n_before + 1
-
-    # Unknown step id -> best-effort no-op (never raises).
-    await emitter.update_compute_status("does-not-exist", "RUNNING")
-    assert len(_pipeline_frames(sink)) == n_before + 1
-
-
-@pytest.mark.asyncio
 async def test_tool_card_role_defaults_to_tool_backcompat(
     emitter: PipelineEmitter, sink: _CapturingSink
 ) -> None:

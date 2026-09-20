@@ -13,7 +13,7 @@ import json
 import logging
 import os
 from collections.abc import Awaitable, Callable
-from contextlib import asynccontextmanager, contextmanager
+from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
@@ -90,22 +90,6 @@ def current_turn_case() -> str | None:
 # down every dispatch path. Where one is present it is a ``basis="user"`` spatial
 # knob and overrides the model's prompt-interpreted proposal. ``None`` means
 # nothing was drawn this turn, which is the common case.
-
-_TURN_DRAWN_GEOMETRY: contextvars.ContextVar[dict | None] = contextvars.ContextVar(
-    "trid3nt_turn_drawn_geometry", default=None
-)
-
-
-def bind_turn_drawn_geometry(geometry: dict | None) -> contextvars.Token:
-    """Bind the turn's user-drawn geometry (dict) for gate consumption; returns
-    the token."""
-    return _TURN_DRAWN_GEOMETRY.set(geometry)
-
-
-def current_turn_drawn_geometry() -> dict | None:
-    """The drawn geometry bound to the current task's turn, or None."""
-    return _TURN_DRAWN_GEOMETRY.get()
-
 
 #
 # ``emit_tool_call`` binds the active ``PipelineEmitter`` here for the lifetime of
@@ -309,9 +293,6 @@ class ErrorCodeRegistry:
 
     def known(self, code: str) -> bool:
         return code in self._codes
-
-    def snapshot(self) -> list[str]:
-        return sorted(self._codes)
 
 
 #: Seed set of error codes the atomic tools + the cancel chain may emit.
@@ -1256,21 +1237,6 @@ class PipelineEmitter:
             return
         step.name = name
 
-    async def update_compute_status(
-        self, step_id: str, batch_status: str
-    ) -> None:
-        """Patch a compute step's ``batch_status`` and re-emit; best-effort.
-        Mirrors the backend verbatim, never an estimate. A no-op on an unknown id
-        or an unchanged status, and it never alters the step's own ``state``.
-        """
-        step = self._steps.get(step_id)
-        if step is None:
-            return
-        if step.batch_status == batch_status:
-            return
-        step.batch_status = batch_status
-        await self._emit_pipeline_state()
-
     def _clear_parent_breadcrumb(self, step: _StepState) -> None:
         """Clear the live-breadcrumb fields on a PARENT's terminal transition.
         Only the parent's own breadcrumb line clears: its child rows keep their
@@ -1588,18 +1554,6 @@ class PipelineEmitter:
             logger.warning("emit_tool_io: bad payload dropped: %s", exc)
             return
         await self._send("tool-io", payload)
-
-
-    @contextmanager
-    def tool_call(self, *, name: str, tool_name: str):
-        """Sync context-manager form for non-async tool calls.
-        Unimplemented: a sync context cannot await an emission, so every caller
-        takes the async form instead.
-        """
-        raise NotImplementedError(
-            "use async_emit_tool_call from the WS handler; the sync context "
-            "is reserved for a future non-WS integration"
-        )
 
     async def _emit_one_layer(self, layer: LayerURI) -> None:
         """Publish, guard, then track one client-bound layer. Never raises."""

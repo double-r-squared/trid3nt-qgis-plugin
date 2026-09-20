@@ -12,7 +12,7 @@ from trid3nt_server.adapters.adapter import CompactionCompleteEvent, CompactionS
 from trid3nt_server.tools import TOOL_REGISTRY
 from trid3nt_server.render.charts import is_chart_emission_result
 from trid3nt_server.tools.search.tool_retrieval import CORE_FLOOR
-from trid3nt_server.render.pipeline_emitter import bind_turn_case, bind_turn_drawn_geometry, complete_compaction_card, mint_compaction_card
+from trid3nt_server.render.pipeline_emitter import bind_turn_case, complete_compaction_card, mint_compaction_card
 from trid3nt_server.render.uri_registry import get_uri_registry
 from trid3nt_server.gates.circuit_breaker import CircuitBreakerError
 # The gate engine (trid3nt_server.gates.confirm) is imported function-locally in
@@ -1853,9 +1853,6 @@ async def _dispatch_model_turn_and_persist(
     # Bind the owning Case into the per-task context var, so EVERY envelope this
     # turn emits carries that case_id and a client routes it to that stream.
     bind_turn_case(turn_case_id)
-    # Bind this turn's user-drawn geometry so composer gates read it
-    # (current_turn_drawn_geometry) as a basis="user" spatial knob.
-    bind_turn_drawn_geometry(state.drawn_geometry)
     # Per-turn object capture: a concurrent turn (or Case switch) re-points
     # both SessionState fields mid-stream, so this wrapper gauges completion
     # against THIS turn's history list and joins the narration list
