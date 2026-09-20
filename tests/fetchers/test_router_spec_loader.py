@@ -348,6 +348,22 @@ def test_a_datum_stated_on_the_source_row_is_never_overwritten():
     assert spec.vertical_datum == "EGM2008"
 
 
+def test_a_row_stating_a_paragraph_for_an_extent_note_is_refused():
+    """The match quotes the note whole behind a prefix inside a wire field of
+    300, so a paragraph here makes every excluded row unsendable."""
+    row = _coverage()
+    row["extent"]["note"] = "x" * 201
+    with pytest.raises(SpecLoadError, match="terrain row states an extent note"):
+        load_spec({**raster_spec(), "coverage": [row]})
+
+
+def test_a_row_stating_its_extent_in_one_sentence_loads():
+    row = _coverage()
+    row["extent"]["note"] = "y" * 200
+    assert load_spec({**raster_spec(),
+                      "coverage": [row]}).coverage[0].extent.note == "y" * 200
+
+
 def test_a_rowed_source_is_never_the_internal_tier():
     """A coverage row makes a source pickable by the match, and a picked source
     is handed to the model - which the internal tier exists to prevent."""

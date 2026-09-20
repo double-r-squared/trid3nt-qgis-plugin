@@ -138,6 +138,28 @@ def _validate_row_datums(spec: SourceSpec, source_hint: str) -> None:
             "surface nothing can bring another onto.")
 
 
+#: The longest an extent note may be. A note is the SENTENCE a reader checks the
+#: outline against, and the match quotes it whole behind a prefix inside a wire
+#: field of 300 - a paragraph here makes every excluded row unsendable. What the
+#: sentence leaves out belongs in the caveats, which no wire field carries.
+_NOTE_LIMIT = 200
+
+
+def _validate_row_notes(spec: SourceSpec, source_hint: str) -> None:
+    """Every coverage row's extent note is one sentence, not a paragraph."""
+    for row in spec.coverage:
+        note = row.extent.note or ""
+        if len(note) <= _NOTE_LIMIT:
+            continue
+        raise SpecLoadError(
+            f"{source_hint}: {spec.name}'s {row.data_class} row states an "
+            f"extent note of {len(note)} characters, over the {_NOTE_LIMIT} a "
+            "note may be. The match quotes it whole behind its own prefix in a "
+            "wire field of 300, so a longer note leaves the excluded row "
+            "unsendable. State the outline in one sentence and move the rest to "
+            "the caveats.")
+
+
 def load_spec(data: dict, *, source_hint: str = "<dict>") -> SourceSpec:
     """Validate an already-parsed spec mapping into a :class:`SourceSpec`.
     Raises :class:`SpecLoadError` wrapping the pydantic ``ValidationError``, so one
@@ -158,6 +180,7 @@ def load_spec(data: dict, *, source_hint: str = "<dict>") -> SourceSpec:
             "The internal tier is for an absorbed in-process seam that states NO "
             "row: drop the rows or drop internal_only.")
     _validate_row_datums(spec, source_hint)
+    _validate_row_notes(spec, source_hint)
     return spec
 
 
