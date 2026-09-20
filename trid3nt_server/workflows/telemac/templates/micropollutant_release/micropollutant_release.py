@@ -75,7 +75,8 @@ class DATA:
     #: THE DOMAIN, as a CLASS: a release named up front also names the seed a
     #: reach is walked downstream from. A polygon the user supplies or draws
     #: supersedes this, and states its own edges or none.
-    domain = Data.need("hydrography", at=Ref("release"), span_km=_REACH_LENGTH_KM)
+    domain = Data.need("hydrography", of="reach", at=Ref("release"),
+                       span_km=_REACH_LENGTH_KM)
     #: THE BED, as the CLASS it is rather than the source it comes from: the
     #: measurement where something measured it, the terrain under the rest. Which
     #: survey or which DEM reaches this domain is the match's to answer off their

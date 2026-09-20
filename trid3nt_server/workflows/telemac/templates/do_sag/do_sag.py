@@ -83,7 +83,7 @@ class DATA:
     # The outfall names which stretch to model: the reach is walked DOWNSTREAM
     # from it, so the sag develops inside the domain rather than past its end. A
     # domain the user supplies supersedes this.
-    domain = Data.need("hydrography", at=Ref("outfall_coords"),
+    domain = Data.need("hydrography", of="reach", at=Ref("outfall_coords"),
                        span_km=_REACH_LENGTH_KM)
     # THE LINE the oxygen is read down. The reach producer measured a centerline
     # and it fills this; a lake is asked for the line the question is about.

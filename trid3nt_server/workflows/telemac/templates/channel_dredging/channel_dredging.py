@@ -90,7 +90,7 @@ class DATA:
     #: THE CHANNEL. A seed on the water names a stretch of river and the match
     #: ranks the reach producer and the waterbody producer over it in turn; a
     #: fairway the port supplies supersedes it.
-    domain = Data.need("hydrography", at=Ref("seed_point"),
+    domain = Data.need("hydrography", of="reach", at=Ref("seed_point"),
                        span_km=_REACH_LENGTH_KM)
     #: THE LINE the dredge's reference profiles are stationed along: the
     #: centerline the reach producer measured, or the one the port draws over a

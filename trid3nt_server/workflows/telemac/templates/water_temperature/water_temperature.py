@@ -68,7 +68,8 @@ class DATA:
     # the mapped water and arrives with its two end transects, which is where
     # the inflow and the outflow are prescribed. A closed body states no run
     # and its whole edge is wall.
-    domain = Data.need("hydrography", at=Ref("seed"), span_km=_REACH_LENGTH_KM)
+    domain = Data.need("hydrography", of="reach", at=Ref("seed"),
+                       span_km=_REACH_LENGTH_KM)
 
     # THE BED, as the CLASS it is rather than the source it comes from: the
     # measurement where something measured it, the terrain under the rest. Which
