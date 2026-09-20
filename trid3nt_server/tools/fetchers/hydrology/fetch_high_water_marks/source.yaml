@@ -92,7 +92,7 @@ docstring: |-
 
   **When to use:**
   - Validate a modeled peak flood surface: pair these marks with the model
-    via ``extract_model_at_observations`` then ``compute_skill_metrics``.
+    through the calibration subsystem's pairing and skill metrics.
   - "high water marks for Hurricane Michael near Panama City", "surveyed
     flood peak elevations here", "USGS HWMs for this flood".
 
@@ -132,8 +132,8 @@ docstring: |-
   ``HwmNoMarksError`` (no marks in the AOI).
 
   Cross-tool dependencies:
-      - Downstream: ``extract_model_at_observations`` (pairs these marks with
-        a model raster) -> ``compute_skill_metrics``.
+      - Downstream: the calibration subsystem pairs these marks with a model
+        field and scores the pairs.
       - Upstream: ``geocode_location`` / ``fetch_administrative_boundaries``
         (derive the AOI bbox).
       - Source: USGS STN (stn.wim.usgs.gov/STNServices).

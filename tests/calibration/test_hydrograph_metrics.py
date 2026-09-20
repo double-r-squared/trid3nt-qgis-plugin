@@ -14,8 +14,8 @@ import pytest
 from trid3nt_server.render.charts import (
     build_hydrograph_overlay_chart,
 )
-from trid3nt_server.tools.derive.compute_skill_metrics.compute_skill_metrics import (
-    SkillMetricsInputError,
+from trid3nt_server.workflows.calibration import CalibrationError
+from trid3nt_server.workflows.calibration.metrics import (
     nash_sutcliffe_efficiency,
     pearson_r2,
 )
@@ -87,9 +87,9 @@ def test_fewer_than_two_pairs_returns_none():
 
 
 def test_length_mismatch_raises():
-    with pytest.raises(SkillMetricsInputError):
+    with pytest.raises(CalibrationError):
         nash_sutcliffe_efficiency([1.0, 2.0], [1.0])
-    with pytest.raises(SkillMetricsInputError):
+    with pytest.raises(CalibrationError):
         pearson_r2([1.0, 2.0], [1.0])
 
 

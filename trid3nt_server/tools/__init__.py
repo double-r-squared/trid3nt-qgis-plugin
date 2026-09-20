@@ -203,7 +203,6 @@ from .derive.compute_layer_bounds import compute_layer_bounds  # noqa: E402,F401
 from .derive.compute_model_residuals import compute_model_residuals  # noqa: E402,F401
 from .derive.compute_sediment_yield import compute_sediment_yield  # noqa: E402,F401
 # model-fit skill metrics (spotpy).
-from .derive.compute_skill_metrics import compute_skill_metrics  # noqa: E402,F401
 from .derive.derive_active_fire import derive_active_fire  # noqa: E402,F401
 # THE BED composition: a measurement over a wider surface, the finer one winning
 # where it measured, with a sidecar saying which painted each cell.
@@ -219,7 +218,6 @@ from .derive.derive_true_color import derive_true_color  # noqa: E402,F401
 # step between a line and the closed polygon a mesh is cut from.
 from .derive.endpoints import endpoints  # noqa: E402,F401
 # model-vs-observation pairing primitive.
-from .derive.extract_model_at_observations import extract_model_at_observations  # noqa: E402,F401
 from .derive.extract_stream_network import extract_stream_network  # noqa: E402,F401
 from .derive.extract_timeseries_at_point import extract_timeseries_at_point  # noqa: E402,F401
 from .derive.charts.generate_chart import generate_chart  # noqa: E402,F401

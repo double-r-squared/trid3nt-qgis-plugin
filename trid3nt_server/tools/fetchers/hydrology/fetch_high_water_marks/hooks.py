@@ -292,8 +292,8 @@ def envelope(
         "Observed quantity is WATER-SURFACE ELEVATION (elev_ft, above the "
         "stated vertical_datum) -- stamped on every feature as "
         "quantity='water_surface_elevation'. It is NOT a depth above ground; "
-        "pair it against a model flood-DEPTH raster only via "
-        "extract_model_at_observations (which converts WSE->depth with a DEM).",
+        "pair it against a model flood-DEPTH raster only through the "
+        "calibration subsystem, which converts WSE to depth with a DEM.",
     ]
 
     return {
