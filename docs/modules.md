@@ -145,11 +145,11 @@ appended by DYNAMIC_ICE_COVER: `ICE COVER FRAC.` (SURFAC FRACTION, ramp `blues`)
 | `TPR5` | PEAK PERIOD TPR5 | s | `viridis` | yes | yes |
 | `TPR8` | PEAK PERIOD TPR8 | s | `viridis` | yes | yes |
 | `POW` | WAVE POWER | kW/m | `inferno` | yes | yes |
-| `BETA` | BREAKING RAT | 1/s | `reds` | yes | yes |
-| `BETAWC` | WHITE CAPING | 1/s | `reds` | yes | yes |
+| `BETA` | BREAKING RAT | 1/s | `reds_r` | yes | yes |
+| `BETAWC` | WHITE CAPING | 1/s | `reds_r` | yes | yes |
 | `SRE` | SURFACE ROLLER E | m3/s2 | `oranges` | yes | yes |
-| `DBR` | BREAKER DISSIP | m2/s | `reds` | yes | yes |
-| `DSR` | ROLLER DISSIP | m3/s3 | `oranges` | yes | yes |
+| `DBR` | BREAKER DISSIP | m2/s | `reds_r` | yes | yes |
+| `DSR` | ROLLER DISSIP | m3/s3 | `oranges_r` | yes | yes |
 | `DPIC` | PEAK DIRECTION | deg | `hsv` | yes | yes |
 
 ### `waqtel`
