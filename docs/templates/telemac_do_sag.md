@@ -37,18 +37,18 @@ The values the template declares. `desc` is what the model reads when it fills o
 
 | field | the proving run's value |
 |---|---|
-| `do_min_mgl` | 8.96890545403967 |
+| `do_min_mgl` | 8.969906822172113 |
 | `do_below_standard` | False |
 | `do_min_distance_m` | 69.24522524599003 |
-| `bod_mixed_mgl` | 0.8260952257298289 |
-| `mean_velocity_mps` | 0.016844866028475004 |
+| `bod_mixed_mgl` | 0.809925268189967 |
+| `mean_velocity_mps` | 0.016625604899186207 |
 | `mesh_size_m` | 14.524 |
 
 It publishes these layers onto the canvas:
 
-- Input: river reach (river_reach)
-- Input: ehydro surveys (ehydro_surveys)
-- Input: bed elevation (dem, 3DEP 1-10 m US lidar (default 10 m); Copernicus GLO-30 30 m global via source=copernicus, datum NAVD88 (metres, positive up))
+- Input: domain (river_reach)
+- Input: bed (ehydro_surveys)
+- Input: bed (3dep_extra, datum NAVD88 (metres, positive up))
 - Outfall (user) - river_reach_domain
 - Velocity u over time (river_reach_domain_mesh)
 - Velocity v over time (river_reach_domain_mesh)
@@ -65,23 +65,23 @@ It publishes these layers onto the canvas:
 
 ## The proving run
 
-Run `01M2W7MXRNMJDQ2FAPSVNPDHSM`, 2026-09-19T07:04:25.319103+00:00, 55.658 s, at commit `966392d7b95ac996d00a5df14f667096b64a3e2a-dirty`.
+Run `01M2Z5T8D37A014SW9BS42SN1J`, 2026-09-20T10:30:05.473585+00:00, 114.278 s, at commit `51e023434461a083a833809792aa1c54c2fb790e-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M2W7MXRNMJDQ2FAPSVNPDHSM)](telemac_do_sag/telemac_do_sag.png)
+![Every layer the run published, stacked and framed on the result (run 01M2Z5T8D37A014SW9BS42SN1J)](telemac_do_sag/telemac_do_sag.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M2W7MXRNMJDQ2FAPSVNPDHSM)*
+*Every layer the run published, stacked and framed on the result (run 01M2Z5T8D37A014SW9BS42SN1J)*
 
-![The solve, frame by frame (run 01M2W7MXRNMJDQ2FAPSVNPDHSM)](telemac_do_sag/telemac_do_sag_animation.gif)
+![The solve, frame by frame (run 01M2Z5T8D37A014SW9BS42SN1J)](telemac_do_sag/telemac_do_sag_animation.gif)
 
-*The solve, frame by frame (run 01M2W7MXRNMJDQ2FAPSVNPDHSM)*
+*The solve, frame by frame (run 01M2Z5T8D37A014SW9BS42SN1J)*
 
-![final frame (run 01M2W7MXRNMJDQ2FAPSVNPDHSM)](telemac_do_sag/telemac_do_sag_final_frame.png)
+![final frame (run 01M2Z5T8D37A014SW9BS42SN1J)](telemac_do_sag/telemac_do_sag_final_frame.png)
 
-*final frame (run 01M2W7MXRNMJDQ2FAPSVNPDHSM)*
+*final frame (run 01M2Z5T8D37A014SW9BS42SN1J)*
 
-![dissolved oxygen - the chart the run persisted (run 01M2W7MXRNMJDQ2FAPSVNPDHSM)](telemac_do_sag/telemac_do_sag_chart_dissolved_oxygen.png)
+![dissolved oxygen - the chart the run persisted (run 01M2Z5T8D37A014SW9BS42SN1J)](telemac_do_sag/telemac_do_sag_chart_dissolved_oxygen.png)
 
-*dissolved oxygen - the chart the run persisted (run 01M2W7MXRNMJDQ2FAPSVNPDHSM)*
+*dissolved oxygen - the chart the run persisted (run 01M2Z5T8D37A014SW9BS42SN1J)*
 
 ### The sheet it filled
 
@@ -105,11 +105,11 @@ await TOOL_REGISTRY['telemac_do_sag'].fn(
     do_standard_mgl=5.0,
     mesh_resolution_m=40.0,
     outfall_coords={'lon': -122.669784, 'lat': 45.518485, 'name': None},
-    carrier=56.6,
-    stage=2.776,
+    discharge=56.6,
+    level=2.776,
     keywords={'DURATION': 7200.0, 'waqtel: CONSTANT OF DEGRADATION OF ORGANIC LOAD K1': 2.0, 'waqtel: K2 REAERATION COEFFICIENT': 6.0},
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2W7MXRNMJDQ2FAPSVNPDHSM` and commit `966392d7b95ac996d00a5df14f667096b64a3e2a-dirty`. The full argument record is [`telemac_do_sag/run.json`](telemac_do_sag/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2Z5T8D37A014SW9BS42SN1J` and commit `51e023434461a083a833809792aa1c54c2fb790e-dirty`. The full argument record is [`telemac_do_sag/run.json`](telemac_do_sag/run.json).
 
