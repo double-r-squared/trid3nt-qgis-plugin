@@ -136,3 +136,46 @@ def test_a_coupled_reach_submits_the_coupled_modules_steering_too(tmp_path,
         MASS_BALANCE=True)])
     assert _submitted(monkeypatch, tmp_path / "sed", bed) == {
         "t2d_river.cas": "telemac2d", "gaia_domain.cas": "gaia"}
+
+
+def _written(monkeypatch, tmp_path, sheet) -> dict:
+    """The keywords each deck the serializer writes states, by file."""
+    from trid3nt_server.workflows.telemac.authoring import serializer as Z
+
+    decks: dict = {}
+
+    def _driver(rundir, config, *, what):
+        from pathlib import Path
+
+        decks.update({name: deck["values"]
+                      for name, deck in config["write"].items()})
+        (Path(rundir) / "telemac_cas_written.json").write_text(
+            json.dumps({name: {} for name in config["write"]}))
+
+    monkeypatch.setattr(Z, "validate_authored_steering", lambda *a, **k: {})
+    monkeypatch.setattr(Z, "run_cas_driver", _driver)
+    Z.serialize(sheet, tmp_path, steering="t2d_river.cas")
+    return decks
+
+
+def test_a_coupled_steering_names_the_hosts_partitioned_files(tmp_path,
+                                                              monkeypatch):
+    """On more than one core the launcher partitions the files EACH deck names,
+    so the coupled deck names the host's mesh and boundary conditions itself."""
+    from trid3nt_server.workflows.telemac.modules import T2D, WAQTEL, fill
+
+    sheet = fill(T2D, GEOMETRY_FILE="river.slf",
+                 BOUNDARY_CONDITIONS_FILE="river.cli",
+                 PARALLEL_PROCESSORS=2,
+                 coupling=[WAQTEL.o2(
+                     WATER_TEMPERATURE=20.0, WATER_SALINITY=0.0,
+                     CONSTANT_OF_DEGRADATION_OF_ORGANIC_LOAD_K1=0.3,
+                     CONSTANT_OF_NITRIFICATION_KINETIC_K4=0.0,
+                     FORMULA_FOR_COMPUTING_K2=0, K2_REAERATION_COEFFICIENT=0.9,
+                     O2_SATURATION_DENSITY_OF_WATER__CS_=9.0, BENTHIC_DEMAND=0.0,
+                     PHOTOSYNTHESIS_P=0.0, VEGETAL_RESPIRATION_R=0.0)])
+    decks = _written(monkeypatch, tmp_path, sheet)
+    assert decks["t2d_river.cas"]["PARALLEL PROCESSORS"] == 2
+    coupled = decks["t2d_river.waqtel"]
+    assert coupled["GEOMETRY FILE"] == "river.slf"
+    assert coupled["BOUNDARY CONDITIONS FILE"] == "river.cli"

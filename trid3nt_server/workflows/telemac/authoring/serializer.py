@@ -42,7 +42,7 @@ def serialize(sheet: Any, rundir: Path | str, *,
 
 
 def _spread(sheet: Any, rundir: Path, steering: str,
-            decks: dict[str, dict[str, Any]]) -> None:
+            decks: dict[str, dict[str, Any]], *, host: Any = None) -> None:
     """``sheet`` and everything it names, onto the disk and into ``decks``.
 
     A coupled body is not content: it is filled against its own module's
@@ -50,12 +50,13 @@ def _spread(sheet: Any, rundir: Path, steering: str,
     rather than restated by whoever asked the question."""
     from ..modules import fill, wrapper_for
 
+    stated = {**dict(sheet.resolved()), **sheet.printouts()}
     decks[steering] = {"module": sheet.module,
-                       "values": {**dict(sheet.resolved()), **sheet.printouts()}}
+                       "values": {**_partitioned(sheet, host), **stated}}
     for basename, content in sheet.files.items():
         if isinstance(content, Mapping) and "slots" in content:
             _spread(fill(wrapper_for(content["module"]), **dict(content["slots"])),
-                    rundir, basename, decks)
+                    rundir, basename, decks, host=sheet)
             continue
         path = rundir / basename
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -63,3 +64,26 @@ def _spread(sheet: Any, rundir: Path, steering: str,
             path.write_bytes(content)
         else:
             path.write_text(str(content))
+
+
+#: The two files the engine's launcher partitions PER DECK: it splits the mesh
+#: and the boundary conditions each steering names into one piece per core, so a
+#: coupled steering naming neither is handed nothing to read on more than one
+#: core and the run dies in partel.
+_PARTITIONED = ("GEOMETRY_FILE", "BOUNDARY_CONDITIONS_FILE")
+
+
+def _partitioned(sheet: Any, host: Any) -> dict[str, Any]:
+    """The host's mesh and boundary files, under the coupled module's spelling.
+
+    A coupled body runs on the host's domain, so the files are the host's; a
+    module whose dictionary has no such keyword takes none."""
+    if host is None:
+        return {}
+    named = {}
+    for identifier in _PARTITIONED:
+        slot = sheet.body.MODULE_INPUT.get(identifier)
+        stated = host.filled.get(identifier)
+        if slot is not None and stated is not None:
+            named[slot.keyword] = stated.value
+    return named

@@ -44,12 +44,12 @@ The values the template declares. `desc` is what the model reads when it fills o
 
 | field | the proving run's value |
 |---|---|
-| `peak_temperature_c` | 13.501789093017578 |
-| `peak_temperature_time_s` | 3574.60009765625 |
-| `final_temperature_c` | 13.501789093017578 |
-| `diurnal_range_c` | 0.001789093017578125 |
-| `temperature_spread_c` | 3.1442699432373047 |
-| `mean_velocity_mps` | 0.021054669564763047 |
+| `peak_temperature_c` | 13.500875473022461 |
+| `peak_temperature_time_s` | 2871.39990234375 |
+| `final_temperature_c` | 13.50084114074707 |
+| `diurnal_range_c` | 0.0008754730224609375 |
+| `temperature_spread_c` | 0.44190406799316406 |
+| `mean_velocity_mps` | 0.021058111188112037 |
 | `mesh_size_m` | 11.711 |
 
 It publishes these layers onto the canvas:
@@ -74,23 +74,23 @@ It publishes these layers onto the canvas:
 
 ## The proving run
 
-Run `01M2W7TB7KN9P8FGV16ZN85PMJ`, 2026-09-19T07:07:45.365530+00:00, 113.11 s, at commit `1765ab2d553075f80de48f0660702bac00647c1d-dirty`.
+Run `01M2Y0S5S486K3ZGY1X567E75Z`, 2026-09-19T23:42:42.261948+00:00, 43.559 s, at commit `089b5aa3750984af590de0ddbab6e9f3b4b7a95e-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M2W7TB7KN9P8FGV16ZN85PMJ)](telemac_water_temperature/telemac_water_temperature.png)
+![Every layer the run published, stacked and framed on the result (run 01M2Y0S5S486K3ZGY1X567E75Z)](telemac_water_temperature/telemac_water_temperature.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M2W7TB7KN9P8FGV16ZN85PMJ)*
+*Every layer the run published, stacked and framed on the result (run 01M2Y0S5S486K3ZGY1X567E75Z)*
 
-![The solve, frame by frame (run 01M2W7TB7KN9P8FGV16ZN85PMJ)](telemac_water_temperature/telemac_water_temperature_animation.gif)
+![The solve, frame by frame (run 01M2Y0S5S486K3ZGY1X567E75Z)](telemac_water_temperature/telemac_water_temperature_animation.gif)
 
-*The solve, frame by frame (run 01M2W7TB7KN9P8FGV16ZN85PMJ)*
+*The solve, frame by frame (run 01M2Y0S5S486K3ZGY1X567E75Z)*
 
-![final frame (run 01M2W7TB7KN9P8FGV16ZN85PMJ)](telemac_water_temperature/telemac_water_temperature_final_frame.png)
+![final frame (run 01M2Y0S5S486K3ZGY1X567E75Z)](telemac_water_temperature/telemac_water_temperature_final_frame.png)
 
-*final frame (run 01M2W7TB7KN9P8FGV16ZN85PMJ)*
+*final frame (run 01M2Y0S5S486K3ZGY1X567E75Z)*
 
-![water temperature - the chart the run persisted (run 01M2W7TB7KN9P8FGV16ZN85PMJ)](telemac_water_temperature/telemac_water_temperature_chart_water_temperature.png)
+![water temperature - the chart the run persisted (run 01M2Y0S5S486K3ZGY1X567E75Z)](telemac_water_temperature/telemac_water_temperature_chart_water_temperature.png)
 
-*water temperature - the chart the run persisted (run 01M2W7TB7KN9P8FGV16ZN85PMJ)*
+*water temperature - the chart the run persisted (run 01M2Y0S5S486K3ZGY1X567E75Z)*
 
 ### The sheet it filled
 
@@ -124,5 +124,5 @@ await TOOL_REGISTRY['telemac_water_temperature'].fn(
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2W7TB7KN9P8FGV16ZN85PMJ` and commit `1765ab2d553075f80de48f0660702bac00647c1d-dirty`. The full argument record is [`telemac_water_temperature/run.json`](telemac_water_temperature/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2Y0S5S486K3ZGY1X567E75Z` and commit `089b5aa3750984af590de0ddbab6e9f3b4b7a95e-dirty`. The full argument record is [`telemac_water_temperature/run.json`](telemac_water_temperature/run.json).
 
