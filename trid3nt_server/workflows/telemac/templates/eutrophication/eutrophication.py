@@ -149,7 +149,7 @@ class DATA:
         tool("fetch_usgs_water_quality", bbox=Ref("domain.bbox"),
              characteristic="temperature",
              purpose="observed water temperature"),
-        near=Ref("domain.centroid"), units="degC",
+        near=Ref("domain.centroid"),
         measures="a water temperature",
         opens="the nearest sampled water temperature is"
     ).context("no water-quality site near this domain reports a water "

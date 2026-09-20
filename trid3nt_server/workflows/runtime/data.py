@@ -231,6 +231,17 @@ class DataDecl(Row):
     #: against. The place, the window and the frame are the RUN's and are read
     #: off it, so a question states none of them.
     data_class: str = ""
+    #: THE PUBLISHED VARIABLE this row observes, by the name the run's own
+    #: result carries it under. An observation is a measurement OF something the
+    #: run publishes, and the two are comparable only in one unit, so the unit
+    #: this row's record is read in is that variable's - off the run's published
+    #: table, never off the row. Empty where the row observes nothing published.
+    observes: str = ""
+    #: HOW FAR this question's domain reaches, in kilometres: the one opinion a
+    #: question has about its own extent. Generic, because every source calls it
+    #: something else - the coverage row's ``ask`` block maps it to the param
+    #: the source states it in.
+    span_km: float | None = None
     #: What this slot's ingestion is told about the value it is handed - the
     #: point a nearest-site query ranks against, the unit the keyword reads.
     #: Declared on the row because only the row knows them; a late-bound read
@@ -272,6 +283,17 @@ class DataDecl(Row):
                 f"Data {self.name!r} states need={self.data_class!r}, which is "
                 f"not one of the classes a coverage row is written in "
                 f"({', '.join(DATA_CLASSES)}).")
+        if self.observes and not self.data_class:
+            raise PlanValidationError(
+                f"Data {self.name!r} states of={self.observes!r} and needs no "
+                "class: what a row observes is the published variable its own "
+                "MEASUREMENT is compared against, so a row that goes out for "
+                "nothing observes nothing.")
+        if self.span_km is not None and not self.data_class:
+            raise PlanValidationError(
+                f"Data {self.name!r} states span_km and needs no class: how far "
+                "a question reaches is what the match asks a source for, and a "
+                "row that names its own producer states the reach on the call.")
         if self.is_context and not (self.producer is not None or self.data_class):
             raise PlanValidationError(
                 f"Data {self.name!r} declares .context() and states neither a need "
@@ -427,7 +449,8 @@ class DataDecl(Row):
                 "one way.")
         return replace(self, producer=producer)
 
-    def need(self, data_class: str, *, at: Any = None) -> "DataDecl":
+    def need(self, data_class: str, *, at: Any = None, of: str = "",
+             span_km: float | None = None) -> "DataDecl":
         """THE CLASS this row needs, which the match fills from whatever measures
         it here.
 
@@ -435,8 +458,11 @@ class DataDecl(Row):
         are read off it, so a question states neither; ``at`` is the POINT this
         row is asked at where the domain's own centre is not it - the seed a
         reach is cut from, the place the nearest reporting site is ranked
-        against - and is the only fact about the world a row still states."""
-        return replace(self, data_class=str(data_class),
+        against. ``of`` names the published variable this row OBSERVES, whose
+        unit the record is read in; ``span_km`` is how far the question reaches,
+        which the answering source's coverage row maps to its own param."""
+        return replace(self, data_class=str(data_class), observes=str(of),
+                       span_km=None if span_km is None else float(span_km),
                        coercion=MappingProxyType({"near": at}))
 
     def context(self, absent: str = "") -> "DataDecl":
@@ -466,53 +492,51 @@ class DataDecl(Row):
         return replace(row, stated_role=LINE, geometry="polyline")
 
     def observation(self, producer: Producer | None = None, *, near: Any = None,
-                    units: Any = None, measures: str = "this value",
-                    opens: str = "", value_field: str = "value",
-                    at: Any = None, record_units: Any = None,
+                    measures: str = "this value", opens: str = "",
+                    value_field: str = "value", at: Any = None,
                     need: str = "", series_field: Any = None,
                     above: Any = None) -> "DataDecl":
         """ONE MEASURED VALUE, under the name a converted question writes as
         ``observe`` with its two sentences in CAPTIONS."""
-        return self._observed(OBSERVE, producer, near, units, measures,
-                              opens, value_field, at,
-                              record_units=record_units, need=need,
+        return self._observed(OBSERVE, producer, near, measures,
+                              opens, value_field, at, need=need,
                               series_field=series_field, above=above)
 
     def level(self, producer: Producer | None = None, *, near: Any = None,
-              units: Any = "m", measures: str = "a water-surface elevation",
+              measures: str = "a water-surface elevation",
               opens: str = "the water opens at",
-              value_field: str = "value", at: Any = None,
-              record_units: Any = None, need: str = "",
+              value_field: str = "value", at: Any = None, need: str = "",
               series_field: Any = None, above: Any = None) -> "DataDecl":
         """THE LEVEL, under the name a converted question writes as ``level``."""
-        return self._observed(LEVEL, producer, near, units, measures, opens,
-                              value_field, at, record_units=record_units,
-                              need=need, series_field=series_field, above=above)
+        return self._observed(LEVEL, producer, near, measures, opens,
+                              value_field, at, need=need,
+                              series_field=series_field, above=above)
 
     def discharge(self, producer: Producer | None = None, *, near: Any = None,
-                  units: Any = None, measures: str = "a streamflow",
+                  measures: str = "a streamflow",
                   opens: str = "the inflow run carries",
-                  value_field: str = "value", at: Any = None,
-                  record_units: Any = None, need: str = "",
+                  value_field: str = "value", at: Any = None, need: str = "",
                   series_field: Any = None, above: Any = None) -> "DataDecl":
         """THE FLOW an inflow run carries, under the name a converted question
         writes as ``discharge``."""
-        return self._observed(DISCHARGE, producer, near, units, measures, opens,
-                              value_field, at, record_units=record_units,
-                              need=need, series_field=series_field, above=above)
+        return self._observed(DISCHARGE, producer, near, measures, opens,
+                              value_field, at, need=need,
+                              series_field=series_field, above=above)
 
     def _observed(self, role: str, producer: Producer | None, near: Any,
-                  units: Any, measures: str, opens: str,
-                  value_field: str, at: Any = None,
-                  record_units: Any = None, need: str = "",
-                  series_field: Any = None, above: Any = None) -> "DataDecl":
-        """One measured value, under the role its consumer reads it by."""
+                  measures: str, opens: str, value_field: str, at: Any = None,
+                  need: str = "", series_field: Any = None,
+                  above: Any = None) -> "DataDecl":
+        """One measured value, under the role its consumer reads it by.
+
+        NO UNIT: what the record is read in is the unit of the keyword this role
+        fills, or of the published variable an observe row names, and neither is
+        a row's to state."""
         row = self if producer is None else self(producer)
         return replace(row, stated_role=role, data_class=need,
                        coercion=MappingProxyType(
-            {"near": near, "to_units": units, "measures": measures,
-             "opens": opens, "field": value_field, "at": at,
-             "record_units": record_units, "series_field": series_field,
+            {"near": near, "measures": measures, "opens": opens,
+             "field": value_field, "at": at, "series_field": series_field,
              "above_field": above}))
 
     def extent(self, producer: Producer | None = None) -> "DataDecl":

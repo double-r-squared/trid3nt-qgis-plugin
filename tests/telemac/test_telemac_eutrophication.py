@@ -444,7 +444,9 @@ def test_the_water_temperature_record_is_one_reading_off_the_nearest_site():
     assert row.role == "observe"
     assert row.producer.runner == "fetch_usgs_water_quality"
     assert row.coercion["near"] == Ref("domain.centroid")
-    assert row.coercion["to_units"] == "degC"
+    # This run publishes no temperature variable, so the record is read in
+    # the unit it was measured in and the row states none.
+    assert "to_units" not in row.coercion
 
 
 def test_water_nobody_sampled_is_a_sentence_rather_than_a_refusal():

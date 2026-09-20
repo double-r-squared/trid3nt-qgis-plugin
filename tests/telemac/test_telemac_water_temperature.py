@@ -70,7 +70,9 @@ def test_the_water_opens_on_one_reading_ranked_from_where_it_is_read():
     assert row.role == "observe"
     assert row.producer.runner == "fetch_usgs_water_quality"
     assert row.coercion["near"] == [Ref("station.lon"), Ref("station.lat")]
-    assert row.coercion["to_units"] == "degC"
+    # NO ROW STATES A UNIT: the record is read in the unit the deck's own
+    # tracer text carries, which is what the result file will say.
+    assert "to_units" not in row.coercion
     assert row.coercion["opens"]
     assert not row.is_context
 
@@ -165,7 +167,7 @@ def test_the_carrier_declares_the_temperature_tracer_and_the_process_adopts_it(
     sheet = _sheet(monkeypatch)
     (row,) = sheet.tracers
     # The carrier's own name and unit, not the row the process would append.
-    assert (row.name, row.unit) == ("TEMPERATURE", "DEG")
+    assert (row.name, row.unit) == ("TEMPERATURE", "DEGC")
     assert dict(sheet.resolved())["WATER QUALITY PROCESS"] == 11
 
 

@@ -86,7 +86,7 @@ def test_the_water_opens_on_one_reading_taken_at_the_runs_own_moment():
     assert opening.producer.runner == "fetch_usgs_water_quality"
     assert opening.producer.kwargs["valid_time"].name == "event_time"
     assert opening.coercion["near"] == [Ref("station.lon"), Ref("station.lat")]
-    assert opening.coercion["to_units"] == "degC"
+    assert "to_units" not in opening.coercion
     assert rows["carrier"].producer.kwargs["valid_time"].name == "event_time"
 
 

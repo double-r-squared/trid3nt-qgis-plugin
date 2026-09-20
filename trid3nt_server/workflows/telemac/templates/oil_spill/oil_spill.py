@@ -97,7 +97,7 @@ class DATA:
     # over any record. The deck writes m3/s, so a record measured in another
     # unit is converted or refused - never read as though it were this one.
     carrier = Data.discharge(
-        near=Ref("domain.centroid"), units="m3/s", measures="a streamflow",
+        near=Ref("domain.centroid"), measures="a streamflow",
         opens="the carrier flow opens at", need="discharge series")
     # THE LEVEL the water stands at, which the run opens flat at and the outflow
     # holds. A reach whose measured ends do not FALL has no uniform-flow depth to

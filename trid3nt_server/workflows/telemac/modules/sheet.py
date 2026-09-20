@@ -18,7 +18,7 @@ from trid3nt_server.workflows.runtime.plan import declared_reads
 from .module import Output, Slot, SlotRefused
 
 __all__ = ["Filled", "Origin", "Provenance", "Sheet", "SheetIncomplete", "draw",
-           "fill", "fill_coupled", "late_bound", "run"]
+           "fill", "fill_coupled", "late_bound", "run", "tracer_text"]
 
 
 class Origin(str, Enum):
@@ -54,6 +54,13 @@ class SheetIncomplete(SlotRefused):
     """A run was asked for on a sheet whose REQUIRED slots are not all filled."""
 
     error_code = "TELEMAC_SHEET_INCOMPLETE"
+
+
+def tracer_text(declared: Any) -> tuple[str, str]:
+    """A tracer's NAME and UNIT off the 32-character text a deck writes it as:
+    the name in the first sixteen, the unit after them."""
+    padded = str(declared).ljust(32)
+    return (padded[:16].strip(), padded[16:].strip())
 
 
 @dataclass(frozen=True, slots=True)
@@ -108,12 +115,12 @@ class Sheet:
         row = self.body.MODULE_OUTPUT.get(self.body.TRACER)
         rows = []
         for declared in dict(self.resolved()).get("NAMES OF TRACERS") or ():
-            padded = str(declared).ljust(32)
+            name, unit = tracer_text(declared)
             # A TRACER THE DECK NAMES is a quantity the deck put into the
             # domain unless the module that put it there says otherwise, so a
             # carrier's own row states the edge and the injection for the ones
             # it declares and an appending module states its own below.
-            rows.append(Output(name=padded[:16].strip(), unit=padded[16:].strip(),
+            rows.append(Output(name=name, unit=unit,
                                style=row.style if row is not None else None,
                                has_edge=True if row is None or row.has_edge is None
                                else row.has_edge,

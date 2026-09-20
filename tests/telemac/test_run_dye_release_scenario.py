@@ -144,7 +144,9 @@ def test_the_carrier_flow_is_the_inflow_runs_value_and_not_a_param():
     assert carrier.coercion["measures"] == "a streamflow"
     assert carrier.producer is None
     assert carrier.data_class == "discharge series"
-    assert carrier.coercion["to_units"] == "m3/s"
+    # The unit is the PRESCRIBED FLOWRATES list's, which the transform fixes;
+    # no row states one.
+    assert "to_units" not in carrier.coercion
 
 
 def test_the_params_are_the_questions_own_and_the_deck_states_the_keywords():

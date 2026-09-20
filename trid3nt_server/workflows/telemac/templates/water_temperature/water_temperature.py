@@ -154,7 +154,7 @@ class DATA:
         tool("fetch_usgs_water_quality", bbox=Ref("domain.bbox"),
              characteristic="temperature",
              valid_time=ParamRef("event_time")),
-        near=[Ref("station.lon"), Ref("station.lat")], units="degC",
+        near=[Ref("station.lon"), Ref("station.lat")],
         measures="a water temperature", opens="the water opens at")
 
 
@@ -221,9 +221,10 @@ class STEERING(T2D):
     #: a measured temperature and carries it in at every face that feeds it. The
     #: thermic process matches that name and attaches its budget to this tracer
     #: rather than appending a second one, and the unit written here is the unit
-    #: the result carries.
+    #: the result carries - and the unit a row that OBSERVES this variable reads
+    #: its record in, so it names the scale rather than the dimension.
     NUMBER_OF_TRACERS = 1
-    NAMES_OF_TRACERS = ["TEMPERATURE     DEG"]
+    NAMES_OF_TRACERS = ["TEMPERATURE     DEGC"]
     INITIAL_VALUES_OF_TRACERS = [Ref("water_temperature.value")]
 
     #: The water arriving at a feeding face is the same water the sample site

@@ -43,7 +43,7 @@ _CODE = "OBSERVATION_INVALID"
 #: rather than being the portal's: a Fahrenheit row is converted by name, and two
 #: spellings of one unit - "deg C" beside "degC" - are one unit.
 _FAHRENHEIT = ("degf", "f", "deg f", "fahrenheit")
-_CELSIUS = ("degc", "c", "deg c", "celsius")
+_CELSIUS = ("degc", "c", "oc", "deg c", "celsius")
 
 #: What a source calls the MOMENT it reported, and what it calls the thing that
 #: reported. A sample portal names a site; a gridded analysis names the reach it

@@ -389,7 +389,7 @@ class _OBSERVED:
 
     opening = Data.observation(
         tool("fetch_usgs_water_quality", characteristic="temperature"),
-        near=Ref("station"), units="degC", measures="a water temperature",
+        near=Ref("station"), measures="a water temperature",
         opens="the water opens at")
 
 
@@ -419,7 +419,10 @@ def test_an_observation_row_yields_the_reading_not_the_record(monkeypatch):
 
     interpreter = _answered(monkeypatch, _SITES)
     monkeypatch.setattr(dataclasses, "replace", lambda obj, **kw: obj)
-    env = interpreter._Env(params=None, data={}, results={"station": (0.11, 0.1)})
+    # NO ROW STATES A UNIT: what this slot reads is the unit of the keyword its
+    # ROLE fills, which the workflow answers for.
+    env = interpreter._Env(params=None, data={}, results={"station": (0.11, 0.1)},
+                           slot_units={"observe": "degC"})
     found = asyncio.run(interpreter._produce(env, data_rows(_OBSERVED)[0]))
     assert found.value == pytest.approx(10.0)
     assert found.units == "degC" and found.site_id == "NEAR"
@@ -437,6 +440,7 @@ def test_a_supplied_number_supersedes_the_record_through_the_same_slot(monkeypat
     from trid3nt_server.workflows.runtime import interpreter
 
     env = interpreter._Env(params=None, data={}, results={"station": (0.11, 0.1)},
+                           slot_units={"observe": "degC"},
                            supplied={"opening": 11.5})
     found = asyncio.run(interpreter._produce(env, data_rows(_OBSERVED)[0]))
     assert found.value == pytest.approx(11.5) and found.units == "degC"

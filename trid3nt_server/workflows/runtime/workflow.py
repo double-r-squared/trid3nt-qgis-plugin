@@ -154,6 +154,16 @@ class Workflow:
         none and a matched record is then read in the unit it was measured in."""
         return {}
 
+    def published_units(self) -> Mapping[str, str]:
+        """The UNIT each variable this run publishes is written in, by the name
+        the result carries it under.
+
+        What an observe row is read in: a measurement of a published variable
+        and the variable itself are comparable only in one unit. A runtime that
+        publishes nothing named states none, and a row that observes one then
+        refuses rather than being read in whatever its source published."""
+        return {}
+
     def run_window_s(self, keywords: Mapping[str, Any]) -> float | None:
         """How long this run's solve covers, in seconds - the window a matched
         SERIES source has to hold a record over.
@@ -206,6 +216,7 @@ class Workflow:
                 supplied=supplied_artifacts, continued=continued,
                 window_s=self.run_window_s(dict(keywords or {})),
                 slot_units=self.slot_units(), captions=self.captions,
+                published_units=self.published_units(),
             )
         except asyncio.CancelledError:
             raise

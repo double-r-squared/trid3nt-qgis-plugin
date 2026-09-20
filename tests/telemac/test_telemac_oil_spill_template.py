@@ -87,7 +87,7 @@ def test_the_carrier_is_one_reading_and_never_the_grid_it_came_from():
     assert carrier.producer is None
     assert carrier.data_class == "discharge series"
     assert carrier.coercion["near"] == Ref("domain.centroid")
-    assert carrier.coercion["to_units"] == "m3/s"
+    assert "to_units" not in carrier.coercion
 
 
 def test_the_release_is_settled_against_the_domain_it_may_be_unplaced_in():

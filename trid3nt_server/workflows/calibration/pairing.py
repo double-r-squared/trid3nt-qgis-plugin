@@ -15,11 +15,7 @@ from typing import Any, Mapping, Sequence
 
 from . import CalibrationError
 
-__all__ = ["Pairs", "pairs", "observed_units", "quantity_of", "datum_shift"]
-
-#: Exact foot per metre. A surveyed peak arrives in feet on most US records and
-#: a model raster is metres, so the unit is resolved rather than assumed.
-_FT_TO_M = 0.3048
+__all__ = ["Pairs", "onto", "pairs", "observed_units", "quantity_of", "datum_shift"]
 
 #: Observed fields whose NAME declares FEET, and those whose name declares or
 #: implies METRES. A generic already-aligned name carries no unit tell and is
@@ -54,33 +50,48 @@ class Pairs:
         return len(self.observed)
 
 
-def observed_units(field_name: str, stated: str | None) -> tuple[float, str]:
-    """``(factor to metres, note)`` for an observed field: what the caller stated,
-    else what the field's own name declares.
+def observed_units(field_name: str, stated: str | None) -> tuple[str, str]:
+    """``(the unit the record is in, the note)`` for an observed field: what the
+    caller stated, else what the field's own name declares.
 
-    An undeterminable unit refuses: pairing a value of unknown unit against a
-    metre raster is a silent feet-versus-metres error nothing downstream sees."""
+    The unit only - the CONVERSION is the runtime's one function, so a record
+    paired against a model goes through the same table a record ingested into a
+    slot does. An undeterminable unit refuses: pairing a value of unknown unit
+    against a metre raster is a silent feet-versus-metres error nothing
+    downstream sees."""
     if stated:
         word = stated.strip().lower()
         if word in ("ft", "feet", "foot"):
-            return _FT_TO_M, f"{field_name} declared feet, converted x{_FT_TO_M:g}"
+            return "ft", f"{field_name} declared feet"
         if word in ("m", "meter", "meters", "metre", "metres"):
-            return 1.0, f"{field_name} declared metres"
-        raise CalibrationError(
-            "CALIBRATION_UNITS_UNKNOWN",
-            f"observed units {stated!r} is not a length unit; state 'feet' or "
-            "'metres'.")
+            return "m", f"{field_name} declared metres"
+        return stated.strip(), f"{field_name} declared {stated.strip()}"
     name = field_name.strip().lower()
     if name in _FEET_FIELDS or name.endswith(("_ft", "_feet")):
-        return _FT_TO_M, f"{field_name} read as feet, converted x{_FT_TO_M:g}"
+        return "ft", f"{field_name} read as feet"
     if name in _METRE_FIELDS or name.endswith(("_m", "_metre", "_metres",
                                                "_meter", "_meters")):
-        return 1.0, f"{field_name} read as metres"
+        return "m", f"{field_name} read as metres"
     raise CalibrationError(
         "CALIBRATION_UNITS_UNKNOWN",
         f"the unit of the observed field {field_name!r} is not stated and its "
         "name does not declare one; the model is in metres, so pairing here "
         "would risk a silent feet-versus-metres mismatch. State the units.")
+
+
+def onto(value: float, units: str, to_units: str) -> float:
+    """One observed value on the unit the MODEL publishes, through the runtime's
+    one conversion.
+
+    The observe slot's ingestion reads the opening value through the same
+    function, so a record converted for the journal and the same record
+    converted for a residual are converted once, by one table."""
+    from trid3nt_server.inputs.observation import ObservationError, convert
+
+    try:
+        return convert(value, units, to_units)
+    except ObservationError as exc:
+        raise CalibrationError("CALIBRATION_UNITS_UNKNOWN", str(exc)) from exc
 
 
 def quantity_of(name: str | None) -> str | None:
@@ -185,16 +196,18 @@ def _field(band: Any) -> Any:
 
 def pairs(model: Any, observed: Sequence[Mapping[str, Any]], *,
           value_field: str = "value", units: str | None = None,
-          frame: str | None = None, shift_m: float | None = None,
-          quantity: str | None = None, wet_reach_m: float = 250.0,
-          ground: Any = None) -> Pairs:
+          to_units: str = "m", frame: str | None = None,
+          shift_m: float | None = None, quantity: str | None = None,
+          wet_reach_m: float = 250.0, ground: Any = None) -> Pairs:
     """The model read at every observation that survives the four axes.
 
     ``model`` is an open rasterio dataset or a raster path; ``observed`` is the
     record, each row carrying ``lon``/``lat``, the measured value under
     ``value_field``, and optionally ``time``, ``id``, ``vertical_datum`` and
-    ``quantity``. ``ground`` is a ground-elevation raster, the only thing that
-    reconciles a model DEPTH against an observed ELEVATION."""
+    ``quantity``. ``to_units`` is the unit the MODEL publishes the variable in -
+    the one the record is converted onto - and ``ground`` is a ground-elevation
+    raster, the only thing that reconciles a model DEPTH against an observed
+    ELEVATION."""
     import numpy as np
     import rasterio
 
@@ -226,7 +239,7 @@ def pairs(model: Any, observed: Sequence[Mapping[str, Any]], *,
             "the record carries no observations, so there is nothing to pair "
             "the model against.")
 
-    to_m, unit_note = observed_units(value_field, units)
+    record_units, unit_note = observed_units(value_field, units)
     frames = sorted({str(row.get("vertical_datum") or "").strip()
                      for row in observed} - {""})
     shift, datum_note = datum_shift(frames[0] if len(frames) == 1 else None,
@@ -275,7 +288,7 @@ def pairs(model: Any, observed: Sequence[Mapping[str, Any]], *,
                 dropped.append({"id": identity, "reason": "quantity_unreconciled"})
                 continue
             sample = sample + ground_z
-        kept_obs.append(value * to_m + shift)
+        kept_obs.append(onto(value, record_units, to_units) + shift)
         kept_sim.append(sample)
         kept_times.append(row.get("time"))
         kept_ids.append(None if row.get("id") is None else str(row["id"]))
@@ -287,7 +300,7 @@ def pairs(model: Any, observed: Sequence[Mapping[str, Any]], *,
             f"{_why(dropped)}. Nothing here fills that in.")
     return Pairs(observed=tuple(kept_obs), simulated=tuple(kept_sim),
                  times=tuple(kept_times), ids=tuple(kept_ids),
-                 dropped=tuple(dropped), units="m",
+                 dropped=tuple(dropped), units=to_units,
                  quantity=model_quantity or obs_quantity, frame=model_frame,
                  notes=(unit_note, datum_note))
 

@@ -696,6 +696,28 @@ class TelemacWorkflow(Workflow):
         return {DISCHARGE: PRESCRIBED_UNITS["flowrate"],
                 LEVEL: PRESCRIBED_UNITS["elevation"]}
 
+    def published_units(self) -> Mapping[str, str]:
+        """The unit each variable this run publishes is written in, by the name
+        the result file carries.
+
+        Three statements, all the deck's own: the module's variable table, the
+        rows every coupled module appends behind it, and the 32-character
+        tracer text the deck writes its own tracers as. A row that observes one
+        of them is read in that unit."""
+        from .modules import wrapper_for
+        from .modules.sheet import tracer_text
+
+        published = {row.name: row.unit
+                     for row in self.steering.MODULE_OUTPUT.values()}
+        for body in getattr(self.steering, "coupling", ()) or ():
+            appends = wrapper_for(body["module"]).APPENDS
+            for row in (list(appends(body)) if appends is not None else []):
+                published[row.name] = row.unit
+        for declared in getattr(self.steering, "NAMES_OF_TRACERS", ()) or ():
+            name, unit = tracer_text(declared)
+            published[name] = unit
+        return published
+
     def run_window_s(self, keywords: Mapping[str, Any]) -> float | None:
         """How long this run's solve covers: the deck's own DURATION, under the
         floor that may have moved it.

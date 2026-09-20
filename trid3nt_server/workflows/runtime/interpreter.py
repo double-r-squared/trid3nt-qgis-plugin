@@ -143,6 +143,7 @@ async def interpret(
     window_s: float | None = None,
     slot_units: Mapping[str, str] | None = None,
     captions: Mapping[str, str] | None = None,
+    published_units: Mapping[str, str] | None = None,
 ) -> RunResult:
     """Validate, then walk the plan. The only place a declared workflow executes."""
     validate_plan(plan, declared_params, data)
@@ -165,7 +166,8 @@ async def interpret(
                resume=resume, supplied=dict(supplied or {}), workflow=plan.name,
                continued=continued, window_s=window_s,
                slot_units=dict(slot_units or {}),
-               captions=dict(captions or {}))
+               captions=dict(captions or {}),
+               published_units=dict(published_units or {}))
     out = RunResult(value=None, entries=entries, params=params,
                     keywords=dict(env.keywords))
     token = bind_domain(domain)
@@ -331,6 +333,10 @@ class _Env:
     #: variable and by DATA row name. A measured row's caption is the noun the
     #: run's refusals and its journal line are written about.
     captions: Mapping[str, str] = field(default_factory=dict)
+    #: The unit each PUBLISHED variable is written in, by the name the result
+    #: carries. A row that observes one is read in that unit, so the record and
+    #: the thing it is a measurement of are the same measurement.
+    published_units: Mapping[str, str] = field(default_factory=dict)
 
 
 def _data_step_label(name: str) -> str:
@@ -661,7 +667,9 @@ async def _ask_for(env: _Env, choice: SourceChoice,
 
     Every source states where it wants the place - a box or a seed - and a
     series source states the window as two dates; what the matched ROW adds to
-    that is the match's to say, so the ask closes through it."""
+    that is the match's to say, so the ask closes through it. The row's own
+    generic attributes travel with it, for the matched row to map onto the
+    params this source states them in."""
     dom = current_domain()
     lon, lat = await _place(env, decl)
     opens = env.params.value_of("event_time") if env.params else None
@@ -669,7 +677,9 @@ async def _ask_for(env: _Env, choice: SourceChoice,
         choice.picked, decl.name.replace("_", " "),
         _around(dom.bbox, _mesh_m(env)) if dom is not None and dom.bbox else None,
         lon, lat, str(opens) if opens else None,
-        _closes(opens, env.window_s)), lon, lat)
+        _closes(opens, env.window_s)), lon, lat,
+        {"span_km": decl.span_km,
+         "seed_point": None if lon is None or lat is None else [lon, lat]})
 
 
 def _around(bbox: Sequence[float], mesh_m: float | None) -> list[float]:
@@ -757,16 +767,39 @@ def _what_the_run_calls_it(env: _Env, decl: DataDecl,
     Neither is a row's to state: the unit is the one the keyword this role fills
     is read in, fixed by the transform that writes it, and the noun is the
     template's caption for the row - the same word the sheet and the published
-    variable are captioned with. A role the workflow states no unit for is read
-    in the unit the record was measured in."""
+    variable are captioned with. A row that OBSERVES a published variable is
+    read in that variable's own unit instead, because a measurement and the
+    thing it is a measurement of are comparable in one unit and no other; a role
+    the workflow states no unit for is read in the unit the record was measured
+    in."""
     told: dict[str, Any] = {}
-    unit = env.slot_units.get(decl.role)
-    if unit and not decl.coercion.get("to_units"):
+    unit = (_observed_unit(env, decl) if decl.observes
+            else env.slot_units.get(decl.role))
+    if unit:
         told["to_units"] = unit
     caption = env.captions.get(decl.name) or stated
     if caption:
         told["caption"] = str(caption)
     return told
+
+
+def _observed_unit(env: _Env, decl: DataDecl) -> str:
+    """The unit the variable this row OBSERVES is published in.
+
+    A name this run publishes nothing under, or publishes under no stated unit,
+    refuses: reading the record in whatever its source published would pair a
+    measurement against a variable in another unit and call the difference the
+    model's error."""
+    unit = str(env.published_units.get(decl.observes) or "")
+    if unit:
+        return unit
+    raise PlanValidationError(
+        f"Data {decl.name!r} observes {decl.observes!r}, and this run publishes "
+        f"no unit under that name (it publishes "
+        f"{', '.join(sorted(n for n, u in env.published_units.items() if u)) or 'nothing named'}). "
+        "A record read in its own unit against a variable written in another is "
+        "a difference nobody measured: name the variable the run publishes, or "
+        "state the unit where that variable is declared.")
 
 
 def _what_the_record_reports(env: _Env, decl: DataDecl,

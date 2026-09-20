@@ -165,7 +165,7 @@ class DATA:
         tool("fetch_usgs_water_quality", bbox=Ref("domain.bbox"),
              characteristic="temperature",
              valid_time=ParamRef("event_time")),
-        near=[Ref("station.lon"), Ref("station.lat")], units="degC",
+        near=[Ref("station.lon"), Ref("station.lat")],
         at=ParamRef("event_time"),
         measures="a water temperature", opens="the water opens at"
     ).context("no sample near this domain in this window; the stated value "
