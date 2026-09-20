@@ -138,7 +138,7 @@ def close_mesh_gate(gate: "MeshGate | str") -> None:
 
 def _metadata(name: str) -> AtomicToolMetadata:
     return AtomicToolMetadata(
-        name=name, ttl_class="live-no-cache", cacheable=False, tier="general")
+        name=name, ttl_class="live-no-cache", tier="general")
 
 
 def _accept_tool(mesh_id: str) -> tuple[AtomicToolMetadata, Any]:

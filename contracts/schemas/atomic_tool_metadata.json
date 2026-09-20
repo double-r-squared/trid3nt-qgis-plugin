@@ -230,9 +230,16 @@
   "description": "Cache-shim metadata for one atomic tool's registration.\nRegistration is REFUSED when this is missing, incomplete, or fails the\ncross-field validator - so a misconfigured tool never reaches the wire.",
   "properties": {
     "cacheable": {
-      "default": true,
-      "title": "Cacheable",
-      "type": "boolean"
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Cacheable"
     },
     "destructive_hint": {
       "default": false,

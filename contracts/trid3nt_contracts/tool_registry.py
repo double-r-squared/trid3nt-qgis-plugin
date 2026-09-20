@@ -199,8 +199,10 @@ class AtomicToolMetadata(GraceModel):
     #: The prefix in the cache layout. Required when cacheable, and omittable
     #: when not, since nothing is written.
     source_class: str | None = None
-    #: Explicit rather than inferred, so the uncacheable set is enumerated.
-    cacheable: bool = True
+    #: DERIVED from ``ttl_class``, which already decides it: every class but
+    #: ``live-no-cache`` is cached. Unstated it resolves; stated it must agree
+    #: with the class, which the cross-field validator below is.
+    cacheable: bool | None = None
 
     # Both default to the safe, opted-out value, so a tool opts in by passing
     # the keyword rather than by remembering to.
@@ -345,6 +347,10 @@ class AtomicToolMetadata(GraceModel):
 
     @model_validator(mode="after")
     def _validate_cacheable_consistency(self) -> AtomicToolMetadata:
+        if self.cacheable is None:
+            object.__setattr__(self, "cacheable",
+                               self.ttl_class != "live-no-cache")
+            return self
         """A cacheable tool must name a source class and must not be live-only:
         the first cannot build a cache key, the second would never hit. An
         uncacheable tool must be live-only, or the cache appears to be in play.

@@ -81,11 +81,6 @@ def synthesize_metadata(spec: SourceSpec) -> AtomicToolMetadata:
         name=spec.name,
         ttl_class=spec.cache.ttl_class,
         source_class=spec.source_class,          # cache prefix (NOT the error prefix)
-        # A live-no-cache spec (one whose answer turns over continuously) is
-        # uncacheable by construction: read_through
-        # short-circuits it and the AtomicToolMetadata cross-field validator forbids
-        # cacheable=True with ttl_class=live-no-cache.
-        cacheable=spec.cache.ttl_class != "live-no-cache",
         supports_global_query=spec.supports_global_query,
         payload_mb_estimator_name="estimate_payload_mb",
         open_world_hint=True,

@@ -35,17 +35,15 @@ __all__ = ["example_bbox_area"]
 # at construction, so a misconfigured tool fails fast at IMPORT time (before it
 # is ever on the wire). See docs/authoring/writing-a-tool.md section B for every
 # field. This example is a pure deterministic compute, not a fetcher:
-#   - cacheable=False  -> it does not write the object-store cache, so
-#   - ttl_class="live-no-cache" (the validator REQUIRES this pairing when
-#     cacheable=False), and
+#   - ttl_class="live-no-cache" -> it writes no object-store cache, and that
+#     class IS what says so: cacheable derives from it and is never restated.
 #   - source_class=None (no cache-bucket prefix is needed when nothing is cached).
-# A network FETCHER instead sets cacheable=True + ttl_class="static-30d" (or
-# semi-static-7d / dynamic-1h) + a source_class prefix like "dem".
+# A network FETCHER instead sets ttl_class="static-30d" (or semi-static-7d /
+# dynamic-1h) + a source_class prefix like "dem".
 _METADATA = AtomicToolMetadata(
     name="example_bbox_area",  # TODO: rename to your tool's function name (== registry key)
     ttl_class="live-no-cache",  # TODO: a fetcher uses "static-30d" / "semi-static-7d" / "dynamic-1h"
     source_class=None,  # TODO: a cacheable tool needs a non-empty prefix, e.g. "dem"
-    cacheable=False,  # TODO: True for a network fetcher whose bytes you want cached
     supports_global_query=False,  # this tool requires a bbox; bbox=None is a hard error below
     # MCP annotation hints -- safe defaults for a read-only, in-process compute:
     read_only_hint=True,  # False for writers (publish_layer, run_solver, ...)

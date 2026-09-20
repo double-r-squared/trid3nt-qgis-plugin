@@ -218,6 +218,22 @@ class LayerURI(GraceModel):
     #: the layer saying nothing, which is never the same as NAVD88.
     vertical_datum: str | None = None
 
+    @classmethod
+    def published(cls, prefix: str, *, seed: str, **fields: Any) -> "LayerURI":
+        """A layer THIS RUN produced, its id minted as ``<prefix>-<seed>``.
+
+        The seed is the caller's because the artifact's file carries it too: one
+        stem names the record and the bytes, so a reader holding either can find
+        the other."""
+        return cls(layer_id=f"{prefix}-{seed}", **fields)
+
+
+def layer_seed() -> str:
+    """A fresh stem for one produced layer - its id and its file share it."""
+    import uuid
+
+    return uuid.uuid4().hex[:8]
+
 
 class AnswerLayerURI(LayerURI):
     """A solved run's own record: the mesh every published group rides, and the
