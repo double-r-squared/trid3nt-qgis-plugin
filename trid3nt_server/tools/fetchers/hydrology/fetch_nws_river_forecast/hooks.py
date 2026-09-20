@@ -14,7 +14,8 @@ from typing import Any
 from trid3nt_contracts.source_spec import SourceSpec
 
 from ..._router import hooks as _hooks
-from ..._router.errors import router_input_error, router_upstream_error
+from ..._router.errors import (router_empty_error, router_input_error,
+                               router_upstream_error)
 
 __all__ = ["build_request", "parse_response", "enrich_plan", "enrich_merge"]
 
@@ -223,12 +224,14 @@ def _no_gauges_gauge(sc: str, lid: str):
 
 
 def _no_gauges_bbox(sc: str, bbox: Any):
-    return router_input_error(
+    """A box with no forecast point in it is the source holding NOTHING here -
+    the box is the domain's own, so it is not the ask being wrong, and a slot
+    matched to this source moves on to the next survivor."""
+    return router_empty_error(
         sc,
         f"No NWS river/forecast gauges (AHPS/NWPS) found inside bbox={bbox!r}. The "
-        f"NWPS gauges-by-bbox service returned zero forecast points. Either the area "
-        f"has no forecast river reach or the bbox misses the river; try a larger bbox "
-        f"or an area on a known forecast river.",
+        f"NWPS gauges-by-bbox service returned zero forecast points: this area is "
+        f"not on a forecast river reach.",
         "NO_GAUGES",
     )
 

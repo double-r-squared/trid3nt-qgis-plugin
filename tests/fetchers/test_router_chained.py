@@ -15,7 +15,9 @@ import pytest
 
 from trid3nt_contracts.source_spec import SourceSpec
 from trid3nt_server.tools.fetchers._router import router as R
-from trid3nt_server.tools.fetchers._router.errors import RouterInputError, RouterUpstreamError
+from trid3nt_server.tools.fetchers._router.errors import (RouterEmptyError,
+                                                          RouterInputError,
+                                                          RouterUpstreamError)
 from trid3nt_server.tools.fetchers._router.executors import chained_resolution as C
 from trid3nt_server.tools.fetchers._router.executors.chained_resolution import DetailResult
 from trid3nt_server.tools.fetchers._router.hooks import RequestPlan
@@ -164,10 +166,12 @@ def _gauge(lid, lon=-91.0, lat=30.5):
             "status": {"observed": {"primary": 10.0, "floodCategory": "no_flooding"}, "forecast": {}}}
 
 
-def test_river_bbox_no_gauges_typed_error():
+def test_river_bbox_no_gauges_is_an_empty_answer():
+    """A box off a forecast reach is the source holding nothing there, not the
+    caller asking wrong: a matched slot moves on to the next survivor."""
     e = _err("fetch_nws_river_forecast", {"bbox": [-80.0, 24.0, -79.9, 24.1]},
              {"nwps/v1/gauges": {"gauges": []}})
-    assert isinstance(e, RouterInputError) and e.error_code == "NWS_RIVER_FORECAST_NO_GAUGES"
+    assert isinstance(e, RouterEmptyError) and e.error_code == "NWS_RIVER_FORECAST_NO_GAUGES"
 
 
 def test_river_bbox_too_large():

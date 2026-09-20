@@ -277,20 +277,23 @@ def _stated(spec: SourceSpec, points: Any, survey_id: str) -> tuple[str, str, fl
     units = sorted({str(v).strip() for v in points[_UOM_FIELD].dropna().unique()
                     if str(v).strip()})
     if len(datums) != 1 or len(units) != 1:
-        raise router_input_error(
+        # THE SURVEY is what cannot be read, not the ask: the bed is refused and
+        # nothing chooses a zero, and a slot matched here moves on to the next
+        # source rather than the whole run stopping on this one's metadata.
+        raise router_empty_error(
             sc,
             f"survey {survey_id} states {datums or 'no'} vertical datum and "
             f"{units or 'no'} unit over its own points: a bed needs exactly one of "
             "each, and nothing here may choose between them.",
-            spec.input_error_suffix,
+            "NO_STATED_DATUM",
         )
     scale = _METRES_PER_UNIT.get(units[0].lower().replace(" ", "").replace("_", ""))
     if scale is None:
-        raise router_input_error(
+        raise router_empty_error(
             sc,
             f"survey {survey_id} measures its depths in {units[0]!r}, which is not a "
             f"unit this fetch can convert (known: {sorted(_METRES_PER_UNIT)}).",
-            spec.input_error_suffix,
+            "UNCONVERTIBLE_UNIT",
         )
     return datums[0], units[0], scale
 

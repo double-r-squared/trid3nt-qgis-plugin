@@ -133,7 +133,8 @@ coverage:
 caveats:
 - NWS/NWPS (AHPS) river-forecast gauges with observed + forecast stage and flood category; US + territories
   only. Optional per-gauge threshold + stageflow-series enrichment (bounded, best-effort). A bbox with
-  no forecast gauge -> a typed NO_GAUGES error (not empty). No API key.
+  no forecast gauge -> a typed NO_GAUGES empty answer; a named lid that does not exist ->
+  a typed input error. No API key.
 docstring: "Fetch NWS river-forecast gauges + flood categories as a Point FlatGeobuf.\n\nRetrieves the\
   \ NWS / National Water Prediction Service (AHPS/NWPS) river\nforecast points inside ``bbox`` and returns\
   \ one Point feature per gauge,\neach carrying:\n\n  - the OBSERVED river stage (``obs_stage_ft``) and\

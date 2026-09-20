@@ -112,13 +112,15 @@ def test_the_stated_unit_is_what_the_depths_are_converted_from(spec):
 
 
 def test_a_survey_that_states_no_datum_refuses_by_name(spec):
-    with pytest.raises(RouterInputError) as excinfo:
+    """The SURVEY is what cannot be read, not the ask, so it holds nothing here:
+    nothing chooses a zero, and a slot matched to this source takes the next one."""
+    with pytest.raises(RouterEmptyError) as excinfo:
         eh._stated(spec, _points(datum=None), "WR_03")
     assert "WR_03" in str(excinfo.value)
 
 
 def test_a_unit_nothing_here_converts_refuses_by_name(spec):
-    with pytest.raises(RouterInputError) as excinfo:
+    with pytest.raises(RouterEmptyError) as excinfo:
         eh._stated(spec, _points(uom="fathom"), "WR_03")
     assert "fathom" in str(excinfo.value)
 
@@ -126,7 +128,7 @@ def test_a_unit_nothing_here_converts_refuses_by_name(spec):
 def test_two_datums_over_one_survey_are_refused_rather_than_chosen_between(spec):
     points = _points()
     points.loc[1, eh._DATUM_FIELD] = "MLLW"
-    with pytest.raises(RouterInputError):
+    with pytest.raises(RouterEmptyError):
         eh._stated(spec, points, "WR_03")
 
 
