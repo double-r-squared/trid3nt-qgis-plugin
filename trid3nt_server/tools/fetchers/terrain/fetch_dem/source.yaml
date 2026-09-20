@@ -42,7 +42,6 @@ ingest:
 hooks:
   delegate: dem_3dep.read
   delegate_validate: dem_3dep.validate
-  pre_resolve: dem_3dep.coarsen
   envelope: dem_3dep.envelope
 normalize:
   crs: EPSG:5070
@@ -66,15 +65,15 @@ payload_estimate:
   floor_mb: 0.1
 # DATA-native resolution declaration (the gate card quotes it beside a
 # consuming solver's declared range). 3DEP native is 1-10 m US lidar; source=copernicus
-# serves GLO-30 30 m global. A large bbox auto-coarsens (payload gate), so there is no
-# coarse ceiling; the fine floor is the 1 m lidar native.
+# serves GLO-30 30 m global. There is no coarse ceiling; the fine floor is the 1 m
+# lidar native, and a bbox too wide for the asked spacing refuses rather than coarsens.
 resolution_declarations:
 - param: resolution_m
   unit: m
   min_value: 1
   native_hint: 3DEP 1-10 m US lidar (default 10 m); Copernicus GLO-30 30 m global via source=copernicus
   constraint_source: data
-  rationale: 3DEP US lidar is native 1-10 m (10/30 m fastest on the tile tree); large bboxes auto-coarsen; no fine floor below the 1 m lidar native
+  rationale: 3DEP US lidar is native 1-10 m (10/30 m fastest on the tile tree); a bbox too wide for the asked spacing refuses naming the spacing that fits; no fine floor below the 1 m lidar native
 coverage:
 -   data_class: terrain
     kind: measured
@@ -104,8 +103,9 @@ caveats:
 - source="copernicus" is served verbatim by fetch_copernicus_dem (global GLO-30 30 m) via the pre-flight
   dispatch seam -- no re-cache under the dem prefix. A bbox outside 3DEP coverage on the auto path returns a
   distinct DEM_OUT_OF_COVERAGE error naming copernicus.
-- State/multi-state bboxes auto-coarsen against a 4000 px/axis pixel budget (the delivered spacing + an
-  honest coarsening note are stamped into name/layer_id); continent-scale (> 5,000,000 km^2) hard-fails.
+- The resolution asked is the resolution fetched and the resolution keyed; a bbox needing more than
+  4000 px/axis at that spacing REFUSES (PIXEL_BUDGET_EXCEEDED naming the budget, the asked spacing and the
+  spacing that fits) so the caller chooses; continent-scale (> 5,000,000 km^2) hard-fails.
 docstring: |-
   Fetch a digital elevation model (DEM) / terrain elevation for a bounding box (USGS 3DEP US lidar; on a 3DEP outage the default path STOPS and asks before any Copernicus GLO-30 swap; either source pinnable).
 
@@ -148,16 +148,17 @@ docstring: |-
   - Single-point elevation lookups -- the tool fetches a raster window;
     for a point query use a future ``point_elevation`` tool.
   - Continent-scale bboxes (> 5,000,000 km2) -- rejected with
-    ``BboxInvalidError``. State/multi-state bboxes auto-coarsen instead of
-    failing (not a dead end).
+    ``BboxInvalidError``. A state/multi-state bbox at a fine spacing is refused
+    with the pixel-budget error naming the spacing that fits; re-ask at that
+    spacing (not a dead end).
 
   **Parameters:**
   - ``bbox`` (tuple[float,float,float,float]): ``(min_lon, min_lat, max_lon,
-    max_lat)`` in EPSG:4326. Max area 5,000,000 km2; large bboxes auto-coarsen.
+    max_lat)`` in EPSG:4326. Max area 5,000,000 km2.
   - ``resolution_m`` (int, default 10): DEM grid spacing in meters (3DEP only).
-    10 m or 30 m are fastest on 3DEP's tile tree. A large bbox may deliver a
-    coarser grid than requested (a pixel-budget auto-coarsen); the delivered
-    spacing is stamped into the result.
+    10 m or 30 m are fastest on 3DEP's tile tree. This spacing is what is
+    fetched: a bbox needing more than 4000 px/axis at it is REFUSED with the
+    coarser spacing that fits named, never quietly coarsened.
   - ``source`` (str, default ``"auto"``): ``"auto"`` (USGS 3DEP first; on a 3DEP
     service failure/timeout it raises a GATED typed error naming
     ``source="copernicus"`` for the user to approve -- NO silent cross-dataset
@@ -171,7 +172,5 @@ docstring: |-
   (``s3://trid3nt-cache/cache/static-30d/dem/<key>.tif``).
   CRS: EPSG:5070 (py3dep default); units: meters above NAVD88.
   Fields consumed downstream: ``uri`` -> by hydraulic model setup and
-  the QGIS plugin's native rendering;-> map rendering. When the
-  bbox forced a coarser grid than requested, ``name`` carries an honest
-  coarsening note (approximate terrain -- fine for a hillshade/overview,
-  not site-scale analysis).
+  the QGIS plugin's native rendering;-> map rendering. ``name`` and
+  ``layer_id`` carry the spacing asked for, which is the spacing delivered.

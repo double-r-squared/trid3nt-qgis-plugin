@@ -1,17 +1,13 @@
 """USGS 3DEP DEM delegate hooks.
 
 The maintained library owns 3DEP discovery and the socket, so the router delegates that
-one network step and keeps params, gates, cache, stamps and typed errors. Four hooks
+one network step and keeps params, gates, cache, stamps and typed errors. Three hooks
 carry the DEM behaviour the declarative surface cannot express."""
 
-# ``validate`` is the continent-ceiling hard cap plus the auto-path out-of-coverage
-# pre-flight, raised pre-cache and pre-network.
-#
-# ``coarsen`` is the pixel-budget auto-coarsen: it recomputes the effective resolution
-# and re-quantizes the bbox to that coarser grid BEFORE read_through, so the cache key
-# keys on the DELIVERED grid. The original requested resolution rides
-# ``requested_res_m`` ONLY when coarsening happened, so a non-coarsened request keeps
-# the plain ``{bbox, resolution_m}`` key.
+# ``validate`` is the continent-ceiling hard cap, the pixel-budget REFUSAL and the
+# auto-path out-of-coverage pre-flight, all raised pre-cache and pre-network. The
+# resolution asked is the resolution fetched and the resolution keyed: a request past
+# the pixel budget refuses naming the spacing that fits, never coarsens itself.
 #
 # ``read`` runs the library call under a hard wall-clock watchdog, gates partial
 # coverage on the reprojected bounds, and gates its errors on the SOURCE: an automatic
@@ -38,7 +34,7 @@ from ..._fetch_common import (
     BboxInvalidError,
     UpstreamAPIError,
     _bbox_area_km2,
-    round_bbox_to_resolution,
+    enforce_pixel_budget,
 )
 from ..._router.hooks import register_hook
 
@@ -50,7 +46,6 @@ __all__ = [
     "DemAutoFallbackGateError",
     "DemOutOfCoverageError",
     "validate_dem",
-    "coarsen_dem",
     "read_dem",
     "envelope_dem",
 ]
@@ -111,11 +106,8 @@ _DEM_COVERAGE_TOL_DEG = 0.0008
 #: Continent ceiling (mirrors fetch_landcover); above this a bbox hard-fails.
 _DEM_CONTINENT_CEILING_KM2 = 5_000_000.0
 
-#: Pixel-budget long-axis cap for the auto-coarsen (matches fetch_landcover).
+#: Pixel-budget long-axis cap a request must fit (matches fetch_landcover).
 _DEM_PIXEL_BUDGET_PX = 4000
-
-#: Absolute floor on the coarsen math (3DEP's finest lidar tiles ~1 m).
-_DEM_FINEST_RES_FLOOR_M = 1
 
 #: Env override + default for the hard wall-clock budget on the 3DEP attempt.
 _DEM_PRIMARY_TIMEOUT_ENV = "TRID3NT_DEM_PRIMARY_TIMEOUT_S"
@@ -339,9 +331,9 @@ def _fetch_3dep_dem_array_bounded(
 
 @register_hook("dem_3dep.validate")
 def validate_dem(spec: SourceSpec, params: dict[str, Any]) -> None:
-    """Pre-cache DEM input gate: the continent-scale hard cap, then the out-of-coverage
-    check on the AUTO path only. Both run AFTER type validation and BEFORE
-    read_through, so both are pre-network and testable offline."""
+    """Pre-cache DEM input gate: the continent-scale hard cap, the out-of-coverage
+    check on the AUTO path, then the pixel-budget refusal. All run AFTER type
+    validation and BEFORE read_through, so all are pre-network and testable offline."""
     bbox = tuple(float(v) for v in params["bbox"])
     rough_area = _bbox_area_km2(bbox)
     if rough_area > _DEM_CONTINENT_CEILING_KM2:
@@ -368,35 +360,12 @@ def validate_dem(spec: SourceSpec, params: dict[str, Any]) -> None:
         ]
         raise oob_err
 
-
-
-
-@register_hook("dem_3dep.coarsen")
-def coarsen_dem(spec: SourceSpec, params: dict[str, Any]) -> dict[str, Any]:
-    """Pixel-budget auto-coarsen, returning the coarsened bbox and effective resolution.
-    The effective resolution is NEVER finer than requested, and the bbox is re-quantized
-    to the DELIVERED grid so a coarsened fetch cannot collide with a native one."""
-
-    # ``requested_res_m`` is returned ONLY when coarsening actually happened, so a
-    # non-coarsened request keeps the plain ``{bbox, resolution_m}`` cache key, and the
-    # envelope hook reads it back to stamp the honest coarsening note.
-    requested_res = int(params["resolution_m"])
-    min_lon, min_lat, max_lon, max_lat = tuple(float(v) for v in params["bbox"])
-    mid_lat = 0.5 * (min_lat + max_lat)
-    from pyproj import Geod
-
-    geod = Geod(ellps="WGS84")
-    long_axis_m = max(
-        geod.inv(min_lon, mid_lat, max_lon, mid_lat)[2],
-        geod.inv(min_lon, min_lat, min_lon, max_lat)[2],
+    # PIXEL BUDGET last, once the bbox is one 3DEP can serve at all: the ask is
+    # refused rather than coarsened, naming the spacing that fits.
+    enforce_pixel_budget(
+        bbox, int(params["resolution_m"]), budget_px=_DEM_PIXEL_BUDGET_PX,
+        source="fetch_dem",
     )
-    budget_res = int(math.ceil(long_axis_m / _DEM_PIXEL_BUDGET_PX))
-    effective_res = max(_DEM_FINEST_RES_FLOOR_M, requested_res, budget_res)
-    quantized = round_bbox_to_resolution((min_lon, min_lat, max_lon, max_lat), effective_res)
-    out: dict[str, Any] = {"bbox": list(quantized), "resolution_m": effective_res}
-    if effective_res > requested_res:
-        out["requested_res_m"] = requested_res
-    return out
 
 
 
@@ -467,18 +436,11 @@ def read_dem(spec: SourceSpec, params: dict[str, Any], *, timeout_s: float) -> t
 def envelope_dem(
     spec: SourceSpec, params: dict[str, Any], layer: Any, data: bytes | None
 ) -> dict[str, Any]:
-    """Build the emitted ``layer_id`` and ``name``, plus the honest coarsen stamp when
-    ``requested_res_m`` shows the delivered grid is coarser than asked. Pure over the
-    resolved params, and the router strips the identity keys, so it can only enrich."""
+    """Build the emitted ``layer_id`` and ``name`` from the resolution the caller asked
+    for, which is the one fetched. Pure over the resolved params, and the router strips
+    the identity keys, so it can only enrich."""
     bbox = tuple(float(v) for v in params["bbox"])
-    effective_res = int(params["resolution_m"])
-    requested_res = params.get("requested_res_m")
-    name = f"USGS 3DEP DEM ({effective_res}m)"
-    if requested_res is not None and int(requested_res) != effective_res:
-        name += (
-            f", coarsened from {int(requested_res)}m -- large-AOI pixel budget. "
-            "Terrain detail is approximate at this scale: fine for a "
-            "hillshade/overview render, not for site-scale analysis."
-        )
-    layer_id = f"dem-{bbox[0]:.4f}-{bbox[1]:.4f}-{effective_res}m"
+    resolution_m = int(params["resolution_m"])
+    name = f"USGS 3DEP DEM ({resolution_m}m)"
+    layer_id = f"dem-{bbox[0]:.4f}-{bbox[1]:.4f}-{resolution_m}m"
     return {"layer_id": layer_id, "name": name}

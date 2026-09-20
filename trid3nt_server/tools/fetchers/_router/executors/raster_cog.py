@@ -1205,9 +1205,8 @@ def _fixed_tile_grid_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple
 # (NLCD via the MRLC GeoServer) returning the canonical class integers in the band
 # (NOT palette indices), then a background(0)-to-nodata pixel remap, then a palette
 # COG with the embedded band-1 color table preserved. The coverage id resolves from
-# the vintage year through a declarative map; the effective resolution and quantized
-# bbox come from the pre_resolve auto-coarsen, merged into params before the cache
-# key. The GET runs through the shared ogc adapter, the ONE sanctioned socket for this
+# the vintage year through a declarative map; the resolution asked for and the bbox
+# quantized to it come from pre_resolve, merged into params before the cache key. The GET runs through the shared ogc adapter, the ONE sanctioned socket for this
 # mode, and ``execute`` bakes the source's embedded palette into the serialized COG.
 
 

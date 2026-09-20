@@ -1,9 +1,9 @@
 """``fetch_landcover``: the coverage-service fold with a post-emit envelope.
 
 A service read remaps the background to nodata into a paletted COG, the
-pre-resolve puts the dataset alias, the parsed vintage, the effective resolution
+pre-resolve puts the dataset alias, the parsed vintage, the resolution asked for
 and the quantized bbox into the cache key, and the envelope writes the roughness
-sidecar a solver builder later reads. Covered with those, the auto-coarsen."""
+sidecar a solver builder later reads. Covered with those, the pixel-budget refusal."""
 
 from __future__ import annotations
 
@@ -13,7 +13,10 @@ import rasterio
 from rasterio.io import MemoryFile
 
 from trid3nt_contracts.execution import LandcoverResult
-from trid3nt_server.tools.fetchers._fetch_common import round_bbox_to_resolution
+from trid3nt_server.tools.fetchers._fetch_common import (
+    PixelBudgetExceededError,
+    round_bbox_to_resolution,
+)
 from trid3nt_server.tools.fetchers._router import router as _router
 from trid3nt_server.tools.fetchers.terrain.fetch_landcover import hooks as lch
 from trid3nt_server.tools.fetchers._router.spec import compose_specs_from_tree
@@ -116,11 +119,20 @@ def test_pre_resolve_alias_and_vintage(spec):
     assert r2["vintage_year"] == 2019
 
 
-def test_pre_resolve_auto_coarsen_state_scale(spec):
-    # A ~4-degree-wide AOI at 30 m blows the 4000-px budget -> coarsened + downsampled.
+def test_pre_resolve_past_budget_refuses(spec):
+    """A ~8-degree-wide AOI at 30 m blows the 4000 px/axis budget: REFUSED naming the
+    budget and the spacing that fits, never coarsened behind the caller's back."""
     wa = [-124.8, 45.5, -116.9, 49.0]
-    r = lch.pre_resolve(spec, {"bbox": wa, "dataset": "nlcd_2021", "resolution_m": 30})
-    assert r["resolution_m"] > 30
+    with pytest.raises(PixelBudgetExceededError) as ei:
+        lch.pre_resolve(spec, {"bbox": wa, "dataset": "nlcd_2021", "resolution_m": 30})
+    assert "4000 px/axis" in str(ei.value)
+    assert "resolution_m=30" in str(ei.value)
+
+
+def test_pre_resolve_at_fitting_resolution_serves(spec):
+    wa = [-124.8, 45.5, -116.9, 49.0]
+    r = lch.pre_resolve(spec, {"bbox": wa, "dataset": "nlcd_2021", "resolution_m": 300})
+    assert r["resolution_m"] == 300
     assert r["downsampled"] is True
 
 

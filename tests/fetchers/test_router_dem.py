@@ -17,8 +17,8 @@ import rasterio.transform as _rt
 from trid3nt_server.tools import TOOL_REGISTRY, RegisteredTool
 from trid3nt_server.tools.fetchers._fetch_common import (
     BboxInvalidError,
+    PixelBudgetExceededError,
     UpstreamAPIError,
-    round_bbox_to_resolution,
 )
 from trid3nt_server.tools.fetchers.terrain.fetch_dem import hooks as dem_mod
 from trid3nt_contracts.execution import DemLayerURI, LayerURI
@@ -111,7 +111,8 @@ def test_fetch_dem_happy_path_writes_through_cache(monkeypatch, fake_s3):
     assert layer.units == "meters"
     assert layer.role == "input"
     assert layer.name == "USGS 3DEP DEM (10m)"
-    q = round_bbox_to_resolution(FORT_MYERS_BBOX, 10)
+    # The bbox keyed and emitted is the one asked for (round_6dp), not a grid snap.
+    q = tuple(round(v, 6) for v in FORT_MYERS_BBOX)
     assert layer.layer_id == f"dem-{q[0]:.4f}-{q[1]:.4f}-10m"
     assert layer.bbox is not None and tuple(layer.bbox) == q
     # A real COG was written through the shared writer (serialization moved into
@@ -130,28 +131,52 @@ def test_fetch_dem_rejects_continent_scale_bbox():
 
 
 
-def test_fetch_dem_state_scale_no_hard_fail(monkeypatch, fake_s3):
+def test_fetch_dem_state_scale_past_budget_refuses(monkeypatch, fake_s3):
+    """A state-scale bbox at 30 m needs more than 4000 px/axis: the fetcher REFUSES
+    naming the budget, the asked spacing and the spacing that fits -- and coarsens
+    nothing, so nothing is cached."""
     _install_fake_array(monkeypatch)
-    layer = fetch_dem(bbox=_WA_STATE_BBOX, resolution_m=30)
-    effective = _effective_res_from_layer(layer)
-    assert 30 < effective <= 900
-    assert "coarsened from 30m" in layer.name
-    assert "hillshade/overview" in layer.name
+    with pytest.raises(PixelBudgetExceededError) as ei:
+        fetch_dem(bbox=_WA_STATE_BBOX, resolution_m=30)
+    msg = str(ei.value)
+    assert "4000 px/axis" in msg
+    assert "resolution_m=30" in msg
+    assert "the finest spacing that fits this bbox" in msg
+    assert fake_s3.store == {}
 
 
-def test_fetch_dem_bypass_enforces_pixel_budget(monkeypatch, fake_s3):
+def test_fetch_dem_state_scale_at_fitting_resolution_serves(monkeypatch, fake_s3):
     _install_fake_array(monkeypatch)
-    layer = fetch_dem(bbox=_WA_STATE_BBOX, resolution_m=10)
-    effective = _effective_res_from_layer(layer)
-    assert 10 < effective <= 900
-    assert "coarsened from 10m" in layer.name
+    layer = fetch_dem(bbox=_WA_STATE_BBOX, resolution_m=200)
+    assert _effective_res_from_layer(layer) == 200
+    assert layer.name == "USGS 3DEP DEM (200m)"
+
+
+def test_fetch_dem_cache_key_is_the_asked_bbox_and_resolution():
+    """The key carries the params as asked -- a plain {bbox, resolution_m, source} --
+    with no resolved-resolution rider, so a 10 m ask keys as 10 m."""
+    from trid3nt_server.tools.cache import cache_key_for
+    from trid3nt_server.tools.fetchers._router.router import (
+        prospective_cache_key, synthesize_metadata,
+    )
+    from trid3nt_server.tools.fetchers._router.spec import compose_specs_from_tree
+
+    spec = compose_specs_from_tree()["fetch_dem"]
+    plain = {
+        "bbox": tuple(round(v, 6) for v in FORT_MYERS_BBOX),
+        "resolution_m": 10,
+        "source": "auto",
+    }
+    key = prospective_cache_key(spec, {"bbox": FORT_MYERS_BBOX, "resolution_m": 10})
+    assert key == cache_key_for(synthesize_metadata(spec), plain)
+    other = prospective_cache_key(spec, {"bbox": FORT_MYERS_BBOX, "resolution_m": 30})
+    assert other != key
 
 
 def test_fetch_dem_explicit_coarse_resolution_honored(monkeypatch, fake_s3):
     _install_fake_array(monkeypatch)
     layer = fetch_dem(bbox=FORT_MYERS_BBOX, resolution_m=300)
     assert _effective_res_from_layer(layer) == 300
-    assert "coarsened" not in layer.name
 
 
 def test_fetch_dem_tiny_bbox_native_resolution_untouched(monkeypatch, fake_s3):
@@ -159,7 +184,6 @@ def test_fetch_dem_tiny_bbox_native_resolution_untouched(monkeypatch, fake_s3):
     tiny_bbox = (-81.9010, 26.5500, -81.9000, 26.5510)  # ~100 m x 110 m
     layer = fetch_dem(bbox=tiny_bbox, resolution_m=1)
     assert _effective_res_from_layer(layer) == 1
-    assert "coarsened" not in layer.name
 
 
 

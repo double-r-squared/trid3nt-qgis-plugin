@@ -122,26 +122,25 @@ docstring: |-
   - Single-point landcover classification -- this tool returns a raster;
     read the class at a point with ``probe_point``.
   - Continent-scale bboxes (> 5,000,000 km^2) -- the tool raises
-    ``BboxInvalidError`` at that hard ceiling. State-scale and
-    multi-state-scale bboxes are served by auto-coarsening the resolution
-    (the fetch-resolution gate asks the user to confirm the coarsened rung
-    before the MRLC WCS GetCoverage is issued).
+    ``BboxInvalidError`` at that hard ceiling. A state-scale or
+    multi-state-scale bbox at 30 m is REFUSED with the pixel-budget error
+    naming the coarser spacing that fits; pass that ``resolution_m``.
 
   **Parameters:**
   - ``bbox`` (tuple[float,float,float,float]): ``(min_lon, min_lat, max_lon,
     max_lat)`` in EPSG:4326. Continent-scale bboxes (> 5e6 km^2) are
-    rejected; all other sizes are served at auto-coarsened resolution.
+    rejected; a bbox needing more than 4000 px/axis at the asked
+    ``resolution_m`` is refused naming the spacing that fits.
   - ``dataset`` (str, default ``"nlcd_2021"``): ``"nlcd"`` (default vintage)
     or ``"nlcd_YYYY"`` (e.g. ``"nlcd_2021"``, ``"nlcd_2019"``,
     ``"nlcd_2016"``) or ``"esa_worldcover_2021"`` (forward-looking). Bare
     ``"nlcd"`` and ``"nlcd_"`` are accepted as aliases for the default
     vintage. Valid NLCD years: 2001, 2004, 2006, 2008, 2011, 2013, 2016,
     2019, 2021.
-  - ``resolution_m`` (int, default 30): pixel grid spacing in meters.
-    The fetch-resolution gate auto-coarsens this for large bboxes and
-    asks the user to confirm before downloading. The native NLCD grid
-    is 30 m; coarser values (60, 120, 300, 600 m) are used for
-    state-scale or multi-state-scale AOIs.
+  - ``resolution_m`` (int, default 30): pixel grid spacing in meters, and
+    the spacing fetched -- nothing coarsens it. The native NLCD grid is
+    30 m (a finer ask is served at 30 m); pass a coarser value (60, 120,
+    300, 600 m) for a state-scale or multi-state-scale AOI.
 
   **Returns:**
   A dict with keys:

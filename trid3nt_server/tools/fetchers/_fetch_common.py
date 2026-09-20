@@ -12,7 +12,9 @@ __all__ = [
     "FetchError",
     "UpstreamAPIError",
     "BboxInvalidError",
+    "PixelBudgetExceededError",
     "bbox_pixel_dims",
+    "enforce_pixel_budget",
     "round_bbox_to_resolution",
 ]
 
@@ -42,6 +44,14 @@ class BboxInvalidError(FetchError):
     """The bbox failed validation (degenerate, out of CRS range, too large)."""
 
     error_code = "BBOX_INVALID"
+    retryable = False
+
+class PixelBudgetExceededError(FetchError):
+    """The asked resolution over this bbox needs more pixels per axis than the source
+    serves. A fetcher never coarsens on its own, so the request REFUSES naming the
+    budget and the resolution that fits, and the caller chooses the grid it gets."""
+
+    error_code = "PIXEL_BUDGET_EXCEEDED"
     retryable = False
 
 # Nominatim usage policy requires a descriptive User-Agent identifying the
@@ -144,3 +154,41 @@ def bbox_pixel_dims(
     width_px = max(px_min, min(px_max, int(round(width_m / native_cell_m)) or px_min))
     height_px = max(px_min, min(px_max, int(round(height_m / native_cell_m)) or px_min))
     return width_px, height_px
+
+
+def _bbox_long_axis_m(bbox: tuple[float, float, float, float]) -> float:
+    """Geodesic length (m) of the bbox's longer axis, measured at its mid-latitude."""
+    min_lon, min_lat, max_lon, max_lat = (float(v) for v in bbox)
+    mid_lat = 0.5 * (min_lat + max_lat)
+    from pyproj import Geod
+
+    geod = Geod(ellps="WGS84")
+    return max(
+        geod.inv(min_lon, mid_lat, max_lon, mid_lat)[2],
+        geod.inv(min_lon, min_lat, min_lon, max_lat)[2],
+    )
+
+
+def enforce_pixel_budget(
+    bbox: tuple[float, float, float, float],
+    resolution_m: int,
+    *,
+    budget_px: int,
+    source: str,
+) -> None:
+    """Raise ``PixelBudgetExceededError`` unless ``bbox`` at ``resolution_m`` fits
+    ``budget_px`` pixels on its long axis. The resolution asked is the resolution
+    fetched, so a request past the budget refuses rather than coarsening: the message
+    names the budget, the asked resolution and the resolution that fits this bbox, and
+    the caller re-asks."""
+    long_axis_m = _bbox_long_axis_m(bbox)
+    fits_res = int(math.ceil(long_axis_m / budget_px))
+    if resolution_m >= fits_res:
+        return
+    raise PixelBudgetExceededError(
+        f"{source}: bbox={tuple(bbox)} at resolution_m={resolution_m} needs "
+        f"{int(math.ceil(long_axis_m / resolution_m))} px on its long axis, past the "
+        f"{budget_px} px/axis budget this source serves. Nothing was coarsened: "
+        f"re-ask at resolution_m={fits_res} m (the finest spacing that fits this "
+        "bbox) or coarser, or ask for a smaller bbox."
+    )
