@@ -360,7 +360,7 @@ package DataSeam {
 
     part waterCut : WaterCut {
         doc /*
-        code: trid3nt_server/tools/derive/derive_water_polygon/derive_water_polygon.py
+        code: trid3nt_server/workflows/mesh/water.py
         */
     }
 
@@ -1397,11 +1397,11 @@ package DataSeam {
     verify requirement TheShorelineIsTheDomainsOwnEdge by
         "tests/mesh/test_mesh_om2d.py::test_a_box_extent_refuses_and_names_the_cut_that_makes_it_a_domain";
     verify requirement TheShorelineIsTheDomainsOwnEdge by
-        "tests/derive/test_derive_water_polygon.py::test_the_water_is_the_side_the_way_does_not_have_its_land_on";
+        "tests/mesh/test_mesh_water.py::test_the_water_is_the_side_the_way_does_not_have_its_land_on";
     verify requirement TheShorelineIsTheDomainsOwnEdge by
-        "tests/derive/test_derive_water_polygon.py::test_reversing_the_way_moves_the_water_to_the_other_side";
+        "tests/mesh/test_mesh_water.py::test_reversing_the_way_moves_the_water_to_the_other_side";
     verify requirement TheShorelineIsTheDomainsOwnEdge by
-        "tests/derive/test_derive_water_polygon.py::test_a_way_that_ends_inside_the_box_divides_nothing_and_refuses";
+        "tests/mesh/test_mesh_water.py::test_a_way_that_ends_inside_the_box_divides_nothing_and_refuses";
 
     satisfy requirement TheDomainIsOneSlotHoweverItIsFilled by domainSlot;
     satisfy requirement TheDomainIsOneSlotHoweverItIsFilled by slotDoor;
