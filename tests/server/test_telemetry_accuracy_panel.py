@@ -295,7 +295,7 @@ def test_build_telemetry_summary_folds_solve_section(tmp_path, monkeypatch):
         "trid3nt_server.server.protocol.catalog_http._get_telemetry_path", lambda: tel_path
     )
     monkeypatch.setattr(
-        "trid3nt_server.server.protocol.catalog_http._get_solve_telemetry_path", lambda: solve_path
+        "trid3nt_server.telemetry._get_solve_telemetry_path", lambda: str(solve_path)
     )
     monkeypatch.setattr("trid3nt_server.server.get_persistence", lambda: None)
 
@@ -328,8 +328,8 @@ def test_build_telemetry_summary_solve_zero_state(tmp_path, monkeypatch):
         "trid3nt_server.server.protocol.catalog_http._get_telemetry_path", lambda: tel_path
     )
     monkeypatch.setattr(
-        "trid3nt_server.server.protocol.catalog_http._get_solve_telemetry_path",
-        lambda: tmp_path / "no_solves.jsonl",
+        "trid3nt_server.telemetry._get_solve_telemetry_path",
+        lambda: str(tmp_path / "no_solves.jsonl"),
     )
     monkeypatch.setattr("trid3nt_server.server.get_persistence", lambda: None)
     with tel_path.open("w") as fh:

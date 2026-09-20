@@ -606,20 +606,8 @@ def _aggregate_records(records: list[dict[str, Any]]) -> dict[str, Any]:
 # backend, AOI - are read from the JSONL the solve writer already maintains and
 # folded into the summary.
 
-_DEFAULT_SOLVE_TELEMETRY_PATH = "/tmp/trid3nt_solve_telemetry.jsonl"
-
 #: How many recent solve records to surface in the ``recent`` array.
 _SOLVE_RECENT_CAP = 20
-
-
-def _get_solve_telemetry_path() -> Path:
-    """Resolve the solve-telemetry JSONL path, env override then default, the
-    same way the writer does so reader and writer agree."""
-    return Path(
-        os.environ.get(
-            "TRID3NT_SOLVE_TELEMETRY_PATH", _DEFAULT_SOLVE_TELEMETRY_PATH
-        )
-    )
 
 
 def _load_solve_records_from_file(path: Path) -> list[dict[str, Any]]:
@@ -982,7 +970,11 @@ async def build_telemetry_summary(
     # already seeded. Independent of the tool-call source above -- solves are
     # logged on their own sink.
     try:
-        solve_records = _load_solve_records_from_file(_get_solve_telemetry_path())
+        from trid3nt_server import telemetry as _telemetry
+
+        solve_records = _load_solve_records_from_file(
+            Path(_telemetry._get_solve_telemetry_path())
+        )
         summary["solve_telemetry"] = _aggregate_solve_telemetry(solve_records)
     except Exception:  # noqa: BLE001 -- never break the dashboard on solve read
         logger.warning("telemetry summary: solve telemetry read failed", exc_info=True)

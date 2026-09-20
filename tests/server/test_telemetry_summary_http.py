@@ -186,8 +186,8 @@ def test_build_telemetry_summary_carries_by_model_and_accuracy(
     )
     # No solve sink for this test — keep the solve section zero-state.
     monkeypatch.setattr(
-        "trid3nt_server.server.protocol.catalog_http._get_solve_telemetry_path",
-        lambda: tmp_path / "no_solves.jsonl",
+        "trid3nt_server.telemetry._get_solve_telemetry_path",
+        lambda: str(tmp_path / "no_solves.jsonl"),
     )
     monkeypatch.setattr("trid3nt_server.server.get_persistence", lambda: None)
 
