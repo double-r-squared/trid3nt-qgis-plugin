@@ -9,7 +9,6 @@ supports_global_query: false
 endpoints:
   data:
     url: https://elevation.nationalmap.gov/
-vertical_datum: NAVD88 (metres, positive up)
 auth:
   mode: none
 params:
@@ -93,7 +92,7 @@ coverage:
       series: false
       latest: '2024-01-01'
     resolution_m: 10.0
-    datum: NAVD88 (metres, positive up)
+    datum: NAVD88
     units:
       elevation: m
     value_column: elevation

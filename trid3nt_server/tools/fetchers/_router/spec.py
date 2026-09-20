@@ -7,11 +7,13 @@ loader lifts them verbatim from the sibling ``corpus.yaml`` under the spec name.
 from __future__ import annotations
 
 import logging
+from functools import lru_cache
 from pathlib import Path
 
 import yaml
 from pydantic import ValidationError
 
+from trid3nt_contracts.coverage import PER_RECORD
 from trid3nt_contracts.source_spec import SourceSpec
 
 logger = logging.getLogger(
@@ -23,7 +25,11 @@ __all__ = [
     "load_spec",
     "load_spec_from_path",
     "compose_specs_from_tree",
+    "served_frames",
 ]
+
+#: The fetch whose frames ARE the vocabulary a coverage row states its zero in.
+_OFFSET_FETCH = "fetch_vertical_datum_offset"
 
 
 class SpecLoadError(ValueError):
@@ -54,6 +60,41 @@ def _read_sibling_corpus(source_yaml: Path, name: str) -> list[str]:
     return [str(q) for q in phrasings if isinstance(q, str)]
 
 
+@lru_cache(maxsize=1)
+def served_frames() -> frozenset[str]:
+    """The vertical frames the offset fetch converts between, lower-cased.
+
+    Read off that spec's own params, because a second list of frame names here
+    would drift from the one service that has to answer for them."""
+    for path in sorted(_fetchers_root().rglob("source.yaml")):
+        with path.open() as fh:
+            raw = yaml.safe_load(fh) or {}
+        if isinstance(raw, dict) and raw.get("name") == _OFFSET_FETCH:
+            stated = ((raw.get("params") or {}).get("from_frame") or {})
+            return frozenset(str(v).lower() for v in (stated.get("values") or ()))
+    return frozenset()
+
+
+def _validate_row_datums(spec: SourceSpec, source_hint: str) -> None:
+    """Every coverage row states its zero as a frame, per record, or not at all.
+
+    A row's datum is what the match reads and what the offset row is asked in, so
+    prose here is a zero nothing can convert: the source is unplaceable against
+    every other surface and nothing downstream can say why."""
+    frames = served_frames()
+    for row in spec.coverage:
+        stated = (row.datum or "").strip()
+        if not stated or stated == PER_RECORD or stated.lower() in frames:
+            continue
+        raise SpecLoadError(
+            f"{source_hint}: {spec.name}'s {row.data_class} row states its "
+            f"datum as {stated!r}, which names no frame the offset service "
+            f"converts ({', '.join(sorted(frames))}). State the frame the "
+            f"dataset's documentation counts from, {PER_RECORD!r} where each "
+            "record carries its own zero, or nothing at all - prose names a "
+            "surface nothing can bring another onto.")
+
+
 def load_spec(data: dict, *, source_hint: str = "<dict>") -> SourceSpec:
     """Validate an already-parsed spec mapping into a :class:`SourceSpec`.
     Raises :class:`SpecLoadError` wrapping the pydantic ``ValidationError``, so one
@@ -73,6 +114,7 @@ def load_spec(data: dict, *, source_hint: str = "<dict>") -> SourceSpec:
             "gate hands the model on that pick, so it can never be tier=internal. "
             "The internal tier is for an absorbed in-process seam that states NO "
             "row: drop the rows or drop internal_only.")
+    _validate_row_datums(spec, source_hint)
     return spec
 
 

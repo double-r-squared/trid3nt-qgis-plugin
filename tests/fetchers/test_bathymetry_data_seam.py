@@ -372,7 +372,7 @@ def test_the_lake_row_pins_one_product_of_the_mixed_mosaic() -> None:
         "source.yaml"))
     rule = spec.ingest["imageserver"]["export_query"]["mosaicRule"]
     assert "Name='greatlakes_lakedatum'" in rule
-    assert "Low Water Datum" in (spec.vertical_datum or "")
+    assert spec.vertical_datum == "LWD_IGLD85"
 
 
 def test_the_bathymetry_sources_are_found_through_their_class(

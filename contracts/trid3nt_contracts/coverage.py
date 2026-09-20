@@ -282,10 +282,12 @@ class Coverage(GraceModel):
     #: The finest cell the source publishes, in metres. ``None`` where the
     #: source is not a grid - a station set, a point sample, a polygon.
     resolution_m: float | None = Field(default=None, gt=0.0)
-    #: The zero this source's elevations are counted from, in its own words.
-    #: ``None`` where it publishes none, which the match flags and the offset
-    #: row refuses at. :data:`PER_RECORD` where the record carries a zero per
-    #: feature and the row can state no one word for the network.
+    #: The zero this source's elevations are counted from, as ONE FRAME NAME the
+    #: offset service converts - the row is what an offset is asked in, so prose
+    #: here is a surface nothing can bring another onto, and the loader refuses
+    #: it. ``None`` where the dataset publishes none, which the match flags and
+    #: the offset row refuses at. :data:`PER_RECORD` where the record carries a
+    #: zero per feature and the row can state no one word for the network.
     datum: str | None = None
     #: The unit of EACH value column the record carries, by column name. A slot
     #: reads the column it needs and converts to the keyword's unit or refuses;

@@ -17,7 +17,6 @@ supports_global_query: false
 endpoints:
   data:
     url: "https://planetarycomputer.microsoft.com/api/stac/v1"
-vertical_datum: EGM2008 geoid (metres, positive up)
 auth:
   mode: none
 
@@ -84,7 +83,7 @@ coverage:
       series: false
       latest: '2021-01-01'
     resolution_m: 30.0
-    datum: EGM2008 geoid (metres, positive up)
+    datum: EGM2008
     units:
       elevation: m
     value_column: elevation

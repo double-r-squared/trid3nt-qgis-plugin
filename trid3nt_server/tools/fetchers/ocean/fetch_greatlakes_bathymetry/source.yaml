@@ -6,7 +6,6 @@ supports_global_query: false
 error_prefix: GREATLAKES_BATHYMETRY
 input_error_suffix: INPUT_INVALID
 empty_error_suffix: EMPTY
-vertical_datum: each Great Lake's own Low Water Datum (metres, positive up)
 endpoints:
   data:
     url: https://gis.ngdc.noaa.gov/arcgis/rest/services/DEM_mosaics
@@ -95,7 +94,10 @@ coverage:
       series: false
       latest: '2019-01-01'
     resolution_m: 90.0
-    datum: each Great Lake's own Low Water Datum (metres, positive up)
+    # The mosaic is published on each lake's Low Water Datum, which is that
+    # lake's low water plane on IGLD85; the offset service answers it per lake
+    # by point.
+    datum: LWD_IGLD85
     units:
       elevation: m
     value_column: elevation

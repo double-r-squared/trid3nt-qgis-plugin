@@ -81,7 +81,10 @@ coverage:
     series: false
     latest: '2020-01-01'
   resolution_m: 247.0
-  datum: land surface
+  # A depth below the land surface stands on no vertical frame: the release
+  # publishes none, so this row states none and a slot wanting an elevation
+  # refuses rather than reading the terrain as a zero.
+  datum: null
   units:
     water_table_depth: m
   value_column: water_table_depth

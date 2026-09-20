@@ -83,7 +83,7 @@ coverage:
     # resolution_m is that cell: 1 arc-second is about 30 m.
     ask: {resolution: 1 arc-second}
     resolution_m: 30.0
-    datum: NAVD88 (metres, positive up)
+    datum: NAVD88
     units:
       elevation: m
     value_column: elevation

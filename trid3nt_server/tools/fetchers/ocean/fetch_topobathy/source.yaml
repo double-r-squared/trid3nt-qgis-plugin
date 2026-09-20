@@ -12,7 +12,6 @@ empty_error_suffix: EMPTY
 endpoints:
   data:
     url: https://noaa-nos-coastal-lidar-pds.s3.amazonaws.com/
-vertical_datum: NAVD88 (metres, positive up)
 auth:
   mode: none
 params:
@@ -117,7 +116,7 @@ coverage:
       series: false
       latest: '2023-01-01'
     resolution_m: 3.0
-    datum: NAVD88 (metres, positive up)
+    datum: NAVD88
     units:
       elevation: m
     value_column: elevation

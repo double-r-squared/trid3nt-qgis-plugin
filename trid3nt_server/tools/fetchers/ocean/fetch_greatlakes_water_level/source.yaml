@@ -6,12 +6,6 @@ input_error_suffix: INPUT_INVALID
 empty_error_suffix: EMPTY
 shape: station-timeseries-fgb
 supports_global_query: false
-# The zero these readings are counted from, stated from the API's own datum
-# field rather than assumed: the station metadata endpoint lists exactly ONE
-# datum for a Great Lakes gauge, GL_LWD. The wording is the Great Lakes
-# bathymetry row's, character for character, because a level and a bed can only
-# be read together when what they are counted from is the same statement.
-vertical_datum: each Great Lake's own Low Water Datum (metres, positive up)
 endpoints:
   catalog:
     url: "https://api.tidesandcurrents.noaa.gov/mdapi/prod/webapi/stations.json"
@@ -89,7 +83,11 @@ coverage:
       series: true
       max_span_days: 31.0
       cadence: 6-min samples
-    datum: each Great Lake's own Low Water Datum (metres, positive up)
+    # The API lists exactly ONE datum for a Great Lakes gauge, GL_LWD, which
+    # is the low water datum on IGLD85 the offset service converts by lake and
+    # point. The bathymetry row states the same frame, because a level and a bed
+    # are read together only when their zeros are one statement.
+    datum: LWD_IGLD85
     units:
       water_level: m
       time_series_csv: m

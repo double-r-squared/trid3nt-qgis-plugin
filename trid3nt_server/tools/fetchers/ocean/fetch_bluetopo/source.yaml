@@ -12,7 +12,6 @@ empty_error_suffix: COVERAGE_GAP
 endpoints:
   data:
     url: https://noaa-ocs-nationalbathymetry-pds.s3.amazonaws.com/
-vertical_datum: NAVD88 (metres, positive up)
 auth:
   mode: none
 params:
@@ -85,7 +84,7 @@ coverage:
       series: false
       latest: '2024-01-01'
     resolution_m: 2.0
-    datum: NAVD88 (metres, positive up)
+    datum: NAVD88
     units:
       elevation: m
     value_column: elevation
