@@ -145,3 +145,37 @@ async def test_a_source_on_the_list_twice_is_called_with_each_rows_own_ask(world
     assert asks["measured"] == {"purpose": "water level series",
                                 "bbox": PORTLAND_BOX}
     assert asks["predicted"]["product"] == "predictions"
+
+
+@pytest.mark.asyncio
+async def test_the_gauges_and_the_portal_both_measure_a_sample_at_portland():
+    """The REGISTERED world, not a fixture: a water quality sample asked for at
+    Portland lists the gauge network beside the sample portal, and the sort puts
+    the gauges first. Both stand there, so a slot that opens on a temperature
+    the gauges report continuously is no longer answered only by the portal's
+    discrete archive."""
+    found = await find_sources("water quality sample", PORTLAND_BOX,
+                               ["2026-09-17T00:00:00Z", "2026-09-20T00:00:00Z"])
+    named = [row["tool_name"] for row in found["results"]]
+    assert "fetch_usgs_nwis_gauges" in named and "fetch_usgs_water_quality" in named
+    assert named.index("fetch_usgs_nwis_gauges") < named.index("fetch_usgs_water_quality")
+
+
+@pytest.mark.asyncio
+async def test_the_gauge_row_is_called_by_the_code_its_vocabulary_names():
+    """A slot naming the variable it observes reaches the gauges through the
+    same ``need:of`` the portal is reached through: the row maps TEMPERATURE
+    onto the source's own word, which here is the NWIS parameter code."""
+    from trid3nt_server.tools.search.match import (
+        Need, ask_for, base_ask, match, sources_with_coverage)
+
+    need = Need(slot="observe", data_class="water quality sample",
+                lon=-122.67, lat=45.51, of="TEMPERATURE",
+                opens="2026-09-17T00:00:00Z", until="2026-09-20T00:00:00Z",
+                pick="fetch_usgs_nwis_gauges")
+    choice = match(need, sources_with_coverage())
+    ask = ask_for(choice, base_ask(choice.picked, "observe", PORTLAND_BOX,
+                                   need.lon, need.lat, need.opens, need.until),
+                  need.lon, need.lat, {"of": need.of})
+    assert ask["parameter"] == "00010"
+    assert (ask["start_date"], ask["end_date"]) == ("2026-09-17", "2026-09-20")

@@ -21,7 +21,17 @@ _IV_URL = "https://waterservices.usgs.gov/nwis/iv/"
 _SITE_URL = "https://waterservices.usgs.gov/nwis/site/"
 _PARAM_DISCHARGE = "00060"
 _PARAM_GAGE_HEIGHT = "00065"
+_PARAM_TEMPERATURE = "00010"
 _PARAMETER_CD = f"{_PARAM_DISCHARGE},{_PARAM_GAGE_HEIGHT}"
+
+#: The value and window columns each NWIS parameter code is read into. A code
+#: with no columns here is a measurement this source publishes nowhere, so the
+#: ask refuses it rather than fetching a series that lands in no column.
+_COLUMNS: dict[str, tuple[str, str]] = {
+    _PARAM_DISCHARGE: ("discharge_cfs", "time_series_csv"),
+    _PARAM_GAGE_HEIGHT: ("gage_height_ft", "stage_series_csv"),
+    _PARAM_TEMPERATURE: ("water_temp_c", "temp_series_csv"),
+}
 _MAX_BBOX_SQ_DEG = 24.5
 _MAX_WINDOW_DAYS = 120
 _USER_AGENT = (
@@ -75,6 +85,21 @@ def _resolve_window(sc: str, sfx: str, start_date: Any, end_date: Any, period: A
     return (d0.isoformat(), d1.isoformat())
 
 
+def _resolve_parameter(sc: str, sfx: str, parameter: Any) -> str | None:
+    """The parameter codes this call asks NWIS for, or ``None`` for the pair the
+    gauge network is read by default."""
+    codes = [code.strip() for code in str(parameter or "").split(",") if code.strip()]
+    if not codes:
+        return None
+    unknown = [code for code in codes if code not in _COLUMNS]
+    if unknown:
+        raise router_input_error(
+            sc, f"parameter={parameter!r} names {', '.join(unknown)}, which this "
+                f"source reads into no column; it publishes {', '.join(sorted(_COLUMNS))} "
+                "(discharge, gage height, water temperature)", sfx)
+    return ",".join(codes)
+
+
 @register_hook("usgs_nwis.resolve")
 def resolve(spec: SourceSpec, params: dict[str, Any]) -> dict[str, Any]:
     """Resolve the spatial selector, temporal window and mode, pure and pre-cache-key,
@@ -118,6 +143,7 @@ def resolve(spec: SourceSpec, params: dict[str, Any]) -> dict[str, Any]:
         "state_code": resolved_state,
         "bbox": resolved_bbox,
         "window": list(window) if isinstance(window, tuple) else window,
+        "parameter": _resolve_parameter(sc, sfx, params.get("parameter")),
         "_mode": mode,
         # Collapse the raw temporal params into the resolved window for the cache key
         # The key carries the resolved window only, not the period-vs-dates form.
@@ -146,8 +172,9 @@ def build_request(spec: SourceSpec, params: dict[str, Any]) -> list[RequestPlan]
     window = params.get("window")
     sel = _selector_params(state_code, bbox)
     headers = {"User-Agent": _USER_AGENT}
+    parameter_cd = str(params.get("parameter") or _PARAMETER_CD)
 
-    iv_params: dict[str, str] = {"format": "json", "siteStatus": "active", "parameterCd": _PARAMETER_CD, **sel}
+    iv_params: dict[str, str] = {"format": "json", "siteStatus": "active", "parameterCd": parameter_cd, **sel}
     if isinstance(window, str):
         iv_params["period"] = window
     elif isinstance(window, (list, tuple)):
@@ -156,7 +183,7 @@ def build_request(spec: SourceSpec, params: dict[str, Any]) -> list[RequestPlan]
     iv_plan = RequestPlan(url=_IV_URL, params=iv_params, headers=headers)
 
     site_params = {"format": "rdb", "siteStatus": "active", "hasDataTypeCd": "iv",
-                   "siteOutput": "expanded", "parameterCd": _PARAMETER_CD, **sel}
+                   "siteOutput": "expanded", "parameterCd": parameter_cd, **sel}
     site_plan = RequestPlan(url=_SITE_URL, params=site_params, headers=headers)
     return [iv_plan, site_plan]
 
@@ -211,19 +238,17 @@ def _parse_iv_json(sc: str, raw: bytes) -> list[dict[str, Any]]:
                 except (TypeError, ValueError):
                     latest_val = None
         rec = by_site.setdefault(site_no, {"site_no": site_no, "site_name": site_name, "lon": lon, "lat": lat,
-                                           "discharge_cfs": None, "gage_height_ft": None, "reading_dt": None})
+                                           "discharge_cfs": None, "gage_height_ft": None,
+                                           "water_temp_c": None, "reading_dt": None})
         if site_name and not rec.get("site_name"):
             rec["site_name"] = site_name
-        if param == _PARAM_DISCHARGE and latest_val is not None:
-            rec["discharge_cfs"] = latest_val
+        value_column = _COLUMNS.get(param, ("", ""))[0]
+        if value_column and latest_val is not None:
+            rec[value_column] = latest_val
             if latest_dt and not rec["reading_dt"]:
                 rec["reading_dt"] = latest_dt
-        elif param == _PARAM_GAGE_HEIGHT and latest_val is not None:
-            rec["gage_height_ft"] = latest_val
-            if latest_dt and not rec["reading_dt"]:
-                rec["reading_dt"] = latest_dt
-    return [_feature(r["lon"], r["lat"], {k: r[k] for k in ("site_no", "site_name", "discharge_cfs", "gage_height_ft", "reading_dt")})
-            for r in by_site.values()]
+    cols = ("site_no", "site_name", "discharge_cfs", "gage_height_ft", "water_temp_c", "reading_dt")
+    return [_feature(r["lon"], r["lat"], {k: r[k] for k in cols}) for r in by_site.values()]
 
 
 def _parse_iv_json_window(sc: str, raw: bytes) -> list[dict[str, Any]]:
@@ -270,16 +295,21 @@ def _parse_iv_json_window(sc: str, raw: bytes) -> list[dict[str, Any]]:
                     continue
                 samples.append((dt_s, fv))
         rec = by_site.setdefault(site_no, {"site_no": site_no, "site_name": site_name, "lon": lon, "lat": lat,
-                                           "discharge_cfs": None, "gage_height_ft": None, "reading_dt": None,
-                                           "time_series_csv": "", "stage_series_csv": "",
+                                           "discharge_cfs": None, "gage_height_ft": None,
+                                           "water_temp_c": None, "reading_dt": None,
+                                           "time_series_csv": "", "stage_series_csv": "", "temp_series_csv": "",
                                            "time_start": None, "time_end": None, "n_timesteps": 0,
                                            "discharge_min_cfs": None, "discharge_max_cfs": None, "discharge_mean_cfs": None})
         if site_name and not rec.get("site_name"):
             rec["site_name"] = site_name
-        if not samples:
+        value_column, series_column = _COLUMNS.get(param, ("", ""))
+        if not samples or not value_column:
             continue
+        # Each measurement's window is its own column beside the others: one
+        # gauge reports several quantities and a slot reads the one it opens on.
+        rec[series_column] = "\n".join(f"{dt_s},{v:.6f}" for dt_s, v in samples) + "\n"
+        rec[value_column] = samples[-1][1]
         if param == _PARAM_DISCHARGE:
-            rec["time_series_csv"] = "\n".join(f"{dt_s},{v:.6f}" for dt_s, v in samples) + "\n"
             vals = [v for _dt_s, v in samples]
             rec["n_timesteps"] = len(vals)
             rec["time_start"] = samples[0][0]
@@ -287,17 +317,11 @@ def _parse_iv_json_window(sc: str, raw: bytes) -> list[dict[str, Any]]:
             rec["discharge_min_cfs"] = min(vals)
             rec["discharge_max_cfs"] = max(vals)
             rec["discharge_mean_cfs"] = sum(vals) / len(vals)
-            rec["discharge_cfs"] = samples[-1][1]
             rec["reading_dt"] = samples[-1][0]
-        elif param == _PARAM_GAGE_HEIGHT:
-            # The stage window is its own column beside the discharge one: one
-            # gauge reports two quantities and a slot reads the one it opens on.
-            rec["stage_series_csv"] = "\n".join(f"{dt_s},{v:.6f}" for dt_s, v in samples) + "\n"
-            rec["gage_height_ft"] = samples[-1][1]
-            if rec["reading_dt"] is None:
-                rec["reading_dt"] = samples[-1][0]
-    cols = ("site_no", "site_name", "discharge_cfs", "gage_height_ft", "reading_dt", "time_series_csv",
-            "stage_series_csv",
+        elif rec["reading_dt"] is None:
+            rec["reading_dt"] = samples[-1][0]
+    cols = ("site_no", "site_name", "discharge_cfs", "gage_height_ft", "water_temp_c", "reading_dt",
+            "time_series_csv", "stage_series_csv", "temp_series_csv",
             "time_start", "time_end", "n_timesteps", "discharge_min_cfs", "discharge_max_cfs", "discharge_mean_cfs")
     return [_feature(r["lon"], r["lat"], {k: r[k] for k in cols}) for r in by_site.values()]
 
@@ -343,7 +367,8 @@ def _parse_site_rdb(sc: str, raw: bytes) -> list[dict[str, Any]]:
         site_name = cols[i_name].strip() if (i_name is not None and len(cols) > i_name) else ""
         features.append(_feature(lon, lat, {
             "site_no": site_no, "site_name": site_name,
-            "discharge_cfs": None, "gage_height_ft": None, "reading_dt": None,
+            "discharge_cfs": None, "gage_height_ft": None, "water_temp_c": None,
+            "reading_dt": None,
             "gauge_datum_ft": _number(cols, i_alt),
             "vertical_datum": _word(cols, i_datum)}))
     return features

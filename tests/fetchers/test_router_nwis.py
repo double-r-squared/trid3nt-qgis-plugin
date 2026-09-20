@@ -85,8 +85,8 @@ def test_parse_iv_instantaneous_carries_the_gauge_s_own_zero(spec):
         spec, {"_mode": "instantaneous"}, [_iv_body(), _SITE_RDB])
     assert len(feats) == 2  # two distinct sites merged over discharge + gage
     assert set(feats[0]["properties"]) == {
-        "site_no", "site_name", "discharge_cfs", "gage_height_ft", "reading_dt",
-        "gauge_datum_ft", "vertical_datum"}
+        "site_no", "site_name", "discharge_cfs", "gage_height_ft", "water_temp_c",
+        "reading_dt", "gauge_datum_ft", "vertical_datum"}
     by = {f["properties"]["site_no"]: f["properties"] for f in feats}
     assert by["01646500"]["discharge_cfs"] == 1200.0 and by["01646500"]["gage_height_ft"] == 3.4
     assert by["01646500"]["gauge_datum_ft"] == 37.20
@@ -99,8 +99,8 @@ def test_parse_iv_window_publishes_the_stage_series_beside_the_discharge(spec):
     feats = hooks.HOOK_REGISTRY["usgs_nwis.parse"](
         spec, {"_mode": "hydrograph"}, [_iv_window_body(), _SITE_RDB])
     p = feats[0]["properties"]
-    assert set(p) == {"site_no", "site_name", "discharge_cfs", "gage_height_ft", "reading_dt",
-                      "time_series_csv", "stage_series_csv",
+    assert set(p) == {"site_no", "site_name", "discharge_cfs", "gage_height_ft", "water_temp_c",
+                      "reading_dt", "time_series_csv", "stage_series_csv", "temp_series_csv",
                       "time_start", "time_end", "n_timesteps", "discharge_min_cfs",
                       "discharge_max_cfs", "discharge_mean_cfs",
                       "gauge_datum_ft", "vertical_datum"}
@@ -108,6 +108,48 @@ def test_parse_iv_window_publishes_the_stage_series_beside_the_discharge(spec):
     assert p["time_series_csv"].startswith("2024-01-01T00:00:00Z,1000.000000")
     assert p["stage_series_csv"].startswith("2024-01-01T00:00:00Z,3.100000")
     assert p["gauge_datum_ft"] == 37.20 and p["vertical_datum"] == "NAVD88"
+
+
+def test_the_temperature_code_is_read_into_its_own_column(spec):
+    """The third coverage row is asked by the parameter code NWIS answers to,
+    and the reading lands in the column that row names rather than in the
+    discharge one it is not measured in."""
+    body = json.dumps({"value": {"timeSeries": [
+        _iv_series("14211720", "WILLAMETTE", -122.67, 45.51, "00010", "18.4",
+                   "2026-09-20T03:30:00Z")]}}).encode()
+    p = hooks.HOOK_REGISTRY["usgs_nwis.parse"](spec, {"_mode": "instantaneous"},
+                                               [body])[0]["properties"]
+    assert p["water_temp_c"] == 18.4
+    assert p["discharge_cfs"] is None and p["gage_height_ft"] is None
+    assert p["reading_dt"] == "2026-09-20T03:30:00Z"
+
+
+def test_the_temperature_window_is_its_own_series_column(spec):
+    samples = [("2026-09-17T00:00:00Z", 18.7), ("2026-09-17T01:00:00Z", 18.6)]
+    body = json.dumps({"value": {"timeSeries": [
+        _window_series("00010", samples)]}}).encode()
+    p = hooks.HOOK_REGISTRY["usgs_nwis.parse"](spec, {"_mode": "hydrograph"},
+                                               [body])[0]["properties"]
+    assert p["temp_series_csv"].startswith("2026-09-17T00:00:00Z,18.700000")
+    assert p["water_temp_c"] == 18.6
+    assert p["time_series_csv"] == "" and p["n_timesteps"] == 0
+
+
+def test_a_parameter_this_source_reads_into_no_column_refuses(spec):
+    assert _resolve_err(spec, {"bbox": [-122.7, 45.4, -122.6, 45.6],
+                               "parameter": "00095"}) == "NWIS_GAUGES_INPUT_ERROR"
+
+
+def test_the_asked_parameter_is_what_both_services_are_called_with(spec):
+    params = hooks.HOOK_REGISTRY["usgs_nwis.resolve"](
+        spec, {"bbox": [-122.7, 45.4, -122.6, 45.6], "parameter": "00010"})
+    assert params["parameter"] == "00010"
+    plans = hooks.HOOK_REGISTRY["usgs_nwis.build_request"](spec, params)
+    assert [pl.params["parameterCd"] for pl in plans] == ["00010", "00010"]
+    pair = hooks.HOOK_REGISTRY["usgs_nwis.build_request"](
+        spec, hooks.HOOK_REGISTRY["usgs_nwis.resolve"](
+            spec, {"bbox": [-122.7, 45.4, -122.6, 45.6]}))
+    assert pair[0].params["parameterCd"] == "00060,00065"
 
 
 def test_parse_site_rdb(spec):

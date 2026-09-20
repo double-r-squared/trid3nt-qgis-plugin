@@ -322,3 +322,30 @@ def test_a_sample_two_cadences_ahead_is_refused() -> None:
                     at="2026-09-18T12:00:00Z", caption="a water level",
                     code="TELEMAC_LEVEL_UNMEASURED")
     assert caught.value.error_code == "TELEMAC_LEVEL_UNMEASURED"
+
+
+def test_the_gauge_row_says_which_column_carries_a_temperature() -> None:
+    """A gauge record and a sample-portal record differ in shape, and the ROW is
+    what the ingestion reads either one through: the columns and their units
+    come off the coverage row of whichever source answered, never off its name.
+    The gauge carries no per-feature unit column, so the row's is the unit."""
+    from trid3nt_server.tools.fetchers._router import registration
+    import trid3nt_server.main as main
+
+    main._import_tools_registry()
+    row = next(r for r in registration.get_spec("fetch_usgs_nwis_gauges").coverage
+               if r.data_class == "water quality sample")
+    gauge = {"type": "Feature",
+             "geometry": {"type": "Point", "coordinates": [-122.67, 45.51]},
+             "properties": {"site_id": "14211720", "water_temp_c": 18.4,
+                            "discharge_cfs": None,
+                            "temp_series_csv": "2026-09-20T02:30Z,18.5\n"
+                                               "2026-09-20T03:30Z,18.4\n"}}
+    found = observation(_fc(gauge), field=row.value_column,
+                        series_field=row.series_column,
+                        column_units=dict(row.units), to_units="degC",
+                        at="2026-09-20T03:30:00Z")
+    assert found.value == pytest.approx(18.4)
+    assert found.units == "degC"
+    assert found.series.units == "degC"
+    assert found.series.values[-1] == pytest.approx(18.4)

@@ -27,6 +27,7 @@ params:
   start_date: {type: str, schema_optional: true}
   end_date:   {type: str, schema_optional: true}
   period:     {type: str, schema_optional: true}
+  parameter:  {type: str, schema_optional: true}
 
 ingest:
   # Both plans are fetched and the parse hook joins them: the readings carry the
@@ -35,8 +36,8 @@ ingest:
   properties_by_param:
     param: _mode
     map:
-      instantaneous: [site_no, site_name, discharge_cfs, gage_height_ft, reading_dt, gauge_datum_ft, vertical_datum]
-      hydrograph: [site_no, site_name, discharge_cfs, gage_height_ft, reading_dt, time_series_csv, stage_series_csv, time_start, time_end, n_timesteps, discharge_min_cfs, discharge_max_cfs, discharge_mean_cfs, gauge_datum_ft, vertical_datum]
+      instantaneous: [site_no, site_name, discharge_cfs, gage_height_ft, water_temp_c, reading_dt, gauge_datum_ft, vertical_datum]
+      hydrograph: [site_no, site_name, discharge_cfs, gage_height_ft, water_temp_c, reading_dt, time_series_csv, stage_series_csv, temp_series_csv, time_start, time_end, n_timesteps, discharge_min_cfs, discharge_max_cfs, discharge_mean_cfs, gauge_datum_ft, vertical_datum]
 
 hooks:
   pre_resolve: usgs_nwis.resolve
@@ -125,11 +126,45 @@ coverage:
   value_column: gage_height_ft
   series_column: stage_series_csv
   above_column: gauge_datum_ft
+- data_class: water quality sample
+  kind: measured
+  reach_km: 25
+  extent:
+    kind: stations
+    rings:
+      - [[-125.0, 24.0], [-66.0, 24.0], [-66.0, 50.0], [-125.0, 50.0]]
+      - [[-172.0, 51.0], [-129.0, 51.0], [-129.0, 72.0], [-172.0, 72.0]]
+      - [[-161.0, 18.0], [-154.0, 18.0], [-154.0, 23.0], [-161.0, 23.0]]
+      - [[-68.5, 17.0], [-64.0, 17.0], [-64.0, 19.0], [-68.5, 19.0]]
+      - [[144.0, 13.0], [146.5, 13.0], [146.5, 21.0], [144.0, 21.0]]
+      - [[-171.5, -15.0], [-169.0, -15.0], [-169.0, -13.0], [-171.5, -13.0]]
+    note: the 00010 water-temperature record at the same gauges, reported at
+      the instantaneous cadence wherever a site measures it
+    discover: bbox
+  window:
+    series: true
+    earliest: "2007-10-01"
+    max_span_days: 120.0
+    cadence: 5-min to hourly instantaneous samples
+  datum: null
+  units:
+    water_temp_c: degC
+    temp_series_csv: degC
+  value_column: water_temp_c
+  series_column: temp_series_csv
+  # THE MEASUREMENT this row is asked for, in NWIS's own parameter-code
+  # vocabulary: the slot names the variable its run publishes and this table is
+  # where that name becomes the code the service answers to. A variable with no
+  # code here is a measurement the gauge network does not take.
+  ask: {parameter: "need:of"}
+  vocabulary:
+    TEMPERATURE: "00010"
 
 caveats:
   - "pass EXACTLY ONE of state_code (no area limit) or bbox (<= ~25 deg^2)"
   - "OBSERVED gauge network; for MODELED reach flow use fetch_noaa_nwm_streamflow"
   - "primary IV real-time -> Site-service location fallback -> honest NWIS_GAUGES_NO_STATIONS (never an empty-success layer)"
+  - "parameter names the measurement read: 00060 discharge, 00065 gage height, 00010 water temperature (deg C); any other code refuses pre-network"
   - "a gage height is a height ABOVE the gauge's own zero, not an elevation: ``gauge_datum_ft`` is that zero's elevation and ``vertical_datum`` the frame it is counted from, both off the site record, and a consumer that wants a water-surface elevation adds them"
 
 # corpus lifted from sibling corpus.yaml.
@@ -206,6 +241,15 @@ docstring: |-
           this for "the last week's flow at the gauges".
       When NONE of start_date / end_date / period is given, the tool returns
       the LATEST instantaneous reading per station (the default overlay mode).
+
+  Measurement selector:
+      parameter: Optional NWIS parameter code, or a comma-separated list of
+          them, naming WHICH measurement to read at the gauges: ``"00060"``
+          discharge into ``discharge_cfs`` / ``time_series_csv``, ``"00065"``
+          gage height into ``gage_height_ft`` / ``stage_series_csv``,
+          ``"00010"`` WATER TEMPERATURE (deg C) into ``water_temp_c`` /
+          ``temp_series_csv``. Omitted, the discharge-and-stage pair is read.
+          A code this tool reads into no column raises ``NwisInputError``.
 
   Returns:
       ``LayerURI`` pointing at a FlatGeobuf in the cache bucket:
