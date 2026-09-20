@@ -44,6 +44,7 @@ The values the template declares. `desc` is what the model reads when it fills o
 | `current_along_y_mps` | 0.005862186197191477 |
 | `hs_at_station_m` | 0.03550698608160019 |
 | `peak_current_speed_mps` | 0.15607312321662903 |
+| `breaking_rate_peak_per_s` | - |
 | `mesh_size_m` | 16.223 |
 
 It publishes these layers onto the canvas:

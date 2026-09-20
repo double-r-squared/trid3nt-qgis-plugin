@@ -24,7 +24,7 @@ from trid3nt_server.workflows.runtime import (
 )
 from trid3nt_server.workflows.mesh.tool import mesh_op, tool
 from trid3nt_server.workflows.solver.compute_class import compute_class
-from trid3nt_server.workflows.telemac.modules import T2D, WAC, mesh, series
+from trid3nt_server.workflows.telemac.modules import T2D, WAC, field, mesh, series
 from trid3nt_server.workflows.telemac.modules.telemac2d import Boundaries, Wind
 from trid3nt_server.workflows.telemac.modules.tomawac import RESULT_FILENAME
 from trid3nt_server.workflows.telemac.templates.wave_driven_currents.declarations import (
@@ -105,10 +105,12 @@ class DATA:
     #: square to the beach drives no current along it, so the direction in this
     #: record is what the whole question turns on.
     wave = Data.need("wave series", at=Ref("seed"))
-    #: THE LEVEL the whole domain stands at. The seaward rim is a prescribed
-    #: ELEVATION - that is what an ocean boundary section writes into the
-    #: boundary file - so the tide is what the open edge holds and what the
-    #: depths under the breaking are counted down from.
+    #: THE TIDE, as the SERIES the record serves rather than one reading of it.
+    #: The seaward rim is a prescribed ELEVATION - that is what an ocean boundary
+    #: section writes into the boundary file - so this is what the open edge
+    #: holds and what the depths under the breaking are counted down from, and
+    #: it MOVES: the host writes the window as the boundary's own column and
+    #: lumps to a single number only where the record reported one moment.
     level = Data.need("water level series")
     #: The domain as a MESH, when the caller has one already. Unfilled, MESH
     #: below is what both modules are solved on.
@@ -252,8 +254,9 @@ OUTPUTS = [
     series("HM0", at=_STATION, module="tomawac").chart(),
 ]
 CAPTIONS = {"M": "current speed", "U": "current along x", "V": "current along y",
-            "HM0": "significant wave height", "wave": "a sea state",
-            "level": "a water-surface elevation"}
+            "HM0": "significant wave height", "BETA": "breaking rate",
+            "wave": "a sea state",
+            "level": "the tide the open edge holds, over the run's window"}
 
 #: The run's ANSWER, as the numbers a reader has to be able to check: how fast
 #: the water is moving at the station when the window closes, the pair that says
@@ -267,6 +270,12 @@ ANSWER = {
     "hs_at_station_m": series("HM0", at=_STATION,
                               module="tomawac").measure("last"),
     "peak_current_speed_mps": series("M").measure("max"),
+    # THE FORCING ITSELF, as a magnitude: the coupled module publishes its
+    # breaking rate as a negative quantity, so the hardest-working node is the
+    # field's MINIMUM negated. A current with no breaking behind it is a run
+    # that drove nothing, which is the one reading this answer separates.
+    "breaking_rate_peak_per_s": (field("BETA", t=-1, module="tomawac")
+                                 .measure("min").over(-1.0)),
     "mesh_size_m": mesh().measure("size_m"),
 }
 

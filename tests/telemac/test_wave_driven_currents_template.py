@@ -16,6 +16,8 @@ from trid3nt_server.workflows.runtime import Ref
 from trid3nt_server.workflows.runtime.data import BED, DOMAIN, EXTENT, LEVEL, WAVE
 from trid3nt_server.workflows.telemac.modules import T2D, WAC, fill
 from trid3nt_server.workflows.telemac.modules.module import SlotRefused
+from trid3nt_server.workflows.telemac.authoring.boundaries import (
+    LIQUID_BOUNDARIES_FILENAME)
 from trid3nt_server.workflows.telemac.modules.tomawac import RESULT_FILENAME
 from trid3nt_server.workflows.telemac.templates.wave_driven_currents import (
     wave_driven_currents as template)
@@ -158,6 +160,7 @@ def test_the_answers_are_the_two_modules_own_rows():
     assert named["current_along_y_mps"] == ("V", None)
     assert named["hs_at_station_m"] == ("HM0", "tomawac")
     assert named["peak_current_speed_mps"] == ("M", None)
+    assert named["breaking_rate_peak_per_s"] == ("BETA", "tomawac")
     assert "HM0" in WAC.MODULE_OUTPUT
 
 
@@ -176,3 +179,49 @@ def test_the_granularity_floor_is_the_step_this_deck_states():
                       if p.name == "mesh_resolution_m")
     assert resolution.default == 40.0
     assert resolution.bounds[0] == 20.0
+
+
+def test_the_breaking_answer_reads_the_magnitude_of_a_negative_field():
+    """TOMAWAC publishes its breaking rate as a NEGATIVE quantity - energy
+    leaving the spectrum - so the hardest-working node is the field's minimum,
+    and read as a maximum this answer would report the untouched water offshore.
+    The synthetic field is a shore band against still water."""
+    measure = template.ANSWER["breaking_rate_peak_per_s"]
+    assert measure.stat == "min"
+    band = [-0.205, -0.118, -0.004, 0.0, 0.0]
+    assert measure.answer(min(band), measure.against) == pytest.approx(0.205)
+
+
+def test_the_tide_reaches_the_rim_as_the_series_the_record_served():
+    """The level slot reads a water level SERIES, and the host writes the window
+    the record reported as the boundary's own column: a rim held at one number
+    is a sea standing still for the whole run, which a wave-driven current is
+    measured against."""
+    from trid3nt_server.workflows.runtime.temporal import Series
+
+    tide = Series([0.0, 1800.0, 3600.0], [0.25, 0.40, 0.52], units="m")
+    rows = _rows()
+    assert rows["level"].data_class == "water level series"
+    sheet = fill(template.STEERING, produced={
+        "settled": {"title": "COAST DOMAIN",
+                    "liquid_boundary_order": ["open"],
+                    "liquid_boundary_prescribes": ["elevation"],
+                    "opening": "CONSTANT ELEVATION", "depth_m": None,
+                    "level_m": 0.25, "outflow_stage_m": 0.25,
+                    "outflow_stage_series": tide, "time_step_s": 1.0,
+                    "start_time_s": 0.0, "until_s": _HOUR_S},
+        "station": _STATION,
+        "wave": Wave(height_m=1.6, peak_frequency_hz=0.125,
+                     direction_deg=40.0, peak_period_s=8.0,
+                     from_direction_deg=220.0),
+        "level": tide})
+    stated = dict(sheet.resolved())
+    assert stated["LIQUID BOUNDARIES FILE"] == LIQUID_BOUNDARIES_FILENAME
+    written = sheet.files[LIQUID_BOUNDARIES_FILENAME]
+    assert written.splitlines()[1] == "T SL(1)"
+
+
+def test_the_captions_say_the_level_row_carries_the_tide_over_the_window():
+    """A caption that called it one elevation would describe a different run."""
+    assert "tide" in template.CAPTIONS["level"]
+    assert "window" in template.CAPTIONS["level"]
