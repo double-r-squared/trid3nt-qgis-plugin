@@ -85,10 +85,9 @@ coverage:
       kind: surface
       rings:
       - [[-92.5, 41.0], [-74.5, 41.0], [-74.5, 49.5], [-92.5, 49.5]]
-      note: the Great Lakes and the connecting channels between them - the St.
-        Marys, the St. Clair, the Detroit and the Niagara - which is the water CHS
-        counts chart datum from IGLD85 on. NONNA-10 also covers Canada's tidal
-        coasts, whose chart datum is another surface this row cannot speak for.
+      note: the Great Lakes and the connecting channels between them - the St. Marys,
+        the St. Clair, the Detroit and the Niagara - which is the water CHS counts chart
+        datum from IGLD85 on
     window:
       series: false
       latest: '2026-04-01'
@@ -112,6 +111,7 @@ caveats:
   as HTTP 200 with an all-nodata raster, which this tool reads as a coverage gap rather than
   as a bed at the datum plane; coverage is patchy on both sides of the international boundary
   and follows CHS's survey sources rather than the border.
+- NONNA-10 also covers Canada's tidal coasts, whose chart datum is another surface this row cannot speak for, so the row under-claims what the dataset holds.
 docstring: |-
   Fetch CHS NONNA-10 bathymetry over a bbox as a float32 GeoTIFF on chart datum.
 

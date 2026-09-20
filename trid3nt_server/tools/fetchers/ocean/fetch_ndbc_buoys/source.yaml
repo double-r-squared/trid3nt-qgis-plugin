@@ -87,10 +87,9 @@ coverage:
       kind: stations
       rings:
       - [[-180.0, -90.0], [180.0, -90.0], [180.0, 90.0], [-180.0, 90.0]]
-      note: every moored buoy NDBC's own listing states a met payload for - the
-        US coasts, the Great Lakes, the tropical arrays and the partner buoys
-        other national networks report to NDBC; a fixed coastal platform states
-        the same payload and measures no waves, so it is not listed here
+      note: every moored buoy NDBC's own listing states a met payload for - the US
+        coasts, the Great Lakes, the tropical arrays and the partner buoys other
+        national networks report to NDBC
       read_from: ndbc_buoys.stations
     window:
       series: true
@@ -124,6 +123,7 @@ caveats:
   - "the match passes the NEAREST listed buoy: an open-water swell field is coherent over tens of kilometres, but a buoy moored inside a bay or behind an island does not speak for the open coast at the same distance - call this by station to read the buoy the question is about"
   - "the wave height, the peak period and the peak direction are what this carries; the wind, pressure and air/water temperature columns stdmet publishes beside them are a meteorological record this source states no coverage row for"
   - "a direction is degT - the compass bearing the waves come FROM - and a deck stating a direction of propagation converts it rather than reading it as it stands"
+  - "a fixed coastal platform states the same met payload and measures no waves, so it is not listed here"
 
 docstring: |-
   Fetch a NOAA NDBC buoy's measured SEA STATE - wave height, peak period and

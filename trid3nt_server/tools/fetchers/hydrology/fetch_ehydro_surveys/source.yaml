@@ -128,10 +128,8 @@ coverage:
       - [[-68.5, 17.0], [-64.0, 17.0], [-64.0, 19.0], [-68.5, 19.0]]
       - [[144.0, 13.0], [146.5, 13.0], [146.5, 21.0], [144.0, 21.0]]
       - [[-171.5, -15.0], [-169.0, -15.0], [-169.0, -13.0], [-171.5, -13.0]]
-      note: the dredged prism of a federal navigation project - which is exactly
-        what a channel survey IS, so a domain with no project has none and a
-        question that asks for this class is asking for the maintained channel
-        rather than for the water around it
+      note: the dredged prism of a federal navigation project - which is exactly what a
+        channel survey IS, so a domain with no project has none
     window:
       series: false
     resolution_m: 1.0
@@ -148,6 +146,7 @@ caveats:
   - "the surveys are picked by COVERAGE, newest first over each part of the bbox nothing newer reached, up to twelve packages - so a reach whose southern half was last surveyed years ago comes back with that older pass beside the recent ones, and every survey's date is on its own rows and on the run journal"
   - "``since`` is a filter the caller states, for comparing one dredging against another; unstated, age only RANKS the surveys and never drops one"
   - "``datum_offset_m`` is the shift the survey's OWN package metadata publishes between its project datum and a national frame (``datum_offset_frame``), read off the sentence the district wrote it in; it is null where the package states none, and applying it is the consumer's"
+  - "a question that asks for this class is asking for the maintained channel rather than for the water around it"
 
 docstring: |-
   Fetch USACE eHydro CHANNEL SURVEY soundings + the survey footprint for a bbox -> the measured bed.

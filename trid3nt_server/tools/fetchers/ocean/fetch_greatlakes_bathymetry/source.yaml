@@ -97,9 +97,8 @@ coverage:
         [-83.3, 42.25]]
       - [[-82.95, 42.28], [-82.4, 42.28], [-82.4, 42.7], [-82.95, 42.7]]
       - [[-79.9, 43.1], [-76.0, 43.1], [-76.0, 44.4], [-79.9, 44.4]]
-      note: the gridded LAKES one outline each - Superior, Michigan, Huron, Erie,
-        St. Clair, Ontario - and not the rivers between them; the St. Clair, Detroit
-        and Niagara corridors carry no soundings and come back as fill
+      note: the gridded LAKES one outline each - Superior, Michigan, Huron, Erie, St.
+        Clair, Ontario - and not the rivers between them
     window:
       series: false
       latest: '2019-01-01'
@@ -122,6 +121,7 @@ caveats:
   datums do not merge without a stated offset).
 - NCEI's own Grid Extract path publishes these soundings on MEAN SEA LEVEL instead. This tool reads
   the DEM_all ImageServer's lake-datum grids, and the datum stated here is theirs.
+- the St. Clair, Detroit and Niagara corridors carry no soundings in these grids and come back as fill
 docstring: |-
   Fetch the NOAA NCEI Great Lakes lake-datum BATHYMETRY over a bbox as a float32 GeoTIFF.
 

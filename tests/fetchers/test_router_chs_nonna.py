@@ -140,14 +140,15 @@ def answered(monkeypatch):
     return serve
 
 
-def test_the_row_states_a_measured_bed_over_the_lakes_and_their_channels(row):
+def test_the_row_states_a_measured_bed_over_the_lakes_and_their_channels(spec, row):
     assert (row.data_class, row.kind) == ("bathymetry", "measured")
     assert row.extent.kind == "surface" and row.reach_km is None
     assert row.extent.covers(*PORT_HURON)
     # The waters the row speaks for are named on it, because the product reaches
-    # far past them and chart datum is another surface out there.
+    # far past them and chart datum is another surface out there - which the
+    # caveats carry, the note being one sentence the match quotes on the wire.
     assert "connecting channels" in row.extent.note
-    assert "tidal coasts" in row.extent.note
+    assert any("tidal coasts" in caveat for caveat in spec.caveats)
     assert not row.window.series and row.window.latest == "2026-04-01"
 
 
