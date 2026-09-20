@@ -14,6 +14,7 @@ import pytest
 
 from trid3nt_server.workflows.runtime import Ref
 from trid3nt_server.workflows.runtime.data import BED, DOMAIN, EXTENT, LEVEL, WAVE
+from trid3nt_server.workflows.runtime.plan import declared_reads
 from trid3nt_server.workflows.telemac.modules import WAC, fill
 from trid3nt_server.workflows.telemac.modules.tomawac import RESULT_FILENAME
 
@@ -130,7 +131,7 @@ def test_the_deck_states_the_physics_the_question_is_about():
     and LECDON writes no breaking row at all."""
     sheet = fill(WAC, **{name: value for name, value in
                          _deck().ASSERTED.items()
-                         if not isinstance(value, Ref)})
+                         if not any(declared_reads(value, Ref))})
     stated = dict(sheet.resolved())
     assert stated["DEPTH-INDUCED BREAKING DISSIPATION"] == 1
     assert stated["BOTTOM FRICTION DISSIPATION"] == 1
@@ -156,7 +157,8 @@ def test_the_answers_are_the_module_s_own_rows():
     assert named["breaker_dissipation_max_m2s"] == "DBR"
     for token in ("HM0", "TPD", "DMOY", "BETA", "DBR"):
         assert token in WAC.MODULE_OUTPUT
-    assert [p.variable for p in template.OUTPUTS] == ["HM0", "TPD", "DMOY"]
+    assert [p.variable or p.kind
+            for p in template.OUTPUTS] == ["HM0", "TPD", "DMOY", "spectrum"]
 
 
 def test_every_charted_variable_is_captioned():
@@ -164,7 +166,27 @@ def test_every_charted_variable_is_captioned():
     from trid3nt_server.workflows.telemac.templates.nearshore_waves import (
         nearshore_waves as template)
 
-    assert all(p.variable in template.CAPTIONS for p in template.OUTPUTS)
+    assert all((p.variable or p.kind) in template.CAPTIONS
+               for p in template.OUTPUTS)
+
+
+def test_the_spectrum_is_recorded_where_the_station_settled():
+    """The three charted numbers are statistics OF a spectrum, so the deck names
+    the station as a printout point and publishes the spectrum itself. The
+    keyword takes the abscissae apart from the ordinates, and a settled point is
+    one value with an order - so each is read off the pair by position."""
+    from trid3nt_server.workflows.telemac.templates.nearshore_waves import (
+        nearshore_waves as template)
+
+    asserted = template.STEERING.ASSERTED
+    assert asserted["ABSCISSAE_OF_SPECTRUM_PRINTOUT_POINTS"] == [
+        Ref("station.at.0")]
+    assert asserted["ORDINATES_OF_SPECTRUM_PRINTOUT_POINTS"] == [
+        Ref("station.at.1")]
+    # The spectra are read off the file the deck named, never off the wave field.
+    assert asserted["PUNCTUAL_RESULTS_FILE"] != asserted["ED_RESULTS_FILE"]
+    read = next(p for p in template.OUTPUTS if p.kind == "spectrum")
+    assert read.at is template._STATION and read.publish == "chart"
 
 
 def _deck():

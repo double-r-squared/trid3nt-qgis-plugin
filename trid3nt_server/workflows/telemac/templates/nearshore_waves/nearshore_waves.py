@@ -23,7 +23,13 @@ from trid3nt_server.workflows.runtime import (
 )
 from trid3nt_server.workflows.mesh.tool import mesh_op, tool
 from trid3nt_server.workflows.solver.compute_class import compute_class
-from trid3nt_server.workflows.telemac.modules import WAC, field, mesh, series
+from trid3nt_server.workflows.telemac.modules import (
+    WAC,
+    field,
+    mesh,
+    series,
+    spectrum,
+)
 from trid3nt_server.workflows.telemac.modules.tomawac import RESULT_FILENAME
 from trid3nt_server.workflows.telemac.templates.nearshore_waves.declarations import (
     ACCEPTS,
@@ -42,6 +48,10 @@ __all__ = ["ANSWER", "CAPTIONS", "DATA", "MESH", "OUTPUTS", "PARAMS", "STEERING"
 _GEOMETRY = "coast.slf"
 _BOUNDARY = "coast.cli"
 _STEERING_FILE = "tom_nearshore.cas"
+#: The PUNCTUAL file, which is not a field over the domain: it is the whole
+#: directional spectrum at each point the deck names, written over the polar
+#: frequency-direction grid.
+_SPECTRA = "tom_nearshore.spe"
 
 #: WHERE the waves are read over time: the point the ask gave, settled onto a
 #: node of the accepted mesh, so every chart is a node the run solved on. The
@@ -132,6 +142,15 @@ class STEERING(WAC):
     BOUNDARY_PEAK_FREQUENCY = Ref("wave.peak_frequency_hz")
     BOUNDARY_MAIN_DIRECTION_1 = Ref("wave.direction_deg")
 
+    #: THE SPECTRUM ITSELF at the station, which is the sea state the three
+    #: charted numbers are summary statistics OF: where the energy sits in
+    #: frequency, and how it is spread over direction. The engine takes the 2D
+    #: node nearest each coordinate, so the pair is the settled station in the
+    #: mesh's own metres - one value with an order, read by position.
+    PUNCTUAL_RESULTS_FILE = _SPECTRA
+    ABSCISSAE_OF_SPECTRUM_PRINTOUT_POINTS = [Ref("station.at.0")]
+    ORDINATES_OF_SPECTRUM_PRINTOUT_POINTS = [Ref("station.at.1")]
+
     #: WHAT THE WATER STANDS AT. TOMAWAC carries no free surface of its own: the
     #: depth every node shoals over is this level less the bed, so the tide the
     #: gauge reported is what decides where the waves break.
@@ -189,11 +208,13 @@ OUTPUTS = [
     series("HM0", at=_STATION).chart(),
     series("TPD", at=_STATION).chart(),
     series("DMOY", at=_STATION).chart(),
+    spectrum(at=_STATION).chart(),
 ]
 CAPTIONS = {"HM0": "significant wave height", "TPD": "peak wave period",
             "DMOY": "mean wave direction", "BETA": "breaking rate",
             "DBR": "breaker dissipation", "wave": "a sea state",
-            "level": "a water-surface elevation"}
+            "level": "a water-surface elevation",
+            "spectrum": "wave energy by frequency at the station"}
 
 #: The run's ANSWER, as the numbers a reader has to be able to check: the highest
 #: wave anywhere in the water, the three the station stands under when the window
