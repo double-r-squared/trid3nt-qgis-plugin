@@ -29,6 +29,10 @@ from trid3nt_server.workflows.telemac.templates.ice_cover import ice_cover as te
 #: it: the engine stops at an instant outside the table, so a week-long run is
 #: only authorable against a week of observations.
 _WEEK_HOURS = 7 * 24 + 1
+
+#: The moment the run opens at, which is the weather table's t = 0: the record
+#: has to hold an observation at or before it and one at or after the close.
+_OPENS = "2024-01-11T00:00:00Z"
 _STATION = {"lon": -122.67, "lat": 45.52, "name": "Ice station"}
 
 #: The baseline Params the domain slot, the module dictionaries and the runtime
@@ -169,7 +173,8 @@ def _sheet(monkeypatch, **floor):
         geometry_reader, "read_geometry_doc",
         lambda layer: {"features": [_observation(hour)
                                     for hour in range(_WEEK_HOURS)]})
-    return fill(template.STEERING, **floor, produced={
+    return fill(template.STEERING, **floor,
+                params={"event_time": _OPENS}, produced={
         "settled": {"title": "DOMAIN", "time_step_s": 5.0,
                     "liquid_boundary_order": ["inflow", "outflow"],
                     "liquid_boundary_prescribes": ["flowrate", "elevation"],

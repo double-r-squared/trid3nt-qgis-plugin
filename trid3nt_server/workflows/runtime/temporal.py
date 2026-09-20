@@ -197,7 +197,7 @@ class Series:
 
         stamps = pd.to_datetime([stamp for stamp, _v in samples], utc=True)
         order = sorted(range(len(stamps)), key=lambda i: stamps[i])
-        origin = (pd.Timestamp(at, tz="UTC") if at is not None
+        origin = (pd.to_datetime(at, utc=True) if at is not None
                   else stamps[order[0]])
         return cls([float(start_s) + (stamps[i] - origin).total_seconds()
                     for i in order],

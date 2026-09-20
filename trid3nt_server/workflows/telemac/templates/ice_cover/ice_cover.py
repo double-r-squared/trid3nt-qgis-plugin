@@ -205,9 +205,12 @@ class STEERING(T2D):
     #: station whose record can drive the run end to end is the one taken, and
     #: what is written into it is what the readers of this run read. The engine
     #: stops at an instant outside the table, so the file is written for the
-    #: DURATION this deck states rather than for a second number beside it.
+    #: DURATION this deck states rather than for a second number beside it, and
+    #: its t = 0 is the moment the run opens at rather than the record's own
+    #: first sample.
     atmosphere = Atmosphere(observed=DATA.weather, at=_STATION,
-                            duration_s=Ref("sheet.DURATION"))
+                            duration_s=Ref("sheet.DURATION"),
+                            event_time=ParamRef("event_time"))
 
     #: The ice. Five statements, and every other constant the module carries -
     #: the heat budget itself, the frazil class count and its seeding, the

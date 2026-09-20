@@ -154,13 +154,14 @@ def _rows(hours=range(0, 24), **overrides):
     return [_feature(_observation(hour, **overrides)) for hour in hours]
 
 
-def _observed(monkeypatch, rows, *, duration_s=20.0 * _HOUR, **overrides):
+def _observed(monkeypatch, rows, *, duration_s=20.0 * _HOUR, event_time=None,
+              **overrides):
     """The fetched record answers with ``rows`` and nothing reaches the network."""
     monkeypatch.setattr(geometry_reader, "read_geometry_doc",
                         lambda layer: {"features": rows})
     return atmospheric_data_file(Atmosphere(
         observed="s3://cache/raws.fgb", at=_SEED, duration_s=duration_s,
-        **overrides))
+        event_time=event_time, **overrides))
 
 
 def _column(text: str, mnemonic: str) -> list[float]:
@@ -169,10 +170,32 @@ def _column(text: str, mnemonic: str) -> list[float]:
     return [float(row.split()[index]) for row in lines[3:]]
 
 
-def test_the_record_opens_the_run_clock_at_its_first_observation(monkeypatch):
+def test_a_run_stating_no_moment_opens_its_clock_at_the_first_observation(
+        monkeypatch):
+    """The record's own first sample is the only honest origin when the run
+    names no moment, and the table stops at the first observation at or after
+    the run closes."""
     text = _observed(monkeypatch, _rows())
-    assert _column(text, "T") == [hour * _HOUR for hour in range(24)]
+    assert _column(text, "T") == [hour * _HOUR for hour in range(21)]
     assert "SCOC1" in text.splitlines()[0] and "2026-09-01 00:00" in text.splitlines()[0]
+
+
+def test_the_table_opens_at_the_moment_the_run_opens_at(monkeypatch):
+    """t = 0 IS the run's own opening: an hourly record bracketing a six-hour
+    run is read from that moment rather than re-anchored on its first sample."""
+    text = _observed(monkeypatch, _rows(range(11, 20)), duration_s=6.0 * _HOUR,
+                     event_time="2026-09-01T12:00:00Z")
+    assert _column(text, "T") == [hour * _HOUR for hour in range(7)]
+    assert "2026-09-01 12:00" in text.splitlines()[0]
+
+
+def test_a_record_opening_after_the_run_does_refuses_naming_the_opening(
+        monkeypatch):
+    """A record whose first sample falls inside the run would be read flat back
+    to it, which is a forcing nobody measured."""
+    with pytest.raises(TelemacError, match="no observation at or before the opening"):
+        _observed(monkeypatch, _rows(range(13, 20)), duration_s=6.0 * _HOUR,
+                  event_time="2026-09-01T12:00:00Z")
 
 
 def test_every_reported_unit_is_carried_into_the_unit_its_slot_names(monkeypatch):
@@ -243,7 +266,8 @@ def test_the_nearest_station_that_can_drive_the_run_is_the_one_taken(monkeypatch
 
 def test_a_series_stated_beside_a_record_stands_over_what_the_record_reports(
         monkeypatch):
-    text = _observed(monkeypatch, _rows(), cloud_octas=[2.0] * 24)
+    text = _observed(monkeypatch, _rows(), duration_s=23.0 * _HOUR,
+                     cloud_octas=[2.0] * 24)
     # The network reports no cloud at all, so the stated column is the only one
     # there is - and the run reads a cloud rather than the engine's constant.
     assert _column(text, "CLDC") == [2.0] * 24
@@ -290,7 +314,7 @@ def test_an_airport_row_short_of_a_column_the_run_does_not_read_is_an_instant(
     text = atmospheric_data_file(
         Atmosphere(observed="s3://cache/asos.fgb", at=_SEED,
                    duration_s=20.0 * _HOUR), _ice_columns())
-    assert len(text.splitlines()) == 3 + 24
+    assert len(text.splitlines()) == 3 + 21
 
 
 def test_a_record_holding_no_station_refuses_by_name(monkeypatch):

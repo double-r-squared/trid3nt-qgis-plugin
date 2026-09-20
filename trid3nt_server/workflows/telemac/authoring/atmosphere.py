@@ -9,6 +9,7 @@ fit a slot are that slot's own ingestion."""
 
 from __future__ import annotations
 
+import bisect
 import datetime as _dt
 import math
 from types import MappingProxyType
@@ -212,13 +213,15 @@ def Atmosphere(*, times_s: Any = None, air_temp_c: Any = None,  # noqa: N802
                cloud_octas: Any = None, solar_radiation_wm2: Any = None,
                pressure_pa: Any = None, rain_mm: Any = None,
                observed: Any = None, at: Any = None,
-               duration_s: Any = None) -> Mapping[str, Any]:
+               duration_s: Any = None,
+               event_time: Any = None) -> Mapping[str, Any]:
     """The weather over the domain as time series on the run's own clock: what a
     heat budget reads, plus the rain and the wind beside it.
 
     ``observed`` is a fetched station record the nearest usable station is taken
     from; a series stated here stands over what that record reports, and one
-    left out writes no column, so the host reads its own constant keyword."""
+    left out writes no column, so the host reads its own constant keyword.
+    ``event_time`` is the moment the run opens at, which is the table's t = 0."""
     # A MAPPING, not an object: the sheet's one ref walk descends mappings. Every
     # series shares one clock, because the file is ONE table - the engine
     # interpolates every column between the same two rows.
@@ -230,7 +233,8 @@ def Atmosphere(*, times_s: Any = None, air_temp_c: Any = None,  # noqa: N802
         "wind_speed_mps": wind_speed_mps, "wind_from_deg": wind_from_deg,
         "cloud_octas": cloud_octas, "solar_radiation_wm2": solar_radiation_wm2,
         "pressure_pa": pressure_pa, "rain_mm": rain_mm,
-        "observed": observed, "at": at, "duration_s": duration_s})
+        "observed": observed, "at": at, "duration_s": duration_s,
+        "event_time": event_time})
 
 
 #: The columns whose UNIT two readers of this one file disagree on, by the
@@ -427,7 +431,7 @@ def _from_record(value: Mapping[str, Any], columns: Sequence[str]
     for distance_km, station, observations in stations:
         try:
             times, series, opened = _series(observations, value.get("duration_s"),
-                                            columns)
+                                            columns, value.get("event_time"))
         except ValueError as why:
             refusals.append(f"{station} ({distance_km:.0f} km): {why}")
             continue
@@ -435,8 +439,8 @@ def _from_record(value: Mapping[str, Any], columns: Sequence[str]
         absent = [COLUMNS[name][0] for name in columns if name not in series]
         return times, series, (
             f"the weather is the station {station}, {distance_km:.0f} km from "
-            f"the reach: {len(times)} observations opening at {stamp} UTC, which "
-            "is this run t = 0."
+            f"the reach: {len(times)} observations bracketing the run, which "
+            f"opens at {stamp} UTC and is this table's t = 0."
             + (f" This network reports no {', '.join(absent)}, so the engine "
                "reads its own constant for it." if absent else ""))
     raise TelemacError(
@@ -478,12 +482,15 @@ def _by_station(rows: Sequence[Mapping[str, Any]], lon: float, lat: float
 
 
 def _series(observations: Sequence[Mapping[str, Any]], duration_s: Any,
-            columns: Sequence[str]
+            columns: Sequence[str], event_time: Any = None
             ) -> tuple[list[float], dict[str, Any], _dt.datetime]:
     """One station's observations -> the slots, on the run's clock from zero.
 
-    t = 0 is the station's FIRST complete observation, so the run opens on an
-    instant somebody measured rather than on a midnight nobody did."""
+    t = 0 IS THE MOMENT THE RUN OPENS AT: the record is aligned to it rather
+    than re-anchored on its own first sample, and the table is read between the
+    last observation at or before that moment and the first at or after the
+    close. A run that states no moment opens on the first observation, which is
+    the only honest origin when nothing else is stated."""
     kept: dict[_dt.datetime, dict[str, float]] = {}
     for observation in observations:
         reported = _network(observation)
@@ -497,23 +504,45 @@ def _series(observations: Sequence[Mapping[str, Any]], duration_s: Any,
     stamps = sorted(kept)
     if len(stamps) < _MIN_INSTANTS:
         raise ValueError(f"{len(stamps)} complete observations in the window")
+    opens = _instant(event_time) or stamps[0]
+    closes = (opens + _dt.timedelta(seconds=float(duration_s))
+              if duration_s is not None else stamps[-1])
+    held = _bracketing(stamps, opens, closes)
     # Each slot is a measured record on this station's clock, and it is judged
     # where every record is: the hole bound is the alignment's, not this file's.
     try:
         series = {slot: align(Series.from_samples(
-                      [(stamp, kept[stamp][slot]) for stamp in stamps],
-                      units=COLUMNS[slot][1]), max_gap_s=_MAX_GAP_S).series
-                  for slot in kept[stamps[0]]}
+                      [(stamp, kept[stamp][slot]) for stamp in held],
+                      units=COLUMNS[slot][1], at=opens),
+                      max_gap_s=_MAX_GAP_S).series
+                  for slot in kept[held[0]]}
     except TemporalGapError as why:
         raise ValueError(str(why)) from why
     times = list(next(iter(series.values())).times_s)
-    # The engine STOPS when a requested instant falls outside the table at either
-    # end, so a run longer than the record it is driven by cannot be authored.
-    if duration_s is not None and times[-1] < float(duration_s):
-        raise ValueError(f"the record runs {times[-1] / 3600.0:.0f} h and the "
-                         f"run is {float(duration_s) / 3600.0:.0f} h long")
     return (times, {slot: list(found.values) for slot, found in series.items()},
-            stamps[0])
+            opens)
+
+
+def _bracketing(stamps: Sequence[_dt.datetime], opens: _dt.datetime,
+                closes: _dt.datetime) -> list[_dt.datetime]:
+    """The observations the run is READ BETWEEN: the last at or before it opens
+    and the first at or after it closes.
+
+    The engine STOPS when a requested instant falls outside the table at either
+    end, so a record that does not bracket the run cannot drive it; the refusal
+    names the end the bracket is missing at."""
+    if stamps[0] > opens or stamps[-1] < closes:
+        raise ValueError(
+            f"the record runs {stamps[0]:%Y-%m-%d %H:%M} to "
+            f"{stamps[-1]:%Y-%m-%d %H:%M} UTC "
+            f"({(stamps[-1] - stamps[0]).total_seconds() / 3600.0:.0f} h) and "
+            f"the run opens at {opens:%Y-%m-%d %H:%M} and closes at "
+            f"{closes:%Y-%m-%d %H:%M} "
+            f"({(closes - opens).total_seconds() / 3600.0:.0f} h): it holds no "
+            "observation at or "
+            + ("before the opening" if stamps[0] > opens else "after the close"))
+    return list(stamps[bisect.bisect_right(stamps, opens) - 1:
+                       bisect.bisect_left(stamps, closes) + 1])
 
 
 def _instant(stamp: Any) -> _dt.datetime | None:

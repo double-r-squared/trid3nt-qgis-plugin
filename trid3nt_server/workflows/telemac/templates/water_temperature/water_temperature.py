@@ -15,6 +15,7 @@ from trid3nt_server.inputs import point_arg
 from trid3nt_server.inputs.instant import event_time
 from trid3nt_server.workflows.runtime import (
     Data,
+    ParamRef,
     Ref,
     register_workflow,
 )
@@ -200,9 +201,12 @@ class STEERING(T2D):
     #: neither column is written and the engine reads its own CLOUD COVER and
     #: VALUE OF ATMOSPHERIC PRESSURE, both of which the card shows. The engine
     #: stops at an instant outside the table, so the file is written for the
-    #: DURATION this deck states rather than for a second number beside it.
+    #: DURATION this deck states rather than for a second number beside it, and
+    #: its t = 0 is the moment the run opens at rather than the record's own
+    #: first sample.
     atmosphere = Atmosphere(observed=DATA.weather, at=_STATION,
-                            duration_s=Ref("sheet.DURATION"))
+                            duration_s=Ref("sheet.DURATION"),
+                            event_time=ParamRef("event_time"))
 
     #: The heat budget, on the engine's own calibration constants: this question
     #: asks what the published exchange gives under real weather, so the run
