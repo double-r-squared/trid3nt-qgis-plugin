@@ -38,19 +38,19 @@ The values the template declares. `desc` is what the model reads when it fills o
 
 | field | the proving run's value |
 |---|---|
-| `bed_evolution_max_m` | 0.002018596511334181 |
-| `bed_evolution_min_m` | -0.0039045989979058504 |
-| `net_bed_mass_kg` | 804.7181 |
+| `bed_evolution_max_m` | 0.0027289653662592173 |
+| `bed_evolution_min_m` | -0.004709255415946245 |
+| `net_bed_mass_kg` | 1362.207 |
 | `surface_d50_spread_m` | 0.0 |
-| `marker_cmax_mgl` | 1.5659886598587036 |
+| `marker_cmax_mgl` | 1.42881441116333 |
 | `active_frames` | 18 |
 | `mesh_size_m` | 20.888 |
 
 It publishes these layers onto the canvas:
 
-- Input: river reach (river_reach)
-- Input: ehydro surveys (ehydro_surveys)
-- Input: bed elevation (dem, 3DEP 1-10 m US lidar (default 10 m); Copernicus GLO-30 30 m global via source=copernicus, datum NAVD88 (metres, positive up))
+- Input: domain (river_reach)
+- Input: bed (ehydro_surveys)
+- Input: bed (3dep_extra, datum NAVD88 (metres, positive up))
 - Release point (user) - river_reach_domain
 - Velocity u over time (river_reach_domain_mesh)
 - Velocity v over time (river_reach_domain_mesh)
@@ -68,23 +68,23 @@ It publishes these layers onto the canvas:
 
 ## The proving run
 
-Run `01M2W9C68ZQVTJHDE2F9GZ36TA`, 2026-09-19T07:34:20.362781+00:00, 38.059 s, at commit `966392d7b95ac996d00a5df14f667096b64a3e2a-dirty`.
+Run `01M2Z5THE97GFYB3Q7DD2EWCFC`, 2026-09-20T10:30:08.668021+00:00, 43.25 s, at commit `51e023434461a083a833809792aa1c54c2fb790e`.
 
-![Every layer the run published, stacked and framed on the result (run 01M2W9C68ZQVTJHDE2F9GZ36TA)](telemac_bed_scour/telemac_bed_scour.png)
+![Every layer the run published, stacked and framed on the result (run 01M2Z5THE97GFYB3Q7DD2EWCFC)](telemac_bed_scour/telemac_bed_scour.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M2W9C68ZQVTJHDE2F9GZ36TA)*
+*Every layer the run published, stacked and framed on the result (run 01M2Z5THE97GFYB3Q7DD2EWCFC)*
 
-![The solve, frame by frame (run 01M2W9C68ZQVTJHDE2F9GZ36TA)](telemac_bed_scour/telemac_bed_scour_animation.gif)
+![The solve, frame by frame (run 01M2Z5THE97GFYB3Q7DD2EWCFC)](telemac_bed_scour/telemac_bed_scour_animation.gif)
 
-*The solve, frame by frame (run 01M2W9C68ZQVTJHDE2F9GZ36TA)*
+*The solve, frame by frame (run 01M2Z5THE97GFYB3Q7DD2EWCFC)*
 
-![final frame (run 01M2W9C68ZQVTJHDE2F9GZ36TA)](telemac_bed_scour/telemac_bed_scour_final_frame.png)
+![final frame (run 01M2Z5THE97GFYB3Q7DD2EWCFC)](telemac_bed_scour/telemac_bed_scour_final_frame.png)
 
-*final frame (run 01M2W9C68ZQVTJHDE2F9GZ36TA)*
+*final frame (run 01M2Z5THE97GFYB3Q7DD2EWCFC)*
 
-![marker concentration - the chart the run persisted (run 01M2W9C68ZQVTJHDE2F9GZ36TA)](telemac_bed_scour/telemac_bed_scour_chart_marker_concentration.png)
+![marker concentration - the chart the run persisted (run 01M2Z5THE97GFYB3Q7DD2EWCFC)](telemac_bed_scour/telemac_bed_scour_chart_marker_concentration.png)
 
-*marker concentration - the chart the run persisted (run 01M2W9C68ZQVTJHDE2F9GZ36TA)*
+*marker concentration - the chart the run persisted (run 01M2Z5THE97GFYB3Q7DD2EWCFC)*
 
 ### The sheet it filled
 
@@ -111,11 +111,11 @@ await TOOL_REGISTRY['telemac_bed_scour'].fn(
     mesh_resolution_m=40.0,
     release={'lon': -122.669784, 'lat': 45.518485, 'name': None},
     spill_duration_s=300.0,
-    carrier=993.9,
-    stage=2.694,
+    discharge=993.9,
+    level=2.694,
     keywords={'DURATION': 1800.0},
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2W9C68ZQVTJHDE2F9GZ36TA` and commit `966392d7b95ac996d00a5df14f667096b64a3e2a-dirty`. The full argument record is [`telemac_bed_scour/run.json`](telemac_bed_scour/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2Z5THE97GFYB3Q7DD2EWCFC` and commit `51e023434461a083a833809792aa1c54c2fb790e`. The full argument record is [`telemac_bed_scour/run.json`](telemac_bed_scour/run.json).
 
