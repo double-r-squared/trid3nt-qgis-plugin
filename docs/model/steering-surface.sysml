@@ -890,6 +890,15 @@ package SteeringSurface {
         a host deck that states the switch itself keeps what it said. The user
         code each deck of a run names is staged off that deck, never off the
         host's alone.
+
+        A MODULE STATES ITS OWN SPELLINGS. The keyword a deck names its result
+        in, and the keywords its run LENGTH is spelled in, are the module's
+        statements exactly as its output table is: one module names the window
+        itself, another names a step and a count of them whose product it is,
+        and a module that does not march in time names none. Every stage that
+        needs either - the settle the water opens under, the window a matched
+        series source is filtered on, the file the primitives read - asks the
+        module, so no reader carries one module's word for all of them.
         */
     }
 
@@ -1330,6 +1339,14 @@ package SteeringSurface {
         "tests/telemac/test_telemac_tomawac.py::test_the_spectra_are_kept_as_result_files_and_never_rowed_as_a_mesh";
     verify requirement OutputsAreTheModules by
         "tests/telemac/test_telemac_tomawac.py::test_the_module_appends_no_tracer_and_arms_the_switch_it_is_felt_through";
+    verify requirement OutputsAreTheModules by
+        "tests/telemac/test_telemac_spectrum_read.py::test_the_polar_grid_decodes_into_frequencies_and_directions";
+    verify requirement OutputsAreTheModules by
+        "tests/telemac/test_telemac_spectrum_read.py::test_the_measures_are_the_energy_the_stated_spectrum_carries";
+    verify requirement OutputsAreTheModules by
+        "tests/telemac/test_telemac_spectrum_read.py::test_the_point_asked_about_is_answered_by_the_nearest_printout_point";
+    verify requirement OutputsAreTheModules by
+        "tests/telemac/test_telemac_spectrum_read.py::test_no_module_whose_result_is_a_mesh_reads_a_spectrum";
     satisfy requirement OutputsAreTheModules by wrapper;
     satisfy requirement OutputsAreTheModules by output;
     satisfy requirement OutputsAreTheModules by sheet;
@@ -1367,6 +1384,15 @@ package SteeringSurface {
         "tests/telemac/test_telemac_module_outputs.py::test_the_card_carries_every_variable_each_deck_writes";
     verify requirement OutputsAreTheModules by
         "tests/telemac/test_telemac_module_outputs.py::test_the_published_order_is_the_table_order_across_host_and_coupled";
+
+    verify requirement ModuleIsTheUnit by
+        "tests/telemac/test_telemac_tomawac.py::test_the_module_states_the_keyword_its_own_result_is_named_in";
+    verify requirement ModuleIsTheUnit by
+        "tests/telemac/test_telemac_tomawac.py::test_the_module_states_how_its_own_run_length_is_spelled";
+    verify requirement ModuleIsTheUnit by
+        "tests/telemac/test_nearshore_waves_template.py::test_the_run_length_is_the_product_the_module_spells_it_as";
+    verify requirement ModuleIsTheUnit by
+        "tests/telemac/test_nearshore_waves_template.py::test_the_run_is_read_off_the_file_the_module_spells_its_results_in";
 
     satisfy requirement InputsAreTypedPrimitives by point;
     satisfy requirement InputsAreTypedPrimitives by canvasGate;
