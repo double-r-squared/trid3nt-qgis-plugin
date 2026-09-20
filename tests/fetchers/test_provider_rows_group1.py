@@ -85,3 +85,61 @@ def test_epa_frs_facilities_is_a_provider_row_per_program() -> None:
 
 def test_epa_frs_facilities_refuses_by_name_with_no_session() -> None:
     _assert_refuses_with_no_session("fetch_epa_frs_facilities", facility_program="tri")
+
+
+def test_hifld_critical_infrastructure_is_a_provider_row_per_type() -> None:
+    _assert_open_row("fetch_hifld_critical_infrastructure")
+    spec = _spec("fetch_hifld_critical_infrastructure")
+    hospitals = qgis_provider.build_uri(
+        spec, {"bbox": _BBOX, "facility_type": "hospitals"}
+    )
+    assert hospitals.endswith("Hospitals/FeatureServer/0'")
+    power = qgis_provider.build_uri(
+        spec, {"bbox": _BBOX, "facility_type": "power_plants"}
+    )
+    assert power.endswith("Power_Plants/FeatureServer/0'")
+
+
+def test_hifld_transmission_lines_is_a_provider_row_in_mode_open() -> None:
+    _assert_open_row("fetch_hifld_transmission_lines")
+    spec = _spec("fetch_hifld_transmission_lines")
+    filtered = qgis_provider.build_uri(
+        spec, {"bbox": _BBOX, "min_voltage_kv": 230.0}
+    )
+    assert filtered.endswith("sql=VOLTAGE >= 230")
+
+
+def test_mtbs_burn_severity_is_a_provider_row_in_mode_open() -> None:
+    _assert_open_row("fetch_mtbs_burn_severity")
+    spec = _spec("fetch_mtbs_burn_severity")
+    filtered = qgis_provider.build_uri(
+        spec, {"bbox": _BBOX, "year_range": [2010, 2020]}
+    )
+    assert filtered.endswith("sql=YEAR >= 2010 AND YEAR <= 2020")
+
+
+def test_nifc_fire_perimeters_is_a_provider_row_in_mode_open() -> None:
+    _assert_open_row("fetch_nifc_fire_perimeters")
+    spec = _spec("fetch_nifc_fire_perimeters")
+    plain = qgis_provider.build_uri(spec, {"bbox": _BBOX})
+    assert plain.endswith("WFIGS_Interagency_Perimeters_Current/FeatureServer/0'")
+
+
+def test_usace_levees_is_a_provider_row_per_layer() -> None:
+    _assert_open_row("fetch_usace_levees")
+    spec = _spec("fetch_usace_levees")
+    default = qgis_provider.build_uri(spec, {"bbox": _BBOX, "layer": "leveed_areas"})
+    assert default.endswith("FeatureServer/16'")
+    routes = qgis_provider.build_uri(spec, {"bbox": _BBOX, "layer": "system_routes"})
+    assert routes.endswith("FeatureServer/14'")
+
+
+@pytest.mark.parametrize("name, extra", [
+    ("fetch_hifld_critical_infrastructure", {"facility_type": "hospitals"}),
+    ("fetch_hifld_transmission_lines", {}),
+    ("fetch_mtbs_burn_severity", {}),
+    ("fetch_nifc_fire_perimeters", {}),
+    ("fetch_usace_levees", {}),
+])
+def test_group1_row_refuses_by_name_with_no_session(name: str, extra: dict) -> None:
+    _assert_refuses_with_no_session(name, **extra)

@@ -1,117 +1,97 @@
-# HIFLD transmission lines over an ArcGIS FeatureServer, with a declarative WHERE
-# builder for the VOLTAGE floor and const derived columns.
+# HIFLD electric power transmission lines, opened on the user's map through
+# QGIS's own ArcGIS FeatureServer provider, with an optional VOLTAGE floor.
 schema_version: v1
 
 name: fetch_hifld_transmission_lines
-source_class: hifld_transmission_lines     # cache prefix
-error_prefix: HIFLD_TRANSMISSION           # error token, distinct from the cache prefix
-input_error_suffix: INPUT_INVALID          # HIFLDTransmissionInputError -> *_INPUT_INVALID
-shape: vector-fgb
-supports_global_query: false               # HIFLD is US-only, bbox required
+source_class: hifld_transmission_lines
+error_prefix: HIFLD_TRANSMISSION
+input_error_suffix: INPUT_INVALID
+shape: record
+supports_global_query: false
 
 endpoints:
   data:
-    url: "https://services1.arcgis.com/Hp6G80Pky0om7QvQ/arcgis/rest/services/Electric_Power_Transmission_Lines/FeatureServer/0/query"
+    url: "https://services1.arcgis.com/Hp6G80Pky0om7QvQ/arcgis/rest/services/Electric_Power_Transmission_Lines/FeatureServer/0"
 auth:
   mode: none
   user_agent: trid3nt_default
 
 params:
-  bbox:           {type: bbox, required: true, quantize: round_6dp}
+  bbox: {type: bbox, required: true, quantize: round_6dp}
   min_voltage_kv: {type: float, required: false, default: null, min: 0.0}
-gates:
-  max_features: 30000                        # paging cap
 
 ingest:
-  access: ogr
-  ogr: {driver: ESRIJSON}
-  query_template: {out_fields: "*", order_by: "OBJECTID ASC"}
-  # VOLTAGE floor only when the caller pins one (VOLTAGE >= {v:g}).
+  access: qgis_provider
+  qgis_provider:
+    provider: arcgisfeatureserver
+    uri: "crs='EPSG:4326' url='{url}'"
+    mode: open
   where_clauses:
     - {template: "VOLTAGE >= {min_voltage_kv:g}", require: [min_voltage_kv]}
-  # LineString / MultiLineString only (non-line geoms are dropped defensively).
-  geometry_filter: {geom_types: [LineString, MultiLineString]}
-  json_coerce_nested: true
-  derived_columns:
-    infra_type:  {source: const, value: transmission_line}
-    infra_label: {source: const, value: "Electric Power Transmission Line"}
 
 normalize:
   crs: "EPSG:4326"
   units: "kV"
 
 output:
-  layer_type: vector
-  ext: fgb
-  role: primary
-  style:
-    kind: reference
-    geometry: line
-  emit_bbox: true                            # the LayerURI carries bbox
+  layer_type: record
+  ext: json
 
 cache:
-  ttl_class: static-30d
-payload_estimate:                            # est_features(=area*1200)*700/(1024^2)
-  model: per_feature
-  features_per_sq_deg: 1200.0
-  kb_per_feature: 0.68359375                 # 700 bytes / 1024
-  floor_mb: 0.02
+  ttl_class: live-no-cache
+payload_estimate:
+  model: bbox_area
+  mb_per_sq_deg: 0.0
+  floor_mb: 0.0
 
 caveats:
-  - "US-only HIFLD bulk transmission; empty bbox -> header-only FGB (honest-empty, never a fabricated error)"
-  - "min_voltage_kv is an optional nominal-voltage floor (kV); negative HIFLD sentinels are excluded by the >= filter"
+  - "HIFLD electric power transmission lines via a public ArcGIS FeatureServer, opened as a live map overlay"
+  - "min_voltage_kv is an optional nominal-voltage floor (kV) applied server-side as the layer's subset"
+  - "the layer is drawn by QGIS from the service, so its features are on the map but not in the case store and no analysis reads them"
+  - "US-only HIFLD; bulk transmission only, not last-mile distribution"
   - "model-callable, not matched: infrastructure lines, not one of the seventeen matched data classes"
 
 docstring: |-
-  HIFLD electric power transmission lines within a bbox as a FlatGeobuf layer.
+  HIFLD electric power transmission lines, added to the map.
 
-  Fetches national Homeland Infrastructure Foundation-Level Data (HIFLD)
-  ``Electric Power Transmission Lines`` polyline segments intersecting a bbox,
-  from a public, unauthenticated ArcGIS REST FeatureService. Returns a
-  FlatGeobuf of ``LineString`` / ``MultiLineString`` features in EPSG:4326 with
-  the HIFLD attribute payload (ID, TYPE, STATUS, OWNER, VOLTAGE, VOLT_CLASS,
-  connected substations SUB_1 / SUB_2) plus ``infra_type`` / ``infra_label``.
+  Opens national Homeland Infrastructure Foundation-Level Data (HIFLD)
+  ``Electric Power Transmission Lines`` as a live layer served by QGIS's own
+  ArcGIS FeatureServer provider, from a public, unauthenticated service.
 
   This is the LINE (power-grid backbone) complement to the POINT lifeline
-  inventory in ``fetch_hifld_critical_infrastructure`` -- pair the two
-  (power_plants points + transmission lines) for full electric-power exposure.
+  inventory in ``fetch_hifld_critical_infrastructure``.
 
   **When to use:**
-  - "Where are the power transmission lines near [place]?"; "show the electric
-    grid in this area"; "what high-voltage lines cross this footprint?".
-  - A hazard / exposure workflow needs the transmission network inside a flood
-    / fire / surge / earthquake footprint.
-  - Lifeline resilience: which corridors / voltage classes are hazard-exposed.
+  - "Where are the power transmission lines near [place]?"; "show the
+    electric grid in this area"; "what high-voltage lines cross this
+    footprint?".
+  - Lifeline resilience context for a flood / fire / surge / earthquake
+    footprint.
 
   **When NOT to use:**
+  - To COMPUTE with the line attributes - intersect them with fields, feed
+    a model. The overlay is drawn from the service and its features never
+    reach the store; nothing downstream can read them.
   - Power PLANTS / hospitals / schools / fire / police POINTS ->
     ``fetch_hifld_critical_infrastructure``. Dams -> ``fetch_usace_dams``.
-  - Non-US areas (HIFLD is US-only). Real-time grid load / outage status
-    (HIFLD is static). Last-mile distribution lines (HIFLD is bulk transmission).
+  - Non-US areas (HIFLD is US-only). Last-mile distribution lines (HIFLD is
+    bulk transmission).
 
   **Parameters:**
-      bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326. Required -- ``supports_global_query=False``. Example Houston metro:
-          ``(-95.8, 29.5, -95.0, 30.1)``.
+      bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326. Required.
       min_voltage_kv: Optional nominal-voltage floor in kV. When set, only
-          segments with ``VOLTAGE >= min_voltage_kv`` are returned (e.g.
-          ``230`` or ``345`` to isolate the high-voltage backbone). Default
-          ``None`` returns all voltage classes.
+          segments with ``VOLTAGE >= min_voltage_kv`` are drawn.
 
   **Returns:**
-      ``LayerURI`` -> FlatGeobuf of ``LineString`` / ``MultiLineString``
-      features in EPSG:4326. Properties carry the HIFLD source columns plus
-      ``infra_type`` (always ``"transmission_line"``) and ``infra_label``.
-      ``layer_type="vector"``, ``role="primary"`` ``units="kV"``.
-
+      A record naming what was opened: the provider, the service uri behind
+      the layer, the layer name and the bbox the map was taken to.
   **Error types:**
-      - ``HIFLDTransmissionInputError``: bad bbox or min_voltage_kv
+      - ``HIFLD_TRANSMISSIONInputError``: bad bbox or min_voltage_kv
         (retryable=False).
-      - ``HIFLDTransmissionUpstreamError``: HTTP/network failure, ArcGIS error
-        envelope, or FlatGeobuf serialization failure (retryable=True).
-      - ``HIFLDTransmissionEmptyError``: no segments in bbox (retryable=False;
-        not raised by default -- empty FGB is returned).
+      - ``HIFLD_TRANSMISSIONUpstreamError``: the provider's own text when it
+        cannot open the service (retryable=True).
 
-  Cache: ``ttl_class="static-30d"``, ``source_class="hifld_transmission_lines"``.
-  Cache key is SHA-256 of ``(bbox-rounded-6dp, min_voltage_kv)``.
+  Requires a live QGIS session: the layer is opened in the user's QGIS, so a
+  headless or direct call refuses by name rather than returning nothing.
 
   ``supports_global_query=False``. No API key required.

@@ -30,6 +30,9 @@ PROMOTED = {
         "source_class": "hifld_critical_infrastructure",
         "properties": ["bbox", "facility_type"],
         "required": ["bbox", "facility_type"],
+        # An overlay QGIS draws from its own service: nothing is stored, so the
+        # row declares live-no-cache and the tool is not cacheable.
+        "cacheable": False,
     },
     "fetch_noaa_coops_tides": {
         "source_class": "noaa_coops_tides",
@@ -44,20 +47,23 @@ PROMOTED = {
     # --- phase-2 wave-2: the ArcGIS FeatureServer/MapServer vector family ---
     "fetch_nifc_fire_perimeters": {
         "source_class": "nifc_perimeters",
-        "properties": ["bbox", "status"],
-        # A None-default param is required-in-schema per the adapter (twin-identical);
-        # status carries a real "active" default so it stays optional.
+        # status queried the "Current" service regardless of its value even
+        # in the twin; the overlay row drops the dead param.
+        "properties": ["bbox"],
         "required": ["bbox"],
+        "cacheable": False,
     },
     "fetch_hifld_transmission_lines": {
         "source_class": "hifld_transmission_lines",
         "properties": ["bbox", "min_voltage_kv"],
         "required": ["bbox", "min_voltage_kv"],
+        "cacheable": False,
     },
     "fetch_mtbs_burn_severity": {
         "source_class": "mtbs_burn_severity",
         "properties": ["bbox", "year_range"],
         "required": ["bbox", "year_range"],
+        "cacheable": False,
     },
     "fetch_nhd_waterbodies": {
         "source_class": "nhd_waterbodies",

@@ -1,133 +1,105 @@
-# HIFLD critical-infrastructure points over an ArcGIS FeatureServer,
-# the canonical resultOffset paging pattern.
+# HIFLD critical-infrastructure points, opened on the user's map through
+# QGIS's own ArcGIS FeatureServer provider: one facility_type, one service.
 schema_version: v1
 
 name: fetch_hifld_critical_infrastructure
-source_class: hifld_critical_infrastructure   # cache prefix
-error_prefix: HIFLD_INFRA                      # error token, distinct from the cache prefix
-input_error_suffix: INPUT_INVALID              # input errors stamp *_INPUT_INVALID
-shape: vector-fgb
-supports_global_query: false                  # HIFLD is US-only
+source_class: hifld_critical_infrastructure
+error_prefix: HIFLD_INFRA
+input_error_suffix: INPUT_INVALID
+shape: record
+supports_global_query: false
 
-# --- endpoints ------------------------------------------------------------
-# The service routes facility_type -> a per-service FeatureServer URL (routing dict
-# below). The router's vector-fgb executor reads ONE `data` endpoint URL and does
-# NOT consult a routing dict, so `data` is pinned to the Hospitals service and the
-# full routing table is retained in ingest.routing.
 endpoints:
-  data:
-    url: "https://services2.arcgis.com/C8EMgrsFcRFL6LrL/arcgis/rest/services/Hospitals/FeatureServer/0/query"
+  hospitals:
+    url: "https://services2.arcgis.com/C8EMgrsFcRFL6LrL/arcgis/rest/services/Hospitals/FeatureServer/0"
+  schools:
+    url: "https://services2.arcgis.com/C8EMgrsFcRFL6LrL/arcgis/rest/services/Public_Schools/FeatureServer/0"
+  fire_stations:
+    url: "https://services2.arcgis.com/C8EMgrsFcRFL6LrL/arcgis/rest/services/Fire_Stations/FeatureServer/0"
+  police:
+    url: "https://services2.arcgis.com/C8EMgrsFcRFL6LrL/arcgis/rest/services/Local_Law_Enforcement_Locations/FeatureServer/0"
+  power_plants:
+    url: "https://services2.arcgis.com/C8EMgrsFcRFL6LrL/arcgis/rest/services/Power_Plants/FeatureServer/0"
 auth:
   mode: none
   user_agent: trid3nt_default
 
-# --- request-param schema -------------------------------------------------
 params:
-  facility_type: {type: enum, required: true,
-                  values: [hospitals, schools, fire_stations, police, power_plants]}
-  bbox:          {type: bbox, required: true, quantize: round_6dp}
-gates:
-  max_features: 30000          # paging cap
+  bbox: {type: bbox, required: true, quantize: round_6dp}
+  facility_type: {type: enum, required: true, lowercase: true,
+                   values: [hospitals, schools, fire_stations, police, power_plants],
+                   aliases: {hospital: hospitals, public_schools: schools,
+                             fire: fire_stations, ems: fire_stations,
+                             law_enforcement: police, power_plant: power_plants}}
 
-# --- ingestion (vector-API-FGB / ArcGIS FeatureServer query) -------------
 ingest:
-  access: ogr
-  ogr: {driver: ESRIJSON}
-  query_template: {out_fields: "*", order_by: "OBJECTID ASC"}
-  # The declarative feature filter, not a hardcode:
-  #  - keep only Point features with finite coords (drops null/non-Point rows)
-  #  - coerce nested (dict/list) HIFLD props to JSON strings (FGB-safe)
-  #  - add derived facility_type (== the request) + facility_label (routing label)
-  geometry_filter: {geom_types: [Point], require_finite: true}
-  json_coerce_nested: true
-  derived_columns:
-    facility_type:  {source: param,   param: facility_type}
-    facility_label: {source: routing, key_param: facility_type, field: label}
-  routing:                     # facility_type -> {service, label}
-    hospitals:     {service: Hospitals, label: Hospital}
-    schools:       {service: Public_Schools, label: Public School}
-    fire_stations: {service: Fire_Stations, label: Fire Station}
-    police:        {service: Local_Law_Enforcement_Locations, label: Law Enforcement}
-    power_plants:  {service: Power_Plants, label: Power Plant}
-  org_base: "https://services2.arcgis.com/C8EMgrsFcRFL6LrL/arcgis/rest/services"
+  access: qgis_provider
+  qgis_provider:
+    provider: arcgisfeatureserver
+    uri: "crs='EPSG:4326' url='{url}'"
+    mode: open
+  endpoint_by_param: {param: facility_type, map: {hospitals: hospitals,
+                       schools: schools, fire_stations: fire_stations,
+                       police: police, power_plants: power_plants}}
 
-# --- normalization stamps -------------------------------------------------
 normalize:
   crs: "EPSG:4326"
-  units: null
 
-# --- output surface -------------------------------------------------------
 output:
-  layer_type: vector
-  ext: fgb
-  role: primary
-  style:
-    kind: reference
-    geometry: point
+  layer_type: record
+  ext: json
 
-# --- cache + payload gate -------------------------------------------------
 cache:
-  ttl_class: static-30d
-payload_estimate:              # est_features(=area*density)*1200/(1024^2); hospitals density=30
-  model: per_feature
-  features_per_sq_deg: 30.0
-  kb_per_feature: 1.171875     # 1200 bytes / 1024
-  floor_mb: 0.02
+  ttl_class: live-no-cache
+payload_estimate:
+  model: bbox_area
+  mb_per_sq_deg: 0.0
+  floor_mb: 0.0
 
-# --- honesty: caveats + fallback -----------------------------------------
 caveats:
-  - "US-only HIFLD; empty bbox (e.g. open water) -> header-only FGB (honest-empty, never a fabricated error)"
-  - "facility_type in {hospitals,schools,fire_stations,police,power_plants} (aliases accepted upstream)"
+  - "HIFLD critical-infrastructure points via a public ArcGIS FeatureServer per facility_type, opened as a live map overlay; one facility_type per call, no cross-type union"
+  - "the layer is drawn by QGIS from the service, so its features are on the map but not in the case store and no analysis reads them"
+  - "US-only HIFLD"
   - "model-callable, not matched: critical-infrastructure points, not one of the seventeen matched data classes"
 
-# corpus lifted from sibling corpus.yaml.
+docstring: |-
+  HIFLD critical-infrastructure points by facility type, added to the map.
 
-# --- LLM docstring: the sole source of the promoted tool description and the
-# retrieval-index document text. ---
-docstring: |
-  HIFLD critical-infrastructure points by facility type as a FlatGeobuf layer.
-
-  Fetches national Homeland Infrastructure Foundation-Level Data (HIFLD) point
-  facilities of one ``facility_type`` intersecting a bbox, from a public,
-  unauthenticated ArcGIS REST FeatureService mirror. Returns a FlatGeobuf of
-  ``Point`` features in EPSG:4326 with the HIFLD attribute payload plus
-  ``facility_type`` / ``facility_label`` columns.
+  Opens national Homeland Infrastructure Foundation-Level Data (HIFLD) point
+  facilities of one ``facility_type`` as a live layer served by QGIS's own
+  ArcGIS FeatureServer provider, from a public, unauthenticated mirror.
 
   **When to use:**
   - "Where are the hospitals / schools / fire stations / police stations near
     [place]?"; "show critical infrastructure in this area".
-  - A hazard / exposure workflow needs life-safety facility locations inside a
-    flood / fire / surge footprint.
-  - Evacuation / shelter / damage-assessment context overlays.
+  - Life-safety facility context for a flood / fire / surge footprint.
 
   **When NOT to use:**
-  - Dams -> ``fetch_usace_dams``. Buildings -> ``fetch_usace_nsi``.
-  - Non-US facilities (HIFLD is US-only). Real-time status (HIFLD is static).
-  - An amenity not in the supported set -> use an OSM Overpass fetcher.
+  - To COMPUTE with the facility attributes - intersect them with fields,
+    count by type, feed a model. The overlay is drawn from the service and
+    its features never reach the store; nothing downstream can read them.
+  - Dams -> ``fetch_usace_dams``. EPA-regulated facilities ->
+    ``fetch_epa_frs_facilities``.
+  - Non-US facilities (HIFLD is US-only). An amenity not in the supported
+    set -> use an OSM Overpass fetcher.
 
   **Parameters:**
-      facility_type: One of ``"hospitals"``, ``"schools"``, ``"fire_stations"``,
-          ``"police"``, ``"power_plants"`` (aliases accepted: ``"hospital"``,
-          ``"public_schools"``, ``"fire"``, ``"ems"``, ``"law_enforcement"``,
-          ``"power_plant"``, etc.).
-      bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326. Required -- ``supports_global_query=False``. Example Houston metro:
-          ``(-95.8, 29.5, -95.0, 30.1)``.
+      bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326. Required.
+      facility_type: One of ``"hospitals"``, ``"schools"``,
+          ``"fire_stations"``, ``"police"``, ``"power_plants"`` (aliases
+          accepted: ``"hospital"``, ``"public_schools"``, ``"fire"``,
+          ``"ems"``, ``"law_enforcement"``, ``"power_plant"``).
 
   **Returns:**
-      ``LayerURI`` -> FlatGeobuf of ``Point`` features in EPSG:4326. Properties
-      carry the HIFLD source columns (NAME, ADDRESS, CITY, STATE, ZIP, and
-      type-specific fields) plus ``facility_type`` and ``facility_label``.
-      ``layer_type="vector"``, ``role="primary"`` ``units=None``.
-
+      A record naming what was opened: the provider, the service uri behind
+      the layer, the layer name and the bbox the map was taken to.
   **Error types:**
-      - ``HIFLDInfraInputError``: unknown facility_type or bad bbox
+      - ``HIFLD_INFRAInputError``: unknown facility_type or bad bbox
         (retryable=False).
-      - ``HIFLDInfraUpstreamError``: HTTP/network failure, ArcGIS error
-        envelope, or FlatGeobuf serialization failure (retryable=True).
-      - ``HIFLDInfraEmptyError``: no features in bbox (retryable=False; not
-        raised by default -- empty FGB is returned).
+      - ``HIFLD_INFRAUpstreamError``: the provider's own text when it cannot
+        open the service (retryable=True).
 
-  Cache: ``ttl_class="static-30d"``, ``source_class="hifld_critical_infrastructure"``.
-  Cache key is SHA-256 of ``(facility_key, bbox-rounded-6dp)``.
+  Requires a live QGIS session: the layer is opened in the user's QGIS, so a
+  headless or direct call refuses by name rather than returning nothing.
 
   ``supports_global_query=False``. No API key required.
