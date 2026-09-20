@@ -24,7 +24,7 @@ from trid3nt_server.tools import register_tool
 from trid3nt_server.tools.search.match import (
     Need, ask_for, base_ask, match, sources_with_coverage)
 
-__all__ = ["find_sources", "FindSourcesError"]
+__all__ = ["FIND_SOURCES", "find_sources", "FindSourcesError"]
 
 logger = logging.getLogger("trid3nt_server.tools.search.find_sources")
 
@@ -42,8 +42,14 @@ class FindSourcesError(RuntimeError):
 _AROUND_POINT = 0.001
 
 
+#: The name the registry and the dispatch gate know this tool by. The gate
+#: EXPANDS on it: a fetcher with a coverage row is not described to the model,
+#: so the sources this names are how its schema reaches the turn.
+FIND_SOURCES = "find_sources"
+
+
 _METADATA = AtomicToolMetadata(
-    name="find_sources",
+    name=FIND_SOURCES,
     ttl_class="live-no-cache",
     source_class=None,
     cacheable=False,
