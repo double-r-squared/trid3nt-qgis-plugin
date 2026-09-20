@@ -859,6 +859,9 @@ def _route_once(
         return dispatched
     metadata = synthesize_metadata(spec)
     params = validate_params(spec, raw_params)
+    # The ASK, on the log, for every fetch: a cache hit reaches no executor, so
+    # this is the only place that states what was requested of a source.
+    logger.info("fetch %s ask=%s", metadata.name, str(params)[:400])
     # Frames-list output shape: an animation source returns an ORDERED
     # list[LayerURI] (one cache entry + one layer per timestamp), so the executor
     # owns the per-frame read_through loop -- there is no single top-level

@@ -289,3 +289,28 @@ def test_promoted_tool_carries_a_docstring(registered_spec):
     spec, name = registered_spec
     doc = TOOL_REGISTRY[name].fn.__doc__
     assert doc and "fetch_demo_raster" in doc
+
+
+def test_route_logs_the_ask_on_hit_and_miss(fake_s3, monkeypatch, caplog):
+    """The fetch record is read off the log, and a cache hit runs no executor -
+    so the ask is logged before the cache decision, on both paths."""
+    import numpy as np
+    import rasterio.transform as rtransform
+
+    spec = _raster_spec()
+
+    def _synthetic(s, p):
+        n = 8
+        arr = np.ones((n, n), dtype="float32")
+        return arr, rtransform.from_bounds(*p["bbox"], n, n), "EPSG:4326"
+
+    monkeypatch.setattr(raster_cog, "fetch_source_array", _synthetic)
+    args = {"bbox": [-117.5, 33.5, -116.5, 34.5], "variable": "fm100",
+            "start_date": "2026-07-01", "end_date": "2026-07-03"}
+    with caplog.at_level("INFO", logger=router.logger.name):
+        router.route(spec, dict(args))
+        router.route(spec, dict(args))
+    asks = [r.getMessage() for r in caplog.records
+            if r.getMessage().startswith("fetch fetch_demo_raster ask=")]
+    assert len(asks) == 2
+    assert "'variable': 'fm100'" in asks[0]
