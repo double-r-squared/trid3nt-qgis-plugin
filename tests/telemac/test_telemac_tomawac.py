@@ -238,3 +238,19 @@ def test_the_module_states_how_its_own_run_length_is_spelled():
     # spells none.
     assert WAC.seconds({"TIME_STEP": 2.0}) is None
     assert ART.seconds({"TIME_STEP": 2.0}) is None
+
+
+def test_the_dissipation_rows_are_drawn_for_the_sign_the_engine_writes_them_in():
+    """The engine publishes every dissipation row as a NEGATIVE quantity, so a
+    surf band runs from the field's minimum up to zero. A bottom pinned at zero
+    would collapse that band onto one colour, and an edge taken as a fraction
+    of the peak would clip every node of it away, which is a zero picture over
+    a field that reached -0.2. The ramps are reversed so the strongest
+    dissipation takes the deepest colour."""
+    for token in ("BETA", "BETAWC", "DBR", "DSR"):
+        row = WAC.MODULE_OUTPUT[token]
+        assert not row.has_edge
+        assert "floor" not in dict(row.style)
+        assert str(dict(row.style)["ramp"]).endswith("_r")
+    # The roller's own ENERGY is not a dissipation and keeps its floor.
+    assert dict(WAC.MODULE_OUTPUT["SRE"].style)["floor"] == 0

@@ -49,11 +49,17 @@ _STRESS = {"kind": "mesh", "ramp": "rdbu", "units": "m3/s2", "center": 0.0}
 _SPEED = {"kind": "mesh", "ramp": "plasma", "units": "m/s", "floor": 0}
 _FREQUENCY = {"kind": "mesh", "ramp": "cividis", "units": "Hz", "floor": 0}
 _PERIOD = {"kind": "mesh", "ramp": "viridis", "units": "s", "floor": 0}
-#: WHAT HAS AN EDGE. Breaking and the roller it leaves happen in a band the sea
-#: makes where the bar or the shore is, so each is read as the shape it has; a
+#: WHAT HAS AN EDGE. The roller the breaking leaves happens in a band the sea
+#: makes where the bar or the shore is, so it is read as the shape it has; a
 #: height, a period and a direction are everywhere the water is and are drawn
 #: whole.
-_BREAKING = {"kind": "mesh", "ramp": "reds", "units": "1/s", "floor": 0}
+#: WHAT DISSIPATION IS PUBLISHED AS. The engine writes every dissipation row as
+#: a NEGATIVE quantity - energy leaving the spectrum - so a surf band runs from
+#: the field's minimum up to zero. The ramp is reversed for that, the strongest
+#: dissipation taking the deepest colour, and no floor is declared: a bottom
+#: pinned at zero would collapse the whole band onto one colour and an edge
+#: taken as a fraction of the peak would clip every node of it away.
+_BREAKING = {"kind": "mesh", "ramp": "reds_r", "units": "1/s"}
 
 #: What the module WRITES, by the mnemonic VARIABLES FOR 2D GRAPHIC PRINTOUTS
 #: spells: the SIXTEEN characters the result record names the row in, the unit
@@ -120,17 +126,16 @@ MODULE_OUTPUT: Mapping[str, Output] = MappingProxyType({
     "POW": Output("WAVE POWER", "kW/m",
                   style={"kind": "mesh", "ramp": "inferno", "units": "kW/m",
                          "floor": 0}),
-    "BETA": Output("BREAKING RAT", "1/s", style=_BREAKING, has_edge=True),
-    "BETAWC": Output("WHITE CAPING", "1/s", style=_BREAKING, has_edge=True),
+    "BETA": Output("BREAKING RAT", "1/s", style=_BREAKING),
+    "BETAWC": Output("WHITE CAPING", "1/s", style=_BREAKING),
     "SRE": Output("SURFACE ROLLER E", "m3/s2", has_edge=True,
                   style={"kind": "mesh", "ramp": "oranges", "units": "m3/s2",
                          "floor": 0}),
-    "DBR": Output("BREAKER DISSIP", "m2/s", has_edge=True,
-                  style={"kind": "mesh", "ramp": "reds", "units": "m2/s",
-                         "floor": 0}),
-    "DSR": Output("ROLLER DISSIP", "m3/s3", has_edge=True,
-                  style={"kind": "mesh", "ramp": "oranges", "units": "m3/s3",
-                         "floor": 0}),
+    "DBR": Output("BREAKER DISSIP", "m2/s",
+                  style={"kind": "mesh", "ramp": "reds_r", "units": "m2/s"}),
+    "DSR": Output("ROLLER DISSIP", "m3/s3",
+                  style={"kind": "mesh", "ramp": "oranges_r",
+                         "units": "m3/s3"}),
     "DPIC": Output("PEAK DIRECTION", "deg", style=_DIRECTION),
 })
 
