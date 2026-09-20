@@ -48,9 +48,9 @@ UNSET = _Unset()
 _RESERVED = frozenset((
     "MODULE", "MODULE_INPUT", "COMPOSITES", "READS", "ASSERTED", "ARMS",
     "ARMS_ON_HOST", "MODULE_OUTPUT", "LISTING", "DERIVED", "PRINTOUTS",
-    "CADENCE", "TRACER", "APPENDS", "APPENDABLE", "ONLY_3D", "UNWRITTEN",
-    "RESULT_FILE", "RESULT_FILES", "composites", "reads", "appends",
-    "printouts", "slot",
+    "CADENCE", "CLOCK", "TRACER", "APPENDS", "APPENDABLE", "ONLY_3D",
+    "UNWRITTEN", "RESULT_FILE", "RESULT_FILES", "RESULT_KEYWORD", "composites",
+    "reads", "appends", "printouts", "seconds", "slot",
 ))
 
 
@@ -399,6 +399,16 @@ class Module(metaclass=_Body):
     UNWRITTEN: frozenset[str] = frozenset()
     #: The result file the primitives read; empty reads the run's own.
     RESULT_FILE: str = ""
+    #: The keyword a deck of this module NAMES that result in, by identifier.
+    #: Every module writes one and they do not all spell it alike - TOMAWAC's is
+    #: 2D RESULTS FILE - so the reader that wants the name asks the module for
+    #: the spelling rather than assuming one module's word.
+    RESULT_KEYWORD: str = "RESULTS_FILE"
+    #: How this module spells its run LENGTH, by identifier: the keywords whose
+    #: PRODUCT is the seconds a solve covers - one where the module names the
+    #: window itself, two where it names a step and a count of them. Empty on a
+    #: module that does not march in time, whose run covers no window at all.
+    CLOCK: tuple[str, ...] = ()
     #: The OTHER result files a deck of this module may name, by identifier: a
     #: file the module writes that no primitive of the geographic mesh reads -
     #: TOMAWAC's spectra over the frequency-direction grid. A deck that names
@@ -421,6 +431,22 @@ class Module(metaclass=_Body):
     #: coupling nobody armed is a module the host never feels. The host deck
     #: keeps whatever it states itself, off included.
     ARMS_ON_HOST: tuple[str, ...] = ()
+
+    @classmethod
+    def seconds(cls, stated: Mapping[str, Any]) -> float | None:
+        """How long a run of this module covers, off the keywords it spells it in.
+
+        ``None`` where the module states no clock, or where a keyword of it has
+        no number yet: a length read off half a spelling is not a window."""
+        if not cls.CLOCK:
+            return None
+        length = 1.0
+        for name in cls.CLOCK:
+            value = stated.get(name)
+            if not isinstance(value, (int, float)) or isinstance(value, bool):
+                return None
+            length *= float(value)
+        return length
 
     @classmethod
     def composites(cls, **expanders: Callable[[Any], Any]) -> None:

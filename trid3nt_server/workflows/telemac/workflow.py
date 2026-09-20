@@ -720,13 +720,13 @@ class TelemacWorkflow(Workflow):
         return published
 
     def run_window_s(self, keywords: Mapping[str, Any]) -> float | None:
-        """How long this run's solve covers: the deck's own DURATION, under the
+        """How long this run's solve covers, as THIS module spells it, under the
         floor that may have moved it.
 
         A matched series source has to hold a record over it, so the number the
         deck will write is the number the match filters on."""
-        window = stated(steering=self.steering, keywords=keywords).get("DURATION")
-        return float(window) if isinstance(window, (int, float)) else None
+        return self.steering.seconds(
+            stated(steering=self.steering, keywords=keywords))
 
     def steps(self) -> list[Any]:
         """The step sequence: the world, then fill, then run, then the outputs.
@@ -764,7 +764,7 @@ class TelemacWorkflow(Workflow):
         # says the run has to write: a 3D deck names a 3D and a 2D result rather
         # than one RESULTS FILE, and the run's own facts name what it wrote.
         listed = tuple(self._states("RESULTS", ()))
-        result = self._file("RESULTS_FILE",
+        result = self._file(self.steering.RESULT_KEYWORD,
                             listed[0] if listed else "results.slf")
         declared = {prm.name for prm in self.params}
         level = (slots.get(LEVEL) or [""])[0]
@@ -813,10 +813,11 @@ class TelemacWorkflow(Workflow):
                     "geometry": geometry, "boundary": boundary,
                     "result": result,
                     "mesh_resolution_m": ParamRef("mesh_resolution_m"),
-                    # THE CLOCK IS THE DECK'S: DURATION is a keyword the module
-                    # carries, so the settle reads the seconds the deck was
-                    # written for rather than a lever restating it.
-                    "duration_s": self._asserted("DURATION"),
+                    # THE CLOCK IS THE MODULE'S: how a run length is spelled is
+                    # the module's own statement - one window, or a step and a
+                    # count of them - so the settle reads the seconds the deck
+                    # was written for rather than a lever restating it.
+                    "duration_s": self._clock(),
                     # WHICH RUN THIS ONE CARRIES ON FROM: a rerun ledger row,
                     # not a value the question asks about.
                     "continue_from": Continued,
@@ -879,6 +880,15 @@ class TelemacWorkflow(Workflow):
                  ).named("solve"),
             self._outputs_step(params),
         ]
+
+    def _clock(self) -> Any:
+        """How long the settle opens this run's water for, as the module spells it.
+
+        One keyword where the module names the window itself, the step and the
+        count where it names those; the deck has to state each, and that refusal
+        stands at import. A module that does not march in time spells none."""
+        spelled = [self._asserted(keyword) for keyword in self.steering.CLOCK]
+        return spelled[0] if len(spelled) == 1 else spelled or None
 
     def _asserted(self, keyword: str) -> Any:
         """One value the DECK itself states, read at RUN time off the floor.

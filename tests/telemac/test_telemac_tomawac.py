@@ -8,9 +8,12 @@ arms, and the two roles one wrapper serves."""
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
 
 from trid3nt_server.workflows.telemac.modules import (
+    ART,
     T2D,
     T3D,
     WAC,
@@ -22,7 +25,7 @@ from trid3nt_server.workflows.telemac.modules.tomawac import (
     RESULT_FILENAME,
     STEERING_FILENAME,
 )
-from trid3nt_server.workflows.telemac.workflow import run_bodies
+from trid3nt_server.workflows.telemac.workflow import TelemacWorkflow, run_bodies
 
 #: The column a DAMOCLES line is read to, which is where the engine truncates
 #: this keyword's own value.
@@ -201,3 +204,37 @@ def test_the_user_fortran_of_every_deck_of_the_run_is_staged():
                 FORTRAN_FILE="T2D_user_fortran")
     assert host.user_code() == ("T2D_user_fortran", "Tom_user_fortran")
     assert fill(T2D, coupling=[_wave()]).user_code() == ()
+
+
+def test_the_module_states_the_keyword_its_own_result_is_named_in():
+    """Every module writes a result and they do not all spell the keyword alike,
+    so the workflow asks the module for the spelling rather than assuming the
+    hydrodynamic word: a deck that names its file under 2D RESULTS FILE is read
+    off that name and not off the fallback."""
+    assert WAC.RESULT_KEYWORD == "ED_RESULTS_FILE"
+    assert T2D.RESULT_KEYWORD == "RESULTS_FILE"
+
+    class Steering(WAC):
+        GEOMETRY_FILE = "geometry.slf"
+        BOUNDARY_CONDITIONS_FILE = "boundary.cli"
+        ED_RESULTS_FILE = RESULT_FILENAME
+
+    stands_on = SimpleNamespace(steering=Steering)
+    assert TelemacWorkflow._file(stands_on, Steering.RESULT_KEYWORD,
+                                 "results.slf") == RESULT_FILENAME
+    assert TelemacWorkflow._file(stands_on, T2D.RESULT_KEYWORD,
+                                 "results.slf") == "results.slf"
+
+
+def test_the_module_states_how_its_own_run_length_is_spelled():
+    """TOMAWAC has no DURATION keyword at all - it names the step and how many
+    of them - so the seconds a run covers are the product the module spells,
+    and the hydrodynamic modules spell the window itself."""
+    assert WAC.CLOCK == ("TIME_STEP", "NUMBER_OF_TIME_STEP")
+    assert T2D.CLOCK == ("DURATION",)
+    assert WAC.seconds({"TIME_STEP": 2.0, "NUMBER_OF_TIME_STEP": 1800}) == 3600.0
+    assert T2D.seconds({"DURATION": 3600.0}) == 3600.0
+    # Half a spelling is not a window, and a module that does not march in time
+    # spells none.
+    assert WAC.seconds({"TIME_STEP": 2.0}) is None
+    assert ART.seconds({"TIME_STEP": 2.0}) is None

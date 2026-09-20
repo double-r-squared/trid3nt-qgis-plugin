@@ -177,6 +177,11 @@ WAC.CADENCE = CADENCE
 #: The result the primitives read: TOMAWAC writes its own 2D field, standalone
 #: and beside a host's alike.
 WAC.RESULT_FILE = RESULT_FILENAME
+#: TOMAWAC spells that file 2D RESULTS FILE, not RESULTS FILE.
+WAC.RESULT_KEYWORD = "ED_RESULTS_FILE"
+#: THE CLOCK: TOMAWAC has no DURATION keyword at all - it names the step and how
+#: many of them, and their product is the seconds the wave field is marched over.
+WAC.CLOCK = ("TIME_STEP", "NUMBER_OF_TIME_STEP")
 #: The SPECTRA, which are results over the polar frequency-direction grid rather
 #: than over the domain: the run keeps and publishes each file a deck names, and
 #: no primitive of the geographic mesh reads either.

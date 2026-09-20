@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import math
 import os
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
@@ -987,6 +988,17 @@ async def settle_outlet_rating(
             "rows": [[q, z] for q, z in rating["rows"]], "note": note}
 
 
+def _seconds(clock: Any) -> float:
+    """How long the water is open for, off however its module spells the length.
+
+    A window stated as one number, or the keyword values whose PRODUCT is it - a
+    step and a count of them. A module that does not march in time spells none
+    and its water opens for the single record a steady solve writes."""
+    if isinstance(clock, (list, tuple)):
+        return math.prod(float(value) for value in clock) if clock else 0.0
+    return float(clock or 0.0)
+
+
 def _domain_unmeasured(message: str) -> Exception:
     return TelemacError(message, error_code="TELEMAC_DOMAIN_UNMEASURED")
 
@@ -994,7 +1006,7 @@ def _domain_unmeasured(message: str) -> Exception:
 async def open_water(
     *,
     mesh: dict[str, Any],
-    duration_s: float,
+    duration_s: float | Sequence[float] | None = None,
     level: Any = None,
     name: str = "",
     geometry: str = "geometry.slf",
@@ -1028,7 +1040,7 @@ async def open_water(
     topology = await asyncio.to_thread(
         read_topology, _mesh_field(mesh, "topology_uri", missing=_mesh_missing))
     start_time_s = float(initial_state["start_s"] or 0.0)
-    duration_s = float(duration_s)
+    duration_s = _seconds(duration_s)
     slug = _slug(name or facts["mesh_name"])
     opening = await asyncio.to_thread(_opening, level, mesh)
     if opening["level_m"] is None and not topology["liquid_boundary_order"]:

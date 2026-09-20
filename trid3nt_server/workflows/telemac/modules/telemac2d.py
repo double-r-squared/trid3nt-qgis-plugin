@@ -667,6 +667,8 @@ def _rain_tracers(tracers: Any) -> Mapping[str, Any]:
 
 T2D = Module("telemac2d")
 T2D.MODULE_OUTPUT = MODULE_OUTPUT
+#: The hydrodynamic clock is one keyword: the window itself.
+T2D.CLOCK = ("DURATION",)
 T2D.LISTING = LISTING
 T2D.PRINTOUTS = "VARIABLES_FOR_GRAPHIC_PRINTOUTS"
 T2D.CADENCE = "GRAPHIC_PRINTOUT_PERIOD"
