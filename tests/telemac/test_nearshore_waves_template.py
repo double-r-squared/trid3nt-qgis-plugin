@@ -212,8 +212,8 @@ def test_the_answers_are_the_module_s_own_rows():
     assert named["hs_max_m"] == "HM0"
     assert named["peak_period_at_station_s"] == "TPD"
     assert named["direction_at_station_deg"] == "DMOY"
-    assert named["breaking_rate_max_per_s"] == "BETA"
-    assert named["breaker_dissipation_max_m2s"] == "DBR"
+    assert named["breaking_rate_peak_per_s"] == "BETA"
+    assert named["breaker_dissipation_peak_m2s"] == "DBR"
     for token in ("HM0", "TPD", "DMOY", "BETA", "DBR"):
         assert token in WAC.MODULE_OUTPUT
     assert [p.variable or p.kind
@@ -259,3 +259,20 @@ def _deck():
                                    "event_time", "compute_class"])
 def test_the_question_declares_the_levers_a_caller_reaches_it_through(named):
     assert named in {param.name for param in _workflow().params}
+
+
+def test_the_breaking_answers_read_the_magnitude_of_a_negative_field():
+    """TOMAWAC publishes both breaking rows as NEGATIVE quantities - energy
+    leaving the spectrum - so the hardest-working node is the field's minimum
+    and the number a reader checks is that minimum negated. Read as a maximum,
+    both would answer the untouched water offshore, which is zero. The
+    synthetic fields are a shore band against still water."""
+    from trid3nt_server.workflows.telemac.templates.nearshore_waves import (
+        nearshore_waves as template)
+
+    band = [-0.205, -0.118, -0.004, 0.0, 0.0]
+    for name in ("breaking_rate_peak_per_s", "breaker_dissipation_peak_m2s"):
+        measure = template.ANSWER[name]
+        assert measure.stat == "min"
+        assert measure.answer(min(band), measure.against) == pytest.approx(0.205)
+        assert measure.answer(max(band), measure.against) == 0.0

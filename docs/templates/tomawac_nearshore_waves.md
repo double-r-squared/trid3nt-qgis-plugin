@@ -43,8 +43,8 @@ The values the template declares. `desc` is what the model reads when it fills o
 | `hs_at_station_m` | 0.7841470837593079 |
 | `peak_period_at_station_s` | 7.965770244598389 |
 | `direction_at_station_deg` | 263.4527893066406 |
-| `breaking_rate_max_per_s` | -0.0 |
-| `breaker_dissipation_max_m2s` | 0.0 |
+| `breaking_rate_peak_per_s` | - |
+| `breaker_dissipation_peak_m2s` | - |
 | `mesh_size_m` | 17.077 |
 
 It publishes these layers onto the canvas:

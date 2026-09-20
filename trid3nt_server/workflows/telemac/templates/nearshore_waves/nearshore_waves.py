@@ -227,8 +227,14 @@ ANSWER = {
     "hs_at_station_m": series("HM0", at=_STATION).measure("last"),
     "peak_period_at_station_s": series("TPD", at=_STATION).measure("last"),
     "direction_at_station_deg": series("DMOY", at=_STATION).measure("last"),
-    "breaking_rate_max_per_s": field("BETA", t=-1).measure("max"),
-    "breaker_dissipation_max_m2s": field("DBR", t=-1).measure("max"),
+    # THE SURF ZONE AT WORK, as a MAGNITUDE. The module publishes both rows as
+    # negative quantities - energy leaving the spectrum - so the hardest-working
+    # node is the field's MINIMUM, and the number a reader checks is that
+    # minimum negated. Read as a maximum, both would answer the untouched water
+    # offshore, which is zero.
+    "breaking_rate_peak_per_s": field("BETA", t=-1).measure("min").over(-1.0),
+    "breaker_dissipation_peak_m2s": (field("DBR", t=-1).measure("min")
+                                     .over(-1.0)),
     "mesh_size_m": mesh().measure("size_m"),
 }
 
