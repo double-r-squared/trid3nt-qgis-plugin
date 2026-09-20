@@ -134,6 +134,20 @@ def _bbox_area_km2(bbox: tuple[float, float, float, float]) -> float:
     return abs(Geod(ellps="WGS84").geometry_area_perimeter(ring)[0]) / 1.0e6
 
 
+def _bbox_axes_m(bbox: tuple[float, float, float, float]) -> tuple[float, float]:
+    """Geodesic ``(width_m, height_m)`` of a WGS84 bbox, the width measured along the
+    mid-latitude parallel and the height along the western meridian."""
+    min_lon, min_lat, max_lon, max_lat = (float(v) for v in bbox)
+    mid_lat = 0.5 * (min_lat + max_lat)
+    from pyproj import Geod
+
+    geod = Geod(ellps="WGS84")
+    return (
+        geod.inv(min_lon, mid_lat, max(min_lon, max_lon), mid_lat)[2],
+        geod.inv(min_lon, min_lat, min_lon, max(min_lat, max_lat))[2],
+    )
+
+
 def bbox_pixel_dims(
     bbox: tuple[float, float, float, float],
     native_cell_m: float,
@@ -141,37 +155,18 @@ def bbox_pixel_dims(
     px_min: int = 16,
     px_max: int = 4096,
 ) -> tuple[int, int]:
-    """``(width_px, height_px)`` for ``bbox`` at ``native_cell_m``, metres-per-degree
-    measured at the bbox mid-latitude. Each axis is clamped to ``[px_min, px_max]``,
-    so a large AOI never materializes an unbounded grid."""
-    min_lon, min_lat, max_lon, max_lat = bbox
-    mid_lat = 0.5 * (min_lat + max_lat)
-    from pyproj import Geod
-
-    geod = Geod(ellps="WGS84")
-    width_m = geod.inv(min_lon, mid_lat, max(min_lon, max_lon), mid_lat)[2]
-    height_m = geod.inv(min_lon, min_lat, min_lon, max(min_lat, max_lat))[2]
+    """``(width_px, height_px)`` for ``bbox`` at ``native_cell_m``. Each axis is
+    clamped to ``[px_min, px_max]``, so a large AOI never materializes an unbounded
+    grid."""
+    width_m, height_m = _bbox_axes_m(bbox)
     width_px = max(px_min, min(px_max, int(round(width_m / native_cell_m)) or px_min))
     height_px = max(px_min, min(px_max, int(round(height_m / native_cell_m)) or px_min))
     return width_px, height_px
 
 
-def _bbox_long_axis_m(bbox: tuple[float, float, float, float]) -> float:
-    """Geodesic length (m) of the bbox's longer axis, measured at its mid-latitude."""
-    min_lon, min_lat, max_lon, max_lat = (float(v) for v in bbox)
-    mid_lat = 0.5 * (min_lat + max_lat)
-    from pyproj import Geod
-
-    geod = Geod(ellps="WGS84")
-    return max(
-        geod.inv(min_lon, mid_lat, max_lon, mid_lat)[2],
-        geod.inv(min_lon, min_lat, min_lon, max_lat)[2],
-    )
-
-
 def enforce_pixel_budget(
     bbox: tuple[float, float, float, float],
-    resolution_m: int,
+    resolution_m: float,
     *,
     budget_px: int,
     source: str,
@@ -181,12 +176,12 @@ def enforce_pixel_budget(
     fetched, so a request past the budget refuses rather than coarsening: the message
     names the budget, the asked resolution and the resolution that fits this bbox, and
     the caller re-asks."""
-    long_axis_m = _bbox_long_axis_m(bbox)
+    long_axis_m = max(_bbox_axes_m(bbox))
     fits_res = int(math.ceil(long_axis_m / budget_px))
     if resolution_m >= fits_res:
         return
     raise PixelBudgetExceededError(
-        f"{source}: bbox={tuple(bbox)} at resolution_m={resolution_m} needs "
+        f"{source}: bbox={tuple(bbox)} at resolution_m={resolution_m:g} needs "
         f"{int(math.ceil(long_axis_m / resolution_m))} px on its long axis, past the "
         f"{budget_px} px/axis budget this source serves. Nothing was coarsened: "
         f"re-ask at resolution_m={fits_res} m (the finest spacing that fits this "
