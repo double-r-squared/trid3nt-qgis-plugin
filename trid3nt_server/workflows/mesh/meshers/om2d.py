@@ -460,11 +460,11 @@ def _open_faces(extent: Any, polygons: list[dict[str, Any]],
                 bbox: tuple[float, ...]) -> list[dict[str, Any]]:
     """Every stretch of this domain's edge that is NOT shoreline, as GeoJSON faces.
 
-    ONE classification, read by the open boundaries and by every sizing function
-    that measures a shoreline: what the water crosses is not where it meets land.
-    Two kinds go in the one list - the runs an extent declares as inflow, outflow
-    or open, and each boundary segment lying on the box the domain was cut out
-    of, which stands in open water and draws no detail."""
+    The mesher's sizing functions read this list and measure the shoreline as the
+    edge MINUS it: what the water crosses is not where it meets land. Two kinds go
+    in the one list - the runs an extent declares as inflow, outflow or open, and
+    each boundary segment lying on the box the domain was cut out of, which stands
+    in open water and draws no detail."""
     from trid3nt_server.inputs.boundary import OPEN_TYPES
 
     declared = [{"type": "Feature", "properties": {"type": run.type},
@@ -480,36 +480,42 @@ def _box_faces(polygons: list[dict[str, Any]],
 
     A face names its stretch by the shorter way round the ring between its two
     ends, and a straight segment is never the longer way - so the segment is the
-    unit here, never the run it belongs to. A boundary that lies on the box the
-    whole way round was DRAWN as that box rather than cut out of one: it is all
-    shore, and nothing is taken from it."""
+    unit here, never the run it belongs to. A boundary whose OUTER ring lies on
+    the box the whole way round was DRAWN as that box rather than cut out of one:
+    it is all shore, and nothing is taken from it. Island holes stand inside the
+    box and say nothing about how the outer ring got there."""
     west, south, east, north = (float(v) for v in bbox)
     lat_tol = _ON_BOX_TOLERANCE_M / 111_320.0
     lon_tol = lat_tol / max(0.15, math.cos(math.radians(0.5 * (south + north))))
     sides = ((west, lon_tol, 0), (east, lon_tol, 0),
              (south, lat_tol, 1), (north, lat_tol, 1))
     faces: list[dict[str, Any]] = []
-    walked = 0
-    for ring in _rings(polygons):
+    outer_walked = outer_on_box = 0
+    for ring, outer in _rings(polygons):
         for start, end in zip(ring[:-1], ring[1:]):
-            walked += 1
-            if any(abs(start[axis] - at) <= tol and abs(end[axis] - at) <= tol
-                   for at, tol, axis in sides):
+            on_box = any(abs(start[axis] - at) <= tol and abs(end[axis] - at) <= tol
+                         for at, tol, axis in sides)
+            if outer:
+                outer_walked += 1
+                outer_on_box += on_box
+            if on_box:
                 faces.append({
                     "type": "Feature", "properties": {"type": "open"},
                     "geometry": {"type": "LineString",
                                  "coordinates": [list(start), list(end)]}})
-    return [] if len(faces) == walked else faces
+    return [] if outer_on_box == outer_walked else faces
 
 
-def _rings(polygons: list[dict[str, Any]]) -> list[list[tuple[float, float]]]:
-    """Every closed coordinate ring the domain's polygons carry, outer and inner."""
-    out: list[list[tuple[float, float]]] = []
+def _rings(polygons: list[dict[str, Any]]
+           ) -> list[tuple[list[tuple[float, float]], bool]]:
+    """Every closed ring the domain's polygons carry, each flagged outer or hole."""
+    out: list[tuple[list[tuple[float, float]], bool]] = []
     for geometry in polygons:
         coordinates = geometry.get("coordinates") or ()
-        parts = (coordinates if str(geometry.get("type")) == "Polygon"
-                 else [ring for part in coordinates for ring in part])
-        out.extend([(float(x), float(y)) for x, y in ring] for ring in parts)
+        parts = ([coordinates] if str(geometry.get("type")) == "Polygon"
+                 else coordinates)
+        out.extend(([(float(x), float(y)) for x, y in ring], index == 0)
+                   for part in parts for index, ring in enumerate(part))
     return out
 
 
