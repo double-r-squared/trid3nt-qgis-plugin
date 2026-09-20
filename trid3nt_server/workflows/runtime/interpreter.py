@@ -445,7 +445,13 @@ async def _matched(env: _Env, decl: DataDecl) -> Any:
     one source its own class matched."""
     if decl.role == BED:
         return await _ingested(env, decl, await _matched_bed(env, decl))
-    choice, value = await _probe(env, decl, decl.data_class, decl.name)
+    # The INGESTION rides INSIDE the probe: a source that answered with rows this
+    # slot finds nothing usable in - a gauge reporting no streamflow over a
+    # closed body - held nothing for this run either, and the next survivor
+    # takes its turn rather than the run standing on the first answer.
+    choice, value = await _probe(
+        env, decl, decl.data_class, decl.name,
+        read=lambda answer, picked: _ingested(env, decl, answer, picked))
     if value is None:
         if decl.is_optional or decl.is_context:
             # A slot nothing measured is an absence the run STATES - the run's
@@ -456,7 +462,7 @@ async def _matched(env: _Env, decl: DataDecl) -> Any:
             return None
         raise StepFailedError(choice.sentence, error_code="DATA_NEED_UNMATCHED",
                               step=_data_step_label(decl.name))
-    return await _ingested(env, decl, value, choice.picked)
+    return value
 
 
 async def _matched_bed(env: _Env, decl: DataDecl) -> Any:
@@ -496,13 +502,15 @@ async def _matched_bed(env: _Env, decl: DataDecl) -> Any:
         {"primary": measured, "fallback": terrain}))
 
 
-async def _probe(env: _Env, decl: DataDecl, data_class: str,
-                 label: str) -> tuple[SourceChoice, Any]:
+async def _probe(env: _Env, decl: DataDecl, data_class: str, label: str, *,
+                 read: Any = None) -> tuple[SourceChoice, Any]:
     """Match a class, then CALL the survivors in rank order -> the first answer.
 
     A source that held nothing over this domain is dropped and the next takes
     its turn, which is how the list a reader sees says what the world answered
-    rather than what the sort preferred. ``None`` where none of them answered."""
+    rather than what the sort preferred. ``read`` is the slot's own reading of an
+    answer, run HERE so a record this slot cannot read drops its rung like an
+    empty one. ``None`` where none of them answered."""
     choice = match(await _need(env, decl, data_class, label),
                    sources_with_coverage())
     while choice.picked:
@@ -511,6 +519,8 @@ async def _probe(env: _Env, decl: DataDecl, data_class: str,
                            await _ask_for(env, choice, decl))
         try:
             value = await _produce(env, row)
+            if read is not None:
+                value = await read(value, choice.picked)
         except asyncio.CancelledError:
             raise
         except Exception as exc:  # noqa: BLE001 - an empty source drops a rung

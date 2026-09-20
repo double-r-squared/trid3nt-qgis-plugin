@@ -61,6 +61,12 @@ def record_datum(source: Any) -> str:
     stated = datum_of(source)
     if stated or source is None:
         return stated
+    from trid3nt_server.workflows.runtime.data import artifact_class
+
+    # A zero carried per FEATURE is a vector record's fact. A surface has no
+    # features, and reading one for them is a vector reader over a raster.
+    if artifact_class(source) == "raster":
+        return ""
     from .geometry import GeometryReadError, read_geometry_doc
 
     try:

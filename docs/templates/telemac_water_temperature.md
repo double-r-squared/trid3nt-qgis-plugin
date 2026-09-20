@@ -40,22 +40,22 @@ The values the template declares. `desc` is what the model reads when it fills o
 
 | field | the proving run's value |
 |---|---|
-| `peak_temperature_c` | 13.500875473022461 |
-| `peak_temperature_time_s` | 2871.39990234375 |
-| `final_temperature_c` | 13.50084114074707 |
-| `diurnal_range_c` | 0.0008754730224609375 |
-| `temperature_spread_c` | 0.44190406799316406 |
-| `mean_velocity_mps` | 0.021058111188112037 |
+| `peak_temperature_c` | 13.507823944091797 |
+| `peak_temperature_time_s` | 3574.60009765625 |
+| `final_temperature_c` | 13.507823944091797 |
+| `diurnal_range_c` | 0.007823944091796875 |
+| `temperature_spread_c` | 7.789234161376953 |
+| `mean_velocity_mps` | 0.01800326565073201 |
 | `mesh_size_m` | 11.711 |
 
 It publishes these layers onto the canvas:
 
-- Input: river reach (river_reach)
-- Input: ehydro surveys (ehydro_surveys)
-- Input: bed elevation (dem, 3DEP 1-10 m US lidar (default 10 m); Copernicus GLO-30 30 m global via source=copernicus, datum NAVD88 (metres, positive up))
+- Input: domain (river_reach)
+- Input: bed (ehydro_surveys)
+- Input: bed (3dep_extra, datum NAVD88 (metres, positive up))
 - Temperature station (user) - river_reach_domain
-- Input: raws weather (raws_weather)
-- Input: usgs water quality (usgs_water_quality)
+- Input: weather (asos_metar)
+- Input: observe (usgs_water_quality)
 - Velocity u over time (river_reach_domain_mesh)
 - Velocity v over time (river_reach_domain_mesh)
 - Water depth over time (river_reach_domain_mesh)
@@ -70,23 +70,23 @@ It publishes these layers onto the canvas:
 
 ## The proving run
 
-Run `01M2Y0S5S486K3ZGY1X567E75Z`, 2026-09-19T23:42:42.261948+00:00, 43.559 s, at commit `089b5aa3750984af590de0ddbab6e9f3b4b7a95e-dirty`.
+Run `01M2YPC0VCSE5Z17H71EBD9FYB`, 2026-09-20T06:00:02.388004+00:00, 45.867 s, at commit `d38a12f07cc0ea4db86ce0fe8dec728e9f74b2c4-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M2Y0S5S486K3ZGY1X567E75Z)](telemac_water_temperature/telemac_water_temperature.png)
+![Every layer the run published, stacked and framed on the result (run 01M2YPC0VCSE5Z17H71EBD9FYB)](telemac_water_temperature/telemac_water_temperature.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M2Y0S5S486K3ZGY1X567E75Z)*
+*Every layer the run published, stacked and framed on the result (run 01M2YPC0VCSE5Z17H71EBD9FYB)*
 
-![The solve, frame by frame (run 01M2Y0S5S486K3ZGY1X567E75Z)](telemac_water_temperature/telemac_water_temperature_animation.gif)
+![The solve, frame by frame (run 01M2YPC0VCSE5Z17H71EBD9FYB)](telemac_water_temperature/telemac_water_temperature_animation.gif)
 
-*The solve, frame by frame (run 01M2Y0S5S486K3ZGY1X567E75Z)*
+*The solve, frame by frame (run 01M2YPC0VCSE5Z17H71EBD9FYB)*
 
-![final frame (run 01M2Y0S5S486K3ZGY1X567E75Z)](telemac_water_temperature/telemac_water_temperature_final_frame.png)
+![final frame (run 01M2YPC0VCSE5Z17H71EBD9FYB)](telemac_water_temperature/telemac_water_temperature_final_frame.png)
 
-*final frame (run 01M2Y0S5S486K3ZGY1X567E75Z)*
+*final frame (run 01M2YPC0VCSE5Z17H71EBD9FYB)*
 
-![water temperature - the chart the run persisted (run 01M2Y0S5S486K3ZGY1X567E75Z)](telemac_water_temperature/telemac_water_temperature_chart_water_temperature.png)
+![water temperature - the chart the run persisted (run 01M2YPC0VCSE5Z17H71EBD9FYB)](telemac_water_temperature/telemac_water_temperature_chart_water_temperature.png)
 
-*water temperature - the chart the run persisted (run 01M2Y0S5S486K3ZGY1X567E75Z)*
+*water temperature - the chart the run persisted (run 01M2YPC0VCSE5Z17H71EBD9FYB)*
 
 ### The sheet it filled
 
@@ -114,11 +114,11 @@ await TOOL_REGISTRY['telemac_water_temperature'].fn(
     station={'lon': -122.669784, 'lat': 45.518485, 'name': None},
     weather_end='2026-09-18',
     weather_start='2026-09-17',
-    carrier=56.6,
-    stage=2.776,
+    discharge=56.6,
+    level=2.776,
     keywords={'DURATION': 3600.0, 'GRAPHIC PRINTOUT PERIOD': 100},
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2Y0S5S486K3ZGY1X567E75Z` and commit `089b5aa3750984af590de0ddbab6e9f3b4b7a95e-dirty`. The full argument record is [`telemac_water_temperature/run.json`](telemac_water_temperature/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2YPC0VCSE5Z17H71EBD9FYB` and commit `d38a12f07cc0ea4db86ce0fe8dec728e9f74b2c4-dirty`. The full argument record is [`telemac_water_temperature/run.json`](telemac_water_temperature/run.json).
 

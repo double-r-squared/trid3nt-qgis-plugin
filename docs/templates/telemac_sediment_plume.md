@@ -38,20 +38,20 @@ The values the template declares. `desc` is what the model reads when it fills o
 
 | field | the proving run's value |
 |---|---|
-| `suspended_cmax` | 0.002200139919295907 |
+| `suspended_cmax` | 6.942128675291315e-05 |
 | `suspended_peak_time_s` | 300.0 |
-| `plume_reach_m` | 55.0 |
-| `active_frames` | 11 |
-| `bed_evolution_max_m` | 4.017263563582674e-05 |
-| `net_bed_mass_kg` | 197.3373 |
-| `deposit_fraction` | 0.82223875 |
+| `plume_reach_m` | 0.1 |
+| `active_frames` | 3 |
+| `bed_evolution_max_m` | 4.488018385018222e-05 |
+| `net_bed_mass_kg` | 200.511 |
+| `deposit_fraction` | 0.8354625 |
 | `mesh_size_m` | 20.888 |
 
 It publishes these layers onto the canvas:
 
-- Input: river reach (river_reach)
-- Input: channel survey soundings (ehydro_surveys)
-- Input: bed elevation (dem, 3DEP 1-10 m US lidar (default 10 m); Copernicus GLO-30 30 m global via source=copernicus, datum NAVD88 (metres, positive up))
+- Input: domain (river_reach)
+- Input: bed (ehydro_surveys)
+- Input: bed (3dep_extra, datum NAVD88 (metres, positive up))
 - Release point (user) - river_reach_domain
 - Velocity u over time (river_reach_domain_mesh)
 - Velocity v over time (river_reach_domain_mesh)
@@ -70,23 +70,23 @@ It publishes these layers onto the canvas:
 
 ## The proving run
 
-Run `01M2W9JK101VD4R4W06YVARKKA`, 2026-09-19T07:37:50.097612+00:00, 34.503 s, at commit `966392d7b95ac996d00a5df14f667096b64a3e2a-dirty`.
+Run `01M2YPBVHNRKA9RP3TZNJ9203V`, 2026-09-20T05:59:47.331401+00:00, 37.434 s, at commit `d38a12f07cc0ea4db86ce0fe8dec728e9f74b2c4-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M2W9JK101VD4R4W06YVARKKA)](telemac_sediment_plume/telemac_sediment_plume.png)
+![Every layer the run published, stacked and framed on the result (run 01M2YPBVHNRKA9RP3TZNJ9203V)](telemac_sediment_plume/telemac_sediment_plume.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M2W9JK101VD4R4W06YVARKKA)*
+*Every layer the run published, stacked and framed on the result (run 01M2YPBVHNRKA9RP3TZNJ9203V)*
 
-![The solve, frame by frame (run 01M2W9JK101VD4R4W06YVARKKA)](telemac_sediment_plume/telemac_sediment_plume_animation.gif)
+![The solve, frame by frame (run 01M2YPBVHNRKA9RP3TZNJ9203V)](telemac_sediment_plume/telemac_sediment_plume_animation.gif)
 
-*The solve, frame by frame (run 01M2W9JK101VD4R4W06YVARKKA)*
+*The solve, frame by frame (run 01M2YPBVHNRKA9RP3TZNJ9203V)*
 
-![peak frame (run 01M2W9JK101VD4R4W06YVARKKA)](telemac_sediment_plume/telemac_sediment_plume_peak_frame.png)
+![peak frame (run 01M2YPBVHNRKA9RP3TZNJ9203V)](telemac_sediment_plume/telemac_sediment_plume_peak_frame.png)
 
-*peak frame (run 01M2W9JK101VD4R4W06YVARKKA)*
+*peak frame (run 01M2YPBVHNRKA9RP3TZNJ9203V)*
 
-![suspended sediment concentration - the chart the run persisted (run 01M2W9JK101VD4R4W06YVARKKA)](telemac_sediment_plume/telemac_sediment_plume_chart_suspended_sediment_concentration.png)
+![suspended sediment concentration - the chart the run persisted (run 01M2YPBVHNRKA9RP3TZNJ9203V)](telemac_sediment_plume/telemac_sediment_plume_chart_suspended_sediment_concentration.png)
 
-*suspended sediment concentration - the chart the run persisted (run 01M2W9JK101VD4R4W06YVARKKA)*
+*suspended sediment concentration - the chart the run persisted (run 01M2YPBVHNRKA9RP3TZNJ9203V)*
 
 ### The sheet it filled
 
@@ -112,11 +112,11 @@ await TOOL_REGISTRY['telemac_sediment_plume'].fn(
     mesh_resolution_m=40.0,
     release={'lon': -122.669784, 'lat': 45.518485, 'name': None},
     spill_duration_s=300.0,
-    carrier=56.6,
-    stage=2.776,
+    discharge=56.6,
+    level=2.776,
     keywords={'DURATION': 1800.0},
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2W9JK101VD4R4W06YVARKKA` and commit `966392d7b95ac996d00a5df14f667096b64a3e2a-dirty`. The full argument record is [`telemac_sediment_plume/run.json`](telemac_sediment_plume/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2YPBVHNRKA9RP3TZNJ9203V` and commit `d38a12f07cc0ea4db86ce0fe8dec728e9f74b2c4-dirty`. The full argument record is [`telemac_sediment_plume/run.json`](telemac_sediment_plume/run.json).
 

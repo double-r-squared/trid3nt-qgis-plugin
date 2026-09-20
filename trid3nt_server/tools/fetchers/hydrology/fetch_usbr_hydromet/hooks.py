@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from typing import Any
 
 from trid3nt_contracts.coverage import CoveragePoint
@@ -119,7 +120,10 @@ def _pick_location(spec: SourceSpec, station: str, candidates: list[dict[str, An
     (station's own ``(SCO)`` in its ``locationName``) wins over a bare name hit;
     more than one survivor refuses rather than choosing between reservoirs."""
     sc = spec.error_code_prefix
-    code = station.strip().upper()
+    # A station that NAMES its own code carries it in a trailing parenthetical,
+    # which is the same spelling RISE's locationName carries.
+    stated = re.search(r"\(([^()]+)\)\s*$", station.strip())
+    code = (stated.group(1) if stated else station).strip().upper()
     coded = [c for c in candidates
              if f"({code})" in str((c.get("attributes") or {}).get("locationName") or "").upper()]
     if len(coded) == 1:

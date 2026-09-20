@@ -167,3 +167,22 @@ def test_a_pair_nothing_measures_refuses_naming_both_frames() -> None:
         onto_frame({"vertical_datum": "CRD", "name": "the survey"}, "NAVD88")
     assert caught.value.error_code == "DATUMS_DIFFER"
     assert "CRD" in str(caught.value) and "NAVD88" in str(caught.value)
+
+
+def test_a_supplied_surface_states_no_per_feature_zero(tmp_path) -> None:
+    """A per-feature zero is a vector record's fact, so a raster is not read for
+    one: a bathymetry handed in as a surface states no datum and owes no row."""
+    import numpy as np
+    import rasterio
+    from rasterio.transform import from_origin
+
+    from trid3nt_server.inputs.vertical_datum import offset_ask, record_datum
+
+    path = tmp_path / "bed.tif"
+    with rasterio.open(path, "w", driver="GTiff", width=4, height=4, count=1,
+                       dtype="float32", crs="EPSG:26910",
+                       transform=from_origin(470_000.0, 5_048_000.0, 20.0, 20.0)
+                       ) as dst:
+        dst.write(np.full((4, 4), -3.0, dtype="float32"), 1)
+    assert record_datum(str(path)) == ""
+    assert offset_ask(str(path), "NAVD88", at=[-123.2, 45.5]) is None

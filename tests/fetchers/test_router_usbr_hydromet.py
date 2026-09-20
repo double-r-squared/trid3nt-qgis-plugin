@@ -101,6 +101,15 @@ def test_a_code_match_wins_over_an_ambiguous_name(spec):
     assert uh._pick_location(spec, "SCO", [other, coded]) is coded
 
 
+def test_a_station_that_names_its_own_code_matches_on_it(spec):
+    """A station stated in full carries the code RISE spells: the parenthetical
+    is read out of it rather than the whole name matched against locationName."""
+    coded = {"attributes": {"locationName": "Henry Hagg Lake and Scoggins Dam (SCO)"}}
+    other = {"attributes": {"locationName": "Hungry Horse Reservoir (HGH)"}}
+    assert uh._pick_location(
+        spec, "Henry Hagg Lake and Scoggins Dam (SCO)", [other, coded]) is coded
+
+
 def test_more_than_one_uncoded_match_refuses_by_name(spec):
     a = {"attributes": {"locationName": "Alpha Reservoir"}}
     b = {"attributes": {"locationName": "Beta Reservoir"}}
