@@ -1126,6 +1126,13 @@ def _opening(level: Any, mesh: Mapping[str, Any]) -> dict[str, Any]:
     bed = np.asarray(node_bed, dtype=float)
     floor, ceiling = float(np.nanmin(bed)), float(np.nanmax(bed))
     measured["level_m"] = round(surface, 3)
+    if not isinstance(level, Mapping):
+        # WHAT AN OPEN EDGE HOLDS on a body with no channel to derive a stage:
+        # the level somebody measured, and the reading's own window where it
+        # carried one - a tide is a level that moves, and a boundary read off
+        # one number would hold the sea still.
+        measured["outflow_stage_m"] = measured["level_m"]
+        measured["outflow_stage_series"] = _window(level)
     measured["opening"] = measured["opening"] or FLAT
     if measured["opening"] == BED_PARALLEL:
         # A SHEET OF ONE DEPTH following the bed: every node holds that depth,

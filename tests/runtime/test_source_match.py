@@ -352,3 +352,29 @@ def test_the_reach_still_answers_for_a_water_level_gauge():
                    [("fetch_gauges", listed(other,
                                             data_class="water level series"))])
     assert choice.picked == "fetch_gauges"
+
+
+def test_a_box_called_source_is_asked_over_a_box_that_reaches_its_station(
+        monkeypatch):
+    """A station set ranked on its nearest station and called by box: the box the
+    source is asked over holds that station, because the reach is what put the
+    source on the list."""
+    from types import SimpleNamespace
+
+    from trid3nt_server.tools.fetchers._router import registration
+    from trid3nt_server.workflows.runtime import match as m
+
+    row = gauges(data_class="water level series", kind="predicted")
+    row.extent = row.extent.model_copy(update={
+        "discover": "",
+        "points": [CoveragePoint(id="8455083", lon=-122.60, lat=45.49)]})
+    spec = SimpleNamespace(params={"bbox": {"required": True}}, coverage=[row])
+    monkeypatch.setitem(registration._SPEC_REGISTRY, "fetch_tides", spec)
+    choice = match(Need(slot="stage", data_class="water level series",
+                        lon=WILLAMETTE[0], lat=WILLAMETTE[1]),
+                   [("fetch_tides", row)])
+    ask = m.ask_for(choice, {"bbox": [-122.68, 45.51, -122.66, 45.53]},
+                    *WILLAMETTE)
+    west, south, east, north = ask["bbox"]
+    assert west <= -122.68 and south <= 45.49 and east >= -122.60
+    assert north >= 45.53

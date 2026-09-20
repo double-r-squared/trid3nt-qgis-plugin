@@ -246,11 +246,34 @@ def ask_for(choice: SourceChoice, base: Mapping[str, Any], lon: float | None,
     if row is None:
         return ask
     ask.update(row.ask)
-    if _STATION in _required(choice.picked) and lon is not None and lat is not None:
-        station = _station_set(row).nearest(lon, lat)
-        if station is not None:
-            ask[_STATION] = station.id
+    if lon is None or lat is None:
+        return ask
+    station = _station_set(row).nearest(lon, lat)
+    if station is None:
+        return ask
+    if _STATION in _required(choice.picked):
+        ask[_STATION] = station.id
+    elif "bbox" in ask:
+        ask["bbox"] = _reaching(ask["bbox"], station)
     return ask
+
+
+def _reaching(bbox: Any, station: CoveragePoint) -> list[float]:
+    """The run's own box, widened to REACH the station the row was ranked on.
+
+    A source called by a box rather than by a name is still ranked on its
+    nearest listed station, and the reach the row states is what put it on the
+    list; a box that stops at the domain's edge asks it a different question."""
+    west, south, east, north = (float(v) for v in bbox)
+    return [min(west, station.lon - _AROUND_STATION),
+            min(south, station.lat - _AROUND_STATION),
+            max(east, station.lon + _AROUND_STATION),
+            max(north, station.lat + _AROUND_STATION)]
+
+
+#: How far past a station the widened box reaches, in degrees - about a hundred
+#: metres, so a station ON the edge is inside the box rather than on its line.
+_AROUND_STATION = 0.001
 
 
 def _picked_row(choice: SourceChoice) -> Coverage | None:
