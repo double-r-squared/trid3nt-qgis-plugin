@@ -67,18 +67,6 @@ _CHIP_STATE_COLORS = {
 }
 _CHIP_PENDING_COLOR = "#8b949e"  # grey -- pending / running / unknown
 
-
-def _tool_chip_style(state: Optional[str]) -> str:
-    """The outlined tool-chip stylesheet, its border and text colour driven
-    off the step state: green complete, grey in progress, red failed, amber
-    declined."""
-    color = _CHIP_STATE_COLORS.get((state or "").lower(), _CHIP_PENDING_COLOR)
-    return (
-        f"font-family: monospace; font-size: 8pt; color: {color}; "
-        f"border: 1px solid {color}; border-radius: 7px; padding: 0px 6px;"
-    )
-
-
 _TOOL_CHIP_DETAIL_STYLE = "color: palette(mid); font-size: 8pt; border: none;"
 # A nested tool row renders as a directory tree: an ASCII connector before the
 # child, so a parent-to-child hierarchy reads as one rather than as a flat
@@ -882,9 +870,6 @@ class _AssistantEntry:
         self._finalized = False
 
     # -- thinking block ---------------------------------------------------- #
-
-    def _toggle_thinking(self) -> None:
-        self._thinking_label.setVisible(self._thinking_toggle.isChecked())
 
     def append_thinking_delta(self, delta: str) -> None:
         """Accumulate a reasoning-channel token delta; show the thinking block."""

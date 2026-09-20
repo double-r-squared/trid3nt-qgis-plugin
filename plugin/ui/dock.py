@@ -1255,7 +1255,7 @@ class Trid3ntDock(QDockWidget):
         # The case AOI is per-case state -- a
         # disconnect ends the case binding, so the overlay must go too.
         self._clear_aoi_overlay()
-        self._clear_region_overlay  #: drop any pending drawn region
+        self._clear_region_overlay()
         self._set_case_label("")
         self._set_dot("disconnected")
         self.status_label.setText("Not connected")
@@ -1267,12 +1267,6 @@ class Trid3ntDock(QDockWidget):
         # dot colour, never the titlebar, signifies connection.
         self._case_title = title
         self.setWindowTitle(title if title else "TRID3NT")
-
-    def _toggle_connection(self) -> None:
-        if self.bridge.running:
-            self.disconnect_agent()
-        else:
-            self.connect_agent()
 
     def _open_settings(self) -> None:
         prev_basemap = self.settings.basemap_preset
@@ -1382,7 +1376,7 @@ class Trid3ntDock(QDockWidget):
         # leaves it cleared when the new case has none). _clear_aoi_overlay
         # also nulls self._case_bbox.
         self._clear_aoi_overlay()
-        self._clear_region_overlay  #: drop any pending drawn region
+        self._clear_region_overlay()
         # A NEW case is BBOX-LESS: a clean slate with no AOI until the user
         # sets one, or the model geocodes it out of the message.
         self.bridge.case_command("create", args=None)
@@ -1826,19 +1820,13 @@ class Trid3ntDock(QDockWidget):
                 self._cases = [c for c in cases if isinstance(c, CaseInfo)]
                 if self._cases_dialog is not None:
                     self._cases_dialog.set_cases(self._cases)
-        elif kind == "raw" and data.get("type") == "map-command":
-            # The agent frames a mesh preview
-            # (and other explicit re-frames) via a "zoom-to" map-command, since
-            # the preview layer itself is published role=input with bbox=None
-            # (so it does NOT self-zoom -- that would yank the camera for every
-            # silent input layer). The plugin dropped every map-command (no
-            # etype branch in trid3nt_client._classify -> arrives here as
-            # kind="raw"), so the fine EPSG:4326 wireframe sat sub-pixel under
-            # the AOI, invisible. Honor ONLY the explicit zoom-to here: frame
-            # the mesh (which sends one) without disturbing silent input layers.
-            payload = data.get("payload") or {}
-            if payload.get("command") == "zoom-to":
-                bbox = (payload.get("args") or {}).get("bbox")
+        elif kind == "map-command":
+            # Honor ONLY the explicit zoom-to. A preview layer is published
+            # role=input with bbox=None so it does NOT self-zoom -- the camera
+            # must not be yanked for every silent input layer -- and the agent
+            # frames it with a "zoom-to" instead.
+            if data.get("command") == "zoom-to":
+                bbox = (data.get("args") or {}).get("bbox")
                 try:
                     canvas = self.iface.mapCanvas()
                 except Exception:  # noqa: BLE001 -- headless: nothing to zoom

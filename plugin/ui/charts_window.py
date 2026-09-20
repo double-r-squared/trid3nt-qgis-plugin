@@ -22,6 +22,7 @@ from qgis.PyQt.QtWidgets import (
 )
 
 from . import charts
+from ..net.trid3nt_client import parse_chart_payload
 
 # Navigation toolbar for (c) -- guarded exactly like the canvas class in
 # ``charts``: absent matplotlib means no toolbar, and the window falls back to
@@ -332,7 +333,7 @@ class ChartsWindow(QDockWidget):
         self._charts = []
         seen = set()
         for raw in payloads or []:
-            chart = charts.parse_chart_payload(raw)
+            chart = parse_chart_payload(raw)
             if chart is None or chart["chart_id"] in seen:
                 continue
             seen.add(chart["chart_id"])
@@ -344,7 +345,7 @@ class ChartsWindow(QDockWidget):
     def add_chart(self, payload: Any) -> bool:
         """One live chart frame. De-dupes on chart_id, so a re-emit re-shows
         the existing entry; True only when a NEW chart was added."""
-        chart = charts.parse_chart_payload(payload)
+        chart = parse_chart_payload(payload)
         if chart is None:
             return False
         for i, existing in enumerate(self._charts):

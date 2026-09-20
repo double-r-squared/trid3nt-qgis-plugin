@@ -116,23 +116,6 @@ _SERIES_COLORS = [
 ]
 
 
-
-
-def parse_chart_payload(payload: Any) -> Optional[dict]:
-    """A wire or persisted chart payload -> the same dict, or None when it
-    carries no chart_id or no dict spec. A bad row is SKIPPED, never raised
-    on: these rows are persisted data."""
-    if not isinstance(payload, dict):
-        return None
-    chart_id = payload.get("chart_id")
-    spec = payload.get("vega_lite_spec")
-    if not isinstance(chart_id, str) or not chart_id:
-        return None
-    if not isinstance(spec, dict) or not spec:
-        return None
-    return payload
-
-
 def spec_title(spec: dict) -> str:
     """Vega-Lite ``title`` is a string or a ``{"text": ...}`` object."""
     title = spec.get("title")

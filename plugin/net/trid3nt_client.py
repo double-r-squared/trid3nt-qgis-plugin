@@ -62,6 +62,7 @@ __all__ = [
     "next_backoff",
     "parse_case_list",
     "parse_case_open",
+    "parse_chart_payload",
     "parse_chat_history",
     "parse_layer_events",
     "parse_pipeline_steps",
@@ -537,25 +538,28 @@ def parse_chat_history(session_state_payload: dict) -> list:
     return out[-CHAT_HISTORY_REPLAY_MAX:]
 
 
+def parse_chart_payload(payload) -> Optional[dict]:
+    """A wire or persisted chart payload -> the same dict, or None when it
+    carries no chart_id or no dict spec. A bad row is SKIPPED, never raised
+    on: these rows are persisted data."""
+    if not isinstance(payload, dict):
+        return None
+    chart_id = payload.get("chart_id")
+    spec = payload.get("vega_lite_spec")
+    if not isinstance(chart_id, str) or not chart_id:
+        return None
+    if not isinstance(spec, dict) or not spec:
+        return None
+    return payload
+
+
 def parse_charts(session_state_payload: dict) -> list:
     """``session_state.charts`` rows -> the persisted chart payloads, in
-    order (oldest first). A row without a usable ``chart_id`` and Vega-Lite
-    spec is skipped, never raised on."""
+    order (oldest first)."""
     rows = session_state_payload.get("charts") or []
     if not isinstance(rows, list):
         return []
-    out: list = []
-    for row in rows:
-        if not isinstance(row, dict):
-            continue
-        chart_id = row.get("chart_id")
-        spec = row.get("vega_lite_spec")
-        if not isinstance(chart_id, str) or not chart_id:
-            continue
-        if not isinstance(spec, dict) or not spec:
-            continue
-        out.append(row)
-    return out
+    return [c for c in (parse_chart_payload(r) for r in rows) if c is not None]
 
 
 @dataclass
@@ -1562,6 +1566,8 @@ class AgentClient:
             # A live mid-turn chart. Its persisted replay twin rides in the
             # case-open ``session_state.charts``.
             return AgentEvent("chart", payload)
+        if etype == "map-command":
+            return AgentEvent("map-command", payload)
         if etype == "solve-progress":
             return AgentEvent("solve-progress", payload)
         if etype == "tool-io":
@@ -1596,19 +1602,6 @@ class AgentClient:
             reason = (payload or {}).get("reason", "Agent reached its iteration limit.")
             return AgentEvent("error", {"message": reason, "source": "loop_exhausted"})
         return AgentEvent("raw", {"type": etype, "payload": payload})
-
-    def run_forever(
-        self,
-        on_event: Callable[[AgentEvent], None],
-        should_stop: Callable[[], bool],
-        poll_seconds: float = 1.0,
-    ) -> None:
-        """Pump events to ``on_event`` until ``should_stop()`` or the socket
-        closes (``ConnectionClosed`` propagates to the caller)."""
-        while not should_stop():
-            event = self.next_event(timeout=poll_seconds)
-            if event is not None:
-                on_event(event)
 
     # -- internals ------------------------------------------------------------ #
 
