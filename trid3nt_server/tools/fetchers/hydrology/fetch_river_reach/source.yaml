@@ -103,6 +103,9 @@ coverage:
     resolution_m: 5.0
     datum: null
     units: {}
+    # HOW FAR the reach runs is the question's own opinion about its domain,
+    # stated generically on the row and heard here in this source's word for it.
+    ask: {distance_km: "need:span_km"}
 
 caveats:
   - "the reach runs FROM the seed: DM walks downstream from it, UM walks upstream to it, and distance_km is measured along the channel"

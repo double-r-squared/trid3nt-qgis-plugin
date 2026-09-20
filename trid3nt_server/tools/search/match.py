@@ -269,19 +269,42 @@ def base_ask(fetcher: str, purpose: str, bbox: Sequence[float] | None,
     return ask
 
 
+#: How a coverage row's ask block names one of the NEED's own attributes rather
+#: than a literal value. The question states its reach once, generically; the
+#: row that knows both names maps it onto the param this source states it in.
+_FROM_NEED = "need:"
+
+
+def _asked(value: str, needs: Mapping[str, Any]) -> Any:
+    """One ask value: the need attribute it names, or the literal it is.
+
+    ``None`` where the row maps a param to an attribute this run states nothing
+    for, and the param is then left off the call so the source's own default
+    answers."""
+    text = str(value)
+    if not text.startswith(_FROM_NEED):
+        return value
+    return needs.get(text[len(_FROM_NEED):])
+
+
 def ask_for(choice: SourceChoice, base: Mapping[str, Any], lon: float | None,
-            lat: float | None) -> dict[str, Any]:
+            lat: float | None, needs: Mapping[str, Any] | None = None
+            ) -> dict[str, Any]:
     """What the PICKED source is called with: the run's own facts, plus what the
     matched ROW says it takes.
 
     The row, not the spec's default, is what the match weighed, so the values
     that make the source answer with that row travel with it; a source called by
-    a station name is given the nearest station the row lists."""
+    a station name is given the nearest station the row lists, and a row that
+    maps a param to one of the need's generic attributes is given that."""
     ask = dict(base)
     row = _picked_row(choice)
     if row is None:
         return ask
-    ask.update(row.ask)
+    stated = dict(needs or {})
+    ask.update({param: _asked(value, stated)
+                for param, value in row.ask.items()
+                if _asked(value, stated) is not None})
     if lon is None or lat is None:
         return ask
     station = _station_set(row).nearest(lon, lat)

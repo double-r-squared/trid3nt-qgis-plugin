@@ -56,9 +56,23 @@ payload_estimate:
   features_per_sq_deg: 5000.0
   kb_per_feature: 1.0
   floor_mb: 0.01
+coverage:
+-   data_class: hydrography
+    kind: measured
+    extent:
+      kind: surface
+      rings:
+      - [[-180.0, -90.0], [180.0, -90.0], [180.0, 90.0], [-180.0, 90.0]]
+      note: OpenStreetMap waterway ways, global and keyless; a channel nobody
+        has mapped in OSM is absent here rather than refused
+    window:
+      series: false
+    # Surveyed and hand-traced ways rather than a grid, so the source publishes
+    # no cell.
+    datum: null
+    units: {}
+
 caveats:
-- "model-callable, not matched: a many-feature network layer is not the one domain a hydrography row returns, so it carries no coverage row"
-- "model-callable, not matched: a many-feature network layer, not a single-domain hydrography row - a run names this tool directly, never through the class match"
 - OpenStreetMap waterway ways (river/stream/canal by default) via the Overpass API (3-mirror fallback),
   clipped to the exact bbox. Global, keyless. An area with no OSM waterways returns a valid 0-feature layer,
   not an error.

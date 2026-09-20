@@ -273,3 +273,41 @@ def test_a_gauge_serving_two_classes_fills_each_slot_from_its_own_row(world,
     flow = interpreter._what_the_record_reports(env, carrier, "fetch_gauges")
     assert flow["field"] == "discharge_cfs"
     assert flow["series_field"] == "time_series_csv"
+
+
+def _reach_source(monkeypatch):
+    """A hydrography source called by a seed and a distance, whose coverage row
+    maps the question's generic span onto its own param."""
+    from trid3nt_server.tools.fetchers._router import registration
+
+    spec = _Spec(coverage("hydrography", res=5.0, datum=None).model_copy(
+        update={"ask": {"distance_km": "need:span_km"}}),
+        "vector", {"seed_point": None, "distance_km": None})
+    monkeypatch.setitem(SPECS, "fetch_reach", spec)
+    monkeypatch.setitem(registration._SPEC_REGISTRY, "fetch_reach", spec)
+
+
+def test_the_question_s_span_reaches_the_source_in_its_own_word(world,
+                                                                monkeypatch):
+    """How far a question reaches is one generic attribute; the matched ROW
+    maps it onto the param that source states it in."""
+    _reach_source(monkeypatch)
+    env = _env()
+    row = _row(Data.need("hydrography", span_km=25.0), "domain")
+    choice, _value = asyncio.run(interpreter._probe(env, row, "hydrography",
+                                                    "domain"))
+    assert choice.picked == "fetch_reach"
+    _runner, called = world[-1]
+    assert called["distance_km"] == 25.0
+
+
+def test_a_question_with_no_opinion_about_its_reach_asks_for_none(world,
+                                                                  monkeypatch):
+    """A row that states no span leaves the param off the call, so the source's
+    own declared default answers rather than a number nobody chose."""
+    _reach_source(monkeypatch)
+    env = _env()
+    asyncio.run(interpreter._probe(env, _row(Data.need("hydrography"), "domain"),
+                                   "hydrography", "domain"))
+    _runner, called = world[-1]
+    assert "distance_km" not in called

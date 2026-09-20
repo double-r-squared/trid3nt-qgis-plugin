@@ -89,8 +89,28 @@ resolution_declarations:
   constraint_source: data
   rationale: the D8 trace runs in the DEM's cells, so the delineation is only as fine as the elevation grid under it
 
+coverage:
+-   data_class: hydrography
+    kind: modelled
+    extent:
+      kind: surface
+      rings:
+      - [[-180.0, -60.0], [180.0, -60.0], [180.0, 84.0], [-180.0, 84.0]]
+      note: wherever the DEM fetcher reaches - Copernicus GLO-30 globally, 3DEP
+        over the US - since the basin is traced in that grid and nothing else
+        bounds it
+    window:
+      series: false
+    # The cell the D8 trace runs in, so the traced edge is only as fine as the
+    # grid under it. GLO-30 is the global floor; 3DEP is finer over the US.
+    resolution_m: 30.0
+    datum: null
+    units: {}
+    # A catchment is asked at its POUR POINT, and how far it may reach is the
+    # question's own span - the half-width of the window the trace runs inside.
+    ask: {pour_point: "need:seed_point", buffer_km: "need:span_km"}
+
 caveats:
-  - "model-callable, not matched: a delineated catchment is a boundary, not a class a slot asks the world for, so it carries no coverage row"
   - "the basin is traced in the DEM over a square window of side 2 x buffer_km centred on the pour point; a basin that reaches the edge of that window is REFUSED by name rather than returned clipped, and the refusal states the buffer_km that would hold it"
   - "the window is held to 4000 cells per axis (16 million cells), which is both the D8 clamp and the DEM fetcher's pixel budget: a fine resolution_m over a wide buffer_km refuses pre-network naming both levers"
   - "the pour point is SNAPPED to the nearest cell carrying at least 100 upslope cells, so a point clicked beside the channel still delineates the channel's basin; the snapped point is on every row"

@@ -44,8 +44,21 @@ payload_estimate:
   features_per_sq_deg: 400.0
   kb_per_feature: 8.0
   floor_mb: 0.02
+coverage:
+-   data_class: hydrography
+    kind: measured
+    extent:
+      kind: surface
+      rings:
+      - [[-180.0, -90.0], [180.0, -90.0], [180.0, 90.0], [-180.0, 90.0]]
+      note: OpenStreetMap natural=coastline ways, global and keyless; an inland
+        place has none, which is a fact about the place
+    window:
+      series: false
+    datum: null
+    units: {}
+
 caveats:
-- "model-callable, not matched: a coastline is not hydrography a domain is read from, so it carries no coverage row"
 - OpenStreetMap natural=coastline ways via the Overpass API (3-mirror fallback). Global, keyless. The
   land is on the LEFT of a coastline way's direction, which is what makes an open line a land/water
   edge; the ways are returned WHOLE rather than clipped, because a coastline cut at the AOI edge would

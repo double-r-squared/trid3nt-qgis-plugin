@@ -294,7 +294,12 @@ class Coverage(GraceModel):
     #: The request values this ROW is fetched under, by param name - what makes
     #: the source answer with THIS row rather than another it also serves. The
     #: probe passes them, because the row is what was matched and a spec default
-    #: answers for whichever row the spec was written around.
+    #: answers for whichever row the spec was written around. A value written
+    #: ``need:<attribute>`` is not a literal: it maps one of the need's own
+    #: generic attributes - ``span_km``, how far the question reaches, or
+    #: ``seed_point``, the place it is asked at - onto the param THIS source
+    #: states it in, so a question states its opinion once and every source
+    #: hears it in its own words.
     ask: dict[str, str] = Field(default_factory=dict)
     #: WHICH column carries what, in the record's own column names: the value a
     #: reading is taken from, the window it reported over, and the elevation of

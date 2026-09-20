@@ -291,10 +291,10 @@ def test_extra_kwargs_ignored():
 # never replacement); the LLM always sees the raw prompt.
 
 
-def test_typo_watershd_routes_without_exact_corpus_queries(
+def test_typo_wetlnds_routes_without_exact_corpus_queries(
     tmp_path, monkeypatch
 ):
-    """A typo'd ask still surfaces ``fetch_watershed`` in the top 5.
+    """A typo'd ask still surfaces ``fetch_nwi_wetlands`` in the top 5.
 
     Its exact corpus queries are stripped, so the correct token has to survive in the
     vocabulary through other tools for the fuzzy correction to fire."""
@@ -303,38 +303,38 @@ def test_typo_watershd_routes_without_exact_corpus_queries(
     corpus = _load_corpus()
     stripped = [
         q
-        for q in corpus.get("fetch_watershed", [])
-        if "watershed" not in q.lower()
+        for q in corpus.get("fetch_nwi_wetlands", [])
+        if "wetland" not in q.lower()
     ]
-    assert stripped != corpus.get("fetch_watershed", []), (
-        "expected to strip at least one 'watershed' corpus query"
+    assert stripped != corpus.get("fetch_nwi_wetlands", []), (
+        "expected to strip at least one 'wetland' corpus query"
     )
-    corpus["fetch_watershed"] = stripped
+    corpus["fetch_nwi_wetlands"] = stripped
     corpus_file = tmp_path / "corpus_stripped.yaml"
     corpus_file.write_text(_yaml.safe_dump(corpus))
     monkeypatch.setenv("TRID3NT_TOOL_CORPUS_YAML", str(corpus_file))
     _reset_index_for_tests()  # rebuild against the stripped corpus
 
-    # Mechanism: the typo token is out-of-vocab and corrects to "watershed".
+    # Mechanism: the typo token is out-of-vocab and corrects to "wetlands".
     index = discover_module._get_index()
-    assert "watershd" not in index.vocabulary
-    assert "watershed" in index.vocabulary
-    assert "watershed" in _close_vocab_matches("watershd", index.vocabulary)
+    assert "wetlnds" not in index.vocabulary
+    assert "wetlands" in index.vocabulary
+    assert "wetlands" in _close_vocab_matches("wetlnds", index.vocabulary)
 
     # Ranking: the raw typo phrase lands the target in the top-5.
-    top = _run_top_k("delineate the watershd that drains to this point", k=5)
-    assert "fetch_watershed" in top, (
-        f"expected fetch_watershed in top-5 for typo query; got {top}"
+    top = _run_top_k("map the wetlnds inside this area", k=5)
+    assert "fetch_nwi_wetlands" in top, (
+        f"expected fetch_nwi_wetlands in top-5 for typo query; got {top}"
     )
 
 
 @pytest.mark.parametrize(
     "query,expected_tool",
     [
-        # "watershd" is the discriminating case: WITHOUT expansion it misses
-        # the top-5 entirely; with expansion the correction "watershed" carries
+        # "wetlnds" is the discriminating case: WITHOUT expansion it misses
+        # the top-5 entirely; with expansion the correction "wetlands" carries
         # BM25 + name-substring.
-        ("watershd above this gauge", "fetch_watershed"),
+        ("wetlnds along this shoreline", "fetch_nwi_wetlands"),
         ("floof depth for this neighborhood", "compute_flood_depth_damage"),
     ],
 )

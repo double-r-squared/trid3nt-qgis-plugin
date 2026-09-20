@@ -858,8 +858,12 @@ package DataSeam {
         one of the same class carries a row for each, and each row carries the
         request values it is fetched under, because the row is what the match
         weighed and a spec default answers for whichever row it was written
-        around. A unit or a zero the RECORD carries per feature is stated as
-        "record" and read off the feature.
+        around. A request value written as a NEED ATTRIBUTE rather than a
+        literal is the row mapping one of the need's own generic facts - how far
+        the question reaches, the place it is asked at - onto the param this
+        source states it in, so a question states its opinion once and every
+        source hears it in its own words. A unit or a zero the RECORD carries
+        per feature is stated as "record" and read off the feature.
 
         A STATION SET LISTS ITS STATIONS - inline where the set is small, read
         from a bounded listing that is cached once, or discovered by box inside
@@ -882,6 +886,20 @@ package DataSeam {
         frame it is matched under are the RUN's - the deck's own duration from
         the moment the run asks at, the vertical lever - and the place is the
         domain's centre unless the row states the point it is asked at.
+
+        NO ROW STATES A UNIT. What a measured slot's record is read in is the
+        unit of the KEYWORD its role fills, which the engine's transform fixes,
+        or - where the row names the PUBLISHED VARIABLE it observes - that
+        variable's own unit off the run's published table: a measurement and the
+        thing it is a measurement of are comparable in one unit and no other, so
+        the ingestion's opening value and the residual a pairing takes go
+        through one conversion. A row that names a variable this run publishes
+        no unit under refuses rather than reading the record in whatever its
+        source published. How far the question's domain REACHES is the one
+        opinion a row still states about its own extent, and it states it
+        generically: the answering source's coverage row maps it onto the param
+        that source calls it by, and a row that states none leaves the param off
+        the call so the source's own default answers.
 
         The filter is mechanical: class and place are hard, the window is hard
         for a SERIES source and never for a static surface - a 2014 survey
