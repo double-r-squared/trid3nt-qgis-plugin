@@ -276,7 +276,7 @@ REVIEW_TITLE = "Review the tracer-release scenario"
 
 telemac_dye_release = register_workflow(
     TelemacWorkflow, _METADATA,
-sys.modules[__name__],
+    sys.modules[__name__],
     provenance=(("mesh_resolution_m", "mesh_resolution_note"),),
     # The dye maximum is the canonical peak class: measured 6x LOW on the coarse
     # mesh, because a concentration peak lives inside one element. How far the

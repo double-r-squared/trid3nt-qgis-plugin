@@ -315,7 +315,7 @@ REVIEW_TITLE = "Review the outfall and the water it discharges to"
 
 telemac_do_sag = register_workflow(
     TelemacWorkflow, _METADATA,
-sys.modules[__name__],
+    sys.modules[__name__],
     provenance=(("mesh_resolution_m", "mesh_resolution_note"),),
     # WHERE the sag sits is a local-feature LOCATION and moves with the element
     # that resolves it. The DO minimum itself is a saturated maximum - a

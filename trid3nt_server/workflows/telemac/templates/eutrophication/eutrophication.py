@@ -326,7 +326,7 @@ REVIEW_TITLE = "Review the water this run is carrying"
 
 telemac_eutrophication = register_workflow(
     TelemacWorkflow, _METADATA,
-sys.modules[__name__],
+    sys.modules[__name__],
     provenance=(("mesh_resolution_m", "mesh_resolution_note"),),
     # WHERE the oxygen bottoms out and where the biomass stands highest are
     # local-feature LOCATIONS and move with the element that resolves them.

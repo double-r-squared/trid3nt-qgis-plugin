@@ -361,7 +361,7 @@ REVIEW_TITLE = "Review the water, the cold snap, and what it opens at"
 
 telemac_ice_cover = register_workflow(
     TelemacWorkflow, _METADATA,
-sys.modules[__name__],
+    sys.modules[__name__],
     provenance=(("mesh_resolution_m", "mesh_resolution_note"),),
     # The thickest ice sits where the water is thinnest and slowest - against
     # the bank, in the shallows - and a coarse element averages that water in
