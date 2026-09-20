@@ -131,7 +131,8 @@ def test_the_tide_gauge_states_the_record_and_the_prediction_apart():
     a row for each, and each names what it is fetched under."""
     rows = load_spec_from_path(
         _ROOT / "ocean/fetch_noaa_coops_tides/source.yaml").coverage
-    by_kind = {row.kind: row for row in rows}
+    by_kind = {row.kind: row for row in rows
+               if row.data_class == "water level series"}
     assert set(by_kind) == {"measured", "predicted"}
     assert by_kind["measured"].ask == {"product": "water_level"}
     assert by_kind["predicted"].ask == {"product": "predictions"}
