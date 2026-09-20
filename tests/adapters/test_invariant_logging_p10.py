@@ -76,10 +76,10 @@ async def _drive(script, dispatch_results, user_text):
     captured: dict = {"rounds": 0, "contents": None}
     real_stream = agent_server.stream_events_with_contents
 
-    def _wrap(client, model, contents, **kw):
+    def _wrap(contents, **kw):
         captured["rounds"] += 1
         captured["contents"] = contents
-        return real_stream(client, model, contents, **kw)
+        return real_stream(contents, **kw)
 
     async def _dispatch(_ws, _state, name, _args):
         return dispatch_results[name]

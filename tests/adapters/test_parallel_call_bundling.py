@@ -54,7 +54,7 @@ async def test_producer_yields_three_function_calls_in_one_chunk(fake_llm):
         Message(role="user", parts=[Part(text="test")])
     ]
     events: list = []
-    async for evt in stream_events_with_contents(None, "gemini-3-pro", contents):
+    async for evt in stream_events_with_contents(contents):
         events.append(evt)
 
     assert len(events) == 3
@@ -87,7 +87,7 @@ async def test_producer_yields_parallel_calls_across_chunks(fake_llm):
         Message(role="user", parts=[Part(text="t")])
     ]
     events: list = []
-    async for evt in stream_events_with_contents(None, "gemini-3-pro", contents):
+    async for evt in stream_events_with_contents(contents):
         events.append(evt)
 
     assert [e.name for e in events] == [
@@ -114,7 +114,7 @@ async def test_producer_yields_mixed_text_and_function_calls(fake_llm):
         Message(role="user", parts=[Part(text="t")])
     ]
     events: list = []
-    async for evt in stream_events_with_contents(None, "gemini-3-pro", contents):
+    async for evt in stream_events_with_contents(contents):
         events.append(evt)
 
     assert len(events) == 2

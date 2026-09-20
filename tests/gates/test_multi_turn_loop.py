@@ -161,9 +161,7 @@ async def test_stream_events_with_contents_yields_function_call(fake_llm):
 
     contents = build_contents_from_history("Show me Fort Myers.", None)
     events: list = []
-    async for evt in stream_events_with_contents(
-        None, "gemini-2.5-pro", contents
-    ):
+    async for evt in stream_events_with_contents(contents):
         events.append(evt)
 
     assert len(events) == 1

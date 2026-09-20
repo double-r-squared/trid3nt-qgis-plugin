@@ -537,12 +537,9 @@ async def _stream_model_reply(
                     )
 
             async for event in stream_events_with_contents(
-                client,
-                settings.model,
                 contents,
                 tool_declarations=tool_decls,
                 system_prompt=system_prompt(),
-                model_cache_ref=state.model_cache_ref,
                 model_id=model_id,
                 show_thinking=show_thinking,
             ):

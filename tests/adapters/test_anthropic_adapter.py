@@ -397,7 +397,7 @@ async def test_dispatch_routes_to_anthropic(monkeypatch):
     events = [
         ev
         async for ev in ad.stream_events_with_contents(
-            client=None, model="ignored", contents=[_user("hi")], system_prompt="SYS"
+            contents=[_user("hi")], system_prompt="SYS"
         )
     ]
     assert any(isinstance(e, TextDeltaEvent) and e.delta == "routed" for e in events)

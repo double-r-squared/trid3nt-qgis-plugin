@@ -135,15 +135,13 @@ def test_stream_scripted_exhausted_emits_terminal_text_no_loop():
 
 
 def test_dispatch_routes_to_scripted_with_no_client(monkeypatch):
-    """stream_events_with_contents(client=None, ...) must yield the scripted
+    """stream_events_with_contents must yield the scripted
     tool call when MODEL_PROVIDER=scripted -- proving the adapter.py seam routes
     BEFORE the Vertex/Bedrock client path (zero cost, no GCP/AWS creds)."""
     monkeypatch.setenv("MODEL_PROVIDER", "scripted")
     sa.set_script([{"text": "Running SWAN.", "tool_call": {"name": "swan_wave_field",
                                                             "args": {"bbox": [-85.55, 29.85, -85.3, 30.05]}}}])
     evs = _run(_collect(stream_events_with_contents(
-        client=None,            # no model client exists on this path
-        model="unused",
         contents=[{"role": "user"}],
     )))
     fc = next(e for e in evs if isinstance(e, FunctionCallEvent))
@@ -160,5 +158,5 @@ def test_removed_and_unknown_providers_raise_unsupported(monkeypatch, prov):
     monkeypatch.setenv("MODEL_PROVIDER", prov)
     with pytest.raises(UnsupportedModelProviderError):
         _run(_collect(stream_events_with_contents(
-            client=None, model="unused", contents=[{"role": "user"}],
+            contents=[{"role": "user"}],
         )))

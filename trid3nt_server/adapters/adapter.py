@@ -155,7 +155,7 @@ def provider_retries() -> int:
     return 3
 
 
-def provider_backoff_s() -> float:
+def _provider_backoff_s() -> float:
     """Exponential-backoff BASE seconds (``TRID3NT_PROVIDER_BACKOFF_S``,
     default 5.0)."""
     raw = os.environ.get("TRID3NT_PROVIDER_BACKOFF_S")
@@ -172,7 +172,7 @@ def provider_backoff_s() -> float:
 def provider_backoff_wait(attempt: int, *, cap: float = 60.0) -> float:
     """Seconds to wait before retry ``attempt`` (0-based): ``base * 2**attempt``
     capped at ``cap``. Pure so tests can pin the schedule."""
-    wait = provider_backoff_s() * (2.0 ** max(int(attempt), 0))
+    wait = _provider_backoff_s() * (2.0 ** max(int(attempt), 0))
     return max(0.0, min(wait, float(cap)))
 
 
@@ -1355,47 +1355,24 @@ def _failed_modeled_envelope_error_code(result: dict[str, Any]) -> str | None:
     return None
 
 
-def _extract_flood_metrics_phrase(result: dict[str, Any]) -> str:
-    """Render whatever flood metrics exist into an honest narration fragment.
-    A solve that succeeded but never reached the map still produced real
-    numbers; only present fields are emitted, and ``""`` when none are."""
+def _metrics_phrase(result: dict[str, Any]) -> str:
+    """Render whatever NUMERIC metrics an envelope carries into an honest
+    narration fragment. A solve that succeeded but never reached the map still
+    produced real numbers; the metric NAMES carry their own units, so nothing
+    here knows one hazard's vocabulary from another's, and "" comes back when
+    the envelope carries no numbers at all."""
     metrics: dict[str, Any] | None = None
-    flood = result.get("flood")
-    if isinstance(flood, dict):
-        m = flood.get("metrics")
-        if isinstance(m, dict):
-            metrics = m
-    if metrics is None:
-        # Fall back to any hazard payload carrying a metrics dict.
-        for payload in result.values():
-            if isinstance(payload, dict) and isinstance(payload.get("metrics"), dict):
-                metrics = payload["metrics"]
-                break
+    for payload in result.values():
+        if isinstance(payload, dict) and isinstance(payload.get("metrics"), dict):
+            metrics = payload["metrics"]
+            break
     if not metrics:
         return ""
-
-    parts: list[str] = []
-
-    def _num(key: str) -> float | None:
-        val = metrics.get(key)
-        if isinstance(val, (int, float)) and not isinstance(val, bool):
-            return float(val)
-        return None
-
-    area = _num("flooded_area_km2")
-    if area is not None:
-        parts.append(f"flooded area {area:g} km^2")
-    max_d = _num("max_depth_m")
-    if max_d is not None:
-        parts.append(f"max depth {max_d:g} m")
-    mean_d = _num("mean_depth_m")
-    if mean_d is not None:
-        parts.append(f"mean depth {mean_d:g} m")
-    p95 = _num("p95_depth_m")
-    if p95 is not None:
-        parts.append(f"p95 depth {p95:g} m")
-
-    return ", ".join(parts)
+    return ", ".join(
+        f"{name} {value:g}"
+        for name, value in metrics.items()
+        if isinstance(value, (int, float)) and not isinstance(value, bool)
+    )
 
 
 def _extract_synthetic_inputs(result: Any) -> list[dict[str, Any]]:
@@ -1619,7 +1596,7 @@ def summarize_tool_result(
         # Sub-case (b): the solve completed (or at least produced metrics) but
         # no renderable layer survived publish/render. Surface the numbers so
         # the agent narrates honestly: real flood, just not on the map.
-        metrics_phrase = _extract_flood_metrics_phrase(result)
+        metrics_phrase = _metrics_phrase(result)
         if metrics_phrase:
             message = (
                 f"The simulation completed ({metrics_phrase}) but the result "
@@ -1838,12 +1815,9 @@ async def stream_events(
     adapter opens its own; an empty ``tool_declarations`` means text-only."""
     contents = build_contents_from_history(user_text, chat_history)
     async for event in stream_events_with_contents(
-        client,
-        model,
         contents,
         tool_declarations=tool_declarations,
         system_prompt=system_prompt,
-        model_cache_ref=model_cache_ref,
     ):
         yield event
 
@@ -1851,24 +1825,15 @@ async def stream_events(
 
 
 async def stream_events_with_contents(
-    client: Any,
-    model: str,
     contents: list[Message],
     tool_declarations: list[ToolDeclaration] | None = None,
     system_prompt: str | None = None,
-    model_cache_ref: str | None = None,
     model_id: str | None = None,
     show_thinking: bool = False,
 ) -> AsyncIterator[StreamEvent]:
     """Stream ONE model round from a fully-built ``contents`` list.
     ``show_thinking`` reaches the OpenAI adapter only; the dispatch is an
     EXPLICIT provider switch, and any other provider raises."""
-    # ``model_cache_ref``, when set, means the request carries NO ``tools[]``
-    # and no ``tool_config``: the provider-side cache already holds the catalog
-    # and the system instruction, and sending either field alongside a cached
-    # reference is a 400. ``system_prompt`` and ``tool_declarations`` are
-    # ignored on that path.
-    #
     # Every adapter converts the IR contents and tool declarations at its own
     # boundary and yields the SAME StreamEvent union, so the dispatch loop, the
     # validator, the emitter and the UI are untouched.
@@ -1940,7 +1905,6 @@ __all__ = [
     "UpstreamProviderError",
     "classify_provider_error_class",
     "provider_retries",
-    "provider_backoff_s",
     "provider_backoff_wait",
     # Never-rehydrate guard (thinking persistence)
     "NEVER_REHYDRATE_FIELDS",

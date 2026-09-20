@@ -55,7 +55,7 @@ def _install_scripted_stream(agent_server, rounds):
     user_texts_per_call: list[list[str]] = []
     model_calls: list[int] = []
 
-    async def _fake_stream(client, model, contents, **kwargs):
+    async def _fake_stream(contents, **kwargs):
         model_calls.append(1)
         # Snapshot the user-role text parts visible on THIS round's request.
         snap: list[str] = []

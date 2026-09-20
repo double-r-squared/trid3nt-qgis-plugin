@@ -90,9 +90,9 @@ async def _start_turn(monkeypatch, ranked, user_text="map the coast"):
     captured: dict = {"contents": None}
     real_stream = agent_server.stream_events_with_contents
 
-    def _wrap(client, model, contents, **kw):
+    def _wrap(contents, **kw):
         captured["contents"] = contents
-        return real_stream(client, model, contents, **kw)
+        return real_stream(contents, **kw)
 
     sock = _FakeSocket()
     state = agent_server.SessionState(session_id=new_ulid())
