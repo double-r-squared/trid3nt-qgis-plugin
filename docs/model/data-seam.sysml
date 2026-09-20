@@ -1217,9 +1217,7 @@ package DataSeam {
     satisfy requirement AFreeSurfaceAndABedShareOneStatedDatum by lakeDeclaration;
     satisfy requirement AFreeSurfaceAndABedShareOneStatedDatum by freeSurfaceReader;
     verify requirement AFreeSurfaceAndABedShareOneStatedDatum by
-        "tests/telemac/test_telemac3d_stratified_flow.py::test_the_level_the_free_surface_opens_at_is_one_measured_value";
-    verify requirement AFreeSurfaceAndABedShareOneStatedDatum by
-        "tests/telemac/test_telemac3d_stratified_flow.py::test_an_ungauged_body_of_water_continues_the_run";
+        "tests/telemac/test_telemac3d_stratified_flow.py::test_the_level_is_ranked_against_the_domain_and_may_be_absent";
     verify requirement AFreeSurfaceAndABedShareOneStatedDatum by
         "tests/inputs/test_slot_inputs.py::test_each_slot_reads_through_the_ingestion_its_role_names";
     verify requirement AFreeSurfaceAndABedShareOneStatedDatum by
@@ -1463,8 +1461,6 @@ package DataSeam {
         "tests/mesh/test_bed_sources_and_runs.py::test_a_tree_without_the_soundings_derive_says_which_one_is_missing";
     verify requirement OneBedOverEverySourceAUserCanHave by
         "tests/telemac/test_workflow_owns_its_stages.py::test_the_bed_op_takes_the_one_row_the_merge_derive_produced";
-    verify requirement OneBedOverEverySourceAUserCanHave by
-        "tests/telemac/test_workflow_owns_its_stages.py::test_a_second_bed_row_refuses_by_name";
 
     verify requirement ABoundaryRunIsTwoPointsAndAType by
         "tests/inputs/test_slot_inputs.py::test_a_domain_producer_hands_over_the_runs_it_cut_the_polygon_between";
@@ -1481,11 +1477,9 @@ package DataSeam {
     verify requirement ABoundaryRunIsTwoPointsAndAType by
         "tests/mesh/test_bed_sources_and_runs.py::test_a_closed_body_states_no_run_and_the_mesh_has_only_walls";
     verify requirement ABoundaryRunIsTwoPointsAndAType by
-        "tests/runtime/test_domain_bed_and_context_slots.py::test_the_runs_slot_is_filled_by_the_domains_own_producer";
+        "tests/telemac/test_workflow_owns_its_stages.py::test_the_boundary_runs_ride_on_the_polygon_the_domain_arrived_as";
     verify requirement ABoundaryRunIsTwoPointsAndAType by
-        "tests/runtime/test_domain_bed_and_context_slots.py::test_a_domain_that_carries_no_runs_leaves_the_slot_empty";
-    verify requirement ABoundaryRunIsTwoPointsAndAType by
-        "tests/runtime/test_domain_bed_and_context_slots.py::test_a_run_the_user_hands_over_supersedes_the_producers_own";
+        "tests/mesh/test_bed_sources_and_runs.py::test_runs_and_named_faces_are_the_same_statement";
     verify requirement ABoundaryRunIsTwoPointsAndAType by
         "tests/telemac/test_telemac_open_channel.py::test_a_domain_with_no_inflow_run_has_no_channel_to_open";
 
@@ -1496,7 +1490,7 @@ package DataSeam {
     verify requirement ABoxIsNotADomainAndIsItsOwnSlot by
         "tests/inputs/test_slot_inputs.py::test_only_the_slots_a_user_can_draw_are_offered_on_the_canvas";
     verify requirement ABoxIsNotADomainAndIsItsOwnSlot by
-        "tests/telemac/test_agitation_template.py::test_the_box_is_an_extent_slot_the_canvas_offers_a_rectangle_for";
+        "tests/telemac/test_agitation_template.py::test_the_extent_is_a_slot_the_canvas_offers_a_rectangle_for";
     verify requirement ABoxIsNotADomainAndIsItsOwnSlot by
         "tests/telemac/test_agitation_template.py::test_the_mesh_is_cut_from_the_domain_polygon_and_not_from_a_box";
 

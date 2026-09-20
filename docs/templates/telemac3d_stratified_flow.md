@@ -14,9 +14,9 @@ The 3D VERTICAL STRUCTURE of a body of water a 2D depth-averaged model cannot re
 
 | row | produced by | what it is | datum |
 |---|---|---|---|
-| `domain` | `fetch_nhd_waterbody_at_point` | Fetch ONE NHD WATERBODY POLYGON from one seed point -> a lake, pond or reservoir as a model domain. | - |
-| `bed` | `fetch_greatlakes_bathymetry` | Fetch the NOAA NCEI Great Lakes lake-datum BATHYMETRY over a bbox as a float32 GeoTIFF. | each Great Lake's own Low Water Datum (metres, positive up) |
-| `level` | `fetch_greatlakes_water_level` | Fetch the OBSERVED Great Lakes water level at NOAA CO-OPS gauges as a FlatGeobuf. | each Great Lake's own Low Water Datum (metres, positive up) |
+| `domain` | matched on a need for hydrography | the closed polygon this run solves over, as a uri, a layer name or a drawn shape; unfilled, the run matches a source of hydrography. | - |
+| `bed` | matched on a need for bathymetry | what the domain's nodes carry for elevation: a DEM, a bathymetry or survey raster, a layer of soundings, or a depth in metres below the free surface; unfilled, the run matches a source of bathymetry. | - |
+| `level` | matched on a need for water level series | the water level series this run opens on: a layer of sites that report it, or the number itself; unfilled, the run matches a source of water level series. | - |
 
 ## The sheet
 

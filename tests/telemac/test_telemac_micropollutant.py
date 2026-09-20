@@ -229,35 +229,32 @@ def test_the_template_declares_none_of_the_runtime_s_own_rows():
     assert steering.DURATION == 172800.0
 
 
-def test_the_three_slots_are_the_world_this_run_stands_on():
-    """One domain, one bed composed by the merge derive, and the runs slot the
-    reach producer's own two faces reach the mesh through."""
-    from trid3nt_server.workflows.runtime.data import BED, DOMAIN, RUNS
+def test_the_four_slots_are_the_world_this_run_stands_on():
+    """One domain, one bed, both stated as the CLASS the match fills them from -
+    no ladder, no producer, no separate runs row: the boundary runs ride on
+    whichever source answers the domain."""
+    from trid3nt_server.workflows.runtime.data import BED, DOMAIN
 
     data = {decl.name: decl for decl in
             _template().telemac_micropollutant_release.workflow.data}
     assert data["domain"].role == DOMAIN
-    assert data["domain"].producer.runner == "fetch_river_reach"
+    assert data["domain"].data_class == "hydrography"
     assert data["bed"].role == BED
-    assert data["bed"].producer.runner == "derive_merge_rasters"
-    assert data["surveyed_bed"].producer.runner == "derive_survey_surface"
-    assert (data["runs"].role, data["runs"].producer) == (RUNS, None)
-    # Both slots reach the wire: what the user supplies supersedes the producer.
-    assert data["domain"].fills_from_user and data["bed"].fills_from_user
+    assert data["bed"].data_class == "bathymetry"
+    assert "runs" not in data and "survey" not in data
+    assert "surveyed_bed" not in data and "terrain" not in data
 
 
-def test_the_carrier_reaches_the_channel_as_ONE_reading_never_the_record():
+def test_the_discharge_reaches_the_channel_as_ONE_reading_never_the_record():
     """The step that opens the channel refuses a record nobody chose a site
     from, so the flow is an OBSERVATION ranked against the domain's own point."""
-    from trid3nt_server.workflows.runtime import DataRef, Ref
     from trid3nt_server.workflows.runtime.data import DISCHARGE
 
     data = {decl.name: decl for decl in
             _template().telemac_micropollutant_release.workflow.data}
-    carrier = data["carrier"]
-    assert carrier.role == DISCHARGE and carrier.is_context
-    assert carrier.coercion["near"] == Ref("domain.centroid")
-    assert carrier.coercion["field"] == "streamflow_cms"
+    discharge = data["discharge"]
+    assert discharge.role == DISCHARGE and discharge.is_context
+    assert discharge.data_class == "discharge series"
 
 
 def test_both_placed_points_carry_the_domain_they_are_placed_along():
@@ -272,13 +269,11 @@ def test_both_placed_points_carry_the_domain_they_are_placed_along():
 
 
 def test_an_unsurveyed_domain_still_runs_on_the_terrain_alone():
-    """The survey and the surface gridded from it are CONTEXT: absent, the run
-    continues and the sheet says which side was missing."""
+    """The bed is ONE need row now; the survey-then-terrain composition is the
+    matched bed's own affair, not a second CONTEXT row on this template."""
     data = {decl.name: decl for decl in
             _template().telemac_micropollutant_release.workflow.data}
-    assert data["survey"].is_context
-    assert "terrain surface stands" in data["survey"].context_sentence
-    assert data["terrain"].is_context is False
+    assert data["bed"].is_context is False
 
 
 def test_the_mesh_the_workflow_builds_paints_the_one_bed_row():
@@ -292,8 +287,9 @@ def test_the_mesh_the_workflow_builds_paints_the_one_bed_row():
     assert recipe.resolution_m.name == "mesh_resolution_m"
     bed = next(op for op in recipe.ops if op.fn == "set_bed")
     assert bed.kwargs == {"source": DataRef("bed")}
+    # No runs row: the boundary runs ride on the domain's own producer.
     runs = next(op for op in recipe.ops if op.fn == "set_boundary_roles")
-    assert runs.kwargs == {"runs": DataRef("runs")}
+    assert runs.kwargs == {"runs": DataRef("domain")}
 
 
 def test_the_plan_reads_as_the_universal_stage_sequence():

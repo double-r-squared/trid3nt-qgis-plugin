@@ -120,59 +120,45 @@ def test_the_params_are_the_questions_own_plus_the_runtimes_levers():
     assert stated(steering=steering, keywords={})["DURATION"] == 172800.0
 
 
-def test_the_three_slots_are_the_world_this_run_stands_on():
-    """One domain, one bed composed by the merge derive, and the runs slot the
-    reach producer's own two faces reach the mesh through."""
-    from trid3nt_server.workflows.runtime import DataRef, data_rows
-    from trid3nt_server.workflows.runtime.data import BED, DOMAIN, RUNS
+def test_the_data_rows_are_the_engine_neutral_slots_this_run_stands_on():
+    """One domain needing a hydrography class, one bed the match composes, and
+    the line the domain's own producer measures beside it - no ladder, no
+    fetcher named on a row."""
+    from trid3nt_server.workflows.runtime import data_rows
+    from trid3nt_server.workflows.runtime.data import BED, DOMAIN, LINE
 
     rows = data_rows(_template().DATA)
-    assert [d.name for d in rows] == ["domain", "runs", "line", "survey",
-                                      "surveyed_bed", "terrain", "bed",
-                                      "carrier", "stage"]
+    assert [d.name for d in rows] == ["domain", "line", "bed", "discharge",
+                                      "level"]
     by_name = {d.name: d for d in rows}
     assert by_name["domain"].role == DOMAIN
-    assert by_name["domain"].producer.runner == "fetch_river_reach"
+    assert by_name["domain"].data_class == "hydrography"
+    assert by_name["domain"].producer is None
+    assert by_name["domain"].span_km == 12.0
+    assert by_name["line"].role == LINE
     assert by_name["bed"].role == BED
-    assert by_name["bed"].producer.runner == "derive_merge_rasters"
-    assert by_name["bed"].producer.kwargs["primary"] == DataRef("surveyed_bed")
-    assert by_name["bed"].producer.kwargs["fallback"] == DataRef("terrain")
-    assert by_name["surveyed_bed"].producer.kwargs["points"] == DataRef("survey")
-    runs = next(d for d in rows if d.role == RUNS)
-    assert (runs.producer, runs.is_optional) == (None, True)
-    # Both slots reach the wire: what the user supplies supersedes the producer.
+    assert by_name["bed"].data_class == "bathymetry"
+    assert by_name["bed"].producer is None
+    # Both slots reach the wire: what the user supplies supersedes the match.
     assert by_name["domain"].fills_from_user and by_name["bed"].fills_from_user
-
-
-def test_an_unsurveyed_domain_still_runs_on_the_terrain_alone():
-    """The survey row is CONTEXT: absent, the grid of nothing is nothing, the
-    terrain the bed slot composes over is the whole bed, and the sheet says so."""
-    from trid3nt_server.workflows.runtime import data_rows
-
-    by_name = {d.name: d for d in data_rows(_template().DATA)}
-    assert by_name["survey"].is_context
-    assert "terrain surface stands" in by_name["survey"].context_sentence
-    assert by_name["terrain"].is_context is False
 
 
 def test_the_carrier_is_one_reading_ranked_against_the_domain():
     """The dilution the whole sag rests on is a NUMBER, so the row is the
-    observation slot: the nearest reporting site, the field it reports under, and
-    a stated number that stands over any record."""
-    from trid3nt_server.workflows.runtime import Ref, data_rows
+    discharge slot: whichever record the match ranks nearest the water, with a
+    stated number standing over any record."""
+    from trid3nt_server.workflows.runtime import data_rows
     from trid3nt_server.workflows.runtime.data import DISCHARGE
 
-    carrier = {d.name: d for d in data_rows(_template().DATA)}["carrier"]
+    carrier = {d.name: d for d in data_rows(_template().DATA)}["discharge"]
     assert carrier.role == DISCHARGE
-    assert carrier.producer.runner == "fetch_noaa_nwm_streamflow"
-    assert carrier.coercion["near"] == Ref("domain.centroid")
-    assert carrier.coercion["field"] == "streamflow_cms"
-    # The nearest-site choice is the SLOT's, so the fetch is not asked for it.
-    assert "near" not in carrier.producer.kwargs
+    assert carrier.data_class == "discharge series"
+    assert carrier.producer is None
     assert carrier.is_context
+    assert "National Water Model" in carrier.context_sentence
 
 
-def test_the_outfall_seeds_the_domain_producer():
+def test_the_outfall_seeds_the_domain_match():
     """The outfall names which stretch to model, and the wire carries no second
     spelling of the same point."""
     import inspect
@@ -181,8 +167,7 @@ def test_the_outfall_seeds_the_domain_producer():
     from trid3nt_server.workflows.runtime import Ref, data_rows
 
     domain = data_rows(_template().DATA)[0]
-    assert domain.producer.kwargs["seed_point"] == [Ref("outfall_coords.lon"),
-                                                    Ref("outfall_coords.lat")]
+    assert domain.coercion["near"] == Ref("outfall_coords")
     wire = set(inspect.signature(TOOL_REGISTRY["telemac_do_sag"].fn).parameters)
     assert "outfall_coords" in wire
     assert {"domain", "bed"} <= wire
@@ -224,7 +209,8 @@ def test_the_mesh_is_built_over_the_domain_slot_at_the_runtimes_own_lever():
     bed = next(op for op in recipe.ops if op.fn == "set_bed")
     assert bed.kwargs == {"source": DataRef("bed")}
     runs = next(op for op in recipe.ops if op.fn == "set_boundary_roles")
-    assert runs.kwargs == {"runs": DataRef("runs")}
+    # No runs row: the boundary runs ride on the domain's own producer.
+    assert runs.kwargs == {"runs": DataRef("domain")}
 
 
 def test_the_settle_step_reads_the_files_the_deck_itself_names():
@@ -330,7 +316,8 @@ def test_the_outputs_list_charts_the_oxygen_along_the_domains_centerline():
         ("profile", "T2", -1, "chart")]
     assert callable(do_sag.OUTPUTS[0].reference)
     assert do_sag.OUTPUTS[0].along == Ref("line")
-    assert do_sag.CAPTIONS == {"T2": "dissolved oxygen"}
+    assert do_sag.CAPTIONS == {"T2": "dissolved oxygen", "discharge": "a streamflow",
+                               "level": "a water level"}
     assert {name: (m.primitive.kind, m.primitive.variable, m.stat)
             for name, m in do_sag.ANSWER.items()} == {
         "do_min_mgl": ("profile", "T2", "min"),

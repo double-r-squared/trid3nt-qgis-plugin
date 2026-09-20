@@ -22,44 +22,50 @@ from trid3nt_server.workflows.runtime import (
     doors,
     tool,
 )
-from trid3nt_server.workflows.runtime.data import BED, DOMAIN, RUNS
+from trid3nt_server.workflows.runtime.data import BED, DOMAIN
 from trid3nt_server.workflows.runtime.levers import LEVER_NAMES, LEVERS, with_levers
 
 
 def test_a_domain_row_is_one_slot_however_it_is_filled():
     """A drawn polygon, the user's layer and a producer fill ONE row: the slot is
     on the wire AND names its producer, and nothing downstream reads which."""
-    class DATA:
-        drawn = Data.domain()
-        fetched = Data.domain(tool("fetch_river_reach", seed=[1.0, 2.0]))
+    class DRAWN:
+        domain = Data.supplied(geometry="polygon")
 
-    rows = {row.name: row for row in data_rows(DATA)}
-    assert rows["drawn"].role == rows["fetched"].role == DOMAIN
-    assert rows["drawn"].geometry == rows["fetched"].geometry == "polygon"
+    class FETCHED:
+        domain = Data(tool("fetch_river_reach", seed=[1.0, 2.0]))
+
+    drawn, fetched = data_rows(DRAWN)[0], data_rows(FETCHED)[0]
+    assert drawn.role == fetched.role == DOMAIN
     # BOTH are on the wire: what the user hands in supersedes the producer.
-    assert rows["drawn"].fills_from_user and rows["fetched"].fills_from_user
-    assert rows["fetched"].producer.runner == "fetch_river_reach"
+    assert drawn.fills_from_user and fetched.fills_from_user
+    assert fetched.producer.runner == "fetch_river_reach"
 
 
 def test_a_bed_row_takes_every_source_a_survey_arrives_in_but_a_mesh():
     class DATA:
-        bed = Data.bed()
+        bed = Data.need("bathymetry")
 
     row = data_rows(DATA)[0]
     assert row.role == BED and row.fills_from_user
-    # a raster, a sounding layer and a stated depth all pass the slot's shape
+    # A bathymetry is measured as a raster AND as soundings, so both are the
+    # class handed in; a stated depth is the number itself and has no shape.
     for supplied in ("s3://b/k/survey.tif", "s3://b/k/soundings.geojson", 2.0):
         row.refuse_wrong_shape(supplied)
-    with pytest.raises(Exception, match="reads as a mesh"):
+    with pytest.raises(Exception, match="reads as mesh"):
         row.refuse_wrong_shape("s3://b/k/solved.slf")
 
 
-def test_boundary_runs_are_an_optional_slot_because_a_closed_body_states_none():
+def test_a_terrain_row_refuses_the_shape_no_source_of_terrain_publishes():
+    """The supplied twin is the CLASS's: terrain is measured as a surface and
+    nothing publishes it as a point layer, so soundings are not a terrain."""
     class DATA:
-        runs = Data.runs()
+        bed = Data.need("terrain")
 
     row = data_rows(DATA)[0]
-    assert (row.role, row.is_optional, row.geometry) == (RUNS, True, "polyline")
+    row.refuse_wrong_shape("s3://b/k/ground.tif")
+    with pytest.raises(Exception, match="reads as vector"):
+        row.refuse_wrong_shape("s3://b/k/soundings.geojson")
 
 
 def test_a_row_declared_with_a_producer_binds_its_reads_like_a_bare_one():
@@ -165,9 +171,8 @@ class _RIVER:
     """A question whose domain producer measures the edge it cuts between and
     the line down the middle of what it cut."""
 
-    domain = Data.domain(tool("fetch_river_reach", seed_point=[0.5, 0.5]))
-    runs = Data.runs()
-    line = Data.line()
+    domain = Data(tool("fetch_river_reach", seed_point=[0.5, 0.5]))
+    line = Data.supplied(geometry="polyline")
 
 
 def _env_over(value, monkeypatch, body=_RIVER):
@@ -179,25 +184,6 @@ def _env_over(value, monkeypatch, body=_RIVER):
     monkeypatch.setattr(interpreter, "_produced", _answered)
     rows = {row.name: row for row in data_rows(body)}
     return interpreter, interpreter._Env(params=None, data=rows, results={})
-
-
-def test_the_runs_slot_is_filled_by_the_domains_own_producer(monkeypatch):
-    """The reach fetcher returns the polygon and the two faces as ONE artifact,
-    so a template that declares the slot restates nothing to be given them."""
-    interpreter, env = _env_over(_REACH, monkeypatch)
-    runs = asyncio.run(interpreter._produce(env, env.data["runs"]))
-    assert [(run.type, run.name) for run in runs] == [("inflow", None),
-                                                      ("outflow", None)]
-
-
-def test_a_domain_that_carries_no_runs_leaves_the_slot_empty(monkeypatch):
-    """A drawn outline measures no edge. With no canvas to ask, the absence is
-    the answer - which is what a CLOSED body states - and it is labelled."""
-    drawn = {"type": "Polygon", "coordinates": [[[0.0, 0.0], [1.0, 0.0],
-                                                 [1.0, 1.0], [0.0, 0.0]]]}
-    interpreter, env = _env_over(drawn, monkeypatch)
-    assert asyncio.run(interpreter._produce(env, env.data["runs"])) is None
-    assert env.absences and "runs" in env.absences[0]
 
 
 def test_the_line_slot_is_filled_by_the_domains_own_centerline(monkeypatch):
@@ -228,16 +214,6 @@ def test_a_line_the_user_draws_is_read_as_one_geometry(monkeypatch):
     env.supplied["line"] = [[0.2, 0.2], [0.8, 0.8]]
     assert asyncio.run(interpreter._produce(env, env.data["line"])) == {
         "type": "LineString", "coordinates": [[0.2, 0.2], [0.8, 0.8]]}
-
-
-def test_a_run_the_user_hands_over_supersedes_the_producers_own(monkeypatch):
-    """The slot reads the same whatever fills it: what the caller supplies is
-    what the mesh prescribes on, and the producer is never asked."""
-    interpreter, env = _env_over(_REACH, monkeypatch)
-    env.supplied["runs"] = [{"start": [0.0, 0.0], "end": [1.0, 0.0],
-                             "type": "open", "name": "the sea"}]
-    runs = asyncio.run(interpreter._produce(env, env.data["runs"]))
-    assert [(run.type, run.name) for run in runs] == [("open", "the sea")]
 
 
 def test_a_malformed_ask_on_a_context_row_refuses_rather_than_reading_absent(
@@ -387,10 +363,8 @@ _SITES = {"type": "FeatureCollection", "features": [
 class _OBSERVED:
     """A row whose PRODUCER is a record and whose VALUE is one reading."""
 
-    opening = Data.observation(
-        tool("fetch_usgs_water_quality", characteristic="temperature"),
-        near=Ref("station"), measures="a water temperature",
-        opens="the water opens at")
+    observe = Data(tool("fetch_usgs_water_quality",
+                        characteristic="temperature"))
 
 
 def _answered(monkeypatch, value: Any):
@@ -431,9 +405,11 @@ def test_an_observation_row_yields_the_reading_not_the_record(monkeypatch):
 def test_the_coercion_a_row_declares_is_bound_before_the_ingestion_runs():
     """``near`` is a late-bound read like any producer kwarg: the point the
     nearest site is ranked against is measured by a step, not written by hand."""
-    row = data_rows(_OBSERVED)[0]
+    class RANKED:
+        observe = Data.need("water quality sample", at=Ref("station"))
+
+    row = data_rows(RANKED)[0]
     assert row.coercion["near"] == Ref("station")
-    assert row.coercion["opens"] == "the water opens at"
 
 
 def test_a_supplied_number_supersedes_the_record_through_the_same_slot(monkeypatch):
@@ -441,7 +417,7 @@ def test_a_supplied_number_supersedes_the_record_through_the_same_slot(monkeypat
 
     env = interpreter._Env(params=None, data={}, results={"station": (0.11, 0.1)},
                            slot_units={"observe": "degC"},
-                           supplied={"opening": 11.5})
+                           supplied={"observe": 11.5})
     found = asyncio.run(interpreter._produce(env, data_rows(_OBSERVED)[0]))
     assert found.value == pytest.approx(11.5) and found.units == "degC"
 

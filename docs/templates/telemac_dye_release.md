@@ -14,11 +14,10 @@ A DYE / TRACER / CONTAMINANT plume released into a body of surface water and car
 
 | row | produced by | what it is | datum |
 |---|---|---|---|
-| `domain` | `fetch_river_reach` | Build a RIVER REACH DOMAIN from one seed point -> the reach polygon, its inflow and outflow boundary runs, and the centerline. | - |
-| `runs` | supplied by the caller | the stretches of the domain's edge that carry a boundary condition - each two points on the edge and a type (inflow, outflow, open); a closed body states none | - |
+| `domain` | matched on a need for hydrography | the closed polygon this run solves over, as a uri, a layer name or a drawn shape; unfilled, the run matches a source of hydrography. | - |
 | `bed` | matched on a need for bathymetry | what the domain's nodes carry for elevation: a DEM, a bathymetry or survey raster, a layer of soundings, or a depth in metres below the free surface; unfilled, the run matches a source of bathymetry. | - |
-| `carrier` | matched on a need for discharge series | a streamflow this run opens on: a layer of sites that report it, or the number itself in m3/s; unfilled, the run matches a source of discharge series. | - |
-| `stage` | matched on a need for water level series | a water-surface elevation this run opens on: a layer of sites that report it, or the number itself in m; unfilled, the run matches a source of water level series. | - |
+| `discharge` | matched on a need for discharge series | the discharge series this run opens on: a layer of sites that report it, or the number itself; unfilled, the run matches a source of discharge series. | - |
+| `level` | matched on a need for water level series | the water level series this run opens on: a layer of sites that report it, or the number itself; unfilled, the run matches a source of water level series. | - |
 
 ## The sheet
 

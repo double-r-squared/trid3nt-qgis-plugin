@@ -26,7 +26,7 @@ def test_a_question_whose_runs_always_carry_a_flow_opens_as_a_channel():
 def test_a_question_whose_discharge_may_be_absent_still_lists_the_channel():
     steps = _steps("telemac_dye_release")
     assert "channel" in steps
-    assert steps["channel"].kwargs["carrier"].root == "carrier"
+    assert steps["channel"].kwargs["carrier"].root == "discharge"
     assert steps["settled"].kwargs["level"].root == "channel"
 
 

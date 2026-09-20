@@ -178,17 +178,6 @@ def test_the_two_rows_are_the_basin_and_the_outlet_it_drains_through(
         assert properties["notes"] == "traced it"
 
 
-def test_the_watershed_surfaces_from_its_own_corpus_phrasings():
-    from pathlib import Path
-
-    import yaml
-
-    from trid3nt_server.tools.search.search_tools import search_tools as dd
-    from trid3nt_server.tools.search.tool_retrieval import retrieve_visible_tools
-
-    dd._get_index()
-    here = Path(ws.__file__).resolve().parent
-    queries = (yaml.safe_load((here / "corpus.yaml").read_text()) or {})["fetch_watershed"]
-    assert queries
-    assert any("fetch_watershed" in retrieve_visible_tools(q, None, 8) for q in queries), (
-        "fetch_watershed surfaces in NO top-8 for any of its corpus queries")
+def test_the_watershed_is_found_through_its_class(class_routes_to_the_match):
+    """A covered fetcher carries no corpus: its class is the door."""
+    class_routes_to_the_match("hydrography", "fetch_watershed")

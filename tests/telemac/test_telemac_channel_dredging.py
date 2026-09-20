@@ -48,51 +48,35 @@ def _recipe():
     return recipe_from_plan_value(_steps()["mesh"].kwargs["mesh"])
 
 
-def test_the_domain_is_one_row_the_reach_fetcher_produces():
-    """The five chained rows are one slot with a producer: a seed on the water,
-    a distance along it, and the polygon comes back with its two end faces."""
+def test_the_domain_is_one_need_row_asked_at_the_seed_point():
+    """The domain names the CLASS it needs and the point it is asked at; which
+    fetcher answers - a reach walked downstream, a waterbody at a point - is the
+    match's, ranked in the coverage order."""
     domain = _rows()["domain"]
-    assert domain.role == "domain" and domain.geometry == "polygon"
-    assert domain.producer.runner == "fetch_river_reach"
-    assert set(domain.producer.kwargs) == {"seed_point", "distance_km"}
-    assert domain.producer.kwargs["distance_km"] == channel_dredging._REACH_LENGTH_KM
+    assert domain.role == "domain" and domain.data_class == "hydrography"
+    assert domain.coercion["near"] == Ref("seed_point")
+    assert domain.span_km == channel_dredging._REACH_LENGTH_KM
 
 
-def test_the_bed_is_one_row_the_merge_derive_made_of_the_survey_and_the_terrain():
-    """set_bed takes ONE source: the soundings are gridded by the derive one row
-    names, and the merge derive lays that measurement over the terrain beside
-    it. The composition is DATA rows, never an argument on the slot."""
-    rows = _rows()
-    bed = rows["bed"]
-    assert bed.role == "bed"
-    assert bed.producer.runner == "derive_merge_rasters"
-    assert bed.producer.kwargs["primary"] == DataRef("surveyed_bed")
-    assert bed.producer.kwargs["fallback"] == DataRef("terrain")
-    assert rows["surveyed_bed"].producer.runner == "derive_survey_surface"
-    assert rows["surveyed_bed"].producer.kwargs["points"] == DataRef("survey")
-    assert rows["terrain"].producer.runner == "fetch_dem"
+def test_the_bed_is_one_need_row_the_stricter_class_the_match_composes():
+    """The dredge asks the STRICTER class - the maintained prism, not the water
+    around it - and the match's own bed rule composes it: the measurement where
+    it measured, the terrain under the rest, never a producer or a merge stated
+    on the template."""
+    bed = _rows()["bed"]
+    assert bed.role == "bed" and bed.data_class == "channel survey"
+    assert bed.producer is None
     assert [row.name for row in _WORKFLOW.data if row.role == "bed"] == ["bed"]
 
 
-def test_an_unsurveyed_channel_still_runs_and_the_sheet_says_which_bed_it_got():
-    """A channel with no federal navigation project has no published survey.
-    The survey row is CONTEXT, the grid of nothing is nothing, and the terrain
-    the slot composes over is the whole bed."""
-    rows = _rows()
-    assert rows["survey"].is_context
-    assert "terrain surface stands" in rows["survey"].context_sentence
-
-
-def test_the_flow_the_channel_is_dredged_under_is_one_reading_not_a_record():
-    """The inflow carries ONE number. Which site reports it and how old the
-    sample is are the observation slot's to decide, so the row is ingested
-    rather than handed to the settle as a fetched layer."""
-    carrier = _rows()["carrier"]
-    assert carrier.role == "discharge" and carrier.is_context
-    assert carrier.producer.runner == "fetch_noaa_nwm_streamflow"
-    assert carrier.coercion["field"] == "streamflow_cms"
-    assert carrier.coercion["near"] == Ref("domain.centroid")
-    assert carrier.coercion["measures"] == "a streamflow"
+def test_the_flow_the_channel_is_dredged_under_is_a_need_row_not_a_record():
+    """The inflow carries ONE number: a NEED row, absent-is-context, and the
+    user's own number wins over any record."""
+    discharge = _rows()["discharge"]
+    assert discharge.role == "discharge" and discharge.data_class == "discharge series"
+    assert discharge.is_context
+    assert "National Water Model" in discharge.context_sentence
+    assert discharge.producer is None
 
 
 def test_the_workflow_owns_every_stage_but_the_two_this_question_measures():
@@ -179,14 +163,12 @@ def test_the_mesh_is_built_over_the_domain_slot_at_the_runtime_lever():
     assert bed.kwargs == {"source": DataRef("bed")}
 
 
-def test_the_boundary_roles_come_from_the_runs_slot():
-    """The reach fetcher returns the section and the two faces it was cut
-    between, and they ride on the domain into the runs slot; a domain that
-    carries none is asked for them, and an edge that names none is closed."""
+def test_the_boundary_roles_ride_on_the_domain_since_no_runs_row_exists():
+    """There is no runs row any more: the boundary walk the match returned rides
+    on the domain's own producer, and the workflow passes that row directly."""
     runs = next(op for op in _recipe().ops if op.fn == "set_boundary_roles")
-    assert runs.kwargs == {"runs": DataRef("runs")}
-    row = next(row for row in _WORKFLOW.data if row.role == "runs")
-    assert (row.name, row.producer, row.is_optional) == ("runs", None, True)
+    assert runs.kwargs == {"runs": DataRef("domain")}
+    assert "runs" not in _rows()
 
 
 def test_the_runtime_levers_are_seated_and_no_baseline_param_is_restated():
@@ -204,12 +186,12 @@ def test_the_runtime_levers_are_seated_and_no_baseline_param_is_restated():
 
 
 def test_every_slot_a_user_can_fill_reaches_the_wire():
-    """A fairway the port supplies supersedes the fetched reach, a surveyed
-    raster supersedes the composed bed and a stated flow supersedes the reading,
-    so all three are arguments though all three name a source; the two areas and
-    the line have no source to supersede."""
+    """A fairway the port supplies supersedes the matched reach, a surveyed
+    raster supersedes the matched bed and a stated flow supersedes the reading,
+    so all name a class or a role though none names a producer; the two areas
+    are supplied and the line names none either."""
     assert {row.name for row in _WORKFLOW.data if row.fills_from_user} == {
-        "domain", "runs", "line", "bed", "carrier", "stage", "dredge_area",
+        "domain", "line", "bed", "discharge", "level", "dredge_area",
         "dump_area"}
 
 
@@ -222,6 +204,13 @@ def test_the_two_areas_name_no_source_and_take_polygons():
 
 def test_a_dredge_releases_nothing_so_it_prescribes_no_tracer():
     assert _STEERING.ASSERTED["boundaries"]["tracers"] == []
+
+
+def test_the_two_measured_rows_carry_their_noun_on_the_journal():
+    """CAPTIONS carries the sentence for the two DATA rows the run journal opens
+    on, keyed by the row's own name."""
+    assert channel_dredging.CAPTIONS == {"discharge": "a streamflow",
+                                         "level": "a water level"}
 
 
 def test_the_answer_is_the_engine_s_own_lines_and_the_change_inside_each_area():

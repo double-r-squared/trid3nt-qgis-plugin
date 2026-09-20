@@ -114,7 +114,7 @@ def _row(decl, name):
 
 def test_the_bed_is_the_measurement_gridded_over_the_terrain_under_it(world):
     env = _env()
-    bed = _row(Data.bed(need="bathymetry"), "bed")
+    bed = _row(Data.need("bathymetry"), "bed")
     out = asyncio.run(interpreter._matched_bed(env, bed))
     ran = [runner for runner, _kw in world]
     assert ran == ["fetch_terrain", "fetch_soundings", "derive_survey_surface",
@@ -134,7 +134,7 @@ def test_a_raster_measurement_reaches_the_merge_without_being_gridded(world,
                               "raster", {"bbox": None}))
     env = _env()
     out = asyncio.run(interpreter._matched_bed(
-        env, _row(Data.bed(need="bathymetry"), "bed")))
+        env, _row(Data.need("bathymetry"), "bed")))
     ran = [runner for runner, _kw in world]
     assert "derive_survey_surface" not in ran
     assert ran[-1] == "derive_merge_rasters"
@@ -152,7 +152,7 @@ def test_no_measurement_over_this_domain_leaves_the_terrain_as_the_whole_bed(
     monkeypatch.setattr(interpreter, "_call_runner", _runner)
     env = _env()
     out = asyncio.run(interpreter._matched_bed(
-        env, _row(Data.bed(need="bathymetry"), "bed")))
+        env, _row(Data.need("bathymetry"), "bed")))
     assert out == "s3://b/fetch_terrain.tif"
     assert "derive_merge_rasters" not in [runner for runner, _kw in world]
     # BOTH measurements were tried, in rank order, and the sheet says so.
@@ -171,7 +171,7 @@ def test_the_next_survivor_takes_its_turn_when_the_top_one_held_nothing(
     monkeypatch.setattr(interpreter, "_call_runner", _runner)
     env = _env()
     choice, value = asyncio.run(interpreter._probe(
-        env, _row(Data.bed(need="bathymetry"), "bed"), "bathymetry", "bed"))
+        env, _row(Data.need("bathymetry"), "bed"), "bathymetry", "bed"))
     assert choice.picked == "fetch_bed_raster"
     assert value == "s3://b/fetch_bed_raster.tif"
     assert choice.rows[0].excluded.startswith("held nothing here")
@@ -181,9 +181,9 @@ def test_a_run_series_is_asked_for_the_window_the_deck_will_solve(world):
     env = interpreter._Env(
         params=_Params(mesh_resolution_m=14.0, event_time="2026-09-13T22:00:00Z"),
         data={}, results={}, window_s=172800.0)
-    carrier = _row(Data.discharge(need="discharge series"), "carrier")
+    discharge = _row(Data.need("discharge series"), "discharge")
     choice, value = asyncio.run(interpreter._probe(
-        env, carrier, "discharge series", "carrier"))
+        env, discharge, "discharge series", "discharge"))
     assert choice.picked == "fetch_gauges"
     _runner, ask = world[-1]
     assert ask["start_date"] == "2026-09-13"
@@ -201,7 +201,7 @@ def test_a_need_and_a_producer_on_one_row_is_refused_at_declaration():
 
     with pytest.raises(PlanValidationError, match="a row is satisfied one way"):
         class DATA:
-            bed = Data.bed(tool("fetch_dem"), need="bathymetry")
+            bed = Data(tool("fetch_dem")).need("bathymetry")
 
         data_rows(DATA)
 
@@ -215,8 +215,7 @@ def test_the_ranked_list_is_one_object_the_card_and_the_sheet_both_read(world):
     from trid3nt_server.workflows.telemac.workflow import _source_rows
 
     env = _env()
-    asyncio.run(interpreter._matched_bed(env, _row(Data.bed(need="bathymetry"),
-                                                   "bed")))
+    asyncio.run(interpreter._matched_bed(env, _row(Data.need("bathymetry"), "bed")))
     rows = _source_rows()
     assert [row.name for row in rows] == ["bed terrain source",
                                           "bed bathymetry source"]
@@ -261,7 +260,7 @@ def test_a_gauge_serving_two_classes_fills_each_slot_from_its_own_row(world,
                   "vector", {"bbox": None, "start_date": None, "end_date": None})
     monkeypatch.setitem(SPECS, "fetch_gauges", gauge)
     env = _env()
-    level = _row(Data.level(need="water level series"), "stage")
+    level = _row(Data.need("water level series"), "level")
     told = interpreter._what_the_record_reports(env, level, "fetch_gauges")
     assert told["field"] == "gage_height_ft"
     assert told["series_field"] == "stage_series_csv"
@@ -269,8 +268,8 @@ def test_a_gauge_serving_two_classes_fills_each_slot_from_its_own_row(world,
     # every column the source states a unit for is readable, whichever row
     # stated it.
     assert told["column_units"]["discharge_cfs"] == "ft3/s"
-    carrier = _row(Data.discharge(need="discharge series"), "carrier")
-    flow = interpreter._what_the_record_reports(env, carrier, "fetch_gauges")
+    discharge = _row(Data.need("discharge series"), "discharge")
+    flow = interpreter._what_the_record_reports(env, discharge, "fetch_gauges")
     assert flow["field"] == "discharge_cfs"
     assert flow["series_field"] == "time_series_csv"
 

@@ -19,7 +19,7 @@ from trid3nt_server.inputs.domain import domain, domain_ring
 from trid3nt_server.inputs.slots import SLOTS, ingest_slot, role_of
 from trid3nt_server.inputs.user_input import UserInputError
 from trid3nt_server.workflows.runtime.data import (
-    BED, DOMAIN, EXTENT, LEVEL, LINE, RUNS)
+    BED, DOMAIN, EXTENT, LEVEL, LINE)
 
 _RING = [[-123.0, 45.0], [-122.9, 45.0], [-122.9, 45.1], [-123.0, 45.1]]
 
@@ -121,7 +121,6 @@ def test_a_depth_no_water_body_holds_refuses_rather_than_being_meshed():
 def test_each_slot_reads_through_the_ingestion_its_role_names():
     assert ingest_slot(DOMAIN, _RING).bbox == (-123.0, 45.0, -122.9, 45.1)
     assert ingest_slot(BED, 2.0).kind == DEPTH
-    assert ingest_slot(RUNS, None) == ()
     # a role nothing here reads leaves the value as it came
     assert ingest_slot("", "x") == "x"
 
@@ -158,9 +157,8 @@ def test_a_domain_says_its_own_name_when_it_is_read_as_text():
 def test_only_the_slots_a_user_can_draw_are_offered_on_the_canvas():
     """A bed is a survey or a number, so there is nothing to draw for it."""
     assert {name for name, slot in SLOTS.items() if slot.draw} == {
-        DOMAIN, RUNS, EXTENT, LINE}
+        DOMAIN, EXTENT, LINE}
     assert SLOTS[DOMAIN].draw[:2] == ("polygon", "domain")
-    assert SLOTS[RUNS].draw[:2] == ("polyline", "boundary run")
     assert SLOTS[LINE].draw[:2] == ("polyline", "line")
     # a box rides the pick mode, which offers no vector tool to choose between
     assert SLOTS[EXTENT].draw[:2] == ("rectangle", "")

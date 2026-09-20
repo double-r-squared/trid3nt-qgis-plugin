@@ -128,7 +128,7 @@ def test_a_non_numeric_bounded_arg_refuses_it_is_never_defaulted():
         _resolve(spill_duration_s="a while")
 
 
-def test_the_carrier_flow_is_the_inflow_runs_value_and_not_a_param():
+def test_the_inflow_flow_is_the_discharge_slots_value_and_not_a_param():
     """The flow the inflow run carries is the observation ROW's - a reading, or
     the number stated on it - so no param of this question declares one, and the
     row states the CLASS it needs rather than the source that reports it."""
@@ -139,14 +139,14 @@ def test_the_carrier_flow_is_the_inflow_runs_value_and_not_a_param():
     )
 
     assert "discharge_m3s" not in {p.name for p in param_rows(PARAMS)}
-    carrier = next(d for d in data_rows(DATA) if d.name == "carrier")
-    assert carrier.role == "discharge"
-    assert carrier.coercion["measures"] == "a streamflow"
-    assert carrier.producer is None
-    assert carrier.data_class == "discharge series"
+    discharge = next(d for d in data_rows(DATA) if d.name == "discharge")
+    assert discharge.role == "discharge"
+    assert discharge.producer is None
+    assert discharge.data_class == "discharge series"
     # The unit is the PRESCRIBED FLOWRATES list's, which the transform fixes;
-    # no row states one.
-    assert "to_units" not in carrier.coercion
+    # no row states one, and the sentence the journal opens with is the
+    # template's caption keyed by this row's own name.
+    assert "to_units" not in discharge.coercion
 
 
 def test_the_params_are_the_questions_own_and_the_deck_states_the_keywords():
@@ -181,31 +181,32 @@ def test_the_params_are_the_questions_own_and_the_deck_states_the_keywords():
 
 
 def test_the_data_body_is_the_slots_and_the_classes_they_need():
-    """The domain the question prefers a producer for, and the bed, the carrier
+    """The domain, the bed, the discharge
     and the level as the CLASSES they need - no fetcher named on any of them."""
     from trid3nt_server.workflows.runtime import Ref, data_rows
     from trid3nt_server.workflows.telemac.templates.dye_release.dye_release import DATA
 
     rows = data_rows(DATA)
-    assert [d.name for d in rows] == ["domain", "runs", "bed", "carrier",
-                                      "stage"]
+    assert [d.name for d in rows] == ["domain", "bed", "discharge", "level"]
     by_name = {d.name: d for d in rows}
     assert by_name["domain"].role == "domain"
-    assert by_name["domain"].geometry == "polygon"
-    assert by_name["domain"].producer.runner == "fetch_river_reach"
+    assert by_name["domain"].producer is None
+    assert by_name["domain"].data_class == "hydrography"
     # THE BED is one class and the runtime owns the merge between the two.
     assert by_name["bed"].role == "bed"
     assert by_name["bed"].producer is None
     assert by_name["bed"].data_class == "bathymetry"
     # ONE READING, not the published grid: the step that opens the channel
     # refuses a record nobody chose a site from, so the flow arrives ingested.
-    carrier = by_name["carrier"]
-    assert carrier.role == "discharge"
-    assert carrier.data_class == "discharge series"
-    assert carrier.coercion["near"] == Ref("domain.centroid")
+    discharge = by_name["discharge"]
+    assert discharge.role == "discharge"
+    assert discharge.data_class == "discharge series"
+    # No point stated: the place a nearest reporting site is ranked against is
+    # the domain's own centre.
+    assert discharge.coercion["near"] is None
     # The level is matched too, and its absence is legal.
-    assert by_name["stage"].data_class == "water level series"
-    assert by_name["stage"].is_optional
+    assert by_name["level"].data_class == "water level series"
+    assert by_name["level"].is_optional
     # No row here is superseded by a supplied artifact, and no row falls to a
     # second source of its own: degrading between sources is the MATCH's.
     assert all(d.producer is None or d.producer.supplied_uri is None
@@ -222,8 +223,9 @@ def test_the_release_point_seeds_the_domain_producer():
     from trid3nt_server.workflows.telemac.templates.dye_release.dye_release import DATA
 
     domain = data_rows(DATA)[0]
-    assert domain.producer.kwargs["seed_point"] == [Ref("release.lon"),
-                                                    Ref("release.lat")]
+    # THE POINT the reach is cut from is the one fact about the world the row
+    # states; which source cuts it is the match's.
+    assert domain.coercion["near"] == Ref("release")
     wire = set(inspect.signature(TOOL_REGISTRY["telemac_dye_release"].fn).parameters)
     assert "release" in wire
     assert not {"release_coords", "release_lat", "release_lon", "location",
@@ -240,7 +242,7 @@ def test_the_domain_and_the_bed_reach_the_wire_as_the_slots_they_are():
     from trid3nt_server.tools import TOOL_REGISTRY
 
     wire = set(inspect.signature(TOOL_REGISTRY["telemac_dye_release"].fn).parameters)
-    assert {"domain", "bed", "carrier"} <= wire
+    assert {"domain", "bed", "discharge"} <= wire
     assert {"survey", "terrain"}.isdisjoint(wire)
 
 
@@ -251,7 +253,7 @@ def test_the_workflow_owns_the_stages_and_the_template_states_what_differs():
     validate_plan(wf.plan, wf.params, wf.data)
     steps = _steps()
     # The channel is LISTED because this question declares a discharge; whether
-    # a run of it carries one is the author's to settle off the carrier it is
+    # a run of it carries one is the author's to settle off the discharge it is
     # handed, and an absent one opens on the level boundaries instead.
     assert [s.label for s in steps] == ["stated", "mesh", "channel", "source",
                                         "settled", "sheet", "solve", "outputs"]
@@ -267,7 +269,9 @@ def test_the_workflow_owns_the_stages_and_the_template_states_what_differs():
     listed = steps[-1].kwargs["outputs"]
     assert [(p.kind, p.variable, p.publish) for p in listed] == [
         ("series", "T1", "chart")]
-    assert steps[-1].kwargs["captions"] == {"T1": "dye concentration"}
+    assert steps[-1].kwargs["captions"] == {
+        "T1": "dye concentration", "discharge": "a streamflow",
+        "level": "a water-surface elevation"}
     assert set(steps[-1].kwargs["answer"]) == {
         "dye_cmax_mgl", "dye_peak_time_s", "plume_reach_m", "active_frames",
         "mesh_size_m"}
@@ -286,7 +290,7 @@ def test_the_mesh_is_built_over_the_domain_slot_at_the_runtimes_own_lever():
     # The RUNS slot: filled by the domain producer that cut the polygon between
     # two faces, by the user's own runs, or by what they draw on the canvas.
     runs = next(op for op in recipe.ops if op.fn == "set_boundary_roles")
-    assert runs.kwargs == {"runs": DataRef("runs")}
+    assert runs.kwargs == {"runs": DataRef("domain")}
 
 
 def test_the_settle_step_reads_the_files_the_deck_itself_names():

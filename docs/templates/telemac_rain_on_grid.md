@@ -14,12 +14,11 @@ How much RUNOFF a storm produces from the catchment a point drains, as an outlet
 
 | row | produced by | what it is | datum |
 |---|---|---|---|
-| `domain` | `fetch_watershed` | Build a WATERSHED DOMAIN from one pour point -> the basin polygon, its outlet boundary run, and the DEM the trace used. | - |
-| `runs` | supplied by the caller | the stretches of the domain's edge that carry a boundary condition - each two points on the edge and a type (inflow, outflow, open); a closed body states none | - |
-| `bed` | `fetch_dem` | Fetch a digital elevation model (DEM) / terrain elevation for a bounding box (USGS 3DEP US lidar; on a 3DEP outage the default path STOPS and asks before any Copernicus GLO-30 swap; either source pinnable). | NAVD88 (metres, positive up) |
-| `rivers` | `fetch_river_geometry` | Fetch river and stream flowline geometry for a bbox (OSM Overpass waterways). | - |
-| `landcover` | `fetch_landcover` | Fetch landcover classification raster (NLCD or ESA WorldCover) for a bbox. | - |
-| `rain` | `fetch_aorc_precip` | NOAA AORC v1.1 historical hourly precipitation -- the AOI-mean hyetograph forcing series for any CONUS year since 1979. | - |
+| `domain` | matched on a need for hydrography | the closed polygon this run solves over, as a uri, a layer name or a drawn shape; unfilled, the run matches a source of hydrography. | - |
+| `bed` | matched on a need for terrain | what the domain's nodes carry for elevation: a DEM, a bathymetry or survey raster, a layer of soundings, or a depth in metres below the free surface; unfilled, the run matches a source of terrain. | - |
+| `rivers` | matched on a need for hydrography | the hydrography this run reads, as a uri or a layer name; unfilled, the run matches a source of hydrography. | - |
+| `landcover` | matched on a need for land cover | the land cover this run reads, as a uri or a layer name; unfilled, the run matches a source of land cover. | - |
+| `rain` | matched on a need for precipitation series | the precipitation series this run reads, as a uri or a layer name; unfilled, the run matches a source of precipitation series. | - |
 
 ## The sheet
 

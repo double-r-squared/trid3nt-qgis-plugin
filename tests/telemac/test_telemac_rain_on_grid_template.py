@@ -46,42 +46,34 @@ def _rows():
     return {row.name: row for row in data_rows(DATA)}
 
 
-def test_the_catchment_is_one_domain_row_its_producer_traced():
-    """The five-row reach chain is one slot: a pour point in, the basin and the
-    outlet run it drains through out. A drawn basin fills the same slot."""
+def test_the_catchment_is_one_need_row_asked_at_the_pour_point():
+    """The catchment names the CLASS it needs and the pour point it is asked
+    at; which fetcher answers - a traced watershed, a drawn basin - is the
+    match's. A drawn basin fills the same slot."""
     rows = _rows()
     domain = rows["domain"]
-    assert domain.role == "domain" and domain.geometry == "polygon"
-    assert domain.producer.runner == "fetch_watershed"
+    assert domain.role == "domain" and domain.data_class == "hydrography"
+    assert domain.coercion["near"].path == "pour_point"
+    assert domain.span_km == 15.0
+    assert domain.producer is None
     assert domain.fills_from_user
 
 
-def test_the_bed_is_one_row_on_the_ground_the_trace_ran_over():
-    """ONE GROUND: the basin is delineated on the same pinned bare-earth product
-    at the same cell the nodes are painted from, so the routing and the
-    elevations cannot describe two different grounds."""
-    from trid3nt_server.workflows.telemac.templates.rain_on_grid.rain_on_grid import (
-        _TERRAIN_RESOLUTION_M,
-        _TERRAIN_SOURCE,
-    )
-
+def test_the_bed_is_one_need_row_the_whole_surface_over_a_catchment():
+    """An OVERLAND domain has no channel bottom under a hillslope, so the bed
+    is the terrain itself, not a measurement laid over something else."""
     rows = _rows()
     bed = rows["bed"]
-    assert bed.role == "bed"
-    assert bed.producer.runner == "fetch_dem"
-    assert bed.producer.kwargs["source"] == _TERRAIN_SOURCE == "3dep"
-    assert bed.producer.kwargs["resolution_m"] == _TERRAIN_RESOLUTION_M
-    traced = rows["domain"].producer.kwargs
-    assert traced["dem_source"] == _TERRAIN_SOURCE
-    assert traced["resolution_m"] == _TERRAIN_RESOLUTION_M
+    assert bed.role == "bed" and bed.data_class == "terrain"
+    assert bed.producer is None
     # exactly one bed row: the workflow's own stages refuse a second.
     assert [r.name for r in _rows().values() if r.role == "bed"] == ["bed"]
 
 
-def test_the_outlet_is_the_run_the_domain_carries_not_a_point_this_template_places():
-    """The catchment's one liquid boundary comes off the RUNS slot - the stretch
-    of the divide the producer measured, typed rating_curve, or the run the user
-    drew - so nothing downstream branches on which way it arrived."""
+def test_the_outlet_rides_on_the_domain_since_no_runs_row_exists():
+    """The catchment's one liquid boundary comes off the domain's own producer -
+    the stretch of the divide it measured, typed rating_curve - since there is
+    no runs row any more; a drawn basin carries its own runs or none."""
     from trid3nt_server.workflows.telemac.templates.rain_on_grid.rain_on_grid import (
         MESH,
     )
@@ -89,7 +81,8 @@ def test_the_outlet_is_the_run_the_domain_carries_not_a_point_this_template_plac
     op = [o for o in MESH.ops if o.fn == "set_boundary_roles"]
     assert len(op) == 1
     assert set(op[0].kwargs) == {"runs"}
-    assert op[0].kwargs["runs"].path == "runs"
+    assert op[0].kwargs["runs"].path == "domain"
+    assert "runs" not in _rows()
 
 
 def test_the_mesh_is_a_band_whose_rim_is_locked_at_the_size_word():

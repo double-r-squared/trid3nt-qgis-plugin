@@ -105,7 +105,7 @@ def test_a_carrier_that_never_passed_its_slot_refuses_by_name(settled):
     with pytest.raises(TelemacError) as exc:
         _run(carrier={"type": "FeatureCollection"})
     assert exc.value.error_code == "TELEMAC_CARRIER_UNINGESTED"
-    assert "Data.observation" in str(exc.value)
+    assert "Name the row discharge" in str(exc.value)
 
 
 def test_no_carrier_at_all_opens_no_channel_and_hands_back_the_level(settled):

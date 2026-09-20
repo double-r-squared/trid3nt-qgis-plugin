@@ -1,9 +1,9 @@
-"""Offline unit tests for the sediment-plume engine template under the domain wave.
+"""Offline unit tests for the sediment-plume engine template.
 
-No solver / no network: the three engine-neutral slots it declares, the bed it
-composes out of a survey and a terrain surface, the stages the workflow owns on
-its behalf, the params it no longer restates, and the keyword opinions it moved
-into the deck. Live end-to-end is the canary, whose packet is the evidence.
+No solver / no network: the need rows it declares, the stages the workflow
+owns on its behalf, the params it no longer restates, and the keyword
+opinions it moved into the deck. Live end-to-end is the canary, whose packet
+is the evidence.
 """
 
 from __future__ import annotations
@@ -12,7 +12,6 @@ import pytest
 
 from trid3nt_server.workflows.runtime.plan import DataRef
 from trid3nt_server.workflows.runtime import Ref
-from trid3nt_server.workflows.runtime.data import BED, DISCHARGE, DOMAIN
 from trid3nt_server.workflows.runtime.levers import LEVER_NAMES
 from trid3nt_server.workflows.telemac.workflow import stated
 from trid3nt_server.workflows.telemac.templates.sediment_plume import (
@@ -48,61 +47,37 @@ def test_registered_on_the_model_surface():
     assert {r.param for r in (md.resolution_specs or ())} == {"mesh_resolution_m"}
 
 
-def test_the_domain_is_one_slot_the_reach_producer_only_prefers():
-    """A river question names the reach fetcher, and a supplied polygon still
-    wins: the row carries a role, so it reaches the wire as an argument."""
+def test_the_domain_is_one_need_row_asked_at_the_release_point():
+    """The domain names the CLASS it needs and the point it is asked at; which
+    fetcher answers - a reach walked downstream, a waterbody at a point - is
+    the match's, ranked in the coverage order."""
     domain = _rows()["domain"]
-    assert domain.role == DOMAIN
-    assert domain.geometry == "polygon"
-    assert domain.producer.runner == "fetch_river_reach"
-    # The seed is the release POINT; a place name is geocoded before the call.
-    assert domain.producer.kwargs["seed_point"] == [Ref("release.lon"),
-                                                    Ref("release.lat")]
+    assert domain.role == "domain" and domain.data_class == "hydrography"
+    assert domain.coercion["near"] == Ref("release")
+    assert domain.span_km == 6.0
     assert domain.fills_from_user
 
 
-def test_the_bed_is_one_row_the_merge_derive_made_of_two_rows():
-    """The survey where it measured, the terrain everywhere else - ONE bed row,
-    composed in the DATA body by the merge derive, never a second bed row and
-    never a fallback on set_bed."""
-    rows = _rows()
-    assert [name for name, row in rows.items() if row.role == BED] == ["bed"]
-    bed = rows["bed"]
-    assert bed.producer.runner == "derive_merge_rasters"
-    assert bed.producer.kwargs["primary"].path == "surveyed_bed"
-    assert bed.producer.kwargs["fallback"].path == "terrain"
-    assert rows["surveyed_bed"].producer.kwargs["points"].path == "survey"
-    assert rows["terrain"].producer.runner == "fetch_dem"
+def test_the_bed_is_one_need_row_the_match_composes():
+    """One row, one class: the measurement where it measured, the terrain
+    under the rest, composed by the match's own bed rule - never a producer or
+    a merge stated on the template."""
+    bed = _rows()["bed"]
+    assert bed.role == "bed" and bed.data_class == "bathymetry"
+    assert bed.producer is None
+    assert [row.name for row in _workflow().data if row.role == "bed"] == ["bed"]
 
 
-def test_the_survey_surface_names_the_depth_it_interpolates():
-    """An eHydro row carries more than one number, so the field the surface is
-    gridded from is named rather than guessed at."""
-    surveyed = _rows()["surveyed_bed"]
-    assert surveyed.producer.runner == "derive_survey_surface"
-    assert surveyed.producer.kwargs["value_field"] == "depth_below_datum_m"
-    assert surveyed.producer.kwargs["resolution_m"].name == "mesh_resolution_m"
-
-
-def test_an_unsurveyed_domain_continues_and_says_so():
-    """No federal navigation project is no published survey, and the sheet says
-    which side was missing rather than refusing the run."""
-    rows = _rows()
-    assert rows["survey"].producer.runner == "fetch_ehydro_surveys"
-    for name in ("survey", "carrier"):
-        assert rows[name].is_context, name
-        assert rows[name].context_sentence
-
-
-def test_the_carrier_flow_is_one_reading_rather_than_the_grid_it_came_off():
-    """The step that opens the channel takes an ingested reading, so which
-    segment reports the flow is ranked against the domain's own interior point
-    and a record nobody chose from is refused by name."""
-    carrier = _rows()["carrier"]
-    assert carrier.role == DISCHARGE
-    assert carrier.producer.runner == "fetch_noaa_nwm_streamflow"
-    assert carrier.coercion["near"] == Ref("domain.centroid")
-    assert carrier.coercion["field"] == "streamflow_cms"
+def test_the_discharge_is_a_need_row_the_match_ranks_against_the_domain():
+    """The flow that carries the pulse is ONE measured value the run opens on,
+    not a layer: a NEED row, absent-is-context, and the user's own number wins
+    over any record."""
+    discharge = _rows()["discharge"]
+    assert (discharge.role == "discharge"
+            and discharge.data_class == "discharge series")
+    assert discharge.is_context
+    assert "National Water Model" in discharge.context_sentence
+    assert discharge.producer is None
 
 
 def test_an_unplaced_release_sits_along_the_domains_own_centerline():
@@ -126,17 +101,16 @@ def test_the_workflow_owns_every_stage_this_template_does_not_differ_on():
 
 
 def test_the_mesh_is_built_over_the_slots_at_the_runtimes_own_lever():
-    """The extent is the domain row, the bed is the merged row, and the runs
-    come off the runs slot the domain producer's two end transects fill."""
-    from trid3nt_server.workflows.runtime.plan import DataRef
-
+    """The extent is the domain row, the bed is the matched row, and the runs
+    ride on the domain's own producer since there is no runs row any more."""
     recipe = [s for s in _workflow().plan.steps if s.label == "mesh"][0].kwargs["mesh"]
     assert recipe["extent"] == DataRef("domain")
     # A placeholder refuses ``==`` by design, so the read is named by its name.
     assert recipe["resolution_m"].name == "mesh_resolution_m"
     ops = {op["op"]: op["kwargs"] for op in recipe["ops"]}
     assert ops["set_bed"] == {"source": DataRef("bed")}
-    assert ops["set_boundary_roles"] == {"runs": DataRef("runs")}
+    assert ops["set_boundary_roles"] == {"runs": DataRef("domain")}
+    assert "runs" not in _rows()
 
 
 def test_the_baseline_params_are_the_runtimes_and_are_not_restated():
@@ -161,7 +135,7 @@ def test_the_baseline_params_are_the_runtimes_and_are_not_restated():
 def test_the_question_keeps_only_its_own_inputs():
     """What a settling-plume question asks: where the sediment went in and how
     concentrated. The flow that carries it is the inflow run's value, which is
-    the carrier ROW's, so it is no param of this one."""
+    the discharge ROW's, so it is no param of this one."""
     declared = {prm.name for prm in _workflow().params}
     assert "discharge_m3s" not in declared
     assert {"release", "spill_fraction", "spill_duration_s",
@@ -192,9 +166,12 @@ def test_the_deck_states_the_window_the_settle_is_built_off():
 def test_the_settling_class_is_keywords_on_gaias_own_body():
     """ONE class, the suspension formula and the advection scheme are GAIA's own
     keywords; what the composite carries is the source concentration the
-    dictionary reads in kg/m3 and the question is asked in mg/L."""
+    dictionary reads in kg/m3 and the question is asked in mg/L. The class is
+    100 um very fine sand, the finest class the Zyserman-Fredsoe suspension
+    law is written for - a 30 um silt run under that same law settled a
+    point, not a plume."""
     body = template.STEERING.ASSERTED["coupling"][0]["slots"]
-    assert body["CLASSES_SEDIMENT_DIAMETERS"] == [3.0e-5]
+    assert body["CLASSES_SEDIMENT_DIAMETERS"] == [1.0e-4]
     assert body["SUSPENSION_TRANSPORT_FORMULA_FOR_ALL_SANDS"] == 3
     assert body["SCHEME_FOR_ADVECTION_OF_SUSPENDED_SEDIMENTS"] == [1]
     assert body["MASS_BALANCE"] is True
@@ -301,13 +278,19 @@ def test_the_slots_reach_the_wire_as_arguments():
     assert "location" not in signature.parameters
 
 
-@pytest.mark.parametrize("name", ["T2"])
-def test_every_published_read_carries_its_caption(name):
-    """CAPTIONS covers the reads this template PLACES and nothing else: what the
-    modules write is published under the engine's own names."""
-    assert name in template.CAPTIONS
-    assert set(template.CAPTIONS) == {
-        p.variable or p.kind for p in template.OUTPUTS}
+def test_every_slot_a_user_can_fill_reaches_the_wire():
+    """A supplied polygon supersedes the matched reach and a supplied raster
+    supersedes the matched bed, so both slots are arguments though both name a
+    class."""
+    assert {row.name for row in _workflow().data if row.fills_from_user} == {
+        "domain", "bed", "discharge", "level"}
+
+
+def test_every_published_read_carries_its_caption():
+    """CAPTIONS covers what the module PLACES, plus the sentence for the one
+    DATA row that states one, keyed by the row's own name."""
+    assert "T2" in template.CAPTIONS
+    assert set(template.CAPTIONS) == {"T2", "discharge"}
 
 
 def test_the_package_holds_the_template_its_declarations_and_its_corpus():

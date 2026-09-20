@@ -16,7 +16,7 @@ import pytest
 
 from trid3nt_server.inputs import geometry as geometry_reader
 from trid3nt_server.inputs.observation import Observation
-from trid3nt_server.workflows.runtime import validate_plan
+from trid3nt_server.workflows.runtime import Ref, data_rows, validate_plan
 from trid3nt_server.workflows.telemac.authoring.atmosphere import ATMOSPHERE_FILENAME
 from trid3nt_server.workflows.telemac.modules import fill
 from trid3nt_server.workflows.telemac.modules.khione import (
@@ -44,18 +44,22 @@ def _workflow():
     return template.telemac_ice_cover.workflow
 
 
+def _rows():
+    return {row.name: row for row in data_rows(template.DATA)}
+
+
 # -- what the run stands on ---------------------------------------------------- #
 
 def test_every_slot_this_run_stands_on_reaches_the_wire_as_the_slot_it_is():
-    """What the user hands in supersedes the producer the template preferred, so
-    a pond outline, a stated depth, a stated opening temperature and a weather
-    record the user already holds run this question with no fetch at all. The
-    rows that are neither a slot nor a mark stay off it."""
+    """What the user hands in supersedes the match the template needs, so a pond
+    outline, a stated depth, a stated opening temperature and a weather record
+    the user already holds run this question with no fetch at all."""
     from trid3nt_server.tools import TOOL_REGISTRY
 
     wire = set(inspect.signature(TOOL_REGISTRY["telemac_ice_cover"].fn).parameters)
-    assert {"domain", "bed", "carrier", "water_temperature", "weather"} <= wire
-    assert {"survey", "terrain", "surveyed_bed"}.isdisjoint(wire)
+    assert {"domain", "bed", "discharge", "observe", "weather"} <= wire
+    assert {"survey", "terrain", "surveyed_bed", "carrier",
+            "water_temperature"}.isdisjoint(wire)
 
 
 def test_the_run_writes_the_ice_modules_own_result_beside_the_hosts():
@@ -67,47 +71,58 @@ def test_the_run_writes_the_ice_modules_own_result_beside_the_hosts():
                                        RESULT_FILENAME]
 
 
-def test_the_weather_is_the_record_that_measures_what_the_ice_module_reads():
-    """KHIONE takes the dew point and the sky cover out of the file and computes
-    its own shortwave, so the airport network - which measures both - is the row
-    rather than the fire-weather network the thermal budget needs a solar from."""
-    row = {r.name: r for r in _workflow().data}["weather"]
-    assert row.producer.runner == "fetch_asos_metar"
+def test_the_water_opens_on_one_reading_ranked_from_where_it_is_read():
+    """Which site the run opens on is the observation slot's choice, ranked
+    against the point the series is read at. The row is LOAD-BEARING: the run
+    has to lose that much heat before it makes any ice at all, and it names
+    the published TEMPERATURE variable it observes - the unit KHIONE's own
+    tracer carries, not a stated one."""
+    row = _rows()["observe"]
+    assert row.role == "observe"
+    assert row.data_class == "water quality sample"
+    assert row.observes == "TEMPERATURE"
+    assert row.producer is None
+    assert row.coercion["near"] == Ref("station")
+    assert row.is_context
+    assert "stated value stands" in row.context_sentence
 
 
-def test_the_water_opens_on_one_reading_taken_at_the_runs_own_moment():
-    """A freeze-up asked about a past winter opens at what the water carried
-    then: the window closes at the run's instant, the way the carrier's does."""
-    from trid3nt_server.workflows.runtime import Ref
-
-    rows = {r.name: r for r in _workflow().data}
-    opening = rows["water_temperature"]
-    assert opening.role == "observe"
-    assert opening.producer.runner == "fetch_usgs_water_quality"
-    assert opening.producer.kwargs["valid_time"].name == "event_time"
-    assert opening.coercion["near"] == [Ref("station.lon"), Ref("station.lat")]
-    assert "to_units" not in opening.coercion
-    assert rows["carrier"].producer.kwargs["valid_time"].name == "event_time"
+def test_the_discharge_is_one_reading_the_channel_step_can_open_on():
+    """The step that opens the channel refuses a record nobody chose from, so
+    the streamflow row is ranked from inside the domain before it gets there.
+    Its ROLE is what the workflow reads: a discharge is what makes this an open
+    channel, and the step that measures one is listed off that."""
+    row = _rows()["discharge"]
+    assert row.role == "discharge"
+    assert row.data_class == "discharge series"
+    assert row.producer is None
+    assert row.is_context
+    assert "National Water Model" in row.context_sentence
 
 
-def test_the_bed_is_one_row_the_merge_derive_made_of_two_rows():
-    rows = {row.name: row for row in _workflow().data}
+def test_the_bed_is_one_need_row_the_match_composes():
+    """One row, one class: the measurement where it measured, the terrain under
+    the rest, composed by the match's own bed rule - never a producer or a merge
+    stated on the template."""
+    rows = _rows()
     assert [name for name, row in rows.items() if row.role == "bed"] == ["bed"]
-    assert rows["bed"].producer.runner == "derive_merge_rasters"
-    assert rows["bed"].producer.kwargs["primary"].path == "surveyed_bed"
-    assert rows["bed"].producer.kwargs["fallback"].path == "terrain"
-    assert rows["survey"].is_context
+    assert rows["bed"].data_class == "bathymetry"
+    assert rows["bed"].producer is None
 
 
-def test_the_domain_producer_hands_over_the_faces_the_run_is_prescribed_on():
-    """A river reach cuts with its two end transects, and they ride on the
-    polygon it returned: the runs slot reads them off the domain."""
-    rows = {row.name: row for row in _workflow().data}
-    assert rows["domain"].producer.runner == "fetch_river_reach"
-    recipe = next(s for s in _workflow().plan.steps
-                  if s.name == "mesh").kwargs["mesh"]
-    roles = next(op for op in recipe["ops"] if op["op"] == "set_boundary_roles")
-    assert roles["kwargs"]["runs"].path == "runs"
+def test_the_boundary_roles_ride_on_the_domain_since_no_runs_row_exists():
+    """There is no runs row: the boundary walk the match returned rides on the
+    domain's own producer, and the mesh recipe reads that row directly."""
+    from trid3nt_server.workflows.mesh.tool import recipe_from_plan_value
+    from trid3nt_server.workflows.runtime import DataRef
+
+    recipe = recipe_from_plan_value(
+        next(s for s in _workflow().plan.steps if s.name == "mesh").kwargs["mesh"])
+    runs = next(op for op in recipe.ops if op.fn == "set_boundary_roles")
+    assert runs.kwargs == {"runs": DataRef("domain")}
+    bed = next(op for op in recipe.ops if op.fn == "set_bed")
+    assert bed.kwargs == {"source": DataRef("bed")}
+    assert "runs" not in _rows()
 
 
 def test_no_keyword_twin_and_no_domain_twin_is_declared_here():
@@ -162,7 +177,7 @@ def _sheet(monkeypatch, **floor):
                     "level_m": 3.1, "inflow_q_m3s": 22.0,
                     "outflow_stage_m": 3.1},
         "station": _STATION,
-        "water_temperature": Observation(value=3.2, units="degC"),
+        "observe": Observation(value=3.2, units="degC"),
         "weather": "s3://cache/asos.fgb"})
 
 
@@ -258,7 +273,8 @@ def test_the_question_places_the_two_series_the_cover_is_read_as():
     assert {p.kind for p in template.OUTPUTS} == {"series"}
     assert all(p.style is None for p in template.OUTPUTS)
     assert {p.module for p in template.OUTPUTS} == {"khione"}
-    assert set(template.CAPTIONS) == {"DYNCOVC", "DYNCOVT"}
+    assert set(template.CAPTIONS) == {"DYNCOVC", "DYNCOVT", "discharge",
+                                      "level", "observe"}
 
 
 def test_the_answer_is_measured_by_the_threshold_the_ask_states():

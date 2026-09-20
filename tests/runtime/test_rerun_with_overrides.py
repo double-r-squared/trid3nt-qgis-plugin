@@ -58,12 +58,10 @@ def test_the_cut_is_the_first_node_the_override_reaches():
     # placed on it and the settled domain are all upstream of the fill, so a
     # threshold override inherits them
     assert labels[:cut] == ["stated", "mesh", "channel", "outfall", "settled"]
-    # so is every DATA row the world is read through - the domain the reach
-    # producer cut, the runs of its edge, the line down it, the published survey,
-    # the surface gridded from it, the terrain under that, the bed the merge
-    # derive made of the two and the carrier flow the inflow prescribes
-    assert keep == frozenset({"domain", "runs", "line", "survey", "surveyed_bed",
-                              "terrain", "bed", "carrier", "stage"})
+    # so is every DATA row the world is read through - the water this question
+    # is asked over, the line down it, the bed under it, the flow the inflow
+    # prescribes and the level the outflow holds
+    assert keep == frozenset({"domain", "line", "bed", "discharge", "level"})
 
 
 def test_a_mesh_override_cuts_earlier_than_a_physics_one():

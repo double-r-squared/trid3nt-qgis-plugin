@@ -21,40 +21,14 @@ _WORKFLOWS = (
 )
 
 
-# family -> list of (fetch-call token that must carry a purpose, purpose word).
-# The purpose word == the "<what>" the deleted helper put in "Input: <what>".
-_FAMILY_INPUTS: dict[str, dict[str, object]] = {
-    "rain_on_grid": {
-        # The bed, the channel network and the land cover are DECLARED artifacts
-        # over the registered fetchers, so the purpose rides the declaration.
-        "file": "telemac/templates/rain_on_grid/rain_on_grid.py",
-        "fetches": [
-            ('tool("fetch_dem"', "mesh bed"),
-            ('tool("fetch_river_geometry"', "river geometry"),
-            ('tool("fetch_landcover"', "land cover"),
-        ],
-    },
-}
+def test_a_matched_row_is_asked_under_its_own_name():
+    """The purpose word a template used to state on its fetch call is the ROW'S
+    NAME now: no template names a fetcher, so the name the seam surfaces the
+    input under is the only word the question spells."""
+    from trid3nt_server.tools.search.match import base_ask
 
-
-def _assert_fetch_carries_purpose(src: str, token: str, word: str) -> None:
-    """The call beginning at ``token`` must pass ``purpose="<word>"`` within the
-    call's argument span (up to the balancing close-paren, best-effort by scanning
-    the next few lines)."""
-    idx = src.find(token)
-    assert idx != -1, f"fetch call {token!r} not found (composer changed shape)"
-    window = src[idx: idx + 400]
-    assert f'purpose="{word}"' in window, (
-        f"fetch {token!r} must carry purpose={word!r} so the emit-on-fetch seam "
-        f"names its surfaced input 'Input: {word} (...)' (found: {window[:200]!r})"
-    )
-
-
-def test_rain_on_grid_input_fetches_declare_purpose():
-    fam = _FAMILY_INPUTS["rain_on_grid"]
-    src = (_WORKFLOWS / fam["file"]).read_text("utf-8")
-    for token, word in fam["fetches"]:
-        _assert_fetch_carries_purpose(src, token, word)
+    assert base_ask("fetch_dem", "bed", None, None, None, None,
+                    None)["purpose"] == "bed"
 
 
 def _fake_spec(source_class: str) -> SimpleNamespace:

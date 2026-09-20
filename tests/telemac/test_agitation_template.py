@@ -41,42 +41,37 @@ def test_the_water_is_cut_out_of_a_box_with_the_mapped_coastline():
     water it leaves. A basin the user outlines supersedes it."""
     rows = _rows()
     domain = rows["domain"]
-    assert (domain.role, domain.geometry) == (DOMAIN, "polygon")
+    assert domain.role == DOMAIN
     assert domain.fills_from_user
     assert domain.producer.runner == "derive_water_polygon"
     assert repr(domain.producer.kwargs["coastline"]) == "DataRef('coast')"
-    assert domain.producer.kwargs["extent"].path == "box.bbox"
-    assert rows["coast"].producer.runner == "fetch_osm_coastline"
+    assert domain.producer.kwargs["extent"].path == "extent.bbox"
+    assert rows["coast"].data_class == "hydrography"
 
 
-def test_the_box_is_an_extent_slot_the_canvas_offers_a_rectangle_for():
+def test_the_extent_is_a_slot_the_canvas_offers_a_rectangle_for():
     """Giving the domain a producer takes away its own draw gate, so the window
     the cut is made in is the slot with the canvas ask: one EXTENT row, read as
     four numbers by whatever takes a box."""
     from trid3nt_server.inputs.slots import SLOTS
 
     rows = _rows()
-    box = rows["box"]
-    assert (box.role, box.geometry, box.producer) == (EXTENT, "rectangle", None)
+    extent = rows["extent"]
+    assert (extent.role, extent.geometry, extent.producer) == (EXTENT, "rectangle",
+                                                                None)
     assert SLOTS[EXTENT].draw[0] == "rectangle"
-    assert rows["coast"].producer.kwargs["bbox"].path == "box.bbox"
 
 
-def test_the_bed_is_the_surveyed_sea_floor_merged_over_the_terrain():
-    """A bed is ONE row: the surveyed sea floor where it sounded and the terrain
-    everywhere else, composed by the merge derive before the slot - a cut water
-    polygon follows the coastline to the metre and a delivered tile ends on its
-    own grid, so the two disagree by a node at the rim. A survey the user holds
-    is the same slot, so the row is on the wire beside its producer."""
+def test_the_bed_is_the_class_it_is_defined_over():
+    """A bed is ONE row that states the CLASS it needs - the measurement where
+    something sounded it, the terrain everywhere else - rather than naming the
+    fetcher that composes it; the match, not the template, decides which source
+    reaches this domain. A survey the user holds is the same slot."""
     rows = _rows()
     bed = rows["bed"]
     assert bed.role == BED and bed.fills_from_user
-    assert bed.producer.runner == "derive_merge_rasters"
-    assert repr(bed.producer.kwargs["primary"]) == "DataRef('seafloor')"
-    assert repr(bed.producer.kwargs["fallback"]) == "DataRef('terrain')"
-    assert rows["seafloor"].producer.runner == "fetch_topobathy"
-    assert rows["seafloor"].producer.kwargs["target_crs"] == "EPSG:4326"
-    assert rows["terrain"].producer.runner == "fetch_dem"
+    assert bed.data_class == "bathymetry"
+    assert bed.producer is None
 
 
 def test_the_mesh_is_cut_from_the_domain_polygon_and_not_from_a_box():
@@ -109,7 +104,7 @@ def test_the_template_declares_no_domain_twin():
                               "reach_length_km"})
 
 
-@pytest.mark.parametrize("name", ["box", "domain", "bed", "structure"])
+@pytest.mark.parametrize("name", ["extent", "domain", "bed", "structure"])
 def test_every_slot_reaches_the_wire(name: str):
     """A slot the caller cannot name is a slot only a fetcher can fill."""
     import inspect
@@ -121,15 +116,18 @@ def test_every_slot_reaches_the_wire(name: str):
     assert f"{name}: " in (fn.__doc__ or "")
 
 
-def test_the_transect_follows_the_direction_the_run_states():
-    """The transect is read along the wave, so it is placed on the KEYWORD and
-    not on the number the deck was authored at: the read resolves through the
-    filled sheet, which is where a stated direction lands."""
+def test_the_transect_is_measured_off_the_structure_the_question_asks_about():
+    """The line a read runs ACROSS a structure along is no row: the workflow
+    measures it off the structure, along the wave the run is solved at, so it
+    resolves through the floor the keyword lands on and names no tool."""
     from trid3nt_server.workflows.runtime import Ref
 
-    row = _rows()["transect"]
-    assert row.producer.kwargs["bearing_deg"] == Ref(
-        "sheet.DIRECTION_OF_WAVE_PROPAGATION")
+    assert "transect" not in _rows()
+    step = _step("transect")
+    assert step.runner == "trid3nt_server.inputs.structure.transect"
+    assert step.kwargs["bearing_deg"] == Ref(
+        "stated.DIRECTION_OF_WAVE_PROPAGATION")
+    assert step.kwargs["convention"] == "trig"
 
 
 def test_the_settle_reads_the_wave_the_run_is_solved_at():

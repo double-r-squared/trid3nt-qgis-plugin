@@ -47,14 +47,8 @@ class PARAMS:
 
 
 class DATA:
-    domain = Data.domain(tool("fetch_river_reach", seed_point=[1.0, 2.0]))
-    survey = Data(tool("fetch_ehydro_surveys", bbox=[0, 0, 1, 1])).context()
-    surveyed_bed = Data(tool("derive_survey_surface", points=survey,
-                             resolution_m=ParamRef("mesh_resolution_m"))).context()
-    terrain = Data(tool("fetch_copernicus_dem", bbox=[0, 0, 1, 1]))
-    bed = Data.bed(tool("derive_merge_rasters", primary=surveyed_bed,
-                        fallback=terrain))
-    runs = Data.runs()
+    domain = Data.need("hydrography", at=Ref("seed"))
+    bed = Data.need("bathymetry")
 
 
 def _template(data: type = DATA, params: type = PARAMS) -> SimpleNamespace:
@@ -123,34 +117,15 @@ def test_the_bed_op_takes_the_one_row_the_merge_derive_produced():
     recipe = recipe_from_plan_value(_mesh(workflow).kwargs["mesh"])
     bed = next(op for op in recipe.ops if op.fn == "set_bed")
     assert bed.kwargs == {"source": DataRef("bed")}
-    runs = next(op for op in recipe.ops if op.fn == "set_boundary_roles")
-    assert runs.kwargs == {"runs": DataRef("runs")}
 
 
-def test_a_second_bed_row_refuses_by_name():
-    """The bed is one source: a template that declares two is saying which wins
-    somewhere the mesh op cannot see."""
-    class TWO_BEDS:
-        domain = Data.domain(tool("fetch_river_reach", seed_point=[1.0, 2.0]))
-        survey = Data.bed(tool("fetch_ehydro_surveys", bbox=[0, 0, 1, 1]))
-        terrain = Data.bed(tool("fetch_copernicus_dem", bbox=[0, 0, 1, 1]))
-
-    with pytest.raises(PlanValidationError) as excinfo:
-        _workflow(data=TWO_BEDS).plan
-    assert "the bed is ONE source" in str(excinfo.value)
-
-
-def test_a_template_with_no_runs_row_takes_the_domain_producers_own():
-    """A reach fetcher returns the section AND the two faces it was cut between,
-    so a template that declares no runs row is not a template with no runs."""
+def test_the_boundary_runs_ride_on_the_polygon_the_domain_arrived_as():
+    """The named stretches of the edge are NO ROW: a reach fetcher returns the
+    section and the two faces it was cut between, and a drawn outline carries
+    whatever it was drawn with, so the op reads the domain itself."""
     from trid3nt_server.workflows.mesh.tool import recipe_from_plan_value
 
-    class NO_RUNS:
-        domain = Data.domain(tool("fetch_river_reach", seed_point=[1.0, 2.0]))
-        terrain = Data.bed()
-
-    workflow = _workflow(data=NO_RUNS)
-    recipe = recipe_from_plan_value(_mesh(workflow).kwargs["mesh"])
+    recipe = recipe_from_plan_value(_mesh(_workflow()).kwargs["mesh"])
     runs = next(op for op in recipe.ops if op.fn == "set_boundary_roles")
     assert runs.kwargs == {"runs": DataRef("domain")}
 
@@ -195,7 +170,7 @@ def test_the_domain_and_the_bed_reach_the_wire_as_the_slots_they_are():
     """What the user hands in supersedes the producer the template preferred, so
     both slots are arguments even though both name a source."""
     supplied = workflow_wire(_workflow())
-    assert {"domain", "bed", "runs"} <= supplied
+    assert {"domain", "bed"} <= supplied
 
 
 def test_a_row_the_deck_never_reads_is_demand_pulled_not_fetched():
@@ -207,12 +182,12 @@ def test_a_row_the_deck_never_reads_is_demand_pulled_not_fetched():
 
     workflow = TOOL_REGISTRY["telemac_dye_release"].fn.workflow
     rows = {row.name for row in workflow.data}
-    assert {"bed", "carrier", "domain"} <= rows
+    assert {"bed", "discharge", "domain"} <= rows
     sheet = next(step for step in workflow.plan.declared()
                  if step.label == "sheet")
     named = set(sheet.kwargs["produced"])
     # the bed is read by the MESH's own set_bed op, never by the deck
-    assert not named & {"bed", "carrier", "domain"}
+    assert not named & {"bed", "discharge", "domain"}
     assert "settled" in named
 
 
@@ -222,7 +197,7 @@ def workflow_wire(workflow: TelemacWorkflow) -> set[str]:
 
 def test_a_template_with_no_domain_refuses_at_import():
     class NO_DOMAIN:
-        terrain = Data.bed()
+        bed = Data.need("bathymetry")
 
     with pytest.raises(PlanValidationError, match="declares no domain"):
         _workflow(data=NO_DOMAIN)
@@ -230,7 +205,7 @@ def test_a_template_with_no_domain_refuses_at_import():
 
 def test_a_template_with_no_bed_refuses_at_import():
     class NO_BED:
-        domain = Data.domain()
+        domain = Data.need("hydrography")
 
     with pytest.raises(PlanValidationError, match="declares no bed"):
         _workflow(data=NO_BED)

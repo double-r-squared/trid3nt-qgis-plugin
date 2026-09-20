@@ -14,14 +14,11 @@ The WAVE AGITATION (Kd = Hs/H0) a declared structure leaves inside a harbour, ma
 
 | row | produced by | what it is | datum |
 |---|---|---|---|
-| `box` | supplied by the caller | a rectangle layer you supply, as a uri or a layer name; required - the template names no source for it. | - |
-| `coast` | `fetch_osm_coastline` | The land-water EDGE at survey resolution: OpenStreetMap coastline ways as LineStrings. | - |
-| `domain` | `derive_water_polygon` | Cut the WATER out of a box with a mapped coastline -> one polygon layer. | - |
-| `seafloor` | `fetch_topobathy` | Fetch a SEAMLESS coastal topo-bathymetry DEM (land + sea floor) for a bbox. | NAVD88 (metres, positive up) |
-| `terrain` | `fetch_dem` | Fetch a digital elevation model (DEM) / terrain elevation for a bounding box (USGS 3DEP US lidar; on a 3DEP outage the default path STOPS and asks before any Copernicus GLO-30 swap; either source pinnable). | NAVD88 (metres, positive up) |
-| `bed` | `derive_merge_rasters` | MERGE two overlapping surfaces into one, the PRIMARY winning where it measured. | - |
+| `extent` | supplied by the caller | a rectangle layer you supply, as a uri or a layer name; required - the template names no source for it. | - |
+| `coast` | matched on a need for hydrography | the hydrography this run reads, as a uri or a layer name; unfilled, the run matches a source of hydrography. | - |
+| `domain` | `derive_water_polygon` | - | - |
+| `bed` | matched on a need for bathymetry | what the domain's nodes carry for elevation: a DEM, a bathymetry or survey raster, a layer of soundings, or a depth in metres below the free surface; unfilled, the run matches a source of bathymetry. | - |
 | `structure` | supplied by the caller | a polyline layer you supply, as a uri or a layer name; required - the template names no source for it. | - |
-| `transect` | `derive_transect` | Lay ONE straight line through the centroid of a shape, along a bearing -> a line layer. | - |
 | `mesh` | supplied by the caller | a mesh layer you supply, as a uri or a layer name; absent is legal and the run reports it. | - |
 
 ## The sheet

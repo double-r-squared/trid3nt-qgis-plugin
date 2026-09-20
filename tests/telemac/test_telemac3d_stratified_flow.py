@@ -29,95 +29,53 @@ def _workflow():
 
 # -- what the run stands on --------------------------------------------------- #
 
-def test_the_run_stands_on_the_domain_slot_the_caller_fills():
+def test_the_data_rows_are_the_engine_neutral_slots_this_run_stands_on():
     """No fetcher maps every pond, so the polygon is a SLOT: drawn on the canvas,
-    picked, or a layer the caller already holds. The producer is the preference
-    this question states, and anything supplied supersedes it."""
-    from trid3nt_server.workflows.runtime.data import DOMAIN
+    picked, or a layer the caller already holds. One bed the match composes, and
+    no runs row - a lake IS a closed body, and the mesh takes its roles from the
+    domain, which measures none."""
+    from trid3nt_server.workflows.runtime import data_rows
+    from trid3nt_server.workflows.runtime.data import BED, DOMAIN, LEVEL
 
-    row = next(d for d in _workflow().data if d.role == DOMAIN)
-    assert row.name == "domain"
-    assert row.geometry == "polygon"
-    assert row.fills_from_user
-    assert row.producer.runner == "fetch_nhd_waterbody_at_point"
+    rows = data_rows(_module().DATA)
+    assert [d.name for d in rows] == ["domain", "bed", "level"]
+    by_name = {d.name: d for d in rows}
+    assert by_name["domain"].role == DOMAIN
+    assert by_name["domain"].data_class == "hydrography"
+    assert by_name["domain"].producer is None
+    assert by_name["domain"].span_km is None
+    assert by_name["bed"].role == BED
+    assert by_name["bed"].data_class == "bathymetry"
+    assert by_name["bed"].producer is None
+    assert by_name["level"].role == LEVEL
+    assert by_name["level"].data_class == "water level series"
+    assert by_name["level"].producer is None
+    # Both slots reach the wire: what the user supplies supersedes the match.
+    assert by_name["domain"].fills_from_user and by_name["bed"].fills_from_user
 
 
 def test_the_seed_names_which_body_of_water_and_is_a_point_never_a_place():
-    """A place name is geocoded to a point before it reaches a fetcher, so what the
-    producer reads is a lon/lat off the Point the seed was ingested into."""
+    """A place name is geocoded to a point before it reaches the match, so what
+    ranks the domain is a lon/lat off the Point the seed was ingested into."""
     from trid3nt_server.inputs import Point
-    from trid3nt_server.workflows.runtime import Ref
-    from trid3nt_server.workflows.runtime.data import DOMAIN
+    from trid3nt_server.workflows.runtime import Ref, data_rows
 
-    row = next(d for d in _workflow().data if d.role == DOMAIN)
-    assert row.producer.kwargs["seed_point"] == [Ref("seed.lon"), Ref("seed.lat")]
+    domain = {d.name: d for d in data_rows(_module().DATA)}["domain"]
+    assert domain.coercion["near"] == Ref("seed")
     seed = next(p for p in _workflow().params if p.name == "seed")
     assert seed.type is Point and seed.optional
 
 
-def test_the_bed_is_one_source_the_caller_supersedes():
-    """A charted lake floor is what this question is usually asked over, and it is
-    a PREFERENCE: the slot takes a survey raster, soundings or a stated depth from
-    whoever has one, and the row's producer only answers when nobody did."""
-    from trid3nt_server.workflows.runtime.data import BED
-
-    beds = [d for d in _workflow().data if d.role == BED]
-    assert [d.name for d in beds] == ["bed"]
-    assert beds[0].producer.runner == "fetch_greatlakes_bathymetry"
-    assert beds[0].fills_from_user
-    # A pond stated as a depth in metres reaches the same slot as a raster does.
-    assert beds[0].wire_annotation == (str | float | None)
-
-
-def test_a_closed_body_declares_no_boundary_runs():
-    """A lake IS a closed body: no stretch of its edge prescribes anything, and the
-    mesh takes its roles from the domain, which states none."""
-    from trid3nt_server.workflows.runtime.data import RUNS
-
-    assert [d.name for d in _workflow().data if d.role == RUNS] == []
-
-
-def test_the_level_the_free_surface_opens_at_is_one_measured_value():
+def test_the_level_is_ranked_against_the_domain_and_may_be_absent():
     """A body of water opens at a LEVEL somebody measured, the way a river opens at
-    a carrier discharge: one reading off the nearest gauge that watched this water,
-    ranked against a point inside the polygon rather than the mean of its vertices."""
-    from trid3nt_server.workflows.runtime import Ref
-    from trid3nt_server.workflows.runtime.data import LEVEL
+    a carrier discharge: one reading off the nearest gauge that watched this
+    water. Water with no gauge on it is not a refusal: the sheet says the gauge
+    held nothing and the column opens at the zero the bed is counted from."""
+    from trid3nt_server.workflows.runtime import data_rows
 
-    row = next(d for d in _workflow().data if d.name == "level")
-    assert row.role == LEVEL
-    assert row.producer.runner == "fetch_greatlakes_water_level"
-    assert row.coercion["near"] == Ref("domain.centroid")
-    assert row.coercion["opens"]
-    # A number stated on the call stands over any record, so the slot takes both.
-    assert row.wire_annotation == (str | float | None)
-
-
-def test_an_ungauged_body_of_water_continues_the_run():
-    """Water with no gauge on it is not a refusal: the sheet says the gauge held
-    nothing and the column opens at the zero the bed is counted from."""
-    row = next(d for d in _workflow().data if d.name == "level")
-    assert row.is_context
-    assert "opens at the zero" in row.context_sentence
-
-
-def test_the_gauge_window_is_the_day_the_scenario_is_read_at():
-    """A daily gauge record is asked over a calendar day, and the moment the run is
-    about is the runtime's own lever - the WORKFLOW reads it as a date because a
-    row asked for one, and the template declares no stage for it."""
-    from trid3nt_server.workflows.runtime import ParamRef, Ref
-
-    module = _module()
-    workflow = _workflow()
-    day = next(step for step in workflow.plan.declared()
-               if step.name == "reading_day")
-    assert day.runner == "trid3nt_server.inputs.instant.day"
-    assert isinstance(day.kwargs["value"], ParamRef)
-    assert day.kwargs["value"].name == "event_time"
-    level = next(d for d in module.DATA.__dict__.values()
-                 if getattr(d, "name", "") == "level")
-    assert level.producer.kwargs["start_date"] == Ref("reading_day")
-    assert level.producer.kwargs["end_date"] == Ref("reading_day")
+    level = {d.name: d for d in data_rows(_module().DATA)}["level"]
+    assert level.is_context
+    assert "opens at the zero" in level.context_sentence
 
 
 # -- the plan the workflow owns ------------------------------------------------ #

@@ -278,9 +278,12 @@ def test_the_template_publishes_nothing_itself():
 
 
 def test_the_template_captions_exactly_what_it_placed():
+    """Every OUTPUTS read has a caption; a row's own caption, keyed by its
+    name rather than a published variable, is additive beside it."""
     template = _template()
     placed = {p.variable for p in template.OUTPUTS}
-    assert set(template.CAPTIONS) == placed
+    assert placed <= set(template.CAPTIONS)
+    assert set(template.CAPTIONS) - placed == {"discharge", "level", "observe"}
 
 
 def test_the_window_is_one_pass_rather_than_a_season():
@@ -413,24 +416,21 @@ def test_the_mesh_is_built_over_the_domain_slot_at_the_runtimes_lever():
     assert recipe.resolution_m.name == "mesh_resolution_m"
     bed = next(op for op in recipe.ops if op.fn == "set_bed")
     assert bed.kwargs == {"source": DataRef("bed")}
-    # The runs slot: the two faces the domain's producer cut the polygon
-    # between, the user's own runs, or what they draw on the canvas.
+    # No runs row: the edge rides on the domain's own producer, which measured
+    # it where it cut the polygon.
     runs = next(op for op in recipe.ops if op.fn == "set_boundary_roles")
-    assert runs.kwargs == {"runs": DataRef("runs")}
+    assert runs.kwargs == {"runs": DataRef("domain")}
 
 
-def test_the_bed_is_one_row_the_merge_derive_made_of_two_rows():
+def test_the_bed_is_a_class_the_match_composes():
     """set_bed takes ONE source. A survey covers the channel and the terrain
-    covers the banks, so a merge row lays the one over the other in the DATA
-    body, and the survey's absence is legal."""
+    covers the banks; which of each reaches this domain, and the merge between
+    them, is the match's and the runtime's, not a row this template states."""
     rows = {row.name: row for row in _plan().data}
     assert rows["bed"].role == "bed"
-    assert rows["bed"].producer.runner == "derive_merge_rasters"
-    assert rows["bed"].producer.kwargs["primary"].path == "surveyed_bed"
-    assert rows["bed"].producer.kwargs["fallback"].path == "terrain"
+    assert rows["bed"].data_class == "bathymetry"
     assert [name for name, row in rows.items() if row.role == "bed"] == ["bed"]
-    assert rows["survey"].is_context
-    assert "terrain surface stands" in rows["survey"].context_sentence
+    assert {"survey", "surveyed_bed", "terrain"} & set(rows) == set()
 
 
 def test_the_water_temperature_record_is_one_reading_off_the_nearest_site():
@@ -438,21 +438,18 @@ def test_the_water_temperature_record_is_one_reading_off_the_nearest_site():
     SITES. Which of them the run is judged against is the observation slot's
     choice, ranked from inside the domain, and the journal carries the site and
     the date because a sample is a moment."""
-    from trid3nt_server.workflows.runtime import Ref
-
-    row = {r.name: r for r in _plan().data}["water_temperature"]
+    row = {r.name: r for r in _plan().data}["observe"]
     assert row.role == "observe"
-    assert row.producer.runner == "fetch_usgs_water_quality"
-    assert row.coercion["near"] == Ref("domain.centroid")
+    assert row.data_class == "water quality sample"
     # This run publishes no temperature variable, so the record is read in
     # the unit it was measured in and the row states none.
-    assert "to_units" not in row.coercion
+    assert not row.observes
 
 
 def test_water_nobody_sampled_is_a_sentence_rather_than_a_refusal():
     """A place with no sample is a fact about the place, not a reason to refuse
     a run whose temperature is stated anyway."""
-    row = {r.name: r for r in _plan().data}["water_temperature"]
+    row = {r.name: r for r in _plan().data}["observe"]
     assert row.is_context
     assert "the stated value stands" in row.context_sentence
 
@@ -485,16 +482,13 @@ def test_the_runtime_levers_are_seated_and_no_keyword_twin_is_declared():
 
 
 def test_the_carrier_flow_is_one_reading_the_open_channel_step_can_read():
-    """The discharge the inflow prescribes is the National Water Model's own
-    row, read where the user stated no number - and read as ONE value, because
-    the step that opens the channel refuses a record nobody chose a site from."""
-    from trid3nt_server.workflows.runtime import Ref
-
-    row = {r.name: r for r in _plan().data}["carrier"]
-    assert row.is_context and row.producer.runner == "fetch_noaa_nwm_streamflow"
+    """The discharge the inflow prescribes is whichever source's coverage row
+    matches this domain, read as ONE value - the step that opens the channel
+    refuses a record nobody chose a site from - and its absence is legal."""
+    row = {r.name: r for r in _plan().data}["discharge"]
     assert row.role == "discharge"
-    assert row.coercion["near"] == Ref("domain.centroid")
-    assert row.coercion["field"] == "streamflow_cms"
+    assert row.data_class == "discharge series"
+    assert row.is_optional
 
 
 def test_the_longitudinal_reads_are_taken_along_the_line_slot():
@@ -523,13 +517,4 @@ def test_the_stretch_the_producer_walks_is_the_templates_own_number():
 
     assert "reach_length_km" not in {prm.name for prm in _plan().params}
     domain = {r.name: r for r in _plan().data}["domain"]
-    assert domain.producer.kwargs["distance_km"] == \
-        eutrophication._REACH_LENGTH_KM
-
-
-def test_the_survey_is_gridded_on_the_field_the_soundings_carry():
-    """eHydro rows carry several numbers; the one the bed is made of is named
-    rather than guessed, and a guess would grid the sounding count."""
-    rows = {row.name: row for row in _plan().data}
-    assert rows["surveyed_bed"].producer.kwargs["value_field"] == \
-        "depth_below_datum_m"
+    assert domain.span_km == eutrophication._REACH_LENGTH_KM

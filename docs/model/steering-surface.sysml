@@ -1093,7 +1093,7 @@ package SteeringSurface {
     verify requirement EverythingOverridable by
         "tests/telemac/test_telemac_module_surface.py::test_a_read_placed_on_a_keyword_resolves_through_the_filled_sheet";
     verify requirement EverythingOverridable by
-        "tests/telemac/test_agitation_template.py::test_the_transect_follows_the_direction_the_run_states";
+        "tests/telemac/test_agitation_template.py::test_the_transect_is_measured_off_the_structure_the_question_asks_about";
     verify requirement EverythingOverridable by
         "tests/telemac/test_telemac_module_surface.py::test_a_rate_stated_by_name_arms_the_term_that_reads_it";
     verify requirement EverythingOverridable by

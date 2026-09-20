@@ -180,17 +180,21 @@ def _declarable_names() -> set[str]:
     }
 
 
-async def _drive_turn_and_capture_registry(monkeypatch) -> dict:
+async def _drive_turn_and_capture_registry(monkeypatch, visible=None) -> dict:
     """Run one no-tool turn and capture the registry handed to
-    build_tool_declarations. Enforce (the built-in surfacing path) is neutralized
-    to the full declarable set so the openai gate is measured in isolation."""
+    build_tool_declarations.
+
+    ``visible`` is what the surfacing path expanded onto this turn; unstated it
+    is the whole declarable set, which is the FAIL-OPEN reading the tests that
+    measure failing open are written around."""
     from trid3nt_server.tools.search import tool_retrieval as tr
 
     monkeypatch.setattr(
         tr, "retrieve_ranked_tools", lambda text, k=25: _ranked(30)[: max(k, 2)]
     )
     monkeypatch.setattr(
-        tr, "retrieve_visible_tools", lambda *_a, **_k: _declarable_names()
+        tr, "retrieve_visible_tools",
+        lambda *_a, **_k: set(visible) if visible else _declarable_names()
     )
 
     captured: dict = {}
@@ -210,17 +214,33 @@ async def _drive_turn_and_capture_registry(monkeypatch) -> dict:
 
 
 @pytest.mark.asyncio
-async def test_openai_provider_turn_is_gated(monkeypatch):
+async def test_the_declared_surface_is_the_budget_and_nothing_else(monkeypatch):
+    """THE INVARIANT: what a turn declares is the ranking's top-k, the core
+    floor, whatever is mounted this session and whatever discovery already
+    expanded onto - and nothing beyond it. A covered fetcher is not among them:
+    it is reached by asking the match for a class at a place, so it enters the
+    turn only once a pick names it."""
+    from trid3nt_server.tools import mounted_tool_names
+    from trid3nt_server.tools.search.match import covered_sources
+    from trid3nt_server.tools.search import tool_retrieval as tr
+
     monkeypatch.setenv("MODEL_PROVIDER", "openai")
     monkeypatch.delenv("TRID3NT_TOOL_GATING_TOPK", raising=False)
-    captured = await _drive_turn_and_capture_registry(monkeypatch)
-    registry = captured["registry"]
-    assert len(registry) < len(TOOL_REGISTRY), (
-        f"openai turn was NOT gated: {len(registry)} == full registry"
-    )
-    # floors survive the gate
+    ranked = _ranked(30)
+    monkeypatch.setattr(tr, "retrieve_ranked_tools",
+                        lambda text, k=25: ranked[: max(k, 2)])
+    captured = await _drive_turn_and_capture_registry(
+        monkeypatch, visible={"publish_layer", "restyle_layer"})
+    registry = set(captured["registry"])
+    budget = ({name for name, _ in ranked[:24]} | CORE_FLOOR
+              | set(mounted_tool_names()) | {"publish_layer", "restyle_layer"})
+    assert not registry - budget, (
+        f"declared beyond the turn's budget: {sorted(registry - budget)}")
     for name in CORE_FLOOR & set(TOOL_REGISTRY):
-        assert name in registry
+        assert name in registry, f"core-floor tool {name} was gated out"
+    assert not registry & covered_sources(), (
+        "a covered fetcher was declared before any pick named it: "
+        f"{sorted(registry & covered_sources())}")
 
 
 @pytest.mark.asyncio

@@ -47,16 +47,15 @@ def test_registered_on_the_model_surface():
     assert {r.param for r in (md.resolution_specs or ())} == {"mesh_resolution_m"}
 
 
-def test_the_domain_is_one_slot_the_reach_producer_only_prefers():
-    """A river question names the reach fetcher, and a supplied polygon still
-    wins: the row carries a role, so it reaches the wire as an argument."""
+def test_the_domain_is_the_class_it_needs_and_a_supplied_polygon_still_wins():
+    """A river question needs a water body; which source cuts one here is the
+    match's. The row carries a role, so it reaches the wire as an argument."""
     domain = _rows()["domain"]
     assert domain.role == DOMAIN
-    assert domain.geometry == "polygon"
-    assert domain.producer.runner == "fetch_river_reach"
+    assert domain.producer is None
+    assert domain.data_class == "hydrography"
     # The seed is the release POINT; a place name is geocoded before the call.
-    assert domain.producer.kwargs["seed_point"] == [Ref("release.lon"),
-                                                    Ref("release.lat")]
+    assert domain.coercion["near"] == Ref("release")
     assert domain.fills_from_user
 
 
@@ -73,21 +72,21 @@ def test_the_bed_is_one_row_stating_the_class_it_needs():
 def test_the_level_is_matched_and_its_absence_is_legal():
     """A reach with no reported water level has no uniform-flow depth to derive,
     so the slot states its class and stays optional."""
-    stage = _rows()["stage"]
-    assert stage.producer is None
-    assert stage.data_class == "water level series"
-    assert stage.is_optional
+    level = _rows()["level"]
+    assert level.producer is None
+    assert level.data_class == "water level series"
+    assert level.is_optional
 
 
-def test_the_carrier_is_one_reading_and_never_the_grid_it_came_from():
+def test_the_discharge_is_one_reading_and_never_the_grid_it_came_from():
     """The step that opens the channel takes an ingested Observation: which site
     reports the flow and how old the sample is are the slot's to decide."""
-    carrier = _rows()["carrier"]
-    assert carrier.role == DISCHARGE
-    assert carrier.producer is None
-    assert carrier.data_class == "discharge series"
-    assert carrier.coercion["near"] == Ref("domain.centroid")
-    assert "to_units" not in carrier.coercion
+    discharge = _rows()["discharge"]
+    assert discharge.role == DISCHARGE
+    assert discharge.producer is None
+    assert discharge.data_class == "discharge series"
+    assert discharge.coercion["near"] is None
+    assert "to_units" not in discharge.coercion
 
 
 def test_the_release_is_settled_against_the_domain_it_may_be_unplaced_in():
@@ -119,7 +118,7 @@ def test_the_mesh_is_built_over_the_slots_at_the_runtimes_own_lever():
     assert recipe["resolution_m"].name == "mesh_resolution_m"
     ops = {op["op"]: op["kwargs"] for op in recipe["ops"]}
     assert ops["set_bed"] == {"source": DataRef("bed")}
-    assert ops["set_boundary_roles"] == {"runs": DataRef("runs")}
+    assert ops["set_boundary_roles"] == {"runs": DataRef("domain")}
 
 
 def test_the_baseline_params_are_the_runtimes_and_are_not_restated():
@@ -146,7 +145,7 @@ def test_the_baseline_params_are_the_runtimes_and_are_not_restated():
 def test_the_question_keeps_only_its_own_inputs():
     """What an oil question asks: where the oil went in, which oil, how much
     dissolved and how the slick is drawn. The flow that carries it is the inflow
-    run's value, which is the carrier ROW's, so it is no param of this one."""
+    run's value, which is the discharge ROW's, so it is no param of this one."""
     declared = {prm.name for prm in _workflow().params}
     assert "discharge_m3s" not in declared
     assert {"release", "spill_fraction", "spill_duration_s", "oil_type",
@@ -250,8 +249,8 @@ def test_the_slots_reach_the_wire_as_arguments():
 
 @pytest.mark.parametrize("name", ["T1", "drogues"])
 def test_every_published_read_carries_its_caption(name):
-    """CAPTIONS covers the reads this template PLACES and nothing else: what the
-    module writes is published under the engine's own names."""
+    """CAPTIONS covers every read this template PLACES; the rows keyed beside
+    them are the sentences the journal opens a measured slot with."""
     assert name in template.CAPTIONS
-    assert set(template.CAPTIONS) == {
-        p.variable or p.kind for p in template.OUTPUTS}
+    assert {p.variable or p.kind for p in template.OUTPUTS} <= set(
+        template.CAPTIONS)
