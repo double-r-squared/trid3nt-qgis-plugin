@@ -1,9 +1,10 @@
 """The CONTRACT of ``telemac_rain_on_grid``: what only a runoff question asks.
 
-The domain, its bed, its boundary runs and the granularity are the runtime's own
-slots and levers; the friction law, the clock, the cadence, the storm's own
-window and how wet the ground already is are keywords the module's dictionary
-describes, stated on the deck. Every number below is this question's own."""
+The domain, its bed, its boundary runs, the granularity and the moment the storm
+opens at are the runtime's own slots and levers; the friction law, the clock, the
+cadence, how long the rain falls for and how wet the ground already is are
+keywords the module's dictionary describes, stated on the deck. Every number
+below is this question's own."""
 
 from __future__ import annotations
 
@@ -92,26 +93,8 @@ class PARAMS:
              "catchment under `precip_mm` for any CONUS window since 1979. It is "
              "the true intensity structure, which is what resolves the hydrograph "
              "SHAPE; a record that stops inside the simulated window stops in the "
-             "run too, so the recession limb appears")
-    rain_start_date = Param(
-        door=doors.USER, optional=True, type=str | None,
-        consequence="scenario",
-        derived_when_absent=(
-            "no record is looked for, and the stated series or the design storm "
-            "drives the run"),
-        desc="First day of the MEASURED storm to look for over this catchment, "
-             "ISO yyyy-mm-dd. With rain_end_date it reads the hourly analysis of "
-             "record; a catchment with no published hours keeps the design storm "
-             "and the run says so")
-    rain_end_date = Param(
-        door=doors.USER, optional=True, type=str | None,
-        consequence="scenario",
-        derived_when_absent=(
-            "no record is looked for, and the stated series or the design storm "
-            "drives the run"),
-        desc="Last day of the measured storm window, ISO yyyy-mm-dd. At most 92 "
-             "days after rain_start_date, and no later than about ten days ago - "
-             "the record is an analysis, not a forecast")
+             "run too, so the recession limb appears. State event_time instead to "
+             "have the run look the record up over its own window")
     design_storm_mm_per_day = Param(
         door=doors.SCENARIO, default=600.0,
         bounds=(2.4, 12000.0), units="mm/day", consequence="physics",
@@ -169,8 +152,8 @@ DOC = dict(
         "supplied as `domain` - meshed fine along its channels, bed from a "
         "bare-earth DEM, SCS curve-number infiltration per node from land cover. "
         "Produces an outlet HYDROGRAPH + a peak flood-DEPTH map. For a REAL event "
-        "call `fetch_aorc_precip` over the catchment and pass its `precip_mm` as "
-        "`rain_series_mm`; else the labeled design storm drives it."
+        "state `event_time`, the moment the storm opens at, and the run reads "
+        "the record over its own window; else a labeled design storm drives it."
     ),
     not_for=(
         "coastal or pluvial inundation depth; a channel dye or sediment plume "

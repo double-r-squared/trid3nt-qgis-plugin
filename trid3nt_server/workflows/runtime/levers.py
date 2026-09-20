@@ -38,8 +38,9 @@ LEVERS: tuple[Param, ...] = (
     Param(name="event_time", door=doors.QUESTION, optional=True,
           consequence="scenario",
           derived_when_absent=(
-              "every observed row is read at the most recent cycle its own "
-              "source has published"),
+              "a surface is read at the most recent cycle its own source has "
+              "published, and no series source is asked at all - a record is a "
+              "reading at a time, and this run stated none"),
           desc="The moment the scenario is read at - an ISO date or datetime "
                "('2026-08-20' or '2026-08-20T06:00:00Z'), from phrasing like "
                "'during last Tuesday's storm'. Each source keeps its own "

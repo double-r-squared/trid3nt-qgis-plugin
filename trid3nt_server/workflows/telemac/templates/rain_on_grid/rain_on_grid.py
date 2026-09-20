@@ -22,6 +22,7 @@ from trid3nt_server.workflows.runtime import (
 )
 from trid3nt_server.workflows.mesh.tool import mesh_op
 from trid3nt_server.inputs import point_arg
+from trid3nt_server.inputs.instant import event_time
 from trid3nt_server.workflows.telemac.modules import (
     T2D,
     extent,
@@ -102,9 +103,10 @@ class DATA:
     rivers = Data.need("hydrography", of="channel network", geometry="polyline")
     landcover = Data.need("land cover")
     #: THE MEASURED STORM, as the hourly analysis of record published it over
-    #: this catchment. CONTEXT: a window nobody stated, a basin outside CONUS or
-    #: hours the record has not published yet leave the row absent and the design
-    #: storm drives the run, which the sheet says in those words.
+    #: this catchment, read over the window the run opens at and its own length
+    #: closes. CONTEXT: a moment nobody stated, a basin outside CONUS or hours
+    #: the record has not published yet leave the row absent and the design storm
+    #: drives the run, which the sheet says in those words.
     rain = Data.need("precipitation series").context(
         "no hourly rainfall record over this catchment for that window; the "
         "design storm drives the run")
@@ -327,9 +329,6 @@ REVIEW_TITLE = "Review the storm, the catchment and the mesh band"
 
 telemac_rain_on_grid = register_workflow(
     TelemacWorkflow, _METADATA, sys.modules[__name__],
-    # The moment a scenario is read at is seated for every template that reads a
-    # dated source; this run reads none, so it is not asked for.
-    levers=("compute_class",),
     # The overland sheet's deepest point and the hydrograph crest are magnitude
     # maxima that live inside single elements, and a coarse element averages both
     # away. WHEN the crest arrives moves with the elements that route the water
@@ -344,6 +343,7 @@ telemac_rain_on_grid = register_workflow(
         point_arg("pour_point", tool="telemac_rain_on_grid",
                   prompt="Click the catchment outlet the runoff drains to",
                   code="TELEMAC_ROG_PARAMS_INVALID"),
+        event_time(),
         compute_class(),
     ),
 )
