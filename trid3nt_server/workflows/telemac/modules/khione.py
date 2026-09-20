@@ -270,6 +270,10 @@ KHIONE.PRINTOUTS = PRINTOUTS
 #: file is the tracer set above, counted among the host's own tracers.
 KHIONE.RESULT_FILE = RESULT_FILENAME
 KHIONE.ONLY_3D = _ONLY_3D
+#: The slots the engine's own allocation marks deprecated and binds to work
+#: arrays it never fills. The printouts keyword may fold them into a prefix so
+#: the token list fits the engine's 72 columns, which makes the file carry them;
+#: the TABLE never rows them, so nothing is published off them.
 KHIONE.UNWRITTEN = frozenset(("COV_THF", "COV_THUN"))
 KHIONE.APPENDABLE = (
     ("every coupled run", (_TEMPERATURE_ROW,)),

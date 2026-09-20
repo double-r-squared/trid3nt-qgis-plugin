@@ -364,3 +364,20 @@ def test_the_gif_resolves_the_ramp_its_panel_was_painted_through():
     assert scale["published_range"] == [-0.005267, 0.005267]
     assert scale["published_style"] == {"kind": "continuous", "ramp": "rdbu",
                                         "units": "m", "floor": None}
+
+
+def test_the_ice_pictures_field_and_the_ice_answers_field_are_one():
+    """The thickness the ice deck's answer states and the field its animation
+    paints are the SAME variable, named once by the template."""
+    from dev.testing.proof_animations import PROOF_ANIMATIONS
+    from trid3nt_server.workflows.telemac.modules.khione import KHIONE
+    from trid3nt_server.workflows.telemac.templates.ice_cover import (
+        ice_cover as template,
+    )
+
+    row = KHIONE.MODULE_OUTPUT[template.ICE_THICKNESS]
+    painted, = PROOF_ANIMATIONS["telemac_ice_cover"]
+    assert painted.variable == row.name
+    assert painted.units == row.unit
+    assert painted.module == "khione"
+    assert template.ICE_THICKNESS in repr(template.ANSWER["peak_ice_thickness_m"])

@@ -31,8 +31,14 @@ from trid3nt_server.workflows.telemac.workflow import (
     Placed, TelemacWorkflow,
 )
 
-__all__ = ["ANSWER", "CAPTIONS", "DATA", "OUTPUTS", "PARAMS", "STEERING",
-           "telemac_ice_cover"]
+__all__ = ["ANSWER", "CAPTIONS", "DATA", "ICE_THICKNESS", "OUTPUTS", "PARAMS",
+           "STEERING", "telemac_ice_cover"]
+
+#: THE FIELD THIS QUESTION IS ABOUT, named once: the engine's TOTAL ice
+#: thickness - the solid border ice that grows in from the banks and the dynamic
+#: cover over it, together. The answer's peak is read off it and the picture
+#: paints it, so the number and the picture cannot be about different ice.
+ICE_THICKNESS = "COV_THT"
 
 
 #: The roughness this deck is solved at, and the law it is read under: Strickler,
@@ -264,9 +270,7 @@ ANSWER = {
                                    above=ParamRef("cover_threshold")
                                    ).measure("t_above")
     .otherwise("no node in the domain froze within the window"),
-    # The thickest ice anywhere is the engine's TOTAL: the solid border ice
-    # and the dynamic cover together, not the cover alone.
-    "peak_ice_thickness_m": series("COV_THT", module="khione").measure("max"),
+    "peak_ice_thickness_m": series(ICE_THICKNESS, module="khione").measure("max"),
     "final_cover_fraction": series("DYNCOVC", at=_STATION, module="khione"
                                    ).measure("last"),
     "mesh_size_m": mesh().measure("size_m"),

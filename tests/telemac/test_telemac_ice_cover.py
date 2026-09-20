@@ -316,3 +316,17 @@ def test_the_workflow_owns_the_stages_and_the_template_states_what_differs():
     assert named.index("station") < named.index("sheet")
     assert [s.label for s in steps if s.self_gating] == ["sheet"]
     assert steps[-2].consequential
+
+
+def test_the_deprecated_slots_the_file_carries_are_rowed_by_nothing():
+    """The engine's printouts keyword may fold the two deprecated work arrays
+    into a prefix so the token list fits its 72 columns, which puts them in the
+    result file. The TABLE is what publishes, and it rows neither."""
+    from trid3nt_server.workflows.telemac.modules.khione import KHIONE
+
+    stated = {"HEAT_BUDGET": True, "DYNAMIC_ICE_COVER": True,
+              "NUMBER_OF_CLASSES_FOR_SUSPENDED_FRAZIL_ICE": 2}
+    assert KHIONE.UNWRITTEN
+    assert not KHIONE.UNWRITTEN & set(KHIONE.table(stated))
+    assert not KHIONE.UNWRITTEN & set(KHIONE.MODULE_OUTPUT)
+
