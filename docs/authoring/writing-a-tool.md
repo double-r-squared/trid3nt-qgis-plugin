@@ -22,8 +22,8 @@ path - the derive, display, search and meta primitives.
 
 Two files are your templates. Read them next to this guide:
 
-- Canonical real example (a read over a handed-in layer returning a chart):
-  `trid3nt_server/tools/derive/compute_cross_section/compute_cross_section.py`
+- Canonical real example (a read over the layers a case holds, returning one row per layer):
+  `trid3nt_server/tools/derive/probe_point/probe_point.py`
 - Copy-me starter (a trivial, dependency-free compute):
   `trid3nt_server/tools/_example_tool_template.py`
 
@@ -305,7 +305,7 @@ case so it proves the CORPUS actually routes.
 
 The test tree MIRRORS the product tree, so a derive tool's test is
 `tests/derive/test_<your_tool>.py`. Model it on
-`tests/derive/test_compute_cross_section.py`. A minimal test asserts three things:
+`tests/derive/test_probe_point.py`. A minimal test asserts three things:
 registration + metadata, the corpus coverage, and the tool's own behavior
 (called directly via `TOOL_REGISTRY[name].fn`, since the decorator returns the
 undecorated function):
