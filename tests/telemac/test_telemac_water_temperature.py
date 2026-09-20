@@ -206,7 +206,9 @@ def test_the_clock_is_the_decks_own_keyword_and_the_weather_table_spans_it(
 def test_the_weather_is_asked_over_the_window_the_deck_closes():
     """No date Param twins the run's window: the record is asked for from the
     moment the run opens at to the instant the deck's own DURATION closes it,
-    in the two params the matched source spells that window under."""
+    in the two params the matched source spells that window under - and a
+    source that spells them as INSTANTS is asked at the instant, so a window
+    shorter than a day is not two of the same day."""
     from trid3nt_server.tools.search.match import (
         Need, base_ask, match, sources_with_coverage)
     from trid3nt_server.workflows.runtime.interpreter import _closes
@@ -219,7 +221,12 @@ def test_the_weather_is_asked_over_the_window_the_deck_closes():
     picked = match(need, sources_with_coverage())
     ask = base_ask(picked.picked, "weather", None, need.lon, need.lat,
                    need.opens, need.until)
-    assert (ask["start_time"], ask["end_time"]) == ("2026-09-10", "2026-09-17")
+    assert (ask["start_time"], ask["end_time"]) == (
+        opens, "2026-09-17T00:00:00+00:00")
+
+    hour = base_ask(picked.picked, "weather", None, need.lon, need.lat,
+                    "2026-09-17", _closes("2026-09-17", 3600.0))
+    assert hour["start_time"] != hour["end_time"]
 
 
 def test_a_stated_duration_sizes_the_weather_record(monkeypatch):
