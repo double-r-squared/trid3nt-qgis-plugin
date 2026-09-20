@@ -195,11 +195,16 @@ def _full_registry_names() -> set[str]:
 
 
 def test_every_registered_tool_has_corpus_queries():
+    from trid3nt_server.tools.search.match import covered_sources
+
     corpus = _load_corpus()
     # Engine templates ARE required to have corpus queries -- their co-located
     # workflows/<engine>/<template>/corpus.yaml is walked into the composed
-    # corpus. Only tier=internal (never model-facing) carries no corpus.
-    missing = sorted(_full_registry_names() - _pool_hidden_names() - set(corpus))
+    # corpus. tier=internal (never model-facing) carries no corpus, and neither
+    # does a fetcher with a coverage row: its phrasings are its CLASS's, which
+    # route to find_sources, and it is never ranked by phrase at all.
+    missing = sorted(_full_registry_names() - _pool_hidden_names()
+                     - covered_sources() - set(corpus))
     assert not missing, (
         "these registered tools have NO tool_query_corpus.yaml entry -- add 5-8 "
         f"routing queries each so retrieve_visible_tools can recall them: {missing}"

@@ -320,7 +320,28 @@ def _compose_corpus_from_tree() -> dict[str, list[str]]:
     # Merge the residual: tools registered outside either tree.
     residual = server_dir / "tools" / "tool_query_corpus.yaml"
     composed.update(_read_corpus_yaml(residual))
-    return composed
+    return _fold_class_corpora(composed)
+
+
+def _fold_class_corpora(composed: dict[str, list[str]]) -> dict[str, list[str]]:
+    """Phrasings keyed by a DATA CLASS, routed to the tool that resolves one.
+
+    A fetcher with a coverage row is not ranked by phrase, so its phrasings are
+    its CLASS's and they are keyed by the class - a key no tool answers to,
+    which is what keeps the composer's per-file update from overwriting the
+    seventeen of them with one another."""
+    from trid3nt_contracts.coverage import DATA_CLASSES
+    from trid3nt_server.tools.search.find_sources.find_sources import FIND_SOURCES
+
+    classes = [key for key in composed if key in DATA_CLASSES]
+    if not classes:
+        return composed
+    folded = dict(composed)
+    routed = list(folded.pop(FIND_SOURCES, []))
+    for key in classes:
+        routed.extend(folded.pop(key))
+    folded[FIND_SOURCES] = routed
+    return folded
 
 
 def _load_corpus(path: Path | None = None) -> dict[str, list[str]]:
@@ -418,8 +439,16 @@ def _build_index(
     """The BM25 + dense index over the registry and the composed corpus. ONE
     document per tool feeds both channels; a spec-driven tool indexes exactly like a
     hand-written one, with no special case."""
+    from trid3nt_server.tools.search.match import covered_sources
+
     snapshot = registry_snapshot if registry_snapshot is not None else dict(TOOL_REGISTRY)
     corpus = _load_corpus(corpus_path)
+    # A fetcher with a COVERAGE ROW is found rather than ranked: which source
+    # measures a class at a place is decided on the row's extent, window and
+    # cell, which no phrasing can weigh. It leaves the index, the class
+    # phrasings route to find_sources instead, and the survivors it names enter
+    # the gate. A fetcher with no row stays here and is routed by description.
+    covered = covered_sources()
 
     tool_names: list[str] = []
     descriptions: list[str] = []
@@ -435,6 +464,8 @@ def _build_index(
         # tier withheld - an absorbed in-process seam, registry-resolvable but not
         # searchable. tier=catalog is not withheld.
         if getattr(entry.metadata, "tier", "general") in ("internal",):
+            continue
+        if name in covered:
             continue
         doc = getattr(entry.fn, "__doc__", "") or ""
         snippet = _short_description(doc)

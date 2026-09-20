@@ -1,0 +1,127 @@
+find_sources:
+- what data is available for this place
+- which source measures this here
+- is there anything that measures this at this location
+- what could i get real numbers from for this area
+- find me a source for this kind of data
+- what measures this and how current is it
+bathymetry:
+- how deep is the river bed here
+- what is the channel depth through this reach
+- surveyed soundings for this harbour
+- how deep is the water in this bay
+- what is the bed elevation under the water here
+- depths across this navigation channel
+terrain:
+- ground elevation over this area
+- elevation data for this place
+- how high is the land here
+- the topography of this catchment
+- land surface heights for this site
+- elevation model of the dry ground
+- how high does the ground stand above the river
+hydrography:
+- where does the river run through here
+- where the channel centerlines run here
+- channel centerlines and waterbody outlines
+- the reach and the water it runs through here
+- the river reach through this town
+- which river runs past this place
+bed material:
+- what is the river bed made of
+- the grain size of the bed material here
+- is the bed material here sand or gravel
+- the sediment size distribution of this channel
+- what material lines the sea floor here
+- bed sediment samples for this reach
+water level series:
+- how high did the water get here
+- the measured stage record at this gauge
+- tide levels through the storm
+- the water level the gauge recorded here
+- how the level changed during the event
+- how high the water stood through the event
+discharge series:
+- how much water is flowing through here
+- the streamflow record for this river
+- river discharge during the flood
+- flow rate past this section over time
+- the measured hydrograph through this event
+- how many cubic feet per second went past
+precipitation series:
+- how much rain fell on this catchment
+- the measured precipitation over this event
+- precipitation totals for this event
+- how much rain was measured over these days
+- what fell here during the event
+- the rain record for these days
+weather forcing:
+- wind and pressure through this event
+- what weather was measured over this event
+- air temperature and humidity over these days
+- meteorological forcing for the model
+- wind speed over the water here
+- atmospheric conditions through the storm
+water quality sample:
+- measured water quality samples here
+- dissolved oxygen samples in this reach
+- nutrient and turbidity measurements here
+- water chemistry observations for this river
+- sampled contaminant concentrations
+- what do the water samples say here
+land cover:
+- what covers the ground here
+- land use classes over this area
+- is this urban or forest
+- impervious cover across this catchment
+- vegetation classes over this area
+- the land cover for this basin
+soil:
+- what soil is under this catchment
+- soil texture and infiltration properties
+- the hydrologic soil group here
+- how permeable is the ground here
+- soil properties for a runoff model
+- the soil survey over this area
+aquifer property:
+- the aquifer transmissivity here
+- how thick is the aquifer under this site
+- hydraulic conductivity of this formation
+- storage properties of the aquifer
+- aquifer properties for a groundwater model
+- how well does the ground transmit water here
+groundwater level:
+- how deep is the water table here
+- the groundwater level record
+- well water levels over time
+- depth to groundwater at this site
+- observed heads in the wells nearby
+- how the water table moved over these years
+fuels:
+- what will burn here
+- the fuel model over this landscape
+- canopy cover and crown fuels
+- vegetation fuels for a fire run
+- surface fuel loading over this area
+- how much fuel is on this ground
+ignition:
+- where did this fire start
+- detected fire starts over this area
+- where this fire was alight at that moment
+- the fire start location for this event
+- detected heat sources over this landscape
+- what was alight here during the event
+seismic source:
+- which faults run through here
+- the earthquake sources for this site
+- which faults and past earthquakes are recorded here
+- fault geometry and slip rates
+- seismic sources for a hazard run
+- past earthquakes over this region
+exposure:
+- what is exposed here
+- buildings and people in this area
+- the building inventory for a damage run
+- how many people live in this area
+- structures standing in this footprint
+- the buildings and population standing over this area

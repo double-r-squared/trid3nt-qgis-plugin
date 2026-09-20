@@ -76,7 +76,9 @@ def _run_top_k(query: str, k: int = 5) -> list[str]:
         ("weather alerts", "fetch_nws_alerts_conus"),
         ("show flood zones", "fetch_fema_nfhl_zones"),
         ("national wetlands inventory polygons", "fetch_nwi_wetlands"),
-        ("elevation Grand Canyon", "fetch_dem"),
+        # A fetcher with a coverage row is not ranked by phrase at all: an
+        # elevation question routes to the match, which names the source.
+        ("elevation data for this place", "find_sources"),
         # Door dissolution: a template is an ordinary retrieval-pool
         # member. A bare "model flooding" is genuinely ambiguous across the
         # family, so the canonical routing query is the specific phrasing one
