@@ -21,6 +21,8 @@ fs = import_module("trid3nt_server.tools.search.find_sources.find_sources")
 from tests.search.test_source_match import CONUS, EUROPE, WILLAMETTE, surface
 
 PORTLAND_BOX = [-122.72, 45.48, -122.62, 45.56]
+#: Open water off the Oregon shelf: outside every Great Lakes ring.
+OREGON_SHELF_BOX = [-124.6, 45.9, -124.5, 46.0]
 
 
 @pytest.fixture
@@ -161,6 +163,21 @@ async def test_the_gauges_and_the_portal_both_measure_a_sample_at_portland():
     named = [row["tool_name"] for row in found["results"]]
     assert "fetch_usgs_nwis_gauges" in named and "fetch_usgs_water_quality" in named
     assert named.index("fetch_usgs_nwis_gauges") < named.index("fetch_usgs_water_quality")
+
+
+@pytest.mark.asyncio
+async def test_a_bed_asked_for_off_the_oregon_coast_excludes_the_lakes_by_name():
+    """The REGISTERED world through the EXCLUDED path: every row the place
+    filter drops renders its extent note behind the match's own prefix, and a
+    note longer than the wire field takes makes the whole answer unsendable -
+    so the ocean box the lake sources do not reach is what proves the notes fit.
+    """
+    found = await find_sources("bathymetry", OREGON_SHELF_BOX)
+    dropped = {row["fetcher"]: row["excluded"] for row in found["choice"]["rows"]}
+    assert "the Great Lakes and the connecting channels" in dropped["fetch_chs_nonna"]
+    assert "does not reach this place" in dropped["fetch_greatlakes_bathymetry"]
+    named = [row["tool_name"] for row in found["results"]]
+    assert "fetch_bluetopo" in named and "fetch_topobathy" in named
 
 
 @pytest.mark.asyncio
