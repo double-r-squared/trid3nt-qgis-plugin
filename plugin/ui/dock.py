@@ -46,6 +46,7 @@ from .cards import (
     _ChatInput,
     _ToolCard,
     _WrapLabel,
+    tool_row,
 )
 from .cases_dialog import CasesDialog
 from .settings_dialog import SettingsDialog
@@ -574,10 +575,8 @@ class Trid3ntDock(QDockWidget):
             if role == "tool":
                 # Accumulate the tool run -- flushed into ONE card when the run
                 # ends (next non-tool row, or end of history).
-                card = self._resolve_tool_card(
-                    row.get("tool_card"), row.get("content")
-                )
-                if card is not None:
+                card = row.get("tool_card")
+                if isinstance(card, dict):
                     tool_group.append(card)
                 continue
             # A non-tool row closes any open tool run.
@@ -622,21 +621,6 @@ class Trid3ntDock(QDockWidget):
         if tool_group:
             self._replay_tool_group(tool_group)
 
-    @staticmethod
-    def _resolve_tool_card(tool_card, content) -> Optional[dict]:
-        """Resolve ONE persisted tool row to its ``ToolCardRecord`` dict
-        (contracts ``case.py``): the typed ``tool_card`` when present, else the
-        ``content`` JSON twin. Malformed/empty -> None (skipped, never raises)."""
-        card = tool_card if isinstance(tool_card, dict) else None
-        if card is None and isinstance(content, str) and content:
-            try:
-                parsed = json.loads(content)
-            except (ValueError, TypeError):
-                parsed = None
-            if isinstance(parsed, dict):
-                card = parsed
-        return card or None
-
     def _replay_tool_group(self, cards: List[dict]) -> None:
         """Render a run of persisted tool rows as ONE parent card, each row
         carrying its response as a collapsed read-only body. The card is
@@ -645,20 +629,12 @@ class Trid3ntDock(QDockWidget):
         meta_lines: List[str] = []
         for card in cards:
             name = card.get("tool_name") or card.get("label") or "tool"
-            state = card.get("state")
-            is_error = bool(card.get("is_error"))
             raw_args = card.get("raw_args")
-            response = card.get("function_response")
-            # E2: an error card shows the failed (x) glyph regardless of the
-            # raw state word.
-            row_state = "failed" if is_error else state
-            inner_rows.append(
-                {"label": str(name),
-                 "state": row_state,
-                 "nested": False,
-                 "result": response if isinstance(response, str) else None,
-                 "is_error": is_error}
-            )
+            inner_rows.append(tool_row(
+                name, card.get("state"),
+                result=card.get("function_response"),
+                is_error=bool(card.get("is_error")),
+            ))
             args_summary = (
                 _short_args_summary(raw_args) if isinstance(raw_args, str) else ""
             )
@@ -1593,11 +1569,10 @@ class Trid3ntDock(QDockWidget):
                     )
                     meta_lines.append(f"{step.name} - {step.state}{suffix}")
                     continue
-                inner_rows.append(
-                    {"label": step.tool_name or step.name,
-                     "state": step.state,
-                     "nested": bool(step.parent_step_id)}
-                )
+                inner_rows.append(tool_row(
+                    step.tool_name or step.name, step.state,
+                    nested=bool(step.parent_step_id),
+                ))
                 # The arg summary
                 # + any substep label + error text join the bottom metadata.
                 bits: List[str] = []

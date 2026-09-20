@@ -112,16 +112,25 @@ class TestParseChatHistory(unittest.TestCase):
                 ]
             }
         )
-        # Item H: a tool row with a usable content
-        # twin SURFACES (tool_card rides along, None here); a tool row with
-        # NEITHER a tool_card dict NOR content is skipped like every other
-        # malformed row -- never raised on.
+        # A tool row resolves to its ToolCardRecord dict here: neither a
+        # typed tool_card nor a parseable content twin is skipped like every
+        # other malformed row -- never raised on.
         self.assertEqual(
             rows,
-            [
-                {"role": "tool", "tool_card": None, "content": "{...}"},
-                {"role": "user", "content": "the one good row"},
-            ],
+            [{"role": "user", "content": "the one good row"}],
+        )
+
+    def test_tool_row_falls_back_to_the_content_json_twin(self):
+        rows = tc.parse_chat_history(
+            {"chat_history": [
+                {"role": "tool",
+                 "content": '{"tool_name": "fetch_dem", "state": "complete"}'},
+            ]}
+        )
+        self.assertEqual(
+            rows,
+            [{"role": "tool",
+              "tool_card": {"tool_name": "fetch_dem", "state": "complete"}}],
         )
 
     def test_capped_at_replay_max_keeping_the_tail(self):
@@ -154,18 +163,15 @@ class TestParseChatHistory(unittest.TestCase):
             }
         )
         self.assertIsNotNone(info)
-        # Item H: tool rows are SURFACED with their
-        # typed tool_card dict (tool-call chain replay on reopen), in order,
-        # inline between the user and agent bubbles.
+        # Tool rows surface as their typed tool_card dict (the tool-call
+        # chain replay on reopen), in order, between the user and agent
+        # bubbles.
         self.assertEqual(
             info.chat_messages,
             [
                 {"role": "user", "content": "start a flood sim"},
-                {
-                    "role": "tool",
-                    "tool_card": {"name": "run_flood_sim", "state": "ok"},
-                    "content": "{tool_card}",
-                },
+                {"role": "tool",
+                 "tool_card": {"name": "run_flood_sim", "state": "ok"}},
                 {"role": "agent", "content": "here is the result",
                  "thinking": None},
             ],

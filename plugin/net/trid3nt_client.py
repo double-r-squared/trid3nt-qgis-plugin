@@ -510,17 +510,18 @@ def parse_chat_history(session_state_payload: dict) -> list:
         role = row.get("role")
         content = row.get("content")
         if role == "tool":
-            # The typed tool_card dict is the preferred render source; the
-            # content JSON twin is the fallback. Skip only when NEITHER is
-            # usable.
-            tool_card = row.get("tool_card")
-            if not isinstance(tool_card, dict) and not (
-                isinstance(content, str) and content
-            ):
+            # The typed tool_card dict is the render source; a content JSON
+            # twin stands in where the row carries no typed card. A row that
+            # resolves to neither is skipped, never raised on.
+            card = row.get("tool_card")
+            if not isinstance(card, dict):
+                try:
+                    card = json.loads(content) if content else None
+                except (ValueError, TypeError):
+                    card = None
+            if not isinstance(card, dict) or not card:
                 continue
-            out.append(
-                {"role": "tool", "tool_card": tool_card, "content": content}
-            )
+            out.append({"role": "tool", "tool_card": card})
             continue
         if role not in ("user", "agent"):
             continue

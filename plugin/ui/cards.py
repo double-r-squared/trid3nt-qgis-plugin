@@ -5,6 +5,7 @@ a one-line chip, and "show details" re-expands it read-only. Its buttons are
 plain QPushButtons, so a composer ENTER can never fire one as a dialog default."""
 from __future__ import annotations
 
+import html
 import re
 from typing import Dict, List, Optional, Tuple
 
@@ -102,16 +103,9 @@ _TOOLCARD_PREFIX_STYLE = (
 )
 
 
-def _tool_row_text_style(state: Optional[str]) -> str:
-    """An inner tool-row LABEL: a coloured monospace label with no border and
-    no background, its colour driven off the step state."""
-    color = _CHIP_STATE_COLORS.get((state or "").lower(), _CHIP_PENDING_COLOR)
-    return f"font-family: monospace; font-size: 9pt; color: {color}; border: none;"
-
-
-def _tool_status_style(state: Optional[str]) -> str:
-    """The right-edge status glyph -- spinner, check or x -- coloured off the
-    same state map."""
+def _tool_state_style(state: Optional[str]) -> str:
+    """An inner tool row's label and its right-edge glyph: a monospace label
+    with no border and no background, coloured off the step state."""
     color = _CHIP_STATE_COLORS.get((state or "").lower(), _CHIP_PENDING_COLOR)
     return f"font-family: monospace; font-size: 9pt; color: {color}; border: none;"
 
@@ -150,17 +144,6 @@ _CODE_PREVIEW_STYLE = (
     "background-color: palette(base); border: 1px solid palette(mid); "
     "border-radius: 2px;"
 )
-
-def _html_escape(text: str) -> str:
-    """Minimal HTML escape for server-sourced strings interpolated into a
-    Qt.TextFormat.RichText label (the credential card's signup link)."""
-    return (
-        text.replace("&", "&amp;")
-        .replace("<", "&lt;")
-        .replace(">", "&gt;")
-        .replace('"', "&quot;")
-    )
-
 
 # Green: a "provide something and the run continues" affordance, distinct from
 # the amber caution gate and the blue code gate.
@@ -585,6 +568,20 @@ class _ErrorFold(QWidget):
             self._body.setVisible(self.toggle.isChecked())
 
 
+def tool_row(label, state, *, nested: bool = False, result=None,
+             is_error: bool = False) -> dict:
+    """One inner row for ``_ToolCard.set_content``. An error row shows the
+    failed glyph whatever state word the record carries, and a non-string
+    result is no result."""
+    return {
+        "label": str(label or ""),
+        "state": "failed" if is_error else state,
+        "nested": nested,
+        "result": result if isinstance(result, str) else None,
+        "is_error": is_error,
+    }
+
+
 class _ToolCard(QFrame):
     """ONE parent card containing this turn's tool calls. There is exactly one
     representation, and the SAME widget serves both the live pipeline and the
@@ -712,13 +709,13 @@ class _ToolCard(QFrame):
             prefix = _label(">", _TOOLCARD_PREFIX_STYLE)
             rl.addWidget(prefix)
             # A plain, non-wrapping label in the state-driven text colour.
-            name_lbl = _label(label, _tool_row_text_style(state))
+            name_lbl = _label(label, _tool_state_style(state))
             rl.addWidget(name_lbl)
             rl.addStretch(1)
             # The ONLY right-edge element is the status glyph; the arg and
             # metadata summary rides the bottom block instead. Running is an
             # animated spinner, complete a check, terminal-failed an x.
-            status = _label("", _tool_status_style(state))
+            status = _label("", _tool_state_style(state))
             if running:
                 status.setText(_SPINNER_FRAMES[self._spinner_frame])
                 self._spinner_labels.append(status)
@@ -1436,7 +1433,7 @@ class CredentialCard(QFrame):
             # The server's REAL signup URL (registry-sourced; a name-only
             # generic card sends None and this label is simply absent --
             # the client never fabricates a URL).
-            href = _html_escape(request.signup_url)
+            href = html.escape(request.signup_url)
             link_lbl = _label(f'<a href="{href}">Get a key: {href}</a>',
                               _GATE_NOTE_STYLE, wrap=True, rich=True)
             lay.addWidget(link_lbl)
@@ -1835,10 +1832,6 @@ class SimCard(QFrame):
         body_lay.addWidget(self.error_lbl)
 
     # -- table plumbing ------------------------------------------------------- #
-
-    @property
-    def engine(self) -> str:
-        return self._engine
 
     @property
     def terminal(self) -> bool:
