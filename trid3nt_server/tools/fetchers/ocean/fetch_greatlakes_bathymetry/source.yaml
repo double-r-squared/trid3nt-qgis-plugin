@@ -49,6 +49,13 @@ ingest:
       # carrying several vertical references at once. The mosaic rule cuts it to
       # the lake-datum bathymetry grids, which are one dataset on one datum.
       mosaicRule: '{"mosaicMethod":"esriMosaicNorthwest","where":"Name=''greatlakes_lakedatum''"}'
+    # WHAT THE MOSAIC WRITES WHERE IT SOUNDED NOTHING. The grids stop at each
+    # lake's own shore and the mosaic fills the rest of a requested bbox with
+    # the lake surface at LWD, which reads as a flat bed at the datum plane
+    # rather than as an absence. Declared here so those cells come back as
+    # nodata and a consumer reading coverage off the raster sees the footprint
+    # the soundings actually have.
+    fill_value: 0.0
 normalize:
   crs: EPSG:4326
   units: meters
@@ -86,10 +93,13 @@ coverage:
       - [[-92.2, 46.4], [-84.3, 46.4], [-84.3, 49.1], [-92.2, 49.1]]
       - [[-88.1, 41.5], [-84.7, 41.5], [-84.7, 46.2], [-88.1, 46.2]]
       - [[-84.8, 43.0], [-79.7, 43.0], [-79.7, 46.4], [-84.8, 46.4]]
-      - [[-83.6, 41.3], [-78.8, 41.3], [-78.8, 43.0], [-83.6, 43.0]]
+      - [[-83.55, 41.35], [-78.8, 42.0], [-78.8, 43.0], [-80.0, 42.75], [-82.6, 42.15],
+        [-83.3, 42.25]]
+      - [[-82.95, 42.28], [-82.4, 42.28], [-82.4, 42.7], [-82.95, 42.7]]
       - [[-79.9, 43.1], [-76.0, 43.1], [-76.0, 44.4], [-79.9, 44.4]]
-      note: the five Great Lakes only; land inside a bbox comes back as the mosaic's
-        own zero fill, which is the lake surface at LWD
+      note: the gridded LAKES one outline each - Superior, Michigan, Huron, Erie,
+        St. Clair, Ontario - and not the rivers between them; the St. Clair, Detroit
+        and Niagara corridors carry no soundings and come back as fill
     window:
       series: false
       latest: '2019-01-01'
@@ -105,10 +115,11 @@ coverage:
 caveats:
 - The NCEI Great Lakes bathymetric grids, referenced to each lake's own LOW WATER DATUM (LWD) - the
   zero-depth the lake is charted and surveyed on. Positive up, so every value over water is negative.
-- Land inside the requested bbox comes back as the mosaic's own zero fill, which is the lake surface
-  at LWD - not an elevation. A domain cut to the water body samples
-  bathymetry everywhere; a domain that reaches inland does not get land terrain here (fetch_dem
-  serves US land on NAVD88, and the two datums do not merge without a stated offset).
+- The grids cover the six gridded lakes and stop at their shores. Everything else inside a requested
+  bbox - land, and the St. Clair, Detroit and Niagara rivers between the lakes - is the mosaic's own
+  zero fill at the lake surface, and is published as NODATA rather than as a flat bed. A domain that
+  reaches inland does not get land terrain here (fetch_dem serves US land on NAVD88, and the two
+  datums do not merge without a stated offset).
 - NCEI's own Grid Extract path publishes these soundings on MEAN SEA LEVEL instead. This tool reads
   the DEM_all ImageServer's lake-datum grids, and the datum stated here is theirs.
 docstring: |-
@@ -133,6 +144,10 @@ docstring: |-
         with 3DEP land, NAVD88).
       - Land terrain: use ``fetch_dem`` (USGS 3DEP, NAVD88, 1-10 m). This grid
         holds no land at all.
+      - A CONNECTING RIVER between two lakes - the St. Clair, the Detroit, the
+        Niagara, the St. Marys: the lake grids stop at their own shores, so
+        these corridors come back entirely nodata. Use ``fetch_ehydro_surveys``
+        for the surveyed navigation channel there.
 
   **Parameters:**
       bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326, over one of

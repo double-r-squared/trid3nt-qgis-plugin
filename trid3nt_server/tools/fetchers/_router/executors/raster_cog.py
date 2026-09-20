@@ -1449,6 +1449,33 @@ def _imageserver_size(bbox: tuple[float, float, float, float], ingest: dict[str,
     return width_px, height_px
 
 
+def _without_fill(spec: SourceSpec, body: bytes, fill: float,
+                  bbox: tuple[float, float, float, float]) -> bytes:
+    """The export re-serialized with the mosaic's own fill written as nodata.
+
+    A grid holding nothing but fill over the bbox measured nothing there, which
+    is missed coverage rather than a flat bed."""
+    import numpy as np
+    import rasterio
+    from rasterio.io import MemoryFile
+
+    with MemoryFile(body) as mem, mem.open() as src:
+        arr = src.read(1).astype("float32")
+        transform, crs, declared = src.transform, src.crs, src.nodata
+    masked = np.where(np.isclose(arr, fill), np.nan, arr)
+    if declared is not None:
+        masked = np.where(np.isclose(arr, float(declared)), np.nan, masked)
+    if not bool(np.isfinite(masked).any()):
+        raise router_empty_error(
+            spec.error_code_prefix,
+            f"the ImageServer grid over bbox={tuple(round(x, 3) for x in bbox)} "
+            f"carries the mosaic's own {fill:g} fill and nothing else, so "
+            "nothing here was measured.",
+            spec.empty_error_suffix,
+        )
+    return array_to_cog_bytes(masked, transform, crs)
+
+
 def _imageserver_export_bytes(spec: SourceSpec, params: dict[str, Any]) -> bytes:
     """ArcGIS ImageServer ``exportImage`` fetch, returning the server's ready GeoTIFF
     body UNCHANGED: the response IS the cached artifact, and GDAL only parses it for
@@ -1518,6 +1545,14 @@ def _imageserver_export_bytes(spec: SourceSpec, params: dict[str, Any]) -> bytes
             f"ImageServer body is not a TIFF for {svc_param}={params.get(svc_param)!r} "
             f"bbox={bbox}; content-type={ct!r}, body preview: {body[:200]!r}",
         )
+
+    # THE MOSAIC'S OWN FILL, published as nodata. A mosaic that writes one value
+    # where it holds no measurement hands back a grid whose fill cannot be told
+    # from a sounding at that value, and a consumer reading coverage off the
+    # grid then takes the fill for measured ground.
+    fill = img.get("fill_value")
+    if fill is not None:
+        return _without_fill(spec, body, float(fill), bbox)
 
     # All-nodata coverage gate: every pixel the nodata sentinel (or the all-zero
     # degenerate over open water) -> the bbox missed coverage -> typed EMPTY.

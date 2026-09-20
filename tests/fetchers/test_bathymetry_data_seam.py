@@ -381,3 +381,74 @@ def test_the_bathymetry_sources_are_found_through_their_class(
     for fetcher in ("fetch_bluetopo", "fetch_greatlakes_bathymetry",
                     "fetch_topobathy"):
         class_routes_to_the_match("bathymetry", fetcher)
+
+
+#: The run's own AOI over the St. Clair River between Lake Huron and Lake
+#: St. Clair, where the mosaic holds no sounding at all.
+ST_CLAIR_RIVER_AOI = (-82.475404, 42.886362, -82.404648, 42.99302)
+
+
+def _lake_spec():
+    from trid3nt_server.tools.fetchers._router.spec import load_spec_from_path
+
+    return load_spec_from_path(Path(
+        "trid3nt_server/tools/fetchers/ocean/fetch_greatlakes_bathymetry/"
+        "source.yaml"))
+
+
+def test_the_lake_rings_stop_at_the_lakes_and_not_the_rivers_between_them() -> None:
+    """The coverage extent is the footprint the soundings have: inside each lake
+    and nowhere along the channels that join them."""
+    from shapely.geometry import Point, Polygon
+
+    rings = [Polygon(r) for r in _lake_spec().coverage[0].extent.rings]
+    west, south, east, north = ST_CLAIR_RIVER_AOI
+    for corner in ((west, south), (east, north), (east, south), (west, north)):
+        assert not any(ring.contains(Point(*corner)) for ring in rings), corner
+    # The lakes the corridor runs between are still covered, and so is the lake
+    # the old rectangle around Erie was the only ring to reach.
+    for lake in ((-82.35, 43.15), (-82.70, 42.45), (-81.50, 41.90)):
+        assert any(ring.contains(Point(*lake)) for ring in rings), lake
+
+
+def test_the_lake_grid_publishes_its_own_fill_as_nodata(monkeypatch) -> None:
+    """Zero is what the mosaic writes where it sounded nothing, so a consumer
+    reading coverage off the raster sees an absence rather than a flat bed at
+    the datum plane."""
+    import io
+
+    import numpy as np
+    import rasterio
+    from rasterio import transform as rtransform
+
+    from trid3nt_server.tools.fetchers._router.errors import RouterEmptyError
+    from trid3nt_server.tools.fetchers._router.executors import raster_cog
+
+    def _tiff(values):
+        buf = io.BytesIO()
+        with rasterio.open(
+                buf, "w", driver="GTiff", height=2, width=2, count=1,
+                dtype="float32", crs="EPSG:4326",
+                transform=rtransform.from_bounds(-82.5, 42.8, -82.4, 42.9, 2, 2)
+        ) as dst:
+            dst.write(np.asarray(values, dtype="float32"), 1)
+        return buf.getvalue()
+
+    tp = "trid3nt_server.tools.fetchers._router.transport"
+    spec, params = _lake_spec(), {"bbox": list(ST_CLAIR_RIVER_AOI)}
+
+    monkeypatch.setattr(f"{tp}.get_client", lambda: object())
+    monkeypatch.setattr(f"{tp}.get_bytes",
+                        lambda *a, **k: (_tiff([[0.0, -9.3], [0.0, -4.1]]),
+                                         "image/tiff", "x"))
+    with rasterio.open(io.BytesIO(raster_cog.execute(spec, params))) as src:
+        band = src.read(1)
+    assert np.isnan(band[0, 0]) and np.isnan(band[1, 0])
+    assert band[0, 1] == pytest.approx(-9.3) and band[1, 1] == pytest.approx(-4.1)
+
+    monkeypatch.setattr(f"{tp}.get_bytes",
+                        lambda *a, **k: (_tiff([[0.0, 0.0], [0.0, 0.0]]),
+                                         "image/tiff", "x"))
+    with pytest.raises(RouterEmptyError) as raised:
+        raster_cog.execute(spec, params)
+    assert raised.value.error_code == "GREATLAKES_BATHYMETRY_EMPTY"
