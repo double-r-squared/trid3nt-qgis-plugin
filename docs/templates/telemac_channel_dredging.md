@@ -46,19 +46,19 @@ The values the template declares. `desc` is what the model reads when it fills o
 
 | field | the proving run's value |
 |---|---|
-| `dug_volume_m3` | 1301.708566 |
-| `dumped_volume_m3` | 1301.708566 |
+| `dug_volume_m3` | 1510.128165 |
+| `dumped_volume_m3` | 1510.128165 |
 | `dredge_report` | the volumes are the engine's own report lines, summed over the passes that finished inside the run's clock |
-| `dredged_bed_change_m` | -0.9154806137084961 |
-| `dumped_bed_change_m` | 0.19385552406311035 |
+| `dredged_bed_change_m` | -1.0620603561401367 |
+| `dumped_bed_change_m` | 0.2248941957950592 |
 | `net_bed_mass_kg` | 0.0 |
 | `mesh_size_m` | 10.33 |
 
 It publishes these layers onto the canvas:
 
-- Input: river reach (river_reach)
-- Input: channel survey soundings (ehydro_surveys)
-- Input: channel bed elevation (dem, 3DEP 1-10 m US lidar (default 10 m); Copernicus GLO-30 30 m global via source=copernicus, datum NAVD88 (metres, positive up))
+- Input: domain (river_reach)
+- Input: bed (ehydro_surveys)
+- Input: bed (3dep_extra, datum NAVD88 (metres, positive up))
 - Velocity u over time (river_reach_domain_mesh)
 - Velocity v over time (river_reach_domain_mesh)
 - Water depth over time (river_reach_domain_mesh)
@@ -74,19 +74,19 @@ It publishes these layers onto the canvas:
 
 ## The proving run
 
-Run `01M2VCY6437D0FNFK9HY6MKR3F`, 2026-09-18T23:17:17.492237+00:00, 29.715 s, at commit `966392d7b95ac996d00a5df14f667096b64a3e2a-dirty`.
+Run `01M2YJF28VSBDVXP8JQH6PN6A8`, 2026-09-20T04:51:41.964920+00:00, 85.194 s, at commit `24f2cef04e9168ebba467497d21e65fed461d71c-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M2VCY6437D0FNFK9HY6MKR3F)](telemac_channel_dredging/telemac_channel_dredging.png)
+![Every layer the run published, stacked and framed on the result (run 01M2YJF28VSBDVXP8JQH6PN6A8)](telemac_channel_dredging/telemac_channel_dredging.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M2VCY6437D0FNFK9HY6MKR3F)*
+*Every layer the run published, stacked and framed on the result (run 01M2YJF28VSBDVXP8JQH6PN6A8)*
 
-![The solve, frame by frame (run 01M2VCY6437D0FNFK9HY6MKR3F)](telemac_channel_dredging/telemac_channel_dredging_animation.gif)
+![The solve, frame by frame (run 01M2YJF28VSBDVXP8JQH6PN6A8)](telemac_channel_dredging/telemac_channel_dredging_animation.gif)
 
-*The solve, frame by frame (run 01M2VCY6437D0FNFK9HY6MKR3F)*
+*The solve, frame by frame (run 01M2YJF28VSBDVXP8JQH6PN6A8)*
 
-![final frame (run 01M2VCY6437D0FNFK9HY6MKR3F)](telemac_channel_dredging/telemac_channel_dredging_final_frame.png)
+![final frame (run 01M2YJF28VSBDVXP8JQH6PN6A8)](telemac_channel_dredging/telemac_channel_dredging_final_frame.png)
 
-*final frame (run 01M2VCY6437D0FNFK9HY6MKR3F)*
+*final frame (run 01M2YJF28VSBDVXP8JQH6PN6A8)*
 
 ### The sheet it filled
 
@@ -94,7 +94,7 @@ Every slot the run resolved, with where the value came from. The engine's own de
 
 | param | value | units | basis | provenance |
 |---|---|---|---|---|
-| `seed_point` | Point(lon=-122.6691667, lat=45.5175, name=None) | - | user | supplied on this invocation |
+| `seed_point` | {'lon': -122.6691667, 'lat': 45.5175, 'name': None} | - | user | supplied on this invocation |
 | `design_depth_m` | 13.0 | m | user | supplied on this invocation |
 | `trigger_depth_m` | 12.8 | m | user | supplied on this invocation |
 | `dredge_start_s` | 600.0 | s | user | supplied on this invocation |
@@ -121,10 +121,15 @@ await TOOL_REGISTRY['telemac_channel_dredging'].fn(
     dredge_start_s=600.0,
     dump_rate_m_per_s=0.02,
     mesh_resolution_m=30.0,
-    seed_point='Point(lon=-122.6691667, lat=45.5175, name=None)',
+    seed_point={'lon': -122.6691667, 'lat': 45.5175, 'name': None},
     trigger_depth_m=12.8,
+    discharge=56.6,
+    dredge_area='{"type": "Polygon", "coordinates": [[[-122.669, 45.5188], [-122.668, 45.5188], [-122.668, 45.5196], [-122.669, 45.5196], [-122.669, 45.5188]]]}',
+    dump_area='{"type": "Polygon", "coordinates": [[[-122.6688, 45.5208], [-122.6678, 45.5208], [-122.6678, 45.5216], [-122.6688, 45.5216], [-122.6688, 45.5208]]]}',
+    level=2.776,
+    keywords={'DURATION': 600.0},
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2VCY6437D0FNFK9HY6MKR3F` and commit `966392d7b95ac996d00a5df14f667096b64a3e2a-dirty`. The full argument record is [`telemac_channel_dredging/run.json`](telemac_channel_dredging/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2YJF28VSBDVXP8JQH6PN6A8` and commit `24f2cef04e9168ebba467497d21e65fed461d71c-dirty`. The full argument record is [`telemac_channel_dredging/run.json`](telemac_channel_dredging/run.json).
 
