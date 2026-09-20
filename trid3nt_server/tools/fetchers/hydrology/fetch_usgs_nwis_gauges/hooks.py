@@ -14,7 +14,7 @@ from typing import Any
 from trid3nt_contracts.source_spec import SourceSpec
 
 from ..._router.errors import (
-    router_empty_error, router_input_error, router_upstream_error)
+    RouterError, router_empty_error, router_input_error, router_upstream_error)
 from ..._router.hooks import RequestPlan, register_hook
 
 _IV_URL = "https://waterservices.usgs.gov/nwis/iv/"
@@ -423,3 +423,20 @@ def parse_response(spec: SourceSpec, params: dict[str, Any], bodies: list[bytes]
         row["properties"]["gauge_datum_ft"] = site.get("gauge_datum_ft")
         row["properties"]["vertical_datum"] = site.get("vertical_datum")
     return readings
+
+
+@register_hook("usgs_nwis.classify_status")
+def classify_status(spec: SourceSpec, status: int | None,
+                    body: str | None) -> RouterError | None:
+    """The site and instantaneous services answer a scope holding no gauge with
+    a 404 over an empty or no-sites body - the network holding nothing here,
+    which is an empty record. A 5xx, a timeout or a body that says something
+    else is a real failure and keeps the upstream default."""
+    text = (body or "").strip()
+    if status != 404 or (text and "No sites found" not in text):
+        return None
+    return router_empty_error(
+        spec.error_code_prefix,
+        "the USGS gauge network publishes no active site in this scope",
+        spec.empty_error_suffix,
+    )

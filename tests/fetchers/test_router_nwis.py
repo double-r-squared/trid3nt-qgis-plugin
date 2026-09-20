@@ -15,6 +15,9 @@ import pytest
 
 from trid3nt_server.tools.fetchers._router import hooks, registration
 from trid3nt_server.tools.fetchers._router.executors import http_json
+from trid3nt_server.tools.fetchers._router.transport import errors as terrors
+from trid3nt_server.tools.fetchers.hydrology.fetch_usgs_nwis_gauges import (
+    hooks as nwis_hooks)
 
 
 @pytest.fixture(scope="module")
@@ -271,4 +274,29 @@ def test_both_services_empty_raises_no_stations(spec, monkeypatch):
     with pytest.raises(Exception) as ei:
         http_json.execute(spec, params)
     assert ei.value.error_code == "NWIS_GAUGES_NO_STATIONS"
+    assert ei.value.retryable is False
+
+
+@pytest.mark.parametrize("body", ["", "  ", "No sites found matching the bBox"])
+def test_a_404_over_a_box_holding_no_gauge_is_an_empty_record(spec, body):
+    typed = nwis_hooks.classify_status(spec, 404, body)
+    assert typed.error_code == "NWIS_GAUGES_NO_STATIONS"
+    assert typed.retryable is False
+
+
+@pytest.mark.parametrize("status,body", [
+    (503, ""), (500, "gateway down"), (None, None), (404, "<html>bad query</html>")])
+def test_a_real_failure_stays_an_upstream_error(spec, status, body):
+    assert nwis_hooks.classify_status(spec, status, body) is None
+
+
+def test_a_transport_404_carries_its_own_non_retryable_verdict(spec, monkeypatch):
+    def _raise(_plan):
+        raise terrors.TransportNotFound("object not found (HTTP 404)", body=None)
+
+    monkeypatch.setattr(http_json, "_get_raw", _raise)
+    bare = registration.get_spec("fetch_noaa_coops_tides")
+    with pytest.raises(Exception) as ei:
+        http_json._get(bare, hooks.RequestPlan(url="https://example.invalid/x"))
+    assert ei.value.error_code.endswith("_UPSTREAM_ERROR")
     assert ei.value.retryable is False

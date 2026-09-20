@@ -43,6 +43,7 @@ hooks:
   pre_resolve: usgs_nwis.resolve
   build_request: usgs_nwis.build_request
   parse_response: usgs_nwis.parse
+  classify_status: usgs_nwis.classify_status
 
 normalize:
   crs: "EPSG:4326"
