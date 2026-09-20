@@ -806,8 +806,14 @@ package DataSeam {
         somebody MEASURED, in one order: the shift the source publishes about
         itself - a district's project datum states in the survey's own metadata
         how far it sits above a national frame, and no service serves that -
-        else the offset a DATA ROW produces between the two frames at the point
-        the run stands on. That row is the RUNTIME's: it is declared where an
+        else the offset a DATA ROW produces between the two frames at a point
+        the OWING SOURCE has data at - the point of that source's own footprint
+        nearest the question's seed, the seed itself where it lies inside that
+        footprint, and never a box's centre or a polygon's centroid. A datum
+        relation is a shift and not a field, so one point stands for the whole
+        source and the row states WHICH point it was asked at, which is what a
+        reader needs to dispute it; a footprint the service reaches nowhere
+        refuses naming that point. That row is the RUNTIME's: it is declared where an
         elevation slot is handed a source on another frame, walked and journaled
         like any other producer, and the slot's coercion reads its value and
         fetches nothing - a coercion may call a derive, never a fetch. A pair
@@ -885,7 +891,7 @@ package DataSeam {
         A RUNTIME SLOT STATES THE CLASS IT NEEDS AND NAMES NO FETCHER. The slot
         is the ROW'S NAME - one reserved list, the runtime slot registry's keys -
         and the modifiers are absence and the sentence an absence carries. A need
-        is one class of a coarse vocabulary of about eighteen; the window and the
+        is one class of the coarse data-class vocabulary; the window and the
         frame it is matched under are the RUN's - the deck's own duration from
         the moment the run asks at, the vertical lever - and the place is the
         domain's centre unless the row states the point it is asked at.
@@ -1392,6 +1398,14 @@ package DataSeam {
         "tests/inputs/test_bed_merge.py::test_a_frame_no_offset_reaches_refuses_naming_both";
     verify requirement TheRunHasOneVerticalFrame by
         "tests/runtime/test_matched_slots.py::test_the_runtime_declares_the_offset_row_a_merge_source_owes";
+    verify requirement TheRunHasOneVerticalFrame by
+        "tests/inputs/test_vertical_datum.py::test_a_footprint_missing_the_box_centre_is_asked_at_the_seed";
+    verify requirement TheRunHasOneVerticalFrame by
+        "tests/inputs/test_vertical_datum.py::test_a_seed_off_the_footprint_is_asked_at_the_nearest_measured_point";
+    verify requirement TheRunHasOneVerticalFrame by
+        "tests/inputs/test_vertical_datum.py::test_a_point_the_service_does_not_reach_refuses_naming_it";
+    verify requirement TheRunHasOneVerticalFrame by
+        "tests/runtime/test_domain_bed_and_context_slots.py::test_an_offset_row_is_asked_where_the_source_measured_not_at_the_seed";
 
     satisfy requirement AStoppedRungNeverShips by waterBodyClassifier;
     satisfy requirement AStoppedRungNeverShips by coastalComposite;

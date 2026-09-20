@@ -538,11 +538,16 @@ over it - are read on it. A source published on another frame reaches it
 through a shift somebody MEASURED, in one order: the shift the source
 publishes about itself (a district's project datum is stated in the
 survey's own metadata, and no service serves it), else the offset the
-RUNTIME declares as a DATA row on `fetch_vertical_datum_offset`, at the
-point the run stands on, between the two frames. That row is journaled
-like any other producer, and the slot's coercion reads its value and
-fetches nothing. A pair nothing measures refuses naming BOTH frames
-rather than laying one over the other.
+RUNTIME declares as a DATA row on `fetch_vertical_datum_offset`, between
+the two frames and at a point the OWING SOURCE has data at: the point of
+that source's own footprint nearest the question's seed, the seed itself
+where it lies inside that footprint, never a box's centre or a polygon's
+centroid. One point stands for the whole source, because a datum relation
+is a shift and not a field, and the row states WHICH point it was asked
+at. That row is journaled like any other producer, and the slot's
+coercion reads its value and fetches nothing. A pair nothing measures
+refuses naming BOTH frames rather than laying one over the other, and a
+footprint the service reaches nowhere refuses naming the point.
 
 ### The context row
 

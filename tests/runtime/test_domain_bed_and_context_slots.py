@@ -8,6 +8,7 @@ what reaches the wire, and what a run says when a context source held nothing.
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 from typing import Any
 
 import pytest
@@ -533,12 +534,14 @@ def test_every_elevation_slot_is_read_on_the_runs_own_vertical_frame():
     assert _told(stated, BED) == {"frame": "IGLD85"}
 
 
-def test_the_runtime_declares_the_offset_row_a_differing_source_owes(monkeypatch):
+def test_the_runtime_declares_the_offset_row_a_differing_source_owes(monkeypatch,
+                                                                     tmp_path):
     """A source on another frame that publishes no shift of its own: the RUNTIME
-    declares the DATA row, the row is journaled like any producer, and what the
-    slot is told is the value it produced."""
+    declares the DATA row, asks it where that source MEASURED - the point of its
+    own footprint nearest the question's seed - and the row is journaled like any
+    producer, with what the slot is told the value it produced."""
     from trid3nt_server.workflows.runtime import interpreter
-    from trid3nt_server.workflows.runtime.data import BED
+    from trid3nt_server.workflows.runtime.data import BED, Data
 
     record = {"offset_m": -1.054, "from_frame": "NAVD88", "to_frame": "EGM2008",
               "source": "NOAA VDatum", "uncertainty_m": 0.165}
@@ -550,20 +553,70 @@ def test_the_runtime_declares_the_offset_row_a_differing_source_owes(monkeypatch
 
     monkeypatch.setattr(interpreter, "_call_runner", _call)
     _standing_on()
+    seeded = dataclasses.replace(
+        Data.need("hydrography", at=[_MEASURED_EAST_OF + 0.005, 45.49]),
+        name="domain")
     env = interpreter._Env(params=_Params({"vertical_frame": "EGM2008"}),
-                           data={}, results={})
+                           data={"domain": seeded}, results={})
     told = asyncio.run(interpreter._on_the_run_s_frame(
         env, _elevation_slot(BED),
-        {"uri": "s3://b/k/dem.tif", "vertical_datum": "NAVD88",
-         "bbox": (-123.22, 45.48, -123.19, 45.50)}))
+        {"uri": _half_measured(tmp_path), "vertical_datum": "NAVD88"}))
     assert told == {"frame": "EGM2008", "offset": record}
     (one,) = asked
     assert one["runner"] == "fetch_vertical_datum_offset"
     assert one["from_frame"] == "navd88" and one["to_frame"] == "egm2008"
-    assert one["point"] == pytest.approx([-123.205, 45.49])
+    assert one["point"] == pytest.approx([_MEASURED_EAST_OF + 0.005, 45.49])
     # the row is ON the run: a declared row with a record, not a hidden call
     assert "bed_datum_offset" in env.data
     assert [r.node for r in env.data_records] == ["data:bed_datum_offset"]
+
+
+def test_an_offset_row_is_asked_where_the_source_measured_not_at_the_seed(
+        monkeypatch, tmp_path):
+    """The seed falls on the half of the DEM that measured nothing, so the ask
+    walks to the nearest point the source actually holds."""
+    from trid3nt_server.workflows.runtime import interpreter
+    from trid3nt_server.workflows.runtime.data import BED, Data
+
+    asked: list[dict] = []
+
+    async def _call(runner, kwargs, label):
+        asked.append(dict(kwargs))
+        return {"offset_m": -1.054, "from_frame": "NAVD88", "to_frame": "EGM2008"}
+
+    monkeypatch.setattr(interpreter, "_call_runner", _call)
+    _standing_on()
+    seeded = dataclasses.replace(
+        Data.need("hydrography", at=[_MEASURED_EAST_OF - 0.01, 45.49]),
+        name="domain")
+    env = interpreter._Env(params=_Params({"vertical_frame": "EGM2008"}),
+                           data={"domain": seeded}, results={})
+    asyncio.run(interpreter._on_the_run_s_frame(
+        env, _elevation_slot(BED),
+        {"uri": _half_measured(tmp_path), "vertical_datum": "NAVD88"}))
+    (one,) = asked
+    assert one["point"] == pytest.approx([_MEASURED_EAST_OF, 45.49])
+
+
+#: The DEM the runtime asks an offset off: it measured only the east half of its
+#: own rectangle, inside the domain the run stands on.
+_MEASURED_EAST_OF = -123.205
+
+
+def _half_measured(tmp_path) -> str:
+    """A DEM whose west half is nodata, over the domain the run stands on."""
+    import numpy as np
+    import rasterio
+    from rasterio.transform import from_origin
+
+    path = tmp_path / "dem.tif"
+    values = np.full((10, 12), 4.0, dtype="float32")
+    values[:, :6] = -9999.0
+    with rasterio.open(path, "w", driver="GTiff", width=12, height=10, count=1,
+                       dtype="float32", crs="EPSG:4326", nodata=-9999.0,
+                       transform=from_origin(-123.22, 45.50, 0.0025, 0.002)) as dst:
+        dst.write(values, 1)
+    return str(path)
 
 
 def test_a_source_on_the_runs_own_frame_declares_no_offset_row(monkeypatch):

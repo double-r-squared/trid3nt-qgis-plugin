@@ -23,6 +23,25 @@ from trid3nt_server.workflows.runtime.journal import (
 WILLAMETTE = (-122.72, 45.50, -122.62, 45.56)
 CONUS = [[(-125.0, 24.0), (-66.0, 24.0), (-66.0, 50.0), (-125.0, 50.0)]]
 
+#: The point the question names, on the half of the reach the survey measured.
+_SEED = [-122.64, 45.53]
+
+
+def _half_measured(tmp_path) -> str:
+    """A survey measuring only the east half of its own rectangle."""
+    import numpy as np
+    import rasterio
+    from rasterio.transform import from_origin
+
+    path = tmp_path / "survey.tif"
+    values = np.full((12, 20), -8.0, dtype="float32")
+    values[:, :10] = -9999.0
+    with rasterio.open(path, "w", driver="GTiff", width=20, height=12, count=1,
+                       dtype="float32", crs="EPSG:4326", nodata=-9999.0,
+                       transform=from_origin(-122.72, 45.56, 0.005, 0.005)) as dst:
+        dst.write(values, 1)
+    return str(path)
+
 
 def coverage(data_class, *, res=None, datum="NAVD88", series=False,
              latest="2024-01-01", units=None, kind="surface", value="",
@@ -151,10 +170,12 @@ def test_a_raster_measurement_reaches_the_merge_without_being_gridded(world,
 
 
 def test_the_runtime_declares_the_offset_row_a_merge_source_owes(world,
-                                                                 monkeypatch):
+                                                                 monkeypatch,
+                                                                 tmp_path):
     """Two surfaces on two zeros meet at the merge before any slot sees them, so
     the shift each owes onto the run's frame is the RUNTIME's own row - the same
-    declaration a slot's source gets, and none for the one already on it."""
+    declaration a slot's source gets, asked where that source measured, and none
+    for the one already on the frame."""
     monkeypatch.setitem(SPECS, "fetch_soundings",
                         _Spec(coverage("bathymetry", res=1.0), "raster",
                               {"bbox": None}))
@@ -164,7 +185,7 @@ def test_the_runtime_declares_the_offset_row_a_merge_source_owes(world,
     async def _runner(runner, kwargs, label):
         world.append((runner, dict(kwargs)))
         if runner == "fetch_soundings":
-            return {"uri": "s3://b/survey.tif", "vertical_datum": "IGLD85"}
+            return {"uri": _half_measured(tmp_path), "vertical_datum": "IGLD85"}
         if runner == "fetch_terrain":
             return {"uri": "s3://b/dem.tif", "vertical_datum": "NAVD88"}
         if runner == "fetch_vertical_datum_offset":
@@ -173,10 +194,12 @@ def test_the_runtime_declares_the_offset_row_a_merge_source_owes(world,
 
     monkeypatch.setattr(interpreter, "_call_runner", _runner)
     env = _env()
+    env.data["domain"] = _row(Data.need("hydrography", at=_SEED), "domain")
     asyncio.run(interpreter._matched_bed(env, _row(Data.need("bathymetry"), "bed")))
     asked = {runner: kwargs for runner, kwargs in world}
     assert asked["fetch_vertical_datum_offset"]["from_frame"] == "igld85"
     assert asked["fetch_vertical_datum_offset"]["to_frame"] == "navd88"
+    assert asked["fetch_vertical_datum_offset"]["point"] == pytest.approx(_SEED)
     merge = asked["trid3nt_server.inputs.bed.merged_surface"]
     assert merge["frame"] == "NAVD88"
     assert merge["primary_offset"] == record and merge["fallback_offset"] is None

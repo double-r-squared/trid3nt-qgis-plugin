@@ -3,7 +3,8 @@
 Covered: two sources on one datum, a source that states none refusing by name,
 two that state different ones refusing with both spelled out, a single source,
 a LAYER stating its own zero against a source NAME reading its spec row, and the
-caller's own error family stamped onto the refusal."""
+caller's own error family stamped onto the refusal, and WHERE an offset row
+is asked - on the owing source's own footprint, nearest the question's seed."""
 
 from __future__ import annotations
 
@@ -186,3 +187,82 @@ def test_a_supplied_surface_states_no_per_feature_zero(tmp_path) -> None:
         dst.write(np.full((4, 4), -3.0, dtype="float32"), 1)
     assert record_datum(str(path)) == ""
     assert offset_ask(str(path), "NAVD88", at=[-123.2, 45.5]) is None
+
+
+#: A REACH of the St. Clair River: the ground a survey measured, the seed the
+#: question names on it, and a domain box whose centre the survey misses.
+_SURVEYED_EAST_OF = -82.43
+_SEED_ON_THE_SURVEY = (-82.41, 42.99)
+_SEED_OFF_THE_SURVEY = (-82.47, 42.99)
+_DOMAIN_BOX = (-82.50, 42.93, -82.40, 43.04)
+
+
+def _half_measured(tmp_path) -> dict[str, str]:
+    """A survey raster measuring only the east half of its own rectangle."""
+    import numpy as np
+    import rasterio
+    from rasterio.transform import from_origin
+
+    path = tmp_path / "survey.tif"
+    values = np.full((9, 10), -8.0, dtype="float32")
+    values[:, :5] = -9999.0
+    with rasterio.open(path, "w", driver="GTiff", width=10, height=9, count=1,
+                       dtype="float32", crs="EPSG:4326", nodata=-9999.0,
+                       transform=from_origin(-82.48, 43.03, 0.01, 0.01)) as dst:
+        dst.write(values, 1)
+    return {"uri": str(path), "vertical_datum": "IGLD85", "name": "the survey"}
+
+
+def _standing_on_the_box(monkeypatch: pytest.MonkeyPatch) -> None:
+    from trid3nt_server.workflows.runtime import domain as runtime_domain
+
+    monkeypatch.setattr(runtime_domain, "current_domain",
+                        lambda: runtime_domain.Domain(bbox=_DOMAIN_BOX))
+
+
+def test_a_footprint_missing_the_box_centre_is_asked_at_the_seed(
+        tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The survey measured nothing at the domain's centre and measured the seed,
+    so the seed is where its offset is asked."""
+    from trid3nt_server.inputs.vertical_datum import offset_ask
+
+    _standing_on_the_box(monkeypatch)
+    ask = offset_ask(_half_measured(tmp_path), "NAVD88", at=_SEED_ON_THE_SURVEY)
+    west, south, east, north = _DOMAIN_BOX
+    assert (west + east) / 2.0 < _SURVEYED_EAST_OF
+    assert ask["point"] == pytest.approx(list(_SEED_ON_THE_SURVEY))
+    assert ask["from_frame"] == "igld85" and ask["to_frame"] == "navd88"
+
+
+def test_a_seed_off_the_footprint_is_asked_at_the_nearest_measured_point(
+        tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The seed sits where the survey measured nothing: the ask walks to the
+    nearest point of the survey's OWN footprint, not to a centre of anything."""
+    from trid3nt_server.inputs.vertical_datum import offset_ask
+
+    _standing_on_the_box(monkeypatch)
+    lon, lat = offset_ask(_half_measured(tmp_path), "NAVD88",
+                          at=_SEED_OFF_THE_SURVEY)["point"]
+    assert lon == pytest.approx(_SURVEYED_EAST_OF)
+    assert lat == pytest.approx(_SEED_OFF_THE_SURVEY[1])
+
+
+def test_a_point_the_service_does_not_reach_refuses_naming_it(
+        tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """VDatum answers an uncovered point with a sentinel height, and the refusal
+    that reads it states the point that was asked."""
+    import json
+
+    from trid3nt_server.inputs.vertical_datum import OFFSET_FETCH, offset_ask
+    from trid3nt_server.tools.fetchers._router.registration import get_spec
+    from trid3nt_server.tools.fetchers._router.errors import RouterEmptyError
+    from trid3nt_server.tools.fetchers.ocean.fetch_vertical_datum_offset.hooks \
+        import record
+
+    _standing_on_the_box(monkeypatch)
+    ask = offset_ask(_half_measured(tmp_path), "NAVD88", at=_SEED_OFF_THE_SURVEY)
+    with pytest.raises(RouterEmptyError) as caught:
+        record(get_spec(OFFSET_FETCH), dict(ask),
+               [json.dumps({"t_z": -999999.0}).encode("utf-8")])
+    lon, lat = ask["point"]
+    assert f"({lon}, {lat})" in str(caught.value)

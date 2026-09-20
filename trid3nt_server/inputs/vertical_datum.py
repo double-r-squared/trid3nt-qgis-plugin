@@ -145,13 +145,16 @@ class Offset:
 
     ``metres`` is ADDED to an elevation on ``from_frame`` to read that elevation
     on ``to_frame``. The frames are empty on a shift the caller stated bare, which
-    nothing can check against the datums it is applied between."""
+    nothing can check against the datums it is applied between. ``at`` is the
+    lon/lat the measurement was asked at, which a reader needs to dispute it: one
+    point stands for a whole source, and which point it was is the claim."""
 
     metres: float
     from_frame: str = ""
     to_frame: str = ""
     source: str = ""
     uncertainty_m: float | None = None
+    at: tuple[float, float] | None = None
 
     @property
     def names_frames(self) -> bool:
@@ -165,7 +168,7 @@ class Offset:
         direction it is wanted is a few centimetres closer than negating it."""
         return Offset(metres=-self.metres, from_frame=self.to_frame,
                       to_frame=self.from_frame, source=self.source,
-                      uncertainty_m=self.uncertainty_m)
+                      uncertainty_m=self.uncertainty_m, at=self.at)
 
     @property
     def note(self) -> str:
@@ -175,7 +178,9 @@ class Offset:
         who = f", stated by {self.source}" if self.source else ", stated on the call"
         how_close = (f" (+/- {self.uncertainty_m:.3f} m)"
                      if self.uncertainty_m is not None else "")
-        return f"{self.metres:+.3f} m{bridge}{how_close}{who}"
+        where = (f" at ({self.at[0]:.5f}, {self.at[1]:.5f})"
+                 if self.at is not None else "")
+        return f"{self.metres:+.3f} m{bridge}{how_close}{where}{who}"
 
 
 @dataclass(frozen=True, slots=True)
@@ -204,7 +209,7 @@ def offset_row(value: Any) -> Offset | None:
     read = (value if isinstance(value, Mapping)
             else {field: getattr(value, field, None)
                   for field in ("offset_m", "from_frame", "to_frame", "source",
-                                "uncertainty_m")})
+                                "uncertainty_m", "lon", "lat")})
     try:
         metres = float(read["offset_m"])
     except (KeyError, TypeError, ValueError):
@@ -214,12 +219,15 @@ def offset_row(value: Any) -> Offset | None:
             "vertical-datum fetch returns, which states offset_m and the two "
             "frames it bridges.")
     uncertainty = read.get("uncertainty_m")
+    lon, lat = read.get("lon"), read.get("lat")
     return Offset(metres=metres,
                   from_frame=str(read.get("from_frame") or "").strip(),
                   to_frame=str(read.get("to_frame") or "").strip(),
                   source=str(read.get("source") or "").strip(),
                   uncertainty_m=(float(uncertainty) if uncertainty is not None
-                                 else None))
+                                 else None),
+                  at=((float(lon), float(lat)) if lon is not None
+                      and lat is not None else None))
 
 
 def names_frame(datum: str, frame: str) -> bool:
@@ -312,18 +320,20 @@ def offset_ask(source: Any, frame: Any, *, at: Any = None
                ) -> dict[str, Any] | None:
     """What a DATA row on :data:`OFFSET_FETCH` ASKS for this source, or ``None``.
 
-    ``None`` says no row is owed: the run names no frame, the source states none
-    or already stands on it, the source publishes its own shift, there is no
-    point to ask at, or the service transforms neither frame - and that last one
-    leaves the alignment to refuse naming both, which is the honest answer for a
-    district's project datum no service knows."""
+    ``at`` is the question's SEED, and the row is asked at the point of the
+    source's own footprint nearest it. ``None`` says no row is owed: the run
+    names no frame, the source states none or already stands on it, the source
+    publishes its own shift, there is no point to ask at, or the service
+    transforms neither frame - and that last one leaves the alignment to refuse
+    naming both, which is the honest answer for a district's project datum no
+    service knows."""
     wanted = str(frame or "").strip()
     here = record_datum(source)
     if not wanted or not here or one_frame([here, wanted]):
         return None
     if published_offset(source) is not None:
         return None
-    point = _point_of(at)
+    point = _point_of(source, at)
     served = _served_frames()
     from_frame, to_frame = _as_served(here, served), _as_served(wanted, served)
     if point is None or not (from_frame and to_frame):
@@ -349,22 +359,80 @@ def _as_served(datum: str, served: Sequence[str]) -> str:
     return next((name for name in served if names_frame(datum, name)), "")
 
 
-def _point_of(at: Any) -> tuple[float, float] | None:
-    """The lon/lat the offset is asked at: what the caller named, else the centre
-    of the domain the run is standing on."""
-    if at is not None:
-        lon = getattr(at, "lon", None)
-        lat = getattr(at, "lat", None)
-        if lon is not None and lat is not None:
-            return float(lon), float(lat)
-        pair = list(at)
-        if len(pair) == 2:
-            return float(pair[0]), float(pair[1])
+def _point_of(source: Any, at: Any) -> tuple[float, float] | None:
+    """WHERE this source is asked for its offset: the point of its OWN footprint
+    nearest the question's seed, which is the seed itself where the seed lies
+    inside that footprint.
+
+    A datum relation is a shift and not a field, so one point stands for the
+    source - but it has to be a point the source HAS data at, which a bbox centre
+    and a centroid are both free not to be. A question that named no seed stands
+    on its domain instead, and the ask lands inside the ground the run and the
+    source share. A record carrying no layer to read a footprint off is asked at
+    the seed, the only point there is."""
+    from shapely.ops import nearest_points
+
+    seed = _seed_shape(at)
+    if seed is None:
+        return None
+    footprint = _footprint(source)
+    if footprint is None or footprint.is_empty:
+        return (float(seed.x), float(seed.y)) if seed.geom_type == "Point" else None
+    shared = footprint.intersection(seed)
+    if shared.is_empty:
+        near, _ = nearest_points(footprint, seed)
+    else:
+        near = (shared if shared.geom_type == "Point"
+                else shared.representative_point())
+    return float(near.x), float(near.y)
+
+
+def _seed_shape(at: Any) -> Any:
+    """What the ask is measured NEAREST TO: the question's seed, else the ground
+    the run stands on - a shape either way, never a box's centre."""
+    from shapely.geometry import Point as _Point, box, shape
+
+    from .point import lonlat_of
+
+    seeded = lonlat_of(at)
+    if seeded is not None:
+        return _Point(*seeded)
     from trid3nt_server.workflows.runtime.domain import current_domain
 
     domain = current_domain()
-    box = getattr(domain, "bbox", None) if domain is not None else None
-    if not box:
+    if domain is None:
         return None
-    west, south, east, north = (float(v) for v in box)
-    return (west + east) / 2.0, (south + north) / 2.0
+    if domain.geometry:
+        return shape(domain.geometry)
+    return box(*(float(v) for v in domain.bbox)) if domain.bbox else None
+
+
+def _footprint(source: Any) -> Any:
+    """Where this source ACTUALLY holds data, as one shape in EPSG:4326, or
+    ``None`` where it carries nothing a footprint reads out of.
+
+    A raster's valid-data mask, a point set's hull, a polygon's own shape - read
+    off the layer the fetch produced, because a file's rectangle claims ground
+    the source left as nodata."""
+    from shapely.geometry import shape
+    from shapely.ops import unary_union
+
+    from trid3nt_server.workflows.runtime.data import artifact_class
+
+    from .geometry import flatten_geometries, read_geometry_doc, source_uri
+    from .user_input import UserInputError
+
+    uri = source_uri(source)
+    try:
+        if artifact_class(uri) == "raster":
+            from .domain import measured_footprint
+
+            return shape(measured_footprint(uri, label="offset source"))
+        parts = [shape(g) for g in flatten_geometries(read_geometry_doc(uri))]
+    except (RuntimeError, UserInputError, OSError, ValueError):
+        return None
+    if not parts:
+        return None
+    merged = unary_union(parts)
+    return (merged if merged.geom_type in ("Polygon", "MultiPolygon")
+            else merged.convex_hull)

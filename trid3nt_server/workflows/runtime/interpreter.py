@@ -16,7 +16,7 @@ import os
 import warnings
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
-from functools import lru_cache
+from functools import lru_cache, partial
 from typing import Any, Iterable, Mapping, Sequence
 
 from trid3nt_contracts.common import SyntheticInput
@@ -913,11 +913,28 @@ async def _on_the_run_s_frame(env: _Env, decl: DataDecl,
     return told if measured is None else {**told, "offset": measured}
 
 
-async def _datum_offset_ask(value: Any, frame: str) -> Mapping[str, Any] | None:
-    """What the offset row asks for this source, off the loop: a spec read."""
+async def _datum_offset_ask(value: Any, frame: str,
+                            seed: Any) -> Mapping[str, Any] | None:
+    """What the offset row asks for this source, off the loop: a footprint read."""
     from trid3nt_server.inputs.vertical_datum import offset_ask
 
-    return await asyncio.to_thread(offset_ask, value, frame)
+    return await asyncio.to_thread(partial(offset_ask, value, frame, at=seed))
+
+
+async def _question_seed(env: _Env) -> Any:
+    """The point the QUESTION named, read off the row that stands the run on a
+    place, or ``None`` where it named none.
+
+    A question states its point once, on the row that puts the run on the ground
+    - a reach is cut from it, a basin is traced up from it. Another row's own
+    point ranks a reporting site and is not the question's place."""
+    from trid3nt_server.inputs.point import lonlat_of
+
+    row = next((r for r in env.data.values() if r.role in (DOMAIN, EXTENT)
+                and r.coercion.get("near") is not None), None)
+    if row is None:
+        return None
+    return lonlat_of(await _bind_value(row.coercion.get("near"), env))
 
 
 async def _offset_row(env: _Env, owner: str, value: Any, frame: str) -> Any:
@@ -926,7 +943,8 @@ async def _offset_row(env: _Env, owner: str, value: Any, frame: str) -> Any:
     The frame is the runtime's, so the question a differing source raises is the
     runtime's too - and it is asked the way every other fact about the world is,
     as a producer row with a ledger record and a line on the journal naming the
-    service that answered. ``None`` where the pair owes no row: the source stands
+    service that answered, at the point of the source's own footprint nearest
+    the question's seed. ``None`` where the pair owes no row: the source stands
     on the frame already, publishes its own shift, or names a datum no service
     transforms - and that last one leaves the alignment to refuse naming both.
 
@@ -934,7 +952,7 @@ async def _offset_row(env: _Env, owner: str, value: Any, frame: str) -> Any:
     the bed merge reads onto the frame before it overlays them."""
     from trid3nt_server.inputs.vertical_datum import OFFSET_FETCH
 
-    ask = await _datum_offset_ask(value, frame)
+    ask = await _datum_offset_ask(value, frame, await _question_seed(env))
     if ask is None:
         return None
     name = f"{owner}_datum_offset"
