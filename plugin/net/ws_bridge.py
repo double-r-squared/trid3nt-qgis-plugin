@@ -335,6 +335,15 @@ class AgentWorker(QObject):
                 request_id, status, result=result, error=error, stdout=stdout
             )
 
+    def send_layer_response(
+        self,
+        key: str,
+        uri: Optional[str] = None,
+        error: Optional[str] = None,
+    ) -> None:
+        if self.client is not None:
+            self.client.send_layer_response(key, uri=uri, error=error)
+
 
 class AgentBridge(QObject):
     """Owns the QThread + worker pair; the dock talks only to this."""
@@ -535,3 +544,12 @@ class AgentBridge(QObject):
             self._worker.send_processing_response(
                 request_id, status, result=result, error=error, stdout=stdout
             )
+
+    def send_layer_response(
+        self,
+        key: str,
+        uri: Optional[str] = None,
+        error: Optional[str] = None,
+    ) -> None:
+        if self._worker is not None:
+            self._worker.send_layer_response(key, uri=uri, error=error)

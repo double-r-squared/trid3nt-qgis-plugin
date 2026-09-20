@@ -201,6 +201,20 @@ PROCESSING_ALG_REQUEST_ROW: dict[str, Any] = {
     "code_exec_id": None,
 }
 
+STUB_LAYER_REQUEST_KEY = "01stublayerrequestkey"
+
+# A layer-request field-for-field the LayerRequestPayload contract: the daemon
+# borrows the session's provider to open one layer and pauses on the
+# layer-response.
+LAYER_REQUEST_ROW: dict[str, Any] = {
+    "key": STUB_LAYER_REQUEST_KEY,
+    "provider": "arcgisfeatureserver",
+    "uri": "crs='EPSG:4326' url='https://example.test/FeatureServer/3'",
+    "name": "us_drought_monitor",
+    "bbox": [-114.0, 31.3, -109.0, 37.0],
+    "mode": "open",
+}
+
 STUB_TOOL_CANDIDATES_REQUEST_ID = "01STUBTOOLPICKAAAAAAAAAAAA"
 
 # A tool-candidates payload field-for-field the ToolCandidatesPayload contract
@@ -439,6 +453,8 @@ class StubAgentServer:
         self.spatial_inputs: list[dict] = []
         #: processing-response payloads (the session's answers).
         self.processing_responses: list[dict] = []
+        #: layer-response payloads (the borrowed provider's answers).
+        self.layer_responses: list[dict] = []
         #: auto/ask carrier: every ``tool_choice_mode`` value PRESENT
         #: on a user-message payload (omitted keys are not recorded -- the
         #: default-auto send stays byte-identical, mirroring aoi_bbox).
@@ -661,6 +677,13 @@ class StubAgentServer:
                     await send(
                         "processing-request", PROCESSING_ALG_REQUEST_ROW, case_id=case_id
                     )
+                    continue
+                if "open-layer" in text:
+                    # A session gate-WAIT: the daemon borrows the session's
+                    # data provider for one layer and BLOCKS until the
+                    # layer-response arrives -- handled in that branch below.
+                    self._pending_gate_case = case_id
+                    await send("layer-request", LAYER_REQUEST_ROW, case_id=case_id)
                     continue
                 if "need-key" in text:
                     # Credential-request pause (LANE K): a keyed tool hit a
@@ -1111,6 +1134,25 @@ class StubAgentServer:
                 await send(
                     "agent-message-chunk",
                     {"message_id": "m-processing", "delta": delta, "done": True},
+                    case_id=gate_case,
+                )
+                await send("turn-complete", {}, case_id=gate_case)
+            elif etype == "layer-response":
+                # The session's answer to a layer-request (contract
+                # LayerResponsePayload): resolves the paused turn with the
+                # staged object, or with the provider's own text.
+                payload = env.get("payload") or {}
+                self.layer_responses.append(payload)
+                gate_case = getattr(self, "_pending_gate_case", None)
+                if payload.get("error"):
+                    delta = f"The provider reported an error: {payload.get('error')}"
+                elif payload.get("uri"):
+                    delta = f"Layer materialised to {payload.get('uri')}."
+                else:
+                    delta = "Layer opened on the map."
+                await send(
+                    "agent-message-chunk",
+                    {"message_id": "m-layer", "delta": delta, "done": True},
                     case_id=gate_case,
                 )
                 await send("turn-complete", {}, case_id=gate_case)

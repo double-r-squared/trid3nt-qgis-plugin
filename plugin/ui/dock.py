@@ -77,6 +77,7 @@ from ..net.run_invocation import USAGE as _RUN_USAGE_HINT, parse_run_invocation
 from ..net.ws_bridge import AgentBridge
 from ..plugin_settings import PluginSettings
 from ..render import probe
+from ..render.layer_request import run_layer_request
 from ..render.processing import run_processing_request
 from ..render.layers import (
     LayerMaterializer,
@@ -1538,6 +1539,11 @@ class Trid3ntDock(QDockWidget):
             # an approved snippet and PAUSES until the response lands, so the
             # envelope is answered here, on the GUI thread, never dropped.
             self._on_processing_request(data)
+        elif kind == "layer-request":
+            # A gate WAIT: the agent borrows this session's data providers for
+            # one layer and PAUSES until the response lands, so the envelope is
+            # answered here, on the GUI thread, never dropped.
+            self._on_layer_request(data)
         elif kind == "secrets-list":
             # The per-user/per-Case secret roster --
             # store it for the settings/secrets state (minimal honest
@@ -1965,6 +1971,27 @@ class Trid3ntDock(QDockWidget):
         ``revised_args`` is always None."""
         self._reply("code-exec confirmation", self.bridge.confirm_payload,
                     code_exec_id, decision, None)
+
+    def _on_layer_request(self, payload: dict) -> None:
+        """Open the borrowed provider layer in this session and answer it. The
+        agent is paused on the reply, so a failure still answers, with the
+        provider's own text."""
+        response = run_layer_request(
+            payload, base_url=self._effective_http_base(), iface=self.iface
+        )
+        self._reply("layer response", self.bridge.send_layer_response, **response)
+        if response.get("error"):
+            self._note(
+                f"Could not open {payload.get('name') or 'the requested layer'}: "
+                f"{response['error']}",
+                error=True,
+            )
+        elif payload.get("mode") == "open":
+            self._ensure_pending().add_note(
+                f"Added {payload.get('name') or 'a layer'} to the map from the "
+                f"{payload.get('provider')} provider"
+            )
+            self._scroll_to_bottom()
 
     def _on_processing_request(self, payload: dict) -> None:
         """Run the request in this session and answer it; a code request also

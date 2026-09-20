@@ -1468,6 +1468,21 @@ class AgentClient:
             queue_if_closed=True,
         )
 
+    def send_layer_response(
+        self,
+        key: str,
+        uri: Optional[str] = None,
+        error: Optional[str] = None,
+    ) -> None:
+        """Answer a ``layer-request`` with the staged object the session uploaded,
+        or the provider's own error text."""
+        self._send(
+            "layer-response",
+            {"key": key, "uri": uri, "error": error},
+            case_id=self.case_id,
+            queue_if_closed=True,
+        )
+
     # -- event pump ---------------------------------------------------------- #
 
     def next_event(self, timeout: float = 1.0) -> Optional[AgentEvent]:
@@ -1553,6 +1568,10 @@ class AgentClient:
             # A gate WAIT: the agent asks THIS session to run an algorithm or an
             # approved snippet and PAUSES until the processing-response lands.
             return AgentEvent("processing-request", payload)
+        if etype == "layer-request":
+            # A gate WAIT: the agent borrows THIS session's data providers to
+            # open one layer and PAUSES until the layer-response lands.
+            return AgentEvent("layer-request", payload)
         if etype == "credential-request":
             # A keyed tool hit a missing or invalid key and the agent PAUSED
             # it to ask for the credential by name. The pause has a
