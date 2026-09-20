@@ -184,7 +184,7 @@ A SLOT may state a NEED instead of naming a producer, written
 `bed = Data.bed(need="bathymetry")`. The need is one class of a coarse
 vocabulary (`trid3nt_contracts.coverage.DATA_CLASSES`); every fetcher states what
 it covers on its own `source.yaml`, and the match
-(`workflows/runtime/match.py`) filters those rows on class and place, holds a
+(`tools/search/match.py`) filters those rows on class and place, holds a
 SERIES source to the run's window, sorts on the cell against the mesh, on
 recency and on the native datum, then calls the survivors in rank order and
 drops one that held nothing over this domain. A row that NAMES a fetcher is a
@@ -340,7 +340,7 @@ waits per the hybrid rule).
 - SEATING: form edits and drawn values take the SAME path - re-seated
   through the GATE door (declared bounds still apply, `basis=user`),
   derivations re-run, dependent Data evicted, the ledger re-keyed. The
-  cards are new FRONT ENDS to that machinery, not new semantics.
+  cards are front ends to that machinery and carry no semantics of their own.
 
 ## Steps beyond fetch/solve
 
@@ -348,9 +348,9 @@ waits per the hybrid rule).
   and how a product is drawn follows from what it IS: a fetcher's `style:` row,
   a solved output's kind and quantity. A workflow declares no ramp, no range and
   no title, because none of them change the simulation. Everything ad hoc lives
-  on the ONE presentation surface, `restyle_layer`, at runtime. The `.render`
-  verb and the `.style()` modifier are both RETIRED: renders are the plugin's
-  job, and workflows describe products.
+  on the ONE presentation surface, `restyle_layer`, at runtime. A declaration
+  carries no render verb and no style modifier: renders are the plugin's job,
+  and workflows describe products.
 - CHART STEPS: the chart SPEC (kind + data + axes) is the persisted
   product; the plugin chart dock is the ONE renderer. Closes the
   chart-restore gap; ends server-side figure generation (matplotlib
@@ -415,7 +415,7 @@ A-green with B-red isolates a fault to the interaction machinery.
 ## The workflow skeleton (Template Method)
 
 The base class lives at `workflows/runtime/workflow.py`. An ENGINE's own class -
-`TelemacWorkflow` and the door value beside it - is what turns a template's
+`TelemacWorkflow` - reads the template module by its own names and turns those
 declarations into the plan a run executes, so the plan is assembled once, at
 registration, from what the template states and from nothing else.
 
@@ -486,12 +486,11 @@ and simply leave the solve-family slots unfilled.
 Two slot kinds, distinguished per slot:
 
 - **hooks** - SILENT defaults: charts and validation checks. Unfilled =
-  nothing happens; no engine subtype ever restates them. A sensor/context-
-  LAYER hook was drafted here and deliberately NOT built (removed in
-  the steps that fetch inputs already emit through the one emission seam, so a
-  skeleton-level hook would be a SECOND input-emission site - exactly the double
-  emission the single-seam guard exists to catch. A test pins that the skeleton
-  emits no input layer of its own.
+  nothing happens; no engine subtype ever restates them. There is no
+  sensor/context-LAYER hook: the steps that fetch inputs already emit through
+  the one emission seam, so a skeleton-level hook would be a SECOND
+  input-emission site - exactly the double emission the single-seam guard exists
+  to catch. A test pins that the skeleton emits no input layer of its own.
 - **abstract slots** - must-fill: the physics and the four operations the
   engine facade realizes. The library refuses to register a template that
   leaves one empty.
@@ -594,15 +593,15 @@ Every template registers through one factory, which synthesizes the
 model-facing signature from the declared params so the schema and the run read
 the same declaration:
 
-    register_workflow(facade, metadata, PARAMS, plan,
-                      data=(...), answer=(...), provenance=(...),
-                      coerce=(...), doc={...}, extra_args=(...))
+    register_workflow(facade, metadata, sys.modules[__name__],
+                      provenance=(...), sensitivity=(...), coerce=(...))
 
-The FACADE class comes first - it is what makes the generated tool an
-engine's workflow rather than a bare skeleton, and it is checked for
-must-fill holes before anything is registered. Template file end state:
-PARAMS + DATA + plan + ANSWER + the chart. The old tool bodies are
-deleted, not wrapped.
+The TEMPLATE MODULE is the third argument, and PARAMS, DATA, ACCEPTS, ANSWER and
+DOC are read off its own names; what stays a keyword is what a template writes
+inline. The FACADE class comes first - it is what makes the generated tool an
+engine's workflow rather than a bare skeleton, and it is checked for must-fill
+holes before anything is registered. A template file holds its declarations and
+nothing else: no tool body sits beside them.
 
 CONSTANT-DOOR WIRE ENFORCEMENT: a CONSTANT-door param is NOT on the
 model-facing wire. The factory
@@ -647,8 +646,8 @@ the child's invocation key (`StepLedger.seed`) and the ordinary resume path
 replays them, so the child never asks for the artifacts it reuses. They are the
 parent's objects at the parent's URIs.
 
-The completion TOMBSTONE stays exactly as it was - it is what keeps a
-`live-no-cache` tool from becoming a result cache. A finished run's records are
+The completion TOMBSTONE is what keeps a `live-no-cache` tool from becoming a
+result cache. A finished run's records are
 copied out to a RUN SNAPSHOT keyed by run id (`snapshot.py`), reachable only by a
 caller that NAMES that run. A failed attempt is recorded the same way under a
 fresh id the error envelope names, which is what makes failure recovery reuse the

@@ -1271,35 +1271,35 @@ package DataSeam {
     satisfy requirement ASlotStatesANeedAndTheMatchFillsIt by sourceMatch;
     satisfy requirement ASlotStatesANeedAndTheMatchFillsIt by matchedSlot;
     verify requirement ASlotStatesANeedAndTheMatchFillsIt by
-        "tests/runtime/test_source_match.py::test_one_survivor_fills_the_slot_and_the_sentence_names_the_facts";
+        "tests/search/test_source_match.py::test_one_survivor_fills_the_slot_and_the_sentence_names_the_facts";
     verify requirement ASlotStatesANeedAndTheMatchFillsIt by
-        "tests/runtime/test_source_match.py::test_a_gauge_on_another_river_is_not_this_domain_s_discharge";
+        "tests/search/test_source_match.py::test_a_gauge_on_another_river_is_not_this_domain_s_discharge";
     verify requirement ASlotStatesANeedAndTheMatchFillsIt by
-        "tests/runtime/test_source_match.py::test_a_gauge_on_the_reach_survives_the_place_filter";
+        "tests/search/test_source_match.py::test_a_gauge_on_the_reach_survives_the_place_filter";
     verify requirement ASlotStatesANeedAndTheMatchFillsIt by
-        "tests/runtime/test_source_match.py::test_the_reach_still_answers_for_a_water_level_gauge";
+        "tests/search/test_source_match.py::test_the_reach_still_answers_for_a_water_level_gauge";
     verify requirement ASlotStatesANeedAndTheMatchFillsIt by
-        "tests/runtime/test_source_match.py::test_a_source_too_coarse_for_the_mesh_ranks_below_every_source_that_resolves_it";
+        "tests/search/test_source_match.py::test_a_source_too_coarse_for_the_mesh_ranks_below_every_source_that_resolves_it";
     verify requirement ASlotStatesANeedAndTheMatchFillsIt by
-        "tests/runtime/test_source_match.py::test_a_source_already_on_the_run_s_frame_outranks_one_that_needs_a_shift";
+        "tests/search/test_source_match.py::test_a_source_already_on_the_run_s_frame_outranks_one_that_needs_a_shift";
     verify requirement ASlotStatesANeedAndTheMatchFillsIt by
-        "tests/runtime/test_source_match.py::test_a_place_no_source_reaches_refuses_naming_what_each_filter_excluded";
+        "tests/search/test_source_match.py::test_a_place_no_source_reaches_refuses_naming_what_each_filter_excluded";
     verify requirement ASlotStatesANeedAndTheMatchFillsIt by
-        "tests/runtime/test_source_match.py::test_a_static_survey_older_than_the_run_is_never_dropped_by_the_window";
+        "tests/search/test_source_match.py::test_a_static_survey_older_than_the_run_is_never_dropped_by_the_window";
     verify requirement ASlotStatesANeedAndTheMatchFillsIt by
-        "tests/runtime/test_source_match.py::test_a_series_outside_the_window_refuses_with_the_nearest_record_named";
+        "tests/search/test_source_match.py::test_a_series_outside_the_window_refuses_with_the_nearest_record_named";
     verify requirement ASlotStatesANeedAndTheMatchFillsIt by
-        "tests/runtime/test_source_match.py::test_one_run_level_statement_loosens_the_window_as_the_user_s_choice";
+        "tests/search/test_source_match.py::test_one_run_level_statement_loosens_the_window_as_the_user_s_choice";
     verify requirement ASlotStatesANeedAndTheMatchFillsIt by
-        "tests/runtime/test_source_match.py::test_a_measured_gauge_at_the_place_outranks_a_modelled_grid_over_it";
+        "tests/search/test_source_match.py::test_a_measured_gauge_at_the_place_outranks_a_modelled_grid_over_it";
     verify requirement ASlotStatesANeedAndTheMatchFillsIt by
-        "tests/runtime/test_source_match.py::test_a_measured_gauge_outranks_a_prediction_a_hundred_kilometres_away";
+        "tests/search/test_source_match.py::test_a_measured_gauge_outranks_a_prediction_a_hundred_kilometres_away";
     verify requirement ASlotStatesANeedAndTheMatchFillsIt by
-        "tests/runtime/test_source_match.py::test_a_station_beyond_its_reach_is_not_a_survivor_at_all";
+        "tests/search/test_source_match.py::test_a_station_beyond_its_reach_is_not_a_survivor_at_all";
     verify requirement ASlotStatesANeedAndTheMatchFillsIt by
-        "tests/runtime/test_source_match.py::test_a_run_that_picks_a_survivor_takes_it_as_the_user_s_choice";
+        "tests/search/test_source_match.py::test_a_run_that_picks_a_survivor_takes_it_as_the_user_s_choice";
     verify requirement ASlotStatesANeedAndTheMatchFillsIt by
-        "tests/runtime/test_source_match.py::test_a_run_that_picks_a_source_the_filters_excluded_is_refused";
+        "tests/search/test_source_match.py::test_a_run_that_picks_a_source_the_filters_excluded_is_refused";
     verify requirement ASlotStatesANeedAndTheMatchFillsIt by
         "tests/runtime/test_matched_slots.py::test_the_bed_is_the_measurement_gridded_over_the_terrain_under_it";
     verify requirement ASlotStatesANeedAndTheMatchFillsIt by
@@ -1315,9 +1315,9 @@ package DataSeam {
     verify requirement TheRankedListIsOneObjectInThreeViews by
         "tests/runtime/test_matched_slots.py::test_the_ranked_list_is_one_object_the_card_and_the_sheet_both_read";
     verify requirement TheRankedListIsOneObjectInThreeViews by
-        "tests/runtime/test_source_match.py::test_several_equal_on_every_fact_present_as_a_tie";
+        "tests/search/test_source_match.py::test_several_equal_on_every_fact_present_as_a_tie";
     verify requirement TheRankedListIsOneObjectInThreeViews by
-        "tests/runtime/test_source_match.py::test_the_ranked_list_carries_at_most_five_rows";
+        "tests/search/test_source_match.py::test_the_ranked_list_carries_at_most_five_rows";
 
     satisfy requirement ASeriesIsAlignedToTheRunsEventTime by seriesOnTheRunsClock;
     satisfy requirement ASeriesIsAlignedToTheRunsEventTime by freeSurfaceReader;

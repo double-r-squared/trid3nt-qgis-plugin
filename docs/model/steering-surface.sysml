@@ -157,12 +157,13 @@ package SteeringSurface {
         */
     }
 
-    part def Door {
+    part def EngineWorkflow {
         doc /*
-        What a template hands its declarations to instead of a plan: it names
-        the world the sheet is filled FROM, the STEERING body itself, and the
-        wrapper output that publishes the solved file. It decides nothing - the
-        sequence it builds is the same for every question.
+        The engine's own workflow class, which reads a template MODULE by its
+        own names - the STEERING body, the data rows, the outputs and the
+        answer - and builds the plan off them. It decides nothing: the sequence
+        it builds is the same for every question, and no object stands between
+        the declaration and the plan.
         */
     }
 
@@ -446,7 +447,7 @@ package SteeringSurface {
         port stageIn : StageIn;
     }
 
-    part door : Door {
+    part engineWorkflow : EngineWorkflow {
         doc /*
         code: trid3nt_server/workflows/telemac/workflow.py
         */
@@ -834,13 +835,13 @@ package SteeringSurface {
         */
     }
 
-    requirement def ReviewIsTheDoorsView {
+    requirement def ReviewIsTheWorkflowsView {
         doc /*
-        The sheet is STATE. The review is how the door renders what fill
+        The sheet is STATE. The review is how the workflow renders what fill
         returned - the set slots with their provenance and the mandatory ones
         still open - and it HOLDS there until the user runs; an edit is another
-        fill. No gate concept survives in the plan: a card in front of the door
-        would revise a sheet the door never reads.
+        fill. No gate concept survives in the plan: a card in front of the fill
+        would revise a sheet the fill never reads.
 
         What is SET and what is OPEN AND MANDATORY are the review; the whole
         rest of the module folds under advanced, grouped by the dictionary's
@@ -995,7 +996,7 @@ package SteeringSurface {
 
     satisfy requirement EngineDefaultSurfaced by slot;
     satisfy requirement EngineDefaultSurfaced by sheet;
-    satisfy requirement EngineDefaultSurfaced by door;
+    satisfy requirement EngineDefaultSurfaced by engineWorkflow;
     verify requirement EngineDefaultSurfaced by
         "tests/telemac/test_telemac_module_surface.py::test_an_open_slot_under_the_fold_says_the_dictionary_answers_it_for_nobody";
     verify requirement EngineDefaultSurfaced by
@@ -1005,7 +1006,7 @@ package SteeringSurface {
     verify requirement EngineDefaultSurfaced by
         "tests/telemac/test_telemac_module_surface.py::test_the_bare_sheet_opens_every_keyword_the_dictionary_answers_for_nobody";
 
-    satisfy requirement TheOpenSetIsCompleteAndRequiredIsTheObligFiles by door;
+    satisfy requirement TheOpenSetIsCompleteAndRequiredIsTheObligFiles by engineWorkflow;
     verify requirement TheOpenSetIsCompleteAndRequiredIsTheObligFiles by
         "tests/telemac/test_telemac_module_surface.py::test_every_required_file_is_the_template_s_own_statement";
     verify requirement TheOpenSetIsCompleteAndRequiredIsTheObligFiles by
@@ -1046,7 +1047,7 @@ package SteeringSurface {
     satisfy requirement EverythingOverridable by wrapper;
     satisfy requirement EverythingOverridable by sheet;
     satisfy requirement EverythingOverridable by canvasGate;
-    satisfy requirement EverythingOverridable by door;
+    satisfy requirement EverythingOverridable by engineWorkflow;
     verify requirement EverythingOverridable by
         "tests/telemac/test_telemac_module_surface.py::test_a_raw_keyword_on_the_wire_fills_the_slot_it_names";
     verify requirement EverythingOverridable by
@@ -1135,7 +1136,7 @@ package SteeringSurface {
 
     verify requirement CompositesLiveInWrappers by
         "tests/telemac/test_telemac_tomawac.py::test_both_hosts_couple_the_waves_through_the_seam_they_share";
-    satisfy requirement OneTemplatePerQuestion by door;
+    satisfy requirement OneTemplatePerQuestion by engineWorkflow;
     verify requirement OneTemplatePerQuestion by
         "tests/telemac/test_telemac_module_surface.py::test_a_structural_fork_is_a_template_and_never_a_switch";
     verify requirement OneTemplatePerQuestion by
@@ -1149,19 +1150,19 @@ package SteeringSurface {
     verify requirement OneTemplatePerQuestion by
         "tests/telemac/test_telemac_outputs.py::test_a_series_at_a_point_is_measured_at_that_point";
 
-    satisfy requirement AStepsKwargsAreItsRunnersCall by door;
+    satisfy requirement AStepsKwargsAreItsRunnersCall by engineWorkflow;
     satisfy requirement AStepsKwargsAreItsRunnersCall by stager;
     verify requirement AStepsKwargsAreItsRunnersCall by
         "tests/runtime/test_step_signatures.py::test_every_step_binds_against_its_own_runners_signature";
 
-    satisfy requirement ReviewIsTheDoorsView by door;
-    verify requirement ReviewIsTheDoorsView by
+    satisfy requirement ReviewIsTheWorkflowsView by engineWorkflow;
+    verify requirement ReviewIsTheWorkflowsView by
         "tests/telemac/test_telemac_module_surface.py::test_the_card_shows_what_is_set_and_open_and_folds_the_rest_by_rubrique";
-    verify requirement ReviewIsTheDoorsView by
+    verify requirement ReviewIsTheWorkflowsView by
         "tests/telemac/test_telemac_module_surface.py::test_the_fill_docstring_names_the_module_its_rubriques_and_its_open_slots";
-    verify requirement ReviewIsTheDoorsView by
-        "tests/telemac/test_telemac_module_surface.py::test_the_review_is_the_doors_view_and_never_a_step_of_its_own";
-    verify requirement ReviewIsTheDoorsView by
+    verify requirement ReviewIsTheWorkflowsView by
+        "tests/telemac/test_telemac_module_surface.py::test_the_review_is_the_workflows_view_and_never_a_step_of_its_own";
+    verify requirement ReviewIsTheWorkflowsView by
         "tests/runtime/test_declarative_library.py::test_do_sag_declares_no_gate_in_front_of_its_self_gating_review";
 
     satisfy requirement CompositesSetOnlyPresence by composite;
@@ -1233,7 +1234,7 @@ package SteeringSurface {
     verify requirement NoBodyExtendsABody by
         "tests/telemac/test_telemac_module_surface.py::test_a_body_extends_the_wrapper_and_never_a_body";
 
-    satisfy requirement ATemplateNumberIsMetToTheMeshsPrecision by door;
+    satisfy requirement ATemplateNumberIsMetToTheMeshsPrecision by engineWorkflow;
     satisfy requirement ATemplateNumberIsMetToTheMeshsPrecision by sheet;
     verify requirement ATemplateNumberIsMetToTheMeshsPrecision by
         "tests/telemac/test_open_water_domains.py::test_the_footprint_and_the_solid_faces_are_cut_at_the_same_width";
@@ -1243,7 +1244,7 @@ package SteeringSurface {
         "tests/telemac/test_open_water_domains.py::test_a_lone_node_between_two_of_another_kind_is_not_a_face";
 
     satisfy requirement ProvenanceNamesTheLayerThatAnswered by sheet;
-    satisfy requirement ProvenanceNamesTheLayerThatAnswered by door;
+    satisfy requirement ProvenanceNamesTheLayerThatAnswered by engineWorkflow;
     verify requirement ProvenanceNamesTheLayerThatAnswered by
         "tests/telemac/test_telemac_module_surface.py::test_a_value_the_run_measured_reads_as_derived_not_as_the_body_that_named_it";
     verify requirement ProvenanceNamesTheLayerThatAnswered by
@@ -1275,7 +1276,7 @@ package SteeringSurface {
     satisfy requirement ModuleIsTheUnit by wrapper;
     satisfy requirement ModuleIsTheUnit by output;
     satisfy requirement ModuleIsTheUnit by sheet;
-    satisfy requirement ModuleIsTheUnit by door;
+    satisfy requirement ModuleIsTheUnit by engineWorkflow;
     satisfy requirement ModuleIsTheUnit by runRecord;
     satisfy requirement ModuleIsTheUnit by messageIR;
     verify requirement ModuleIsTheUnit by
@@ -1333,7 +1334,7 @@ package SteeringSurface {
     satisfy requirement OutputsAreTheModules by output;
     satisfy requirement OutputsAreTheModules by sheet;
     satisfy requirement OutputsAreTheModules by serializer;
-    satisfy requirement OutputsAreTheModules by door;
+    satisfy requirement OutputsAreTheModules by engineWorkflow;
     verify requirement OutputsAreTheModules by
         "tests/telemac/test_telemac_module_outputs.py::test_no_template_states_a_style_or_a_printout_list";
     verify requirement OutputsAreTheModules by
