@@ -145,7 +145,8 @@ coverage:
 caveats:
   - "the soundings are DEPTHS BELOW the survey's own stated datum, positive down, in metres - not elevations; the datum is on every row and is a local project datum on many rivers (Columbia River Datum on the Willamette) or a chart datum on the lakes (the Low Water Datum on IGLD85, published as LWD_IGLD85), so a bed built from these needs a deliberate datum shift"
   - "a survey whose points state no vertical datum or no unit of measure refuses by name rather than guessing one"
-  - "without ``since`` the window is the last YEAR, which is the order a dredged channel is resurveyed on; ``since`` returns every survey ending on or after that date, up to twelve, and refuses over that rather than truncating silently"
+  - "the surveys are picked by COVERAGE, newest first over each part of the bbox nothing newer reached, up to twelve packages - so a reach whose southern half was last surveyed years ago comes back with that older pass beside the recent ones, and every survey's date is on its own rows and on the run journal"
+  - "``since`` is a filter the caller states, for comparing one dredging against another; unstated, age only RANKS the surveys and never drops one"
   - "``datum_offset_m`` is the shift the survey's OWN package metadata publishes between its project datum and a national frame (``datum_offset_frame``), read off the sentence the district wrote it in; it is null where the package states none, and applying it is the consumer's"
 
 docstring: |-
@@ -153,9 +154,9 @@ docstring: |-
 
   What it does:
       Looks the bbox up in the USACE eHydro survey index (one ArcGIS layer over
-      every published survey), takes the surveys in the window intersecting it,
-      downloads each survey's own package and reads the soundings out of its
-      geodatabase.
+      every published survey), picks the surveys that COVER it - newest first
+      over each part of the bbox no newer survey reached - downloads each
+      survey's own package and reads the soundings out of its geodatabase.
       One artifact comes back, its rows tagged ``part``: ``survey`` (the survey
       footprint polygon) and ``sounding`` (the measured points). Every row carries
       the survey's id and date and - read from the survey's own data, never
@@ -184,9 +185,11 @@ docstring: |-
       bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326. Surveys
           INTERSECTING it are returned whole, so a survey can reach well past
           the window.
-      since: optional ISO date. Absent, the window is the last year; present,
-          every survey ending on or after it comes back, newest first, up to
-          twelve - which is how a bed is compared against an earlier one.
+      since: optional ISO date. Absent, EVERY published survey over the bbox is
+          ranked by date and the newest one over each part of it is taken, up to
+          twelve packages - so an old pass is used where nothing newer measured
+          that ground. Present, only surveys ending on or after it are
+          considered, which is how a bed is compared against an earlier one.
 
   Returns:
       ``LayerURI`` for a FlatGeobuf in EPSG:4326 carrying ``part``,
@@ -212,11 +215,10 @@ docstring: |-
   Errors:
       - ``EHYDRO_BBOX_INVALID`` / ``EHYDRO_INPUT_INVALID``: a malformed bbox, a
         bbox over the area gate, or an unparseable ``since``.
-      - ``EHYDRO_NO_SURVEY``: no survey intersects the bbox (or none since that
-        date).
+      - ``EHYDRO_NO_SURVEY``: no survey intersects the bbox, none since the
+        stated date, or none covering enough of it to add a bed.
       - ``EHYDRO_INPUT_INVALID`` also names a survey whose points state no
-        vertical datum or no unit, and a ``since`` window holding more than
-        twelve surveys.
+        vertical datum or no unit.
       - ``EHYDRO_UPSTREAM_ERROR``: the index or the survey package failed.
 
   Tier-1 free. No API key.

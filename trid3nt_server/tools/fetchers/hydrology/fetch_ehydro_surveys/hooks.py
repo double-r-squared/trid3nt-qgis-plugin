@@ -41,20 +41,22 @@ _OUT_FIELDS = (
     "surveydateend", "sourcedatalocation",
 )
 
-#: How many of the newest surveys the index query asks for, and how many a ``since``
-#: window may return. The cap is a refusal rather than a truncation: each survey is
-#: its own multi-megabyte package, and a silently dropped one is a bed with a hole.
-#: It sits above what the default window returns over a long reach - a district
-#: surveys a busy channel in overlapping passes, and twelve kilometres of one
-#: holds seven in a year - so the refusal is for a window somebody widened by
-#: hand, never for the one this fetch asks on its own.
-_INDEX_RECORDS = 25
+#: One page of the index, and the most pages walked. The index is read WHOLE
+#: over the bbox, because which surveys cover the reach is not answerable from
+#: its newest page: a channel's southern half can be covered only by a pass five
+#: years old, and a page ordered by date would never reach it.
+_INDEX_PAGE = 2000
+_INDEX_PAGES = 10
+
+#: How many packages one fetch downloads. Each survey is its own multi-megabyte
+#: ZIP, so the selection stops here rather than truncating silently.
 _MAX_SURVEYS = 12
 
-#: How far back an unstated window reaches. ONE year: a dredged channel is
-#: resurveyed on that order, so a year holds the passes that together cover the
-#: reach without asking for more packages than the cap allows.
-_WINDOW_DAYS = 365
+#: How much of the AOI a survey has to cover that no NEWER selected survey
+#: already covers, as a fraction of the AOI, before its package is worth
+#: downloading. A survey overlapping its neighbour by a sliver adds a package
+#: and no bed.
+_NEW_GROUND = 0.01
 
 #: The feature class carrying the measured soundings, and the three fields a bed
 #: cannot be built without.
@@ -88,11 +90,16 @@ _METRES_PER_UNIT = {
 }
 
 
-def _since(spec: SourceSpec, params: dict[str, Any]) -> _dt.date:
-    """The ``since`` bound as a date - the stated one, else the default window."""
+def _since(spec: SourceSpec, params: dict[str, Any]) -> _dt.date | None:
+    """The ``since`` bound as a date, or ``None`` where the caller stated none.
+
+    A BED is a static measurement, so age ranks a survey and never filters it:
+    an old pass is the best measured bed there is over ground nothing newer
+    covers. A caller comparing one dredging against another states the date and
+    that statement IS the filter."""
     raw = params.get("since")
     if raw is None or not str(raw).strip():
-        return _dt.date.today() - _dt.timedelta(days=_WINDOW_DAYS)
+        return None
     try:
         return _dt.date.fromisoformat(str(raw).strip())
     except ValueError as exc:
@@ -110,7 +117,10 @@ def validate(spec: SourceSpec, params: dict[str, Any]) -> None:
 
 
 def _index(spec: SourceSpec, params: dict[str, Any]) -> list[dict[str, Any]]:
-    """The newest surveys intersecting the bbox, as GeoJSON features."""
+    """EVERY survey intersecting the bbox, as GeoJSON features, paged to the end.
+
+    Which surveys cover the reach is a question about all of them: the index is
+    walked until a page comes back short."""
     import json
 
     sc = spec.error_code_prefix
@@ -125,17 +135,26 @@ def _index(spec: SourceSpec, params: dict[str, Any]) -> list[dict[str, Any]]:
         "outFields": ",".join(_OUT_FIELDS),
         "returnGeometry": "true",
         "orderByFields": "surveydateend DESC",
-        "resultRecordCount": str(_INDEX_RECORDS),
+        "resultRecordCount": str(_INDEX_PAGE),
         "f": "geojson",
     }
-    try:
-        body, _ct, _url = get_bytes(get_client(), str(spec.endpoints["index"].url), params=query)
-        parsed = json.loads(body.decode("utf-8"))
-    except TransportError as exc:
-        raise router_upstream_error(sc, f"the eHydro survey index failed: {exc}")
-    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
-        raise router_upstream_error(sc, f"the eHydro survey index returned non-JSON: {exc}")
-    return [f for f in (parsed.get("features") or []) if isinstance(f, dict)]
+    features: list[dict[str, Any]] = []
+    for page in range(_INDEX_PAGES):
+        try:
+            body, _ct, _url = get_bytes(
+                get_client(), str(spec.endpoints["index"].url),
+                params={**query, "resultOffset": str(page * _INDEX_PAGE)})
+            parsed = json.loads(body.decode("utf-8"))
+        except TransportError as exc:
+            raise router_upstream_error(sc, f"the eHydro survey index failed: {exc}")
+        except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+            raise router_upstream_error(
+                sc, f"the eHydro survey index returned non-JSON: {exc}")
+        found = [f for f in (parsed.get("features") or []) if isinstance(f, dict)]
+        features += found
+        if len(found) < _INDEX_PAGE:
+            break
+    return features
 
 
 def _survey_date(feature: dict[str, Any]) -> _dt.date | None:
@@ -148,8 +167,16 @@ def _survey_date(feature: dict[str, Any]) -> _dt.date | None:
 
 
 def _selected(spec: SourceSpec, features: list[dict[str, Any]],
-              since: _dt.date) -> list[dict[str, Any]]:
-    """The surveys whose window this request asks for, newest first."""
+              since: _dt.date | None, bbox: Any) -> list[dict[str, Any]]:
+    """The surveys that COVER the AOI, newest first, under the package cap.
+
+    Age ranks and never filters: the newest pass over each part of the AOI is
+    the bed there, and where nothing newer reached, an older one is the only
+    measurement that exists. A survey covering nothing the passes above it left
+    is a package that buys no bed, so it is not downloaded."""
+    import shapely
+    from shapely.geometry import box, shape
+
     sc = spec.error_code_prefix
     dated = [(f, _survey_date(f)) for f in features]
     usable = [(f, d) for f, d in dated if d is not None
@@ -162,27 +189,41 @@ def _selected(spec: SourceSpec, features: list[dict[str, Any]],
             spec.empty_error_suffix,
         )
     usable.sort(key=lambda row: row[1], reverse=True)
-    window = [f for f, d in usable if d >= since]
-    if not window:
+    if since is not None:
+        newest = usable[0][1]
+        usable = [(f, d) for f, d in usable if d >= since]
+        if not usable:
+            raise router_empty_error(
+                sc,
+                f"no eHydro survey over this extent ends on or after "
+                f"{since.isoformat()}; the newest one here is "
+                f"{newest.isoformat()}.",
+                spec.empty_error_suffix,
+            )
+    west, south, east, north = (float(v) for v in bbox)
+    aoi = box(west, south, east, north)
+    uncovered, taken = aoi, []
+    for feature, _date in usable:
+        if len(taken) == _MAX_SURVEYS or uncovered.is_empty:
+            break
+        try:
+            footprint = shapely.make_valid(shape(feature["geometry"]))
+        except Exception:  # noqa: BLE001 -- an unreadable footprint covers nothing
+            continue
+        if footprint.intersection(uncovered).area < _NEW_GROUND * aoi.area:
+            continue
+        uncovered = uncovered.difference(footprint)
+        taken.append(feature)
+    if not taken:
         raise router_empty_error(
             sc,
-            f"no eHydro survey over this extent ends on or after {since.isoformat()}; "
-            f"the newest one here is {usable[0][1].isoformat()}.",
+            f"none of the {len(usable)} eHydro surveys intersecting this extent "
+            f"covers more than {_NEW_GROUND:.0%} of it, so no package here "
+            "would add a bed. Widen the bbox onto the channel the surveys run "
+            "along.",
             spec.empty_error_suffix,
         )
-    if len(window) > _MAX_SURVEYS:
-        # The index answered with its newest page, so a window that fills the page
-        # holds at least that many and the count is stated as the floor it is.
-        floor = "at least " if len(features) >= _INDEX_RECORDS else ""
-        counted = f"{floor}{len(window)}"
-        raise router_input_error(
-            sc,
-            f"{counted} surveys end on or after {since.isoformat()} over this "
-            f"extent, more than the {_MAX_SURVEYS} this fetch will download. Move "
-            "since forward, or narrow the bbox.",
-            spec.input_error_suffix,
-        )
-    return window
+    return taken
 
 
 def _package(spec: SourceSpec, url: str, survey_id: str) -> Any:
@@ -317,13 +358,29 @@ def _stated(spec: SourceSpec, points: Any, survey_id: str) -> tuple[str, str, fl
     return _counted_from(datums[0], spec.normalize.quantity), units[0], scale
 
 
+def _journal(surveys: list[dict[str, Any]]) -> None:
+    """WHICH surveys the bed was built from and WHEN each was measured.
+
+    A reach is often covered only by a pass several years old, so the age of the
+    measurement under each part of the domain is part of the answer."""
+    from trid3nt_server.workflows.runtime import journal_note
+
+    named = ", ".join(
+        f"{(f.get('properties') or {}).get('surveyjobidpk')} "
+        f"({d.isoformat() if (d := _survey_date(f)) else 'undated'})"
+        for f in surveys)
+    journal_note(f"the bed is measured by {len(surveys)} USACE eHydro "
+                 f"survey(s), newest first over the ground each covers: {named}.")
+
+
 @register_hook("ehydro.read")
 def read(spec: SourceSpec, params: dict[str, Any], *, timeout_s: float) -> list[dict]:
     """The selected surveys' footprints and soundings, as the rows of one artifact.
     The declared ``timeout_s`` arrives by the delegate contract and is the shared
     transport's own, which owns every socket here and enforces it."""
     since = _since(spec, params)
-    surveys = _selected(spec, _index(spec, params), since)
+    surveys = _selected(spec, _index(spec, params), since, params["bbox"])
+    _journal(surveys)
     rows: list[dict] = []
     for feature in surveys:
         properties = feature.get("properties") or {}

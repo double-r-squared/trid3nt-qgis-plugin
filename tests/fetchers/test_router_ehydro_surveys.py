@@ -1,10 +1,11 @@
 """``fetch_ehydro_surveys``: the survey index, and what each survey states about itself.
 
-The index picks the window - the last year where none is stated - and the package's
-own points carry the datum and the unit the depths are in, its metadata the shift
-between that datum and a national frame. Covered with that, the refusals: an
-unparseable window, a window wider than the download cap, an extent with no survey,
-and a survey that states no datum or a unit nothing here can convert."""
+The surveys are picked by COVERAGE over the bbox - newest first over each part
+of it nothing newer reached - and the package's own points carry the datum and
+the unit the depths are in, its metadata the shift between that datum and a
+national frame. Covered with that, the refusals: an unparseable window, an
+extent with no survey, a stated window newer than every survey, and a survey
+that states no datum or a unit nothing here can convert."""
 
 from __future__ import annotations
 
@@ -27,10 +28,55 @@ def _epoch_ms(iso: str) -> float:
         tzinfo=_dt.timezone.utc).timestamp() * 1000.0
 
 
-def _feature(date: str, survey_id: str = "X", location: str = "https://example/x.ZIP"):
-    return {"type": "Feature", "geometry": {"type": "Polygon", "coordinates": []},
+#: A footprint big enough to cover any bbox a test states, where the test is
+#: about the window rather than about which survey reaches which ground.
+_EVERYWHERE = (-180.0, -85.0, 180.0, 85.0)
+
+
+def _feature(date: str, survey_id: str = "X", location: str = "https://example/x.ZIP",
+             extent: tuple = _EVERYWHERE):
+    west, south, east, north = extent
+    ring = [[west, south], [east, south], [east, north], [west, north], [west, south]]
+    return {"type": "Feature", "geometry": {"type": "Polygon", "coordinates": [ring]},
             "properties": {"surveyjobidpk": survey_id, "surveydateend": _epoch_ms(date),
                            "sourcedatalocation": location}}
+
+
+#: THE RECORDED INDEX over the run's own bbox on the St. Clair River: every one
+#: of the 23 features the FeatureServer returned, as (end date, id, extent). The
+#: northern 1.7 km is surveyed every year; the southern 8 km was last measured
+#: in 2021 and 2020, which is why age may not filter.
+PORT_HURON_AOI = (-82.475404, 42.886362, -82.404648, 42.99302)
+PORT_HURON_INDEX = (
+    ("2026-06-16", "PH_01_BRV_20260616_CS", (-82.4581, 42.9726, -82.4186, 43.0178)),
+    ("2026-06-08", "CR_01_SCR_20260608_CS_BRS", (-82.4222, 42.9627, -82.4121, 42.9781)),
+    ("2025-10-27", "CR_01_SCR_20251027_AD_BRS", (-82.4203, 42.9683, -82.4158, 42.976)),
+    ("2025-08-28", "PH_01_BRV_20250828_CS", (-82.4581, 42.9726, -82.4186, 43.0178)),
+    ("2025-06-17", "CR_01_SCR_20250617_CS_BRS", (-82.4221, 42.9627, -82.4125, 42.9764)),
+    ("2024-10-21", "CR_01_SCR_20241021_AD_BRS", (-82.4222, 42.9624, -82.4124, 42.9765)),
+    ("2024-08-14", "CR_01_SCR_20240814_BD_BRS", (-82.4222, 42.9627, -82.4122, 42.9782)),
+    ("2023-10-10", "CR_01_SCR_20231010_CS_BRS", (-82.4225, 42.9625, -82.412, 42.9791)),
+    ("2023-04-27", "PH_01_BRV_20230427_CS", (-82.4581, 42.9726, -82.4187, 43.0178)),
+    ("2022-09-01", "CR_01_SCR_20220810_CS_BRS", (-82.4207, 42.9667, -82.4121, 42.9769)),
+    ("2021-11-30", "CR_01_SCR_20211123_CS", (-82.4851, 42.8197, -82.4121, 42.9768)),
+    ("2020-11-25", "PH_01_BRV_20201120_CS", (-82.4583, 42.9725, -82.4185, 43.0179)),
+    ("2020-10-21", "CR_01_SCR_20201020_AD", (-82.4208, 42.967, -82.417, 42.9749)),
+    ("2020-09-15", "CR_01_SCR_20200909_BD", (-82.4208, 42.9669, -82.417, 42.9748)),
+    ("2020-08-20", "CR_01_SCR_20200819_CS", (-82.4258, 42.9771, -82.413, 43.0095)),
+    ("2020-07-27", "CR_01_SCR_20200724_CS", (-82.4747, 42.8699, -82.4122, 42.9793)),
+    ("2020-03-02", "CR_01_SCR_20191018_CS", (-82.4203, 42.9672, -82.4121, 42.9778)),
+    ("2020-03-02", "CR_01_SCR_20161004_CS", (-82.4206, 42.9673, -82.4121, 42.9768)),
+    ("2020-01-23", "PH_01_BRV_20160817_CS", (-82.458, 42.9726, -82.4186, 43.0178)),
+    ("2020-01-23", "PH_01_BRV_20150812_CS", (-82.434, 42.9726, -82.4187, 42.9811)),
+    ("2020-01-23", "PH_01_BRV_20150810_AD", (-82.4579, 42.9807, -82.4336, 42.9985)),
+    ("2020-01-23", "PH_01_BRV_20150605_BD", (-82.4581, 42.9913, -82.4424, 43.0004)),
+    ("2019-12-16", "PH_01_BRV_20170808_CS", (-82.4581, 42.9726, -82.4186, 43.0178)),
+)
+
+
+def _port_huron_index():
+    return [_feature(date, survey_id, extent=extent)
+            for date, survey_id, extent in PORT_HURON_INDEX]
 
 
 def _points(datum="CRD", uom="usSurveyFoot", depth=10.0):
@@ -56,51 +102,76 @@ def test_an_unparseable_window_refuses_before_the_network(spec):
     assert excinfo.value.error_code == "EHYDRO_INPUT_INVALID"
 
 
-def test_an_unstated_window_is_the_last_year(spec):
-    """The window lives here and not in the templates that ask for a bed."""
-    asked = eh._since(spec, {"bbox": [-122.7, 45.5, -122.6, 45.6]})
-    assert _dt.date.today() - asked == _dt.timedelta(days=eh._WINDOW_DAYS)
+def test_an_unstated_window_filters_nothing(spec):
+    """A BED is static: an old pass over ground nothing newer measured is the
+    best bed there is, so age ranks and never drops a survey."""
+    assert eh._since(spec, {"bbox": [-122.7, 45.5, -122.6, 45.6]}) is None
 
 
-def test_a_window_returns_every_survey_that_ends_in_it_newest_first(spec):
-    picked = eh._selected(spec, [_feature("2024-01-01", "old"),
-                                 _feature("2026-01-01", "mid"),
-                                 _feature("2026-09-09", "new")],
-                          _dt.date(2025, 1, 1))
-    assert [f["properties"]["surveyjobidpk"] for f in picked] == ["new", "mid"]
+def test_the_newest_survey_over_each_part_of_the_bbox_is_the_one_taken(spec):
+    picked = eh._selected(
+        spec, [_feature("2024-01-01", "old"), _feature("2026-01-01", "mid"),
+               _feature("2026-09-09", "new")], None, [-122.7, 45.5, -122.6, 45.6])
+    # The newest covers the whole bbox, so the two under it buy no ground.
+    assert [f["properties"]["surveyjobidpk"] for f in picked] == ["new"]
 
 
-def test_a_window_past_the_download_cap_refuses_rather_than_truncating(spec):
-    many = [_feature("2026-01-%02d" % n, f"s{n}")
-            for n in range(1, eh._MAX_SURVEYS + 2)]
-    with pytest.raises(RouterInputError) as excinfo:
-        eh._selected(spec, many, _dt.date(2025, 1, 1))
-    message = str(excinfo.value)
-    assert str(eh._MAX_SURVEYS) in message
-    assert f"{eh._MAX_SURVEYS + 1} surveys" in message
-    # The ceiling is the ASK's, not an absence: the window is what moves.
-    assert excinfo.value.error_code == "EHYDRO_INPUT_INVALID"
-    assert "Move since forward" in message
+def test_the_southern_reachs_old_surveys_enter_where_nothing_newer_measured_it(spec):
+    """On the recorded St. Clair River index the recent passes cover 1.7 km of a
+    12 km reach; the southern 8 km is measured only by 2021 and 2020."""
+    picked = [f["properties"]["surveyjobidpk"]
+              for f in eh._selected(spec, _port_huron_index(), None, PORT_HURON_AOI)]
+    # 2021 is the newest pass over the southern 8 km, and 2020 over the north
+    # bank the recent St. Clair River passes stop short of.
+    assert "CR_01_SCR_20211123_CS" in picked
+    assert "CR_01_SCR_20200819_CS" in picked
+    assert picked[0] == "PH_01_BRV_20260616_CS"
+    assert len(picked) <= eh._MAX_SURVEYS
+    # A survey lying wholly inside a newer one's footprint buys no bed.
+    assert "CR_01_SCR_20251027_AD_BRS" not in picked
+    assert "PH_01_BRV_20250828_CS" not in picked
 
 
-def test_a_full_index_page_states_the_count_as_the_floor_it_is(spec):
-    """The index answers one page, so a window that fills it holds AT LEAST that."""
-    page = [_feature("2026-01-%02d" % (n % 28 + 1), f"s{n}")
-            for n in range(eh._INDEX_RECORDS)]
-    with pytest.raises(RouterInputError) as excinfo:
-        eh._selected(spec, page, _dt.date(2025, 1, 1))
-    assert f"at least {eh._INDEX_RECORDS} surveys" in str(excinfo.value)
+def test_the_selected_surveys_cover_the_southern_reach_the_window_left_bare(spec):
+    """What the coverage rule buys: the 8 km the year-long window never reached."""
+    from shapely.geometry import box, shape
+    from shapely.ops import unary_union
+
+    painted = unary_union([shape(f["geometry"]) for f in eh._selected(
+        spec, _port_huron_index(), None, PORT_HURON_AOI)])
+    # The navigation channel only: no eHydro survey on this river reaches east
+    # of -82.4121, which is the Ontario bank.
+    west, south, _east, _north = PORT_HURON_AOI
+    southern = box(west, south, -82.4121, 42.94)
+    assert southern.difference(painted).area < 0.01 * southern.area
+
+
+def test_a_stated_window_is_the_callers_own_filter(spec):
+    """The year-long window the fetch used to apply on its own is what kept the
+    southern reach unmeasured; stated deliberately, it still does."""
+    picked = [f["properties"]["surveyjobidpk"]
+              for f in eh._selected(spec, _port_huron_index(),
+                                    _dt.date(2025, 9, 20), PORT_HURON_AOI)]
+    assert picked == ["PH_01_BRV_20260616_CS", "CR_01_SCR_20260608_CS_BRS"]
+
+
+def test_a_survey_reaching_none_of_the_bbox_refuses_rather_than_downloading(spec):
+    with pytest.raises(RouterEmptyError) as excinfo:
+        eh._selected(spec, [_feature("2026-01-01", extent=(-70.0, 40.0, -69.9, 40.1))],
+                     None, [-122.7, 45.5, -122.6, 45.6])
+    assert excinfo.value.error_code == "EHYDRO_NO_SURVEY"
 
 
 def test_an_extent_with_no_survey_refuses_by_name(spec):
     with pytest.raises(RouterEmptyError) as excinfo:
-        eh._selected(spec, [], _dt.date(2025, 1, 1))
+        eh._selected(spec, [], None, [-122.7, 45.5, -122.6, 45.6])
     assert excinfo.value.error_code == "EHYDRO_NO_SURVEY"
 
 
 def test_a_window_newer_than_every_survey_names_the_newest_there_is(spec):
     with pytest.raises(RouterEmptyError) as excinfo:
-        eh._selected(spec, [_feature("2024-01-01")], _dt.date(2026, 1, 1))
+        eh._selected(spec, [_feature("2024-01-01")], _dt.date(2026, 1, 1),
+                     [-122.7, 45.5, -122.6, 45.6])
     assert "2024-01-01" in str(excinfo.value)
 
 
