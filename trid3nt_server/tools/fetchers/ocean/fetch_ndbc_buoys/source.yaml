@@ -94,7 +94,10 @@ coverage:
       read_from: ndbc_buoys.stations
     window:
       series: true
-      earliest: "1972-01-01"
+      # The first MEASURED wave in the archive, on 46001: the 1972 and 1973
+      # files exist and carry NDBC's missing value in every wave column, so a
+      # floor read off a file's existence sells a window nothing measured.
+      earliest: "1974-12-03"
       max_span_days: 366.0
       cadence: 30-min samples in the realtime file, hourly in the older archive years
     datum: null

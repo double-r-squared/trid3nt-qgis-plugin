@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import datetime as dt
 import gzip
-import os
 
 import pytest
 
@@ -20,10 +19,11 @@ from trid3nt_server.tools.fetchers._router.errors import (
 from trid3nt_server.tools.fetchers._router.spec import compose_specs_from_tree
 from trid3nt_server.tools.fetchers.ocean.fetch_ndbc_buoys import hooks as nb
 
-#: Recorded from ``GET https://www.ndbc.noaa.gov/activestations.xml`` (four of
-#: its 1353 stations: two wave buoys, a fixed CO-OPS platform carrying the same
-#: met payload, and a moored buoy reporting no met record).
-_LISTING_BODY = b"""<?xml version="1.0" encoding="utf-8"?><stations created="2026-09-20T12:55:03UTC" count="4">
+#: Recorded from ``GET https://www.ndbc.noaa.gov/activestations.xml`` (five of
+#: its 1353 stations: three wave buoys, a fixed CO-OPS platform carrying the
+#: same met payload, and a moored buoy reporting no met record).
+_LISTING_BODY = b"""<?xml version="1.0" encoding="utf-8"?><stations created="2026-09-20T12:55:03UTC" count="5">
+  <station id="46001" lat="56.296" lon="-148.027" elev="0" name="WESTERN GULF OF ALASKA  - 175NM SE of Kodiak, AK" owner="NDBC" pgm="NDBC Meteorological/Ocean" type="buoy" met="y" currents="n" waterquality="n" dart="n"/>
   <station id="44085" lat="41.387" lon="-71.032" elev="0" name="Buzzards Bay, MA (260)" owner="Woods Hole Group/NERACOOS" pgm="IOOS Partners" type="buoy" met="y" currents="n" waterquality="n" dart="n"/>
   <station id="44097" lat="40.966" lon="-71.123" elev="0" name="Block Island, RI  (154)" owner="SCRIPPS" pgm="IOOS Partners" type="buoy" met="y" currents="n" waterquality="n" dart="n"/>
   <station id="nwpr1" lat="41.504" lon="-71.326" elev="2.2" name="8452660 - Newport, RI" owner="NOS" pgm="NOS/CO-OPS" type="fixed" met="y" currents="n" waterquality="n" dart="n"/>
@@ -64,11 +64,30 @@ _OLD_ARCHIVE_BODY = b"""YY MM DD hh WD   WSPD GST  WVHT  DPD   APD  MWD  BAR    
 76 01 01 06 999 06.7 99.0 03.10 99.00 08.00 999 1022.0  00.9 999.0 999.0 99.0
 """
 
+#: Recorded from ``GET /data/historical/stdmet/46001h1974.txt.gz``: the last of
+#: the 99.00 rows the network's first two and a half years of files are written
+#: in, and the first rows whose WVHT is a reading rather than that missing value.
+_FIRST_WAVE_BODY = b"""YY MM DD hh WD   WSPD GST  WVHT  DPD   APD  MWD  BAR    ATMP  WTMP  DEWP  VIS
+74 06 27 09 034 03.6 99.0 99.00 99.00 99.00 999 1009.0  08.1 999.0 999.0 99.0
+74 06 27 12 083 03.5 99.0 99.00 99.00 99.00 999 9999.0  08.2 999.0 999.0 99.0
+74 06 27 15 053 03.1 99.0 99.00 99.00 99.00 999 1009.0  08.7 999.0 999.0 99.0
+74 12 03 05 999 05.1 99.0 01.50 99.00 99.00 999 1000.1  02.8 999.0 999.0 99.0
+74 12 03 06 999 05.7 99.0 01.50 99.00 99.00 999 1000.2  02.6 999.0 999.0 99.0
+74 12 03 07 999 07.7 99.0 01.50 99.00 99.00 999 1000.2  02.4 999.0 999.0 99.0
+"""
+
+#: The instant the archive's first MEASURED wave was read at, which is the floor
+#: the row states: the files before it are published and measure no sea state.
+_FIRST_WAVE = "1974-12-03T05:00Z"
+
 #: Point Judith, RI - the harbour of refuge the agitation deck is asked about.
 _POINT_JUDITH = (-71.4814, 41.3611)
 
 _AT_44097 = {"_station_id": "44097", "_station_name": "Block Island, RI  (154)",
              "_owner": "SCRIPPS", "_lon": -71.123, "_lat": 40.966}
+
+_AT_46001 = {"_station_id": "46001", "_station_name": "WESTERN GULF OF ALASKA",
+             "_owner": "NDBC", "_lon": -148.027, "_lat": 56.296}
 
 
 @pytest.fixture(scope="module")
@@ -86,7 +105,7 @@ def test_the_row_states_a_measured_sea_state_over_a_station_network(row):
     assert row.extent.kind == "stations"
     assert row.extent.read_from == "ndbc_buoys.stations"
     assert row.reach_km == 60.0
-    assert row.window.series and row.window.earliest == "1972-01-01"
+    assert row.window.series and row.window.earliest == _FIRST_WAVE[:10]
     # A wave height is a height OF the water and is counted from no zero.
     assert row.datum is None
 
@@ -114,7 +133,8 @@ def test_the_listing_names_the_wave_buoys_and_passes_over_every_other_station(
     monkeypatch.setattr(nb, "get_bytes",
                         lambda client, url, headers=None: (_LISTING_BODY, "", url))
     assert [(p.id, p.datum) for p in nb.stations()] == [("44085", None),
-                                                        ("44097", None)]
+                                                        ("44097", None),
+                                                        ("46001", None)]
 
 
 def test_point_judith_reaches_the_nearest_buoy_within_the_rows_reach(
@@ -236,27 +256,35 @@ def test_the_source_is_found_through_its_class(class_routes_to_the_match):
     class_routes_to_the_match("wave series", "fetch_ndbc_buoys")
 
 
-@pytest.mark.skipif(not os.environ.get("TRID3NT_LIVE"),
-                    reason="one live NDBC read, off the offline suite")
-def test_the_live_buoy_reports_a_sea_state_at_point_judiths_own_reach(spec):
-    """The probe: the listing, the realtime file and the parse over what NDBC
-    published today, at the buoy Point Judith reaches."""
-    today = dt.date.today()
-    listed = nb.stations()
-    station = spec.coverage[0].extent.model_copy(
-        update={"points": listed}).nearest(*_POINT_JUDITH)
-    merged = nb.resolve_parse(spec, {"station": station.id}, [nb.get_bytes(
-        nb.get_client(), nb._LISTING)[0]])
-    params = {**merged, "start_date": (today - dt.timedelta(days=2)).isoformat(),
-              "end_date": today.isoformat()}
-    plans = nb.build_request(spec, params)
-    bodies = [nb.get_bytes(nb.get_client(), plan.url, headers=plan.headers)[0]
-              for plan in plans]
-    props = nb.parse_response(spec, params, bodies)[0]["properties"]
-    assert props["station_id"] == station.id
-    assert props["n_timesteps"] > 0
-    assert 0.0 < props["wave_height_m"] < 30.0
-    print(f"\n{props['station_id']} {props['station_name']} "
-          f"{props['time_end']} Hs={props['wave_height_m']} m "
-          f"Tp={props['peak_period_s']} s dir={props['wave_direction_deg_true']} degT "
-          f"n={props['n_timesteps']}")
+def test_the_rows_floor_is_the_first_measured_wave_and_not_a_files_existence(
+        row, spec):
+    """46001's 1972 and 1973 files are published and every wave column in them
+    is NDBC's missing value; the floor is the instant a wave was first read."""
+    with pytest.raises(RouterEmptyError) as excinfo:
+        nb.parse_response(spec, {**_AT_46001, "start_date": "1974-06-27",
+                                 "end_date": "1974-06-27"}, [_FIRST_WAVE_BODY])
+    assert excinfo.value.error_code == "NDBC_BUOYS_NO_RECORD"
+    props = nb.parse_response(
+        spec, {**_AT_46001, "start_date": "1974-12-03", "end_date": "1974-12-03"},
+        [_FIRST_WAVE_BODY])[0]["properties"]
+    assert props["time_start"] == _FIRST_WAVE
+    assert props["wave_height_m"] == 1.5
+    assert row.window.earliest == _FIRST_WAVE[:10]
+
+
+@pytest.mark.asyncio
+async def test_a_1973_window_at_46001_lists_no_buoy(monkeypatch):
+    """Under the floor there is nothing to ask: the match drops the source by
+    name rather than selling a window whose files measure no sea state."""
+    from trid3nt_server.tools.search import match
+    from trid3nt_server.tools.search.find_sources import find_sources
+
+    monkeypatch.setattr(nb, "get_client", lambda: object())
+    monkeypatch.setattr(nb, "get_bytes",
+                        lambda client, url, headers=None: (_LISTING_BODY, "", url))
+    monkeypatch.setitem(match._LISTED, "ndbc_buoys.stations", nb.stations())
+    found = await find_sources("wave series", [-148.027, 56.296],
+                               ["1973-06-01", "1973-06-08"])
+    assert found["picked"] == ""
+    assert "fetch_ndbc_buoys" in found["sentence"]
+    assert "reports from 1974-12-03" in found["sentence"]

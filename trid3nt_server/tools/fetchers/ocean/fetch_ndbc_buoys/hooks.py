@@ -52,11 +52,6 @@ _PUBLISHED = (
     ("MWD", "wave_direction_deg_true", "wave_direction_series_csv"),
 )
 
-#: The leading columns that spell the instant, in the order every era of the
-#: table writes them. A file whose fifth name is not the minute states an hourly
-#: record with no minute column at all.
-_TIME_FIELDS = ("YY", "YYYY", "MM", "DD", "hh", "mm")
-
 #: The values NDBC writes where the instrument reported nothing. A 99, a 999 or
 #: a 9999 in any of its spellings is a gap and never a reading - no buoy reports
 #: a 99 m sea or a 999 deg heading - and "MM" is the gap in the realtime file.
