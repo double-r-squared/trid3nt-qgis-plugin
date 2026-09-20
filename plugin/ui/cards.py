@@ -248,6 +248,27 @@ def _label(text: str, style: str, *, wrap: bool = False, rich: bool = False,
     return lbl
 
 
+def _fold(body: QWidget, caption: str, open_caption: str = "", *,
+          expanded: bool = False,
+          style: str = _THINKING_TOGGLE_STYLE) -> QPushButton:
+    """The one fold affordance: a flat checkable toggle that shows and hides the
+    body beside it. The wiring is widget-to-widget, never through a bound method
+    of a plain-python owner the dock does not retain - such a connection dies
+    with its owner and leaves a replayed fold as a dead button. ``open_caption``,
+    when given, is the toggle's text while the body shows."""
+    toggle = QPushButton(open_caption if expanded and open_caption else caption)
+    toggle.setFlat(True)
+    toggle.setCheckable(True)
+    toggle.setChecked(expanded)
+    toggle.setStyleSheet(style)
+    body.setVisible(expanded)
+    toggle.toggled.connect(body.setVisible)
+    if open_caption:
+        toggle.toggled.connect(
+            lambda on, t=toggle: t.setText(open_caption if on else caption))
+    return toggle
+
+
 class _WrapLabel(QLabel):
     """Word-wrapping QLabel whose WRAPPED height the layouts actually honor,
     plain text and rich text alike."""
@@ -531,25 +552,18 @@ class _ErrorFold(QWidget):
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(0)
 
-        self.toggle = QPushButton("ERRORS (1)")
-        self.toggle.setFlat(True)
-        self.toggle.setCheckable(True)
-        self.toggle.setChecked(False)  # collapsed by default
-        self.toggle.setStyleSheet(_ERROR_FOLD_TOGGLE_STYLE)
-        self.toggle.clicked.connect(self._apply)
-        self.toggle.setVisible(False)  # hidden while N == 1 (plain-line look)
-        lay.addWidget(self.toggle)
-
         self._body = QWidget()
         self._body_lay = QVBoxLayout(self._body)
         self._body_lay.setContentsMargins(0, 0, 0, 0)
         self._body_lay.setSpacing(0)
+
+        self.toggle = _fold(self._body, "ERRORS (1)",
+                            style=_ERROR_FOLD_TOGGLE_STYLE)
+        self.toggle.setVisible(False)  # hidden while N == 1 (plain-line look)
+        lay.addWidget(self.toggle)
         lay.addWidget(self._body)
 
         self.count = 0
-
-    def _apply(self) -> None:
-        self._body.setVisible(self.toggle.isChecked())
 
     def add_error(self, text: str) -> None:
         """Append one error line to the run as a wrapped red label, with the
@@ -722,11 +736,6 @@ class _ToolCard(QFrame):
             result = row.get("result")
             if isinstance(result, str) and result:
                 is_error = bool(row.get("is_error"))
-                toggle = QPushButton("Result")
-                toggle.setFlat(True)
-                toggle.setCheckable(True)
-                toggle.setChecked(False)
-                toggle.setStyleSheet(_THINKING_TOGGLE_STYLE)
                 body = _WrapLabel(result)
                 body.setTextFormat(Qt.TextFormat.PlainText)
                 body.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
@@ -734,11 +743,7 @@ class _ToolCard(QFrame):
                     _PROBE_ERROR_BLOCK_STYLE if is_error else _THINKING_BLOCK_STYLE
                 )
                 body.setMinimumWidth(1)  # never force a horizontal scrollbar
-                body.setVisible(False)
-                toggle.clicked.connect(
-                    lambda _c=False, b=body, t=toggle: b.setVisible(t.isChecked())
-                )
-                self._body_lay.addWidget(toggle)
+                self._body_lay.addWidget(_fold(body, "Result"))
                 self._body_lay.addWidget(body)
 
         # One muted metadata block pinned at the BOTTOM of the body, under
@@ -798,25 +803,14 @@ class _AssistantEntry:
         thinking_lay.setContentsMargins(0, 0, 0, 0)
         thinking_lay.setSpacing(0)
 
-        self._thinking_toggle = QPushButton("Thinking...")
-        self._thinking_toggle.setFlat(True)
-        self._thinking_toggle.setStyleSheet(_THINKING_TOGGLE_STYLE)
-        self._thinking_toggle.setCheckable(True)
-        self._thinking_toggle.setChecked(True)  # expanded while streaming
-        thinking_lay.addWidget(self._thinking_toggle)
-
         self._thinking_label = _WrapLabel("")
         self._thinking_label.setTextFormat(Qt.TextFormat.PlainText)
         self._thinking_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         self._thinking_label.setStyleSheet(_THINKING_BLOCK_STYLE)
+        self._thinking_toggle = _fold(self._thinking_label, "Thinking...",
+                                      expanded=True)
+        thinking_lay.addWidget(self._thinking_toggle)
         thinking_lay.addWidget(self._thinking_label)
-        # Wire the fold WIDGET-to-WIDGET (toggled ->
-        # setVisible) instead of through a bound method of this plain-python
-        # wrapper. Replayed entries (case reopen) are not retained by the dock,
-        # so a connection to ``self`` died with the wrapper's GC and the
-        # replayed fold became a dead button; a QObject-to-QObject connection
-        # lives as long as the widgets themselves.
-        self._thinking_toggle.toggled.connect(self._thinking_label.setVisible)
 
         self._thinking_container.setVisible(False)
         lay.addWidget(self._thinking_container)
@@ -891,7 +885,6 @@ class _AssistantEntry:
         """Collapse the thinking block once the answer starts streaming."""
         self._thinking_toggle.setChecked(False)
         self._thinking_toggle.setText("Thought process")
-        self._thinking_label.setVisible(False)
 
     # -- answer text ------------------------------------------------------- #
 
@@ -1291,13 +1284,6 @@ class CodeExecCard(QFrame):
 
         # Collapsed monospace preview of the EXACT code -- expandable,
         # read-only (verbatim, never a paraphrase).
-        self.code_toggle = QPushButton("show code")
-        self.code_toggle.setFlat(True)
-        self.code_toggle.setCheckable(True)
-        self.code_toggle.setChecked(False)
-        self.code_toggle.setStyleSheet(_THINKING_TOGGLE_STYLE)
-        self.code_toggle.clicked.connect(self._toggle_code)
-        lay.addWidget(self.code_toggle)
         self.code_view = QPlainTextEdit()
         self.code_view.setPlainText(request.python_code)
         self.code_view.setReadOnly(True)
@@ -1308,7 +1294,8 @@ class CodeExecCard(QFrame):
         self.code_view.setMinimumWidth(1)
         self.code_view.setMaximumHeight(180)
         self.code_view.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
-        self.code_view.setVisible(False)
+        self.code_toggle = _fold(self.code_view, "show code", "hide code")
+        lay.addWidget(self.code_toggle)
         lay.addWidget(self.code_view)
 
         btn_row = QHBoxLayout()
@@ -1326,11 +1313,6 @@ class CodeExecCard(QFrame):
         lay.addWidget(self.result_lbl)
 
     # -- toggles ---------------------------------------------------------- #
-
-    def _toggle_code(self) -> None:
-        checked = self.code_toggle.isChecked()
-        self.code_view.setVisible(checked)
-        self.code_toggle.setText("hide code" if checked else "show code")
 
     def _toggle_details(self, checked: bool) -> None:
         self._body.setVisible(checked)
@@ -2470,15 +2452,12 @@ class FormCard(QFrame):
 
         self._advanced = None
         if sheet.advanced:
-            self.advanced_toggle = QPushButton(
-                f"show advanced ({len(sheet.advanced)})")
-            self.advanced_toggle.setFlat(True)
-            self.advanced_toggle.setCheckable(True)
-            self.advanced_toggle.setStyleSheet(_THINKING_TOGGLE_STYLE)
-            self.advanced_toggle.clicked.connect(self._toggle_advanced)
-            lay.addWidget(self.advanced_toggle)
             self._advanced = self._grid(sheet.advanced)
-            self._advanced.setVisible(False)
+            n_adv = len(sheet.advanced)
+            self.advanced_toggle = _fold(self._advanced,
+                                         f"show advanced ({n_adv})",
+                                         f"hide advanced ({n_adv})")
+            lay.addWidget(self.advanced_toggle)
             lay.addWidget(self._advanced)
 
         btn_row = QHBoxLayout()
@@ -2618,9 +2597,3 @@ class FormCard(QFrame):
         self._body.setVisible(checked)
         self.details_toggle.setText("hide details" if checked else "show details")
 
-    def _toggle_advanced(self, checked: bool) -> None:
-        if self._advanced is None:
-            return
-        self._advanced.setVisible(checked)
-        self.advanced_toggle.setText(
-            ("hide" if checked else "show") + f" advanced ({len(self._sheet.advanced)})")
