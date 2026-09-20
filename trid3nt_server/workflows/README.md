@@ -27,7 +27,7 @@ speak it and the one file that specializes the executor to it.
 | --- | --- |
 | `runtime/__init__.py` | The library's public surface, and the only import a template needs. |
 | `runtime/accepts.py` | `Accepts` - what a template takes when something is SUPPLIED to it, role by role. |
-| `runtime/data.py` | The `DATA` class body: one declared artifact per row, its producer, the engine-neutral SLOTS a run stands on (`Data.domain()`, `Data.bed()`, `Data.runs()`), the CONTEXT row whose absence continues the run, and the modifiers that ride the declaration. |
+| `runtime/data.py` | The `DATA` class body: one declared artifact per row, its producer or the CLASS it needs, the reserved names the engine-neutral slots are keyed off (`domain`, `bed`, `level`, `discharge`, `observe`, `line`, `extent`, `weather`), the CONTEXT row whose absence continues the run, and the modifiers that ride the declaration. |
 | `runtime/docstring.py` | The registered tool's model-facing docstring, rendered from the declarations in two views (routing, full). |
 | `runtime/domain.py` | The `Domain` environment - the current spatial extent every spatial producer reads implicitly. |
 | `runtime/errors.py` | The library's typed errors, each carrying the code the emitter renders. |

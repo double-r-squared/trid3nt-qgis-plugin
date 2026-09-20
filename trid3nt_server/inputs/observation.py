@@ -483,11 +483,12 @@ def _distance_km(feature: Mapping[str, Any], near: Any) -> float:
         km_between,
     )
 
-    if near is None:
+    from trid3nt_server.inputs.point import lonlat_of
+
+    place = lonlat_of(near)
+    if place is None:
         return float("inf")
-    lon, lat = ((float(near.lon), float(near.lat))
-                if hasattr(near, "lon") and hasattr(near, "lat")
-                else (float(near[0]), float(near[1])))
+    lon, lat = place
     coords = (feature.get("geometry") or {}).get("coordinates")
     while isinstance(coords, (list, tuple)) and coords and \
             isinstance(coords[0], (list, tuple)):

@@ -35,7 +35,7 @@ from trid3nt_server.gates.input_review import (
 from trid3nt_contracts.coverage import CoverageExtent, SourceChoice
 
 from .data import (
-    BED, DISCHARGE, DOMAIN, LEVEL, LINE, OBSERVE, RUNS, CoversAOI, DataDecl,
+    BED, DISCHARGE, DOMAIN, LEVEL, LINE, OBSERVE, CoversAOI, DataDecl,
     Producer)
 from trid3nt_server.tools.search.match import (
     Need, ask_for, base_ask, dropped_from, instant, match, sources_with_coverage)
@@ -375,15 +375,6 @@ async def _produce(env: _Env, decl: DataDecl) -> Any:
                            else decl.supplied_validate)
         return await _ingested(env, decl, handed_in)
     producer = decl.producer
-    if producer is None and decl.role == RUNS:
-        # THE DOMAIN'S PRODUCER measured these where it cut the polygon between
-        # two faces, and they ride on the domain it returned; a template that
-        # declares the slot does not restate them. Nothing measured is not the
-        # answer here - the canvas is asked next, and a closed body ends with
-        # none.
-        measured = await _domain_runs(env)
-        if measured:
-            return measured
     if producer is None and decl.role == LINE:
         # THE DOMAIN'S PRODUCER measured this beside the polygon it cut - a
         # reach's centerline rides on the artifact it returned. A body whose
@@ -590,7 +581,7 @@ async def _need(env: _Env, decl: DataDecl, data_class: str,
                 opens=str(opens) if opens else None,
                 until=_closes(opens, env.window_s), frame=run_frame(env.params),
                 mesh_m=_mesh_m(env), pick=_pick(env, decl, data_class),
-                water=_water())
+                of=decl.observes, water=_water())
 
 
 def _water() -> CoverageExtent | None:
@@ -648,12 +639,14 @@ def _closes(opens: Any, window_s: float | None) -> str | None:
 async def _place(env: _Env, decl: DataDecl) -> tuple[float | None, float | None]:
     """The point a slot's coverage is tested at: what the row ranks against, else
     the domain's own centre."""
-    near = await _bind_value(decl.coercion.get("near"), env)
+    from trid3nt_server.inputs.point import lonlat_of
+
+    # THE POINT a row is asked at, in whatever shape the question stated it: a
+    # pick, a pair, a drawn feature. A value no place reads out of is no place
+    # rather than a refusal - the domain's own centre answers next.
+    near = lonlat_of(await _bind_value(decl.coercion.get("near"), env))
     if near is not None:
-        lon, lat = ((getattr(near, "lon", None), getattr(near, "lat", None))
-                    if hasattr(near, "lon") else (near[0], near[1]))
-        if lon is not None and lat is not None:
-            return (float(lon), float(lat))
+        return near
     dom = current_domain()
     if dom is None or not dom.bbox:
         return (None, None)
@@ -678,7 +671,7 @@ async def _ask_for(env: _Env, choice: SourceChoice,
         _around(dom.bbox, _mesh_m(env)) if dom is not None and dom.bbox else None,
         lon, lat, str(opens) if opens else None,
         _closes(opens, env.window_s)), lon, lat,
-        {"span_km": decl.span_km,
+        {"span_km": decl.span_km, "of": decl.observes or None,
          "seed_point": None if lon is None or lat is None else [lon, lat]})
 
 
@@ -691,19 +684,6 @@ def _around(bbox: Sequence[float], mesh_m: float | None) -> list[float]:
     pad = max(3.0 * float(mesh_m or 0.0), 100.0) / 111_320.0
     lon_pad = pad / max(math.cos(math.radians((south + north) / 2.0)), 0.1)
     return [west - lon_pad, south - pad, east + lon_pad, north + pad]
-
-
-async def _domain_runs(env: _Env) -> tuple[Any, ...]:
-    """The boundary runs the DOMAIN row carries, or ``()`` where it carries none.
-
-    The domain is produced on demand like any other read, so asking it for its
-    runs is what fills the runs slot on a question whose producer measured the
-    edge it cut the polygon between."""
-    row = next((r for r in env.data.values() if r.role == DOMAIN), None)
-    if row is None:
-        return ()
-    bound = await _deref(Ref(row.name), env)
-    return tuple(getattr(bound, "runs", None) or ())
 
 
 async def _unstated_ask(env: _Env, decl: DataDecl) -> str:

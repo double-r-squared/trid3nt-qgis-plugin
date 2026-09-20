@@ -102,6 +102,27 @@ def _named(value: Mapping[str, Any]) -> str | None:
     return text or None
 
 
+def lonlat_of(value: Any) -> tuple[float, float] | None:
+    """The place a value STATES, or ``None`` where it states none.
+
+    The synchronous half of the ingestion above: a Point, a mapping a pick or a
+    drawing returns, or a pair. Nothing readable is no place rather than a
+    refusal, because every caller here has somewhere else to look."""
+    if value is None:
+        return None
+    lon, lat = getattr(value, "lon", None), getattr(value, "lat", None)
+    if lon is None or lat is None:
+        try:
+            if isinstance(value, Mapping):
+                found = _from_mapping(value, "point", _CODE)
+                lon, lat = found.lon, found.lat
+            else:
+                lon, lat = lonlat_point(value, label="point", code=_CODE)
+        except Exception:  # noqa: BLE001 - no place is an answer here
+            return None
+    return (float(lon), float(lat))
+
+
 def _from_mapping(value: Mapping[str, Any], label: str, code: str) -> Point:
     geometry = value.get("geometry") if value.get("type") == "Feature" else value
     coords: Any = None

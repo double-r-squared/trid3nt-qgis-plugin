@@ -22,7 +22,6 @@ __all__ = [
     "LEVEL",
     "LINE",
     "OBSERVE",
-    "RUNS",
     "WEATHER",
     "CoversAOI",
     "DOMAIN",
@@ -33,19 +32,20 @@ __all__ = [
     "ToolWord",
     "artifact_class",
     "data_rows",
+    "shapes_of",
     "tool",
 ]
 
 #: THE RESERVED ROW NAMES. A row's NAME is its slot: these are the names
 #: :data:`trid3nt_server.inputs.slots.SLOTS` keys the role behaviour off, spelled
 #: here so the runtime can compare against them without importing the ingestions.
-#: The three a solved run stands on are engine-neutral - the closed polygon the
-#: equations are solved over, the elevation every node of it carries, and the
-#: named stretches of its edge - and a raster engine fills the same three with a
-#: grid, so no word here belongs to an engine.
+#: The two a solved run stands on are engine-neutral - the closed polygon the
+#: equations are solved over and the elevation every node of it carries - and a
+#: raster engine fills the same two with a grid, so no word here belongs to an
+#: engine. The named stretches of the edge are no row: they ride on the polygon
+#: the domain arrived as.
 DOMAIN = "domain"
 BED = "bed"
-RUNS = "runs"
 
 #: The LINE a placed read is measured along. Not one of the three - a run solves
 #: without it - but a slot for the same reason: a producer's own centerline, a
@@ -143,6 +143,22 @@ def artifact_class(value: Any) -> str | None:
     return _CLASS_BY_SUFFIX.get(stem[dot:].lower()) if dot >= 0 else None
 
 
+def shapes_of(data_class: str) -> frozenset[str]:
+    """The artifact CLASSES one data class arrives in, off the sources that
+    measure it.
+
+    Never restated: which shapes a class is published in is the coverage rows'
+    own statement, so a source added in a new shape widens what a slot of that
+    class accepts without a second list moving."""
+    from trid3nt_server.tools.fetchers._router.registration import _SPEC_REGISTRY
+    from trid3nt_server.tools.search.match import sources_with_coverage
+
+    return frozenset(
+        str(_SPEC_REGISTRY[name].output.layer_type)
+        for name, row in sources_with_coverage()
+        if row.data_class == str(data_class) and name in _SPEC_REGISTRY)
+
+
 @dataclass(frozen=True, slots=True)
 class Producer(Row):
     """How an artifact comes into being: a runner name plus its declared args.
@@ -216,10 +232,6 @@ class DataDecl(Row):
     #: How a supplied artifact is checked against the domain - BOUND-DOMAIN-ONLY
     #: under ``CoversAOI`` (see :class:`_CoversAOI`), which is not a coverage test.
     supplied_validate: Any = CoversAOI
-    #: The SLOT a row states rather than taking from its name. The five
-    #: constructors below are the only writers, and they retire with the last
-    #: template that calls one.
-    stated_role: str = ""
     #: This row is CONTEXT: it names a producer, and its absence continues the
     #: run under the sentence below rather than refusing.
     is_context: bool = False
@@ -260,7 +272,7 @@ class DataDecl(Row):
         downstream branches on which."""
         from trid3nt_server.inputs.slots import role_of
 
-        return self.stated_role or role_of(self.name)
+        return role_of(self.name)
 
     def __post_init__(self) -> None:
         if self.name and not self.name.isidentifier():
@@ -352,10 +364,6 @@ class DataDecl(Row):
                     "name or a drawn shape"
                     + ("; unfilled, the template's own producer finds one."
                        if self.producer is not None else self._unfilled))
-        if self.role == RUNS:
-            return ("the stretches of the domain's edge that carry a boundary "
-                    "condition - each two points on the edge and a type "
-                    "(inflow, outflow, open); a closed body states none")
         if self.role == BED:
             return ("what the domain's nodes carry for elevation: a DEM, a "
                     "bathymetry or survey raster, a layer of soundings, or a "
@@ -367,6 +375,11 @@ class DataDecl(Row):
                     "layer of sites that report it, or the number itself"
                     + ("; unfilled, the template's own producer looks for one."
                        if self.producer is not None else self._unfilled))
+        if self.data_class and self.producer is None:
+            # A ROW THAT STATES A NEED NAMES NO SOURCE AND IS NOT UNSOURCED: the
+            # match fills it, and what the caller hands in supersedes that.
+            return (f"the {self.data_class} this run reads, as a uri or a layer "
+                    "name" + self._unfilled)
         shape = f"a {self.geometry} layer" if self.geometry else "a layer"
         if self.producer is not None:
             tail = "unfilled, the template's own producer fetches one"
@@ -386,20 +399,21 @@ class DataDecl(Row):
         """Refuse a supplied artifact whose CLASS is not the shape this slot declared.
 
         Suffix-deep and no deeper; an unclassifiable artifact passes."""
-        if self.role == OBSERVE:
-            # A reading arrives as a record OR as the number itself, and a
-            # number has no artifact class to judge.
-            return
-        if self.role == BED:
-            # A bed takes every class a survey arrives in EXCEPT a mesh: a
-            # solved domain is not an elevation source, and adopting one would
-            # paint the nodes from something nobody measured the ground with.
-            if artifact_class(value) == "mesh":
-                raise SuppliedGeometryError(
-                    f"Data {self.name!r} is the BED slot: it takes a raster "
-                    "surface, a layer of soundings or a depth in metres, and "
-                    f"what was supplied reads as a mesh ({value!r}).")
-            return
+        if self.data_class:
+            # THE SUPPLIED TWIN OF A CLASS takes every shape that class is
+            # measured in - a bathymetry handed in as a raster and one handed in
+            # as soundings are both bathymetry - so the shapes are the ones the
+            # sources of this class publish and no slot restates them. A value
+            # no shape reads out of is the number itself, which every
+            # observation and every bed also takes.
+            found = artifact_class(value)
+            shapes = shapes_of(self.data_class)
+            if found is None or not shapes or found in shapes:
+                return
+            raise SuppliedGeometryError(
+                f"Data {self.name!r} needs {self.data_class}, which is measured "
+                f"as {' or '.join(sorted(shapes))}; what was supplied reads as "
+                f"{found} ({value!r}).")
         if self.geometry is None:
             return
         found = artifact_class(value)
@@ -471,84 +485,6 @@ class DataDecl(Row):
         ``absent`` is the sentence the sheet carries when nothing measured this
         near this domain; unstated, the row's own name says it."""
         return replace(self, is_context=True, absent_note=str(absent or ""))
-
-    def domain(self, producer: Producer | None = None, *,
-               need: str = "") -> "DataDecl":
-        """THE DOMAIN, under the name a converted question writes as ``domain``."""
-        row = self if producer is None else self(producer)
-        return replace(row, stated_role=DOMAIN, geometry="polygon",
-                       data_class=need)
-
-    def runs(self, producer: Producer | None = None) -> "DataDecl":
-        """THE BOUNDARY RUNS, which a converted question does not row at all: they
-        ride on the domain's own producer."""
-        row = self if producer is None else self(producer)
-        return replace(row, stated_role=RUNS, geometry="polyline",
-                       is_optional=True)
-
-    def line(self, producer: Producer | None = None) -> "DataDecl":
-        """THE LINE, under the name a converted question writes as ``line``."""
-        row = self if producer is None else self(producer)
-        return replace(row, stated_role=LINE, geometry="polyline")
-
-    def observation(self, producer: Producer | None = None, *, near: Any = None,
-                    measures: str = "this value", opens: str = "",
-                    value_field: str = "value", at: Any = None,
-                    need: str = "", series_field: Any = None,
-                    above: Any = None) -> "DataDecl":
-        """ONE MEASURED VALUE, under the name a converted question writes as
-        ``observe`` with its two sentences in CAPTIONS."""
-        return self._observed(OBSERVE, producer, near, measures,
-                              opens, value_field, at, need=need,
-                              series_field=series_field, above=above)
-
-    def level(self, producer: Producer | None = None, *, near: Any = None,
-              measures: str = "a water-surface elevation",
-              opens: str = "the water opens at",
-              value_field: str = "value", at: Any = None, need: str = "",
-              series_field: Any = None, above: Any = None) -> "DataDecl":
-        """THE LEVEL, under the name a converted question writes as ``level``."""
-        return self._observed(LEVEL, producer, near, measures, opens,
-                              value_field, at, need=need,
-                              series_field=series_field, above=above)
-
-    def discharge(self, producer: Producer | None = None, *, near: Any = None,
-                  measures: str = "a streamflow",
-                  opens: str = "the inflow run carries",
-                  value_field: str = "value", at: Any = None, need: str = "",
-                  series_field: Any = None, above: Any = None) -> "DataDecl":
-        """THE FLOW an inflow run carries, under the name a converted question
-        writes as ``discharge``."""
-        return self._observed(DISCHARGE, producer, near, measures, opens,
-                              value_field, at, need=need,
-                              series_field=series_field, above=above)
-
-    def _observed(self, role: str, producer: Producer | None, near: Any,
-                  measures: str, opens: str, value_field: str, at: Any = None,
-                  need: str = "", series_field: Any = None,
-                  above: Any = None) -> "DataDecl":
-        """One measured value, under the role its consumer reads it by.
-
-        NO UNIT: what the record is read in is the unit of the keyword this role
-        fills, or of the published variable an observe row names, and neither is
-        a row's to state."""
-        row = self if producer is None else self(producer)
-        return replace(row, stated_role=role, data_class=need,
-                       coercion=MappingProxyType(
-            {"near": near, "measures": measures, "opens": opens,
-             "field": value_field, "at": at, "series_field": series_field,
-             "above_field": above}))
-
-    def extent(self, producer: Producer | None = None) -> "DataDecl":
-        """THE EXTENT, under the name a converted question writes as ``extent``."""
-        row = self if producer is None else self(producer)
-        return replace(row, stated_role=EXTENT, geometry="rectangle")
-
-    def bed(self, producer: Producer | None = None, *,
-            need: str = "") -> "DataDecl":
-        """THE BED, under the name a converted question writes as ``bed``."""
-        row = self if producer is None else self(producer)
-        return replace(row, stated_role=BED, data_class=need)
 
     @property
     def context_sentence(self) -> str:

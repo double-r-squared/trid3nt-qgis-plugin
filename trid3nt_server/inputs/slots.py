@@ -24,12 +24,10 @@ from trid3nt_server.workflows.runtime.data import (
     LEVEL,
     LINE,
     OBSERVE,
-    RUNS,
     WEATHER,
 )
 
 from .bed import bed
-from .boundary import boundary_runs
 from .domain import domain
 from .extent import extent
 from .line import line
@@ -81,10 +79,6 @@ SLOTS: Mapping[str, Slot] = MappingProxyType({
     # A table of weather is read by the composite that expands it onto the run's
     # own clock, so nothing reads it on the way in.
     WEATHER: Slot(classes=frozenset({"weather forcing"})),
-    RUNS: Slot(ingest=boundary_runs,
-               draw=("polyline", "boundary run",
-                     "Draw each stretch of the edge that carries a boundary "
-                     "condition")),
 })
 
 
@@ -100,12 +94,16 @@ def ingest_slot(role: str, value: Any, *, label: str = "",
     ``coercion`` is what the RUN told this slot about the value - the point a
     nearest site is ranked against, the unit the keyword it fills reads. A role
     nothing here reads returns the value as it came: the slot is then whatever
-    its own consumer makes of it."""
+    its own consumer makes of it. An ingestion is handed the keys IT declares:
+    the point a row is asked at is the ASK's, and only the ingestion that ranks
+    a nearest site reads it."""
     slot = SLOTS.get(str(role))
     if slot is None or slot.ingest is None:
         return value
+    takes = inspect.signature(slot.ingest).parameters
     found = slot.ingest(value, label=label or str(role),
-                        **{k: v for k, v in coercion.items() if v is not None})
+                        **{k: v for k, v in coercion.items()
+                           if v is not None and k in takes})
     if inspect.isawaitable(found):
         # This runs OFF the loop, so an ingestion that reads a stored layer
         # gets a loop of its own in this thread.
