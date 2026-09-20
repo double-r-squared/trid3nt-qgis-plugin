@@ -11,6 +11,9 @@ import asyncio
 import json
 
 from trid3nt_server.server.protocol import catalog_http as tool_catalog_http
+from trid3nt_server.tools.fetchers.socioeconomic.fetch_buildings import (
+    hooks as building_hooks,
+)
 
 
 class _FakeReader:
@@ -63,13 +66,13 @@ def test_building_detail_sidecar_hit(monkeypatch):
     """A sidecar carrying the fid returns 200 {fid, tags} without a live query."""
     tags = {"building": "house", "name": "Maison", "height": "8"}
     monkeypatch.setattr(
-        tool_catalog_http, "_read_tags_from_sidecars", lambda fid: dict(tags)
+        building_hooks, "tags_from_sidecars", lambda fid: dict(tags)
     )
 
     def _no_live(osm_type, osm_id):  # pragma: no cover -- must not be reached
         raise AssertionError("live Overpass must not run on a sidecar hit")
 
-    monkeypatch.setattr(tool_catalog_http, "_read_tags_from_overpass", _no_live)
+    monkeypatch.setattr(building_hooks, "tags_from_overpass", _no_live)
 
     reader = _FakeReader(_request("/api/building-detail?osm_type=way&osm_id=777"))
     writer = _FakeWriter()
@@ -85,7 +88,7 @@ def test_building_detail_sidecar_hit(monkeypatch):
 def test_building_detail_falls_back_to_live_overpass(monkeypatch):
     """Sidecar miss -> live Overpass-by-id HIT -> 200 {fid, tags}."""
     monkeypatch.setattr(
-        tool_catalog_http, "_read_tags_from_sidecars", lambda fid: None
+        building_hooks, "tags_from_sidecars", lambda fid: None
     )
     live_called: list[tuple] = []
 
@@ -93,7 +96,7 @@ def test_building_detail_falls_back_to_live_overpass(monkeypatch):
         live_called.append((osm_type, osm_id))
         return {"building": "commercial"}
 
-    monkeypatch.setattr(tool_catalog_http, "_read_tags_from_overpass", _live)
+    monkeypatch.setattr(building_hooks, "tags_from_overpass", _live)
 
     reader = _FakeReader(
         _request("/api/building-detail?osm_type=relation&osm_id=222")
@@ -111,10 +114,10 @@ def test_building_detail_falls_back_to_live_overpass(monkeypatch):
 def test_building_detail_404_when_both_miss(monkeypatch):
     """Sidecar AND live Overpass both empty -> typed 404 (no fabricated success)."""
     monkeypatch.setattr(
-        tool_catalog_http, "_read_tags_from_sidecars", lambda fid: None
+        building_hooks, "tags_from_sidecars", lambda fid: None
     )
     monkeypatch.setattr(
-        tool_catalog_http, "_read_tags_from_overpass", lambda t, i: None
+        building_hooks, "tags_from_overpass", lambda t, i: None
     )
 
     reader = _FakeReader(_request("/api/building-detail?osm_type=way&osm_id=999"))
@@ -131,7 +134,7 @@ def test_building_detail_400_on_bad_osm_type(monkeypatch):
     def _no_sidecar(fid):  # pragma: no cover -- validation runs first
         raise AssertionError("sidecar must not run for an invalid request")
 
-    monkeypatch.setattr(tool_catalog_http, "_read_tags_from_sidecars", _no_sidecar)
+    monkeypatch.setattr(building_hooks, "tags_from_sidecars", _no_sidecar)
 
     reader = _FakeReader(_request("/api/building-detail?osm_type=banana&osm_id=1"))
     writer = _FakeWriter()

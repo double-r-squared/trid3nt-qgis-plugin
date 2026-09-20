@@ -1106,11 +1106,6 @@ class _BuildingDetailBadRequest(Exception):
     """Malformed /api/building-detail request (missing/invalid osm_type|osm_id)."""
 
 
-def _building_fid(osm_type: str, osm_id: str) -> str:
-    """The building feature id the fetcher writes: type initial plus id."""
-    return f"{osm_type[:1]}{osm_id}"
-
-
 def _parse_building_detail_qs(query_string: str) -> tuple[str, str]:
     """Parse and validate the OSM element kind and id from the query string;
     anything malformed raises, so the handler emits a typed 400 rather than a
@@ -1131,104 +1126,19 @@ def _parse_building_detail_qs(query_string: str) -> tuple[str, str]:
     return osm_type_raw, osm_id_raw
 
 
-def _read_tags_from_sidecars(fid: str) -> dict[str, Any] | None:
-    """Scan the buildings tag sidecars for ``fid`` and return its tag bag, or
-    ``None``. SYNC: the caller off-loads it. The request carries no bbox, so the
-    bounded sidecar prefix is listed; a storage fault degrades to the live read."""
-    try:
-
-        from trid3nt_server.tools.cache import CACHE_BUCKET, cache_path
-        # fetch_buildings is folded to the router: the sidecar identity
-        # (source_class / ttl / .tags.json ext) now lives in the promoted spec, not a
-        # coded twin. Read it from the spec, falling back to the load-bearing literals
-        # so a cold spec registry never breaks the enrich read.
-        from trid3nt_server.tools.fetchers._router.registration import get_spec
-    except Exception:  # noqa: BLE001 -- import wiring fault -> live fallback
-        logger.warning("building-detail: sidecar import wiring failed", exc_info=True)
-        return None
-
-    _spec = get_spec("fetch_buildings")
-    if _spec is not None:
-        source_class = _spec.source_class
-        ttl_class = _spec.cache.ttl_class
-        sidecar_ext = str(((_spec.ingest or {}).get("sidecar_write") or {}).get("ext", "tags.json"))
-    else:
-        source_class, ttl_class, sidecar_ext = "buildings", "static-30d", "tags.json"
-
-    bucket = os.environ.get("TRID3NT_CACHE_BUCKET") or CACHE_BUCKET
-    # Derive the buildings/<...> prefix from cache_path with a placeholder key.
-    sentinel = cache_path(source_class, ttl_class, "KEY", sidecar_ext)
-    prefix = sentinel.rsplit("KEY", 1)[0]  # cache/static-30d/buildings/
-    suffix = f".{sidecar_ext}"
-    try:
-        from trid3nt_server import storage
-
-        s3 = storage.client()
-        paginator = s3.get_paginator("list_objects_v2")
-        for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
-            for obj in page.get("Contents", []) or []:
-                key = obj.get("Key", "")
-                if not key.endswith(suffix):
-                    continue
-                try:
-                    raw = s3.get_object(Bucket=bucket, Key=key)["Body"].read()
-                    data = json.loads(raw)
-                except Exception:  # noqa: BLE001 -- skip an unreadable sidecar
-                    continue
-                if isinstance(data, dict):
-                    bag = data.get(fid)
-                    if isinstance(bag, dict):
-                        return bag
-    except Exception:  # noqa: BLE001 -- S3 fault -> live fallback
-        logger.warning("building-detail: sidecar scan degraded", exc_info=True)
-        return None
-    return None
-
-
-def _read_tags_from_overpass(osm_type: str, osm_id: str) -> dict[str, Any] | None:
-    """Live by-id fallback for one OSM element's tag bag, or ``None`` when the
-    element is unknown, untagged or unreachable, in which case the handler emits
-    a typed 404. SYNC: the caller off-loads it."""
-    try:
-        import httpx
-    except Exception:  # noqa: BLE001
-        return None
-    ql = f"[out:json][timeout:25];{osm_type}({osm_id});out tags;"
-    try:
-        with httpx.Client(
-            timeout=30.0, headers={"User-Agent": "trid3nt-building-detail/1.0"}
-        ) as client:
-            resp = client.post(
-                "https://overpass-api.de/api/interpreter", data={"data": ql}
-            )
-            resp.raise_for_status()
-            payload = resp.json()
-    except Exception:  # noqa: BLE001 -- Overpass unreachable / non-JSON
-        logger.warning("building-detail: live Overpass-by-id failed", exc_info=True)
-        return None
-    elements = payload.get("elements") if isinstance(payload, dict) else None
-    if not isinstance(elements, list):
-        return None
-    for el in elements:
-        if not isinstance(el, dict):
-            continue
-        tags = el.get("tags")
-        if isinstance(tags, dict) and tags:
-            return tags
-    return None
-
-
 async def _handle_building_detail(query_string: str) -> bytes:
     """Resolve the ``{fid, tags}`` body for the building-detail route; malformed
     input raises a 400 and tags found in neither the sidecar nor the live read
     raise a 404. Both reads run off the event loop."""
-    osm_type, osm_id = _parse_building_detail_qs(query_string)
-    fid = _building_fid(osm_type, osm_id)
+    from trid3nt_server.tools.fetchers.socioeconomic.fetch_buildings import hooks
 
-    tags = await asyncio.to_thread(_read_tags_from_sidecars, fid)
+    osm_type, osm_id = _parse_building_detail_qs(query_string)
+    fid = hooks.building_fid(osm_type, osm_id)
+
+    tags = await asyncio.to_thread(hooks.tags_from_sidecars, fid)
     if tags is None:
         # Sidecar miss (cold box, evicted, or never written) -> live by-id.
-        tags = await asyncio.to_thread(_read_tags_from_overpass, osm_type, osm_id)
+        tags = await asyncio.to_thread(hooks.tags_from_overpass, osm_type, osm_id)
     if tags is None:
         raise _BuildingDetailNotFound(
             f"no tags for {osm_type}/{osm_id} (sidecar + live Overpass both empty)"
