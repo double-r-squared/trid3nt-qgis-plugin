@@ -22,6 +22,9 @@ __all__ = ["SurveySurfaceError", "SurveySurfaceLayerURI", "derive_survey_surface
 
 _METADATA = AtomicToolMetadata(
     name="derive_survey_surface",
+    # The bed ingestion runs this producer by registry name: resolvable, never
+    # model-facing, so it states no coverage row and carries no corpus.
+    tier="internal",
     ttl_class="live-no-cache",
     source_class="workflow_dispatch",
     cacheable=False,

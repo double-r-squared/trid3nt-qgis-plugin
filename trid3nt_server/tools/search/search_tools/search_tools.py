@@ -306,9 +306,10 @@ def _read_corpus_yaml(p: Path) -> dict[str, list[str]]:
 
 
 def _compose_corpus_from_tree() -> dict[str, list[str]]:
-    """The flat ``{tool: [queries]}`` corpus: every co-located ``corpus.yaml``
+    """The flat ``{key: [queries]}`` corpus: every co-located ``corpus.yaml``
     under ``tools/`` and under ``workflows/`` - engine templates are ordinary pool
-    members - then the residual file merged on top. No tier semantics."""
+    members - then the residual file merged on top. A key is a tool name or a DATA
+    CLASS, which the index turns into its own document. No tier semantics."""
     here = Path(__file__).resolve()
     server_dir = here.parents[3]
     tools_dir = server_dir / "tools"
@@ -320,28 +321,7 @@ def _compose_corpus_from_tree() -> dict[str, list[str]]:
     # Merge the residual: tools registered outside either tree.
     residual = server_dir / "tools" / "tool_query_corpus.yaml"
     composed.update(_read_corpus_yaml(residual))
-    return _fold_class_corpora(composed)
-
-
-def _fold_class_corpora(composed: dict[str, list[str]]) -> dict[str, list[str]]:
-    """Phrasings keyed by a DATA CLASS, routed to the tool that resolves one.
-
-    A fetcher with a coverage row is not ranked by phrase, so its phrasings are
-    its CLASS's and they are keyed by the class - a key no tool answers to,
-    which is what keeps the composer's per-file update from overwriting the
-    seventeen of them with one another."""
-    from trid3nt_contracts.coverage import DATA_CLASSES
-    from trid3nt_server.tools.search.find_sources.find_sources import FIND_SOURCES
-
-    classes = [key for key in composed if key in DATA_CLASSES]
-    if not classes:
-        return composed
-    folded = dict(composed)
-    routed = list(folded.pop(FIND_SOURCES, []))
-    for key in classes:
-        routed.extend(folded.pop(key))
-    folded[FIND_SOURCES] = routed
-    return folded
+    return composed
 
 
 def _load_corpus(path: Path | None = None) -> dict[str, list[str]]:
@@ -439,6 +419,8 @@ def _build_index(
     """The BM25 + dense index over the registry and the composed corpus. ONE
     document per tool feeds both channels; a spec-driven tool indexes exactly like a
     hand-written one, with no special case."""
+    from trid3nt_contracts.coverage import DATA_CLASSES
+    from trid3nt_server.tools.search.find_sources.find_sources import FIND_SOURCES
     from trid3nt_server.tools.search.match import covered_sources
 
     snapshot = registry_snapshot if registry_snapshot is not None else dict(TOOL_REGISTRY)
@@ -467,7 +449,11 @@ def _build_index(
             continue
         if name in covered:
             continue
-        doc = getattr(entry.fn, "__doc__", "") or ""
+        # ROUTING FRONT BLOCK ONLY: the text an author wrote to win retrieval.
+        # A generated body - the keyword sheet, a need row's sentence - describes a
+        # slot the MATCH fills, so its words are not the tool's routing words.
+        doc = (getattr(entry.fn, "routing_doc", None)
+               or getattr(entry.fn, "__doc__", "") or "")
         snippet = _short_description(doc)
         # The FULL docstring feeds BM25 and dense - a much richer signal than the
         # first paragraph - while the short snippet is what the payload returns.
@@ -484,6 +470,21 @@ def _build_index(
         documents.append(body)
         corpus_tokens.append(_tokenize(body))
         tiers.append(getattr(entry.metadata, "tier", "general") or "general")
+
+    # A DATA CLASS indexes as its OWN document routing to the match: one class's
+    # phrasings ranked against their own length, never the whole vocabulary folded
+    # into a single document BM25's length normalization then dilutes.
+    if FIND_SOURCES in tool_names:
+        at = tool_names.index(FIND_SOURCES)
+        for cls in sorted(key for key in corpus if key in DATA_CLASSES):
+            queries = list(corpus[cls])
+            body = "\n".join([cls.replace("_", " "), *queries])
+            tool_names.append(FIND_SOURCES)
+            descriptions.append(descriptions[at])
+            synthetic_queries.append(queries)
+            documents.append(body)
+            corpus_tokens.append(_tokenize(body))
+            tiers.append(tiers[at])
 
     # The typo-expansion vocabulary REUSES the tokens the index already produced
     # rather than re-deriving them. Frozen per build, and the correction cache keys
@@ -1068,8 +1069,14 @@ async def search_tools(
 
     # Build the response payload.
     results: list[dict[str, Any]] = []
-    for idx, score in fused[:k]:
+    seen: set[str] = set()
+    for idx, score in fused:
+        if len(results) >= k:
+            break
         tool_name = index.tool_names[idx]
+        if tool_name in seen:
+            continue
+        seen.add(tool_name)
         snippet = index.descriptions[idx]
         matched = _match_synthetic_queries(query_clean, index.synthetic_queries[idx])
         results.append(

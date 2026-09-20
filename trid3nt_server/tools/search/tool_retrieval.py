@@ -176,8 +176,12 @@ def _discover_topk(user_text: str, k: int) -> set[str] | None:
     fused = _lexical_reinforcement(
         fused, bm25_ranking, getattr(index, "tiers", None), k=60
     )
+    # The index carries a document per DATA CLASS under the match's own name, so
+    # k counts distinct TOOLS - a class document never spends a slot twice.
     names: set[str] = set()
-    for idx, _score in fused[:k]:
+    for idx, _score in fused:
+        if len(names) >= k:
+            break
         names.add(index.tool_names[idx])
     return names
 
@@ -210,9 +214,17 @@ def retrieve_ranked_tools(
     fused = _lexical_reinforcement(
         fused, bm25_ranking, getattr(index, "tiers", None), k=60
     )
-    return [
-        (index.tool_names[idx], float(score)) for idx, score in fused[:k]
-    ]
+    ranked: list[tuple[str, float]] = []
+    seen: set[str] = set()
+    for idx, score in fused:
+        if len(ranked) >= k:
+            break
+        name = index.tool_names[idx]
+        if name in seen:
+            continue
+        seen.add(name)
+        ranked.append((name, float(score)))
+    return ranked
 
 
 def _full_registry_floor(floor: set[str]) -> set[str]:

@@ -1,9 +1,0 @@
-derive_merge_rasters:
-- merge the survey over the DEM into one bed
-- lay this bathymetry on top of the terrain where it has data
-- combine these two elevation rasters, the detailed one winning
-- fill the holes in this survey with the wider surface
-- one continuous surface from a channel survey and a DEM
-- patch this raster where it has no data using that one
-- drape the measured bathymetry over the land elevation
-- I need a single bed raster out of these two grids

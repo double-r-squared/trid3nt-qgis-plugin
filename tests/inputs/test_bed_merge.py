@@ -210,25 +210,6 @@ def test_a_grid_past_the_cell_ceiling_refuses(tmp_path) -> None:
     assert excinfo.value.error_code == "MERGE_RASTERS_RESOLUTION_INVALID"
 
 
-def test_the_derive_surfaces_from_its_own_corpus_phrasings() -> None:
-    from pathlib import Path
-
-    import yaml
-
-    import trid3nt_server.tools.derive.derive_merge_rasters as package
-    from trid3nt_server.tools.search.search_tools import search_tools as dd
-    from trid3nt_server.tools.search.tool_retrieval import retrieve_visible_tools
-
-    dd._get_index()
-    here = Path(package.__file__).resolve().parent
-    queries = (yaml.safe_load((here / "corpus.yaml").read_text())
-               or {})["derive_merge_rasters"]
-    assert queries
-    assert any("derive_merge_rasters" in retrieve_visible_tools(q, None, 8)
-               for q in queries), (
-        "derive_merge_rasters surfaces in NO top-8 for any of its corpus queries")
-
-
 def test_a_stated_offset_reads_the_primary_on_the_fallback_s_datum(tmp_path) -> None:
     merged = merged_surface(
         primary=_survey("CRD"), fallback=_terrain("NAVD88"),

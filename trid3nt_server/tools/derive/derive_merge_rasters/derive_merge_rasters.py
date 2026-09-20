@@ -23,6 +23,9 @@ __all__ = ["MergeRastersError", "MergedRasterLayerURI", "derive_merge_rasters"]
 
 _METADATA = AtomicToolMetadata(
     name="derive_merge_rasters",
+    # The bed ingestion runs this producer by registry name: resolvable, never
+    # model-facing, so it states no coverage row and carries no corpus.
+    tier="internal",
     ttl_class="live-no-cache",
     source_class="workflow_dispatch",
     cacheable=False,

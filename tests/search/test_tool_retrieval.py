@@ -216,12 +216,16 @@ def test_every_registered_tool_has_corpus_queries():
 def test_no_dead_corpus_keys():
     """A corpus key for a tool nothing registers is dead weight in the index.
 
-    The exception is a DECLARED PARKED template, whose corpus travels with the
-    declaration; the visible set is derived from the registry, so it never surfaces."""
+    The exceptions are a DECLARED PARKED template, whose corpus travels with the
+    declaration, and a DATA CLASS, which is its own index document routing to the
+    match; the visible set is derived from the registry, so neither surfaces."""
+    from trid3nt_contracts.coverage import DATA_CLASSES
+
     from tests.search.test_door_dissolution import PARKED_TEMPLATES
 
     corpus = _load_corpus()
-    dead = sorted(set(corpus) - _full_registry_names() - set(PARKED_TEMPLATES))
+    dead = sorted(set(corpus) - _full_registry_names() - set(PARKED_TEMPLATES)
+                  - set(DATA_CLASSES))
     assert not dead, (
         f"tool_query_corpus.yaml has keys for non-registered tools (prune them): {dead}"
     )

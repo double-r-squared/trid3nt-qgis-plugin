@@ -85,6 +85,23 @@ def test_a_covered_fetcher_leaves_the_index_and_an_overlay_one_stays(index):
     assert FIND_SOURCES in indexed
 
 
+def test_the_bed_producers_are_internal_seams_off_the_index(registry, index):
+    """A row runs them by registry name, so they are resolvable and unsearchable:
+    tier=internal, no coverage row, no index entry."""
+    for producer in ("derive_survey_surface", "derive_merge_rasters"):
+        assert producer in registry
+        assert registry[producer].metadata.tier == "internal"
+        assert producer not in set(index.tool_names)
+        assert producer not in covered_sources()
+
+
+def test_each_class_is_its_own_document_under_the_match(index):
+    """A class's phrasings are ranked against their own length, not diluted by the
+    whole vocabulary folded into one document."""
+    corpus = _class_corpus()
+    assert index.tool_names.count(FIND_SOURCES) == len(corpus) + 1
+
+
 def test_the_class_corpus_covers_the_whole_vocabulary(index):
     corpus = _class_corpus()
     assert sorted(corpus) == sorted(DATA_CLASSES)

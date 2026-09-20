@@ -179,21 +179,3 @@ def test_a_point_layer_carrying_other_geometry_beside_it_still_interpolates(tmp_
                                          _output_dir=str(tmp_path))
     assert layer.n_points == 144
 
-
-def test_the_derive_surfaces_from_its_own_corpus_phrasings():
-    from pathlib import Path
-
-    import yaml
-
-    import trid3nt_server.tools.derive.derive_survey_surface as package
-    from trid3nt_server.tools.search.search_tools import search_tools as dd
-    from trid3nt_server.tools.search.tool_retrieval import retrieve_visible_tools
-
-    dd._get_index()
-    here = Path(package.__file__).resolve().parent
-    queries = (yaml.safe_load((here / "corpus.yaml").read_text())
-               or {})["derive_survey_surface"]
-    assert queries
-    assert any("derive_survey_surface" in retrieve_visible_tools(q, None, 8)
-               for q in queries), (
-        "derive_survey_surface surfaces in NO top-8 for any of its corpus queries")
