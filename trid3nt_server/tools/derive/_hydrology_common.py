@@ -34,7 +34,7 @@ __all__ = [
     "write_conditioned_dem",
 ]
 
-logger = logging.getLogger("trid3nt_server.tools.derive._hydrology_common")
+logger = logging.getLogger(__name__)
 
 
 class HydrologyPrimitivesError(RuntimeError):

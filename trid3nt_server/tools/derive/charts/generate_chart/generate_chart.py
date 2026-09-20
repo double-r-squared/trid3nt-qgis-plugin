@@ -5,7 +5,6 @@ Interactivity is guaranteed by construction - every mark is normalized to carry
 """
 from __future__ import annotations
 
-import logging
 import tempfile
 from typing import Any
 
@@ -25,7 +24,6 @@ from trid3nt_server.render.charts import (
 
 __all__ = ["generate_chart"]
 
-logger = logging.getLogger("trid3nt_server.tools.derive.generate_chart.generate_chart")
 
 
 _GENERATE_CHART_META = AtomicToolMetadata(

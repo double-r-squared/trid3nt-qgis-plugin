@@ -14,9 +14,9 @@ import numpy as np
 import pytest
 import rasterio
 
-from trid3nt_server.tools.derive.derive_survey_surface.derive_survey_surface import (
+from trid3nt_server.inputs.bed import (
     SurveySurfaceError,
-    derive_survey_surface,
+    survey_surface,
 )
 
 #: A patch of the Willamette at Portland, so the zone the grid is built in is real.
@@ -43,7 +43,7 @@ def _read(uri: str) -> tuple[np.ndarray, rasterio.Affine, str]:
 
 def test_the_surface_holds_each_measurement_at_its_own_position(tmp_path):
     doc = _plane()
-    layer = derive_survey_surface(
+    layer = survey_surface(
         points=doc, resolution_m=5.0, _output_dir=str(tmp_path))
     assert layer.value_field == "depth_m"
     assert layer.n_points == 144
@@ -62,7 +62,7 @@ def test_the_surface_holds_each_measurement_at_its_own_position(tmp_path):
 
 
 def test_a_cell_with_no_measurement_near_it_is_nodata_not_filled(tmp_path):
-    layer = derive_survey_surface(
+    layer = survey_surface(
         points=_plane(), resolution_m=5.0, max_distance_m=10.0,
         _output_dir=str(tmp_path))
     band, _transform, _crs = _read(layer.uri)
@@ -72,7 +72,7 @@ def test_a_cell_with_no_measurement_near_it_is_nodata_not_filled(tmp_path):
 
 
 def test_the_search_radius_defaults_to_the_survey_own_spacing(tmp_path):
-    layer = derive_survey_surface(
+    layer = survey_surface(
         points=_plane(step_deg=0.0004), resolution_m=10.0, _output_dir=str(tmp_path))
     # 0.0004 deg of longitude at this latitude is about 31 m, which is the nearest
     # neighbour on a square degree grid; the default reach is three of those.
@@ -83,15 +83,15 @@ def test_the_search_radius_defaults_to_the_survey_own_spacing(tmp_path):
 def test_a_coarse_output_grid_never_widens_the_measurements_reach(tmp_path):
     """The reach is the survey's own: asking for a coarser cell must not let the
     surface claim ground farther from a sounding than a fine cell would."""
-    fine = derive_survey_surface(points=_plane(), resolution_m=5.0,
+    fine = survey_surface(points=_plane(), resolution_m=5.0,
                                  _output_dir=str(tmp_path))
-    coarse = derive_survey_surface(points=_plane(), resolution_m=150.0,
+    coarse = survey_surface(points=_plane(), resolution_m=150.0,
                                    _output_dir=str(tmp_path))
     assert coarse.search_radius_m == fine.search_radius_m
 
 
 def test_the_note_states_the_footprint_the_soundings_measured(tmp_path):
-    layer = derive_survey_surface(points=_plane(), resolution_m=10.0,
+    layer = survey_surface(points=_plane(), resolution_m=10.0,
                                   _output_dir=str(tmp_path))
     note = " ".join(layer.notes)
     assert "FOOTPRINT" in note and "km2" in note
@@ -116,7 +116,7 @@ def _ring(count: int = 72, radius_m: float = 50.0) -> dict:
 
 def test_a_cell_coarser_than_the_surveys_reach_refuses_rather_than_reaching(tmp_path):
     with pytest.raises(SurveySurfaceError) as excinfo:
-        derive_survey_surface(points=_ring(), resolution_m=200.0,
+        survey_surface(points=_ring(), resolution_m=200.0,
                               _output_dir=str(tmp_path))
     assert excinfo.value.error_code == "SURVEY_SURFACE_FOOTPRINT_EMPTY"
     assert "max_distance_m" in str(excinfo.value)
@@ -124,14 +124,14 @@ def test_a_cell_coarser_than_the_surveys_reach_refuses_rather_than_reaching(tmp_
 
 def test_several_numeric_fields_are_refused_rather_than_guessed_between(tmp_path):
     with pytest.raises(SurveySurfaceError) as excinfo:
-        derive_survey_surface(points=_plane(extra={"count": 3}),
+        survey_surface(points=_plane(extra={"count": 3}),
                                      resolution_m=5.0, _output_dir=str(tmp_path))
     assert excinfo.value.error_code == "SURVEY_SURFACE_NO_VALUE_FIELD"
     assert "value_field" in str(excinfo.value)
 
 
 def test_naming_the_field_resolves_that(tmp_path):
-    layer = derive_survey_surface(
+    layer = survey_surface(
         points=_plane(extra={"count": 3}), resolution_m=10.0, value_field="depth_m",
         _output_dir=str(tmp_path))
     assert layer.value_field == "depth_m"
@@ -139,7 +139,7 @@ def test_naming_the_field_resolves_that(tmp_path):
 
 def test_a_field_no_point_carries_a_number_under_refuses_naming_the_fields(tmp_path):
     with pytest.raises(SurveySurfaceError) as excinfo:
-        derive_survey_surface(points=_plane(), resolution_m=5.0,
+        survey_surface(points=_plane(), resolution_m=5.0,
                                      value_field="elevation_m", _output_dir=str(tmp_path))
     assert "depth_m" in str(excinfo.value)
 
@@ -149,21 +149,21 @@ def test_a_layer_with_no_point_geometry_refuses_by_name(tmp_path):
         {"type": "Feature", "properties": {"depth_m": 1.0},
          "geometry": {"type": "LineString", "coordinates": [[_LON, _LAT], [_LON, _LAT + 0.01]]}}]}
     with pytest.raises(SurveySurfaceError) as excinfo:
-        derive_survey_surface(points=doc, resolution_m=5.0, _output_dir=str(tmp_path))
+        survey_surface(points=doc, resolution_m=5.0, _output_dir=str(tmp_path))
     assert excinfo.value.error_code == "SURVEY_SURFACE_NO_POINTS"
 
 
 def test_a_cell_size_that_is_not_one_refuses_by_name(tmp_path):
     for bad in (0.0, -5.0, "fine"):
         with pytest.raises(SurveySurfaceError) as excinfo:
-            derive_survey_surface(points=_plane(), resolution_m=bad,
+            survey_surface(points=_plane(), resolution_m=bad,
                                          _output_dir=str(tmp_path))
         assert excinfo.value.error_code == "SURVEY_SURFACE_RESOLUTION_INVALID"
 
 
 def test_a_grid_past_the_cell_ceiling_refuses_naming_the_cell(tmp_path):
     with pytest.raises(SurveySurfaceError) as excinfo:
-        derive_survey_surface(points=_plane(step_deg=0.05), resolution_m=0.05,
+        survey_surface(points=_plane(step_deg=0.05), resolution_m=0.05,
                                      _output_dir=str(tmp_path))
     assert excinfo.value.error_code == "SURVEY_SURFACE_RESOLUTION_INVALID"
     assert "coarser" in str(excinfo.value)
@@ -175,7 +175,7 @@ def test_a_point_layer_carrying_other_geometry_beside_it_still_interpolates(tmp_
         {"type": "Feature", "properties": {"depth_m": None},
          "geometry": {"type": "Polygon", "coordinates": [[
              [_LON, _LAT], [_LON + 0.01, _LAT], [_LON + 0.01, _LAT + 0.01], [_LON, _LAT]]]}})
-    layer = derive_survey_surface(points=doc, resolution_m=10.0,
+    layer = survey_surface(points=doc, resolution_m=10.0,
                                          _output_dir=str(tmp_path))
     assert layer.n_points == 144
 

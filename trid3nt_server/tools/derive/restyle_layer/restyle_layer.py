@@ -14,6 +14,7 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.render import presets
 from trid3nt_server.tools import register_tool
+from trid3nt_server.tools.derive import DeriveError
 from trid3nt_server.render.restyle import (
     RestyleError,
     apply_style,
@@ -23,15 +24,7 @@ from trid3nt_server.render.restyle import (
 
 __all__ = ["restyle_layer"]
 
-logger = logging.getLogger(
-    "trid3nt_server.tools.derive.restyle_layer.restyle_layer")
-
-
-class RestyleArgsError(RuntimeError):
-    """The restyle ask is not answerable as given."""
-
-    error_code = "RESTYLE_ARGS_INVALID"
-    retryable = False
+logger = logging.getLogger(__name__)
 
 
 _METADATA = AtomicToolMetadata(
@@ -87,9 +80,10 @@ async def restyle_layer(
     """
     ids = _ids(layer_ids)
     if not ids:
-        raise RestyleArgsError(
-            "restyle_layer needs at least one layer_id - the id of a layer that is "
-            "already on the map.")
+        raise DeriveError(
+            "RESTYLE_ARGS_INVALID",
+            "restyle_layer needs at least one layer_id - the id of a layer that "
+            "is already on the map.")
     if kind is not None and kind not in presets.KINDS:
         return _error("STYLE_KIND_UNKNOWN",
                       f"{kind!r} is not one of the four preset kinds "

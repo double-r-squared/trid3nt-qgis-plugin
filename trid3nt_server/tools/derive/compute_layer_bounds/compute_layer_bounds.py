@@ -23,7 +23,7 @@ __all__ = [
     "ComputeLayerBoundsError",
 ]
 
-logger = logging.getLogger("trid3nt_server.tools.derive.compute_layer_bounds.compute_layer_bounds")
+logger = logging.getLogger(__name__)
 
 
 
