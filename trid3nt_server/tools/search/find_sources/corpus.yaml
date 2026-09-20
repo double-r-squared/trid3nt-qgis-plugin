@@ -62,6 +62,13 @@ precipitation series:
 - how much rain was measured over these days
 - what fell here during the event
 - the rain record for these days
+wave series:
+- how big were the waves here
+- the measured wave height at this buoy
+- significant wave height and period through the storm
+- what sea state was recorded here
+- the swell period and direction offshore
+- how rough was the water during the event
 weather forcing:
 - wind and pressure through this event
 - what weather was measured over this event
