@@ -15,9 +15,9 @@ from unittest.mock import patch
 
 import pytest
 
+from trid3nt_server.adapters.model_selection import ModelSettings
 from trid3nt_server.adapters.adapter import (
     FunctionCallEvent,
-    ModelSettings,
     MAX_TURN_ITERATIONS,
     TextDeltaEvent,
     _classify_error,
@@ -203,7 +203,7 @@ async def test_stream_model_reply_retry_after_recoverable_failure(fake_llm):
     sock = _FakeSocket()
     state = SessionState(session_id=new_ulid())
     settings = ModelSettings(
-        model="gemini-2.5-pro", project="t", location="us-central1", use_vertex=True
+        model="gemini-2.5-pro"
     )
 
     with patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=_flaky_invoke), \
@@ -293,7 +293,7 @@ async def test_stream_model_reply_failed_retry_caps_at_max_iterations(fake_llm):
     sock = _FakeSocket()
     state = SessionState(session_id=new_ulid())
     settings = ModelSettings(
-        model="gemini-2.5-pro", project="t", location="us-central1", use_vertex=True
+        model="gemini-2.5-pro"
     )
 
     with patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=_always_fail), \

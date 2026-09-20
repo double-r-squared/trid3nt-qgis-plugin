@@ -12,7 +12,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from trid3nt_server import server as agent_server
-from trid3nt_server.adapters.adapter import ModelSettings, TextDeltaEvent
+from trid3nt_server.adapters.model_selection import ModelSettings
+from trid3nt_server.adapters.adapter import TextDeltaEvent
 from trid3nt_server.gates.tool_gating import (
     WIDEN_K,
     WIDEN_THRESHOLD_DEFAULT,
@@ -68,7 +69,7 @@ def _settings() -> ModelSettings:
     # that client unconditionally -- the per-turn client
     # resolution -- so it must not raise.)
     return ModelSettings(
-        model="qwen", project="t", location="us-central1", use_vertex=True
+        model="qwen"
     )
 
 

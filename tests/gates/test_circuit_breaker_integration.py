@@ -16,8 +16,8 @@ from unittest.mock import patch
 
 import pytest
 
+from trid3nt_server.adapters.model_selection import ModelSettings
 from trid3nt_server.adapters.adapter import (
-    ModelSettings,
     MAX_TURN_ITERATIONS,
     summarize_tool_result,
 )
@@ -114,7 +114,7 @@ async def test_circuit_breaker_trips_on_third_failure_and_short_circuits_fourth(
     state = SessionState(session_id=new_ulid())
     state.circuit_breaker = ToolCircuitBreaker(threshold=3, cooldown_s=3600.0)
     settings = ModelSettings(
-        model="gemini-2.5-pro", project="t", location="us-central1", use_vertex=True
+        model="gemini-2.5-pro"
     )
     sock = _FakeSocket()
 
@@ -255,7 +255,7 @@ async def test_arg_errors_through_server_do_not_trip_breaker(fake_llm):
     # tripped after 3 arg errors and blocked everything after.
     state.circuit_breaker = ToolCircuitBreaker(threshold=3, cooldown_s=3600.0)
     settings = ModelSettings(
-        model="gemini-2.5-pro", project="t", location="us-central1", use_vertex=True
+        model="gemini-2.5-pro"
     )
     sock = _FakeSocket()
 
@@ -317,7 +317,7 @@ async def test_circuit_breaker_error_not_counted_as_additional_failure(fake_llm)
 
     sock = _FakeSocket()
     settings = ModelSettings(
-        model="gemini-2.5-pro", project="t", location="us-central1", use_vertex=True
+        model="gemini-2.5-pro"
     )
 
     with patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=_real_invoke), \

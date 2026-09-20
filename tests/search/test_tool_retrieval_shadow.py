@@ -13,7 +13,7 @@ from unittest.mock import patch
 
 import pytest
 
-from trid3nt_server.adapters.adapter import ModelSettings
+from trid3nt_server.adapters.model_selection import ModelSettings
 from trid3nt_contracts import new_ulid
 
 
@@ -33,9 +33,6 @@ def _make_text_chunk(text: str):
 def _settings() -> ModelSettings:
     return ModelSettings(
         model="gemini-2.5-pro",
-        project="test",
-        location="us-central1",
-        use_vertex=True,
     )
 
 

@@ -15,7 +15,7 @@ from unittest.mock import patch
 import pytest
 
 from trid3nt_server import server as agent_server
-from trid3nt_server.adapters.adapter import ModelSettings
+from trid3nt_server.adapters.model_selection import ModelSettings
 from trid3nt_server.adapters.scripted_adapter import set_script
 from trid3nt_contracts import new_ulid
 
@@ -44,7 +44,7 @@ class _FakeSocket:
 
 def _settings() -> ModelSettings:
     return ModelSettings(
-        model="gemini-2.5-pro", project="t", location="us-central1", use_vertex=True
+        model="gemini-2.5-pro"
     )
 
 

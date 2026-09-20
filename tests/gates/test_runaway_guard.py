@@ -124,10 +124,10 @@ def _abort_codes(sock: _FakeSocket) -> list[str]:
 
 
 def _settings():
-    from trid3nt_server.server import ModelSettings
+    from trid3nt_server.adapters.model_selection import ModelSettings
 
     return ModelSettings(
-        model="gemini-2.5-pro", project="t", location="us-central1", use_vertex=True
+        model="gemini-2.5-pro"
     )
 
 

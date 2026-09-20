@@ -15,8 +15,8 @@ from unittest.mock import patch
 
 import pytest
 
+from trid3nt_server.adapters.model_selection import ModelSettings
 from trid3nt_server.adapters.adapter import (
-    ModelSettings,
     summarize_tool_result,
     _classify_error,
 )
@@ -201,7 +201,7 @@ async def test_multi_turn_loop_tool_not_found_feeds_error_to_the_model(fake_llm)
     sock = _FakeSocket()
     state = _make_session()
     settings = ModelSettings(
-        model="gemini-2.5-pro", project="t", location="us-central1", use_vertex=True
+        model="gemini-2.5-pro"
     )
 
     with patch.object(agent_server, "build_tool_declarations", return_value=[]):

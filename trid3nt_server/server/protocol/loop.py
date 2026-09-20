@@ -12,7 +12,7 @@ from trid3nt_contracts.processing_contracts import ProcessingResponsePayload
 from trid3nt_contracts.region_choice import RegionChoiceProvidedEnvelopePayload
 from trid3nt_contracts.secrets import CredentialProvidedEnvelopePayload, SecretAddEnvelopePayload
 from trid3nt_contracts.ws import CancelPayload, ErrorPayload, SessionResumePayload, SpatialInputResponsePayload, UserMessagePayload
-from trid3nt_server.adapters.adapter import ModelSettings, load_settings
+from trid3nt_server.adapters.model_selection import ModelSettings, load_settings
 from trid3nt_server.gates.pending import _resolve_pending_confirmation
 from trid3nt_server.main import MAX_TURNS_PER_SESSION
 from trid3nt_server.server.dispatch.emitter import _assert_sync_offload_safe, _dispatch_tool_and_persist, _ensure_emitter

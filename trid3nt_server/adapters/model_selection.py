@@ -7,6 +7,27 @@ time; nothing here is cached at import.
 from __future__ import annotations
 
 import os
+from dataclasses import dataclass
+
+#: Display and telemetry label when the active provider resolves none of its own.
+DEFAULT_MODEL_LABEL = "gemini-2.5-pro"
+
+
+@dataclass(frozen=True)
+class ModelSettings:
+    """Resolved model configuration: the display and telemetry id used when the
+    active provider resolves no model of its own."""
+
+    model: str
+
+
+def load_settings() -> ModelSettings:
+    """Resolve model settings from the environment.
+    ``TRID3NT_GEMINI_MODEL`` sets only the display and telemetry label; the
+    active provider resolves the real model it calls."""
+    return ModelSettings(
+        model=os.environ.get("TRID3NT_GEMINI_MODEL", DEFAULT_MODEL_LABEL),
+    )
 
 
 def model_provider() -> str:

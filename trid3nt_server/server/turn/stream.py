@@ -6,7 +6,9 @@ import asyncio
 import logging
 from trid3nt_contracts import new_ulid, now_utc
 from trid3nt_contracts.ws import AgentMessageChunkPayload, AgentThinkingChunkPayload, PipelineStatePayload, PipelineStep
-from trid3nt_server.adapters.adapter import CompactionCompleteEvent, CompactionStartEvent, FunctionCallEvent, MAX_TURN_ITERATIONS, ModelSettings, TextDeltaEvent, ThinkingDeltaEvent, UpstreamProviderError, UsageMetadataEvent, build_contents_from_history, build_function_call_content, build_function_response_content, build_layers_present_note, build_tool_declarations, build_user_text_content, classify_provider_error_class, classify_result_usable, stream_events_with_contents, summarize_tool_result, system_prompt
+from trid3nt_contracts.message import Message
+from trid3nt_server.adapters.model_selection import ModelSettings
+from trid3nt_server.adapters.adapter import CompactionCompleteEvent, CompactionStartEvent, FunctionCallEvent, MAX_TURN_ITERATIONS, TextDeltaEvent, ThinkingDeltaEvent, UpstreamProviderError, UsageMetadataEvent, build_contents_from_history, build_layers_present_note, build_tool_declarations, classify_provider_error_class, classify_result_usable, stream_events_with_contents, summarize_tool_result, system_prompt
 from trid3nt_server.tools import TOOL_REGISTRY
 from trid3nt_server.render.charts import is_chart_emission_result
 from trid3nt_server.tools.search.tool_retrieval import CORE_FLOOR
@@ -392,7 +394,7 @@ async def _stream_model_reply(
     # the user message so the model reads the ask, then the user's routing
     # decision. No-op when the gate never fired (the common path).
     for _pin_note in _pin_notes:
-        contents.append(build_user_text_content(_pin_note))
+        contents.append(Message.user_text(_pin_note))
 
     # Per-turn usage metadata harvested from the stream.
     last_usage: UsageMetadataEvent | None = None
@@ -525,7 +527,7 @@ async def _stream_model_reply(
                         _retrieval_registry = _w_reg
                         tool_decls = build_tool_declarations(_retrieval_registry)
                     for _w_note in _w_notes:
-                        contents.append(build_user_text_content(_w_note))
+                        contents.append(Message.user_text(_w_note))
                 except asyncio.CancelledError:
                     raise
                 except Exception:  # noqa: BLE001 -- wave is best-effort
@@ -718,7 +720,7 @@ async def _stream_model_reply(
                     # build_user_text_content) -- no hand-rolled IR here.
                     # Appended so the retried round sees "your last turn was
                     # empty, act or answer".
-                    contents.append(build_user_text_content(_EMPTY_COMPLETION_NUDGE))
+                    contents.append(Message.user_text(_EMPTY_COMPLETION_NUDGE))
                     # Observability is log-only (above): a retry must not inject
                     # a transient note into the persisted narration segment, and
                     # inventing a new envelope type is out of scope -- the
@@ -759,7 +761,7 @@ async def _stream_model_reply(
                             iterations,
                         )
                         contents.append(
-                            build_user_text_content(_CONTINUATION_NUDGE)
+                            Message.user_text(_CONTINUATION_NUDGE)
                         )
                         continue
                     # Neither invariant fired -- log each skip with its reason.
@@ -1297,10 +1299,10 @@ async def _stream_model_reply(
                 # same chokepoint the per-tool record is emitted from.
                 _turn_tool_dispatch_count += 1
                 contents.append(
-                    build_function_call_content(call.name, call.args, call.call_id)
+                    Message.call(call.name, call.args, call.call_id)
                 )
                 contents.append(
-                    build_function_response_content(call.name, summary, call.call_id)
+                    Message.response(call.name, summary, call.call_id)
                 )
 
             # Discovery expands the gate: a tool-search this round widened

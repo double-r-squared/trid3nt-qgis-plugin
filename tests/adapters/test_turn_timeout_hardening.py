@@ -14,6 +14,7 @@ from unittest.mock import patch
 
 import pytest
 
+from trid3nt_server.adapters.model_selection import ModelSettings
 from trid3nt_server.adapters.adapter import TextDeltaEvent
 
 
@@ -70,8 +71,8 @@ async def test_failed_model_call_clears_busy_and_surfaces_error():
     from trid3nt_server.server import SessionState
     from trid3nt_contracts import new_ulid
 
-    settings = agent_server.ModelSettings(
-        model="test-model", project="test", location="local", use_vertex=False
+    settings = ModelSettings(
+        model="test-model"
     )
     state = SessionState(session_id=new_ulid())
     sock = _FakeSocket()
@@ -128,8 +129,8 @@ async def test_normal_turn_path_unaffected():
     from trid3nt_server.server import SessionState
     from trid3nt_contracts import new_ulid
 
-    settings = agent_server.ModelSettings(
-        model="test-model", project="test", location="local", use_vertex=False
+    settings = ModelSettings(
+        model="test-model"
     )
     state = SessionState(session_id=new_ulid())
     sock = _FakeSocket()
@@ -172,8 +173,8 @@ async def test_solve_tool_path_unaffected_by_model_bound():
     from trid3nt_server.adapters.adapter import FunctionCallEvent
     from trid3nt_contracts import new_ulid
 
-    settings = agent_server.ModelSettings(
-        model="test-model", project="test", location="local", use_vertex=False
+    settings = ModelSettings(
+        model="test-model"
     )
     state = SessionState(session_id=new_ulid())
     sock = _FakeSocket()

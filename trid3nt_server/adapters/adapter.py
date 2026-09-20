@@ -20,9 +20,9 @@ from trid3nt_contracts.message import Message, Part, ToolCall, ToolDeclaration, 
 
 logger = logging.getLogger("trid3nt_server.adapters.adapter")
 
-# Display / telemetry model label only -- the active provider resolves the real
-# model it calls. Override at runtime via ``TRID3NT_GEMINI_MODEL``.
-DEFAULT_VERTEX_MODEL = "gemini-2.5-pro"
+#: The code a modeled envelope with no layers carries when its failure marker
+#: names none of its own.
+_NO_LAYERS_CODE = "MODEL_RUN_PRODUCED_NO_LAYERS"
 
 
 
@@ -812,27 +812,6 @@ def build_tool_declarations(tool_registry: dict[str, Any]) -> list[ToolDeclarati
 
 
 
-@dataclass(frozen=True)
-class ModelSettings:
-    """Resolved model configuration.
-    Only ``model`` is live -- the display and telemetry id used when the active
-    provider resolves none of its own; the other fields are inert carriers."""
-
-    model: str
-    project: str = ""
-    location: str = ""
-    use_vertex: bool = False
-
-
-def load_settings() -> ModelSettings:
-    """Resolve model settings from the environment.
-    ``TRID3NT_GEMINI_MODEL`` sets only the display and telemetry label; the
-    active provider resolves the real model it calls."""
-    return ModelSettings(
-        model=os.environ.get("TRID3NT_GEMINI_MODEL", DEFAULT_VERTEX_MODEL),
-    )
-
-
 
 # Hard upper bound on chars a tool response carries back to the model.
 # Anything bigger gets clipped -- the model does not need megabytes of GeoJSON
@@ -1349,22 +1328,21 @@ def _summarize_chart_emission(tool_name: str, result: dict[str, Any]) -> dict[st
     }
 
 
-def _failed_modeled_envelope_error_code(result: dict[str, Any]) -> str:
-    """Extract the threaded failure code from a failed "modeled" envelope.
-    Prefers the depth-0 ``workflow_name`` seam, the one that survives the
-    summary coercion; else the buried ``metrics.solver_version`` seam."""
+def _failed_modeled_envelope_error_code(result: dict[str, Any]) -> str | None:
+    """The threaded failure code of a failure-TAGGED "modeled" envelope, or
+    ``None`` when the envelope carries no marker at all. A run can append its
+    ``solver_run_id`` BEFORE failing, so the marker, not the presence of a run
+    id, is what decides."""
     # A failed envelope threads its error code into TWO seams so it survives
     # ``_coerce_to_summary_value``'s depth>=2 dict collapse: the top-level
     # ``workflow_name == "<name>:FAILED:<CODE>"``, and the buried
-    # ``<hazard>.metrics.solver_version == "failed:<CODE>"``.
+    # ``<hazard>.metrics.solver_version == "failed:<CODE>"``. The scan over the
+    # second is generic over the payload key: any composer threading a failure
+    # the same way resolves here, not only the one that prompted it. A marker
+    # with no code still means failed, and names the generic code.
     wf = result.get("workflow_name")
     if isinstance(wf, str) and ":FAILED:" in wf:
-        code = wf.split(":FAILED:", 1)[1].strip()
-        if code:
-            return code
-    # Scan any hazard payload's metrics.solver_version for "failed:<CODE>".
-    # Generic over the payload key: any composer threading a failure the same
-    # way resolves here, not only the one that prompted the scan.
+        return wf.split(":FAILED:", 1)[1].strip() or _NO_LAYERS_CODE
     for payload in result.values():
         if not isinstance(payload, dict):
             continue
@@ -1373,32 +1351,8 @@ def _failed_modeled_envelope_error_code(result: dict[str, Any]) -> str:
             continue
         sv = metrics.get("solver_version")
         if isinstance(sv, str) and sv.startswith("failed:"):
-            code = sv.split("failed:", 1)[1].strip()
-            if code:
-                return code
-    return "MODEL_RUN_PRODUCED_NO_LAYERS"
-
-
-def _modeled_envelope_is_failure_tagged(result: dict[str, Any]) -> bool:
-    """True when a "modeled" envelope carries an explicit failure marker.
-    A run can append its ``solver_run_id`` BEFORE failing, so the marker, not
-    the presence of a run id, is what decides."""
-    # Two seams carry it: the depth-0 ``workflow_name`` containing ":FAILED:",
-    # which survives ``_coerce_to_summary_value``, and any hazard payload's
-    # depth-2 ``metrics.solver_version`` starting with "failed:".
-    wf = result.get("workflow_name")
-    if isinstance(wf, str) and ":FAILED:" in wf:
-        return True
-    for payload in result.values():
-        if not isinstance(payload, dict):
-            continue
-        metrics = payload.get("metrics")
-        if not isinstance(metrics, dict):
-            continue
-        sv = metrics.get("solver_version")
-        if isinstance(sv, str) and sv.startswith("failed:"):
-            return True
-    return False
+            return sv.split("failed:", 1)[1].strip() or _NO_LAYERS_CODE
+    return None
 
 
 def _extract_flood_metrics_phrase(result: dict[str, Any]) -> str:
@@ -1642,11 +1596,11 @@ def summarize_tool_result(
         and result.get("envelope_type") == "modeled"
         and not result.get("layers")
     ):
-        if _modeled_envelope_is_failure_tagged(result):
+        code = _failed_modeled_envelope_error_code(result)
+        if code is not None:
             # Sub-case (a): an explicitly failure-tagged run (covers both the
             # never-dispatched non-runs AND the dispatched-then-failed exits
             # that already appended a solver_run_id).
-            code = _failed_modeled_envelope_error_code(result)
             message = (
                 f"{tool_name} produced no layers and the model did NOT run "
                 f"successfully ({code})."
@@ -1869,41 +1823,6 @@ def classify_result_usable(
         return None
 
 
-def build_function_call_content(
-    name: str,
-    args: dict[str, Any],
-    call_id: str | None = None,
-) -> Message:
-    """Build the ``model``-role Message wrapping the tool call.
-    Appended to ``contents`` after a dispatch so the next model round sees its
-    own prior tool-call decision."""
-    return Message(
-        role="model",
-        parts=[Part(call=ToolCall(name=name, args=args or {}, id=call_id))],
-    )
-
-
-def build_function_response_content(
-    name: str,
-    response: dict[str, Any],
-    call_id: str | None = None,
-) -> Message:
-    """Build the ``user``-role Message wrapping the tool response.
-    Appended right after the matching call message, so the model has the
-    (call, response) pair before deciding its next turn."""
-    return Message(
-        role="user",
-        parts=[Part(response=ToolResponse(name=name, result=response, id=call_id))],
-    )
-
-
-def build_user_text_content(text: str) -> Message:
-    """Build a plain ``user``-role text Message.
-    The one-Part shape the contents builder uses for a live user message, so a
-    loop driver can append a corrective turn without hand-rolling the IR."""
-    return Message(role="user", parts=[Part(text=text)])
-
-
 
 async def stream_events(
     client: Any,
@@ -2009,9 +1928,7 @@ async def stream_events_with_contents(
 
 
 __all__ = [
-    "DEFAULT_VERTEX_MODEL",
     "MAX_TURN_ITERATIONS",
-    "ModelSettings",
     "StreamEvent",
     "TextDeltaEvent",
     "ThinkingDeltaEvent",
@@ -2031,11 +1948,8 @@ __all__ = [
     "system_prompt",
     "build_contents_from_history",
     "build_layers_present_note",
-    "build_function_call_content",
-    "build_function_response_content",
     "build_tool_declarations",
     "encode_parts_blob",
-    "load_settings",
     "stream_events",
     "stream_events_with_contents",
     "summarize_tool_result",

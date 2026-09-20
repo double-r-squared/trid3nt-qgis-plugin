@@ -13,7 +13,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from trid3nt_server.adapters.adapter import ModelSettings
+from trid3nt_server.adapters.model_selection import ModelSettings
 from trid3nt_contracts import new_ulid
 
 
@@ -73,9 +73,6 @@ async def _drive_loop(fake_llm, turns: list[dict], fake_invoke) -> tuple[list[li
     state = SessionState(session_id=new_ulid())
     settings = ModelSettings(
         model="gemini-2.5-pro",
-        project="test",
-        location="us-central1",
-        use_vertex=True,
     )
 
     with patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=fake_invoke), \

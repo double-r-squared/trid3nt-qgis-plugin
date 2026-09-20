@@ -15,14 +15,13 @@ from unittest.mock import patch
 
 import pytest
 
+from trid3nt_contracts.message import Message
+from trid3nt_server.adapters.model_selection import ModelSettings
 from trid3nt_server.adapters.adapter import (
     FunctionCallEvent,
-    ModelSettings,
     MAX_TURN_ITERATIONS,
     TextDeltaEvent,
     build_contents_from_history,
-    build_function_call_content,
-    build_function_response_content,
     stream_events_with_contents,
     summarize_tool_result,
 )
@@ -121,14 +120,14 @@ def test_build_contents_from_history_collapses_roles():
 
 def test_build_function_call_and_response_content_pair():
     """The (function_call, function_response) Content pair is well-formed."""
-    call_content = build_function_call_content(
+    call_content = Message.call(
         "geocode_location", {"query": "Fort Myers, FL"}, call_id="call-1"
     )
     assert call_content.role == "model"
     assert call_content.parts[0].call.name == "geocode_location"
     assert call_content.parts[0].call.args == {"query": "Fort Myers, FL"}
 
-    resp_content = build_function_response_content(
+    resp_content = Message.response(
         "geocode_location",
         {"tool": "geocode_location", "status": "ok", "result": {"bbox": [1, 2, 3, 4]}},
         call_id="call-1",
@@ -246,9 +245,6 @@ async def test_stream_model_reply_multi_turn_loop(fake_llm):
     state = SessionState(session_id=new_ulid())
     settings = ModelSettings(
         model="gemini-2.5-pro",
-        project="test",
-        location="us-central1",
-        use_vertex=True,
     )
 
     with patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=_fake_invoke), \
@@ -376,7 +372,7 @@ async def test_stream_model_reply_tool_error_does_not_kill_loop(fake_llm):
     sock = _FakeSocket()
     state = SessionState(session_id=new_ulid())
     settings = ModelSettings(
-        model="gemini-2.5-pro", project="t", location="us-central1", use_vertex=True
+        model="gemini-2.5-pro"
     )
 
     with patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=_failing_invoke), \
@@ -420,7 +416,7 @@ async def test_stream_model_reply_caps_runaway_loop(fake_llm):
     sock = _FakeSocket()
     state = SessionState(session_id=new_ulid())
     settings = ModelSettings(
-        model="gemini-2.5-pro", project="t", location="us-central1", use_vertex=True
+        model="gemini-2.5-pro"
     )
 
     with patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=_counting_invoke), \
@@ -517,7 +513,7 @@ async def test_stream_segments_interleave_distinct_message_ids(fake_llm):
     sock = _FakeSocket()
     state = SessionState(session_id=new_ulid())
     settings = ModelSettings(
-        model="gemini-2.5-pro", project="t", location="us-central1", use_vertex=True
+        model="gemini-2.5-pro"
     )
 
     with patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=_fake_invoke), \
@@ -598,7 +594,7 @@ async def test_stream_no_leading_text_before_first_tool_no_empty_bubble(fake_llm
     sock = _FakeSocket()
     state = SessionState(session_id=new_ulid())
     settings = ModelSettings(
-        model="gemini-2.5-pro", project="t", location="us-central1", use_vertex=True
+        model="gemini-2.5-pro"
     )
 
     with patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=_fake_invoke), \
@@ -650,7 +646,7 @@ async def test_stream_multiple_calls_one_round_single_finalize(fake_llm):
     sock = _FakeSocket()
     state = SessionState(session_id=new_ulid())
     settings = ModelSettings(
-        model="gemini-2.5-pro", project="t", location="us-central1", use_vertex=True
+        model="gemini-2.5-pro"
     )
 
     with patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=_fake_invoke), \
@@ -786,9 +782,6 @@ async def test_turn_survives_client_ws_close_mid_dispatch(fake_llm):
     state = SessionState(session_id=new_ulid())
     settings = ModelSettings(
         model="gemini-2.5-pro",
-        project="test",
-        location="us-central1",
-        use_vertex=True,
     )
     persisted, failure_cards, error_codes, p1, p2, p3 = _turn_recorders(
         agent_server
@@ -831,9 +824,6 @@ async def test_client_close_is_not_reported_as_llm_unavailable(fake_llm):
     state = SessionState(session_id=new_ulid())
     settings = ModelSettings(
         model="gemini-2.5-pro",
-        project="test",
-        location="us-central1",
-        use_vertex=True,
     )
     persisted, failure_cards, error_codes, p1, p2, p3 = _turn_recorders(
         agent_server
@@ -861,9 +851,6 @@ async def test_genuine_model_failure_still_reports_llm_unavailable(fake_llm):
     state = SessionState(session_id=new_ulid())
     settings = ModelSettings(
         model="gemini-2.5-pro",
-        project="test",
-        location="us-central1",
-        use_vertex=True,
     )
     persisted, failure_cards, error_codes, p1, p2, p3 = _turn_recorders(
         agent_server

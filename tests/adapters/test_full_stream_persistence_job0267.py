@@ -562,9 +562,9 @@ async def test_e2e_full_turn_replays_complete_stream(
 
 
 
+from trid3nt_server.adapters.model_selection import ModelSettings
 from trid3nt_server.adapters.adapter import (  # noqa: E402
     FunctionCallEvent,
-    ModelSettings,
     TextDeltaEvent,
 )
 
@@ -585,7 +585,7 @@ async def _drive_real_stream(ws, state, turn_events):
             yield evt
 
     settings = ModelSettings(
-        model="m", project="p", location="us-central1", use_vertex=True
+        model="m"
     )
     with patch.object(agent_server, "build_tool_declarations", return_value=[]), \
          patch.object(agent_server, "stream_events_with_contents", _fake_stream):

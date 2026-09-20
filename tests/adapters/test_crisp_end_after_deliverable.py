@@ -13,7 +13,8 @@ from unittest.mock import patch
 
 import pytest
 
-from trid3nt_server.adapters.adapter import ModelSettings, MAX_TURN_ITERATIONS
+from trid3nt_server.adapters.model_selection import ModelSettings
+from trid3nt_server.adapters.adapter import MAX_TURN_ITERATIONS
 from trid3nt_server.server import (
     SessionState,
     _POST_DELIVERABLE_WRAPUP_ROUNDS,
@@ -41,7 +42,7 @@ def _make_fake_chunk_with_function_call(name: str, args: dict, call_id: str):
 
 def _settings() -> ModelSettings:
     return ModelSettings(
-        model="gemini-2.5-pro", project="t", location="us-central1", use_vertex=True
+        model="gemini-2.5-pro"
     )
 
 

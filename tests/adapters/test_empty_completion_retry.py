@@ -13,9 +13,9 @@ from dataclasses import dataclass, field
 import pytest
 from unittest.mock import patch
 
+from trid3nt_server.adapters.model_selection import ModelSettings
 from trid3nt_server.adapters.adapter import (
     FunctionCallEvent,
-    ModelSettings,
     TextDeltaEvent,
 )
 from trid3nt_contracts import new_ulid
@@ -105,7 +105,7 @@ def _drive(provider: str, rounds, monkeypatch, dispatch_side_effect=None):
     sock = _FakeSocket()
     state = SessionState(session_id=new_ulid())
     settings = ModelSettings(
-        model="gpt-oss", project="t", location="us-central1", use_vertex=True
+        model="gpt-oss"
     )
 
     async def _run():

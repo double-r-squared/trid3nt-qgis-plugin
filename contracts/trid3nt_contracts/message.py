@@ -53,6 +53,31 @@ class Message(GraceModel):
     role: Literal["user", "model"] = "user"
     parts: list[Part] = Field(default_factory=list)
 
+    @classmethod
+    def user_text(cls, text: str) -> "Message":
+        """A plain user-role text turn, so a loop driver appends a corrective
+        turn without hand-rolling the IR."""
+        return cls(role="user", parts=[Part(text=text)])
+
+    @classmethod
+    def call(cls, name: str, args: dict[str, Any] | None = None,
+             call_id: str | None = None) -> "Message":
+        """The model-role turn wrapping one tool call, appended after a dispatch
+        so the next model round sees its own prior decision."""
+        return cls(role="model",
+                   parts=[Part(call=ToolCall(name=name, args=args or {},
+                                             id=call_id))])
+
+    @classmethod
+    def response(cls, name: str, result: dict[str, Any] | None = None,
+                 call_id: str | None = None) -> "Message":
+        """The user-role turn wrapping one tool response, appended right after
+        its call so the model has the pair before deciding its next turn."""
+        return cls(role="user",
+                   parts=[Part(response=ToolResponse(name=name,
+                                                     result=result or {},
+                                                     id=call_id))])
+
 
 # ``schema`` shadows a deprecated ``BaseModel`` classmethod: inert on a
 # data-only model, and the field name the seam is specified in.

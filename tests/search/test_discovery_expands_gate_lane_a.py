@@ -16,7 +16,7 @@ import pytest
 
 from trid3nt_server import server as agent_server
 from trid3nt_server import tools as agent_tools
-from trid3nt_server.adapters.adapter import ModelSettings
+from trid3nt_server.adapters.model_selection import ModelSettings
 from trid3nt_server.tools.search.tool_retrieval import CORE_FLOOR
 from trid3nt_server.tools import RegisteredTool
 from trid3nt_server.render.uri_registry import reset_uri_registries_for_tests
@@ -74,7 +74,7 @@ def _text_chunk(text: str):
 
 def _settings() -> ModelSettings:
     return ModelSettings(
-        model="gemini-2.5-pro", project="t", location="us-central1", use_vertex=True
+        model="gemini-2.5-pro"
     )
 
 

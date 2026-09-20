@@ -13,7 +13,8 @@ import logging
 import pytest
 
 from trid3nt_server import server
-from trid3nt_server.adapters.adapter import ModelSettings, TextDeltaEvent, FunctionCallEvent
+from trid3nt_server.adapters.model_selection import ModelSettings
+from trid3nt_server.adapters.adapter import TextDeltaEvent, FunctionCallEvent
 from trid3nt_server import tools as agent_tools
 from trid3nt_server.gates.context_budget import (
     CONTEXT_WINDOW_ABORT_NOTE,
@@ -82,7 +83,7 @@ async def _drive_real_stream(ws, state, fake_stream):
     from trid3nt_server import server as agent_server
 
     settings = ModelSettings(
-        model="m", project="p", location="us-central1", use_vertex=True
+        model="m"
     )
     with patch.object(agent_server, "build_tool_declarations", return_value=[]), \
          patch.object(agent_server, "stream_events_with_contents", fake_stream):

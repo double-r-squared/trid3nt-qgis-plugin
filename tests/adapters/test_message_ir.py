@@ -19,8 +19,6 @@ from trid3nt_contracts.message import Message, Part, ToolCall, ToolDeclaration, 
 from trid3nt_server.adapters.adapter import (
     _decode_parts_blob,
     build_contents_from_history,
-    build_function_call_content,
-    build_function_response_content,
     encode_parts_blob,
 )
 from trid3nt_server.adapters.anthropic_adapter import (
@@ -47,10 +45,10 @@ def _conversation() -> list[Message]:
     """A user ask, one tool call, its response, and a follow-up ask."""
     contents = build_contents_from_history("where is Fort Myers", [])
     contents.append(
-        build_function_call_content("geocode_location", {"query": "Fort Myers, FL"}, "call-1")
+        Message.call("geocode_location", {"query": "Fort Myers, FL"}, "call-1")
     )
     contents.append(
-        build_function_response_content(
+        Message.response(
             "geocode_location", {"status": "ok", "bbox": [1, 2, 3, 4]}, "call-1"
         )
     )
@@ -127,11 +125,12 @@ def test_no_provider_sdk_is_imported_for_the_ir() -> None:
         "        raise ImportError('provider SDK reached the IR: ' + name)\n"
         "    return _real(name, *a, **k)\n"
         "builtins.__import__ = _guard\n"
-        "from trid3nt_server.adapters.adapter import build_function_call_content\n"
+        "from trid3nt_contracts.message import Message\n"
+        "import trid3nt_server.adapters.adapter\n"
         "import trid3nt_server.adapters.openai_adapter\n"
         "import trid3nt_server.adapters.anthropic_adapter\n"
         "import trid3nt_server.gates.context_budget\n"
-        "assert build_function_call_content('t', {}, 'c').parts[0].call.name == 't'\n"
+        "assert Message.call('t', {}, 'c').parts[0].call.name == 't'\n"
         "print('clean')\n"
     )
     out = subprocess.run(

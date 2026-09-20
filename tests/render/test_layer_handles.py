@@ -353,7 +353,7 @@ def _function_response_payloads(contents_per_turn):
 @pytest.mark.asyncio
 async def test_emit_seam_llm_sees_handle_not_uri(fake_llm) -> None:
     from trid3nt_server import server as agent_server
-    from trid3nt_server.adapters.adapter import ModelSettings
+    from trid3nt_server.adapters.model_selection import ModelSettings
     from trid3nt_server.main import _import_tools_registry
     from trid3nt_server.server import SessionState
 
@@ -377,8 +377,7 @@ async def test_emit_seam_llm_sees_handle_not_uri(fake_llm) -> None:
     sock = _FakeSocket()
     state = SessionState(session_id=new_ulid())
     settings = ModelSettings(
-        model="gemini-2.5-pro", project="test", location="us-central1",
-        use_vertex=True,
+        model="gemini-2.5-pro",
     )
     with patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=_fake_invoke), \
          patch.object(agent_server, "build_tool_declarations", return_value=[]):

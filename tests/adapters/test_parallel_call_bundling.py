@@ -15,9 +15,9 @@ from unittest.mock import patch
 
 import pytest
 
+from trid3nt_server.adapters.model_selection import ModelSettings
 from trid3nt_server.adapters.adapter import (
     FunctionCallEvent,
-    ModelSettings,
     TextDeltaEvent,
     stream_events_with_contents,
 )
@@ -155,7 +155,7 @@ async def test_loop_dispatches_three_parallel_calls_in_one_turn(fake_llm):
     sock = _FakeSocket()
     state = SessionState(session_id=new_ulid())
     settings = ModelSettings(
-        model="gemini-3-pro", project="t", location="us-central1", use_vertex=True
+        model="gemini-3-pro"
     )
 
     with patch.object(
@@ -272,7 +272,7 @@ async def test_loop_dispatches_parallel_calls_split_across_chunks(fake_llm):
     sock = _FakeSocket()
     state = SessionState(session_id=new_ulid())
     settings = ModelSettings(
-        model="gemini-3-pro", project="t", location="us-central1", use_vertex=True
+        model="gemini-3-pro"
     )
 
     with patch.object(

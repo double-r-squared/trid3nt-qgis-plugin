@@ -14,8 +14,8 @@ from unittest.mock import patch
 
 import pytest
 
+from trid3nt_server.adapters.model_selection import ModelSettings
 from trid3nt_server.adapters.adapter import (
-    ModelSettings,
     MAX_TURN_ITERATIONS,
 )
 from trid3nt_server.server import _send_loop_exhausted, SessionState
@@ -159,7 +159,7 @@ async def test_stream_model_reply_emits_loop_exhausted_on_cap(fake_llm):
     sock = _FakeSocket()
     state = SessionState(session_id=new_ulid())
     settings = ModelSettings(
-        model="gemini-2.5-pro", project="t", location="us-central1", use_vertex=True
+        model="gemini-2.5-pro"
     )
 
     with patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=_always_succeed), \
@@ -209,7 +209,7 @@ async def test_stream_model_reply_terminal_chunk_after_loop_exhausted(fake_llm):
     sock = _FakeSocket()
     state = SessionState(session_id=new_ulid())
     settings = ModelSettings(
-        model="gemini-2.5-pro", project="t", location="us-central1", use_vertex=True
+        model="gemini-2.5-pro"
     )
 
     with patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=_succeed), \

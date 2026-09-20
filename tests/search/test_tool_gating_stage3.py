@@ -16,7 +16,8 @@ import pytest
 
 import trid3nt_server.main as agent_main
 from trid3nt_server import server as agent_server
-from trid3nt_server.adapters.adapter import ModelSettings, TextDeltaEvent
+from trid3nt_server.adapters.model_selection import ModelSettings
+from trid3nt_server.adapters.adapter import TextDeltaEvent
 from trid3nt_server.tools.search.tool_retrieval import CORE_FLOOR
 from trid3nt_server.gates.tool_gating import (
     TOOL_GATING_TOPK_DEFAULT,
@@ -163,7 +164,7 @@ class _FakeSocket:
 
 def _settings() -> ModelSettings:
     return ModelSettings(
-        model="gemini-2.5-pro", project="t", location="us-central1", use_vertex=True
+        model="gemini-2.5-pro"
     )
 
 
