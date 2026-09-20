@@ -28,9 +28,9 @@ from trid3nt_server.workflows.runtime.errors import PlanValidationError
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["LOOSEN_DATUM", "LOOSEN_WINDOW", "Need", "RANKED_ROWS", "ask_for",
-           "base_ask", "covered_sources", "dropped_from", "instant", "match",
-           "sources_with_coverage"]
+__all__ = ["LOOSEN_DATUM", "LOOSEN_WINDOW", "NO_MOMENT", "Need", "RANKED_ROWS",
+           "ask_for", "base_ask", "covered_sources", "dropped_from", "instant",
+           "match", "sources_with_coverage"]
 
 #: How many rows the ranked list carries. Five: enough for the facts to be
 #: comparable in one read, few enough that a model answering with a row number
@@ -51,7 +51,8 @@ class Need:
     lon: float | None = None
     lat: float | None = None
     #: The instants the run opens and closes at, ISO. A series source that does
-    #: not span them has no record for this run.
+    #: not span them has no record for this run, and a run that states NEITHER
+    #: asks no series source at all - a record has to be a record OF something.
     opens: str | None = None
     until: str | None = None
     #: The vertical frame the run is solved on, off the lever.
@@ -130,8 +131,8 @@ def match(need: Need,
     for name, coverage in candidates:
         if coverage.data_class != need.data_class:
             continue
-        reason = (_unaskable(name, coverage, need) or _wrong_shape(name, need)
-                  or _excluded(need, coverage))
+        reason = (_no_moment(need, coverage) or _unaskable(name, coverage, need)
+                  or _wrong_shape(name, need) or _excluded(need, coverage))
         if reason:
             dropped.append(_option(name, coverage, need, excluded=reason))
             continue
@@ -422,6 +423,23 @@ def _excluded(need: Need, coverage: Coverage) -> str:
     return ""
 
 
+#: The head of the reason a series source is not asked at all, which is also how
+#: the refusal names it: one phrasing, so the row and the sentence cannot drift.
+NO_MOMENT = "no moment was stated"
+
+
+def _no_moment(need: Need, coverage: Coverage) -> str:
+    """Why a SERIES source is not asked when the run states no moment, or "".
+
+    A series is a reading AT A TIME. A run that stated none has no window to put,
+    and a source asked over none answers with its latest record - a reading
+    nobody asked about, taken for the one the question is about."""
+    if not coverage.window.series or need.opens:
+        return ""
+    return (f"{NO_MOMENT}, so it is not asked: a series source reached over no "
+            "window answers with its latest record")
+
+
 def _unpublished(need: Need, coverage: Coverage) -> str:
     """Why a source publishing none of what the slot asked for leaves the list, or "".
 
@@ -594,6 +612,10 @@ def _sentence(need: Need, survivors: Sequence[SourceOption],
     Authored here so the two cannot drift - a second rendering of the same facts
     is a second chance to say something the run did not do."""
     if not survivors:
+        if dropped and all(row.excluded.startswith(NO_MOMENT) for row in dropped):
+            return (f"{need.slot}: {NO_MOMENT}, so no source was asked for "
+                    f"{need.data_class}. State the moment the scenario is read "
+                    "at, or state the value on the call.")
         named = "; ".join(f"{row.fetcher} {row.excluded}" for row in dropped)
         return (f"{need.slot}: nothing measures {need.data_class} here - "
                 + (named or "no source states coverage of this class")

@@ -25,6 +25,11 @@ EUROPE = [[(-10.0, 36.0), (30.0, 36.0), (30.0, 60.0), (-10.0, 60.0)]]
 
 WILLAMETTE = (-122.67, 45.52)
 
+#: THE MOMENT a record is read at. A series source is not asked over a window
+#: nobody stated, so every need for one here states its own.
+DURING = "2024-06-01T00:00:00Z"
+UNTIL = "2024-06-01T12:00:00Z"
+
 
 def surface(data_class="bathymetry", rings=None, res=1.0, datum="NAVD88",
             latest="2024-01-01", note="a stated extent", kind="measured"):
@@ -173,14 +178,16 @@ DOWN_THE_ESTUARY = [[(-124.5, 45.0), (-124.0, 45.0), (-124.0, 46.0),
 
 def level_need(**over):
     kwargs = dict(slot="stage", data_class="water level series",
-                  lon=WILLAMETTE[0], lat=WILLAMETTE[1])
+                  lon=WILLAMETTE[0], lat=WILLAMETTE[1],
+                  opens=DURING, until=UNTIL)
     kwargs.update(over)
     return Need(**kwargs)
 
 
 def test_a_measured_gauge_at_the_place_outranks_a_modelled_grid_over_it():
     choice = match(Need(slot="carrier", data_class="discharge series",
-                        lon=WILLAMETTE[0], lat=WILLAMETTE[1]), [
+                        lon=WILLAMETTE[0], lat=WILLAMETTE[1],
+                        opens=DURING, until=UNTIL), [
         ("fetch_model_grid", Coverage(
             data_class="discharge series", kind="modelled",
             extent=CoverageExtent(kind="surface", rings=CONUS,
@@ -254,7 +261,7 @@ def test_a_source_called_by_station_with_no_stations_listed_is_not_a_survivor(mo
                                    "start_date": {"required": True}})
     monkeypatch.setitem(registration._SPEC_REGISTRY, "fetch_by_station", spec)
     seeded = m.Need(slot="level", data_class="water level series",
-                    lon=-115.92, lat=43.59)
+                    lon=-115.92, lat=43.59, opens=DURING, until=UNTIL)
     discovered = gauges(data_class="water level series")
     assert "called by station" in m._unaskable("fetch_by_station", discovered,
                                                seeded)
@@ -278,9 +285,11 @@ def test_a_source_addressed_by_a_seed_is_no_survivor_of_a_question_with_no_point
     registration._SPEC_REGISTRY["fetch_by_seed"] = spec
     try:
         row = gauges(data_class="water level series")
-        boxed = m.Need(slot="domain", data_class="water level series")
+        boxed = m.Need(slot="domain", data_class="water level series",
+                       opens=DURING, until=UNTIL)
         assert "called by seed_point" in m._unaskable("fetch_by_seed", row, boxed)
         seeded = m.Need(slot="domain", data_class="water level series",
+                        opens=DURING, until=UNTIL,
                         lon=-71.5, lat=41.36)
         assert m._unaskable("fetch_by_seed", row, seeded) == ""
     finally:
@@ -304,7 +313,8 @@ def test_the_probe_names_the_nearest_listed_station_and_the_rows_own_ask(
                            coverage=[row])
     monkeypatch.setitem(registration._SPEC_REGISTRY, "fetch_by_station", spec)
     choice = match(Need(slot="level", data_class="water level series",
-                        lon=WILLAMETTE[0], lat=WILLAMETTE[1]),
+                        lon=WILLAMETTE[0], lat=WILLAMETTE[1],
+                        opens=DURING, until=UNTIL),
                    [("fetch_by_station", row)])
     assert choice.picked == "fetch_by_station"
     ask = m.ask_for(choice, {"bbox": [0, 0, 1, 1]}, *WILLAMETTE)
@@ -347,7 +357,7 @@ def listed(*points, data_class="discharge series"):
 def flow_need(**over):
     kwargs = dict(slot="carrier", data_class="discharge series",
                   lon=WILLAMETTE[0], lat=WILLAMETTE[1], mesh_m=50.0,
-                  water=REACH)
+                  water=REACH, opens=DURING, until=UNTIL)
     kwargs.update(over)
     return Need(**kwargs)
 
@@ -396,7 +406,8 @@ def test_a_box_called_source_is_asked_over_a_box_that_reaches_its_station(
     spec = SimpleNamespace(params={"bbox": {"required": True}}, coverage=[row])
     monkeypatch.setitem(registration._SPEC_REGISTRY, "fetch_tides", spec)
     choice = match(Need(slot="stage", data_class="water level series",
-                        lon=WILLAMETTE[0], lat=WILLAMETTE[1]),
+                        lon=WILLAMETTE[0], lat=WILLAMETTE[1],
+                        opens=DURING, until=UNTIL),
                    [("fetch_tides", row)])
     ask = m.ask_for(choice, {"bbox": [-122.68, 45.51, -122.66, 45.53]},
                     *WILLAMETTE)
@@ -462,3 +473,30 @@ def test_the_source_is_called_by_its_own_word_for_the_feature(monkeypatch):
     ask = m.ask_for(choice, {"bbox": [-122.68, 45.51, -122.66, 45.53]},
                     *WILLAMETTE, {"of": "drainage network"})
     assert ask["waterway_type"] == "drainage"
+
+
+def test_a_series_need_with_no_moment_stated_asks_no_source_at_all():
+    """A record is a reading AT A TIME. A run that stated none has no window to
+    put, so the source that would have answered with its latest one is not
+    asked, and the refusal says which."""
+    from trid3nt_server.tools.search.match import NO_MOMENT
+
+    choice = match(Need(slot="inflow", data_class="discharge series",
+                        lon=WILLAMETTE[0], lat=WILLAMETTE[1]),
+                   [("fetch_gauges", gauges())])
+    assert choice.picked == ""
+    assert NO_MOMENT in choice.rows[0].excluded
+    assert choice.sentence.startswith(f"inflow: {NO_MOMENT}")
+    assert "discharge series" in choice.sentence
+
+
+def test_no_level_or_discharge_source_can_be_reached_without_a_moment():
+    """Every published source of the two classes a level and a discharge slot
+    read states a SERIES window, so the gate above covers every one of them:
+    neither slot has a source it could fall through to for a latest record."""
+    from trid3nt_server.tools.search.match import sources_with_coverage
+
+    rows = [(name, row) for name, row in sources_with_coverage()
+            if row.data_class in ("water level series", "discharge series")]
+    assert rows
+    assert [name for name, row in rows if not row.window.series] == []

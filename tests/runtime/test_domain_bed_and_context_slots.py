@@ -431,7 +431,7 @@ def test_a_context_row_over_a_window_nobody_stated_is_not_asked(monkeypatch):
 
     class DATA:
         rain = Data(tool("fetch_aorc_precip", bbox=[0.0, 0.0, 1.0, 1.0],
-                         start_date=ParamRef("rain_start_date"))
+                         start_date=ParamRef("event_time"))
                     ).context("no hourly rainfall record over this catchment "
                               "for that window")
 
@@ -442,14 +442,62 @@ def test_a_context_row_over_a_window_nobody_stated_is_not_asked(monkeypatch):
         raise AssertionError("the source must not be asked")
 
     monkeypatch.setattr(interpreter, "_produced", _never)
-    env = interpreter._Env(params=_Params({"rain_start_date": None}), data={},
+    env = interpreter._Env(params=_Params({"event_time": None}), data={},
                            results={})
     row = data_rows(DATA)[0]
     assert asyncio.run(interpreter._produce(env, row)) is None
     assert asked == []
     assert env.absences == [
         "no hourly rainfall record over this catchment for that window "
-        "(rain_start_date (the start_date this row reads) was not stated)"]
+        "(event_time (the start_date this row reads) was not stated)"]
+
+
+def _no_moment_env(**over):
+    """A run standing on a place with NO moment stated - the one fact these two
+    rows turn on."""
+    from trid3nt_server.workflows.runtime import interpreter
+
+    _standing_on()
+    return interpreter._Env(params=_Params({"event_time": None}), data={},
+                            results={}, **over)
+
+
+def test_a_context_need_with_no_moment_stated_is_absent_with_its_sentence():
+    """The row states a NEED rather than a producer, so the match is what
+    refuses to ask: a series source reached over no window answers with its
+    latest record, which is a storm nobody asked about."""
+    from trid3nt_server.workflows.runtime import interpreter
+    from trid3nt_server.tools.search.match import NO_MOMENT
+
+    class DATA:
+        rain = Data.need("precipitation series").context(
+            "no hourly rainfall record over this catchment for that window; "
+            "the design storm drives the run")
+
+    env = _no_moment_env()
+    row = data_rows(DATA)[0]
+    assert asyncio.run(interpreter._produce(env, row)) is None
+    assert len(env.absences) == 1
+    assert env.absences[0].startswith(
+        "no hourly rainfall record over this catchment for that window; "
+        "the design storm drives the run (rain: " + NO_MOMENT)
+
+
+def test_a_required_series_need_with_no_moment_stated_refuses_naming_the_slot():
+    """A run that cannot stand without the record refuses instead: the slot by
+    name, and that no moment was stated."""
+    from trid3nt_server.workflows.runtime import interpreter
+    from trid3nt_server.workflows.runtime.errors import StepFailedError
+    from trid3nt_server.tools.search.match import NO_MOMENT
+
+    class DATA:
+        discharge = Data.need("discharge series")
+
+    env = _no_moment_env()
+    with pytest.raises(StepFailedError) as caught:
+        asyncio.run(interpreter._produce(env, data_rows(DATA)[0]))
+    assert caught.value.error_code == "DATA_NEED_UNMATCHED"
+    assert str(caught.value).startswith(f"discharge: {NO_MOMENT}")
 
 
 def _standing_on(bbox=(-123.22, 45.48, -123.19, 45.50)):

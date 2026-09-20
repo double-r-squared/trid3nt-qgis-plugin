@@ -132,14 +132,15 @@ async def test_a_class_no_row_serves_refuses_naming_the_class(world):
 async def test_a_source_on_the_list_twice_is_called_with_each_rows_own_ask(world):
     """A source serving a measured and a predicted series of one class is two
     candidates, and each carries the values that make it answer with THAT row."""
-    from tests.search.test_source_match import gauges
+    from tests.search.test_source_match import DURING, UNTIL, gauges
 
     measured = gauges(data_class="water level series")
     predicted = gauges(data_class="water level series", kind="predicted")
     predicted.ask = {"product": "predictions"}
     world([("fetch_tides", measured), ("fetch_tides", predicted)],
           params={"bbox": {}})
-    found = await find_sources("water level series", PORTLAND_BOX)
+    found = await find_sources("water level series", PORTLAND_BOX,
+                               window=[DURING, UNTIL])
     asks = {row["kind"]: row["ask"] for row in found["results"]}
     assert asks["measured"] == {"purpose": "water level series",
                                 "bbox": PORTLAND_BOX}
