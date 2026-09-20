@@ -246,6 +246,11 @@ _FLOW_BY_SOLVER_TOOL: dict[str, str] = {
     "telemac3d_stratified_flow": "stratified-flow",
     "artemis_harbor_agitation": "harbor-agitation",
 }
+# The flow label is a REPORTING name and no tool metadata carries one, so this
+# map is its only home. The tier=template members deliberately absent from it -
+# telemac_eutrophication, telemac_ice_cover, telemac_micropollutant_release,
+# telemac_water_temperature, tomawac_nearshore_waves,
+# tomawac_wave_driven_currents - are not reported per flow.
 
 #: Flow order in the per-flow breakdown. Derived so a flow can never be reported
 #: without a tool that produces it, nor a tool added without its flow appearing.
@@ -1083,17 +1088,10 @@ def _case_list_route_enabled() -> bool:
     return True
 
 
-def _case_summary_to_wire(case: Any) -> dict[str, Any]:
-    """One ``CaseSummary`` as a case-list row: the model's own serializers,
-    narrowed to the four fields the client needs, with an honest ``None`` bbox
-    when the case has none."""
-    dumped = case.model_dump(mode="json")
-    return {
-        "case_id": dumped.get("case_id"),
-        "title": dumped.get("title"),
-        "updated_at": dumped.get("updated_at"),
-        "bbox": dumped.get("bbox"),
-    }
+#: The case-list row the client reads: the envelope serializes every Case field,
+#: and these four are what a left-rail row renders. A case with no bbox carries
+#: an honest None.
+_CASE_ROW_FIELDS = ("case_id", "title", "updated_at", "bbox")
 
 
 async def build_case_list_payload() -> dict[str, Any]:
@@ -1107,8 +1105,12 @@ async def build_case_list_payload() -> dict[str, Any]:
     if persistence is None:
         raise _CaseListPersistenceUnavailable("persistence unavailable")
 
+    from trid3nt_contracts.case import CaseListEnvelopePayload
+
     cases = await persistence.list_cases_for_user(LOCAL_SINGLE_USER_ID)
-    rows = [_case_summary_to_wire(c) for c in cases]
+    serialized = CaseListEnvelopePayload(cases=cases).model_dump(mode="json")
+    rows = [{k: row.get(k) for k in _CASE_ROW_FIELDS}
+            for row in serialized["cases"]]
     rows.sort(key=lambda r: r.get("updated_at") or "", reverse=True)
     return {"cases": rows}
 
