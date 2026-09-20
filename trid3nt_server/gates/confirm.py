@@ -133,8 +133,8 @@ async def _gate_on_confirm(
         return True, params
 
     if estimate.envelope is None:
-        # Estimate provider signalled NO gate needed (fetch_landcover
-        # no-coarsening skip): dispatch as-is.
+        # Estimate provider signalled NO gate needed (fetch_landcover already at
+        # its native grid): dispatch as-is.
         return True, params
 
     envelope = estimate.envelope

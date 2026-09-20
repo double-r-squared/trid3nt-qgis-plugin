@@ -25,11 +25,12 @@ MAX_FETCH_PX: int = 8192
 # Per-fetcher resolution ladders for the fetch-resolution gate. Finer = smaller
 # metres. fetch_dem reaches 1 m (3DEP); fetch_topobathy floors at 3 m (CUDEM
 # tiles); both default to 10 m. fetch_landcover's native NLCD grid is 30 m and
-# the gate coarsens to 60/120/300/600 m on a large bbox so the MRLC WCS
-# GetCoverage stays under 4000 px per axis. fetch_dem's 90/300/900 m rungs exist
-# because a state-scale AOI needs roughly 150 m to stay under the tool's own
-# 4000 px/axis budget; without them the ladder-filtered choices collapse to the
-# computed finest_allowed_m alone, with no coarser alternative.
+# its 60/120/300/600 m rungs are what a large bbox can be ASKED for so the MRLC
+# WCS GetCoverage stays under 4000 px per axis. fetch_dem's 90/300/900 m rungs
+# exist because a state-scale AOI needs roughly 150 m to stay under the tool's
+# own 4000 px/axis budget; without them the ladder-filtered choices collapse to
+# the computed finest_allowed_m alone, with no coarser alternative. The rungs
+# are the ask the user picks: past the budget the fetcher refuses, never coarsens.
 _FETCH_RES_LADDERS: dict[str, list[float]] = {
     "fetch_dem": [1.0, 3.0, 10.0, 30.0, 90.0, 300.0, 900.0],
     "fetch_topobathy": [3.0, 10.0, 30.0],
@@ -43,9 +44,8 @@ _LANDCOVER_DEFAULT_RES_M: float = 30.0
 # server rejects or times out a GetCoverage beyond roughly 4096 px per axis, so
 # the fetch_landcover card bounds its finest selectable rung to 4000 px rather
 # than the generic MAX_FETCH_PX; otherwise the card would offer a rung the tool
-# cannot deliver and would silently coarsen past. fetch_dem auto-coarsens
-# against its own 4000 px/axis budget, and the ceiling is identical here so the
-# card's suggested rung matches what the fetch will actually deliver.
+# refuses. fetch_dem refuses past its own 4000 px/axis budget, and the ceiling
+# is identical here so the card's suggested rung is one the fetch will serve.
 _FETCH_MAX_PX_BY_TOOL: dict[str, int] = {
     "fetch_landcover": 4000,
     "fetch_dem": 4000,
