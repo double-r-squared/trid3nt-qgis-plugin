@@ -1,112 +1,111 @@
+# EPA regulated-facility points, opened on the user's map through QGIS's own
+# ArcGIS FeatureServer provider: one program, one MapServer layer, one uri -
+# the old build_request/parse_response union of five layers into one FGB has
+# no single-uri equivalent, so facility_program picks ONE layer per call.
 schema_version: v1
+
 name: fetch_epa_frs_facilities
 source_class: epa_frs_facilities
 error_prefix: EPA_FRS
 input_error_suffix: INPUT_INVALID
-shape: vector-fgb
+shape: record
 supports_global_query: false
+
 endpoints:
-  data:
-    url: https://geopub.epa.gov/arcgis/rest/services/NEPAssist/NEPAVELayersPublic_fgdb/MapServer/15/query
+  tri:
+    url: "https://geopub.epa.gov/arcgis/rest/services/NEPAssist/NEPAVELayersPublic_fgdb/MapServer/15"
+  water:
+    url: "https://geopub.epa.gov/arcgis/rest/services/NEPAssist/NEPAVELayersPublic_fgdb/MapServer/16"
+  hazwaste:
+    url: "https://geopub.epa.gov/arcgis/rest/services/NEPAssist/NEPAVELayersPublic_fgdb/MapServer/17"
+  air:
+    url: "https://geopub.epa.gov/arcgis/rest/services/NEPAssist/NEPAVELayersPublic_fgdb/MapServer/18"
+  brownfields:
+    url: "https://geopub.epa.gov/arcgis/rest/services/NEPAssist/NEPAVELayersPublic_fgdb/MapServer/13"
+  superfund:
+    url: "https://geopub.epa.gov/arcgis/rest/services/NEPAssist/NEPAVELayersPublic_fgdb/MapServer/14"
 auth:
   mode: none
-  user_agent: trid3nt/0.1 (Hazard Modeling Agent; https://github.com/double-r-squared/trid3nt-qgis-plugin;
-    agent@trid3nt.dev)
-params:
-  bbox:
-    type: bbox
-    required: true
-    quantize: round_6dp
-  facility_program:
-    type: str
-    required: false
-    default: frs
-hooks:
-  build_request: epa_frs_facilities.build_request
-  parse_response: epa_frs_facilities.parse_response
-ingest:
-  properties:
-  - registry_id
-  - program
-  - program_label
-  - program_acronym
-  - program_id
-  - facility_name
-  - address
-  - city
-  - county
-  - state
-  - postal_code
-  - epa_region
-  - facility_url
-  - npl_status
-normalize:
-  crs: EPSG:4326
-output:
-  layer_type: vector
-  ext: fgb
-  role: primary
-  style:
-    kind: reference
-    geometry: point
-  emit_bbox: true
-cache:
-  ttl_class: static-30d
-payload_estimate:
-  model: per_feature
-  features_per_sq_deg: 9000.0
-  kb_per_feature: 0.41
-  floor_mb: 0.02
-  ceil_mb: 50.0
-caveats:
-- EPA Facility Registry Service program-interest points via the public NEPAssist MapServer. facility_program='frs'
-  unions 5 point layers (TRI/water/hazwaste/air/brownfields); 'superfund' synthesizes points from LAT/LON.
-  US-only; bbox required. Single-page per layer (2000-feature cap/layer).
-- "model-callable, not matched: exposure-facility points, not one of the seventeen matched data classes"
-docstring: |-
-  EPA regulated-facility points by program as a FlatGeobuf layer.
+  user_agent: trid3nt_default
 
-  Fetches EPA Facility Registry Service (FRS) program-interest point facilities
-  of one ``facility_program`` intersecting a bbox, from a public, unauthenticated
-  EPA ArcGIS REST MapServer (the EPA NEPAssist public layers). Returns a
-  FlatGeobuf of ``Point`` features in EPSG:4326 with a common FRS attribute
-  schema (``registry_id``, ``program``, ``program_id``, ``facility_name``,
-  address columns, ``facility_url``).
+params:
+  bbox: {type: bbox, required: true, quantize: round_6dp}
+  facility_program: {type: enum, required: true, lowercase: true,
+                      values: [tri, water, hazwaste, air, brownfields, superfund],
+                      aliases: {toxic_release: tri, toxics: tri, npl: superfund,
+                                cercla: superfund, npdes: water, wastewater: water,
+                                rcra: hazwaste, hazardous_waste: hazwaste,
+                                air_emissions: air, brownfield: brownfields}}
+
+ingest:
+  access: qgis_provider
+  qgis_provider:
+    provider: arcgisfeatureserver
+    uri: "crs='EPSG:4326' url='{url}'"
+    mode: open
+  endpoint_by_param: {param: facility_program, map: {tri: tri, water: water,
+                       hazwaste: hazwaste, air: air, brownfields: brownfields,
+                       superfund: superfund}}
+
+normalize:
+  crs: "EPSG:4326"
+
+output:
+  layer_type: record
+  ext: json
+
+cache:
+  ttl_class: live-no-cache
+payload_estimate:
+  model: bbox_area
+  mb_per_sq_deg: 0.0
+  floor_mb: 0.0
+
+caveats:
+  - "EPA Facility Registry Service program-interest points via the public NEPAssist MapServer, opened as a live map overlay; facility_program selects ONE program layer (tri/water/hazwaste/air/brownfields/superfund) - the prior 'frs' union of five layers into one output has no single-uri equivalent, so a caller wanting all five opens each program in turn"
+  - "the layer is drawn by QGIS from the service, so its features are on the map but not in the case store and no analysis reads them"
+  - "model-callable, not matched: exposure-facility points, not one of the seventeen matched data classes"
+
+docstring: |-
+  EPA regulated-facility points for one program, added to the map.
+
+  Opens EPA Facility Registry Service (FRS) program-interest point facilities
+  for one ``facility_program`` as a live layer served by QGIS's own ArcGIS
+  FeatureServer provider, from the public, unauthenticated EPA NEPAssist
+  MapServer.
 
   **When to use:**
   - "Show EPA regulated facilities / TRI sites / Superfund sites near [place]".
-  - Locating a candidate chemical-source facility for a contamination-plume
-    question, or determining which regulated facilities a modeled plume reaches.
-  - Any hazard / exposure question needing regulated industrial / waste facility
-    locations inside a flood / fire / surge / plume footprint.
+  - Visual context for a chemical-source or exposure question inside a flood
+    / fire / surge / plume footprint.
 
   **When NOT to use:**
+  - To COMPUTE with the facility attributes - intersect them with fields,
+    count by program, feed a model. The overlay is drawn from the service and
+    its features never reach the store; nothing downstream can read them.
+  - Every program layer at once - call this once per ``facility_program``
+    of interest; there is no combined "all programs" overlay.
   - Life-safety facilities (hospitals / schools / fire / police / power) ->
-    ``fetch_hifld_critical_infrastructure``.
-  - Dams -> ``fetch_usace_dams``. Buildings -> ``fetch_usace_nsi``.
-  - Non-US facilities (FRS is US-only). Real-time emission / discharge readings
-    (FRS is a static inventory).
+    ``fetch_hifld_critical_infrastructure``. Dams -> ``fetch_usace_dams``.
+  - Non-US facilities (FRS is US-only).
 
   **Parameters:**
       bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326. Required.
-      facility_program: One of ``"frs"`` (default -- union of TRI + water +
-          hazardous-waste + air + brownfields point layers), ``"tri"``,
-          ``"superfund"``, ``"air"``, ``"water"``, ``"hazwaste"``,
-          ``"brownfields"`` (aliases accepted: ``"all"``, ``"toxic_release"``,
-          ``"npl"``, ``"npdes"``, ``"rcra"``, etc.).
+      facility_program: One of ``"tri"``, ``"water"``, ``"hazwaste"``,
+          ``"air"``, ``"brownfields"``, ``"superfund"`` (aliases accepted:
+          ``"toxic_release"``, ``"npl"``, ``"npdes"``, ``"rcra"``, etc.).
+          Required -- there is no default union layer.
 
   **Returns:**
-      ``LayerURI`` -> FlatGeobuf of ``Point`` features in EPSG:4326. Properties
-      carry ``registry_id``, ``program``, ``program_label``, ``program_acronym``,
-      ``program_id``, ``facility_name``, ``address``, ``city``, ``county``,
-      ``state``, ``postal_code``, ``epa_region``, ``facility_url`` (and
-      ``npl_status`` for Superfund). ``layer_type="vector"``, ``role="primary"``,
-      ``units=None``.
-
+      A record naming what was opened: the provider, the service uri behind
+      the layer, the layer name and the bbox the map was taken to.
   **Error types:**
-      - ``EpaFrsInputError``: unknown facility_program or bad bbox
+      - ``EPA_FRSInputError``: unknown facility_program or bad bbox
         (retryable=False).
-      - ``EpaFrsUpstreamError``: HTTP/network failure, ArcGIS error envelope,
-        or FlatGeobuf serialization failure (retryable=True).
-      - ``EpaFrsEmptyError``: no features in bbox (retryable=False; not raised
-        by default -- an empty FGB is returned).
+      - ``EPA_FRSUpstreamError``: the provider's own text when it cannot
+        open the service (retryable=True).
+
+  Requires a live QGIS session: the layer is opened in the user's QGIS, so a
+  headless or direct call refuses by name rather than returning nothing.
+
+  ``supports_global_query=False``. No API key required.

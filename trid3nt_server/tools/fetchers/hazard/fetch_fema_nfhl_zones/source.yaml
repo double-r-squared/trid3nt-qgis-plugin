@@ -1,156 +1,92 @@
+# FEMA NFHL regulatory flood-zone polygons, opened on the user's map through
+# QGIS's own ArcGIS FeatureServer provider (public MapServer, layer 28).
 schema_version: v1
+
 name: fetch_fema_nfhl_zones
 source_class: fema_nfhl
 error_prefix: FEMA_NFHL_ZONES
 input_error_suffix: INPUT_INVALID
-shape: vector-fgb
+shape: record
 supports_global_query: false
+
 endpoints:
   data:
-    url: https://hazards.fema.gov/arcgis/rest/services/public/NFHL/MapServer/28/query
+    url: "https://hazards.fema.gov/arcgis/rest/services/public/NFHL/MapServer/28"
 auth:
   mode: none
-  user_agent: trid3nt/0.1 (Hazard Modeling Agent; https://github.com/double-r-squared/trid3nt-qgis-plugin;
-    agent@trid3nt.dev)
+  user_agent: trid3nt_default
+
 params:
-  bbox:
-    type: bbox
-    required: true
-    quantize: round_6dp
-  sfha_only:
-    type: bool
-    required: false
-    default: false
-  zone_filter:
-    type: str_list
-    required: false
-    schema_optional: true
-hooks:
-  delegate: fema_nfhl_zones.delegate
+  bbox: {type: bbox, required: true, quantize: round_6dp}
+  zone: {type: str, required: false, schema_optional: true}
+
 ingest:
-  delegate: {library: pygeohydro, timeout_s: 2400}
-  properties:
-  - FLD_ZONE
-  - ZONE_SUBTY
-  - SFHA_TF
-  - STATIC_BFE
-  - V_DATUM
-  - DEPTH
-  - LEN_UNIT
-  - VELOCITY
-  - VEL_UNIT
-  - DFIRM_ID
-  - FLD_AR_ID
-  - STUDY_TYP
-  - SOURCE_CIT
-  - GFID
+  access: qgis_provider
+  qgis_provider:
+    provider: arcgisfeatureserver
+    uri: "crs='EPSG:4326' url='{url}'"
+    mode: open
+  where_clauses:
+    - {template: "FLD_ZONE='{zone}'", require: [zone]}
+
 normalize:
-  crs: EPSG:4326
+  crs: "EPSG:4326"
+
 output:
-  layer_type: vector
-  ext: fgb
-  role: primary
-  style:
-    kind: reference
-    geometry: polygon
-  emit_bbox: false
+  layer_type: record
+  ext: json
+
 cache:
-  ttl_class: static-30d
+  ttl_class: live-no-cache
 payload_estimate:
-  model: per_feature
-  features_per_sq_deg: 512.0
-  kb_per_feature: 1.0
-  floor_mb: 0.05
-  ceil_mb: 50.0
+  model: bbox_area
+  mb_per_sq_deg: 0.0
+  floor_mb: 0.0
+
 caveats:
-- FEMA NFHL regulatory flood-zone polygons via the public MapServer (layer 28). Regulatory static product,
-  NOT live flood extent. US + territories; bbox required.
-- 'Read by OBJECT ID in batches, so a page the service refuses can never pass as the end of the layer: a
-  cursor walk over this endpoint stops early on a deep page and looks whole. A batch it will not serve is a
-  typed upstream error, never a partial regulatory layer.'
-- 'MEASURED LIMIT: the service will not serve a metro-scale AOI to one client in one pass. Over a 0.2 deg^2
-  Tampa Bay bbox (9,894 polygons by its own count) it answers the first two or three batches and then refuses
-  the rest with HTTP 500 and connection resets, at every batch size and pacing measured. A wide AOI is
-  therefore read TILE BY TILE - 0.1 deg sub-bboxes, one servable read each at that AOI''s density, 10 s apart
-  - and the tiles are merged and de-duplicated by object id.'
-- 'Every tile the service still refuses after its attempts is NAMED, with the polygon count it would have
-  carried, in the log and in the run''s notes; an AOI where no tile answered is a typed upstream error. A
-  truncated regulatory layer is never returned quietly. A wide AOI therefore takes minutes, and may still
-  come back short of what the service counts - read its notes before publishing it.'
-- 'model-callable, not matched: regulatory flood-zone polygons, not one of the seventeen matched data classes'
+  - "FEMA NFHL regulatory flood-zone polygons via the public MapServer (layer 28), opened as a live map overlay; QGIS paginates the service itself so the deep-page / tile-refusal handling the old fetch body did no longer applies"
+  - "zone is a single exact FLD_ZONE equality filter (e.g. AE, VE, X); a SFHA-vs-not distinction is a matter of the layer's own style once opened, not a fetch-time filter"
+  - "the layer is drawn by QGIS from the service, so its features are on the map but not in the case store and no analysis reads them"
+  - "model-callable, not matched: regulatory flood-zone polygons, not one of the seventeen matched data classes"
+
 docstring: |-
-  FEMA NFHL regulatory flood-zone polygons as a FlatGeobuf vector layer.
+  FEMA NFHL regulatory flood-zone polygons, added to the map.
 
-  Use this when: the user asks for the FEMA flood map, the regulatory
-  floodplain, the 100-year or 500-year floodplain, the Special Flood Hazard
-  Area, FIRM zones, NFIP / flood-insurance rate zones, the Base Flood
-  Elevation (BFE), or any phrasing implying federal / regulatory flood-risk
-  designation for a place. Returns FlatGeobuf polygons in EPSG:4326 with
-  the FEMA flood-zone semantic columns (``FLD_ZONE``, ``ZONE_SUBTY``,
-  ``SFHA_TF``, ``STATIC_BFE``, ``V_DATUM``, ``DEPTH``, ``VELOCITY``,
-  ``DFIRM_ID``, ``SOURCE_CIT``, ``GFID``). Authoritative source: FEMA
-  Map Service Center National Flood Hazard Layer (NFHL).
+  Opens the FEMA Map Service Center National Flood Hazard Layer (NFHL,
+  layer 28) as a live map overlay served by QGIS's own ArcGIS FeatureServer
+  provider. Carries the FEMA flood-zone semantic columns (``FLD_ZONE``,
+  ``ZONE_SUBTY``, ``SFHA_TF``, ``STATIC_BFE``, ``V_DATUM``, ``DEPTH``,
+  ``VELOCITY``, ``DFIRM_ID``, ``SOURCE_CIT``, ``GFID``).
 
-  Do NOT use this for: real-time / current flood EXTENT (use MRMS
-  QPE-derived inundation; a live modeled flood-extent layer is not
-  currently produced here -- NFHL is a regulatory static product, not a
-  live observation); flood-insurance CLAIMS or paid
-  losses (FEMA OpenFEMA NFIP-claims dataset, separate fetcher); FEMA
-  disaster declarations / public-assistance funding (OpenFEMA, separate
-  fetcher); hurricane storm-surge inundation forecasts (NHC SLOSH product,
-  separate fetcher); coastal sea-level-rise projections (NOAA SLR Viewer,
-  separate fetcher); structure-level flood risk (use ``fetch_usace_nsi``
-  NSI building stock + NFHL polygons intersected client-side); the FEMA
-  National Risk Index multi-hazard composite (separate catalog entry).
+  **When to use:**
+  - User asks for the FEMA flood map, the regulatory floodplain, the
+    100-year or 500-year floodplain, the Special Flood Hazard Area, FIRM
+    zones, NFIP / flood-insurance rate zones, or the Base Flood Elevation.
+  - Visual regulatory-flood context beside a hazard or exposure layer.
 
-  Parameters:
-      bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326.
-          REQUIRED -- NFHL does not support a global query (the polygon corpus
-          is millions of features). An envelope wider than 0.1 deg is read as
-          a grid of 0.1-deg tiles 10 s apart, so a metro AOI takes minutes and
-          any tile the service refuses is named in the run's notes rather than
-          dropped. Example for Fort Myers, FL:
-          ``(-81.95, 26.55, -81.80, 26.70)``.
-      sfha_only: If True, filter server-side to Special Flood Hazard Area
-          polygons only (``SFHA_TF='T'``: zones A, AE, AH, AO, AR, A99,
-          V, VE -- the regulatory 1% annual-chance floodplain that triggers
-          NFIP mandatory-purchase). If False (default), return all zone
-          polygons including 0.2% shaded-X, minimal-hazard X, and undetermined
-          D. Example: ``True`` when the user asks "show the 100-year
-          floodplain"; ``False`` when they ask "show all FEMA flood zones".
-      zone_filter: Optional list of ``FLD_ZONE`` codes to keep, applied
-          client-side after fetch (exact case-insensitive match). Valid
-          codes: ``A``, ``AE``, ``AH``, ``AO``, ``AR``, ``A99``, ``V``,
-          ``VE``, ``X``, ``D``, ``B``, ``C``. None or empty list keeps all
-          designations. Example: ``["VE", "V"]`` to restrict to coastal
-          high-hazard zones.
+  **When NOT to use:**
+  - To COMPUTE with the zone polygons - intersect them with fields, count
+    area by class, feed a model. The overlay is drawn from the service and
+    its features never reach the store; nothing downstream can read them.
+  - Real-time / current flood EXTENT (NFHL is a regulatory static product).
+  - Flood-insurance claims, disaster declarations, storm-surge forecasts,
+    SLR projections - each is a separate source.
 
-  Returns:
-      ``LayerURI`` pointing at a FlatGeobuf in the cache bucket:
-      ``s3://trid3nt-cache/cache/static-30d/fema_nfhl/<key>.fgb``.
-      ``layer_type="vector"``, ``role="primary"``, ``units=None``(downstream QML preset colors AE/A
-      deep blue, VE coastal-high-hazard red, X minimal-hazard pale,
-      D undetermined hatched). Downstream tools consume:
-      ``FLD_ZONE`` (categorical legend), ``STATIC_BFE`` (numeric depth
-      narration), ``SFHA_TF`` (the in-or-out flag).
+  **Parameters:**
+      bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326. Required
+          -- NFHL does not support a global query.
+      zone: Optional exact ``FLD_ZONE`` match (e.g. ``"VE"``, ``"AE"``,
+          ``"X"``). Omit to draw every zone.
 
-  Cross-tool dependencies:
-      - Often paired with ``fetch_administrative_boundaries`` (TIGER county
-        / city polygon) to produce the "FEMA flood zones in [place]" clipped
-        output the user typically wants.
-      - Feeds a structural-loss assessment for the NSI structure inventory
-        x NFHL intersection.
-      - Companion to a hydraulic model run (``build_mesh``,
-        ``run_solver``) when the user wants regulatory-vs-modeled
-        comparison side-by-side.
+  **Returns:**
+      A record naming what was opened: the provider, the service uri behind
+      the layer, the layer name and the bbox the map was taken to.
+  **Error types:**
+      - ``FEMA_NFHL_ZONESInputError``: bad bbox or zone (retryable=False).
+      - ``FEMA_NFHL_ZONESUpstreamError``: the provider's own text when it
+        cannot open the service (retryable=True).
 
-  Cache: ``static-30d``. NFHL is republished through LOMC updates
-  monthly and DFIRM panel revisions quarterly; a 30-day stale window is
-  acceptable for hazard-modeling overlay use. Cache key is SHA-256 of
-  ``(bbox-rounded-6dp, sfha_only, sorted(zone_filter))`` + month vintage.
+  Requires a live QGIS session: the layer is opened in the user's QGIS, so a
+  headless or direct call refuses by name rather than returning nothing.
 
-
-  Payload estimation: ~0.5 MB per square degree, clipped to [0.05, 50] MB.
-  Urban bbox (Houston, Fort Myers metro) typically returns 50-500 KB; rural
-  rangeland returns 5-50 KB; a state-scale bbox can exceed 25 MB and will
-  trigger the chat warning gate.
+  ``supports_global_query=False``. No API key required.
