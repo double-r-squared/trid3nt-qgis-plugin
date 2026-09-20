@@ -80,6 +80,7 @@ from ..render.layers import (
     LayerMaterializer,
     configure_store_access,
     ensure_basemap,
+    reproject,
     sweep_stale_session_dirs,
     zoom_to_bbox4326,
     zoom_to_extent,
@@ -685,26 +686,13 @@ class Trid3ntDock(QDockWidget):
         )
         if bbox is not None:
             return bbox
-        # Arbitrary CRS: use QGIS's transform machinery.
-        try:
-            from qgis.core import (
-                QgsCoordinateReferenceSystem,
-                QgsCoordinateTransform,
-                QgsProject,
-            )
-
-            transform = QgsCoordinateTransform(
-                QgsCoordinateReferenceSystem(authid),
-                QgsCoordinateReferenceSystem("EPSG:4326"),
-                QgsProject.instance(),
-            )
-            rect = transform.transformBoundingBox(extent)
-            return aoi.extent_to_bbox4326(
-                rect.xMinimum(), rect.yMinimum(),
-                rect.xMaximum(), rect.yMaximum(), "EPSG:4326",
-            )
-        except Exception:  # noqa: BLE001 -- honest None, noted in status
+        rect = reproject(extent, authid)
+        if rect is None:
             return None
+        return aoi.extent_to_bbox4326(
+            rect.xMinimum(), rect.yMinimum(),
+            rect.xMaximum(), rect.yMaximum(), "EPSG:4326",
+        )
 
     def _canvas_bbox4326(self) -> Optional[Tuple[float, float, float, float]]:
         """Current canvas extent as an EPSG:4326 bbox tuple, or None."""
@@ -762,22 +750,10 @@ class Trid3ntDock(QDockWidget):
         elif authid_norm == "EPSG:3857":
             lon, lat = aoi.merc_to_lonlat(x, y)
         else:
-            try:
-                from qgis.core import (
-                    QgsCoordinateReferenceSystem,
-                    QgsCoordinateTransform,
-                    QgsProject,
-                )
-
-                transform = QgsCoordinateTransform(
-                    QgsCoordinateReferenceSystem(authid),
-                    QgsCoordinateReferenceSystem("EPSG:4326"),
-                    QgsProject.instance(),
-                )
-                transformed = transform.transform(point)
-                lon, lat = transformed.x(), transformed.y()
-            except Exception:  # noqa: BLE001 -- honest None, noted on click
+            transformed = reproject(point, authid)
+            if transformed is None:
                 return None
+            lon, lat = transformed.x(), transformed.y()
         if not (math.isfinite(lon) and math.isfinite(lat)):
             return None
         if not (-180.0 <= lon <= 180.0 and -90.0 <= lat <= 90.0):
@@ -1931,20 +1907,17 @@ class Trid3ntDock(QDockWidget):
             )
             return
         try:
-            from qgis.core import (
-                QgsCoordinateTransform,
-                QgsGeometry,
-                QgsProject,
-            )
+            from qgis.core import QgsGeometry
 
-            extent = layer.extent()
             dest_crs = canvas.mapSettings().destinationCrs()
-            src_crs = layer.crs()
-            if src_crs != dest_crs:
-                transform = QgsCoordinateTransform(
-                    src_crs, dest_crs, QgsProject.instance().transformContext()
+            extent = reproject(layer.extent(), layer.crs(), dest_crs)
+            if extent is None:
+                self._note(
+                    f"Could not put '{layer.name()}' into the canvas CRS "
+                    f"({layer.crs().authid()} -> {dest_crs.authid()})",
+                    error=True,
                 )
-                extent = transform.transformBoundingBox(extent)
+                return
             zoom_to_extent(canvas, extent)
             # Best-effort flash so the eye catches the located layer.
             try:

@@ -36,22 +36,15 @@ def paint_bbox_overlay(canvas, band, bbox4326, color: str, *,
     building the band on first use and returning it. Cosmetic: any failure
     leaves the canvas as it was and hands the band back unchanged."""
     try:
-        from qgis.core import (
-            QgsCoordinateReferenceSystem,
-            QgsCoordinateTransform,
-            QgsGeometry,
-            QgsProject,
-            QgsRectangle,
-        )
+        from qgis.core import QgsGeometry, QgsRectangle
+
+        from ..render.layers import reproject
 
         lon_min, lat_min, lon_max, lat_max = bbox4326
-        rect = QgsRectangle(lon_min, lat_min, lon_max, lat_max)
-        dst_crs = canvas.mapSettings().destinationCrs()
-        src_crs = QgsCoordinateReferenceSystem("EPSG:4326")
-        if src_crs != dst_crs:
-            rect = QgsCoordinateTransform(
-                src_crs, dst_crs, QgsProject.instance().transformContext()
-            ).transformBoundingBox(rect)
+        rect = reproject(QgsRectangle(lon_min, lat_min, lon_max, lat_max),
+                         "EPSG:4326", canvas.mapSettings().destinationCrs())
+        if rect is None:
+            return band
         if band is None:
             band = QgsRubberBand(canvas, QgsWkbTypes.PolygonGeometry)
             band.setColor(QColor(color))

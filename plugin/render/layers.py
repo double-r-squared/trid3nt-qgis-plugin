@@ -206,6 +206,29 @@ def ensure_basemap(preset: str = "OpenStreetMap") -> Optional[str]:
     return f"{name} basemap added"
 
 
+def reproject(shape, src, dst="EPSG:4326"):
+    """A QgsRectangle or a QgsPointXY from ``src`` CRS into ``dst``, each given
+    as an authid string or a QgsCoordinateReferenceSystem. A rect goes through
+    transformBoundingBox, so what comes back is the box AROUND the transformed
+    shape. None on any failure: an unresolvable CRS is an honest None here and
+    a named refusal at the caller, never a raise."""
+    try:
+        src_crs = (src if isinstance(src, QgsCoordinateReferenceSystem)
+                   else QgsCoordinateReferenceSystem(src))
+        dst_crs = (dst if isinstance(dst, QgsCoordinateReferenceSystem)
+                   else QgsCoordinateReferenceSystem(dst))
+        if src_crs == dst_crs:
+            return shape
+        transform = QgsCoordinateTransform(
+            src_crs, dst_crs, QgsProject.instance().transformContext()
+        )
+        if isinstance(shape, QgsRectangle):
+            return transform.transformBoundingBox(shape)
+        return transform.transform(shape)
+    except Exception:  # noqa: BLE001 -- honest None, never a crash
+        return None
+
+
 def zoom_to_extent(canvas, rect: Optional["QgsRectangle"], margin: float = 0.1) -> bool:
     """Zoom ``canvas`` to ``rect``, already in the canvas' own CRS, scaled out
     by ``margin`` so features are not flush against the view edge. False is a
@@ -243,15 +266,10 @@ def zoom_to_bbox4326(
         lon_min, lat_min, lon_max, lat_max = bbox
         rect = QgsRectangle(lon_min, lat_min, lon_max, lat_max)
         dst_crs = canvas.mapSettings().destinationCrs()
-        src_crs = QgsCoordinateReferenceSystem("EPSG:4326")
-        if src_crs != dst_crs:
-            transform = QgsCoordinateTransform(
-                src_crs, dst_crs, QgsProject.instance().transformContext()
-            )
-            rect = transform.transformBoundingBox(rect)
     except Exception:  # noqa: BLE001 -- honest no-op, never a crash
         return False
-    return zoom_to_extent(canvas, rect, margin=margin)
+    return zoom_to_extent(canvas, reproject(rect, "EPSG:4326", dst_crs),
+                          margin=margin)
 
 
 # -- Temporal Controller stamping -------------------------------------------- #
