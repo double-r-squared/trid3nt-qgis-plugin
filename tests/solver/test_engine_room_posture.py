@@ -165,7 +165,8 @@ def test_an_engine_that_never_moved_is_not_reported_as_drift_unknown():
 def test_the_bed_spec_is_registered_and_pins_one_product_of_the_mosaic():
     """DEM_all serves every NCEI DEM under one endpoint - coastal tiles on NAVD88,
     the same tiles on MHW, the ETOPO bases on EGM2008 - so the row that reads it
-    as a bed pins the ONE product it means and states that product's datum."""
+    as a bed pins the ONE product it means and states that product's datum as
+    the FRAME NAME the offset service converts, never the prose for it."""
     from trid3nt_server.tools.fetchers._router.registration import get_spec
 
     spec = get_spec("fetch_greatlakes_bathymetry")
@@ -174,6 +175,6 @@ def test_the_bed_spec_is_registered_and_pins_one_product_of_the_mosaic():
     assert spec.ingest["imageserver"]["service"] == "DEM_all"
     assert "greatlakes_lakedatum" in \
         spec.ingest["imageserver"]["export_query"]["mosaicRule"]
-    assert "Low Water Datum" in (spec.vertical_datum or "")
+    assert spec.vertical_datum == "LWD_IGLD85"
     assert spec.output.role == "input"
     assert spec.output.style == {"kind": "continuous", "ramp": "gray", "units": "m"}
