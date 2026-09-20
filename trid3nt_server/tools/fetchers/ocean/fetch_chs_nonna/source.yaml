@@ -1,0 +1,160 @@
+# CHS NONNA-10 through the published GeoServer WCS: the Canadian Hydrographic
+# Service's non-navigational bathymetry, which is the only measured bed over the
+# Canadian side of the Great Lakes connecting channels. The mosaic's native grid
+# is EPSG:3857 and GeoServer refuses a GetCoverage whose BBOX is stated in any
+# other frame, so the delegate sends 3857 and asks for 4326 back.
+schema_version: v1
+
+name: fetch_chs_nonna
+source_class: chs_nonna
+error_prefix: CHS_NONNA
+input_error_suffix: INPUT_INVALID
+empty_error_suffix: COVERAGE_GAP
+shape: raster-cog
+supports_global_query: false
+
+endpoints:
+  data:
+    url: https://nonna-geoserver.data.chs-shc.ca/geoserver/wcs
+auth:
+  mode: none
+  user_agent: trid3nt_default
+
+params:
+  bbox: {type: bbox, required: true, quantize: round_6dp}
+  resolution_m: {type: float, default: 10.0, min: 10.0, max: 500.0}
+
+hooks:
+  delegate: chs_nonna.read
+  delegate_validate: chs_nonna.validate
+
+ingest:
+  access: library_delegate
+  delegate:
+    library: chs_nonna_wcs
+    timeout_s: 180.0
+  wcs:
+    coverage: nonna:NONNA 10 Coverage
+    version: '1.0.0'
+    image_format: GeoTIFF
+    # The mosaic's own frame. A BBOX in anything else is refused by the service,
+    # and RESPONSE_CRS is what brings the answer back on the frame the rest of
+    # the seam reads.
+    request_crs: EPSG:3857
+    max_px: 4000
+
+normalize:
+  crs: EPSG:4326
+  units: meters
+  quantity: elevation
+
+output:
+  layer_type: raster
+  ext: tif
+  role: input
+  display_name: CHS NONNA-10 bathymetry (chart datum)
+  style:
+    kind: continuous
+    ramp: gray
+    units: m
+  emit_bbox: true
+
+cache:
+  ttl_class: static-30d
+payload_estimate:
+  model: bbox_area
+  mb_per_sq_deg: 182.0
+  floor_mb: 0.05
+  ceil_mb: 70.0
+
+resolution_declarations:
+- param: resolution_m
+  unit: m
+  min_value: 10.0
+  native_hint: NONNA-10 is posted at 0.0001 degrees (about 10 m); the WCS pyramid
+    it is served from delivers about 14 m cells
+  constraint_source: data
+  rationale: the product's own 0.0001 degree posting floors the ask, and the served
+    pyramid is coarser than that floor, so a finer request is resampling and never
+    a finer measurement
+
+coverage:
+-   data_class: bathymetry
+    kind: measured
+    extent:
+      kind: surface
+      rings:
+      - [[-92.5, 41.0], [-74.5, 41.0], [-74.5, 49.5], [-92.5, 49.5]]
+      note: the Great Lakes and the connecting channels between them - the St.
+        Marys, the St. Clair, the Detroit and the Niagara - which is the water CHS
+        counts chart datum from IGLD85 on. NONNA-10 also covers Canada's tidal
+        coasts, whose chart datum is another surface this row cannot speak for.
+    window:
+      series: false
+      latest: '2026-04-01'
+    resolution_m: 10.0
+    datum: lwd_igld85
+    units:
+      elevation: m
+    value_column: elevation
+
+caveats:
+- The CHS NONNA data products are licensed for NON-NAVIGATIONAL USE ONLY, under the Open
+  Government Licence - Canada plus CHS's own product licence. Nothing here is a chart.
+- Vertically this is CHART DATUM. On the Great Lakes CHS counts chart datum from IGLD 1985,
+  so NONNA's zero over these waters is the Low Water Datum on IGLD85 - the same zero the
+  surveyed navigation channels and the NCEI lake grids are published on. Along a connecting
+  river that datum is a SLOPING surface approximating the river at low stage, not one level
+  plane, so an offset measured at one point speaks for that point.
+- The band is named "Depth" and the numbers are an ELEVATION, POSITIVE UP - every value
+  under water is negative.
+- It is a survey mosaic and not a filled grid. A box CHS has surveyed nothing in comes back
+  as HTTP 200 with an all-nodata raster, which this tool reads as a coverage gap rather than
+  as a bed at the datum plane; coverage is patchy on both sides of the international boundary
+  and follows CHS's survey sources rather than the border.
+docstring: |-
+  Fetch CHS NONNA-10 bathymetry over a bbox as a float32 GeoTIFF on chart datum.
+
+  **What it does:**
+      Reads the Canadian Hydrographic Service's NONNA-10 coverage - the
+      finest published bed over Canadian water - onto the asked lattice as a
+      single-band float32 GeoTIFF (EPSG:4326, metres, POSITIVE UP, so every
+      value under water is negative). NON-NAVIGATIONAL USE ONLY.
+
+  **When to use:**
+      - The bed of a Great Lakes CONNECTING CHANNEL - the St. Clair, the
+        Detroit, the St. Marys, the Niagara - or the Canadian side of a lake,
+        where the US sources hold nothing.
+      - User asks for "NONNA", "CHS bathymetry", "how deep is the channel
+        on the Canadian side".
+
+  **When NOT to use:**
+      - US coastal or estuarine water: ``fetch_bluetopo`` is finer and is on
+        NAVD88, so it needs no datum shift against a land DEM.
+      - An open lake basin: ``fetch_greatlakes_bathymetry`` covers each lake
+        whole where NONNA is patchy.
+      - Land terrain: there is none in it.
+
+  **Parameters:**
+      bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326. Demo AOI
+          (the St. Clair River at Port Huron): ``(-82.4300, 42.9600, -82.4180,
+          42.9700)``.
+      resolution_m: output cell size in metres (default 10, the product's own
+          posting). A bbox needing more than 4000 px on an axis at this
+          spacing refuses rather than coarsening.
+
+  **Returns:**
+      A ``LayerURI`` pointing at the cached GeoTIFF. ``layer_type="raster"``,
+      ``role="input"``, ``units="meters"``.
+
+  **Errors:**
+      - ``CHS_NONNA_INPUT_INVALID``: bad bbox (retryable=False).
+      - ``CHS_NONNA_COVERAGE_GAP``: CHS surveyed nothing in this bbox
+        (retryable=False).
+      - ``CHS_NONNA_UPSTREAM_ERROR``: the WCS failed or answered a non-TIFF
+        body (retryable=True).
+
+  **Vertical datum:**
+      Chart datum, which on the Great Lakes is the Low Water Datum on IGLD 1985.
+      It is not NAVD88 and not mean sea level; ``fetch_vertical_datum_offset``
+      converts it as ``lwd_igld85``.
