@@ -871,45 +871,28 @@ class PipelineEmitter:
                 pipeline_id=self._pipeline_id,
                 steps=[self._to_wire_step(sid) for sid in self._step_order],
             )
-            loop.create_task(self._replay_pipeline_snapshot(snapshot))
+            loop.create_task(self._send_pipeline_state(snapshot))
             return
         # No open pipeline: fall back to the last terminal stash
         # so a RENDERED/terminal card still survives a WS blip.
         terminal = self._last_terminal_pipeline_payload
         if terminal is None:
             return
-        loop.create_task(self._replay_terminal_pipeline_state(terminal))
+        loop.create_task(self._send_pipeline_state(terminal))
 
-    async def _replay_pipeline_snapshot(
-        self, payload: PipelineStatePayload
-    ) -> None:
-        """Replay a FULL live pipeline-state snapshot onto the rebound sink.
-        Idempotent with any later terminal replay: the client replaces a live
-        pipeline wholesale by ``pipeline_id``. Only a closed socket is swallowed.
+    async def _send_pipeline_state(self, payload: PipelineStatePayload) -> None:
+        """Send one pipeline-state frame, live emit and rebind replay alike.
+        ONLY a closed socket is swallowed: the step state is already recorded and
+        a sink rebind replays the full snapshot, so a dead socket never aborts a
+        transition. The client replaces a pipeline wholesale by ``pipeline_id``,
+        which is what makes a replay idempotent with any later one.
         """
         try:
             await self._send("pipeline-state", payload)
         except _CONNECTION_CLOSED_EXC:  # type: ignore[misc]
             logger.debug(
-                "emitter: live pipeline-state snapshot replay failed on the "
-                "rebound socket (best-effort drop) session=%s pipeline_id=%s",
-                self.session_id,
-                self._pipeline_id,
-            )
-
-    async def _replay_terminal_pipeline_state(
-        self, payload: PipelineStatePayload
-    ) -> None:
-        """Replay a stashed terminal pipeline-state onto the rebound sink.
-        Only a closed socket is swallowed - the new sink may also be mid-cycle,
-        and the card then replays on the NEXT rebind.
-        """
-        try:
-            await self._send("pipeline-state", payload)
-        except _CONNECTION_CLOSED_EXC:  # type: ignore[misc]
-            logger.debug(
-                "emitter: terminal pipeline-state replay failed on the rebound "
-                "socket (best-effort drop) session=%s pipeline_id=%s",
+                "emitter: pipeline-state send failed on a closed socket "
+                "(best-effort drop; replays on rebind) session=%s pipeline_id=%s",
                 self.session_id,
                 self._pipeline_id,
             )
@@ -925,31 +908,26 @@ class PipelineEmitter:
         """Return a defensive shallow copy of the current loaded_layers list."""
         return list(self._loaded_layers)
 
-    async def set_layer_visible(self, layer_id: str, visible: bool) -> bool:
-        """Take a published layer off the canvas, or put it back.
-        False when this session never loaded that layer - hiding what nobody
+    async def _patch_layer(self, layer_id: str, field: str, value: Any) -> bool:
+        """Set one field on a published layer row, emitting only on a change.
+        False when this session never loaded that layer - patching what nobody
         published is a refusal rather than a no-op.
         """
         for summary in self._loaded_layers:
             if summary.layer_id == layer_id:
-                if summary.visible != visible:
-                    summary.visible = visible
+                if getattr(summary, field) != value:
+                    setattr(summary, field, value)
                     await self.emit_session_state()
                 return True
         return False
 
+    async def set_layer_visible(self, layer_id: str, visible: bool) -> bool:
+        """Take a published layer off the canvas, or put it back."""
+        return await self._patch_layer(layer_id, "visible", visible)
+
     async def set_layer_name(self, layer_id: str, name: str) -> bool:
-        """Rename a published layer. The row carries the new name to the client.
-        False when this session never loaded that layer - renaming what nobody
-        published is a refusal rather than a no-op.
-        """
-        for summary in self._loaded_layers:
-            if summary.layer_id == layer_id:
-                if summary.name != name:
-                    summary.name = name
-                    await self.emit_session_state()
-                return True
-        return False
+        """Rename a published layer; the row carries the new name to the client."""
+        return await self._patch_layer(layer_id, "name", name)
 
     def reset_loaded_layers(self, layers: list[dict] | None) -> None:
         """Replace the in-memory loaded layers from a persisted snapshot.
@@ -1302,19 +1280,24 @@ class PipelineEmitter:
         step.substep_index = None
         step.substep_total = None
 
-    async def mark_complete(self, step_id: str) -> None:
-        """Flip ``step_id`` to ``complete``, stamp ``completed_at``, emit."""
+    def _mark_terminal(self, step_id: str, state: str) -> _StepState:
+        """Flip ``step_id`` to a terminal state and stamp its close-out.
+        ``duration_ms`` is the AUTHORITATIVE wall-clock figure: the client locks
+        its cosmetic ticker to it, so nothing downstream measures the step again.
+        ``started_at`` is None for a step that failed before it ever ran, and the
+        duration is then None too.
+        """
         step = self._require_step(step_id)
-        step.state = "complete"
+        step.state = state
         step.completed_at = self._now_fn()
         self._clear_parent_breadcrumb(step)
-        # The AUTHORITATIVE wall-clock duration, stamped on the terminal
-        # transition. The client locks its cosmetic ticker to this number once it
-        # arrives, so nothing downstream measures the step a second time.
         step.duration_ms = _elapsed_ms(step.started_at, step.completed_at)
-        # The terminal emit is best-effort on a dead socket and snapshots itself
-        # for replay, so the green card survives a WS cycle.
-        await self._emit_terminal_pipeline_state()
+        return step
+
+    async def mark_complete(self, step_id: str) -> None:
+        """Flip ``step_id`` to ``complete``, stamp ``completed_at``, emit."""
+        self._mark_terminal(step_id, "complete")
+        await self._emit_pipeline_state(terminal=True)
 
     async def mark_failed(
         self, step_id: str, error_code: str, error_message: str
@@ -1323,35 +1306,19 @@ class PipelineEmitter:
         An unseen ``error_code`` is registered here, and the message is truncated;
         the code's shape is enforced where the summary is built, not again here.
         """
-        step = self._require_step(step_id)
+        step = self._mark_terminal(step_id, "failed")
         EMITTER_ERROR_CODES.register(error_code)
-        step.state = "failed"
-        step.completed_at = self._now_fn()
-        self._clear_parent_breadcrumb(step)
-        # A failed card shows its final duration too. ``started_at`` may be None
-        # when the step failed before it ever ran, and the duration is then None.
-        step.duration_ms = _elapsed_ms(step.started_at, step.completed_at)
         step.error_code = error_code
         step.error_message = self._truncate_message(error_message)
-        # The terminal emit is best-effort on a dead socket and snapshots itself
-        # for replay, so the red card survives a WS cycle.
-        await self._emit_terminal_pipeline_state()
+        await self._emit_pipeline_state(terminal=True)
 
     async def mark_cancelled(self, step_id: str) -> None:
         """Flip ``step_id`` to ``cancelled``; emit.
         A cancelled step is DISTINCT from a failed one, and the cancel chain
         calls this before the ``asyncio.CancelledError`` is re-raised.
         """
-        step = self._require_step(step_id)
-        step.state = "cancelled"
-        step.completed_at = self._now_fn()
-        self._clear_parent_breadcrumb(step)
-        # Cancelled is terminal, so the duration is stamped and the yellow card
-        # locks to the elapsed-before-cancel time rather than ticking forever.
-        step.duration_ms = _elapsed_ms(step.started_at, step.completed_at)
-        # The terminal emit is best-effort on a dead socket and snapshots itself
-        # for replay, so the yellow card survives a WS cycle.
-        await self._emit_terminal_pipeline_state()
+        self._mark_terminal(step_id, "cancelled")
+        await self._emit_pipeline_state(terminal=True)
 
     async def _persist_step_card(
         self, step_id: str, *, states: tuple[str, ...]
@@ -1818,56 +1785,43 @@ class PipelineEmitter:
             return message
         return message[: cls.ERROR_MESSAGE_MAX_LEN]
 
+    def _step_fields(self, step_id: str) -> dict[str, Any]:
+        """The fields a wire step and a persisted summary BOTH carry: identity,
+        state, timing, the card-kind discriminator with its solver-run binding,
+        and the nested-substep trio - ``parent_step_id`` rides a CHILD while the
+        live-breadcrumb trio rides the PARENT and is None while it is idle.
+        """
+        s = self._steps[step_id]
+        return {
+            "step_id": s.step_id,
+            "name": s.name,
+            "tool_name": s.tool_name,
+            "state": s.state,
+            "started_at": s.started_at,
+            "completed_at": s.completed_at,
+            "progress_percent": s.progress_percent,
+            "duration_ms": s.duration_ms,
+            "role": s.role,
+            "batch_job_id": s.batch_job_id,
+            "batch_status": s.batch_status,
+            "parent_step_id": s.parent_step_id,
+            "substep_label": s.substep_label,
+            "substep_index": s.substep_index,
+            "substep_total": s.substep_total,
+        }
+
     def _to_wire_step(self, step_id: str) -> PipelineStep:
         s = self._steps[step_id]
         return PipelineStep(
-            step_id=s.step_id,
-            name=s.name,
-            tool_name=s.tool_name,
-            state=s.state,  # type: ignore[arg-type]
-            started_at=s.started_at,
-            completed_at=s.completed_at,
-            progress_percent=s.progress_percent,
-            duration_ms=s.duration_ms,
-            # The card-kind discriminator and the solver-run binding; the
-            # defaults leave a plain tool card unchanged on the wire.
-            role=s.role,  # type: ignore[arg-type]
-            batch_job_id=s.batch_job_id,
-            batch_status=s.batch_status,
-            engine=s.engine,
-            module=s.module,
-            # ``parent_step_id`` rides a CHILD; the live-breadcrumb trio rides
-            # the PARENT, and is None while it is idle.
-            parent_step_id=s.parent_step_id,
-            substep_label=s.substep_label,
-            substep_index=s.substep_index,
-            substep_total=s.substep_total,
+            **self._step_fields(step_id), engine=s.engine, module=s.module
         )
 
     def _to_summary(self, step_id: str) -> PipelineStepSummary:
         s = self._steps[step_id]
         return PipelineStepSummary(
-            step_id=s.step_id,
-            name=s.name,
-            tool_name=s.tool_name,
-            state=s.state,  # type: ignore[arg-type]
-            started_at=s.started_at,
-            completed_at=s.completed_at,
-            progress_percent=s.progress_percent,
+            **self._step_fields(step_id),
             error_code=s.error_code,
             error_message=s.error_message,
-            duration_ms=s.duration_ms,
-            # The card-kind fields ride the persisted summary too, so a compute
-            # card survives a reconnect and a cold-case view.
-            role=s.role,  # type: ignore[arg-type]
-            batch_job_id=s.batch_job_id,
-            batch_status=s.batch_status,
-            # And the nested sub-step fields, so a replayed snapshot carries the
-            # nested timeline rather than a flat list.
-            parent_step_id=s.parent_step_id,
-            substep_label=s.substep_label,
-            substep_index=s.substep_index,
-            substep_total=s.substep_total,
         )
 
     def _collect_children(self, parent_step_id: str) -> list[PersistedSubStepRecord]:
@@ -1900,10 +1854,14 @@ class PipelineEmitter:
             )
         return out
 
-    async def _emit_pipeline_state(self) -> None:
+    async def _emit_pipeline_state(self, *, terminal: bool = False) -> None:
+        """Send the full snapshot for one step transition. A TERMINAL transition
+        also stashes the payload, so a rendered card stays surfaced across a
+        socket blip and replays on the next rebind. An emit with no open pipeline
+        is a programming error at the call site, and is not papered over with an
+        empty snapshot.
+        """
         if self._pipeline_id is None:
-            # An emit with no pipeline is a programming error at the call site,
-            # and is not papered over with an empty snapshot.
             raise EmitterError(
                 "_emit_pipeline_state called with no open pipeline; "
                 "call start_pipeline / add_step first"
@@ -1912,54 +1870,9 @@ class PipelineEmitter:
             pipeline_id=self._pipeline_id,
             steps=[self._to_wire_step(sid) for sid in self._step_order],
         )
-        # A non-terminal running transition is surfaced by this single frame, so
-        # a closed socket would otherwise ABORT the transition and lose the card.
-        # ONLY the connection-closed class is swallowed, symmetric with the
-        # terminal path: the step state is already recorded, and a sink rebind
-        # replays the full snapshot. Any other exception propagates loudly.
-        try:
-            await self._send("pipeline-state", payload)
-        except _CONNECTION_CLOSED_EXC:  # type: ignore[misc]
-            logger.debug(
-                "emitter: running pipeline-state send failed on a closed "
-                "socket (best-effort drop; will replay on rebind) session=%s "
-                "pipeline_id=%s",
-                self.session_id,
-                self._pipeline_id,
-            )
-
-    async def _emit_terminal_pipeline_state(self) -> None:
-        """Emit the pipeline-state for a TERMINAL transition, best-effort.
-        The payload is snapshotted for replay and only a closed socket is
-        swallowed, so the state transition itself always completes.
-        """
-        if self._pipeline_id is None:
-            # A terminal emit with no open pipeline is a programming error at the
-            # call site, on the same contract as the non-terminal emit above.
-            raise EmitterError(
-                "_emit_terminal_pipeline_state called with no open pipeline; "
-                "call start_pipeline / add_step first"
-            )
-        payload = PipelineStatePayload(
-            pipeline_id=self._pipeline_id,
-            steps=[self._to_wire_step(sid) for sid in self._step_order],
-        )
-        # Stash the LAST terminal snapshot so a sink rebind can replay it and a
-        # rendered card stays surfaced across a socket blip.
-        self._last_terminal_pipeline_payload = payload
-        try:
-            await self._send("pipeline-state", payload)
-        except _CONNECTION_CLOSED_EXC:  # type: ignore[misc]
-            # A dead or cycling socket is a best-effort drop: the terminal state
-            # is already on the step, and the snapshot above replays on the next
-            # rebind, so the card is not lost.
-            logger.debug(
-                "emitter: terminal pipeline-state send failed on a closed "
-                "socket (best-effort drop; will replay on rebind) session=%s "
-                "pipeline_id=%s",
-                self.session_id,
-                self._pipeline_id,
-            )
+        if terminal:
+            self._last_terminal_pipeline_payload = payload
+        await self._send_pipeline_state(payload)
 
     async def send_envelope(self, message_type: str, payload: Any) -> None:
         """Emit ONE arbitrary typed envelope on this session's sink.
