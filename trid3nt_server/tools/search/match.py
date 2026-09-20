@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import datetime as dt
 import logging
+import re
 from dataclasses import dataclass
 from typing import Sequence
 
@@ -289,7 +290,22 @@ _WINDOW_PARAMS = ((("start_date", "end_date"), 10),
                   (("start_time", "end_time"), None))
 
 
-def base_ask(fetcher: str, purpose: str, bbox: Sequence[float] | None,
+#: How long ONE cadence is, by the word a row leads its cadence with. A record
+#: that speaks for a moment is bracketed by the minute either side; a word none
+#: of these reads is a day, the coarsest cadence a series is published at.
+_CADENCES: Mapping[str, dt.timedelta] = {
+    "hourly": dt.timedelta(hours=1),
+    "daily": dt.timedelta(days=1),
+    "instantaneous": dt.timedelta(minutes=1)}
+
+#: A cadence stated as a count of minutes, which is how the sub-hourly networks
+#: state theirs.
+_MINUTE_COUNT = re.compile(r"(\d+)\s*-?\s*min")
+
+_A_DAY = dt.timedelta(days=1)
+
+
+def base_ask(choice: SourceChoice, purpose: str, bbox: Sequence[float] | None,
              lon: float | None, lat: float | None, opens: str | None,
              until: str | None) -> dict[str, Any]:
     """The place and the window in the params THIS source states them in.
@@ -297,10 +313,11 @@ def base_ask(fetcher: str, purpose: str, bbox: Sequence[float] | None,
     Every source says where it wants the place - a box or a seed - and a series
     source says the window as two dates or one instant; what the matched ROW
     adds to that is ``ask_for``'s to say, so this is only the half the caller
-    knows."""
+    knows. The window a SERIES row is asked over BRACKETS the run: one cadence
+    before it opens and one after it closes."""
     from trid3nt_server.tools.fetchers._router.registration import _SPEC_REGISTRY
 
-    spec = _SPEC_REGISTRY.get(fetcher)
+    spec = _SPEC_REGISTRY.get(choice.picked)
     params = dict(getattr(spec, "params", {}) or {})
     ask: dict[str, Any] = {"purpose": purpose}
     if "bbox" in params and bbox is not None:
@@ -311,11 +328,41 @@ def base_ask(fetcher: str, purpose: str, bbox: Sequence[float] | None,
                    if pair[0] in params and pair[1] in params), None)
     if opens and window is not None:
         (first, last), cut = window
-        ask[first] = str(opens)[:cut]
-        ask[last] = str(until or opens)[:cut]
+        step = _cadence(_picked_row(choice))
+        ask[first] = _moved(opens, -step, cut)
+        ask[last] = _moved(until or opens, step, cut)
     elif opens and "valid_time" in params:
         ask["valid_time"] = str(opens)
     return ask
+
+
+def _cadence(row: Coverage | None) -> dt.timedelta:
+    """One step of the record this row publishes, off the words IT states it in.
+
+    The LEADING word is the interval; what follows it is a latency, a second
+    product or a caveat, none of which is a step. A surface is not a series, so
+    it is asked over the window itself."""
+    if row is None or not row.window.series:
+        return dt.timedelta(0)
+    stated = row.window.cadence.strip().lower().split()
+    word = stated[0].strip(",;:()") if stated else ""
+    minutes = _MINUTE_COUNT.match(word)
+    if minutes:
+        return dt.timedelta(minutes=int(minutes.group(1)))
+    return _CADENCES.get(word, _A_DAY)
+
+
+def _moved(stamp: str, step: dt.timedelta, cut: int | None) -> str:
+    """One end of the asked window, moved one cadence OUTWARD.
+
+    A window asked instant for instant is answered with the first sample INSIDE
+    it, which leaves the run's own opening and close unmeasured; the sample
+    before the opening and the one after the close are what the run is read
+    between."""
+    moment = instant(stamp)
+    if moment is None:
+        return str(stamp)[:cut]
+    return (moment + step).isoformat()[:cut]
 
 
 #: How a coverage row's ask block names one of the NEED's own attributes rather

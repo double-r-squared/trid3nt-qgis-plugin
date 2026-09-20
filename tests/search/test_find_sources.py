@@ -101,14 +101,16 @@ async def test_a_window_a_series_does_not_cover_drops_it(world):
 
 
 @pytest.mark.asyncio
-async def test_a_series_source_is_called_with_the_window(world):
+async def test_a_series_source_is_called_with_a_window_bracketing_the_run(world):
+    """An hourly row is asked from the hour before the window opens, which is
+    the day before where the window opens at a midnight."""
     from tests.search.test_source_match import gauges
 
     world([("fetch_gauges", gauges(rings=CONUS))],
           params={"bbox": {}, "start_date": {}, "end_date": {}})
     found = await find_sources("discharge series", PORTLAND_BOX,
                                ["2024-05-01", "2024-05-08"])
-    assert found["results"][0]["ask"]["start_date"] == "2024-05-01"
+    assert found["results"][0]["ask"]["start_date"] == "2024-04-30"
     assert found["results"][0]["ask"]["end_date"] == "2024-05-08"
 
 
@@ -174,8 +176,10 @@ async def test_the_gauge_row_is_called_by_the_code_its_vocabulary_names():
                 opens="2026-09-17T00:00:00Z", until="2026-09-20T00:00:00Z",
                 pick="fetch_usgs_nwis_gauges")
     choice = match(need, sources_with_coverage())
-    ask = ask_for(choice, base_ask(choice.picked, "observe", PORTLAND_BOX,
+    ask = ask_for(choice, base_ask(choice, "observe", PORTLAND_BOX,
                                    need.lon, need.lat, need.opens, need.until),
                   need.lon, need.lat, {"of": need.of})
     assert ask["parameter"] == "00010"
-    assert (ask["start_date"], ask["end_date"]) == ("2026-09-17", "2026-09-20")
+    # The gauges publish instantaneous samples from five minutes apart, so the
+    # five minutes before the opening fall on the day before it.
+    assert (ask["start_date"], ask["end_date"]) == ("2026-09-16", "2026-09-20")

@@ -128,7 +128,7 @@ def _row(choice: SourceChoice, row: SourceOption, purpose: str,
     and a predicted series of one class is on it twice, and each is called with
     what ITS row says to pass."""
     picked = choice.model_copy(update={"picked": row.fetcher, "rows": [row]})
-    ask = ask_for(picked, base_ask(row.fetcher, purpose, bbox, lon, lat,
+    ask = ask_for(picked, base_ask(picked, purpose, bbox, lon, lat,
                                    opens, until), lon, lat)
     return {"tool_name": row.fetcher, "kind": row.kind,
             "distance": row.distance, "resolution": row.resolution,

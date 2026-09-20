@@ -27,6 +27,10 @@ from trid3nt_server.workflows.telemac.templates.water_temperature import (
 #: it: the engine stops at an instant outside the table, so a week-long run is
 #: only authorable against a week of observations.
 _WEEK_HOURS = 7 * 24 + 1
+
+#: The moment the run opens at, which is the weather table's t = 0: the record
+#: has to hold an observation at or before it and one at or after the close.
+_OPENS = "2026-09-01T00:00:00Z"
 _STATION = {"lon": -122.72, "lat": 45.57, "name": "Temperature station"}
 
 #: The baseline Params the domain slot, the module dictionary and the runtime
@@ -155,7 +159,8 @@ def _sheet(monkeypatch, **floor):
         geometry_reader, "read_geometry_doc",
         lambda layer: {"features": [_observation(hour)
                                     for hour in range(_WEEK_HOURS)]})
-    return fill(template.STEERING, **floor, produced={
+    return fill(template.STEERING, **floor,
+                params={"event_time": _OPENS}, produced={
         "settled": {"title": "DOMAIN", "time_step_s": 5.0,
                     "liquid_boundary_order": ["inflow", "outflow"],
                     "liquid_boundary_prescribes": ["flowrate", "elevation"],
@@ -203,12 +208,14 @@ def test_the_clock_is_the_decks_own_keyword_and_the_weather_table_spans_it(
     assert float(last.split()[0]) >= 604800.0
 
 
-def test_the_weather_is_asked_over_the_window_the_deck_closes():
-    """No date Param twins the run's window: the record is asked for from the
-    moment the run opens at to the instant the deck's own DURATION closes it,
-    in the two params the matched source spells that window under - and a
-    source that spells them as INSTANTS is asked at the instant, so a window
-    shorter than a day is not two of the same day."""
+def test_the_weather_is_asked_over_a_window_bracketing_the_deck():
+    """No date Param twins the run's window: the record is asked for from ONE
+    CADENCE before the moment the run opens at to one cadence after the instant
+    the deck's own DURATION closes it, so it holds an observation at or before
+    the opening and one at or after the close - in the two params the matched
+    source spells that window under, and a source that spells them as INSTANTS
+    is asked at the instant, so a window shorter than a day is not two of the
+    same day."""
     from trid3nt_server.tools.search.match import (
         Need, base_ask, match, sources_with_coverage)
     from trid3nt_server.workflows.runtime.interpreter import _closes
@@ -219,12 +226,13 @@ def test_the_weather_is_asked_over_the_window_the_deck_closes():
     need = Need(slot="weather", data_class="weather forcing", lon=-122.72,
                 lat=45.57, opens=opens, until=_closes(opens, window_s))
     picked = match(need, sources_with_coverage())
-    ask = base_ask(picked.picked, "weather", None, need.lon, need.lat,
+    ask = base_ask(picked, "weather", None, need.lon, need.lat,
                    need.opens, need.until)
+    # The airport network reports hourly, so the bracket is the hour either side.
     assert (ask["start_time"], ask["end_time"]) == (
-        opens, "2026-09-17T00:00:00+00:00")
+        "2026-09-09T23:00:00+00:00", "2026-09-17T01:00:00+00:00")
 
-    hour = base_ask(picked.picked, "weather", None, need.lon, need.lat,
+    hour = base_ask(picked, "weather", None, need.lon, need.lat,
                     "2026-09-17", _closes("2026-09-17", 3600.0))
     assert hour["start_time"] != hour["end_time"]
 

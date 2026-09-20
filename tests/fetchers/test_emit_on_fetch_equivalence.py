@@ -25,9 +25,11 @@ def test_a_matched_row_is_asked_under_its_own_name():
     """The purpose word a template used to state on its fetch call is the ROW'S
     NAME now: no template names a fetcher, so the name the seam surfaces the
     input under is the only word the question spells."""
+    from trid3nt_contracts.coverage import SourceChoice
     from trid3nt_server.tools.search.match import base_ask
 
-    assert base_ask("fetch_dem", "bed", None, None, None, None,
+    choice = SourceChoice(slot="bed", need="bathymetry", picked="fetch_dem")
+    assert base_ask(choice, "bed", None, None, None, None,
                     None)["purpose"] == "bed"
 
 

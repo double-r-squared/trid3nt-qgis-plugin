@@ -703,7 +703,7 @@ async def _ask_for(env: _Env, choice: SourceChoice,
     lon, lat = await _place(env, decl)
     opens = env.params.value_of("event_time") if env.params else None
     return ask_for(choice, base_ask(
-        choice.picked, decl.name.replace("_", " "),
+        choice, decl.name.replace("_", " "),
         _around(dom.bbox, _mesh_m(env)) if dom is not None and dom.bbox else None,
         lon, lat, str(opens) if opens else None,
         _closes(opens, env.window_s)), lon, lat,

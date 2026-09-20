@@ -42,13 +42,13 @@ def surface(data_class="bathymetry", rings=None, res=1.0, datum="NAVD88",
 
 def gauges(data_class="discharge series", rings=None, earliest=None,
            latest=None, units=None, kind="measured", reach_km=25.0,
-           note="a gauge network"):
+           note="a gauge network", cadence="hourly"):
     return Coverage(
         data_class=data_class, kind=kind, reach_km=reach_km,
         extent=CoverageExtent(kind="stations", rings=rings or CONUS, note=note,
                               discover="bbox"),
         window=CoverageWindow(series=True, earliest=earliest, latest=latest,
-                              cadence="hourly"),
+                              cadence=cadence),
         units=units or {"time_series_csv": "ft3/s"})
 
 
@@ -500,3 +500,50 @@ def test_no_level_or_discharge_source_can_be_reached_without_a_moment():
             if row.data_class in ("water level series", "discharge series")]
     assert rows
     assert [name for name, row in rows if not row.window.series] == []
+
+
+def _asked_over(monkeypatch, cadence, params, name):
+    """The window a row stating ``cadence`` is asked over for a six-hour run."""
+    from types import SimpleNamespace
+
+    from trid3nt_server.tools.fetchers._router import registration
+    from trid3nt_server.tools.search import match as m
+
+    opens, until = "2026-09-10T12:00:00Z", "2026-09-10T18:00:00Z"
+    row = gauges(data_class="water level series", cadence=cadence)
+    monkeypatch.setitem(registration._SPEC_REGISTRY, name, SimpleNamespace(
+        params={param: {} for param in params}, coverage=[row]))
+    choice = match(Need(slot="level", data_class="water level series",
+                        lon=WILLAMETTE[0], lat=WILLAMETTE[1],
+                        opens=opens, until=until), [(name, row)])
+    assert choice.picked == name
+    ask = m.base_ask(choice, "level", None, *WILLAMETTE, opens, until)
+    return tuple(ask[param] for param in params)
+
+
+def test_an_hourly_row_is_asked_the_hour_either_side_of_the_run(monkeypatch):
+    """A window asked instant for instant is answered with the first sample
+    INSIDE it, which leaves the run's own opening and close unmeasured: the ask
+    opens one of the row's own cadences early and closes one late, so the record
+    holds the observation at or before the opening and the one at or after the
+    close."""
+    assert _asked_over(monkeypatch, "hourly observations",
+                       ("start_time", "end_time"), "fetch_hourly") == (
+        "2026-09-10T11:00:00+00:00", "2026-09-10T19:00:00+00:00")
+
+
+def test_a_daily_row_is_asked_the_day_before_and_the_day_after(monkeypatch):
+    """The cadence is the ROW'S own: a daily record brackets the same six-hour
+    run with the day either side of it, and a source that spells its window as
+    DATES is still asked in days."""
+    assert _asked_over(monkeypatch, "daily samples",
+                       ("start_date", "end_date"), "fetch_daily") == (
+        "2026-09-09", "2026-09-11")
+
+
+def test_a_row_stating_no_interval_this_reads_is_bracketed_by_a_day(monkeypatch):
+    """A cadence nobody can read is not a reason to ask instant for instant, so
+    the widest cadence a series is published at stands in for it."""
+    assert _asked_over(monkeypatch, "irregular field campaigns",
+                       ("start_time", "end_time"), "fetch_irregular") == (
+        "2026-09-09T12:00:00+00:00", "2026-09-11T18:00:00+00:00")
