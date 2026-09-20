@@ -640,9 +640,10 @@ class MergedRasterLayerURI(LayerURI):
     #: mesh reads it to say which source painted each node.
     provenance_uri: str | None = None
     resolution_m: float = 0.0
-    #: The metres added to the primary to read it on the fallback's datum, which
-    #: is zero wherever the two already counted from one zero.
+    #: The metres added to each input to read it on the frame the merge landed
+    #: on, which is zero wherever that input already counted from it.
     datum_shift_m: float = 0.0
+    fallback_shift_m: float = 0.0
     notes: list[str] = []
 
 
@@ -750,35 +751,65 @@ def _counts_down(layer: Any) -> bool:
     return str(getattr(layer, "quantity", "") or "").startswith(_DEPTH_QUANTITY)
 
 
-def _merge_aligned(primary: Any, fallback: Any, offset: Any) -> Any:
-    """The zero both surfaces end up counting from, and what it cost to get there.
+def _merge_frame(fallback: Any, frame: Any) -> str:
+    """The zero this merge lands on: the RUN's, else the wider surface's own.
 
-    The FALLBACK's datum is the one the merge lands on: it is the wider surface,
-    so every cell the primary does not paint is already on it. An offset the
-    call does not state is the one the PRIMARY publishes about itself - a survey
-    measured on a district's project datum states in its own metadata how far
-    that zero sits above a national frame, and no service serves that datum."""
-    from .vertical_datum import DatumError, align, published_offset
+    A run states its frame and every elevation it ingests is read onto it. A
+    merge called outside one lands on the fallback, which paints every cell the
+    primary does not, so nothing it already holds moves."""
+    from .vertical_datum import datum_of
+
+    return str(frame or "").strip() or datum_of(fallback)
+
+
+def _merge_aligned(source: Any, frame: str, offset: Any) -> Any:
+    """What it costs to read ONE of the merge's surfaces on the frame it lands on.
+
+    Both are read onto that zero before either paints a cell, so the overlay is
+    over one axis. An offset the call does not state is the one the source
+    publishes about itself - a survey measured on a district's project datum
+    states in its own metadata how far that zero sits above a national frame,
+    and no service serves that datum - and a pair nothing measures refuses
+    naming both. A frame nothing named leaves nothing to land on, which is the
+    unstated zero refusing by name."""
+    from .vertical_datum import DatumError, one_datum, onto_frame
 
     try:
-        return align(primary, fallback,
-                     offset=offset if offset is not None else published_offset(primary),
-                     code_prefix="MERGE_RASTERS_")
+        if not frame:
+            one_datum(source, code_prefix="MERGE_RASTERS_")
+        return onto_frame(source, frame, offset=offset,
+                          code_prefix="MERGE_RASTERS_")
     except DatumError as exc:
         raise MergeRastersError(exc.error_code, str(exc)) from exc
 
 
-def _merge_journal(primary: Any, aligned: Any, *, depths: bool) -> None:
-    """What the run SAYS about the surface this merge moved onto the other's zero."""
-    from trid3nt_server.workflows.runtime import journal_note
+def _read_as(layer: Any, role: str, aligned: Any, *, depths: bool) -> str:
+    """The sentence a run SAYS about a surface this merge moved onto its frame,
+    or "" where that surface already stood on it.
 
+    The packet's note and the journal line are one statement, said once."""
     from .vertical_datum import datum_of
 
-    zero = datum_of(primary) or "its own datum"
-    counted = (f"the measurement is a surface of DEPTHS below {zero}, read as "
+    if not (depths or aligned.shift_m):
+        return ""
+    zero = datum_of(layer) or "its own datum"
+    counted = (f"The {role} is a surface of DEPTHS below {zero}, read as "
                f"elevations counted up from it" if depths else
-               f"the measurement is a surface of elevations on {zero}")
-    journal_note(f"{counted}, and it is {aligned.note}.")
+               f"The {role} is a surface of elevations on {zero}")
+    return f"{counted}, and it is {aligned.note}."
+
+
+def _rezeroed(source: Any, aligned: Any, *, depths: bool) -> Any:
+    """One input's own grid read on the frame the merge lands on, or ``None``
+    where nothing moved it.
+
+    On its OWN grid, before anything reads it onto the common one, so the cells
+    that land carry the measurement's values already re-zeroed."""
+    if not (depths or aligned.shift_m):
+        return None
+    return _on_the_frame(
+        source.read(1, masked=True).filled(_NODATA).astype("float32"),
+        aligned.shift_m, depths=depths)
 
 
 def _bbox_4326(crs: Any, transform: Any, width: int, height: int
@@ -832,19 +863,23 @@ def merged_surface(
     primary: Any = None,
     fallback: Any = None,
     resolution_m: float | None = None,
-    offset: Any = None,
+    frame: Any = None,
+    primary_offset: Any = None,
+    fallback_offset: Any = None,
     *,
     _output_dir: str | None = None,
 ) -> MergedRasterLayerURI:
     """MERGE two overlapping surfaces into one bed, the PRIMARY winning where it measured.
 
-    The measurement is re-zeroed onto the fallback's datum by the slot's own flip
-    above, both are read onto one grid at the finer of their two cell sizes over
-    the union of what they cover, and the OVERLAY is the substrate's own merge
-    over those two single-source warps with priority by order - nothing here
-    re-implements it. Which input won at each cell is rebuilt from the same two
-    warps and written as a sidecar, because the mesh records which source painted
-    each node.
+    Each input is re-zeroed onto the run's vertical frame by the flip above -
+    through the offset row the runtime declared for it, else the shift it
+    publishes about itself - before either is read onto the common grid, so the
+    overlay is over one axis. Both then land on one grid at the finer of their
+    two cell sizes over the union of what they cover, and the OVERLAY is the
+    substrate's own merge over those two single-source warps with priority by
+    order - nothing here re-implements it. Which input won at each cell is
+    rebuilt from the same two warps and written as a sidecar, because the mesh
+    records which source painted each node.
     """
     import tempfile
 
@@ -853,7 +888,7 @@ def merged_surface(
     from rasterio.merge import merge
 
     from trid3nt_server.tools.derive._hydrology_common import write_cog
-    from .vertical_datum import datum_of
+    from trid3nt_server.workflows.runtime import journal_note
 
     if fallback is None and primary is None:
         raise MergeRastersError(
@@ -862,7 +897,9 @@ def merged_surface(
     if primary is None or fallback is None:
         return _passed_through(primary if fallback is None else fallback,
                                absent="primary" if primary is None else "fallback")
-    aligned = _merge_aligned(primary, fallback, offset)
+    zero = _merge_frame(fallback, frame)
+    aligned = _merge_aligned(primary, zero, primary_offset)
+    under_aligned = _merge_aligned(fallback, zero, fallback_offset)
     depths = _counts_down(primary)
 
     seed = layer_seed()
@@ -871,13 +908,11 @@ def merged_surface(
         under = _staged(fallback, "fallback", scratch)
         with rasterio.open(top) as a, rasterio.open(under) as b:
             crs, width, height, transform, cell = _common_grid([a, b], resolution_m)
-            rezeroed = (_on_the_frame(
-                a.read(1, masked=True).filled(_NODATA).astype("float32"),
-                aligned.shift_m, depths=depths)
-                if depths or aligned.shift_m else None)
+            rezeroed = _rezeroed(a, aligned, depths=depths)
             over, over_path = _warped(a, crs, width, height, transform, rezeroed,
                                       scratch, "measurement")
-            below, below_path = _warped(b, crs, width, height, transform, None,
+            below, below_path = _warped(b, crs, width, height, transform,
+                                        _rezeroed(b, under_aligned, depths=False),
                                         scratch, "wider")
         won = np.where(np.isfinite(over), 0,
                        np.where(np.isfinite(below), 1, _PROVENANCE_NODATA))
@@ -905,8 +940,9 @@ def merged_surface(
 
     top_share = float((won == 0).sum()) / float(won.size)
     under_share = float((won == 1).sum()) / float(won.size)
-    read_as = (f"The primary counted DEPTHS below {datum_of(primary)} and was "
-               f"{aligned.note}." if depths else f"The primary was {aligned.note}.")
+    moved = [line for line in (_read_as(primary, "primary", aligned, depths=depths),
+                               _read_as(fallback, "fallback", under_aligned,
+                                        depths=False)) if line]
     notes = [
         f"The primary painted {top_share * 100.0:.1f}% of the merged grid and "
         f"the fallback {under_share * 100.0:.1f}%; "
@@ -914,13 +950,12 @@ def merged_surface(
         "and left as nodata.",
         f"Merged at {metres:.3g} m in {crs}, the finer of the two inputs unless "
         "a resolution was stated.",
-        read_as if (depths or aligned.shift_m)
-        else f"Both surfaces count from {aligned.datum}.",
+        *(moved or [f"Both surfaces count from {zero}."]),
     ]
     logger.info("bed merge: %dx%d at %.3g m, primary %.1f%% / fallback %.1f%%",
                 width, height, metres, top_share * 100.0, under_share * 100.0)
-    if depths or aligned.shift_m:
-        _merge_journal(primary, aligned, depths=depths)
+    for line in moved:
+        journal_note(line)
     return MergedRasterLayerURI.published(
         "merged-bed", seed=seed,
         name="merged bed surface",
@@ -935,8 +970,9 @@ def merged_surface(
                   else getattr(primary, "quantity", None)
                   or getattr(fallback, "quantity", None)),
         bbox=_bbox_4326(crs, transform, width, height),
-        vertical_datum=aligned.datum or None,
+        vertical_datum=zero or None,
         datum_shift_m=round(float(aligned.shift_m), 4),
+        fallback_shift_m=round(float(under_aligned.shift_m), 4),
         primary_fraction=round(top_share, 4),
         fallback_fraction=round(under_share, 4),
         provenance_uri=provenance,

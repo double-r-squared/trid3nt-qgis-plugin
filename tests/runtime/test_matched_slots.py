@@ -61,6 +61,13 @@ SPECS = {
         coverage("discharge series", series=True, latest=None, datum=None,
                  kind="stations", units={"time_series_csv": "ft3/s"}),
         "vector", {"bbox": None, "start_date": None, "end_date": None}),
+    # The offset fetch measures no class, so it matches nothing; what the
+    # runtime reads off it is the enum of frames the service transforms.
+    "fetch_vertical_datum_offset": _Spec(
+        [], "record",
+        {"point": None,
+         "from_frame": type("P", (), {"values": ["navd88", "igld85"]})(),
+         "to_frame": type("P", (), {"values": ["navd88", "igld85"]})()}),
 }
 
 
@@ -78,11 +85,12 @@ def world(monkeypatch):
     called: list[tuple[str, dict]] = []
 
     async def _runner(runner, kwargs, label):
+        # A source publishes the SHAPE its spec states, suffix and all: what a
+        # reader may open a URI as is read off that suffix and nothing else.
         called.append((runner, dict(kwargs)))
-        if runner in ("fetch_soundings", "fetch_bed_raster", "fetch_terrain",
-                      "fetch_gauges"):
-            return f"s3://b/{runner}.out"
-        return f"s3://b/{runner}.tif"
+        ext = "geojson" if getattr(SPECS.get(runner), "output", None) and \
+            SPECS[runner].output.layer_type == "vector" else "tif"
+        return f"s3://b/{runner}.{ext}"
 
     monkeypatch.setattr(interpreter, "_call_runner", _runner)
     monkeypatch.setattr(interpreter, "sources_with_coverage",
@@ -142,6 +150,42 @@ def test_a_raster_measurement_reaches_the_merge_without_being_gridded(world,
     assert out.endswith("merged_surface.tif")
 
 
+def test_the_runtime_declares_the_offset_row_a_merge_source_owes(world,
+                                                                 monkeypatch):
+    """Two surfaces on two zeros meet at the merge before any slot sees them, so
+    the shift each owes onto the run's frame is the RUNTIME's own row - the same
+    declaration a slot's source gets, and none for the one already on it."""
+    monkeypatch.setitem(SPECS, "fetch_soundings",
+                        _Spec(coverage("bathymetry", res=1.0), "raster",
+                              {"bbox": None}))
+    record = {"offset_m": 0.013, "from_frame": "IGLD85", "to_frame": "NAVD88",
+              "source": "NOAA VDatum"}
+
+    async def _runner(runner, kwargs, label):
+        world.append((runner, dict(kwargs)))
+        if runner == "fetch_soundings":
+            return {"uri": "s3://b/survey.tif", "vertical_datum": "IGLD85"}
+        if runner == "fetch_terrain":
+            return {"uri": "s3://b/dem.tif", "vertical_datum": "NAVD88"}
+        if runner == "fetch_vertical_datum_offset":
+            return record
+        return f"s3://b/{runner}.tif"
+
+    monkeypatch.setattr(interpreter, "_call_runner", _runner)
+    env = _env()
+    asyncio.run(interpreter._matched_bed(env, _row(Data.need("bathymetry"), "bed")))
+    asked = {runner: kwargs for runner, kwargs in world}
+    assert asked["fetch_vertical_datum_offset"]["from_frame"] == "igld85"
+    assert asked["fetch_vertical_datum_offset"]["to_frame"] == "navd88"
+    merge = asked["trid3nt_server.inputs.bed.merged_surface"]
+    assert merge["frame"] == "NAVD88"
+    assert merge["primary_offset"] == record and merge["fallback_offset"] is None
+    # ON the run: the measurement's row is declared and the terrain, already on
+    # the frame, owes none.
+    assert "bed_measurement_datum_offset" in env.data
+    assert "bed_terrain_datum_offset" not in env.data
+
+
 def test_no_measurement_over_this_domain_leaves_the_terrain_as_the_whole_bed(
         world, monkeypatch):
     async def _runner(runner, kwargs, label):
@@ -195,7 +239,7 @@ def test_a_run_series_is_asked_for_the_window_the_deck_will_solve(world):
     west, south, east, north = ask["bbox"]
     assert west < WILLAMETTE[0] and south < WILLAMETTE[1]
     assert east > WILLAMETTE[2] and north > WILLAMETTE[3]
-    assert value == "s3://b/fetch_gauges.out"
+    assert value == "s3://b/fetch_gauges.geojson"
 
 
 def test_a_need_and_a_producer_on_one_row_is_refused_at_declaration():

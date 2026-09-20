@@ -474,6 +474,7 @@ async def _matched_bed(env: _Env, decl: DataDecl) -> Any:
     before the merge reads it; with no measurement over this domain the terrain
     is the whole bed, which is what the sheet then says."""
     from trid3nt_server.inputs.bed import MERGE_DERIVE, SURVEY_DERIVE
+    from .levers import run_frame
 
     _choice, terrain = await _probe(env, decl, "terrain", f"{decl.name} terrain")
     if decl.data_class == "terrain":
@@ -500,9 +501,17 @@ async def _matched_bed(env: _Env, decl: DataDecl) -> Any:
              "resolution_m": _mesh_m(env)}))
     if terrain is None:
         return measured
+    # TWO SURFACES MEET HERE, before any slot sees either, so the zero they are
+    # overlaid on is the run's: each one published on another frame owes the same
+    # offset row a slot's source owes, declared by the same runtime.
+    frame = run_frame(env.params)
     return await _produce(env, _runtime_row(
         env, f"{decl.name}_merged", MERGE_DERIVE,
-        {"primary": measured, "fallback": terrain}))
+        {"primary": measured, "fallback": terrain, "frame": frame,
+         "primary_offset": await _offset_row(
+             env, f"{decl.name}_measurement", measured, frame),
+         "fallback_offset": await _offset_row(
+             env, f"{decl.name}_terrain", terrain, frame)}))
 
 
 async def _probe(env: _Env, decl: DataDecl, data_class: str, label: str, *,
@@ -900,7 +909,7 @@ async def _on_the_run_s_frame(env: _Env, decl: DataDecl,
         return {}
     frame = run_frame(env.params)
     told = {"frame": frame} if decl.role == BED else {"to_datum": frame}
-    measured = await _offset_row(env, decl, value, frame)
+    measured = await _offset_row(env, decl.name, value, frame)
     return told if measured is None else {**told, "offset": measured}
 
 
@@ -911,8 +920,7 @@ async def _datum_offset_ask(value: Any, frame: str) -> Mapping[str, Any] | None:
     return await asyncio.to_thread(offset_ask, value, frame)
 
 
-async def _offset_row(env: _Env, decl: DataDecl, value: Any,
-                      frame: str) -> Any:
+async def _offset_row(env: _Env, owner: str, value: Any, frame: str) -> Any:
     """The measured shift onto the run's frame, as a DATA row the RUNTIME declares.
 
     The frame is the runtime's, so the question a differing source raises is the
@@ -920,13 +928,16 @@ async def _offset_row(env: _Env, decl: DataDecl, value: Any,
     as a producer row with a ledger record and a line on the journal naming the
     service that answered. ``None`` where the pair owes no row: the source stands
     on the frame already, publishes its own shift, or names a datum no service
-    transforms - and that last one leaves the slot to refuse naming both."""
+    transforms - and that last one leaves the alignment to refuse naming both.
+
+    ``owner`` is what the row is named after - a slot, or one of the two surfaces
+    the bed merge reads onto the frame before it overlays them."""
     from trid3nt_server.inputs.vertical_datum import OFFSET_FETCH
 
     ask = await _datum_offset_ask(value, frame)
     if ask is None:
         return None
-    name = f"{decl.name}_datum_offset"
+    name = f"{owner}_datum_offset"
     row = DataDecl(name=name, producer=Producer(runner=OFFSET_FETCH,
                                                 kwargs=ask, row=name))
     env.data[name] = row

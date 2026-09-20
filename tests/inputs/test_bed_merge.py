@@ -6,9 +6,10 @@ rest, the merged grid taking the finer cell over the union of both, the sidecar
 naming which input painted each cell, an absent row passing the other surface
 through, two different vertical datums refusing by name, an unstated datum
 refusing, a STATED OFFSET bringing two differing datums onto one axis while an
-offset between two other frames still refuses, a primary of DEPTHS read as
-elevations on the fallback's zero through the shift the survey publishes about
-itself, two disjoint surfaces, a measurement over half a domain landing survey and
+offset between two other frames still refuses, EACH input read onto the run's
+own frame through the offset row declared for it, a region no service serves
+still refusing by name, a primary of DEPTHS read as elevations on the frame
+through the shift the survey publishes about itself, two disjoint surfaces, a measurement over half a domain landing survey and
 terrain in the right halves even though it is read onto a finer grid, and a corner
 no sounding stood in coming back terrain."""
 
@@ -213,8 +214,9 @@ def test_a_grid_past_the_cell_ceiling_refuses(tmp_path) -> None:
 def test_a_stated_offset_reads_the_primary_on_the_fallback_s_datum(tmp_path) -> None:
     merged = merged_surface(
         primary=_survey("CRD"), fallback=_terrain("NAVD88"),
-        offset={"offset_m": 1.6093, "from_frame": "CRD", "to_frame": "NAVD88",
-                "source": "the survey's own metadata"},
+        primary_offset={"offset_m": 1.6093, "from_frame": "CRD",
+                        "to_frame": "NAVD88",
+                        "source": "the survey's own metadata"},
         _output_dir=str(tmp_path))
     with rasterio.open(merged.uri) as surface, \
             rasterio.open(merged.provenance_uri) as source:
@@ -232,17 +234,54 @@ def test_an_offset_between_two_other_frames_refuses(tmp_path) -> None:
     with pytest.raises(MergeRastersError) as excinfo:
         merged_surface(
             primary=_survey("CRD"), fallback=_terrain("NAVD88"),
-            offset={"offset_m": -1.131, "from_frame": "NAVD88",
-                    "to_frame": "EGM2008", "source": "NOAA VDatum"},
+            primary_offset={"offset_m": -1.131, "from_frame": "NAVD88",
+                            "to_frame": "EGM2008", "source": "NOAA VDatum"},
             _output_dir=str(tmp_path))
     assert excinfo.value.error_code == "MERGE_RASTERS_DATUM_OFFSET_MISMATCH"
 
 
 def test_one_datum_needs_no_offset_and_shifts_nothing(tmp_path) -> None:
     merged = merged_surface(primary=_survey(), fallback=_terrain(),
-                                  offset=None, _output_dir=str(tmp_path))
-    assert merged.datum_shift_m == 0.0
+                                  _output_dir=str(tmp_path))
+    assert merged.datum_shift_m == 0.0 and merged.fallback_shift_m == 0.0
     assert "Both surfaces count from NAVD88." in merged.notes
+
+
+def test_each_source_off_the_runs_frame_is_shifted_onto_it_before_the_overlay(
+        tmp_path) -> None:
+    """A lake survey on IGLD85 and a terrain DEM on NAVD88 are one axis only on
+    the run's own frame: each carries the offset row declared for it, both are
+    re-zeroed on their own grids, and the merged surface says which shift moved
+    which input."""
+    merged = merged_surface(
+        primary=_survey("IGLD85"), fallback=_terrain("NAVD88"), frame="EGM2008",
+        primary_offset={"offset_m": 0.013, "from_frame": "IGLD85",
+                        "to_frame": "EGM2008", "source": "NOAA VDatum"},
+        fallback_offset={"offset_m": -1.054, "from_frame": "NAVD88",
+                         "to_frame": "EGM2008", "source": "NOAA VDatum"},
+        _output_dir=str(tmp_path))
+    with rasterio.open(merged.uri) as surface, \
+            rasterio.open(merged.provenance_uri) as source:
+        values, won = surface.read(1), source.read(1)
+    assert merged.vertical_datum == "EGM2008"
+    assert merged.datum_shift_m == pytest.approx(0.013)
+    assert merged.fallback_shift_m == pytest.approx(-1.054)
+    assert float(values[won == 0].max()) == pytest.approx(-5.0 + 0.013)
+    assert float(values[won == 1].min()) == pytest.approx(10.0 - 1.054)
+    assert "elevations on IGLD85" in merged.notes[-2]
+    assert "elevations on NAVD88" in merged.notes[-1]
+    assert "NOAA VDatum" in merged.notes[-1]
+
+
+def test_a_frame_no_offset_reaches_refuses_naming_both(tmp_path) -> None:
+    """The offset fetch serves the frames it serves; a region it does not reach
+    produces no row, and the merge then refuses by name rather than laying one
+    surface over the other."""
+    with pytest.raises(MergeRastersError) as excinfo:
+        merged_surface(primary=_survey("CRD"), fallback=_terrain("NAVD88"),
+                       frame="NAVD88", _output_dir=str(tmp_path))
+    assert excinfo.value.error_code == "MERGE_RASTERS_DATUMS_DIFFER"
+    assert "CRD" in str(excinfo.value) and "NAVD88" in str(excinfo.value)
 
 
 def test_a_primary_of_depths_is_read_as_elevations_on_the_fallbacks_zero(
@@ -265,7 +304,7 @@ def test_a_primary_of_depths_is_read_as_elevations_on_the_fallbacks_zero(
     # The merged surface no longer counts the way the primary did, so it states
     # the quantity it was read onto rather than the one the primary named.
     assert merged.quantity == "elevation"
-    assert "counted DEPTHS below CRD" in merged.notes[-1]
+    assert "DEPTHS below CRD" in merged.notes[-1]
 
 
 def test_a_depth_surface_whose_zero_nothing_bridges_refuses_by_name(

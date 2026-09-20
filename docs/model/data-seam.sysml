@@ -815,10 +815,13 @@ package DataSeam {
         the other, because a shift nobody measured is indistinguishable from a
         measurement to every reader downstream.
 
-        The same order holds wherever two surfaces meet before a slot does: a
-        merge reads its primary on the fallback's zero through the offset the
-        call states, else the one the primary publishes, and refuses naming both
-        when neither exists. A surface counting DEPTHS down from its zero is one
+        The same order holds wherever two surfaces meet before a slot does:
+        the bed merge reads BOTH of its inputs onto the run's frame, each
+        through the row the runtime declared for it - the same declaration a
+        slot's source gets and never a second mechanism - before either paints
+        a cell, and a pair nothing measures refuses naming both. A merge called
+        outside a run lands on the wider surface's own zero, which nothing it
+        already holds moves. A surface counting DEPTHS down from its zero is one
         axis with a surface counting elevations up only through that shift, so
         it is read the other way round on the way - on its own grid, before
         either is read onto the common one.
@@ -1383,6 +1386,12 @@ package DataSeam {
         "tests/inputs/test_vertical_datum.py::test_a_pair_nothing_measures_refuses_naming_both_frames";
     verify requirement TheRunHasOneVerticalFrame by
         "tests/inputs/test_slot_inputs.py::test_the_bed_slot_says_which_shape_it_was_handed";
+    verify requirement TheRunHasOneVerticalFrame by
+        "tests/inputs/test_bed_merge.py::test_each_source_off_the_runs_frame_is_shifted_onto_it_before_the_overlay";
+    verify requirement TheRunHasOneVerticalFrame by
+        "tests/inputs/test_bed_merge.py::test_a_frame_no_offset_reaches_refuses_naming_both";
+    verify requirement TheRunHasOneVerticalFrame by
+        "tests/runtime/test_matched_slots.py::test_the_runtime_declares_the_offset_row_a_merge_source_owes";
 
     satisfy requirement AStoppedRungNeverShips by waterBodyClassifier;
     satisfy requirement AStoppedRungNeverShips by coastalComposite;
