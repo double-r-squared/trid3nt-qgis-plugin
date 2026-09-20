@@ -232,7 +232,6 @@ from .derive.restyle_layer import restyle_layer  # noqa: E402,F401 - DISPLAY-sta
 # user's own QGIS session; the code one never runs without the approval card.
 from .derive.run_pyqgis import run_pyqgis  # noqa: E402,F401
 from .derive.run_qgis_algorithm import run_qgis_algorithm  # noqa: E402,F401
-from .derive.section import section  # noqa: E402,F401
 
 # -- simulation (engine bridges, model_* engines, solver seam) --
 # Run-diagnostics dispatcher: one registered tool over the per-engine parser
@@ -249,6 +248,9 @@ from trid3nt_server.workflows.solver import solver  # noqa: E402,F401
 
 # -- discovery (dataset/tool retrieval) --
 from .search.search_tools import search_tools  # noqa: E402,F401
+# find_sources: the model's face on the match, and the door a fetcher with a
+# coverage row is reached through - a class and a place, never a description.
+from .search.find_sources import find_sources  # noqa: E402,F401
 # describe_keywords: the READ over the TELEMAC module catalogs - the only way the
 # keyword surface is reached, since no docstring budget carries it.
 from trid3nt_server.workflows.telemac.modules.describe import describe_keywords  # noqa: E402,F401

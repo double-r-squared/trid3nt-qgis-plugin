@@ -29,7 +29,8 @@ from trid3nt_server.workflows.runtime.errors import PlanValidationError
 logger = logging.getLogger(__name__)
 
 __all__ = ["LOOSEN_DATUM", "LOOSEN_WINDOW", "Need", "RANKED_ROWS", "ask_for",
-           "dropped_from", "instant", "match", "sources_with_coverage"]
+           "base_ask", "covered_sources", "dropped_from", "instant", "match",
+           "sources_with_coverage"]
 
 #: How many rows the ranked list carries. Five: enough for the facts to be
 #: comparable in one read, few enough that a model answering with a row number
@@ -96,6 +97,15 @@ def sources_with_coverage() -> list[tuple[str, Coverage]]:
     return sorted(((name, row) for name, spec in _SPEC_REGISTRY.items()
                    for row in spec.coverage),
                   key=lambda pair: (pair[0], pair[1].data_class))
+
+
+def covered_sources() -> frozenset[str]:
+    """The fetchers a coverage row speaks for: the ones the match can reach.
+
+    A covered fetcher is found by asking the world for a class rather than by
+    reading its description, so this set is what discovery routes THROUGH
+    ``find_sources`` instead of ranking by phrasing."""
+    return frozenset(name for name, _row in sources_with_coverage())
 
 
 def match(need: Need,
@@ -231,6 +241,32 @@ def _station_set(coverage: Coverage) -> CoverageExtent:
     listed = _LISTED[hook]
     return coverage.extent.model_copy(update={"points": listed}) if listed \
         else coverage.extent
+
+
+def base_ask(fetcher: str, purpose: str, bbox: Sequence[float] | None,
+             lon: float | None, lat: float | None, opens: str | None,
+             until: str | None) -> dict[str, Any]:
+    """The place and the window in the params THIS source states them in.
+
+    Every source says where it wants the place - a box or a seed - and a series
+    source says the window as two dates or one instant; what the matched ROW
+    adds to that is ``ask_for``'s to say, so this is only the half the caller
+    knows."""
+    from trid3nt_server.tools.fetchers._router.registration import _SPEC_REGISTRY
+
+    spec = _SPEC_REGISTRY.get(fetcher)
+    params = dict(getattr(spec, "params", {}) or {})
+    ask: dict[str, Any] = {"purpose": purpose}
+    if "bbox" in params and bbox is not None:
+        ask["bbox"] = [float(v) for v in bbox]
+    if "seed_point" in params and lon is not None and lat is not None:
+        ask["seed_point"] = [lon, lat]
+    if opens and "start_date" in params and "end_date" in params:
+        ask["start_date"] = str(opens)[:10]
+        ask["end_date"] = str(until or opens)[:10]
+    elif opens and "valid_time" in params:
+        ask["valid_time"] = str(opens)
+    return ask
 
 
 def ask_for(choice: SourceChoice, base: Mapping[str, Any], lon: float | None,
