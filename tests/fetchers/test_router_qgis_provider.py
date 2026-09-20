@@ -230,3 +230,33 @@ def test_mode_materialise_lands_the_export_under_the_row_key(
     assert second.hit
     assert len(session.asked) == 1
     assert session.asked[0].key in first.uri
+
+
+def test_the_drought_monitor_is_a_provider_row_in_mode_open() -> None:
+    from pathlib import Path
+
+    from trid3nt_server.tools import fetchers
+    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt_server.tools.fetchers._router.spec import compose_specs_from_tree
+
+    specs = compose_specs_from_tree(Path(fetchers.__file__).resolve().parent)
+    spec = specs["fetch_us_drought_monitor"]
+    assert spec.ingest["access"] == qgis_provider.ACCESS
+    assert spec.ingest["qgis_provider"]["mode"] == "open"
+    assert spec.hooks is None or not spec.hooks.model_dump(exclude_none=True)
+    assert spec.output.layer_type == "record"
+    assert TOOL_REGISTRY["fetch_us_drought_monitor"].metadata.cacheable is False
+    current = qgis_provider.build_uri(spec, {"bbox": _BBOX, "date": None})
+    assert current.endswith("US_Drought_Intensity_v1/FeatureServer/3'")
+    archive = qgis_provider.build_uri(spec, {"bbox": _BBOX, "date": "20210803"})
+    assert archive.endswith("FeatureServer/2' sql=period='20210803'")
+
+
+def test_the_drought_monitor_refuses_by_name_with_no_session(monkeypatch) -> None:
+    from trid3nt_server.render import pipeline_emitter
+    from trid3nt_server.server.processing import SessionUnavailableError
+    from trid3nt_server.tools import TOOL_REGISTRY
+
+    monkeypatch.setattr(pipeline_emitter, "current_emitter", lambda: None)
+    with pytest.raises(SessionUnavailableError, match="us_drought_monitor"):
+        TOOL_REGISTRY["fetch_us_drought_monitor"].fn(bbox=_BBOX)

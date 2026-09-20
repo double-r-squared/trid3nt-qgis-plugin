@@ -1,19 +1,20 @@
-# US Drought Monitor polygons over an ArcGIS FeatureServer. A date_compact param and a
-# param-conditioned endpoint_select (the current layer versus the archive layer), plus a
-# declarative WHERE and a column_map with a dm->label lookup and a ddate -> ISO transform.
+# US Drought Monitor polygons, opened on the user's map through QGIS's own ArcGIS
+# FeatureServer provider. A date_compact param and a param-conditioned
+# endpoint_select (the current layer versus the archive layer), plus a declarative
+# WHERE the provider applies as its subset.
 schema_version: v1
 
 name: fetch_us_drought_monitor
-source_class: us_drought_monitor           # cache prefix; error prefix == source_class.upper()
+source_class: us_drought_monitor           # error prefix == source_class.upper()
 input_error_suffix: INPUT_INVALID          # US_DROUGHT_MONITORInputError -> *_INPUT_INVALID
-shape: vector-fgb
+shape: record
 supports_global_query: false               # US-only polygons, bbox required
 
 endpoints:
   current:                                   # date absent -> current week (layer 3)
-    url: "https://services9.arcgis.com/RHVPKKiFTONKtxq3/arcgis/rest/services/US_Drought_Intensity_v1/FeatureServer/3/query"
+    url: "https://services9.arcgis.com/RHVPKKiFTONKtxq3/arcgis/rest/services/US_Drought_Intensity_v1/FeatureServer/3"
   archive:                                   # date present -> archived release (layer 2)
-    url: "https://services9.arcgis.com/RHVPKKiFTONKtxq3/arcgis/rest/services/US_Drought_Intensity_v1/FeatureServer/2/query"
+    url: "https://services9.arcgis.com/RHVPKKiFTONKtxq3/arcgis/rest/services/US_Drought_Intensity_v1/FeatureServer/2"
 auth:
   mode: none
   user_agent: trid3nt_default
@@ -23,101 +24,82 @@ params:
   date: {type: date_compact, required: false, default: null}
 
 ingest:
-  access: ogr
-  ogr: {driver: ESRIJSON}
+  access: qgis_provider
+  qgis_provider:
+    provider: arcgisfeatureserver
+    uri: "crs='EPSG:4326' url='{url}'"
+    mode: open                               # context on the map, never a case input
   # Current-vs-archive layer chosen by the presence of `date` (period).
   endpoint_select: {param: date, absent: current, present: archive}
-  query_template:
-    out_fields: "OBJECTID,dm,period,ddate"
-    order_by: "OBJECTID ASC"
-  # Archive filter only when a release date is pinned (period='<YYYYMMDD>').
+  # Archive filter only when a release date is pinned; the provider applies it
+  # as the layer's subset.
   where_clauses:
     - {template: "period='{date}'", require: [date]}
-  column_map:
-    dm:         {from: dm, kind: int, default: 0, on_error: skip_feature}
-    label:      {from: dm, kind: lookup, key_from: dm, default_template: "D{key}",
-                 table: {0: "D0 Abnormally Dry", 1: "D1 Moderate Drought",
-                         2: "D2 Severe Drought", 3: "D3 Extreme Drought",
-                         4: "D4 Exceptional Drought"}}
-    period:     {from: period, kind: str, default: ""}
-    valid_date: {from: ddate, kind: date_iso, default: ""}
 
 normalize:
   crs: "EPSG:4326"
   units: "dm_class"
 
 output:
-  layer_type: vector
-  ext: fgb
-  role: primary
-  style:
-    kind: reference
-    geometry: polygon
-  emit_bbox: true                            # the LayerURI carries bbox
+  layer_type: record
+  ext: json
 
 cache:
-  ttl_class: semi-static-7d
-payload_estimate:                            # area*0.6 clamp[0.05,60]
+  ttl_class: live-no-cache                   # an overlay is opened, never stored
+payload_estimate:                            # nothing crosses the wire but the uri
   model: bbox_area
-  mb_per_sq_deg: 0.6
-  floor_mb: 0.05
+  mb_per_sq_deg: 0.0
+  floor_mb: 0.0
 
 caveats:
-  - "USDM weekly drought-category (D0-D4) polygons; current week by default or a past release via date"
-  - "US-only; out-of-coverage or off-cadence date -> header-only FGB (honest-empty, never a fabricated error)"
+  - "USDM weekly drought-category (D0-D4) polygons opened as a live map overlay; current week by default or a past release via date"
+  - "the layer is drawn by QGIS from the service, so its features are on the map but not in the case store and no analysis reads them"
+  - "US-only; outside the United States the service has nothing to draw"
   - "model-callable, not matched: a categorical drought class is not a slot's data class, so it carries no coverage row"
 
 docstring: |-
-  US Drought Monitor weekly drought-category polygons as a FlatGeobuf layer.
+  US Drought Monitor weekly drought-category polygons, added to the map.
 
-  Fetches the dissolved USDM drought-category (Multi)Polygons intersecting the
-  bbox for the current week (default) or a specified past release ``date``.
-  Returns a FlatGeobuf with one feature per drought class (D0-D4) intersecting
-  the bbox, annotated with ``dm`` (0-4 class), ``label`` (category name),
-  ``period`` (USDM release ``YYYYMMDD``), and ``valid_date`` (ISO date).
+  Opens the dissolved USDM drought-category (Multi)Polygons for the current week
+  (default) or a specified past release ``date`` as a live layer served by the
+  USDM's own ArcGIS FeatureServer, drawn by QGIS over the requested area. The
+  features carry ``dm`` (0-4 class), ``period`` (USDM release ``YYYYMMDD``) and
+  ``ddate``, and are styled and queried in QGIS like any other layer.
 
   **When to use:**
   - User asks for the US Drought Monitor map, current drought conditions, or
     "how bad is the drought in [region]?".
-  - Agent needs drought-intensity polygons as a wildfire-risk or
-    agricultural-stress context layer (intersect with ag fields, active fire,
-    or fuel/vegetation layers).
+  - User wants drought-intensity polygons as visual context beside a
+    wildfire-risk, agricultural or streamflow layer.
   - User wants a past drought snapshot via the optional ``date`` parameter.
 
   **When NOT to use:**
+  - To COMPUTE with the drought categories - intersect them with fields,
+    count area by class, feed a model. The overlay is drawn from the service
+    and its features never reach the store; nothing downstream can read them.
   - For continuous soil-moisture / SPI / SPEI indices -> the USDM is a
     categorical expert-synthesis product, not a numeric index.
   - For streamflow drought / reservoir levels -> use ``fetch_usgs_nwis_gauges``.
-  - For areas outside the United States and its territories -> the USDM is
-    US-only; an out-of-coverage bbox returns an honest empty layer.
-  - For active-fire detections -> use ``fetch_firms_active_fire`` /
-    ``fetch_firms_active_fire`` (drought is the antecedent dryness, not fire).
+  - For active-fire detections -> use ``fetch_firms_active_fire`` (drought is
+    the antecedent dryness, not fire).
 
   **Parameters:**
       bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326. Required.
-          ``supports_global_query=False`` -- US-only polygon source. USDM
-          polygons are dissolved per category nationally, so an
-          envelope-intersect query returns the full category polygon clipped
-          at intersection. Example for the US Southwest (Arizona):
-          ``(-114.0, 31.3, -109.0, 37.0)``.
+          ``supports_global_query=False`` -- US-only polygon source. Example
+          for the US Southwest (Arizona): ``(-114.0, 31.3, -109.0, 37.0)``.
       date: Optional USDM release date for a past weekly snapshot. Accepts
           ``"YYYY-MM-DD"`` or ``"YYYYMMDD"``; should fall on a valid USDM
           Tuesday release date. Defaults to ``None`` -> current/latest week.
 
   **Returns:**
-      ``LayerURI`` pointing at a FlatGeobuf in the cache bucket. Each feature
-      is a (Multi)Polygon in EPSG:4326. Properties: ``dm`` (int 0-4 drought
-      class), ``label`` (str, e.g. "D2 Severe Drought"), ``period`` (str
-      ``YYYYMMDD``), ``valid_date`` (str ISO date or empty). ``layer_type``
-      is ``"vector"``, ``role`` is ``"primary"`` ``units`` is ``"dm_class"``.
+      A record naming what was opened: the provider, the service uri behind the
+      layer, the layer name and the bbox the map was taken to.
   **Error types:**
       - ``US_DROUGHT_MONITORInputError``: bad bbox or date (retryable=False).
-      - ``US_DROUGHT_MONITORUpstreamError``: HTTP/network failure, ArcGIS
-        error envelope, or FlatGeobuf serialization failure (retryable=True).
-      - ``US_DROUGHT_MONITOREmptyError``: no drought in bbox (retryable=False;
-        not raised by default -- an empty FGB is returned instead).
+      - ``US_DROUGHT_MONITORUpstreamError``: the provider's own text when it
+        cannot open the service (retryable=True).
 
-  Cache: ``ttl_class="semi-static-7d"``, ``source_class="us_drought_monitor"``.
-  Cache key is SHA-256 of ``(bbox-rounded-6dp, period-or-"current")``.
+  Requires a live QGIS session: the layer is opened in the user's QGIS, so a
+  headless or direct call refuses by name rather than returning nothing.
 
   ``supports_global_query=False``. No API key required.

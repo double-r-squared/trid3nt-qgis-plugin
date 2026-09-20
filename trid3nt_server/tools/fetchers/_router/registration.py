@@ -17,6 +17,7 @@ from typing import Any
 from trid3nt_contracts.source_spec import SourceSpec
 
 from . import router
+from .executors.qgis_provider import ACCESS as QGIS_PROVIDER_ACCESS
 from .spec import compose_specs_from_tree
 
 logger = logging.getLogger(
@@ -189,10 +190,15 @@ def _validate_hooks(spec: SourceSpec) -> None:
         )
 
     # record shape: a record source MUST declare hooks.record (the router
-    # has nothing else to shape the dict); a delegate_resolve pairs with a delegate.
+    # has nothing else to shape the dict), unless its executor shapes the dict
+    # itself - a borrowed-provider overlay's record IS the session's own answer.
+    # A delegate_resolve pairs with a delegate.
     if spec.output.layer_type == "record":
         record_hook = spec.hooks.record if spec.hooks is not None else None
-        if not record_hook:
+        executor_shapes_it = (
+            (spec.ingest or {}).get("access") == QGIS_PROVIDER_ACCESS
+        )
+        if not record_hook and not executor_shapes_it:
             raise HookResolutionError(
                 f"spec {spec.name!r}: output.layer_type=record requires hooks.record"
             )
