@@ -39,20 +39,20 @@ The values the template declares. `desc` is what the model reads when it fills o
 
 | field | the proving run's value |
 |---|---|
-| `dissolved_cmax_mgl` | 0.002726218430325389 |
+| `dissolved_cmax_mgl` | 0.0004999350057914853 |
 | `dissolved_peak_time_s` | 14400.0 |
-| `dissolved_travel_m` | 146.4 |
-| `dissolved_final_mean_mgl` | 0.004351620992220561 |
-| `suspended_sorbed_final_mean_mgl` | 0.0008982747679195556 |
-| `bed_sorbed_final_mean_g_m2` | 3.761992697592254e-05 |
-| `sorbed_over_dissolved` | 0.20642302478212393 |
+| `dissolved_travel_m` | 130.1 |
+| `dissolved_final_mean_mgl` | 0.0008009465932218154 |
+| `suspended_sorbed_final_mean_mgl` | 0.0001654770489934775 |
+| `bed_sorbed_final_mean_g_m2` | 7.015834675604677e-06 |
+| `sorbed_over_dissolved` | 0.2066018513517168 |
 | `mesh_size_m` | 20.888 |
 
 It publishes these layers onto the canvas:
 
-- Input: river reach (river_reach)
-- Input: channel survey soundings (ehydro_surveys)
-- Input: bed elevation (dem, 3DEP 1-10 m US lidar (default 10 m); Copernicus GLO-30 30 m global via source=copernicus, datum NAVD88 (metres, positive up))
+- Input: domain (river_reach)
+- Input: bed (ehydro_surveys)
+- Input: bed (3dep_extra, datum NAVD88 (metres, positive up))
 - Release point (user) - river_reach_domain
 - Monitoring point (derived) - river_reach_domain
 - Velocity u over time (river_reach_domain_mesh)
@@ -72,31 +72,31 @@ It publishes these layers onto the canvas:
 
 ## The proving run
 
-Run `01M2VZA5Z27XKPJZA99ZC6QGAC`, 2026-09-19T04:39:13.179545+00:00, 108.549 s, at commit `966392d7b95ac996d00a5df14f667096b64a3e2a-dirty`.
+Run `01M2Z65TZT1E1YTF1WWQZ3V098`, 2026-09-20T10:37:15.494666+00:00, 100.553 s, at commit `4906f0691ad38ccf726b79d7f7a8fe5760040315`.
 
-![Every layer the run published, stacked and framed on the result (run 01M2VZA5Z27XKPJZA99ZC6QGAC)](telemac_micropollutant_release/telemac_micropollutant_release.png)
+![Every layer the run published, stacked and framed on the result (run 01M2Z65TZT1E1YTF1WWQZ3V098)](telemac_micropollutant_release/telemac_micropollutant_release.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M2VZA5Z27XKPJZA99ZC6QGAC)*
+*Every layer the run published, stacked and framed on the result (run 01M2Z65TZT1E1YTF1WWQZ3V098)*
 
-![The solve, frame by frame - dissolved (run 01M2VZA5Z27XKPJZA99ZC6QGAC)](telemac_micropollutant_release/telemac_micropollutant_release_animation_dissolved.gif)
+![The solve, frame by frame - dissolved (run 01M2Z65TZT1E1YTF1WWQZ3V098)](telemac_micropollutant_release/telemac_micropollutant_release_animation_dissolved.gif)
 
-*The solve, frame by frame - dissolved (run 01M2VZA5Z27XKPJZA99ZC6QGAC)*
+*The solve, frame by frame - dissolved (run 01M2Z65TZT1E1YTF1WWQZ3V098)*
 
-![The solve, frame by frame - on_the_bed (run 01M2VZA5Z27XKPJZA99ZC6QGAC)](telemac_micropollutant_release/telemac_micropollutant_release_animation_on_the_bed.gif)
+![The solve, frame by frame - on_the_bed (run 01M2Z65TZT1E1YTF1WWQZ3V098)](telemac_micropollutant_release/telemac_micropollutant_release_animation_on_the_bed.gif)
 
-*The solve, frame by frame - on_the_bed (run 01M2VZA5Z27XKPJZA99ZC6QGAC)*
+*The solve, frame by frame - on_the_bed (run 01M2Z65TZT1E1YTF1WWQZ3V098)*
 
-![dissolved peak frame (run 01M2VZA5Z27XKPJZA99ZC6QGAC)](telemac_micropollutant_release/telemac_micropollutant_release_dissolved_peak_frame.png)
+![dissolved peak frame (run 01M2Z65TZT1E1YTF1WWQZ3V098)](telemac_micropollutant_release/telemac_micropollutant_release_dissolved_peak_frame.png)
 
-*dissolved peak frame (run 01M2VZA5Z27XKPJZA99ZC6QGAC)*
+*dissolved peak frame (run 01M2Z65TZT1E1YTF1WWQZ3V098)*
 
-![on the bed final frame (run 01M2VZA5Z27XKPJZA99ZC6QGAC)](telemac_micropollutant_release/telemac_micropollutant_release_on_the_bed_final_frame.png)
+![on the bed final frame (run 01M2Z65TZT1E1YTF1WWQZ3V098)](telemac_micropollutant_release/telemac_micropollutant_release_on_the_bed_final_frame.png)
 
-*on the bed final frame (run 01M2VZA5Z27XKPJZA99ZC6QGAC)*
+*on the bed final frame (run 01M2Z65TZT1E1YTF1WWQZ3V098)*
 
-![dissolved micropollutant - the chart the run persisted (run 01M2VZA5Z27XKPJZA99ZC6QGAC)](telemac_micropollutant_release/telemac_micropollutant_release_chart_dissolved_micropollutant.png)
+![dissolved micropollutant - the chart the run persisted (run 01M2Z65TZT1E1YTF1WWQZ3V098)](telemac_micropollutant_release/telemac_micropollutant_release_chart_dissolved_micropollutant.png)
 
-*dissolved micropollutant - the chart the run persisted (run 01M2VZA5Z27XKPJZA99ZC6QGAC)*
+*dissolved micropollutant - the chart the run persisted (run 01M2Z65TZT1E1YTF1WWQZ3V098)*
 
 ### The sheet it filled
 
@@ -124,9 +124,11 @@ await TOOL_REGISTRY['telemac_micropollutant_release'].fn(
     monitoring_fraction=0.1,
     release={'lon': -122.669784, 'lat': 45.518485, 'name': None},
     release_duration_s=300.0,
-    keywords={'DURATION': 14400.0, 'GRAPHIC PRINTOUT PERIOD': 300, 'VALUES OF THE TRACERS AT THE SOURCES': [500.0, 0.0, 0.0, 0.0, 0.0]},
+    discharge=56.6,
+    level=2.776,
+    keywords={'DURATION': 14400.0, 'GRAPHIC PRINTOUT PERIOD': 300},
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2VZA5Z27XKPJZA99ZC6QGAC` and commit `966392d7b95ac996d00a5df14f667096b64a3e2a-dirty`. The full argument record is [`telemac_micropollutant_release/run.json`](telemac_micropollutant_release/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2Z65TZT1E1YTF1WWQZ3V098` and commit `4906f0691ad38ccf726b79d7f7a8fe5760040315`. The full argument record is [`telemac_micropollutant_release/run.json`](telemac_micropollutant_release/run.json).
 
