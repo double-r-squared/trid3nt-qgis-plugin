@@ -20,6 +20,7 @@ from .outputs import (
     max_over_time,
     mesh,
     series,
+    spectrum,
 )
 from .sheet import Filled, Sheet, SheetIncomplete, draw, fill, run
 from .artemis import ART
@@ -35,7 +36,7 @@ __all__ = [
     "Primitive", "Sheet", "SheetIncomplete", "Slot", "SlotRefused", "T2D", "T3D",
     "WAC", "WAQTEL", "WRAPPERS", "column", "draw", "extent", "field", "fill",
     "load_module_input", "mass_balance", "max_over_time", "mesh", "run", "series",
-    "wrapper_for",
+    "spectrum", "wrapper_for",
 ]
 
 #: The exposed wrappers, by the module name the engine knows each by. A coupled

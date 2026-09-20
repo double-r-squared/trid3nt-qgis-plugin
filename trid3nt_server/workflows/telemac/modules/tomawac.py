@@ -16,7 +16,7 @@ from types import MappingProxyType
 from typing import Any, Mapping
 
 from .module import Module, Output
-from .outputs import PRIMITIVES
+from .outputs import PRIMITIVES, read_spectrum
 
 __all__ = ["MODULE_OUTPUT", "RESULT_FILENAME", "STEERING_FILENAME", "WAC"]
 
@@ -192,4 +192,6 @@ WAC.UNWRITTEN = frozenset(("PRI",))
 #: module appends nothing to its host's tracers and arms the switch that
 #: addition happens under instead.
 WAC.ARMS_ON_HOST = ("WAVE_DRIVEN_CURRENTS",)
-WAC.reads(**PRIMITIVES)
+#: The spectra are read by the one primitive that reads a polar grid, and by no
+#: module whose results are written over a geographic mesh.
+WAC.reads(**PRIMITIVES, spectrum=read_spectrum)

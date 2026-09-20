@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import shutil
 import tempfile
 from dataclasses import dataclass, replace
@@ -38,6 +39,7 @@ __all__ = [
     "Profile",
     "Read",
     "Series",
+    "Spectrum",
     "Track",
     "deliver",
     "OutputEmpty",
@@ -56,7 +58,9 @@ __all__ = [
     "mesh",
     "profile",
     "read_selafin",
+    "read_spectrum",
     "series",
+    "spectrum",
 ]
 
 _TELEMAC_IMAGE_DEFAULT = "trid3nt-local/telemac:latest"
@@ -140,6 +144,25 @@ class Profile(Read):
     values: Any
     #: What the x axis IS - ``"downstream distance"``.
     along: str
+    lines: tuple[Line, ...] = ()
+
+
+@dataclass(frozen=True, kw_only=True)
+class Spectrum(Read):
+    """The sea's energy at one point, over the polar frequency-direction grid.
+
+    ``density`` is F(f, theta) at one instant - one row per frequency, one column
+    per direction - and ``values`` is its integral over direction, the energy
+    against frequency a reader sees. A DIRECTION here is the grid's own angle,
+    in whatever convention the deck stated its spectrum in."""
+
+    units: str
+    frequency_hz: Any
+    values: Any
+    directions_deg: Any
+    density: Any
+    #: Where the spectrum was recorded - the printout point's own name.
+    at: str
     lines: tuple[Line, ...] = ()
 
 
@@ -475,6 +498,14 @@ def column(name: str, at: Any = None, t: Any = -1) -> Primitive:
     return Primitive("column", variable=name, at=at, t=t)
 
 
+def spectrum(at: Any = None, t: Any = -1) -> Primitive:
+    """The directional spectrum a printout point recorded, at an instant.
+
+    ``at`` is the Point the nearest printout point answers for; unplaced, the
+    first the deck named."""
+    return Primitive("spectrum", at=at, t=t)
+
+
 # -- the read of each, off a solved run ------------------------------------- #
 
 class Solved:
@@ -492,6 +523,7 @@ class Solved:
         # drawn over. A 3D result is no mesh format: the module writes the 2D
         # result beside it, and that is the mesh its planes are read onto.
         self.display_file = str(run.get("display_basename") or self.result_file)
+        self._beside: dict[str, dict[str, Any]] = {}
 
     @cached_property
     def result(self) -> dict[str, Any]:
@@ -630,6 +662,29 @@ class Solved:
             return read_selafin(local)
         finally:
             Path(local).unlink(missing_ok=True)
+
+    def beside(self, keyword: str) -> dict[str, Any]:
+        """Another result THIS deck named, read off the file it named it in.
+
+        A module writes more than one - TOMAWAC's spectra over the polar
+        frequency-direction grid beside its wave field - and each is kept under
+        the name its own deck gave it, so the read asks the deck rather than
+        guessing a basename."""
+        from trid3nt_server.workflows.solver.solver import download_result
+
+        filled = (self.run.get("sheet") or {}).get("filled") or {}
+        basename = str((filled.get(keyword) or {}).get("value") or "")
+        if not basename:
+            raise OutputEmpty(
+                f"this run's deck names no {self.body.slot(keyword).keyword}, so "
+                "the run wrote no such file and there is nothing to read.")
+        if basename not in self._beside:
+            local = download_result(self.run_id, basename)
+            try:
+                self._beside[basename] = read_selafin(local)
+            finally:
+                Path(local).unlink(missing_ok=True)
+        return self._beside[basename]
 
     @cached_property
     def wet(self) -> Any:
@@ -1061,6 +1116,97 @@ def _boundary_series(primitive: Primitive, solved: Solved) -> Series:
                   times=times_arr, values=flows_arr,
                   at=f"at {point.name or 'liquid boundary ' + str(nearest['number'])}",
                   lon=float(lon), lat=float(lat), measures=measures)
+
+
+#: How a punctual file names the variable one printout point recorded: the
+#: spectrum's number, then the 1-BASED 2D mesh node the engine snapped the asked
+#: coordinate onto.
+_PRINTOUT_POINT = re.compile(r"PT2D0*(\d+)")
+
+
+def read_spectrum(primitive: Primitive, solved: Solved) -> Spectrum:
+    """``spectrum(at)``: the directional spectrum one printout point recorded.
+
+    The punctual file's MESH IS THE POLAR FREQUENCY-DIRECTION GRID - a node at
+    (f cos theta, f sin theta) - and it carries one variable per printout point
+    the deck named. The read takes the point nearest the place asked about, at
+    one instant, and integrates over direction for the energy against frequency.
+    No primitive of the geographic mesh can reach it."""
+    import numpy as np
+
+    spectra = solved.beside(solved.body.RESULT_FILES[0])
+    name, node = _printout_point(primitive, solved, spectra)
+    times = np.asarray(spectra["times"], dtype="float64")
+    index = (int(primitive.t) if isinstance(primitive.t, int)
+             else int(np.argmin(np.abs(times - float(primitive.t)))))
+    x = np.asarray(spectra["x"], dtype="float64")
+    y = np.asarray(spectra["y"], dtype="float64")
+    frequency, rows = _rings(np.hypot(x, y), 5)
+    direction, columns = _rings(
+        np.round(np.degrees(np.arctan2(y, x)), 4) % 360.0, 4)
+    flat = np.asarray(spectra["data"][name], dtype="float64")[index]
+    if frequency.size * direction.size != flat.size:
+        raise OutputEmpty(
+            f"{name} is written over {flat.size} nodes, and the file's own mesh "
+            f"reads as {frequency.size} frequencies by {direction.size} "
+            "directions: this is not a polar spectral grid.")
+    density = np.zeros((frequency.size, direction.size))
+    density[rows, columns] = flat
+    # The energy against frequency: the directional spectrum summed over the
+    # grid's own equal angular sectors, which is what a reader is shown.
+    energy = density.sum(axis=1) * (2.0 * np.pi / direction.size)
+    variance = float(np.trapezoid(energy, frequency))
+    peak = int(np.argmax(energy)) if energy.size else 0
+    at = (primitive.at.name if getattr(primitive.at, "name", None)
+          else f"2D node {node + 1}")
+    return Spectrum(
+        units="m2/Hz", frequency_hz=frequency, values=energy,
+        directions_deg=direction, density=density, at=f"at {at}",
+        measures={"hm0_m": 4.0 * float(np.sqrt(max(variance, 0.0))),
+                  "variance_m2": variance,
+                  "peak_frequency_hz": float(frequency[peak]),
+                  "peak_period_s": (float(1.0 / frequency[peak])
+                                    if frequency[peak] else None),
+                  "peak_direction_deg": float(
+                      direction[int(np.argmax(density)) % direction.size]),
+                  "t": float(times[index]), "frames": int(times.size)})
+
+
+def _rings(values: Any, decimals: int) -> tuple[Any, Any]:
+    """The distinct values of one polar axis, and the ring each node is on.
+
+    The grid is written in single precision, so a ring's nodes agree only to a
+    rounding; what is reported is the ring's own mean rather than that rounding."""
+    import numpy as np
+
+    index = np.searchsorted(np.unique(np.round(values, decimals)),
+                            np.round(values, decimals))
+    return (np.bincount(index, weights=values) / np.bincount(index), index)
+
+
+def _printout_point(primitive: Primitive, solved: Solved,
+                    spectra: Mapping[str, Any]) -> tuple[str, int]:
+    """The variable this read is taken from, and the 2D node it stands on.
+
+    A printout point is named for the node the engine snapped the asked
+    coordinate onto, so the point a question is asked at is answered by the
+    nearest one the deck named; an unplaced read takes the first."""
+    import numpy as np
+
+    lon, lat = solved.lonlat
+    found = [(name, int(match.group(1)) - 1)
+             for name, match in ((n, _PRINTOUT_POINT.search(n.strip().upper()))
+                                 for n in spectra["varnames"])
+             if match is not None and 0 <= int(match.group(1)) - 1 < lon.size]
+    if not found:
+        raise OutputEmpty(
+            "the spectra file carries no printout point over a node of the mesh "
+            f"this run solved on (it carries {spectra['varnames']}).")
+    if primitive.at is None:
+        return found[0]
+    node = solved.node_at(_point(primitive.at))
+    return min(found, key=lambda row: float(np.hypot(lon[row[1]] - lon[node],
+                                                     lat[row[1]] - lat[node])))
 
 
 def read_max_over_time(primitive: Primitive, solved: Solved) -> Field:
@@ -1569,15 +1715,19 @@ def _station(read: Series, *, caption: str, reference_time: str | None
                   units=read.units)
 
 
-def _chart(read: Series | Profile, *, caption: str, where: str) -> dict[str, Any]:
-    """A series or a profile -> the chart payload the dock renders, titled by the
-    caption; every reference line rides as its own named series."""
+def _chart(read: Series | Profile | Spectrum, *, caption: str,
+           where: str) -> dict[str, Any]:
+    """A series, a profile or a spectrum -> the chart payload the dock renders,
+    titled by the caption; every reference line rides as its own named series."""
     from trid3nt_server.render.charts import build_chart_payload
 
     title = f"{caption[:1].upper()}{caption[1:]}"
     if isinstance(read, Profile):
         x, at = [float(d) for d in read.distance_m], read.along
         xfield, axis = "x_m", f"{at[:1].upper()}{at[1:]} (m)"
+    elif isinstance(read, Spectrum):
+        x, at = [float(f) for f in read.frequency_hz], read.at
+        xfield, axis = "f_hz", "Frequency (Hz)"
     else:
         x, at = [float(t) for t in read.times], read.at
         xfield, axis = "t_s", "Time (s)"
@@ -1593,9 +1743,14 @@ def _chart(read: Series | Profile, *, caption: str, where: str) -> dict[str, Any
         encoding["color"] = {"field": "series", "type": "nominal", "title": None}
     peak = max(range(len(values)), key=values.__getitem__) if values else 0
     low = min(range(len(values)), key=values.__getitem__) if values else 0
-    what = (f"; lowest {values[low]:.3g} {read.units} at {x[low]:.0f} m"
-            if isinstance(read, Profile) else
-            f"; peaks at {values[peak]:.3g} {read.units} at t = {x[peak]:.0f} s")
+    if isinstance(read, Profile):
+        what = f"; lowest {values[low]:.3g} {read.units} at {x[low]:.0f} m"
+    elif isinstance(read, Spectrum):
+        what = (f"; peaks at {values[peak]:.3g} {read.units} at "
+                f"{x[peak]:.3g} Hz")
+    else:
+        what = (f"; peaks at {values[peak]:.3g} {read.units} at "
+                f"t = {x[peak]:.0f} s")
     return build_chart_payload(
         vega_lite_spec={
             "mark": {"type": "line", "point": not read.lines},
@@ -1604,7 +1759,9 @@ def _chart(read: Series | Profile, *, caption: str, where: str) -> dict[str, Any
         },
         title=f"{title}, {at} - {where}",
         caption=(f"The {caption}, {at}, at each of {len(x)} "
-                 + ("stations" if isinstance(read, Profile) else "output times")
+                 + ("stations" if isinstance(read, Profile)
+                    else "frequencies" if isinstance(read, Spectrum)
+                    else "output times")
                  + (what if values else "") + "."
                  + "".join(f" {line.label} is drawn beside it." for line in read.lines)),
     )
