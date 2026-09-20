@@ -581,6 +581,53 @@ def tool_row(label, state, *, nested: bool = False, result=None,
     }
 
 
+def _row_widget(row: dict, frame: str) -> tuple[QWidget, Optional[QLabel]]:
+    """One inner tool row: the "> name ... glyph" line plus, when the tool
+    answered, its collapsed result body under it. Returns the widget and the
+    status label when it is a live spinner, which the card must tick."""
+    nested = bool(row.get("nested"))
+    state = row.get("state")
+    holder = QWidget()
+    hold_lay = QVBoxLayout(holder)
+    hold_lay.setContentsMargins(0, 0, 0, 0)
+    hold_lay.setSpacing(1)
+
+    line = QWidget()
+    rl = QHBoxLayout(line)
+    # A small ">" prefix for visual nesting; a deeper inset for a sub-step
+    # child so hierarchy still reads.
+    rl.setContentsMargins(4 + (12 if nested else 0), 0, 0, 0)
+    rl.setSpacing(6)
+    rl.addWidget(_label(">", _TOOLCARD_PREFIX_STYLE))
+    rl.addWidget(_label(str(row.get("label") or ""), _tool_state_style(state)))
+    rl.addStretch(1)
+    # The ONLY right-edge element is the status glyph; the arg and metadata
+    # summary rides the card's bottom block instead.
+    status = _label("", _tool_state_style(state))
+    running = _is_running_state(state)
+    status.setText(
+        frame if running
+        else _TERMINAL_GLYPHS.get((state or "").lower(), _STATUS_GLYPH_DONE)
+    )
+    rl.addWidget(status)
+    hold_lay.addWidget(line)
+
+    result = row.get("result")
+    if isinstance(result, str) and result:
+        body = _WrapLabel(result)
+        body.setTextFormat(Qt.TextFormat.PlainText)
+        body.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        body.setStyleSheet(
+            _PROBE_ERROR_BLOCK_STYLE if bool(row.get("is_error"))
+            else _THINKING_BLOCK_STYLE
+        )
+        body.setMinimumWidth(1)  # never force a horizontal scrollbar
+        hold_lay.addWidget(_fold(body, "Result"))
+        hold_lay.addWidget(body)
+
+    return holder, status if running else None
+
+
 class _ToolCard(QFrame):
     """ONE parent card containing this turn's tool calls. There is exactly one
     representation, and the SAME widget serves both the live pipeline and the
@@ -680,67 +727,25 @@ class _ToolCard(QFrame):
         any_failed = False
         any_declined = False
         n_tools = 0
+        frame = _SPINNER_FRAMES[self._spinner_frame]
         for row in inner_rows:
-            label = str(row.get("label") or "")
-            if not label:
+            if not str(row.get("label") or ""):
                 continue
             n_tools += 1
-            state = row.get("state")
-            nested = bool(row.get("nested"))
-            running = _is_running_state(state)
-            if running:
+            state = (row.get("state") or "").lower()
+            if _is_running_state(state):
                 any_running = True
             # A failed row (or a replayed error row) taints the whole card's
             # aggregate state -> red border below. A CANCELLED row does not: it
             # is the user's decline, and it tints the card amber instead.
-            if (state or "").lower() == "failed" or bool(row.get("is_error")):
+            if state == "failed" or bool(row.get("is_error")):
                 any_failed = True
-            elif (state or "").lower() == "cancelled":
+            elif state == "cancelled":
                 any_declined = True
-
-            row_w = QWidget()
-            rl = QHBoxLayout(row_w)
-            # A small ">" prefix for visual nesting (drops the old bubble
-            # frame + tree-connector arrow that cut into the text); a deeper
-            # inset for a sub-step child so hierarchy still reads.
-            rl.setContentsMargins(4 + (12 if nested else 0), 0, 0, 0)
-            rl.setSpacing(6)
-            prefix = _label(">", _TOOLCARD_PREFIX_STYLE)
-            rl.addWidget(prefix)
-            # A plain, non-wrapping label in the state-driven text colour.
-            name_lbl = _label(label, _tool_state_style(state))
-            rl.addWidget(name_lbl)
-            rl.addStretch(1)
-            # The ONLY right-edge element is the status glyph; the arg and
-            # metadata summary rides the bottom block instead. Running is an
-            # animated spinner, complete a check, terminal-failed an x.
-            status = _label("", _tool_state_style(state))
-            if running:
-                status.setText(_SPINNER_FRAMES[self._spinner_frame])
-                self._spinner_labels.append(status)
-            else:
-                status.setText(
-                    _TERMINAL_GLYPHS.get(
-                        (state or "").lower(), _STATUS_GLYPH_DONE
-                    )
-                )
-            rl.addWidget(status)
-            self._body_lay.addWidget(row_w)
-
-            # The tool RESULT shows UNDER its row, inside the card,
-            # as a collapsed read-only body (error responses get the red block).
-            result = row.get("result")
-            if isinstance(result, str) and result:
-                is_error = bool(row.get("is_error"))
-                body = _WrapLabel(result)
-                body.setTextFormat(Qt.TextFormat.PlainText)
-                body.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-                body.setStyleSheet(
-                    _PROBE_ERROR_BLOCK_STYLE if is_error else _THINKING_BLOCK_STYLE
-                )
-                body.setMinimumWidth(1)  # never force a horizontal scrollbar
-                self._body_lay.addWidget(_fold(body, "Result"))
-                self._body_lay.addWidget(body)
+            widget, spinner = _row_widget(row, frame)
+            if spinner is not None:
+                self._spinner_labels.append(spinner)
+            self._body_lay.addWidget(widget)
 
         # One muted metadata block pinned at the BOTTOM of the body, under
         # all the inner rows, so every bit of text lives inside the card border.
