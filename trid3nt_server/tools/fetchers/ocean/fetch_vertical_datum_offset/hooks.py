@@ -42,6 +42,18 @@ _SERVED_AS: dict[str, tuple[str, str]] = {
     "LWD_IGLD85": ("NAD83_2011", "geoid18"),
 }
 
+#: The frames VDatum serves off a TIDAL grid rather than off a geoid model. A
+#: region may demand its own horizontal frame for these and for no other.
+_TIDAL = frozenset({"MLLW", "MLW", "MTL", "LMSL", "MHW", "MHHW"})
+
+#: What a REGION demands of a tidal frame's horizontal frame, where it demands
+#: something other than what ``_SERVED_AS`` pairs that frame with everywhere
+#: else. West-coast tidal grids are published on IGS14 and the service refuses
+#: the pairing in its own words - "For West Coast Region, Target Horizontal
+#: Frame should be IGS14 for Tidal" - whichever side of the conversion the tidal
+#: frame sits on.
+_TIDAL_HORIZONTAL: dict[str, str] = {"westcoast": "IGS14"}
+
 #: What VDatum writes where a grid does not reach the point. It is a value in a
 #: successful response, not an error, so a reader that does not know it treats a
 #: miss as a 999 km offset.
@@ -106,17 +118,25 @@ def _frame(spec: SourceSpec, params: dict[str, Any], key: str) -> str:
     return name
 
 
+def _horizontal(region: str, frame: str, served: str) -> str:
+    """The horizontal frame ``region`` serves this vertical frame under."""
+    demanded = _TIDAL_HORIZONTAL.get(region)
+    return demanded if demanded is not None and frame in _TIDAL else served
+
+
 @register_hook("vdatum.build_request")
 def build_request(spec: SourceSpec, params: dict[str, Any]) -> list[RequestPlan]:
     """The one conversion request: a zero height on the source frame at the point."""
     source = _frame(spec, params, "from_frame")
     target = _frame(spec, params, "to_frame")
     lon, lat = (float(v) for v in params["point"])
+    region = _region(spec, lon, lat)
     s_h, s_geoid = _SERVED_AS[source]
     t_h, t_geoid = _SERVED_AS[target]
+    s_h, t_h = (_horizontal(region, source, s_h), _horizontal(region, target, t_h))
     return [RequestPlan(url=str(spec.endpoints["convert"].url), params={
         "s_x": f"{lon:.7f}", "s_y": f"{lat:.7f}", "s_z": "0.0",
-        "region": _region(spec, lon, lat),
+        "region": region,
         "s_coor": "geo", "s_h_frame": s_h, "s_v_frame": source,
         "s_v_geoid": s_geoid, "s_v_unit": "m",
         "t_coor": "geo", "t_h_frame": t_h, "t_v_frame": target,

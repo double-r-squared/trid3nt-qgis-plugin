@@ -20,6 +20,10 @@ from trid3nt_server.tools.fetchers._router.spec import compose_specs_from_tree
 from trid3nt_server.tools.fetchers.ocean.fetch_vertical_datum_offset import hooks as vd
 
 _GAUGE = [-122.6691667, 45.5175]
+#: The Scripps nearshore water off La Jolla, CA, and the Duck FRF pier, NC: one
+#: point in the west-coast grids and one in the contiguous grids.
+_LA_JOLLA = [-117.25714, 32.86689]
+_DUCK = [-75.7467, 36.1833]
 
 
 @pytest.fixture(scope="module")
@@ -120,3 +124,61 @@ def test_a_project_datum_is_not_a_frame_this_fetch_serves(spec):
         vd.build_request(spec, _params(from_frame="CRD"))
     assert caught.value.error_code == "VDATUM_INPUT_INVALID"
     assert "project datum" in str(caught.value)
+
+
+def test_a_west_coast_tidal_frame_is_sent_under_the_frame_that_region_demands(spec):
+    """VDatum publishes its west-coast tidal grids on IGS14 and refuses the
+    conversion outright under the frame every other region serves them on: its
+    own words are "For West Coast Region, Target Horizontal Frame should be
+    IGS14 for Tidal". The tidal side of the pair carries that frame and the
+    other side keeps its own."""
+    asked = _params(point=_LA_JOLLA, from_frame="mllw", to_frame="navd88")
+    plan, = vd.build_request(spec, asked)
+    assert plan.params["region"] == "westcoast"
+    assert (plan.params["s_v_frame"], plan.params["s_h_frame"]) == ("MLLW", "IGS14")
+    assert (plan.params["t_v_frame"], plan.params["t_h_frame"]) == ("NAVD88",
+                                                                   "NAD83_2011")
+
+
+def test_the_demanded_frame_follows_the_tidal_side_and_not_the_target_slot(spec):
+    """The demand is the TIDAL frame's, so it moves with that frame rather than
+    sitting on whichever side the conversion was asked in."""
+    asked = _params(point=_LA_JOLLA, from_frame="navd88", to_frame="mhw")
+    plan, = vd.build_request(spec, asked)
+    assert plan.params["s_h_frame"] == "NAD83_2011"
+    assert plan.params["t_h_frame"] == "IGS14"
+
+
+def test_a_tidal_frame_outside_that_region_keeps_the_pairing_it_is_served_under(spec):
+    """No other region demands it, and sending IGS14 where the grids are
+    published on NAD83_2011 would be the same mismatch the other way."""
+    plan, = vd.build_request(spec, _params(point=_DUCK, from_frame="mllw",
+                                           to_frame="navd88"))
+    assert plan.params["region"] == "contiguous"
+    assert plan.params["s_h_frame"] == plan.params["t_h_frame"] == "NAD83_2011"
+
+
+def test_the_west_coast_tidal_offset_is_read_off_the_answer_that_pairing_gets(spec):
+    """The recorded answer to the request above: a conversion the service
+    performs rather than the 412 the other pairing is refused with."""
+    body = {"region": "WESTCOAST", "s_h_frame": "IGS14", "s_v_frame": "MLLW",
+            "t_h_frame": "NAD83_2011", "t_v_frame": "NAVD88",
+            "t_x": "-117.2571307911", "t_y": "32.866890859", "t_z": "-0.086",
+            "uncertainty": "0.091"}
+    asked = _params(point=_LA_JOLLA, from_frame="mllw", to_frame="navd88")
+    read = vd.record(spec, asked, [json.dumps(body).encode("utf-8")])
+    assert read["offset_m"] == -0.086
+    assert read["uncertainty_m"] == 0.091
+    assert read["region"] == "westcoast"
+
+
+def test_the_refusal_the_wrong_west_coast_pairing_gets_is_read_as_the_input_error(spec):
+    """The service answers it with HTTP 200 and an error envelope, and the
+    message a reader is handed is the service's own."""
+    body = {"errorCode": 412,
+            "message": "For West Coast Region, Target Horizontal Frame should "
+                       "be IGS14 for Tidal"}
+    asked = _params(point=_LA_JOLLA, from_frame="mllw", to_frame="navd88")
+    with pytest.raises(RouterInputError) as raised:
+        vd.record(spec, asked, [json.dumps(body).encode("utf-8")])
+    assert "IGS14 for Tidal" in str(raised.value)
