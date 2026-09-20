@@ -153,27 +153,23 @@ def test_fetch_dem_state_scale_at_fitting_resolution_serves(monkeypatch, fake_s3
 
 
 def test_fetch_dem_cache_key_is_the_asked_bbox_and_resolution():
-    """The key carries the params as asked -- a plain {bbox, resolution_m, source} --
-    with no resolved-resolution rider, so a 10 m ask keys as 10 m."""
-    from trid3nt_server.tools.cache import cache_key_for
-    from trid3nt_server.tools.fetchers._router.router import (
-        prospective_cache_key, synthesize_metadata,
-    )
-    from trid3nt_server.tools.fetchers._router.spec import (
-        compose_specs_from_tree, record_shape,
-    )
+    """The key's CONTENT is the params as asked, with no resolved-resolution rider:
+    spelling the default source changes nothing, and a different asked bbox or
+    resolution keys differently -- including a past-budget ask, which does NOT
+    collapse onto the key of the spacing that would have fitted."""
+    from trid3nt_server.tools.fetchers._router.router import prospective_cache_key
+    from trid3nt_server.tools.fetchers._router.spec import compose_specs_from_tree
 
     spec = compose_specs_from_tree()["fetch_dem"]
-    plain = {
-        "bbox": tuple(round(v, 6) for v in FORT_MYERS_BBOX),
-        "resolution_m": 10,
-        "source": "auto",
-    }
-    key = prospective_cache_key(spec, {"bbox": FORT_MYERS_BBOX, "resolution_m": 10})
-    assert key == cache_key_for(synthesize_metadata(spec), plain,
-                                record_shape=record_shape(spec))
-    other = prospective_cache_key(spec, {"bbox": FORT_MYERS_BBOX, "resolution_m": 30})
-    assert other != key
+    asked = {"bbox": FORT_MYERS_BBOX, "resolution_m": 10}
+    key = prospective_cache_key(spec, asked)
+    assert key is not None
+    assert prospective_cache_key(spec, {**asked, "source": "auto"}) == key
+    assert prospective_cache_key(spec, {**asked, "resolution_m": 30}) != key
+    assert prospective_cache_key(spec, {**asked, "bbox": _WA_STATE_BBOX}) != key
+    assert prospective_cache_key(spec, {"bbox": _WA_STATE_BBOX, "resolution_m": 10}) != (
+        prospective_cache_key(spec, {"bbox": _WA_STATE_BBOX, "resolution_m": 200})
+    )
 
 
 def test_fetch_dem_explicit_coarse_resolution_honored(monkeypatch, fake_s3):
