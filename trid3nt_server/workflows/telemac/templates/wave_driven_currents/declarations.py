@@ -5,12 +5,19 @@ from __future__ import annotations
 from trid3nt_server.inputs import Point
 from trid3nt_server.workflows.runtime import Accepts, Param, doors, lever
 
-__all__ = ["ACCEPTS", "DOC", "PARAMS"]
+__all__ = ["ACCEPTS", "DEFAULT_OPEN_DEPTH_M", "DOC", "PARAMS"]
 
 #: What a wave-driven-current run can be HANDED. The current and the waves are
 #: solved over the same body of water on the same triangulation - that is what
 #: same-mesh coupling means - so a supplied mesh is the whole of both.
 ACCEPTS = Accepts(mesh=("unstructured_tri",))
+
+#: How deep a boundary stretch has to reach for the library to designate it the
+#: OPEN edge the sea state is imposed across. EVERY stretch that reaches it
+#: opens: a coastal window is open on its seaward side and along both ends, and
+#: the library's own default is set for a shelf-scale domain rather than for a
+#: window whose deepest node is a few tens of metres down.
+DEFAULT_OPEN_DEPTH_M: float = -12.0
 
 
 class PARAMS:
@@ -48,6 +55,14 @@ class PARAMS:
         desc="Target element edge length the water is triangulated at; the "
              "longshore current is driven across the surf zone, so what this "
              "has to resolve is the width of the breaking band")
+
+    open_depth_threshold_m = Param(
+        door=doors.SCENARIO, default=DEFAULT_OPEN_DEPTH_M,
+        bounds=(-200.0, -1.0), units="m", consequence="physics",
+        desc="How deep a boundary stretch must reach for it to be designated "
+             "the OPEN edge the measured sea state enters through; every "
+             "stretch that reaches it opens, and a window where none does has "
+             "no edge for the spectrum and refuses")
 
 
 DOC = dict(

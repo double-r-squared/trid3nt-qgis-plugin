@@ -236,7 +236,8 @@ MESH = tool.build_mesh(
         # quad an open section is written under prescribes a water LEVEL and
         # leaves the velocity free, which is exactly the tidal edge a coastal
         # window wants and exactly the edge a spectrum is imposed across.
-        mesh_op("identify_ocean_boundary_sections"),
+        mesh_op("identify_ocean_boundary_sections",
+                depth_threshold=P.open_depth_threshold_m),
     ],
 )
 

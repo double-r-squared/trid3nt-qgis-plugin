@@ -195,7 +195,8 @@ MESH = tool.build_mesh(
         # sea state is imposed along all of it: a coastal window is open on its
         # seaward side and along both ends, and picking one of them would force
         # a swell through a slot.
-        mesh_op("identify_ocean_boundary_sections"),
+        mesh_op("identify_ocean_boundary_sections",
+                depth_threshold=P.open_depth_threshold_m),
     ],
 )
 
