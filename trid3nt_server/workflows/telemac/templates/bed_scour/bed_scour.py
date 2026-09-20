@@ -7,6 +7,8 @@ goes."""
 
 from __future__ import annotations
 
+import sys
+
 from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
 
 from trid3nt_server.workflows.runtime import (
@@ -39,7 +41,7 @@ from trid3nt_server.workflows.solver.compute_class import compute_class
 from trid3nt_server.workflows.telemac.templates.bed_scour.declarations import (
     ACCEPTS, DOC, GRADATION_PRESETS, PARAMS, PARAMS as P,
 )
-from trid3nt_server.workflows.telemac.workflow import Door, Placed, TelemacWorkflow
+from trid3nt_server.workflows.telemac.workflow import Placed, TelemacWorkflow
 
 __all__ = ["ANSWER", "CAPTIONS", "DATA", "OUTPUTS", "PARAMS", "STEERING",
            "telemac_bed_scour"]
@@ -323,18 +325,17 @@ _METADATA = AtomicToolMetadata(
 )
 
 
+#: The engine files this run has to write for it to have solved
+#: anything; unstated, the deck's own RESULTS FILE is the one.
+RESULTS = (_RESULT, RESULT_FILENAME)
+
+#: The title the card carries when the run is held for review.
+REVIEW_TITLE = "Review the mobile-bed scenario"
+
+
 telemac_bed_scour = register_workflow(
     TelemacWorkflow, _METADATA,
-    PARAMS,
-    Door(
-        steering=STEERING,
-        results=(_RESULT, RESULT_FILENAME),
-        compute_class=ParamRef("compute_class"),
-        outputs=OUTPUTS, captions=CAPTIONS, answer=ANSWER,
-        review_title="Review the mobile-bed scenario"),
-    data=DATA,
-    accepts=ACCEPTS,
-    answer=tuple(ANSWER),
+sys.modules[__name__],
     provenance=(("mesh_resolution_m", "mesh_resolution_note"),),
     # Scour and deposition maxima live inside single elements, so a coarse mesh
     # reads both low.
@@ -347,5 +348,4 @@ telemac_bed_scour = register_workflow(
         event_time(),
         compute_class(),
     ),
-    doc=DOC,
 )

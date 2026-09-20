@@ -337,6 +337,12 @@ def _boundaries(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
                 "number would be read; the boundary file and the steering file "
                 "would describe different boundaries. A face meant to state no "
                 f"condition carries the {FREE_EXIT_ROLE!r} role, which says so.")
+        if what == "flowrate" and measured["inflow_q_m3s"] is None:
+            raise ValueError(
+                f"liquid boundary {number} ({role!r}) prescribes a flowrate and "
+                "this run imposed none: the discharge slot was not filled, so "
+                "there is no flow to write at that boundary. State the flow on "
+                "the carrier slot, or name a source that reaches this water.")
         # A free exit reads NEITHER list, so both carry a placeholder that keeps
         # the lists in the measured order rather than shifting past it.
         flowrates.append(float(measured["inflow_q_m3s"])

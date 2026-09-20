@@ -1,11 +1,13 @@
-"""WHICH QUESTIONS OPEN AS A CHANNEL: the ones whose runs always carry a flow.
+"""WHICH QUESTIONS OPEN AS A CHANNEL: the ones that declare a discharge at all.
 
-A discharge row a run may arrive without is not a channel, and a plan cannot
-author one on a maybe - a tidal mouth opens on its level boundaries, which is
-the open-water base.
+Whether a run CARRIES a flow is a run-time fact the match settles, so the plan
+lists the stage and the author decides off the carrier it is handed: an absent
+one opens no channel and hands back the level, which is the open-water base.
 """
 
 from __future__ import annotations
+
+import asyncio
 
 
 def _steps(tool: str) -> dict[str, object]:
@@ -21,7 +23,18 @@ def test_a_question_whose_runs_always_carry_a_flow_opens_as_a_channel():
     assert steps["settled"].kwargs["level"].root == "channel"
 
 
-def test_a_question_whose_discharge_may_be_absent_opens_on_its_levels():
+def test_a_question_whose_discharge_may_be_absent_still_lists_the_channel():
     steps = _steps("telemac_dye_release")
-    assert "channel" not in steps
-    assert steps["settled"].kwargs["level"].root == "stage"
+    assert "channel" in steps
+    assert steps["channel"].kwargs["carrier"].root == "carrier"
+    assert steps["settled"].kwargs["level"].root == "channel"
+
+
+def test_an_absent_carrier_authors_no_channel_and_hands_back_the_level():
+    from trid3nt_server.workflows.telemac.authoring.assembler import open_channel
+
+    stage = object()
+    opened = asyncio.run(open_channel(mesh={}, friction_law=4,
+                                      friction_coefficient=0.03,
+                                      carrier=None, stage=stage))
+    assert opened is stage

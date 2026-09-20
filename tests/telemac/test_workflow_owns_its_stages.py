@@ -1,11 +1,12 @@
-"""The door the WORKFLOW owns: the stages built from the declared slots.
+"""The stages the WORKFLOW builds from a template module's declared slots.
 
 Offline: nothing is built and nothing is solved. What is proved is the PLAN a
-template gets when it states only what differs, and that a template still
-handing over its own stages runs exactly as it did.
+template gets when it states only what differs from the base.
 """
 
 from __future__ import annotations
+
+from types import SimpleNamespace
 
 import pytest
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
@@ -17,12 +18,11 @@ from trid3nt_server.workflows.runtime import (
     ParamRef,
     PlanValidationError,
     Ref,
-    Step,
     tool,
 )
 from trid3nt_server.workflows.runtime.levers import LEVER_NAMES, lever
 from trid3nt_server.workflows.telemac.modules import T2D
-from trid3nt_server.workflows.telemac.workflow import Door, TelemacWorkflow
+from trid3nt_server.workflows.telemac.workflow import TelemacWorkflow
 
 _METADATA = AtomicToolMetadata(
     name="telemac_water_temperature", ttl_class="live-no-cache",
@@ -57,10 +57,16 @@ class DATA:
     runs = Data.runs()
 
 
-def _workflow(door: Door, data: type = DATA, params: type = PARAMS
-              ) -> TelemacWorkflow:
-    return TelemacWorkflow(metadata=_METADATA, params=params, plan=door,
-                           data=data, levers=door.levers)
+def _template(data: type = DATA, params: type = PARAMS) -> SimpleNamespace:
+    """A template module, as the workflow reads one: its own names and nothing
+    around them."""
+    return SimpleNamespace(STEERING=STEERING, PARAMS=params, DATA=data)
+
+
+def _workflow(data: type = DATA, params: type = PARAMS) -> TelemacWorkflow:
+    return TelemacWorkflow(metadata=_METADATA, params=params,
+                           template=_template(data, params), data=data,
+                           levers=TelemacWorkflow.levers())
 
 
 def _steps(workflow: TelemacWorkflow) -> list[str]:
@@ -78,7 +84,7 @@ def _mesh(workflow: TelemacWorkflow):
 def test_a_template_that_states_only_what_differs_gets_the_whole_plan():
     """No domain steps, no mesh recipe, no settle, no file names: the workflow
     builds its stages from the slots and the deck's own statements."""
-    workflow = _workflow(Door(steering=STEERING))
+    workflow = _workflow()
     assert _steps(workflow) == ["stated", "mesh", "settled", "sheet", "solve",
                                 "outputs"]
     assert [step.stage for step in workflow.plan.steps] == [
@@ -88,7 +94,7 @@ def test_a_template_that_states_only_what_differs_gets_the_whole_plan():
 def test_the_mesh_is_built_over_the_domain_slot_at_the_runtimes_own_lever():
     from trid3nt_server.workflows.mesh.tool import recipe_from_plan_value
 
-    workflow = _workflow(Door(steering=STEERING))
+    workflow = _workflow()
     recipe = recipe_from_plan_value(_mesh(workflow).kwargs["mesh"])
     assert recipe.mesher == "om2d" and recipe.kind == "unstructured_tri"
     assert recipe.extent == DataRef("domain")
@@ -102,7 +108,7 @@ def test_the_rim_is_sized_because_nothing_else_in_the_library_sizes_it():
     the size word, and the granularity lever is the user's."""
     from trid3nt_server.workflows.mesh.tool import recipe_from_plan_value
 
-    workflow = _workflow(Door(steering=STEERING))
+    workflow = _workflow()
     recipe = recipe_from_plan_value(_mesh(workflow).kwargs["mesh"])
     rim = recipe.ops[0]
     assert (rim.fn, dict(rim.kwargs)) == ("set_rim_size", {})
@@ -113,7 +119,7 @@ def test_the_bed_op_takes_the_one_row_the_merge_derive_produced():
     in the DATA body; the op takes that row and nothing beside it."""
     from trid3nt_server.workflows.mesh.tool import recipe_from_plan_value
 
-    workflow = _workflow(Door(steering=STEERING))
+    workflow = _workflow()
     recipe = recipe_from_plan_value(_mesh(workflow).kwargs["mesh"])
     bed = next(op for op in recipe.ops if op.fn == "set_bed")
     assert bed.kwargs == {"source": DataRef("bed")}
@@ -130,7 +136,7 @@ def test_a_second_bed_row_refuses_by_name():
         terrain = Data.bed(tool("fetch_copernicus_dem", bbox=[0, 0, 1, 1]))
 
     with pytest.raises(PlanValidationError) as excinfo:
-        _workflow(Door(steering=STEERING), data=TWO_BEDS).plan
+        _workflow(data=TWO_BEDS).plan
     assert "the bed is ONE source" in str(excinfo.value)
 
 
@@ -143,14 +149,14 @@ def test_a_template_with_no_runs_row_takes_the_domain_producers_own():
         domain = Data.domain(tool("fetch_river_reach", seed_point=[1.0, 2.0]))
         terrain = Data.bed()
 
-    workflow = _workflow(Door(steering=STEERING), data=NO_RUNS)
+    workflow = _workflow(data=NO_RUNS)
     recipe = recipe_from_plan_value(_mesh(workflow).kwargs["mesh"])
     runs = next(op for op in recipe.ops if op.fn == "set_boundary_roles")
     assert runs.kwargs == {"runs": DataRef("domain")}
 
 
 def test_the_settle_step_reads_the_files_the_deck_itself_names():
-    workflow = _workflow(Door(steering=STEERING))
+    workflow = _workflow()
     settle = _step(workflow, "settled")
     assert settle.runner.endswith("assembler.open_water")
     assert settle.kwargs["geometry"] == "domain.slf"
@@ -169,7 +175,7 @@ def test_the_floor_is_resolved_once_before_any_stage_runs():
     run's own keywords, so a stated DURATION is the one the settle reads."""
     from trid3nt_server.workflows.telemac.workflow import stated
 
-    workflow = _workflow(Door(steering=STEERING))
+    workflow = _workflow()
     first = workflow.plan.steps[0]
     assert first.name == "stated" and first.stage == "prep"
     assert stated(steering=STEERING, keywords={})["DURATION"] == 604800.0
@@ -178,7 +184,7 @@ def test_the_floor_is_resolved_once_before_any_stage_runs():
 
 
 def test_the_runtime_levers_are_seated_so_the_template_states_none_of_them():
-    workflow = _workflow(Door(steering=STEERING))
+    workflow = _workflow()
     # The template's own row for a lever keeps its place; every lever it does
     # not state is seated after it, in the order the runtime declares them.
     assert [prm.name for prm in workflow.params] == [
@@ -188,7 +194,7 @@ def test_the_runtime_levers_are_seated_so_the_template_states_none_of_them():
 def test_the_domain_and_the_bed_reach_the_wire_as_the_slots_they_are():
     """What the user hands in supersedes the producer the template preferred, so
     both slots are arguments even though both name a source."""
-    supplied = workflow_wire(_workflow(Door(steering=STEERING)))
+    supplied = workflow_wire(_workflow())
     assert {"domain", "bed", "runs"} <= supplied
 
 
@@ -219,7 +225,7 @@ def test_a_template_with_no_domain_refuses_at_import():
         terrain = Data.bed()
 
     with pytest.raises(PlanValidationError, match="declares no domain"):
-        _workflow(Door(steering=STEERING), data=NO_DOMAIN)
+        _workflow(data=NO_DOMAIN)
 
 
 def test_a_template_with_no_bed_refuses_at_import():
@@ -227,26 +233,4 @@ def test_a_template_with_no_bed_refuses_at_import():
         domain = Data.domain()
 
     with pytest.raises(PlanValidationError, match="declares no bed"):
-        _workflow(Door(steering=STEERING), data=NO_BED)
-
-
-def test_a_template_that_still_hands_over_its_own_stages_runs_as_it_did():
-    """The transition is ADDITIVE: a door that states its settle step owns its
-    plan, and nothing is seated on its behalf."""
-    own = Door(steering=STEERING,
-               settle=Step(runner="x.settle", kwargs={}),
-               domain=(Step(runner="x.geocode", kwargs={}).named("reach"),),
-               mesh=tool.build_mesh(mesher="om2d", extent=Ref("reach"),
-                                    resolution_m=14.0, ops=[]),
-               mesh_on="reach", results=("r2d_domain.slf",),
-               steering_file="t2d.cas", prefix="telemac", dispatch="x.solve")
-    assert own.owns_stages is False and own.levers == ()
-
-    class OWN_DATA:
-        domain = Data.domain()
-        bed = Data.bed()
-
-    workflow = _workflow(own, data=OWN_DATA)
-    assert _steps(workflow) == ["stated", "reach", "mesh", "settled", "sheet",
-                               "solve", "outputs"]
-    assert [prm.name for prm in workflow.params] == ["mesh_resolution_m"]
+        _workflow(data=NO_BED)

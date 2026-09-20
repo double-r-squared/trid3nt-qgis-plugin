@@ -10,6 +10,8 @@ baseflow."""
 
 from __future__ import annotations
 
+import sys
+
 from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
 
 from trid3nt_server.workflows.runtime import (
@@ -45,7 +47,7 @@ from trid3nt_server.workflows.telemac.templates.rain_on_grid.declarations import
     PARAMS as P,
 )
 from trid3nt_server.workflows.telemac.workflow import (
-    Door, Measured, TelemacWorkflow,
+    Measured, TelemacWorkflow,
 )
 
 __all__ = ["ANSWER", "CAPTIONS", "DATA", "MESH", "OUTPUTS", "PARAMS", "STEERING",
@@ -347,19 +349,15 @@ _METADATA = AtomicToolMetadata(
 )
 
 
+#: The title the card carries when the run is held for review.
+REVIEW_TITLE = "Review the storm, the catchment and the mesh band"
+
+
 telemac_rain_on_grid = register_workflow(
-    TelemacWorkflow, _METADATA, PARAMS,
-    Door(
-        steering=STEERING,
-        mesh=MESH,
-        compute_class=ParamRef("compute_class"),
-        outputs=OUTPUTS, captions=CAPTIONS, answer=ANSWER,
-        review_title="Review the storm, the catchment and the mesh band"),
-    data=DATA,
+    TelemacWorkflow, _METADATA, sys.modules[__name__],
     # The moment a scenario is read at is seated for every template that reads a
     # dated source; this run reads none, so it is not asked for.
     levers=("compute_class",),
-    answer=tuple(ANSWER),
     # The overland sheet's deepest point and the hydrograph crest are magnitude
     # maxima that live inside single elements, and a coarse element averages both
     # away. WHEN the crest arrives moves with the elements that route the water
@@ -376,5 +374,4 @@ telemac_rain_on_grid = register_workflow(
                   code="TELEMAC_ROG_PARAMS_INVALID"),
         compute_class(),
     ),
-    doc=DOC,
 )

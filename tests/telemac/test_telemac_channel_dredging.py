@@ -100,7 +100,6 @@ def test_the_workflow_owns_every_stage_but_the_two_this_question_measures():
     channel: the workflow lists that off this question's own discharge row. The
     dredge's areas are measured against the SETTLED run, so that step is the
     template's and it runs after."""
-    assert _WORKFLOW.plan_decl.owns_stages
     assert [step.label for step in _WORKFLOW.plan.steps] == [
         "stated", "mesh", "channel", "settled", "dredge", "sheet", "solve",
         "outputs"]

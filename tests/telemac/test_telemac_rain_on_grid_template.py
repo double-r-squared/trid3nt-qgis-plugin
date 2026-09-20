@@ -163,7 +163,6 @@ def test_the_declared_plan_is_the_rain_on_grid_sequence():
     plan = workflow.plan
     assert [step.label for step in plan.declared()] == [
         "stated", "mesh", "outlet", "settled", "sheet", "solve", "outputs"]
-    assert workflow.plan_decl.owns_stages
     validate_plan(plan, workflow.params, workflow.data)
 
 

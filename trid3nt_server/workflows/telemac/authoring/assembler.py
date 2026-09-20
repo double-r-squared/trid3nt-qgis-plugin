@@ -1174,7 +1174,7 @@ async def open_channel(
     friction_coefficient: float,
     carrier: Any = None,
     stage: Any = None,
-) -> dict[str, Any]:
+) -> Any:
     """A CHANNEL OPENS UNDER A DISCHARGE, on top of any body of water: what the
     inflow carries, what the outflow holds, and the depth the run opens at.
 
@@ -1186,9 +1186,12 @@ async def open_channel(
     bed-parallel at that same depth - the equilibrium its own downstream boundary
     holds it to rather than a blanket depth draining into it.
 
-    An edge that names NO runs is a closed body: there is no channel here to
-    measure, so this adds nothing and hands back the level it was given, which
-    is what the base opens the water flat at."""
+    A run that carries NO CARRIER opens no channel: there is no flow to impose,
+    so this hands back the level it was given and the body opens on its level
+    boundaries, which is the base's own opening. An edge that names no runs is a
+    closed body and is the same nothing."""
+    if carrier is None:
+        return stage
     node_xy, node_bed = await asyncio.to_thread(mesh_nodes, mesh)
     topology = await asyncio.to_thread(
         read_topology, _mesh_field(mesh, "topology_uri", missing=_mesh_missing))
@@ -1202,7 +1205,7 @@ async def open_channel(
                 "discharge_note": "this domain's edge names no runs, so no flow "
                                   "is imposed and no stage is derived."}
     law, coefficient = int(friction_law), float(friction_coefficient)
-    inflow_q, discharge_note = _carried_discharge(carrier)
+    inflow_q, discharge_note = _reported_discharge(carrier)
     bed = _measured_channel(roles, node_xy, node_bed)
     # A LEVEL SOMEBODY MEASURED is where the water stands, and the run opens flat
     # at it: a uniform-flow depth is a model of the same surface, and a model
@@ -1258,23 +1261,6 @@ def _window(reading: Any) -> Any:
     the caller said, and the boundary states it as the constant the engine
     reads."""
     return getattr(reading, "series", None)
-
-
-def _carried_discharge(carrier: Any) -> tuple[float, str]:
-    """What the inflow run carries, and where the number came from -> refuses.
-
-    One value, whichever way it arrived: the slot reads a stated number and a
-    record the same, and a stated one stands over any record. Nothing carried is
-    no flow to impose, and the run says so."""
-    reported = _reported_discharge(carrier)
-    if reported is None:
-        raise TelemacError(
-            "the inflow run carries a discharge and nothing reported one over "
-            "this domain. State the flow on the carrier slot, or name a source "
-            "that reaches this water.",
-            error_code="TELEMAC_INFLOW_DISCHARGE_UNMEASURED")
-    value, note = reported
-    return value, note
 
 
 def _held_level(stage: Any) -> tuple[float, str] | None:
@@ -1345,16 +1331,15 @@ def _level_opening(bed: Mapping[str, Any], held: tuple[float, str], *,
             "held": note, "q_m3s": float(discharge_q)}
 
 
-def _reported_discharge(carrier: Any) -> tuple[float, str] | None:
+def _reported_discharge(carrier: Any) -> tuple[float, str]:
     """The streamflow the carrier OBSERVATION reports, with what reported it.
 
-    ``None`` where nothing came - a context row whose source held nothing. A
-    record that never passed its slot's ingestion is refused by name rather than
-    read here: choosing the nearest site is what the observation slot does."""
+    One value, whichever way it arrived: a stated number and a record read the
+    same. A record that never passed its slot's ingestion is refused by name
+    rather than read here: choosing the nearest site is what the observation
+    slot does."""
     from trid3nt_server.inputs.observation import Observation
 
-    if carrier is None:
-        return None
     if isinstance(carrier, (int, float)) and not isinstance(carrier, bool):
         return float(carrier), (
             f"the discharge {float(carrier):g} m3/s was stated on the call.")

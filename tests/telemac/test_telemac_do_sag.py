@@ -370,7 +370,7 @@ def _filled(*, keywords=None, **supplied):
                   "outfall": {"at": [0.0, 0.0], "name": None}},
         params={row.name: resolved.value_of(row.name)
                 for row in _workflow().params},
-        slots={}, workflow="telemac_do_sag", title="",
+        workflow="telemac_do_sag", title="",
         keywords=dict(keywords or {}), input_mode="auto"))
 
 

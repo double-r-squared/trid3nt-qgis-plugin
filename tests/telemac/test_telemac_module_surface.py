@@ -979,7 +979,7 @@ def test_no_flipped_body_branches_on_anything():
             assert not callable(value), f"{body.__name__}.{key} is code"
 
 
-def test_the_review_is_the_doors_view_and_never_a_step_of_its_own():
+def test_the_review_is_the_workflows_view_and_never_a_step_of_its_own():
     """The sheet is state; the door renders what fill returned and HOLDS. A gate
     in front of it would edit a sheet the door never reads."""
     from trid3nt_server.tools import TOOL_REGISTRY
@@ -1009,7 +1009,7 @@ def test_the_open_channel_body_is_written_at_the_derivation_it_was_solved_for():
         workflow = TOOL_REGISTRY[name].fn.workflow
         # A question whose runs may carry no discharge authors no channel at
         # all: it opens on its level boundaries.
-        channel = next((n for n in workflow.plan_decl(workflow)
+        channel = next((n for n in workflow.plan.steps
                         if getattr(n, "name", "") == "channel"), None)
         if channel is None:
             continue
@@ -1103,7 +1103,7 @@ def _owned_recipe(tool_name: str):
     from trid3nt_server.workflows.mesh.tool import recipe_from_plan_value
 
     workflow = TOOL_REGISTRY[tool_name].fn.workflow
-    step = next(n for n in workflow.plan_decl(workflow)
+    step = next(n for n in workflow.plan.steps
                 if getattr(n, "name", "") == "mesh")
     return recipe_from_plan_value(step.kwargs["mesh"])
 
@@ -1236,7 +1236,7 @@ def test_a_floor_that_is_not_a_mapping_refuses_by_name():
     from trid3nt_server.workflows.telemac.workflow import fill_sheet
 
     with pytest.raises(SlotRefused) as caught:
-        asyncio.run(fill_sheet(steering=T2D, produced={}, params={}, slots={},
+        asyncio.run(fill_sheet(steering=T2D, produced={}, params={},
                                workflow="probe", title="", input_mode="auto",
                                keywords='{"LAW OF BOTTOM FRICTION": 4}'))
     assert "mapping" in str(caught.value) and "got str" in str(caught.value)
@@ -1271,21 +1271,22 @@ def test_a_template_reads_its_answer_through_the_primitives_its_module_binds():
 
     readers = {}
     for name in _TEMPLATES:
-        door = TOOL_REGISTRY[name].fn.workflow.plan_decl
-        if door.outputs:
-            body = door.steering
-            for primitive in door.outputs:
+        workflow = TOOL_REGISTRY[name].fn.workflow
+        declared = getattr(workflow.template, "OUTPUTS", ())
+        if declared:
+            body = workflow.steering
+            for primitive in declared:
                 reader = WRAPPERS[primitive.module] if primitive.module else body
                 assert primitive.kind in reader.READS, (name, primitive)
                 assert primitive.publish in ("layer", "chart", "animate", "station")
-                assert (primitive.variable or primitive.kind) in door.captions, (
+                assert (primitive.variable or primitive.kind) in workflow.template.CAPTIONS, (
                     name, primitive)
-            for measure in door.answer.values():
+            for measure in workflow.template.ANSWER.values():
                 reader = (WRAPPERS[measure.primitive.module]
                           if measure.primitive.module else body)
                 assert measure.primitive.kind in reader.READS, (name, measure)
             continue
-        readers[name] = door.read(None).runner
+        readers[name] = workflow.template.ANSWER
     assert "telemac_dye_release" not in readers
     assert len(set(readers.values())) == len(readers), readers
 
@@ -1297,13 +1298,13 @@ def test_the_fill_docstring_names_the_module_its_rubriques_and_its_open_slots():
 
     for name in _TEMPLATES:
         entry = TOOL_REGISTRY[name]
-        body = entry.fn.workflow.plan_decl.steering
+        body = entry.fn.workflow.steering
         doc = entry.fn.__doc__
         assert f"Sheet: {body.MODULE}" in doc, name
         assert f"dictionary has {len(body.MODULE_INPUT)} keywords" in doc, name
         assert "Open mandatory slots:" in doc, name
         assert "describe_keywords" in doc and "keywords=" in doc, name
-        stated = set(body.ASSERTED) | set(entry.fn.workflow.plan_decl.slots)
+        stated = set(body.ASSERTED)
         for identifier in stated:
             slot = body.MODULE_INPUT.get(identifier)
             if slot is not None and slot.rubrique:
@@ -1318,9 +1319,8 @@ def test_every_required_file_is_the_template_s_own_statement():
     from trid3nt_server.tools import TOOL_REGISTRY
 
     for name in _TEMPLATES:
-        door = TOOL_REGISTRY[name].fn.workflow.plan_decl
-        body = door.steering
-        stated = set(body.ASSERTED) | set(door.slots)
+        body = TOOL_REGISTRY[name].fn.workflow.steering
+        stated = set(body.ASSERTED)
         unstated = sorted(slot.keyword for n, slot in body.MODULE_INPUT.items()
                           if slot.is_required and n not in stated)
         assert not unstated, f"{name} leaves {unstated} to something else"

@@ -6,6 +6,8 @@ standing waves are visible rather than averaged away."""
 
 from __future__ import annotations
 
+import sys
+
 from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
 
 from trid3nt_server.workflows.runtime import (
@@ -31,7 +33,7 @@ from trid3nt_server.workflows.telemac.templates.agitation.declarations import (
     PARAMS as P,
 )
 from trid3nt_server.workflows.telemac.workflow import (
-    Door, Measured, TelemacWorkflow,
+    Measured, TelemacWorkflow,
 )
 
 __all__ = ["ANSWER", "CAPTIONS", "DATA", "MESH", "OUTPUTS", "PARAMS", "STEERING",
@@ -235,28 +237,33 @@ _ARTEMIS_METADATA = AtomicToolMetadata(
 )
 
 
+#: WHAT the mesh is built over, and the DATA slot a caller may hand a built
+#: mesh in instead of the recipe. Filled, that mesh is adopted whole.
+MESH_ON = "domain"
+SUPPLIED_MESH = DATA.mesh
+
+#: The engine files this run has to write for it to have solved
+#: anything; unstated, the deck's own RESULTS FILE is the one.
+RESULTS = (_RESULT,)
+
+#: What the run directory calls the deck, and where the staged files live.
+STEERING_FILE = _STEERING_FILE
+PREFIX = "artemis"
+
+#: The title the card carries when the run is held for review.
+REVIEW_TITLE = "Review the incident wave, the structure and the mesh"
+
+
 artemis_harbor_agitation = register_workflow(
-    TelemacWorkflow, _ARTEMIS_METADATA, PARAMS,
-    Door(
-        steering=STEERING,
-        mesh=MESH, mesh_on="domain", supplied_mesh=DATA.mesh,
-        results=(_RESULT,),
-        steering_file=_STEERING_FILE, prefix="artemis",
-        compute_class=P.compute_class,
-        outputs=OUTPUTS, captions=CAPTIONS, answer=ANSWER,
-        review_title="Review the incident wave, the structure and the mesh"),
-    data=DATA,
+    TelemacWorkflow, _ARTEMIS_METADATA, sys.modules[__name__],
     # A harbour is settled by the wave that enters it, and the stages that do it
     # read no runtime lever: no dated source, no frame a level is counted from,
     # and the mesh size is this question's own param.
     levers=(),
-    accepts=ACCEPTS,
-    answer=tuple(ANSWER),
     provenance=(("structure", "structure_note"),
                 ("mesh_resolution_m", "mesh_edge_note")),
     # A phase-RESOLVING solve is the most mesh-dependent of the family: Kd peaks
     # inside a diffraction fringe the coarse mesh averages away.
     sensitivity=(("kd_max", "peak"),),
     coerce=(compute_class(),),
-    doc=DOC,
 )

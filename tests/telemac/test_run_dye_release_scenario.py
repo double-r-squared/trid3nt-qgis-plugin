@@ -251,9 +251,10 @@ def test_the_workflow_owns_the_stages_and_the_template_states_what_differs():
     wf = _workflow()
     validate_plan(wf.plan, wf.params, wf.data)
     steps = _steps()
-    # No channel: this question's carrier may be absent, so a run of it opens on
-    # its level boundaries and the base settles the water.
-    assert [s.label for s in steps] == ["stated", "mesh", "source",
+    # The channel is LISTED because this question declares a discharge; whether
+    # a run of it carries one is the author's to settle off the carrier it is
+    # handed, and an absent one opens on the level boundaries instead.
+    assert [s.label for s in steps] == ["stated", "mesh", "channel", "source",
                                         "settled", "sheet", "solve", "outputs"]
     # The review is the door's VIEW of the sheet it just filled, so the run is
     # held on the fill itself rather than in front of a step that has not run.

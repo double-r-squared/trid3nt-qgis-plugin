@@ -126,26 +126,23 @@ def test_the_workflow_owns_the_stages_and_the_template_states_no_recipe():
     """The mesh recipe, the file names and the settle step are the runtime's now;
     what the template states is what DIFFERS from every other domain."""
     module = _module()
-    door = _workflow().plan_decl
+    workflow = _workflow()
 
-    assert door.settle is None and door.owns_stages
-    assert door.mesh is None and door.domain == ()
     assert not hasattr(module, "MESH")
-    assert door.levers == ("mesh_resolution_m", "event_time", "compute_class",
-                           "vertical_frame")
+    assert [step.label for step in workflow.plan.steps][:2] == ["stated", "mesh"]
+    assert workflow.levers() == ("mesh_resolution_m", "event_time",
+                                 "compute_class", "vertical_frame")
 
 
 def test_the_owned_mesh_paints_its_bed_and_takes_its_roles_from_the_domain():
     """One bed row painted at the nodes, and the runs from wherever they were
     stated - here the domain, which measured none."""
-    from trid3nt_server.workflows.mesh.tool import recipe_plan_value
-
     workflow = _workflow()
-    owned = workflow.plan_decl._from_slots(workflow)
-    ask = recipe_plan_value(owned.mesh)
+    mesh = next(step for step in workflow.plan.steps if step.label == "mesh")
+    ask = dict(mesh.kwargs["mesh"])
     assert repr(ask["extent"]) == "DataRef('domain')"
     assert repr(ask["resolution_m"]) == "ParamRef('mesh_resolution_m')"
-    ops = {op["op"]: op["kwargs"] for op in ask["ops"]}
+    ops = {op["op"]: dict(op["kwargs"]) for op in ask["ops"]}
     assert repr(ops["set_bed"]["source"]) == "DataRef('bed')"
     assert repr(ops["set_boundary_roles"]["runs"]) == "DataRef('domain')"
 

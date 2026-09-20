@@ -7,6 +7,8 @@ to and the closed form the process reduces to."""
 
 from __future__ import annotations
 
+import sys
+
 from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
 
 from trid3nt_server.workflows.runtime import (
@@ -27,14 +29,14 @@ from trid3nt_server.workflows.telemac.templates.do_sag.declarations import (
     ACCEPTS, DOC, PARAMS, PARAMS as P,
 )
 from trid3nt_server.workflows.telemac.workflow import (
-    Door, Placed, TelemacWorkflow,
+    Placed, TelemacWorkflow,
 )
 
 __all__ = ["ANSWER", "CAPTIONS", "DATA", "OUTPUTS", "PARAMS", "STEERING",
            "telemac_do_sag"]
 
 #: The file the run directory holds this run's picture under. The deck's own
-#: RESULTS statement names it, so the Door restates nothing.
+#: RESULTS statement names it, so nothing here restates it.
 _RESULT = "r2d_domain.slf"
 
 #: How far the reach producer walks downstream from the outfall when this
@@ -307,17 +309,13 @@ _METADATA = AtomicToolMetadata(
 )
 
 
+#: The title the card carries when the run is held for review.
+REVIEW_TITLE = "Review the outfall and the water it discharges to"
+
+
 telemac_do_sag = register_workflow(
     TelemacWorkflow, _METADATA,
-    PARAMS,
-    Door(
-        steering=STEERING,
-        compute_class=ParamRef("compute_class"),
-        outputs=OUTPUTS, captions=CAPTIONS, answer=ANSWER,
-        review_title="Review the outfall and the water it discharges to"),
-    data=DATA,
-    accepts=ACCEPTS,
-    answer=tuple(ANSWER),
+sys.modules[__name__],
     provenance=(("mesh_resolution_m", "mesh_resolution_note"),),
     # WHERE the sag sits is a local-feature LOCATION and moves with the element
     # that resolves it. The DO minimum itself is a saturated maximum - a
@@ -330,5 +328,4 @@ telemac_do_sag = register_workflow(
         event_time(),
         compute_class(),
     ),
-    doc=DOC,
 )

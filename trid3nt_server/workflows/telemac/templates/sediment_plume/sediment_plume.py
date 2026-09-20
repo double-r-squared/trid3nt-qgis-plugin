@@ -7,6 +7,8 @@ and only what was injected can deposit."""
 
 from __future__ import annotations
 
+import sys
+
 from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
 
 from trid3nt_server.workflows.runtime import (
@@ -40,7 +42,7 @@ from trid3nt_server.workflows.telemac.templates.sediment_plume.declarations impo
     ACCEPTS, DOC, PARAMS, PARAMS as P,
     SEDIMENT_CONCENTRATION_MGL, SOURCE_Q_M3S,
 )
-from trid3nt_server.workflows.telemac.workflow import Door, Placed, TelemacWorkflow
+from trid3nt_server.workflows.telemac.workflow import Placed, TelemacWorkflow
 
 __all__ = ["ANSWER", "CAPTIONS", "DATA", "OUTPUTS", "PARAMS", "STEERING",
            "telemac_sediment_plume"]
@@ -313,18 +315,17 @@ _METADATA = AtomicToolMetadata(
 )
 
 
+#: The engine files this run has to write for it to have solved
+#: anything; unstated, the deck's own RESULTS FILE is the one.
+RESULTS = (_RESULT, RESULT_FILENAME)
+
+#: The title the card carries when the run is held for review.
+REVIEW_TITLE = "Review the sediment-plume scenario"
+
+
 telemac_sediment_plume = register_workflow(
     TelemacWorkflow, _METADATA,
-    PARAMS,
-    Door(
-        steering=STEERING,
-        results=(_RESULT, RESULT_FILENAME),
-        compute_class=ParamRef("compute_class"),
-        outputs=OUTPUTS, captions=CAPTIONS, answer=ANSWER,
-        review_title="Review the sediment-plume scenario"),
-    data=DATA,
-    accepts=ACCEPTS,
-    answer=tuple(ANSWER),
+sys.modules[__name__],
     provenance=(("mesh_resolution_m", "mesh_resolution_note"),),
     # The suspended maximum is the canonical peak class: a concentration peak
     # lives inside one element. How far the plume REACHED is a front location and
@@ -339,5 +340,4 @@ telemac_sediment_plume = register_workflow(
         event_time(),
         compute_class(),
     ),
-    doc=DOC,
 )

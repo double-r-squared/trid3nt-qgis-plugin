@@ -7,6 +7,8 @@ floating particles and the tracer carries what dissolved."""
 
 from __future__ import annotations
 
+import sys
+
 from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
 
 from trid3nt_server.workflows.runtime import (
@@ -39,7 +41,7 @@ from trid3nt_server.workflows.solver.compute_class import compute_class
 from trid3nt_server.workflows.telemac.templates.oil_spill.declarations import (
     ACCEPTS, DOC, OIL_PRESETS, PARAMS, PARAMS as P,
 )
-from trid3nt_server.workflows.telemac.workflow import Door, Placed, TelemacWorkflow
+from trid3nt_server.workflows.telemac.workflow import Placed, TelemacWorkflow
 
 __all__ = ["ANSWER", "CAPTIONS", "DATA", "OUTPUTS", "PARAMS", "STEERING",
            "telemac_oil_spill"]
@@ -282,18 +284,17 @@ _METADATA = AtomicToolMetadata(
 )
 
 
+#: The engine files this run has to write for it to have solved
+#: anything; unstated, the deck's own RESULTS FILE is the one.
+RESULTS = (_RESULT, _RESTART, DROGUES_FILENAME)
+
+#: The title the card carries when the run is held for review.
+REVIEW_TITLE = "Review the oil spill scenario"
+
+
 telemac_oil_spill = register_workflow(
     TelemacWorkflow, _METADATA,
-    PARAMS,
-    Door(
-        steering=STEERING,
-        results=(_RESULT, _RESTART, DROGUES_FILENAME),
-        compute_class=ParamRef("compute_class"),
-        outputs=OUTPUTS, captions=CAPTIONS, answer=ANSWER,
-        review_title="Review the oil spill scenario"),
-    data=DATA,
-    accepts=ACCEPTS,
-    answer=tuple(ANSWER),
+sys.modules[__name__],
     provenance=(("mesh_resolution_m", "mesh_resolution_note"),),
     # The dissolved maximum is the canonical peak class: a concentration peak
     # lives inside one element. How far the slick REACHED is a front location and
@@ -307,5 +308,4 @@ telemac_oil_spill = register_workflow(
         event_time(),
         compute_class(),
     ),
-    doc=DOC,
 )

@@ -497,25 +497,28 @@ def test_an_area_holding_no_node_refuses_rather_than_measuring_nothing(solved,
 
 # -- the door: the outputs list, read and published -------------------------- #
 
-def test_the_door_refuses_a_published_variable_with_no_caption():
+def test_a_published_variable_with_no_caption_refuses_at_import():
+    """A template publishes what it LISTS and names each one; the plan is built
+    at import, so a listing nothing captions never reaches a run."""
     from trid3nt_server.workflows.runtime import PlanValidationError
     from trid3nt_server.workflows.telemac.templates.dye_release.dye_release import (
         telemac_dye_release,
     )
-    from trid3nt_server.workflows.telemac.workflow import Door
 
-    door = telemac_dye_release.workflow.plan_decl
+    workflow = telemac_dye_release.workflow
     with pytest.raises(PlanValidationError, match="no caption"):
-        Door(**{**_fields(door), "captions": {}})(telemac_dye_release.workflow)
+        _replanned(workflow, CAPTIONS={})
     with pytest.raises(PlanValidationError, match="no .layer"):
-        Door(**{**_fields(door), "outputs": [max_over_time("T1")]})(
-            telemac_dye_release.workflow)
+        _replanned(workflow, OUTPUTS=[max_over_time("T1")])
 
 
-def _fields(door: Any) -> dict[str, Any]:
-    import dataclasses
+def _replanned(workflow: Any, **over: Any) -> Any:
+    """This workflow's plan rebuilt over a template that states one thing else."""
+    from types import SimpleNamespace
 
-    return {f.name: getattr(door, f.name) for f in dataclasses.fields(door)}
+    module = SimpleNamespace(**{**vars(workflow.template), **over})
+    return type(workflow)(metadata=workflow.metadata, params=workflow.params,
+                          template=module, data=workflow.data)
 
 
 def test_publish_outputs_reads_once_publishes_each_and_answers(monkeypatch, solved):

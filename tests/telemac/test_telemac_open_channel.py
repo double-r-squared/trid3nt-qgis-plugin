@@ -108,10 +108,10 @@ def test_a_carrier_that_never_passed_its_slot_refuses_by_name(settled):
     assert "Data.observation" in str(exc.value)
 
 
-def test_no_flow_anywhere_refuses_rather_than_opening_on_a_guess(settled):
-    with pytest.raises(TelemacError) as exc:
-        _run(carrier=None)
-    assert exc.value.error_code == "TELEMAC_INFLOW_DISCHARGE_UNMEASURED"
+def test_no_carrier_at_all_opens_no_channel_and_hands_back_the_level(settled):
+    """Whether a run CARRIES a flow is settled at run time: an absent carrier is
+    no channel to open, so the level it was handed is what the base opens at."""
+    assert _run(carrier=None, stage=98.5) == 98.5
 
 
 def test_a_domain_with_no_inflow_run_has_no_channel_to_open(settled, monkeypatch):

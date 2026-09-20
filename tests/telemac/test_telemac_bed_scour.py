@@ -107,7 +107,6 @@ def test_the_workflow_owns_every_stage_but_the_two_measured_on_the_mesh():
     """No domain steps, no mesh recipe, no settle, no restated file names. The
     open-channel hydraulics and the release point are measured against the
     ACCEPTED mesh, so those two stay the template's."""
-    assert _WORKFLOW.plan_decl.owns_stages
     assert [step.label for step in _WORKFLOW.plan.steps] == [
         "stated", "mesh", "channel", "source", "settled", "sheet", "solve",
         "outputs"]

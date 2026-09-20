@@ -13,10 +13,11 @@ import pytest
 from trid3nt_server.workflows.runtime.data import BED, DOMAIN, EXTENT
 
 
-def _door():
+def _declared():
+    """The template module the registration was handed, by its own names."""
     from trid3nt_server.tools import TOOL_REGISTRY
 
-    return TOOL_REGISTRY["artemis_harbor_agitation"].fn.workflow.plan_decl
+    return TOOL_REGISTRY["artemis_harbor_agitation"].fn.workflow.template
 
 
 def _step(label):

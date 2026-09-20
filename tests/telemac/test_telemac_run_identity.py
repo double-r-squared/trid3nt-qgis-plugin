@@ -31,7 +31,7 @@ TEMPLATE_MODULES: tuple[tuple[str, str], ...] = (
 def _steering(tool_name: str) -> type:
     from trid3nt_server.tools import TOOL_REGISTRY
 
-    return TOOL_REGISTRY[tool_name].fn.workflow.plan_decl.steering
+    return TOOL_REGISTRY[tool_name].fn.workflow.steering
 
 
 @pytest.mark.parametrize("tool_name,module", TEMPLATE_MODULES)

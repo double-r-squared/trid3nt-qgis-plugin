@@ -8,6 +8,8 @@ names no liquid boundary."""
 
 from __future__ import annotations
 
+import sys
+
 from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
 
 from trid3nt_server.workflows.runtime import (
@@ -36,7 +38,7 @@ from trid3nt_server.workflows.telemac.templates.stratified_flow.declarations imp
     PARAMS,
     PARAMS as P,
 )
-from trid3nt_server.workflows.telemac.workflow import Door, TelemacWorkflow
+from trid3nt_server.workflows.telemac.workflow import TelemacWorkflow
 
 __all__ = ["ANSWER", "CAPTIONS", "DATA", "OUTPUTS", "PARAMS", "STEERING",
            "telemac3d_stratified_flow"]
@@ -262,24 +264,24 @@ _TELEMAC3D_METADATA = AtomicToolMetadata(
 )
 
 
+#: The two files the run has to write. Stated rather than read off the deck
+#: because a 3D deck names them 3D RESULT FILE and 2D RESULT FILE, and what
+#: the workflow reads back is the single RESULTS FILE a 2D deck states.
+RESULTS = (_RESULT_3D, _RESULT_2D)
+
+#: A 3D SELAFIN is no mesh format MDAL opens: the module writes the 2D
+#: result over the same mesh, and a plane of a 3D field is drawn onto it.
+DISPLAY_FILE = _RESULT_2D
+
+#: What the run directory calls the deck, and where the staged files live.
+PREFIX = "telemac3d"
+
+#: The title the card carries when the run is held for review.
+REVIEW_TITLE = "Review the prescribed column, the deck and the mesh"
+
+
 telemac3d_stratified_flow = register_workflow(
-    TelemacWorkflow, _TELEMAC3D_METADATA, PARAMS,
-    Door(
-        steering=STEERING,
-        # The two files the run has to write. Stated rather than read off the
-        # deck because a 3D deck names them 3D RESULT FILE and 2D RESULT FILE,
-        # and what the workflow reads back is the single RESULTS FILE a 2D deck
-        # states.
-        results=(_RESULT_3D, _RESULT_2D),
-        # A 3D SELAFIN is no mesh format MDAL opens: the module writes the 2D
-        # result over the same mesh, and a plane of a 3D field is drawn onto it.
-        display_file=_RESULT_2D,
-        prefix="telemac3d",
-        compute_class=ParamRef("compute_class"),
-        outputs=OUTPUTS, captions=CAPTIONS, answer=ANSWER,
-        review_title="Review the prescribed column, the deck and the mesh"),
-    data=DATA,
-    answer=tuple(ANSWER),
+    TelemacWorkflow, _TELEMAC3D_METADATA, sys.modules[__name__],
     provenance=(("thermocline_depth_m", "thermocline_note"),
                 ("mesh_resolution_m", "mesh_resolution_note")),
     # The surface-to-bottom temperature difference is read ACROSS the thermocline,
@@ -294,5 +296,4 @@ telemac3d_stratified_flow = register_workflow(
         event_time(),
         compute_class(),
     ),
-    doc=DOC,
 )
