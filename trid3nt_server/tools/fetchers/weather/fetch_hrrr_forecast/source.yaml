@@ -144,11 +144,11 @@ coverage:
   value_column: ""
 
 docstring: |-
-  NOAA HRRR 3 km short-term weather forecast -- Tier-1 CONUS fetcher.
+  NOAA HRRR 3 km short-term weather forecast -- Tier-1 fetcher.
 
   What it does: returns a CRS-tagged GeoTIFF (EPSG:4326) of a single HRRR
   forecast field at a single forecast lead time, reprojected from the
-  native Lambert Conformal Conic grid and clipped to the requested CONUS
+  native Lambert Conformal Conic grid and clipped to the requested
   bbox. Wraps the University of Utah CHPC HRRR-Zarr mirror on AWS S3
   (anonymous, Tier-1 free, no API key). Resolves the most-recently
   published HRRR cycle whose forecast at the requested lead time is on
@@ -157,7 +157,7 @@ docstring: |-
   ~1.0 - 1.5 h).
 
   When to use:
-  - User asks for "the forecast for the next few hours" anywhere in CONUS
+  - User asks for "the forecast for the next few hours"
     ("what's the wind looking like in Tampa tomorrow morning?", "is rain
     coming through Denver this afternoon?", "show me HRRR temperature
     forecast for Chicago").
@@ -168,35 +168,28 @@ docstring: |-
     windy". Only reach for the lone signed ``10m_u_wind`` / ``10m_v_wind``
     components when the user explicitly needs wind DIRECTION or a vector
     component (e.g. onshore/offshore decomposition).
-  - Driving a hazard model with near-real-time meteorological forcing on
-    a US-side bbox: precip input to a pluvial rainfall-runoff model (``telemac_rain_on_grid``), wind for surface forcing, temperature for snow/fire-weather context.
+  - Driving a hazard model with near-real-time meteorological forcing:
+    precip input to a pluvial rainfall-runoff model (``telemac_rain_on_grid``), wind for surface forcing, temperature for snow/fire-weather context.
   - "Observed vs forecast" comparisons against ASOS/METAR (or RAWS for
     fire weather).
-  - Any short-term (<= 18 h, or <= 48 h on 00/06/12/18z cycles) US weather
-    decision-support overlay.
+  - Short-term weather decision-support overlays.
 
   When NOT to use:
   - Historical / reanalysis weather -- use ``fetch_era5_reanalysis``
-    (global, 0.25 deg, 1940 - present) instead. HRRR-Zarr archives ~2016+
-    cycles but the tool exposes only the current operational forecast.
-  - Outside CONUS (Mexico interior, Caribbean except direct CONUS spillover,
-    Alaska, Hawaii, the open Pacific or Atlantic) -- HRRR is CONUS-only;
-    bbox outside the coverage envelope raises ``HRRRForecastInputError``.
-    Use ``fetch_era5_reanalysis`` for global, ECMWF AIFS/IFS for global
-    forecast.
+    instead. HRRR-Zarr carries an archive, but this tool exposes only the
+    current operational forecast.
   - Observed precipitation accumulation -- use ``fetch_mrms_qpe``
     (1 km gauge-corrected). HRRR's APCP is model-predicted; MRMS is the
     observation.
   - Watches / warnings -- use ``fetch_nws_alerts_conus`` or
     ``fetch_nws_event`` instead. Those carry the official advisory text;
     HRRR carries raw model output.
-  - Hourly forecast horizons beyond 18 h on non-extended cycles, or
-    beyond 48 h on extended cycles -- those leads are not in HRRR.
+  - A lead time past the forecast window the coverage row states -- those
+    leads are not in HRRR.
 
   Parameters:
       bbox: ``(west, south, east, north)`` in EPSG:4326 (WGS84 decimal
-          degrees). Must intersect CONUS coverage (~lon -134..-60,
-          lat 21..53). Example: ``(-82.4, 26.3, -81.6, 26.9)`` for the
+          degrees). Example: ``(-82.4, 26.3, -81.6, 26.9)`` for the
           Fort Myers / Lee County area.
       variable: one of ``"2m_temperature"`` (K), ``"10m_wind_speed"``
           (m s-1, DERIVED wind-speed magnitude ``sqrt(u^2 + v^2)`` -- the

@@ -123,7 +123,7 @@ coverage:
 
 # --- honesty: caveats + fallback -----------------------------------------
 caveats:
-  - "non-CONUS -> fetch_era5_reanalysis"
+  - "off the coverage row's domain -> fetch_era5_reanalysis"
   - "empty/out-of-coverage window -> GRIDMET_EMPTY (retryable=false); no fabricated pixels"
 
 # corpus omitted here -> loader lifts it verbatim from the sibling corpus.yaml.
@@ -131,7 +131,7 @@ caveats:
 # --- LLM docstring: the sole source of the promoted tool description and the
 # retrieval-index document text. ---
 docstring: |-
-  gridMET CONUS daily gridded meteorology.
+  gridMET daily gridded meteorology.
 
   Fetches a daily gridded meteorological variable from the University of
   Idaho gridMET dataset (Abatzoglou 2013) over the requested bbox + date
@@ -140,22 +140,22 @@ docstring: |-
   bbox in a single wire call (<1 MB typical for a metro-scale request).
 
   Use this when:
-    - User asks for fire-weather / fuel-moisture inside CONUS
+    - User asks for fire-weather / fuel-moisture
       ("fm100", "fm1000", "fuel moisture", "fire danger").
-    - User asks for daily-aggregated CONUS weather over a historical
+    - User asks for daily-aggregated weather over a historical
       window (drought, precip, ET, temperature, humidity, wind speed).
     - The wildfire pipeline needs *dynamic* moisture state to pair with
       LANDFIRE *static* fuel models.
-    - User asks for Palmer Drought Severity Index (pdsi) anywhere in
-      CONUS, 1979-01-01 -> present (3-day lag).
+    - User asks for Palmer Drought Severity Index (pdsi).
     - User asks for reference ET (pet) for water-balance computations.
 
   Do NOT use this for:
-    - Non-CONUS bboxes -- use ``fetch_era5_reanalysis`` (global 0.25 deg).
+    - A bbox off the coverage row's domain -- use ``fetch_era5_reanalysis``
+      (global 0.25 deg).
     - Sub-daily timesteps -- gridMET is daily; use ERA5 or HRRR,
       or GOES for hourly / sub-hourly.
-    - Real-time / live forecast -- gridMET lags ~3 days; use NWS Alerts
-      + HRRR for live CONUS forecast.
+    - Real-time / live forecast -- gridMET is a lagged daily analysis; use
+      NWS Alerts + HRRR for a live forecast.
     - Radar precipitation -- use ``fetch_mrms_qpe`` (1 km gauge-corrected)
       instead of gridMET ``pr`` (4 km PRISM-blended).
     - Static fuel-model class / vegetation type -- use
@@ -164,7 +164,6 @@ docstring: |-
 
   Parameters:
     bbox: ``(west, south, east, north)`` in EPSG:4326 decimal degrees.
-      Must intersect CONUS (~-124.77, 25.05, -67.06, 49.40).
       Example: ``(-117.5, 33.5, -116.5, 34.5)`` (Riverside Co., CA).
     variable: one of ``fm100`` (100-hr dead fuel moisture, Percent),
       ``fm1000`` (1000-hr dead fuel moisture, Percent),
@@ -176,7 +175,7 @@ docstring: |-
       ``rmin`` / ``rmax`` (daily min/max relative humidity, Percent),
       ``pr`` (daily precipitation, mm),
       ``srad`` (downward shortwave radiation, W m-2).
-    start_date: ISO YYYY-MM-DD; inclusive. Must be >= 1979-01-01.
+    start_date: ISO YYYY-MM-DD; inclusive.
     end_date: ISO YYYY-MM-DD; inclusive. Must be <= today. Hard cap
       366 days from start_date.
 
@@ -192,12 +191,13 @@ docstring: |-
     in the session with ``run_qgis_algorithm``). Feeds raster outputs to AOI
     zonal stats and clips in the session, and fire-danger composers. Sibling
     fetchers: ``fetch_era5_reanalysis``
-    (global, hourly -- non-CONUS choice), ``fetch_landfire_fuels`` (static
+    (global, hourly), ``fetch_landfire_fuels`` (static
     fuel-model class -- pair with gridMET for full moisture state),
     ``fetch_mrms_qpe`` (1 km gauge-corrected radar precip).
 
   Raises:
-    ``GRIDMETInputError``: bad bbox / variable / dates / out-of-CONUS.
+    ``GRIDMETInputError``: bad bbox / variable / dates, or a bbox off the
+    coverage row.
     ``GRIDMETNotAvailableError``: dates outside published coverage.
     ``GRIDMETEmptyError``: bbox subset has no finite pixels.
     ``GRIDMETUpstreamError``: THREDDS DAP failure (retryable).

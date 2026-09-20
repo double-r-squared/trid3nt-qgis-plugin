@@ -128,7 +128,7 @@ coverage:
 
 caveats:
   - "pass EXACTLY ONE of state_code (no area limit) or bbox (<= ~25 deg^2)"
-  - "OBSERVED gauge network; for MODELED reach flow use fetch_noaa_nwm_streamflow (US + territories only)"
+  - "OBSERVED gauge network; for MODELED reach flow use fetch_noaa_nwm_streamflow"
   - "primary IV real-time -> Site-service location fallback -> honest NWIS_GAUGES_NO_STATIONS (never an empty-success layer)"
   - "a gage height is a height ABOVE the gauge's own zero, not an elevation: ``gauge_datum_ft`` is that zero's elevation and ``vertical_datum`` the frame it is counted from, both off the site record, and a consumer that wants a water-surface elevation adds them"
 
@@ -174,8 +174,7 @@ docstring: |-
         "NWM" / "the whole river network" -> ``fetch_noaa_nwm_streamflow``.
       - River-reach POLYLINES without gauges -- use ``fetch_river_geometry``
         (NHDPlus HR) or ``fetch_nhdplus_nldi_navigate``.
-      - This tool is US + territories only (supports_global_query=False);
-        there is no global river-discharge fetcher.
+      - there is no global river-discharge fetcher.
       - Precipitation / design-storm forcing -- use ``fetch_mrms_qpe`` or
         ``lookup_precip_return_period``.
       - Coastal tide-station water levels -- use ``fetch_noaa_coops_tides``.
@@ -253,4 +252,4 @@ docstring: |-
         (retryable=False).
 
 
-  Tier-1 free. No API key. ``supports_global_query=False`` (US + territories).
+  Tier-1 free. No API key.

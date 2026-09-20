@@ -62,10 +62,10 @@ coverage:
       KFFACT: dimensionless
 caveats:
 - USGS STATSGO soils (KFFACT erodibility / THICK thickness) 30 m COG via pfdf.data.usgs.statsgo (library-delegate;
-  the library owns discovery + the socket). CONUS only. An open-water bbox inside CONUS returns a typed
+  the library owns discovery + the socket). An open-water bbox inside the covered extent returns a typed
   empty error, never an empty raster.
 docstring: |-
-  Fetch a STATSGO soils raster (KFFACT or THICK) for a CONUS bbox.
+  Fetch a STATSGO soils raster (KFFACT or THICK) for a bbox.
 
   What it does:
       Pulls the requested STATSGO field from the USGS ScienceBase COG
@@ -77,22 +77,19 @@ docstring: |-
 
   When to use:
       - User asks for soil erodibility, soil hydrologic-group / runoff
-        curve-number derivation, or soil-thickness context in a CONUS
-        area ("what's the soil K-factor in this watershed?", "give me
+        curve-number derivation, or soil-thickness context
+        ("what's the soil K-factor in this watershed?", "give me
         soil thickness over Camp Fire footprint").
       - Post-fire debris-flow workflow (M1 / M3 / M4 logistic models
         from Staley et al. 2017) needs catchment-aggregated soil
         covariates over a burn-perimeter or watershed polygon.
-      - Hydrologic / runoff modeling needs a CONUS-wide soil substrate
-        when SSURGO is too detailed or unavailable for the bbox.
+      - Hydrologic / runoff modeling needs a soil substrate when SSURGO
+        is too detailed or unavailable for the bbox.
 
   When NOT to use:
       - DO NOT use for fine-scale (1:24,000) county-level soils -- use
         SSURGO (no atomic tool yet; add in a future job) which is the
         high-resolution sibling of STATSGO.
-      - DO NOT use outside CONUS -- STATSGO does not cover Alaska,
-        Hawaii, Puerto Rico, or other territories; the input validator
-        raises ``STATSGOSoilsInputError`` on out-of-CONUS bbox.
       - DO NOT use for global soils -- use ``fetch_soilgrids`` (ISRIC
         SoilGrids 2.0, global 250 m); for curve numbers use
         ``fetch_gcn250_curve_numbers`` (global SCS CN raster) which
@@ -103,7 +100,7 @@ docstring: |-
   Parameters:
       bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326.
           4-float tuple, lon/lat ordered min-then-max on each axis. Must
-          intersect ``(-125, 24, -66.5, 49.5)`` CONUS envelope or
+          intersect the tool's covered extent (see coverage) or
           ``STATSGOSoilsInputError`` is raised. Recommended scale:
           watershed / county sized (<=1 deg x 1 deg) -- larger bboxes still
           work but emit MB-scale COGs; the payload-warning gate
@@ -130,7 +127,7 @@ docstring: |-
       - Composes WITH: ``model_debris_flow`` (its KF-factor layer); a clip to a
         burn perimeter or watershed in the session.
       - Sibling: ``fetch_gcn250_curve_numbers`` (global SCS CN raster -- overlaps semantically with KFFACT-as-HSG-proxy but is global +
-        AMC-tiered; prefer GCN250 when leaving CONUS).
+        AMC-tiered; prefer GCN250 off this tool's coverage row).
       - Upstream source: USGS ScienceBase STATSGO COG collection via
         ``pfdf.data.usgs.statsgo``.
 
@@ -140,11 +137,11 @@ docstring: |-
 
   Errors:
       - ``STATSGOSoilsInputError``: bad bbox / unsupported field / bbox
-        outside CONUS (retryable=False).
+        outside coverage (retryable=False).
       - ``STATSGOSoilsUpstreamError``: ScienceBase 5xx / network error /
         COG materialization failure (retryable=True).
-      - ``STATSGOSoilsEmptyError``: bbox inside CONUS but the STATSGO
-        raster has no data there (open water / Great Lakes pocket)
+      - ``STATSGOSoilsEmptyError``: bbox inside the covered extent but the
+        STATSGO raster has no data there (open water / Great Lakes pocket)
         (retryable=False).
 
   Tier-1 free. No API key. ``supports_global_query=False``.

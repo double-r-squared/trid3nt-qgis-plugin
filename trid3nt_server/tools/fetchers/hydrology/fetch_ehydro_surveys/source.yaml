@@ -143,8 +143,6 @@ docstring: |-
       - DO NOT use for open-coast or shelf bathymetry - use ``fetch_bluetopo``
         or ``fetch_topobathy``; eHydro maps dredged channels only.
       - DO NOT use for land elevation - use ``fetch_dem``.
-      - DO NOT use outside the US, and do not expect coverage on a river with no
-        federal navigation project.
       - DO NOT treat the values as elevations: they are depths below the
         survey's stated datum, positive downward.
 

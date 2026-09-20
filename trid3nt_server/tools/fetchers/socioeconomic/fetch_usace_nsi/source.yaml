@@ -91,9 +91,8 @@ coverage:
   value_column: val_struct
 
 caveats:
-- USACE National Structure Inventory (CONUS + AK/HI/territories only); per-axis bbox span capped at 1
-  degree (NSI 500s oversized envelopes). A bbox with no structures -> a header-only FlatGeobuf, never
-  an error.
+- Per-axis bbox span capped at 1 degree (NSI 500s oversized envelopes). A bbox with no structures ->
+  a header-only FlatGeobuf, never an error.
 docstring: |-
   USACE National Structure Inventory as a point FlatGeobuf -- buildings +
   HAZUS occupancy class + per-structure replacement value (USD).
@@ -105,8 +104,8 @@ docstring: |-
   replacement value (``val_struct``, USD), content value (``val_cont``),
   square footage, year built, foundation type/height, FEMA FIRM flood
   zone, AM/PM population, and ground elevation. NSI is the authoritative
-  U.S.-wide structure inventory used by FEMA / USACE / HAZUS for flood
-  loss estimation.
+  structure inventory used by FEMA / USACE / HAZUS for flood loss
+  estimation.
 
   When to use:
       - User asks for the buildings or "structure inventory" inside an
@@ -117,16 +116,15 @@ docstring: |-
         AND per-structure replacement value, removing both the
         default-RES1 proxy AND the
         ``_REPLACEMENT_VALUE_DEFAULTS_USD`` per-class fallback. This is
-        the **preferred** structure-exposure substrate inside CONUS.
+        the **preferred** structure-exposure substrate.
       - User asks for exposed value or repair cost estimates that need a
         real ``val_struct`` per structure.
       - Counting buildings by occupancy class (RES1 / COM1 / IND1 / EDU1
         / etc.) in a small area.
 
   When NOT to use:
-      - Outside the United States -- NSI only covers CONUS + AK + HI + the
-        U.S. territories. Use ``fetch_buildings`` (building footprints) for
-        international queries instead.
+      - Off the coverage row -- use ``fetch_buildings`` (building
+        footprints) instead.
       - For bbox spans larger than ~1 degree per axis -- NSI rejects
         oversized queries with a 500. Split into tiles and call once per
         tile, or aggregate footprints in the session for the regional
@@ -186,9 +184,9 @@ docstring: |-
       - Every NSI feature already carries ``component_type`` and
         ``replacement_value`` (added by this tool) for real HAZUS
         occupancy + structure values rather than a class-default
-        fallback. This is the **preferred** structure-exposure substrate
-        when the bbox is inside CONUS -- prefer NSI when available and
-        fall back to ``fetch_buildings`` only outside the US.
+        fallback. This is the **preferred** structure-exposure substrate --
+        prefer NSI where the coverage row reaches and fall back to
+        ``fetch_buildings`` elsewhere.
       - Complementary to ``fetch_hrsl_population`` (population grid),
         ``fetch_administrative_boundaries`` (admin polygons for zonal
         aggregation), and ``fetch_roads_osm`` (road network) for full

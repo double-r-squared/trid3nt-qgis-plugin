@@ -157,7 +157,7 @@ docstring: |-
     conditions where agency instrumentation (CO-OPS, MRMS, ATCF) does not
     reach.
   - Any post-event analysis that needs a globally consistent atmospheric
-    reanalysis over a historical period (1940 to ~3 months ago).
+    reanalysis over a historical period.
   - User asks for historical wind fields, precipitation totals, or sea-state
     data outside the CONUS gauge network.
   - Compound-flood substrate following Bates et al. (NHESS 2023): ERA5 is
@@ -187,8 +187,7 @@ docstring: |-
     ``"2m_temperature"``, ``"total_precipitation"``, ``"runoff"``,
     ``"significant_height_of_combined_wind_waves_and_swell"``. For any
     non-directional wind question pass ``"10m_wind_speed"``.
-  - ``start_date`` (str): ISO YYYY-MM-DD inclusive. ERA5 coverage: 1940-01-01
-    to ~3 months ago (finalised) or 5 days ago (ERA5T preliminary).
+  - ``start_date`` (str): ISO YYYY-MM-DD inclusive.
   - ``end_date`` (str): ISO YYYY-MM-DD inclusive. Hard cap 366 days from start.
   - ``api_key`` (str | None): explicit CDS key; overrides all other resolution
     paths. Resolved priority: kwarg -> ``secret_ref`` -> env var

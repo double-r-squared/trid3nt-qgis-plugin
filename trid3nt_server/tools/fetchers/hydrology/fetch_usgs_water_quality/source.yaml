@@ -122,7 +122,6 @@ coverage:
   value_column: value
 
 caveats:
-- US + territories only (supports_global_query=false)
 - zero WQP monitoring sites for the characteristic in the bbox -> WQP_NO_SITES (retryable=false); never an empty success layer
 - sites with no numeric latest result still render with value=null (the monitoring network is real; NEVER fabricated)
 - bbox area capped at ~100 deg^2 -> WQP_INPUT_ERROR (a contamination question is local)
@@ -159,8 +158,6 @@ docstring: |-
         (modeled).
       - Drinking-water-system violations / regulated facilities -- use
         ``fetch_epa_frs_facilities`` (EPA Facility Registry).
-      - Global / non-US water quality -- this tool is US + territories only
-        (``supports_global_query=False``).
 
   Args:
       bbox: REQUIRED ``(west, south, east, north)`` in EPSG:4326 for the
@@ -227,4 +224,4 @@ docstring: |-
         the bbox (retryable=False).
 
 
-  Tier-1 free. No API key. ``supports_global_query=False`` (US + territories).
+  Tier-1 free. No API key.

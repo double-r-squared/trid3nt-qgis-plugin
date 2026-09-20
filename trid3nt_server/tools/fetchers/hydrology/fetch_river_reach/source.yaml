@@ -139,7 +139,6 @@ docstring: |-
       - DO NOT use for the river BED: this is geometry only. The bed comes from
         ``fetch_ehydro_surveys`` (a channel survey), a bathymetry fetcher, or a
         DEM.
-      - DO NOT use outside the US.
 
   Parameters:
       seed_point: ``(lon, lat)`` in EPSG:4326, ON or near the channel. It is
@@ -171,7 +170,8 @@ docstring: |-
   direction; the channel network and the mapped banks are multi-year stable.
 
   Errors:
-      - ``RIVER_REACH_INPUT_INVALID``: a seed off the network or outside CONUS.
+      - ``RIVER_REACH_INPUT_INVALID``: a seed off the mapped network (see the
+        coverage row).
       - ``RIVER_REACH_EMPTY``: no flowline from the seed, no mapped water
         surface at the reach, or the cut left no polygon - each named.
       - ``RIVER_REACH_UPSTREAM_ERROR``: NLDI or NHD failed.

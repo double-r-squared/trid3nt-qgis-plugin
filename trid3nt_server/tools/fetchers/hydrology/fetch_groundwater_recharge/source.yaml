@@ -90,14 +90,14 @@ coverage:
   value_column: recharge
 
 caveats:
-  - "CONUS ONLY -- both grids stop at the conterminous US border; an AOI outside it raises RECHARGE_INPUT_INVALID naming the CONUS envelope"
+  - "An AOI outside it raises RECHARGE_INPUT_INVALID naming the envelope"
   - "the two sources encode inland water DIFFERENTLY: reitz_2017 (the default) stamps it 0.0 mm/yr (a FINITE value, not a nodata sentinel), so an AOI entirely over the Great Lakes or a large reservoir serves a plausible-looking all-zero raster rather than an error; wolock_2003 stamps inland water as NaN, so the same AOI raises RECHARGE_EMPTY on that source. An all-ocean AOI (outside both grids' land extent) raises RECHARGE_EMPTY on either source."
   - "long-term MEAN annual rates, not a time series: reitz_2017 is the 2000-2013 average, wolock_2003 is a 1951-80 runoff climatology x base-flow index -- neither resolves a drought year, a season, or a storm"
   - "reitz_2017 is TOTAL recharge (it includes the return flow from groundwater-sourced irrigation), so in heavily irrigated areas it exceeds the natural rate; wolock_2003 estimates NATURAL recharge only, which is most of why the two disagree there"
   - "the two sources are methodologically independent (empirical water-budget regression vs base-flow partition of a runoff map) and disagree locally by tens of percent; that spread is a real uncertainty estimate, not an error in either"
 
 docstring: |-
-  Long-term mean annual groundwater recharge rate over the contiguous US.
+  Long-term mean annual groundwater recharge rate.
 
   **What it does:** Windowed read of a staged CONUS recharge raster to a
   CRS-tagged GeoTIFF over the requested bbox. Pixel values are the mean annual
@@ -106,8 +106,7 @@ docstring: |-
   ``reitz_2017`` (default) and ``wolock_2003``.
 
   **When to use:**
-  - Setting the recharge boundary condition for a groundwater flow model
-    anywhere in the contiguous US.
+  - Setting the recharge boundary condition for a groundwater flow model.
   - Answering "how fast does groundwater recharge here", "how much rainfall
     reaches the aquifer", "what is the annual recharge rate for this county".
   - Water-budget and sustainable-yield work: comparing recharge against
@@ -116,8 +115,6 @@ docstring: |-
     spread as an honest range, since they were derived by unrelated methods.
 
   **When NOT to use:**
-  - DO NOT use outside the contiguous US -- Alaska, Hawaii, Puerto Rico and all
-    territories are off both grids and raise ``RECHARGE_INPUT_INVALID``.
   - DO NOT use for a single year, season, storm, or drought. These are
     long-term means; for event-scale infiltration use precipitation forcing
     (``fetch_gridmet``, ``fetch_aorc_precip``) with an infiltration method.

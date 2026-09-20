@@ -152,9 +152,6 @@ docstring: |-
       ``fetch_firms_active_fire`` (NASA VIIRS/MODIS thermal anomalies).
     - Fire perimeter polygons -- use ``fetch_nifc_fire_perimeters`` (NIFC
       current perimeters) or ``fetch_mtbs_burn_severity`` (historical).
-    - Locations outside the western/southern US fire belt -- RAWS coverage
-      is sparse east of the Mississippi and non-existent outside the US.
-      Use ``fetch_asos_metar`` or ``fetch_era5_reanalysis`` instead.
 
   **Parameters:**
 

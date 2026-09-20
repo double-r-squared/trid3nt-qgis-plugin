@@ -131,8 +131,8 @@ coverage:
   series_column: fcst_series_json
 
 caveats:
-- NWS/NWPS (AHPS) river-forecast gauges with observed + forecast stage and flood category; US + territories
-  only. Optional per-gauge threshold + stageflow-series enrichment (bounded, best-effort). A bbox with
+- NWS/NWPS (AHPS) river-forecast gauges with observed + forecast stage and flood category.
+  Optional per-gauge threshold + stageflow-series enrichment (bounded, best-effort). A bbox with
   no forecast gauge -> a typed NO_GAUGES empty answer; a named lid that does not exist ->
   a typed input error. No API key.
 docstring: "Fetch NWS river-forecast gauges + flood categories as a Point FlatGeobuf.\n\nRetrieves the\
@@ -162,4 +162,4 @@ docstring: "Fetch NWS river-forecast gauges + flood categories as a Point FlatGe
   \ EPSG:4326).\n\nRaises:\n    NwsRiverForecastInputError: bbox and gauge_id both missing / malformed.\n\
   \    NwsRiverForecastBboxTooLargeError: bbox implausibly large.\n    NwsRiverForecastNoGaugesError:\
   \ zero forecast gauges in the bbox, or\n        an unknown gauge_id.\n    NwsRiverForecastUpstreamError:\
-  \ NWPS API / network failure.\n\nTier-1 free. No API key. ``supports_global_query=False`` (US + territories)."
+  \ NWPS API / network failure.\n\nTier-1 free. No API key."

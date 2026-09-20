@@ -112,7 +112,7 @@ caveats:
 - "Coarser than fetch_aorc_precip (~800 m) for precipitation alone; NLDAS-2 is the source when the run needs the FULL forcing set (radiation, humidity, wind, pressure) that AORC's precipitation record does not carry."
 
 docstring: |-
-  NASA NLDAS-2 hourly land-surface forcing -- the AOI-mean forcing series (precipitation, temperature, wind, radiation, humidity, pressure) for any CONUS window since 1979.
+  NASA NLDAS-2 hourly land-surface forcing -- the AOI-mean forcing series (precipitation, temperature, wind, radiation, humidity, pressure).
 
   **What it does:** Reads the NLDAS-2 primary forcing file set (``NLDAS_FORA0125_H``)
   through the GES DISC time-series service at its native 1/8 degree hourly
@@ -130,10 +130,9 @@ docstring: |-
 
   **When NOT to use:**
   - Precipitation alone at the finest available resolution -- ``fetch_aorc_precip``
-    is ~800 m against NLDAS-2's ~12 km over the same CONUS record.
+    is ~800 m against NLDAS-2's ~12 km.
   - Real-time or forecast weather -- use ``fetch_hrrr_forecast``; NLDAS-2 ends
     yesterday.
-  - Outside CONUS -- use ``fetch_era5_reanalysis`` (global).
   - A gridded forcing FIELD -- this returns an AOI-mean series, not a raster.
 
   **Requires an Earthdata Login.** GES DISC answers an unauthenticated request
@@ -142,9 +141,9 @@ docstring: |-
   host -- it never substitutes another dataset.
 
   **Parameters:**
-  - ``bbox`` (list[float]): ``(min_lon, min_lat, max_lon, max_lat)`` EPSG:4326.
-    Must intersect CONUS; capped at 2.0 deg^2.
-  - ``start_date`` (str): ISO ``YYYY-MM-DD`` inclusive. Coverage floor 1979-01-02.
+  - ``bbox`` (list[float]): ``(min_lon, min_lat, max_lon, max_lat)`` EPSG:4326,
+    capped at 2.0 deg^2.
+  - ``start_date`` (str): ISO ``YYYY-MM-DD`` inclusive.
   - ``end_date`` (str): ISO ``YYYY-MM-DD`` inclusive. Capped at 92 days from
     ``start_date``; must be before today.
   - ``variables`` (list[str], optional): any of ``prcp``, ``temp``, ``wind_u``,

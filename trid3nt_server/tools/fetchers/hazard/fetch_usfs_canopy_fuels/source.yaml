@@ -83,12 +83,12 @@ coverage:
     cbd: kg/m^3 * 100
 
 caveats:
-  - "30 m LANDFIRE LF2022 CONUS canopy base height / bulk density via ImageServer exportImage; all-nodata raster (bbox outside CONUS) -> USFS_CANOPY_FUELS_EMPTY (never a fabricated layer)"
+  - "30 m LANDFIRE LF2022 canopy base height / bulk density via ImageServer exportImage; an all-nodata raster (outside the covered extent, see the coverage row) -> USFS_CANOPY_FUELS_EMPTY (never a fabricated layer)"
 
 # corpus lifted from sibling corpus.yaml.
 
 docstring: |-
-  Fetch USFS canopy base height (CBH) or canopy bulk density (CBD) raster for a CONUS bbox.
+  Fetch USFS canopy base height (CBH) or canopy bulk density (CBD) raster for a bbox.
 
   Fetches a 30 m LANDFIRE LF2022 canopy-fuel raster for the requested area.
   CBH (canopy base height) and CBD (canopy bulk density) are the two canopy
@@ -100,7 +100,7 @@ docstring: |-
 
   When to use:
       - User asks for canopy base height, canopy fuel loading, canopy bulk
-        density, or crown fuel structure for a CONUS area.
+        density, or crown fuel structure for an area.
       - Agent needs CBH or CBD as input to a wildfire-spread or crown-fire
         model (FlamMap, FARSITE, FSim, QUIC-Fire).
       - User asks about spotting potential, torching probability, or
@@ -118,7 +118,7 @@ docstring: |-
         use ``fetch_mtbs_burn_severity``.
   Parameters:
       bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326.
-          Required (``supports_global_query=False``); CONUS-only at v0.1.
+          Required (``supports_global_query=False``; see the coverage row).
           Example for San Diego fire country:
           ``(-117.5, 32.5, -117.0, 33.0)``.
       layer: Which canopy-fuel layer to fetch:
@@ -156,8 +156,8 @@ docstring: |-
           degenerate; non-retryable.
       ``USFSCanopyFuelsUpstreamError``: LANDFIRE ImageServer network failure,
           HTTP non-200, JSON error envelope, or non-TIFF body; retryable.
-      ``USFSCanopyFuelsEmptyError``: all-nodata raster -- bbox outside CONUS
-          LANDFIRE coverage; non-retryable.
+      ``USFSCanopyFuelsEmptyError``: all-nodata raster -- outside LANDFIRE
+          coverage (see the coverage row); non-retryable.
 
   Cache: ``static-30d``. LANDFIRE LF2022 is a static product;
   the 30-day window is well inside the publication cadence. Cache key:

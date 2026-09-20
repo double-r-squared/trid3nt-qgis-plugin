@@ -88,7 +88,7 @@ coverage:
   value_column: water_level
 
 caveats:
-  - "USGS Water Data OGC API observed groundwater monitoring wells + their latest water-level reading (depth-to-water / groundwater elevation) as points; U.S. + territories. Pass EXACTLY ONE of state_code (USPS) or bbox (state wins). No wells with a reading in scope -> a typed USGS_GROUNDWATER_NO_WELLS error, never a fabricated layer."
+  - "USGS Water Data OGC API observed groundwater monitoring wells + their latest water-level reading (depth-to-water / groundwater elevation) as points. Pass EXACTLY ONE of state_code (USPS) or bbox (state wins). No wells with a reading in scope -> a typed USGS_GROUNDWATER_NO_WELLS error, never a fabricated layer."
 
 docstring: |-
   Fetch REAL, OBSERVED USGS groundwater monitoring wells as a point FlatGeobuf.
@@ -123,8 +123,6 @@ docstring: |-
         companion). This tool is the GROUNDWATER (subsurface well) network.
       - Soil-moisture / shallow vadose-zone water content -- that is a different
         measurement; this is the saturated-zone water table.
-      - Global / non-US wells -- this tool is US + territories only
-        (``supports_global_query=False``).
 
   Spatial selector (pass EXACTLY ONE):
       state_code: Optional 2-letter USPS state/territory code (e.g. ``"KS"``,
@@ -182,4 +180,4 @@ docstring: |-
       - ``GwNoWellsError``: no groundwater wells with a reading in scope
         (retryable=False).
 
-  Tier-1 free. No API key. ``supports_global_query=False`` (US + territories).
+  Tier-1 free. No API key.

@@ -79,7 +79,7 @@ coverage:
   series_column: time_series_csv
 
 caveats:
-  - "GTSM v3.0 reanalysis is HISTORICAL only (1950 -> ~2024); a MODEL, not a gauge -- for CONUS use fetch_noaa_coops_tides"
+  - "GTSM v3.0 is a reanalysis, a MODEL, not a gauge -- for CONUS use fetch_noaa_coops_tides"
   - "keyed: free Copernicus CDS key auto-requested via credential card on GTSM_MISSING_KEY; empty bbox -> GTSM_EMPTY (no gauges)"
   - "sparse global gauge network; composers interpolate to the hydraulic model grid"
 
@@ -112,8 +112,8 @@ docstring: |-
 
   - CONUS with operating CO-OPS tide gauges -- use ``fetch_noaa_coops_tides``
     for real observational records; GTSM is a model, not a gauge measurement.
-  - Forecasted tide/surge -- GTSM v3.0 reanalysis is historical only (1950 to
-    ~2024); use ECMWF/NHC tools for future surge forecasts.
+  - Forecasted tide/surge -- GTSM v3.0 is a historical reanalysis, not a
+    forecast; use ECMWF/NHC tools for future surge forecasts.
   - Sub-hourly boundary timesteps -- output is pinned to hourly; the GTSM CDS
     dataset supports 10-min aggregation but a hydraulic model rarely needs finer steps.
   - Gridded water-level fields -- output is a sparse gauge network; composers
@@ -123,7 +123,7 @@ docstring: |-
 
   - ``bbox``: ``(west, south, east, north)`` in EPSG:4326. Required;
     ``supports_global_query=False`` -- global time-series is GB-scale.
-  - ``start_date``: ISO YYYY-MM-DD inclusive. GTSM coverage: 1950 -> ~2024.
+  - ``start_date``: ISO YYYY-MM-DD inclusive (see the coverage row for the window).
   - ``end_date``: ISO YYYY-MM-DD inclusive. Hard cap 366 days from start.
   - ``output``: ``"water_level"`` (default, tide + surge; canonical
     hydraulic model input) or ``"surge_only"`` (meteorological residual only).

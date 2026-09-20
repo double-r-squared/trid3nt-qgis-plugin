@@ -73,7 +73,7 @@ coverage:
   value_column: persons_per_cell
 
 caveats:
-  - "global ~30 m (1 arcsec) Meta HRSL persons/cell (about -56 to +72 latitude; excludes Antarctica + far Arctic); an all-nodata window (open water / off coverage) -> HRSL_EMPTY (never a fabricated layer)"
+  - "global ~30 m (1 arcsec) Meta HRSL persons/cell; an all-nodata window (open water / off coverage) -> HRSL_EMPTY (never a fabricated layer)"
   - "gridded population, NOT per-building occupancy; combine fetch_buildings footprints with HRSL for building-level counts"
 
 # corpus lifted from sibling corpus.yaml.
@@ -86,8 +86,7 @@ docstring: |-
   reads only the window covering the requested bbox, and writes a
   Cloud-Optimized GeoTIFF of persons-per-cell values. Resolution ~1 arcsecond
   (~30 m at the equator); float32, NaN nodata, EPSG:4326. Cached ``static-30d``.
-  Coverage: global land areas between approximately -56 deg and +72 deg latitude
-  (excludes Antarctica + far Arctic). No API key required.
+  No API key required.
 
   **When to use:**
   - Exposure modeling: "how many people live inside the flood inundation zone?"
@@ -104,7 +103,6 @@ docstring: |-
   - Authoritative US census tabulation for reporting (use US Census API).
   - Real-time or near-real-time population counts (HRSL is an annual model
     output, not a live measurement).
-  - Bboxes covering Antarctica or far-north Arctic (raises ``HRSLEmptyError``).
 
   **Parameters:**
   - ``bbox`` (tuple): ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326.

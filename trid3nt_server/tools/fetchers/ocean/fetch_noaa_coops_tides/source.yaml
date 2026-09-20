@@ -174,8 +174,7 @@ docstring: |-
   ``products/water_level`` or ``products/predictions`` endpoint. Returns a
   FlatGeobuf with one Point feature per station, carrying the full hourly
   time series inline as a ``time_series_csv`` attribute suitable for a
-  hydraulic model's coastal boundary forcing. Tier-1 free, no API key. Covers US coastal waters,
-  Great Lakes, and US territories.
+  hydraulic model's coastal boundary forcing. Tier-1 free, no API key.
 
   **When to use:**
   - User asks "what are the tide levels at Fort Myers / Key West / any US
@@ -206,9 +205,8 @@ docstring: |-
 
   **Parameters:**
       bbox: ``(west, south, east, north)`` in EPSG:4326 (WGS84 decimal
-          degrees). Required -- ``supports_global_query=False``. CO-OPS
-          has ~300 stations globally, primarily US coastline and territories;
-          specify a coastal bbox. Cap of 50 stations per call.
+          degrees). Required -- ``supports_global_query=False``. Specify a
+          coastal bbox. Cap of 50 stations per call.
           Example for Fort Myers + Naples area: ``(-82.5, 25.5, -81.0, 27.5)``
           -> returns 2 stations (8725520 Fort Myers + 8725114 Naples Bay).
       start_date: ISO YYYY-MM-DD; inclusive start of the data window.

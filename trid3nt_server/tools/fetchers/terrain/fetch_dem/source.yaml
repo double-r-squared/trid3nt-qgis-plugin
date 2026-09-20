@@ -103,7 +103,7 @@ caveats:
   Default source="auto": on a 3DEP service outage/timeout it STOPS and asks (a typed DEM_FALLBACK_GATE
   naming source="copernicus") rather than silently substituting a coarser cross-dataset radar DEM.'
 - source="copernicus" is served verbatim by fetch_copernicus_dem (global GLO-30 30 m) via the pre-flight
-  dispatch seam -- no re-cache under the dem prefix. A clearly non-US bbox on the auto path returns a
+  dispatch seam -- no re-cache under the dem prefix. A bbox outside 3DEP coverage on the auto path returns a
   distinct DEM_OUT_OF_COVERAGE error naming copernicus.
 - State/multi-state bboxes auto-coarsen against a 4000 px/axis pixel budget (the delivered spacing + an
   honest coarsening note are stamped into name/layer_id); continent-scale (> 5,000,000 km^2) hard-fails.
@@ -111,16 +111,16 @@ docstring: |-
   Fetch a digital elevation model (DEM) / terrain elevation for a bounding box (USGS 3DEP US lidar; on a 3DEP outage the default path STOPS and asks before any Copernicus GLO-30 swap; either source pinnable).
 
   Use this (not ``fetch_topobathy``, which is coastal land+seafloor) for a plain
-  ground-elevation DEM. The default ``source="auto"`` tries USGS 3DEP (US, 1-10 m
+  ground-elevation DEM. The default ``source="auto"`` tries USGS 3DEP (1-10 m
   lidar). If the 3DEP SERVICE is unavailable / times out it does NOT silently
   substitute a different dataset: it raises a typed error that names
   ``source="copernicus"`` (keyless GLOBAL 30 m radar) as the retry and states the
   tradeoff, so YOU relay it and the USER approves the coarser cross-dataset swap
   before it happens (a silent swap would degrade map integrity while looking like
-  success). Pass ``source="copernicus"`` DIRECTLY for terrain OUTSIDE the US (the
-  Alps, Andes, Himalaya, Africa, ...) -- the keyless global GLO-30 30 m model is a
-  built-in mode of this tool; a clearly non-US bbox on the auto path returns a
-  distinct out-of-coverage error naming copernicus. Pass ``source="3dep"`` ONLY to
+  success). Pass ``source="copernicus"`` DIRECTLY for terrain where 3DEP has no
+  coverage -- the keyless global GLO-30 30 m model is a built-in mode of this
+  tool; a bbox outside 3DEP coverage on the auto path returns a distinct
+  out-of-coverage error naming copernicus. Pass ``source="3dep"`` ONLY to
   pin 3DEP: a pinned source never switches (a 3DEP outage then surfaces a typed
   error suggesting Copernicus).
 
@@ -144,8 +144,6 @@ docstring: |-
     over a polygon).
 
   **When NOT to use:**
-  - Coverage outside the continental US with the DEFAULT source -- pass
-    ``source="copernicus"`` for a global GLO-30 30 m DEM.
   - Bathymetry (below-water elevation) -- 3DEP/GLO-30 are land/surface models;
     use ``fetch_topobathy`` for coastal seafloor depth.
   - Single-point elevation lookups -- the tool fetches a raster window;
@@ -164,8 +162,8 @@ docstring: |-
   - ``source`` (str, default ``"auto"``): ``"auto"`` (USGS 3DEP first; on a 3DEP
     service failure/timeout it raises a GATED typed error naming
     ``source="copernicus"`` for the user to approve -- NO silent cross-dataset
-    swap; a clearly non-US bbox raises a distinct out-of-coverage error);
-    ``"3dep"`` (PIN USGS 3DEP, US-only, honors ``resolution_m``, no fallback); or
+    swap; a bbox outside 3DEP coverage raises a distinct out-of-coverage error);
+    ``"3dep"`` (PIN USGS 3DEP, honors ``resolution_m``, no fallback); or
     ``"copernicus"`` (PIN Copernicus GLO-30, global 30 m radar, keyless -- the
     built-in global mode, the user-approved retry target).
 

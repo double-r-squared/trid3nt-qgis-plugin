@@ -93,24 +93,22 @@ caveats:
 # corpus lifted from sibling corpus.yaml.
 
 docstring: |-
-  NOAA AORC v1.1 historical hourly precipitation -- the AOI-mean hyetograph forcing series for any CONUS year since 1979.
+  NOAA AORC v1.1 historical hourly precipitation -- the AOI-mean hyetograph forcing series.
 
   **What it does:** Opens the public NOAA Analysis of Record for Calibration
   (AORC) v1.1 per-year Zarr store on AWS (anonymous), selects the request bbox and
   hour window, and averages the ~800 m (30 arc-second) hourly total precipitation
   (``APCP_surface``, mm) over the AOI into a HYETOGRAPH: the hourly precip series
-  plus the window accumulation. AORC spans 1979-02 to ~10 days before present, so
-  it is the historical precipitation forcing for events BEFORE the MRMS archive
-  (which begins ~2020-10).
+  plus the window accumulation. It is the historical precipitation forcing for
+  events BEFORE the MRMS archive.
 
   **When to use:**
   - Rain-on-grid / rainfall-runoff FORCING for a historical storm on a small
     basin: the AOI-mean hyetograph is the standard spatially-uniform precip input
     for a watershed hydrologic/hydraulic run (e.g. calibrating an outlet-discharge
     replication against a gauge record from 2014-2019).
-  - "How much rain fell over <basin> during the <year> storm, hour by hour?" for
-    any CONUS location and any year 1979-present.
-  - Pre-2020 precipitation where ``fetch_mrms_qpe`` has no coverage.
+  - "How much rain fell over <basin> during the <year> storm, hour by hour?"
+  - Precipitation where ``fetch_mrms_qpe`` has no coverage.
   - A globally-consistent, gauge-and-analysis-blended hourly precip record used to
     drive the National Water Model retrospective (AORC is that forcing).
 
@@ -121,15 +119,13 @@ docstring: |-
   - A SPATIAL precipitation raster / map layer -- this returns an AOI-MEAN series
     (a forcing hyetograph), not a gridded field; for a gauge-corrected accumulation
     COG use ``fetch_mrms_qpe``.
-  - Non-CONUS precipitation -- AORC v1.1 (1 km) is CONUS; use
-    ``fetch_era5_reanalysis`` (global, 27 km).
   - Design-storm return periods -- use ``lookup_precip_return_period`` (Atlas 14).
 
   **Parameters:**
   - ``bbox`` (list[float]): ``(min_lon, min_lat, max_lon, max_lat)`` EPSG:4326, the
-    AOI averaged into the hyetograph. Must intersect CONUS; capped at 2.0 deg^2 (a
+    AOI averaged into the hyetograph. Capped at 2.0 deg^2 (a
     forcing series is a small-basin query).
-  - ``start_date`` (str): ISO ``YYYY-MM-DD`` inclusive. Coverage floor 1979-02-01.
+  - ``start_date`` (str): ISO ``YYYY-MM-DD`` inclusive.
   - ``end_date`` (str): ISO ``YYYY-MM-DD`` inclusive (window ends at that day's
     23:00). Capped at 92 days from ``start_date``.
 

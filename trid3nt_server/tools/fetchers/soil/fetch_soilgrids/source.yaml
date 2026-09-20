@@ -126,9 +126,9 @@ docstring: |-
   to EPSG:4326 at ~250 m, applies the property scaling to recover physical
   units, and writes a single-band float32 COG to the 30-day cache.
 
-  This is GLOBAL -- the worldwide complement to the US-only STATSGO/SSURGO
-  chain (``fetch_statsgo_soils``). Use it for soil texture, organic carbon,
-  bulk density, or pH anywhere on Earth at a consistent 250 m schema.
+  This is the complement to the STATSGO/SSURGO chain
+  (``fetch_statsgo_soils``). Use it for soil texture, organic carbon,
+  bulk density, or pH at a consistent 250 m schema.
 
   **Properties (``soil_property``):**
   - ``"clay"`` / ``"sand"`` / ``"silt"`` -- texture fraction, percent.
@@ -142,10 +142,9 @@ docstring: |-
   infiltration and ag rooting).
 
   **When to use:**
-  - Soil texture / organic carbon / pH / bulk density for any NON-US (or
-    cross-border) area -- agriculture, hydrology, infiltration substrate.
-  - A consistent 250 m global soil layer where US STATSGO/SSURGO does not
-    reach (Africa, Asia, South America, Europe).
+  - Soil texture / organic carbon / pH / bulk density -- agriculture,
+    hydrology, infiltration substrate.
+  - A consistent 250 m soil layer where STATSGO/SSURGO does not reach.
   - Pair with ``fetch_gcn250_curve_numbers`` (infiltration CN) and
     ``fetch_dem`` (terrain) for a global hydrologic forcing stack.
 
@@ -154,7 +153,6 @@ docstring: |-
     use ``fetch_statsgo_soils``; SoilGrids is a 250 m machine-learned
     prediction, not a surveyed map unit.
   - SCS curve numbers for runoff -- use ``fetch_gcn250_curve_numbers``.
-  - Antarctica / far Arctic (SoilGrids excludes them).
 
   **Parameters:**
   - ``bbox`` (tuple): ``(min_lon, min_lat, max_lon, max_lat)`` EPSG:4326.

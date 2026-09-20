@@ -110,15 +110,12 @@ docstring: |-
   - A hydraulic model setup requires
     landcover for Manning's roughness assignment -- this is the canonical
     supply tool.
-  - User asks "what land cover exists in this area?" for a CONUS location.
+  - User asks "what land cover exists in this area?"
   - Exposure analysis: intersect a hazard footprint with impervious-surface
     or developed-land classes.
   - Visualization using the ``categorical_landcover`` QML style preset.
 
   **When NOT to use:**
-  - Coverage outside CONUS L48 -- NLCD covers only the 48 contiguous US
-    states; Alaska, Hawaii, and Puerto Rico have separate MRLC layers not
-    in the v0.1 substrate.
   - Global landcover -- pass ``dataset="esa_worldcover_2021"`` to opt into
     the ESA WorldCover branch, but that branch currently raises
     ``UpstreamAPIError`` (forward-looking).

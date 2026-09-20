@@ -76,7 +76,7 @@ coverage:
     value_column: curve_number
 
 caveats:
-  - "global ~250 m SCS curve numbers (Jaafar 2019, 84 N to 57 S; no Antarctica/far-Arctic); an all-nodata window (over open water / off coverage) -> GCN250_EMPTY (never a fabricated layer)"
+  - "global ~250 m SCS curve numbers (Jaafar 2019); an all-nodata window (over open water / off coverage) -> GCN250_EMPTY (never a fabricated layer)"
   - "CONUS work prefers NLCD-derived CNs (~30 m) from an NLCD land-cover raster reclassified in the session; CN is an SCS depth-loss method, NOT a rational-method runoff coefficient"
 
 # corpus lifted from sibling corpus.yaml.
@@ -92,14 +92,13 @@ docstring: |-
   0-100 represent the SCS curve number; nodata = 255.
 
   **When to use:**
-  - Building a pluvial-flood scenario for any non-CONUS
-    area where NLCD-derived curve numbers are unavailable -- GCN250 covers
-    global land surface (84 N to 57 S).
+  - Building a pluvial-flood scenario where NLCD-derived curve numbers
+    are unavailable.
   - AMC sensitivity analysis: run the same storm under ``"dry"``,
     ``"average"``, and ``"wet"`` antecedent conditions to bracket the
     infiltration-loss range.
   - User asks for SCS infiltration inputs, curve numbers, or runoff
-    potential outside the continental US.
+    potential.
   - Research-validated for compound-flood modeling per Eilander et al.
     (NHESS 2023); the standard global substrate for compound-flood
     hydraulic-model workflows.
@@ -115,7 +114,6 @@ docstring: |-
   - DO NOT use to infer Manning's roughness -- CN governs infiltration loss
     only; surface roughness requires ``fetch_landcover`` + a roughness
     lookup table.
-  - DO NOT use for Antarctica or above 84 N (GCN250 does not cover those).
 
   **Parameters:**
   - ``bbox`` (tuple[float, float, float, float]): ``(min_lon, min_lat,

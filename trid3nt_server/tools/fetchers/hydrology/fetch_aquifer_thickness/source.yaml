@@ -82,7 +82,7 @@ coverage:
   value_column: saturated_thickness
 
 caveats:
-  - "CONUS ONLY -- an AOI outside the staged envelope raises AQUIFER_THICKNESS_INPUT_INVALID naming it. Alaska, Hawaii, Puerto Rico and all territories are off the grid."
+  - "An AOI outside the staged envelope raises AQUIFER_THICKNESS_INPUT_INVALID naming it."
   - "THIS IS NOT A MAPPED AQUIFER THICKNESS. It is the saturated thickness of the MODELLED SURFICIAL system: the base is the Zell-Sanford model bottom, a value PRESCRIBED per surficial-geology x HUC4 calibration zone (96 distinct round constants CONUS-wide, from 5 m -- a real coastal zone in LA/ME/NY/FL -- to 150 m below land surface), not a surveyed or interpreted hydrogeologic contact. Where the real aquifer is thicker than the modelled zone, this number is bounded by the modelling choice rather than by geology."
   - "Cross-checked against an INDEPENDENT bedrock-depth product (ISRIC SoilGrids-2017 BDTICM) it runs systematically HIGH: over Story County IA, Maricopa County AZ and the Yazoo basin MS it exceeds (depth-to-bedrock minus water-table depth) in 88-99% of cells, by a median of 26-57 m. The two disagree because they define the aquifer base differently -- neither is a survey -- but do not present this as a drilled thickness."
   - "DO NOT use it for a named confined aquifer. The Ogallala/High Plains, the Floridan, the Gulf Coast and every other deep or confined unit are outside the surficial system this model represents; for those, thickness must come from the aquifer-specific hydrogeologic framework, not from here."
@@ -91,8 +91,7 @@ caveats:
   - "Off the model's active domain the raster is NODATA and the read raises AQUIFER_THICKNESS_EMPTY -- verified for open ocean, the Gulf, the Great Lakes and the Florida Keys."
 
 docstring: |-
-  Saturated thickness of the shallow (surficial, unconfined) groundwater system
-  across the contiguous US.
+  Saturated thickness of the shallow (surficial, unconfined) groundwater system.
 
   **What it does:** Windowed read of a staged CONUS raster to a CRS-tagged
   GeoTIFF over the requested bbox. Pixel values are METRES of saturated
@@ -120,8 +119,6 @@ docstring: |-
   - Comparing the shallow system's capacity between regions.
 
   **When NOT to use:**
-  - DO NOT use outside the contiguous US -- raises
-    ``AQUIFER_THICKNESS_INPUT_INVALID``.
   - DO NOT use for a NAMED or CONFINED aquifer (Ogallala/High Plains, Floridan,
     Gulf Coast, any deep unit). This is the surficial system only; use the
     aquifer-specific hydrogeologic framework instead.

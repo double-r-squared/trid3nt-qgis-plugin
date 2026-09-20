@@ -344,9 +344,17 @@ def test_negative_depths_survive_the_read_unclamped(specs, monkeypatch):
 
 
 
-def test_depth_caveats_state_the_verified_limits(specs):
-    joined = " ".join(specs["fetch_water_table_depth"].caveats).lower()
-    assert "conus only" in joined
+def test_depth_states_its_extent_on_the_row_and_its_limits_in_the_caveats(specs):
+    """Where it reaches is the row's sentence; what the number MEANS there is
+    the caveats'."""
+    spec = specs["fetch_water_table_depth"]
+    (row,) = spec.coverage
+    lons = [lon for ring in row.extent.rings for lon, _lat in ring]
+    lats = [lat for ring in row.extent.rings for _lon, lat in ring]
+    assert (min(lons), min(lats), max(lons), max(lats)) == tuple(
+        spec.gates.conus_bbox)
+    joined = " ".join(spec.caveats).lower()
+    assert "conus only" not in joined
     assert "negative" in joined            # discharge areas, not an error
     assert "saturates" in joined           # clipped at the prescribed model bottom
     assert "simulated" in joined and "not measured" in joined
@@ -388,8 +396,14 @@ def test_transmissivity_caveats_state_the_west_east_contrast(specs):
     """The paper's headline regional finding must be stated, and stated on the
     MEDIAN -- the mean reads backwards because a handful of western alluvial
     basins run past 100,000 m2/day."""
-    joined = " ".join(specs["fetch_aquifer_transmissivity"].caveats).lower()
-    assert "conus only" in joined
+    spec = specs["fetch_aquifer_transmissivity"]
+    (row,) = spec.coverage
+    lons = [lon for ring in row.extent.rings for lon, _lat in ring]
+    lats = [lat for ring in row.extent.rings for _lon, lat in ring]
+    assert (min(lons), min(lats), max(lons), max(lats)) == tuple(
+        spec.gates.conus_bbox)
+    joined = " ".join(spec.caveats).lower()
+    assert "conus only" not in joined
     assert "lower in the west" in joined
     assert "median" in joined and "mean" in joined
     assert "t = k x b" in joined or "t = k * b" in joined

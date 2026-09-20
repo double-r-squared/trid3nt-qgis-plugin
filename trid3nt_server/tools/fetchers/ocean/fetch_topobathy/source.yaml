@@ -159,14 +159,12 @@ docstring: |-
   **When NOT to use:**
       - A pure inland / pluvial flood with no coast -- use ``fetch_dem`` (no
         bathymetry needed; CUDEM has no inland coverage anyway).
-      - Outside the US coast -- NOAA NCEI CUDEM is US-coast-only; the validator
-        raises ``TopobathyInputError`` for a bbox that misses the US coastal
-        envelope.
+      - Outside the US coast -- the tool refuses with ``TopobathyInputError``
+        (see the coverage row).
 
   **Parameters:**
-      bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326. Must
-          intersect the US coastal envelope. Demo AOI (Florida panhandle /
-          Mexico Beach): ``(-85.75, 29.55, -85.25, 30.20)``.
+      bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326. Demo AOI
+          (Florida panhandle / Mexico Beach): ``(-85.75, 29.55, -85.25, 30.20)``.
       resolution_m: 3DEP land-DEM grid spacing in metres (default 10). The
           CUDEM tiles are native ~3 m; the merge re-grids onto the warp output
           grid.

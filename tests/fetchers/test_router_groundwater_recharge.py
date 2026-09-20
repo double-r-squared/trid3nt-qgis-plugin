@@ -243,9 +243,16 @@ def test_values_pass_through_unscaled(spec, monkeypatch):
     assert np.allclose(out, 166.7)
 
 
-def test_caveats_state_the_conus_limit_and_the_source_disagreement(spec):
+def test_the_row_states_the_limit_and_the_caveats_the_source_disagreement(spec):
+    """Coverage is the ROW's to state; the caveats carry only what the row
+    cannot -- which of the two staged grids disagrees with which, and why."""
+    (row,) = spec.coverage
+    lons = [lon for ring in row.extent.rings for lon, _lat in ring]
+    lats = [lat for ring in row.extent.rings for _lon, lat in ring]
+    assert (min(lons), min(lats), max(lons), max(lats)) == tuple(
+        spec.gates.conus_bbox)
     joined = " ".join(spec.caveats).lower()
-    assert "conus only" in joined
+    assert "conus only" not in joined
     assert "irrigation" in joined
     assert "independent" in joined
 

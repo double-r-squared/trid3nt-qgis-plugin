@@ -105,8 +105,6 @@ caveats:
   inside the bbox 5x5 grid -- offshore / ungauged) / NWM_STREAMFLOW_NOT_AVAILABLE (the
   requested cycle is not published -- a gap, a future date, or outside the ~30-day bucket
   retention window).'
-- CONUS-only (supports_global_query=False); a bbox must intersect (-130, 20, -60, 55) or
-  NWM_STREAMFLOW_INPUT_ERROR is raised.
 corpus:
 - what are current river discharge rates along the Mississippi?
 - show me NWM streamflow for the Caloosahatchee right now
@@ -136,9 +134,9 @@ docstring: |-
   storms); flood-extent rasters (NWM does not publish inundation directly -- that requires a hydraulic model run with NWM forcing).
 
   Params:
-      bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326. Required -- NWM is CONUS-only, supports_global_query=False. The bbox MUST
-          intersect ``(-130, 20, -60, 55)`` or
-          ``NWMStreamflowInputError`` is raised. Typical scales:
+      bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326. Required.
+          A bbox the NWM domain cannot reach raises
+          ``NWMStreamflowInputError``. Typical scales:
           - Watershed (~1 deg x 1 deg): ~50-200 reaches returned
           - Regional (~5 deg x 5 deg): up to _MAX_REACHES=500 (hard cap)
           Example for Fort Myers / Caloosahatchee:

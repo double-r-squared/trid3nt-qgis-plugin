@@ -95,12 +95,12 @@ coverage:
     ch: m * 10
 
 caveats:
-  - "30 m LANDFIRE LF2022 CONUS fuels/vegetation via ImageServer exportImage; all-nodata raster (bbox outside CONUS) -> LANDFIRE_FUELS_EMPTY (never a fabricated layer)"
+  - "30 m LANDFIRE LF2022 fuels/vegetation via ImageServer exportImage; an all-nodata raster (outside the covered extent, see the coverage row) -> LANDFIRE_FUELS_EMPTY (never a fabricated layer)"
 
 # corpus lifted from sibling corpus.yaml.
 
 docstring: |-
-  Fetch LANDFIRE fuels and vegetation raster for a CONUS bounding box.
+  Fetch LANDFIRE fuels and vegetation raster for a bounding box.
 
   **What it does:** Downloads a 30 m raster from the LANDFIRE LF2022 CONUS
   ImageServer (USDA Forest Service + USGS), clips it server-side to the
@@ -133,7 +133,7 @@ docstring: |-
     ``fetch_raws_weather`` for meteorological inputs.
   **Parameters:**
   - ``bbox`` (tuple[float, float, float, float]): ``(min_lon, min_lat,
-    max_lon, max_lat)`` in EPSG:4326. Required; CONUS-only.
+    max_lon, max_lat)`` in EPSG:4326. Required (see the coverage row).
     Example: ``(-112.0, 34.5, -111.0, 35.5)`` (north-central Arizona).
   - ``layer`` (str, default ``"fbfm40"``): one of ``"fbfm40"`` (Scott and
     Burgan 40; integer codes 101-204 + 91/92/93/98/99 special classes),
@@ -146,5 +146,4 @@ docstring: |-
   (``s3://trid3nt-cache/cache/static-30d/landfire_fuels/<key>.tif``).
   ``layer_type="raster"``, ``role="primary"``. ``units`` is populated for
   continuous canopy layers (``"m * 10"`` / ``"kg/m^3 * 100"``), ``None``
-  for categorical fuel-model layers. EPSG:4326, 30 m native resolution,
-  LANDFIRE 2022 vintage.
+  for categorical fuel-model layers. EPSG:4326, 30 m native resolution.

@@ -91,10 +91,9 @@ docstring: |-
 
   **When to use:**
 
-  - Quasi-global rainfall baseline for drought, agriculture, and pluvial-flood
-    context OUTSIDE CONUS / outside radar coverage -- Africa, South Asia, Latin
-    America, the tropics. CHIRPS is the community standard for data-sparse
-    regions.
+  - Rainfall baseline for drought, agriculture, and pluvial-flood context in
+    data-sparse regions - the community standard where CONUS radar/gauge
+    products do not reach.
   - Monsoon / wet-season precipitation totals: ``period="monthly"`` returns
     mm/month; e.g. peak-monsoon Western Ghats:
     ``fetch_chirps_precipitation(bbox=(72,15,78,21), date="2023-07")``.
@@ -111,18 +110,15 @@ docstring: |-
     ~4 km -- use ``fetch_gridmet``.
   - Hourly / forecast precipitation -- use ``fetch_hrrr_forecast`` (CONUS) or
     ``fetch_era5_reanalysis`` (global hourly, needs a Copernicus CDS key).
-  - Areas poleward of 50 deg latitude -- CHIRPS coverage stops at 50 S / 50 N;
-    a bbox entirely outside that band raises ``CHIRPSEmptyError``.
 
   **Parameters:**
 
   - ``bbox``: ``(min_lon, min_lat, max_lon, max_lat)`` EPSG:4326. When
     ``None``, returns the full quasi-global CHIRPS grid (~7200 x 2000 px;
-    ``supports_global_query=True``). Must intersect ``(-180, -50, 180, 50)``
-    or ``CHIRPSEmptyError`` is raised.
+    ``supports_global_query=True``).
   - ``date``: for ``period="monthly"`` a ``"YYYY-MM"`` (or ``"YYYY-MM-DD"``,
     day ignored) string; for ``period="daily"`` a full ``"YYYY-MM-DD"``.
-    Required. Must be within the CHIRPS record (1981-present, past dates only).
+    Required.
   - ``period``: ``"monthly"`` (default, mm/month) or ``"daily"`` (mm/day).
 
   **Returns:**

@@ -84,7 +84,7 @@ coverage:
   value_column: transmissivity
 
 caveats:
-  - "CONUS ONLY -- the model stops at the conterminous US border; an AOI outside the staged envelope raises AQUIFER_TRANSMISSIVITY_INPUT_INVALID naming it. Alaska, Hawaii, Puerto Rico and all territories are off the grid."
+  - "An AOI outside the staged envelope raises AQUIFER_TRANSMISSIVITY_INPUT_INVALID naming it."
   - "This is the release's HEADLINE PEST-calibrated field: the 75 subdomain groundwater-flow models were calibrated against long-term average water levels, and the published transmissivity is the converged solution's post-processed output, not an input the models were handed. It is not an independent measurement of any single well or borehole."
   - "LONG-TERM AVERAGE steady state driven by 1985-2015 mean recharge -- it resolves no season, drought, or pumping response."
   - "TRANSMISSIVITY IS LOWER IN THE WEST THAN THE EAST, on the MEDIAN: CONUS-wide, the median west of 100W is far below the median east of 100W (the paper's own headline regional finding). Do not read this off the MEAN -- a handful of western alluvial basins run past 100,000 m2/day and pull the western mean above the eastern one; the median is where the paper's claim actually shows."
@@ -94,7 +94,7 @@ caveats:
 
 docstring: |-
   Effective transmissivity of the shallow (surficial, unconfined) groundwater
-  system across the contiguous US.
+  system.
 
   **What it does:** Windowed read of a staged CONUS transmissivity raster to a
   CRS-tagged GeoTIFF over the requested bbox. Pixel values are M2/DAY --
@@ -123,8 +123,6 @@ docstring: |-
     spread and higher sustainable yield, all else equal.
 
   **When NOT to use:**
-  - DO NOT use outside the contiguous US -- raises
-    ``AQUIFER_TRANSMISSIVITY_INPUT_INVALID``.
   - DO NOT use for a NAMED or CONFINED aquifer (Ogallala/High Plains, Floridan,
     Gulf Coast, any deep unit). This is the surficial system only.
   - DO NOT read the west-vs-east claim off a MEAN -- read it off the median;

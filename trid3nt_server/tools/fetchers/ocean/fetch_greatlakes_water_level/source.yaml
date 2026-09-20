@@ -102,9 +102,8 @@ caveats:
 - The datum is each lake's own LOW WATER DATUM, which is the same zero the NCEI Great Lakes
   bathymetric grids are charted on, so a level from here and a bed from fetch_greatlakes_bathymetry
   are counted from one statement and need no offset between them.
-- An OCEAN coast station has no LWD at all; this tool asks for that datum by name, so a coastal
-  bbox comes back empty rather than on a different reference. For US ocean tide levels use
-  fetch_noaa_coops_tides (MLLW).
+- This tool asks the data endpoint for the LWD datum by name, never a different reference. For
+  US ocean tide levels use fetch_noaa_coops_tides (MLLW).
 docstring: |-
   Fetch the OBSERVED Great Lakes water level at NOAA CO-OPS gauges as a FlatGeobuf.
 

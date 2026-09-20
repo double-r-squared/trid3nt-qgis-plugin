@@ -81,7 +81,7 @@ coverage:
 caveats:
 - JRC GHS-POP R2023A epoch 2020, ~100 m EPSG:4326; modeled gridded residential population (persons/cell),
   not a live count. Global 10-deg ZIP tiles; whole-object per intersecting tile. bbox required
-  (global mosaic ~12 GB). Empty over open ocean / outside coverage -> GHSL_POPULATION_EMPTY.
+  (global mosaic ~12 GB).
 docstring: |-
   Fetch JRC GHSL GHS-POP gridded population (persons/cell) for a bbox.
 
@@ -111,7 +111,6 @@ docstring: |-
   - Sub-100 m / parcel-scale precision (HRSL ~30 m is finer; prefer it when
     coverage and resolution both matter and the AOI is small).
   - Real-time counts (GHS-POP is a modeled epoch grid, not a live measurement).
-  - Bboxes over open ocean / outside coverage (raises ``GHSLPopEmptyError``).
 
   **Parameters:**
   - ``bbox`` (tuple): ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326.

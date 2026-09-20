@@ -153,8 +153,8 @@ docstring: |-
       - DO NOT use for a catchment - that is ``fetch_watershed``.
       - DO NOT use to map EVERY waterbody in an area - that is
         ``fetch_nhd_waterbodies``, which takes a bbox and returns the set.
-      - DO NOT use for vegetated wetlands (``fetch_nwi_wetlands``), for global
-        surface water (``fetch_jrc_global_surface_water``), or outside the US.
+      - DO NOT use for vegetated wetlands (``fetch_nwi_wetlands``), or for global
+        surface water (``fetch_jrc_global_surface_water``).
 
   Parameters:
       seed_point: ``(lon, lat)`` in EPSG:4326, on the water or beside it.
