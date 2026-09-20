@@ -1279,8 +1279,7 @@ def _held_level(stage: Any) -> tuple[float, str] | None:
             f"the outflow level for this run arrived as {type(stage).__name__}, "
             "which is a record rather than a reading: which site reports the "
             "level and how old the sample is are the observation slot's to "
-            "decide. Declare the row as Data.observation(...) so one value "
-            "reaches this step.",
+            "decide. Name the row level so one value reaches this step.",
             error_code="TELEMAC_STAGE_UNINGESTED")
     return float(stage.value), (
         f"the outflow holds at {stage.value:g} m, which "
@@ -1347,8 +1346,8 @@ def _reported_discharge(carrier: Any) -> tuple[float, str]:
         raise TelemacError(
             f"the carrier for this run arrived as {type(carrier).__name__}, which "
             "is a record rather than a reading: which site reports the flow and "
-            "how old the sample is are the observation slot's to decide. Declare "
-            "the row as Data.observation(...) so one value reaches this step.",
+            "how old the sample is are the observation slot's to decide. Name "
+            "the row discharge so one value reaches this step.",
             error_code="TELEMAC_CARRIER_UNINGESTED")
     where = carrier.site_name or carrier.site_id
     if not where and not carrier.sampled:

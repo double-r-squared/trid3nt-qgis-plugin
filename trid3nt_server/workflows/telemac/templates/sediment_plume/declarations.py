@@ -82,7 +82,7 @@ DOC = dict(
         "canvas, or a supplied polygon: ONE settling class over a bed with NO "
         "stock, so nothing erodes and only what was injected deposits. Give "
         "`release` as a pick or a pair, or supply `domain`. Deck: "
-        "DURATION 3600 s, CLASSES SEDIMENT DIAMETERS 3.0e-5 m, SUSPENSION "
+        "DURATION 3600 s, CLASSES SEDIMENT DIAMETERS 1.0e-4 m, SUSPENSION "
         "TRANSPORT FORMULA FOR ALL SANDS 3, SCHEME FOR ADVECTION OF SUSPENDED "
         "SEDIMENTS 1, no WIND and no RAIN OR EVAPORATION - set each by its "
         "keyword name."

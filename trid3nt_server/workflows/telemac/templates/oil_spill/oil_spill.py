@@ -13,10 +13,8 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
 
 from trid3nt_server.workflows.runtime import (
     Data,
-    ParamRef,
     Ref,
     register_workflow,
-    tool,
 )
 from trid3nt_server.inputs import point_arg
 from trid3nt_server.inputs.instant import event_time
@@ -77,37 +75,26 @@ class DATA:
 
     # A release named up front also names which stretch to model: the reach is
     # walked downstream from it. A domain the user supplies supersedes this.
-    domain = Data.domain(
-        tool("fetch_river_reach", distance_km=_REACH_LENGTH_KM,
-             seed_point=[Ref("release.lon"), Ref("release.lat")]))
-    # THE STRETCHES OF ITS EDGE the water crosses. The reach producer measured
-    # them where it cut the section, and they ride on the domain it returned; a
-    # domain that arrives with none - a drawn outline, a lake - is asked for
-    # them on the canvas, and an edge that names none is a closed body's.
-    runs = Data.runs()
+    domain = Data.need("hydrography", at=Ref("release"), span_km=_REACH_LENGTH_KM)
     # THE BED, as the CLASS it is rather than the source it comes from: the
     # measurement where something measured it, the terrain under the rest. Which
     # survey or which DEM reaches this domain is the match's to answer off their
     # coverage rows, and the merge between the two classes is the runtime's one
     # rule.
-    bed = Data.bed(need="bathymetry")
+    bed = Data.need("bathymetry")
     # THE FLOW the inflow run prescribes, as a CLASS: which record reports a
     # discharge over this domain is the match's, and the window it reports is
     # opened at the moment the run opens at. A number stated on this row stands
-    # over any record. The deck writes m3/s, so a record measured in another
-    # unit is converted or refused - never read as though it were this one.
-    carrier = Data.discharge(
-        near=Ref("domain.centroid"), measures="a streamflow",
-        opens="the carrier flow opens at", need="discharge series")
+    # over any record, and the unit it is read in is the unit of the keyword
+    # the slot fills.
+    discharge = Data.need("discharge series")
     # THE LEVEL the water stands at, which the run opens flat at and the outflow
     # holds. A reach whose measured ends do not FALL has no uniform-flow depth to
     # derive, and a closed body never had one. An ELEVATION on the datum the bed
     # is painted on: a gauge reports a height above its OWN zero, so the record
     # carries that zero's elevation and the offset row puts it on the run's
     # frame.
-    stage = Data.level(near=Ref("domain.centroid"),
-                       opens="the outflow holds at",
-                       need="water level series").optional()
+    level = Data.need("water level series").optional()
 
 
 class STEERING(T2D):
@@ -235,7 +222,8 @@ OUTPUTS = [
     series("T1").chart(),
     drogues().layer(),
 ]
-CAPTIONS = {"T1": "dissolved oil concentration", "drogues": "oil slick track"}
+CAPTIONS = {"T1": "dissolved oil concentration", "drogues": "oil slick track",
+            "discharge": "a streamflow", "level": "a water-surface elevation"}
 
 #: The run's ANSWER, as the numbers a reader has to be able to check, each a
 #: measure of one of the reads above.

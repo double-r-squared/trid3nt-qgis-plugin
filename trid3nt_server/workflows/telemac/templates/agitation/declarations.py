@@ -104,7 +104,7 @@ DOC = dict(
         "deg (trig from +x) - set either by name. THE STRUCTURE IS THE "
         "QUESTION and is REQUIRED: `structure=` a breakwater layer "
         "(`fetch_osm_breakwaters`) or a drawn line. Give `domain=` the water as "
-        "an outline or a polygon layer, or `box=` a rectangle the "
+        "an outline or a polygon layer, or `extent=` a rectangle the "
         "coastline cuts into water."
     ),
     not_for=(
@@ -114,7 +114,7 @@ DOC = dict(
     ),
     params=PARAMS,
     controls=(
-        ("box",
+        ("extent",
          "NOT needed when `domain=` is filled - this is the other way to say "
          "where the water is. A rectangle over the harbour as a LAYER (a uri or "
          "a file, not four numbers): the mapped coastline divides it and the "
@@ -124,7 +124,7 @@ DOC = dict(
         ("domain",
          "A harbour approach, a marina basin, or any water a structure shelters. "
          "Its own edge is the SHORELINE the mesh is sized against, so a rough "
-         "outline is enough; unfilled, the box above is cut instead."),
+         "outline is enough; unfilled, the extent above is cut instead."),
         ("bed",
          "That producer is NOAA CUDEM nearshore topobathy over the domain - the "
          "surveyed sea floor the wave refracts over. Hand it your own survey "

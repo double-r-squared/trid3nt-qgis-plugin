@@ -10,11 +10,12 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 from typing import Any
 
 from .shape import polygons, polylines, shape
 
-__all__ = ["StructureError", "structure"]
+__all__ = ["StructureError", "structure", "transect"]
 
 logger = logging.getLogger("trid3nt_server.inputs.structure")
 
@@ -74,3 +75,65 @@ def _buffered(lines: list[Any], width_m: float, label: str) -> dict[str, Any]:
     footprint = series.to_crs(metric).buffer(width_m / 2.0).union_all()
     logger.info("%s: %d line(s) widened to %g m", label, len(lines), width_m)
     return json.loads(gpd.GeoSeries([footprint], crs=metric).to_crs(4326).to_json())
+
+
+#: The two ways a direction is stated: a compass bearing clockwise from north, or
+#: a trigonometric angle counter-clockwise from east, which is the convention a
+#: wave propagation direction is written in.
+_CONVENTIONS = ("compass", "trig")
+
+
+def transect(value: Any, *, bearing_deg: Any, length_m: Any,
+             convention: str = "trig", label: str = "transect",
+             code: str = _CODE) -> dict[str, Any]:
+    """THE LINE a reading across a structure is taken along: through the
+    structure's centroid, along a stated direction, half its length each way.
+
+    A read that runs ACROSS a built thing has no line of its own - the domain's
+    centerline runs down the water, not through the breakwater - so the line is
+    measured off the structure the question is about. Laid in the structure's own
+    UTM zone, so the length is metres on the ground, and returned as the one
+    GeoJSON geometry every placed read is measured along.
+    """
+    from pyproj import Transformer
+    from shapely.geometry import shape as _shape
+    from shapely.ops import unary_union
+
+    from .geometry import flatten_geometries, utm_epsg_for
+
+    drawn = shape(value, label=label, code=code)
+    geometries = [] if drawn is None else [
+        _shape(g) for g in flatten_geometries(drawn.features)]
+    geometries = [g for g in geometries if g is not None and not g.is_empty]
+    if not geometries:
+        raise StructureError(
+            code, f"the structure {value!r} carries no geometry, so there is "
+            "nothing to centre a transect on.")
+    if convention not in _CONVENTIONS:
+        raise StructureError(
+            code, f"convention must be one of {list(_CONVENTIONS)}; got "
+            f"{convention!r}.")
+    try:
+        length = float(length_m)
+    except (TypeError, ValueError):
+        length = 0.0
+    if length <= 0.0:
+        raise StructureError(
+            code, f"the transect is a length on the ground; got "
+            f"length_m={length_m!r}.")
+    angle = math.radians(float(bearing_deg))
+    east, north = ((math.sin(angle), math.cos(angle)) if convention == "compass"
+                   else (math.cos(angle), math.sin(angle)))
+    centre = unary_union(geometries).centroid
+    epsg = utm_epsg_for(float(centre.x), float(centre.y))
+    forward = Transformer.from_crs(4326, epsg, always_xy=True)
+    back = Transformer.from_crs(epsg, 4326, always_xy=True)
+    cx, cy = forward.transform(float(centre.x), float(centre.y))
+    half = length / 2.0
+    ends = [back.transform(cx - half * east, cy - half * north),
+            back.transform(cx + half * east, cy + half * north)]
+    logger.info("%s: %.0f m through (%.5f, %.5f) along %g deg %s in EPSG:%d",
+                label, length, centre.x, centre.y, float(bearing_deg),
+                convention, epsg)
+    return {"type": "LineString",
+            "coordinates": [[float(x), float(y)] for x, y in ends]}

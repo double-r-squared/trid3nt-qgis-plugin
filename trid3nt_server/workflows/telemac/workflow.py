@@ -118,6 +118,7 @@ class Placed(Ref):
 #: itself, or against the settled run.
 _MEASURES: Mapping[str, tuple[str, str, str]] = MappingProxyType({
     "footprint": ("trid3nt_server.inputs.structure.structure", "prep", "world"),
+    "transect": ("trid3nt_server.inputs.structure.transect", "prep", "world"),
     "rating": (f"{_TELEMAC}.authoring.assembler.settle_outlet_rating",
                "author", "produce"),
     "harbour": (f"{_TELEMAC}.authoring.assembler.settle_harbour",
@@ -735,7 +736,7 @@ class TelemacWorkflow(Workflow):
         inflow carries - so a template states only what differs from that."""
         from trid3nt_server.workflows.mesh.tool import mesh_op, tool
         from trid3nt_server.workflows.runtime.data import (
-            BED, DISCHARGE, DOMAIN, LEVEL, RUNS)
+            BED, DISCHARGE, DOMAIN, LEVEL)
         from trid3nt_server.workflows.runtime.plan import DataRef
 
         slots: dict[str, list[str]] = {}
@@ -746,12 +747,12 @@ class TelemacWorkflow(Workflow):
         if not domain:
             raise PlanValidationError(
                 f"{self.name} declares no domain: a run solves over a polygon, so "
-                "the DATA body needs one row written Data.domain(...).")
+                "the DATA body needs a row named domain.")
         beds = slots.get(BED) or []
         if not beds:
             raise PlanValidationError(
                 f"{self.name} declares no bed: every node carries an elevation, so "
-                "the DATA body needs a row written Data.bed(...).")
+                "the DATA body needs a row named bed.")
         if len(beds) > 1:
             raise PlanValidationError(
                 f"{self.name} declares {len(beds)} bed rows ({beds}); the bed is "
@@ -796,11 +797,10 @@ class TelemacWorkflow(Workflow):
             # word.
             ops=[mesh_op("set_rim_size"), *_clean_ops(),
                  mesh_op("set_bed", source=DataRef(beds[0])),
-                 # The runs come from wherever they were stated: the row the
-                 # user fills, or the domain's own producer, which measured the
-                 # edge it cut the polygon between.
-                 mesh_op("set_boundary_roles",
-                         runs=DataRef((slots.get(RUNS) or [domain])[0]))])
+                 # The runs ride on the DOMAIN: the producer measured them
+                 # where it cut the polygon between two faces, and a drawn
+                 # outline carries the ones the canvas asked for.
+                 mesh_op("set_boundary_roles", runs=DataRef(domain))])
         settle = self._settle(recipe, domain) or Step(
             runner=f"{_TELEMAC}.authoring.assembler.open_water",
             stage="author",
@@ -1013,12 +1013,17 @@ class TelemacWorkflow(Workflow):
     def _asked(self, recipe: Any) -> tuple["Measured", ...]:
         """Every measurement this question asks for, in the order it is named.
 
-        Read off the deck's own assertions and off the mesh recipe a template
-        declared, because a measurement the MESHER consumes - the footprint a
-        structure is cut out of - is asked for there and nowhere else."""
+        Read off the deck's own assertions, off the mesh recipe a template
+        declared and off the reads the outputs and the answer are taken along,
+        because the thing that asks for a measurement is what knows there is
+        one - the footprint a mesher cuts a structure out of is named in the
+        recipe, and the line a profile is read along is named on the read."""
         found: dict[str, Measured] = {}
         ops = [dict(op.kwargs) for op in getattr(recipe, "ops", ())]
-        for surface in (self.steering.ASSERTED, ops):
+        answer = self._states("ANSWER", {})
+        reads = [(p.at, p.along) for p in (*self._states("OUTPUTS", ()),
+                                           *(m.primitive for m in answer.values()))]
+        for surface in (self.steering.ASSERTED, ops, reads):
             for ref in declared_reads(surface, Ref):
                 if isinstance(ref, Measured):
                     found.setdefault(ref.root, ref)

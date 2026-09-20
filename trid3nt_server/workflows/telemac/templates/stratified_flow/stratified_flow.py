@@ -17,7 +17,6 @@ from trid3nt_server.workflows.runtime import (
     ParamRef,
     Ref,
     register_workflow,
-    tool,
 )
 from trid3nt_server.inputs import point_arg
 from trid3nt_server.inputs.instant import event_time
@@ -55,45 +54,33 @@ _RESULT_2D = "res2d_basin.slf"
 #: value is 1, which prints every step of a run whose answer is its settled state.
 _LISTING_PERIOD = 100
 
-#: How far from a seed standing on LAND the mapped body it names may be. A person
-#: pointing at a shore means the water they are pointing at; past this the
-#: producer refuses naming what was nearest rather than solving another lake.
-_SEED_SEARCH_KM = 2.0
-
-
 class DATA:
-    """The two slots this run stands on, and the level its free surface opens at.
+    """The three slots this run stands on: the body of water, its bed, and the
+    level its free surface opens at.
 
     Every row is superseded by what the caller hands in, so the same declaration
     solves a charted Great Lake and a pond nobody has ever mapped."""
 
     # DRAWN, picked, or the caller's own layer. A body of water is a closed
-    # polygon whether a fetcher maps it or nobody ever has, so the producer here
-    # is a PREFERENCE: where the ask names or points at a mapped body, its
+    # polygon whether a fetcher maps it or nobody ever has, so the match here
+    # is a PREFERENCE: where the seed names or points at a mapped body, its
     # outline is the domain, and anything the caller supplies supersedes it.
-    domain = Data.domain(tool("fetch_nhd_waterbody_at_point",
-                              seed_point=[Ref("seed.lon"), Ref("seed.lat")],
-                              search_distance_km=_SEED_SEARCH_KM))
-    # The charted floor of the water this question is most often asked about. A
+    domain = Data.need("hydrography", at=Ref("seed"))
+    # THE BED, as the CLASS it is rather than the source it comes from: the
+    # measurement where something measured it, the terrain under the rest. A
     # bed is TOPOBATHY and the coastal composites do not reach the Great Lakes
-    # at all, so this row names the survey the lakes are charted on. Anywhere
-    # else the caller fills the same slot - a survey raster, a layer of
-    # soundings, or the depth in metres the water body holds.
-    bed = Data.bed(tool("fetch_greatlakes_bathymetry", bbox=Ref("domain.bbox"),
-                        purpose="bed elevation"))
+    # at all, so this slot is answered by the survey the lakes are charted on;
+    # anywhere else it is a survey raster, a layer of soundings, or the depth
+    # in metres the water body holds.
+    bed = Data.need("bathymetry")
     # THE LEVEL the free surface opens at, over the day the run is about: ONE
-    # measured value off the nearest gauge that watched this water, the way a
-    # river opens on a carrier discharge, read on the SAME datum the charted bed
-    # above is counted from. ABSENT is legal - a pond has no gauge, and a bed
-    # stated as a depth is counted from the free surface itself, so the column
-    # opens at the bed's own zero and the sheet says so.
-    level = Data.level(
-        tool("fetch_greatlakes_water_level", bbox=Ref("domain.bbox"),
-             start_date=Ref("reading_day"), end_date=Ref("reading_day")),
-        near=Ref("domain.centroid"), measures="a water level",
-        opens="the free surface opens at"
-    ).context("no water-level gauge published a reading over this domain that "
-              "day; the free surface opens at the zero the bed is counted from")
+    # measured value off the nearest gauge that watched this water, read on the
+    # SAME datum the charted bed above is counted from. ABSENT is legal - a pond
+    # has no gauge, and a bed stated as a depth is counted from the free surface
+    # itself, so the column opens at the bed's own zero and the sheet says so.
+    level = Data.need("water level series").context(
+        "no water-level gauge published a reading over this domain that day; "
+        "the free surface opens at the zero the bed is counted from")
 
 
 class STEERING(T3D):
@@ -217,7 +204,7 @@ class STEERING(T3D):
 OUTPUTS = [
     column("T1").chart(reference=column("T1", t=0)),
 ]
-CAPTIONS = {"T1": "water temperature"}
+CAPTIONS = {"T1": "water temperature", "level": "a water level"}
 
 #: The run's ANSWER, as the numbers a reader has to be able to check, each a
 #: measure of one of the reads above or of the velocity column beside them: the

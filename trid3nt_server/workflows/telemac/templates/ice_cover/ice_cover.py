@@ -19,7 +19,6 @@ from trid3nt_server.workflows.runtime import (
     ParamRef,
     Ref,
     register_workflow,
-    tool,
 )
 from trid3nt_server.workflows.solver.compute_class import compute_class
 from trid3nt_server.workflows.telemac.modules import KHIONE, T2D, mesh, series
@@ -61,11 +60,6 @@ _STATION_FRAC = 0.98
 _STATION = Placed("station", point=PARAMS.station, fraction=_STATION_FRAC,
                   label="Ice station")
 
-#: The terrain cell the banks are painted from. 3DEP is PINNED, not preferred: a
-#: DSM (Copernicus GLO-30 carries canopy) puts the bank on the tree tops, and its
-#: EGM2008 zero is not the NAVD88 the surveys and the gauges are measured on.
-_TERRAIN_RESOLUTION_M = 10
-
 #: The tracers KHIONE appends to this host under the switches the ice deck below
 #: states, in the order it appends them: the water temperature, the frazil it
 #: suspends, and the two the dynamic cover carries. The boundary list is written
@@ -79,64 +73,35 @@ class DATA:
     opens at - beside the flow that fills its inflow and the days of weather the
     heat budget is driven by."""
 
-    # THE DOMAIN. A polygon the caller supplies or draws supersedes this; unfilled,
-    # the reach the seed stands on is cut from the mapped water and arrives with
-    # its two end transects, which is where the inflow and the outflow are
-    # prescribed. A closed body states no run and its whole edge is wall.
-    domain = Data.domain(
-        tool("fetch_river_reach", distance_km=_REACH_LENGTH_KM,
-             seed_point=[Ref("seed.lon"), Ref("seed.lat")]))
-    # THE STRETCHES OF ITS EDGE the water crosses. The reach producer measured
-    # them where it cut the section, and they ride on the domain it returned; a
-    # domain that arrives with none - a drawn outline, a lake - is asked for
-    # them on the canvas, and an edge that names none is a closed body's.
-    runs = Data.runs()
+    # THE DOMAIN, as the CLASS it is: a polygon the caller supplies or draws
+    # supersedes this; unfilled, the reach the seed stands on is matched from
+    # the mapped water and arrives with its two end transects, which is where
+    # the inflow and the outflow are prescribed. A closed body states no run
+    # and its whole edge is wall.
+    domain = Data.need("hydrography", at=Ref("seed"), span_km=_REACH_LENGTH_KM)
 
-    # THE MEASUREMENT. Water with no federal navigation project has no published
-    # sounding, and the sheet says so rather than refusing.
-    survey = Data(tool("fetch_ehydro_surveys", bbox=Ref("domain.bbox"))
-                  ).context("no published channel survey over this domain; "
-                            "the terrain surface stands")
-    # THE SOUNDINGS AS A SURFACE, at the scale the mesh resolves. Its values are
-    # DEPTHS below the survey's own project datum, and the merge below reads
-    # them as elevations on the terrain's zero through the shift the survey
-    # publishes about itself.
-    surveyed_bed = Data(tool("derive_survey_surface", points=survey,
-                             value_field="depth_below_datum_m",
-                             resolution_m=ParamRef("mesh_resolution_m"))
-                        ).context("no soundings to grid into a surveyed bed "
-                                  "over this domain")
-    # A terrain surface measures the water TOP, so where no survey reaches it
-    # the modelled water is shallower than the real water - and a heat budget
-    # divided by too small a depth cools that water too fast.
-    terrain = Data(tool("fetch_dem", bbox=Ref("domain.bbox"), source="3dep",
-                        resolution_m=_TERRAIN_RESOLUTION_M,
-                        purpose="bed elevation"))
-    # ONE bed: the survey where it measured, the terrain everywhere else, as a
-    # derive over the two rows. With the survey absent the terrain passes
-    # through the merge unchanged and is the whole bed.
-    bed = Data.bed(tool("derive_merge_rasters", primary=surveyed_bed,
-                        fallback=terrain))
+    # THE BED, as the CLASS it is rather than the source it comes from: the
+    # measurement where something measured it, the terrain under the rest. Which
+    # survey or which DEM reaches this domain is the match's to answer off their
+    # coverage rows, and the merge between the two classes is the runtime's one
+    # rule. A terrain surface measures the water TOP, so where no survey reaches
+    # it the modelled water is shallower than the real water - and a heat
+    # budget divided by too small a depth cools that water too fast.
+    bed = Data.need("bathymetry")
 
-    # The carrier flow the inflow run prescribes. A number stated on this row
-    # stands over any record, so the flow is the slot's and no param twins it.
-    # ONE reading, not the grid the model published: which reach segment reports
-    # it is ranked against the domain's own interior point, and the step that
-    # opens the channel refuses a record nobody chose from.
-    carrier = Data.discharge(
-        tool("fetch_noaa_nwm_streamflow", bbox=Ref("domain.bbox"),
-             valid_time=ParamRef("event_time")),
-        near=Ref("domain.centroid"), value_field="streamflow_cms",
-        measures="a streamflow", opens="the carrier flow opens at"
-    ).context("the National Water Model published no streamflow over this "
-              "domain at that cycle")
+    # THE FLOW the inflow run prescribes, as a CLASS: which record reports a
+    # discharge over this domain is the match's, and the window it reports is
+    # opened at the moment the run opens at. A number stated on this row stands
+    # over any record, so the flow is the slot's and no param twins it.
+    discharge = Data.need("discharge series").context(
+        "the National Water Model published no streamflow over this "
+        "domain at that cycle")
     # THE LEVEL the water stands at, which the run opens flat at and the outflow
     # holds. A reach whose measured ends do not FALL has no uniform-flow depth to
     # derive, and a closed body never had one. An ELEVATION on the datum the bed
     # is painted on - a gauge publishes its height above its own zero, which is a
     # different surface, so no source is named here and the number is stated.
-    stage = Data.level(near=Ref("domain.centroid"),
-                       opens="the outflow holds at").optional()
+    level = Data.need("water level series").optional()
 
     # THE WEATHER the budget reads. The ice module takes the air temperature, the
     # DEW POINT, the cloud and the wind out of this one file and computes its own
@@ -144,32 +109,20 @@ class DATA:
     # which measures a dew point and codes a sky cover, and which sits where
     # people and water are rather than on a ridge - is the record that fits it.
     # Which station is taken, the unit carriage and the run's own clock are the
-    # Atmosphere slot's ingestion.
-    # A record a user already holds STANDS OVER the network: the mark puts this
-    # row on the wire, and what is handed in is read the same way the fetched
-    # record is. A table of weather has no extent, so it is not checked against
-    # the domain.
-    weather = Data(tool("fetch_asos_metar", bbox=Ref("domain.bbox"),
-                        start_time=P.weather_start,
-                        end_time=P.weather_end).supplied(validate=None))
+    # Atmosphere slot's ingestion. A table of weather has no extent, so it is
+    # not checked against the domain and is read by the composite rather than
+    # on the way in.
+    weather = Data.need("weather forcing")
     # WHAT THE WATER OPENS AT, measured. ONE reading off the sample site nearest
-    # the point the series is read at, in the unit the keyword carries, with that
-    # site, its distance and the sample date on the run journal. How much heat
-    # the water has to lose before it makes any ice at all is this number, so it
-    # is load-bearing, and it is the water THIS run is about: the row states the
-    # run's own moment, and a sample from outside the window that closes there
-    # is another river's reading rather than this one's. A number supplied here
-    # stands over the record, and where the portal sampled nothing in the window
-    # the sheet says so and the value is the caller's.
-    water_temperature = Data.observation(
-        tool("fetch_usgs_water_quality", bbox=Ref("domain.bbox"),
-             characteristic="temperature",
-             valid_time=ParamRef("event_time")),
-        near=[Ref("station.lon"), Ref("station.lat")],
-        at=ParamRef("event_time"),
-        measures="a water temperature", opens="the water opens at"
-    ).context("no sample near this domain in this window; the stated value "
-              "stands")
+    # the point the series is read at, in the unit KHIONE's own temperature
+    # tracer carries, with that site, its distance and the sample date on the
+    # run journal. How much heat the water has to lose before it makes any ice
+    # at all is this number, so it is load-bearing. A number supplied here
+    # stands over the record, and where the portal sampled nothing in the
+    # window the sheet says so and the value is the caller's.
+    observe = Data.need("water quality sample", of="TEMPERATURE",
+                        at=Ref("station")).context(
+        "no sample near this domain in this window; the stated value stands")
 
 
 class STEERING(T2D):
@@ -235,13 +188,13 @@ class STEERING(T2D):
     #: the measured temperature the whole domain starts at; the frazil and the
     #: cover behind it open at the engine's own zero, which is water with no ice
     #: in it yet.
-    INITIAL_VALUES_OF_TRACERS = [Ref("water_temperature.value")]
+    INITIAL_VALUES_OF_TRACERS = [Ref("observe.value")]
 
     #: The water arriving at a feeding face is the OPEN water above the reach:
     #: it carries the temperature the sample site measured and no ice at all -
     #: no frazil in suspension, no cover on it. One value per appended tracer,
     #: in the order the ice deck below appends them.
-    boundaries = Boundaries(measured=Ref("settled"), tracers=[Ref("water_temperature.value"), *_INFLOW_ICE])
+    boundaries = Boundaries(measured=Ref("settled"), tracers=[Ref("observe.value"), *_INFLOW_ICE])
 
     #: The weather over the whole domain, as the one table the engine
     #: interpolates every column of between the same two rows. The nearest
@@ -288,7 +241,9 @@ OUTPUTS = [
     series("DYNCOVC", at=_STATION, module="khione").chart(),
     series("DYNCOVT", at=_STATION, module="khione").chart(),
 ]
-CAPTIONS = {"DYNCOVC": "ice cover fraction", "DYNCOVT": "ice cover thickness"}
+CAPTIONS = {"DYNCOVC": "ice cover fraction", "DYNCOVT": "ice cover thickness",
+           "discharge": "a streamflow", "level": "a water-surface elevation",
+           "observe": "a water temperature"}
 
 #: The run's ANSWER, as the numbers a reader has to be able to check: when the
 #: water at the point first stood under more ice than the ask calls frozen, when

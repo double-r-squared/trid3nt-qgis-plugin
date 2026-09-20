@@ -15,10 +15,8 @@ from trid3nt_server.inputs import point_arg
 from trid3nt_server.inputs.instant import event_time
 from trid3nt_server.workflows.runtime import (
     Data,
-    ParamRef,
     Ref,
     register_workflow,
-    tool,
 )
 from trid3nt_server.workflows.solver.compute_class import compute_class
 from trid3nt_server.workflows.telemac.modules import T2D, WAQTEL, field, mesh, series
@@ -59,74 +57,40 @@ _STATION_FRAC = 0.98
 _STATION = Placed("station", point=PARAMS.station, fraction=_STATION_FRAC,
                   label="Temperature station")
 
-#: The terrain cell the banks are painted from. 3DEP is PINNED, not preferred: a
-#: DSM (Copernicus GLO-30 carries canopy) puts the bank on the tree tops, and its
-#: EGM2008 zero is not the NAVD88 the surveys and the gauges are measured on.
-_TERRAIN_RESOLUTION_M = 10
-
 
 class DATA:
     """The slots this run stands on - the water, the bed under it and what it
     opens at - beside the flow that fills its inflow and the week of weather the
     heat budget is driven by."""
 
-    # THE DOMAIN. A polygon the caller supplies or draws supersedes this; unfilled,
-    # the reach the seed stands on is cut from the mapped water and arrives with
-    # its two end transects, which is where the inflow and the outflow are
-    # prescribed. A closed body states no run and its whole edge is wall.
-    domain = Data.domain(
-        tool("fetch_river_reach", distance_km=_REACH_LENGTH_KM,
-             seed_point=[Ref("seed.lon"), Ref("seed.lat")]))
-    # THE STRETCHES OF ITS EDGE the water crosses. The reach producer measured
-    # them where it cut the section, and they ride on the domain it returned; a
-    # domain that arrives with none - a drawn outline, a lake - is asked for
-    # them on the canvas, and an edge that names none is a closed body's.
-    runs = Data.runs()
+    # THE DOMAIN, as the CLASS it is: a polygon the caller supplies or draws
+    # supersedes this; unfilled, the reach the seed stands on is matched from
+    # the mapped water and arrives with its two end transects, which is where
+    # the inflow and the outflow are prescribed. A closed body states no run
+    # and its whole edge is wall.
+    domain = Data.need("hydrography", at=Ref("seed"), span_km=_REACH_LENGTH_KM)
 
-    # THE MEASUREMENT. Water with no federal navigation project has no published
-    # sounding, and the sheet says so rather than refusing.
-    survey = Data(tool("fetch_ehydro_surveys", bbox=Ref("domain.bbox"))
-                  ).context("no published channel survey over this domain; "
-                            "the terrain surface stands")
-    # THE SOUNDINGS AS A SURFACE, at the scale the mesh resolves. Its values are
-    # DEPTHS below the survey's own project datum, and the merge below reads
-    # them as elevations on the terrain's zero through the shift the survey
-    # publishes about itself.
-    surveyed_bed = Data(tool("derive_survey_surface", points=survey,
-                             value_field="depth_below_datum_m",
-                             resolution_m=ParamRef("mesh_resolution_m"))
-                        ).context("no soundings to grid into a surveyed bed "
-                                  "over this domain")
-    # A terrain surface measures the water TOP, so where no survey reaches it
-    # the modelled water is shallower than the real water.
-    terrain = Data(tool("fetch_dem", bbox=Ref("domain.bbox"), source="3dep",
-                        resolution_m=_TERRAIN_RESOLUTION_M,
-                        purpose="bed elevation"))
-    # ONE bed: the survey where it measured, the terrain everywhere else, as a
-    # derive over the two rows. With the survey absent the terrain passes
-    # through the merge unchanged and is the whole bed.
-    bed = Data.bed(tool("derive_merge_rasters", primary=surveyed_bed,
-                        fallback=terrain))
+    # THE BED, as the CLASS it is rather than the source it comes from: the
+    # measurement where something measured it, the terrain under the rest. Which
+    # survey or which DEM reaches this domain is the match's to answer off their
+    # coverage rows, and the merge between the two classes is the runtime's one
+    # rule. A domain with no federal navigation project has no published
+    # survey, and the sheet says so rather than refusing.
+    bed = Data.need("bathymetry")
 
-    # The carrier flow the inflow run prescribes. A number stated on this row
-    # stands over any record, so the flow is the slot's and no param twins it.
-    # ONE reading, not the grid the model published: which reach segment reports
-    # it is ranked against the domain's own interior point, and the step that
-    # opens the channel refuses a record nobody chose from.
-    carrier = Data.discharge(
-        tool("fetch_noaa_nwm_streamflow", bbox=Ref("domain.bbox"),
-             valid_time=ParamRef("event_time")),
-        near=Ref("domain.centroid"), value_field="streamflow_cms",
-        measures="a streamflow", opens="the carrier flow opens at"
-    ).context("the National Water Model published no streamflow over this "
-              "domain at that cycle")
+    # THE FLOW the inflow run prescribes, as a CLASS: which record reports a
+    # discharge over this domain is the match's, and the window it reports is
+    # opened at the moment the run opens at. A number stated on this row stands
+    # over any record, so the flow is the slot's and no param twins it.
+    discharge = Data.need("discharge series").context(
+        "the National Water Model published no streamflow over this "
+        "domain at that cycle")
     # THE LEVEL the water stands at, which the run opens flat at and the outflow
     # holds. A reach whose measured ends do not FALL has no uniform-flow depth to
     # derive, and a closed body never had one. An ELEVATION on the datum the bed
     # is painted on - a gauge publishes its height above its own zero, which is a
     # different surface, so no source is named here and the number is stated.
-    stage = Data.level(near=Ref("domain.centroid"),
-                       opens="the outflow holds at").optional()
+    level = Data.need("water level series").optional()
 
     # THE WEATHER the budget reads. The RAWS network is the one hourly record the
     # registry reaches without an account that carries SOLAR RADIATION beside the
@@ -134,28 +98,21 @@ class DATA:
     # drives a diurnal water temperature. The network sits on ridges and in
     # clearings tens of kilometres from the water, and how far out a station may
     # stand is the fetcher's own declared radius; which one is taken, the unit
-    # carriage and the run's own clock are the Atmosphere slot's ingestion.
-    # A record a user already holds STANDS OVER the network: the mark puts this
-    # row on the wire, and what is handed in is read the same way the fetched
-    # record is. A table of weather has no extent, so it is not checked against
-    # the domain.
-    weather = Data(tool("fetch_raws_weather", bbox=Ref("domain.bbox"),
-                        start_time=P.weather_start,
-                        end_time=P.weather_end).supplied(validate=None))
+    # carriage and the run's own clock are the Atmosphere slot's ingestion. A
+    # table of weather has no extent, so it is not checked against the domain
+    # and is read by the composite rather than on the way in.
+    weather = Data.need("weather forcing")
     # WHAT THE WATER OPENS AT, measured. ONE reading off the sample site nearest
-    # the point the series is read at, in the unit the keyword carries, with that
-    # site, its distance and the sample date on the run journal. The run spends
-    # days on water that entered at a face carrying this value, so it is
-    # load-bearing: nothing sampled near this domain REFUSES rather than opening
-    # at a guessed temperature, and a number supplied here stands over the record.
-    # The window CLOSES at the run's own moment, the way the carrier's does: a
-    # run dated last winter opens at what the water carried then.
-    water_temperature = Data.observation(
-        tool("fetch_usgs_water_quality", bbox=Ref("domain.bbox"),
-             characteristic="temperature",
-             valid_time=ParamRef("event_time")),
-        near=[Ref("station.lon"), Ref("station.lat")],
-        measures="a water temperature", opens="the water opens at")
+    # the point the series is read at, in the unit the deck's own tracer text
+    # carries, with that site, its distance and the sample date on the run
+    # journal. The run spends days on water that entered at a face carrying
+    # this value, so it is load-bearing: nothing sampled near this domain
+    # REFUSES rather than opening at a guessed temperature, and a number
+    # supplied here stands over the record. The window CLOSES at the run's own
+    # moment, the way the discharge's does: a run dated last winter opens at
+    # what the water carried then.
+    observe = Data.need("water quality sample", of="TEMPERATURE",
+                        at=Ref("station"))
 
 
 class STEERING(T2D):
@@ -217,7 +174,7 @@ class STEERING(T2D):
     # the ceiling the weather window can drive.
     DURATION = 604800.0
 
-    #: The carrier declares the temperature tracer ITSELF, so the water opens at
+    #: The deck declares the temperature tracer ITSELF, so the water opens at
     #: a measured temperature and carries it in at every face that feeds it. The
     #: thermic process matches that name and attaches its budget to this tracer
     #: rather than appending a second one, and the unit written here is the unit
@@ -225,12 +182,12 @@ class STEERING(T2D):
     #: its record in, so it names the scale rather than the dimension.
     NUMBER_OF_TRACERS = 1
     NAMES_OF_TRACERS = ["TEMPERATURE     DEGC"]
-    INITIAL_VALUES_OF_TRACERS = [Ref("water_temperature.value")]
+    INITIAL_VALUES_OF_TRACERS = [Ref("observe.value")]
 
     #: The water arriving at a feeding face is the same water the sample site
     #: measured: the domain warms because of what happens OVER it, so the inflow
     #: carries the opening temperature rather than a second number.
-    boundaries = Boundaries(measured=Ref("settled"), tracers=[Ref("water_temperature.value")])
+    boundaries = Boundaries(measured=Ref("settled"), tracers=[Ref("observe.value")])
 
     #: The weather over the whole domain, as the one table the engine
     #: interpolates every column of between the same two rows. The nearest RAWS
@@ -256,7 +213,8 @@ OUTPUTS = [
     series("T1", at=_STATION).chart(),
     series("T1", at=_STATION).station(),
 ]
-CAPTIONS = {"T1": "water temperature"}
+CAPTIONS = {"T1": "water temperature", "discharge": "a streamflow",
+            "level": "a water-surface elevation", "observe": "a water temperature"}
 
 #: The run's ANSWER, as the numbers a reader has to be able to check: how warm
 #: the water at the point got and when, where it stood when the window closed,

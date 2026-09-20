@@ -16,7 +16,6 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
 
 from trid3nt_server.workflows.runtime import (
     Data,
-    ParamRef,
     Ref,
     register_workflow,
     tool,
@@ -42,7 +41,6 @@ from trid3nt_server.workflows.telemac.templates.rain_on_grid.declarations import
     DOC,
     LANDCOVER_CN_MANNING,
     LANDCOVER_UNMAPPED,
-    NLCD_NATIVE_RESOLUTION_M,
     PARAMS,
     PARAMS as P,
 )
@@ -61,30 +59,15 @@ _GEOMETRY = "rog.slf"
 _BOUNDARY = "rog.cli"
 _RESULT = "r2d_rog.slf"
 
-#: Half-width of the square DEM window the basin is traced inside, and the
-#: ground the trace and the bed are both read at. The delineation REFUSES a basin
-#: the window clips, so this over-covers one headwater catchment upstream of its
+#: How far this question's domain reaches: the half-width of the square DEM
+#: window the basin is traced inside. The delineation REFUSES a basin the
+#: window clips, so this over-covers one headwater catchment upstream of its
 #: outlet; at this cell it stays well inside the tracer's own pre-network budget.
 _BASIN_WINDOW_KM = 15.0
-_TERRAIN_RESOLUTION_M = 10
 
-#: 3DEP is PINNED, not preferred, on both rows that read the ground: a DSM
-#: (Copernicus GLO-30 includes forest canopy) puts the bed on the tree tops and
-#: routes the water down the wrong slopes. A pinned source never switches, so an
-#: outage surfaces the fetcher's own typed error naming copernicus and the
-#: substitution is the user's to make - which is what a cross-dataset swap has to
-#: be. ONE GROUND: the basin is delineated on the same product at the same cell
-#: the nodes are painted from, so the routing and the elevations cannot describe
-#: two different grounds.
-_TERRAIN_SOURCE = "3dep"
-
-#: The channel network mesh refinement is sized by distance to, and how fast the
-#: edge may grow between that band and the hillslopes.
-_CHANNEL_NETWORK = "nhdplus_hr"
+#: How fast the mesh edge may grow away from the channel-network band it is
+#: sized against.
 _MESH_GRADE = 0.20
-
-#: The land-cover product the per-node curve numbers and Manning n are keyed to.
-_LANDCOVER = "nlcd_2021"
 
 #: Where the image BAKES the RAINDEF=3 copy of the engine's own
 #: ``runoff_scs_cn.f``. The installed source hardcodes ``RAINDEF=1`` as a
@@ -96,46 +79,34 @@ RAINDEF3_USER_FORTRAN = "/opt/trid3nt/user_fortran/raindef3"
 
 
 class DATA:
-    """The two slots this run stands on, the network its mesh refines toward,
-    and the surface its infiltration is read off."""
+    """The catchment this run stands on, the ground it runs over, the network
+    its mesh refines toward, the surface its infiltration is read off, and the
+    storm that measured over it, if one did."""
 
-    #: THE CATCHMENT. A pour point names which basin is modelled at all: the
-    #: producer snaps it onto the traced channel, walks the D8 grid upslope and
-    #: returns the divide with the outlet run it drains through. A basin the user
-    #: draws or owns supersedes it and carries its own runs, or none.
-    domain = Data.domain(tool("fetch_watershed",
-                              pour_point=[Ref("pour_point.lon"),
-                                          Ref("pour_point.lat")],
-                              buffer_km=_BASIN_WINDOW_KM,
-                              resolution_m=_TERRAIN_RESOLUTION_M,
-                              dem_source=_TERRAIN_SOURCE))
-    # THE STRETCH OF THE DIVIDE the basin drains through, as the producer
-    # measured it: cut at the snapped pour point, typed as the rating curve the
-    # level is read off. A basin the user draws is asked for it on the canvas.
-    runs = Data.runs()
-    #: THE GROUND the water runs over. A bare-earth DEM is the correct class for
-    #: an OVERLAND domain - there is no channel bottom under a hillslope - and a
-    #: pond or a surveyed basin fills the same slot with its own surface or a
-    #: stated depth.
-    bed = Data.bed(tool("fetch_dem", bbox=Ref("domain.bbox"),
-                        source=_TERRAIN_SOURCE,
-                        resolution_m=_TERRAIN_RESOLUTION_M,
-                        purpose="mesh bed"))
-    rivers = Data(tool("fetch_river_geometry", bbox=Ref("domain.bbox"),
-                       source=_CHANNEL_NETWORK, purpose="river geometry"))
-    landcover = Data(tool("fetch_landcover", bbox=Ref("domain.bbox"),
-                          dataset=_LANDCOVER,
-                          resolution_m=NLCD_NATIVE_RESOLUTION_M,
-                          purpose="land cover"))
+    #: THE CATCHMENT, as a CLASS: a pour point names which basin is modelled at
+    #: all, and a watershed IS a water-body extent like any other hydrography
+    #: row. The match snaps it onto the traced channel, walks the D8 grid
+    #: upslope and returns the divide with the outlet run it drains through - a
+    #: basin the user draws or owns supersedes it and carries its own runs, or
+    #: none.
+    domain = Data.need("hydrography", at=Ref("pour_point"),
+                       span_km=_BASIN_WINDOW_KM)
+    #: THE GROUND the water runs over, as the whole surface rather than a bed
+    #: measured over something else: an OVERLAND domain has no channel bottom
+    #: under a hillslope, so nothing is laid over this row.
+    bed = Data.need("terrain")
+    #: THE MAPPED CHANNEL NETWORK the mesh refines toward - a river's own
+    #: geometry is a hydrography row too, ranked by the match against the same
+    #: class as the domain.
+    rivers = Data.need("hydrography")
+    landcover = Data.need("land cover")
     #: THE MEASURED STORM, as the hourly analysis of record published it over
     #: this catchment. CONTEXT: a window nobody stated, a basin outside CONUS or
     #: hours the record has not published yet leave the row absent and the design
     #: storm drives the run, which the sheet says in those words.
-    rain = Data(tool("fetch_aorc_precip", bbox=Ref("domain.bbox"),
-                     start_date=ParamRef("rain_start_date"),
-                     end_date=ParamRef("rain_end_date"))
-                ).context("no hourly rainfall record over this catchment for "
-                          "that window; the design storm drives the run")
+    rain = Data.need("precipitation series").context(
+        "no hourly rainfall record over this catchment for that window; the "
+        "design storm drives the run")
 
 
 #: The MESH RECIPE this question states for itself, because a catchment is
@@ -168,15 +139,16 @@ MESH = tool.build_mesh(
         # overland solve ponds to its rim and sets the published peak depth from
         # a terrain artifact the routing does not believe in.
         mesh_op("set_bed", source=DATA.bed, condition="pit_fill"),
-        # THE OUTLET, as the run the producer measured: the stretch of the
-        # divide the terrain drains through, cut at the snapped pour point. Its
+        # THE OUTLET, as the domain's own match measured it: the stretch of the
+        # divide the terrain drains through, cut at the snapped pour point,
+        # which rides on the domain row rather than a row of its own. Its
         # type is rating_curve, so the quad prescribes a water LEVEL and the
         # curve beside the deck is what that level is read off - the outlet
         # rises and falls with the hydrograph instead of standing at the
         # boundary file's zero. The all-KSORT free exit is not the alternative:
         # it is well-posed only while the normal velocity leaves, and
         # propin_telemac2d.f refuses an entering one by name.
-        mesh_op("set_boundary_roles", runs=DATA.runs),
+        mesh_op("set_boundary_roles", runs=DATA.domain),
     ],
 )
 

@@ -15,7 +15,6 @@ from trid3nt_server.workflows.runtime import (
     ParamRef,
     Ref,
     register_workflow,
-    tool,
 )
 from trid3nt_server.inputs import point_arg
 from trid3nt_server.inputs.instant import event_time
@@ -36,7 +35,8 @@ from trid3nt_server.workflows.telemac.workflow import (
     Measured, TelemacWorkflow,
 )
 
-__all__ = ["ANSWER", "DATA", "PARAMS", "STEERING", "telemac_channel_dredging"]
+__all__ = ["ANSWER", "CAPTIONS", "DATA", "PARAMS", "STEERING",
+           "telemac_channel_dredging"]
 
 
 #: The names the run directory holds this run's files under - the deck's own
@@ -87,58 +87,29 @@ class DATA:
     """The slots this run stands on - the water, its bed, the flow through it -
     and the two areas the dredge works on, which this template names no source for."""
 
-    #: THE CHANNEL. A seed on the water names a stretch of river and the fetcher
-    #: returns the polygon with the two end transects it was cut between and the
-    #: centerline beside it; a fairway the port supplies supersedes it.
-    domain = Data.domain(
-        tool("fetch_river_reach", distance_km=_REACH_LENGTH_KM,
-             seed_point=[Ref("seed_point.lon"), Ref("seed_point.lat")]))
-    # THE STRETCHES OF ITS EDGE the water crosses. The reach producer measured
-    # them where it cut the section, and they ride on the domain it returned; a
-    # domain that arrives with none - a drawn outline, a lake - is asked for
-    # them on the canvas, and an edge that names none is a closed body's.
-    runs = Data.runs()
+    #: THE CHANNEL. A seed on the water names a stretch of river and the match
+    #: ranks the reach producer and the waterbody producer over it in turn; a
+    #: fairway the port supplies supersedes it.
+    domain = Data.need("hydrography", at=Ref("seed_point"),
+                       span_km=_REACH_LENGTH_KM)
     #: THE LINE the dredge's reference profiles are stationed along: the
     #: centerline the reach producer measured, or the one the port draws over a
     #: fairway nobody mapped a channel through.
-    line = Data.line()
-    #: THE MEASUREMENT, and the whole reason a dredged volume is worth reading: a
-    #: surface DEM measures the water top, so a fairway painted from one is
-    #: centimetres deep and the cut to grade is summed over nothing. A channel with
-    #: no federal navigation project has no published survey, and the sheet says so
-    #: rather than refusing.
-    survey = Data(tool("fetch_ehydro_surveys", bbox=Ref("domain.bbox"),
-                       purpose="channel survey soundings")
-                  ).context("no published channel survey over this domain; "
-                            "the terrain surface stands")
-    # THE SOUNDINGS AS A SURFACE, at the scale the mesh resolves. Its values are
-    # DEPTHS below the survey's own project datum, and the merge below reads
-    # them as elevations on the terrain's zero through the shift the survey
-    # publishes about itself.
-    surveyed_bed = Data(tool("derive_survey_surface", points=survey,
-                             value_field="depth_below_datum_m",
-                             resolution_m=ParamRef("mesh_resolution_m"))
-                        ).context("no soundings to grid into a surveyed bed "
-                                  "over this domain")
-    terrain = Data(tool("fetch_dem", bbox=Ref("domain.bbox"), source="3dep",
-                        resolution_m=_TERRAIN_RESOLUTION_M,
-                        purpose="channel bed elevation"))
-    # ONE bed: the survey where it measured, the terrain everywhere else, as a
-    # derive over the two rows. With the survey absent the terrain passes
-    # through the merge unchanged and is the whole bed.
-    bed = Data.bed(tool("derive_merge_rasters", primary=surveyed_bed,
-                        fallback=terrain))
+    line = Data.supplied(geometry="polyline")
+    #: THE MEASUREMENT, and the whole reason a dredged volume is worth reading:
+    #: a surface DEM measures the water top, so a fairway painted from one is
+    #: centimetres deep and the cut to grade is summed over nothing. The
+    #: STRICTER class - the maintained prism, not the water around it - is what
+    #: this question asks; a channel with no federal navigation project has no
+    #: published survey, and the terrain stands in for it.
+    bed = Data.need("channel survey")
     #: The flow that shoals the fairway and carries what the dredger disturbs:
     #: ONE reading off the nearest reporting site, or the number stated on this
     #: row, which stands over any record. What the open channel opened on is
     #: said once, on its own journal note.
-    carrier = Data.discharge(
-        tool("fetch_noaa_nwm_streamflow", bbox=Ref("domain.bbox"),
-             valid_time=ParamRef("event_time")),
-        near=Ref("domain.centroid"), value_field="streamflow_cms",
-        measures="a streamflow", opens="the carrier flow opens at"
-    ).context("the National Water Model published no streamflow over this "
-              "domain at that cycle")
+    discharge = Data.need("discharge series").context(
+        "the National Water Model published no streamflow over this domain "
+        "at that cycle")
     #: WHERE the dredger works, and where the spoil goes. Two SLOTS: the channel
     #: a port keeps at grade and the disposal ground it is licensed to use are
     #: both administrative areas, and no dataset knows either - they are drawn,
@@ -150,8 +121,7 @@ class DATA:
     # derive, and a closed body never had one. An ELEVATION on the datum the bed
     # is painted on - a gauge publishes its height above its own zero, which is a
     # different surface, so no source is named here and the number is stated.
-    stage = Data.level(near=Ref("domain.centroid"),
-                       opens="the outflow holds at").optional()
+    level = Data.need("water level series").optional()
 
 
 #: The two areas and the reference surface, measured against the SETTLED run:
@@ -274,6 +244,9 @@ class STEERING(T2D):
             reference=Ref("dredge.profiles"),
             origin=_TIME_ORIGIN))]
 
+
+#: The two measured rows' nouns, read on the run journal.
+CAPTIONS = {"discharge": "a streamflow", "level": "a water level"}
 
 #: The run's ANSWER. The two volumes are the engine's OWN report lines, summed
 #: over the maintenance passes it printed; the two bed changes are the evolution

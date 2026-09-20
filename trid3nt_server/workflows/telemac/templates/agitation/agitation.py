@@ -55,44 +55,25 @@ class DATA:
     who already holds the basin's outline supplies it and the cut never runs.
     The transect is laid through whatever structure the run is handed."""
 
-    #: The window the sheltering question is asked in. Produced on demand, so a
+    #: The window the sheltering question is asked in. Drawn on the canvas, so a
     #: caller who supplies the basin outline below is never asked to draw one.
-    box = Data.extent()
-    #: The land-water EDGE at survey resolution. OpenStreetMap draws a coastline
-    #: way with the land on its LEFT, and that direction is the whole of the
-    #: classification the cut below makes.
-    coast = Data(tool("fetch_osm_coastline", bbox=Ref("box.bbox")))
+    extent = Data.supplied(geometry="rectangle")
+    #: THE LAND-WATER EDGE, as the CLASS it is rather than the source it comes
+    #: from: OpenStreetMap's coastline is the one source that reaches it today,
+    #: and the match is what says so. Land is on its LEFT, and that direction is
+    #: the whole of the classification the cut below makes.
+    coast = Data.need("hydrography")
     #: THE DOMAIN: the water the coastline leaves inside the box. A polygon is
     #: what a mesh is cut from and a coastline is a line, so this row is the step
     #: between the two; a basin the user outlines supersedes it.
-    domain = Data.domain(tool("derive_water_polygon", coastline=coast,
-                              extent=Ref("box.bbox")))
-    #: TOPOBATHY is the class a bed is defined over and CUDEM's nearshore
-    #: collection covers a surveyed harbour, so the bed the wave refracts over is
-    #: the surveyed sea floor. The source's own default target is ONE UTM zone,
-    #: so a harbour outside it would be warped across ten zones before anything
-    #: sampled it; lon/lat is what the nodes are sampled in.
-    seafloor = Data(tool("fetch_topobathy", bbox=Ref("domain.bbox"),
-                         target_crs="EPSG:4326"))
-    #: The LAND-AND-SHORE surface the survey's own footprint stops short of. A
-    #: cut water polygon follows the coastline to the metre and a delivered tile
-    #: ends on its own grid, so the two disagree by a node at the rim.
-    terrain = Data(tool("fetch_dem", bbox=Ref("domain.bbox"),
-                        purpose="bed elevation"))
-    #: ONE bed: the survey where it sounded, the terrain everywhere else, both on
-    #: NAVD88 - and the merge refuses two datums by name rather than writing a
-    #: step into the floor a wave then refracts over. Supply a survey raster, a
-    #: layer of soundings or a depth in metres and that is the bed instead.
-    bed = Data.bed(tool("derive_merge_rasters", primary=seafloor,
-                        fallback=terrain))
+    domain = Data(tool("derive_water_polygon", coastline=coast,
+                       extent=Ref("extent.bbox")))
+    #: ONE bed: the class it is defined over rather than the source it comes
+    #: from - the measurement where something sounded it, the terrain everywhere
+    #: else. Supply a survey raster, a layer of soundings or a depth in metres
+    #: and that is the bed instead.
+    bed = Data.need("bathymetry")
     structure = Data.supplied(geometry="polyline")
-    #: The line the agitation is read along: through the structure's centroid,
-    #: along the wave the deck states it is travelling, from the exposed side
-    #: into the lee. A propagation direction is what the keyword carries, so the
-    #: transect is read in the same trigonometric convention.
-    transect = tool("derive_transect", shape=structure, convention="trig",
-                    bearing_deg=Ref("sheet.DIRECTION_OF_WAVE_PROPAGATION"),
-                    length_m=P.transect_length_m)
     #: The domain as a MESH, when the caller has one already. Unfilled, MESH
     #: below is what the wave is solved on.
     mesh = Data.supplied(geometry="mesh").optional()
@@ -191,12 +172,24 @@ MESH = tool.build_mesh(
 )
 
 
+#: THE LINE the agitation is read along: through the structure's centroid, along
+#: the wave the deck states it is travelling, from the exposed side into the lee.
+#: A propagation direction is what the keyword carries, so the line is laid in
+#: the same trigonometric convention. Measured off the structure rather than
+#: produced, because the water's own centerline runs nowhere near this read.
+_TRANSECT = Measured(
+    "transect", kind="transect",
+    asked={"value": DATA.structure, "convention": "trig",
+           "bearing_deg": Ref("stated.DIRECTION_OF_WAVE_PROPAGATION"),
+           "length_m": ParamRef("transect_length_m"),
+           "code": "ARTEMIS_STRUCTURE_INVALID"})
+
 #: What this question PLACES: the agitation coefficient along the transect the
 #: user drew through the structure. The profile keeps the nodes within one
 #: finest mesh edge of the line - the band the structure's own nodes were laid
 #: at - so the read is the line's and not a mean over the whole basin's width.
 OUTPUTS = [
-    profile("KD", along=DATA.transect, within_m=P.mesh_resolution_m).chart(),
+    profile("KD", along=_TRANSECT, within_m=P.mesh_resolution_m).chart(),
 ]
 CAPTIONS = {"KD": "agitation coefficient"}
 
@@ -204,9 +197,9 @@ CAPTIONS = {"KD": "agitation coefficient"}
 #: measure of one of the reads above or of the wave height it is a ratio of.
 ANSWER = {
     "kd_max": field("KD", t=-1).measure("max"),
-    "kd_transect_min": profile("KD", along=DATA.transect,
+    "kd_transect_min": profile("KD", along=_TRANSECT,
                                within_m=P.mesh_resolution_m).measure("min"),
-    "kd_transect_max": profile("KD", along=DATA.transect,
+    "kd_transect_max": profile("KD", along=_TRANSECT,
                                within_m=P.mesh_resolution_m).measure("max"),
     "hs_max_m": field("HS", t=-1).measure("max"),
     "mesh_size_m": mesh().measure("size_m"),

@@ -15,7 +15,7 @@ import sys
 from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
 
 from trid3nt_server.workflows.runtime import (
-    Data, ParamRef, Ref, register_workflow, tool,
+    Data, Ref, register_workflow,
 )
 from trid3nt_server.inputs import point_arg
 from trid3nt_server.inputs.instant import event_time
@@ -73,94 +73,51 @@ _ENTERING = [2.0, 0.05, 0.02, 1.0, 0.5, 0.05, 2.0, 8.667]
 #: and the far end of the profile is what one pass made of them.
 _PHYTO_IN, _PO4_IN, _NO3_IN = _ENTERING[0], _ENTERING[1], _ENTERING[3]
 
-#: The terrain cell the banks are painted from. 3DEP is PINNED, not preferred: a
-#: DSM (Copernicus GLO-30 carries canopy) puts the bank on the tree tops, and its
-#: EGM2008 zero is not the NAVD88 the surveys and the gauges are measured on.
-_TERRAIN_RESOLUTION_M = 10
-
 
 class DATA:
     """The domain and the bed this run stands on, and the two readings it opens
     on: the flow the inflow carries, and the temperature the stated one is read
     against."""
 
-    # THE DOMAIN. A polygon the caller supplies or draws supersedes this;
-    # unfilled, the stretch the seed stands on is cut from the mapped water and
-    # arrives with its two end transects - which is where the inflow and the
-    # outflow are prescribed - and with its centerline, which is the line every
-    # longitudinal read below is taken along.
-    domain = Data.domain(
-        tool("fetch_river_reach", distance_km=_REACH_LENGTH_KM,
-             seed_point=[Ref("seed.lon"), Ref("seed.lat")]))
-    # THE STRETCHES OF ITS EDGE the water crosses. The reach producer measured
-    # them where it cut the section, and they ride on the domain it returned; a
-    # domain that arrives with none - a drawn outline, a lake - is asked for
-    # them on the canvas, and an edge that names none is a closed body's.
-    runs = Data.runs()
+    # THE DOMAIN, as the CLASS it is: a polygon the caller supplies or draws
+    # supersedes this; unfilled, the stretch the seed stands on is matched from
+    # the mapped water and arrives with its two end transects - which is where
+    # the inflow and the outflow are prescribed - and with its centerline, which
+    # is the line every longitudinal read below is taken along.
+    domain = Data.need("hydrography", at=Ref("seed"), span_km=_REACH_LENGTH_KM)
     # THE LINE every longitudinal read is taken along.
-    line = Data.line()
+    line = Data.supplied(geometry="polyline")
 
-    # THE BED, as one source composed from two. ABSENT is legal on the survey:
-    # water with no federal navigation project has no published sounding, and
-    # the sheet says so.
-    survey = Data(tool("fetch_ehydro_surveys", bbox=Ref("domain.bbox"),
-                       purpose="channel survey soundings")
-                  ).context("no published channel survey over this domain; "
-                            "the terrain surface stands")
-    # THE SOUNDINGS AS A SURFACE, at the scale the mesh resolves. Its values are
-    # DEPTHS below the survey's own project datum, and the merge below reads
-    # them as elevations on the terrain's zero through the shift the survey
-    # publishes about itself.
-    surveyed_bed = Data(tool("derive_survey_surface", points=survey,
-                             value_field="depth_below_datum_m",
-                             resolution_m=ParamRef("mesh_resolution_m"))
-                        ).context("no soundings to grid into a surveyed bed "
-                                  "over this domain")
-    # A terrain surface measures the water TOP, so where no survey reaches it
-    # the modelled water is shallower than the real water.
-    terrain = Data(tool("fetch_dem", bbox=Ref("domain.bbox"), source="3dep",
-                        resolution_m=_TERRAIN_RESOLUTION_M,
-                        purpose="bed elevation"))
-    # ONE bed: the survey where it measured, the terrain everywhere else, as a
-    # derive over the two rows. With the survey absent the terrain passes
-    # through the merge unchanged and is the whole bed.
-    bed = Data.bed(tool("derive_merge_rasters", primary=surveyed_bed,
-                        fallback=terrain))
+    # THE BED, as the CLASS it is rather than the source it comes from: the
+    # measurement where something measured it, the terrain under the rest. Which
+    # survey or which DEM reaches this domain is the match's to answer off their
+    # coverage rows, and the merge between the two classes is the runtime's one
+    # rule.
+    bed = Data.need("bathymetry")
 
-    # The carrier flow the inflow run prescribes. A number stated on this row
-    # stands over any record, so the flow is the slot's and no param twins it.
-    # ONE reading, not the grid the model published: which reach segment reports
-    # it is ranked against the domain's own interior point, and the step that
-    # opens the channel refuses a record nobody chose from.
-    carrier = Data.discharge(
-        tool("fetch_noaa_nwm_streamflow", bbox=Ref("domain.bbox"),
-             valid_time=ParamRef("event_time")),
-        near=Ref("domain.centroid"), value_field="streamflow_cms",
-        measures="a streamflow", opens="the carrier flow opens at"
-    ).context("the National Water Model published no streamflow over this "
-              "domain at that cycle")
+    # THE FLOW the inflow run prescribes, as a CLASS: which record reports a
+    # discharge over this domain is the match's, and the window it reports is
+    # opened at the moment the run opens at. A number stated on this row stands
+    # over any record.
+    discharge = Data.need("discharge series").optional()
 
     # WHAT THE WATER IS ACTUALLY THIS WARM AT, as the record rather than as the
     # deck's number. ONE reading off the nearest sample site, so the run journal
     # says which site took it and when the sample was a moment: the stated
     # temperature is read against this and the keyword is never filled from it.
-    # Nothing sampled near this domain is an absence the sheet states.
-    water_temperature = Data.observation(
-        tool("fetch_usgs_water_quality", bbox=Ref("domain.bbox"),
-             characteristic="temperature",
-             purpose="observed water temperature"),
-        near=Ref("domain.centroid"),
-        measures="a water temperature",
-        opens="the nearest sampled water temperature is"
-    ).context("no water-quality site near this domain reports a water "
-              "temperature; the stated value stands")
+    # This run publishes no temperature VARIABLE of its own - the water
+    # temperature is a stated WAQTEL keyword, not a tracer - so this row states
+    # no ``of=`` and its record is read in the unit it was measured in.
+    observe = Data.need("water quality sample").context(
+        "no water-quality site near this domain reports a water "
+        "temperature; the stated value stands")
     # THE LEVEL the water stands at, which the run opens flat at and the outflow
     # holds. A reach whose measured ends do not FALL has no uniform-flow depth to
     # derive, and a closed body never had one. An ELEVATION on the datum the bed
-    # is painted on - a gauge publishes its height above its own zero, which is a
-    # different surface, so no source is named here and the number is stated.
-    stage = Data.level(near=Ref("domain.centroid"),
-                       opens="the outflow holds at").optional()
+    # is painted on: a gauge reports a height above its OWN zero, so the record
+    # carries that zero's elevation and the offset row puts it on the run's
+    # frame.
+    level = Data.need("water level series").optional()
 
 
 class STEERING(T2D):
@@ -260,7 +217,9 @@ OUTPUTS = [
     series("T1", at=P.station).chart(),
     series("T8", at=P.station).chart(),
 ]
-CAPTIONS = {"T1": "phyto biomass", "T8": "dissolved o2"}
+CAPTIONS = {"T1": "phyto biomass", "T8": "dissolved o2",
+            "discharge": "a streamflow", "level": "a water-surface elevation",
+            "observe": "a water temperature"}
 
 #: The run's ANSWER: what one pass did to the water, as the numbers a reader has
 #: to be able to check. Every ratio is held to the stated concentration the water
