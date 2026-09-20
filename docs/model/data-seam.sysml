@@ -185,14 +185,16 @@ package DataSeam {
 
     interface def BedSourceParams {
         doc /*
-        The request a bed source takes. ``min_pixel_m`` only COARSENS: it never
-        invents a cell finer than the tile that was read, which is why it is the
+        The request a bed source takes. ``resolution_m`` is the one lever name
+        every raster fetcher and the topobathy composite share: it floors the
+        merge at the asked cell size, never invents a cell finer than the tile
+        that was read and never coarsens past the ask, which is why it is the
         param the resolution declaration hangs off.
         */
         item bbox : RealList;
         item target_crs : String;
         item timeout_s : Real;
-        item min_pixel_m : Real [0..1];
+        item resolution_m : Real [0..1];
     }
 
     interface def CatalogReadDeclaration {

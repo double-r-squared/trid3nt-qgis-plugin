@@ -319,6 +319,62 @@ def test_the_envelope_states_the_datum_in_provenance() -> None:
 
 
 
+def test_the_bed_resolution_lever_is_resolution_m_from_the_spec_to_the_merge(
+    monkeypatch: pytest.MonkeyPatch, tile_scheme: Path
+) -> None:
+    """One lever name across the raster fetchers: what the spec declares is what the
+    rung edge hands over and what the hook passes into the composite."""
+    numpy = pytest.importorskip("numpy")
+    from trid3nt_server.tools.fetchers._router.spec import load_spec_from_path
+
+    spec = load_spec_from_path(Path(
+        "trid3nt_server/tools/fetchers/ocean/fetch_bluetopo/source.yaml"))
+    assert "resolution_m" in spec.params
+    assert [d.param for d in spec.resolution_declarations] == ["resolution_m"]
+
+    passed: dict = {}
+    monkeypatch.setattr(bt, "assert_navd88_tile", lambda _p: "NAVD88")
+    monkeypatch.setattr(bt, "record_provenance", lambda _fields: None)
+    monkeypatch.setattr(
+        tb, "_composite_sources_to_array",
+        lambda sources, *_a, **kw: (passed.update(kw)
+                                    or (numpy.full((4, 4), 3.0, dtype="float32"),
+                                        None, "EPSG:4326",
+                                        [True] * len(sources),
+                                        [None] * len(sources))))
+
+    bt.read_bluetopo(None, {"bbox": (-85.6, 30.0, -85.3, 30.1), "resolution_m": 8},
+                     timeout_s=10.0)
+    assert passed == {"resolution_m": 8.0}
+
+
+def test_a_bed_resolution_that_is_not_a_cell_size_refuses_by_the_lever_name() -> None:
+    with pytest.raises(bt.BlueTopoInputError) as excinfo:
+        bt.validate_bluetopo(None, {"bbox": COASTAL_AOI, "resolution_m": 0})
+    assert "resolution_m" in str(excinfo.value)
+
+
+def test_the_bluetopo_rung_hands_the_composites_own_lever_straight_through(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from trid3nt_contracts.execution import BlueTopoResult
+    from trid3nt_server.tools import TOOL_REGISTRY
+
+    whole = BlueTopoResult(
+        layer_id="x", name="x", layer_type="raster", uri="s3://x.tif",
+        coverage_fraction=1.0,
+    )
+    asked: dict = {}
+    monkeypatch.setitem(
+        TOOL_REGISTRY, "fetch_bluetopo",
+        TOOL_REGISTRY["fetch_bluetopo"].__class__(
+            **{**TOOL_REGISTRY["fetch_bluetopo"].__dict__,
+               "fn": lambda **kw: (asked.update(kw), whole)[1]}),
+    )
+    tc.serve_bluetopo_bed(bbox=COASTAL_AOI, resolution_m=8)
+    assert asked["resolution_m"] == 8
+
+
 def test_the_bluetopo_spec_declares_the_delegate_hooks_and_the_result_model() -> None:
     from trid3nt_contracts.execution import LAYER_RESULT_MODELS
     from trid3nt_server.tools.fetchers._router.spec import load_spec_from_path

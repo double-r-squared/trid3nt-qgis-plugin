@@ -155,10 +155,8 @@ def serve_bluetopo_bed(
     kwargs: dict[str, Any] = {"bbox": bbox}
     if target_crs is not None:
         kwargs["target_crs"] = target_crs
-    # The composite's one resolution lever is resolution_m; BlueTopo's own request
-    # names the same floor min_pixel_m, and this rung edge is where they meet.
     if resolution_m is not None:
-        kwargs["min_pixel_m"] = resolution_m
+        kwargs["resolution_m"] = resolution_m
     if timeout_s is not None:
         kwargs["timeout_s"] = timeout_s
 

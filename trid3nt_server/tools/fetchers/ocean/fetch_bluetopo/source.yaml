@@ -25,7 +25,7 @@ params:
   timeout_s:
     type: float
     default: 120.0
-  min_pixel_m:
+  resolution_m:
     type: float
     schema_optional: true
 ingest:
@@ -65,12 +65,12 @@ payload_estimate:
 # navigationally relevant water. The gate card quotes this beside a consuming
 # solver's declared range.
 resolution_declarations:
-- param: min_pixel_m
+- param: resolution_m
   unit: m
   min_value: 2
   native_hint: BlueTopo multi-resolution UTM tiles - 2 m / 4 m / 8 m / 16 m tiers, finer in shallow water
   constraint_source: data
-  rationale: the published tile scheme's own Resolution tiers; min_pixel_m only COARSENS the merge, it never invents a finer cell than the tile it read
+  rationale: the published tile scheme's own Resolution tiers; resolution_m floors the merge at the asked cell size and never invents a cell finer than the tile it read, and nothing coarsens the merge that the caller did not ask for
 coverage:
 -   data_class: bathymetry
     kind: measured
@@ -144,10 +144,11 @@ docstring: |-
       target_crs: output CRS (default ``EPSG:32616``). The NAVD88 vertical is
           preserved; only the horizontal grid is reprojected.
       timeout_s: tile-scheme listing / download budget in seconds (default 120).
-      min_pixel_m: OPTIONAL output-resolution FLOOR in metres. The merge is no
-          finer than this even where a 2 m tile is available, which keeps a
-          small AOI from producing a needlessly heavy grid. It only COARSENS:
-          it never invents a cell finer than the tile that was read.
+      resolution_m: OPTIONAL output cell size in metres, the same lever name the
+          topobathy composite takes. The merge is floored at this value even
+          where a 2 m tile is available, which keeps a small AOI from producing
+          a needlessly heavy grid; it never invents a cell finer than the tile
+          that was read, and it never coarsens past what was asked.
 
   **Returns:**
       A ``BlueTopoResult`` (a ``LayerURI`` subclass) pointing at the merged COG

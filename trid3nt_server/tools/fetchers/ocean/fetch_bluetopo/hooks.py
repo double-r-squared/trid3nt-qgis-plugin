@@ -292,9 +292,9 @@ def validate_bluetopo(spec: Any, params: dict[str, Any]) -> None:
     t_s = params.get("timeout_s")
     if t_s is not None and (not math.isfinite(float(t_s)) or float(t_s) <= 0):
         raise BlueTopoInputError(f"timeout_s must be > 0 and finite; got {t_s!r}")
-    mpx = params.get("min_pixel_m")
-    if mpx is not None and (not math.isfinite(float(mpx)) or float(mpx) <= 0):
-        raise BlueTopoInputError(f"min_pixel_m must be > 0 and finite; got {mpx!r}")
+    res = params.get("resolution_m")
+    if res is not None and (not math.isfinite(float(res)) or float(res) <= 0):
+        raise BlueTopoInputError(f"resolution_m must be > 0 and finite; got {res!r}")
 
 
 
@@ -314,8 +314,8 @@ def read_bluetopo(
     bbox = tuple(float(v) for v in params["bbox"])
     target_crs = (str(params.get("target_crs") or TARGET_CRS)).strip()
     fetch_timeout = float(params.get("timeout_s") or 120.0)
-    mpx = params.get("min_pixel_m")
-    min_pixel_m = float(mpx) if mpx is not None else None
+    res = params.get("resolution_m")
+    resolution_m = float(res) if res is not None else None
 
     rows = select_bluetopo_tiles(bbox, timeout_s=fetch_timeout)
     if not rows:
@@ -339,7 +339,7 @@ def read_bluetopo(
 
     try:
         array, transform, crs, painted, _footprints = _composite_sources_to_array(
-            sources, target_crs, bbox, min_pixel_m=min_pixel_m
+            sources, target_crs, bbox, resolution_m=resolution_m
         )
     except TopobathyEmptyError as exc:
         raise BlueTopoCoverageGapError(
