@@ -46,11 +46,11 @@ The values the template declares. `desc` is what the model reads when it fills o
 
 | field | the proving run's value |
 |---|---|
-| `dug_volume_m3` | 1510.128165 |
-| `dumped_volume_m3` | 1510.128165 |
+| `dug_volume_m3` | 1498.61288 |
+| `dumped_volume_m3` | 1498.61288 |
 | `dredge_report` | the volumes are the engine's own report lines, summed over the passes that finished inside the run's clock |
-| `dredged_bed_change_m` | -1.0620603561401367 |
-| `dumped_bed_change_m` | 0.2248941957950592 |
+| `dredged_bed_change_m` | -1.0539617538452148 |
+| `dumped_bed_change_m` | 0.22317928075790405 |
 | `net_bed_mass_kg` | 0.0 |
 | `mesh_size_m` | 10.33 |
 
@@ -58,7 +58,7 @@ It publishes these layers onto the canvas:
 
 - Input: domain (river_reach)
 - Input: bed (ehydro_surveys)
-- Input: bed (3dep_extra, datum NAVD88 (metres, positive up))
+- Input: bed (dem, 3DEP 1-10 m US lidar (default 10 m); Copernicus GLO-30 30 m global via source=copernicus, datum NAVD88 (metres, positive up))
 - Velocity u over time (river_reach_domain_mesh)
 - Velocity v over time (river_reach_domain_mesh)
 - Water depth over time (river_reach_domain_mesh)
@@ -74,19 +74,19 @@ It publishes these layers onto the canvas:
 
 ## The proving run
 
-Run `01M2YWMDA28FGK9F2TWPTAGBTZ`, 2026-09-20T07:49:22.014671+00:00, 44.19 s, at commit `d0f0a07575b27fb6a13831b2340e2c26d10160f3-dirty`.
+Run `01M2ZA2BXD0MYW6FMXQR9WK861`, 2026-09-20T11:44:16.285672+00:00, 61.2 s, at commit `170b7ad20386d55a6e38a680b153c8228587b69e`.
 
-![Every layer the run published, stacked and framed on the result (run 01M2YWMDA28FGK9F2TWPTAGBTZ)](telemac_channel_dredging/telemac_channel_dredging.png)
+![Every layer the run published, stacked and framed on the result (run 01M2ZA2BXD0MYW6FMXQR9WK861)](telemac_channel_dredging/telemac_channel_dredging.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M2YWMDA28FGK9F2TWPTAGBTZ)*
+*Every layer the run published, stacked and framed on the result (run 01M2ZA2BXD0MYW6FMXQR9WK861)*
 
-![The solve, frame by frame (run 01M2YWMDA28FGK9F2TWPTAGBTZ)](telemac_channel_dredging/telemac_channel_dredging_animation.gif)
+![The solve, frame by frame (run 01M2ZA2BXD0MYW6FMXQR9WK861)](telemac_channel_dredging/telemac_channel_dredging_animation.gif)
 
-*The solve, frame by frame (run 01M2YWMDA28FGK9F2TWPTAGBTZ)*
+*The solve, frame by frame (run 01M2ZA2BXD0MYW6FMXQR9WK861)*
 
-![final frame (run 01M2YWMDA28FGK9F2TWPTAGBTZ)](telemac_channel_dredging/telemac_channel_dredging_final_frame.png)
+![final frame (run 01M2ZA2BXD0MYW6FMXQR9WK861)](telemac_channel_dredging/telemac_channel_dredging_final_frame.png)
 
-*final frame (run 01M2YWMDA28FGK9F2TWPTAGBTZ)*
+*final frame (run 01M2ZA2BXD0MYW6FMXQR9WK861)*
 
 ### The sheet it filled
 
@@ -131,5 +131,5 @@ await TOOL_REGISTRY['telemac_channel_dredging'].fn(
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2YWMDA28FGK9F2TWPTAGBTZ` and commit `d0f0a07575b27fb6a13831b2340e2c26d10160f3-dirty`. The full argument record is [`telemac_channel_dredging/run.json`](telemac_channel_dredging/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2ZA2BXD0MYW6FMXQR9WK861` and commit `170b7ad20386d55a6e38a680b153c8228587b69e`. The full argument record is [`telemac_channel_dredging/run.json`](telemac_channel_dredging/run.json).
 
