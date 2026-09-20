@@ -35,8 +35,8 @@ from trid3nt_server.gates.input_review import (
 from trid3nt_contracts.coverage import CoverageExtent, SourceChoice
 
 from .data import (
-    BED, DISCHARGE, DOMAIN, EXTENT, LEVEL, LINE, OBSERVE, CoversAOI, DataDecl,
-    Producer)
+    BED, DISCHARGE, DOMAIN, EXTENT, LEVEL, LINE, OBSERVE, WAVE, CoversAOI,
+    DataDecl, Producer)
 from trid3nt_server.tools.search.match import (
     Need, ask_for, base_ask, dropped_from, instant, match, sources_with_coverage)
 from .domain import Domain, bind_domain, current_domain, domain_from_result, reset_domain
@@ -794,11 +794,11 @@ async def _ingested(env: _Env, decl: DataDecl, value: Any,
     return ingested
 
 
-#: The slots filled from a RECORD somebody measured - the three whose value is a
+#: The slots filled from a RECORD somebody measured - the four whose value is a
 #: reading rather than a geometry or a surface. What a row of one OBSERVES is a
 #: published variable and is read in that variable's unit; on any other slot
 #: ``of`` names the FEATURE the source publishes and no unit is owed.
-_READS_A_RECORD = (OBSERVE, LEVEL, DISCHARGE)
+_READS_A_RECORD = (OBSERVE, LEVEL, DISCHARGE, WAVE)
 
 
 def _the_window_it_is_cut_from(decl: DataDecl) -> dict[str, Any]:

@@ -22,6 +22,7 @@ __all__ = [
     "LEVEL",
     "LINE",
     "OBSERVE",
+    "WAVE",
     "WEATHER",
     "CoversAOI",
     "DOMAIN",
@@ -74,6 +75,12 @@ EXTENT = "extent"
 #: the run's own clock. Nothing ingests it on the way in; the name is reserved so
 #: a row that carries weather is the row that composite reads.
 WEATHER = "weather"
+
+#: The sea state at the open edge: the same kind of thing as the weather over a
+#: domain - one record, several columns, measured somewhere near - so it is its
+#: own name too, and its ingestion turns those columns into the keywords a
+#: spectral deck forces its boundary at.
+WAVE = "wave"
 
 
 # A ROW STATES THE CLASS IT NEEDS; IT NEVER NAMES A FETCHER. Text relevance

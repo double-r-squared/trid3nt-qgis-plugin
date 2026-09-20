@@ -24,6 +24,7 @@ from trid3nt_server.workflows.runtime.data import (
     LEVEL,
     LINE,
     OBSERVE,
+    WAVE,
     WEATHER,
 )
 
@@ -32,6 +33,7 @@ from .domain import domain
 from .extent import extent
 from .line import line
 from .observation import observation
+from .wave import wave
 
 __all__ = ["SLOTS", "Slot", "ask_on_canvas", "ingest_slot", "role_of"]
 
@@ -79,6 +81,10 @@ SLOTS: Mapping[str, Slot] = MappingProxyType({
     # A table of weather is read by the composite that expands it onto the run's
     # own clock, so nothing reads it on the way in.
     WEATHER: Slot(classes=frozenset({"weather forcing"})),
+    # A sea state is a record of several columns too, but every one of them
+    # becomes a keyword the deck states, so the turn from the record's words to
+    # the engine's is this slot's ingestion.
+    WAVE: Slot(ingest=wave, classes=frozenset({"wave series"})),
 })
 
 
