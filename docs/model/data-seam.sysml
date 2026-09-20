@@ -551,6 +551,12 @@ package DataSeam {
         */
     }
 
+    part modelMatch : SourceMatch {
+        doc /*
+        code: trid3nt_server/tools/search/find_sources/find_sources.py
+        */
+    }
+
     part rankedListCard : RankedSourceList {
         doc /*
         code: trid3nt_server/workflows/telemac/workflow.py
