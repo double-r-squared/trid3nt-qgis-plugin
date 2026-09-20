@@ -106,6 +106,16 @@ package DataSeam {
         */
     }
 
+    part def SeaStateReader {
+        doc /*
+        The slot ingestion that turns a buoy's record into the scalars a
+        spectral deck forces its open edge with: the column stated in each
+        quantity's own unit, a peak frequency off the period reported and the
+        bearing the waves run toward off the one they come from, both said on
+        the run journal.
+        */
+    }
+
     part def CoastalComposite {
         doc /*
         The CUDEM-first coastal topo-bathy composite: the row's original
@@ -605,6 +615,12 @@ package DataSeam {
         */
     }
 
+    part seaStateReader : SeaStateReader {
+        doc /*
+        code: trid3nt_server/inputs/wave.py
+        */
+    }
+
     part offsetRowDeclaration : VerticalFrame {
         doc /*
         code: trid3nt_server/workflows/runtime/interpreter.py
@@ -1000,6 +1016,28 @@ package DataSeam {
         bed calls the list to its end rather than standing on the first answer,
         and the provenance the merge writes names the rung that painted each
         cell by its rank.
+        */
+    }
+
+    requirement def ASeaStateIsAReservedSlot {
+        doc /*
+        THE SEA STATE AT AN OPEN BOUNDARY IS A RESERVED SLOT, not a composite
+        and not an observation under another name. It is the same kind of thing
+        as the weather over a domain - one record of several measured columns -
+        so it is a name on the reserved list, serving one class, and the match
+        fills it the way it fills every other need.
+
+        What makes it its own slot is what its INGESTION does: every column of
+        the record becomes a KEYWORD the deck states, so the turn from the
+        record's words to the engine's lives there and nowhere else. A quantity
+        is read off the column stated in that quantity's own unit - a record
+        stating two columns in one unit refuses rather than taking the first -
+        and the two conversions a spectral deck needs are made at that one
+        place: the peak FREQUENCY is one over the period reported, and the
+        deck's MAIN DIRECTION is the bearing the waves run TOWARD, which a met
+        record's own is turned through 180 to reach. Neither is folded silently
+        into a number: the journal says the buoy, how far off it stands, the
+        moment, what it reported, and both turns.
         */
     }
 
@@ -1400,6 +1438,17 @@ package DataSeam {
         "tests/search/test_source_match.py::test_several_equal_on_every_fact_present_as_a_tie";
     verify requirement TheRankedListIsOneObjectInThreeViews by
         "tests/search/test_source_match.py::test_the_ranked_list_carries_at_most_five_rows";
+
+    satisfy requirement ASeaStateIsAReservedSlot by seaStateReader;
+    satisfy requirement ASeaStateIsAReservedSlot by slotDoor;
+    verify requirement ASeaStateIsAReservedSlot by
+        "tests/inputs/test_wave.py::test_the_slot_reserves_the_name_and_reads_the_class_the_buoys_publish";
+    verify requirement ASeaStateIsAReservedSlot by
+        "tests/inputs/test_wave.py::test_each_quantity_is_read_off_the_column_stated_in_its_own_unit";
+    verify requirement ASeaStateIsAReservedSlot by
+        "tests/inputs/test_wave.py::test_two_columns_in_one_unit_refuse_rather_than_the_first_being_taken";
+    verify requirement ASeaStateIsAReservedSlot by
+        "tests/inputs/test_wave.py::test_the_two_conversions_a_deck_needs_are_made_here";
 
     satisfy requirement ASeriesIsAlignedToTheRunsEventTime by seriesOnTheRunsClock;
     satisfy requirement ASeriesIsAlignedToTheRunsEventTime by freeSurfaceReader;
