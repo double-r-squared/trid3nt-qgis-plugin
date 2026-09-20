@@ -330,3 +330,10 @@ def test_the_deprecated_slots_the_file_carries_are_rowed_by_nothing():
     assert not KHIONE.UNWRITTEN & set(KHIONE.table(stated))
     assert not KHIONE.UNWRITTEN & set(KHIONE.MODULE_OUTPUT)
 
+
+def test_the_inflow_tracer_is_the_record_where_one_measured_a_window():
+    """The temperature the arriving water carries is the record's whole window
+    where a station on this water served one, and the single reading where none
+    did - the choice is the record's, not a branch in the deck."""
+    assert template.STEERING.boundaries["tracers"][0] == Ref("observe.forcing")
+    assert template.STEERING.INITIAL_VALUES_OF_TRACERS == [Ref("observe.value")]

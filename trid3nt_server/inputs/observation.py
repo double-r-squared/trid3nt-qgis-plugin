@@ -86,6 +86,16 @@ class Observation:
     #: ``None`` where the source reported one moment and nothing more.
     series: Series | None = None
 
+    @property
+    def forcing(self) -> Series | float:
+        """What an engine is DRIVEN by here: the whole window where the record
+        reported one, else the one number.
+
+        A slot that can write either hands this over, so the choice between a
+        measured record and a lumped constant is the record's own and not a
+        branch in the deck that reads it."""
+        return self.series if self.series is not None else self.value
+
 
 class ObservationError(RuntimeError):
     """A typed refusal: nothing near this place measured what the slot opens on."""

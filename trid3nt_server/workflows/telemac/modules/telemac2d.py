@@ -12,7 +12,7 @@ from typing import Any, Mapping, Sequence
 
 from trid3nt_server.inputs.series import align
 from trid3nt_server.workflows.runtime import Ref
-from trid3nt_server.workflows.runtime.temporal import RATE, STATE
+from trid3nt_server.workflows.runtime.temporal import RATE, STATE, Series
 
 from ..authoring.atmosphere import Atmosphere, expand_atmosphere
 from .coupling import couples
@@ -319,6 +319,7 @@ def _boundaries(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
 
     from ..authoring.boundaries import (
         LIQUID_BOUNDARIES_FILENAME,
+        TRACER,
         column_name,
         liquid_boundaries_file,
     )
@@ -326,7 +327,13 @@ def _boundaries(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
     measured = value["measured"]
     order = list(measured["liquid_boundary_order"])
     prescribes = list(measured["liquid_boundary_prescribes"])
-    per_tracer = [float(v) for v in value["tracers"]]
+    # A tracer the run MEASURED over its window arrives as a series; the
+    # steering list still carries one number per tracer per boundary, which is
+    # what the engine reads wherever the file has no column, so a series lumps
+    # to what it opened at there.
+    per_tracer = list(value["tracers"])
+    lumped = [float(v.values[0]) if isinstance(v, Series) else float(v)
+              for v in per_tracer]
     windows = {"flowrate": measured.get("inflow_q_series"),
                "elevation": measured.get("outflow_stage_series")}
     step_s = float(measured.get("time_step_s") or 0.0)
@@ -356,7 +363,17 @@ def _boundaries(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
                          if what == "flowrate" else 0.0)
         elevations.append(float(measured["outflow_stage_m"])
                           if what == "elevation" else 0.0)
-        tracers += per_tracer
+        tracers += lumped
+        # The water ARRIVING at a feeding face carries what was measured in it,
+        # so a tracer series is written at the boundaries that prescribe a flow
+        # and nowhere else.
+        if what == "flowrate":
+            for position, found in enumerate(per_tracer, start=1):
+                if isinstance(found, Series):
+                    columns.append((
+                        column_name(TRACER, number, position), found.units,
+                        align(found, onto=step_s, opening_at=start_s,
+                              quantity=STATE, units=found.units).series))
         window = windows.get(what)
         if window is not None:
             unit = PRESCRIBED_UNITS[what]
@@ -366,6 +383,8 @@ def _boundaries(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
                             align(window, onto=step_s, opening_at=start_s,
                                   quantity=RATE if what == "flowrate" else STATE,
                                   units=unit).series))
+    if lumped:
+        _tracer_note(per_tracer)
     # A CLOSED body has no liquid boundary to prescribe anything at, and a run
     # with no tracers prescribes none. An EMPTY list is not that statement - it
     # is a keyword with nothing after it, which DAMOCLES reads as the next
@@ -381,6 +400,27 @@ def _boundaries(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
                 columns, start_s=start_s,
                 until_s=float(measured["until_s"]), tail_s=_SERIES_TAIL_S,
                 note=str(measured.get("discharge_note") or ""))})
+
+
+def _tracer_note(per_tracer: Sequence[Any]) -> None:
+    """Say on the journal whether what the water ARRIVES carrying was measured
+    over the window or is one number held for all of it.
+
+    What a run opens on is part of its answer, and a question decided by an
+    inflow tracer is decided by that difference."""
+    from trid3nt_server.workflows.runtime import journal_note
+
+    driven = [n for n, v in enumerate(per_tracer, start=1) if isinstance(v, Series)]
+    if driven:
+        journal_note(
+            f"the inflow tracer(s) {driven} are driven by a measured series "
+            "over the whole window, read out of the liquid boundaries file.")
+        return
+    journal_note(
+        "the inflow tracers are STATED: each is held at one value for the "
+        "whole window, because no record on this water measured one over time "
+        "at a feeding face. A record from another reach is a different site's "
+        "water and is not substituted for it.")
 
 
 def Runoff(*, node_xy: Any, cn2: Any, antecedent_moisture: Any,  # noqa: N802

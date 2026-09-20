@@ -16,7 +16,8 @@ from trid3nt_server.workflows.runtime.temporal import Series
 
 from ..errors import TelemacError
 
-__all__ = ["LIQUID_BOUNDARIES_FILENAME", "column_name", "liquid_boundaries_file"]
+__all__ = ["LIQUID_BOUNDARIES_FILENAME", "TRACER", "column_name",
+           "liquid_boundaries_file"]
 
 #: The file a host's LIQUID BOUNDARIES FILE statement names.
 LIQUID_BOUNDARIES_FILENAME = "river_boundaries.txt"
@@ -26,19 +27,31 @@ _TIME = "T"
 
 #: What the engine calls the column it looks for, by what the boundary
 #: prescribes: ``q.f`` builds ``Q(I)`` and ``sl.f`` builds ``SL(I)`` from the
-#: LIQUID BOUNDARY NUMBER, which is the walk order the mesh topology numbers.
-#: The scan compares nine characters exactly, so no other spelling is found.
+#: LIQUID BOUNDARY NUMBER, which is the walk order the mesh topology numbers,
+#: and ``tr.f`` builds ``TR(I,ITRAC)`` from that number AND the tracer's
+#: position. The scan compares nine characters exactly, so no other spelling is
+#: found. A tracer's unit is the record's own and rides on the series, so this
+#: table states none for it.
 _MNEMONIC: Mapping[str, tuple[str, str]] = {
     "flowrate": ("Q", "m3/s"),
     "elevation": ("SL", "m"),
+    "tracer": ("TR", ""),
 }
+
+#: What a TRACER column is addressed by, beside its boundary.
+TRACER = "tracer"
 
 #: The longest column name the reader holds (``CHARACTER(LEN=9)``).
 _NAME_CHARS = 9
 
 
-def column_name(prescribes: str, number: int) -> str:
-    """The column THIS boundary's value is read out of, or a refusal by name."""
+def column_name(prescribes: str, number: int, tracer: int | None = None) -> str:
+    """The column THIS boundary's value is read out of, or a refusal by name.
+
+    A tracer is read per boundary AND per tracer, so its column names both and
+    the engine falls back to the steering list's constant wherever it is
+    absent - which is how one deck states a measured inflow and a number
+    everywhere else."""
     if str(prescribes) not in _MNEMONIC:
         raise TelemacError(
             f"liquid boundary {number} prescribes {prescribes!r}, and the "
@@ -46,7 +59,9 @@ def column_name(prescribes: str, number: int) -> str:
             "series at a boundary the engine reads nothing at would be a table "
             "nobody opens.",
             error_code="TELEMAC_BOUNDARY_SERIES_UNREAD")
-    name = f"{_MNEMONIC[str(prescribes)][0]}({int(number)})"
+    inside = (str(int(number)) if tracer is None
+              else f"{int(number)},{int(tracer)}")
+    name = f"{_MNEMONIC[str(prescribes)][0]}({inside})"
     if len(name) > _NAME_CHARS:
         raise TelemacError(
             f"the engine holds a column name in {_NAME_CHARS} characters and "

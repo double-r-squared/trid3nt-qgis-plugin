@@ -121,3 +121,37 @@ def test_the_file_opens_where_a_continued_run_s_clock_opens():
     assert [float(row.split()[0]) for row in rows] == [
         3600.0, 7200.0, 10800.0, 10900.0]
     assert [float(row.split()[1]) for row in rows] == [10.0, 20.0, 30.0, 30.0]
+
+
+#: A synthetic water temperature over two hours: the water cools while it runs.
+_TEMPERATURE = Series([0.0, 3600.0, 7200.0], [3.2, 1.7, 0.2], units="degC")
+
+
+def test_a_tracer_column_is_named_the_way_tr_f_builds_it():
+    """``tr.f`` scans for ``TR(I,ITRAC)`` on the same file the flow and the
+    stage are read off, so a measured tracer is a third column and not a second
+    table."""
+    assert column_name("tracer", 1, 1) == "TR(1,1)"
+    assert column_name("tracer", 12, 4) == "TR(12,4)"
+
+
+def test_a_tracer_series_is_written_at_the_face_the_water_arrives_through():
+    keywords, files = _boundaries(
+        {"measured": _settled(), "tracers": [_TEMPERATURE, 0.0]})
+    lines = files[LIQUID_BOUNDARIES_FILENAME].splitlines()
+    # The inflow is boundary 1 and the temperature is the first tracer; the
+    # outflow prescribes a stage and carries no arriving water.
+    assert lines[1] == "T TR(1,1)"
+    assert lines[2] == "s degC"
+    assert [row.split()[1] for row in lines[3:]] == ["3.2", "1.7", "0.2", "0.2"]
+    # The steering list still carries one number per tracer per boundary: the
+    # engine reads it wherever the file has no column, and a series lumps there
+    # to what it opened at.
+    assert keywords["PRESCRIBED_TRACERS_VALUES"] == [3.2, 0.0, 3.2, 0.0]
+
+
+def test_a_stated_tracer_writes_no_column_and_only_the_list_stands():
+    keywords, files = _boundaries(
+        {"measured": _settled(), "tracers": [3.2, 0.0]})
+    assert files == {}
+    assert keywords["PRESCRIBED_TRACERS_VALUES"] == [3.2, 0.0, 3.2, 0.0]

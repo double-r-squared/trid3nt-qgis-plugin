@@ -202,9 +202,12 @@ class STEERING(T2D):
 
     #: The water arriving at a feeding face is the OPEN water above the reach:
     #: it carries the temperature the sample site measured and no ice at all -
-    #: no frazil in suspension, no cover on it. One value per appended tracer,
-    #: in the order the ice deck below appends them.
-    boundaries = Boundaries(measured=Ref("settled"), tracers=[Ref("observe.value"), *_INFLOW_ICE])
+    #: no frazil in suspension, no cover on it. One entry per appended tracer,
+    #: in the order the ice deck below appends them; the temperature is the
+    #: record's whole window where a station on this water measured one, and
+    #: the one reading where none did.
+    boundaries = Boundaries(measured=Ref("settled"),
+                            tracers=[Ref("observe.forcing"), *_INFLOW_ICE])
 
     #: The weather over the whole domain, as the one table the engine
     #: interpolates every column of between the same two rows. The nearest

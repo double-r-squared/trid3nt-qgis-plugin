@@ -17,6 +17,7 @@ from __future__ import annotations
 import pytest
 
 from trid3nt_server.inputs.observation import (
+    Observation,
     ObservationError,
     convert,
     note,
@@ -349,3 +350,13 @@ def test_the_gauge_row_says_which_column_carries_a_temperature() -> None:
     assert found.units == "degC"
     assert found.series.units == "degC"
     assert found.series.values[-1] == pytest.approx(18.4)
+
+
+def test_what_an_engine_is_driven_by_is_the_window_where_one_was_reported():
+    """The choice between a measured record and a lumped constant belongs to the
+    record, not to the deck that reads it."""
+    from trid3nt_server.workflows.runtime.temporal import Series
+
+    window = Series([0.0, 3600.0], [3.2, 0.2], units="degC")
+    assert Observation(value=3.2, series=window).forcing is window
+    assert Observation(value=3.2).forcing == 3.2
