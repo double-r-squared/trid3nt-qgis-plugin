@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 from trid3nt_contracts.coverage import (
-    DATA_CLASSES, PROVENANCE_KINDS, CoveragePoint)
+    DATA_CLASSES, PROVENANCE_KINDS, CoverageExtent, CoveragePoint)
 from trid3nt_server.tools.fetchers._router.spec import load_spec_from_path
 
 _ROOT = Path(__file__).resolve().parents[2] / "trid3nt_server" / "tools" / "fetchers"
@@ -46,6 +46,17 @@ def test_a_station_row_lists_its_stations(path):
         if row.extent.kind == "stations":
             assert (row.extent.points or row.extent.read_from
                     or row.extent.discover), path.parent.name
+
+
+def test_the_contract_refuses_a_station_set_drawn_as_rings_alone():
+    """The refusal is the contract's, not the sweep's: a stations extent with
+    rings and no listing, hook or discovery never constructs."""
+    ring = [(-72.0, 41.0), (-71.0, 41.0), (-71.0, 42.0), (-72.0, 42.0)]
+    with pytest.raises(ValueError, match="a station set lists its stations"):
+        CoverageExtent(kind="stations", rings=[ring])
+    assert CoverageExtent(kind="stations", rings=[ring], discover="bbox")
+    assert CoverageExtent(kind="stations", rings=[ring], points=[
+        CoveragePoint(id="8452660", lon=-71.32614, lat=41.504333)])
 
 
 @pytest.mark.parametrize("path", SPECS, ids=lambda p: p.parent.name)
