@@ -76,7 +76,7 @@ def test_summarize_tool_result_error_typed_upstream_is_retryable():
 
 
 def test_classify_error_value_error_not_retryable():
-    """ValueError = bad args = not retryable (Gemini must change something)."""
+    """ValueError = bad args = not retryable (the model must change something)."""
     code, retryable = _classify_error(ValueError("invalid bbox shape"))
     assert code == "VALUEERROR"
     assert retryable is False
@@ -166,9 +166,9 @@ async def test_stream_model_reply_retry_after_recoverable_failure(fake_llm):
     from trid3nt_server import server as agent_server
     from trid3nt_server.server import SessionState
 
-    # Turn 1: Gemini calls fetch_dem with a (made-up) bbox.
-    # Turn 2: Gemini sees the upstream error + retryable=True; retries.
-    # Turn 3: Gemini narrates success.
+    # Turn 1: the model calls fetch_dem with a (made-up) bbox.
+    # Turn 2: the model sees the upstream error + retryable=True; retries.
+    # Turn 3: the model narrates success.
     turn1_chunk = _make_fake_chunk_with_function_call(
         "fetch_dem", {"bbox": [-82.0, 26.5, -81.7, 26.8]}, "call-dem-1"
     )
@@ -237,11 +237,11 @@ async def test_stream_model_reply_retry_after_recoverable_failure(fake_llm):
     assert len(dispatch_log) == 2
     assert dispatch_log[0][0] == "fetch_dem"
     assert dispatch_log[1][0] == "fetch_dem"
-    # Second call's args were not identical to first (Gemini chose to vary).
+    # Second call's args were not identical to first (the model chose to vary).
     assert dispatch_log[0][1] != dispatch_log[1][1]
 
     # Turn 2 carried the function_response with the structured error so
-    # Gemini saw it before deciding to retry.
+    # the model saw it before deciding to retry.
     turn2_parts = [
         p for (_role, parts) in contents_per_turn[1] for p in parts
     ]
@@ -303,7 +303,7 @@ async def test_stream_model_reply_failed_retry_caps_at_max_iterations(fake_llm):
         )
 
     # The circuit breaker caps real dispatches at its threshold (default 3);
-    # additional Gemini turns that keep calling fetch_dem are short-circuited.
+    # additional model turns that keep calling fetch_dem are short-circuited.
     # Importantly: the loop must terminate (no infinite loop).
     threshold = state.circuit_breaker.threshold
     assert dispatch_count["n"] <= threshold, (

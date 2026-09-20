@@ -127,11 +127,11 @@ async def test_first_call_to_real_non_hot_set_tool_dispatches(fake_llm) -> None:
 
     # Dispatched on the first call — exactly once, no detours.
     assert dispatch_log == ["compute_cross_section"]
-    # Exactly two Gemini turns: the call turn + the terminal narration.
+    # Exactly two model turns: the call turn + the terminal narration.
     assert len(contents_per_turn) == 2
-    # The function_response Gemini saw is an ok envelope, not the bounce.
+    # The function_response the model saw is an ok envelope, not the bounce.
     payloads = _function_response_payloads(contents_per_turn)
-    assert payloads, "no function_response reached the second Gemini turn"
+    assert payloads, "no function_response reached the second model turn"
     name, payload = payloads[0]
     assert name == "compute_cross_section"
     assert payload.get("error_code") != "OUT_OF_ALLOWED_SET"
@@ -173,7 +173,7 @@ async def test_layer_producing_tool_response_carries_handle_instruction(fake_llm
     )
 
     payloads = _function_response_payloads(contents_per_turn)
-    assert payloads, "no function_response reached the second Gemini turn"
+    assert payloads, "no function_response reached the second model turn"
     _name, payload = payloads[0]
 
     # The handle announcement is present...

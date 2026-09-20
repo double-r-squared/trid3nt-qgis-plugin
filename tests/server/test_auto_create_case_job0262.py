@@ -66,7 +66,7 @@ def test_root_prompt_creates_named_active_case_before_turn(
 
     directive = asyncio.run(_prepare_user_turn(ws, state, PROMPT))
 
-    assert directive is None  # Gemini path
+    assert directive is None  # the turn goes to the model
     case_id = state.active_case_id
     assert case_id is not None
     case = asyncio.run(_persistence_bound.get_case(case_id))

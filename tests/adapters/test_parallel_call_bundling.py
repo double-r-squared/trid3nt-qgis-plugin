@@ -36,7 +36,7 @@ class _FakeSocket:
 
 @pytest.mark.asyncio
 async def test_producer_yields_three_function_calls_in_one_chunk(fake_llm):
-    """One Gemini chunk carrying 3 function_call Parts surfaces 3
+    """One model chunk carrying 3 function_call Parts surfaces 3
     FunctionCallEvents — none dropped, order preserved."""
     fake_llm.script([
         {
@@ -128,7 +128,7 @@ async def test_producer_yields_mixed_text_and_function_calls(fake_llm):
 
 @pytest.mark.asyncio
 async def test_loop_dispatches_three_parallel_calls_in_one_turn(fake_llm):
-    """Three parallel function_calls in one Gemini response → all three
+    """Three parallel function_calls in one model response -> all three
     dispatch → all three function_response Parts land in the SAME
     follow-up contents list (one re-stream call, not three)."""
     from trid3nt_server import server as agent_server
@@ -166,7 +166,7 @@ async def test_loop_dispatches_three_parallel_calls_in_one_turn(fake_llm):
             "research",
         )
 
-    # All three tools dispatched in one go, in the order Gemini emitted them.
+    # All three tools dispatched in one go, in the order the model emitted them.
     assert [name for (name, _) in dispatch_log] == [
         "fetch_dem",
         "geocode_location",
@@ -192,7 +192,7 @@ async def test_loop_dispatches_three_parallel_calls_in_one_turn(fake_llm):
             snapshot.append((c.role, parts_view))
         captured_contents.append(snapshot)
 
-    # Exactly TWO Gemini calls (turn 1 + turn 2 final narrative) — NOT four
+    # Exactly TWO model calls (turn 1 + turn 2 final narrative), NOT four
     # (would-be split across three sub-turns).
     assert len(captured_contents) == 2, (
         f"parallel calls split across turns: {len(captured_contents)} streams"
@@ -243,7 +243,7 @@ async def test_loop_dispatches_three_parallel_calls_in_one_turn(fake_llm):
 
 @pytest.mark.asyncio
 async def test_loop_dispatches_parallel_calls_split_across_chunks(fake_llm):
-    """When Gemini's one turn streams across multiple chunks (the wire
+    """When the model's one turn streams across multiple chunks (the wire
     shape — chunks are token-level), all function_calls across all chunks
     in that ONE turn are still bundled into a single follow-up turn."""
     from trid3nt_server import server as agent_server

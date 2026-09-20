@@ -282,11 +282,11 @@ async def test_stream_model_reply_multi_turn_loop(fake_llm):
         "fetch_fema_nfhl_zones",
     ], f"unexpected dispatch order: {dispatch_log}"
 
-    # The flood-zone call received the bbox Gemini synthesized from the geocode
+    # The flood-zone call received the bbox the model synthesized from the geocode
     # result — proving the function_response was fed back through.
     assert dispatch_log[2][1].get("bbox") == [-82.0, 26.5, -81.7, 26.8]
 
-    # Four Gemini calls happened (one per turn).
+    # Four model calls happened (one per turn).
     assert len(contents_per_turn) == 4
 
     # Turn 1 contents: only the user message.
@@ -398,7 +398,7 @@ async def test_stream_model_reply_tool_error_does_not_kill_loop(fake_llm):
 
 @pytest.mark.asyncio
 async def test_stream_model_reply_caps_runaway_loop(fake_llm):
-    """A Gemini that emits a function_call every turn is fail-stopped at the cap."""
+    """A model that emits a function_call every turn is fail-stopped at the cap."""
     from trid3nt_server import server as agent_server
     from trid3nt_server.server import SessionState
 

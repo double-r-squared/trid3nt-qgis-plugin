@@ -177,20 +177,20 @@ def _make_fake_chunk_with_text(text: str):
 
 
 @pytest.mark.asyncio
-async def test_multi_turn_loop_tool_not_found_feeds_error_to_gemini(fake_llm):
+async def test_multi_turn_loop_tool_not_found_feeds_error_to_the_model(fake_llm):
     """An unknown-tool call becomes an error envelope on the function_response.
 
     The loop must not propagate the exception out and crash the session; after
     reading the error the model emits a text turn and the loop terminates normally."""
     from trid3nt_server import server as agent_server
 
-    # Turn 1: Gemini calls a tool that doesn't exist.
+    # Turn 1: the model calls a tool that doesn't exist.
     turn1_chunk = _make_fake_chunk_with_function_call(
         "fetch_volcano_lava_flow",  # not in TOOL_REGISTRY
         {"bbox": [-82.0, 26.5, -81.7, 26.8]},
         "call-lava-1",
     )
-    # Turn 2: Gemini narrates it can't help.
+    # Turn 2: the model narrates it can't help.
     turn2_chunk = _make_fake_chunk_with_text(
         "I don't have a volcanic lava flow tool; I cannot model that."
     )
@@ -209,7 +209,7 @@ async def test_multi_turn_loop_tool_not_found_feeds_error_to_gemini(fake_llm):
             sock, state, settings, "Show me lava flows in Hawaii", "research"
         )
 
-    # Capture the function_response payload that Gemini sees on turn 2, rebuilt
+    # Capture the function_response payload the model sees on turn 2, rebuilt
     # from the recorded scripted-provider calls (replaces the retired
     # ``_capture_and_stream`` kwargs snapshot).
     contents_per_turn: list[list[Any]] = []
@@ -237,7 +237,7 @@ async def test_multi_turn_loop_tool_not_found_feeds_error_to_gemini(fake_llm):
 
     # Turn 2 must have received a function_response with the structured error.
     assert len(contents_per_turn) >= 2, (
-        f"Expected at least 2 Gemini turns; got {len(contents_per_turn)}"
+        f"Expected at least 2 model turns; got {len(contents_per_turn)}"
     )
     turn2_parts = [p for (_role, parts) in contents_per_turn[1] for p in parts]
     fn_responses = [p for p in turn2_parts if p[0] == "function_response"]
@@ -260,7 +260,7 @@ async def test_multi_turn_loop_tool_not_found_feeds_error_to_gemini(fake_llm):
         c["payload"].get("delta", "") for c in narrative_chunks
     )
     assert "cannot" in text_seen.lower() or "don't" in text_seen.lower(), (
-        f"Expected Gemini's fallback narrative in output; got: {text_seen!r}"
+        f"Expected the model's fallback narrative in output; got: {text_seen!r}"
     )
 
 

@@ -534,7 +534,7 @@ async def test_e2e_full_turn_replays_complete_stream(
         st.chat_history.append({"role": "user", "text": user_text})
 
     directive = await server._prepare_user_turn(ws, state, "fetch the data")
-    assert directive is None  # Gemini path
+    assert directive is None  # the turn goes to the model
 
     orig = server._stream_model_reply
     server._stream_model_reply = fake_stream

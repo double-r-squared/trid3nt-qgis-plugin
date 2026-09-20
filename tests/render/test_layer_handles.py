@@ -318,7 +318,7 @@ async def test_server_persist_and_seed_helpers_round_trip(tmp_path) -> None:
 
 
 # 5. End-to-end: the function_response the model reads shows L<n>, never the
-#    raw uri (fake Gemini, REAL emit seam in _stream_model_reply).
+#    raw uri (fake model, REAL emit seam in _stream_model_reply).
 
 
 def _make_fake_chunk_with_function_call(name: str, args: dict, call_id: str = "c1"):

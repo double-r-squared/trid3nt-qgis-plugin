@@ -104,7 +104,7 @@ async def test_send_loop_exhausted_is_not_error_envelope():
     """The envelope type is 'loop_exhausted', NOT 'error'.
 
     The web UI distinguishes 'agent ran out of steps' from
-    'Gemini API unavailable' using this type discriminator.
+    'the provider is unavailable' using this type discriminator.
     """
     sock = _FakeSocket()
     await _send_loop_exhausted(sock, "s1")

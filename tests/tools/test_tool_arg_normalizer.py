@@ -1,4 +1,4 @@
-"""Tests for ``tool_arg_normalizer`` — the centralized Gemini kwarg sweep.
+"""Tests for ``tool_arg_normalizer``, the centralized model-kwarg sweep.
 
 Each test names exactly one normalization rule and proves it fires by calling
 ``normalize_args(name, raw, fn)`` against a tiny fake callable whose signature
@@ -126,7 +126,7 @@ def test_passes_known_kwargs_through() -> None:
 
 
 def test_drops_unknown_kwargs_does_not_raise() -> None:
-    """Gemini's invented kwargs (``run_name``, ``scenario_id``) get dropped."""
+    """Kwargs the model invents (``run_name``, ``scenario_id``) get dropped."""
     out = normalize_args(
         "sfincs_flood",
         {

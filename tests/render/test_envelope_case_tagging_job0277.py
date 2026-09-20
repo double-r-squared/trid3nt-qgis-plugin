@@ -91,7 +91,7 @@ async def test_emitter_send_stamps_bound_case() -> None:
 
 @pytest.mark.asyncio
 async def test_dispatch_wrapper_binds_turn_case(monkeypatch) -> None:
-    """The real Gemini dispatch wrapper binds the pin for the whole turn."""
+    """The real dispatch wrapper binds the pin for the whole turn."""
 
     class FakeWS:
         def __init__(self) -> None:

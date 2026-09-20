@@ -299,7 +299,7 @@ async def test_circuit_breaker_error_not_counted_as_additional_failure(fake_llm)
     # Record the original deadline.
     deadline_before = state.circuit_breaker._cooldown_until.get("fetch_dem")
 
-    # Two more turns where Gemini keeps trying fetch_dem — both get short-circuited.
+    # Two more turns where the model keeps trying fetch_dem, both short-circuited.
     invoked = {"n": 0}
 
     # Rounds 0,1 request fetch_dem (short-circuited); round 2 narrates.

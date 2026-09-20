@@ -254,7 +254,7 @@ def test_user_turn_rebinds_to_message_case(monkeypatch, tmp_path):
         )
     )
 
-    assert directive is None  # Gemini path
+    assert directive is None  # the turn goes to the model
     # Re-bound BEFORE the sync (the sync observed the corrected Case).
     assert synced_to == [CASE_B]
     assert st.active_case_id == CASE_B
