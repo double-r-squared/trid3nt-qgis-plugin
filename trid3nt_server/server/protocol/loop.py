@@ -11,13 +11,14 @@ from trid3nt_contracts.payload_warning import PayloadConfirmationEnvelopePayload
 from trid3nt_contracts.processing_contracts import ProcessingResponsePayload
 from trid3nt_contracts.region_choice import RegionChoiceProvidedEnvelopePayload
 from trid3nt_contracts.secrets import CredentialProvidedEnvelopePayload, SecretAddEnvelopePayload
-from trid3nt_contracts.ws import CancelPayload, ErrorPayload, SessionResumePayload, SpatialInputResponsePayload, UserMessagePayload
+from trid3nt_contracts.ws import CancelPayload, ErrorPayload, LayerResponsePayload, SessionResumePayload, SpatialInputResponsePayload, UserMessagePayload
 from trid3nt_server.adapters.model_selection import ModelSettings, load_settings
 from trid3nt_server.gates.pending import _resolve_pending_confirmation
 from trid3nt_server.main import MAX_TURNS_PER_SESSION
 from trid3nt_server.server.dispatch.emitter import _assert_sync_offload_safe, _dispatch_tool_and_persist, _ensure_emitter
 from trid3nt_server.server.interactions import _resolve_pending_credential, _resolve_pending_tool_choice
 from trid3nt_server.server.processing import _resolve_pending_processing
+from trid3nt_server.tools.fetchers._router.executors.qgis_provider import resolve_pending_layer
 from trid3nt_server.server.protocol.auth import _ensure_auth_handshake, _handle_auth_token, _handle_session_resume
 from trid3nt_server.server.protocol.connections import _deregister_session_connection, session_connection_count
 from trid3nt_server.server.protocol.handlers import _BG_TASKS, _drain_bg_tasks, _handle_dev_tool_invoke, _handle_layer_delete, _handle_secret_add
@@ -565,6 +566,38 @@ def _make_handler(settings: ModelSettings):
                             state.session_id,
                             proc.request_id,
                             proc.status,
+                        )
+
+                    elif msg_type == "layer-response":
+                        # The session opened a provider layer the daemon
+                        # borrowed and answered; resolving the paused future
+                        # hands the fetch its staged object or the provider's
+                        # own text. May arrive on a sibling connection.
+                        try:
+                            layer = LayerResponsePayload.model_validate(
+                                payload_dict
+                            )
+                        except ValidationError as ve:
+                            await _send_error(
+                                websocket,
+                                state.session_id,
+                                "TOOL_PARAMS_INVALID",
+                                f"layer-response invalid: {ve.errors()[0]['msg']}",
+                            )
+                            continue
+                        if not resolve_pending_layer(state.session_id, layer):
+                            logger.warning(
+                                "layer-response for unknown/closed key=%s "
+                                "session=%s",
+                                layer.key,
+                                state.session_id,
+                            )
+                            continue
+                        logger.info(
+                            "layer-response accepted session=%s key=%s uri=%s",
+                            state.session_id,
+                            layer.key,
+                            layer.uri,
                         )
 
                     elif msg_type == "tool-choice":
