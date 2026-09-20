@@ -119,10 +119,69 @@ def test_the_seaward_edge_is_opened_so_the_spectrum_has_somewhere_to_enter():
     from trid3nt_server.workflows.telemac.templates.nearshore_waves import (
         nearshore_waves as template)
 
-    ops = [op.fn for op in template.MESH.ops]
-    assert "identify_ocean_boundary_sections" in ops
+    ops = {op.fn: op for op in template.MESH.ops}
     assert "set_bed" in ops
     assert template.MESH_ON == "domain"
+    # THE DECK STATES THE DEPTH, never the library. The library's own default is
+    # set for a shelf-scale domain and is deeper than every node of a nearshore
+    # window, so inheriting it opens nothing and walls the whole rim.
+    stated = ops["identify_ocean_boundary_sections"].kwargs["depth_threshold"]
+    assert stated.name == "open_depth_threshold_m"
+    param = next(p for p in _workflow().params
+                 if p.name == "open_depth_threshold_m")
+    assert (param.default, param.door) == (-12.0, "scenario")
+
+
+@pytest.mark.asyncio
+async def test_a_window_whose_rim_is_all_wall_refuses_rather_than_solving_zeros(
+        monkeypatch, tmp_path):
+    """A sea state prescribed across an edge that was never designated enters
+    nowhere: the domain opens empty and stays empty, and every wave answer is a
+    green zero. The settle names the deck and the depth it stated."""
+    import numpy as np
+
+    from trid3nt_server.workflows.telemac.authoring import assembler as asm_mod
+    from trid3nt_server.workflows.telemac.errors import TelemacError
+
+    monkeypatch.setenv("TRID3NT_RUNS_DIR", str(tmp_path))
+    # A synthetic mesh whose every boundary node is solid wall, which is what a
+    # coastal window returns when no stretch of it reaches the stated depth.
+    monkeypatch.setattr(asm_mod, "read_topology", lambda _uri: {
+        "roles": {}, "liquid_boundary_order": [],
+        "liquid_boundary_prescribes": [],
+        "states": "this domain names no liquid boundary; its whole boundary "
+                  "is solid wall"})
+    monkeypatch.setattr(asm_mod, "mesh_nodes",
+                        lambda _mesh: (np.zeros((4, 2)), np.zeros(4)))
+
+    with pytest.raises(TelemacError) as raised:
+        await asm_mod.open_water(mesh=_closed_mesh(), duration_s=_HOUR_S,
+                                 deck=_TOOL, open_depth_threshold_m=-12.0)
+    assert raised.value.error_code == "TELEMAC_MESH_CLOSED"
+    assert _TOOL in str(raised.value) and "-12 m" in str(raised.value)
+
+
+def _closed_mesh():
+    """A mesh record over a window nothing designated open."""
+    from trid3nt_server.workflows.mesh.artifact import MeshArtifact
+
+    artifact = MeshArtifact(
+        mesh_id="M01", name="Duck, NC", mode="om2d",
+        display_uri="s3://m/M01/mesh.2dm", slf_uri="s3://m/M01/coast.slf",
+        cli_uri="s3://m/M01/coast.cli",
+        topology_uri="s3://m/M01/mesh_topology.json",
+        recipe_uri="s3://m/M01/mesh_recipe.jsonl", crs_authid="EPSG:32618",
+        has_bathymetry=True, utm_epsg=32618, node_count=252, element_count=400,
+        bbox=(-75.755, 36.170, -75.725, 36.200),
+        provenance={"bed_source": "bluetopo"})
+    return {"artifact": artifact, "mesh_id": artifact.mesh_id,
+            "slf_uri": artifact.slf_uri, "cli_uri": artifact.cli_uri,
+            "topology_uri": artifact.topology_uri,
+            "display_uri": artifact.display_uri,
+            "recipe_uri": artifact.recipe_uri,
+            "node_count": artifact.node_count,
+            "element_count": artifact.element_count, "min_edge_m": 40.0,
+            "provenance": dict(artifact.provenance)}
 
 
 def test_the_deck_states_the_physics_the_question_is_about():

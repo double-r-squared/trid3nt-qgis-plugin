@@ -1040,6 +1040,16 @@ package DataSeam {
         record's own is turned through 180 to reach. Neither is folded silently
         into a number: the journal says the buoy, how far off it stands, the
         moment, what it reported, and both turns.
+
+        A PRESCRIBED SEA STATE NEEDS AN EDGE TO ENTER BY. The deck that imposes
+        one states the depth a boundary stretch has to reach for it to be
+        designated open, on the scenario door, and every stretch that reaches it
+        opens; no deck inherits the meshing library's own default, which is set
+        for a shelf-scale domain and is deeper than every node of a nearshore
+        window. A mesh where nothing reaches the stated depth is sealed, and one
+        settle refuses it for every deck that prescribes a sea state, naming the
+        deck and the depth it stated - a sealed domain solves green with every
+        wave answer zero, which is the one failure a reader cannot see.
         */
     }
 
@@ -1451,6 +1461,12 @@ package DataSeam {
         "tests/inputs/test_wave.py::test_two_columns_in_one_unit_refuse_rather_than_the_first_being_taken";
     verify requirement ASeaStateIsAReservedSlot by
         "tests/inputs/test_wave.py::test_the_two_conversions_a_deck_needs_are_made_here";
+    verify requirement ASeaStateIsAReservedSlot by
+        "tests/telemac/test_nearshore_waves_template.py::test_the_seaward_edge_is_opened_so_the_spectrum_has_somewhere_to_enter";
+    verify requirement ASeaStateIsAReservedSlot by
+        "tests/telemac/test_nearshore_waves_template.py::test_a_window_whose_rim_is_all_wall_refuses_rather_than_solving_zeros";
+    verify requirement ASeaStateIsAReservedSlot by
+        "tests/telemac/test_wave_driven_currents_template.py::test_the_seaward_rim_is_opened_so_the_tide_and_the_spectrum_both_enter";
 
     satisfy requirement ASeriesIsAlignedToTheRunsEventTime by seriesOnTheRunsClock;
     satisfy requirement ASeriesIsAlignedToTheRunsEventTime by freeSurfaceReader;

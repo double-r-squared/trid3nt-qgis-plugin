@@ -135,9 +135,16 @@ def test_the_seaward_rim_is_opened_so_the_tide_and_the_spectrum_both_enter():
     """One rim, two roles: the code quad an ocean section is written under
     prescribes a level and leaves the velocity free, which is the host's tidal
     edge and the wave deck's spectral edge at once."""
-    named = [op.fn for op in template.MESH.ops]
-    assert "identify_ocean_boundary_sections" in named
+    named = {op.fn: op for op in template.MESH.ops}
     assert "set_bed" in named
+    # THE DECK STATES THE DEPTH the rim is opened at, never the library: its own
+    # default is deeper than every node of a coastal window, and a walled rim
+    # admits neither the tide nor the spectrum.
+    stated = named["identify_ocean_boundary_sections"].kwargs["depth_threshold"]
+    assert stated.name == "open_depth_threshold_m"
+    param = next(p for p in _workflow().params
+                 if p.name == "open_depth_threshold_m")
+    assert (param.default, param.door) == (-12.0, "scenario")
 
 
 def test_the_answers_are_the_two_modules_own_rows():

@@ -42,8 +42,8 @@ logger = logging.getLogger("trid3nt_server.workflows.telemac.authoring.assembler
 
 __all__ = ["BASIN_BOUNDARY", "BASIN_GEOMETRY", "HARBOUR_GEOMETRY",
            "case_section", "mesh_nodes", "new_rundir", "open_channel",
-           "open_water", "settle_dredge", "settle_harbour",
-           "settle_outlet_rating", "settle_release",
+           "open_water", "refuse_a_sealed_domain", "settle_dredge",
+           "settle_harbour", "settle_outlet_rating", "settle_release",
            "stage_run", "stage_telemac_manifest", "to_utm"]
 
 #: The names the run directory holds an open-water domain's staged geometry
@@ -1003,6 +1003,25 @@ def _domain_unmeasured(message: str) -> Exception:
     return TelemacError(message, error_code="TELEMAC_DOMAIN_UNMEASURED")
 
 
+def refuse_a_sealed_domain(topology: Mapping[str, Any], *, deck: str,
+                           open_depth_threshold_m: float) -> None:
+    """A prescribed sea state needs an edge to enter the domain through.
+
+    Every deck that imposes one states the depth a boundary stretch has to reach
+    for it to be designated open; a mesh where none does is sealed, and the
+    solver runs it green with every wave answer zero."""
+    if topology["roles"].get("open"):
+        return
+    raise TelemacError(
+        f"{deck}: the accepted mesh designates no liquid boundary, so a "
+        f"prescribed sea state has no edge to enter the domain through - no "
+        f"boundary stretch reaches {open_depth_threshold_m:g} m, the depth this "
+        f"deck states an open edge at, and {topology['states']}. Ask over a "
+        f"window whose seaward edge reaches that depth, or state "
+        f"open_depth_threshold_m at a depth this window does reach.",
+        error_code="TELEMAC_MESH_CLOSED")
+
+
 async def open_water(
     *,
     mesh: dict[str, Any],
@@ -1014,6 +1033,8 @@ async def open_water(
     result: str = "results.slf",
     mesh_resolution_m: float | None = None,
     continue_from: str | None = None,
+    deck: str = "",
+    open_depth_threshold_m: float | None = None,
 ) -> dict[str, Any]:
     """A BODY OF WATER OPENS at a level over its bed: the mesh it was handed, the
     clock the run turns on, the files the box is given, and THE OPENING - the
@@ -1039,6 +1060,12 @@ async def open_water(
                                             len(node_xy))
     topology = await asyncio.to_thread(
         read_topology, _mesh_field(mesh, "topology_uri", missing=_mesh_missing))
+    # A deck that STATES the depth an open edge is designated at is one whose
+    # sea state is prescribed across that edge; a deck that states none names a
+    # body of water that may legitimately be closed.
+    if open_depth_threshold_m is not None:
+        refuse_a_sealed_domain(topology, deck=deck or facts["mesh_name"],
+                               open_depth_threshold_m=open_depth_threshold_m)
     start_time_s = float(initial_state["start_s"] or 0.0)
     duration_s = _seconds(duration_s)
     slug = _slug(name or facts["mesh_name"])
@@ -1552,6 +1579,8 @@ async def settle_harbour(
     wave_direction_deg: float,
     reflection_coef: float,
     result_basename: str,
+    deck: str,
+    open_depth_threshold_m: float,
 ) -> dict[str, Any]:
     """What the accepted harbour mesh measures -> what the harbour sheet reads.
 
@@ -1562,14 +1591,9 @@ async def settle_harbour(
     utm_epsg = int(facts["utm_epsg"])
     topology = read_topology(_mesh_field(mesh, "topology_uri",
                                          missing=_harbour_mesh_missing))
-    open_nodes = [int(n) for n in (topology["roles"].get("open") or ())]
-    if not open_nodes:
-        raise TelemacError(
-            "the accepted mesh designates no liquid boundary, so a prescribed "
-            f"incident wave has no edge to enter the domain through: {topology['states']}. "
-            "Name an open stretch on the mesh (identify_ocean_boundary_sections) "
-            "before solving a wave on it.",
-            error_code="ARTEMIS_MESH_CLOSED")
+    refuse_a_sealed_domain(topology, deck=deck,
+                           open_depth_threshold_m=open_depth_threshold_m)
+    open_nodes = [int(n) for n in topology["roles"]["open"]]
     cli_text, boundary_nodes = _boundary_file(mesh, missing=_harbour_mesh_missing)
     points_utm, _cells, node_bed, _lonlat = await asyncio.to_thread(
         read_accepted_mesh_nodes,

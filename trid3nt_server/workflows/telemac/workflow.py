@@ -821,6 +821,13 @@ class TelemacWorkflow(Workflow):
                     # WHICH RUN THIS ONE CARRIES ON FROM: a rerun ledger row,
                     # not a value the question asks about.
                     "continue_from": Continued,
+                    # A deck that STATES the depth an open edge is designated at
+                    # is one whose sea state is prescribed across that edge, and
+                    # a mesh where nothing reaches it is sealed.
+                    **({"deck": self.name,
+                        "open_depth_threshold_m":
+                            ParamRef("open_depth_threshold_m")}
+                       if "open_depth_threshold_m" in declared else {}),
                     **({"name": ParamRef("name")}
                        if "name" in declared else {})})
         produce = (self._reading_day() + channel + self._placements(domain)

@@ -97,7 +97,9 @@ _HARBOUR = Measured(
            "wave_height_m": ParamRef("wave_height_m"),
            "wave_direction_deg": Ref("stated.DIRECTION_OF_WAVE_PROPAGATION"),
            "reflection_coef": ParamRef("reflection_coef"),
-           "result_basename": _RESULT})
+           "result_basename": _RESULT,
+           "deck": "artemis_harbor_agitation",
+           "open_depth_threshold_m": ParamRef("open_depth_threshold_m")})
 
 
 class STEERING(ART):
