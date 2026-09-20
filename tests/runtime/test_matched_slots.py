@@ -355,17 +355,66 @@ def test_a_gauge_serving_two_classes_fills_each_slot_from_its_own_row(world,
     monkeypatch.setitem(SPECS, "fetch_gauges", gauge)
     env = _env()
     level = _row(Data.need("water level series"), "level")
-    told = interpreter._what_the_record_reports(env, level, "fetch_gauges")
+    told = interpreter._what_the_record_reports(
+        env, level, interpreter._coverage_row("fetch_gauges",
+                                              "water level series"))
     assert told["field"] == "gage_height_ft"
     assert told["series_field"] == "stage_series_csv"
     assert told["above_field"] == "gauge_datum_ft"
-    # every column the source states a unit for is readable, whichever row
-    # stated it.
-    assert told["column_units"]["discharge_cfs"] == "ft3/s"
+    # the columns the LEVEL row states, and none the flow row states.
+    assert told["column_units"] == {"gage_height_ft": "ft",
+                                    "stage_series_csv": "ft",
+                                    "gauge_datum_ft": "ft"}
     discharge = _row(Data.need("discharge series"), "discharge")
-    flow = interpreter._what_the_record_reports(env, discharge, "fetch_gauges")
+    flow = interpreter._what_the_record_reports(
+        env, discharge, interpreter._coverage_row("fetch_gauges",
+                                                  "discharge series"))
     assert flow["field"] == "discharge_cfs"
     assert flow["series_field"] == "time_series_csv"
+    assert flow["column_units"]["time_series_csv"] == "ft3/s"
+
+
+def test_one_column_name_in_two_units_is_read_off_the_row_that_was_matched(
+        world, monkeypatch):
+    """A tide service publishing a level in metres and a water temperature in
+    degC under ONE column name: the level slot reads m and the observe slot
+    reads degC, because each is told what the row ITS match produced states -
+    never a flattening across the rows, which would read the temperature's unit
+    on the level."""
+    measured = coverage("water level series", series=True, latest=None,
+                        datum=None, kind="stations",
+                        units={"water_level": "m", "time_series_csv": "m"},
+                        value="water_level", window_column="time_series_csv")
+    tides = _Spec([measured.model_copy(update={
+        "kind": "predicted", "units": {"predicted_wl": "m",
+                                       "time_series_csv": "m"},
+        "value_column": "predicted_wl"}), measured,
+        coverage("water quality sample", series=True, latest=None, datum=None,
+                 kind="stations",
+                 units={"water_temperature": "degC", "time_series_csv": "degC"},
+                 value="water_temperature",
+                 window_column="time_series_csv").model_copy(
+                     update={"vocabulary": {"TEMPERATURE": "water_temperature"}})],
+        "vector", {"bbox": None, "start_date": None, "end_date": None})
+    monkeypatch.setitem(SPECS, "fetch_tides", tides)
+    env = _env(event_time="2026-09-13T22:00:00Z")
+
+    def told(row, data_class):
+        choice, _value = asyncio.run(
+            interpreter._probe(env, row, data_class, row.name))
+        assert choice.picked == "fetch_tides"
+        return interpreter._what_the_record_reports(
+            env, row, interpreter._matched_row(choice, choice.picked))
+
+    level = told(_row(Data.need("water level series"), "level"),
+                 "water level series")
+    # the MEASURED row, not the first row of the class the spec states.
+    assert level["field"] == "water_level"
+    assert level["column_units"]["time_series_csv"] == "m"
+    observed = told(_row(Data.need("water quality sample", of="TEMPERATURE"),
+                         "observe"), "water quality sample")
+    assert observed["field"] == "water_temperature"
+    assert observed["column_units"]["time_series_csv"] == "degC"
 
 
 def _reach_source(monkeypatch):

@@ -423,7 +423,8 @@ async def _produce(env: _Env, decl: DataDecl) -> Any:
         if value is not _UNREPLAYABLE:
             env.data_records.append(cached)
             logger.info("data %s REPLAYED from ledger", decl.name)
-            return await _ingested(env, decl, value, cached.runner)
+            return await _ingested(env, decl, value, _coverage_row(
+                cached.runner, decl.data_class))
     label = _data_step_label(decl.name)
     if decl.is_context:
         return await _context(env, decl, label)
@@ -434,7 +435,8 @@ async def _produce(env: _Env, decl: DataDecl) -> Any:
         record, index=-1, node=_data_step_label(decl.name)))
     if env.ledger is not None:
         await env.ledger.record_data(decl.name, record)
-    return await _ingested(env, decl, value, producer.runner)
+    return await _ingested(env, decl, value,
+                           _coverage_row(producer.runner, decl.data_class))
 
 
 async def _matched(env: _Env, decl: DataDecl) -> Any:
@@ -452,7 +454,7 @@ async def _matched(env: _Env, decl: DataDecl) -> Any:
     # takes its turn rather than the run standing on the first answer.
     choice, value = await _probe(
         env, decl, decl.data_class, decl.name,
-        read=lambda answer, picked: _ingested(env, decl, answer, picked))
+        read=lambda answer, row: _ingested(env, decl, answer, row))
     if value is None:
         if decl.is_optional or decl.is_context:
             # A slot nothing measured is an absence the run STATES - the run's
@@ -579,7 +581,7 @@ async def _probe(env: _Env, decl: DataDecl, data_class: str, label: str, *,
     A source that held nothing over this domain is dropped and the next takes
     its turn, which is how the list a reader sees says what the world answered
     rather than what the sort preferred. ``read`` is the slot's own reading of an
-    answer, run HERE so a record this slot cannot read drops its rung like an
+    answer, handed the row that was matched and run HERE so a record this slot cannot read drops its rung like an
     empty one. ``None`` where none of them answered."""
     choice = match(await _need(env, decl, data_class, label),
                    sources_with_coverage())
@@ -590,7 +592,7 @@ async def _probe(env: _Env, decl: DataDecl, data_class: str, label: str, *,
         try:
             value = await _produce(env, row)
             if read is not None:
-                value = await read(value, choice.picked)
+                value = await read(value, _matched_row(choice, choice.picked))
         except asyncio.CancelledError:
             raise
         except Exception as exc:  # noqa: BLE001 - an empty source drops a rung
@@ -625,13 +627,30 @@ def _spec_of(fetcher: str) -> Any:
     return get_spec(fetcher)
 
 
-def _coverage_row(fetcher: str, data_class: str) -> Any:
+def _coverage_row(fetcher: str, data_class: str, kind: str = "") -> Any:
     """The row THIS source states about THIS class, or ``None``.
 
     A source serving two classes states one row each, and the row a slot reads
-    is the row of the class it asked for."""
+    is the row of the class it asked for; where it serves one class two ways - a
+    measured record beside a prediction - the ``kind`` the match ranked says
+    which of the two, because each publishes its own columns and units. A row
+    asking about no class at all - a derive the runtime declared - names none."""
+    if not data_class:
+        return None
     return next((row for row in getattr(_spec_of(fetcher), "coverage", ())
-                 if row.data_class == data_class), None)
+                 if row.data_class == data_class
+                 and (not kind or row.kind == kind)), None)
+
+
+def _matched_row(choice: SourceChoice, fetcher: str) -> Any:
+    """THE COVERAGE ROW the match produced, or ``None`` where it picked nothing.
+
+    The ranked row names it by both facts a source can serve twice under - the
+    class the slot asked for and the kind the row was ranked on - so what a slot
+    is told about the record is the statement of the row that answered it."""
+    kind = next((row.kind for row in choice.rows
+                 if row.fetcher == fetcher and not row.excluded), "")
+    return _coverage_row(fetcher, choice.need, kind) if fetcher else None
 
 
 def _value_column(fetcher: str, data_class: str) -> str:
@@ -814,7 +833,7 @@ async def _domain_companion(env: _Env, named: str) -> Any:
 
 
 async def _ingested(env: _Env, decl: DataDecl, value: Any,
-                    runner: str = "") -> Any:
+                    row: Any = None) -> Any:
     """A SLOT's value through the one ingestion its role reads; a plain row's
     value as it came.
 
@@ -832,7 +851,7 @@ async def _ingested(env: _Env, decl: DataDecl, value: Any,
                                           await _asked_of(env, decl)))
     coercion.update(_the_window_it_is_cut_from(decl))
     coercion.update(await _on_the_run_s_frame(env, decl, value))
-    coercion.update(_what_the_record_reports(env, decl, runner))
+    coercion.update(_what_the_record_reports(env, decl, row))
     ingested = await asyncio.to_thread(ingest_slot, decl.role, value,
                                        label=decl.name, **coercion)
     if decl.role == DOMAIN and ingested is not None:
@@ -918,28 +937,25 @@ def _observed_unit(env: _Env, decl: DataDecl, observed: str) -> str:
 
 
 def _what_the_record_reports(env: _Env, decl: DataDecl,
-                             runner: str) -> dict[str, Any]:
+                             row: Any) -> dict[str, Any]:
     """What an OBSERVATION slot is told about the record it was handed.
 
-    The unit of each value column is the SOURCE's own statement, read off the
-    coverage row of whichever fetcher answered - a record that carries no unit
-    column is still read in the unit it was measured in, never in the unit the
-    slot wanted. The moment the run opens at and how long it covers are the
-    run's, so the series is placed on the run's clock and a record that stops
-    early refuses."""
+    Every word of it is THE MATCHED ROW's own statement, never a reading across
+    the other rows the source serves: one service publishing a level in metres
+    and a temperature in degrees under the same column name states a row each,
+    and the units of the row nobody matched are another measurement's. A record
+    that carries no unit column is still read in the unit it was measured in,
+    never in the unit the slot wanted. The moment the run opens at and how long
+    it covers are the run's, so the series is placed on the run's clock and a
+    record that stops early refuses."""
     if decl.role not in _READS_A_RECORD:
         return {}
     told: dict[str, Any] = {"window_s": env.window_s}
-    rows = list(getattr(_spec_of(runner), "coverage", ())) if runner else []
-    told["column_units"] = {column: unit for row in rows
-                            for column, unit in row.units.items()}
-    row = next((r for r in rows if r.data_class == decl.data_class), None) \
-        if decl.data_class else None
     if row is not None:
         # A SLOT THAT STATED A NEED names no column: which column carries the
         # reading, the window and the zero is the source's own statement.
-        told.update(field=row.value_column, series_field=row.series_column,
-                    above_field=row.above_column)
+        told.update(column_units=dict(row.units), field=row.value_column,
+                    series_field=row.series_column, above_field=row.above_column)
     # HOW THE RECORD MOVES IN TIME is the source's own class where the row that
     # answered states one, else the slot's role: a flow is a per-time total and a
     # level is read at an instant. No author states it.
@@ -1040,7 +1056,8 @@ async def _context(env: _Env, decl: DataDecl, label: str) -> Any:
         # its slot finds nothing usable in - sites that report another
         # characteristic, a survey with no soundings - held nothing for this run
         # either, and a context row says so rather than refusing.
-        ingested = await _ingested(env, decl, value, decl.producer.runner)
+        ingested = await _ingested(env, decl, value, _coverage_row(
+            decl.producer.runner, decl.data_class))
     except asyncio.CancelledError:
         raise
     except Exception as exc:  # noqa: BLE001 - any empty source is the absence
