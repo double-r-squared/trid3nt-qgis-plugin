@@ -61,10 +61,6 @@ normalize:
   crs: "EPSG:4326"
   units: m
   quantity: depth_below_datum
-  # Each survey states its OWN vertical datum (CRD on the Willamette, MLLW on a
-  # coast, NAVD88 elsewhere), so this source cannot state one for all of them: the
-  # datum rides on every row instead, and a survey that states none refuses.
-  datum: null
 
 output:
   layer_type: vector
@@ -106,7 +102,11 @@ coverage:
     window:
       series: false
     resolution_m: 1.0
-    datum: null
+    # Each survey states its OWN zero (CRD on the Willamette, LWD on the lakes,
+    # MLLW on a coast, NAVD88 elsewhere), so no one word answers for the source:
+    # the datum rides on every row from the survey's own points, and a survey
+    # whose points state none refuses.
+    datum: record
     units:
       depth_below_datum_m: m
     value_column: depth_below_datum_m
@@ -129,7 +129,7 @@ coverage:
     window:
       series: false
     resolution_m: 1.0
-    datum: null
+    datum: record
     units:
       depth_below_datum_m: m
     value_column: depth_below_datum_m
