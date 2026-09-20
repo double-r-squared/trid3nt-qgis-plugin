@@ -10,8 +10,11 @@ a direct solver is factorised whole and runs serial whatever was asked.
 
 from __future__ import annotations
 
+from typing import get_args
+
 import pytest
 
+from trid3nt_contracts.execution import ComputeClass
 from trid3nt_server.workflows.runtime.levers import COMPUTE_CORES, cores_for
 from trid3nt_server.workflows.solver.compute_class import (
     COMPUTE_CLASS_ALIAS,
@@ -29,9 +32,11 @@ from trid3nt_server.workflows.telemac.modules.sheet import (
 
 
 def test_every_rung_the_dispatcher_serves_is_sized_in_cores():
-    """One table, so the rungs a caller is offered and the rungs a solve is
-    partitioned on cannot drift apart."""
+    """One table, so the rungs a caller is offered, the rungs a solve is
+    partitioned on, and the rungs the dispatch handle accepts cannot drift
+    apart."""
     assert set(COMPUTE_CLASS_ALIAS.values()) == set(COMPUTE_CORES)
+    assert set(COMPUTE_CLASS_ALIAS.values()) == set(get_args(ComputeClass))
 
 
 def test_a_class_outside_the_ladder_refuses_by_name():

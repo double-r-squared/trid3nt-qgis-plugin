@@ -39,7 +39,7 @@ __all__ = [
 
 # Open enum: the compute classes a solver may request. The handle shape does
 # NOT change per backend, so a new backend adds a class and nothing else.
-ComputeClass = Literal["small", "standard", "large", "gpu"]
+ComputeClass = Literal["small", "standard", "large", "xlarge", "gpu"]
 
 
 
