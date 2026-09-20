@@ -66,7 +66,7 @@ Module `telemac2d`, proving run `01M2VDCVVHYA2PSTPY4HC01SZ7`.
 
 ICE COVER under a cold snap: when water freezes over, and how thick.
 
-Module `telemac2d`, proving run `01M2WXJS87WECYEZ42A3G3FPFW`.
+Module `telemac2d`, proving run `01M2YR0097ETBRS991GWCZXR21`.
 
 ## [`telemac_micropollutant_release`](telemac_micropollutant_release.md)
 

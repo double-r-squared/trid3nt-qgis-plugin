@@ -8,7 +8,9 @@ re-derived here, nothing that reports refusing, the note a run says, and the
 WINDOW a run's own moment closes: a sample from another decade is not ranked,
 a sample inside the window is, and nothing inside it refuses - and the WINDOW
 itself: the whole series kept beside the reading, in the slot's unit, on the
-slot's datum, and absent where the record reported one moment."""
+slot's datum, and absent where the record reported one moment - and the
+CADENCE a record speaks at: a daily record's evening stamp serves that day's
+noon, a six-minute gauge reaches six minutes on and no further."""
 
 from __future__ import annotations
 
@@ -280,3 +282,43 @@ def test_a_gauge_that_publishes_no_zero_refuses_rather_than_reading_a_height() -
                     to_units="m", to_datum="NAVD88",
                     caption="a water-surface elevation")
     assert caught.value.error_code == "OBSERVATION_GAUGE_ZERO_UNSTATED"
+
+
+def _station(csv: str) -> dict:
+    return {"type": "FeatureCollection", "features": [{
+        "type": "Feature",
+        "geometry": {"type": "Point", "coordinates": [-122.68, 45.51]},
+        "properties": {"station_id": "SCO", "station_name": "a reservoir",
+                       "unit": "m", "time_series_csv": csv}}]}
+
+
+def test_a_daily_record_serves_the_noon_it_stamped_that_evening() -> None:
+    """The day's reading is the day's reading: a record that opens on the run's
+    own day is read forward to its evening stamp rather than refusing."""
+    found = observation(_station("2026-09-18T19:00Z,1041.48\n"
+                                 "2026-09-19T19:00Z,1041.52\n"),
+                        at="2026-09-18T12:00:00Z", caption="a water level")
+    assert found.value == pytest.approx(1041.48)
+    assert found.sampled == "2026-09-18T19:00Z"
+
+
+def test_a_six_minute_gauge_reaches_six_minutes_on_and_no_further() -> None:
+    found = observation(_station("2026-09-18T12:06Z,3.10\n"
+                                 "2026-09-18T12:12Z,3.12\n"
+                                 "2026-09-18T12:18Z,3.14\n"),
+                        at="2026-09-18T12:00:00Z", caption="a water level")
+    assert found.sampled == "2026-09-18T12:06Z"
+    with pytest.raises(ObservationError):
+        observation(_station("2026-09-18T12:12Z,3.12\n"
+                             "2026-09-18T12:18Z,3.14\n"),
+                    at="2026-09-18T12:00:00Z", caption="a water level",
+                    code="TELEMAC_LEVEL_UNMEASURED")
+
+
+def test_a_sample_two_cadences_ahead_is_refused() -> None:
+    with pytest.raises(ObservationError) as caught:
+        observation(_station("2026-09-20T19:00Z,1041.20\n"
+                             "2026-09-21T19:00Z,1041.35\n"),
+                    at="2026-09-18T12:00:00Z", caption="a water level",
+                    code="TELEMAC_LEVEL_UNMEASURED")
+    assert caught.value.error_code == "TELEMAC_LEVEL_UNMEASURED"

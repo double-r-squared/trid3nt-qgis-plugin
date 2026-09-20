@@ -42,80 +42,80 @@ The values the template declares. `desc` is what the model reads when it fills o
 | field | the proving run's value |
 |---|---|
 | `freeze_time_s` | not asked: the cover at the point did not freeze within the window |
-| `domain_freeze_time_s` | 5274.0 |
-| `peak_ice_thickness_m` | 0.28161486983299255 |
+| `domain_freeze_time_s` | not asked: no node in the domain froze within the window |
+| `peak_ice_thickness_m` | 0.0012897340347990394 |
 | `final_cover_fraction` | 0.0 |
-| `mesh_size_m` | 11.711 |
+| `mesh_size_m` | 20.438 |
 
 It publishes these layers onto the canvas:
 
-- Input: river reach (river_reach)
-- Input: ehydro surveys (ehydro_surveys)
-- Input: bed elevation (dem, 3DEP 1-10 m US lidar (default 10 m); Copernicus GLO-30 30 m global via source=copernicus, datum NAVD88 (metres, positive up))
-- Ice station (user) - river_reach_domain
-- Input: asos metar (asos_metar)
-- Input: usgs water quality (usgs_water_quality)
-- Velocity u over time (river_reach_domain_mesh)
-- Velocity v over time (river_reach_domain_mesh)
-- Water depth over time (river_reach_domain_mesh)
-- Free surface over time (river_reach_domain_mesh)
-- Bottom (m) at t = 21447.6 s (river_reach_domain_mesh)
-- Froude number over time (river_reach_domain_mesh)
-- Scalar flowrate over time (river_reach_domain_mesh)
-- Scalar velocity over time (river_reach_domain_mesh)
-- Temperature over time (river_reach_domain_mesh)
-- Frazil over time (river_reach_domain_mesh)
-- Ice cover frac. over time (river_reach_domain_mesh)
-- Ice cover thick. over time (river_reach_domain_mesh)
-- Solrad clear sky over time (river_reach_domain_mesh)
-- Solrad cloudy over time (river_reach_domain_mesh)
-- Net solrad over time (river_reach_domain_mesh)
-- Effective solrad over time (river_reach_domain_mesh)
-- Evapo heat flux over time (river_reach_domain_mesh)
-- Conduc heat flux over time (river_reach_domain_mesh)
-- Precip heat flux over time (river_reach_domain_mesh)
-- Frazil theta0 over time (river_reach_domain_mesh)
-- Frazil theta1 over time (river_reach_domain_mesh)
-- Reentrainment over time (river_reach_domain_mesh)
-- Settling vel. over time (river_reach_domain_mesh)
-- Solid ice conc. over time (river_reach_domain_mesh)
-- Solid ice thick. over time (river_reach_domain_mesh)
-- Equiv. surface over time (river_reach_domain_mesh)
-- Top ice cover over time (river_reach_domain_mesh)
-- Bottom ice cover over time (river_reach_domain_mesh)
-- Total ice thick. over time (river_reach_domain_mesh)
-- Characteristics over time (river_reach_domain_mesh)
-- Particles number over time (river_reach_domain_mesh)
-- Total concentrat over time (river_reach_domain_mesh)
-- Nb particle over time (river_reach_domain_mesh)
-- Frazil s over time (river_reach_domain_mesh)
-- Nb particle s over time (river_reach_domain_mesh)
-- Temperature s over time (river_reach_domain_mesh)
-- river_reach_domain_mesh
+- Input: domain (nhd_waterbody_at_point)
+- Input: discharge (usgs_nwis_gauges)
+- Input: discharge (nws_nwps_river_forecast)
+- Input: level (usbr_hydromet)
+- Ice station (user) - nhd_waterbody
+- Input: weather (asos_metar)
+- Velocity u over time (nhd_waterbody_mesh)
+- Velocity v over time (nhd_waterbody_mesh)
+- Water depth over time (nhd_waterbody_mesh)
+- Free surface over time (nhd_waterbody_mesh)
+- Bottom (m) at t = 21600 s (nhd_waterbody_mesh)
+- Froude number over time (nhd_waterbody_mesh)
+- Scalar flowrate over time (nhd_waterbody_mesh)
+- Scalar velocity over time (nhd_waterbody_mesh)
+- Temperature over time (nhd_waterbody_mesh)
+- Frazil over time (nhd_waterbody_mesh)
+- Ice cover frac. over time (nhd_waterbody_mesh)
+- Ice cover thick. over time (nhd_waterbody_mesh)
+- Solrad clear sky over time (nhd_waterbody_mesh)
+- Solrad cloudy over time (nhd_waterbody_mesh)
+- Net solrad over time (nhd_waterbody_mesh)
+- Effective solrad over time (nhd_waterbody_mesh)
+- Evapo heat flux over time (nhd_waterbody_mesh)
+- Conduc heat flux over time (nhd_waterbody_mesh)
+- Precip heat flux over time (nhd_waterbody_mesh)
+- Frazil theta0 over time (nhd_waterbody_mesh)
+- Frazil theta1 over time (nhd_waterbody_mesh)
+- Reentrainment over time (nhd_waterbody_mesh)
+- Settling vel. over time (nhd_waterbody_mesh)
+- Solid ice conc. over time (nhd_waterbody_mesh)
+- Solid ice thick. over time (nhd_waterbody_mesh)
+- Equiv. surface over time (nhd_waterbody_mesh)
+- Top ice cover over time (nhd_waterbody_mesh)
+- Bottom ice cover over time (nhd_waterbody_mesh)
+- Total ice thick. over time (nhd_waterbody_mesh)
+- Characteristics over time (nhd_waterbody_mesh)
+- Particles number over time (nhd_waterbody_mesh)
+- Total concentrat over time (nhd_waterbody_mesh)
+- Nb particle over time (nhd_waterbody_mesh)
+- Frazil s over time (nhd_waterbody_mesh)
+- Nb particle s over time (nhd_waterbody_mesh)
+- Temperature s over time (nhd_waterbody_mesh)
+- nhd_waterbody_mesh
 
 ## The proving run
 
-Run `01M2WXJS87WECYEZ42A3G3FPFW`, 2026-09-19T13:30:07.017730+00:00, 206.341 s, at commit `966392d7b95ac996d00a5df14f667096b64a3e2a-dirty`.
+Run `01M2YR0097ETBRS991GWCZXR21`, 2026-09-20T06:28:56.980685+00:00, 88.335 s, at commit `84d9129f40136b5ee14d0a67b5554d3454b4220d-dirty`.
 
-![Every layer the run published, stacked and framed on the result (run 01M2WXJS87WECYEZ42A3G3FPFW)](telemac_ice_cover/telemac_ice_cover.png)
+![Every layer the run published, stacked and framed on the result (run 01M2YR0097ETBRS991GWCZXR21)](telemac_ice_cover/telemac_ice_cover.png)
 
-*Every layer the run published, stacked and framed on the result (run 01M2WXJS87WECYEZ42A3G3FPFW)*
+*Every layer the run published, stacked and framed on the result (run 01M2YR0097ETBRS991GWCZXR21)*
 
-![The solve, frame by frame (run 01M2WXJS87WECYEZ42A3G3FPFW)](telemac_ice_cover/telemac_ice_cover_animation.gif)
+![The solve, frame by frame (run 01M2YR0097ETBRS991GWCZXR21)](telemac_ice_cover/telemac_ice_cover_animation.gif)
 
-*The solve, frame by frame (run 01M2WXJS87WECYEZ42A3G3FPFW)*
+*The solve, frame by frame (run 01M2YR0097ETBRS991GWCZXR21)*
 
-![peak frame (run 01M2WXJS87WECYEZ42A3G3FPFW)](telemac_ice_cover/telemac_ice_cover_peak_frame.png)
+![peak frame (run 01M2YR0097ETBRS991GWCZXR21)](telemac_ice_cover/telemac_ice_cover_peak_frame.png)
 
-*peak frame (run 01M2WXJS87WECYEZ42A3G3FPFW)*
+*peak frame (run 01M2YR0097ETBRS991GWCZXR21)*
 
-![ice cover fraction - the chart the run persisted (run 01M2WXJS87WECYEZ42A3G3FPFW)](telemac_ice_cover/telemac_ice_cover_chart_ice_cover_fraction.png)
+![ice cover fraction - the chart the run persisted (run 01M2YR0097ETBRS991GWCZXR21)](telemac_ice_cover/telemac_ice_cover_chart_ice_cover_fraction.png)
 
-*ice cover fraction - the chart the run persisted (run 01M2WXJS87WECYEZ42A3G3FPFW)*
+*ice cover fraction - the chart the run persisted (run 01M2YR0097ETBRS991GWCZXR21)*
 
-![ice cover thickness - the chart the run persisted (run 01M2WXJS87WECYEZ42A3G3FPFW)](telemac_ice_cover/telemac_ice_cover_chart_ice_cover_thickness.png)
+![ice cover thickness - the chart the run persisted (run 01M2YR0097ETBRS991GWCZXR21)](telemac_ice_cover/telemac_ice_cover_chart_ice_cover_thickness.png)
 
-*ice cover thickness - the chart the run persisted (run 01M2WXJS87WECYEZ42A3G3FPFW)*
+*ice cover thickness - the chart the run persisted (run 01M2YR0097ETBRS991GWCZXR21)*
 
 ### The sheet it filled
 
@@ -123,15 +123,15 @@ Every slot the run resolved, with where the value came from. The engine's own de
 
 | param | value | units | basis | provenance |
 |---|---|---|---|---|
-| `seed` | {'lon': -122.6691667, 'lat': 45.5175, 'name': None} | - | user | supplied on this invocation |
+| `seed` | {'lon': -123.221649, 'lat': 45.485595, 'name': None} | - | user | supplied on this invocation |
 | `weather_start` | 2024-01-14 | - | user | supplied on this invocation |
 | `weather_end` | 2024-01-18 | - | user | supplied on this invocation |
-| `station` | {'lon': -122.669784, 'lat': 45.518485, 'name': None} | - | user | supplied on this invocation |
+| `station` | {'lon': -123.221649, 'lat': 45.485595, 'name': None} | - | user | supplied on this invocation |
 | `cover_threshold` | 0.5 | - | user | supplied on this invocation |
 | `mesh_resolution_m` | 40.0 | m | user | supplied on this invocation |
 | `event_time` | 2024-01-14T12:00:00+00:00 | - | user | supplied on this invocation |
+| `vertical_frame` | NGVD29 | - | user | supplied on this invocation |
 | `compute_class` | medium | - | default_demo | declared constant default |
-| `vertical_frame` | NAVD88 | - | default_demo | declared constant default |
 
 ### Reproduce
 
@@ -142,15 +142,16 @@ await TOOL_REGISTRY['telemac_ice_cover'].fn(
     cover_threshold=0.5,
     event_time='2024-01-14T12:00:00+00:00',
     mesh_resolution_m=40.0,
-    seed={'lon': -122.6691667, 'lat': 45.5175, 'name': None},
-    station={'lon': -122.669784, 'lat': 45.518485, 'name': None},
+    seed={'lon': -123.221649, 'lat': 45.485595, 'name': None},
+    station={'lon': -123.221649, 'lat': 45.485595, 'name': None},
+    vertical_frame='NGVD29',
     weather_end='2024-01-18',
     weather_start='2024-01-14',
-    carrier=56.6,
-    stage=2.776,
+    bed='/home/nate/Documents/trid3nt-local/dev/testing/fixtures/hagg_lake/hagg_lake_topobathy_20m_ngvd29_m.tif',
+    observe=4.0,
     keywords={'DURATION': 21600.0, 'khione: GRAPHIC PRINTOUT PERIOD': 300, 'telemac2d: GRAPHIC PRINTOUT PERIOD': 300},
 )
 ```
 
-That is the invocation this run came from; the figures above are stamped with run `01M2WXJS87WECYEZ42A3G3FPFW` and commit `966392d7b95ac996d00a5df14f667096b64a3e2a-dirty`. The full argument record is [`telemac_ice_cover/run.json`](telemac_ice_cover/run.json).
+That is the invocation this run came from; the figures above are stamped with run `01M2YR0097ETBRS991GWCZXR21` and commit `84d9129f40136b5ee14d0a67b5554d3454b4220d-dirty`. The full argument record is [`telemac_ice_cover/run.json`](telemac_ice_cover/run.json).
 

@@ -59,6 +59,13 @@ _SITE_FIELDS = ("site_id", "station_id", "feature_id")
 #: moment is asking about none, and every sample it fetched is a candidate.
 _WINDOW_DAYS = 30.0
 
+#: How far AHEAD of the asked moment a record may be read when it sampled
+#: nothing before it: one of the record's OWN cadences, so a daily record's
+#: same-day reading is that day's value and a six-minute gauge reaches six
+#: minutes on. A record holding one readable stamp states no spacing, and a day
+#: is the coarsest cadence a record that speaks for a moment is read at.
+_LONE_CADENCE = dt.timedelta(days=1)
+
 #: What a ROW calls the zero its elevation is counted from. A portal that
 #: federates programs publishes readings on several, so the datum rides on the
 #: row and the layer's own is read only where the rows state none.
@@ -158,39 +165,62 @@ def _samples(csv_text: str) -> list[tuple[str, float]]:
     return rows
 
 
-def _opening_sample(csv_text: str, at: Any) -> tuple[str | None, float] | None:
-    """The row of a station's series the run OPENS on: the last sample at or
-    before the moment asked about, else the last row the record holds.
+def _cadence(rows: list[tuple[str, float]]) -> dt.timedelta:
+    """The spacing a record SPEAKS at, read off its own stamps.
 
-    A record that spans the run is reported over a window, so the reading this
-    run opens on is the one measured at its own instant rather than whichever
-    sample the record happened to end at."""
-    rows = _samples(csv_text)
+    The median gap between consecutive samples, so one hole in a daily record
+    does not make the record fortnightly. A record that holds one readable
+    stamp states no spacing at all and speaks for its day."""
+    stamps = [taken for taken in (_moment(stamp) for stamp, _ in rows)
+              if taken is not None]
+    gaps = sorted(later - earlier for earlier, later in zip(stamps, stamps[1:])
+                  if later > earlier)
+    return gaps[len(gaps) // 2] if gaps else _LONE_CADENCE
+
+
+def _pick(rows: list[tuple[str, float]],
+          at: Any) -> tuple[str | None, float] | None:
+    """THE row of a record the run OPENS on - one picker, every slot.
+
+    The latest sample at or before the moment asked about; failing that, the
+    earliest sample AFTER it within one of the record's own cadences, because a
+    day's reading stamped in the evening is still that day's reading and a
+    record that speaks every six minutes says nothing about the hour after. A
+    run that asks about no moment opens on the last row the record holds."""
     if not rows:
         return None
     asked = _moment(at)
-    if asked is not None:
-        inside = [row for row in rows if (_moment(row[0]) or asked) <= asked]
-        if inside:
-            return (inside[-1][0] or None, inside[-1][1])
-    return (rows[-1][0] or None, rows[-1][1])
+    if asked is None:
+        return (rows[-1][0] or None, rows[-1][1])
+    before = [row for row in rows if (_moment(row[0]) or asked) <= asked]
+    if before:
+        return (before[-1][0] or None, before[-1][1])
+    ahead = sorted((taken, index) for index, taken in
+                   ((index, _moment(row[0])) for index, row in enumerate(rows))
+                   if taken is not None and taken - asked <= _cadence(rows))
+    if ahead:
+        nearest = rows[ahead[0][1]]
+        return (nearest[0] or None, nearest[1])
+    return None
 
 
 def _reading(props: Mapping[str, Any], field: str, series_field: str,
-             at: Any = None) -> tuple[str | None, float] | None:
-    """One feature's value and the stamp it carries, from a column or a series.
+             at: Any = None) -> tuple[str | None, float, dt.timedelta] | None:
+    """One feature's value, the stamp it carries and the cadence it speaks at.
 
     A record that carries a window is read AT the moment the run asks about, so
     the stamp beside the value is the run's own instant inside the record and
-    the window check below is about that sample."""
+    the window check below is about that sample. A column that carries one
+    number speaks for no interval and is read at the lone cadence."""
     if series_field and props.get(series_field):
-        found = _opening_sample(str(props[series_field]), at)
+        rows = _samples(str(props[series_field]))
+        found = _pick(rows, at)
         if found is not None:
-            return found
+            return (found[0], found[1], _cadence(rows))
     direct = props.get(field)
     if direct is not None:
         try:
-            return (_text(props, *_STAMP_FIELDS), float(direct))
+            return (_text(props, *_STAMP_FIELDS), float(direct), _LONE_CADENCE)
         except (TypeError, ValueError):
             return None
     return None
@@ -209,9 +239,10 @@ def _moment(value: Any) -> dt.datetime | None:
     return read if read.tzinfo is not None else read.replace(tzinfo=dt.timezone.utc)
 
 
-def _in_window(sampled: Any, at: Any) -> bool:
-    """Whether a sample speaks for a run asking at ``at``: taken on or before
-    that moment and no older than the window.
+def _in_window(sampled: Any, at: Any,
+               cadence: dt.timedelta = _LONE_CADENCE) -> bool:
+    """Whether a sample speaks for a run asking at ``at``: taken no older than
+    the window behind that moment, or no further than one cadence ahead of it.
 
     An undated sample is never shown to be inside it, so it is outside."""
     taken, asked = _moment(sampled), _moment(at)
@@ -219,7 +250,9 @@ def _in_window(sampled: Any, at: Any) -> bool:
         return True
     if taken is None:
         return False
-    return dt.timedelta(0) <= asked - taken <= dt.timedelta(days=_WINDOW_DAYS)
+    if taken <= asked:
+        return asked - taken <= dt.timedelta(days=_WINDOW_DAYS)
+    return taken - asked <= cadence
 
 
 def observation(source: Any, *, near: Any = None, field: str = "value",
@@ -261,7 +294,7 @@ def observation(source: Any, *, near: Any = None, field: str = "value",
         if reading is None:
             continue
         candidates.append((_distance_km(feature, near), feature, reading))
-    within = [row for row in candidates if _in_window(row[2][0], at)]
+    within = [row for row in candidates if _in_window(row[2][0], at, row[2][2])]
     if candidates and not within:
         raise ObservationError(
             code,
@@ -277,7 +310,8 @@ def observation(source: Any, *, near: Any = None, field: str = "value",
             f"nothing in {label} reports {measures}, so the value this run "
             "opens on is not measured anywhere near it. State the value on the "
             "call, or name a source that reaches this place.")
-    distance_km, feature, (sampled, raw) = min(candidates, key=lambda row: row[0])
+    distance_km, feature, (sampled, raw, _spacing) = min(
+        candidates, key=lambda row: row[0])
     props = feature.get("properties") or {}
     columns = dict(column_units or {})
     units = props.get(units_field) or columns.get(field) or record_units
