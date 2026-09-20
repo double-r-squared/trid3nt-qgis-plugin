@@ -65,7 +65,9 @@ class DATA:
     # polygon whether a fetcher maps it or nobody ever has, so the match here
     # is a PREFERENCE: where the seed names or points at a mapped body, its
     # outline is the domain, and anything the caller supplies supersedes it.
-    domain = Data.need("hydrography", at=Ref("seed"))
+    # The feature is the WATERBODY by name, so a reach mapped at the same seed
+    # never stands in for the body this question stratifies.
+    domain = Data.need("hydrography", of="waterbody", at=Ref("seed"))
     # THE BED, as the CLASS it is rather than the source it comes from: the
     # measurement where something measured it, the terrain under the rest. A
     # bed is TOPOBATHY and the coastal composites do not reach the Great Lakes

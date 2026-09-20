@@ -28,6 +28,7 @@ The values the template declares. `desc` is what the model reads when it fills o
 | param | door | units | default | desc |
 |---|---|---|---|---|
 | `seed` | user | - | optional | Where on the channel the modelled stretch STARTS, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer. Geocode a place name first. It seeds the reach the domain is cut from; supply the domain polygon - a lake, a pond, a harbour - instead and this is not read |
+| `body` | question | - | optional | Which kind of water the seed is on: 'reach' (default) cuts a stretch of river from the mapped channel; 'waterbody' takes the lake, pond or reservoir the seed stands in. Read only when no domain polygon is supplied |
 | `weather_start` | question | - | - | First day of the observed weather the water is driven over, 'YYYY-MM-DD' - from phrasing like 'last week' or 'the first week of August'. The station record is hourly and the network holds the last two weeks, so an earlier day refuses typed |
 | `weather_end` | question | - | - | Last day of the observed weather, 'YYYY-MM-DD'. The run is DURATION long from the first observation - a week unless you set that keyword - so this day has to be far enough past weather_start to cover it; at most 14 days after |
 | `station` | user | - | optional | Where the temperature series and its diurnal range are read, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon' or a point layer. Geocode a place name first |

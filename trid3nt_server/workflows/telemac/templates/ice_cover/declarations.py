@@ -14,8 +14,9 @@ ACCEPTS = Accepts(mesh=("unstructured_tri",))
 
 
 class PARAMS:
-    """What only a freeze-up question asks: where to cut a stretch of channel
-    when no domain is handed in, the days of weather the water is driven over,
+    """What only a freeze-up question asks: which kind of water the seed is
+    on and where to cut it when no domain is handed in, the days of weather the
+    water is driven over,
     where the cover series is read, and how much cover counts as frozen. The
     domain, the bed, what the water opens at and the granularity are the
     runtime's own slots and levers, and the clock, the cadence, the friction and
@@ -32,6 +33,19 @@ class PARAMS:
              "a point layer. Geocode a place name first. It seeds the reach the "
              "domain is cut from; supply the domain polygon - a lake, a pond, a "
              "reservoir - instead and this is not read")
+    # WHICH KIND OF WATER the question is asked of, where no domain is handed
+    # in. Both are hydrography and both are mapped at the same seed, so the
+    # feature the domain row asks for is what tells them apart: a reach arrives
+    # cut to length with its two end transects, which is where the inflow and
+    # the outflow are prescribed, and a closed body arrives as one outline that
+    # states no run and whose whole edge is wall.
+    body = Param(
+        door=doors.QUESTION, optional=True, default="reach",
+        consequence="aoi", user_lever=True,
+        desc="Which kind of water the seed is on: 'reach' (default) cuts a "
+             "stretch of river from the mapped channel; 'waterbody' takes the "
+             "lake, pond or reservoir the seed stands in. Read only when no "
+             "domain polygon is supplied")
     # THE COLD SNAP is the question's own scenario: water freezes under a week
     # that happened, so the dates are what make this a record rather than a
     # hypothetical. There is no default - a freeze-up nobody dated is nobody's.
@@ -84,17 +98,18 @@ DOC = dict(
     summary="ICE COVER under a cold snap: when water freezes over, and how "
             "thick.",
     routing=(
-        "THE tool for \"when does this river freeze over\", \"how thick does "
-        "the ice get\", \"frazil and border ice in the cold snap\". KHIONE on "
-        "TELEMAC-2D over the domain it is given - a pond, a lake, or the reach "
-        "seed stands on: the heat budget under the hourly airport record, the "
-        "frazil it makes, and the cover that grows from it. Produces the cover "
-        "fraction and its thickness, animated and charted at a point. "
+        "THE tool for \"when does this water freeze over\", \"how thick does "
+        "the ice get\", \"frazil and border ice\". KHIONE on "
+        "TELEMAC-2D over the domain it is given, drawn or matched at `seed`: "
+        "the heat budget under the hourly airport record, the frazil it makes, "
+        "and the cover that grows from it. Produces cover fraction and "
+        "thickness, animated and charted at a point. "
         "Deck opinions, by keyword: DURATION (seven days), GRAPHIC PRINTOUT "
         "PERIOD, LAW OF BOTTOM FRICTION, FRICTION COEFFICIENT; on the ice "
         "deck ATMOSPHERE-WATER EXCHANGE MODEL, DYNAMIC ICE COVER, MODEL FOR "
         "MASS EXCHANGE BETWEEN FRAZIL AND ICE COVER, BORDER ICE COVER. Supply "
-        "the domain or `seed`, and `weather_start` / `weather_end`."
+        "the domain or `seed` - `body='waterbody'` for a lake or reservoir - "
+        "and `weather_start` / `weather_end`."
     ),
     not_for=(
         "how warm the water gets with no ice in the question "

@@ -136,13 +136,13 @@ def test_no_keyword_twin_and_no_domain_twin_is_declared_here():
 
 def test_the_only_params_are_the_questions_own_inputs():
     """The place the cover is read, what counts as frozen there, the water the
-    domain is cut from and the days of weather it happens under. Everything else
-    is a keyword, a slot or a lever."""
+    domain is cut from and which kind of water that is, and the days of weather
+    it happens under. Everything else is a keyword, a slot or a lever."""
     from trid3nt_server.workflows.runtime import param_rows
 
     assert {p.name for p in param_rows(template.PARAMS)} == {
-        "seed", "station", "cover_threshold", "weather_start", "weather_end",
-        "mesh_resolution_m"}
+        "seed", "body", "station", "cover_threshold", "weather_start",
+        "weather_end", "mesh_resolution_m"}
 
 
 def test_the_granularity_row_is_restated_only_for_its_own_default():

@@ -28,6 +28,7 @@ The values the template declares. `desc` is what the model reads when it fills o
 | param | door | units | default | desc |
 |---|---|---|---|---|
 | `seed` | user | - | optional | Where on the water the modelled stretch STARTS, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer. Geocode a place name first. It seeds the reach the domain is cut from; supply the domain polygon - a lake, a pond, a reservoir - instead and this is not read |
+| `body` | question | - | optional | Which kind of water the seed is on: 'reach' (default) cuts a stretch of river from the mapped channel; 'waterbody' takes the lake, pond or reservoir the seed stands in. Read only when no domain polygon is supplied |
 | `weather_start` | question | - | - | First day of the observed weather the water is driven over, 'YYYY-MM-DD' - the day the cold snap starts. The airport record is hourly and reaches back decades, so a past winter is askable |
 | `weather_end` | question | - | - | Last day of the observed weather, 'YYYY-MM-DD'. The run is DURATION long from the first observation - a week unless you set that keyword - so this day has to be far enough past weather_start to cover it |
 | `station` | user | - | optional | Where the ice cover and its thickness are read over time, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon' or a point layer. Geocode a place name first |
