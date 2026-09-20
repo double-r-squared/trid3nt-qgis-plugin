@@ -13,7 +13,7 @@ from typing import Annotated, Any, Mapping
 from trid3nt_contracts.coverage import DATA_CLASSES
 
 from .errors import PlanValidationError, SuppliedGeometryError
-from .plan import DataRef, Row, body_rows
+from .plan import DataRef, Ref, Row, body_rows
 
 __all__ = [
     "BED",
@@ -248,8 +248,10 @@ class DataDecl(Row):
     #: publishes - a measurement and the thing it measures are comparable in one
     #: unit, so the record is read in that variable's, off the run's published
     #: table and never off the row. On every other slot it is the FEATURE asked
-    #: for. Empty where any of the class will do.
-    observes: str = ""
+    #: for. Empty where any of the class will do. A :class:`Ref` where the
+    #: feature is the CALLER'S - one question asked of two kinds of water - and
+    #: it is bound at run time the way the point the row is asked at is.
+    observes: str | Ref = ""
     #: HOW FAR this question's domain reaches, in kilometres: the one opinion a
     #: question has about its own extent. Generic, because every source calls it
     #: something else - the coverage row's ``ask`` block maps it to the param
@@ -463,7 +465,7 @@ class DataDecl(Row):
                 "one way.")
         return replace(self, producer=producer)
 
-    def need(self, data_class: str, *, at: Any = None, of: str = "",
+    def need(self, data_class: str, *, at: Any = None, of: Any = "",
              span_km: float | None = None, geometry: str | None = None,
              ) -> "DataDecl":
         """THE CLASS this row needs, which the match fills from whatever measures
@@ -475,7 +477,9 @@ class DataDecl(Row):
         reach is cut from, the place the nearest reporting site is ranked
         against. ``of`` names WHAT OF THE CLASS is asked for - the variable a
         record is read for, the feature a map is read for - and a source
-        publishing none of it leaves the match's list;
+        publishing none of it leaves the match's list; where the feature is the
+        caller's rather than the question's it is a ``Ref`` to the param that
+        settles it, bound before the match runs the way ``at`` is;
         ``span_km`` is how far the question reaches,
         which the answering source's coverage row maps to its own param.
         ``geometry`` is the SHAPE this row is read as - a class measured in more
@@ -485,7 +489,8 @@ class DataDecl(Row):
             raise PlanValidationError(
                 f"Data {self.name!r}: .need(geometry={geometry!r}) is not a "
                 f"declared shape; the shapes are {sorted(_GEOMETRIES)}.")
-        return replace(self, data_class=str(data_class), observes=str(of),
+        return replace(self, data_class=str(data_class),
+                       observes=of if isinstance(of, Ref) else str(of),
                        geometry=geometry,
                        span_km=None if span_km is None else float(span_km),
                        coercion=MappingProxyType({"near": at}))

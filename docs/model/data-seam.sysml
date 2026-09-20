@@ -886,6 +886,10 @@ package DataSeam {
         frame it is matched under are the RUN's - the deck's own duration from
         the moment the run asks at, the vertical lever - and the place is the
         domain's centre unless the row states the point it is asked at.
+        WHAT OF THE CLASS the row asks for is the word the answering
+        source publishes it under, and where ONE question is asked of two
+        kinds of thing it is a read of the param that settles which, bound
+        before the match runs the way the point the row is asked at is.
 
         NO ROW STATES A UNIT. What a measured slot's record is read in is the
         unit of the KEYWORD its role fills, which the engine's transform fixes,

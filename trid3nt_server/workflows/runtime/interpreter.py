@@ -595,7 +595,16 @@ async def _need(env: _Env, decl: DataDecl, data_class: str,
                 opens=str(opens) if opens else None,
                 until=_closes(opens, env.window_s), frame=run_frame(env.params),
                 mesh_m=_mesh_m(env), pick=_pick(env, decl, data_class),
-                of=decl.observes, water=_water())
+                of=await _asked_of(env, decl), water=_water())
+
+
+async def _asked_of(env: _Env, decl: DataDecl) -> str:
+    """WHAT OF ITS CLASS this row asks the world for, bound.
+
+    A question asked of two kinds of water states the feature as a read of the
+    param that settles it, and the read is bound here rather than at
+    declaration, the way the point the row is asked at is."""
+    return str(await _bind_value(decl.observes, env) or "")
 
 
 async def _somewhere_to_ask(env: _Env) -> None:
@@ -698,7 +707,7 @@ async def _ask_for(env: _Env, choice: SourceChoice,
         _around(dom.bbox, _mesh_m(env)) if dom is not None and dom.bbox else None,
         lon, lat, str(opens) if opens else None,
         _closes(opens, env.window_s)), lon, lat,
-        {"span_km": decl.span_km, "of": decl.observes or None,
+        {"span_km": decl.span_km, "of": await _asked_of(env, decl) or None,
          "seed_point": None if lon is None or lat is None else [lon, lat]})
 
 
@@ -752,7 +761,8 @@ async def _ingested(env: _Env, decl: DataDecl, value: Any,
     coercion = await _bind_value(dict(decl.coercion), env)
     stated = str(coercion.pop("measures", "") or "")
     coercion.pop("opens", None)
-    coercion.update(_what_the_run_calls_it(env, decl, stated))
+    coercion.update(_what_the_run_calls_it(env, decl, stated,
+                                          await _asked_of(env, decl)))
     coercion.update(_the_window_it_is_cut_from(decl))
     coercion.update(await _on_the_run_s_frame(env, decl, value))
     coercion.update(_what_the_record_reports(env, decl, runner))
@@ -797,8 +807,8 @@ def _the_window_it_is_cut_from(decl: DataDecl) -> dict[str, Any]:
     return {"extent": tuple(float(v) for v in dom.bbox)}
 
 
-def _what_the_run_calls_it(env: _Env, decl: DataDecl,
-                           stated: str) -> dict[str, Any]:
+def _what_the_run_calls_it(env: _Env, decl: DataDecl, stated: str,
+                           observed: str) -> dict[str, Any]:
     """The UNIT this slot converts to and the NOUN the run says it in.
 
     Neither is a row's to state: the unit is the one the keyword this role fills
@@ -810,8 +820,8 @@ def _what_the_run_calls_it(env: _Env, decl: DataDecl,
     the workflow states no unit for is read in the unit the record was measured
     in."""
     told: dict[str, Any] = {}
-    unit = (_observed_unit(env, decl)
-            if decl.observes and decl.role in _READS_A_RECORD
+    unit = (_observed_unit(env, decl, observed)
+            if observed and decl.role in _READS_A_RECORD
             else env.slot_units.get(decl.role))
     if unit:
         told["to_units"] = unit
@@ -821,18 +831,18 @@ def _what_the_run_calls_it(env: _Env, decl: DataDecl,
     return told
 
 
-def _observed_unit(env: _Env, decl: DataDecl) -> str:
+def _observed_unit(env: _Env, decl: DataDecl, observed: str) -> str:
     """The unit the variable this row OBSERVES is published in.
 
     A name this run publishes nothing under, or publishes under no stated unit,
     refuses: reading the record in whatever its source published would pair a
     measurement against a variable in another unit and call the difference the
     model's error."""
-    unit = str(env.published_units.get(decl.observes) or "")
+    unit = str(env.published_units.get(observed) or "")
     if unit:
         return unit
     raise PlanValidationError(
-        f"Data {decl.name!r} observes {decl.observes!r}, and this run publishes "
+        f"Data {decl.name!r} observes {observed!r}, and this run publishes "
         f"no unit under that name (it publishes "
         f"{', '.join(sorted(n for n, u in env.published_units.items() if u)) or 'nothing named'}). "
         "A record read in its own unit against a variable written in another is "
