@@ -58,7 +58,6 @@ rerun_workflow = register_tool(
         name="rerun_workflow",
         ttl_class="live-no-cache",
         source_class="workflow_dispatch",
-        cacheable=False,
     ),
     read_only_hint=False,
     open_world_hint=False,

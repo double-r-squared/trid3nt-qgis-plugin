@@ -56,7 +56,6 @@ _LOOKUP_PRECIP_RETURN_PERIOD_METADATA = AtomicToolMetadata(
     name="lookup_precip_return_period",
     ttl_class="static-30d",
     source_class="precip_return_period",
-    cacheable=True,
 )
 
 # The ``/cgi-bin/hdsc/new/`` path 301-redirects to this one, so pointing at the

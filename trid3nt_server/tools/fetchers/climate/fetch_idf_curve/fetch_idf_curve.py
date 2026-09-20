@@ -65,7 +65,6 @@ _METADATA = AtomicToolMetadata(
     name="fetch_idf_curve",
     ttl_class="static-30d",
     source_class="idf_curve",
-    cacheable=True,
 )
 
 

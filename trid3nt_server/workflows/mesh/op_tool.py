@@ -24,7 +24,6 @@ __all__ = ["mesh_op"]
 _METADATA = AtomicToolMetadata(
     name="mesh_op",
     ttl_class="live-no-cache",
-    cacheable=False,
     tier="general",
 )
 

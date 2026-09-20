@@ -267,7 +267,6 @@ _METADATA = AtomicToolMetadata(
     name="telemac_sediment_plume",
     ttl_class="live-no-cache",
     source_class="workflow_dispatch",
-    cacheable=False,
     engine="telemac",
     tier="template",
     resolution_specs=(_RES_SPEC,),

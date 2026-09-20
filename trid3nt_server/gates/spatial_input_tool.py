@@ -29,7 +29,6 @@ _REQUEST_SPATIAL_INPUT_METADATA = AtomicToolMetadata(
     name="request_spatial_input",
     ttl_class="live-no-cache",
     source_class="workflow_dispatch",
-    cacheable=False,
 )
 
 

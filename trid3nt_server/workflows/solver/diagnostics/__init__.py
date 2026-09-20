@@ -54,7 +54,6 @@ _METADATA = AtomicToolMetadata(
     name="read_run_diagnostics",
     ttl_class="live-no-cache",
     source_class=None,
-    cacheable=False,
 )
 
 

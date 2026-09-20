@@ -244,7 +244,6 @@ _TELEMAC3D_METADATA = AtomicToolMetadata(
     name="telemac3d_stratified_flow",
     ttl_class="live-no-cache",
     source_class="workflow_dispatch",
-    cacheable=False,
     engine="telemac",
     tier="template",
     resolution_specs=(_TELEMAC3D_RES_SPEC,),

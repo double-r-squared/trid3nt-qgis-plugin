@@ -935,7 +935,6 @@ _RUN_SOLVER_METADATA = AtomicToolMetadata(
     name="run_solver",
     ttl_class="live-no-cache",
     source_class="solver_dispatch",
-    cacheable=False,
 )
 
 
@@ -1011,7 +1010,6 @@ _WAIT_FOR_COMPLETION_METADATA = AtomicToolMetadata(
     name="wait_for_completion",
     ttl_class="live-no-cache",
     source_class="solver_dispatch",
-    cacheable=False,
 )
 
 

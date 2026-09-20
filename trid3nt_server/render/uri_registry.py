@@ -60,19 +60,10 @@ RESOLVABLE_URI_PARAMS: frozenset[str] = frozenset(
         "landcover_uri",
         "hazard_uri",
         "model_setup_uri",
-        # compute_model_residuals: the MODEL raster + the OPTIONAL existing
-        # observations vector layer -- both are handle/URI-resolved like the
-        # other *_uri params above.
-        "model_layer_uri",
-        "observations_layer_uri",
-        # ``compute_skill_metrics`` (paired obs/sim table) and
-        # ``compute_flood_extent_skill`` (modeled + benchmark wet/dry extent)
-        # take handle/URI params like the ones above. ``run_handle``
-        # (read_run_diagnostics) is excluded -- it self-resolves and must
-        # not be mangled here.
+        # ``compute_skill_metrics`` (paired obs/sim table) takes a handle/URI
+        # param like the ones above. ``run_handle`` (read_run_diagnostics) is
+        # excluded -- it self-resolves and must not be mangled here.
         "paired_table_uri",
-        "model_extent_uri",
-        "benchmark_extent_uri",
     }
 )
 
@@ -99,14 +90,6 @@ _WALK_MAX_DEPTH = 8
 _WALK_MAX_ITEMS = 64
 _ANNOUNCE_CAP = 8
 _ERROR_HANDLES_CAP = 10
-
-#: Tools that consume a DEM as their primary input. When the branch-4 "no
-#: layers yet" fallback fires for one of these, the message names ``fetch_dem``:
-#: a generic solver example steers a terrain-derivative ask away from the call
-#: it actually needs.
-_DEM_CONSUMING_TOOLS: frozenset[str] = frozenset({"compute_cross_section"})
-
-
 
 
 class UriResolutionError(RuntimeError):
@@ -693,12 +676,6 @@ class SessionUriRegistry:
         ]
         layer_recs.sort(key=lambda r: r.seq, reverse=True)
         if not layer_recs:
-            if tool_name in _DEM_CONSUMING_TOOLS:
-                return (
-                    "No layers have been produced this session yet — run "
-                    "fetch_dem for this AOI first to get a dem_uri handle, "
-                    f"then retry {tool_name}."
-                )
             return (
                 "No layers have been produced this session yet — run the "
                 "producing tool first (e.g. sfincs_flood for a "

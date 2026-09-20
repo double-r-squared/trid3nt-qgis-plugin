@@ -292,7 +292,6 @@ _METADATA = AtomicToolMetadata(
     name="telemac_ice_cover",
     ttl_class="live-no-cache",
     source_class="workflow_dispatch",
-    cacheable=False,
     engine="telemac",
     tier="template",
     resolution_specs=(_RES_SPEC,),

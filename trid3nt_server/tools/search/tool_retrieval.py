@@ -67,7 +67,6 @@ CORE_FLOOR: frozenset[str] = frozenset(
         "search_tools",
         "run_qgis_algorithm",
         "run_pyqgis",
-        "compute_layer_bounds",
         "request_spatial_input",
         "generate_chart",
     }

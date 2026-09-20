@@ -912,7 +912,6 @@ _SEARCH_TOOLS_METADATA = AtomicToolMetadata(
     name="search_tools",
     ttl_class="live-no-cache",
     source_class=None,
-    cacheable=False,
 )
 
 

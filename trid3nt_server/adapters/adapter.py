@@ -515,30 +515,20 @@ the tool has ALREADY done the best it can:
     or ask the user to name a more specific area. Never repeat an identical
     failing geocode_location call.
 
-Fit / zoom / resize the view to a layer (CRITICAL — you CAN drive the map):
-To fit, zoom, or "resize the box to encompass all the <features>" (buildings,
-points, polygons, the whole layer extent) — call compute_layer_bounds with the
-layer's layer_id HANDLE from the [Case state] note, NOT its display tile URL
-(the https://.../cog/tiles/... template) — the handle resolves to the data COG
-deterministically. It computes the layer's EPSG:4326 extent AND emits a
-zoom-to map-command so the actual viewport fits all features. You CAN pan and
-zoom the user's map this way — NEVER claim you cannot move/pan/zoom the map.
-Do NOT use run_pyqgis for bounding-box / extent / total_bounds math —
-compute_layer_bounds is the dedicated, fast, deterministic path and it also
-moves the camera; a snippet for bbox math is gated and the result never reaches
-the map.
-
-Fit / resize NEVER re-fetches an already-loaded layer (CRITICAL — F96,
-NATE 2026-06-17): when the user asks to FIT, ZOOM, RESIZE the box, or
-"encompass all the <features>" (all flood zones, all buildings, all points)
-for data that is ALREADY on the map, that is a VIEW change, NOT a data fetch.
-Call compute_layer_bounds on the EXISTING layer's handle (from the [Case state]
-note) — do NOT call the fetch_* tool again. Re-fetching a layer already present
-mints a SECOND identical layer (e.g. two identical flood-zone choropleths stacked on
-the map). Check the [Case state] note FIRST: if a layer of the requested data
-kind is already listed for this AOI, reuse its handle. Only fetch fresh data
-when the user names a genuinely DIFFERENT or LARGER area than the loaded extent,
-a different source, or explicitly asks to refresh.
+Fit / zoom / resize the view to a layer (CRITICAL - the map moves itself):
+Fitting the view is the CANVAS's own behaviour, not a tool call. Every layer
+line on the [Case state] note carries its own bbox=, and a layer that publishes
+moves the camera to it as it lands. So when the user asks to fit, zoom, or
+"resize the box to encompass all the <features>" (buildings, points, polygons,
+the whole layer extent) for data ALREADY on the map: READ that layer's bbox=
+off the [Case state] note and say what the extent is - do NOT call a tool, and
+do NOT call the fetch_* tool again. Re-fetching a layer already present mints a
+SECOND identical layer (e.g. two identical flood-zone choropleths stacked on the
+map), which is FORBIDDEN. Only fetch fresh data when the user names a genuinely
+DIFFERENT or LARGER area than the loaded extent, a different source, or
+explicitly asks to refresh. Do NOT use run_pyqgis for bounding-box / extent /
+total_bounds math either - the bounds are already on the note, and a gated
+snippet's result never reaches the map.
 
 NEVER hand-wave a real duplicate as a "display artifact" (CRITICAL — honesty
 floor, F97, NATE 2026-06-17): if two layers genuinely RENDERED on the map (e.g.
@@ -1091,8 +1081,8 @@ def build_layers_present_note(
         # A ``role="primary"`` layer is a RESULT, which is what stops the re-run;
         # everything else is an INPUT / context layer. A recognized FETCHED layer
         # (buildings / landcover / dem / roads / ...) is an INPUT tagged with its
-        # KIND so a fit / resize / re-show follow-up reuses it
-        # (compute_layer_bounds on its handle) instead of re-fetching a duplicate.
+        # KIND so a fit / resize / re-show follow-up reuses it - its own bbox is
+        # on this line - instead of re-fetching a duplicate.
         if role_raw == "primary":
             role_label = "RESULT"
         else:
@@ -1123,8 +1113,9 @@ def build_layers_present_note(
             + "\n".join(lines)
             + "\nIf a RESULT already answers the user's request for this AOI and "
             "parameters, narrate from it and pass its handle onward (e.g. an "
-            "existing flood-depth RESULT feeds compute_flood_depth_damage "
-            "directly). Re-running the expensive simulation that produced an "
+            "existing flood-depth RESULT feeds the next analysis directly, "
+            "sampled or composed in code_exec rather than re-simulated). "
+            "Re-running the expensive simulation that produced an "
             "existing RESULT is FORBIDDEN unless the user changes the area / "
             "parameters or explicitly asks to re-run. Do NOT re-fetch or "
             "recompute a layer already listed here unless it is genuinely absent."
@@ -1133,8 +1124,8 @@ def build_layers_present_note(
             "FIT, ZOOM, RESIZE the box, or 'encompass all the <features>' for "
             "that SAME data (e.g. 'resize the bbox to encompass all the "
             "buildings' when an INPUT[buildings] layer is already listed) is NOT a fetch — "
-            "call compute_layer_bounds on the EXISTING layer's handle to fit the "
-            "view. Re-calling the fetch_* tool produces a SECOND identical layer "
+            "read that layer's own bbox= off the line above; the canvas fits itself. "
+            "Re-calling the fetch_* tool produces a SECOND identical layer "
             "(a real duplicate on the map), which is FORBIDDEN. Only re-fetch when "
             "the user names a DIFFERENT area that pokes OUTSIDE the existing "
             "extent, a different data source / kind, or explicitly asks to "

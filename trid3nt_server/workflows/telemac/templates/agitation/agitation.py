@@ -223,7 +223,6 @@ _ARTEMIS_METADATA = AtomicToolMetadata(
     name="artemis_harbor_agitation",
     ttl_class="live-no-cache",
     source_class="workflow_dispatch",
-    cacheable=False,
     engine="telemac",
     tier="template",
     resolution_specs=(_ARTEMIS_RES_SPEC,),

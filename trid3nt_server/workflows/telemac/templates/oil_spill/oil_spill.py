@@ -260,7 +260,6 @@ _METADATA = AtomicToolMetadata(
     name="telemac_oil_spill",
     ttl_class="live-no-cache",
     source_class="workflow_dispatch",
-    cacheable=False,
     engine="telemac",
     tier="template",
     resolution_specs=(_RES_SPEC,),

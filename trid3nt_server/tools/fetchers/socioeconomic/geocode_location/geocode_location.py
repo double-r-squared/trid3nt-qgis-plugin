@@ -350,7 +350,6 @@ _GEOCODE_LOCATION_METADATA = AtomicToolMetadata(
     name="geocode_location",
     ttl_class="dynamic-1h",
     source_class="geocode",
-    cacheable=True,
 )
 
 # Sub-locality phrasings can resolve to a single building/POI footprint when

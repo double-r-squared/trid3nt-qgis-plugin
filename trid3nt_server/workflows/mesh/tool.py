@@ -221,7 +221,6 @@ def _refuse_unsolvable(art: MeshArtifact) -> None:
 _METADATA = AtomicToolMetadata(
     name="build_mesh",
     ttl_class="live-no-cache",
-    cacheable=False,
     tier="general",
     resolution_specs=EDGE_RESOLUTION_SPECS,
 )

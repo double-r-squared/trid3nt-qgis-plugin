@@ -52,7 +52,6 @@ _METADATA = AtomicToolMetadata(
     name=FIND_SOURCES,
     ttl_class="live-no-cache",
     source_class=None,
-    cacheable=False,
 )
 
 

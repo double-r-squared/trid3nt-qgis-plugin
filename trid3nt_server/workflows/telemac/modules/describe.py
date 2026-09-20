@@ -92,7 +92,6 @@ def _row(slot: Any) -> dict[str, Any]:
     AtomicToolMetadata(
         name="describe_keywords",
         ttl_class="live-no-cache",
-        cacheable=False,
     ),
     read_only_hint=True,
     open_world_hint=False,
