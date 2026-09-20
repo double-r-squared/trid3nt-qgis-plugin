@@ -1,9 +1,0 @@
-fetch_watershed:
-- delineate the watershed that drains to this point
-- what catchment drains to this gauge
-- give me the basin above this outfall as a model domain
-- the drainage area upstream of this culvert
-- catchment polygon and its outlet for a rain on grid run
-- watershed boundary from a pour point on the creek
-- the basin that feeds this reservoir inlet
-- set up the contributing area above this point as a domain

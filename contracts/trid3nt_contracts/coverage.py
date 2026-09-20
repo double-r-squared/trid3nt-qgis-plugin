@@ -309,6 +309,17 @@ class Coverage(GraceModel):
     value_column: str = ""
     series_column: str = ""
     above_column: str = ""
+    #: THIS SOURCE'S OWN WORD for each published variable it can be asked for,
+    #: by the variable's published name. A row that maps ``need:of`` onto one of
+    #: its params is asked by the word here, so a question names the variable it
+    #: observes once and every source hears the measurement in its own
+    #: vocabulary; a variable this table has no word for is a measurement the
+    #: source does not take, and the match excludes it saying so.
+    vocabulary: dict[str, str] = Field(default_factory=dict)
+
+    def word_for(self, variable: str) -> str:
+        """This source's own name for a published variable, "" where it has none."""
+        return str(self.vocabulary.get(str(variable), ""))
 
     @model_validator(mode="after")
     def _validate_reach(self) -> "Coverage":

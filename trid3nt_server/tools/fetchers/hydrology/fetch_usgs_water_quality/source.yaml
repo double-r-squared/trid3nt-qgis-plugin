@@ -120,6 +120,18 @@ coverage:
   units:
     value: record
   value_column: value
+  # THE MEASUREMENT this row is asked for, in WQP's own CharacteristicName
+  # vocabulary: the slot names the variable its run publishes and this table is
+  # where that name becomes the word the service answers to. A variable with no
+  # word here is a measurement WQP does not hold, and the match says so.
+  ask: {characteristic: "need:of"}
+  vocabulary:
+    TEMPERATURE: Temperature, water
+    O2: Dissolved oxygen (DO)
+    NO3: Nitrate
+    NH4: Ammonia
+    PO4: Orthophosphate
+    PHY: Chlorophyll a
 
 caveats:
 - zero WQP monitoring sites for the characteristic in the bbox -> WQP_NO_SITES (retryable=false); never an empty success layer
