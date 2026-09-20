@@ -139,18 +139,25 @@ def _row(decl, name):
     return dataclasses.replace(decl, name=name)
 
 
-def test_the_bed_is_the_measurement_gridded_over_the_terrain_under_it(world):
+def test_every_surviving_rung_is_laid_in_rank_order_over_the_terrain(world):
+    """A domain reaching past the top pick is what the next rung is for, so the
+    bed calls EVERY survivor of its class and the merge lays them in rank order
+    over the terrain under all of them."""
     env = _env()
     bed = _row(Data.need("bathymetry"), "bed")
     out = asyncio.run(interpreter._matched_bed(env, bed))
     ran = [runner for runner, _kw in world]
-    assert ran == ["fetch_terrain", "fetch_soundings",
+    assert ran == ["fetch_terrain", "fetch_soundings", "fetch_bed_raster",
                    "trid3nt_server.inputs.bed.survey_surface",
                    "trid3nt_server.inputs.bed.merged_surface"]
     assert out.endswith("merged_surface.tif")
+    merge = world[-1][1]
+    assert merge["primary"] == ["s3://b/trid3nt_server.inputs.bed.survey_surface.tif",
+                                "s3://b/fetch_bed_raster.tif"]
+    assert merge["fallback"] == "s3://b/fetch_terrain.tif"
     # the soundings are gridded at the run's own edge, on the column the
     # coverage row names.
-    _runner, grid = world[2]
+    _runner, grid = world[3]
     assert grid["value_field"] == "depth_below_datum_m"
     assert grid["resolution_m"] == 14.0
 
@@ -202,10 +209,12 @@ def test_the_runtime_declares_the_offset_row_a_merge_source_owes(world,
     assert asked["fetch_vertical_datum_offset"]["point"] == pytest.approx(_SEED)
     merge = asked["trid3nt_server.inputs.bed.merged_surface"]
     assert merge["frame"] == "NAVD88"
-    assert merge["primary_offset"] == record and merge["fallback_offset"] is None
-    # ON the run: the measurement's row is declared and the terrain, already on
-    # the frame, owes none.
-    assert "bed_measurement_datum_offset" in env.data
+    # One row per RUNG, by rank: the rung off the frame owes one, the rung that
+    # states no zero of its own owes none, and neither does the terrain.
+    assert merge["primary_offset"] == [record, None]
+    assert merge["fallback_offset"] is None
+    assert "bed_fetch_soundings_datum_offset" in env.data
+    assert "bed_fetch_bed_raster_datum_offset" not in env.data
     assert "bed_terrain_datum_offset" not in env.data
 
 

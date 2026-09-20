@@ -631,17 +631,24 @@ class MergeRastersError(UserInputError):
 class MergedRasterLayerURI(LayerURI):
     """The merged surface, with WHAT PAINTED IT rather than what was offered."""
 
-    #: The share of the merged cells each input actually painted.
+    #: The share of the merged cells the MEASUREMENTS painted between them, and
+    #: the share the wider surface under all of them painted.
     primary_fraction: float = 0.0
     fallback_fraction: float = 0.0
-    #: The single-band raster carrying which input won at each cell - 0 primary,
-    #: 1 fallback, nodata where neither measured. A sidecar rather than a second
+    #: What each RUNG of the ladder painted, in rank order: the name the rung
+    #: carries and its share of the merged cells. The provenance sidecar below
+    #: writes a cell's rung as its index into this list.
+    rungs: list[tuple[str, float]] = []
+    #: The single-band raster carrying which rung won at each cell, by its rank -
+    #: 0 the top rung, then each rung that painted what the ones above it left -
+    #: and nodata where none of them measured. A sidecar rather than a second
     #: band, so the surface stays the one-band grid every sampler reads, and the
     #: mesh reads it to say which source painted each node.
     provenance_uri: str | None = None
     resolution_m: float = 0.0
-    #: The metres added to each input to read it on the frame the merge landed
-    #: on, which is zero wherever that input already counted from it.
+    #: The metres added to the top rung and to the wider surface to read each on
+    #: the frame the merge landed on, zero wherever it already counted from it.
+    #: Every rung's own shift is on the notes, said in the words a reader needs.
     datum_shift_m: float = 0.0
     fallback_shift_m: float = 0.0
     notes: list[str] = []
@@ -658,7 +665,7 @@ _PROVENANCE_NODATA = 255
 
 
 def _staged(layer: Any, role: str, scratch: str) -> str:
-    """One input raster, local and readable, or a refusal naming it."""
+    """One rung's raster, local and readable, or a refusal naming it."""
     from trid3nt_server.tools.derive._hydrology_common import _stage_uri_local
 
     from .geometry import source_uri
@@ -669,11 +676,37 @@ def _staged(layer: Any, role: str, scratch: str) -> str:
             "MERGE_RASTERS_NO_SOURCE",
             f"the {role} {layer!r} names no raster file to read.")
     try:
-        return _stage_uri_local(uri, scratch, role)
+        # The role is a rung's own name and reaches a FILENAME here, so what is
+        # not a word in it is not carried into one.
+        return _stage_uri_local(
+            uri, scratch, "".join(c if c.isalnum() else "_" for c in role))
     except Exception as exc:  # noqa: BLE001 - every reader fault, named by source
         raise MergeRastersError(
             "MERGE_RASTERS_UNREADABLE",
             f"the {role} raster {uri!r} could not be read ({exc}).") from exc
+
+
+def _listed(value: Any) -> list[Any]:
+    """One argument as the list of things it names, in the order it names them."""
+    if value is None:
+        return []
+    return list(value) if isinstance(value, (list, tuple)) else [value]
+
+
+def _rungs(surfaces: Any, offsets: Any) -> list[tuple[Any, Any]]:
+    """The surfaces one argument names, in rank order, each with its own offset.
+
+    A caller states one surface and the one offset row declared for it, or a
+    ranked list and the rows declared for each; the two are paired by rank, and
+    a rung the caller named no row for owes none."""
+    shifts = _listed(offsets)
+    return [(layer, shifts[rank] if rank < len(shifts) else None)
+            for rank, layer in enumerate(_listed(surfaces))]
+
+
+def _rung_label(layer: Any, rank: int) -> str:
+    """What the merge CALLS one rung: the name it carries, else its rank."""
+    return str(getattr(layer, "name", "") or "").strip() or f"rung {rank + 1}"
 
 
 def _metres_per_unit(crs: Any) -> float:
@@ -751,22 +784,23 @@ def _counts_down(layer: Any) -> bool:
     return str(getattr(layer, "quantity", "") or "").startswith(_DEPTH_QUANTITY)
 
 
-def _merge_frame(fallback: Any, frame: Any) -> str:
-    """The zero this merge lands on: the RUN's, else the wider surface's own.
+def _merge_frame(under: Any, frame: Any) -> str:
+    """The zero this merge lands on: the RUN's, else the LAST rung's own.
 
     A run states its frame and every elevation it ingests is read onto it. A
-    merge called outside one lands on the fallback, which paints every cell the
-    primary does not, so nothing it already holds moves."""
+    merge called outside one lands on the bottom rung, which paints every cell
+    the rungs above it left, so nothing it already holds moves."""
     from .vertical_datum import datum_of
 
-    return str(frame or "").strip() or datum_of(fallback)
+    return str(frame or "").strip() or datum_of(under)
 
 
 def _merge_aligned(source: Any, frame: str, offset: Any) -> Any:
-    """What it costs to read ONE of the merge's surfaces on the frame it lands on.
+    """What it costs to read ONE rung of the ladder on the frame it lands on.
 
-    Both are read onto that zero before either paints a cell, so the overlay is
-    over one axis. An offset the call does not state is the one the source
+    Every rung is read onto that zero before any of them paints a cell, so the
+    overlay is over one axis. An offset the call does not state is the one the
+    source
     publishes about itself - a survey measured on a district's project datum
     states in its own metadata how far that zero sits above a national frame,
     and no service serves that datum - and a pair nothing measures refuses
@@ -784,8 +818,8 @@ def _merge_aligned(source: Any, frame: str, offset: Any) -> Any:
 
 
 def _read_as(layer: Any, role: str, aligned: Any, *, depths: bool) -> str:
-    """The sentence a run SAYS about a surface this merge moved onto its frame,
-    or "" where that surface already stood on it.
+    """The sentence a run SAYS about a rung this merge moved onto its frame, or
+    "" where that rung already stood on it.
 
     The packet's note and the journal line are one statement, said once."""
     from .vertical_datum import datum_of
@@ -800,7 +834,7 @@ def _read_as(layer: Any, role: str, aligned: Any, *, depths: bool) -> str:
 
 
 def _rezeroed(source: Any, aligned: Any, *, depths: bool) -> Any:
-    """One input's own grid read on the frame the merge lands on, or ``None``
+    """One rung's own grid read on the frame the merge lands on, or ``None``
     where nothing moved it.
 
     On its OWN grid, before anything reads it onto the common one, so the cells
@@ -869,19 +903,24 @@ def merged_surface(
     *,
     _output_dir: str | None = None,
 ) -> MergedRasterLayerURI:
-    """MERGE two overlapping surfaces into one bed, the PRIMARY winning where it measured.
+    """MERGE a ranked LADDER of surfaces into one bed, each rung winning where it measured.
 
-    Each input is re-zeroed onto the run's vertical frame by the flip above -
-    through the offset row the runtime declared for it, else the shift it
-    publishes about itself - before either is read onto the common grid, so the
-    overlay is over one axis. Both then land on one grid at the finer of their
-    two cell sizes over the union of what they cover, and the OVERLAY is the
-    substrate's own merge over those two single-source warps with priority by
-    order - nothing here re-implements it. Which input won at each cell is
-    rebuilt from the same two warps and written as a sidecar, because the mesh
-    records which source painted each node.
+    ``primary`` is the measurement, or the ranked list of measurements highest
+    rung first; ``fallback`` is the wider surface under all of them, and each
+    offset is the row declared for the rung of the same rank. A rung paints only
+    the cells the rungs above it left, because a domain reaching past the top
+    pick is what the next rung is for. Every rung is re-zeroed onto the run's
+    vertical frame by the flip above - through its own offset row, else the shift
+    it publishes about itself - before any of them is read onto the common grid,
+    so the overlay is over one axis. They then land on one grid at the finest of
+    their cell sizes over the union of what they cover, and the OVERLAY is the
+    substrate's own merge over those single-source warps with priority by order -
+    nothing here re-implements it. Which rung won at each cell is rebuilt from the
+    same warps and written as a sidecar, because the mesh records which source
+    painted each node.
     """
     import tempfile
+    from contextlib import ExitStack
 
     import numpy as np
     import rasterio
@@ -890,41 +929,49 @@ def merged_surface(
     from trid3nt_server.tools.derive._hydrology_common import write_cog
     from trid3nt_server.workflows.runtime import journal_note
 
-    if fallback is None and primary is None:
+    measured = _rungs(primary, primary_offset)
+    ladder = measured + _rungs(fallback, fallback_offset)
+    if not ladder:
         raise MergeRastersError(
             "MERGE_RASTERS_NO_SOURCE",
             "a bed merge was given neither surface, so there is nothing to merge.")
-    if primary is None or fallback is None:
-        return _passed_through(primary if fallback is None else fallback,
-                               absent="primary" if primary is None else "fallback")
-    zero = _merge_frame(fallback, frame)
-    aligned = _merge_aligned(primary, zero, primary_offset)
-    under_aligned = _merge_aligned(fallback, zero, fallback_offset)
-    depths = _counts_down(primary)
+    if len(ladder) == 1:
+        return _passed_through(ladder[0][0],
+                               absent="fallback" if measured else "primary")
+    zero = _merge_frame(ladder[-1][0], frame)
+    labels = [_rung_label(layer, rank) for rank, (layer, _row) in enumerate(ladder)]
+    aligned = [_merge_aligned(layer, zero, row) for layer, row in ladder]
+    counts_down = [_counts_down(layer) for layer, _row in ladder]
 
     seed = layer_seed()
     with tempfile.TemporaryDirectory(prefix="bed-merge-") as scratch:
-        top = _staged(primary, "primary", scratch)
-        under = _staged(fallback, "fallback", scratch)
-        with rasterio.open(top) as a, rasterio.open(under) as b:
-            crs, width, height, transform, cell = _common_grid([a, b], resolution_m)
-            rezeroed = _rezeroed(a, aligned, depths=depths)
-            over, over_path = _warped(a, crs, width, height, transform, rezeroed,
-                                      scratch, "measurement")
-            below, below_path = _warped(b, crs, width, height, transform,
-                                        _rezeroed(b, under_aligned, depths=False),
-                                        scratch, "wider")
-        won = np.where(np.isfinite(over), 0,
-                       np.where(np.isfinite(below), 1, _PROVENANCE_NODATA))
-        painted = int((won != _PROVENANCE_NODATA).sum())
-        if not painted:
+        staged = [_staged(layer, labels[rank], scratch)
+                  for rank, (layer, _row) in enumerate(ladder)]
+        with ExitStack() as opened:
+            surfaces = [opened.enter_context(rasterio.open(path))
+                        for path in staged]
+            crs, width, height, transform, cell = _common_grid(surfaces, resolution_m)
+            grids, paths = [], []
+            for rank, src in enumerate(surfaces):
+                values, path = _warped(
+                    src, crs, width, height, transform,
+                    _rezeroed(src, aligned[rank], depths=counts_down[rank]),
+                    scratch, f"rung{rank}")
+                grids.append(values)
+                paths.append(path)
+        # BOTTOM UP, so the rung with the best claim to a cell is the last to
+        # write it: the ladder's order IS the priority the overlay below applies.
+        won = np.full(grids[0].shape, _PROVENANCE_NODATA, dtype="uint8")
+        for rank in range(len(grids) - 1, -1, -1):
+            won[np.isfinite(grids[rank])] = rank
+        if not int((won != _PROVENANCE_NODATA).sum()):
             raise MergeRastersError(
                 "MERGE_RASTERS_DISJOINT",
-                "neither surface measured a single cell of the grid they span "
-                "together, so there is nothing to merge. Name two surfaces over "
-                "the same ground.")
+                f"none of the {len(ladder)} surfaces tried ({', '.join(labels)}) "
+                "measured a single cell of the grid they span together, so there "
+                "is nothing to merge. Name surfaces over the same ground.")
         west, north = transform.c, transform.f
-        stack, _ = merge([over_path, below_path], method="first",
+        stack, _ = merge(paths, method="first",
                          bounds=(west, north + height * transform.e,
                                  west + width * transform.a, north),
                          res=(cell, cell))
@@ -932,28 +979,29 @@ def merged_surface(
         uri = write_cog(stack[0], crs=crs, transform=transform, prefix="merged_bed",
                         seed=seed, output_dir=_output_dir,
                         code="MERGE_RASTERS_WRITE_FAILED", nodata=_NODATA)
-        provenance = write_cog(won.astype("uint8"), crs=crs, transform=transform,
+        provenance = write_cog(won, crs=crs, transform=transform,
                                prefix="merged_bed_source", seed=seed,
                                output_dir=_output_dir,
                                code="MERGE_RASTERS_WRITE_FAILED",
                                nodata=float(_PROVENANCE_NODATA))
 
-    top_share = float((won == 0).sum()) / float(won.size)
-    under_share = float((won == 1).sum()) / float(won.size)
-    moved = [line for line in (_read_as(primary, "primary", aligned, depths=depths),
-                               _read_as(fallback, "fallback", under_aligned,
-                                        depths=False)) if line]
+    shares = [float((won == rank).sum()) / float(won.size)
+              for rank in range(len(ladder))]
+    moved = [line for line in
+             (_read_as(layer, labels[rank], aligned[rank], depths=counts_down[rank])
+              for rank, (layer, _row) in enumerate(ladder)) if line]
+    painted = "; ".join(f"{label} {share * 100.0:.1f}%"
+                        for label, share in zip(labels, shares))
     notes = [
-        f"The primary painted {top_share * 100.0:.1f}% of the merged grid and "
-        f"the fallback {under_share * 100.0:.1f}%; "
-        f"{(1.0 - top_share - under_share) * 100.0:.1f}% is measured by neither "
-        "and left as nodata.",
-        f"Merged at {metres:.3g} m in {crs}, the finer of the two inputs unless "
-        "a resolution was stated.",
-        *(moved or [f"Both surfaces count from {zero}."]),
+        f"The ladder painted the merged grid in rank order - {painted} - and "
+        f"{(1.0 - sum(shares)) * 100.0:.1f}% is measured by none of them and left "
+        "as nodata.",
+        f"Merged at {metres:.3g} m in {crs}, the finest of the rungs unless a "
+        "resolution was stated.",
+        *(moved or [f"Every surface counts from {zero}."]),
     ]
-    logger.info("bed merge: %dx%d at %.3g m, primary %.1f%% / fallback %.1f%%",
-                width, height, metres, top_share * 100.0, under_share * 100.0)
+    logger.info("bed merge: %dx%d at %.3g m over %d rungs - %s",
+                width, height, metres, len(ladder), painted)
     for line in moved:
         journal_note(line)
     return MergedRasterLayerURI.published(
@@ -963,18 +1011,22 @@ def merged_surface(
         uri=uri,
         style=_BED_STYLE,
         role="primary",
-        units=getattr(primary, "units", None) or getattr(fallback, "units", None),
-        # A primary read the other way round no longer carries the quantity it
+        units=next((getattr(layer, "units", None) for layer, _row in ladder
+                    if getattr(layer, "units", None)), None),
+        # A rung read the other way round no longer carries the quantity it
         # named, so the merged surface states the one it was read onto.
-        quantity=(getattr(fallback, "quantity", None) if depths
-                  else getattr(primary, "quantity", None)
-                  or getattr(fallback, "quantity", None)),
+        quantity=next((getattr(layer, "quantity", None)
+                       for rank, (layer, _row) in enumerate(ladder)
+                       if not counts_down[rank] and getattr(layer, "quantity", None)),
+                      None),
         bbox=_bbox_4326(crs, transform, width, height),
         vertical_datum=zero or None,
-        datum_shift_m=round(float(aligned.shift_m), 4),
-        fallback_shift_m=round(float(under_aligned.shift_m), 4),
-        primary_fraction=round(top_share, 4),
-        fallback_fraction=round(under_share, 4),
+        datum_shift_m=round(float(aligned[0].shift_m), 4),
+        fallback_shift_m=(round(float(aligned[-1].shift_m), 4)
+                          if len(ladder) > len(measured) else 0.0),
+        primary_fraction=round(sum(shares[:len(measured)]), 4),
+        fallback_fraction=round(sum(shares[len(measured):]), 4),
+        rungs=[(label, round(share, 4)) for label, share in zip(labels, shares)],
         provenance_uri=provenance,
         resolution_m=round(metres, 4),
         notes=notes)

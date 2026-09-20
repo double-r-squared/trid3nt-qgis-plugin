@@ -829,15 +829,20 @@ package DataSeam {
         for by the FULLEST frame its words name: a chart datum names the
         reference system it is expressed on, and a low water plane is not the
         geodetic zero it is expressed on but a surface metres above it, so the
-        shorter name inside the longer is never what is measured.
+        shorter name inside the longer is never what is measured. A DEPTH is
+        counted from a WATER SURFACE and never from a reference system, so the
+        word a record of depths states names the surface it hangs below: a
+        sounding on IGLD85 is counted from the low water datum expressed on
+        IGLD85, which the row's own datum vocabulary says and the survey's plot
+        sheet states in its own sentence.
 
-        The same order holds wherever two surfaces meet before a slot does:
-        the bed merge reads BOTH of its inputs onto the run's frame, each
-        through the row the runtime declared for it - the same declaration a
-        slot's source gets and never a second mechanism - before either paints
-        a cell, and a pair nothing measures refuses naming both. A merge called
-        outside a run lands on the wider surface's own zero, which nothing it
-        already holds moves. A surface counting DEPTHS down from its zero is one
+        The same order holds wherever surfaces meet before a slot does: the bed
+        merge reads EVERY RUNG of its ladder onto the run's frame, each through
+        the row the runtime declared for it - one per rung, the same declaration
+        a slot's source gets and never a second mechanism - before any of them
+        paints a cell, and a pair nothing measures refuses naming both. A merge
+        called outside a run lands on the bottom rung's own zero, which nothing
+        it already holds moves. A surface counting DEPTHS down from its zero is one
         axis with a surface counting elevations up only through that shift, so
         it is read the other way round on the way - on its own grid, before
         either is read onto the common one.
@@ -955,9 +960,14 @@ package DataSeam {
         than a way past them.
 
         The bed is the one slot whose physics rule the runtime owns, stated
-        ONCE: the measurement where it measured, the terrain under the rest, the
-        soundings gridded at the run's own edge before the merge reads them, and
-        the terrain alone where nothing measured this domain.
+        ONCE: EVERY surviving rung of the class laid in rank order over the
+        terrain under all of them, each rung painting the cells the rungs above
+        it left, the soundings gridded at the run's own edge before the merge
+        reads them, and the terrain alone where nothing measured this domain. A
+        domain reaching past the top pick is what the next rung is for, so the
+        bed calls the list to its end rather than standing on the first answer,
+        and the provenance the merge writes names the rung that painted each
+        cell by its rank.
         */
     }
 
@@ -1337,7 +1347,7 @@ package DataSeam {
     verify requirement ASlotStatesANeedAndTheMatchFillsIt by
         "tests/search/test_source_match.py::test_a_run_that_picks_a_source_the_filters_excluded_is_refused";
     verify requirement ASlotStatesANeedAndTheMatchFillsIt by
-        "tests/runtime/test_matched_slots.py::test_the_bed_is_the_measurement_gridded_over_the_terrain_under_it";
+        "tests/runtime/test_matched_slots.py::test_every_surviving_rung_is_laid_in_rank_order_over_the_terrain";
     verify requirement ASlotStatesANeedAndTheMatchFillsIt by
         "tests/runtime/test_matched_slots.py::test_no_measurement_over_this_domain_leaves_the_terrain_as_the_whole_bed";
     verify requirement ASlotStatesANeedAndTheMatchFillsIt by
@@ -1408,6 +1418,10 @@ package DataSeam {
         "tests/inputs/test_bed_merge.py::test_a_frame_no_offset_reaches_refuses_naming_both";
     verify requirement TheRunHasOneVerticalFrame by
         "tests/runtime/test_matched_slots.py::test_the_runtime_declares_the_offset_row_a_merge_source_owes";
+    verify requirement TheRunHasOneVerticalFrame by
+        "tests/inputs/test_bed_merge.py::test_each_rung_is_read_onto_the_frame_through_the_row_declared_for_it";
+    verify requirement TheRunHasOneVerticalFrame by
+        "tests/fetchers/test_router_ehydro_surveys.py::test_a_depth_on_igld85_is_counted_from_the_low_water_datum";
     verify requirement TheRunHasOneVerticalFrame by
         "tests/inputs/test_vertical_datum.py::test_a_record_stating_a_chart_datum_asks_for_the_chart_datum";
     verify requirement TheRunHasOneVerticalFrame by
@@ -1494,6 +1508,10 @@ package DataSeam {
         "tests/inputs/test_bed_merge.py::test_the_primary_wins_where_it_measured_and_the_fallback_fills_the_rest";
     verify requirement OneBedOverEverySourceAUserCanHave by
         "tests/inputs/test_bed_merge.py::test_the_sidecar_says_which_input_painted_each_cell";
+    verify requirement OneBedOverEverySourceAUserCanHave by
+        "tests/inputs/test_bed_merge.py::test_every_rung_paints_the_cells_the_rungs_above_it_left";
+    verify requirement OneBedOverEverySourceAUserCanHave by
+        "tests/inputs/test_bed_merge.py::test_a_grid_the_whole_ladder_leaves_unpainted_refuses_naming_the_rungs";
     verify requirement OneBedOverEverySourceAUserCanHave by
         "tests/inputs/test_bed_merge.py::test_an_absent_primary_passes_the_other_surface_through";
     verify requirement OneBedOverEverySourceAUserCanHave by

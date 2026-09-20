@@ -467,13 +467,15 @@ async def _matched(env: _Env, decl: DataDecl) -> Any:
 
 
 async def _matched_bed(env: _Env, decl: DataDecl) -> Any:
-    """THE BED, stated once here: the measurement where it measured, the terrain
-    under the rest.
+    """THE BED, stated once here: EVERY rung the class survives with, laid in rank
+    order over the terrain under all of them.
 
-    A measurement that arrives as soundings is gridded at the mesh's own cell
-    before the merge reads it; with no measurement over this domain the terrain
-    is the whole bed, which is what the sheet then says."""
-    from trid3nt_server.inputs.bed import MERGE_DERIVE, SURVEY_DERIVE
+    A domain reaching past the top pick is what the next rung is for, so a source
+    is called even where a higher one answered and the merge lays the whole
+    ladder; a rung that arrives as soundings is gridded at the mesh's own cell
+    before the merge reads it. With no measurement at all the terrain is the whole
+    bed, which is what the sheet then says."""
+    from trid3nt_server.inputs.bed import MERGE_DERIVE
     from .levers import run_frame
 
     _choice, terrain = await _probe(env, decl, "terrain", f"{decl.name} terrain")
@@ -485,33 +487,71 @@ async def _matched_bed(env: _Env, decl: DataDecl) -> Any:
                 _choice.sentence, error_code="DATA_NEED_UNMATCHED",
                 step=_data_step_label(decl.name))
         return terrain
-    choice, measured = await _probe(env, decl, decl.data_class,
-                                    f"{decl.name} {decl.data_class}")
-    if measured is None:
+    laid = await _every_rung(env, decl, f"{decl.name} {decl.data_class}")
+    if not laid:
         if terrain is None:
             raise StepFailedError(
                 _choice.sentence, error_code="DATA_NEED_UNMATCHED",
                 step=_data_step_label(decl.name))
         return terrain
-    if _spec_of(choice.picked).output.layer_type == "vector":
-        measured = await _produce(env, _runtime_row(
-            env, f"{decl.name}_surveyed", SURVEY_DERIVE,
-            {"points": measured, "value_field": _value_column(choice.picked,
-                                                              decl.data_class),
-             "resolution_m": _mesh_m(env)}))
-    if terrain is None:
-        return measured
-    # TWO SURFACES MEET HERE, before any slot sees either, so the zero they are
-    # overlaid on is the run's: each one published on another frame owes the same
-    # offset row a slot's source owes, declared by the same runtime.
+    rungs = [await _surfaced(env, decl, picked, value) for picked, value in laid]
+    if terrain is None and len(rungs) == 1:
+        return rungs[0]
+    # THE LADDER MEETS HERE, before any slot sees a rung of it, so the zero they
+    # are overlaid on is the run's: each rung published on another frame owes the
+    # same offset row a slot's source owes, declared by the same runtime.
     frame = run_frame(env.params)
     return await _produce(env, _runtime_row(
         env, f"{decl.name}_merged", MERGE_DERIVE,
-        {"primary": measured, "fallback": terrain, "frame": frame,
-         "primary_offset": await _offset_row(
-             env, f"{decl.name}_measurement", measured, frame),
+        {"primary": rungs, "fallback": terrain, "frame": frame,
+         "primary_offset": [await _offset_row(env, f"{decl.name}_{picked}",
+                                              surface, frame)
+                            for (picked, _held), surface in zip(laid, rungs)],
          "fallback_offset": await _offset_row(
              env, f"{decl.name}_terrain", terrain, frame)}))
+
+
+async def _every_rung(env: _Env, decl: DataDecl, label: str
+                      ) -> list[tuple[str, Any]]:
+    """EVERY survivor of the bed's class, called in rank order -> what each held.
+
+    The bed is the one slot that lays a whole ladder rather than standing on the
+    first answer, so the list is walked to its end; a source that held nothing
+    here drops off it the way it does under any other slot, and the sheet says
+    so."""
+    choice = match(await _need(env, decl, decl.data_class, label),
+                   sources_with_coverage())
+    laid: list[tuple[str, Any]] = []
+    for picked in [row.fetcher for row in choice.rows if not row.excluded]:
+        asking = choice.model_copy(update={"picked": picked})
+        row = _runtime_row(env, f"{label.replace(' ', '_')}_{picked}", picked,
+                           await _ask_for(env, asking, decl))
+        try:
+            laid.append((picked, await _produce(env, row)))
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:  # noqa: BLE001 - an empty source drops a rung
+            if getattr(exc, "retryable", False) or _malformed_ask(exc):
+                raise
+            logger.info("%s: %s held nothing (%s); the rung drops off the ladder",
+                        label, picked, exc)
+            choice = dropped_from(choice, picked, f"held nothing here ({exc})")
+    slot_choice(choice)
+    journal_note(choice.sentence)
+    return laid
+
+
+async def _surfaced(env: _Env, decl: DataDecl, picked: str, held: Any) -> Any:
+    """One rung as a SURFACE: soundings through the grid that makes one of them,
+    a raster as it came."""
+    from trid3nt_server.inputs.bed import SURVEY_DERIVE
+
+    if _spec_of(picked).output.layer_type != "vector":
+        return held
+    return await _produce(env, _runtime_row(
+        env, f"{decl.name}_surveyed_{picked}", SURVEY_DERIVE,
+        {"points": held, "value_field": _value_column(picked, decl.data_class),
+         "resolution_m": _mesh_m(env)}))
 
 
 async def _probe(env: _Env, decl: DataDecl, data_class: str, label: str, *,

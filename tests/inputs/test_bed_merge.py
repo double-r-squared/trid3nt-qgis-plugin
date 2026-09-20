@@ -1,8 +1,9 @@
-"""The bed slot's MERGE: a measurement over part of the ground, a wider surface
-under the rest.
+"""The bed slot's MERGE: a ranked LADDER of measurements, a wider surface under
+all of them.
 
-Covered: the primary winning every cell it measured and the fallback filling the
-rest, the merged grid taking the finer cell over the union of both, the sidecar
+Covered: every rung painting what the rungs above it left and the whole ladder
+refusing where none of them measured a cell, the top rung winning every cell it
+measured and the fallback filling the rest, the merged grid taking the finer cell over the union of both, the sidecar
 naming which input painted each cell, an absent row passing the other surface
 through, two different vertical datums refusing by name, an unstated datum
 refusing, a STATED OFFSET bringing two differing datums onto one axis while an
@@ -244,7 +245,7 @@ def test_one_datum_needs_no_offset_and_shifts_nothing(tmp_path) -> None:
     merged = merged_surface(primary=_survey(), fallback=_terrain(),
                                   _output_dir=str(tmp_path))
     assert merged.datum_shift_m == 0.0 and merged.fallback_shift_m == 0.0
-    assert "Both surfaces count from NAVD88." in merged.notes
+    assert "Every surface counts from NAVD88." in merged.notes
 
 
 def test_each_source_off_the_runs_frame_is_shifted_onto_it_before_the_overlay(
@@ -326,3 +327,69 @@ def test_an_absent_survey_leaves_the_terrain_as_the_whole_bed(tmp_path) -> None:
     assert merged.uri == terrain.uri
     assert merged.vertical_datum == "NAVD88"
     assert merged.fallback_fraction == 1.0
+
+
+def _partial(columns: list[float | None], datum: str = "NAVD88") -> LayerURI:
+    """A 4 m x 4 m rung at 1 m, measuring only the columns it names a value for."""
+    grid = np.full((4, 4), _NODATA)
+    for column, value in enumerate(columns):
+        if value is not None:
+            grid[:, column] = value
+    return _layer(_write(grid, west=500_000.0, north=4_000_000.0, cell=1.0), datum)
+
+
+def test_every_rung_paints_the_cells_the_rungs_above_it_left(tmp_path) -> None:
+    """A domain reaching past the top pick is what the next rung is for: the
+    ladder is laid whole, in rank order, and the sidecar names the rung that
+    painted each cell by its rank."""
+    merged = merged_surface(primary=[_partial([-5.0, -5.0, None, None]),
+                                     _partial([None, -7.0, -7.0, None])],
+                            fallback=_partial([10.0, 10.0, 10.0, 10.0]),
+                            _output_dir=str(tmp_path))
+    with rasterio.open(merged.uri) as surface, \
+            rasterio.open(merged.provenance_uri) as source:
+        values, won = surface.read(1), source.read(1)
+    assert won.shape == (4, 4)
+    assert [int(v) for v in won[0]] == [0, 0, 1, 2]
+    assert [float(v) for v in values[0]] == pytest.approx([-5.0, -5.0, -7.0, 10.0])
+    assert [share for _name, share in merged.rungs] == pytest.approx(
+        [0.5, 0.25, 0.25])
+    assert merged.primary_fraction == pytest.approx(0.75)
+    assert merged.fallback_fraction == pytest.approx(0.25)
+
+
+def test_each_rung_is_read_onto_the_frame_through_the_row_declared_for_it(
+        tmp_path) -> None:
+    """A chart datum and the system it is expressed on are metres apart, so every
+    rung crosses onto the run's frame through the offset row of its own rank, and
+    the run says which point was asked and how close the service claims to be."""
+    merged = merged_surface(
+        primary=[_partial([-5.0, -5.0, None, None], "IGLD85"),
+                 _partial([None, -7.0, -7.0, None], "LWD_IGLD85")],
+        fallback=_partial([10.0, 10.0, 10.0, 10.0], "NAVD88"), frame="NAVD88",
+        primary_offset=[{"offset_m": 0.013, "from_frame": "IGLD85",
+                         "to_frame": "NAVD88", "source": "NOAA VDatum"},
+                        {"offset_m": 176.056, "from_frame": "LWD_IGLD85",
+                         "to_frame": "NAVD88", "source": "NOAA VDatum",
+                         "uncertainty_m": 0.2, "lon": -82.424158,
+                         "lat": 42.986770}],
+        _output_dir=str(tmp_path))
+    with rasterio.open(merged.uri) as surface:
+        values = surface.read(1)
+    assert [float(v) for v in values[0]] == pytest.approx(
+        [-5.0 + 0.013, -5.0 + 0.013, -7.0 + 176.056, 10.0])
+    assert merged.datum_shift_m == pytest.approx(0.013)
+    assert "(+/- 0.200 m) at (-82.42416, 42.98677)" in merged.notes[-1]
+
+
+def test_a_grid_the_whole_ladder_leaves_unpainted_refuses_naming_the_rungs(
+        tmp_path) -> None:
+    """A rung measuring nothing is not a refusal - the next one is what it is for
+    - and only a grid every rung left refuses, naming how many were tried."""
+    tried = [_partial([None, None, None, None]) for _ in range(3)]
+    with pytest.raises(MergeRastersError) as excinfo:
+        merged_surface(primary=tried[:2], fallback=tried[2],
+                       _output_dir=str(tmp_path))
+    assert excinfo.value.error_code == "MERGE_RASTERS_DISJOINT"
+    assert "none of the 3 surfaces tried" in str(excinfo.value)
+    assert all(os.path.basename(rung.uri) in str(excinfo.value) for rung in tried)
