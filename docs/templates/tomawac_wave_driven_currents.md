@@ -39,14 +39,119 @@ The values the template declares. `desc` is what the model reads when it fills o
 
 | field | the proving run's value |
 |---|---|
-| `longshore_current_speed_mps` | - |
-| `current_along_x_mps` | - |
-| `current_along_y_mps` | - |
-| `hs_at_station_m` | - |
-| `peak_current_speed_mps` | - |
-| `mesh_size_m` | - |
+| `longshore_current_speed_mps` | 0.006056792102754116 |
+| `current_along_x_mps` | 0.0015229926211759448 |
+| `current_along_y_mps` | 0.005862186197191477 |
+| `hs_at_station_m` | 0.03550698608160019 |
+| `peak_current_speed_mps` | 0.15607312321662903 |
+| `mesh_size_m` | 16.223 |
+
+It publishes these layers onto the canvas:
+
+- Input: domain (osm_coastline)
+- Input: bed (dem, 3DEP 1-10 m US lidar (default 10 m); Copernicus GLO-30 30 m global via source=copernicus, datum NAVD88)
+- Input: bed (bluetopo, BlueTopo multi-resolution UTM tiles - 2 m / 4 m / 8 m / 16 m tiers, finer in shallow water, datum NAVD88)
+- Input: bed (topobathy, CUDEM 1/9" ~3 m nearshore; ETOPO 2022 15" ~450 m offshore fallback; 3DEP 10 m land, datum NAVD88)
+- Current station (user) - osm_coastline_osm_coastline
+- Input: level (noaa_coops_tides, datum MLLW)
+- Input: wave (ndbc_buoys)
+- Velocity u over time (osm_coastline_osm_coastline_mesh)
+- Velocity v over time (osm_coastline_osm_coastline_mesh)
+- Water depth over time (osm_coastline_osm_coastline_mesh)
+- Free surface over time (osm_coastline_osm_coastline_mesh)
+- Bottom (m) at t = 3600 s (osm_coastline_osm_coastline_mesh)
+- Froude number over time (osm_coastline_osm_coastline_mesh)
+- Scalar flowrate over time (osm_coastline_osm_coastline_mesh)
+- Scalar velocity over time (osm_coastline_osm_coastline_mesh)
+- Variance m0 over time (osm_coastline_osm_coastline_mesh)
+- Wave height hm0 over time (osm_coastline_osm_coastline_mesh)
+- Mean direction over time (osm_coastline_osm_coastline_mesh)
+- Wave spread over time (osm_coastline_osm_coastline_mesh)
+- Force fx over time (osm_coastline_osm_coastline_mesh)
+- Force fy over time (osm_coastline_osm_coastline_mesh)
+- Stress sxx over time (osm_coastline_osm_coastline_mesh)
+- Stress sxy over time (osm_coastline_osm_coastline_mesh)
+- Stress syy over time (osm_coastline_osm_coastline_mesh)
+- Bottom velocity over time (osm_coastline_osm_coastline_mesh)
+- Mean freq fmoy over time (osm_coastline_osm_coastline_mesh)
+- Mean freq fm01 over time (osm_coastline_osm_coastline_mesh)
+- Mean freq fm02 over time (osm_coastline_osm_coastline_mesh)
+- Peak freq fpd over time (osm_coastline_osm_coastline_mesh)
+- Peak freq fpr5 over time (osm_coastline_osm_coastline_mesh)
+- Peak freq fpr8 over time (osm_coastline_osm_coastline_mesh)
+- Ustar over time (osm_coastline_osm_coastline_mesh)
+- Wave stress over time (osm_coastline_osm_coastline_mesh)
+- Mean period tmoy over time (osm_coastline_osm_coastline_mesh)
+- Mean period tm01 over time (osm_coastline_osm_coastline_mesh)
+- Mean period tm02 over time (osm_coastline_osm_coastline_mesh)
+- Peak period tpd over time (osm_coastline_osm_coastline_mesh)
+- Peak period tpr5 over time (osm_coastline_osm_coastline_mesh)
+- Peak period tpr8 over time (osm_coastline_osm_coastline_mesh)
+- Wave power over time (osm_coastline_osm_coastline_mesh)
+- Breaking rat over time (osm_coastline_osm_coastline_mesh)
+- Breaker dissip over time (osm_coastline_osm_coastline_mesh)
+- Peak direction over time (osm_coastline_osm_coastline_mesh)
+- osm_coastline_osm_coastline_mesh
 
 ## The proving run
 
-None rendered yet.
+Run `01M309C1PF88CVH2VAX22A8SPX`, 2026-09-20T20:51:41.458905+00:00, 75.35 s, at commit `3958f955f53df329330b74046bf0e40dd00e86b1-dirty`.
+
+![Every layer the run published, stacked and framed on the result (run 01M309C1PF88CVH2VAX22A8SPX)](tomawac_wave_driven_currents/tomawac_wave_driven_currents.png)
+
+*Every layer the run published, stacked and framed on the result (run 01M309C1PF88CVH2VAX22A8SPX)*
+
+![The solve, frame by frame - current (run 01M309C1PF88CVH2VAX22A8SPX)](tomawac_wave_driven_currents/tomawac_wave_driven_currents_animation_current.gif)
+
+*The solve, frame by frame - current (run 01M309C1PF88CVH2VAX22A8SPX)*
+
+![The solve, frame by frame - wave_height (run 01M309C1PF88CVH2VAX22A8SPX)](tomawac_wave_driven_currents/tomawac_wave_driven_currents_animation_wave_height.gif)
+
+*The solve, frame by frame - wave_height (run 01M309C1PF88CVH2VAX22A8SPX)*
+
+![current peak frame (run 01M309C1PF88CVH2VAX22A8SPX)](tomawac_wave_driven_currents/tomawac_wave_driven_currents_current_peak_frame.png)
+
+*current peak frame (run 01M309C1PF88CVH2VAX22A8SPX)*
+
+![wave height peak frame (run 01M309C1PF88CVH2VAX22A8SPX)](tomawac_wave_driven_currents/tomawac_wave_driven_currents_wave_height_peak_frame.png)
+
+*wave height peak frame (run 01M309C1PF88CVH2VAX22A8SPX)*
+
+![current speed - the chart the run persisted (run 01M309C1PF88CVH2VAX22A8SPX)](tomawac_wave_driven_currents/tomawac_wave_driven_currents_chart_current_speed.png)
+
+*current speed - the chart the run persisted (run 01M309C1PF88CVH2VAX22A8SPX)*
+
+![significant wave height - the chart the run persisted (run 01M309C1PF88CVH2VAX22A8SPX)](tomawac_wave_driven_currents/tomawac_wave_driven_currents_chart_significant_wave_height.png)
+
+*significant wave height - the chart the run persisted (run 01M309C1PF88CVH2VAX22A8SPX)*
+
+### The sheet it filled
+
+Every slot the run resolved, with where the value came from. The engine's own defaults are folded: what is not here, the engine chose.
+
+| param | value | units | basis | provenance |
+|---|---|---|---|---|
+| `seed` | {'lon': -71.51, 'lat': 41.31, 'name': None} | - | user | supplied on this invocation |
+| `station` | {'lon': -71.509, 'lat': 41.356, 'name': None} | - | user | supplied on this invocation |
+| `mesh_resolution_m` | 40.0 | m | user | supplied on this invocation |
+| `event_time` | 2026-09-17T12:00:00+00:00 | - | user | supplied on this invocation |
+| `open_depth_threshold_m` | -12.0 | m | default_demo | declared scenario default |
+| `compute_class` | medium | - | default_demo | declared constant default |
+| `vertical_frame` | NAVD88 | - | default_demo | declared constant default |
+
+### Reproduce
+
+```python
+from trid3nt_server.tools import TOOL_REGISTRY
+
+await TOOL_REGISTRY['tomawac_wave_driven_currents'].fn(
+    event_time='2026-09-17T12:00:00+00:00',
+    mesh_resolution_m=40.0,
+    seed={'lon': -71.51, 'lat': 41.31, 'name': None},
+    station={'lon': -71.509, 'lat': 41.356, 'name': None},
+    extent="{'bbox': [-71.525, 41.338, -71.492, 41.368], 'name': 'Point Judith, RI'}",
+)
+```
+
+That is the invocation this run came from; the figures above are stamped with run `01M309C1PF88CVH2VAX22A8SPX` and commit `3958f955f53df329330b74046bf0e40dd00e86b1-dirty`. The full argument record is [`tomawac_wave_driven_currents/run.json`](tomawac_wave_driven_currents/run.json).
 

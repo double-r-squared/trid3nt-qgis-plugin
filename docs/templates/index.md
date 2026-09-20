@@ -110,13 +110,17 @@ Module `telemac2d`, proving run `01M2ZCK2Z4BK96T1CN2AA7W5GH`.
 
 ## [`tomawac_nearshore_waves`](tomawac_nearshore_waves.md)
 
+[![tomawac_nearshore_waves](tomawac_nearshore_waves/tomawac_nearshore_waves.png)](tomawac_nearshore_waves.md)
+
 NEARSHORE WAVES: what the offshore swell becomes at the shore - how high, how long, which way, and where it breaks.
 
-Module `tomawac`.
+Module `tomawac`, proving run `01M307TT340WGGQT0KMHWBWNM4`.
 
 ## [`tomawac_wave_driven_currents`](tomawac_wave_driven_currents.md)
 
+[![tomawac_wave_driven_currents](tomawac_wave_driven_currents/tomawac_wave_driven_currents.png)](tomawac_wave_driven_currents.md)
+
 WAVE-DRIVEN CURRENTS: the current breaking waves drive along the shore - how fast and which way.
 
-Module `telemac2d`.
+Module `telemac2d`, proving run `01M309C1PF88CVH2VAX22A8SPX`.
 

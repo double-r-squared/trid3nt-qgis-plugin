@@ -39,15 +39,130 @@ The values the template declares. `desc` is what the model reads when it fills o
 
 | field | the proving run's value |
 |---|---|
-| `hs_max_m` | - |
-| `hs_at_station_m` | - |
-| `peak_period_at_station_s` | - |
-| `direction_at_station_deg` | - |
-| `breaking_rate_max_per_s` | - |
-| `breaker_dissipation_max_m2s` | - |
-| `mesh_size_m` | - |
+| `hs_max_m` | 1.0198705196380615 |
+| `hs_at_station_m` | 0.7841470837593079 |
+| `peak_period_at_station_s` | 7.965770244598389 |
+| `direction_at_station_deg` | 263.4527893066406 |
+| `breaking_rate_max_per_s` | -0.0 |
+| `breaker_dissipation_max_m2s` | 0.0 |
+| `mesh_size_m` | 17.077 |
+
+It publishes these layers onto the canvas:
+
+- Input: domain (osm_coastline)
+- Input: bed (dem, 3DEP 1-10 m US lidar (default 10 m); Copernicus GLO-30 30 m global via source=copernicus, datum NAVD88)
+- Input: bed (bluetopo, BlueTopo multi-resolution UTM tiles - 2 m / 4 m / 8 m / 16 m tiers, finer in shallow water, datum NAVD88)
+- Input: bed (topobathy, CUDEM 1/9" ~3 m nearshore; ETOPO 2022 15" ~450 m offshore fallback; 3DEP 10 m land, datum NAVD88)
+- Wave station (user) - osm_coastline_osm_coastline
+- Input: level (noaa_coops_tides, datum MLLW)
+- Input: wave (ndbc_buoys)
+- Variance m0 over time (osm_coastline_osm_coastline_mesh)
+- Wave height hm0 over time (osm_coastline_osm_coastline_mesh)
+- Mean direction over time (osm_coastline_osm_coastline_mesh)
+- Wave spread over time (osm_coastline_osm_coastline_mesh)
+- Bottom (m) at t = 3600 s (osm_coastline_osm_coastline_mesh)
+- Water depth over time (osm_coastline_osm_coastline_mesh)
+- Force fx over time (osm_coastline_osm_coastline_mesh)
+- Force fy over time (osm_coastline_osm_coastline_mesh)
+- Stress sxx over time (osm_coastline_osm_coastline_mesh)
+- Stress sxy over time (osm_coastline_osm_coastline_mesh)
+- Stress syy over time (osm_coastline_osm_coastline_mesh)
+- Bottom velocity over time (osm_coastline_osm_coastline_mesh)
+- Mean freq fmoy over time (osm_coastline_osm_coastline_mesh)
+- Mean freq fm01 over time (osm_coastline_osm_coastline_mesh)
+- Mean freq fm02 over time (osm_coastline_osm_coastline_mesh)
+- Peak freq fpd over time (osm_coastline_osm_coastline_mesh)
+- Peak freq fpr5 over time (osm_coastline_osm_coastline_mesh)
+- Peak freq fpr8 over time (osm_coastline_osm_coastline_mesh)
+- Ustar over time (osm_coastline_osm_coastline_mesh)
+- Wave stress over time (osm_coastline_osm_coastline_mesh)
+- Mean period tmoy over time (osm_coastline_osm_coastline_mesh)
+- Mean period tm01 over time (osm_coastline_osm_coastline_mesh)
+- Mean period tm02 over time (osm_coastline_osm_coastline_mesh)
+- Peak period tpd over time (osm_coastline_osm_coastline_mesh)
+- Peak period tpr5 over time (osm_coastline_osm_coastline_mesh)
+- Peak period tpr8 over time (osm_coastline_osm_coastline_mesh)
+- Wave power over time (osm_coastline_osm_coastline_mesh)
+- Breaking rat over time (osm_coastline_osm_coastline_mesh)
+- Breaker dissip over time (osm_coastline_osm_coastline_mesh)
+- Peak direction over time (osm_coastline_osm_coastline_mesh)
+- osm_coastline_osm_coastline_mesh
 
 ## The proving run
 
-None rendered yet.
+Run `01M307TT340WGGQT0KMHWBWNM4`, 2026-09-20T20:24:18.113282+00:00, 41.492 s, at commit `cba4ee002e732c91c4a87abaad51f2399f0352c4-dirty`.
+
+![Every layer the run published, stacked and framed on the result (run 01M307TT340WGGQT0KMHWBWNM4)](tomawac_nearshore_waves/tomawac_nearshore_waves.png)
+
+*Every layer the run published, stacked and framed on the result (run 01M307TT340WGGQT0KMHWBWNM4)*
+
+![The solve, frame by frame - breaking (run 01M307TT340WGGQT0KMHWBWNM4)](tomawac_nearshore_waves/tomawac_nearshore_waves_animation_breaking.gif)
+
+*The solve, frame by frame - breaking (run 01M307TT340WGGQT0KMHWBWNM4)*
+
+![The solve, frame by frame - direction (run 01M307TT340WGGQT0KMHWBWNM4)](tomawac_nearshore_waves/tomawac_nearshore_waves_animation_direction.gif)
+
+*The solve, frame by frame - direction (run 01M307TT340WGGQT0KMHWBWNM4)*
+
+![The solve, frame by frame - wave_height (run 01M307TT340WGGQT0KMHWBWNM4)](tomawac_nearshore_waves/tomawac_nearshore_waves_animation_wave_height.gif)
+
+*The solve, frame by frame - wave_height (run 01M307TT340WGGQT0KMHWBWNM4)*
+
+![breaking peak frame (run 01M307TT340WGGQT0KMHWBWNM4)](tomawac_nearshore_waves/tomawac_nearshore_waves_breaking_peak_frame.png)
+
+*breaking peak frame (run 01M307TT340WGGQT0KMHWBWNM4)*
+
+![direction final frame (run 01M307TT340WGGQT0KMHWBWNM4)](tomawac_nearshore_waves/tomawac_nearshore_waves_direction_final_frame.png)
+
+*direction final frame (run 01M307TT340WGGQT0KMHWBWNM4)*
+
+![wave height peak frame (run 01M307TT340WGGQT0KMHWBWNM4)](tomawac_nearshore_waves/tomawac_nearshore_waves_wave_height_peak_frame.png)
+
+*wave height peak frame (run 01M307TT340WGGQT0KMHWBWNM4)*
+
+![mean wave direction - the chart the run persisted (run 01M307TT340WGGQT0KMHWBWNM4)](tomawac_nearshore_waves/tomawac_nearshore_waves_chart_mean_wave_direction.png)
+
+*mean wave direction - the chart the run persisted (run 01M307TT340WGGQT0KMHWBWNM4)*
+
+![peak wave period - the chart the run persisted (run 01M307TT340WGGQT0KMHWBWNM4)](tomawac_nearshore_waves/tomawac_nearshore_waves_chart_peak_wave_period.png)
+
+*peak wave period - the chart the run persisted (run 01M307TT340WGGQT0KMHWBWNM4)*
+
+![significant wave height - the chart the run persisted (run 01M307TT340WGGQT0KMHWBWNM4)](tomawac_nearshore_waves/tomawac_nearshore_waves_chart_significant_wave_height.png)
+
+*significant wave height - the chart the run persisted (run 01M307TT340WGGQT0KMHWBWNM4)*
+
+![wave energy by frequency at the station - the chart the run persisted (run 01M307TT340WGGQT0KMHWBWNM4)](tomawac_nearshore_waves/tomawac_nearshore_waves_chart_wave_energy_by_frequency_at_the_station.png)
+
+*wave energy by frequency at the station - the chart the run persisted (run 01M307TT340WGGQT0KMHWBWNM4)*
+
+### The sheet it filled
+
+Every slot the run resolved, with where the value came from. The engine's own defaults are folded: what is not here, the engine chose.
+
+| param | value | units | basis | provenance |
+|---|---|---|---|---|
+| `seed` | {'lon': -75.593, 'lat': 36.257, 'name': None} | - | user | supplied on this invocation |
+| `station` | {'lon': -75.7375, 'lat': 36.184, 'name': None} | - | user | supplied on this invocation |
+| `mesh_resolution_m` | 40.0 | m | user | supplied on this invocation |
+| `event_time` | 2026-09-17T12:00:00+00:00 | - | user | supplied on this invocation |
+| `open_depth_threshold_m` | -12.0 | m | default_demo | declared scenario default |
+| `compute_class` | medium | - | default_demo | declared constant default |
+| `vertical_frame` | NAVD88 | - | default_demo | declared constant default |
+
+### Reproduce
+
+```python
+from trid3nt_server.tools import TOOL_REGISTRY
+
+await TOOL_REGISTRY['tomawac_nearshore_waves'].fn(
+    event_time='2026-09-17T12:00:00+00:00',
+    mesh_resolution_m=40.0,
+    seed={'lon': -75.593, 'lat': 36.257, 'name': None},
+    station={'lon': -75.7375, 'lat': 36.184, 'name': None},
+    extent="{'bbox': [-75.755, 36.17, -75.725, 36.2], 'name': 'Duck, NC'}",
+)
+```
+
+That is the invocation this run came from; the figures above are stamped with run `01M307TT340WGGQT0KMHWBWNM4` and commit `cba4ee002e732c91c4a87abaad51f2399f0352c4-dirty`. The full argument record is [`tomawac_nearshore_waves/run.json`](tomawac_nearshore_waves/run.json).
 
