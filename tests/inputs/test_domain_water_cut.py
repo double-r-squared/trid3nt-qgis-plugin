@@ -78,3 +78,15 @@ def test_a_polygon_is_still_read_as_the_polygon_it_is():
     drawn = domain({"type": "Polygon", "coordinates": [[*ring, ring[0]]]},
                    extent=(-69.8, 42.0, -69.2, 43.0))
     assert _bounds(drawn.geometry) == pytest.approx((-70.0, 42.0, -69.0, 43.0))
+
+
+def test_the_lines_the_cut_consumed_are_not_companions_of_the_water():
+    """A companion is a geometry the producer measured BESIDE the polygon; the
+    edge a polygon was cut FROM is not one, and a mesher handed the domain reads
+    the water alone."""
+    cut = domain({"type": "FeatureCollection", "features": [
+        {"type": "Feature", "properties": {"name": "Point Judith"},
+         "geometry": _COAST}]}, extent=_BOX)
+    assert cut.companions == {}
+    parts = cut.as_feature_collection()["features"]
+    assert [f["geometry"]["type"] for f in parts] == [cut.geometry["type"]]

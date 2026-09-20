@@ -122,14 +122,11 @@ def domain(value: Any, *, label: str = "domain", code: str = _CODE,
     if isinstance(uri, str) and uri.strip().startswith(_LAYER_SCHEMES):
         doc = read_geometry_doc(uri.strip())
         logger.info("%s: read from %s", label, uri)
-        return Domain(_one_polygon(doc, label, code, extent), _named(value),
-                      uri.strip(),
-                      _runs_of(value, label, code) or _prescribed(doc, label, code),
-                      _companions(doc))
+        return _carried_by(doc, _named(value), uri.strip(),
+                           _runs_of(value, label, code), extent, label, code)
     if isinstance(value, Mapping):
-        return Domain(_one_polygon(value, label, code, extent), _named(value),
-                      _uri_of(value), _runs_of(value, label, code)
-                      or _prescribed(value, label, code), _companions(value))
+        return _carried_by(value, _named(value), _uri_of(value),
+                           _runs_of(value, label, code), extent, label, code)
     ring = polygon_ring(value, label=label, code=code)
     return Domain(_closed(ring or []))
 
@@ -177,23 +174,31 @@ def _rings(geometry: Mapping[str, Any]) -> list[list[Any]]:
     return []
 
 
-def _one_polygon(doc: Any, label: str, code: str,
-                 extent: Any = None) -> dict[str, Any]:
-    """The polygon a document carries; several are the one they cover together.
+def _carried_by(doc: Any, name: str | None, uri: str | None,
+                stated: tuple[BoundaryRun, ...], extent: Any, label: str,
+                code: str) -> Domain:
+    """The domain one geometry document carries.
 
-    A document of LINES carries none and is the land-water edge: the water it
-    leaves inside the window is this slot's polygon, cut below."""
+    A document of LINES carries no polygon and no companions either: it is the
+    land-water EDGE, and the water the cut leaves is the whole of what the slot
+    then holds."""
     geometries = list(flatten_geometries(read_geometry_doc(doc)))
     polygons = [g for g in geometries
                 if str(g.get("type")) in ("Polygon", "MultiPolygon")]
-    if not polygons:
-        if any(str(g.get("type")) in ("LineString", "MultiLineString")
+    if polygons:
+        return Domain(_one_polygon(polygons), name, uri,
+                      stated or _prescribed(doc, label, code), _companions(doc))
+    if not any(str(g.get("type")) in ("LineString", "MultiLineString")
                for g in geometries):
-            return _water_left_by(doc, extent, label, code)
         raise UserInputError(
             f"the {label} carries no polygon geometry. A domain is the CLOSED "
             "outline the equations are solved over: draw it, name a polygon "
             "layer, or let the template's own producer find one.", code=code)
+    return Domain(_water_left_by(doc, extent, label, code), name, uri)
+
+
+def _one_polygon(polygons: list[dict[str, Any]]) -> dict[str, Any]:
+    """The polygon a document carries; several are the one they cover together."""
     if len(polygons) == 1:
         return dict(polygons[0])
     # SEVERAL polygons are one domain with parts - a lake with islands cut out,
