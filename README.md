@@ -91,8 +91,9 @@ you. The full reference is [docs/site/configuration.md](docs/site/configuration.
 
 A client machine points its **Server URL** at the daemon's
 [Tailscale](https://tailscale.com) address instead of loopback, e.g.
-`ws://100.x.x.x:8765/ws`; everything else is advertised on connect. Set
-`TRID3NT_ACCESS_TOKEN` on the daemon for a shared-secret lock - see
+`ws://100.x.x.x:8765/ws`; everything else is advertised on connect. Every
+client presents the daemon's access token, minted at first start into
+`~/.trid3nt/access_token` - see
 [Remote daemon access](docs/site/configuration.md#remote-daemon-access-tailnet).
 
 ## Repo layout

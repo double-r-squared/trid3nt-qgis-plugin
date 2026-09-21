@@ -96,13 +96,12 @@ pathological fetchers, but new heavy tools will not be covered.
 **Symptom**: the dock connects fine but the case list is empty, even though cases exist in
 `data/persistence/`.
 
-**Root cause**: local auth is anonymous -- the server mints a fresh ULID user per unknown
-connection, and a case belongs to the ULID that created it. A client with no stored identity
-IS a brand-new user.
+**Root cause**: a case belongs to the session identity that created it. Every verified
+connection is scoped to the one fixed identity, so an empty list means the cases were written
+by an older build under a different ULID, not by this daemon.
 
-**Fix**: connect with the owning identity rather than a fresh one. The owner ULID for existing
-cases is visible in `logs/agent.log` (`auth-ack ... user_id=...`) or in the persistence store;
-the plugin stores its own identity in the QGIS profile and reuses it across restarts.
+**Fix**: check the owner ULID the cases carry in the persistence store against the
+`auth-ack ... user_id=...` line in `logs/agent.log`.
 
 ---
 

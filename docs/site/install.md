@@ -45,8 +45,8 @@ and one file.
    - **Server URL** -- `ws://127.0.0.1:8765/ws` if the daemon runs on this same
      machine, or the daemon's tailnet address for a remote daemon, e.g.
      `ws://100.x.x.x:8765/ws`.
-   - **Server token** -- leave blank unless the daemon set
-     `TRID3NT_ACCESS_TOKEN`, in which case paste the same value here.
+   - **Server token** -- required. The daemon printed it at first start and
+     keeps it in `~/.trid3nt/access_token`; paste that value here.
 
    See [Remote daemon access (tailnet)](configuration.md#remote-daemon-access-tailnet)
    for how the plugin learns the MinIO / HTTP endpoints from that one URL.

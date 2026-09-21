@@ -111,7 +111,7 @@ QGIS profile when the daemon's MinIO uses different ones.
 
 | Variable | Default | What it does |
 |----------|---------|--------------|
-| `TRID3NT_ACCESS_TOKEN` | _(unset)_ | Optional shared token. When set, the WS handshake requires the client's `auth-token` to match (constant-time compare); a missing/wrong token is rejected with a typed `AUTH_FAILED` close (WS code 1008) and the client stops retrying. **Unset (default) is byte-identical anonymous access** -- no token required. Set the same value on the client. |
+| `TRID3NT_ACCESS_TOKEN` | _(the minted token)_ | Override the daemon's access token. The gate is ALWAYS on: the WS handshake requires the client's `auth-token` to match (constant-time compare), and a missing or wrong token is refused with a typed `AUTH_FAILED` close (WS code 1008) the client stops retrying on. Unset, the daemon mints a token into `~/.trid3nt/access_token` (0600) at first start and prints it once; paste that value into the plugin's **Server token**. |
 | `TRID3NT_ADVERTISED_DATA_BASE` | _(derived)_ | Override the advertised MinIO base URL (e.g. behind a reverse proxy / different hostname). When unset, derived as `http://<connected-host>:9000`. |
 | `TRID3NT_ADVERTISED_HTTP_BASE` | _(derived)_ | Override the advertised agent HTTP base URL. When unset, derived as `http://<connected-host>:<TRID3NT_AGENT_HTTP_PORT>` (default `:8766`). |
 
@@ -124,8 +124,8 @@ QGIS profile when the daemon's MinIO uses different ones.
    - **Server URL** -- the same field the loopback default lives in
      (`ws://127.0.0.1:8765/ws`). Point it at the daemon's tailnet address
      instead, e.g. `ws://100.x.x.x:8765/ws`.
-   - **Server token (optional)** -- leave blank unless the daemon set
-     `TRID3NT_ACCESS_TOKEN`, in which case paste the same value here.
+   - **Server token** -- required. The daemon printed it at first start and
+     keeps it in `~/.trid3nt/access_token`; paste that value here.
 3. That is the whole setup. There is **no second field to configure** for
    MinIO or the agent's HTTP API -- the plugin learns both automatically
    from the connect handshake's advertised `data_base` / `http_base` (see
