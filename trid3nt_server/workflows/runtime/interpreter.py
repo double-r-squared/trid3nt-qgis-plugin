@@ -510,6 +510,10 @@ async def _matched_bed(env: _Env, decl: DataDecl) -> Any:
     return await _produce(env, _runtime_row(
         env, f"{decl.name}_merged", MERGE_DERIVE,
         {"primary": rungs, "fallback": terrain, "frame": frame,
+         # THE CUT IS WHERE THE WATER IS, and the terrain under the ladder
+         # measures the water top rather than the bed, so it paints outside it
+         # only and the merge states what share of the water nothing measured.
+         "water": _cut_polygon(),
          "primary_offset": [await _offset_row(env, f"{decl.name}_{picked}",
                                               surface, frame)
                             for (picked, _held), surface in zip(laid, rungs)],
@@ -733,6 +737,15 @@ def _water() -> CoverageExtent | None:
     if len(ring) < 3:
         return None
     return CoverageExtent(kind="surface", rings=[ring + [ring[0]]], note=note)
+
+
+def _cut_polygon() -> dict[str, Any] | None:
+    """The polygon the domain was CUT with, or ``None`` where it carries none.
+
+    A box is not a cut: it states where the question was asked, not where the
+    water is, and a bed restricted to one would leave dry ground unpainted."""
+    dom = current_domain()
+    return dict(dom.geometry) if dom is not None and dom.geometry else None
 
 
 def _pick(env: _Env, decl: DataDecl, data_class: str) -> str:

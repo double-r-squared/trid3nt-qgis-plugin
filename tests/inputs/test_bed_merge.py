@@ -17,7 +17,10 @@ dropping off while the rungs under it paint, the TOP rung being unplaceable
 refusing the whole merge, a ladder left with one rung passing it through, and a
 merged bed splitting into two populations farther apart than the domain's own
 relief refusing as a cliff while an ordinary channel cut into the terrain around
-it merges."""
+it merges, the terrain rung painting only OUTSIDE the polygon the domain was cut
+with, the share of the water measured by nothing reaching the result, the
+journal and the input row, a merge handed no cut claiming nothing about the
+water, and a cut carrying no polygon refusing rather than painting it."""
 
 from __future__ import annotations
 
@@ -505,3 +508,77 @@ def test_the_merge_publishes_the_bed_as_an_input_layer(tmp_path, monkeypatch) ->
     assert row["layer_id"] == f"input-{merged.layer_id}"
     assert row["style"] == merged.style and row["style"]["units"] == "m"
     assert set(row) == {"cog_uri", "layer_id", "name", "style"}
+
+
+def _cut(west: float, south: float, east: float, north: float) -> dict:
+    """The water polygon the domain was cut with, in the lon/lat a domain
+    publishes its geometry in, over a box stated in the rungs' own UTM zone."""
+    from rasterio.warp import transform_geom
+
+    return transform_geom("EPSG:32610", "EPSG:4326", {
+        "type": "Polygon",
+        "coordinates": [[[west, south], [east, south], [east, north],
+                         [west, north], [west, south]]]})
+
+
+def test_the_terrain_paints_only_outside_the_polygon_the_domain_was_cut_with(
+        tmp_path) -> None:
+    """A wider surface measures the water TOP, so inside the cut it is not a bed:
+    the measured rung paints the water it reached, the water it did not reach is
+    left unpainted, and the ground outside the cut is the terrain's as before."""
+    merged = merged_surface(
+        primary=_survey(), fallback=_terrain(), frame="NAVD88",
+        water=_cut(500_004.0, 3_999_992.0, 500_012.0, 4_000_000.0),
+        _output_dir=str(tmp_path))
+    with rasterio.open(merged.uri) as surface:
+        values = surface.read(1)
+    # The 1 m grid spans 500,000-500,016 east and 3,999,984-4,000,000 north, so
+    # the cut is its columns 4-11 over rows 0-7 and the survey is the top-left
+    # 4 x 4 of that.
+    assert float(values[0, 4]) == pytest.approx(-5.0)
+    assert np.isnan(values[7, 11])
+    assert np.isnan(values[0, 8])
+    assert float(values[0, 12]) == pytest.approx(10.0)
+    assert float(values[8, 4]) == pytest.approx(10.0)
+
+
+def test_the_merge_states_the_share_of_the_water_measured_by_nothing(
+        tmp_path) -> None:
+    """The heuristic a reader weighs before asking for a surface between the
+    measurements: one number over the WATER, on the result, on the journal line
+    and on the input row the packet shows."""
+    from trid3nt_server.workflows.runtime.journal import bind_notes, drain_notes
+
+    token = bind_notes()
+    merged = merged_surface(
+        primary=_survey(), fallback=_terrain(), frame="NAVD88",
+        water=_cut(500_004.0, 3_999_992.0, 500_012.0, 4_000_000.0),
+        _output_dir=str(tmp_path))
+    said = drain_notes(token)
+    # Sixteen of the cut's sixty-four cells were sounded.
+    assert merged.unmeasured_water_fraction == pytest.approx(0.75)
+    stated = [line for line in said if "measured by nothing" in line]
+    assert len(stated) == 1
+    assert "75.0%" in stated[0]
+    assert "75.0% of the water measured by nothing" in merged.input_row()["name"]
+
+
+def test_a_merge_handed_no_cut_claims_nothing_about_the_water(tmp_path) -> None:
+    """The share is over the polygon the domain was cut with, so a merge given
+    none states no share rather than one over a grid that is not the water."""
+    merged = merged_surface(primary=_survey(), fallback=_terrain(),
+                            frame="NAVD88", _output_dir=str(tmp_path))
+    assert merged.unmeasured_water_fraction is None
+    assert "measured by nothing" not in merged.input_row()["name"]
+
+
+def test_a_cut_carrying_no_polygon_refuses_rather_than_painting_the_water(
+        tmp_path) -> None:
+    """There is no inside for the terrain to stay out of, and merging as though
+    the cut said nothing would paint the water with the surface over it."""
+    with pytest.raises(MergeRastersError) as excinfo:
+        merged_surface(primary=_survey(), fallback=_terrain(), frame="NAVD88",
+                       water={"type": "LineString",
+                              "coordinates": [[-122.0, 36.0], [-122.0, 36.1]]},
+                       _output_dir=str(tmp_path))
+    assert excinfo.value.error_code == "MERGE_RASTERS_NO_SOURCE"

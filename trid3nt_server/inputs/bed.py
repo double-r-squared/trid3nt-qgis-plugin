@@ -638,6 +638,13 @@ class MergedRasterLayerURI(LayerURI):
     #: the share the wider surface under all of them painted.
     primary_fraction: float = 0.0
     fallback_fraction: float = 0.0
+    #: The share of the WATER - the cells inside the polygon the domain was cut
+    #: with - that no rung of this ladder measured. ``None`` where the merge was
+    #: handed no polygon, because a bed with no water to be inside claims
+    #: nothing about it. It is the number a reader weighs before asking for a
+    #: surface between the measurements, and the shares above are over the whole
+    #: grid rather than over the water, so neither of them answers it.
+    unmeasured_water_fraction: float | None = None
     #: What each RUNG of the ladder painted, in rank order: the name the rung
     #: carries and its share of the merged cells. The provenance sidecar below
     #: writes a cell's rung as its index into this list.
@@ -665,6 +672,9 @@ class MergedRasterLayerURI(LayerURI):
         painted = ", ".join(f"{label} {share * 100.0:.1f}%"
                             for label, share in self.rungs)
         said = [f"merged: {painted}"] if painted else []
+        if self.unmeasured_water_fraction is not None:
+            said.append(f"{self.unmeasured_water_fraction * 100.0:.1f}% of the "
+                        "water measured by nothing")
         if self.vertical_datum:
             said.append(f"datum {self.vertical_datum}")
         return {"cog_uri": self.uri, "layer_id": f"input-{self.layer_id}",
@@ -774,13 +784,17 @@ def _common_grid(sources: list[Any], resolution_m: float | None
 
 
 def _warped(src: Any, crs: Any, width: int, height: int, transform: Any,
-            values: Any, scratch: str, role: str) -> tuple[Any, str]:
+            values: Any, scratch: str, role: str, never: Any = None
+            ) -> tuple[Any, str]:
     """ONE source on the common grid, nodata where it measured nothing.
 
     GDAL's own warp, through the binding the daemon links, and the result is
     both read back for the provenance and left on disk for the overlay below.
     ``values`` is that source's grid already re-zeroed, which is what the caller
-    passes where the two surfaces did not count from one zero."""
+    passes where the two surfaces did not count from one zero. ``never`` is the
+    cells this rung may not paint whatever it holds there - a terrain surface
+    measures the water TOP, so inside the water it is not a bed and the rungs
+    that measured the bottom are the only ones that speak for it."""
     import os
 
     import numpy as np
@@ -795,6 +809,8 @@ def _warped(src: Any, crs: Any, width: int, height: int, transform: Any,
               src_nodata=(src.nodata if values is None else _NODATA),
               dst_nodata=_NODATA,
               resampling=Resampling.bilinear)
+    if never is not None:
+        out[never] = _NODATA
     path = os.path.join(scratch, f"{role}_on_the_grid.tif")
     with rasterio.open(path, "w", driver="GTiff", height=height, width=width,
                        count=1, dtype="float32", crs=crs, transform=transform,
@@ -898,6 +914,35 @@ def _rezeroed(source: Any, aligned: Any, *, depths: bool) -> Any:
     return _on_the_frame(
         source.read(1, masked=True).filled(_NODATA).astype("float32"),
         aligned.shift_m, depths=depths)
+
+
+def _water_cells(water: Any, crs: Any, transform: Any, width: int, height: int
+                 ) -> Any:
+    """The cells of the common grid INSIDE the polygon the domain was cut with,
+    or ``None`` where that polygon reaches none of them.
+
+    The cut is the run's statement of where the water is, and a bed is only
+    asked to measure under it. The polygon is read in the frame the domain
+    publishes it in - lon/lat - and put on this grid's own CRS here, because the
+    grid is the finest rung's and no caller knows which rung that was."""
+    import numpy as np
+    from rasterio.features import geometry_mask
+    from rasterio.warp import transform_geom
+
+    from .geometry import flatten_geometries, read_geometry_doc
+
+    shapes = [g for g in flatten_geometries(read_geometry_doc(water))
+              if str(g.get("type")) in ("Polygon", "MultiPolygon")]
+    if not shapes:
+        raise MergeRastersError(
+            "MERGE_RASTERS_NO_SOURCE",
+            f"the water this bed is merged under ({water!r}) carries no polygon, "
+            "so there is no inside for the terrain to stay out of. Hand the cut "
+            "the domain was made with, or merge without one.")
+    inside = geometry_mask(
+        [transform_geom("EPSG:4326", crs, shape) for shape in shapes],
+        out_shape=(height, width), transform=transform, invert=True)
+    return inside if int(np.count_nonzero(inside)) else None
 
 
 def _bbox_4326(crs: Any, transform: Any, width: int, height: int
@@ -1023,6 +1068,7 @@ def merged_surface(
     frame: Any = None,
     primary_offset: Any = None,
     fallback_offset: Any = None,
+    water: Any = None,
     *,
     _output_dir: str | None = None,
 ) -> MergedRasterLayerURI:
@@ -1043,6 +1089,12 @@ def merged_surface(
     nothing here re-implements it. Which rung won at each cell is rebuilt from the
     same warps and written as a sidecar, because the mesh records which source
     painted each node.
+
+    ``water`` is the polygon the domain was CUT with. Inside it the fallback
+    measures the water top rather than the bottom, so it paints only OUTSIDE it
+    and water no measured rung reached is left unpainted; the share of the water
+    measured by nothing is stated on the result and on the journal, which is the
+    number a reader weighs before asking for a surface between the measurements.
     """
     import tempfile
     from contextlib import ExitStack
@@ -1083,12 +1135,15 @@ def merged_surface(
             surfaces = [opened.enter_context(rasterio.open(path))
                         for path in staged]
             crs, width, height, transform, cell = _common_grid(surfaces, resolution_m)
+            wet = (_water_cells(water, crs, transform, width, height)
+                   if water is not None else None)
             grids, paths = [], []
             for rank, src in enumerate(surfaces):
                 values, path = _warped(
                     src, crs, width, height, transform,
                     _rezeroed(src, aligned[rank], depths=counts_down[rank]),
-                    scratch, f"rung{rank}")
+                    scratch, f"rung{rank}",
+                    None if rank < measured else wet)
                 grids.append(values)
                 paths.append(path)
         # BOTTOM UP, so the rung with the best claim to a cell is the last to
@@ -1131,15 +1186,26 @@ def merged_surface(
     covered = (f"The ladder painted the merged grid in rank order - {painted} - "
                f"and {(1.0 - sum(shares)) * 100.0:.1f}% is measured by none of "
                "them and left as nodata.")
+    unmeasured = (round(float((won[wet] == _PROVENANCE_NODATA).sum())
+                        / float(wet.sum()), 4) if wet is not None else None)
+    # THE ONE NUMBER A READER WEIGHS before asking for a surface between the
+    # measurements, so it is said in the same breath as the rule that produced
+    # it rather than left to be read off two shares over a different denominator.
+    wet_said = (["Only the measured rungs paint inside the polygon the domain "
+                 "was cut with - a wider surface measures the water TOP, not "
+                 f"the bed - and {unmeasured * 100.0:.1f}% of the water inside "
+                 "it is measured by nothing."]
+                if unmeasured is not None else [])
     notes = [
         covered,
+        *wet_said,
         f"Merged at {metres:.3g} m in {crs}, the finest of the rungs unless a "
         "resolution was stated.",
         *(moved or [f"Every surface counts from {zero}."]),
     ]
     logger.info("bed merge: %dx%d at %.3g m over %d rungs - %s",
                 width, height, metres, len(ladder), painted)
-    for line in (covered, *moved):
+    for line in (covered, *wet_said, *moved):
         journal_note(line)
     merged = MergedRasterLayerURI.published(
         "merged-bed", seed=seed,
@@ -1163,6 +1229,7 @@ def merged_surface(
                           if len(ladder) > measured else 0.0),
         primary_fraction=round(sum(shares[:measured]), 4),
         fallback_fraction=round(sum(shares[measured:]), 4),
+        unmeasured_water_fraction=unmeasured,
         rungs=[(label, round(share, 4)) for label, share in zip(labels, shares)],
         provenance_uri=provenance,
         resolution_m=round(metres, 4),
