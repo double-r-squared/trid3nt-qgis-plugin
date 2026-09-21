@@ -491,6 +491,54 @@ def fetch_model_list(
 
 
 
+class KeyedSourcesRequestError(Exception):
+    """``fetch_keyed_sources`` failed -- transport, HTTP status, or a non-JSON
+    body. Carries an honest, user-facing message."""
+
+
+def fetch_keyed_sources(base_url: str, timeout: float = 8.0) -> list:
+    """``GET {base_url}/api/tool-catalog`` -> the credentials its rows declare.
+
+    One entry per credential NAME, so two sources served by one account appear
+    once; the tool catalog is the only reader of the rows, and it carries no key
+    material. Any fault RAISES so the form can say the agent is unreachable."""
+    url = f"{base_url.rstrip('/')}/api/tool-catalog"
+    request = urllib.request.Request(url, method="GET")
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as resp:
+            raw = resp.read()
+    except urllib.error.HTTPError as exc:
+        raise KeyedSourcesRequestError(
+            f"tool catalog request failed (HTTP {exc.code})"
+        ) from exc
+    except (urllib.error.URLError, OSError, TimeoutError) as exc:
+        raise KeyedSourcesRequestError(
+            f"agent HTTP API unreachable at {url} ({exc})"
+        ) from exc
+    try:
+        payload = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise KeyedSourcesRequestError(
+            f"tool catalog returned non-JSON: {exc}"
+        ) from exc
+    if not isinstance(payload, dict):
+        raise KeyedSourcesRequestError("tool catalog returned a non-object body")
+    by_name: dict = {}
+    for tool in payload.get("tools") or []:
+        credential = tool.get("credential") if isinstance(tool, dict) else None
+        if not isinstance(credential, dict):
+            continue
+        name = credential.get("name")
+        if isinstance(name, str) and name and name not in by_name:
+            by_name[name] = {
+                "name": name,
+                "label": str(credential.get("label") or name),
+                "signup_url": credential.get("signup_url") or None,
+                "env_var": str(credential.get("env_var") or ""),
+            }
+    return [by_name[k] for k in sorted(by_name)]
+
+
 #: Cap on chat-history replay rows: a Case that has chatted for hours must not
 #: stall the dock repainting hundreds of bubbles.
 CHAT_HISTORY_REPLAY_MAX = 50

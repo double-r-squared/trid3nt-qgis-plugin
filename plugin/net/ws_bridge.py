@@ -267,6 +267,10 @@ class AgentWorker(QObject):
         if self.client is not None:
             self.client.confirm_payload(warning_id, decision, revised_args)
 
+    def push_secret(self, provider_id: str, key_value: str) -> None:
+        if self.client is not None:
+            self.client.push_secret(provider_id, key_value)
+
     def send_tool_choice(
         self,
         request_id: str,
@@ -466,6 +470,10 @@ class AgentBridge(QObject):
     ) -> None:
         if self._worker is not None:
             self._worker.confirm_payload(warning_id, decision, revised_args)
+
+    def push_secret(self, provider_id: str, key_value: str) -> None:
+        if self._worker is not None:
+            self._worker.push_secret(provider_id, key_value)
 
     def send_tool_choice(
         self,

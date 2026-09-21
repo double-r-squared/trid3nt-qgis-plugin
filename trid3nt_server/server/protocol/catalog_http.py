@@ -62,6 +62,21 @@ def _facet_str(value: Any) -> str | None:
     return s or None
 
 
+def _credential_facts(tool_name: str) -> dict[str, Any] | None:
+    """The credential a tool's source row declares, as wire facts (or None)."""
+    from trid3nt_server.credentials.resolver import credential_for_tool
+
+    credential = credential_for_tool(tool_name)
+    if credential is None:
+        return None
+    return {
+        "name": credential.name,
+        "label": credential.label,
+        "signup_url": credential.signup_url,
+        "env_var": credential.env_var,
+    }
+
+
 def build_catalog_payload(
     *,
     corpus: dict[str, list[str]] | None = None,
@@ -107,6 +122,11 @@ def build_catalog_payload(
                     "idempotent_hint": bool(meta.idempotent_hint),
                 },
                 "sample_queries": sample_queries,
+                # The key this source needs, verbatim off its row, so the
+                # plugin's keys form has one row per credential and no table of
+                # its own. NO key material: a name, a label, a signup url and
+                # the env var the daemon falls back to.
+                "credential": _credential_facts(name),
             }
         )
 

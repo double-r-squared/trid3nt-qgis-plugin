@@ -1,7 +1,8 @@
-"""TRID3NT settings dialog + provider preset table.
+"""TRID3NT settings dialog, the provider preset table, and the data-source keys.
 
 APPLY-ON-SAVE: nothing a field carries takes effect until Save, where every
-field copies into ``settings`` in one place."""
+field copies into ``settings`` in one place. A data-source key is the one
+exception to that store: it goes to QgsAuthManager, never to QSettings."""
 from __future__ import annotations
 
 from typing import List, Optional
@@ -12,6 +13,7 @@ from qgis.PyQt.QtWidgets import (
     QDialog,
     QDialogButtonBox,
     QFormLayout,
+    QGroupBox,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -21,7 +23,8 @@ from qgis.PyQt.QtWidgets import (
 )
 
 from ..plugin_settings import PluginSettings
-from ..net.tasks import _ModelListTask, _ProviderConfigTask
+from ..net.auth_broker import AuthBroker
+from ..net.tasks import _KeyedSourcesTask, _ModelListTask, _ProviderConfigTask
 
 
 
@@ -90,9 +93,11 @@ PROVIDER_PRESETS: dict = {
 
 
 class SettingsDialog(QDialog):
-    """The server URL and token, the basemap, and the model controls. Nothing
-    applies until Save: every field, line edits and checkboxes alike, copies
-    into ``settings`` in ``accept()``."""
+    """The server URL and token, the basemap, the model controls and the keys.
+
+    Nothing applies until Save: every field, line edits and checkboxes alike,
+    copies into ``settings`` in ``accept()``, and a typed key goes to
+    QgsAuthManager there."""
 
     def __init__(
         self,
@@ -111,6 +116,11 @@ class SettingsDialog(QDialog):
         # Keep-alive refs for the live model-list fetch tasks, initialised
         # BEFORE _reload_model_choices runs below.
         self._model_list_tasks: List["_ModelListTask"] = []
+        # The keys form's rows come from the daemon; until they land the group
+        # shows why it is empty rather than an empty box.
+        self._keys_task: Optional["_KeyedSourcesTask"] = None
+        self._key_edits: dict = {}
+        self._broker = AuthBroker()
         self.setWindowTitle("TRID3NT settings")
         form = QFormLayout(self)
 
@@ -211,6 +221,17 @@ class SettingsDialog(QDialog):
             self.conn_toggle_btn.clicked.connect(self._connect_and_close)
         form.addRow("Connection", self.conn_toggle_btn)
 
+        # The data-source keys. One row per CREDENTIAL the daemon's source rows
+        # declare, not per source: two sources served by one account share one
+        # row and one entered key.
+        self.keys_group = QGroupBox("Keys (data sources)")
+        self.keys_form = QFormLayout(self.keys_group)
+        self.keys_status = QLabel("Reading the sources that need a key...")
+        self.keys_status.setWordWrap(True)
+        self.keys_form.addRow(self.keys_status)
+        form.addRow(self.keys_group)
+        self._load_keyed_sources()
+
         self._form = form
 
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel)
@@ -234,7 +255,75 @@ class SettingsDialog(QDialog):
         self._settings.openrouter_api_key = self.provider_key_edit.text()
         self._settings.model_id = self.model_combo.currentText()
         self._push_provider_config()
+        self._save_keys()
         super().accept()
+
+    def _load_keyed_sources(self) -> None:
+        """Fetch the credentials the daemon's source rows declare, off-thread so
+        a dead agent never freezes the dialog."""
+        task = _KeyedSourcesTask(self._resolve_http_base(), self)
+        self._keys_task = task
+        task.finished.connect(self._on_keyed_sources)
+        task.errored.connect(self._on_keyed_sources_errored)
+        task.start()
+
+    def _on_keyed_sources(self, rows: list) -> None:
+        """Build one masked row per credential. A stored key is reported as
+        stored and NEVER read back into the field."""
+        try:
+            stored = self._broker.stored_names()
+            if not rows:
+                self.keys_status.setText("No data source here needs a key.")
+                return
+            self.keys_status.setVisible(False)
+            for row in rows:
+                edit = QLineEdit()
+                edit.setEchoMode(QLineEdit.EchoMode.Password)
+                edit.setPlaceholderText(
+                    "stored - type to replace" if row["name"] in stored
+                    else f"not set ({row['env_var']})"
+                )
+                self._key_edits[row["name"]] = edit
+                cell = QHBoxLayout()
+                cell.addWidget(edit, 1)
+                if row["signup_url"]:
+                    link = QLabel(
+                        f'<a href="{row["signup_url"]}">get a key</a>'
+                    )
+                    link.setOpenExternalLinks(True)
+                    cell.addWidget(link)
+                self.keys_form.addRow(row["label"], cell)
+        except RuntimeError:
+            # The dialog closed mid-fetch; nothing to build.
+            return
+
+    def _on_keyed_sources_errored(self, message: str) -> None:
+        try:
+            self.keys_status.setText(
+                f"Could not read which sources need a key: {message}"
+            )
+        except RuntimeError:
+            return
+
+    def _save_keys(self) -> None:
+        """Store each typed key in QgsAuthManager and push it to the agent.
+
+        An untouched field changes nothing, so a stored key survives a Save that
+        did not mean to replace it. SECURITY: the value goes to the auth manager
+        and the ``secret-add`` envelope only - never to QSettings, never logged."""
+        dock = self.parent()
+        push = getattr(getattr(dock, "bridge", None), "push_secret", None)
+        for name, edit in self._key_edits.items():
+            value = edit.text()
+            if not value:
+                continue
+            self._broker.remember(name, value)
+            edit.clear()
+            if callable(push):
+                try:
+                    push(name, value)
+                except Exception:  # noqa: BLE001 -- stored either way
+                    pass
 
     def _disconnect_and_close(self) -> None:
         """Run the dock's disconnect path, then close WITHOUT saving: this is

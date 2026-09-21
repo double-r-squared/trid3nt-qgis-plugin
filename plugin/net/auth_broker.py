@@ -1,8 +1,10 @@
 """QgsAuthManager credential broker (plugin side).
 
-QgsAuthManager is the credential HOME; key values move between it and the daemon
-over ``secret-add``, one envelope per provider, and are NEVER logged. With no
-master password, or no QGIS, every call is a no-op rather than a raise."""
+QgsAuthManager is the credential HOME; the keys form writes into it, and key
+values move to the daemon over ``secret-add``, one envelope per credential, and
+are NEVER logged. A provider row's key never leaves here at all - its stored
+config id rides the datasource uri as ``authcfg=``. With no master password, or
+no QGIS, every call is a no-op rather than a raise."""
 
 from __future__ import annotations
 
@@ -11,8 +13,8 @@ from typing import Callable, Dict, Optional, Protocol
 
 logger = logging.getLogger("trid3nt.auth_broker")
 
-# Name prefix for the plugin's own QgsAuthManager entries. The provider_id
-# (a server ``ProviderID``) is appended so one entry maps 1:1 to one provider.
+# Name prefix for the plugin's own QgsAuthManager entries. The credential name
+# a source row declares is appended, so one entry maps 1:1 to one credential.
 _NAME_PREFIX = "trid3nt-cred:"
 
 
@@ -23,7 +25,13 @@ class CredentialStore(Protocol):
         """All stored ``{provider_id: key_value}`` (empty when unavailable)."""
 
     def remember(self, provider_id: str, key_value: str) -> bool:
-        """Persist a provider's key; ``False`` when the store is unavailable."""
+        """Persist a credential's key; ``False`` when the store is unavailable."""
+
+    def config_id(self, provider_id: str) -> Optional[str]:
+        """The stored config id for one credential, or ``None`` when absent."""
+
+    def names(self) -> frozenset:
+        """Which credentials have an entry. Names only, no payload read."""
 
 
 class QgsAuthManagerStore:
@@ -65,6 +73,22 @@ class QgsAuthManagerStore:
             if isinstance(name, str) and name.startswith(_NAME_PREFIX):
                 out[name[len(_NAME_PREFIX):]] = cfg_id
         return out
+
+    def config_id(self, provider_id: str) -> Optional[str]:
+        """The stored config id for one credential. The id is what a datasource
+        uri carries as ``authcfg=``, so the key itself never leaves the manager."""
+        am = self._manager()
+        if am is None:
+            return None
+        return self._config_ids_by_provider(am).get(provider_id)
+
+    def names(self) -> frozenset:
+        """Which credentials have an entry, off the config names alone - no
+        payload load, so this answers with the master password still locked."""
+        am = self._manager()
+        if am is None:
+            return frozenset()
+        return frozenset(self._config_ids_by_provider(am))
 
     def providers(self) -> Dict[str, str]:
         am = self._manager()
@@ -142,8 +166,25 @@ class AuthBroker:
         return pushed
 
     def remember(self, provider_id: str, key_value: str) -> bool:
-        """Store a prompt-answered key so the next connect re-pushes it."""
+        """Store a key the keys form took, so the next connect re-pushes it."""
         try:
             return self._store.remember(provider_id, key_value)
         except Exception:  # noqa: BLE001
             return False
+
+    def config_id(self, provider_id: str) -> Optional[str]:
+        """The stored config id for one credential, or ``None``. A row that
+        names a credential nothing has stored refuses rather than opening a
+        layer the provider will reject."""
+        try:
+            return self._store.config_id(provider_id)
+        except Exception:  # noqa: BLE001
+            return None
+
+    def stored_names(self) -> frozenset:
+        """Which credentials have a key stored. Names ONLY: the form shows that
+        a key is present without ever reading the value back."""
+        try:
+            return self._store.names()
+        except Exception:  # noqa: BLE001
+            return frozenset()
