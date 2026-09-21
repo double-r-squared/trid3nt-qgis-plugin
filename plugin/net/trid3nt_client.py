@@ -44,6 +44,13 @@ __all__ = [
     "Debouncer",
     "HandshakeFailed",
     "LayerEvent",
+    "Library",
+    "LibraryItem",
+    "LibraryRequestError",
+    "fetch_library",
+    "search_library",
+    "parse_library",
+    "parse_library_hits",
     "OUTBOUND_QUEUE_MAX",
     "PipelineStep",
     "RECONNECT_FLOOR_MS",
@@ -537,6 +544,185 @@ def fetch_keyed_sources(base_url: str, timeout: float = 8.0) -> list:
                 "env_var": str(credential.get("env_var") or ""),
             }
     return [by_name[k] for k in sorted(by_name)]
+
+
+class LibraryRequestError(Exception):
+    """``fetch_library`` or ``search_library`` failed -- transport, HTTP status,
+    or a non-JSON body. Carries an honest, user-facing message."""
+
+
+@dataclass
+class LibraryItem:
+    """One library entry: a registered tool or a data row. ``name`` is the
+    exact text a direct ``!run`` takes for a tool and the row name a fetch
+    argument takes for a row; ``facts`` are label/value pairs, in wire order."""
+
+    name: str
+    description: str = ""
+    group: str = ""
+    kind: str = "tool"
+    facts: list = field(default_factory=list)
+
+
+@dataclass
+class Library:
+    """The library listing: tools under their subsystem, data rows under their
+    class then kind. Both halves are already sorted by the daemon; the plugin
+    never re-sorts."""
+
+    subsystems: list = field(default_factory=list)  # [(name, [LibraryItem])]
+    classes: list = field(default_factory=list)     # [(name, [(kind, [item])])]
+    generated_at: str = ""
+
+
+def _library_facts(raw) -> list:
+    """Wire facts as ordered (label, value) pairs; absent and empty values are
+    dropped so the detail pane never shows a blank row."""
+    out = []
+    if not isinstance(raw, dict):
+        return out
+    for key, value in raw.items():
+        if value is None or value == "" or value == []:
+            continue
+        if isinstance(value, (list, tuple)):
+            text = ", ".join(str(v) for v in value)
+        elif isinstance(value, bool):
+            text = "yes" if value else "no"
+        else:
+            text = str(value)
+        if text:
+            out.append((str(key), text))
+    return out
+
+
+def _library_item(raw, group: str, kind: str) -> Optional["LibraryItem"]:
+    """One wire entry as a LibraryItem, or None when it carries no name -- a
+    nameless entry cannot be typed into a direct run, so it is not shown."""
+    if not isinstance(raw, dict):
+        return None
+    name = raw.get("name")
+    if not isinstance(name, str) or not name.strip():
+        return None
+    facts = _library_facts(raw.get("facts"))
+    fetcher = raw.get("fetcher")
+    if isinstance(fetcher, str) and fetcher.strip():
+        facts.insert(0, ("fetcher", fetcher.strip()))
+    description = raw.get("description") or raw.get("docstring") or ""
+    return LibraryItem(
+        name=name.strip(),
+        description=str(description).strip(),
+        group=group,
+        kind=kind,
+        facts=facts,
+    )
+
+
+def parse_library(payload) -> Library:
+    """The ``/api/library`` body as a Library. PURE and defensive: a malformed
+    subsystem, class, kind or entry is skipped, never raised on, so one bad row
+    never costs the panel the rest of the listing."""
+    library = Library()
+    if not isinstance(payload, dict):
+        return library
+    generated = payload.get("generated_at")
+    library.generated_at = generated if isinstance(generated, str) else ""
+    for sub in payload.get("subsystems") or []:
+        if not isinstance(sub, dict):
+            continue
+        name = str(sub.get("name") or "").strip()
+        if not name:
+            continue
+        items = [
+            item for item in (
+                _library_item(t, name, "tool") for t in sub.get("tools") or []
+            ) if item is not None
+        ]
+        library.subsystems.append((name, items))
+    for cls in payload.get("classes") or []:
+        if not isinstance(cls, dict):
+            continue
+        class_name = str(cls.get("name") or "").strip()
+        if not class_name:
+            continue
+        kinds = []
+        for kind in cls.get("kinds") or []:
+            if not isinstance(kind, dict):
+                continue
+            kind_name = str(kind.get("name") or "").strip()
+            if not kind_name:
+                continue
+            group = f"{class_name} / {kind_name}"
+            rows = [
+                item for item in (
+                    _library_item(r, group, "row") for r in kind.get("rows") or []
+                ) if item is not None
+            ]
+            kinds.append((kind_name, rows))
+        library.classes.append((class_name, kinds))
+    return library
+
+
+def parse_library_hits(payload) -> list:
+    """The ``/api/library/search`` body as LibraryItems in the server's ranked
+    order, the BM25 score kept as a fact. PURE and defensive, like
+    ``parse_library``."""
+    hits = []
+    if not isinstance(payload, dict):
+        return hits
+    for raw in payload.get("hits") or []:
+        if not isinstance(raw, dict):
+            continue
+        kind = str(raw.get("kind") or "tool")
+        item = _library_item(raw, str(raw.get("group") or ""), kind)
+        if item is None:
+            continue
+        score = raw.get("score")
+        if isinstance(score, (int, float)):
+            item.facts.append(("score", f"{float(score):.3f}"))
+        hits.append(item)
+    return hits
+
+
+def _library_get(url: str, what: str, timeout: float):
+    """One GET against a library route, decoded as JSON. Every fault RAISES
+    LibraryRequestError so the panel can say what failed instead of showing an
+    empty list as if the library were empty."""
+    request = urllib.request.Request(url, method="GET")
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as resp:
+            raw = resp.read()
+    except urllib.error.HTTPError as exc:
+        raise LibraryRequestError(
+            f"{what} request failed (HTTP {exc.code})"
+        ) from exc
+    except (urllib.error.URLError, OSError, TimeoutError) as exc:
+        raise LibraryRequestError(
+            f"agent HTTP API unreachable at {url} ({exc})"
+        ) from exc
+    try:
+        return json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise LibraryRequestError(f"{what} returned non-JSON: {exc}") from exc
+
+
+def fetch_library(base_url: str, timeout: float = 8.0) -> Library:
+    """``GET {base_url}/api/library`` -> the listing: every registered tool
+    under its subsystem, every data row under its class and kind."""
+    payload = _library_get(
+        f"{base_url.rstrip('/')}/api/library", "library", timeout
+    )
+    return parse_library(payload)
+
+
+def search_library(base_url: str, query: str, timeout: float = 8.0) -> list:
+    """``GET {base_url}/api/library/search?q=`` -> the ranked hits. This is the
+    same BM25 corpus the model routes on, so a human and the model search one
+    surface."""
+    url = (
+        f"{base_url.rstrip('/')}/api/library/search?"
+        + urllib.parse.urlencode({"q": query})
+    )
+    return parse_library_hits(_library_get(url, "library search", timeout))
 
 
 #: Cap on chat-history replay rows: a Case that has chatted for hours must not

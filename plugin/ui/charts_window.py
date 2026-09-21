@@ -22,6 +22,7 @@ from qgis.PyQt.QtWidgets import (
 )
 
 from . import charts
+from ._style import CompactTitleBar
 from ..net.trid3nt_client import parse_chart_payload
 
 # Navigation toolbar for (c) -- guarded exactly like the canvas class in
@@ -71,45 +72,6 @@ if _NAV_TOOLBAR is not None:
             super().__init__(canvas, parent, coordinates=False)
             self.setIconSize(_TOOLBAR_ICON_SIZE)
             self.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
-
-
-class _CompactTitleBar(QWidget):
-    """A slim ``setTitleBarWidget`` replacement: one fixed-height row with a
-    small-font title, float and close -- the same two affordances the native
-    title bar gives, without its generous padding and icon sizing."""
-
-    _HEIGHT = 20  # px -- vs the platform-default title bar (30-40+ px)
-
-    def __init__(self, dock: QDockWidget):
-        super().__init__(dock)
-        row = QHBoxLayout(self)
-        row.setContentsMargins(6, 2, 2, 2)
-        row.setSpacing(2)
-
-        title = QLabel(dock.windowTitle())
-        title.setStyleSheet("font-size: 8pt; font-weight: 600;")
-        row.addWidget(title)
-        row.addStretch(1)
-
-        float_btn = QToolButton()
-        float_btn.setText("⧉")  # float/dock glyph
-        float_btn.setAutoRaise(True)
-        float_btn.setFixedSize(16, 16)
-        float_btn.setToolTip("Float/dock this window")
-        float_btn.clicked.connect(
-            lambda: dock.setFloating(not dock.isFloating())
-        )
-        row.addWidget(float_btn)
-
-        close_btn = QToolButton()
-        close_btn.setText("✕")  # close glyph
-        close_btn.setAutoRaise(True)
-        close_btn.setFixedSize(16, 16)
-        close_btn.setToolTip("Close")
-        close_btn.clicked.connect(dock.close)
-        row.addWidget(close_btn)
-
-        self.setFixedHeight(self._HEIGHT)
 
 
 _CANVAS_MIN_HEIGHT = 220  # px -- the bottom dock is short and wide
@@ -209,7 +171,7 @@ class ChartsWindow(QDockWidget):
     ):
         super().__init__("TRID3NT Charts", parent)
         self.setObjectName("Trid3ntChartsWindow")
-        self.setTitleBarWidget(_CompactTitleBar(self))
+        self.setTitleBarWidget(CompactTitleBar(self))
         self._charts: List[dict] = []
         self._index = 0
         self._locate_callback = locate_callback

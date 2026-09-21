@@ -33,6 +33,7 @@ from qgis.core import QgsMapLayer
 
 from . import draw_tools, gate
 from .charts_window import ChartsWindow
+from .library_window import LibraryWindow
 from .cards import (
     CodeExecCard,
     FormCard,
@@ -58,6 +59,8 @@ from ..case import aoi, push_layer
 from ..net.tasks import (
     _CaseListTask,
     _EffectiveModelTask,
+    _LibrarySearchTask,
+    _LibraryTask,
     _ProbePointTask,
     _ProviderConfigTask,
     _PushLayerTask,
@@ -231,6 +234,11 @@ class Trid3ntDock(QDockWidget):
         # chat keeps only the count button ``_charts_count`` labels.
         self._charts_window: Optional[ChartsWindow] = None
         self._charts_count = 0
+        # The Library is a sibling bottom window, built LAZILY on its first
+        # open. It is read-only and case-independent: a case switch leaves it
+        # exactly as it is.
+        self._library_window: Optional[LibraryWindow] = None
+        self._library_tasks: List[object] = []
 
         self._build_ui()
         self._wire_bridge()
@@ -349,6 +357,13 @@ class Trid3ntDock(QDockWidget):
         self.charts_btn = _tool_button(
             "Charts (0)", self._show_charts_window,
             "Show the charts window (bottom of the app)")
+
+        # The Library: every registered tool under its subsystem and every data
+        # row under its class, with the name a direct !run takes one click from
+        # the clipboard.
+        self.library_btn = _tool_button(
+            "Library", self._show_library_window,
+            "Browse and search the tools and data rows you can run")
 
         # Clearing the AOI is MULTIPLEXED into the Set-AOI tool: while it is
         # active, BACKSPACE or DELETE clears the current AOI through a canvas
@@ -1797,6 +1812,53 @@ class Trid3ntDock(QDockWidget):
             pass
         self._set_charts_button(flag=False)
 
+    # -- library window -------------------------------------------------------- #
+
+    def _ensure_library_window(self) -> LibraryWindow:
+        """Lazily build the bottom-docked library window on its first open.
+        Headless it stays a standalone widget, still fully driveable."""
+        if self._library_window is None:
+            self._library_window = LibraryWindow(parent=self)
+            self._library_window.searchRequested.connect(self._search_library)
+            self._library_window.refreshRequested.connect(self._load_library)
+            try:
+                self.iface.addDockWidget(
+                    Qt.DockWidgetArea.BottomDockWidgetArea, self._library_window
+                )
+            except Exception:  # noqa: BLE001 -- headless / no main window
+                pass
+        return self._library_window
+
+    def _show_library_window(self) -> None:
+        """The chat "Library" button: create-if-needed, raise, and fetch the
+        listing on the first open -- the listing is static for the life of the
+        daemon, so a second open re-shows what is already there."""
+        window = self._ensure_library_window()
+        window.setVisible(True)
+        try:
+            window.raise_()
+        except Exception:  # noqa: BLE001 -- headless
+            pass
+        if window.group_tree.topLevelItemCount() == 0:
+            self._load_library()
+
+    def _load_library(self) -> None:
+        window = self._ensure_library_window()
+        window.set_status("loading the library ...")
+        task = _LibraryTask(self._effective_http_base(), self)
+        task.finished.connect(window.set_library)
+        task.errored.connect(window.set_status)
+        self._library_tasks.append(task)  # keep-alive
+        task.start()
+
+    def _search_library(self, query: str) -> None:
+        window = self._ensure_library_window()
+        task = _LibrarySearchTask(self._effective_http_base(), query, self)
+        task.finished.connect(window.set_hits)
+        task.errored.connect(window.set_status)
+        self._library_tasks.append(task)  # keep-alive
+        task.start()
+
     def _set_charts_button(self, flag: bool = False) -> None:
         """Repaint the "Charts (N)" button: the count, plus a subtle "*" flag
         when a new chart arrived while the window was not being looked at
@@ -2227,6 +2289,13 @@ class Trid3ntDock(QDockWidget):
                 pass
             self._charts_window.deleteLater()
             self._charts_window = None
+        if self._library_window is not None:
+            try:
+                self.iface.removeDockWidget(self._library_window)
+            except Exception:  # noqa: BLE001 -- headless / never docked
+                pass
+            self._library_window.deleteLater()
+            self._library_window = None
         self.bridge.stop()
         # Remote-streaming session TTL: dock close / plugin unload
         # ends the session -- remove its staging dir so nothing survives it.

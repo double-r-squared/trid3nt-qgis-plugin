@@ -5,9 +5,18 @@ qgisMaximumVersion=4.99
 supportsQt6=True
 description=TRID3NT agent chat dock -- ask for geospatial data or a hazard simulation in plain language and the answer arrives as styled layers on the canvas.
 about=Dockable chat panel that drives a TRID3NT agent over ws:// (this box or a tailnet peer). Every layer the agent publishes is STREAMED in place as a native QGIS layer -- COG rasters and FlatGeobuf vectors read ranged from the object store via GDAL /vsis3/ (no project download); the one format with no /vsi layer (MDAL meshes) stages to a session-scoped temp dir cleaned up when the dock closes. Simulation gate card, drawn-rectangle AOI on every message, capped-jitter auto-reconnect with queued sends, and case switching (open any existing case's chat) that restores its layers in one gesture. The TRID3NT stack (agent, MinIO, Ollama) must be installed and running separately -- the plugin never starts or stops it.
-version=0.3.40
+version=0.3.41
 author=Nate Almanza
-changelog=0.3.40 - The server token is required. The daemon's access token is
+changelog=0.3.41 - The LIBRARY panel. A read-only bottom-docked window lists
+    what can be run: every registered tool under its subsystem and every data
+    row under its class then kind with the fetcher named beside it, read from
+    the daemon's /api/library route. The middle list carries the entries, the
+    right pane the selected entry's description, its exact name for a direct
+    !run and its facts, and Copy name puts that name on the clipboard in one
+    click. One search box runs /api/library/search - the same BM25 corpus the
+    model routes on - and Browse returns to the listing. The !run usage hint
+    now points at the panel instead of asking the assistant to search.
+    0.3.40 - The server token is required. The daemon's access token is
     now the connect gate and it is always on: the daemon mints one into
     ~/.trid3nt/access_token at first start and prints it once, and a connection
     presenting no token (or a wrong one) is refused with the typed AUTH_FAILED

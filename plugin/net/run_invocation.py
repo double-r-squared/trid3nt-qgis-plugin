@@ -22,8 +22,7 @@ USAGE = (
     "tool directly (same call the model makes). "
     "Examples: !run geocode_location(query=\"Boulder, Colorado\")  |  "
     "!run fetch_dem(bbox=[-85.4, 29.9, -85.3, 30.0], source=\"3dep\"). "
-    "To find tool names + args, ask the assistant to search the catalog "
-    "(e.g. \"what tools can fetch elevation?\") or call search_tools."
+    "To find a name, open the Library panel and search it."
 )
 
 _IDENT = r"[A-Za-z_][A-Za-z0-9_]*"

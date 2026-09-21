@@ -11,13 +11,16 @@ from qgis.PyQt.QtCore import QObject, pyqtSignal
 
 from .trid3nt_client import (
     CaseListRequestError,
+    LibraryRequestError,
     KeyedSourcesRequestError,
     ModelListRequestError,
     ProviderConfigRequestError,
     fetch_case_list,
     fetch_keyed_sources,
+    fetch_library,
     fetch_model_list,
     post_provider_config,
+    search_library,
 )
 from ..case import push_layer
 from ..render import probe
@@ -74,6 +77,58 @@ class _ProviderConfigTask(QObject):
             self.errored.emit(f"{type(exc).__name__}: {exc}")
             return
         self.finished.emit(result)
+
+
+class _LibraryTask(QObject):
+    """GET /api/library -- the listing the Library panel browses."""
+
+    finished = pyqtSignal(object)  # Library
+    errored = pyqtSignal(str)      # honest message
+
+    def __init__(self, base_url: str, parent: Optional[QObject] = None):
+        super().__init__(parent)
+        self._base_url = base_url
+
+    def start(self) -> None:
+        threading.Thread(target=self._run, daemon=True).start()
+
+    def _run(self) -> None:
+        try:
+            library = fetch_library(self._base_url)
+        except LibraryRequestError as exc:
+            self.errored.emit(str(exc))
+            return
+        except Exception as exc:  # noqa: BLE001 -- surfaced, never silent
+            self.errored.emit(f"{type(exc).__name__}: {exc}")
+            return
+        self.finished.emit(library)
+
+
+class _LibrarySearchTask(QObject):
+    """GET /api/library/search -- the BM25 hits for one query."""
+
+    finished = pyqtSignal(str, list)  # query, [LibraryItem]
+    errored = pyqtSignal(str)         # honest message
+
+    def __init__(self, base_url: str, query: str,
+                 parent: Optional[QObject] = None):
+        super().__init__(parent)
+        self._base_url = base_url
+        self._query = query
+
+    def start(self) -> None:
+        threading.Thread(target=self._run, daemon=True).start()
+
+    def _run(self) -> None:
+        try:
+            hits = search_library(self._base_url, self._query)
+        except LibraryRequestError as exc:
+            self.errored.emit(str(exc))
+            return
+        except Exception as exc:  # noqa: BLE001 -- surfaced, never silent
+            self.errored.emit(f"{type(exc).__name__}: {exc}")
+            return
+        self.finished.emit(self._query, hits)
 
 
 class _KeyedSourcesTask(QObject):
